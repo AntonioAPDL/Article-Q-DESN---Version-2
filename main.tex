@@ -2061,10 +2061,15 @@ The resulting evidence supports a conservative scoped statement. Q--DESN is a
 competitive reservoir baseline against cached fold-aligned PriceFM predictions
 on the aligned benchmark panel, with better mean and median AQL in aggregate.
 It is not uniformly better than PriceFM: fold 3 is nearly tied on average, and
-PriceFM remains better for a nontrivial subset of region/fold rows. The
-remaining empirical work is therefore targeted model repair for those rows and
-a fully joint PriceFM run if application-level evidence for the joint
-multi-quantile readout is desired.
+PriceFM remains better for a nontrivial subset of region/fold rows. Subsequent
+read-only repair audits of those PriceFM-favored rows did not produce a
+validation-selected Q--DESN candidate that beat PriceFM on the aligned
+original-scale test AQL gate, so they are treated as negative diagnostic
+evidence rather than as a basis for changing the article tables or figures. A
+new PriceFM run should therefore require a pre-registered mechanism beyond
+local same-quantile rescue perturbations, and a fully joint PriceFM run would be
+needed before making application-level claims about the joint multi-quantile
+readout.
 
 % ============================================================
 \section{Discussion}

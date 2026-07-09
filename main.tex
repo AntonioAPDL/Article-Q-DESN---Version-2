@@ -213,7 +213,7 @@ computational: it approximates the Q--DESN posterior under the working
 likelihood and is not presented as a general claim about variational-inference
 methodology.
 
-The paper makes five contributions. First, Q--DESN formulates Bayesian
+The article makes five contributions. First, Q--DESN formulates Bayesian
 quantile readout inference conditional on fixed deep ESN features. Second,
 the readout combines a quantile-fixed exAL working likelihood with the
 default ridge prior and a regularized horseshoe adaptive-shrinkage
@@ -221,12 +221,14 @@ alternative. Third, model-specific MCMC and variational Bayes updates are
 derived for the resulting hierarchy. Fourth, multi-quantile reporting is
 treated through two distinct routes: independent single-level fits followed by
 isotonic or rearrangement synthesis, and a joint quantile-vector readout with
-regularized-horseshoe shrinkage across adjacent quantile-specific slopes. Fifth, the
-simulation and application protocols are tied to versioned validation assets:
+regularized-horseshoe shrinkage across adjacent quantile-specific slopes.
+Fifth, the empirical protocol is tied to versioned validation assets:
 single-quantile TT500 experiments evaluate fit recovery and held-out forecast
 accuracy, while a joint multi-quantile synthetic study evaluates coherence,
 proper quantile scores, crossing diagnostics, and runtime under known
-conditional quantile paths.
+conditional quantile paths. The GloFAS and PriceFM applications then use the
+same article-facing provenance discipline for scoped forecast-calibration and
+benchmark-comparison workflows.
 
 The remainder of the paper is organized as follows.
 Section~\ref{sec:notation} introduces notation, deep echo state network
@@ -350,6 +352,11 @@ uses regularized-horseshoe shrinkage on adjacent slope innovations. The
 resulting prior is a soft non-crossing mechanism rather than a hard constraint;
 reported curves may still be projected or rearranged when exact monotonicity is
 required.
+
+These distinctions determine the notation used below. We first separate the
+objects fixed by reservoir construction from the stochastic readout and
+likelihood quantities, so that posterior statements can be read as conditional
+on a recorded feature map.
 
 % ============================================================
 
@@ -1217,6 +1224,14 @@ crossing diagnostics.
 \section{Posterior Prediction and Quantile Synthesis}
 \label{sec:forecast}
 
+Prediction and multi-quantile reporting involve separate operations. The first
+operation propagates posterior or variational uncertainty through the fixed
+reservoir recursion at future horizons. The second, used only when several
+levels are reported together, converts fitted level-specific summaries into a
+monotone curve or instead uses the joint quantile-vector readout introduced in
+Section~\ref{subsec:joint-qdesn}. The subsections below keep these operations
+separate.
+
 \subsection{Multi-Step Posterior Prediction}
 \label{subsec:forecast_hstep}
 
@@ -1353,7 +1368,10 @@ roles. Reservoir tuning chooses a reproducible feature-generation rule before
 the final analysis; numerical diagnostics screen candidate feature maps for
 alignment, stability, redundancy, and conditioning failures; forecast
 evaluation is defined by the simulation or application protocol. This section
-therefore gives a selection and diagnostic workflow. The simulation and
+therefore gives a selection and diagnostic workflow. Because posterior
+inference is conditional on the fixed feature map, this design record is part
+of the empirical interpretation rather than a post hoc implementation detail.
+The simulation and
 streamflow sections specify the concrete fit-recovery and, where applicable,
 forecast-scoring criteria used in their empirical designs.
 
@@ -1729,6 +1747,7 @@ than the independent AL row. The exQDESN rows have no raw crossings in this
 validation bundle, but their average forecast distances to the oracle quantiles
 are larger; in this study they are useful likelihood extensions rather than
 evidence of exAL dominance.
+
 Table~\ref{tab:joint-qdesn-article-validation-vb-scenario-summary} gives the
 same held-out forecast-distance comparison by synthetic mechanism, replacing
 the heat-map view with numerical entries that can be checked directly. The
@@ -1900,8 +1919,9 @@ the discrepancy map uses leak rates
 \((\GlofasApplicationCurrentDiscrepancyReservoirAlpha{})\), global/bias input
 scales
 \(\GlofasApplicationCurrentDiscrepancyReservoirWinScaleGlobal{}/\GlofasApplicationCurrentDiscrepancyReservoirWinScaleBias{}\),
-and reservoir seed \(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\). The
-two readout blocks use separate regularized-horseshoe global scales,
+and reservoir seed \(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\).
+
+The two readout blocks use separate regularized-horseshoe global scales,
 \(\tau_{0,\mathrm{ref}}=\GlofasApplicationCurrentSharedRhsTau{}\) and
 \(\tau_{0,\mathrm{disc}}=\GlofasApplicationCurrentDiscrepancyRhsTau{}\),
 respectively. The tracked config snapshot and selection manifest record the
@@ -2066,10 +2086,10 @@ read-only repair audits of those PriceFM-favored rows did not produce a
 validation-selected Q--DESN candidate that beat PriceFM on the aligned
 original-scale test AQL gate, so they are treated as negative diagnostic
 evidence rather than as a basis for changing the article tables or figures. A
-new PriceFM run should therefore require a pre-registered mechanism beyond
-local same-quantile rescue perturbations, and a fully joint PriceFM run would be
-needed before making application-level claims about the joint multi-quantile
-readout.
+new PriceFM run should therefore require a pre-specified change to the design,
+such as the information set, model class, selection rule, or joint readout
+protocol. A fully joint PriceFM run would be needed before making
+application-level claims about the joint multi-quantile readout.
 
 % ============================================================
 \section{Discussion}
@@ -2101,8 +2121,8 @@ produce monotone reported quantile curves, but they do not define a joint
 posterior over quantile-indexed readouts. The joint quantile-vector extension
 shares information across quantile levels through adjacent RHS slope
 innovations, giving a soft non-crossing mechanism. It does not impose the
-non-crossing inequalities as
-hard constraints. When exact monotonicity is required for downstream use, the
+non-crossing inequalities as hard constraints. When exact monotonicity is
+required for downstream use, the
 reported curve should still be obtained through an ordered-intercept
 parameterization, projection, rearrangement, or another explicitly declared
 monotone contract.
@@ -2127,6 +2147,10 @@ MCMC on small joint problems. On the application side, broader multi-origin
 GloFAS studies and explicitly joint PriceFM runs are needed before the joint
 quantile-vector prior can be interpreted as application-level evidence rather
 than a synthetic validation result.
+
+Within these boundaries, the article establishes Q--DESN as a reproducible
+fixed-feature Bayesian quantile-readout workflow whose inference, synthesis,
+diagnostics, and empirical validation are tied to explicit protocols.
 
 \section*{Acknowledgments}
 

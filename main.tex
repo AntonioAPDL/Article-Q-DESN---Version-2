@@ -906,6 +906,18 @@ are not included in the high-dimensional RHS slope path by default; they are
 either weakly regularized independently or represented through ordered gaps
 when a stronger monotonicity convention is desired.
 
+This construction generalizes the single-level RHS Q--DESN by replacing the
+single readout \((\alpha,\vect\beta)\) with
+\(\{(\alpha_q,\vect\beta_q)\}_{q=1}^Q\). For \(Q=1\), the individual RHS
+Q--DESN is recovered by the convention
+\(\alpha_1=\alpha\), \(\vect\beta_1=\vect\beta\), and no learned slope
+baseline. Equivalently, set
+\(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and place the RHS prior directly
+on \(\Delta_1=\vect\beta_1\). Thus the baseline introduced below is not an
+intercept and is not part of the ordinary single-quantile model; it is a
+multi-quantile slope-path device used to separate a shared slope center from
+adjacent quantile-level innovations.
+
 For each \(q\), the working likelihood uses the quantile-fixed exAL family at
 the corresponding target level,
 \begin{equation}
@@ -922,9 +934,10 @@ to temper this composite contribution, with \(\kappa=1\) as the default and
 \(\kappa=1/Q\) as a conservative sensitivity setting under the general Bayes
 view of loss-based updating \citep{BissiriHolmesWalker2016GeneralBayes}.
 
-The joint prior adapts the Quantile-Varying Parameter (QVP) idea that adjacent
-quantile-indexed coefficient changes should be small unless the data support
-tail-specific effects \citep{KohnsSzendrei2025QVP}. Let
+For a genuine multi-quantile grid, the joint prior adapts the
+Quantile-Varying Parameter (QVP) idea that adjacent quantile-indexed
+coefficient changes should be small unless the data support tail-specific
+effects \citep{KohnsSzendrei2025QVP}. Let
 \(\vect\beta_{\mathrm{base}}\in\R^r\) be a baseline readout and define adjacent
 innovations
 \[

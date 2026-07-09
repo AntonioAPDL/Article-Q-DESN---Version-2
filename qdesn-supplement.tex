@@ -1096,6 +1096,12 @@ Q_{p_q}(y_t\mid\mathcal F_t)=
 \qquad
 \alpha_q\in\R,\quad \vect\beta_q\in\R^r .
 \]
+This notation contains the single-level RHS Q--DESN as the \(Q=1\) convention
+\(\alpha_1=\alpha\), \(\vect\beta_1=\vect\beta\), with no learned slope
+baseline. Equivalently, for the single-quantile limit set
+\(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and assign the RHS prior
+directly to \(\Delta_1=\vect\beta_1\). The baseline in the multi-quantile
+derivation below is therefore a slope-path device, not an intercept term.
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
 \begin{align}
@@ -1150,8 +1156,9 @@ sensitivity setting.
 \subsection{QVP--RHS Prior}
 \label{subsec:supp_joint_qvp_prior}
 
-Let \(\vect\beta_{\mathrm{base}}\in\R^r\) denote a baseline readout. Adjacent innovations
-are
+For a genuine multi-quantile grid, let
+\(\vect\beta_{\mathrm{base}}\in\R^r\) denote a baseline readout. Adjacent
+innovations are
 \[
 \Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}},\qquad
 \Delta_q=\vect\beta_q-\vect\beta_{q-1},\quad q=2,\ldots,Q.

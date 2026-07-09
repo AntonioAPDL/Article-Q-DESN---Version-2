@@ -1167,14 +1167,19 @@ scale-asymmetry blocks \((\sigma_q,\gamma_q)\) remain non-conjugate. We
 therefore use two computation routes for this fixed-design target: an MCMC
 sampler with separate exAL block updates and a mean-field variational Bayes
 approximation with Laplace--Delta updates for the non-conjugate blocks.
+In the algorithms below, GIG, positive-truncated Normal, Gaussian, and
+inverse-gamma entries denote closed-form full conditionals for MCMC and
+closed-form coordinate factors for VB. The block order is intentionally the
+same in both algorithms; only the final exAL scale-asymmetry block requires a
+non-conjugate update.
 
 \subsection{Markov Chain Monte Carlo}
 
 \noindent
 The augmented likelihood and shrinkage hierarchy give a partially Gibbs
-sampler. Blocks with named full conditionals are updated directly; the
-complete-data targets, full conditionals, CAVI factors, and ELBO terms for AL
-and exAL likelihoods under ridge and \RHS{} priors are given in Sections
+sampler. Closed-form blocks are sampled from their named full conditionals;
+the complete-data targets, full conditionals, CAVI factors, and ELBO terms for
+AL and exAL likelihoods under ridge and \RHS{} priors are given in Sections
 S4--S8 of the supplement. Under the Nishimura--Suchard hierarchy, the
 global-local scales have inverse-gamma updates. Each exAL block
 \((\sigma_q,\gamma_q)\) remains non-conjugate and is updated with
@@ -1189,11 +1194,11 @@ monitoring of the \((\sigma_q,\gamma_q)\) updates, including acceptance rates
 when Metropolis--Hastings is used.
 
 \begin{algorithm}[H]
-\caption{MCMC sampler for quantile-vector Q--DESN with exAL and QVP--RHS
-shrinkage. For \(Q=1\), set \(\vect\beta_{\mathrm{base}}=\zeros{r}\), place
-the RHS prior on \(\Delta_1=\vect\beta_1\), and omit baseline-slope blocks.
-AL and ridge variants omit the corresponding \(s_{q,t}\), \(\gamma_q\), and
-shrinkage blocks.}
+\caption{Block MCMC for the quantile-vector Q--DESN posterior. For \(Q=1\),
+set \(\vect\beta_{\mathrm{base}}=\zeros{r}\), place the RHS prior on
+\(\Delta_1=\vect\beta_1\), and omit baseline-slope blocks. AL and ridge
+variants omit the corresponding \(s_{q,t}\), \(\gamma_q\), and shrinkage
+blocks.}
 \label{alg:mcmc}
 \begin{algorithmic}[1]
 \REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, learning rate $\kappa$, MCMC iterations $N$
@@ -1202,16 +1207,15 @@ shrinkage blocks.}
   \STATE Initialize $\vect\beta_{\mathrm{base}}$ and its baseline RHS scales
 \ENDIF
 \FOR{$i=1$ to $N$}
-  \STATE Sample $v_{q,t}$ for all $q,t$ from independent generalized inverse Gaussian (GIG) full conditionals
-  \STATE Sample $s_{q,t}$ for all $q,t$ from independent positive-truncated Normal full conditionals
-  \STATE Sample $\vect\beta_{\mathrm{st}}$ from the stacked Gaussian conditional in \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
+  \STATE \textbf{Latents:} sample \(v_{q,t}\) from independent GIG full conditionals; under exAL, sample \(s_{q,t}\) from independent positive-truncated Normal full conditionals
+  \STATE \textbf{Slope path:} sample \(\vect\beta_{\mathrm{st}}\mid\cdot\sim\Normal(\vect m_\beta,\mat K_\beta^{-1})\), with \(\mat K_\beta\) and \(\vect m_\beta\) from \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
   \IF{$Q>1$}
-    \STATE Sample $\vect\beta_{\mathrm{base}}$ featurewise and update its baseline RHS scales
+    \STATE \textbf{Baseline:} sample \(\vect\beta_{\mathrm{base}}\) from its Gaussian conditional and update baseline RHS scales from inverse-gamma full conditionals
   \ENDIF
-  \STATE Sample $\vect\alpha$ as a Gaussian block, or through ordered gaps when exact intercept monotonicity is imposed
-  \STATE Update innovation RHS scales for $\Delta_1,\ldots,\Delta_Q$; for $Q=1$ this is the ordinary RHS update on $\vect\beta_1$
-  \STATE Update each $(\sigma_q,\gamma_q)$ by Metropolis--Hastings (MH) or slice sampling on transformed coordinates
-  \STATE Store post-burn-in draws, crossing diagnostics, and predictive summaries, with thinning only if used
+  \STATE \textbf{Intercepts:} sample \(\vect\alpha\) from its Gaussian conditional, or from an ordered-gap block when exact intercept monotonicity is imposed
+  \STATE \textbf{RHS scales:} sample innovation local, global, auxiliary, and slab scales from inverse-gamma full conditionals; for \(Q=1\), these are the ordinary RHS scales for \(\vect\beta_1\)
+  \STATE \textbf{Likelihood:} update each exAL \((\sigma_q,\gamma_q)\) block by MH or slice sampling on transformed coordinates; under AL, use the corresponding \(\sigma_q\) block
+  \STATE \textbf{Monitor:} store post-burn-in draws, crossing diagnostics, and predictive summaries, with thinning only if used
 \ENDFOR
 \end{algorithmic}
 \end{algorithm}
@@ -1269,8 +1273,8 @@ corresponding blocks. The output is a set of approximate posterior moments,
 predictive summaries, and crossing diagnostics at the target quantile levels.
 
 \begin{algorithm}[H]
-\caption{Variational Bayes updates for quantile-vector Q--DESN with exAL and
-QVP--RHS shrinkage. For \(Q=1\), set
+\caption{Block VB--LD for the quantile-vector Q--DESN posterior. For \(Q=1\),
+set
 \(\vect\beta_{\mathrm{base}}=\zeros{r}\), place the RHS prior on
 \(\Delta_1=\vect\beta_1\), and omit baseline-slope factors. AL and ridge
 variants omit the corresponding latent, asymmetry, and shrinkage factors.}
@@ -1282,17 +1286,16 @@ variants omit the corresponding latent, asymmetry, and shrinkage factors.}
   \STATE Initialize $q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})$ and its baseline RHS scale factors
 \ENDIF
 \REPEAT
-  \STATE Update $q(v_{q,t})$ as independent generalized inverse Gaussian (GIG) factors
-  \STATE Update $q(s_{q,t})$ as independent positive-truncated Normal factors
-  \STATE Update $q_\beta(\vect\beta_{\mathrm{st}})$ as a multivariate Normal factor using the expected version of \eqref{eq:joint-kbeta-main}
+  \STATE \textbf{Latents:} update \(q(v_{q,t})\) as independent GIG factors; under exAL, update \(q(s_{q,t})\) as independent positive-truncated Normal factors
+  \STATE \textbf{Slope path:} update \(q_\beta(\vect\beta_{\mathrm{st}})\) as a multivariate Normal factor using the expected version of \eqref{eq:joint-kbeta-main}
   \IF{$Q>1$}
-    \STATE Update $q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})$ and its baseline RHS scale factors
+    \STATE \textbf{Baseline:} update \(q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})\) as a Gaussian factor and update baseline RHS scale factors as inverse-gamma factors
   \ENDIF
-  \STATE Update $q_\alpha(\vect\alpha)$, with ordered-gap factors if exact intercept monotonicity is imposed
-  \STATE Update innovation RHS scale factors for $\Delta_1,\ldots,\Delta_Q$; for $Q=1$ these are the ordinary RHS factors for $\vect\beta_1$
-  \STATE Update each $q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)$ by a Laplace approximation on unconstrained coordinates
-  \STATE Update Delta-method expectations for smooth functions of $(\sigma_q,\gamma_q)$
-  \STATE Evaluate the ELBO or Laplace--Delta ELBO approximation, crossing diagnostics, and convergence criteria
+  \STATE \textbf{Intercepts:} update \(q_\alpha(\vect\alpha)\) as a Gaussian factor, or use ordered-gap factors when exact intercept monotonicity is imposed
+  \STATE \textbf{RHS scales:} update innovation local, global, auxiliary, and slab scale factors as inverse-gamma factors; for \(Q=1\), these are the ordinary RHS factors for \(\vect\beta_1\)
+  \STATE \textbf{Likelihood:} update each \(q_{\sigma_q,\gamma_q}\) by a Laplace approximation on unconstrained coordinates; under AL, use the corresponding \(q_{\sigma_q}\) factor
+  \STATE \textbf{Expectations:} update Delta-method expectations for smooth functions of \((\sigma_q,\gamma_q)\)
+  \STATE \textbf{Monitor:} evaluate the ELBO or Laplace--Delta ELBO approximation, crossing diagnostics, and convergence criteria
 \UNTIL{convergence}
 \end{algorithmic}
 \end{algorithm}

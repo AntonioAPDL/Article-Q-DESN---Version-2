@@ -1,3 +1,0 @@
-fit_id,model_id,model_family,quantile_level,inference_method,coefficient_prior,reservoir_seed,required,enabled,config_hash,notes
-raw_glofas_p50,raw_glofas,raw_glofas,0.50,none,none,NA,true,true,TO_BE_COMPUTED,"Raw GloFAS ensemble median baseline for the posterior-draw dry run."
-qdesn_discrepancy_rhs_al_mcmc_draw_p50,qdesn_discrepancy_rhs_al_mcmc_draw,qdesn_glofas_discrepancy,0.50,mcmc,rhs,20260511,true,true,TO_BE_COMPUTED,"Posterior-draw GloFAS discrepancy-calibration Q-DESN with AL likelihood, MCMC, and default regularized horseshoe prior."

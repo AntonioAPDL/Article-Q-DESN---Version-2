@@ -1,0 +1,8 @@
+quantile_id,quantile_level,role,enabled
+p05,0.05,lower_tail,true
+p10,0.10,lower_interval,true
+p25,0.25,lower_body,true
+p50,0.50,median,true
+p75,0.75,upper_body,true
+p90,0.90,upper_interval,true
+p95,0.95,upper_tail,true

@@ -1,0 +1,311 @@
+version: 0.1
+application_name: glofas_stage_c_full7_confirmations_20260622_arch04_a035_synthesis
+description: Stage C raw synthesis and scoring config for GloFAS candidate arch04_a035.
+application_model:
+  contract: latent_path_ensemble_likelihood
+paths:
+  input_bundle: application/config/input_bundle_authoritative_dec25.yaml
+  input_bundle_manifest_template: application/manifests/input_bundle_manifest_TEMPLATE.csv
+  input_bundle_manifest: application/manifests/input_bundle_manifest.csv
+  input_manifest: application/manifests/input_manifest.csv
+  input_manifest_template: application/manifests/input_manifest_TEMPLATE.csv
+  schema: application/manifests/expected_schema.yaml
+  source_registry: application/config/authoritative_cutoff_sources.csv
+  cutoffs: application/config/cutoffs_dec25_authoritative.csv
+  quantile_grid: local_trackers/runtime_configs/glofas_stage_c_full7_confirmations_20260622/arch04_a035/quantile_grid_all.csv
+  model_grid: local_trackers/runtime_configs/glofas_stage_c_full7_confirmations_20260622/arch04_a035/model_grid_all.csv
+  figure_specs: application/config/figure_specs_dec25_authoritative.yaml
+  data_local: application/data_local
+  cache: application/cache/glofas_stage_c_full7_confirmations_20260622_arch04_a035_synthesis
+  runs: application/runs
+  logs: application/logs
+  generated_outputs: application/outputs/generated
+  promoted_tables: tables
+  promoted_figures: figures
+dependencies:
+  qdesn_engine: exdqlm
+  qdesn_engine_load_mode: local_source
+  qdesn_engine_repo_hint: /data/jaguir26/local/src/exdqlm__wt__article_app_engine_73c043f
+  qdesn_engine_expected_repo_hint: /data/jaguir26/local/src/exdqlm__wt__article_app_engine_73c043f
+  qdesn_engine_required_load_mode: local_source
+  qdesn_engine_required_branch: article/app-engine-73c043f
+  qdesn_engine_required_commit: 73c043f0436b508808366f312350fd44c2d06771
+  qdesn_engine_min_version: 1.0.0
+  qdesn_engine_disallowed_paths:
+  - /data/jaguir26/local/src/exdqlm__wt__qdesn_fitforecast_0p5p0
+  - /data/jaguir26/local/src/exdqlm__wt__validation_fitforecast_0p5p0
+  - /data/jaguir26/local/src/exdqlm__wt__glofas_discrepancy_qdesn
+  - /data/jaguir26/local/src/exdqlm__wt__qdesn_0p4p0_integration
+  - /data/jaguir26/local/src/exdqlm__wt__validation_rerun_after_0p4p0_integration
+  - /home/jaguir26/local
+  qdesn_engine_required_for: qdesn_glofas_discrepancy
+  fail_if_qdesn_engine_missing: yes
+data:
+  forecast_system: GloFAS
+  reference_process: transformed gauge streamflow
+  transform:
+    response: log1p
+    forecast: log1p
+    inverse_response: expm1
+  calendar:
+    horizon_unit: days
+    require_target_date_equals_origin_plus_horizon: yes
+  ensemble:
+    member_factorization: conditionally_independent_given_forecast_system_quantile
+    exchangeable_members: yes
+forecast_protocol:
+  default_horizon_min: 1
+  default_horizon_max: 30
+  require_common_origins_across_models: yes
+  require_common_targets_across_models: yes
+  require_no_target_leakage: no
+covariates:
+  enabled: yes
+  variables:
+  - ppt
+  - soil
+  source_policy: realized_history_and_blended_gefs_forecast
+  allow_realized_future_blend: yes
+  forecast:
+    handoff_root: application/data_local/upstream_jerez/gefs_nwm_forecast_runs/gefs_nwm_forecast_manifest_source_native_tranche1_20260406T194500Z/handoff_forecasts/site=11160500/run_id=gefs_nwm_forecast_manifest_source_native_tranche1_20260406T194500Z
+    horizon_days: 30
+  readout:
+    include_lags: yes
+    lags:
+      range:
+      - 0
+      - 300
+    standardize: yes
+    scale_reference: retrospective_train
+  ppt:
+    reduction: q85
+    dry_day_threshold_mm: 0
+    noisy_blend:
+      enabled: yes
+      noise_sd: 30
+      noise_seed: 20260415
+      noise_distribution: normal
+      floor_at_zero: yes
+    observed_blend:
+      enabled: yes
+      observed_weight: 0.5
+      observed_zero_stay_prob: 0.9
+      observed_zero_stay_seed: 20260415
+  soil:
+    reduction: q85
+    noisy_blend:
+      enabled: yes
+      noise_sd: 0.05
+      noise_seed: 20260415
+      noise_distribution: abs_normal
+      floor_at_zero: no
+    observed_blend:
+      enabled: yes
+      observed_weight: 0.5
+prediction:
+  contract_version: '0.3'
+  target: reference_quantile_from_glofas_discrepancy
+  horizon_scope: issued_glofas_only
+  q_g_source: posterior_model_quantile
+  discrepancy_feature_strategy: recursive_latent_path
+  prediction_unit: posterior_draw
+  posterior_draw_contract: q_y_draw_equals_q_g_draw_minus_d_g_draw
+  posterior_predictive_sampling: disabled
+  beyond_issued_horizon: disabled
+feature_contract:
+  version: latent_path_v0.3
+  two_block_design: yes
+  reservoir_input:
+    internal_bias: yes
+    output_lags:
+      range:
+      - 1
+      - 300
+    covariates:
+      ppt:
+        range:
+        - 0
+        - 300
+      soil:
+        range:
+        - 0
+        - 300
+    standardize: yes
+  readout:
+    add_intercept: yes
+    include_reservoir_state: yes
+    reservoir_state_lags: []
+    include_input_block: no
+    input_block:
+      output_lags:
+        range:
+        - 1
+        - 300
+      covariates:
+        ppt:
+          range:
+          - 0
+          - 300
+        soil:
+          range:
+          - 0
+          - 300
+      include_internal_bias: no
+    include_horizon_scaled: no
+    standardize_output_lags: yes
+    standardize_non_intercept: no
+  forecast_alignment:
+    output_lags_anchor: target_date
+    covariate_lags_anchor: target_date
+reservoir:
+  D: 4
+  'n':
+  - 100
+  - 100
+  - 100
+  - 100
+  n_tilde:
+  - 100
+  - 100
+  - 100
+  m: 300
+  washout: 500
+  alpha:
+  - 0.035
+  - 0.035
+  - 0.035
+  - 0.035
+  rho:
+  - 0.95
+  - 0.95
+  - 0.95
+  - 0.95
+  pi_w:
+  - 0.03
+  - 0.03
+  - 0.03
+  - 0.03
+  pi_in:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+  win_scale_global: 0.18
+  win_scale_bias: 0.18
+  input_bound: none
+  act_f: tanh
+  act_k: identity
+  standardize_inputs: yes
+  add_bias: yes
+  seed: 20260512
+inference:
+  default_method: vb_ld
+  likelihood_family: al
+  diagnostic_method: mcmc
+  diagnostic_likelihood_family: al
+  coefficient_prior_default: rhs
+  coefficient_prior_dense_baseline: ridge
+  vb_ld:
+    max_iter: 150
+    max_iter_hard_cap: 150
+    min_iter_elbo: 20
+    tol: 0.001
+    tol_par: 0.001
+    n_samp_xi: 500
+    n_draws: 2000
+    rhs_tau0: 0.001
+    rhs_slab_s2: 1.0
+    rhs_a_zeta: 2.0
+    rhs_b_zeta: 4.0
+    rhs_alpha_tau0: 0.03
+    rhs_alpha_slab_s2: 1.0
+    rhs_alpha_a_zeta: 2.0
+    rhs_alpha_b_zeta: 4.0
+    rhs_freeze_tau_warmup_iters: 50
+    rhs_update_every: 1
+    rhs_min_tau_updates: 1
+    intercept_prec: 1.0e-09
+    sigma_a: 2.0
+    sigma_b: 1.0
+    elbo_check_frequency: 10
+    save_elbo_trace: yes
+    save_parameter_summaries: yes
+    future_moment_strategy: streamed_grouped
+    future_update_strategy: linearized_delta
+    future_objective_strategy: grouped
+    dense_debug_allowed: no
+    diagnostics:
+      profile_substeps: no
+      trace_iterations: no
+  mcmc:
+    n_iter: 2000
+    burn_in: 1000
+    thin: 1
+    rhs_tau0: 0.001
+    rhs_slab_s2: 1.0
+    rhs_a_zeta: 2.0
+    rhs_b_zeta: 4.0
+    rhs_alpha_tau0: 0.03
+    rhs_alpha_slab_s2: 1.0
+    rhs_alpha_a_zeta: 2.0
+    rhs_alpha_b_zeta: 4.0
+    rhs_n_inner: 1
+    intercept_prec: 1.0e-09
+    sigma_a: 2.0
+    sigma_b: 1.0
+scoring:
+  primary: check_loss
+  intervals:
+  - lower: 0.05
+    upper: 0.95
+    nominal: 0.9
+  - lower: 0.15
+    upper: 0.8
+    nominal: 0.65
+  - lower: 0.35
+    upper: 0.65
+    nominal: 0.3
+  event_thresholds: []
+post_analysis:
+  enabled: yes
+  run_after_outputs: no
+  trace_skip: 5
+  credible_level: 0.95
+  recent_history_n: 200
+  history_chunk_size: 500
+  forecast_window:
+    before_days: 30
+    after_days: 30
+  coefficient_forest:
+    top_k: 50
+  storage:
+    write_history_draws_rds: no
+    write_history_draws_csv: no
+execution:
+  require_input_manifest: yes
+  write_session_info: yes
+  write_git_state: yes
+  stop_on_failed_required_model: yes
+  inference_support:
+    allow_unsupported_design_gate: no
+    require_supported_for_input_check: yes
+    require_supported_for_model_fit: yes
+    note: Optimized selected-winner confirmation rerun with max_iter=200. Use timing
+      outputs, calibration metrics, and post-analysis figures to compare current optimized
+      code against the previous promoted max_iter=1000 run.
+  prelaunch:
+    enabled: no
+    purpose: memory_refinement_candidate_preparation_only
+  final_launch:
+    enabled: no
+    note: Synthesis-only config; consumes completed Stage C component fits.
+  seed_contract:
+    require_config_model_grid_match: yes
+synthesis:
+  spread_calibration:
+    enabled: yes
+    factor: 1.4
+    additive_width: 0.5
+    center_quantile: 0.5
+    calibration_id: scorebalanced_spread_x1p400_plus0p500
+.__config_path__: /data/jaguir26/local/src/Article-Q-DESN/local_trackers/runtime_configs/glofas_stage_c_full7_confirmations_20260622/arch04_a035/synthesis_config_scorebalanced.yaml

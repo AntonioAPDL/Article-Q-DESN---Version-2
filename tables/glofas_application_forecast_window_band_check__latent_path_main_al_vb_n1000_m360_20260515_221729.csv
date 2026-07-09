@@ -1,0 +1,2 @@
+"fit_id","model_id","quantile_level","origin_date","window_start","window_end","credible_level","n_history_window_rows","n_history_band_rows","history_band_ok","n_forecast_window_rows","n_forecast_band_rows","forecast_band_ok"
+"qdesn_latent_path_rhs_al_vb_main_p50","qdesn_latent_path_rhs_al_vb_main_p50",0.5,2022-12-25,2022-11-25,2023-01-24,0.95,31,31,TRUE,28,28,TRUE

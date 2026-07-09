@@ -1,0 +1,102 @@
+version: 0.1
+application_name: glofas_latent_path_al_vb_synthetic_recovery
+description: >
+  Synthetic recovery gate for the latent-path ensemble-likelihood Q-DESN
+  application model. The gate uses a known linear feature map, AL likelihoods,
+  source-specific scales, a latent future USGS path, and posterior-draw
+  prediction identities. It is intentionally independent of the real GloFAS
+  input bundle so that algebraic and variational failures are caught before any
+  full Dec. 25 application fit is launched.
+
+application_model:
+  contract: latent_path_ensemble_likelihood
+
+paths:
+  cache: application/cache/latent_path_al_vb_synthetic_recovery
+  runs: application/runs
+  logs: application/logs
+  generated_outputs: application/outputs/generated
+  promoted_tables: tables
+  promoted_figures: figures
+
+dependencies:
+  qdesn_engine: article_side_synthetic_gate
+  qdesn_engine_load_mode: none
+  fail_if_qdesn_engine_missing: false
+
+prediction:
+  contract_version: "0.3"
+  target: reference_quantile_from_glofas_discrepancy
+  horizon_scope: issued_glofas_only
+  q_g_source: posterior_model_quantile
+  discrepancy_feature_strategy: recursive_latent_path
+  prediction_unit: posterior_draw
+  posterior_draw_contract: q_y_draw_equals_q_g_draw_minus_d_g_draw
+  posterior_predictive_sampling: disabled
+  beyond_issued_horizon: disabled
+
+reservoir:
+  seed: 20260513
+
+inference:
+  default_method: vb_ld
+  likelihood_family: al
+  coefficient_prior_default: rhs
+  vb_ld:
+    max_iter: 250
+    min_iter_elbo: 20
+    tol: 5.0e-5
+    tol_par: 5.0e-5
+    n_draws: 200
+    rhs_tau0: 0.25
+    rhs_slab_s2: 4.0
+    rhs_a_zeta: 2.0
+    rhs_b_zeta: 4.0
+    intercept_prec: 1.0e-9
+    sigma_a: 2.0
+    sigma_b: 1.0
+    elbo_check_frequency: 5
+    save_elbo_trace: true
+    save_parameter_summaries: true
+    future_moment_strategy: streamed_grouped
+    future_update_strategy: linearized_delta
+    future_objective_strategy: grouped
+    dense_debug_allowed: false
+  mcmc:
+    rhs_tau0: 0.25
+    rhs_slab_s2: 4.0
+    rhs_a_zeta: 2.0
+    rhs_b_zeta: 4.0
+    intercept_prec: 1.0e-9
+    sigma_a: 2.0
+    sigma_b: 1.0
+
+synthetic_recovery:
+  seed: 20260513
+  origin_date: "2026-01-31"
+  n_history: 160
+  horizon: 5
+  n_members: 50
+  p0: 0.50
+  beta: [0.25, 0.35, -0.08, 0.04, 0.08]
+  alpha: [0.15, -0.06, 0.03, 0.02, -0.05]
+  sigma_y: 0.18
+  sigma_g: 0.22
+  tolerances:
+    q_y_rmse: 1.50
+    q_g_rmse: 1.50
+    discrepancy_rmse: 1.50
+    y_future_rmse: 1.75
+    max_draw_identity_error: 1.0e-8
+
+execution:
+  require_input_manifest: false
+  write_session_info: true
+  write_git_state: true
+  stop_on_failed_required_model: true
+  prelaunch:
+    enabled: true
+    purpose: latent_path_al_vb_synthetic_recovery
+  final_launch:
+    enabled: false
+    note: synthetic recovery is a gate, not an application launch

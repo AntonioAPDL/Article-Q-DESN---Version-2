@@ -1,0 +1,3 @@
+"model_label","model_id","n_scored_horizons","n_quantile_scores","check_loss_mean","check_loss_reduction_vs_raw","interval_score_mean","interval_coverage_mean","crps_quantile_grid_mean","mae_to_observation","rmse_to_observation","bias_to_observation"
+"Q--DESN calibration","qdesn_latent_path_stage_n_winner_glofas_stage_n_winner_full7_confirmation_20260701",28,196,0.33390676563933,0.562916480980641,4.14023602499425,0.833333333333333,0.685888455438677,1.21772424960647,1.4898397709428,-0.657520507814791
+"Raw GloFAS","raw_glofas_glofas_stage_n_winner_full7_confirmation_20260701",28,196,0.763942704562467,,13.0537862430348,0,1.44235863997326,1.76680142961777,1.9728598848738,-1.76680142961777

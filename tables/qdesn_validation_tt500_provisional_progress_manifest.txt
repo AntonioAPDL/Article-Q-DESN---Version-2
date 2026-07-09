@@ -1,0 +1,23 @@
+Q-DESN TT500 provisional progress table manifest
+Generated at: 2026-06-13 22:48:05 EDT
+Builder: application/scripts/30_build_shared_validation_tt500_provisional_table.R
+Config: /data/jaguir26/local/src/Article-Q-DESN/application/config/shared_validation_tt500_provisional_progress.yaml
+Output TeX: /data/jaguir26/local/src/Article-Q-DESN/tables/qdesn_validation_tt500_provisional_progress.tex
+Output CSV: /data/jaguir26/local/src/Article-Q-DESN/tables/qdesn_validation_tt500_provisional_progress.csv
+Run tag: qdesn-dynamic-fitforecast-v2-mcmc-tt500-20260520-035319__git-d075941
+Campaign id: 20260525-191523__git-d075941
+Validation worktree: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0
+Validation branch: validation/shared-fitforecast-v2-1.0.0
+Validation commit at export: ec465f93b7b799e675c40f3a6382c7c6e9ae5727
+Package version: 1.0.0
+Source registry root: /data/jaguir26/local/src/shared_dynamic_fit_forecast_validation/sources/dlm_constV_p90_m0amp_highnoise_steepertrend_v2_TTmain10000_fitforecast
+Source registry hash name: 000__bundle_manifest.json.sha256
+Source registry hash value: edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275
+Atomic progress SHA-256: 3aee0709d06ab11fe714252013fd4d3a15de273f40033e80e36d53453a8f32ca
+Root progress SHA-256: 49cdd51c52ad4c2a667aa130124e4f46c198ef0d4197324270bfead95abc7a98
+Manifest SHA-256: 83b6ca1155edf308aa9ab15ec91dc7a6cd68bc566bc35e8f1df52896685f8e35
+Atomic specs: total=36 complete=32 running=2 pending=2
+Root specs: total=18 complete=16 running=2 pending=0
+Manifest article_consumable: FALSE
+Manifest is_final: FALSE
+Article policy: operational status display only; not a scientific result table.

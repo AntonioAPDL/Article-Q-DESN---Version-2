@@ -1,0 +1,1186 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_median_de_lu_folds23_seed_robustness_20260604
+  purpose: Median seed-robustness grid for retained fold winners and validation-selected
+    horizon-block specialists. This config is prepared for dry-run validation before
+    launch.
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_median_de_lu_fold1_authoritative_reservoir_corrected_20260602.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_median_de_lu_folds23_seed_robustness_20260604
+    run_root: application/data_local/pricefm/runs/pricefm_median_de_lu_folds23_seed_robustness_20260604
+  scope:
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    - 3
+    quantiles:
+    - 0.5
+    horizons: all
+    ranking_split: val
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+  fixed:
+    lead_window: 96
+    feature_map: window_reservoir_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    recurrent_sparsity: 0.05
+    reservoir_activation: tanh
+    state_output: final_layer
+    default_jobs: 1
+    qdesn_likelihoods:
+    - al
+    - exal
+    warm_start_enabled: true
+    exact_equivalence_train_rows: 1000
+    artifact_hygiene:
+      enabled: true
+      clean_adapter_patterns:
+      - X_*.csv
+      clean_model_patterns:
+      - '*.rds'
+      - '*.rda'
+      - '*.RData'
+      preserve_patterns:
+      - adapter_manifest.json
+      - feature_manifest.json
+      - rows_*.csv
+      - rows_all.csv
+      - y_*.csv
+      - metric_summary.csv
+      - metric_by_horizon.csv
+      - metric_by_horizon_group.csv
+      - model_method_summary.csv
+      - model_parameter_summary.csv
+      - model_trace_summary.csv
+      - predictions_with_naive_scaled.csv
+      - model_predictions_scaled.csv
+      - exact_equivalence.csv
+      - warm_start_diagnostics.csv
+      - report.md
+      - '*.png'
+      - '*.pdf'
+      - '*.json'
+      - '*.log'
+  launch:
+    seed_robustness:
+      priorities:
+      - 0
+      experiment_jobs: 10
+      cell_jobs: 1
+      build_windows: true
+      note: Prepared only. Launch after inspecting generated configs and confirming
+        storage/CPU budget.
+  experiments:
+  - id: seedrob_f2_horizonblock_h1to24_l72_n60_a0p5_r0p85_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 60
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window72_units60_alpha0p5_rho0p85, source method
+      qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h1to24_l72_n60_a0p5_r0p85_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 60
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window72_units60_alpha0p5_rho0p85, source method
+      qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h1to24_l72_n60_a0p5_r0p85_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 60
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window72_units60_alpha0p5_rho0p85, source method
+      qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h1to24_l72_n60_a0p5_r0p85_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 60
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window72_units60_alpha0p5_rho0p85, source method
+      qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h1to24_l72_n60_a0p5_r0p85_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 60
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window72_units60_alpha0p5_rho0p85, source method
+      qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h73to96_l72_n160_a0p4_r0p85_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window72_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h73to96_l72_n160_a0p4_r0p85_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window72_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h73to96_l72_n160_a0p4_r0p85_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window72_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h73to96_l72_n160_a0p4_r0p85_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window72_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h73to96_l72_n160_a0p4_r0p85_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window72_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h25to48_l96_n160_a0p6_r0p85_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.6
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 25-48, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p6_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h25to48_l96_n160_a0p6_r0p85_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.6
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 25-48, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p6_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h25to48_l96_n160_a0p6_r0p85_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.6
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 25-48, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p6_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h25to48_l96_n160_a0p6_r0p85_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.6
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 25-48, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p6_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h25to48_l96_n160_a0p6_r0p85_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.6
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 25-48, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p6_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h49to72_l96_n160_a0p4_r0p85_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 49-72, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h49to72_l96_n160_a0p4_r0p85_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 49-72, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h49to72_l96_n160_a0p4_r0p85_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 49-72, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h49to72_l96_n160_a0p4_r0p85_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 49-72, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_horizonblock_h49to72_l96_n160_a0p4_r0p85_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.4
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 2, horizon group 49-72, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p4_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_retainedglobal_hall_l72_n120_a0p5_r0p9_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 2, horizon group all, source
+      experiment rf_p0_f23_d1n120_l072_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_retainedglobal_hall_l72_n120_a0p5_r0p9_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 2, horizon group all, source
+      experiment rf_p0_f23_d1n120_l072_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_retainedglobal_hall_l72_n120_a0p5_r0p9_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 2, horizon group all, source
+      experiment rf_p0_f23_d1n120_l072_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_retainedglobal_hall_l72_n120_a0p5_r0p9_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 2, horizon group all, source
+      experiment rf_p0_f23_d1n120_l072_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f2_retainedglobal_hall_l72_n120_a0p5_r0p9_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 2, horizon group all, source
+      experiment rf_p0_f23_d1n120_l072_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h25to48_l72_n80_a0p5_r0p85_in0p35_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 25-48, source
+      experiment rfdeep_p1_input_lag_window72_units80_rho0p85_input_scale0p35, source
+      method qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h25to48_l72_n80_a0p5_r0p85_in0p35_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 25-48, source
+      experiment rfdeep_p1_input_lag_window72_units80_rho0p85_input_scale0p35, source
+      method qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h25to48_l72_n80_a0p5_r0p85_in0p35_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 25-48, source
+      experiment rfdeep_p1_input_lag_window72_units80_rho0p85_input_scale0p35, source
+      method qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h25to48_l72_n80_a0p5_r0p85_in0p35_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 25-48, source
+      experiment rfdeep_p1_input_lag_window72_units80_rho0p85_input_scale0p35, source
+      method qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h25to48_l72_n80_a0p5_r0p85_in0p35_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 72
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 25-48, source
+      experiment rfdeep_p1_input_lag_window72_units80_rho0p85_input_scale0p35, source
+      method qdesn_al_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h49to72_l96_n80x80_a0p5_r0p9_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 49-72, source
+      experiment rfdeep_p0_d2_l096_n080x080_a0p50_r0p90_in0p50_seed20260603, source
+      method qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h49to72_l96_n80x80_a0p5_r0p9_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 49-72, source
+      experiment rfdeep_p0_d2_l096_n080x080_a0p50_r0p90_in0p50_seed20260603, source
+      method qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h49to72_l96_n80x80_a0p5_r0p9_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 49-72, source
+      experiment rfdeep_p0_d2_l096_n080x080_a0p50_r0p90_in0p50_seed20260603, source
+      method qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h49to72_l96_n80x80_a0p5_r0p9_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 49-72, source
+      experiment rfdeep_p0_d2_l096_n080x080_a0p50_r0p90_in0p50_seed20260603, source
+      method qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h49to72_l96_n80x80_a0p5_r0p9_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 49-72, source
+      experiment rfdeep_p0_d2_l096_n080x080_a0p50_r0p90_in0p50_seed20260603, source
+      method qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h1to24_l96_n80_a0p4_r0p97_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.4
+    rho: 0.97
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window96_units80_alpha0p4_rho0p97, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h1to24_l96_n80_a0p4_r0p97_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.4
+    rho: 0.97
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window96_units80_alpha0p4_rho0p97, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h1to24_l96_n80_a0p4_r0p97_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.4
+    rho: 0.97
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window96_units80_alpha0p4_rho0p97, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h1to24_l96_n80_a0p4_r0p97_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.4
+    rho: 0.97
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window96_units80_alpha0p4_rho0p97, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h1to24_l96_n80_a0p4_r0p97_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.4
+    rho: 0.97
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 1-24, source
+      experiment rfdeep_p1_d1core_lag_window96_units80_alpha0p4_rho0p97, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h73to96_l96_n160_a0p5_r0p85_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p5_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h73to96_l96_n160_a0p5_r0p85_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p5_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h73to96_l96_n160_a0p5_r0p85_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p5_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h73to96_l96_n160_a0p5_r0p85_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p5_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_horizonblock_h73to96_l96_n160_a0p5_r0p85_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 160
+    alpha: 0.5
+    rho: 0.85
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for horizon_block, fold 3, horizon group 73-96, source
+      experiment rfdeep_p1_d1core_lag_window96_units160_alpha0p5_rho0p85, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_retainedglobal_hall_l96_n80_a0p5_r0p9_in0p5_seed20260601
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260601
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 3, horizon group all, source
+      experiment rf_p0_f23_d1n080_l096_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_retainedglobal_hall_l96_n80_a0p5_r0p9_in0p5_seed20260602
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260602
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 3, horizon group all, source
+      experiment rf_p0_f23_d1n080_l096_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_retainedglobal_hall_l96_n80_a0p5_r0p9_in0p5_seed20260603
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 3, horizon group all, source
+      experiment rf_p0_f23_d1n080_l096_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_retainedglobal_hall_l96_n80_a0p5_r0p9_in0p5_seed20260604
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260604
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 3, horizon group all, source
+      experiment rf_p0_f23_d1n080_l096_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  - id: seedrob_f3_retainedglobal_hall_l96_n80_a0p5_r0p9_in0p5_seed20260605
+    stage: seed_robustness
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260605
+    quantile: 0.5
+    rationale: Seed robustness for retained_global, fold 3, horizon group all, source
+      experiment rf_p0_f23_d1n080_l096_a0p50_r0p90_in0p50_seed20260601, source method
+      qdesn_exal_rhs_ns_exact_chunked.
+  experiment_blocks: []

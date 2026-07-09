@@ -1,0 +1,143 @@
+% Compact manuscript wrapper for the joint multi-quantile synthetic validation.
+% Values are taken from the fixed article-candidate validation artifacts.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.34\textwidth}>{\raggedright\arraybackslash}p{0.56\textwidth}@{}}
+\toprule
+Item & Value \\
+\midrule
+Synthetic validation design & Fixed bridge and stress scenario collection \\
+Selected specification & RHS shrinkage setting \(\tau_0=0.15\) \\
+RHS global shrinkage \(\tau_0\) & 0.15 \\
+Scenarios and replicates & 9 base scenarios, 10 replicates each \\
+Forecast origins & 9000 held-out origins \\
+Tau grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95 \\
+Train/test lengths & 1000 / 1000 retained observations \\
+VB controls & max iter 720; adaptive grid 720, 960 \\
+Rolling-origin controls & refit stride 30; forecast-origin stride 10 \\
+Diagnostic status & raw crossings retained; reported quantiles are monotone \\
+\bottomrule
+\end{tabular}
+\caption{Joint multi-quantile synthetic forecast-validation protocol.}
+\label{tab:joint-qvp-phase4k-protocol}
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.23\textwidth}cccccccc@{}}
+\toprule
+Setting & \(\tau_0\) & Reported & \shortstack{Raw\\cross.} &
+\shortstack{Reported\\cross.} & MAE & RMSE & \shortstack{Max-iter\\rate} &
+\shortstack{Runtime\\h} \\
+\midrule
+\(\tau_0=0.10\) & 0.10 & no & 27 & 0 & 0.0918 & 0.1216 & 0.0531 & 6.86 \\
+\(\tau_0=0.15\) & 0.15 & yes & 27 & 0 & 0.0922 & 0.1220 & 0.0378 & 5.52 \\
+\bottomrule
+\end{tabular}
+\caption{RHS global-shrinkage sensitivity used to select the reported
+multi-quantile specification. Raw and reported columns count adjacent crossing
+pairs before and after monotone rearrangement.}
+\label{tab:joint-qvp-phase4k-tau0-decision}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.38\textwidth}r@{\qquad}r@{}}
+\toprule
+Metric & Value & Diagnostic detail \\
+\midrule
+Replicated scenario rows & 90 & 63 clean / 27 diagnostic / 0 numerical fail \\
+Forecast origins & 9000 & 7 quantiles per origin \\
+Mean truth MAE & 0.0922 & truth-distance criterion satisfied \\
+Mean truth RMSE & 0.1220 & truth-distance criterion satisfied \\
+Mean pinball loss & 0.1595 & finite forecast score \\
+Mean WIS & 0.3191 & finite interval score \\
+Mean CRPS-grid score & 0.3641 & finite grid score \\
+Mean absolute hit-rate error & 0.0342 & max absolute error 0.29 \\
+Reported crossing pairs & 0 & monotonicity criterion satisfied \\
+Raw crossing pairs & 27 & retained diagnostic \\
+\bottomrule
+\end{tabular}
+\caption{Forecast scores for the reported joint multi-quantile synthetic
+validation.}
+\label{tab:joint-qvp-phase4k-selected-scores}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+Tau & MAE to truth & RMSE to truth & Bias to truth & Max abs. error \\
+\midrule
+0.05 & 0.1107 & 0.1429 & -0.0046 & 1.942 \\
+0.10 & 0.0909 & 0.1206 & -0.0124 & 2.015 \\
+0.25 & 0.0676 & 0.0929 & -0.0142 & 2.090 \\
+0.50 & 0.0630 & 0.0874 & -0.0126 & 1.954 \\
+0.75 & 0.0769 & 0.1043 & -0.0108 & 1.924 \\
+0.90 & 0.1059 & 0.1384 & -0.0091 & 2.052 \\
+0.95 & 0.1304 & 0.1676 & -0.0155 & 2.126 \\
+\bottomrule
+\end{tabular}
+\caption{Reported forecast quantile distance to true conditional quantiles by tau.}
+\label{tab:joint-qvp-phase4k-truth-by-tau}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.34\textwidth}ccc@{}}
+\toprule
+Base scenario & Tau pair & Raw crossing pairs & Max adjustment \\
+\midrule
+Regime shift & 0.05--0.10 & 15 & 0.0905 \\
+Laplace bridge & 0.05--0.10 & 6 & 0.1095 \\
+Student-\(t\) location-scale & 0.90--0.95 & 3 & 0.0294 \\
+Heteroskedastic seasonal & 0.05--0.10 & 2 & 0.1219 \\
+Persistent heavy-tail & 0.90--0.95 & 1 & 0.0199 \\
+\bottomrule
+\end{tabular}
+\caption{Raw crossing diagnostics before monotone rearrangement.}
+\label{tab:joint-qvp-phase4k-crossing-diagnostics}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.40\textwidth}ccc@{}}
+\toprule
+Base scenario & MAE to truth & RMSE to truth & Max abs. error \\
+\midrule
+Regime shift & 0.2736 & 0.4070 & 2.126 \\
+Nonlinear reservoir design & 0.0916 & 0.1143 & 0.598 \\
+Heteroskedastic seasonal & 0.0892 & 0.1127 & 1.396 \\
+Persistent heavy-tail & 0.0668 & 0.0828 & 0.851 \\
+Laplace bridge & 0.0644 & 0.0800 & 0.529 \\
+Asymmetric Laplace tail & 0.0639 & 0.0794 & 1.027 \\
+Gaussian-mixture bridge & 0.0630 & 0.0781 & 0.402 \\
+Student-\(t\) location-scale & 0.0590 & 0.0730 & 0.575 \\
+Normal bridge & 0.0583 & 0.0706 & 0.326 \\
+\bottomrule
+\end{tabular}
+\caption{Reported forecast quantile distance to true conditional quantiles by scenario.}
+\label{tab:joint-qvp-phase4k-scenario-summary}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.30\textwidth}cccc@{}}
+\toprule
+Setting & VB refits & Max-iter count & Max-iter rate & Runtime h \\
+\midrule
+\(\tau_0=0.15\) & 370 & 14 & 0.0378 & 5.52 \\
+\bottomrule
+\end{tabular}
+\caption{VB convergence and runtime diagnostics for the reported specification.}
+\label{tab:joint-qvp-phase4k-runtime-convergence}
+\end{table}

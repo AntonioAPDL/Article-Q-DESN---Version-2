@@ -1,0 +1,641 @@
+% !TeX program = pdflatex
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+
+\usepackage{amsmath,amssymb,amsfonts,mathtools,bm,booktabs,tabularx,array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
+
+% ---- Unified notation ----
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\operatorname{Var}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\mat}[1]{\bm{#1}}
+\newcommand{\zeros}[1]{\vect 0_{#1}}
+\newcommand{\ones}[1]{\vect 1_{#1}}
+\newcommand{\ind}{\mathbf{1}}
+\newcommand{\Normal}{\mathcal{N}}
+\newcommand{\IG}{\operatorname{IG}}
+\newcommand{\StudentT}{\operatorname{t}}
+\newcommand{\argmin}{\operatorname*{arg\,min}}
+
+% ---- Supplement numbering ----
+\newcounter{suppalgorithm}
+\renewcommand{\thesuppalgorithm}{S\arabic{suppalgorithm}}
+\newenvironment{suppalgorithm}[1]{%
+  \refstepcounter{suppalgorithm}%
+  \par\medskip\noindent\textbf{Algorithm~\thesuppalgorithm. #1.}\par\nobreak
+}{\par\medskip}
+
+\renewcommand{\theequation}{S\arabic{equation}}
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\thesection}{S\arabic{section}}
+\renewcommand{\thesubsection}{S\arabic{section}.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{S\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
+
+\title{Supplementary Note: Exact Gaussian DESN Readouts under a Scaled Ridge Prior}
+\author{Antonio Aguirre \and Raquel Prado \and Bruno Sans\'o}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This note derives the exact conjugate Gaussian, or normal-likelihood, deep echo
+state network (DESN) readout used as a fast baseline and initialization device
+for Q--DESN models. Conditional on the reservoir construction and washout, the
+DESN states define a deterministic design matrix, so the Gaussian readout is a
+Bayesian linear regression model on fixed nonlinear features. We use a scaled
+ridge prior, \(\vect\beta\mid\omega^2\sim\Normal_d(\vect b,\omega^2\mat P^{-1})\),
+and an inverse-gamma prior on the homoskedastic observation variance
+\(\omega^2\). This model has an exact Normal--inverse-gamma posterior, a
+closed-form marginal Student posterior for the readout coefficients, a
+closed-form posterior predictive distribution for fixed future DESN features,
+and an exact direct posterior sampler. Since the posterior is available in
+closed form, no Gibbs sampler, CAVI/VB algorithm, or ELBO approximation is
+needed for this Gaussian baseline. Regularized-horseshoe variants are mentioned
+only as conditionally conjugate alternatives, not as part of the exact baseline.
+\end{abstract}
+
+\section{Scope and Relation to Q--DESN}
+\label{sec:scope}
+
+After reservoir construction, spectral scaling, layer reduction, and washout,
+the DESN feature map is fixed. Posterior inference for the readout is therefore
+conditional on a deterministic design matrix
+\(\mat X=[\vect x_1^\top;\ldots;\vect x_T^\top]\). The Gaussian DESN considered
+in this note replaces the AL or exAL working likelihood with the homoskedastic
+Normal likelihood
+\begin{equation}
+\label{eq:gaussian_likelihood_scope}
+\vect y\mid \vect\beta,\omega^2,\mat X
+\sim \Normal_T(\mat X\vect\beta,\omega^2\mat I_T),
+\qquad \omega^2>0.
+\end{equation}
+The variance parameter is denoted by \(\omega^2\), not \(\sigma\), to avoid
+confusion with the AL/exAL scale parameter in Q--DESN.
+
+The Gaussian DESN is not a quantile model. If the Gaussian likelihood is taken
+literally, \(\vect x_t^\top\vect\beta\) targets a conditional mean under
+squared-error loss. In Q--DESN, by contrast, \(\vect x_t^\top\vect\beta\) is the
+conditional \(p_0\)-quantile under an AL or exAL working likelihood. The role of
+this note is therefore computational:
+\begin{enumerate}[label=(\roman*)]
+\item provide an exact mean-regression baseline on the same fixed DESN features;
+\item provide a conditioning and regularization diagnostic for the readout;
+\item provide stable initial values for AL and exAL Q--DESN algorithms;
+\item avoid unnecessary approximate inference for a model whose posterior is
+available analytically.
+\end{enumerate}
+
+\section{Fixed DESN Design and Notation}
+\label{sec:fixed_design}
+
+Let
+\begin{equation}
+\label{eq:y_X_beta_dimensions}
+\vect y=(y_1,\ldots,y_T)^\top\in\R^T,
+\qquad
+\mat X=[\vect x_1^\top;\ldots;\vect x_T^\top]\in\R^{T\times d},
+\qquad d=r+1.
+\end{equation}
+Each row vector \(\vect x_t=(1,\tilde{\vect x}_t^\top)^\top\in\R^d\) contains
+an intercept and \(r\) fixed DESN readout features. The coefficient vector is
+partitioned as
+\begin{equation}
+\label{eq:beta_partition}
+\vect\beta=(\beta_0,\beta_1,\ldots,\beta_r)^\top\in\R^d,
+\qquad
+\vect\beta_{1:r}=(\beta_1,\ldots,\beta_r)^\top.
+\end{equation}
+The first coefficient is the intercept. The remaining \(r\) coefficients are
+slopes associated with the fixed DESN features. No reservoir weight, input
+weight, reducer, leak rate, or spectral-radius parameter is inferred in this
+Gaussian readout.
+
+For any \(\vect\beta\), define
+\begin{equation}
+\label{eq:residuals}
+\vect e(\vect\beta)=\vect y-\mat X\vect\beta,
+\qquad
+S_y(\vect\beta)=\|\vect y-\mat X\vect\beta\|^2.
+\end{equation}
+The identity matrix of size \(m\) is \(\mat I_m\).
+
+\section{Distributional Conventions}
+\label{sec:dist_conventions}
+
+All inverse-gamma distributions use the reciprocal-scale rate parameterization
+\begin{equation}
+\label{eq:ig_density}
+p(x\mid a,b)=\frac{b^a}{\Gamma(a)}x^{-a-1}\exp(-b/x),
+\qquad x>0,
+\end{equation}
+written \(x\sim\IG(a,b)\). If \(x\sim\IG(a,b)\), then
+\begin{equation}
+\label{eq:ig_moments}
+\E(x^{-1})=\frac{a}{b},
+\qquad
+\E(x)=\frac{b}{a-1}\quad(a>1),
+\qquad
+\E(\log x)=\log b-\psi(a),
+\end{equation}
+where \(\psi(\cdot)\) is the digamma function. For a Gaussian factor,
+\begin{equation}
+\label{eq:normal_entropy}
+H\{\Normal_d(\vect m,\mat S)\}
+=\frac12\{d(1+\log 2\pi)+\log|\mat S|\}.
+\end{equation}
+The notation \(\StudentT_\nu(\vect m,\mat S)\) denotes a multivariate Student
+\(t\) distribution with degrees of freedom \(\nu\), location \(\vect m\), and
+scale matrix \(\mat S\). Its covariance is \(\nu(\nu-2)^{-1}\mat S\), for
+\(\nu>2\).
+
+\section{Exact Scaled-Ridge Gaussian DESN}
+\label{sec:scaled_ridge}
+
+\subsection{Model}
+\label{subsec:model}
+
+The exact Gaussian baseline uses the conjugate scaled ridge prior
+\begin{align}
+\vect y\mid\vect\beta,\omega^2,\mat X
+&\sim \Normal_T(\mat X\vect\beta,\omega^2\mat I_T),
+\label{eq:likelihood}\\
+\vect\beta\mid\omega^2
+&\sim \Normal_d(\vect b,\omega^2\mat P^{-1}),
+\label{eq:scaled_prior}\\
+\omega^2&\sim\IG(a_\omega,b_\omega),
+\label{eq:omega_prior}
+\end{align}
+where \(a_\omega,b_\omega>0\), \(\mat P\in\R^{d\times d}\) is positive
+definite, and
+\begin{equation}
+\label{eq:b_P_definition}
+\vect b=(b_0,0,\ldots,0)^\top,
+\qquad
+\mat P=\diag(P_0,\kappa_\beta^{-2},\ldots,\kappa_\beta^{-2}).
+\end{equation}
+If
+\(\beta_0\mid\omega^2\sim\Normal(b_0,\omega^2V_0)\), then
+\(P_0=V_0^{-1}\). More general positive definite \(\mat P\) can be used without
+changing the derivation.
+
+The scaling by \(\omega^2\) in \eqref{eq:scaled_prior} is the key conjugacy
+condition. It is not identical to an independent ridge prior
+\(\vect\beta\sim\Normal_d(\vect b,\mat P^{-1})\). The scaled version is retained
+here because it yields an exact one-shot posterior and is used only as a
+baseline and initialization device for Q--DESN.
+
+\subsection{Full joint distribution}
+\label{subsec:joint}
+
+The joint density factors as
+\begin{equation}
+\label{eq:joint_factorization}
+p(\vect y,\vect\beta,\omega^2\mid\mat X)
+=p(\vect y\mid\vect\beta,\omega^2,\mat X)
+ p(\vect\beta\mid\omega^2)p(\omega^2).
+\end{equation}
+Writing all terms that depend on unknowns,
+\begin{align}
+\label{eq:joint_density_explicit}
+p(\vect y,\vect\beta,\omega^2\mid\mat X)
+&=(2\pi\omega^2)^{-T/2}
+\exp\left\{-\frac{1}{2\omega^2}
+(\vect y-\mat X\vect\beta)^\top(\vect y-\mat X\vect\beta)\right\}
+\nonumber\\
+&\quad\times
+(2\pi\omega^2)^{-d/2}|\mat P|^{1/2}
+\exp\left\{-\frac{1}{2\omega^2}
+(\vect\beta-\vect b)^\top\mat P(\vect\beta-\vect b)\right\}
+\nonumber\\
+&\quad\times
+\frac{b_\omega^{a_\omega}}{\Gamma(a_\omega)}
+(\omega^2)^{-a_\omega-1}\exp(-b_\omega/\omega^2).
+\end{align}
+Equivalently, up to constants independent of \((\vect\beta,\omega^2)\),
+\begin{align}
+\label{eq:log_joint}
+\log p(\vect y,\vect\beta,\omega^2\mid\mat X)
+&=\frac12\log|\mat P|+a_\omega\log b_\omega-\log\Gamma(a_\omega)
+\nonumber\\
+&\quad
+-\left(a_\omega+1+\frac{T+d}{2}\right)\log\omega^2
+\nonumber\\
+&\quad
+-\frac{1}{2\omega^2}\left[
+\|\vect y-\mat X\vect\beta\|^2
++(\vect\beta-\vect b)^\top\mat P(\vect\beta-\vect b)
++2b_\omega\right].
+\end{align}
+
+\subsection{Completing the square}
+\label{subsec:complete_square}
+
+Define
+\begin{align}
+\mat P_n&=\mat P+\mat X^\top\mat X,
+\label{eq:Pn}\\
+\vect h_n&=\mat P\vect b+\mat X^\top\vect y,
+\label{eq:hn}\\
+\vect m_n&=\mat P_n^{-1}\vect h_n,
+\label{eq:mn}\\
+a_n&=a_\omega+\frac{T}{2},
+\label{eq:an}\\
+B_n&=b_\omega+\frac12\left(
+\vect y^\top\vect y+
+\vect b^\top\mat P\vect b-
+\vect m_n^\top\mat P_n\vect m_n
+\right).
+\label{eq:Bn}
+\end{align}
+Then
+\begin{align}
+\label{eq:complete_square_identity}
+&\|\vect y-\mat X\vect\beta\|^2
++(\vect\beta-\vect b)^\top\mat P(\vect\beta-\vect b)
+\nonumber\\
+&\qquad=
+(\vect\beta-\vect m_n)^\top\mat P_n(\vect\beta-\vect m_n)
++\vect y^\top\vect y+
+\vect b^\top\mat P\vect b-
+\vect m_n^\top\mat P_n\vect m_n.
+\end{align}
+Substituting \eqref{eq:complete_square_identity} into the joint density gives
+an exact Normal--inverse-gamma posterior.
+
+\subsection{Exact posterior}
+\label{subsec:exact_posterior}
+
+The posterior factorization is
+\begin{align}
+\omega^2\mid\vect y,\mat X&\sim\IG(a_n,B_n),
+\label{eq:omega_posterior}\\
+\vect\beta\mid\omega^2,\vect y,\mat X
+&\sim\Normal_d(\vect m_n,\omega^2\mat P_n^{-1}).
+\label{eq:beta_cond_posterior}
+\end{align}
+Equivalently,
+\begin{equation}
+\label{eq:joint_posterior_kernel}
+p(\vect\beta,\omega^2\mid\vect y,\mat X)
+=p(\vect\beta\mid\omega^2,\vect y,\mat X)p(\omega^2\mid\vect y,\mat X).
+\end{equation}
+The marginal coefficient posterior is multivariate Student \(t\):
+\begin{equation}
+\label{eq:beta_student_posterior}
+\vect\beta\mid\vect y,\mat X
+\sim
+\StudentT_{2a_n}\left(\vect m_n,\frac{B_n}{a_n}\mat P_n^{-1}\right).
+\end{equation}
+Hence
+\begin{align}
+\E(\vect\beta\mid\vect y,\mat X)&=\vect m_n,
+\label{eq:posterior_mean_beta}\\
+\Var(\vect\beta\mid\vect y,\mat X)
+&=\frac{B_n}{a_n-1}\mat P_n^{-1},
+\qquad a_n>1,
+\label{eq:posterior_var_beta}\\
+\E(\omega^2\mid\vect y,\mat X)&=\frac{B_n}{a_n-1},
+\qquad a_n>1.
+\label{eq:posterior_mean_omega}
+\end{align}
+The posterior mode of \(\vect\beta\) and its posterior mean coincide at
+\(\vect m_n\), while the marginal posterior for \(\vect\beta\) carries the
+additional uncertainty induced by integrating out \(\omega^2\).
+
+\section{Posterior Predictive Distributions}
+\label{sec:predictive}
+
+For a new fixed DESN feature vector \(\vect x_*\in\R^d\), the posterior
+predictive distribution is
+\begin{equation}
+\label{eq:predictive_univariate}
+y_*\mid\vect y,\mat X,\vect x_*
+\sim
+\StudentT_{2a_n}\left(
+\vect x_*^\top\vect m_n,
+\frac{B_n}{a_n}\{1+\vect x_*^\top\mat P_n^{-1}\vect x_*\}
+\right).
+\end{equation}
+More generally, for a fixed future design matrix \(\mat X_*\in\R^{H\times d}\),
+\begin{equation}
+\label{eq:predictive_multivariate}
+\vect y_*\mid\vect y,\mat X,\mat X_*
+\sim
+\StudentT_{2a_n}\left(
+\mat X_*\vect m_n,
+\frac{B_n}{a_n}\{\mat I_H+\mat X_*\mat P_n^{-1}\mat X_*^\top\}
+\right).
+\end{equation}
+The fixed-design condition matters. In multi-step DESN forecasting, future
+features may depend on previously simulated responses. Conditional on any
+particular generated feature path, \eqref{eq:predictive_multivariate} applies.
+If the feature path is recursively simulated, posterior prediction should
+propagate draws through the reservoir recursion rather than treating
+\(\mat X_*\) as known in advance.
+
+\section{Exact Log Marginal Likelihood}
+\label{sec:log_marginal}
+
+Integrating out both \(\vect\beta\) and \(\omega^2\) gives the closed-form
+marginal likelihood
+\begin{align}
+\label{eq:log_marginal}
+\log p(\vect y\mid\mat X)
+&=-\frac{T}{2}\log(2\pi)
++\frac12\log|\mat P|-\frac12\log|\mat P_n|
++a_\omega\log b_\omega-a_n\log B_n
+\nonumber\\
+&\quad+\log\Gamma(a_n)-\log\Gamma(a_\omega).
+\end{align}
+This replaces any need for an ELBO in the Gaussian baseline. It is also a
+strong implementation check: exact posterior samplers and numerical posterior
+summaries should be consistent with \eqref{eq:log_marginal} and
+\eqref{eq:omega_posterior}--\eqref{eq:beta_student_posterior}.
+
+\section{Exact Direct Posterior Sampler}
+\label{sec:direct_sampler}
+
+Because the posterior is available exactly, no Markov chain is required.
+Independent posterior draws are generated directly as follows.
+
+\begin{suppalgorithm}{Direct sampler for the exact scaled-ridge Gaussian DESN}
+\label{alg:direct_sampler}
+\emph{Input:} fixed design \(\mat X\), response \(\vect y\), prior
+\((\vect b,\mat P,a_\omega,b_\omega)\), and desired number of draws \(M\).
+\begin{enumerate}[label=(\arabic*)]
+\item Compute \(\mat P_n\), \(\vect m_n\), \(a_n\), and \(B_n\) from
+\eqref{eq:Pn}--\eqref{eq:Bn}.
+\item For \(m=1,\ldots,M\):
+  \begin{enumerate}[label=(\alph*)]
+  \item draw \(\omega^{2(m)}\sim\IG(a_n,B_n)\);
+  \item draw
+  \(\vect\beta^{(m)}\mid\omega^{2(m)}
+  \sim\Normal_d(\vect m_n,\omega^{2(m)}\mat P_n^{-1})\).
+  \end{enumerate}
+\item For fixed future \(\mat X_*\), optionally draw
+\(\vect y_*^{(m)}\sim\Normal_H(\mat X_*\vect\beta^{(m)},
+\omega^{2(m)}\mat I_H)\), or use the analytic Student distribution in
+\eqref{eq:predictive_multivariate}.
+\end{enumerate}
+\end{suppalgorithm}
+
+Algorithm~\ref{alg:direct_sampler} is a direct posterior sampler, not a Gibbs
+sampler. A Gibbs sampler would only reproduce a posterior that is already
+available in closed form. Similarly, CAVI/VB would only approximate an exact
+posterior. For this reason, Gibbs, CAVI, and ELBO derivations are intentionally
+omitted from the main Gaussian baseline.
+
+\section{Use as Initialization for AL and exAL Q--DESN}
+\label{sec:initialization}
+
+The posterior mean \(\vect m_n\) gives a stable Gaussian readout estimate on the
+same fixed DESN features used by Q--DESN. For a target quantile level
+\(p_0\in(0,1)\), use it as a mean-regression warm start and then shift the
+intercept to target the desired empirical quantile.
+
+Define Gaussian residuals
+\begin{equation}
+\label{eq:init_residuals}
+r_t^N=y_t-\vect x_t^\top\vect m_n,
+\qquad t=1,\ldots,T.
+\end{equation}
+Let
+\begin{equation}
+\label{eq:empirical_resid_quantile}
+c_{p_0}=\widehat Q_{p_0}(r_1^N,\ldots,r_T^N)
+\end{equation}
+be the empirical \(p_0\)-quantile of the Gaussian residuals. Set
+\begin{align}
+\beta_0^{\mathrm{init}}(p_0)&=m_{n,0}+c_{p_0},
+\label{eq:init_beta0}\\
+\beta_j^{\mathrm{init}}(p_0)&=m_{n,j},
+\qquad j=1,\ldots,r.
+\label{eq:init_betaj}
+\end{align}
+Then the empirical \(p_0\)-quantile of
+\(y_t-\vect x_t^\top\vect\beta^{\mathrm{init}}(p_0)\) is approximately zero.
+This makes \(\vect x_t^\top\vect\beta^{\mathrm{init}}(p_0)\) a more appropriate
+initial quantile path than the raw Gaussian mean path.
+
+With the check loss
+\begin{equation}
+\label{eq:check_loss}
+\rho_p(u)=u\{p-\ind(u<0)\},
+\end{equation}
+initialize the AL/exAL scale by
+\begin{equation}
+\label{eq:init_sigma}
+\sigma^{\mathrm{init}}
+=\frac1T\sum_{t=1}^T
+\rho_{p_0}\left(y_t-\vect x_t^\top\vect\beta^{\mathrm{init}}(p_0)\right)
++\epsilon,
+\end{equation}
+where \(\epsilon>0\) is a small numerical floor. For AL, no shape parameter or
+\(s_t\) variables are used. For exAL, initialize at the AL special case,
+\begin{equation}
+\label{eq:init_gamma}
+\gamma^{\mathrm{init}}=0,
+\end{equation}
+or at a small jittered value near zero if the implementation uses an open
+transformed support. Stable latent starts are
+\begin{equation}
+\label{eq:init_latents}
+v_t^{\mathrm{init}}=\sigma^{\mathrm{init}},
+\qquad
+s_t^{\mathrm{init}}=\sqrt{2/\pi}\quad\text{for exAL only}.
+\end{equation}
+
+For variational Q--DESN implementations, a Gaussian covariance scale can also
+be initialized from
+\begin{equation}
+\label{eq:init_covariance}
+\widehat{\Var}(\vect\beta\mid\vect y,\mat X)
+=\frac{B_n}{a_n-1}\mat P_n^{-1},
+\qquad a_n>1,
+\end{equation}
+or from the conditional covariance
+\(\widehat\omega^2\mat P_n^{-1}\) with
+\(\widehat\omega^2=B_n/(a_n-1)\). These covariance quantities should be viewed
+as numerical initializers rather than posterior uncertainty statements for the
+AL/exAL quantile model.
+
+\section{Omitted Variants and Why They Are Not Main Derivations}
+\label{sec:omitted_variants}
+
+\subsection{Independent, unscaled ridge prior}
+\label{subsec:unscaled_omitted}
+
+The independent ridge prior
+\begin{equation}
+\label{eq:unscaled_prior_omitted}
+\vect\beta\sim\Normal_d(\vect b,\mat P^{-1}),
+\qquad
+\omega^2\sim\IG(a_\omega,b_\omega)
+\end{equation}
+is conditionally conjugate: \(\vect\beta\mid\omega^2,\vect y,\mat X\) is
+Gaussian and \(\omega^2\mid\vect\beta,\vect y,\mat X\) is inverse-gamma.
+However, it does not yield the same one-shot Normal--inverse-gamma posterior as
+Section~\ref{sec:scaled_ridge}, because the coefficient prior is not scaled by
+\(\omega^2\). It would require a Gibbs sampler or a mean-field approximation
+for posterior computation. Since the purpose of this note is an exact Gaussian
+baseline and initializer, the unscaled prior is not developed further here.
+
+\subsection{Regularized horseshoe readout prior}
+\label{subsec:rhs_omitted}
+
+A Gaussian DESN with the Nishimura--Suchard regularized-horseshoe
+\texttt{rhs\_ns} prior is also conditionally conjugate under its product
+representation. Given the local, global, and slab scales, the coefficient block
+is Gaussian, and the scale blocks can have inverse-gamma updates. Nevertheless,
+after integrating over those shrinkage scales, the marginal posterior is not a
+single closed-form Normal--inverse-gamma or Student distribution. Thus the
+\texttt{rhs\_ns} Gaussian model is useful as a conditional Gibbs or CAVI warm
+start, but it is not the exact closed-form baseline derived in this note.
+
+For Q--DESN initialization, the recommended default is therefore
+\begin{equation}
+\label{eq:init_pipeline}
+\begin{gathered}
+\text{exact scaled-ridge Gaussian DESN}\\
+\longrightarrow\ \text{quantile-shifted }\vect\beta^{\mathrm{init}}(p_0)\\
+\longrightarrow\ \text{AL/exAL Q--DESN}.
+\end{gathered}
+\end{equation}
+If adaptive RHS shrinkage is required in the final Q--DESN fit, RHS scale
+initializations can still be constructed from the shifted ridge coefficients,
+for example
+\begin{align}
+\tau^{\mathrm{init}}
+&=\operatorname{median}_{j=1,\ldots,r}|\beta_j^{\mathrm{init}}|+
+\epsilon,
+\label{eq:init_tau_rhs}\\
+\lambda_j^{\mathrm{init}}
+&=\max\left\{\lambda_{\min},
+\frac{|\beta_j^{\mathrm{init}}|}{\tau^{\mathrm{init}}}\right\},
+\qquad j=1,\ldots,r,
+\label{eq:init_lambda_rhs}\\
+\zeta^{\mathrm{init}}
+&=\max_{j=1,\ldots,r}|\beta_j^{\mathrm{init}}|+
+\epsilon.
+\label{eq:init_zeta_rhs}
+\end{align}
+These are initialization heuristics, not an exact RHS posterior calculation.
+
+\section{Implementation Notes}
+\label{sec:implementation}
+
+The main computational object is the positive definite precision matrix
+\(\mat P_n=\mat P+\mat X^\top\mat X\). Implementations should use Cholesky
+factorization of \(\mat P_n\) for all solves, log determinants, and Gaussian
+sampling. Avoid explicit matrix inversion except in small diagnostic scripts.
+For example,
+\begin{equation}
+\label{eq:solve_not_inverse}
+\vect m_n=\mat P_n^{-1}\vect h_n
+\end{equation}
+should be computed by solving \(\mat P_n\vect m_n=\vect h_n\).
+
+For the log marginal likelihood,
+\(\log|\mat P_n|\) and \(\log|\mat P|\) should be obtained from Cholesky factors.
+For posterior covariance diagnostics, use triangular solves to compute selected
+diagonal entries or linear-function variances rather than forming a dense
+inverse when \(d\) is large.
+
+Feature preprocessing should be fixed before inference. Centering and scaling
+non-intercept DESN features can improve conditioning, but the intercept column
+should remain an explicit column of ones. The prior precision \(P_0\) controls
+intercept regularization separately from the slope precision
+\(\kappa_\beta^{-2}\).
+
+\section{Validation and Consistency Checks}
+\label{sec:validation}
+
+\subsection{Dimension checks}
+
+\begin{enumerate}[label=(\alph*)]
+\item \(\mat X\in\R^{T\times d}\), \(\mat X^\top\mat X\in\R^{d\times d}\),
+\(\mat P\in\R^{d\times d}\), and \(\mat P_n\in\R^{d\times d}\).
+\item \(\vect h_n=\mat P\vect b+\mat X^\top\vect y\in\R^d\), hence
+\(\vect m_n\in\R^d\).
+\item \(B_n\) is scalar and positive when the prior is proper and
+\(\mat P_n\) is positive definite.
+\item \(\vect x_*^\top\mat P_n^{-1}\vect x_*\) is scalar and nonnegative.
+\end{enumerate}
+
+\subsection{Conjugacy checks}
+
+\begin{enumerate}[label=(\alph*)]
+\item The scaled prior contributes \(-d\log\omega^2/2\) to the joint density,
+but this factor is canceled by the Gaussian integral over \(\vect\beta\) when
+obtaining \(\omega^2\mid\vect y\). Therefore the marginal shape is
+\(a_\omega+T/2\), not \(a_\omega+(T+d)/2\).
+\item Conditional on \(\omega^2\), the posterior precision for \(\vect\beta\) is
+\(\omega^{-2}\mat P_n\), and the posterior covariance is
+\(\omega^2\mat P_n^{-1}\).
+\item Integrating \(\omega^2\) gives the Student posterior in
+\eqref{eq:beta_student_posterior} with degrees of freedom \(2a_n\).
+\item The posterior predictive variance includes both observation noise and
+coefficient uncertainty through
+\(1+\vect x_*^\top\mat P_n^{-1}\vect x_*\).
+\end{enumerate}
+
+\subsection{Numerical checks}
+
+\begin{enumerate}[label=(\alph*)]
+\item Independent draws from Algorithm~\ref{alg:direct_sampler} should match
+\(\E(\omega^2\mid\vect y,\mat X)=B_n/(a_n-1)\) and
+\(\E(\vect\beta\mid\vect y,\mat X)=\vect m_n\), within Monte Carlo error.
+\item The empirical covariance of sampled \(\vect\beta\) should match
+\(B_n(a_n-1)^{-1}\mat P_n^{-1}\), for \(a_n>1\).
+\item The direct Student sampler for \(\vect\beta\) and the two-step
+\(\omega^2,\vect\beta\mid\omega^2\) sampler should give the same marginal
+summaries.
+\item The log determinant terms in \eqref{eq:log_marginal} should be computed
+from Cholesky factors and checked for finite values.
+\item The condition numbers of \(\mat X^\top\mat X\), \(\mat P\), and
+\(\mat P_n\) should be monitored. Poor conditioning indicates a feature-scaling
+or reservoir-design issue, not a posterior-derivation issue.
+\end{enumerate}
+
+\subsection{Q--DESN initialization checks}
+
+\begin{enumerate}[label=(\alph*)]
+\item After the intercept shift in \eqref{eq:init_beta0}, the empirical
+\(p_0\)-quantile of
+\(y_t-\vect x_t^\top\vect\beta^{\mathrm{init}}(p_0)\) should be close to zero.
+\item The initialized AL/exAL scale in \eqref{eq:init_sigma} must be strictly
+positive.
+\item The initialized exAL shape value must lie in the quantile-dependent
+support \((L,U)\). If \(0\) is represented only as a boundary case in code, use
+a small interior jitter around zero.
+\item If RHS shrinkage scales are initialized by
+\eqref{eq:init_tau_rhs}--\eqref{eq:init_zeta_rhs}, all scales must be finite and
+positive.
+\end{enumerate}
+
+\subsection{Final self-audit}
+
+This note keeps only the scaled-ridge Gaussian DESN as the main model because
+it is the version with an exact closed-form posterior. It does not present
+Gibbs, CAVI, or ELBO algorithms for the main model because those methods are
+unnecessary approximations or redundant samplers for an analytically available
+posterior. Unscaled ridge and \texttt{rhs\_ns} priors are described only to
+clarify why they are not the exact baseline: both are useful conditionally
+conjugate models, but neither yields the same one-shot closed-form marginal
+posterior after all nuisance quantities are integrated out.
+
+\end{document}

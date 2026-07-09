@@ -1,0 +1,34 @@
+Current TT500 validation comparison table manifest
+Generated at: 2026-07-02 09:36:47 EDT
+Builder: scripts/build_validation_tt500_current_comparison_table.R
+Fit size: 500
+Expected source registry hash: edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275
+exDQLM/DQLM input: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/runs/20260515_exdqlm_dqlm_dynamic_fitforecast_v2_orchestrated_3500202605200353075941/interfaces/exdqlm_dqlm_dynamic_fitforecast_v2_shared_interface.csv
+exDQLM/DQLM input SHA-256: 2333de505952e403a6b97d54e710368878fdbc2197f4c9f9060d22dc10c31515
+Q-DESN VB input: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/dynamic_fitforecast_v2_validation/qdesn-dynamic-fitforecast-v2-vb-full-20260520-035319__git-d075941/20260520-071231__git-d075941/tables/campaign_fit_summary.csv
+Q-DESN VB input SHA-256: 2fc9a76319fdd509a66611b237c5cad74777af10a4a6639f3c3ae1bdba0e083f
+Q-DESN MCMC input: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/dynamic_fitforecast_v2_validation/qdesn-dynamic-fitforecast-v2-mcmc-tt500-20260520-035319__git-d075941/20260525-191523__git-d075941/provisional_progress/tt500_provisional_atomic_progress.csv
+Q-DESN MCMC input SHA-256: 3aee0709d06ab11fe714252013fd4d3a15de273f40033e80e36d53453a8f32ca
+Output TeX: /data/jaguir26/local/src/Article-Q-DESN__wt__main_validation_tables/tables/qdesn_validation_tt500_current_comparison.tex
+Output inference companion TeX: /data/jaguir26/local/src/Article-Q-DESN__wt__main_validation_tables/tables/qdesn_validation_tt500_inference_companion.tex
+Output CSV: /data/jaguir26/local/src/Article-Q-DESN__wt__main_validation_tables/tables/qdesn_validation_tt500_current_comparison.csv
+Output TeX SHA-256: d23318a03e64a422a26d82d887bbd8beb01c14392712ed1c5654e9c822bd894e
+Output inference companion TeX SHA-256: 01ecf64d270d410143b4fa12845d8da2f46626934d719836a063519144e4fa26
+Output CSV SHA-256: 4b00f57a6d51d5d0a1b63f2372ca783bd005ce142c561fa0d5935780cd223269
+Rows total: 108
+Rows complete: 104
+Rows running: 2
+Rows pending: 2
+Rows with missing forecast metrics: 40
+Rows by source: exdqlm_dqlm_shared_interface=36; qdesn_mcmc_atomic_progress=36; qdesn_vb_campaign_summary_with_rolling_path_sidecars=36
+Presentation: three primary manuscript tables by error family; two inference-stratified companion longtables are generated separately to avoid duplicating the main numerical comparison.
+Primary table labels: tab:simulation-tt500-normal; tab:simulation-tt500-laplace; tab:simulation-tt500-gausmix
+Companion table labels: tab:simulation-tt500-vb; tab:simulation-tt500-mcmc
+Column groups: Fit RMSE/PB; F100 RMSE/PB; F1000 RMSE/PB.
+Table highlight rule: boldface marks the lowest reported value within each family, quantile, and metric column; ties after two-decimal rounding are all highlighted.
+Source registry hashes in output: edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275
+Validation commits in output: d075941313186b15853e94c2a2cad7d0fec410d8, ec465f93b7b799e675c40f3a6382c7c6e9ae5727
+Package versions in output: 1.0.0
+Run tags in output: 20260515_exdqlm_dqlm_dynamic_fitforecast_v2_orchestrated_3500202605200353075941; qdesn-dynamic-fitforecast-v2-mcmc-tt500-20260520-035319__git-d075941; qdesn-dynamic-fitforecast-v2-vb-full-20260520-035319__git-d075941
+Policy: current article-facing comparison snapshot with explicit incomplete-row placeholders.
+Refresh rule: rerun this builder after validation finalizes or when adding TT100/other fit-size cases.

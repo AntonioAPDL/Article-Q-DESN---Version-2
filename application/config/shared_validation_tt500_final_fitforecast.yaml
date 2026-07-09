@@ -1,0 +1,698 @@
+artifact_id: shared_validation_tt500_final_fitforecast_20260704_current_best_vb_mcmc
+artifact_status: final_article_facing_tt500
+article_consumable: true
+is_final: true
+validation_worktree: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0
+validation_branch: validation/shared-fitforecast-v2-1.0.0
+validation_head_commit_at_article_sync: f4956ddd3dcb1193194458c9dbaab9f87829e338
+package_version: 1.0.0
+source_registry_root: /data/jaguir26/local/src/shared_dynamic_fit_forecast_validation/sources/dlm_constV_p90_m0amp_highnoise_steepertrend_v2_TTmain10000_fitforecast
+source_registry_hash_name: 000__bundle_manifest.json.sha256
+source_registry_hash_value: edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275
+fit_size: 500
+train_start_source_index: 8501
+train_end_source_index: 9000
+forecast_origin_source_index: 9000
+forecast_block_start_source_index: 9001
+forecast_block_end_source_index: 10000
+max_lead_configured: 30
+origin_stride: 30
+forecast_protocol: rolling_origin_no_refit_state_update
+interfaces:
+  qdesn_mcmc:
+    model_family: qdesn
+    interface_role: qdesn_tt500_mcmc_scale_repaired
+    path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/dynamic_fitforecast_v2_validation/qdesn-rolling-origin-v3-scale-repair-20260621__git-ec465f9/final_tt500/interfaces/qdesn_dynamic_fitforecast_v2_shared_interface.csv
+    sha256: dd9b35bdb20763f5b1e4d2cfaf261deb8c4cc09e87400cb789802d4d97473a16
+    validation_commit_at_export: ec465f93b7b799e675c40f3a6382c7c6e9ae5727
+    expected_rows_total: 1080
+    expected_rows_tt500: 1080
+    expected_fit_size_values:
+      - 500
+    expected_inference_values:
+      - mcmc
+    accepted_status_values:
+      - SUCCESS
+    require_scale_repaired_qdesn_forecasts: true
+  qdesn_vb:
+    model_family: qdesn
+    interface_role: qdesn_vb_full_scale_repaired
+    path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/dynamic_fitforecast_v2_validation/qdesn-rolling-origin-v3-scale-repair-20260621__git-ec465f9/vb_full/interfaces/qdesn_dynamic_fitforecast_v2_shared_interface.csv
+    sha256: d92cacc5edaad2bbef7eb02d51a55cf21bb5d456f2a91eff5d29d1b0f6da6e92
+    validation_commit_at_export: ec465f93b7b799e675c40f3a6382c7c6e9ae5727
+    expected_rows_total: 2160
+    expected_rows_tt500: 1080
+    expected_fit_size_values:
+      - 500
+      - 5000
+    expected_inference_values:
+      - vb
+    accepted_status_values:
+      - SUCCESS
+    require_scale_repaired_qdesn_forecasts: true
+  exdqlm_dqlm:
+    model_family: exdqlm_dqlm
+    interface_role: exdqlm_dqlm_dynamic_tt500_fitforecast
+    path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/runs/20260515_exdqlm_dqlm_dynamic_fitforecast_v2_orchestrated_3500202605200353075941/interfaces/exdqlm_dqlm_dynamic_fitforecast_v2_shared_interface.csv
+    sha256: 2333de505952e403a6b97d54e710368878fdbc2197f4c9f9060d22dc10c31515
+    validation_commit_at_export: d075941313186b15853e94c2a2cad7d0fec410d8
+    expected_rows_total: 1620
+    expected_rows_tt500: 1080
+    expected_fit_size_values:
+      - 500
+      - 5000
+    expected_inference_values:
+      - vb
+      - mcmc
+    accepted_status_values:
+      - done
+    require_scale_repaired_qdesn_forecasts: false
+summary_overrides:
+  exdqlm_dqlm_vb_current_best_c13:
+    enabled: true
+    override_type: exdqlm_dqlm_vb_current_best
+    interface_role: exdqlm_dqlm_vb_current_best_c13_article_summary_override
+    validation_commit_at_export: 10ef52920b8d77de9c01d05efd0db2939c70f4e6
+    validation_audit_commit: fc2bfefd814a3325eea957bd6f439439a8a6dd4d
+    run_tag: 20260702_exdqlm_dqlm_vb_c0_discount_screen
+    selected_candidate_id: c13_trend100_season1_df0995s099
+    expected_cells: 18
+    expected_leads: 30
+    expected_origins_scored_total: 1000
+    current_best_csv_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/docs/exdqlm_dqlm_qdesn_vb_current_best_comparison_20260703.csv
+    current_best_csv_sha256: 540588b9588b5c9b062e897d3d396984faa0d4edeb80ec10698097ac78ef6b47
+    current_best_audit_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/docs/EXDQLM_DQLM_QDESN_VB_CURRENT_BEST_AUDIT_2026-07-03.md
+    current_best_audit_sha256: f1a724443d04a955462ae945d7e938c700c37798f61c97b179d90c40a2242574
+    raw_interface_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/runs/20260702_exdqlm_dqlm_vb_c0_discount_screen/interfaces/exdqlm_dqlm_dynamic_fitforecast_v2_shared_interface.csv
+    raw_interface_sha256: 64f052a2ee36d917735c089f6dce663ea24ed4d612e563a3c47c10640fff2465
+    expected_model_variants:
+      - dqlm
+      - exdqlm
+    expected_families:
+      - gausmix
+      - laplace
+      - normal
+    expected_tau_values:
+      - 0.05
+      - 0.25
+      - 0.50
+  exdqlm_dqlm_c13_mcmc_current_best_20260704:
+    enabled: true
+    override_type: exdqlm_dqlm_mcmc_current_best
+    interface_role: exdqlm_dqlm_c13_mcmc_current_best_article_summary_override
+    validation_commit_at_export: 49a4caa5b62d32216e75945e8adfbfa8e83c63cc
+    validation_run_commit: 49a4caa5b62d32216e75945e8adfbfa8e83c63cc
+    run_tag: 20260704_exdqlm_dqlm_c13_mcmc_500obs_full_v2
+    promotion_id: exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704
+    promotion_status: authoritative_article_facing_after_complete_audit
+    diagnostic_qualification: diagnostic_qualified_current_best_c13_mcmc
+    selected_candidate_id: c13_trend100_season1_df0995s099
+    expected_cells: 18
+    expected_leads: 30
+    expected_origins_scored_total: 1000
+    promotion_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704/exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704_summary.csv
+    promotion_summary_sha256: 59e6e1c2977624ad8c72fb035e831242540602e7116076e54370c943fda70e03
+    promotion_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704/exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704_manifest.json
+    promotion_manifest_sha256: 6317251d3eb7f2e14ced8e457e6599605aa789974076547704608d0b4d2fe92d
+    promotion_sources_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704/exdqlm_dqlm_c13_mcmc_500obs_authoritative_20260704_sources.csv
+    promotion_sources_sha256: 843633420402785ea848d707f3d041d4af2f2db99a89db02635fe50e972395e2
+    expected_model_variants:
+      - dqlm
+      - exdqlm
+    expected_families:
+      - gausmix
+      - laplace
+      - normal
+    expected_tau_values:
+      - 0.05
+      - 0.25
+      - 0.50
+    expected_source_registry_hash_names:
+      - sha256
+    invalid_run_tags:
+      - 20260704_exdqlm_dqlm_c13_mcmc_500obs_refresh
+      - 20260704_exdqlm_dqlm_c13_mcmc_500obs_refresh_v2
+      - 20260704_exdqlm_dqlm_c13_mcmc_500obs_full_v1
+  qdesn_al_rhs_recalibrated_candidate_authoritative:
+    enabled: true
+    override_type: promotion_handoff
+    interface_role: qdesn_tt500_al_rhs_recalibrated_candidate_authoritative
+    validation_commit_at_export: ef1f9a86bc6838fc6877f7060ea28815bc8b44c4
+    run_tag: qdesn-tt500-al-rhs-recalibrated-candidate-authoritative-handoff-20260701
+    promotion_id: qdesn_tt500_al_rhs_recalibrated_candidate_20260701
+    diagnostic_qualification: >-
+      AL RHS VB Wave A success-only candidate; unstable rhs_tau0=3e-05
+      exploratory failures excluded and documented.
+    expected_promotion_rows: 9
+    expected_model_variants:
+      - rhs_ns
+    expected_model_keys:
+      - qdesn_al_rhs_ns
+    expected_qdesn_likelihoods:
+      - al
+    expected_likelihood_families:
+      - al
+    expected_priors:
+      - rhs_ns
+    expected_methods:
+      - vb
+    expected_inferences:
+      - vb
+    expected_row_diagnostic_qualifications:
+      - diagnostic_pass
+    require_comparison_eligible: true
+    promotion_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_al_rhs_recalibrated_candidate_20260701/qdesn_tt500_al_rhs_recalibrated_candidate_20260701_summary.csv
+    promotion_summary_sha256: 1dc5de595092551d749f03df509f1a9697f54c98be2bba34f4c51750c1a59d30
+    promotion_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_al_rhs_recalibrated_candidate_20260701/qdesn_tt500_al_rhs_recalibrated_candidate_20260701_manifest.json
+    promotion_manifest_sha256: 8e17f332e291754a6ca67bfa0740aa93ee6d2164d2db5986122f0f0934940728
+    accepted_signoff_grades:
+      - PASS
+    replacements:
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_al_rhs_ns
+        inference: vb
+  qdesn_vb_stage3_forecast_bias_rescue:
+    enabled: true
+    interface_role: qdesn_tt500_vb_stage3_forecast_bias_rescue_summary_override
+    validation_commit_at_export: 203f47adcbd417827e26e8efaf36f120e075fbf3
+    run_tag: qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628
+    report_root: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage3_forecast_bias_rescue/qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628/20260628-114648__git-203f47a
+    results_root: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/results/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage3_forecast_bias_rescue/qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628/20260628-114648__git-203f47a
+    primary_profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+    backup_profiles:
+      - tt500vb_f3_d1_n30_a0p03_r0p5_m15_lag15_rl0_pw0p03_pin0p3
+    fit_forecast_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage3_forecast_bias_rescue/qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628/20260628-114648__git-203f47a/tables/qdesn_tt500_vb_screen_fit_forecast_summary.csv
+    fit_forecast_summary_sha256: 7eb702bb7ab468a083acacd1a185b485af21642d2bffafc9355a9b4f9526d3ca
+    dominance_cell_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage3_forecast_bias_rescue/qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628/20260628-114648__git-203f47a/tables/qdesn_tt500_vb_dominance_cell_summary.csv
+    dominance_cell_summary_sha256: 59a2c78376f49e31f13d121730579e596d145c8cab7b7146eb19dbc5829e4192
+    dominance_profile_ranking_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage3_forecast_bias_rescue/qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628/20260628-114648__git-203f47a/tables/qdesn_tt500_vb_dominance_profile_ranking.csv
+    dominance_profile_ranking_sha256: aa1c25cb3a22988d91b053917b460408fe79460eaf5f98f6f32ce7ea9f57444f
+    audit_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage3_forecast_bias_rescue/qdesn-tt500-vb-stage3-forecast-bias-rescue-full-20260628/20260628-114648__git-203f47a/audit/tables/qdesn_tt500_vb_screen_audit_summary.csv
+    audit_summary_sha256: 3a4711868bea45098e3e7c36495ce0e712bbb5cd57bb4c2ba1f63d7c59ee1828
+    replacements:
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+  qdesn_vb_stage4_remaining_cell_repair:
+    enabled: true
+    override_type: candidate_ledger
+    interface_role: qdesn_tt500_vb_stage4_remaining_cell_repair_summary_override
+    validation_commit_at_export: 4d77027184df369a0607f3ac78eb7eae2687a5ed
+    run_tag: qdesn-tt500-vb-stage4a4b-candidate-ledger-20260629
+    candidate_ledger_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/docs/qdesn_tt500_vb_stage4_best_candidate_ledger_2026-06-29.csv
+    candidate_ledger_sha256: 585ad93f139672fa9930b170f33dcba90bc9f2f48fdaa1c4c5c63da05e4f6421
+    candidate_ledger_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/docs/qdesn_tt500_vb_stage4_best_candidate_ledger_2026-06-29_manifest.json
+    candidate_ledger_manifest_sha256: 80153ef79aebcf3ee10cdabf20d921865391322ddf1f231f1a9046f0d54a8331
+    accepted_signoff_grades:
+      - PASS
+      - WARN
+    stage_sources:
+      stage4a_remaining_cells_transfer:
+        report_root: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4_remaining_cells_transfer/qdesn-tt500-vb-stage4-transfer-full-20260629__git-a59c631/20260629-035305__git-a59c631
+        fit_forecast_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4_remaining_cells_transfer/qdesn-tt500-vb-stage4-transfer-full-20260629__git-a59c631/20260629-035305__git-a59c631/tables/qdesn_tt500_vb_screen_fit_forecast_summary.csv
+        fit_forecast_summary_sha256: 4b1665e2ac99971bc7a943d5f98d8b1b38684f8c2cc47f37fa5d4aea665ed88c
+        dominance_cell_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4_remaining_cells_transfer/qdesn-tt500-vb-stage4-transfer-full-20260629__git-a59c631/20260629-035305__git-a59c631/tables/qdesn_tt500_vb_dominance_cell_summary.csv
+        dominance_cell_summary_sha256: 2f5e9e4a2dc07802c253b364d5b239b8314898a4db8fefb994e5c8f1bacf385a
+        dominance_profile_ranking_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4_remaining_cells_transfer/qdesn-tt500-vb-stage4-transfer-full-20260629__git-a59c631/20260629-035305__git-a59c631/tables/qdesn_tt500_vb_dominance_profile_ranking.csv
+        dominance_profile_ranking_sha256: 512df7d2a1bf1ecff1fc991cbe265af11a7aa3c09515b4404822bf1cf66b73d9
+        audit_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4_remaining_cells_transfer/qdesn-tt500-vb-stage4-transfer-full-20260629__git-a59c631/20260629-035305__git-a59c631/audit/tables/qdesn_tt500_vb_screen_audit_summary.csv
+        audit_summary_sha256: 16ca4d542e75fa789872f1f9d06aebc27252da1cc36f4e866372baa6c76f2466
+      stage4b_gausmix005_pinball_refinement:
+        report_root: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4b_gausmix005_pinball_refinement/qdesn-tt500-vb-stage4b-gausmix005-pinball-full-20260629__git-52a1821/20260629-040813__git-52a1821
+        fit_forecast_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4b_gausmix005_pinball_refinement/qdesn-tt500-vb-stage4b-gausmix005-pinball-full-20260629__git-52a1821/20260629-040813__git-52a1821/tables/qdesn_tt500_vb_screen_fit_forecast_summary.csv
+        fit_forecast_summary_sha256: bcd72050f780263cc6ee74ebc70180454fffd528d06c45c125170d4f03baa333
+        dominance_cell_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4b_gausmix005_pinball_refinement/qdesn-tt500-vb-stage4b-gausmix005-pinball-full-20260629__git-52a1821/20260629-040813__git-52a1821/tables/qdesn_tt500_vb_dominance_cell_summary.csv
+        dominance_cell_summary_sha256: 76fda6142a25dd97dadffe49420f4f393d8fbafd8aee4f22634b4d435bc67ad9
+        dominance_profile_ranking_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4b_gausmix005_pinball_refinement/qdesn-tt500-vb-stage4b-gausmix005-pinball-full-20260629__git-52a1821/20260629-040813__git-52a1821/tables/qdesn_tt500_vb_dominance_profile_ranking.csv
+        dominance_profile_ranking_sha256: 04a975dffd9dd121d1d330909c699c53d8db254a708040a0af16e1d8ecca918c
+        audit_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/reports/qdesn_mcmc_validation/qdesn_dynamic_fitforecast_v2_tt500_vb_stage4b_gausmix005_pinball_refinement/qdesn-tt500-vb-stage4b-gausmix005-pinball-full-20260629__git-52a1821/20260629-040813__git-52a1821/audit/tables/qdesn_tt500_vb_screen_audit_summary.csv
+        audit_summary_sha256: cdda9567444fb71b18796140d68d8a65341cea18288e7244e8b071df8a25544d
+    replacements:
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        stage: stage4b_gausmix005_pinball_refinement
+        profile: tt500vb_f3_d2_n20_a0p05_r0p6_m15_lag15_rl0_pw0p03_pin0p3
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        stage: stage4a_remaining_cells_transfer
+        profile: tt500vb_f3_d1_n30_a0p03_r0p5_m15_lag15_rl0_pw0p03_pin0p3
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        stage: stage4a_remaining_cells_transfer
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        stage: stage4a_remaining_cells_transfer
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        stage: stage4a_remaining_cells_transfer
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_exal_rhs_ns
+        inference: vb
+        stage: stage4a_remaining_cells_transfer
+        profile: tt500vb_f3_d1_n30_a0p02_r0p45_m15_lag15_rl0_pw0p03_pin0p3
+  qdesn_mcmc_vb_winner_confirmation_authoritative:
+    enabled: true
+    override_type: mcmc_authoritative_handoff
+    interface_role: qdesn_tt500_mcmc_vb_winner_confirmation_authoritative
+    validation_commit_at_export: d45abc6e2408a287bd10aff7861f41872e894f8f
+    run_tag: qdesn-tt500-mcmc-authoritative-handoff-20260701
+    promotion_id: qdesn_tt500_mcmc_authoritative_20260701
+    diagnostic_qualification: diagnostic_qualified_authoritative_mcmc
+    promotion_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_mcmc_authoritative_20260701/qdesn_tt500_mcmc_authoritative_summary.csv
+    promotion_summary_sha256: 3272c426c4844afc188099f8e63c3d4f442729ee851a0c2347afe7fdff70025d
+    promotion_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_mcmc_authoritative_20260701/qdesn_tt500_mcmc_authoritative_manifest.json
+    promotion_manifest_sha256: 479e4f59b5d6c8eafcadc06a01eaa6951ab44852e40ab6b17f97be8a172cf8a4
+    accepted_signoff_grades:
+      - WARN
+      - FAIL
+    replacements:
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_exal_rhs_ns
+        inference: mcmc
+  qdesn_mcmc_al_rhs_recalibrated_authoritative:
+    enabled: true
+    override_type: promotion_handoff
+    interface_role: qdesn_tt500_mcmc_al_rhs_recalibrated_authoritative
+    validation_commit_at_export: 9819010fe658e8d71aef5a9c962a2a477a509b4c
+    run_tag: qdesn-tt500-mcmc-al-rhs-recalibrated-authoritative-handoff-20260702
+    promotion_id: qdesn_tt500_mcmc_al_rhs_recalibrated_authoritative_20260702
+    diagnostic_qualification: diagnostic_qualified_authoritative_mcmc_al_rhs_recalibrated
+    expected_promotion_rows: 9
+    expected_model_variants:
+      - rhs_ns
+    expected_model_keys:
+      - qdesn_al_rhs_ns
+    expected_qdesn_likelihoods:
+      - al
+    expected_likelihood_families:
+      - al
+    expected_priors:
+      - rhs_ns
+    expected_methods:
+      - mcmc
+    expected_inferences:
+      - mcmc
+    expected_row_diagnostic_qualifications:
+      - diagnostic_qualified_authoritative_mcmc_al_rhs_recalibrated
+    require_comparison_eligible: true
+    promotion_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_mcmc_al_rhs_recalibrated_authoritative_20260702/qdesn_tt500_mcmc_al_rhs_recalibrated_authoritative_20260702_summary.csv
+    promotion_summary_sha256: a24de53f8d24111e21785c0eec5b6c40973a0bbb7494060c16135a9062ba5063
+    promotion_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_mcmc_al_rhs_recalibrated_authoritative_20260702/qdesn_tt500_mcmc_al_rhs_recalibrated_authoritative_20260702_manifest.json
+    promotion_manifest_sha256: 301ab838dfed94ef1994cb5e0d90506abb0c2ceec35c71dea1437cea06a21fb9
+    accepted_signoff_grades:
+      - PASS
+      - WARN
+    replacements:
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_al_rhs_ns
+        inference: mcmc
+  qdesn_ridge_corrected_candidate_authoritative:
+    enabled: true
+    override_type: promotion_handoff
+    interface_role: qdesn_tt500_ridge_corrected_candidate_authoritative
+    validation_commit_at_export: 454c38d5a74c0ae12c2b7121ba5d58a52c7496a6
+    run_tag: qdesn-tt500-ridge-corrected-candidate-authoritative-handoff-20260701
+    promotion_id: qdesn_tt500_ridge_corrected_candidate_20260701
+    diagnostic_qualification: >-
+      VB and MCMC AL diagnostic-clean enough for candidate promotion; MCMC exAL
+      has unresolved high-autocorrelation debt.
+    expected_promotion_rows: 36
+    expected_model_variants:
+      - ridge
+    expected_model_keys:
+      - qdesn_al_ridge
+      - qdesn_exal_ridge
+    expected_qdesn_likelihoods:
+      - al
+      - exal
+    expected_likelihood_families:
+      - al
+      - exal
+    expected_priors:
+      - ridge
+    expected_methods:
+      - vb
+      - mcmc
+    expected_inferences:
+      - vb
+      - mcmc
+    expected_row_diagnostic_qualifications:
+      - diagnostic_pass
+      - diagnostic_debt
+    require_comparison_eligible: false
+    promotion_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_ridge_corrected_candidate_20260701/qdesn_tt500_ridge_corrected_candidate_summary.csv
+    promotion_summary_sha256: d5597eadf3f73d0ca4b1875dc6771ceb9e9f5f467dd1b36cdac4cc5dc1045a17
+    promotion_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_ridge_corrected_candidate_20260701/qdesn_tt500_ridge_corrected_candidate_manifest.json
+    promotion_manifest_sha256: 90c29593925f101754fdd9fcae0f8875cc3d230eefae742eaee7fbf759808fbc
+    accepted_signoff_grades:
+      - PASS
+      - WARN
+      - FAIL
+    replacements:
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_al_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_al_ridge
+        inference: vb
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: vb
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: vb
+  qdesn_mcmc_ridge_exal_authoritative:
+    enabled: false
+    override_type: mcmc_authoritative_handoff
+    interface_role: qdesn_tt500_ridge_exal_mcmc_authoritative
+    validation_commit_at_export: 454c38d5a74c0ae12c2b7121ba5d58a52c7496a6
+    run_tag: qdesn-tt500-ridge-exal-mcmc-authoritative-handoff-20260701
+    promotion_id: qdesn_tt500_ridge_exal_mcmc_authoritative_20260701
+    diagnostic_qualification: diagnostic_qualified_authoritative_mcmc_with_explicit_flags
+    expected_model_variant: ridge
+    expected_model_key: qdesn_exal_ridge
+    expected_qdesn_likelihood: exal
+    expected_likelihood_family: exal
+    expected_prior: ridge
+    promotion_summary_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_ridge_exal_mcmc_authoritative_20260701/qdesn_tt500_ridge_exal_mcmc_authoritative_summary.csv
+    promotion_summary_sha256: 8423e373e082515dcb5a5980176d75a1b1a69146da9e66bbfff0cf2d69c52ded
+    promotion_manifest_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_tt500_ridge_exal_mcmc_authoritative_20260701/qdesn_tt500_ridge_exal_mcmc_authoritative_manifest.json
+    promotion_manifest_sha256: 5e3ad97fa997fb0699410548eab37a0e216f648bb631bba162764e8145e08a15
+    accepted_signoff_grades:
+      - PASS
+      - WARN
+      - FAIL
+    replacements:
+      - family: gausmix
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: gausmix
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: laplace
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.05
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.25
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+      - family: normal
+        tau: 0.50
+        model_key: qdesn_exal_ridge
+        inference: mcmc
+article_outputs:
+  summary_csv: tables/qdesn_validation_tt500_final_summary.csv
+  tex_wrapper: tables/qdesn_validation_tt500_final_tables.tex
+  normal_tex: tables/qdesn_validation_tt500_final_normal.tex
+  laplace_tex: tables/qdesn_validation_tt500_final_laplace.tex
+  gausmix_tex: tables/qdesn_validation_tt500_final_gausmix.tex
+  manifest: tables/qdesn_validation_tt500_final_manifest.txt
+article_policy: >-
+  Final article-facing 500-observation fit-and-forecast comparison. Q-DESN
+  exAL RHS MCMC rows are replaced by the June 30, 2026 diagnostic-qualified
+  authoritative handoff. Q-DESN AL RHS MCMC rows are replaced by the July 2,
+  2026 recalibrated diagnostic-qualified handoff with PASS/WARN flags
+  preserved. Q-DESN AL/exAL ridge VB and MCMC rows are replaced by the July 1,
+  2026 corrected ridge handoff with diagnostic flags preserved, including
+  accepted WARN/FAIL rows where explicitly pinned. exDQLM/DQLM VB rows are
+  replaced by the July 3, 2026 current-best c13 summary override; exDQLM/DQLM
+  MCMC rows remain historical until a matched MCMC refresh is pinned. These
+  handoffs exclude 5000-observation MCMC; 5000-observation rows remain outside
+  manuscript claims unless a later config pins complete interfaces with their
+  own hashes and guards.

@@ -1,0 +1,119 @@
+{
+  "files": [
+    {
+      "bytes": 443,
+      "path": "tables/pricefm_full_main_summary.tex",
+      "sha256": "03c3726f016d791a837243e2ef0323b6e21ec5671e6d23c6e1a723328f3e6e5e"
+    },
+    {
+      "bytes": 285,
+      "path": "tables/pricefm_full_input_set_summary.tex",
+      "sha256": "360e1e779836d1eedf7b8ca336e8d4eef034d7eb4a08fedd4b2b75fa83323f6f"
+    },
+    {
+      "bytes": 284,
+      "path": "tables/pricefm_full_horizon_diagnostic_summary.tex",
+      "sha256": "f99ec223b1cf68602a7fddcb5123e823cd549542c292e5e86d73300647c82d94"
+    },
+    {
+      "bytes": 307,
+      "path": "tables/pricefm_full_fold_summary.tex",
+      "sha256": "a25934ea9f4b6e196eddba2ce3605299ab954d1dd70e8e772bf52f6bb8c5d807"
+    },
+    {
+      "bytes": 238,
+      "path": "tables/pricefm_full_method_summary.tex",
+      "sha256": "48162e5f081203f718421ae9a2598b4894c449529a37cafb0e5324add26e54e3"
+    },
+    {
+      "bytes": 233,
+      "path": "tables/pricefm_full_decision_summary.tex",
+      "sha256": "f548ffc160cabef2e3d55d9f5400dd1c73411dd7b809181d4fbd0da9e9fef40d"
+    },
+    {
+      "bytes": 310,
+      "path": "tables/pricefm_full_source_summary.tex",
+      "sha256": "718cc16158096fc698c77b6817698a677b0b45a78c8ffdf4fb020f904d6aebf6"
+    },
+    {
+      "bytes": 317,
+      "path": "tables/pricefm_full_feature_summary.tex",
+      "sha256": "52e567d7d05d2ba8918666a697e1e956f9b1ce45162e4e7740ecc13e80e27440"
+    },
+    {
+      "bytes": 284,
+      "path": "tables/pricefm_full_horizon_summary.tex",
+      "sha256": "f99ec223b1cf68602a7fddcb5123e823cd549542c292e5e86d73300647c82d94"
+    },
+    {
+      "bytes": 1136,
+      "path": "tables/pricefm_full_top_wins_losses.tex",
+      "sha256": "a8c716d07d232369801e4cea007f3a7d0d673eef9a58e6966f76c168e02b2a1b"
+    },
+    {
+      "bytes": 1235,
+      "path": "tables/pricefm_full_priority_rescue.tex",
+      "sha256": "a6bfcbc81985c22b7b78eb3d8b8ba4644af300feee0743c7c4fa13207e329a58"
+    },
+    {
+      "bytes": 2124,
+      "path": "tables/pricefm_full_current_outputs.tex",
+      "sha256": "68ffca2872aa55982dfbc0342fbdf2f8f7a176e2fe5f25ea83893b4f8ca22104"
+    },
+    {
+      "bytes": 69049,
+      "path": "figures/pricefm_application/pricefm_full_qdesn_pricefm_delta.png",
+      "sha256": "140208e9628d517c8623cc8dd6ce950a39a0c2e4a30c16ce6b781e09ffc60760"
+    },
+    {
+      "bytes": 73073,
+      "path": "figures/pricefm_application/pricefm_full_horizon_delta_heatmap.png",
+      "sha256": "3ccb2e958585b12b5ccd6e7e47cff83074e83f5e45a6dd6eeee8281b95c9b7e6"
+    }
+  ],
+  "summary": {
+    "comparison_status_completed": true,
+    "decision_counts": {
+      "pricefm_wins": 36,
+      "qdesn_close": 12,
+      "qdesn_wins": 66
+    },
+    "expected_quantiles": [
+      0.1,
+      0.25,
+      0.45,
+      0.5,
+      0.55,
+      0.75,
+      0.9
+    ],
+    "fits_models": false,
+    "launches_models": false,
+    "mean_delta_AQL_qdesn_minus_pricefm": -0.21266590741168667,
+    "median_delta_AQL_qdesn_minus_pricefm": -0.0828163895796008,
+    "mutates_manuscript": false,
+    "n_binary_artifacts": 0,
+    "n_folds": 3,
+    "n_horizon_diagnostic_region_folds": 72,
+    "n_region_folds": 114,
+    "n_regions": 38,
+    "outputs": {
+      "decision_registry": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_decision_registry.csv",
+      "horizon_diagnostics": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_horizon_diagnostics.csv",
+      "horizon_summary": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_horizon_summary.csv",
+      "method_summary": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_method_summary.csv",
+      "source_manifest": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/source_manifest.csv",
+      "summary_json": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/summary.json"
+    },
+    "qdesn_win_rate": 0.5789473684210527,
+    "recommended_next_action": "build_full_surface_manuscript_assets",
+    "row_alignment_complete": true,
+    "source_class_counts": {
+      "current_r3q": 42,
+      "provenance_bridge_30": 30,
+      "stage_m": 42
+    },
+    "stage": "pricefm_full_surface_decision_closeout",
+    "status": "completed"
+  }
+}

@@ -63,6 +63,11 @@ modest, and reproducible in the main article.
   not rolling-origin forecast validation.
 - Updated source table captions in `application/R/joint_qdesn_article_assets.R`
   so regenerated Phase 115 tables preserve the polish.
+- Tightened the compact model-summary table layout in
+  `tables/joint_qdesn_article_validation_vb_model_summary.tex` so the four
+  model labels remain readable in the compiled article.  This is a presentation
+  edit only; the numerical summaries and caption are unchanged, and the asset
+  manifest hash was refreshed for the edited table.
 
 ## Reproducibility Plan
 

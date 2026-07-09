@@ -1282,3 +1282,582 @@ app_joint_qdesn_run_phase114_vb_article_candidate_freeze <- function(
     paths = c(paths, artifact_manifest = manifest_info$manifest_path)
   )
 }
+
+# Phase 118 targeted exAL tail-calibration readiness after article integration.
+
+app_joint_qdesn_default_phase118_exal_tail_readiness_dir <- function() {
+  app_path("application/cache/joint_qdesn_phase118_exal_tail_calibration_readiness_20260709")
+}
+
+app_joint_qdesn_default_phase118_vb_screening_dir <- function() {
+  app_path("application/cache/joint_qdesn_vb_spec_screening_phase118_20260709")
+}
+
+app_joint_qdesn_phase118_verify_article_manifest <- function(
+  manifest_path = app_path("tables/joint_qdesn_article_validation_asset_manifest.csv")
+) {
+  manifest_path <- normalizePath(manifest_path, mustWork = TRUE)
+  manifest <- app_read_csv(manifest_path)
+  app_check_required_columns(
+    manifest,
+    c("label", "artifact_type", "path", "size_bytes", "sha256"),
+    "joint QDESN article validation asset manifest"
+  )
+  base_dir <- normalizePath(file.path(dirname(manifest_path), ".."), mustWork = TRUE)
+  out <- app_bind_rows_fill(lapply(seq_len(nrow(manifest)), function(ii) {
+    rel_path <- manifest$path[[ii]]
+    abs_path <- if (grepl("^/", rel_path)) rel_path else file.path(base_dir, rel_path)
+    exists <- file.exists(abs_path)
+    actual_sha <- if (exists) app_sha256_file(abs_path) else NA_character_
+    actual_size <- if (exists) as.numeric(file.info(abs_path)$size) else NA_real_
+    data.frame(
+      label = manifest$label[[ii]],
+      artifact_type = manifest$artifact_type[[ii]],
+      relative_path = rel_path,
+      path = normalizePath(abs_path, mustWork = FALSE),
+      exists = exists,
+      declared_sha256 = manifest$sha256[[ii]],
+      actual_sha256 = actual_sha,
+      declared_size_bytes = as.numeric(manifest$size_bytes[[ii]]),
+      actual_size_bytes = actual_size,
+      status = if (exists &&
+        identical(tolower(actual_sha), tolower(manifest$sha256[[ii]])) &&
+        identical(as.numeric(actual_size), as.numeric(manifest$size_bytes[[ii]]))) "pass" else "fail",
+      stringsAsFactors = FALSE
+    )
+  }))
+  out
+}
+
+app_joint_qdesn_phase118_article_model_audit <- function(
+  model_path = app_path("tables/joint_qdesn_article_validation_vb_model_summary.csv")
+) {
+  model_path <- normalizePath(model_path, mustWork = TRUE)
+  x <- app_read_csv(model_path)
+  app_check_required_columns(
+    x,
+    c(
+      "model_id", "display_label", "likelihood", "fit_structure", "fit_truth_mae",
+      "forecast_truth_mae", "forecast_check_loss", "crps_grid_mean",
+      "abs_hit_rate_error", "abs_coverage_error", "forecast_raw_crossings",
+      "forecast_contract_crossings", "forecast_max_adjustment", "article_gate"
+    ),
+    "joint QDESN article validation model summary"
+  )
+  joint_al <- x$forecast_truth_mae[x$model_id == "joint_qdesn_rhs_vb"][[1L]]
+  independent_al <- x$forecast_truth_mae[x$model_id == "qdesn_rhs_independent_vb"][[1L]]
+  x$forecast_mae_rank <- rank(x$forecast_truth_mae, ties.method = "first")
+  x$fit_mae_rank <- rank(x$fit_truth_mae, ties.method = "first")
+  x$forecast_gap_vs_joint_qdesn <- x$forecast_truth_mae - joint_al
+  x$forecast_gap_vs_independent_qdesn <- x$forecast_truth_mae - independent_al
+  x$phase118_diagnosis <- ifelse(
+    x$model_id == "joint_qdesn_rhs_vb",
+    "primary article anchor; preserve unless a new candidate improves tail behavior without degrading AL fit/forecast metrics",
+    ifelse(
+      x$likelihood == "exal" & x$forecast_gap_vs_joint_qdesn > 0.03,
+      "exAL is noncrossing but materially farther from oracle quantile paths; target tail fan geometry",
+      ifelse(
+        x$model_id == "qdesn_rhs_independent_vb" & x$forecast_raw_crossings > 50,
+        "independent AL remains a useful accuracy comparator but has high raw monotone-adjustment burden",
+        "context comparator; retain for common-control screening"
+      )
+    )
+  )
+  x
+}
+
+app_joint_qdesn_phase118_parse_mae_cell <- function(x) {
+  suppressWarnings(as.numeric(sub(" .*", "", as.character(x))))
+}
+
+app_joint_qdesn_phase118_scenario_audit <- function(
+  scenario_path = app_path("tables/joint_qdesn_article_validation_vb_scenario_summary.csv")
+) {
+  scenario_path <- normalizePath(scenario_path, mustWork = TRUE)
+  x <- utils::read.csv(scenario_path, stringsAsFactors = FALSE, check.names = FALSE)
+  required <- c("Scenario", "Joint QDESN", "Independent QDESN", "Joint exQDESN", "Independent exQDESN")
+  app_check_required_columns(x, required, "joint QDESN article validation scenario summary")
+  mae <- data.frame(
+    scenario = x$Scenario,
+    joint_qdesn_mae = app_joint_qdesn_phase118_parse_mae_cell(x[["Joint QDESN"]]),
+    independent_qdesn_mae = app_joint_qdesn_phase118_parse_mae_cell(x[["Independent QDESN"]]),
+    joint_exqdesn_mae = app_joint_qdesn_phase118_parse_mae_cell(x[["Joint exQDESN"]]),
+    independent_exqdesn_mae = app_joint_qdesn_phase118_parse_mae_cell(x[["Independent exQDESN"]]),
+    stringsAsFactors = FALSE
+  )
+  mat <- as.matrix(mae[, -1L, drop = FALSE])
+  winner_col <- colnames(mat)[max.col(-mat, ties.method = "first")]
+  mae$winner <- c(
+    joint_qdesn_mae = "Joint QDESN",
+    independent_qdesn_mae = "Independent QDESN",
+    joint_exqdesn_mae = "Joint exQDESN",
+    independent_exqdesn_mae = "Independent exQDESN"
+  )[winner_col]
+  mae$best_al_mae <- pmin(mae$joint_qdesn_mae, mae$independent_qdesn_mae)
+  mae$best_exal_mae <- pmin(mae$joint_exqdesn_mae, mae$independent_exqdesn_mae)
+  mae$joint_exal_minus_joint_al <- mae$joint_exqdesn_mae - mae$joint_qdesn_mae
+  mae$best_exal_minus_best_al <- mae$best_exal_mae - mae$best_al_mae
+  mae$phase118_focus <- ifelse(
+    mae$best_exal_minus_best_al > 0.05,
+    "high_priority_exal_tail_or_fan_geometry",
+    ifelse(mae$best_exal_minus_best_al > 0.02, "moderate_priority_exal_calibration", "context_or_stability_check")
+  )
+  mae[order(-mae$best_exal_minus_best_al), , drop = FALSE]
+}
+
+app_joint_qdesn_phase118_read_optional_tau_summary <- function(
+  tau_summary_path = "",
+  phase114_freeze_dir = "",
+  phase116_dir = ""
+) {
+  candidates <- character()
+  if (nzchar(as.character(tau_summary_path)[[1L]])) {
+    candidates <- c(candidates, as.character(tau_summary_path)[[1L]])
+  }
+  if (nzchar(as.character(phase116_dir)[[1L]])) {
+    candidates <- c(candidates, file.path(as.character(phase116_dir)[[1L]], "tau_sensitivity_summary.csv"))
+  }
+  if (nzchar(as.character(phase114_freeze_dir)[[1L]])) {
+    candidates <- c(candidates, file.path(as.character(phase114_freeze_dir)[[1L]], "selected_vb_tau_summary.csv"))
+  }
+  candidates <- candidates[nzchar(candidates)]
+  candidates <- candidates[file.exists(candidates)]
+  if (!length(candidates)) return(NULL)
+  path <- normalizePath(candidates[[1L]], mustWork = TRUE)
+  x <- app_read_csv(path)
+  names(x) <- gsub("\\.", "_", names(x))
+  if ("region" %in% names(x) && !"tail_region" %in% names(x)) x$tail_region <- x$region
+  if ("independent_qdesn_truth_mae" %in% names(x) && !"qdesn_independent_truth_mae" %in% names(x)) {
+    x$qdesn_independent_truth_mae <- x$independent_qdesn_truth_mae
+  }
+  if ("independent_exqdesn_truth_mae" %in% names(x) && !"exqdesn_independent_truth_mae" %in% names(x)) {
+    x$exqdesn_independent_truth_mae <- x$independent_exqdesn_truth_mae
+  }
+  if (!"joint_exqdesn_minus_joint_qdesn" %in% names(x)) {
+    x$joint_exqdesn_minus_joint_qdesn <- x$joint_exqdesn_truth_mae - x$joint_qdesn_truth_mae
+  }
+  if (!"exqdesn_independent_minus_qdesn_independent" %in% names(x)) {
+    x$exqdesn_independent_minus_qdesn_independent <- x$exqdesn_independent_truth_mae - x$qdesn_independent_truth_mae
+  }
+  x$source_tau_summary_path <- path
+  x$source_tau_summary_sha256 <- app_sha256_file(path)
+  keep <- c(
+    "tau", "tail_region", "joint_qdesn_truth_mae", "joint_exqdesn_truth_mae",
+    "qdesn_independent_truth_mae", "exqdesn_independent_truth_mae",
+    "joint_exqdesn_minus_joint_qdesn", "exqdesn_independent_minus_qdesn_independent",
+    "source_tau_summary_path", "source_tau_summary_sha256"
+  )
+  missing <- setdiff(keep, names(x))
+  if (length(missing)) {
+    stop(sprintf("Optional tau summary is missing required normalized columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  x[, keep, drop = FALSE]
+}
+
+app_joint_qdesn_phase118_tail_gap_audit <- function(
+  model_audit,
+  tau_summary_path = "",
+  phase114_freeze_dir = "",
+  phase116_dir = ""
+) {
+  tau <- app_joint_qdesn_phase118_read_optional_tau_summary(
+    tau_summary_path = tau_summary_path,
+    phase114_freeze_dir = phase114_freeze_dir,
+    phase116_dir = phase116_dir
+  )
+  if (is.null(tau)) {
+    joint_al <- model_audit$forecast_truth_mae[model_audit$model_id == "joint_qdesn_rhs_vb"][[1L]]
+    joint_exal <- model_audit$forecast_truth_mae[model_audit$model_id == "joint_exqdesn_rhs_vb"][[1L]]
+    ind_al <- model_audit$forecast_truth_mae[model_audit$model_id == "qdesn_rhs_independent_vb"][[1L]]
+    ind_exal <- model_audit$forecast_truth_mae[model_audit$model_id == "exqdesn_rhs_independent_vb"][[1L]]
+    tau <- data.frame(
+      tau = NA_real_,
+      tail_region = "aggregate_no_tau_cache",
+      joint_qdesn_truth_mae = joint_al,
+      joint_exqdesn_truth_mae = joint_exal,
+      qdesn_independent_truth_mae = ind_al,
+      exqdesn_independent_truth_mae = ind_exal,
+      joint_exqdesn_minus_joint_qdesn = joint_exal - joint_al,
+      exqdesn_independent_minus_qdesn_independent = ind_exal - ind_al,
+      source_tau_summary_path = NA_character_,
+      source_tau_summary_sha256 = NA_character_,
+      stringsAsFactors = FALSE
+    )
+  }
+  tau$priority <- ifelse(
+    tau$tail_region %in% c("lower_tail", "upper_tail") & tau$joint_exqdesn_minus_joint_qdesn > 0.05,
+    "high",
+    ifelse(tau$joint_exqdesn_minus_joint_qdesn > 0.025, "moderate", "context")
+  )
+  tau$phase118_diagnosis <- ifelse(
+    tau$priority == "high",
+    "exAL tail distance is materially worse than AL; target scalar fan-width and gamma-initialization controls",
+    ifelse(
+      tau$priority == "moderate",
+      "exAL gap is visible but not dominant; retain as calibration support metric",
+      "no primary exAL tail blocker at this tau or aggregate row"
+    )
+  )
+  tau
+}
+
+app_joint_qdesn_phase118_control_feasibility <- function() {
+  data.frame(
+    control_family = c(
+      "scalar_alpha_prior_width", "gamma_initialization", "rhs_global_shrinkage",
+      "finite_zeta2_beta_cap", "rhs_inner_loop_and_vb_budget", "tail_specific_alpha_vector",
+      "exal_gamma_update_damping", "model_specific_exal_controls", "mcmc_exal_promotion"
+    ),
+    phase118_status = c(
+      "use_now", "use_now", "use_now", "use_now", "use_now",
+      "defer_derivation_review", "defer_derivation_review", "defer_until_common_controls_fail",
+      "defer_until_vb_tail_calibration_passes"
+    ),
+    reason = c(
+      "Already wired as a scalar control and directly addresses over- or under-regularized alpha/tail fan geometry.",
+      "Already wired and previously improved the selected candidate; useful for exAL shape sensitivity without changing updates.",
+      "Already wired through tau0 and can reduce coefficient noise or loosen over-smoothing under common controls.",
+      "Already wired through zeta2 and can bound coefficient variance without changing the likelihood.",
+      "Already wired and separates tail miscalibration from premature VB stopping.",
+      "Likely relevant for tails but changes the mixed joint/independent screening contract; reserve for a second derivation-specific stage.",
+      "Would alter the exAL optimizer/update contract and needs theory review before article use.",
+      "Could make exAL win by special treatment, but first test common controls to preserve table fairness.",
+      "MCMC should confirm a frozen VB target, not search over uncalibrated exAL settings."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase118_candidate_registry <- function(
+  screening_output_dir = app_joint_qdesn_default_phase118_vb_screening_dir(),
+  reference_fit_dir = "",
+  reference_forecast_dir = "",
+  n_cores = 9L
+) {
+  screening_output_dir <- normalizePath(screening_output_dir, mustWork = FALSE)
+  has_reference <- nzchar(reference_fit_dir) && nzchar(reference_forecast_dir) &&
+    dir.exists(reference_fit_dir) && dir.exists(reference_forecast_dir)
+  ids <- c(
+    if (has_reference) "phase113_selected_reference" else "phase113_selected_controls_rerun",
+    "alpha0p75_gamma_zero_zeta2_16",
+    "alpha1p0_gamma_zero_zeta2_16",
+    "alpha1p25_gamma_zero_zeta2_16",
+    "alpha1p5_gamma_zero_zeta2_16",
+    "alpha0p6_gamma_zero_zeta2_16",
+    "alpha0p75_gamma_half_zeta2_16",
+    "alpha1p0_gamma_half_zeta2_16",
+    "alpha0p75_gamma_default_zeta2_16",
+    "tau0_0p75_alpha0p75_gamma_zero",
+    "tau0_1p0_alpha0p75_gamma_zero",
+    "tau0_0p35_alpha0p75_gamma_zero",
+    "zeta2_32_alpha0p75_gamma_zero",
+    "zeta2_8_alpha0p75_gamma_zero",
+    "zeta2_inf_alpha0p75_gamma_zero",
+    "alpha1p0_tau0_0p75_gamma_zero_zeta2_32",
+    "inner12_iter1920_alpha0p75_gamma_zero"
+  )
+  candidate_dir <- function(id, stage) file.path(screening_output_dir, "candidates", id, stage)
+  fit_dirs <- vapply(ids, candidate_dir, character(1L), stage = "fit")
+  forecast_dirs <- vapply(ids, candidate_dir, character(1L), stage = "forecast")
+  if (has_reference) {
+    fit_dirs[[1L]] <- normalizePath(reference_fit_dir, mustWork = TRUE)
+    forecast_dirs[[1L]] <- normalizePath(reference_forecast_dir, mustWork = TRUE)
+  }
+  registry <- data.frame(
+    candidate_id = ids,
+    candidate_label = c(
+      if (has_reference) "Frozen Phase 113 selected reference" else "Rerun Phase 113 selected controls",
+      "Alpha sd 0.75, zero gamma, zeta2 16",
+      "Alpha sd 1.0, zero gamma, zeta2 16",
+      "Alpha sd 1.25, zero gamma, zeta2 16",
+      "Alpha sd 1.5, zero gamma, zeta2 16",
+      "Alpha sd 0.6, zero gamma, zeta2 16",
+      "Alpha sd 0.75, half-default gamma, zeta2 16",
+      "Alpha sd 1.0, half-default gamma, zeta2 16",
+      "Alpha sd 0.75, default gamma, zeta2 16",
+      "RHS tau0 0.75, alpha sd 0.75, zero gamma",
+      "RHS tau0 1.0, alpha sd 0.75, zero gamma",
+      "RHS tau0 0.35, alpha sd 0.75, zero gamma",
+      "zeta2 32, alpha sd 0.75, zero gamma",
+      "zeta2 8, alpha sd 0.75, zero gamma",
+      "zeta2 Inf, alpha sd 0.75, zero gamma",
+      "tau0 0.75, zeta2 32, alpha sd 1.0, zero gamma",
+      "Inner-loop 12, VB 1920, alpha sd 0.75, zero gamma"
+    ),
+    use_existing_artifacts = c(has_reference, rep(FALSE, length(ids) - 1L)),
+    fit_dir = fit_dirs,
+    forecast_dir = forecast_dirs,
+    vb_max_iter = c(rep(1440L, length(ids) - 1L), 1920L),
+    adaptive_vb_max_iter_grid = c(rep("1440,1920", length(ids) - 1L), "1920,2400"),
+    vb_tol = rep(1.0e-4, length(ids)),
+    rhs_vb_inner = c(rep(10L, length(ids) - 1L), 12L),
+    tau0 = c(0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.75, 1.0, 0.35, 0.5, 0.5, 0.5, 0.75, 0.5),
+    zeta2 = c(16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 32, 8, Inf, 32, 16),
+    a_sigma = rep(2, length(ids)),
+    b_sigma = rep(1, length(ids)),
+    alpha_prior_sd = c(
+      "0.5", "0.75", "1", "1.25", "1.5", "0.6", "0.75", "1", "0.75",
+      "0.75", "0.75", "0.75", "0.75", "0.75", "0.75", "1", "0.75"
+    ),
+    alpha_min_spacing = rep(0, length(ids)),
+    gamma_init_policy = c(
+      "zero", "zero", "zero", "zero", "zero", "zero", "half_default", "half_default", "default",
+      "zero", "zero", "zero", "zero", "zero", "zero", "zero", "zero"
+    ),
+    review_adjustment_threshold = rep(1.0e-3, length(ids)),
+    max_dense_dim = rep(300L, length(ids)),
+    n_cores = rep(as.integer(n_cores), length(ids)),
+    candidate_role = c(
+      if (has_reference) "selected_reference" else "selected_controls_rerun",
+      rep("phase118_tail_calibration_candidate", length(ids) - 1L)
+    ),
+    notes = c(
+      "Current article candidate controls: tau0=0.5, zeta2=16, alpha sd 0.5, zero gamma, RHS inner 10, VB 1440/1920.",
+      "Primary fan-width probe: loosen the scalar alpha prior modestly while preserving the selected zero-gamma and zeta2 controls.",
+      "Checks whether returning alpha prior width to 1.0 widens exAL tails without losing AL stability.",
+      "Upper fan-width probe; promotes only if AL metrics and raw adjustment burden stay within safeguards.",
+      "Aggressive fan-width probe; included to see whether exAL tails are still over-regularized at alpha sd 1.25.",
+      "Near-selected fan-width probe; tests whether a small alpha-width relaxation captures most of the improvement with less risk.",
+      "Separates gamma-start sensitivity from alpha-width effects without changing the exAL update equations.",
+      "Tests whether alpha sd 1.0 benefits from a damped nonzero gamma start.",
+      "Checks whether default gamma initialization is competitive once the alpha prior is modestly loosened.",
+      "Loosens global RHS shrinkage modestly to test whether coefficient over-smoothing contributes to exAL tail compression.",
+      "Returns toward the original global RHS shrinkage while keeping the selected finite zeta2 and zero-gamma controls.",
+      "Strengthens global RHS shrinkage beyond the selected setting to test whether exAL gaps reflect noise rather than over-smoothing.",
+      "Weaker finite beta cap than zeta2=16; tests whether exAL tail fan needs more coefficient variance.",
+      "Stronger finite beta cap than zeta2=16; tests whether anti-noise regularization improves tail recovery.",
+      "Removes the finite beta cap while keeping the Phase 118 alpha and gamma controls.",
+      "Combined promising-region probe: looser RHS, wider alpha prior, and weaker finite beta cap for upper-tail fan width.",
+      "Computational diagnostic: tests whether longer RHS/VB inner updates reduce tail gaps or convergence review pressure."
+    ),
+    stringsAsFactors = FALSE
+  )
+  app_joint_qdesn_validate_screening_registry(registry, allow_alpha_prior_vectors = FALSE)
+  registry
+}
+
+app_joint_qdesn_phase118_selection_policy <- function() {
+  data.frame(
+    gate_order = seq_len(10L),
+    gate_name = c(
+      "implementation_integrity", "contract_noncrossing", "finite_scores", "tail_gap_reduction",
+      "exal_overall_recovery", "al_preservation", "raw_adjustment_burden", "hit_coverage_calibration",
+      "runtime_feasibility", "fresh_holdout_confirmation"
+    ),
+    gate_type = c("hard_fail", "hard_fail", "hard_fail", rep("selection", 6L), "promotion_required"),
+    pass_or_review_rule = c(
+      "All candidate manifests verify, no worker failures, no train/validation leakage, finite quantiles and scale summaries.",
+      "Contract forecast quantiles must have zero adjacent crossings after the declared monotone contract.",
+      "Fit/forecast truth distances, check loss, CRPS-grid, hit rates, coverage, and runtime summaries must be finite.",
+      "Prefer candidates reducing joint exQDESN tail truth-MAE gaps at tau 0.05, 0.90, and 0.95 by at least 20 percent relative to the frozen candidate.",
+      "Joint exQDESN average forecast truth MAE should move materially toward Joint QDESN RHS; a gap above 0.03 remains review.",
+      "Joint QDESN RHS forecast truth MAE should not worsen by more than 5 percent, and check/CRPS should not worsen by more than 1 percent.",
+      "Raw crossings and maximum monotone adjustment should not exceed the frozen selected candidate by more than 25 percent.",
+      "Hit-rate and central-interval coverage errors should improve for exAL or remain within the current review band.",
+      "Runtime should remain compatible with a later MCMC reference; candidates much slower than the selected controls are review unless accuracy gains are large.",
+      "No article-table replacement until the chosen candidate is evaluated once on a fresh final validation split or fresh replicate seeds."
+    ),
+    rationale = c(
+      "Protects reproducibility and implementation credibility.",
+      "The article scoring contract requires a noncrossing reported grid.",
+      "Avoids promoting numerical artifacts.",
+      "Targets the observed failure mode instead of a broad leaderboard search.",
+      "Prevents a tail-only improvement from hiding worse overall oracle recovery.",
+      "Keeps the primary article anchor from being sacrificed to make exAL look better.",
+      "Maintains transparency around raw versus contract quantile grids.",
+      "Tail fan widening should improve calibration, not just oracle MAE.",
+      "Keeps the study feasible and MCMC-ready.",
+      "Prevents overfitting to the current article validation bundle."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase118_next_action_plan <- function() {
+  data.frame(
+    step = seq_len(7L),
+    stage = c("freeze_current_article", "materialize_fixtures_if_missing", "run_phase118_screen", "audit_phase118_screen", "select_or_reject", "confirm_on_fresh_holdout", "mcmc_or_manuscript"),
+    action = c(
+      "Treat the current Phase 115/116 article assets as the baseline evidence and do not overwrite them during screening.",
+      "If the v2 clone lacks application/cache fixtures, regenerate them from application/config/joint_qdesn_simulation_dgp_registry_20260706.csv.",
+      "Run the targeted Phase 118 registry through the existing Phase 106 VB screening runner.",
+      "Refresh the screening audit and inspect model, scenario, tau, coverage, raw-adjustment, and runtime summaries.",
+      "Promote only if exAL tail gaps improve under the pre-declared rules without degrading Joint QDESN RHS.",
+      "Evaluate the selected candidate on a fresh final validation split or fresh replicate seeds before changing article tables.",
+      "If VB passes, run MCMC only for the frozen target; otherwise keep current article wording and document exAL as future calibration work."
+    ),
+    output = c(
+      "current committed article tables and manifest",
+      "joint_qdesn_simulation_dgp_fixtures_20260706",
+      "joint_qdesn_vb_spec_screening_phase118_20260709",
+      "refreshed Phase 106-style audit tables",
+      "selected_spec_recommendation.csv plus Phase 118 decision note",
+      "fresh-holdout evidence pack",
+      "MCMC reference or manuscript stability note"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase118_launch_commands <- function(registry_path, screening_output_dir, fixture_dir, n_cores = 9L) {
+  data.frame(
+    command_id = c("generate_fixtures_if_missing", "run_phase118_targeted_vb_screen", "audit_phase118_targeted_vb_screen"),
+    command = c(
+      sprintf(
+        "Rscript application/scripts/98_generate_joint_qdesn_simulation_dgp_fixtures.R --output-dir %s --registry application/config/joint_qdesn_simulation_dgp_registry_20260706.csv",
+        fixture_dir
+      ),
+      sprintf(
+        "Rscript application/scripts/106_run_joint_qdesn_vb_spec_screening.R --registry %s --output-dir %s --fixture-dir %s --n-cores %d --reuse-completed true --audit-only false",
+        registry_path,
+        screening_output_dir,
+        fixture_dir,
+        as.integer(n_cores)
+      ),
+      sprintf(
+        "Rscript application/scripts/107_audit_joint_qdesn_vb_spec_screening.R --output-dir %s",
+        screening_output_dir
+      )
+    ),
+    purpose = c(
+      "Create the frozen long-series synthetic fixtures if they are not already present in application/cache.",
+      "Run the targeted common-control exAL tail-calibration VB screening.",
+      "Refresh screening summaries and selected-candidate recommendation after the run."
+    ),
+    run_condition = c(
+      "Only if fixture_dir is missing or its manifest does not verify.",
+      "After Phase 118 readiness artifacts have been reviewed.",
+      "After all candidate fit and forecast artifacts complete."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase118_readme <- function(run_config, model_audit, tail_audit, registry, launch_commands) {
+  joint_exal <- model_audit[model_audit$model_id == "joint_exqdesn_rhs_vb", , drop = FALSE]
+  joint_al <- model_audit[model_audit$model_id == "joint_qdesn_rhs_vb", , drop = FALSE]
+  worst_tail <- tail_audit[order(-tail_audit$joint_exqdesn_minus_joint_qdesn), , drop = FALSE][1L, , drop = FALSE]
+  c(
+    "# Joint QDESN Phase 118 exAL Tail-Calibration Readiness",
+    "",
+    "This artifact prepares a targeted VB calibration screen for the joint-QDESN synthetic validation study.",
+    "It does not replace the committed article tables and does not launch MCMC.",
+    "",
+    sprintf("- Output directory: `%s`", run_config$out_dir[[1L]]),
+    sprintf("- Proposed screening directory: `%s`", run_config$screening_output_dir[[1L]]),
+    sprintf("- Candidate rows: %d", nrow(registry)),
+    "",
+    "Current diagnosis:",
+    sprintf(
+      "- Joint QDESN RHS forecast MAE is %.4f; Joint exQDESN RHS forecast MAE is %.4f.",
+      joint_al$forecast_truth_mae[[1L]],
+      joint_exal$forecast_truth_mae[[1L]]
+    ),
+    sprintf(
+      "- Worst available exAL-vs-AL gap row is `%s` at tau %s with gap %.4f.",
+      worst_tail$tail_region[[1L]],
+      ifelse(is.na(worst_tail$tau[[1L]]), "NA", sprintf("%.2f", worst_tail$tau[[1L]])),
+      worst_tail$joint_exqdesn_minus_joint_qdesn[[1L]]
+    ),
+    "- The next screen is targeted at exAL fan geometry, not an unconstrained search to make exAL win.",
+    "- Promotion requires fresh-holdout confirmation before the article tables are replaced.",
+    "",
+    "Primary launch command:",
+    "",
+    launch_commands$command[launch_commands$command_id == "run_phase118_targeted_vb_screen"][[1L]]
+  )
+}
+
+app_joint_qdesn_run_phase118_exal_tail_calibration_readiness <- function(
+  out_dir = app_joint_qdesn_default_phase118_exal_tail_readiness_dir(),
+  screening_output_dir = app_joint_qdesn_default_phase118_vb_screening_dir(),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  table_dir = app_path("tables"),
+  tau_summary_path = "",
+  phase114_freeze_dir = "",
+  phase116_dir = "",
+  reference_fit_dir = "",
+  reference_forecast_dir = "",
+  n_cores = 9L
+) {
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  screening_output_dir <- normalizePath(screening_output_dir, mustWork = FALSE)
+  fixture_dir <- normalizePath(fixture_dir, mustWork = FALSE)
+  table_dir <- normalizePath(table_dir, mustWork = TRUE)
+  app_ensure_dir(out_dir)
+
+  model_audit <- app_joint_qdesn_phase118_article_model_audit(file.path(table_dir, "joint_qdesn_article_validation_vb_model_summary.csv"))
+  scenario_audit <- app_joint_qdesn_phase118_scenario_audit(file.path(table_dir, "joint_qdesn_article_validation_vb_scenario_summary.csv"))
+  manifest_verification <- app_joint_qdesn_phase118_verify_article_manifest(file.path(table_dir, "joint_qdesn_article_validation_asset_manifest.csv"))
+  tail_audit <- app_joint_qdesn_phase118_tail_gap_audit(
+    model_audit = model_audit,
+    tau_summary_path = tau_summary_path,
+    phase114_freeze_dir = phase114_freeze_dir,
+    phase116_dir = phase116_dir
+  )
+  control_feasibility <- app_joint_qdesn_phase118_control_feasibility()
+  registry <- app_joint_qdesn_phase118_candidate_registry(
+    screening_output_dir = screening_output_dir,
+    reference_fit_dir = reference_fit_dir,
+    reference_forecast_dir = reference_forecast_dir,
+    n_cores = n_cores
+  )
+  selection_policy <- app_joint_qdesn_phase118_selection_policy()
+  next_action <- app_joint_qdesn_phase118_next_action_plan()
+  registry_path <- file.path(out_dir, "phase118_exal_tail_screening_registry.csv")
+  launch_commands <- app_joint_qdesn_phase118_launch_commands(
+    registry_path = registry_path,
+    screening_output_dir = screening_output_dir,
+    fixture_dir = fixture_dir,
+    n_cores = n_cores
+  )
+  run_config <- data.frame(
+    run_id = "joint_qdesn_phase118_exal_tail_calibration_readiness",
+    out_dir = out_dir,
+    screening_output_dir = screening_output_dir,
+    fixture_dir = fixture_dir,
+    table_dir = table_dir,
+    tau_summary_path = if (nzchar(tau_summary_path)) normalizePath(tau_summary_path, mustWork = TRUE) else "",
+    phase114_freeze_dir = if (nzchar(phase114_freeze_dir)) normalizePath(phase114_freeze_dir, mustWork = FALSE) else "",
+    phase116_dir = if (nzchar(phase116_dir)) normalizePath(phase116_dir, mustWork = FALSE) else "",
+    reference_fit_dir = if (nzchar(reference_fit_dir)) normalizePath(reference_fit_dir, mustWork = FALSE) else "",
+    reference_forecast_dir = if (nzchar(reference_forecast_dir)) normalizePath(reference_forecast_dir, mustWork = FALSE) else "",
+    n_cores = as.integer(n_cores),
+    n_candidate_rows = nrow(registry),
+    n_high_priority_tail_rows = sum(tail_audit$priority == "high", na.rm = TRUE),
+    article_asset_manifest_status = if (all(manifest_verification$status == "pass")) "pass" else "fail",
+    readiness_decision = if (all(manifest_verification$status == "pass")) "ready_to_launch_targeted_vb_screen_after_review" else "blocked_manifest_failure",
+    stringsAsFactors = FALSE
+  )
+  readme_path <- file.path(out_dir, "README.md")
+  writeLines(app_joint_qdesn_phase118_readme(run_config, model_audit, tail_audit, registry, launch_commands), readme_path, useBytes = TRUE)
+  paths <- c(
+    phase118_run_config = app_joint_qdesn_screening_write_csv(run_config, file.path(out_dir, "phase118_run_config.csv")),
+    source_asset_manifest_verification = app_joint_qdesn_screening_write_csv(manifest_verification, file.path(out_dir, "source_asset_manifest_verification.csv")),
+    current_model_metric_audit = app_joint_qdesn_screening_write_csv(model_audit, file.path(out_dir, "current_model_metric_audit.csv")),
+    current_scenario_winner_audit = app_joint_qdesn_screening_write_csv(scenario_audit, file.path(out_dir, "current_scenario_winner_audit.csv")),
+    tail_gap_audit = app_joint_qdesn_screening_write_csv(tail_audit, file.path(out_dir, "tail_gap_audit.csv")),
+    control_feasibility_audit = app_joint_qdesn_screening_write_csv(control_feasibility, file.path(out_dir, "control_feasibility_audit.csv")),
+    phase118_exal_tail_screening_registry = app_joint_qdesn_screening_write_csv(registry, registry_path),
+    selection_policy = app_joint_qdesn_screening_write_csv(selection_policy, file.path(out_dir, "selection_policy.csv")),
+    next_action_plan = app_joint_qdesn_screening_write_csv(next_action, file.path(out_dir, "next_action_plan.csv")),
+    launch_commands = app_joint_qdesn_screening_write_csv(launch_commands, file.path(out_dir, "launch_commands.csv")),
+    provenance = app_joint_qdesn_screening_write_csv(app_joint_qvp_provenance_rows(), file.path(out_dir, "provenance.csv")),
+    readme = normalizePath(readme_path, mustWork = TRUE)
+  )
+  manifest_info <- app_joint_qdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = normalizePath(out_dir, mustWork = TRUE),
+    run_config = run_config,
+    manifest_verification = manifest_verification,
+    model_audit = model_audit,
+    scenario_audit = scenario_audit,
+    tail_audit = tail_audit,
+    control_feasibility = control_feasibility,
+    registry = registry,
+    selection_policy = selection_policy,
+    next_action_plan = next_action,
+    launch_commands = launch_commands,
+    paths = c(paths, artifact_manifest = manifest_info$manifest_path)
+  )
+}

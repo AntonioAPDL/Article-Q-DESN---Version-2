@@ -26,7 +26,9 @@ modest, and reproducible in the main article.
 
 2. The prose needed a clearer separation between raw quantile outputs and the
    reported monotone grid.  Phase 116 records 73 raw pre-rearrangement crossings
-   in the selected VB source and zero reported-grid crossings.  Readers should
+   in the selected-candidate VB bundle and zero reported-grid crossings; the
+   model-level table attributes 2 of those raw crossings to the primary Joint
+   QDESN RHS row and 71 to the Independent QDESN RHS comparator.  Readers should
    not have to infer which grid is scored.
 
 3. The scenario table shows heterogeneity.  Joint QDESN RHS has the lowest

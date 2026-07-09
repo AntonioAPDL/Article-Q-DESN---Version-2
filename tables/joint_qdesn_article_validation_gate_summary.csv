@@ -1,6 +1,6 @@
 "Evidence","Gate","Detail"
 "Source manifests","pass","218 source files verified"
-"Selected VB validation source","review","Selected candidate zeta2_16_inner10_gamma_zero_alpha0p5_tau0_0p5; mean forecast MAE 0.118; raw forecast crossings 73; contract crossings 0"
+"Selected VB validation bundle","review","Selected candidate zeta2_16_inner10_gamma_zero_alpha0p5_tau0_0p5; mean forecast MAE 0.118; bundle raw forecast crossings 73 (primary Joint QDESN RHS 2; Independent QDESN RHS 71); contract crossings 0"
 "MCMC article reference source","pass","9 pass, 0 review, 0 fail scenario rows"
 "MCMC worker failures","pass","0 worker failure rows"
 "MCMC contract crossings","pass","0 contract crossing pairs"

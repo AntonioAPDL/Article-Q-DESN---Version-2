@@ -1617,14 +1617,14 @@ u_{T+h}^{(m,r)}\sim\Unif(0,1),
 y_{T+h}^{(m,r)}
 =Q_{T+h}^{*,(m)}\!\left(u_{T+h}^{(m,r)}\right).
 \]
-This is inverse-CDF sampling from the posterior sampled quantile function. It is
-not a draw from a mixture, normalized product, or collection of the
-quantile-specific composite AL/exAL working-likelihood factors.
+This is inverse-CDF sampling from the posterior-sampled quantile function. It is
+not obtained by mixing the quantile-specific working likelihoods, normalizing
+their product, or drawing separately from their AL/exAL factors.
 
 When separate models are fit at ordered quantile levels
-\(p_1<\cdots<p_K\), multi-quantile synthesis can be used to form a monotone
-estimated predictive quantile function. This is a generic post-processing
-device for independently fitted quantile models, not part of the Q--DESN
+\(p_1<\cdots<p_K\), multi-quantile synthesis can form a monotone predictive
+quantile curve. This generic post-processing device is used for independently
+fitted quantile models and is not part of the Q--DESN
 posterior target. At each time point, collect fitted target-quantile summaries
 \(m_{1,t},\ldots,m_{K,t}\), such as posterior means or medians of the readout
 locations from the \(K\) independently fitted models. The synthesis uses this

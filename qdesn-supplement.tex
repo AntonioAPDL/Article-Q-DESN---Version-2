@@ -1092,19 +1092,19 @@ The intercepts are kept separate from the high-dimensional slope shrinkage.
 Let \(0<p_1<\cdots<p_Q<1\) be the quantile grid. At level \(p_q\),
 \[
 Q_{p_q}(y_t\mid\mathcal F_t)=
-\alpha_q+\tilde{\vect x}_t^\top\vect\theta_q,
+\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q,
 \qquad
-\alpha_q\in\R,\quad \vect\theta_q\in\R^r .
+\alpha_q\in\R,\quad \vect\beta_q\in\R^r .
 \]
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
 \begin{align}
 v_{q,t}\mid\sigma_q&\sim\Exp(\text{rate}=1/\sigma_q),&
 s_{q,t}&\sim\TN(0,1),\\
-y_t\mid\alpha_q,\vect\theta_q,\sigma_q,\gamma_q,v_{q,t},s_{q,t}
+y_t\mid\alpha_q,\vect\beta_q,\sigma_q,\gamma_q,v_{q,t},s_{q,t}
 &\sim
 \Normal\left(
-\alpha_q+\tilde{\vect x}_t^\top\vect\theta_q
+\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q
 +\sigma_qD_qs_{q,t}+A_qv_{q,t},\,
 \sigma_qB_qv_{q,t}
 \right),
@@ -1118,7 +1118,7 @@ Define
 \[
 \vect y_{\mathrm{st}}=\ones{Q}\otimes\vect y,\qquad
 \mat Z_{\mathrm{st}}=\Id{Q}\otimes\mat Z,\qquad
-\vect\theta=(\vect\theta_1^\top,\ldots,\vect\theta_Q^\top)^\top,
+\vect\beta_{\mathrm{st}}=(\vect\beta_1^\top,\ldots,\vect\beta_Q^\top)^\top,
 \]
 and
 \[
@@ -1135,10 +1135,10 @@ and stack these into \(\vect d\) and
 \(\mat\Omega=\diag(\omega_{q,t})\). Conditional on the latent variables and
 likelihood parameters,
 \begin{equation}
-\vect y_{\mathrm{st}}\mid\vect\theta,\vect\alpha,\vect d,\mat\Omega
+\vect y_{\mathrm{st}}\mid\vect\beta_{\mathrm{st}},\vect\alpha,\vect d,\mat\Omega
 \sim
 \Normal(
-\vect\alpha_{\mathrm{st}}+\mat Z_{\mathrm{st}}\vect\theta+\vect d,\,
+\vect\alpha_{\mathrm{st}}+\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}+\vect d,\,
 \mat\Omega).
 \label{eq:supp_joint_stacked_likelihood}
 \end{equation}
@@ -1150,15 +1150,15 @@ sensitivity setting.
 \subsection{QVP--RHS Prior}
 \label{subsec:supp_joint_qvp_prior}
 
-Let \(\vect\theta_0\in\R^r\) denote a baseline readout. Adjacent innovations
+Let \(\vect\beta_{\mathrm{base}}\in\R^r\) denote a baseline readout. Adjacent innovations
 are
 \[
-\Delta_1=\vect\theta_1-\vect\theta_0,\qquad
-\Delta_q=\vect\theta_q-\vect\theta_{q-1},\quad q=2,\ldots,Q.
+\Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}},\qquad
+\Delta_q=\vect\beta_q-\vect\beta_{q-1},\quad q=2,\ldots,Q.
 \]
 The baseline slope and adjacent innovations use separate RHS hierarchies:
 \begin{align}
-\theta_{0,j}\mid\lambda^0_j,\tau^0,\zeta_0
+\beta_{\mathrm{base},j}\mid\lambda^0_j,\tau^0,\zeta_0
 &\sim\Normal(0,V^0_j),&
 V^0_j
 &=
@@ -1180,28 +1180,28 @@ separately to each adjacent innovation block.
 Let \(\mat H\in\R^{Qr\times Qr}\) be the block first-difference matrix
 satisfying
 \[
-\mat H\vect\theta=
-(\vect\theta_1^\top,
-(\vect\theta_2-\vect\theta_1)^\top,\ldots,
-(\vect\theta_Q-\vect\theta_{Q-1})^\top)^\top .
+\mat H\vect\beta_{\mathrm{st}}=
+(\vect\beta_1^\top,
+(\vect\beta_2-\vect\beta_1)^\top,\ldots,
+(\vect\beta_Q-\vect\beta_{Q-1})^\top)^\top .
 \]
 Set
 \[
-\tilde{\vect\theta}_0=
-(\vect\theta_0^\top,\zeros{r}^\top,\ldots,\zeros{r}^\top)^\top,
+\tilde{\vect\beta}_{\mathrm{base}}=
+(\vect\beta_{\mathrm{base}}^\top,\zeros{r}^\top,\ldots,\zeros{r}^\top)^\top,
 \qquad
 \mat D_\Delta=\diag(V^\Delta_{q,j}:q=1,\ldots,Q,\ j=1,\ldots,r).
 \]
 Then the conditional QVP prior can be written as
 \begin{equation}
-p(\vect\theta\mid\vect\theta_0,\mat D_\Delta)
+p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)
 \propto
 |\mat D_\Delta|^{-1/2}
 \exp\left[
 -\frac12
-(\mat H\vect\theta-\tilde{\vect\theta}_0)^\top
+(\mat H\vect\beta_{\mathrm{st}}-\tilde{\vect\beta}_{\mathrm{base}})^\top
 \mat D_\Delta^{-1}
-(\mat H\vect\theta-\tilde{\vect\theta}_0)
+(\mat H\vect\beta_{\mathrm{st}}-\tilde{\vect\beta}_{\mathrm{base}})
 \right].
 \label{eq:supp_joint_qvp_prior}
 \end{equation}
@@ -1215,7 +1215,7 @@ for the innovation RHS hierarchy, and let \(\Theta_0\) collect the
 corresponding baseline RHS scales. Up to constants not depending on unknowns,
 the complete-data posterior is
 \begin{align}
-&p(\vect\theta,\vect\theta_0,\vect\alpha,
+&p(\vect\beta_{\mathrm{st}},\vect\beta_{\mathrm{base}},\vect\alpha,
 \{\sigma_q,\gamma_q\}_{q=1}^Q,
 \{v_{q,t},s_{q,t}\}_{q,t},
 \Theta_0,\Theta_\Delta\mid\vect y,\mat Z)
@@ -1224,10 +1224,10 @@ the complete-data posterior is
 \exp\left[
 -\frac{\kappa}{2}
 (\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
--\mat Z_{\mathrm{st}}\vect\theta-\vect d)^\top
+-\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)^\top
 \mat\Omega^{-1}
 (\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
--\mat Z_{\mathrm{st}}\vect\theta-\vect d)
+-\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)
 \right]
 \nonumber\\
 &\qquad\times
@@ -1240,8 +1240,8 @@ p(v_{q,t}\mid\sigma_q)p(s_{q,t})
 \nonumber\\
 &\qquad\times
 p(\vect\alpha)\,
-p(\vect\theta_0\mid\Theta_0)p(\Theta_0)\,
-p(\vect\theta\mid\vect\theta_0,\mat D_\Delta)p(\Theta_\Delta).
+p(\vect\beta_{\mathrm{base}}\mid\Theta_0)p(\Theta_0)\,
+p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)p(\Theta_\Delta).
 \label{eq:supp_joint_complete_posterior}
 \end{align}
 The factor \(\kappa\) is attached to the Gaussian observation contribution.
@@ -1252,47 +1252,47 @@ other choices interpretable as tempered observation information.
 \subsection{Gaussian Blocks}
 
 Let
-\(\vect r_\theta=\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}-\vect d\).
+\(\vect r_\beta=\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}-\vect d\).
 Combining \eqref{eq:supp_joint_stacked_likelihood} and
 \eqref{eq:supp_joint_qvp_prior} gives
 \begin{align}
-\mat K_\theta
+\mat K_\beta
 &=
 \kappa\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\mat Z_{\mathrm{st}}
 +\mat H^\top\mat D_\Delta^{-1}\mat H,\\
-\vect m_\theta
+\vect m_\beta
 &=
-\mat K_\theta^{-1}
+\mat K_\beta^{-1}
 \left\{
-\kappa\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\vect r_\theta
-+\mat H^\top\mat D_\Delta^{-1}\tilde{\vect\theta}_0
+\kappa\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\vect r_\beta
++\mat H^\top\mat D_\Delta^{-1}\tilde{\vect\beta}_{\mathrm{base}}
 \right\}.
-\label{eq:supp_joint_theta_conditional}
+\label{eq:supp_joint_beta_conditional}
 \end{align}
 Thus
 \[
-\vect\theta\mid\cdots\sim\Normal(\vect m_\theta,\mat K_\theta^{-1}).
+\vect\beta_{\mathrm{st}}\mid\cdots\sim\Normal(\vect m_\beta,\mat K_\beta^{-1}).
 \]
-In implementation, \(\mat K_\theta\) should be treated as a sparse precision
+In implementation, \(\mat K_\beta\) should be treated as a sparse precision
 matrix; the dense inverse is not needed for MCMC sampling.
 
 The baseline coefficients are conditionally independent by feature under the
 diagonal RHS representation. For \(j=1,\ldots,r\),
 \begin{align}
 K_{0,j}&=(V^0_j)^{-1}+(V^\Delta_{1,j})^{-1},\\
-m_{0,j}&=K_{0,j}^{-1}(V^\Delta_{1,j})^{-1}\theta_{1,j},
+m_{0,j}&=K_{0,j}^{-1}(V^\Delta_{1,j})^{-1}\beta_{1,j},
 \end{align}
 so
 \[
-\theta_{0,j}\mid\cdots\sim\Normal(m_{0,j},K_{0,j}^{-1}).
+\beta_{\mathrm{base},j}\mid\cdots\sim\Normal(m_{0,j},K_{0,j}^{-1}).
 \]
 This update uses the fact that only the first innovation
-\(\Delta_1=\vect\theta_1-\vect\theta_0\) contains \(\vect\theta_0\).
+\(\Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}}\) contains \(\vect\beta_{\mathrm{base}}\).
 
 For unconstrained intercepts with independent priors
 \(\alpha_q\sim\Normal(a_{\alpha,q},V_{\alpha,q})\), define
 \[
-e_{q,t}^{\alpha}=y_t-d_{q,t}-\tilde{\vect x}_t^\top\vect\theta_q .
+e_{q,t}^{\alpha}=y_t-d_{q,t}-\tilde{\vect x}_t^\top\vect\beta_q .
 \]
 Then
 \begin{align}
@@ -1322,7 +1322,7 @@ quantile-indexed copy of the single-level update with the Gaussian likelihood
 scaled by \(\kappa\). Define
 \[
 e_{q,t}^{v}
-=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\theta_q-\sigma_qD_qs_{q,t}.
+=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-\sigma_qD_qs_{q,t}.
 \]
 Then
 \[
@@ -1348,7 +1348,7 @@ been omitted from the kernel.
 For the positive-shift latent variable, define
 \[
 e_{q,t}^{s}
-=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\theta_q-A_qv_{q,t}.
+=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-A_qv_{q,t}.
 \]
 The conditional distribution is positive-truncated Normal with precision and
 mean
@@ -1375,7 +1375,7 @@ kernel
 \log\{\sigma_qB_qv_{q,t}\}
 +
 \frac{
-\{y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\theta_q
+\{y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q
 -\sigma_qD_qs_{q,t}-A_qv_{q,t}\}^2}
 {\sigma_qB_qv_{q,t}}
 \right]
@@ -1399,7 +1399,7 @@ Nishimura--Suchard product updates. For a baseline coefficient,
 \sim
 \IG\left(
 1,\,
-\frac{1}{\nu_{0,j}}+\frac{\theta_{0,j}^2}{2(\tau^0)^2}
+\frac{1}{\nu_{0,j}}+\frac{\beta_{\mathrm{base},j}^2}{2(\tau^0)^2}
 \right),
 \qquad
 \nu_{0,j}\mid\cdots
@@ -1413,14 +1413,14 @@ and
 \IG\left(
 \frac{r+1}{2},\,
 \frac{1}{\xi_0}
-+\frac12\sum_{j=1}^r\frac{\theta_{0,j}^2}{(\lambda^0_j)^2}
++\frac12\sum_{j=1}^r\frac{\beta_{\mathrm{base},j}^2}{(\lambda^0_j)^2}
 \right),
 \qquad
 \xi_0\mid\cdots
 \sim
 \IG\left(1,\frac{1}{(\tau^0)^2}+\frac{1}{(\tau_0^0)^2}\right).
 \]
-For each innovation block \(q\), replace \(\theta_{0,j}\),
+For each innovation block \(q\), replace \(\beta_{\mathrm{base},j}\),
 \(\lambda^0_j\), and \(\tau^0\) by \(\Delta_{q,j}\),
 \(\lambda^\Delta_{q,j}\), and \(\tau^\Delta_q\). If the slab scale is random
 and shared across innovation blocks, then
@@ -1444,14 +1444,14 @@ with the analogous \(r/2\) update for a random baseline slab scale
 quantile grid \(p_1<\cdots<p_Q\), priors, learning rate \(\kappa\), and MCMC
 controls.
 \begin{enumerate}[label=(\arabic*)]
-\item Initialize \(\vect\alpha\), \(\vect\theta\), \(\vect\theta_0\),
+\item Initialize \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), \(\vect\beta_{\mathrm{base}}\),
 likelihood parameters, exAL latent variables, and RHS scales.
 \item Repeat:
   \begin{enumerate}[label=(\alph*)]
   \item update \(v_{q,t}\) and \(s_{q,t}\) for all \(q,t\);
-  \item update \(\vect\theta\) from the sparse Gaussian precision
-  \eqref{eq:supp_joint_theta_conditional};
-  \item update \(\vect\theta_0\) featurewise;
+  \item update \(\vect\beta_{\mathrm{st}}\) from the sparse Gaussian precision
+  \eqref{eq:supp_joint_beta_conditional};
+  \item update \(\vect\beta_{\mathrm{base}}\) featurewise;
   \item update \(\vect\alpha\) by the Gaussian block or by the monotone-gap
   transformed block;
   \item update baseline and innovation RHS scales;
@@ -1466,7 +1466,7 @@ For VB--LD, a mean-field factorization matching the MCMC blocks is
 \begin{align}
 q
 &=
-q_\theta(\vect\theta)q_{\theta_0}(\vect\theta_0)q_\alpha(\vect\alpha)
+q_\beta(\vect\beta_{\mathrm{st}})q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})q_\alpha(\vect\alpha)
 \prod_{q=1}^Q q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)
 \prod_{q=1}^Q\prod_{t=1}^T q_{v_{q,t}}(v_{q,t})q_{s_{q,t}}(s_{q,t})
 \nonumber\\
@@ -1475,15 +1475,15 @@ q(\Theta_0)q(\Theta_\Delta),
 \label{eq:supp_joint_vb_factorization}
 \end{align}
 with \(q_{s_{q,t}}\) omitted under AL. The factors
-\(q_\theta\), \(q_{\theta_0}\), and \(q_\alpha\) are Gaussian; the \(v\)
+\(q_\beta\), \(q_{\beta_{\mathrm{base}}}\), and \(q_\alpha\) are Gaussian; the \(v\)
 factors are GIG; the \(s\) factors are positive-truncated Normal; and the RHS
 scale factors are inverse-gamma. The \(q_{\sigma_q,\gamma_q}\) factors use
 Laplace--Delta approximations on the transformed coordinates above.
 
-The Gaussian variational precision for \(q_\theta\) is obtained from
-\eqref{eq:supp_joint_theta_conditional} by replacing
+The Gaussian variational precision for \(q_\beta\) is obtained from
+\eqref{eq:supp_joint_beta_conditional} by replacing
 \(\mat\Omega^{-1}\), \(\mat D_\Delta^{-1}\), \(\vect d\), and
-\(\tilde{\vect\theta}_0\) with the corresponding variational expectations.
+\(\tilde{\vect\beta}_{\mathrm{base}}\) with the corresponding variational expectations.
 Only selected covariance elements are needed for the RHS scale expectations and
 ELBO; a full dense inverse of the stacked precision is not required when sparse
 selected-inverse or diagonal-extraction routines are available.
@@ -1493,17 +1493,17 @@ The joint ELBO is
 \elbo_{\mathrm{joint}}(q)
 &=
 \kappa\E_q\{\log p(\vect y_{\mathrm{st}}\mid
-\vect\theta,\vect\alpha,\vect d,\mat\Omega)\}
+\vect\beta_{\mathrm{st}},\vect\alpha,\vect d,\mat\Omega)\}
 +\sum_{q,t}\E_q\{\log p(v_{q,t}\mid\sigma_q)\}
 +\sum_{q,t}\E_q\{\log p(s_{q,t})\}
 \nonumber\\
 &\quad
 +\sum_q\E_q\{\log p(\sigma_q)+\log\pi_{\gamma_q}(\gamma_q)\}
 +\E_q\{\log p(\vect\alpha)\}
-+\E_q\{\log p(\vect\theta\mid\vect\theta_0,\mat D_\Delta)\}
++\E_q\{\log p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)\}
 \nonumber\\
 &\quad
-+\E_q\{\log p(\vect\theta_0,\Theta_0)\}
++\E_q\{\log p(\vect\beta_{\mathrm{base}},\Theta_0)\}
 +\E_q\{\log p(\Theta_\Delta)\}
 +H(q).
 \label{eq:supp_joint_elbo}
@@ -1519,7 +1519,7 @@ For adjacent levels \(q-1\) and \(q\), define the fitted gap at time \(t\) by
 \[
 g_{q,t}=
 (\alpha_q-\alpha_{q-1})
-+\tilde{\vect x}_t^\top(\vect\theta_q-\vect\theta_{q-1}).
++\tilde{\vect x}_t^\top(\vect\beta_q-\vect\beta_{q-1}).
 \]
 The raw crossing count is
 \[
@@ -1534,7 +1534,7 @@ made large repairs. On a bounded feature domain
 \(\tilde{\vect x}_t\in[-1,1]^r\), the sufficient condition
 \[
 \alpha_q-\alpha_{q-1}\ge
-\|\vect\theta_q-\vect\theta_{q-1}\|_1
+\|\vect\beta_q-\vect\beta_{q-1}\|_1
 \]
 is a diagnostic reference for soft non-crossing behavior; it is not imposed by
 the QVP--RHS prior unless a separate hard-constraint step is added.

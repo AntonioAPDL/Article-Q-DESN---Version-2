@@ -106,22 +106,25 @@
 \noindent
 Conditional quantiles are central to asymmetric decision losses, tail-risk
 assessment, and interval forecasting, but nonlinear dynamic quantile models can
-be difficult to fit when the temporal representation is also learned
-Bayesianly. We develop the quantile deep echo state network (Q--DESN), which
-uses a fixed deep echo state network feature map and places Bayesian inference
-only on the quantile readout. Conditional on reservoir construction, scaling,
-and washout, the readout is estimated with a quantile-fixed extended asymmetric
-Laplace working likelihood, ridge or regularized-horseshoe shrinkage priors,
-and either Markov chain Monte Carlo or a model-specific variational Bayes
-approximation with a Laplace--Delta treatment of the non-conjugate
-scale-asymmetry block. For multi-quantile reporting, we distinguish independent
-single-level fits followed by monotone synthesis from a joint quantile-vector
-readout that adapts Quantile-Varying Parameter shrinkage to adjacent
-quantile-specific readout coefficients. The joint prior encourages coherent
-quantile paths but does not by itself impose hard noncrossing constraints, so
-exact monotone output remains an explicit reporting contract. Synthetic studies
-and GloFAS streamflow and PriceFM electricity-price applications evaluate the
-resulting fixed-feature quantile forecasting workflow under recorded protocols.
+be difficult to fit when high-dimensional temporal features must be regularized
+while preserving uncertainty in quantile-specific readouts. We develop the
+quantile deep echo state network (Q--DESN), which uses a fixed deep echo state
+network feature map and places Bayesian inference only on the quantile readout.
+Conditional on reservoir construction, scaling, and washout, the readout is
+estimated with a quantile-fixed extended asymmetric Laplace working likelihood,
+ridge or regularized-horseshoe shrinkage priors, and either Markov chain Monte
+Carlo or a model-specific variational Bayes approximation with a
+Laplace--Delta treatment of the non-conjugate scale-asymmetry block. For
+multi-quantile reporting, we distinguish independent single-level fits
+followed by monotone synthesis from a joint quantile-vector readout that adapts
+Quantile-Varying Parameter shrinkage to adjacent quantile-specific readout
+coefficients. The joint prior encourages coherent quantile paths but does not
+by itself impose hard noncrossing constraints, so exact monotone output remains
+an explicit reporting contract. Synthetic studies and GloFAS streamflow and
+PriceFM electricity-price applications indicate that the resulting
+fixed-feature workflow is competitive under recorded protocols, while
+calibration, crossing behavior, and reservoir specification remain empirical
+diagnostics rather than automatic posterior guarantees.
 \end{abstract}
 
 \bigskip
@@ -710,7 +713,9 @@ B(\gamma)\sigma v\big).
 \]
 All quantities \(g(\gamma)\), \(p_\gamma\), \(A(\gamma)\), \(B(\gamma)\),
 \(C(\gamma)\), and \(\lambda(\gamma)\) depend on the target quantile
-level \(p_0\); this dependence is suppressed for readability.
+level \(p_0\); this dependence is suppressed for readability. Once
+\((p_0,\gamma)\) is fixed, these are deterministic constants in the Gaussian
+augmentation.
 
 % ============================================================
 \section{Model Specification}
@@ -889,11 +894,11 @@ but independent fitting does not couple readout coefficients across levels. For
 applications in which the coefficient path itself is part of the inferential
 target, let \(0<p_1<\cdots<p_Q<1\) be a fixed quantile grid and write
 \(\mat Z\) for the \(T\times r\) non-intercept fixed feature design. In a full
-Q--DESN analysis, \(\mat Z\) is the non-intercept DESN design; in the joint
-synthetic validation below, the same readout construction is evaluated on the
-frozen article-facing feature design recorded by that validation bundle. The
-joint quantile-vector readout separates intercepts from high-dimensional
-slopes:
+Q--DESN analysis, \(\mat Z\) is the non-intercept DESN design. The joint
+synthetic validation below uses the same readout on a frozen article-facing
+feature design recorded by that validation bundle; it does not change the model
+definition. The joint quantile-vector readout separates intercepts from
+high-dimensional slopes:
 \begin{equation}
 Q_{p_q}(y_t\mid\mathcal F_t)
 =\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q,
@@ -965,6 +970,9 @@ regularization in frequentist quantile regression
 but the shrinkage is placed on the Bayesian readout path conditional on the
 fixed feature design.
 
+The next display rewrites the \(Q\) augmented likelihood contributions as one
+stacked Gaussian block conditional on the exAL latent variables and the
+quantile-specific intercepts.
 Let
 \(\vect\beta_{\mathrm{st}}=(\vect\beta_1^\top,\ldots,\vect\beta_Q^\top)^\top\),
 \(\mat Z_{\mathrm{st}}=\Id{Q}\otimes\mat Z\), and
@@ -1063,20 +1071,21 @@ scored quantile grids.
 \label{subsec:posterior-target}
 
 \noindent
-We state posterior computation for the quantile-vector model in
-Section~\ref{subsec:joint-qdesn}. The individual RHS Q--DESN is obtained by
-the \(Q=1\) collapse described there: take \(\alpha_1\) as the single-level
-intercept, identify \(\vect\beta_1\) with the single-level non-intercept slope
-vector, set \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\), place the RHS prior
-directly on \(\Delta_1=\vect\beta_1\), and omit all baseline-slope factors. In
-the notation of Section~\ref{subsec:qdesn}, the single-level coefficient
-vector is then \((\alpha,\vect\beta_1^\top)^\top\), with \(\alpha\) playing
-the role of \(\beta_0\). This convention lets the same MCMC and VB algorithms
-serve both the general joint readout and the single-quantile readout.
+The quantile-vector posterior is written so that the individual RHS Q--DESN is
+the \(Q=1\) collapse of Section~\ref{subsec:joint-qdesn}. In that collapse,
+take \(\alpha_1\) as the single-level intercept, identify \(\vect\beta_1\) with
+the single-level non-intercept slope vector, set
+\(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\), place the RHS prior directly on
+\(\Delta_1=\vect\beta_1\), and omit all baseline-slope factors. In the
+notation of Section~\ref{subsec:qdesn}, the single-level coefficient vector is
+then \((\alpha,\vect\beta_1^\top)^\top\), with \(\alpha\) playing the role of
+\(\beta_0\). This convention lets the same MCMC and VB algorithms serve both
+the general joint readout and the single-quantile readout.
 
-Let \(\Theta_\Delta\) collect the local, global, auxiliary, and slab scales
-for the adjacent-innovation RHS hierarchy. Let \(\Theta_0\) collect the
-corresponding baseline RHS scales, included only when \(Q>1\). Let
+For the general target, let \(\Theta_\Delta\) collect the local, global,
+auxiliary, and slab scales for the adjacent-innovation RHS hierarchy. Let
+\(\Theta_0\) collect the corresponding baseline RHS scales, included only when
+\(Q>1\). Let
 \(\Theta_Q\) collect \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), the
 likelihood parameters, \(\Theta_\Delta\), and, for \(Q>1\),
 \((\vect\beta_{\mathrm{base}},\Theta_0)\). Let
@@ -1201,21 +1210,27 @@ variants omit the corresponding \(s_{q,t}\), \(\gamma_q\), and shrinkage
 blocks.}
 \label{alg:mcmc}
 \begin{algorithmic}[1]
-\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, learning rate $\kappa$, MCMC iterations $N$
+\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, and learning rate $\kappa$
+\REQUIRE MCMC iterations $N$ and convergence-monitoring settings
 \STATE Initialize $\vect\alpha$, $\vect\beta_{\mathrm{st}}$, likelihood parameters, latent variables, and RHS scales
 \IF{$Q>1$}
   \STATE Initialize $\vect\beta_{\mathrm{base}}$ and its baseline RHS scales
 \ENDIF
 \FOR{$i=1$ to $N$}
-  \STATE \textbf{Latents:} sample \(v_{q,t}\) from independent GIG full conditionals; under exAL, sample \(s_{q,t}\) from independent positive-truncated Normal full conditionals
-  \STATE \textbf{Slope path:} sample \(\vect\beta_{\mathrm{st}}\mid\cdot\sim\Normal(\vect m_\beta,\mat K_\beta^{-1})\), with \(\mat K_\beta\) and \(\vect m_\beta\) from \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
+  \STATE \textbf{Latents:} sample \(v_{q,t}\) from independent GIG full conditionals
+  \STATE \textbf{Latents (exAL):} when exAL is used, sample \(s_{q,t}\) from independent positive-truncated Normal full conditionals
+  \STATE \textbf{Slope path:} form \(\mat K_\beta\) and \(\vect m_\beta\) from \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
+  \STATE \textbf{Slope path:} sample \(\vect\beta_{\mathrm{st}}\mid\cdot\sim\Normal(\vect m_\beta,\mat K_\beta^{-1})\)
   \IF{$Q>1$}
-    \STATE \textbf{Baseline:} sample \(\vect\beta_{\mathrm{base}}\) from its Gaussian conditional and update baseline RHS scales from inverse-gamma full conditionals
+    \STATE \textbf{Baseline:} sample \(\vect\beta_{\mathrm{base}}\) from its Gaussian conditional
+    \STATE \textbf{Baseline scales:} update baseline RHS scales from inverse-gamma full conditionals
   \ENDIF
   \STATE \textbf{Intercepts:} sample \(\vect\alpha\) from its Gaussian conditional, or from an ordered-gap block when exact intercept monotonicity is imposed
-  \STATE \textbf{RHS scales:} sample innovation local, global, auxiliary, and slab scales from inverse-gamma full conditionals; for \(Q=1\), these are the ordinary RHS scales for \(\vect\beta_1\)
-  \STATE \textbf{Likelihood:} update each exAL \((\sigma_q,\gamma_q)\) block by MH or slice sampling on transformed coordinates; under AL, use the corresponding \(\sigma_q\) block
-  \STATE \textbf{Monitor:} store post-burn-in draws, crossing diagnostics, and predictive summaries, with thinning only if used
+  \STATE \textbf{RHS scales:} sample innovation local, global, auxiliary, and slab scales from inverse-gamma full conditionals
+  \STATE \textbf{RHS scales (\(Q=1\)):} use the ordinary RHS scale updates for \(\vect\beta_1\)
+  \STATE \textbf{Likelihood:} update each exAL \((\sigma_q,\gamma_q)\) block by MH or slice sampling on transformed coordinates
+  \STATE \textbf{Likelihood (AL):} use the corresponding \(\sigma_q\) block and omit \(\gamma_q\)
+  \STATE \textbf{Monitor:} store post-burn-in draws, crossing diagnostics, and convergence summaries, with thinning only if used
 \ENDFOR
 \end{algorithmic}
 \end{algorithm}
@@ -1280,20 +1295,26 @@ set
 variants omit the corresponding latent, asymmetry, and shrinkage factors.}
 \label{alg:vb}
 \begin{algorithmic}[1]
-\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, learning rate $\kappa$, convergence controls
+\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, and learning rate $\kappa$
+\REQUIRE Convergence controls for the ELBO or Laplace--Delta ELBO approximation
 \STATE Initialize factors for $q_\beta(\vect\beta_{\mathrm{st}})$, $q_\alpha(\vect\alpha)$, latent variables, RHS scales, and $q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)$
 \IF{$Q>1$}
   \STATE Initialize $q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})$ and its baseline RHS scale factors
 \ENDIF
 \REPEAT
-  \STATE \textbf{Latents:} update \(q(v_{q,t})\) as independent GIG factors; under exAL, update \(q(s_{q,t})\) as independent positive-truncated Normal factors
-  \STATE \textbf{Slope path:} update \(q_\beta(\vect\beta_{\mathrm{st}})\) as a multivariate Normal factor using the expected version of \eqref{eq:joint-kbeta-main}
+  \STATE \textbf{Latents:} update \(q(v_{q,t})\) as independent GIG factors
+  \STATE \textbf{Latents (exAL):} when exAL is used, update \(q(s_{q,t})\) as independent positive-truncated Normal factors
+  \STATE \textbf{Slope path:} update \(q_\beta(\vect\beta_{\mathrm{st}})\) as a multivariate Normal factor
+  \STATE \textbf{Slope path:} use the expected version of \eqref{eq:joint-kbeta-main}
   \IF{$Q>1$}
-    \STATE \textbf{Baseline:} update \(q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})\) as a Gaussian factor and update baseline RHS scale factors as inverse-gamma factors
+    \STATE \textbf{Baseline:} update \(q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})\) as a Gaussian factor
+    \STATE \textbf{Baseline scales:} update baseline RHS scale factors as inverse-gamma factors
   \ENDIF
   \STATE \textbf{Intercepts:} update \(q_\alpha(\vect\alpha)\) as a Gaussian factor, or use ordered-gap factors when exact intercept monotonicity is imposed
-  \STATE \textbf{RHS scales:} update innovation local, global, auxiliary, and slab scale factors as inverse-gamma factors; for \(Q=1\), these are the ordinary RHS factors for \(\vect\beta_1\)
-  \STATE \textbf{Likelihood:} update each \(q_{\sigma_q,\gamma_q}\) by a Laplace approximation on unconstrained coordinates; under AL, use the corresponding \(q_{\sigma_q}\) factor
+  \STATE \textbf{RHS scales:} update innovation local, global, auxiliary, and slab scale factors as inverse-gamma factors
+  \STATE \textbf{RHS scales (\(Q=1\)):} use the ordinary RHS factors for \(\vect\beta_1\)
+  \STATE \textbf{Likelihood:} update each \(q_{\sigma_q,\gamma_q}\) by a Laplace approximation on unconstrained coordinates
+  \STATE \textbf{Likelihood (AL):} use the corresponding \(q_{\sigma_q}\) factor
   \STATE \textbf{Expectations:} update Delta-method expectations for smooth functions of \((\sigma_q,\gamma_q)\)
   \STATE \textbf{Monitor:} evaluate the ELBO or Laplace--Delta ELBO approximation, crossing diagnostics, and convergence criteria
 \UNTIL{convergence}
@@ -1362,12 +1383,11 @@ inherit the same \(p_0\) indexing.
 
 \begin{algorithm}[H]
 \caption{Block posterior prediction for one fitted Q--DESN target level
-\(p_0\). For independent multi-level reporting, run the same forecast recursion
-separately for each fitted \(p_k\) and pass the resulting level-specific
-summaries to Section~\ref{sec:synthesis}.}
+\(p_0\).}
 \label{alg:forecast}
 \begin{algorithmic}[1]
-\REQUIRE Target level $p_0$, forecast origin $T$, horizon $H$, stored reservoir state, posterior or VB--LD draws for the fitted \(p_0\) model, and origin-available future covariates
+\REQUIRE Target level $p_0$, forecast origin $T$, horizon $H$, and stored reservoir state
+\REQUIRE Posterior or VB--LD draws for the fitted \(p_0\) model and origin-available future covariates
 \STATE \textbf{Condition:} teacher-force Eq.~\eqref{eq:desn-hierarchy} through time $T$ using observed responses and fixed reservoir weights
 \FOR{each posterior or variational draw $m$}
   \STATE \textbf{Initialize:} set the reservoir state and response lags at the forecast origin
@@ -1375,10 +1395,11 @@ summaries to Section~\ref{sec:synthesis}.}
     \STATE \textbf{Design:} form $\vect u_{T+h}^{(m,p_0)}$ from known covariates, observed pre-origin lags, and pathwise simulated forecast-window lags
     \STATE \textbf{Reservoir:} update Eq.~\eqref{eq:desn-hierarchy} and form the draw-specific design vector $\vect x_{T+h}^{(m,p_0)}$
     \STATE \textbf{Readout:} compute $\mu_{p_0,T+h}^{(m)}=\vect x_{T+h}^{(m,p_0)\top}\vect\beta_{p_0}^{(m)}$
-    \STATE \textbf{Emit:} sample from $\exAL_{p_0}$ for path propagation and working-likelihood simulation; retain $\mu_{p_0,T+h}^{(m)}$ for \(p_0\)-quantile reporting
+    \STATE \textbf{Emit:} sample from $\exAL_{p_0}$ when path propagation or working-likelihood simulation is required
+    \STATE \textbf{Report:} retain $\mu_{p_0,T+h}^{(m)}$ for \(p_0\)-quantile reporting
   \ENDFOR
 \ENDFOR
-\STATE \textbf{Aggregate:} summarize draws into forecast bands, \(p_0\)-level quantile summaries, scores, and coverage diagnostics when validation outcomes are available
+\STATE \textbf{Aggregate:} summarize draws into forecast bands, \(p_0\)-level quantile summaries, scores, and coverage diagnostics
 \end{algorithmic}
 \end{algorithm}
 
@@ -1410,7 +1431,11 @@ Algorithm~\ref{alg:forecast}, but replaces the single-level readout step by
 \qquad q=1,\ldots,Q,
 \]
 and reports the resulting raw quantile vector, with optional monotone
-post-processing, rather than drawing one future response per \(q\).
+post-processing. If recursive lag inputs require a future response path, that
+path must be generated by a declared propagation rule, such as a
+working-likelihood or synthesized predictive draw. The joint readout supplies
+the quantile vector used by that rule; it should not be interpreted as drawing
+one future response per \(q\).
 
 % ============================================================
 \subsection{Monotone Quantile Synthesis}
@@ -1431,7 +1456,8 @@ variational summary of the target quantile at time \(t\), such as the
 posterior mean or median of
 \(\mu_{k,t}=\vect x_t^\top\vect\beta_k\), or the corresponding
 forecast-horizon summary from the recursion in
-Section~\ref{subsec:forecast_hstep}. The synthesis uses the target grid
+Section~\ref{subsec:forecast_hstep}; at a forecast origin, \(t\) may be read as
+the target date \(T+h\). The synthesis uses the target grid
 \(\{(p_k,\hat q_{k,t})\}_{k=1}^K\), not off-target quantiles implied by the
 \(\exAL_{p_k}\) working likelihood. Since independent fits can cross, first
 project the grid onto the monotone cone,
@@ -1471,15 +1497,15 @@ applied afterward only when exact monotone output is required.
 \label{sec:selection}
 
 \noindent
-Reservoir tuning, numerical diagnosis, and forecast evaluation have distinct
-roles. Reservoir tuning chooses a reproducible feature-generation rule before
-the final analysis; numerical diagnostics screen candidate feature maps for
-alignment, stability, redundancy, and conditioning failures; forecast
-evaluation is defined by the simulation or application protocol. This section
-therefore gives a selection and diagnostic workflow. Because posterior
-inference is conditional on the fixed feature map, this design record is part
-of the empirical interpretation rather than a post hoc implementation detail.
-The simulation and
+Prediction and synthesis inherit the reservoir feature map selected before
+posterior fitting. Reservoir tuning, numerical diagnosis, and forecast
+evaluation therefore have distinct roles. Reservoir tuning chooses a
+reproducible feature-generation rule before the final analysis; numerical
+diagnostics screen candidate feature maps for alignment, stability,
+redundancy, and conditioning failures; forecast evaluation is defined by the
+simulation or application protocol. Because posterior inference is conditional
+on the fixed feature map, this design record is part of the empirical
+interpretation rather than a post hoc implementation detail. The simulation and
 streamflow sections specify the concrete fit-recovery and, where applicable,
 forecast-scoring criteria used in their empirical designs.
 
@@ -1621,14 +1647,16 @@ protocol before being combined with the Q--DESN readout.
 \label{sec:simulation}
 
 \noindent
-The simulation section has two complementary parts. The first is a
-500-observation single-quantile dynamic benchmark that follows the
+The simulation evidence is organized around two complementary questions. The
+first asks whether a single-quantile Q--DESN readout can recover and forecast a
+known dynamic quantile path under a 500-observation benchmark following the
 family-based comparison strategy of \citet{yan2025new}. The target quantile
 level is fixed in advance, the data-generating mechanism is known, and
 competing models are compared under matched error families, fit-window sizes,
-and quantile levels. The second is a joint multi-quantile validation study that
-uses known conditional quantiles to compare joint and independent QDESN and
-exQDESN readouts over a fixed grid of quantile levels.
+and quantile levels. The second asks whether a joint multi-quantile readout can
+recover several known conditional quantile paths and reduce raw crossing
+behavior relative to independent QDESN and exQDESN readouts over a fixed grid
+of quantile levels.
 
 In contrast to the linear-regression setting of \citet{yan2025new}, the oracle
 quantile paths are dynamic, and Q--DESN represents those paths through
@@ -1984,15 +2012,21 @@ g_{T+h,m}^{\mathrm{ens}}\mid q^{\mathrm{glo}}_{p_0,T+h},\sigma_{\mathrm{glo}},\g
 &\sim \exAL_{p_0}(q^{\mathrm{glo}}_{p_0,T+h},\sigma_{\mathrm{glo}},\gamma_{\mathrm{glo}}),
 \quad h=1,\ldots,H,\quad m=1,\ldots,M.
 \end{align*}
+This display gives the general exAL form. The AL specialization used by the
+selected reference-case run omits \(s\)-latent variables and \(\gamma\) blocks,
+and replaces the exAL constants by the corresponding AL constants at the fitted
+level.
 The issued ensemble members enter as conditionally independent likelihood
 contributions given the forecast-system quantile path and source-specific
 likelihood parameters. ECMWF ensemble forecasts use perturbed initial states
 and model perturbations to produce forecast alternatives
 \citep{ECMWF2026ENSGeneration}; in the Q--DESN calibration layer, this supports
 treating GloFAS members at a common forecast origin and horizon as
-exchangeable draws around \(q^{\mathrm{glo}}_{p_0,T+h}\). The default
-application model shares \(\sigma_{\mathrm{glo}}\) and \(\gamma_{\mathrm{glo}}\)
-between retrospective and issued-ensemble GloFAS rows.
+exchangeable draws around \(q^{\mathrm{glo}}_{p_0,T+h}\). In exAL variants,
+the default application model shares \(\sigma_{\mathrm{glo}}\) and
+\(\gamma_{\mathrm{glo}}\) between retrospective and issued-ensemble GloFAS
+rows; under the AL specialization, only the corresponding
+\(\sigma_{\mathrm{glo}}\) block is shared.
 
 For this reference-case analysis, the seven fitted quantile levels are
 \(0.05\), \(0.15\), \(0.35\), \(0.50\), \(0.65\), \(0.80\), and \(0.95\).
@@ -2095,6 +2129,8 @@ statement.
 
 As a second empirical case, we consider probabilistic day-ahead electricity
 price forecasting using the PriceFM benchmark of \citet{YuEtAl2026PriceFM}.
+The article-side target is original-unit quantile scoring on the PriceFM paper
+quantile grid under fold-aligned test timestamps.
 The released data cover European bidding regions at 15-minute resolution and
 include day-ahead price, load, solar, and wind forecasts. PriceFM itself is a
 graph-informed foundation model: it uses region-level exogenous information

@@ -1,0 +1,6 @@
+spec_id,m,alpha,rho,pi_w,pi_in,win_scale_global,win_scale_bias,input_bound,launch_seed,rationale
+d1n300_m110a088r097,110,0.88,0.97,0.03,1.00,0.20,0.20,none,20260512,"Higher effective-rank screen than selected reference while retaining accepted seed 20260512."
+d1n300_m110a086r097,110,0.86,0.97,0.03,1.00,0.20,0.20,none,20260512,"Slightly lower leak-rate neighbor of the high-rank m110/r097 region with accepted seed 20260512."
+d1n300_m100a092r095,100,0.92,0.95,0.03,1.00,0.20,0.20,none,20260512,"Same memory/leak as selected reference with slightly lower spectral radius."
+d1n300_m100a092r093,100,0.92,0.93,0.03,1.00,0.20,0.20,none,20260512,"Same memory/leak as selected reference with lower spectral radius stress test."
+d1n300_m110a090r097s13,110,0.90,0.97,0.03,1.00,0.20,0.20,none,20260513,"Highest-ranked m110/a090/r097 screen candidate using a recommended accepted seed."

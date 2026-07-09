@@ -1,0 +1,391 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_median_de_lu_reservoir_corrected_20260602
+  purpose: >
+    Corrected DE_LU fold-1 median reservoir-feature screen after the
+    2026-06-02 reservoir-control propagation fix. The previous reservoir grid
+    produced strong pre-fix metric evidence, but its per-cell adapters silently
+    used default reservoir controls. This grid uses a new ignored run root and
+    focuses overnight compute around the truly promising small-reservoir region.
+
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_full_median_warmstart.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_median_de_lu_reservoir_corrected_20260602
+    run_root: application/data_local/pricefm/runs/pricefm_median_de_lu_reservoir_corrected_20260602
+
+  scope:
+    regions: [DE_LU]
+    folds: [1]
+    quantiles: [0.50]
+    horizons: all
+    ranking_split: val
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+
+  fixed:
+    lead_window: 96
+    feature_map: window_reservoir_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    recurrent_sparsity: 0.05
+    reservoir_activation: tanh
+    state_output: final_layer
+    default_jobs: 1
+    qdesn_likelihoods: [al, exal]
+    warm_start_enabled: true
+    exact_equivalence_train_rows: 1000
+    artifact_hygiene:
+      enabled: true
+      clean_adapter_patterns: [X_*.csv]
+      clean_model_patterns: ["*.rds", "*.rda", "*.RData"]
+      preserve_patterns:
+        - adapter_manifest.json
+        - feature_manifest.json
+        - rows_*.csv
+        - rows_all.csv
+        - y_*.csv
+        - metric_summary.csv
+        - metric_by_horizon.csv
+        - metric_by_horizon_group.csv
+        - model_method_summary.csv
+        - model_parameter_summary.csv
+        - model_trace_summary.csv
+        - predictions_with_naive_scaled.csv
+        - model_predictions_scaled.csv
+        - exact_equivalence.csv
+        - warm_start_diagnostics.csv
+        - report.md
+        - "*.png"
+        - "*.pdf"
+        - "*.json"
+        - "*.log"
+
+  launch:
+    smoke_gate:
+      priorities: [0]
+      experiment_jobs: 1
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Run these five cells first. Validate that feature manifests record the
+        intended reservoir controls and that all distinct reservoir specs have
+        distinct reservoir_config_sha256 and train X hashes.
+    main_screen:
+      priorities: [1]
+      experiment_jobs: 10
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Overnight corrected screen over small D1 and compact D2 reservoirs.
+        This is intentionally focused: it avoids high-capacity cells until
+        corrected small-reservoir behavior is understood.
+    tail_diagnostics:
+      priorities: [2]
+      experiment_jobs: 4
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Optional follow-up diagnostics only after priority 1 identifies a stable
+        region. Do not launch automatically with the overnight main screen.
+
+  experiments:
+    - id: rc_p0_d1n80_l096_a0p70_r0p90_in0p50_seed20260601
+      stage: smoke_corrected
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [80]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.50
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: Re-run the actual pre-fix metric-winner geometry as a corrected baseline.
+
+    - id: rc_p0_d1n120_l096_a0p70_r0p90_in0p50_seed20260601
+      stage: smoke_corrected
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.50
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: Re-run the best pre-fix exAL near-tie geometry as a corrected baseline.
+
+    - id: rc_p0_d2n40x40_l096_a0p70_r0p90_in0p50_seed20260601
+      stage: smoke_corrected
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 2
+      units: [40, 40]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.50
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: Small true D2 smoke with low readout dimension.
+
+    - id: rc_p0_d2n80x80_l096_a0p70_r0p90_in0p50_seed20260601
+      stage: smoke_corrected
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 2
+      units: [80, 80]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.50
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: True D2 version of the mislabeled pre-fix smoke winner.
+
+    - id: rc_p0_d1n80_l096_a0p70_r0p90_in0p25_seed20260601
+      stage: smoke_corrected
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [80]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.25
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: Low-input-scale sanity check around the pre-fix metric winner.
+
+  experiment_blocks:
+    - id_prefix: rc_p1_d1_capacity_l096
+      stage: d1_capacity_base
+      priority: 1
+      rationale: Capacity curve around the observed small-reservoir signal.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[40], [60], [80], [120], [180], [240]]
+
+    - id_prefix: rc_p1_d1n80_l096
+      stage: d1_core_dynamics
+      priority: 1
+      rationale: Dynamic-control screen around the actual pre-fix metric-winner size.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [80]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: rc_p1_d1n120_l096
+      stage: d1_core_dynamics
+      priority: 1
+      rationale: Dynamic-control screen around the best pre-fix exAL near-tie size.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [120]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: rc_p1_d1_highinput_l096
+      stage: d1_input_scale_tail
+      priority: 1
+      rationale: Check whether stronger input scaling helps or saturates the small reservoirs.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        alpha: 0.70
+        rho: 0.90
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[80], [120]]
+        input_scale: [1.00, 1.50]
+
+    - id_prefix: rc_p1_d2_base_l096
+      stage: d2_compact_base
+      priority: 1
+      rationale: True compact D2 base controls after the propagation fix.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 2
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[40, 40], [60, 60], [80, 80], [120, 120]]
+
+    - id_prefix: rc_p1_d2n40x40_l096
+      stage: d2_core_dynamics
+      priority: 1
+      rationale: Dynamic-control screen for low-dimensional true D2 reservoirs.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 2
+        units: [40, 40]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: rc_p1_d2n80x80_l096
+      stage: d2_core_dynamics
+      priority: 1
+      rationale: Dynamic-control screen for true D2 reservoirs at the pre-fix winner dimension.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 2
+        units: [80, 80]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: rc_p1_context_l096_neighbors
+      stage: context_check_small
+      priority: 1
+      rationale: Neighboring context lengths for the strongest small D1 sizes.
+      base:
+        feature_map: window_reservoir_v1
+        depth: 1
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[80], [120]]
+        lag_window: [48, 72, 128]
+
+    - id_prefix: rc_p2_d1n180_l096
+      stage: d1_mid_capacity_dynamics
+      priority: 2
+      rationale: Optional mid-capacity D1 dynamics after priority 1.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [180]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: rc_p2_d1n240_l096
+      stage: d1_mid_capacity_dynamics
+      priority: 2
+      rationale: Optional D1 240 dynamics after priority 1.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [240]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: rc_p2_d2_bottleneck_l096
+      stage: d2_bottleneck
+      priority: 2
+      rationale: Optional D2 bottleneck/compression diagnostics.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 2
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[80, 40], [120, 40], [160, 80]]
+
+    - id_prefix: rc_p2_d3_tiny_l096
+      stage: d3_tiny
+      priority: 2
+      rationale: Optional tiny D3 depth diagnostic.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 3
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[40, 40, 40], [60, 60, 60]]
+
+    - id_prefix: rc_p2_sparsity_d1n80_l096
+      stage: sparsity_check
+      priority: 2
+      rationale: Optional sparsity diagnostic for the current best-size D1 reservoir.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [80]
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        recurrent_sparsity: [0.02, 0.10]
+
+    - id_prefix: rc_p2_highcap_l096
+      stage: high_capacity_check
+      priority: 2
+      rationale: Optional high-capacity diagnostics only after the corrected small screen.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[360], [480]]

@@ -1,0 +1,2 @@
+fit_id,model_id,model_family,quantile_level,inference_method,coefficient_prior,reservoir_seed,required,enabled,config_hash,notes
+raw_glofas_p50,raw_glofas,raw_glofas,0.50,none,none,NA,false,true,TO_BE_COMPUTED,"Raw GloFAS median placeholder used only so source-figure checks have a valid model-grid contract."

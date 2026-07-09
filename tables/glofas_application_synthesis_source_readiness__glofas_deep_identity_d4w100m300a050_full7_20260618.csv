@@ -1,0 +1,8 @@
+"quantile_id","quantile_level","run_id","fit_status_exists","prediction_table_exists","required_fit_rows_completed"
+"p05",0.05,"glofas_deep_identity_d4w100m300a050_full7_20260618_p05",TRUE,TRUE,TRUE
+"p15",0.15,"glofas_deep_identity_d4w100m300a050_full7_20260618_p15",TRUE,TRUE,TRUE
+"p35",0.35,"glofas_deep_identity_d4w100m300a050_full7_20260618_p35",TRUE,TRUE,TRUE
+"p50",0.5,"glofas_deep_identity_d4w100m300a050_full7_20260618_p50",TRUE,TRUE,TRUE
+"p65",0.65,"glofas_deep_identity_d4w100m300a050_full7_20260618_p65",TRUE,TRUE,TRUE
+"p80",0.8,"glofas_deep_identity_d4w100m300a050_full7_20260618_p80",TRUE,TRUE,TRUE
+"p95",0.95,"glofas_deep_identity_d4w100m300a050_full7_20260618_p95",TRUE,TRUE,TRUE

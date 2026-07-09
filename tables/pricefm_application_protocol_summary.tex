@@ -1,0 +1,25 @@
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.22\textwidth}>{\raggedright\arraybackslash}p{0.66\textwidth}}
+\toprule
+Item & Value
+\\
+\midrule
+Data source & PriceFM European day-ahead electricity benchmark; fold-aligned cached PriceFM predictions are used for the comparison.
+\\
+Frequency and response & 15-minute day-ahead electricity prices evaluated on the original EUR/MWh scale.
+\\
+Covariates & Day-ahead load, solar, and wind forecasts, plus lagged price/covariate information through the QDESN reservoir design.
+\\
+Rolling folds & Fold 1 train: 2022-01-01 to 2024-09-01 (93,504 rows); Fold 1 val: 2024-09-01 to 2025-01-01 (11,712 rows); Fold 1 test: 2025-01-01 to 2025-05-01 (11,520 rows); Fold 2 train: 2022-01-01 to 2025-01-01 (105,216 rows); Fold 2 val: 2025-01-01 to 2025-05-01 (11,520 rows); Fold 2 test: 2025-05-01 to 2025-09-01 (11,808 rows); Fold 3 train: 2022-01-01 to 2025-05-01 (116,736 rows); Fold 3 val: 2025-05-01 to 2025-09-01 (11,808 rows); Fold 3 test: 2025-09-01 to 2026-01-01 (11,712 rows)
+\\
+Selected panel & 42 region/folds from 15 regions: AT, BE, DK\_1, DK\_2, EE, FI, HU, LT, LV, NL, PL, RO, SE\_4, SI, SK.
+\\
+QDESN selection & One validation-selected QDESN/exQDESN readout is used per region/fold. The candidate set includes AL/exAL RHS\(_{\mathrm{NS}}\) readouts and may include topology-neighbor covariates from the released PriceFM graph.
+\\
+Selected QDESN/exQDESN readouts & QDESN RHS\(_{\mathrm{NS}}\); exQDESN RHS\(_{\mathrm{NS}}\)
+\\
+Quantile grid & 0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90
+\\
+Primary metric & Original-unit average quantile loss (AQL); lower is better. Delta AQL is QDESN/exQDESN AQL minus PriceFM AQL.
+\\
+\bottomrule
+\end{tabular}

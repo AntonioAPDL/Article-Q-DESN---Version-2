@@ -1,0 +1,2 @@
+"Diagnostic","Scenario","Tau","Status","Raw MAE","Contract MAE","alpha mean","sigma mean","Treatment"
+"Independent exQDESN RHS held out","Asymmetric Laplace Tail","0.75","confirmed failure","2,724.6","545.5","3,432.1","0.0094","excluded from main table"

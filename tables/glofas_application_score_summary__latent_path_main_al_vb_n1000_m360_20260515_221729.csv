@@ -1,3 +1,0 @@
-"model_id","n_quantile_scores","check_loss_mean","interval_score_mean","interval_coverage_mean","crps_quantile_grid_mean"
-"qdesn_latent_path_rhs_al_vb_main_p50",28,0.748292396057817,,,
-"raw_glofas_latent_path_main_p50",28,0.875378727598426,,,

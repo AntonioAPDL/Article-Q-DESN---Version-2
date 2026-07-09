@@ -1,3 +1,0 @@
-"fit_id","model_id","quantile_level","method","likelihood_family","parameter_family","parameter","mean","lo","median","hi","sd"
-"qdesn_latent_path_rhs_al_vb_main_p50","qdesn_latent_path_rhs_al_vb_main_p50",0.5,"vb","al","scale","sigma_Y",0.0754638834297409,0.0743809104293517,0.075448378487417,0.0765335327632902,0.000551136687047235
-"qdesn_latent_path_rhs_al_vb_main_p50","qdesn_latent_path_rhs_al_vb_main_p50",0.5,"vb","al","scale","sigma_G",0.0524401468020175,0.051739557990086,0.0524389657397594,0.0531635213438914,0.0003601071816303

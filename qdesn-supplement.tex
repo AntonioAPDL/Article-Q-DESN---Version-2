@@ -1101,7 +1101,9 @@ This notation contains the single-level RHS Q--DESN as the \(Q=1\) convention
 baseline. Equivalently, for the single-quantile limit set
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and assign the RHS prior
 directly to \(\Delta_1=\vect\beta_1\). The baseline in the multi-quantile
-derivation below is therefore a slope-path device, not an intercept term.
+derivation below is therefore a slope-path device, not an intercept term. In
+this limit, the baseline RHS hierarchy and its variational factors are simply
+absent; the innovation RHS hierarchy is the ordinary single-level RHS prior.
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
 \begin{align}
@@ -1220,7 +1222,7 @@ used by both the MCMC and VB updates.
 Let \(\Theta_{\Delta}\) collect all local, global, auxiliary, and slab scales
 for the innovation RHS hierarchy, and let \(\Theta_0\) collect the
 corresponding baseline RHS scales. Up to constants not depending on unknowns,
-the complete-data posterior is
+the complete-data posterior for the multi-quantile case is
 \begin{align}
 &p(\vect\beta_{\mathrm{st}},\vect\beta_{\mathrm{base}},\vect\alpha,
 \{\sigma_q,\gamma_q\}_{q=1}^Q,
@@ -1255,6 +1257,11 @@ The factor \(\kappa\) is attached to the Gaussian observation contribution.
 The latent-variable densities remain the exAL augmentation densities; this
 keeps \(\kappa=1\) equal to the ordinary complete-data posterior and makes
 other choices interpretable as tempered observation information.
+For \(Q=1\), remove
+\(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), and the baseline-prior factor
+from \eqref{eq:supp_joint_complete_posterior}, set
+\(\Delta_1=\vect\beta_1\), and use the innovation RHS hierarchy as the
+ordinary single-level RHS hierarchy.
 
 \subsection{Gaussian Blocks}
 
@@ -1449,19 +1456,23 @@ with the analogous \(r/2\) update for a random baseline slab scale
 \label{alg:joint_qdesn_mcmc}
 \emph{Input:} fixed non-intercept design \(\mat Z\), response \(\vect y\),
 quantile grid \(p_1<\cdots<p_Q\), priors, learning rate \(\kappa\), and MCMC
-controls.
+controls. For \(Q=1\), use the collapsed convention
+\(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and
+\(\Delta_1=\vect\beta_1\), and skip every baseline update below.
 \begin{enumerate}[label=(\arabic*)]
-\item Initialize \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), \(\vect\beta_{\mathrm{base}}\),
-likelihood parameters, exAL latent variables, and RHS scales.
+\item Initialize \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), likelihood
+parameters, exAL latent variables, and innovation RHS scales. If \(Q>1\),
+also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
 \item Repeat:
   \begin{enumerate}[label=(\alph*)]
   \item update \(v_{q,t}\) and \(s_{q,t}\) for all \(q,t\);
   \item update \(\vect\beta_{\mathrm{st}}\) from the sparse Gaussian precision
   \eqref{eq:supp_joint_beta_conditional};
-  \item update \(\vect\beta_{\mathrm{base}}\) featurewise;
+  \item if \(Q>1\), update \(\vect\beta_{\mathrm{base}}\) featurewise;
   \item update \(\vect\alpha\) by the Gaussian block or by the monotone-gap
   transformed block;
-  \item update baseline and innovation RHS scales;
+  \item update innovation RHS scales, and if \(Q>1\) update baseline RHS
+  scales;
   \item update each \((\sigma_q,\gamma_q)\) block using
   \eqref{eq:supp_joint_sigma_gamma_kernel} on transformed coordinates;
   \item store draws and crossing diagnostics after burn-in.
@@ -1485,7 +1496,10 @@ with \(q_{s_{q,t}}\) omitted under AL. The factors
 \(q_\beta\), \(q_{\beta_{\mathrm{base}}}\), and \(q_\alpha\) are Gaussian; the \(v\)
 factors are GIG; the \(s\) factors are positive-truncated Normal; and the RHS
 scale factors are inverse-gamma. The \(q_{\sigma_q,\gamma_q}\) factors use
-Laplace--Delta approximations on the transformed coordinates above.
+Laplace--Delta approximations on the transformed coordinates above. For
+\(Q=1\), remove \(q_{\beta_{\mathrm{base}}}\) and \(q(\Theta_0)\), set
+\(\Delta_1=\vect\beta_1\), and read \(q_\beta\) as the ordinary
+single-level slope factor.
 
 The Gaussian variational precision for \(q_\beta\) is obtained from
 \eqref{eq:supp_joint_beta_conditional} by replacing

@@ -913,10 +913,7 @@ Q--DESN is recovered by the convention
 \(\alpha_1=\alpha\), \(\vect\beta_1=\vect\beta\), and no learned slope
 baseline. Equivalently, set
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and place the RHS prior directly
-on \(\Delta_1=\vect\beta_1\). Thus the baseline introduced below is not an
-intercept and is not part of the ordinary single-quantile model; it is a
-multi-quantile slope-path device used to separate a shared slope center from
-adjacent quantile-level innovations.
+on \(\Delta_1=\vect\beta_1\).
 
 For each \(q\), the working likelihood uses the quantile-fixed exAL family at
 the corresponding target level,
@@ -1063,28 +1060,37 @@ scored quantile grids.
 \label{sec:inference}
 
 \noindent
-Let \(\Theta\) collect the readout coefficients, exAL parameters, and
-prior scale parameters, and let \(\vect a=(\vect v,\vect s)\) collect the
-exAL auxiliary variables. Conditional on the fixed DESN design \(\mat X\),
-the augmented posterior target is
+We state posterior computation for the quantile-vector model in
+Section~\ref{subsec:joint-qdesn}. The individual RHS Q--DESN is obtained by
+the \(Q=1\) collapse described there: set \(\alpha_1=\alpha\),
+\(\vect\beta_1=\vect\beta\), \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\),
+place the RHS prior directly on \(\Delta_1=\vect\beta_1\), and omit all
+baseline-slope factors. This convention lets the same MCMC and VB algorithms
+serve both the general joint readout and the single-quantile readout.
+
+Let \(\Theta_Q\) collect the intercepts, slope path, likelihood parameters,
+and shrinkage-scale parameters, and let
+\(\vect a_Q=\{v_{q,t},s_{q,t}:q=1,\ldots,Q;\,t=1,\ldots,T\}\) collect the
+exAL auxiliary variables. Conditional on the fixed non-intercept design
+\(\mat Z\), the augmented quantile-vector posterior target is
 \[
-p(\Theta,\vect a\mid\vect y,\mat X)
+p(\Theta_Q,\vect a_Q\mid\vect y,\mat Z)
 \propto
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\vect x_t)
-p(v_t\mid\sigma)p(s_t)\right\}
-p(\Theta),
+\left\{\prod_{q=1}^Q\prod_{t=1}^T
+p(y_t\mid\alpha_q,\vect\beta_q,\sigma_q,\gamma_q,v_{q,t},s_{q,t},\tilde{\vect x}_t)^\kappa
+p(v_{q,t}\mid\sigma_q)p(s_{q,t})\right\}
+p(\Theta_Q),
 \]
-with the \(s_t\) and \(\gamma\) terms omitted under the AL special case.
-The reduced Q--DESN with the AL likelihood is conditionally conjugate under
-this augmentation: the readout, likelihood scale, and shrinkage-scale blocks
-have standard closed-form Gibbs updates. The exAL extension preserves the
-Gaussian readout structure, but the additional asymmetry parameter
-\(\gamma\) enters \(A(\gamma)\), \(B(\gamma)\), and \(\lambda(\gamma)\), so
-the scale-asymmetry block \((\sigma,\gamma)\) is no longer conjugate. We
-therefore use two computation routes for this same fixed-design target: an
-MCMC sampler with a separate update for the exAL block and a mean-field
-variational Bayes approximation.
+with \(s_{q,t}\) and \(\gamma_q\) omitted under the AL special case. The prior
+\(p(\Theta_Q)\) is the intercept prior, the QVP--RHS slope-path prior in
+\eqref{eq:joint-baseline-rhs}--\eqref{eq:joint-innovation-rhs}, and the
+likelihood-scale priors, with baseline terms omitted under the \(Q=1\)
+collapse. The exAL augmentation preserves a Gaussian slope-path update, given
+by \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}, but the
+scale-asymmetry blocks \((\sigma_q,\gamma_q)\) remain non-conjugate. We
+therefore use two computation routes for the same fixed-design target: an
+MCMC sampler with separate exAL block updates and a mean-field variational
+Bayes approximation with Laplace--Delta updates for the non-conjugate blocks.
 
 \subsection{Markov Chain Monte Carlo}
 
@@ -1093,32 +1099,41 @@ The augmented likelihood and shrinkage hierarchy give a partially Gibbs
 sampler. Blocks with named full conditionals are updated directly; the
 complete-data targets, full conditionals, CAVI factors, and ELBO terms for AL
 and exAL likelihoods under ridge and \RHS{} priors are given in Sections
-S4--S7 of the supplement. Under the Nishimura--Suchard hierarchy, the
-global-local scales have inverse-gamma updates. The exAL block
-\((\sigma,\gamma)\) remains non-conjugate and is updated with
+S4--S8 of the supplement. Under the Nishimura--Suchard hierarchy, the
+global-local scales have inverse-gamma updates. Each exAL block
+\((\sigma_q,\gamma_q)\) remains non-conjugate and is updated with
 Metropolis--Hastings or slice moves on transformed coordinates.
-Algorithm~\ref{alg:mcmc} summarizes the exAL sampler with regularized
-horseshoe shrinkage. Ridge and AL variants omit the corresponding shrinkage,
-\(s_t\), and \(\gamma\) blocks. Diagnostics use trace plots, effective sample
-size summaries, and monitoring of the \((\sigma,\gamma)\) update, including
-acceptance rates when Metropolis--Hastings is used.
+Algorithm~\ref{alg:mcmc} summarizes the quantile-vector sampler with QVP--RHS
+shrinkage. Ridge and AL variants omit the corresponding shrinkage,
+\(s_{q,t}\), and \(\gamma_q\) blocks. Diagnostics use trace plots, effective
+sample size summaries, crossing diagnostics for multi-quantile grids, and
+monitoring of the \((\sigma_q,\gamma_q)\) updates, including acceptance rates
+when Metropolis--Hastings is used.
 
 \begin{algorithm}[H]
-\caption{MCMC sampler for Q--DESN with exAL and regularized horseshoe shrinkage.
-AL and ridge variants omit the corresponding \(s_t\), \(\gamma\), and shrinkage
-blocks.}
+\caption{MCMC sampler for quantile-vector Q--DESN with exAL and QVP--RHS
+shrinkage. For \(Q=1\), set \(\vect\beta_{\mathrm{base}}=\zeros{r}\), place
+the RHS prior on \(\Delta_1=\vect\beta_1\), and omit baseline-slope blocks.
+AL and ridge variants omit the corresponding \(s_{q,t}\), \(\gamma_q\), and
+shrinkage blocks.}
 \label{alg:mcmc}
 \begin{algorithmic}[1]
-\REQUIRE Data $\{y_t,\vect x_t\}_{t=1}^T$, priors, MCMC iterations $N$
-\STATE Initialize $(\vect\beta,\sigma,\gamma)$, shrinkage scales, and latents $(v_{1:T},s_{1:T})$
+\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, learning rate $\kappa$, MCMC iterations $N$
+\STATE Initialize $\vect\alpha$, $\vect\beta_{\mathrm{st}}$, likelihood parameters, latent variables, and RHS scales
+\IF{$Q>1$}
+  \STATE Initialize $\vect\beta_{\mathrm{base}}$ and its baseline RHS scales
+\ENDIF
 \FOR{$i=1$ to $N$}
-  \STATE Sample $v_{1:T}$ from independent generalized inverse Gaussian (GIG) full conditionals
-  \STATE Sample $s_{1:T}$ from independent positive-truncated Normal full conditionals
-  \STATE Sample $\vect\beta$ from its multivariate Normal conditional
-  \STATE Sample $\{\lambda_j^2,\nu_j\}_{j=1}^r$, $\tau^2$, and $\xi$ from inverse-gamma (IG) conditionals
-  \STATE If $\zeta^2$ is random, sample it from its IG conditional; otherwise keep it fixed
-  \STATE Update $(\sigma,\gamma)$ by Metropolis--Hastings (MH) or slice sampling
-  \STATE Store post-burn-in draws, with thinning only if used
+  \STATE Sample $v_{q,t}$ for all $q,t$ from independent generalized inverse Gaussian (GIG) full conditionals
+  \STATE Sample $s_{q,t}$ for all $q,t$ from independent positive-truncated Normal full conditionals
+  \STATE Sample $\vect\beta_{\mathrm{st}}$ from the stacked Gaussian conditional in \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
+  \IF{$Q>1$}
+    \STATE Sample $\vect\beta_{\mathrm{base}}$ featurewise and update its baseline RHS scales
+  \ENDIF
+  \STATE Sample $\vect\alpha$ as a Gaussian block, or through ordered gaps when exact intercept monotonicity is imposed
+  \STATE Update innovation RHS scales for $\Delta_1,\ldots,\Delta_Q$; for $Q=1$ this is the ordinary RHS update on $\vect\beta_1$
+  \STATE Update each $(\sigma_q,\gamma_q)$ by Metropolis--Hastings (MH) or slice sampling on transformed coordinates
+  \STATE Store post-burn-in draws, crossing diagnostics, and predictive summaries, with thinning only if used
 \ENDFOR
 \end{algorithmic}
 \end{algorithm}
@@ -1130,73 +1145,74 @@ For lower-cost approximate inference, we use a mean-field variational Bayes
 approximation for the augmented posterior above. It is an approximation to the
 same fixed-design model, not a different model. The Gaussian, GIG,
 positive-truncated Normal, and inverse-gamma factors have closed-form
-coordinate updates. The exAL scale-asymmetry block is non-conjugate. Building
+coordinate updates. The exAL scale-asymmetry blocks are non-conjugate. Building
 on the variational strategy of \citet{barata2021_flex_quantile} and the
 non-conjugate variational ideas of \citet{wang2013nonconjugatevb}, the
-VB--LD implementation uses a Laplace approximation for this block and
-Delta-method approximations for expectations of smooth functions of
-\((\sigma,\gamma)\). This replaces an importance-sampling step with
+VB--LD implementation uses independent Laplace approximations for these
+blocks and Delta-method approximations for expectations of smooth functions of
+\((\sigma_q,\gamma_q)\). This replaces an importance-sampling step with
 deterministic approximations inside the coordinate updates.
 
-For Q--DESN under the regularized horseshoe formulation above, with
-\(\vect a=(\vect v,\vect s)\), the variational factorization is
-\[
-q(\Theta,\vect a)
-=
-q_\beta(\vect\beta)\,
-q_{\sigma,\gamma}(\sigma,\gamma)\,
-q_{\tau^2}(\tau^2)\,q_\xi(\xi)\,
-\prod_{j=1}^r q_{\lambda_j^2}(\lambda_j^2)q_{\nu_j}(\nu_j)\,
-q_{\zeta^2}(\zeta^2)\,
-\prod_{t=1}^T q_{v_t}(v_t)\,q_{s_t}(s_t),
-\]
-where \(q_{\zeta^2}\) is omitted if \(\zeta\) is fixed. The factors for
-\(\vect\beta\), \(\{v_t\}\), \(\{s_t\}\), \(\{\lambda_j^2\}\), \(\{\nu_j\}\),
-\(\tau^2\), and \(\xi\) remain in Gaussian, GIG, positive-truncated Normal,
-and inverse-gamma families. Only \(q_{\sigma,\gamma}\) is approximated with
-Laplace--Delta on unconstrained coordinates. Posterior means and predictive
-summaries from VB--LD are therefore variational approximations, with
-additional approximation error from this Laplace--Delta block.
+For the quantile-vector QVP--RHS formulation, the mean-field family contains
+Gaussian factors for \(\vect\beta_{\mathrm{st}}\), \(\vect\alpha\), and, when
+\(Q>1\), \(\vect\beta_{\mathrm{base}}\); GIG factors for the \(v_{q,t}\);
+positive-truncated Normal factors for the \(s_{q,t}\); inverse-gamma factors
+for baseline and innovation RHS scales; and independent Laplace--Delta
+factors for the \((\sigma_q,\gamma_q)\) blocks. Under the \(Q=1\) collapse,
+the baseline factor and its scale factors are removed, and the innovation
+scale factors are exactly the ordinary RHS factors for the single slope
+readout. Posterior means and predictive summaries from VB--LD are therefore
+variational approximations, with additional approximation error only from the
+Laplace--Delta scale-asymmetry blocks.
 
 The Laplace--Delta step uses unconstrained coordinates
-\(\boldsymbol{\eta}=(\log\sigma,\log\{(\gamma-L)/(U-\gamma)\})^\top\),
+\(\boldsymbol{\eta}_q=(\log\sigma_q,\log\{(\gamma_q-L_q)/(U_q-\gamma_q)\})^\top\),
 on which the expected complete-data log posterior, including the Jacobian, is
-approximated by a Normal density at its mode. If \(\hat{\boldsymbol{\eta}}\)
-is the mode and \(\Sigma\) is the negative inverse Hessian at that mode, then
-smooth expectations needed by the closed-form updates are approximated by
+approximated by a Normal density at its mode. If
+\(\hat{\boldsymbol{\eta}}_q\) is the mode and \(\Sigma_q\) is the negative
+inverse Hessian at that mode, then smooth expectations needed by the
+closed-form updates are approximated by
 \[
-\E\{g(\boldsymbol{\eta})\}
+\E\{g(\boldsymbol{\eta}_q)\}
 \approx
-g(\hat{\boldsymbol{\eta}})
-+\frac12\mathrm{Tr}\!\left\{\nabla^2g(\hat{\boldsymbol{\eta}})\Sigma\right\}.
+g(\hat{\boldsymbol{\eta}}_q)
++\frac12\mathrm{Tr}\!\left\{\nabla^2g(\hat{\boldsymbol{\eta}}_q)\Sigma_q\right\}.
 \]
 Thus, only expectations involving the exAL scale and asymmetry use
 Laplace--Delta; the remaining factors are updated in closed form. The updates
 are iterated until the evidence lower bound (ELBO), or its Laplace--Delta
 approximation, stabilizes.
 
-Algorithm~\ref{alg:vb} outlines the coordinate ascent updates for the exAL
-and regularized horseshoe case. Ridge and AL variants omit the corresponding
-blocks. The output is a set of approximate posterior moments and predictive
-summaries at the target quantile levels.
+Algorithm~\ref{alg:vb} outlines the coordinate ascent updates for the
+quantile-vector exAL and QVP--RHS case. Ridge and AL variants omit the
+corresponding blocks. The output is a set of approximate posterior moments,
+predictive summaries, and crossing diagnostics at the target quantile levels.
 
 \begin{algorithm}[H]
-\caption{Variational Bayes updates for Q--DESN with exAL and regularized
-horseshoe shrinkage. AL and ridge variants omit the corresponding latent,
-asymmetry, and shrinkage factors.}
+\caption{Variational Bayes updates for quantile-vector Q--DESN with exAL and
+QVP--RHS shrinkage. For \(Q=1\), set
+\(\vect\beta_{\mathrm{base}}=\zeros{r}\), place the RHS prior on
+\(\Delta_1=\vect\beta_1\), and omit baseline-slope factors. AL and ridge
+variants omit the corresponding latent, asymmetry, and shrinkage factors.}
 \label{alg:vb}
 \begin{algorithmic}[1]
-\REQUIRE Data $\{y_t,\vect x_t\}_{t=1}^T$, priors, convergence controls
-\STATE Initialize factors for $q(\vect\beta)$, $q(v_{1:T})$, $q(s_{1:T})$, shrinkage scales, and $q(\sigma,\gamma)$
+\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, learning rate $\kappa$, convergence controls
+\STATE Initialize factors for $q_\beta(\vect\beta_{\mathrm{st}})$, $q_\alpha(\vect\alpha)$, latent variables, RHS scales, and $q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)$
+\IF{$Q>1$}
+  \STATE Initialize $q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})$ and its baseline RHS scale factors
+\ENDIF
 \REPEAT
-  \STATE Update $q(v_{1:T})$ as independent generalized inverse Gaussian (GIG) factors
-  \STATE Update $q(s_{1:T})$ as independent positive-truncated Normal factors
-  \STATE Update $q(\vect\beta)$ as a multivariate Normal factor
-  \STATE Update $\{q(\lambda_j^2),q(\nu_j)\}_{j=1}^r$, $q(\tau^2)$, and $q(\xi)$ as inverse-gamma (IG) factors
-  \STATE If $\zeta^2$ is random, update $q(\zeta^2)$ as an IG factor; otherwise keep it fixed
-  \STATE Update $q(\sigma,\gamma)$ by a Laplace approximation on unconstrained coordinates
-  \STATE Update Delta-method expectations for smooth functions of $(\sigma,\gamma)$
-  \STATE Evaluate the ELBO or Laplace--Delta ELBO approximation and check convergence
+  \STATE Update $q(v_{q,t})$ as independent generalized inverse Gaussian (GIG) factors
+  \STATE Update $q(s_{q,t})$ as independent positive-truncated Normal factors
+  \STATE Update $q_\beta(\vect\beta_{\mathrm{st}})$ as a multivariate Normal factor using the expected version of \eqref{eq:joint-kbeta-main}
+  \IF{$Q>1$}
+    \STATE Update $q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})$ and its baseline RHS scale factors
+  \ENDIF
+  \STATE Update $q_\alpha(\vect\alpha)$, with ordered-gap factors if exact intercept monotonicity is imposed
+  \STATE Update innovation RHS scale factors for $\Delta_1,\ldots,\Delta_Q$; for $Q=1$ these are the ordinary RHS factors for $\vect\beta_1$
+  \STATE Update each $q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)$ by a Laplace approximation on unconstrained coordinates
+  \STATE Update Delta-method expectations for smooth functions of $(\sigma_q,\gamma_q)$
+  \STATE Evaluate the ELBO or Laplace--Delta ELBO approximation, crossing diagnostics, and convergence criteria
 \UNTIL{convergence}
 \end{algorithmic}
 \end{algorithm}
@@ -1204,39 +1220,15 @@ asymmetry, and shrinkage factors.}
 \subsection{Joint Quantile-Vector Inference}
 \label{subsec:joint-inference}
 
-The joint quantile-vector extension targets the augmented posterior defined by
-the composite exAL likelihood in \eqref{eq:joint-qdesn-exal}, the intercept
-prior, the baseline RHS prior \eqref{eq:joint-baseline-rhs}, and the
-innovation RHS prior \eqref{eq:joint-innovation-rhs}. Conditional on the
-exAL latent variables and shrinkage scales, the only structural change from
-the single-level sampler is that the readout update becomes the stacked
-Gaussian update in \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}.
-The latent variables \(\{v_{q,t},s_{q,t}\}\) and likelihood parameters
-\((\sigma_q,\gamma_q)\) are updated by quantile level, while the
-adjacent-difference RHS prior couples the slope vectors
-\(\vect\beta_1,\ldots,\vect\beta_Q\).
-
-The MCMC sampler alternates between five groups: exAL latent variables for
-each \(q\), the stacked slope path \(\vect\beta_{\mathrm{st}}\), the baseline
-readout \(\vect\beta_{\mathrm{base}}\), intercepts \(\vect\alpha\), and the
-baseline and innovation RHS scale blocks. The intercept block may be updated as
-an unconstrained Gaussian block or through ordered gaps if exact intercept
-monotonicity is part of the reported specification. The scale-asymmetry block
-\((\sigma_q,\gamma_q)\) remains non-conjugate and is updated separately for
-each \(q\) on transformed coordinates.
-
-The VB--LD approximation uses the same factorization logic as the
-single-level model, with multivariate Gaussian factors for
-\(\vect\beta_{\mathrm{st}}\), \(\vect\beta_{\mathrm{base}}\), and
-\(\vect\alpha\), inverse-gamma factors for the RHS scales, GIG factors for the
-\(v_{q,t}\), positive-truncated Normal factors for the \(s_{q,t}\), and
-independent Laplace--Delta factors for the quantile-specific
-\((\sigma_q,\gamma_q)\) blocks. The resulting ELBO is exact for the
-conditionally conjugate Gaussian, GIG, truncated-normal, and inverse-gamma
-factors, and approximate for smooth functions of the Laplace--Delta blocks.
-Section S8 of the supplement gives the full posterior factorization,
-conditional updates, variational factorization, ELBO terms, and crossing
-diagnostics.
+The algorithms above are the article's general computation recipes. The
+supplement keeps the single-level full conditionals and the full
+quantile-vector posterior algebra explicit: Sections S4--S7 give the
+single-level AL/exAL updates, and Section S8 gives the QVP--RHS posterior,
+stacked Gaussian blocks, VB factorization, ELBO terms, and crossing
+diagnostics. Thus a reader implementing only one quantile can use
+Algorithms~\ref{alg:mcmc}--\ref{alg:vb} with \(Q=1\) and the collapsed RHS
+prior, while a reader implementing multiple levels uses the same algorithms
+with the baseline and adjacent-innovation blocks active.
 
 
 % ============================================================

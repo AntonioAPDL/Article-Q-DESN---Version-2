@@ -907,11 +907,11 @@ either weakly regularized independently or represented through ordered gaps
 when a stronger monotonicity convention is desired.
 
 This construction generalizes the single-level RHS Q--DESN by replacing the
-single readout \((\alpha,\vect\beta)\) with
+single intercept-slope readout \((\beta_0,\vect\beta_{1:r})\) with
 \(\{(\alpha_q,\vect\beta_q)\}_{q=1}^Q\). For \(Q=1\), the individual RHS
-Q--DESN is recovered by the convention
-\(\alpha_1=\alpha\), \(\vect\beta_1=\vect\beta\), and no learned slope
-baseline. Equivalently, set
+Q--DESN is recovered by taking \(\alpha_1\) as the single-level intercept and
+identifying \(\vect\beta_1\) with the single-level non-intercept slope vector,
+with no learned slope baseline. Equivalently, set
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and place the RHS prior directly
 on \(\Delta_1=\vect\beta_1\).
 
@@ -1059,38 +1059,114 @@ scored quantile grids.
 \section{Posterior Inference}
 \label{sec:inference}
 
+\subsection{General Augmented Posterior Target}
+\label{subsec:posterior-target}
+
 \noindent
 We state posterior computation for the quantile-vector model in
 Section~\ref{subsec:joint-qdesn}. The individual RHS Q--DESN is obtained by
-the \(Q=1\) collapse described there: set \(\alpha_1=\alpha\),
-\(\vect\beta_1=\vect\beta\), \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\),
-place the RHS prior directly on \(\Delta_1=\vect\beta_1\), and omit all
-baseline-slope factors. This convention lets the same MCMC and VB algorithms
+the \(Q=1\) collapse described there: take \(\alpha_1\) as the single-level
+intercept, identify \(\vect\beta_1\) with the single-level non-intercept slope
+vector, set \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\), place the RHS prior
+directly on \(\Delta_1=\vect\beta_1\), and omit all baseline-slope factors. In
+the notation of Section~\ref{subsec:qdesn}, the single-level coefficient
+vector is then \((\alpha,\vect\beta_1^\top)^\top\), with \(\alpha\) playing
+the role of \(\beta_0\). This convention lets the same MCMC and VB algorithms
 serve both the general joint readout and the single-quantile readout.
 
-Let \(\Theta_Q\) collect the intercepts, slope path, likelihood parameters,
-and shrinkage-scale parameters, and let
+Let \(\Theta_\Delta\) collect the local, global, auxiliary, and slab scales
+for the adjacent-innovation RHS hierarchy. Let \(\Theta_0\) collect the
+corresponding baseline RHS scales, included only when \(Q>1\). Let
+\(\Theta_Q\) collect \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), the
+likelihood parameters, \(\Theta_\Delta\), and, for \(Q>1\),
+\((\vect\beta_{\mathrm{base}},\Theta_0)\). Let
 \(\vect a_Q=\{v_{q,t},s_{q,t}:q=1,\ldots,Q;\,t=1,\ldots,T\}\) collect the
-exAL auxiliary variables. Conditional on the fixed non-intercept design
-\(\mat Z\), the augmented quantile-vector posterior target is
-\[
-p(\Theta_Q,\vect a_Q\mid\vect y,\mat Z)
+exAL auxiliary variables. With the stacked quantities
+\(\vect y_{\mathrm{st}}\), \(\vect\alpha_{\mathrm{st}}\),
+\(\mat Z_{\mathrm{st}}\), \(\vect d\), and \(\mat\Omega\) defined in
+Section~\ref{subsec:joint-qdesn}, the tempered complete-data posterior can be
+written, up to constants not depending on unknowns, as
+\begin{align}
+&p(\Theta_Q,\vect a_Q\mid\vect y,\mat Z)
 \propto
-\left\{\prod_{q=1}^Q\prod_{t=1}^T
-p(y_t\mid\alpha_q,\vect\beta_q,\sigma_q,\gamma_q,v_{q,t},s_{q,t},\tilde{\vect x}_t)^\kappa
-p(v_{q,t}\mid\sigma_q)p(s_{q,t})\right\}
-p(\Theta_Q),
+\exp\left[
+-\frac{\kappa}{2}
+(\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
+-\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)^\top
+\mat\Omega^{-1}
+(\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
+-\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)
+\right]
+\nonumber\\
+&\quad\times
+\prod_{q=1}^Q\prod_{t=1}^T
+\left\{
+(\omega_{q,t})^{-\kappa/2}
+p(v_{q,t}\mid\sigma_q)p(s_{q,t})
+\right\}
+\prod_{q=1}^Q p(\sigma_q)\pi_{\gamma_q}(\gamma_q)\ind\{L_q<\gamma_q<U_q\}
+\nonumber\\
+&\quad\times
+p(\vect\alpha)\,
+p_\Delta^{(Q)}(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)\,
+p(\Theta_\Delta)\,\mathcal B_Q,
+\label{eq:joint-posterior-target-main}
+\end{align}
+where
+\[
+\mathcal B_Q=
+\begin{cases}
+p(\vect\beta_{\mathrm{base}}\mid\Theta_0)p(\Theta_0), & Q>1,\\
+1, & Q=1.
+\end{cases}
 \]
-with \(s_{q,t}\) and \(\gamma_q\) omitted under the AL special case. The prior
-\(p(\Theta_Q)\) is the intercept prior, the QVP--RHS slope-path prior in
-\eqref{eq:joint-baseline-rhs}--\eqref{eq:joint-innovation-rhs}, and the
-likelihood-scale priors, with baseline terms omitted under the \(Q=1\)
-collapse. The exAL augmentation preserves a Gaussian slope-path update, given
-by \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}, but the
+The Gaussian prior factor \(p_\Delta^{(Q)}\) is induced by the
+first-difference matrix \(\mat H\) and innovation covariance
+\(\mat D_\Delta\) in \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}.
+For \(Q>1\), it is the adjacent-innovation prior centered on the baseline
+slope, so the \(\vect\beta_{\mathrm{base}}\) argument is active. For \(Q=1\),
+there is no random baseline argument, and the same factor is read as the
+ordinary RHS slope prior
+\[
+p_\Delta^{(1)}(\vect\beta_1\mid\mat D_\Delta)
+\propto
+\exp\left(-\frac12\vect\beta_1^\top\mat D_\Delta^{-1}\vect\beta_1\right),
+\qquad \Delta_1=\vect\beta_1.
+\]
+The AL special case omits \(s_{q,t}\), \(\gamma_q\), and the
+positive-truncated Normal factors. The ordinary single-quantile posterior is
+obtained from \eqref{eq:joint-posterior-target-main} by setting \(Q=1\),
+\(\kappa=1\), \(\vect y_{\mathrm{st}}=\vect y\),
+\(\mat Z_{\mathrm{st}}=\mat Z\), \(\vect\alpha_{\mathrm{st}}=\alpha\ones{T}\),
+\(\vect\beta_{\mathrm{st}}=\vect\beta_1\), and dropping \(\mathcal B_Q\):
+\begin{align}
+&p(\alpha,\vect\beta_1,\sigma,\gamma,\{v_t,s_t\}_{t=1}^T,\Theta_\Delta
+\mid\vect y,\mat Z)
+\propto
+\exp\left[
+-\frac12
+(\vect y-\alpha\ones{T}-\mat Z\vect\beta_1-\vect d_1)^\top
+\mat\Omega_1^{-1}
+(\vect y-\alpha\ones{T}-\mat Z\vect\beta_1-\vect d_1)
+\right]
+\nonumber\\
+&\quad\times
+\prod_{t=1}^T
+\left\{
+(\omega_t)^{-1/2}p(v_t\mid\sigma)p(s_t)
+\right\}
+p(\sigma)\pi_{\gamma}(\gamma)\ind\{L<\gamma<U\}
+p(\alpha)\,p_\Delta^{(1)}(\vect\beta_1\mid\mat D_\Delta)p(\Theta_\Delta).
+\label{eq:single-posterior-collapse-main}
+\end{align}
+Thus the posterior, not only the algorithms, has a single general expression
+with a transparent collapse to the individual RHS Q--DESN. The exAL
+augmentation preserves the Gaussian slope-path update in
+\eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}, but the
 scale-asymmetry blocks \((\sigma_q,\gamma_q)\) remain non-conjugate. We
-therefore use two computation routes for the same fixed-design target: an
-MCMC sampler with separate exAL block updates and a mean-field variational
-Bayes approximation with Laplace--Delta updates for the non-conjugate blocks.
+therefore use two computation routes for this fixed-design target: an MCMC
+sampler with separate exAL block updates and a mean-field variational Bayes
+approximation with Laplace--Delta updates for the non-conjugate blocks.
 
 \subsection{Markov Chain Monte Carlo}
 
@@ -1103,8 +1179,10 @@ S4--S8 of the supplement. Under the Nishimura--Suchard hierarchy, the
 global-local scales have inverse-gamma updates. Each exAL block
 \((\sigma_q,\gamma_q)\) remains non-conjugate and is updated with
 Metropolis--Hastings or slice moves on transformed coordinates.
-Algorithm~\ref{alg:mcmc} summarizes the quantile-vector sampler with QVP--RHS
-shrinkage. Ridge and AL variants omit the corresponding shrinkage,
+Algorithm~\ref{alg:mcmc} targets
+\eqref{eq:joint-posterior-target-main}; with \(Q=1\), it targets the collapsed
+posterior in \eqref{eq:single-posterior-collapse-main}. Ridge and AL variants
+omit the corresponding shrinkage,
 \(s_{q,t}\), and \(\gamma_q\) blocks. Diagnostics use trace plots, effective
 sample size summaries, crossing diagnostics for multi-quantile grids, and
 monitoring of the \((\sigma_q,\gamma_q)\) updates, including acceptance rates
@@ -1184,7 +1262,9 @@ are iterated until the evidence lower bound (ELBO), or its Laplace--Delta
 approximation, stabilizes.
 
 Algorithm~\ref{alg:vb} outlines the coordinate ascent updates for the
-quantile-vector exAL and QVP--RHS case. Ridge and AL variants omit the
+variational approximation to \eqref{eq:joint-posterior-target-main}; with
+\(Q=1\), the same updates approximate
+\eqref{eq:single-posterior-collapse-main}. Ridge and AL variants omit the
 corresponding blocks. The output is a set of approximate posterior moments,
 predictive summaries, and crossing diagnostics at the target quantile levels.
 
@@ -1217,11 +1297,14 @@ variants omit the corresponding latent, asymmetry, and shrinkage factors.}
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{Joint Quantile-Vector Inference}
+\subsection{Supplementary Algebra and Implementation Notes}
 \label{subsec:joint-inference}
 
-The algorithms above are the article's general computation recipes. The
-supplement keeps the single-level full conditionals and the full
+Equations~\eqref{eq:joint-posterior-target-main} and
+\eqref{eq:single-posterior-collapse-main} define the article-facing posterior
+targets, and Algorithms~\ref{alg:mcmc}--\ref{alg:vb} are placed immediately
+after them because they implement those targets. The supplement keeps the
+single-level full conditionals and the full
 quantile-vector posterior algebra explicit: Sections S4--S7 give the
 single-level AL/exAL updates, and Section S8 gives the QVP--RHS posterior,
 stacked Gaussian blocks, VB factorization, ELBO terms, and crossing

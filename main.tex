@@ -1338,50 +1338,58 @@ construction, and the working likelihood. At a forecast origin \(T\), the
 historical reservoir state is obtained by teacher forcing: the recursion in
 Eq.~\eqref{eq:desn-hierarchy} is run through the observed record with observed
 responses in the lag vector \(\vect u_t\). After \(T\), future responses are
-unobserved, so multi-step forecasting is draw-specific. For a fixed future
-design row and a posterior draw
-\(\theta^{(m)}=(\vect\beta^{(m)},\sigma^{(m)},\gamma^{(m)})\), the
+unobserved, so multi-step forecasting is draw-specific. For a single-level fit
+at target \(p_0\), write the draw as
+\(\theta_{p_0}^{(m)}
+=(\vect\beta_{p_0}^{(m)},\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)})\). Conditional
+on a fixed future design row and this draw, the \(p_0\)-indexed
 working-likelihood predictive distribution is available in closed form:
 \[
-y_{T+h}^{(m)}
+y_{T+h}^{(m,p_0)}
 \sim
 \exAL_{p_0}\!\left(
-\vect x_{T+h}^{(m)\top}\vect\beta^{(m)},
-\sigma^{(m)},\gamma^{(m)}
+\vect x_{T+h}^{(m,p_0)\top}\vect\beta_{p_0}^{(m)},
+\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)}
 \right).
 \]
-The posterior predictive distribution is the mixture of these closed-form
-working-likelihood distributions over the MCMC posterior draws, or over draws
-from the VB--LD approximation. It is generally summarized by Monte Carlo rather
-than by a closed-form mixture. Multi-step horizons add one further
-Monte-Carlo step: future lagged responses inside the forecast window are
-generated pathwise, so the future design rows are draw-specific.
+The posterior predictive distribution at this fitted level is the mixture of
+these closed-form working-likelihood distributions over the MCMC posterior
+draws, or over draws from the VB--LD approximation. It is generally summarized
+by Monte Carlo rather than by a closed-form mixture. Multi-step horizons add
+one further Monte-Carlo step: future lagged responses inside the forecast
+window are generated pathwise, so the future design rows are draw-specific and
+inherit the same \(p_0\) indexing.
 
 \begin{algorithm}[H]
-\caption{Block posterior prediction for Q--DESN. For \(Q=1\), use the
-collapsed single-level readout. For a joint grid, repeat the readout step over
-\(q=1,\ldots,Q\) and apply any monotone reporting contract after the raw
-quantile vector is computed.}
+\caption{Block posterior prediction for one fitted Q--DESN target level
+\(p_0\). For independent multi-level reporting, run the same forecast recursion
+separately for each fitted \(p_k\) and pass the resulting level-specific
+summaries to Section~\ref{sec:synthesis}.}
 \label{alg:forecast}
 \begin{algorithmic}[1]
-\REQUIRE Forecast origin $T$, horizon $H$, stored reservoir state, posterior draws or VB--LD draws, and origin-available future covariates
+\REQUIRE Target level $p_0$, forecast origin $T$, horizon $H$, stored reservoir state, posterior or VB--LD draws for the fitted \(p_0\) model, and origin-available future covariates
 \STATE \textbf{Condition:} teacher-force Eq.~\eqref{eq:desn-hierarchy} through time $T$ using observed responses and fixed reservoir weights
 \FOR{each posterior or variational draw $m$}
   \STATE \textbf{Initialize:} set the reservoir state and response lags at the forecast origin
   \FOR{$h=1$ to $H$}
-    \STATE \textbf{Design:} form $\vect u_{T+h}^{(m)}$ from known covariates, observed pre-origin lags, and pathwise simulated forecast-window lags
-    \STATE \textbf{Reservoir:} update Eq.~\eqref{eq:desn-hierarchy} and form the draw-specific design vector $\vect x_{T+h}^{(m)}$
-    \STATE \textbf{Readout:} compute $\mu_{T+h}^{(m)}=\vect x_{T+h}^{(m)\top}\vect\beta^{(m)}$ for a single level, or $\mu_{q,T+h}^{(m)}=\alpha_q^{(m)}+\tilde{\vect x}_{T+h}^{(m)\top}\vect\beta_q^{(m)}$ for a joint grid
-    \STATE \textbf{Emit:} sample a working-likelihood draw from exAL for simulation, or retain the readout quantile summaries for deterministic quantile reporting
+    \STATE \textbf{Design:} form $\vect u_{T+h}^{(m,p_0)}$ from known covariates, observed pre-origin lags, and pathwise simulated forecast-window lags
+    \STATE \textbf{Reservoir:} update Eq.~\eqref{eq:desn-hierarchy} and form the draw-specific design vector $\vect x_{T+h}^{(m,p_0)}$
+    \STATE \textbf{Readout:} compute $\mu_{p_0,T+h}^{(m)}=\vect x_{T+h}^{(m,p_0)\top}\vect\beta_{p_0}^{(m)}$
+    \STATE \textbf{Emit:} sample from $\exAL_{p_0}$ for path propagation and working-likelihood simulation; retain $\mu_{p_0,T+h}^{(m)}$ for \(p_0\)-quantile reporting
   \ENDFOR
 \ENDFOR
-\STATE \textbf{Aggregate:} summarize draws into forecast bands, target-level quantiles, scores, and coverage diagnostics when validation outcomes are available
+\STATE \textbf{Aggregate:} summarize draws into forecast bands, \(p_0\)-level quantile summaries, scores, and coverage diagnostics when validation outcomes are available
 \end{algorithmic}
 \end{algorithm}
 
 Exogenous covariates must be known at the forecast origin, supplied as
 scenarios, or generated by an external covariate model. Additional details are
-given in Section S9 of the supplement.
+given in Section S9 of the supplement. Thus, under independent single-level
+fits, ``forecasting all levels'' means applying Algorithm~\ref{alg:forecast}
+separately to each fitted \(p_k\). A single \(p_0\) fit should not be read as
+producing fitted target-level quantile summaries for all levels; off-target
+quantiles implied by its exAL working distribution are not the fitted quantile
+targets used in Section~\ref{sec:synthesis}.
 
 For the joint quantile-vector readout, the reservoir recursion is unchanged.
 A posterior or variational draw contains the level-specific readouts
@@ -1391,7 +1399,18 @@ draw-specific future design vector returns a raw quantile vector over the grid
 monotone reporting contract is applied. The composite quantile-vector
 likelihood should therefore be read as a device for estimating the conditional
 quantile path; it does not create a separate replicated future response for
-each quantile level.
+each quantile level. In the joint case, prediction over the grid uses the same
+condition, design, reservoir, and aggregate blocks as
+Algorithm~\ref{alg:forecast}, but replaces the single-level readout step by
+\[
+\mu_{q,T+h}^{(m)}
+=
+\alpha_q^{(m)}
++\tilde{\vect x}_{T+h}^{(m)\top}\vect\beta_q^{(m)},
+\qquad q=1,\ldots,Q,
+\]
+and reports the resulting raw quantile vector, with optional monotone
+post-processing, rather than drawing one future response per \(q\).
 
 % ============================================================
 \subsection{Monotone Quantile Synthesis}

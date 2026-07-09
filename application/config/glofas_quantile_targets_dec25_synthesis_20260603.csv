@@ -1,0 +1,8 @@
+quantile_id,quantile_level,role,enabled
+p05,0.05,lower_90,true
+p15,0.15,lower_65,true
+p35,0.35,lower_30,true
+p50,0.50,median,true
+p65,0.65,upper_30,true
+p80,0.80,upper_65,true
+p95,0.95,upper_90,true

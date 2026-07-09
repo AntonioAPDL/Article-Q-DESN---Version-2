@@ -1,0 +1,75 @@
+version: 0.1
+bundle_id: glofas_qdesn_authoritative_TO_BE_FILLED
+description: >
+  Local registration contract for the frozen inputs used by the GloFAS
+  Q-DESN discrepancy-calibration application. The files are intentionally
+  untracked; this configuration records the expected names and semantic roles.
+
+bundle_root: application/data_local/frozen_inputs/glofas_qdesn_authoritative_TO_BE_FILLED
+copy_files: false
+manifest_output: application/manifests/input_manifest.csv
+bundle_manifest_output: application/manifests/input_bundle_manifest.csv
+
+inputs:
+  reference_gauge:
+    source_name: reference gauge streamflow
+    source_type: observation
+    relative_path: reference/reference_gauge.csv
+    upstream_reference: TO_BE_FILLED
+    date_columns:
+      - date
+    required: true
+    notes: >
+      Observed streamflow for the target gauge, one row per station_id and
+      date after preprocessing.
+
+  glofas_retrospective:
+    source_name: GloFAS retrospective streamflow
+    source_type: retrospective_forecast
+    relative_path: glofas/glofas_retrospective.csv
+    upstream_reference: TO_BE_FILLED
+    date_columns:
+      - date
+    required: true
+    notes: >
+      Retrospective single-trajectory GloFAS series aligned to the reference
+      gauge location and calendar.
+
+  glofas_ensemble:
+    source_name: GloFAS ensemble streamflow forecasts
+    source_type: ensemble_forecast
+    relative_path: glofas/glofas_ensemble.csv
+    upstream_reference: TO_BE_FILLED
+    date_columns:
+      - origin_date
+      - target_date
+    required: true
+    notes: >
+      Forecast-origin table with origin_date, target_date, horizon, member,
+      and GloFAS streamflow values.
+
+  ppt_soil_covariates:
+    source_name: precipitation and soil covariates
+    source_type: covariate
+    relative_path: covariates/ppt_soil_covariates.csv
+    upstream_reference: TO_BE_FILLED
+    date_columns:
+      - date
+    required: false
+    notes: >
+      Optional model-facing precipitation and soil-moisture table with columns
+      date, ppt, and soil. The Q-DESN readout does not use GDPC, PCA, or
+      climate-index columns.
+
+  climate_covariates:
+    source_name: diagnostic climate covariates
+    source_type: covariate
+    relative_path: covariates/climate_covariates.csv
+    upstream_reference: TO_BE_FILLED
+    date_columns:
+      - date
+    required: false
+    notes: >
+      Optional diagnostic/provenance file retained for source audits. It is not
+      a model-facing readout input unless a future configuration explicitly
+      defines a separate contract for it.

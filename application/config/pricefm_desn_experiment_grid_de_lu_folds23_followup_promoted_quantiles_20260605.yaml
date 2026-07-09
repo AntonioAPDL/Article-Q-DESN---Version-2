@@ -1,0 +1,391 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_de_lu_folds23_followup_promoted_quantiles_20260605
+  purpose: Paper-quantile promotion grid generated from the region-fold median selection
+    registry. Each experiment is scoped to one selected region/fold/tau combination.
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_median_de_lu_fold1_authoritative_reservoir_corrected_20260602.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_de_lu_folds23_followup_promoted_quantiles_20260605
+    run_root: application/data_local/pricefm/runs/pricefm_de_lu_folds23_followup_promoted_quantiles_20260605
+  scope:
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    - 3
+    quantiles:
+    - 0.1
+    - 0.25
+    - 0.45
+    - 0.5
+    - 0.55
+    - 0.75
+    - 0.9
+    horizons: all
+    ranking_split: test
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+  fixed:
+    lead_window: 96
+    feature_map: window_reservoir_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    recurrent_sparsity: 0.05
+    reservoir_activation: tanh
+    state_output: final_layer
+    default_jobs: 1
+    qdesn_likelihoods:
+    - al
+    - exal
+    exact_equivalence_train_rows: 1000
+    artifact_hygiene:
+      enabled: true
+      clean_adapter_patterns:
+      - X_*.csv
+      clean_model_patterns:
+      - '*.rds'
+      - '*.rda'
+      - '*.RData'
+      preserve_patterns:
+      - adapter_manifest.json
+      - feature_manifest.json
+      - rows_*.csv
+      - rows_all.csv
+      - y_*.csv
+      - metric_summary.csv
+      - metric_by_horizon.csv
+      - metric_by_horizon_group.csv
+      - model_method_summary.csv
+      - model_parameter_summary.csv
+      - model_trace_summary.csv
+      - predictions_with_naive_scaled.csv
+      - model_predictions_scaled.csv
+      - exact_equivalence.csv
+      - warm_start_diagnostics.csv
+      - report.md
+      - '*.png'
+      - '*.pdf'
+      - '*.json'
+      - '*.log'
+  launch:
+    paper_quantile_cells:
+      priorities:
+      - 0
+      experiment_jobs: 8
+      cell_jobs: 1
+      build_windows: true
+      note: Generated promotion grid. Launch with the grid runner; each experiment
+        has a region/fold override from the median registry.
+    summarizer:
+      script: application/scripts/pricefm/15_summarize_paper_quantile_runs.py
+      output_dirs:
+        fold_2: application/data_local/pricefm/authoritative/pricefm_de_lu_fold2_followup_paper_quantiles_authoritative_20260605
+        fold_3: application/data_local/pricefm/authoritative/pricefm_de_lu_fold3_followup_paper_quantiles_authoritative_20260605
+  experiments:
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p1
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.1
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p25
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.25
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p45
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.45
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p5
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p55
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.55
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p75
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.75
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603_fold2_delu_tau0p9
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 2
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.9
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=2, median_experiment=fup_f2_priorp2retest_l96_d1_n120_a0p5_r0p9_in0p25_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.194531714549435'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p1
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.1
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p25
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.25
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p45
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.45
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p5
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.5
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p55
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.55
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p75
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.75
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  - id: fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603_fold3_delu_tau0p9
+    stage: paper_quantile_promoted
+    priority: 0
+    regions:
+    - DE_LU
+    folds:
+    - 3
+    feature_map: window_reservoir_v1
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    projection_scale: 1.0
+    tau0: 0.001
+    seed: 20260603
+    quantile: 0.9
+    rationale: 'Promoted from median validation registry: region=DE_LU, fold=3, median_experiment=fup_f3_fold3localrefine_l96_d2_n80x80_a0p4_r0p9_in0p35_seed20260603,
+      selected_method=qdesn_exal_rhs_ns_exact_chunked, val_metric=6.738953736644266'
+  experiment_blocks: []

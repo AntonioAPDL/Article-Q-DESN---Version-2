@@ -1,0 +1,92 @@
+pricefm_desn_full:
+  data_config: application/config/pricefm_data_pipeline_lag8640.yaml
+  package_path: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0
+  rscript_bin: /data/jaguir26/local/opt/R/4.6.0/bin/Rscript
+  python_bin: application/data_local/pricefm/venv/bin/python
+
+  scope:
+    regions: all
+    folds: [1, 2, 3]
+    splits: [train, val, test]
+    horizons: all
+    quantiles: [0.50]
+    feature_policy: target_only
+
+  training:
+    train_origin_limit: 500
+    train_origin_selection: tail
+
+  adapter:
+    output_root: application/data_local/pricefm/runs/desn_model_full_median_warmstart_lag8640_n500_20260531/cells
+    feature_map: window_desn_v1
+    feature_dim: 30
+    row_chunk_size: 512
+    seed: 20260531
+    include_intercept: true
+    keep_matrices_after_success: false
+
+  run:
+    output_dir: application/data_local/pricefm/runs/desn_model_full_median_warmstart_lag8640_n500_20260531
+    nd_predictive: 400
+    seed: 20260531
+    default_jobs: 2
+
+  rhs_ns:
+    tau0: 1.0e-4
+    shrink_intercept: false
+    freeze_tau_iters: 5
+    freeze_tau_warmup_iters: 5
+
+  warm_start:
+    enabled: true
+    record_diagnostics: true
+    fallback_to_cold: false
+    qdesn:
+      al:
+        enabled: true
+        first_tau_source: normal_rhs_ns
+        next_tau_source: previous_al_tau
+        tau_order: [0.50]
+        components: [beta, beta_state, sigma]
+      exal:
+        enabled: true
+        source: al_same_tau
+        components: [beta, beta_state, sigma]
+        gamma_policy: zero
+
+  normal:
+    omega_prior:
+      a: 2.0
+      b: 1.0
+    vb_control:
+      max_iter: 30
+      min_iter: 5
+      tol: 1.0e-5
+      verbose: false
+
+  qdesn_vb:
+    likelihoods: [al, exal]
+    max_iter: 120
+    min_iter_elbo: 5
+    tol: 1.0e-4
+    tol_par: 1.0e-4
+    n_samp_xi: 80
+    prior_sigma:
+      a: 1.0
+      b: 1.0
+    prior_gamma:
+      mu0: 0.0
+      s20: 10.0
+    chunking:
+      enabled: true
+      mode: exact
+      chunk_size: 2048
+      order: sequential
+      trace: false
+
+  exact_equivalence:
+    enabled: true
+    likelihood: al
+    quantile: 0.50
+    train_rows: 1000
+    tolerance: 1.0e-6

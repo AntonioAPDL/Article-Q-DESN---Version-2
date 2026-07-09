@@ -1,0 +1,2 @@
+cutoff_id,origin_date,train_start,train_end,eval_start,eval_end,horizon_min,horizon_max,split,enabled,notes
+dec25_2022_latent_micro_pilot,2022-12-25,1979-02-01,2022-12-25,2022-12-26,2023-01-01,1,7,diagnostic,true,"Seven-horizon latent-path AL-VB micro-pilot cutoff for validating recursive future-state wiring before large 30-horizon fits."

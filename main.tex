@@ -2006,9 +2006,11 @@ rows; under the AL specialization, only the corresponding
 For this reference-case analysis, the seven fitted quantile levels are
 \(0.05\), \(0.15\), \(0.35\), \(0.50\), \(0.65\), \(0.80\), and \(0.95\).
 They are fitted independently with the AL special case and the VB approximation.
-This application therefore uses the independent-fit and synthesis workflow,
-not the joint quantile-vector readout of Section~\ref{subsec:joint-qdesn}. The
-draw-level predictive
+This choice is deliberate: the streamflow application is intended as a fast
+calibration workflow, so the reported run uses Q--DESN under AL rather than
+exQDESN under exAL. This application therefore uses the independent-fit and
+synthesis workflow, not the joint quantile-vector readout of
+Section~\ref{subsec:joint-qdesn}. The draw-level predictive
 summaries are then passed through the monotone synthesis step. The selected
 manuscript output additionally uses a no-refit spread calibration at the
 synthesis stage, centered at quantile
@@ -2260,8 +2262,9 @@ The validation evidence is correspondingly scoped. The single-quantile dynamic
 simulations test recovery and held-out forecasting under pinned data-generating
 mechanisms. The joint multi-quantile synthetic study checks coherence
 under known conditional quantile paths. The GloFAS application is an
-audited one-origin streamflow calibration case using independent AL--VB fits
-and monotone synthesis, while the PriceFM comparison is a fold-aligned
+audited one-origin streamflow calibration case using computationally light
+independent Q--DESN AL--VB fits and monotone synthesis, while the PriceFM
+comparison is a fold-aligned
 benchmark against cached Phase-I predictions. These studies support the
 reported workflows under their own protocols, not a universal ranking of
 Q--DESN over all dynamic quantile or foundation-model alternatives.

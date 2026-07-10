@@ -8,6 +8,7 @@
 \onehalfspacing
 
 \usepackage{amsmath,amssymb,amsfonts,mathtools,bm,booktabs,tabularx,array}
+\usepackage{graphicx}
 \usepackage{enumitem}
 \usepackage[round,authoryear]{natbib}
 \usepackage{hyperref}
@@ -1640,6 +1641,34 @@ The finite grid does not identify tail shape outside \([p_1,p_K]\); parametric
 tail extension should therefore be treated as a separate modeling step rather
 than an implication of the composite working likelihood.
 
+\clearpage
+\section{Supplementary Validation Tables}
+\label{sec:supp_validation_tables}
+
+The main article reports MCMC-only validation summaries. This section preserves
+the generated VB--LD companion evidence and the full generated table captions so
+the computational comparison remains auditable without making VB rows the
+article-facing validation results.
+
+\subsection{Single-Quantile VB--LD Companion Panels}
+
+The following generated tables retain both inference panels from the pinned
+500-observation validation bundle. In the main article, only the MCMC rows from
+these source tables are displayed.
+
+\input{tables/qdesn_validation_tt500_final_tables.tex}
+
+\clearpage
+\subsection{Joint Multi-Quantile VB--LD Forecast Screening}
+
+The following generated tables report the VB--LD held-out forecast screening
+for the joint and independent multi-quantile readouts. These tables provide
+computational and forecast-screening context for the MCMC fit-reference results
+shown in the main article.
+
+\input{tables/joint_qdesn_article_validation_tables.tex}
+
+\clearpage
 \section{GloFAS Discrepancy-Calibration Model}
 \label{sec:glofas_discrepancy}
 

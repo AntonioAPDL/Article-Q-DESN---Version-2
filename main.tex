@@ -1675,9 +1675,10 @@ family-based comparison strategy of \citet{yan2025new}. The target quantile
 level is fixed in advance, the data-generating mechanism is known, and
 competing models are compared under matched error families, fit-window sizes,
 and quantile levels. The second asks whether a joint multi-quantile readout can
-recover several known conditional quantile paths and reduce raw crossing
-behavior relative to independent QDESN and exQDESN readouts over a fixed grid
-of quantile levels.
+recover several known conditional quantile paths under posterior simulation and
+maintain coherent raw quantile grids over a fixed set of levels. Companion
+VB--LD screening and forecast-comparison tables are kept in the supplement
+rather than used as the main article evidence.
 
 In contrast to the linear-regression setting of \citet{yan2025new}, the oracle
 quantile paths are dynamic, and Q--DESN represents those paths through
@@ -1687,13 +1688,15 @@ conditional quantile path, and how well it forecasts held-out dynamic blocks.
 We write \(p\) for the single target level in the first study and \(\tau\) for
 levels in the multi-quantile grid.
 
-The reported tables are generated from verified source files. The table
-builders check source hashes, rolling-origin metadata, fit and forecast windows,
-and table hashes before writing manuscript assets. Run-level provenance remains
-in the generated manifests. Larger-window MCMC studies and alternative
-simulation roots remain outside the present article tables and require separate
-pinned validation interfaces. The joint multi-quantile validation below has its
-own registry, table assets, and crossing-diagnostic contract.
+The reported main-text tables are MCMC summaries derived from verified source
+files. The table builders check source hashes, rolling-origin metadata, fit and
+forecast windows, and table hashes before writing manuscript assets. Run-level
+provenance remains in the generated manifests, and the supplement preserves the
+VB--LD companion panels and generated forecast-screening summaries. Larger-window
+MCMC studies and alternative simulation roots remain outside the present article
+tables and require separate pinned validation interfaces. The joint
+multi-quantile validation below has its own registry, table assets, and
+crossing-diagnostic contract.
 
 \subsection{Single-Quantile Dynamic Data-Generating Processes}
 
@@ -1795,9 +1798,9 @@ location. Because the oracle path \(\mu_t\) is known, fit-window recovery can
 be evaluated using quantile mean absolute error, quantile RMSE, bias,
 correlation, and check loss at the target level \(p\). Forecast accuracy is
 evaluated only on outcomes not used for fitting, under common forecast origins
-and leads for every model. The article-facing tables report fit recovery,
-forecast scoring, and runtime separately; row-completion and source-hash
-diagnostics remain in the guarded interface files and generated manifest.
+and leads for every model. The article-facing tables report fit recovery and
+forecast scoring; runtime, row-completion, and source-hash diagnostics remain
+in the guarded interface files and generated manifest.
 
 For single-level quantile fits, the primary proper score is pinball loss at the
 fitted level. Quantile MAE and quantile RMSE compare the fitted or forecast
@@ -1805,15 +1808,16 @@ quantile summary directly with the known oracle quantile path, while pinball
 loss scores realized observations relative to the reported quantile. These
 metrics therefore answer different questions and should not be collapsed into
 one rank.
-Runtime is reported as a computational criterion for comparing posterior
-simulation with VB--LD, not as a statistical accuracy measure.
+Runtime is retained as a computational criterion for comparing posterior
+simulation with VB--LD in the generated provenance and supplement, not as a
+statistical accuracy measure.
 
 Because the simulation uses one reproducible dynamic root for each family and
 quantile level, the tables report deterministic criterion values for that
 source design rather than Monte Carlo means over repeated data sets. Any
-boldface or ranking in the final tables is interpreted within a fixed family,
-quantile level, fit-window, model family, and inference comparison. A model row
-is eligible for interpretation only if the shared interface reports successful
+boldface or ranking in the displayed MCMC tables is interpreted within a fixed
+family, quantile level, fit-window, model family, and metric. A model row is
+eligible for interpretation only if the shared interface reports successful
 completion, valid source hashes, valid fit and forecast windows, nonmissing
 fit-recovery metrics, nonmissing rolling-origin forecast metrics, and an
 acceptable health or signoff status.
@@ -1823,122 +1827,68 @@ acceptable health or signoff status.
 The verified protocol uses the 500-observation training window
 \(8501{:}9000\), the held-out block \(9001{:}10000\), rolling-origin forecasts
 with leads 1--30 and origin stride 30, and the three target levels
-\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-tt500-final-normal}--%
-\ref{tab:simulation-tt500-final-gausmix} report the family-specific summaries.
-The entries are generated from lead-level rolling-origin interface rows: fit
-RMSE measures recovery of the known oracle quantile path on the training
-window, forecast MAE measures oracle-quantile forecast error averaged across
-scored rolling-origin lead-target pairs, pinball loss scores realized
-observations at the fitted quantile level, and runtime is retained in the
-generated provenance files.
-Boldface marks the lowest value within each inference panel and quantile level,
-not a global ranking across different statistical and computational criteria.
-Some exQDESN RHS cells use audited compact replacements for earlier full-grid
-exports; the generated manifest records the replacement source, profile, hash,
-and diagnostic qualification for each such cell. The exQDESN RHS MCMC row uses
-an audited confirmation run for the VB-selected specifications, with remaining
-chain-autocorrelation qualifications recorded in the manifest.
+\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-tt500-mcmc-normal}--%
+\ref{tab:simulation-tt500-mcmc-gausmix} report the MCMC family-specific
+summaries. The entries are generated from lead-level rolling-origin interface
+rows: fit RMSE measures recovery of the known oracle quantile path on the
+training window, forecast MAE measures oracle-quantile forecast error averaged
+across scored rolling-origin lead-target pairs, and pinball loss scores
+realized observations at the fitted quantile level. Runtime and row-level
+provenance are retained in the generated manifest. Boldface marks the lowest
+MCMC value within each quantile level and metric, not a global ranking across
+different statistical criteria.
 
-\input{tables/qdesn_validation_tt500_final_tables.tex}
+\input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
-The result tables are generated by the tracked final-validation config and
-table-builder script. The generated manifest records the full validation paths,
-interface hashes, source-registry hash, table hashes, and row counts; the
-Article-Q-DESN commit containing the manifest provides the article-side
-provenance. The tables should therefore be interpreted as a final
-article-facing validation bundle for this fixed dynamic design, not as a claim
-about larger-window MCMC runs, alternative fit sizes, multiple dynamic roots, or
-an unreported reservoir hyperparameter search. The exQDESN RHS MCMC entries
-are artifact-complete confirmation fits for the VB-selected specifications; two
-cells retain high-autocorrelation qualifications in the generated manifest.
+The result tables are derived from the tracked final-validation config and
+table-builder outputs without changing the generated source tables. The
+generated manifest records the full validation paths, interface hashes,
+source-registry hash, table hashes, row counts, audited compact replacements,
+and any remaining chain-autocorrelation qualifications. The displayed MCMC
+tables should therefore be interpreted as the article-facing validation bundle
+for this fixed dynamic design, not as a claim about larger-window MCMC runs,
+alternative fit sizes, multiple dynamic roots, or an unreported reservoir
+hyperparameter search. The VB--LD panels from the same generated validation
+bundle are reported in the supplement as computational companion evidence.
 
 \subsection{Joint Multi-Quantile Frozen-Feature Validation}
 
 The second simulation study asks a different question: whether a shared
 quantile-vector readout can recover several conditional quantile paths at once
-and forecast a held-out dynamic block when the oracle paths are known. The
-target is therefore multi-quantile coherence and forecast-distance calibration
-under a frozen feature design, not a new single-quantile comparison against
+under a frozen feature design. The main article reports the MCMC reference layer
+for the selected joint QDESN RHS specification. This layer is a fit-window
+posterior recovery and crossing-diagnostic check, not a rolling-origin
+held-out forecast validation and not a new single-quantile comparison against
 dynamic linear baselines.
 
-The four VB entries vary two modeling choices while keeping the regularized
-horseshoe (RHS) prior fixed. Entries labeled QDESN use the AL working
-likelihood, and entries labeled exQDESN use the exAL working likelihood. The
-modifier ``joint'' denotes one quantile-vector readout fit across
+The selected readout is fit across
 \[
 \tau\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}.
 \]
-The modifier ``independent'' denotes separately fit single-quantile readouts
-assembled over the same grid and then passed through the same monotone
-rearrangement before scoring. This convention separates the likelihood choice
-from the readout structure, so the table entries can be read as statistical
-comparisons rather than as internal implementation labels.
+The validation uses nine synthetic data-generating mechanisms, a frozen feature
+design, and a 500-observation fit window. The three bridge mechanisms align
+with the Gaussian, Laplace, and Gaussian-mixture families in the single-quantile
+study. The six stress mechanisms introduce Student-\(t\) errors, asymmetric
+tails, heteroskedastic seasonality, persistent heavy tails, regime shifts, and
+nonlinear reservoir-friendly dynamics. Quantile summaries are compared with the
+known conditional quantiles, realized observations are scored through check
+loss, and raw adjacent-level crossing counts are retained as numerical
+coherence diagnostics. Held-out VB--LD forecast screening over the same
+mechanisms is reported in the supplement.
 
-The validation uses nine synthetic data-generating mechanisms, a frozen
-feature design, a 500-observation fit window, and a 1000-observation
-held-out block. The three bridge mechanisms align with the Gaussian, Laplace,
-and Gaussian-mixture families in the single-quantile study. The six stress
-mechanisms introduce Student-\(t\) errors, asymmetric tails, heteroskedastic
-seasonality, persistent heavy tails, regime shifts, and nonlinear
-reservoir-friendly dynamics. Forecasts use a no-refit rolling-origin protocol
-over the common held-out block. The VB entries compare fit-window recovery and
-held-out forecast behavior. Quantile summaries are compared with the known
-conditional quantiles, and realized observations are scored through check loss,
-grid CRPS, hit-rate diagnostics, and interval diagnostics. For each fitted
-entry, the validation stores both the raw quantile grid returned by the model
-and the reported grid obtained after monotone rearrangement. Scores are
-computed from the reported monotone grid; raw crossing counts are retained only
-as numerical stability diagnostics. This is a quantile-grid forecast validation:
-held-out responses are not sampled from the composite AL/exAL likelihood, and
-the displayed VB entries are point summaries of the fitted readout paths.
-Draw-level posterior quantile-curve calibration is a separate diagnostic and is
-left to future validation.
+\input{tables/joint_qdesn_article_validation_mcmc_main_summary.tex}
 
-\input{tables/joint_qdesn_article_validation_tables.tex}
-
-Table~\ref{tab:joint-qdesn-article-validation-vb-model-summary} reports that,
-after averaging over the nine synthetic mechanisms rather than over a single
-empirical data set, the joint QDESN RHS entry has the lowest average held-out
-MAE to the known conditional quantiles among the four VB entries. Its forecast
-MAE is \(0.096\), compared with \(0.098\) for the independent QDESN comparator,
-\(0.145\) for joint exQDESN, and \(0.133\) for independent exQDESN. The margin
-between the joint and independent AL entries is small, so the main
-interpretation is not a broad dominance claim. Rather, the joint readout is
-competitive in forecast distance while showing far fewer pre-rearrangement
-crossing events than the independent AL entry. The exQDESN entries have no raw
-crossings in this validation bundle, but their average forecast distances to
-the oracle quantiles are larger; in this study they are useful likelihood
-extensions rather than evidence of exAL dominance.
-
-Table~\ref{tab:joint-qdesn-article-validation-vb-scenario-summary} gives the
-same held-out forecast-distance comparison by synthetic mechanism, replacing
-the heat-map view with numerical entries that can be checked directly. The
-joint QDESN RHS row has the lowest displayed MAE in five of the nine mechanisms,
-while independent AL or independent exAL rows are lower in the remaining
-mechanisms. This heterogeneity is why the validation is interpreted as
-frozen-design evidence of competitive multi-quantile behavior, not as a claim
-of uniform superiority.
-
-The VB-initialized MCMC reference run is restricted to the fit window for the
-selected joint QDESN RHS specification. It is not a rolling-origin forecast
-validation. Instead, it checks whether VB provides a stable initializer for
-posterior simulation and whether the fitted quantile paths remain close to the
-known oracle paths. Across the nine scenarios, the MCMC reference run produces
-finite draws, noncrossing raw and reported quantile grids, and pass-level
-scenario diagnostics. This result supports the selected VB fit as an MCMC
-initializer for the primary joint QDESN RHS row under the recorded MCMC
-controls, while leaving held-out forecast comparison to the VB validation layer.
-
-The generated provenance tables retain the full scenario summaries, MCMC
-scenario diagnostics, source-hash checks, and run-level diagnostic status. The
-MCMC distance plots are retained as generated diagnostics but are not printed in
-the main text because they are fit-reference checks rather than held-out
-forecast comparisons. Those records are not additional statistical claims; they
-document that the article tables and figures were generated from verified
-validation outputs without rerunning inference. The joint validation should
-therefore be interpreted as frozen-design evidence for reported multi-quantile
-summaries under the specified mechanisms, feature design, quantile grid,
-monotone reporting contract, and forecast protocol.
+Table~\ref{tab:joint-qdesn-article-validation-mcmc-main-summary} shows that the
+MCMC reference run produces finite diagnostics across all nine mechanisms. The
+MCMC fit-window MAE to the known conditional quantile paths ranges from
+\(0.061\) to \(0.121\), the chain-pooled normalized path distance ranges from
+\(0.031\) to \(0.183\), and the raw adjacent-level crossing count is zero in
+each scenario. Runtime is between 17.3 and 22.9 minutes under the recorded MCMC
+controls. These results support the selected joint QDESN RHS readout as a
+posterior-simulation reference fit for the frozen-feature multi-quantile
+design. The supplement retains the VB--LD companion tables for held-out
+forecast screening, independent-readout comparison, and computational
+scalability context.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}

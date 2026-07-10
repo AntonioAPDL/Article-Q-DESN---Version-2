@@ -1,0 +1,25 @@
+% MCMC-only article wrapper derived from
+% tables/qdesn_validation_tt500_final_laplace.tex.
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Model & \multicolumn{3}{c}{$p=0.05$} & \multicolumn{3}{c}{$p=0.25$} & \multicolumn{3}{c}{$p=0.50$} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+ & Fit RMSE & Forecast MAE & Check loss & Fit RMSE & Forecast MAE & Check loss & Fit RMSE & Forecast MAE & Check loss \\
+\midrule
+DQLM & \textbf{3.663} & 9.791 & 1.968 & 2.850 & 3.520 & 4.548 & 1.774 & \textbf{1.337} & \textbf{5.082} \\
+exDQLM & 5.677 & 22.44 & 5.154 & 1.710 & 6.811 & 5.106 & 1.774 & 2.013 & 5.206 \\
+QDESN ridge & 9.972 & 19.77 & 2.483 & 4.018 & 9.954 & 5.686 & 2.967 & 13.41 & 8.863 \\
+exQDESN ridge & 7.853 & 9.678 & 2.063 & 3.265 & 10.93 & 5.821 & 2.949 & 12.43 & 8.453 \\
+QDESN RHS & 6.783 & 12.14 & 2.103 & 2.054 & \textbf{2.474} & \textbf{4.493} & \textbf{1.217} & 2.765 & 5.254 \\
+exQDESN RHS & 6.671 & \textbf{2.143} & \textbf{1.859} & \textbf{1.564} & 3.921 & 4.608 & 1.263 & 3.248 & 5.334 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{MCMC single-quantile fit-and-forecast comparison for the Laplace simulation family. Forecast entries average scored rolling-origin lead-target pairs over leads 1--30 with origin stride 30. Lower values are better for all displayed metrics, and boldface marks the lowest MCMC value within each quantile level and metric.}
+\label{tab:simulation-tt500-mcmc-laplace}
+\end{table}

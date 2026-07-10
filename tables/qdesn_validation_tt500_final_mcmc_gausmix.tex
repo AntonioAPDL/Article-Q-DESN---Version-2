@@ -1,0 +1,25 @@
+% MCMC-only article wrapper derived from
+% tables/qdesn_validation_tt500_final_gausmix.tex.
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrr@{}}
+\toprule
+Model & \multicolumn{3}{c}{$p=0.05$} & \multicolumn{3}{c}{$p=0.25$} & \multicolumn{3}{c}{$p=0.50$} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+ & Fit RMSE & Forecast MAE & Check loss & Fit RMSE & Forecast MAE & Check loss & Fit RMSE & Forecast MAE & Check loss \\
+\midrule
+DQLM & 2.623 & 3.003 & \textbf{1.505} & 4.740 & \textbf{2.487} & \textbf{4.540} & 2.226 & \textbf{1.932} & \textbf{5.556} \\
+exDQLM & \textbf{2.554} & 23.91 & 5.857 & \textbf{1.381} & 8.941 & 5.649 & 2.408 & 2.207 & 5.607 \\
+QDESN ridge & 8.180 & 8.722 & 1.930 & 5.094 & 16.82 & 6.924 & 4.273 & 8.097 & 7.012 \\
+exQDESN ridge & 6.316 & 4.912 & 1.619 & 3.917 & 13.17 & 6.236 & 4.557 & 7.532 & 6.780 \\
+QDESN RHS & 6.269 & 4.440 & 1.562 & 2.659 & 4.246 & 4.690 & \textbf{1.229} & 3.141 & 5.690 \\
+exQDESN RHS & 4.176 & \textbf{2.028} & 1.510 & 2.069 & 5.376 & 4.803 & 1.384 & 3.423 & 5.727 \\
+\bottomrule
+\end{tabular}%
+}
+\caption{MCMC single-quantile fit-and-forecast comparison for the Gaussian-mixture simulation family. Forecast entries average scored rolling-origin lead-target pairs over leads 1--30 with origin stride 30. Lower values are better for all displayed metrics, and boldface marks the lowest MCMC value within each quantile level and metric.}
+\label{tab:simulation-tt500-mcmc-gausmix}
+\end{table}

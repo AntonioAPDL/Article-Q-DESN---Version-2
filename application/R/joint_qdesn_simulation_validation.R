@@ -29,6 +29,25 @@ app_joint_qdesn_simulation_model_specs <- function() {
   )
 }
 
+app_joint_qdesn_parse_id_csv <- function(x) {
+  if (is.null(x) || !length(x)) return(character())
+  x <- as.character(x)[[1L]]
+  if (is.na(x) || !nzchar(trimws(x))) return(character())
+  vals <- trimws(strsplit(x, ",", fixed = TRUE)[[1L]])
+  vals[nzchar(vals)]
+}
+
+app_joint_qdesn_filter_model_specs <- function(model_ids = NULL) {
+  specs <- app_joint_qdesn_simulation_model_specs()
+  if (is.null(model_ids) || !length(model_ids)) return(specs)
+  model_ids <- unique(as.character(model_ids))
+  model_ids <- model_ids[nzchar(model_ids)]
+  if (!length(model_ids)) return(specs)
+  missing <- setdiff(model_ids, specs$model_id)
+  if (length(missing)) stop("Unknown model_ids: ", paste(missing, collapse = ", "), call. = FALSE)
+  specs[match(model_ids, specs$model_id), , drop = FALSE]
+}
+
 app_joint_qdesn_simulation_controls <- function(
   vb_max_iter = 240L,
   adaptive_vb_max_iter_grid = c(240L, 480L),
@@ -602,9 +621,9 @@ app_joint_qdesn_assessment_rows <- function(
   app_joint_qdesn_bind_rows(rows)
 }
 
-app_joint_qdesn_fit_one_scenario <- function(artifacts, scenario_id, controls) {
+app_joint_qdesn_fit_one_scenario <- function(artifacts, scenario_id, controls, model_ids = NULL) {
   fixture <- app_joint_qdesn_scenario_fixture(artifacts, scenario_id, role = "fit")
-  specs <- app_joint_qdesn_simulation_model_specs()
+  specs <- app_joint_qdesn_filter_model_specs(model_ids)
   rows <- list()
   for (ii in seq_len(nrow(specs))) {
     spec <- specs[ii, , drop = FALSE]
@@ -783,6 +802,7 @@ app_joint_qdesn_run_vb_fit_validation <- function(
   out_dir = app_joint_qdesn_default_vb_fit_validation_dir(),
   fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
   scenario_ids = NULL,
+  model_ids = NULL,
   vb_max_iter = 240L,
   adaptive_vb_max_iter_grid = c(240L, 480L),
   vb_tol = 1.0e-4,
@@ -806,6 +826,8 @@ app_joint_qdesn_run_vb_fit_validation <- function(
   missing <- setdiff(scenario_ids, available)
   if (length(missing)) stop("Unknown scenario_ids: ", paste(missing, collapse = ", "), call. = FALSE)
   scenario_ids <- scenario_ids[scenario_ids %in% available]
+  model_specs <- app_joint_qdesn_filter_model_specs(model_ids)
+  model_ids <- model_specs$model_id
   controls <- app_joint_qdesn_simulation_controls(
     vb_max_iter = vb_max_iter,
     adaptive_vb_max_iter_grid = adaptive_vb_max_iter_grid,
@@ -824,7 +846,7 @@ app_joint_qdesn_run_vb_fit_validation <- function(
   )
   results <- app_joint_qdesn_parallel_lapply(
     scenario_ids,
-    function(sid) app_joint_qdesn_fit_one_scenario(artifacts, sid, controls),
+    function(sid) app_joint_qdesn_fit_one_scenario(artifacts, sid, controls, model_ids = model_ids),
     controls$n_cores
   )
   scenario_failure <- app_joint_qdesn_worker_failure_rows(results, "fit")
@@ -871,7 +893,12 @@ app_joint_qdesn_run_vb_fit_validation <- function(
     fixture_dir = artifacts$fixture_dir,
     controls = controls,
     scenario_ids = scenario_ids,
-    extra = list(validation_scope = "fit_rows_only", forecast_launched = FALSE)
+    extra = list(
+      validation_scope = "fit_rows_only",
+      forecast_launched = FALSE,
+      model_ids = paste(model_ids, collapse = ","),
+      n_models = length(model_ids)
+    )
   )
   readme_path <- file.path(out_dir, "README.md")
   writeLines(app_joint_qdesn_fit_validation_readme(run_config, assessment), readme_path, useBytes = TRUE)
@@ -944,11 +971,11 @@ app_joint_qdesn_forecast_target_fixture <- function(artifacts, scenario_id, orig
   )
 }
 
-app_joint_qdesn_forecast_one_scenario <- function(artifacts, scenario_id, controls) {
+app_joint_qdesn_forecast_one_scenario <- function(artifacts, scenario_id, controls, model_ids = NULL) {
   fit_fixture <- app_joint_qdesn_scenario_fixture(artifacts, scenario_id, role = "fit")
   origin_plan <- artifacts$forecast_origin_plan[artifacts$forecast_origin_plan$scenario_id == scenario_id, , drop = FALSE]
   origin_plan <- origin_plan[order(origin_plan$origin_index), , drop = FALSE]
-  specs <- app_joint_qdesn_simulation_model_specs()
+  specs <- app_joint_qdesn_filter_model_specs(model_ids)
   rows <- list()
   for (ii in seq_len(nrow(specs))) {
     spec <- specs[ii, , drop = FALSE]
@@ -1030,6 +1057,7 @@ app_joint_qdesn_run_vb_forecast_validation <- function(
   out_dir = app_joint_qdesn_default_vb_forecast_validation_dir(),
   fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
   scenario_ids = NULL,
+  model_ids = NULL,
   vb_max_iter = 240L,
   adaptive_vb_max_iter_grid = c(240L, 480L),
   vb_tol = 1.0e-4,
@@ -1053,6 +1081,8 @@ app_joint_qdesn_run_vb_forecast_validation <- function(
   missing <- setdiff(scenario_ids, available)
   if (length(missing)) stop("Unknown scenario_ids: ", paste(missing, collapse = ", "), call. = FALSE)
   scenario_ids <- scenario_ids[scenario_ids %in% available]
+  model_specs <- app_joint_qdesn_filter_model_specs(model_ids)
+  model_ids <- model_specs$model_id
   controls <- app_joint_qdesn_simulation_controls(
     vb_max_iter = vb_max_iter,
     adaptive_vb_max_iter_grid = adaptive_vb_max_iter_grid,
@@ -1071,7 +1101,7 @@ app_joint_qdesn_run_vb_forecast_validation <- function(
   )
   results <- app_joint_qdesn_parallel_lapply(
     scenario_ids,
-    function(sid) app_joint_qdesn_forecast_one_scenario(artifacts, sid, controls),
+    function(sid) app_joint_qdesn_forecast_one_scenario(artifacts, sid, controls, model_ids = model_ids),
     controls$n_cores
   )
   scenario_failure <- app_joint_qdesn_worker_failure_rows(results, "forecast")
@@ -1111,7 +1141,9 @@ app_joint_qdesn_run_vb_forecast_validation <- function(
     extra = list(
       validation_scope = "validation_origin_leads",
       coefficient_refit_policy = "single_fit_no_refit_across_validation_blocks",
-      uses_frozen_target_design = TRUE
+      uses_frozen_target_design = TRUE,
+      model_ids = paste(model_ids, collapse = ","),
+      n_models = length(model_ids)
     )
   )
   readme_path <- file.path(out_dir, "README.md")

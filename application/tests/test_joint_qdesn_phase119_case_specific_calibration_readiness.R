@@ -7,7 +7,7 @@ repo_root <- if (exists("app_repo_root", mode = "function")) {
   if (!is.na(file_arg)) {
     normalizePath(file.path(dirname(normalizePath(sub("^--file=", "", file_arg), mustWork = TRUE)), "..", ".."), mustWork = TRUE)
   } else {
-    stop("Cannot determine repository root for joint QDESN Phase 118 readiness test.", call. = FALSE)
+    stop("Cannot determine repository root for joint QDESN Phase 119 readiness test.", call. = FALSE)
   }
 }
 
@@ -36,27 +36,7 @@ check_manifest <- function(dir) {
   invisible(manifest)
 }
 
-tau_summary <- tempfile("phase118_tau_", fileext = ".csv")
-utils::write.csv(
-  data.frame(
-    tau = c(0.05, 0.50, 0.95),
-    tail_region = c("lower_tail", "center", "upper_tail"),
-    joint_qdesn_truth_mae = c(0.12, 0.06, 0.14),
-    joint_exqdesn_truth_mae = c(0.19, 0.061, 0.31),
-    qdesn_independent_truth_mae = c(0.16, 0.04, 0.15),
-    exqdesn_independent_truth_mae = c(0.19, 0.04, 0.29),
-    joint_exqdesn_minus_joint_qdesn = c(0.07, 0.001, 0.17),
-    exqdesn_independent_minus_qdesn_independent = c(0.03, 0.00, 0.14),
-    stringsAsFactors = FALSE
-  ),
-  tau_summary,
-  row.names = FALSE
-)
-
-out_dir <- tempfile("joint_qdesn_phase118_")
-screen_dir <- tempfile("joint_qdesn_phase118_screen_")
-fixture_dir <- tempfile("joint_qdesn_phase118_fixture_")
-tmp_root <- tempfile("joint_qdesn_phase118_article_")
+tmp_root <- tempfile("joint_qdesn_phase119_article_")
 table_dir <- file.path(tmp_root, "tables")
 dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -65,46 +45,45 @@ model_summary <- data.frame(
   display_label = c("JOINT QDESN RHS", "QDESN RHS", "JOINT exQDESN RHS", "exQDESN RHS"),
   likelihood = c("al", "al", "exal", "exal"),
   fit_structure = c("joint", "independent_single_tau", "joint", "independent_single_tau"),
-  fit_truth_mae = c(0.089, 0.096, 0.130, 0.125),
-  fit_truth_rmse = c(0.122, 0.132, 0.170, 0.166),
-  fit_check_loss = c(0.154, 0.154, 0.156, 0.156),
-  fit_raw_crossings = c(0, 27, 0, 0),
+  fit_truth_mae = c(0.08, 0.09, 0.12, 0.13),
+  fit_truth_rmse = c(0.10, 0.11, 0.16, 0.17),
+  fit_check_loss = c(0.15, 0.15, 0.16, 0.16),
+  fit_raw_crossings = c(0, 2, 0, 0),
   fit_contract_crossings = c(0, 0, 0, 0),
-  fit_max_iter_rows = c(0, 3, 0, 2),
+  fit_max_iter_rows = c(0, 1, 0, 1),
   fit_gate_status = c("pass", "pass;review", "pass", "pass;review"),
-  forecast_truth_mae = c(0.096, 0.098, 0.145, 0.133),
-  forecast_truth_rmse = c(0.129, 0.136, 0.187, 0.175),
-  forecast_check_loss = c(0.161, 0.161, 0.163, 0.162),
-  crps_grid_mean = c(0.368, 0.368, 0.370, 0.369),
-  abs_hit_rate_error = c(0.018, 0.016, 0.036, 0.033),
-  abs_coverage_error = c(0.029, 0.025, 0.076, 0.069),
-  forecast_raw_crossings = c(2, 71, 0, 0),
+  forecast_truth_mae = c(0.09, 0.10, 0.16, 0.14),
+  forecast_truth_rmse = c(0.12, 0.13, 0.20, 0.18),
+  forecast_check_loss = c(0.16, 0.16, 0.17, 0.17),
+  crps_grid_mean = c(0.36, 0.36, 0.38, 0.37),
+  abs_hit_rate_error = c(0.02, 0.02, 0.04, 0.035),
+  abs_coverage_error = c(0.03, 0.03, 0.08, 0.07),
+  forecast_raw_crossings = c(1, 20, 0, 0),
   forecast_contract_crossings = c(0, 0, 0, 0),
-  forecast_max_iter_rows = c(0, 3, 0, 2),
-  forecast_max_adjustment = c(0.046, 0.226, 0, 0),
+  forecast_max_iter_rows = c(0, 1, 0, 1),
+  forecast_max_adjustment = c(0.01, 0.08, 0, 0),
   forecast_gate_status = c("pass;review", "pass;review", "pass", "pass;review"),
   model_label = c("Joint QDESN RHS", "Independent QDESN RHS", "Joint exQDESN RHS", "Independent exQDESN RHS"),
   model_role = c("primary", "comparator", "comparator", "comparator"),
   article_gate = c("review", "review", "pass", "review"),
   stringsAsFactors = FALSE
 )
+
 scenario_summary <- data.frame(
-  Scenario = c(
-    "Asymmetric Laplace Tail", "Gaussian-Mixture Bridge", "Heteroskedastic Seasonal",
-    "Laplace Bridge", "Nonlinear Reservoir Friendly", "Normal Bridge",
-    "Persistent Heavy Tail", "Regime Shift", "Student-t Location-Scale"
-  ),
-  `Joint QDESN` = c("0.089 (0.132)", "0.097 (0.128)", "0.088 (0.118)", "0.085 (0.122)", "0.102 (0.144)", "0.090 (0.114)", "0.126 (0.164)", "0.120 (0.137)", "0.068 (0.089)"),
-  `Independent QDESN` = c("0.087 (0.141)", "0.101 (0.136)", "0.093 (0.128)", "0.101 (0.140)", "0.121 (0.159)", "0.085 (0.113)", "0.129 (0.171)", "0.096 (0.125)", "0.073 (0.101)"),
-  `Joint exQDESN` = c("0.144 (0.209)", "0.136 (0.162)", "0.093 (0.122)", "0.139 (0.183)", "0.200 (0.249)", "0.146 (0.164)", "0.137 (0.175)", "0.176 (0.220)", "0.134 (0.165)"),
-  `Independent exQDESN` = c("0.105 (0.168)", "0.131 (0.162)", "0.086 (0.114)", "0.143 (0.188)", "0.198 (0.248)", "0.123 (0.147)", "0.136 (0.177)", "0.142 (0.183)", "0.130 (0.161)"),
+  Scenario = c("Nonlinear Reservoir Friendly", "Student-t Location-Scale", "Heteroskedastic Seasonal"),
+  `Joint QDESN` = c("0.102 (0.144)", "0.068 (0.089)", "0.088 (0.118)"),
+  `Independent QDESN` = c("0.121 (0.159)", "0.073 (0.101)", "0.093 (0.128)"),
+  `Joint exQDESN` = c("0.200 (0.249)", "0.134 (0.165)", "0.093 (0.122)"),
+  `Independent exQDESN` = c("0.198 (0.248)", "0.130 (0.161)", "0.086 (0.114)"),
   check.names = FALSE,
   stringsAsFactors = FALSE
 )
+
 model_path <- file.path(table_dir, "joint_qdesn_article_validation_vb_model_summary.csv")
 scenario_path <- file.path(table_dir, "joint_qdesn_article_validation_vb_scenario_summary.csv")
 utils::write.csv(model_summary, model_path, row.names = FALSE)
 utils::write.csv(scenario_summary, scenario_path, row.names = FALSE)
+
 asset_manifest <- data.frame(
   label = c("vb_model_summary", "vb_scenario_summary"),
   artifact_type = c("table", "table"),
@@ -115,39 +94,42 @@ asset_manifest <- data.frame(
 )
 utils::write.csv(asset_manifest, file.path(table_dir, "joint_qdesn_article_validation_asset_manifest.csv"), row.names = FALSE)
 
-result <- app_joint_qdesn_run_phase118_exal_tail_calibration_readiness(
+out_dir <- tempfile("joint_qdesn_phase119_")
+screen_dir <- tempfile("joint_qdesn_phase119_screen_")
+fixture_dir <- tempfile("joint_qdesn_phase119_fixture_")
+
+result <- app_joint_qdesn_run_phase119_case_specific_calibration_readiness(
   out_dir = out_dir,
   screening_output_dir = screen_dir,
   fixture_dir = fixture_dir,
   table_dir = table_dir,
-  tau_summary_path = tau_summary,
   n_cores = 1L
 )
 
 check_manifest(result$out_dir)
 
 stopifnot(identical(result$run_config$article_asset_manifest_status[[1L]], "pass"))
-stopifnot(identical(result$run_config$readiness_decision[[1L]], "ready_to_launch_targeted_vb_screen_after_review"))
-stopifnot(nrow(result$model_audit) == 4L)
-stopifnot(all(c("joint_qdesn_rhs_vb", "joint_exqdesn_rhs_vb", "qdesn_rhs_independent_vb", "exqdesn_rhs_independent_vb") %in% result$model_audit$model_id))
-stopifnot(nrow(result$scenario_audit) >= 9L)
-stopifnot(any(result$tail_audit$priority == "high"))
-stopifnot(identical(result$tail_audit$source_tau_summary_sha256[[1L]], app_sha256_file(tau_summary)))
-stopifnot(nrow(result$registry) >= 8L)
+stopifnot(identical(result$run_config$readiness_decision[[1L]], "ready_to_prepare_case_specific_screening"))
+stopifnot(nrow(result$case_table) == 12L)
+stopifnot(all(c("case_id", "scenario_id", "model_id", "priority", "case_focus") %in% names(result$case_table)))
+stopifnot(any(result$case_table$priority == "high"))
+stopifnot(nrow(result$registry) > nrow(result$case_table))
 stopifnot(!anyDuplicated(result$registry$candidate_id))
-stopifnot(any(result$registry$candidate_id == "phase113_selected_controls_rerun"))
-stopifnot(all(result$registry$use_existing_artifacts == FALSE))
+stopifnot(all(nzchar(result$registry$scenario_ids)))
+stopifnot(all(nzchar(result$registry$model_ids)))
+stopifnot(all(vapply(result$registry$scenario_ids, function(x) length(app_joint_qdesn_parse_id_csv(x)) == 1L, logical(1L))))
+stopifnot(all(vapply(result$registry$model_ids, function(x) length(app_joint_qdesn_parse_id_csv(x)) == 1L, logical(1L))))
 app_joint_qdesn_validate_screening_registry(result$registry, allow_alpha_prior_vectors = FALSE)
-stopifnot(all(c("selection_policy.csv", "launch_commands.csv", "phase118_exal_tail_screening_registry.csv") %in% basename(unname(result$paths))))
-stopifnot(any(grepl("106_run_joint_qdesn_vb_spec_screening.R", result$launch_commands$command, fixed = TRUE)))
-stopifnot(any(grepl("98_generate_joint_qdesn_simulation_dgp_fixtures.R", result$launch_commands$command, fixed = TRUE)))
 
-source_manifest <- utils::read.csv(file.path(result$out_dir, "source_asset_manifest_verification.csv"), stringsAsFactors = FALSE)
-stopifnot(nrow(source_manifest) == 2L)
-stopifnot(all(source_manifest$status == "pass"))
+stopifnot(all(file.exists(unname(result$shard_paths))))
+stopifnot(any(result$launch_commands$command_id == "run_phase119_exal_high_priority"))
+stopifnot(any(grepl("121_launch_joint_qdesn_phase119_parallel_chunks.sh", result$launch_commands$command, fixed = TRUE)))
+stopifnot(any(grepl("--workers", result$launch_commands$command, fixed = TRUE)))
+stopifnot(any(grepl("--fixture-dir", result$launch_commands$command, fixed = TRUE)))
 
 selection <- utils::read.csv(file.path(result$out_dir, "selection_policy.csv"), stringsAsFactors = FALSE)
-stopifnot(all(c("gate_name", "gate_type", "pass_or_review_rule", "rationale") %in% names(selection)))
+stopifnot(all(c("gate_name", "gate_type", "rule", "rationale") %in% names(selection)))
+stopifnot(any(selection$gate_name == "case_scope"))
 stopifnot(any(selection$gate_name == "fresh_holdout_confirmation"))
 
-cat("Joint QDESN Phase 118 exAL tail-calibration readiness test passed.\n")
+cat("Joint QDESN Phase 119 case-specific calibration readiness test passed.\n")

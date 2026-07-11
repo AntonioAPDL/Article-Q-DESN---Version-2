@@ -1861,3 +1861,1769 @@ app_joint_qdesn_run_phase118_exal_tail_calibration_readiness <- function(
     paths = c(paths, artifact_manifest = manifest_info$manifest_path)
   )
 }
+
+# Phase 119 case-specific calibration readiness.  Unlike Phase 118, this stage
+# prepares targeted rows that each evaluate one scenario/model case, so the
+# later selection can choose different specifications for different cases.
+
+app_joint_qdesn_default_phase119_case_readiness_dir <- function() {
+  app_path("application/cache/joint_qdesn_phase119_case_specific_calibration_readiness_20260709")
+}
+
+app_joint_qdesn_default_phase119_case_screening_dir <- function() {
+  app_path("application/cache/joint_qdesn_vb_case_specific_screening_phase119_20260709")
+}
+
+app_joint_qdesn_phase119_scenario_name_map <- function(fixture_dir = app_joint_qdesn_default_simulation_fixture_dir()) {
+  fallback <- data.frame(
+    scenario_id = c(
+      "normal_bridge", "laplace_bridge", "gaussian_mixture_bridge",
+      "student_t_location_scale", "asymmetric_laplace_tail",
+      "heteroskedastic_seasonal", "persistent_heavy_tail",
+      "regime_shift", "nonlinear_reservoir_friendly"
+    ),
+    scenario = c(
+      "Normal Bridge", "Laplace Bridge", "Gaussian-Mixture Bridge",
+      "Student-t Location-Scale", "Asymmetric Laplace Tail",
+      "Heteroskedastic Seasonal", "Persistent Heavy Tail",
+      "Regime Shift", "Nonlinear Reservoir Friendly"
+    ),
+    scenario_class = c(rep("bridge", 3L), rep("stress", 6L)),
+    distribution_family = c(
+      "gaussian", "laplace", "gaussian_mixture", "student_t",
+      "asymmetric_laplace", "student_t", "student_t", "student_t",
+      "gaussian_mixture"
+    ),
+    dynamics_class = c(
+      rep("ar1_seasonal_location_scale", 5L),
+      "heteroskedastic_seasonal",
+      "ar1_seasonal_location_scale",
+      "regime_shift_location_scale",
+      "nonlinear_reservoir_friendly"
+    ),
+    stringsAsFactors = FALSE
+  )
+  summary_path <- file.path(fixture_dir, "scenario_summary.csv")
+  if (!file.exists(summary_path)) return(fallback)
+  x <- app_read_csv(summary_path)
+  keep <- intersect(c("scenario_id", "scenario_class", "distribution_family", "dynamics_class"), names(x))
+  x <- unique(x[, keep, drop = FALSE])
+  out <- merge(fallback[, c("scenario_id", "scenario"), drop = FALSE], x, by = "scenario_id", all.y = TRUE)
+  out$scenario <- ifelse(is.na(out$scenario), gsub("_", " ", tools::toTitleCase(out$scenario_id)), out$scenario)
+  out
+}
+
+app_joint_qdesn_phase119_model_metric_lookup <- function(row, model_id) {
+  if (identical(model_id, "joint_qdesn_rhs_vb")) return(row$joint_qdesn_mae[[1L]])
+  if (identical(model_id, "qdesn_rhs_independent_vb")) return(row$independent_qdesn_mae[[1L]])
+  if (identical(model_id, "joint_exqdesn_rhs_vb")) return(row$joint_exqdesn_mae[[1L]])
+  if (identical(model_id, "exqdesn_rhs_independent_vb")) return(row$independent_exqdesn_mae[[1L]])
+  NA_real_
+}
+
+app_joint_qdesn_phase119_model_focus <- function(model_id) {
+  if (identical(model_id, "joint_qdesn_rhs_vb")) return("primary_joint_al_accuracy")
+  if (identical(model_id, "qdesn_rhs_independent_vb")) return("independent_al_accuracy_and_raw_crossing")
+  if (identical(model_id, "joint_exqdesn_rhs_vb")) return("joint_exal_tail_fan")
+  if (identical(model_id, "exqdesn_rhs_independent_vb")) return("independent_exal_tail_fan")
+  "unknown"
+}
+
+app_joint_qdesn_phase119_case_priority <- function(model_id, scenario_row) {
+  if (model_id %in% c("joint_exqdesn_rhs_vb", "exqdesn_rhs_independent_vb")) {
+    gap <- if (identical(model_id, "joint_exqdesn_rhs_vb")) {
+      scenario_row$joint_exal_minus_joint_al[[1L]]
+    } else {
+      scenario_row$best_exal_minus_best_al[[1L]]
+    }
+    if (is.finite(gap) && gap > 0.05) return("high")
+    if (is.finite(gap) && gap > 0.02) return("moderate")
+    return("context")
+  }
+  if (identical(model_id, "qdesn_rhs_independent_vb") &&
+      scenario_row$winner[[1L]] == "Independent QDESN") return("high")
+  if (identical(model_id, "joint_qdesn_rhs_vb") &&
+      scenario_row$winner[[1L]] == "Joint QDESN") return("high")
+  "moderate"
+}
+
+app_joint_qdesn_phase119_case_table <- function(
+  table_dir = app_path("tables"),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir()
+) {
+  scenario_audit <- app_joint_qdesn_phase118_scenario_audit(
+    file.path(table_dir, "joint_qdesn_article_validation_vb_scenario_summary.csv")
+  )
+  scenario_map <- app_joint_qdesn_phase119_scenario_name_map(fixture_dir)
+  scenario_audit <- merge(scenario_audit, scenario_map, by = "scenario", all.x = TRUE)
+  specs <- app_joint_qdesn_simulation_model_specs()
+  rows <- list()
+  for (ii in seq_len(nrow(scenario_audit))) {
+    srow <- scenario_audit[ii, , drop = FALSE]
+    for (jj in seq_len(nrow(specs))) {
+      spec <- specs[jj, , drop = FALSE]
+      priority <- app_joint_qdesn_phase119_case_priority(spec$model_id[[1L]], srow)
+      current_mae <- app_joint_qdesn_phase119_model_metric_lookup(srow, spec$model_id[[1L]])
+      best_al <- srow$best_al_mae[[1L]]
+      rows[[length(rows) + 1L]] <- data.frame(
+        case_id = paste(srow$scenario_id[[1L]], spec$model_id[[1L]], sep = "__"),
+        scenario_id = srow$scenario_id[[1L]],
+        scenario = srow$scenario[[1L]],
+        scenario_class = srow$scenario_class[[1L]],
+        distribution_family = srow$distribution_family[[1L]],
+        dynamics_class = srow$dynamics_class[[1L]],
+        model_id = spec$model_id[[1L]],
+        display_label = spec$display_label[[1L]],
+        likelihood = spec$likelihood[[1L]],
+        fit_structure = spec$fit_structure[[1L]],
+        case_focus = app_joint_qdesn_phase119_model_focus(spec$model_id[[1L]]),
+        priority = priority,
+        current_forecast_truth_mae = current_mae,
+        scenario_best_al_mae = best_al,
+        current_gap_vs_best_al = current_mae - best_al,
+        joint_exal_minus_joint_al = srow$joint_exal_minus_joint_al[[1L]],
+        best_exal_minus_best_al = srow$best_exal_minus_best_al[[1L]],
+        current_winner = srow$winner[[1L]],
+        objective = if (priority == "high") {
+          "case-specific optimization target; include in first launch wave"
+        } else if (priority == "moderate") {
+          "secondary case-specific optimization; run after high-priority cases or if resources allow"
+        } else {
+          "stability/context case; retain to prevent overfitting high-priority failures"
+        },
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  out <- app_joint_qdesn_bind_rows(rows)
+  out[order(factor(out$priority, levels = c("high", "moderate", "context")), out$scenario_id, out$model_id), , drop = FALSE]
+}
+
+app_joint_qdesn_phase119_control_grid <- function(model_id, priority = "moderate") {
+  base <- data.frame(
+    suffix = "selected_controls",
+    candidate_label = "Current selected controls",
+    vb_max_iter = 1440L,
+    adaptive_vb_max_iter_grid = "1440,1920",
+    vb_tol = 1.0e-4,
+    rhs_vb_inner = 10L,
+    tau0 = 0.5,
+    zeta2 = 16,
+    a_sigma = 2,
+    b_sigma = 1,
+    alpha_prior_sd = "0.5",
+    alpha_min_spacing = 0,
+    gamma_init_policy = "zero",
+    review_adjustment_threshold = 1.0e-3,
+    max_dense_dim = 300L,
+    candidate_role = "case_selected_controls_reference",
+    notes = "Case-local rerun of the selected Phase 113/114 controls for direct comparison.",
+    stringsAsFactors = FALSE
+  )
+  if (model_id %in% c("joint_exqdesn_rhs_vb", "exqdesn_rhs_independent_vb")) {
+    grid <- data.frame(
+      suffix = c(
+        "alpha0p75_gamma_zero_zeta2_16", "alpha1p0_gamma_zero_zeta2_16",
+        "alpha1p25_gamma_zero_zeta2_32", "alpha0p75_gamma_half_zeta2_16",
+        "alpha1p0_gamma_half_zeta2_16", "tau0_0p75_alpha0p75_gamma_zero",
+        "tau0_0p35_alpha0p75_gamma_zero", "zeta2_8_alpha0p75_gamma_zero",
+        "zeta2_32_alpha1p0_gamma_zero", "inner12_iter1920_alpha0p75_gamma_zero"
+      ),
+      candidate_label = c(
+        "Alpha sd 0.75, zero gamma, zeta2 16",
+        "Alpha sd 1.0, zero gamma, zeta2 16",
+        "Alpha sd 1.25, zero gamma, zeta2 32",
+        "Alpha sd 0.75, half-default gamma, zeta2 16",
+        "Alpha sd 1.0, half-default gamma, zeta2 16",
+        "RHS tau0 0.75, alpha sd 0.75, zero gamma",
+        "RHS tau0 0.35, alpha sd 0.75, zero gamma",
+        "zeta2 8, alpha sd 0.75, zero gamma",
+        "zeta2 32, alpha sd 1.0, zero gamma",
+        "Inner-loop 12, VB 1920, alpha sd 0.75, zero gamma"
+      ),
+      vb_max_iter = c(rep(1440L, 9L), 1920L),
+      adaptive_vb_max_iter_grid = c(rep("1440,1920", 9L), "1920,2400"),
+      vb_tol = rep(1.0e-4, 10L),
+      rhs_vb_inner = c(rep(10L, 9L), 12L),
+      tau0 = c(0.5, 0.5, 0.5, 0.5, 0.5, 0.75, 0.35, 0.5, 0.5, 0.5),
+      zeta2 = c(16, 16, 32, 16, 16, 16, 16, 8, 32, 16),
+      a_sigma = rep(2, 10L),
+      b_sigma = rep(1, 10L),
+      alpha_prior_sd = c("0.75", "1", "1.25", "0.75", "1", "0.75", "0.75", "0.75", "1", "0.75"),
+      alpha_min_spacing = rep(0, 10L),
+      gamma_init_policy = c("zero", "zero", "zero", "half_default", "half_default", "zero", "zero", "zero", "zero", "zero"),
+      review_adjustment_threshold = rep(1.0e-3, 10L),
+      max_dense_dim = rep(300L, 10L),
+      candidate_role = rep("case_exal_tail_fan_candidate", 10L),
+      notes = c(
+        "Moderately loosens the exAL fan while preserving selected zero-gamma controls.",
+        "Tests whether returning to alpha sd 1.0 fixes tail compression.",
+        "High-fan-width/high-variance probe for difficult exAL tails.",
+        "Tests damped nonzero gamma initialization at moderate fan width.",
+        "Tests damped nonzero gamma initialization at wider fan width.",
+        "Loosens RHS smoothing to reduce tail compression.",
+        "Strengthens RHS smoothing to separate noise from over-smoothing.",
+        "Stronger beta cap for noisy independent or tail cases.",
+        "Weaker beta cap with wider alpha prior.",
+        "Separates exAL tail error from premature VB/RHS stopping."
+      ),
+      stringsAsFactors = FALSE
+    )
+  } else if (identical(model_id, "qdesn_rhs_independent_vb")) {
+    grid <- data.frame(
+      suffix = c(
+        "tau0_0p35_alpha0p5_zeta2_16", "tau0_0p25_alpha0p35_zeta2_8",
+        "tau0_0p75_alpha0p5_zeta2_16", "zeta2_8_alpha0p5",
+        "zeta2_32_alpha0p6", "inner12_iter1920_tau0_0p35"
+      ),
+      candidate_label = c(
+        "Independent AL: tau0 0.35, alpha sd 0.5, zeta2 16",
+        "Independent AL: tau0 0.25, alpha sd 0.35, zeta2 8",
+        "Independent AL: tau0 0.75, alpha sd 0.5, zeta2 16",
+        "Independent AL: zeta2 8, alpha sd 0.5",
+        "Independent AL: zeta2 32, alpha sd 0.6",
+        "Independent AL: inner-loop 12, VB 1920, tau0 0.35"
+      ),
+      vb_max_iter = c(rep(1440L, 5L), 1920L),
+      adaptive_vb_max_iter_grid = c(rep("1440,1920", 5L), "1920,2400"),
+      vb_tol = rep(1.0e-4, 6L),
+      rhs_vb_inner = c(rep(10L, 5L), 12L),
+      tau0 = c(0.35, 0.25, 0.75, 0.5, 0.5, 0.35),
+      zeta2 = c(16, 8, 16, 8, 32, 16),
+      a_sigma = rep(2, 6L),
+      b_sigma = rep(1, 6L),
+      alpha_prior_sd = c("0.5", "0.35", "0.5", "0.5", "0.6", "0.5"),
+      alpha_min_spacing = rep(0, 6L),
+      gamma_init_policy = rep("zero", 6L),
+      review_adjustment_threshold = rep(1.0e-3, 6L),
+      max_dense_dim = rep(300L, 6L),
+      candidate_role = rep("case_independent_al_candidate", 6L),
+      notes = c(
+        "Stronger RHS coupling to reduce independent raw crossings while preserving AL accuracy.",
+        "Aggressive anti-noise candidate for raw crossing cases.",
+        "Looser RHS coupling for accuracy-sensitive independent AL cases.",
+        "Stronger finite beta cap for noisy independent fits.",
+        "Weaker finite beta cap with mild alpha relaxation.",
+        "Separates raw-crossing pressure from premature VB/RHS stopping."
+      ),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    grid <- data.frame(
+      suffix = c(
+        "tau0_0p35_alpha0p5_zeta2_16", "tau0_0p75_alpha0p5_zeta2_16",
+        "zeta2_8_alpha0p5", "zeta2_32_alpha0p6",
+        "alpha0p75_tau0_0p5_zeta2_16", "inner12_iter1920_alpha0p5"
+      ),
+      candidate_label = c(
+        "Joint AL: tau0 0.35, alpha sd 0.5, zeta2 16",
+        "Joint AL: tau0 0.75, alpha sd 0.5, zeta2 16",
+        "Joint AL: zeta2 8, alpha sd 0.5",
+        "Joint AL: zeta2 32, alpha sd 0.6",
+        "Joint AL: alpha sd 0.75, tau0 0.5, zeta2 16",
+        "Joint AL: inner-loop 12, VB 1920, alpha sd 0.5"
+      ),
+      vb_max_iter = c(rep(1440L, 5L), 1920L),
+      adaptive_vb_max_iter_grid = c(rep("1440,1920", 5L), "1920,2400"),
+      vb_tol = rep(1.0e-4, 6L),
+      rhs_vb_inner = c(rep(10L, 5L), 12L),
+      tau0 = c(0.35, 0.75, 0.5, 0.5, 0.5, 0.5),
+      zeta2 = c(16, 16, 8, 32, 16, 16),
+      a_sigma = rep(2, 6L),
+      b_sigma = rep(1, 6L),
+      alpha_prior_sd = c("0.5", "0.5", "0.5", "0.6", "0.75", "0.5"),
+      alpha_min_spacing = rep(0, 6L),
+      gamma_init_policy = rep("zero", 6L),
+      review_adjustment_threshold = rep(1.0e-3, 6L),
+      max_dense_dim = rep(300L, 6L),
+      candidate_role = rep("case_joint_al_candidate", 6L),
+      notes = c(
+        "Tests stronger RHS coupling for primary joint AL stability.",
+        "Tests looser RHS coupling for scenario-specific accuracy.",
+        "Stronger beta cap for noisy scenario-specific AL fits.",
+        "Weaker beta cap with mild alpha relaxation.",
+        "Moderately wider alpha prior as a local accuracy probe.",
+        "Separates primary AL error from premature VB/RHS stopping."
+      ),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (identical(priority, "context")) {
+    grid <- grid[seq_len(min(3L, nrow(grid))), , drop = FALSE]
+  } else if (identical(priority, "moderate")) {
+    grid <- grid[seq_len(min(6L, nrow(grid))), , drop = FALSE]
+  }
+  app_joint_qdesn_bind_rows(list(base, grid))
+}
+
+app_joint_qdesn_phase119_candidate_registry <- function(
+  case_table,
+  screening_output_dir = app_joint_qdesn_default_phase119_case_screening_dir(),
+  n_cores = 1L,
+  priority_filter = c("high", "moderate", "context")
+) {
+  screening_output_dir <- normalizePath(screening_output_dir, mustWork = FALSE)
+  priority_filter <- unique(as.character(priority_filter))
+  cases <- case_table[case_table$priority %in% priority_filter, , drop = FALSE]
+  rows <- list()
+  for (ii in seq_len(nrow(cases))) {
+    case <- cases[ii, , drop = FALSE]
+    grid <- app_joint_qdesn_phase119_control_grid(case$model_id[[1L]], case$priority[[1L]])
+    case_slug <- gsub("[^A-Za-z0-9_]+", "_", case$case_id[[1L]])
+    for (jj in seq_len(nrow(grid))) {
+      g <- grid[jj, , drop = FALSE]
+      candidate_id <- paste(case_slug, g$suffix[[1L]], sep = "__")
+      rows[[length(rows) + 1L]] <- data.frame(
+        candidate_id = candidate_id,
+        candidate_label = paste(case$scenario[[1L]], case$display_label[[1L]], g$candidate_label[[1L]], sep = " | "),
+        use_existing_artifacts = FALSE,
+        fit_dir = file.path(screening_output_dir, "cases", case_slug, "candidates", g$suffix[[1L]], "fit"),
+        forecast_dir = file.path(screening_output_dir, "cases", case_slug, "candidates", g$suffix[[1L]], "forecast"),
+        vb_max_iter = g$vb_max_iter[[1L]],
+        adaptive_vb_max_iter_grid = g$adaptive_vb_max_iter_grid[[1L]],
+        vb_tol = g$vb_tol[[1L]],
+        rhs_vb_inner = g$rhs_vb_inner[[1L]],
+        tau0 = g$tau0[[1L]],
+        zeta2 = g$zeta2[[1L]],
+        a_sigma = g$a_sigma[[1L]],
+        b_sigma = g$b_sigma[[1L]],
+        alpha_prior_sd = g$alpha_prior_sd[[1L]],
+        alpha_min_spacing = g$alpha_min_spacing[[1L]],
+        gamma_init_policy = g$gamma_init_policy[[1L]],
+        review_adjustment_threshold = g$review_adjustment_threshold[[1L]],
+        max_dense_dim = g$max_dense_dim[[1L]],
+        n_cores = as.integer(n_cores),
+        candidate_role = g$candidate_role[[1L]],
+        notes = g$notes[[1L]],
+        scenario_ids = case$scenario_id[[1L]],
+        model_ids = case$model_id[[1L]],
+        case_id = case$case_id[[1L]],
+        case_priority = case$priority[[1L]],
+        case_focus = case$case_focus[[1L]],
+        case_current_forecast_truth_mae = case$current_forecast_truth_mae[[1L]],
+        case_gap_vs_best_al = case$current_gap_vs_best_al[[1L]],
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  registry <- app_joint_qdesn_bind_rows(rows)
+  app_joint_qdesn_validate_screening_registry(registry, allow_alpha_prior_vectors = FALSE)
+  registry
+}
+
+app_joint_qdesn_phase119_registry_shards <- function(registry) {
+  list(
+    high_priority = registry[registry$case_priority == "high", , drop = FALSE],
+    exal_high_priority = registry[registry$case_priority == "high" & grepl("exal", registry$case_focus, fixed = TRUE), , drop = FALSE],
+    al_high_priority = registry[registry$case_priority == "high" & !grepl("exal", registry$case_focus, fixed = TRUE), , drop = FALSE],
+    moderate_priority = registry[registry$case_priority == "moderate", , drop = FALSE],
+    context_priority = registry[registry$case_priority == "context", , drop = FALSE]
+  )
+}
+
+app_joint_qdesn_phase119_selection_policy <- function() {
+  data.frame(
+    gate_order = seq_len(9L),
+    gate_name = c(
+      "case_scope", "implementation_integrity", "contract_noncrossing",
+      "primary_metric", "secondary_scores", "raw_adjustment_burden",
+      "vb_convergence", "fresh_holdout_confirmation", "manuscript_promotion"
+    ),
+    gate_type = c("design", "hard_fail", "hard_fail", rep("selection", 4L), "promotion_required", "promotion_required"),
+    rule = c(
+      "Each candidate targets exactly one scenario_id and one model_id; no global winner is required.",
+      "Candidate manifests, fixture hashes, worker status, finite quantiles, and finite scores must pass.",
+      "Contract quantiles must have zero crossings after the monotone contract.",
+      "Select the lowest forecast truth MAE within each case, with fit truth MAE used as a tie-breaker.",
+      "Check loss, CRPS-grid, hit-rate error, and coverage error must not show a material deterioration relative to selected controls.",
+      "Raw crossings and monotone adjustments remain diagnostics; large increases are review, not silent failures.",
+      "Max-iteration flags remain review unless they coincide with unstable or nonfinite outputs.",
+      "A per-case selected row cannot replace article assets until confirmed on fresh held-out fixtures or fresh replicate seeds.",
+      "Only after fresh confirmation should article tables be rebuilt using case-specific model/scenario specifications."
+    ),
+    rationale = c(
+      "Matches the clarified scientific goal: optimize each validation case rather than one specification for all cases.",
+      "Protects reproducibility and implementation credibility.",
+      "Preserves the article's reported noncrossing forecast contract.",
+      "Targets oracle recovery, the core synthetic-validation signal.",
+      "Prevents overfitting to truth distance alone.",
+      "Maintains transparency around raw versus reported quantile grids.",
+      "Keeps VB diagnostics visible while avoiding premature rejection of finite candidates.",
+      "Prevents overfitting the current validation bundle.",
+      "Keeps the manuscript evidence coherent and reproducible."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase119_next_action_plan <- function() {
+  data.frame(
+    step = seq_len(6L),
+    stage = c("finish_current_phase118", "case_specific_screen", "case_audit", "case_selection", "fresh_confirmation", "article_rebuild_or_defer"),
+    action = c(
+      "Let the current Phase 118 global/common-control run finish; use it as context, not as a forced global winner.",
+      "Run Phase 119 high-priority case-specific registries first, then moderate/context shards as resources allow.",
+      "Audit each case by scenario_id/model_id against its selected-controls row and report fit/forecast metrics.",
+      "Select one specification per case, allowing different controls for AL, exAL, joint, independent, and each scenario.",
+      "Confirm selected case specifications on fresh held-out fixtures or fresh replicate seeds before article promotion.",
+      "If confirmed, rebuild article validation assets with explicit case-specific specification metadata; otherwise document the calibrated limits."
+    ),
+    output = c(
+      "completed Phase 118 audit",
+      "joint_qdesn_vb_case_specific_screening_phase119_20260709",
+      "case_scorecard.csv and case_selected_specification.csv",
+      "per-case freeze artifact",
+      "fresh-holdout evidence pack",
+      "updated article tables or limitations note"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase119_launch_commands <- function(
+  registry_paths,
+  screening_output_dir,
+  fixture_dir,
+  n_cores = 1L,
+  readiness_dir = app_joint_qdesn_default_phase119_case_readiness_dir()
+) {
+  ids <- names(registry_paths)
+  commands <- vapply(ids, function(id) {
+    sprintf(
+      "bash application/scripts/121_launch_joint_qdesn_phase119_parallel_chunks.sh --shard %s --workers 8 --readiness-dir %s --screening-output-dir %s --fixture-dir %s --n-cores-per-worker %d",
+      id,
+      readiness_dir,
+      screening_output_dir,
+      fixture_dir,
+      as.integer(n_cores)
+    )
+  }, character(1L))
+  audit <- vapply(ids, function(id) {
+    sprintf(
+      "Rscript application/scripts/107_audit_joint_qdesn_vb_spec_screening.R --output-dir %s",
+      file.path(screening_output_dir, id)
+    )
+  }, character(1L))
+  data.frame(
+    command_id = c(paste0("run_phase119_", ids), paste0("audit_phase119_", ids)),
+    registry_shard = c(ids, ids),
+    command = c(commands, audit),
+    purpose = c(
+      paste("Run Phase 119 case-specific shard", ids),
+      paste("Audit Phase 119 case-specific shard", ids)
+    ),
+    run_condition = c(
+      rep("Prefer after Phase 118 finishes or when spare cores are available; high-priority shards should run first.", length(ids)),
+      rep("After the corresponding shard completes.", length(ids))
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase119_readme <- function(run_config, case_table, registry, launch_commands) {
+  counts <- as.data.frame(table(case_table$priority), stringsAsFactors = FALSE)
+  names(counts) <- c("priority", "n_cases")
+  high <- counts$n_cases[counts$priority == "high"]
+  if (!length(high)) high <- 0L
+  primary_command <- launch_commands$command[launch_commands$command_id == "run_phase119_exal_high_priority"]
+  if (!length(primary_command)) primary_command <- launch_commands$command[[1L]]
+  c(
+    "# Joint QDESN Phase 119 Case-Specific Calibration Readiness",
+    "",
+    "This artifact prepares per-case calibration screens for the joint-QDESN synthetic validation study.",
+    "Unlike Phase 118, Phase 119 does not search for a single universal specification.",
+    "Each candidate row targets exactly one scenario and one model, so later selection can choose a different specification per validation case.",
+    "",
+    sprintf("- Output directory: `%s`", run_config$out_dir[[1L]]),
+    sprintf("- Proposed screening root: `%s`", run_config$screening_output_dir[[1L]]),
+    sprintf("- Screening source status: `%s`", run_config$screening_source_status[[1L]]),
+    sprintf("- Article asset manifest status: `%s`", run_config$article_asset_manifest_status[[1L]]),
+    sprintf("- Cases: %d total; %d high priority.", nrow(case_table), high),
+    sprintf("- Candidate rows: %d", nrow(registry)),
+    "",
+    "Recommended execution:",
+    "",
+    "1. Let the currently running Phase 118 job finish unless spare cores are explicitly available.",
+    "2. Launch `exal_high_priority` first; it targets the clearest current weakness.",
+    "3. Launch `al_high_priority` and `moderate_priority` after the first shard is stable.",
+    "4. Refresh article-facing asset manifests before manuscript promotion if any `.tex` wrapper hashes changed.",
+    "5. Do not rebuild article tables until fresh-holdout confirmation passes.",
+    "",
+    "Primary high-priority launch command:",
+    "",
+    primary_command[[1L]]
+  )
+}
+
+app_joint_qdesn_run_phase119_case_specific_calibration_readiness <- function(
+  out_dir = app_joint_qdesn_default_phase119_case_readiness_dir(),
+  screening_output_dir = app_joint_qdesn_default_phase119_case_screening_dir(),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  table_dir = app_path("tables"),
+  n_cores = 1L
+) {
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  screening_output_dir <- normalizePath(screening_output_dir, mustWork = FALSE)
+  fixture_dir <- normalizePath(fixture_dir, mustWork = FALSE)
+  table_dir <- normalizePath(table_dir, mustWork = TRUE)
+  app_ensure_dir(out_dir)
+
+  manifest_verification <- app_joint_qdesn_phase118_verify_article_manifest(file.path(table_dir, "joint_qdesn_article_validation_asset_manifest.csv"))
+  model_audit <- app_joint_qdesn_phase118_article_model_audit(file.path(table_dir, "joint_qdesn_article_validation_vb_model_summary.csv"))
+  case_table <- app_joint_qdesn_phase119_case_table(table_dir = table_dir, fixture_dir = fixture_dir)
+  registry <- app_joint_qdesn_phase119_candidate_registry(
+    case_table = case_table,
+    screening_output_dir = screening_output_dir,
+    n_cores = n_cores,
+    priority_filter = c("high", "moderate", "context")
+  )
+  shards <- app_joint_qdesn_phase119_registry_shards(registry)
+  shard_paths <- character()
+  for (nm in names(shards)) {
+    if (!nrow(shards[[nm]])) next
+    shard_paths[[nm]] <- app_joint_qdesn_screening_write_csv(
+      shards[[nm]],
+      file.path(out_dir, sprintf("phase119_%s_registry.csv", nm))
+    )
+  }
+  full_registry_path <- file.path(out_dir, "phase119_case_specific_screening_registry.csv")
+  selection_policy <- app_joint_qdesn_phase119_selection_policy()
+  next_action <- app_joint_qdesn_phase119_next_action_plan()
+  launch_commands <- app_joint_qdesn_phase119_launch_commands(
+    registry_paths = shard_paths,
+    screening_output_dir = screening_output_dir,
+    fixture_dir = fixture_dir,
+    n_cores = n_cores,
+    readiness_dir = out_dir
+  )
+  screening_source_files <- c(
+    "joint_qdesn_article_validation_vb_model_summary.csv",
+    "joint_qdesn_article_validation_vb_scenario_summary.csv"
+  )
+  screening_source_rows <- manifest_verification[
+    basename(manifest_verification$relative_path) %in% screening_source_files,
+    ,
+    drop = FALSE
+  ]
+  screening_source_status <- if (
+    nrow(screening_source_rows) == length(screening_source_files) &&
+      all(screening_source_rows$status == "pass")
+  ) {
+    "pass"
+  } else {
+    "fail"
+  }
+  article_manifest_status <- if (all(manifest_verification$status == "pass")) "pass" else "review"
+  readiness_decision <- if (!identical(screening_source_status, "pass")) {
+    "block_screening_source_manifest_mismatch"
+  } else if (!identical(article_manifest_status, "pass")) {
+    "ready_to_launch_screening_review_article_manifest_before_promotion"
+  } else {
+    "ready_to_prepare_case_specific_screening"
+  }
+  run_config <- data.frame(
+    run_id = "joint_qdesn_phase119_case_specific_calibration_readiness",
+    out_dir = out_dir,
+    screening_output_dir = screening_output_dir,
+    fixture_dir = fixture_dir,
+    table_dir = table_dir,
+    n_cores = as.integer(n_cores),
+    n_cases = nrow(case_table),
+    n_high_priority_cases = sum(case_table$priority == "high"),
+    n_registry_rows = nrow(registry),
+    screening_source_status = screening_source_status,
+    article_asset_manifest_status = article_manifest_status,
+    readiness_decision = readiness_decision,
+    stringsAsFactors = FALSE
+  )
+  readme_path <- file.path(out_dir, "README.md")
+  writeLines(app_joint_qdesn_phase119_readme(run_config, case_table, registry, launch_commands), readme_path, useBytes = TRUE)
+  paths <- c(
+    phase119_run_config = app_joint_qdesn_screening_write_csv(run_config, file.path(out_dir, "phase119_run_config.csv")),
+    source_asset_manifest_verification = app_joint_qdesn_screening_write_csv(manifest_verification, file.path(out_dir, "source_asset_manifest_verification.csv")),
+    current_model_metric_audit = app_joint_qdesn_screening_write_csv(model_audit, file.path(out_dir, "current_model_metric_audit.csv")),
+    case_specific_audit = app_joint_qdesn_screening_write_csv(case_table, file.path(out_dir, "case_specific_audit.csv")),
+    phase119_case_specific_screening_registry = app_joint_qdesn_screening_write_csv(registry, full_registry_path),
+    selection_policy = app_joint_qdesn_screening_write_csv(selection_policy, file.path(out_dir, "selection_policy.csv")),
+    next_action_plan = app_joint_qdesn_screening_write_csv(next_action, file.path(out_dir, "next_action_plan.csv")),
+    launch_commands = app_joint_qdesn_screening_write_csv(launch_commands, file.path(out_dir, "launch_commands.csv")),
+    provenance = app_joint_qdesn_screening_write_csv(app_joint_qvp_provenance_rows(), file.path(out_dir, "provenance.csv")),
+    readme = normalizePath(readme_path, mustWork = TRUE),
+    shard_paths
+  )
+  manifest_info <- app_joint_qdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = normalizePath(out_dir, mustWork = TRUE),
+    run_config = run_config,
+    manifest_verification = manifest_verification,
+    model_audit = model_audit,
+    case_table = case_table,
+    registry = registry,
+    shard_paths = shard_paths,
+    selection_policy = selection_policy,
+    next_action_plan = next_action,
+    launch_commands = launch_commands,
+    paths = c(paths, artifact_manifest = manifest_info$manifest_path)
+  )
+}
+
+# Phase 120 targeted follow-up.  Phase 119 high-priority rows are complete; this
+# stage freezes their case-level audit and creates only the additional candidate
+# rows needed for unresolved review cases.
+
+app_joint_qdesn_default_phase120_case_followup_dir <- function() {
+  app_path("application/cache/joint_qdesn_phase120_case_selection_followup_20260711")
+}
+
+app_joint_qdesn_default_phase120_case_screening_dir <- function() {
+  app_path("application/cache/joint_qdesn_vb_case_specific_screening_phase120_20260711")
+}
+
+app_joint_qdesn_phase120_required_screening_files <- function() {
+  c(
+    "candidate_registry.csv",
+    "screening_health_summary.csv",
+    "fit_model_metric_summary.csv",
+    "forecast_model_metric_summary.csv",
+    "candidate_manifest_verification.csv",
+    "artifact_manifest.csv"
+  )
+}
+
+app_joint_qdesn_phase120_read_screening_shard <- function(dir, source_label) {
+  dir <- normalizePath(dir, mustWork = TRUE)
+  required <- app_joint_qdesn_phase120_required_screening_files()
+  missing <- required[!file.exists(file.path(dir, required))]
+  if (length(missing)) {
+    stop(
+      sprintf("%s is missing required Phase 119 files: %s", source_label, paste(missing, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+  list(
+    source_label = source_label,
+    dir = dir,
+    root_manifest_verification = app_joint_qdesn_screening_verify_manifest(dir, source_label, "top_level"),
+    candidate_manifest_verification = app_read_csv(file.path(dir, "candidate_manifest_verification.csv")),
+    candidate_registry = app_read_csv(file.path(dir, "candidate_registry.csv")),
+    health = app_read_csv(file.path(dir, "screening_health_summary.csv")),
+    fit_model = app_read_csv(file.path(dir, "fit_model_metric_summary.csv")),
+    forecast_model = app_read_csv(file.path(dir, "forecast_model_metric_summary.csv"))
+  )
+}
+
+app_joint_qdesn_phase120_add_source <- function(x, source_label) {
+  if (!nrow(x)) return(x)
+  x$source_shard <- source_label
+  x
+}
+
+app_joint_qdesn_phase120_source_health_summary <- function(shards) {
+  rows <- lapply(shards, function(shard) {
+    health <- shard$health
+    root <- shard$root_manifest_verification
+    nested <- shard$candidate_manifest_verification
+    data.frame(
+      source_shard = shard$source_label,
+      source_dir = shard$dir,
+      candidate_rows = nrow(shard$candidate_registry),
+      health_rows = nrow(health),
+      gate_pass = sum(health$gate_status == "pass", na.rm = TRUE),
+      gate_review = sum(health$gate_status == "review", na.rm = TRUE),
+      gate_fail = sum(health$gate_status == "fail", na.rm = TRUE),
+      root_manifest_pass_rows = sum(root$status == "pass", na.rm = TRUE),
+      root_manifest_fail_rows = sum(root$status != "pass", na.rm = TRUE),
+      nested_manifest_pass_rows = sum(nested$status == "pass", na.rm = TRUE),
+      nested_manifest_fail_rows = sum(nested$status != "pass", na.rm = TRUE),
+      worker_failures = sum(health$scenario_worker_failures, na.rm = TRUE),
+      contract_crossings = sum(health$contract_crossings, na.rm = TRUE),
+      forecast_raw_crossings = sum(health$forecast_raw_crossings, na.rm = TRUE),
+      fit_reached_max_iter = sum(health$fit_reached_max_iter, na.rm = TRUE),
+      forecast_reached_max_iter = sum(health$forecast_reached_max_iter, na.rm = TRUE),
+      elapsed_hours = sum(health$elapsed_seconds, na.rm = TRUE) / 3600,
+      source_gate = if (any(root$status != "pass", na.rm = TRUE) ||
+        any(nested$status != "pass", na.rm = TRUE) ||
+        sum(health$scenario_worker_failures, na.rm = TRUE) > 0L ||
+        sum(health$contract_crossings, na.rm = TRUE) > 0L) {
+        "fail"
+      } else {
+        "pass"
+      },
+      stringsAsFactors = FALSE
+    )
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_qdesn_phase120_prefix_cols <- function(x, cols, prefix) {
+  keep <- intersect(cols, names(x))
+  out <- x[, keep, drop = FALSE]
+  rename <- setdiff(keep, "candidate_id")
+  names(out)[match(rename, names(out))] <- paste0(prefix, rename)
+  out
+}
+
+app_joint_qdesn_phase120_candidate_score_audit <- function(shards) {
+  registry <- app_joint_qdesn_bind_rows(lapply(shards, function(s) {
+    app_joint_qdesn_phase120_add_source(s$candidate_registry, s$source_label)
+  }))
+  health <- app_joint_qdesn_bind_rows(lapply(shards, function(s) {
+    app_joint_qdesn_phase120_add_source(s$health, s$source_label)
+  }))
+  fit <- app_joint_qdesn_bind_rows(lapply(shards, function(s) {
+    app_joint_qdesn_phase120_add_source(s$fit_model, s$source_label)
+  }))
+  forecast <- app_joint_qdesn_bind_rows(lapply(shards, function(s) {
+    app_joint_qdesn_phase120_add_source(s$forecast_model, s$source_label)
+  }))
+
+  app_check_required_columns(registry, c("candidate_id", "case_id", "scenario_ids", "model_ids"), "Phase 119 registry")
+  app_check_required_columns(health, c("candidate_id", "gate_status", "forecast_raw_crossings", "contract_crossings"), "Phase 119 health")
+  app_check_required_columns(forecast, c("candidate_id", "truth_mae", "raw_crossing_pairs", "contract_crossing_pairs"), "Phase 119 forecast metrics")
+
+  reg_keep <- intersect(c(
+    "candidate_id", "candidate_label", "source_shard", "candidate_role", "scenario_ids", "model_ids",
+    "fit_dir", "forecast_dir", "n_cores",
+    "case_id", "case_priority", "case_focus", "case_current_forecast_truth_mae", "case_gap_vs_best_al",
+    "vb_max_iter", "adaptive_vb_max_iter_grid", "vb_tol", "rhs_vb_inner", "tau0", "zeta2",
+    "a_sigma", "b_sigma", "alpha_prior_sd", "alpha_min_spacing", "gamma_init_policy",
+    "review_adjustment_threshold", "max_dense_dim", "notes"
+  ), names(registry))
+  h <- app_joint_qdesn_phase120_prefix_cols(
+    health,
+    c(
+      "candidate_id", "manifest_status", "scenario_worker_failures", "fit_worker_failures",
+      "forecast_worker_failures", "fit_raw_crossings", "forecast_raw_crossings",
+      "contract_crossings", "max_forecast_adjustment", "max_forecast_truth_mae",
+      "fit_reached_max_iter", "forecast_reached_max_iter", "elapsed_seconds", "gate_status"
+    ),
+    "health_"
+  )
+  f <- app_joint_qdesn_phase120_prefix_cols(
+    fit,
+    c(
+      "candidate_id", "truth_mae", "truth_rmse", "check_loss_mean", "crps_grid_mean",
+      "abs_hit_rate_error", "abs_coverage_error", "interval_width_mean", "interval_score_mean",
+      "raw_crossing_pairs", "contract_crossing_pairs", "reached_max_iter", "max_abs_adjustment",
+      "adjustment_rate", "finite_quantiles", "finite_scores", "gate_status", "elapsed_seconds"
+    ),
+    "fit_"
+  )
+  fc <- app_joint_qdesn_phase120_prefix_cols(
+    forecast,
+    c(
+      "candidate_id", "stage", "model_id", "display_label", "likelihood", "fit_structure",
+      "truth_mae", "truth_rmse", "check_loss_mean", "crps_grid_mean", "abs_hit_rate_error",
+      "abs_coverage_error", "interval_width_mean", "interval_score_mean", "raw_crossing_pairs",
+      "contract_crossing_pairs", "reached_max_iter", "max_abs_adjustment", "adjustment_rate",
+      "finite_quantiles", "finite_scores", "gate_status", "elapsed_seconds"
+    ),
+    "forecast_"
+  )
+  out <- Reduce(function(x, y) merge(x, y, by = "candidate_id", all.x = TRUE), list(registry[, reg_keep, drop = FALSE], h, f, fc))
+  out$forecast_truth_delta_vs_selected_controls <- NA_real_
+  for (case_id in unique(out$case_id)) {
+    idx <- which(out$case_id == case_id)
+    ref_idx <- idx[out$candidate_role[idx] == "case_selected_controls_reference"]
+    if (!length(ref_idx)) ref_idx <- idx[which.min(out$forecast_truth_mae[idx])]
+    ref <- out$forecast_truth_mae[ref_idx[[1L]]]
+    out$forecast_truth_delta_vs_selected_controls[idx] <- out$forecast_truth_mae[idx] - ref
+  }
+  out$implementation_gate <- ifelse(
+    out$health_manifest_status != "pass" |
+      out$health_scenario_worker_failures > 0 |
+      out$health_contract_crossings > 0 |
+      out$forecast_contract_crossing_pairs > 0 |
+      !out$forecast_finite_quantiles |
+      !out$forecast_finite_scores,
+    "fail",
+    ifelse(
+      out$health_gate_status == "review" |
+        out$forecast_raw_crossing_pairs > 0 |
+        out$forecast_reached_max_iter > 0 |
+        out$fit_reached_max_iter > 0,
+      "review",
+      "pass"
+    )
+  )
+  out$selection_score <- out$forecast_truth_mae +
+    0.20 * out$fit_truth_mae +
+    0.0005 * out$forecast_raw_crossing_pairs +
+    0.0020 * out$forecast_reached_max_iter +
+    0.0020 * out$fit_reached_max_iter +
+    0.0010 * pmin(out$forecast_max_abs_adjustment, 1)
+  out[order(out$case_id, out$selection_score, out$forecast_raw_crossing_pairs), , drop = FALSE]
+}
+
+app_joint_qdesn_phase120_case_winner_audit <- function(candidate_audit) {
+  cases <- split(candidate_audit, candidate_audit$case_id)
+  rows <- lapply(cases, function(x) {
+    x$fail_order <- ifelse(x$implementation_gate == "fail", 1L, 0L)
+    x <- x[order(
+      x$fail_order,
+      x$forecast_truth_mae,
+      x$forecast_raw_crossing_pairs,
+      x$forecast_reached_max_iter,
+      x$forecast_check_loss_mean,
+      x$forecast_crps_grid_mean,
+      x$health_elapsed_seconds
+    ), , drop = FALSE]
+    best <- x[1L, , drop = FALSE]
+    followup_status <- if (best$implementation_gate[[1L]] == "fail") {
+      "blocked_implementation_failure"
+    } else if (best$forecast_raw_crossing_pairs[[1L]] > 0L) {
+      "review_followup_raw_crossing"
+    } else if (best$forecast_reached_max_iter[[1L]] > 0L || best$fit_reached_max_iter[[1L]] > 0L) {
+      "review_followup_convergence"
+    } else if (best$implementation_gate[[1L]] == "pass") {
+      "ready_for_vb_freeze_candidate"
+    } else {
+      "review_no_extra_followup_selected"
+    }
+    data.frame(
+      case_id = best$case_id,
+      source_shard = best$source_shard,
+      scenario_id = best$scenario_ids,
+      model_id = best$model_ids,
+      display_label = best$forecast_display_label,
+      likelihood = best$forecast_likelihood,
+      fit_structure = best$forecast_fit_structure,
+      selected_candidate_id = best$candidate_id,
+      selected_candidate_label = best$candidate_label,
+      selected_candidate_role = best$candidate_role,
+      implementation_gate = best$implementation_gate,
+      followup_status = followup_status,
+      forecast_truth_mae = best$forecast_truth_mae,
+      fit_truth_mae = best$fit_truth_mae,
+      forecast_check_loss = best$forecast_check_loss_mean,
+      forecast_crps_grid = best$forecast_crps_grid_mean,
+      forecast_hit_rate_error = best$forecast_abs_hit_rate_error,
+      forecast_coverage_error = best$forecast_abs_coverage_error,
+      forecast_raw_crossings = best$forecast_raw_crossing_pairs,
+      forecast_contract_crossings = best$forecast_contract_crossing_pairs,
+      fit_reached_max_iter = best$fit_reached_max_iter,
+      forecast_reached_max_iter = best$forecast_reached_max_iter,
+      max_forecast_adjustment = best$forecast_max_abs_adjustment,
+      forecast_truth_delta_vs_selected_controls = best$forecast_truth_delta_vs_selected_controls,
+      tau0 = best$tau0,
+      zeta2 = best$zeta2,
+      alpha_prior_sd = best$alpha_prior_sd,
+      gamma_init_policy = best$gamma_init_policy,
+      rhs_vb_inner = best$rhs_vb_inner,
+      vb_max_iter = best$vb_max_iter,
+      adaptive_vb_max_iter_grid = best$adaptive_vb_max_iter_grid,
+      recommended_action = if (followup_status == "ready_for_vb_freeze_candidate") {
+        "keep as provisional VB winner; include in later VB freeze/MCMC initialization after all targeted follow-up is audited"
+      } else if (followup_status == "review_followup_raw_crossing") {
+        "run targeted stronger RHS sparsity/coupling and higher-iteration candidates for this exact case"
+      } else if (followup_status == "review_followup_convergence") {
+        "run targeted higher VB inner/outer-iteration candidates for this exact case"
+      } else {
+        "manual review before freeze"
+      },
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- app_joint_qdesn_bind_rows(rows)
+  out[order(factor(out$followup_status, levels = c(
+    "blocked_implementation_failure", "review_followup_raw_crossing",
+    "review_followup_convergence", "review_no_extra_followup_selected",
+    "ready_for_vb_freeze_candidate"
+  )), out$case_id), , drop = FALSE]
+}
+
+app_joint_qdesn_phase120_target_cases <- function(case_winners) {
+  targets <- case_winners[case_winners$followup_status %in% c(
+    "review_followup_raw_crossing",
+    "review_followup_convergence"
+  ), , drop = FALSE]
+  targets$phase120_target_priority <- ifelse(
+    targets$followup_status == "review_followup_raw_crossing",
+    "raw_crossing_resolution",
+    "convergence_resolution"
+  )
+  targets
+}
+
+app_joint_qdesn_phase120_control_grid <- function(model_id, followup_status) {
+  if (identical(model_id, "qdesn_rhs_independent_vb")) {
+    return(data.frame(
+      suffix = c(
+        "tau0_0p20_alpha0p35_zeta2_8_inner12_iter2400",
+        "tau0_0p25_alpha0p30_zeta2_4_inner12_iter2400",
+        "tau0_0p35_alpha0p40_zeta2_8_inner14_iter2400",
+        "tau0_0p20_alpha0p45_zeta2_16_inner14_iter2880",
+        "tau0_0p35_alpha0p5_zeta2_32_inner14_iter2880",
+        "tau0_0p5_alpha0p6_zeta2_32_inner14_iter2400"
+      ),
+      candidate_label = c(
+        "Independent AL targeted crossing: tau0 0.20, alpha sd 0.35, zeta2 8, inner 12",
+        "Independent AL targeted crossing: tau0 0.25, alpha sd 0.30, zeta2 4, inner 12",
+        "Independent AL targeted crossing: tau0 0.35, alpha sd 0.40, zeta2 8, inner 14",
+        "Independent AL targeted crossing: tau0 0.20, alpha sd 0.45, zeta2 16, inner 14",
+        "Independent AL targeted crossing: tau0 0.35, alpha sd 0.50, zeta2 32, inner 14",
+        "Independent AL targeted crossing: tau0 0.50, alpha sd 0.60, zeta2 32, inner 14"
+      ),
+      vb_max_iter = c(2400L, 2400L, 2400L, 2880L, 2880L, 2400L),
+      adaptive_vb_max_iter_grid = c("2400,2880", "2400,2880", "2400,2880", "2880,3360", "2880,3360", "2400,2880"),
+      vb_tol = rep(1.0e-4, 6L),
+      rhs_vb_inner = c(12L, 12L, 14L, 14L, 14L, 14L),
+      tau0 = c(0.20, 0.25, 0.35, 0.20, 0.35, 0.50),
+      zeta2 = c(8, 4, 8, 16, 32, 32),
+      a_sigma = rep(2, 6L),
+      b_sigma = rep(1, 6L),
+      alpha_prior_sd = c("0.35", "0.30", "0.40", "0.45", "0.50", "0.60"),
+      alpha_min_spacing = rep(0, 6L),
+      gamma_init_policy = rep("zero", 6L),
+      review_adjustment_threshold = rep(1.0e-3, 6L),
+      max_dense_dim = rep(300L, 6L),
+      candidate_role = rep("phase120_independent_al_raw_crossing_candidate", 6L),
+      notes = c(
+        "Aggressive RHS coupling and tighter empirical intercept prior to reduce independent-tail noise.",
+        "Most aggressive sparsity/coupling probe; useful only if accuracy does not collapse.",
+        "Moderate coupling with additional RHS coordinate passes.",
+        "Strong coupling with more outer iterations; tests whether raw crossings are optimizer-limited.",
+        "Retains the Phase 119 winning zeta2 scale while increasing coordinate passes and iterations.",
+        "Accuracy-preserving continuation around the Phase 119 zeta2 32 winner."
+      ),
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (identical(model_id, "joint_qdesn_rhs_vb")) {
+    return(data.frame(
+      suffix = c(
+        "tau0_0p20_alpha0p35_zeta2_8_inner14_iter2880",
+        "tau0_0p25_alpha0p35_zeta2_8_inner12_iter2400",
+        "tau0_0p35_alpha0p45_zeta2_8_inner14_iter2400",
+        "tau0_0p35_alpha0p5_zeta2_16_inner14_iter2880",
+        "tau0_0p25_alpha0p5_zeta2_16_inner14_iter2880",
+        "tau0_0p5_alpha0p75_zeta2_16_inner14_iter2400"
+      ),
+      candidate_label = c(
+        "Joint AL targeted crossing: tau0 0.20, alpha sd 0.35, zeta2 8, inner 14",
+        "Joint AL targeted crossing: tau0 0.25, alpha sd 0.35, zeta2 8, inner 12",
+        "Joint AL targeted crossing: tau0 0.35, alpha sd 0.45, zeta2 8, inner 14",
+        "Joint AL targeted crossing: tau0 0.35, alpha sd 0.50, zeta2 16, inner 14",
+        "Joint AL targeted crossing: tau0 0.25, alpha sd 0.50, zeta2 16, inner 14",
+        "Joint AL accuracy continuation: tau0 0.50, alpha sd 0.75, zeta2 16, inner 14"
+      ),
+      vb_max_iter = c(2880L, 2400L, 2400L, 2880L, 2880L, 2400L),
+      adaptive_vb_max_iter_grid = c("2880,3360", "2400,2880", "2400,2880", "2880,3360", "2880,3360", "2400,2880"),
+      vb_tol = rep(1.0e-4, 6L),
+      rhs_vb_inner = c(14L, 12L, 14L, 14L, 14L, 14L),
+      tau0 = c(0.20, 0.25, 0.35, 0.35, 0.25, 0.50),
+      zeta2 = c(8, 8, 8, 16, 16, 16),
+      a_sigma = rep(2, 6L),
+      b_sigma = rep(1, 6L),
+      alpha_prior_sd = c("0.35", "0.35", "0.45", "0.50", "0.50", "0.75"),
+      alpha_min_spacing = rep(0, 6L),
+      gamma_init_policy = rep("zero", 6L),
+      review_adjustment_threshold = rep(1.0e-3, 6L),
+      max_dense_dim = rep(300L, 6L),
+      candidate_role = rep("phase120_joint_al_raw_crossing_candidate", 6L),
+      notes = c(
+        "Strongest joint smoothing probe for the single remaining joint AL raw crossing.",
+        "Less aggressive but still crossing-focused joint AL probe.",
+        "Moderate alpha tightening with stronger beta cap.",
+        "Higher-coordinate-pass continuation of the Phase 119 selected controls.",
+        "Stronger RHS coupling with Phase 119 alpha width retained.",
+        "Accuracy-preserving continuation around the Phase 119 alpha 0.75 candidate."
+      ),
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (identical(model_id, "joint_exqdesn_rhs_vb")) {
+    return(data.frame(
+      suffix = c(
+        "inner14_iter2400_alpha0p75_gamma_zero",
+        "inner16_iter2880_alpha0p75_gamma_zero",
+        "tau0_0p35_inner14_iter2400_alpha0p75_gamma_zero",
+        "tau0_0p5_inner16_iter2880_alpha1p0_gamma_zero",
+        "zeta2_32_inner14_iter2400_alpha1p0_gamma_zero",
+        "tol5e5_inner16_iter2880_alpha0p75_gamma_zero"
+      ),
+      candidate_label = c(
+        "Joint exQDESN convergence: inner 14, VB 2400, alpha sd 0.75, zero gamma",
+        "Joint exQDESN convergence: inner 16, VB 2880, alpha sd 0.75, zero gamma",
+        "Joint exQDESN convergence: tau0 0.35, inner 14, VB 2400",
+        "Joint exQDESN convergence/fan: tau0 0.50, inner 16, alpha sd 1.0",
+        "Joint exQDESN convergence/fan: zeta2 32, inner 14, alpha sd 1.0",
+        "Joint exQDESN convergence: tighter tolerance, inner 16, VB 2880"
+      ),
+      vb_max_iter = c(2400L, 2880L, 2400L, 2880L, 2400L, 2880L),
+      adaptive_vb_max_iter_grid = c("2400,2880", "2880,3360", "2400,2880", "2880,3360", "2400,2880", "2880,3360"),
+      vb_tol = c(rep(1.0e-4, 5L), 5.0e-5),
+      rhs_vb_inner = c(14L, 16L, 14L, 16L, 14L, 16L),
+      tau0 = c(0.50, 0.50, 0.35, 0.50, 0.50, 0.50),
+      zeta2 = c(16, 16, 16, 16, 32, 16),
+      a_sigma = rep(2, 6L),
+      b_sigma = rep(1, 6L),
+      alpha_prior_sd = c("0.75", "0.75", "0.75", "1.00", "1.00", "0.75"),
+      alpha_min_spacing = rep(0, 6L),
+      gamma_init_policy = rep("zero", 6L),
+      review_adjustment_threshold = rep(1.0e-3, 6L),
+      max_dense_dim = rep(300L, 6L),
+      candidate_role = rep("phase120_joint_exal_convergence_candidate", 6L),
+      notes = c(
+        "Direct continuation of the Phase 119 winner with more RHS coordinate passes.",
+        "Higher-iteration continuation to test whether review status is optimizer budget.",
+        "Adds stronger RHS coupling while preserving the Phase 119 alpha/gamma policy.",
+        "Tests whether slightly wider exAL fan plus more iterations improves the tail case.",
+        "Tests finite beta cap relaxation with the wider exAL fan.",
+        "Separates tolerance from iteration-budget effects."
+      ),
+      stringsAsFactors = FALSE
+    ))
+  }
+  stop(sprintf("No Phase 120 follow-up grid for model '%s'.", model_id), call. = FALSE)
+}
+
+app_joint_qdesn_phase120_followup_registry <- function(
+  target_cases,
+  screening_output_dir = app_joint_qdesn_default_phase120_case_screening_dir(),
+  n_cores = 1L
+) {
+  screening_output_dir <- normalizePath(screening_output_dir, mustWork = FALSE)
+  rows <- list()
+  for (ii in seq_len(nrow(target_cases))) {
+    target <- target_cases[ii, , drop = FALSE]
+    grid <- app_joint_qdesn_phase120_control_grid(target$model_id[[1L]], target$followup_status[[1L]])
+    case_slug <- gsub("[^A-Za-z0-9_]+", "_", target$case_id[[1L]])
+    for (jj in seq_len(nrow(grid))) {
+      g <- grid[jj, , drop = FALSE]
+      candidate_id <- paste(case_slug, paste0("phase120_", g$suffix[[1L]]), sep = "__")
+      rows[[length(rows) + 1L]] <- data.frame(
+        candidate_id = candidate_id,
+        candidate_label = paste(target$scenario_id[[1L]], target$display_label[[1L]], g$candidate_label[[1L]], sep = " | "),
+        use_existing_artifacts = FALSE,
+        fit_dir = file.path(screening_output_dir, "targeted_followup", "cases", case_slug, "candidates", g$suffix[[1L]], "fit"),
+        forecast_dir = file.path(screening_output_dir, "targeted_followup", "cases", case_slug, "candidates", g$suffix[[1L]], "forecast"),
+        vb_max_iter = g$vb_max_iter[[1L]],
+        adaptive_vb_max_iter_grid = g$adaptive_vb_max_iter_grid[[1L]],
+        vb_tol = g$vb_tol[[1L]],
+        rhs_vb_inner = g$rhs_vb_inner[[1L]],
+        tau0 = g$tau0[[1L]],
+        zeta2 = g$zeta2[[1L]],
+        a_sigma = g$a_sigma[[1L]],
+        b_sigma = g$b_sigma[[1L]],
+        alpha_prior_sd = g$alpha_prior_sd[[1L]],
+        alpha_min_spacing = g$alpha_min_spacing[[1L]],
+        gamma_init_policy = g$gamma_init_policy[[1L]],
+        review_adjustment_threshold = g$review_adjustment_threshold[[1L]],
+        max_dense_dim = g$max_dense_dim[[1L]],
+        n_cores = as.integer(n_cores),
+        candidate_role = g$candidate_role[[1L]],
+        notes = g$notes[[1L]],
+        scenario_ids = target$scenario_id[[1L]],
+        model_ids = target$model_id[[1L]],
+        case_id = target$case_id[[1L]],
+        case_priority = "phase120_targeted_followup",
+        case_focus = target$phase120_target_priority[[1L]],
+        case_current_forecast_truth_mae = target$forecast_truth_mae[[1L]],
+        case_gap_vs_best_al = NA_real_,
+        phase120_source_best_candidate_id = target$selected_candidate_id[[1L]],
+        phase120_followup_status = target$followup_status[[1L]],
+        phase120_source_raw_crossings = target$forecast_raw_crossings[[1L]],
+        phase120_source_reached_max_iter = target$forecast_reached_max_iter[[1L]],
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  registry <- app_joint_qdesn_bind_rows(rows)
+  app_joint_qdesn_validate_screening_registry(registry, allow_alpha_prior_vectors = FALSE)
+  registry
+}
+
+app_joint_qdesn_phase120_selection_policy <- function() {
+  data.frame(
+    gate_order = seq_len(8L),
+    gate_name = c(
+      "source_integrity", "case_local_selection", "targeted_followup_scope",
+      "implementation_gate", "raw_crossing_review", "convergence_review",
+      "mcmc_readiness", "article_promotion"
+    ),
+    gate_type = c("hard_fail", "design", "design", "hard_fail", "review", "review", "promotion_required", "promotion_required"),
+    rule = c(
+      "Phase 119 high-priority root and nested manifests must verify before using any winners.",
+      "Select within scenario/model case; do not force one common specification across all cases.",
+      "Generate new rows only for winning cases still blocked by raw crossings or convergence review.",
+      "Reject missing hashes, worker failures, nonfinite metrics, or contract crossings.",
+      "Raw crossings trigger targeted smoothing/sparsity follow-up, not hidden promotion.",
+      "Max-iteration flags trigger higher inner/outer VB follow-up before freezing.",
+      "After Phase 120, freeze one VB/VB-LD winner per article case and initialize MCMC from those winners.",
+      "Article tables remain unchanged until MCMC confirmation artifacts are complete and hash-manifested."
+    ),
+    rationale = c(
+      "Prevents contaminated selection from partial or corrupted artifacts.",
+      "Matches the user's scientific goal of per-case optimization.",
+      "Avoids an inefficient broad moderate/context launch that does not address the unresolved cases.",
+      "Preserves the implementation/reproducibility standard used in Phases 113-119.",
+      "Maintains the raw/contract quantile distinction without overclaiming.",
+      "Separates optimizer budget from model behavior.",
+      "Keeps VB as calibration/initialization and MCMC as final article-facing evidence.",
+      "Protects the manuscript from premature validation-table promotion."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase120_next_action_plan <- function() {
+  data.frame(
+    step = seq_len(5L),
+    stage = c("launch_targeted_followup", "audit_phase120", "freeze_case_winners", "launch_mcmc_confirmation", "article_asset_integration"),
+    action = c(
+      "Run the Phase 120 targeted follow-up registry with row-parallel workers.",
+      "Audit Phase 120 against Phase 119 winners and choose stable per-case VB winners.",
+      "Freeze one VB/VB-LD candidate for each article-facing scenario/model row.",
+      "Initialize MCMC from the frozen winners for Joint/Independent QDESN and Joint/Independent exQDESN rows needed in the article.",
+      "Only after MCMC passes, rebuild article tables/figures/manifests in the authoritative v2 article repo."
+    ),
+    output = c(
+      "joint_qdesn_vb_case_specific_screening_phase120_20260711/targeted_followup",
+      "Phase 120 winner comparison and gate audit",
+      "case-specific VB freeze artifact",
+      "MCMC confirmation artifact with raw/contract quantile-grid diagnostics",
+      "article validation assets with provenance and SHA-256 manifests"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase120_launch_commands <- function(registry_path, screening_output_dir, fixture_dir, n_cores = 1L) {
+  canonical_output_dir <- file.path(screening_output_dir, "targeted_followup")
+  run_cmd <- sprintf(
+    "bash application/scripts/123_launch_joint_qdesn_screening_parallel_chunks.sh --registry %s --canonical-output-dir %s --fixture-dir %s --workers 10 --n-cores-per-worker %d --run-id phase120_targeted_20260711",
+    registry_path,
+    canonical_output_dir,
+    fixture_dir,
+    as.integer(n_cores)
+  )
+  audit_cmd <- sprintf(
+    "Rscript application/scripts/106_run_joint_qdesn_vb_spec_screening.R --registry %s --output-dir %s --fixture-dir %s --n-cores %d --reuse-completed true --audit-only true",
+    registry_path,
+    canonical_output_dir,
+    fixture_dir,
+    as.integer(n_cores)
+  )
+  data.frame(
+    command_id = c("run_phase120_targeted_followup", "audit_phase120_targeted_followup"),
+    command = c(run_cmd, audit_cmd),
+    purpose = c(
+      "Run only the unresolved case-specific Phase 120 follow-up rows.",
+      "Build the canonical Phase 120 targeted-follow-up audit after all workers finish."
+    ),
+    run_condition = c(
+      "Launch now if spare cores are available; this replaces the broad moderate/context backlog for the immediate next step.",
+      "Run after all Phase 120 worker tmux sessions finish with EXIT_CODE=0."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase120_readme <- function(run_config, source_health, case_winners, targets, registry, launch_commands) {
+  c(
+    "# Joint QDESN Phase 120 Case-Selection Follow-Up",
+    "",
+    "This artifact audits the completed Phase 119 high-priority screens and prepares a targeted follow-up registry.",
+    "The purpose is per-case optimization, not a single global specification.",
+    "",
+    sprintf("- Output directory: `%s`", run_config$out_dir[[1L]]),
+    sprintf("- Phase 119 AL source: `%s`", run_config$phase119_al_high_priority_dir[[1L]]),
+    sprintf("- Phase 119 exAL source: `%s`", run_config$phase119_exal_high_priority_dir[[1L]]),
+    sprintf("- Source gates: %s", paste(source_health$source_gate, collapse = ", ")),
+    sprintf("- High-priority winning cases audited: %d", nrow(case_winners)),
+    sprintf("- Targeted follow-up cases: %d", nrow(targets)),
+    sprintf("- Targeted follow-up candidate rows: %d", nrow(registry)),
+    "",
+    "Why not launch the remaining broad moderate/context backlog now?",
+    "",
+    "The unresolved rows are already high-priority cases.  They need additional candidate designs around raw crossings or VB convergence, not unrelated moderate/context cases.",
+    "",
+    "Primary launch command:",
+    "",
+    launch_commands$command[launch_commands$command_id == "run_phase120_targeted_followup"][[1L]]
+  )
+}
+
+app_joint_qdesn_run_phase120_case_selection_followup <- function(
+  out_dir = app_joint_qdesn_default_phase120_case_followup_dir(),
+  screening_output_dir = app_joint_qdesn_default_phase120_case_screening_dir(),
+  al_high_priority_dir = file.path(app_joint_qdesn_default_phase119_case_screening_dir(), "al_high_priority"),
+  exal_high_priority_dir = file.path(app_joint_qdesn_default_phase119_case_screening_dir(), "exal_high_priority"),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  n_cores = 1L
+) {
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  screening_output_dir <- normalizePath(screening_output_dir, mustWork = FALSE)
+  fixture_dir <- normalizePath(fixture_dir, mustWork = FALSE)
+  app_ensure_dir(out_dir)
+
+  shards <- list(
+    al_high_priority = app_joint_qdesn_phase120_read_screening_shard(al_high_priority_dir, "al_high_priority"),
+    exal_high_priority = app_joint_qdesn_phase120_read_screening_shard(exal_high_priority_dir, "exal_high_priority")
+  )
+  source_health <- app_joint_qdesn_phase120_source_health_summary(shards)
+  candidate_audit <- app_joint_qdesn_phase120_candidate_score_audit(shards)
+  case_winners <- app_joint_qdesn_phase120_case_winner_audit(candidate_audit)
+  targets <- app_joint_qdesn_phase120_target_cases(case_winners)
+  registry <- app_joint_qdesn_phase120_followup_registry(
+    targets,
+    screening_output_dir = screening_output_dir,
+    n_cores = n_cores
+  )
+  registry_path <- file.path(out_dir, "phase120_targeted_followup_registry.csv")
+  selection_policy <- app_joint_qdesn_phase120_selection_policy()
+  next_action <- app_joint_qdesn_phase120_next_action_plan()
+  launch_commands <- app_joint_qdesn_phase120_launch_commands(
+    registry_path = registry_path,
+    screening_output_dir = screening_output_dir,
+    fixture_dir = fixture_dir,
+    n_cores = n_cores
+  )
+  run_config <- data.frame(
+    run_id = "joint_qdesn_phase120_case_selection_followup",
+    out_dir = out_dir,
+    screening_output_dir = screening_output_dir,
+    fixture_dir = fixture_dir,
+    phase119_al_high_priority_dir = normalizePath(al_high_priority_dir, mustWork = TRUE),
+    phase119_exal_high_priority_dir = normalizePath(exal_high_priority_dir, mustWork = TRUE),
+    n_cores = as.integer(n_cores),
+    n_phase119_candidates = nrow(candidate_audit),
+    n_case_winners = nrow(case_winners),
+    n_target_cases = nrow(targets),
+    n_followup_candidate_rows = nrow(registry),
+    source_gate_status = if (all(source_health$source_gate == "pass")) "pass" else "fail",
+    readiness_decision = if (all(source_health$source_gate == "pass") && nrow(registry) > 0L) {
+      "ready_to_launch_phase120_targeted_followup"
+    } else if (all(source_health$source_gate == "pass")) {
+      "no_followup_needed_ready_for_vb_freeze"
+    } else {
+      "blocked_source_artifact_failure"
+    },
+    stringsAsFactors = FALSE
+  )
+  readme_path <- file.path(out_dir, "README.md")
+  writeLines(app_joint_qdesn_phase120_readme(run_config, source_health, case_winners, targets, registry, launch_commands), readme_path, useBytes = TRUE)
+  source_manifest <- app_joint_qdesn_bind_rows(list(
+    app_joint_qdesn_phase120_add_source(shards$al_high_priority$root_manifest_verification, "al_high_priority_root"),
+    app_joint_qdesn_phase120_add_source(shards$exal_high_priority$root_manifest_verification, "exal_high_priority_root"),
+    app_joint_qdesn_phase120_add_source(shards$al_high_priority$candidate_manifest_verification, "al_high_priority_nested"),
+    app_joint_qdesn_phase120_add_source(shards$exal_high_priority$candidate_manifest_verification, "exal_high_priority_nested")
+  ))
+  paths <- c(
+    phase120_run_config = app_joint_qdesn_screening_write_csv(run_config, file.path(out_dir, "phase120_run_config.csv")),
+    phase119_source_manifest_verification = app_joint_qdesn_screening_write_csv(source_manifest, file.path(out_dir, "phase119_source_manifest_verification.csv")),
+    phase119_source_health_summary = app_joint_qdesn_screening_write_csv(source_health, file.path(out_dir, "phase119_source_health_summary.csv")),
+    phase119_candidate_score_audit = app_joint_qdesn_screening_write_csv(candidate_audit, file.path(out_dir, "phase119_candidate_score_audit.csv")),
+    phase119_case_winner_audit = app_joint_qdesn_screening_write_csv(case_winners, file.path(out_dir, "phase119_case_winner_audit.csv")),
+    phase120_target_case_audit = app_joint_qdesn_screening_write_csv(targets, file.path(out_dir, "phase120_target_case_audit.csv")),
+    phase120_targeted_followup_registry = app_joint_qdesn_screening_write_csv(registry, registry_path),
+    phase120_selection_policy = app_joint_qdesn_screening_write_csv(selection_policy, file.path(out_dir, "phase120_selection_policy.csv")),
+    phase120_next_action_plan = app_joint_qdesn_screening_write_csv(next_action, file.path(out_dir, "phase120_next_action_plan.csv")),
+    phase120_launch_commands = app_joint_qdesn_screening_write_csv(launch_commands, file.path(out_dir, "phase120_launch_commands.csv")),
+    provenance = app_joint_qdesn_screening_write_csv(app_joint_qvp_provenance_rows(), file.path(out_dir, "provenance.csv")),
+    readme = normalizePath(readme_path, mustWork = TRUE)
+  )
+  manifest_info <- app_joint_qdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = normalizePath(out_dir, mustWork = TRUE),
+    run_config = run_config,
+    source_health = source_health,
+    candidate_audit = candidate_audit,
+    case_winners = case_winners,
+    targets = targets,
+    registry = registry,
+    selection_policy = selection_policy,
+    next_action_plan = next_action,
+    launch_commands = launch_commands,
+    paths = c(paths, artifact_manifest = manifest_info$manifest_path)
+  )
+}
+
+# Phase 121 freezes the case-specific VB/VB-LD winners after the Phase 120
+# targeted follow-up.  This is a reproducible initialization contract for the
+# later MCMC confirmation layer; it is not article-facing final evidence.
+
+app_joint_qdesn_default_phase121_case_vb_freeze_dir <- function() {
+  app_path("application/cache/joint_qdesn_phase121_case_vb_winner_freeze_20260711")
+}
+
+app_joint_qdesn_phase121_default_source_dirs <- function() {
+  list(
+    al_high_priority = file.path(app_joint_qdesn_default_phase119_case_screening_dir(), "al_high_priority"),
+    exal_high_priority = file.path(app_joint_qdesn_default_phase119_case_screening_dir(), "exal_high_priority"),
+    phase120_targeted_followup = file.path(app_joint_qdesn_default_phase120_case_screening_dir(), "targeted_followup")
+  )
+}
+
+app_joint_qdesn_phase121_metric_tol <- function(best_mae, abs_tol = 5.0e-4, rel_tol = 0.005) {
+  max(as.numeric(abs_tol), as.numeric(rel_tol) * abs(as.numeric(best_mae)))
+}
+
+app_joint_qdesn_phase121_load_sources <- function(source_dirs = app_joint_qdesn_phase121_default_source_dirs()) {
+  labels <- names(source_dirs)
+  if (is.null(labels) || any(!nzchar(labels))) {
+    stop("Phase 121 source_dirs must be a named list or named character vector.", call. = FALSE)
+  }
+  out <- lapply(seq_along(source_dirs), function(ii) {
+    app_joint_qdesn_phase120_read_screening_shard(source_dirs[[ii]], labels[[ii]])
+  })
+  names(out) <- labels
+  out
+}
+
+app_joint_qdesn_phase121_source_manifest <- function(shards) {
+  pieces <- list()
+  for (nm in names(shards)) {
+    pieces[[length(pieces) + 1L]] <- app_joint_qdesn_phase120_add_source(shards[[nm]]$root_manifest_verification, paste0(nm, "_root"))
+    pieces[[length(pieces) + 1L]] <- app_joint_qdesn_phase120_add_source(shards[[nm]]$candidate_manifest_verification, paste0(nm, "_nested"))
+  }
+  app_joint_qdesn_bind_rows(pieces)
+}
+
+app_joint_qdesn_phase121_candidate_audit <- function(shards) {
+  out <- app_joint_qdesn_phase120_candidate_score_audit(shards)
+  out$phase121_source_role <- ifelse(
+    out$source_shard == "phase120_targeted_followup",
+    "targeted_followup_candidate",
+    "phase119_case_specific_candidate"
+  )
+  out$phase121_hard_fail <- out$implementation_gate == "fail" |
+    !is.finite(out$forecast_truth_mae) |
+    !is.finite(out$fit_truth_mae) |
+    out$forecast_contract_crossing_pairs > 0 |
+    out$fit_contract_crossing_pairs > 0 |
+    !out$forecast_finite_quantiles |
+    !out$forecast_finite_scores |
+    !out$fit_finite_quantiles |
+    !out$fit_finite_scores
+  out$phase121_hard_fail[is.na(out$phase121_hard_fail)] <- TRUE
+  out$phase121_review_reason <- ifelse(
+    out$phase121_hard_fail,
+    "hard_gate_failure",
+    ifelse(
+      out$forecast_reached_max_iter > 0 | out$fit_reached_max_iter > 0,
+      "vb_max_iteration_review",
+      ifelse(
+        out$forecast_raw_crossing_pairs > 0 | out$fit_raw_crossing_pairs > 0 |
+          out$forecast_max_abs_adjustment > 1.0e-3 | out$fit_max_abs_adjustment > 1.0e-3,
+        "raw_crossing_or_monotone_adjustment_review",
+        "no_review_flag"
+      )
+    )
+  )
+  out
+}
+
+app_joint_qdesn_phase121_select_one_case <- function(x, abs_tol = 5.0e-4, rel_tol = 0.005) {
+  x$hard_fail_order <- ifelse(x$phase121_hard_fail, 1L, 0L)
+  usable <- x[!x$phase121_hard_fail & is.finite(x$forecast_truth_mae), , drop = FALSE]
+  if (!nrow(usable)) {
+    x <- x[order(
+      x$hard_fail_order,
+      x$forecast_truth_mae,
+      x$forecast_contract_crossing_pairs,
+      x$forecast_reached_max_iter,
+      x$forecast_raw_crossing_pairs
+    ), , drop = FALSE]
+    best <- x[1L, , drop = FALSE]
+    best$phase121_selection_rule <- "blocked_all_candidates_failed_hard_gate"
+    best$phase121_best_forecast_truth_mae <- best$forecast_truth_mae
+    best$phase121_mae_tolerance <- NA_real_
+    best$phase121_selected_within_tolerance <- FALSE
+    best$phase121_selection_status <- "fail"
+    best$phase121_selection_note <- "No usable candidate passed hard implementation gates."
+    return(best)
+  }
+
+  best_mae <- min(usable$forecast_truth_mae, na.rm = TRUE)
+  tol <- app_joint_qdesn_phase121_metric_tol(best_mae, abs_tol = abs_tol, rel_tol = rel_tol)
+  eligible <- usable[usable$forecast_truth_mae <= best_mae + tol, , drop = FALSE]
+  eligible$phase121_stability_penalty <- 1000 * (eligible$forecast_reached_max_iter + eligible$fit_reached_max_iter) +
+    10 * (eligible$forecast_contract_crossing_pairs + eligible$fit_contract_crossing_pairs) +
+    1 * (eligible$forecast_raw_crossing_pairs + eligible$fit_raw_crossing_pairs) +
+    pmin(eligible$forecast_max_abs_adjustment + eligible$fit_max_abs_adjustment, 1)
+  eligible <- eligible[order(
+    eligible$phase121_stability_penalty,
+    eligible$forecast_check_loss_mean,
+    eligible$forecast_crps_grid_mean,
+    eligible$fit_truth_mae,
+    eligible$forecast_truth_mae,
+    eligible$health_elapsed_seconds
+  ), , drop = FALSE]
+  selected <- eligible[1L, , drop = FALSE]
+  raw_best <- usable[order(usable$forecast_truth_mae, usable$forecast_check_loss_mean), , drop = FALSE][1L, , drop = FALSE]
+  selected$phase121_selection_rule <- if (identical(selected$candidate_id[[1L]], raw_best$candidate_id[[1L]])) {
+    "minimum_forecast_truth_mae_selected"
+  } else {
+    "within_tolerance_stability_selected"
+  }
+  selected$phase121_best_forecast_truth_mae <- best_mae
+  selected$phase121_mae_tolerance <- tol
+  selected$phase121_selected_within_tolerance <- TRUE
+  selected$phase121_selection_status <- if (selected$implementation_gate[[1L]] == "pass") "pass" else "review"
+  selected$phase121_selection_note <- if (selected$phase121_selection_rule[[1L]] == "within_tolerance_stability_selected") {
+    sprintf(
+      "Selected a more stable candidate within %.6f forecast-MAE tolerance of the raw best candidate `%s`.",
+      tol,
+      raw_best$candidate_id[[1L]]
+    )
+  } else {
+    "Selected the candidate with the lowest forecast truth MAE among usable rows."
+  }
+  selected
+}
+
+app_joint_qdesn_phase121_select_case_winners <- function(candidate_audit, abs_tol = 5.0e-4, rel_tol = 0.005) {
+  cases <- split(candidate_audit, candidate_audit$case_id)
+  out <- app_joint_qdesn_bind_rows(lapply(cases, app_joint_qdesn_phase121_select_one_case, abs_tol = abs_tol, rel_tol = rel_tol))
+  out$phase121_freeze_role <- ifelse(
+    out$phase121_selection_status == "fail",
+    "blocked",
+    ifelse(out$phase121_selection_status == "pass", "vb_winner_ready_for_mcmc_initialization", "vb_winner_review_ready_for_mcmc_initialization")
+  )
+  out[order(out$scenario_ids, out$model_ids), , drop = FALSE]
+}
+
+app_joint_qdesn_phase121_winner_controls <- function(winners) {
+  keep <- c(
+    "case_id", "scenario_ids", "model_ids", "candidate_id", "candidate_label",
+    "source_shard", "phase121_selection_status", "phase121_selection_rule",
+    "phase121_freeze_role", "vb_max_iter", "adaptive_vb_max_iter_grid", "vb_tol",
+    "rhs_vb_inner", "tau0", "zeta2", "a_sigma", "b_sigma", "alpha_prior_sd",
+    "alpha_min_spacing", "gamma_init_policy", "review_adjustment_threshold",
+    "max_dense_dim", "fit_dir", "forecast_dir", "notes"
+  )
+  keep <- intersect(keep, names(winners))
+  winners[, keep, drop = FALSE]
+}
+
+app_joint_qdesn_phase121_winner_metric_summary <- function(winners) {
+  keep <- c(
+    "case_id", "scenario_ids", "model_ids", "forecast_display_label",
+    "forecast_likelihood", "forecast_fit_structure", "candidate_id",
+    "source_shard", "phase121_selection_status", "phase121_selection_rule",
+    "phase121_best_forecast_truth_mae", "phase121_mae_tolerance",
+    "forecast_truth_mae", "fit_truth_mae", "forecast_truth_rmse", "fit_truth_rmse",
+    "forecast_check_loss_mean", "forecast_crps_grid_mean",
+    "forecast_abs_hit_rate_error", "forecast_abs_coverage_error",
+    "forecast_interval_width_mean", "forecast_interval_score_mean",
+    "forecast_raw_crossing_pairs", "forecast_contract_crossing_pairs",
+    "fit_raw_crossing_pairs", "fit_contract_crossing_pairs",
+    "forecast_reached_max_iter", "fit_reached_max_iter",
+    "forecast_max_abs_adjustment", "fit_max_abs_adjustment",
+    "health_elapsed_seconds", "phase121_review_reason", "phase121_selection_note"
+  )
+  keep <- intersect(keep, names(winners))
+  winners[, keep, drop = FALSE]
+}
+
+app_joint_qdesn_phase121_gate_audit <- function(source_health, candidate_audit, winners) {
+  source_fail <- any(source_health$source_gate != "pass")
+  candidate_fail <- any(candidate_audit$phase121_hard_fail)
+  winner_fail <- any(winners$phase121_selection_status == "fail")
+  contract_crossings <- sum(winners$forecast_contract_crossing_pairs, winners$fit_contract_crossing_pairs, na.rm = TRUE)
+  raw_crossings <- sum(winners$forecast_raw_crossing_pairs, winners$fit_raw_crossing_pairs, na.rm = TRUE)
+  max_iter <- sum(winners$forecast_reached_max_iter, winners$fit_reached_max_iter, na.rm = TRUE)
+  stability_tie <- sum(winners$phase121_selection_rule == "within_tolerance_stability_selected", na.rm = TRUE)
+  data.frame(
+    gate = c(
+      "source_manifests_and_workers",
+      "candidate_hard_gates",
+      "selected_winner_hard_gates",
+      "selected_contract_crossings",
+      "selected_raw_crossing_review",
+      "selected_vb_max_iteration_review",
+      "stability_tie_policy",
+      "mcmc_scope_readiness"
+    ),
+    status = c(
+      ifelse(source_fail, "fail", "pass"),
+      ifelse(candidate_fail, "review", "pass"),
+      ifelse(winner_fail, "fail", "pass"),
+      ifelse(contract_crossings > 0, "fail", "pass"),
+      ifelse(raw_crossings > 0, "review", "pass"),
+      ifelse(max_iter > 0, "review", "pass"),
+      ifelse(stability_tie > 0, "pass", "pass"),
+      "review"
+    ),
+    detail = c(
+      sprintf("%d source shards; %d source rows failed manifest/worker/contract gates.", nrow(source_health), sum(source_health$source_gate != "pass")),
+      sprintf("%d/%d candidate rows have hard-gate failures; these are excluded from selection unless a case has no usable row.", sum(candidate_audit$phase121_hard_fail, na.rm = TRUE), nrow(candidate_audit)),
+      sprintf("%d selected winners failed hard gates.", sum(winners$phase121_selection_status == "fail", na.rm = TRUE)),
+      sprintf("%d selected fit/forecast contract crossing pairs.", contract_crossings),
+      sprintf("%d selected fit/forecast raw crossing pairs retained as diagnostics.", raw_crossings),
+      sprintf("%d selected fit/forecast max-iteration flags.", max_iter),
+      sprintf("%d selected winners used the within-tolerance stability rule.", stability_tie),
+      "Existing MCMC readiness code is AL joint-only and not enough for all four final article rows."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase121_mcmc_readiness_gap_audit <- function(winners) {
+  rows <- lapply(split(winners, winners$model_ids), function(x) {
+    model_id <- x$model_ids[[1L]]
+    likelihood <- x$forecast_likelihood[[1L]]
+    fit_structure <- x$forecast_fit_structure[[1L]]
+    existing_support <- if (identical(model_id, "joint_qdesn_rhs_vb") && identical(likelihood, "al") && identical(fit_structure, "joint")) {
+      "partial_phase108_joint_al_fit_window_reference"
+    } else {
+      "not_supported_by_phase108"
+    }
+    required_capability <- if (identical(likelihood, "al") && identical(fit_structure, "joint")) {
+      "case_specific_joint_al_mcmc_confirmation"
+    } else if (identical(likelihood, "al")) {
+      "case_specific_independent_al_mcmc_confirmation"
+    } else if (identical(fit_structure, "joint")) {
+      "case_specific_joint_exal_mcmc_confirmation"
+    } else {
+      "case_specific_independent_exal_mcmc_confirmation"
+    }
+    data.frame(
+      model_id = model_id,
+      display_label = x$forecast_display_label[[1L]],
+      likelihood = likelihood,
+      fit_structure = fit_structure,
+      selected_cases = nrow(x),
+      selected_pass = sum(x$phase121_selection_status == "pass", na.rm = TRUE),
+      selected_review = sum(x$phase121_selection_status == "review", na.rm = TRUE),
+      selected_fail = sum(x$phase121_selection_status == "fail", na.rm = TRUE),
+      existing_mcmc_support = existing_support,
+      required_mcmc_capability = required_capability,
+      readiness_status = if (identical(existing_support, "partial_phase108_joint_al_fit_window_reference")) {
+        "partial_existing_runner_needs_phase122_case_specific_extension"
+      } else {
+        "phase122_runner_required"
+      },
+      reason = if (identical(existing_support, "partial_phase108_joint_al_fit_window_reference")) {
+        "Phase108 can initialize a joint AL reference from one VB contract, but the final study needs per-case winners and article-row confirmation."
+      } else if (identical(likelihood, "exal")) {
+        "The existing MCMC readiness runner does not implement the exAL likelihood or independent exQDESN rows."
+      } else {
+        "The existing MCMC readiness runner does not implement independent single-quantile QDESN MCMC rows."
+      },
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- app_joint_qdesn_bind_rows(rows)
+  out[order(match(out$model_id, c(
+    "joint_qdesn_rhs_vb", "qdesn_rhs_independent_vb",
+    "joint_exqdesn_rhs_vb", "exqdesn_rhs_independent_vb"
+  ))), , drop = FALSE]
+}
+
+app_joint_qdesn_phase121_mcmc_launch_plan <- function(
+  phase121_dir = app_joint_qdesn_default_phase121_case_vb_freeze_dir(),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  mcmc_out_dir = app_path("application/cache/joint_qdesn_phase122_mcmc_case_confirmation_20260711"),
+  n_cores = 12L,
+  n_chains = 2L,
+  mcmc_n_iter = 1200L,
+  mcmc_burn = 600L,
+  mcmc_thin = 10L
+) {
+  data.frame(
+    step = seq_len(5L),
+    stage = c(
+      "implement_phase122_runner",
+      "phase122_smoke_on_one_case_per_model",
+      "launch_phase122_article_confirmation",
+      "audit_phase122_mcmc_outputs",
+      "rebuild_article_assets_after_mcmc"
+    ),
+    command_or_action = c(
+      "Add a case-specific MCMC confirmation runner that consumes Phase121 winners and supports joint/independent AL plus joint/independent exAL rows.",
+      sprintf("Rscript application/scripts/125_run_joint_qdesn_phase122_mcmc_case_confirmation.R --phase121-dir %s --fixture-dir %s --output-dir %s --scenario-limit-per-model 1 --n-chains %d --mcmc-n-iter 120 --mcmc-burn 60 --mcmc-thin 10 --n-cores %d", phase121_dir, fixture_dir, mcmc_out_dir, as.integer(n_chains), as.integer(n_cores)),
+      sprintf("Rscript application/scripts/125_run_joint_qdesn_phase122_mcmc_case_confirmation.R --phase121-dir %s --fixture-dir %s --output-dir %s --n-chains %d --mcmc-n-iter %d --mcmc-burn %d --mcmc-thin %d --n-cores %d", phase121_dir, fixture_dir, mcmc_out_dir, as.integer(n_chains), as.integer(mcmc_n_iter), as.integer(mcmc_burn), as.integer(mcmc_thin), as.integer(n_cores)),
+      sprintf("Rscript application/scripts/126_audit_joint_qdesn_phase122_mcmc_case_confirmation.R --phase122-dir %s", mcmc_out_dir),
+      "Rebuild authoritative article tables/figures only after Phase122 manifests, chain diagnostics, quantile-grid metrics, and contract noncrossing gates pass."
+    ),
+    status = c(
+      "required_before_launch",
+      "pending_phase122_implementation",
+      "pending_phase122_smoke",
+      "pending_phase122_completion",
+      "blocked_until_mcmc_passes"
+    ),
+    gate_before_next = c(
+      "runner supports all four requested article rows without treating composite likelihood as a scalar predictive density",
+      "finite draws, finite quantile-grid summaries, no contract crossings, manifest pass",
+      "all case rows complete, manifests pass, no implementation failures",
+      "MCMC confirmation audit pass or explicit review/fail reasons",
+      "article-safe update only"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase121_next_action_plan <- function() {
+  data.frame(
+    step = seq_len(4L),
+    action = c(
+      "Use Phase121 winners as the frozen VB/VB-LD initialization source.",
+      "Implement Phase122 MCMC confirmation support for each requested article row.",
+      "Launch Phase122 only after a smoke check proves the runner supports joint/independent AL and exAL contracts.",
+      "Keep article tables frozen until Phase122 is complete, audited, and hash-manifested."
+    ),
+    rationale = c(
+      "Avoids more broad VB screening now that Phase120 resolved the only exAL convergence blocker and showed AL raw crossings are diagnostic rather than contract failures.",
+      "The current Phase108 runner is not broad enough for the final article evidence requested by the user.",
+      "Prevents expensive runs from failing late because of unsupported exAL or independent-row assumptions.",
+      "Maintains VB as calibration/initialization and MCMC as the final article-facing validation layer."
+    ),
+    output = c(
+      "Phase121 case_winner_selection.csv and controls",
+      "Phase122 implementation and tests",
+      "Phase122 MCMC confirmation artifact",
+      "Phase123 article asset rebuild/audit"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase121_readme <- function(run_config, gate_audit, winners, mcmc_gap, launch_plan) {
+  c(
+    "# Joint QDESN Phase 121 Case-Specific VB Winner Freeze",
+    "",
+    "This artifact freezes one VB/VB-LD winner per scenario-model case after the Phase 119 high-priority screens and Phase 120 targeted follow-up.",
+    "It is a reproducible initialization contract for the MCMC confirmation layer. It is not final article-facing validation evidence.",
+    "",
+    sprintf("- Output directory: `%s`", run_config$out_dir[[1L]]),
+    sprintf("- Source rows audited: %d", run_config$n_candidate_rows[[1L]]),
+    sprintf("- Case winners frozen: %d", run_config$n_case_winners[[1L]]),
+    sprintf("- Selection tolerance: absolute %.6f or relative %.3f, whichever is larger.", run_config$forecast_mae_abs_tolerance[[1L]], run_config$forecast_mae_rel_tolerance[[1L]]),
+    sprintf("- Freeze status: `%s`", run_config$freeze_status[[1L]]),
+    "",
+    "Gate summary:",
+    paste(capture.output(print(table(gate_audit$status))), collapse = "\n"),
+    "",
+    "Winner summary:",
+    paste(capture.output(print(table(winners$phase121_selection_status))), collapse = "\n"),
+    "",
+    "MCMC readiness:",
+    paste(sprintf("- `%s`: %s", mcmc_gap$model_id, mcmc_gap$readiness_status), collapse = "\n"),
+    "",
+    "Policy:",
+    "- Hard failures are missing hashes, worker failures, nonfinite fit/forecast summaries, or contract crossings.",
+    "- Raw crossings and monotone adjustments remain review diagnostics, not hard failures, because scoring uses the monotone contract grid.",
+    "- Within a small forecast-MAE tolerance, the freeze prefers candidates with no max-iteration flags and fewer raw-adjustment diagnostics.",
+    "- The existing Phase108 MCMC code is AL joint-only; Phase122 is required before the final article-facing MCMC table can be promoted.",
+    "",
+    "Next executable plan:",
+    "",
+    paste(sprintf("%d. %s", launch_plan$step, launch_plan$command_or_action), collapse = "\n\n")
+  )
+}
+
+app_joint_qdesn_run_phase121_case_vb_winner_freeze <- function(
+  out_dir = app_joint_qdesn_default_phase121_case_vb_freeze_dir(),
+  al_high_priority_dir = file.path(app_joint_qdesn_default_phase119_case_screening_dir(), "al_high_priority"),
+  exal_high_priority_dir = file.path(app_joint_qdesn_default_phase119_case_screening_dir(), "exal_high_priority"),
+  phase120_targeted_dir = file.path(app_joint_qdesn_default_phase120_case_screening_dir(), "targeted_followup"),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  mcmc_out_dir = app_path("application/cache/joint_qdesn_phase122_mcmc_case_confirmation_20260711"),
+  forecast_mae_abs_tolerance = 5.0e-4,
+  forecast_mae_rel_tolerance = 0.005,
+  n_cores = 12L,
+  n_chains = 2L,
+  mcmc_n_iter = 1200L,
+  mcmc_burn = 600L,
+  mcmc_thin = 10L
+) {
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  fixture_dir <- normalizePath(fixture_dir, mustWork = FALSE)
+  mcmc_out_dir <- normalizePath(mcmc_out_dir, mustWork = FALSE)
+  app_ensure_dir(out_dir)
+  source_dirs <- list(
+    al_high_priority = normalizePath(al_high_priority_dir, mustWork = TRUE),
+    exal_high_priority = normalizePath(exal_high_priority_dir, mustWork = TRUE),
+    phase120_targeted_followup = normalizePath(phase120_targeted_dir, mustWork = TRUE)
+  )
+  shards <- app_joint_qdesn_phase121_load_sources(source_dirs)
+  source_health <- app_joint_qdesn_phase120_source_health_summary(shards)
+  source_manifest <- app_joint_qdesn_phase121_source_manifest(shards)
+  candidate_audit <- app_joint_qdesn_phase121_candidate_audit(shards)
+  winners <- app_joint_qdesn_phase121_select_case_winners(
+    candidate_audit,
+    abs_tol = forecast_mae_abs_tolerance,
+    rel_tol = forecast_mae_rel_tolerance
+  )
+  controls <- app_joint_qdesn_phase121_winner_controls(winners)
+  metric_summary <- app_joint_qdesn_phase121_winner_metric_summary(winners)
+  gate_audit <- app_joint_qdesn_phase121_gate_audit(source_health, candidate_audit, winners)
+  mcmc_gap <- app_joint_qdesn_phase121_mcmc_readiness_gap_audit(winners)
+  launch_plan <- app_joint_qdesn_phase121_mcmc_launch_plan(
+    phase121_dir = out_dir,
+    fixture_dir = fixture_dir,
+    mcmc_out_dir = mcmc_out_dir,
+    n_cores = n_cores,
+    n_chains = n_chains,
+    mcmc_n_iter = mcmc_n_iter,
+    mcmc_burn = mcmc_burn,
+    mcmc_thin = mcmc_thin
+  )
+  next_action <- app_joint_qdesn_phase121_next_action_plan()
+  freeze_status <- if (any(gate_audit$status == "fail")) {
+    "fail_blocked_before_mcmc"
+  } else if (any(gate_audit$status == "review")) {
+    "review_ready_for_phase122_mcmc_runner_implementation"
+  } else {
+    "pass_ready_for_phase122_mcmc_runner_implementation"
+  }
+  run_config <- data.frame(
+    run_id = "joint_qdesn_phase121_case_vb_winner_freeze",
+    out_dir = out_dir,
+    al_high_priority_dir = source_dirs$al_high_priority,
+    exal_high_priority_dir = source_dirs$exal_high_priority,
+    phase120_targeted_dir = source_dirs$phase120_targeted_followup,
+    fixture_dir = fixture_dir,
+    mcmc_out_dir = mcmc_out_dir,
+    n_candidate_rows = nrow(candidate_audit),
+    n_case_winners = nrow(winners),
+    n_pass_winners = sum(winners$phase121_selection_status == "pass", na.rm = TRUE),
+    n_review_winners = sum(winners$phase121_selection_status == "review", na.rm = TRUE),
+    n_fail_winners = sum(winners$phase121_selection_status == "fail", na.rm = TRUE),
+    selected_contract_crossings = sum(winners$forecast_contract_crossing_pairs, winners$fit_contract_crossing_pairs, na.rm = TRUE),
+    selected_raw_crossings = sum(winners$forecast_raw_crossing_pairs, winners$fit_raw_crossing_pairs, na.rm = TRUE),
+    selected_max_iter_flags = sum(winners$forecast_reached_max_iter, winners$fit_reached_max_iter, na.rm = TRUE),
+    forecast_mae_abs_tolerance = as.numeric(forecast_mae_abs_tolerance),
+    forecast_mae_rel_tolerance = as.numeric(forecast_mae_rel_tolerance),
+    freeze_status = freeze_status,
+    mcmc_promotion_status = "blocked_until_phase122_runner_supports_all_final_article_rows",
+    stringsAsFactors = FALSE
+  )
+  readme_path <- file.path(out_dir, "README.md")
+  writeLines(app_joint_qdesn_phase121_readme(run_config, gate_audit, winners, mcmc_gap, launch_plan), readme_path, useBytes = TRUE)
+  paths <- c(
+    phase121_run_config = app_joint_qdesn_screening_write_csv(run_config, file.path(out_dir, "phase121_run_config.csv")),
+    source_manifest_verification = app_joint_qdesn_screening_write_csv(source_manifest, file.path(out_dir, "source_manifest_verification.csv")),
+    source_health_summary = app_joint_qdesn_screening_write_csv(source_health, file.path(out_dir, "source_health_summary.csv")),
+    combined_candidate_audit = app_joint_qdesn_screening_write_csv(candidate_audit, file.path(out_dir, "combined_candidate_audit.csv")),
+    case_winner_selection = app_joint_qdesn_screening_write_csv(winners, file.path(out_dir, "case_winner_selection.csv")),
+    case_winner_controls = app_joint_qdesn_screening_write_csv(controls, file.path(out_dir, "case_winner_controls.csv")),
+    case_winner_metric_summary = app_joint_qdesn_screening_write_csv(metric_summary, file.path(out_dir, "case_winner_metric_summary.csv")),
+    case_winner_gate_audit = app_joint_qdesn_screening_write_csv(gate_audit, file.path(out_dir, "case_winner_gate_audit.csv")),
+    mcmc_readiness_gap_audit = app_joint_qdesn_screening_write_csv(mcmc_gap, file.path(out_dir, "mcmc_readiness_gap_audit.csv")),
+    mcmc_launch_plan = app_joint_qdesn_screening_write_csv(launch_plan, file.path(out_dir, "mcmc_launch_plan.csv")),
+    next_action_plan = app_joint_qdesn_screening_write_csv(next_action, file.path(out_dir, "next_action_plan.csv")),
+    provenance = app_joint_qdesn_screening_write_csv(app_joint_qvp_provenance_rows(), file.path(out_dir, "provenance.csv")),
+    readme = normalizePath(readme_path, mustWork = TRUE)
+  )
+  manifest_info <- app_joint_qdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = normalizePath(out_dir, mustWork = TRUE),
+    run_config = run_config,
+    source_manifest_verification = source_manifest,
+    source_health = source_health,
+    candidate_audit = candidate_audit,
+    winners = winners,
+    controls = controls,
+    metric_summary = metric_summary,
+    gate_audit = gate_audit,
+    mcmc_gap = mcmc_gap,
+    launch_plan = launch_plan,
+    next_action_plan = next_action,
+    paths = c(paths, artifact_manifest = manifest_info$manifest_path)
+  )
+}

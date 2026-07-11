@@ -70,10 +70,22 @@ app_joint_qdesn_parse_iter_grid <- function(x) {
 
 app_joint_qdesn_prepare_screening_registry <- function(registry) {
   if (!"gamma_init_policy" %in% names(registry)) registry$gamma_init_policy <- "default"
+  if (!"scenario_ids" %in% names(registry)) registry$scenario_ids <- ""
+  if (!"model_ids" %in% names(registry)) registry$model_ids <- ""
   registry$gamma_init_policy <- ifelse(
     is.na(registry$gamma_init_policy) | !nzchar(registry$gamma_init_policy),
     "default",
     as.character(registry$gamma_init_policy)
+  )
+  registry$scenario_ids <- ifelse(
+    is.na(registry$scenario_ids),
+    "",
+    as.character(registry$scenario_ids)
+  )
+  registry$model_ids <- ifelse(
+    is.na(registry$model_ids),
+    "",
+    as.character(registry$model_ids)
   )
   registry
 }
@@ -127,6 +139,21 @@ app_joint_qdesn_validate_screening_registry <- function(
       ),
       call. = FALSE
     )
+  }
+  available_models <- app_joint_qdesn_simulation_model_specs()$model_id
+  for (ii in seq_len(nrow(registry))) {
+    model_ids <- app_joint_qdesn_parse_id_csv(registry$model_ids[[ii]])
+    missing_models <- setdiff(model_ids, available_models)
+    if (length(missing_models)) {
+      stop(
+        sprintf(
+          "Unknown model_ids for screening candidate '%s': %s.",
+          registry$candidate_id[[ii]],
+          paste(missing_models, collapse = ", ")
+        ),
+        call. = FALSE
+      )
+    }
   }
   for (ii in seq_len(nrow(registry))) app_joint_qdesn_parse_iter_grid(registry$adaptive_vb_max_iter_grid[[ii]])
   invisible(TRUE)
@@ -272,7 +299,8 @@ app_joint_qdesn_screening_model_metrics <- function(dir, stage, candidate_row) {
   cbind(
     app_joint_qdesn_screening_candidate_meta(candidate_row, c(
       "candidate_id", "candidate_label", "candidate_role", "tau0", "zeta2",
-      "alpha_prior_sd", "alpha_min_spacing", "gamma_init_policy", "vb_max_iter", "adaptive_vb_max_iter_grid", "rhs_vb_inner"
+      "alpha_prior_sd", "alpha_min_spacing", "gamma_init_policy", "scenario_ids", "model_ids",
+      "vb_max_iter", "adaptive_vb_max_iter_grid", "rhs_vb_inner"
     ), nrow(out)),
     data.frame(stage = stage, out, stringsAsFactors = FALSE)
   )
@@ -599,6 +627,8 @@ app_joint_qdesn_run_vb_spec_screening <- function(
         alpha_prior_sd = app_joint_qdesn_parse_numeric_vector(cand$alpha_prior_sd[[1L]], "alpha_prior_sd", allow_inf = TRUE),
         alpha_min_spacing = as.numeric(cand$alpha_min_spacing[[1L]]),
         gamma_init_policy = cand$gamma_init_policy[[1L]],
+        scenario_ids = app_joint_qdesn_parse_id_csv(cand$scenario_ids[[1L]]),
+        model_ids = app_joint_qdesn_parse_id_csv(cand$model_ids[[1L]]),
         review_adjustment_threshold = as.numeric(cand$review_adjustment_threshold[[1L]]),
         max_dense_dim = as.integer(cand$max_dense_dim[[1L]]),
         n_cores = as.integer(cand$n_cores[[1L]])
@@ -618,6 +648,8 @@ app_joint_qdesn_run_vb_spec_screening <- function(
         alpha_prior_sd = app_joint_qdesn_parse_numeric_vector(cand$alpha_prior_sd[[1L]], "alpha_prior_sd", allow_inf = TRUE),
         alpha_min_spacing = as.numeric(cand$alpha_min_spacing[[1L]]),
         gamma_init_policy = cand$gamma_init_policy[[1L]],
+        scenario_ids = app_joint_qdesn_parse_id_csv(cand$scenario_ids[[1L]]),
+        model_ids = app_joint_qdesn_parse_id_csv(cand$model_ids[[1L]]),
         review_adjustment_threshold = as.numeric(cand$review_adjustment_threshold[[1L]]),
         max_dense_dim = as.integer(cand$max_dense_dim[[1L]]),
         n_cores = as.integer(cand$n_cores[[1L]])

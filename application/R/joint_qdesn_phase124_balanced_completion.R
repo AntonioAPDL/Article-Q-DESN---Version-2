@@ -519,3 +519,336 @@ app_joint_qdesn_run_phase124_balanced_completion_prepare <- function(
     paths = c(paths, artifact_manifest = manifest_info$manifest_path)
   )
 }
+
+# Phase 124b freezes one VB/VB-LD winner for each Phase 124 missing balanced
+# cell.  The output intentionally follows the Phase 121 freeze contract so the
+# existing Phase 122 MCMC confirmation runner can consume it unchanged.
+
+app_joint_qdesn_default_phase124b_missing_cell_vb_freeze_dir <- function() {
+  app_path("application/cache/joint_qdesn_phase124b_missing_cell_vb_winner_freeze_20260711")
+}
+
+app_joint_qdesn_default_phase124c_mcmc_completion_dir <- function() {
+  app_path("application/cache/joint_qdesn_phase124c_mcmc_balanced_completion_20260711")
+}
+
+app_joint_qdesn_phase124b_source_dirs <- function(
+  phase124_prepare_dir = app_joint_qdesn_default_phase124_balanced_completion_dir(),
+  phase124_vb_dir = app_joint_qdesn_default_phase124_vb_completion_dir()
+) {
+  list(
+    phase124_prepare_dir = normalizePath(phase124_prepare_dir, winslash = "/", mustWork = TRUE),
+    phase124_vb_dir = normalizePath(phase124_vb_dir, winslash = "/", mustWork = TRUE)
+  )
+}
+
+app_joint_qdesn_phase124b_missing_cell_coverage <- function(missing_cells, candidate_audit, winners) {
+  app_check_required_columns(missing_cells, c("case_id", "scenario_id", "source_model_id"), "Phase 124 missing cells")
+  candidate_cases <- unique(candidate_audit$case_id)
+  winner_cases <- unique(winners$case_id)
+  out <- missing_cells[, c("case_id", "scenario_id", "source_model_id"), drop = FALSE]
+  out$n_candidate_rows <- as.integer(table(factor(candidate_audit$case_id, levels = out$case_id)))
+  out$winner_selected <- out$case_id %in% winner_cases
+  out$coverage_status <- ifelse(out$n_candidate_rows > 0 & out$winner_selected, "pass", "fail")
+  out
+}
+
+app_joint_qdesn_phase124b_gate_audit <- function(
+  prepare_manifest,
+  source_health,
+  candidate_audit,
+  winners,
+  coverage
+) {
+  base <- app_joint_qdesn_phase121_gate_audit(source_health, candidate_audit, winners)
+  prepare_manifest_status <- if (nrow(prepare_manifest) && all(prepare_manifest$status == "pass")) "pass" else "fail"
+  coverage_status <- if (nrow(coverage) && all(coverage$coverage_status == "pass")) "pass" else "fail"
+  n_winners <- nrow(winners)
+  n_missing <- nrow(coverage)
+  extra <- data.frame(
+    gate = c(
+      "phase124_prepare_manifest",
+      "missing_cell_coverage",
+      "phase124c_mcmc_launch_readiness",
+      "balanced_article_promotion"
+    ),
+    status = c(
+      prepare_manifest_status,
+      coverage_status,
+      if (prepare_manifest_status == "pass" &&
+        coverage_status == "pass" &&
+        n_winners == n_missing &&
+        !any(winners$phase121_selection_status == "fail", na.rm = TRUE) &&
+        sum(winners$forecast_contract_crossing_pairs, winners$fit_contract_crossing_pairs, na.rm = TRUE) == 0L) "review" else "fail",
+      "review"
+    ),
+    detail = c(
+      sprintf("%d/%d Phase 124 preparation manifest rows pass.", sum(prepare_manifest$status == "pass"), nrow(prepare_manifest)),
+      sprintf("%d/%d missing balanced cells have candidate rows and a selected winner.", sum(coverage$coverage_status == "pass"), nrow(coverage)),
+      "Ready to launch Phase124c MCMC for frozen missing-cell winners; selected raw crossings and max-iteration flags remain review diagnostics.",
+      "Article promotion remains blocked until Phase122 and Phase124c MCMC rows are merged into a balanced 32-cell artifact."
+    ),
+    stringsAsFactors = FALSE
+  )
+  app_joint_qdesn_bind_rows(list(extra, base))
+}
+
+app_joint_qdesn_phase124b_mcmc_launch_plan <- function(
+  phase124b_dir = app_joint_qdesn_default_phase124b_missing_cell_vb_freeze_dir(),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  mcmc_out_dir = app_joint_qdesn_default_phase124c_mcmc_completion_dir(),
+  n_cores = 12L,
+  n_chains = 2L,
+  mcmc_n_iter = 1200L,
+  mcmc_burn = 600L,
+  mcmc_thin = 10L
+) {
+  launch_cmd <- sprintf(
+    paste(
+      "Rscript application/scripts/125_run_joint_qdesn_phase122_mcmc_case_confirmation.R",
+      "--phase121-dir %s",
+      "--fixture-dir %s",
+      "--output-dir %s",
+      "--n-chains %d",
+      "--mcmc-n-iter %d",
+      "--mcmc-burn %d",
+      "--mcmc-thin %d",
+      "--n-cores %d"
+    ),
+    shQuote(normalizePath(phase124b_dir, winslash = "/", mustWork = FALSE)),
+    shQuote(normalizePath(fixture_dir, winslash = "/", mustWork = FALSE)),
+    shQuote(normalizePath(mcmc_out_dir, winslash = "/", mustWork = FALSE)),
+    as.integer(n_chains),
+    as.integer(mcmc_n_iter),
+    as.integer(mcmc_burn),
+    as.integer(mcmc_thin),
+    as.integer(n_cores)
+  )
+  tmux_log <- paste0(normalizePath(mcmc_out_dir, winslash = "/", mustWork = FALSE), "_tmux.log")
+  tmux_cmd <- sprintf(
+    "tmux new-session -d -s %s %s",
+    shQuote("joint_qdesn_phase124c_mcmc_20260711"),
+    shQuote(sprintf(
+      "cd %s && { echo START $(date -Is); %s; ec=$?; echo EXIT_CODE=${ec}; echo END $(date -Is); exit ${ec}; } > %s 2>&1",
+      shQuote(app_repo_root()),
+      launch_cmd,
+      shQuote(tmux_log)
+    ))
+  )
+  audit_cmd <- sprintf(
+    "Rscript application/scripts/126_freeze_joint_qdesn_phase123_mcmc_article_candidate.R --phase122-dir %s --output-dir %s",
+    shQuote(normalizePath(mcmc_out_dir, winslash = "/", mustWork = FALSE)),
+    shQuote(app_path("application/cache/joint_qdesn_phase124d_mcmc_completion_audit_20260711"))
+  )
+  data.frame(
+    step = seq_len(4L),
+    command_id = c(
+      "launch_phase124c_mcmc_completion",
+      "launch_phase124c_mcmc_completion_tmux",
+      "audit_phase124c_mcmc_completion",
+      "merge_phase122_phase124c_balanced_grid"
+    ),
+    command = c(
+      launch_cmd,
+      tmux_cmd,
+      audit_cmd,
+      "After Phase124c passes, merge Phase122's 17 rows and Phase124c's 15 rows into a balanced 32-cell article-candidate artifact."
+    ),
+    purpose = c(
+      "Run MCMC confirmation for only the 15 missing balanced cells.",
+      "Detached version of the same MCMC launch with START/EXIT_CODE/END logging.",
+      "Produce an MCMC confirmation audit for the Phase124c completion artifact.",
+      "Create final balanced article evidence before manuscript table promotion."
+    ),
+    run_condition = c(
+      "Run after Phase124b freeze manifest verifies.",
+      "Use this for long-running background execution.",
+      "Run after the Phase124c log ends with EXIT_CODE=0.",
+      "Run only after Phase124c MCMC gate has no fail rows."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase124b_next_action_plan <- function() {
+  data.frame(
+    step = seq_len(5L),
+    stage = c(
+      "phase124c_mcmc_completion",
+      "phase124c_health_audit",
+      "balanced_grid_merge",
+      "article_asset_rebuild",
+      "manuscript_promotion"
+    ),
+    action = c(
+      "Initialize MCMC from the 15 frozen Phase124b missing-cell VB/VB-LD winners.",
+      "Audit chains, VB-to-MCMC distances, raw/contract crossings, quantile-grid metrics, and manifests.",
+      "Merge Phase122's existing 17 MCMC rows with the 15 Phase124c rows.",
+      "Rebuild article validation tables and figures from the balanced 32-cell MCMC artifact.",
+      "Update the manuscript only after the balanced artifact passes implementation gates and review diagnostics are documented."
+    ),
+    gate = c(
+      "Phase124b manifest pass and no selected hard failures.",
+      "No worker failures, finite draws/scores, zero contract crossings, source manifests pass.",
+      "Every scenario-model cell present exactly once.",
+      "Generated tables/figures hash-manifested and checked against predictive-contract wording.",
+      "Article-safe diff only; no application refactors."
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_qdesn_phase124b_readme <- function(run_config, gate_audit, winners, coverage, launch_plan) {
+  c(
+    "# Joint QDESN Phase 124b Missing-Cell VB Winner Freeze",
+    "",
+    "This artifact freezes one VB/VB-LD winner for each missing model-scenario cell from the Phase 124 balanced-completion screen.",
+    "It intentionally writes a Phase121-compatible `case_winner_controls.csv` so the existing Phase122 MCMC confirmation runner can consume the artifact unchanged.",
+    "",
+    sprintf("- Output directory: `%s`", run_config$out_dir[[1L]]),
+    sprintf("- Phase124 preparation source: `%s`", run_config$phase124_prepare_dir[[1L]]),
+    sprintf("- Phase124 VB source: `%s`", run_config$phase124_vb_dir[[1L]]),
+    sprintf("- Missing cells covered: %d/%d", sum(coverage$coverage_status == "pass"), nrow(coverage)),
+    sprintf("- Winners frozen: %d", nrow(winners)),
+    sprintf("- Winner gates: %d pass, %d review, %d fail.", run_config$n_pass_winners[[1L]], run_config$n_review_winners[[1L]], run_config$n_fail_winners[[1L]]),
+    sprintf("- Freeze status: `%s`", run_config$freeze_status[[1L]]),
+    "",
+    "Interpretation:",
+    "",
+    "The Phase124b winners are suitable as VB initializers for MCMC completion.  They are not final article evidence.",
+    "Review flags are retained for raw crossings and VB max-iteration diagnostics.  Contract quantiles remain noncrossing.",
+    "",
+    "Gate summary:",
+    paste(sprintf("- `%s`: `%s` - %s", gate_audit$gate, gate_audit$status, gate_audit$detail), collapse = "\n"),
+    "",
+    "Next executable command:",
+    "",
+    launch_plan$command[launch_plan$command_id == "launch_phase124c_mcmc_completion_tmux"][[1L]]
+  )
+}
+
+app_joint_qdesn_run_phase124b_missing_cell_vb_winner_freeze <- function(
+  out_dir = app_joint_qdesn_default_phase124b_missing_cell_vb_freeze_dir(),
+  phase124_prepare_dir = app_joint_qdesn_default_phase124_balanced_completion_dir(),
+  phase124_vb_dir = app_joint_qdesn_default_phase124_vb_completion_dir(),
+  fixture_dir = app_joint_qdesn_default_simulation_fixture_dir(),
+  mcmc_out_dir = app_joint_qdesn_default_phase124c_mcmc_completion_dir(),
+  forecast_mae_abs_tolerance = 5.0e-4,
+  forecast_mae_rel_tolerance = 0.005,
+  n_cores = 12L,
+  n_chains = 2L,
+  mcmc_n_iter = 1200L,
+  mcmc_burn = 600L,
+  mcmc_thin = 10L
+) {
+  out_dir <- normalizePath(out_dir, winslash = "/", mustWork = FALSE)
+  app_ensure_dir(out_dir)
+  dirs <- app_joint_qdesn_phase124b_source_dirs(phase124_prepare_dir, phase124_vb_dir)
+  fixture_dir <- normalizePath(fixture_dir, winslash = "/", mustWork = FALSE)
+  mcmc_out_dir <- normalizePath(mcmc_out_dir, winslash = "/", mustWork = FALSE)
+
+  prepare_manifest <- app_joint_qdesn_phase124_manifest_verify(dirs$phase124_prepare_dir, "phase124_balanced_completion_prepare")
+  missing_cells <- app_read_csv(file.path(dirs$phase124_prepare_dir, "phase124_missing_cells.csv"))
+  shard <- app_joint_qdesn_phase120_read_screening_shard(dirs$phase124_vb_dir, "phase124_vb_completion")
+  shards <- list(phase124_vb_completion = shard)
+  source_health <- app_joint_qdesn_phase120_source_health_summary(shards)
+  source_manifest <- app_joint_qdesn_bind_rows(list(
+    app_joint_qdesn_phase120_add_source(shard$root_manifest_verification, "phase124_vb_completion_root"),
+    app_joint_qdesn_phase120_add_source(shard$candidate_manifest_verification, "phase124_vb_completion_nested"),
+    app_joint_qdesn_phase120_add_source(prepare_manifest, "phase124_prepare")
+  ))
+  candidate_audit <- app_joint_qdesn_phase121_candidate_audit(shards)
+  candidate_audit <- candidate_audit[candidate_audit$case_id %in% missing_cells$case_id, , drop = FALSE]
+  winners <- app_joint_qdesn_phase121_select_case_winners(
+    candidate_audit,
+    abs_tol = forecast_mae_abs_tolerance,
+    rel_tol = forecast_mae_rel_tolerance
+  )
+  winners$phase124b_selection_status <- winners$phase121_selection_status
+  winners$phase124b_selection_rule <- winners$phase121_selection_rule
+  winners$phase124b_freeze_role <- ifelse(
+    winners$phase121_selection_status == "fail",
+    "blocked",
+    ifelse(winners$phase121_selection_status == "pass", "missing_cell_vb_winner_ready_for_mcmc", "missing_cell_vb_winner_review_ready_for_mcmc")
+  )
+  coverage <- app_joint_qdesn_phase124b_missing_cell_coverage(missing_cells, candidate_audit, winners)
+  controls <- app_joint_qdesn_phase121_winner_controls(winners)
+  metric_summary <- app_joint_qdesn_phase121_winner_metric_summary(winners)
+  gate_audit <- app_joint_qdesn_phase124b_gate_audit(prepare_manifest, source_health, candidate_audit, winners, coverage)
+  launch_plan <- app_joint_qdesn_phase124b_mcmc_launch_plan(
+    phase124b_dir = out_dir,
+    fixture_dir = fixture_dir,
+    mcmc_out_dir = mcmc_out_dir,
+    n_cores = n_cores,
+    n_chains = n_chains,
+    mcmc_n_iter = mcmc_n_iter,
+    mcmc_burn = mcmc_burn,
+    mcmc_thin = mcmc_thin
+  )
+  next_action <- app_joint_qdesn_phase124b_next_action_plan()
+  selected_contract_crossings <- sum(winners$forecast_contract_crossing_pairs, winners$fit_contract_crossing_pairs, na.rm = TRUE)
+  selected_raw_crossings <- sum(winners$forecast_raw_crossing_pairs, winners$fit_raw_crossing_pairs, na.rm = TRUE)
+  selected_max_iter <- sum(winners$forecast_reached_max_iter, winners$fit_reached_max_iter, na.rm = TRUE)
+  freeze_status <- if (any(gate_audit$status == "fail")) {
+    "fail_blocked_before_phase124c_mcmc"
+  } else if (any(gate_audit$status == "review")) {
+    "review_ready_for_phase124c_mcmc_completion"
+  } else {
+    "pass_ready_for_phase124c_mcmc_completion"
+  }
+  run_config <- data.frame(
+    run_id = "joint_qdesn_phase124b_missing_cell_vb_winner_freeze",
+    out_dir = out_dir,
+    phase124_prepare_dir = dirs$phase124_prepare_dir,
+    phase124_vb_dir = dirs$phase124_vb_dir,
+    fixture_dir = fixture_dir,
+    mcmc_out_dir = mcmc_out_dir,
+    n_candidate_rows = nrow(candidate_audit),
+    n_missing_cells = nrow(missing_cells),
+    n_case_winners = nrow(winners),
+    n_pass_winners = sum(winners$phase121_selection_status == "pass", na.rm = TRUE),
+    n_review_winners = sum(winners$phase121_selection_status == "review", na.rm = TRUE),
+    n_fail_winners = sum(winners$phase121_selection_status == "fail", na.rm = TRUE),
+    selected_contract_crossings = selected_contract_crossings,
+    selected_raw_crossings = selected_raw_crossings,
+    selected_max_iter_flags = selected_max_iter,
+    forecast_mae_abs_tolerance = as.numeric(forecast_mae_abs_tolerance),
+    forecast_mae_rel_tolerance = as.numeric(forecast_mae_rel_tolerance),
+    freeze_status = freeze_status,
+    mcmc_promotion_status = "ready_to_launch_phase124c_missing_cell_mcmc_completion_review",
+    stringsAsFactors = FALSE
+  )
+  readme_path <- file.path(out_dir, "README.md")
+  writeLines(app_joint_qdesn_phase124b_readme(run_config, gate_audit, winners, coverage, launch_plan), readme_path, useBytes = TRUE)
+  paths <- c(
+    phase124b_run_config = app_joint_qdesn_phase124_write_csv(run_config, file.path(out_dir, "phase124b_run_config.csv")),
+    source_manifest_verification = app_joint_qdesn_phase124_write_csv(source_manifest, file.path(out_dir, "source_manifest_verification.csv")),
+    source_health_summary = app_joint_qdesn_phase124_write_csv(source_health, file.path(out_dir, "source_health_summary.csv")),
+    phase124_missing_cell_coverage = app_joint_qdesn_phase124_write_csv(coverage, file.path(out_dir, "phase124_missing_cell_coverage.csv")),
+    combined_candidate_audit = app_joint_qdesn_phase124_write_csv(candidate_audit, file.path(out_dir, "combined_candidate_audit.csv")),
+    case_winner_selection = app_joint_qdesn_phase124_write_csv(winners, file.path(out_dir, "case_winner_selection.csv")),
+    case_winner_controls = app_joint_qdesn_phase124_write_csv(controls, file.path(out_dir, "case_winner_controls.csv")),
+    case_winner_metric_summary = app_joint_qdesn_phase124_write_csv(metric_summary, file.path(out_dir, "case_winner_metric_summary.csv")),
+    case_winner_gate_audit = app_joint_qdesn_phase124_write_csv(gate_audit, file.path(out_dir, "case_winner_gate_audit.csv")),
+    mcmc_completion_launch_plan = app_joint_qdesn_phase124_write_csv(launch_plan, file.path(out_dir, "mcmc_completion_launch_plan.csv")),
+    next_action_plan = app_joint_qdesn_phase124_write_csv(next_action, file.path(out_dir, "next_action_plan.csv")),
+    provenance = app_joint_qdesn_phase124_write_csv(app_joint_qvp_provenance_rows(), file.path(out_dir, "provenance.csv")),
+    readme = normalizePath(readme_path, winslash = "/", mustWork = TRUE)
+  )
+  manifest_info <- app_joint_qdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = normalizePath(out_dir, winslash = "/", mustWork = TRUE),
+    run_config = run_config,
+    source_manifest_verification = source_manifest,
+    source_health = source_health,
+    coverage = coverage,
+    candidate_audit = candidate_audit,
+    winners = winners,
+    controls = controls,
+    metric_summary = metric_summary,
+    gate_audit = gate_audit,
+    launch_plan = launch_plan,
+    next_action_plan = next_action,
+    paths = c(paths, artifact_manifest = manifest_info$manifest_path)
+  )
+}

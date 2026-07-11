@@ -114,6 +114,25 @@ def test_cell_config_carries_reservoir_controls(tmp_path):
     assert adapter["state_output"] == "final_layer"
 
 
+def test_cell_config_carries_horizon_block_readout_controls(tmp_path):
+    full = temp_full_config(tmp_path)
+    full["adapter"].update({
+        "feature_map": "window_reservoir_v1",
+        "feature_dim": 8,
+        "depth": 1,
+        "units": [8],
+        "readout_interaction": "horizon_block",
+        "horizon_block_size": 24,
+        "readout_interaction_basis": "state_lead",
+    })
+    data = load_config(full["data_config"])
+    cell = make_cell_config(full, data, "DE_LU", 1)["pricefm_desn_smoke"]
+    adapter = cell["adapter"]
+    assert adapter["readout_interaction"] == "horizon_block"
+    assert adapter["horizon_block_size"] == 24
+    assert adapter["readout_interaction_basis"] == "state_lead"
+
+
 def test_cell_config_carries_graph_feature_policy_and_spatial_controls(tmp_path):
     full = temp_full_config(tmp_path)
     full["scope"]["feature_policy"] = "graph_khop"

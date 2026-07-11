@@ -53,6 +53,13 @@ EXPERIMENT_METADATA_FIELDS = [
     "test_AQL",
     "test_MAE",
     "test_RMSE",
+    "horizon_focus",
+    "horizon_weight_multiplier",
+    "horizon_weighting_mode",
+    "horizon_weighting_enabled",
+    "readout_interaction",
+    "horizon_block_size",
+    "readout_interaction_basis",
 ]
 
 
@@ -150,6 +157,40 @@ def experiment_feature_policy(grid, exp):
     fixed = grid.get("fixed", {})
     scope = grid.get("scope", {})
     return str(exp.get("feature_policy", fixed.get("feature_policy", scope.get("feature_policy", "target_only"))))
+
+
+def experiment_training_config(grid, exp):
+    fixed = grid.get("fixed", {})
+    training = {
+        "train_origin_limit": int(fixed["train_origin_limit"]),
+        "train_origin_selection": str(fixed.get("train_origin_selection", "tail")),
+    }
+    if "training" in fixed:
+        training.update(copy.deepcopy(fixed["training"]))
+    if "training" in exp:
+        training.update(copy.deepcopy(exp["training"]))
+
+    enabled = exp.get("horizon_weighting_enabled", None)
+    has_explicit = "horizon_weighting" in exp or "horizon_weight_multiplier" in exp
+    if enabled is not None or has_explicit:
+        current = copy.deepcopy(training.get("horizon_weighting", {}))
+        if "horizon_weighting" in exp:
+            current.update(copy.deepcopy(exp["horizon_weighting"]))
+        if enabled is not None:
+            current["enabled"] = bool(enabled)
+        elif "enabled" not in current:
+            current["enabled"] = False
+        if "horizon_focus" in exp:
+            current["focus"] = copy.deepcopy(exp["horizon_focus"])
+        if "horizon_weight_multiplier" in exp:
+            current["multiplier"] = float(exp["horizon_weight_multiplier"])
+        if "horizon_weighting_mode" in exp:
+            current["mode"] = str(exp["horizon_weighting_mode"])
+        current.setdefault("mode", "integer_frequency_replication")
+        current.setdefault("scope", "horizon_group")
+        current.setdefault("apply_to", ["qdesn"])
+        training["horizon_weighting"] = current
+    return training
 
 
 def experiment_spatial_config(grid, exp):
@@ -274,10 +315,7 @@ def build_experiment_config(grid, exp, generated_root):
     full["scope"]["horizons"] = scope.get("horizons", "all")
     feature_policy = experiment_feature_policy(grid, exp)
     full["scope"]["feature_policy"] = feature_policy
-    full["training"] = {
-        "train_origin_limit": int(fixed["train_origin_limit"]),
-        "train_origin_selection": str(fixed.get("train_origin_selection", "tail")),
-    }
+    full["training"] = experiment_training_config(grid, exp)
     full["adapter"]["output_root"] = config_path_value(paths["adapter_root"])
     full["adapter"]["feature_map"] = str(exp.get("feature_map", fixed.get("feature_map", "window_desn_v1")))
     full["adapter"]["feature_dim"] = int(exp["feature_dim"])
@@ -292,7 +330,8 @@ def build_experiment_config(grid, exp, generated_root):
     for key in [
         "depth", "units", "alpha", "rho", "input_scale",
         "recurrent_sparsity", "recurrent_density", "bias_scale",
-        "reservoir_activation", "state_output",
+        "reservoir_activation", "state_output", "readout_interaction",
+        "horizon_block_size", "readout_interaction_basis",
     ]:
         if key in exp:
             full["adapter"][key] = copy.deepcopy(exp[key])
@@ -357,6 +396,9 @@ def prepare_grid(grid, generated_root, write=False):
                 exp.get("recurrent_density", grid["fixed"].get("recurrent_sparsity", "")),
             )),
             "state_output": str(exp.get("state_output", grid["fixed"].get("state_output", ""))),
+            "readout_interaction": str(exp.get("readout_interaction", grid["fixed"].get("readout_interaction", "none"))),
+            "horizon_block_size": exp.get("horizon_block_size", grid["fixed"].get("horizon_block_size", "")),
+            "readout_interaction_basis": str(exp.get("readout_interaction_basis", grid["fixed"].get("readout_interaction_basis", ""))),
             "quantiles": json.dumps(experiment_quantiles(grid, exp)),
             "regions": json.dumps(experiment_regions(grid, exp)),
             "folds": json.dumps(experiment_folds(grid, exp)),
@@ -367,6 +409,14 @@ def prepare_grid(grid, generated_root, write=False):
             "run_dir": config_path_value(paths["run_dir"]),
             "rationale": str(exp.get("rationale", "")),
         }
+        training = experiment_training_config(grid, exp)
+        horizon_weighting = training.get("horizon_weighting", {})
+        row["horizon_weighting_enabled"] = bool(horizon_weighting.get("enabled", False))
+        row["horizon_weighting_mode"] = str(horizon_weighting.get("mode", ""))
+        row["horizon_focus"] = json_cell(horizon_weighting.get("focus", exp.get("horizon_focus", "")))
+        row["horizon_weight_multiplier"] = json_cell(
+            horizon_weighting.get("multiplier", exp.get("horizon_weight_multiplier", ""))
+        )
         spatial = experiment_spatial_config(grid, exp)
         row["graph_degree"] = spatial.get("graph_degree", "")
         row["graph_source"] = spatial.get("graph_source", "")

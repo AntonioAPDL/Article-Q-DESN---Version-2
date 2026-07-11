@@ -210,6 +210,45 @@ def test_reservoir_feature_map_supports_stacked_layers():
     assert len(reservoir["layers"]) == 2
 
 
+def test_reservoir_feature_map_supports_horizon_block_readout_interactions():
+    window = synthetic_window(n_origins=2, lag_window=4, lead_window=48, lag_dim=2, lead_dim=3)
+    horizons = [1, 24, 25, 48]
+    cfg = normalize_reservoir_config({
+        "depth": 1,
+        "units": [5],
+        "alpha": 0.7,
+        "rho": 0.9,
+        "input_scale": 0.5,
+        "recurrent_sparsity": 0.5,
+    }, feature_dim=5)
+    X, _, rows, reservoir, _ = make_design_chunked(
+        window, "train", horizons, horizons, "window_reservoir_v1",
+        feature_dim=5, seed=123, row_chunk_size=3,
+        reservoir_config=cfg,
+        readout_config={
+            "readout_interaction": "horizon_block",
+            "horizon_block_size": 24,
+            "readout_interaction_basis": "state_lead",
+        },
+    )
+    base_feature_count = 5 + 3 + 3 + len(horizons)
+    interaction_source_count = 5 + 3
+    expected_features = 1 + base_feature_count + 2 * interaction_source_count
+    assert X.shape == (window["Y"].shape[0] * len(horizons), expected_features)
+    assert reservoir["config"]["state_output"] == "final_layer"
+
+    first_block_start = 1 + base_feature_count
+    first_block_end = first_block_start + interaction_source_count
+    second_block_start = first_block_end
+    second_block_end = second_block_start + interaction_source_count
+    row_h1 = next(i for i, row in enumerate(rows) if row["horizon"] == 1)
+    row_h25 = next(i for i, row in enumerate(rows) if row["horizon"] == 25)
+    assert np.any(np.abs(X[row_h1, first_block_start:first_block_end]) > 0.0)
+    assert np.allclose(X[row_h1, second_block_start:second_block_end], 0.0)
+    assert np.allclose(X[row_h25, first_block_start:first_block_end], 0.0)
+    assert np.any(np.abs(X[row_h25, second_block_start:second_block_end]) > 0.0)
+
+
 def test_reservoir_dynamic_controls_change_states_even_when_matrices_match():
     window = synthetic_window(n_origins=4, lag_window=8)
     horizons = [1, 4]

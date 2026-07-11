@@ -36,6 +36,9 @@ ADAPTER_FORWARD_KEYS = [
     "bias_scale",
     "reservoir_activation",
     "state_output",
+    "readout_interaction",
+    "horizon_block_size",
+    "readout_interaction_basis",
 ]
 
 

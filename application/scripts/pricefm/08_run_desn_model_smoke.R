@@ -67,6 +67,7 @@ X_train <- read_matrix(file.path(adapter_dir, "X_train.csv"))
 y_train <- read_vector(file.path(adapter_dir, "y_train.csv"))
 X_val <- read_matrix(file.path(adapter_dir, "X_val.csv"))
 X_test <- read_matrix(file.path(adapter_dir, "X_test.csv"))
+rows_train <- read_rows("train")
 rows_val <- read_rows("val")
 rows_test <- read_rows("test")
 quantiles <- as.numeric(unlist(cfg$quantiles))
@@ -158,6 +159,7 @@ warm_cfg <- cfg$warm_start %||% list(enabled = FALSE)
 warm_enabled <- isTRUE(warm_cfg$enabled)
 warm_fallback_to_cold <- isTRUE(warm_cfg$fallback_to_cold %||% FALSE)
 warm_record_diagnostics <- if (is.null(warm_cfg$record_diagnostics)) TRUE else isTRUE(warm_cfg$record_diagnostics)
+training_cfg <- cfg$training %||% list()
 
 as_config_vec <- function(x, default = character()) {
   if (is.null(x)) return(default)
@@ -165,6 +167,152 @@ as_config_vec <- function(x, default = character()) {
 }
 
 tau_key <- function(tau) sprintf("%.12g", as.numeric(tau))
+
+horizon_group_label <- function(horizon) {
+  horizon <- as.integer(horizon)
+  start <- ((horizon - 1L) %/% 24L) * 24L + 1L
+  end <- min(start + 23L, max(horizons))
+  paste0(start, "-", end)
+}
+
+infer_integer_scale <- function(multiplier, max_scale = 20L) {
+  multiplier <- as.numeric(multiplier)[1L]
+  if (!is.finite(multiplier) || multiplier <= 0) {
+    stop("horizon_weighting multiplier must be positive and finite.", call. = FALSE)
+  }
+  for (scale in seq_len(as.integer(max_scale))) {
+    value <- multiplier * scale
+    if (isTRUE(all.equal(value, round(value), tolerance = 1.0e-8))) {
+      return(as.integer(scale))
+    }
+  }
+  stop("horizon_weighting multiplier cannot be represented as integer frequencies within max_scale.", call. = FALSE)
+}
+
+parse_focus_mask <- function(rows, weighting_cfg) {
+  focus <- weighting_cfg$focus %||% weighting_cfg$horizon_focus %||% NULL
+  if (is.null(focus)) {
+    focus <- weighting_cfg$horizon_group %||% NULL
+  }
+  if (is.null(focus)) {
+    stop("enabled horizon_weighting requires focus/horizon_focus.", call. = FALSE)
+  }
+  row_horizon <- as.integer(rows$horizon)
+  scope <- as.character(weighting_cfg$scope %||% "horizon_group")[1L]
+  if (identical(scope, "horizon")) {
+    focus_h <- as.integer(unlist(focus, use.names = FALSE))
+    return(row_horizon %in% focus_h)
+  }
+  focus_group <- as.character(unlist(focus, use.names = FALSE))
+  row_group <- vapply(row_horizon, horizon_group_label, character(1L))
+  row_group %in% focus_group
+}
+
+build_horizon_weighting <- function(rows, weighting_cfg) {
+  default <- list(
+    enabled = FALSE,
+    mode = "none",
+    apply_to = character(),
+    focus = "",
+    multiplier = 1,
+    base_frequency = 1L,
+    focused_frequency = 1L,
+    n_train_original = nrow(rows),
+    n_train_weighted = nrow(rows),
+    frequency = rep.int(1L, nrow(rows)),
+    summary = data.frame()
+  )
+  if (is.null(weighting_cfg) || !isTRUE(weighting_cfg$enabled %||% FALSE)) {
+    default$summary <- data.frame(
+      enabled = FALSE,
+      mode = "none",
+      apply_to = "",
+      focus = "",
+      multiplier = 1,
+      base_frequency = 1L,
+      focused_frequency = 1L,
+      n_train_original = nrow(rows),
+      n_train_weighted = nrow(rows),
+      n_focus_rows = 0L,
+      stringsAsFactors = FALSE
+    )
+    return(default)
+  }
+  mode <- as.character(weighting_cfg$mode %||% "integer_frequency_replication")[1L]
+  if (!identical(mode, "integer_frequency_replication")) {
+    stop("Unsupported horizon_weighting mode: ", mode, call. = FALSE)
+  }
+  multiplier <- as.numeric(weighting_cfg$multiplier %||% 1)[1L]
+  scale <- as.integer(weighting_cfg$integer_scale %||% infer_integer_scale(multiplier))
+  base_frequency <- as.integer(weighting_cfg$base_frequency %||% scale)
+  focused_frequency <- as.integer(round(multiplier * base_frequency))
+  if (base_frequency < 1L || focused_frequency < 1L) {
+    stop("horizon_weighting frequencies must be positive integers.", call. = FALSE)
+  }
+  focus_mask <- parse_focus_mask(rows, weighting_cfg)
+  if (!any(focus_mask)) {
+    stop("horizon_weighting focus matched zero training rows.", call. = FALSE)
+  }
+  frequency <- rep.int(base_frequency, nrow(rows))
+  frequency[focus_mask] <- focused_frequency
+  max_factor <- as.numeric(weighting_cfg$max_expansion_factor %||% 8)
+  expansion_factor <- sum(frequency) / nrow(rows)
+  if (is.finite(max_factor) && expansion_factor > max_factor) {
+    stop(
+      "horizon_weighting expansion factor ", round(expansion_factor, 4),
+      " exceeds max_expansion_factor ", max_factor,
+      call. = FALSE
+    )
+  }
+  focus_text <- paste(as.character(unlist(weighting_cfg$focus %||% weighting_cfg$horizon_focus)), collapse = ",")
+  apply_to <- as_config_vec(weighting_cfg$apply_to %||% "qdesn")
+  summary <- data.frame(
+    enabled = TRUE,
+    mode = mode,
+    apply_to = paste(apply_to, collapse = ","),
+    focus = focus_text,
+    multiplier = multiplier,
+    base_frequency = base_frequency,
+    focused_frequency = focused_frequency,
+    n_train_original = nrow(rows),
+    n_train_weighted = as.integer(sum(frequency)),
+    n_focus_rows = as.integer(sum(focus_mask)),
+    expansion_factor = as.numeric(expansion_factor),
+    stringsAsFactors = FALSE
+  )
+  list(
+    enabled = TRUE,
+    mode = mode,
+    apply_to = apply_to,
+    focus = focus_text,
+    multiplier = multiplier,
+    base_frequency = base_frequency,
+    focused_frequency = focused_frequency,
+    n_train_original = nrow(rows),
+    n_train_weighted = as.integer(sum(frequency)),
+    frequency = frequency,
+    summary = summary
+  )
+}
+
+horizon_weighting <- build_horizon_weighting(rows_train, training_cfg$horizon_weighting %||% NULL)
+qdesn_weighting_enabled <- isTRUE(horizon_weighting$enabled) && "qdesn" %in% horizon_weighting$apply_to
+if (qdesn_weighting_enabled) {
+  train_index_qdesn <- rep(seq_len(nrow(X_train)), times = horizon_weighting$frequency)
+  X_q_train <- X_train[train_index_qdesn, , drop = FALSE]
+  y_q_train <- y_train[train_index_qdesn]
+} else {
+  X_q_train <- X_train
+  y_q_train <- y_train
+}
+qdesn_likelihoods <- unique(tolower(as_config_vec(cfg$qdesn_vb$likelihoods %||% c("al", "exal"))))
+bad_likelihoods <- setdiff(qdesn_likelihoods, c("al", "exal"))
+if (length(bad_likelihoods)) {
+  stop("Unsupported qdesn_vb likelihood(s): ", paste(bad_likelihoods, collapse = ", "), call. = FALSE)
+}
+if (!length(qdesn_likelihoods)) {
+  stop("qdesn_vb likelihoods must be nonempty.", call. = FALSE)
+}
 
 safe_sigma_from_fit <- function(fit) {
   val <- NA_real_
@@ -326,8 +474,8 @@ make_vb_init_from_fit <- function(source_fit, components, n_rows, gamma_policy =
     beta_m <- source_fit$qbeta$m %||% source_fit$beta$mean %||% NULL
     beta_V <- source_fit$qbeta$V %||% source_fit$beta$cov %||% NULL
     if (!is.null(beta_m) && !is.null(beta_V) &&
-        length(beta_m) == ncol(X_train) &&
-        all(dim(as.matrix(beta_V)) == c(ncol(X_train), ncol(X_train))) &&
+        length(beta_m) == ncol(X_q_train) &&
+        all(dim(as.matrix(beta_V)) == c(ncol(X_q_train), ncol(X_q_train))) &&
         all(is.finite(beta_m)) && all(is.finite(beta_V))) {
       init$beta_m <- as.numeric(beta_m)
       init$beta_V <- as.matrix(beta_V)
@@ -448,7 +596,7 @@ fit_normal <- function(method_id, prior_type) {
   fit
 }
 
-fit_quantile <- function(likelihood, tau, X_tr = X_train, y_tr = y_train,
+fit_quantile <- function(likelihood, tau, X_tr = X_q_train, y_tr = y_q_train,
                          chunking = cfg$qdesn_vb$chunking, init = list(),
                          init_source = "cold", init_components = character(),
                          fit_order = NA_integer_, record_warm = TRUE,
@@ -562,7 +710,7 @@ fit_qdesn_like <- function(likelihood, normal_fits = list(), fit_cache = list())
         }
       }
     }
-    init_info <- make_vb_init_from_fit(source_fit, components, nrow(X_train), gamma_policy = gamma_policy)
+    init_info <- make_vb_init_from_fit(source_fit, components, nrow(X_q_train), gamma_policy = gamma_policy)
     if (!length(init_info$components)) source_label <- "cold"
     fit <- fit_quantile(
       likelihood, tau,
@@ -594,7 +742,7 @@ fit_qdesn_like <- function(likelihood, normal_fits = list(), fit_cache = list())
     converged = all(vapply(fits, function(z) isTRUE(z$converged), logical(1))),
     iter = max(vapply(fits, function(z) as.integer(z$iter %||% NA_integer_), integer(1)), na.rm = TRUE),
     train_seconds = as.numeric(elapsed),
-    n_train = nrow(X_train),
+    n_train = nrow(X_q_train),
     n_features = ncol(X_train),
     warm_start_enabled = qwarm_enabled,
     warm_start_strategy = if (qwarm_enabled) "see_warm_start_diagnostics" else "cold"
@@ -634,13 +782,18 @@ normal_fits$normal_scaled_ridge <- fit_normal("normal_scaled_ridge", "scaled_rid
 normal_fits$normal_rhs_ns <- fit_normal("normal_rhs_ns", "rhs_ns")
 run_exact_equivalence()
 fit_cache <- list()
-fit_cache$al <- fit_qdesn_like("al", normal_fits = normal_fits, fit_cache = fit_cache)
-fit_cache$exal <- fit_qdesn_like("exal", normal_fits = normal_fits, fit_cache = fit_cache)
+if ("al" %in% qdesn_likelihoods) {
+  fit_cache$al <- fit_qdesn_like("al", normal_fits = normal_fits, fit_cache = fit_cache)
+}
+if ("exal" %in% qdesn_likelihoods) {
+  fit_cache$exal <- fit_qdesn_like("exal", normal_fits = normal_fits, fit_cache = fit_cache)
+}
 
 predictions <- do.call(rbind, prediction_rows)
 methods <- do.call(rbind, method_rows)
 utils::write.csv(predictions, file.path(out_dir, "model_predictions_scaled.csv"), row.names = FALSE)
 utils::write.csv(methods, file.path(out_dir, "model_method_summary.csv"), row.names = FALSE)
+utils::write.csv(horizon_weighting$summary, file.path(out_dir, "training_weight_summary.csv"), row.names = FALSE)
 if (length(exact_rows)) {
   utils::write.csv(do.call(rbind, exact_rows), file.path(out_dir, "exact_equivalence.csv"), row.names = FALSE)
 }
@@ -661,6 +814,8 @@ write_json(file.path(out_dir, "run_manifest.json"), list(
   methods = methods$method_id,
   quantiles = quantiles,
   horizons = horizons,
+  qdesn_likelihoods = qdesn_likelihoods,
+  horizon_weighting = as.list(horizon_weighting$summary[1, , drop = TRUE]),
   warm_start = warm_cfg
 ))
 

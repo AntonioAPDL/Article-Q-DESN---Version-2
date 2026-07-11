@@ -553,6 +553,53 @@ def test_reservoir_grid_expands_blocks_and_writes_controls(tmp_path):
     assert cell["adapter"]["input_scale"] == 0.5
 
 
+def test_grid_materializer_forwards_horizon_block_readout_controls(tmp_path):
+    payload = yaml.safe_load(GRID.read_text())
+    grid = payload["pricefm_desn_experiment_grid"]
+    grid["grid_id"] = "test_horizon_block_readout"
+    grid["base"]["generated_root"] = str(tmp_path / "generated")
+    grid["base"]["run_root"] = str(tmp_path / "runs")
+    grid["experiment_blocks"] = []
+    grid["experiments"] = [
+        {
+            "id": "hb_readout",
+            "stage": "test",
+            "priority": 0,
+            "regions": ["DE_LU"],
+            "folds": [1],
+            "quantile": 0.5,
+            "lag_window": 96,
+            "feature_map": "window_reservoir_v1",
+            "feature_policy": "target_only",
+            "feature_dim": 96,
+            "depth": 1,
+            "units": [96],
+            "alpha": 0.4,
+            "rho": 0.86,
+            "input_scale": 0.25,
+            "state_output": "final_layer",
+            "readout_interaction": "horizon_block",
+            "horizon_block_size": 24,
+            "readout_interaction_basis": "state_lead",
+            "tau0": 0.001,
+            "seed": 20260730,
+        }
+    ]
+    cfg_path = tmp_path / "grid.yaml"
+    cfg_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+    loaded = grid_mod.load_grid(str(cfg_path))
+    rows = grid_mod.prepare_grid(loaded, tmp_path / "generated", write=True)
+    assert rows[0]["readout_interaction"] == "horizon_block"
+    assert int(rows[0]["horizon_block_size"]) == 24
+    full_path = ROOT / rows[0]["full_config"]
+    if not full_path.exists():
+        full_path = Path(rows[0]["full_config"])
+    full = yaml.safe_load(full_path.read_text())["pricefm_desn_full"]
+    assert full["adapter"]["readout_interaction"] == "horizon_block"
+    assert full["adapter"]["horizon_block_size"] == 24
+    assert full["adapter"]["readout_interaction_basis"] == "state_lead"
+
+
 def test_corrected_reservoir_grid_is_focused_and_validates_controls(tmp_path):
     grid = grid_mod.load_grid(str(CORRECTED_RESERVOIR_GRID))
     rows = grid_mod.prepare_grid(grid, tmp_path / "corrected_reservoir_grid", write=True)

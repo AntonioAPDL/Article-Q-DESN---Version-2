@@ -905,6 +905,74 @@ def reservoir_state_dim(reservoir_config):
     return int(reservoir_config["units"][-1])
 
 
+def normalize_readout_interaction_config(adapter_cfg):
+    interaction = str(adapter_cfg.get("readout_interaction", "none") or "none")
+    if interaction not in ("none", "horizon_block"):
+        raise ValueError("readout_interaction must be 'none' or 'horizon_block'")
+    block_size = int(adapter_cfg.get("horizon_block_size", 24))
+    if block_size < 1:
+        raise ValueError("horizon_block_size must be positive")
+    basis = str(adapter_cfg.get("readout_interaction_basis", "state_lead") or "state_lead")
+    if interaction == "none":
+        basis = "none"
+        return {
+            "readout_interaction": interaction,
+            "horizon_block_size": block_size,
+            "readout_interaction_basis": basis,
+        }
+    if basis not in ("state_lead", "all_features"):
+        raise ValueError("readout_interaction_basis must be 'state_lead' or 'all_features'")
+    return {
+        "readout_interaction": interaction,
+        "horizon_block_size": block_size,
+        "readout_interaction_basis": basis,
+    }
+
+
+def horizon_block_labels(selected_horizons, horizon_block_size):
+    horizons = [int(h) for h in selected_horizons]
+    if not horizons:
+        return []
+    max_h = max(horizons)
+    starts = sorted({((h - 1) // int(horizon_block_size)) * int(horizon_block_size) + 1 for h in horizons})
+    return [
+        "{}-{}".format(start, min(start + int(horizon_block_size) - 1, max_h))
+        for start in starts
+    ]
+
+
+def horizon_block_indices(h_values, selected_horizons, horizon_block_size):
+    starts = sorted({
+        ((int(h) - 1) // int(horizon_block_size)) * int(horizon_block_size) + 1
+        for h in selected_horizons
+    })
+    lookup = {start: i for i, start in enumerate(starts)}
+    return np.asarray([
+        lookup[((int(h) - 1) // int(horizon_block_size)) * int(horizon_block_size) + 1]
+        for h in h_values
+    ], dtype=int)
+
+
+def readout_interaction_feature_count(source_dim, selected_horizons, readout_config):
+    if readout_config["readout_interaction"] == "none":
+        return 0
+    return int(source_dim) * len(horizon_block_labels(selected_horizons, readout_config["horizon_block_size"]))
+
+
+def append_readout_interactions(feats, interaction_source, h_vec, selected_horizons, readout_config):
+    if readout_config["readout_interaction"] == "none":
+        return feats
+    labels = horizon_block_labels(selected_horizons, readout_config["horizon_block_size"])
+    if not labels:
+        return feats
+    block_idx = horizon_block_indices(h_vec, selected_horizons, readout_config["horizon_block_size"])
+    parts = [feats]
+    for block_id in range(len(labels)):
+        mask = (block_idx == block_id).astype(float).reshape(-1, 1)
+        parts.append(interaction_source * mask)
+    return np.column_stack(parts)
+
+
 def compute_reservoir_states(x_lag, reservoir, reservoir_config):
     x_lag = np.asarray(x_lag, dtype=float)
     n_origins = int(x_lag.shape[0])
@@ -975,7 +1043,8 @@ def finalize_activation_stats(stats):
 def make_design_chunked(window, split, horizons, selected_horizons, feature_map,
                         feature_dim, seed, include_intercept=True,
                         row_chunk_size=2048, mapping=None,
-                        projection_scale=1.0, reservoir_config=None):
+                        projection_scale=1.0, reservoir_config=None,
+                        readout_config=None):
     feature_map = str(feature_map)
     if feature_map not in ("flat_direct", "window_desn_v1", "window_reservoir_v1"):
         raise ValueError("Unknown feature_map: {}".format(feature_map))
@@ -986,6 +1055,10 @@ def make_design_chunked(window, split, horizons, selected_horizons, feature_map,
     if not np.isfinite(projection_scale) or projection_scale <= 0.0:
         raise ValueError("projection_scale must be finite and positive")
     row_chunk_size = max(1, int(row_chunk_size))
+    if readout_config is None:
+        readout_config = normalize_readout_interaction_config({})
+    else:
+        readout_config = normalize_readout_interaction_config(readout_config)
 
     y, rows, origin_index, horizon_index = supervised_response_rows(window, split, horizons)
     raw_dim = raw_feature_dim(window, selected_horizons)
@@ -1015,11 +1088,22 @@ def make_design_chunked(window, split, horizons, selected_horizons, feature_map,
     horizon_dim = 3 + len(selected_horizons)
     if feature_map == "flat_direct":
         n_core_features = raw_dim
+        n_interaction_source_features = raw_dim - horizon_dim
     elif feature_map == "window_reservoir_v1":
-        n_core_features = reservoir_state_dim(reservoir_config) + lead_dim + horizon_dim
+        n_interaction_source_features = reservoir_state_dim(reservoir_config) + lead_dim
+        n_core_features = n_interaction_source_features + horizon_dim
     else:
         n_core_features = feature_dim
-    n_features = n_core_features + (1 if include_intercept else 0)
+        n_interaction_source_features = feature_dim
+    n_features = (
+        n_core_features
+        + readout_interaction_feature_count(
+            n_interaction_source_features,
+            selected_horizons,
+            readout_config,
+        )
+        + (1 if include_intercept else 0)
+    )
     X = np.empty((n_rows, n_features), dtype=float)
     h_values = np.asarray(horizons, dtype=int)
     activation_stats = init_activation_stats() if feature_map == "window_desn_v1" else None
@@ -1040,13 +1124,18 @@ def make_design_chunked(window, split, horizons, selected_horizons, feature_map,
                 horizon_features(h_vec, selected_horizons),
             ])
             feats = raw
+            interaction_source = raw[:, : raw.shape[1] - horizon_dim]
         elif feature_map == "window_reservoir_v1":
             lead_at_h = window["X_lead"][origins, h_vec - 1, :].reshape(end - start, -1)
-            feats = np.column_stack([
+            state_lead = np.column_stack([
                 projection_scale * reservoir_states[origins],
                 lead_at_h,
+            ])
+            feats = np.column_stack([
+                state_lead,
                 horizon_features(h_vec, selected_horizons),
             ])
+            interaction_source = state_lead
         else:
             raw = np.column_stack([
                 window["X_lag"][origins].reshape(end - start, -1),
@@ -1056,6 +1145,16 @@ def make_design_chunked(window, split, horizons, selected_horizons, feature_map,
             pre_tanh = projection_scale * (raw @ mapping)
             update_activation_stats(activation_stats, pre_tanh)
             feats = np.tanh(pre_tanh)
+            interaction_source = feats
+        if readout_config["readout_interaction_basis"] == "all_features":
+            interaction_source = feats
+        feats = append_readout_interactions(
+            feats,
+            interaction_source,
+            h_vec,
+            selected_horizons,
+            readout_config,
+        )
         if include_intercept:
             X[start:end, 0] = 1.0
             X[start:end, 1:] = feats
@@ -1175,6 +1274,7 @@ def build_adapter(smoke_config_path, force=False):
     include_intercept = bool(smoke["adapter"].get("include_intercept", True))
     row_chunk_size = int(smoke["adapter"].get("row_chunk_size", 2048))
     projection_scale = float(smoke["adapter"].get("projection_scale", 1.0))
+    readout_config = normalize_readout_interaction_config(smoke["adapter"])
     reservoir_config = (
         normalize_reservoir_config(smoke["adapter"], feature_dim)
         if str(feature_map) == "window_reservoir_v1"
@@ -1209,6 +1309,7 @@ def build_adapter(smoke_config_path, force=False):
             mapping=mapping,
             projection_scale=projection_scale,
             reservoir_config=reservoir_config,
+            readout_config=readout_config,
         )
         if mapping is not None and mapping_hash is None:
             if feature_map == "window_desn_v1":
@@ -1256,6 +1357,8 @@ def build_adapter(smoke_config_path, force=False):
         "feature_map_matrix_sha256": mapping_hash,
         "horizon_features": ["scaled_horizon", "sin_phase", "cos_phase", "selected_horizon_one_hot"],
         "row_chunk_size": row_chunk_size,
+        "readout_interaction": dict(readout_config),
+        "readout_interaction_blocks": horizon_block_labels(horizons, readout_config["horizon_block_size"]),
     }
     if reservoir_config is not None:
         feature_manifest["reservoir"] = dict(reservoir_config)

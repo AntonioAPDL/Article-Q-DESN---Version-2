@@ -1855,40 +1855,47 @@ bundle are reported in the supplement as computational companion evidence.
 
 The second simulation study asks a different question: whether a shared
 quantile-vector readout can recover several conditional quantile paths at once
-under a frozen feature design. The main article reports the MCMC reference layer
-for the selected joint QDESN RHS specification. This layer is a fit-window
-posterior recovery and crossing-diagnostic check, not a rolling-origin
-held-out forecast validation and not a new single-quantile comparison against
-dynamic linear baselines.
+under a frozen feature design. VB and VB--LD are used here for screening,
+calibration, and initialization. The article-facing evidence is the balanced
+VB-initialized MCMC confirmation grid over the four readout--likelihood
+combinations: Joint QDESN RHS, Independent QDESN RHS, Joint exQDESN RHS, and
+Independent exQDESN RHS. These rows evaluate posterior quantile-grid readout
+paths; they should not be read as validation of a scalar predictive density
+obtained by multiplying or mixing the component working likelihoods.
 
 The selected readout is fit across
 \[
 \tau\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}.
 \]
-The validation uses nine synthetic data-generating mechanisms, a frozen feature
-design, and a 500-observation fit window. The three bridge mechanisms align
+The balanced confirmation grid uses eight synthetic data-generating mechanisms,
+a frozen feature design, and a 500-observation fit window. The three bridge
+mechanisms align
 with the Gaussian, Laplace, and Gaussian-mixture families in the single-quantile
-study. The six stress mechanisms introduce Student-\(t\) errors, asymmetric
-tails, heteroskedastic seasonality, persistent heavy tails, regime shifts, and
-nonlinear reservoir-friendly dynamics. Quantile summaries are compared with the
-known conditional quantiles, realized observations are scored through check
-loss, and raw adjacent-level crossing counts are retained as numerical
-coherence diagnostics. Held-out VB--LD forecast screening over the same
-mechanisms is reported in the supplement.
+study. The five stress mechanisms introduce Student-\(t\) errors, asymmetric
+tails, persistent heavy tails, regime shifts, and nonlinear reservoir-friendly
+dynamics. The resulting grid has 32 scenario--model MCMC rows. Quantile
+summaries are compared with the known conditional quantiles, realized
+observations are scored through check loss and grid CRPS, and empirical
+hit-rate errors summarize marginal calibration. Reported scores use the
+declared monotone quantile-grid contract; raw adjacent-level crossings before
+that contract are retained as numerical coherence diagnostics.
 
-\input{tables/joint_qdesn_article_validation_mcmc_main_summary.tex}
+\input{tables/joint_qdesn_article_validation_mcmc_balanced_model_summary.tex}
 
-Table~\ref{tab:joint-qdesn-article-validation-mcmc-main-summary} shows that the
-MCMC reference run produces finite diagnostics across all nine mechanisms. The
-MCMC fit-window MAE to the known conditional quantile paths ranges from
-\(0.061\) to \(0.121\), the chain-pooled normalized path distance ranges from
-\(0.031\) to \(0.183\), and the raw adjacent-level crossing count is zero in
-each scenario. Runtime is between 17.3 and 22.9 minutes under the recorded MCMC
-controls. These results support the selected joint QDESN RHS readout as a
-posterior-simulation reference fit for the frozen-feature multi-quantile
-design. The supplement retains the VB--LD companion tables for held-out
-forecast screening, independent-readout comparison, and computational
-scalability context.
+Table~\ref{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}
+summarizes the balanced MCMC confirmation layer. All hard implementation gates
+pass: the 32 rows are present, posterior draws and scores are finite, and the
+reported monotone grids have zero contract crossings. The overall status
+remains review rather than pass because raw pre-contract crossings are still
+observed. These are concentrated in the AL rows: Joint QDESN RHS has one raw
+forecast crossing, Independent QDESN RHS has 37, and both exQDESN rows have
+zero. Joint QDESN RHS therefore provides the primary AL anchor, combining
+strong fit and forecast recovery with much cleaner raw-crossing diagnostics
+than the independent AL readout. Joint exQDESN RHS is the cleanest joint exAL
+extension by the crossing gate, although its average oracle-distance metrics
+are less competitive. The supplement records the scenario-level MCMC table,
+gate audit, and metric-specific winners so these qualifications remain
+auditable without making the main text table-heavy.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}

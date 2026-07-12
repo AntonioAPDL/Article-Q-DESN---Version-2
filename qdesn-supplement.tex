@@ -1646,9 +1646,9 @@ than an implication of the composite working likelihood.
 \label{sec:supp_validation_tables}
 
 The main article reports MCMC-only validation summaries. This section preserves
-the generated VB--LD companion evidence and the full generated table captions so
-the computational comparison remains auditable without making VB rows the
-article-facing validation results.
+the generated VB--LD companion panels, balanced joint-validation provenance,
+and full generated table captions so the computational comparison remains
+auditable without making VB rows the article-facing validation results.
 
 \subsection{Single-Quantile VB--LD Companion Panels}
 
@@ -1659,14 +1659,15 @@ these source tables are displayed.
 \input{tables/qdesn_validation_tt500_final_tables.tex}
 
 \clearpage
-\subsection{Joint Multi-Quantile VB--LD Forecast Screening}
+\subsection{Joint Multi-Quantile Balanced MCMC Provenance}
 
-The following generated tables report the VB--LD held-out forecast screening
-for the joint and independent multi-quantile readouts. These tables provide
-computational and forecast-screening context for the MCMC fit-reference results
-shown in the main article.
+The following generated tables preserve the protocol, scenario-level balanced
+MCMC summaries, gate audit, and metric-specific winners for the joint and
+independent multi-quantile readouts. The VB and VB--LD stages remain the
+screening, calibration, and initialization layer; the tables below document the
+MCMC confirmation evidence used by the main article.
 
-\input{tables/joint_qdesn_article_validation_tables.tex}
+\input{tables/joint_qdesn_article_validation_provenance_tables.tex}
 
 \clearpage
 \section{GloFAS Discrepancy-Calibration Model}

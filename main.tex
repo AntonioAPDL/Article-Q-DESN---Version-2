@@ -1883,19 +1883,20 @@ that contract are retained as numerical coherence diagnostics.
 \input{tables/joint_qdesn_article_validation_mcmc_balanced_model_summary.tex}
 
 Table~\ref{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}
-summarizes the balanced MCMC confirmation layer. All hard implementation gates
-pass: the 32 rows are present, posterior draws and scores are finite, and the
-reported monotone grids have zero contract crossings. The overall status
-remains review rather than pass because raw pre-contract crossings are still
-observed. These are concentrated in the AL rows: Joint QDESN RHS has one raw
-forecast crossing, Independent QDESN RHS has 37, and both exQDESN rows have
-zero. Joint QDESN RHS therefore provides the primary AL anchor, combining
-strong fit and forecast recovery with much cleaner raw-crossing diagnostics
-than the independent AL readout. Joint exQDESN RHS is the cleanest joint exAL
-extension by the crossing gate, although its average oracle-distance metrics
-are less competitive. The supplement records the scenario-level MCMC table,
-gate audit, and metric-specific winners so these qualifications remain
-auditable without making the main text table-heavy.
+summarizes the balanced MCMC confirmation layer at the scenario level. Entries
+report forecast MAE against the oracle quantile grid, with fit-window MAE and
+raw adjacent-level crossing counts retained in parentheses; boldface marks the
+within-scenario forecast-MAE winner. The scenario-wise display makes the
+heterogeneity clearer than an aggregate model ranking. Joint QDESN RHS is the
+forecast-MAE winner in five of the eight mechanisms, including the Gaussian,
+Laplace, asymmetric-tail, nonlinear-reservoir, and Student-\(t\)
+location-scale cases. Independent exQDESN RHS wins the Gaussian-mixture bridge,
+persistent-heavy-tail, and regime-shift cases. The independent AL readout is
+competitive in average forecast MAE but carries most of the raw crossing
+burden, whereas the exAL rows are raw-crossing free in this balanced MCMC
+packet. The supplement records the protocol audit, aggregate summaries, and
+metric-specific winners so these qualifications remain reproducible without
+making the main text table-heavy.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}

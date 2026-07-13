@@ -14567,6 +14567,8 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   trace <- vector("list", max_iter)
   monitor_trace <- vector("list", max_iter)
   elbo_trace <- vector("list", max_iter)
+  sigma_trace <- matrix(NA_real_, nrow = max_iter, ncol = K)
+  colnames(sigma_trace) <- paste0("tau_", seq_len(K))
   rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
   converged <- FALSE
   for (iter in seq_len(max_iter)) {
@@ -14664,10 +14666,11 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	      beta_entropy_logdet = beta_entropy_logdet
 	    )
 	    monitor_trace[[iter]] <- app_joint_qvp_monitor_row(iter, monitor_terms)
-	    elbo_trace[[iter]] <- elbo_terms
-	    max_beta_change <- max(abs(beta_mean - beta_old))
-	    monitor <- -data_terms$likelihood_quadratic - data_terms$latent_rate - prior_quadratic + beta_entropy_logdet
-	    trace[[iter]] <- data.frame(
+		    elbo_trace[[iter]] <- elbo_terms
+		    max_beta_change <- max(abs(beta_mean - beta_old))
+		    monitor <- -data_terms$likelihood_quadratic - data_terms$latent_rate - prior_quadratic + beta_entropy_logdet
+        sigma_trace[iter, ] <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
+		    trace[[iter]] <- data.frame(
 	      iter = iter,
 	      max_beta_change = max_beta_change,
 	      max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
@@ -14677,14 +14680,15 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	      partial_elbo = partial_elbo,
 	      stringsAsFactors = FALSE
 	    )
-	    if (max_beta_change < tol) {
-	      converged <- TRUE
-	      trace <- trace[seq_len(iter)]
-	      monitor_trace <- monitor_trace[seq_len(iter)]
-	      elbo_trace <- elbo_trace[seq_len(iter)]
-	      break
-	    }
-	  }
+		    if (max_beta_change < tol) {
+		      converged <- TRUE
+		      trace <- trace[seq_len(iter)]
+		      monitor_trace <- monitor_trace[seq_len(iter)]
+		      elbo_trace <- elbo_trace[seq_len(iter)]
+          sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
+		      break
+		    }
+		  }
 	  sigma_mean <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
 	  qhat_mean <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) +
 	    matrix(alpha, nrow = Tn, ncol = K, byrow = TRUE)
@@ -14711,6 +14715,7 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	    qhat_mean = qhat_mean,
 	    crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
 	    trace = trace_out,
+      sigma_trace = sigma_trace,
 	    monitor_terms = do.call(rbind, monitor_trace),
 	    elbo_terms = do.call(rbind, elbo_trace),
 	    objective_diagnostics = objective_diagnostics,
@@ -14831,6 +14836,9 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
   s2_mean <- matrix(1, nrow = Tn, ncol = K)
   trace <- vector("list", max_iter)
   monitor_trace <- vector("list", max_iter)
+  gamma_trace <- matrix(NA_real_, nrow = max_iter, ncol = K)
+  sigma_trace <- matrix(NA_real_, nrow = max_iter, ncol = K)
+  colnames(gamma_trace) <- colnames(sigma_trace) <- paste0("tau_", seq_len(K))
   rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
   converged <- FALSE
   for (iter in seq_len(max_iter)) {
@@ -14956,6 +14964,8 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
     max_sigma_change <- max(abs(sigma_mean - sigma_old))
     monitor <- -likelihood_quadratic - latent_linear - positive_shift_quadratic -
       prior_quadratic + beta_entropy_logdet
+    gamma_trace[iter, ] <- gamma
+    sigma_trace[iter, ] <- sigma_mean
     trace[[iter]] <- data.frame(
       iter = iter,
       max_beta_change = max_beta_change,
@@ -14970,6 +14980,8 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
       converged <- TRUE
       trace <- trace[seq_len(iter)]
       monitor_trace <- monitor_trace[seq_len(iter)]
+      gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
+      sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
       break
     }
   }
@@ -14991,6 +15003,8 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
     qhat_mean = qhat_mean,
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
     trace = do.call(rbind, trace),
+    gamma_trace = gamma_trace,
+    sigma_trace = sigma_trace,
     monitor_terms = do.call(rbind, monitor_trace),
     converged = converged,
     tau = tau,
@@ -15133,7 +15147,13 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       )
       sigma[[k]] <- min(max(sigma[[k]], sigma_bounds[[1L]]), sigma_bounds[[2L]])
 
-      gamma_width <- gamma_slice_width %||% ((support$upper[[k]] - support$lower[[k]]) / 20)
+      gamma_width_default <- (support$upper[[k]] - support$lower[[k]]) / 20
+      gamma_width <- if (is.null(gamma_slice_width)) {
+        gamma_width_default
+      } else {
+        gamma_slice_width <- as.numeric(gamma_slice_width)
+        if (length(gamma_slice_width) == 1L) gamma_slice_width[[1L]] else gamma_slice_width[[k]]
+      }
       gamma[[k]] <- app_joint_qvp_slice_bounded_one(
         x0 = gamma[[k]],
         lower = support$lower[[k]] + 1.0e-8,

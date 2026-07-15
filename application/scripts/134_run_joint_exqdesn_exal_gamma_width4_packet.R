@@ -44,6 +44,9 @@ args <- app_parse_args(list(
   vb_n_cores = "4",
   gamma_init_mode = "vb_jittered",
   gamma_jitter_fraction = "0.10",
+  gamma_slice_max_steps = "100",
+  target_tau = "",
+  target_width_multiplier = "",
   trace_write_stride = "50",
   vb_max_iter_override = "",
   adaptive_vb_max_iter_grid_override = "",
@@ -152,6 +155,14 @@ prepare_one_case <- function(row) {
   support <- app_joint_qvp_exal_support(fixture$tau)
   width_default <- (as.numeric(support$upper) - as.numeric(support$lower)) / 20
   width_vector <- width_default * width_multiplier
+  target_tau_index <- integer()
+  if (!is.null(target_tau)) {
+    target_tau_index <- which(abs(as.numeric(fixture$tau) - target_tau) <= 1.0e-8)
+    if (!length(target_tau_index)) {
+      stop(sprintf("Target tau %.8f is not in scenario '%s' tau grid.", target_tau, scenario_id), call. = FALSE)
+    }
+    width_vector[target_tau_index] <- width_default[target_tau_index] * target_width_multiplier
+  }
   list(
     row = row,
     scenario_id = scenario_id,
@@ -164,7 +175,8 @@ prepare_one_case <- function(row) {
     vb_elapsed = vb_elapsed,
     sigma_bounds = sigma_bounds,
     width_default = width_default,
-    width_vector = width_vector
+    width_vector = width_vector,
+    target_tau_index = target_tau_index
   )
 }
 
@@ -199,6 +211,7 @@ run_one_chain <- function(job) {
     max_dense_dim = controls$max_dense_dim,
     sigma_bounds = prep$sigma_bounds,
     gamma_slice_width = prep$width_vector,
+    gamma_slice_max_steps = gamma_slice_max_steps,
     init = init
   )
   chain_elapsed <- proc.time()[["elapsed"]] - chain_start
@@ -256,7 +269,31 @@ if (!nrow(selected)) stop("No Joint exQDESN exAL-RHS cases selected.", call. = F
 
 width_multiplier <- parse_number(arg_value("width_multiplier"))
 if (!is.finite(width_multiplier) || width_multiplier <= 0) stop("width_multiplier must be positive.", call. = FALSE)
+gamma_slice_max_steps <- parse_integer(arg_value("gamma_slice_max_steps"))
+target_tau <- parse_number(arg_value("target_tau"), allow_empty = TRUE)
+target_width_multiplier <- parse_number(arg_value("target_width_multiplier"), allow_empty = TRUE)
+if (!is.null(target_tau) && is.null(target_width_multiplier)) {
+  stop("target_width_multiplier is required when target_tau is set.", call. = FALSE)
+}
+if (is.null(target_tau) && !is.null(target_width_multiplier)) {
+  stop("target_tau is required when target_width_multiplier is set.", call. = FALSE)
+}
+if (!is.null(target_width_multiplier) && (!is.finite(target_width_multiplier) || target_width_multiplier <= 0)) {
+  stop("target_width_multiplier must be positive.", call. = FALSE)
+}
 experiment_id <- paste0("gamma_width_multiplier_", gsub("[^0-9]+", "p", format(width_multiplier, trim = TRUE, scientific = FALSE)))
+if (!is.null(target_tau)) {
+  experiment_id <- paste0(
+    experiment_id,
+    "_target_tau_",
+    gsub("[^0-9]+", "p", format(target_tau, trim = TRUE, scientific = FALSE)),
+    "_width_",
+    gsub("[^0-9]+", "p", format(target_width_multiplier, trim = TRUE, scientific = FALSE))
+  )
+}
+if (!identical(gamma_slice_max_steps, 100L)) {
+  experiment_id <- paste0(experiment_id, "_steps_", gamma_slice_max_steps)
+}
 vb_max_iter_override <- parse_integer(arg_value("vb_max_iter_override"), allow_empty = TRUE)
 vb_grid_override <- parse_csv(arg_value("adaptive_vb_max_iter_grid_override"))
 gamma_init_mode <- as.character(arg_value("gamma_init_mode"))[[1L]]
@@ -428,6 +465,10 @@ vb_case_summary <- app_joint_qdesn_bind_rows(lapply(case_preps, function(prep) {
     sigma_upper_bound = prep$sigma_bounds[[2L]],
     default_gamma_slice_width_by_tau = paste(format(prep$width_default, digits = 8, trim = TRUE), collapse = ","),
     gamma_slice_width_by_tau = paste(format(prep$width_vector, digits = 8, trim = TRUE), collapse = ","),
+    gamma_slice_max_steps = gamma_slice_max_steps,
+    target_tau = target_tau %||% NA_real_,
+    target_width_multiplier = target_width_multiplier %||% NA_real_,
+    target_tau_index = if (length(prep$target_tau_index)) paste(prep$target_tau_index, collapse = ",") else "",
     stringsAsFactors = FALSE
   ))
 }))
@@ -522,6 +563,9 @@ run_config <- data.frame(
   selected_cases = paste(selected$case_id, collapse = ","),
   n_cases = nrow(selected),
   width_multiplier = width_multiplier,
+  target_tau = target_tau %||% NA_real_,
+  target_width_multiplier = target_width_multiplier %||% NA_real_,
+  gamma_slice_max_steps = gamma_slice_max_steps,
   trace_write_stride = trace_write_stride,
   n_chains = mcmc_controls$n_chains,
   mcmc_n_iter = mcmc_controls$mcmc_n_iter,
@@ -554,6 +598,9 @@ writeLines(c(
   sprintf("- Fixture source: `%s`", artifacts$fixture_dir),
   sprintf("- Cases: `%s`", nrow(selected)),
   sprintf("- Width multiplier: `%s`", width_multiplier),
+  sprintf("- Target tau override: `%s`", if (is.null(target_tau)) "none" else target_tau),
+  sprintf("- Target width multiplier: `%s`", if (is.null(target_width_multiplier)) "none" else target_width_multiplier),
+  sprintf("- Gamma slice max steps: `%s`", gamma_slice_max_steps),
   sprintf("- Chains per case: `%s`", mcmc_controls$n_chains),
   sprintf("- MCMC iterations/burn/thin: `%s/%s/%s`", mcmc_controls$mcmc_n_iter, mcmc_controls$mcmc_burn, mcmc_controls$mcmc_thin),
   sprintf("- Gamma initialisation mode: `%s`", gamma_init_mode),

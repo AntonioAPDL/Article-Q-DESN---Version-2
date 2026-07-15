@@ -1,3 +1,23 @@
+repo_root <- if (exists("app_repo_root", mode = "function")) {
+  app_repo_root()
+} else if (dir.exists(file.path(getwd(), "application/R"))) {
+  normalizePath(getwd(), mustWork = TRUE)
+} else {
+  file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1]
+  if (!is.na(file_arg)) {
+    normalizePath(file.path(dirname(normalizePath(sub("^--file=", "", file_arg), mustWork = TRUE)), "..", ".."), mustWork = TRUE)
+  } else {
+    stop("Cannot determine repository root for joint exAL MCMC test.", call. = FALSE)
+  }
+}
+
+source(file.path(repo_root, "application/R/00_packages.R"))
+app_set_repo_root(repo_root)
+source(app_path("application/R/input_contract.R"))
+source(app_path("application/R/synthesize_quantiles.R"))
+source(app_path("application/R/score_forecasts.R"))
+source(app_path("application/R/joint_qvp_qdesn.R"))
+
 set.seed(20260701)
 Tn <- 16L
 Z <- cbind(

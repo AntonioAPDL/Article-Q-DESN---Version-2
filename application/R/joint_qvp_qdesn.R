@@ -15051,7 +15051,8 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   alpha_min_spacing = 0,
   max_dense_dim = 250L,
   sigma_bounds = c(1.0e-8, 1.0e8),
-  gamma_slice_width = NULL
+  gamma_slice_width = NULL,
+  gamma_slice_max_steps = 100L
 ) {
   if (!is.null(seed)) set.seed(seed)
   y <- as.numeric(y)
@@ -15068,6 +15069,11 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     stop("Invalid MCMC iteration, burn, or thin controls.", call. = FALSE)
   }
   if (!is.finite(kappa) || kappa <= 0) stop("kappa must be positive.", call. = FALSE)
+  gamma_slice_max_steps <- as.integer(gamma_slice_max_steps)
+  if (!length(gamma_slice_max_steps) || any(is.na(gamma_slice_max_steps)) ||
+      any(gamma_slice_max_steps <= 0L)) {
+    stop("gamma_slice_max_steps must be a positive integer scalar or vector.", call. = FALSE)
+  }
   sigma_bounds <- as.numeric(sigma_bounds)
   if (length(sigma_bounds) != 2L || any(!is.finite(sigma_bounds)) ||
       sigma_bounds[[1L]] <= 0 || sigma_bounds[[2L]] <= sigma_bounds[[1L]]) {
@@ -15154,11 +15160,17 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
         gamma_slice_width <- as.numeric(gamma_slice_width)
         if (length(gamma_slice_width) == 1L) gamma_slice_width[[1L]] else gamma_slice_width[[k]]
       }
+      gamma_steps <- if (length(gamma_slice_max_steps) == 1L) {
+        gamma_slice_max_steps[[1L]]
+      } else {
+        gamma_slice_max_steps[[k]]
+      }
       gamma[[k]] <- app_joint_qvp_slice_bounded_one(
         x0 = gamma[[k]],
         lower = support$lower[[k]] + 1.0e-8,
         upper = support$upper[[k]] - 1.0e-8,
         width = gamma_width,
+        max_steps = gamma_steps,
         log_density = function(g) {
           app_joint_qvp_gamma_log_kernel(
             gamma = g,

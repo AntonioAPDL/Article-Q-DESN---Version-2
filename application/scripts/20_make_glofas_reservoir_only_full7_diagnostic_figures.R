@@ -40,8 +40,26 @@ read_required_csv <- function(path, label) {
   app_read_csv(path)
 }
 
+is_blank_csv <- function(path) {
+  if (!file.exists(path)) return(TRUE)
+  info <- file.info(path)
+  if (!is.finite(info$size) || info$size == 0) return(TRUE)
+  lines <- readLines(path, n = 5L, warn = FALSE)
+  if (!length(lines)) return(TRUE)
+  text <- trimws(paste(lines, collapse = ""))
+  !nzchar(text) || identical(text, "\"\"")
+}
+
 read_optional_csv <- function(path) {
-  if (file.exists(path)) app_read_csv(path) else data.frame()
+  if (!file.exists(path) || is_blank_csv(path)) return(data.frame())
+  app_read_csv(path)
+}
+
+ensure_empty_columns <- function(x, columns) {
+  for (nm in columns) {
+    if (!nm %in% names(x)) x[[nm]] <- vector("logical", nrow(x))
+  }
+  x
 }
 
 save_plot <- function(plot, name, width = 9, height = 5.5) {
@@ -108,7 +126,8 @@ synth_tables <- file.path(synth_dir, "tables")
 pred <- read_required_csv(file.path(synth_tables, "prediction_quantiles_synthesized.csv"), "synthesized predictions")
 draws <- read_optional_csv(file.path(synth_tables, "posterior_draw_predictions.csv"))
 score_q <- read_required_csv(file.path(synth_tables, "score_by_quantile.csv"), "score-by-quantile table")
-score_i <- read_required_csv(file.path(synth_tables, "score_by_interval.csv"), "score-by-interval table")
+score_i <- read_optional_csv(file.path(synth_tables, "score_by_interval.csv"))
+score_i <- ensure_empty_columns(score_i, c("model_id", "horizon", "interval_score", "covered", "nominal"))
 score_c <- read_required_csv(file.path(synth_tables, "score_by_crps.csv"), "score-by-CRPS table")
 score_s <- read_required_csv(file.path(synth_tables, "score_summary.csv"), "score summary")
 cross_d <- read_required_csv(file.path(synth_tables, "quantile_synthesis_diagnostics.csv"), "crossing diagnostics")
@@ -430,20 +449,31 @@ figures <- c(figures, crps_by_horizon = save_plot(
   figure_name("crps_by_horizon"), 8.6, 4.8
 ))
 
-interval_summary <- aggregate(cbind(interval_score, covered) ~ model_label + nominal, score_i, mean, na.rm = TRUE)
+interval_summary <- data.frame(
+  model_label = character(),
+  nominal = numeric(),
+  interval_score = numeric(),
+  covered = numeric(),
+  stringsAsFactors = FALSE
+)
+if (nrow(score_i) && all(c("model_label", "nominal", "interval_score", "covered") %in% names(score_i))) {
+  interval_summary <- aggregate(cbind(interval_score, covered) ~ model_label + nominal, score_i, mean, na.rm = TRUE)
+}
 app_write_csv(interval_summary, file.path(run_dirs$tables, "interval_score_coverage_summary.csv"))
-figures <- c(figures, interval_coverage_score = save_plot(
-  ggplot2::ggplot(interval_summary, ggplot2::aes(factor(nominal), covered, fill = model_label)) +
-    ggplot2::geom_col(position = "dodge", width = 0.68) +
-    ggplot2::geom_hline(ggplot2::aes(yintercept = nominal), data = unique(interval_summary["nominal"]), linetype = 2, color = "gray35") +
-    ggplot2::scale_fill_manual(values = model_palette) +
-    ggplot2::labs(
-      title = "Empirical Interval Coverage by Nominal Level",
-      x = "Nominal interval", y = "Empirical coverage", fill = "Model"
-    ) +
-    theme_diag(),
-  figure_name("interval_coverage"), 8.2, 4.8
-))
+if (nrow(interval_summary)) {
+  figures <- c(figures, interval_coverage_score = save_plot(
+    ggplot2::ggplot(interval_summary, ggplot2::aes(factor(nominal), covered, fill = model_label)) +
+      ggplot2::geom_col(position = "dodge", width = 0.68) +
+      ggplot2::geom_hline(ggplot2::aes(yintercept = nominal), data = unique(interval_summary["nominal"]), linetype = 2, color = "gray35") +
+      ggplot2::scale_fill_manual(values = model_palette) +
+      ggplot2::labs(
+        title = "Empirical Interval Coverage by Nominal Level",
+        x = "Nominal interval", y = "Empirical coverage", fill = "Model"
+      ) +
+      theme_diag(),
+    figure_name("interval_coverage"), 8.2, 4.8
+  ))
+}
 
 figures <- c(figures, interval_widths = save_plot(
   ggplot2::ggplot(widths[widths$model_label == "Q-DESN", ], ggplot2::aes(horizon)) +

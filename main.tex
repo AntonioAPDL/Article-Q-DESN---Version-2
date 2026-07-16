@@ -1629,7 +1629,7 @@ the relevant scores depend on the empirical setting. In simulations with a
 known oracle quantile path, fit-recovery metrics such as quantile-path RMSE,
 mean absolute error, bias, and correlation are available. In both simulations
 and applications, forecast scoring must use common forecast origins and horizons
-for all candidates. For a single fitted quantile level, pinball loss is the
+for all candidates. For a single fitted quantile level, check loss is the
 proper score aligned with the target functional. When several levels are fit
 and an estimated predictive quantile function is reported, interval score,
 empirical coverage, interval length, CRPS from the synthesized grid, and PIT
@@ -1802,9 +1802,9 @@ and leads for every model. The article-facing tables report fit recovery and
 forecast scoring; runtime, row-completion, and source-hash diagnostics remain
 in the guarded interface files and generated manifest.
 
-For single-level quantile fits, the primary proper score is pinball loss at the
+For single-level quantile fits, the primary proper score is check loss at the
 fitted level. Quantile MAE and quantile RMSE compare the fitted or forecast
-quantile summary directly with the known oracle quantile path, while pinball
+quantile summary directly with the known oracle quantile path, while check
 loss scores realized observations relative to the reported quantile. These
 metrics therefore answer different questions and should not be collapsed into
 one rank.
@@ -1832,7 +1832,7 @@ with leads 1--30 and origin stride 30, and the three target levels
 summaries. The entries are generated from lead-level rolling-origin interface
 rows: fit RMSE measures recovery of the known oracle quantile path on the
 training window, forecast MAE measures oracle-quantile forecast error averaged
-across scored rolling-origin lead-target pairs, and pinball loss scores
+across scored rolling-origin lead-target pairs, and check loss scores
 realized observations at the fitted quantile level. Runtime and row-level
 provenance are retained in the generated manifest. Boldface marks the lowest
 MCMC value within each quantile level and metric, not a global ranking across

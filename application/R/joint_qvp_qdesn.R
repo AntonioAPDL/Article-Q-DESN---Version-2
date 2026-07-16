@@ -15035,6 +15035,23 @@ app_joint_qvp_gamma_log_kernel <- function(gamma, y, fitted_no_alpha, alpha, sig
   if (is.finite(val)) val else -Inf
 }
 
+app_joint_qvp_gamma_to_eta <- function(gamma, lower, upper) {
+  width <- upper - lower
+  if (!is.finite(width) || width <= 0) stop("Invalid gamma support.", call. = FALSE)
+  p <- (gamma - lower) / width
+  p <- pmin(pmax(p, .Machine$double.eps), 1 - .Machine$double.eps)
+  log(p) - log1p(-p)
+}
+
+app_joint_qvp_eta_to_gamma <- function(eta, lower, upper) {
+  lower + (upper - lower) * stats::plogis(eta)
+}
+
+app_joint_qvp_gamma_logit_jacobian <- function(eta, lower, upper) {
+  p <- stats::plogis(eta)
+  log(upper - lower) + log(p) + log1p(-p)
+}
+
 app_joint_qvp_fit_exal_mcmc_tiny <- function(
   y,
   Z,
@@ -15052,9 +15069,11 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   max_dense_dim = 250L,
   sigma_bounds = c(1.0e-8, 1.0e8),
   gamma_slice_width = NULL,
-  gamma_slice_max_steps = 100L
+  gamma_slice_max_steps = 100L,
+  gamma_update = c("bounded_slice", "logit_slice")
 ) {
   if (!is.null(seed)) set.seed(seed)
+  gamma_update <- match.arg(gamma_update)
   y <- as.numeric(y)
   Z <- app_joint_qvp_check_design(Z)
   tau <- app_joint_qvp_validate_tau_grid(tau)
@@ -15155,7 +15174,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 
       gamma_width_default <- (support$upper[[k]] - support$lower[[k]]) / 20
       gamma_width <- if (is.null(gamma_slice_width)) {
-        gamma_width_default
+        if (identical(gamma_update, "logit_slice")) 1 else gamma_width_default
       } else {
         gamma_slice_width <- as.numeric(gamma_slice_width)
         if (length(gamma_slice_width) == 1L) gamma_slice_width[[1L]] else gamma_slice_width[[k]]
@@ -15165,26 +15184,50 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       } else {
         gamma_slice_max_steps[[k]]
       }
-      gamma[[k]] <- app_joint_qvp_slice_bounded_one(
-        x0 = gamma[[k]],
-        lower = support$lower[[k]] + 1.0e-8,
-        upper = support$upper[[k]] - 1.0e-8,
-        width = gamma_width,
-        max_steps = gamma_steps,
-        log_density = function(g) {
-          app_joint_qvp_gamma_log_kernel(
-            gamma = g,
-            y = y,
-            fitted_no_alpha = fitted_no_alpha[, k],
-            alpha = alpha[[k]],
-            sigma = sigma[[k]],
-            s = s[, k],
-            v = v[, k],
-            tau = tau[[k]],
-            kappa = kappa
-          )
-        }
-      )
+      gamma_log_density <- function(g) {
+        app_joint_qvp_gamma_log_kernel(
+          gamma = g,
+          y = y,
+          fitted_no_alpha = fitted_no_alpha[, k],
+          alpha = alpha[[k]],
+          sigma = sigma[[k]],
+          s = s[, k],
+          v = v[, k],
+          tau = tau[[k]],
+          kappa = kappa
+        )
+      }
+      if (identical(gamma_update, "logit_slice")) {
+        support_lower <- support$lower[[k]]
+        support_upper <- support$upper[[k]]
+        margin <- max(1.0e-8, 1.0e-8 * (support_upper - support_lower))
+        gamma_lower <- support_lower + margin
+        gamma_upper <- support_upper - margin
+        eta_lower <- app_joint_qvp_gamma_to_eta(gamma_lower, support_lower, support_upper)
+        eta_upper <- app_joint_qvp_gamma_to_eta(gamma_upper, support_lower, support_upper)
+        eta0 <- app_joint_qvp_gamma_to_eta(gamma[[k]], support_lower, support_upper)
+        eta_new <- app_joint_qvp_slice_bounded_one(
+          x0 = eta0,
+          lower = eta_lower,
+          upper = eta_upper,
+          width = gamma_width,
+          max_steps = gamma_steps,
+          log_density = function(eta) {
+            g <- app_joint_qvp_eta_to_gamma(eta, support_lower, support_upper)
+            gamma_log_density(g) + app_joint_qvp_gamma_logit_jacobian(eta, support_lower, support_upper)
+          }
+        )
+        gamma[[k]] <- app_joint_qvp_eta_to_gamma(eta_new, support_lower, support_upper)
+      } else {
+        gamma[[k]] <- app_joint_qvp_slice_bounded_one(
+          x0 = gamma[[k]],
+          lower = support$lower[[k]] + 1.0e-8,
+          upper = support$upper[[k]] - 1.0e-8,
+          width = gamma_width,
+          max_steps = gamma_steps,
+          log_density = gamma_log_density
+        )
+      }
     }
     if (iter %in% keep_idx) {
       keep_pos <- keep_pos + 1L
@@ -15211,6 +15254,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
     tau = tau,
     kappa = kappa,
+    gamma_update = gamma_update,
     seed = seed,
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("joint_qvp_exal_mcmc_tiny_%s", format(Sys.time(), "%Y%m%d%H%M%S")),

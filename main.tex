@@ -222,8 +222,8 @@ hierarchy. Fourth, multi-quantile reporting is treated through two distinct
 routes: independent single-level fits followed by monotone synthesis, and a
 joint quantile-vector readout that adapts QVP-style adjacent shrinkage to
 quantile-specific readout slopes. Fifth, a supplementary RQR--DESN
-interval-readout extension uses the same fixed-feature view to estimate
-coverage-indexed intervals through a generalized-Bayes loss. Synthetic
+generalized-Bayes interval-readout extension uses the fixed DESN feature map
+to estimate coverage-indexed intervals directly. Synthetic
 experiments and the GloFAS and
 PriceFM applications then illustrate the resulting workflow under reproducible
 forecast-validation protocols.
@@ -321,9 +321,12 @@ contract is applied.
 
 Relaxed quantile regression (RQR) provides a different route to interval
 construction by learning interval roots directly rather than first estimating a
-preassigned lower and upper quantile pair \citep{PouplinEtAl2024RQR}. We use
-this idea only as a supplementary fixed-feature interval readout: two DESN
-readout surfaces define ordered endpoints, and a generalized-Bayes update
+preassigned lower and upper quantile pair
+\citep{PouplinEtAl2024RQR}. This avoids tying a target coverage level to an
+equal-tailed or symmetric quantile pair when the conditional error
+distribution may be skewed. We use this idea only as a supplementary
+fixed-feature interval readout: two DESN readout surfaces define ordered
+endpoints, and a generalized-Bayes update
 \citep{BissiriHolmesWalker2016GeneralBayes} targets the RQR loss. This
 extension is not a response likelihood and does not supply posterior
 predictive response draws; its evidence is therefore reported through interval
@@ -1080,6 +1083,83 @@ rearrangement. The synthetic joint validation below therefore records raw
 crossings separately from the declared monotone reporting contract used for
 scored quantile grids.
 
+\subsection{Generalized-Bayes RQR--DESN Interval Readout}
+\label{subsec:rqr-desn-model}
+
+\noindent
+The preceding models target one or more conditional quantile ordinates. A
+separate supplementary readout can instead target a prediction interval
+directly. For a coverage level \(c\in(0,1)\), the RQR--DESN interval readout
+uses two exchangeable fixed-feature root surfaces
+\[
+\eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
+\eta_{2t}=\vect x_t^\top\vect\beta_2,
+\]
+and reports ordered endpoints
+\[
+L_t=\min(\eta_{1t},\eta_{2t}),\qquad
+U_t=\max(\eta_{1t},\eta_{2t}).
+\]
+The root labels are not lower and upper labels; ordering is applied only when
+interval endpoints are reported. Let
+\[
+e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}).
+\]
+Then \(e_t<0\) exactly when \(y_t\) lies between the two roots. The RQR loss
+uses this sign information through
+\[
+\rho_c(e)=e\{c-\ind(e<0)\},
+\]
+and the empirical risk is
+\begin{equation}
+R_{T,c}(\vect\beta_1,\vect\beta_2)
+=
+\sum_{t=1}^T
+\rho_c\!\left[
+\{y_t-\vect x_t^\top\vect\beta_1\}
+\{y_t-\vect x_t^\top\vect\beta_2\}
+\right].
+\label{eq:rqr-risk-main}
+\end{equation}
+
+The Bayesian object used here is a generalized posterior over the two readout
+coefficient vectors,
+\begin{equation}
+\Pi_{\mathrm R}
+(d\vect\beta_1,d\vect\beta_2\mid\vect y,\mat X)
+\propto
+\pi_\beta(d\vect\beta_1)\pi_\beta(d\vect\beta_2)
+\exp\{-\omega_{\mathrm R}R_{T,c}(\vect\beta_1,\vect\beta_2)\},
+\label{eq:rqr-generalized-posterior-main}
+\end{equation}
+where \(\omega_{\mathrm R}>0\) is a learning rate
+\citep{BissiriHolmesWalker2016GeneralBayes}. The normalization in
+\eqref{eq:rqr-generalized-posterior-main} is over coefficient space, not over
+future response values. Consequently, RQR--DESN provides posterior summaries
+for interval endpoints, widths, and midpoints; it is not a response likelihood
+and does not by itself define posterior predictive response draws.
+
+At the population level, the unrestricted RQR problem has a useful
+interpretation. Writing \(L(x)\) and \(U(x)\) for the endpoint functions, under
+regularity, positive interval width, and an interior solution, the
+first-order conditions imply
+\[
+\Pr\{L(x)<Y<U(x)\mid X=x\}=c
+\]
+and
+\[
+\E\!\left[
+Y\ind\{L(x)<Y<U(x)\}\mid X=x
+\right]
+=c\,\E(Y\mid X=x).
+\]
+Thus the target is a coverage-plus-mean-balance interval
+\citep{PouplinEtAl2024RQR}. It is not generally an equal-tailed interval, a
+minimum-width interval, or a highest-density interval. With finite DESN
+features and regularized linear roots, the fitted readout is best interpreted
+as an RQR-risk approximation within the selected feature class, with coverage
+checked empirically in the validation design.
+
 % ============================================================
 \section{Posterior Inference}
 \label{sec:inference}
@@ -1198,6 +1278,50 @@ inverse-gamma entries denote closed-form full conditionals for MCMC and
 closed-form coordinate factors for VB. The block order is intentionally the
 same in both algorithms; only the final exAL scale-asymmetry block requires a
 non-conjugate update.
+
+\subsection{Exact Loss-Kernel Augmentation for RQR--DESN}
+\label{subsec:rqr-desn-inference}
+
+\noindent
+The RQR--DESN generalized posterior in
+Section~\ref{subsec:rqr-desn-model} has its own augmentation. It is separate
+from the AL/exAL response augmentations used by Q--DESN. Let
+\[
+r_t=y_t^2,\qquad
+m_t^{\mathrm R}=y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
+\]
+so that \(r_t-m_t^{\mathrm R}=e_t\). With
+\[
+\sigma_{\mathrm R}=\omega_{\mathrm R}^{-1},\qquad
+\xi_c=\frac{1-2c}{c(1-c)},\qquad
+\phi_c=\frac{2}{c(1-c)},
+\]
+the exponentiated RQR loss has the exact kernel identity
+\begin{align}
+\exp\{-\omega_{\mathrm R}\rho_c(e_t)\}
+={}&
+\frac{\sigma_{\mathrm R}}{c(1-c)}
+\int_0^\infty
+\Normal\!\left(
+r_t\mid m_t^{\mathrm R}+\xi_c v,\,
+\phi_c\sigma_{\mathrm R}v
+\right)
+\frac{1}{\sigma_{\mathrm R}}\exp(-v/\sigma_{\mathrm R})\,dv .
+\label{eq:rqr-loss-kernel-main}
+\end{align}
+This is an exact augmentation of the loss kernel, not a generative model for
+the original response. The observed \(y_t\) appears in both \(r_t\) and
+\(m_t^{\mathrm R}\), so the pseudo-response form should not be interpreted as
+a Gaussian observation equation for \(y_t\).
+
+Conditional on the latent scales \(v_t\), each root coefficient block is
+Gaussian after conditioning on the other root, and the \(v_t\) blocks have GIG
+full conditionals. Ridge and RHS priors enter through the same canonical
+Gaussian prior-precision form used for Q--DESN readouts, applied separately to
+the two roots. The complete RQR--DESN MCMC block, including draw-level
+endpoint ordering, is given in the supplement.
+Algorithms~\ref{alg:mcmc}--\ref{alg:vb} below remain the Q--DESN and
+quantile-vector Q--DESN algorithms.
 
 \subsection{Markov Chain Monte Carlo}
 
@@ -1915,26 +2039,15 @@ making the main text table-heavy.
 
 \subsection{RQR--DESN Interval-Readout Confirmation}
 
-A final simulation-validation layer considers an interval-readout extension
-rather than another quantile-grid model. Relaxed quantile regression estimates
-an interval at a target coverage level \(c\) through two root functions
-\citep{PouplinEtAl2024RQR}. In the fixed-feature version used here, the roots
-are \(\eta_{1t}=\vect x_t^\top\vect\beta_1\) and
-\(\eta_{2t}=\vect x_t^\top\vect\beta_2\), with reported endpoints
-\[
-L_t=\min(\eta_{1t},\eta_{2t}),\qquad
-U_t=\max(\eta_{1t},\eta_{2t}).
-\]
-The generalized-Bayes update is based on the loss
-\[
-\rho_c\{(y_t-\eta_{1t})(y_t-\eta_{2t})\},
-\]
-where \(\rho_c(u)=u\{c-\ind(u<0)\}\). Thus \(c\) indexes an interval
-coverage target, not a lower-tail quantile level. The resulting RQR--DESN
-readout is useful for direct interval estimation, but it is not a normalized
-likelihood for the response and does not define posterior predictive response
-draws. The supplement records the pseudo-AL augmentation and MCMC blocks used
-for this readout.
+A final simulation-validation layer evaluates the RQR--DESN interval readout
+defined in Section~\ref{subsec:rqr-desn-model} and computed using the
+loss-kernel augmentation in Section~\ref{subsec:rqr-desn-inference}. This is
+not another quantile-grid model. The study asks whether direct
+coverage-indexed interval roots can recover oracle endpoints in fixed designs
+and improve held-out interval scores on teacher-forced DESN features. The
+validation is interpreted through ordered endpoints, width, empirical
+coverage, interval score, and paired baseline deltas; no response-predictive
+density or recursive response simulation is claimed.
 
 The confirmation reported here follows a broad package-side screen and then
 reruns the selected MCMC interval-readout configurations with fresh seeds. The
@@ -2331,9 +2444,11 @@ The validation evidence is correspondingly scoped. The single-quantile dynamic
 simulations test recovery and held-out forecasting under pinned data-generating
 mechanisms. The joint multi-quantile synthetic study checks coherence
 under known conditional quantile paths. The RQR--DESN confirmation evaluates a
-coverage-indexed interval readout through MCMC interval scores, empirical
-coverage, and paired baseline deltas; it is not a response predictive
-likelihood or recursive simulation study. The GloFAS application is an
+coverage-indexed interval readout whose ideal population target is
+coverage-plus-mean balance rather than an equal-tailed or shortest-interval
+rule; the evidence is through MCMC interval scores, empirical coverage, and
+paired baseline deltas, not through a response predictive likelihood or
+recursive simulation study. The GloFAS application is an
 audited one-origin streamflow calibration case using computationally light
 independent Q--DESN AL--VB fits and monotone synthesis, while the PriceFM
 comparison is a fold-aligned

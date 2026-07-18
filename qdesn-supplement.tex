@@ -80,7 +80,7 @@ VB--LD computational approximation, and the joint quantile-vector QVP--RHS
 extension.
 It also records the relaxed quantile regression DESN (RQR--DESN)
 interval-readout extension as a generalized-Bayes target over two fixed-feature
-root readouts, together with its supplementary targeted-confirmation results.
+root readouts, together with its supplementary calibration-screened evidence.
 The notation is aligned with the main article.
 \end{abstract}
 
@@ -155,7 +155,7 @@ extension. \\
 Supplementary validation tables &
 Section~\ref{sec:supp_validation_tables} &
 Preserves VB--LD companion panels, joint-validation provenance, and the
-RQR--DESN targeted-confirmation table outside the main article evidence path. \\
+RQR--DESN calibration-screened table outside the main article evidence path. \\
 Posterior prediction and monotone reporting &
 Section~\ref{sec:forecast_synthesis} &
 Links the fitted quantile readout to working-likelihood forecast simulation and
@@ -923,10 +923,8 @@ likelihood parameters,
 \mat\Omega).
 \label{eq:supp_joint_stacked_likelihood}
 \end{equation}
-If a composite-likelihood learning rate is used, the Gaussian observation term
-in \eqref{eq:supp_joint_stacked_likelihood} is multiplied by
-\(\kappa>0\). The default is \(\kappa=1\); \(\kappa=1/Q\) is a conservative
-sensitivity setting.
+The reported joint analyses use the untempered product of these
+quantile-specific working-likelihood factors.
 
 \subsection{QVP--RHS Prior}
 \label{subsec:supp_joint_qvp_prior}
@@ -1004,7 +1002,7 @@ the complete-data posterior for the multi-quantile case is
 \nonumber\\
 &\quad\propto
 \exp\left[
--\frac{\kappa}{2}
+-\frac{1}{2}
 (\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
 -\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)^\top
 \mat\Omega^{-1}
@@ -1015,7 +1013,7 @@ the complete-data posterior for the multi-quantile case is
 &\qquad\times
 \prod_{q=1}^Q\prod_{t=1}^T
 \left\{
-(\omega_{q,t})^{-\kappa/2}
+(\omega_{q,t})^{-1/2}
 p(v_{q,t}\mid\sigma_q)p(s_{q,t})
 \right\}
 \prod_{q=1}^Q p(\sigma_q)\pi_{\gamma_q}(\gamma_q)\ind\{L_q<\gamma_q<U_q\}
@@ -1026,10 +1024,9 @@ p(\vect\beta_{\mathrm{base}}\mid\Theta_0)p(\Theta_0)\,
 p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)p(\Theta_\Delta).
 \label{eq:supp_joint_complete_posterior}
 \end{align}
-The factor \(\kappa\) is attached to the Gaussian observation contribution.
-The latent-variable densities remain the exAL augmentation densities; this
-keeps \(\kappa=1\) equal to the ordinary complete-data posterior and makes
-other choices interpretable as tempered observation information.
+This is the untempered complete-data posterior used for the reported joint
+model. Alternative complete-data observation tempering would define a separate
+generalized posterior and is not part of the article evidence path.
 For \(Q=1\), remove
 \(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), and the baseline-prior factor
 from \eqref{eq:supp_joint_complete_posterior}, set
@@ -1045,13 +1042,13 @@ Combining \eqref{eq:supp_joint_stacked_likelihood} and
 \begin{align}
 \mat K_\beta
 &=
-\kappa\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\mat Z_{\mathrm{st}}
+\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\mat Z_{\mathrm{st}}
 +\mat H^\top\mat D_\Delta^{-1}\mat H,\\
 \vect m_\beta
 &=
 \mat K_\beta^{-1}
 \left\{
-\kappa\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\vect r_\beta
+\mat Z_{\mathrm{st}}^\top\mat\Omega^{-1}\vect r_\beta
 +\mat H^\top\mat D_\Delta^{-1}\tilde{\vect\beta}_{\mathrm{base}}
 \right\}.
 \label{eq:supp_joint_beta_conditional}
@@ -1084,12 +1081,12 @@ e_{q,t}^{\alpha}=y_t-d_{q,t}-\tilde{\vect x}_t^\top\vect\beta_q .
 Then
 \begin{align}
 K_{\alpha,q}
-&=V_{\alpha,q}^{-1}+\kappa\sum_{t=1}^T\omega_{q,t}^{-1},\\
+&=V_{\alpha,q}^{-1}+\sum_{t=1}^T\omega_{q,t}^{-1},\\
 m_{\alpha,q}
 &=K_{\alpha,q}^{-1}
 \left\{
 V_{\alpha,q}^{-1}a_{\alpha,q}
-+\kappa\sum_{t=1}^T\omega_{q,t}^{-1}e_{q,t}^{\alpha}
++\sum_{t=1}^T\omega_{q,t}^{-1}e_{q,t}^{\alpha}
 \right\},
 \end{align}
 and \(\alpha_q\mid\cdots\sim\Normal(m_{\alpha,q},K_{\alpha,q}^{-1})\). For a
@@ -1105,8 +1102,7 @@ low-dimensional Metropolis--Hastings, slice, or Laplace step.
 \subsection{exAL Latent-Variable and Scale Blocks}
 
 Conditional on the joint readout, each exAL latent update is a
-quantile-indexed copy of the single-level update with the Gaussian likelihood
-scaled by \(\kappa\). Define
+quantile-indexed copy of the single-level update. Define
 \[
 e_{q,t}^{v}
 =y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-\sigma_qD_qs_{q,t}.
@@ -1115,7 +1111,7 @@ Then
 \[
 p(v_{q,t}\mid\cdots)
 \propto
-v_{q,t}^{-\kappa/2}
+v_{q,t}^{-1/2}
 \exp\left[
 -\frac12\left\{
 \chi_{q,t}^{v}v_{q,t}^{-1}
@@ -1125,11 +1121,11 @@ v_{q,t}^{-\kappa/2}
 \]
 which is a GIG density with
 \[
-\chi_{q,t}^{v}=\frac{\kappa(e_{q,t}^{v})^2}{\sigma_qB_q},
+\chi_{q,t}^{v}=\frac{(e_{q,t}^{v})^2}{\sigma_qB_q},
 \qquad
-\psi_{q,t}^{v}=\frac{\kappa A_q^2}{\sigma_qB_q}+\frac{2}{\sigma_q}.
+\psi_{q,t}^{v}=\frac{A_q^2}{\sigma_qB_q}+\frac{2}{\sigma_q}.
 \]
-The GIG index is \(1-\kappa/2\). Terms that do not depend on \(v_{q,t}\) have
+The GIG index is \(1/2\). Terms that do not depend on \(v_{q,t}\) have
 been omitted from the kernel.
 
 For the positive-shift latent variable, define
@@ -1140,10 +1136,10 @@ e_{q,t}^{s}
 The conditional distribution is positive-truncated Normal with precision and
 mean
 \[
-K_{s,q,t}=1+\frac{\kappa\sigma_qD_q^2}{B_qv_{q,t}},
+K_{s,q,t}=1+\frac{\sigma_qD_q^2}{B_qv_{q,t}},
 \qquad
 m_{s,q,t}=K_{s,q,t}^{-1}
-\frac{\kappa D_qe_{q,t}^{s}}{B_qv_{q,t}},
+\frac{D_qe_{q,t}^{s}}{B_qv_{q,t}},
 \]
 that is,
 \[
@@ -1157,7 +1153,7 @@ kernel
 \begin{align}
 \ell_q(\sigma_q,\gamma_q)
 &=
--\frac{\kappa}{2}\sum_{t=1}^T
+-\frac{1}{2}\sum_{t=1}^T
 \left[
 \log\{\sigma_qB_qv_{q,t}\}
 +
@@ -1228,7 +1224,7 @@ with the analogous \(r/2\) update for a random baseline slab scale
 \begin{suppalgorithm}{Joint exAL--QVP--Q--DESN--RHS MCMC}
 \label{alg:joint_qdesn_mcmc}
 \emph{Input:} fixed non-intercept design \(\mat Z\), response \(\vect y\),
-quantile grid \(p_1<\cdots<p_Q\), priors, learning rate \(\kappa\), and MCMC
+quantile grid \(p_1<\cdots<p_Q\), priors, and MCMC
 controls. For \(Q=1\), use the collapsed convention
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and
 \(\Delta_1=\vect\beta_1\), and skip every baseline update below.
@@ -1579,7 +1575,7 @@ widths, and midpoints. Root labels are exchangeable, so reported summaries are
 formed after ordering endpoints draw by draw.
 \end{suppalgorithm}
 
-The article-facing validation uses MCMC only. A fast VB implementation may be
+The reported validation uses MCMC only. A fast VB implementation may be
 useful for screening or initialization, but VB interval uncertainty is not
 promoted here because it has not undergone a separate calibration study. The
 reported simulation evidence therefore uses empirical coverage, interval score,
@@ -1592,12 +1588,12 @@ width, and paired baseline deltas for MCMC interval summaries.
 The main article reports MCMC-only validation summaries. This section preserves
 the generated VB--LD companion panels, balanced joint-validation provenance,
 and full generated table captions so the computational comparison remains
-auditable without making VB rows the article-facing validation results.
+auditable without making VB rows the reported validation results.
 
 \subsection{Single-Quantile VB--LD Companion Panels}
 
 The following generated tables retain both inference panels from the pinned
-500-observation validation bundle. In the main article, only the MCMC rows from
+500-observation validation study. In the main article, only the MCMC rows from
 these source tables are displayed.
 
 \input{tables/qdesn_validation_tt500_final_tables.tex}
@@ -1606,7 +1602,7 @@ these source tables are displayed.
 \subsection{Joint Multi-Quantile Balanced MCMC Provenance}
 
 The following generated tables preserve the protocol, scenario-level balanced
-MCMC summaries, gate audit, and metric-specific winners for the joint and
+MCMC summaries, readiness audit, and metric-specific summaries for the joint and
 independent multi-quantile readouts. The VB and VB--LD stages remain the
 screening, calibration, and initialization layer; the tables below document the
 MCMC confirmation evidence used by the main article.
@@ -1614,10 +1610,10 @@ MCMC confirmation evidence used by the main article.
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
 
 \clearpage
-\subsection{RQR--DESN Targeted Confirmation}
+\subsection{RQR--DESN Supplementary Direct-Interval Evidence}
 \label{subsec:supp_rqr_confirmation}
 
-The RQR--DESN confirmation is supplementary because it changes the inferential
+The RQR--DESN evidence is supplementary because it changes the inferential
 target from conditional quantiles to direct coverage-indexed intervals. The
 study asks whether ordered interval roots can recover oracle endpoints in fixed
 designs and improve held-out interval scores on teacher-forced DESN features.
@@ -1634,14 +1630,15 @@ teacher-forced held-out interval scoring on fixed DESN features.
 
 \input{tables/rqr_desn_targeted_confirmation_winner_map.tex}
 
-Table~\ref{tab:rqr-desn-targeted-confirmation} reports the
-calibration-constrained MCMC winner in each stage, mechanism, and coverage
-cell. All selected rows improve over the empirical train-interval baseline in
-paired interval score. Ten of the twelve winner cells have green calibration,
-and the two yellow cells occur in the nonlinear dynamic DESN mechanism, where
-the coverage errors are positive but remain within the predeclared review band.
+Table~\ref{tab:rqr-desn-calibration-screened} reports the
+calibration-screened MCMC row in each stage, mechanism, and coverage cell. All
+selected rows improve over the empirical train-interval baseline in paired
+interval score. Ten of the twelve selected cells have green calibration, and
+the two yellow cells occur in the nonlinear dynamic DESN mechanism, where the
+coverage errors are positive but remain within the predeclared review band.
 These results support RQR--DESN as a promising direct-interval reuse of the
-fixed-feature infrastructure, while leaving VB calibration, recursive interval
+fixed-feature infrastructure. They are not a matched superiority study against
+quantile-derived intervals, and they leave VB calibration, recursive interval
 forecasting, and nested multi-coverage interval modeling as future work.
 
 \clearpage

@@ -74,6 +74,8 @@ kernels, Markov chain Monte Carlo (MCMC) full conditionals, mean-field
 variational Bayes coordinate updates, the Laplace--Delta treatment of
 non-conjugate blocks, evidence lower bound (ELBO) terms, and the joint
 quantile-vector QVP--RHS extension.
+It also records the RQR--DESN interval-readout extension as a
+generalized-Bayes target over two fixed-feature root readouts.
 The notation is aligned with the main article.
 \end{abstract}
 
@@ -139,6 +141,11 @@ Section~\ref{sec:joint_qdesn_supp} &
 Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, VB--LD
 factorization, ELBO terms, and crossing diagnostics for the joint
 multi-quantile readout. \\
+RQR--DESN interval readout &
+Section~\ref{sec:rqr_desn_supp} &
+Defines the two-root generalized-Bayes interval target, pseudo-AL
+augmentation, and MCMC block structure for the supplementary interval-readout
+extension. \\
 Posterior prediction and synthesis &
 Section~\ref{sec:forecast_synthesis} &
 Links the fitted quantile readout to working-likelihood forecast simulation and
@@ -1640,6 +1647,153 @@ grid, a final monotone rearrangement can be applied \citep{chernozhukov2010}.
 The finite grid does not identify tail shape outside \([p_1,p_K]\); parametric
 tail extension should therefore be treated as a separate modeling step rather
 than an implication of the composite working likelihood.
+
+\clearpage
+\section{RQR--DESN Interval-Readout Extension}
+\label{sec:rqr_desn_supp}
+
+The RQR--DESN extension changes the readout target while keeping the DESN
+feature map fixed. For a target coverage level \(c\in(0,1)\), the model uses
+two root readouts
+\[
+\eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
+\eta_{2t}=\vect x_t^\top\vect\beta_2,
+\]
+and reports the ordered interval endpoints
+\[
+L_t=\min(\eta_{1t},\eta_{2t}),\qquad
+U_t=\max(\eta_{1t},\eta_{2t}).
+\]
+The coverage level \(c\) is not a quantile index. It indexes a direct interval
+target, following the relaxed quantile regression loss of
+\citet{PouplinEtAl2024RQR}. With
+\[
+\rho_c(u)=u\{c-\ind(u<0)\},\qquad
+e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}),
+\]
+the generalized posterior is
+\[
+\pi(\vect\beta_1,\vect\beta_2\mid \vect y,\mat X)
+\propto
+\pi_1(\vect\beta_1)\pi_2(\vect\beta_2)
+\exp\left\{-\omega\sum_{t=1}^T\rho_c(e_t)\right\},
+\]
+where \(\omega>0\) is a learning rate. This is a generalized-Bayes update
+\citep{BissiriHolmesWalker2016GeneralBayes}, not a normalized response
+likelihood. Consequently, RQR--DESN produces posterior summaries for interval
+functionals \((L_t,U_t)\), but it does not provide posterior predictive draws
+of \(y_t\).
+
+\subsection{Pseudo-AL Augmentation}
+\label{subsec:rqr_desn_aug}
+
+The implementation uses a pseudo-AL representation of the RQR residual product.
+Let \(r_t=y_t^2\) and
+\[
+\mu_t
+=y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
+\qquad
+r_t-\mu_t=e_t.
+\]
+Set
+\[
+\sigma_\omega=\omega^{-1},\qquad
+\xi_c=\frac{1-2c}{c(1-c)},\qquad
+\phi_c=\frac{2}{c(1-c)}.
+\]
+Conditional on \(v_t>0\), the pseudo-observation model is
+\[
+r_t\mid \vect\beta_1,\vect\beta_2,v_t
+\sim
+\Normal\{\mu_t+\xi_c v_t,\ \phi_c\sigma_\omega v_t\},
+\qquad
+v_t\sim \Exp(\sigma_\omega^{-1}).
+\]
+Integrating out \(v_t\) recovers the RQR generalized-posterior kernel in
+\(e_t\). The augmentation is therefore a computational device for the
+interval loss, not a distributional model for the original response.
+
+With the \(\GIG(p,a,b)\) convention proportional to
+\(x^{p-1}\exp\{-(ax+b/x)/2\}\), the latent-scale update is
+\[
+v_t\mid\cdot\sim
+\GIG\left\{
+\frac12,\
+\frac{1}{2\sigma_\omega c(1-c)},\
+\frac{c(1-c)e_t^2}{2\sigma_\omega}
+\right\}.
+\]
+
+\subsection{Coefficient Blocks}
+\label{subsec:rqr_desn_blocks}
+
+Let \(W_v=\diag\{(\phi_c\sigma_\omega v_t)^{-1}:t=1,\ldots,T\}\).
+Conditional on the second root, the pseudo-observation equation for
+\(\vect\beta_1\) is linear. Define
+\[
+\mat A_1=\diag(\vect y-\vect\eta_2)\mat X,\qquad
+\vect z_1=\vect y^{\,2}-\vect y\circ\vect\eta_2-\xi_c\vect v.
+\]
+If the prior for \(\vect\beta_1\) has Gaussian canonical parameters
+\((\mat Q_{01},\vect h_{01})\), then
+\[
+\mat Q_1=\mat Q_{01}+\mat A_1^\top W_v\mat A_1,\qquad
+\vect h_1=\vect h_{01}+\mat A_1^\top W_v\vect z_1,
+\]
+and
+\[
+\vect\beta_1\mid\cdot\sim
+\Normal(\mat Q_1^{-1}\vect h_1,\mat Q_1^{-1}).
+\]
+The update for \(\vect\beta_2\) is identical after exchanging the root labels:
+\[
+\mat A_2=\diag(\vect y-\vect\eta_1)\mat X,\qquad
+\vect z_2=\vect y^{\,2}-\vect y\circ\vect\eta_1-\xi_c\vect v.
+\]
+Ridge and \texttt{rhs\_ns} priors enter through the same canonical Gaussian
+blocks used by the Q--DESN readout, applied separately to the two root
+coefficient vectors.
+
+\begin{suppalgorithm}{RQR--DESN generalized-Bayes MCMC}
+\emph{Input:} response vector \(\vect y\), fixed DESN design matrix
+\(\mat X\), coverage level \(c\), learning rate \(\omega\), coefficient prior,
+initial roots \((\vect\beta_1,\vect\beta_2)\), burn-in, retained draws, and
+thinning.
+
+\begin{enumerate}[leftmargin=2.5em]
+\item Initialize root coefficients and latent scales \(v_1,\ldots,v_T\).
+\item For each MCMC iteration:
+  \begin{enumerate}[leftmargin=2.5em]
+  \item update each \(v_t\) from the \(\GIG\) full conditional using the
+  current residual product \(e_t\);
+  \item update \(\vect\beta_1\) from its Gaussian block conditional on
+  \(\vect\beta_2\) and \(\vect v\);
+  \item update the first-root shrinkage state when using \texttt{rhs\_ns};
+  \item update \(\vect\beta_2\) from its Gaussian block conditional on
+  \(\vect\beta_1\) and \(\vect v\);
+  \item update the second-root shrinkage state when using \texttt{rhs\_ns};
+  \item record the RQR loss and numerical precision diagnostics.
+  \end{enumerate}
+\item After burn-in and thinning, transform every retained draw to ordered
+interval endpoints
+\[
+L_t^{(s)}=\min(\vect x_t^\top\vect\beta_1^{(s)},
+\vect x_t^\top\vect\beta_2^{(s)}),\qquad
+U_t^{(s)}=\max(\vect x_t^\top\vect\beta_1^{(s)},
+\vect x_t^\top\vect\beta_2^{(s)}).
+\]
+\end{enumerate}
+
+\emph{Output:} posterior draws and summaries of the ordered interval endpoints,
+widths, and midpoints. Root labels are exchangeable, so reported summaries are
+formed after ordering endpoints draw by draw.
+\end{suppalgorithm}
+
+The article-facing validation uses MCMC only. A fast VB implementation may be
+useful for screening or initialization, but VB interval uncertainty is not
+promoted here because it has not undergone a separate calibration study. The
+reported simulation evidence therefore uses empirical coverage, interval score,
+width, and paired baseline deltas for MCMC interval summaries.
 
 \clearpage
 \section{Supplementary Validation Tables}

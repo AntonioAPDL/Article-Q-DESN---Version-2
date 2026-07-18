@@ -120,11 +120,12 @@ followed by monotone synthesis from a joint quantile-vector readout that adapts
 Quantile-Varying Parameter shrinkage to adjacent quantile-specific readout
 coefficients. The joint prior encourages coherent quantile paths but does not
 by itself impose hard noncrossing constraints, so exact monotone output remains
-an explicit reporting contract. Synthetic studies and GloFAS streamflow and
-PriceFM electricity-price applications indicate that the resulting
-fixed-feature workflow is competitive under recorded protocols, while
-calibration, crossing behavior, and reservoir specification remain empirical
-diagnostics rather than automatic posterior guarantees.
+an explicit reporting contract. Synthetic studies, including a targeted
+interval-readout confirmation layer, and GloFAS streamflow and PriceFM
+electricity-price applications indicate that the resulting fixed-feature
+workflow is competitive under recorded protocols, while calibration, crossing
+behavior, and reservoir specification remain empirical diagnostics rather than
+automatic posterior guarantees.
 \end{abstract}
 
 \bigskip
@@ -212,7 +213,7 @@ computational: it approximates the Q--DESN posterior under the working
 likelihood and is not presented as a general claim about variational-inference
 methodology.
 
-The article contributes four elements. First, Q--DESN formulates Bayesian
+The article contributes five elements. First, Q--DESN formulates Bayesian
 quantile readout inference conditional on fixed deep ESN features. Second, the
 readout combines a quantile-fixed exAL working likelihood with ridge
 regularization and a regularized-horseshoe adaptive-shrinkage alternative.
@@ -220,7 +221,10 @@ Third, the MCMC and variational Bayes updates are derived for this fixed-design
 hierarchy. Fourth, multi-quantile reporting is treated through two distinct
 routes: independent single-level fits followed by monotone synthesis, and a
 joint quantile-vector readout that adapts QVP-style adjacent shrinkage to
-quantile-specific readout slopes. Synthetic experiments and the GloFAS and
+quantile-specific readout slopes. Fifth, a supplementary RQR--DESN
+interval-readout extension uses the same fixed-feature view to estimate
+coverage-indexed intervals through a generalized-Bayes loss. Synthetic
+experiments and the GloFAS and
 PriceFM applications then illustrate the resulting workflow under reproducible
 forecast-validation protocols.
 
@@ -233,7 +237,8 @@ Section~\ref{sec:inference} describes posterior
 computation, while Sections~\ref{sec:forecast}--\ref{sec:selection}
 describe posterior prediction, optional quantile synthesis, and reservoir
 diagnostics.
-Section~\ref{sec:simulation} presents the simulation design, and
+Section~\ref{sec:simulation} presents the simulation design, including the
+RQR--DESN interval-readout confirmation, and
 Sections~\ref{sec:data}--\ref{sec:pricefm-application} give reproducible
 streamflow and electricity-price forecasting applications.
 Section~\ref{sec:discussion} summarizes limitations and future work.
@@ -313,6 +318,16 @@ scale and asymmetry, and shrinkage parameters. The joint extension further
 couples quantile-specific readout coefficients during inference, so raw
 multi-quantile paths can be made more coherent before any monotone reporting
 contract is applied.
+
+Relaxed quantile regression (RQR) provides a different route to interval
+construction by learning interval roots directly rather than first estimating a
+preassigned lower and upper quantile pair \citep{PouplinEtAl2024RQR}. We use
+this idea only as a supplementary fixed-feature interval readout: two DESN
+readout surfaces define ordered endpoints, and a generalized-Bayes update
+\citep{BissiriHolmesWalker2016GeneralBayes} targets the RQR loss. This
+extension is not a response likelihood and does not supply posterior
+predictive response draws; its evidence is therefore reported through interval
+score, empirical coverage, width, and baseline deltas.
 
 Shrinkage priors enter because fixed reservoir designs can be
 high-dimensional and correlated. Ridge shrinkage provides the
@@ -1898,6 +1913,52 @@ packet. The supplement records the protocol audit, aggregate summaries, and
 metric-specific winners so these qualifications remain reproducible without
 making the main text table-heavy.
 
+\subsection{RQR--DESN Interval-Readout Confirmation}
+
+A final simulation-validation layer considers an interval-readout extension
+rather than another quantile-grid model. Relaxed quantile regression estimates
+an interval at a target coverage level \(c\) through two root functions
+\citep{PouplinEtAl2024RQR}. In the fixed-feature version used here, the roots
+are \(\eta_{1t}=\vect x_t^\top\vect\beta_1\) and
+\(\eta_{2t}=\vect x_t^\top\vect\beta_2\), with reported endpoints
+\[
+L_t=\min(\eta_{1t},\eta_{2t}),\qquad
+U_t=\max(\eta_{1t},\eta_{2t}).
+\]
+The generalized-Bayes update is based on the loss
+\[
+\rho_c\{(y_t-\eta_{1t})(y_t-\eta_{2t})\},
+\]
+where \(\rho_c(u)=u\{c-\ind(u<0)\}\). Thus \(c\) indexes an interval
+coverage target, not a lower-tail quantile level. The resulting RQR--DESN
+readout is useful for direct interval estimation, but it is not a normalized
+likelihood for the response and does not define posterior predictive response
+draws. The supplement records the pseudo-AL augmentation and MCMC blocks used
+for this readout.
+
+The confirmation reported here follows a broad package-side screen and then
+reruns the selected MCMC interval-readout configurations with fresh seeds. The
+targeted denominator has 912 scenario rows: 648 MCMC rows and 264 empirical
+train-interval baseline rows, with no VB rows. All completion, failure,
+metric-count, MCMC-diagnostic, interval-validity, and no-response-predictive
+contract gates pass. The fixed-design stage permits endpoint-recovery
+interpretation because oracle endpoints are available. The dynamic stage is
+restricted to teacher-forced held-out interval scoring on fixed DESN features;
+it is not a recursive response-simulation study.
+
+\input{tables/rqr_desn_targeted_confirmation_winner_map.tex}
+
+Table~\ref{tab:rqr-desn-targeted-confirmation} reports the
+calibration-constrained MCMC winner in each stage, mechanism, and coverage
+cell. All selected rows improve over the empirical train-interval baseline in
+paired interval score. Ten of the twelve winner cells have green calibration,
+and the two yellow cells occur in the nonlinear dynamic DESN mechanism, where
+the coverage errors are positive but remain within the predeclared review band.
+These results support RQR--DESN as a promising interval-readout extension of
+the fixed-feature workflow, while leaving VB calibration, recursive interval
+forecasting, and nested multi-coverage interval modeling as separate future
+work.
+
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}
 
@@ -2269,7 +2330,10 @@ monotone contract.
 The validation evidence is correspondingly scoped. The single-quantile dynamic
 simulations test recovery and held-out forecasting under pinned data-generating
 mechanisms. The joint multi-quantile synthetic study checks coherence
-under known conditional quantile paths. The GloFAS application is an
+under known conditional quantile paths. The RQR--DESN confirmation evaluates a
+coverage-indexed interval readout through MCMC interval scores, empirical
+coverage, and paired baseline deltas; it is not a response predictive
+likelihood or recursive simulation study. The GloFAS application is an
 audited one-origin streamflow calibration case using computationally light
 independent Q--DESN AL--VB fits and monotone synthesis, while the PriceFM
 comparison is a fold-aligned
@@ -2281,6 +2345,8 @@ Several extensions are natural. On the statistical side, future work should
 study calibrated composite-likelihood scaling, hard or probabilistic
 non-crossing constraints, richer covariance structures for quantile
 innovations, and sensitivity to reservoir scaling on bounded feature domains.
+For RQR--DESN, future work should study calibrated VB uncertainty, learning-rate
+sensitivity, and joint nested intervals across several coverage levels.
 On the computational side, the joint model calls for sparse precision solvers,
 selected covariance extraction for VB, and diagnostics comparing VB--LD with
 MCMC on small joint problems. On the application side, broader multi-origin

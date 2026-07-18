@@ -64,6 +64,7 @@
 \newcommand{\AL}{\mathrm{AL}}
 \newcommand{\exAL}{\mathrm{exAL}}
 \newcommand{\RHS}{\ensuremath{\mathrm{RHS}}}
+\newcommand{\pkg}[1]{\textsf{#1}}
 
 % Current manuscript-facing GloFAS application output aliases.
 \input{tables/glofas_application_current_outputs.tex}
@@ -326,7 +327,9 @@ quantile linear models combine dynamic linear modeling with Bayesian
 quantile regression and provide posterior computation for time-varying
 quantile paths \citep{GoncalvesMigonBastos2020DQLM}. The exDQLM of
 \citet{barata2021_flex_quantile} adds asymmetric likelihood flexibility for
-dynamic quantile inference. Q--DESN changes the predictor
+dynamic quantile inference and is implemented, together with the corresponding
+AL/DQLM path, in the CRAN package \pkg{exdqlm}
+\citep{exdqlmRPackage}. Q--DESN changes the predictor
 representation: instead of specifying a low-dimensional linear dynamic
 state, it conditions on fixed nonlinear reservoir states and places a
 Bayesian quantile readout on the resulting design matrix. The DQLM and exDQLM
@@ -1768,7 +1771,8 @@ including the reservoir
 profile, random seed, source hashes, package version, branch, commit, and run
 tag. Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
-fit-window, and forecast-origin protocol.
+fit-window, and forecast-origin protocol using \pkg{exdqlm}
+\citep[version 1.1.0;][]{exdqlmRPackage}.
 
 The primary comparison does not use repeated data-generating roots, a broad
 reservoir hyperparameter search, non-Bayesian ESN readouts, or post hoc

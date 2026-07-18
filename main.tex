@@ -178,10 +178,11 @@ inference is concentrated in the readout model.
 The quantile deep echo state network (Q--DESN) combines this fixed DESN
 design with a Bayesian quantile readout. For a chosen level \(p_0\), the
 readout location \(\mu_t=\vect x_t^\top\vect\beta\) is linked to the response
-through the quantile-fixed generalized asymmetric Laplace (GAL) distribution
-of \citet{yan2025new}. We refer to this distribution as \(\qfGAL\) in prose
-and retain \(\exAL\) in formulas and generated table labels as the project
-shorthand for the same quantile-fixed extension of AL. Under this
+through the quantile-fixed generalized asymmetric Laplace distribution,
+abbreviated \(\qfGAL\), of \citet{yan2025new}. We use \(\qfGAL\) in prose and
+retain \(\exAL\) in formulas and generated table labels only as the project
+shorthand for the same quantile-fixed extension of AL. Thus \(\exAL\) in this
+article should be read as qfGAL, not as the broader GAL family. Under this
 parameterization, \(\mu_t\) is the model's \(p_0\)th conditional quantile,
 while the \(\qfGAL\) asymmetry parameter allows mode, skewness, and tail
 behavior to vary relative to the asymmetric Laplace special case.
@@ -476,7 +477,7 @@ $\vect x_t$ & readout design vector with intercept & $(r+1)\times1$ \\
 $\mat X$ & fixed DESN design matrix after washout & $T\times(r+1)$ \\
 $\vect\beta$ & readout coefficients & $(r+1)\times1$ \\
 $\kappa_\beta^2$ & default ridge slope-prior variance & positive \\
-$\sigma,\gamma$ & exAL scale and asymmetry parameters & $\sigma>0,\ \gamma\in(L,U)$ \\
+$\sigma,\gamma$ & qfGAL/exAL scale and asymmetry parameters & $\sigma>0,\ \gamma\in(L,U)$ \\
 $(\lambda_j,\tau,\zeta)$ & local, global, and slab shrinkage scales & positive \\
 \bottomrule
 \end{tabular}
@@ -747,10 +748,13 @@ posterior inference.
 \label{subsec:exal}
 The quantile-fixed generalized asymmetric Laplace distribution of
 \citet{yan2025new} extends the asymmetric Laplace (AL) working likelihood
-while keeping the target quantile fixed. We use \(\qfGAL\) for the
-distributional family in prose and retain \(\exAL\) in formulas and generated
-tables as the project shorthand. The standard AL likelihood is recovered as a
-special case, but its skewness is fixed once \(p_0\) is chosen. The
+while keeping the target quantile fixed. We abbreviate this quantile-fixed
+family as \(\qfGAL\). The broader label GAL is not specific enough here,
+because the quantile-fixing reparameterization is what makes \(\mu\) the
+target \(p_0\)-quantile. We retain \(\exAL\) in formulas and generated tables
+as a project shorthand for the same qfGAL likelihood. The standard AL
+likelihood is recovered as a special case, but its skewness is fixed once
+\(p_0\) is chosen. The
 \(\qfGAL\) asymmetry parameter allows mode, skewness, and tail behavior to
 vary within a quantile-fixed likelihood. At fixed level \(p_0\), \(\mu\) is
 the \(p_0\)th quantile, \(\sigma>0\) is a scale parameter, and \(\gamma\) is

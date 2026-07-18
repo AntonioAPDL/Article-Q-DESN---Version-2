@@ -113,14 +113,13 @@ network feature map and places Bayesian inference only on the quantile readout.
 Conditional on reservoir construction, scaling, and washout, the readout is
 estimated with a quantile-fixed extended asymmetric Laplace working likelihood,
 ridge or regularized-horseshoe shrinkage priors, and either Markov chain Monte
-Carlo or a model-specific variational Bayes approximation with a
-Laplace--Delta treatment of the non-conjugate scale-asymmetry block. For
-multi-quantile reporting, we distinguish independent single-level fits
-followed by monotone synthesis from a joint quantile-vector readout that adapts
+Carlo or a model-specific variational Bayes approximation. For multi-quantile
+reporting, we distinguish independent single-level fits followed by a declared
+monotone reporting contract from a joint quantile-vector readout that adapts
 Quantile-Varying Parameter shrinkage to adjacent quantile-specific readout
-coefficients. The joint prior encourages coherent quantile paths but does not
-by itself impose hard noncrossing constraints, so exact monotone output remains
-an explicit reporting contract. Synthetic studies, including a targeted
+coefficients. The joint prior encourages coherent quantile paths but does not by
+itself impose hard noncrossing constraints, so exact monotone output remains
+explicit. Synthetic studies, including a targeted
 interval-readout confirmation layer, and GloFAS streamflow and PriceFM
 electricity-price applications indicate that the resulting fixed-feature
 workflow is competitive under recorded protocols, while calibration, crossing
@@ -205,21 +204,24 @@ product representation used here, the local, global, and slab scale updates
 retain closed-form inverse-gamma forms
 \citep{NishimuraSuchard2023SSS,MakalicSchmidt2016SimpleSampler}.
 Posterior computation includes an MCMC sampler for the Q--DESN hierarchy. A
-mean-field variational Bayes approximation uses
-Laplace and Delta-method approximations for the non-conjugate exAL scale and
-asymmetry block. We refer to this implementation as VB--LD when the specific
-Laplace--Delta approximation needs to be distinguished. Its role is
-computational: it approximates the Q--DESN posterior under the working
-likelihood and is not presented as a general claim about variational-inference
-methodology.
+mean-field variational Bayes approximation is used for lower-cost screening and
+initialization. In exAL fits, the scale-asymmetry block is non-conjugate; the
+implementation uses the Laplace--Delta approximation for non-conjugate
+variational inference of \citet{wang2013nonconjugatevb} for that block. We use
+``VB--LD'' only as implementation shorthand for this Wang--Blei-style
+approximation inside Q--DESN, not as a new variational-inference contribution.
+Detailed VB--LD implementation notes and the post hoc monotone synthesis
+protocol are deferred to the companion placeholder
+\citet{DeLeonEtAl2026QDESNCompanion}.
 
 The article contributes five elements. First, Q--DESN formulates Bayesian
 quantile readout inference conditional on fixed deep ESN features. Second, the
 readout combines a quantile-fixed exAL working likelihood with ridge
 regularization and a regularized-horseshoe adaptive-shrinkage alternative.
-Third, the MCMC and variational Bayes updates are derived for this fixed-design
-hierarchy. Fourth, multi-quantile reporting is treated through two distinct
-routes: independent single-level fits followed by monotone synthesis, and a
+Third, the MCMC updates are derived for this fixed-design hierarchy, while the
+VB--LD approximation is used as a computational screening and initialization
+route. Fourth, multi-quantile reporting is treated through two distinct routes:
+independent single-level fits followed by a monotone reporting contract, and a
 joint quantile-vector readout that adapts QVP-style adjacent shrinkage to
 quantile-specific readout slopes. Fifth, a supplementary relaxed quantile
 regression DESN (RQR--DESN) generalized-Bayes interval-readout extension uses
@@ -236,7 +238,7 @@ exAL representation. Section~\ref{sec:model} presents the Q--DESN model
 and prior specification, including the joint quantile-vector extension.
 Section~\ref{sec:inference} describes posterior
 computation, while Sections~\ref{sec:forecast}--\ref{sec:selection}
-describe posterior prediction, optional quantile synthesis, and reservoir
+describe posterior prediction, monotone reporting contracts, and reservoir
 diagnostics.
 Section~\ref{sec:simulation} presents the simulation design, including the
 RQR--DESN interval-readout confirmation, and
@@ -1376,120 +1378,54 @@ blocks.}
 \end{algorithmic}
 \end{algorithm}
 
-\subsection{Variational Bayes}
+\subsection{Variational Approximation}
 \label{sec:vb}
 
-For lower-cost approximate inference, we use a mean-field variational Bayes
-approximation for the augmented posterior above. It is an approximation to the
-same fixed-design model, not a different model. The Gaussian, GIG,
-positive-truncated Normal, and inverse-gamma factors have closed-form
-coordinate updates. The exAL scale-asymmetry blocks are non-conjugate. Building
-on the variational strategy of \citet{barata2021_flex_quantile} and the
-non-conjugate variational ideas of \citet{wang2013nonconjugatevb}, the
-VB--LD implementation uses independent Laplace approximations for these
-blocks and Delta-method approximations for expectations of smooth functions of
-\((\sigma_q,\gamma_q)\). This replaces an importance-sampling step with
-deterministic approximations inside the coordinate updates.
-
-For the quantile-vector QVP--RHS formulation, the mean-field family contains
-Gaussian factors for \(\vect\beta_{\mathrm{st}}\), \(\vect\alpha\), and, when
-\(Q>1\), \(\vect\beta_{\mathrm{base}}\); GIG factors for the \(v_{q,t}\);
-positive-truncated Normal factors for the \(s_{q,t}\); inverse-gamma factors
-for baseline and innovation RHS scales; and independent Laplace--Delta
-factors for the \((\sigma_q,\gamma_q)\) blocks. Under the \(Q=1\) collapse,
-the baseline factor and its scale factors are removed, and the innovation
-scale factors are exactly the ordinary RHS factors for the single slope
-readout. Posterior means and predictive summaries from VB--LD are therefore
-variational approximations, with additional approximation error only from the
-Laplace--Delta scale-asymmetry blocks.
-
-The Laplace--Delta step uses unconstrained coordinates
-\(\boldsymbol{\eta}_q=(\log\sigma_q,\log\{(\gamma_q-L_q)/(U_q-\gamma_q)\})^\top\),
-on which the expected complete-data log posterior, including the Jacobian, is
-approximated by a Normal density at its mode. If
-\(\hat{\boldsymbol{\eta}}_q\) is the mode and \(\Sigma_q\) is the negative
-inverse Hessian at that mode, then smooth expectations needed by the
-closed-form updates are approximated by
-\[
-\E\{g(\boldsymbol{\eta}_q)\}
-\approx
-g(\hat{\boldsymbol{\eta}}_q)
-+\frac12\mathrm{Tr}\!\left\{\nabla^2g(\hat{\boldsymbol{\eta}}_q)\Sigma_q\right\}.
-\]
-Thus, only expectations involving the exAL scale and asymmetry use
-Laplace--Delta; the remaining factors are updated in closed form. The updates
-are iterated until the evidence lower bound (ELBO), or its Laplace--Delta
-approximation, stabilizes.
-
-Algorithm~\ref{alg:vb} outlines the coordinate ascent updates for the
-variational approximation to \eqref{eq:joint-posterior-target-main}; with
-\(Q=1\), the same updates approximate
-\eqref{eq:single-posterior-collapse-main}. Ridge and AL variants omit the
-corresponding blocks. The output is a set of approximate posterior moments,
-predictive summaries, and crossing diagnostics at the target quantile levels.
-
-\begin{algorithm}[H]
-\caption{Block VB--LD for the quantile-vector Q--DESN posterior. For \(Q=1\),
-set
-\(\vect\beta_{\mathrm{base}}=\zeros{r}\), place the RHS prior on
-\(\Delta_1=\vect\beta_1\), and omit baseline-slope factors. AL and ridge
-variants omit the corresponding latent, asymmetry, and shrinkage factors.}
-\label{alg:vb}
-\begin{algorithmic}[1]
-\REQUIRE Data $\{y_t,\tilde{\vect x}_t\}_{t=1}^T$, quantile grid $p_1<\cdots<p_Q$, priors, and learning rate $\kappa$
-\REQUIRE Convergence controls for the ELBO or Laplace--Delta ELBO approximation
-\STATE Initialize factors for $q_\beta(\vect\beta_{\mathrm{st}})$, $q_\alpha(\vect\alpha)$, latent variables, RHS scales, and $q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)$
-\IF{$Q>1$}
-  \STATE Initialize $q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})$ and its baseline RHS scale factors
-\ENDIF
-\REPEAT
-  \STATE \textbf{Latents:} update \(q(v_{q,t})\) as independent GIG factors
-  \STATE \textbf{Latents (exAL):} when exAL is used, update \(q(s_{q,t})\) as independent positive-truncated Normal factors
-  \STATE \textbf{Slope path:} update \(q_\beta(\vect\beta_{\mathrm{st}})\) as a multivariate Normal factor
-  \STATE \textbf{Slope path:} use the expected version of \eqref{eq:joint-kbeta-main}
-  \IF{$Q>1$}
-    \STATE \textbf{Baseline:} update \(q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})\) as a Gaussian factor
-    \STATE \textbf{Baseline scales:} update baseline RHS scale factors as inverse-gamma factors
-  \ENDIF
-  \STATE \textbf{Intercepts:} update \(q_\alpha(\vect\alpha)\) as a Gaussian factor, or use ordered-gap factors when exact intercept monotonicity is imposed
-  \STATE \textbf{RHS scales:} update innovation local, global, auxiliary, and slab scale factors as inverse-gamma factors
-  \STATE \textbf{RHS scales (\(Q=1\)):} use the ordinary RHS factors for \(\vect\beta_1\)
-  \STATE \textbf{Likelihood:} update each \(q_{\sigma_q,\gamma_q}\) by a Laplace approximation on unconstrained coordinates
-  \STATE \textbf{Likelihood (AL):} use the corresponding \(q_{\sigma_q}\) factor
-  \STATE \textbf{Expectations:} update Delta-method expectations for smooth functions of \((\sigma_q,\gamma_q)\)
-  \STATE \textbf{Monitor:} evaluate the ELBO or Laplace--Delta ELBO approximation, crossing diagnostics, and convergence criteria
-\UNTIL{convergence}
-\end{algorithmic}
-\end{algorithm}
+For lower-cost screening, warm starts, and companion validation panels, we also
+use a mean-field variational approximation to the same augmented target. The
+Gaussian, GIG, positive-truncated Normal, inverse-gamma, and RHS scale factors
+retain the closed-form coordinate structure implied by
+\eqref{eq:joint-posterior-target-main}. The only extra non-conjugacy introduced
+by the exAL likelihood is the scale-asymmetry block
+\((\sigma_q,\gamma_q)\). That block is approximated with the
+Laplace--Delta treatment for non-conjugate variational inference of
+\citet{wang2013nonconjugatevb}, adapted to the Q--DESN readout in the
+companion implementation record of
+\citet{DeLeonEtAl2026QDESNCompanion}. We therefore use the label VB--LD as a
+computational convention: it identifies the variational approximation used for
+screening and initialization, while the MCMC sampler remains the reference
+posterior computation when simulation tables report MCMC results.
 
 \subsection{Supplementary Algebra and Implementation Notes}
 \label{subsec:joint-inference}
 
 Equations~\eqref{eq:joint-posterior-target-main} and
 \eqref{eq:single-posterior-collapse-main} define the article-facing posterior
-targets, and Algorithms~\ref{alg:mcmc}--\ref{alg:vb} are placed immediately
-after them because they implement those targets. The supplement keeps the
-single-level full conditionals and the full
-quantile-vector posterior algebra explicit: Sections S4--S7 give the
-single-level AL/exAL updates, and Section S8 gives the QVP--RHS posterior,
-stacked Gaussian blocks, VB factorization, ELBO terms, and crossing
+targets, and Algorithm~\ref{alg:mcmc} implements those targets. The supplement
+keeps the single-level full conditionals and the full quantile-vector posterior
+algebra explicit: Sections S4--S7 give the single-level AL/exAL updates, and
+Section S8 gives the QVP--RHS posterior, stacked Gaussian blocks, and crossing
 diagnostics. Thus a reader implementing only one quantile can use
-Algorithms~\ref{alg:mcmc}--\ref{alg:vb} with \(Q=1\) and the collapsed RHS
-prior, while a reader implementing multiple levels uses the same algorithms
-with the baseline and adjacent-innovation blocks active.
+Algorithm~\ref{alg:mcmc} with \(Q=1\) and the collapsed RHS prior, while a
+reader implementing multiple levels uses the same sampler with the baseline and
+adjacent-innovation blocks active. The separate VB--LD and monotone-synthesis
+implementation details are referenced rather than rederived in the main
+article.
 
 
 % ============================================================
-\section{Posterior Prediction and Quantile Synthesis}
+\section{Posterior Prediction}
 \label{sec:forecast}
 
 Prediction and multi-quantile reporting involve separate operations. The first
 operation propagates posterior or variational uncertainty through the fixed
 reservoir recursion at future horizons. The second, used only when several
-levels are reported together, converts fitted level-specific summaries into a
-monotone curve or instead uses the joint quantile-vector readout introduced in
-Section~\ref{subsec:joint-qdesn}. The subsections below keep these operations
-separate.
+levels are reported together, applies a declared monotone reporting contract or
+uses the joint quantile-vector readout introduced in
+Section~\ref{subsec:joint-qdesn}. The post hoc synthesis details for
+independent fits are not repeated here; the article treats them as a reporting
+contract and refers to the companion placeholder
+\citet{DeLeonEtAl2026QDESNCompanion}.
 
 \subsection{Multi-Step Posterior Quantile Prediction}
 \label{subsec:forecast_hstep}
@@ -1551,7 +1487,7 @@ fits, ``forecasting all levels'' means applying Algorithm~\ref{alg:forecast}
 separately to each fitted \(p_k\). A single \(p_0\) fit should not be read as
 producing fitted target-level quantile summaries for all levels; off-target
 quantiles implied by its exAL working distribution are not the fitted quantile
-targets used in Section~\ref{sec:synthesis}.
+targets used in the monotone reporting contract.
 
 For the joint quantile-vector readout, the reservoir recursion is unchanged.
 A posterior or variational draw contains the level-specific readouts
@@ -1578,12 +1514,15 @@ If recursive lag inputs require a scalar future response path, the joint model
 uses posterior quantile-function sampling rather than draws from the composite
 working likelihood. Let
 \(\vect q_{T+h}^{(m)}
-=(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\), let
-\(\mathcal M\) denote the declared monotone reporting contract, and set
-\(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). Interpolating
-\(\{(p_q,q_{q,T+h}^{*,(m)})\}_{q=1}^Q\) as in
-Eq.~\eqref{eq:synth_quantile} gives a draw-specific quantile function
-\(Q_{T+h}^{*,(m)}(u)\). A synthesized response draw is then
+=(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
+is required, let \(\mathcal M\) denote the declared reporting contract, such as
+isotonic projection or rearrangement
+\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010,DeLeonEtAl2026QDESNCompanion},
+and set
+\(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered grid
+defines a draw-specific quantile function \(Q_{T+h}^{*,(m)}(u)\) under the
+declared interpolation and endpoint convention. A synthesized response draw is
+then
 \[
 u_{T+h}^{(m,r)}\sim\Unif(0,1),
 \qquad
@@ -1594,70 +1533,12 @@ rule; it should not be interpreted as drawing one future response per \(q\), nor
 as mixing or normalizing the quantile-specific AL/exAL working likelihoods.
 
 % ============================================================
-\subsection{Monotone Quantile Synthesis}
-\label{sec:synthesis}
-
-\noindent
-The Q--DESN likelihood is specified at one quantile level at a time. When models
-are fit independently on a grid \(p_1<\cdots<p_K\), their fitted values are
-target-level quantile summaries, not draws from a joint posterior over a
-quantile function. Monotone synthesis is useful only when a monotone predictive
-quantile curve is needed for interval construction, display, or distributional
-forecast evaluation. The same construction applies to any quantile forecasting
-method that returns ordered-level summaries; here it remains an optional
-post-processing step rather than a component of the fitted Q--DESN likelihood.
-
-For each level \(p_k\), let \(\hat q_{k,t}\) denote a posterior or
-variational summary of the target quantile at time \(t\), such as the
-posterior mean or median of
-\(\mu_{k,t}=\vect x_t^\top\vect\beta_k\), or the corresponding
-forecast-horizon summary from the recursion in
-Section~\ref{subsec:forecast_hstep}; at a forecast origin, \(t\) may be read as
-the target date \(T+h\). The synthesis uses the target grid
-\(\{(p_k,\hat q_{k,t})\}_{k=1}^K\), not off-target quantiles implied by the
-\(\exAL_{p_k}\) working likelihood. Since independent fits can cross, first
-project the grid onto the monotone cone,
-\begin{align}
-\vect q_t^* =
-\underset{q_1 \leq \cdots \leq q_K}{\arg\min}
-\sum_{k=1}^K \left( \hat q_{k,t} - q_k \right)^2 ,
-\label{eq:isotonic_regression}
-\end{align}
-using isotonic regression \citep{BarlowBrunk1972IsotonicDual}. With
-\(\vect q_t^*=(\hat q_{1,t}^*,\ldots,\hat q_{K,t}^*)\), define the estimated
-predictive quantile function by piecewise linear interpolation:
-\begin{align}
-Q_t^{\text{synth}}(u) =
-\begin{cases}
-\hat q_{1,t}^*, & u \leq p_1, \\
-(1 - w)\hat q_{k,t}^* + w\hat q_{k+1,t}^*, & p_k \leq u < p_{k+1}, \\
-\hat q_{K,t}^*, & u \geq p_K,
-\end{cases}
-\label{eq:synth_quantile}
-\end{align}
-where \(k=\max\{j:p_j\leq u\}\) and
-\(w=(u-p_k)/(p_{k+1}-p_k)\) in the middle line. Endpoint behavior is
-intentionally conservative: outside the fitted quantile range, the grid does
-not identify tail shape. Grid CRPS and weighted quantile scores computed from
-this object are finite-grid approximations to quantile-score integrals under the
-declared reporting contract, not scores for an unspecified density obtained by
-mixing or normalizing composite-likelihood factors. If draw-level curves or
-smoother interpolants are used and residual non-monotonicity appears on a dense
-evaluation grid, a final monotone rearrangement can be applied before
-interpolation \citep{chernozhukov2010}. Independent synthesis and the joint
-quantile-vector readout should not be interpreted interchangeably. Independent
-fits preserve the single-target posterior interpretation at each \(p_k\) and use
-synthesis only to report a monotone curve. The joint readout instead couples
-adjacent quantile-specific slopes during inference; the same monotone contract
-can be applied afterward only when exact monotone output is required.
-
-% ============================================================
 \section{Model Diagnostics and Reservoir Specification}
 \label{sec:selection}
 
 \noindent
-Prediction and synthesis inherit the reservoir feature map selected before
-posterior fitting. Reservoir tuning, numerical diagnosis, and forecast
+Prediction and monotone reporting inherit the reservoir feature map selected
+before posterior fitting. Reservoir tuning, numerical diagnosis, and forecast
 evaluation therefore have distinct roles. Reservoir tuning chooses a
 reproducible feature-generation rule before the final analysis; numerical
 diagnostics screen candidate feature maps for alignment, stability,
@@ -2469,8 +2350,9 @@ quantile-vector prior can be interpreted as application-level evidence rather
 than a synthetic validation result.
 
 Within these boundaries, the article establishes Q--DESN as a reproducible
-fixed-feature Bayesian quantile-readout workflow whose inference, synthesis,
-diagnostics, and empirical validation are tied to explicit protocols.
+fixed-feature Bayesian quantile-readout workflow whose inference, monotone
+reporting, diagnostics, and empirical validation are tied to explicit
+protocols.
 
 \section*{Acknowledgments}
 

@@ -70,10 +70,9 @@ includes the readout coefficients, likelihood scale and asymmetry, auxiliary
 mixture variables, and shrinkage parameters. The derivations cover complete-data
 posterior targets for the default ridge prior and the Nishimura--Suchard
 regularized horseshoe (\texttt{rhs\_ns}) shrinkage alternative, posterior
-kernels, Markov chain Monte Carlo (MCMC) full conditionals, mean-field
-variational Bayes coordinate updates, the Laplace--Delta treatment of
-non-conjugate blocks, evidence lower bound (ELBO) terms, and the joint
-quantile-vector QVP--RHS extension.
+kernels, Markov chain Monte Carlo (MCMC) full conditionals, the role of the
+VB--LD computational approximation, and the joint quantile-vector QVP--RHS
+extension.
 It also records the relaxed quantile regression DESN (RQR--DESN)
 interval-readout extension as a generalized-Bayes target over two fixed-feature
 root readouts.
@@ -130,27 +129,27 @@ used in the simulation tables. \\
 MCMC full conditionals &
 Section~\ref{sec:mcmc} &
 Derives the readout, latent-variable, scale, asymmetry, and shrinkage updates. \\
-Variational Bayes and Laplace--Delta updates &
+Variational Bayes and Laplace--Delta provenance &
 Section~\ref{sec:cavi} &
-Derives the mean-field factors, closed-form updates, and Laplace--Delta block
-used by the variational Bayes algorithm. \\
+States the VB--LD role and cites the Wang--Blei non-conjugate variational
+approximation and companion implementation record. \\
 ELBO &
 Section~\ref{sec:elbo} &
-Gives the exact and approximate terms monitored by the VB algorithm. \\
+Records the convergence-monitoring role of the ELBO and defers the full
+decomposition to the companion implementation record. \\
 Joint quantile-vector extension &
 Section~\ref{sec:joint_qdesn_supp} &
-Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, VB--LD
-factorization, ELBO terms, and crossing diagnostics for the joint
-multi-quantile readout. \\
+Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, and crossing
+diagnostics for the joint multi-quantile readout. \\
 RQR--DESN interval readout &
 Section~\ref{sec:rqr_desn_supp} &
 Defines the two-root generalized-Bayes interval target, pseudo-AL
 augmentation, and MCMC block structure for the supplementary interval-readout
 extension. \\
-Posterior prediction and synthesis &
+Posterior prediction and monotone reporting &
 Section~\ref{sec:forecast_synthesis} &
 Links the fitted quantile readout to working-likelihood forecast simulation and
-multi-quantile synthesis. \\
+points to the companion monotone-synthesis protocol. \\
 GloFAS discrepancy-calibration model &
 Section~\ref{sec:glofas_discrepancy} &
 Expresses the single-forecast-system application as an augmented
@@ -641,451 +640,28 @@ or \texttt{rhs\_ns}, and MCMC controls.
 \end{enumerate}
 \end{suppalgorithm}
 
-\section{Variational Bayes and Laplace--Delta Updates}
+\section{Variational Bayes and Laplace--Delta Approximation}
 \label{sec:cavi}
 
-The VB approximation targets the same complete-data posterior as the MCMC
-sampler but restricts it to a mean-field family. Gaussian, GIG,
-truncated-normal, and inverse-gamma factors remain closed form, while the
-non-conjugate exAL scale and asymmetry factor \((\sigma,\gamma)\) is
-approximated
-using Laplace--Delta on transformed coordinates
-\citep{wang2013nonconjugatevb,barata2021_flex_quantile}. The update equations
-therefore separate closed-form factors from Delta-method approximations to
-smooth expectations involving \((\sigma,\gamma)\); the shrinkage-scale factors
-remain closed form under \texttt{rhs\_ns}.
+The article uses VB--LD as a computational approximation for screening,
+warm starts, and companion validation panels. The Laplace--Delta component is
+the non-conjugate variational approximation of \citet{wang2013nonconjugatevb},
+applied here only to the exAL scale-asymmetry block
+\((\sigma,\gamma)\). The Q--DESN adaptation, factor bookkeeping, and numerical
+monitoring details are deferred to the companion placeholder
+\citet{DeLeonEtAl2026QDESNCompanion}; they are not rederived in this
+supplement.
 
-\subsection{Variational Families}
-
-For exAL with ridge prior,
-\begin{equation}
-q(\vect\beta,\vect v,\vect s,\sigma,\gamma)
-=q_\beta(\vect\beta)q_{\sigma,\gamma}(\sigma,\gamma)
-\prod_{t=1}^Tq_{v_t}(v_t)q_{s_t}(s_t).
-\label{eq:supp_vb_exal_ridge}
-\end{equation}
-For exAL with \texttt{rhs\_ns}, multiply \eqref{eq:supp_vb_exal_ridge} by
-\[
-\left\{\prod_{j=1}^rq_{\lambda_j^2}(\lambda_j^2)q_{\nu_j}(\nu_j)\right\}
-q_{\tau^2}(\tau^2)q_\xi(\xi)q_{\zeta^2}(\zeta^2),
-\]
-omitting \(q_{\zeta^2}\) when \(\zeta^2\) is fixed. For AL, replace
-\(q_{\sigma,\gamma}\) by \(q_\sigma(\sigma)\), omit \(q_{s_t}\), and set
-\(\gamma=0\).
-
-\subsection{Coefficient Factor}
-
-Let \(\bar{\mat\Omega}=\diag(\bar w_1,\ldots,\bar w_T)\), where
-\[
-\bar w_t=\E\{(\sigma B_\gamma v_t)^{-1}\}
-\]
-for exAL and \(\bar w_t=B_0^{-1}\E(\sigma^{-1})\E(v_t^{-1})\) for AL.
-For exAL define
-\[
-\bar m_t=
-\E\left[
-\frac{y_t-\sigma D_\gamma s_t-A_\gamma v_t}{\sigma B_\gamma v_t}
-\right],
-\qquad
-\bar{\vect m}=(\bar m_1,\ldots,\bar m_T)^\top.
-\]
-For AL, use
-\[
-\bar m_t=
-B_0^{-1}\left\{\E(\sigma^{-1})\E(v_t^{-1})y_t
--A_0\E(\sigma^{-1})\right\}.
-\]
-The prior precision is \(\bar{\mat P}=\mat P_\beta\) for ridge and
-\[
-\bar{\mat P}=
-\diag\left(V_0^{-1},
-\E(\tau^{-2})\E(\lambda_1^{-2})+\E(\zeta^{-2}),\ldots,
-\E(\tau^{-2})\E(\lambda_r^{-2})+\E(\zeta^{-2})\right)
-\]
-for \texttt{rhs\_ns}. The prior mean vector is
-\(\vect b=\vect b_\beta\) for ridge and
-\(\vect b=(b_0,0,\ldots,0)^\top\) for \texttt{rhs\_ns}. Then
-\begin{align}
-q_\beta(\vect\beta)&=\Normal(\vect m_\beta,\mat\Sigma_\beta),\\
-\mat\Sigma_\beta&=(\mat X^\top\bar{\mat\Omega}\mat X+\bar{\mat P})^{-1},\\
-\vect m_\beta&=\mat\Sigma_\beta(\mat X^\top\bar{\vect m}+\bar{\mat P}\vect b).
-\label{eq:supp_vb_beta}
-\end{align}
-
-\subsection{AL CAVI Updates}
-
-Let
-\[
-\bar r_t=y_t-\vect x_t^\top\vect m_\beta,\qquad
-\overline{r_t^2}=\bar r_t^2+\vect x_t^\top\mat\Sigma_\beta\vect x_t.
-\]
-For AL,
-\begin{align}
-q(v_t)
-&=
-\GIG\left(
-1/2,
-B_0^{-1}\E(\sigma^{-1})\overline{r_t^2},
-\E(\sigma^{-1})\left(\frac{A_0^2}{B_0}+2\right)
-\right),
-\label{eq:supp_vb_al_v}\\
-q(\sigma)
-&=
-\IG(a_\sigma^\star,b_\sigma^\star),\\
-a_\sigma^\star
-&=a_\sigma+\frac{3T}{2},\\
-b_\sigma^\star
-&=
-b_\sigma+\sum_{t=1}^T\E(v_t)
-+\frac{1}{2B_0}\sum_{t=1}^T
-\left\{
-\overline{r_t^2}\E(v_t^{-1})-2A_0\bar r_t+A_0^2\E(v_t)
-\right\}.
-\label{eq:supp_vb_al_sigma}
-\end{align}
-
-\subsection{exAL Latent-Factor Updates}
-
-For exAL, define the smooth expectations
-\[
-M_1=\E\{(\sigma B_\gamma)^{-1}\},\quad
-M_2=\E(D_\gamma/B_\gamma),\quad
-M_3=\E(\sigma D_\gamma^2/B_\gamma),\quad
-M_4=\E(A_\gamma D_\gamma/B_\gamma),
-\]
-and
-\[
-M_5=\E\{A_\gamma^2/(\sigma B_\gamma)+2/\sigma\}.
-\]
-These expectations are computed from the current \(q_{\sigma,\gamma}\) by
-Laplace--Delta. Then
-\begin{align}
-q(v_t)
-&=
-\GIG(1/2,\bar\chi_t,\bar\psi_t),\\
-\bar\chi_t
-&=
-M_1\overline{r_t^2}
--2M_2\bar r_t\E(s_t)
-+M_3\E(s_t^2),\\
-\bar\psi_t&=M_5.
-\label{eq:supp_vb_exal_v}
-\end{align}
-The truncated-normal factor for \(s_t\) is
-\begin{align}
-q(s_t)&=\TN(m_{s,t}^{\mathrm{VB}},V_{s,t}^{\mathrm{VB}}),\\
-V_{s,t}^{\mathrm{VB}}
-&=\left\{1+M_3\E(v_t^{-1})\right\}^{-1},\\
-m_{s,t}^{\mathrm{VB}}
-&=
-V_{s,t}^{\mathrm{VB}}
-\left\{
-M_2\bar r_t\E(v_t^{-1})-M_4
-\right\}.
-\label{eq:supp_vb_exal_s}
-\end{align}
-
-\subsection{Regularized-Horseshoe CAVI Updates}
-
-For \(j=1,\ldots,r\), let
-\(\overline{\beta_j^2}=m_{\beta,j}^2+(\mat\Sigma_\beta)_{jj}\). The
-\texttt{rhs\_ns} factors are inverse-gamma:
-\begin{align}
-q(\lambda_j^2)
-&=\IG\left(1,\ \E(\nu_j^{-1})
-+\frac12\overline{\beta_j^2}\E(\tau^{-2})\right),\\
-q(\nu_j)
-&=\IG\left(1,\ 1+\E(\lambda_j^{-2})\right),\\
-q(\tau^2)
-&=\IG\left(\frac{r+1}{2},
-\E(\xi^{-1})
-+\frac12\sum_{j=1}^r\overline{\beta_j^2}\E(\lambda_j^{-2})\right),\\
-q(\xi)
-&=\IG\left(1,\ \tau_0^{-2}+\E(\tau^{-2})\right),\\
-q(\zeta^2)
-&=\IG\left(a_\zeta+\frac{r}{2},
-b_\zeta+\frac12\sum_{j=1}^r\overline{\beta_j^2}\right).
-\label{eq:supp_vb_rhs}
-\end{align}
-Again, the final line is omitted when \(\zeta^2\) is fixed.
-
-\subsection{Laplace--Delta Update for \texorpdfstring{\(q_{\sigma,\gamma}\)}{q sigma gamma}}
-
-Use unconstrained coordinates
-\[
-\eta_\sigma=\log\sigma,\qquad
-\eta_\gamma=\logit\{(\gamma-L)/(U-L)\}.
-\]
-Let \(\vect\eta=(\eta_\gamma,\eta_\sigma)^\top\) and let
-\((\gamma,\sigma)=T(\vect\eta)\). The variational log-target is
-\[
-\ell_{\mathrm{LD}}(\vect\eta)
-=
-\E_{q_{-(\sigma,\gamma)}}\{
-\log p(\vect y,\vect v,\vect s,\vect\beta,\sigma,\gamma,\Theta_{\mathrm{rhs}}
-\mid\mat X)
-\}
-+\log|J_T(\vect\eta)|.
-\label{eq:supp_ld_logtarget}
-\]
-At the mode \(\hat{\vect\eta}\), with Hessian
-\(\mat H=\nabla^2\ell_{\mathrm{LD}}(\hat{\vect\eta})\), set
-\[
-q_{\sigma,\gamma}(\vect\eta)
-\approx
-\Normal\{\hat{\vect\eta},(-\mat H)^{-1}\}.
-\label{eq:supp_ld_gaussian}
-\]
-For any smooth function \(h(\sigma,\gamma)\),
-\begin{equation}
-\E\{h(\sigma,\gamma)\}
-\approx
-h\{T(\hat{\vect\eta})\}
-+\frac12\tr\left[
-\nabla^2_{\eta} h\{T(\hat{\vect\eta})\}(-\mat H)^{-1}
-\right].
-\label{eq:supp_delta}
-\end{equation}
-The expectations \(M_1,\ldots,M_5\), \(\E(\log\sigma)\),
-\(\E(\sigma^{-1})\), \(\E(\log B_\gamma)\), and
-\(\E\{\log\pi_\gamma(\gamma)\}\) are evaluated this way.
-
-\begin{suppalgorithm}{Q--DESN Variational Bayes Updates}
-\label{alg:qdesn_cavi}
-\emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
-target quantile \(p_0\), likelihood choice AL or exAL, coefficient prior ridge
-or \texttt{rhs\_ns}, and convergence controls.
-\begin{enumerate}[label=(\arabic*)]
-\item Initialize \(q_\beta\), latent factors, scale factors, and
-\texttt{rhs\_ns} factors when used.
-\item Repeat until convergence:
-  \begin{enumerate}[label=(\alph*)]
-  \item update \(q(v_t)\) by \eqref{eq:supp_vb_al_v} for AL or
-  \eqref{eq:supp_vb_exal_v} for exAL;
-  \item for exAL, update \(q(s_t)\) by \eqref{eq:supp_vb_exal_s};
-  \item update \(q_\beta\) by \eqref{eq:supp_vb_beta};
-  \item update \texttt{rhs\_ns} factors by \eqref{eq:supp_vb_rhs} when used;
-  \item update \(q(\sigma)\) for AL by \eqref{eq:supp_vb_al_sigma};
-  \item update \(q_{\sigma,\gamma}\) for exAL by
-  \eqref{eq:supp_ld_logtarget}--\eqref{eq:supp_ld_gaussian};
-  \item recompute needed moments and monitor the ELBO.
-  \end{enumerate}
-\item Return variational factors and posterior summaries for the readout
-quantile path \(\mu_t=\vect x_t^\top\vect\beta\).
-\end{enumerate}
-\end{suppalgorithm}
-
-\section{ELBO Decomposition}
+\section{ELBO Monitoring}
 \label{sec:elbo}
 
-The ELBO decomposition follows the complete-data joint distribution in
-Section~\ref{sec:model_joint}. For exAL, the ELBO is
-\begin{align}
-\elbo(q)
-&=
-\E_q\{\log p(\vect y\mid\vect\beta,\sigma,\gamma,\vect v,\vect s,\mat X)\}
-+\E_q\{\log p(\vect v\mid\sigma)\}
-+\E_q\{\log p(\vect s)\}
-\nonumber\\
-&\quad
-+\E_q\{\log p(\vect\beta,\Theta_{\mathrm{rhs}})\}
-+\E_q\{\log p(\sigma)\}
-+\E_q\{\log\pi_\gamma(\gamma)\}
-+H(q).
-\label{eq:supp_elbo_decomp}
-\end{align}
-For ridge, the fourth term is \(\E_q\{\log p(\vect\beta)\}\). For
-\texttt{rhs\_ns}, it includes the coefficient, local-scale, global-scale,
-slab, and auxiliary-variable terms in Section~\ref{subsec:rhs_elbo}.
+The implementation monitors the evidence lower bound, or the corresponding
+Laplace--Delta approximation when exAL scale-asymmetry factors are present, as
+a numerical convergence diagnostic for VB--LD. The exact decomposition depends
+on the likelihood, shrinkage prior, and active non-conjugate blocks and is
+reported with the companion implementation details in
+\citet{DeLeonEtAl2026QDESNCompanion}.
 
-\subsection{Likelihood and Latent Terms}
-
-Let
-\[
-r_t=y_t-\vect x_t^\top\vect m_\beta,\qquad
-q_t=\vect x_t^\top\mat\Sigma_\beta\vect x_t,
-\]
-and use expectations under the current variational factors. The exAL
-likelihood contribution is
-\begin{align}
-\elbo_{\mathrm{like}}
-&=
--\frac{T}{2}\log(2\pi)
--\frac12\sum_{t=1}^T
-\left[
-\E(\log\sigma)+\E(\log B_\gamma)+\E(\log v_t)
-\right]
-\nonumber\\
-&\quad
--\frac12\sum_{t=1}^T
-\E\left[
-\frac{\{y_t-\vect x_t^\top\vect\beta-\sigma D_\gamma s_t-A_\gamma v_t\}^2}
-{\sigma B_\gamma v_t}
-\right].
-\label{eq:supp_elbo_like}
-\end{align}
-The final expectation is exact for AL and evaluated by the same
-Laplace--Delta approximations to smooth expectations used in the CAVI
-updates for exAL. The latent-prior
-terms are
-\begin{align}
-\elbo_v
-&=
--T\E(\log\sigma)-\E(\sigma^{-1})\sum_{t=1}^T\E(v_t),\\
-\elbo_s
-&=
-T\log2-\frac{T}{2}\log(2\pi)-\frac12\sum_{t=1}^T\E(s_t^2),
-\label{eq:supp_elbo_latents}
-\end{align}
-with \(\elbo_s\) omitted for AL. The scale and asymmetry prior terms are
-\begin{align}
-\elbo_\sigma
-&=
-a_\sigma\log b_\sigma-\log\Gamma(a_\sigma)
--(a_\sigma+1)\E(\log\sigma)-b_\sigma\E(\sigma^{-1}),\\
-\elbo_\gamma&=\E\{\log\pi_\gamma(\gamma)\},
-\label{eq:supp_elbo_sigmagam}
-\end{align}
-with \(\elbo_\gamma\) omitted for AL.
-
-\subsection{Ridge Coefficient-Prior Term}
-
-Under the ridge prior \eqref{eq:supp_ridge_prior},
-\begin{align}
-\elbo_\beta^{\mathrm{ridge}}
-&=
--\frac{r+1}{2}\log(2\pi)
--\frac12\log|\mat V_\beta|
-\nonumber\\
-&\quad
--\frac12
-\left[
-(\vect m_\beta-\vect b_\beta)^\top\mat P_\beta(\vect m_\beta-\vect b_\beta)
-+\tr(\mat P_\beta\mat\Sigma_\beta)
-\right].
-\label{eq:supp_elbo_ridge}
-\end{align}
-
-\subsection{Regularized-Horseshoe Coefficient-Prior and Scale Terms}
-\label{subsec:rhs_elbo}
-
-For \(x\sim\IG(a,b)\), define
-\[
-m_{\log x}(a,b)=\log b-\psi(a),\qquad
-m_{x^{-1}}(a,b)=a/b,\qquad
-h_{\IG}(a,b)=a+\log b+\log\Gamma(a)-(a+1)\psi(a).
-\]
-Here \(\psi(\cdot)\) is the digamma function.
-Let
-\[
-\ell_{\lambda j}=\E\log\lambda_j^2,\quad
-r_{\lambda j}=\E(\lambda_j^{-2}),\quad
-\ell_{\nu j}=\E\log\nu_j,\quad
-r_{\nu j}=\E(\nu_j^{-1}),
-\]
-and similarly \((\ell_\tau,r_\tau)\), \((\ell_\xi,r_\xi)\), and
-\((\ell_\zeta,r_\zeta)\). If \(\zeta^2\) is fixed at \(\zeta_0^2\), use
-\(\ell_\zeta=\log\zeta_0^2\) and \(r_\zeta=\zeta_0^{-2}\). With
-\(\overline{\beta_j^2}=m_{\beta,j}^2+(\mat\Sigma_\beta)_{jj}\),
-\begin{align}
-\elbo_{\beta,\mathrm{hs}}
-&=
-\sum_{j=1}^r
-\left[
--\frac12\log(2\pi)-\frac12\ell_\tau-\frac12\ell_{\lambda j}
--\frac12\overline{\beta_j^2}r_\tau r_{\lambda j}
-\right],\\
-\elbo_{\beta,\mathrm{slab}}
-&=
-\sum_{j=1}^r
-\left[
--\frac12\log(2\pi)-\frac12\ell_\zeta
--\frac12\overline{\beta_j^2}r_\zeta
-\right].
-\label{eq:supp_elbo_rhs_beta}
-\end{align}
-The half-Cauchy auxiliary-prior terms are
-\begin{align}
-\elbo_{\lambda\mid\nu}
-&=
-\sum_{j=1}^r
-\left[
--\frac12\ell_{\nu j}-\log\Gamma(1/2)
--\frac32\ell_{\lambda j}-r_{\nu j}r_{\lambda j}
-\right],\\
-\elbo_{\nu}
-&=
-\sum_{j=1}^r
-\left[
--\log\Gamma(1/2)-\frac32\ell_{\nu j}-r_{\nu j}
-\right],\\
-\elbo_{\tau\mid\xi}
-&=
--\frac12\ell_\xi-\log\Gamma(1/2)-\frac32\ell_\tau-r_\xi r_\tau,\\
-\elbo_{\xi}
-&=
-\frac12\log(\tau_0^{-2})-\log\Gamma(1/2)-\frac32\ell_\xi-\tau_0^{-2}r_\xi,\\
-\elbo_{\zeta}
-&=
-\begin{cases}
-a_\zeta\log b_\zeta-\log\Gamma(a_\zeta)
--(a_\zeta+1)\ell_\zeta-b_\zeta r_\zeta,
-& \zeta^2\text{ random},\\
-0, & \zeta^2\text{ fixed},
-\end{cases}
-\label{eq:supp_elbo_rhs_scales}
-\end{align}
-The unshrunk intercept prior contributes
-\begin{equation}
-\elbo_{\beta_0}
-=
--\frac12\log(2\pi V_0)
--\frac12V_0^{-1}\{(m_{\beta,0}-b_0)^2+(\mat\Sigma_\beta)_{00}\}.
-\label{eq:supp_elbo_intercept}
-\end{equation}
-The \texttt{rhs\_ns} contribution to the expected complete-data log density is
-the sum of \eqref{eq:supp_elbo_rhs_beta}--\eqref{eq:supp_elbo_intercept}. The
-entropy of the inverse-gamma scale factors is added separately through
-\(H(q)\).
-
-\subsection{Entropy Terms and Exact-versus-Approximate Status}
-
-The Gaussian entropy is
-\[
-H\{q_\beta\}=\frac12\{(r+1)(1+\log2\pi)+\log|\mat\Sigma_\beta|\}.
-\]
-For \(x\sim\IG(a,b)\), the entropy is \(h_{\IG}(a,b)\). For
-\(x\sim\GIG(\lambda,\chi,\psi)\), with \(z=(\chi\psi)^{1/2}\),
-\begin{align}
-H\{\GIG(\lambda,\chi,\psi)\}
-&=
-\log\{2K_\lambda(z)\}
--\frac{\lambda}{2}\log(\psi/\chi)
--(\lambda-1)\E(\log x)
-\nonumber\\
-&\quad
-+\frac12\{\chi\E(x^{-1})+\psi\E(x)\}.
-\label{eq:supp_entropy_gig}
-\end{align}
-For \(s\sim\TN(m,V)\), let \(a=V^{1/2}\), \(z=m/a\), and
-\(\Lambda(z)=\phi(z)/\Phi(z)\). Then
-\[
-H\{\TN(m,V)\}
-=
-\frac12\log(2\pi V)+\log\Phi(z)+\frac12\{1-z\Lambda(z)\}.
-\]
-For the Laplace--Delta block, if
-\(q_\eta=\Normal(\hat{\vect\eta},\mat\Sigma_\eta)\), then
-\[
-H\{q_{\sigma,\gamma}\}
-\approx
-\frac12\{2(1+\log2\pi)+\log|\mat\Sigma_\eta|\}
-+\E_{q_\eta}\{\log|J_T(\vect\eta)|\}.
-\]
-All Gaussian, inverse-gamma, GIG, and truncated-normal terms are exact up to
-standard special-function evaluation. Terms involving smooth nonlinear
-functions of \((\sigma,\gamma)\) are approximate under the
-Laplace--Delta expansion.
 
 \section{Joint exAL--QVP--Q--DESN--RHS Extension}
 \label{sec:joint_qdesn_supp}
@@ -1460,7 +1036,7 @@ b_{\zeta_\Delta}
 with the analogous \(r/2\) update for a random baseline slab scale
 \(\zeta_0^2\). If slab scales are fixed, these updates are omitted.
 
-\subsection{MCMC and VB--LD Algorithms}
+\subsection{MCMC Algorithm and VB--LD Pointer}
 
 \begin{suppalgorithm}{Joint exAL--QVP--Q--DESN--RHS MCMC}
 \label{alg:joint_qdesn_mcmc}
@@ -1490,59 +1066,12 @@ also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
 \end{enumerate}
 \end{suppalgorithm}
 
-For VB--LD, a mean-field factorization matching the MCMC blocks is
-\begin{align}
-q
-&=
-q_\beta(\vect\beta_{\mathrm{st}})q_{\beta_{\mathrm{base}}}(\vect\beta_{\mathrm{base}})q_\alpha(\vect\alpha)
-\prod_{q=1}^Q q_{\sigma_q,\gamma_q}(\sigma_q,\gamma_q)
-\prod_{q=1}^Q\prod_{t=1}^T q_{v_{q,t}}(v_{q,t})q_{s_{q,t}}(s_{q,t})
-\nonumber\\
-&\quad\times
-q(\Theta_0)q(\Theta_\Delta),
-\label{eq:supp_joint_vb_factorization}
-\end{align}
-with \(q_{s_{q,t}}\) omitted under AL. The factors
-\(q_\beta\), \(q_{\beta_{\mathrm{base}}}\), and \(q_\alpha\) are Gaussian; the \(v\)
-factors are GIG; the \(s\) factors are positive-truncated Normal; and the RHS
-scale factors are inverse-gamma. The \(q_{\sigma_q,\gamma_q}\) factors use
-Laplace--Delta approximations on the transformed coordinates above. For
-\(Q=1\), remove \(q_{\beta_{\mathrm{base}}}\) and \(q(\Theta_0)\), set
-\(\Delta_1=\vect\beta_1\), and read \(q_\beta\) as the ordinary
-single-level slope factor.
-
-The Gaussian variational precision for \(q_\beta\) is obtained from
-\eqref{eq:supp_joint_beta_conditional} by replacing
-\(\mat\Omega^{-1}\), \(\mat D_\Delta^{-1}\), \(\vect d\), and
-\(\tilde{\vect\beta}_{\mathrm{base}}\) with the corresponding variational expectations.
-Only selected covariance elements are needed for the RHS scale expectations and
-ELBO; a full dense inverse of the stacked precision is not required when sparse
-selected-inverse or diagonal-extraction routines are available.
-
-The joint ELBO is
-\begin{align}
-\elbo_{\mathrm{joint}}(q)
-&=
-\kappa\E_q\{\log p(\vect y_{\mathrm{st}}\mid
-\vect\beta_{\mathrm{st}},\vect\alpha,\vect d,\mat\Omega)\}
-+\sum_{q,t}\E_q\{\log p(v_{q,t}\mid\sigma_q)\}
-+\sum_{q,t}\E_q\{\log p(s_{q,t})\}
-\nonumber\\
-&\quad
-+\sum_q\E_q\{\log p(\sigma_q)+\log\pi_{\gamma_q}(\gamma_q)\}
-+\E_q\{\log p(\vect\alpha)\}
-+\E_q\{\log p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)\}
-\nonumber\\
-&\quad
-+\E_q\{\log p(\vect\beta_{\mathrm{base}},\Theta_0)\}
-+\E_q\{\log p(\Theta_\Delta)\}
-+H(q).
-\label{eq:supp_joint_elbo}
-\end{align}
-The Gaussian, GIG, truncated-normal, and inverse-gamma terms are exact under
-the variational factorization. Expectations involving nonlinear functions of
-\((\sigma_q,\gamma_q)\) are evaluated with the same Laplace--Delta expansion
-used in the single-level VB--LD algorithm.
+For the joint VB--LD approximation, the same block structure is used as a
+mean-field computational approximation, with Wang--Blei Laplace--Delta updates
+only for the non-conjugate exAL scale-asymmetry factors
+\citep{wang2013nonconjugatevb}. The full factorization, selected-covariance
+bookkeeping, and ELBO decomposition are part of the companion implementation
+record \citep{DeLeonEtAl2026QDESNCompanion} and are not repeated here.
 
 \subsection{Crossing Diagnostics}
 
@@ -1570,13 +1099,13 @@ made large repairs. On a bounded feature domain
 is a diagnostic reference for soft non-crossing behavior; it is not imposed by
 the QVP--RHS prior unless a separate hard-constraint step is added.
 
-\section{Posterior Prediction and Quantile Synthesis}
+\section{Posterior Prediction and Monotone Reporting}
 \label{sec:forecast_synthesis}
 
 Forecasting propagates posterior or variational draws through the fixed
-reservoir, whereas multi-quantile synthesis is a
-post-processing device for independently fitted quantile levels rather than a
-joint multi-quantile posterior model.
+reservoir, whereas monotone reporting is a post-processing contract for
+independently fitted quantile levels rather than a joint multi-quantile
+posterior model.
 
 For a single-level fit at target \(p_0\), write a posterior draw or a draw from
 the variational approximation as
@@ -1614,12 +1143,12 @@ For draw \(m\) at horizon \(h\), write
 and let
 \(\vect q_{T+h}^{(m)}
 =(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
-is required, apply the declared reporting contract
-\(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). Piecewise-linear
-interpolation across
-\(\{(p_q,q_{q,T+h}^{*,(m)})\}_{q=1}^Q\), with the conservative endpoint rule
-below, defines \(Q_{T+h}^{*,(m)}(u)\). A scalar synthesized response draw is
-then
+is required, apply the declared reporting contract, such as isotonic projection
+or rearrangement
+\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010,DeLeonEtAl2026QDESNCompanion},
+and set \(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered
+grid defines \(Q_{T+h}^{*,(m)}(u)\) under the declared interpolation and
+endpoint convention. A scalar synthesized response draw is then
 \[
 u_{T+h}^{(m,r)}\sim\Unif(0,1),
 \qquad
@@ -1630,24 +1159,14 @@ This is inverse-CDF sampling from the posterior-sampled quantile function. It is
 not obtained by mixing the quantile-specific working likelihoods, normalizing
 their product, or drawing separately from their AL/exAL factors.
 
-When separate models are fit at ordered quantile levels
-\(p_1<\cdots<p_K\), multi-quantile synthesis can form a monotone predictive
-quantile curve. This generic post-processing device is used for independently
-fitted quantile models and is not part of the Q--DESN
-posterior target. At each time point, collect fitted target-quantile summaries
-\(m_{1,t},\ldots,m_{K,t}\), such as posterior means or medians of the readout
-locations from the \(K\) independently fitted models. The synthesis uses this
-target grid rather than off-target quantiles from the working likelihoods. If
-necessary, replace the grid by the isotonic projection
-\(m_{1,t}^\star\le\cdots\le m_{K,t}^\star\)
-\citep{BarlowBrunk1972IsotonicDual}. Linear
-interpolation across \((p_k,m_{k,t}^\star)\), with conservative endpoint
-extrapolation, gives the estimated quantile function. If posterior-draw-level
-curves or smoother interpolants introduce residual non-monotonicity on a dense
-grid, a final monotone rearrangement can be applied \citep{chernozhukov2010}.
-The finite grid does not identify tail shape outside \([p_1,p_K]\); parametric
-tail extension should therefore be treated as a separate modeling step rather
-than an implication of the composite working likelihood.
+When separate models are fit at ordered quantile levels \(p_1<\cdots<p_K\),
+the article uses a monotone reporting contract only after fitting. That
+contract operates on fitted target-quantile summaries, not on off-target
+quantiles from the working likelihoods, and may use isotonic projection or
+monotone rearrangement
+\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. The detailed
+post-processing protocol, including interpolation and endpoint conventions, is
+deferred to \citet{DeLeonEtAl2026QDESNCompanion}.
 
 \clearpage
 \section{Quantile-Free Interval Prediction: RQR--DESN}
@@ -2703,12 +2222,13 @@ a_{\sigma,c}\log b_{\sigma,c}-\log\Gamma(a_{\sigma,c})
 &=\E\{\log\pi_{\gamma_c}(\gamma_c)\}.
 \label{eq:supp_glofas_elbo_source_terms}
 \end{align}
-The RHS coefficient-prior and shrinkage-scale terms are blockwise copies of
-Section~\ref{subsec:rhs_elbo}, with \(\vect\beta\) replaced separately by the
-non-intercept entries of \(\vect\beta_{p_0}\) and
-\(\vect\alpha_{p_0}\). Entropy terms are summed over the Gaussian coefficient
-factor, GIG latent factors, truncated-normal latent factors, inverse-gamma RHS
-factors, and the source-specific Laplace--Delta factors.
+The RHS coefficient-prior and shrinkage-scale terms are the corresponding
+blockwise RHS ELBO terms, with \(\vect\beta\) replaced separately by the
+non-intercept entries of \(\vect\beta_{p_0}\) and \(\vect\alpha_{p_0}\);
+the full bookkeeping is deferred to \citet{DeLeonEtAl2026QDESNCompanion}.
+Entropy terms are summed over the Gaussian coefficient factor, GIG latent
+factors, truncated-normal latent factors, inverse-gamma RHS factors, and the
+source-specific Laplace--Delta factors.
 Terms involving smooth nonlinear functions of \((\sigma_c,\gamma_c)\) are
 evaluated with the same Laplace--Delta approximation used in
 \eqref{eq:supp_glofas_delta}.

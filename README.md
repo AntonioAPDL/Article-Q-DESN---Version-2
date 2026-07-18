@@ -1,4 +1,4 @@
-# Bayesian Quantile Deep Echo State Networks
+# Bayesian Quantile Forecasting with Deep Echo State Networks
 
 This repository contains the working manuscript, supplement, bibliography, and
 simulation tables for the Q--DESN article.

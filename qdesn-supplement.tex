@@ -1649,7 +1649,7 @@ tail extension should therefore be treated as a separate modeling step rather
 than an implication of the composite working likelihood.
 
 \clearpage
-\section{RQR--DESN Interval-Readout Extension}
+\section{Quantile-Free Interval Estimation: RQR--DESN}
 \label{sec:rqr_desn_supp}
 
 The RQR--DESN extension changes the readout target while keeping the DESN
@@ -1674,9 +1674,9 @@ e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}),
 \]
 the sign of \(e_t\) records whether the observation is inside the interval:
 \(e_t<0\) when \(L_t<y_t<U_t\) and \(e_t>0\) outside the interval. The
-empirical RQR risk is
+empirical RQR loss is
 \[
-R_{T,c}(\vect\beta_1,\vect\beta_2)
+\mathcal L_{T,c}(\vect\beta_1,\vect\beta_2)
 =
 \sum_{t=1}^T\rho_c(e_t),
 \]
@@ -1685,7 +1685,7 @@ and the generalized posterior is
 \Pi_{\mathrm R}(d\vect\beta_1,d\vect\beta_2\mid \vect y,\mat X)
 \propto
 \pi_\beta(d\vect\beta_1)\pi_\beta(d\vect\beta_2)
-\exp\left\{-\omega_{\mathrm R}R_{T,c}(\vect\beta_1,\vect\beta_2)\right\},
+\exp\left\{-\omega_{\mathrm R}\mathcal L_{T,c}(\vect\beta_1,\vect\beta_2)\right\},
 \]
 where \(\omega_{\mathrm R}>0\) is a learning rate. This is a
 generalized-Bayes update \citep{BissiriHolmesWalker2016GeneralBayes}, not a
@@ -1708,10 +1708,9 @@ Y\ind\{L(x)<Y<U(x)\}\mid X=x
 =c\,\E(Y\mid X=x).
 \]
 Thus the ideal target is a coverage-plus-mean-balance interval. The finite
-fixed-feature readout should not be interpreted as guaranteeing finite-sample
-coverage, equal-tailed endpoints, shortest intervals, highest-density
-intervals, or calibrated generalized-posterior credible bands without
-additional checking.
+fixed-feature readout allows asymmetric interval estimation, with empirical
+coverage and generalized-posterior calibration checked by the validation
+protocol rather than assumed from the loss alone.
 
 \subsection{Pseudo-AL Augmentation}
 \label{subsec:rqr_desn_aug}

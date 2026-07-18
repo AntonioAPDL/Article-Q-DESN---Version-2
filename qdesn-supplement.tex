@@ -34,7 +34,6 @@
 \newcommand{\Unif}{\operatorname{Unif}}
 \newcommand{\AL}{\operatorname{AL}}
 \newcommand{\exAL}{\operatorname{exAL}}
-\newcommand{\qfGAL}{\operatorname{qfGAL}}
 \newcommand{\RHS}{\operatorname{RHS}}
 \newcommand{\elbo}{\mathcal{L}}
 \newcommand{\logit}{\operatorname{logit}}
@@ -67,9 +66,11 @@
 \noindent
 Conditional on fixed reservoir features, Q--DESN is a high-dimensional
 Bayesian quantile readout model under the asymmetric Laplace (AL) or
-quantile-fixed generalized asymmetric Laplace working likelihood, abbreviated
-\(\qfGAL\). The notation \(\exAL\) is retained in formulas and generated table
-labels as the project shorthand for qfGAL, not for the broader GAL family. The augmented posterior target
+extended asymmetric Laplace (\(\exAL\)) working likelihood. The \(\exAL\)
+notation follows the main article's convention for the quantile-fixed
+generalized asymmetric Laplace construction of \citet{yan2025new}, keeping
+exQDESN and exDQLM labels aligned with the same likelihood choice. The
+augmented posterior target
 includes the readout coefficients, likelihood scale and asymmetry, auxiliary
 mixture variables, and shrinkage parameters. The derivations cover complete-data
 posterior targets for the default ridge prior and the Nishimura--Suchard
@@ -199,9 +200,10 @@ A_0=\frac{1-2p_0}{p_0(1-p_0)},\qquad
 B_0=\frac{2}{p_0(1-p_0)}.
 \]
 The notation \(\exAL\) denotes the quantile-fixed generalized asymmetric
-Laplace distribution, abbreviated \(\qfGAL\), of \citet{yan2025new}. In this
-supplement, \(\exAL\) is only the project shorthand for qfGAL. It should not
-be read as the unconstrained or broader GAL family. The exAL likelihood
+Laplace distribution of \citet{yan2025new}. This convention emphasizes the
+role of the likelihood as an extension of AL while preserving the
+quantile-fixed parameterization that identifies \(\mu\) as the target
+conditional quantile. The exAL likelihood
 introduces an asymmetry parameter \(\gamma\in(L,U)\), where \(L\) and
 \(U\) are determined by the quantile-identifying construction. Define
 \[

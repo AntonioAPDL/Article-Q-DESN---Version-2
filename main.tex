@@ -63,7 +63,6 @@
 \newcommand{\Unif}{\mathrm{Unif}}
 \newcommand{\AL}{\mathrm{AL}}
 \newcommand{\exAL}{\mathrm{exAL}}
-\newcommand{\qfGAL}{\mathrm{qfGAL}}
 \newcommand{\RHS}{\ensuremath{\mathrm{RHS}}}
 
 % Current manuscript-facing GloFAS application output aliases.
@@ -178,16 +177,17 @@ inference is concentrated in the readout model.
 The quantile deep echo state network (Q--DESN) combines this fixed DESN
 design with a Bayesian quantile readout. For a chosen level \(p_0\), the
 readout location \(\mu_t=\vect x_t^\top\vect\beta\) is linked to the response
-through the quantile-fixed generalized asymmetric Laplace distribution,
-abbreviated \(\qfGAL\), of \citet{yan2025new}. We use \(\qfGAL\) in prose and
-retain \(\exAL\) in formulas and generated table labels only as the project
-shorthand for the same quantile-fixed extension of AL. Thus \(\exAL\) in this
-article should be read as qfGAL, not as the broader GAL family. Under this
-parameterization, \(\mu_t\) is the model's \(p_0\)th conditional quantile,
-while the \(\qfGAL\) asymmetry parameter allows mode, skewness, and tail
-behavior to vary relative to the asymmetric Laplace special case.
+through the quantile-fixed generalized asymmetric Laplace construction of
+\citet{yan2025new}. To keep notation aligned with the exDQLM baseline and the
+exQDESN labels used in the validation tables, this article denotes that
+quantile-fixed extension of AL by \(\exAL\). Thus an ``ex'' model prefix
+indicates the extended asymmetric Laplace working likelihood, whereas the
+unprefixed QDESN and DQLM labels indicate the AL working likelihood. Under
+this parameterization, \(\mu_t\) is the model's \(p_0\)th conditional
+quantile, while the \(\exAL\) asymmetry parameter allows mode, skewness, and
+tail behavior to vary relative to the asymmetric Laplace special case.
 
-The AL or \(\qfGAL\) likelihood is used as a working likelihood in the Bayesian
+The AL or \(\exAL\) likelihood is used as a working likelihood in the Bayesian
 quantile-regression sense. It defines a posterior target for quantile-specific
 readout inference without asserting that either likelihood is the
 data-generating error law
@@ -208,7 +208,7 @@ retain closed-form inverse-gamma forms
 \citep{NishimuraSuchard2023SSS,MakalicSchmidt2016SimpleSampler}.
 Posterior computation includes an MCMC sampler for the Q--DESN hierarchy and a
 mean-field variational Bayes approximation for lower-cost screening,
-initialization, and selected application workflows. In \(\qfGAL\) fits, the
+initialization, and selected application workflows. In \(\exAL\) fits, the
 scale-asymmetry block is non-conjugate; the implementation uses the
 Laplace--Delta approximation for non-conjugate variational inference of
 \citet{wang2013nonconjugatevb} for that block. We use ``VB--LD'' only as
@@ -217,7 +217,7 @@ Q--DESN, not as a new variational-inference contribution.
 
 This article makes three principal contributions. First, it introduces
 Q--DESN as a Bayesian conditional-quantile readout built on a fixed DESN
-feature map, with AL or \(\qfGAL\) working likelihoods and ridge or
+feature map, with AL or \(\exAL\) working likelihoods and ridge or
 regularized-horseshoe regularization. Second, it develops two distinct
 strategies for quantile grids: independent target-level fits followed by a
 prespecified monotone reporting rule, and a joint quantile-vector readout that
@@ -243,7 +243,7 @@ Construction & Target & Updating rule and prior & Article-facing output \\
 \midrule
 Single-level Q--DESN &
 \(Q_{p_0}(Y_t\mid\mathcal F_t)\) &
-AL or \(\qfGAL\) working likelihood with ridge or \RHS{} readout shrinkage;
+AL or \(\exAL\) working likelihood with ridge or \RHS{} readout shrinkage;
 MCMC or VB--LD &
 One fitted conditional quantile; working-likelihood simulation is used only
 under the declared forecast protocol. \\
@@ -255,7 +255,7 @@ Reported quantile grid and interpolated predictive quantile curve; no joint
 posterior over quantile-indexed coefficients. \\
 Joint QVP--Q--DESN &
 Quantile vector over a fixed grid &
-Composite AL or \(\qfGAL\) working target with \RHS{} shrinkage on baseline
+Composite AL or \(\exAL\) working target with \RHS{} shrinkage on baseline
 slopes and adjacent slope innovations; MCMC is the article-facing reference &
 Jointly estimated raw quantile path; exact monotonicity still requires a hard
 constraint or reporting rule. \\
@@ -267,7 +267,7 @@ Supplementary ordered interval endpoints; no response likelihood or posterior
 predictive response density. \\
 \bottomrule
 \end{tabular}
-\caption{Model map. AL versus \(\qfGAL\) is a working-likelihood choice,
+\caption{Model map. AL versus \(\exAL\) is a working-likelihood choice,
 ridge versus \RHS{} is a readout-prior choice, independent versus joint fitting
 is a multi-quantile strategy, and MCMC versus VB--LD is a computational
 choice. RQR--DESN is an alternative direct-interval target rather than a
@@ -276,7 +276,7 @@ generalization of the Q--DESN quantile hierarchy.}
 \end{table}
 
 The empirical evidence follows this hierarchy. The single-quantile simulation
-validates AL and \(\qfGAL\) Q--DESN readouts against DQLM and exDQLM baselines.
+validates QDESN and exQDESN readouts against DQLM and exDQLM baselines.
 The joint simulation evaluates the quantile-vector prior against independent
 multi-quantile readouts under known oracle quantile paths. The GloFAS and
 PriceFM applications use selected independent Q--DESN workflows; they are not
@@ -287,7 +287,7 @@ inferential target and currently has MCMC, not calibrated VB, article support.
 The remainder of the paper is organized as follows.
 Section~\ref{sec:notation} introduces notation, deep echo state network
 (DESN) dynamics, and the
-\(\qfGAL\) representation. Section~\ref{sec:model} presents the Q--DESN model
+\(\exAL\) representation. Section~\ref{sec:model} presents the Q--DESN model
 and prior specification, including independent and joint multi-quantile
 extensions.
 Section~\ref{sec:inference} describes posterior
@@ -318,7 +318,8 @@ adjustment under misspecification
 The quantile-fixed generalized asymmetric Laplace distribution of
 \citet{yan2025new} addresses a specific limitation of the asymmetric
 Laplace family by allowing the error distribution to vary after the target
-percentile has been fixed.
+percentile has been fixed; this is the distribution denoted by \(\exAL\) in
+the rest of the article.
 
 Dynamic quantile models provide statistical baselines. Dynamic
 quantile linear models combine dynamic linear modeling with Bayesian
@@ -360,7 +361,7 @@ that reservoir features can be embedded in probabilistic forecasting models
 \citep{McDermottWikle2018DeepESNUQ,GuerraScardapaneBianchi2023PLFRC,GandhiLeePanTheodorou2018TanhUncertainty,SinghRaman2025ESNStateSpace}.
 This literature sets the boundary of the present contribution: uncertainty
 quantification for ESNs is already active. The narrower gap addressed here is
-quantile-specific Bayesian readout inference under AL or \(\qfGAL\) working
+quantile-specific Bayesian readout inference under AL or \(\exAL\) working
 likelihoods with high-dimensional coefficient regularization.
 
 Quantile-oriented ESN methods provide the closest forecasting comparison.
@@ -371,7 +372,7 @@ regression to calibrate DESN forecasts for quasi-periodic climate processes.
 Q--DESN is complementary to these approaches. It does not treat the
 reservoir training or penalized-quantile calibration step as the Bayesian
 object; instead, conditional on the generated reservoir, it specifies an
-\(\qfGAL\) readout whose posterior includes readout coefficients, likelihood
+\(\exAL\) readout whose posterior includes readout coefficients, likelihood
 scale, asymmetry, and shrinkage parameters. The joint extension further
 couples quantile-specific readout coefficients during inference, so raw
 multi-quantile paths can be made more coherent before any monotone reporting
@@ -477,7 +478,7 @@ $\vect x_t$ & readout design vector with intercept & $(r+1)\times1$ \\
 $\mat X$ & fixed DESN design matrix after washout & $T\times(r+1)$ \\
 $\vect\beta$ & readout coefficients & $(r+1)\times1$ \\
 $\kappa_\beta^2$ & default ridge slope-prior variance & positive \\
-$\sigma,\gamma$ & qfGAL/exAL scale and asymmetry parameters & $\sigma>0,\ \gamma\in(L,U)$ \\
+$\sigma,\gamma$ & exAL scale and asymmetry parameters & $\sigma>0,\ \gamma\in(L,U)$ \\
 $(\lambda_j,\tau,\zeta)$ & local, global, and slab shrinkage scales & positive \\
 \bottomrule
 \end{tabular}
@@ -744,28 +745,27 @@ and scaling choices can affect short-horizon behavior. All masks and base
 matrices are fixed for the entire analysis and are not resampled during
 posterior inference.
 
-\subsection{Quantile-Fixed Generalized Asymmetric Laplace}
+\subsection{Extended Asymmetric Laplace Working Likelihood}
 \label{subsec:exal}
 The quantile-fixed generalized asymmetric Laplace distribution of
 \citet{yan2025new} extends the asymmetric Laplace (AL) working likelihood
-while keeping the target quantile fixed. We abbreviate this quantile-fixed
-family as \(\qfGAL\). The broader label GAL is not specific enough here,
-because the quantile-fixing reparameterization is what makes \(\mu\) the
-target \(p_0\)-quantile. We retain \(\exAL\) in formulas and generated tables
-as a project shorthand for the same qfGAL likelihood. The standard AL
-likelihood is recovered as a special case, but its skewness is fixed once
-\(p_0\) is chosen. The
-\(\qfGAL\) asymmetry parameter allows mode, skewness, and tail behavior to
-vary within a quantile-fixed likelihood. At fixed level \(p_0\), \(\mu\) is
-the \(p_0\)th quantile, \(\sigma>0\) is a scale parameter, and \(\gamma\) is
-an asymmetry parameter with bounded support \((L,U)\). The endpoints \(L\) and
-\(U\) solve \(g(\gamma)=1-p_0\) and \(g(\gamma)=p_0\), respectively, where
+while keeping the target quantile fixed. We denote this likelihood by
+\(\exAL\), for extended asymmetric Laplace, to match the ``ex'' model prefix
+used in exQDESN and exDQLM. The notation is a naming convention for the
+Yan--Kottas quantile-fixed extension of AL, not a different distribution. The
+standard AL likelihood is recovered as a special case, but its skewness is
+fixed once \(p_0\) is chosen. The \(\exAL\) asymmetry parameter allows mode,
+skewness, and tail behavior to vary within a quantile-fixed likelihood. At
+fixed level \(p_0\), \(\mu\) is the \(p_0\)th quantile, \(\sigma>0\) is a
+scale parameter, and \(\gamma\) is an asymmetry parameter with bounded support
+\((L,U)\). The endpoints \(L\) and \(U\) solve \(g(\gamma)=1-p_0\) and
+\(g(\gamma)=p_0\), respectively, where
 \(g(\gamma)=2\Phi(-|\gamma|)\exp(\gamma^2/2)\), and \(\Phi\) is the standard
 Normal CDF.
 
 \medskip
 \noindent
-Posterior computation uses the stochastic representation of the \(\qfGAL\)
+Posterior computation uses the stochastic representation of the \(\exAL\)
 distribution. If
 \[
 y\sim\exAL_{p_0}(\mu,\sigma,\gamma),
@@ -816,7 +816,7 @@ arises.
 \label{subsec:qdesn}
 
 The Q--DESN is obtained by inserting the fixed DESN feature map into the
-quantile-fixed exAL likelihood of Section~\ref{subsec:exal}. Let
+exAL working likelihood of Section~\ref{subsec:exal}. Let
 \(\tilde{\vect x}_t\) be the feature vector in
 Eq.~\eqref{eq:desn-hierarchy}, and set
 \(\vect x_t=(1,\tilde{\vect x}_t^\top)^\top\). Conditional on the fixed design
@@ -1000,8 +1000,8 @@ with no learned slope baseline. Equivalently, set
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and place the RHS prior directly
 on \(\Delta_1=\vect\beta_1\).
 
-For each \(q\), the working likelihood uses the quantile-fixed exAL family at
-the corresponding target level,
+For each \(q\), the working likelihood uses the exAL family at the
+corresponding target level,
 \begin{equation}
 y_t\mid\alpha_q,\vect\beta_q,\sigma_q,\gamma_q
 \sim
@@ -1154,7 +1154,7 @@ The supplement records a separate relaxed quantile regression DESN
 (RQR--DESN) readout that instead targets a prediction interval of prescribed
 coverage \(c\) directly \citep{PouplinEtAl2024RQR}. RQR--DESN reuses the
 fixed DESN design matrix, intercept--slope separation, ridge or \RHS{} prior
-interface, and Gaussian readout solvers, but it replaces the AL or \(\qfGAL\)
+interface, and Gaussian readout solvers, but it replaces the AL or \(\exAL\)
 working likelihood with a generalized-Bayes update based on the RQR loss
 \citep{BissiriHolmesWalker2016GeneralBayes}. It is therefore not a \(Q=2\)
 joint Q--DESN, and the RQR loss-kernel augmentation is not a response

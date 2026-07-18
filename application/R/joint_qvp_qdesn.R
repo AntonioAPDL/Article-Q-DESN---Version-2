@@ -15070,7 +15070,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   sigma_bounds = c(1.0e-8, 1.0e8),
   gamma_slice_width = NULL,
   gamma_slice_max_steps = 100L,
-  gamma_update = c("bounded_slice", "logit_slice")
+  gamma_update = c("bounded_slice", "logit_slice", "fixed")
 ) {
   if (!is.null(seed)) set.seed(seed)
   gamma_update <- match.arg(gamma_update)
@@ -15197,7 +15197,9 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
           kappa = kappa
         )
       }
-      if (identical(gamma_update, "logit_slice")) {
+      if (identical(gamma_update, "fixed")) {
+        gamma[[k]] <- gamma[[k]]
+      } else if (identical(gamma_update, "logit_slice")) {
         support_lower <- support$lower[[k]]
         support_upper <- support$upper[[k]]
         margin <- max(1.0e-8, 1.0e-8 * (support_upper - support_lower))

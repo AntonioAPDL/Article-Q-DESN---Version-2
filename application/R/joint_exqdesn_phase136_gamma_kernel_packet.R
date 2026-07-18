@@ -111,6 +111,7 @@ app_joint_exqdesn_phase136_variant_registry <- function(selected_cases, variant_
         variant,
         bounded_w4 = "bounded_slice",
         logit_w4 = "logit_slice",
+        fixed_zero = "fixed",
         stop(sprintf("Unknown Phase136 variant_id '%s'.", variant), call. = FALSE)
       )
       rows[[length(rows) + 1L]] <- cbind(
@@ -123,6 +124,8 @@ app_joint_exqdesn_phase136_variant_registry <- function(selected_cases, variant_
           gamma_slice_max_steps = as.integer(gamma_slice_max_steps),
           phase136_variant_role = if (identical(gamma_update, "bounded_slice")) {
             "existing_gamma_slice_width4_reference"
+          } else if (identical(gamma_update, "fixed")) {
+            "fixed_gamma_zero_near_al_sensitivity"
           } else {
             "logit_gamma_slice_geometry_test"
           },
@@ -138,11 +141,37 @@ app_joint_exqdesn_phase136_variant_registry <- function(selected_cases, variant_
 
 app_joint_exqdesn_phase136_width_vector <- function(tau, gamma_update, bounded_width_multiplier, logit_eta_width) {
   support <- app_joint_qvp_exal_support(tau)
-  if (identical(gamma_update, "logit_slice")) {
+  if (identical(gamma_update, "fixed")) {
+    rep(1, length(tau))
+  } else if (identical(gamma_update, "logit_slice")) {
     rep(as.numeric(logit_eta_width), length(tau))
   } else {
     (as.numeric(support$upper) - as.numeric(support$lower)) / 20 * as.numeric(bounded_width_multiplier)
   }
+}
+
+app_joint_exqdesn_phase136_chain_init_for_gamma_update <- function(vb_fit, tau, controls,
+                                                                   chain_id, n_chains,
+                                                                   gamma_update,
+                                                                   mode = "vb_jittered",
+                                                                   jitter_fraction = 0.10) {
+  if (identical(gamma_update, "fixed")) {
+    init <- vb_fit
+    gamma <- app_joint_qdesn_gamma_init_for_policy(tau, controls)
+    if (is.null(gamma)) gamma <- rep(0, length(app_joint_qvp_validate_tau_grid(tau)))
+    gamma <- app_joint_qvp_check_gamma(tau, gamma)
+    init$gamma_mean <- gamma
+    init$gamma <- gamma
+    return(init)
+  }
+  app_joint_exqdesn_gamma_chain_init(
+    vb_fit = vb_fit,
+    tau = tau,
+    chain_id = chain_id,
+    n_chains = n_chains,
+    mode = mode,
+    jitter_fraction = jitter_fraction
+  )
 }
 
 app_joint_exqdesn_phase136_fit_vb_case <- function(fixture, spec, controls) {
@@ -203,11 +232,13 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
   width_vector <- prep$gamma_slice_width
   chain_start <- proc.time()[["elapsed"]]
   if (identical(spec$fit_structure[[1L]], "joint")) {
-    init <- app_joint_exqdesn_gamma_chain_init(
+    init <- app_joint_exqdesn_phase136_chain_init_for_gamma_update(
       vb_fit = prep$vb$vb_fit,
       tau = fixture$tau,
+      controls = controls,
       chain_id = chain_id,
       n_chains = mcmc_controls$n_chains,
+      gamma_update = gamma_update,
       mode = gamma_init_mode,
       jitter_fraction = gamma_jitter_fraction
     )
@@ -234,11 +265,13 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
   } else {
     one_tau_fits <- vector("list", length(fixture$tau))
     for (kk in seq_along(fixture$tau)) {
-      one_init <- app_joint_exqdesn_gamma_chain_init(
+      one_init <- app_joint_exqdesn_phase136_chain_init_for_gamma_update(
         vb_fit = prep$vb$vb_fit$fits[[kk]],
         tau = fixture$tau[[kk]],
+        controls = controls,
         chain_id = chain_id,
         n_chains = mcmc_controls$n_chains,
+        gamma_update = gamma_update,
         mode = gamma_init_mode,
         jitter_fraction = gamma_jitter_fraction
       )

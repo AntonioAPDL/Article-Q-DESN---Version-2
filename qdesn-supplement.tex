@@ -38,6 +38,7 @@
 \newcommand{\elbo}{\mathcal{L}}
 \newcommand{\logit}{\operatorname{logit}}
 \newcommand{\expit}{\operatorname{expit}}
+\DeclareMathOperator{\argmin}{arg\,min}
 \newcommand{\pkg}[1]{\textsf{#1}}
 \newcommand{\TableStyle}{\footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.08}}
 
@@ -54,7 +55,7 @@
 \renewcommand{\thesubsection}{S\arabic{section}.\arabic{subsection}}
 \renewcommand{\thesubsubsection}{S\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
 
-\title{Supplementary Material for ``Bayesian Quantile Deep Echo State Networks''}
+\title{Supplementary Material for ``Bayesian Quantile Readouts for Deep Echo State Networks''}
 \author{Antonio De Leon \and Raquel Prado \and Bruno Sans\'o}
 \date{\today}
 
@@ -64,8 +65,9 @@
 \begin{abstract}
 \noindent
 Conditional on fixed reservoir features, Q--DESN is a high-dimensional
-Bayesian quantile readout model under the asymmetric Laplace (AL) or extended
-asymmetric Laplace (exAL) working likelihood. The augmented posterior target
+Bayesian quantile readout model under the asymmetric Laplace (AL) or
+quantile-fixed generalized asymmetric Laplace working likelihood, denoted
+exAL in formulas and generated table labels. The augmented posterior target
 includes the readout coefficients, likelihood scale and asymmetry, auxiliary
 mixture variables, and shrinkage parameters. The derivations cover complete-data
 posterior targets for the default ridge prior and the Nishimura--Suchard
@@ -75,7 +77,7 @@ VB--LD computational approximation, and the joint quantile-vector QVP--RHS
 extension.
 It also records the relaxed quantile regression DESN (RQR--DESN)
 interval-readout extension as a generalized-Bayes target over two fixed-feature
-root readouts.
+root readouts, together with its supplementary targeted-confirmation results.
 The notation is aligned with the main article.
 \end{abstract}
 
@@ -131,12 +133,13 @@ Section~\ref{sec:mcmc} &
 Derives the readout, latent-variable, scale, asymmetry, and shrinkage updates. \\
 Variational Bayes and Laplace--Delta provenance &
 Section~\ref{sec:cavi} &
-States the VB--LD role and cites the Wang--Blei non-conjugate variational
-approximation and companion implementation record. \\
+States the generic fixed-design mean-field factors, canonical Gaussian readout
+update, RHS CAVI updates, and Wang--Blei Laplace--Delta treatment for the
+non-conjugate exAL scale-asymmetry block. \\
 ELBO &
 Section~\ref{sec:elbo} &
-Records the convergence-monitoring role of the ELBO and defers the full
-decomposition to the companion implementation record. \\
+Gives the fixed-design decomposition monitored by the generic VB--LD
+implementation. \\
 Joint quantile-vector extension &
 Section~\ref{sec:joint_qdesn_supp} &
 Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, and crossing
@@ -146,10 +149,15 @@ Section~\ref{sec:rqr_desn_supp} &
 Defines the two-root generalized-Bayes interval target, pseudo-AL
 augmentation, and MCMC block structure for the supplementary interval-readout
 extension. \\
+Supplementary validation tables &
+Section~\ref{sec:supp_validation_tables} &
+Preserves VB--LD companion panels, joint-validation provenance, and the
+RQR--DESN targeted-confirmation table outside the main article evidence path. \\
 Posterior prediction and monotone reporting &
 Section~\ref{sec:forecast_synthesis} &
 Links the fitted quantile readout to working-likelihood forecast simulation and
-points to the companion monotone-synthesis protocol. \\
+defines the monotone reporting rule, interpolation convention, and
+quantile-function sampling rule used by multi-level reports. \\
 GloFAS discrepancy-calibration model &
 Section~\ref{sec:glofas_discrepancy} &
 Expresses the single-forecast-system application as an augmented
@@ -643,24 +651,197 @@ or \texttt{rhs\_ns}, and MCMC controls.
 \section{Variational Bayes and Laplace--Delta Approximation}
 \label{sec:cavi}
 
-The article uses VB--LD as a computational approximation for screening,
-warm starts, and companion validation panels. The Laplace--Delta component is
-the non-conjugate variational approximation of \citet{wang2013nonconjugatevb},
-applied here only to the exAL scale-asymmetry block
-\((\sigma,\gamma)\). The Q--DESN adaptation, factor bookkeeping, and numerical
-monitoring details are deferred to the companion placeholder
-\citet{DeLeonEtAl2026QDESNCompanion}; they are not rederived in this
-supplement.
+The article uses VB--LD as a model-specific computational approximation for
+screening, warm starts, and selected application fits. The approximation is
+mean-field for the conditionally conjugate augmented blocks and uses the
+Laplace--Delta method of \citet{wang2013nonconjugatevb} only for the
+non-conjugate exAL scale-asymmetry block \((\sigma,\gamma)\). This section
+records the generic fixed-design updates; application-specific GloFAS factors
+are given separately in Section~\ref{subsec:glofas_vb}.
+
+For a single target level \(p_0\), use the mean-field family
+\begin{equation}
+q=
+q_\beta(\vect\beta)\,q_\Theta(\Theta_\beta)\,
+q_{\sigma,\gamma}(\sigma,\gamma)
+\prod_{t=1}^T q_v(v_t)q_s(s_t),
+\label{eq:supp_generic_vb_family}
+\end{equation}
+where \(q_s\) and the \(\gamma\) component are omitted for AL, and
+\(q_\Theta\) is omitted under a fixed ridge prior. The coefficient factor is
+Gaussian. Conditional on the latent variables, both AL and exAL have the form
+\[
+y_t=\vect x_t^\top\vect\beta+d_t+\epsilon_t,\qquad
+\epsilon_t\mid\omega_t\sim\Normal(0,\omega_t),
+\]
+with \(d_t=A_0v_t\) and \(\omega_t=B_0\sigma v_t\) for AL, and
+\[
+d_t=\lambda(\gamma)\sigma s_t+A(\gamma)v_t,\qquad
+\omega_t=B(\gamma)\sigma v_t
+\]
+for exAL. Define the variational canonical moments
+\[
+\bar w_t=\E_q(\omega_t^{-1}),\qquad
+\bar r_t=\E_q\{\omega_t^{-1}(y_t-d_t)\}.
+\]
+If the prior contributes Gaussian canonical parameters
+\((\bar{\mat P}_\beta,\bar{\vect h}_\beta)\), then
+\begin{align}
+q_\beta(\vect\beta)&=\Normal(\vect m_\beta,\mat\Sigma_\beta),\\
+\mat\Sigma_\beta&=
+\left(\mat X^\top\bar{\mat W}\mat X+\bar{\mat P}_\beta\right)^{-1},\\
+\vect m_\beta&=
+\mat\Sigma_\beta\left(\mat X^\top\bar{\vect r}
++\bar{\vect h}_\beta\right),
+\label{eq:supp_generic_vb_beta}
+\end{align}
+where \(\bar{\mat W}=\diag(\bar w_1,\ldots,\bar w_T)\) and
+\(\bar{\vect r}=(\bar r_1,\ldots,\bar r_T)^\top\). For a fixed ridge prior,
+\(\bar{\mat P}_\beta=\diag(V_0^{-1},\kappa_\beta^{-2}\ones{r})\) and
+\(\bar{\vect h}_\beta=(V_0^{-1}b_0,0,\ldots,0)^\top\). Under
+\texttt{rhs\_ns}, the intercept block is unchanged and the slope precision
+uses
+\[
+\bar P_{\beta,j}
+=
+\E_q(\tau^{-2})\E_q(\lambda_j^{-2})+\E_q(\zeta^{-2}),
+\qquad j=1,\ldots,r .
+\]
+
+For AL, the latent and scale updates are conjugate after taking expectations
+over \(q_\beta\):
+\begin{align}
+q_v(v_t)
+&=
+\GIG\left(
+\frac12,\
+B_0^{-1}\E_q(\sigma^{-1})\overline e_t^{\,2},\
+\E_q(\sigma^{-1})\left(\frac{A_0^2}{B_0}+2\right)
+\right),\\
+q_\sigma(\sigma)
+&=\IG(a_\sigma^\star,b_\sigma^\star),
+\label{eq:supp_generic_vb_al_latents}
+\end{align}
+where
+\(\overline e_t^{\,2}
+=\{y_t-\vect x_t^\top\vect m_\beta\}^2
++\vect x_t^\top\mat\Sigma_\beta\vect x_t\), and
+\[
+a_\sigma^\star=a_\sigma+\frac{3T}{2},\qquad
+b_\sigma^\star=b_\sigma+\sum_{t=1}^T\E_q(v_t)
++\frac{1}{2B_0}\sum_{t=1}^T
+\left[
+\overline e_t^{\,2}\E_q(v_t^{-1})
+-2A_0\{y_t-\vect x_t^\top\vect m_\beta\}
++A_0^2\E_q(v_t)
+\right].
+\]
+For exAL, \(q_v(v_t)\) and \(q_s(s_t)\) have the same GIG and
+positive-truncated Normal forms as the MCMC blocks after replacing products by
+expectations under the other variational factors. The smooth expectations that
+depend on \((\sigma,\gamma)\), such as
+\(\E\{(\sigma B_\gamma)^{-1}\}\),
+\(\E(D_\gamma/B_\gamma)\), and
+\(\E\{A_\gamma^2/(\sigma B_\gamma)+2/\sigma\}\), are evaluated by the
+Laplace--Delta approximation below.
+
+The \texttt{rhs\_ns} CAVI updates are the MCMC inverse-gamma scale updates with
+coefficient squares replaced by second moments
+\(\overline{\beta_j^2}=m_{\beta,j}^2+(\mat\Sigma_\beta)_{jj}\):
+\begin{align}
+q(\lambda_j^2)
+&=\IG\left(1,\ \E_q(\nu_j^{-1})
++\frac12\overline{\beta_j^2}\E_q(\tau^{-2})\right),\\
+q(\nu_j)
+&=\IG\left(1,\ 1+\E_q(\lambda_j^{-2})\right),\\
+q(\tau^2)
+&=\IG\left(\frac{r+1}{2},\
+\E_q(\xi^{-1})+\frac12\sum_{j=1}^r
+\overline{\beta_j^2}\E_q(\lambda_j^{-2})\right),\\
+q(\xi)
+&=\IG\left(1,\ \tau_0^{-2}+\E_q(\tau^{-2})\right),\\
+q(\zeta^2)
+&=\IG\left(a_\zeta+\frac r2,\
+b_\zeta+\frac12\sum_{j=1}^r\overline{\beta_j^2}\right).
+\label{eq:supp_generic_vb_rhs}
+\end{align}
+The slab update is omitted when \(\zeta\) is fixed.
+
+For the exAL scale-asymmetry factor, map unconstrained coordinates
+\(\vect\eta\) to \((\sigma,\gamma)\), for example by
+\(\sigma=\exp(\eta_1)\) and a smooth transformation from \(\eta_2\) to
+\((L,U)\). Let
+\[
+\ell_{\mathrm{LD}}(\vect\eta)
+=
+\E_{q_{-(\sigma,\gamma)}}\{\log p(\vect y,\vect v,\vect s
+\mid\vect\beta,\sigma,\gamma,\mat X)\}
++\log p(\sigma)+\log\pi_\gamma(\gamma)+\log|J(\vect\eta)|.
+\]
+At the mode \(\hat{\vect\eta}\), with negative Hessian
+\(\mat K_\eta=-\nabla^2\ell_{\mathrm{LD}}(\hat{\vect\eta})\), set
+\[
+q_{\sigma,\gamma}(\vect\eta)
+\approx
+\Normal(\hat{\vect\eta},\mat K_\eta^{-1}).
+\]
+For any smooth function \(h(\sigma,\gamma)\), expectations used by the
+coordinate updates are evaluated by
+\begin{equation}
+\E_q\{h(\sigma,\gamma)\}
+\approx
+h\{T(\hat{\vect\eta})\}
++\frac12\tr\left[
+\nabla^2_\eta h\{T(\hat{\vect\eta})\}\mat K_\eta^{-1}
+\right],
+\label{eq:supp_generic_delta}
+\end{equation}
+with the first term alone giving the Laplace-mode approximation when the delta
+correction is intentionally disabled.
 
 \section{ELBO Monitoring}
 \label{sec:elbo}
 
-The implementation monitors the evidence lower bound, or the corresponding
-Laplace--Delta approximation when exAL scale-asymmetry factors are present, as
-a numerical convergence diagnostic for VB--LD. The exact decomposition depends
-on the likelihood, shrinkage prior, and active non-conjugate blocks and is
-reported with the companion implementation details in
-\citet{DeLeonEtAl2026QDESNCompanion}.
+The fixed-design VB implementation monitors the evidence lower bound
+\[
+\elbo(q)
+=
+\E_q\{\log p(\vect y,\vect v,\vect s,\vect\beta,\Theta_\beta,\sigma,\gamma
+\mid\mat X)\}+H(q),
+\label{eq:supp_generic_elbo}
+\]
+with the \(s\)-latent and \(\gamma\) terms omitted for AL. Expanding the exAL
+case gives
+\begin{align}
+\elbo(q)
+&=
+\E_q\{\log p(\vect y\mid\vect\beta,\sigma,\gamma,\vect v,\vect s,\mat X)\}
++\E_q\{\log p(\vect v\mid\sigma)\}
++\E_q\{\log p(\vect s)\}
+\nonumber\\
+&\quad
++\E_q\{\log p(\vect\beta,\Theta_\beta)\}
++\E_q\{\log p(\sigma)\}
++\E_q\{\log\pi_\gamma(\gamma)\}
++H(q).
+\label{eq:supp_generic_elbo_decomp}
+\end{align}
+For AL, replace the exAL likelihood term by the AL likelihood term and omit
+\(\E_q\{\log p(\vect s)\}\) and
+\(\E_q\{\log\pi_\gamma(\gamma)\}\). The likelihood component is evaluated from
+the conditional Gaussian density using the same expectations
+\(\bar w_t\), \(\bar r_t\), \(\E_q(\log\sigma)\),
+\(\E_q(\log B_\gamma)\), \(\E_q(\log v_t)\), and latent second moments that
+enter the coordinate updates. The prior component includes the Gaussian
+coefficient prior and, when \texttt{rhs\_ns} is active, the inverse-gamma
+local, global, auxiliary, and slab terms. The entropy component sums the
+Gaussian coefficient entropy, GIG latent entropies, truncated-normal latent
+entropies, inverse-gamma scale entropies, and the Gaussian entropy of the
+Laplace--Delta factor for \((\sigma,\gamma)\). When the Laplace--Delta block is
+active, \eqref{eq:supp_generic_elbo_decomp} is monitored as an approximation to
+the exact mean-field ELBO; convergence claims are therefore numerical
+diagnostics for the stated approximation, not evidence of exact posterior
+sampling.
 
 
 \section{Joint exAL--QVP--Q--DESN--RHS Extension}
@@ -1069,9 +1250,10 @@ also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
 For the joint VB--LD approximation, the same block structure is used as a
 mean-field computational approximation, with Wang--Blei Laplace--Delta updates
 only for the non-conjugate exAL scale-asymmetry factors
-\citep{wang2013nonconjugatevb}. The full factorization, selected-covariance
-bookkeeping, and ELBO decomposition are part of the companion implementation
-record \citep{DeLeonEtAl2026QDESNCompanion} and are not repeated here.
+\citep{wang2013nonconjugatevb}. The generic fixed-design factorization and
+ELBO decomposition are given in Sections~\ref{sec:cavi}--\ref{sec:elbo}; the
+joint implementation applies those same factors to the stacked Gaussian block,
+with selected-covariance bookkeeping recorded in the implementation outputs.
 
 \subsection{Crossing Diagnostics}
 
@@ -1087,9 +1269,9 @@ C_{\mathrm{raw}}=\sum_{q=2}^Q\sum_{t=1}^T\ind\{g_{q,t}<0\}.
 \]
 If reported quantile curves are projected or rearranged, the corresponding
 reported crossing count should be computed after that declared monotone
-contract. The maximum and mean absolute projection adjustments are useful
+rule. The maximum and mean absolute projection adjustments are useful
 diagnostics because a zero reported crossing count alone does not show whether
-the joint prior produced coherent raw paths or whether the reporting contract
+the joint prior produced coherent raw paths or whether the reporting rule
 made large repairs. On a bounded feature domain
 \(\tilde{\vect x}_t\in[-1,1]^r\), the sufficient condition
 \[
@@ -1103,9 +1285,25 @@ the QVP--RHS prior unless a separate hard-constraint step is added.
 \label{sec:forecast_synthesis}
 
 Forecasting propagates posterior or variational draws through the fixed
-reservoir, whereas monotone reporting is a post-processing contract for
+reservoir, whereas monotone reporting is a post-processing rule for
 independently fitted quantile levels rather than a joint multi-quantile
-posterior model.
+posterior model. For fitted ordinates
+\(\widehat{\vect q}_t=(\widehat q_{1,t},\ldots,\widehat q_{K,t})^\top\) at
+levels \(p_1<\cdots<p_K\), the default rule is
+\begin{equation}
+\vect q_t^*
+=
+\argmin_{q_1\le\cdots\le q_K}
+\sum_{k=1}^K w_k(\widehat q_{k,t}-q_k)^2,
+\qquad w_k>0.
+\label{eq:supp_monotone_projection}
+\end{equation}
+The article uses equal weights unless a validation or application protocol
+declares otherwise. The rule may be applied draw by draw when joint posterior
+or variational quantile-path draws are available, or to posterior summary
+ordinates when only summary grids are retained. Draw-level projection preserves
+more posterior dependence information; summary-level projection is a reporting
+repair for a displayed grid.
 
 For a single-level fit at target \(p_0\), write a posterior draw or a draw from
 the variational approximation as
@@ -1143,9 +1341,9 @@ For draw \(m\) at horizon \(h\), write
 and let
 \(\vect q_{T+h}^{(m)}
 =(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
-is required, apply the declared reporting contract, such as isotonic projection
+is required, apply the declared reporting rule, such as isotonic projection
 or rearrangement
-\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010,DeLeonEtAl2026QDESNCompanion},
+\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010},
 and set \(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered
 grid defines \(Q_{T+h}^{*,(m)}(u)\) under the declared interpolation and
 endpoint convention. A scalar synthesized response draw is then
@@ -1160,16 +1358,24 @@ not obtained by mixing the quantile-specific working likelihoods, normalizing
 their product, or drawing separately from their AL/exAL factors.
 
 When separate models are fit at ordered quantile levels \(p_1<\cdots<p_K\),
-the article uses a monotone reporting contract only after fitting. That
-contract operates on fitted target-quantile summaries, not on off-target
-quantiles from the working likelihoods, and may use isotonic projection or
-monotone rearrangement
-\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. The detailed
-post-processing protocol, including interpolation and endpoint conventions, is
-deferred to \citet{DeLeonEtAl2026QDESNCompanion}.
+the article uses a monotone reporting rule only after fitting. That rule
+operates on fitted target-quantile summaries, not on off-target quantiles from
+the working likelihoods, and may use isotonic projection
+\eqref{eq:supp_monotone_projection} or monotone rearrangement
+\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. The ordered grid defines
+a reported quantile curve by linear interpolation on \([p_1,p_K]\). Outside the
+fitted grid, the article reports grid-level summaries and avoids tail
+extrapolation unless an application explicitly declares an endpoint convention.
+For recursive distributional simulation from an independently fitted grid, a
+common-history propagation rule is preferred: at each horizon, form all target
+ordinates from the same current lag history, apply the monotone rule, sample
+one \(u\sim\Unif(0,1)\), set \(y=Q^*(u)\), and feed that same simulated
+response into all level-specific reservoir recursions for the next horizon.
+This avoids combining quantiles produced under different future response
+histories.
 
 \clearpage
-\section{Quantile-Free Interval Prediction: RQR--DESN}
+\section{Direct Coverage-Indexed Interval Prediction: RQR--DESN}
 \label{sec:rqr_desn_supp}
 
 The relaxed quantile regression DESN (RQR--DESN) extension changes the readout
@@ -1231,6 +1437,17 @@ Thus the ideal target is a coverage-plus-mean-balance interval. The finite
 fixed-feature readout allows asymmetric interval prediction, with empirical
 coverage and generalized-posterior calibration checked by the validation
 protocol rather than assumed from the loss alone.
+
+Several qualifications are part of the target definition. RQR--DESN does not
+assign the two endpoints to preselected lower and upper quantile levels, and
+the fitted interval is not generally equal-tailed, shortest, or a
+highest-density interval. Intervals fit separately at multiple coverage levels
+need not be nested unless a nesting rule is imposed. The learning rate
+\(\omega_{\mathrm R}\) controls the concentration of the generalized posterior
+and should be fixed by design or checked by sensitivity analysis. Credible
+bands for \(L_t\) and \(U_t\) describe uncertainty about the endpoint
+functionals under the loss-based update; they are not posterior predictive
+bands for future responses.
 
 \subsection{Pseudo-AL Augmentation}
 \label{subsec:rqr_desn_aug}
@@ -1389,6 +1606,37 @@ screening, calibration, and initialization layer; the tables below document the
 MCMC confirmation evidence used by the main article.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
+
+\clearpage
+\subsection{RQR--DESN Targeted Confirmation}
+\label{subsec:supp_rqr_confirmation}
+
+The RQR--DESN confirmation is supplementary because it changes the inferential
+target from conditional quantiles to direct coverage-indexed intervals. The
+study asks whether ordered interval roots can recover oracle endpoints in fixed
+designs and improve held-out interval scores on teacher-forced DESN features.
+It is interpreted through ordered endpoints, width, empirical coverage,
+interval score, and paired baseline deltas. It is not a response-predictive
+density validation and does not include recursive response simulation.
+
+The targeted denominator has 912 scenario rows: 648 MCMC rows and 264 empirical
+train-interval baseline rows, with no VB rows. All completion, failure,
+metric-count, MCMC-diagnostic, interval-validity, and no-response-predictive
+gates pass. The fixed-design stage permits endpoint-recovery interpretation
+because oracle endpoints are available. The dynamic stage is restricted to
+teacher-forced held-out interval scoring on fixed DESN features.
+
+\input{tables/rqr_desn_targeted_confirmation_winner_map.tex}
+
+Table~\ref{tab:rqr-desn-targeted-confirmation} reports the
+calibration-constrained MCMC winner in each stage, mechanism, and coverage
+cell. All selected rows improve over the empirical train-interval baseline in
+paired interval score. Ten of the twelve winner cells have green calibration,
+and the two yellow cells occur in the nonlinear dynamic DESN mechanism, where
+the coverage errors are positive but remain within the predeclared review band.
+These results support RQR--DESN as a promising direct-interval reuse of the
+fixed-feature infrastructure, while leaving VB calibration, recursive interval
+forecasting, and nested multi-coverage interval modeling as future work.
 
 \clearpage
 \section{GloFAS Discrepancy-Calibration Model}
@@ -2225,7 +2473,8 @@ a_{\sigma,c}\log b_{\sigma,c}-\log\Gamma(a_{\sigma,c})
 The RHS coefficient-prior and shrinkage-scale terms are the corresponding
 blockwise RHS ELBO terms, with \(\vect\beta\) replaced separately by the
 non-intercept entries of \(\vect\beta_{p_0}\) and \(\vect\alpha_{p_0}\);
-the full bookkeeping is deferred to \citet{DeLeonEtAl2026QDESNCompanion}.
+the bookkeeping follows the generic \texttt{rhs\_ns} decomposition in
+Sections~\ref{sec:cavi}--\ref{sec:elbo}.
 Entropy terms are summed over the Gaussian coefficient factor, GIG latent
 factors, truncated-normal latent factors, inverse-gamma RHS factors, and the
 source-specific Laplace--Delta factors.

@@ -63,6 +63,7 @@
 \newcommand{\Unif}{\mathrm{Unif}}
 \newcommand{\AL}{\mathrm{AL}}
 \newcommand{\exAL}{\mathrm{exAL}}
+\newcommand{\qfGAL}{\mathrm{qfGAL}}
 \newcommand{\RHS}{\ensuremath{\mathrm{RHS}}}
 
 % Current manuscript-facing GloFAS application output aliases.
@@ -93,7 +94,7 @@
 \newcommand{\NOTE}[1]{\ifnotes\textcolor{blue}{[Note: #1]}\fi}
 
 % ---- Title & metadata ----
-\title{\vspace{-0.6cm}Bayesian Quantile Deep Echo State Networks}
+\title{\vspace{-0.6cm}Bayesian Quantile Readouts for Deep Echo State Networks}
 \author{Antonio De Leon$^{1}$ \and Raquel Prado$^{1}$ \and Bruno Sans\'o$^{1}$}
 \date{\small $^{1}$Department of Statistics, University of California, Santa Cruz \\
 \vspace{0.25em}\today}
@@ -111,20 +112,19 @@ while preserving uncertainty in quantile-specific readouts. We develop the
 quantile deep echo state network (Q--DESN), which uses a fixed deep echo state
 network feature map and places Bayesian inference only on the quantile readout.
 Conditional on reservoir construction, scaling, and washout, the readout is
-estimated with a quantile-fixed extended asymmetric Laplace working likelihood,
-ridge or regularized-horseshoe shrinkage priors, and either Markov chain Monte
-Carlo or a model-specific variational Bayes approximation. For multi-quantile
-reporting, we distinguish independent single-level fits followed by a declared
-monotone reporting contract from a joint quantile-vector readout that adapts
-Quantile-Varying Parameter shrinkage to adjacent quantile-specific readout
-coefficients. The joint prior encourages coherent quantile paths but does not by
-itself impose hard noncrossing constraints, so exact monotone output remains
-explicit. Synthetic studies, including a targeted
-interval-readout confirmation layer, and GloFAS streamflow and PriceFM
-electricity-price applications indicate that the resulting fixed-feature
-workflow is competitive under recorded protocols, while calibration, crossing
-behavior, and reservoir specification remain empirical diagnostics rather than
-automatic posterior guarantees.
+estimated with an asymmetric Laplace or quantile-fixed generalized asymmetric
+Laplace working likelihood, ridge or regularized-horseshoe shrinkage priors,
+and either Markov chain Monte Carlo or a model-specific variational Bayes
+approximation. For multi-quantile reporting, we distinguish independent
+single-level fits followed by a prespecified monotone reporting rule from a
+joint quantile-vector readout that adapts Quantile-Varying Parameter shrinkage
+to adjacent quantile-specific readout coefficients. The joint prior encourages
+coherent quantile paths but does not by itself impose hard noncrossing
+constraints, so exact monotone output remains explicit. Synthetic studies and
+GloFAS streamflow and PriceFM electricity-price applications indicate that the
+resulting fixed-feature workflow is competitive under recorded protocols,
+while calibration, crossing behavior, and reservoir specification remain
+empirical diagnostics rather than automatic posterior guarantees.
 \end{abstract}
 
 \bigskip
@@ -179,15 +179,17 @@ The quantile deep echo state network (Q--DESN) combines this fixed DESN
 design with a Bayesian quantile readout. For a chosen level \(p_0\), the
 readout location \(\mu_t=\vect x_t^\top\vect\beta\) is linked to the response
 through the quantile-fixed generalized asymmetric Laplace (GAL) distribution
-of \citet{yan2025new}. Throughout this article, \(\exAL\) denotes this
-quantile-fixed GAL working likelihood. Under this parameterization, \(\mu_t\)
-is the model's \(p_0\)th conditional quantile, while the exAL asymmetry
-parameter allows mode, skewness, and tail behavior to vary relative to the
-asymmetric Laplace special case.
+of \citet{yan2025new}. We refer to this distribution as \(\qfGAL\) in prose
+and retain \(\exAL\) in formulas and generated table labels as the project
+shorthand for the same quantile-fixed extension of AL. Under this
+parameterization, \(\mu_t\) is the model's \(p_0\)th conditional quantile,
+while the \(\qfGAL\) asymmetry parameter allows mode, skewness, and tail
+behavior to vary relative to the asymmetric Laplace special case.
 
-The exAL likelihood is used as a working likelihood in the Bayesian
+The AL or \(\qfGAL\) likelihood is used as a working likelihood in the Bayesian
 quantile-regression sense. It defines a posterior target for quantile-specific
-readout inference without asserting that exAL is the data-generating error law
+readout inference without asserting that either likelihood is the
+data-generating error law
 \citep{sriram2013theoretical,YangWangHe2016ALInference,JiLeeRabeHesketh2025ValidSE}.
 Posterior intervals for readout quantities and forecast bands generated from
 the fitted likelihood are therefore model-based summaries conditional on the
@@ -203,48 +205,101 @@ slab component for large coefficients
 product representation used here, the local, global, and slab scale updates
 retain closed-form inverse-gamma forms
 \citep{NishimuraSuchard2023SSS,MakalicSchmidt2016SimpleSampler}.
-Posterior computation includes an MCMC sampler for the Q--DESN hierarchy. A
-mean-field variational Bayes approximation is used for lower-cost screening and
-initialization. In exAL fits, the scale-asymmetry block is non-conjugate; the
-implementation uses the Laplace--Delta approximation for non-conjugate
-variational inference of \citet{wang2013nonconjugatevb} for that block. We use
-``VB--LD'' only as implementation shorthand for this Wang--Blei-style
-approximation inside Q--DESN, not as a new variational-inference contribution.
-Detailed VB--LD implementation notes and the post hoc monotone synthesis
-protocol are deferred to the companion placeholder
-\citet{DeLeonEtAl2026QDESNCompanion}.
+Posterior computation includes an MCMC sampler for the Q--DESN hierarchy and a
+mean-field variational Bayes approximation for lower-cost screening,
+initialization, and selected application workflows. In \(\qfGAL\) fits, the
+scale-asymmetry block is non-conjugate; the implementation uses the
+Laplace--Delta approximation for non-conjugate variational inference of
+\citet{wang2013nonconjugatevb} for that block. We use ``VB--LD'' only as
+implementation shorthand for this Wang--Blei-style approximation inside
+Q--DESN, not as a new variational-inference contribution.
 
-The article contributes five elements. First, Q--DESN formulates Bayesian
-quantile readout inference conditional on fixed deep ESN features. Second, the
-readout combines a quantile-fixed exAL working likelihood with ridge
-regularization and a regularized-horseshoe adaptive-shrinkage alternative.
-Third, the MCMC updates are derived for this fixed-design hierarchy, while the
-VB--LD approximation is used as a computational screening and initialization
-route. Fourth, multi-quantile reporting is treated through two distinct routes:
-independent single-level fits followed by a monotone reporting contract, and a
-joint quantile-vector readout that adapts QVP-style adjacent shrinkage to
-quantile-specific readout slopes. Fifth, a supplementary relaxed quantile
-regression DESN (RQR--DESN) generalized-Bayes interval-readout extension uses
-the fixed DESN feature map to estimate coverage-indexed intervals directly.
-Synthetic
-experiments and the GloFAS and
-PriceFM applications then illustrate the resulting workflow under reproducible
-forecast-validation protocols.
+This article makes three principal contributions. First, it introduces
+Q--DESN as a Bayesian conditional-quantile readout built on a fixed DESN
+feature map, with AL or \(\qfGAL\) working likelihoods and ridge or
+regularized-horseshoe regularization. Second, it develops two distinct
+strategies for quantile grids: independent target-level fits followed by a
+prespecified monotone reporting rule, and a joint quantile-vector readout that
+shares information through regularized-horseshoe shrinkage on adjacent
+coefficient changes. The joint prior encourages coherent quantile paths but
+does not impose hard noncrossing. Third, it provides MCMC and a model-specific
+Laplace--Delta variational approximation and evaluates their statistical and
+computational behavior in simulations and forecasting applications. The
+supplement additionally records a relaxed quantile regression DESN
+(RQR--DESN) direct-interval readout to illustrate how the same fixed-feature
+and shrinkage infrastructure can be reused under a different generalized-Bayes
+target.
+
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.19\textwidth}
+>{\raggedright\arraybackslash}p{0.23\textwidth}
+>{\raggedright\arraybackslash}p{0.21\textwidth}
+>{\raggedright\arraybackslash}p{0.25\textwidth}@{}}
+\toprule
+Construction & Target & Updating rule and prior & Article-facing output \\
+\midrule
+Single-level Q--DESN &
+\(Q_{p_0}(Y_t\mid\mathcal F_t)\) &
+AL or \(\qfGAL\) working likelihood with ridge or \RHS{} readout shrinkage;
+MCMC or VB--LD &
+One fitted conditional quantile; working-likelihood simulation is used only
+under the declared forecast protocol. \\
+Independent-grid Q--DESN &
+\(\{Q_{p_k}(Y_t\mid\mathcal F_t)\}_{k=1}^K\) &
+Separate single-level fits at each target level, followed by a prespecified
+monotone reporting rule &
+Reported quantile grid and interpolated predictive quantile curve; no joint
+posterior over quantile-indexed coefficients. \\
+Joint QVP--Q--DESN &
+Quantile vector over a fixed grid &
+Composite AL or \(\qfGAL\) working target with \RHS{} shrinkage on baseline
+slopes and adjacent slope innovations; MCMC is the article-facing reference &
+Jointly estimated raw quantile path; exact monotonicity still requires a hard
+constraint or reporting rule. \\
+RQR--DESN &
+Coverage-indexed interval \((L_t,U_t)\) &
+Generalized Bayes update based on the RQR loss with ridge or \RHS{} priors on
+two exchangeable roots &
+Supplementary ordered interval endpoints; no response likelihood or posterior
+predictive response density. \\
+\bottomrule
+\end{tabular}
+\caption{Model map. AL versus \(\qfGAL\) is a working-likelihood choice,
+ridge versus \RHS{} is a readout-prior choice, independent versus joint fitting
+is a multi-quantile strategy, and MCMC versus VB--LD is a computational
+choice. RQR--DESN is an alternative direct-interval target rather than a
+generalization of the Q--DESN quantile hierarchy.}
+\label{tab:model-map}
+\end{table}
+
+The empirical evidence follows this hierarchy. The single-quantile simulation
+validates AL and \(\qfGAL\) Q--DESN readouts against DQLM and exDQLM baselines.
+The joint simulation evaluates the quantile-vector prior against independent
+multi-quantile readouts under known oracle quantile paths. The GloFAS and
+PriceFM applications use selected independent Q--DESN workflows; they are not
+application-level evidence for the joint quantile-vector prior. RQR--DESN is
+kept as supplementary direct-interval evidence because it changes the
+inferential target and currently has MCMC, not calibrated VB, article support.
 
 The remainder of the paper is organized as follows.
 Section~\ref{sec:notation} introduces notation, deep echo state network
 (DESN) dynamics, and the
-exAL representation. Section~\ref{sec:model} presents the Q--DESN model
-and prior specification, including the joint quantile-vector extension.
+\(\qfGAL\) representation. Section~\ref{sec:model} presents the Q--DESN model
+and prior specification, including independent and joint multi-quantile
+extensions.
 Section~\ref{sec:inference} describes posterior
 computation, while Sections~\ref{sec:forecast}--\ref{sec:selection}
-describe posterior prediction, monotone reporting contracts, and reservoir
+describe posterior prediction, monotone reporting rules, and reservoir
 diagnostics.
-Section~\ref{sec:simulation} presents the simulation design, including the
-RQR--DESN interval-readout confirmation, and
+Section~\ref{sec:simulation} presents the simulation design, and
 Sections~\ref{sec:data}--\ref{sec:pricefm-application} give reproducible
 streamflow and electricity-price forecasting applications.
-Section~\ref{sec:discussion} summarizes limitations and future work.
+Section~\ref{sec:discussion} summarizes limitations and future work. The
+supplement gives the full RQR--DESN direct-interval readout, generic VB--LD
+and ELBO details, monotone reporting conventions, and additional validation
+tables.
 
 \subsection*{Related Work}
 
@@ -304,9 +359,8 @@ that reservoir features can be embedded in probabilistic forecasting models
 \citep{McDermottWikle2018DeepESNUQ,GuerraScardapaneBianchi2023PLFRC,GandhiLeePanTheodorou2018TanhUncertainty,SinghRaman2025ESNStateSpace}.
 This literature sets the boundary of the present contribution: uncertainty
 quantification for ESNs is already active. The narrower gap addressed here is
-quantile-specific Bayesian readout inference under a quantile-fixed
-asymmetric working likelihood with high-dimensional coefficient
-regularization.
+quantile-specific Bayesian readout inference under AL or \(\qfGAL\) working
+likelihoods with high-dimensional coefficient regularization.
 
 Quantile-oriented ESN methods provide the closest forecasting comparison.
 \citet{LvZhaoLiuWang2016QRESNE} use quantile-regression ESN ensembles to
@@ -316,11 +370,11 @@ regression to calibrate DESN forecasts for quasi-periodic climate processes.
 Q--DESN is complementary to these approaches. It does not treat the
 reservoir training or penalized-quantile calibration step as the Bayesian
 object; instead, conditional on the generated reservoir, it specifies an
-exAL readout whose posterior includes readout coefficients, likelihood
-scale and asymmetry, and shrinkage parameters. The joint extension further
+\(\qfGAL\) readout whose posterior includes readout coefficients, likelihood
+scale, asymmetry, and shrinkage parameters. The joint extension further
 couples quantile-specific readout coefficients during inference, so raw
 multi-quantile paths can be made more coherent before any monotone reporting
-contract is applied.
+rule is applied.
 
 Relaxed quantile regression (RQR) provides a different route to interval
 construction by learning interval roots directly rather than first estimating a
@@ -370,7 +424,7 @@ fixed feature readouts and uses regularized-horseshoe shrinkage on adjacent
 slope innovations. The resulting prior is a soft non-crossing mechanism rather
 than a hard constraint. In the validation bundle below, it substantially
 reduces raw crossings relative to independent AL readouts before the monotone
-reporting contract is applied; exact monotonicity still requires an explicit
+reporting rule is applied; exact monotonicity still requires an explicit
 ordered parameterization, projection, or rearrangement.
 
 These distinctions determine the notation used below. We first separate the
@@ -689,24 +743,25 @@ and scaling choices can affect short-horizon behavior. All masks and base
 matrices are fixed for the entire analysis and are not resampled during
 posterior inference.
 
-\subsection{Extended Asymmetric Laplace (exAL)}
+\subsection{Quantile-Fixed Generalized Asymmetric Laplace}
 \label{subsec:exal}
-The symbol \(\exAL\) denotes the quantile-fixed generalized asymmetric
-Laplace (GAL) distribution of \citet{yan2025new}. We use the name exAL to
-emphasize that it extends the asymmetric Laplace (AL) working likelihood while
-keeping the target quantile fixed. The standard AL likelihood is recovered as
-a special case, but its skewness is fixed once \(p_0\) is chosen. The exAL
-asymmetry parameter allows mode, skewness, and tail behavior to vary within a
-quantile-fixed likelihood. At fixed level \(p_0\), \(\mu\) is the \(p_0\)th
-quantile, \(\sigma>0\) is a scale parameter, and \(\gamma\) is an asymmetry
-parameter with bounded support \((L,U)\). The endpoints \(L\) and \(U\) solve
-\(g(\gamma)=1-p_0\) and \(g(\gamma)=p_0\), respectively, where
+The quantile-fixed generalized asymmetric Laplace distribution of
+\citet{yan2025new} extends the asymmetric Laplace (AL) working likelihood
+while keeping the target quantile fixed. We use \(\qfGAL\) for the
+distributional family in prose and retain \(\exAL\) in formulas and generated
+tables as the project shorthand. The standard AL likelihood is recovered as a
+special case, but its skewness is fixed once \(p_0\) is chosen. The
+\(\qfGAL\) asymmetry parameter allows mode, skewness, and tail behavior to
+vary within a quantile-fixed likelihood. At fixed level \(p_0\), \(\mu\) is
+the \(p_0\)th quantile, \(\sigma>0\) is a scale parameter, and \(\gamma\) is
+an asymmetry parameter with bounded support \((L,U)\). The endpoints \(L\) and
+\(U\) solve \(g(\gamma)=1-p_0\) and \(g(\gamma)=p_0\), respectively, where
 \(g(\gamma)=2\Phi(-|\gamma|)\exp(\gamma^2/2)\), and \(\Phi\) is the standard
 Normal CDF.
 
 \medskip
 \noindent
-Posterior computation uses the stochastic representation of the exAL
+Posterior computation uses the stochastic representation of the \(\qfGAL\)
 distribution. If
 \[
 y\sim\exAL_{p_0}(\mu,\sigma,\gamma),
@@ -1073,7 +1128,7 @@ Q_{p_q}(y_t\mid\mathcal F_t)-Q_{p_{q-1}}(y_t\mid\mathcal F_t)
 +\tilde{\vect x}_t^\top(\vect\beta_q-\vect\beta_{q-1}).
 \]
 On a bounded feature domain, for example after an explicit scaling or clipping
-contract that puts each component of \(\tilde{\vect x}_t\) in \([-1,1]\), the
+condition that puts each component of \(\tilde{\vect x}_t\) in \([-1,1]\), the
 inequality
 \(\alpha_q-\alpha_{q-1}\ge
 \|\vect\beta_q-\vect\beta_{q-1}\|_1\) is sufficient for non-crossing. The
@@ -1083,128 +1138,25 @@ feature-dependent term and concentrating the posterior near coherent quantile
 paths. Exact monotonicity still requires an explicit ordered-intercept
 parameterization, posterior rejection rule, isotonic projection, or monotone
 rearrangement. The synthetic joint validation below therefore records raw
-crossings separately from the declared monotone reporting contract used for
+crossings separately from the declared monotone reporting rule used for
 scored quantile grids.
 
-\subsection{Quantile-Free Interval Prediction: RQR--DESN}
+\subsection{Supplementary Direct-Interval Readout: RQR--DESN}
 \label{subsec:rqr-desn-model}
 
 \noindent
-The preceding models target one or more conditional quantile ordinates. A
-separate supplementary readout can instead target a prediction interval
-directly. For a coverage level \(c\in(0,1)\), the relaxed quantile regression
-DESN (RQR--DESN) interval readout uses two exchangeable fixed-feature root
-surfaces
-\[
-\eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
-\eta_{2t}=\vect x_t^\top\vect\beta_2,
-\]
-and reports ordered endpoints
-\[
-L_t=\min(\eta_{1t},\eta_{2t}),\qquad
-U_t=\max(\eta_{1t},\eta_{2t}).
-\]
-The root labels are not lower and upper labels; ordering is applied when
-interval endpoints are reported. This makes the interval construction
-quantile-free in the following sense: the coverage level \(c\) is not assigned
-to preselected lower and upper quantile probabilities. Instead, the two roots
-are learned through a loss that records whether the response lies inside the
-reported interval. Let
-\[
-e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}).
-\]
-Then \(e_t<0\) exactly when \(y_t\) lies between the two roots, and
-\(e_t>0\) when it lies outside. The RQR loss uses this sign information
-through
-\[
-\rho_c(e)=e\{c-\ind(e<0)\},
-\]
-and the empirical loss is
-\begin{equation}
-\mathcal L_{T,c}(\vect\beta_1,\vect\beta_2)
-=
-\sum_{t=1}^T
-\rho_c\!\left[
-\{y_t-\vect x_t^\top\vect\beta_1\}
-\{y_t-\vect x_t^\top\vect\beta_2\}
-\right].
-\label{eq:rqr-loss-main}
-\end{equation}
-This loss balances covered and uncovered observations toward the target
-coverage while allowing the interval to be asymmetric when the conditional
-distribution is asymmetric.
-
-The Bayesian object used here is a generalized posterior over the two readout
-coefficient vectors,
-\begin{equation}
-\Pi_{\mathrm R}
-(d\vect\beta_1,d\vect\beta_2\mid\vect y,\mat X)
-\propto
-\pi_\beta(d\vect\beta_1)\pi_\beta(d\vect\beta_2)
-\exp\{-\omega_{\mathrm R}\mathcal L_{T,c}(\vect\beta_1,\vect\beta_2)\},
-\label{eq:rqr-generalized-posterior-main}
-\end{equation}
-where \(\omega_{\mathrm R}>0\) is a learning rate
-\citep{BissiriHolmesWalker2016GeneralBayes}. The normalization in
-\eqref{eq:rqr-generalized-posterior-main} is over coefficient space, not over
-future response values. Consequently, RQR--DESN provides posterior summaries
-for interval endpoints, widths, and midpoints; it is not a response likelihood
-and does not by itself define posterior predictive response draws.
-
-The original RQR construction is introduced as a direct interval objective for
-optimization, with gradient analysis used to describe how interval roots move
-under the loss \citep{PouplinEtAl2024RQR}. Here the contribution is different:
-we use the same interval loss as a generalized-Bayes update and exploit an
-exact AL-style loss-kernel augmentation for posterior estimation under fixed
-DESN features. Define
-\[
-r_t=y_t^2,\qquad
-m_t^{\mathrm R}=y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
-\]
-so that \(r_t-m_t^{\mathrm R}=e_t\). With
-\[
-\sigma_{\mathrm R}=\omega_{\mathrm R}^{-1},\qquad
-\xi_c=\frac{1-2c}{c(1-c)},\qquad
-\phi_c=\frac{2}{c(1-c)},
-\]
-the exponentiated RQR loss has the exact kernel identity
-\begin{align}
-\exp\{-\omega_{\mathrm R}\rho_c(e_t)\}
-={}&
-\frac{\sigma_{\mathrm R}}{c(1-c)}
-\int_0^\infty
-\Normal\!\left(
-r_t\mid m_t^{\mathrm R}+\xi_c v,\,
-\phi_c\sigma_{\mathrm R}v
-\right)
-\frac{1}{\sigma_{\mathrm R}}\exp(-v/\sigma_{\mathrm R})\,dv .
-\label{eq:rqr-loss-kernel-main}
-\end{align}
-The identity is the route by which the RQR loss enters posterior estimation:
-it provides conditionally Gaussian root updates and GIG latent-scale updates
-for MCMC. It is an augmentation of the loss kernel, not a Gaussian model for
-the original response, because the observed \(y_t\) appears in both \(r_t\)
-and \(m_t^{\mathrm R}\).
-
-At the population level, the unrestricted RQR problem has a useful
-interpretation. Writing \(L(x)\) and \(U(x)\) for the endpoint functions, under
-regularity, positive interval width, and an interior solution, the
-first-order conditions imply
-\[
-\Pr\{L(x)<Y<U(x)\mid X=x\}=c
-\]
-and
-\[
-\E\!\left[
-Y\ind\{L(x)<Y<U(x)\}\mid X=x
-\right]
-=c\,\E(Y\mid X=x).
-\]
-Thus the target is a coverage-plus-mean-balance interval
-\citep{PouplinEtAl2024RQR}. With finite DESN features and regularized linear
-roots, the fitted readout is best interpreted as a posterior interval-readout
-approximation within the selected feature class, with coverage checked
-empirically in the validation design.
+The Q--DESN models above target one or more conditional quantile ordinates.
+The supplement records a separate relaxed quantile regression DESN
+(RQR--DESN) readout that instead targets a prediction interval of prescribed
+coverage \(c\) directly \citep{PouplinEtAl2024RQR}. RQR--DESN reuses the
+fixed DESN design matrix, intercept--slope separation, ridge or \RHS{} prior
+interface, and Gaussian readout solvers, but it replaces the AL or \(\qfGAL\)
+working likelihood with a generalized-Bayes update based on the RQR loss
+\citep{BissiriHolmesWalker2016GeneralBayes}. It is therefore not a \(Q=2\)
+joint Q--DESN, and the RQR loss-kernel augmentation is not a response
+likelihood. Reported RQR summaries are ordered interval endpoints, widths, and
+scores; the full loss, pseudo-AL augmentation, MCMC blocks, and targeted
+confirmation results are given in the supplement.
 
 % ============================================================
 \section{Posterior Inference}
@@ -1389,9 +1341,8 @@ retain the closed-form coordinate structure implied by
 by the exAL likelihood is the scale-asymmetry block
 \((\sigma_q,\gamma_q)\). That block is approximated with the
 Laplace--Delta treatment for non-conjugate variational inference of
-\citet{wang2013nonconjugatevb}, adapted to the Q--DESN readout in the
-companion implementation record of
-\citet{DeLeonEtAl2026QDESNCompanion}. We therefore use the label VB--LD as a
+\citet{wang2013nonconjugatevb}, adapted to the Q--DESN readout as detailed in
+the supplement. We therefore use the label VB--LD as a
 computational convention: it identifies the variational approximation used for
 screening and initialization, while the MCMC sampler remains the reference
 posterior computation when simulation tables report MCMC results.
@@ -1408,9 +1359,8 @@ Section S8 gives the QVP--RHS posterior, stacked Gaussian blocks, and crossing
 diagnostics. Thus a reader implementing only one quantile can use
 Algorithm~\ref{alg:mcmc} with \(Q=1\) and the collapsed RHS prior, while a
 reader implementing multiple levels uses the same sampler with the baseline and
-adjacent-innovation blocks active. The separate VB--LD and monotone-synthesis
-implementation details are referenced rather than rederived in the main
-article.
+adjacent-innovation blocks active. Generic VB--LD factors, ELBO monitoring,
+and the monotone reporting rule are given in the supplement.
 
 
 % ============================================================
@@ -1420,12 +1370,25 @@ article.
 Prediction and multi-quantile reporting involve separate operations. The first
 operation propagates posterior or variational uncertainty through the fixed
 reservoir recursion at future horizons. The second, used only when several
-levels are reported together, applies a declared monotone reporting contract or
+levels are reported together, applies a declared monotone reporting rule or
 uses the joint quantile-vector readout introduced in
-Section~\ref{subsec:joint-qdesn}. The post hoc synthesis details for
-independent fits are not repeated here; the article treats them as a reporting
-contract and refers to the companion placeholder
-\citet{DeLeonEtAl2026QDESNCompanion}.
+Section~\ref{subsec:joint-qdesn}. For a fitted grid
+\(\widehat{\vect q}_{t}=(\widehat q_{1,t},\ldots,\widehat q_{K,t})^\top\) at
+levels \(p_1<\cdots<p_K\), the default reporting rule is the weighted
+isotonic projection
+\begin{equation}
+\vect q_t^*
+=
+\argmin_{q_1\le\cdots\le q_K}
+\sum_{k=1}^K w_k(\widehat q_{k,t}-q_k)^2,
+\qquad w_k>0,
+\label{eq:monotone-reporting-main}
+\end{equation}
+with equal weights unless a validation protocol predeclares another choice.
+The ordered grid is then linearly interpolated over
+\([p_1,p_K]\). Outside the fitted range, the article reports grid-level
+quantile summaries rather than extrapolated tail claims unless an application
+explicitly declares an endpoint convention.
 
 \subsection{Multi-Step Posterior Quantile Prediction}
 \label{subsec:forecast_hstep}
@@ -1487,14 +1450,14 @@ fits, ``forecasting all levels'' means applying Algorithm~\ref{alg:forecast}
 separately to each fitted \(p_k\). A single \(p_0\) fit should not be read as
 producing fitted target-level quantile summaries for all levels; off-target
 quantiles implied by its exAL working distribution are not the fitted quantile
-targets used in the monotone reporting contract.
+targets used in the monotone reporting rule.
 
 For the joint quantile-vector readout, the reservoir recursion is unchanged.
 A posterior or variational draw contains the level-specific readouts
 \(\{\alpha_q,\vect\beta_q,\sigma_q,\gamma_q\}_{q=1}^Q\), so the same
 draw-specific future design vector returns a raw quantile vector over the grid
 \(p_1,\ldots,p_Q\). That raw vector is the joint model output before any
-monotone reporting contract is applied. The composite quantile-vector
+monotone reporting rule is applied. The composite quantile-vector
 likelihood should therefore be read as a device for estimating the conditional
 quantile path; it does not create a separate replicated future response for
 each quantile level. In the joint case, prediction over the grid uses the same
@@ -1515,9 +1478,9 @@ uses posterior quantile-function sampling rather than draws from the composite
 working likelihood. Let
 \(\vect q_{T+h}^{(m)}
 =(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
-is required, let \(\mathcal M\) denote the declared reporting contract, such as
+is required, let \(\mathcal M\) denote the declared reporting rule, such as
 isotonic projection or rearrangement
-\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010,DeLeonEtAl2026QDESNCompanion},
+\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010},
 and set
 \(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered grid
 defines a draw-specific quantile function \(Q_{T+h}^{*,(m)}(u)\) under the
@@ -1688,7 +1651,7 @@ protocol before being combined with the Q--DESN readout.
 \label{sec:simulation}
 
 \noindent
-The simulation evidence is organized around two complementary questions. The
+The main simulation evidence is organized around two complementary questions. The
 first asks whether a single-quantile Q--DESN readout can recover and forecast a
 known dynamic quantile path under a 500-observation benchmark following the
 family-based comparison strategy of \citet{yan2025new}. The target quantile
@@ -1716,7 +1679,7 @@ VB--LD companion panels and generated forecast-screening summaries. Larger-windo
 MCMC studies and alternative simulation roots remain outside the present article
 tables and require separate pinned validation interfaces. The joint
 multi-quantile validation below has its own registry, table assets, and
-crossing-diagnostic contract.
+crossing-diagnostic protocol.
 
 \subsection{Single-Quantile Dynamic Data-Generating Processes}
 
@@ -1897,8 +1860,8 @@ dynamics. The resulting grid has 32 scenario--model MCMC rows. Quantile
 summaries are compared with the known conditional quantiles, realized
 observations are scored through check loss and grid CRPS, and empirical
 hit-rate errors summarize marginal calibration. Reported scores use the
-declared monotone quantile-grid contract; raw adjacent-level crossings before
-that contract are retained as numerical coherence diagnostics.
+declared monotone quantile-grid rule; raw adjacent-level crossings before
+that rule are retained as numerical coherence diagnostics.
 
 \input{tables/joint_qdesn_article_validation_mcmc_balanced_model_summary.tex}
 
@@ -1917,40 +1880,6 @@ burden, whereas the exAL rows are raw-crossing free in this balanced MCMC
 packet. The supplement records the protocol audit, aggregate summaries, and
 metric-specific winners so these qualifications remain reproducible without
 making the main text table-heavy.
-
-\subsection{RQR--DESN Interval-Readout Confirmation}
-
-A final simulation-validation layer evaluates the RQR--DESN interval readout
-defined in Section~\ref{subsec:rqr-desn-model}. This is not another
-quantile-grid model. The study asks whether direct coverage-indexed interval
-roots can recover oracle endpoints in fixed designs and improve held-out
-interval scores on teacher-forced DESN features. The validation is interpreted
-through ordered endpoints, width, empirical coverage, interval score, and
-paired baseline deltas; no response-predictive density or recursive response
-simulation is claimed.
-
-The confirmation reported here follows a broad package-side screen and then
-reruns the selected MCMC interval-readout configurations with fresh seeds. The
-targeted denominator has 912 scenario rows: 648 MCMC rows and 264 empirical
-train-interval baseline rows, with no VB rows. All completion, failure,
-metric-count, MCMC-diagnostic, interval-validity, and no-response-predictive
-contract gates pass. The fixed-design stage permits endpoint-recovery
-interpretation because oracle endpoints are available. The dynamic stage is
-restricted to teacher-forced held-out interval scoring on fixed DESN features;
-it is not a recursive response-simulation study.
-
-\input{tables/rqr_desn_targeted_confirmation_winner_map.tex}
-
-Table~\ref{tab:rqr-desn-targeted-confirmation} reports the
-calibration-constrained MCMC winner in each stage, mechanism, and coverage
-cell. All selected rows improve over the empirical train-interval baseline in
-paired interval score. Ten of the twelve winner cells have green calibration,
-and the two yellow cells occur in the nonlinear dynamic DESN mechanism, where
-the coverage errors are positive but remain within the predeclared review band.
-These results support RQR--DESN as a promising interval-readout extension of
-the fixed-feature workflow, while leaving VB calibration, recursive interval
-forecasting, and nested multi-coverage interval modeling as separate future
-work.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}
@@ -1986,7 +1915,7 @@ The selected manuscript-facing run uses the forecast origin
 \GlofasApplicationCurrentScoredHorizons{} issued target dates. The application
 is therefore an audited reference case rather than a basin-wide or
 multi-origin operational evaluation. This restriction is intentional: it keeps
-the data extraction, forecast-origin alignment, posterior prediction contract,
+the data extraction, forecast-origin alignment, posterior prediction protocol,
 and promotion manifest inspectable before broader comparisons are reported.
 
 \subsection{Application Model}
@@ -2071,11 +2000,11 @@ They are fitted independently with the AL special case and the VB approximation.
 This choice is deliberate: the streamflow application is intended as a fast
 calibration workflow, so the reported run uses Q--DESN under AL rather than
 exQDESN under exAL. This application therefore uses the independent-fit and
-synthesis workflow, not the joint quantile-vector readout of
+monotone reporting workflow, not the joint quantile-vector readout of
 Section~\ref{subsec:joint-qdesn}. The draw-level predictive
-summaries are then passed through the monotone synthesis step. The selected
+summaries are then passed through the monotone reporting rule. The selected
 manuscript output additionally uses a no-refit spread calibration at the
-synthesis stage, centered at quantile
+reporting stage, centered at quantile
 \(\GlofasApplicationCurrentSpreadCalibrationCenterQuantile{}\), with
 multiplicative factor \(\GlofasApplicationCurrentSpreadCalibrationFactor{}\) and
 additive half-width
@@ -2140,7 +2069,7 @@ predictive interval coverage across the scored nominal intervals.}
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentCorrectedPathsFigure}
 \caption{Raw GloFAS quantile paths, discrepancy-corrected Q--DESN quantile
-paths after monotone synthesis and synthesis-time spread calibration, and
+paths after monotone reporting and reporting-time spread calibration, and
 held-out reference streamflow over the issued forecast window for the selected
 GloFAS application run.}
 \label{fig:glofas-application-corrected-paths}
@@ -2201,7 +2130,7 @@ The benchmark is interpreted as an application of the selected Q--DESN
 forecasting workflow recorded by the validation registries. It is not used as
 evidence for the joint quantile-vector RHS prior unless a future PriceFM run
 explicitly fits and promotes that joint readout under the same fold-aligned
-contract.
+protocol.
 
 \subsection{Full-Surface Results}
 
@@ -2318,19 +2247,20 @@ likelihood is not a unique response predictive density. When exact monotonicity
 is required for downstream use, the
 reported curve should still be obtained through an ordered-intercept
 parameterization, projection, rearrangement, or another explicitly declared
-monotone contract.
+monotone reporting rule.
 
 The validation evidence is correspondingly scoped. The single-quantile dynamic
 simulations test recovery and held-out forecasting under pinned data-generating
 mechanisms. The joint multi-quantile synthetic study checks coherence
-under known conditional quantile paths. The RQR--DESN confirmation evaluates a
+under known conditional quantile paths. The supplementary RQR--DESN
+confirmation evaluates a
 coverage-indexed interval readout whose ideal population target is
 coverage-plus-mean balance and whose finite-feature implementation allows
 asymmetric interval prediction; the evidence is through MCMC interval scores,
 empirical coverage, and paired baseline deltas, not through a response
 predictive likelihood or recursive simulation study. The GloFAS application is an
 audited one-origin streamflow calibration case using computationally light
-independent Q--DESN AL--VB fits and monotone synthesis, while the PriceFM
+independent Q--DESN AL--VB fits and monotone reporting, while the PriceFM
 comparison is a fold-aligned
 benchmark against cached Phase-I predictions. These studies support the
 reported workflows under their own protocols, not a universal ranking of

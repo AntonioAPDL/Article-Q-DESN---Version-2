@@ -20,6 +20,8 @@ literature/
 # Local operational trackers and runtime-only planning notes.
 local_trackers/
 .codex_work/
+restructuring.md
+CODEX_*
 
 # Local AI-generated investigation reports.
 PRICEFM_DATA_PIPELINE_REPORT.md

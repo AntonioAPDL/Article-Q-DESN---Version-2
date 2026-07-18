@@ -221,9 +221,10 @@ Third, the MCMC and variational Bayes updates are derived for this fixed-design
 hierarchy. Fourth, multi-quantile reporting is treated through two distinct
 routes: independent single-level fits followed by monotone synthesis, and a
 joint quantile-vector readout that adapts QVP-style adjacent shrinkage to
-quantile-specific readout slopes. Fifth, a supplementary RQR--DESN
-generalized-Bayes interval-readout extension uses the fixed DESN feature map
-to estimate coverage-indexed intervals directly. Synthetic
+quantile-specific readout slopes. Fifth, a supplementary relaxed quantile
+regression DESN (RQR--DESN) generalized-Bayes interval-readout extension uses
+the fixed DESN feature map to estimate coverage-indexed intervals directly.
+Synthetic
 experiments and the GloFAS and
 PriceFM applications then illustrate the resulting workflow under reproducible
 forecast-validation protocols.
@@ -1089,8 +1090,9 @@ scored quantile grids.
 \noindent
 The preceding models target one or more conditional quantile ordinates. A
 separate supplementary readout can instead target a prediction interval
-directly. For a coverage level \(c\in(0,1)\), the RQR--DESN interval readout
-uses two exchangeable fixed-feature root surfaces
+directly. For a coverage level \(c\in(0,1)\), the relaxed quantile regression
+DESN (RQR--DESN) interval readout uses two exchangeable fixed-feature root
+surfaces
 \[
 \eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
 \eta_{2t}=\vect x_t^\top\vect\beta_2,

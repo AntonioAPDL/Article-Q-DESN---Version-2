@@ -1,8 +1,13 @@
-\begin{tabular}{lrrrrrr}
+\begingroup
+\TableStyle
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Input set & Region-fold evaluations & Lower Q--DESN AQL & Near-equivalent AQL & Lower PriceFM AQL & Mean $\Delta$ & Median $\Delta$ \\
+Input set & $n$ & \shortstack{Q--DESN\\lower} & \shortstack{Near\\ties} & \shortstack{PriceFM\\lower} & \shortstack{Mean\\$\Delta$} & \shortstack{Median\\$\Delta$} \\
 \midrule
 Graph-derived inputs & 56 & 34 & 5 & 17 & -0.366 & -0.113 \\
 Target-only inputs & 58 & 32 & 7 & 19 & -0.064 & -0.046 \\
 \bottomrule
 \end{tabular}
+\endgroup

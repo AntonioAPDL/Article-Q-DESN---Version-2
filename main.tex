@@ -20,6 +20,7 @@
 \usetikzlibrary{arrows.meta,calc,fit,positioning}
 \usepackage{subcaption}
 \usepackage{array}
+\usepackage{tabularx}
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{algorithm}
@@ -65,10 +66,16 @@
 \newcommand{\exAL}{\mathrm{exAL}}
 \newcommand{\RHS}{\ensuremath{\mathrm{RHS}}}
 \newcommand{\pkg}[1]{\textsf{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\TableStyle}{%
+  \footnotesize
+  \setlength{\tabcolsep}{4.5pt}%
+  \renewcommand{\arraystretch}{1.12}%
+}
 
-% Current manuscript-facing GloFAS application output aliases.
+% Current reported GloFAS application output aliases.
 \input{tables/glofas_application_current_outputs.tex}
-% Current manuscript-facing PriceFM application output aliases.
+% Current reported PriceFM application output aliases.
 \input{tables/pricefm_full_current_outputs.tex}
 
 % Identity, zeros, and ones with consistent bold style
@@ -234,26 +241,27 @@ target.
 
 \begin{table}[!htbp]
 \centering
-\scriptsize
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.18\textwidth}
->{\raggedright\arraybackslash}p{0.23\textwidth}
->{\raggedright\arraybackslash}p{0.23\textwidth}
+\begingroup
+\TableStyle
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.17\textwidth}
+>{\raggedright\arraybackslash}p{0.22\textwidth}
+Y
 >{\raggedright\arraybackslash}p{0.24\textwidth}@{}}
 \toprule
-Construction & Target & Updating rule and prior & Reported object \\
+Construction & Inferential target & Fitting structure & Reported quantity \\
 \midrule
 Single-level Q--DESN &
 \(Q_{p_0}(Y_t\mid\mathcal F_t)\) &
 AL or \(\exAL\) working likelihood with ridge or \RHS{} readout shrinkage;
 MCMC or VB--LD &
-One fitted conditional quantile; working-likelihood simulation is used only
-under the declared forecast protocol. \\
+One fitted conditional quantile; working-likelihood simulation only under the
+declared forecast protocol. \\
 Independent-grid Q--DESN &
 \(\{Q_{p_k}(Y_t\mid\mathcal F_t)\}_{k=1}^K\) &
 Separate single-level fits at each target level, followed by a prespecified
 monotone reporting rule &
-Reported quantile grid and interpolated predictive quantile curve; no joint
-posterior over quantile-indexed coefficients. \\
+Quantile grid and interpolated predictive quantile curve; no joint posterior
+over quantile-indexed coefficients. \\
 Joint Q--DESN &
 Quantile vector over a fixed grid &
 Composite AL or \(\exAL\) working target with QVP--\RHS{} shrinkage on
@@ -265,10 +273,11 @@ RQR--DESN &
 Coverage-indexed interval \((L_t,U_t)\) &
 Generalized Bayes update based on the RQR loss with ridge or \RHS{} priors on
 two exchangeable roots &
-Supplementary ordered interval endpoints; no response likelihood or posterior
-predictive response density. \\
+Ordered interval endpoints; no response likelihood or posterior predictive
+response density. \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
+\endgroup
 \caption{Model map. AL versus \(\exAL\) is a working-likelihood choice,
 ridge versus \RHS{} is a readout-prior choice, independent versus joint fitting
 is a multi-quantile strategy, and MCMC versus VB--LD is a computational
@@ -285,24 +294,6 @@ PriceFM applications use selected independent Q--DESN workflows; they are not
 application-level evidence for the joint quantile-vector prior. RQR--DESN is
 kept as supplementary direct-interval evidence because it changes the
 inferential target and currently has MCMC, not calibrated VB, article support.
-
-The remainder of the paper is organized as follows.
-Section~\ref{sec:notation} introduces notation, deep echo state network
-(DESN) dynamics, and the
-\(\exAL\) representation. Section~\ref{sec:model} presents the Q--DESN model
-and prior specification, including independent and joint multi-quantile
-extensions.
-Section~\ref{sec:inference} describes posterior
-computation, while Sections~\ref{sec:forecast}--\ref{sec:selection}
-describe posterior prediction, monotone reporting rules, and reservoir
-diagnostics.
-Section~\ref{sec:simulation} presents the simulation design, and
-Sections~\ref{sec:data}--\ref{sec:pricefm-application} give reproducible
-streamflow and electricity-price forecasting applications.
-Section~\ref{sec:discussion} summarizes limitations and future work. The
-supplement gives the full RQR--DESN direct-interval readout, generic VB--LD
-and ELBO details, monotone reporting conventions, and additional validation
-tables.
 
 \subsection*{Related Work}
 
@@ -438,6 +429,22 @@ objects fixed by reservoir construction from the stochastic readout and
 likelihood quantities, so that posterior statements can be read as conditional
 on a recorded feature map.
 
+The remainder of the paper is organized as follows.
+Section~\ref{sec:notation} introduces notation, deep echo state network
+(DESN) dynamics, and the \(\exAL\) representation.
+Section~\ref{sec:model} presents the Q--DESN model and prior specification,
+including independent and joint multi-quantile extensions and the RQR--DESN
+direct-interval readout.
+Section~\ref{sec:inference} describes posterior computation, while
+Sections~\ref{sec:forecast}--\ref{sec:selection} describe posterior
+prediction, monotone reporting rules, and reservoir diagnostics.
+Section~\ref{sec:simulation} presents the simulation design, and
+Sections~\ref{sec:data}--\ref{sec:pricefm-application} give reproducible
+streamflow and electricity-price forecasting applications.
+Section~\ref{sec:discussion} summarizes limitations and future work. The
+supplement gives full conditional derivations, VB--LD and ELBO details,
+monotone reporting conventions, and additional validation tables.
+
 % ============================================================
 
 
@@ -465,13 +472,17 @@ and \(\ones{m}\), respectively.
 
 \begin{table}[t]
 \centering
-\small
-\begin{tabular}{@{}lll@{}}
+\begingroup
+\TableStyle
+\begin{tabularx}{\textwidth}{@{}
+>{\raggedright\arraybackslash}p{0.18\textwidth}
+Y
+>{\raggedright\arraybackslash}p{0.25\textwidth}@{}}
 \toprule
 Symbol & Description & Dimension and support \\
 \midrule
 $y_t$ & scalar response at time $t$ & scalar \\
-$p_0,\ p_k$ & single-fit and synthesis-grid quantile levels & $(0,1)$ \\
+$p_0,\ p_k$ & single-level and quantile-grid probabilities & $(0,1)$ \\
 $\vect z_t$ & exogenous covariates & $q\times1$ \\
 $\vect u_t$ & response lags and exogenous covariates & $(m+q)\times1$ \\
 $\vect h_{t,d}$ & reservoir state at layer $d$ & $n_d\times1$ \\
@@ -485,7 +496,8 @@ $\kappa_\beta^2$ & default ridge slope-prior variance & positive \\
 $\sigma,\gamma$ & exAL scale and asymmetry parameters & $\sigma>0,\ \gamma\in(L,U)$ \\
 $(\lambda_j,\tau,\zeta)$ & local, global, and slab shrinkage scales & positive \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
+\endgroup
 \caption{Key notation used throughout. Reservoir quantities are drawn or
 constructed once, held fixed after washout, and collected in the design
 matrix \(\mat X\).}
@@ -1152,52 +1164,213 @@ scored quantile grids.
 
 \noindent
 The Q--DESN models above target one or more conditional quantile ordinates.
-The supplement records a separate relaxed quantile regression DESN
-(RQR--DESN) readout that instead targets a prediction interval of prescribed
-coverage \(c\) directly \citep{PouplinEtAl2024RQR}. RQR--DESN reuses the
-fixed DESN design matrix, intercept--slope separation, ridge or \RHS{} prior
-interface, and Gaussian readout solvers, but it replaces the AL or \(\exAL\)
-working likelihood with a generalized-Bayes update based on the RQR loss
-\citep{BissiriHolmesWalker2016GeneralBayes}. It is therefore not a \(Q=2\)
-joint Q--DESN, and the RQR loss-kernel augmentation is not a response
-likelihood. Reported RQR summaries are ordered interval endpoints, widths, and
-scores. The full loss, pseudo-AL augmentation, MCMC blocks, and supplementary
-calibration-screened evidence are given in the supplement. The current RQR
-evidence is interpreted as direct-interval target portability, not as a matched
-superiority study against quantile-derived intervals.
+Relaxed quantile regression (RQR) instead estimates a prediction interval of
+prescribed coverage directly, without assigning the two endpoints in advance to
+particular quantile probabilities \citep{PouplinEtAl2024RQR}. For
+\(c\in(0,1)\), define two exchangeable root readouts
+\[
+\eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
+\eta_{2t}=\vect x_t^\top\vect\beta_2,
+\]
+and report the ordered endpoints
+\[
+L_t=\min(\eta_{1t},\eta_{2t}),\qquad
+U_t=\max(\eta_{1t},\eta_{2t}).
+\]
+The root labels are exchangeable and are ordered only when interval summaries
+are formed.
+
+The core RQR objective is a check loss applied to a residual product. Let
+\[
+e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}).
+\]
+Then \(e_t<0\) if and only if \(y_t\) lies between the two roots. RQR applies
+\[
+\rho_c(e)=e\{c-\ind(e<0)\}
+\]
+to this product, so that \(c\) indexes a direct interval target rather than a
+conditional quantile. The empirical loss and generalized posterior are
+\[
+R_{T,c}(\vect\beta_1,\vect\beta_2)
+=
+\sum_{t=1}^T \rho_c(e_t),
+\]
+and
+\[
+\Pi_{\mathrm R}
+(d\vect\beta_1,d\vect\beta_2\mid\vect y,\mat X)
+\propto
+\pi_\beta(d\vect\beta_1)\pi_\beta(d\vect\beta_2)
+\exp\{-\omega_{\mathrm R}R_{T,c}(\vect\beta_1,\vect\beta_2)\},
+\]
+where \(\omega_{\mathrm R}>0\) is a generalized-Bayes learning rate
+\citep{BissiriHolmesWalker2016GeneralBayes}. The original RQR formulation is
+presented as loss minimization for interval prediction; the version here
+changes the inferential route by exponentiating the core loss and combining it
+with the same fixed-feature readout priors used by Q--DESN.
+
+The loss kernel admits the usual asymmetric-Laplace check-loss augmentation
+after treating \(e_t\) as a pseudo-residual. Let
+\[
+r_t=y_t^2,\qquad
+m_t^{\mathrm R}
+=
+y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
+\qquad
+r_t-m_t^{\mathrm R}=e_t.
+\]
+Set
+\[
+\sigma_{\mathrm R}=\omega_{\mathrm R}^{-1},\qquad
+\xi_c=\frac{1-2c}{c(1-c)},\qquad
+\phi_c=\frac{2}{c(1-c)}.
+\]
+Then, up to a normalizing constant that does not depend on the root
+coefficients,
+\[
+\exp\{-\omega_{\mathrm R}\rho_c(e_t)\}
+\propto
+\int_0^\infty
+\Normal\!\left(
+r_t\mid m_t^{\mathrm R}+\xi_c v_t,\,
+\phi_c\sigma_{\mathrm R}v_t
+\right)
+\Exp\!\left(v_t\mid\text{rate}=1/\sigma_{\mathrm R}\right)\,dv_t .
+\]
+This is an augmentation of the generalized-Bayes loss kernel, not a generative
+likelihood for the original response. Conditional on \(v_t\) and one root,
+\(m_t^{\mathrm R}\) is linear in the other root; for example, conditional on
+\(\vect\beta_2\),
+\[
+m_t^{\mathrm R}
+=
+y_t\eta_{2t}
++(y_t-\eta_{2t})\vect x_t^\top\vect\beta_1 .
+\]
+Consequently, the two coefficient vectors have alternating Gaussian full
+conditionals, the latent scales have GIG full conditionals, and the ridge or
+\RHS{} readout modules used by Q--DESN can be reused. This conjugacy is
+conditional and blockwise rather than joint in both roots. RQR--DESN is
+therefore not a \(Q=2\) joint Q--DESN and does not provide a response
+predictive density; it reports posterior summaries of ordered endpoints,
+midpoints, widths, empirical coverage, and interval scores.
+
+\begin{table}[!htbp]
+\centering
+\begingroup
+\TableStyle
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.19\textwidth}YY@{}}
+\toprule
+Component & RQR--DESN formulation & Computational consequence \\
+\midrule
+Inferential target &
+Two exchangeable root surfaces, ordered into an interval with target coverage
+\(c\) &
+Direct interval prediction without preassigning endpoint quantile levels. \\
+Core loss &
+\(\rho_c\{(y-\eta_1)(y-\eta_2)\}\) &
+Check loss applied to a residual product whose sign records interval
+membership. \\
+Loss augmentation &
+Asymmetric-Laplace normal--exponential identity for
+\(r_t-m_t^{\mathrm R}\) &
+Latent scale \(v_t\) has a GIG full conditional. \\
+Root readouts &
+Condition on one root and the latent scales &
+The other coefficient vector has a Gaussian full conditional. \\
+Shrinkage &
+Separate ridge or \RHS{} prior for each root &
+The Q--DESN Gaussian solvers and RHS scale-update modules are reused. \\
+Reported output &
+Order the two roots for every posterior draw &
+Endpoint, midpoint, and width summaries; no response predictive density. \\
+\bottomrule
+\end{tabularx}
+
+\smallskip
+\parbox{\textwidth}{\footnotesize
+\emph{Note:} Conjugacy is conditional and blockwise. The augmentation is an
+identity for the generalized-Bayes loss kernel, not a likelihood for the
+original response.}
+\endgroup
+\caption{Computational bridge from the RQR loss to the RQR--DESN sampler.}
+\label{tab:rqr-computational-bridge}
+\end{table}
+
+The supplement gives the full loss-kernel derivation, GIG parameters, Gaussian
+precision formulas, root-switching diagnostics, and supplementary
+calibration-screened evidence. The current RQR evidence is interpreted as
+direct-interval target portability, not as a matched superiority study against
+quantile-derived intervals.
 
 % ============================================================
 \section{Posterior Inference}
 \label{sec:inference}
 
-\subsection{General Augmented Posterior Target}
+\subsection{Single-Level Augmented Posterior}
 \label{subsec:posterior-target}
 
 \noindent
-The quantile-vector posterior is written so that the individual RHS Q--DESN is
-the \(Q=1\) collapse of Section~\ref{subsec:joint-qdesn}. In that collapse,
-take \(\alpha_1\) as the single-level intercept, identify \(\vect\beta_1\) with
-the single-level non-intercept slope vector, set
-\(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\), place the RHS prior directly on
-\(\Delta_1=\vect\beta_1\), and omit all baseline-slope factors. In the
-notation of Section~\ref{subsec:qdesn}, the single-level coefficient vector is
-then \((\alpha,\vect\beta_1^\top)^\top\), with \(\alpha\) playing the role of
-\(\beta_0\). This convention lets the same MCMC and VB algorithms serve both
-the general joint readout and the single-quantile readout.
+For one target probability \(p_0\), the Q--DESN posterior conditions on the
+fixed DESN design and updates only the readout, working-likelihood, and
+shrinkage parameters. Let \(\mat Z\) denote the non-intercept design,
+\(\alpha\) the intercept, and \(\vect\beta_1\) the non-intercept slope vector.
+Let \(\Theta_\Delta\) collect the local, global, auxiliary, and slab scales for
+the RHS prior when the adaptive prior is used. For the exAL working likelihood,
+let \(\{v_t,s_t:t=1,\ldots,T\}\) be the scale-mixture and positive-shift
+latent variables; for AL, the \(s_t\) and \(\gamma\) blocks are omitted. With
+\(\vect d_1\), \(\mat\Omega_1\), and \(\omega_t\) collecting the corresponding
+complete-data shifts and variances from the augmented likelihood, the
+single-level complete-data posterior can be written, up to constants not
+depending on unknowns, as
+\begin{align}
+&p(\alpha,\vect\beta_1,\sigma,\gamma,\{v_t,s_t\}_{t=1}^T,\Theta_\Delta
+\mid\vect y,\mat Z)
+\propto
+\exp\left[
+-\frac12
+(\vect y-\alpha\ones{T}-\mat Z\vect\beta_1-\vect d_1)^\top
+\mat\Omega_1^{-1}
+(\vect y-\alpha\ones{T}-\mat Z\vect\beta_1-\vect d_1)
+\right]
+\nonumber\\
+&\quad\times
+\prod_{t=1}^T
+\left\{
+(\omega_t)^{-1/2}p(v_t\mid\sigma)p(s_t)
+\right\}
+p(\sigma)\pi_{\gamma}(\gamma)\ind\{L<\gamma<U\}
+p(\alpha)\,p_\Delta^{(1)}(\vect\beta_1\mid\mat D_\Delta)p(\Theta_\Delta).
+\label{eq:single-posterior-collapse-main}
+\end{align}
+Here
+\[
+p_\Delta^{(1)}(\vect\beta_1\mid\mat D_\Delta)
+\propto
+\exp\left(-\frac12\vect\beta_1^\top\mat D_\Delta^{-1}\vect\beta_1\right)
+\]
+is the ordinary RHS slope prior, with \(\Delta_1=\vect\beta_1\). The ridge
+case replaces this factor by the Gaussian ridge prior. This display is the
+basic posterior target for the individual Q--DESN readout; the joint
+quantile-vector construction below reuses the same augmented Gaussian
+structure after stacking levels and replacing the direct slope prior by a
+QVP--RHS slope-path prior.
 
-For the general target, let \(\Theta_\Delta\) collect the local, global,
-auxiliary, and slab scales for the adjacent-innovation RHS hierarchy. Let
-\(\Theta_0\) collect the corresponding baseline RHS scales, included only when
-\(Q>1\). Let
-\(\Theta_Q\) collect \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), the
-likelihood parameters, \(\Theta_\Delta\), and, for \(Q>1\),
+\subsection{Joint Quantile-Vector Extension}
+\label{subsec:joint-inference-main}
+
+\noindent
+For a grid \(p_1<\cdots<p_Q\), let \(\Theta_\Delta\) collect the RHS scales for
+adjacent slope innovations and let \(\Theta_0\) collect the baseline-slope RHS
+scales. Let \(\Theta_Q\) collect \(\vect\alpha\),
+\(\vect\beta_{\mathrm{st}}\), the likelihood parameters,
+\(\Theta_\Delta\), and, for \(Q>1\),
 \((\vect\beta_{\mathrm{base}},\Theta_0)\). Let
 \(\vect a_Q=\{v_{q,t},s_{q,t}:q=1,\ldots,Q;\,t=1,\ldots,T\}\) collect the
 exAL auxiliary variables. With the stacked quantities
 \(\vect y_{\mathrm{st}}\), \(\vect\alpha_{\mathrm{st}}\),
 \(\mat Z_{\mathrm{st}}\), \(\vect d\), and \(\mat\Omega\) defined in
-Section~\ref{subsec:joint-qdesn}, the complete-data posterior can be
-written, up to constants not depending on unknowns, as
+Section~\ref{subsec:joint-qdesn}, the joint complete-data posterior is
 \begin{align}
 &p(\Theta_Q,\vect a_Q\mid\vect y,\mat Z)
 \propto
@@ -1236,43 +1409,14 @@ The Gaussian prior factor \(p_\Delta^{(Q)}\) is induced by the
 first-difference matrix \(\mat H\) and innovation covariance
 \(\mat D_\Delta\) in \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}.
 For \(Q>1\), it is the adjacent-innovation prior centered on the baseline
-slope, so the \(\vect\beta_{\mathrm{base}}\) argument is active. For \(Q=1\),
-there is no random baseline argument, and the same factor is read as the
-ordinary RHS slope prior
-\[
-p_\Delta^{(1)}(\vect\beta_1\mid\mat D_\Delta)
-\propto
-\exp\left(-\frac12\vect\beta_1^\top\mat D_\Delta^{-1}\vect\beta_1\right),
-\qquad \Delta_1=\vect\beta_1.
-\]
-The AL special case omits \(s_{q,t}\), \(\gamma_q\), and the
-positive-truncated Normal factors. The ordinary single-quantile posterior is
-obtained from \eqref{eq:joint-posterior-target-main} by setting \(Q=1\),
-\(\vect y_{\mathrm{st}}=\vect y\),
-\(\mat Z_{\mathrm{st}}=\mat Z\), \(\vect\alpha_{\mathrm{st}}=\alpha\ones{T}\),
-\(\vect\beta_{\mathrm{st}}=\vect\beta_1\), and dropping \(\mathcal B_Q\):
-\begin{align}
-&p(\alpha,\vect\beta_1,\sigma,\gamma,\{v_t,s_t\}_{t=1}^T,\Theta_\Delta
-\mid\vect y,\mat Z)
-\propto
-\exp\left[
--\frac12
-(\vect y-\alpha\ones{T}-\mat Z\vect\beta_1-\vect d_1)^\top
-\mat\Omega_1^{-1}
-(\vect y-\alpha\ones{T}-\mat Z\vect\beta_1-\vect d_1)
-\right]
-\nonumber\\
-&\quad\times
-\prod_{t=1}^T
-\left\{
-(\omega_t)^{-1/2}p(v_t\mid\sigma)p(s_t)
-\right\}
-p(\sigma)\pi_{\gamma}(\gamma)\ind\{L<\gamma<U\}
-p(\alpha)\,p_\Delta^{(1)}(\vect\beta_1\mid\mat D_\Delta)p(\Theta_\Delta).
-\label{eq:single-posterior-collapse-main}
-\end{align}
-Thus the posterior, not only the algorithms, has a single general expression
-with a transparent collapse to the individual RHS Q--DESN. The exAL
+slope, so the \(\vect\beta_{\mathrm{base}}\) argument is active. The AL
+special case omits \(s_{q,t}\), \(\gamma_q\), and the positive-truncated
+Normal factors. Setting \(Q=1\), taking \(\alpha_1=\alpha\),
+\(\vect y_{\mathrm{st}}=\vect y\), \(\mat Z_{\mathrm{st}}=\mat Z\),
+\(\vect\alpha_{\mathrm{st}}=\alpha\ones{T}\),
+\(\vect\beta_{\mathrm{st}}=\vect\beta_1\), and dropping \(\mathcal B_Q\)
+recovers the single-level posterior in
+\eqref{eq:single-posterior-collapse-main}. The exAL
 augmentation preserves the Gaussian slope-path update in
 \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}, but the
 scale-asymmetry blocks \((\sigma_q,\gamma_q)\) remain non-conjugate. We
@@ -1354,9 +1498,6 @@ the supplement. We therefore use the label VB--LD as a
 computational convention: it identifies the variational approximation used for
 screening and initialization, while the MCMC sampler remains the reference
 posterior computation when simulation tables report MCMC results.
-
-\subsection{Supplementary Algebra and Implementation Notes}
-\label{subsec:joint-inference}
 
 Equations~\eqref{eq:joint-posterior-target-main} and
 \eqref{eq:single-posterior-collapse-main} define the reported posterior
@@ -1453,7 +1594,7 @@ inherit the same \(p_0\) indexing.
 
 Exogenous covariates must be known at the forecast origin, supplied as
 scenarios, or generated by an external covariate model. Additional details are
-given in Section S9 of the supplement. Thus, under independent single-level
+given in the supplement. Thus, under independent single-level
 fits, ``forecasting all levels'' means applying Algorithm~\ref{alg:forecast}
 separately to each fitted \(p_k\). A single \(p_0\) fit should not be read as
 producing fitted target-level quantile summaries for all levels; off-target
@@ -1568,45 +1709,31 @@ inference.
 
 \begin{table}[!htbp]
 \centering
-\small
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.16\textwidth}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.21\textwidth}@{}}
+\begingroup
+\TableStyle
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.24\textwidth}YY@{}}
 \toprule
-Component & Role in the fixed feature map & Selection rule & Main diagnostic risk \\
+Reservoir choice & Role & Main diagnostic \\
 \midrule
-\(D\) & Number of reservoir layers and hierarchy of time scales &
-Search over a small set and retain additional depth only when validation scores
-improve after seed checks. &
-Unnecessary depth can add unstable or redundant features. \\
-\(\{n_d\},\{\tilde n_d\}\) & Reservoir capacity and lower-layer feature
-dimension & Treat as the main complexity control, with reduction sizes selected
-as part of the same feature map. &
-Large designs can overfit or produce poorly conditioned readouts; redundant
-states can reduce the effective rank of \(\mat X\). \\
-\(m\) & Explicit lag memory entering the reservoir input & Choose a
-domain-informed grid and require all lags to be available at the forecast
-origin. & Excessive lags increase dimension and can leak future information if
-alignment is not audited. \\
-\(\{\alpha_d\},\{\rho_d\}\) & Reservoir time scale, persistence, and stability &
-Co-tune because both affect memory. Near-one radii require
-empirical stability checks. & Saturation, state collapse, or sensitivity to
-initial conditions. \\
-\(\{\pi^{(W)}_d\},\{\pi^{(\mathrm{in})}_d\}\) and input scaling & Internal
-connectivity and input excitation & Fix from a small set of literature-guided
-defaults; broaden the search when diagnostics show under-excitation or
-saturation. & Too sparse can reduce richness; too dense or strongly driven can
-saturate nonlinear states. \\
-\(f,k,T_0\) & Nonlinearity, bridge transformation, and initial-condition
-washout & Fix before reservoir selection, with \(T_0\) chosen relative to the
-memory scale. & Short washout can leave initial-condition artifacts. \\
-Seed & Realization of the random feature map & Treat as a robustness variable,
-not as a hidden tuning parameter. Refit top candidates over multiple seeds. &
-A single selected seed can overstate validation performance. \\
+Depth and widths & Feature complexity and hierarchy of time scales &
+Validation score, effective rank, and readout conditioning. \\
+Leak rates and spectral radii & Dynamic memory and stability of the fixed
+state recursion &
+Finite states, saturation checks, and sensitivity to initial conditions. \\
+Seed & Random-feature realization &
+Multi-seed sensitivity for top candidate designs. \\
+Washout and lag memory & Initialization, information set, and short-horizon
+state alignment &
+Forecast-origin alignment and absence of short-horizon initialization
+artifacts. \\
 \bottomrule
-\end{tabular}
-\caption{Reservoir specification components for the fixed Q--DESN feature map.
-The selected object is the design used by the Bayesian readout, so selection is
+\end{tabularx}
+\endgroup
+\caption{Main reservoir diagnostics for the fixed Q--DESN feature map. The
+selected object is the design used by the Bayesian readout, so selection is
 based on validation evidence and design diagnostics rather than posterior
-uncertainty over reservoir weights.}
+uncertainty over reservoir weights. A fuller component-level checklist is given
+in the supplement.}
 \label{tab:reservoir-selection}
 \end{table}
 
@@ -1640,8 +1767,8 @@ not by themselves establish calibrated posterior credible bands under likelihood
 misspecification.
 
 The coarse search focuses on the primary design parameters in
-Table~\ref{tab:reservoir-selection}: \(D\), \(\{n_d\}\),
-\(\{\tilde n_d\}\), \(m\), \(\{\alpha_d\}\), and \(\{\rho_d\}\). Secondary
+Table~\ref{tab:reservoir-selection}: depth, widths, lag memory, washout, leak
+rates, and spectral radii. Secondary
 choices such as recurrent sparsity, input sparsity, input scaling, and
 activations are broadened only when diagnostics indicate a specific failure
 mode. Top candidates are refit over multiple reservoir seeds and, when
@@ -1928,7 +2055,7 @@ origin \(T\) for horizon \(h=1,\ldots,H\). The values
 \(y_{T+1},\ldots,y_{T+H}\) are not available at the forecast origin. They are
 held out during prediction and used only later for validation.
 
-The selected manuscript-facing run uses the forecast origin
+The reported reference run uses the forecast origin
 \GlofasApplicationCurrentOriginDate{} and scores seven fitted quantile levels over
 \GlofasApplicationCurrentScoredHorizons{} issued target dates. The application
 is therefore an audited reference case rather than a basin-wide or
@@ -2021,7 +2148,7 @@ exQDESN under exAL. This application therefore uses the independent-fit and
 monotone reporting workflow, not the joint quantile-vector readout of
 Section~\ref{subsec:joint-qdesn}. The draw-level predictive
 summaries are then passed through the monotone reporting rule. The selected
-manuscript output additionally uses a no-refit spread calibration at the
+reported output additionally uses a no-refit spread calibration at the
 reporting stage, centered at quantile
 \(\GlofasApplicationCurrentSpreadCalibrationCenterQuantile{}\), with
 multiplicative factor \(\GlofasApplicationCurrentSpreadCalibrationFactor{}\) and
@@ -2060,7 +2187,7 @@ aliases for this run.
 \subsection{Reference Application Results}
 
 Table~\ref{tab:glofas-application-score} reports the forecast scores for the
-selected reference run. Relative to raw GloFAS, the Q--DESN calibration reduces
+reported reference run. Relative to raw GloFAS, the Q--DESN calibration reduces
 the mean check loss from \(\GlofasApplicationCurrentRawCheckLoss{}\) to
 \(\GlofasApplicationCurrentQdesnCheckLoss{}\), the interval score from
 \(\GlofasApplicationCurrentRawIntervalScore{}\) to
@@ -2072,10 +2199,10 @@ coverage increases from \(\GlofasApplicationCurrentRawMeanCoverage{}\) to
 audited forecast origin and should be read as a reference-case calibration
 result rather than as a multi-origin operational validation.
 
-\begin{table}[H]
+\begin{table}[!htbp]
 \centering
-\caption{Forecast scoring for the selected GloFAS application run.
-Scores are computed on the transformed streamflow scale for the audited
+\caption{Forecast scoring for the GloFAS reference-case forecast.
+Scores are computed on the transformed streamflow scale for the
 forecast origin \GlofasApplicationCurrentOriginDate{}. Lower check loss,
 interval score, and CRPS are better; mean coverage reports empirical
 predictive interval coverage across the scored nominal intervals.}
@@ -2088,23 +2215,23 @@ predictive interval coverage across the scored nominal intervals.}
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentCorrectedPathsFigure}
 \caption{Raw GloFAS quantile paths, discrepancy-corrected Q--DESN quantile
 paths after monotone reporting and reporting-time spread calibration, and
-held-out reference streamflow over the issued forecast window for the selected
-GloFAS application run.}
+held-out reference streamflow over the issued forecast window for the GloFAS
+reference-case forecast.}
 \label{fig:glofas-application-corrected-paths}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
-\caption{Posterior forecast-window diagnostic for the selected GloFAS
-application run. The display checks the synthesized and spread-calibrated
+\caption{Posterior forecast-window diagnostic for the GloFAS reference-case
+forecast. The display checks the synthesized and spread-calibrated
 quantile bands around the forecast origin and the issued target dates used in
 Table~\ref{tab:glofas-application-score}.}
 \label{fig:glofas-application-forecast-window}
 \end{figure}
 
-The selected run passed the source-hash, file-hash, score-table, and VB
-convergence checks used by the article workflow. The VB fits used
+Reproducibility checks confirm the source hashes, file hashes, score table, and
+VB convergence record used by the article workflow. The VB fits used
 \GlofasApplicationCurrentVbIterations{} iterations. Future model
 specifications can replace this reference case through the same selection
 record and output aliases, without changing the application model
@@ -2115,14 +2242,14 @@ statement.
 
 As a second empirical case, we consider probabilistic day-ahead electricity
 price forecasting using the PriceFM benchmark of \citet{YuEtAl2026PriceFM}.
-The article-side target is original-unit quantile scoring on the PriceFM paper
+The reported target is original-unit quantile scoring on the PriceFM paper
 quantile grid under fold-aligned test timestamps.
 The released data cover European bidding regions at 15-minute resolution and
 include day-ahead price, load, solar, and wind forecasts. PriceFM itself is a
 graph-informed foundation model: it uses region-level exogenous information
 and a sparse graph mask derived from the European transmission topology. Our
-article-side comparison is therefore designed as a scoped benchmark against
-cached fold-aligned PriceFM predictions, not as a claim about the full
+reported comparison is therefore designed as a scoped benchmark against
+fold-aligned PriceFM predictions, not as a claim about the full
 paper-wide PriceFM evaluation.
 
 \subsection{Comparison Protocol}
@@ -2130,22 +2257,22 @@ paper-wide PriceFM evaluation.
 The reported benchmark contains \PricefmFullRegionFolds{} region/fold
 evaluations, spanning \PricefmFullRegions{} European bidding regions and
 \PricefmFullFolds{} rolling folds. Each evaluation is scored on the same
-fold-aligned test timestamps used by the cached PriceFM predictions. The
+fold-aligned test timestamps used by the PriceFM predictions. The
 scoring metric is original-unit average quantile loss (AQL) on the PriceFM
 paper quantile grid
 \(\PricefmFullPaperQuantiles\). Throughout this section, \(\Delta\) AQL denotes
 Q--DESN AQL minus PriceFM AQL. Negative values indicate lower Q--DESN AQL;
-positive values indicate lower cached PriceFM AQL.
+positive values indicate lower PriceFM AQL.
 
-The benchmark panel is assembled from audited validation registries and
+The benchmark panel is assembled from audited analysis records and
 previously computed paper-quantile score files. This assembly step is
-registry-only: it does not fit new models and it does not alter the cached
+assembly-only: it does not fit new models and it does not alter the
 PriceFM predictions. Across the benchmark, \PricefmFullTargetOnlyRows{}
 selected region/fold evaluations use target-only information and
 \PricefmFullGraphRows{} selected region/fold evaluations use graph-derived
 PriceFM neighborhood summaries.
 The benchmark is interpreted as an application of the selected Q--DESN
-forecasting workflow recorded by the validation registries. It is not used as
+forecasting workflow recorded by the analysis records. It is not used as
 evidence for the joint quantile-vector RHS prior unless a future PriceFM run
 explicitly fits and promotes that joint readout under the same fold-aligned
 protocol.
@@ -2155,7 +2282,7 @@ protocol.
 Across the aligned benchmark, Q--DESN has lower AQL in
 \PricefmFullQdesnWins{} of \PricefmFullRegionFolds{} region/fold evaluations
 (\PricefmFullQdesnWinRate{}), \PricefmFullQdesnClose{} evaluations are
-near-equivalent under the monitoring threshold, and cached PriceFM has lower
+near-equivalent under the prespecified near-equivalence threshold, and PriceFM has lower
 AQL in \PricefmFullPricefmWins{} evaluations. The mean Q--DESN AQL is
 \PricefmFullMeanQdesnAql{}, compared with mean PriceFM AQL
 \PricefmFullMeanPricefmAql{}, giving mean \(\Delta\) AQL
@@ -2165,34 +2292,24 @@ rather than uniform. Table~\ref{tab:pricefm-full-main-summary} shows that the
 mean \(\Delta\) AQL is most negative in fold 2, modestly negative in fold 1,
 and essentially neutral in fold 3.
 
-\begin{table}[H]
+\begin{table}[!htbp]
 \centering
-\small
 \caption{PriceFM benchmark summary. AQL is computed on the original
 electricity-price scale using the PriceFM paper quantile grid. The last two
 columns report Q--DESN AQL minus PriceFM AQL; negative values indicate lower
-Q--DESN AQL and positive values indicate lower cached PriceFM AQL. Near ties
-are retained as a separate monitoring category.}
+Q--DESN AQL and positive values indicate lower PriceFM AQL. Near ties are
+retained as a separate prespecified category.}
 \label{tab:pricefm-full-main-summary}
-\resizebox{\textwidth}{!}{\input{\PricefmFullMainSummaryTable}}
+\input{\PricefmFullMainSummaryTable}
 \end{table}
 
 The input set also matters. Graph-derived covariates have the most negative
 average \(\Delta\) AQL, whereas target-only evaluations are closer to neutral.
 This comparison should not be read as a causal attribution to graph features,
 because input sets and selected model specifications vary across region/fold
-evaluations. It is a diagnostic summary of where the selected registry is
-strongest on the aligned benchmark.
-
-\begin{table}[H]
-\centering
-\caption{PriceFM benchmark by input set. Graph-derived inputs include selected
-evaluations using graph-neighborhood summaries or graph-neighborhood lag
-features. Target-only inputs use only the target-region information available
-to the local forecasting workflow.}
-\label{tab:pricefm-full-input-set-summary}
-\resizebox{\textwidth}{!}{\input{\PricefmFullInputSetSummaryTable}}
-\end{table}
+evaluations. It is a diagnostic summary of where the selected analysis record is
+strongest on the aligned benchmark. Input-set and horizon-block breakdowns are
+reported in the supplement.
 
 \subsection{Horizon Diagnostics and Remaining Gaps}
 
@@ -2204,21 +2321,11 @@ rather than as a second
 full-surface registry, because not every audited source artifact retained
 horizon-block scores.
 
-\begin{table}[H]
-\centering
-\caption{Available horizon-block diagnostics for the PriceFM benchmark.
-Entries denote scored region/fold and horizon-block combinations for the
-subset with retained horizon diagnostics. Negative \(\Delta\) values indicate
-lower Q--DESN AQL; positive values indicate lower cached PriceFM AQL.}
-\label{tab:pricefm-full-horizon-diagnostic-summary}
-\input{\PricefmFullHorizonDiagnosticSummaryTable}
-\end{table}
-
 The resulting evidence supports a conservative scoped statement. Q--DESN is a
-competitive reservoir baseline against cached fold-aligned PriceFM predictions
+competitive reservoir baseline against fold-aligned PriceFM predictions
 on the aligned benchmark panel, with lower mean and median AQL in aggregate.
 It is not uniformly lower than PriceFM: fold 3 is nearly tied on average, and
-cached PriceFM has lower AQL for a nontrivial subset of region/fold
+PriceFM has lower AQL for a nontrivial subset of region/fold
 evaluations. Subsequent read-only sensitivity checks of those PriceFM-favored
 evaluations did not produce a validation-selected Q--DESN candidate whose
 frozen test evaluation improved aligned original-scale AQL, so they are treated

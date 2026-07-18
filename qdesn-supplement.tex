@@ -161,6 +161,10 @@ Section~\ref{sec:forecast_synthesis} &
 Links the fitted quantile readout to working-likelihood forecast simulation and
 defines the monotone reporting rule, interpolation convention, and
 quantile-function sampling rule used by multi-level reports. \\
+Reservoir design diagnostics &
+Section~\ref{sec:supp_reservoir_diagnostics} &
+Records the component-level feature-map checklist that is summarized in the
+main article. \\
 GloFAS discrepancy-calibration model &
 Section~\ref{sec:glofas_discrepancy} &
 Expresses the single-forecast-system application as an augmented
@@ -170,6 +174,61 @@ Q--DESN readout with reference and GloFAS-specific likelihood blocks. \\
 \endgroup
 \caption{Supplement roadmap for the Q--DESN posterior target and algorithms.}
 \label{tab:supp_roadmap}
+\end{table}
+
+\section{Reservoir Design Diagnostics}
+\label{sec:supp_reservoir_diagnostics}
+
+The main article treats the reservoir as a fixed feature map selected before
+posterior inference. Table~\ref{tab:supp-reservoir-selection} records the
+component-level checklist behind the compact diagnostic table in the main text.
+These checks are reproducibility diagnostics for the deterministic feature
+construction; they are not posterior uncertainty over recurrent weights.
+
+\begin{table}[!htbp]
+\centering
+\begingroup
+\TableStyle
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.16\textwidth}
+>{\raggedright\arraybackslash}p{0.25\textwidth}
+>{\raggedright\arraybackslash}p{0.28\textwidth}
+>{\raggedright\arraybackslash}X@{}}
+\toprule
+Component & Role in the fixed feature map & Selection rule & Main diagnostic risk \\
+\midrule
+\(D\) & Number of reservoir layers and hierarchy of time scales &
+Search over a small set and retain additional depth only when validation scores
+improve after seed checks. &
+Unnecessary depth can add unstable or redundant features. \\
+\(\{n_d\},\{\tilde n_d\}\) & Reservoir capacity and lower-layer feature
+dimension & Treat as the main complexity control, with reduction sizes selected
+as part of the same feature map. &
+Large designs can overfit or produce poorly conditioned readouts; redundant
+states can reduce the effective rank of \(\mat X\). \\
+\(m\) & Explicit lag memory entering the reservoir input & Choose a
+domain-informed grid and require all lags to be available at the forecast
+origin. & Excessive lags increase dimension and can leak future information if
+alignment is not audited. \\
+\(\{\alpha_d\},\{\rho_d\}\) & Reservoir time scale, persistence, and stability &
+Co-tune because both affect memory. Near-one radii require empirical stability
+checks. & Saturation, state collapse, or sensitivity to initial conditions. \\
+\(\{\pi^{(W)}_d\},\{\pi^{(\mathrm{in})}_d\}\) and input scaling & Internal
+connectivity and input excitation & Fix from a small set of literature-guided
+defaults; broaden the search when diagnostics show under-excitation or
+saturation. & Too sparse can reduce richness; too dense or strongly driven can
+saturate nonlinear states. \\
+\(f,k,T_0\) & Nonlinearity, bridge transformation, and initial-condition
+washout & Fix before reservoir selection, with \(T_0\) chosen relative to the
+memory scale. & Short washout can leave initial-condition artifacts. \\
+Seed & Realization of the random feature map & Treat as a robustness variable,
+not as a hidden tuning parameter. Refit top candidates over multiple seeds. &
+A single selected seed can overstate validation performance. \\
+\bottomrule
+\end{tabularx}
+\endgroup
+\caption{Component-level reservoir specification checklist for the fixed
+Q--DESN feature map.}
+\label{tab:supp-reservoir-selection}
 \end{table}
 
 \section{Distributional Conventions}
@@ -1441,21 +1500,22 @@ coverage and generalized-posterior calibration checked by the validation
 protocol rather than assumed from the loss alone.
 
 Several qualifications are part of the target definition. RQR--DESN does not
-assign the two endpoints to preselected lower and upper quantile levels, and
-the fitted interval is not generally equal-tailed, shortest, or a
-highest-density interval. Intervals fit separately at multiple coverage levels
-need not be nested unless a nesting rule is imposed. The learning rate
-\(\omega_{\mathrm R}\) controls the concentration of the generalized posterior
-and should be fixed by design or checked by sensitivity analysis. Credible
-bands for \(L_t\) and \(U_t\) describe uncertainty about the endpoint
-functionals under the loss-based update; they are not posterior predictive
-bands for future responses.
+assign the two endpoints to preselected lower and upper quantile levels, and it
+allows asymmetric interval shapes. Intervals fit separately at multiple
+coverage levels need not be nested unless a nesting rule is imposed. The
+learning rate \(\omega_{\mathrm R}\) controls the concentration of the
+generalized posterior and should be fixed by design or checked by sensitivity
+analysis. Credible bands for \(L_t\) and \(U_t\) describe uncertainty about the
+endpoint functionals under the loss-based update; they are not posterior
+predictive bands for future responses.
 
 \subsection{Pseudo-AL Augmentation}
 \label{subsec:rqr_desn_aug}
 
-The implementation uses a pseudo-AL representation of the RQR residual product.
-Let \(r_t=y_t^2\) and
+The implementation uses a pseudo-AL representation of the core RQR residual
+product. Additional width or conditional-coverage penalties would define extra
+loss terms and would require separate computational treatment. Let
+\(r_t=y_t^2\) and
 \[
 m_t^{\mathrm R}
 =y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
@@ -1640,6 +1700,36 @@ These results support RQR--DESN as a promising direct-interval reuse of the
 fixed-feature infrastructure. They are not a matched superiority study against
 quantile-derived intervals, and they leave VB calibration, recursive interval
 forecasting, and nested multi-coverage interval modeling as future work.
+
+\clearpage
+\subsection{PriceFM Application Diagnostic Breakdowns}
+\label{subsec:supp_pricefm_diagnostics}
+
+The main article reports the aggregate fold-aligned PriceFM comparison. The
+tables below preserve two secondary diagnostic views from the same assembled
+benchmark: the input-set breakdown and the available horizon-block breakdown.
+They are descriptive summaries of the selected analysis records, not separate
+selection criteria.
+
+\begin{table}[!htbp]
+\centering
+\caption{PriceFM benchmark by input set. Graph-derived inputs include selected
+evaluations using graph-neighborhood summaries or graph-neighborhood lag
+features. Target-only inputs use only the target-region information available
+to the local forecasting workflow.}
+\label{tab:supp-pricefm-full-input-set-summary}
+\input{tables/pricefm_full_input_set_summary.tex}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\caption{Available horizon-block diagnostics for the PriceFM benchmark.
+Entries denote scored region/fold and horizon-block combinations for the
+subset with retained horizon diagnostics. Negative \(\Delta\) values indicate
+lower Q--DESN AQL; positive values indicate lower PriceFM AQL.}
+\label{tab:supp-pricefm-full-horizon-diagnostic-summary}
+\input{tables/pricefm_full_horizon_diagnostic_summary.tex}
+\end{table}
 
 \clearpage
 \section{GloFAS Discrepancy-Calibration Model}

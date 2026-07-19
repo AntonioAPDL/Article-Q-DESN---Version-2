@@ -26,6 +26,7 @@ source(app_path("application/R/joint_exqdesn_phase140_gamma_redesign_readiness.R
 
 args <- app_parse_args(list(
   output_dir = "application/cache/joint_qdesn_phase140_exal_gamma_redesign_readiness_20260717",
+  launch_output_dir = "",
   phase139_dir = "application/cache/joint_qdesn_phase139_exal_long_chain_synthesis_20260717",
   n_chains = "8",
   mcmc_n_iter = "12000",
@@ -49,6 +50,10 @@ parse_integer <- function(x) {
 result <- app_joint_exqdesn_run_phase140_gamma_redesign_readiness(
   out_dir = arg_value("output_dir"),
   phase139_dir = arg_value("phase139_dir"),
+  launch_output_dir = {
+    launch_output <- arg_value("launch_output_dir")
+    if (is.null(launch_output) || !nzchar(as.character(launch_output)[[1L]])) NULL else launch_output
+  },
   n_chains = parse_integer(arg_value("n_chains")),
   mcmc_n_iter = parse_integer(arg_value("mcmc_n_iter")),
   mcmc_burn = parse_integer(arg_value("mcmc_burn")),

@@ -138,6 +138,40 @@ stopifnot(identical(variants$phase136_variant_id[[1L]], "fixed_zero"))
 stopifnot(identical(variants$gamma_update[[1L]], "fixed"))
 stopifnot(identical(variants$phase136_variant_role[[1L]], "fixed_gamma_zero_near_al_sensitivity"))
 
+base_jobs <- data.frame(
+  job_id = paste0("case_a__fixed_zero__chain_", sprintf("%02d", 1:3)),
+  phase136_case_variant_id = "case_a__fixed_zero",
+  case_id = "case_a",
+  scenario_id = "normal_bridge",
+  phase136_variant_id = "fixed_zero",
+  chain_id = 1:3,
+  chain_seed = 14001:14003,
+  stringsAsFactors = FALSE
+)
+valid_chain_result <- list(
+  phase136_case_variant_id = "case_a__fixed_zero",
+  case_id = "case_a",
+  scenario_id = "normal_bridge",
+  phase136_variant_id = "fixed_zero",
+  chain_id = 1L,
+  chain_seed = 14001L,
+  fit = fit,
+  runtime = data.frame(elapsed_seconds = 1, stringsAsFactors = FALSE)
+)
+malformed_chain_result <- list(chain_id = 2L)
+explicit_worker_error <- app_joint_qdesn_worker_error("case_a__fixed_zero__chain_03", simpleError("simulated chain failure"))
+chain_results <- list(valid_chain_result, malformed_chain_result, explicit_worker_error)
+stopifnot(app_joint_exqdesn_phase136_valid_chain_result(valid_chain_result))
+stopifnot(!app_joint_exqdesn_phase136_valid_chain_result(malformed_chain_result))
+failures <- app_joint_exqdesn_phase136_chain_result_failure_rows(chain_results, base_jobs)
+stopifnot(nrow(failures) == 2L)
+stopifnot(all(failures$worker_status == "fail"))
+stopifnot(identical(sort(failures$chain_id), c(2L, 3L)))
+stopifnot(any(grepl("Malformed or undelivered", failures$error_message, fixed = TRUE)))
+valid_only <- chain_results[vapply(chain_results, app_joint_exqdesn_phase136_valid_chain_result, logical(1L))]
+stopifnot(length(valid_only) == 1L)
+stopifnot(identical(valid_only[[1L]]$phase136_case_variant_id, "case_a__fixed_zero"))
+
 root <- tempfile("joint_exqdesn_phase140_")
 phase139_dir <- file.path(root, "phase139")
 out_dir <- file.path(root, "phase140")
@@ -146,6 +180,7 @@ make_phase139_like_artifact(phase139_dir)
 result <- app_joint_exqdesn_run_phase140_gamma_redesign_readiness(
   out_dir = out_dir,
   phase139_dir = phase139_dir,
+  launch_output_dir = file.path(root, "phase140_fixed_gamma_recovery"),
   n_chains = 2,
   mcmc_n_iter = 60,
   mcmc_burn = 20,
@@ -157,6 +192,8 @@ stopifnot(dir.exists(result$out_dir))
 stopifnot(identical(result$decision$phase140_decision[[1L]], "ready_to_launch_fixed_gamma_zero_sensitivity"))
 stopifnot(identical(result$launch_plan$variant_ids[[1L]], "fixed_zero"))
 stopifnot(identical(result$launch_plan$gamma_update[[1L]], "fixed"))
+stopifnot(identical(result$launch_plan$output_dir[[1L]], file.path(root, "phase140_fixed_gamma_recovery")))
+stopifnot(identical(result$run_config$launch_output_dir[[1L]], result$launch_plan$output_dir[[1L]]))
 stopifnot(result$launch_plan$n_cases[[1L]] == 2L)
 stopifnot(result$launch_plan$total_chain_jobs[[1L]] == 4L)
 stopifnot(grepl("--variant-ids fixed_zero", result$launch_plan$command[[1L]], fixed = TRUE))

@@ -149,13 +149,18 @@ app_joint_exqdesn_phase140_build_command <- function(output_dir, phase139, case_
 
 app_joint_exqdesn_phase140_launch_plan <- function(phase139, case_priority,
                                                    launch_root = "application/cache",
+                                                   launch_output_dir = NULL,
                                                    n_chains = 8L,
                                                    mcmc_n_iter = 12000L,
                                                    mcmc_burn = 3000L,
                                                    mcmc_thin = 1L,
                                                    mcmc_seed_offset = 9600L) {
   cases <- case_priority$case_id[case_priority$phase140_case_action == "include_in_fixed_gamma_zero_sensitivity"]
-  out_dir <- file.path(launch_root, "joint_qdesn_phase140_exal_fixed_gamma_zero_sensitivity_20260717")
+  out_dir <- if (!is.null(launch_output_dir) && nzchar(as.character(launch_output_dir[[1L]]))) {
+    as.character(launch_output_dir[[1L]])
+  } else {
+    file.path(launch_root, "joint_qdesn_phase140_exal_fixed_gamma_zero_sensitivity_20260717")
+  }
   data.frame(
     launch_id = "phase140_fixed_gamma_zero_sensitivity",
     launch_status = "prepared_not_launched",
@@ -247,6 +252,7 @@ app_joint_exqdesn_phase140_readme <- function(decision, launch_plan, feasibility
 app_joint_exqdesn_run_phase140_gamma_redesign_readiness <- function(
   out_dir = app_joint_exqdesn_phase140_default_dir(),
   phase139_dir = app_joint_exqdesn_phase140_default_phase139_dir(),
+  launch_output_dir = NULL,
   n_chains = 8L,
   mcmc_n_iter = 12000L,
   mcmc_burn = 3000L,
@@ -261,6 +267,7 @@ app_joint_exqdesn_run_phase140_gamma_redesign_readiness <- function(
   launch_plan <- app_joint_exqdesn_phase140_launch_plan(
     phase139,
     case_priority,
+    launch_output_dir = launch_output_dir,
     n_chains = n_chains,
     mcmc_n_iter = mcmc_n_iter,
     mcmc_burn = mcmc_burn,
@@ -273,6 +280,7 @@ app_joint_exqdesn_run_phase140_gamma_redesign_readiness <- function(
     run_id = "joint_qdesn_phase140_exal_gamma_redesign_readiness",
     out_dir = out_dir,
     phase139_dir = phase139$dir,
+    launch_output_dir = launch_plan$output_dir[[1L]],
     n_chains = as.integer(n_chains),
     mcmc_n_iter = as.integer(mcmc_n_iter),
     mcmc_burn = as.integer(mcmc_burn),

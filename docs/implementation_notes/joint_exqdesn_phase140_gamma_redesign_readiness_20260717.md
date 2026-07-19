@@ -30,6 +30,10 @@ Phase140 adds a fixed-gamma sensitivity hook to the existing exAL MCMC path:
 
 Defaults remain unchanged for existing bounded-slice and logit-slice MCMC paths.
 
+## Recovery Note
+
+The first fixed-gamma-zero launch ended with an orchestration failure after one forked worker did not deliver a result. The failure occurred before result tables were written, so it produced no interpretable statistical evidence. The Phase136 runner now validates chain-result objects before grouping them. Worker errors and malformed or undelivered chain results are recorded in `phase136_chain_worker_failures.csv`, and case assessments fail if the requested number of chains is not completed. Phase140 readiness also accepts a launch-output override so recovery launches can preserve the failed output directory as evidence rather than overwriting it.
+
 ## Generated Artifact
 
 The readiness script writes:

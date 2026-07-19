@@ -174,6 +174,78 @@ app_joint_exqdesn_phase136_chain_init_for_gamma_update <- function(vb_fit, tau, 
   )
 }
 
+app_joint_exqdesn_phase136_valid_chain_result <- function(x) {
+  if (app_joint_qdesn_is_worker_error(x)) return(FALSE)
+  if (!is.list(x)) return(FALSE)
+  required <- c("phase136_case_variant_id", "case_id", "scenario_id",
+                "phase136_variant_id", "chain_id", "chain_seed", "fit", "runtime")
+  if (!all(required %in% names(x))) return(FALSE)
+  if (length(x$phase136_case_variant_id) != 1L || !nzchar(as.character(x$phase136_case_variant_id[[1L]]))) return(FALSE)
+  if (length(x$chain_id) != 1L || is.na(as.integer(x$chain_id[[1L]]))) return(FALSE)
+  if (length(x$chain_seed) != 1L || is.na(as.integer(x$chain_seed[[1L]]))) return(FALSE)
+  if (is.null(x$fit) || !is.list(x$fit)) return(FALSE)
+  if (is.null(x$runtime) || !is.data.frame(x$runtime) || !nrow(x$runtime)) return(FALSE)
+  TRUE
+}
+
+app_joint_exqdesn_phase136_chain_result_failure_rows <- function(results, base_jobs) {
+  rows <- lapply(seq_along(results), function(ii) {
+    result <- results[[ii]]
+    job <- if (nrow(base_jobs) >= ii) base_jobs[ii, , drop = FALSE] else data.frame()
+    job_id <- if (nrow(job) && "job_id" %in% names(job)) job$job_id[[1L]] else as.character(ii)
+    if (app_joint_qdesn_is_worker_error(result)) {
+      return(data.frame(
+        validation_label = "phase136_mcmc_chain",
+        scenario_id = if (nrow(job) && "scenario_id" %in% names(job)) job$scenario_id[[1L]] else result$input,
+        worker_index = ii,
+        worker_status = "fail",
+        error_class = result$error_class,
+        error_message = result$error_message,
+        job_id = job_id,
+        phase136_case_variant_id = if (nrow(job) && "phase136_case_variant_id" %in% names(job)) job$phase136_case_variant_id[[1L]] else NA_character_,
+        case_id = if (nrow(job) && "case_id" %in% names(job)) job$case_id[[1L]] else NA_character_,
+        phase136_variant_id = if (nrow(job) && "phase136_variant_id" %in% names(job)) job$phase136_variant_id[[1L]] else NA_character_,
+        chain_id = if (nrow(job) && "chain_id" %in% names(job)) job$chain_id[[1L]] else NA_integer_,
+        chain_seed = if (nrow(job) && "chain_seed" %in% names(job)) job$chain_seed[[1L]] else NA_integer_,
+        stringsAsFactors = FALSE
+      ))
+    }
+    if (app_joint_exqdesn_phase136_valid_chain_result(result)) return(NULL)
+    data.frame(
+      validation_label = "phase136_mcmc_chain",
+      scenario_id = if (nrow(job) && "scenario_id" %in% names(job)) job$scenario_id[[1L]] else NA_character_,
+      worker_index = ii,
+      worker_status = "fail",
+      error_class = paste(class(result), collapse = ";"),
+      error_message = "Malformed or undelivered MCMC chain result; expected phase136_case_variant_id, chain_id, chain_seed, fit, and runtime.",
+      job_id = job_id,
+      phase136_case_variant_id = if (nrow(job) && "phase136_case_variant_id" %in% names(job)) job$phase136_case_variant_id[[1L]] else NA_character_,
+      case_id = if (nrow(job) && "case_id" %in% names(job)) job$case_id[[1L]] else NA_character_,
+      phase136_variant_id = if (nrow(job) && "phase136_variant_id" %in% names(job)) job$phase136_variant_id[[1L]] else NA_character_,
+      chain_id = if (nrow(job) && "chain_id" %in% names(job)) job$chain_id[[1L]] else NA_integer_,
+      chain_seed = if (nrow(job) && "chain_seed" %in% names(job)) job$chain_seed[[1L]] else NA_integer_,
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- app_joint_qdesn_bind_rows(rows)
+  if (nrow(out)) return(out)
+  data.frame(
+    validation_label = character(),
+    scenario_id = character(),
+    worker_index = integer(),
+    worker_status = character(),
+    error_class = character(),
+    error_message = character(),
+    job_id = character(),
+    phase136_case_variant_id = character(),
+    case_id = character(),
+    phase136_variant_id = character(),
+    chain_id = integer(),
+    chain_seed = integer(),
+    stringsAsFactors = FALSE
+  )
+}
+
 app_joint_exqdesn_phase136_fit_vb_case <- function(fixture, spec, controls) {
   if (identical(spec$model_id[[1L]], "joint_exqdesn_rhs_vb")) {
     retained <- app_joint_exqdesn_fit_with_retained_init(fixture, controls)
@@ -360,8 +432,11 @@ app_joint_exqdesn_phase136_assess_case <- function(prep, mcmc_controls, mcmc_sum
     sm$mcmc_forecast_raw_crossing_pairs,
     na.rm = TRUE
   )
+  chain_complete <- nrow(sm) &&
+    "all_requested_chains_completed" %in% names(sm) &&
+    isTRUE(as.logical(sm$all_requested_chains_completed[[1L]]))
   hard_fail <- !nrow(sm) || !nrow(rh) || any(!is.finite(c(sm$mcmc_fit_truth_mae, sm$mcmc_forecast_truth_mae))) ||
-    contract_cross > 0L || any(!dr$all_finite, na.rm = TRUE)
+    contract_cross > 0L || any(!dr$all_finite, na.rm = TRUE) || !chain_complete
   review <- !hard_fail && (
     raw_cross > 0L ||
       (!isTRUE(prep$vb$vb_fit$converged)) ||
@@ -622,8 +697,11 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
     mcmc_controls$n_cores
   )
   mcmc_elapsed <- proc.time()[["elapsed"]] - mcmc_start
-  chain_failures <- app_joint_qdesn_worker_failure_rows(chain_results, "phase136_mcmc_chain")
-  successful_chains <- app_joint_qdesn_successful_worker_results(chain_results, "phase136_mcmc_chain")
+  chain_failures <- app_joint_exqdesn_phase136_chain_result_failure_rows(chain_results, base_jobs)
+  successful_chains <- chain_results[vapply(chain_results, app_joint_exqdesn_phase136_valid_chain_result, logical(1L))]
+  if (!length(successful_chains)) {
+    stop("All Phase136 MCMC chain workers failed or returned malformed results; no case-level summaries can be formed.", call. = FALSE)
+  }
   chains_by_case_variant <- split(successful_chains, vapply(successful_chains, `[[`, character(1L), "phase136_case_variant_id"))
 
   case_results <- lapply(names(chains_by_case_variant), function(id) {
@@ -700,6 +778,9 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
         vb_adaptive_attempts = attr(prep$vb$vb_fit, "adaptive_vb_attempts") %||% as.character(prep$controls$vb_max_iter),
         vb_max_iter_used = as.integer(attr(prep$vb$vb_fit, "adaptive_vb_max_iter_used") %||% prep$controls$vb_max_iter),
         mcmc_n_chains = mcmc_controls$n_chains,
+        mcmc_n_chains_successful = length(fits),
+        mcmc_n_chains_failed = max(0L, mcmc_controls$n_chains - length(fits)),
+        all_requested_chains_completed = length(fits) == mcmc_controls$n_chains,
         mcmc_n_iter = mcmc_controls$mcmc_n_iter,
         mcmc_burn = mcmc_controls$mcmc_burn,
         mcmc_thin = mcmc_controls$mcmc_thin,

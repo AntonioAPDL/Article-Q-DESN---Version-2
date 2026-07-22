@@ -97,6 +97,105 @@ app_joint_exqdesn_phase136_select_cases <- function(phase135, case_ids = NULL, c
   selected
 }
 
+app_joint_exqdesn_phase136_parse_width_token <- function(x) {
+  value <- suppressWarnings(as.numeric(gsub("p", ".", as.character(x), fixed = TRUE)))
+  if (is.na(value) || !is.finite(value) || value <= 0) {
+    stop(sprintf("Invalid Phase136 gamma width token '%s'.", x), call. = FALSE)
+  }
+  value
+}
+
+app_joint_exqdesn_phase136_variant_spec <- function(variant_id,
+                                                    bounded_width_multiplier = 4,
+                                                    logit_eta_width = 4,
+                                                    gamma_slice_max_steps = 100L) {
+  variant_id <- as.character(variant_id)[[1L]]
+  bounded_width_multiplier <- as.numeric(bounded_width_multiplier)
+  logit_eta_width <- as.numeric(logit_eta_width)
+  if (identical(variant_id, "fixed_zero")) {
+    return(data.frame(
+      phase136_variant_id = variant_id,
+      gamma_update = "fixed",
+      bounded_width_multiplier = NA_real_,
+      logit_eta_width = NA_real_,
+      gamma_prior_type = "none",
+      gamma_prior_center = NA_real_,
+      gamma_prior_sd_eta = NA_real_,
+      gamma_slice_max_steps = as.integer(gamma_slice_max_steps),
+      phase136_variant_role = "fixed_gamma_zero_near_al_sensitivity",
+      stringsAsFactors = FALSE
+    ))
+  }
+  prior_match <- regexec("^logit_prior_sd_([0-9]+(?:p[0-9]+)?)$", variant_id)
+  prior_parts <- regmatches(variant_id, prior_match)[[1L]]
+  if (length(prior_parts)) {
+    prior_sd <- app_joint_exqdesn_phase136_parse_width_token(prior_parts[[2L]])
+    return(data.frame(
+      phase136_variant_id = variant_id,
+      gamma_update = "logit_slice",
+      bounded_width_multiplier = NA_real_,
+      logit_eta_width = logit_eta_width,
+      gamma_prior_type = "logit_normal",
+      gamma_prior_center = 0,
+      gamma_prior_sd_eta = prior_sd,
+      gamma_slice_max_steps = as.integer(gamma_slice_max_steps),
+      phase136_variant_role = "regularized_logit_gamma_near_al_reference",
+      stringsAsFactors = FALSE
+    ))
+  }
+  bounded_match <- regexec("^bounded_w([0-9]+(?:p[0-9]+)?)$", variant_id)
+  bounded_parts <- regmatches(variant_id, bounded_match)[[1L]]
+  if (length(bounded_parts)) {
+    width <- if (identical(variant_id, "bounded_w4")) {
+      bounded_width_multiplier
+    } else {
+      app_joint_exqdesn_phase136_parse_width_token(bounded_parts[[2L]])
+    }
+    return(data.frame(
+      phase136_variant_id = variant_id,
+      gamma_update = "bounded_slice",
+      bounded_width_multiplier = width,
+      logit_eta_width = NA_real_,
+      gamma_prior_type = "none",
+      gamma_prior_center = NA_real_,
+      gamma_prior_sd_eta = NA_real_,
+      gamma_slice_max_steps = as.integer(gamma_slice_max_steps),
+      phase136_variant_role = if (identical(variant_id, "bounded_w4")) {
+        "existing_gamma_slice_width4_reference"
+      } else {
+        "narrow_or_rescaled_bounded_gamma_slice_test"
+      },
+      stringsAsFactors = FALSE
+    ))
+  }
+  logit_match <- regexec("^logit_w([0-9]+(?:p[0-9]+)?)$", variant_id)
+  logit_parts <- regmatches(variant_id, logit_match)[[1L]]
+  if (length(logit_parts)) {
+    width <- if (identical(variant_id, "logit_w4")) {
+      logit_eta_width
+    } else {
+      app_joint_exqdesn_phase136_parse_width_token(logit_parts[[2L]])
+    }
+    return(data.frame(
+      phase136_variant_id = variant_id,
+      gamma_update = "logit_slice",
+      bounded_width_multiplier = NA_real_,
+      logit_eta_width = width,
+      gamma_prior_type = "none",
+      gamma_prior_center = NA_real_,
+      gamma_prior_sd_eta = NA_real_,
+      gamma_slice_max_steps = as.integer(gamma_slice_max_steps),
+      phase136_variant_role = if (identical(variant_id, "logit_w4")) {
+        "logit_gamma_slice_geometry_test"
+      } else {
+        "narrow_or_rescaled_logit_gamma_slice_test"
+      },
+      stringsAsFactors = FALSE
+    ))
+  }
+  stop(sprintf("Unknown Phase136 variant_id '%s'.", variant_id), call. = FALSE)
+}
+
 app_joint_exqdesn_phase136_variant_registry <- function(selected_cases, variant_ids = c("bounded_w4", "logit_w4"),
                                                         bounded_width_multiplier = 4, logit_eta_width = 4,
                                                         gamma_slice_max_steps = 100L) {
@@ -107,30 +206,15 @@ app_joint_exqdesn_phase136_variant_registry <- function(selected_cases, variant_
   for (ii in seq_len(nrow(selected_cases))) {
     row <- selected_cases[ii, , drop = FALSE]
     for (variant in variant_ids) {
-      gamma_update <- switch(
+      spec <- app_joint_exqdesn_phase136_variant_spec(
         variant,
-        bounded_w4 = "bounded_slice",
-        logit_w4 = "logit_slice",
-        fixed_zero = "fixed",
-        stop(sprintf("Unknown Phase136 variant_id '%s'.", variant), call. = FALSE)
+        bounded_width_multiplier = bounded_width_multiplier,
+        logit_eta_width = logit_eta_width,
+        gamma_slice_max_steps = gamma_slice_max_steps
       )
       rows[[length(rows) + 1L]] <- cbind(
         row,
-        data.frame(
-          phase136_variant_id = variant,
-          gamma_update = gamma_update,
-          bounded_width_multiplier = if (identical(gamma_update, "bounded_slice")) bounded_width_multiplier else NA_real_,
-          logit_eta_width = if (identical(gamma_update, "logit_slice")) logit_eta_width else NA_real_,
-          gamma_slice_max_steps = as.integer(gamma_slice_max_steps),
-          phase136_variant_role = if (identical(gamma_update, "bounded_slice")) {
-            "existing_gamma_slice_width4_reference"
-          } else if (identical(gamma_update, "fixed")) {
-            "fixed_gamma_zero_near_al_sensitivity"
-          } else {
-            "logit_gamma_slice_geometry_test"
-          },
-          stringsAsFactors = FALSE
-        )
+        spec
       )
     }
   }
@@ -332,6 +416,9 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
       gamma_slice_width = width_vector,
       gamma_slice_max_steps = variant$gamma_slice_max_steps[[1L]],
       gamma_update = gamma_update,
+      gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
+      gamma_prior_center = variant$gamma_prior_center[[1L]] %||% 0,
+      gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
       init = init
     )
   } else {
@@ -365,6 +452,9 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
         gamma_slice_width = width_vector[[kk]],
         gamma_slice_max_steps = variant$gamma_slice_max_steps[[1L]],
         gamma_update = gamma_update,
+        gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
+        gamma_prior_center = variant$gamma_prior_center[[1L]] %||% 0,
+        gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
         init = one_init
       )
     }
@@ -632,8 +722,11 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
       phase136_variant_id = variant$phase136_variant_id[[1L]],
       phase136_case_variant_id = variant$phase136_case_variant_id[[1L]],
       gamma_update = variant$gamma_update[[1L]],
-      width_multiplier = ifelse(variant$gamma_update[[1L]] == "bounded_slice", bounded_width_multiplier, NA_real_),
-      logit_eta_width = ifelse(variant$gamma_update[[1L]] == "logit_slice", logit_eta_width, NA_real_),
+      width_multiplier = ifelse(variant$gamma_update[[1L]] == "bounded_slice", variant$bounded_width_multiplier[[1L]], NA_real_),
+      logit_eta_width = ifelse(variant$gamma_update[[1L]] == "logit_slice", variant$logit_eta_width[[1L]], NA_real_),
+      gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
+      gamma_prior_center = variant$gamma_prior_center[[1L]] %||% NA_real_,
+      gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
       stringsAsFactors = FALSE
     )
     vb_meta <- cbind(vb_meta, common, stringsAsFactors = FALSE)
@@ -656,8 +749,8 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
       gamma_slice_width = app_joint_exqdesn_phase136_width_vector(
         fixture$tau,
         variant$gamma_update[[1L]],
-        bounded_width_multiplier,
-        logit_eta_width
+        variant$bounded_width_multiplier[[1L]],
+        variant$logit_eta_width[[1L]]
       )
     )
   }, vb_n_cores)

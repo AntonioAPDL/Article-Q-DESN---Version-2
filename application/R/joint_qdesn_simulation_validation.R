@@ -767,9 +767,17 @@ app_joint_qdesn_make_run_config <- function(run_id, out_dir, fixture_dir, contro
 }
 
 app_joint_qdesn_write_manifest <- function(paths, out_dir) {
+  out_dir_norm <- normalizePath(out_dir, mustWork = TRUE)
+  path_norm <- normalizePath(paths, mustWork = TRUE)
+  out_prefix <- paste0(out_dir_norm, .Platform$file.sep)
+  relative_path <- ifelse(
+    startsWith(path_norm, out_prefix),
+    substring(path_norm, nchar(out_prefix) + 1L),
+    basename(paths)
+  )
   manifest <- data.frame(
     label = names(paths),
-    relative_path = basename(paths),
+    relative_path = relative_path,
     size_bytes = as.numeric(file.info(paths)$size),
     sha256 = vapply(paths, app_sha256_file, character(1L)),
     stringsAsFactors = FALSE

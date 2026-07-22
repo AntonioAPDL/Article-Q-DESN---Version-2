@@ -56,6 +56,39 @@ fit_b <- app_joint_qvp_fit_exal_mcmc_tiny(
   max_dense_dim = 20L
 )
 
+fit_prior_a <- app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 18L,
+  burn = 9L,
+  thin = 3L,
+  seed = 709L,
+  kappa = 1,
+  gamma_init = rep(0, length(tau)),
+  gamma_update = "logit_slice",
+  gamma_prior_type = "logit_normal",
+  gamma_prior_center = 0,
+  gamma_prior_sd_eta = 0.5,
+  max_dense_dim = 20L
+)
+fit_prior_b <- app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 18L,
+  burn = 9L,
+  thin = 3L,
+  seed = 709L,
+  kappa = 1,
+  gamma_init = rep(0, length(tau)),
+  gamma_update = "logit_slice",
+  gamma_prior_type = "logit_normal",
+  gamma_prior_center = 0,
+  gamma_prior_sd_eta = 0.5,
+  max_dense_dim = 20L
+)
+
 stopifnot(inherits(fit_a, "joint_qvp_qdesn_tiny_fit"))
 stopifnot(identical(dim(fit_a$beta_draws), c(3L, 4L)))
 stopifnot(identical(dim(fit_a$alpha_draws), c(3L, 2L)))
@@ -73,6 +106,11 @@ stopifnot(identical(round(fit_a$beta_draws, 12), round(fit_b$beta_draws, 12)))
 stopifnot(identical(round(fit_a$alpha_draws, 12), round(fit_b$alpha_draws, 12)))
 stopifnot(identical(round(fit_a$sigma_draws, 12), round(fit_b$sigma_draws, 12)))
 stopifnot(identical(round(fit_a$gamma_draws, 12), round(fit_b$gamma_draws, 12)))
+stopifnot(inherits(fit_prior_a, "joint_qvp_qdesn_tiny_fit"))
+stopifnot(identical(fit_prior_a$gamma_prior_type, "logit_normal"))
+stopifnot(all(abs(fit_prior_a$gamma_prior_center) < 1.0e-12))
+stopifnot(all(abs(fit_prior_a$gamma_prior_sd_eta - 0.5) < 1.0e-12))
+stopifnot(identical(round(fit_prior_a$gamma_draws, 12), round(fit_prior_b$gamma_draws, 12)))
 stopifnot(identical(fit_a$manifest$status[[1L]], "prototype_success"))
 stopifnot(identical(fit_a$manifest$likelihood[[1L]], "exal"))
 stopifnot(identical(fit_a$manifest$inference[[1L]], "mcmc_tiny"))
@@ -103,3 +141,15 @@ bad_gamma <- try(app_joint_qvp_fit_exal_mcmc_tiny(
   gamma_init = c(support$lower[[1L]], gamma0[[2L]])
 ), silent = TRUE)
 stopifnot(inherits(bad_gamma, "try-error"))
+
+bad_prior <- try(app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 10L,
+  burn = 5L,
+  gamma_update = "logit_slice",
+  gamma_prior_type = "logit_normal",
+  gamma_prior_sd_eta = -1
+), silent = TRUE)
+stopifnot(inherits(bad_prior, "try-error"))

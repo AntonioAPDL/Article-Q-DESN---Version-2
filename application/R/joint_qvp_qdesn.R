@@ -15052,6 +15052,28 @@ app_joint_qvp_gamma_logit_jacobian <- function(eta, lower, upper) {
   log(upper - lower) + log(p) + log1p(-p)
 }
 
+app_joint_qvp_gamma_log_prior <- function(gamma, lower, upper,
+                                          gamma_prior_type = "none",
+                                          gamma_prior_center = 0,
+                                          gamma_prior_sd_eta = NA_real_) {
+  gamma_prior_type <- as.character(gamma_prior_type %||% "none")[[1L]]
+  if (identical(gamma_prior_type, "none")) return(0)
+  if (!identical(gamma_prior_type, "logit_normal")) {
+    stop(sprintf("Unknown gamma_prior_type '%s'.", gamma_prior_type), call. = FALSE)
+  }
+  gamma_prior_center <- as.numeric(gamma_prior_center)[[1L]]
+  gamma_prior_sd_eta <- as.numeric(gamma_prior_sd_eta)[[1L]]
+  if (!is.finite(gamma_prior_center) || gamma_prior_center <= lower || gamma_prior_center >= upper) {
+    stop("gamma_prior_center must be finite and inside the gamma support.", call. = FALSE)
+  }
+  if (!is.finite(gamma_prior_sd_eta) || gamma_prior_sd_eta <= 0) {
+    stop("gamma_prior_sd_eta must be positive and finite for logit-normal gamma prior.", call. = FALSE)
+  }
+  eta <- app_joint_qvp_gamma_to_eta(gamma, lower, upper)
+  eta_center <- app_joint_qvp_gamma_to_eta(gamma_prior_center, lower, upper)
+  stats::dnorm(eta, mean = eta_center, sd = gamma_prior_sd_eta, log = TRUE)
+}
+
 app_joint_qvp_fit_exal_mcmc_tiny <- function(
   y,
   Z,
@@ -15070,10 +15092,17 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   sigma_bounds = c(1.0e-8, 1.0e8),
   gamma_slice_width = NULL,
   gamma_slice_max_steps = 100L,
-  gamma_update = c("bounded_slice", "logit_slice", "fixed")
+  gamma_update = c("bounded_slice", "logit_slice", "fixed"),
+  gamma_prior_type = "none",
+  gamma_prior_center = 0,
+  gamma_prior_sd_eta = NA_real_
 ) {
   if (!is.null(seed)) set.seed(seed)
   gamma_update <- match.arg(gamma_update)
+  gamma_prior_type <- as.character(gamma_prior_type %||% "none")[[1L]]
+  if (!gamma_prior_type %in% c("none", "logit_normal")) {
+    stop(sprintf("Unknown gamma_prior_type '%s'.", gamma_prior_type), call. = FALSE)
+  }
   y <- as.numeric(y)
   Z <- app_joint_qvp_check_design(Z)
   tau <- app_joint_qvp_validate_tau_grid(tau)
@@ -15101,6 +15130,28 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   init <- app_joint_qvp_normalize_init(init, K, p)
   gamma <- init$gamma %||% if (is.null(gamma_init)) app_joint_qvp_default_gamma(tau) else app_joint_qvp_check_gamma(tau, gamma_init)
   support <- app_joint_qvp_exal_support(tau)
+  gamma_prior_center <- as.numeric(gamma_prior_center)
+  if (length(gamma_prior_center) == 1L) gamma_prior_center <- rep(gamma_prior_center, K)
+  if (length(gamma_prior_center) != K) {
+    stop("gamma_prior_center must have length 1 or length(tau).", call. = FALSE)
+  }
+  gamma_prior_sd_eta <- as.numeric(gamma_prior_sd_eta)
+  if (length(gamma_prior_sd_eta) == 1L) gamma_prior_sd_eta <- rep(gamma_prior_sd_eta, K)
+  if (length(gamma_prior_sd_eta) != K) {
+    stop("gamma_prior_sd_eta must have length 1 or length(tau).", call. = FALSE)
+  }
+  if (!identical(gamma_prior_type, "none")) {
+    for (k in seq_len(K)) {
+      invisible(app_joint_qvp_gamma_log_prior(
+        gamma = gamma[[k]],
+        lower = support$lower[[k]],
+        upper = support$upper[[k]],
+        gamma_prior_type = gamma_prior_type,
+        gamma_prior_center = gamma_prior_center[[k]],
+        gamma_prior_sd_eta = gamma_prior_sd_eta[[k]]
+      ))
+    }
+  }
   beta <- init$beta %||% rep(0, K * p)
   alpha <- init$alpha %||% sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
   sigma <- init$sigma %||% rep(max(stats::mad(y), 1.0e-3), K)
@@ -15185,7 +15236,9 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
         gamma_slice_max_steps[[k]]
       }
       gamma_log_density <- function(g) {
-        app_joint_qvp_gamma_log_kernel(
+        support_lower <- support$lower[[k]]
+        support_upper <- support$upper[[k]]
+        val <- app_joint_qvp_gamma_log_kernel(
           gamma = g,
           y = y,
           fitted_no_alpha = fitted_no_alpha[, k],
@@ -15196,6 +15249,16 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
           tau = tau[[k]],
           kappa = kappa
         )
+        if (!is.finite(val)) return(-Inf)
+        val <- val + app_joint_qvp_gamma_log_prior(
+          gamma = g,
+          lower = support_lower,
+          upper = support_upper,
+          gamma_prior_type = gamma_prior_type,
+          gamma_prior_center = gamma_prior_center[[k]],
+          gamma_prior_sd_eta = gamma_prior_sd_eta[[k]]
+        )
+        if (is.finite(val)) val else -Inf
       }
       if (identical(gamma_update, "fixed")) {
         gamma[[k]] <- gamma[[k]]
@@ -15257,6 +15320,9 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     tau = tau,
     kappa = kappa,
     gamma_update = gamma_update,
+    gamma_prior_type = gamma_prior_type,
+    gamma_prior_center = gamma_prior_center,
+    gamma_prior_sd_eta = gamma_prior_sd_eta,
     seed = seed,
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("joint_qvp_exal_mcmc_tiny_%s", format(Sys.time(), "%Y%m%d%H%M%S")),

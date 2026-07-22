@@ -78,9 +78,6 @@ regularized horseshoe (\texttt{rhs\_ns}) shrinkage alternative, posterior
 kernels, Markov chain Monte Carlo (MCMC) full conditionals, the role of the
 VB--LD computational approximation, and the joint quantile-vector QVP--RHS
 extension.
-It also records the relaxed quantile regression DESN (RQR--DESN)
-interval-readout extension as a generalized-Bayes target over two fixed-feature
-root readouts, together with its supplementary calibration-screened evidence.
 The notation is aligned with the main article.
 \end{abstract}
 
@@ -147,15 +144,10 @@ Joint quantile-vector extension &
 Section~\ref{sec:joint_qdesn_supp} &
 Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, and crossing
 diagnostics for the joint multi-quantile readout. \\
-RQR--DESN interval readout &
-Section~\ref{sec:rqr_desn_supp} &
-Defines the two-root generalized-Bayes interval target, pseudo-AL
-augmentation, and MCMC block structure for the supplementary interval-readout
-extension. \\
 Supplementary validation tables &
 Section~\ref{sec:supp_validation_tables} &
-Preserves VB--LD companion panels, joint-validation provenance, and the
-RQR--DESN calibration-screened table outside the main article evidence path. \\
+Preserves VB--LD companion panels and joint-validation provenance outside the
+main article evidence path. \\
 Posterior prediction and monotone reporting &
 Section~\ref{sec:forecast_synthesis} &
 Links the fitted quantile readout to working-likelihood forecast simulation and
@@ -1436,212 +1428,6 @@ This avoids combining quantiles produced under different future response
 histories.
 
 \clearpage
-\section{Direct Coverage-Indexed Interval Prediction: RQR--DESN}
-\label{sec:rqr_desn_supp}
-
-The relaxed quantile regression DESN (RQR--DESN) extension changes the readout
-target while keeping the DESN feature map fixed. For a target coverage level
-\(c\in(0,1)\), the model uses two exchangeable root readouts
-\[
-\eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
-\eta_{2t}=\vect x_t^\top\vect\beta_2,
-\]
-and reports the ordered interval endpoints
-\[
-L_t=\min(\eta_{1t},\eta_{2t}),\qquad
-U_t=\max(\eta_{1t},\eta_{2t}).
-\]
-The root labels are exchangeable; lower and upper labels are applied only
-after ordering the two root ordinates. The coverage level \(c\) is not a
-quantile index. It indexes a direct interval target, following the relaxed
-quantile regression loss of \citet{PouplinEtAl2024RQR}. With
-\[
-\rho_c(u)=u\{c-\ind(u<0)\},\qquad
-e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}),
-\]
-the sign of \(e_t\) records whether the observation is inside the interval:
-\(e_t<0\) when \(L_t<y_t<U_t\) and \(e_t>0\) outside the interval. The
-empirical RQR loss is
-\[
-\mathcal L_{T,c}(\vect\beta_1,\vect\beta_2)
-=
-\sum_{t=1}^T\rho_c(e_t),
-\]
-and the generalized posterior is
-\[
-\Pi_{\mathrm R}(d\vect\beta_1,d\vect\beta_2\mid \vect y,\mat X)
-\propto
-\pi_\beta(d\vect\beta_1)\pi_\beta(d\vect\beta_2)
-\exp\left\{-\omega_{\mathrm R}\mathcal L_{T,c}(\vect\beta_1,\vect\beta_2)\right\},
-\]
-where \(\omega_{\mathrm R}>0\) is a learning rate. This is a
-generalized-Bayes update \citep{BissiriHolmesWalker2016GeneralBayes}, not a
-normalized response likelihood. Consequently, RQR--DESN produces posterior
-summaries for interval functionals \((L_t,U_t)\), but it does not provide
-posterior predictive draws of \(y_t\).
-
-The population target has a useful interpretation under an unrestricted
-interior solution with positive interval width. Writing \(L(x)\) and \(U(x)\)
-for the endpoint functions, the first-order conditions for the expected RQR
-loss imply
-\[
-\Pr\{L(x)<Y<U(x)\mid X=x\}=c
-\]
-and
-\[
-\E\!\left[
-Y\ind\{L(x)<Y<U(x)\}\mid X=x
-\right]
-=c\,\E(Y\mid X=x).
-\]
-Thus the ideal target is a coverage-plus-mean-balance interval. The finite
-fixed-feature readout allows asymmetric interval prediction, with empirical
-coverage and generalized-posterior calibration checked by the validation
-protocol rather than assumed from the loss alone.
-
-Several qualifications are part of the target definition. RQR--DESN does not
-assign the two endpoints to preselected lower and upper quantile levels, and it
-allows asymmetric interval shapes. Intervals fit separately at multiple
-coverage levels need not be nested unless a nesting rule is imposed. The
-learning rate \(\omega_{\mathrm R}\) controls the concentration of the
-generalized posterior and should be fixed by design or checked by sensitivity
-analysis. Credible bands for \(L_t\) and \(U_t\) describe uncertainty about the
-endpoint functionals under the loss-based update; they are not posterior
-predictive bands for future responses.
-
-\subsection{Pseudo-AL Augmentation}
-\label{subsec:rqr_desn_aug}
-
-The implementation uses a pseudo-AL representation of the core RQR residual
-product. Additional width or conditional-coverage penalties would define extra
-loss terms and would require separate computational treatment. Let
-\(r_t=y_t^2\) and
-\[
-m_t^{\mathrm R}
-=y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
-\qquad
-r_t-m_t^{\mathrm R}=e_t.
-\]
-Set
-\[
-\sigma_{\mathrm R}=\omega_{\mathrm R}^{-1},\qquad
-\xi_c=\frac{1-2c}{c(1-c)},\qquad
-\phi_c=\frac{2}{c(1-c)}.
-\]
-The exponentiated loss contribution satisfies the exact identity
-\[
-\exp\{-\omega_{\mathrm R}\rho_c(e_t)\}
-=
-\frac{\sigma_{\mathrm R}}{c(1-c)}
-\int_0^\infty
-\Normal\!\left(
-r_t\mid m_t^{\mathrm R}+\xi_c v,\,
-\phi_c\sigma_{\mathrm R}v
-\right)
-\frac{1}{\sigma_{\mathrm R}}\exp(-v/\sigma_{\mathrm R})\,dv .
-\]
-Equivalently, conditional on \(v_t>0\), the pseudo-observation
-representation is
-\[
-r_t\mid \vect\beta_1,\vect\beta_2,v_t
-\sim
-\Normal\{m_t^{\mathrm R}+\xi_c v_t,\ \phi_c\sigma_{\mathrm R} v_t\},
-\qquad
-v_t\sim \Exp(\text{rate}=1/\sigma_{\mathrm R}).
-\]
-The augmentation is therefore a computational device for the interval loss,
-not a distributional model for the original response. The observed response
-appears in both \(r_t\) and \(m_t^{\mathrm R}\), which is why the Gaussian
-display is not a generative observation equation for \(y_t\).
-
-With the \(\GIG(p,a,b)\) convention proportional to
-\(x^{p-1}\exp\{-(ax+b/x)/2\}\), the latent-scale update is
-\[
-v_t\mid\cdot\sim
-\GIG\left\{
-\frac12,\
-\frac{1}{2\sigma_{\mathrm R} c(1-c)},\
-\frac{c(1-c)e_t^2}{2\sigma_{\mathrm R}}
-\right\}.
-\]
-Numerically, the Gaussian coefficient blocks should be formed with stable
-symmetric solves, such as Cholesky factorization with the same precision guards
-used for the Q--DESN readout. If \(e_t\) is zero to numerical precision, the
-GIG update must be evaluated using a sampler that supports the limiting case or
-with a documented positive residual-product floor.
-
-\subsection{Coefficient Blocks}
-\label{subsec:rqr_desn_blocks}
-
-Let \(W_v=\diag\{(\phi_c\sigma_{\mathrm R} v_t)^{-1}:t=1,\ldots,T\}\).
-Conditional on the second root, the pseudo-observation equation for
-\(\vect\beta_1\) is linear. Define
-\[
-\mat A_1=\diag(\vect y-\vect\eta_2)\mat X,\qquad
-\vect z_1=\vect y^{\,2}-\vect y\circ\vect\eta_2-\xi_c\vect v.
-\]
-If the prior for \(\vect\beta_1\) has Gaussian canonical parameters
-\((\mat Q_{01},\vect h_{01})\), then
-\[
-\mat Q_1=\mat Q_{01}+\mat A_1^\top W_v\mat A_1,\qquad
-\vect h_1=\vect h_{01}+\mat A_1^\top W_v\vect z_1,
-\]
-and
-\[
-\vect\beta_1\mid\cdot\sim
-\Normal(\mat Q_1^{-1}\vect h_1,\mat Q_1^{-1}).
-\]
-The update for \(\vect\beta_2\) is identical after exchanging the root labels:
-\[
-\mat A_2=\diag(\vect y-\vect\eta_1)\mat X,\qquad
-\vect z_2=\vect y^{\,2}-\vect y\circ\vect\eta_1-\xi_c\vect v.
-\]
-Ridge and \texttt{rhs\_ns} priors enter through the same canonical Gaussian
-blocks used by the Q--DESN readout, applied separately to the two root
-coefficient vectors.
-
-\begin{suppalgorithm}{RQR--DESN generalized-Bayes MCMC}
-\emph{Input:} response vector \(\vect y\), fixed DESN design matrix
-\(\mat X\), coverage level \(c\), learning rate \(\omega_{\mathrm R}\), coefficient prior,
-initial roots \((\vect\beta_1,\vect\beta_2)\), burn-in, retained draws, and
-thinning.
-
-\begin{enumerate}[leftmargin=2.5em]
-\item Initialize root coefficients and latent scales \(v_1,\ldots,v_T\).
-\item For each MCMC iteration:
-  \begin{enumerate}[leftmargin=2.5em]
-  \item update each \(v_t\) from the \(\GIG\) full conditional using the
-  current residual product \(e_t\);
-  \item update \(\vect\beta_1\) from its Gaussian block conditional on
-  \(\vect\beta_2\) and \(\vect v\);
-  \item update the first-root shrinkage state when using \texttt{rhs\_ns};
-  \item update \(\vect\beta_2\) from its Gaussian block conditional on
-  \(\vect\beta_1\) and \(\vect v\);
-  \item update the second-root shrinkage state when using \texttt{rhs\_ns};
-  \item record the RQR loss and numerical precision diagnostics.
-  \end{enumerate}
-\item After burn-in and thinning, transform every retained draw to ordered
-interval endpoints
-\[
-L_t^{(s)}=\min(\vect x_t^\top\vect\beta_1^{(s)},
-\vect x_t^\top\vect\beta_2^{(s)}),\qquad
-U_t^{(s)}=\max(\vect x_t^\top\vect\beta_1^{(s)},
-\vect x_t^\top\vect\beta_2^{(s)}).
-\]
-\end{enumerate}
-
-\emph{Output:} posterior draws and summaries of the ordered interval endpoints,
-widths, and midpoints. Root labels are exchangeable, so reported summaries are
-formed after ordering endpoints draw by draw.
-\end{suppalgorithm}
-
-The reported validation uses MCMC only. A fast VB implementation may be
-useful for screening or initialization, but VB interval uncertainty is not
-promoted here because it has not undergone a separate calibration study. The
-reported simulation evidence therefore uses empirical coverage, interval score,
-width, and paired baseline deltas for MCMC interval summaries.
-
-\clearpage
 \section{Supplementary Validation Tables}
 \label{sec:supp_validation_tables}
 
@@ -1668,38 +1454,6 @@ screening, calibration, and initialization layer; the tables below document the
 MCMC confirmation evidence used by the main article.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
-
-\clearpage
-\subsection{RQR--DESN Supplementary Direct-Interval Evidence}
-\label{subsec:supp_rqr_confirmation}
-
-The RQR--DESN evidence is supplementary because it changes the inferential
-target from conditional quantiles to direct coverage-indexed intervals. The
-study asks whether ordered interval roots can recover oracle endpoints in fixed
-designs and improve held-out interval scores on teacher-forced DESN features.
-It is interpreted through ordered endpoints, width, empirical coverage,
-interval score, and paired baseline deltas. It is not a response-predictive
-density validation and does not include recursive response simulation.
-
-The targeted denominator has 912 scenario rows: 648 MCMC rows and 264 empirical
-train-interval baseline rows, with no VB rows. All completion, failure,
-metric-count, MCMC-diagnostic, interval-validity, and no-response-predictive
-gates pass. The fixed-design stage permits endpoint-recovery interpretation
-because oracle endpoints are available. The dynamic stage is restricted to
-teacher-forced held-out interval scoring on fixed DESN features.
-
-\input{tables/rqr_desn_targeted_confirmation_winner_map.tex}
-
-Table~\ref{tab:rqr-desn-calibration-screened} reports the
-calibration-screened MCMC row in each stage, mechanism, and coverage cell. All
-selected rows improve over the empirical train-interval baseline in paired
-interval score. Ten of the twelve selected cells have green calibration, and
-the two yellow cells occur in the nonlinear dynamic DESN mechanism, where the
-coverage errors are positive but remain within the predeclared review band.
-These results support RQR--DESN as a promising direct-interval reuse of the
-fixed-feature infrastructure. They are not a matched superiority study against
-quantile-derived intervals, and they leave VB calibration, recursive interval
-forecasting, and nested multi-coverage interval modeling as future work.
 
 \clearpage
 \subsection{PriceFM Application Diagnostic Breakdowns}

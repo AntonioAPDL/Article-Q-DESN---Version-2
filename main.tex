@@ -233,11 +233,7 @@ shares information through regularized-horseshoe shrinkage on adjacent
 coefficient changes. The joint prior encourages coherent quantile paths but
 does not impose hard noncrossing. Third, it provides MCMC and a model-specific
 Laplace--Delta variational approximation and evaluates their statistical and
-computational behavior in simulations and forecasting applications. The
-supplement additionally records a relaxed quantile regression DESN
-(RQR--DESN) direct-interval readout to illustrate how the same fixed-feature
-and shrinkage infrastructure can be reused under a different generalized-Bayes
-target.
+computational behavior in simulations and forecasting applications.
 
 \begin{table}[!htbp]
 \centering
@@ -268,21 +264,13 @@ Composite AL or \(\exAL\) working target with QVP--\RHS{} shrinkage on
 baseline slopes and adjacent slope innovations; MCMC is the reported reference &
 Jointly estimated raw quantile path; exact monotonicity still requires a hard
 constraint or reporting rule. \\
-\midrule
-RQR--DESN &
-Coverage-indexed interval \((L_t,U_t)\) &
-Generalized Bayes update based on the RQR loss with ridge or \RHS{} priors on
-two exchangeable roots &
-Ordered interval endpoints; no response likelihood or posterior predictive
-response density. \\
 \bottomrule
 \end{tabularx}
 \endgroup
 \caption{Model map. AL versus \(\exAL\) is a working-likelihood choice,
 ridge versus \RHS{} is a readout-prior choice, independent versus joint fitting
 is a multi-quantile strategy, and MCMC versus VB--LD is a computational
-choice. RQR--DESN is an alternative direct-interval target rather than a
-generalization of the Q--DESN quantile hierarchy.}
+choice.}
 \label{tab:model-map}
 \end{table}
 
@@ -291,9 +279,7 @@ validates QDESN and exQDESN readouts against DQLM and exDQLM baselines.
 The joint simulation evaluates the quantile-vector prior against independent
 multi-quantile readouts under known oracle quantile paths. The GloFAS and
 PriceFM applications use selected independent Q--DESN workflows; they are not
-application-level evidence for the joint quantile-vector prior. RQR--DESN is
-kept as supplementary direct-interval evidence because it changes the
-inferential target and currently has MCMC, not calibrated VB, article support.
+application-level evidence for the joint quantile-vector prior.
 
 \subsection*{Related Work}
 
@@ -373,19 +359,6 @@ couples quantile-specific readout coefficients during inference, so raw
 multi-quantile paths can be made more coherent before any monotone reporting
 rule is applied.
 
-Relaxed quantile regression (RQR) provides a different route to interval
-construction by learning interval roots directly rather than first estimating a
-preassigned lower and upper quantile pair
-\citep{PouplinEtAl2024RQR}. This avoids tying a target coverage level to an
-equal-tailed or symmetric quantile pair when the conditional error
-distribution may be skewed. We use this idea only as a supplementary
-fixed-feature interval readout: two DESN readout surfaces define ordered
-endpoints, and a generalized-Bayes update
-\citep{BissiriHolmesWalker2016GeneralBayes} targets the RQR loss. This
-extension is not a response likelihood and does not supply posterior
-predictive response draws; its evidence is therefore reported through interval
-score, empirical coverage, width, and baseline deltas.
-
 Shrinkage priors enter because fixed reservoir designs can be
 high-dimensional and correlated. Ridge shrinkage provides the
 default dense Gaussian regularization. The regularized horseshoe, building
@@ -433,8 +406,7 @@ The remainder of the paper is organized as follows.
 Section~\ref{sec:notation} introduces notation, deep echo state network
 (DESN) dynamics, and the \(\exAL\) representation.
 Section~\ref{sec:model} presents the Q--DESN model and prior specification,
-including independent and joint multi-quantile extensions and the RQR--DESN
-direct-interval readout.
+including independent and joint multi-quantile extensions.
 Section~\ref{sec:inference} describes posterior computation, while
 Sections~\ref{sec:forecast}--\ref{sec:selection} describe posterior
 prediction, monotone reporting rules, and reservoir diagnostics.
@@ -1158,150 +1130,6 @@ parameterization, posterior rejection rule, isotonic projection, or monotone
 rearrangement. The synthetic joint validation below therefore records raw
 crossings separately from the declared monotone reporting rule used for
 scored quantile grids.
-
-\subsection{Alternative Direct-Interval Readout: RQR--DESN}
-\label{subsec:rqr-desn-model}
-
-\noindent
-The Q--DESN models above target one or more conditional quantile ordinates.
-Relaxed quantile regression (RQR) instead estimates a prediction interval of
-prescribed coverage directly, without assigning the two endpoints in advance to
-particular quantile probabilities \citep{PouplinEtAl2024RQR}. For
-\(c\in(0,1)\), define two exchangeable root readouts
-\[
-\eta_{1t}=\vect x_t^\top\vect\beta_1,\qquad
-\eta_{2t}=\vect x_t^\top\vect\beta_2,
-\]
-and report the ordered endpoints
-\[
-L_t=\min(\eta_{1t},\eta_{2t}),\qquad
-U_t=\max(\eta_{1t},\eta_{2t}).
-\]
-The root labels are exchangeable and are ordered only when interval summaries
-are formed.
-
-The core RQR objective is a check loss applied to a residual product. Let
-\[
-e_t=(y_t-\eta_{1t})(y_t-\eta_{2t}).
-\]
-Then \(e_t<0\) if and only if \(y_t\) lies between the two roots. RQR applies
-\[
-\rho_c(e)=e\{c-\ind(e<0)\}
-\]
-to this product, so that \(c\) indexes a direct interval target rather than a
-conditional quantile. The empirical loss and generalized posterior are
-\[
-R_{T,c}(\vect\beta_1,\vect\beta_2)
-=
-\sum_{t=1}^T \rho_c(e_t),
-\]
-and
-\[
-\Pi_{\mathrm R}
-(d\vect\beta_1,d\vect\beta_2\mid\vect y,\mat X)
-\propto
-\pi_\beta(d\vect\beta_1)\pi_\beta(d\vect\beta_2)
-\exp\{-\omega_{\mathrm R}R_{T,c}(\vect\beta_1,\vect\beta_2)\},
-\]
-where \(\omega_{\mathrm R}>0\) is a generalized-Bayes learning rate
-\citep{BissiriHolmesWalker2016GeneralBayes}. The original RQR formulation is
-presented as loss minimization for interval prediction; the version here
-changes the inferential route by exponentiating the core loss and combining it
-with the same fixed-feature readout priors used by Q--DESN.
-
-The loss kernel admits the usual asymmetric-Laplace check-loss augmentation
-after treating \(e_t\) as a pseudo-residual. Let
-\[
-r_t=y_t^2,\qquad
-m_t^{\mathrm R}
-=
-y_t(\eta_{1t}+\eta_{2t})-\eta_{1t}\eta_{2t},
-\qquad
-r_t-m_t^{\mathrm R}=e_t.
-\]
-Set
-\[
-\sigma_{\mathrm R}=\omega_{\mathrm R}^{-1},\qquad
-\xi_c=\frac{1-2c}{c(1-c)},\qquad
-\phi_c=\frac{2}{c(1-c)}.
-\]
-Then, up to a normalizing constant that does not depend on the root
-coefficients,
-\[
-\exp\{-\omega_{\mathrm R}\rho_c(e_t)\}
-\propto
-\int_0^\infty
-\Normal\!\left(
-r_t\mid m_t^{\mathrm R}+\xi_c v_t,\,
-\phi_c\sigma_{\mathrm R}v_t
-\right)
-\Exp\!\left(v_t\mid\text{rate}=1/\sigma_{\mathrm R}\right)\,dv_t .
-\]
-This is an augmentation of the generalized-Bayes loss kernel, not a generative
-likelihood for the original response. Conditional on \(v_t\) and one root,
-\(m_t^{\mathrm R}\) is linear in the other root; for example, conditional on
-\(\vect\beta_2\),
-\[
-m_t^{\mathrm R}
-=
-y_t\eta_{2t}
-+(y_t-\eta_{2t})\vect x_t^\top\vect\beta_1 .
-\]
-Consequently, the two coefficient vectors have alternating Gaussian full
-conditionals, the latent scales have GIG full conditionals, and the ridge or
-\RHS{} readout modules used by Q--DESN can be reused. This conjugacy is
-conditional and blockwise rather than joint in both roots. RQR--DESN is
-therefore not a \(Q=2\) joint Q--DESN and does not provide a response
-predictive density; it reports posterior summaries of ordered endpoints,
-midpoints, widths, empirical coverage, and interval scores.
-
-\begin{table}[!htbp]
-\centering
-\begingroup
-\TableStyle
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.19\textwidth}YY@{}}
-\toprule
-Component & RQR--DESN formulation & Computational consequence \\
-\midrule
-Inferential target &
-Two exchangeable root surfaces, ordered into an interval with target coverage
-\(c\) &
-Direct interval prediction without preassigning endpoint quantile levels. \\
-Core loss &
-\(\rho_c\{(y-\eta_1)(y-\eta_2)\}\) &
-Check loss applied to a residual product whose sign records interval
-membership. \\
-Loss augmentation &
-Asymmetric-Laplace normal--exponential identity for
-\(r_t-m_t^{\mathrm R}\) &
-Latent scale \(v_t\) has a GIG full conditional. \\
-Root readouts &
-Condition on one root and the latent scales &
-The other coefficient vector has a Gaussian full conditional. \\
-Shrinkage &
-Separate ridge or \RHS{} prior for each root &
-The Q--DESN Gaussian solvers and RHS scale-update modules are reused. \\
-Reported output &
-Order the two roots for every posterior draw &
-Endpoint, midpoint, and width summaries; no response predictive density. \\
-\bottomrule
-\end{tabularx}
-
-\smallskip
-\parbox{\textwidth}{\footnotesize
-\emph{Note:} Conjugacy is conditional and blockwise. The augmentation is an
-identity for the generalized-Bayes loss kernel, not a likelihood for the
-original response.}
-\endgroup
-\caption{Computational bridge from the RQR loss to the RQR--DESN sampler.}
-\label{tab:rqr-computational-bridge}
-\end{table}
-
-The supplement gives the full loss-kernel derivation, GIG parameters, Gaussian
-precision formulas, root-switching diagnostics, and supplementary
-calibration-screened evidence. The current RQR evidence is interpreted as
-direct-interval target portability, not as a matched superiority study against
-quantile-derived intervals.
 
 % ============================================================
 \section{Posterior Inference}
@@ -2376,14 +2204,8 @@ monotone reporting rule.
 The validation evidence is correspondingly scoped. The single-quantile dynamic
 simulations test recovery and held-out forecasting under pinned data-generating
 mechanisms. The joint multi-quantile synthetic study checks coherence
-under known conditional quantile paths. The supplementary RQR--DESN
-confirmation evaluates a
-coverage-indexed interval readout whose ideal population target is
-coverage-plus-mean balance and whose finite-feature implementation allows
-asymmetric interval prediction; the evidence is through MCMC interval scores,
-empirical coverage, and paired baseline deltas, not through a response
-predictive likelihood or recursive simulation study. The GloFAS application is an
-audited one-origin streamflow calibration case using computationally light
+under known conditional quantile paths. The GloFAS application is an audited
+one-origin streamflow calibration case using computationally light
 independent Q--DESN AL--VB fits and monotone reporting, while the PriceFM
 comparison is a fold-aligned
 benchmark against cached Phase-I predictions. These studies support the
@@ -2394,8 +2216,6 @@ Several extensions are natural. On the statistical side, future work should
 study calibrated composite-likelihood scaling, hard or probabilistic
 non-crossing constraints, richer covariance structures for quantile
 innovations, and sensitivity to reservoir scaling on bounded feature domains.
-For RQR--DESN, future work should study calibrated VB uncertainty, learning-rate
-sensitivity, and joint nested intervals across several coverage levels.
 On the computational side, the joint model calls for sparse precision solvers,
 selected covariance extraction for VB, and diagnostics comparing VB--LD with
 MCMC on small joint problems. On the application side, broader multi-origin

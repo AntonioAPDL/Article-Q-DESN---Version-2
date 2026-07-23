@@ -1,0 +1,16 @@
+Q-DESN/DQLM 500-observation MCMC current-best article tables
+generated_at: 2026-07-23 19:17:47.87347
+source_csv: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_mcmc_current_best_20260723/qdesn_dqlm_500obs_mcmc_current_best_clean_20260723.csv
+source_manifest: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_mcmc_current_best_20260723/qdesn_dqlm_500obs_mcmc_current_best_manifest_20260723.json
+source_csv_sha256: 3dc352e30458c6960c269258b54e79ca39e5dc151d59792c7985a699e765619f
+source_registry_hash: edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275
+row_count_clean_input: 34
+table_normal: /data/jaguir26/local/src/Article-Q-DESN---Version-2/tables/qdesn_validation_tt500_final_mcmc_normal.tex
+table_laplace: /data/jaguir26/local/src/Article-Q-DESN---Version-2/tables/qdesn_validation_tt500_final_mcmc_laplace.tex
+table_gausmix: /data/jaguir26/local/src/Article-Q-DESN---Version-2/tables/qdesn_validation_tt500_final_mcmc_gausmix.tex
+wrapper: /data/jaguir26/local/src/Article-Q-DESN---Version-2/tables/qdesn_validation_tt500_final_mcmc_tables.tex
+artifact_sha256:
+  qdesn_validation_tt500_final_mcmc_normal.tex: 9da7b05031bc81482e4b74cacba777653da09458e7c72290489b9d7399125d2b
+  qdesn_validation_tt500_final_mcmc_laplace.tex: 2a03dca34be0953562b0a7b40547d7b2a1b119fb6d4d65c52b0fed86d2e098b0
+  qdesn_validation_tt500_final_mcmc_gausmix.tex: d807396476976a7a5ce9ac1bfc940b9a31a6cd899f1b2b014a4640de2e58f727
+  qdesn_validation_tt500_final_mcmc_tables.tex: 43bc6811286ae92d9ff255da5e0d40fc64d7e805cfae5b60e77907829ef5ef01

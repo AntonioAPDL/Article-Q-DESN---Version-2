@@ -1783,29 +1783,31 @@ acceptable health or signoff status.
 The verified protocol uses the 500-observation training window
 \(8501{:}9000\), the held-out block \(9001{:}10000\), rolling-origin forecasts
 with leads 1--30 and origin stride 30, and the three target levels
-\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-tt500-mcmc-normal}--%
-\ref{tab:simulation-tt500-mcmc-gausmix} report the MCMC family-specific
-summaries. The entries are generated from lead-level rolling-origin interface
-rows: fit RMSE measures recovery of the known oracle quantile path on the
-training window, forecast MAE measures oracle-quantile forecast error averaged
-across scored rolling-origin lead-target pairs, and check loss scores
-realized observations at the fitted quantile level. Runtime and row-level
-provenance are retained in the generated manifest. Boldface marks the lowest
-MCMC value within each quantile level and metric, not a global ranking across
-different statistical criteria.
+\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-normal}--%
+\ref{tab:simulation-500obs-mcmc-gausmix} report the current-best clean MCMC
+family-specific summaries. The entries are generated from lead-level
+rolling-origin interface rows: fit RMSE measures recovery of the known oracle
+quantile path on the training window, forecast MAE measures oracle-quantile
+forecast error averaged across scored rolling-origin lead-target pairs, and
+forecast check loss scores realized observations at the fitted quantile level.
+Runtime and row-level provenance are retained in the generated manifest. Blank
+entries indicate that no clean current-best row is available for that
+model--quantile cell. Boldface marks the lowest clean MCMC value within each
+quantile level and metric, not a global ranking across different statistical
+criteria.
 
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
-The result tables are derived from the tracked final-validation config and
-table-builder outputs without changing the generated source tables. The
-generated manifest records the full validation paths, interface hashes,
-source-registry hash, table hashes, row counts, audited compact replacements,
-and any remaining chain-autocorrelation qualifications. The displayed MCMC
-tables should therefore be interpreted as the reported validation study
-for this fixed dynamic design, not as a claim about larger-window MCMC runs,
-alternative fit sizes, multiple dynamic roots, or an unreported reservoir
-hyperparameter search. The VB--LD panels from the same generated validation
-bundle are reported in the supplement as computational companion evidence.
+The result tables are derived from the tracked current-best validation evidence
+layer without changing the generated source tables. The generated manifest
+records the validation source paths, source-registry hash, table hashes, row
+counts, audited compact replacements, and any remaining diagnostic
+qualifications. The displayed MCMC tables should therefore be interpreted as
+the reported validation study for this fixed dynamic design, not as a claim
+about larger-window MCMC runs, alternative fit sizes, multiple dynamic roots,
+or an unreported reservoir hyperparameter search. Variational Bayes panels from
+the same generated validation bundle are reported in the supplement as
+computational companion evidence.
 
 \subsection{Joint Multi-Quantile Frozen-Feature Validation}
 

@@ -57,8 +57,23 @@ behind the current draft.
 
 The checked-in 500-observation simulation tables are already included by
 `main.tex`.
-They consume the finalized shared 1.0.0 fit-and-forecast validation handoff
-through:
+The current headline MCMC comparison tables consume the source-hash-verified
+current-best 1.0.0 fit-and-forecast validation handoff through:
+
+```bash
+Rscript scripts/build_qdesn_mcmc_current_best_validation_tables.R
+```
+
+The script reads the clean promoted evidence table at
+`/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_mcmc_current_best_20260723/`
+and writes the manuscript-facing MCMC tables plus
+`tables/qdesn_validation_tt500_mcmc_current_best_manifest.txt`. The manifest
+records the source CSV hash, shared source-registry hash, generated table
+hashes, and clean input row count. Failed-signoff rows are excluded from the
+headline MCMC tables, and missing clean model--quantile cells are displayed as
+blank entries.
+
+The broader generated validation bundle is retained through:
 
 ```bash
 Rscript application/scripts/31_build_shared_validation_tt500_final_tables.R
@@ -92,7 +107,7 @@ back into article tables.
 The shared 1.0.0 validation logic worktree is
 `/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0` on branch
 `validation/shared-fitforecast-v2-1.0.0` at commit
-`fc2bfefd814a3325eea957bd6f439439a8a6dd4d`. This branch is authoritative for
+`82997058338359d3434acbec8bb3b872f3e6daaa`. This branch is authoritative for
 the current Article-facing 500-observation validation handoff.
 
 The current freeze and interpretation note is

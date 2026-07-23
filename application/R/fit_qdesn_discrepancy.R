@@ -174,6 +174,9 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
   if (!is.null(vb_cfg$chunking)) {
     out$chunking <- vb_cfg$chunking
   }
+  if (!is.null(vb_cfg$warm_start)) {
+    out$warm_start <- vb_cfg$warm_start
+  }
   if (!is.null(vb_cfg$draw_backend) && nzchar(as.character(vb_cfg$draw_backend))) {
     out$draw_backend <- tolower(as.character(vb_cfg$draw_backend)[[1L]])
   }

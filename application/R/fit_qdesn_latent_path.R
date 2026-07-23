@@ -948,6 +948,15 @@ app_latent_path_fit_diagnostics <- function(result) {
   base$vb_draw_backend_requested <- result$fit$vb_diagnostics$draw_backend_requested %||% NA_character_
   base$vb_theta_draw_backend <- result$fit$vb_diagnostics$theta_draw_backend %||% NA_character_
   base$vb_future_draw_backend <- result$fit$vb_diagnostics$future_draw_backend %||% NA_character_
+  warm_start <- result$fit$vb_diagnostics$warm_start %||% list(enabled = FALSE)
+  base$vb_warm_start_enabled <- app_as_bool(warm_start$enabled %||% FALSE)
+  base$vb_warm_start_used <- app_as_bool(warm_start$used %||% FALSE)
+  base$vb_warm_start_theta_used <- app_as_bool(warm_start$theta_used %||% FALSE)
+  base$vb_warm_start_future_used <- app_as_bool(warm_start$future_used %||% FALSE)
+  base$vb_warm_start_sigma_used <- app_as_bool(warm_start$sigma_used %||% FALSE)
+  base$vb_warm_start_source <- warm_start$source_path %||% NA_character_
+  base$vb_warm_start_source_sha256 <- warm_start$source_sha256 %||% NA_character_
+  base$vb_warm_start_message <- warm_start$message %||% NA_character_
   base
 }
 

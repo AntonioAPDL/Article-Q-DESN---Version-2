@@ -1546,6 +1546,153 @@ app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, 
   val - 0.5 * sum(prior_state$prior_precision * e_theta2)
 }
 
+app_latent_path_warm_start_config <- function(vb_args = list()) {
+  cfg <- vb_args$warm_start %||% list(enabled = FALSE)
+  if (is.logical(cfg) && length(cfg) == 1L) cfg <- list(enabled = cfg)
+  if (!is.list(cfg)) cfg <- list(enabled = app_as_bool(cfg))
+  list(
+    enabled = app_as_bool(cfg$enabled %||% FALSE),
+    fit_object = cfg$fit_object %||% cfg$fit_path %||% cfg$path %||% NULL,
+    use_theta = app_as_bool(cfg$use_theta %||% TRUE),
+    use_future = app_as_bool(cfg$use_future %||% TRUE),
+    use_sigma = app_as_bool(cfg$use_sigma %||% TRUE),
+    require_theta = app_as_bool(cfg$require_theta %||% TRUE),
+    require_future = app_as_bool(cfg$require_future %||% TRUE),
+    require_sigma = app_as_bool(cfg$require_sigma %||% FALSE),
+    covariance_jitter = as.numeric(cfg$covariance_jitter %||% 1.0e-8)
+  )
+}
+
+app_latent_path_warm_start_fit <- function(path) {
+  resolved <- app_resolve_path(path, must_work = TRUE)
+  obj <- readRDS(resolved)
+  fit <- obj$fit %||% obj
+  if (!is.list(fit) || is.null(fit$summary)) {
+    stop(sprintf("Warm-start object is not a latent-path fit with a summary: %s", resolved), call. = FALSE)
+  }
+  list(
+    fit = fit,
+    path = app_prefer_repo_relative_path(resolved),
+    sha256 = app_sha256_file(resolved)
+  )
+}
+
+app_latent_path_warm_start_cov <- function(x, dim, jitter = 1.0e-8, label = "covariance") {
+  if (is.null(x)) return(NULL)
+  x <- as.matrix(x)
+  if (!identical(dim(x), c(as.integer(dim), as.integer(dim)))) {
+    stop(sprintf("Warm-start %s has dimension %s but expected %d x %d.", label, paste(dim(x), collapse = " x "), dim, dim), call. = FALSE)
+  }
+  if (any(!is.finite(x))) {
+    stop(sprintf("Warm-start %s contains non-finite entries.", label), call. = FALSE)
+  }
+  x <- (x + t(x)) / 2
+  eig <- eigen(x, symmetric = TRUE)
+  floor_val <- max(as.numeric(jitter), .Machine$double.eps)
+  vals <- pmax(as.numeric(eig$values), floor_val)
+  out <- eig$vectors %*% (t(eig$vectors) * vals)
+  out <- (out + t(out)) / 2
+  dimnames(out) <- dimnames(x)
+  out
+}
+
+app_latent_path_warm_start_sigma <- function(fit) {
+  sigma <- fit$variational_state$sigma %||% NULL
+  if (is.null(sigma)) sigma <- fit$summary$sigma_state %||% NULL
+  if (is.null(sigma)) return(NULL)
+  if (!all(c("shape", "rate") %in% names(sigma))) return(NULL)
+  shape <- sigma$shape
+  rate <- sigma$rate
+  if (is.null(names(shape))) names(shape) <- c("Y", "G")[seq_along(shape)]
+  if (is.null(names(rate))) names(rate) <- c("Y", "G")[seq_along(rate)]
+  if (!all(c("Y", "G") %in% names(shape)) || !all(c("Y", "G") %in% names(rate))) return(NULL)
+  app_latent_ig_expectations(shape[c("Y", "G")], rate[c("Y", "G")])
+}
+
+app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_future) {
+  cfg <- app_latent_path_warm_start_config(vb_args)
+  diagnostics <- list(
+    enabled = cfg$enabled,
+    used = FALSE,
+    theta_used = FALSE,
+    future_used = FALSE,
+    sigma_used = FALSE,
+    source_path = NA_character_,
+    source_sha256 = NA_character_,
+    message = if (isTRUE(cfg$enabled)) NA_character_ else "warm start disabled"
+  )
+  out <- list(
+    theta_mean = NULL,
+    theta_cov = NULL,
+    y_mean = NULL,
+    y_cov = NULL,
+    sigma_state = NULL,
+    diagnostics = diagnostics
+  )
+  if (!isTRUE(cfg$enabled)) return(out)
+  if (is.null(cfg$fit_object) || !nzchar(as.character(cfg$fit_object[[1L]]))) {
+    stop("Warm start is enabled but no fit_object/path was supplied.", call. = FALSE)
+  }
+
+  source <- app_latent_path_warm_start_fit(cfg$fit_object)
+  fit <- source$fit
+  messages <- character()
+  out$diagnostics$source_path <- source$path
+  out$diagnostics$source_sha256 <- source$sha256
+
+  if (isTRUE(cfg$use_theta)) {
+    theta_mean <- fit$variational_state$theta_mean %||% fit$summary$theta_mean %||% NULL
+    theta_cov <- fit$variational_state$theta_cov %||% fit$summary$theta_cov %||% NULL
+    ok <- !is.null(theta_mean) && length(theta_mean) == p && !is.null(theta_cov)
+    if (!ok) {
+      msg <- sprintf("theta warm start unavailable or dimension-mismatched; expected length %d.", p)
+      if (isTRUE(cfg$require_theta)) stop(msg, call. = FALSE)
+      messages <- c(messages, msg)
+    } else {
+      out$theta_mean <- as.numeric(theta_mean)
+      names(out$theta_mean) <- colnames(design$H_fixed) %||% names(theta_mean)
+      out$theta_cov <- app_latent_path_warm_start_cov(theta_cov, p, cfg$covariance_jitter, "theta_cov")
+      out$diagnostics$theta_used <- TRUE
+    }
+  }
+
+  if (isTRUE(cfg$use_future)) {
+    y_mean <- fit$variational_state$y_future_mean %||% fit$summary$y_future_mean %||% NULL
+    y_cov <- fit$variational_state$y_future_cov %||% fit$summary$y_future_cov %||% NULL
+    ok <- !is.null(y_mean) && length(y_mean) == H_future && !is.null(y_cov)
+    if (!ok) {
+      msg <- sprintf("future-path warm start unavailable or dimension-mismatched; expected length %d.", H_future)
+      if (isTRUE(cfg$require_future)) stop(msg, call. = FALSE)
+      messages <- c(messages, msg)
+    } else {
+      out$y_mean <- as.numeric(y_mean)
+      out$y_cov <- app_latent_path_warm_start_cov(y_cov, H_future, cfg$covariance_jitter, "y_future_cov")
+      out$diagnostics$future_used <- TRUE
+    }
+  }
+
+  if (isTRUE(cfg$use_sigma)) {
+    sigma_state <- app_latent_path_warm_start_sigma(fit)
+    if (is.null(sigma_state)) {
+      msg <- "sigma warm start unavailable; using default sigma initialization."
+      if (isTRUE(cfg$require_sigma)) stop(msg, call. = FALSE)
+      messages <- c(messages, msg)
+    } else {
+      out$sigma_state <- sigma_state
+      out$diagnostics$sigma_used <- TRUE
+    }
+  }
+
+  out$diagnostics$used <- isTRUE(out$diagnostics$theta_used) ||
+    isTRUE(out$diagnostics$future_used) ||
+    isTRUE(out$diagnostics$sigma_used)
+  if (!length(messages)) {
+    messages <- if (isTRUE(out$diagnostics$used)) "warm start accepted" else "warm start enabled but no block was used"
+  }
+  out$diagnostics$message <- paste(messages, collapse = " | ")
+  out
+}
+
 app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_ns", vb_args = list(), seed = NULL) {
   if (!identical(tolower(as.character(vb_args$likelihood_family %||% "al")), "al")) {
     stop("The article-side latent-path VB fitter currently supports AL likelihood only.", call. = FALSE)
@@ -1616,10 +1763,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   }
 
   set.seed(seed)
-  theta_mean <- rep(0, p)
-  theta_cov <- diag(1, p)
-  y_mean <- as.numeric(design$y_future_init)
-  y_cov <- diag(rep(stats::var(design$z_fixed, na.rm = TRUE) %||% 1, H_future))
+  warm_start <- app_latent_path_warm_start_prepare(design, vb_args, p = p, H_future = H_future)
+  theta_mean <- warm_start$theta_mean %||% rep(0, p)
+  theta_cov <- warm_start$theta_cov %||% diag(1, p)
+  y_mean <- warm_start$y_mean %||% as.numeric(design$y_future_init)
+  y_cov <- warm_start$y_cov %||% diag(rep(stats::var(design$z_fixed, na.rm = TRUE) %||% 1, H_future))
   if (any(!is.finite(diag(y_cov))) || any(diag(y_cov) <= 0)) y_cov <- diag(1, H_future)
 
   prior_state <- time_step(NA_integer_, "prior_initialization", {
@@ -1632,6 +1780,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       alpha_index = design$alpha_index %||% NULL
     )
   })
+  if (isTRUE(warm_start$diagnostics$theta_used)) {
+    prior_state <- time_step(NA_integer_, "warm_start_prior_update", {
+      app_latent_prior_state_update(prior_state, theta_mean, theta_cov)
+    })
+  }
   row_moments <- time_step(NA_integer_, "initial_row_moments", {
     app_latent_row_moments(
       design, y_mean, y_cov, theta_mean, theta_cov,
@@ -1640,9 +1793,15 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     )
   })
   append_substeps(NA_integer_, "initial_row_moments", attr(row_moments, "substep_timing", exact = TRUE))
-  sigma_state <- time_step(NA_integer_, "sigma_initialization", {
-    app_latent_source_sigma_init(row_moments$source, vb_args$prior_sigma %||% list(a = 2, b = 1))
-  })
+  sigma_state <- if (!is.null(warm_start$sigma_state)) {
+    time_step(NA_integer_, "warm_start_sigma_initialization", {
+      warm_start$sigma_state
+    })
+  } else {
+    time_step(NA_integer_, "sigma_initialization", {
+      app_latent_source_sigma_init(row_moments$source, vb_args$prior_sigma %||% list(a = 2, b = 1))
+    })
+  }
   v_state <- time_step(NA_integer_, "initial_v_update", {
     app_latent_update_v(row_moments, sigma_state, constants)
   })
@@ -1798,6 +1957,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       future_draw_backend = y_draw_backend,
       iteration_timing = iteration_timing_df,
       substep_timing = substep_timing_df,
+      warm_start = warm_start$diagnostics,
       objective_type = "first_order_delta_expected_log_joint"
     ),
     variational_state = list(

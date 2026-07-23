@@ -1815,9 +1815,12 @@ under a frozen feature design. VB and VB--LD are used here for screening,
 calibration, and initialization. The reported evidence is the balanced
 VB-initialized MCMC confirmation grid over the four readout--likelihood
 combinations: Joint QDESN RHS, Independent QDESN RHS, Joint exQDESN RHS, and
-Independent exQDESN RHS. These rows evaluate posterior quantile-grid readout
-paths; they should not be read as validation of a scalar predictive density
-obtained by multiplying or mixing the component working likelihoods.
+Independent exQDESN RHS. A subsequent gamma-decision audit keeps Joint QDESN
+RHS under \(\AL\) as the primary article anchor and treats the sampled-gamma
+exQDESN rows as exAL sensitivity evidence rather than as the promoted primary
+model. All rows evaluate posterior quantile-grid readout paths; they should not
+be read as validation of a scalar predictive density obtained by multiplying or
+mixing the component working likelihoods.
 
 The selected readout is fit across
 \[
@@ -1850,9 +1853,12 @@ location-scale cases. Independent exQDESN RHS has the lowest forecast MAE in
 the Gaussian-mixture bridge, persistent-heavy-tail, and regime-shift cases. The
 independent AL readout is competitive in average forecast MAE but carries most
 of the raw crossing burden, whereas the exAL rows are raw-crossing free in this
-balanced MCMC packet. The supplement records the protocol audit, aggregate summaries, and
-metric-specific summaries so these qualifications remain reproducible without
-making the main text table-heavy.
+balanced MCMC packet. These exAL wins do not by themselves promote sampled-gamma
+exQDESN as the leading article model: the Phase143 gamma-decision freeze found
+that sampled-gamma exAL variants did not improve on the AL-like fixed-gamma
+reference in the high-priority comparison cases. The supplement records the
+protocol audit, aggregate summaries, and metric-specific summaries so these
+qualifications remain reproducible without making the main text table-heavy.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}

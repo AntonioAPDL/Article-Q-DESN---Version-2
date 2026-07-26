@@ -1772,11 +1772,13 @@ Because the simulation uses one reproducible dynamic root for each family and
 quantile level, the tables report deterministic criterion values for that
 source design rather than Monte Carlo means over repeated data sets. Any
 boldface or ranking in the displayed MCMC tables is interpreted within a fixed
-family, quantile level, fit-window, model family, and metric. A model row is
-eligible for interpretation only if the shared interface reports successful
-completion, valid source hashes, valid fit and forecast windows, nonmissing
-fit-recovery metrics, nonmissing rolling-origin forecast metrics, and an
-acceptable health or signoff status.
+family, quantile level, fit-window, model family, and metric. The displayed
+Q--DESN values form a case-specific, metric-wise calibration envelope: each
+entry is the best finite value observed for that model, family, quantile level,
+and metric. Consequently, entries within one model row may originate from
+different calibrated specifications or replicate seeds. The source candidate,
+run tag, diagnostic signoff, and source hash for every entry are retained in
+the generated manifest.
 
 \subsection{Single-Quantile Fit and Forecast Results}
 
@@ -1784,17 +1786,18 @@ The verified protocol uses the 500-observation training window
 \(8501{:}9000\), the held-out block \(9001{:}10000\), rolling-origin forecasts
 with leads 1--30 and origin stride 30, and the three target levels
 \(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-normal}--%
-\ref{tab:simulation-500obs-mcmc-gausmix} report the current-best clean MCMC
-family-specific summaries. The entries are generated from lead-level
+\ref{tab:simulation-500obs-mcmc-gausmix} report the calibrated MCMC
+family-specific metric envelopes. The entries are generated from lead-level
 rolling-origin interface rows: fit RMSE measures recovery of the known oracle
 quantile path on the training window, forecast MAE measures oracle-quantile
 forecast error averaged across scored rolling-origin lead-target pairs, and
 forecast check loss scores realized observations at the fitted quantile level.
-Runtime and row-level provenance are retained in the generated manifest. Blank
-entries indicate that no clean current-best row is available for that
-model--quantile cell. Boldface marks the lowest clean MCMC value within each
-quantile level and metric, not a global ranking across different statistical
-criteria.
+Runtime and metric-level provenance are retained in the generated manifest.
+Boldface marks the lowest displayed MCMC value within each quantile level and
+metric, not a global ranking across different statistical criteria. Diagnostic
+status is disclosed rather than used as a hard metric-exclusion rule: daggers
+mark rows with a contributing WARN source, and double daggers mark rows with a
+contributing FAIL source.
 
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 

@@ -25,15 +25,15 @@ get_arg <- function(flag, default) {
 
 source_dir <- get_arg(
   "--source-dir",
-  "/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_mcmc_current_best_20260723"
+  "/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_mcmc_metric_envelope_20260726"
 )
 source_csv <- get_arg(
   "--source-csv",
-  file.path(source_dir, "qdesn_dqlm_500obs_mcmc_current_best_clean_20260723.csv")
+  file.path(source_dir, "qdesn_dqlm_500obs_mcmc_metric_envelope_20260726_article_envelope.csv")
 )
 source_manifest <- get_arg(
   "--source-manifest",
-  file.path(source_dir, "qdesn_dqlm_500obs_mcmc_current_best_manifest_20260723.json")
+  file.path(source_dir, "qdesn_dqlm_500obs_mcmc_metric_envelope_20260726_manifest.json")
 )
 
 out_dir <- file.path(repo_root, "tables")
@@ -50,15 +50,23 @@ required <- c(
   "model_variant", "family", "tau", "comparison_eligible", "status",
   "signoff_grade", "fit_qtrue_rmse", "forecast_qtrue_mae_H1000",
   "forecast_check_loss_H1000", "source_key", "source_promotion_id",
-  "source_table_sha256", "source_registry_hash_value"
+  "source_table_sha256", "source_registry_hash_value", "metric_source_mixed",
+  "fit_source_candidate_id", "fit_source_run_tag", "fit_source_signoff_grade",
+  "forecast_mae_source_candidate_id", "forecast_mae_source_run_tag",
+  "forecast_mae_source_signoff_grade", "forecast_check_source_candidate_id",
+  "forecast_check_source_run_tag", "forecast_check_source_signoff_grade"
 )
 missing <- setdiff(required, names(clean))
 if (length(missing)) {
   stop(sprintf("Current-best clean table is missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
 }
 
-clean <- clean[clean$comparison_eligible == "TRUE" & clean$status %in% c("SUCCESS", "done"), , drop = FALSE]
-if (!nrow(clean)) stop("No clean comparison-eligible rows are available.", call. = FALSE)
+if (!all(clean$comparison_eligible == "STATUS_AGNOSTIC")) {
+  stop("Metric-envelope rows must declare comparison_eligible=STATUS_AGNOSTIC.", call. = FALSE)
+}
+if (!all(clean$status %in% c("SUCCESS", "done"))) {
+  stop("Metric-envelope rows must derive from completed runs.", call. = FALSE)
+}
 if (length(unique(clean$source_registry_hash_value)) != 1L) {
   stop("Current-best rows do not share one source registry hash.", call. = FALSE)
 }
@@ -127,7 +135,9 @@ format_metric <- function(value, best) {
 model_label_for_family <- function(family, model_variant) {
   rows <- clean[clean$family == family & clean$model_variant == model_variant, , drop = FALSE]
   label <- models[[model_variant]]
-  if (nrow(rows) && any(rows$signoff_grade == "WARN")) {
+  if (nrow(rows) && any(rows$signoff_grade == "FAIL")) {
+    label <- paste0(label, "$^{\\ddagger}$")
+  } else if (nrow(rows) && any(rows$signoff_grade == "WARN")) {
     label <- paste0(label, "$^{\\dagger}$")
   }
   label
@@ -165,7 +175,7 @@ write_family_table <- function(family) {
     lines <- c(lines, paste0(model_label_for_family(family, model_variant), " & ", paste(cells, collapse = " & "), " \\\\"))
   }
   caption <- sprintf(
-    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better for all displayed metrics, and boldface marks the lowest clean comparison value within each quantile level and metric. Daggered Q--DESN rows contain at least one diagnostically usable WARN row; failed-signoff rows are excluded from this table.",
+    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Each entry is the best observed value for that model, quantile level, and metric in the frozen case-specific calibration ledger; entries within one model row may therefore come from different calibrated specifications or replicate seeds. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is retained in the manifest and is not used as a metric-exclusion rule.",
     families[[family]]
   )
   lines <- c(
@@ -195,13 +205,15 @@ manifest_path <- file.path(out_dir, "qdesn_validation_tt500_mcmc_current_best_ma
 artifact_paths <- c(written, wrapper)
 artifact_hashes <- tools::sha256sum(artifact_paths)
 manifest_lines <- c(
-  "Q-DESN/DQLM 500-observation MCMC current-best article tables",
+  "Q-DESN/DQLM 500-observation MCMC metric-wise calibrated article tables",
   sprintf("generated_at: %s", Sys.time()),
   sprintf("source_csv: %s", normalizePath(source_csv, winslash = "/", mustWork = TRUE)),
   sprintf("source_manifest: %s", normalizePath(source_manifest, winslash = "/", mustWork = TRUE)),
   sprintf("source_csv_sha256: %s", tools::sha256sum(source_csv)[[1L]]),
   sprintf("source_registry_hash: %s", unique(clean$source_registry_hash_value)),
-  sprintf("row_count_clean_input: %d", nrow(clean)),
+  sprintf("row_count_metric_envelope: %d", nrow(clean)),
+  "selection_policy: minimum observed finite value by model_variant x family x tau x metric; diagnostic status retained but not excluded",
+  "interpretation: metric-wise calibrated envelope; metrics in one displayed row may originate from different candidate specifications or replicate seeds",
   sprintf("table_normal: %s", written[["normal"]]),
   sprintf("table_laplace: %s", written[["laplace"]]),
   sprintf("table_gausmix: %s", written[["gausmix"]]),

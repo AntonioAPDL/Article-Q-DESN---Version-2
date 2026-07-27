@@ -1737,7 +1737,7 @@ profile, random seed, source hashes, package version, branch, commit, and run
 tag. Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
 fit-window, and forecast-origin protocol using \pkg{exdqlm}
-\citep[version 1.1.0;][]{exdqlmRPackage}.
+\citep[version 1.0.0;][]{exdqlmRPackage}.
 
 The primary comparison does not use repeated data-generating roots, a broad
 reservoir hyperparameter search, non-Bayesian ESN readouts, or post hoc
@@ -1800,6 +1800,17 @@ mark rows with a contributing WARN source, and double daggers mark rows with a
 contributing FAIL source.
 
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
+
+A separate full-budget confirmation used one coherent exQDESN--RHS
+specification for the Laplace family at \(p=0.25\), rather than selecting each
+criterion from a potentially different fit. It yielded fit RMSE \(1.747\),
+forecast MAE \(1.367\), and forecast check loss \(4.388\), while passing the
+prespecified external-comparison, stability, source-provenance, and
+storage-retention gates. A marginal-chain diagnostic warning is retained in
+the provenance ledger. Because these values are slightly above the
+corresponding metric-wise minima \(1.727\), \(1.355\), and \(4.378\), the
+confirmation strengthens the coherent-model evidence without changing the
+displayed envelope.
 
 The result tables are derived from the tracked current-best validation evidence
 layer without changing the generated source tables. The generated manifest

@@ -55,8 +55,10 @@ scripts/build_arxiv_source_bundle.sh
 
 The script copies only the main article, supplement source, bibliography,
 included table files, and figures used by `main.tex` into a timestamped
-directory under `/tmp`. Compile checks for the main article and supplement
-should be run from that bundle before upload.
+directory under `/tmp`. It also gives the upload copy clean source names such
+as `article.tex`, `supplement.tex`, `references.bib`, short table names, and
+short figure names. Compile checks for the main article and supplement should
+be run from that bundle before upload.
 
 For the arXiv web form, the likely primary archive is `stat` and the likely
 primary class is `stat.ME`. The license choice is an author decision; use the

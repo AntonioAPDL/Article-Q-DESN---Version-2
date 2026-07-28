@@ -1247,9 +1247,9 @@ sampler with separate exAL block updates and a mean-field variational Bayes
 approximation with Laplace--Delta updates for the non-conjugate blocks.
 In the algorithms below, GIG, positive-truncated Normal, Gaussian, and
 inverse-gamma entries denote closed-form full conditionals for MCMC and
-closed-form coordinate factors for VB. The block order is intentionally the
-same in both algorithms; only the final exAL scale-asymmetry block requires a
-non-conjugate update.
+closed-form coordinate factors for VB. The same block structure reappears in
+the variational updates; only the final exAL scale-asymmetry block requires a
+non-conjugate treatment.
 
 \subsection{Markov Chain Monte Carlo}
 
@@ -1258,7 +1258,7 @@ The augmented likelihood and shrinkage hierarchy give a partially Gibbs
 sampler. Closed-form blocks are sampled from their named full conditionals;
 the complete-data targets, full conditionals, CAVI factors, and ELBO terms for
 AL and exAL likelihoods under ridge and \RHS{} priors are given in Sections
-S4--S8 of the supplement. Under the Nishimura--Suchard hierarchy, the
+S5--S9 of the supplement. Under the Nishimura--Suchard hierarchy, the
 global-local scales have inverse-gamma updates. Each exAL block
 \((\sigma_q,\gamma_q)\) remains non-conjugate and is updated with
 Metropolis--Hastings or slice moves on transformed coordinates.
@@ -1272,7 +1272,7 @@ monitoring of the \((\sigma_q,\gamma_q)\) updates, including acceptance rates
 when Metropolis--Hastings is used.
 
 \begin{algorithm}[H]
-\caption{Block MCMC for the quantile-vector Q--DESN posterior. For \(Q=1\),
+\caption{MCMC sampler for the Q--DESN posterior. For \(Q=1\),
 set \(\vect\beta_{\mathrm{base}}=\zeros{r}\), place the RHS prior on
 \(\Delta_1=\vect\beta_1\), and omit baseline-slope blocks. AL and ridge
 variants omit the corresponding \(s_{q,t}\), \(\gamma_q\), and shrinkage
@@ -1286,19 +1286,17 @@ blocks.}
   \STATE Initialize $\vect\beta_{\mathrm{base}}$ and its baseline RHS scales
 \ENDIF
 \FOR{$i=1$ to $N$}
-  \STATE \textbf{Latents:} sample \(v_{q,t}\) from independent GIG full conditionals
-  \STATE \textbf{Latents (exAL):} when exAL is used, sample \(s_{q,t}\) from independent positive-truncated Normal full conditionals
-  \STATE \textbf{Slope path:} form \(\mat K_\beta\) and \(\vect m_\beta\) from \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
-  \STATE \textbf{Slope path:} sample \(\vect\beta_{\mathrm{st}}\mid\cdot\sim\Normal(\vect m_\beta,\mat K_\beta^{-1})\)
+  \STATE \textbf{Latent scales:} for each \(q,t\), draw \(v_{q,t}\mid\cdot\) from the AL or exAL GIG full conditional
+  \STATE \textbf{exAL shifts:} for exAL, draw \(s_{q,t}\mid\cdot\) from its positive-truncated Normal full conditional; omit this step for AL
+  \STATE \textbf{Slope path:} compute \(\mat K_\beta\) and \(\vect m_\beta\) from \eqref{eq:joint-kbeta-main}--\eqref{eq:joint-mbeta-main}
+  \STATE \textbf{Slope path:} draw \(\vect\beta_{\mathrm{st}}\mid\cdot\sim\Normal(\vect m_\beta,\mat K_\beta^{-1})\)
   \IF{$Q>1$}
-    \STATE \textbf{Baseline:} sample \(\vect\beta_{\mathrm{base}}\) from its Gaussian conditional
-    \STATE \textbf{Baseline scales:} update baseline RHS scales from inverse-gamma full conditionals
+    \STATE \textbf{Baseline:} draw \(\vect\beta_{\mathrm{base}}\) from its Gaussian conditional and draw its RHS scales from inverse-gamma full conditionals
   \ENDIF
-  \STATE \textbf{Intercepts:} sample \(\vect\alpha\) from its Gaussian conditional, or from an ordered-gap block when exact intercept monotonicity is imposed
-  \STATE \textbf{RHS scales:} sample innovation local, global, auxiliary, and slab scales from inverse-gamma full conditionals
-  \STATE \textbf{RHS scales (\(Q=1\)):} use the ordinary RHS scale updates for \(\vect\beta_1\)
-  \STATE \textbf{Likelihood:} update each exAL \((\sigma_q,\gamma_q)\) block by MH or slice sampling on transformed coordinates
-  \STATE \textbf{Likelihood (AL):} use the corresponding \(\sigma_q\) block and omit \(\gamma_q\)
+  \STATE \textbf{Intercepts:} draw \(\vect\alpha\) from its Gaussian conditional, or update the ordered-gap block when exact intercept monotonicity is imposed
+  \STATE \textbf{\RHS{} scales:} draw innovation local, global, auxiliary, and slab scales from inverse-gamma full conditionals; for \(Q=1\), this is the ordinary single-level RHS block for \(\vect\beta_1\)
+  \STATE \textbf{AL scale:} for AL, draw each \(\sigma_q\mid\cdot\) from its inverse-gamma full conditional and omit \(\gamma_q\)
+  \STATE \textbf{exAL scale--asymmetry:} for exAL, update each \((\sigma_q,\gamma_q)\) on transformed coordinates targeting its non-conjugate conditional kernel
   \STATE \textbf{Monitor:} store post-burn-in draws, crossing diagnostics, and convergence summaries, with thinning only if used
 \ENDFOR
 \end{algorithmic}
@@ -1325,13 +1323,15 @@ Equations~\eqref{eq:joint-posterior-target-main} and
 \eqref{eq:single-posterior-collapse-main} define the reported posterior
 targets, and Algorithm~\ref{alg:mcmc} implements those targets. The supplement
 keeps the single-level full conditionals and the full quantile-vector posterior
-algebra explicit: Sections S4--S7 give the single-level AL/exAL updates, and
-Section S8 gives the QVP--RHS posterior, stacked Gaussian blocks, and crossing
+algebra explicit: Sections S5--S8 give the single-level posterior,
+MCMC, VB--LD, and ELBO updates, while Section S9 gives the QVP--RHS
+posterior, stacked Gaussian blocks, and crossing
 diagnostics. Thus a reader implementing only one quantile can use
 Algorithm~\ref{alg:mcmc} with \(Q=1\) and the collapsed RHS prior, while a
 reader implementing multiple levels uses the same sampler with the baseline and
 adjacent-innovation blocks active. Generic VB--LD factors, ELBO monitoring,
-and the monotone reporting rule are given in the supplement.
+the corresponding coordinate-update algorithm, and the monotone reporting rule
+are given in the supplement.
 
 
 % ============================================================
@@ -1393,20 +1393,23 @@ window are generated pathwise, so the future design rows are draw-specific and
 inherit the same \(p_0\) indexing.
 
 \begin{algorithm}[H]
-\caption{Block posterior prediction for one fitted Q--DESN target level
+\caption{Posterior prediction for one fitted Q--DESN target level
 \(p_0\).}
 \label{alg:forecast}
 \begin{algorithmic}[1]
 \REQUIRE Target level $p_0$, forecast origin $T$, horizon $H$, and stored reservoir state
 \REQUIRE Posterior or variational draws for the fitted \(p_0\) model and origin-available future covariates
 \STATE \textbf{Condition:} teacher-force Eq.~\eqref{eq:desn-hierarchy} through time $T$ using observed responses and fixed reservoir weights
+\STATE \textbf{Notation:} within the loop, write \(\vect u_h^{(m)}=\vect u_{T+h}^{(m,p_0)}\) and \(\vect x_h^{(m)}=\vect x_{T+h}^{(m,p_0)}\)
 \FOR{each posterior or variational draw $m$}
   \STATE \textbf{Initialize:} set the reservoir state and response lags at the forecast origin
   \FOR{$h=1$ to $H$}
-    \STATE \textbf{Design:} form $\vect u_{T+h}^{(m,p_0)}$ from known covariates, observed pre-origin lags, and pathwise simulated forecast-window lags
-    \STATE \textbf{Reservoir:} update Eq.~\eqref{eq:desn-hierarchy} and form the draw-specific design vector $\vect x_{T+h}^{(m,p_0)}$
-    \STATE \textbf{Readout:} compute $\mu_{p_0,T+h}^{(m)}=\vect x_{T+h}^{(m,p_0)\top}\vect\beta_{p_0}^{(m)}$
-    \STATE \textbf{Emit:} sample from $\exAL_{p_0}$ when path propagation or working-likelihood simulation is required
+    \STATE \textbf{Design:} form $\vect u_h^{(m)}$ from known covariates, observed pre-origin lags, and pathwise simulated forecast-window lags
+    \STATE \textbf{Reservoir:} update Eq.~\eqref{eq:desn-hierarchy} and form the draw-specific design vector $\vect x_h^{(m)}$
+    \STATE \textbf{Readout:} compute $\mu_{p_0,T+h}^{(m)}=\vect x_h^{(m)\top}\vect\beta_{p_0}^{(m)}$
+    \IF{a free-running response path is required}
+      \STATE \textbf{Emit:} draw \(y_{T+h}^{(m,p_0)}\) from the fitted AL or \(\exAL_{p_0}\) working likelihood conditional on \(\mu_{p_0,T+h}^{(m)}\)
+    \ENDIF
     \STATE \textbf{Report:} retain $\mu_{p_0,T+h}^{(m)}$ for \(p_0\)-quantile reporting
   \ENDFOR
 \ENDFOR

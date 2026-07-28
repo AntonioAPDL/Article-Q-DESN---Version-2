@@ -46,7 +46,8 @@
 \renewcommand{\thesuppalgorithm}{S\arabic{suppalgorithm}}
 \newenvironment{suppalgorithm}[1]{%
   \refstepcounter{suppalgorithm}%
-  \par\medskip\noindent\textbf{Algorithm~\thesuppalgorithm. #1.}\par\nobreak
+  \par\medskip\noindent\textbf{Algorithm~\thesuppalgorithm. #1.}\par
+  \nopagebreak[4]\smallskip\nopagebreak[4]
 }{\par\medskip}
 
 \renewcommand{\theequation}{S\arabic{equation}}
@@ -76,8 +77,8 @@ mixture variables, and shrinkage parameters. The derivations cover complete-data
 posterior targets for the default ridge prior and the Nishimura--Suchard
 regularized horseshoe (\texttt{rhs\_ns}) shrinkage alternative, posterior
 kernels, Markov chain Monte Carlo (MCMC) full conditionals, the role of the
-VB--LD computational approximation, and the joint quantile-vector QVP--RHS
-extension.
+VB--LD computational approximation and coordinate updates, and the joint
+quantile-vector QVP--RHS extension.
 The notation is aligned with the main article.
 \end{abstract}
 
@@ -134,8 +135,9 @@ Derives the readout, latent-variable, scale, asymmetry, and shrinkage updates. \
 Variational Bayes and Laplace--Delta provenance &
 Section~\ref{sec:cavi} &
 States the generic fixed-design mean-field factors, canonical Gaussian readout
-update, RHS CAVI updates, and Wang--Blei Laplace--Delta treatment for the
-non-conjugate exAL scale-asymmetry block. \\
+update, RHS CAVI updates, Wang--Blei Laplace--Delta treatment for the
+non-conjugate exAL scale-asymmetry block, and the coordinate-update
+algorithm. \\
 ELBO &
 Section~\ref{sec:elbo} &
 Gives the fixed-design decomposition monitored by the generic VB
@@ -680,7 +682,7 @@ ordinary global-local full conditional block given \(\vect\beta\), while the
 direct Piironen--Vehtari joint prior does not preserve these inverse-gamma
 updates.
 
-\begin{suppalgorithm}{Q--DESN AL and exAL MCMC}
+\begin{suppalgorithm}{Single-level Q--DESN MCMC sampler}
 \label{alg:qdesn_mcmc}
 \emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
 target quantile \(p_0\), likelihood choice AL or exAL, coefficient prior ridge
@@ -690,17 +692,22 @@ or \texttt{rhs\_ns}, and MCMC controls.
 \(\gamma,\vect s\). Initialize \texttt{rhs\_ns} scales when used.
 \item For each MCMC iteration:
   \begin{enumerate}[label=(\alph*)]
-  \item update \(v_t\) from \eqref{eq:supp_v_mcmc} for exAL or
-  \eqref{eq:supp_al_v_mcmc} for AL;
-  \item for exAL, update \(s_t\) from \eqref{eq:supp_s_mcmc};
-  \item update \(\vect\beta\) from \eqref{eq:supp_beta_mcmc};
-  \item for \texttt{rhs\_ns}, update
+  \item draw each \(v_t\mid\cdot\) from the GIG full conditional in
+  \eqref{eq:supp_v_mcmc} for exAL or \eqref{eq:supp_al_v_mcmc} for AL;
+  \item for exAL, draw each \(s_t\mid\cdot\) from the positive-truncated
+  Normal full conditional in \eqref{eq:supp_s_mcmc};
+  \item draw \(\vect\beta\mid\cdot\) from the Gaussian full conditional in
+  \eqref{eq:supp_beta_mcmc};
+  \item for \texttt{rhs\_ns}, draw
   \((\lambda_j^2,\nu_j)_{j=1}^r,\tau^2,\xi,\zeta^2\) by
   \eqref{eq:supp_rhs_mcmc};
-  \item update \(\sigma\), and for exAL also update \(\gamma\), using
-  \eqref{eq:supp_al_sigma_mcmc}, \eqref{eq:supp_sigmagam_joint_kernel}, or
-  the partially Gibbs blocks \eqref{eq:supp_exal_sigma_mcmc}--\eqref{eq:supp_gamma_mcmc};
-  \item retain draws after burn-in, with thinning only if used.
+  \item for AL, draw \(\sigma\mid\cdot\) from
+  \eqref{eq:supp_al_sigma_mcmc};
+  \item for exAL, update \((\sigma,\gamma)\) on transformed coordinates
+  targeting \eqref{eq:supp_sigmagam_joint_kernel}, or use the partially Gibbs
+  route \eqref{eq:supp_exal_sigma_mcmc}--\eqref{eq:supp_gamma_mcmc};
+  \item store retained draws and diagnostics after burn-in, with thinning only
+  if used.
   \end{enumerate}
 \end{enumerate}
 \end{suppalgorithm}
@@ -855,6 +862,36 @@ h\{T(\hat{\vect\eta})\}
 \end{equation}
 with the first term alone giving the Laplace-mode approximation when the delta
 correction is intentionally disabled.
+
+\begin{suppalgorithm}{Single-level Q--DESN VB--LD coordinate updates}
+\label{alg:qdesn_vb_ld}
+\emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
+target quantile \(p_0\), likelihood choice AL or exAL, coefficient prior ridge
+or \texttt{rhs\_ns}, and convergence controls.
+\begin{enumerate}[label=(\arabic*)]
+\item Initialize \(q_\beta\), latent-variable factors, likelihood scale
+factors, and, when used, RHS and exAL scale-asymmetry factors.
+\item Repeat until the ELBO or declared parameter criterion has converged:
+  \begin{enumerate}[label=(\alph*)]
+  \item set \(q_\beta(\vect\beta)\) to the Gaussian factor in
+  \eqref{eq:supp_generic_vb_beta};
+  \item for AL, set \(q_v(v_t)\) and \(q_\sigma(\sigma)\) by
+  \eqref{eq:supp_generic_vb_al_latents};
+  \item for exAL, set \(q_v(v_t)\) and \(q_s(s_t)\) to the GIG and
+  positive-truncated Normal factors implied by the corresponding MCMC blocks,
+  replacing products by expectations under the other factors;
+  \item for \texttt{rhs\_ns}, set the inverse-gamma RHS factors by
+  \eqref{eq:supp_generic_vb_rhs};
+  \item for exAL, set \(q_{\sigma,\gamma}\) by the Laplace--Delta Gaussian
+  approximation on transformed coordinates and recompute smooth expectations
+  using \eqref{eq:supp_generic_delta};
+  \item monitor the ELBO in \eqref{eq:supp_generic_elbo}--\eqref{eq:supp_generic_elbo_decomp},
+  interpreted as a Laplace--Delta approximation when the exAL block is active.
+  \end{enumerate}
+\item Return variational factors, fitted readout summaries, ELBO history, and
+convergence diagnostics.
+\end{enumerate}
+\end{suppalgorithm}
 
 \section{ELBO Monitoring}
 \label{sec:elbo}
@@ -1272,7 +1309,7 @@ with the analogous \(r/2\) update for a random baseline slab scale
 
 \subsection{MCMC Algorithm and VB--LD Pointer}
 
-\begin{suppalgorithm}{Joint exAL--QVP--Q--DESN--RHS MCMC}
+\begin{suppalgorithm}{MCMC sampler for the joint QVP--Q--DESN posterior}
 \label{alg:joint_qdesn_mcmc}
 \emph{Input:} fixed non-intercept design \(\mat Z\), response \(\vect y\),
 quantile grid \(p_1<\cdots<p_Q\), priors, and MCMC
@@ -1285,17 +1322,25 @@ parameters, exAL latent variables, and innovation RHS scales. If \(Q>1\),
 also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
 \item Repeat:
   \begin{enumerate}[label=(\alph*)]
-  \item update \(v_{q,t}\) and \(s_{q,t}\) for all \(q,t\);
-  \item update \(\vect\beta_{\mathrm{st}}\) from the sparse Gaussian precision
-  \eqref{eq:supp_joint_beta_conditional};
-  \item if \(Q>1\), update \(\vect\beta_{\mathrm{base}}\) featurewise;
-  \item update \(\vect\alpha\) by the Gaussian block or by the monotone-gap
-  transformed block;
-  \item update innovation RHS scales, and if \(Q>1\) update baseline RHS
-  scales;
-  \item update each \((\sigma_q,\gamma_q)\) block using
-  \eqref{eq:supp_joint_sigma_gamma_kernel} on transformed coordinates;
-  \item store draws and crossing diagnostics after burn-in.
+  \item draw each \(v_{q,t}\mid\cdot\) from its quantile-indexed GIG full
+  conditional; for AL use the AL constants and omit the \(s\)-latent block;
+  \item for exAL, draw each \(s_{q,t}\mid\cdot\) from its
+  positive-truncated Normal full conditional;
+  \item compute the sparse precision and mean in
+  \eqref{eq:supp_joint_beta_conditional}, then draw
+  \(\vect\beta_{\mathrm{st}}\mid\cdot\sim
+  \Normal(\vect m_\beta,\mat K_\beta^{-1})\);
+  \item if \(Q>1\), draw \(\vect\beta_{\mathrm{base}}\) featurewise from the
+  Gaussian baseline conditionals;
+  \item draw unconstrained intercepts from their Gaussian conditionals, or
+  update the monotone-gap transformed block when exact intercept ordering is
+  imposed;
+  \item draw innovation RHS scales, and if \(Q>1\) draw baseline RHS scales,
+  from their inverse-gamma full conditionals;
+  \item update each exAL \((\sigma_q,\gamma_q)\) block on transformed
+  coordinates targeting \eqref{eq:supp_joint_sigma_gamma_kernel}; for AL,
+  use the corresponding \(\sigma_q\) full conditional and omit \(\gamma_q\);
+  \item store retained draws and crossing diagnostics after burn-in.
   \end{enumerate}
 \end{enumerate}
 \end{suppalgorithm}
@@ -1897,36 +1942,45 @@ where \(T_c\) maps unconstrained coordinates to
 Laplace-informed proposal or by one-dimensional conditional slice updates, but
 the target density is \eqref{eq:supp_glofas_slice_target}.
 
-\begin{suppalgorithm}{GloFAS discrepancy-calibration MCMC sampler}
+\begin{suppalgorithm}{MCMC sampler for the GloFAS discrepancy-calibration model}
 \label{alg:glofas_mcmc}
 \emph{Input:} stacked observations \(\vect z\), source labels \(c_i\), target
 quantile \(p_0\), likelihood choice AL or exAL, RHS hyperparameters, MCMC
 controls, and either a fixed augmented design \(\mat H\) or a latent-path
 state-continuation map.
 \begin{enumerate}[label=(\arabic*)]
-\item Initialize \(\vect\theta_{p_0}\), RHS scales, source scales
-\(\{\sigma_c\}\), latent \(\{v_i^c\}\), and, for exAL,
+\item Initialize
+\(\vect\theta_{p_0}=(\vect\beta_{p_0}^\top,\vect\alpha_{p_0}^\top)^\top\),
+the separate \(\beta\)- and \(\alpha\)-block RHS scales, source scales
+\(\{\sigma_c\}\), latent variables \(\{v_i^c\}\), and, for exAL,
 \(\{\gamma_c,s_i^c\}\). For the latent-path model, also initialize
 \(\vect y_F\).
 \item For each MCMC iteration:
   \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, rebuild the forecast-window rows of
+  \item for the latent-path model, recompute the forecast-window rows of
   \(\mat H(\vect y_F)\);
-  \item update each \(v_i^c\) from \eqref{eq:supp_glofas_v_mcmc} for exAL or
+  \item draw each \(v_i^c\mid\cdot\) from the GIG full conditional in
+  \eqref{eq:supp_glofas_v_mcmc} for exAL or
   \eqref{eq:supp_glofas_al_v_mcmc} for AL;
-  \item for exAL, update each \(s_i^c\) from
+  \item for exAL, draw each \(s_i^c\mid\cdot\) from
   \eqref{eq:supp_glofas_s_mcmc};
-  \item update \(\vect\theta_{p_0}\) from
-  \eqref{eq:supp_glofas_theta_mcmc};
-  \item update the beta and alpha RHS scales from \eqref{eq:supp_glofas_rhs_mcmc};
-  \item for AL, update each \(\sigma_c\) from
+  \item draw
+  \(\vect\theta_{p_0}\mid\cdot\sim
+  \Normal(\vect m_{\theta\mid\cdot},\mat\Sigma_{\theta\mid\cdot})\)
+  using \eqref{eq:supp_glofas_theta_mcmc};
+  \item for each block \(b\in\{\beta,\alpha\}\), draw the RHS local, global,
+  auxiliary, and slab scales from \eqref{eq:supp_glofas_rhs_mcmc};
+  \item for AL, draw each \(\sigma_c\mid\cdot\) from
   \eqref{eq:supp_glofas_al_sigma_mcmc};
   \item for exAL, update each \((\sigma_c,\gamma_c)\) by slice sampling on
   the transformed target \eqref{eq:supp_glofas_slice_target};
-  \item for the latent-path model, update \(\vect y_F\) by a documented
-  non-conjugate block or componentwise sampler, recomputing only the
-  forecast-window state rows after a proposal;
-  \item retain draws after burn-in, with thinning only if used.
+  \item for the latent-path model, update \(\vect y_F\) by an MH, slice, or
+  componentwise move targeting the complete-data posterior
+  \eqref{eq:supp_glofas_joint_exal_rhs} or
+  \eqref{eq:supp_glofas_joint_al_rhs} with \(\mat H=\mat H(\vect y_F)\),
+  recomputing only forecast-window state rows after a proposal;
+  \item store retained draws and diagnostics after burn-in, with thinning only
+  if used.
   \end{enumerate}
 \end{enumerate}
 \end{suppalgorithm}
@@ -2199,7 +2253,7 @@ H(q_F)=\frac12\log |2\pi e\,\mat V_F|.
 The resulting monitored objective is a Laplace--Delta approximation to the
 ELBO of the nonlinear latent-path model.
 
-\begin{suppalgorithm}{GloFAS discrepancy-calibration variational Bayes updates}
+\begin{suppalgorithm}{Variational Bayes updates for the GloFAS discrepancy-calibration model}
 \label{alg:glofas_vb}
 \emph{Input:} stacked observations \(\vect z\), source labels \(c_i\), target
 quantile \(p_0\), likelihood choice AL or exAL, block-specific RHS hyperparameters,
@@ -2210,26 +2264,26 @@ latent-path state-continuation map.
 scale factors. For the latent-path model, also initialize \(q_F\).
 \item Repeat until convergence:
   \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, update \(q_F\) by the Laplace target
+  \item for the latent-path model, set \(q_F\) by the Laplace target
   \eqref{eq:supp_glofas_latent_path_al_ld_target} for AL or
   \eqref{eq:supp_glofas_latent_path_exal_ld_target} for exAL, then recompute
   the Delta-method design moments;
-  \item update \(q(v_i^c)\) by \eqref{eq:supp_glofas_vb_al_v} for AL or
+  \item set \(q(v_i^c)\) by \eqref{eq:supp_glofas_vb_al_v} for AL or
   \eqref{eq:supp_glofas_vb_exal_v} for exAL;
-  \item for exAL, update \(q(s_i^c)\) by
+  \item for exAL, set \(q(s_i^c)\) by
   \eqref{eq:supp_glofas_vb_exal_s};
-  \item update \(q_\theta\) by \eqref{eq:supp_glofas_vb_theta};
-  \item update the beta and alpha RHS factors by \eqref{eq:supp_glofas_vb_rhs};
-  \item for AL, update each \(q(\sigma_c)\) by
+  \item set \(q_\theta\) by \eqref{eq:supp_glofas_vb_theta};
+  \item set the beta and alpha RHS factors by \eqref{eq:supp_glofas_vb_rhs};
+  \item for AL, set each \(q(\sigma_c)\) by
   \eqref{eq:supp_glofas_vb_al_sigma};
-  \item for exAL, update each \(q_{\sigma_c,\gamma_c}\) by
+  \item for exAL, set each \(q_{\sigma_c,\gamma_c}\) by
   \eqref{eq:supp_glofas_ld_target}--\eqref{eq:supp_glofas_ld_gaussian};
   \item recompute smooth expectations by \eqref{eq:supp_glofas_delta} and
   monitor the ELBO, or the Laplace--Delta ELBO approximation when \(q_F\) is
   present.
   \end{enumerate}
-\item Return variational factors and summaries of
-\(\vect h_i^{c\top}\vect\theta_{p_0}\).
+\item Return variational factors, fitted reference and discrepancy summaries,
+forecast summaries, ELBO history, and convergence diagnostics.
 \end{enumerate}
 \end{suppalgorithm}
 

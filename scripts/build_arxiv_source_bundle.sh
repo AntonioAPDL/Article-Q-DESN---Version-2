@@ -89,6 +89,10 @@ for f in "${rewrite_files[@]}"; do
     s{figures/glofas_application/glofas_qdesn_discrepancy_corrected_quantile_paths__glofas_stage_n_winner_scorebalanced_20260703\.pdf}{figures/glofas_calibrated_quantile_paths.pdf}g;
     s{figures/glofas_application/diagnostics/glofas_stage_n_winner_full7_scorebalanced_qdesn_synthesized_bands__glofas_stage_n_winner_scorebalanced_20260703\.pdf}{figures/glofas_forecast_bands.pdf}g;
     s{\\bibliography\{refs\}}{\\bibliography{references}}g;
+    s#\\input\{\\GlofasApplicationCurrentScoreTable\}#\\input\x7btables/glofas_score_summary.tex\x7d#g;
+    s#\\input\{\\PricefmFullMainSummaryTable\}#\\input\x7btables/pricefm_benchmark_main_summary.tex\x7d#g;
+    s#\\includegraphics(\[[^\]]*\])?\{\\GlofasApplicationCurrentCorrectedPathsFigure\}#\\includegraphics${1}\x7bfigures/glofas_calibrated_quantile_paths.pdf\x7d#g;
+    s#\\includegraphics(\[[^\]]*\])?\{\\GlofasApplicationCurrentForecastWindowFigure\}#\\includegraphics${1}\x7bfigures/glofas_forecast_bands.pdf\x7d#g;
   ' "$f"
 done
 

@@ -138,7 +138,7 @@ update, RHS CAVI updates, and Wang--Blei Laplace--Delta treatment for the
 non-conjugate exAL scale-asymmetry block. \\
 ELBO &
 Section~\ref{sec:elbo} &
-Gives the fixed-design decomposition monitored by the generic VB--LD
+Gives the fixed-design decomposition monitored by the generic VB
 implementation. \\
 Joint quantile-vector extension &
 Section~\ref{sec:joint_qdesn_supp} &
@@ -146,7 +146,7 @@ Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, and crossing
 diagnostics for the joint multi-quantile readout. \\
 Supplementary validation tables &
 Section~\ref{sec:supp_validation_tables} &
-Preserves VB--LD companion panels and joint-validation provenance outside the
+Preserves VB companion panels and joint-validation diagnostics outside the
 main article evidence path. \\
 Posterior prediction and monotone reporting &
 Section~\ref{sec:forecast_synthesis} &
@@ -1432,13 +1432,13 @@ histories.
 \label{sec:supp_validation_tables}
 
 The main article reports MCMC-only validation summaries. This section preserves
-the generated VB--LD companion panels, balanced joint-validation provenance,
+the generated VB companion panels, balanced joint-validation diagnostics,
 and full generated table captions so the computational comparison remains
 auditable without making VB rows the reported validation results.
 
-\subsection{Single-Quantile VB--LD Companion Panels}
+\subsection{Single-Quantile VB Companion Panels}
 
-The following generated tables retain both inference panels from the pinned
+The following generated tables retain both inference panels from the fixed
 500-observation validation study. In the main article, only the MCMC rows from
 these source tables are displayed.
 
@@ -1449,10 +1449,10 @@ these source tables are displayed.
 
 The following generated tables preserve the protocol, scenario-level balanced
 MCMC summaries, readiness audit, and metric-specific summaries for the joint and
-independent multi-quantile readouts. The VB and VB--LD stages remain the
+independent multi-quantile readouts. The VB stages remain the
 screening, calibration, and initialization layer; the tables below document the
-MCMC confirmation evidence used by the main article. The Phase143 gamma-decision
-freeze qualifies the sampled-gamma exQDESN rows as sensitivity evidence and
+MCMC confirmation evidence used by the main article. The gamma-sensitivity
+audit qualifies the sampled-gamma exQDESN rows as sensitivity evidence and
 does not alter the balanced MCMC packet values reported here.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}

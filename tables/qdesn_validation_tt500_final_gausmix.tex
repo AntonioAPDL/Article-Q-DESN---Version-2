@@ -11,7 +11,7 @@ Model & \multicolumn{3}{c}{$p=0.05$} & \multicolumn{3}{c}{$p=0.25$} & \multicolu
 \cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
  & Fit RMSE & Forecast MAE & Check loss & Fit RMSE & Forecast MAE & Check loss & Fit RMSE & Forecast MAE & Check loss \\
 \midrule
-\multicolumn{10}{@{}l}{\textit{VB--LD}} \\
+\multicolumn{10}{@{}l}{\textit{VB}} \\
 DQLM & \textbf{2.725} & 5.169 & 1.610 & 1.958 & 4.675 & 4.795 & 1.598 & 1.840 & 5.541 \\
 exDQLM & 4.615 & 9.234 & 1.895 & \textbf{1.834} & 3.976 & 4.711 & \textbf{1.595} & 1.859 & 5.542 \\
 QDESN ridge & 8.485 & 10.27 & 2.407 & 5.038 & 15.93 & 6.745 & 4.385 & 8.481 & 7.131 \\
@@ -30,6 +30,6 @@ exQDESN RHS & 4.176 & \textbf{2.028} & 1.510 & 2.069 & 5.376 & 4.803 & 1.384 & 3
 \bottomrule
 \end{tabular}%
 }
-\caption{Final single-quantile fit-and-forecast comparison for the Gaussian mixture simulation family. Rows compare DQLM, exDQLM, and QDESN/exQDESN variants; panels separate VB--LD and MCMC. Forecast entries average scored rolling-origin lead-target pairs over leads 1--30 with origin stride 30. Lower values are better for all displayed metrics, and boldface marks the lowest value within each inference panel and quantile level.}
+\caption{Final single-quantile fit-and-forecast comparison for the Gaussian mixture simulation family. Rows compare DQLM, exDQLM, and QDESN/exQDESN variants; panels separate VB and MCMC. Forecast entries average scored rolling-origin lead-target pairs over leads 1--30 with origin stride 30. Lower values are better for all displayed metrics, and boldface marks the lowest value within each inference panel and quantile level.}
 \label{tab:simulation-tt500-final-gausmix}
 \end{table}

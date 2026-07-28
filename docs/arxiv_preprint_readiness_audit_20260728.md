@@ -36,6 +36,18 @@ repository were treated as unrelated work and left untouched.
   `/tmp/qdesn_supp_compile_20260728`; the final PDF has 36 pages.
 - Targeted log scans found no LaTeX errors, undefined references, undefined
   citations, or overfull/underfull boxes in the final logs.
+- A clean arXiv source bundle was built and compiled from
+  `/tmp/qdesn_arxiv_source_bundle_final2_20260728`. The bundle contains only
+  the manuscript sources, bibliography, included table files, and the figures
+  referenced by the main article.
+- The clean bundle main article compiled with
+  `pdflatex`, `bibtex`, `pdflatex`, `pdflatex`, `pdflatex`; the final bundle
+  PDF has 38 pages.
+- The clean bundle supplement compiled with
+  `pdflatex`, `bibtex`, `pdflatex`, `pdflatex`; the final bundle PDF has
+  36 pages.
+- Final clean-bundle log scans found no LaTeX errors, undefined references,
+  undefined citations, or overfull/underfull boxes in either final log.
 
 ## Manuscript Polish Applied
 
@@ -49,6 +61,10 @@ The polish keeps all reported numerical results unchanged.
   manifests, branch/commit provenance, and phase labels with reader-facing
   reproducibility language.
 - Removed local validation source paths from table source comments.
+- Added `scripts/build_arxiv_source_bundle.sh`, which creates an isolated
+  upload candidate and refuses to overwrite an existing output directory.
+- Replaced included-table source comments that exposed local builder script
+  paths with neutral article-facing comments.
 - Preserved warning/failure markers in validation tables as diagnostic
   disclosure; no metric values were changed.
 

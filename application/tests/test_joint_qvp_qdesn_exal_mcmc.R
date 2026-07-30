@@ -89,6 +89,39 @@ fit_prior_b <- app_joint_qvp_fit_exal_mcmc_tiny(
   max_dense_dim = 20L
 )
 
+fit_refresh_a <- app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 16L,
+  burn = 8L,
+  thin = 2L,
+  seed = 710L,
+  kappa = 1,
+  gamma_init = rep(0, length(tau)),
+  gamma_update = "logit_slice",
+  gamma_slice_width = 1,
+  gamma_refresh_repeats = 2L,
+  gamma_refresh_block = "sigma",
+  max_dense_dim = 20L
+)
+fit_refresh_b <- app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 16L,
+  burn = 8L,
+  thin = 2L,
+  seed = 710L,
+  kappa = 1,
+  gamma_init = rep(0, length(tau)),
+  gamma_update = "logit_slice",
+  gamma_slice_width = 1,
+  gamma_refresh_repeats = 2L,
+  gamma_refresh_block = "sigma",
+  max_dense_dim = 20L
+)
+
 stopifnot(inherits(fit_a, "joint_qvp_qdesn_tiny_fit"))
 stopifnot(identical(dim(fit_a$beta_draws), c(3L, 4L)))
 stopifnot(identical(dim(fit_a$alpha_draws), c(3L, 2L)))
@@ -111,6 +144,12 @@ stopifnot(identical(fit_prior_a$gamma_prior_type, "logit_normal"))
 stopifnot(all(abs(fit_prior_a$gamma_prior_center) < 1.0e-12))
 stopifnot(all(abs(fit_prior_a$gamma_prior_sd_eta - 0.5) < 1.0e-12))
 stopifnot(identical(round(fit_prior_a$gamma_draws, 12), round(fit_prior_b$gamma_draws, 12)))
+stopifnot(inherits(fit_refresh_a, "joint_qvp_qdesn_tiny_fit"))
+stopifnot(identical(fit_refresh_a$gamma_refresh_repeats, 2L))
+stopifnot(identical(fit_refresh_a$gamma_refresh_block, "sigma"))
+stopifnot(all(is.finite(fit_refresh_a$gamma_draws)))
+stopifnot(all(fit_refresh_a$sigma_draws > 0))
+stopifnot(identical(round(fit_refresh_a$gamma_draws, 12), round(fit_refresh_b$gamma_draws, 12)))
 stopifnot(identical(fit_a$manifest$status[[1L]], "prototype_success"))
 stopifnot(identical(fit_a$manifest$likelihood[[1L]], "exal"))
 stopifnot(identical(fit_a$manifest$inference[[1L]], "mcmc_tiny"))
@@ -153,3 +192,23 @@ bad_prior <- try(app_joint_qvp_fit_exal_mcmc_tiny(
   gamma_prior_sd_eta = -1
 ), silent = TRUE)
 stopifnot(inherits(bad_prior, "try-error"))
+
+bad_refresh <- try(app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 10L,
+  burn = 5L,
+  gamma_refresh_repeats = 0L
+), silent = TRUE)
+stopifnot(inherits(bad_refresh, "try-error"))
+
+bad_refresh_block <- try(app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 10L,
+  burn = 5L,
+  gamma_refresh_block = "bad_block"
+), silent = TRUE)
+stopifnot(inherits(bad_refresh_block, "try-error"))

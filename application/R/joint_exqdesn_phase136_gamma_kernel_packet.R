@@ -220,18 +220,96 @@ app_joint_exqdesn_phase136_variant_registry <- function(selected_cases, variant_
   }
   out <- app_joint_qdesn_bind_rows(rows)
   out$phase136_case_variant_id <- paste(out$case_id, out$phase136_variant_id, sep = "__")
-  out
+  app_joint_exqdesn_phase136_normalize_variant_registry(out)
+}
+
+app_joint_exqdesn_phase136_variant_value <- function(variant, name, default) {
+  if (!name %in% names(variant)) return(default)
+  value <- variant[[name]][[1L]]
+  if (is.null(value) || !length(value) || is.na(value)) return(default)
+  value
+}
+
+app_joint_exqdesn_phase136_normalize_variant_registry <- function(variant_registry) {
+  variant_registry <- as.data.frame(variant_registry, stringsAsFactors = FALSE)
+  if (!"scenario_ids" %in% names(variant_registry) && "scenario_id" %in% names(variant_registry)) {
+    variant_registry$scenario_ids <- variant_registry$scenario_id
+  }
+  if (!"model_ids" %in% names(variant_registry)) {
+    variant_registry$model_ids <- NA_character_
+  }
+  required <- c(
+    "case_id", "scenario_ids", "model_ids", "phase136_variant_id",
+    "gamma_update", "bounded_width_multiplier", "logit_eta_width",
+    "gamma_prior_type", "gamma_prior_center", "gamma_prior_sd_eta",
+    "gamma_slice_max_steps"
+  )
+  missing <- setdiff(required, names(variant_registry))
+  if (length(missing)) {
+    stop(sprintf("Variant registry is missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  if (!"phase136_case_variant_id" %in% names(variant_registry)) {
+    variant_registry$phase136_case_variant_id <- paste(variant_registry$case_id, variant_registry$phase136_variant_id, sep = "__")
+  }
+  defaults <- list(
+    phase136_variant_role = "custom_gamma_sampler_variant",
+    gamma_refresh_repeats = 1L,
+    gamma_refresh_block = "none",
+    gamma_init_mode = NA_character_,
+    gamma_jitter_fraction = NA_real_,
+    gamma_sigma_mh_eta_sd = 0.25,
+    gamma_sigma_mh_log_sigma_sd = 0.05,
+    gamma_sigma_mh_rho_mode = "zero",
+    gamma_sigma_mh_rho_abs = 0,
+    gamma_sigma_mh_eta_sd_vector = "",
+    gamma_sigma_mh_log_sigma_sd_vector = "",
+    gamma_sigma_mh_repeats = 1L
+  )
+  for (nm in names(defaults)) {
+    if (!nm %in% names(variant_registry)) variant_registry[[nm]] <- defaults[[nm]]
+  }
+  variant_registry$phase136_variant_id <- as.character(variant_registry$phase136_variant_id)
+  variant_registry$phase136_case_variant_id <- as.character(variant_registry$phase136_case_variant_id)
+  variant_registry$gamma_update <- as.character(variant_registry$gamma_update)
+  variant_registry$gamma_prior_type <- as.character(variant_registry$gamma_prior_type)
+  variant_registry$gamma_refresh_block <- as.character(variant_registry$gamma_refresh_block)
+  variant_registry$gamma_refresh_repeats <- as.integer(variant_registry$gamma_refresh_repeats)
+  variant_registry$gamma_slice_max_steps <- as.integer(variant_registry$gamma_slice_max_steps)
+  variant_registry$gamma_jitter_fraction <- as.numeric(variant_registry$gamma_jitter_fraction)
+  bad_update <- !variant_registry$gamma_update %in% c(
+    "bounded_slice", "logit_slice", "fixed", "joint_rw_mh", "hybrid_refresh_joint_mh"
+  )
+  if (any(bad_update)) stop("Variant registry contains unsupported gamma_update values.", call. = FALSE)
+  bad_block <- !variant_registry$gamma_refresh_block %in% c("none", "sigma", "sigma_s", "sigma_s_v")
+  if (any(bad_block)) stop("Variant registry contains unsupported gamma_refresh_block values.", call. = FALSE)
+  if (any(!is.finite(variant_registry$gamma_refresh_repeats) | variant_registry$gamma_refresh_repeats <= 0L)) {
+    stop("Variant registry gamma_refresh_repeats must be positive integers.", call. = FALSE)
+  }
+  if (anyDuplicated(variant_registry$phase136_case_variant_id)) {
+    stop("Variant registry phase136_case_variant_id values must be unique.", call. = FALSE)
+  }
+  variant_registry
 }
 
 app_joint_exqdesn_phase136_width_vector <- function(tau, gamma_update, bounded_width_multiplier, logit_eta_width) {
   support <- app_joint_qvp_exal_support(tau)
-  if (identical(gamma_update, "fixed")) {
+  if (gamma_update %in% c("fixed", "joint_rw_mh")) {
     rep(1, length(tau))
-  } else if (identical(gamma_update, "logit_slice")) {
+  } else if (gamma_update %in% c("logit_slice", "hybrid_refresh_joint_mh")) {
     rep(as.numeric(logit_eta_width), length(tau))
   } else {
     (as.numeric(support$upper) - as.numeric(support$lower)) / 20 * as.numeric(bounded_width_multiplier)
   }
+}
+
+app_joint_exqdesn_phase136_numeric_vector <- function(x, K, fallback) {
+  value <- as.character(x %||% "")[[1L]]
+  if (!nzchar(trimws(value))) return(rep(as.numeric(fallback), length.out = K))
+  out <- suppressWarnings(as.numeric(trimws(strsplit(value, ",", fixed = TRUE)[[1L]])))
+  if (length(out) != K || any(!is.finite(out))) {
+    stop(sprintf("Expected %s finite comma-separated sampler values.", K), call. = FALSE)
+  }
+  out
 }
 
 app_joint_exqdesn_phase136_chain_init_for_gamma_update <- function(vb_fit, tau, controls,
@@ -385,6 +463,30 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
   chain_id <- as.integer(job$chain_id[[1L]])
   chain_seed <- as.integer(job$chain_seed[[1L]])
   gamma_update <- variant$gamma_update[[1L]]
+  variant_gamma_init_mode <- as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_init_mode", gamma_init_mode))[[1L]]
+  variant_gamma_jitter_fraction <- as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_jitter_fraction", gamma_jitter_fraction))[[1L]]
+  gamma_refresh_repeats <- as.integer(app_joint_exqdesn_phase136_variant_value(variant, "gamma_refresh_repeats", 1L))[[1L]]
+  gamma_refresh_block <- as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_refresh_block", "none"))[[1L]]
+  gamma_sigma_mh_eta_sd <- as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_eta_sd", 0.25))[[1L]]
+  gamma_sigma_mh_log_sigma_sd <- as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_log_sigma_sd", 0.05))[[1L]]
+  gamma_sigma_mh_rho_mode <- as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_rho_mode", "zero"))[[1L]]
+  gamma_sigma_mh_rho_abs <- as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_rho_abs", 0))[[1L]]
+  gamma_sigma_mh_repeats <- as.integer(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_repeats", 1L))[[1L]]
+  gamma_sigma_mh_eta_sd <- app_joint_exqdesn_phase136_numeric_vector(
+    app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_eta_sd_vector", ""),
+    length(fixture$tau),
+    gamma_sigma_mh_eta_sd
+  )
+  gamma_sigma_mh_log_sigma_sd <- app_joint_exqdesn_phase136_numeric_vector(
+    app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_log_sigma_sd_vector", ""),
+    length(fixture$tau),
+    gamma_sigma_mh_log_sigma_sd
+  )
+  gamma_sigma_mh_rho <- if (identical(gamma_sigma_mh_rho_mode, "tau_signed")) {
+    ifelse(fixture$tau < 0.5, -gamma_sigma_mh_rho_abs, ifelse(fixture$tau > 0.5, gamma_sigma_mh_rho_abs, 0))
+  } else {
+    rep(gamma_sigma_mh_rho_abs, length(fixture$tau))
+  }
   width_vector <- prep$gamma_slice_width
   chain_start <- proc.time()[["elapsed"]]
   if (identical(spec$fit_structure[[1L]], "joint")) {
@@ -395,8 +497,8 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
       chain_id = chain_id,
       n_chains = mcmc_controls$n_chains,
       gamma_update = gamma_update,
-      mode = gamma_init_mode,
-      jitter_fraction = gamma_jitter_fraction
+      mode = variant_gamma_init_mode,
+      jitter_fraction = variant_gamma_jitter_fraction
     )
     fit <- app_joint_qvp_fit_exal_mcmc_tiny(
       y = fixture$y,
@@ -419,6 +521,12 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
       gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
       gamma_prior_center = variant$gamma_prior_center[[1L]] %||% 0,
       gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
+      gamma_refresh_repeats = gamma_refresh_repeats,
+      gamma_refresh_block = gamma_refresh_block,
+      gamma_sigma_mh_eta_sd = gamma_sigma_mh_eta_sd,
+      gamma_sigma_mh_log_sigma_sd = gamma_sigma_mh_log_sigma_sd,
+      gamma_sigma_mh_rho = gamma_sigma_mh_rho,
+      gamma_sigma_mh_repeats = gamma_sigma_mh_repeats,
       init = init
     )
   } else {
@@ -431,8 +539,8 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
         chain_id = chain_id,
         n_chains = mcmc_controls$n_chains,
         gamma_update = gamma_update,
-        mode = gamma_init_mode,
-        jitter_fraction = gamma_jitter_fraction
+        mode = variant_gamma_init_mode,
+        jitter_fraction = variant_gamma_jitter_fraction
       )
       one_tau_fits[[kk]] <- app_joint_qvp_fit_exal_mcmc_tiny(
         y = fixture$y,
@@ -455,6 +563,12 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
         gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
         gamma_prior_center = variant$gamma_prior_center[[1L]] %||% 0,
         gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
+        gamma_refresh_repeats = gamma_refresh_repeats,
+        gamma_refresh_block = gamma_refresh_block,
+        gamma_sigma_mh_eta_sd = gamma_sigma_mh_eta_sd,
+        gamma_sigma_mh_log_sigma_sd = gamma_sigma_mh_log_sigma_sd,
+        gamma_sigma_mh_rho = gamma_sigma_mh_rho[[kk]],
+        gamma_sigma_mh_repeats = gamma_sigma_mh_repeats,
         init = one_init
       )
     }
@@ -467,6 +581,13 @@ app_joint_exqdesn_phase136_run_chain <- function(job, prep_by_case_variant, mcmc
     )
     fit$gamma_update <- gamma_update
   }
+  fit$gamma_refresh_repeats <- gamma_refresh_repeats
+  fit$gamma_refresh_block <- gamma_refresh_block
+  fit$gamma_init_mode <- variant_gamma_init_mode
+  fit$gamma_jitter_fraction <- variant_gamma_jitter_fraction
+  fit$gamma_sigma_mh_scale_profile <- as.character(
+    app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_scale_profile", "scalar")
+  )[[1L]]
   elapsed <- proc.time()[["elapsed"]] - chain_start
   list(
     phase136_case_variant_id = prep$phase136_case_variant_id,
@@ -616,11 +737,20 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
   vb_n_cores = 5L,
   gamma_init_mode = "vb_jittered",
   gamma_jitter_fraction = 0.10,
+  gamma_refresh_repeats = 1L,
+  gamma_refresh_block = "none",
   trace_write_stride = 50L,
   save_rdata = FALSE,
-  dry_run = FALSE
+  dry_run = FALSE,
+  variant_registry_override = NULL,
+  run_id = "joint_qdesn_phase136_exal_gamma_kernel_packet"
 ) {
   out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  gamma_refresh_repeats <- as.integer(gamma_refresh_repeats)[[1L]]
+  if (!is.finite(gamma_refresh_repeats) || is.na(gamma_refresh_repeats) || gamma_refresh_repeats <= 0L) {
+    stop("gamma_refresh_repeats must be a positive integer scalar.", call. = FALSE)
+  }
+  gamma_refresh_block <- match.arg(as.character(gamma_refresh_block)[[1L]], c("none", "sigma", "sigma_s", "sigma_s_v"))
   app_ensure_dir(out_dir)
   app_ensure_dir(file.path(out_dir, "figures"))
   if (isTRUE(save_rdata)) app_ensure_dir(file.path(out_dir, "raw_objects"))
@@ -628,13 +758,21 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
   phase135 <- app_joint_exqdesn_phase136_load_phase135(phase135_screening_dir, phase135_audit_dir)
   artifacts <- app_joint_qdesn_load_fixture_artifacts(fixture_dir)
   selected <- app_joint_exqdesn_phase136_select_cases(phase135, case_ids = case_ids, case_limit = case_limit)
-  variant_registry <- app_joint_exqdesn_phase136_variant_registry(
-    selected,
-    variant_ids = variant_ids,
-    bounded_width_multiplier = bounded_width_multiplier,
-    logit_eta_width = logit_eta_width,
-    gamma_slice_max_steps = gamma_slice_max_steps
-  )
+  variant_registry <- if (is.null(variant_registry_override)) {
+    app_joint_exqdesn_phase136_variant_registry(
+      selected,
+      variant_ids = variant_ids,
+      bounded_width_multiplier = bounded_width_multiplier,
+      logit_eta_width = logit_eta_width,
+      gamma_slice_max_steps = gamma_slice_max_steps
+    )
+  } else {
+    app_joint_exqdesn_phase136_normalize_variant_registry(variant_registry_override)
+  }
+  if (is.null(variant_registry_override)) {
+    variant_registry$gamma_refresh_repeats <- as.integer(gamma_refresh_repeats)
+    variant_registry$gamma_refresh_block <- as.character(gamma_refresh_block)
+  }
   mcmc_controls <- app_joint_qdesn_mcmc_readiness_controls(
     n_chains = n_chains,
     mcmc_n_iter = mcmc_n_iter,
@@ -649,7 +787,7 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
   )
 
   run_config <- data.frame(
-    run_id = "joint_qdesn_phase136_exal_gamma_kernel_packet",
+    run_id = run_id,
     out_dir = out_dir,
     phase135_screening_dir = phase135$screening_dir,
     phase135_audit_dir = phase135$audit_dir,
@@ -671,6 +809,9 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
     gamma_slice_max_steps = gamma_slice_max_steps,
     gamma_init_mode = gamma_init_mode,
     gamma_jitter_fraction = gamma_jitter_fraction,
+    gamma_refresh_repeats = as.integer(gamma_refresh_repeats),
+    gamma_refresh_block = as.character(gamma_refresh_block),
+    custom_variant_registry = !is.null(variant_registry_override),
     trace_write_stride = trace_write_stride,
     n_cores = mcmc_controls$n_cores,
     vb_n_cores = as.integer(vb_n_cores),
@@ -714,21 +855,37 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
     vb_elapsed <- proc.time()[["elapsed"]] - vb_start
     sigma_upper <- max(1, mcmc_controls$sigma_upper_multiplier * max(vb$vb_fit$sigma_mean, na.rm = TRUE))
     sigma_bounds <- c(1.0e-8, sigma_upper)
-    vb_meta <- app_joint_qdesn_phase122_meta(fixture, spec, variant, spec$inference[[1L]], spec$model_id[[1L]])
-    mcmc_meta <- app_joint_qdesn_phase122_meta(fixture, spec, variant, "MCMC", app_joint_qdesn_phase122_mcmc_model_id(spec$model_id[[1L]]))
-    common <- data.frame(
-      experiment_id = variant$phase136_variant_id[[1L]],
-      variant_id = variant$phase136_variant_id[[1L]],
-      phase136_variant_id = variant$phase136_variant_id[[1L]],
-      phase136_case_variant_id = variant$phase136_case_variant_id[[1L]],
-      gamma_update = variant$gamma_update[[1L]],
-      width_multiplier = ifelse(variant$gamma_update[[1L]] == "bounded_slice", variant$bounded_width_multiplier[[1L]], NA_real_),
-      logit_eta_width = ifelse(variant$gamma_update[[1L]] == "logit_slice", variant$logit_eta_width[[1L]], NA_real_),
-      gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
-      gamma_prior_center = variant$gamma_prior_center[[1L]] %||% NA_real_,
-      gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
-      stringsAsFactors = FALSE
-    )
+	    vb_meta <- app_joint_qdesn_phase122_meta(fixture, spec, variant, spec$inference[[1L]], spec$model_id[[1L]])
+	    mcmc_meta <- app_joint_qdesn_phase122_meta(fixture, spec, variant, "MCMC", app_joint_qdesn_phase122_mcmc_model_id(spec$model_id[[1L]]))
+	    variant_gamma_init_mode <- as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_init_mode", gamma_init_mode))[[1L]]
+	    variant_gamma_jitter_fraction <- as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_jitter_fraction", gamma_jitter_fraction))[[1L]]
+	    variant_gamma_refresh_repeats <- as.integer(app_joint_exqdesn_phase136_variant_value(variant, "gamma_refresh_repeats", gamma_refresh_repeats))[[1L]]
+	    variant_gamma_refresh_block <- as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_refresh_block", gamma_refresh_block))[[1L]]
+	    common <- data.frame(
+	      experiment_id = variant$phase136_variant_id[[1L]],
+	      variant_id = variant$phase136_variant_id[[1L]],
+	      phase136_variant_id = variant$phase136_variant_id[[1L]],
+	      phase136_case_variant_id = variant$phase136_case_variant_id[[1L]],
+	      gamma_update = variant$gamma_update[[1L]],
+	      width_multiplier = ifelse(variant$gamma_update[[1L]] == "bounded_slice", variant$bounded_width_multiplier[[1L]], NA_real_),
+	      logit_eta_width = ifelse(variant$gamma_update[[1L]] == "logit_slice", variant$logit_eta_width[[1L]], NA_real_),
+	      gamma_prior_type = variant$gamma_prior_type[[1L]] %||% "none",
+	      gamma_prior_center = variant$gamma_prior_center[[1L]] %||% NA_real_,
+	      gamma_prior_sd_eta = variant$gamma_prior_sd_eta[[1L]] %||% NA_real_,
+	      gamma_refresh_repeats = variant_gamma_refresh_repeats,
+	      gamma_refresh_block = variant_gamma_refresh_block,
+	      gamma_sigma_mh_eta_sd = as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_eta_sd", 0.25))[[1L]],
+	      gamma_sigma_mh_log_sigma_sd = as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_log_sigma_sd", 0.05))[[1L]],
+	      gamma_sigma_mh_rho_mode = as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_rho_mode", "zero"))[[1L]],
+	      gamma_sigma_mh_rho_abs = as.numeric(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_rho_abs", 0))[[1L]],
+	      gamma_sigma_mh_eta_sd_vector = as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_eta_sd_vector", ""))[[1L]],
+	      gamma_sigma_mh_log_sigma_sd_vector = as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_log_sigma_sd_vector", ""))[[1L]],
+	      gamma_sigma_mh_repeats = as.integer(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_repeats", 1L))[[1L]],
+	      gamma_sigma_mh_scale_profile = as.character(app_joint_exqdesn_phase136_variant_value(variant, "gamma_sigma_mh_scale_profile", "scalar"))[[1L]],
+	      gamma_init_mode = variant_gamma_init_mode,
+	      gamma_jitter_fraction = variant_gamma_jitter_fraction,
+	      stringsAsFactors = FALSE
+	    )
     vb_meta <- cbind(vb_meta, common, stringsAsFactors = FALSE)
     mcmc_meta <- cbind(mcmc_meta, common, stringsAsFactors = FALSE)
     list(
@@ -803,6 +960,45 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
     results <- results[order(vapply(results, `[[`, integer(1L), "chain_id"))]
     fits <- lapply(results, `[[`, "fit")
     pooled <- app_joint_qdesn_phase122_pool_mcmc_chains(fits, prep$fixture$Z, length(prep$fixture$tau), ncol(prep$fixture$Z), prep$fixture$tau)
+    chain_group_stability <- data.frame()
+    if (length(fits) >= 4L) {
+      split_at <- floor(length(fits) / 2L)
+      pooled_a <- app_joint_qdesn_phase122_pool_mcmc_chains(
+        fits[seq_len(split_at)], prep$fixture$Z, length(prep$fixture$tau),
+        ncol(prep$fixture$Z), prep$fixture$tau
+      )
+      pooled_b <- app_joint_qdesn_phase122_pool_mcmc_chains(
+        fits[seq.int(split_at + 1L, length(fits))], prep$fixture$Z,
+        length(prep$fixture$tau), ncol(prep$fixture$Z), prep$fixture$tau
+      )
+      fit_a <- app_joint_qdesn_predict_fit(pooled_a, prep$fixture$Z, prep$fixture$tau)
+      fit_b <- app_joint_qdesn_predict_fit(pooled_b, prep$fixture$Z, prep$fixture$tau)
+      forecast_a <- app_joint_qdesn_phase122_forecast_scores(
+        prep$mcmc_meta, artifacts, prep$scenario_id, prep$fixture, pooled_a,
+        "qhat", "phase136_chain_group_a_forecast"
+      )$raw
+      forecast_b <- app_joint_qdesn_phase122_forecast_scores(
+        prep$mcmc_meta, artifacts, prep$scenario_id, prep$fixture, pooled_b,
+        "qhat", "phase136_chain_group_b_forecast"
+      )$raw
+      chain_group_stability <- app_joint_qdesn_bind_rows(lapply(seq_along(prep$fixture$tau), function(kk) {
+        tau_k <- prep$fixture$tau[[kk]]
+        qa <- forecast_a$qhat[abs(forecast_a$tau - tau_k) < 1.0e-10]
+        qb <- forecast_b$qhat[abs(forecast_b$tau - tau_k) < 1.0e-10]
+        data.frame(
+          prep$mcmc_meta,
+          quantile_index = kk,
+          tau = tau_k,
+          n_chains_group_a = split_at,
+          n_chains_group_b = length(fits) - split_at,
+          fit_qhat_mean_abs_group_delta = mean(abs(fit_a[, kk] - fit_b[, kk])),
+          fit_qhat_max_abs_group_delta = max(abs(fit_a[, kk] - fit_b[, kk])),
+          forecast_qhat_mean_abs_group_delta = mean(abs(qa - qb)),
+          forecast_qhat_max_abs_group_delta = max(abs(qa - qb)),
+          stringsAsFactors = FALSE
+        )
+      }))
+    }
     vb_fit_scores <- app_joint_qdesn_phase122_score_qhat(
       prep$vb_meta,
       prep$fixture,
@@ -878,6 +1074,16 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
         mcmc_burn = mcmc_controls$mcmc_burn,
         mcmc_thin = mcmc_controls$mcmc_thin,
         mcmc_n_keep_total = nrow(pooled$beta_draws),
+        gamma_sigma_mh_acceptance_mean = {
+          acceptance <- unlist(lapply(fits, function(x) x$gamma_sigma_mh_acceptance_rate %||% NA_real_))
+          acceptance <- acceptance[is.finite(acceptance)]
+          if (length(acceptance)) mean(acceptance) else NA_real_
+        },
+        gamma_sigma_mh_acceptance_min = {
+          acceptance <- unlist(lapply(fits, function(x) x$gamma_sigma_mh_acceptance_rate %||% NA_real_))
+          acceptance <- acceptance[is.finite(acceptance)]
+          if (length(acceptance)) min(acceptance) else NA_real_
+        },
         mcmc_init_source = pooled$init_source,
         all_chain_init_source_provided = all(vapply(fits, function(x) grepl("provided", x$init_source %||% "", fixed = TRUE), logical(1L))),
         mcmc_draws_all_finite = all(draw$all_finite),
@@ -905,6 +1111,18 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
     if (isTRUE(save_rdata)) {
       saveRDS(list(fits = fits, pooled = pooled), file.path(out_dir, "raw_objects", paste0(app_joint_exqdesn_trace_safe_id(id), ".rds")))
     }
+    mh_acceptance <- app_joint_qdesn_bind_rows(lapply(seq_along(fits), function(chain_id) {
+      rate <- as.numeric(fits[[chain_id]]$gamma_sigma_mh_acceptance_rate %||% rep(NA_real_, length(prep$fixture$tau)))
+      data.frame(
+        prep$mcmc_meta,
+        chain_id = chain_id,
+        chain_seed = fits[[chain_id]]$seed %||% NA_integer_,
+        quantile_index = seq_along(prep$fixture$tau),
+        tau = prep$fixture$tau,
+        gamma_sigma_mh_acceptance_rate = rep(rate, length.out = length(prep$fixture$tau)),
+        stringsAsFactors = FALSE
+      )
+    }))
     list(
       prep = prep,
       mcmc_summary = mcmc_summary,
@@ -927,6 +1145,8 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
       rhat = rhat,
       gap = app_joint_exqdesn_chain_mean_gap_rows(trace),
       autocorrelation = app_joint_exqdesn_autocorrelation_rows(trace),
+      mh_acceptance = mh_acceptance,
+      chain_group_stability = chain_group_stability,
       runtime = app_joint_qdesn_bind_rows(lapply(results, `[[`, "runtime")),
       figure_path = figure_path
     )
@@ -953,6 +1173,8 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
   rhat <- app_joint_qdesn_bind_rows(lapply(case_results, `[[`, "rhat"))
   gap <- app_joint_qdesn_bind_rows(lapply(case_results, `[[`, "gap"))
   autocorrelation <- app_joint_qdesn_bind_rows(lapply(case_results, `[[`, "autocorrelation"))
+  mh_acceptance <- app_joint_qdesn_bind_rows(lapply(case_results, `[[`, "mh_acceptance"))
+  chain_group_stability <- app_joint_qdesn_bind_rows(lapply(case_results, `[[`, "chain_group_stability"))
   runtime <- app_joint_qdesn_bind_rows(lapply(case_results, `[[`, "runtime"))
   runtime <- app_joint_qdesn_bind_rows(list(
     runtime,
@@ -1035,6 +1257,14 @@ app_joint_exqdesn_run_phase136_gamma_kernel_packet <- function(
     mcmc_rhat_ess_summary = app_joint_qvp_write_csv(rhat, file.path(out_dir, "mcmc_rhat_ess_summary.csv")),
     chain_mean_gap_summary = app_joint_qvp_write_csv(gap, file.path(out_dir, "chain_mean_gap_summary.csv")),
     autocorrelation_summary = app_joint_qvp_write_csv(autocorrelation, file.path(out_dir, "autocorrelation_summary.csv")),
+    gamma_sigma_mh_acceptance_summary = app_joint_qvp_write_csv(
+      mh_acceptance,
+      file.path(out_dir, "gamma_sigma_mh_acceptance_summary.csv")
+    ),
+    chain_group_qhat_stability = app_joint_qvp_write_csv(
+      chain_group_stability,
+      file.path(out_dir, "chain_group_qhat_stability.csv")
+    ),
     runtime_summary = app_joint_qvp_write_csv(runtime, file.path(out_dir, "runtime_summary.csv")),
     provenance = app_joint_qvp_write_csv(app_joint_qvp_provenance_rows(), file.path(out_dir, "provenance.csv")),
     readme = normalizePath(readme_path, mustWork = TRUE),

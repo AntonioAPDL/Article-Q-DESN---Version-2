@@ -460,8 +460,20 @@ app_joint_qdesn_quantile_scores <- function(contract_rows, qhat_col = "qhat") {
   out
 }
 
+app_joint_qdesn_score_variant_columns <- function(scored) {
+  intersect(
+    c(
+      "case_id", "source_candidate_id", "source_model_id", "inference",
+      "experiment_id", "variant_id", "phase136_variant_id",
+      "phase136_case_variant_id", "gamma_update"
+    ),
+    names(scored)
+  )
+}
+
 app_joint_qdesn_check_loss_summary <- function(scored) {
-  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure", "tau")
+  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+          app_joint_qdesn_score_variant_columns(scored), "tau")
   mean_loss <- aggregate(check_loss ~ ., scored[, c(by, "check_loss"), drop = FALSE], mean, na.rm = TRUE)
   names(mean_loss)[names(mean_loss) == "check_loss"] <- "check_loss_mean"
   n_loss <- aggregate(check_loss ~ ., scored[, c(by, "check_loss"), drop = FALSE], function(x) sum(is.finite(x)))
@@ -470,7 +482,8 @@ app_joint_qdesn_check_loss_summary <- function(scored) {
 }
 
 app_joint_qdesn_hit_rate_summary <- function(scored) {
-  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure", "tau")
+  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+          app_joint_qdesn_score_variant_columns(scored), "tau")
   hit <- aggregate(hit ~ ., scored[, c(by, "hit"), drop = FALSE], mean, na.rm = TRUE)
   names(hit)[names(hit) == "hit"] <- "hit_rate"
   n <- aggregate(hit ~ ., scored[, c(by, "hit"), drop = FALSE], function(x) sum(!is.na(x)))
@@ -482,7 +495,8 @@ app_joint_qdesn_hit_rate_summary <- function(scored) {
 }
 
 app_joint_qdesn_truth_summary <- function(scored) {
-  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure", "tau")
+  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+          app_joint_qdesn_score_variant_columns(scored), "tau")
   mae <- aggregate(truth_abs_error ~ ., scored[, c(by, "truth_abs_error"), drop = FALSE], mean, na.rm = TRUE)
   names(mae)[names(mae) == "truth_abs_error"] <- "truth_mae"
   rmse <- aggregate(truth_sq_error ~ ., scored[, c(by, "truth_sq_error"), drop = FALSE], function(x) sqrt(mean(x, na.rm = TRUE)))
@@ -493,7 +507,8 @@ app_joint_qdesn_truth_summary <- function(scored) {
 }
 
 app_joint_qdesn_group_key_columns <- function(scored) {
-  base <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure", "full_time_index")
+  base <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+            app_joint_qdesn_score_variant_columns(scored), "full_time_index")
   extra <- intersect(c("origin_index", "horizon"), names(scored))
   c(base, extra)
 }
@@ -509,7 +524,8 @@ app_joint_qdesn_crps_grid_summary <- function(scored, qhat_col = "qhat") {
     cbind(block[1L, key_cols, drop = FALSE], data.frame(crps_grid = crps, stringsAsFactors = FALSE))
   })
   point <- app_joint_qdesn_bind_rows(rows)
-  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure")
+  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+          app_joint_qdesn_score_variant_columns(point))
   mean_crps <- aggregate(crps_grid ~ ., point[, c(by, "crps_grid"), drop = FALSE], mean, na.rm = TRUE)
   names(mean_crps)[names(mean_crps) == "crps_grid"] <- "crps_grid_mean"
   n_crps <- aggregate(crps_grid ~ ., point[, c(by, "crps_grid"), drop = FALSE], function(x) sum(is.finite(x)))
@@ -536,7 +552,8 @@ app_joint_qdesn_interval_summary <- function(scored, qhat_col = "qhat") {
       y <- block$y[[1L]]
       alpha <- 1 - (pair[[2L]] - pair[[1L]])
       rows[[length(rows) + 1L]] <- cbind(
-        block[1L, c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure"), drop = FALSE],
+        block[1L, c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+                      app_joint_qdesn_score_variant_columns(block)), drop = FALSE],
         data.frame(
           lower_tau = pair[[1L]],
           upper_tau = pair[[2L]],
@@ -550,7 +567,9 @@ app_joint_qdesn_interval_summary <- function(scored, qhat_col = "qhat") {
     }
   }
   point <- app_joint_qdesn_bind_rows(rows)
-  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure", "lower_tau", "upper_tau", "nominal_coverage")
+  by <- c("scenario_id", "model_id", "display_label", "likelihood", "fit_structure",
+          app_joint_qdesn_score_variant_columns(point),
+          "lower_tau", "upper_tau", "nominal_coverage")
   coverage <- aggregate(covered ~ ., point[, c(by, "covered"), drop = FALSE], mean, na.rm = TRUE)
   names(coverage)[names(coverage) == "covered"] <- "coverage"
   width <- aggregate(interval_width ~ ., point[, c(by, "interval_width"), drop = FALSE], mean, na.rm = TRUE)

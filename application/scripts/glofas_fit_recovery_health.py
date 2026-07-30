@@ -102,13 +102,15 @@ def reconcile_status(row, scheduler, worker):
 
     if complete and score.exists():
         return "completed", live
-    if worker_status.startswith("failed") or scheduler_status.startswith("failed"):
-        return "failed", live
     if live and (
         worker_status == "running"
         or scheduler_status in {"running", "running_external"}
     ):
         return "running", live
+    if scheduler_status == "pending":
+        return "pending", live
+    if worker_status.startswith("failed") or scheduler_status.startswith("failed"):
+        return "failed", live
     if scheduler_status in {"stopped_before_launch", "completed_existing"}:
         return scheduler_status, live
     if worker_status == "running" or scheduler_status == "running":
@@ -145,6 +147,9 @@ def main():
         scheduler = scheduler_rows.get(candidate_id, {})
         worker = read_one(output_root / "status" / f"{candidate_id}.csv")
         status, live = reconcile_status(row, scheduler, worker)
+        active_worker = worker
+        if status == "pending" and scheduler.get("status") == "pending":
+            active_worker = {}
         run_dir = pathlib.Path(row["run_dir"])
         score_path = output_root / "scores" / f"{candidate_id}_observed_fit_scores.csv"
         log_path = pathlib.Path(row["log_path"])
@@ -152,8 +157,8 @@ def main():
             "candidate_id": candidate_id,
             "priority": row["priority"],
             "status": status,
-            "stage": worker.get("stage", ""),
-            "pid": worker.get("pid", "") or scheduler.get("pid", ""),
+            "stage": active_worker.get("stage", ""),
+            "pid": active_worker.get("pid", "") or scheduler.get("pid", ""),
             "pid_live": str(live).lower(),
             "core": scheduler.get("core", ""),
             "started_at": scheduler.get("started_at", ""),

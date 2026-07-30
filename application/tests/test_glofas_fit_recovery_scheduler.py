@@ -105,6 +105,27 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertEqual(status, "running")
             self.assertTrue(live)
 
+    def test_scheduler_retry_pending_supersedes_old_worker_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            run_dir = output_root / "runs" / "candidate_run"
+            log_path = output_root / "logs" / "candidate.log"
+            run_dir.mkdir(parents=True)
+            row = {
+                "candidate_id": "candidate",
+                "run_dir": str(run_dir),
+                "log_path": str(log_path),
+            }
+            scheduler_state = {"status": "pending", "pid": ""}
+            worker_state = {"status": "failed", "pid": "999999999"}
+            status, live = health.reconcile_status(
+                row,
+                scheduler_state,
+                worker_state,
+            )
+            self.assertEqual(status, "pending")
+            self.assertFalse(live)
+
 
 if __name__ == "__main__":
     unittest.main()

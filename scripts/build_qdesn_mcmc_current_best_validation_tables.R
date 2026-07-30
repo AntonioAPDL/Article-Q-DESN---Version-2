@@ -23,11 +23,19 @@ get_arg <- function(flag, default) {
   args[[idx[[1L]] + 1L]]
 }
 
+validation_root <- normalizePath(
+  get_arg(
+    "--validation-root",
+    "/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0"
+  ),
+  winslash = "/",
+  mustWork = TRUE
+)
 promotion_id <- "qdesn_dqlm_500obs_mcmc_metric_envelope_20260727"
 source_dir <- get_arg(
   "--source-dir",
   file.path(
-    "/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0",
+    validation_root,
     "validation", "fitforecast_v2", "promotions", promotion_id
   )
 )
@@ -43,6 +51,25 @@ source_confirmation <- get_arg(
   "--source-confirmation",
   file.path(source_dir, paste0(promotion_id, "_coherent_confirmation.csv"))
 )
+authority_freeze_id <- paste0(
+  "qdesn_500obs_mcmc_nested_final_origin9000_v1_",
+  "evidence_freeze_20260730"
+)
+authority_freeze_dir <- get_arg(
+  "--authority-freeze-dir",
+  file.path(
+    validation_root,
+    "validation", "fitforecast_v2", "promotions", authority_freeze_id
+  )
+)
+authority_freeze_manifest_path <- get_arg(
+  "--authority-freeze-manifest",
+  file.path(authority_freeze_dir, "evidence_freeze_manifest.json")
+)
+authority_ledger_path <- get_arg(
+  "--authority-ledger",
+  file.path(authority_freeze_dir, "frozen_evidence_ledger.csv")
+)
 
 out_dir <- file.path(repo_root, "tables")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -53,6 +80,8 @@ stop_if_missing <- function(path, label) {
 stop_if_missing(source_csv, "current-best clean evidence table")
 stop_if_missing(source_manifest, "current-best manifest")
 stop_if_missing(source_confirmation, "coherent-confirmation ledger")
+stop_if_missing(authority_freeze_manifest_path, "article-authority freeze manifest")
+stop_if_missing(authority_ledger_path, "article-authority evidence ledger")
 
 sha256 <- function(path) unname(tools::sha256sum(path)[[1L]])
 as_bool <- function(value) {
@@ -74,6 +103,175 @@ verify_manifest_files <- function(entries, label) {
   }
   invisible(TRUE)
 }
+normalize_within_validation <- function(path_relative, label) {
+  candidate <- normalizePath(
+    file.path(validation_root, path_relative),
+    winslash = "/",
+    mustWork = TRUE
+  )
+  prefix <- paste0(validation_root, "/")
+  if (!startsWith(candidate, prefix)) {
+    stop(sprintf("%s escapes the validation root.", label), call. = FALSE)
+  }
+  candidate
+}
+verify_authority_entry <- function(entry, label) {
+  if (is.null(entry$path_relative) || is.null(entry$sha256)) {
+    stop(sprintf("%s is missing path/hash metadata.", label), call. = FALSE)
+  }
+  path <- normalize_within_validation(entry$path_relative, label)
+  if (!identical(sha256(path), entry$sha256)) {
+    stop(sprintf("%s has a SHA-256 mismatch.", label), call. = FALSE)
+  }
+  path
+}
+git_last_commit_for <- function(path) {
+  path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  prefix <- paste0(validation_root, "/")
+  if (!startsWith(path, prefix)) {
+    stop("Cannot resolve authority commit outside validation root.", call. = FALSE)
+  }
+  relative <- substring(path, nchar(prefix) + 1L)
+  out <- system2(
+    "git",
+    c("-C", validation_root, "log", "-1", "--format=%H", "--", relative),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  if (!length(out) || !grepl("^[0-9a-f]{40}$", out[[1L]])) {
+    stop("Could not resolve the validation authority commit.", call. = FALSE)
+  }
+  out[[1L]]
+}
+
+authority_freeze <- jsonlite::read_json(
+  authority_freeze_manifest_path,
+  simplifyVector = TRUE
+)
+expected_latest_decision <- "NO_CONFIRMED_COHERENT_ARTICLE_REFRESH"
+expected_valid_run_tag <- paste0(
+  "qdesn-500obs-mcmc-nested-final-o9000-v1-full-",
+  "20260730__git-bd4da62"
+)
+expected_rejected_run_tag <- paste0(
+  "qdesn-500obs-mcmc-nested-final-o9000-v1-full-",
+  "20260730__git-6582f87"
+)
+if (!identical(authority_freeze$freeze_id, authority_freeze_id) ||
+    !identical(authority_freeze$scope,
+      "independent_qdesn_exqdesn_mcmc_validation_only") ||
+    !identical(authority_freeze$git_branch,
+      "validation/shared-fitforecast-v2-1.0.0") ||
+    !identical(authority_freeze$package_version, "1.0.0") ||
+    !identical(authority_freeze$authority_contract_version, "1.0.0") ||
+    !identical(authority_freeze$authoritative_numeric_promotion_id,
+      promotion_id) ||
+    as.integer(authority_freeze$authoritative_numeric_row_count) != 36L ||
+    as.integer(authority_freeze$authoritative_candidate_row_count) != 129L ||
+    as.integer(authority_freeze$authoritative_displayed_metric_count) != 108L ||
+    !identical(authority_freeze$scientific_decision,
+      expected_latest_decision) ||
+    as.integer(authority_freeze$coherent_promotion_cells) != 0L ||
+    as.integer(authority_freeze$article_refresh_metric_rows) != 0L ||
+    isTRUE(authority_freeze$origin_9000_untouched_confirmation_eligible) ||
+    !identical(authority_freeze$article_update_policy,
+      "KEEP_CURRENT_ARTICLE_PARENT_ROWS_UNCHANGED") ||
+    !identical(authority_freeze$article_numeric_state,
+      "UNCHANGED_FROM_20260727_AUTHORITY") ||
+    !identical(
+      unname(authority_freeze$consumable_scientific_run_tags),
+      expected_valid_run_tag
+    ) ||
+    !identical(
+      unname(authority_freeze$permanently_rejected_run_tags),
+      expected_rejected_run_tag
+    ) ||
+    !identical(
+      as.integer(unname(authority_freeze$exposed_confirmation_origins)),
+      9000L
+    )) {
+  stop("Article-authority freeze does not satisfy the no-change contract.", call. = FALSE)
+}
+
+authority_source_csv <- verify_authority_entry(
+  authority_freeze$authoritative_numeric_article_envelope,
+  "Authoritative numerical envelope"
+)
+authority_source_manifest <- verify_authority_entry(
+  authority_freeze$authoritative_numeric_manifest,
+  "Authoritative numerical manifest"
+)
+authority_source_confirmation <- verify_authority_entry(
+  authority_freeze$authoritative_coherent_confirmation,
+  "Authoritative coherent confirmation"
+)
+expected_authority_paths <- c(
+  authority_source_csv,
+  authority_source_manifest,
+  authority_source_confirmation
+)
+requested_authority_paths <- normalizePath(
+  c(source_csv, source_manifest, source_confirmation),
+  winslash = "/",
+  mustWork = TRUE
+)
+if (!identical(requested_authority_paths, expected_authority_paths)) {
+  stop("Requested article inputs differ from the authority freeze.", call. = FALSE)
+}
+
+authority_ledger <- read.csv(
+  authority_ledger_path,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+if (!all(c("role", "path_relative", "sha256", "consume_policy") %in%
+         names(authority_ledger)) ||
+    anyDuplicated(authority_ledger$role)) {
+  stop("Article-authority evidence ledger has an invalid schema.", call. = FALSE)
+}
+authority_ledger_files <- data.frame(
+  path = vapply(
+    seq_len(nrow(authority_ledger)),
+    function(index) normalize_within_validation(
+      authority_ledger$path_relative[[index]],
+      paste0("Authority ledger row ", index)
+    ),
+    character(1L)
+  ),
+  sha256 = authority_ledger$sha256,
+  stringsAsFactors = FALSE
+)
+verify_manifest_files(authority_ledger_files, "Article-authority evidence ledger")
+expected_authority_roles <- c(
+  "article_numeric_envelope",
+  "article_numeric_manifest",
+  "article_coherent_confirmation"
+)
+if (!setequal(
+  authority_ledger$role[grepl("^article_", authority_ledger$role)],
+  expected_authority_roles
+)) {
+  stop("Article-authority ledger is missing required article roles.", call. = FALSE)
+}
+bundle_paths <- c(
+  file.path(authority_freeze_dir, "README.md"),
+  file.path(authority_freeze_dir, "run_disposition.csv"),
+  file.path(authority_freeze_dir, "origin_disposition.csv"),
+  authority_ledger_path
+)
+bundle_hashes <- c(
+  authority_freeze$bundle_hashes$readme_sha256,
+  authority_freeze$bundle_hashes$run_disposition_sha256,
+  authority_freeze$bundle_hashes$origin_disposition_sha256,
+  authority_freeze$bundle_hashes$frozen_evidence_ledger_sha256
+)
+if (!all(file.exists(bundle_paths)) ||
+    !identical(unname(tools::sha256sum(bundle_paths)), unname(bundle_hashes))) {
+  stop("Article-authority bundle hash verification failed.", call. = FALSE)
+}
+validation_authority_commit <- git_last_commit_for(
+  authority_freeze_manifest_path
+)
 
 promotion_manifest <- jsonlite::read_json(source_manifest, simplifyVector = TRUE)
 expected_decision <- "ELIGIBLE_FOR_SCIENTIFIC_PROMOTION_PENDING_ARTICLE_REVIEW"
@@ -89,7 +287,11 @@ if (!identical(promotion_manifest$promotion_id, promotion_id) ||
     as.integer(promotion_manifest$n_metric_promotions) != 0L ||
     as_bool(promotion_manifest$displayed_envelope_changed) ||
     as_bool(promotion_manifest$tracked_source_dirty_before_materialization) ||
-    length(promotion_manifest$untracked_before_materialization) != 0L) {
+    length(promotion_manifest$untracked_before_materialization) != 0L ||
+    !identical(
+      promotion_manifest$source_registry_hash_value,
+      authority_freeze$source_registry_hash_value
+    )) {
   stop("Current-best promotion manifest does not satisfy the frozen article gate.", call. = FALSE)
 }
 verify_manifest_files(promotion_manifest$source_manifest, "Promotion source manifest")
@@ -306,8 +508,7 @@ model_label_for_family <- function(family, model_variant) {
 write_family_table <- function(family) {
   path <- file.path(out_dir, sprintf("qdesn_validation_tt500_final_mcmc_%s.tex", family))
   lines <- c(
-    "% Generated by scripts/build_qdesn_mcmc_current_best_validation_tables.R.",
-    sprintf("%% Source: %s", normalizePath(source_csv, winslash = "/", mustWork = TRUE)),
+    "% Article-facing independent simulation MCMC table.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -335,7 +536,7 @@ write_family_table <- function(family) {
     lines <- c(lines, paste0(model_label_for_family(family, model_variant), " & ", paste(cells, collapse = " & "), " \\\\"))
   }
   caption <- sprintf(
-    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Each entry is the best observed value for that model, quantile level, and metric in the frozen case-specific calibration ledger; entries within one model row may therefore come from different calibrated specifications or replicate seeds. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is retained in the manifest and is not used as a metric-exclusion rule.",
+    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Each entry is the best observed value for that model, quantile level, and metric in the fixed case-specific calibration record; entries within one model row may therefore come from different calibrated specifications or replicate seeds. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is retained in the reproducibility record and is not used as a metric-exclusion rule.",
     families[[family]]
   )
   lines <- c(
@@ -355,7 +556,7 @@ written <- vapply(family_order, write_family_table, character(1L))
 
 wrapper <- file.path(out_dir, "qdesn_validation_tt500_final_mcmc_tables.tex")
 writeLines(c(
-  "% Generated by scripts/build_qdesn_mcmc_current_best_validation_tables.R.",
+  "% Article-facing independent simulation MCMC tables.",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_normal.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_laplace.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_gausmix.tex}"
@@ -366,7 +567,60 @@ artifact_paths <- c(written, wrapper)
 artifact_hashes <- tools::sha256sum(artifact_paths)
 manifest_lines <- c(
   "Q-DESN/DQLM 500-observation MCMC metric-wise calibrated article tables",
-  sprintf("generated_at: %s", Sys.time()),
+  sprintf("authority_as_of: %s", authority_freeze$freeze_date),
+  sprintf("authority_freeze_id: %s", authority_freeze$freeze_id),
+  sprintf(
+    "authority_freeze_manifest: %s",
+    normalizePath(
+      authority_freeze_manifest_path,
+      winslash = "/",
+      mustWork = TRUE
+    )
+  ),
+  sprintf(
+    "authority_freeze_manifest_sha256: %s",
+    sha256(authority_freeze_manifest_path)
+  ),
+  sprintf(
+    "validation_authority_commit: %s",
+    validation_authority_commit
+  ),
+  sprintf(
+    "latest_evidence_closeout_id: %s",
+    authority_freeze$closeout_id
+  ),
+  sprintf(
+    "latest_evidence_decision: %s",
+    authority_freeze$scientific_decision
+  ),
+  sprintf(
+    "latest_evidence_coherent_promotion_cells: %d",
+    as.integer(authority_freeze$coherent_promotion_cells)
+  ),
+  sprintf(
+    "latest_evidence_article_refresh_metric_rows: %d",
+    as.integer(authority_freeze$article_refresh_metric_rows)
+  ),
+  sprintf(
+    "latest_evidence_consumable_run_tag: %s",
+    unname(authority_freeze$consumable_scientific_run_tags)
+  ),
+  sprintf(
+    "latest_evidence_rejected_run_tag: %s",
+    unname(authority_freeze$permanently_rejected_run_tags)
+  ),
+  sprintf(
+    "exposed_confirmation_origins: %s",
+    paste(
+      as.integer(unname(authority_freeze$exposed_confirmation_origins)),
+      collapse = ","
+    )
+  ),
+  sprintf(
+    "article_numeric_state: %s",
+    authority_freeze$article_numeric_state
+  ),
+  "article_numeric_update: FALSE",
   sprintf("source_promotion_id: %s", promotion_manifest$promotion_id),
   sprintf("source_csv: %s", normalizePath(source_csv, winslash = "/", mustWork = TRUE)),
   sprintf("source_manifest: %s", normalizePath(source_manifest, winslash = "/", mustWork = TRUE)),
@@ -403,10 +657,10 @@ manifest_lines <- c(
   ),
   "selection_policy: minimum observed finite value by model_variant x family x tau x metric; diagnostic status retained but not excluded",
   "interpretation: metric-wise calibrated envelope plus a separately identified coherent full-budget confirmation",
-  sprintf("table_normal: %s", written[["normal"]]),
-  sprintf("table_laplace: %s", written[["laplace"]]),
-  sprintf("table_gausmix: %s", written[["gausmix"]]),
-  sprintf("wrapper: %s", normalizePath(wrapper, winslash = "/", mustWork = TRUE)),
+  sprintf("table_normal: %s", file.path("tables", basename(written[["normal"]]))),
+  sprintf("table_laplace: %s", file.path("tables", basename(written[["laplace"]]))),
+  sprintf("table_gausmix: %s", file.path("tables", basename(written[["gausmix"]]))),
+  sprintf("wrapper: %s", file.path("tables", basename(wrapper))),
   "artifact_sha256:",
   sprintf("  %s: %s", basename(names(artifact_hashes)), unname(artifact_hashes))
 )

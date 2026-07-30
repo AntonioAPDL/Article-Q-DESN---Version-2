@@ -46,6 +46,13 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         self.assertTrue(health.pid_alive(str(os.getpid())))
         self.assertFalse(scheduler.pid_alive("not-a-pid"))
 
+    def test_absolute_runtime_config_can_be_made_repo_relative(self):
+        config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"
+        self.assertEqual(
+            str(config.relative_to(REPO_ROOT)),
+            "local_trackers/runtime/config.yaml",
+        )
+
     def test_health_reconciles_completed_run_from_marker_and_score(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp) / "runtime"

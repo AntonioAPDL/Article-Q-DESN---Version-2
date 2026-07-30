@@ -20,6 +20,11 @@ def parse_args():
     parser.add_argument("--min-disk-gb", type=float, default=120.0)
     parser.add_argument("--poll-seconds", type=int, default=60)
     parser.add_argument("--cores", default="3,7,11,15")
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Retry non-running candidates whose worker status is failed.",
+    )
     return parser.parse_args()
 
 
@@ -127,12 +132,15 @@ def main():
                 "started_at": previous.get("started_at", ""),
             })
         elif worker.get("status") == "failed":
-            states[candidate_id].update({
-                "status": "failed_existing",
-                "pid": pid,
-                "finished_at": worker.get("timestamp", ""),
-                "return_code": worker.get("exit_code", ""),
-            })
+            if args.retry_failed:
+                states[candidate_id]["status"] = "pending"
+            else:
+                states[candidate_id].update({
+                    "status": "failed_existing",
+                    "pid": pid,
+                    "finished_at": worker.get("timestamp", ""),
+                    "return_code": worker.get("exit_code", ""),
+                })
 
     fields = list(next(iter(states.values())).keys())
     while True:

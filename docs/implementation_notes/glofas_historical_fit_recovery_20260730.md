@@ -33,7 +33,9 @@ only targets after that date.
 4. `glofas_fit_recovery_rescore_history.R` scores the retained historical paths
    on common dates and both response scales.
 5. `glofas_fit_recovery_scheduler.py` launches bounded, single-threaded p50
-   fits only when load, memory, and disk gates permit.
+   fits only when load, memory, and disk gates permit. It preserves failed
+   states by default; `--retry-failed` must be supplied explicitly after the
+   failure has been diagnosed and corrected.
 6. Each worker runs the standard fit, scoring, output, and post-analysis stages,
    then writes compact observed-fit scores and a completion marker.
 7. `glofas_fit_recovery_health.py` reconciles scheduler state, worker markers,

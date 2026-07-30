@@ -19,6 +19,10 @@ CURRENT_STAGE="initializing"
 
 mkdir -p "$STATUS_DIR"
 cd "$REPO_ROOT"
+CONFIG_ARG="$CONFIG"
+if [[ "$CONFIG_ARG" == "${REPO_ROOT}/"* ]]; then
+  CONFIG_ARG="${CONFIG_ARG#"${REPO_ROOT}/"}"
+fi
 
 write_status() {
   local status="$1"
@@ -58,21 +62,21 @@ fi
 CURRENT_STAGE="03_fit_models"
 write_status "running" "$CURRENT_STAGE"
 Rscript application/scripts/03_fit_models.R \
-  --config "$CONFIG" \
+  --config "$CONFIG_ARG" \
   --run_id "$RUN_ID" \
   --confirm_final_launch true
 
 CURRENT_STAGE="04_score_models"
 write_status "running" "$CURRENT_STAGE"
-Rscript application/scripts/04_score_models.R --config "$CONFIG" --run_id "$RUN_ID"
+Rscript application/scripts/04_score_models.R --config "$CONFIG_ARG" --run_id "$RUN_ID"
 
 CURRENT_STAGE="05_make_outputs"
 write_status "running" "$CURRENT_STAGE"
-Rscript application/scripts/05_make_outputs.R --config "$CONFIG" --run_id "$RUN_ID"
+Rscript application/scripts/05_make_outputs.R --config "$CONFIG_ARG" --run_id "$RUN_ID"
 
 CURRENT_STAGE="07_post_analysis"
 write_status "running" "$CURRENT_STAGE"
-Rscript application/scripts/07_post_analysis.R --config "$CONFIG" --run_id "$RUN_ID"
+Rscript application/scripts/07_post_analysis.R --config "$CONFIG_ARG" --run_id "$RUN_ID"
 
 CURRENT_STAGE="observed_fit_scoring"
 write_status "running" "$CURRENT_STAGE"

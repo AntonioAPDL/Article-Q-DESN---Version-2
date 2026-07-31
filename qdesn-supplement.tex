@@ -1492,13 +1492,14 @@ these source tables are displayed.
 \clearpage
 \subsection{Joint Multi-Quantile Balanced MCMC Provenance}
 
-The following generated tables preserve the protocol, scenario-level balanced
-MCMC summaries, readiness audit, and metric-specific summaries for the joint and
-independent multi-quantile readouts. The VB stages remain the
-screening, calibration, and initialization layer; the tables below document the
-MCMC confirmation evidence used by the main article. The gamma-sensitivity
-audit qualifies the sampled-gamma exQDESN rows as sensitivity evidence and
-does not alter the balanced MCMC packet values reported here.
+The following generated tables preserve the computational protocol, diagnostic
+gates, metric-specific winners, and replicated likelihood contrasts for the
+joint and independent multi-quantile readouts. VB and VB-LD provide the
+scenario-specific screening, calibration, and initialization layer. The main
+article reports the balanced MCMC confirmation, whereas the final supplementary
+table summarizes paired AL-minus-exAL forecast-MAE differences over 50 fresh
+fixtures per scenario. This separation keeps replicated specification evidence
+distinct from the article-facing posterior-computation evidence.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
 

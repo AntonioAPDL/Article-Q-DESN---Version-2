@@ -1819,18 +1819,19 @@ supplement as computational companion evidence.
 
 \subsection{Joint Multi-Quantile Frozen-Feature Validation}
 
-The second simulation study asks a different question: whether a shared
-quantile-vector readout can recover several conditional quantile paths at once
-under a frozen feature design. VB is used here for screening,
-calibration, and initialization. The reported evidence is the balanced
-VB-initialized MCMC confirmation grid over the four readout--likelihood
-combinations: Joint QDESN RHS, Independent QDESN RHS, Joint exQDESN RHS, and
-Independent exQDESN RHS. A subsequent gamma-sensitivity audit keeps Joint QDESN
-RHS under \(\AL\) as the primary article anchor and treats the sampled-gamma
-exQDESN rows as exAL sensitivity evidence rather than as the promoted primary
-model. All rows evaluate posterior quantile-grid readout paths; they should not
-be read as validation of a scalar predictive density obtained by multiplying or
-mixing the component working likelihoods.
+The second simulation study assesses whether a shared quantile-vector readout
+can recover several conditional quantile paths simultaneously under a frozen
+feature design. Candidate reservoir and prior specifications are selected
+separately for each mechanism and model using VB or VB-LD. A replicated
+robustness experiment then refits the 32 frozen scenario--model specifications
+on 50 independently generated fixtures per cell, for 1,600 variational fits in
+total. The article-facing evidence is a balanced MCMC confirmation of the same
+four readout--likelihood combinations: Joint QDESN RHS, Independent QDESN RHS,
+Joint exQDESN RHS, and Independent exQDESN RHS. Each MCMC run is initialized
+from its corresponding variational fit and retains the scenario-specific
+specification fixed before sampling. All comparisons concern posterior
+quantile-grid readout paths; they do not validate a scalar predictive density
+formed by multiplying or mixing the component working likelihoods.
 
 The selected readout is fit across
 \[
@@ -1838,37 +1839,45 @@ The selected readout is fit across
 \]
 The balanced confirmation grid uses eight synthetic data-generating mechanisms,
 a frozen feature design, and a 500-observation fit window. The three bridge
-mechanisms align
-with the Gaussian, Laplace, and Gaussian-mixture families in the single-quantile
-study. The five stress mechanisms introduce Student-\(t\) errors, asymmetric
-tails, persistent heavy tails, regime shifts, and nonlinear reservoir-friendly
-dynamics. The resulting grid has 32 scenario--model MCMC rows. Quantile
-summaries are compared with the known conditional quantiles, realized
-observations are scored through check loss and grid CRPS, and empirical
-hit-rate errors summarize marginal calibration. Reported scores use the
-declared monotone quantile-grid rule; raw adjacent-level crossings before
-that rule are retained as numerical coherence diagnostics.
+mechanisms use Gaussian, Laplace, and Gaussian-mixture innovations. The five
+stress mechanisms introduce asymmetric tails, persistent heavy tails,
+Student-\(t\) errors, regime shifts, and nonlinear reservoir-friendly dynamics.
+The resulting grid contains 32 scenario--model MCMC rows. Fitted and forecast
+quantiles are compared with the known conditional quantile paths; realized
+observations are scored by check loss and grid CRPS; and hit-rate errors
+summarize marginal calibration. Reported scores use the declared monotone
+quantile-grid rule, while raw adjacent-level crossings before that rule are
+retained as numerical coherence diagnostics.
 
 \input{tables/joint_qdesn_article_validation_mcmc_balanced_model_summary.tex}
 
 Table~\ref{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}
 summarizes the balanced MCMC confirmation layer at the scenario level. Entries
 report forecast MAE against the oracle quantile grid, with fit-window MAE and
-raw adjacent-level crossing counts retained in parentheses; boldface marks the
-lowest within-scenario forecast MAE. The scenario-wise display makes the
-heterogeneity clearer than an aggregate model ranking. Joint QDESN RHS is the
-lowest-forecast-MAE row in five of the eight mechanisms, including the Gaussian,
-Laplace, asymmetric-tail, nonlinear-reservoir, and Student-\(t\)
-location-scale cases. Independent exQDESN RHS has the lowest forecast MAE in
-the Gaussian-mixture bridge, persistent-heavy-tail, and regime-shift cases. The
-independent AL readout is competitive in average forecast MAE but carries most
-of the raw crossing burden, whereas the exAL rows are raw-crossing free in this
-balanced MCMC packet. These exAL wins do not by themselves promote sampled-gamma
-exQDESN as the leading article model: the gamma-sensitivity audit found
-that sampled-gamma exAL variants did not improve on the AL-like fixed-gamma
-reference in the high-priority comparison cases. The supplement records the
-protocol audit, aggregate summaries, and metric-specific summaries so these
-qualifications remain reproducible without making the main text table-heavy.
+raw forecast-window crossing counts in parentheses; boldface marks the lowest
+within-scenario forecast MAE. Joint QDESN RHS has the lowest forecast MAE in
+four of the eight mechanisms: the Gaussian-mixture, Laplace, nonlinear, and
+normal cases. Independent QDESN RHS is lowest for the regime-shift and
+Student-\(t\) location-scale mechanisms, while Independent exQDESN RHS is
+lowest for the asymmetric-tail and persistent-heavy-tail mechanisms. Thus the
+two independent rows account for two scenarios each, and Joint exQDESN RHS is
+not the forecast-MAE minimum in this frozen packet. The asymmetric-tail
+difference between the two independent rows is only \(1.3\times 10^{-4}\), so
+that numerical ordering should not be interpreted as a substantive separation.
+
+Fit recovery gives a complementary result: Joint QDESN RHS has the lowest MAE
+in six of the eight fit windows, with Independent exQDESN RHS lowest in the two
+remaining cases. Quantile coherence also distinguishes the readouts.
+Independent QDESN RHS accounts for 24 of the 25 raw forecast-window crossings;
+Joint QDESN RHS accounts for one, and both exAL rows account for none. All 32
+rows have zero crossings after the monotone reporting rule. The replicated VB
+experiment further gives lower median paired forecast MAE to AL than exAL for
+both readout structures in every mechanism, although the frequency and size of
+the differences vary by scenario. Together, these results support Joint QDESN
+RHS as the principal joint-readout reference in this design. They do not support
+a claim that the additional exAL shape parameter uniformly improves
+quantile-path accuracy. The supplement reports the computational protocol,
+diagnostic gates, metric-specific winners, and replicated AL--exAL contrasts.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}

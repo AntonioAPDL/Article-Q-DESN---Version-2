@@ -1,0 +1,23 @@
+Independent single-quantile MCMC performance figure
+figure_id: qdesn_mcmc_metric_envelope_heatmap
+source_promotion_id: qdesn_dqlm_500obs_mcmc_metric_envelope_20260727
+source_csv: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0/validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_mcmc_metric_envelope_20260727/qdesn_dqlm_500obs_mcmc_metric_envelope_20260727_article_envelope.csv
+source_csv_sha256: aa4399576453ec0e9eeb21fa2166a1aaeed977c976064b13c4dc27f963cbb9a1
+source_registry_hash: edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275
+source_rows: 36
+plotted_values: 108
+models: 4
+families: 3
+quantile_levels: 3
+metrics: 3
+metric_source_mixed_rows: 14
+normalization: value divided by the minimum across four models within family x tau x metric
+fill_transform: log2(ratio_to_best)
+selection_policy: status-agnostic metric-wise calibrated envelope; lower is better
+diagnostic_policy: WARN and FAIL markers reflect the contributing metric source
+script: /data/jaguir26/local/src/Article-Q-DESN---Version-2/scripts/build_qdesn_mcmc_validation_figure.R
+script_sha256: 35f6d7bf99c2ebdea7b365bf2211378a8b88ed1a8d10e1307b22dc783c6d37d9
+figure_pdf: /data/jaguir26/local/src/Article-Q-DESN---Version-2/figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf
+figure_pdf_sha256: 50a06c2e967fc40cfad6465950f266201702409c32cebff3e45ce58377d2b485
+figure_data_csv: /data/jaguir26/local/src/Article-Q-DESN---Version-2/tables/qdesn_validation_mcmc_figure_data.csv
+figure_data_csv_sha256: b30459aa3ac4fb2ec66ab636c50559218a80a9180215227b60d55f44c84043f2

@@ -104,8 +104,11 @@ app_glofas_fit_recovery_metric_row <- function(history, window = NA_integer_, ta
   raw_err_original <- h$raw_original[raw_ok] - h$y_original[raw_ok]
   peak_cut <- suppressWarnings(stats::quantile(h$y_original, probs = 0.95, na.rm = TRUE, names = FALSE))
   peak <- is.finite(h$y_original) & h$y_original >= peak_cut
+  check_loss <- app_glofas_fit_recovery_check_loss(h$y_log1p, h$qhat_log1p, tau = tau)
+  absolute_error <- mean(abs(err_log))
   data.frame(
     candidate_id = unique(h$candidate_id)[[1L]],
+    quantile_level = as.numeric(tau),
     window = app_glofas_fit_recovery_window_label(window),
     date_min = as.character(min(h$target_date)),
     date_max = as.character(max(h$target_date)),
@@ -113,8 +116,10 @@ app_glofas_fit_recovery_metric_row <- function(history, window = NA_integer_, ta
     log1p_mae = mean(abs(err_log)),
     log1p_rmse = sqrt(mean(err_log^2)),
     log1p_bias = mean(err_log),
-    p50_check_loss_mean = app_glofas_fit_recovery_check_loss(h$y_log1p, h$qhat_log1p, tau = tau),
-    p50_degenerate_crps_proxy_mean = mean(abs(err_log)),
+    check_loss_mean = check_loss,
+    absolute_error_mean = absolute_error,
+    p50_check_loss_mean = if (isTRUE(all.equal(as.numeric(tau), 0.5, tolerance = 1e-12))) check_loss else NA_real_,
+    p50_degenerate_crps_proxy_mean = if (isTRUE(all.equal(as.numeric(tau), 0.5, tolerance = 1e-12))) absolute_error else NA_real_,
     original_mae = mean(abs(err_original)),
     original_rmse = sqrt(mean(err_original^2)),
     original_bias = mean(err_original),

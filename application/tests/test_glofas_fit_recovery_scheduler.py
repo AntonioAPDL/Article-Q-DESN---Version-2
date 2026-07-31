@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import os
 import tempfile
 import unittest
@@ -27,6 +28,28 @@ health = load_script_module(
 
 
 class GlofasFitRecoverySchedulerTests(unittest.TestCase):
+    def make_manifest_row(self, root):
+        root = Path(root)
+        config = root / "configs" / "candidate.yaml"
+        grid = root / "configs" / "grid.csv"
+        config.parent.mkdir(parents=True)
+        config.write_text("value: 1\n", encoding="utf-8")
+        grid.write_text("fit_id\nfit\n", encoding="utf-8")
+        digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+        return {
+            "candidate_id": "candidate",
+            "priority": "1",
+            "config_path": str(config),
+            "config_sha256": digest(config),
+            "model_grid_path": str(grid),
+            "model_grid_sha256": digest(grid),
+            "run_id": "candidate_run",
+            "run_dir": str(root / "runs" / "candidate_run"),
+            "log_path": str(root / "logs" / "candidate.log"),
+            "warm_start_source_fit_object": "",
+            "warm_start_source_sha256": "",
+        }
+
     def test_scheduler_state_roundtrip_is_priority_ordered(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "state.csv"
@@ -125,6 +148,25 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             )
             self.assertEqual(status, "pending")
             self.assertFalse(live)
+
+    def test_manifest_integrity_accepts_owned_hashed_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_rejects_changed_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            Path(row["config_path"]).write_text("value: 2\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Config hash changed"):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_rejects_unowned_run_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            row["run_dir"] = str(Path(tmp).parent / "outside")
+            with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
 
 
 if __name__ == "__main__":

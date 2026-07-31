@@ -105,6 +105,13 @@ Tracked helper files:
 - `plot_input_diagnostics.R`
 - `synthesize_quantiles.R`: monotone quantile-grid synthesis and crossing
   diagnostics for independently fitted quantile models.
+- `glofas_fit_recovery.R`: observed-history reconstruction, single-quantile
+  scoring, candidate comparison, and guarded artifact cleanup for GloFAS fit
+  recovery experiments.
+- `glofas_fit_recovery_selection.R`: manifest validation, common-date
+  alignment, independent and post-hoc isotonic distributional scoring,
+  convergence/warm-start gates, and ranking for the staged GloFAS
+  distributional-selection workflow.
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.

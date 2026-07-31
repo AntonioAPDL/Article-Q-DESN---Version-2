@@ -3,6 +3,7 @@
 import argparse
 import csv
 import datetime as dt
+import hashlib
 import os
 import pathlib
 import shutil
@@ -59,6 +60,93 @@ def read_manifest(path):
     return rows
 
 
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with pathlib.Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def require_within(path, root, label):
+    path = pathlib.Path(path).resolve()
+    root = pathlib.Path(root).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{label} escapes its owned runtime root: {path}") from exc
+    return path
+
+
+def validate_manifest(rows, output_root, cores, max_parallel):
+    if not rows:
+        raise ValueError("The scheduler manifest is empty")
+    required = {
+        "candidate_id", "priority", "config_path", "config_sha256",
+        "model_grid_path", "model_grid_sha256", "run_id", "run_dir",
+        "log_path",
+    }
+    missing = required.difference(rows[0])
+    if missing:
+        raise ValueError(
+            "The scheduler manifest lacks required columns: "
+            + ", ".join(sorted(missing))
+        )
+    candidate_ids = [row["candidate_id"] for row in rows]
+    run_ids = [row["run_id"] for row in rows]
+    priorities = [int(float(row["priority"])) for row in rows]
+    if any(not value or "/" in value or "\\" in value for value in candidate_ids):
+        raise ValueError("Candidate IDs must be nonempty path-safe values")
+    if len(candidate_ids) != len(set(candidate_ids)):
+        raise ValueError("Candidate IDs must be unique")
+    if len(run_ids) != len(set(run_ids)):
+        raise ValueError("Run IDs must be unique")
+    if len(priorities) != len(set(priorities)):
+        raise ValueError("Manifest priorities must be unique")
+    if len(cores) != len(set(cores)):
+        raise ValueError("Declared scheduler cores must be unique")
+    cpu_count = os.cpu_count() or 1
+    if any(core < 0 or core >= cpu_count for core in cores):
+        raise ValueError(f"Declared scheduler cores must lie in [0, {cpu_count - 1}]")
+    if max_parallel < 1 or max_parallel > len(cores):
+        raise ValueError(
+            "max-parallel must be between one and the number of declared cores"
+        )
+
+    output_root = pathlib.Path(output_root).resolve()
+    runs_root = output_root / "runs"
+    logs_root = output_root / "logs"
+    for row in rows:
+        config_path = pathlib.Path(row["config_path"]).resolve()
+        grid_path = pathlib.Path(row["model_grid_path"]).resolve()
+        if not config_path.is_file() or not grid_path.is_file():
+            raise ValueError(
+                f"Prepared config/model grid is missing for {row['candidate_id']}"
+            )
+        if sha256_file(config_path) != row["config_sha256"]:
+            raise ValueError(f"Config hash changed for {row['candidate_id']}")
+        if sha256_file(grid_path) != row["model_grid_sha256"]:
+            raise ValueError(f"Model-grid hash changed for {row['candidate_id']}")
+        require_within(row["run_dir"], runs_root, "Run directory")
+        require_within(row["log_path"], logs_root, "Log path")
+
+        warm_path = row.get("warm_start_source_fit_object", "").strip()
+        warm_hash = row.get("warm_start_source_sha256", "").strip()
+        if bool(warm_path) != bool(warm_hash):
+            raise ValueError(
+                f"Warm-start path/hash must be supplied together for {row['candidate_id']}"
+            )
+        if warm_path:
+            if not pathlib.Path(warm_path).is_file():
+                raise ValueError(
+                    f"Warm-start source is missing for {row['candidate_id']}"
+                )
+            if sha256_file(warm_path) != warm_hash:
+                raise ValueError(
+                    f"Warm-start source hash changed for {row['candidate_id']}"
+                )
+
+
 def read_last_csv(path):
     path = pathlib.Path(path)
     if not path.exists():
@@ -88,8 +176,7 @@ def main():
     output_root = pathlib.Path(args.output_root).resolve()
     manifest = read_manifest(args.manifest)
     cores = [int(value) for value in args.cores.split(",") if value.strip()]
-    if args.max_parallel < 1 or args.max_parallel > len(cores):
-        raise SystemExit("max-parallel must be between one and the number of declared cores")
+    validate_manifest(manifest, output_root, cores, args.max_parallel)
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "logs").mkdir(exist_ok=True)
     state_path = output_root / "scheduler_state.csv"

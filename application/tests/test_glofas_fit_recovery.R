@@ -36,6 +36,11 @@ stopifnot(isTRUE(all.equal(
   scores$p50_check_loss_mean,
   0.5 * scores$p50_degenerate_crps_proxy_mean
 )))
+stopifnot(isTRUE(all.equal(scores$check_loss_mean, scores$p50_check_loss_mean)))
+tail_scores <- app_glofas_fit_recovery_score_history(history, windows = NA_integer_, tau = 0.05)
+stopifnot(tail_scores$quantile_level[[1L]] == 0.05)
+stopifnot(is.finite(tail_scores$check_loss_mean[[1L]]))
+stopifnot(is.na(tail_scores$p50_check_loss_mean[[1L]]))
 stopifnot(all(scores$original_mae > 0))
 
 history_b <- history

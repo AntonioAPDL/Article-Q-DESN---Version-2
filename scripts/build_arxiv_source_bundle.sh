@@ -51,6 +51,7 @@ copy_as tables/joint_qdesn_article_validation_mcmc_balanced_scenario_summary.tex
 copy_as tables/joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex tables/joint_simulation_diagnostic_gates.tex
 copy_as tables/joint_qdesn_article_validation_mcmc_balanced_winner_summary.tex tables/joint_simulation_winner_summary.tex
 
+copy_as figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf figures/independent_simulation_mcmc_performance.pdf
 copy_as figures/glofas_application/glofas_qdesn_discrepancy_corrected_quantile_paths__glofas_stage_n_winner_scorebalanced_20260703.pdf figures/glofas_calibrated_quantile_paths.pdf
 copy_as figures/glofas_application/diagnostics/glofas_stage_n_winner_full7_scorebalanced_qdesn_synthesized_bands__glofas_stage_n_winner_scorebalanced_20260703.pdf figures/glofas_forecast_bands.pdf
 
@@ -86,6 +87,7 @@ for f in "${rewrite_files[@]}"; do
     s{tables/joint_qdesn_article_validation_mcmc_balanced_scenario_summary\.tex}{tables/joint_simulation_scenario_summary.tex}g;
     s{tables/joint_qdesn_article_validation_mcmc_balanced_gate_summary\.tex}{tables/joint_simulation_diagnostic_gates.tex}g;
     s{tables/joint_qdesn_article_validation_mcmc_balanced_winner_summary\.tex}{tables/joint_simulation_winner_summary.tex}g;
+    s{figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap\.pdf}{figures/independent_simulation_mcmc_performance.pdf}g;
     s{figures/glofas_application/glofas_qdesn_discrepancy_corrected_quantile_paths__glofas_stage_n_winner_scorebalanced_20260703\.pdf}{figures/glofas_calibrated_quantile_paths.pdf}g;
     s{figures/glofas_application/diagnostics/glofas_stage_n_winner_full7_scorebalanced_qdesn_synthesized_bands__glofas_stage_n_winner_scorebalanced_20260703\.pdf}{figures/glofas_forecast_bands.pdf}g;
     s{\\bibliography\{refs\}}{\\bibliography{references}}g;
@@ -104,11 +106,13 @@ Main article:
   bibtex article
   pdflatex -interaction=nonstopmode -halt-on-error article.tex
   pdflatex -interaction=nonstopmode -halt-on-error article.tex
+  pdflatex -interaction=nonstopmode -halt-on-error article.tex
 
 Supplement source is included as supplement.tex. If the supplement is submitted
 as ancillary material, compile it separately and upload the resulting PDF:
   pdflatex -interaction=nonstopmode -halt-on-error supplement.tex
   bibtex supplement
+  pdflatex -interaction=nonstopmode -halt-on-error supplement.tex
   pdflatex -interaction=nonstopmode -halt-on-error supplement.tex
   pdflatex -interaction=nonstopmode -halt-on-error supplement.tex
 

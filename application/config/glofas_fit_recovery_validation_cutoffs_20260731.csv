@@ -1,0 +1,3 @@
+cutoff_id,origin_date,bundle_dir,glofas_source_id,covariate_policy,enabled,priority,notes
+dec21_2021,2021-12-21,application/data_local/frozen_inputs/authoritative_cutoffs/cutoff_date=2021-12-21,glofas_hist_v31_lisflood_cons,oracle_realized,true,1,"Long-history v3.1 pseudo-cutoff; realized ppt/soil are diagnostic-only future covariates"
+may11_2022,2022-05-11,application/data_local/frozen_inputs/authoritative_cutoffs/cutoff_date=2022-05-11,glofas_hist_v31_lisflood_cons,oracle_realized,true,2,"Long-history v3.1 pseudo-cutoff; realized ppt/soil are diagnostic-only future covariates"

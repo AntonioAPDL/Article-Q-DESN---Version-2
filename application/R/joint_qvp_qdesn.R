@@ -15066,6 +15066,157 @@ app_joint_qvp_exal_sigma_gamma_log_kernel <- function(
   if (is.finite(val)) val else -Inf
 }
 
+app_joint_qvp_exal_collapsed_sufficient_stats <- function(
+  y, fitted_no_alpha, alpha, s, v
+) {
+  r <- y - alpha - fitted_no_alpha
+  if (any(!is.finite(r)) || any(!is.finite(s)) || any(!is.finite(v)) || any(v <= 0)) {
+    stop("Collapsed gamma-scale sufficient statistics require finite values and positive v.", call. = FALSE)
+  }
+  list(
+    n = length(r),
+    sum_v = sum(v),
+    sum_log_v = sum(log(v)),
+    sum_r = sum(r),
+    sum_r2_over_v = sum(r^2 / v),
+    sum_s = sum(s),
+    sum_s2_over_v = sum(s^2 / v),
+    sum_sr_over_v = sum(s * r / v)
+  )
+}
+
+app_joint_qvp_exal_sigma_gig_terms <- function(
+  gamma, y, fitted_no_alpha, alpha, s, v, tau, kappa,
+  a_sigma = 0.1, b_sigma = 0.1,
+  sufficient_stats = NULL
+) {
+  if (!is.finite(a_sigma) || a_sigma <= 0 || !is.finite(b_sigma) || b_sigma <= 0) {
+    stop("Scale-prior parameters must be positive and finite.", call. = FALSE)
+  }
+  constants <- tryCatch(app_joint_qvp_exal_constants(tau, gamma), error = function(e) NULL)
+  if (is.null(constants)) return(NULL)
+  stats <- sufficient_stats %||% app_joint_qvp_exal_collapsed_sufficient_stats(
+    y = y, fitted_no_alpha = fitted_no_alpha, alpha = alpha, s = s, v = v
+  )
+  B <- constants$B[[1L]]
+  A <- constants$A[[1L]]
+  lambda_exal <- constants$lambda[[1L]]
+  if (!is.finite(B) || B <= 0) return(NULL)
+  weighted_residual_ss <- stats$sum_r2_over_v - 2 * A * stats$sum_r + A^2 * stats$sum_v
+  out <- list(
+    lambda = -a_sigma - 1.5 * kappa * stats$n,
+    chi = 2 * b_sigma + 2 * kappa * stats$sum_v +
+      kappa * weighted_residual_ss / B,
+    psi = kappa * lambda_exal^2 * stats$sum_s2_over_v / B,
+    constants = constants,
+    log_Bv_sum = stats$n * log(B) + stats$sum_log_v,
+    lambda_s_centered_over_Bv_sum = lambda_exal / B *
+      (stats$sum_sr_over_v - A * stats$sum_s),
+    sufficient_stats = stats
+  )
+  if (!is.finite(out$lambda) || !is.finite(out$chi) || out$chi <= 0 ||
+      !is.finite(out$psi) || out$psi < 0) return(NULL)
+  out$psi <- max(out$psi, .Machine$double.eps)
+  out
+}
+
+app_joint_qvp_exal_gamma_collapsed_log_kernel <- function(
+  gamma, y, fitted_no_alpha, alpha, s, v, tau, kappa,
+  a_sigma = 0.1, b_sigma = 0.1,
+  gamma_prior_type = "none", gamma_prior_center = 0,
+  gamma_prior_sd_eta = NA_real_,
+  sufficient_stats = NULL
+) {
+  terms <- app_joint_qvp_exal_sigma_gig_terms(
+    gamma = gamma, y = y, fitted_no_alpha = fitted_no_alpha,
+    alpha = alpha, s = s, v = v, tau = tau, kappa = kappa,
+    a_sigma = a_sigma, b_sigma = b_sigma,
+    sufficient_stats = sufficient_stats
+  )
+  if (is.null(terms)) return(-Inf)
+  support <- app_joint_qvp_exal_support(tau)
+  prior <- app_joint_qvp_gamma_log_prior(
+    gamma = gamma,
+    lower = support$lower[[1L]],
+    upper = support$upper[[1L]],
+    gamma_prior_type = gamma_prior_type,
+    gamma_prior_center = gamma_prior_center,
+    gamma_prior_sd_eta = gamma_prior_sd_eta
+  )
+  constant <- -0.5 * kappa * terms$log_Bv_sum +
+    kappa * terms$lambda_s_centered_over_Bv_sum + prior
+  out <- constant + app_joint_qvp_gig_log_integral(
+    terms$lambda, terms$chi, terms$psi
+  )
+  if (is.finite(out)) out else -Inf
+}
+
+app_joint_qvp_exal_sigma_gamma_collapsed_draw <- function(
+  sigma, gamma, y, fitted_no_alpha, alpha, s, v, tau, kappa,
+  gamma_slice_width = 1, gamma_slice_max_steps = 100L,
+  a_sigma = 0.1, b_sigma = 0.1,
+  gamma_prior_type = "none", gamma_prior_center = 0,
+  gamma_prior_sd_eta = NA_real_
+) {
+  support <- app_joint_qvp_exal_support(tau)
+  lower <- support$lower[[1L]]
+  upper <- support$upper[[1L]]
+  margin <- max(1.0e-8, 1.0e-8 * (upper - lower))
+  eta_lower <- app_joint_qvp_gamma_to_eta(lower + margin, lower, upper)
+  eta_upper <- app_joint_qvp_gamma_to_eta(upper - margin, lower, upper)
+  eta0 <- app_joint_qvp_gamma_to_eta(gamma, lower, upper)
+  density_evaluations <- 0L
+  sufficient_stats <- app_joint_qvp_exal_collapsed_sufficient_stats(
+    y = y, fitted_no_alpha = fitted_no_alpha, alpha = alpha, s = s, v = v
+  )
+  eta_log_density <- function(eta) {
+    density_evaluations <<- density_evaluations + 1L
+    g <- app_joint_qvp_eta_to_gamma(eta, lower, upper)
+    app_joint_qvp_exal_gamma_collapsed_log_kernel(
+      gamma = g, y = y, fitted_no_alpha = fitted_no_alpha,
+      alpha = alpha, s = s, v = v, tau = tau, kappa = kappa,
+      a_sigma = a_sigma, b_sigma = b_sigma,
+      gamma_prior_type = gamma_prior_type,
+      gamma_prior_center = gamma_prior_center,
+      gamma_prior_sd_eta = gamma_prior_sd_eta,
+      sufficient_stats = sufficient_stats
+    ) + app_joint_qvp_gamma_logit_jacobian(eta, lower, upper)
+  }
+  eta <- app_joint_qvp_slice_bounded_one(
+    x0 = eta0,
+    lower = eta_lower,
+    upper = eta_upper,
+    width = gamma_slice_width,
+    max_steps = gamma_slice_max_steps,
+    log_density = eta_log_density
+  )
+  gamma_new <- app_joint_qvp_eta_to_gamma(eta, lower, upper)
+  terms <- app_joint_qvp_exal_sigma_gig_terms(
+    gamma = gamma_new, y = y, fitted_no_alpha = fitted_no_alpha,
+    alpha = alpha, s = s, v = v, tau = tau, kappa = kappa,
+    a_sigma = a_sigma, b_sigma = b_sigma,
+    sufficient_stats = sufficient_stats
+  )
+  if (is.null(terms)) stop("Collapsed gamma-scale draw produced invalid GIG terms.", call. = FALSE)
+  sigma_new <- app_joint_qvp_rgig(
+    lambda = terms$lambda,
+    chi = terms$chi,
+    psi = terms$psi,
+    current = sigma
+  )[[1L]]
+  if (!is.finite(sigma_new) || sigma_new <= 0) {
+    stop("Collapsed gamma-scale draw produced an invalid scale.", call. = FALSE)
+  }
+  list(
+    sigma = sigma_new,
+    gamma = gamma_new,
+    density_evaluations = density_evaluations,
+    gig_lambda = terms$lambda,
+    gig_chi = terms$chi,
+    gig_psi = terms$psi
+  )
+}
+
 app_joint_qvp_exal_sigma_gamma_rw_mh <- function(
   sigma, gamma, y, fitted_no_alpha, alpha, s, v, tau, kappa,
   sigma_bounds, eta_sd = 0.25, log_sigma_sd = 0.05, rho = 0,
@@ -15165,14 +15316,18 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
+  a_sigma = 0.1,
+  b_sigma = 0.1,
   gamma_init = NULL,
   init = NULL,
+  alpha_prior_mean = NULL,
+  alpha_prior_sd = Inf,
   alpha_min_spacing = 0,
   max_dense_dim = 250L,
   sigma_bounds = c(1.0e-8, 1.0e8),
   gamma_slice_width = NULL,
   gamma_slice_max_steps = 100L,
-  gamma_update = c("bounded_slice", "logit_slice", "fixed", "joint_rw_mh", "hybrid_refresh_joint_mh"),
+  gamma_update = c("bounded_slice", "logit_slice", "fixed", "joint_rw_mh", "hybrid_refresh_joint_mh", "collapsed_logit_slice"),
   gamma_prior_type = "none",
   gamma_prior_center = 0,
   gamma_prior_sd_eta = NA_real_,
@@ -15204,6 +15359,9 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     stop("Invalid MCMC iteration, burn, or thin controls.", call. = FALSE)
   }
   if (!is.finite(kappa) || kappa <= 0) stop("kappa must be positive.", call. = FALSE)
+  if (!is.finite(a_sigma) || a_sigma <= 0 || !is.finite(b_sigma) || b_sigma <= 0) {
+    stop("a_sigma and b_sigma must be positive and finite.", call. = FALSE)
+  }
   gamma_slice_max_steps <- as.integer(gamma_slice_max_steps)
   if (!length(gamma_slice_max_steps) || any(is.na(gamma_slice_max_steps)) ||
       any(gamma_slice_max_steps <= 0L)) {
@@ -15212,6 +15370,10 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   gamma_refresh_repeats <- as.integer(gamma_refresh_repeats)[[1L]]
   if (!is.finite(gamma_refresh_repeats) || is.na(gamma_refresh_repeats) || gamma_refresh_repeats <= 0L) {
     stop("gamma_refresh_repeats must be a positive integer scalar.", call. = FALSE)
+  }
+  if (identical(gamma_update, "collapsed_logit_slice") &&
+      (gamma_refresh_repeats != 1L || !identical(gamma_refresh_block, "none"))) {
+    stop("collapsed_logit_slice requires gamma_refresh_repeats = 1 and gamma_refresh_block = 'none'.", call. = FALSE)
   }
   gamma_sigma_mh_repeats <- as.integer(gamma_sigma_mh_repeats %||% gamma_refresh_repeats)[[1L]]
   if (!is.finite(gamma_sigma_mh_repeats) || is.na(gamma_sigma_mh_repeats) ||
@@ -15232,6 +15394,12 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     stop("sigma_bounds must be two increasing positive finite values.", call. = FALSE)
   }
   init <- app_joint_qvp_normalize_init(init, K, p)
+  alpha_prior <- app_joint_qvp_alpha_prior_spec(
+    y = y,
+    tau = tau,
+    alpha_prior_mean = alpha_prior_mean,
+    alpha_prior_sd = alpha_prior_sd
+  )
   gamma <- init$gamma %||% if (is.null(gamma_init)) app_joint_qvp_default_gamma(tau) else app_joint_qvp_check_gamma(tau, gamma_init)
   support <- app_joint_qvp_exal_support(tau)
   gamma_prior_center <- as.numeric(gamma_prior_center)
@@ -15270,6 +15438,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   gamma_draws <- matrix(NA_real_, nrow = n_keep, ncol = K)
   gamma_sigma_mh_accept <- integer(K)
   gamma_sigma_mh_attempt <- integer(K)
+  gamma_collapsed_density_evaluations <- integer(K)
   keep_pos <- 0L
   for (iter in seq_len(n_iter)) {
     constants <- app_joint_qvp_exal_constants(tau, gamma)
@@ -15298,8 +15467,9 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       resid_alpha <- y - fitted_no_alpha[, k] -
         constants$lambda[[k]] * sigma[[k]] * s[, k] -
         constants$A[[k]] * v[, k]
-      prec <- sum(wk)
-      mean <- sum(wk * resid_alpha) / prec
+      prior_prec <- if (is.finite(alpha_prior$sd[[k]])) 1 / alpha_prior$sd[[k]]^2 else 0
+      prec <- sum(wk) + prior_prec
+      mean <- (sum(wk * resid_alpha) + prior_prec * alpha_prior$mean[[k]]) / prec
       lower <- if (k == 1L) -Inf else alpha[[k - 1L]] + alpha_min_spacing
       upper <- if (k == K) Inf else alpha[[k + 1L]] - alpha_min_spacing
       if (lower >= upper) stop("Ordered intercept bounds collapsed.", call. = FALSE)
@@ -15312,7 +15482,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	      support_upper <- support$upper[[k]]
 	      gamma_width_default <- (support$upper[[k]] - support$lower[[k]]) / 20
 	      gamma_width <- if (is.null(gamma_slice_width)) {
-	        if (gamma_update %in% c("logit_slice", "hybrid_refresh_joint_mh")) 1 else gamma_width_default
+	        if (gamma_update %in% c("logit_slice", "hybrid_refresh_joint_mh", "collapsed_logit_slice")) 1 else gamma_width_default
       } else {
         gamma_slice_width <- as.numeric(gamma_slice_width)
         if (length(gamma_slice_width) == 1L) gamma_slice_width[[1L]] else gamma_slice_width[[k]]
@@ -15335,11 +15505,11 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	        app_joint_qvp_rtruncnorm(Tn, mean = mean_s, sd = sqrt(1 / prec_s), lower = 0)
 	      }
 	      draw_sigma_k <- function(cst, sigma_k, v_k, s_k) {
-	        chi_sigma <- 0.2 + 2 * kappa * sum(v_k) +
+	        chi_sigma <- 2 * b_sigma + 2 * kappa * sum(v_k) +
 	          kappa * sum((r - cst$A[[1L]] * v_k)^2 / (cst$B[[1L]] * v_k))
 	        psi_sigma <- kappa * sum(cst$lambda[[1L]]^2 * s_k^2 / (cst$B[[1L]] * v_k))
 	        out <- app_joint_qvp_rgig(
-	          lambda = -0.1 - 1.5 * kappa * Tn,
+	          lambda = -a_sigma - 1.5 * kappa * Tn,
 	          chi = chi_sigma,
 	          psi = max(psi_sigma, .Machine$double.eps),
 	          current = sigma_k
@@ -15409,7 +15579,23 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	      gamma_k <- gamma[[k]]
 	      v_k <- draw_v_k(cst, sigma_k, s_k, v_k)
 	      s_k <- draw_s_k(cst, sigma_k, v_k)
-	      if (identical(gamma_update, "joint_rw_mh")) {
+	      if (identical(gamma_update, "collapsed_logit_slice")) {
+	        move <- app_joint_qvp_exal_sigma_gamma_collapsed_draw(
+	          sigma = sigma_k, gamma = gamma_k, y = y,
+	          fitted_no_alpha = fitted_no_alpha[, k], alpha = alpha[[k]],
+	          s = s_k, v = v_k, tau = tau[[k]], kappa = kappa,
+	          gamma_slice_width = gamma_width,
+	          gamma_slice_max_steps = gamma_steps,
+	          a_sigma = a_sigma, b_sigma = b_sigma,
+	          gamma_prior_type = gamma_prior_type,
+	          gamma_prior_center = gamma_prior_center[[k]],
+	          gamma_prior_sd_eta = gamma_prior_sd_eta[[k]]
+	        )
+	        sigma_k <- move$sigma
+	        gamma_k <- move$gamma
+	        gamma_collapsed_density_evaluations[[k]] <-
+	          gamma_collapsed_density_evaluations[[k]] + move$density_evaluations
+	      } else if (identical(gamma_update, "joint_rw_mh")) {
 	        rho_k <- gamma_sigma_mh_rho[[k]]
 	        for (proposal_id in seq_len(gamma_sigma_mh_repeats)) {
 	          move <- app_joint_qvp_exal_sigma_gamma_rw_mh(
@@ -15420,6 +15606,8 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	            eta_sd = gamma_sigma_mh_eta_sd[[k]],
 	            log_sigma_sd = gamma_sigma_mh_log_sigma_sd[[k]],
 	            rho = rho_k,
+	            a_sigma = a_sigma,
+	            b_sigma = b_sigma,
 	            gamma_prior_type = gamma_prior_type,
 	            gamma_prior_center = gamma_prior_center[[k]],
 	            gamma_prior_sd_eta = gamma_prior_sd_eta[[k]]
@@ -15433,7 +15621,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	        sigma_k <- draw_sigma_k(cst, sigma_k, v_k, s_k)
 	        gamma_k <- draw_gamma_k(gamma_k, sigma_k, s_k, v_k)
 	      }
-	      if (!identical(gamma_update, "joint_rw_mh") && gamma_refresh_repeats > 1L) {
+	      if (!gamma_update %in% c("joint_rw_mh", "collapsed_logit_slice") && gamma_refresh_repeats > 1L) {
 	        for (refresh_id in seq_len(gamma_refresh_repeats - 1L)) {
 	          cst <- app_joint_qvp_exal_constants(tau[[k]], gamma_k)
 	          if (identical(gamma_refresh_block, "sigma_s_v")) {
@@ -15459,6 +15647,8 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	            eta_sd = gamma_sigma_mh_eta_sd[[k]],
 	            log_sigma_sd = gamma_sigma_mh_log_sigma_sd[[k]],
 	            rho = rho_k,
+	            a_sigma = a_sigma,
+	            b_sigma = b_sigma,
 	            gamma_prior_type = gamma_prior_type,
 	            gamma_prior_center = gamma_prior_center[[k]],
 	            gamma_prior_sd_eta = gamma_prior_sd_eta[[k]]
@@ -15500,6 +15690,11 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
     tau = tau,
     kappa = kappa,
 	    gamma_update = gamma_update,
+	    a_sigma = a_sigma,
+	    b_sigma = b_sigma,
+	    alpha_prior_mean = alpha_prior$mean,
+	    alpha_prior_sd = alpha_prior$sd,
+	    alpha_prior_mean_source = alpha_prior$mean_source,
 	    gamma_prior_type = gamma_prior_type,
 	    gamma_prior_center = gamma_prior_center,
 	    gamma_prior_sd_eta = gamma_prior_sd_eta,
@@ -15514,6 +15709,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	      gamma_sigma_mh_accept / gamma_sigma_mh_attempt,
 	      NA_real_
 	    ),
+	    gamma_collapsed_density_evaluations = gamma_collapsed_density_evaluations,
 	    seed = seed,
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("joint_qvp_exal_mcmc_tiny_%s", format(Sys.time(), "%Y%m%d%H%M%S")),

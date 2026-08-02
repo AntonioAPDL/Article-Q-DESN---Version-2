@@ -122,6 +122,49 @@ fit_refresh_b <- app_joint_qvp_fit_exal_mcmc_tiny(
   max_dense_dim = 20L
 )
 
+fit_collapsed_a <- app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 16L,
+  burn = 8L,
+  thin = 2L,
+  seed = 711L,
+  kappa = 1,
+  tau0 = 0.5,
+  zeta2 = 16,
+  a_sigma = 2,
+  b_sigma = 1,
+  gamma_init = rep(0, length(tau)),
+  gamma_update = "collapsed_logit_slice",
+  gamma_slice_width = 2,
+  gamma_slice_max_steps = 80L,
+  alpha_prior_mean = "empirical_quantile",
+  alpha_prior_sd = 0.5,
+  max_dense_dim = 20L
+)
+fit_collapsed_b <- app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 16L,
+  burn = 8L,
+  thin = 2L,
+  seed = 711L,
+  kappa = 1,
+  tau0 = 0.5,
+  zeta2 = 16,
+  a_sigma = 2,
+  b_sigma = 1,
+  gamma_init = rep(0, length(tau)),
+  gamma_update = "collapsed_logit_slice",
+  gamma_slice_width = 2,
+  gamma_slice_max_steps = 80L,
+  alpha_prior_mean = "empirical_quantile",
+  alpha_prior_sd = 0.5,
+  max_dense_dim = 20L
+)
+
 stopifnot(inherits(fit_a, "joint_qvp_qdesn_tiny_fit"))
 stopifnot(identical(dim(fit_a$beta_draws), c(3L, 4L)))
 stopifnot(identical(dim(fit_a$alpha_draws), c(3L, 2L)))
@@ -150,6 +193,21 @@ stopifnot(identical(fit_refresh_a$gamma_refresh_block, "sigma"))
 stopifnot(all(is.finite(fit_refresh_a$gamma_draws)))
 stopifnot(all(fit_refresh_a$sigma_draws > 0))
 stopifnot(identical(round(fit_refresh_a$gamma_draws, 12), round(fit_refresh_b$gamma_draws, 12)))
+stopifnot(inherits(fit_collapsed_a, "joint_qvp_qdesn_tiny_fit"))
+stopifnot(identical(fit_collapsed_a$gamma_update, "collapsed_logit_slice"))
+stopifnot(identical(fit_collapsed_a$a_sigma, 2))
+stopifnot(identical(fit_collapsed_a$b_sigma, 1))
+stopifnot(identical(fit_collapsed_a$alpha_prior_mean_source, "empirical_quantile"))
+stopifnot(all(is.finite(fit_collapsed_a$beta_draws)))
+stopifnot(all(is.finite(fit_collapsed_a$alpha_draws)))
+stopifnot(all(is.finite(fit_collapsed_a$sigma_draws)))
+stopifnot(all(is.finite(fit_collapsed_a$gamma_draws)))
+stopifnot(all(fit_collapsed_a$sigma_draws > 0))
+stopifnot(all(fit_collapsed_a$gamma_collapsed_density_evaluations > 0L))
+stopifnot(identical(round(fit_collapsed_a$beta_draws, 12), round(fit_collapsed_b$beta_draws, 12)))
+stopifnot(identical(round(fit_collapsed_a$alpha_draws, 12), round(fit_collapsed_b$alpha_draws, 12)))
+stopifnot(identical(round(fit_collapsed_a$sigma_draws, 12), round(fit_collapsed_b$sigma_draws, 12)))
+stopifnot(identical(round(fit_collapsed_a$gamma_draws, 12), round(fit_collapsed_b$gamma_draws, 12)))
 stopifnot(identical(fit_a$manifest$status[[1L]], "prototype_success"))
 stopifnot(identical(fit_a$manifest$likelihood[[1L]], "exal"))
 stopifnot(identical(fit_a$manifest$inference[[1L]], "mcmc_tiny"))
@@ -212,3 +270,14 @@ bad_refresh_block <- try(app_joint_qvp_fit_exal_mcmc_tiny(
   gamma_refresh_block = "bad_block"
 ), silent = TRUE)
 stopifnot(inherits(bad_refresh_block, "try-error"))
+
+bad_collapsed_refresh <- try(app_joint_qvp_fit_exal_mcmc_tiny(
+  y = y,
+  Z = Z,
+  tau = tau,
+  n_iter = 10L,
+  burn = 5L,
+  gamma_update = "collapsed_logit_slice",
+  gamma_refresh_repeats = 2L
+), silent = TRUE)
+stopifnot(inherits(bad_collapsed_refresh, "try-error"))

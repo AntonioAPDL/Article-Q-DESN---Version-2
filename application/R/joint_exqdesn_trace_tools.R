@@ -111,6 +111,141 @@ app_joint_exqdesn_classic_rhat <- function(draw_matrix) {
   sqrt(var_hat / W)
 }
 
+app_joint_exqdesn_split_chains <- function(draw_matrix) {
+  draw_matrix <- as.matrix(draw_matrix)
+  if (nrow(draw_matrix) < 4L || ncol(draw_matrix) < 2L || any(!is.finite(draw_matrix))) {
+    return(matrix(numeric(), nrow = 0L, ncol = 0L))
+  }
+  n_half <- floor(nrow(draw_matrix) / 2L)
+  first <- draw_matrix[seq_len(n_half), , drop = FALSE]
+  last <- draw_matrix[seq.int(nrow(draw_matrix) - n_half + 1L, nrow(draw_matrix)), , drop = FALSE]
+  cbind(first, last)
+}
+
+app_joint_exqdesn_rank_normalize <- function(draw_matrix) {
+  draw_matrix <- as.matrix(draw_matrix)
+  if (!length(draw_matrix) || any(!is.finite(draw_matrix))) return(draw_matrix)
+  ranks <- rank(as.numeric(draw_matrix), ties.method = "average")
+  n <- length(ranks)
+  probs <- (ranks - 3 / 8) / (n + 1 / 4)
+  matrix(stats::qnorm(probs), nrow = nrow(draw_matrix), ncol = ncol(draw_matrix))
+}
+
+app_joint_exqdesn_multichain_ess <- function(draw_matrix) {
+  draw_matrix <- as.matrix(draw_matrix)
+  n <- nrow(draw_matrix)
+  m <- ncol(draw_matrix)
+  if (n < 4L || m < 2L || any(!is.finite(draw_matrix))) return(NA_real_)
+  chain_var <- apply(draw_matrix, 2L, stats::var)
+  W <- mean(chain_var)
+  if (!is.finite(W) || W <= 0) return(NA_real_)
+  B <- n * stats::var(colMeans(draw_matrix))
+  var_plus <- (n - 1) / n * W + B / n
+  if (!is.finite(var_plus) || var_plus <= 0) return(NA_real_)
+  rho <- numeric(n)
+  rho[[1L]] <- 1
+  for (lag in seq_len(n - 1L)) {
+    delta <- draw_matrix[seq.int(lag + 1L, n), , drop = FALSE] -
+      draw_matrix[seq_len(n - lag), , drop = FALSE]
+    variogram <- mean(delta^2)
+    rho[[lag + 1L]] <- 1 - variogram / (2 * var_plus)
+  }
+  even <- seq.int(1L, n - 1L, by = 2L)
+  odd <- even + 1L
+  keep <- odd <= n
+  pair_sums <- rho[even[keep]] + rho[odd[keep]]
+  nonpositive <- which(!is.finite(pair_sums) | pair_sums <= 0)
+  if (length(nonpositive)) pair_sums <- pair_sums[seq_len(nonpositive[[1L]] - 1L)]
+  if (!length(pair_sums)) return(min(n * m, max(1, n * m / 2)))
+  pair_sums <- cummin(pair_sums)
+  tau_hat <- -1 + 2 * sum(pair_sums)
+  if (!is.finite(tau_hat) || tau_hat <= 0) return(as.numeric(n * m))
+  min(as.numeric(n * m), max(1, n * m / tau_hat))
+}
+
+app_joint_exqdesn_modern_diagnostics <- function(draw_matrix) {
+  raw <- as.matrix(draw_matrix)
+  split <- app_joint_exqdesn_split_chains(raw)
+  if (!length(split)) {
+    return(data.frame(
+      rank_rhat = NA_real_, folded_rhat = NA_real_, bulk_ess = NA_real_,
+      tail_ess = NA_real_, mcse_mean = NA_real_, n_chains = ncol(raw),
+      n_draws_per_chain = nrow(raw), stringsAsFactors = FALSE
+    ))
+  }
+  ranked <- app_joint_exqdesn_rank_normalize(split)
+  folded <- app_joint_exqdesn_rank_normalize(abs(split - stats::median(split)))
+  q <- stats::quantile(split, probs = c(0.05, 0.95), names = FALSE, type = 8)
+  low_indicator <- 1 * (split <= q[[1L]])
+  high_indicator <- 1 * (split <= q[[2L]])
+  bulk_ess <- app_joint_exqdesn_multichain_ess(ranked)
+  tail_ess <- min(
+    app_joint_exqdesn_multichain_ess(low_indicator),
+    app_joint_exqdesn_multichain_ess(high_indicator),
+    na.rm = TRUE
+  )
+  if (!is.finite(tail_ess)) tail_ess <- NA_real_
+  data.frame(
+    rank_rhat = app_joint_exqdesn_classic_rhat(ranked),
+    folded_rhat = app_joint_exqdesn_classic_rhat(folded),
+    bulk_ess = bulk_ess,
+    tail_ess = tail_ess,
+    mcse_mean = if (is.finite(bulk_ess) && bulk_ess > 0) stats::sd(as.numeric(raw)) / sqrt(bulk_ess) else NA_real_,
+    n_chains = ncol(raw),
+    n_draws_per_chain = nrow(raw),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_exqdesn_rank_histogram <- function(draw_matrix, n_bins = 20L) {
+  draw_matrix <- as.matrix(draw_matrix)
+  n_bins <- as.integer(n_bins)[[1L]]
+  if (n_bins < 2L || !length(draw_matrix) || any(!is.finite(draw_matrix))) return(data.frame())
+  ranks <- matrix(
+    rank(as.numeric(draw_matrix), ties.method = "average"),
+    nrow = nrow(draw_matrix), ncol = ncol(draw_matrix)
+  )
+  scaled <- ranks / (length(ranks) + 1)
+  rows <- lapply(seq_len(ncol(draw_matrix)), function(chain_id) {
+    bins <- cut(scaled[, chain_id], breaks = seq(0, 1, length.out = n_bins + 1L),
+                include.lowest = TRUE, labels = FALSE)
+    counts <- tabulate(bins, nbins = n_bins)
+    data.frame(
+      chain_id = chain_id,
+      rank_bin = seq_len(n_bins),
+      rank_bin_lower = (seq_len(n_bins) - 1L) / n_bins,
+      rank_bin_upper = seq_len(n_bins) / n_bins,
+      count = counts,
+      fraction = counts / nrow(draw_matrix),
+      stringsAsFactors = FALSE
+    )
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_exqdesn_modern_diagnostic_rows <- function(fits, tau, meta) {
+  rows <- list()
+  for (param in c("sigma", "gamma", "exal_lambda")) {
+    for (kk in seq_along(tau)) {
+      mats <- lapply(fits, function(fit) {
+        if (identical(param, "sigma")) return(as.numeric(fit$sigma_draws[, kk]))
+        gamma <- as.numeric(fit$gamma_draws[, kk])
+        if (identical(param, "gamma")) return(gamma)
+        vapply(gamma, function(g) app_joint_qvp_exal_constants(tau[[kk]], g)$lambda[[1L]], numeric(1L))
+      })
+      n_min <- min(vapply(mats, length, integer(1L)))
+      draw_matrix <- do.call(cbind, lapply(mats, function(x) x[seq_len(n_min)]))
+      rows[[length(rows) + 1L]] <- cbind(
+        meta,
+        data.frame(parameter = param, quantile_index = kk, tau = tau[[kk]], stringsAsFactors = FALSE),
+        app_joint_exqdesn_modern_diagnostics(draw_matrix),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  app_joint_qdesn_bind_rows(rows)
+}
+
 app_joint_exqdesn_mcmc_chain_trace_rows <- function(fits, tau, meta, n_iter, burn, thin) {
   keep_idx <- seq.int(as.integer(burn) + 1L, as.integer(n_iter), by = as.integer(thin))
   rows <- list()

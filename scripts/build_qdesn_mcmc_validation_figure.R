@@ -44,7 +44,7 @@ validation_root <- normalizePath(
   winslash = "/",
   mustWork = TRUE
 )
-promotion_id <- "qdesn_dqlm_500obs_mcmc_metric_envelope_20260727"
+promotion_id <- "qdesn_dqlm_500obs_mcmc_metric_envelope_20260804"
 source_csv <- normalizePath(
   get_arg(
     "--source-csv",
@@ -242,11 +242,16 @@ if (
   stop("Authoritative source does not satisfy the complete frozen figure contract.", call. = FALSE)
 }
 
-relative_to_validation <- function(path) {
+workspace_root <- normalizePath(
+  dirname(validation_root),
+  winslash = "/",
+  mustWork = TRUE
+)
+relative_to_workspace <- function(path) {
   normalized <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  prefix <- paste0(validation_root, "/")
+  prefix <- paste0(workspace_root, "/")
   if (!startsWith(normalized, prefix)) {
-    stop("A metric source path escapes the validation root.", call. = FALSE)
+    stop("A metric source path escapes the canonical workspace root.", call. = FALSE)
   }
   substring(normalized, nchar(prefix) + 1L)
 }
@@ -268,7 +273,7 @@ long <- do.call(
       source_run_tag = source[[definition$run_tag]],
       source_path_relative = vapply(
         source[[definition$path]],
-        relative_to_validation,
+        relative_to_workspace,
         character(1L)
       ),
       source_sha256 = source[[definition$sha256]],
@@ -542,6 +547,7 @@ manifest_output <- c(
   "fill_transform: log2(ratio_to_best)",
   "selection_policy: status-agnostic metric-wise calibrated envelope; lower is better",
   "diagnostic_policy: WARN and FAIL markers reflect the contributing metric source",
+  paste0("source_path_base: ", workspace_root),
   paste0("script: ", relative_to_repo(script_path)),
   paste0("script_sha256: ", sha256(script_path)),
   paste0("figure_pdf: ", relative_to_repo(output_pdf)),

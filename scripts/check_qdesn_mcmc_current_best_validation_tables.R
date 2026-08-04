@@ -46,41 +46,61 @@ if (anyDuplicated(scalar_keys)) {
 manifest <- setNames(sub("^[^:]+: ", "", scalar_lines), scalar_keys)
 
 expected <- c(
-  authority_as_of = "2026-07-30",
+  authority_as_of = "2026-08-04",
   authority_freeze_id = paste0(
-    "qdesn_500obs_mcmc_nested_final_origin9000_v1_",
-    "evidence_freeze_20260730"
+    "qdesn_500obs_mcmc_alpha_rho_confirmation_v1_",
+    "evidence_freeze_20260804"
   ),
+  authority_contract_version = "1.1.0",
   validation_authority_commit =
-    "b24cb53f34863f1ca7a6df95c8508d341de5692d",
-  latest_evidence_decision = "NO_CONFIRMED_COHERENT_ARTICLE_REFRESH",
-  latest_evidence_coherent_promotion_cells = "0",
-  latest_evidence_article_refresh_metric_rows = "0",
-  latest_evidence_consumable_run_tag = paste0(
-    "qdesn-500obs-mcmc-nested-final-o9000-v1-full-",
-    "20260730__git-bd4da62"
-  ),
+    "67c2dd84a00aa97ef74c5f5b8698a23349870b71",
+  latest_evidence_decision =
+    "PROMOTE_COHERENT_STATUS_AGNOSTIC_METRIC_ENVELOPE",
+  latest_evidence_coherent_promotion_cells = "1",
+  latest_evidence_article_refresh_metric_rows = "3",
+  latest_evidence_consumable_run_tag =
+    "qdesn-arfc1-full-20260803_152952__git-3ed1d0c",
   latest_evidence_rejected_run_tag = paste0(
     "qdesn-500obs-mcmc-nested-final-o9000-v1-full-",
     "20260730__git-6582f87"
   ),
   exposed_confirmation_origins = "9000",
-  article_numeric_state = "UNCHANGED_FROM_20260727_AUTHORITY",
-  article_numeric_update = "FALSE",
-  source_promotion_id = "qdesn_dqlm_500obs_mcmc_metric_envelope_20260727",
+  article_numeric_state = "UPDATED_FROM_20260727_AUTHORITY_BY_3_METRICS",
+  article_update_policy = "PROMOTE_GAUSMIX_P025_EXAL_RHS_THREE_METRICS_ONLY",
+  origin_9000_untouched_confirmation_eligible = "TRUE",
+  article_numeric_update = "TRUE",
+  source_promotion_id = "qdesn_dqlm_500obs_mcmc_metric_envelope_20260804",
+  source_parent_promotion_id =
+    "qdesn_dqlm_500obs_mcmc_metric_envelope_20260727",
+  source_metric_promotions = "3",
   source_csv_sha256 =
-    "aa4399576453ec0e9eeb21fa2166a1aaeed977c976064b13c4dc27f963cbb9a1",
+    "23a0cebbca740cb8d16c104e7f2bdaa3139d30876391ca3c2438801225bf664e",
   source_manifest_sha256 =
-    "64fe0d174b203f041b9047589a84345089106b20757755549662f82c5f301ba3",
+    "f4511835dbf81c8283513cf48db6695541ac2714ca26081b7d09b8af9db51820",
   source_confirmation_sha256 =
-    "a1ba1a9c25d2e0e3ee0c77958e23fca5beeb1fdbed89f6f09ff5a9f3a9a640f3",
+    "40dd59e3bd25f8e00ed1921b3f6a8010ad95a63fb099ac6e9c294f23417abf0d",
   source_registry_hash =
     "edddb56fc2b30e49ac99fdd08b53dad468ed53e05d0fe1fe16426ee9d9ffe275",
   validation_branch = "validation/shared-fitforecast-v2-1.0.0",
   validation_package_version = "1.0.0",
   row_count_metric_envelope = "36",
-  row_count_candidate_ledger = "129",
-  displayed_envelope_changed_by_confirmation = "FALSE"
+  row_count_candidate_ledger = "130",
+  displayed_envelope_changed_by_confirmation = "TRUE",
+  coherent_confirmation_run_tag =
+    "qdesn-arfc1-full-20260803_152952__git-3ed1d0c",
+  coherent_confirmation_spec_id =
+    "qdesn__gausmix__0p25__tt500__rhs_ns__mcmc__exal__8cda647284e157",
+  coherent_confirmation_decision =
+    "PROMOTE_COHERENT_STATUS_AGNOSTIC_METRIC_ENVELOPE",
+  coherent_confirmation_signoff_grade = "FAIL",
+  coherent_confirmation_signoff_reason =
+    "high_autocorrelation; half_chain_drift",
+  coherent_confirmation_all_metrics_improve_previous_envelope = "TRUE",
+  coherent_confirmation_seed_replicated_within_1p10 = "FALSE",
+  coherent_confirmation_paired_alpha_rho_transfer_pass = "FALSE",
+  coherent_confirmation_fit_rmse = "1.90443260252763",
+  coherent_confirmation_forecast_mae_H1000 = "3.65624121141485",
+  coherent_confirmation_forecast_check_H1000 = "4.64371594143888"
 )
 missing_keys <- setdiff(names(expected), names(manifest))
 if (length(missing_keys)) {
@@ -239,5 +259,5 @@ if (any(grepl("/home/jaguir26/local/src", active_text, fixed = TRUE))) {
 cat("authority_inputs_verified: 4\n")
 cat("article_artifacts_verified: 4\n")
 cat("displayed_numeric_values_verified: 108\n")
-cat("article_numeric_update: FALSE\n")
+cat("article_numeric_update: TRUE\n")
 cat("result: PASS\n")

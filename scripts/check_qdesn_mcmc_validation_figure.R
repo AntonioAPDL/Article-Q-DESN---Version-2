@@ -61,6 +61,10 @@ source_csv <- normalizePath(
   mustWork = TRUE
 )
 if (
+  !identical(
+    manifest_value("source_path_base"),
+    "/data/jaguir26/local/src"
+  ) ||
   !identical(sha256(source_csv), manifest_value("source_csv_sha256")) ||
   !identical(sha256(figure_pdf_path), manifest_value("figure_pdf_sha256")) ||
   !identical(sha256(figure_data_path), manifest_value("figure_data_csv_sha256"))

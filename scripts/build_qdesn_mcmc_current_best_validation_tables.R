@@ -31,7 +31,7 @@ validation_root <- normalizePath(
   winslash = "/",
   mustWork = TRUE
 )
-promotion_id <- "qdesn_dqlm_500obs_mcmc_metric_envelope_20260727"
+promotion_id <- "qdesn_dqlm_500obs_mcmc_metric_envelope_20260804"
 source_dir <- get_arg(
   "--source-dir",
   file.path(
@@ -52,8 +52,8 @@ source_confirmation <- get_arg(
   file.path(source_dir, paste0(promotion_id, "_coherent_confirmation.csv"))
 )
 authority_freeze_id <- paste0(
-  "qdesn_500obs_mcmc_nested_final_origin9000_v1_",
-  "evidence_freeze_20260730"
+  "qdesn_500obs_mcmc_alpha_rho_confirmation_v1_",
+  "evidence_freeze_20260804"
 )
 authority_freeze_dir <- get_arg(
   "--authority-freeze-dir",
@@ -148,11 +148,10 @@ authority_freeze <- jsonlite::read_json(
   authority_freeze_manifest_path,
   simplifyVector = TRUE
 )
-expected_latest_decision <- "NO_CONFIRMED_COHERENT_ARTICLE_REFRESH"
-expected_valid_run_tag <- paste0(
-  "qdesn-500obs-mcmc-nested-final-o9000-v1-full-",
-  "20260730__git-bd4da62"
-)
+expected_latest_decision <-
+  "PROMOTE_COHERENT_STATUS_AGNOSTIC_METRIC_ENVELOPE"
+expected_valid_run_tag <-
+  "qdesn-arfc1-full-20260803_152952__git-3ed1d0c"
 expected_rejected_run_tag <- paste0(
   "qdesn-500obs-mcmc-nested-final-o9000-v1-full-",
   "20260730__git-6582f87"
@@ -163,21 +162,21 @@ if (!identical(authority_freeze$freeze_id, authority_freeze_id) ||
     !identical(authority_freeze$git_branch,
       "validation/shared-fitforecast-v2-1.0.0") ||
     !identical(authority_freeze$package_version, "1.0.0") ||
-    !identical(authority_freeze$authority_contract_version, "1.0.0") ||
+    !identical(authority_freeze$authority_contract_version, "1.1.0") ||
     !identical(authority_freeze$authoritative_numeric_promotion_id,
       promotion_id) ||
     as.integer(authority_freeze$authoritative_numeric_row_count) != 36L ||
-    as.integer(authority_freeze$authoritative_candidate_row_count) != 129L ||
+    as.integer(authority_freeze$authoritative_candidate_row_count) != 130L ||
     as.integer(authority_freeze$authoritative_displayed_metric_count) != 108L ||
     !identical(authority_freeze$scientific_decision,
       expected_latest_decision) ||
-    as.integer(authority_freeze$coherent_promotion_cells) != 0L ||
-    as.integer(authority_freeze$article_refresh_metric_rows) != 0L ||
-    isTRUE(authority_freeze$origin_9000_untouched_confirmation_eligible) ||
+    as.integer(authority_freeze$coherent_promotion_cells) != 1L ||
+    as.integer(authority_freeze$article_refresh_metric_rows) != 3L ||
+    !isTRUE(authority_freeze$origin_9000_untouched_confirmation_eligible) ||
     !identical(authority_freeze$article_update_policy,
-      "KEEP_CURRENT_ARTICLE_PARENT_ROWS_UNCHANGED") ||
+      "PROMOTE_GAUSMIX_P025_EXAL_RHS_THREE_METRICS_ONLY") ||
     !identical(authority_freeze$article_numeric_state,
-      "UNCHANGED_FROM_20260727_AUTHORITY") ||
+      "UPDATED_FROM_20260727_AUTHORITY_BY_3_METRICS") ||
     !identical(
       unname(authority_freeze$consumable_scientific_run_tags),
       expected_valid_run_tag
@@ -257,12 +256,14 @@ bundle_paths <- c(
   file.path(authority_freeze_dir, "README.md"),
   file.path(authority_freeze_dir, "run_disposition.csv"),
   file.path(authority_freeze_dir, "origin_disposition.csv"),
+  file.path(authority_freeze_dir, "cell_disposition.csv"),
   authority_ledger_path
 )
 bundle_hashes <- c(
   authority_freeze$bundle_hashes$readme_sha256,
   authority_freeze$bundle_hashes$run_disposition_sha256,
   authority_freeze$bundle_hashes$origin_disposition_sha256,
+  authority_freeze$bundle_hashes$cell_disposition_sha256,
   authority_freeze$bundle_hashes$frozen_evidence_ledger_sha256
 )
 if (!all(file.exists(bundle_paths)) ||
@@ -274,18 +275,18 @@ validation_authority_commit <- git_last_commit_for(
 )
 
 promotion_manifest <- jsonlite::read_json(source_manifest, simplifyVector = TRUE)
-expected_decision <- "ELIGIBLE_FOR_SCIENTIFIC_PROMOTION_PENDING_ARTICLE_REVIEW"
+expected_decision <- "PROMOTE_COHERENT_STATUS_AGNOSTIC_METRIC_ENVELOPE"
 if (!identical(promotion_manifest$promotion_id, promotion_id) ||
     !identical(promotion_manifest$validation_branch,
       "validation/shared-fitforecast-v2-1.0.0") ||
     !identical(promotion_manifest$package_version, "1.0.0") ||
     !identical(promotion_manifest$confirmation_decision, expected_decision) ||
-    !identical(promotion_manifest$confirmation_signoff_grade, "WARN") ||
+    !identical(promotion_manifest$confirmation_signoff_grade, "FAIL") ||
     as.integer(promotion_manifest$coherent_confirmation_rows) != 1L ||
-    as.integer(promotion_manifest$n_candidates) != 129L ||
+    as.integer(promotion_manifest$n_candidates) != 130L ||
     as.integer(promotion_manifest$n_envelope_rows) != 36L ||
-    as.integer(promotion_manifest$n_metric_promotions) != 0L ||
-    as_bool(promotion_manifest$displayed_envelope_changed) ||
+    as.integer(promotion_manifest$n_metric_promotions) != 3L ||
+    !as_bool(promotion_manifest$displayed_envelope_changed) ||
     as_bool(promotion_manifest$tracked_source_dirty_before_materialization) ||
     length(promotion_manifest$untracked_before_materialization) != 0L ||
     !identical(
@@ -363,25 +364,29 @@ required_confirmation <- c(
   "envelope_forecast_qtrue_mae_H1000",
   "envelope_forecast_check_loss_H1000", "fit_envelope_winner",
   "forecast_mae_envelope_winner", "forecast_check_envelope_winner",
-  "all_external_metrics_within_1p05", "all_metrics_stable_within_1p10",
+  "all_metrics_improve_previous_envelope", "seed_replicated_within_1p10",
+  "paired_alpha_rho_transfer_pass",
   "signoff_grade", "signoff_reason", "decision",
   "source_registry_hash_value"
 )
 missing_confirmation <- setdiff(required_confirmation, names(confirmation))
 if (nrow(confirmation) != 1L || length(missing_confirmation) ||
-    confirmation$candidate_id[[1L]] != "mgv3_16_exal_local__full_5787212" ||
+    confirmation$candidate_id[[1L]] !=
+      "arfc1_parent_exal_gausmix_t0p25_r01__full_3ed1d0c" ||
     confirmation$model_variant[[1L]] != "qdesn_exal_rhs_ns" ||
-    confirmation$family[[1L]] != "laplace" ||
+    confirmation$family[[1L]] != "gausmix" ||
     abs(as.numeric(confirmation$tau[[1L]]) - 0.25) > 1e-12 ||
     as.integer(confirmation$fit_size[[1L]]) != 500L ||
     confirmation$run_tag[[1L]] != promotion_manifest$confirmation_run_tag ||
     confirmation$spec_id[[1L]] != promotion_manifest$confirmation_spec_id ||
     confirmation$decision[[1L]] != expected_decision ||
-    confirmation$signoff_grade[[1L]] != "WARN" ||
-    confirmation$signoff_reason[[1L]] != "chain_marginal_but_usable" ||
-    !as_bool(confirmation$all_external_metrics_within_1p05[[1L]]) ||
-    !as_bool(confirmation$all_metrics_stable_within_1p10[[1L]]) ||
-    any(vapply(
+    confirmation$signoff_grade[[1L]] != "FAIL" ||
+    confirmation$signoff_reason[[1L]] !=
+      "high_autocorrelation; half_chain_drift" ||
+    !as_bool(confirmation$all_metrics_improve_previous_envelope[[1L]]) ||
+    as_bool(confirmation$seed_replicated_within_1p10[[1L]]) ||
+    as_bool(confirmation$paired_alpha_rho_transfer_pass[[1L]]) ||
+    !all(vapply(
       confirmation[c(
         "fit_envelope_winner",
         "forecast_mae_envelope_winner",
@@ -397,7 +402,7 @@ if (nrow(confirmation) != 1L || length(missing_confirmation) ||
 
 target_envelope <- clean[
   clean$model_variant == "qdesn_exal_rhs_ns" &
-    clean$family == "laplace" &
+    clean$family == "gausmix" &
     abs(as.numeric(clean$tau) - 0.25) <= 1e-12,
   ,
   drop = FALSE
@@ -570,6 +575,10 @@ manifest_lines <- c(
   sprintf("authority_as_of: %s", authority_freeze$freeze_date),
   sprintf("authority_freeze_id: %s", authority_freeze$freeze_id),
   sprintf(
+    "authority_contract_version: %s",
+    authority_freeze$authority_contract_version
+  ),
+  sprintf(
     "authority_freeze_manifest: %s",
     normalizePath(
       authority_freeze_manifest_path,
@@ -620,8 +629,26 @@ manifest_lines <- c(
     "article_numeric_state: %s",
     authority_freeze$article_numeric_state
   ),
-  "article_numeric_update: FALSE",
+  sprintf(
+    "article_update_policy: %s",
+    authority_freeze$article_update_policy
+  ),
+  sprintf(
+    "origin_9000_untouched_confirmation_eligible: %s",
+    toupper(as.character(
+      authority_freeze$origin_9000_untouched_confirmation_eligible
+    ))
+  ),
+  "article_numeric_update: TRUE",
   sprintf("source_promotion_id: %s", promotion_manifest$promotion_id),
+  sprintf(
+    "source_parent_promotion_id: %s",
+    promotion_manifest$parent_promotion_id
+  ),
+  sprintf(
+    "source_metric_promotions: %d",
+    as.integer(promotion_manifest$n_metric_promotions)
+  ),
   sprintf("source_csv: %s", normalizePath(source_csv, winslash = "/", mustWork = TRUE)),
   sprintf("source_manifest: %s", normalizePath(source_manifest, winslash = "/", mustWork = TRUE)),
   sprintf("source_confirmation: %s", normalizePath(source_confirmation, winslash = "/", mustWork = TRUE)),
@@ -646,6 +673,24 @@ manifest_lines <- c(
   sprintf("coherent_confirmation_decision: %s", confirmation$decision[[1L]]),
   sprintf("coherent_confirmation_signoff_grade: %s", confirmation$signoff_grade[[1L]]),
   sprintf("coherent_confirmation_signoff_reason: %s", confirmation$signoff_reason[[1L]]),
+  sprintf(
+    "coherent_confirmation_all_metrics_improve_previous_envelope: %s",
+    toupper(as.character(as_bool(
+      confirmation$all_metrics_improve_previous_envelope[[1L]]
+    )))
+  ),
+  sprintf(
+    "coherent_confirmation_seed_replicated_within_1p10: %s",
+    toupper(as.character(as_bool(
+      confirmation$seed_replicated_within_1p10[[1L]]
+    )))
+  ),
+  sprintf(
+    "coherent_confirmation_paired_alpha_rho_transfer_pass: %s",
+    toupper(as.character(as_bool(
+      confirmation$paired_alpha_rho_transfer_pass[[1L]]
+    )))
+  ),
   sprintf("coherent_confirmation_fit_rmse: %.15g", confirmation$fit_qtrue_rmse[[1L]]),
   sprintf(
     "coherent_confirmation_forecast_mae_H1000: %.15g",
@@ -656,7 +701,7 @@ manifest_lines <- c(
     confirmation$forecast_check_loss_H1000[[1L]]
   ),
   "selection_policy: minimum observed finite value by model_variant x family x tau x metric; diagnostic status retained but not excluded",
-  "interpretation: metric-wise calibrated envelope plus a separately identified coherent full-budget confirmation",
+  "interpretation: metric-wise calibrated envelope with three values supplied by one coherent full-budget confirmation; diagnostic failure is retained and specification transfer is not claimed",
   sprintf("table_normal: %s", file.path("tables", basename(written[["normal"]]))),
   sprintf("table_laplace: %s", file.path("tables", basename(written[["laplace"]]))),
   sprintf("table_gausmix: %s", file.path("tables", basename(written[["gausmix"]]))),

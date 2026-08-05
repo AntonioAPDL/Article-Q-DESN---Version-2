@@ -11786,25 +11786,47 @@ app_joint_qvp_rtruncnorm <- function(n, mean, sd, lower = -Inf, upper = Inf) {
   stats::qnorm(stats::runif(n, lo, hi), mean = mean, sd = sd)
 }
 
-app_joint_qvp_initialize_rhs_state <- function(K, p, tau0 = 1, zeta2 = Inf) {
-  make_block <- function() {
+app_joint_qvp_initialize_rhs_state <- function(
+  K,
+  p,
+  tau0 = 1,
+  zeta2 = Inf,
+  anchor_tau0 = tau0,
+  innovation_tau0 = tau0,
+  anchor_zeta2 = zeta2,
+  innovation_zeta2 = zeta2
+) {
+  validate_scale <- function(x, label, allow_infinite = FALSE) {
+    x <- as.numeric(x)[[1L]]
+    valid <- if (allow_infinite) (is.finite(x) || is.infinite(x)) && x > 0 else is.finite(x) && x > 0
+    if (!valid) stop(sprintf("%s must be positive%s.", label, if (allow_infinite) " finite or Inf" else " and finite"), call. = FALSE)
+    x
+  }
+  anchor_tau0 <- validate_scale(anchor_tau0, "anchor_tau0")
+  innovation_tau0 <- validate_scale(innovation_tau0, "innovation_tau0")
+  anchor_zeta2 <- validate_scale(anchor_zeta2, "anchor_zeta2", allow_infinite = TRUE)
+  innovation_zeta2 <- validate_scale(innovation_zeta2, "innovation_zeta2", allow_infinite = TRUE)
+  make_block <- function(block_tau0, block_zeta2) {
     list(
       lambda2 = rep(1, p),
       nu = rep(1, p),
-      tau2 = tau0^2,
+      tau2 = block_tau0^2,
       xi = 1,
-      tau0 = tau0,
-      zeta2 = zeta2,
+      tau0 = block_tau0,
+      zeta2 = block_zeta2,
       a_zeta = 2,
       b_zeta = 4
     )
   }
   innovations <- if (K > 1L) {
-    stats::setNames(replicate(K - 1L, make_block(), simplify = FALSE), paste0("delta_", 2:K))
+    stats::setNames(
+      replicate(K - 1L, make_block(innovation_tau0, innovation_zeta2), simplify = FALSE),
+      paste0("delta_", 2:K)
+    )
   } else {
     list()
   }
-  blocks <- c(list(anchor = make_block()), innovations)
+  blocks <- c(list(anchor = make_block(anchor_tau0, anchor_zeta2)), innovations)
   blocks
 }
 
@@ -12400,6 +12422,10 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
+  anchor_tau0 = tau0,
+  innovation_tau0 = tau0,
+  anchor_zeta2 = zeta2,
+  innovation_zeta2 = zeta2,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -12441,7 +12467,11 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   alpha <- init$alpha %||% sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
   sigma <- init$sigma %||% rep(max(stats::mad(y), 1.0e-3), K)
   v <- matrix(rep(sigma, each = Tn), nrow = Tn, ncol = K)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  rhs_state <- app_joint_qvp_initialize_rhs_state(
+    K, p, tau0 = tau0, zeta2 = zeta2,
+    anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+  )
   keep_idx <- seq.int(burn + 1L, n_iter, by = thin)
   n_keep <- length(keep_idx)
   beta_draws <- matrix(NA_real_, nrow = n_keep, ncol = K * p)
@@ -14529,6 +14559,10 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
+  anchor_tau0 = tau0,
+  innovation_tau0 = tau0,
+  anchor_zeta2 = zeta2,
+  innovation_zeta2 = zeta2,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -14554,7 +14588,11 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   }
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  rhs_state <- app_joint_qvp_initialize_rhs_state(
+    K, p, tau0 = tau0, zeta2 = zeta2,
+    anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+  )
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
   beta_mean <- rep(0, K * p)
@@ -14772,6 +14810,10 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
+  anchor_tau0 = tau0,
+  innovation_tau0 = tau0,
+  anchor_zeta2 = zeta2,
+  innovation_zeta2 = zeta2,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -14808,6 +14850,10 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
       kappa = kappa,
       tau0 = tau0,
       zeta2 = zeta2,
+      anchor_tau0 = anchor_tau0,
+      innovation_tau0 = innovation_tau0,
+      anchor_zeta2 = anchor_zeta2,
+      innovation_zeta2 = innovation_zeta2,
       a_sigma = a_sigma,
       b_sigma = b_sigma,
       alpha_prior_mean = alpha_prior_mean,
@@ -14822,7 +14868,11 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
   gamma <- app_joint_qvp_check_gamma(tau, gamma)
   support <- app_joint_qvp_exal_support(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  rhs_state <- app_joint_qvp_initialize_rhs_state(
+    K, p, tau0 = tau0, zeta2 = zeta2,
+    anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+  )
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
   beta_mean <- init$beta %||% rep(0, K * p)
@@ -15316,6 +15366,10 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
+  anchor_tau0 = tau0,
+  innovation_tau0 = tau0,
+  anchor_zeta2 = zeta2,
+  innovation_zeta2 = zeta2,
   a_sigma = 0.1,
   b_sigma = 0.1,
   gamma_init = NULL,
@@ -15429,7 +15483,11 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   sigma <- init$sigma %||% rep(max(stats::mad(y), 1.0e-3), K)
   v <- matrix(rep(sigma, each = Tn), nrow = Tn, ncol = K)
   s <- matrix(abs(stats::rnorm(Tn * K)), nrow = Tn, ncol = K)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  rhs_state <- app_joint_qvp_initialize_rhs_state(
+    K, p, tau0 = tau0, zeta2 = zeta2,
+    anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+  )
   keep_idx <- seq.int(burn + 1L, n_iter, by = thin)
   n_keep <- length(keep_idx)
   beta_draws <- matrix(NA_real_, nrow = n_keep, ncol = K * p)

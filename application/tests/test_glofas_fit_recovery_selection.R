@@ -42,6 +42,24 @@ stopifnot(isTRUE(all.equal(selection_synthesized$history$qhat_isotonic[
   selection_synthesized$history$target_date == selection_dates[[1L]]
 ], c(0.95, 1.2, 1.2), tolerance = 1e-12)))
 
+selection_tail <- app_glofas_selection_tail_audit(selection_synthesized$history)
+stopifnot(nrow(selection_tail$summary) == 1L)
+stopifnot(selection_tail$summary$n_dates[[1L]] == length(selection_dates))
+stopifnot(is.finite(selection_tail$summary$fitted_max_to_observed_max[[1L]]))
+stopifnot(selection_tail$summary$max_inverse_transform_abs_error[[1L]] < 1e-12)
+stopifnot(all(selection_tail$excursions$qhat_original > selection_tail$excursions$observed_max))
+
+if (requireNamespace("ggplot2", quietly = TRUE) && isTRUE(capabilities("cairo"))) {
+  selection_plot <- ggplot2::ggplot(data.frame(x = 1:2, y = 1:2), ggplot2::aes(x, y)) +
+    ggplot2::geom_line()
+  selection_png <- tempfile(fileext = ".png")
+  selection_pdf <- tempfile(fileext = ".pdf")
+  app_glofas_selection_save_plot(selection_plot, selection_png, 3, 2)
+  app_glofas_selection_save_plot(selection_plot, selection_pdf, 3, 2)
+  stopifnot(file.info(selection_png)$size > 0, file.info(selection_pdf)$size > 0)
+  unlink(c(selection_png, selection_pdf))
+}
+
 selection_scores <- app_glofas_selection_score_windows(
   selection_synthesized$history,
   selection_synthesized$crossing,

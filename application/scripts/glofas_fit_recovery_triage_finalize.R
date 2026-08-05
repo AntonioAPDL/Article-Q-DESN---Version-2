@@ -94,6 +94,10 @@ app_write_csv(scores$by_quantile, file.path(output_root, "tables", "observed_his
 app_write_csv(scores$by_date, file.path(output_root, "tables", "observed_history_scores_by_date.csv"))
 app_write_csv(ranking, file.path(output_root, "tables", "stage_a_triage_ranking.csv"))
 
+tail_audit <- app_glofas_selection_tail_audit(synthesized$history, upper_level = 0.95)
+app_write_csv(tail_audit$summary, file.path(output_root, "tables", "upper_tail_excursion_summary.csv"))
+app_write_csv(tail_audit$excursions, file.path(output_root, "tables", "upper_tail_excursions.csv"))
+
 recommendations <- ranking[ranking$advance_eligible, , drop = FALSE]
 recommendations <- head(recommendations, 2L)
 finalists <- data.frame(
@@ -105,6 +109,9 @@ finalists <- data.frame(
   recommended = TRUE,
   approved_for_blocked_validation = FALSE,
   approved_for_full7 = FALSE,
+  tail_review_required = tail_audit$summary$tail_review_required[
+    match(recommendations$candidate_id, tail_audit$summary$candidate_id)
+  ],
   evidence_path = file.path(output_root, "tables", "stage_a_triage_ranking.csv"),
   notes = "Recommendation only; scientific approval is required before any successor launch.",
   stringsAsFactors = FALSE
@@ -184,16 +191,33 @@ p_rank <- ggplot2::ggplot(ranking_plot, ggplot2::aes(candidate_id, triage_integr
   ) + theme_recovery
 
 save_plot <- function(name, plot, width, height) {
-  ggplot2::ggsave(file.path(output_root, "figures", paste0(name, ".pdf")), plot, width = width, height = height, units = "in", device = grDevices::cairo_pdf)
-  ggplot2::ggsave(file.path(output_root, "figures", paste0(name, ".png")), plot, width = width, height = height, units = "in", dpi = 180)
+  app_glofas_selection_save_plot(plot, file.path(output_root, "figures", paste0(name, ".pdf")), width, height)
+  app_glofas_selection_save_plot(plot, file.path(output_root, "figures", paste0(name, ".png")), width, height)
 }
 save_plot("observed_history_last200_independent_quantiles", p_raw, 10.0, 6.4)
 save_plot("observed_history_last200_isotonic_intervals", p_iso, 10.0, 6.4)
 save_plot("stage_a_triage_score_comparison", p_rank, 8.0, 4.8)
 
 figure_paths <- list.files(file.path(output_root, "figures"), full.names = TRUE)
+finalization_provenance_path <- file.path(output_root, "finalization_provenance.csv")
+app_write_csv(data.frame(
+  field = c(
+    "finalized_at", "repo_head", "finalizer_sha256", "selection_helper_sha256",
+    "completed_source_manifest_sha256", "ranking_sha256"
+  ),
+  value = c(
+    format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE)[[1L]],
+    app_sha256_file(app_path("application/scripts/glofas_fit_recovery_triage_finalize.R")),
+    app_sha256_file(app_path("application/R/glofas_fit_recovery_selection.R")),
+    app_sha256_file(completed_manifest_path),
+    app_sha256_file(file.path(output_root, "tables", "stage_a_triage_ranking.csv"))
+  ),
+  stringsAsFactors = FALSE
+), finalization_provenance_path)
 artifact_paths <- c(
   completed_manifest_path,
+  finalization_provenance_path,
   list.files(file.path(output_root, "tables"), full.names = TRUE),
   figure_paths
 )

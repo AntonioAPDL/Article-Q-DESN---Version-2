@@ -171,6 +171,83 @@ app_glofas_selection_apply_isotonic <- function(history, tolerance = 1e-10) {
   list(history = out, crossing = app_bind_rows_fill(diagnostics))
 }
 
+app_glofas_selection_tail_audit <- function(history, upper_level = 0.95) {
+  required <- c(
+    "candidate_id", "target_date", "quantile_level", "y_original",
+    "qhat_log1p", "qhat_original", "qhat_independent", "qhat_isotonic"
+  )
+  missing <- setdiff(required, names(history))
+  if (length(missing)) stop(sprintf("Tail audit lacks: %s.", paste(missing, collapse = ", ")), call. = FALSE)
+  upper <- history[abs(as.numeric(history$quantile_level) - upper_level) < 1e-12, , drop = FALSE]
+  if (!nrow(upper)) stop(sprintf("Tail audit found no p = %.2f rows.", upper_level), call. = FALSE)
+  rows <- lapply(split(upper, upper$candidate_id), function(x) {
+    observed_max <- max(as.numeric(x$y_original), na.rm = TRUE)
+    fitted <- as.numeric(x$qhat_original)
+    data.frame(
+      candidate_id = as.character(x$candidate_id[[1L]]),
+      quantile_level = upper_level,
+      n_dates = nrow(x),
+      observed_max = observed_max,
+      fitted_q95 = unname(stats::quantile(fitted, 0.95, na.rm = TRUE)),
+      fitted_q99 = unname(stats::quantile(fitted, 0.99, na.rm = TRUE)),
+      fitted_max = max(fitted, na.rm = TRUE),
+      max_inverse_transform_abs_error = max(
+        abs(expm1(as.numeric(x$qhat_log1p)) - fitted), na.rm = TRUE
+      ),
+      fitted_max_to_observed_max = max(fitted, na.rm = TRUE) / observed_max,
+      n_above_observed_max = sum(fitted > observed_max, na.rm = TRUE),
+      fraction_above_observed_max = mean(fitted > observed_max, na.rm = TRUE),
+      n_above_2x_observed_max = sum(fitted > 2 * observed_max, na.rm = TRUE),
+      n_above_5x_observed_max = sum(fitted > 5 * observed_max, na.rm = TRUE),
+      n_above_20x_observed_max = sum(fitted > 20 * observed_max, na.rm = TRUE),
+      tail_review_required = max(fitted, na.rm = TRUE) > 20 * observed_max,
+      stringsAsFactors = FALSE
+    )
+  })
+  summary <- app_bind_rows_fill(rows)
+  excursions <- merge(
+    upper[, c(
+      "candidate_id", "target_date", "y_original", "qhat_original",
+      "raw_original", "qhat_independent", "qhat_isotonic"
+    ), drop = FALSE],
+    summary[, c("candidate_id", "observed_max"), drop = FALSE],
+    by = "candidate_id",
+    all.x = TRUE,
+    sort = FALSE
+  )
+  excursions <- excursions[excursions$qhat_original > excursions$observed_max, , drop = FALSE]
+  excursions$fitted_to_observed_max <- excursions$qhat_original / excursions$observed_max
+  excursions <- excursions[order(-excursions$qhat_original, excursions$candidate_id), , drop = FALSE]
+  rownames(excursions) <- NULL
+  list(summary = summary, excursions = excursions)
+}
+
+app_glofas_selection_save_plot <- function(plot, path, width, height, dpi = 180) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Saving selection figures requires ggplot2.", call. = FALSE)
+  }
+  if (!isTRUE(capabilities("cairo"))) {
+    stop("Saving selection figures requires headless Cairo graphics support.", call. = FALSE)
+  }
+  extension <- tolower(tools::file_ext(path))
+  device <- switch(
+    extension,
+    pdf = grDevices::cairo_pdf,
+    png = function(filename, width, height, units, res, ...) {
+      grDevices::png(
+        filename = filename, width = width, height = height, units = units,
+        res = res, type = "cairo-png", ...
+      )
+    },
+    stop(sprintf("Unsupported figure extension: %s.", extension), call. = FALSE)
+  )
+  ggplot2::ggsave(
+    path, plot, width = width, height = height, units = "in", dpi = dpi,
+    device = device
+  )
+  normalizePath(path, mustWork = TRUE)
+}
+
 app_glofas_selection_interval_score <- function(y, lower, upper, alpha = 0.10) {
   y <- as.numeric(y)
   lower <- as.numeric(lower)

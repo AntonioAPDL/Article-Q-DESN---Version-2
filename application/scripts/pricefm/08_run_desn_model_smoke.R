@@ -37,6 +37,8 @@ repo_path <- function(path) {
   if (grepl("^/", path)) path else file.path(repo_root, path)
 }
 
+source(repo_path("application/scripts/pricefm/pricefm_horizon_readout.R"), local = TRUE)
+
 cfg <- yaml::read_yaml(repo_path(cfg_path))$pricefm_desn_smoke
 out_dir <- repo_path(cfg$run$output_dir)
 adapter_dir <- repo_path(cfg$adapter$output_dir)
@@ -63,13 +65,24 @@ read_matrix <- function(path) as.matrix(utils::read.csv(path, header = FALSE, ch
 read_vector <- function(path) as.numeric(read_matrix(path)[, 1L])
 read_rows <- function(split) utils::read.csv(file.path(adapter_dir, paste0("rows_", split, ".csv")), stringsAsFactors = FALSE)
 
-X_train <- read_matrix(file.path(adapter_dir, "X_train.csv"))
-y_train <- read_vector(file.path(adapter_dir, "y_train.csv"))
-X_val <- read_matrix(file.path(adapter_dir, "X_val.csv"))
-X_test <- read_matrix(file.path(adapter_dir, "X_test.csv"))
-rows_train <- read_rows("train")
-rows_val <- read_rows("val")
-rows_test <- read_rows("test")
+configured_splits <- unique(as.character(unlist(cfg$splits %||% c("train", "val", "test"), use.names = FALSE)))
+if (!"train" %in% configured_splits) {
+  stop("Configured splits must include train.", call. = FALSE)
+}
+evaluation_splits <- setdiff(configured_splits, "train")
+if (!length(evaluation_splits)) {
+  stop("Configured splits must include at least one evaluation split.", call. = FALSE)
+}
+X_by_split <- setNames(lapply(configured_splits, function(split) {
+  read_matrix(file.path(adapter_dir, paste0("X_", split, ".csv")))
+}), configured_splits)
+y_by_split <- setNames(lapply(configured_splits, function(split) {
+  read_vector(file.path(adapter_dir, paste0("y_", split, ".csv")))
+}), configured_splits)
+rows_by_split <- setNames(lapply(configured_splits, read_rows), configured_splits)
+X_train <- X_by_split$train
+y_train <- y_by_split$train
+rows_train <- rows_by_split$train
 quantiles <- as.numeric(unlist(cfg$quantiles))
 horizons <- as.integer(unlist(cfg$horizons))
 
@@ -301,9 +314,11 @@ if (qdesn_weighting_enabled) {
   train_index_qdesn <- rep(seq_len(nrow(X_train)), times = horizon_weighting$frequency)
   X_q_train <- X_train[train_index_qdesn, , drop = FALSE]
   y_q_train <- y_train[train_index_qdesn]
+  rows_q_train <- rows_train[train_index_qdesn, , drop = FALSE]
 } else {
   X_q_train <- X_train
   y_q_train <- y_train
+  rows_q_train <- rows_train
 }
 qdesn_likelihoods <- unique(tolower(as_config_vec(cfg$qdesn_vb$likelihoods %||% c("al", "exal"))))
 bad_likelihoods <- setdiff(qdesn_likelihoods, c("al", "exal"))
@@ -312,6 +327,22 @@ if (length(bad_likelihoods)) {
 }
 if (!length(qdesn_likelihoods)) {
   stop("qdesn_vb likelihoods must be nonempty.", call. = FALSE)
+}
+qdesn_readout_modes <- unique(tolower(as_config_vec(cfg$qdesn_vb$readout_modes %||% "shared_static")))
+bad_readout_modes <- setdiff(qdesn_readout_modes, c("shared_static", "separate_horizon_block"))
+if (length(bad_readout_modes)) {
+  stop("Unsupported qdesn_vb readout mode(s): ", paste(bad_readout_modes, collapse = ", "), call. = FALSE)
+}
+if (!length(qdesn_readout_modes)) {
+  stop("qdesn_vb readout_modes must be nonempty.", call. = FALSE)
+}
+if ("separate_horizon_block" %in% qdesn_readout_modes && !"shared_static" %in% qdesn_readout_modes) {
+  stop("separate_horizon_block requires shared_static as its paired control and warm-start anchor.", call. = FALSE)
+}
+horizon_readout_cfg <- cfg$qdesn_vb$horizon_readout %||% list()
+horizon_readout_block_size <- as.integer(horizon_readout_cfg$block_size %||% 24L)
+if (!is.finite(horizon_readout_block_size) || horizon_readout_block_size < 1L) {
+  stop("qdesn_vb horizon_readout block_size must be positive.", call. = FALSE)
 }
 
 safe_sigma_from_fit <- function(fit) {
@@ -462,7 +493,8 @@ record_fit_diagnostics <- function(method_id, model_family, likelihood_family,
   invisible(NULL)
 }
 
-make_vb_init_from_fit <- function(source_fit, components, n_rows, gamma_policy = "source") {
+make_vb_init_from_fit <- function(source_fit, components, n_rows,
+                                  n_features = ncol(X_q_train), gamma_policy = "source") {
   init <- list()
   used <- character()
   components <- unique(as_config_vec(components))
@@ -474,8 +506,8 @@ make_vb_init_from_fit <- function(source_fit, components, n_rows, gamma_policy =
     beta_m <- source_fit$qbeta$m %||% source_fit$beta$mean %||% NULL
     beta_V <- source_fit$qbeta$V %||% source_fit$beta$cov %||% NULL
     if (!is.null(beta_m) && !is.null(beta_V) &&
-        length(beta_m) == ncol(X_q_train) &&
-        all(dim(as.matrix(beta_V)) == c(ncol(X_q_train), ncol(X_q_train))) &&
+        length(beta_m) == n_features &&
+        all(dim(as.matrix(beta_V)) == c(n_features, n_features)) &&
         all(is.finite(beta_m)) && all(is.finite(beta_V))) {
       init$beta_m <- as.numeric(beta_m)
       init$beta_V <- as.matrix(beta_V)
@@ -549,8 +581,15 @@ fit_normal <- function(method_id, prior_type) {
     )
   }
   elapsed <- proc.time()[["elapsed"]] - start
-  append_predictions(method_id, "val", rows_val, normal_predict_quantiles(fit, X_val, seed + 11L))
-  append_predictions(method_id, "test", rows_test, normal_predict_quantiles(fit, X_test, seed + 17L))
+  for (split_index in seq_along(evaluation_splits)) {
+    split <- evaluation_splits[[split_index]]
+    append_predictions(
+      method_id,
+      split,
+      rows_by_split[[split]],
+      normal_predict_quantiles(fit, X_by_split[[split]], seed + 10L + split_index)
+    )
+  }
   append_method(
     method_id = method_id,
     model_family = "normal",
@@ -565,6 +604,8 @@ fit_normal <- function(method_id, prior_type) {
     train_seconds = as.numeric(elapsed),
     n_train = nrow(X_train),
     n_features = ncol(X_train),
+    readout_mode = "shared_static",
+    n_readout_blocks = 1L,
     warm_start_enabled = warm_enabled,
     warm_start_strategy = if (identical(prior_type, "rhs_ns")) "normal_rhs_internal_scaled_ridge_start" else "closed_form"
   )
@@ -600,7 +641,9 @@ fit_quantile <- function(likelihood, tau, X_tr = X_q_train, y_tr = y_q_train,
                          chunking = cfg$qdesn_vb$chunking, init = list(),
                          init_source = "cold", init_components = character(),
                          fit_order = NA_integer_, record_warm = TRUE,
-                         record_trace = TRUE) {
+                         record_trace = TRUE,
+                         diagnostic_method_id = paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked"),
+                         diagnostic_model_family = "qdesn_static_readout") {
   ctrl <- exdqlm::exal_make_vb_control(
     max_iter = as.integer(cfg$qdesn_vb$max_iter),
     min_iter_elbo = as.integer(cfg$qdesn_vb$min_iter_elbo),
@@ -640,7 +683,7 @@ fit_quantile <- function(likelihood, tau, X_tr = X_q_train, y_tr = y_q_train,
   fit_elapsed <- proc.time()[["elapsed"]] - fit_start
   if (warm_record_diagnostics && isTRUE(record_warm)) {
     append_warm(
-      method_id = paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked"),
+      method_id = diagnostic_method_id,
       likelihood_family = likelihood,
       tau = as.numeric(tau),
       fit_order = as.integer(fit_order),
@@ -657,8 +700,8 @@ fit_quantile <- function(likelihood, tau, X_tr = X_q_train, y_tr = y_q_train,
   }
   if (isTRUE(record_trace)) {
     record_fit_diagnostics(
-      method_id = paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked"),
-      model_family = "qdesn_static_readout",
+      method_id = diagnostic_method_id,
+      model_family = diagnostic_model_family,
       likelihood_family = likelihood,
       prior_family = "rhs_ns",
       tau = tau,
@@ -672,8 +715,9 @@ fit_qdesn_like <- function(likelihood, normal_fits = list(), fit_cache = list())
   method_id <- paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked")
   start <- proc.time()[["elapsed"]]
   fits <- list()
-  pred_val <- matrix(NA_real_, nrow(X_val), length(quantiles))
-  pred_test <- matrix(NA_real_, nrow(X_test), length(quantiles))
+  pred_by_split <- setNames(lapply(evaluation_splits, function(split) {
+    matrix(NA_real_, nrow(X_by_split[[split]]), length(quantiles))
+  }), evaluation_splits)
   qcfg <- warm_cfg$qdesn[[likelihood]] %||% list()
   qwarm_enabled <- warm_enabled && isTRUE(qcfg$enabled %||% TRUE)
   components <- as_config_vec(qcfg$components %||% c("beta", "beta_state", "sigma"))
@@ -724,12 +768,14 @@ fit_qdesn_like <- function(likelihood, normal_fits = list(), fit_cache = list())
   for (j in seq_along(quantiles)) {
     tau <- quantiles[[j]]
     fit <- fits[[tau_key(tau)]]
-    pred_val[, j] <- as.numeric(X_val %*% fit$qbeta$m)
-    pred_test[, j] <- as.numeric(X_test %*% fit$qbeta$m)
+    for (split in evaluation_splits) {
+      pred_by_split[[split]][, j] <- as.numeric(X_by_split[[split]] %*% fit$qbeta$m)
+    }
   }
   elapsed <- proc.time()[["elapsed"]] - start
-  append_predictions(method_id, "val", rows_val, pred_val)
-  append_predictions(method_id, "test", rows_test, pred_test)
+  for (split in evaluation_splits) {
+    append_predictions(method_id, split, rows_by_split[[split]], pred_by_split[[split]])
+  }
   append_method(
     method_id = method_id,
     model_family = "qdesn_static_readout",
@@ -744,10 +790,221 @@ fit_qdesn_like <- function(likelihood, normal_fits = list(), fit_cache = list())
     train_seconds = as.numeric(elapsed),
     n_train = nrow(X_q_train),
     n_features = ncol(X_train),
+    readout_mode = "shared_static",
+    n_readout_blocks = 1L,
     warm_start_enabled = qwarm_enabled,
     warm_start_strategy = if (qwarm_enabled) "see_warm_start_diagnostics" else "cold"
   )
   invisible(fits)
+}
+
+fit_qdesn_horizon_separate <- function(likelihood, shared_fits) {
+  method_id <- paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked_horizon_separate")
+  start <- proc.time()[["elapsed"]]
+  fits <- list()
+  pred_by_split <- setNames(lapply(evaluation_splits, function(split) {
+    matrix(NA_real_, nrow(X_by_split[[split]]), length(quantiles))
+  }), evaluation_splits)
+  components <- as_config_vec(
+    horizon_readout_cfg$warm_start_components %||% c("beta", "beta_state", "sigma")
+  )
+  for (j in seq_along(quantiles)) {
+    tau <- quantiles[[j]]
+    shared_fit <- shared_fits[[tau_key(tau)]]
+    block_fits <- pricefm_fit_horizon_block_models(
+      X_q_train,
+      y_q_train,
+      rows_q_train$horizon,
+      horizon_readout_block_size,
+      function(X_block, y_block, block_name, block_index) {
+        init_info <- make_vb_init_from_fit(
+          shared_fit,
+          components,
+          n_rows = nrow(X_block),
+          n_features = ncol(X_block),
+          gamma_policy = if (identical(likelihood, "al")) "zero" else "source"
+        )
+        fit_quantile(
+          likelihood,
+          tau,
+          X_tr = X_block,
+          y_tr = y_block,
+          init = init_info$init,
+          init_source = paste0("shared_static_tau_", tau_key(tau)),
+          init_components = init_info$components,
+          fit_order = j,
+          diagnostic_method_id = paste0(method_id, "::block=", block_name),
+          diagnostic_model_family = "qdesn_horizon_separate_readout"
+        )
+      }
+    )
+    fits[[tau_key(tau)]] <- block_fits
+    for (split in evaluation_splits) {
+      pred_by_split[[split]][, j] <- pricefm_predict_horizon_block_models(
+        block_fits,
+        X_by_split[[split]],
+        rows_by_split[[split]]$horizon,
+        horizon_readout_block_size,
+        function(fit, X_block, block_name) as.numeric(X_block %*% fit$qbeta$m)
+      )
+    }
+  }
+  elapsed <- proc.time()[["elapsed"]] - start
+  for (split in evaluation_splits) {
+    append_predictions(method_id, split, rows_by_split[[split]], pred_by_split[[split]])
+  }
+  flat_fits <- unlist(fits, recursive = FALSE, use.names = FALSE)
+  append_method(
+    method_id = method_id,
+    model_family = "qdesn_horizon_separate_readout",
+    likelihood_family = likelihood,
+    prior_family = "rhs_ns_per_horizon_block",
+    target_label = "full_data_exact_chunked",
+    preserves_full_data_target = TRUE,
+    approximate = FALSE,
+    chunking_mode = "exact",
+    converged = all(vapply(flat_fits, function(z) isTRUE(z$converged), logical(1))),
+    iter = max(vapply(flat_fits, function(z) as.integer(z$iter %||% NA_integer_), integer(1)), na.rm = TRUE),
+    train_seconds = as.numeric(elapsed),
+    n_train = nrow(X_q_train),
+    n_features = ncol(X_train),
+    readout_mode = "separate_horizon_block",
+    n_readout_blocks = length(unique(pricefm_horizon_block_labels(horizons, horizon_readout_block_size))),
+    warm_start_enabled = TRUE,
+    warm_start_strategy = "paired_shared_static_fit_per_tau"
+  )
+  invisible(fits)
+}
+
+run_nested_validation <- function() {
+  nested_cfg <- cfg$nested_validation %||% list(enabled = FALSE)
+  if (!isTRUE(nested_cfg$enabled %||% FALSE)) return(invisible(NULL))
+  nested <- pricefm_build_nested_temporal_folds(
+    rows_train,
+    n_folds = as.integer(nested_cfg$n_folds %||% 3L),
+    initial_train_fraction = as.numeric(nested_cfg$initial_train_fraction %||% 0.55),
+    validation_fraction = as.numeric(nested_cfg$validation_fraction %||% 0.15),
+    min_train_origins = as.integer(nested_cfg$min_train_origins %||% 120L),
+    min_validation_origins = as.integer(nested_cfg$min_validation_origins %||% 30L)
+  )
+  metric_rows <- list()
+  for (inner_fold in seq_along(nested$folds)) {
+    fold <- nested$folds[[inner_fold]]
+    X_inner <- X_train[fold$train_index, , drop = FALSE]
+    y_inner <- y_train[fold$train_index]
+    rows_inner <- rows_train[fold$train_index, , drop = FALSE]
+    X_inner_val <- X_train[fold$validation_index, , drop = FALSE]
+    y_inner_val <- y_train[fold$validation_index]
+    rows_inner_val <- rows_train[fold$validation_index, , drop = FALSE]
+    inner_weighting <- build_horizon_weighting(rows_inner, training_cfg$horizon_weighting %||% NULL)
+    if (isTRUE(inner_weighting$enabled) && "qdesn" %in% inner_weighting$apply_to) {
+      weighted_index <- rep(seq_len(nrow(X_inner)), times = inner_weighting$frequency)
+      X_inner_q <- X_inner[weighted_index, , drop = FALSE]
+      y_inner_q <- y_inner[weighted_index]
+      rows_inner_q <- rows_inner[weighted_index, , drop = FALSE]
+    } else {
+      X_inner_q <- X_inner
+      y_inner_q <- y_inner
+      rows_inner_q <- rows_inner
+    }
+    for (likelihood in qdesn_likelihoods) {
+      for (tau in quantiles) {
+        shared_method_id <- paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked")
+        shared_fit <- fit_quantile(
+          likelihood,
+          tau,
+          X_tr = X_inner_q,
+          y_tr = y_inner_q,
+          record_warm = FALSE,
+          record_trace = FALSE
+        )
+        shared_prediction <- as.numeric(X_inner_val %*% shared_fit$qbeta$m)
+        if ("shared_static" %in% qdesn_readout_modes) {
+          diagnostics <- pricefm_quantile_diagnostics(y_inner_val, shared_prediction, tau)
+          metric_rows[[length(metric_rows) + 1L]] <- data.frame(
+            inner_fold = inner_fold,
+            method_id = shared_method_id,
+            likelihood_family = likelihood,
+            readout_mode = "shared_static",
+            tau = tau,
+            n_train_rows = nrow(X_inner_q),
+            n_validation_rows = nrow(X_inner_val),
+            n_readout_blocks = 1L,
+            converged = isTRUE(shared_fit$converged),
+            diagnostics,
+            stringsAsFactors = FALSE
+          )
+        }
+        if ("separate_horizon_block" %in% qdesn_readout_modes) {
+          components <- as_config_vec(
+            horizon_readout_cfg$warm_start_components %||% c("beta", "beta_state", "sigma")
+          )
+          block_fits <- pricefm_fit_horizon_block_models(
+            X_inner_q,
+            y_inner_q,
+            rows_inner_q$horizon,
+            horizon_readout_block_size,
+            function(X_block, y_block, block_name, block_index) {
+              init_info <- make_vb_init_from_fit(
+                shared_fit,
+                components,
+                n_rows = nrow(X_block),
+                n_features = ncol(X_block),
+                gamma_policy = if (identical(likelihood, "al")) "zero" else "source"
+              )
+              fit_quantile(
+                likelihood,
+                tau,
+                X_tr = X_block,
+                y_tr = y_block,
+                init = init_info$init,
+                init_source = paste0("nested_shared_static_fold_", inner_fold),
+                init_components = init_info$components,
+                fit_order = inner_fold,
+                record_warm = FALSE,
+                record_trace = FALSE
+              )
+            }
+          )
+          separate_prediction <- pricefm_predict_horizon_block_models(
+            block_fits,
+            X_inner_val,
+            rows_inner_val$horizon,
+            horizon_readout_block_size,
+            function(fit, X_block, block_name) as.numeric(X_block %*% fit$qbeta$m)
+          )
+          diagnostics <- pricefm_quantile_diagnostics(y_inner_val, separate_prediction, tau)
+          metric_rows[[length(metric_rows) + 1L]] <- data.frame(
+            inner_fold = inner_fold,
+            method_id = paste0(shared_method_id, "_horizon_separate"),
+            likelihood_family = likelihood,
+            readout_mode = "separate_horizon_block",
+            tau = tau,
+            n_train_rows = nrow(X_inner_q),
+            n_validation_rows = nrow(X_inner_val),
+            n_readout_blocks = length(block_fits),
+            converged = all(vapply(block_fits, function(z) isTRUE(z$converged), logical(1))),
+            diagnostics,
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+    }
+  }
+  metrics <- do.call(rbind, metric_rows)
+  fold_summary <- merge(nested$summary, unique(metrics[c("inner_fold")]), by = "inner_fold", all.y = TRUE)
+  utils::write.csv(metrics, file.path(out_dir, "nested_validation_metrics.csv"), row.names = FALSE)
+  utils::write.csv(fold_summary, file.path(out_dir, "nested_validation_folds.csv"), row.names = FALSE)
+  write_json(file.path(out_dir, "nested_validation_manifest.json"), list(
+    enabled = TRUE,
+    selector = "median_inner_fold_AQL_scaled_with_worst_fold_harm_guard",
+    existing_test_role = "not_loaded_not_predicted_not_selected",
+    readout_modes = qdesn_readout_modes,
+    horizon_block_size = horizon_readout_block_size,
+    n_folds = nrow(nested$summary),
+    fold_summary = nested$summary
+  ))
+  invisible(metrics)
 }
 
 run_exact_equivalence <- function() {
@@ -778,15 +1035,25 @@ run_exact_equivalence <- function() {
 }
 
 normal_fits <- list()
-normal_fits$normal_scaled_ridge <- fit_normal("normal_scaled_ridge", "scaled_ridge")
-normal_fits$normal_rhs_ns <- fit_normal("normal_rhs_ns", "rhs_ns")
+normal_enabled <- if (is.null(cfg$normal$enabled)) TRUE else isTRUE(cfg$normal$enabled)
+if (normal_enabled) {
+  normal_fits$normal_scaled_ridge <- fit_normal("normal_scaled_ridge", "scaled_ridge")
+  normal_fits$normal_rhs_ns <- fit_normal("normal_rhs_ns", "rhs_ns")
+}
 run_exact_equivalence()
+run_nested_validation()
 fit_cache <- list()
 if ("al" %in% qdesn_likelihoods) {
   fit_cache$al <- fit_qdesn_like("al", normal_fits = normal_fits, fit_cache = fit_cache)
+  if ("separate_horizon_block" %in% qdesn_readout_modes) {
+    fit_cache$al_horizon_separate <- fit_qdesn_horizon_separate("al", fit_cache$al)
+  }
 }
 if ("exal" %in% qdesn_likelihoods) {
   fit_cache$exal <- fit_qdesn_like("exal", normal_fits = normal_fits, fit_cache = fit_cache)
+  if ("separate_horizon_block" %in% qdesn_readout_modes) {
+    fit_cache$exal_horizon_separate <- fit_qdesn_horizon_separate("exal", fit_cache$exal)
+  }
 }
 
 predictions <- do.call(rbind, prediction_rows)
@@ -814,7 +1081,11 @@ write_json(file.path(out_dir, "run_manifest.json"), list(
   methods = methods$method_id,
   quantiles = quantiles,
   horizons = horizons,
+  configured_splits = configured_splits,
+  evaluation_splits = evaluation_splits,
   qdesn_likelihoods = qdesn_likelihoods,
+  qdesn_readout_modes = qdesn_readout_modes,
+  horizon_readout = list(block_size = horizon_readout_block_size),
   horizon_weighting = as.list(horizon_weighting$summary[1, , drop = TRUE]),
   warm_start = warm_cfg
 ))

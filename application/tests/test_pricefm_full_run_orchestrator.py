@@ -83,6 +83,26 @@ def test_cell_config_carries_optional_training_cap(tmp_path):
     assert cell["adapter"]["projection_scale"] == 2.0
 
 
+def test_cell_config_carries_nested_validation_and_test_quarantine(tmp_path):
+    full = temp_full_config(tmp_path)
+    full["scope"]["splits"] = ["train", "val"]
+    full["nested_validation"] = {
+        "enabled": True,
+        "n_folds": 3,
+        "initial_train_fraction": 0.55,
+        "validation_fraction": 0.15,
+    }
+    full["qdesn_vb"]["readout_modes"] = ["shared_static", "separate_horizon_block"]
+    full["qdesn_vb"]["horizon_readout"] = {"block_size": 24}
+    data = load_config(full["data_config"])
+    cell = make_cell_config(full, data, "DE_LU", 1)["pricefm_desn_smoke"]
+    assert cell["splits"] == ["train", "val"]
+    assert cell["nested_validation"]["enabled"] is True
+    assert cell["nested_validation"]["n_folds"] == 3
+    assert cell["qdesn_vb"]["readout_modes"] == ["shared_static", "separate_horizon_block"]
+    assert cell["qdesn_vb"]["horizon_readout"]["block_size"] == 24
+
+
 def test_cell_config_carries_reservoir_controls(tmp_path):
     full = temp_full_config(tmp_path)
     full["adapter"].update({
@@ -247,6 +267,24 @@ def test_adapter_ready_for_model_requires_design_matrices(tmp_path):
     assert is_adapter_ready_for_model(paths) is True
 
     (paths["adapter"] / "X_train.csv").unlink()
+    assert is_adapter_ready_for_model(paths) is False
+
+
+def test_adapter_ready_for_model_honors_train_val_only_contract(tmp_path):
+    full = temp_full_config(tmp_path)
+    paths = cell_paths(full, "DE_LU", 1)
+    paths["adapter"].mkdir(parents=True)
+    for name in [
+        "adapter_manifest.json",
+        "X_train.csv",
+        "X_val.csv",
+        "y_train.csv",
+        "y_val.csv",
+        "rows_train.csv",
+        "rows_val.csv",
+    ]:
+        (paths["adapter"] / name).write_text("x\n")
+    assert is_adapter_ready_for_model(paths, ["train", "val"]) is True
     assert is_adapter_ready_for_model(paths) is False
 
 

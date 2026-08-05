@@ -162,6 +162,66 @@ def test_prepare_grid_supports_per_experiment_quantile_override(tmp_path):
     assert second["scope"]["quantiles"] == [0.25, 0.75]
 
 
+def test_prepare_grid_carries_nested_separate_readout_contract(tmp_path):
+    payload = yaml.safe_load(CORRECTED_RESERVOIR_GRID.read_text())
+    grid = payload["pricefm_desn_experiment_grid"]
+    grid["grid_id"] = "unit_nested_horizon_readout"
+    grid["base"]["generated_root"] = str(tmp_path / "generated")
+    grid["base"]["run_root"] = str(tmp_path / "runs")
+    grid["scope"]["splits"] = ["train", "val"]
+    grid["fixed"]["qdesn_likelihoods"] = ["al"]
+    grid["fixed"]["normal"] = {"enabled": False}
+    grid["fixed"]["warm_start"] = {"enabled": False}
+    grid["fixed"]["exact_equivalence"] = {"enabled": False}
+    grid["fixed"]["qdesn_vb"] = {
+        "readout_modes": ["shared_static", "separate_horizon_block"],
+        "horizon_readout": {"block_size": 24},
+    }
+    grid["fixed"]["nested_validation"] = {
+        "enabled": True,
+        "n_folds": 3,
+        "initial_train_fraction": 0.55,
+        "validation_fraction": 0.15,
+    }
+    grid["experiment_blocks"] = []
+    grid["experiments"] = [{
+        "id": "nested_cell",
+        "stage": "unit",
+        "priority": 0,
+        "regions": ["NO_4"],
+        "folds": [2],
+        "feature_map": "window_reservoir_v1",
+        "feature_policy": "target_only",
+        "lag_window": 96,
+        "depth": 2,
+        "units": [48, 48],
+        "alpha": 0.2,
+        "rho": 0.95,
+        "input_scale": 0.2,
+        "tau0": 1.0e-4,
+        "seed": 20260804,
+        "quantile": 0.50,
+        "readout_interaction": "none",
+    }]
+    cfg_path = tmp_path / "grid.yaml"
+    cfg_path.write_text(yaml.safe_dump(payload, sort_keys=False))
+
+    loaded = grid_mod.load_grid(str(cfg_path))
+    grid_mod.prepare_grid(loaded, tmp_path / "generated", write=True)
+    full = yaml.safe_load(
+        (tmp_path / "generated" / "configs" / "full" / "nested_cell.yaml").read_text()
+    )["pricefm_desn_full"]
+    assert full["scope"]["splits"] == ["train", "val"]
+    assert full["normal"]["enabled"] is False
+    assert full["warm_start"]["enabled"] is False
+    assert full["exact_equivalence"]["enabled"] is False
+    assert full["qdesn_vb"]["likelihoods"] == ["al"]
+    assert full["qdesn_vb"]["readout_modes"] == ["shared_static", "separate_horizon_block"]
+    assert full["qdesn_vb"]["horizon_readout"]["block_size"] == 24
+    assert full["nested_validation"]["enabled"] is True
+    assert full["nested_validation"]["n_folds"] == 3
+
+
 def test_prepare_grid_preserves_experiment_metadata(tmp_path):
     payload = yaml.safe_load(CORRECTED_RESERVOIR_GRID.read_text())
     grid = payload["pricefm_desn_experiment_grid"]

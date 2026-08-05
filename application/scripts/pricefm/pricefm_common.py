@@ -65,9 +65,12 @@ def validate_config(cfg):
     missing = [k for k in required if k not in pricefm]
     if missing:
         raise ValueError("Missing pricefm config keys: {}".format(", ".join(missing)))
+    allow_absolute = bool(pricefm.get("allow_absolute_local_paths", False))
     for key in ("raw_dir", "interim_dir", "processed_dir"):
         path = Path(pricefm[key])
-        if path.is_absolute() or not str(path).startswith("application/"):
+        if path.is_absolute() and not allow_absolute:
+            raise ValueError("{} must be a repo-relative application path".format(key))
+        if not path.is_absolute() and not str(path).startswith("application/"):
             raise ValueError("{} must be a repo-relative application path".format(key))
     if len(pricefm["regions"]) != len(set(pricefm["regions"])):
         raise ValueError("Duplicate regions in config.")

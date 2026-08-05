@@ -60,6 +60,15 @@ EXPERIMENT_METADATA_FIELDS = [
     "readout_interaction",
     "horizon_block_size",
     "readout_interaction_basis",
+    "stage_r35_queue",
+    "protect_current_qdesn",
+    "source_r34_experiment_id",
+    "source_r34_selected_method",
+    "readout_modes",
+    "nested_validation_rule",
+    "existing_test_role",
+    "mechanism_qualification_only",
+    "fresh_confirmation_required",
 ]
 
 
@@ -90,6 +99,15 @@ def require_keys(obj, keys, context):
     missing = [key for key in keys if key not in obj]
     if missing:
         raise ValueError("{} missing required keys: {}".format(context, ", ".join(missing)))
+
+
+def deep_update(target, updates):
+    for key, value in dict(updates or {}).items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            deep_update(target[key], value)
+        else:
+            target[key] = copy.deepcopy(value)
+    return target
 
 
 def slug_value(value):
@@ -313,6 +331,7 @@ def build_experiment_config(grid, exp, generated_root):
     quantiles = experiment_quantiles(grid, exp)
     full["scope"]["quantiles"] = quantiles
     full["scope"]["horizons"] = scope.get("horizons", "all")
+    full["scope"]["splits"] = list(scope.get("splits", full["scope"].get("splits", ["train", "val", "test"])))
     feature_policy = experiment_feature_policy(grid, exp)
     full["scope"]["feature_policy"] = feature_policy
     full["training"] = experiment_training_config(grid, exp)
@@ -345,7 +364,23 @@ def build_experiment_config(grid, exp, generated_root):
         full["run"]["default_jobs"] = int(fixed["default_jobs"])
     full["rhs_ns"]["tau0"] = float(exp["tau0"])
     full["rhs_ns"]["shrink_intercept"] = bool(fixed.get("shrink_intercept", False))
+    full.setdefault("normal", {})
+    full.setdefault("qdesn_vb", {})
+    full.setdefault("warm_start", {})
+    full.setdefault("exact_equivalence", {})
     full["qdesn_vb"]["likelihoods"] = list(fixed.get("qdesn_likelihoods", ["al", "exal"]))
+    deep_update(full["normal"], fixed.get("normal"))
+    deep_update(full["normal"], exp.get("normal"))
+    deep_update(full["qdesn_vb"], fixed.get("qdesn_vb"))
+    deep_update(full["qdesn_vb"], exp.get("qdesn_vb"))
+    deep_update(full["warm_start"], fixed.get("warm_start"))
+    deep_update(full["warm_start"], exp.get("warm_start"))
+    deep_update(full["exact_equivalence"], fixed.get("exact_equivalence"))
+    deep_update(full["exact_equivalence"], exp.get("exact_equivalence"))
+    if "nested_validation" in fixed or "nested_validation" in exp:
+        full["nested_validation"] = {}
+        deep_update(full["nested_validation"], fixed.get("nested_validation"))
+        deep_update(full["nested_validation"], exp.get("nested_validation"))
     full["exact_equivalence"]["train_rows"] = int(fixed.get("exact_equivalence_train_rows", 1000))
     if len(quantiles) == 1:
         full["exact_equivalence"]["quantile"] = float(quantiles[0])

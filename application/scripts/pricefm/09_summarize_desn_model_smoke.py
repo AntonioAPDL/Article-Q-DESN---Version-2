@@ -35,11 +35,11 @@ def ensure_market_index(df, split_time_col, time_col):
     raise ValueError("Dataframe lacks market-time columns")
 
 
-def load_scaled_price_series(data_cfg, fold, region):
+def load_scaled_price_series(data_cfg, fold, region, splits=("train", "val", "test")):
     spec = pricefm_block(data_cfg)
     root = repo_path(Path(spec["processed_dir"]) / "splits_scaled" / "fold_{}".format(fold))
     frames = []
-    for split in ("train", "val", "test"):
+    for split in splits:
         frame = pd.read_parquet(root / "{}_scaled.parquet".format(split))
         frames.append(ensure_market_index(frame, spec["split_time_col"], spec["time_col"]))
     df = pd.concat(frames).sort_index()
@@ -268,11 +268,17 @@ def main():
     region = smoke["region"]
     horizons = [int(h) for h in smoke["horizons"]]
     quantiles = [float(q) for q in smoke["quantiles"]]
+    configured_splits = list(dict.fromkeys(str(x) for x in smoke.get("splits", ["train", "val", "test"])))
+    if "train" not in configured_splits:
+        raise ValueError("Configured splits must include train")
+    evaluation_splits = [split for split in configured_splits if split != "train"]
+    if not evaluation_splits:
+        raise ValueError("Configured splits must include at least one evaluation split")
     y_scaler = load_y_scaler(data_cfg, fold, region)
 
     rows = {
         split: pd.read_csv(adapter_dir / "rows_{}.csv".format(split))
-        for split in ("train", "val", "test")
+        for split in configured_splits
     }
     for split in rows:
         rows[split] = rows[split].sort_values(["origin_id", "horizon"]).reset_index(drop=True)
@@ -280,11 +286,11 @@ def main():
     model_pred = pd.read_csv(run_dir / "model_predictions_scaled.csv")
     all_pred = [model_pred]
 
-    price_series = load_scaled_price_series(data_cfg, fold, region)
+    price_series = load_scaled_price_series(data_cfg, fold, region, splits=configured_splits)
     train_y = pivot_truth(rows["train"], horizons)
     train_anchors = rows["train"].drop_duplicates("origin_id").sort_values("origin_id")["origin_market_time"].tolist()
     for days, method_id in [(1, "naive1_prev_day"), (3, "naive2_prev3_avg"), (7, "naive3_prev7_avg")]:
-        for split in ("val", "test"):
+        for split in evaluation_splits:
             split_rows = rows[split]
             eval_anchors = split_rows.drop_duplicates("origin_id").sort_values("origin_id")["origin_market_time"].tolist()
             pred = make_naive_quantile_forecast(
@@ -393,9 +399,18 @@ def main():
         f.write("## Methods\n\n")
         for method_id in sorted(pred["method_id"].unique()):
             f.write("- `{}`\n".format(method_id))
-        f.write("\n## Original-Unit Test Metrics\n\n")
-        test_orig = metrics[(metrics["split"] == "test") & (metrics["unit"] == "original")]
-        f.write(markdown_table(test_orig))
+        f.write("\n## Original-Unit Evaluation Metrics\n\n")
+        evaluation_orig = metrics[
+            metrics["split"].isin(evaluation_splits) & (metrics["unit"] == "original")
+        ]
+        f.write(markdown_table(evaluation_orig))
+        nested_path = run_dir / "nested_validation_metrics.csv"
+        f.write("\n## Nested Temporal Validation\n\n")
+        if nested_path.exists() and nested_path.stat().st_size > 0:
+            nested = pd.read_csv(nested_path)
+            f.write(markdown_table(nested))
+        else:
+            f.write("No nested temporal validation was configured.\n")
         f.write("\n\n## Exact Chunking Gate\n\n")
         if exact.empty:
             f.write("No exact-equivalence gate was recorded.\n")
@@ -430,6 +445,9 @@ def main():
         "predictions": str(run_dir / "predictions_with_naive_scaled.csv"),
         "figures": figure_info,
         "n_methods": int(pred["method_id"].nunique()),
+        "configured_splits": configured_splits,
+        "evaluation_splits": evaluation_splits,
+        "existing_test_loaded": "test" in configured_splits,
     })
 
 

@@ -178,6 +178,8 @@ def make_cell_config(full_cfg, data_cfg, region, fold):
     }
     if "training" in full_cfg:
         cell[CELL_BLOCK]["training"] = dict(full_cfg["training"])
+    if "nested_validation" in full_cfg:
+        cell[CELL_BLOCK]["nested_validation"] = copy.deepcopy(full_cfg["nested_validation"])
     if "warm_start" in full_cfg:
         cell[CELL_BLOCK]["warm_start"] = dict(full_cfg["warm_start"])
     if "artifact_hygiene" in full_cfg:
@@ -232,20 +234,18 @@ def is_cell_complete(full_cfg, region, fold):
     return all(path.exists() and path.stat().st_size > 0 for path in required)
 
 
-def is_adapter_ready_for_model(paths):
+def is_adapter_ready_for_model(paths, splits=None):
     """Return whether adapter outputs needed by the R model step are present."""
+    splits = list(splits or ["train", "val", "test"])
     required = [
         paths["adapter"] / "adapter_manifest.json",
-        paths["adapter"] / "X_train.csv",
-        paths["adapter"] / "X_val.csv",
-        paths["adapter"] / "X_test.csv",
-        paths["adapter"] / "y_train.csv",
-        paths["adapter"] / "y_val.csv",
-        paths["adapter"] / "y_test.csv",
-        paths["adapter"] / "rows_train.csv",
-        paths["adapter"] / "rows_val.csv",
-        paths["adapter"] / "rows_test.csv",
     ]
+    for split in splits:
+        required.extend([
+            paths["adapter"] / "X_{}.csv".format(split),
+            paths["adapter"] / "y_{}.csv".format(split),
+            paths["adapter"] / "rows_{}.csv".format(split),
+        ])
     return all(path.exists() and path.stat().st_size > 0 for path in required)
 
 
@@ -382,7 +382,8 @@ def run_cell(full_cfg, data_cfg, region, fold, force=False, resume=True, dry_run
     rscript_bin = repo_path(full_cfg.get("rscript_bin", "Rscript"))
     cfg_path = paths["config"]
 
-    if force or not is_adapter_ready_for_model(paths):
+    configured_splits = list(full_cfg["scope"].get("splits", ["train", "val", "test"]))
+    if force or not is_adapter_ready_for_model(paths, configured_splits):
         adapter_cmd = [
             python_bin,
             repo_path("application/scripts/pricefm/07_build_desn_direct_horizon_adapter.py"),

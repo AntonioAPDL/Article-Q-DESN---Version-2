@@ -52,6 +52,7 @@ if (!all(gate$gate_pass)) stop("At least one full-seven fit failed its completio
 combined <- app_glofas_selection_combine_histories(source_manifest, cutoff_date = cutoff_date)
 synthesized <- app_glofas_selection_apply_isotonic(combined$history)
 scores <- app_glofas_selection_score_windows(synthesized$history, synthesized$crossing, windows = windows)
+tail_audit <- app_glofas_selection_tail_audit(synthesized$history, upper_level = 0.95)
 names(scores$summary)[names(scores$summary) == "triage_integrated_quantile_score"] <- "crps_quantile_grid_mean"
 names(scores$by_date)[names(scores$by_date) == "triage_integrated_quantile_score"] <- "crps_quantile_grid"
 
@@ -70,6 +71,8 @@ app_write_csv(scores$summary, file.path(output_root, "tables", "observed_history
 app_write_csv(scores$by_quantile, file.path(output_root, "tables", "observed_history_full7_scores_by_quantile.csv"))
 app_write_csv(scores$by_date, file.path(output_root, "tables", "observed_history_full7_scores_by_date.csv"))
 app_write_csv(ranking, file.path(output_root, "tables", "observed_history_full7_ranking.csv"))
+app_write_csv(tail_audit$summary, file.path(output_root, "tables", "upper_tail_excursion_summary.csv"))
+app_write_csv(tail_audit$excursions, file.path(output_root, "tables", "upper_tail_excursions.csv"))
 
 if (!requireNamespace("ggplot2", quietly = TRUE)) stop("Full-seven finalization requires ggplot2.", call. = FALSE)
 last200 <- do.call(rbind, lapply(split(synthesized$history, synthesized$history$candidate_id), function(x) {
@@ -104,15 +107,31 @@ for (spec in list(
   list(name = "observed_history_last200_full7_quantiles", plot = p_paths, width = 9.2, height = 5.8),
   list(name = "observed_history_full7_crps_ranking", plot = p_rank, width = 7.5, height = 4.5)
 )) {
-  ggplot2::ggsave(file.path(output_root, "figures", paste0(spec$name, ".pdf")), spec$plot, width = spec$width, height = spec$height, units = "in", device = grDevices::cairo_pdf)
-  ggplot2::ggsave(file.path(output_root, "figures", paste0(spec$name, ".png")), spec$plot, width = spec$width, height = spec$height, units = "in", dpi = 180)
+  app_glofas_selection_save_plot(spec$plot, file.path(output_root, "figures", paste0(spec$name, ".pdf")), spec$width, spec$height)
+  app_glofas_selection_save_plot(spec$plot, file.path(output_root, "figures", paste0(spec$name, ".png")), spec$width, spec$height)
 }
 
 paths <- c(
   file.path(output_root, "quantile_source_manifest_completed.csv"),
+  file.path(output_root, "finalization_provenance.csv"),
   list.files(file.path(output_root, "tables"), full.names = TRUE),
   list.files(file.path(output_root, "figures"), full.names = TRUE)
 )
+app_write_csv(data.frame(
+  field = c(
+    "finalized_at", "repo_head", "finalizer_sha256", "selection_helper_sha256",
+    "completed_source_manifest_sha256", "ranking_sha256"
+  ),
+  value = c(
+    format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE)[[1L]],
+    app_sha256_file(app_path("application/scripts/glofas_fit_recovery_full7_finalize.R")),
+    app_sha256_file(app_path("application/R/glofas_fit_recovery_selection.R")),
+    app_sha256_file(file.path(output_root, "quantile_source_manifest_completed.csv")),
+    app_sha256_file(file.path(output_root, "tables", "observed_history_full7_ranking.csv"))
+  ),
+  stringsAsFactors = FALSE
+), file.path(output_root, "finalization_provenance.csv"))
 app_write_csv(data.frame(
   path = paths,
   size_bytes = as.numeric(file.info(paths)$size),

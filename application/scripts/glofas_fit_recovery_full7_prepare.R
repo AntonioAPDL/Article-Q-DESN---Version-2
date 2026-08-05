@@ -23,6 +23,10 @@ resolve_repo <- function(path, must_work = FALSE) {
 finalists_path <- resolve_repo(args$finalists, must_work = TRUE)
 triage_root <- resolve_repo(args$triage_root, must_work = TRUE)
 output_root <- resolve_repo(args$output_root, must_work = FALSE)
+batch_id <- basename(output_root)
+if (!grepl("^[A-Za-z0-9][A-Za-z0-9._-]*$", batch_id)) {
+  stop("The full-seven output-root basename is not a safe batch ID.", call. = FALSE)
+}
 finalists <- app_read_csv(finalists_path)
 required <- c("candidate_id", "recommended", "approved_for_full7")
 missing <- setdiff(required, names(finalists))
@@ -132,7 +136,7 @@ for (candidate_id in finalists$candidate_id) {
     config_path <- file.path(candidate_root, paste0("config_", quantile_id, ".yaml"))
     app_write_yaml(cfg, config_path)
 
-    run_id <- paste0("glofas_fit_recovery_full7_20260731_", candidate_id, "_", quantile_id)
+    run_id <- paste(batch_id, candidate_id, quantile_id, sep = "_")
     run_dir <- file.path(output_root, "runs", run_id)
     fit_object <- file.path(run_dir, "objects", paste0(fit_id, ".rds"))
     runtime_rows[[length(runtime_rows) + 1L]] <- data.frame(

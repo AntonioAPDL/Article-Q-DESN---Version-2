@@ -70,6 +70,10 @@ finalists_path <- resolve_repo(args$finalists, must_work = TRUE)
 cutoff_path <- resolve_repo(args$cutoff_registry, must_work = TRUE)
 p50_root <- resolve_repo(args$p50_recovery_root, must_work = TRUE)
 output_root <- resolve_repo(args$output_root, must_work = FALSE)
+batch_id <- basename(output_root)
+if (!grepl("^[A-Za-z0-9][A-Za-z0-9._-]*$", batch_id)) {
+  stop("The blocked-validation output-root basename is not a safe batch ID.", call. = FALSE)
+}
 data_root <- normalizePath(args$authoritative_data_root, mustWork = TRUE)
 finalists <- app_read_csv(finalists_path)
 if (!all(c("candidate_id", "recommended", "approved_for_blocked_validation") %in% names(finalists))) {
@@ -290,7 +294,7 @@ for (cutoff_id in names(cutoff_assets)) {
     cfg$execution$final_launch$note <- paste("Approved cold-start blocked diagnostic for", candidate_id, cutoff_id)
     config_path <- file.path(candidate_root, "config_p50.yaml")
     app_write_yaml(cfg, config_path)
-    run_id <- paste0("glofas_fit_recovery_blocked_20260731_", candidate_id, "_", cutoff_id)
+    run_id <- paste(batch_id, candidate_id, cutoff_id, sep = "_")
     runtime_rows[[length(runtime_rows) + 1L]] <- data.frame(
       candidate_id = paste(candidate_id, cutoff_id, sep = "__"),
       base_candidate_id = candidate_id,

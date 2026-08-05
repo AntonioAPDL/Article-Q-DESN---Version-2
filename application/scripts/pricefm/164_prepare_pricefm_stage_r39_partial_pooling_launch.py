@@ -178,7 +178,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("R39 launch-prep gates failed")
     launcher = Path(args.launcher).resolve()
     command = (
-        f"{Path(args.python_bin).resolve()} {launcher} --grid-config {grid_path} "
+        # Preserve the venv entrypoint: resolving its symlink loses the venv
+        # package context on this host.
+        f"{Path(args.python_bin).absolute()} {launcher} --grid-config {grid_path} "
         f"--priorities 0,1 --experiment-jobs {args.experiment_jobs} --cell-jobs 1 "
         f"--build-windows false --resume true --force false --dry-run false --cpu-list {args.cpu_list}"
     )

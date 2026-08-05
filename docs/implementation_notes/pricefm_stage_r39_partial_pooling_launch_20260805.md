@@ -15,3 +15,7 @@ R39 is median mechanism qualification. Existing test, registry, article,
 full-quantile, and MCMC actions remain blocked. Fresh article confirmation also
 remains blocked by the absence of post-2025 observations and comparable PriceFM
 forecast artifacts.
+
+The launch command preserves the PriceFM virtual-environment entrypoint path
+without resolving its interpreter symlink, ensuring the launcher's PyYAML and
+other environment dependencies remain available.

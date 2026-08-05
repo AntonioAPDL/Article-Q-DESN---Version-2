@@ -58,3 +58,9 @@ def test_cpu_parser_rejects_duplicates():
     module = load_module()
     with pytest.raises(ValueError, match="unique"):
         module.cpu_ids("1-3,3")
+
+
+def test_launch_command_preserves_virtual_environment_path():
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert "Path(args.python_bin).absolute()" in source
+    assert "Path(args.python_bin).resolve()" not in source

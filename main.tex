@@ -1722,13 +1722,14 @@ record for source identity, model specification, and scoring metadata.
 \subsection{Single-Quantile Competing Methods}
 
 For each family and target quantile level in the single-quantile validation
-bundle, the Q--DESN comparison varies the working likelihood, readout prior,
-and inference method specified by the validation design. To keep table
-labels compact, entries labeled QDESN use the AL working likelihood and entries
-labeled exQDESN use the exAL working likelihood; the suffix gives the readout
-prior, either ridge or regularized horseshoe (RHS). The reservoir specification
-is fixed within each validation grid, with the reservoir profile, random seed,
-source identifiers, and software version retained in the reproducibility record.
+bundle, the article-facing Q--DESN comparison varies the working likelihood and
+inference method while using regularized-horseshoe (RHS) readout shrinkage.
+Entries labeled Q--DESN AL--RHS use the AL working likelihood, whereas entries
+labeled Q--DESN exAL--RHS use the exAL working likelihood. Historical ridge
+fits are not included because they have not been replayed under the corrected
+train-only preprocessing contract. The reservoir specification, random seed,
+source identifiers, and software version for every displayed metric are retained
+in the reproducibility record.
 Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
 fit-window, and forecast-origin protocol using \pkg{exdqlm}
@@ -1794,6 +1795,12 @@ status is disclosed rather than used as a hard metric-exclusion rule: daggers
 mark rows with a contributing WARN source, and double daggers mark rows with a
 contributing FAIL source.
 
+All displayed Q--DESN and exQ--DESN values were recomputed after restricting
+feature scaling and every other learned preprocessing quantity to observations
+available through the fitting origin. The DQLM and exDQLM baselines use the same
+source trajectories, training window, forecast origins, leads, and scoring
+rules, but do not use the shared reservoir-scaling step.
+
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
 Figure~\ref{fig:independent-simulation-mcmc-metric-envelope} provides a
@@ -1811,7 +1818,7 @@ families. Columns identify the data-generating family and rows identify the
 criterion. Each cell prints the absolute criterion value, while shading gives
 its ratio to the lowest value among the four models for that family, quantile
 level, and criterion. Outlined cells are the within-comparison minima; darker
-cells indicate larger multiplicative departures. Triangles and crosses mark
+cells indicate larger multiplicative departures. Plus signs and crosses mark
 values whose contributing metric source has a WARN or FAIL signoff,
 respectively. Because the displayed record is a metric-wise calibration
 envelope, cells need not originate from a common specification or replicate
@@ -1819,17 +1826,6 @@ seed. All criteria are lower-is-better. Forecast criteria use the held-out
 window of length 1000 with leads 1--30 and origin stride 30.}
 \label{fig:independent-simulation-mcmc-metric-envelope}
 \end{figure}
-
-A separate full-budget confirmation used one coherent exQDESN--RHS
-specification for the Laplace family at \(p=0.25\), rather than selecting each
-criterion from a potentially different fit. It yielded fit RMSE \(1.747\),
-forecast MAE \(1.367\), and forecast check loss \(4.388\), while passing the
-prespecified external-comparison, stability, reproducibility, and
-storage-retention gates. A marginal-chain diagnostic warning is retained in
-the reproducibility record. Because these values are slightly above the
-corresponding metric-wise minima \(1.727\), \(1.355\), and \(4.378\), the
-confirmation strengthens the coherent-model evidence without changing the
-displayed envelope.
 
 The result tables are derived from the archived validation evidence without
 altering the underlying source tables. The reproducibility record stores the

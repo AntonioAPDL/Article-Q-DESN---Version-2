@@ -196,13 +196,16 @@ Planned files:
   counts, and the refresh command consumed by
   `application/scripts/29_audit_shared_validation_tt500_provisional_progress.R`
   and `application/scripts/30_build_shared_validation_tt500_provisional_table.R`.
-- `shared_validation_tt500_final_fitforecast.yaml`: final article-facing TT500
-  fit-and-forecast handoff for the shared Q--DESN + exDQLM/DQLM validation
-  study. It pins the validation worktree, branch, current sync commit, package
-  version, source-registry hash, TT500 train/forecast windows, rolling-origin
-  lead/stride policy, exact shared-interface paths, and SHA-256 hashes consumed
-  by `application/scripts/31_build_shared_validation_tt500_final_tables.R`.
-  This config is TT500-only; TT5000 MCMC must not be inferred from it.
+- `independent_validation_trainonly_v1.yaml`: authoritative article-facing
+  500-observation handoff for the independent Q--DESN + exDQLM/DQLM simulation
+  study. It pins the corrected 72-row interface, manifest, source ledger, source
+  registry, common windows, and rolling-origin lead/stride policy consumed by
+  `scripts/build_independent_validation_trainonly_article.R`. Q--DESN rows must
+  use train-only preprocessing; uncorrected ridge rows and 5000-observation
+  MCMC runs are outside this contract.
+- `shared_validation_tt500_final_fitforecast.yaml`: historical pre-correction
+  build configuration retained for auditability. It is not the current
+  article-table authority.
 
 Generated outputs follow the application artifact lifecycle:
 

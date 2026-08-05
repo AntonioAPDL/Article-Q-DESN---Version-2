@@ -196,16 +196,17 @@ selection manifest with hashes. Future model replacements should update this
 current-output registry instead of editing application figure and table paths by
 hand.
 
-The shared simulation validation tables follow the same principle. The final
-TT500 fit-and-forecast handoff is pinned by
-`application/config/shared_validation_tt500_final_fitforecast.yaml` and rebuilt
-with `application/scripts/31_build_shared_validation_tt500_final_tables.R`.
-That builder reads hash-pinned Q--DESN and exDQLM/DQLM shared-interface CSV
-files, checks the source registry, rolling-origin grid, TT500 windows,
-package/branch/commit provenance, and Q--DESN scale-repaired forecast paths,
-then writes the article-facing `tables/qdesn_validation_tt500_final_*` files.
-TT5000 MCMC remains outside manuscript claims until a separate final handoff is
-declared and guarded.
+The independent simulation tables follow the same principle. The authoritative
+500-observation handoff is pinned by
+`application/config/independent_validation_trainonly_v1.yaml` and rebuilt with
+`scripts/build_independent_validation_trainonly_article.R`. The builder verifies
+the immutable 72-row interface, source-ledger hashes, common rolling-origin
+protocol, and train-only Q--DESN preprocessing contract before regenerating the
+main MCMC tables, performance figure, and supplementary VB/MCMC tables.
+Historical ridge rows and 5000-observation MCMC runs remain outside these
+manuscript claims. The older
+`application/config/shared_validation_tt500_final_fitforecast.yaml` pipeline is
+retained as historical build context and is not the current table authority.
 
 For GloFAS synthesis runs that use optional no-refit spread calibration, the
 calibration must be declared in the synthesis config and promoted through

@@ -1484,8 +1484,10 @@ auditable without making VB rows the reported validation results.
 \subsection{Single-Quantile VB Companion Panels}
 
 The following generated tables retain both inference panels from the fixed
-500-observation validation study. In the main article, only the MCMC rows from
-these source tables are displayed.
+500-observation validation study. Q--DESN and exQ--DESN entries use the exact
+train-only preprocessing replay, and historical ridge rows are omitted because
+they have not undergone that correction. In the main article, only the MCMC
+rows from these source tables are displayed.
 
 \input{tables/qdesn_validation_tt500_final_tables.tex}
 

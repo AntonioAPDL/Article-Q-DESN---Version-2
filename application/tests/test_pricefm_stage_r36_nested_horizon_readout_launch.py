@@ -143,6 +143,7 @@ def test_stage_r36_materializes_case_specific_test_quarantined_launch(monkeypatc
     assert summary["n_harm_guards"] == 1
     assert summary["existing_test_loaded"] is False
     assert summary["readout_modes"] == ["shared_static", "separate_horizon_block"]
+    assert summary["cpu_ids"] == list(range(16, 27))
     manifest = pd.read_csv(output / "pricefm_stage_r36_launch_manifest.csv")
     assert len(manifest) == 2
     assert manifest["mechanism_qualification_only"].map(bool).all()

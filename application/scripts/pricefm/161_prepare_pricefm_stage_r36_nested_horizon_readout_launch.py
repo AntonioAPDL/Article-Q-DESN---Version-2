@@ -107,6 +107,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--expected-harm-guards", type=int, default=2)
     p.add_argument("--experiment-jobs", type=int, default=11)
     p.add_argument("--cell-jobs", type=int, default=1)
+    p.add_argument("--cpu-list", default="16-26")
     p.add_argument("--authorize-launch", type=parse_bool, default=False)
     p.add_argument("--force", type=parse_bool, default=False)
     return p
@@ -189,6 +190,25 @@ def config_hash(payload: dict[str, Any]) -> str:
 
 def slug_region(region: str) -> str:
     return str(region).lower().replace("_", "")
+
+
+def cpu_list_value(value: str) -> list[int]:
+    cpus: list[int] = []
+    for part in str(value).split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if "-" in token:
+            start_text, end_text = token.split("-", 1)
+            start, end = int(start_text), int(end_text)
+            if start < 0 or end < start:
+                raise ValueError(f"Invalid CPU range: {token}")
+            cpus.extend(range(start, end + 1))
+        else:
+            cpus.append(int(token))
+    if any(cpu < 0 for cpu in cpus) or len(cpus) != len(set(cpus)):
+        raise ValueError("CPU list must contain unique nonnegative identifiers")
+    return cpus
 
 
 def absolutize_data_paths(data: dict[str, Any], artifact_root: Path) -> None:
@@ -331,6 +351,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     grid_root = repo_path(args.grid_generated_root)
     run_root = repo_path(args.run_root)
     artifact_root = Path(args.artifact_repo_root).resolve()
+    cpu_ids = cpu_list_value(args.cpu_list)
     if output_dir.exists():
         if not args.force:
             raise FileExistsError(f"{output_dir} exists; rerun with --force true")
@@ -456,6 +477,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     "priorities": [0, 1],
                     "experiment_jobs": int(args.experiment_jobs),
                     "cell_jobs": int(args.cell_jobs),
+                    "cpu_ids": cpu_ids,
                     "build_windows": False,
                     "dry_run": False,
                     "resume": True,
@@ -586,6 +608,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ("package_present", Path(args.package_path).exists(), "The pinned exdqlm package worktree exists."),
         ("rscript_present", Path(args.rscript_bin).exists(), "The configured Rscript exists."),
         ("python_present", python_bin.exists(), "The configured PriceFM Python environment exists."),
+        ("one_cpu_per_experiment", len(cpu_ids) >= min(len(manifest_rows), int(args.experiment_jobs)), "Every concurrent experiment has a dedicated CPU affinity."),
         ("registry_manuscript_blocked", not any(x["mutates_registry"] or x["mutates_manuscript"] for x in manifest_rows), "No downstream mutation is enabled."),
     ]
     gate_frame = pd.DataFrame([{"gate": name, "passed": bool(passed), "detail": detail} for name, passed, detail in gates])
@@ -603,7 +626,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         f"{python_bin} {repo_path(args.source_grid_launcher)} --grid-config {grid_path} "
         f"--priorities 0,1 --experiment-jobs {int(args.experiment_jobs)} "
         f"--cell-jobs {int(args.cell_jobs)} --build-windows false --resume true "
-        "--force false --dry-run false"
+        f"--force false --dry-run false --cpu-list {args.cpu_list}"
     )
     (output_dir / OUT_COMMAND).write_text(command + "\n")
 
@@ -645,6 +668,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "launch_ready": bool(args.authorize_launch),
         "experiment_jobs": int(args.experiment_jobs),
         "cell_jobs": int(args.cell_jobs),
+        "cpu_ids": cpu_ids,
         "mutates_registry": False,
         "mutates_manuscript": False,
         "mcmc_authorized": False,

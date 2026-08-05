@@ -459,6 +459,35 @@ def test_grid_runner_window_jobs_expand_graph_neighbor_direct_dependencies(tmp_p
     assert jobs[0]["lag_window"] == 96
 
 
+def test_grid_runner_pins_each_experiment_to_requested_cpu(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_run_logged(cmd, log_path, dry_run=False):
+        captured["cmd"] = [str(x) for x in cmd]
+        return {"status": "completed", "return_code": 0, "elapsed_seconds": 0.1}
+
+    monkeypatch.setattr(runner_mod, "run_logged", fake_run_logged)
+    row = {
+        "id": "cpu_pinned",
+        "priority": 0,
+        "stage": "unit",
+        "full_config": str(tmp_path / "full.yaml"),
+        "run_dir": str(tmp_path / "run"),
+    }
+    result = runner_mod.run_experiment(
+        row,
+        tmp_path / "logs",
+        dry_run=False,
+        resume=True,
+        force=False,
+        cell_jobs=1,
+        cpu_id=17,
+    )
+    assert captured["cmd"][:3] == ["taskset", "-c", "17"]
+    assert result["cpu_id"] == 17
+    assert runner_mod.parse_cpu_list("16-18,21") == [16, 17, 18, 21]
+
+
 def test_prepare_grid_rejects_invalid_experiment_quantiles(tmp_path):
     payload = yaml.safe_load(CORRECTED_RESERVOIR_GRID.read_text())
     grid = payload["pricefm_desn_experiment_grid"]

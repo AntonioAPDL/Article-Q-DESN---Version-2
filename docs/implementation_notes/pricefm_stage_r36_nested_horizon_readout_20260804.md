@@ -100,3 +100,7 @@ The generated grid and run roots are:
 All required historical train/validation windows, interpreters, package sources,
 mechanism tokens, split contracts, and mutation blocks pass the materialized
 launch-prep gates.
+
+The production launcher assigns the 11 concurrent experiments one core each on
+CPUs 16-26. BLAS/OpenMP thread counts are fixed to one in the background launch
+environment, preventing hidden multicore expansion inside an experiment.

@@ -36,6 +36,30 @@ def parse_csv(value, cast=str):
     return [cast(x.strip()) for x in str(value).split(",") if x.strip()]
 
 
+def parse_cpu_list(value):
+    if value is None or str(value).strip() == "":
+        return []
+    cpus = []
+    for part in str(value).split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if "-" in token:
+            start_text, end_text = token.split("-", 1)
+            start, end = int(start_text), int(end_text)
+            if start < 0 or end < start:
+                raise ValueError("Invalid CPU range: {}".format(token))
+            cpus.extend(range(start, end + 1))
+        else:
+            cpu = int(token)
+            if cpu < 0:
+                raise ValueError("CPU identifiers must be nonnegative")
+            cpus.append(cpu)
+    if len(cpus) != len(set(cpus)):
+        raise ValueError("CPU list contains duplicates")
+    return cpus
+
+
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
@@ -54,6 +78,11 @@ def parser():
     p.add_argument("--regions", default=None, help="Optional comma-separated region override for every generated config.")
     p.add_argument("--folds", default=None, help="Optional comma-separated fold override for every generated config.")
     p.add_argument("--max-experiments", type=int, default=None)
+    p.add_argument(
+        "--cpu-list",
+        default=None,
+        help="Optional comma/range CPU list; each concurrent experiment is pinned to one CPU.",
+    )
     return p
 
 
@@ -231,7 +260,8 @@ def build_windows_for_rows(input_rows, log_dir, dry_run, resume, force):
     return status_rows
 
 
-def run_experiment(row, log_dir, dry_run, resume, force, cell_jobs, regions=None, folds=None):
+def run_experiment(row, log_dir, dry_run, resume, force, cell_jobs,
+                   regions=None, folds=None, cpu_id=None):
     log_path = log_dir / "{}.log".format(row["id"])
     cmd = [
         sys.executable,
@@ -246,6 +276,8 @@ def run_experiment(row, log_dir, dry_run, resume, force, cell_jobs, regions=None
         cmd.extend(["--regions", ",".join(str(x) for x in regions)])
     if folds:
         cmd.extend(["--folds", ",".join(str(int(x)) for x in folds)])
+    if cpu_id is not None:
+        cmd = ["taskset", "-c", str(int(cpu_id))] + cmd
     result = run_logged(cmd, log_path, dry_run=False)
     if dry_run and result["status"] == "completed":
         result["status"] = "planned"
@@ -257,6 +289,7 @@ def run_experiment(row, log_dir, dry_run, resume, force, cell_jobs, regions=None
         "config": row["full_config"],
         "run_dir": row["run_dir"],
         "log": config_path_value(log_path),
+        "cpu_id": "" if cpu_id is None else int(cpu_id),
         **result,
     }
 
@@ -266,7 +299,7 @@ def write_status(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = [
         "id", "kind", "priority", "stage", "status", "return_code",
-        "elapsed_seconds", "config", "run_dir", "log",
+        "elapsed_seconds", "cpu_id", "config", "run_dir", "log",
     ]
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
@@ -289,6 +322,11 @@ def main():
     )
     region_override = parse_csv(args.regions, str)
     fold_override = parse_csv(args.folds, int)
+    cpu_ids = parse_cpu_list(args.cpu_list)
+    if cpu_ids and len(cpu_ids) < min(len(selected), int(args.experiment_jobs)):
+        raise ValueError(
+            "CPU list must contain at least one CPU per concurrently running experiment"
+        )
     generated_root = repo_path(grid["base"]["generated_root"])
     log_dir = generated_root / "launch_logs"
     status_rows = []
@@ -307,12 +345,13 @@ def main():
             raise SystemExit(1)
 
     if int(args.experiment_jobs) <= 1:
-        for row in selected:
+        for index, row in enumerate(selected):
             status_rows.append(run_experiment(
                 row, log_dir, bool(args.dry_run), bool(args.resume),
                 bool(args.force), int(args.cell_jobs),
                 regions=region_override,
                 folds=fold_override,
+                cpu_id=cpu_ids[index % len(cpu_ids)] if cpu_ids else None,
             ))
     else:
         with ThreadPoolExecutor(max_workers=int(args.experiment_jobs)) as ex:
@@ -321,8 +360,9 @@ def main():
                     run_experiment, row, log_dir, bool(args.dry_run),
                     bool(args.resume), bool(args.force), int(args.cell_jobs),
                     region_override, fold_override,
+                    cpu_ids[index % len(cpu_ids)] if cpu_ids else None,
                 )
-                for row in selected
+                for index, row in enumerate(selected)
             ]
             for fut in as_completed(futs):
                 status_rows.append(fut.result())
@@ -339,6 +379,7 @@ def main():
         "n_selected_experiments": len(selected),
         "region_override": region_override,
         "fold_override": fold_override,
+        "cpu_ids": cpu_ids,
         "status_csv": config_path_value(status_path),
         "selected_ids": [row["id"] for row in selected],
     }

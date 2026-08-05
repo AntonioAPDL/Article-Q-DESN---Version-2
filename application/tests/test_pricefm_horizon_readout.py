@@ -61,6 +61,8 @@ for (fold in folds$folds) {{
 }}
 diag <- pricefm_quantile_diagnostics(y, pred, 0.5)
 stopifnot(diag$AQL_scaled < 1e-10)
+pooled <- pricefm_partial_pool_predictions(rep(0, length(y)), pred, 0.5)
+stopifnot(max(abs(pooled - 0.5 * pred)) < 1e-12)
 """
     result = subprocess.run(
         [str(RSCRIPT), "-e", code],
@@ -80,6 +82,8 @@ def test_runner_consumes_nested_and_separate_readout_configuration():
     assert "pricefm_predict_horizon_block_models" in text
     assert "pricefm_build_nested_temporal_folds" in text
     assert "nested_validation_metrics.csv" in text
+    assert "nested_partial_pooling_metrics.csv" in text
+    assert "nested_partial_pooling_convergence.csv" in text
     assert 'existing_test_role = "not_loaded_not_predicted_not_selected"' in text
 
 
@@ -138,6 +142,10 @@ def test_actual_runner_fits_nested_shared_and_separate_readouts_without_test(tmp
                 "horizon_readout": {
                     "block_size": 2,
                     "warm_start_components": ["beta", "beta_state", "sigma"],
+                    "partial_pooling": {
+                        "enabled": True,
+                        "weights": [0.0, 0.5, 1.0],
+                    },
                 },
                 "max_iter": 5,
                 "min_iter_elbo": 2,
@@ -181,6 +189,11 @@ def test_actual_runner_fits_nested_shared_and_separate_readouts_without_test(tmp
     nested = pd.read_csv(output / "nested_validation_metrics.csv")
     assert len(nested) == 4
     assert set(nested["readout_mode"]) == {"shared_static", "separate_horizon_block"}
+    pooling = pd.read_csv(output / "nested_partial_pooling_metrics.csv")
+    assert len(pooling) == 2 * 2 * 3
+    assert set(pooling["separate_weight"]) == {0.0, 0.5, 1.0}
+    convergence = pd.read_csv(output / "nested_partial_pooling_convergence.csv")
+    assert len(convergence) == 2 * 2
     predictions = pd.read_csv(output / "model_predictions_scaled.csv")
     assert set(predictions["split"]) == {"val"}
     manifest = json.loads((output / "run_manifest.json").read_text())

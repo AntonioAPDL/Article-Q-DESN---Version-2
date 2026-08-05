@@ -344,6 +344,23 @@ horizon_readout_block_size <- as.integer(horizon_readout_cfg$block_size %||% 24L
 if (!is.finite(horizon_readout_block_size) || horizon_readout_block_size < 1L) {
   stop("qdesn_vb horizon_readout block_size must be positive.", call. = FALSE)
 }
+partial_pool_cfg <- horizon_readout_cfg$partial_pooling %||% list(enabled = FALSE)
+partial_pool_enabled <- isTRUE(partial_pool_cfg$enabled %||% FALSE)
+partial_pool_weights <- sort(unique(as.numeric(as_config_vec(
+  partial_pool_cfg$weights %||% c(0, 0.25, 0.5, 0.75, 1)
+))))
+if (partial_pool_enabled) {
+  if (!all(c("shared_static", "separate_horizon_block") %in% qdesn_readout_modes)) {
+    stop("partial pooling requires paired shared and separate readouts.", call. = FALSE)
+  }
+  if (!length(partial_pool_weights) || any(!is.finite(partial_pool_weights)) ||
+      any(partial_pool_weights < 0 | partial_pool_weights > 1)) {
+    stop("partial-pooling weights must be finite values in [0, 1].", call. = FALSE)
+  }
+  if (!all(c(0, 1) %in% partial_pool_weights)) {
+    stop("partial-pooling weights must include shared (0) and separate (1) controls.", call. = FALSE)
+  }
+}
 
 safe_sigma_from_fit <- function(fit) {
   val <- NA_real_
@@ -888,6 +905,8 @@ run_nested_validation <- function() {
     min_validation_origins = as.integer(nested_cfg$min_validation_origins %||% 30L)
   )
   metric_rows <- list()
+  pool_rows <- list()
+  pool_convergence_rows <- list()
   for (inner_fold in seq_along(nested$folds)) {
     fold <- nested$folds[[inner_fold]]
     X_inner <- X_train[fold$train_index, , drop = FALSE]
@@ -987,6 +1006,46 @@ run_nested_validation <- function() {
             diagnostics,
             stringsAsFactors = FALSE
           )
+          if (partial_pool_enabled) {
+            block_labels <- pricefm_horizon_block_labels(
+              rows_inner_val$horizon, horizon_readout_block_size
+            )
+            for (block_name in unique(block_labels)) {
+              block_index <- which(block_labels == block_name)
+              block_fit <- block_fits[[block_name]]
+              pool_convergence_rows[[length(pool_convergence_rows) + 1L]] <- data.frame(
+                inner_fold = inner_fold,
+                likelihood_family = likelihood,
+                tau = tau,
+                horizon_group = block_name,
+                converged = isTRUE(block_fit$converged),
+                iter = as.integer(block_fit$iter %||% NA_integer_),
+                stringsAsFactors = FALSE
+              )
+              for (pool_weight in partial_pool_weights) {
+                pooled_prediction <- pricefm_partial_pool_predictions(
+                  shared_prediction[block_index],
+                  separate_prediction[block_index],
+                  pool_weight
+                )
+                pool_diagnostics <- pricefm_quantile_diagnostics(
+                  y_inner_val[block_index], pooled_prediction, tau
+                )
+                pool_rows[[length(pool_rows) + 1L]] <- data.frame(
+                  inner_fold = inner_fold,
+                  likelihood_family = likelihood,
+                  tau = tau,
+                  horizon_group = block_name,
+                  separate_weight = pool_weight,
+                  n_validation_rows = length(block_index),
+                  shared_converged = isTRUE(shared_fit$converged),
+                  separate_block_converged = isTRUE(block_fit$converged),
+                  pool_diagnostics,
+                  stringsAsFactors = FALSE
+                )
+              }
+            }
+          }
         }
       }
     }
@@ -994,6 +1053,18 @@ run_nested_validation <- function() {
   metrics <- do.call(rbind, metric_rows)
   fold_summary <- merge(nested$summary, unique(metrics[c("inner_fold")]), by = "inner_fold", all.y = TRUE)
   utils::write.csv(metrics, file.path(out_dir, "nested_validation_metrics.csv"), row.names = FALSE)
+  if (partial_pool_enabled) {
+    utils::write.csv(
+      do.call(rbind, pool_rows),
+      file.path(out_dir, "nested_partial_pooling_metrics.csv"),
+      row.names = FALSE
+    )
+    utils::write.csv(
+      do.call(rbind, pool_convergence_rows),
+      file.path(out_dir, "nested_partial_pooling_convergence.csv"),
+      row.names = FALSE
+    )
+  }
   utils::write.csv(fold_summary, file.path(out_dir, "nested_validation_folds.csv"), row.names = FALSE)
   write_json(file.path(out_dir, "nested_validation_manifest.json"), list(
     enabled = TRUE,
@@ -1001,6 +1072,12 @@ run_nested_validation <- function() {
     existing_test_role = "not_loaded_not_predicted_not_selected",
     readout_modes = qdesn_readout_modes,
     horizon_block_size = horizon_readout_block_size,
+    partial_pooling = list(
+      enabled = partial_pool_enabled,
+      weights = partial_pool_weights,
+      selection_scope = "case_specific_horizon_block",
+      evidence_role = "inner_validation_selection_only"
+    ),
     n_folds = nrow(nested$summary),
     fold_summary = nested$summary
   ))
@@ -1085,7 +1162,10 @@ write_json(file.path(out_dir, "run_manifest.json"), list(
   evaluation_splits = evaluation_splits,
   qdesn_likelihoods = qdesn_likelihoods,
   qdesn_readout_modes = qdesn_readout_modes,
-  horizon_readout = list(block_size = horizon_readout_block_size),
+  horizon_readout = list(
+    block_size = horizon_readout_block_size,
+    partial_pooling = list(enabled = partial_pool_enabled, weights = partial_pool_weights)
+  ),
   horizon_weighting = as.list(horizon_weighting$summary[1, , drop = TRUE]),
   warm_start = warm_cfg
 ))

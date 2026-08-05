@@ -59,6 +59,22 @@ pricefm_predict_horizon_block_models <- function(fits, X, horizon, block_size, p
   out
 }
 
+pricefm_partial_pool_predictions <- function(shared, separate, weight) {
+  shared <- as.numeric(shared)
+  separate <- as.numeric(separate)
+  weight <- as.numeric(weight)[1L]
+  if (length(shared) != length(separate) || !length(shared)) {
+    stop("shared and separate predictions must be nonempty and equally sized.", call. = FALSE)
+  }
+  if (!is.finite(weight) || weight < 0 || weight > 1) {
+    stop("partial-pooling weight must be in [0, 1].", call. = FALSE)
+  }
+  if (any(!is.finite(shared)) || any(!is.finite(separate))) {
+    stop("partial-pooling predictions must be finite.", call. = FALSE)
+  }
+  (1 - weight) * shared + weight * separate
+}
+
 pricefm_build_nested_temporal_folds <- function(
     rows,
     n_folds = 3L,

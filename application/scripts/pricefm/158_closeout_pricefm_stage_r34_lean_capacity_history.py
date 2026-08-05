@@ -29,6 +29,16 @@ DEFAULT_RUN_ROOT = (
 )
 DEFAULT_LOG_ROOT = "application/data_local/pricefm/logs"
 DEFAULT_RUN_TAG = "pricefm_stage_r33_lean_capacity_history_20260722"
+DEFAULT_REPAIR_MANIFEST = (
+    "application/data_local/pricefm/authoritative/"
+    "pricefm_stage_r33a_se1_guard_repair_prep_20260803/"
+    "pricefm_stage_r33a_se1_guard_repair_manifest.csv"
+)
+DEFAULT_REPAIR_GRID_ROOT = (
+    "application/data_local/pricefm/experiment_grids/"
+    "pricefm_stage_r33a_se1_guard_repair_20260803"
+)
+DEFAULT_REPAIR_RUN_TAG = "pricefm_stage_r33a_se1_guard_repair_20260803"
 DEFAULT_OUTPUT_DIR = (
     "application/data_local/pricefm/authoritative/"
     "pricefm_stage_r34_lean_capacity_history_closeout_20260728"
@@ -54,9 +64,15 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--run-root", default=DEFAULT_RUN_ROOT)
     p.add_argument("--log-root", default=DEFAULT_LOG_ROOT)
     p.add_argument("--run-tag", default=DEFAULT_RUN_TAG)
+    p.add_argument("--repair-manifest", default=DEFAULT_REPAIR_MANIFEST)
+    p.add_argument("--repair-grid-root", default=DEFAULT_REPAIR_GRID_ROOT)
+    p.add_argument("--repair-run-tag", default=DEFAULT_REPAIR_RUN_TAG)
     p.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     p.add_argument("--expected-experiments", type=int, default=480)
     p.add_argument("--expected-cases", type=int, default=20)
+    p.add_argument("--expected-repair-experiments", type=int, default=24)
+    p.add_argument("--expected-repair-region", default="SE_1")
+    p.add_argument("--expected-repair-fold", type=int, default=3)
     p.add_argument("--health-only", type=parse_bool, default=False)
     p.add_argument("--force", type=parse_bool, default=False)
     return p
@@ -112,13 +128,27 @@ def exit_code(log_root: str | Path, run_tag: str) -> int | None:
         return None
 
 
-def launch_status(grid_root: str | Path) -> pd.DataFrame:
+def launch_status(grid_root: str | Path, label: str) -> pd.DataFrame:
     path = repo_path(grid_root) / "launch_status.csv"
     if not path.exists():
-        return pd.DataFrame(columns=["kind", "status", "return_code"])
+        return pd.DataFrame(columns=["id", "kind", "status", "return_code"])
     frame = pd.read_csv(path, low_memory=False)
-    require_columns(frame, ["kind", "status", "return_code"], "Stage-R33 launch status")
+    require_columns(frame, ["id", "kind", "status", "return_code"], label)
     return frame
+
+
+def experiment_status(status: pd.DataFrame) -> pd.DataFrame:
+    out = status[status["kind"].astype(str).eq("experiment")].copy()
+    out["id"] = out["id"].astype(str)
+    out["return_code_numeric"] = pd.to_numeric(out["return_code"], errors="coerce")
+    return out
+
+
+def completed_zero(frame: pd.DataFrame) -> pd.Series:
+    return (
+        frame["status"].astype(str).str.lower().eq("completed")
+        & frame["return_code_numeric"].eq(0)
+    )
 
 
 def metric_paths(run_root: str | Path) -> list[Path]:
@@ -170,6 +200,7 @@ def parse_metric_rows(manifest: pd.DataFrame, run_root: str | Path) -> pd.DataFr
 
 def completion_audit(
     manifest: pd.DataFrame,
+    repair_manifest: pd.DataFrame,
     metrics: pd.DataFrame,
     args: argparse.Namespace,
 ) -> tuple[pd.DataFrame, bool, dict[str, Any]]:
@@ -180,26 +211,69 @@ def completion_audit(
         for p in repo_path(args.run_root).iterdir()
         if p.is_dir()
     } if repo_path(args.run_root).exists() else set()
-    status = launch_status(args.grid_root)
-    experiment_status = status[status["kind"].astype(str).eq("experiment")].copy()
-    status_ok = (
-        not experiment_status.empty
-        and experiment_status["status"].astype(str).str.lower().eq("completed").all()
-        and pd.to_numeric(experiment_status["return_code"], errors="coerce").eq(0).all()
+    base_status = launch_status(args.grid_root, "Stage-R33 base launch status")
+    repair_status = launch_status(args.repair_grid_root, "Stage-R33A repair launch status")
+    base_experiments = experiment_status(base_status)
+    repair_experiments = experiment_status(repair_status)
+    repair_ids = set(repair_manifest["experiment_id"].astype(str))
+    manifest_ids = set(manifest["experiment_id"].astype(str))
+    base_ids = set(base_experiments["id"].astype(str))
+    base_repair = base_experiments[base_experiments["id"].isin(repair_ids)].copy()
+    base_nonrepair = base_experiments[~base_experiments["id"].isin(repair_ids)].copy()
+    base_failed_ids = set(base_experiments.loc[~completed_zero(base_experiments), "id"].astype(str))
+    effective = pd.concat([base_nonrepair, repair_experiments], ignore_index=True, sort=False)
+    effective_ids = set(effective["id"].astype(str))
+    repair_case_ok = (
+        not repair_manifest.empty
+        and repair_manifest["region"].astype(str).eq(str(args.expected_repair_region)).all()
+        and repair_manifest["fold"].astype(int).eq(int(args.expected_repair_fold)).all()
+    )
+    base_nonrepair_ok = (
+        len(base_nonrepair) == int(args.expected_experiments) - int(args.expected_repair_experiments)
+        and completed_zero(base_nonrepair).all()
+    )
+    base_repair_failed = (
+        len(base_repair) == int(args.expected_repair_experiments)
+        and not completed_zero(base_repair).any()
+        and base_failed_ids == repair_ids
+    )
+    repair_status_ok = (
+        len(repair_experiments) == int(args.expected_repair_experiments)
+        and set(repair_experiments["id"].astype(str)) == repair_ids
+        and completed_zero(repair_experiments).all()
+    )
+    effective_status_ok = (
+        len(effective) == int(args.expected_experiments)
+        and not effective["id"].duplicated().any()
+        and effective_ids == manifest_ids
+        and completed_zero(effective).all()
     )
     n_cases = int(manifest[["region", "fold"]].drop_duplicates().shape[0])
     metric_method_rows = int(metrics.shape[0])
     expected_method_rows = int(args.expected_experiments) * 2
     code = exit_code(args.log_root, args.run_tag)
+    repair_code = exit_code(args.log_root, args.repair_run_tag)
     checks = [
         ("manifest_experiments", len(manifest), args.expected_experiments, len(manifest) == args.expected_experiments),
         ("manifest_cases", n_cases, args.expected_cases, n_cases == args.expected_cases),
         ("run_directories", len(run_dirs), args.expected_experiments, len(run_dirs) == args.expected_experiments),
         ("metric_summaries", len(paths), args.expected_experiments, len(paths) == args.expected_experiments),
         ("metric_method_rows", metric_method_rows, expected_method_rows, metric_method_rows == expected_method_rows),
-        ("launch_experiment_rows", len(experiment_status), args.expected_experiments, len(experiment_status) == args.expected_experiments),
-        ("launch_experiments_completed_zero", bool(status_ok), True, bool(status_ok)),
-        ("launcher_exit_code", code if code is not None else "", 0, code == 0),
+        ("repair_manifest_experiments", len(repair_manifest), args.expected_repair_experiments,
+         len(repair_manifest) == args.expected_repair_experiments),
+        ("repair_manifest_ids_are_base_subset", len(repair_ids & manifest_ids), args.expected_repair_experiments,
+         repair_ids.issubset(manifest_ids) and len(repair_ids) == args.expected_repair_experiments),
+        ("repair_manifest_case_exact", bool(repair_case_ok), True, bool(repair_case_ok)),
+        ("base_launch_experiment_rows", len(base_experiments), args.expected_experiments,
+         len(base_experiments) == args.expected_experiments and base_ids == manifest_ids),
+        ("base_nonrepair_completed_zero", bool(base_nonrepair_ok), True, bool(base_nonrepair_ok)),
+        ("base_failed_ids_match_repair_manifest", bool(base_repair_failed), True, bool(base_repair_failed)),
+        ("repair_launch_experiment_rows", len(repair_experiments), args.expected_repair_experiments,
+         len(repair_experiments) == args.expected_repair_experiments),
+        ("repair_experiments_completed_zero", bool(repair_status_ok), True, bool(repair_status_ok)),
+        ("effective_launch_experiments_completed_zero", bool(effective_status_ok), True, bool(effective_status_ok)),
+        ("base_launcher_exit_code", code if code is not None else "", 0, code == 0),
+        ("repair_launcher_exit_code", repair_code if repair_code is not None else "", 0, repair_code == 0),
         ("manifest_ids_have_metrics", len(completed_ids & set(manifest["experiment_id"])), args.expected_experiments,
          completed_ids == set(manifest["experiment_id"])),
     ]
@@ -216,9 +290,18 @@ def completion_audit(
         "run_directories": int(len(run_dirs)),
         "metric_summaries": int(len(paths)),
         "metric_method_rows": metric_method_rows,
-        "launch_status_rows": int(len(status)),
-        "launch_experiment_rows": int(len(experiment_status)),
+        "launch_status_rows": int(len(base_status) + len(repair_status)),
+        "launch_experiment_rows": int(len(effective)),
+        "base_launch_status_rows": int(len(base_status)),
+        "base_launch_experiment_rows": int(len(base_experiments)),
+        "base_failed_experiments": int(len(base_failed_ids)),
+        "repair_manifest_experiments": int(len(repair_manifest)),
+        "repair_launch_status_rows": int(len(repair_status)),
+        "repair_launch_experiment_rows": int(len(repair_experiments)),
+        "repair_completed_experiments": int(completed_zero(repair_experiments).sum()),
+        "effective_completed_experiments": int(completed_zero(effective).sum()),
         "launcher_exit_code": code,
+        "repair_launcher_exit_code": repair_code,
         "remaining_experiments": int(max(0, args.expected_experiments - len(paths))),
         "run_complete": complete,
     }
@@ -289,7 +372,7 @@ def mcmc_queue(promotions: pd.DataFrame) -> pd.DataFrame:
 def decision_gates(complete: bool, selected: pd.DataFrame, promotions: pd.DataFrame) -> pd.DataFrame:
     dual = int(selected["beats_both_on_test"].map(boolish).sum()) if not selected.empty else 0
     rows = [
-        ("r33_complete", complete, "All 480 experiments and launcher records must complete cleanly."),
+        ("r33_complete", complete, "All 480 effective experiments must complete across the immutable R33 base ledger and bounded R33A repair ledger."),
         ("validation_selection_frozen", complete and len(selected) == 20, "One validation-only winner per case."),
         ("test_used_for_audit_only", True, "Test is inspected only after validation selection."),
         ("dual_reference_winner_exists", dual > 0, "Winner must beat current Q-DESN and cached PriceFM on test."),
@@ -325,6 +408,7 @@ def render_report(summary: dict[str, Any], selected: pd.DataFrame, promotions: p
             f"- Run complete: `{summary['run_complete']}`",
             f"- Experiments complete: `{summary['metric_summaries']} / {summary['manifest_experiments']}`",
             f"- Remaining experiments: `{summary['remaining_experiments']}`",
+            f"- Guard-repair experiments complete: `{summary['repair_completed_experiments']} / {summary['repair_manifest_experiments']}`",
             f"- Validation-selected cases: `{len(selected)}`",
             f"- Validation-selected dual-reference wins: `{len(promotions)}`",
             "",
@@ -339,6 +423,7 @@ def render_report(summary: dict[str, Any], selected: pd.DataFrame, promotions: p
 def main() -> None:
     args = parser().parse_args()
     manifest = read_csv_required(args.manifest, "Stage-R33 launch manifest")
+    repair_manifest = read_csv_required(args.repair_manifest, "Stage-R33A repair manifest")
     require_columns(
         manifest,
         [
@@ -353,15 +438,22 @@ def main() -> None:
     )
     if not manifest["selection_is_validation_only"].map(boolish).all():
         raise ValueError("Stage-R33 manifest violates validation-only selection")
+    require_columns(
+        repair_manifest,
+        ["experiment_id", "region", "fold", "selection_is_validation_only"],
+        "Stage-R33A repair manifest",
+    )
+    if not repair_manifest["selection_is_validation_only"].map(boolish).all():
+        raise ValueError("Stage-R33A repair manifest violates validation-only selection")
     metrics = parse_metric_rows(manifest, args.run_root)
-    audit, complete, summary = completion_audit(manifest, metrics, args)
+    audit, complete, summary = completion_audit(manifest, repair_manifest, metrics, args)
 
     if args.health_only:
         print(json.dumps(summary, indent=2, sort_keys=True))
         return
     if not complete:
         raise RuntimeError(
-            "Stage-R33 is incomplete; refusing to materialize Stage-R34 decisions. "
+            "Stage-R33/R33A is incomplete; refusing to materialize Stage-R34 decisions. "
             f"{summary['metric_summaries']}/{summary['manifest_experiments']} experiments complete, "
             f"{summary['remaining_experiments']} remaining."
         )
@@ -380,7 +472,16 @@ def main() -> None:
     mcmc = mcmc_queue(promotions)
     gates = decision_gates(complete, selected, promotions)
     sources = source_manifest(
-        [repo_path(args.manifest), repo_path(args.grid_root) / "manifest.csv"]
+        [
+            repo_path(args.manifest),
+            repo_path(args.grid_root) / "manifest.csv",
+            repo_path(args.grid_root) / "launch_status.csv",
+            repo_path(args.repair_manifest),
+            repo_path(args.repair_grid_root) / "manifest.csv",
+            repo_path(args.repair_grid_root) / "launch_status.csv",
+            repo_path(args.log_root) / f"{args.run_tag}.exit",
+            repo_path(args.log_root) / f"{args.repair_run_tag}.exit",
+        ]
         + metric_paths(args.run_root)
     )
 

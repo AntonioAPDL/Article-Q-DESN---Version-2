@@ -107,3 +107,24 @@ The live `--health-only true` check reported 213 of 480 experiments complete
 and 267 remaining. A live finalization attempt exited nonzero with the expected
 incomplete-run error and created no Stage-R34 output directory. Stage-R33
 remained active with 16 concurrent experiments.
+
+## 2026-08-03 R33A Repair Reconciliation Addendum
+
+The base launcher subsequently ended with 456 successful experiments and 24
+failed experiments. All failures are the same `SE_1` fold-3 case and stopped
+before model fitting because the requested horizon-weight expansion was 6.5
+while `max_expansion_factor` was 6. This is an orchestration/resource-guard
+failure, not an observed model-performance result.
+
+R34 now requires two immutable launch ledgers:
+
+1. the original 480-row R33 ledger, whose 24 failed IDs must exactly match the
+   R33A repair manifest; and
+2. the separate 24-row R33A ledger, whose IDs must all complete with return
+   code zero.
+
+The effective 480-row completion state is assembled from the 456 successful
+base rows plus the 24 successful repair rows. R34 refuses to materialize if an
+ID is missing, duplicated, substituted, or repaired outside `SE_1` fold 3, or
+if either launcher exit file is absent/nonzero. The original R33 YAML and
+`launch_status.csv` are not rewritten.

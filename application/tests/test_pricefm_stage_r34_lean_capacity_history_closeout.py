@@ -31,11 +31,14 @@ def write_csv(path, rows):
 
 def fixture_tree(tmp_path, complete=True):
     manifest_path = tmp_path / "prep" / "manifest.csv"
+    repair_manifest_path = tmp_path / "repair_prep" / "manifest.csv"
     grid_root = tmp_path / "grid"
+    repair_grid_root = tmp_path / "repair_grid"
     run_root = tmp_path / "runs"
     log_root = tmp_path / "logs"
     output_dir = tmp_path / "output"
     manifest = []
+    repair_manifest = []
     experiment_rows = []
     for region, fold in [("AA", 1), ("BB", 2)]:
         for arm in range(2):
@@ -51,7 +54,9 @@ def fixture_tree(tmp_path, complete=True):
                     "selection_is_validation_only": True,
                 }
             )
-            if complete or experiment_id != "r33_BB_2_1":
+            repair_id = "r33_BB_2_1"
+            is_repair = experiment_id == repair_id
+            if complete or not is_repair:
                 metric = run_root / experiment_id / "cells" / f"region={region}" / f"fold={fold}" / "model" / "metric_summary.csv"
                 val = 3.0 + arm
                 test = (4.0 + arm * 0.2) if region == "AA" else (4.7 + arm * 0.2)
@@ -64,27 +69,56 @@ def fixture_tree(tmp_path, complete=True):
                         {"method_id": "qdesn_exal_rhs_ns_exact_chunked", "split": "test", "unit": "original", "AQL": test + 0.1},
                     ],
                 )
-                experiment_rows.append({"kind": "experiment", "status": "completed", "return_code": 0})
+            experiment_rows.append(
+                {
+                    "id": experiment_id,
+                    "kind": "experiment",
+                    "status": "failed" if is_repair else "completed",
+                    "return_code": 1 if is_repair else 0,
+                }
+            )
+            if is_repair:
+                repair_manifest.append(manifest[-1].copy())
     write_csv(manifest_path, manifest)
+    write_csv(repair_manifest_path, repair_manifest)
     write_csv(grid_root / "manifest.csv", manifest)
+    write_csv(grid_root / "launch_status.csv", experiment_rows)
+    log_root.mkdir(parents=True, exist_ok=True)
+    (log_root / "test_run.exit").write_text("0\n")
     if complete:
-        write_csv(grid_root / "launch_status.csv", experiment_rows)
-        log_root.mkdir(parents=True, exist_ok=True)
-        (log_root / "test_run.exit").write_text("0\n")
-    return manifest_path, grid_root, run_root, log_root, output_dir
+        write_csv(
+            repair_grid_root / "launch_status.csv",
+            [{"id": "r33_BB_2_1", "kind": "experiment", "status": "completed", "return_code": 0}],
+        )
+        (log_root / "test_repair.exit").write_text("0\n")
+    return (
+        manifest_path,
+        repair_manifest_path,
+        grid_root,
+        repair_grid_root,
+        run_root,
+        log_root,
+        output_dir,
+    )
 
 
 def args(module, paths):
-    manifest, grid_root, run_root, log_root, output_dir = paths
+    manifest, repair_manifest, grid_root, repair_grid_root, run_root, log_root, output_dir = paths
     return module.argparse.Namespace(
         manifest=str(manifest),
         grid_root=str(grid_root),
         run_root=str(run_root),
         log_root=str(log_root),
         run_tag="test_run",
+        repair_manifest=str(repair_manifest),
+        repair_grid_root=str(repair_grid_root),
+        repair_run_tag="test_repair",
         output_dir=str(output_dir),
         expected_experiments=4,
         expected_cases=2,
+        expected_repair_experiments=1,
+        expected_repair_region="BB",
+        expected_repair_fold=2,
         health_only=False,
         force=False,
     )
@@ -94,13 +128,17 @@ def test_incomplete_run_is_not_finalizable(tmp_path):
     module = load_module()
     paths = fixture_tree(tmp_path, complete=False)
     manifest = module.read_csv_required(paths[0], "manifest")
-    metrics = module.parse_metric_rows(manifest, paths[2])
-    audit, complete, summary = module.completion_audit(manifest, metrics, args(module, paths))
+    repair_manifest = module.read_csv_required(paths[1], "repair manifest")
+    metrics = module.parse_metric_rows(manifest, paths[4])
+    audit, complete, summary = module.completion_audit(
+        manifest, repair_manifest, metrics, args(module, paths)
+    )
 
     assert not complete
     assert summary["metric_summaries"] == 3
     assert summary["remaining_experiments"] == 1
     assert not audit["passed"].map(module.boolish).all()
+    assert summary["repair_completed_experiments"] == 0
     assert not paths[-1].exists()
 
 
@@ -108,10 +146,14 @@ def test_complete_run_freezes_validation_winners_and_separates_gates(tmp_path):
     module = load_module()
     paths = fixture_tree(tmp_path, complete=True)
     manifest = module.read_csv_required(paths[0], "manifest")
-    metrics = module.parse_metric_rows(manifest, paths[2])
-    audit, complete, summary = module.completion_audit(manifest, metrics, args(module, paths))
+    repair_manifest = module.read_csv_required(paths[1], "repair manifest")
+    metrics = module.parse_metric_rows(manifest, paths[4])
+    audit, complete, summary = module.completion_audit(
+        manifest, repair_manifest, metrics, args(module, paths)
+    )
 
     assert complete
+    assert summary["repair_completed_experiments"] == 1
     assert audit["passed"].map(module.boolish).all()
     selected = module.select_cases(metrics, "val_AQL", "authoritative_case_selection")
     oracle = module.select_cases(metrics, "test_AQL", "diagnostic_test_oracle")

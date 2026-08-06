@@ -27,6 +27,108 @@ app_glofas_fit_recovery_check_loss <- function(y, qhat, tau = 0.5) {
   mean(u * (tau - as.numeric(u < 0)))
 }
 
+app_glofas_fit_recovery_portability_defaults <- function() {
+  list(
+    max_check_loss_ratio_vs_raw = 1,
+    max_component_identity_error = 1e-8,
+    max_forecast_to_observed_max_ratio = 10,
+    max_abs_discrepancy_to_history_q995_ratio = 1.5
+  )
+}
+
+app_glofas_fit_recovery_portability_audit <- function(
+  qscored,
+  rawscored,
+  discrepancy_history,
+  thresholds = app_glofas_fit_recovery_portability_defaults()
+) {
+  required_q <- c("target_date", "horizon", "qhat", "y_reference", "q_g_hat", "d_g_hat")
+  required_raw <- c("target_date", "qhat")
+  required_history <- c("target_date", "observed_discrepancy")
+  missing_q <- setdiff(required_q, names(qscored))
+  missing_raw <- setdiff(required_raw, names(rawscored))
+  missing_history <- setdiff(required_history, names(discrepancy_history))
+  if (length(missing_q) || length(missing_raw) || length(missing_history)) {
+    stop(sprintf(
+      "Portability audit inputs are incomplete (q: %s; raw: %s; history: %s).",
+      paste(missing_q, collapse = ", "), paste(missing_raw, collapse = ", "),
+      paste(missing_history, collapse = ", ")
+    ), call. = FALSE)
+  }
+  threshold_names <- names(app_glofas_fit_recovery_portability_defaults())
+  if (!all(threshold_names %in% names(thresholds))) {
+    stop("Portability thresholds are incomplete.", call. = FALSE)
+  }
+  q <- qscored
+  raw <- rawscored
+  q$target_date <- as.Date(q$target_date)
+  raw$target_date <- as.Date(raw$target_date)
+  raw <- raw[match(q$target_date, raw$target_date), , drop = FALSE]
+  if (any(is.na(raw$target_date)) || any(!is.finite(as.numeric(raw$qhat)))) {
+    stop("Raw and Q-DESN forecasts do not share a complete target-date grid.", call. = FALSE)
+  }
+  numeric_q <- c("qhat", "y_reference", "q_g_hat", "d_g_hat")
+  if (any(!vapply(q[numeric_q], function(x) all(is.finite(as.numeric(x))), logical(1L)))) {
+    stop("Q-DESN portability inputs contain non-finite forecast components.", call. = FALSE)
+  }
+  qhat <- as.numeric(q$qhat)
+  y <- as.numeric(q$y_reference)
+  q_g <- as.numeric(q$q_g_hat)
+  d_g <- as.numeric(q$d_g_hat)
+  raw_qhat <- as.numeric(raw$qhat)
+  identity_error <- abs(qhat - (q_g - d_g))
+  q_loss <- app_glofas_fit_recovery_check_loss(y, qhat, tau = 0.5)
+  raw_loss <- app_glofas_fit_recovery_check_loss(y, raw_qhat, tau = 0.5)
+  observed_original <- app_glofas_fit_recovery_safe_expm1(y)
+  qhat_original <- app_glofas_fit_recovery_safe_expm1(qhat)
+  observed_max <- max(observed_original, na.rm = TRUE)
+  forecast_ratio <- max(qhat_original, na.rm = TRUE) / observed_max
+  historical_abs <- abs(as.numeric(discrepancy_history$observed_discrepancy))
+  historical_abs <- historical_abs[is.finite(historical_abs)]
+  if (!length(historical_abs)) stop("Historical discrepancy support is empty.", call. = FALSE)
+  history_q995 <- unname(stats::quantile(historical_abs, 0.995, na.rm = TRUE))
+  discrepancy_ratio <- max(abs(d_g), na.rm = TRUE) / max(history_q995, .Machine$double.eps)
+  performance_pass <- is.finite(q_loss) && is.finite(raw_loss) &&
+    q_loss <= thresholds$max_check_loss_ratio_vs_raw * raw_loss
+  identity_pass <- max(identity_error) <= thresholds$max_component_identity_error
+  forecast_scale_pass <- forecast_ratio <= thresholds$max_forecast_to_observed_max_ratio
+  discrepancy_support_pass <- discrepancy_ratio <= thresholds$max_abs_discrepancy_to_history_q995_ratio
+
+  detail <- data.frame(
+    target_date = q$target_date,
+    horizon = as.integer(q$horizon),
+    y_log1p = y,
+    raw_log1p = raw_qhat,
+    q_g_log1p = q_g,
+    d_g_log1p = d_g,
+    q_y_log1p = qhat,
+    component_identity_error = identity_error,
+    y_original = observed_original,
+    raw_original = app_glofas_fit_recovery_safe_expm1(raw_qhat),
+    q_g_original = app_glofas_fit_recovery_safe_expm1(q_g),
+    q_y_original = qhat_original,
+    stringsAsFactors = FALSE
+  )
+  summary <- data.frame(
+    qdesn_check_loss_mean = q_loss,
+    raw_check_loss_mean = raw_loss,
+    check_loss_ratio_vs_raw = q_loss / raw_loss,
+    component_identity_max_abs_error = max(identity_error),
+    forecast_to_observed_max_ratio = forecast_ratio,
+    forecast_abs_discrepancy_max = max(abs(d_g)),
+    history_abs_discrepancy_q995 = history_q995,
+    forecast_abs_discrepancy_to_history_q995_ratio = discrepancy_ratio,
+    performance_gate_pass = performance_pass,
+    component_identity_gate_pass = identity_pass,
+    forecast_scale_gate_pass = forecast_scale_pass,
+    discrepancy_support_gate_pass = discrepancy_support_pass,
+    scientific_portability_gate_pass = performance_pass && identity_pass &&
+      forecast_scale_pass && discrepancy_support_pass,
+    stringsAsFactors = FALSE
+  )
+  list(summary = summary, detail = detail)
+}
+
 app_glofas_fit_recovery_history <- function(
   x,
   candidate_id,

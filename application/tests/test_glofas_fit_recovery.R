@@ -100,3 +100,47 @@ done_cleanup <- app_glofas_fit_recovery_cleanup(
 stopifnot(isTRUE(done_cleanup$executed[[1L]]))
 stopifnot(!file.exists(done_cleanup$path[[1L]]))
 unlink(cleanup_root, recursive = TRUE)
+
+portability_dates <- as.Date("2022-01-01") + 0:3
+portability_q <- data.frame(
+  target_date = portability_dates,
+  horizon = 1:4,
+  qhat = c(1.0, 1.1, 1.2, 1.3),
+  y_reference = c(1.0, 1.2, 1.1, 1.4),
+  q_g_hat = c(1.2, 1.3, 1.4, 1.5),
+  d_g_hat = rep(0.2, 4),
+  stringsAsFactors = FALSE
+)
+portability_raw <- data.frame(
+  target_date = portability_dates,
+  qhat = c(0.7, 0.8, 0.8, 0.9),
+  stringsAsFactors = FALSE
+)
+portability_history <- data.frame(
+  target_date = as.Date("2021-01-01") + 0:199,
+  observed_discrepancy = seq(-0.5, 0.5, length.out = 200),
+  stringsAsFactors = FALSE
+)
+portability_ok <- app_glofas_fit_recovery_portability_audit(
+  portability_q, portability_raw, portability_history
+)
+stopifnot(isTRUE(portability_ok$summary$scientific_portability_gate_pass[[1L]]))
+stopifnot(portability_ok$summary$component_identity_max_abs_error[[1L]] < 1e-12)
+
+portability_explosive <- portability_q
+portability_explosive$d_g_hat <- -6
+portability_explosive$qhat <- portability_explosive$q_g_hat - portability_explosive$d_g_hat
+portability_bad <- app_glofas_fit_recovery_portability_audit(
+  portability_explosive, portability_raw, portability_history
+)
+stopifnot(!portability_bad$summary$performance_gate_pass[[1L]])
+stopifnot(!portability_bad$summary$forecast_scale_gate_pass[[1L]])
+stopifnot(!portability_bad$summary$discrepancy_support_gate_pass[[1L]])
+stopifnot(isTRUE(portability_bad$summary$component_identity_gate_pass[[1L]]))
+
+portability_identity <- portability_q
+portability_identity$qhat[[1L]] <- portability_identity$qhat[[1L]] + 0.1
+portability_identity_bad <- app_glofas_fit_recovery_portability_audit(
+  portability_identity, portability_raw, portability_history
+)
+stopifnot(!portability_identity_bad$summary$component_identity_gate_pass[[1L]])

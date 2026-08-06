@@ -1,4 +1,5 @@
 #!/usr/bin/env Rscript
+
 file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1L]
 root <- normalizePath(file.path(dirname(sub("^--file=", "", file_arg)), "..", ".."))
 source(file.path(root, "application/R/00_packages.R"))
@@ -16,5 +17,16 @@ for (file in c(
   "joint_exqdesn_phase163b_corrected_closure.R"
 )) source(app_path("application/R", file))
 
-result <- app_joint_exqdesn_phase163b_run()
+args <- commandArgs(trailingOnly = TRUE)
+value_after <- function(flag, default = NULL) {
+  idx <- match(flag, args)
+  if (is.na(idx) || idx == length(args)) default else args[[idx + 1L]]
+}
+dirs <- app_joint_exqdesn_phase163b_dirs()
+dirs$phase150 <- value_after("--phase150-dir", dirs$phase150)
+dirs$phase163_readiness <- value_after("--phase163-readiness-dir", dirs$phase163_readiness)
+dirs$phase163 <- value_after("--phase163-dir", dirs$phase163)
+dirs$output <- value_after("--output-dir", dirs$output)
+
+result <- app_joint_exqdesn_phase163b_run(dirs)
 print(result$assessment, row.names = FALSE)

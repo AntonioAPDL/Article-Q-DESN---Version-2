@@ -96,27 +96,19 @@ app_joint_exqdesn_phase163_prepare <- function(dirs = app_joint_exqdesn_phase163
 }
 
 app_joint_exqdesn_phase163_audit <- function(dirs = app_joint_exqdesn_phase163_dirs()) {
-  forecast <- app_read_csv(file.path(dirs$screening, "forecast_scenario_metric_summary.csv"))
-  tau <- app_read_csv(file.path(dirs$screening, "forecast_tau_metric_summary.csv"))
-  registry <- app_read_csv(file.path(dirs$readiness, "phase163_candidate_registry.csv"))
-  benchmarks <- app_read_csv(file.path(dirs$readiness, "frozen_benchmarks.csv"))
-  f <- forecast[forecast$model_id == "joint_exqdesn_rhs_vb", c("candidate_id","scenario_id","truth_mae","check_loss_mean","gate_status","contract_crossing_pairs")]
-  names(f)[3:6] <- c("forecast_truth_mae","forecast_check_loss","gate_status","contract_crossings")
-  q <- tau[tau$model_id == "joint_exqdesn_rhs_vb" & abs(tau$tau-.95)<1e-8, c("candidate_id","truth_mae")]
-  q$scenario_id <- registry$scenario_ids[match(q$candidate_id, registry$candidate_id)]
-  names(q)[2] <- "tau095_truth_mae"
-  z <- merge(merge(f,q,by=c("candidate_id","scenario_id")),benchmarks,by="scenario_id")
-  z$forecast_gain_vs_article <- z$mcmc_forecast_truth_mae_exal-z$forecast_truth_mae
-  z$check_loss_relative_change <- z$forecast_check_loss/z$mcmc_forecast_check_loss_mean_exal-1
-  z$eligible_for_independent_validation <- z$gate_status=="pass" & z$contract_crossings==0 &
-    z$forecast_gain_vs_article >= pmax(.0025,.025*z$mcmc_forecast_truth_mae_exal) & z$check_loss_relative_change <= .01
-  z <- z[order(z$scenario_id,z$forecast_truth_mae,z$tau095_truth_mae),]
-  winners <- do.call(rbind,lapply(split(z,z$scenario_id),function(x)x[1,,drop=FALSE]))
-  assessment <- data.frame(gate_status=if(any(!is.finite(z$forecast_truth_mae)))"fail" else "pass",
-    candidates=nrow(z),eligible=sum(z$eligible_for_independent_validation),recommendation=if(any(z$eligible_for_independent_validation))
-      "freeze_eligible_candidates_for_independent_validation" else "retain_current_article_rows",stringsAsFactors=FALSE)
-  app_joint_qvp_write_csv(z,file.path(dirs$screening,"phase163_candidate_ranking.csv"))
-  app_joint_qvp_write_csv(winners,file.path(dirs$screening,"phase163_scenario_winners.csv"))
-  app_joint_qvp_write_csv(assessment,file.path(dirs$screening,"phase163_result_assessment.csv"))
-  list(ranking=z,winners=winners,assessment=assessment)
+  warning(
+    "The legacy Phase163 promotion audit is superseded by the inference-matched Phase163b closure.",
+    call. = FALSE
+  )
+  if (!exists("app_joint_exqdesn_phase162_verify_manifest", mode = "function")) {
+    source(app_path("application/R", "joint_exqdesn_phase162_scenario_classification.R"))
+  }
+  if (!exists("app_joint_exqdesn_phase163b_run", mode = "function")) {
+    source(app_path("application/R", "joint_exqdesn_phase163b_corrected_closure.R"))
+  }
+  corrected_dirs <- app_joint_exqdesn_phase163b_dirs()
+  corrected_dirs$phase163_readiness <- dirs$readiness
+  corrected_dirs$phase163 <- dirs$screening
+  result <- app_joint_exqdesn_phase163b_run(corrected_dirs)
+  list(ranking = result$ranking, winners = result$winners, assessment = result$assessment)
 }

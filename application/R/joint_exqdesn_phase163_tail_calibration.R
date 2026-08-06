@@ -97,13 +97,14 @@ app_joint_exqdesn_phase163_prepare <- function(dirs = app_joint_exqdesn_phase163
 
 app_joint_exqdesn_phase163_audit <- function(dirs = app_joint_exqdesn_phase163_dirs()) {
   forecast <- app_read_csv(file.path(dirs$screening, "forecast_scenario_metric_summary.csv"))
-  fit <- app_read_csv(file.path(dirs$screening, "fit_scenario_metric_summary.csv"))
   tau <- app_read_csv(file.path(dirs$screening, "forecast_tau_metric_summary.csv"))
+  registry <- app_read_csv(file.path(dirs$readiness, "phase163_candidate_registry.csv"))
   benchmarks <- app_read_csv(file.path(dirs$readiness, "frozen_benchmarks.csv"))
   f <- forecast[forecast$model_id == "joint_exqdesn_rhs_vb", c("candidate_id","scenario_id","truth_mae","check_loss_mean","gate_status","contract_crossing_pairs")]
   names(f)[3:6] <- c("forecast_truth_mae","forecast_check_loss","gate_status","contract_crossings")
-  q <- tau[tau$model_id == "joint_exqdesn_rhs_vb" & abs(tau$tau-.95)<1e-8, c("candidate_id","scenario_id","truth_mae","truth_bias")]
-  names(q)[3:4] <- c("tau095_truth_mae","tau095_truth_bias")
+  q <- tau[tau$model_id == "joint_exqdesn_rhs_vb" & abs(tau$tau-.95)<1e-8, c("candidate_id","truth_mae")]
+  q$scenario_id <- registry$scenario_ids[match(q$candidate_id, registry$candidate_id)]
+  names(q)[2] <- "tau095_truth_mae"
   z <- merge(merge(f,q,by=c("candidate_id","scenario_id")),benchmarks,by="scenario_id")
   z$forecast_gain_vs_article <- z$mcmc_forecast_truth_mae_exal-z$forecast_truth_mae
   z$check_loss_relative_change <- z$forecast_check_loss/z$mcmc_forecast_check_loss_mean_exal-1

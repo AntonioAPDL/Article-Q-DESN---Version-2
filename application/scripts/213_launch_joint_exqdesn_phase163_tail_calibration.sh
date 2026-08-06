@@ -19,7 +19,7 @@ finalizer="${screening}/phase163_finalizer.sh"
 log="${screening}/phase163_finalizer.log"
 cat > "${finalizer}" <<RUNNER
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 cd $(printf '%q' "${repo_root}") || exit 1
 {
   echo "START \$(date -Is)"

@@ -248,6 +248,14 @@ Prediction-contract convention:
   design summaries record both `requested_horizon_max` and the effective
   `horizon_max`; a shorter effective horizon is expected when the archived
   issued ensemble does not contain all requested lead times.
+- Latent-path two-block experiments may set
+  `prediction.discrepancy_transition_strategy`. The default
+  `recursive_level` retains the established model. The experimental
+  `persistence_anchored_innovation` strategy models the discrepancy innovation
+  around its preceding observed value and anchors unknown future discrepancy
+  inputs at the last observed discrepancy. This is a fitted model contract,
+  not post-processing or forecast clipping. It must be selected by blocked
+  historical validation before any full-quantile or manuscript use.
 - Final manuscript launches are not allowed to use a prediction contract whose
   name begins with `pilot_`, and discrepancy rows must use `prediction_unit:
   posterior_draw`.

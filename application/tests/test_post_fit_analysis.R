@@ -66,6 +66,19 @@ stopifnot(nrow(hist_sum) == 3L)
 stopifnot(all.equal(hist_sum$observed_discrepancy, c(0.2, 0.2, 0.4)))
 stopifnot(all(is.finite(hist_sum$q_y_median)))
 stopifnot(all(is.finite(hist_sum$d_g_median)))
+persistence_design <- design
+persistence_design$discrepancy_baseline_fixed <- c(0.10, 0.20, 0.30)
+persistence_hist_sum <- app_post_fit_history_summary(bundle, persistence_design, fit_row, pcfg)
+stopifnot(isTRUE(all.equal(
+  persistence_hist_sum$d_g_median,
+  hist_sum$d_g_median + persistence_design$discrepancy_baseline_fixed,
+  tolerance = 1.0e-12
+)))
+stopifnot(isTRUE(all.equal(
+  persistence_hist_sum$q_g_mean,
+  persistence_hist_sum$q_y_mean + persistence_hist_sum$d_g_mean,
+  tolerance = 1.0e-12
+)))
 recent <- app_post_fit_recent_history(hist_sum, 2L)
 stopifnot(nrow(recent) == 2L)
 stopifnot(identical(as.character(recent$target_date[[1L]]), "2022-01-02"))

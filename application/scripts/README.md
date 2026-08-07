@@ -351,6 +351,24 @@ The registration stage is usually run when a new local input bundle is placed
 under `application/data_local/`; `run_all.R` assumes that registration has
 already produced `application/manifests/input_manifest.csv`.
 
+## GloFAS Fit-Recovery Transition Audit
+
+The fit-recovery workflow compares discrepancy transitions without opening the
+sealed 2022-12-25 application cutoff. Prepare a one-candidate, four-cutoff base
+with `glofas_fit_recovery_blocked_prepare.R`, then materialize the paired
+recursive and persistence-anchored p50 fits with
+`glofas_fit_recovery_transition_prepare.R`. The generic bounded scheduler runs
+one single-threaded fit per pinned core. The watcher uses
+`glofas_fit_recovery_transition_finalize.R`, which first applies the shared
+technical and scientific portability gates and then ranks candidates by the
+worst primary GloFAS-v3.1 cutoff before mean loss.
+
+The 2021-01-23 GloFAS-v2.1 replay is reported as a source-vintage sensitivity
+check and is not pooled silently with the three primary v3.1 cutoffs. All four
+replays use explicitly oracle-realized future precipitation and soil moisture,
+so they diagnose portability but do not represent operational forecast skill.
+The finalizer never starts a seven-quantile run automatically.
+
 ## Artifact Lifecycle
 
 The application has a three-layer artifact contract:

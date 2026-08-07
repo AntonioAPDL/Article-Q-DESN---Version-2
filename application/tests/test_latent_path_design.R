@@ -8,6 +8,23 @@ latent_cfg$application_model <- list(contract = "latent_path_ensemble_likelihood
 latent_cfg$prediction$prediction_unit <- "posterior_draw"
 latent_cfg$prediction$q_g_source <- "posterior_model_quantile"
 latent_cfg$prediction$discrepancy_feature_strategy <- "recursive_latent_path"
+stopifnot(identical(app_latent_path_discrepancy_transition_strategy(latent_cfg), "recursive_level"))
+persistence_cfg <- latent_cfg
+persistence_cfg$prediction$discrepancy_transition_strategy <- "persistence_anchored_innovation"
+stopifnot(identical(
+  app_latent_path_discrepancy_transition_strategy(persistence_cfg),
+  "persistence_anchored_innovation"
+))
+bad_transition_cfg <- latent_cfg
+bad_transition_cfg$prediction$discrepancy_transition_strategy <- "post_hoc_clip"
+bad_transition_msg <- tryCatch(
+  {
+    app_latent_path_discrepancy_transition_strategy(bad_transition_cfg)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("discrepancy_transition_strategy", bad_transition_msg, fixed = TRUE))
 stopifnot(identical(app_application_model_contract(latent_cfg), "latent_path_ensemble_likelihood"))
 stopifnot(isTRUE(app_is_latent_path_contract(latent_cfg)))
 stopifnot(identical(app_validate_application_model_contract(latent_cfg), "latent_path_ensemble_likelihood"))
@@ -688,6 +705,42 @@ two_block_pred <- app_predict_qdesn_latent_path_draws(two_block_result, latent_p
 stopifnot(nrow(two_block_pred$draws) == 6L)
 stopifnot(all(abs(two_block_pred$draws$q_y_draw - (two_block_pred$draws$q_g_draw - two_block_pred$draws$d_g_draw)) < 1.0e-8))
 stopifnot(identical(unique(two_block_pred$draws$prediction_state_strategy), "first_order_delta"))
+
+persistence_result <- two_block_result
+persistence_result$design$discrepancy_baseline_fixed <- c(0.2, 0.3, 0.4, 0.5)
+persistence_result$design$discrepancy_baseline_future <- rep(0.75, 3L)
+persistence_result$design$discrepancy_transition_strategy <- "persistence_anchored_innovation"
+persistence_pred <- app_predict_qdesn_latent_path_draws(
+  persistence_result, latent_panel, persistence_cfg, sim$model_row
+)
+stopifnot(isTRUE(all.equal(
+  persistence_pred$draws$q_y_draw,
+  two_block_pred$draws$q_y_draw,
+  tolerance = 1.0e-12
+)))
+stopifnot(isTRUE(all.equal(
+  persistence_pred$draws$d_g_draw,
+  two_block_pred$draws$d_g_draw + 0.75,
+  tolerance = 1.0e-12
+)))
+stopifnot(all(abs(
+  persistence_pred$draws$q_y_draw -
+    (persistence_pred$draws$q_g_draw - persistence_pred$draws$d_g_draw)
+) < 1.0e-8))
+stopifnot(identical(
+  unique(persistence_pred$draws$discrepancy_transition_strategy),
+  "persistence_anchored_innovation"
+))
+
+lag_panel <- data.frame(
+  target_date = as.Date("2026-04-01") + 0:4,
+  y_transformed = c(-0.4, -0.2, 0.1, 0.3, 0.8)
+)
+stopifnot(isTRUE(all.equal(
+  app_latent_path_discrepancy_lag_one(lag_panel, as.Date("2026-04-03") + 0:2),
+  c(-0.2, 0.1, 0.3),
+  tolerance = 1.0e-12
+)))
 
 future_obj_grouped <- app_latent_future_objective(
   y_mean_eq, simple_design, theta_mean_eq, theta_cov_eq, e_inv_eq, sigma_eq, constants_eq,

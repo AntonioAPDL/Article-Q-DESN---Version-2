@@ -642,8 +642,12 @@ app_joint_exqdesn_phase169_apply_chain_start <- function(init, starts, job, K, p
 
 app_joint_exqdesn_phase169_worker_complete <- function(worker_dir) {
   required <- c(
-    "posterior_draws.csv.gz", "chain_summary.csv", "sampler_diagnostics.csv",
-    "runtime.csv", "provenance.csv", "README.md", "artifact_manifest.csv"
+    file.path("checkpoint", "posterior_draws.csv.gz"),
+    file.path("checkpoint", "sampler_diagnostics.csv"),
+    file.path("checkpoint", "checkpoint_metadata.csv"),
+    file.path("checkpoint", "artifact_manifest.csv"),
+    "chain_summary.csv", "runtime.csv", "provenance.csv", "README.md",
+    "artifact_manifest.csv"
   )
   if (!dir.exists(worker_dir) || any(!file.exists(file.path(worker_dir, required)))) return(FALSE)
   verified <- tryCatch(
@@ -651,6 +655,178 @@ app_joint_exqdesn_phase169_worker_complete <- function(worker_dir) {
     error = function(e) NULL
   )
   !is.null(verified) && nrow(verified) > 0L && all(verified$status == "pass")
+}
+
+app_joint_exqdesn_phase169_score_meta <- function(job) {
+  structure <- as.character(job$fit_structure[[1L]])
+  if (!structure %in% c("joint", "independent")) {
+    stop("Phase169 score metadata has an invalid fit structure.", call. = FALSE)
+  }
+  data.frame(
+    scenario_id = as.character(job$scenario_id[[1L]]),
+    base_scenario_id = as.character(job$base_scenario_id[[1L]]),
+    model_id = if (structure == "joint") {
+      "joint_exqdesn_rhs_mcmc"
+    } else {
+      "independent_exqdesn_rhs_mcmc"
+    },
+    display_label = if (structure == "joint") {
+      "Joint exQDESN RHS"
+    } else {
+      "Independent exQDESN RHS"
+    },
+    likelihood = "exAL",
+    fit_structure = structure,
+    inference_method_id = as.character(job$inference_method_id[[1L]]),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_exqdesn_phase169_validate_score_meta <- function(meta) {
+  required <- c(
+    "scenario_id", "base_scenario_id", "model_id", "display_label",
+    "likelihood", "fit_structure", "inference_method_id"
+  )
+  missing <- setdiff(required, names(meta))
+  if (nrow(meta) != 1L || length(missing) ||
+      any(!nzchar(as.character(unlist(meta[required], use.names = FALSE))))) {
+    stop(sprintf(
+      "Phase169 score metadata is malformed%s.",
+      if (length(missing)) paste0(": missing ", paste(missing, collapse = ", ")) else ""
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+app_joint_exqdesn_phase169_checkpoint_dir <- function(worker_dir) {
+  file.path(worker_dir, "checkpoint")
+}
+
+app_joint_exqdesn_phase169_checkpoint_complete <- function(worker_dir) {
+  checkpoint_dir <- app_joint_exqdesn_phase169_checkpoint_dir(worker_dir)
+  required <- c(
+    "posterior_draws.csv.gz", "sampler_diagnostics.csv",
+    "checkpoint_metadata.csv", "artifact_manifest.csv"
+  )
+  if (!dir.exists(checkpoint_dir) ||
+      any(!file.exists(file.path(checkpoint_dir, required)))) return(FALSE)
+  verified <- tryCatch(
+    app_joint_exqdesn_verify_manifest(checkpoint_dir, "phase169_checkpoint"),
+    error = function(e) NULL
+  )
+  !is.null(verified) && nrow(verified) == 3L && all(verified$status == "pass")
+}
+
+app_joint_exqdesn_phase169_write_checkpoint <- function(
+  fit,
+  fixture,
+  job,
+  elapsed_seconds,
+  freeze_dir,
+  worker_dir
+) {
+  checkpoint_dir <- app_joint_exqdesn_phase169_checkpoint_dir(worker_dir)
+  if (dir.exists(checkpoint_dir)) {
+    quarantine <- paste0(
+      checkpoint_dir, "_incomplete_", format(Sys.time(), "%Y%m%dT%H%M%S")
+    )
+    if (!file.rename(checkpoint_dir, quarantine)) {
+      stop("Could not quarantine an incomplete Phase169 checkpoint.", call. = FALSE)
+    }
+  }
+  app_ensure_dir(checkpoint_dir)
+  draws <- app_joint_exqdesn_phase157_draw_frame(fit)
+  if (any(!is.finite(as.matrix(draws[, -1L, drop = FALSE]))) ||
+      any(fit$sigma_draws <= 0)) {
+    stop("Phase169 worker produced invalid posterior draws.", call. = FALSE)
+  }
+  sampler <- app_joint_exqdesn_phase169_sampler_rows(fit, fixture, job)
+  metadata <- data.frame(
+    worker_id = as.integer(job$worker_id[[1L]]),
+    mcmc_case_id = as.character(job$mcmc_case_id[[1L]]),
+    scenario_id = as.character(job$scenario_id[[1L]]),
+    fit_structure = as.character(job$fit_structure[[1L]]),
+    inference_method_id = as.character(job$inference_method_id[[1L]]),
+    chain_id = as.integer(job$chain_id[[1L]]),
+    chain_seed = as.integer(job$chain_seed[[1L]]),
+    n_iter = as.integer(job$n_iter[[1L]]),
+    burn = as.integer(job$burn[[1L]]),
+    thin = as.integer(job$thin[[1L]]),
+    n_keep = nrow(draws),
+    init_source = fit$init_source %||% "provided",
+    elapsed_seconds = as.numeric(elapsed_seconds),
+    freeze_manifest_sha256 = app_sha256_file(file.path(freeze_dir, "artifact_manifest.csv")),
+    checkpoint_role = "postfit_prescore_recovery",
+    stringsAsFactors = FALSE
+  )
+  paths <- c(
+    posterior_draws = app_joint_exqdesn_phase157_write_gzip_csv(
+      draws, file.path(checkpoint_dir, "posterior_draws.csv.gz")
+    ),
+    sampler_diagnostics = app_joint_qvp_write_csv(
+      sampler, file.path(checkpoint_dir, "sampler_diagnostics.csv")
+    ),
+    checkpoint_metadata = app_joint_qvp_write_csv(
+      metadata, file.path(checkpoint_dir, "checkpoint_metadata.csv")
+    )
+  )
+  manifest <- app_joint_exqdesn_write_manifest(paths, checkpoint_dir)
+  if (!app_joint_exqdesn_phase169_checkpoint_complete(worker_dir)) {
+    stop("Phase169 checkpoint verification failed.", call. = FALSE)
+  }
+  list(
+    fit = fit,
+    draws = draws,
+    sampler = sampler,
+    metadata = metadata,
+    paths = c(paths, checkpoint_manifest = manifest$manifest_path)
+  )
+}
+
+app_joint_exqdesn_phase169_load_checkpoint <- function(
+  worker_dir,
+  fixture,
+  job,
+  freeze_dir = NULL
+) {
+  if (!app_joint_exqdesn_phase169_checkpoint_complete(worker_dir)) {
+    stop("Phase169 checkpoint is incomplete.", call. = FALSE)
+  }
+  checkpoint_dir <- app_joint_exqdesn_phase169_checkpoint_dir(worker_dir)
+  metadata <- app_read_csv(file.path(checkpoint_dir, "checkpoint_metadata.csv"))
+  expected <- c(
+    worker_id = as.character(job$worker_id[[1L]]),
+    chain_seed = as.character(job$chain_seed[[1L]]),
+    inference_method_id = as.character(job$inference_method_id[[1L]])
+  )
+  actual <- c(
+    worker_id = as.character(metadata$worker_id[[1L]]),
+    chain_seed = as.character(metadata$chain_seed[[1L]]),
+    inference_method_id = as.character(metadata$inference_method_id[[1L]])
+  )
+  freeze_matches <- is.null(freeze_dir) || identical(
+    as.character(metadata$freeze_manifest_sha256[[1L]]),
+    app_sha256_file(file.path(freeze_dir, "artifact_manifest.csv"))
+  )
+  if (nrow(metadata) != 1L || !identical(actual, expected) || !freeze_matches) {
+    stop("Phase169 checkpoint identity does not match the frozen job.", call. = FALSE)
+  }
+  list(
+    fit = app_joint_exqdesn_phase157_read_fit(
+      checkpoint_dir, fixture$tau, job$chain_seed[[1L]], job$chain_id[[1L]]
+    ),
+    draws = app_joint_exqdesn_phase156_read_csv(
+      file.path(checkpoint_dir, "posterior_draws.csv.gz")
+    ),
+    sampler = app_read_csv(file.path(checkpoint_dir, "sampler_diagnostics.csv")),
+    metadata = metadata,
+    paths = c(
+      posterior_draws = file.path(checkpoint_dir, "posterior_draws.csv.gz"),
+      sampler_diagnostics = file.path(checkpoint_dir, "sampler_diagnostics.csv"),
+      checkpoint_metadata = file.path(checkpoint_dir, "checkpoint_metadata.csv"),
+      checkpoint_manifest = file.path(checkpoint_dir, "artifact_manifest.csv")
+    )
+  )
 }
 
 app_joint_exqdesn_phase169_density_evaluations <- function(fit, K) {
@@ -716,7 +892,9 @@ app_joint_exqdesn_phase169_run_worker <- function(
   if (reuse_completed && app_joint_exqdesn_phase169_worker_complete(worker_dir)) {
     return(list(worker_id = worker_id, status = "reused_verified", worker_dir = worker_dir))
   }
-  if (dir.exists(worker_dir) && length(list.files(worker_dir, all.files = TRUE, no.. = TRUE))) {
+  has_checkpoint <- app_joint_exqdesn_phase169_checkpoint_complete(worker_dir)
+  if (!has_checkpoint && dir.exists(worker_dir) &&
+      length(list.files(worker_dir, all.files = TRUE, no.. = TRUE))) {
     quarantine <- paste0(worker_dir, "_incomplete_", format(Sys.time(), "%Y%m%dT%H%M%S"))
     if (!file.rename(worker_dir, quarantine)) stop("Could not quarantine incomplete Phase169 worker.", call. = FALSE)
   }
@@ -729,6 +907,8 @@ app_joint_exqdesn_phase169_run_worker <- function(
     fixture <- app_joint_qdesn_scenario_fixture(artifacts, job$scenario_id[[1L]], role = "fit")
     K <- length(fixture$tau)
     p <- ncol(fixture$Z)
+    meta <- app_joint_exqdesn_phase169_score_meta(job)
+    app_joint_exqdesn_phase169_validate_score_meta(meta)
     init <- app_joint_exqdesn_phase169_init_from_rows(
       freeze$init, job$mcmc_case_id[[1L]], job$fit_structure[[1L]], K, p
     )
@@ -749,31 +929,32 @@ app_joint_exqdesn_phase169_run_worker <- function(
       gamma_slice_width = as.numeric(job$gamma_slice_width[[1L]]),
       gamma_slice_max_steps = as.integer(job$gamma_slice_max_steps[[1L]])
     )
-    started <- proc.time()[["elapsed"]]
-    fit <- if (job$fit_structure[[1L]] == "joint") {
-      do.call(
-        app_joint_exqdesn_fit_mcmc_dispatch,
-        c(list(method_id = job$inference_method_id[[1L]]), common)
+    checkpoint <- if (has_checkpoint) {
+      app_joint_exqdesn_phase169_load_checkpoint(
+        worker_dir, fixture, job, freeze_dir = freeze$dir
       )
     } else {
-      do.call(
-        app_joint_exqdesn_fit_independent_mcmc_dispatch,
-        c(list(method_id = job$inference_method_id[[1L]]), common)
+      started <- proc.time()[["elapsed"]]
+      fit <- if (job$fit_structure[[1L]] == "joint") {
+        do.call(
+          app_joint_exqdesn_fit_mcmc_dispatch,
+          c(list(method_id = job$inference_method_id[[1L]]), common)
+        )
+      } else {
+        do.call(
+          app_joint_exqdesn_fit_independent_mcmc_dispatch,
+          c(list(method_id = job$inference_method_id[[1L]]), common)
+        )
+      }
+      elapsed <- proc.time()[["elapsed"]] - started
+      app_joint_exqdesn_phase169_write_checkpoint(
+        fit, fixture, job, elapsed, freeze$dir, worker_dir
       )
     }
-    elapsed <- proc.time()[["elapsed"]] - started
-    draws <- app_joint_exqdesn_phase157_draw_frame(fit)
-    if (any(!is.finite(as.matrix(draws[, -1L, drop = FALSE]))) || any(fit$sigma_draws <= 0)) {
-      stop("Phase169 worker produced invalid posterior draws.", call. = FALSE)
-    }
-    meta <- data.frame(
-      scenario_id = job$scenario_id[[1L]],
-      base_scenario_id = job$base_scenario_id[[1L]],
-      model_id = if (job$fit_structure[[1L]] == "joint") "joint_exqdesn_rhs_mcmc" else "independent_exqdesn_rhs_mcmc",
-      fit_structure = job$fit_structure[[1L]],
-      inference_method_id = job$inference_method_id[[1L]],
-      stringsAsFactors = FALSE
-    )
+    fit <- checkpoint$fit
+    draws <- checkpoint$draws
+    sampler <- checkpoint$sampler
+    elapsed <- as.numeric(checkpoint$metadata$elapsed_seconds[[1L]])
     fit_score <- app_joint_qdesn_phase122_score_qhat(
       meta, fixture, app_joint_qdesn_predict_fit(fit, fixture$Z, fixture$tau),
       "qhat", "phase169_chain_fit"
@@ -815,7 +996,6 @@ app_joint_exqdesn_phase169_run_worker <- function(
     if (summary$contract_crossing_pairs[[1L]] > 0L) {
       stop("Phase169 chain contract qhat crosses.", call. = FALSE)
     }
-    sampler <- app_joint_exqdesn_phase169_sampler_rows(fit, fixture, job)
     runtime <- summary[, c(
       "worker_id", "mcmc_case_id", "scenario_id", "fit_structure",
       "inference_method_id", "chain_id", "chain_seed", "elapsed_seconds",
@@ -830,12 +1010,12 @@ app_joint_exqdesn_phase169_run_worker <- function(
       sprintf("- Chain: %d", job$chain_id[[1L]]),
       sprintf("- Seed: %d", job$chain_seed[[1L]]),
       "- Initialization: matched VB1 structured-v profile.",
-      "- Storage: compressed coefficient/scale/shape draws; no latent binary object."
+      sprintf("- Posterior source: %s.", if (has_checkpoint) "verified checkpoint" else "fresh exact-MCMC fit"),
+      "- Storage: hash-checkpointed coefficient/scale/shape draws; no latent binary object."
     ), readme, useBytes = TRUE)
     paths <- c(
-      posterior_draws = app_joint_exqdesn_phase157_write_gzip_csv(draws, file.path(worker_dir, "posterior_draws.csv.gz")),
+      checkpoint$paths,
       chain_summary = app_joint_qvp_write_csv(summary, file.path(worker_dir, "chain_summary.csv")),
-      sampler_diagnostics = app_joint_qvp_write_csv(sampler, file.path(worker_dir, "sampler_diagnostics.csv")),
       runtime = app_joint_qvp_write_csv(runtime, file.path(worker_dir, "runtime.csv")),
       provenance = app_joint_qvp_write_csv(app_joint_qvp_provenance_rows(), file.path(worker_dir, "provenance.csv")),
       README = normalizePath(readme, mustWork = TRUE)
@@ -844,6 +1024,16 @@ app_joint_exqdesn_phase169_run_worker <- function(
     if (!app_joint_exqdesn_phase169_worker_complete(worker_dir)) {
       stop("Phase169 worker manifest failed after publication.", call. = FALSE)
     }
+    stale_receipts <- c(
+      file.path(worker_dir, "failure_receipt.csv"),
+      if (!is.null(failure_dir) && nzchar(failure_dir)) {
+        file.path(failure_dir, sprintf("worker_%03d.csv", worker_id))
+      } else {
+        character()
+      }
+    )
+    stale_receipts <- stale_receipts[file.exists(stale_receipts)]
+    if (length(stale_receipts)) unlink(stale_receipts, force = TRUE)
     list(
       worker_id = worker_id,
       status = "completed",
@@ -870,7 +1060,12 @@ app_joint_exqdesn_phase169_run_worker <- function(
 }
 
 app_joint_exqdesn_phase169_read_fit <- function(worker_dir, tau, seed, chain_id) {
-  app_joint_exqdesn_phase157_read_fit(worker_dir, tau, seed, chain_id)
+  source_dir <- if (dir.exists(app_joint_exqdesn_phase169_checkpoint_dir(worker_dir))) {
+    app_joint_exqdesn_phase169_checkpoint_dir(worker_dir)
+  } else {
+    worker_dir
+  }
+  app_joint_exqdesn_phase157_read_fit(source_dir, tau, seed, chain_id)
 }
 
 app_joint_exqdesn_phase169_health <- function(
@@ -992,13 +1187,8 @@ app_joint_exqdesn_phase169_finalize <- function(
     pooled <- app_joint_qdesn_phase122_pool_mcmc_chains(
       fits, fixture$Z, length(fixture$tau), ncol(fixture$Z), fixture$tau
     )
-    meta <- data.frame(
-      scenario_id = jobs$scenario_id[[1L]],
-      base_scenario_id = jobs$base_scenario_id[[1L]],
-      fit_structure = jobs$fit_structure[[1L]],
-      inference_method_id = jobs$inference_method_id[[1L]],
-      stringsAsFactors = FALSE
-    )
+    meta <- app_joint_exqdesn_phase169_score_meta(jobs[1L, , drop = FALSE])
+    app_joint_exqdesn_phase169_validate_score_meta(meta)
     fit_score <- app_joint_qdesn_phase122_score_qhat(
       meta, fixture, app_joint_qdesn_predict_fit(pooled, fixture$Z, fixture$tau),
       "qhat", "phase169_pooled_fit"

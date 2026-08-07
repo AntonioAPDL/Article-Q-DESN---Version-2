@@ -144,3 +144,92 @@ portability_identity_bad <- app_glofas_fit_recovery_portability_audit(
   portability_identity, portability_raw, portability_history
 )
 stopifnot(!portability_identity_bad$summary$component_identity_gate_pass[[1L]])
+
+transition_cutoffs <- c("nov12_2021", "dec21_2021", "may11_2022", "jan23_2021")
+transition_roles <- c(rep("primary_v31", 3L), "supplemental_source_vintage")
+transition_fixture <- rbind(
+  data.frame(
+    candidate_id = "fr09_recursive_level",
+    cutoff_id = transition_cutoffs,
+    validation_role = transition_roles,
+    discrepancy_transition_strategy = "recursive_level",
+    discrepancy_tau0 = 0.001,
+    qdesn_check_loss_mean = c(0.20, 0.30, 0.10, 0.25),
+    raw_check_loss_mean = c(0.18, 0.22, 0.12, 0.20),
+    technical_gate_pass = TRUE,
+    scientific_portability_gate_pass = c(TRUE, FALSE, TRUE, TRUE),
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    candidate_id = "fr09_persistence_innovation",
+    cutoff_id = transition_cutoffs,
+    validation_role = transition_roles,
+    discrepancy_transition_strategy = "persistence_anchored_innovation",
+    discrepancy_tau0 = 0.001,
+    qdesn_check_loss_mean = c(0.15, 0.17, 0.09, 0.18),
+    raw_check_loss_mean = c(0.18, 0.22, 0.12, 0.20),
+    technical_gate_pass = TRUE,
+    scientific_portability_gate_pass = TRUE,
+    stringsAsFactors = FALSE
+  )
+)
+transition_fixture$check_loss_ratio_vs_raw <- with(
+  transition_fixture,
+  qdesn_check_loss_mean / raw_check_loss_mean
+)
+transition_fixture$check_loss_reduction_vs_raw <- with(
+  transition_fixture,
+  (raw_check_loss_mean - qdesn_check_loss_mean) / raw_check_loss_mean
+)
+transition_ranking <- app_glofas_transition_validation_summary(transition_fixture)
+stopifnot(identical(transition_ranking$candidate_id[[1L]], "fr09_persistence_innovation"))
+stopifnot(transition_ranking$n_primary_cutoffs[[1L]] == 3L)
+stopifnot(transition_ranking$n_supplemental_cutoffs[[1L]] == 1L)
+stopifnot(isTRUE(transition_ranking$eligible_for_full7_review[[1L]]))
+stopifnot(!transition_ranking$auto_launch_full7[[1L]])
+stopifnot(!transition_ranking$eligible_for_full7_review[[2L]])
+
+transition_paired <- app_glofas_transition_paired_comparison(transition_fixture)
+stopifnot(nrow(transition_paired) == length(transition_cutoffs))
+expected_reduction <- (c(0.20, 0.30, 0.10, 0.25) - c(0.15, 0.17, 0.09, 0.18)) /
+  c(0.20, 0.30, 0.10, 0.25)
+stopifnot(isTRUE(all.equal(
+  transition_paired$innovation_check_loss_reduction_vs_recursive,
+  expected_reduction
+)))
+
+transition_incomplete <- transition_fixture[
+  !(transition_fixture$candidate_id == "fr09_persistence_innovation" &
+      transition_fixture$cutoff_id == "jan23_2021"),
+  ,
+  drop = FALSE
+]
+transition_pair_error <- tryCatch(
+  {
+    app_glofas_transition_paired_comparison(transition_incomplete)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("same cutoff grid", transition_pair_error))
+
+transition_duplicate <- rbind(transition_fixture, transition_fixture[1L, , drop = FALSE])
+transition_duplicate_error <- tryCatch(
+  {
+    app_glofas_transition_validation_summary(transition_duplicate)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("one row per candidate and cutoff", transition_duplicate_error))
+
+transition_missing_gate <- transition_fixture
+transition_missing_gate$scientific_portability_gate_pass[[1L]] <- NA
+transition_gate_error <- tryCatch(
+  {
+    app_glofas_transition_validation_summary(transition_missing_gate)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("fully determined", transition_gate_error))

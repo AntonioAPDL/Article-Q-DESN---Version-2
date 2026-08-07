@@ -129,6 +129,128 @@ app_glofas_fit_recovery_portability_audit <- function(
   list(summary = summary, detail = detail)
 }
 
+app_glofas_transition_validation_summary <- function(by_cutoff) {
+  required <- c(
+    "candidate_id", "cutoff_id", "validation_role", "discrepancy_transition_strategy",
+    "discrepancy_tau0", "qdesn_check_loss_mean", "raw_check_loss_mean",
+    "check_loss_ratio_vs_raw", "check_loss_reduction_vs_raw",
+    "technical_gate_pass", "scientific_portability_gate_pass"
+  )
+  missing <- setdiff(required, names(by_cutoff))
+  if (!is.data.frame(by_cutoff) || !nrow(by_cutoff) || length(missing)) {
+    stop(
+      sprintf("Transition validation is empty or missing: %s.", paste(missing, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+  if (anyDuplicated(by_cutoff[c("candidate_id", "cutoff_id")])) {
+    stop("Transition validation requires one row per candidate and cutoff.", call. = FALSE)
+  }
+  numeric_fields <- c(
+    "discrepancy_tau0", "qdesn_check_loss_mean", "raw_check_loss_mean",
+    "check_loss_ratio_vs_raw", "check_loss_reduction_vs_raw"
+  )
+  if (any(!vapply(by_cutoff[numeric_fields], function(x) all(is.finite(as.numeric(x))), logical(1L)))) {
+    stop("Transition validation metrics must be finite.", call. = FALSE)
+  }
+  gate_fields <- c("technical_gate_pass", "scientific_portability_gate_pass")
+  if (any(vapply(by_cutoff[gate_fields], function(x) any(is.na(app_as_bool_vec(x))), logical(1L)))) {
+    stop("Transition validation gates must be fully determined.", call. = FALSE)
+  }
+  rows <- lapply(split(by_cutoff, by_cutoff$candidate_id), function(x) {
+    primary <- x[x$validation_role == "primary_v31", , drop = FALSE]
+    supplemental <- x[x$validation_role != "primary_v31", , drop = FALSE]
+    if (length(unique(x$discrepancy_transition_strategy)) != 1L ||
+        length(unique(x$discrepancy_tau0)) != 1L) {
+      stop("Each transition candidate must have one strategy and one discrepancy tau0.", call. = FALSE)
+    }
+    if (nrow(primary) < 3L) stop("Each transition candidate requires three primary v3.1 cutoffs.", call. = FALSE)
+    data.frame(
+      candidate_id = x$candidate_id[[1L]],
+      discrepancy_transition_strategy = x$discrepancy_transition_strategy[[1L]],
+      discrepancy_tau0 = x$discrepancy_tau0[[1L]],
+      n_primary_cutoffs = nrow(primary),
+      primary_wins_vs_raw = sum(primary$qdesn_check_loss_mean < primary$raw_check_loss_mean),
+      primary_mean_check_loss = mean(primary$qdesn_check_loss_mean),
+      primary_mean_raw_check_loss = mean(primary$raw_check_loss_mean),
+      primary_worst_check_loss_ratio_vs_raw = max(primary$check_loss_ratio_vs_raw),
+      primary_mean_check_loss_reduction_vs_raw = mean(primary$check_loss_reduction_vs_raw),
+      primary_all_technical_gates_pass = all(app_as_bool_vec(primary$technical_gate_pass)),
+      primary_all_scientific_gates_pass = all(app_as_bool_vec(primary$scientific_portability_gate_pass)),
+      n_supplemental_cutoffs = nrow(supplemental),
+      supplemental_wins_vs_raw = sum(supplemental$qdesn_check_loss_mean < supplemental$raw_check_loss_mean),
+      supplemental_worst_check_loss_ratio_vs_raw = if (nrow(supplemental)) {
+        max(supplemental$check_loss_ratio_vs_raw)
+      } else NA_real_,
+      supplemental_all_technical_gates_pass = if (nrow(supplemental)) {
+        all(app_as_bool_vec(supplemental$technical_gate_pass))
+      } else NA,
+      stringsAsFactors = FALSE
+    )
+  })
+  ranking <- app_bind_rows_fill(rows)
+  ranking <- ranking[order(
+    !ranking$primary_all_scientific_gates_pass,
+    ranking$primary_worst_check_loss_ratio_vs_raw,
+    ranking$primary_mean_check_loss
+  ), , drop = FALSE]
+  ranking$transition_rank <- seq_len(nrow(ranking))
+  ranking$eligible_for_full7_review <- ranking$primary_all_technical_gates_pass &
+    ranking$primary_all_scientific_gates_pass
+  ranking$auto_launch_full7 <- FALSE
+  ranking$decision_status <- ifelse(
+    ranking$eligible_for_full7_review,
+    "eligible_for_full7_review_after_human_diagnostic_review",
+    "blocked_primary_portability_failure"
+  )
+  rownames(ranking) <- NULL
+  ranking
+}
+
+app_glofas_transition_paired_comparison <- function(by_cutoff) {
+  required <- c(
+    "cutoff_id", "discrepancy_transition_strategy", "qdesn_check_loss_mean",
+    "check_loss_ratio_vs_raw"
+  )
+  missing <- setdiff(required, names(by_cutoff))
+  if (!is.data.frame(by_cutoff) || !nrow(by_cutoff) || length(missing)) {
+    stop(
+      sprintf("Transition pairing is empty or missing: %s.", paste(missing, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+  allowed <- c("recursive_level", "persistence_anchored_innovation")
+  if (!setequal(unique(by_cutoff$discrepancy_transition_strategy), allowed)) {
+    stop("Transition pairing requires exactly the recursive and innovation strategies.", call. = FALSE)
+  }
+  recursive <- by_cutoff[
+    by_cutoff$discrepancy_transition_strategy == "recursive_level",
+    c("cutoff_id", "qdesn_check_loss_mean", "check_loss_ratio_vs_raw"),
+    drop = FALSE
+  ]
+  names(recursive)[-1L] <- paste0("recursive_", names(recursive)[-1L])
+  innovation <- by_cutoff[
+    by_cutoff$discrepancy_transition_strategy == "persistence_anchored_innovation",
+    c("cutoff_id", "qdesn_check_loss_mean", "check_loss_ratio_vs_raw"),
+    drop = FALSE
+  ]
+  names(innovation)[-1L] <- paste0("innovation_", names(innovation)[-1L])
+  if (!nrow(recursive) || !nrow(innovation) || anyDuplicated(recursive$cutoff_id) ||
+      anyDuplicated(innovation$cutoff_id)) {
+    stop("Transition pairing requires one recursive and one innovation row per cutoff.", call. = FALSE)
+  }
+  paired <- merge(recursive, innovation, by = "cutoff_id", all = TRUE, sort = FALSE)
+  if (any(!stats::complete.cases(paired))) {
+    stop("Recursive and innovation transition rows do not share the same cutoff grid.", call. = FALSE)
+  }
+  paired$innovation_check_loss_reduction_vs_recursive <- with(
+    paired,
+    (recursive_qdesn_check_loss_mean - innovation_qdesn_check_loss_mean) /
+      recursive_qdesn_check_loss_mean
+  )
+  paired
+}
+
 app_glofas_fit_recovery_history <- function(
   x,
   candidate_id,

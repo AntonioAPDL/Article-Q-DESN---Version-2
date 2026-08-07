@@ -165,12 +165,18 @@ app_post_fit_history_summary <- function(bundle, design, fit_row, pcfg) {
   out <- vector("list", length(starts))
   base <- design$base_panel
   base$target_date <- as.Date(base$target_date)
+  discrepancy_baseline <- as.numeric(
+    design$discrepancy_baseline_fixed %||% rep(0, nrow(X_alpha))
+  )
+  if (length(discrepancy_baseline) != nrow(X_alpha) || any(!is.finite(discrepancy_baseline))) {
+    stop("Post-fit history requires one finite discrepancy baseline per design row.", call. = FALSE)
+  }
   for (i in seq_along(starts)) {
     idx <- starts[[i]]:min(nrow(X_beta), starts[[i]] + chunk_size - 1L)
     X_beta_i <- X_beta[idx, , drop = FALSE]
     X_alpha_i <- X_alpha[idx, , drop = FALSE]
     q_y <- beta %*% t(X_beta_i)
-    d_g <- alpha %*% t(X_alpha_i)
+    d_g <- sweep(alpha %*% t(X_alpha_i), 2L, discrepancy_baseline[idx], "+")
     q_g <- q_y + d_g
     block <- data.frame(
       fit_id = app_fit_row_value(fit_row, "fit_id"),

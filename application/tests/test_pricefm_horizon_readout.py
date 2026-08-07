@@ -84,6 +84,10 @@ def test_runner_consumes_nested_and_separate_readout_configuration():
     assert "nested_validation_metrics.csv" in text
     assert "nested_partial_pooling_metrics.csv" in text
     assert "nested_partial_pooling_convergence.csv" in text
+    assert "nested_warm_start_diagnostics.csv" in text
+    assert 'source_label <- paste0("nested_al_tau_", tau_key(tau))' in text
+    assert 'X_inner,' in text
+    assert 'y_inner,' in text
     assert 'existing_test_role = "not_loaded_not_predicted_not_selected"' in text
 
 
@@ -134,10 +138,33 @@ def test_actual_runner_fits_nested_shared_and_separate_readouts_without_test(tmp
                 "freeze_tau_iters": 1,
                 "freeze_tau_warmup_iters": 1,
             },
-            "warm_start": {"enabled": False, "record_diagnostics": False},
-            "normal": {"enabled": False},
+            "warm_start": {
+                "enabled": True,
+                "record_diagnostics": True,
+                "fallback_to_cold": False,
+                "qdesn": {
+                    "al": {
+                        "enabled": True,
+                        "first_tau_source": "normal_rhs_ns",
+                        "next_tau_source": "previous_al_tau",
+                        "tau_order": [0.5],
+                        "components": ["beta", "beta_state", "sigma"],
+                    },
+                    "exal": {
+                        "enabled": True,
+                        "source": "al_same_tau",
+                        "components": ["beta", "beta_state", "sigma"],
+                        "gamma_policy": "zero",
+                    },
+                },
+            },
+            "normal": {
+                "enabled": True,
+                "omega_prior": {"a": 2.0, "b": 1.0},
+                "vb_control": {"max_iter": 5, "min_iter": 2, "tol": 1.0e-3, "verbose": False},
+            },
             "qdesn_vb": {
-                "likelihoods": ["al"],
+                "likelihoods": ["al", "exal"],
                 "readout_modes": ["shared_static", "separate_horizon_block"],
                 "horizon_readout": {
                     "block_size": 2,
@@ -187,13 +214,20 @@ def test_actual_runner_fits_nested_shared_and_separate_readouts_without_test(tmp
     methods = pd.read_csv(output / "model_method_summary.csv")
     assert set(methods["readout_mode"]) == {"shared_static", "separate_horizon_block"}
     nested = pd.read_csv(output / "nested_validation_metrics.csv")
-    assert len(nested) == 4
+    assert len(nested) == 8
     assert set(nested["readout_mode"]) == {"shared_static", "separate_horizon_block"}
+    assert set(nested["likelihood_family"]) == {"al", "exal"}
     pooling = pd.read_csv(output / "nested_partial_pooling_metrics.csv")
-    assert len(pooling) == 2 * 2 * 3
+    assert len(pooling) == 2 * 2 * 2 * 3
     assert set(pooling["separate_weight"]) == {0.0, 0.5, 1.0}
     convergence = pd.read_csv(output / "nested_partial_pooling_convergence.csv")
-    assert len(convergence) == 2 * 2
+    assert len(convergence) == 2 * 2 * 2
+    warm = pd.read_csv(output / "nested_warm_start_diagnostics.csv")
+    nested_exal = warm[(warm["likelihood_family"] == "exal") & (warm["readout_mode"] == "shared_static")]
+    assert len(nested_exal) == 2
+    assert set(nested_exal["init_source"]) == {"nested_al_tau_0.5"}
+    assert nested_exal["source_available"].all()
+    assert nested_exal["init_components"].str.contains("beta").all()
     predictions = pd.read_csv(output / "model_predictions_scaled.csv")
     assert set(predictions["split"]) == {"val"}
     manifest = json.loads((output / "run_manifest.json").read_text())

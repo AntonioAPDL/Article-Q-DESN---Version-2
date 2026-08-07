@@ -172,6 +172,7 @@ warm_cfg <- cfg$warm_start %||% list(enabled = FALSE)
 warm_enabled <- isTRUE(warm_cfg$enabled)
 warm_fallback_to_cold <- isTRUE(warm_cfg$fallback_to_cold %||% FALSE)
 warm_record_diagnostics <- if (is.null(warm_cfg$record_diagnostics)) TRUE else isTRUE(warm_cfg$record_diagnostics)
+normal_enabled <- if (is.null(cfg$normal$enabled)) TRUE else isTRUE(cfg$normal$enabled)
 training_cfg <- cfg$training %||% list()
 
 as_config_vec <- function(x, default = character()) {
@@ -907,6 +908,7 @@ run_nested_validation <- function() {
   metric_rows <- list()
   pool_rows <- list()
   pool_convergence_rows <- list()
+  nested_warm_rows <- list()
   for (inner_fold in seq_along(nested$folds)) {
     fold <- nested$folds[[inner_fold]]
     X_inner <- X_train[fold$train_index, , drop = FALSE]
@@ -926,16 +928,113 @@ run_nested_validation <- function() {
       y_inner_q <- y_inner
       rows_inner_q <- rows_inner
     }
-    for (likelihood in qdesn_likelihoods) {
-      for (tau in quantiles) {
+    al_warm_cfg <- warm_cfg$qdesn$al %||% list()
+    nested_normal_fit <- NULL
+    nested_normal_needed <- (
+      warm_enabled && normal_enabled && "al" %in% qdesn_likelihoods &&
+      identical(as.character(al_warm_cfg$first_tau_source %||% "normal_rhs_ns")[1L], "normal_rhs_ns")
+    )
+    if (isTRUE(nested_normal_needed)) {
+      normal_start <- proc.time()[["elapsed"]]
+      nested_normal_fit <- exdqlm::normal_desn_fit(
+        X_inner,
+        y_inner,
+        beta_prior_type = "rhs_ns",
+        omega_prior = cfg$normal$omega_prior,
+        rhs = rhs,
+        control = cfg$normal$vb_control
+      )
+      nested_warm_rows[[length(nested_warm_rows) + 1L]] <- data.frame(
+        inner_fold = inner_fold,
+        method_id = "nested_normal_rhs_ns",
+        likelihood_family = "normal",
+        readout_mode = "shared_static",
+        tau = NA_real_,
+        horizon_group = NA_character_,
+        warm_start_configured = TRUE,
+        init_source = "normal_scaled_ridge_internal",
+        init_components = "internal_package_default",
+        source_available = TRUE,
+        converged = isTRUE(nested_normal_fit$converged %||% TRUE),
+        fit_seconds = proc.time()[["elapsed"]] - normal_start,
+        stringsAsFactors = FALSE
+      )
+    }
+    inner_fit_cache <- list(al = list(), exal = list())
+    nested_likelihood_order <- c(
+      qdesn_likelihoods[qdesn_likelihoods == "al"],
+      qdesn_likelihoods[qdesn_likelihoods == "exal"]
+    )
+    for (likelihood in nested_likelihood_order) {
+      qcfg <- warm_cfg$qdesn[[likelihood]] %||% list()
+      qwarm_enabled <- warm_enabled && isTRUE(qcfg$enabled %||% TRUE)
+      components <- as_config_vec(qcfg$components %||% c("beta", "beta_state", "sigma"))
+      likelihood_tau_order <- warm_tau_order(likelihood)
+      for (tau_order_index in seq_along(likelihood_tau_order)) {
+        tau <- likelihood_tau_order[[tau_order_index]]
         shared_method_id <- paste0("qdesn_", likelihood, "_rhs_ns_exact_chunked")
+        source_fit <- NULL
+        source_label <- "cold"
+        gamma_policy <- as.character(qcfg$gamma_policy %||% "source")[1L]
+        if (isTRUE(qwarm_enabled)) {
+          if (identical(likelihood, "al")) {
+            if (tau_order_index == 1L &&
+                identical(as.character(qcfg$first_tau_source %||% "normal_rhs_ns")[1L], "normal_rhs_ns")) {
+              source_fit <- nested_normal_fit
+              source_label <- "nested_normal_rhs_ns"
+            } else if (tau_order_index > 1L &&
+                       identical(as.character(qcfg$next_tau_source %||% "previous_al_tau")[1L], "previous_al_tau")) {
+              previous_tau <- likelihood_tau_order[[tau_order_index - 1L]]
+              source_fit <- inner_fit_cache$al[[tau_key(previous_tau)]]
+              source_label <- paste0("nested_al_tau_", tau_key(previous_tau))
+            }
+          } else if (identical(likelihood, "exal") &&
+                     identical(as.character(qcfg$source %||% "al_same_tau")[1L], "al_same_tau")) {
+            source_fit <- inner_fit_cache$al[[tau_key(tau)]]
+            source_label <- paste0("nested_al_tau_", tau_key(tau))
+            if (identical(as.character(qcfg$gamma_policy %||% "zero")[1L], "zero")) {
+              gamma_policy <- "zero"
+            }
+          }
+        }
+        init_info <- make_vb_init_from_fit(
+          source_fit,
+          components,
+          n_rows = nrow(X_inner_q),
+          n_features = ncol(X_inner_q),
+          gamma_policy = gamma_policy
+        )
+        if (!length(init_info$components)) source_label <- "cold"
+        shared_start <- proc.time()[["elapsed"]]
         shared_fit <- fit_quantile(
           likelihood,
           tau,
           X_tr = X_inner_q,
           y_tr = y_inner_q,
-          record_warm = FALSE,
-          record_trace = FALSE
+          init = init_info$init,
+          init_source = source_label,
+          init_components = init_info$components,
+          fit_order = tau_order_index,
+          record_warm = warm_record_diagnostics && qwarm_enabled,
+          record_trace = FALSE,
+          diagnostic_method_id = paste0("nested_fold=", inner_fold, "::", shared_method_id),
+          diagnostic_model_family = "qdesn_nested_static_readout"
+        )
+        inner_fit_cache[[likelihood]][[tau_key(tau)]] <- shared_fit
+        nested_warm_rows[[length(nested_warm_rows) + 1L]] <- data.frame(
+          inner_fold = inner_fold,
+          method_id = shared_method_id,
+          likelihood_family = likelihood,
+          readout_mode = "shared_static",
+          tau = tau,
+          horizon_group = NA_character_,
+          warm_start_configured = qwarm_enabled,
+          init_source = source_label,
+          init_components = paste(init_info$components, collapse = "+"),
+          source_available = !is.null(source_fit),
+          converged = isTRUE(shared_fit$converged),
+          fit_seconds = proc.time()[["elapsed"]] - shared_start,
+          stringsAsFactors = FALSE
         )
         shared_prediction <- as.numeric(X_inner_val %*% shared_fit$qbeta$m)
         if ("shared_static" %in% qdesn_readout_modes) {
@@ -971,7 +1070,8 @@ run_nested_validation <- function() {
                 n_features = ncol(X_block),
                 gamma_policy = if (identical(likelihood, "al")) "zero" else "source"
               )
-              fit_quantile(
+              block_start <- proc.time()[["elapsed"]]
+              block_fit <- fit_quantile(
                 likelihood,
                 tau,
                 X_tr = X_block,
@@ -983,6 +1083,22 @@ run_nested_validation <- function() {
                 record_warm = FALSE,
                 record_trace = FALSE
               )
+              nested_warm_rows[[length(nested_warm_rows) + 1L]] <<- data.frame(
+                inner_fold = inner_fold,
+                method_id = paste0(shared_method_id, "_horizon_separate"),
+                likelihood_family = likelihood,
+                readout_mode = "separate_horizon_block",
+                tau = tau,
+                horizon_group = block_name,
+                warm_start_configured = TRUE,
+                init_source = paste0("nested_shared_static_fold_", inner_fold),
+                init_components = paste(init_info$components, collapse = "+"),
+                source_available = TRUE,
+                converged = isTRUE(block_fit$converged),
+                fit_seconds = proc.time()[["elapsed"]] - block_start,
+                stringsAsFactors = FALSE
+              )
+              block_fit
             }
           )
           separate_prediction <- pricefm_predict_horizon_block_models(
@@ -1065,6 +1181,13 @@ run_nested_validation <- function() {
       row.names = FALSE
     )
   }
+  if (length(nested_warm_rows)) {
+    utils::write.csv(
+      do.call(rbind, nested_warm_rows),
+      file.path(out_dir, "nested_warm_start_diagnostics.csv"),
+      row.names = FALSE
+    )
+  }
   utils::write.csv(fold_summary, file.path(out_dir, "nested_validation_folds.csv"), row.names = FALSE)
   write_json(file.path(out_dir, "nested_validation_manifest.json"), list(
     enabled = TRUE,
@@ -1072,6 +1195,12 @@ run_nested_validation <- function() {
     existing_test_role = "not_loaded_not_predicted_not_selected",
     readout_modes = qdesn_readout_modes,
     horizon_block_size = horizon_readout_block_size,
+    nested_warm_start = list(
+      enabled = warm_enabled,
+      normal_enabled = normal_enabled,
+      chain = "inner_train_normal_rhs_ns_to_al_same_fold_tau_to_exal_same_fold_tau",
+      diagnostics_file = "nested_warm_start_diagnostics.csv"
+    ),
     partial_pooling = list(
       enabled = partial_pool_enabled,
       weights = partial_pool_weights,
@@ -1112,7 +1241,6 @@ run_exact_equivalence <- function() {
 }
 
 normal_fits <- list()
-normal_enabled <- if (is.null(cfg$normal$enabled)) TRUE else isTRUE(cfg$normal$enabled)
 if (normal_enabled) {
   normal_fits$normal_scaled_ridge <- fit_normal("normal_scaled_ridge", "scaled_ridge")
   normal_fits$normal_rhs_ns <- fit_normal("normal_rhs_ns", "rhs_ns")

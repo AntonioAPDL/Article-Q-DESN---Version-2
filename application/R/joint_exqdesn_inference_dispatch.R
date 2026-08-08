@@ -4,6 +4,45 @@ app_joint_exqdesn_method_registry_path <- function() {
   app_path("application/config/joint_exqdesn_inference_method_registry_v1.csv")
 }
 
+app_joint_exqdesn_default_policy_path <- function() {
+  app_path("application/config/joint_exqdesn_inference_default_policy_v1.csv")
+}
+
+app_joint_exqdesn_load_default_policy <- function(
+  path = app_joint_exqdesn_default_policy_path()
+) {
+  path <- normalizePath(path, mustWork = TRUE)
+  policy <- app_read_csv(path)
+  required <- c(
+    "policy_version", "inference_family", "default_method_id",
+    "evidence_phase", "evidence_status", "effective_date", "notes"
+  )
+  missing <- setdiff(required, names(policy))
+  if (length(missing)) {
+    stop(sprintf("The exQDESN default policy is missing: %s", paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  if (anyDuplicated(policy$inference_family) || any(!nzchar(policy$default_method_id))) {
+    stop("The exQDESN default policy must contain one nonempty method per inference family.", call. = FALSE)
+  }
+  registry <- app_joint_exqdesn_load_method_registry()
+  idx <- match(policy$default_method_id, registry$method_id)
+  if (anyNA(idx) || any(!registry$enabled[idx]) ||
+      any(registry$inference_family[idx] != policy$inference_family) ||
+      any(!registry$exact_target[idx])) {
+    stop("The exQDESN default policy must reference enabled exact methods in the method registry.", call. = FALSE)
+  }
+  policy
+}
+
+app_joint_exqdesn_default_method_id <- function(inference_family = "mcmc") {
+  policy <- app_joint_exqdesn_load_default_policy()
+  row <- policy[policy$inference_family == inference_family, , drop = FALSE]
+  if (nrow(row) != 1L) {
+    stop(sprintf("No unique production default is defined for exQDESN %s inference.", inference_family), call. = FALSE)
+  }
+  row$default_method_id[[1L]]
+}
+
 app_joint_exqdesn_load_method_registry <- function(
   path = app_joint_exqdesn_method_registry_path()
 ) {
@@ -127,13 +166,10 @@ app_joint_exqdesn_fit_vb_dispatch <- function(method_id = NULL, ...) {
 
 app_joint_exqdesn_fit_mcmc_dispatch <- function(method_id = NULL, ...) {
   args <- list(...)
-  if (is.null(method_id) || identical(method_id, "MCMC_legacy_default")) {
+  method_source <- if (is.null(method_id)) "production_default" else "explicit"
+  method_id <- method_id %||% app_joint_exqdesn_default_method_id("mcmc")
+  if (identical(method_id, "MCMC_legacy_default")) {
     fit <- do.call(app_joint_qvp_fit_exal_mcmc_tiny, app_joint_exqdesn_filter_call_args(app_joint_qvp_fit_exal_mcmc_tiny, args))
-    if (is.null(method_id)) {
-      fit$inference_method_id <- "legacy_implicit_bounded_slice"
-      fit$fit_structure <- "joint"
-      return(fit)
-    }
     method <- app_joint_exqdesn_method_row(method_id, "mcmc")
   } else {
     method <- app_joint_exqdesn_method_row(method_id, "mcmc")
@@ -155,6 +191,10 @@ app_joint_exqdesn_fit_mcmc_dispatch <- function(method_id = NULL, ...) {
     }
   }
   fit <- app_joint_exqdesn_attach_method_metadata(fit, method, "joint")
+  fit$inference_method_source <- method_source
+  if (!is.null(fit$manifest) && is.data.frame(fit$manifest)) {
+    fit$manifest$inference_method_source <- method_source
+  }
   app_joint_exqdesn_validate_fit_contract(fit, "mcmc", "joint")
   fit
 }
@@ -246,7 +286,7 @@ app_joint_exqdesn_combine_independent_mcmc <- function(fits, Z, tau, seed = NA_i
 }
 
 app_joint_exqdesn_fit_independent_mcmc_dispatch <- function(
-  method_id,
+  method_id = NULL,
   y,
   Z,
   tau,
@@ -255,6 +295,8 @@ app_joint_exqdesn_fit_independent_mcmc_dispatch <- function(
   tau_seed_stride = 1009L,
   ...
 ) {
+  method_source <- if (is.null(method_id)) "production_default" else "explicit"
+  method_id <- method_id %||% app_joint_exqdesn_default_method_id("mcmc")
   tau <- app_joint_qvp_validate_tau_grid(tau)
   Z <- app_joint_qvp_check_design(Z)
   extra <- list(...)
@@ -273,5 +315,7 @@ app_joint_exqdesn_fit_independent_mcmc_dispatch <- function(
     args$init <- if (!is.null(init$fits)) init$fits[[k]] else init
     fits[[k]] <- do.call(app_joint_exqdesn_fit_mcmc_dispatch, c(list(method_id = method_id), args))
   }
-  app_joint_exqdesn_combine_independent_mcmc(fits, Z, tau, seed)
+  out <- app_joint_exqdesn_combine_independent_mcmc(fits, Z, tau, seed)
+  out$inference_method_source <- method_source
+  out
 }

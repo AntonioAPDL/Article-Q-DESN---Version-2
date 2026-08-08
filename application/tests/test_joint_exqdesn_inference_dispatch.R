@@ -16,6 +16,12 @@ stopifnot(all(c(
   "M0_v_collapsed_support_logit", "M1b_u_collapsed_support_logit",
   "M1_u_collapsed_p_logit", "K_branch_inverse_cdf"
 ) %in% registry$method_id))
+policy <- app_joint_exqdesn_load_default_policy()
+stopifnot(nrow(policy) == 1L)
+stopifnot(identical(
+  app_joint_exqdesn_default_method_id("mcmc"),
+  "M0_v_collapsed_support_logit"
+))
 
 fixture <- app_joint_qvp_simulate_ts_toy_synthetic(
   Tn = 22L,
@@ -80,13 +86,22 @@ mcmc_args <- list(
   seed = 2026080612L,
   max_dense_dim = 100L
 )
-legacy_mcmc <- do.call(app_joint_exqdesn_fit_mcmc_dispatch, mcmc_args)
+default_mcmc <- do.call(app_joint_exqdesn_fit_mcmc_dispatch, mcmc_args)
+explicit_default <- do.call(
+  app_joint_exqdesn_fit_mcmc_dispatch,
+  c(list(method_id = "M0_v_collapsed_support_logit"), mcmc_args)
+)
 explicit_legacy <- do.call(
   app_joint_exqdesn_fit_mcmc_dispatch,
   c(list(method_id = "MCMC_legacy_default"), mcmc_args)
 )
-stopifnot(max(abs(legacy_mcmc$beta_draws - explicit_legacy$beta_draws)) < 1.0e-12)
-stopifnot(identical(legacy_mcmc$gamma_update, "bounded_slice"))
+stopifnot(max(abs(default_mcmc$beta_draws - explicit_default$beta_draws)) < 1.0e-12)
+stopifnot(identical(default_mcmc$inference_method_id, "M0_v_collapsed_support_logit"))
+stopifnot(identical(default_mcmc$inference_method_source, "production_default"))
+stopifnot(identical(explicit_default$inference_method_source, "explicit"))
+stopifnot(identical(explicit_legacy$gamma_update, "bounded_slice"))
+stopifnot(identical(explicit_legacy$inference_method_id, "MCMC_legacy_default"))
+stopifnot(identical(explicit_legacy$inference_method_source, "explicit"))
 
 m0 <- do.call(
   app_joint_exqdesn_fit_mcmc_dispatch,
@@ -109,5 +124,24 @@ m1b <- app_joint_exqdesn_fit_mcmc_dispatch(
 stopifnot(identical(m1b$gamma_coordinate, "support_logit"))
 stopifnot(isTRUE(m1b$sigma_collapsed))
 stopifnot(all(is.finite(m1b$qhat_mean)))
+
+independent_default <- app_joint_exqdesn_fit_independent_mcmc_dispatch(
+  y = fixture$y,
+  Z = fixture$Z,
+  tau = 0.5,
+  n_iter = 16L,
+  burn = 8L,
+  thin = 2L,
+  seed = 2026080614L,
+  max_dense_dim = 100L
+)
+stopifnot(identical(
+  independent_default$inference_method_id,
+  "M0_v_collapsed_support_logit"
+))
+stopifnot(identical(
+  independent_default$inference_method_source,
+  "production_default"
+))
 
 cat("exQDESN inference dispatch tests passed.\n")

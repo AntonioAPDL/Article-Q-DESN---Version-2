@@ -397,6 +397,22 @@ app_joint_exqdesn_phase170_run <- function(
   )
   source_snapshot$size_bytes <- as.numeric(file.info(app_path(source_snapshot$relative_path))$size)
   source_snapshot$sha256 <- vapply(app_path(source_snapshot$relative_path), app_sha256_file, character(1L))
+  provenance <- app_joint_qdesn_bind_rows(list(
+    app_joint_qvp_provenance_rows(),
+    data.frame(
+      key = c(
+        "phase170_implementation_commit",
+        "phase169r_artifact_manifest_sha256",
+        "phase170_default_policy_sha256"
+      ),
+      value = c(
+        app_git_sha(short = FALSE),
+        app_sha256_file(file.path(dirs$phase169r, "artifact_manifest.csv")),
+        app_sha256_file(app_joint_exqdesn_default_policy_path())
+      ),
+      stringsAsFactors = FALSE
+    )
+  ))
   readme <- file.path(dirs$phase170, "README.md")
   writeLines(c(
     "# Phase170 exact exQDESN MCMC default promotion", "",
@@ -435,7 +451,7 @@ app_joint_exqdesn_phase170_run <- function(
       source_snapshot, file.path(dirs$phase170, "source_code_snapshot.csv")
     ),
     provenance = app_joint_qvp_write_csv(
-      app_joint_qvp_provenance_rows(), file.path(dirs$phase170, "provenance.csv")
+      provenance, file.path(dirs$phase170, "provenance.csv")
     ),
     README = normalizePath(readme, mustWork = TRUE)
   )

@@ -6,6 +6,8 @@ cfg_recovery_unit <- list(
       tol = 1.0e-4,
       n_draws = 6L,
       rhs_tau0 = 0.5,
+      rhs_freeze_tau_warmup_iters = 0L,
+      rhs_min_tau_updates = 0L,
       intercept_prec = 1.0e-9,
       sigma_a = 2,
       sigma_b = 1

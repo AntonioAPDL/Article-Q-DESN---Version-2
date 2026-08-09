@@ -375,6 +375,27 @@ app_glofas_selection_score_windows <- function(
   )
 }
 
+app_glofas_selection_warm_start_contract <- function(source_kind, qdiag) {
+  source_kind <- as.character(source_kind)
+  if (length(source_kind) != 1L || !nzchar(source_kind)) {
+    stop("The quantile source kind must be a nonempty scalar.", call. = FALSE)
+  }
+  if (nrow(qdiag) != 1L) return(FALSE)
+  warm_enabled <- isTRUE(app_as_bool_vec(qdiag$vb_warm_start_enabled)[[1L]])
+  warm_used <- isTRUE(app_as_bool_vec(qdiag$vb_warm_start_used)[[1L]])
+  theta_used <- isTRUE(app_as_bool_vec(qdiag$vb_warm_start_theta_used)[[1L]])
+  future_used <- isTRUE(app_as_bool_vec(qdiag$vb_warm_start_future_used)[[1L]])
+  sigma_used <- isTRUE(app_as_bool_vec(qdiag$vb_warm_start_sigma_used)[[1L]])
+  if (source_kind %in% c("new_tail_fit", "new_full7_fit")) {
+    return(warm_enabled && warm_used && theta_used && !future_used && !sigma_used)
+  }
+  if (source_kind == "new_cold_start_transition_full7_fit") {
+    return(!warm_enabled && !warm_used && !theta_used && !future_used && !sigma_used)
+  }
+  if (source_kind == "reused_p50") return(TRUE)
+  stop(sprintf("Unsupported quantile source kind: %s.", source_kind), call. = FALSE)
+}
+
 app_glofas_selection_fit_gate <- function(source_manifest) {
   manifest <- app_glofas_selection_validate_source_manifest(source_manifest, require_complete = TRUE)
   rows <- lapply(seq_len(nrow(manifest)), function(i) {
@@ -393,15 +414,7 @@ app_glofas_selection_fit_gate <- function(source_manifest) {
       isTRUE(app_as_bool_vec(qdiag$finite_sigma)[[1L]])
     converged_ok <- nrow(qdiag) == 1L && isTRUE(app_as_bool_vec(qdiag$vb_converged)[[1L]])
     status_ok <- nrow(qstatus) == 1L && identical(as.character(qstatus$status[[1L]]), "completed")
-    warm_required <- grepl("^new_", as.character(row$source_kind[[1L]]))
-    warm_theta_ok <- if (warm_required) {
-      nrow(qdiag) == 1L && isTRUE(app_as_bool_vec(qdiag$vb_warm_start_used)[[1L]]) &&
-        isTRUE(app_as_bool_vec(qdiag$vb_warm_start_theta_used)[[1L]]) &&
-        !isTRUE(app_as_bool_vec(qdiag$vb_warm_start_future_used)[[1L]]) &&
-        !isTRUE(app_as_bool_vec(qdiag$vb_warm_start_sigma_used)[[1L]])
-    } else {
-      TRUE
-    }
+    warm_theta_ok <- app_glofas_selection_warm_start_contract(row$source_kind[[1L]], qdiag)
     data.frame(
       candidate_id = row$candidate_id[[1L]],
       quantile_id = row$quantile_id[[1L]],

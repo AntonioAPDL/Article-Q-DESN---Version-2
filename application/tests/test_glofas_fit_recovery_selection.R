@@ -85,3 +85,33 @@ selection_ranking <- app_glofas_selection_rank(
 stopifnot(nrow(selection_ranking) == 1L)
 stopifnot(selection_ranking$triage_rank[[1L]] == 1L)
 stopifnot(isTRUE(selection_ranking$advance_eligible[[1L]]))
+
+warm_contract_fixture <- data.frame(
+  vb_warm_start_enabled = TRUE,
+  vb_warm_start_used = TRUE,
+  vb_warm_start_theta_used = TRUE,
+  vb_warm_start_future_used = FALSE,
+  vb_warm_start_sigma_used = FALSE,
+  stringsAsFactors = FALSE
+)
+stopifnot(app_glofas_selection_warm_start_contract("new_tail_fit", warm_contract_fixture))
+stopifnot(app_glofas_selection_warm_start_contract("new_full7_fit", warm_contract_fixture))
+stopifnot(app_glofas_selection_warm_start_contract("reused_p50", warm_contract_fixture))
+stopifnot(!app_glofas_selection_warm_start_contract(
+  "new_cold_start_transition_full7_fit", warm_contract_fixture
+))
+
+cold_contract_fixture <- warm_contract_fixture
+cold_contract_fixture[] <- FALSE
+stopifnot(app_glofas_selection_warm_start_contract(
+  "new_cold_start_transition_full7_fit", cold_contract_fixture
+))
+stopifnot(!app_glofas_selection_warm_start_contract("new_tail_fit", cold_contract_fixture))
+unsupported_source_error <- tryCatch(
+  {
+    app_glofas_selection_warm_start_contract("unknown_source", cold_contract_fixture)
+    ""
+  },
+  error = function(e) conditionMessage(e)
+)
+stopifnot(grepl("Unsupported quantile source kind", unsupported_source_error))

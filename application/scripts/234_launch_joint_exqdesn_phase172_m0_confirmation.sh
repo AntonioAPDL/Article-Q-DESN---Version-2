@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+CACHE_ROOT="${JOINT_EXQDESN_CACHE_ROOT:-/data/jaguir26/local/src/Article-Q-DESN---Version-2/application/cache}"
 SESSION="joint_exqdesn_phase172_m0_article_20260809"
 JOBS=""
 CPU_LIST=""
@@ -11,6 +12,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --jobs) JOBS="$2"; shift 2 ;;
     --cpu-list) CPU_LIST="$2"; shift 2 ;;
+    --cache-root) CACHE_ROOT="$2"; shift 2 ;;
     --session) SESSION="$2"; shift 2 ;;
     --foreground) FOREGROUND=1; shift ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
@@ -45,9 +47,9 @@ for cpu in "${CPUS[@]:0:JOBS}"; do
   SEEN[$cpu]=1
 done
 
-FREEZE="$ROOT/application/cache/joint_exqdesn_phase171_m0_balanced_article_freeze_20260809"
-ORCH="$ROOT/application/cache/joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809_orchestration"
-LOG="$ROOT/application/cache/joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809_tmux.log"
+FREEZE="$CACHE_ROOT/joint_exqdesn_phase171_m0_balanced_article_freeze_20260809"
+ORCH="$CACHE_ROOT/joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809_orchestration"
+LOG="$CACHE_ROOT/joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809_tmux.log"
 WORKER_SCRIPT="$ROOT/application/scripts/233_run_joint_exqdesn_phase172_m0_chain.R"
 if [[ ! -f "$FREEZE/artifact_manifest.csv" ]]; then
   printf 'Missing Phase171 freeze: %s\n' "$FREEZE" >&2
@@ -56,7 +58,7 @@ fi
 
 mkdir -p "$ORCH/logs" "$ORCH/exits" "$ORCH/failures"
 MEM_GIB=$(awk '/MemAvailable:/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
-DISK_GIB=$(df -Pk "$ROOT/application/cache" | awk 'NR==2 {printf "%.0f", $4/1024/1024}')
+DISK_GIB=$(df -Pk "$CACHE_ROOT" | awk 'NR==2 {printf "%.0f", $4/1024/1024}')
 if (( MEM_GIB < 100 || DISK_GIB < 10 )); then
   printf 'Resource gate failed: available RAM=%s GiB, free disk=%s GiB.\n' "$MEM_GIB" "$DISK_GIB" >&2
   exit 4
@@ -74,16 +76,16 @@ if [[ -n "$BUSY" ]]; then
 fi
 
 ps -eLo pid=,ppid=,psr=,pcpu=,pmem=,etime=,comm=,args= > "$ORCH/process_inventory_before_launch.txt"
-printf 'phase_id,jobs,cpu_list,available_ram_gib,free_disk_gib,session,launched_at\n' > "$ORCH/launch_config.csv"
-printf 'phase172_m0_balanced_article_confirmation,%s,"%s",%s,%s,%s,%s\n' \
-  "$JOBS" "$CPU_LIST" "$MEM_GIB" "$DISK_GIB" "$SESSION" "$(date -Is)" >> "$ORCH/launch_config.csv"
+printf 'phase_id,jobs,cpu_list,cache_root,available_ram_gib,free_disk_gib,session,launched_at\n' > "$ORCH/launch_config.csv"
+printf 'phase172_m0_balanced_article_confirmation,%s,"%s","%s",%s,%s,%s,%s\n' \
+  "$JOBS" "$CPU_LIST" "$CACHE_ROOT" "$MEM_GIB" "$DISK_GIB" "$SESSION" "$(date -Is)" >> "$ORCH/launch_config.csv"
 
 if (( FOREGROUND == 0 )); then
   if tmux has-session -t "$SESSION" 2>/dev/null; then
     printf 'tmux session already exists: %s\n' "$SESSION" >&2
     exit 5
   fi
-  printf -v CMD '%q ' "$0" --jobs "$JOBS" --cpu-list "$CPU_LIST" --session "$SESSION" --foreground
+  printf -v CMD '%q ' "$0" --jobs "$JOBS" --cpu-list "$CPU_LIST" --cache-root "$CACHE_ROOT" --session "$SESSION" --foreground
   tmux new-session -d -s "$SESSION" "bash -lc '$CMD > $(printf %q "$LOG") 2>&1; code=\$?; echo EXIT_CODE=\$code; exit \$code'"
   printf 'session=%s\nlog=%s\n' "$SESSION" "$LOG"
   exit 0

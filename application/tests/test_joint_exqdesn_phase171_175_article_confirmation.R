@@ -169,5 +169,14 @@ expect_error(
   "approved=TRUE"
 )
 
+launcher_path <- app_path("application/scripts/234_launch_joint_exqdesn_phase172_m0_confirmation.sh")
+launcher <- readLines(launcher_path, warn = FALSE)
+stopifnot(
+  any(grepl("JOINT_EXQDESN_CACHE_ROOT", launcher, fixed = TRUE)),
+  any(grepl("--cache-root", launcher, fixed = TRUE)),
+  any(grepl('FREEZE="$CACHE_ROOT/', launcher, fixed = TRUE)),
+  !any(grepl('FREEZE="$ROOT/application/cache/', launcher, fixed = TRUE))
+)
+
 unlink(c(tmp, manifest_dir), recursive = TRUE, force = TRUE)
 cat("joint exQDESN Phase171-175 article confirmation tests passed\n")

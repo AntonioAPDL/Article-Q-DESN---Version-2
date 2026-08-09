@@ -72,7 +72,11 @@ workspace is produced.
 The launcher requires 24-32 explicitly listed, currently idle logical CPUs,
 at least 100 GiB available RAM, and at least 10 GiB free disk. It binds one
 single-threaded worker to each CPU and submits four balanced waves. It refuses
-to compete with a high-CPU process found on any selected slot.
+to compete with a high-CPU process found on any selected slot. By default it
+uses the authoritative shared cache at
+`/data/jaguir26/local/src/Article-Q-DESN---Version-2/application/cache`, matching
+the R workflow. `JOINT_EXQDESN_CACHE_ROOT` or `--cache-root` may override that
+location explicitly for a reproducible alternate deployment.
 
 ```bash
 bash application/scripts/234_launch_joint_exqdesn_phase172_m0_confirmation.sh \

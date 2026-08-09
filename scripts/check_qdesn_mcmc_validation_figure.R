@@ -74,6 +74,43 @@ if (
 
 source <- read.csv(source_csv, check.names = FALSE, stringsAsFactors = FALSE)
 figure <- read.csv(figure_data_path, check.names = FALSE, stringsAsFactors = FALSE)
+source_required <- c(
+  "article_interface_id", "inference", "model_variant", "family", "tau",
+  "status", "source_registry_hash_value", "fit_qtrue_rmse",
+  "forecast_qtrue_mae_H1000", "forecast_check_loss_H1000",
+  "fit_source_candidate_id", "fit_source_run_tag", "fit_source_signoff_grade",
+  "fit_source_path", "fit_source_sha256", "forecast_mae_source_candidate_id",
+  "forecast_mae_source_run_tag", "forecast_mae_source_signoff_grade",
+  "forecast_mae_source_path", "forecast_mae_source_sha256",
+  "forecast_check_source_candidate_id", "forecast_check_source_run_tag",
+  "forecast_check_source_signoff_grade", "forecast_check_source_path",
+  "forecast_check_source_sha256", "source_promotion_id"
+)
+missing_source <- setdiff(source_required, names(source))
+if (length(missing_source)) {
+  stop(
+    sprintf("Authority is missing columns: %s", paste(missing_source, collapse = ", ")),
+    call. = FALSE
+  )
+}
+source <- source[source$inference == "mcmc", , drop = FALSE]
+source_key <- with(source, paste(model_variant, family, sprintf("%.2f", as.numeric(tau))))
+source_expected <- expand.grid(
+  model_variant = c("dqlm", "exdqlm", "qdesn_al_rhs_ns", "qdesn_exal_rhs_ns"),
+  family = c("normal", "laplace", "gausmix"),
+  tau = c(0.05, 0.25, 0.50),
+  stringsAsFactors = FALSE
+)
+source_expected_key <- with(
+  source_expected,
+  paste(model_variant, family, sprintf("%.2f", tau))
+)
+if (nrow(source) != 36L || anyDuplicated(source_key) ||
+    !setequal(source_key, source_expected_key) ||
+    any(source$status != "SUCCESS") ||
+    any(source$article_interface_id != manifest_value("promotion_id"))) {
+  stop("Authority does not contain the exact 36-row MCMC comparison grid.", call. = FALSE)
+}
 required <- c(
   "model_variant",
   "family",
@@ -100,25 +137,28 @@ if (length(missing)) {
 }
 
 metric_map <- list(
-  fit_rmse = c(
+  fit_qtrue_rmse = c(
     value = "fit_qtrue_rmse",
     signoff = "fit_source_signoff_grade",
     candidate = "fit_source_candidate_id",
     run_tag = "fit_source_run_tag",
+    path = "fit_source_path",
     sha256 = "fit_source_sha256"
   ),
-  forecast_mae = c(
+  forecast_qtrue_mae_H1000 = c(
     value = "forecast_qtrue_mae_H1000",
     signoff = "forecast_mae_source_signoff_grade",
     candidate = "forecast_mae_source_candidate_id",
     run_tag = "forecast_mae_source_run_tag",
+    path = "forecast_mae_source_path",
     sha256 = "forecast_mae_source_sha256"
   ),
-  forecast_check = c(
+  forecast_check_loss_H1000 = c(
     value = "forecast_check_loss_H1000",
     signoff = "forecast_check_source_signoff_grade",
     candidate = "forecast_check_source_candidate_id",
     run_tag = "forecast_check_source_run_tag",
+    path = "forecast_check_source_path",
     sha256 = "forecast_check_source_sha256"
   )
 )
@@ -142,6 +182,10 @@ expected <- do.call(
       source_signoff_grade = source[[definition[["signoff"]]]],
       source_candidate_id = source[[definition[["candidate"]]]],
       source_run_tag = source[[definition[["run_tag"]]]],
+      source_path_relative = substring(
+        normalizePath(source[[definition[["path"]]]], winslash = "/", mustWork = TRUE),
+        nchar(manifest_value("source_path_base")) + 2L
+      ),
       source_sha256 = source[[definition[["sha256"]]]],
       source_promotion_id = source$source_promotion_id,
       source_registry_hash_value = source$source_registry_hash_value,
@@ -170,6 +214,7 @@ if (
   !identical(figure$source_signoff_grade, expected$source_signoff_grade) ||
   !identical(figure$source_candidate_id, expected$source_candidate_id) ||
   !identical(figure$source_run_tag, expected$source_run_tag) ||
+  !identical(figure$source_path_relative, expected$source_path_relative) ||
   !identical(figure$source_sha256, expected$source_sha256) ||
   !identical(figure$source_promotion_id, expected$source_promotion_id) ||
   !identical(

@@ -414,6 +414,15 @@ metric_specs <- list(
     path = "forecast_check_source_path", sha = "forecast_check_source_sha256"
   )
 )
+workspace_root <- normalizePath(dirname(validation_root), winslash = "/", mustWork = TRUE)
+relative_to_workspace <- function(path) {
+  normalized <- normalizePath(path, winslash = "/", mustWork = TRUE)
+  prefix <- paste0(workspace_root, "/")
+  if (!startsWith(normalized, prefix)) {
+    stop("A figure metric source escapes the canonical workspace root.", call. = FALSE)
+  }
+  substring(normalized, nchar(prefix) + 1L)
+}
 mcmc <- source[source$inference == "mcmc", , drop = FALSE]
 figure_rows <- list()
 for (i in seq_len(nrow(mcmc))) {
@@ -437,7 +446,7 @@ for (i in seq_len(nrow(mcmc))) {
       source_signoff_grade = as.character(mcmc[[spec$signoff]][[i]]),
       source_candidate_id = as.character(mcmc[[spec$candidate]][[i]]),
       source_run_tag = as.character(mcmc[[spec$run_tag]][[i]]),
-      source_path = as.character(mcmc[[spec$path]][[i]]),
+      source_path_relative = relative_to_workspace(as.character(mcmc[[spec$path]][[i]])),
       source_sha256 = as.character(mcmc[[spec$sha]][[i]]),
       source_promotion_id = as.character(mcmc$source_promotion_id[[i]]),
       source_registry_hash_value = as.character(mcmc$source_registry_hash_value[[i]]),
@@ -550,12 +559,16 @@ figure_manifest_path <- resolve_article(outputs$figure_manifest)
 writeLines(c(
   "Independent single-quantile corrected MCMC performance figure",
   sprintf("promotion_id: %s", config$promotion_id),
+  sprintf("source_path_base: %s", workspace_root),
   sprintf("source_csv: %s", interface_path),
   sprintf("source_csv_sha256: %s", sha256(interface_path)),
   sprintf("figure_data: %s", relative_article(figure_data_path)),
   sprintf("figure_data_sha256: %s", sha256(figure_data_path)),
+  sprintf("figure_data_csv: %s", relative_article(figure_data_path)),
+  sprintf("figure_data_csv_sha256: %s", sha256(figure_data_path)),
   sprintf("figure_pdf: %s", relative_article(figure_path)),
   sprintf("figure_pdf_sha256: %s", sha256(figure_path)),
+  sprintf("source_registry_hash: %s", config$source_registry_hash_value),
   sprintf("row_count: %d", nrow(figure_data)),
   "warn_marker: +",
   "fail_marker: x"

@@ -1801,6 +1801,18 @@ available through the fitting origin. The DQLM and exDQLM baselines use the same
 source trajectories, training window, forecast origins, leads, and scoring
 rules, but do not use the shared reservoir-scaling step.
 
+For the exAL--RHS MCMC envelope, we additionally evaluated an exact
+\(v\)-augmented transition that collapses the scale from the shape update,
+redraws the scale exactly, and updates the shape on the logit transform of its
+native bounded support. Fifteen case-specific anchors were each evaluated with
+three independent chains, giving 60,000 retained draws per pooled anchor. A
+pooled criterion replaced its frozen article value only when it was strictly
+lower; this improved 22 of the 27 family--quantile--criterion entries and
+increased the number of exAL--RHS within-comparison minima from 10 to 16. The
+five non-improving entries retain their previous values and metric-level
+provenance. This confirmation changes the computational transition used for the
+new evidence, not the case-specific DESN or RHS specifications.
+
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
 Figure~\ref{fig:independent-simulation-mcmc-metric-envelope} provides a

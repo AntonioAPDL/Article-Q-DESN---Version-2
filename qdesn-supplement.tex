@@ -1492,6 +1492,27 @@ rows from these source tables are displayed.
 \input{tables/qdesn_validation_tt500_final_tables.tex}
 
 \clearpage
+\subsection{Independent exAL MCMC Sampler Confirmation}
+\label{subsec:supp-independent-exal-m0-confirmation}
+
+The updated independent exAL--RHS metric envelope uses a completed confirmation
+of the exact \(v\)-augmented, scale-collapsed, support-logit transition. The
+confirmation comprised 15 case-specific anchors, three independent chains per
+anchor, and 20,000 retained draws per chain. Thirteen pooled anchors met the
+declared diagnostic thresholds and two retained review-level Monte Carlo-error
+flags for the exAL shape or scale coordinate; no chain failed, and all fitted
+and forecast paths were finite. Diagnostic grades were preserved in the
+metric-level record but were not used as accuracy filters.
+
+Promotion was criterion-specific because the primary tables are explicitly
+calibration envelopes. Of 27 family--quantile--criterion comparisons, 22 pooled
+values were strictly lower than the frozen authority and replaced it; five were
+not lower and were retained from the previous authority. All source values,
+chain diagnostics, path-agreement summaries, runtime checks, and selection
+decisions are frozen as compact, hash-verified artifacts. No fitted-object
+payload is retained.
+
+\clearpage
 \subsection{Single-Quantile Five-Chain MCMC Sensitivity}
 \label{subsec:supp-independent-five-chain-sensitivity}
 

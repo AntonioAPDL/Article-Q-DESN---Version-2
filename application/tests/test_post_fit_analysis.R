@@ -124,6 +124,52 @@ trace_path <- file.path(tmp_post, "trace.pdf")
 app_post_plot_traces(trace, trace_path, pcfg, "VB test traces")
 stopifnot(file.exists(trace_path), file.info(trace_path)$size > 1000)
 
+fit_latent_rhs <- fit_al
+fit_latent_rhs$beta_prior <- NULL
+fit_latent_rhs$diagnostics$max_parameter_change_trace <- NULL
+fit_latent_rhs$diagnostics$parameter_change_trace <- c(2, 1, 0.2, 0.02)
+fit_latent_rhs$diagnostics$rhs_global_scale_trace <- do.call(rbind, lapply(c("beta", "alpha"), function(block) {
+  data.frame(
+    iteration = 1:4,
+    block = block,
+    effective_tau = seq(0.1, 0.4, length.out = 4L),
+    e_inv_tau2 = seq(100, 25, length.out = 4L),
+    coefficient_l2 = seq(1, 2, length.out = 4L),
+    global_relative_change = c(0, 0, 0.2, 0.1),
+    stringsAsFactors = FALSE
+  )
+}))
+make_latent_rhs_state <- function(tau0) {
+  list(
+    prior = "rhs_ns",
+    e_inv_tau2 = 4,
+    e_inv_xi = 0.5,
+    e_inv_zeta2 = 0.25,
+    e_inv_lambda2 = c(1, 2, 4),
+    rhs_control = list(freeze_tau_warmup_iters = 25L),
+    first_tau_update_iter = 26L,
+    tau_update_count = 3L,
+    last_update_iteration = 28L,
+    tau0 = tau0
+  )
+}
+fit_latent_rhs$variational_state <- list(prior = list(
+  prior = "block_rhs_ns",
+  blocks = list(
+    beta = list(state = make_latent_rhs_state(0.1)),
+    alpha = list(state = make_latent_rhs_state(0.01))
+  )
+))
+latent_trace <- app_post_fit_trace_table(fit_latent_rhs, bundle, fit_row)
+stopifnot("rhs_beta_effective_tau" %in% latent_trace$trace_name)
+stopifnot("rhs_alpha_effective_tau" %in% latent_trace$trace_name)
+stopifnot(sum(latent_trace$trace_name == "max_parameter_change") == 4L)
+latent_rhs_summary <- app_post_fit_rhs_summary(fit_latent_rhs, fit_row)
+stopifnot(identical(latent_rhs_summary$rhs_block, c("beta", "alpha")))
+stopifnot(all(latent_rhs_summary$warmup_iters == 25L))
+stopifnot(all(latent_rhs_summary$first_tau_update_iter == 26L))
+stopifnot(all(is.finite(latent_rhs_summary$tau2)))
+
 param_sum <- app_post_fit_parameter_summary(bundle, fit_row, pcfg)
 stopifnot(nrow(param_sum) == 2L)
 stopifnot(!"asymmetry" %in% param_sum$parameter_family)

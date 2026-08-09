@@ -99,8 +99,11 @@ Tracked helper files:
   equivalence tests, uses streamed grouped future moments for the production
   path, updates the future USGS latent path with a linearized Delta Gaussian
   step, applies independent regularized-horseshoe states to the beta and alpha
-  coefficient blocks, and stores the final future-state linearization for
-  draw-level prediction.
+  coefficient blocks, supports a global-scale-only RHS warmup with explicit
+  release/convergence diagnostics, and stores the final future-state
+  linearization for draw-level prediction. The application adapter defaults to
+  25 frozen global-scale iterations; low-level callers must request a warmup
+  explicitly.
 - `figure_provenance.R`
 - `plot_input_diagnostics.R`
 - `synthesize_quantiles.R`: monotone quantile-grid synthesis and crossing

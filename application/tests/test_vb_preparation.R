@@ -158,6 +158,9 @@ stopifnot(identical(vb_args$future_moment_strategy, "streamed_grouped"))
 stopifnot(identical(vb_args$future_update_strategy, "linearized_delta"))
 stopifnot(identical(vb_args$future_objective_strategy, "grouped"))
 stopifnot(is.null(vb_args$chunking))
+stopifnot(identical(vb_args$rhs$freeze_tau_warmup_iters, 25L))
+stopifnot(identical(vb_args$rhs$update_every, 1L))
+stopifnot(identical(vb_args$rhs$min_tau_updates, 1L))
 
 vb_cfg_chunked <- vb_cfg
 vb_cfg_chunked$inference$vb_ld$chunking <- list(enabled = TRUE, mode = "exact", chunk_size = 128L, order = "sequential")

@@ -330,7 +330,28 @@ app_post_fit_trace_table <- function(fit, bundle, fit_row) {
     diag <- fit$diagnostics %||% fit$vb_diagnostics %||% list()
     add_trace("elbo", diag$elbo_trace %||% numeric(), "vb_diagnostic")
     add_trace("relative_change", diag$relative_change_trace %||% numeric(), "vb_diagnostic")
-    add_trace("max_parameter_change", diag$max_parameter_change_trace %||% numeric(), "vb_diagnostic")
+    add_trace(
+      "max_parameter_change",
+      diag$max_parameter_change_trace %||% diag$parameter_change_trace %||% numeric(),
+      "vb_diagnostic"
+    )
+    rhs_trace <- diag$rhs_global_scale_trace %||% NULL
+    if (is.data.frame(rhs_trace) && nrow(rhs_trace) && "block" %in% names(rhs_trace)) {
+      rhs_trace <- rhs_trace[order(rhs_trace$iteration, rhs_trace$block), , drop = FALSE]
+      for (block_name in unique(rhs_trace$block)) {
+        block_rows <- rhs_trace[rhs_trace$block == block_name, , drop = FALSE]
+        for (field in intersect(
+          c("effective_tau", "e_inv_tau2", "coefficient_l2", "global_relative_change"),
+          names(block_rows)
+        )) {
+          add_trace(
+            paste("rhs", block_name, field, sep = "_"),
+            block_rows[[field]],
+            "vb_rhs_diagnostic"
+          )
+        }
+      }
+    }
   } else if (identical(method, "mcmc")) {
     if (!is.null(bundle$sigma)) {
       for (j in seq_len(ncol(bundle$sigma))) add_trace(colnames(bundle$sigma)[[j]], bundle$sigma[, j], "mcmc_draw")
@@ -344,25 +365,48 @@ app_post_fit_trace_table <- function(fit, bundle, fit_row) {
 }
 
 app_post_fit_rhs_summary <- function(fit, fit_row) {
-  state <- fit$beta_prior$state %||% NULL
+  state <- fit$variational_state$prior %||% fit$beta_prior$state %||% NULL
   if (!is.list(state)) return(data.frame())
+  states <- if (identical(state$prior, "block_rhs_ns")) {
+    lapply(state$blocks, function(block) block$state)
+  } else if (identical(state$prior, "rhs_ns") || !is.null(fit$beta_prior$state)) {
+    list(all = state)
+  } else {
+    list()
+  }
+  if (!length(states)) return(data.frame())
   scalar <- function(x) if (length(x) && is.finite(as.numeric(x[[1L]]))) as.numeric(x[[1L]]) else NA_real_
-  data.frame(
-    fit_id = fit_row$fit_id,
-    model_id = fit_row$model_id,
-    quantile_level = as.numeric(fit_row$quantile_level),
-    method = app_fit_row_value(fit_row, "method"),
-    likelihood_family = app_fit_row_value(fit_row, "likelihood_family"),
-    tau2 = scalar(state$tau2),
-    zeta2 = scalar(state$zeta2),
-    E_inv_tau2 = scalar(state$E_inv_tau2),
-    E_inv_zeta2 = scalar(state$E_inv_zeta2),
-    lambda2_min = if (!is.null(state$lambda2)) min(state$lambda2, na.rm = TRUE) else NA_real_,
-    lambda2_median = if (!is.null(state$lambda2)) stats::median(state$lambda2, na.rm = TRUE) else NA_real_,
-    lambda2_max = if (!is.null(state$lambda2)) max(state$lambda2, na.rm = TRUE) else NA_real_,
-    iter = if (length(state$iter)) as.integer(state$iter[[1L]]) else NA_integer_,
-    stringsAsFactors = FALSE
-  )
+  rows <- lapply(names(states), function(block_name) {
+    block <- states[[block_name]]
+    e_inv_tau2 <- scalar(block$e_inv_tau2 %||% block$E_inv_tau2)
+    e_inv_zeta2 <- scalar(block$e_inv_zeta2 %||% block$E_inv_zeta2)
+    lambda2 <- block$lambda2 %||% if (!is.null(block$e_inv_lambda2)) {
+      1 / pmax(as.numeric(block$e_inv_lambda2), 1.0e-12)
+    } else {
+      NULL
+    }
+    data.frame(
+      fit_id = fit_row$fit_id,
+      model_id = fit_row$model_id,
+      quantile_level = as.numeric(fit_row$quantile_level),
+      method = app_fit_row_value(fit_row, "method"),
+      likelihood_family = app_fit_row_value(fit_row, "likelihood_family"),
+      rhs_block = block_name,
+      tau2 = scalar(block$tau2 %||% if (is.finite(e_inv_tau2)) 1 / e_inv_tau2 else NA_real_),
+      zeta2 = scalar(block$zeta2 %||% if (is.finite(e_inv_zeta2)) 1 / e_inv_zeta2 else NA_real_),
+      E_inv_tau2 = e_inv_tau2,
+      E_inv_zeta2 = e_inv_zeta2,
+      lambda2_min = if (length(lambda2)) min(lambda2, na.rm = TRUE) else NA_real_,
+      lambda2_median = if (length(lambda2)) stats::median(lambda2, na.rm = TRUE) else NA_real_,
+      lambda2_max = if (length(lambda2)) max(lambda2, na.rm = TRUE) else NA_real_,
+      warmup_iters = as.integer((block$rhs_control %||% list())$freeze_tau_warmup_iters %||% NA_integer_),
+      first_tau_update_iter = as.integer(block$first_tau_update_iter %||% NA_integer_),
+      tau_update_count = as.integer(block$tau_update_count %||% NA_integer_),
+      iter = as.integer(block$iter %||% block$last_update_iteration %||% NA_integer_),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
 }
 
 app_post_fit_metrics <- function(predictions, cfg) {

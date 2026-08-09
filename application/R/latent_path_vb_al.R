@@ -162,7 +162,94 @@ app_latent_mvn_draws_exact <- function(mean, cov, n_draws, seed = NULL, backend 
   out
 }
 
-app_latent_rhs_state_init <- function(p, intercept_index, args) {
+app_latent_rhs_integer_control <- function(value, name, minimum) {
+  value_num <- suppressWarnings(as.numeric(value)[[1L]])
+  if (!is.finite(value_num) || value_num < minimum || abs(value_num - round(value_num)) > 1.0e-8) {
+    stop(sprintf("RHS %s must be an integer greater than or equal to %d.", name, minimum), call. = FALSE)
+  }
+  as.integer(round(value_num))
+}
+
+app_latent_normalize_rhs_control <- function(args = NULL) {
+  args <- args %||% list()
+  freeze_iters <- app_latent_rhs_integer_control(
+    args$freeze_tau_warmup_iters %||% 0L,
+    "freeze_tau_warmup_iters",
+    0L
+  )
+  min_tau_updates <- app_latent_rhs_integer_control(
+    args$min_tau_updates %||% 0L,
+    "min_tau_updates",
+    0L
+  )
+  if (freeze_iters > 0L) min_tau_updates <- max(1L, min_tau_updates)
+  list(
+    freeze_tau_warmup_iters = freeze_iters,
+    update_every = app_latent_rhs_integer_control(args$update_every %||% 1L, "update_every", 1L),
+    min_tau_updates = min_tau_updates
+  )
+}
+
+app_latent_rhs_global_schedule <- function(state, iter, update_global = NULL) {
+  control <- state$rhs_control %||% app_latent_normalize_rhs_control()
+  iter <- app_latent_rhs_integer_control(iter %||% 0L, "update iteration", 0L)
+  warmup_active <- iter > 0L && iter <= control$freeze_tau_warmup_iters
+  scheduled <- iter > 0L && !warmup_active && (iter %% control$update_every == 0L)
+  forced_after_warmup <- iter > control$freeze_tau_warmup_iters &&
+    control$freeze_tau_warmup_iters > 0L &&
+    !isTRUE(state$has_post_warmup_tau_update)
+  do_update <- if (is.null(update_global)) {
+    isTRUE(scheduled || forced_after_warmup)
+  } else {
+    isTRUE(update_global)
+  }
+  if (warmup_active) do_update <- FALSE
+  reason <- if (warmup_active) {
+    "warmup"
+  } else if (!is.null(update_global) && !isTRUE(update_global)) {
+    "explicitly_disabled"
+  } else if (!is.null(update_global) && isTRUE(update_global)) {
+    "explicitly_enabled"
+  } else if (forced_after_warmup && !scheduled) {
+    "forced_after_warmup"
+  } else if (scheduled) {
+    "scheduled"
+  } else {
+    "cadence_skip"
+  }
+  list(
+    iteration = iter,
+    warmup_active = warmup_active,
+    global_update_performed = do_update,
+    reason = reason
+  )
+}
+
+app_latent_rhs_minimum_convergence_iteration <- function(control) {
+  control <- app_latent_normalize_rhs_control(control)
+  if (control$min_tau_updates < 1L) return(1L)
+  update_count <- 0L
+  iter <- 0L
+  first_after_warmup <- FALSE
+  search_limit <- control$freeze_tau_warmup_iters +
+    (control$min_tau_updates + 2L) * control$update_every + 2L
+  while (iter < search_limit && update_count < control$min_tau_updates) {
+    iter <- iter + 1L
+    warmup_active <- iter <= control$freeze_tau_warmup_iters
+    scheduled <- !warmup_active && (iter %% control$update_every == 0L)
+    forced <- !warmup_active && control$freeze_tau_warmup_iters > 0L && !first_after_warmup
+    if (scheduled || forced) {
+      update_count <- update_count + 1L
+      first_after_warmup <- TRUE
+    }
+  }
+  if (update_count < control$min_tau_updates) {
+    stop("Could not determine a valid RHS global-scale update schedule.", call. = FALSE)
+  }
+  iter + 1L
+}
+
+app_latent_rhs_state_init <- function(p, intercept_index, args, rhs_control = NULL) {
   tau0 <- as.numeric(args$tau0 %||% 1)
   a_zeta <- as.numeric(args$a_zeta %||% 2)
   b_zeta <- as.numeric(args$b_zeta %||% 4)
@@ -180,7 +267,18 @@ app_latent_rhs_state_init <- function(p, intercept_index, args) {
     e_inv_nu = rep(1, p),
     e_inv_tau2 = 1 / tau0^2,
     e_inv_xi = 1,
-    e_inv_zeta2 = a_zeta / b_zeta
+    e_inv_zeta2 = a_zeta / b_zeta,
+    rhs_control = app_latent_normalize_rhs_control(rhs_control),
+    tau_update_count = 0L,
+    first_tau_update_iter = NA_integer_,
+    last_tau_update_iter = NA_integer_,
+    has_post_warmup_tau_update = FALSE,
+    last_update_iteration = 0L,
+    last_warmup_active = FALSE,
+    last_global_update_performed = FALSE,
+    last_update_reason = "initialization",
+    last_global_relative_change = 0,
+    last_coefficient_l2 = NA_real_
   )
   state$prior_precision <- app_latent_rhs_prior_precision(state, p)
   state
@@ -196,10 +294,17 @@ app_latent_rhs_prior_precision <- function(state, p) {
   pmax(prec, 1.0e-12)
 }
 
-app_latent_rhs_state_update <- function(state, theta_mean, theta_cov) {
+app_latent_rhs_state_update <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
   p <- length(theta_mean)
   e_theta2 <- as.numeric(theta_mean^2 + diag(theta_cov))
   idx <- state$penalized
+  schedule <- app_latent_rhs_global_schedule(state, iter = iter, update_global = update_global)
+  state$last_update_iteration <- schedule$iteration
+  state$last_warmup_active <- schedule$warmup_active
+  state$last_global_update_performed <- schedule$global_update_performed
+  state$last_update_reason <- schedule$reason
+  state$last_global_relative_change <- 0
+  state$last_coefficient_l2 <- if (length(idx)) sqrt(sum(theta_mean[idx]^2)) else 0
   if (!length(idx)) {
     state$prior_precision <- app_latent_rhs_prior_precision(state, p)
     return(state)
@@ -213,13 +318,24 @@ app_latent_rhs_state_update <- function(state, theta_mean, theta_cov) {
   nu_rate <- pmax(1 + state$e_inv_lambda2[idx], 1.0e-12)
   state$e_inv_nu[idx] <- nu_shape / nu_rate
 
-  tau_shape <- (length(idx) + 1) / 2
-  tau_rate <- pmax(state$e_inv_xi + 0.5 * sum(e_theta2[idx] * state$e_inv_lambda2[idx]), 1.0e-12)
-  state$e_inv_tau2 <- tau_shape / tau_rate
+  if (isTRUE(schedule$global_update_performed)) {
+    old_global <- c(e_inv_tau2 = state$e_inv_tau2, e_inv_xi = state$e_inv_xi)
+    tau_shape <- (length(idx) + 1) / 2
+    tau_rate <- pmax(state$e_inv_xi + 0.5 * sum(e_theta2[idx] * state$e_inv_lambda2[idx]), 1.0e-12)
+    state$e_inv_tau2 <- tau_shape / tau_rate
 
-  xi_shape <- 1
-  xi_rate <- pmax(1 / state$tau0^2 + state$e_inv_tau2, 1.0e-12)
-  state$e_inv_xi <- xi_shape / xi_rate
+    xi_shape <- 1
+    xi_rate <- pmax(1 / state$tau0^2 + state$e_inv_tau2, 1.0e-12)
+    state$e_inv_xi <- xi_shape / xi_rate
+    new_global <- c(e_inv_tau2 = state$e_inv_tau2, e_inv_xi = state$e_inv_xi)
+    state$last_global_relative_change <- max(abs(new_global - old_global) / pmax(1, abs(old_global)))
+    state$tau_update_count <- as.integer(state$tau_update_count %||% 0L) + 1L
+    if (!is.finite(state$first_tau_update_iter)) state$first_tau_update_iter <- schedule$iteration
+    state$last_tau_update_iter <- schedule$iteration
+    if (schedule$iteration > state$rhs_control$freeze_tau_warmup_iters) {
+      state$has_post_warmup_tau_update <- TRUE
+    }
+  }
 
   zeta_shape <- state$a_zeta + length(idx) / 2
   zeta_rate <- pmax(state$b_zeta + 0.5 * sum(e_theta2[idx]), 1.0e-12)
@@ -264,12 +380,14 @@ app_latent_prior_state_init <- function(
       beta_state <- app_latent_rhs_state_init(
         p = length(beta_index),
         intercept_index = app_latent_prior_block_intercepts(beta_index, intercept_index),
-        args = beta_args
+        args = beta_args,
+        rhs_control = vb_args$rhs %||% list()
       )
       alpha_state <- app_latent_rhs_state_init(
         p = length(alpha_index),
         intercept_index = app_latent_prior_block_intercepts(alpha_index, intercept_index),
-        args = alpha_args
+        args = alpha_args,
+        rhs_control = vb_args$rhs %||% list()
       )
       out <- list(
         prior = "block_rhs_ns",
@@ -282,7 +400,12 @@ app_latent_prior_state_init <- function(
       out$prior_precision <- app_latent_prior_state_combine_precision(out, p)
       return(out)
     }
-    return(app_latent_rhs_state_init(p, intercept_index, vb_args$beta_rhs %||% list()))
+    return(app_latent_rhs_state_init(
+      p,
+      intercept_index,
+      vb_args$beta_rhs %||% list(),
+      rhs_control = vb_args$rhs %||% list()
+    ))
   }
   if (identical(prior, "ridge")) {
     prec <- as.numeric((vb_args$beta_ridge %||% list())$precision %||% vb_args$ridge_precision %||% 1)
@@ -299,21 +422,126 @@ app_latent_prior_state_init <- function(
   stop(sprintf("Unsupported latent-path VB prior '%s'.", prior), call. = FALSE)
 }
 
-app_latent_prior_state_update <- function(state, theta_mean, theta_cov) {
-  if (identical(state$prior, "rhs_ns")) return(app_latent_rhs_state_update(state, theta_mean, theta_cov))
+app_latent_prior_state_update <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
+  if (identical(state$prior, "rhs_ns")) {
+    return(app_latent_rhs_state_update(state, theta_mean, theta_cov, iter = iter, update_global = update_global))
+  }
   if (identical(state$prior, "block_rhs_ns")) {
     for (block_name in names(state$blocks)) {
       idx <- state$blocks[[block_name]]$global_index
       state$blocks[[block_name]]$state <- app_latent_rhs_state_update(
         state = state$blocks[[block_name]]$state,
         theta_mean = as.numeric(theta_mean[idx]),
-        theta_cov = as.matrix(theta_cov[idx, idx, drop = FALSE])
+        theta_cov = as.matrix(theta_cov[idx, idx, drop = FALSE]),
+        iter = iter,
+        update_global = update_global
       )
     }
     state$prior_precision <- app_latent_prior_state_combine_precision(state, length(theta_mean))
     return(state)
   }
   state
+}
+
+app_latent_prior_rhs_states <- function(state) {
+  if (identical(state$prior, "rhs_ns")) return(list(all = state))
+  if (identical(state$prior, "block_rhs_ns")) {
+    return(lapply(state$blocks, function(block) block$state))
+  }
+  list()
+}
+
+app_latent_prior_rhs_trace <- function(state, iter) {
+  states <- app_latent_prior_rhs_states(state)
+  if (!length(states)) return(data.frame())
+  rows <- lapply(names(states), function(block_name) {
+    block <- states[[block_name]]
+    idx <- block$penalized
+    local_scale <- if (length(idx)) 1 / sqrt(pmax(block$e_inv_lambda2[idx], 1.0e-12)) else numeric()
+    data.frame(
+      iteration = as.integer(iter),
+      block = block_name,
+      warmup_active = isTRUE(block$last_warmup_active),
+      global_update_performed = isTRUE(block$last_global_update_performed),
+      update_reason = as.character(block$last_update_reason %||% NA_character_),
+      effective_tau = sqrt(1 / pmax(as.numeric(block$e_inv_tau2), 1.0e-12)),
+      e_inv_tau2 = as.numeric(block$e_inv_tau2),
+      e_inv_xi = as.numeric(block$e_inv_xi),
+      e_inv_zeta2 = as.numeric(block$e_inv_zeta2),
+      global_relative_change = as.numeric(block$last_global_relative_change %||% NA_real_),
+      coefficient_l2 = as.numeric(block$last_coefficient_l2 %||% NA_real_),
+      local_scale_median = if (length(local_scale)) stats::median(local_scale) else NA_real_,
+      local_scale_max = if (length(local_scale)) max(local_scale) else NA_real_,
+      tau_update_count = as.integer(block$tau_update_count %||% 0L),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+app_latent_prior_rhs_gate <- function(state, iter) {
+  states <- app_latent_prior_rhs_states(state)
+  if (!length(states)) return(list(passed = TRUE, blocks = data.frame()))
+  rows <- lapply(names(states), function(block_name) {
+    block <- states[[block_name]]
+    control <- block$rhs_control %||% app_latent_normalize_rhs_control()
+    required <- control$min_tau_updates
+    enough_updates <- as.integer(block$tau_update_count %||% 0L) >= required
+    needs_response <- required > 0L || control$freeze_tau_warmup_iters > 0L
+    coefficient_response <- !needs_response ||
+      (is.finite(block$first_tau_update_iter) && as.integer(iter) > block$first_tau_update_iter)
+    data.frame(
+      block = block_name,
+      enough_tau_updates = enough_updates,
+      coefficient_response_after_release = coefficient_response,
+      passed = enough_updates && coefficient_response,
+      stringsAsFactors = FALSE
+    )
+  })
+  blocks <- do.call(rbind, rows)
+  list(passed = all(blocks$passed), blocks = blocks)
+}
+
+app_latent_prior_rhs_diagnostics <- function(state, iter) {
+  states <- app_latent_prior_rhs_states(state)
+  gate <- app_latent_prior_rhs_gate(state, iter)
+  if (!length(states)) {
+    return(list(
+      active = FALSE,
+      convergence_gate_passed = TRUE,
+      minimum_convergence_iteration = 1L,
+      blocks = data.frame()
+    ))
+  }
+  rows <- lapply(names(states), function(block_name) {
+    block <- states[[block_name]]
+    control <- block$rhs_control
+    gate_row <- gate$blocks[gate$blocks$block == block_name, , drop = FALSE]
+    data.frame(
+      block = block_name,
+      freeze_tau_warmup_iters = control$freeze_tau_warmup_iters,
+      update_every = control$update_every,
+      min_tau_updates = control$min_tau_updates,
+      tau_update_count = as.integer(block$tau_update_count %||% 0L),
+      first_tau_update_iter = as.integer(block$first_tau_update_iter %||% NA_integer_),
+      last_tau_update_iter = as.integer(block$last_tau_update_iter %||% NA_integer_),
+      effective_tau = sqrt(1 / pmax(as.numeric(block$e_inv_tau2), 1.0e-12)),
+      e_inv_tau2 = as.numeric(block$e_inv_tau2),
+      e_inv_xi = as.numeric(block$e_inv_xi),
+      coefficient_l2 = as.numeric(block$last_coefficient_l2 %||% NA_real_),
+      enough_tau_updates = gate_row$enough_tau_updates[[1L]],
+      coefficient_response_after_release = gate_row$coefficient_response_after_release[[1L]],
+      gate_passed = gate_row$passed[[1L]],
+      stringsAsFactors = FALSE
+    )
+  })
+  controls <- lapply(states, function(block) block$rhs_control)
+  list(
+    active = TRUE,
+    convergence_gate_passed = gate$passed,
+    minimum_convergence_iteration = max(vapply(controls, app_latent_rhs_minimum_convergence_iteration, integer(1L))),
+    blocks = do.call(rbind, rows)
+  )
 }
 
 app_latent_source_sigma_init <- function(source, prior_sigma) {
@@ -1709,6 +1937,27 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   n_draws <- as.integer(vb_args$n_draws %||% 500L)
   if (!is.finite(max_iter) || max_iter < 1L) max_iter <- 200L
   if (!is.finite(n_draws) || n_draws < 1L) n_draws <- 500L
+  rhs_control <- app_latent_normalize_rhs_control(vb_args$rhs %||% list())
+  rhs_active <- tolower(as.character(coefficient_prior %||% "rhs_ns")) %in% c("rhs", "rhs_ns")
+  minimum_rhs_convergence_iter <- if (rhs_active) {
+    app_latent_rhs_minimum_convergence_iteration(rhs_control)
+  } else {
+    1L
+  }
+  if (max_iter < minimum_rhs_convergence_iter) {
+    stop(
+      sprintf(
+        paste(
+          "VB max_iter = %d cannot satisfy the RHS global-scale schedule;",
+          "at least %d iterations are required for the configured warmup,",
+          "minimum global-scale updates, and one coefficient response."
+        ),
+        max_iter,
+        minimum_rhs_convergence_iter
+      ),
+      call. = FALSE
+    )
+  }
   future_moment_strategy <- app_latent_future_moment_strategy(vb_args)
   future_objective_strategy <- app_latent_future_objective_strategy(vb_args)
   future_update_strategy <- app_latent_future_update_strategy(vb_args)
@@ -1782,7 +2031,13 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   })
   if (isTRUE(warm_start$diagnostics$theta_used)) {
     prior_state <- time_step(NA_integer_, "warm_start_prior_update", {
-      app_latent_prior_state_update(prior_state, theta_mean, theta_cov)
+      app_latent_prior_state_update(
+        prior_state,
+        theta_mean,
+        theta_cov,
+        iter = 0L,
+        update_global = rhs_control$freeze_tau_warmup_iters == 0L
+      )
     })
   }
   row_moments <- time_step(NA_integer_, "initial_row_moments", {
@@ -1808,6 +2063,8 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   objective <- numeric(max_iter)
   par_change <- numeric(max_iter)
   repaired_theta <- logical(max_iter)
+  rhs_gate_trace <- logical(max_iter)
+  rhs_trace <- list()
 
   for (iter in seq_len(max_iter)) {
     old <- c(theta_mean, y_mean, sigma_state$inv_mean)
@@ -1876,8 +2133,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       )
     })
     prior_state <- time_step(iter, "prior_update", {
-      app_latent_prior_state_update(prior_state, theta_mean, theta_cov)
+      app_latent_prior_state_update(prior_state, theta_mean, theta_cov, iter = iter)
     })
+    rhs_trace[[length(rhs_trace) + 1L]] <- app_latent_prior_rhs_trace(prior_state, iter)
+    rhs_gate <- app_latent_prior_rhs_gate(prior_state, iter)
+    rhs_gate_trace[[iter]] <- isTRUE(rhs_gate$passed)
 
     objective[[iter]] <- time_step(iter, "objective", {
       app_latent_approx_objective(
@@ -1887,13 +2147,25 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     })
     new <- c(theta_mean, y_mean, sigma_state$inv_mean)
     par_change[[iter]] <- max(abs(new - old) / pmax(1, abs(old)))
-    if (iter >= min_iter && is.finite(par_change[[iter]]) && par_change[[iter]] < tol) {
+    if (iter >= min_iter && isTRUE(rhs_gate$passed) &&
+        is.finite(par_change[[iter]]) && par_change[[iter]] < tol) {
       objective <- objective[seq_len(iter)]
       par_change <- par_change[seq_len(iter)]
       repaired_theta <- repaired_theta[seq_len(iter)]
+      rhs_gate_trace <- rhs_gate_trace[seq_len(iter)]
       break
     }
   }
+
+  rhs_trace <- rhs_trace[vapply(rhs_trace, nrow, integer(1L)) > 0L]
+  rhs_trace_df <- if (length(rhs_trace)) {
+    do.call(rbind, rhs_trace)
+  } else {
+    data.frame()
+  }
+  rhs_diagnostics <- app_latent_prior_rhs_diagnostics(prior_state, length(objective))
+  final_converged <- isTRUE(rhs_diagnostics$convergence_gate_passed) &&
+    is.finite(tail(par_change, 1L)) && tail(par_change, 1L) < tol
 
   theta_draws <- time_step(NA_integer_, "theta_draw_generation", {
     app_latent_mvn_draws_exact(theta_mean, theta_cov, n_draws, seed = seed + 11L, backend = draw_backend)
@@ -1941,12 +2213,16 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       y_future = y_draws
     ),
     vb_diagnostics = list(
-      converged = tail(par_change, 1L) < tol,
+      converged = final_converged,
       iterations = length(objective),
       elbo_final = tail(objective, 1L),
       elbo_trace = objective,
       max_parameter_change = tail(par_change, 1L),
       parameter_change_trace = par_change,
+      rhs_global_scale = rhs_diagnostics,
+      rhs_global_scale_trace = rhs_trace_df,
+      rhs_convergence_gate_trace = rhs_gate_trace,
+      rhs_minimum_convergence_iteration = minimum_rhs_convergence_iter,
       theta_precision_repaired = any(repaired_theta),
       future_moment_strategy = future_moment_strategy,
       future_update_strategy = future_update_strategy,

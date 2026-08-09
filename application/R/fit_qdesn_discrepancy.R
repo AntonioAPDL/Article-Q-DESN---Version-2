@@ -154,9 +154,9 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
       b = as.numeric(vb_cfg$sigma_b %||% mcmc_cfg$sigma_b %||% 1)
     ),
     rhs = list(
-      freeze_tau_warmup_iters = as.integer(vb_cfg$rhs_freeze_tau_warmup_iters %||% 0L),
-      update_every = as.integer(vb_cfg$rhs_update_every %||% 1L),
-      min_tau_updates = as.integer(vb_cfg$rhs_min_tau_updates %||% 0L)
+      freeze_tau_warmup_iters = vb_cfg$rhs_freeze_tau_warmup_iters %||% 25L,
+      update_every = vb_cfg$rhs_update_every %||% 1L,
+      min_tau_updates = vb_cfg$rhs_min_tau_updates %||% 1L
     ),
     diagnostics = list(
       elbo_check_frequency = as.integer(vb_cfg$elbo_check_frequency %||% 10L),
@@ -378,6 +378,16 @@ app_discrepancy_fit_diagnostics <- function(result) {
     vb_elbo_final = app_discrepancy_vb_diag_value(result$fit, "elbo_final"),
     vb_elbo_relative_change = app_discrepancy_vb_diag_value(result$fit, "elbo_relative_change"),
     vb_max_parameter_change = app_discrepancy_vb_diag_value(result$fit, "max_parameter_change"),
+    rhs_beta_warmup_iters = app_discrepancy_rhs_diag_value(result$fit, "beta", "freeze_tau_warmup_iters"),
+    rhs_alpha_warmup_iters = app_discrepancy_rhs_diag_value(result$fit, "alpha", "freeze_tau_warmup_iters"),
+    rhs_beta_first_tau_update_iter = app_discrepancy_rhs_diag_value(result$fit, "beta", "first_tau_update_iter"),
+    rhs_alpha_first_tau_update_iter = app_discrepancy_rhs_diag_value(result$fit, "alpha", "first_tau_update_iter"),
+    rhs_beta_tau_update_count = app_discrepancy_rhs_diag_value(result$fit, "beta", "tau_update_count"),
+    rhs_alpha_tau_update_count = app_discrepancy_rhs_diag_value(result$fit, "alpha", "tau_update_count"),
+    rhs_beta_effective_tau = app_discrepancy_rhs_diag_value(result$fit, "beta", "effective_tau"),
+    rhs_alpha_effective_tau = app_discrepancy_rhs_diag_value(result$fit, "alpha", "effective_tau"),
+    rhs_beta_gate_passed = app_discrepancy_rhs_diag_value(result$fit, "beta", "gate_passed"),
+    rhs_alpha_gate_passed = app_discrepancy_rhs_diag_value(result$fit, "alpha", "gate_passed"),
     stringsAsFactors = FALSE
   )
 }
@@ -393,6 +403,18 @@ app_discrepancy_vb_diag_value <- function(fit, name) {
     if (is.list(obj) && name %in% names(obj)) return(obj[[name]][[1L]])
   }
   NA
+}
+
+app_discrepancy_rhs_diag_value <- function(fit, block, name) {
+  diag <- fit$vb_diagnostics$rhs_global_scale %||%
+    fit$diagnostics$rhs_global_scale %||%
+    fit$summary$vb_diagnostics$rhs_global_scale %||%
+    NULL
+  rows <- diag$blocks %||% NULL
+  if (!is.data.frame(rows) || !all(c("block", name) %in% names(rows))) return(NA)
+  value <- rows[rows$block == block, name, drop = TRUE]
+  if (length(value) != 1L) return(NA)
+  value[[1L]]
 }
 
 app_discrepancy_prediction_draw_checks <- function(draws, tolerance = 1.0e-8) {

@@ -16,7 +16,8 @@ if (is.null(cfg_path)) stop("--config is required", call. = FALSE)
 force <- tolower(arg("--force", "false")) %in% c("1", "true", "yes")
 cfg <- yaml::read_yaml(cfg_path)$pricefm_stage_r50_mcmc
 out <- cfg$output_dir
-if (dir.exists(out) && length(list.files(out)) && !force) {
+existing_output <- if (dir.exists(out)) setdiff(list.files(out), "chain.log") else character()
+if (length(existing_output) && !force) {
   stop("Output exists: ", out, call. = FALSE)
 }
 dir.create(out, recursive = TRUE, showWarnings = FALSE)

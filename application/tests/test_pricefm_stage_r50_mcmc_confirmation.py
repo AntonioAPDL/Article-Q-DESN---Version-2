@@ -44,6 +44,7 @@ def test_runner_preserves_contract_and_avoids_internal_vb():
     assert "base_frequency" in text and "focused_frequency" in text
     assert 'likelihood_family = "exal"' in text
     assert "horizon_1_24" in text
+    assert 'setdiff(list.files(out), "chain.log")' in text
 
 
 def test_launcher_uses_one_cpu_lane_per_worker():

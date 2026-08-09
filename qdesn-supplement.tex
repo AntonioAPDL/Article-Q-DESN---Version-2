@@ -1492,6 +1492,30 @@ rows from these source tables are displayed.
 \input{tables/qdesn_validation_tt500_final_tables.tex}
 
 \clearpage
+\subsection{Single-Quantile Five-Chain MCMC Sensitivity}
+\label{subsec:supp-independent-five-chain-sensitivity}
+
+The primary single-quantile MCMC tables report case-specific metric envelopes,
+so their fit and forecast entries need not arise from one common calibrated
+fit. As a robustness check, we revisited the Gaussian \(p=0.25\) comparison
+using five independently seeded chains for each candidate design. For each
+chain, the posterior point path was computed first; the reported sensitivity
+path is the coordinatewise median of those five paths. All criteria were then
+recomputed from that path. This construction is a robustness summary of
+chain-specific point estimates, not a pooled posterior sample.
+
+Among the complete five-chain designs, one coherent design was selected per
+working likelihood. Relative to the corresponding primary envelope, the
+coherent \(\AL\)--\(\RHS\) design reduced fit RMSE by 8.4\% and forecast MAE by
+1.6\%, while its forecast check loss increased by 0.4\%. The coherent
+\(\exAL\)--\(\RHS\) design reduced fit RMSE by 18.3\%, forecast MAE by 8.7\%, and
+forecast check loss by 0.4\%. These results support robustness of the selected
+Q--DESN behavior but do not replace the primary table because the estimators
+are not identical.
+
+\input{tables/qdesn_validation_mcmc_five_chain_sensitivity.tex}
+
+\clearpage
 \subsection{Joint Multi-Quantile Balanced MCMC Provenance}
 
 The following generated tables preserve the computational protocol, diagnostic

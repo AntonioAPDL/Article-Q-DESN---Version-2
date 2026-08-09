@@ -369,6 +369,28 @@ replays use explicitly oracle-realized future precipitation and soil moisture,
 so they diagnose portability but do not represent operational forecast skill.
 The finalizer never starts a seven-quantile run automatically.
 
+## GloFAS Full-Quantile Scientific Audit
+
+`glofas_fit_recovery_full7_scientific_audit.R` closes out a completed
+seven-quantile fit on observed history before any promotion decision. It
+recomputes the grid-score approximation on both the modeled `log1p` scale and
+the original streamflow scale, aligns available historical comparators to the
+exact common date grid, audits upper-tail scale and discrepancy support, and
+uses the retained p95 fit/design only for two-block readout attribution. The
+script writes hashed evidence manifests and either `PROMOTION_BLOCKED.txt` or
+`ELIGIBLE_FOR_HUMAN_REVIEW.txt`; neither outcome changes article files.
+
+When the audit isolates a p95 readout failure,
+`glofas_fit_recovery_p95_readout_repair_prepare.R` materializes the declared
+cold-start candidate set. The feature-ablation candidates keep precipitation
+and soil moisture in each reservoir input vector and remove them only from the
+direct readout skip block. Run the resulting manifest with the bounded generic
+scheduler and use `glofas_fit_recovery_p95_readout_repair_finalize.R` through
+the allowlisted watcher. The p95 finalizer ranks only candidates passing
+technical, identity, physical-tail, and discrepancy-support gates on common
+pre-cutoff dates. It can authorize human review and historical pseudo-cutoff
+replay, but never launches full7, promotes outputs, or edits the article.
+
 ## Artifact Lifecycle
 
 The application has a three-layer artifact contract:

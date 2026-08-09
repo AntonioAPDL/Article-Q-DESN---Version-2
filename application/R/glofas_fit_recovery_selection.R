@@ -389,7 +389,10 @@ app_glofas_selection_warm_start_contract <- function(source_kind, qdiag) {
   if (source_kind %in% c("new_tail_fit", "new_full7_fit")) {
     return(warm_enabled && warm_used && theta_used && !future_used && !sigma_used)
   }
-  if (source_kind == "new_cold_start_transition_full7_fit") {
+  if (source_kind %in% c(
+    "new_cold_start_transition_full7_fit",
+    "new_cold_start_tail_repair_fit"
+  )) {
     return(!warm_enabled && !warm_used && !theta_used && !future_used && !sigma_used)
   }
   if (source_kind == "reused_p50") return(TRUE)

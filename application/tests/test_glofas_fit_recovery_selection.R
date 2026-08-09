@@ -106,6 +106,9 @@ cold_contract_fixture[] <- FALSE
 stopifnot(app_glofas_selection_warm_start_contract(
   "new_cold_start_transition_full7_fit", cold_contract_fixture
 ))
+stopifnot(app_glofas_selection_warm_start_contract(
+  "new_cold_start_tail_repair_fit", cold_contract_fixture
+))
 stopifnot(!app_glofas_selection_warm_start_contract("new_tail_fit", cold_contract_fixture))
 unsupported_source_error <- tryCatch(
   {

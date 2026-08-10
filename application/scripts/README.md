@@ -391,6 +391,16 @@ technical, identity, physical-tail, and discrepancy-support gates on common
 pre-cutoff dates. It can authorize human review and historical pseudo-cutoff
 replay, but never launches full7, promotes outputs, or edits the article.
 
+If the readout fit remains sensitive to early RHS shrinkage updates,
+`glofas_fit_recovery_p95_tau_warmup_prepare.R` snapshots the immutable p95
+control inputs and materializes the controlled `k=25` and `k=50` global-scale
+warmup fits. Only the shared and discrepancy global `tau`/`xi` updates are
+frozen; coefficients and local scales continue updating. The paired finalizer
+verifies the exact requested/effective release iteration before applying the
+same pre-cutoff technical and scientific gates. It also writes global-scale,
+coefficient-norm, objective, and parameter-change traces. This sensitivity
+stage cannot launch full7 or promote an application result automatically.
+
 ## Artifact Lifecycle
 
 The application has a three-layer artifact contract:

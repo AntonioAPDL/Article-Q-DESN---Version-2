@@ -7,7 +7,7 @@ POLL_SECONDS="${3:-${POLL_SECONDS:-300}}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 case "$FINALIZER" in
-  application/scripts/glofas_fit_recovery_triage_finalize.R|application/scripts/glofas_fit_recovery_blocked_finalize.R|application/scripts/glofas_fit_recovery_transition_finalize.R|application/scripts/glofas_fit_recovery_full7_finalize.R|application/scripts/glofas_fit_recovery_p95_readout_repair_finalize.R)
+  application/scripts/glofas_fit_recovery_triage_finalize.R|application/scripts/glofas_fit_recovery_blocked_finalize.R|application/scripts/glofas_fit_recovery_transition_finalize.R|application/scripts/glofas_fit_recovery_full7_finalize.R|application/scripts/glofas_fit_recovery_p95_readout_repair_finalize.R|application/scripts/glofas_fit_recovery_p95_tau_warmup_finalize.R)
     ;;
   *)
     printf 'Refusing non-allowlisted finalizer: %s\n' "$FINALIZER" >&2

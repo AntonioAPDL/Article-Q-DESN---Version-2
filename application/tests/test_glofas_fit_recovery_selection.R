@@ -109,6 +109,12 @@ stopifnot(app_glofas_selection_warm_start_contract(
 stopifnot(app_glofas_selection_warm_start_contract(
   "new_cold_start_tail_repair_fit", cold_contract_fixture
 ))
+stopifnot(app_glofas_selection_warm_start_contract(
+  "new_cold_start_p95_global_scale_warmup_fit", cold_contract_fixture
+))
+stopifnot(app_glofas_selection_warm_start_contract(
+  "immutable_effective_k0_control", cold_contract_fixture
+))
 stopifnot(!app_glofas_selection_warm_start_contract("new_tail_fit", cold_contract_fixture))
 unsupported_source_error <- tryCatch(
   {

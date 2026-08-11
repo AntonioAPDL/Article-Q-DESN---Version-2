@@ -77,6 +77,8 @@
 \input{tables/glofas_application_current_outputs.tex}
 % Current reported PriceFM application output aliases.
 \input{tables/pricefm_full_current_outputs.tex}
+% PriceFM paper-aligned comparison aliases.
+\input{tables/pricefm_paper_aligned_current_outputs.tex}
 
 % Identity, zeros, and ones with consistent bold style
 \newcommand{\Id}[1]{\mat I_{#1}}
@@ -2158,7 +2160,9 @@ statement.
 \label{sec:pricefm-application}
 
 As a second empirical case, we consider probabilistic day-ahead electricity
-price forecasting using the PriceFM benchmark of \citet{YuEtAl2026PriceFM}.
+price forecasting using version~4 of the PriceFM benchmark
+\citep{YuEtAl2026PriceFM}. The current benchmark release spans 1~January~2022
+through 1~January~2026.
 The reported target is original-unit quantile scoring on the PriceFM paper
 quantile grid under fold-aligned test timestamps.
 The released data cover European bidding regions at 15-minute resolution and
@@ -2194,6 +2198,13 @@ evidence for the joint quantile-vector RHS prior unless a future PriceFM run
 explicitly fits and promotes that joint readout under the same fold-aligned
 protocol.
 
+PriceFM reports two model-comparison protocols. Its Table~II is a full-shot
+evaluation, whereas its Table~III evaluates leave-one-region-out zero-shot
+generalization. Because the Q--DESN specifications here are fitted and selected
+with observations from each target region, the full-shot table is the relevant
+paper-level analogue. The zero-shot table is not used to rank the present
+region-specific fits.
+
 \subsection{Full-Surface Results}
 
 Across the aligned benchmark, Q--DESN has lower AQL in
@@ -2205,20 +2216,41 @@ AQL in \PricefmFullPricefmWins{} evaluations. The mean Q--DESN AQL is
 \PricefmFullMeanPricefmAql{}, giving mean \(\Delta\) AQL
 \PricefmFullMeanDeltaAql{} and median \(\Delta\) AQL
 \PricefmFullMedianDeltaAql{}. The aggregate difference is therefore modest
-rather than uniform. Table~\ref{tab:pricefm-full-main-summary} shows that the
-mean \(\Delta\) AQL is most negative in fold 2, modestly negative in fold 1,
-and essentially neutral in fold 3.
+rather than uniform. The fold-level supplementary summary shows that the mean
+\(\Delta\) AQL is most negative in fold 2, modestly negative in fold 1, and
+essentially neutral in fold 3. On the same 114-cell replay surface, the
+cell-macro mean AQCR is \PricefmAlignedQdesnAqcr{} for Q--DESN and
+\PricefmAlignedPricefmAqcr{} for the released PriceFM checkpoint. Mean MAE is
+\PricefmAlignedQdesnMae{} versus \PricefmAlignedPricefmMae{}, and mean RMSE is
+\PricefmAlignedQdesnRmse{} versus \PricefmAlignedPricefmRmse{}, respectively.
+Thus Q--DESN reduces replayed AQL, MAE, and RMSE by approximately
+\PricefmAlignedAqlReduction{}, \PricefmAlignedMaeReduction{}, and
+\PricefmAlignedRmseReduction{}, while retaining a nonzero quantile-crossing
+rate.
 
 \begin{table}[!htbp]
 \centering
-\caption{PriceFM benchmark summary. AQL is computed on the original
-electricity-price scale using the PriceFM paper quantile grid. The last two
-columns report Q--DESN AQL minus PriceFM AQL; negative values indicate lower
-Q--DESN AQL and positive values indicate lower PriceFM AQL. Near ties are
-retained as a separate prespecified category.}
-\label{tab:pricefm-full-main-summary}
-\input{\PricefmFullMainSummaryTable}
+\caption{PriceFM-aligned model comparison. The first panel reports direct
+cell-macro means from the common 38-region, three-fold replay; boldface marks
+the better of those two directly aligned rows. The second panel reproduces the
+full-shot values in Table~II of PriceFM version~4
+\citep{YuEtAl2026PriceFM}. The paper-reported panel uses a distinct fitted-model
+and aggregation pipeline and is therefore contextual rather than a
+head-to-head ranking against the replay panel. AQL, MAE, and RMSE are in
+EUR/MWh; AQCR is in percent. Rank is reproduced only for the paper-reported
+panel; dashes indicate that no cross-panel rank is assigned. Lower is better.}
+\label{tab:pricefm-paper-aligned-main-comparison}
+\input{\PricefmPaperAlignedMainComparisonTable}
 \end{table}
+
+The directly replayed checkpoint is the appropriate distribution-level
+comparator because its predictions are aligned row by row with the Q--DESN
+predictions. Its AQL differs from the PriceFM paper's optimized full-shot AQL,
+so the two PriceFM rows are deliberately not conflated. Numerically, the
+Q--DESN replay AQL lies within the range reported for the graph baselines in
+PriceFM Table~II, but differences in fitted objects and aggregation preclude a
+cross-panel rank claim. The fold-level win, tie, and loss summary from the
+previous main-text table is retained as a supplementary diagnostic.
 
 The input set also matters. Graph-derived covariates have the most negative
 average \(\Delta\) AQL, whereas target-only evaluations are closer to neutral.
@@ -2240,7 +2272,10 @@ horizon-block scores.
 
 The resulting evidence supports a conservative scoped statement. Q--DESN is a
 competitive reservoir baseline against fold-aligned PriceFM predictions
-on the aligned benchmark panel, with lower mean and median AQL in aggregate.
+on the aligned benchmark panel, with lower mean and median AQL and lower
+cell-macro MAE and RMSE in aggregate. This direct advantage is relative to the
+released checkpoint replay, not to the separately reported optimized
+full-shot PriceFM result.
 It is not uniformly lower than PriceFM: fold 3 is nearly tied on average, and
 PriceFM has lower AQL for a nontrivial subset of region/fold
 evaluations. Subsequent read-only sensitivity checks of those PriceFM-favored

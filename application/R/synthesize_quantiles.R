@@ -30,6 +30,68 @@ app_synthesize_quantile_grid <- function(predictions) {
   do.call(rbind, out)
 }
 
+app_apply_synthesis_model_identity <- function(predictions, source_row) {
+  if (!nrow(predictions)) return(predictions)
+  app_check_required_columns(predictions, "model_id", "prediction table")
+  if (nrow(source_row) != 1L) {
+    stop("Synthesis model identity requires exactly one source-manifest row.", call. = FALSE)
+  }
+
+  mappings <- list(
+    c("raw_fit_id", "raw_synthesis_model_id"),
+    c("qdesn_fit_id", "qdesn_synthesis_model_id")
+  )
+  predictions$source_model_id <- as.character(predictions$model_id)
+  for (mapping in mappings) {
+    source_col <- mapping[[1L]]
+    target_col <- mapping[[2L]]
+    if (!all(c(source_col, target_col) %in% names(source_row))) next
+    source_id <- trimws(as.character(source_row[[source_col]][[1L]]))
+    target_id <- trimws(as.character(source_row[[target_col]][[1L]]))
+    if (!nzchar(source_id) || !nzchar(target_id) || is.na(source_id) || is.na(target_id)) next
+    predictions$model_id[predictions$model_id == source_id] <- target_id
+  }
+  predictions
+}
+
+app_synthesis_model_grid_audit <- function(predictions, target_quantiles, tolerance = 1.0e-12) {
+  required <- c("model_id", "origin_date", "target_date", "horizon", "quantile_level")
+  app_check_required_columns(predictions, required, "prediction table")
+  target_quantiles <- sort(unique(as.numeric(target_quantiles)))
+  if (!length(target_quantiles) || any(!is.finite(target_quantiles))) {
+    stop("Target quantiles must be finite and nonempty.", call. = FALSE)
+  }
+
+  rows <- lapply(split(predictions, predictions$model_id), function(model) {
+    group_key <- interaction(
+      as.Date(model$origin_date),
+      as.Date(model$target_date),
+      as.integer(model$horizon),
+      drop = TRUE
+    )
+    group_levels <- lapply(split(as.numeric(model$quantile_level), group_key), function(x) {
+      sort(unique(x[is.finite(x)]))
+    })
+    group_complete <- vapply(group_levels, function(x) {
+      length(x) == length(target_quantiles) && all(abs(x - target_quantiles) <= tolerance)
+    }, logical(1L))
+    available <- sort(unique(as.numeric(model$quantile_level)))
+    data.frame(
+      model_id = as.character(model$model_id[[1L]]),
+      n_prediction_groups = length(group_levels),
+      n_target_quantiles = length(target_quantiles),
+      min_quantiles_per_group = min(lengths(group_levels)),
+      max_quantiles_per_group = max(lengths(group_levels)),
+      available_quantiles = paste(format(available, trim = TRUE), collapse = ";"),
+      complete_quantile_grid = length(group_complete) > 0L && all(group_complete),
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out
+}
+
 app_quantile_crossing_diagnostics <- function(predictions, value_col, label) {
   key_cols <- c("model_id", "origin_date", "target_date", "horizon")
   required <- c(key_cols, "quantile_level", value_col)

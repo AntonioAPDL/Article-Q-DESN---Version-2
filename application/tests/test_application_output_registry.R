@@ -49,6 +49,52 @@ write.csv(
   app_path(tmp_registry_dir, "tables", "fit_diag.csv"),
   row.names = FALSE
 )
+write.csv(
+  data.frame(
+    candidate_id = "toy_candidate",
+    reference_D = 1L,
+    reference_n = "300",
+    reference_n_tilde = "none",
+    reference_m = 100L,
+    reference_washout = 25L,
+    reference_alpha = "0.92",
+    reference_rho = "0.97",
+    reference_pi_w = "0.03",
+    reference_pi_in = "1",
+    reference_win_scale_global = 0.2,
+    reference_win_scale_bias = 0.25,
+    reference_seed = 123L,
+    discrepancy_D = 2L,
+    discrepancy_n = "200;100",
+    discrepancy_n_tilde = "100",
+    discrepancy_m = 80L,
+    discrepancy_washout = 25L,
+    discrepancy_alpha = "0.1;0.2",
+    discrepancy_rho = "0.9;0.8",
+    discrepancy_pi_w = "0.03;0.04",
+    discrepancy_pi_in = "1;1",
+    discrepancy_win_scale_global = 0.15,
+    discrepancy_win_scale_bias = 0.16,
+    discrepancy_seed = 321L,
+    shared_rhs_tau0 = 0.003,
+    discrepancy_rhs_tau0 = 0.03,
+    discrepancy_transition_strategy = "persistence_anchored_innovation"
+  ),
+  app_path(tmp_registry_dir, "tables", "model_spec.csv"),
+  row.names = FALSE
+)
+write.csv(
+  data.frame(
+    candidate_id = "toy_candidate",
+    window = "all",
+    estimate_mode = "isotonic",
+    n_dates = 12495L,
+    crps_quantile_grid_mean = 0.0445,
+    interval_coverage = 0.906
+  ),
+  app_path(tmp_registry_dir, "tables", "observed_history.csv"),
+  row.names = FALSE
+)
 writeLines(
   c(
     "reservoir:",
@@ -92,6 +138,8 @@ promotion_manifest <- data.frame(
     "qdesn_discrepancy_fit_diagnostics",
     "run_config_yaml",
     "spread_calibration_manifest",
+    "authoritative_model_spec",
+    "observed_history_full7_ranking",
     "discrepancy_corrected_quantile_paths",
     "post_fit_test__forecast_window_pm30",
     "post_fit_test__diagnostic_traces"
@@ -105,6 +153,8 @@ promotion_manifest <- data.frame(
       "tables/fit_diag.csv",
       "tables/run_config.yaml",
       "tables/spread.csv",
+      "tables/model_spec.csv",
+      "tables/observed_history.csv",
       "figures/paths.pdf",
       "figures/forecast.pdf",
       "figures/traces.pdf"
@@ -151,16 +201,34 @@ stopifnot(identical(result$registry$reservoir_washout, "25"))
 stopifnot(identical(result$registry$reservoir_seed, "123"))
 stopifnot(identical(result$registry$rhs_shared_tau0, "0.003"))
 stopifnot(identical(result$registry$rhs_discrepancy_tau0, "0.03"))
+stopifnot(identical(result$registry$candidate_id, "toy_candidate"))
+stopifnot(identical(result$registry$discrepancy_transition_strategy, "persistence-anchored innovation"))
+stopifnot(identical(result$registry$reference_reservoir_pi_w, "0.03"))
+stopifnot(identical(result$registry$reference_reservoir_pi_in, "1"))
+stopifnot(identical(result$registry$reference_reservoir_win_scale_global, "0.2"))
+stopifnot(identical(result$registry$reference_reservoir_win_scale_bias, "0.25"))
+stopifnot(identical(result$registry$discrepancy_reservoir_depth, "2"))
+stopifnot(identical(result$registry$discrepancy_reservoir_size, "200,100"))
+stopifnot(identical(result$registry$discrepancy_reducer_size, "100"))
+stopifnot(identical(result$registry$discrepancy_reservoir_alpha, "0.1,0.2"))
+stopifnot(identical(result$registry$discrepancy_reservoir_seed, "321"))
 stopifnot(identical(result$registry$spread_calibration_enabled, "yes"))
 stopifnot(identical(result$registry$spread_calibration_factor, "1.4"))
 stopifnot(identical(result$registry$spread_calibration_additive_width, "0.5"))
 stopifnot(identical(result$registry$spread_calibration_center_quantile, "0.50"))
 stopifnot(identical(result$registry$spread_calibration_id, "toy_spread"))
+stopifnot(grepl("no-refit reporting-time spread calibration", result$registry$spread_calibration_description, fixed = TRUE))
+stopifnot(identical(result$registry$observed_history_crps, "0.0445"))
+stopifnot(identical(result$registry$observed_history_coverage, "0.906"))
+stopifnot(identical(result$registry$observed_history_dates, "12,495"))
 registry_tex <- readLines(app_path(tmp_registry_dir, "tables", "current_outputs.tex"))
 stopifnot(any(grepl("GlofasApplicationCurrentSharedRhsTau", registry_tex, fixed = TRUE)))
 stopifnot(any(grepl("GlofasApplicationCurrentDiscrepancyRhsTau", registry_tex, fixed = TRUE)))
 stopifnot(any(grepl("GlofasApplicationCurrentQdesnCrps", registry_tex, fixed = TRUE)))
 stopifnot(any(grepl("GlofasApplicationCurrentSpreadCalibrationFactor", registry_tex, fixed = TRUE)))
+stopifnot(any(grepl("GlofasApplicationCurrentReferenceReservoirDepth", registry_tex, fixed = TRUE)))
+stopifnot(any(grepl("GlofasApplicationCurrentDiscrepancyReservoirDepth", registry_tex, fixed = TRUE)))
+stopifnot(any(grepl("GlofasApplicationCurrentObservedHistoryCrps", registry_tex, fixed = TRUE)))
 score_tex <- readLines(app_path(tmp_registry_dir, "tables", "current_score.tex"))
 stopifnot(any(grepl("Q--DESN calibration", score_tex, fixed = TRUE)))
 stopifnot(any(grepl("Raw GloFAS", score_tex, fixed = TRUE)))

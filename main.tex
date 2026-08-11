@@ -2038,14 +2038,10 @@ exQDESN under exAL. This application therefore uses the independent-fit and
 monotone reporting workflow, not the joint quantile-vector readout of
 Section~\ref{subsec:joint-qdesn}. The draw-level predictive
 summaries are then passed through the monotone reporting rule. The selected
-reported output additionally uses a no-refit spread calibration at the
-reporting stage, centered at quantile
-\(\GlofasApplicationCurrentSpreadCalibrationCenterQuantile{}\), with
-multiplicative factor \(\GlofasApplicationCurrentSpreadCalibrationFactor{}\) and
-additive half-width
-\(\GlofasApplicationCurrentSpreadCalibrationAdditiveWidth{}\). This adjustment
-changes only the synthesized forecast-window bands; it does not alter the
-reservoir features, likelihood, priors, or fitted readout coefficients.
+reported output uses the following reporting convention:
+\GlofasApplicationCurrentSpreadCalibrationDescription{} This convention does not
+alter the reservoir features, likelihood, priors, or fitted readout
+coefficients.
 
 The selected fit uses separate DESN feature maps for the reference quantile path
 and the GloFAS discrepancy path. Both maps have depth
@@ -2055,8 +2051,9 @@ and the GloFAS discrepancy path. Both maps have depth
 \(\GlofasApplicationCurrentReferenceReservoirMemory{}\), washout
 \(\GlofasApplicationCurrentReferenceReservoirWashout{}\), spectral radii
 \((\GlofasApplicationCurrentReferenceReservoirRho{})\), recurrent sparsity
-\((\GlofasApplicationCurrentReferenceReservoirPiW{})\), and dense input
-matrices. The reference map uses leak rates
+\((\GlofasApplicationCurrentReferenceReservoirPiW{})\), and input inclusion
+probabilities \((\GlofasApplicationCurrentReferenceReservoirPiIn{})\). The
+reference map uses leak rates
 \((\GlofasApplicationCurrentReferenceReservoirAlpha{})\) and global/bias input
 scales
 \(\GlofasApplicationCurrentReferenceReservoirWinScaleGlobal{}/\GlofasApplicationCurrentReferenceReservoirWinScaleBias{}\),
@@ -2066,6 +2063,8 @@ the discrepancy map uses leak rates
 scales
 \(\GlofasApplicationCurrentDiscrepancyReservoirWinScaleGlobal{}/\GlofasApplicationCurrentDiscrepancyReservoirWinScaleBias{}\),
 and reservoir seed \(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\).
+Forecast-window discrepancy states use the
+\GlofasApplicationCurrentDiscrepancyTransitionStrategy{} transition.
 
 The two readout blocks use separate regularized-horseshoe global scales,
 \(\tau_{0,\mathrm{ref}}=\GlofasApplicationCurrentSharedRhsTau{}\) and
@@ -2075,6 +2074,17 @@ version, preprocessing choices, selected files, and fitted specification for
 this reference run.
 
 \subsection{Reference Application Results}
+
+The selected fit was audited over
+\GlofasApplicationCurrentObservedHistoryDates{} observed dates through the
+forecast origin. After monotone reporting, its observational-window
+quantile-grid CRPS was \(\GlofasApplicationCurrentObservedHistoryCrps{}\), and
+empirical 90\% interval coverage was
+\(\GlofasApplicationCurrentObservedHistoryCoverage{}\). This evidence governs
+the specification choice; the forecast window remains a held-out assessment.
+The retrospective audit also identified occasional extreme fitted values in the
+\(p_0=0.95\) path, so the upper-tail component remains subject to targeted
+sensitivity analysis.
 
 Table~\ref{tab:glofas-application-score} reports the forecast scores for the
 reported reference run. Relative to raw GloFAS, the Q--DESN calibration reduces
@@ -2095,7 +2105,8 @@ result rather than as a multi-origin operational validation.
 Scores are computed on the transformed streamflow scale for the
 forecast origin \GlofasApplicationCurrentOriginDate{}. Lower check loss,
 interval score, and CRPS are better; mean coverage reports empirical
-predictive interval coverage across the scored nominal intervals.}
+coverage for the 90\% predictive interval. The final column gives the relative
+reduction in mean check loss.}
 \label{tab:glofas-application-score}
 \input{\GlofasApplicationCurrentScoreTable}
 \end{table}
@@ -2103,10 +2114,9 @@ predictive interval coverage across the scored nominal intervals.}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentCorrectedPathsFigure}
-\caption{Raw GloFAS quantile paths, discrepancy-corrected Q--DESN quantile
-paths after monotone reporting and reporting-time spread calibration, and
-held-out reference streamflow over the issued forecast window for the GloFAS
-reference-case forecast.}
+\caption{Raw GloFAS median, discrepancy-corrected Q--DESN quantile
+paths after monotone reporting, and held-out reference streamflow over the
+issued forecast window for the GloFAS reference-case forecast.}
 \label{fig:glofas-application-corrected-paths}
 \end{figure}
 
@@ -2114,14 +2124,15 @@ reference-case forecast.}
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
 \caption{Posterior forecast-window diagnostic for the GloFAS reference-case
-forecast. The display checks the synthesized and spread-calibrated
-quantile bands around the forecast origin and the issued target dates used in
+forecast. The black path is held-out reference streamflow; the nested blue
+bands summarize the synthesized predictive quantiles over the issued target
+dates used in
 Table~\ref{tab:glofas-application-score}.}
 \label{fig:glofas-application-forecast-window}
 \end{figure}
 
 Reproducibility checks confirm the data extraction, selected files, score table,
-and VB convergence record used for this reference case. The VB fits used
+and VB convergence record used for this reference case. The VB fits required
 \GlofasApplicationCurrentVbIterations{} iterations. Future model specifications
 can replace this reference case through the same selection
 record and output aliases, without changing the application model

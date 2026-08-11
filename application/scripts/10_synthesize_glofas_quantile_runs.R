@@ -91,12 +91,14 @@ for (i in seq_len(nrow(source_manifest))) {
     pred,
     final_launch = isTRUE(cfg$execution$final_launch$enabled %||% FALSE)
   )
+  pred <- app_apply_synthesis_model_identity(pred, row)
   pred$source_run_id <- row$run_id[[1L]]
   pred$source_quantile_id <- row$quantile_id[[1L]]
   prediction_rows[[length(prediction_rows) + 1L]] <- pred
 
   draws <- read_optional_csv(file.path(tables_dir, "posterior_draw_predictions.csv"))
   if (nrow(draws)) {
+    if ("model_id" %in% names(draws)) draws <- app_apply_synthesis_model_identity(draws, row)
     draws$source_run_id <- row$run_id[[1L]]
     draws$source_quantile_id <- row$quantile_id[[1L]]
     draw_rows[[length(draw_rows) + 1L]] <- draws
@@ -133,6 +135,17 @@ if (any(duplicate_key)) {
   dup <- predictions[duplicate_key, c("model_id", "origin_date", "target_date", "horizon", "quantile_level"), drop = FALSE]
   app_write_csv(dup, file.path(run_dirs$logs, "duplicate_prediction_keys.csv"))
   stop("Synthesis prediction table has duplicate model/origin/target/horizon/quantile keys.", call. = FALSE)
+}
+
+target_quantiles <- sort(unique(as.numeric(source_manifest$quantile_level)))
+model_grid_audit <- app_synthesis_model_grid_audit(predictions, target_quantiles)
+app_write_csv(model_grid_audit, file.path(run_dirs$tables, "synthesis_model_grid_audit.csv"))
+if (any(!model_grid_audit$complete_quantile_grid)) {
+  bad <- model_grid_audit$model_id[!model_grid_audit$complete_quantile_grid]
+  stop(
+    sprintf("Synthesis models do not contain the complete target quantile grid: %s", paste(bad, collapse = ", ")),
+    call. = FALSE
+  )
 }
 
 pred_mono <- app_synthesize_quantile_grid(predictions)
@@ -193,11 +206,12 @@ prov <- app_write_output_provenance(
 app_write_csv(prov, file.path(out_dir, "manuscript_output_provenance.csv"))
 
 readiness_report <- data.frame(
-  category = c("sources", "sources", "predictions", "synthesis", "metrics", "figures"),
+  category = c("sources", "sources", "predictions", "predictions", "synthesis", "metrics", "figures"),
   check = c(
     "all_required_source_runs_complete",
     "all_target_quantiles_available",
     "duplicate_prediction_keys_absent",
+    "all_synthesis_models_have_complete_quantile_grid",
     "post_synthesis_crossings_absent",
     "score_summary_exists",
     "manuscript_figures_exist"
@@ -206,6 +220,7 @@ readiness_report <- data.frame(
     all(readiness$required_fit_rows_completed),
     all(sort(unique(as.numeric(source_manifest$quantile_level))) %in% sort(unique(predictions$quantile_level))),
     !any(duplicate_key),
+    all(model_grid_audit$complete_quantile_grid),
     sum(cross_after$n_crossing_pairs, na.rm = TRUE) == 0,
     file.exists(file.path(run_dirs$tables, "score_summary.csv")),
     all(file.exists(unname(figures)))
@@ -214,6 +229,7 @@ readiness_report <- data.frame(
     paste(readiness$run_id, readiness$required_fit_rows_completed, sep = "=", collapse = "; "),
     paste(sort(unique(predictions$quantile_level)), collapse = ", "),
     "key: model_id, origin_date, target_date, horizon, quantile_level",
+    paste(model_grid_audit$model_id, model_grid_audit$available_quantiles, sep = "=", collapse = "; "),
     sprintf("crossing_pairs_after=%d", sum(cross_after$n_crossing_pairs, na.rm = TRUE)),
     file.path(run_dirs$tables, "score_summary.csv"),
     paste(unname(figures), collapse = "; ")

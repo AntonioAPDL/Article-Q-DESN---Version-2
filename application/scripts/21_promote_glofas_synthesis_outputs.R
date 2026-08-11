@@ -11,6 +11,11 @@ args <- app_parse_args(list(
   synthesis_run_id = "glofas_reservoir_only_m360_full7_20260607_synthesis_final",
   diagnostic_run_id = "glofas_reservoir_only_m360_full7_20260607_diagnostic_figures",
   output_slug = "glofas_reservoir_only_m360_full7_20260607",
+  component_registry = "",
+  promotion_decision = "",
+  component_integrity_audit = "",
+  authoritative_model_spec = "",
+  observed_history_root = "",
   allow_ignored_config = TRUE
 ))
 
@@ -126,10 +131,26 @@ add_output(
 add_table("launch_readiness_report", "launch_readiness_report.csv")
 add_table("launch_readiness_summary", "launch_readiness_summary.txt")
 add_table("quantile_synthesis_diagnostic_summary", "quantile_synthesis_diagnostic_summary.csv")
+add_table("quantile_synthesis_diagnostics", "quantile_synthesis_diagnostics.csv")
 add_table("score_by_quantile", "score_by_quantile.csv")
 add_table("score_by_interval", "score_by_interval.csv")
 add_table("score_by_crps", "score_by_crps.csv")
 add_table("synthesis_source_readiness", "synthesis_source_readiness.csv")
+add_table("synthesis_model_grid_audit", "synthesis_model_grid_audit.csv")
+add_table("prediction_quantiles_independent", "prediction_quantiles.csv")
+add_table("prediction_quantiles_monotone", "prediction_quantiles_synthesized.csv")
+add_table("prediction_quantiles_raw_glofas", "prediction_quantiles_raw_combined.csv")
+add_table("discrepancy_identity_readiness", "discrepancy_identity_readiness.csv")
+add_table("discrepancy_identity_prediction_summary", "discrepancy_identity_prediction_summary.csv")
+add_table("discrepancy_identity_prediction_by_quantile", "discrepancy_identity_prediction_by_quantile.csv")
+add_table("discrepancy_identity_prediction_by_horizon", "discrepancy_identity_prediction_by_horizon.csv")
+add_table("discrepancy_identity_prediction_row_checks", "discrepancy_identity_prediction_row_checks.csv")
+add_output(
+  "synthesis_source_manifest_used",
+  file.path(synth_dirs$manifest, "synthesis_source_manifest_used.csv"),
+  file.path(tables_dir, sprintf("glofas_application_synthesis_source_manifest__%s.csv", slug)),
+  "provenance_snapshot"
+)
 add_table("qdesn_discrepancy_fit_diagnostics_synthesis", "qdesn_discrepancy_fit_diagnostics.csv")
 add_table("qdesn_discrepancy_vb_iteration_timing", "qdesn_discrepancy_vb_iteration_timing.csv", required = FALSE)
 add_diag_table("diagnostic_readiness_report", "diagnostic_readiness_report.csv")
@@ -147,6 +168,64 @@ add_output(
 add_output("qdesn_discrepancy_fit_manifest", file.path(synth_dirs$tables, "fit_status.csv"), file.path(tables_dir, sprintf("glofas_application_fit_manifest__%s.csv", slug)), "provenance_snapshot")
 add_output("qdesn_discrepancy_fit_diagnostics", file.path(synth_dirs$tables, "qdesn_discrepancy_fit_diagnostics.csv"), file.path(tables_dir, sprintf("glofas_application_fit_diagnostics__%s.csv", slug)), "provenance_snapshot")
 
+resolve_optional_source <- function(path) {
+  path <- trimws(as.character(path %||% "")[[1L]])
+  if (!nzchar(path)) return(NA_character_)
+  if (grepl("^/", path)) path else app_path(path)
+}
+
+optional_sources <- c(
+  authoritative_component_registry = resolve_optional_source(args$component_registry),
+  authoritative_promotion_decision = resolve_optional_source(args$promotion_decision),
+  authoritative_component_integrity_audit = resolve_optional_source(args$component_integrity_audit),
+  authoritative_model_spec = resolve_optional_source(args$authoritative_model_spec)
+)
+for (role in names(optional_sources)) {
+  source <- optional_sources[[role]]
+  if (!is.na(source) && file.exists(source)) {
+    add_output(
+      role,
+      source,
+      file.path(tables_dir, sprintf("glofas_application_%s__%s.csv", role, slug)),
+      "provenance_snapshot",
+      TRUE
+    )
+  }
+}
+
+observed_history_root <- resolve_optional_source(args$observed_history_root)
+if (!is.na(observed_history_root) && dir.exists(observed_history_root)) {
+  observed_tables <- c(
+    observed_history_full7_ranking = "tables/observed_history_full7_ranking.csv",
+    observed_history_full7_scores = "tables/observed_history_full7_scores.csv",
+    observed_history_full7_scores_by_quantile = "tables/observed_history_full7_scores_by_quantile.csv",
+    observed_history_crossing_by_date = "tables/observed_history_crossing_by_date.csv",
+    observed_history_upper_tail_summary = "tables/upper_tail_excursion_summary.csv"
+  )
+  for (role in names(observed_tables)) {
+    add_output(
+      role,
+      file.path(observed_history_root, observed_tables[[role]]),
+      file.path(tables_dir, sprintf("glofas_application_%s__%s.csv", role, slug)),
+      "article_table",
+      TRUE
+    )
+  }
+  observed_figures <- c(
+    observed_history_full7_crps_ranking = "figures/observed_history_full7_crps_ranking.pdf",
+    observed_history_last200_full7_quantiles = "figures/observed_history_last200_full7_quantiles.pdf"
+  )
+  for (role in names(observed_figures)) {
+    add_output(
+      role,
+      file.path(observed_history_root, observed_figures[[role]]),
+      file.path(figures_dir, "glofas_application", "diagnostics", sprintf("%s__%s.pdf", role, slug)),
+      "diagnostic_figure",
+      TRUE
+    )
+  }
+}
+
 add_figure(
   "discrepancy_corrected_quantile_paths",
   file.path(synth_generated_dir, "figures", "glofas_qdesn_discrepancy_corrected_quantile_paths.pdf"),
@@ -157,6 +236,19 @@ add_figure(
   file.path(synth_generated_dir, "figures", "glofas_qdesn_discrepancy_draws_by_horizon.pdf"),
   sprintf("glofas_qdesn_discrepancy_draws_by_horizon__%s.pdf", slug)
 )
+additional_synthesis_figures <- c(
+  discrepancy_corrected_quantile_paths_independent = "glofas_qdesn_discrepancy_corrected_quantile_paths_independent.pdf",
+  discrepancy_corrected_quantile_paths_monotone = "glofas_qdesn_discrepancy_corrected_quantile_paths_monotone.pdf",
+  discrepancy_identity_reconciliation = "glofas_qdesn_discrepancy_identity_reconciliation.pdf"
+)
+for (role in names(additional_synthesis_figures)) {
+  file <- additional_synthesis_figures[[role]]
+  add_figure(
+    role,
+    file.path(synth_generated_dir, "figures", file),
+    sprintf("%s__%s.pdf", tools::file_path_sans_ext(file), slug)
+  )
+}
 add_diag_figure_by_suffix <- function(role, suffix, required = TRUE) {
   matches <- list.files(file.path(diag_generated_dir, "figures"), pattern = paste0(suffix, "$"), full.names = FALSE)
   if (!length(matches)) {

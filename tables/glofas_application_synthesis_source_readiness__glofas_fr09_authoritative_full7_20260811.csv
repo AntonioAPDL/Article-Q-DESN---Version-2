@@ -1,0 +1,8 @@
+"quantile_id","quantile_level","run_id","fit_status_exists","prediction_table_exists","required_fit_rows_completed"
+"p05",0.05,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p05",TRUE,TRUE,TRUE
+"p15",0.15,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p15",TRUE,TRUE,TRUE
+"p35",0.35,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p35",TRUE,TRUE,TRUE
+"p50",0.5,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p50",TRUE,TRUE,TRUE
+"p65",0.65,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p65",TRUE,TRUE,TRUE
+"p80",0.8,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p80",TRUE,TRUE,TRUE
+"p95",0.95,"glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p95",TRUE,TRUE,TRUE

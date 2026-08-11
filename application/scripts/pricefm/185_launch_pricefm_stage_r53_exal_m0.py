@@ -36,6 +36,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--resume", type=parse_bool, default=True)
     p.add_argument("--force-incomplete", type=parse_bool, default=True)
     p.add_argument("--busy-cpu-threshold", type=float, default=50.0)
+    p.add_argument("--external-active-case-id", default="")
+    p.add_argument("--external-case-poll-seconds", type=float, default=30.0)
     return p
 
 
@@ -113,6 +115,22 @@ def completed_summary(path: Path, eligibility_field: str | None = None) -> bool:
     if payload.get("status") != "completed":
         return False
     return True if eligibility_field is None else bool(payload.get(eligibility_field))
+
+
+def case_process_active(row) -> bool:
+    process_table = subprocess.check_output(["ps", "-eo", "args="], text=True)
+    config = str(row.config)
+    return any(CASE_RUNNER.name in line and config in line for line in process_table.splitlines())
+
+
+def partition_external_case(cases: pd.DataFrame, case_id: str) -> tuple[list, list]:
+    rows = list(cases.itertuples(index=False))
+    if not case_id:
+        return rows, []
+    external = [row for row in rows if row.id == case_id]
+    if len(external) != 1:
+        raise ValueError(f"External active case must identify exactly one manifest row: {case_id}")
+    return [row for row in rows if row.id != case_id], external
 
 
 class CampaignRecorder:
@@ -246,10 +264,27 @@ def run(args) -> dict:
     all_results: list[dict] = []
     try:
         if args.phase in {"all", "cases"}:
-            all_results.extend(run_lanes(list(cases.itertuples(index=False)), "cases", cpus, CASE_RUNNER, args, recorder))
+            case_rows, external_rows = partition_external_case(cases, args.external_active_case_id)
+            all_results.extend(run_lanes(case_rows, "cases", cpus, CASE_RUNNER, args, recorder))
             failed_cases = [row for row in all_results if row["phase"] == "cases" and row["status"] == "failed"]
             if failed_cases:
                 raise RuntimeError(f"{len(failed_cases)} case replay jobs failed; M0 chains were not started")
+            for row in external_rows:
+                while (
+                    not completed_summary(Path(row.output_dir) / "case_summary.json", "m0_launch_eligible")
+                    and case_process_active(row)
+                ):
+                    recorder.publish("waiting_external_case")
+                    time.sleep(max(float(args.external_case_poll_seconds), 1.0))
+                result = run_one(
+                    row, "cases", cpus[0], CASE_RUNNER, args.artifact_repo,
+                    args.resume, args.force_incomplete,
+                )
+                recorder.record(result)
+                print(json.dumps(result, sort_keys=True), flush=True)
+                all_results.append(result)
+                if result["status"] == "failed":
+                    raise RuntimeError("External case replay failed; M0 chains were not started")
         if args.phase in {"all", "chains"}:
             unready = [row.id for row in cases.itertuples(index=False) if not completed_summary(Path(row.output_dir) / "case_summary.json", "m0_launch_eligible")]
             if unready:

@@ -44,7 +44,8 @@ registry are outside scope.
    chain draws, scalar diagnostics, predictions, and an atomic success marker.
 5. `185_launch_pricefm_stage_r53_exal_m0.py` runs one process per unused
    physical core, forces all numerical thread pools to one, and resumes only
-   incomplete jobs. The adapter/replay phase must finish before chains start.
+   incomplete jobs. It can recognize one externally active replay without
+   duplicating it. The adapter/replay phase must finish before chains start.
 6. `186_closeout_pricefm_stage_r54_exal_m0.R` selects complete seven-quantile
    bundles using validation AQL only. It then audits the frozen test split
    against current authoritative Q-DESN and cached PriceFM.

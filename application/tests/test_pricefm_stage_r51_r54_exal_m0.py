@@ -125,6 +125,7 @@ def test_case_and_chain_runners_consume_the_frozen_m0_contract():
 
 
 def test_launcher_uses_distinct_physical_cpu_lanes_and_single_thread_env():
+    mod = load(LAUNCHER, "pricefm_r53_launcher")
     text = LAUNCHER.read_text()
     assert "validate_distinct_physical" in text
     assert '"OPENBLAS_NUM_THREADS": "1"' in text
@@ -133,6 +134,12 @@ def test_launcher_uses_distinct_physical_cpu_lanes_and_single_thread_env():
     assert "case replay jobs failed; M0 chains were not started" in text
     assert 'recorder.publish("finished", status=final["status"])' in text
     assert 'recorder.publish("failed", status="failed", error=str(exc))' in text
+    cases = pd.DataFrame([{"id": "a"}, {"id": "b"}])
+    regular, external = mod.partition_external_case(cases, "b")
+    assert [row.id for row in regular] == ["a"]
+    assert [row.id for row in external] == ["b"]
+    with pytest.raises(ValueError, match="exactly one"):
+        mod.partition_external_case(cases, "missing")
 
 
 @pytest.mark.skipif(not R_BIN.exists() or not EXDQLM.exists(), reason="local R/exdqlm integration unavailable")

@@ -1555,10 +1555,21 @@ distinct from the article-facing posterior-computation evidence.
 \label{subsec:supp_pricefm_diagnostics}
 
 The main article reports the aggregate fold-aligned PriceFM comparison. The
-tables below preserve two secondary diagnostic views from the same assembled
-benchmark: the input-set breakdown and the available horizon-block breakdown.
-They are descriptive summaries of the selected analysis records, not separate
-selection criteria.
+tables below preserve three secondary diagnostic views from the same assembled
+benchmark: the fold-level decision summary, the input-set breakdown, and the
+available horizon-block breakdown. They are descriptive summaries of the
+selected analysis records, not separate selection criteria.
+
+\begin{table}[!htbp]
+\centering
+\caption{Fold-level PriceFM benchmark summary. AQL is computed on the original
+electricity-price scale using the PriceFM paper quantile grid. The last two
+columns report Q--DESN AQL minus PriceFM AQL; negative values indicate lower
+Q--DESN AQL. Near ties retain the prespecified classification used by the
+full-surface decision registry.}
+\label{tab:supp-pricefm-full-fold-summary}
+\input{tables/pricefm_full_main_summary.tex}
+\end{table}
 
 \begin{table}[!htbp]
 \centering

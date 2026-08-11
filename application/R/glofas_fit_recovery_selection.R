@@ -391,7 +391,9 @@ app_glofas_selection_warm_start_contract <- function(source_kind, qdiag) {
   }
   if (source_kind %in% c(
     "new_cold_start_transition_full7_fit",
-    "new_cold_start_tail_repair_fit"
+    "new_cold_start_tail_repair_fit",
+    "new_cold_start_p95_global_scale_warmup_fit",
+    "immutable_effective_k0_control"
   )) {
     return(!warm_enabled && !warm_used && !theta_used && !future_used && !sigma_used)
   }

@@ -12,6 +12,10 @@ config_path <- file.path(repo_root, "application", "config", "independent_valida
 config <- yaml::read_yaml(config_path)
 validation_root <- normalizePath(config$validation_root, winslash = "/", mustWork = TRUE)
 sha256 <- function(path) unname(tools::sha256sum(path)[[1L]])
+as_bool <- function(x) {
+  if (is.logical(x)) return(!is.na(x) & x)
+  tolower(as.character(x)) %in% c("true", "t", "1", "yes")
+}
 resolve_validation <- function(relative_path) {
   normalizePath(file.path(validation_root, relative_path), winslash = "/", mustWork = TRUE)
 }
@@ -53,6 +57,15 @@ if (anyDuplicated(source_key) || !setequal(source_key, expected_key) ||
     !all(source$preprocessing_scope[grepl("^qdesn_", source$model_variant)] == "train_only") ||
     !all(source$source_registry_hash_value == config$source_registry_hash_value)) {
   stop("Generated summary violates the scientific table contract.", call. = FALSE)
+}
+qdesn_rows <- grepl("^qdesn_", source$model_variant)
+if (!all(as_bool(source$article_consumption_allowed)) ||
+    any(source$rolling_rebaseline_state != config$rolling_rebaseline_state) ||
+    any(source$forecast_metric_contract[qdesn_rows] != config$qdesn_forecast_metric_contract) ||
+    any(source$promotion_validation_branch != config$promotion_validation_branch) ||
+    any(source$promotion_validation_commit != config$promotion_validation_commit) ||
+    any(source$rolling_evidence_promotion_id[qdesn_rows] != config$promotion_id)) {
+  stop("Generated summary is not the authoritative rolling-origin rebaseline.", call. = FALSE)
 }
 
 table_paths <- unlist(config$outputs[c(
@@ -99,6 +112,8 @@ manifest_paths <- vapply(
 manifest_text <- paste(unlist(lapply(manifest_paths, readLines, warn = FALSE)), collapse = "\n")
 if (!grepl(config$promotion_id, manifest_text, fixed = TRUE) ||
     !grepl(config$interface_sha256, manifest_text, fixed = TRUE) ||
+    !grepl(config$rolling_rebaseline_state, manifest_text, fixed = TRUE) ||
+    !grepl(config$qdesn_forecast_metric_contract, manifest_text, fixed = TRUE) ||
     grepl("/home/jaguir26/local/src", manifest_text, fixed = TRUE)) {
   stop("Generated manifests violate the provenance contract.", call. = FALSE)
 }

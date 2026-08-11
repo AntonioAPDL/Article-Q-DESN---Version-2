@@ -96,7 +96,9 @@ required <- c(
   "forecast_block_start_source_index", "forecast_block_end_source_index",
   "forecast_max_lead_configured", "forecast_origin_stride", "package_version",
   "validation_branch", "validation_commit", "validation_closeout_commit",
-  "source_promotion_id"
+  "source_promotion_id", "forecast_metric_contract", "rolling_rebaseline_state",
+  "article_consumption_allowed", "promotion_validation_branch",
+  "promotion_validation_commit", "rolling_evidence_promotion_id"
 )
 missing <- setdiff(required, names(source))
 if (length(missing)) {
@@ -138,6 +140,14 @@ if (nrow(source) != as.integer(config$expected_rows) || anyDuplicated(key) ||
 qdesn_rows <- grepl("^qdesn_", source$model_variant)
 if (!all(source$preprocessing_scope[qdesn_rows] == "train_only")) {
   stop("A Q-DESN row does not use train-only preprocessing.", call. = FALSE)
+}
+if (!all(as_bool(source$article_consumption_allowed)) ||
+    any(source$rolling_rebaseline_state != config$rolling_rebaseline_state) ||
+    any(source$forecast_metric_contract[qdesn_rows] != config$qdesn_forecast_metric_contract) ||
+    any(source$promotion_validation_branch != config$promotion_validation_branch) ||
+    any(source$promotion_validation_commit != config$promotion_validation_commit) ||
+    any(source$rolling_evidence_promotion_id[qdesn_rows] != config$promotion_id)) {
+  stop("The rolling-origin article authority is provisional or stale.", call. = FALSE)
 }
 
 metric_sources <- unique(rbind(
@@ -529,6 +539,9 @@ manifest_lines <- c(
   sprintf("ridge_policy: %s", config$ridge_policy),
   "qdesn_preprocessing_scope: train_only",
   "forecast_protocol: rolling_origin_no_refit_state_update",
+  sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
+  sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
+  sprintf("promotion_validation_commit: %s", config$promotion_validation_commit),
   "artifacts:"
 )
 manifest_lines <- c(
@@ -548,6 +561,8 @@ writeLines(c(
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
   "selection_policy: fixed case-specific metric envelope; diagnostic status retained but not excluded",
   "qdesn_preprocessing_scope: train_only",
+  sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
+  sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
   sprintf("row_count_mcmc: %d", nrow(mcmc)),
   sprintf("signoff_counts_mcmc: %s", paste(names(table(mcmc$signoff_grade)), table(mcmc$signoff_grade), collapse = ",")),
   "artifact_sha256:",

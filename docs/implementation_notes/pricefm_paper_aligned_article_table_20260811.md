@@ -80,6 +80,23 @@ replay AQL (`7.039`). The two values are not interchangeable.
    R54 promotion must regenerate the table from a newly frozen registry.
 5. No article claim should describe Q-DESN as uniformly superior to PriceFM.
 
+## Overleaf File-Limit Cleanup
+
+The first authenticated Overleaf push was rejected because the project had
+reached its 2,000-file limit. A scoped dependency audit identified two obsolete
+PriceFM presentation generations: the original `pricefm_application_*` assets
+and the later `pricefm_stage_m_*` assets. Both summarize only 42 region/fold
+cells from 15 regions, are superseded by the authoritative 114-cell
+`pricefm_full_*` surface, and are not referenced by either `main.tex` or
+`qdesn-supplement.tex`.
+
+Eighteen legacy presentation outputs were therefore removed from the current
+tree: twelve generated table/manifest files and six generated figures. Their
+contents remain recoverable from Git commit `652f113`; no source code, model
+output, current full-surface asset, or non-PriceFM file was removed. This lowers
+the tracked tree from 1,984 to 1,966 files and leaves room for the validated
+paper-aligned table on Overleaf.
+
 ## Validation
 
 The following checks passed:

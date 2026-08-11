@@ -77,7 +77,17 @@
     "tables/pricefm_paper_aligned_current_outputs.tex": "40f43a0c63682eac31a394cdb13d53ed9da3e1e36e76a1ac453e8c6b3681651f",
     "tables/pricefm_paper_aligned_main_comparison.tex": "0d8591591764c75b3a71dda98d9f40d9728740923d1aa3ddf6b2379376393b14",
     "tables/pricefm_paper_aligned_main_comparison.csv": "1e3daa47ce3cc2ab772ba43f838e9c57ae3a765b9ee81cad828234b0b7f9d61a",
-    "docs/implementation_notes/pricefm_paper_aligned_article_table_20260811.md": "b33eede10815caef811d7d32a072ca64479caa28e8074d35813a532bb4fcbebb"
+    "docs/implementation_notes/pricefm_paper_aligned_article_table_20260811.md": "811be081c98a40ee40c552983092940ddb9c1ca5b119800d0cd22ce7e4264609"
+  },
+  "overleaf_file_limit_cleanup": {
+    "status": "completed",
+    "files_removed": 18,
+    "tracked_files_before": 1984,
+    "tracked_files_after": 1966,
+    "scope": "obsolete 42-cell PriceFM application and Stage-M presentation assets",
+    "main_or_supplement_references": 0,
+    "superseded_by": "authoritative 114-cell pricefm_full surface",
+    "recoverable_from_commit": "652f11399225f083cea2dc02c950a67bd91f762f"
   },
   "guards": {
     "active_stage_r53_used": false,

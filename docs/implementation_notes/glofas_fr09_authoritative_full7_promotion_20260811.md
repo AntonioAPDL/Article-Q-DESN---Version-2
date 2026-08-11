@@ -83,8 +83,18 @@ component registry.
 The synthesis source manifest maps each quantile-specific fit identifier to a
 canonical synthesis model identifier. Run
 `application/scripts/10_synthesize_glofas_quantile_runs.R`, followed by
-`application/scripts/12_generate_glofas_quantile_diagnostics.R`, then promote
-with `application/scripts/21_promote_glofas_synthesis_outputs.R`. Finally run
+`application/scripts/12_generate_glofas_quantile_diagnostics.R`. The no-refit
+cutoff-context stage is then generated with
+`application/scripts/22_make_glofas_authoritative_context_figures.R`. It
+validates and plots the final 60 observed dates, the 28 issued forecast dates,
+and the complete 51-member GloFAS ensemble. Its compact 60-by-7 historical
+quantile source is promoted with the packet, so regeneration does not depend on
+the 42 MB recovery table or its former worktree.
+
+Promote with `application/scripts/21_promote_glofas_synthesis_outputs.R`,
+passing
+`--context_run_id glofas_fr09_authoritative_full7_20260811_context60_members`.
+Finally run
 `application/scripts/09_select_application_outputs.R` against the generated
 promotion manifest.
 
@@ -94,12 +104,15 @@ and manuscript compilation pass.
 
 ## Validation
 
-The promotion contains 70 tracked outputs; all 70 promoted SHA-256 hashes match
+The promotion contains 79 tracked outputs; all 79 promoted SHA-256 hashes match
 their source hashes and no required destination is missing. All seven synthesis
 readiness checks, all six diagnostic readiness checks, and all five
 discrepancy-identity checks pass. The complete-grid audit contains two models,
-28 forecast groups per model, and seven quantiles per group. All 23 promoted
-PDFs pass structural inspection.
+28 forecast groups per model, and seven quantiles per group. All 24 promoted
+PDF rows pass structural inspection. All 13 cutoff-context
+checks pass, including exact cutoff alignment, complete historical and forecast
+quantile grids, 51 members at each of 28 targets, and agreement between the
+direct member median and the stored raw-GloFAS median.
 
 The focused application-output registry and quantile-grid regression tests
 pass. The unmodified full application suite is currently blocked by two

@@ -16,13 +16,18 @@ args <- app_parse_args(list(
   component_integrity_audit = "",
   authoritative_model_spec = "",
   observed_history_root = "",
+  context_run_id = "",
   allow_ignored_config = TRUE
 ))
 
-cfg <- app_read_config(app_path(args$config))
+config_arg <- as.character(args$config)[[1L]]
+config_path <- if (grepl("^/", config_arg)) config_arg else app_path(config_arg)
+cfg <- app_read_config(config_path)
 slug <- gsub("[^A-Za-z0-9_.-]+", "_", as.character(args$output_slug)[[1L]])
 synth_dirs <- app_create_run_dirs(cfg, run_id = args$synthesis_run_id)
 diag_dirs <- app_create_run_dirs(cfg, run_id = args$diagnostic_run_id)
+context_enabled <- nzchar(trimws(as.character(args$context_run_id %||% "")[[1L]]))
+context_dirs <- if (context_enabled) app_create_run_dirs(cfg, run_id = args$context_run_id) else NULL
 
 tables_dir <- app_path(cfg$paths$promoted_tables %||% "tables")
 figures_dir <- app_path(cfg$paths$promoted_figures %||% "figures")
@@ -32,6 +37,11 @@ app_ensure_dir(file.path(figures_dir, "glofas_application", "diagnostics"))
 
 synth_generated_dir <- file.path(app_config_path(cfg, "generated_outputs"), basename(synth_dirs$run_dir))
 diag_generated_dir <- file.path(app_config_path(cfg, "generated_outputs"), basename(diag_dirs$run_dir))
+context_generated_dir <- if (context_enabled) {
+  file.path(app_config_path(cfg, "generated_outputs"), basename(context_dirs$run_dir))
+} else {
+  NA_character_
+}
 
 readiness_path <- file.path(synth_dirs$tables, "launch_readiness_report.csv")
 if (!file.exists(readiness_path)) {
@@ -51,6 +61,18 @@ diag_readiness <- app_read_csv(diag_readiness_path)
 if (!all(app_as_bool_vec(diag_readiness$passed))) {
   failed <- diag_readiness[!app_as_bool_vec(diag_readiness$passed), , drop = FALSE]
   stop(sprintf("Refusing to promote diagnostics with failed checks: %s", paste(failed$check, collapse = ", ")), call. = FALSE)
+}
+
+if (context_enabled) {
+  context_readiness_path <- file.path(context_dirs$tables, "cutoff_context_readiness.csv")
+  if (!file.exists(context_readiness_path)) {
+    stop(sprintf("Missing cutoff-context readiness report: %s", context_readiness_path), call. = FALSE)
+  }
+  context_readiness <- app_read_csv(context_readiness_path)
+  if (!nrow(context_readiness) || !all(app_as_bool_vec(context_readiness$passed))) {
+    failed <- context_readiness[!app_as_bool_vec(context_readiness$passed), , drop = FALSE]
+    stop(sprintf("Refusing to promote cutoff-context figures with failed checks: %s", paste(failed$check, collapse = ", ")), call. = FALSE)
+  }
 }
 
 promote_rows <- list()
@@ -85,6 +107,16 @@ add_diag_figure <- function(role, file, required = TRUE) {
     file.path(diag_generated_dir, "figures", file),
     file.path(figures_dir, "glofas_application", "diagnostics", sprintf("%s__%s.pdf", tools::file_path_sans_ext(file), slug)),
     "diagnostic_figure",
+    required
+  )
+}
+
+add_context_table <- function(role, file, storage_class = "diagnostic_table", required = TRUE) {
+  add_output(
+    role,
+    file.path(context_dirs$tables, file),
+    file.path(tables_dir, sprintf("glofas_application_%s__%s.csv", role, slug)),
+    storage_class,
     required
   )
 }
@@ -226,11 +258,51 @@ if (!is.na(observed_history_root) && dir.exists(observed_history_root)) {
   }
 }
 
-add_figure(
-  "discrepancy_corrected_quantile_paths",
-  file.path(synth_generated_dir, "figures", "glofas_qdesn_discrepancy_corrected_quantile_paths.pdf"),
-  sprintf("glofas_qdesn_discrepancy_corrected_quantile_paths__%s.pdf", slug)
-)
+if (context_enabled) {
+  add_figure(
+    "discrepancy_corrected_quantile_paths",
+    file.path(context_generated_dir, "figures", "glofas_fr09_authoritative_full7_cutoff_context_quantile_paths.pdf"),
+    sprintf("glofas_qdesn_discrepancy_corrected_quantile_paths__%s.pdf", slug)
+  )
+  add_output(
+    "post_fit__forecast_window_pm30",
+    file.path(context_generated_dir, "figures", "glofas_fr09_authoritative_full7_cutoff_context_synthesized_bands.pdf"),
+    file.path(figures_dir, "glofas_application", "diagnostics", sprintf("glofas_fr09_authoritative_full7_qdesn_synthesized_bands__%s.pdf", slug)),
+    "diagnostic_figure",
+    TRUE
+  )
+  context_tables <- c(
+    cutoff_context_qdesn_quantiles = "cutoff_context_qdesn_quantiles.csv",
+    cutoff_context_observed_history_source = "cutoff_context_observed_history_source.csv",
+    cutoff_context_bands = "cutoff_context_bands.csv",
+    cutoff_context_reference = "cutoff_context_reference.csv",
+    cutoff_context_glofas_retrospective = "cutoff_context_glofas_retrospective.csv",
+    cutoff_context_glofas_ensemble_members = "cutoff_context_glofas_ensemble_members.csv",
+    cutoff_context_glofas_ensemble_summary = "cutoff_context_glofas_ensemble_summary.csv",
+    cutoff_context_readiness = "cutoff_context_readiness.csv"
+  )
+  for (role in names(context_tables)) add_context_table(role, context_tables[[role]])
+  add_output(
+    "cutoff_context_source_provenance",
+    file.path(context_dirs$manifest, "cutoff_context_source_provenance.csv"),
+    file.path(tables_dir, sprintf("glofas_application_cutoff_context_source_provenance__%s.csv", slug)),
+    "provenance_snapshot",
+    TRUE
+  )
+  add_output(
+    "cutoff_context_output_manifest",
+    file.path(context_dirs$manifest, "cutoff_context_output_manifest.csv"),
+    file.path(tables_dir, sprintf("glofas_application_cutoff_context_output_manifest__%s.csv", slug)),
+    "provenance_snapshot",
+    TRUE
+  )
+} else {
+  add_figure(
+    "discrepancy_corrected_quantile_paths",
+    file.path(synth_generated_dir, "figures", "glofas_qdesn_discrepancy_corrected_quantile_paths.pdf"),
+    sprintf("glofas_qdesn_discrepancy_corrected_quantile_paths__%s.pdf", slug)
+  )
+}
 add_figure(
   "discrepancy_draws_by_horizon",
   file.path(synth_generated_dir, "figures", "glofas_qdesn_discrepancy_draws_by_horizon.pdf"),
@@ -267,9 +339,12 @@ add_diag_figure_by_suffix <- function(role, suffix, required = TRUE) {
   invisible(matches[[1L]])
 }
 
-add_diag_figure_by_suffix("post_fit__forecast_window_pm30", "qdesn_synthesized_bands.pdf")
+if (!context_enabled) {
+  add_diag_figure_by_suffix("post_fit__forecast_window_pm30", "qdesn_synthesized_bands.pdf")
+}
 add_diag_figure_by_suffix("post_fit_diagnostic_traces", "vb_parameter_change_traces.pdf")
 for (file in list.files(file.path(diag_generated_dir, "figures"), pattern = "[.]pdf$", full.names = FALSE)) {
+  if (context_enabled && grepl("qdesn_synthesized_bands[.]pdf$", file)) next
   role <- paste0("diagnostic_", tools::file_path_sans_ext(file))
   if (!role %in% vapply(promote_rows, function(x) x$output_role[[1L]], character(1L))) {
     add_diag_figure(role, file, required = TRUE)
@@ -296,6 +371,7 @@ manifest <- data.frame(
   source_path = promote_map$source_path,
   run_id = basename(synth_dirs$run_dir),
   diagnostic_run_id = basename(diag_dirs$run_dir),
+  context_run_id = if (context_enabled) basename(context_dirs$run_dir) else NA_character_,
   config_path = normalizePath(cfg$.__config_path__, mustWork = FALSE),
   article_git_sha = app_git_sha(short = FALSE) %||% NA_character_,
   engine_repo_sha = engine_sha,

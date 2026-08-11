@@ -2114,20 +2114,27 @@ reduction in mean check loss.}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentCorrectedPathsFigure}
-\caption{Raw GloFAS median, discrepancy-corrected Q--DESN quantile
-paths after monotone reporting, and held-out reference streamflow over the
-issued forecast window for the GloFAS reference-case forecast.}
+\caption{Discrepancy-corrected Q--DESN quantile paths for the GloFAS
+reference case. The figure shows the final 60 observed dates through the
+forecast origin (vertical dashed line) and the subsequent 28-day issued
+forecast window. Black denotes observed USGS streamflow before the origin,
+red denotes the held-out USGS measurements, and orange denotes retrospective
+GloFAS. Thin gray paths are all 51 issued GloFAS ensemble members; their median
+is the dashed gray path.}
 \label{fig:glofas-application-corrected-paths}
 \end{figure}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
-\caption{Posterior forecast-window diagnostic for the GloFAS reference-case
-forecast. The black path is held-out reference streamflow; the nested blue
-bands summarize the synthesized predictive quantiles over the issued target
-dates used in
-Table~\ref{tab:glofas-application-score}.}
+\caption{Synthesized Q--DESN distribution for the GloFAS reference case over
+the final 60 observed dates and the subsequent 28-day forecast window. The
+nested blue bands are the 90\%, 65\%, and 30\% quantile intervals, and the blue
+path is the median. The vertical dashed line marks the forecast origin. Black
+and red paths denote observed and held-out USGS streamflow, respectively;
+orange denotes retrospective GloFAS, and thin gray paths show all 51 issued
+GloFAS ensemble members, with their median dashed. Forecast scores use the
+post-origin targets in Table~\ref{tab:glofas-application-score}.}
 \label{fig:glofas-application-forecast-window}
 \end{figure}
 

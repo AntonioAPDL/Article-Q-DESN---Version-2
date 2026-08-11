@@ -25,6 +25,12 @@ restructuring2.md
 morechanges.md
 CODEX_*
 
+# Local article-only Overleaf snapshot workspaces. The published snapshot is
+# materialized from overleaf/article_files.txt and must not be committed to
+# the full research branch as a duplicate tree.
+/.overleaf_publish/
+/overleaf_export/
+
 # Local AI-generated investigation reports.
 PRICEFM_DATA_PIPELINE_REPORT.md
 QDESN_Batched_VB_Implementation_Report.md

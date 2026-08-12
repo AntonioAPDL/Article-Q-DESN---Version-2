@@ -65,6 +65,22 @@ verify_hash(source_ledger_path, config$source_ledger_sha256, "Source ledger")
 source_manifest <- jsonlite::read_json(source_manifest_path, simplifyVector = TRUE)
 source_ledger <- read.csv(source_ledger_path, check.names = FALSE, stringsAsFactors = FALSE)
 if (!identical(as.character(source_manifest$promotion_id), as.character(config$promotion_id)) ||
+    !identical(as.character(source_manifest$promotion_status),
+               as.character(config$paired_confirmation_status)) ||
+    !identical(as.character(source_manifest$method_id),
+               as.character(config$paired_confirmation_method_id)) ||
+    !identical(as.character(source_manifest$run_id),
+               as.character(config$paired_confirmation_run_id)) ||
+    !identical(as.character(source_manifest$run_tag),
+               as.character(config$paired_confirmation_run_tag)) ||
+    !identical(as.character(source_manifest$execution_commit),
+               as.character(config$paired_confirmation_execution_commit)) ||
+    !identical(as.character(source_manifest$closeout_commit),
+               as.character(config$paired_confirmation_closeout_commit)) ||
+    !identical(as.integer(source_manifest$promoted_metric_roles),
+               as.integer(config$paired_confirmation_promoted_metric_roles)) ||
+    !identical(as.integer(source_manifest$retained_iterations_per_chain),
+               as.integer(config$paired_confirmation_retained_iterations_per_chain)) ||
     !identical(as.integer(source_manifest$observed_rows), as.integer(config$expected_rows)) ||
     !identical(as.integer(source_manifest$ridge_rows), 0L) ||
     !identical(as.character(source_manifest$article_interface_sha256), as.character(config$interface_sha256)) ||
@@ -98,7 +114,10 @@ required <- c(
   "validation_branch", "validation_commit", "validation_closeout_commit",
   "source_promotion_id", "forecast_metric_contract", "rolling_rebaseline_state",
   "article_consumption_allowed", "promotion_validation_branch",
-  "promotion_validation_commit", "rolling_evidence_promotion_id"
+  "promotion_validation_commit", "rolling_evidence_promotion_id",
+  "metric_estimator_contract", "confirmation_chain_count",
+  "confirmation_execution_commit", "confirmation_closeout_commit",
+  "confirmation_state"
 )
 missing <- setdiff(required, names(source))
 if (length(missing)) {
@@ -148,6 +167,24 @@ if (!all(as_bool(source$article_consumption_allowed)) ||
     any(source$promotion_validation_commit != config$promotion_validation_commit) ||
     any(source$rolling_evidence_promotion_id[qdesn_rows] != config$promotion_id)) {
   stop("The rolling-origin article authority is provisional or stale.", call. = FALSE)
+}
+
+confirmed <- source$confirmation_state == config$paired_confirmation_state
+expected_confirmed <- source$inference == "mcmc" &
+  source$model_variant == "qdesn_exal_rhs_ns" & source$family == "normal" &
+  abs(source$tau - 0.05) < 1e-12
+if (!identical(confirmed, expected_confirmed) || sum(confirmed) != 1L ||
+    source$metric_estimator_contract[confirmed] != config$paired_confirmation_estimator_contract ||
+    source$confirmation_chain_count[confirmed] != as.integer(config$paired_confirmation_chains_per_cell) ||
+    source$confirmation_execution_commit[confirmed] != config$paired_confirmation_execution_commit ||
+    source$confirmation_closeout_commit[confirmed] != config$paired_confirmation_closeout_commit ||
+    source$source_promotion_id[confirmed] != config$promotion_id ||
+    any(source$confirmation_state[!confirmed] != "INHERITED_FROM_V5") ||
+    any(source$confirmation_chain_count[!confirmed] != 0L)) {
+  stop(
+    "The paired-confirmation estimator contract is incomplete or targets the wrong article cell.",
+    call. = FALSE
+  )
 }
 
 metric_sources <- unique(rbind(
@@ -293,7 +330,9 @@ write_mcmc_table <- function(family, path) {
       paste0(
         "\\caption{MCMC single-quantile fit-and-forecast comparison for the %s simulation family. ",
         "The Q--DESN entries form a fixed case-specific metric envelope and can therefore draw different ",
-        "criteria from different calibrated fits. Q--DESN preprocessing is estimated only from the training ",
+        "criteria from different calibrated fits. A confirmed criterion may instead use its predeclared ",
+        "repeated-chain aggregate, as identified in the metric-level record. Q--DESN preprocessing is ",
+        "estimated only from the training ",
         "window. Forecast criteria average rolling-origin lead-target pairs over a held-out window of length ",
         "1000 using leads 1--30 and origin stride 30. Lower values are better, and boldface marks the best ",
         "displayed value within each target level and criterion. A dagger or double dagger records a ",
@@ -542,6 +581,15 @@ manifest_lines <- c(
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
   sprintf("promotion_validation_commit: %s", config$promotion_validation_commit),
+  sprintf("paired_confirmation_method_id: %s", config$paired_confirmation_method_id),
+  sprintf("paired_confirmation_run_id: %s", config$paired_confirmation_run_id),
+  sprintf("paired_confirmation_run_tag: %s", config$paired_confirmation_run_tag),
+  sprintf("paired_confirmation_execution_commit: %s", config$paired_confirmation_execution_commit),
+  sprintf("paired_confirmation_closeout_commit: %s", config$paired_confirmation_closeout_commit),
+  sprintf(
+    "paired_confirmation_promoted_metric_roles: %d",
+    as.integer(config$paired_confirmation_promoted_metric_roles)
+  ),
   "artifacts:"
 )
 manifest_lines <- c(
@@ -563,6 +611,15 @@ writeLines(c(
   "qdesn_preprocessing_scope: train_only",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
+  sprintf("paired_confirmation_estimator_contract: %s", config$paired_confirmation_estimator_contract),
+  sprintf(
+    "paired_confirmation_chains_per_cell: %d",
+    as.integer(config$paired_confirmation_chains_per_cell)
+  ),
+  sprintf(
+    "paired_confirmation_promoted_metric_roles: %d",
+    as.integer(config$paired_confirmation_promoted_metric_roles)
+  ),
   sprintf("row_count_mcmc: %d", nrow(mcmc)),
   sprintf("signoff_counts_mcmc: %s", paste(names(table(mcmc$signoff_grade)), table(mcmc$signoff_grade), collapse = ",")),
   "artifact_sha256:",

@@ -33,12 +33,33 @@ if (!identical(sha256(interface_path), as.character(config$interface_sha256)) ||
 }
 
 source <- read.csv(interface_path, check.names = FALSE, stringsAsFactors = FALSE)
+source_manifest <- jsonlite::read_json(source_manifest_path, simplifyVector = TRUE)
 summary <- read.csv(resolve_article(config$outputs$summary_csv), check.names = FALSE,
                     stringsAsFactors = FALSE)
 compat <- read.csv(resolve_article(config$outputs$compatibility_summary_csv), check.names = FALSE,
                    stringsAsFactors = FALSE)
 if (!identical(source, summary) || !identical(source, compat) || nrow(source) != 72L) {
   stop("Generated article summaries differ from the pinned interface.", call. = FALSE)
+}
+if (!identical(as.character(source_manifest$promotion_id), as.character(config$promotion_id)) ||
+    !identical(as.character(source_manifest$promotion_status),
+               as.character(config$paired_confirmation_status)) ||
+    !identical(as.character(source_manifest$method_id),
+               as.character(config$paired_confirmation_method_id)) ||
+    !identical(as.character(source_manifest$run_id),
+               as.character(config$paired_confirmation_run_id)) ||
+    !identical(as.character(source_manifest$run_tag),
+               as.character(config$paired_confirmation_run_tag)) ||
+    !identical(as.character(source_manifest$execution_commit),
+               as.character(config$paired_confirmation_execution_commit)) ||
+    !identical(as.character(source_manifest$closeout_commit),
+               as.character(config$paired_confirmation_closeout_commit)) ||
+    !identical(as.integer(source_manifest$promoted_metric_roles),
+               as.integer(config$paired_confirmation_promoted_metric_roles)) ||
+    !identical(as.integer(source_manifest$retained_iterations_per_chain),
+               as.integer(config$paired_confirmation_retained_iterations_per_chain))) {
+  stop("The paired-confirmation manifest does not match the pinned article contract.",
+       call. = FALSE)
 }
 
 expected <- expand.grid(
@@ -67,6 +88,20 @@ if (!all(as_bool(source$article_consumption_allowed)) ||
     any(source$rolling_evidence_promotion_id[qdesn_rows] != config$promotion_id)) {
   stop("Generated summary is not the authoritative rolling-origin rebaseline.", call. = FALSE)
 }
+confirmed <- source$confirmation_state == config$paired_confirmation_state
+expected_confirmed <- source$inference == "mcmc" &
+  source$model_variant == "qdesn_exal_rhs_ns" & source$family == "normal" &
+  abs(source$tau - 0.05) < 1e-12
+if (!identical(confirmed, expected_confirmed) || sum(confirmed) != 1L ||
+    source$metric_estimator_contract[confirmed] != config$paired_confirmation_estimator_contract ||
+    source$confirmation_chain_count[confirmed] != as.integer(config$paired_confirmation_chains_per_cell) ||
+    source$confirmation_execution_commit[confirmed] != config$paired_confirmation_execution_commit ||
+    source$confirmation_closeout_commit[confirmed] != config$paired_confirmation_closeout_commit ||
+    any(source$confirmation_state[!confirmed] != "INHERITED_FROM_V5") ||
+    any(source$confirmation_chain_count[!confirmed] != 0L)) {
+  stop("Generated summary violates the paired-confirmation estimator contract.",
+       call. = FALSE)
+}
 
 table_paths <- unlist(config$outputs[c(
   "protocol_tex", "family_wrapper_tex", "combined_tex", "normal_tex", "laplace_tex",
@@ -78,7 +113,8 @@ table_text <- paste(unlist(lapply(table_paths, readLines, warn = FALSE)), collap
 if (grepl("QDESN ridge|exQDESN ridge|VB--LD|Final TT500", table_text) ||
     !grepl("Q--DESN AL--RHS", table_text, fixed = TRUE) ||
     !grepl("Q--DESN exAL--RHS", table_text, fixed = TRUE) ||
-    !grepl("Forecast check loss", table_text, fixed = TRUE)) {
+    !grepl("Forecast check loss", table_text, fixed = TRUE) ||
+    !grepl("predeclared repeated-chain aggregate", table_text, fixed = TRUE)) {
   stop("Generated tables contain a stale label or omit a required label.", call. = FALSE)
 }
 
@@ -98,9 +134,11 @@ if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fix
     !grepl("figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf", main_text,
            fixed = TRUE) ||
     !grepl("train-only preprocessing", main_text, fixed = TRUE) ||
+    !grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
     !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
-    !grepl("train-only preprocessing replay", supp_text, fixed = TRUE)) {
+    !grepl("train-only preprocessing replay", supp_text, fixed = TRUE) ||
+    !grepl("A later paired confirmation targeted", supp_text, fixed = TRUE)) {
   stop("Manuscript prose is not wired to the corrected artifacts.", call. = FALSE)
 }
 
@@ -114,6 +152,8 @@ if (!grepl(config$promotion_id, manifest_text, fixed = TRUE) ||
     !grepl(config$interface_sha256, manifest_text, fixed = TRUE) ||
     !grepl(config$rolling_rebaseline_state, manifest_text, fixed = TRUE) ||
     !grepl(config$qdesn_forecast_metric_contract, manifest_text, fixed = TRUE) ||
+    !grepl(config$paired_confirmation_method_id, manifest_text, fixed = TRUE) ||
+    !grepl(config$paired_confirmation_estimator_contract, manifest_text, fixed = TRUE) ||
     grepl("/home/jaguir26/local/src", manifest_text, fixed = TRUE)) {
   stop("Generated manifests violate the provenance contract.", call. = FALSE)
 }

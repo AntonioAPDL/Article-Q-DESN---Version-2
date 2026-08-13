@@ -2,11 +2,12 @@
 
 ## Status and scope
 
-This document is a plan, not an implementation record. It refines the
-Phase 173-175 closeout after the complete Phase 172 exact-M0 campaign. It must
-not alter the running Phase 173 process, its source code, its inputs, or its
-atomic output. No article asset may be changed until the staged packet has been
-reviewed explicitly.
+This document preserves the pre-implementation design. Phase 173 subsequently
+completed without intervention, and the implemented policy and observed
+decisions are documented in
+`joint_exqdesn_phase173b_174_metric_qualified_closeout_20260813.md`. The process
+and source immutability constraints below were honored. No tracked article asset
+was changed; publication remains the integration chat's responsibility.
 
 The scope is limited to the 16 exAL cells in the balanced joint-QDESN
 simulation study:
@@ -376,28 +377,27 @@ Stop and request review before any article staging if:
 - [x] Current Phase 173 process left untouched.
 - [x] Current all-or-nothing Phase 174 behavior identified.
 - [x] Metric selection versus method consistency risk documented.
-- [ ] Phase 173 exits successfully and publishes its atomic artifact.
-- [ ] Phase 173 manifest and all 16 case gates are audited.
+- [x] Phase 173 exits successfully and publishes its atomic artifact.
+- [x] Phase 173 manifest and all 16 case gates are audited.
 
-### Implementation, only after user approval
+### Implemented closeout
 
-- [ ] Add and validate the versioned Phase 173B policy.
-- [ ] Implement the deterministic case-decision classifier.
-- [ ] Add the Phase 173B postprocessor and artifact manifest.
-- [ ] Add nuisance-mixing exception and functional-stability tests.
-- [ ] Refactor Phase 174 to consume explicit row actions.
-- [ ] Produce the method-consistent staged packet and metric audit.
-- [ ] Review all improved, worsened, retained, and qualified cases.
-- [ ] Verify tracked article assets remain unchanged.
-- [ ] Request explicit approval for Phase 175.
-- [ ] Promote atomically, compile, verify, document, and publish only after
-  approval.
+- [x] Add and validate the versioned Phase 173B policy.
+- [x] Implement the deterministic case-decision classifier.
+- [x] Add the Phase 173B postprocessor and artifact manifest.
+- [x] Add nuisance-mixing exception and functional-stability tests.
+- [x] Refactor Phase 174 to consume explicit row actions.
+- [x] Produce the method-consistent staged packet and metric audit.
+- [x] Review all improved, worsened, retained, and qualified cases.
+- [x] Verify tracked article assets remain unchanged.
+- [x] Freeze an integration handoff on the dedicated task branch.
+- [ ] Integration chat reviews and publishes the allow-listed article assets.
 
 ## Recommended next action
 
-Wait for the currently running Phase 173 audit. Do not launch another MCMC job.
-After Phase 173 completes, implement only the Phase 173B deterministic decision
-layer, inspect its 16 case-level actions, and then decide whether Phase 174
-staging is ready. This is the shortest path that honors the improved cases,
-accepts nonideal nuisance mixing when the article estimand is stable, and avoids
-another expensive or outcome-selected simulation campaign.
+Do not launch another blanket MCMC campaign. Use the frozen Phase 173B/174
+handoff to integrate the method-consistent packet: 11 functionally qualified M0
+exAL rows and five verified historical fallbacks. The integration chat should
+merge the dedicated branch, rerun the recorded tests, review the staged table
+diffs and qualifications, compile the manuscript, and publish only the
+allow-listed article assets.

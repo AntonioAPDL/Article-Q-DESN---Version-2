@@ -127,12 +127,14 @@ Rscript application/scripts/236_finalize_joint_exqdesn_phase173_m0_article_audit
 
 ### Phase 174: balanced packet and staging
 
-Phase 174 is permitted only when all 16 exAL cells are `pass` or
-`qualified_article_ready`. It preserves the 16 historical AL rows
-value-for-value, replaces the 16 exAL rows, recomputes full-precision winners,
-and writes a 32-cell packet. It then builds article tables under an ignored
-staging directory and verifies that current tracked article assets did not
-change.
+Phase 174 now requires the hash-verified Phase 173B decision packet. It
+preserves the 16 historical AL rows value-for-value, uses Phase 173 exact-M0
+evidence for each functionally qualified exAL cell, and retains the verified
+historical exAL row only for a documented hard or functional hold. It
+recomputes full-precision winners and writes a 32-cell packet, then builds
+article tables under an ignored staging directory and verifies that current
+tracked article assets did not change. Metric direction is reported separately
+and never determines whether a valid prospective M0 estimate is retained.
 
 ```bash
 Rscript application/scripts/237_build_joint_qdesn_phase174_article_assets_staging.R

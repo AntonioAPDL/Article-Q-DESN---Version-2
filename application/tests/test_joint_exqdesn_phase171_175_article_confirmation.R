@@ -139,6 +139,96 @@ summary$mcmc_forecast_contract_crossing_pairs <- 1L
 gate <- app_joint_exqdesn_phase173_assess_cells(summary, diagnostics, partitions, jackknife)
 stopifnot(gate$gate_status[[1L]] == "fail")
 
+policy <- app_joint_exqdesn_phase173b_load_policy()
+stopifnot(
+  policy$policy_id[[1L]] == "phase173b_metric_qualified_v1",
+  policy$selection_policy[[1L]] == "prospective_M0_with_historical_fallback_only_for_functional_hold_or_hard_fail"
+)
+assessment173b <- data.frame(
+  implementation_status = "pass", leave_one_chain_out_status = "pass",
+  readout_severity_status = "pass", multi_tau_shape_severity_status = "pass",
+  scalar_mixing_status = "review", raw_crossing_status = "pass",
+  stringsAsFactors = FALSE
+)
+qhat173b <- data.frame(
+  q99_standardized_qhat_delta = rep(0.20, 4L),
+  q01_central90_overlap_fraction = rep(0.85, 4L),
+  stringsAsFactors = FALSE
+)
+sensitivity173b <- data.frame(
+  summary_type = c("mean", "median", "trimmed_mean"),
+  forecast_truth_mae = c(0.0900, 0.0905, 0.0902),
+  stringsAsFactors = FALSE
+)
+decision <- app_joint_exqdesn_phase173b_case_decision(
+  assessment173b, qhat173b, sensitivity173b,
+  historical_forecast_mae = 0.10, m0_forecast_mae = 0.09,
+  jackknife_mcse = 0.001, policy = policy
+)
+stopifnot(
+  decision$action[[1L]] == "promote_with_mixing_qualification",
+  decision$functional_stability_status[[1L]] == "pass",
+  decision$primary_metric_direction[[1L]] == "clear_improvement"
+)
+
+qhat_hold <- qhat173b
+qhat_hold$q99_standardized_qhat_delta[[1L]] <- 0.60
+decision_qhat_hold <- app_joint_exqdesn_phase173b_case_decision(
+  assessment173b, qhat_hold, sensitivity173b, 0.10, 0.09, 0.001, policy
+)
+stopifnot(
+  decision_qhat_hold$action[[1L]] == "retain_historical_functional_hold",
+  decision_qhat_hold$qhat_functional_status[[1L]] == "hold"
+)
+
+sensitivity_reversal <- sensitivity173b
+sensitivity_reversal$forecast_truth_mae <- c(0.09, 0.11, 0.10)
+decision_summary_hold <- app_joint_exqdesn_phase173b_case_decision(
+  assessment173b, qhat173b, sensitivity_reversal, 0.10, 0.09, 0.001, policy
+)
+stopifnot(
+  decision_summary_hold$action[[1L]] == "retain_historical_functional_hold",
+  !decision_summary_hold$posterior_summary_direction_consistent[[1L]]
+)
+
+assessment_readout <- assessment173b
+assessment_readout$readout_severity_status <- "hold"
+decision_readout <- app_joint_exqdesn_phase173b_case_decision(
+  assessment_readout, qhat173b, sensitivity173b, 0.10, 0.09, 0.001, policy
+)
+stopifnot(
+  decision_readout$action[[1L]] == "promote_with_mixing_qualification",
+  decision_readout$readout_functional_status[[1L]] == "review_accepted"
+)
+qhat_review <- qhat173b
+qhat_review$q99_standardized_qhat_delta <- 0.35
+qhat_review$q01_central90_overlap_fraction <- 0.75
+decision_readout_review <- app_joint_exqdesn_phase173b_case_decision(
+  assessment_readout, qhat_review, sensitivity173b, 0.10, 0.09, 0.001, policy
+)
+stopifnot(
+  decision_readout_review$action[[1L]] == "promote_with_mixing_qualification",
+  decision_readout_review$qhat_functional_status[[1L]] == "review_accepted",
+  decision_readout_review$readout_functional_status[[1L]] == "review_accepted"
+)
+
+assessment_fail <- assessment173b
+assessment_fail$implementation_status <- "fail"
+decision_fail <- app_joint_exqdesn_phase173b_case_decision(
+  assessment_fail, qhat173b, sensitivity173b, 0.10, 0.09, 0.001, policy
+)
+stopifnot(decision_fail$action[[1L]] == "retain_historical_candidate_fail")
+
+decision_worsened <- app_joint_exqdesn_phase173b_case_decision(
+  assessment173b, qhat173b,
+  transform(sensitivity173b, forecast_truth_mae = forecast_truth_mae + 0.02),
+  0.10, 0.11, 0.001, policy
+)
+stopifnot(
+  decision_worsened$action[[1L]] == "promote_with_mixing_qualification",
+  decision_worsened$primary_metric_direction[[1L]] == "worsened"
+)
+
 old <- data.frame(
   case_id = c("a", "b"), scenario_id = c("s", "s"),
   source_model_id = c("joint_qdesn_rhs_vb", "joint_exqdesn_rhs_vb"),
@@ -149,11 +239,12 @@ old <- data.frame(
 )
 current <- old
 current$mcmc_forecast_truth_mae[[2L]] <- 1.5
+current$source_block_id <- c("phase154_joint_al", "phase173_m0_exal")
 delta <- app_joint_exqdesn_phase174_old_new_diff(old, current)
 stopifnot(
   all(delta$row_action[delta$case_id == "a"] == "preserved_al"),
   all(delta$delta_phase174_minus_historical[delta$case_id == "a"] == 0),
-  all(delta$row_action[delta$case_id == "b"] == "replaced_exal")
+  all(delta$row_action[delta$case_id == "b"] == "replaced_exal_with_qualified_m0")
 )
 
 manifest_dir <- tempfile("phase171-manifest-")
@@ -176,6 +267,11 @@ stopifnot(
   any(grepl("--cache-root", launcher, fixed = TRUE)),
   any(grepl('FREEZE="$CACHE_ROOT/', launcher, fixed = TRUE)),
   !any(grepl('FREEZE="$ROOT/application/cache/', launcher, fixed = TRUE))
+)
+
+stopifnot(
+  file.exists(app_path("application/scripts/238_audit_joint_exqdesn_phase173b_metric_qualified_promotion.R")),
+  file.exists(app_path("application/scripts/239_freeze_joint_exqdesn_phase174_integration_handoff.R"))
 )
 
 unlink(c(tmp, manifest_dir), recursive = TRUE, force = TRUE)

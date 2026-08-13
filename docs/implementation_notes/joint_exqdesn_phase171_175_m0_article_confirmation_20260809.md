@@ -6,6 +6,8 @@
 > `joint_exqdesn_phase173b_175_metric_qualified_promotion_plan_20260812.md`.
 > That refinement is not implemented yet and does not modify the running
 > Phase 173 audit.
+> The pre-closeout cache retention and cleanup audit is recorded in
+> `joint_exqdesn_phase171_175_cache_cleanup_20260812.md`.
 
 ## Purpose
 

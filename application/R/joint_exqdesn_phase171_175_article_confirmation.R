@@ -2792,6 +2792,11 @@ app_joint_exqdesn_phase174_relabel_generated_file <- function(path, source_line 
     ),
     lines, fixed = TRUE
   )
+  input_rows <- grepl("^\\\\input\\{[^}]+\\}$", lines)
+  if (any(input_rows)) {
+    referenced <- sub("^\\\\input\\{([^}]+)\\}$", "\\1", lines[input_rows])
+    lines[input_rows] <- sprintf("\\input{tables/%s}", basename(referenced))
+  }
   writeLines(lines, path, useBytes = TRUE)
   normalizePath(path, mustWork = TRUE)
 }
@@ -3242,6 +3247,11 @@ app_joint_exqdesn_phase175_promote_staged_assets <- function(
   if (!setequal(basenames, allowed) || anyDuplicated(basenames)) {
     stop("Phase175 staged asset allow-list mismatch.", call. = FALSE)
   }
+  portable_wrappers <- c(
+    "joint_qdesn_article_validation_mcmc_balanced_scenario_summary.tex",
+    "joint_qdesn_article_validation_tables.tex",
+    "joint_qdesn_article_validation_provenance_tables.tex"
+  )
   app_ensure_dir(tables_dir)
   for (ii in seq_len(nrow(assets))) {
     source <- normalizePath(assets$path[[ii]], mustWork = TRUE)
@@ -3250,14 +3260,37 @@ app_joint_exqdesn_phase175_promote_staged_assets <- function(
     }
     target <- file.path(tables_dir, basenames[[ii]])
     tmp <- paste0(target, ".tmp.", Sys.getpid())
-    if (!file.copy(source, tmp, overwrite = TRUE) || !file.rename(tmp, target)) {
+    if (!file.copy(source, tmp, overwrite = TRUE)) {
+      unlink(tmp, force = TRUE)
+      stop(sprintf("Phase175 could not atomically publish '%s'.", basenames[[ii]]), call. = FALSE)
+    }
+    if (basenames[[ii]] %in% portable_wrappers) {
+      app_joint_exqdesn_phase174_relabel_generated_file(tmp)
+    }
+    if (!file.rename(tmp, target)) {
       unlink(tmp, force = TRUE)
       stop(sprintf("Phase175 could not atomically publish '%s'.", basenames[[ii]]), call. = FALSE)
     }
   }
-  checks <- vapply(seq_len(nrow(assets)), function(ii) {
-    identical(tolower(app_sha256_file(file.path(tables_dir, basenames[[ii]]))), tolower(assets$sha256[[ii]]))
+  published_sha256 <- vapply(
+    file.path(tables_dir, basenames), app_sha256_file, character(1L)
+  )
+  rewritten <- basenames %in% portable_wrappers
+  portable <- vapply(seq_len(nrow(assets)), function(ii) {
+    if (!rewritten[[ii]]) return(TRUE)
+    lines <- readLines(file.path(tables_dir, basenames[[ii]]), warn = FALSE)
+    inputs <- lines[grepl("^\\\\input\\{[^}]+\\}$", lines)]
+    length(inputs) > 0L && all(grepl("^\\\\input\\{tables/[^}]+\\}$", inputs))
   }, logical(1L))
+  checks <- portable & (rewritten |
+    tolower(published_sha256) == tolower(assets$sha256))
   if (!all(checks)) stop("Phase175 post-copy verification failed.", call. = FALSE)
-  data.frame(asset = basenames, verified = checks, stringsAsFactors = FALSE)
+  data.frame(
+    asset = basenames,
+    source_sha256 = assets$sha256,
+    published_sha256 = published_sha256,
+    publication_action = ifelse(rewritten, "portable_wrapper_rewrite", "verbatim"),
+    verified = checks,
+    stringsAsFactors = FALSE
+  )
 }

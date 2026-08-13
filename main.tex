@@ -1888,6 +1888,13 @@ from its corresponding variational fit and retains the scenario-specific
 specification fixed before sampling. All comparisons concern posterior
 quantile-grid readout paths; they do not validate a scalar predictive density
 formed by multiplying or mixing the component working likelihoods.
+The updated packet preserves all 16 AL rows. For the 16 exAL rows, it uses the
+prospectively selected exact-M0 evidence in 11 cells whose reported quantile
+functionals pass the stability policy and retains five previously verified
+rows where that functional is unstable. The 11 M0 rows retain their mixing
+qualification. Across all 16 prospective M0 cells, M0 improves fit-window MAE
+relative to the historical exAL result, but improves forecast MAE in only five,
+three of which are functionally stable enough for promotion.
 
 The selected readout is fit across
 \[
@@ -1911,29 +1918,29 @@ Table~\ref{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}
 summarizes the balanced MCMC confirmation layer at the scenario level. Entries
 report forecast MAE against the oracle quantile grid, with fit-window MAE and
 raw forecast-window crossing counts in parentheses; boldface marks the lowest
-within-scenario forecast MAE. Joint QDESN RHS has the lowest forecast MAE in
-four of the eight mechanisms: the Gaussian-mixture, Laplace, nonlinear, and
-normal cases. Independent QDESN RHS is lowest for the regime-shift and
-Student-\(t\) location-scale mechanisms, while Independent exQDESN RHS is
-lowest for the asymmetric-tail and persistent-heavy-tail mechanisms. Thus the
-two independent rows account for two scenarios each, and Joint exQDESN RHS is
-not the forecast-MAE minimum in this frozen packet. The asymmetric-tail
-difference between the two independent rows is only \(1.3\times 10^{-4}\), so
-that numerical ordering should not be interpreted as a substantive separation.
+within-scenario forecast MAE. Joint QDESN RHS is lowest in the Laplace,
+nonlinear, and normal mechanisms. Independent QDESN RHS is lowest in the
+asymmetric-tail, regime-shift, and Student-\(t\) location-scale mechanisms,
+while Independent exQDESN RHS is lowest in the Gaussian-mixture and
+persistent-heavy-tail mechanisms. Joint exQDESN RHS is not the forecast-MAE
+minimum in this frozen packet. These numerical winners are descriptive because
+complete winner-versus-runner Monte Carlo error is unavailable whenever a
+retained historical row is involved.
 
 Fit recovery gives a complementary result: Joint QDESN RHS has the lowest MAE
-in six of the eight fit windows, with Independent exQDESN RHS lowest in the two
-remaining cases. Quantile coherence also distinguishes the readouts.
+in five of the eight fit windows, with Independent exQDESN RHS lowest in the
+three remaining cases. Quantile coherence also distinguishes the readouts.
 Independent QDESN RHS accounts for 24 of the 25 raw forecast-window crossings;
 Joint QDESN RHS accounts for one, and both exAL rows account for none. All 32
 rows have zero crossings after the monotone reporting rule. The replicated VB
 experiment further gives lower median paired forecast MAE to AL than exAL for
 both readout structures in every mechanism, although the frequency and size of
-the differences vary by scenario. Together, these results support Joint QDESN
-RHS as the principal joint-readout reference in this design. They do not support
-a claim that the additional exAL shape parameter uniformly improves
-quantile-path accuracy. The supplement reports the computational protocol,
-diagnostic gates, metric-specific winners, and replicated AL--exAL contrasts.
+the differences vary by scenario. Together, these results retain Joint QDESN
+RHS as the principal joint-readout reference in this design. They do not
+support a claim that the additional exAL shape parameter, or the M0 update,
+uniformly improves forecast quantile-path accuracy. The supplement reports the
+computational protocol, diagnostic gates, metric-specific winners, and
+replicated AL--exAL contrasts.
 
 \section{Application: GloFAS Streamflow Forecast Calibration}
 \label{sec:data}

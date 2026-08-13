@@ -443,7 +443,7 @@ app_qdesn_make_reducer <- function(n_from, n_to) {
 app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
   r <- cfg$reservoir %||% list()
   D <- as.integer(r$D %||% 1L)
-  n <- as.integer(unlist(r$n %||% r[["FALSE"]] %||% 50L, use.names = FALSE))
+  n <- as.integer(unlist(r[["n"]] %||% r[["FALSE"]] %||% 50L, use.names = FALSE))
   if (length(n) == 1L) n <- rep(n, D)
   if (length(n) != D || any(!is.finite(n)) || any(n <= 0L)) stop("Invalid reservoir n specification.", call. = FALSE)
   n_tilde <- as.integer(unlist(r$n_tilde %||% if (D > 1L) n[-D] else integer(0), use.names = FALSE))

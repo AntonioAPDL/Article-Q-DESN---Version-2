@@ -12,6 +12,7 @@ source(app_path("application/R/glofas_context_figures.R"))
 args <- app_parse_args(list(
   config = "local_trackers/runtime_configs/glofas_fr09_authoritative_full7_20260811/synthesis_config.yaml",
   synthesis_run_id = "glofas_fr09_authoritative_full7_20260811_synthesis_contractfixed",
+  diagnostic_run_id = "glofas_fr09_authoritative_full7_20260811_diagnostic_figures",
   observed_history = "tables/glofas_application_cutoff_context_observed_history_source__glofas_fr09_authoritative_full7_20260811.csv",
   run_id = "glofas_fr09_authoritative_full7_20260811_context60_members",
   candidate_id = "fr09_persistence_innovation",
@@ -55,14 +56,24 @@ context <- app_prepare_glofas_cutoff_context(
   candidate_id = as.character(args$candidate_id)[[1L]],
   transform = as.character(cfg$data$transform$response %||% "log1p")
 )
+diagnostic_dirs <- app_create_run_dirs(cfg, run_id = as.character(args$diagnostic_run_id)[[1L]])
+discrepancy_path <- file.path(diagnostic_dirs$tables, "discrepancy_prepost_cutoff_window.csv")
+discrepancy_context <- app_prepare_glofas_discrepancy_context(
+  discrepancy = app_read_csv(discrepancy_path),
+  cutoff_date = context$cutoff_date,
+  history_observations = as.integer(args$history_observations),
+  expected_forecast_dates = sort(unique(context$ensemble$target_date))
+)
 
 prefix <- gsub("[^A-Za-z0-9_.-]+", "_", as.character(args$figure_prefix)[[1L]])
 figures <- c(
   cutoff_context_quantile_paths = file.path(figure_dir, sprintf("%s_cutoff_context_quantile_paths.pdf", prefix)),
-  cutoff_context_synthesized_bands = file.path(figure_dir, sprintf("%s_cutoff_context_synthesized_bands.pdf", prefix))
+  cutoff_context_synthesized_bands = file.path(figure_dir, sprintf("%s_cutoff_context_synthesized_bands.pdf", prefix)),
+  cutoff_context_discrepancy_by_quantile = file.path(figure_dir, sprintf("%s_cutoff_context_discrepancy_by_quantile.pdf", prefix))
 )
 app_plot_glofas_context_quantile_paths(context, figures[["cutoff_context_quantile_paths"]])
 app_plot_glofas_context_bands(context, figures[["cutoff_context_synthesized_bands"]])
+app_plot_glofas_discrepancy_context(discrepancy_context, figures[["cutoff_context_discrepancy_by_quantile"]])
 
 tables <- c(
   cutoff_context_qdesn_quantiles = file.path(run_dirs$tables, "cutoff_context_qdesn_quantiles.csv"),
@@ -72,7 +83,9 @@ tables <- c(
   cutoff_context_glofas_retrospective = file.path(run_dirs$tables, "cutoff_context_glofas_retrospective.csv"),
   cutoff_context_glofas_ensemble_members = file.path(run_dirs$tables, "cutoff_context_glofas_ensemble_members.csv"),
   cutoff_context_glofas_ensemble_summary = file.path(run_dirs$tables, "cutoff_context_glofas_ensemble_summary.csv"),
-  cutoff_context_readiness = file.path(run_dirs$tables, "cutoff_context_readiness.csv")
+  cutoff_context_readiness = file.path(run_dirs$tables, "cutoff_context_readiness.csv"),
+  cutoff_context_discrepancy_traces = file.path(run_dirs$tables, "cutoff_context_discrepancy_traces.csv"),
+  cutoff_context_discrepancy_readiness = file.path(run_dirs$tables, "cutoff_context_discrepancy_readiness.csv")
 )
 app_write_csv(context$quantile_paths, tables[["cutoff_context_qdesn_quantiles"]])
 app_write_csv(context$observed_history_source, tables[["cutoff_context_observed_history_source"]])
@@ -82,6 +95,8 @@ app_write_csv(context$retrospective, tables[["cutoff_context_glofas_retrospectiv
 app_write_csv(context$ensemble, tables[["cutoff_context_glofas_ensemble_members"]])
 app_write_csv(context$ensemble_summary, tables[["cutoff_context_glofas_ensemble_summary"]])
 app_write_csv(context$audit, tables[["cutoff_context_readiness"]])
+app_write_csv(discrepancy_context$trace, tables[["cutoff_context_discrepancy_traces"]])
+app_write_csv(discrepancy_context$audit, tables[["cutoff_context_discrepancy_readiness"]])
 
 source_paths <- c(
   config = cfg$.__config_path__,
@@ -89,6 +104,7 @@ source_paths <- c(
   schema = schema_path,
   predictions = prediction_path,
   observed_history = observed_history_path,
+  discrepancy_trace = discrepancy_path,
   reference = app_manifest_path(manifest, "reference_gauge"),
   retrospective = app_manifest_path(manifest, "glofas_retrospective"),
   ensemble = app_manifest_path(manifest, "glofas_ensemble")

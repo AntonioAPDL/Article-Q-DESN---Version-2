@@ -41,7 +41,10 @@ Tracked helper files:
 - `model_contract.R`: application-model contract helpers. These distinguish
   the frozen `origin_state_bridge` workflow from the target
   `latent_path_ensemble_likelihood` workflow and record source-parameter
-  ownership for GloFAS likelihood rows.
+  ownership for GloFAS likelihood rows. The block-config resolver preserves the
+  legacy shared reservoir specification by default while permitting explicit,
+  independently validated reference and discrepancy reservoir, input-lag, and
+  readout overrides.
 - `feature_contract.R`: normalized readout-feature contract for the GloFAS
   discrepancy model. It parses output and covariate lag specifications,
   separates the reservoir's internal input bias from the readout intercept, and
@@ -115,6 +118,15 @@ Tracked helper files:
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS
   distributional-selection workflow.
+- `glofas_constrained_median_screening.R`: deterministic expansion of reviewed
+  two-block p50 screening spaces, including linked DESN profiles with exact
+  cardinality checks and score-balanced prior-expansion anchors; block-specific
+  config materialization, SHA-pinned baseline verification, semantic warm-start
+  policy, historical-fit constraints, and forecast check-loss ranking. The FR09 template can first be
+  run with `--audit_only true`, which verifies the promoted evidence and frozen
+  engine while producing no candidates. Median fits are never labeled as
+  distributional CRPS; eligible candidates still require diagnostic review, a
+  cold p50 confirmation, and a full multi-quantile refit before promotion.
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.

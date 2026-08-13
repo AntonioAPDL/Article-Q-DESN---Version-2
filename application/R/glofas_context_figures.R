@@ -515,3 +515,202 @@ app_plot_glofas_context_bands <- function(context, path) {
   ggplot2::ggsave(path, p, width = 9.4, height = 6.4, units = "in", device = grDevices::cairo_pdf)
   invisible(path)
 }
+
+app_prepare_glofas_discrepancy_context <- function(
+  discrepancy,
+  cutoff_date,
+  history_observations = 60L,
+  expected_forecast_dates = NULL
+) {
+  app_context_require_columns(
+    discrepancy,
+    c(
+      "quantile_id", "quantile_level", "target_date", "phase", "correction",
+      "observed_discrepancy", "estimate"
+    ),
+    "discrepancy trace"
+  )
+  cutoff_date <- as.Date(cutoff_date)
+  history_observations <- as.integer(history_observations)
+  discrepancy$target_date <- as.Date(discrepancy$target_date)
+  discrepancy$quantile_level <- suppressWarnings(as.numeric(discrepancy$quantile_level))
+  discrepancy$observed_discrepancy <- suppressWarnings(as.numeric(discrepancy$observed_discrepancy))
+  discrepancy$estimate <- suppressWarnings(as.numeric(discrepancy$estimate))
+  corrections <- c("independent_fit", "monotone_implied")
+  discrepancy <- discrepancy[discrepancy$correction %in% corrections, , drop = FALSE]
+  if (!nrow(discrepancy)) stop("No independent or monotone-implied discrepancy traces were found.", call. = FALSE)
+
+  pre_dates <- sort(unique(discrepancy$target_date[
+    discrepancy$phase == "pre_cutoff_history" & discrepancy$target_date <= cutoff_date
+  ]))
+  if (length(pre_dates) < history_observations) {
+    stop(sprintf("Only %d pre-cutoff discrepancy dates are available; %d were requested.", length(pre_dates), history_observations), call. = FALSE)
+  }
+  pre_dates <- tail(pre_dates, history_observations)
+  if (max(pre_dates) != cutoff_date) stop("The discrepancy history does not end exactly at the cutoff.", call. = FALSE)
+  forecast_dates <- sort(unique(discrepancy$target_date[
+    discrepancy$phase == "post_cutoff_forecast" & discrepancy$target_date > cutoff_date
+  ]))
+  if (!is.null(expected_forecast_dates)) {
+    expected_forecast_dates <- sort(as.Date(expected_forecast_dates))
+    if (!identical(as.character(forecast_dates), as.character(expected_forecast_dates))) {
+      stop("Discrepancy forecast dates do not match the authoritative forecast context.", call. = FALSE)
+    }
+  }
+  keep_dates <- c(pre_dates, forecast_dates)
+  trace <- discrepancy[discrepancy$target_date %in% keep_dates, , drop = FALSE]
+  levels <- sort(unique(trace$quantile_level))
+  if (length(levels) != 7L || any(!is.finite(levels))) {
+    stop(sprintf("Expected seven finite discrepancy quantiles but found %d.", length(levels)), call. = FALSE)
+  }
+  for (correction in corrections) {
+    one <- trace[trace$correction == correction, , drop = FALSE]
+    app_context_complete_grid(one, "target_date", "quantile_level", sprintf("%s discrepancy trace", correction))
+  }
+  if (any(!is.finite(trace$observed_discrepancy)) || any(!is.finite(trace$estimate))) {
+    stop("Discrepancy context contains non-finite observed or estimated values.", call. = FALSE)
+  }
+  duplicate_check <- merge(
+    trace[trace$correction == "independent_fit", c("target_date", "quantile_level", "observed_discrepancy"), drop = FALSE],
+    trace[trace$correction == "monotone_implied", c("target_date", "quantile_level", "observed_discrepancy"), drop = FALSE],
+    by = c("target_date", "quantile_level"),
+    suffixes = c("_independent", "_monotone")
+  )
+  observed_difference <- max(abs(
+    duplicate_check$observed_discrepancy_independent - duplicate_check$observed_discrepancy_monotone
+  ))
+  if (!is.finite(observed_difference) || observed_difference > 1e-12) {
+    stop("Observed discrepancy differs between correction representations.", call. = FALSE)
+  }
+  trace$quantile_label <- factor(
+    paste0("p", sprintf("%02d", round(100 * trace$quantile_level))),
+    levels = paste0("p", sprintf("%02d", round(100 * levels)))
+  )
+  trace <- trace[order(trace$quantile_level, trace$target_date, trace$correction), , drop = FALSE]
+  audit <- data.frame(
+    check = c(
+      "history_ends_at_cutoff",
+      "history_observation_count",
+      "forecast_dates_match_context",
+      "seven_quantile_levels",
+      "independent_trace_complete",
+      "monotone_trace_complete",
+      "observed_trace_agrees_across_representations",
+      "finite_observed_and_estimated_discrepancies"
+    ),
+    passed = TRUE,
+    detail = c(
+      as.character(max(pre_dates)),
+      sprintf("%d observations", length(pre_dates)),
+      sprintf("%d forecast dates", length(forecast_dates)),
+      paste(format(levels, trim = TRUE), collapse = ", "),
+      sprintf("%d rows", sum(trace$correction == "independent_fit")),
+      sprintf("%d rows", sum(trace$correction == "monotone_implied")),
+      sprintf("maximum absolute difference %.3g", observed_difference),
+      sprintf("%d rows", nrow(trace))
+    ),
+    stringsAsFactors = FALSE
+  )
+  list(
+    cutoff_date = cutoff_date,
+    history_dates = pre_dates,
+    forecast_dates = forecast_dates,
+    quantile_levels = levels,
+    trace = trace,
+    audit = audit
+  )
+}
+
+app_plot_glofas_discrepancy_context <- function(discrepancy_context, path) {
+  app_require_namespace("ggplot2")
+  app_ensure_dir(dirname(path))
+  trace <- discrepancy_context$trace
+  independent <- trace[trace$correction == "independent_fit", , drop = FALSE]
+  observed_history <- independent[independent$phase == "pre_cutoff_history", , drop = FALSE]
+  heldout_forecast <- independent[independent$phase == "post_cutoff_forecast", , drop = FALSE]
+  monotone_forecast <- trace[
+    trace$correction == "monotone_implied" & trace$phase == "post_cutoff_forecast",
+    ,
+    drop = FALSE
+  ]
+  forecast_shade <- data.frame(
+    xmin = discrepancy_context$cutoff_date,
+    xmax = max(discrepancy_context$forecast_dates),
+    ymin = -Inf,
+    ymax = Inf
+  )
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_rect(
+      data = forecast_shade,
+      ggplot2::aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+      inherit.aes = FALSE,
+      fill = "#F3F4F6"
+    ) +
+    ggplot2::geom_hline(yintercept = 0, color = "#9CA3AF", linewidth = 0.3) +
+    ggplot2::geom_line(
+      data = observed_history,
+      ggplot2::aes(x = target_date, y = observed_discrepancy, group = quantile_label, color = "Observed historical discrepancy"),
+      linewidth = 0.58
+    ) +
+    ggplot2::geom_line(
+      data = heldout_forecast,
+      ggplot2::aes(x = target_date, y = observed_discrepancy, group = quantile_label, color = "Held-out realized discrepancy"),
+      linewidth = 0.58
+    ) +
+    ggplot2::geom_point(
+      data = heldout_forecast,
+      ggplot2::aes(x = target_date, y = observed_discrepancy, color = "Held-out realized discrepancy"),
+      size = 0.85
+    ) +
+    ggplot2::geom_line(
+      data = independent,
+      ggplot2::aes(x = target_date, y = estimate, group = quantile_label, color = "Independent Q-DESN discrepancy"),
+      linewidth = 0.78
+    ) +
+    ggplot2::geom_line(
+      data = monotone_forecast,
+      ggplot2::aes(x = target_date, y = estimate, group = quantile_label, color = "Post-monotone implied discrepancy"),
+      linewidth = 0.7,
+      linetype = "22"
+    ) +
+    ggplot2::geom_vline(
+      data = data.frame(cutoff_date = discrepancy_context$cutoff_date),
+      ggplot2::aes(xintercept = cutoff_date),
+      color = "#374151",
+      linetype = "33",
+      linewidth = 0.55
+    ) +
+    ggplot2::facet_wrap(~quantile_label, ncol = 4) +
+    ggplot2::scale_color_manual(
+      name = NULL,
+      breaks = c(
+        "Observed historical discrepancy",
+        "Held-out realized discrepancy",
+        "Independent Q-DESN discrepancy",
+        "Post-monotone implied discrepancy"
+      ),
+      values = c(
+        "Observed historical discrepancy" = "#111827",
+        "Held-out realized discrepancy" = "#8B1E3F",
+        "Independent Q-DESN discrepancy" = "#1769AA",
+        "Post-monotone implied discrepancy" = "#D97706"
+      )
+    ) +
+    ggplot2::scale_x_date(date_breaks = "1 month", date_labels = "%b %d") +
+    ggplot2::labs(
+      title = "Observed and estimated GloFAS discrepancy by quantile",
+      subtitle = "Final 60 observations and 28-day forecast window; discrepancy is GloFAS minus USGS on the log1p scale",
+      x = NULL,
+      y = "Discrepancy on transformed scale"
+    ) +
+    app_glofas_context_theme() +
+    ggplot2::theme(
+      strip.text = ggplot2::element_text(face = "bold"),
+      panel.grid.major.x = ggplot2::element_line(color = "#ECEFF1", linewidth = 0.25),
+      axis.text.x = ggplot2::element_text(angle = 30, hjust = 1),
+      legend.position = "bottom"
+    ) +
+    ggplot2::guides(color = ggplot2::guide_legend(nrow = 1, byrow = TRUE, override.aes = list(linewidth = c(0.8, 0.8, 1.0, 0.9))))
+  ggplot2::ggsave(path, p, width = 11.2, height = 7.2, units = "in", device = grDevices::cairo_pdf)
+  invisible(path)
+}

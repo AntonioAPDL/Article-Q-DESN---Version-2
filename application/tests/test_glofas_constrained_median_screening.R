@@ -1,0 +1,428 @@
+screen_base_cfg <- list(
+  reservoir = list(
+    D = 1L,
+    n = 300L,
+    n_tilde = integer(0),
+    m = 360L,
+    washout = 500L,
+    alpha = 0.1,
+    rho = 0.95,
+    pi_w = 0.03,
+    pi_in = 1.0,
+    win_scale_global = 0.18,
+    win_scale_bias = 0.18,
+    seed = 20260512L,
+    standardize_inputs = TRUE,
+    add_bias = TRUE
+  ),
+  feature_contract = list(
+    version = "0.3",
+    two_block_design = TRUE,
+    reservoir_input = list(
+      output_lags = list(range = c(1L, 360L)),
+      covariates = list(
+        ppt = list(range = c(0L, 359L)),
+        soil = list(range = c(0L, 359L))
+      )
+    ),
+    readout = list(
+      add_intercept = TRUE,
+      include_reservoir_state = TRUE,
+      include_input_block = FALSE,
+      include_horizon_scaled = FALSE
+    ),
+    blocks = list(discrepancy = list(reservoir_seed_offset = 1009L))
+  ),
+  inference = list(vb_ld = list(rhs_tau0 = 0.1, rhs_alpha_tau0 = 0.001))
+)
+
+stopifnot(identical(
+  app_qdesn_block_config(screen_base_cfg, "reference")$reservoir$alpha,
+  screen_base_cfg$reservoir$alpha
+))
+stopifnot(app_qdesn_block_seed(data.frame(), screen_base_cfg, "reference") == 20260512L)
+stopifnot(app_qdesn_block_seed(data.frame(), screen_base_cfg, "discrepancy") == 20261521L)
+
+screen_candidate <- data.frame(
+  candidate_id = "fixture",
+  `reference.D` = 2,
+  `reference.n` = 40,
+  `reference.n_tilde` = 30,
+  `reference.m` = 120,
+  `reference.washout` = 450,
+  `reference.alpha` = 0.05,
+  `reference.seed` = 11,
+  `reference.rhs_tau0` = 1e-3,
+  `discrepancy.D` = 3,
+  `discrepancy.n` = 60,
+  `discrepancy.n_tilde` = 20,
+  `discrepancy.m` = 90,
+  `discrepancy.washout` = 600,
+  `discrepancy.alpha` = 0.2,
+  `discrepancy.seed` = 29,
+  `discrepancy.rhs_tau0` = 1e-4,
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+screen_cfg <- app_glofas_median_screen_apply_candidate(screen_base_cfg, screen_candidate)
+reference_cfg <- app_qdesn_block_config(screen_cfg, "reference")
+discrepancy_cfg <- app_qdesn_block_config(screen_cfg, "discrepancy")
+stopifnot(reference_cfg$reservoir$D == 2L)
+stopifnot(identical(as.numeric(reference_cfg$reservoir$n), c(40, 40)))
+stopifnot(identical(as.numeric(reference_cfg$reservoir$n_tilde), 30))
+stopifnot(discrepancy_cfg$reservoir$D == 3L)
+stopifnot(identical(as.numeric(discrepancy_cfg$reservoir$n), c(60, 60, 60)))
+stopifnot(identical(as.numeric(discrepancy_cfg$reservoir$n_tilde), c(20, 20)))
+stopifnot(app_qdesn_common_washout(screen_cfg) == 600L)
+stopifnot(app_qdesn_block_seed(data.frame(), screen_cfg, "reference") == 11L)
+stopifnot(app_qdesn_block_seed(data.frame(), screen_cfg, "discrepancy") == 29L)
+stopifnot(screen_cfg$inference$vb_ld$rhs_tau0 == 1e-3)
+stopifnot(screen_cfg$inference$vb_ld$rhs_alpha_tau0 == 1e-4)
+stopifnot(identical(
+  app_qdesn_reservoir_input_spec(reference_cfg)$output_lags,
+  1:120
+))
+stopifnot(identical(
+  app_qdesn_reservoir_input_spec(discrepancy_cfg)$covariate_lags$ppt,
+  0:89
+))
+
+screen_space <- list(
+  version = "1.0",
+  screen_id = "fixture_screen",
+  launch_authorized = FALSE,
+  fixed = list(
+    quantile_level = 0.5,
+    parameters = list(
+      reference = list(D = 2, n = 40, n_tilde = 30, pi_w = 0.03, pi_in = 1.0),
+      discrepancy = list(D = 2, n = 40, n_tilde = 30, pi_w = 0.03, pi_in = 1.0)
+    )
+  ),
+  candidate_sets = list(list(
+    set_id = "alpha_tau",
+    varying = list(
+      reference = list(alpha = c(0.05, 0.1)),
+      discrepancy = list(rhs_tau0 = c(1e-4, 1e-3))
+    )
+  )),
+  execution = list(max_candidates = 10L)
+)
+screen_manifest <- app_glofas_median_screen_candidate_manifest(screen_space)
+screen_manifest_again <- app_glofas_median_screen_candidate_manifest(screen_space)
+stopifnot(nrow(screen_manifest) == 4L)
+stopifnot(identical(screen_manifest$candidate_id, screen_manifest_again$candidate_id))
+stopifnot(!any(screen_manifest$launch_authorized))
+
+screen_too_large <- screen_space
+screen_too_large$execution$max_candidates <- 3L
+screen_limit_message <- tryCatch(
+  {
+    app_glofas_median_screen_candidate_manifest(screen_too_large)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("above execution.max_candidates", screen_limit_message, fixed = TRUE))
+
+screen_unknown <- screen_space
+screen_unknown$candidate_sets[[1L]]$varying$reference$unknown <- 1
+screen_unknown_message <- tryCatch(
+  {
+    app_glofas_median_screen_validate_space(screen_unknown)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("unsupported parameters", screen_unknown_message, fixed = TRUE))
+
+yaml_11_n_key <- list(reference = stats::setNames(list(80), "FALSE"))
+yaml_11_n_key <- app_glofas_median_screen_normalize_yaml_keys(yaml_11_n_key)
+stopifnot(identical(yaml_11_n_key$reference$n, 80))
+
+source_fit_fixture <- tempfile("median_warm_source_", fileext = ".rds")
+saveRDS(list(summary = list()), source_fit_fixture)
+source_contract_fixture <- list(version = "1.0")
+tau_only_row <- data.frame(`reference.rhs_tau0` = 1e-4, check.names = FALSE)
+tau_only_cfg <- app_glofas_median_screen_apply_candidate(screen_base_cfg, tau_only_row)
+exact_plan <- app_glofas_median_screen_warm_start_plan(
+  screen_base_cfg, tau_only_cfg, source_fit_fixture, source_contract_fixture
+)
+stopifnot(isTRUE(exact_plan$enabled))
+stopifnot(identical(exact_plan$compatibility_mode, "exact_design"))
+
+screen_base_empty_list <- screen_base_cfg
+screen_base_empty_list$reservoir$n_tilde <- list()
+tau_only_list_cfg <- app_glofas_median_screen_apply_candidate(screen_base_empty_list, tau_only_row)
+exact_list_plan <- app_glofas_median_screen_warm_start_plan(
+  screen_base_empty_list, tau_only_list_cfg, source_fit_fixture, source_contract_fixture
+)
+stopifnot(identical(exact_list_plan$compatibility_mode, "exact_design"))
+
+alpha_row <- data.frame(`reference.alpha` = 0.2, check.names = FALSE)
+alpha_cfg <- app_glofas_median_screen_apply_candidate(screen_base_cfg, alpha_row)
+coordinate_plan <- app_glofas_median_screen_warm_start_plan(
+  screen_base_cfg, alpha_cfg, source_fit_fixture, source_contract_fixture
+)
+stopifnot(identical(coordinate_plan$compatibility_mode, "coordinate_transfer"))
+stopifnot(isTRUE(coordinate_plan$requires_cold_confirmation))
+
+size_row <- data.frame(
+  `reference.D` = 2,
+  `reference.n` = 50,
+  `reference.n_tilde` = 50,
+  check.names = FALSE
+)
+size_cfg <- app_glofas_median_screen_apply_candidate(screen_base_cfg, size_row)
+state_plan <- app_glofas_median_screen_warm_start_plan(
+  screen_base_cfg, size_cfg, source_fit_fixture, source_contract_fixture
+)
+stopifnot(identical(state_plan$compatibility_mode, "state_only"))
+stopifnot(!isTRUE(state_plan$use_theta))
+unlink(source_fit_fixture)
+
+warm_design <- list(
+  H_fixed = matrix(0, nrow = 4L, ncol = 2L, dimnames = list(NULL, c("beta__x", "alpha__x"))),
+  future_key = data.frame(target_date = as.Date("2026-01-01") + 0:1, horizon = 1:2),
+  p0 = 0.5,
+  warm_start_design_hash = "same_design"
+)
+warm_contract <- app_latent_path_warm_start_contract(warm_design)
+warm_design_reindexed <- warm_design
+rownames(warm_design_reindexed$future_key) <- c("source_row_41", "source_row_99")
+stopifnot(identical(
+  warm_contract$future_key_hash,
+  app_latent_path_warm_start_contract(warm_design_reindexed)$future_key_hash
+))
+warm_fit <- list(
+  summary = list(
+    theta_mean = c(0.1, 0.2),
+    theta_cov = diag(2),
+    y_future_mean = c(1, 2),
+    y_future_cov = diag(2)
+  ),
+  variational_state = list(
+    theta_mean = c(0.1, 0.2),
+    theta_cov = diag(2),
+    y_future_mean = c(1, 2),
+    y_future_cov = diag(2)
+  ),
+  warm_start_contract = warm_contract
+)
+warm_fit_path <- tempfile("strict_warm_fit_", fileext = ".rds")
+saveRDS(warm_fit, warm_fit_path)
+stopifnot(identical(
+  app_latent_path_warm_start_contract_from_fit(warm_fit_path),
+  warm_contract
+))
+strict_warm <- app_latent_path_warm_start_prepare(
+  warm_design,
+  vb_args = list(warm_start = list(
+    enabled = TRUE,
+    fit_object = warm_fit_path,
+    require_contract = TRUE,
+    compatibility_mode = "exact_design",
+    use_sigma = FALSE
+  )),
+  p = 2L,
+  H_future = 2L
+)
+stopifnot(isTRUE(strict_warm$diagnostics$theta_used))
+stopifnot(identical(strict_warm$diagnostics$compatibility_class, "exact_design"))
+
+warm_design_mismatch <- warm_design
+warm_design_mismatch$warm_start_design_hash <- "different_design"
+strict_mismatch_message <- tryCatch(
+  {
+    app_latent_path_warm_start_prepare(
+      warm_design_mismatch,
+      vb_args = list(warm_start = list(
+        enabled = TRUE,
+        fit_object = warm_fit_path,
+        require_contract = TRUE,
+        compatibility_mode = "exact_design"
+      )),
+      p = 2L,
+      H_future = 2L
+    )
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("contract rejected", strict_mismatch_message, fixed = TRUE))
+coordinate_warm <- app_latent_path_warm_start_prepare(
+  warm_design_mismatch,
+  vb_args = list(warm_start = list(
+    enabled = TRUE,
+    fit_object = warm_fit_path,
+    require_contract = TRUE,
+    compatibility_mode = "coordinate_transfer",
+    use_sigma = FALSE
+  )),
+  p = 2L,
+  H_future = 2L
+)
+stopifnot(isTRUE(coordinate_warm$diagnostics$theta_used))
+stopifnot(identical(coordinate_warm$diagnostics$compatibility_class, "coordinate_transfer"))
+unlink(warm_fit_path)
+
+observed_fixture <- rbind(
+  data.frame(candidate_id = "good", window = c("all", "last1000", "last200", "last50"), log1p_mae = c(0.061, 0.038, 0.052, 0.19)),
+  data.frame(candidate_id = "bad_history", window = c("all", "last1000", "last200", "last50"), log1p_mae = c(0.08, 0.06, 0.08, 0.20))
+)
+forecast_fixture <- data.frame(
+  candidate_id = c("good", "bad_history"),
+  forecast_p50_check_loss_mean = c(0.75, 0.70),
+  stringsAsFactors = FALSE
+)
+baseline_fixture <- list(
+  forecast_p50_check_loss_mean = 0.798826956115941,
+  observed_log1p_mae_all = 0.0624424466662982,
+  observed_log1p_mae_last1000 = 0.0388437273850094,
+  observed_log1p_mae_last200 = 0.05360828353558,
+  observed_log1p_mae_last50 = 0.178787719773148
+)
+ranking_fixture <- app_glofas_median_screen_rank(
+  observed_fixture,
+  forecast_fixture,
+  baseline_fixture,
+  technical_status = data.frame(
+    candidate_id = c("good", "bad_history"),
+    technical_gate_pass = TRUE
+  )
+)
+stopifnot(identical(ranking_fixture$candidate_id[[1L]], "good"))
+stopifnot(isTRUE(ranking_fixture$eligible_for_full7_review[[1L]]))
+stopifnot(identical(
+  ranking_fixture$decision[ranking_fixture$candidate_id == "bad_history"],
+  "reject_historical_fit_regression"
+))
+stopifnot(all(ranking_fixture$full7_required_for_distributional_crps))
+
+stage_b_fixture <- data.frame(
+  candidate_id = paste0("candidate_", 1:8),
+  screen_rank = 1:8,
+  technical_gate_pass = TRUE,
+  historical_hard_gate_pass = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, TRUE),
+  architecture_profile = c("d1_n250", "d1_n350", "d1_n400", "d2_n200", "d2_n300", "d1_n250", "d1_n350", "d2_n300"),
+  reservoir_memory_profile = rep(c("m360", "m720"), 4),
+  direct_memory_profile = rep(c("direct180", "direct360"), each = 4),
+  `reference.alpha` = c(0.01, 0.10, 0.20, 0.01, 0.10, 0.20, 0.01, 0.10),
+  `reference.rho` = rep(c(0.85, 0.95), 4),
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+stage_b_selected <- app_glofas_median_screen_select_balanced_stage_b(stage_b_fixture, top_k = 7L)
+stopifnot(nrow(stage_b_selected) == 7L)
+stopifnot(!"candidate_7" %in% stage_b_selected$candidate_id)
+stopifnot(length(unique(stage_b_selected$architecture_profile)) == 5L)
+stopifnot(identical(stage_b_selected$stage_b_selection_order, 1:7))
+
+template_space <- app_read_yaml(app_path("application/config/glofas_constrained_median_screen_space_TEMPLATE.yaml"))
+app_glofas_median_screen_validate_space(template_space, allow_empty = TRUE)
+
+fr09_template <- app_read_yaml(app_path("application/config/glofas_constrained_median_screen_space_FR09_TEMPLATE.yaml"))
+app_glofas_median_screen_validate_space(fr09_template, allow_empty = TRUE)
+stopifnot(!app_as_bool(fr09_template$launch_authorized))
+stopifnot(!length(fr09_template$candidate_sets))
+
+linked_stage_a_path <- app_path("application/config/glofas_p50_linked_d1d2_stage_a_20260811.yaml")
+linked_stage_a <- app_glofas_median_screen_space(linked_stage_a_path)
+linked_stage_a_manifest <- app_glofas_median_screen_candidate_manifest(linked_stage_a)
+stopifnot(nrow(linked_stage_a_manifest) == 120L)
+stopifnot(length(unique(linked_stage_a_manifest$candidate_id)) == 120L)
+stopifnot(all(linked_stage_a_manifest$launch_authorized))
+stopifnot(identical(sort(unique(linked_stage_a_manifest$architecture_profile)), c(
+  "d1_n250", "d1_n350", "d1_n400", "d2_n200", "d2_n300"
+)))
+stopifnot(all(table(linked_stage_a_manifest$architecture_profile) == 24L))
+stopifnot(all(table(linked_stage_a_manifest$reservoir_memory_profile) == 60L))
+stopifnot(all(table(linked_stage_a_manifest$direct_memory_profile) == 60L))
+stopifnot(all(table(linked_stage_a_manifest$reference.alpha) == 40L))
+stopifnot(all(table(linked_stage_a_manifest$reference.rho) == 60L))
+stopifnot(all(linked_stage_a_manifest$reference.D == linked_stage_a_manifest$discrepancy.D))
+stopifnot(all(linked_stage_a_manifest$reference.n == linked_stage_a_manifest$discrepancy.n))
+stopifnot(all(linked_stage_a_manifest$reference.m == linked_stage_a_manifest$discrepancy.m))
+stopifnot(all(linked_stage_a_manifest$reference.alpha == linked_stage_a_manifest$discrepancy.alpha))
+stopifnot(all(linked_stage_a_manifest$reference.rho == linked_stage_a_manifest$discrepancy.rho))
+stopifnot(all(linked_stage_a_manifest$reference.seed == 20260512L))
+stopifnot(all(linked_stage_a_manifest$discrepancy.seed == 20261521L))
+stopifnot(all(linked_stage_a_manifest$reference.reservoir_output_lag_max == linked_stage_a_manifest$reference.m))
+stopifnot(all(linked_stage_a_manifest$reference.reservoir_covariate_lag_max == linked_stage_a_manifest$reference.m))
+stopifnot(all(linked_stage_a_manifest$reference.direct_output_lag_max == linked_stage_a_manifest$reference.direct_covariate_lag_max))
+stopifnot(all(linked_stage_a_manifest$reference.rhs_tau0 == 0.1))
+stopifnot(all(linked_stage_a_manifest$discrepancy.rhs_tau0 == 0.001))
+stopifnot(as.integer(linked_stage_a$fixed$inference$max_iter) == 400L)
+stopifnot(as.integer(linked_stage_a$fixed$inference$max_iter_hard_cap) == 400L)
+stopifnot(as.integer(linked_stage_a$confirmation$authoritative_max_iter) == 400L)
+
+d1_rows <- linked_stage_a_manifest$reference.D == 1L
+d2_rows <- linked_stage_a_manifest$reference.D == 2L
+stopifnot(all(is.na(linked_stage_a_manifest$reference.n_tilde[d1_rows])))
+stopifnot(all(linked_stage_a_manifest$reference.n_tilde[d2_rows] == linked_stage_a_manifest$reference.n[d2_rows]))
+stopifnot(all(linked_stage_a_manifest$discrepancy.n_tilde[d2_rows] == linked_stage_a_manifest$discrepancy.n[d2_rows]))
+
+linked_full <- app_glofas_median_screen_space(
+  app_path("application/config/glofas_p50_linked_d1d2_full_space_20260811.yaml")
+)
+linked_full_manifest <- app_glofas_median_screen_candidate_manifest(linked_full)
+stopifnot(nrow(linked_full_manifest) == 1080L)
+stopifnot(length(unique(linked_full_manifest$candidate_id)) == 1080L)
+stopifnot(all(table(linked_full_manifest$architecture_profile) == 216L))
+stopifnot(all(table(linked_full_manifest$reservoir_memory_profile) == 540L))
+stopifnot(all(table(linked_full_manifest$direct_memory_profile) == 540L))
+stopifnot(all(table(linked_full_manifest$prior_profile) == 120L))
+stopifnot(all(table(linked_full_manifest$reference.rhs_tau0) == 360L))
+stopifnot(all(table(linked_full_manifest$discrepancy.rhs_tau0) == 360L))
+stopifnot(!any(linked_full_manifest$launch_authorized))
+
+linked_wrong_count <- linked_stage_a
+linked_wrong_count$execution$expected_candidates <- 121L
+linked_count_message <- tryCatch(
+  {
+    app_glofas_median_screen_candidate_manifest(linked_wrong_count)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("not execution.expected_candidates=121", linked_count_message, fixed = TRUE))
+
+linked_mixed <- linked_stage_a
+linked_mixed$candidate_sets <- screen_space$candidate_sets
+linked_mixed_message <- tryCatch(
+  {
+    app_glofas_median_screen_validate_space(linked_mixed)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("cannot be mixed", linked_mixed_message, fixed = TRUE))
+
+linked_candidate_cfg <- app_glofas_median_screen_apply_candidate(
+  screen_base_cfg,
+  linked_stage_a_manifest[linked_stage_a_manifest$architecture_profile == "d2_n200", , drop = FALSE][1L, , drop = FALSE]
+)
+linked_contract <- app_glofas_median_screen_linked_desn_contract(linked_candidate_cfg)
+stopifnot(isTRUE(linked_contract$pass))
+stopifnot(linked_contract$reference_seed == 20260512L)
+stopifnot(linked_contract$discrepancy_seed == 20261521L)
+
+fr09_contract_path <- app_path("application/config/glofas_constrained_median_baseline_fr09.yaml")
+fr09_contract <- app_glofas_median_screen_baseline_contract(fr09_contract_path)
+stopifnot(identical(fr09_contract$candidate_id, "fr09_persistence_innovation"))
+stopifnot(as.integer(fr09_contract$current_values$reference$n) == 300L)
+stopifnot(identical(fr09_contract$engine$required_commit, "73c043f0436b508808366f312350fd44c2d06771"))
+fr09_paths_available <- all(vapply(fr09_contract$artifacts, function(entry) {
+  path <- as.character(entry$path %||% "")
+  if (!nzchar(path)) return(FALSE)
+  file.exists(if (grepl("^/", path)) path else app_path(path))
+}, logical(1L)))
+if (fr09_paths_available) {
+  verified_fr09 <- app_glofas_median_screen_verify_baseline(fr09_contract_path)
+  stopifnot(nrow(verified_fr09$audit) == 10L)
+  stopifnot(all(verified_fr09$audit$verified))
+  stopifnot(isTRUE(all.equal(
+    as.numeric(verified_fr09$metrics$forecast_p50_check_loss_mean),
+    0.798826956115941,
+    tolerance = 1e-12
+  )))
+}

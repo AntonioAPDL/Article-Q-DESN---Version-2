@@ -1787,7 +1787,138 @@ app_latent_path_warm_start_config <- function(vb_args = list()) {
     require_theta = app_as_bool(cfg$require_theta %||% TRUE),
     require_future = app_as_bool(cfg$require_future %||% TRUE),
     require_sigma = app_as_bool(cfg$require_sigma %||% FALSE),
-    covariance_jitter = as.numeric(cfg$covariance_jitter %||% 1.0e-8)
+    covariance_jitter = as.numeric(cfg$covariance_jitter %||% 1.0e-8),
+    require_contract = app_as_bool(cfg$require_contract %||% FALSE),
+    compatibility_mode = match.arg(
+      as.character(cfg$compatibility_mode %||% "exact_design"),
+      c("exact_design", "coordinate_transfer", "state_only")
+    ),
+    source_contract = cfg$source_contract %||% cfg$contract %||% NULL
+  )
+}
+
+app_latent_path_contract_hash <- function(x, prefix = "latent_path_contract_") {
+  if (exists("app_qdesn_hash_object", mode = "function")) {
+    return(app_qdesn_hash_object(x, prefix = prefix))
+  }
+  path <- tempfile(prefix, fileext = ".rds")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(x, path, version = 2L)
+  app_sha256_file(path)
+}
+
+app_latent_path_warm_start_contract <- function(design, design_hash = NULL) {
+  theta_names <- colnames(design$H_fixed)
+  if (is.null(theta_names) || any(!nzchar(theta_names))) {
+    theta_names <- paste0("theta_", seq_len(ncol(design$H_fixed)))
+  }
+  future_key <- design$future_key[, intersect(c("target_date", "horizon"), names(design$future_key)), drop = FALSE]
+  if ("target_date" %in% names(future_key)) future_key$target_date <- as.character(as.Date(future_key$target_date))
+  if ("horizon" %in% names(future_key)) future_key$horizon <- as.integer(future_key$horizon)
+  rownames(future_key) <- NULL
+  design_hash <- design_hash %||% design$warm_start_design_hash %||% NULL
+  if (is.null(design_hash) && exists("app_hash_latent_path_design", mode = "function")) {
+    design_hash <- app_hash_latent_path_design(design)
+  }
+  list(
+    version = "1.0",
+    design_hash = as.character(design_hash %||% NA_character_),
+    quantile_level = as.numeric(design$p0 %||% NA_real_),
+    n_theta = ncol(design$H_fixed),
+    theta_names = as.character(theta_names),
+    theta_names_hash = app_latent_path_contract_hash(as.character(theta_names), "theta_names_"),
+    n_future = nrow(design$future_key),
+    future_key_hash = app_latent_path_contract_hash(future_key, "future_key_")
+  )
+}
+
+app_latent_path_read_warm_start_contract <- function(x) {
+  if (is.null(x) || !length(x)) return(NULL)
+  if (is.list(x)) return(x)
+  path <- app_resolve_path(as.character(x[[1L]]), must_work = TRUE)
+  ext <- tolower(tools::file_ext(path))
+  if (ext %in% c("yaml", "yml")) return(app_read_yaml(path))
+  if (ext == "rds") return(readRDS(path))
+  if (ext == "json") {
+    app_require_namespace("jsonlite")
+    return(jsonlite::read_json(path, simplifyVector = TRUE))
+  }
+  stop("Warm-start contract paths must be YAML, JSON, or RDS.", call. = FALSE)
+}
+
+app_latent_path_warm_start_compatibility <- function(source, target, mode = "exact_design") {
+  mode <- match.arg(mode, c("exact_design", "coordinate_transfer", "state_only"))
+  required <- c("design_hash", "quantile_level", "n_theta", "theta_names_hash", "n_future", "future_key_hash")
+  missing_source <- setdiff(required, names(source %||% list()))
+  missing_target <- setdiff(required, names(target %||% list()))
+  if (length(missing_source) || length(missing_target)) {
+    return(list(
+      accepted = FALSE,
+      class = "invalid_contract",
+      theta_allowed = FALSE,
+      future_allowed = FALSE,
+      sigma_allowed = FALSE,
+      message = sprintf(
+        "warm-start contract is incomplete (source: %s; target: %s)",
+        paste(missing_source, collapse = ","),
+        paste(missing_target, collapse = ",")
+      )
+    ))
+  }
+  same_quantile <- isTRUE(all.equal(
+    as.numeric(source$quantile_level),
+    as.numeric(target$quantile_level),
+    tolerance = 1.0e-12
+  ))
+  same_theta <- identical(as.integer(source$n_theta), as.integer(target$n_theta)) &&
+    identical(as.character(source$theta_names_hash), as.character(target$theta_names_hash))
+  same_future <- identical(as.integer(source$n_future), as.integer(target$n_future)) &&
+    identical(as.character(source$future_key_hash), as.character(target$future_key_hash))
+  source_hash <- as.character(source$design_hash %||% NA_character_)
+  target_hash <- as.character(target$design_hash %||% NA_character_)
+  same_design <- !is.na(source_hash) && !is.na(target_hash) &&
+    nzchar(source_hash) && nzchar(target_hash) && identical(source_hash, target_hash)
+
+  if (same_quantile && same_theta && same_future && same_design) {
+    return(list(
+      accepted = TRUE,
+      class = "exact_design",
+      theta_allowed = TRUE,
+      future_allowed = TRUE,
+      sigma_allowed = TRUE,
+      message = "exact semantic design contract matched"
+    ))
+  }
+  if (identical(mode, "coordinate_transfer") && same_quantile && same_theta && same_future) {
+    return(list(
+      accepted = TRUE,
+      class = "coordinate_transfer",
+      theta_allowed = TRUE,
+      future_allowed = TRUE,
+      sigma_allowed = TRUE,
+      message = "feature coordinates and future key matched; design values differ"
+    ))
+  }
+  if (identical(mode, "state_only") && same_quantile && same_future) {
+    return(list(
+      accepted = TRUE,
+      class = "state_only",
+      theta_allowed = FALSE,
+      future_allowed = TRUE,
+      sigma_allowed = TRUE,
+      message = "only future-path and source-scale state transfer is allowed"
+    ))
+  }
+  list(
+    accepted = FALSE,
+    class = "incompatible",
+    theta_allowed = FALSE,
+    future_allowed = FALSE,
+    sigma_allowed = FALSE,
+    message = sprintf(
+      "warm-start contract rejected: mode=%s same_quantile=%s same_theta=%s same_future=%s same_design=%s",
+      mode, same_quantile, same_theta, same_future, same_design
+    )
   )
 }
 
@@ -1803,6 +1934,13 @@ app_latent_path_warm_start_fit <- function(path) {
     path = app_prefer_repo_relative_path(resolved),
     sha256 = app_sha256_file(resolved)
   )
+}
+
+app_latent_path_warm_start_contract_from_fit <- function(path) {
+  source <- app_latent_path_warm_start_fit(path)
+  source$fit$warm_start_contract %||%
+    source$fit$summary$warm_start_contract %||%
+    NULL
 }
 
 app_latent_path_warm_start_cov <- function(x, dim, jitter = 1.0e-8, label = "covariance") {
@@ -1847,6 +1985,10 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
     sigma_used = FALSE,
     source_path = NA_character_,
     source_sha256 = NA_character_,
+    contract_required = cfg$require_contract,
+    compatibility_mode = cfg$compatibility_mode,
+    compatibility_class = if (isTRUE(cfg$require_contract)) NA_character_ else "legacy_dimension_only",
+    compatibility_message = NA_character_,
     message = if (isTRUE(cfg$enabled)) NA_character_ else "warm start disabled"
   )
   out <- list(
@@ -1868,7 +2010,30 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
   out$diagnostics$source_path <- source$path
   out$diagnostics$source_sha256 <- source$sha256
 
-  if (isTRUE(cfg$use_theta)) {
+  source_contract <- app_latent_path_read_warm_start_contract(
+    cfg$source_contract %||% fit$warm_start_contract %||% fit$summary$warm_start_contract %||% NULL
+  )
+  compatibility <- NULL
+  if (isTRUE(cfg$require_contract) || !is.null(source_contract)) {
+    if (is.null(source_contract)) {
+      stop("Strict warm start requires a source semantic contract.", call. = FALSE)
+    }
+    target_contract <- app_latent_path_warm_start_contract(design)
+    compatibility <- app_latent_path_warm_start_compatibility(
+      source_contract,
+      target_contract,
+      mode = cfg$compatibility_mode
+    )
+    out$diagnostics$compatibility_class <- compatibility$class
+    out$diagnostics$compatibility_message <- compatibility$message
+    if (!isTRUE(compatibility$accepted)) stop(compatibility$message, call. = FALSE)
+  }
+
+  theta_allowed <- is.null(compatibility) || isTRUE(compatibility$theta_allowed)
+  future_allowed <- is.null(compatibility) || isTRUE(compatibility$future_allowed)
+  sigma_allowed <- is.null(compatibility) || isTRUE(compatibility$sigma_allowed)
+
+  if (isTRUE(cfg$use_theta) && isTRUE(theta_allowed)) {
     theta_mean <- fit$variational_state$theta_mean %||% fit$summary$theta_mean %||% NULL
     theta_cov <- fit$variational_state$theta_cov %||% fit$summary$theta_cov %||% NULL
     ok <- !is.null(theta_mean) && length(theta_mean) == p && !is.null(theta_cov)
@@ -1882,9 +2047,11 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
       out$theta_cov <- app_latent_path_warm_start_cov(theta_cov, p, cfg$covariance_jitter, "theta_cov")
       out$diagnostics$theta_used <- TRUE
     }
+  } else if (isTRUE(cfg$use_theta) && !isTRUE(theta_allowed)) {
+    messages <- c(messages, "theta transfer disabled by semantic compatibility policy")
   }
 
-  if (isTRUE(cfg$use_future)) {
+  if (isTRUE(cfg$use_future) && isTRUE(future_allowed)) {
     y_mean <- fit$variational_state$y_future_mean %||% fit$summary$y_future_mean %||% NULL
     y_cov <- fit$variational_state$y_future_cov %||% fit$summary$y_future_cov %||% NULL
     ok <- !is.null(y_mean) && length(y_mean) == H_future && !is.null(y_cov)
@@ -1897,9 +2064,11 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
       out$y_cov <- app_latent_path_warm_start_cov(y_cov, H_future, cfg$covariance_jitter, "y_future_cov")
       out$diagnostics$future_used <- TRUE
     }
+  } else if (isTRUE(cfg$use_future) && !isTRUE(future_allowed)) {
+    messages <- c(messages, "future-path transfer disabled by semantic compatibility policy")
   }
 
-  if (isTRUE(cfg$use_sigma)) {
+  if (isTRUE(cfg$use_sigma) && isTRUE(sigma_allowed)) {
     sigma_state <- app_latent_path_warm_start_sigma(fit)
     if (is.null(sigma_state)) {
       msg <- "sigma warm start unavailable; using default sigma initialization."
@@ -1909,6 +2078,8 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
       out$sigma_state <- sigma_state
       out$diagnostics$sigma_used <- TRUE
     }
+  } else if (isTRUE(cfg$use_sigma) && !isTRUE(sigma_allowed)) {
+    messages <- c(messages, "source-scale transfer disabled by semantic compatibility policy")
   }
 
   out$diagnostics$used <- isTRUE(out$diagnostics$theta_used) ||

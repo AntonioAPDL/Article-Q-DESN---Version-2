@@ -309,6 +309,9 @@ app_make_glofas_discrepancy_data <- function(
   panel$horizon <- as.integer(panel$horizon)
 
   two_block <- app_discrepancy_uses_two_blocks(cfg)
+  cfg_beta <- app_qdesn_block_config(cfg, "reference")
+  cfg_alpha <- if (isTRUE(two_block)) app_qdesn_block_config(cfg, "discrepancy") else cfg_beta
+  drop <- app_qdesn_common_washout(cfg, drop = drop)
   if (isTRUE(two_block) && isTRUE(include_ensemble_training)) {
     stop(
       paste(
@@ -336,7 +339,7 @@ app_make_glofas_discrepancy_data <- function(
   horizon_scale <- app_discrepancy_horizon_scale(panel, cfg, horizon_scale = horizon_scale)
   feature <- app_feature_matrix_from_panel(
     panel = base_panel,
-    cfg = cfg,
+    cfg = cfg_beta,
     model_row = model_row,
     X_base = X_base,
     drop = drop,
@@ -365,7 +368,7 @@ app_make_glofas_discrepancy_data <- function(
     discrepancy_panel <- app_copy_covariate_attrs(discrepancy_panel, base_panel)
     alpha_feature <- app_feature_matrix_from_panel(
       panel = discrepancy_panel,
-      cfg = cfg,
+      cfg = cfg_alpha,
       model_row = model_row,
       X_base = NULL,
       drop = drop,
@@ -536,6 +539,10 @@ app_make_glofas_discrepancy_data <- function(
     feature_meta = feature$meta,
     feature_meta_beta = feature$meta,
     feature_meta_alpha = feature_meta_alpha,
+    block_config_beta = cfg_beta,
+    block_config_alpha = cfg_alpha,
+    block_config_hash_beta = app_qdesn_block_config_hash(cfg, "reference"),
+    block_config_hash_alpha = app_qdesn_block_config_hash(cfg, if (isTRUE(two_block)) "discrepancy" else "reference"),
     design_version = if (isTRUE(two_block)) "0.3" else "0.2",
     two_block_design = isTRUE(two_block),
     feature_strategy = feature_strategy,
@@ -601,6 +608,11 @@ app_make_glofas_prediction_design <- function(design, panel, cfg, model_row = NU
   keys <- unique(ens[, c("origin_date", "target_date", "horizon"), drop = FALSE])
   keys <- keys[order(keys$origin_date, keys$target_date, keys$horizon), , drop = FALSE]
   base_panel <- app_copy_covariate_attrs(design$base_panel, panel)
+  cfg_beta <- design$block_config_beta %||% app_qdesn_block_config(cfg, "reference")
+  cfg_alpha <- design$block_config_alpha %||% app_qdesn_block_config(
+    cfg,
+    if (isTRUE(design$two_block_design %||% FALSE)) "discrepancy" else "reference"
+  )
   if (!is.null(design$covariate_timeline)) {
     attr(base_panel, "model_covariate_timeline") <- design$covariate_timeline
   }
@@ -610,7 +622,7 @@ app_make_glofas_prediction_design <- function(design, panel, cfg, model_row = NU
     origin_dates = keys$origin_date,
     target_dates = keys$target_date,
     horizons = keys$horizon,
-    cfg = cfg,
+    cfg = cfg_beta,
     feature_strategy = "horizon_indexed_origin_state",
     horizon_scale = design$horizon_scale %||% app_discrepancy_horizon_scale(panel, cfg),
     feature_meta = design$feature_meta_beta %||% design$feature_meta
@@ -621,7 +633,7 @@ app_make_glofas_prediction_design <- function(design, panel, cfg, model_row = NU
     origin_dates = keys$origin_date,
     target_dates = keys$target_date,
     horizons = keys$horizon,
-    cfg = cfg,
+    cfg = cfg_alpha,
     feature_strategy = "horizon_indexed_origin_state",
     horizon_scale = design$horizon_scale %||% app_discrepancy_horizon_scale(panel, cfg),
     feature_meta = design$feature_meta_alpha %||% design$feature_meta
@@ -688,6 +700,11 @@ app_make_glofas_prediction_design <- function(design, panel, cfg, model_row = NU
     feature_meta = design$feature_meta_beta %||% design$feature_meta,
     feature_meta_beta = design$feature_meta_beta %||% design$feature_meta,
     feature_meta_alpha = design$feature_meta_alpha %||% design$feature_meta,
+    block_config_hash_beta = design$block_config_hash_beta %||% app_qdesn_block_config_hash(cfg, "reference"),
+    block_config_hash_alpha = design$block_config_hash_alpha %||% app_qdesn_block_config_hash(
+      cfg,
+      if (isTRUE(design$two_block_design %||% FALSE)) "discrepancy" else "reference"
+    ),
     design_version = app_discrepancy_design_version(design),
     two_block_design = isTRUE(design$two_block_design %||% FALSE),
     feature_strategy = "horizon_indexed_origin_state",
@@ -801,6 +818,8 @@ app_prediction_design_summary <- function(x) {
     feature_contract_has_new_contract = isTRUE(feature_contract$has_new_contract %||% FALSE),
     design_version = x$design_version %||% "0.2",
     two_block_design = isTRUE(x$two_block_design %||% FALSE),
+    block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
+    block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
     feature_strategy = x$feature_strategy,
     horizon_scale = x$horizon_scale %||% NA_real_,
     prediction_design_hash = app_hash_prediction_design(x),
@@ -947,6 +966,8 @@ app_discrepancy_design_summary <- function(x) {
     feature_contract_has_new_contract = isTRUE(feature_contract$has_new_contract %||% FALSE),
     design_version = app_discrepancy_design_version(x),
     two_block_design = isTRUE(x$two_block_design %||% FALSE),
+    block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
+    block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
     feature_strategy = x$feature_strategy %||% "origin_state_pilot",
     horizon_scale = x$horizon_scale %||% NA_real_,
     include_ensemble_training = isTRUE(x$include_ensemble_training),

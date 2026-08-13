@@ -1,5 +1,12 @@
 # Joint exQDESN Phase 171-175 M0 Article Confirmation
 
+> Closeout planning note: the implementation described here remains the
+> currently executed Phase 171-175 contract. The planned post-Phase-173
+> qualification and promotion refinement is documented in
+> `joint_exqdesn_phase173b_175_metric_qualified_promotion_plan_20260812.md`.
+> That refinement is not implemented yet and does not modify the running
+> Phase 173 audit.
+
 ## Purpose
 
 This workflow closes the exAL inference update for the balanced joint-QDESN

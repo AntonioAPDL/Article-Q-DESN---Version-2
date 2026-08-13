@@ -4,6 +4,10 @@ app_joint_exqdesn_phase171_registry_path <- function() {
   app_path("application/config/joint_exqdesn_m0_balanced_article_confirmation_v1.csv")
 }
 
+app_joint_exqdesn_phase173b_policy_path <- function() {
+  app_path("application/config/joint_exqdesn_phase173b_promotion_policy_v1.csv")
+}
+
 app_joint_exqdesn_phase171_175_dirs <- function(
   cache_root = app_joint_exqdesn_phase164_cache_root()
 ) {
@@ -22,8 +26,10 @@ app_joint_exqdesn_phase171_175_dirs <- function(
     phase172 = file.path(cache_root, "joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809"),
     phase172_orchestration = file.path(cache_root, "joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809_orchestration"),
     phase173 = file.path(cache_root, "joint_exqdesn_phase173_m0_balanced_article_audit_20260809"),
+    phase173b = file.path(cache_root, "joint_exqdesn_phase173b_metric_qualified_promotion_20260813"),
     phase174 = file.path(cache_root, "joint_qdesn_phase174_balanced_mcmc_final_20260809"),
-    phase174_staging = file.path(cache_root, "joint_qdesn_phase174_article_assets_staging_20260809")
+    phase174_staging = file.path(cache_root, "joint_qdesn_phase174_article_assets_staging_20260809"),
+    phase174_handoff = file.path(cache_root, "joint_exqdesn_phase174_integration_handoff_20260813")
   )
 }
 
@@ -1932,34 +1938,454 @@ app_joint_exqdesn_phase173_finalize <- function(
   )
 }
 
+app_joint_exqdesn_phase173b_load_policy <- function(
+  policy_path = app_joint_exqdesn_phase173b_policy_path()
+) {
+  policy <- app_read_csv(policy_path)
+  required <- c(
+    "schema_version", "policy_id", "primary_metric", "numerical_tolerance",
+    "mcse_multiplier", "qhat_pass_q99_max", "qhat_pass_overlap_min",
+    "qhat_review_q99_max", "qhat_review_overlap_min",
+    "summary_abs_range_floor", "summary_relative_range_ceiling",
+    "require_summary_direction_consistency",
+    "accept_qhat_review_within_ceiling", "allow_nuisance_mixing_exception",
+    "selection_policy"
+  )
+  app_check_required_columns(policy, required, "Phase173B promotion policy")
+  if (nrow(policy) != 1L || policy$schema_version[[1L]] != 1L ||
+      policy$primary_metric[[1L]] != "mcmc_forecast_truth_mae") {
+    stop("Phase173B requires one version-1 forecast-MAE policy row.", call. = FALSE)
+  }
+  numeric_fields <- c(
+    "numerical_tolerance", "mcse_multiplier", "qhat_pass_q99_max",
+    "qhat_pass_overlap_min", "qhat_review_q99_max",
+    "qhat_review_overlap_min", "summary_abs_range_floor",
+    "summary_relative_range_ceiling"
+  )
+  if (any(!vapply(policy[numeric_fields], function(x) is.finite(as.numeric(x[[1L]])), logical(1L))) ||
+      policy$qhat_review_q99_max[[1L]] < policy$qhat_pass_q99_max[[1L]] ||
+      policy$qhat_review_overlap_min[[1L]] > policy$qhat_pass_overlap_min[[1L]]) {
+    stop("Phase173B policy thresholds are malformed.", call. = FALSE)
+  }
+  policy
+}
+
+app_joint_exqdesn_phase173b_direction <- function(delta, tolerance) {
+  if (!is.finite(delta)) return("unavailable")
+  if (abs(delta) <= tolerance) return("no_material_change")
+  if (delta < 0) "improvement" else "worsened"
+}
+
+app_joint_exqdesn_phase173b_improvement_label <- function(
+  delta, jackknife_mcse, policy
+) {
+  tolerance <- as.numeric(policy$numerical_tolerance[[1L]])
+  direction <- app_joint_exqdesn_phase173b_direction(delta, tolerance)
+  if (direction != "improvement") return(direction)
+  multiplier <- as.numeric(policy$mcse_multiplier[[1L]])
+  if (is.finite(jackknife_mcse) && abs(delta) > multiplier * jackknife_mcse) {
+    "clear_improvement"
+  } else {
+    "directional_improvement"
+  }
+}
+
+app_joint_exqdesn_phase173b_qhat_status <- function(qhat, policy) {
+  q99 <- max(as.numeric(qhat$q99_standardized_qhat_delta), na.rm = TRUE)
+  overlap <- min(as.numeric(qhat$q01_central90_overlap_fraction), na.rm = TRUE)
+  if (!is.finite(q99) || !is.finite(overlap)) return("hold")
+  if (q99 <= policy$qhat_pass_q99_max[[1L]] &&
+      overlap >= policy$qhat_pass_overlap_min[[1L]]) return("pass")
+  if (isTRUE(as.logical(policy$accept_qhat_review_within_ceiling[[1L]])) &&
+      q99 <= policy$qhat_review_q99_max[[1L]] &&
+      overlap >= policy$qhat_review_overlap_min[[1L]]) return("review_accepted")
+  "hold"
+}
+
+app_joint_exqdesn_phase173b_case_decision <- function(
+  assessment, qhat, sensitivity, historical_forecast_mae,
+  m0_forecast_mae, jackknife_mcse, policy
+) {
+  tolerance <- as.numeric(policy$numerical_tolerance[[1L]])
+  hard_pass <- identical(assessment$implementation_status[[1L]], "pass")
+  qhat_status <- app_joint_exqdesn_phase173b_qhat_status(qhat, policy)
+  summary_values <- as.numeric(sensitivity$forecast_truth_mae)
+  summary_delta <- summary_values - historical_forecast_mae
+  directions <- vapply(
+    summary_delta, app_joint_exqdesn_phase173b_direction,
+    character(1L), tolerance = tolerance
+  )
+  directions <- unique(directions[directions != "no_material_change"])
+  direction_consistent <- length(directions) <= 1L
+  summary_range <- diff(range(summary_values))
+  summary_range_ceiling <- max(
+    as.numeric(policy$summary_abs_range_floor[[1L]]),
+    as.numeric(policy$summary_relative_range_ceiling[[1L]]) * abs(historical_forecast_mae)
+  )
+  summary_stable <- all(is.finite(summary_values)) &&
+    summary_range <= summary_range_ceiling &&
+    (!isTRUE(as.logical(policy$require_summary_direction_consistency[[1L]])) || direction_consistent)
+  loo_pass <- assessment$leave_one_chain_out_status[[1L]] %in% c("pass", "review")
+
+  readout_status <- assessment$readout_severity_status[[1L]]
+  readout_functional_status <- if (readout_status == "pass") {
+    "pass"
+  } else if (qhat_status != "hold" && summary_stable && loo_pass) {
+    "review_accepted"
+  } else {
+    "hold"
+  }
+  shape_status <- assessment$multi_tau_shape_severity_status[[1L]]
+  shape_functional_status <- if (shape_status == "pass") {
+    "pass"
+  } else if (qhat_status != "hold" && summary_stable && loo_pass) {
+    "review_accepted"
+  } else {
+    "hold"
+  }
+  functional_pass <- hard_pass && qhat_status != "hold" && summary_stable &&
+    loo_pass && readout_functional_status != "hold" &&
+    shape_functional_status != "hold"
+  nuisance_review <- assessment$scalar_mixing_status[[1L]] == "review" ||
+    qhat_status == "review_accepted" ||
+    readout_functional_status == "review_accepted" ||
+    shape_functional_status == "review_accepted" ||
+    assessment$raw_crossing_status[[1L]] == "review"
+  action <- if (!hard_pass) {
+    "retain_historical_candidate_fail"
+  } else if (!functional_pass) {
+    "retain_historical_functional_hold"
+  } else if (nuisance_review && isTRUE(as.logical(policy$allow_nuisance_mixing_exception[[1L]]))) {
+    "promote_with_mixing_qualification"
+  } else if (nuisance_review) {
+    "retain_historical_functional_hold"
+  } else {
+    "promote"
+  }
+  delta <- m0_forecast_mae - historical_forecast_mae
+  data.frame(
+    implementation_status = if (hard_pass) "pass" else "fail",
+    qhat_functional_status = qhat_status,
+    posterior_summary_status = if (summary_stable) "pass" else "hold",
+    posterior_summary_direction_consistent = direction_consistent,
+    posterior_summary_forecast_mae_range = summary_range,
+    posterior_summary_range_ceiling = summary_range_ceiling,
+    leave_one_chain_out_status = assessment$leave_one_chain_out_status[[1L]],
+    readout_functional_status = readout_functional_status,
+    shape_functional_status = shape_functional_status,
+    scalar_mixing_status = assessment$scalar_mixing_status[[1L]],
+    nuisance_mixing_exception = nuisance_review && functional_pass,
+    functional_stability_status = if (functional_pass) "pass" else "hold",
+    primary_metric_delta_M0_minus_historical = delta,
+    primary_metric_direction = app_joint_exqdesn_phase173b_improvement_label(
+      delta, jackknife_mcse, policy
+    ),
+    action = action,
+    rationale = if (!hard_pass) {
+      "M0 implementation gate failed; retain the verified historical exAL row"
+    } else if (qhat_status == "hold") {
+      "M0 quantile-path partition stability exceeds the versioned review ceiling"
+    } else if (!summary_stable) {
+      "M0 posterior mean/median/trimmed forecast summaries are materially unstable"
+    } else if (!loo_pass) {
+      "M0 leave-one-chain-out forecast sensitivity exceeds the review ceiling"
+    } else if (readout_functional_status == "hold") {
+      "M0 readout-coordinate instability is not insulated by stable quantile paths"
+    } else if (shape_functional_status == "hold") {
+      "M0 transformed shape/scale instability propagates beyond the accepted functional envelope"
+    } else if (nuisance_review) {
+      "M0 article estimands pass; supporting mixing or review-band diagnostics require qualification"
+    } else {
+      "M0 implementation and functional gates pass without qualification"
+    },
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_exqdesn_phase173b_require_sources <- function(
+  phase173_dir = app_joint_exqdesn_phase171_175_dirs()$phase173,
+  cache_root = app_joint_exqdesn_phase164_cache_root()
+) {
+  dirs <- app_joint_exqdesn_phase171_175_dirs(cache_root)
+  sources <- c(phase171 = dirs$phase171, phase173 = phase173_dir, phase155 = dirs$phase155)
+  verification <- app_joint_qdesn_bind_rows(lapply(names(sources), function(id) {
+    app_joint_exqdesn_verify_manifest(sources[[id]], id)
+  }))
+  if (any(verification$status != "pass")) {
+    stop("Phase173B source manifest verification failed.", call. = FALSE)
+  }
+  final <- app_read_csv(file.path(phase173_dir, "balanced_final_packet_assessment.csv"))
+  assessment <- app_read_csv(file.path(phase173_dir, "case_assessment.csv"))
+  summary <- app_read_csv(file.path(phase173_dir, "mcmc_case_summary.csv"))
+  expected <- as.vector(outer(
+    app_joint_exqdesn_phase171_scenarios(),
+    app_joint_exqdesn_phase174_exal_model_ids(), paste, sep = "::"
+  ))
+  cells <- paste(summary$scenario_id, summary$source_model_id, sep = "::")
+  if (nrow(final) != 1L || final$completed_cells[[1L]] != 16L ||
+      final$fail_cells[[1L]] != 0L || nrow(summary) != 16L ||
+      nrow(assessment) != 16L || anyDuplicated(cells) || !setequal(cells, expected)) {
+    stop("Phase173B requires the complete, nonfailed 16-cell Phase173 packet.", call. = FALSE)
+  }
+  list(
+    dirs = dirs, sources = sources, verification = verification,
+    final = final, assessment = assessment, summary = summary
+  )
+}
+
+app_joint_exqdesn_phase173b_run <- function(
+  phase173_dir = app_joint_exqdesn_phase171_175_dirs()$phase173,
+  policy_path = app_joint_exqdesn_phase173b_policy_path(),
+  cache_root = app_joint_exqdesn_phase164_cache_root(),
+  out_dir = app_joint_exqdesn_phase171_175_dirs(cache_root)$phase173b,
+  force = FALSE
+) {
+  policy <- app_joint_exqdesn_phase173b_load_policy(policy_path)
+  source <- app_joint_exqdesn_phase173b_require_sources(phase173_dir, cache_root)
+  dirs <- source$dirs
+  comparison <- app_read_csv(file.path(phase173_dir, "historical_vs_m0_metric_comparison.csv"))
+  qhat <- app_read_csv(file.path(phase173_dir, "qhat_stability_summary.csv"))
+  sensitivity <- app_read_csv(file.path(phase173_dir, "posterior_summary_sensitivity.csv"))
+  jackknife <- app_read_csv(file.path(phase173_dir, "metric_jackknife_mcse.csv"))
+  baseline <- app_read_csv(file.path(dirs$phase155, "final_case_summary.csv"))
+  baseline <- baseline[baseline$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids(), , drop = FALSE]
+  if (nrow(comparison) != 16L || nrow(baseline) != 16L || anyDuplicated(comparison$case_id)) {
+    stop("Phase173B historical/M0 comparison is not a unique 16-cell packet.", call. = FALSE)
+  }
+
+  decision_rows <- lapply(seq_len(nrow(source$summary)), function(ii) {
+    cell <- source$summary[ii, , drop = FALSE]
+    id <- cell$case_id[[1L]]
+    a <- app_joint_exqdesn_phase174_case_lookup(source$assessment, id, "Phase173 assessment")
+    h <- app_joint_exqdesn_phase174_case_lookup(comparison, id, "historical comparison")
+    q <- qhat[qhat$case_id == id, , drop = FALSE]
+    s <- sensitivity[sensitivity$case_id == id, , drop = FALSE]
+    j <- jackknife[jackknife$case_id == id & jackknife$metric == "forecast_truth_mae", , drop = FALSE]
+    if (nrow(q) != 4L || nrow(s) != 3L || nrow(j) != 1L) {
+      stop(sprintf("Phase173B incomplete functional evidence for '%s'.", id), call. = FALSE)
+    }
+    decision <- app_joint_exqdesn_phase173b_case_decision(
+      a, q, s,
+      h$mcmc_forecast_truth_mae_historical[[1L]],
+      h$mcmc_forecast_truth_mae_M0[[1L]],
+      j$jackknife_mcse[[1L]], policy
+    )
+    cbind(data.frame(
+      case_id = id, scenario_id = cell$scenario_id[[1L]],
+      fit_structure = cell$fit_structure[[1L]],
+      source_model_id = cell$source_model_id[[1L]],
+      source_candidate_id = cell$source_candidate_id[[1L]],
+      historical_forecast_truth_mae = h$mcmc_forecast_truth_mae_historical[[1L]],
+      m0_forecast_truth_mae = h$mcmc_forecast_truth_mae_M0[[1L]],
+      m0_forecast_truth_mae_jackknife_mcse = j$jackknife_mcse[[1L]],
+      maximum_q99_standardized_qhat_delta = max(q$q99_standardized_qhat_delta),
+      minimum_q01_central90_overlap_fraction = min(q$q01_central90_overlap_fraction),
+      phase173_gate_status = a$gate_status[[1L]],
+      stringsAsFactors = FALSE
+    ), decision)
+  })
+  decisions <- app_joint_qdesn_bind_rows(decision_rows)
+  promote_actions <- c("promote", "promote_with_mixing_qualification")
+  decisions$selected_source <- ifelse(
+    decisions$action %in% promote_actions, "phase173_m0", "phase155_historical"
+  )
+  phase173_manifest_sha <- app_sha256_file(file.path(phase173_dir, "artifact_manifest.csv"))
+  phase155_manifest_sha <- app_sha256_file(file.path(dirs$phase155, "artifact_manifest.csv"))
+  decisions$selected_source_manifest_sha256 <- ifelse(
+    decisions$selected_source == "phase173_m0", phase173_manifest_sha, phase155_manifest_sha
+  )
+  decisions$selected_source_dir <- ifelse(
+    decisions$selected_source == "phase173_m0",
+    app_prefer_repo_relative_path(phase173_dir),
+    app_prefer_repo_relative_path(dirs$phase155)
+  )
+
+  primary <- decisions[, c(
+    "case_id", "scenario_id", "fit_structure", "source_model_id",
+    "historical_forecast_truth_mae", "m0_forecast_truth_mae",
+    "primary_metric_delta_M0_minus_historical",
+    "m0_forecast_truth_mae_jackknife_mcse", "primary_metric_direction",
+    "action", "selected_source"
+  ), drop = FALSE]
+  metric_specs <- list(
+    fit_truth_mae = c("mcmc_fit_truth_mae_historical", "mcmc_fit_truth_mae_M0"),
+    forecast_truth_mae = c("mcmc_forecast_truth_mae_historical", "mcmc_forecast_truth_mae_M0"),
+    forecast_check_loss_mean = c("mcmc_forecast_check_loss_mean_historical", "mcmc_forecast_check_loss_mean_M0")
+  )
+  secondary <- app_joint_qdesn_bind_rows(lapply(seq_len(nrow(comparison)), function(ii) {
+    row <- comparison[ii, , drop = FALSE]
+    app_joint_qdesn_bind_rows(lapply(names(metric_specs), function(metric) {
+      fields <- metric_specs[[metric]]
+      old <- as.numeric(row[[fields[[1L]]]][[1L]])
+      now <- as.numeric(row[[fields[[2L]]]][[1L]])
+      data.frame(
+        case_id = row$case_id[[1L]], scenario_id = row$scenario_id[[1L]],
+        fit_structure = row$fit_structure[[1L]], metric = metric,
+        historical_value = old, m0_value = now,
+        delta_M0_minus_historical = now - old,
+        direction = app_joint_exqdesn_phase173b_direction(
+          now - old, policy$numerical_tolerance[[1L]]
+        ), stringsAsFactors = FALSE
+      )
+    }))
+  }))
+  posterior <- merge(
+    sensitivity,
+    comparison[, c("case_id", "mcmc_forecast_truth_mae_historical"), drop = FALSE],
+    by = "case_id", sort = FALSE
+  )
+  posterior$delta_from_historical <- posterior$forecast_truth_mae -
+    posterior$mcmc_forecast_truth_mae_historical
+  posterior$direction <- vapply(
+    posterior$delta_from_historical, app_joint_exqdesn_phase173b_direction,
+    character(1L), tolerance = policy$numerical_tolerance[[1L]]
+  )
+  functional <- decisions[, c(
+    "case_id", "scenario_id", "fit_structure", "implementation_status",
+    "qhat_functional_status", "posterior_summary_status",
+    "posterior_summary_direction_consistent",
+    "posterior_summary_forecast_mae_range", "posterior_summary_range_ceiling",
+    "leave_one_chain_out_status", "readout_functional_status",
+    "shape_functional_status", "functional_stability_status", "rationale"
+  ), drop = FALSE]
+  nuisance <- decisions[, c(
+    "case_id", "scenario_id", "fit_structure", "scalar_mixing_status",
+    "qhat_functional_status", "readout_functional_status",
+    "shape_functional_status", "nuisance_mixing_exception", "action"
+  ), drop = FALSE]
+  retained <- decisions[grepl("^retain_historical", decisions$action), c(
+    "case_id", "scenario_id", "fit_structure", "source_model_id", "action",
+    "rationale", "primary_metric_direction", "selected_source",
+    "selected_source_dir", "selected_source_manifest_sha256"
+  ), drop = FALSE]
+  method_consistency <- decisions[, c(
+    "case_id", "scenario_id", "fit_structure", "source_model_id", "action",
+    "primary_metric_direction", "selected_source", "selected_source_dir",
+    "selected_source_manifest_sha256"
+  ), drop = FALSE]
+  method_consistency$prospective_method <- "M0_v_collapsed_support_logit"
+  method_consistency$historical_fallback_reason <- ifelse(
+    grepl("^retain_historical", method_consistency$action),
+    "functional_or_implementation_hold", "not_applicable"
+  )
+  if (any(decisions$action == "retain_historical_candidate_fail")) {
+    overall_gate <- "fail"
+    staging_ready <- FALSE
+  } else {
+    overall_gate <- if (all(decisions$action == "promote")) "pass" else "review"
+    staging_ready <- TRUE
+  }
+  final <- data.frame(
+    phase_id = "phase173b_metric_qualified_promotion",
+    gate_status = overall_gate,
+    total_cells = nrow(decisions),
+    promote_cells = sum(decisions$action == "promote"),
+    promote_with_mixing_qualification_cells = sum(decisions$action == "promote_with_mixing_qualification"),
+    retained_historical_functional_hold_cells = sum(decisions$action == "retain_historical_functional_hold"),
+    retained_historical_candidate_fail_cells = sum(decisions$action == "retain_historical_candidate_fail"),
+    m0_primary_metric_improvement_cells = sum(grepl("improvement", decisions$primary_metric_direction)),
+    selected_m0_cells = sum(decisions$selected_source == "phase173_m0"),
+    selected_historical_cells = sum(decisions$selected_source == "phase155_historical"),
+    staging_ready = staging_ready,
+    article_assets_modified = FALSE,
+    rescue_jobs_launched = 0L,
+    recommendation = if (staging_ready) "build_phase174_method_consistent_hybrid_packet" else "repair_candidate_failures_before_staging",
+    stringsAsFactors = FALSE
+  )
+
+  if (dir.exists(out_dir)) {
+    if (!force) {
+      check <- tryCatch(app_joint_exqdesn_verify_manifest(out_dir, "phase173b"), error = function(e) NULL)
+      if (!is.null(check) && all(check$status == "pass")) {
+        return(list(
+          out_dir = out_dir,
+          decisions = app_read_csv(file.path(out_dir, "case_promotion_decision.csv")),
+          final = app_read_csv(file.path(out_dir, "promotion_readiness_summary.csv"))
+        ))
+      }
+    }
+    quarantine <- paste0(out_dir, ".superseded.", format(Sys.time(), "%Y%m%dT%H%M%S"))
+    if (!file.rename(out_dir, quarantine)) stop("Could not quarantine prior Phase173B output.", call. = FALSE)
+  }
+  app_ensure_dir(out_dir)
+  readme <- file.path(out_dir, "README.md")
+  writeLines(c(
+    "# Phase173B metric-qualified exQDESN promotion audit", "",
+    "This deterministic postprocessor does not rerun MCMC and does not select a sampler from realized scores.",
+    "M0 remains the prospective exAL method unless a hard or functional gate requires the verified historical fallback.",
+    sprintf("- Gate: `%s`", final$gate_status[[1L]]),
+    sprintf("- Selected M0 / historical exAL cells: `%d / %d`", final$selected_m0_cells[[1L]], final$selected_historical_cells[[1L]]),
+    sprintf("- Primary forecast-MAE improvements under M0: `%d / 16`", final$m0_primary_metric_improvement_cells[[1L]]),
+    "- Scalar gamma/sigma limitations alone do not reject a stable posterior quantile path.",
+    "- No rescue chain or tracked article asset was launched or modified."
+  ), readme, useBytes = TRUE)
+  write <- function(x, name) app_joint_qvp_write_csv(x, file.path(out_dir, name))
+  paths <- c(
+    promotion_policy = write(policy, "promotion_policy.csv"),
+    case_promotion_decision = write(decisions, "case_promotion_decision.csv"),
+    historical_vs_m0_primary_metric = write(primary, "historical_vs_m0_primary_metric.csv"),
+    historical_vs_m0_secondary_metrics = write(secondary, "historical_vs_m0_secondary_metrics.csv"),
+    nuisance_mixing_exception_audit = write(nuisance, "nuisance_mixing_exception_audit.csv"),
+    functional_stability_audit = write(functional, "functional_stability_audit.csv"),
+    posterior_summary_decision_audit = write(posterior, "posterior_summary_decision_audit.csv"),
+    winner_margin_mcse_audit = write(app_read_csv(file.path(phase173_dir, "winner_margin_mc_error_audit.csv")), "winner_margin_mcse_audit.csv"),
+    retained_historical_cell_audit = write(retained, "retained_historical_cell_audit.csv"),
+    method_consistency_audit = write(method_consistency, "method_consistency_audit.csv"),
+    promotion_readiness_summary = write(final, "promotion_readiness_summary.csv"),
+    source_manifest_verification = write(source$verification, "source_manifest_verification.csv"),
+    run_config = write(data.frame(
+      phase_id = "phase173b_metric_qualified_promotion",
+      phase173_dir = normalizePath(phase173_dir),
+      policy_path = normalizePath(policy_path), output_dir = out_dir,
+      selection_policy = policy$selection_policy[[1L]],
+      tracked_article_assets_modified = FALSE, stringsAsFactors = FALSE
+    ), "run_config.csv"),
+    provenance = write(app_joint_qvp_provenance_rows(), "provenance.csv"),
+    README = normalizePath(readme, mustWork = TRUE)
+  )
+  manifest <- app_joint_exqdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = out_dir, decisions = decisions, final = final,
+    paths = c(paths, artifact_manifest = manifest$manifest_path)
+  )
+}
+
 app_joint_exqdesn_phase174_exal_model_ids <- function() {
   c("joint_exqdesn_rhs_vb", "exqdesn_rhs_independent_vb")
 }
 
 app_joint_exqdesn_phase174_require_phase173 <- function(
-  phase173_dir = app_joint_exqdesn_phase171_175_dirs()$phase173
+  phase173_dir = app_joint_exqdesn_phase171_175_dirs()$phase173,
+  phase173b_dir = app_joint_exqdesn_phase171_175_dirs()$phase173b
 ) {
   phase173_dir <- normalizePath(phase173_dir, mustWork = TRUE)
+  phase173b_dir <- normalizePath(phase173b_dir, mustWork = TRUE)
   verification <- app_joint_exqdesn_verify_manifest(phase173_dir, "phase173")
+  decision_verification <- app_joint_exqdesn_verify_manifest(phase173b_dir, "phase173b")
   final <- app_read_csv(file.path(phase173_dir, "balanced_final_packet_assessment.csv"))
   assessment <- app_read_csv(file.path(phase173_dir, "case_assessment.csv"))
   summary <- app_read_csv(file.path(phase173_dir, "mcmc_case_summary.csv"))
+  decision_final <- app_read_csv(file.path(phase173b_dir, "promotion_readiness_summary.csv"))
+  decisions <- app_read_csv(file.path(phase173b_dir, "case_promotion_decision.csv"))
   expected <- as.vector(outer(
     app_joint_exqdesn_phase171_scenarios(),
     app_joint_exqdesn_phase174_exal_model_ids(),
     paste, sep = "::"
   ))
   cells <- paste(summary$scenario_id, summary$source_model_id, sep = "::")
-  ready <- c("pass", "qualified_article_ready")
   if (any(verification$status != "pass") || nrow(final) != 1L ||
-      final$gate_status[[1L]] != "pass" || nrow(summary) != 16L ||
+      any(decision_verification$status != "pass") || nrow(summary) != 16L ||
       anyDuplicated(cells) || !setequal(cells, expected) ||
-      nrow(assessment) != 16L || any(!assessment$gate_status %in% ready)) {
-    stop("Phase174 requires a complete, passing Phase173 packet with all 16 exAL cells ready.", call. = FALSE)
+      nrow(assessment) != 16L || nrow(decisions) != 16L ||
+      anyDuplicated(decisions$case_id) || nrow(decision_final) != 1L ||
+      !isTRUE(as.logical(decision_final$staging_ready[[1L]]))) {
+    stop("Phase174 requires complete Phase173 evidence and a staging-ready Phase173B decision packet.", call. = FALSE)
   }
   list(
     dir = phase173_dir, verification = verification, final = final,
-    assessment = assessment, summary = summary
+    assessment = assessment, summary = summary,
+    decision_dir = phase173b_dir, decision_verification = decision_verification,
+    decision_final = decision_final, decisions = decisions
   )
 }
 
@@ -1995,6 +2421,10 @@ app_joint_exqdesn_phase174_compose_case_summary <- function(
   baseline$min_bulk_ess <- NA_real_
   baseline$min_tail_ess <- NA_real_
   baseline$phase173_gate_status <- NA_character_
+  baseline$phase173b_action <- "preserved_historical"
+  baseline$phase173b_primary_metric_direction <- NA_character_
+  baseline$phase173b_mixing_exception <- FALSE
+  baseline$source_manifest_sha256 <- app_sha256_file(file.path(dirs$phase155, "artifact_manifest.csv"))
   preflight <- app_read_csv(file.path(freeze$dir, "scoring_preflight.csv"))
   init_audit <- app_read_csv(file.path(freeze$dir, "vb_initialization_audit.csv"))
   fit_adjustment <- app_read_csv(file.path(phase173$dir, "fit_monotone_adjustment.csv"))
@@ -2009,13 +2439,23 @@ app_joint_exqdesn_phase174_compose_case_summary <- function(
     case_id <- current$case_id[[1L]]
     idx <- which(baseline$case_id == case_id)
     if (length(idx) != 1L) stop(sprintf("Phase174 could not map exAL case '%s'.", case_id), call. = FALSE)
-    key <- current$mcmc_case_id[[1L]]
+    key <- if ("mcmc_case_id" %in% names(current) && nzchar(current$mcmc_case_id[[1L]])) {
+      current$mcmc_case_id[[1L]]
+    } else {
+      paste(current$scenario_id[[1L]], current$fit_structure[[1L]], sep = "__")
+    }
     vb <- preflight[preflight$mcmc_case_id == key, , drop = FALSE]
     init <- init_audit[init_audit$mcmc_case_id == key, , drop = FALSE]
     gate <- app_joint_exqdesn_phase174_case_lookup(assessment, case_id, "assessment")
+    decision <- app_joint_exqdesn_phase174_case_lookup(phase173$decisions, case_id, "Phase173B decision")
     if (nrow(vb) != 1L || nrow(init) != 1L) {
       stop(sprintf("Phase174 could not map Phase171 initialization for '%s'.", case_id), call. = FALSE)
     }
+    baseline$phase173_gate_status[idx] <- gate$gate_status[[1L]]
+    baseline$phase173b_action[idx] <- decision$action[[1L]]
+    baseline$phase173b_primary_metric_direction[idx] <- decision$primary_metric_direction[[1L]]
+    baseline$phase173b_mixing_exception[idx] <- as.logical(decision$nuisance_mixing_exception[[1L]])
+    if (grepl("^retain_historical", decision$action[[1L]])) next
     replace <- list(
       source_candidate_id = current$source_candidate_id[[1L]],
       model_id = current$model_id[[1L]],
@@ -2088,10 +2528,18 @@ app_joint_exqdesn_phase174_compose_case_summary <- function(
     baseline$max_folded_rhat[idx] <- current$max_folded_rhat[[1L]]
     baseline$min_bulk_ess[idx] <- current$min_bulk_ess[[1L]]
     baseline$min_tail_ess[idx] <- current$min_tail_ess[[1L]]
-    baseline$phase173_gate_status[idx] <- gate$gate_status[[1L]]
+    baseline$source_manifest_sha256[idx] <- decision$selected_source_manifest_sha256[[1L]]
   }
   new_al <- baseline[!baseline$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids(), names(old_al), drop = FALSE]
-  if (!identical(old_al, new_al)) {
+  old_al <- old_al[order(old_al$case_id), , drop = FALSE]
+  new_al <- new_al[order(new_al$case_id), , drop = FALSE]
+  old_hash <- vapply(seq_len(nrow(old_al)), function(ii) {
+    app_joint_exqdesn_phase171_row_hash(old_al[ii, , drop = FALSE])
+  }, character(1L))
+  new_hash <- vapply(seq_len(nrow(new_al)), function(ii) {
+    app_joint_exqdesn_phase171_row_hash(new_al[ii, , drop = FALSE])
+  }, character(1L))
+  if (!identical(old_hash, new_hash)) {
     stop("Phase174 altered an unchanged AL row.", call. = FALSE)
   }
   baseline <- baseline[order(baseline$scenario_order, baseline$model_order), , drop = FALSE]
@@ -2119,18 +2567,77 @@ app_joint_exqdesn_phase174_case_assessment <- function(case_summary) {
   )
 }
 
+app_joint_exqdesn_phase174_winner_mc_audit <- function(case_summary, phase173_dir) {
+  jackknife <- app_read_csv(file.path(phase173_dir, "metric_jackknife_mcse.csv"))
+  metric_map <- c(
+    mcmc_fit_truth_mae = "fit_truth_mae",
+    mcmc_forecast_truth_mae = "forecast_truth_mae",
+    mcmc_forecast_check_loss_mean = "forecast_check_loss_mean",
+    mcmc_forecast_crps_grid = "forecast_crps_grid_mean"
+  )
+  rows <- lapply(unique(case_summary$scenario_id), function(scenario_id) {
+    block <- case_summary[case_summary$scenario_id == scenario_id, , drop = FALSE]
+    app_joint_qdesn_bind_rows(lapply(names(metric_map), function(metric) {
+      ord <- order(as.numeric(block[[metric]]), block$source_model_id)
+      winner <- block[ord[[1L]], , drop = FALSE]
+      runner <- block[ord[[2L]], , drop = FALSE]
+      lookup <- function(row) {
+        if (row$source_block_id[[1L]] != "phase173_m0_exal") return(NA_real_)
+        value <- jackknife[
+          jackknife$case_id == row$case_id[[1L]] &
+            jackknife$metric == metric_map[[metric]],
+          "jackknife_mcse", drop = TRUE
+        ]
+        if (length(value) == 1L) as.numeric(value) else NA_real_
+      }
+      winner_mcse <- lookup(winner)
+      runner_mcse <- lookup(runner)
+      available <- c(winner_mcse, runner_mcse)
+      available <- available[is.finite(available)]
+      combined <- if (length(available)) sqrt(sum(available^2)) else NA_real_
+      margin <- runner[[metric]][[1L]] - winner[[metric]][[1L]]
+      data.frame(
+        scenario_id = scenario_id, metric = metric,
+        winner_model_id = winner$source_model_id[[1L]],
+        runner_up_model_id = runner$source_model_id[[1L]],
+        winner_value = winner[[metric]][[1L]], runner_up_value = runner[[metric]][[1L]],
+        winner_margin = margin, winner_jackknife_mcse = winner_mcse,
+        runner_up_jackknife_mcse = runner_mcse,
+        available_combined_mcse = combined,
+        mcse_coverage = if (all(is.finite(c(winner_mcse, runner_mcse)))) {
+          "complete"
+        } else if (length(available)) {
+          "partial"
+        } else {
+          "unavailable_for_frozen_historical_rows"
+        },
+        interpretation = if (!all(is.finite(c(winner_mcse, runner_mcse)))) {
+          "descriptive_winner_incomplete_mcse"
+        } else if (margin <= 2 * combined) {
+          "near_tie"
+        } else {
+          "resolved_at_available_mc_precision"
+        }, stringsAsFactors = FALSE
+      )
+    }))
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
 app_joint_exqdesn_phase174_build_packet <- function(
   phase173_dir = app_joint_exqdesn_phase171_175_dirs()$phase173,
+  phase173b_dir = app_joint_exqdesn_phase171_175_dirs()$phase173b,
   freeze_dir = app_joint_exqdesn_phase171_175_dirs()$phase171,
   cache_root = app_joint_exqdesn_phase164_cache_root(),
   force = FALSE
 ) {
   dirs <- app_joint_exqdesn_phase171_175_dirs(cache_root)
-  phase173 <- app_joint_exqdesn_phase174_require_phase173(phase173_dir)
+  phase173 <- app_joint_exqdesn_phase174_require_phase173(phase173_dir, phase173b_dir)
   freeze <- app_joint_exqdesn_phase171_load(freeze_dir)
   source_dirs <- c(
     phase171 = freeze$dir,
     phase173 = phase173$dir,
+    phase173b = phase173$decision_dir,
     phase153 = dirs$phase153_vb,
     phase154 = dirs$phase154_final,
     phase155 = dirs$phase155
@@ -2156,6 +2663,7 @@ app_joint_exqdesn_phase174_build_packet <- function(
   if (!hard_pass) stop("Phase174 balanced-packet hard gate failed.", call. = FALSE)
   assessment <- app_joint_exqdesn_phase174_case_assessment(case_summary)
   winners <- app_joint_qdesn_phase155_metric_winners(case_summary)
+  winner_mc <- app_joint_exqdesn_phase174_winner_mc_audit(case_summary, phase173$dir)
   model_summary <- app_joint_qdesn_phase155_model_summary(case_summary)
   audit <- data.frame(
     case_id = case_summary$case_id,
@@ -2171,6 +2679,10 @@ app_joint_exqdesn_phase174_build_packet <- function(
     mcmc_burn = case_summary$mcmc_burn,
     mcmc_thin = case_summary$mcmc_thin,
     mcmc_n_keep_total = case_summary$mcmc_n_keep_total,
+    phase173b_action = case_summary$phase173b_action,
+    phase173b_primary_metric_direction = case_summary$phase173b_primary_metric_direction,
+    phase173b_mixing_exception = case_summary$phase173b_mixing_exception,
+    source_manifest_sha256 = case_summary$source_manifest_sha256,
     implementation_reusable = case_summary$implementation_status == "pass",
     article_grade = case_summary$article_grade,
     gate_status = case_summary$gate_status,
@@ -2191,18 +2703,24 @@ app_joint_exqdesn_phase174_build_packet <- function(
     hard_implementation_gate = "pass",
     total_cells = nrow(case_summary),
     al_cells_preserved = sum(!case_summary$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids()),
-    m0_exal_cells = sum(case_summary$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids()),
+    m0_exal_cells = sum(case_summary$source_block_id == "phase173_m0_exal"),
+    retained_historical_exal_cells = sum(
+      case_summary$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids() &
+        case_summary$source_block_id != "phase173_m0_exal"
+    ),
     contract_crossing_pairs = sum(assessment$contract_crossing_pairs),
     raw_crossing_pairs = sum(assessment$raw_crossing_pairs),
     article_assets_modified = FALSE,
-    recommendation = "build_phase174_staged_article_assets",
+    recommendation = "review_phase174_hybrid_staging_before_article_integration",
     stringsAsFactors = FALSE
   )
   lineage <- case_summary[, c(
     "case_id", "scenario_id", "source_model_id", "source_candidate_id",
     "source_block_id", "source_dir", "inference_method_id",
     "vb_initialization_method", "mcmc_n_chains", "mcmc_n_iter",
-    "mcmc_burn", "mcmc_thin", "mcmc_n_keep_total"
+    "mcmc_burn", "mcmc_thin", "mcmc_n_keep_total",
+    "phase173b_action", "phase173b_primary_metric_direction",
+    "phase173b_mixing_exception", "source_manifest_sha256"
   ), drop = FALSE]
   out_dir <- dirs$phase174
   if (dir.exists(out_dir)) {
@@ -2219,7 +2737,8 @@ app_joint_exqdesn_phase174_build_packet <- function(
   readme <- file.path(out_dir, "README.md")
   writeLines(c(
     "# Phase174 balanced MCMC final packet", "",
-    "This packet preserves the 16 audited AL rows and replaces only the 16 exAL rows with the Phase173 exact-M0 confirmation.",
+    "This packet preserves all 16 audited AL rows and applies the Phase173B method-consistent exAL source decision case by case.",
+    "Functionally qualified exAL cells use exact M0; held cells retain their verified historical exAL row.",
     "It is the source for staged article assets; it does not modify tracked article files.",
     sprintf("- Gate: `%s`", final$gate_status[[1L]]),
     sprintf("- Contract crossings: `%d`", final$contract_crossing_pairs[[1L]])
@@ -2232,11 +2751,13 @@ app_joint_exqdesn_phase174_build_packet <- function(
     final_assessment = write(final, "final_assessment.csv"),
     model_summary = write(model_summary, "model_summary.csv"),
     scenario_winner_summary = write(winners, "scenario_winner_summary.csv"),
+    winner_margin_mc_error_audit = write(winner_mc, "winner_margin_mc_error_audit.csv"),
     source_to_cell_lineage = write(lineage, "source_to_cell_lineage.csv"),
     source_manifest_verification = write(source_verification, "source_manifest_verification.csv"),
     run_config = write(data.frame(
       phase_id = "phase174_balanced_mcmc_final", phase171_dir = freeze$dir,
-      phase173_dir = phase173$dir, output_dir = out_dir,
+      phase173_dir = phase173$dir, phase173b_dir = phase173$decision_dir,
+      output_dir = out_dir,
       validation_contract = "posterior_quantile_grid_with_monotone_scoring_contract",
       scalar_predictive_density_claim = FALSE, stringsAsFactors = FALSE
     ), "run_config.csv"),
@@ -2263,6 +2784,14 @@ app_joint_exqdesn_phase174_relabel_generated_file <- function(path, source_line 
     source_line %||% "% Source: frozen Phase174 balanced MCMC evidence.",
     lines, fixed = TRUE
   )
+  lines <- gsub(
+    "All scores use the monotone quantile-grid contract; raw crossings are retained only as pre-contract diagnostics.",
+    paste(
+      "All scores use the monotone quantile-grid contract; raw crossings are retained only as pre-contract diagnostics.",
+      "Updated exAL rows are used only when quantile-path stability gates pass; otherwise the previously verified MCMC result is retained."
+    ),
+    lines, fixed = TRUE
+  )
   writeLines(lines, path, useBytes = TRUE)
   normalizePath(path, mustWork = TRUE)
 }
@@ -2283,7 +2812,13 @@ app_joint_exqdesn_phase174_old_new_diff <- function(old, current) {
       historical_value = as.numeric(before[[metric]][[1L]]),
       phase174_value = as.numeric(now[[metric]][[1L]]),
       delta_phase174_minus_historical = as.numeric(now[[metric]][[1L]] - before[[metric]][[1L]]),
-      row_action = if (now$source_model_id[[1L]] %in% app_joint_exqdesn_phase174_exal_model_ids()) "replaced_exal" else "preserved_al",
+      row_action = if (!now$source_model_id[[1L]] %in% app_joint_exqdesn_phase174_exal_model_ids()) {
+        "preserved_al"
+      } else if ("source_block_id" %in% names(now) && now$source_block_id[[1L]] == "phase173_m0_exal") {
+        "replaced_exal_with_qualified_m0"
+      } else {
+        "retained_historical_exal"
+      },
       stringsAsFactors = FALSE
     )))
   })
@@ -2298,8 +2833,9 @@ app_joint_exqdesn_phase174_stage_assets <- function(
 ) {
   dirs <- app_joint_exqdesn_phase171_175_dirs(cache_root)
   packet <- app_joint_exqdesn_phase174_build_packet(
-    phase173_dir = dirs$phase173, freeze_dir = dirs$phase171,
-    cache_root = cache_root, force = FALSE
+    phase173_dir = dirs$phase173, phase173b_dir = dirs$phase173b,
+    freeze_dir = dirs$phase171,
+    cache_root = cache_root, force = force
   )
   packet_verification <- app_joint_exqdesn_verify_manifest(phase174_dir, "phase174")
   if (any(packet_verification$status != "pass")) stop("Phase174 packet manifest failed.", call. = FALSE)
@@ -2313,6 +2849,7 @@ app_joint_exqdesn_phase174_stage_assets <- function(
   winners <- app_joint_qdesn_phase155_metric_winners(case_summary)
   main_data <- app_joint_qdesn_phase155_main_table_data(case_summary)
   model_summary <- app_joint_qdesn_phase155_model_summary(case_summary)
+  winner_mc <- app_read_csv(file.path(phase174_dir, "winner_margin_mc_error_audit.csv"))
   winner_table <- app_joint_qdesn_phase155_winner_table(winners)
   replication_table <- app_joint_qdesn_phase155_replication_table(phase153_contrasts)
   protocol <- data.frame(
@@ -2324,13 +2861,13 @@ app_joint_exqdesn_phase174_stage_assets <- function(
       "0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95.",
       "500 observations after the declared DESN washout.",
       "No-refit held-out forecasts at origins separated by 30 observations, scored at leads 1-30.",
-      "The preserved AL rows use their frozen article-grade effort; updated exAL rows use eight chains with 24,000 iterations and 5,000 retained draws per chain.",
+      "The preserved AL rows retain their frozen article-grade effort. Functionally qualified exAL updates use eight chains with 24,000 iterations and 5,000 retained draws per chain; held exAL cells retain their verified historical effort.",
       "Scores validate posterior quantile-grid summaries after the declared monotone rule; raw crossings remain diagnostics.",
       sprintf("The replicated robustness layer contains %d fresh-fixture VB fits and is retained unchanged.", phase153_assessment$completed_candidates[[1L]])
     ), stringsAsFactors = FALSE
   )
   gates <- data.frame(
-    gate = c("phase174_manifest", "balanced_grid", "unchanged_al_rows", "updated_exal_rows", "finite_scores", "provided_initialization", "contract_crossings", "raw_crossings", "article_staging"),
+    gate = c("phase174_manifest", "balanced_grid", "unchanged_al_rows", "qualified_exal_source", "finite_scores", "provided_initialization", "contract_crossings", "raw_crossings", "article_staging"),
     status = c(
       "pass", "pass", "pass", "pass", "pass", "pass", "pass",
       if (sum(case_summary$mcmc_forecast_raw_crossing_pairs) > 0L) "review" else "pass",
@@ -2340,7 +2877,11 @@ app_joint_exqdesn_phase174_stage_assets <- function(
       sprintf("%d/%d Phase174 artifact hashes verify.", sum(packet_verification$status == "pass"), nrow(packet_verification)),
       "All 32 scenario-model cells are present exactly once.",
       "All 16 AL rows are value-identical to the current frozen article packet.",
-      "All 16 exAL rows come from the passing Phase173 exact-M0 audit.",
+      sprintf(
+        "%d exAL rows use functionally qualified Phase173 M0 evidence; %d held cells retain verified historical exAL evidence.",
+        sum(case_summary$source_block_id == "phase173_m0_exal"),
+        sum(case_summary$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids() & case_summary$source_block_id != "phase173_m0_exal")
+      ),
       "All article-facing fit and forecast scores are finite.",
       "Every MCMC row records provided variational initialization.",
       sprintf("Contract crossings=%d.", sum(case_summary$mcmc_fit_contract_crossing_pairs + case_summary$mcmc_forecast_contract_crossing_pairs)),
@@ -2349,12 +2890,12 @@ app_joint_exqdesn_phase174_stage_assets <- function(
     ), stringsAsFactors = FALSE
   )
   claim_audit <- data.frame(
-    claim_id = c("balanced_grid", "al_unchanged", "exal_m0_source", "quantile_grid_contract", "scalar_density_scope", "winner_precision"),
-    status = c("pass", "pass", "pass", "pass", "pass", if (any(app_read_csv(file.path(dirs$phase173, "winner_margin_mc_error_audit.csv"))$interpretation == "near_tie")) "review" else "pass"),
+    claim_id = c("balanced_grid", "al_unchanged", "exal_qualified_source", "quantile_grid_contract", "scalar_density_scope", "winner_precision"),
+    status = c("pass", "pass", "pass", "pass", "pass", if (any(winner_mc$interpretation != "resolved_at_available_mc_precision")) "review" else "pass"),
     evidence = c(
       "Eight scenarios and four model rows form 32 complete cells.",
       "The 16 AL cells were preserved without value changes.",
-      "The 16 exAL cells trace to the hash-verified Phase173 M0 packet.",
+      "Each exAL row traces either to functionally qualified Phase173 M0 evidence or to the verified historical fallback declared by Phase173B.",
       "All scores use monotone contract quantiles; raw crossings are separate diagnostics.",
       "No scalar posterior predictive density claim is introduced.",
       "Numerical winners are recomputed; near ties are retained in the Monte Carlo error audit."
@@ -2419,16 +2960,254 @@ app_joint_exqdesn_phase174_stage_assets <- function(
     phase153_manifest_verification = write(phase153_verification, "phase153_manifest_verification.csv"),
     old_vs_new_article_table_diff = write(old_new, "old_vs_new_article_table_diff.csv"),
     table_claim_audit = write(claim_audit, "table_claim_audit.csv"),
+    winner_margin_mc_error_audit = write(winner_mc, "winner_margin_mc_error_audit.csv"),
     gate_summary = write(gates, "gate_summary.csv"),
-    source_to_cell_lineage = write(case_summary[, c("case_id", "scenario_id", "source_model_id", "source_candidate_id", "source_block_id", "source_dir", "inference_method_id", "vb_initialization_method")], "source_to_cell_lineage.csv"),
+    source_to_cell_lineage = write(case_summary[, c(
+      "case_id", "scenario_id", "source_model_id", "source_candidate_id",
+      "source_block_id", "source_dir", "source_manifest_sha256",
+      "inference_method_id", "vb_initialization_method", "phase173b_action",
+      "phase173b_primary_metric_direction", "phase173b_mixing_exception"
+    )], "source_to_cell_lineage.csv"),
     current_asset_immutability_audit = write(data.frame(tracked_article_assets_unchanged = tracked_unchanged, before_assets = nrow(current_assets_before), after_assets = nrow(current_assets_after), status = if (tracked_unchanged) "pass" else "fail"), "current_asset_immutability_audit.csv"),
-    run_config = write(data.frame(phase_id = "phase174_article_assets_staging", phase174_dir = phase174_dir, phase153_dir = normalizePath(phase153_dir), staging_dir = out_dir, tracked_tables_modified = FALSE, phase175_approved = FALSE, stringsAsFactors = FALSE), "run_config.csv"),
+    run_config = write(data.frame(
+      phase_id = "phase174_article_assets_staging",
+      phase174_dir = phase174_dir, phase173b_dir = dirs$phase173b,
+      phase153_dir = normalizePath(phase153_dir), staging_dir = out_dir,
+      tracked_tables_modified = FALSE, phase175_approved = FALSE,
+      stringsAsFactors = FALSE
+    ), "run_config.csv"),
     provenance = write(app_joint_qvp_provenance_rows(), "provenance.csv"),
     README = normalizePath(readme, mustWork = TRUE),
     setNames(table_paths, paste0("staged_", names(table_paths)))
   )
   manifest <- app_joint_exqdesn_write_manifest(paths, out_dir)
   list(out_dir = out_dir, case_summary = case_summary, winners = winners, gates = gates, claim_audit = claim_audit, asset_manifest = asset_manifest, paths = c(paths, artifact_manifest = manifest$manifest_path))
+}
+
+app_joint_exqdesn_phase174_git_lines <- function(args) {
+  output <- app_system2_repo("git", args, stdout = TRUE, stderr = TRUE)
+  status <- attr(output, "status")
+  if (!is.null(status) && status != 0L) return(character())
+  output
+}
+
+app_joint_exqdesn_phase174_freeze_integration_handoff <- function(
+  transcript_path,
+  cache_root = app_joint_exqdesn_phase164_cache_root(),
+  out_dir = app_joint_exqdesn_phase171_175_dirs(cache_root)$phase174_handoff,
+  run_tests = TRUE,
+  force = FALSE
+) {
+  dirs <- app_joint_exqdesn_phase171_175_dirs(cache_root)
+  source_dirs <- c(
+    phase173 = dirs$phase173, phase173b = dirs$phase173b,
+    phase174 = dirs$phase174, phase174_staging = dirs$phase174_staging
+  )
+  verification <- app_joint_qdesn_bind_rows(lapply(names(source_dirs), function(id) {
+    app_joint_exqdesn_verify_manifest(source_dirs[[id]], id)
+  }))
+  if (dir.exists(out_dir)) {
+    if (!force) stop("Phase174 integration handoff exists; use force=TRUE to rebuild.", call. = FALSE)
+    quarantine <- paste0(out_dir, ".superseded.", format(Sys.time(), "%Y%m%dT%H%M%S"))
+    if (!file.rename(out_dir, quarantine)) stop("Could not quarantine prior integration handoff.", call. = FALSE)
+  }
+  app_ensure_dir(out_dir)
+
+  test_paths <- c(
+    "application/tests/test_joint_exqdesn_phase171_175_article_confirmation.R",
+    "application/tests/test_joint_exqdesn_inference_dispatch.R",
+    "application/tests/test_joint_exqdesn_phase167_169_mcmc_method_selection.R",
+    "application/tests/test_joint_exqdesn_phase169r_recovery.R",
+    "application/tests/test_joint_exqdesn_phase170_default_promotion.R"
+  )
+  test_rows <- lapply(seq_along(test_paths), function(ii) {
+    test <- test_paths[[ii]]
+    log <- file.path(out_dir, sprintf("test_%02d_%s.log", ii, tools::file_path_sans_ext(basename(test))))
+    exit_code <- if (run_tests) {
+      as.integer(system2("Rscript", app_path(test), stdout = log, stderr = log))
+    } else {
+      writeLines("Test execution explicitly disabled.", log)
+      NA_integer_
+    }
+    data.frame(
+      test = test, exit_code = exit_code,
+      status = if (!run_tests) "not_run" else if (exit_code == 0L) "pass" else "fail",
+      log_path = normalizePath(log, mustWork = TRUE),
+      log_sha256 = app_sha256_file(log), stringsAsFactors = FALSE
+    )
+  })
+  tests <- app_joint_qdesn_bind_rows(test_rows)
+
+  branch <- app_joint_exqdesn_phase171_git_value(c("rev-parse", "--abbrev-ref", "HEAD"))
+  head <- app_joint_exqdesn_phase171_git_value(c("rev-parse", "HEAD"))
+  upstream <- app_joint_exqdesn_phase171_git_value(c("rev-parse", "--abbrev-ref", "@{upstream}"))
+  upstream_head <- app_joint_exqdesn_phase171_git_value(c("rev-parse", "@{upstream}"))
+  main_head <- app_joint_exqdesn_phase171_git_value(c("rev-parse", "origin/main"))
+  merge_base <- app_joint_exqdesn_phase171_git_value(c("merge-base", "HEAD", "origin/main"))
+  status_lines <- app_joint_exqdesn_phase174_git_lines(c("status", "--porcelain"))
+  counts <- app_joint_exqdesn_phase174_git_lines(c("rev-list", "--left-right", "--count", "origin/main...HEAD"))
+  counts <- if (length(counts)) strsplit(trimws(counts[[1L]]), "[[:space:]]+")[[1L]] else c(NA, NA)
+  branch_state <- data.frame(
+    lane = "joint_exqdesn_phase171_175_article_confirmation",
+    transcript_path = transcript_path,
+    worktree = app_repo_root(), branch = branch, upstream = upstream,
+    head = head, upstream_head = upstream_head, origin_main_head = main_head,
+    merge_base_with_origin_main = merge_base,
+    origin_main_unique_commits = as.integer(counts[[1L]]),
+    task_branch_unique_commits = as.integer(counts[[2L]]),
+    worktree_clean = length(status_lines) == 0L,
+    synchronized_with_upstream = identical(head, upstream_head),
+    stringsAsFactors = FALSE
+  )
+  unique_lines <- app_joint_exqdesn_phase174_git_lines(c(
+    "log", "--reverse", "--format=%H%x09%s", "origin/main..HEAD"
+  ))
+  unique_commits <- if (length(unique_lines)) {
+    fields <- strsplit(unique_lines, "\t", fixed = TRUE)
+    data.frame(
+      commit = vapply(fields, `[[`, character(1L), 1L),
+      subject = vapply(fields, function(x) paste(x[-1L], collapse = "\t"), character(1L)),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    data.frame(commit = character(), subject = character(), stringsAsFactors = FALSE)
+  }
+  changed_lines <- app_joint_exqdesn_phase174_git_lines(c(
+    "diff", "--name-status", paste0(merge_base, "..HEAD")
+  ))
+  changed_files <- if (length(changed_lines)) {
+    fields <- strsplit(changed_lines, "\t", fixed = TRUE)
+    data.frame(
+      change_status = vapply(fields, `[[`, character(1L), 1L),
+      path = vapply(fields, function(x) paste(x[-1L], collapse = " -> "), character(1L)),
+      article_safe = vapply(fields, function(x) {
+        path <- paste(x[-1L], collapse = " -> ")
+        grepl("^(main\\.tex|qdesn-supplement\\.tex|tables/|figures/|docs/)", path)
+      }, logical(1L)), stringsAsFactors = FALSE
+    )
+  } else {
+    data.frame(change_status = character(), path = character(), article_safe = logical(), stringsAsFactors = FALSE)
+  }
+
+  phase173 <- app_read_csv(file.path(dirs$phase173, "balanced_final_packet_assessment.csv"))
+  phase173b <- app_read_csv(file.path(dirs$phase173b, "promotion_readiness_summary.csv"))
+  phase174 <- app_read_csv(file.path(dirs$phase174, "final_assessment.csv"))
+  run_completion <- data.frame(
+    run_tag = c("phase172_m0_confirmation", "phase173_m0_audit", "phase173b_decision", "phase174_hybrid_packet", "phase174_asset_staging"),
+    expected_units = c(128L, phase173$expected_cells[[1L]], phase173b$total_cells[[1L]], phase174$total_cells[[1L]], 1L),
+    completed_units = c(128L, phase173$completed_cells[[1L]], phase173b$total_cells[[1L]], phase174$total_cells[[1L]], 1L),
+    failed_units = c(0L, phase173$fail_cells[[1L]], phase173b$retained_historical_candidate_fail_cells[[1L]], 0L, 0L),
+    gate_status = c("pass", phase173$gate_status[[1L]], phase173b$gate_status[[1L]], phase174$gate_status[[1L]], "review"),
+    stringsAsFactors = FALSE
+  )
+  manifest_inventory <- app_joint_qdesn_bind_rows(lapply(names(source_dirs), function(id) {
+    dir <- source_dirs[[id]]
+    v <- verification[verification$source_id == id, , drop = FALSE]
+    size <- suppressWarnings(as.numeric(strsplit(system2("du", c("-sb", dir), stdout = TRUE), "[[:space:]]+")[[1L]][[1L]]))
+    data.frame(
+      source_id = id, source_dir = dir,
+      manifest_path = file.path(dir, "artifact_manifest.csv"),
+      manifest_sha256 = app_sha256_file(file.path(dir, "artifact_manifest.csv")),
+      manifest_rows = nrow(v), verified_rows = sum(v$status == "pass"),
+      failed_rows = sum(v$status != "pass"), storage_bytes = size,
+      storage_status = "retained_frozen_evidence", stringsAsFactors = FALSE
+    )
+  }))
+  article_assets <- app_read_csv(file.path(dirs$phase174_staging, "staged_article_asset_manifest.csv"))
+  article_safe <- article_assets[, c("label", "artifact_type", "path", "size_bytes", "sha256"), drop = FALSE]
+  article_safe$publication_action <- "integration_chat_review_then_allow_listed_article_publish"
+  runtime_exclusions <- data.frame(
+    path = c(
+      dirs$phase171, dirs$phase172, dirs$phase172_orchestration, dirs$phase173,
+      dirs$phase173b, dirs$phase174, dirs$phase174_staging, dirs$phase174_handoff,
+      paste0(dirs$phase173, "_tmux.log")
+    ),
+    category = c(
+      "freeze", "chain_workers", "orchestration", "pooled_audit", "decision_audit",
+      "hybrid_packet", "article_staging", "integration_handoff", "runtime_log"
+    ),
+    exclusion_reason = "runtime_or_generated_evidence_must_remain_gitignored",
+    stringsAsFactors = FALSE
+  )
+  decisions <- app_read_csv(file.path(dirs$phase173b, "case_promotion_decision.csv"))
+  risk_register <- data.frame(
+    risk_id = c(
+      "phase173_review_gate", "nuisance_mixing", "functional_fallbacks",
+      "historical_al_mcse", "phase154_legacy_test_dependency", "article_not_published"
+    ),
+    status = c(
+      "open_documented", "open_documented", "mitigated_by_fallback",
+      "open_documented", "archived_dependency", "expected"
+    ),
+    detail = c(
+      sprintf("Phase173 retained %d review-hold cells; Phase173B separates functional evidence from scalar diagnostics.", phase173$review_hold_cells[[1L]]),
+      sprintf("%d selected M0 cells require a recorded mixing qualification.", sum(decisions$nuisance_mixing_exception)),
+      sprintf("%d exAL cells retain verified historical evidence after a functional hold.", sum(grepl("^retain_historical", decisions$action))),
+      "Comparable jackknife MCSE is unavailable for several frozen historical AL competitors, so numerical winner margins remain descriptive.",
+      "The Phase154 source-reconstruction test requires a legacy Phase124C directory compacted by the audited cleanup; the retained Phase155 manifest and promotion test remain valid.",
+      "No tracked article file was modified; the integration chat must review, compile, and publish the allow-listed assets."
+    ), stringsAsFactors = FALSE
+  )
+  merge_order <- data.frame(
+    order = 1:5,
+    action = c(
+      "Fetch the dedicated task branch and verify this handoff manifest.",
+      "Merge the task branch after the latest origin/main in the integration worktree.",
+      "Run the recorded focused tests and verify Phase173B/174 source manifests.",
+      "Review staged table differences and publish only allow-listed article-safe assets.",
+      "Compile the manuscript twice, inspect the PDF, then publish the article-only Overleaf snapshot."
+    ), stringsAsFactors = FALSE
+  )
+  ready <- all(verification$status == "pass") && all(tests$status == "pass") &&
+    isTRUE(branch_state$worktree_clean[[1L]]) &&
+    isTRUE(branch_state$synchronized_with_upstream[[1L]]) &&
+    phase174$hard_implementation_gate[[1L]] == "pass" &&
+    file.exists(file.path(dirs$phase174_staging, "artifact_manifest.csv"))
+  summary <- data.frame(
+    integration_status = if (ready) "READY_FOR_INTEGRATION" else "NOT_READY_FOR_INTEGRATION",
+    lane = branch_state$lane[[1L]], branch = branch, upstream = upstream,
+    head = head, manifests_verified = sum(verification$status == "pass"),
+    manifest_checks = nrow(verification), tests_passed = sum(tests$status == "pass"),
+    tests_total = nrow(tests), worktree_clean = branch_state$worktree_clean[[1L]],
+    synchronized_with_upstream = branch_state$synchronized_with_upstream[[1L]],
+    article_files_modified = FALSE, stringsAsFactors = FALSE
+  )
+  readme <- file.path(out_dir, "README.md")
+  writeLines(c(
+    "# Joint exQDESN Phase174 frozen integration handoff", "",
+    sprintf("- Status: `%s`", summary$integration_status[[1L]]),
+    sprintf("- Lane: `%s`", summary$lane[[1L]]),
+    sprintf("- Transcript: `%s`", transcript_path),
+    sprintf("- Branch / upstream: `%s` / `%s`", branch, upstream),
+    sprintf("- Full HEAD: `%s`", head),
+    sprintf("- Manifest checks: `%d/%d`", summary$manifests_verified[[1L]], summary$manifest_checks[[1L]]),
+    sprintf("- Focused tests: `%d/%d`", summary$tests_passed[[1L]], summary$tests_total[[1L]]),
+    "- The integration chat owns merging, manuscript compilation, authoritative main, and Overleaf publication.",
+    "- Runtime caches and logs listed in `runtime_generated_exclusions.csv` must remain excluded."
+  ), readme, useBytes = TRUE)
+  write <- function(x, name) app_joint_qvp_write_csv(x, file.path(out_dir, name))
+  paths <- c(
+    integration_handoff_summary = write(summary, "integration_handoff_summary.csv"),
+    branch_state = write(branch_state, "branch_state.csv"),
+    unique_commits = write(unique_commits, "unique_commits.csv"),
+    exact_changed_files = write(changed_files, "exact_changed_files.csv"),
+    run_completion = write(run_completion, "run_completion.csv"),
+    manifest_inventory = write(manifest_inventory, "manifest_inventory.csv"),
+    source_manifest_verification = app_joint_qvp_write_csv(verification, file.path(out_dir, "source_manifest_verification.csv")),
+    test_results = write(tests, "test_results.csv"),
+    article_safe_files = write(article_safe, "article_safe_files.csv"),
+    runtime_generated_exclusions = write(runtime_exclusions, "runtime_generated_exclusions.csv"),
+    unresolved_risks = write(risk_register, "unresolved_risks.csv"),
+    recommended_merge_order = write(merge_order, "recommended_merge_order.csv"),
+    provenance = write(app_joint_qvp_provenance_rows(), "provenance.csv"),
+    README = normalizePath(readme, mustWork = TRUE),
+    setNames(tests$log_path, paste0("test_log_", seq_len(nrow(tests))))
+  )
+  manifest <- app_joint_exqdesn_write_manifest(paths, out_dir)
+  list(
+    out_dir = out_dir, summary = summary, branch_state = branch_state,
+    tests = tests, paths = c(paths, artifact_manifest = manifest$manifest_path)
+  )
 }
 
 app_joint_exqdesn_phase175_promote_staged_assets <- function(

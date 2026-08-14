@@ -4,11 +4,13 @@ Date: 2026-08-13
 
 The integration merged frozen lane commit
 `c804028a6b78538ebc788bd7d45ecc19689cc3b5` with an explicit merge commit and
-promoted the 14 files authorized by the Phase 174 handoff. Eleven files are
+promoted the 14 files authorized by the Phase 174 handoff. Ten files remain
 byte-identical to their frozen staging artifacts. Three LaTeX wrappers replace
 machine-local absolute staging inputs with `tables/<basename>` inputs so the
-article-only deployment is portable. The numerical CSVs and rendered table
-bodies are unchanged.
+article-only deployment is portable. A later manuscript revision replaces
+gate-oriented prose in the model-summary caption with the substantive
+11-new/5-retained path-stability description. The numerical CSVs and rendered
+table cells are unchanged.
 
 The main-text winner counts and interpretation were reconciled to the frozen
 32-row scenario table. The text preserves the declared scope: posterior

@@ -1,0 +1,6 @@
+schema_version,case_id,tau0_low_multiplier,tau0_high_multiplier,include_tail_relaxation,alternate_design_role,alternate_design_reason,selection_scope,pre_m0_rank_authority,exact_m0_rank_required
+1,laplace_bridge__exqdesn_rhs_independent_vb,0.70,1.50,TRUE,none,"Prior reservoir maps did not improve the corresponding joint VB case; reopen tau0 and intercept-tail regularization first.",case_specific_scenario_readout,FALSE,TRUE
+1,normal_bridge__exqdesn_rhs_independent_vb,0.67,1.33,TRUE,none,"The direct Gaussian bridge is structurally adequate; test local shrinkage and tail regularization without adding unnecessary states.",case_specific_scenario_readout,FALSE,TRUE
+1,persistent_heavy_tail__exqdesn_rhs_independent_vb,0.70,1.50,TRUE,none,"The direct design was retained in prior feature work; tail-specific intercept regularization is the focused new direction.",case_specific_scenario_readout,FALSE,TRUE
+1,regime_shift__exqdesn_rhs_independent_vb,0.67,1.67,TRUE,hybrid_compact,"Independent exAL did not receive the full Phase151 joint feature-map screen; one compact hybrid map is a bounded novel check.",case_specific_scenario_readout,FALSE,TRUE
+1,regime_shift__joint_exqdesn_rhs_vb,0.67,1.67,TRUE,none,"Phase151 found every reservoir/hybrid map worse for the joint regime-shift case; do not repeat that failed feature branch.",case_specific_scenario_readout,FALSE,TRUE

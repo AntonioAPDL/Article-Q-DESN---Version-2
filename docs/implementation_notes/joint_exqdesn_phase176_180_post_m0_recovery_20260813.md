@@ -1,5 +1,32 @@
 # Joint exQDESN Phase 176-180 Post-M0 Recovery
 
+## Phase 178 completion and exact-M0 transition
+
+The protected structured-VB feasibility screen completed all 126 planned rows
+without worker failures. It retained 15 templates across five case-specific
+model/scenario cells. These templates are feasibility survivors only: VB does
+not select an article winner, and the article fixture remains excluded from
+ranking. The next evidential stage is the frozen exact-M0 ranking packet of 180
+chains (15 templates, three calibration replicates, and four chains per
+template-replicate pair).
+
+The Phase 178 and Phase 179 launchers use a completion-aware CPU lease queue.
+Each audited CPU is assigned to at most one live child process and is returned
+to the queue only after that exact PID terminates. This replaces cyclic CPU
+assignment, which could place a new worker on a CPU still occupied by an
+unusually slow predecessor. Worker-level resume checks, exit files, logs, and
+failure packets remain unchanged.
+
+Before an exact-M0 launch, operators must:
+
+1. verify the Phase 178 VB audit and its artifact manifest;
+2. verify the exact-M0 freeze, unique chain and component seeds, and the
+   `M0_v_collapsed_support_logit` method contract;
+3. supply a contemporaneously audited CPU list rather than an inferred range;
+4. confirm that no article-fixture row can enter ranking; and
+5. retain the selected-versus-parity protected confirmation as a separate
+   phase after ranking.
+
 ## Scientific boundary
 
 Phase 173 completed exact-M0 confirmation for all 16 exAL cells. Phase 173B

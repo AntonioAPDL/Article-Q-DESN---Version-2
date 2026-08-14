@@ -2788,10 +2788,7 @@ app_joint_exqdesn_phase174_relabel_generated_file <- function(path, source_line 
     "All scores use the monotone quantile-grid contract; raw crossings are retained only as pre-contract diagnostics.",
     paste(
       "All scores use the monotone quantile-grid contract; raw crossings are retained only as pre-contract diagnostics.",
-      paste(
-        "Eleven qf-GAL entries use newly qualified M0 results satisfying prespecified finite-path and quantile-stability criteria;",
-        "five use previously verified MCMC results because their replacement paths did not satisfy those criteria."
-      )
+      "Updated exAL rows are used only when quantile-path stability gates pass; otherwise the previously verified MCMC result is retained."
     ),
     lines, fixed = TRUE
   )

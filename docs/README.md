@@ -1,55 +1,78 @@
 # Documentation Guide
 
-The authoritative publication sources are `../main.tex`,
-`../qdesn-supplement.tex`, and `../refs.bib`. Documentation records why those
-sources and their generated assets have their current form; a note does not
-become authoritative merely because it is recent or calls itself current.
+The documentation is organized for readers who want to understand why the
+current manuscript looks the way it does, without needing the whole editing
+history.
 
-## Current evidence authorities
+## Audits
 
-- GloFAS: `implementation_notes/glofas_fr09_authoritative_full7_promotion_20260811.md`
-  and the tracked `../tables/glofas_application_current_*` aliases. The result
-  is a one-gauge, one-origin, 28-horizon retrospective reference analysis.
-  Responses are held out, but the declared covariate policy blends realized
-  future precipitation and soil-moisture information; it is therefore not a
-  clean operational origin-information forecast.
-- Independent Q-DESN validation: the promoted v6 article assets plus the dated
-  exAL M0, five-chain, paired-comparison, and rolling-evaluation records. The
-  2026-08-13 Tier-B campaign retained v6 and promoted no new article metrics.
-- Joint Q-DESN validation: the Phase 173B/174 closeout and
-  `implementation_notes/joint_exqdesn_phase174_article_promotion_manifest_20260813.csv`.
-  The older `../tables/joint_qdesn_article_validation_asset_manifest.csv` is a
-  historical Phase 155 manifest and is not a current integrity manifest.
-- PriceFM: `implementation_notes/pricefm_paper_aligned_article_table_20260811.md`
-  and the tracked paper-aligned comparison assets. The aligned replay is a
-  retrospective direct-horizon comparison: every policy uses realized-ex-post
-  target load, solar, and wind leads, and graph rows additionally use neighbor
-  leads. Published PriceFM full-shot values are context only and are not part
-  of the aligned ranking.
+- `audits/initial_style_audit.md`: first broad audit of the manuscript,
+  supplement, bibliography, and simulation tables.
+- `audits/reader_focused_style_audit.md`: reader-facing pass focused on
+  clarity, notation, and anti-generic prose.
+- `audits/reviewer_reading_audit.md`: fresh-reader pass from the perspective of
+  a potential reviewer.
+- `audits/full_manuscript_style_audit.md`: whole-document style and scope audit
+  after the major framing changes.
 
-## Current scientific contracts
+## Revision Logs
 
-The operative contracts include the GloFAS latent-path likelihood and blended
-covariate contracts and the PriceFM graph-feature, parity-selection, and
-region/fold-selection contracts. Some older GloFAS contracts describe
-superseded feature maps, reservoir dimensions, likelihood choices, or source
-layouts. Use the current aliases and dated evidence authorities listed above
-before relying on any older plan or contract.
+- `revision_logs/initial_style_revision_log.md`: changes from the first style
+  pass.
+- `revision_logs/reader_focused_revision_log.md`: later changes from the
+  reader-focused, reviewer, introduction, related-work, and compact-abstract
+  passes.
 
-## Historical material
+## Implementation Notes
 
-Most files in `audits/`, `implementation_notes/`, and `revision_logs/` are
-historical plans, implementation records, or completed campaign records. They
-remain useful provenance but must not override the current manuscript,
-implementation, configurations, promoted outputs, or dated promotion
-manifests. In particular:
+- `implementation_notes/regularized_horseshoe_update_report.md`: record of the
+  regularized-horseshoe implementation update and the supporting citation
+  changes.
+- `implementation_notes/glofas_application_reproducibility_blueprint.md`:
+  design contract for the planned GloFAS Q-DESN application workflow,
+  including the current local R 4.6.0 runtime requirement for validation and
+  application gates.
+- `implementation_notes/glofas_model_contract_20260511.md`: frozen
+  discrepancy-calibration model contract connecting the main article,
+  supplement, and future code.
+- `implementation_notes/glofas_implementation_spec_20260511.md`: code-facing
+  object map, API boundary, validation checks, and run-artifact contract for
+  the GloFAS implementation.
+- `implementation_notes/glofas_prelaunch_runbook_20260511.md`: final dry-run
+  and preflight procedure before any manuscript-scale application launch.
+- `implementation_notes/glofas_large_vb_launch_protocol_20260512.md`:
+  companion VB protocol for the large Dec. 25 GloFAS discrepancy profile,
+  including the inference-support gate that requires engine-reported
+  discrepancy `AL + VB` support before posterior computation.
+- `implementation_notes/glofas_large_gate_and_vb_p50_pilot_20260512.md`:
+  record of the full large MCMC and VB design gates and the first median-only
+  large AL-VB pilot.
+- `implementation_notes/glofas_phase3_derivation_plan_20260511.md`: derivation
+  plan for the application-specific posterior, MCMC, VB, and ELBO supplement
+  material.
+- `implementation_notes/glofas_application_model_families_20260513.md`:
+  separation between the frozen origin-state bridge and the latent-path
+  ensemble-likelihood target model.
+- `implementation_notes/glofas_latent_path_ensemble_likelihood_contract_20260513.md`:
+  initial statistical contract, likelihood ownership, future-state recursion,
+  and derivation gates for the latent-path GloFAS model.
+- `implementation_notes/glofas_latent_path_vb_first_plan_20260513.md`:
+  revised implementation plan prioritizing AL-VB, then AL-MCMC, then exAL,
+  with effective-horizon handling and synthetic validation requirements.
+- `implementation_notes/glofas_latent_path_four_case_derivations_20260513.md`:
+  pre-implementation derivation note for the AL-VB, AL-MCMC, exAL-VB, and
+  exAL-MCMC latent-path GloFAS targets under one shared notation.
+- `implementation_notes/application_selected_reference_run_20260524.md`:
+  current manuscript-facing GloFAS application run, promoted-output registry,
+  compact score table, selection command, and replacement protocol.
+- `implementation_notes/glofas_candidate_batch_20260524.md`: focused
+  reservoir-candidate launch batch after the selected reference GloFAS run,
+  holding the prior and inference settings fixed while varying screened D1 n300
+  reservoir controls.
+- `implementation_notes/glofas_capacity1000_candidate_batch_20260524.md`:
+  capacity-controlled depth/width candidate batch with total reservoir units
+  fixed at 1000, identity/no-reduction inter-layer state maps, and a required
+  `diagnostic_target=both` reservoir-validity gate before launch.
 
-- early style audits predate both real-data applications;
-- several GloFAS and PriceFM promotion notes retain an old phrase such as
-  “current authoritative” even though later promotions superseded them;
-- the 2026-08-11 Overleaf audit describes its own source snapshot, not the
-  current publication closure;
-- deprecated launch and cleanup notes are retained only as history.
-
-Select evidence through the promoted current-output aliases and dated
-promotion manifests described above, not by filename date or keyword alone.
+These notes are descriptive. The authoritative manuscript sources are
+`../main.tex`, `../qdesn-supplement.tex`, and `../refs.bib`.

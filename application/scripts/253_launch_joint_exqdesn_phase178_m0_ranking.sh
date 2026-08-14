@@ -35,7 +35,7 @@ mkdir -p "$ORCH/logs" "$ORCH/exits" "$ORCH/failures"
 [[ -f "$FREEZE/artifact_manifest.csv" ]] || \
   Rscript "$ROOT/application/scripts/250_prepare_joint_exqdesn_phase178_m0_ranking.R" --vb-cores "$VB_CORES" \
     >"$ORCH/preparation.log" 2>&1
-mapfile -t WORKERS < <(awk -F, 'NR>1 {gsub(/"/,"",$1); print $1}' "$FREEZE/chain_plan.csv")
+mapfile -t WORKERS < <(joint_exqdesn_chain_plan_worker_ids "$FREEZE/chain_plan.csv")
 for worker in "${WORKERS[@]}"; do
   joint_exqdesn_cpu_queue_acquire; cpu="$QUEUE_CPU"
   (

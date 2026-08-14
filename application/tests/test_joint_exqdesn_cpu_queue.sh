@@ -29,10 +29,19 @@ if (joint_exqdesn_cpu_queue_init "11,11" 2 >/dev/null 2>&1); then
   exit 1
 fi
 
+plan=$(mktemp)
+trap 'rm -f "$plan"' EXIT
+printf '%s\n' '"case_id","notes","worker_id"' '"case_a","quoted, comma",7' '"case_b","ok",12' > "$plan"
+mapfile -t parsed_workers < <(joint_exqdesn_chain_plan_worker_ids "$plan")
+[[ "${parsed_workers[*]}" == "7 12" ]]
+
 for launcher in 249 253 256 259; do
   file=$(find "$ROOT/application/scripts" -maxdepth 1 -name "${launcher}_launch_joint_exqdesn_*.sh")
   grep -q 'joint_exqdesn_cpu_queue_acquire' "$file"
   ! grep -q 'slot %' "$file"
+  if [[ "$launcher" != "249" ]]; then
+    grep -q 'joint_exqdesn_chain_plan_worker_ids' "$file"
+  fi
 done
 
 echo "joint exQDESN completion-aware CPU queue tests passed"

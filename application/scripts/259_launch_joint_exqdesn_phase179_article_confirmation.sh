@@ -32,7 +32,7 @@ if [[ ! -f "$FREEZE/artifact_manifest.csv" ]]; then
   Rscript "$ROOT/application/scripts/258_check_joint_exqdesn_phase179_article_confirmation.R" >"$ORCH/final_health.log" 2>&1
   exit 0
 fi
-mapfile -t WORKERS < <(awk -F, 'NR>1 {gsub(/"/,"",$1); print $1}' "$FREEZE/chain_plan.csv")
+mapfile -t WORKERS < <(joint_exqdesn_chain_plan_worker_ids "$FREEZE/chain_plan.csv")
 for worker in "${WORKERS[@]}"; do
   joint_exqdesn_cpu_queue_acquire; cpu="$QUEUE_CPU"
   (

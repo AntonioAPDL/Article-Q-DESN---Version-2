@@ -1,3 +1,0 @@
-"model_id","n_quantile_scores","check_loss_mean","check_loss_independent_mean","check_loss_monotone_mean","interval_score_mean","interval_coverage_mean","crps_quantile_grid_mean"
-"qdesn_glofas_discrepancy_fr09_authoritative",196,0.56541337777938,0.565590000725678,0.56541337777938,10.8031757845375,0.357142857142857,1.1318775063192
-"raw_glofas_fr09_authoritative",196,0.763942704562467,0.763942704562467,0.763942704562467,25.2027636659504,0,1.44235863997326

@@ -1,0 +1,3 @@
+"model_id","n_quantile_scores","check_loss_mean","check_loss_independent_mean","check_loss_monotone_mean","interval_score_mean","interval_coverage_mean","crps_quantile_grid_mean"
+"qdesn_latent_path_rhs_al_vb_glofas_discrepancy_smoothing_gate_20260616_c03_m420_alpha010_tau_current",196,0.495186133578148,0.495186133578148,0.495186133578148,5.75774362946862,0.214285714285714,1.00967052909448
+"raw_glofas_glofas_discrepancy_smoothing_gate_20260616_c03_m420_alpha010_tau_current",196,0.763942704562467,0.763942704562467,0.763942704562467,13.0537862430348,0,1.44235863997326

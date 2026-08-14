@@ -1,0 +1,227 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_median_region_panel_20260606
+  purpose: Median-only region-panel selection grid. The panel is selected from PriceFM
+    audit/reference diagnostics and the candidate set is a bounded transfer of the
+    current DE_LU-winning neighborhoods.
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_median_de_lu_fold1_authoritative_reservoir_corrected_20260602.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_median_region_panel_20260606
+    run_root: application/data_local/pricefm/runs/pricefm_median_region_panel_20260606
+  scope:
+    regions:
+    - DE_LU
+    - EE
+    - HU
+    - NO_4
+    - SE_2
+    - IT_SICI
+    folds:
+    - 1
+    - 2
+    - 3
+    quantiles:
+    - 0.5
+    horizons: all
+    ranking_split: val
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+  fixed:
+    lead_window: 96
+    feature_map: window_reservoir_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    recurrent_sparsity: 0.05
+    reservoir_activation: tanh
+    state_output: final_layer
+    default_jobs: 1
+    qdesn_likelihoods:
+    - al
+    - exal
+    warm_start_enabled: true
+    exact_equivalence_train_rows: 1000
+    artifact_hygiene:
+      enabled: true
+      clean_adapter_patterns:
+      - X_*.csv
+      clean_model_patterns:
+      - '*.rds'
+      - '*.rda'
+      - '*.RData'
+      preserve_patterns:
+      - adapter_manifest.json
+      - feature_manifest.json
+      - rows_*.csv
+      - rows_all.csv
+      - y_*.csv
+      - metric_summary.csv
+      - metric_by_horizon.csv
+      - metric_by_horizon_group.csv
+      - model_method_summary.csv
+      - model_parameter_summary.csv
+      - model_trace_summary.csv
+      - predictions_with_naive_scaled.csv
+      - model_predictions_scaled.csv
+      - exact_equivalence.csv
+      - warm_start_diagnostics.csv
+      - report.md
+      - '*.png'
+      - '*.pdf'
+      - '*.json'
+      - '*.log'
+  launch:
+    dry_run_gate:
+      priorities:
+      - 0
+      - 1
+      experiment_jobs: 10
+      cell_jobs: 1
+      build_windows: true
+      note: Use --dry-run true first. Priority 0 transfers the three current DE_LU
+        winner/anchor geometries; priority 1 adds compact context diagnostics. Selection
+        remains validation-only.
+    priority0_panel_core:
+      priorities:
+      - 0
+      experiment_jobs: 6
+      cell_jobs: 1
+      build_windows: true
+      note: First real launch stage if storage/CPU budget is approved.
+    priority1_panel_diagnostics:
+      priorities:
+      - 1
+      experiment_jobs: 6
+      cell_jobs: 1
+      build_windows: true
+      note: Optional diagnostic stage after priority 0 is inspected.
+  experiments:
+  - stage: region_panel_median
+    regions: &id001
+    - DE_LU
+    - EE
+    - HU
+    - NO_4
+    - SE_2
+    - IT_SICI
+    folds: &id002
+    - 1
+    - 2
+    - 3
+    feature_map: window_reservoir_v1
+    projection_scale: 1.0
+    tau0: 0.001
+    quantile: 0.5
+    state_output: final_layer
+    id: panel_core_l096_d1_n120_a0p5_r0p9_in0p50_seed20260601
+    priority: 0
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    seed: 20260601
+    rationale: Global anchor from the corrected DE_LU fold-1 winner geometry.
+  - stage: region_panel_median
+    regions: *id001
+    folds: *id002
+    feature_map: window_reservoir_v1
+    projection_scale: 1.0
+    tau0: 0.001
+    quantile: 0.5
+    state_output: final_layer
+    id: panel_lowinput_l096_d1_n120_a0p5_r0p9_in0p25_seed20260603
+    priority: 0
+    lag_window: 96
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.25
+    seed: 20260603
+    rationale: Fold-2 follow-up winner geometry; tests lower input scale.
+  - stage: region_panel_median
+    regions: *id001
+    folds: *id002
+    feature_map: window_reservoir_v1
+    projection_scale: 1.0
+    tau0: 0.001
+    quantile: 0.5
+    state_output: final_layer
+    id: panel_d2_l096_d2_n080x080_a0p4_r0p9_in0p35_seed20260603
+    priority: 0
+    lag_window: 96
+    depth: 2
+    units:
+    - 80
+    - 80
+    alpha: 0.4
+    rho: 0.9
+    input_scale: 0.35
+    seed: 20260603
+    rationale: Fold-3 follow-up winner geometry; compact D=2 representation.
+  - stage: region_panel_median
+    regions: *id001
+    folds: *id002
+    feature_map: window_reservoir_v1
+    projection_scale: 1.0
+    tau0: 0.001
+    quantile: 0.5
+    state_output: final_layer
+    id: panel_compact_l096_d1_n080_a0p5_r0p9_in0p50_seed20260603
+    priority: 1
+    lag_window: 96
+    depth: 1
+    units:
+    - 80
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    seed: 20260603
+    rationale: Compact D=1 diagnostic near the fold-3 anchor neighborhood.
+  - stage: region_panel_median
+    regions: *id001
+    folds: *id002
+    feature_map: window_reservoir_v1
+    projection_scale: 1.0
+    tau0: 0.001
+    quantile: 0.5
+    state_output: final_layer
+    id: panel_short_l072_d1_n120_a0p5_r0p9_in0p50_seed20260603
+    priority: 1
+    lag_window: 72
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    seed: 20260603
+    rationale: Short-context check around the one-day-ish DE_LU winners.
+  - stage: region_panel_median
+    regions: *id001
+    folds: *id002
+    feature_map: window_reservoir_v1
+    projection_scale: 1.0
+    tau0: 0.001
+    quantile: 0.5
+    state_output: final_layer
+    id: panel_long_l128_d1_n120_a0p5_r0p9_in0p50_seed20260603
+    priority: 1
+    lag_window: 128
+    depth: 1
+    units:
+    - 120
+    alpha: 0.5
+    rho: 0.9
+    input_scale: 0.5
+    seed: 20260603
+    rationale: Slightly longer context check without returning to very long windows.
+  experiment_blocks: []

@@ -1,0 +1,185 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_de_lu_fold1_paper_quantiles_authoritative_20260602
+  purpose: >
+    Authoritative DE_LU fold-1 paper-quantile follow-up for the corrected
+    reservoir baseline. Each PriceFM tutorial quantile is launched as an
+    independent one-core cell so the seven quantile fits can run in parallel
+    and then be merged into paper-style multi-quantile metrics.
+
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_median_de_lu_fold1_authoritative_reservoir_corrected_20260602.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_de_lu_fold1_paper_quantiles_authoritative_20260602
+    run_root: application/data_local/pricefm/runs/pricefm_de_lu_fold1_paper_quantiles_authoritative_20260602
+
+  scope:
+    regions: [DE_LU]
+    folds: [1]
+    quantiles: [0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90]
+    horizons: all
+    ranking_split: test
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+
+  fixed:
+    lead_window: 96
+    feature_map: window_reservoir_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    recurrent_sparsity: 0.05
+    reservoir_activation: tanh
+    state_output: final_layer
+    default_jobs: 1
+    qdesn_likelihoods: [al, exal]
+    exact_equivalence_train_rows: 1000
+    artifact_hygiene:
+      enabled: true
+      clean_adapter_patterns: [X_*.csv]
+      clean_model_patterns: ["*.rds", "*.rda", "*.RData"]
+      preserve_patterns:
+        - adapter_manifest.json
+        - feature_manifest.json
+        - rows_*.csv
+        - rows_all.csv
+        - y_*.csv
+        - metric_summary.csv
+        - metric_by_horizon.csv
+        - metric_by_horizon_group.csv
+        - model_method_summary.csv
+        - model_parameter_summary.csv
+        - model_trace_summary.csv
+        - predictions_with_naive_scaled.csv
+        - model_predictions_scaled.csv
+        - exact_equivalence.csv
+        - warm_start_diagnostics.csv
+        - report.md
+        - "*.png"
+        - "*.pdf"
+        - "*.json"
+        - "*.log"
+
+  launch:
+    paper_quantile_cells:
+      priorities: [0]
+      experiment_jobs: 7
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Launch all seven independent quantile cells. This intentionally gives
+        up cross-quantile warm starts so the quantile fits can run concurrently
+        with one core each. Within each cell, AL still warm-starts from the
+        normal RHS_NS fit and exAL warm-starts from AL at the same tau.
+    summarizer:
+      script: application/scripts/pricefm/15_summarize_paper_quantile_runs.py
+      output_dir: application/data_local/pricefm/authoritative/pricefm_de_lu_fold1_paper_quantiles_authoritative_20260602
+
+  experiments:
+    - id: pq_tau0p10_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.10
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.10 cell.
+
+    - id: pq_tau0p25_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.25
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.25 cell.
+
+    - id: pq_tau0p45_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.45
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.45 cell.
+
+    - id: pq_tau0p50_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.50
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.50 cell.
+
+    - id: pq_tau0p55_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.55
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.55 cell.
+
+    - id: pq_tau0p75_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.75
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.75 cell.
+
+    - id: pq_tau0p90_rc_p1_d1n120_l096_alpha0p5_rho0p9_input_scale0p5
+      stage: paper_quantile
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.5
+      rho: 0.9
+      input_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      quantile: 0.90
+      rationale: Corrected median winner geometry, independent PriceFM tutorial tau=0.90 cell.

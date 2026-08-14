@@ -1,0 +1,25 @@
+% Manuscript-facing MCMC-only wrapper derived from
+% tables/joint_qdesn_article_validation_mcmc_scenario_summary.tex.
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.22\textwidth}llrrrrr>{\raggedright\arraybackslash}p{0.18\textwidth}@{}}
+\toprule
+Scenario & Class & Family & MCMC MAE & MCMC check loss & Chain-pooled path distance & Pre-rearrangement crossings & Runtime min. & Diagnostic note \\
+\midrule
+Asymmetric Laplace Tail & stress & Asymmetric Laplace & 0.081 & 0.140 & 0.107 & 0 & 19.9 & all diagnostics finite \\
+Gaussian-Mixture Bridge & bridge & Gaussian mixture & 0.098 & 0.160 & 0.063 & 0 & 18.7 & all diagnostics finite \\
+Heteroskedastic Seasonal & stress & Student-t & 0.088 & 0.190 & 0.031 & 0 & 19.3 & all diagnostics finite \\
+Laplace Bridge & bridge & Laplace & 0.089 & 0.128 & 0.146 & 0 & 19.1 & all diagnostics finite \\
+Nonlinear Reservoir Friendly & stress & Gaussian mixture & 0.109 & 0.171 & 0.183 & 0 & 18.4 & all diagnostics finite \\
+Normal Bridge & bridge & Gaussian & 0.081 & 0.123 & 0.149 & 0 & 19.2 & all diagnostics finite \\
+Persistent Heavy Tail & stress & Student-t & 0.121 & 0.155 & 0.100 & 0 & 22.9 & all diagnostics finite \\
+Regime Shift & stress & Student-t & 0.082 & 0.187 & 0.085 & 0 & 17.3 & all diagnostics finite \\
+Student-t Location-Scale & stress & Student-t & 0.061 & 0.133 & 0.038 & 0 & 19.4 & all diagnostics finite \\
+\bottomrule
+\end{tabular}
+}%
+\caption{MCMC fit-reference diagnostics for the primary joint QDESN RHS row across the nine frozen-feature multi-quantile mechanisms. The MCMC layer checks fit-window posterior recovery and raw crossing behavior for the selected joint readout; it is not a rolling-origin held-out forecast comparison. Path distances compare fitted quantile paths after normalization to the scale of the oracle paths.}
+\label{tab:joint-qdesn-article-validation-mcmc-main-summary}
+\end{table}

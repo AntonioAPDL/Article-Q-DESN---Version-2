@@ -8,6 +8,19 @@ declare -Ag JOINT_EXQDESN_QUEUE_PID_CPU=()
 declare -gi JOINT_EXQDESN_QUEUE_ACTIVE=0
 QUEUE_CPU=""
 
+joint_exqdesn_chain_plan_worker_ids() {
+  local chain_plan="$1"
+  Rscript - "$chain_plan" <<'RS'
+args <- commandArgs(trailingOnly = TRUE)
+x <- read.csv(args[[1L]], stringsAsFactors = FALSE, check.names = FALSE)
+if (!"worker_id" %in% names(x) || anyNA(x$worker_id) ||
+    anyDuplicated(x$worker_id) || any(x$worker_id != as.integer(x$worker_id))) {
+  stop("chain_plan.csv requires unique integer worker_id values.", call. = FALSE)
+}
+cat(as.integer(x$worker_id), sep = "\n")
+RS
+}
+
 joint_exqdesn_cpu_queue_init() {
   local cpu_list="$1" max_parallel="$2" cpu
   local -A seen=()

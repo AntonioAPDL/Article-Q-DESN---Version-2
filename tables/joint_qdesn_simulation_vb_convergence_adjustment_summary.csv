@@ -1,4 +1,0 @@
-"Model","Fit max-iter rows","Forecast max-iter rows","Forecast raw crossings","Contract crossings","Max adjustment","Convergence audit"
-"Joint QDESN RHS","8","8","4","0","0.054","review"
-"Independent QDESN RHS","8","8","157","0","0.241","pass with note"
-"Joint exQDESN RHS","9","9","0","0","0.000","pass with note"

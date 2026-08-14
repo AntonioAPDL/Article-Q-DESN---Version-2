@@ -1,4 +1,4 @@
-# Bayesian Quantile Forecasting with Deep Echo State Network Readouts
+# Bayesian Conditional-Quantile Forecasting with Fixed Deep Echo State Network Features
 
 This repository contains the working manuscript, supplement, bibliography, and
 simulation tables for the Q--DESN article.
@@ -13,9 +13,11 @@ simulation tables for the Q--DESN article.
   used for manuscript revisions.
 - `scripts/build_qdesn_simulation_tables.R`: script used to regenerate the
   simulation tables from external validation outputs.
-- `application/`: planned GloFAS streamflow forecast-calibration workflow.
-  Source-controlled files in this directory define the reproducibility
-  contract; local data, caches, runs, logs, and generated outputs are ignored.
+- `application/`: reproducible GloFAS and PriceFM application workflows. The
+  current article includes a completed one-origin GloFAS reference case and a
+  PriceFM-aligned transfer benchmark. Source-controlled files define their
+  reproducibility contracts; local data, caches, runs, logs, and generated
+  outputs are ignored.
 - `docs/`: audit notes, revision logs, and implementation notes.
 
 ## Build
@@ -53,12 +55,11 @@ Build a clean source bundle with:
 scripts/build_arxiv_source_bundle.sh
 ```
 
-The script copies only the main article, supplement source, bibliography,
-included table files, and figures used by `main.tex` into a timestamped
-directory under `/tmp`. It also gives the upload copy clean source names such
-as `article.tex`, `supplement.tex`, `references.bib`, short table names, and
-short figure names. Compile checks for the main article and supplement should
-be run from that bundle before upload.
+The script reads the same recorder-verified source allowlist used by the
+article-only Overleaf projection, then copies those sources with their
+repository-relative names into a timestamped directory under `/tmp`. Compile
+checks for both `main.tex` and `qdesn-supplement.tex` must be run from that
+isolated bundle before upload.
 
 For the arXiv web form, the likely primary archive is `stat` and the likely
 primary class is `stat.ME`. The license choice is an author decision; use the
@@ -93,10 +94,15 @@ for the current fit-and-forecast result tables.
 
 ## GloFAS Application
 
-The planned application is organized under `application/`. Start with
-`application/README.md` and
-`docs/implementation_notes/glofas_application_reproducibility_blueprint.md`.
-The application workflow is intentionally article-owned: it will define the
-input contract, model grid, forecast-origin protocol, scoring outputs, and
-manuscript table/figure provenance used by Section 9. Large or private inputs
-and generated runs should remain in ignored local directories.
+The application workflow is organized under `application/`. Start with
+`application/README.md`. The current article-facing authority is the completed
+2026-08-11 FR09 reference case documented in
+`docs/implementation_notes/glofas_fr09_authoritative_full7_promotion_20260811.md`.
+It covers one reference gauge, the 25 December 2022 forecast origin, seven
+independently fitted quantile levels, and 28 held-out horizons. This is a
+focused retrospective reference analysis, not multi-origin or basin-wide
+operational validation: future responses are blinded, while the selected
+configuration declares a blend containing realized future precipitation and
+soil-moisture covariates. Large or private inputs and generated runs remain in
+ignored local directories; tracked manifests and stable aliases preserve the
+publication provenance.

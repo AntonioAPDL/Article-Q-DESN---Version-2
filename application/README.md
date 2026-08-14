@@ -1,16 +1,26 @@
-# GloFAS Q-DESN Application
+# Q-DESN Applications
 
-This directory will contain the reproducible workflow for the GloFAS
-streamflow forecast-calibration application described in Section 9 of the
-article.
+This directory contains the reproducible workflow for the GloFAS streamflow
+forecast-calibration application and the PriceFM transfer benchmark. The
+current article-facing GloFAS result is a completed one-gauge, one-origin
+reference case with 28 held-out horizons; broader multi-origin and multi-basin
+evaluation remains future work.
 
 The application is article-owned. The Q-DESN computational engine may be
 installed from a pinned `exdqlm` commit or vendored later as a small audited
 module, but the data contract, forecast-origin protocol, model grid, scoring,
 and manuscript outputs live here.
 
-The current application work distinguishes the frozen origin-state bridge from
-the target latent-path ensemble-likelihood model. The model-family separation
+## Historical GloFAS Development Profiles
+
+The profiles in this section record the path from the original origin-state
+bridge to the later latent-path model. They are retained for reproducibility
+but are superseded as manuscript authority by the completed FR09 reference
+case documented below. They must not be read as pending launch instructions or
+as the active selected configuration.
+
+Earlier application work distinguished the frozen origin-state bridge from
+the then-target latent-path ensemble-likelihood model. The model-family separation
 is documented in
 `docs/implementation_notes/glofas_application_model_families_20260513.md`.
 The original bridge contract remains documented in
@@ -20,12 +30,13 @@ code-facing object and API mapping is documented in
 required Q-DESN application fits use the regularized horseshoe prior; ridge
 fits are retained as dense baselines.
 
-The forward launch gates are documented in
+The historical forward launch gates are documented in
 `docs/implementation_notes/glofas_application_forward_plan_20260511.md`. That
-note is the current checkpoint for moving from audited source figures to the
-package-backed dry run and final application launch.
+note records a former checkpoint for moving from audited source figures to a
+package-backed dry run and application launch; it is not the current evidence
+authority.
 
-The first executable latent-path smoke profile is
+The first historical executable latent-path smoke profile is
 `config/glofas_latent_path_al_vb_dec25_smoke.yaml`, with model rows in
 `config/model_grid_latent_path_al_vb_dec25_smoke.csv`. It uses the audited
 Dec. 25, 2022 input bundle, a deliberately small history and horizon window,
@@ -35,7 +46,7 @@ check for recursive future-state construction and posterior-draw output. It is
 not an application-scale fit and should not be used for manuscript performance
 claims.
 
-The next launch gate is
+A later historical launch gate is
 `config/glofas_latent_path_al_vb_dec25_micro_pilot.yaml`, with model rows in
 `config/model_grid_latent_path_al_vb_dec25_micro_pilot.csv`. It uses the same
 real Dec. 25 source bundle and recursive posterior-draw contract, but extends
@@ -45,12 +56,12 @@ on the larger median-only pilot.
 
 The covariate-aware latent-path full profile is documented in
 `docs/implementation_notes/glofas_latent_path_vb_structure_profile_20260514.md`.
-That note records the current VB structure decision: dense future-row moments
+That note records the then-current VB structure decision: dense future-row moments
 are retained only as a debug reference, while the executable full profile uses
 keyed future-builder output, streamed grouped moments, a linearized Delta
 future-path update, and first-order Delta posterior-draw prediction. The full
-covariate-aware AL-VB readiness profile remains disabled. The safe full-specification
-pilot is `config/glofas_latent_path_al_vb_dec25_pilot.yaml`, with model rows in
+covariate-aware AL-VB readiness profile was disabled. The corresponding full-specification
+pilot was `config/glofas_latent_path_al_vb_dec25_pilot.yaml`, with model rows in
 `config/model_grid_latent_path_al_vb_dec25_pilot.csv`. It mirrors the current
 large DESN and covariate-aware reservoir input contract but limits VB to a
 short diagnostic run. The historical completed pilot
@@ -59,7 +70,7 @@ path, posterior-draw prediction contract, post-fit uncertainty-band checks, and
 diagnostic plot generation under the previous launch size; it is not a
 manuscript-scale fit.
 
-The main Dec. 25 latent-path AL-VB launch is configured separately in
+The historical main Dec. 25 latent-path AL-VB launch was configured separately in
 `config/glofas_latent_path_al_vb_dec25_main.yaml`, with model rows in
 `config/model_grid_latent_path_al_vb_dec25_main.csv`. This main configuration
 uses `D = 2`, `n = (1000, 1000)`, `n_tilde = 500`, `m = 360`,
@@ -70,7 +81,7 @@ uses `D = 2`, `n = (1000, 1000)`, `n_tilde = 500`, `m = 360`,
 are guarded by a 500-iteration hard cap to avoid accidentally running obsolete
 1,500-iteration profiles.
 
-Because the main configuration is marked as a final launch, it cannot reach
+Although superseded, the main configuration is marked as a final launch and cannot reach
 `scripts/03_fit_models.R` unless the command includes
 `--confirm_final_launch true`. The wrapper option `--preflight true` is not a
 dry run; it appends `scripts/06_preflight_launch.R` after the ordinary workflow
@@ -127,7 +138,11 @@ Ignored local artifacts:
 - `outputs/`: storage-light generated-output staging before manuscript
   promotion.
 
-## PriceFM Data-Layer Pilot
+## Historical PriceFM Data-Layer and Median Pilots
+
+This section records early PriceFM data and median-model development. The
+current 114-cell publication comparison is described in the current-reference
+section below; these pilot notes are not the publication authority.
 
 The PriceFM data pipeline is staged under `scripts/pricefm/` with configuration
 in `config/pricefm_data_pipeline.yaml`. It is a data-layer pilot only:
@@ -135,12 +150,12 @@ download, audit, split, scale, and window construction for the Hugging Face
 `RunyaoYu/PriceFM` `FINAL.csv` artifact. Generated data stay ignored under
 `data_local/pricefm/`, with logs under `logs/pricefm/`.
 
-The first operational target is deliberately narrow: DE_LU, fold 1, L96/H96
+The first historical target was deliberately narrow: DE_LU, fold 1, L96/H96
 rolling windows, train-only robust scaling, and explicit `market_time =
 time_utc + 1 hour` manifests. These artifacts are not Q-DESN model inputs until
 a later modeling adapter is explicitly specified and tested.
 
-The current median PriceFM modeling workflow uses tracked experiment-grid
+The subsequent median PriceFM modeling workflow used tracked experiment-grid
 configs under `application/config/` and ignored run/output roots under
 `application/data_local/pricefm/`. The fold 2/3 follow-up seed/refinement grid
 is prepared by
@@ -215,31 +230,41 @@ registry exposes the selected calibration factor, additive width, center
 quantile, and calibration identifier as LaTeX aliases; the manuscript should
 describe these as synthesis-time adjustments, not as refitted Q-DESN models.
 
-### Current GloFAS Manuscript Candidate
+### Current GloFAS Manuscript Reference Case
 
-As of 2026-06-21, the current manuscript-facing GloFAS candidate is:
-
-```text
-glofas_cal07_scorebalanced_spread140_add050_synthesis_final
-```
-
-This candidate is selected through
+As of 2026-08-11, the current manuscript-facing GloFAS authority is the
+`fr09_persistence_innovation` reference case. It is selected through
 `tables/glofas_application_current_selection_manifest.csv`; manuscript text
-should continue to use the stable aliases in
-`tables/glofas_application_current_outputs.tex`. The tracked run snapshot is
-`tables/glofas_application_run_config__glofas_cal07_scorebalanced_spread140_add050_20260621.yaml`.
+continues to use the stable aliases in
+`tables/glofas_application_current_outputs.tex`. The tracked component
+registry and promotion decision are documented in
+`docs/implementation_notes/glofas_fr09_authoritative_full7_promotion_20260811.md`.
 
 The reference-case scores on the transformed streamflow scale are:
 
 | Model | Check | Interval | CRPS | Coverage |
 |---|---:|---:|---:|---:|
-| Q-DESN calibration | 0.3818 | 4.1930 | 0.7915 | 0.583 |
-| Raw GloFAS | 0.7639 | 13.0538 | 1.4424 | 0.000 |
+| Q-DESN reporting action | 0.5654 | 10.8032 | 1.1319 | 0.357 |
+| Raw GloFAS | 0.7639 | 25.2028 | 1.4424 | 0.000 |
 
-The selected spread calibration is
-`scorebalanced_spread_x1p400_plus0p500`, centered at quantile 0.50. It is a
-post-fit synthesis adjustment only; it does not change the fitted reservoirs,
-likelihood, priors, or readout coefficients.
+No reporting-time spread calibration is applied. The seven AL--VB levels are
+fitted independently and combined by the declared monotone reporting action.
+The 90% held-out coverage improves relative to raw GloFAS but remains far below
+the nominal 0.90 level, so this result must not be described as generally
+calibrated.
+
+The held-out designation applies to the future response path. The selected
+configuration deliberately blends forecast precipitation and soil-moisture
+covariates with realized future values, so the result is a retrospective
+response-blinded pseudo-forecast rather than a clean operational
+origin-information forecast. Posterior-predictive outcome sampling is disabled
+for this run; its outputs are seven independent variational quantile paths.
+
+The tracked PriceFM comparison is likewise retrospective. Its graph-feature
+policy records lead covariates as realized ex-post. The common 38-region,
+three-fold replay is directly aligned to the released checkpoint panel, while
+the paper's full-shot Table-II values remain contextual and must not be folded
+into the same ranking.
 
 Future GloFAS replacements should be promoted by rerunning
 `scripts/08_promote_application_outputs.R` and then
@@ -492,13 +517,19 @@ retrospective series for model fitting, scoring, or manuscript-facing claims
 unless its product version has been verified against the revised data-lineage
 audit.
 
-## Current Engine Gate
+## Historical Engine and Launch Gates
 
-The current application configurations use the shared 1.0.0 local `exdqlm`
+The material below describes earlier engine and launch contracts. It remains
+useful for reproducing development checks, but the selected FR09 result uses
+the Article-v2 covariate-aware design path and the AL-only article-side
+variational readout. These launch profiles are not current manuscript
+authorities.
+
+The later development configurations used the shared 1.0.0 local `exdqlm`
 validation-logic worktree at
-`/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0`. The active
-latent-path ensemble-likelihood workflow uses that source for Q--DESN feature
-construction and readout APIs, while the latent-path AL-VB fitter remains
+`/data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0`. Those
+profiles used that source for Q--DESN feature construction and readout APIs,
+while the latent-path AL-VB fitter remained
 article-side. For simulation results, the article consumes only the finalized
 TT500 shared fit+forecast handoff pinned in
 `application/config/shared_validation_tt500_final_fitforecast.yaml`; unfinished

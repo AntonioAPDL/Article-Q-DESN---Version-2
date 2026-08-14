@@ -35,6 +35,20 @@ CODEX_*
 PRICEFM_DATA_PIPELINE_REPORT.md
 QDESN_Batched_VB_Implementation_Report.md
 
+# Local-only manuscript review inputs supplied for editorial revisions.
+/review_inputs/
+/academic_style_wickle.md
+/academic_style_wickle.txt
+
+# Local manuscript-revision audits, plans, matrices, and closeout records.
+/docs/audits/qdesn_claim_evidence_matrix_*.csv
+/docs/audits/qdesn_document_authority_inventory_*.csv
+/docs/audits/qdesn_main_supplement_support_map_*.md
+/docs/audits/qdesn_manuscript_deep_revision_audit_*.md
+/docs/audits/qdesn_style_compliance_matrix_*.md
+/docs/implementation_notes/qdesn_major_manuscript_revision_handoff_*.md
+/docs/revision_logs/qdesn_major_manuscript_revision_closeout_*.md
+
 # Local-only application workspace. Raw data, frozen handoffs, caches, logs,
 # fitted objects, and generated application outputs are reproducible artifacts
 # but are not source files.

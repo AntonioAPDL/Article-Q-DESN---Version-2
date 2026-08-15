@@ -50,6 +50,14 @@ to reuse already completed checkpoints. Runtime artifacts remain ignored and
 must not be interpreted as complete until the final health audit reports 180
 completed workers, zero failures, and a verified ranking manifest.
 
+Production preflight also requires schema-compatible candidate identifiers.
+Structured initialization carries a transient `phase166_candidate_id`, whereas
+the immutable M0 chain plan carries `phase178_template_id` and the historical
+source `candidate_id`. Design construction therefore resolves identifiers in
+that explicit order and is regression-tested without requiring the transient
+VB field. This identifier affects provenance labels only; it does not alter the
+frozen design specification, seeds, likelihood, prior, or sampler target.
+
 Ranking prioritizes finite and stable posterior quantile-grid functionals:
 fit and forecast oracle MAE, check loss, grid CRPS, raw and contract crossings,
 and replicate stability. Scalar gamma and scale diagnostics remain supporting

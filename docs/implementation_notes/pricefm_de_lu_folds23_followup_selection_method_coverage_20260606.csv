@@ -1,0 +1,5 @@
+region,fold,method_id,selection_split,selection_unit,selection_metric,n_rows,n_finite_metric_rows,covered
+DE_LU,2,qdesn_al_rhs_ns_exact_chunked,val,original,AQL,5,5,True
+DE_LU,2,qdesn_exal_rhs_ns_exact_chunked,val,original,AQL,5,5,True
+DE_LU,3,qdesn_al_rhs_ns_exact_chunked,val,original,AQL,120,120,True
+DE_LU,3,qdesn_exal_rhs_ns_exact_chunked,val,original,AQL,120,120,True

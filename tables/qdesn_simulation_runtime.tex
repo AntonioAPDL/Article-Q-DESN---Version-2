@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrrrr@{}}
+\toprule
+ & \multicolumn{4}{c}{\(T=500\)} & \multicolumn{4}{c}{\(T=5000\)} \\
+\cmidrule(lr){2-5}\cmidrule(l){6-9}
+Model & VB & MCMC & \(\Delta\) & Speedup & VB & MCMC & \(\Delta\) & Speedup \\
+\midrule
+\(\AL\)--ridge & 11.0 & 1003.7 & 992.7 & 91.5\(\times\) & 12.3 & 1584.2 & 1571.9 & 129.2\(\times\) \\
+\(\exAL\)--ridge & 10.8 & 1025.9 & 1015.1 & 94.9\(\times\) & 12.0 & 1912.5 & 1900.4 & 158.8\(\times\) \\
+\(\AL\)--\RHS{} & 5.1 & 1001.7 & 996.6 & 195.8\(\times\) & 35.5 & 1583.9 & 1548.4 & 44.6\(\times\) \\
+\(\exAL\)--\RHS{} & 4.9 & 1034.8 & 1029.9 & 211.4\(\times\) & 37.6 & 1952.2 & 1914.6 & 51.9\(\times\) \\
+\bottomrule
+\end{tabular}
+\caption{Simulation study. Median runtime for the 144-fit validation grid, in minutes. The column \(\Delta\) is MCMC minus VB runtime, and Speedup is the MCMC-to-VB runtime ratio; larger ratios indicate that VB is faster.}
+\label{tab:simulation-runtime}
+\end{table}

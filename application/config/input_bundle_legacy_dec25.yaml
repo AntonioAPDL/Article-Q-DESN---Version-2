@@ -1,0 +1,69 @@
+version: 0.1
+bundle_id: legacy_glofas_dec25_2022
+description: >
+  Local legacy registration contract for the 2022-12-25 GloFAS source
+  diagnostic. The materialized files are schema-compatible but remain
+  untracked because they are local audit inputs, not manuscript data artifacts.
+  This bundle is explicitly unverified and must be replaced by the authoritative
+  revised-article frozen input bundle before any manuscript-facing GloFAS claim.
+
+bundle_root: application/data_local/frozen_inputs/legacy_dec25_2022
+copy_files: false
+manifest_output: application/manifests/input_manifest.csv
+bundle_manifest_output: application/manifests/input_bundle_manifest.csv
+
+inputs:
+  reference_gauge:
+    source_name: reference gauge streamflow
+    source_type: observation
+    relative_path: reference/reference_gauge.csv
+    upstream_reference: local legacy USGS daily average plus Dec 25 retrospective file
+    date_columns:
+      - date
+    required: true
+    notes: >
+      Transformed daily gauge streamflow used only for the local Dec 25 source
+      diagnostic. Historical values through the cutoff come from the legacy
+      retrospective file; held-out values after the cutoff come from the local
+      USGS daily-average file. This is not the authoritative revised-article
+      bundle.
+
+  glofas_retrospective:
+    source_name: GloFAS retrospective streamflow
+    source_type: retrospective_forecast
+    relative_path: glofas/glofas_retrospective.csv
+    upstream_reference: local legacy retros_2022-12-25.csv
+    date_columns:
+      - date
+    required: true
+    notes: >
+      Transformed GloFAS retrospective trajectory from the local legacy Dec 25
+      bundle. This file has not been verified against the revised-article
+      product-version audit and must not be promoted as authoritative.
+
+  glofas_ensemble:
+    source_name: GloFAS ensemble streamflow forecasts
+    source_type: ensemble_forecast
+    relative_path: glofas/glofas_ensemble.csv
+    upstream_reference: local legacy glofas_ens_2022-12-25.csv
+    date_columns:
+      - origin_date
+      - target_date
+    required: true
+    notes: >
+      Transformed GloFAS ensemble forecasts for origin 2022-12-25, materialized
+      in long format with one row per member and horizon. This file has not
+      been verified against the revised-article product-version audit and must
+      not be promoted as authoritative.
+
+  climate_covariates:
+    source_name: diagnostic climate covariates
+    source_type: covariate
+    relative_path: covariates/climate_covariates.csv
+    upstream_reference: not used in the local Dec 25 source diagnostic
+    date_columns:
+      - date
+    required: false
+    notes: >
+      Not required for this source-figure diagnostic and not used by the active
+      Q-DESN readout contract.

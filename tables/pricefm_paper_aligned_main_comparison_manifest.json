@@ -1,0 +1,98 @@
+{
+  "stage": "pricefm_paper_aligned_article_table",
+  "status": "completed",
+  "date": "2026-08-11",
+  "paper_source": {
+    "arxiv_id": "2508.04875",
+    "arxiv_version": 4,
+    "revision_date": "2026-05-08",
+    "source_url": "https://arxiv.org/abs/2508.04875v4",
+    "source_table": "Experiment.tex, Table II (full-shot evaluation)",
+    "source_archive_sha256": "76fa40e20bb07ccf556eca3ba92fc7e1720fd31ab554151466b546086872be6e",
+    "upstream_git_commit": "c72d1228bde80417d5cc782521328e02ab5401c3"
+  },
+  "applicability": {
+    "primary_pricefm_table": "Table II: full-shot evaluation",
+    "reason": "The article fits and validation-selects a region/fold-specific Q-DESN using observations from each target region.",
+    "not_primary": "Table III: leave-one-region-out zero-shot evaluation",
+    "cross_panel_comparison": "context_only_not_head_to_head"
+  },
+  "local_metric_contract": {
+    "registry_path": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_decision_registry.csv",
+    "registry_sha256": "d45c43b6d2dd3b163ca1d3cd0b140ce0e582797aaea0a3db012a7d74293e4802",
+    "region_fold_rows": 114,
+    "regions": 38,
+    "folds": 3,
+    "quantiles": [0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90],
+    "split": "test",
+    "unit": "original",
+    "aggregation": "unweighted mean of region/fold metric summaries",
+    "metric_match_key": ["region", "fold", "method_id", "AQL"],
+    "aql_match_tolerance": 1e-8,
+    "complete_metric_rows": 114,
+    "duplicate_metric_matches_consistent": true,
+    "qdesn": {
+      "AQL": 6.826019439122782,
+      "AQCR_percent": 2.6443754958218095,
+      "MAE": 16.727651141081658,
+      "RMSE": 25.453091657606794
+    },
+    "pricefm_released_checkpoint": {
+      "AQL": 7.03868534653447,
+      "AQCR_percent": 0.0,
+      "MAE": 17.27366671978033,
+      "RMSE": 26.335538393719123
+    }
+  },
+  "local_metric_sources": [
+    {"path": "application/data_local/pricefm/authoritative/pricefm_coverage_quantiles_priority0_comparison_fixed_20260702/panel_metric.csv", "sha256": "a244155e4a72910c2a2d41503a76ff7d1cf0ffb60746ec6b79508321e63d184b", "selected_metric_rows": 83},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_cached_vs_stage_b_combined_promotion_rescue_20260617/panel_metric.csv", "sha256": "76d6cd6ff853742ad73e96677347cc659a76c5659cebfa61008f46280a0ccb45", "selected_metric_rows": 36},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_cached_vs_stage_g_seedrob_promoted_quantiles_20260622/panel_metric.csv", "sha256": "4ac97b9918055005ebfb6dcb64655a2428e16b14a5223f8f32e195535d52d777", "selected_metric_rows": 12},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_cached_vs_stage_h_priority0_promoted_quantiles_20260623/panel_metric.csv", "sha256": "eb53b6cac694ee06286c16e9ba8f8781362ff5b7525c71c7f9a7d0d5fd55b724", "selected_metric_rows": 8},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_cached_vs_stage_i_unresolved_promoted_quantiles_20260623/panel_metric.csv", "sha256": "682470916554bfc21f4bc785b270a67af8abeae18ca8831367ff167be24d588c", "selected_metric_rows": 2},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_desn_region_panel_from_local_ar_20260613/panel_metric.csv", "sha256": "a8cfa1e0d0b86a7452e7a08a68865a5ace5352c2640afdbbcf3fdff8e0fe010b", "selected_metric_rows": 22},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_desn_region_panel_graph_local_20260614/panel_metric.csv", "sha256": "d5d704cd1228147825aaebae6145ff7df4a6b87eee89c04f2d9a1e8dbc78bafc", "selected_metric_rows": 4},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_stage_c_completion_paper_quantiles_20260618/panel_metric.csv", "sha256": "9b8a2252a50aeaf0f7516f0c9fff712f969add621abb51e5dc5dbff7cbc29b9e", "selected_metric_rows": 12},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_stage_c_priority1_green_paper_quantiles_20260618/panel_metric.csv", "sha256": "ad5945f43ee2b3c562669623fff189294954ad2a393736d904157eed0abdc79f", "selected_metric_rows": 17},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_stage_d_graph_median_rescue_promoted_quantiles_20260619/panel_metric.csv", "sha256": "9d9a50febff2f4233055c25e664c701ccc1282101764324486a73a0afc86a921", "selected_metric_rows": 7},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_stage_e_full_panel_missing_paper_quantiles_20260619/panel_metric.csv", "sha256": "62f428e8d1ab34a751b9d1020d87d3914e666a843f52475b566c20f885a7cc73", "selected_metric_rows": 15},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_phase1_vs_stage_f_graph_median_rescue_promoted_quantiles_20260621/panel_metric.csv", "sha256": "c90d2cec4c4b64ef4a3d5d167a3bd2a24ce5fd3ee824bff09cc01770dedc2c48", "selected_metric_rows": 9},
+    {"path": "application/data_local/pricefm/authoritative/pricefm_stage_r3_itcnor_quantile_promotion_comparison_20260703/panel_metric.csv", "sha256": "727d397a8403a6a7bc41c8110fddf08b3ce0be9b9fb9485b8f199126defdbe24", "selected_metric_rows": 1}
+  ],
+  "outputs": [
+    "tables/pricefm_paper_aligned_current_outputs.tex",
+    "tables/pricefm_paper_aligned_main_comparison.tex",
+    "tables/pricefm_paper_aligned_main_comparison.csv",
+    "docs/implementation_notes/pricefm_paper_aligned_article_table_20260811.md"
+  ],
+  "article_files": [
+    "main.tex",
+    "qdesn-supplement.tex",
+    "refs.bib"
+  ],
+  "artifact_sha256": {
+    "main.tex": "cfcb607fd32b915299ac40706c9ff0c6facb074353d1b09bf65ba26eb01feadb",
+    "qdesn-supplement.tex": "a1784be9b49305629f58805a878e3e5bee294a64674b9e4f2834748c0970ffbd",
+    "refs.bib": "cb7336ac8fb622b64d7ea2667f1d73d2df62dd8f836505b79974bb0c7d55fe02",
+    "tables/pricefm_paper_aligned_current_outputs.tex": "40f43a0c63682eac31a394cdb13d53ed9da3e1e36e76a1ac453e8c6b3681651f",
+    "tables/pricefm_paper_aligned_main_comparison.tex": "0d8591591764c75b3a71dda98d9f40d9728740923d1aa3ddf6b2379376393b14",
+    "tables/pricefm_paper_aligned_main_comparison.csv": "1e3daa47ce3cc2ab772ba43f838e9c57ae3a765b9ee81cad828234b0b7f9d61a",
+    "docs/implementation_notes/pricefm_paper_aligned_article_table_20260811.md": "811be081c98a40ee40c552983092940ddb9c1ca5b119800d0cd22ce7e4264609"
+  },
+  "overleaf_file_limit_cleanup": {
+    "status": "completed",
+    "files_removed": 18,
+    "tracked_files_before": 1984,
+    "tracked_files_after": 1966,
+    "scope": "obsolete 42-cell PriceFM application and Stage-M presentation assets",
+    "main_or_supplement_references": 0,
+    "superseded_by": "authoritative 114-cell pricefm_full surface",
+    "recoverable_from_commit": "652f11399225f083cea2dc02c950a67bd91f762f"
+  },
+  "guards": {
+    "active_stage_r53_used": false,
+    "models_fitted": false,
+    "registry_mutated": false,
+    "non_pricefm_work_touched": false
+  }
+}

@@ -1,0 +1,60 @@
+\begin{table}[p]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llrrrrrr@{}}
+\toprule
+ & & \multicolumn{2}{c}{Normal} & \multicolumn{2}{c}{Laplace} & \multicolumn{2}{c}{Gaussian mixture} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(l){7-8}
+\(\tau\) & Model & VB & MCMC & VB & MCMC & VB & MCMC \\
+\midrule
+\multicolumn{8}{@{}l}{\emph{Effective training size \(T=500\)}}\\
+\addlinespace[0.15em]
+\(0.05\) & \(\mathrm{DQLM}\) & 1.68 & 1.68 & 2.81 & 2.80 & 2.50 & 2.52 \\
+ & \(\mathrm{exDQLM}\) & 1.65 & 1.49 & 2.68 & 2.32 & 2.46 & 2.04 \\
+ & Q--DESN \(\AL\)--ridge & 3.30 & 6.59 & 4.24 & 7.67 & 4.42 & 8.90 \\
+ & Q--DESN \(\exAL\)--ridge & 3.12 & 4.25 & 3.99 & 4.74 & 4.17 & 5.22 \\
+ & Q--DESN \(\AL\)--\RHS{} & \textbf{0.95} & 0.99 & \textbf{1.70} & 1.73 & \textbf{1.36} & 1.37 \\
+ & Q--DESN \(\exAL\)--\RHS{} & 1.00 & 1.08 & 1.80 & 1.82 & 1.45 & 1.50 \\
+\addlinespace[0.2em]
+\(0.25\) & \(\mathrm{DQLM}\) & 5.70 & 5.68 & 8.10 & 8.08 & 8.31 & 8.31 \\
+ & \(\mathrm{exDQLM}\) & 5.75 & 5.62 & 7.82 & 6.50 & 8.22 & 4.45 \\
+ & Q--DESN \(\AL\)--ridge & 8.16 & 11.57 & 10.35 & 14.53 & 10.89 & 15.53 \\
+ & Q--DESN \(\exAL\)--ridge & 8.17 & 11.50 & 10.39 & 13.84 & 10.92 & 14.38 \\
+ & Q--DESN \(\AL\)--\RHS{} & \textbf{3.15} & 3.27 & \textbf{4.56} & 4.64 & \textbf{4.36} & 4.50 \\
+ & Q--DESN \(\exAL\)--\RHS{} & 3.49 & 3.34 & 4.85 & 4.67 & 4.77 & 4.60 \\
+\addlinespace[0.2em]
+\(0.50\) & \(\mathrm{DQLM}\) & 7.96 & 7.89 & 9.90 & 9.87 & 10.80 & 10.74 \\
+ & \(\mathrm{exDQLM}\) & 8.16 & 7.33 & 9.85 & 7.34 & 10.91 & 9.07 \\
+ & Q--DESN \(\AL\)--ridge & 9.28 & 13.69 & 11.71 & 17.43 & 12.39 & 17.94 \\
+ & Q--DESN \(\exAL\)--ridge & 9.44 & 14.07 & 11.93 & 17.23 & 12.62 & 18.11 \\
+ & Q--DESN \(\AL\)--\RHS{} & \textbf{3.98} & 4.12 & \textbf{5.27} & 5.40 & \textbf{5.49} & 5.65 \\
+ & Q--DESN \(\exAL\)--\RHS{} & 4.00 & 4.12 & 5.27 & 5.41 & 5.49 & 5.66 \\
+\midrule
+\multicolumn{8}{@{}l}{\emph{Effective training size \(T=5000\)}}\\
+\addlinespace[0.15em]
+\(0.05\) & \(\mathrm{DQLM}\) & 1.00 & 1.00 & 1.57 & 1.57 & 1.46 & 1.47 \\
+ & \(\mathrm{exDQLM}\) & 0.99 & 0.84 & 1.57 & 1.36 & 1.45 & 1.24 \\
+ & Q--DESN \(\AL\)--ridge & \textbf{0.54} & 2.20 & \textbf{0.77} & 2.81 & \textbf{0.77} & 3.00 \\
+ & Q--DESN \(\exAL\)--ridge & 0.61 & 1.48 & 0.86 & 2.12 & 0.87 & 2.06 \\
+ & Q--DESN \(\AL\)--\RHS{} & 0.95 & 1.02 & 1.49 & 1.55 & 1.38 & 1.41 \\
+ & Q--DESN \(\exAL\)--\RHS{} & 1.03 & 1.08 & 1.65 & 1.69 & 1.49 & 1.55 \\
+\addlinespace[0.2em]
+\(0.25\) & \(\mathrm{DQLM}\) & 3.19 & 3.19 & 4.31 & 4.31 & 4.62 & 4.62 \\
+ & \(\mathrm{exDQLM}\) & 3.14 & 2.79 & 4.22 & 3.96 & 4.53 & 4.13 \\
+ & Q--DESN \(\AL\)--ridge & \textbf{2.67} & 4.41 & \textbf{3.77} & 6.22 & \textbf{3.83} & 6.26 \\
+ & Q--DESN \(\exAL\)--ridge & 5.79 & 4.48 & 6.57 & 6.24 & 7.24 & 6.43 \\
+ & Q--DESN \(\AL\)--\RHS{} & 3.20 & 3.31 & 4.27 & 4.38 & 4.50 & 4.65 \\
+ & Q--DESN \(\exAL\)--\RHS{} & 3.35 & 3.34 & 4.45 & 4.43 & 4.68 & 4.68 \\
+\addlinespace[0.2em]
+\(0.50\) & \(\mathrm{DQLM}\) & 4.11 & 4.10 & 5.16 & 5.16 & 5.74 & 5.74 \\
+ & \(\mathrm{exDQLM}\) & 4.14 & 4.03 & 5.16 & \textbf{5.16} & 5.76 & 5.73 \\
+ & Q--DESN \(\AL\)--ridge & 3.86 & 5.61 & 5.34 & 7.67 & \textbf{5.55} & 8.03 \\
+ & Q--DESN \(\exAL\)--ridge & \textbf{3.86} & 5.63 & 5.34 & 7.66 & 5.55 & 8.05 \\
+ & Q--DESN \(\AL\)--\RHS{} & 4.05 & 4.19 & 5.18 & 5.30 & 5.61 & 5.74 \\
+ & Q--DESN \(\exAL\)--\RHS{} & 4.05 & 4.19 & 5.18 & 5.29 & 5.61 & 5.74 \\
+\bottomrule
+\end{tabular}
+\caption{Simulation study. Quantile check loss at the target quantile. Entries and boldface are defined as in Table~\ref{tab:simulation-rmse}.}
+\label{tab:simulation-checkloss}
+\end{table}

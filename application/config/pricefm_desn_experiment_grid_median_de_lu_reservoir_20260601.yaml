@@ -1,0 +1,231 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_median_de_lu_reservoir_20260601
+  purpose: >
+    Big but targeted DE_LU fold-1 median reservoir-feature screen. This grid
+    follows the 20260531/20260601 random-projection screens, where the best
+    practical model used L=96, m=480, projection_scale=0.5, RHS_NS, and exact
+    chunked AL/exAL VB. The next scientific question is whether a true recurrent
+    reservoir feature map improves over the static random projection of the
+    lag window while keeping the same model/evaluation workflow.
+
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_full_median_warmstart.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_median_de_lu_reservoir_20260601
+    run_root: application/data_local/pricefm/runs/pricefm_median_de_lu_reservoir_20260601
+
+  scope:
+    regions: [DE_LU]
+    folds: [1]
+    quantiles: [0.50]
+    horizons: all
+    ranking_split: val
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+
+  fixed:
+    lead_window: 96
+    feature_map: window_reservoir_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    recurrent_sparsity: 0.05
+    reservoir_activation: tanh
+    state_output: final_layer
+    default_jobs: 1
+    qdesn_likelihoods: [al, exal]
+    warm_start_enabled: true
+    exact_equivalence_train_rows: 1000
+    artifact_hygiene:
+      enabled: true
+      clean_adapter_patterns: [X_*.csv]
+      clean_model_patterns: ["*.rds", "*.rda", "*.RData"]
+      preserve_patterns:
+        - adapter_manifest.json
+        - feature_manifest.json
+        - rows_*.csv
+        - rows_all.csv
+        - y_*.csv
+        - metric_summary.csv
+        - model_method_summary.csv
+        - predictions_with_naive_scaled.csv
+        - report.md
+        - "*.png"
+        - "*.pdf"
+        - "*.json"
+        - "*.log"
+
+  launch:
+    smoke_gate:
+      priorities: [0]
+      experiment_jobs: 1
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Run only these two cells first if a real launch is desired. They verify
+        that D=1 and D=2 recurrent feature maps can pass the full adapter/model/
+        summary path before the large screen starts.
+    main_screen:
+      priorities: [1]
+      experiment_jobs: 10
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Main search over leakage, spectral radius, input scale, depth, and
+        capacity. Use resume=true and force=false so completed cells are reused.
+    capacity_tail:
+      priorities: [2]
+      experiment_jobs: 3
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        More expensive high-capacity and seed-robustness diagnostics. Launch
+        only after priority 1 identifies a stable region.
+
+  experiments:
+    - id: res_smoke_d1n120_a0p70_r0p90_in0p50_seed20260601
+      stage: smoke_reservoir
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 1
+      units: [120]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.50
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: Small D=1 recurrent smoke gate before launching the main screen.
+
+    - id: res_smoke_d2n80x80_a0p70_r0p90_in0p50_seed20260601
+      stage: smoke_reservoir
+      priority: 0
+      feature_map: window_reservoir_v1
+      lag_window: 96
+      depth: 2
+      units: [80, 80]
+      alpha: 0.70
+      rho: 0.90
+      input_scale: 0.50
+      feature_dim: 80
+      tau0: 1.0e-3
+      seed: 20260601
+      rationale: Small D=2 recurrent smoke gate for stacked state dynamics.
+
+  experiment_blocks:
+    - id_prefix: res_p1_d1n480_l096
+      stage: d1_memory_stability
+      priority: 1
+      rationale: Main D=1 screen around the current L=96 random-projection winner.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [480]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.30, 0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50, 1.00]
+
+    - id_prefix: res_p1_d1cap_l096
+      stage: d1_capacity
+      priority: 1
+      rationale: Capacity check below and above the current m=480 winner.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        units: [[360], [720]]
+        alpha: [0.50, 0.70]
+        rho: [0.90, 0.97]
+        input_scale: [0.50]
+
+    - id_prefix: res_p1_d2n240x240_l096
+      stage: d2_compact
+      priority: 1
+      rationale: Compact two-layer reservoirs with the same one-day context.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 2
+        units: [240, 240]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70, 0.90]
+        rho: [0.80, 0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: res_p1_context_d1n480
+      stage: context_check
+      priority: 1
+      rationale: Neighboring contexts around the one-day L=96 winner.
+      base:
+        feature_map: window_reservoir_v1
+        depth: 1
+        units: [480]
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        lag_window: [72, 128, 144]
+
+    - id_prefix: res_p2_d1high_l096
+      stage: high_capacity
+      priority: 2
+      rationale: Expensive high-capacity reservoir diagnostics after priority 1.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [960]
+        tau0: 1.0e-3
+        seed: 20260601
+      factors:
+        alpha: [0.50, 0.70]
+        rho: [0.90, 0.97]
+        input_scale: [0.25, 0.50]
+
+    - id_prefix: res_p2_d2n360x360_l096
+      stage: d2_capacity
+      priority: 2
+      rationale: Wider two-layer reservoirs for top-region follow-up.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 2
+        units: [360, 360]
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+      factors:
+        seed: [20260601, 20260602]
+
+    - id_prefix: res_p2_seed_d1n480_l096
+      stage: seed_robustness
+      priority: 2
+      rationale: Seed robustness for the central D=1 specification.
+      base:
+        feature_map: window_reservoir_v1
+        lag_window: 96
+        depth: 1
+        units: [480]
+        alpha: 0.70
+        rho: 0.90
+        input_scale: 0.50
+        tau0: 1.0e-3
+      factors:
+        seed: [20260602, 20260603]

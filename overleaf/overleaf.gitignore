@@ -1,0 +1,32 @@
+# This is an article-only deployment branch. Existing allowlisted files remain
+# tracked, but new research-code, documentation, table, and figure artifacts
+# must be added first to GitHub main and then to overleaf/article_files.txt.
+/application/
+/docs/
+/scripts/
+/overleaf/
+/tables/*
+/figures/*
+/*.md
+/*.tex
+
+# LaTeX build products.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+/main.pdf
+/qdesn-supplement.pdf
+
+# Common local/editor artifacts.
+.DS_Store
+*~
+*.bak
+*.tmp
+__pycache__/
+*.py[cod]

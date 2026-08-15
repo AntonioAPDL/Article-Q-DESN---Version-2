@@ -111,76 +111,18 @@ terms that support those algorithms. When the exAL block is active, smooth
 Taylor/Laplace statements are branchwise away from \(\gamma=0\); the AL point
 is an exact nested special case but does not justify generic two-sided Hessian
 arguments at zero.
-Table~\ref{tab:supp_roadmap} gives a navigation map.
-
-\begin{table}[!htb]
-\centering
-\begingroup
-\TableStyle
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.25\textwidth}
->{\raggedright\arraybackslash}p{0.24\textwidth}
->{\raggedright\arraybackslash}X@{}}
-\toprule
-Topic & Supplement location & Role in Q--DESN \\
-\midrule
-Reservoir and readout notation &
-Sections~\ref{sec:desn_features}--\ref{sec:model_joint} &
-Defines the deterministic design matrix and the likelihood after feature
-construction. \\
-AL and exAL complete-data targets &
-Section~\ref{sec:model_joint} &
-States the joint distribution for likelihood, latent variables, and priors. \\
-Default ridge and \texttt{rhs\_ns} priors &
-Sections~\ref{sec:priors} and \ref{sec:rhs_ns} &
-Gives the default Gaussian readout prior and the adaptive shrinkage alternative
-used in the simulation tables. \\
-MCMC full conditionals &
-Section~\ref{sec:mcmc} &
-Derives the readout, latent-variable, scale, asymmetry, and shrinkage updates. \\
-Variational Bayes and Laplace--Delta provenance &
-Section~\ref{sec:cavi} &
-States the generic fixed-design mean-field factors, canonical Gaussian readout
-update, RHS CAVI updates, Wang--Blei Laplace--Delta treatment for the
-non-conjugate exAL scale-asymmetry block, and the coordinate-update
-algorithm. \\
-ELBO &
-Section~\ref{sec:elbo} &
-Gives the fixed-design decomposition monitored by the generic VB
-implementation. \\
-Joint quantile-vector extension &
-Section~\ref{sec:joint_qdesn_supp} &
-Derives the stacked exAL likelihood, QVP--RHS prior, MCMC blocks, and crossing
-diagnostics for the joint multi-quantile readout. \\
-Supplementary validation tables &
-Section~\ref{sec:supp_validation_tables} &
-Preserves VB companion panels and joint-validation diagnostics outside the
-main article evidence path. \\
-Readout reporting and monotone actions &
-Section~\ref{sec:forecast_synthesis} &
-Links the fitted quantile readout to working-likelihood response simulation and
-defines the monotone reporting rule, interpolation convention, and
-action-induced quantile-curve sampling rule used by multi-level reports. \\
-Reservoir design diagnostics &
-Section~\ref{sec:supp_reservoir_diagnostics} &
-Records the component-level feature-map checklist that is summarized in the
-main article. \\
-GloFAS discrepancy-readout model &
-Section~\ref{sec:glofas_discrepancy} &
-Expresses the single-forecast-system application as an augmented
-Q--DESN readout with reference and GloFAS-specific likelihood blocks. \\
-\bottomrule
-\end{tabularx}
-\endgroup
-\caption{Supplement roadmap for the Q--DESN posterior target and algorithms.}
-\label{tab:supp_roadmap}
-\end{table}
+The supplement first records the reservoir-design checklist, then gives the
+fixed-design likelihood, prior, MCMC, variational, and ELBO details for the
+single-level readout. It next derives the joint quantile-vector extension,
+states the monotone reporting rules, preserves supplementary validation
+evidence, and closes with the GloFAS discrepancy-readout model.
 
 \section{Reservoir Design Diagnostics}
 \label{sec:supp_reservoir_diagnostics}
 
 The main article treats the reservoir as a fixed feature map selected before
 posterior inference. Table~\ref{tab:supp-reservoir-selection} records the
-component-level checklist behind the compact diagnostic table in the main text.
+component-level checklist behind that fixed-feature design decision.
 These checks are reproducibility diagnostics for the deterministic feature
 construction; they are not posterior uncertainty over recurrent weights.
 

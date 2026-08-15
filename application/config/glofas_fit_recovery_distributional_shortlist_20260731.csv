@@ -1,0 +1,5 @@
+candidate_id,role,source_priority,advance_to_triage,retain_heavy,description
+fr08_direct360_tight_prior,full_history_leader,1,true,true,"Best full-history p50 check loss; full 360-day direct block and tight RHS priors"
+fr06_direct360_alpha010,recent_window_leader,2,true,true,"Best fitted last-200/100/50 p50 check loss; full direct block and alpha 0.10"
+fr09_direct180_alpha010,efficiency_safeguard,3,true,true,"Competitive recent p50 fit with a 180-day direct block and alpha 0.10"
+fr01_historical_parity,reproduction_control,4,true,true,"Exact reconstruction of the archived historical feature and fit contract"

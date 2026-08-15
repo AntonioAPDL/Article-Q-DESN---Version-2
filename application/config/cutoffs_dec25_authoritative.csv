@@ -1,0 +1,2 @@
+cutoff_id,origin_date,train_start,train_end,eval_start,eval_end,horizon_min,horizon_max,split,enabled,notes
+dec25_2022,2022-12-25,1979-02-01,2022-12-25,2022-12-26,2023-01-24,1,30,diagnostic,true,"Audited jerez source diagnostic for the 2022-12-25 GloFAS origin."

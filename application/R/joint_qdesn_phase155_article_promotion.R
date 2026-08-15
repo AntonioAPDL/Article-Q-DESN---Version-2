@@ -349,7 +349,7 @@ app_joint_qdesn_phase155_metric_winners <- function(case_summary) {
     mcmc_fit_truth_mae = "Fit MAE",
     mcmc_forecast_truth_mae = "Forecast MAE",
     mcmc_forecast_check_loss_mean = "Check loss",
-    mcmc_forecast_crps_grid = "Grid CRPS"
+    mcmc_forecast_crps_grid = "aCRPS"
   )
   rows <- lapply(unique(case_summary$scenario_id), function(scenario_id) {
     block <- case_summary[case_summary$scenario_id == scenario_id, , drop = FALSE]
@@ -467,7 +467,7 @@ app_joint_qdesn_phase155_write_main_table <- function(data, path) {
 }
 
 app_joint_qdesn_phase155_winner_table <- function(winners) {
-  metrics <- c("Fit MAE", "Forecast MAE", "Check loss", "Grid CRPS")
+  metrics <- c("Fit MAE", "Forecast MAE", "Check loss", "aCRPS")
   rows <- lapply(unique(winners$scenario_id), function(scenario_id) {
     block <- winners[winners$scenario_id == scenario_id, , drop = FALSE]
     values <- setNames(rep("--", length(metrics)), metrics)
@@ -483,7 +483,7 @@ app_joint_qdesn_phase155_winner_table <- function(winners) {
       `Fit MAE` = values[["Fit MAE"]],
       `Forecast MAE` = values[["Forecast MAE"]],
       `Check loss` = values[["Check loss"]],
-      `Grid CRPS` = values[["Grid CRPS"]],
+      aCRPS = values[["aCRPS"]],
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
@@ -645,7 +645,7 @@ app_joint_qdesn_phase155_claim_audit <- function(case_summary, winners, src) {
       sprintf("All chain gates pass; max chain-to-pooled quantile-grid distance=%.4f.", max(case_summary$max_chain_qhat_normalized_distance)),
       sprintf("Phase153 completed %d independent VB fits with zero implementation failures and zero contract crossings.", src$phase153_assessment$completed_candidates[[1L]]),
       "The exAL rows are valid confirmation rows but do not dominate AL in quantile-path accuracy; they should not be described as uniformly superior.",
-      "All claims concern posterior quantile grids, check loss, grid CRPS, hit-rate error, and crossing diagnostics, not a unique scalar predictive density."
+      "All claims concern posterior quantile grids, check loss, finite-grid aCRPS, hit-rate error, and crossing diagnostics, not a unique scalar predictive density."
     ),
     stringsAsFactors = FALSE
   )

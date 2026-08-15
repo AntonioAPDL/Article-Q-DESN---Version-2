@@ -333,7 +333,7 @@ app_joint_qdesn_article_make_vb_model_table <- function(summary, scope = c("main
     `Forecast MAE` = vapply(summary$forecast_truth_mae, app_joint_qdesn_article_fmt_num, character(1L), digits = 3),
     `Forecast RMSE` = vapply(summary$forecast_truth_rmse, app_joint_qdesn_article_fmt_num, character(1L), digits = 3),
     `Check loss` = vapply(summary$forecast_check_loss, app_joint_qdesn_article_fmt_num, character(1L), digits = 3),
-    `Grid CRPS` = vapply(summary$crps_grid_mean, app_joint_qdesn_article_fmt_num, character(1L), digits = 3),
+    aCRPS = vapply(summary$crps_grid_mean, app_joint_qdesn_article_fmt_num, character(1L), digits = 3),
     `Hit-rate error` = vapply(summary$abs_hit_rate_error, app_joint_qdesn_article_fmt_num, character(1L), digits = 3),
     `Pre-rearrangement crossings` = vapply(summary$forecast_raw_crossings, app_joint_qdesn_article_fmt_int, character(1L)),
     stringsAsFactors = FALSE,
@@ -341,7 +341,7 @@ app_joint_qdesn_article_make_vb_model_table <- function(summary, scope = c("main
   )
   if (identical(scope, "main")) {
     out <- out[, c(
-      "Model", "Fit MAE", "Forecast MAE", "Check loss", "Grid CRPS",
+      "Model", "Fit MAE", "Forecast MAE", "Check loss", "aCRPS",
       "Hit-rate error", "Pre-rearrangement crossings"
     ), drop = FALSE]
     names(out)[names(out) == "Pre-rearrangement crossings"] <- "Raw crossings"
@@ -716,7 +716,7 @@ app_joint_qdesn_run_article_validation_assets <- function(
     ),
     vb_model_csv = app_joint_qdesn_article_write_csv(vb_summary, file.path(tables_dir, "joint_qdesn_article_validation_vb_model_summary.csv")),
     vb_model_tex = app_joint_qdesn_article_write_latex_table(vb_table, file.path(tables_dir, "joint_qdesn_article_validation_vb_model_summary.tex"),
-      "Compact joint multi-quantile synthetic validation summary averaged over the nine mechanisms in Table~\\ref{tab:joint-qdesn-article-validation-protocol}; this is not a single empirical data set. Rows labeled QDESN use the AL likelihood, rows labeled exQDESN use the exAL likelihood, and the model name indicates whether the readout is joint or independently fit by quantile. Fit and forecast MAE are computed against known conditional quantiles, check loss scores realized observations, grid CRPS summarizes the reported monotone quantile grid, hit-rate error summarizes marginal calibration, and raw crossings count adjacent quantile crossings before monotone rearrangement.",
+      "Compact joint multi-quantile synthetic validation summary averaged over the nine mechanisms in Table~\\ref{tab:joint-qdesn-article-validation-protocol}; this is not a single empirical data set. Rows labeled QDESN use the AL likelihood, rows labeled exQDESN use the exAL likelihood, and the model name indicates whether the readout is joint or independently fit by quantile. Fit and forecast MAE are computed against known conditional quantiles, check loss scores realized observations, aCRPS summarizes a finite fitted quantile grid by trapezoidal integration of pinball loss, hit-rate error summarizes marginal calibration, and raw crossings count adjacent quantile crossings before monotone rearrangement.",
       "tab:joint-qdesn-article-validation-vb-model-summary",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.22\\textwidth}rrrrrr@{}",
       size = "\\scriptsize",

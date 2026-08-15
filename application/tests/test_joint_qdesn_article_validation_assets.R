@@ -356,7 +356,7 @@ for (pattern in forbidden_main) {
   stopifnot(!any(grepl(pattern, main_rendered, fixed = TRUE)))
 }
 stopifnot(any(grepl("Raw crossings", main_rendered, fixed = TRUE)))
-stopifnot(any(grepl("Grid CRPS", main_rendered, fixed = TRUE)))
+stopifnot(any(grepl("aCRPS", main_rendered, fixed = TRUE)))
 
 vb_model_tex <- readLines(file.path(tables_dir, "joint_qdesn_article_validation_vb_model_summary.tex"), warn = FALSE)
 stopifnot(!any(grepl("Likelihood", vb_model_tex, fixed = TRUE)))

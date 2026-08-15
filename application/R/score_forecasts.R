@@ -86,7 +86,7 @@ app_score_intervals <- function(predictions, cfg) {
   if (!length(rows)) data.frame() else do.call(rbind, rows)
 }
 
-app_crps_quantile_grid <- function(block) {
+app_acrps_quantile_grid <- function(block) {
   block <- block[order(block$quantile_level), , drop = FALSE]
   p <- block$quantile_level
   y <- block$y_reference[[which(is.finite(block$y_reference))[1L]]]
@@ -96,7 +96,11 @@ app_crps_quantile_grid <- function(block) {
   2 * sum(diff(p) * (head(loss, -1L) + tail(loss, -1L)) / 2)
 }
 
-app_score_crps_grid <- function(predictions) {
+app_crps_quantile_grid <- function(block) {
+  app_acrps_quantile_grid(block)
+}
+
+app_score_acrps_grid <- function(predictions) {
   key_cols <- c("model_id", "origin_date", "target_date", "horizon")
   keys <- unique(predictions[, key_cols, drop = FALSE])
   out <- vector("list", nrow(keys))
@@ -105,12 +109,20 @@ app_score_crps_grid <- function(predictions) {
       predictions$origin_date == keys$origin_date[[i]] &
       predictions$target_date == keys$target_date[[i]] &
       predictions$horizon == keys$horizon[[i]]
+    score <- app_acrps_quantile_grid(predictions[idx, , drop = FALSE])
     out[[i]] <- cbind(
       keys[i, , drop = FALSE],
-      data.frame(crps_quantile_grid = app_crps_quantile_grid(predictions[idx, , drop = FALSE]))
+      data.frame(
+        acrps_quantile_grid = score,
+        crps_quantile_grid = score
+      )
     )
   }
   do.call(rbind, out)
+}
+
+app_score_crps_grid <- function(predictions) {
+  app_score_acrps_grid(predictions)
 }
 
 app_score_summary <- function(scored_predictions, interval_scores, crps_scores) {
@@ -121,6 +133,12 @@ app_score_summary <- function(scored_predictions, interval_scores, crps_scores) 
     q_block <- scored_predictions[scored_predictions$model_id == model, , drop = FALSE]
     i_block <- interval_scores[interval_scores$model_id == model, , drop = FALSE]
     c_block <- crps_scores[crps_scores$model_id == model, , drop = FALSE]
+    acrps_col <- if ("acrps_quantile_grid" %in% names(c_block)) "acrps_quantile_grid" else "crps_quantile_grid"
+    acrps_mean <- if (nrow(c_block) && acrps_col %in% names(c_block)) {
+      mean(c_block[[acrps_col]], na.rm = TRUE)
+    } else {
+      NA_real_
+    }
     rows[[i]] <- data.frame(
       model_id = model,
       n_quantile_scores = sum(is.finite(q_block$check_loss)),
@@ -137,7 +155,8 @@ app_score_summary <- function(scored_predictions, interval_scores, crps_scores) 
       },
       interval_score_mean = if (nrow(i_block)) mean(i_block$interval_score, na.rm = TRUE) else NA_real_,
       interval_coverage_mean = if (nrow(i_block)) mean(i_block$covered, na.rm = TRUE) else NA_real_,
-      crps_quantile_grid_mean = if (nrow(c_block)) mean(c_block$crps_quantile_grid, na.rm = TRUE) else NA_real_,
+      acrps_quantile_grid_mean = acrps_mean,
+      crps_quantile_grid_mean = acrps_mean,
       stringsAsFactors = FALSE
     )
   }

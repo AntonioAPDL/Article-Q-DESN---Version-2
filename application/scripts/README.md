@@ -57,7 +57,7 @@ Launch-safety contract:
   `10_synthesize_glofas_quantile_runs.R` consumes completed per-quantile
   runs, combines their prediction tables by shared `model_id`, applies
   monotone quantile synthesis, scores check loss, interval score, and
-  quantile-grid CRPS, and writes manuscript-facing figures and provenance.
+  finite-grid aCRPS, and writes manuscript-facing figures and provenance.
   This keeps expensive fitting separate from article-facing synthesis.
 - `11_evaluate_glofas_hybrid_synthesis.R` is a no-refit diagnostic layer for
   completed multi-quantile synthesis runs. It builds predeclared raw/Q-DESN

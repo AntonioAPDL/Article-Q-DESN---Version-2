@@ -246,7 +246,7 @@ make_model_table <- function(summary) {
     `Forecast MAE` = vapply(summary$forecast_truth_mae, fmt_num, character(1L), digits = 3),
     `Forecast RMSE` = vapply(summary$forecast_truth_rmse, fmt_num, character(1L), digits = 3),
     `Check loss` = vapply(summary$forecast_check_loss, fmt_num, character(1L), digits = 3),
-    `CRPS-grid` = vapply(summary$crps_grid_mean, fmt_num, character(1L), digits = 3),
+    aCRPS = vapply(summary$crps_grid_mean, fmt_num, character(1L), digits = 3),
     `Hit error` = vapply(summary$abs_hit_rate_error, fmt_num, character(1L), digits = 3),
     `Raw crossings` = vapply(summary$forecast_raw_crossing_pairs, fmt_int, character(1L)),
     `Runtime min.` = vapply(summary$forecast_elapsed_seconds / 60, fmt_num, character(1L), digits = 1),
@@ -355,7 +355,7 @@ make_protocol_table <- function(fixture_dir, fit_dir, forecast_dir, model_summar
       sprintf("VB max iter %s with adaptive grid %s; RHS tau0 = %s", fit_cfg$vb_max_iter[[1L]], fit_cfg$adaptive_vb_max_iter_grid[[1L]], fit_cfg$tau0[[1L]]),
       paste(model_summary$article_label[model_summary$main_table_included], collapse = "; "),
       "Independent exQDESN RHS, due to localized K=1 exAL instability",
-      "Truth MAE/RMSE, check loss, CRPS-grid, hit-rate error, interval diagnostics, raw and contract crossing diagnostics"
+      "Truth MAE/RMSE, check loss, finite-grid aCRPS, hit-rate error, interval diagnostics, raw and contract crossing diagnostics"
     ),
     stringsAsFactors = FALSE
   )
@@ -657,4 +657,4 @@ cat(sprintf("Joint QDESN article evidence pack assets written under %s and %s\n"
 cat(sprintf("Cache verification directory: %s\n", out_dir))
 cat(sprintf("Article asset manifest: %s\n", asset_manifest_path))
 cat("Main article rows:\n")
-print(model_table[, c("Model", "Role", "Forecast MAE", "Check loss", "CRPS-grid")], row.names = FALSE)
+print(model_table[, c("Model", "Role", "Forecast MAE", "Check loss", "aCRPS")], row.names = FALSE)

@@ -118,7 +118,7 @@ Tracked helper files:
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.
-- `score_forecasts.R`: check loss, interval score, and quantile-grid CRPS
+- `score_forecasts.R`: check loss, interval score, and finite-grid aCRPS
   helpers. Multi-quantile workflows can report both independent and monotone
   check loss so synthesis corrections remain explicit.
 - `reservoir_screening.R`: sampler-free D-ESN reservoir diagnostics and

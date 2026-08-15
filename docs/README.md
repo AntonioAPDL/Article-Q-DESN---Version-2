@@ -6,6 +6,12 @@ history.
 
 ## Audits
 
+- `audits/qdesn_corrected_pro_reaudit_implementation_plan_20260815.md`:
+  implementation-grade plan derived from the clean-room corrected PRO re-audit
+  and verified against the repaired repository authority.
+- `audits/qdesn_corrected_claim_ledger_20260815.csv`: tracked claim ledger
+  imported from the corrected 71-row claim--evidence matrix, with implementation
+  status fields for this revision.
 - `audits/initial_style_audit.md`: first broad audit of the manuscript,
   supplement, bibliography, and simulation tables.
 - `audits/reader_focused_style_audit.md`: reader-facing pass focused on
@@ -17,6 +23,8 @@ history.
 
 ## Revision Logs
 
+- `revision_logs/corrected_pro_reaudit_revision_log_20260815.md`: revision
+  log for the corrected PRO re-audit implementation.
 - `revision_logs/initial_style_revision_log.md`: changes from the first style
   pass.
 - `revision_logs/reader_focused_revision_log.md`: later changes from the
@@ -25,6 +33,9 @@ history.
 
 ## Implementation Notes
 
+- `implementation_notes/qdesn_inferential_object_and_terminology_contract_20260815.md`:
+  current terminology authority for readout summaries, reported actions,
+  working-likelihood simulations, and aCRPS.
 - `implementation_notes/regularized_horseshoe_update_report.md`: record of the
   regularized-horseshoe implementation update and the supporting citation
   changes.
@@ -76,3 +87,11 @@ history.
 
 These notes are descriptive. The authoritative manuscript sources are
 `../main.tex`, `../qdesn-supplement.tex`, and `../refs.bib`.
+
+For the corrected Aug. 15, 2026 reader-centered revision, current
+application-facing authorities are the FR09 GloFAS promotion note, the tracked
+GloFAS current-output aliases, the PriceFM paper-aligned comparison manifest,
+and `implementation_notes/qdesn_inferential_object_and_terminology_contract_20260815.md`.
+Older GloFAS launch protocols and candidate notes remain historical
+implementation records even when their original titles use words such as
+"current" or "authoritative."

@@ -1,4 +1,4 @@
-# Bayesian Quantile Forecasting with Deep Echo State Network Readouts
+# Bayesian Quantile Readouts for Deep Echo State Networks
 
 This repository contains the working manuscript, supplement, bibliography, and
 simulation tables for the Q--DESN article.
@@ -13,9 +13,9 @@ simulation tables for the Q--DESN article.
   used for manuscript revisions.
 - `scripts/build_qdesn_simulation_tables.R`: script used to regenerate the
   simulation tables from external validation outputs.
-- `application/`: planned GloFAS streamflow forecast-calibration workflow.
-  Source-controlled files in this directory define the reproducibility
-  contract; local data, caches, runs, logs, and generated outputs are ignored.
+- `application/`: article-owned application code and reproducibility contracts,
+  including the current GloFAS retrospective reference case and PriceFM replay
+  outputs. Local data, caches, runs, logs, and generated outputs are ignored.
 - `docs/`: audit notes, revision logs, and implementation notes.
 
 ## Build
@@ -53,12 +53,10 @@ Build a clean source bundle with:
 scripts/build_arxiv_source_bundle.sh
 ```
 
-The script copies only the main article, supplement source, bibliography,
-included table files, and figures used by `main.tex` into a timestamped
-directory under `/tmp`. It also gives the upload copy clean source names such
-as `article.tex`, `supplement.tex`, `references.bib`, short table names, and
-short figure names. Compile checks for the main article and supplement should
-be run from that bundle before upload.
+The script copies the manifest-controlled article dependency closure from
+`overleaf/article_files.txt` into a timestamped directory under `/tmp`,
+preserving the same relative paths used by the TeX sources. Compile checks for
+the main article and supplement should be run from that bundle before upload.
 
 For the arXiv web form, the likely primary archive is `stat` and the likely
 primary class is `stat.ME`. The license choice is an author decision; use the
@@ -93,10 +91,10 @@ for the current fit-and-forecast result tables.
 
 ## GloFAS Application
 
-The planned application is organized under `application/`. Start with
-`application/README.md` and
-`docs/implementation_notes/glofas_application_reproducibility_blueprint.md`.
-The application workflow is intentionally article-owned: it will define the
-input contract, model grid, forecast-origin protocol, scoring outputs, and
-manuscript table/figure provenance used by Section 9. Large or private inputs
-and generated runs should remain in ignored local directories.
+The current manuscript-facing GloFAS application is organized under
+`application/`. Start with `application/README.md` and the current authority
+record `docs/implementation_notes/glofas_fr09_authoritative_full7_promotion_20260811.md`.
+The workflow is intentionally article-owned: it defines the input contract,
+model grid, forecast-origin protocol, scoring outputs, and manuscript
+table/figure provenance used by the GloFAS section. Large or private inputs and
+generated runs should remain in ignored local directories.

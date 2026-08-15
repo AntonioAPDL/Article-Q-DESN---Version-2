@@ -1,15 +1,17 @@
 # GloFAS Q-DESN Application
 
-This directory will contain the reproducible workflow for the GloFAS
-streamflow forecast-calibration application described in Section 9 of the
-article.
+This directory contains the reproducibility workflow for the article-owned
+GloFAS streamflow application and related application-facing assets. The
+current manuscript-facing GloFAS authority is the Aug. 11, 2026 FR09
+retrospective reference case described below, not the earlier planned or pilot
+records preserved in this README.
 
 The application is article-owned. The Q-DESN computational engine may be
 installed from a pinned `exdqlm` commit or vendored later as a small audited
 module, but the data contract, forecast-origin protocol, model grid, scoring,
 and manuscript outputs live here.
 
-The current application work distinguishes the frozen origin-state bridge from
+Historical application work distinguishes the frozen origin-state bridge from
 the target latent-path ensemble-likelihood model. The model-family separation
 is documented in
 `docs/implementation_notes/glofas_application_model_families_20260513.md`.
@@ -20,10 +22,10 @@ code-facing object and API mapping is documented in
 required Q-DESN application fits use the regularized horseshoe prior; ridge
 fits are retained as dense baselines.
 
-The forward launch gates are documented in
+The historical forward launch gates are documented in
 `docs/implementation_notes/glofas_application_forward_plan_20260511.md`. That
-note is the current checkpoint for moving from audited source figures to the
-package-backed dry run and final application launch.
+note is preserved as an implementation record, not as the current manuscript
+authority after the FR09 promotion.
 
 The first executable latent-path smoke profile is
 `config/glofas_latent_path_al_vb_dec25_smoke.yaml`, with model rows in
@@ -217,29 +219,32 @@ describe these as synthesis-time adjustments, not as refitted Q-DESN models.
 
 ### Current GloFAS Manuscript Candidate
 
-As of 2026-06-21, the current manuscript-facing GloFAS candidate is:
+As of 2026-08-11, the current manuscript-facing GloFAS candidate is:
 
 ```text
-glofas_cal07_scorebalanced_spread140_add050_synthesis_final
+glofas_fr09_authoritative_full7_20260811_synthesis_contractfixed
 ```
 
 This candidate is selected through
 `tables/glofas_application_current_selection_manifest.csv`; manuscript text
 should continue to use the stable aliases in
 `tables/glofas_application_current_outputs.tex`. The tracked run snapshot is
-`tables/glofas_application_run_config__glofas_cal07_scorebalanced_spread140_add050_20260621.yaml`.
+`tables/glofas_application_run_config__glofas_fr09_authoritative_full7_20260811.yaml`.
+This is a retrospective one-origin reference case using the selected
+`persistence_anchored_innovation` discrepancy transition and a blended
+future-weather covariate policy; it is not an operational multi-origin
+calibration study.
 
 The reference-case scores on the transformed streamflow scale are:
 
-| Model | Check | Interval | CRPS | Coverage |
+| Model | Check | Interval | aCRPS | Coverage |
 |---|---:|---:|---:|---:|
-| Q-DESN calibration | 0.3818 | 4.1930 | 0.7915 | 0.583 |
-| Raw GloFAS | 0.7639 | 13.0538 | 1.4424 | 0.000 |
+| Q-DESN readout | 0.5654 | 10.8032 | 1.1319 | 0.357 |
+| Raw GloFAS | 0.7639 | 25.2028 | 1.4424 | 0.000 |
 
-The selected spread calibration is
-`scorebalanced_spread_x1p400_plus0p500`, centered at quantile 0.50. It is a
-post-fit synthesis adjustment only; it does not change the fitted reservoirs,
-likelihood, priors, or readout coefficients.
+No reporting-time spread calibration is selected for this run. The nominal
+90% interval is sharply undercovered, so the score improvements should not be
+described as evidence of calibrated predictive intervals.
 
 Future GloFAS replacements should be promoted by rerunning
 `scripts/08_promote_application_outputs.R` and then
@@ -518,8 +523,8 @@ worktree, the old 0.5.0 fitforecast validation worktree, or a stale
 The legacy pilot prediction adapter uses an origin-state discrepancy
 correction: it subtracts the fitted discrepancy readout at the forecast origin
 from the raw GloFAS ensemble quantile. This remains useful as a historical API
-gate, but it is not the current target application model. The target
-latent-path workflow uses posterior-draw predictions and the recursive
+gate, but it is not the current target application model. Later latent-path
+workflow drafts used posterior-draw predictions and the recursive
 future-state contract described in the implementation notes. In model notation,
 the legacy adapter is a point bridge for the posterior-draw identity
 `q_Y_draw(s, T, h, p0) = q_G_draw(s, T, h, p0) - d_G_draw(s, T, h, p0)`.
@@ -531,6 +536,13 @@ supplies `q_G` draws and the fitted Q-DESN supplies posterior discrepancy
 draws. This pilot is not the final posterior-draw prediction contract.
 Forecasts beyond the issued GloFAS horizon would require recursive prediction
 of both the GloFAS quantile path and the discrepancy path.
+
+The promoted FR09 manuscript run instead uses
+`discrepancy_transition_strategy: persistence_anchored_innovation`,
+`posterior_predictive_sampling: disabled`, and a retrospective blended
+future-covariate policy. Treat the posterior-draw material in this section as
+historical implementation context unless a future promotion explicitly selects
+that contract.
 
 The first executable posterior-draw gate is
 `config/glofas_discrepancy_posterior_draw_dryrun.yaml`. It fits the

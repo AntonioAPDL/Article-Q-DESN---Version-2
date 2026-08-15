@@ -355,5 +355,7 @@ validated:
 - Coefficient prior: regularized horseshoe as the default application prior;
   ridge as the dense baseline.
 - Quantile grid: `0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95`.
-- Scores: check loss, interval coverage, interval score, CRPS from the
-  synthesized quantile grid, runtime, and fit status.
+- Scores: check loss, interval coverage, interval score, aCRPS from the
+  synthesized finite quantile grid, runtime, and fit status. Here aCRPS
+  denotes a finite-grid trapezoidal integrated pinball score, not full
+  continuous-distribution CRPS.

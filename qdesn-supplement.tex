@@ -233,6 +233,7 @@ Q--DESN feature map.}
 \section{Distributional Conventions}
 \label{sec:dist_conventions}
 
+\noindent\textbf{Shared parameterizations.}
 The posterior kernels below use the following distributional
 parameterizations. These conventions are inherited by the MCMC, CAVI, and ELBO
 derivations below; in particular, all inverse-gamma distributions use a rate in
@@ -252,11 +253,13 @@ The notation \(\TN(m,V)\) denotes a Normal distribution with mean \(m\) and
 variance \(V\), truncated to \((0,\infty)\). The functions \(\Phi\) and
 \(\phi\) denote the standard Normal distribution and density functions.
 
+\noindent\textbf{AL constants.}
 For a fixed target quantile \(p_0\in(0,1)\), the AL constants are
 \[
 A_0=\frac{1-2p_0}{p_0(1-p_0)},\qquad
 B_0=\frac{2}{p_0(1-p_0)}.
 \]
+\noindent\textbf{exAL branch constants.}
 The notation \(\exAL\) denotes the quantile-fixed generalized asymmetric
 Laplace distribution of \citet{yan2025new}. This convention emphasizes the
 role of the likelihood as an extension of AL while preserving the
@@ -279,6 +282,8 @@ D_\gamma=C_\gamma|\gamma|.
 The main article denotes the same exAL shift coefficient by
 \(\lambda(\gamma)=C(\gamma)|\gamma|\); the supplement uses \(D_\gamma\)
 to reduce visual clutter in posterior kernels.
+
+\noindent\textbf{AL nesting and branchwise regularity.}
 When \(\gamma=0\) and the \(s_t\) latents are omitted, the exAL hierarchy
 reduces to the AL working likelihood with constants \(A_0,B_0\).
 This nesting is exact. The surrounding \(p_\gamma\), \(A_\gamma\),
@@ -441,6 +446,7 @@ where the last line is omitted when \(\zeta^2\) is fixed.
 
 \subsection{Complete-Data Posterior Targets}
 
+\noindent\textbf{Augmented target convention.}
 The augmented posterior targets below include each AL or exAL mixture variable
 once. The inverse-gamma variables in the \texttt{rhs\_ns} prior augment only
 the shrinkage scales, not the likelihood.
@@ -456,6 +462,7 @@ p(v_t\mid\sigma)p(s_t)\right\}
 p(\vect\beta)p(\sigma)\pi_\gamma(\gamma)\ind\{L<\gamma<U\}.
 \label{eq:supp_joint_exal_ridge}
 \end{align}
+\noindent\textbf{RHS target.}
 Under exAL and \texttt{rhs\_ns}, with
 \(\Theta_{\mathrm{rhs}}=(\vect\lambda^2,\vect\nu,\tau^2,\xi,\zeta^2)\),
 \begin{align}
@@ -476,6 +483,7 @@ p(\tau^2\mid\xi)p(\xi)p(\zeta^2)
 p(\sigma)\pi_\gamma(\gamma)\ind\{L<\gamma<U\}.
 \label{eq:supp_joint_exal_rhs}
 \end{align}
+\noindent\textbf{AL reductions.}
 The AL joint distributions are obtained by dropping \(\vect s\) and \(\gamma\),
 replacing \(A_\gamma,B_\gamma\) by \(A_0,B_0\), and using
 \eqref{eq:supp_al_hierarchy}. Thus, for example, the AL target with a ridge
@@ -914,6 +922,7 @@ convergence diagnostics.
 \section{ELBO Monitoring}
 \label{sec:elbo}
 
+\noindent\textbf{Monitored objective.}
 The fixed-design VB implementation monitors the evidence lower bound
 \[
 \elbo(q)
@@ -938,6 +947,7 @@ case gives
 +H(q).
 \label{eq:supp_generic_elbo_decomp}
 \end{align}
+\noindent\textbf{Approximation status.}
 For AL, replace the exAL likelihood term by the AL likelihood term and omit
 \(\E_q\{\log p(\vect s)\}\) and
 \(\E_q\{\log\pi_\gamma(\gamma)\}\). The likelihood component is evaluated from
@@ -1625,9 +1635,10 @@ lower Q--DESN AQL; positive values indicate lower PriceFM AQL.}
 \end{table}
 
 \clearpage
-\section{GloFAS Discrepancy-Calibration Model}
+\section{GloFAS Discrepancy-Readout Model}
 \label{sec:glofas_discrepancy}
 
+\noindent\textbf{Application object.}
 The streamflow application model uses one forecast system, the Global Flood
 Awareness System (GloFAS), together with a reference gauge record
 \citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. The reference
@@ -1644,6 +1655,7 @@ states.
 \subsection{Data Blocks and Augmented Design}
 \label{subsec:glofas_aug_design}
 
+\noindent\textbf{Data blocks.}
 Fix a quantile level \(p_0\). Let \(y_t\) denote transformed reference
 streamflow, \(g_t^{\mathrm{ret}}\) the retrospective GloFAS product, and
 \(g_{T+h,m}^{\mathrm{ens}}\) GloFAS ensemble member \(m\) at forecast origin
@@ -1657,6 +1669,7 @@ The discrepancy feature vector \(\vect x_i^{\mathrm{disc}}\) is generated from
 the GloFAS-minus-reference discrepancy path. Both vectors are fixed after
 conditioning on the relevant historical or latent future path.
 
+\noindent\textbf{Augmented design.}
 Define
 \[
 \vect\theta_{p_0}
@@ -1701,6 +1714,8 @@ then applies the learned discrepancy readout. The recursive path
 \(\hat q^{\mathrm{ens}}_{p_0,T+h}\) is the empirical GloFAS ensemble quantile
 at the fitted level, remains an implemented alternative but is not the selected
 article-facing run.
+
+\noindent\textbf{Selected reporting contract.}
 Stacking source contributions conditional on the selected state construction
 gives a vector \(\vect z\), a design matrix \(\mat H\), and source labels
 \(c_i\). With observed historical data only, \(\mat H\) is fixed. Under the
@@ -1708,6 +1723,7 @@ FR09 reporting contract, response-level posterior-predictive sampling is
 disabled and the reported forecast-window summaries are variational readout
 summaries passed through the monotone reporting rule.
 
+\noindent\textbf{Forecast-time decomposition.}
 The forecast-time use of the selected decomposition is additive around the
 persistence baseline. For horizons covered by an issued GloFAS ensemble at
 origin \(T\), the ensemble informs the forecast-system evidence and the raw
@@ -1720,8 +1736,8 @@ and the associated forecast-system readout is
 \[
 q^{\mathrm{glo},(s)}_{p_0,T+h}
 =q^{\mathrm{ref},(s)}_{p_0,T+h}
-d_T^{\mathrm{ret}}
-\vect x_{T+h}^{\mathrm{disc},(s)\top}\vect\alpha_{p_0}^{(s)}.
++d_T^{\mathrm{ret}}
++\vect x_{T+h}^{\mathrm{disc},(s)\top}\vect\alpha_{p_0}^{(s)}.
 \]
 Here \(d_T^{\mathrm{ret}}\) is the last historical retrospective discrepancy.
 Point summaries are taken after this readout construction. Using future
@@ -2087,6 +2103,7 @@ the separate \(\beta\)- and \(\alpha\)-block RHS scales, source scales
 \subsection{Variational Bayes and CAVI Updates}
 \label{subsec:glofas_vb}
 
+\noindent\textbf{Mean-field family.}
 For exAL, use the mean-field family
 \begin{equation}
 q=
@@ -2126,12 +2143,15 @@ q_\theta(\vect\theta_{p_0})&=\Normal(\vect m_\theta,\mat\Sigma_\theta),\\
 \label{eq:supp_glofas_vb_theta}
 \end{align}
 
+\noindent\textbf{Readout residual moments.}
 For each contribution, define
 \[
 \bar r_i^c=z_i^c-\vect h_i^{c\top}\vect m_\theta,\qquad
 \overline{(r_i^c)^2}
 =(\bar r_i^c)^2+\vect h_i^{c\top}\mat\Sigma_\theta\vect h_i^c .
 \]
+
+\noindent\textbf{AL coordinate factors.}
 For AL,
 \begin{align}
 q(v_i^c)
@@ -2158,6 +2178,7 @@ b_{\sigma,c}+\sum_{i\in\mathcal I_c}\E(v_i^c)
 \label{eq:supp_glofas_vb_al_sigma}
 \end{align}
 
+\noindent\textbf{exAL coordinate factors.}
 For exAL, define source-specific branchwise smooth expectations
 \[
 M_{1c}=\E\{(\sigma_cB_{\gamma_c})^{-1}\},\quad
@@ -2196,6 +2217,7 @@ M_{2c}\bar r_i^c\E\{(v_i^c)^{-1}\}-M_{4c}
 \label{eq:supp_glofas_vb_exal_s}
 \end{align}
 
+\noindent\textbf{RHS coordinate factors.}
 The RHS CAVI updates are applied independently to each block
 \(b\in\{\beta,\alpha\}\):
 \begin{align}
@@ -2219,6 +2241,7 @@ b_{\zeta,b}+\frac12\sum_{j\in\mathcal J_b}\overline{\theta_{b,j}^2}\right),
 where
 \(\overline{\theta_{b,j}^2}=m_{\theta,bj}^2+(\mat\Sigma_\theta)_{bj,bj}\).
 
+\noindent\textbf{Source scale--asymmetry factor.}
 For exAL, the source-specific Laplace--Delta target is
 \begin{align}
 \ell_{c,\mathrm{LD}}(\vect\eta_c)
@@ -2253,6 +2276,7 @@ h\{T_c(\hat{\vect\eta}_c)\}
 \label{eq:supp_glofas_delta}
 \end{equation}
 
+\noindent\textbf{Future-path factor.}
 For the latent-path ensemble-likelihood model, the variational family is
 augmented by a factor \(q_F(\vect y_F)\), where
 \(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\). Write
@@ -2271,6 +2295,8 @@ R_i^c(\vect y_F)
 \vect h_i^c(\vect y_F)^\top
 \mat\Sigma_\theta\vect h_i^c(\vect y_F).
 \]
+
+\noindent\textbf{Future-path likelihood target.}
 For AL, the future-path Laplace target is, up to constants not depending on
 \(\vect y_F\),
 \begin{equation}
@@ -2308,6 +2334,8 @@ M_{6,c}=\E\{A_{\gamma_c}/(\sigma_cB_{\gamma_c})\}.
 The remaining exAL terms in the complete-data likelihood and latent-prior
 density do not depend on \(\vect y_F\) and are included in the ELBO
 decomposition below.
+
+\noindent\textbf{Future-path Gaussian approximation.}
 At the mode \(\hat{\vect y}_F\), set
 \[
 \mat K_F=-\nabla^2_{\vect y_F}\ell_F(\hat{\vect y}_F),
@@ -2317,7 +2345,10 @@ q_F(\vect y_F)\approx
 \]
 with any Hessian regularization recorded in the fit object. Delta-method
 moments of the nonlinear state map are then used in the remaining coordinate
-updates. If \(\mat J_i\) is the Jacobian of \(\vect h_i^c(\vect y_F)\) at
+updates.
+
+\noindent\textbf{Delta moments.}
+If \(\mat J_i\) is the Jacobian of \(\vect h_i^c(\vect y_F)\) at
 \(\hat{\vect y}_F\), and \(\mat V_F=\mat K_F^{-1}\), then the default
 first-order Delta moments are
 \[
@@ -2344,6 +2375,8 @@ Also,
 Second-order mean corrections can be added for selected low-dimensional
 summaries, but they are not required for the first implementation because they
 would require Hessians for all reservoir features.
+
+\noindent\textbf{Entropy and objective.}
 Replacing fixed-design products by
 \((\vect a_i^c,\mat S_i^c,\vect b_i^c,\bar z_i^c,
 \overline{(z_i^c)^2})\) gives the latent-path VB--LD updates. The entropy
@@ -2391,6 +2424,7 @@ forecast summaries, ELBO history, and convergence diagnostics.
 \subsection{ELBO}
 \label{subsec:glofas_elbo}
 
+\noindent\textbf{Application ELBO.}
 For exAL, the application ELBO is
 \begin{align}
 \elbo(q)
@@ -2411,6 +2445,8 @@ For exAL, the application ELBO is
 +H(q).
 \label{eq:supp_glofas_elbo_decomp}
 \end{align}
+
+\noindent\textbf{Likelihood terms.}
 For AL, omit the \(s\)-latent and \(\gamma_c\) prior terms. The exAL
 likelihood term for source \(c\) is
 \begin{align}
@@ -2451,11 +2487,15 @@ The corresponding AL likelihood term is
 \right].
 \label{eq:supp_glofas_elbo_like_al}
 \end{align}
+
+\noindent\textbf{Latent-path objective.}
 For the latent-path model, these likelihood terms are evaluated with the
 Laplace--Delta future-path moments above, and \(H(q)\) includes
 \(H(q_F)\). Thus the monitored quantity is an ELBO approximation for the
 nonlinear latent-path model; it reduces to the fixed-design ELBO when
 \(\vect y_F\) is absent or held fixed.
+
+\noindent\textbf{Prior and entropy terms.}
 The latent and source-parameter prior terms are
 \begin{align}
 \elbo_{v,c}

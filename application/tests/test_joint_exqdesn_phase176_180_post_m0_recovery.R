@@ -171,6 +171,28 @@ stopifnot(
   all(m0_plan_a$inference_method_id == "M0_v_collapsed_support_logit"),
   all(!app_as_bool_vec(m0_plan_a$article_fixture_selection_allowed))
 )
+stopifnot(
+  identical(
+    app_joint_exqdesn_phase178_candidate_design_id(data.frame(
+      phase166_candidate_id = "vb_init", phase178_template_id = "template",
+      candidate_id = "source", stringsAsFactors = FALSE
+    )),
+    "vb_init"
+  ),
+  identical(
+    app_joint_exqdesn_phase178_candidate_design_id(data.frame(
+      phase178_template_id = "template", candidate_id = "source",
+      stringsAsFactors = FALSE
+    )),
+    "template"
+  ),
+  identical(
+    app_joint_exqdesn_phase178_candidate_design_id(data.frame(
+      candidate_id = "source", stringsAsFactors = FALSE
+    )),
+    "source"
+  )
+)
 
 rank_summary <- do.call(rbind, lapply(1:3, function(rr) {
   rbind(

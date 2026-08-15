@@ -1901,6 +1901,16 @@ app_joint_exqdesn_phase178_fit_structured_v <- function(candidate, fixture) {
   fit
 }
 
+app_joint_exqdesn_phase178_candidate_design_id <- function(candidate) {
+  for (field in c("phase166_candidate_id", "phase178_template_id", "candidate_id")) {
+    value <- candidate[[field]]
+    if (length(value) == 1L && !is.na(value) && nzchar(as.character(value))) {
+      return(as.character(value))
+    }
+  }
+  stop("Phase178 candidate has no stable design identifier.", call. = FALSE)
+}
+
 app_joint_exqdesn_phase178_load_candidate_fixture <- function(candidate, fixture_dir) {
   fixture_dirs <- app_joint_exqdesn_phase164_dirs()
   fixture_dirs$selected_fixtures <- fixture_dir
@@ -1909,7 +1919,7 @@ app_joint_exqdesn_phase178_load_candidate_fixture <- function(candidate, fixture
   )
   design_candidate <- candidate
   design_candidate$scenario_id <- candidate$scenario_ids[[1L]]
-  design_candidate$candidate_id <- candidate$phase166_candidate_id[[1L]]
+  design_candidate$candidate_id <- app_joint_exqdesn_phase178_candidate_design_id(candidate)
   transformed <- app_joint_exqdesn_phase151_transform_design(
     artifacts, design_candidate
   )

@@ -27,6 +27,36 @@ Before an exact-M0 launch, operators must:
 5. retain the selected-versus-parity protected confirmation as a separate
    phase after ranking.
 
+## Production exact-M0 ranking launch
+
+The production Phase 178 ranking packet contains 180 independently seeded
+workers: 15 case-specific survivor templates, three protected ranking
+replicates, and four chains per template-replicate case. Each chain uses
+`M0_v_collapsed_support_logit`, 24,000 iterations, 4,000 burn-in iterations,
+and thinning by four. The 45 structured-v initialization cases and all freeze
+hashes must pass before sampling begins.
+
+The launch is deliberately case-specific. Candidates compete only within the
+same scenario and readout structure; no global DESN specification is selected.
+VB evidence determines feasibility only. Exact-M0 functionals determine the
+ranking, and a later fresh-seed selected-versus-parity stage determines whether
+a candidate can replace the current article authority.
+
+The August 15 production allocation uses 16 audited CPUs
+(`19-24,31-39,60`) and leaves four otherwise free CPUs unclaimed. The lease
+queue may reuse a listed CPU only after its registered child PID exits. A
+resume relaunch reads the same immutable chain plan and allows the worker API
+to reuse already completed checkpoints. Runtime artifacts remain ignored and
+must not be interpreted as complete until the final health audit reports 180
+completed workers, zero failures, and a verified ranking manifest.
+
+Ranking prioritizes finite and stable posterior quantile-grid functionals:
+fit and forecast oracle MAE, check loss, grid CRPS, raw and contract crossings,
+and replicate stability. Scalar gamma and scale diagnostics remain supporting
+evidence: review-level scalar mixing does not by itself disqualify a candidate
+whose quantile functionals are stable, but functionally unstable candidates
+cannot be promoted regardless of apparent point-metric gains.
+
 ## Scientific boundary
 
 Phase 173 completed exact-M0 confirmation for all 16 exAL cells. Phase 173B

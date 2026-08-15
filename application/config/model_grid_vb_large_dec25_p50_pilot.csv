@@ -1,0 +1,3 @@
+fit_id,model_id,model_family,quantile_level,inference_method,coefficient_prior,reservoir_seed,likelihood_family,required,enabled,config_hash,notes
+raw_glofas_vb_large_p50,raw_glofas_vb_large_p50_pilot,raw_glofas,0.50,none,none,NA,none,true,true,TO_BE_COMPUTED,"Raw GloFAS ensemble median baseline for the Dec. 25 long-history median-only VB pilot."
+qdesn_discrepancy_rhs_al_vb_large_p50,qdesn_discrepancy_rhs_al_vb_large_p50_pilot,qdesn_glofas_discrepancy,0.50,vb_ld,rhs,20260512,al,true,true,TO_BE_COMPUTED,"Median-only large-spec posterior-draw GloFAS discrepancy Q-DESN with AL likelihood, VB approximation, and regularized horseshoe prior."

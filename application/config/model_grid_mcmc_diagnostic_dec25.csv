@@ -1,0 +1,7 @@
+fit_id,model_id,model_family,quantile_level,inference_method,coefficient_prior,reservoir_seed,required,enabled,config_hash,notes
+raw_glofas_p10,raw_glofas,raw_glofas,0.10,none,none,NA,true,true,TO_BE_COMPUTED,"Raw GloFAS ensemble 0.10 quantile baseline for the Dec. 25 diagnostic run."
+raw_glofas_p50,raw_glofas,raw_glofas,0.50,none,none,NA,true,true,TO_BE_COMPUTED,"Raw GloFAS ensemble median baseline for the Dec. 25 diagnostic run."
+raw_glofas_p90,raw_glofas,raw_glofas,0.90,none,none,NA,true,true,TO_BE_COMPUTED,"Raw GloFAS ensemble 0.90 quantile baseline for the Dec. 25 diagnostic run."
+qdesn_discrepancy_rhs_al_mcmc_diag_p10,qdesn_discrepancy_rhs_al_mcmc_diag,qdesn_glofas_discrepancy,0.10,mcmc,rhs,20260512,true,true,TO_BE_COMPUTED,"Diagnostic posterior-draw GloFAS discrepancy Q-DESN at p=0.10 with AL likelihood, MCMC, and regularized horseshoe prior."
+qdesn_discrepancy_rhs_al_mcmc_diag_p50,qdesn_discrepancy_rhs_al_mcmc_diag,qdesn_glofas_discrepancy,0.50,mcmc,rhs,20260512,true,true,TO_BE_COMPUTED,"Diagnostic posterior-draw GloFAS discrepancy Q-DESN at p=0.50 with AL likelihood, MCMC, and regularized horseshoe prior."
+qdesn_discrepancy_rhs_al_mcmc_diag_p90,qdesn_discrepancy_rhs_al_mcmc_diag,qdesn_glofas_discrepancy,0.90,mcmc,rhs,20260512,true,true,TO_BE_COMPUTED,"Diagnostic posterior-draw GloFAS discrepancy Q-DESN at p=0.90 with AL likelihood, MCMC, and regularized horseshoe prior."

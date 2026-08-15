@@ -1,0 +1,93 @@
+version: 0.1
+description: >
+  Required source families for the authoritative GloFAS Q-DESN application
+  input bundle. These checks are intentionally conservative: the application
+  should not generate manuscript-facing figures or model fits from a copied
+  bundle unless these source families are visible in the copied lineage files.
+
+cutoff_directory_pattern: "cutoff_date=%Y-%m-%d"
+
+required_lineage_files:
+  - snapshot_source_map.json
+  - data_start_filter_summary.txt
+
+glofas_version_rule:
+  lisflood_start_date: "2021-05-26"
+  before_start_expected: glofas_hist_v21_htessel_cons
+  before_start_aliases:
+    - "GloFAS historical v2.1"
+    - "HTESSEL-LISFLOOD"
+  on_or_after_start_expected: glofas_hist_v31_lisflood_cons
+  on_or_after_start_aliases:
+    - "GloFAS historical v3.1"
+    - "glofas_source_id: glofas_hist_v31_lisflood_cons"
+  on_or_after_disallowed:
+    - glofas_hist_v21_htessel_cons
+
+components:
+  reference_gauge:
+    required: true
+    label: Reference gauge observations
+    patterns:
+      - "\\busgs\\b"
+      - "reference[_ -]?gauge"
+      - "streamflow"
+
+  glofas_retrospective:
+    required: true
+    label: GloFAS retrospective path
+    patterns:
+      - "glofas.*retro"
+      - "retro.*glofas"
+      - "glofas.*histor"
+
+  glofas_ensemble:
+    required: true
+    label: GloFAS issued ensemble forecasts
+    patterns:
+      - "glofas.*ensemble"
+      - "glofas.*forecast"
+      - "ensemble.*glofas"
+
+  gefs_precipitation:
+    required: true
+    label: GEFS precipitation forecast input
+    patterns:
+      - "gefs.*precip"
+      - "precip.*gefs"
+      - "gefs.*apcp"
+      - "apcp.*gefs"
+      - "gefs.*ppt"
+      - "ppt.*gefs"
+
+  gefs_soil_moisture:
+    required: true
+    label: GEFS soil-moisture forecast input
+    patterns:
+      - "gefs.*soilw"
+      - "soilw.*gefs"
+      - "gefs.*soil"
+      - "soil.*gefs"
+
+  soil_moisture:
+    required: true
+    label: Soil-moisture input
+    patterns:
+      - "soil[_ -]?moist"
+      - "moisture"
+
+  blended_forecast:
+    required: true
+    label: Blended or weighted forecast input
+    patterns:
+      - "blend"
+      - "weighted"
+      - "custom[_ -]?filled"
+      - "filled"
+
+  retrospective_family:
+    required: true
+    label: Retrospective input family
+    patterns:
+      - "retro"
+      - "retrospective"

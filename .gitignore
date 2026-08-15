@@ -1,16 +1,6 @@
-# This is an article-only deployment branch. Existing allowlisted files remain
-# tracked, but new research-code, documentation, table, and figure artifacts
-# must be added first to GitHub main and then to overleaf/article_files.txt.
-/application/
-/docs/
-/scripts/
-/overleaf/
-/tables/*
-/figures/*
-/*.md
-/*.tex
+AGENTS_academic_writing_snippet.md
 
-# LaTeX build products.
+# LaTeX build artifacts.
 *.aux
 *.bbl
 *.blg
@@ -19,14 +9,39 @@
 *.log
 *.out
 *.synctex.gz
-*.toc
-/main.pdf
 /qdesn-supplement.pdf
-
-# Common local/editor artifacts.
-.DS_Store
-*~
-*.bak
-*.tmp
+Rplots.pdf
 __pycache__/
 *.py[cod]
+
+# Local-only literature audit workspace: PDFs, extracted text, and notes.
+literature/
+
+# Local operational trackers and runtime-only planning notes.
+local_trackers/
+.codex_work/
+restructuring.md
+restructuring2.md
+morechanges.md
+CODEX_*
+
+# Local article-only Overleaf snapshot workspaces. The published snapshot is
+# materialized from overleaf/article_files.txt and must not be committed to
+# the full research branch as a duplicate tree.
+/.overleaf_publish/
+/overleaf_export/
+
+# Local AI-generated investigation reports.
+PRICEFM_DATA_PIPELINE_REPORT.md
+QDESN_Batched_VB_Implementation_Report.md
+
+# Local-only application workspace. Raw data, frozen handoffs, caches, logs,
+# fitted objects, and generated application outputs are reproducible artifacts
+# but are not source files.
+application/data_local/
+application/cache/
+application/runs/
+application/logs/
+application/outputs/
+application/manifests/input_manifest.csv
+application/manifests/input_bundle_manifest.csv

@@ -1,0 +1,11 @@
+"family","base_case","D","n_vector","n_tilde","selection_reason","n_shortlisted","total_units"
+"positive_control_d1n300","d1n300_refine",1,"300","","current_reference_control",1,300
+"positive_control_d1n300","d1n300_refine",1,"300","","top_positive_control_d1n300",10,300
+"shallow_capacity_ladder","d1n400_ladder",1,"400","","top_shallow_capacity_by_base_case",3,400
+"shallow_capacity_ladder","d1n500_ladder",1,"500","","top_shallow_capacity_by_base_case",3,500
+"shallow_capacity_ladder","d1n700_ladder",1,"700","","top_shallow_capacity_by_base_case",3,700
+"shallow_capacity_ladder","d1n1000_ladder",1,"1000","","top_shallow_capacity_by_base_case",3,1000
+"two_layer_ladder","d2n250x250_ladder",2,"250;250","250","top_two_layer_by_base_case",2,500
+"two_layer_ladder","d2n350x350_ladder",2,"350;350","350","top_two_layer_by_base_case",1,700
+"two_layer_ladder","d2n400x300_ladder",2,"400;300","400","top_two_layer_by_base_case",2,700
+"two_layer_ladder","d2n600x400_ladder",2,"600;400","600","top_two_layer_by_base_case",2,1000

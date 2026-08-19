@@ -198,11 +198,14 @@ Planned files:
   and `application/scripts/30_build_shared_validation_tt500_provisional_table.R`.
 - `independent_validation_trainonly_v1.yaml`: authoritative article-facing
   500-observation handoff for the independent Q--DESN + exDQLM/DQLM simulation
-  study. It pins the corrected 72-row interface, manifest, source ledger, source
-  registry, common windows, and rolling-origin lead/stride policy consumed by
-  `scripts/build_independent_validation_trainonly_article.R`. Q--DESN rows must
-  use train-only preprocessing; uncorrected ridge rows and 5000-observation
-  MCMC runs are outside this contract.
+  study. It pins the corrected 72-row v8 interface, manifest, portable source
+  ledger, five-row article delta, source registry, common windows, and
+  rolling-origin lead/stride policy consumed by
+  `scripts/build_independent_validation_trainonly_article.R`. The v8 handoff
+  preserves prior confirmed values and adds only strict, case-specific forecast
+  improvements from three-chain full-budget confirmation. Q--DESN rows must use
+  train-only preprocessing; uncorrected ridge rows and 5000-observation MCMC
+  runs are outside this contract.
 - `shared_validation_tt500_final_fitforecast.yaml`: historical pre-correction
   build configuration retained for auditability. It is not the current
   article-table authority.

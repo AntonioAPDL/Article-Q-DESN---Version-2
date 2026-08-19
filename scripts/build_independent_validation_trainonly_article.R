@@ -54,47 +54,97 @@ as_bool <- function(x) {
   if (is.logical(x)) return(!is.na(x) & x)
   tolower(as.character(x)) %in% c("true", "t", "1", "yes")
 }
+resolve_portable_validation_path <- function(path, label) {
+  if (length(path) != 1L || is.na(path) || !nzchar(path) || grepl("^/", path)) {
+    stop(sprintf("%s must be a nonempty validation-relative path.", label), call. = FALSE)
+  }
+  resolved <- normalizePath(file.path(validation_root, path), winslash = "/", mustWork = TRUE)
+  if (!startsWith(resolved, paste0(validation_root, "/"))) {
+    stop(sprintf("%s escapes the validation root.", label), call. = FALSE)
+  }
+  resolved
+}
+portable_metric_source <- function(path, label) {
+  marker <- "validation/fitforecast_v2/"
+  at <- regexpr(marker, path, fixed = TRUE)
+  if (at[[1L]] < 1L) {
+    stop(sprintf("%s has no portable validation path.", label), call. = FALSE)
+  }
+  resolve_portable_validation_path(substring(path, at[[1L]]), label)
+}
 
 interface_path <- resolve_validation(config$interface_relative_path, "Interface")
 source_manifest_path <- resolve_validation(config$manifest_relative_path, "Manifest")
 source_ledger_path <- resolve_validation(config$source_ledger_relative_path, "Source ledger")
+article_delta_path <- resolve_validation(config$article_delta_relative_path, "Article delta")
+promotion_decision_path <- resolve_validation(
+  config$promotion_decision_ledger_relative_path,
+  "Promotion decision ledger"
+)
+remaining_gap_path <- resolve_validation(config$remaining_gap_ledger_relative_path, "Remaining-gap ledger")
 verify_hash(interface_path, config$interface_sha256, "Interface")
 verify_hash(source_manifest_path, config$manifest_sha256, "Manifest")
 verify_hash(source_ledger_path, config$source_ledger_sha256, "Source ledger")
+verify_hash(article_delta_path, config$article_delta_sha256, "Article delta")
+verify_hash(promotion_decision_path, config$promotion_decision_ledger_sha256, "Promotion decision ledger")
+verify_hash(remaining_gap_path, config$remaining_gap_ledger_sha256, "Remaining-gap ledger")
 
 source_manifest <- jsonlite::read_json(source_manifest_path, simplifyVector = TRUE)
 source_ledger <- read.csv(source_ledger_path, check.names = FALSE, stringsAsFactors = FALSE)
+manifest_jobs <- as.integer(unlist(source_manifest$campaign_jobs, use.names = TRUE))
+expected_jobs <- as.integer(unlist(config$campaign_jobs, use.names = TRUE))
+names(manifest_jobs) <- names(unlist(source_manifest$campaign_jobs, use.names = TRUE))
+names(expected_jobs) <- names(unlist(config$campaign_jobs, use.names = TRUE))
 if (!identical(as.character(source_manifest$promotion_id), as.character(config$promotion_id)) ||
-    !identical(as.character(source_manifest$promotion_status),
-               as.character(config$paired_confirmation_status)) ||
-    !identical(as.character(source_manifest$method_id),
-               as.character(config$paired_confirmation_method_id)) ||
-    !identical(as.character(source_manifest$run_id),
-               as.character(config$paired_confirmation_run_id)) ||
-    !identical(as.character(source_manifest$run_tag),
-               as.character(config$paired_confirmation_run_tag)) ||
-    !identical(as.character(source_manifest$execution_commit),
-               as.character(config$paired_confirmation_execution_commit)) ||
-    !identical(as.character(source_manifest$closeout_commit),
-               as.character(config$paired_confirmation_closeout_commit)) ||
-    !identical(as.integer(source_manifest$promoted_metric_roles),
-               as.integer(config$paired_confirmation_promoted_metric_roles)) ||
+    !identical(as.character(source_manifest$promotion_status), as.character(config$promotion_status)) ||
+    !identical(as.character(source_manifest$scientific_decision), as.character(config$scientific_decision)) ||
+    !identical(as.character(source_manifest$base_promotion_id), as.character(config$base_promotion_id)) ||
+    !identical(as.character(source_manifest$rendered_article_base_id),
+               as.character(config$rendered_article_base_id)) ||
+    !identical(as.character(source_manifest$exal_method_id), as.character(config$exal_method_id)) ||
+    !identical(as.character(source_manifest$al_method_id), as.character(config$al_method_id)) ||
+    !identical(as.character(source_manifest$run_id), as.character(config$campaign_run_id)) ||
+    !identical(as.character(source_manifest$run_tag), as.character(config$campaign_run_tag)) ||
+    !identical(as.character(source_manifest$scientific_design_commit),
+               as.character(config$scientific_design_commit)) ||
+    !identical(as.character(source_manifest$confirmation_execution_commit),
+               as.character(config$confirmation_execution_commit)) ||
+    !identical(as.character(source_manifest$closeout_implementation_commit),
+               as.character(config$closeout_implementation_commit)) ||
+    !identical(manifest_jobs, expected_jobs) ||
+    !identical(as.integer(source_manifest$canonical_chains), as.integer(config$canonical_chains)) ||
+    !identical(as.integer(source_manifest$promoted_metric_roles), as.integer(config$promoted_metric_roles)) ||
+    !identical(as.integer(source_manifest$article_numeric_updates_from_rendered_v6),
+               as.integer(config$article_numeric_updates_from_rendered_base)) ||
     !identical(as.integer(source_manifest$retained_iterations_per_chain),
-               as.integer(config$paired_confirmation_retained_iterations_per_chain)) ||
+               as.integer(config$retained_iterations_per_chain)) ||
     !identical(as.integer(source_manifest$observed_rows), as.integer(config$expected_rows)) ||
-    !identical(as.integer(source_manifest$ridge_rows), 0L) ||
+    !identical(as.integer(source_manifest$binary_payload_count), 0L) ||
+    !isTRUE(source_manifest$storage_policy_pass) ||
     !identical(as.character(source_manifest$article_interface_sha256), as.character(config$interface_sha256)) ||
-    !identical(as.character(source_manifest$source_registry_hash_value), as.character(config$source_registry_hash_value)) ||
-    !identical(as.character(source_manifest$ridge_policy), as.character(config$ridge_policy))) {
+    !identical(as.character(source_manifest$source_ledger_sha256), as.character(config$source_ledger_sha256)) ||
+    !identical(as.character(source_manifest$article_delta_sha256), as.character(config$article_delta_sha256)) ||
+    !identical(as.character(source_manifest$promotion_decision_ledger_sha256),
+               as.character(config$promotion_decision_ledger_sha256)) ||
+    !identical(as.character(source_manifest$remaining_gap_ledger_sha256),
+               as.character(config$remaining_gap_ledger_sha256)) ||
+    !identical(as.character(source_manifest$source_registry_hash_value),
+               as.character(config$source_registry_hash_value))) {
   stop("The source manifest violates the article configuration.", call. = FALSE)
 }
-if (!all(c("source_id", "path", "sha256") %in% names(source_ledger)) ||
-    any(!file.exists(source_ledger$path)) ||
-    !identical(unname(tools::sha256sum(source_ledger$path)), unname(source_ledger$sha256))) {
+if (!all(c("source_id", "path", "sha256", "role") %in% names(source_ledger)) ||
+    anyDuplicated(source_ledger$source_id) || any(grepl("^/", source_ledger$path))) {
+  stop("The validation source ledger is malformed or nonportable.", call. = FALSE)
+}
+source_ledger_paths <- vapply(seq_len(nrow(source_ledger)), function(i) {
+  resolve_portable_validation_path(source_ledger$path[[i]], sprintf("Source ledger row %d", i))
+}, character(1L))
+if (!identical(unname(tools::sha256sum(source_ledger_paths)), unname(source_ledger$sha256))) {
   stop("The validation source ledger is incomplete or stale.", call. = FALSE)
 }
 
 source <- read.csv(interface_path, check.names = FALSE, stringsAsFactors = FALSE)
+article_delta <- read.csv(article_delta_path, check.names = FALSE, stringsAsFactors = FALSE)
 required <- c(
   "article_interface_id", "inference", "model_variant", "model_label", "family", "tau",
   "fit_size", "effective_fit_size", "comparison_eligible", "status", "signoff_grade",
@@ -156,6 +206,36 @@ if (nrow(source) != as.integer(config$expected_rows) || anyDuplicated(key) ||
     any(grepl("/home/jaguir26/local/src", unlist(source, use.names = FALSE), fixed = TRUE))) {
   stop("Article interface violates the fixed independent-validation contract.", call. = FALSE)
 }
+delta_required <- c(
+  "inference", "model_variant", "family", "tau", "metric", "rendered_v6_value",
+  "authoritative_v8_value", "relative_gain_pct", "source_promotion_id"
+)
+if (!all(delta_required %in% names(article_delta)) ||
+    nrow(article_delta) != as.integer(config$article_numeric_updates_from_rendered_base) ||
+    anyDuplicated(with(article_delta, paste(inference, model_variant, family, tau, metric))) ||
+    any(!article_delta$metric %in% metric_cols) ||
+    any(!is.finite(article_delta$rendered_v6_value)) ||
+    any(!is.finite(article_delta$authoritative_v8_value)) ||
+    any(article_delta$authoritative_v8_value >= article_delta$rendered_v6_value) ||
+    any(article_delta$relative_gain_pct <= 0)) {
+  stop("The article-delta ledger violates the strict-improvement contract.", call. = FALSE)
+}
+delta_matches <- vapply(seq_len(nrow(article_delta)), function(i) {
+  row <- article_delta[i, , drop = FALSE]
+  source_row <- source[
+    source$inference == row$inference & source$model_variant == row$model_variant &
+      source$family == row$family & abs(source$tau - row$tau) < 1e-12,
+    ,
+    drop = FALSE
+  ]
+  nrow(source_row) == 1L &&
+    abs(as.numeric(source_row[[row$metric]][[1L]]) - row$authoritative_v8_value) < 1e-12 &&
+    identical(as.character(source_row$source_promotion_id[[1L]]),
+              as.character(row$source_promotion_id[[1L]]))
+}, logical(1L))
+if (!all(delta_matches)) {
+  stop("The article-delta ledger does not match the pinned v8 interface.", call. = FALSE)
+}
 qdesn_rows <- grepl("^qdesn_", source$model_variant)
 if (!all(source$preprocessing_scope[qdesn_rows] == "train_only")) {
   stop("A Q-DESN row does not use train-only preprocessing.", call. = FALSE)
@@ -169,20 +249,28 @@ if (!all(as_bool(source$article_consumption_allowed)) ||
   stop("The rolling-origin article authority is provisional or stale.", call. = FALSE)
 }
 
-confirmed <- source$confirmation_state == config$paired_confirmation_state
-expected_confirmed <- source$inference == "mcmc" &
-  source$model_variant == "qdesn_exal_rhs_ns" & source$family == "normal" &
-  abs(source$tau - 0.05) < 1e-12
-if (!identical(confirmed, expected_confirmed) || sum(confirmed) != 1L ||
-    source$metric_estimator_contract[confirmed] != config$paired_confirmation_estimator_contract ||
-    source$confirmation_chain_count[confirmed] != as.integer(config$paired_confirmation_chains_per_cell) ||
-    source$confirmation_execution_commit[confirmed] != config$paired_confirmation_execution_commit ||
-    source$confirmation_closeout_commit[confirmed] != config$paired_confirmation_closeout_commit ||
-    source$source_promotion_id[confirmed] != config$promotion_id ||
-    any(source$confirmation_state[!confirmed] != "INHERITED_FROM_V5") ||
-    any(source$confirmation_chain_count[!confirmed] != 0L)) {
+expected_state_counts <- as.integer(unlist(config$expected_confirmation_states, use.names = TRUE))
+names(expected_state_counts) <- names(unlist(config$expected_confirmation_states, use.names = TRUE))
+observed_state_counts <- table(factor(
+  source$confirmation_state,
+  levels = names(expected_state_counts)
+))
+names(observed_state_counts) <- names(expected_state_counts)
+confirmed <- source$confirmation_state != "INHERITED_FROM_V5"
+current_confirmed <- source$confirmation_state == config$current_confirmation_state
+if (!identical(as.integer(observed_state_counts), unname(expected_state_counts)) ||
+    sum(confirmed) != as.integer(config$confirmed_rows_total) ||
+    sum(current_confirmed) != as.integer(config$current_confirmed_rows) ||
+    any(source$confirmation_chain_count[confirmed] != as.integer(config$confirmation_chains_per_cell)) ||
+    any(source$confirmation_chain_count[!confirmed] != 0L) ||
+    any(!nzchar(source$confirmation_execution_commit[confirmed])) ||
+    any(!nzchar(source$confirmation_closeout_commit[confirmed])) ||
+    any(source$metric_estimator_contract[current_confirmed] != config$current_estimator_contract) ||
+    any(source$confirmation_execution_commit[current_confirmed] != config$confirmation_execution_commit) ||
+    any(source$confirmation_closeout_commit[current_confirmed] != config$closeout_implementation_commit) ||
+    any(source$source_promotion_id[current_confirmed] != config$promotion_id)) {
   stop(
-    "The paired-confirmation estimator contract is incomplete or targets the wrong article cell.",
+    "The cumulative confirmation estimator contract is incomplete or targets the wrong article cells.",
     call. = FALSE
   )
 }
@@ -195,8 +283,10 @@ metric_sources <- unique(rbind(
            c("fit_source_path", "fit_source_sha256"))
 ))
 names(metric_sources) <- c("path", "sha256")
-if (any(!file.exists(metric_sources$path)) ||
-    !identical(unname(tools::sha256sum(metric_sources$path)), unname(metric_sources$sha256))) {
+metric_source_paths <- vapply(seq_len(nrow(metric_sources)), function(i) {
+  portable_metric_source(metric_sources$path[[i]], sprintf("Metric source row %d", i))
+}, character(1L))
+if (!identical(unname(tools::sha256sum(metric_source_paths)), unname(metric_sources$sha256))) {
   stop("Metric-level validation evidence is missing or has changed.", call. = FALSE)
 }
 
@@ -463,14 +553,15 @@ metric_specs <- list(
     path = "forecast_check_source_path", sha = "forecast_check_source_sha256"
   )
 )
-workspace_root <- normalizePath(dirname(validation_root), winslash = "/", mustWork = TRUE)
-relative_to_workspace <- function(path) {
-  normalized <- normalizePath(path, winslash = "/", mustWork = TRUE)
-  prefix <- paste0(workspace_root, "/")
-  if (!startsWith(normalized, prefix)) {
-    stop("A figure metric source escapes the canonical workspace root.", call. = FALSE)
+relative_to_validation <- function(path) {
+  marker <- "validation/fitforecast_v2/"
+  at <- regexpr(marker, path, fixed = TRUE)
+  if (at[[1L]] < 1L) {
+    stop("A figure metric source has no portable validation path.", call. = FALSE)
   }
-  substring(normalized, nchar(prefix) + 1L)
+  relative <- substring(path, at[[1L]])
+  resolve_portable_validation_path(relative, "Figure metric source")
+  relative
 }
 mcmc <- source[source$inference == "mcmc", , drop = FALSE]
 figure_rows <- list()
@@ -495,7 +586,7 @@ for (i in seq_len(nrow(mcmc))) {
       source_signoff_grade = as.character(mcmc[[spec$signoff]][[i]]),
       source_candidate_id = as.character(mcmc[[spec$candidate]][[i]]),
       source_run_tag = as.character(mcmc[[spec$run_tag]][[i]]),
-      source_path_relative = relative_to_workspace(as.character(mcmc[[spec$path]][[i]])),
+      source_path_relative = relative_to_validation(as.character(mcmc[[spec$path]][[i]])),
       source_sha256 = as.character(mcmc[[spec$sha]][[i]]),
       source_promotion_id = as.character(mcmc$source_promotion_id[[i]]),
       source_registry_hash_value = as.character(mcmc$source_registry_hash_value[[i]]),
@@ -556,6 +647,34 @@ plot <- ggplot2::ggplot(
   )
 figure_path <- resolve_article(outputs$figure_pdf)
 ggplot2::ggsave(figure_path, plot = plot, width = 11.2, height = 8.0, units = "in", device = grDevices::cairo_pdf)
+normalize_pdf_creation_date <- function(path) {
+  bytes <- readBin(path, what = "raw", n = file.info(path)$size)
+  marker <- charToRaw("/CreationDate (D:")
+  candidates <- which(bytes == marker[[1L]])
+  hits <- candidates[vapply(candidates, function(at) {
+    end <- at + length(marker) - 1L
+    end <= length(bytes) && identical(bytes[at:end], marker)
+  }, logical(1L))]
+  if (length(hits) != 1L) {
+    stop("The generated PDF does not contain one creation-date field.", call. = FALSE)
+  }
+  closing <- which(seq_along(bytes) > hits[[1L]] & bytes == charToRaw(")")[[1L]])
+  if (!length(closing)) {
+    stop("The generated PDF creation-date field is unterminated.", call. = FALSE)
+  }
+  close_at <- closing[[1L]]
+  old <- rawToChar(bytes[hits[[1L]]:close_at])
+  replacement <- "/CreationDate (D:20000101000000+00'00)"
+  if (nchar(old, type = "bytes") != nchar(replacement, type = "bytes")) {
+    stop("The generated PDF creation-date field has an unexpected width.", call. = FALSE)
+  }
+  bytes[hits[[1L]]:close_at] <- charToRaw(replacement)
+  connection <- file(path, open = "wb")
+  on.exit(close(connection), add = TRUE)
+  writeBin(bytes, connection)
+  invisible(path)
+}
+normalize_pdf_creation_date(figure_path)
 
 artifact_paths <- c(
   summary_path, compat_summary_path, protocol_path, family_paths, family_wrapper,
@@ -566,12 +685,17 @@ relative_article <- function(path) substring(normalizePath(path, winslash = "/")
 manifest_lines <- c(
   "Independent single-quantile corrected article handoff",
   sprintf("promotion_id: %s", config$promotion_id),
-  sprintf("source_interface: %s", interface_path),
+  sprintf("promotion_status: %s", config$promotion_status),
+  sprintf("scientific_decision: %s", config$scientific_decision),
+  sprintf("source_interface: %s", config$interface_relative_path),
   sprintf("source_interface_sha256: %s", sha256(interface_path)),
-  sprintf("source_manifest: %s", source_manifest_path),
+  sprintf("source_manifest: %s", config$manifest_relative_path),
   sprintf("source_manifest_sha256: %s", sha256(source_manifest_path)),
-  sprintf("source_ledger: %s", source_ledger_path),
+  sprintf("source_ledger: %s", config$source_ledger_relative_path),
   sprintf("source_ledger_sha256: %s", sha256(source_ledger_path)),
+  sprintf("article_delta: %s", config$article_delta_relative_path),
+  sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
+  sprintf("article_numeric_updates: %d", nrow(article_delta)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
   sprintf("row_count: %d", nrow(source)),
   sprintf("signoff_counts: %s", paste(names(table(source$signoff_grade)), table(source$signoff_grade), collapse = ",")),
@@ -580,16 +704,17 @@ manifest_lines <- c(
   "forecast_protocol: rolling_origin_no_refit_state_update",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
+  sprintf("promotion_validation_branch: %s", config$promotion_validation_branch),
   sprintf("promotion_validation_commit: %s", config$promotion_validation_commit),
-  sprintf("paired_confirmation_method_id: %s", config$paired_confirmation_method_id),
-  sprintf("paired_confirmation_run_id: %s", config$paired_confirmation_run_id),
-  sprintf("paired_confirmation_run_tag: %s", config$paired_confirmation_run_tag),
-  sprintf("paired_confirmation_execution_commit: %s", config$paired_confirmation_execution_commit),
-  sprintf("paired_confirmation_closeout_commit: %s", config$paired_confirmation_closeout_commit),
-  sprintf(
-    "paired_confirmation_promoted_metric_roles: %d",
-    as.integer(config$paired_confirmation_promoted_metric_roles)
-  ),
+  sprintf("exal_method_id: %s", config$exal_method_id),
+  sprintf("al_method_id: %s", config$al_method_id),
+  sprintf("campaign_run_id: %s", config$campaign_run_id),
+  sprintf("campaign_run_tag: %s", config$campaign_run_tag),
+  sprintf("scientific_design_commit: %s", config$scientific_design_commit),
+  sprintf("confirmation_execution_commit: %s", config$confirmation_execution_commit),
+  sprintf("closeout_implementation_commit: %s", config$closeout_implementation_commit),
+  sprintf("canonical_chains: %d", as.integer(config$canonical_chains)),
+  sprintf("promoted_metric_roles_current_campaign: %d", as.integer(config$promoted_metric_roles)),
   "artifacts:"
 )
 manifest_lines <- c(
@@ -603,23 +728,22 @@ mcmc_manifest_path <- resolve_article(outputs$mcmc_manifest)
 writeLines(c(
   "Independent single-quantile corrected MCMC article tables",
   sprintf("promotion_id: %s", config$promotion_id),
-  sprintf("source_csv: %s", interface_path),
+  sprintf("source_csv: %s", config$interface_relative_path),
   sprintf("source_csv_sha256: %s", sha256(interface_path)),
   sprintf("source_manifest_sha256: %s", sha256(source_manifest_path)),
+  sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
   "selection_policy: fixed case-specific metric envelope; diagnostic status retained but not excluded",
   "qdesn_preprocessing_scope: train_only",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
-  sprintf("paired_confirmation_estimator_contract: %s", config$paired_confirmation_estimator_contract),
-  sprintf(
-    "paired_confirmation_chains_per_cell: %d",
-    as.integer(config$paired_confirmation_chains_per_cell)
-  ),
-  sprintf(
-    "paired_confirmation_promoted_metric_roles: %d",
-    as.integer(config$paired_confirmation_promoted_metric_roles)
-  ),
+  sprintf("current_confirmation_state: %s", config$current_confirmation_state),
+  sprintf("current_estimator_contract: %s", config$current_estimator_contract),
+  sprintf("confirmation_chains_per_cell: %d", as.integer(config$confirmation_chains_per_cell)),
+  sprintf("confirmed_rows_total: %d", as.integer(config$confirmed_rows_total)),
+  sprintf("promoted_metric_roles_current_campaign: %d", as.integer(config$promoted_metric_roles)),
+  sprintf("article_numeric_updates_from_rendered_base: %d",
+          as.integer(config$article_numeric_updates_from_rendered_base)),
   sprintf("row_count_mcmc: %d", nrow(mcmc)),
   sprintf("signoff_counts_mcmc: %s", paste(names(table(mcmc$signoff_grade)), table(mcmc$signoff_grade), collapse = ",")),
   "artifact_sha256:",
@@ -631,8 +755,8 @@ figure_manifest_path <- resolve_article(outputs$figure_manifest)
 writeLines(c(
   "Independent single-quantile corrected MCMC performance figure",
   sprintf("promotion_id: %s", config$promotion_id),
-  sprintf("source_path_base: %s", workspace_root),
-  sprintf("source_csv: %s", interface_path),
+  "source_path_base: validation_root",
+  sprintf("source_csv: %s", config$interface_relative_path),
   sprintf("source_csv_sha256: %s", sha256(interface_path)),
   sprintf("figure_data: %s", relative_article(figure_data_path)),
   sprintf("figure_data_sha256: %s", sha256(figure_data_path)),

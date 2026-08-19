@@ -19,6 +19,16 @@ as_bool <- function(x) {
 resolve_validation <- function(relative_path) {
   normalizePath(file.path(validation_root, relative_path), winslash = "/", mustWork = TRUE)
 }
+resolve_portable_validation_path <- function(path, label) {
+  if (length(path) != 1L || is.na(path) || !nzchar(path) || grepl("^/", path)) {
+    stop(sprintf("%s must be a nonempty validation-relative path.", label), call. = FALSE)
+  }
+  resolved <- normalizePath(file.path(validation_root, path), winslash = "/", mustWork = TRUE)
+  if (!startsWith(resolved, paste0(validation_root, "/"))) {
+    stop(sprintf("%s escapes the validation root.", label), call. = FALSE)
+  }
+  resolved
+}
 resolve_article <- function(relative_path) {
   normalizePath(file.path(repo_root, relative_path), winslash = "/", mustWork = TRUE)
 }
@@ -26,14 +36,22 @@ resolve_article <- function(relative_path) {
 interface_path <- resolve_validation(config$interface_relative_path)
 source_manifest_path <- resolve_validation(config$manifest_relative_path)
 source_ledger_path <- resolve_validation(config$source_ledger_relative_path)
+article_delta_path <- resolve_validation(config$article_delta_relative_path)
+promotion_decision_path <- resolve_validation(config$promotion_decision_ledger_relative_path)
+remaining_gap_path <- resolve_validation(config$remaining_gap_ledger_relative_path)
 if (!identical(sha256(interface_path), as.character(config$interface_sha256)) ||
     !identical(sha256(source_manifest_path), as.character(config$manifest_sha256)) ||
-    !identical(sha256(source_ledger_path), as.character(config$source_ledger_sha256))) {
+    !identical(sha256(source_ledger_path), as.character(config$source_ledger_sha256)) ||
+    !identical(sha256(article_delta_path), as.character(config$article_delta_sha256)) ||
+    !identical(sha256(promotion_decision_path), as.character(config$promotion_decision_ledger_sha256)) ||
+    !identical(sha256(remaining_gap_path), as.character(config$remaining_gap_ledger_sha256))) {
   stop("Pinned validation input hashes do not match.", call. = FALSE)
 }
 
 source <- read.csv(interface_path, check.names = FALSE, stringsAsFactors = FALSE)
 source_manifest <- jsonlite::read_json(source_manifest_path, simplifyVector = TRUE)
+source_ledger <- read.csv(source_ledger_path, check.names = FALSE, stringsAsFactors = FALSE)
+article_delta <- read.csv(article_delta_path, check.names = FALSE, stringsAsFactors = FALSE)
 summary <- read.csv(resolve_article(config$outputs$summary_csv), check.names = FALSE,
                     stringsAsFactors = FALSE)
 compat <- read.csv(resolve_article(config$outputs$compatibility_summary_csv), check.names = FALSE,
@@ -41,25 +59,47 @@ compat <- read.csv(resolve_article(config$outputs$compatibility_summary_csv), ch
 if (!identical(source, summary) || !identical(source, compat) || nrow(source) != 72L) {
   stop("Generated article summaries differ from the pinned interface.", call. = FALSE)
 }
+manifest_jobs <- as.integer(unlist(source_manifest$campaign_jobs, use.names = TRUE))
+expected_jobs <- as.integer(unlist(config$campaign_jobs, use.names = TRUE))
+names(manifest_jobs) <- names(unlist(source_manifest$campaign_jobs, use.names = TRUE))
+names(expected_jobs) <- names(unlist(config$campaign_jobs, use.names = TRUE))
 if (!identical(as.character(source_manifest$promotion_id), as.character(config$promotion_id)) ||
-    !identical(as.character(source_manifest$promotion_status),
-               as.character(config$paired_confirmation_status)) ||
-    !identical(as.character(source_manifest$method_id),
-               as.character(config$paired_confirmation_method_id)) ||
-    !identical(as.character(source_manifest$run_id),
-               as.character(config$paired_confirmation_run_id)) ||
-    !identical(as.character(source_manifest$run_tag),
-               as.character(config$paired_confirmation_run_tag)) ||
-    !identical(as.character(source_manifest$execution_commit),
-               as.character(config$paired_confirmation_execution_commit)) ||
-    !identical(as.character(source_manifest$closeout_commit),
-               as.character(config$paired_confirmation_closeout_commit)) ||
-    !identical(as.integer(source_manifest$promoted_metric_roles),
-               as.integer(config$paired_confirmation_promoted_metric_roles)) ||
+    !identical(as.character(source_manifest$promotion_status), as.character(config$promotion_status)) ||
+    !identical(as.character(source_manifest$scientific_decision), as.character(config$scientific_decision)) ||
+    !identical(as.character(source_manifest$base_promotion_id), as.character(config$base_promotion_id)) ||
+    !identical(as.character(source_manifest$rendered_article_base_id),
+               as.character(config$rendered_article_base_id)) ||
+    !identical(as.character(source_manifest$exal_method_id), as.character(config$exal_method_id)) ||
+    !identical(as.character(source_manifest$al_method_id), as.character(config$al_method_id)) ||
+    !identical(as.character(source_manifest$run_id), as.character(config$campaign_run_id)) ||
+    !identical(as.character(source_manifest$run_tag), as.character(config$campaign_run_tag)) ||
+    !identical(as.character(source_manifest$scientific_design_commit),
+               as.character(config$scientific_design_commit)) ||
+    !identical(as.character(source_manifest$confirmation_execution_commit),
+               as.character(config$confirmation_execution_commit)) ||
+    !identical(as.character(source_manifest$closeout_implementation_commit),
+               as.character(config$closeout_implementation_commit)) ||
+    !identical(manifest_jobs, expected_jobs) ||
+    !identical(as.integer(source_manifest$canonical_chains), as.integer(config$canonical_chains)) ||
+    !identical(as.integer(source_manifest$promoted_metric_roles), as.integer(config$promoted_metric_roles)) ||
+    !identical(as.integer(source_manifest$article_numeric_updates_from_rendered_v6),
+               as.integer(config$article_numeric_updates_from_rendered_base)) ||
     !identical(as.integer(source_manifest$retained_iterations_per_chain),
-               as.integer(config$paired_confirmation_retained_iterations_per_chain))) {
-  stop("The paired-confirmation manifest does not match the pinned article contract.",
+               as.integer(config$retained_iterations_per_chain)) ||
+    !identical(as.integer(source_manifest$binary_payload_count), 0L) ||
+    !isTRUE(source_manifest$storage_policy_pass)) {
+  stop("The adaptive-confirmation manifest does not match the pinned article contract.",
        call. = FALSE)
+}
+if (!all(c("source_id", "path", "sha256", "role") %in% names(source_ledger)) ||
+    anyDuplicated(source_ledger$source_id) || any(grepl("^/", source_ledger$path))) {
+  stop("The source ledger is malformed or nonportable.", call. = FALSE)
+}
+source_ledger_paths <- vapply(seq_len(nrow(source_ledger)), function(i) {
+  resolve_portable_validation_path(source_ledger$path[[i]], sprintf("Source ledger row %d", i))
+}, character(1L))
+if (!identical(unname(tools::sha256sum(source_ledger_paths)), unname(source_ledger$sha256))) {
+  stop("A source-ledger hash is stale.", call. = FALSE)
 }
 
 expected <- expand.grid(
@@ -79,6 +119,34 @@ if (anyDuplicated(source_key) || !setequal(source_key, expected_key) ||
     !all(source$source_registry_hash_value == config$source_registry_hash_value)) {
   stop("Generated summary violates the scientific table contract.", call. = FALSE)
 }
+delta_required <- c(
+  "inference", "model_variant", "family", "tau", "metric", "rendered_v6_value",
+  "authoritative_v8_value", "relative_gain_pct", "source_promotion_id"
+)
+if (!all(delta_required %in% names(article_delta)) ||
+    nrow(article_delta) != as.integer(config$article_numeric_updates_from_rendered_base) ||
+    anyDuplicated(with(article_delta, paste(inference, model_variant, family, tau, metric))) ||
+    any(!article_delta$metric %in% metric_cols) ||
+    any(article_delta$authoritative_v8_value >= article_delta$rendered_v6_value) ||
+    any(article_delta$relative_gain_pct <= 0)) {
+  stop("The article-delta ledger violates the strict-improvement contract.", call. = FALSE)
+}
+delta_matches <- vapply(seq_len(nrow(article_delta)), function(i) {
+  row <- article_delta[i, , drop = FALSE]
+  source_row <- source[
+    source$inference == row$inference & source$model_variant == row$model_variant &
+      source$family == row$family & abs(source$tau - row$tau) < 1e-12,
+    ,
+    drop = FALSE
+  ]
+  nrow(source_row) == 1L &&
+    abs(as.numeric(source_row[[row$metric]][[1L]]) - row$authoritative_v8_value) < 1e-12 &&
+    identical(as.character(source_row$source_promotion_id[[1L]]),
+              as.character(row$source_promotion_id[[1L]]))
+}, logical(1L))
+if (!all(delta_matches)) {
+  stop("The article-delta ledger does not match the generated summary.", call. = FALSE)
+}
 qdesn_rows <- grepl("^qdesn_", source$model_variant)
 if (!all(as_bool(source$article_consumption_allowed)) ||
     any(source$rolling_rebaseline_state != config$rolling_rebaseline_state) ||
@@ -88,18 +156,26 @@ if (!all(as_bool(source$article_consumption_allowed)) ||
     any(source$rolling_evidence_promotion_id[qdesn_rows] != config$promotion_id)) {
   stop("Generated summary is not the authoritative rolling-origin rebaseline.", call. = FALSE)
 }
-confirmed <- source$confirmation_state == config$paired_confirmation_state
-expected_confirmed <- source$inference == "mcmc" &
-  source$model_variant == "qdesn_exal_rhs_ns" & source$family == "normal" &
-  abs(source$tau - 0.05) < 1e-12
-if (!identical(confirmed, expected_confirmed) || sum(confirmed) != 1L ||
-    source$metric_estimator_contract[confirmed] != config$paired_confirmation_estimator_contract ||
-    source$confirmation_chain_count[confirmed] != as.integer(config$paired_confirmation_chains_per_cell) ||
-    source$confirmation_execution_commit[confirmed] != config$paired_confirmation_execution_commit ||
-    source$confirmation_closeout_commit[confirmed] != config$paired_confirmation_closeout_commit ||
-    any(source$confirmation_state[!confirmed] != "INHERITED_FROM_V5") ||
-    any(source$confirmation_chain_count[!confirmed] != 0L)) {
-  stop("Generated summary violates the paired-confirmation estimator contract.",
+expected_state_counts <- as.integer(unlist(config$expected_confirmation_states, use.names = TRUE))
+names(expected_state_counts) <- names(unlist(config$expected_confirmation_states, use.names = TRUE))
+observed_state_counts <- table(factor(
+  source$confirmation_state,
+  levels = names(expected_state_counts)
+))
+confirmed <- source$confirmation_state != "INHERITED_FROM_V5"
+current_confirmed <- source$confirmation_state == config$current_confirmation_state
+if (!identical(as.integer(observed_state_counts), unname(expected_state_counts)) ||
+    sum(confirmed) != as.integer(config$confirmed_rows_total) ||
+    sum(current_confirmed) != as.integer(config$current_confirmed_rows) ||
+    any(source$confirmation_chain_count[confirmed] != as.integer(config$confirmation_chains_per_cell)) ||
+    any(source$confirmation_chain_count[!confirmed] != 0L) ||
+    any(!nzchar(source$confirmation_execution_commit[confirmed])) ||
+    any(!nzchar(source$confirmation_closeout_commit[confirmed])) ||
+    any(source$metric_estimator_contract[current_confirmed] != config$current_estimator_contract) ||
+    any(source$confirmation_execution_commit[current_confirmed] != config$confirmation_execution_commit) ||
+    any(source$confirmation_closeout_commit[current_confirmed] != config$closeout_implementation_commit) ||
+    any(source$source_promotion_id[current_confirmed] != config$promotion_id)) {
+  stop("Generated summary violates the cumulative confirmation estimator contract.",
        call. = FALSE)
 }
 
@@ -135,10 +211,13 @@ if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fix
            fixed = TRUE) ||
     !grepl("train-only preprocessing", main_text, fixed = TRUE) ||
     !grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
+    !grepl("A forecast-first follow-up then revisited", main_text, fixed = TRUE) ||
+    !grepl("A subsequent adaptive forecast-gap campaign", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
     !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
     !grepl("train-only preprocessing replay", supp_text, fixed = TRUE) ||
-    !grepl("A later paired confirmation targeted", supp_text, fixed = TRUE)) {
+    !grepl("A later paired confirmation targeted", supp_text, fixed = TRUE) ||
+    !grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE)) {
   stop("Manuscript prose is not wired to the corrected artifacts.", call. = FALSE)
 }
 
@@ -150,10 +229,11 @@ manifest_paths <- vapply(
 manifest_text <- paste(unlist(lapply(manifest_paths, readLines, warn = FALSE)), collapse = "\n")
 if (!grepl(config$promotion_id, manifest_text, fixed = TRUE) ||
     !grepl(config$interface_sha256, manifest_text, fixed = TRUE) ||
+    !grepl(config$article_delta_sha256, manifest_text, fixed = TRUE) ||
     !grepl(config$rolling_rebaseline_state, manifest_text, fixed = TRUE) ||
     !grepl(config$qdesn_forecast_metric_contract, manifest_text, fixed = TRUE) ||
-    !grepl(config$paired_confirmation_method_id, manifest_text, fixed = TRUE) ||
-    !grepl(config$paired_confirmation_estimator_contract, manifest_text, fixed = TRUE) ||
+    !grepl(config$exal_method_id, manifest_text, fixed = TRUE) ||
+    !grepl(config$current_estimator_contract, manifest_text, fixed = TRUE) ||
     grepl("/home/jaguir26/local/src", manifest_text, fixed = TRUE)) {
   stop("Generated manifests violate the provenance contract.", call. = FALSE)
 }

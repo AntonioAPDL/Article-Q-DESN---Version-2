@@ -219,8 +219,19 @@ if (audit_only) {
 manifest <- app_glofas_median_screen_candidate_manifest(space)
 
 inference_override <- (space$fixed %||% list())$inference %||% list()
+preflight <- space$reservoir_preflight %||% list()
+preflight_enabled <- app_as_bool(preflight$enabled %||% FALSE)
+preflight_target <- match.arg(
+  as.character(preflight$diagnostic_target %||% "reservoir"),
+  c("layers", "reservoir", "readout", "both")
+)
+preflight_reject_decision <- match.arg(
+  as.character(preflight$reject_decision %||% "reject"),
+  c("reject", "none")
+)
 runtime_rows <- list()
 candidate_contract_rows <- list()
+warm_source_cache <- new.env(parent = emptyenv())
 for (i in seq_len(nrow(manifest))) {
   row <- manifest[i, , drop = FALSE]
   candidate_id <- as.character(row$candidate_id[[1L]])
@@ -238,7 +249,14 @@ for (i in seq_len(nrow(manifest))) {
   cfg$paths$generated_outputs <- file.path(output_root, "generated")
   cfg$inference$vb_ld <- app_qdesn_deep_merge(cfg$inference$vb_ld %||% list(), inference_override)
   linked_contract <- app_glofas_median_screen_linked_desn_contract(cfg)
-  require_linked <- app_as_bool((space$linked_factorial %||% list())$require_same_desn %||% FALSE)
+  require_linked_default <- app_as_bool(
+    (space$contracts %||% list())$require_same_desn_by_default %||%
+      (space$linked_factorial %||% list())$require_same_desn %||%
+      FALSE
+  )
+  require_linked <- app_as_bool(
+    app_glofas_median_screen_row_value(row, "require_linked_desn", require_linked_default)
+  )
   if (require_linked && !isTRUE(linked_contract$pass)) {
     stop(sprintf("Candidate %s violates the required shared DESN specification contract.", candidate_id), call. = FALSE)
   }
@@ -267,26 +285,54 @@ for (i in seq_len(nrow(manifest))) {
   candidate_source_cfg <- base_cfg
   candidate_source_contract <- source_contract
   candidate_source_contract_origin <- source_contract_origin
+  candidate_source_cached <- NULL
+  warm_start_policy <- tolower(as.character(app_glofas_median_screen_row_value(row, "warm_start_policy", "auto")))
   row_source_fit <- as.character(app_glofas_median_screen_row_value(row, "warm_start_source_fit_object", ""))
   row_source_config <- as.character(app_glofas_median_screen_row_value(row, "warm_start_source_config", ""))
-  if (nzchar(row_source_fit)) {
+  if (identical(warm_start_policy, "cold")) {
+    if (nzchar(row_source_fit) || nzchar(row_source_config)) {
+      stop(sprintf("Candidate %s requests a cold start but supplies warm-start artifacts.", candidate_id), call. = FALSE)
+    }
+    candidate_source_fit_path <- NULL
+    candidate_source_contract <- NULL
+    candidate_source_contract_origin <- "disabled_by_candidate_policy"
+  } else if (nzchar(row_source_fit)) {
     candidate_source_fit_path <- resolve_path(row_source_fit, must_work = TRUE)
     if (!nzchar(row_source_config)) {
       stop(sprintf("Candidate %s supplies a warm-start fit without its source config.", candidate_id), call. = FALSE)
     }
-    candidate_source_cfg <- app_read_config(resolve_path(row_source_config, must_work = TRUE))
-    candidate_source_contract <- app_latent_path_warm_start_contract_from_fit(candidate_source_fit_path)
-    candidate_source_contract_origin <- "embedded_in_candidate_source_fit"
-    if (is.null(candidate_source_contract)) {
-      stop(sprintf("Candidate %s source fit lacks a semantic warm-start contract.", candidate_id), call. = FALSE)
+    candidate_source_config_path <- resolve_path(row_source_config, must_work = TRUE)
+    cache_key <- paste(candidate_source_fit_path, candidate_source_config_path, sep = "\r")
+    candidate_source_cached <- get0(cache_key, envir = warm_source_cache, inherits = FALSE)
+    if (is.null(candidate_source_cached)) {
+      candidate_source_cached <- list(
+        cfg = app_read_config(candidate_source_config_path),
+        contract = app_latent_path_warm_start_contract_from_fit(candidate_source_fit_path),
+        fit_sha256 = app_sha256_file(candidate_source_fit_path)
+      )
+      if (is.null(candidate_source_cached$contract)) {
+        stop(sprintf("Candidate %s source fit lacks a semantic warm-start contract.", candidate_id), call. = FALSE)
+      }
+      candidate_source_cached$contract_sha256 <- app_latent_path_contract_hash(
+        candidate_source_cached$contract,
+        "source_contract_"
+      )
+      assign(cache_key, candidate_source_cached, envir = warm_source_cache)
     }
+    candidate_source_cfg <- candidate_source_cached$cfg
+    candidate_source_contract <- candidate_source_cached$contract
+    candidate_source_contract_origin <- "embedded_in_candidate_source_fit"
   } else if (nzchar(row_source_config)) {
     stop(sprintf("Candidate %s supplies a warm-start source config without a fit object.", candidate_id), call. = FALSE)
   }
-  candidate_source_sha <- if (!is.null(candidate_source_fit_path)) {
+  candidate_source_sha <- if (!is.null(candidate_source_cached)) {
+    candidate_source_cached$fit_sha256
+  } else if (!is.null(candidate_source_fit_path)) {
     app_sha256_file(candidate_source_fit_path)
   } else NA_character_
-  candidate_source_contract_hash <- if (!is.null(candidate_source_contract)) {
+  candidate_source_contract_hash <- if (!is.null(candidate_source_cached)) {
+    candidate_source_cached$contract_sha256
+  } else if (!is.null(candidate_source_contract)) {
     app_latent_path_contract_hash(candidate_source_contract, "source_contract_")
   } else NA_character_
 
@@ -345,6 +391,11 @@ for (i in seq_len(nrow(manifest))) {
   config_path <- file.path(candidate_root, "config_p50.yaml")
   app_write_yaml(cfg, config_path)
   run_id <- paste0(space$screen_id, "_", candidate_id)
+  preflight_run_id <- paste0(run_id, "__reservoir_preflight")
+  preflight_summary_path <- file.path(
+    output_root, "runs", preflight_run_id, "tables",
+    "reservoir_screening_architecture_summary.csv"
+  )
   runtime_rows[[i]] <- data.frame(
     candidate_id = candidate_id,
     candidate_set = row$candidate_set[[1L]],
@@ -357,13 +408,25 @@ for (i in seq_len(nrow(manifest))) {
     run_dir = file.path(output_root, "runs", run_id),
     log_path = file.path(output_root, "logs", paste0(candidate_id, ".log")),
     warm_start_enabled = isTRUE(warm$enabled),
+    warm_start_policy = warm_start_policy,
     warm_start_compatibility_mode = warm$compatibility_mode,
     warm_start_requires_cold_confirmation = isTRUE(warm$requires_cold_confirmation),
     warm_start_reason = warm$reason,
     warm_start_source_fit_object = candidate_source_fit_path %||% "",
-    warm_start_source_sha256 = candidate_source_sha %||% "",
+    warm_start_source_sha256 = if (is.na(candidate_source_sha)) "" else candidate_source_sha,
     source_contract_sha256 = candidate_source_contract_hash,
     source_contract_origin = candidate_source_contract_origin,
+    source_candidate_id = as.character(app_glofas_median_screen_row_value(row, "source_candidate_id", "")),
+    candidate_role = as.character(app_glofas_median_screen_row_value(row, "candidate_role", row$candidate_set[[1L]])),
+    reservoir_preflight_enabled = preflight_enabled,
+    reservoir_preflight_target = preflight_target,
+    reservoir_preflight_reject_decision = preflight_reject_decision,
+    reservoir_preflight_run_id = preflight_run_id,
+    reservoir_preflight_summary_path = preflight_summary_path,
+    reservoir_preflight_max_corr_features_full = as.integer(preflight$max_corr_features_full %||% 5000L),
+    reservoir_preflight_corr_block_size = as.integer(preflight$corr_block_size %||% 512L),
+    reservoir_preflight_spectral_radius_exact_max_n = as.integer(preflight$spectral_radius_exact_max_n %||% 512L),
+    reservoir_preflight_cheap_validation = app_as_bool(preflight$cheap_validation %||% FALSE),
     qdesn_engine_repo = candidate_engine_report$repo_hint,
     qdesn_engine_branch = candidate_engine_report$repo_branch,
     qdesn_engine_commit = candidate_engine_report$repo_git_sha,
@@ -385,6 +448,8 @@ for (i in seq_len(nrow(manifest))) {
     linked_desn_discrepancy_hash = linked_contract$discrepancy_hash,
     reference_seed = linked_contract$reference_seed,
     discrepancy_seed = linked_contract$discrepancy_seed,
+    warm_start_policy = warm_start_policy,
+    candidate_role = as.character(app_glofas_median_screen_row_value(row, "candidate_role", row$candidate_set[[1L]])),
     common_washout = app_qdesn_common_washout(cfg),
     full7_required_for_distributional_crps = TRUE,
     auto_launch_full7 = FALSE,
@@ -425,6 +490,7 @@ provenance <- data.frame(
 app_write_csv(provenance, file.path(output_root, "provenance.csv"))
 
 scheduler <- space$scheduler %||% list()
+finalization <- space$finalization %||% list()
 cores <- paste(unlist(scheduler$cores %||% c(0L, 1L, 2L, 3L), use.names = FALSE), collapse = ",")
 launch_lines <- c(
   "#!/usr/bin/env bash",
@@ -433,17 +499,18 @@ launch_lines <- c(
   if (authorized) {
     sprintf(
       paste(
-        "python3 application/scripts/glofas_fit_recovery_scheduler.py",
-        "--manifest %s --output-root %s --max-parallel %d --cores %s",
-        "--max-load %.6g --min-memory-gb %.6g --min-disk-gb %.6g"
+        "bash application/scripts/glofas_constrained_median_screen_orchestrate.sh",
+        "%s %s %d %s %.6g %.6g %.6g %s %s"
       ),
-      shQuote(file.path(output_root, "runtime_manifest.csv")),
       shQuote(output_root),
+      shQuote(file.path(output_root, "runtime_manifest.csv")),
       as.integer(scheduler$max_parallel %||% 4L),
       shQuote(cores),
       as.numeric(scheduler$max_load %||% 58),
       as.numeric(scheduler$min_memory_gb %||% 48),
-      as.numeric(scheduler$min_disk_gb %||% 120)
+      as.numeric(scheduler$min_disk_gb %||% 120),
+      if (app_as_bool(finalization$run_after_scheduler %||% FALSE)) "true" else "false",
+      if (app_as_bool(finalization$cleanup_after_complete_batch %||% FALSE)) "true" else "false"
     )
   } else {
     "echo 'Launch blocked: regenerate with reviewed launch_authorized: true and --authorize_launch true.' >&2; exit 2"

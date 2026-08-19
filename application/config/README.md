@@ -17,6 +17,11 @@ Planned files:
   It names the planned exAL and VB-LD rows and permits input and design gates
   before every requested inference route is available; model fitting remains
   fail-closed for unsupported required rows.
+- `glofas_p50_alpha_rho_tau_response_surface_20260819.yaml`: authorized,
+  exact-cardinality definition for the 56-fit response-surface campaign around
+  the completed Stage-A D2/m720 leader. It freezes the SHA-pinned anchor,
+  approved alpha/rho support, RHS sentinels, warm/cold canaries, two-block
+  reservoir preflight, `max_iter=150`, and 20 unique single-core workers.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

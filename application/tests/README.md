@@ -23,7 +23,12 @@ Tracked tests:
 - `test_reservoir_screening.R`: sampler-free reservoir diagnostics, including
   spectral-radius and leaky-effective checks, finite/dead/saturated state
   guards, correlation redundancy, pruning, effective rank, conditioning,
-  serialization, seed aggregation, and a tiny fake-design integration path.
+  serialization, seed aggregation, semantic two-block initial-condition
+  forgetting, and a tiny fake-design integration path.
+- `test_glofas_constrained_median_screening.R`: constrained p50 range
+  expansion, semantic warm starts, historical/forecast gates, the frozen
+  Stage-A design, and the exact 56-candidate alpha/rho/tau response-surface
+  campaign with retained warm/cold canaries.
 - `test_latent_path_design.R`: application-model contract parsing,
   latent-path state continuation, requested versus effective issued-horizon
   handling, synthetic AL fixture generation, scaling of reservoir lag inputs,

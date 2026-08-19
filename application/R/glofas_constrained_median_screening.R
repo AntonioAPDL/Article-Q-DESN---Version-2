@@ -310,7 +310,8 @@ app_glofas_median_screen_validate_space <- function(space, allow_empty = FALSE) 
     metadata <- explicit[[i]]$metadata %||% list()
     allowed_metadata <- c(
       "source_candidate_id", "warm_start_source_fit_object",
-      "warm_start_source_config"
+      "warm_start_source_config", "warm_start_policy", "candidate_role",
+      "require_linked_desn"
     )
     unknown_metadata <- setdiff(names(metadata), allowed_metadata)
     if (length(unknown_metadata)) {
@@ -318,6 +319,23 @@ app_glofas_median_screen_validate_space <- function(space, allow_empty = FALSE) 
         "explicit candidate %d contains unsupported metadata: %s.",
         i, paste(unknown_metadata, collapse = ", ")
       ), call. = FALSE)
+    }
+    warm_policy <- tolower(as.character(metadata$warm_start_policy %||% "auto"))
+    if (length(warm_policy) != 1L || !warm_policy %in% c("auto", "cold")) {
+      stop(sprintf(
+        "explicit candidate %d warm_start_policy must be 'auto' or 'cold'.",
+        i
+      ), call. = FALSE)
+    }
+    if (identical(warm_policy, "cold") &&
+        (!is.null(metadata$warm_start_source_fit_object) || !is.null(metadata$warm_start_source_config))) {
+      stop(sprintf(
+        "explicit candidate %d cannot supply warm-start artifacts when warm_start_policy='cold'.",
+        i
+      ), call. = FALSE)
+    }
+    if (!is.null(metadata$require_linked_desn)) {
+      invisible(app_as_bool(metadata$require_linked_desn))
     }
   }
   invisible(space)
@@ -399,7 +417,9 @@ app_glofas_median_screen_candidate_manifest <- function(space) {
   manifest <- app_bind_rows_fill(rows)
   if (!nrow(manifest)) stop("Screening expansion produced no candidates.", call. = FALSE)
   parameter_columns <- intersect(app_glofas_median_screen_parameters(), names(manifest))
-  dedupe_key <- apply(manifest[, parameter_columns, drop = FALSE], 1L, function(x) paste(x, collapse = "\r"))
+  treatment_columns <- intersect("warm_start_policy", names(manifest))
+  dedupe_columns <- c(parameter_columns, treatment_columns)
+  dedupe_key <- apply(manifest[, dedupe_columns, drop = FALSE], 1L, function(x) paste(x, collapse = "\r"))
   manifest <- manifest[!duplicated(dedupe_key), , drop = FALSE]
   max_candidates <- as.integer((space$execution %||% list())$max_candidates %||% 500L)
   if (nrow(manifest) > max_candidates) {

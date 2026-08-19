@@ -360,11 +360,19 @@ authorized manifest. The active runtime root is:
 local_trackers/runtime_configs/glofas_p50_linked_d1d2_stage_a_20260811
 ```
 
-The scheduler is pinned to 20 one-thread workers on reviewed cores 40--59.
+The Stage-A scheduler was pinned to 20 one-thread workers on cores 40--59.
 `scheduler_state.csv`, per-candidate status files, and worker logs are the
 authoritative live-health surfaces. `prelaunch_incident_resolution.csv` records
 two launch-contract failures that were caught before model computation and the
 source-level corrections applied before the production launch.
+
+Stage A subsequently completed 120/120 fits without failure. Candidate
+`linked_stage_a_109_de5070bceb` ranked first but improved forecast p50 check
+loss by only about 0.41%, below the prospective 3% gate. The follow-up
+response-surface campaign and its stricter prefit diagnostics are documented in
+`docs/implementation_notes/glofas_p50_alpha_rho_tau_response_surface_20260819.md`.
+Its affinity map is recorded separately because concurrent joint-QDESN
+phase-179 workers occupy the historical Stage-A cores.
 
 ## Checklist
 
@@ -390,7 +398,7 @@ source-level corrections applied before the production launch.
 - [x] Materialize and review the 120-candidate Stage-A manifest.
 - [x] Obtain explicit Stage-A launch authorization.
 - [x] Launch 20 pinned Stage-A workers after live resource and contract checks.
-- [ ] Complete the p50 screen and inspect diagnostics.
+- [x] Complete the 120-fit Stage-A p50 screen and inspect its ranking.
 - [ ] Cold-refit any warm-started finalist.
 - [ ] Run full seven-quantile confirmation for a qualifying candidate.
 - [ ] Compare genuine forecast and observational-window CRPS before promotion.

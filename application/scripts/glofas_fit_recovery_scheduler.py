@@ -33,6 +33,10 @@ def timestamp():
     return dt.datetime.now(dt.timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
+def is_true(value):
+    return str(value).strip().lower() in {"1", "true", "t", "yes", "y"}
+
+
 def available_memory_gb():
     values = {}
     with open("/proc/meminfo", encoding="utf-8") as handle:
@@ -116,6 +120,14 @@ def validate_manifest(rows, output_root, cores, max_parallel):
     output_root = pathlib.Path(output_root).resolve()
     runs_root = output_root / "runs"
     logs_root = output_root / "logs"
+    hash_cache = {}
+
+    def cached_sha256(path):
+        resolved = pathlib.Path(path).resolve()
+        if resolved not in hash_cache:
+            hash_cache[resolved] = sha256_file(resolved)
+        return hash_cache[resolved]
+
     for row in rows:
         config_path = pathlib.Path(row["config_path"]).resolve()
         grid_path = pathlib.Path(row["model_grid_path"]).resolve()
@@ -123,12 +135,21 @@ def validate_manifest(rows, output_root, cores, max_parallel):
             raise ValueError(
                 f"Prepared config/model grid is missing for {row['candidate_id']}"
             )
-        if sha256_file(config_path) != row["config_sha256"]:
+        if cached_sha256(config_path) != row["config_sha256"]:
             raise ValueError(f"Config hash changed for {row['candidate_id']}")
-        if sha256_file(grid_path) != row["model_grid_sha256"]:
+        if cached_sha256(grid_path) != row["model_grid_sha256"]:
             raise ValueError(f"Model-grid hash changed for {row['candidate_id']}")
         require_within(row["run_dir"], runs_root, "Run directory")
         require_within(row["log_path"], logs_root, "Log path")
+
+        if is_true(row.get("reservoir_preflight_enabled", "false")):
+            preflight_summary = row.get("reservoir_preflight_summary_path", "").strip()
+            preflight_run_id = row.get("reservoir_preflight_run_id", "").strip()
+            if not preflight_summary or not preflight_run_id:
+                raise ValueError(
+                    f"Reservoir preflight paths are incomplete for {row['candidate_id']}"
+                )
+            require_within(preflight_summary, runs_root, "Reservoir preflight summary")
 
         warm_path = row.get("warm_start_source_fit_object", "").strip()
         warm_hash = row.get("warm_start_source_sha256", "").strip()
@@ -141,7 +162,7 @@ def validate_manifest(rows, output_root, cores, max_parallel):
                 raise ValueError(
                     f"Warm-start source is missing for {row['candidate_id']}"
                 )
-            if sha256_file(warm_path) != warm_hash:
+            if cached_sha256(warm_path) != warm_hash:
                 raise ValueError(
                     f"Warm-start source hash changed for {row['candidate_id']}"
                 )
@@ -205,8 +226,12 @@ def main():
     for row in manifest:
         candidate_id = row["candidate_id"]
         marker = pathlib.Path(row["run_dir"]) / ".fit_recovery_complete"
+        rejected_marker = pathlib.Path(row["run_dir"]) / ".reservoir_preflight_rejected"
         if marker.exists():
             states[candidate_id]["status"] = "completed_existing"
+            continue
+        if rejected_marker.exists():
+            states[candidate_id]["status"] = "rejected_existing"
             continue
         worker = read_last_csv(output_root / "status" / f"{candidate_id}.csv")
         previous = previous_states.get(candidate_id, {})
@@ -237,7 +262,13 @@ def main():
                 continue
             item["log_handle"].close()
             state = states[candidate_id]
-            state["status"] = "completed" if return_code == 0 else "failed"
+            row = next(row for row in manifest if row["candidate_id"] == candidate_id)
+            rejected_marker = pathlib.Path(row["run_dir"]) / ".reservoir_preflight_rejected"
+            state["status"] = (
+                "rejected" if return_code == 0 and rejected_marker.exists()
+                else "completed" if return_code == 0
+                else "failed"
+            )
             state["finished_at"] = timestamp()
             state["return_code"] = str(return_code)
             del active[candidate_id]
@@ -247,9 +278,14 @@ def main():
                 continue
             row = next(row for row in manifest if row["candidate_id"] == candidate_id)
             marker = pathlib.Path(row["run_dir"]) / ".fit_recovery_complete"
+            rejected_marker = pathlib.Path(row["run_dir"]) / ".reservoir_preflight_rejected"
             worker = read_last_csv(output_root / "status" / f"{candidate_id}.csv")
             if marker.exists():
                 state["status"] = "completed_existing"
+                state["finished_at"] = worker.get("timestamp", timestamp())
+                state["return_code"] = "0"
+            elif rejected_marker.exists():
+                state["status"] = "rejected_existing"
                 state["finished_at"] = worker.get("timestamp", timestamp())
                 state["return_code"] = "0"
             elif worker.get("status") == "failed":
@@ -317,6 +353,15 @@ def main():
                 "MKL_NUM_THREADS": "1",
                 "VECLIB_MAXIMUM_THREADS": "1",
                 "NUMEXPR_NUM_THREADS": "1",
+                "GLOFAS_RESERVOIR_PREFLIGHT_ENABLED": row.get("reservoir_preflight_enabled", "false"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_TARGET": row.get("reservoir_preflight_target", "reservoir"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_REJECT_DECISION": row.get("reservoir_preflight_reject_decision", "reject"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_RUN_ID": row.get("reservoir_preflight_run_id", ""),
+                "GLOFAS_RESERVOIR_PREFLIGHT_SUMMARY_PATH": row.get("reservoir_preflight_summary_path", ""),
+                "GLOFAS_RESERVOIR_PREFLIGHT_MAX_CORR_FEATURES_FULL": row.get("reservoir_preflight_max_corr_features_full", "5000"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_CORR_BLOCK_SIZE": row.get("reservoir_preflight_corr_block_size", "512"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_SPECTRAL_RADIUS_EXACT_MAX_N": row.get("reservoir_preflight_spectral_radius_exact_max_n", "512"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION": row.get("reservoir_preflight_cheap_validation", "false"),
             })
             process = subprocess.Popen(
                 command,

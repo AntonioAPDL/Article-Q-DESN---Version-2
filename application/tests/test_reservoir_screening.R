@@ -189,3 +189,57 @@ forget <- app_empirical_initial_condition_forgetting_test(
 )
 stopifnot(inherits(forget, "app_initial_condition_forgetting_report"))
 stopifnot(isTRUE(forget$ran))
+
+exact_forgetting_reservoir <- toy_reservoir
+exact_forgetting_reservoir$W <- list(matrix(0, 1L, 1L))
+exact_forgetting_reservoir$alpha <- 1
+exact_forgetting <- app_empirical_initial_condition_forgetting_test(
+  input_matrix = toy_input,
+  reservoir = exact_forgetting_reservoir,
+  meta = list(),
+  config = app_reservoir_diagnostic_config(
+    washout = 5L,
+    initial_forgetting_ratio_max = 0.2
+  )
+)
+stopifnot(isTRUE(exact_forgetting$ran))
+stopifnot(identical(exact_forgetting$forgetting_ratio, 0))
+stopifnot(isTRUE(exact_forgetting$passed))
+stopifnot(identical(exact_forgetting$decision, "pass"))
+
+original_input_spec <- app_qdesn_reservoir_input_spec
+original_input_matrix <- app_qdesn_reservoir_input_matrix
+assign("app_qdesn_reservoir_input_spec", function(cfg) list(), envir = .GlobalEnv)
+assign(
+  "app_qdesn_reservoir_input_matrix",
+  function(panel, cfg, spec) list(X = matrix(0, nrow(panel), 1L)),
+  envir = .GlobalEnv
+)
+semantic_qfit <- list(
+  reservoir = toy_reservoir,
+  meta = list(
+    drop = 0L,
+    standardize_inputs = FALSE,
+    input_bound = "none",
+    win_scale_global = 1,
+    win_scale_bias = 1,
+    win_scale_lags = NULL,
+    lag_center = 0,
+    lag_scale = 1
+  )
+)
+semantic_forgetting <- app_latent_path_semantic_forgetting_reports(
+  list(
+    future_context = list(qfit_beta = semantic_qfit, qfit_alpha = semantic_qfit),
+    block_config_beta = list(reservoir = list(washout = 0L)),
+    block_config_alpha = list(reservoir = list(washout = 0L)),
+    base_panel_full = data.frame(y = rep(0, 30L)),
+    base_panel_disc_full = data.frame(y = rep(0, 30L))
+  ),
+  config = app_reservoir_diagnostic_config(initial_forgetting_ratio_max = 0.2)
+)
+assign("app_qdesn_reservoir_input_spec", original_input_spec, envir = .GlobalEnv)
+assign("app_qdesn_reservoir_input_matrix", original_input_matrix, envir = .GlobalEnv)
+stopifnot(identical(names(semantic_forgetting), c("reference", "discrepancy")))
+stopifnot(all(vapply(semantic_forgetting, function(x) isTRUE(x$ran), logical(1L))))
+stopifnot(all(vapply(semantic_forgetting, function(x) identical(x$decision, "pass"), logical(1L))))

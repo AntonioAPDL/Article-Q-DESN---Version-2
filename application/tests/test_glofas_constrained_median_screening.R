@@ -426,3 +426,84 @@ if (fr09_paths_available) {
     tolerance = 1e-12
   )))
 }
+
+campaign_definition <- app_read_yaml(app_path(
+  "application/config/glofas_p50_alpha_rho_tau_response_surface_20260819.yaml"
+))
+campaign_anchor_fixture <- list(
+  candidate_id = "linked_stage_a_109_de5070bceb",
+  ranking_path = "/tmp/ranking.csv",
+  config_path = "/tmp/anchor_config.yaml",
+  fit_object_path = "/tmp/anchor_fit.rds"
+)
+campaign_space <- app_glofas_median_campaign_space(
+  campaign_definition,
+  anchor = campaign_anchor_fixture
+)
+campaign_manifest <- app_glofas_median_screen_candidate_manifest(campaign_space)
+campaign_manifest_again <- app_glofas_median_screen_candidate_manifest(campaign_space)
+stopifnot(nrow(campaign_manifest) == 56L)
+stopifnot(identical(campaign_manifest$candidate_id, campaign_manifest_again$candidate_id))
+stopifnot(all(campaign_manifest$launch_authorized))
+stopifnot(as.integer(campaign_space$fixed$inference$max_iter) == 150L)
+stopifnot(as.integer(campaign_space$fixed$inference$max_iter_hard_cap) == 150L)
+stopifnot(as.integer(campaign_space$scheduler$max_parallel) == 20L)
+stopifnot(length(unique(as.integer(unlist(campaign_space$scheduler$cores)))) == 20L)
+stopifnot(sum(campaign_manifest$warm_start_policy == "cold") == 2L)
+stopifnot(all(is.na(campaign_manifest$warm_start_source_fit_object[campaign_manifest$warm_start_policy == "cold"])))
+stopifnot(all(nzchar(campaign_manifest$warm_start_source_fit_object[campaign_manifest$warm_start_policy == "auto"])))
+campaign_role_expected <- c(
+  repeatability_canary = 2L,
+  coordinate_transfer_canary = 2L,
+  linked_alpha_profile = 14L,
+  linked_rho_profile = 6L,
+  linked_alpha_rho_interaction = 12L,
+  tau0_sentinel = 8L,
+  block_specific_alpha = 12L
+)
+campaign_role_observed <- table(campaign_manifest$candidate_role)
+stopifnot(identical(
+  as.integer(campaign_role_observed[names(campaign_role_expected)]),
+  unname(campaign_role_expected)
+))
+stopifnot(all(campaign_manifest$reference.D == 2L))
+stopifnot(all(campaign_manifest$discrepancy.D == 2L))
+stopifnot(all(campaign_manifest$reference.n == 200L))
+stopifnot(all(campaign_manifest$discrepancy.n == 200L))
+stopifnot(all(campaign_manifest$reference.m == 720L))
+stopifnot(all(campaign_manifest$discrepancy.m == 720L))
+block_specific <- campaign_manifest$candidate_role == "block_specific_alpha"
+stopifnot(all(campaign_manifest$reference.alpha[block_specific] != campaign_manifest$discrepancy.alpha[block_specific]))
+stopifnot(!any(app_as_bool_vec(campaign_manifest$require_linked_desn[block_specific])))
+
+interaction_a <- app_glofas_median_campaign_maximin_pairs(
+  campaign_definition$campaign$support$alpha,
+  campaign_definition$campaign$support$rho,
+  0.20, 0.95, 12L
+)
+interaction_b <- app_glofas_median_campaign_maximin_pairs(
+  campaign_definition$campaign$support$alpha,
+  campaign_definition$campaign$support$rho,
+  0.20, 0.95, 12L
+)
+stopifnot(identical(interaction_a, interaction_b))
+stopifnot(nrow(interaction_a) == 12L)
+stopifnot(!any(interaction_a$alpha == 0.20))
+stopifnot(!any(interaction_a$rho == 0.95))
+
+treatment_space <- screen_space
+treatment_space$candidate_sets <- list()
+treatment_space$explicit_candidates <- list(
+  list(
+    set_id = "warm",
+    parameters = list(reference = list(alpha = 0.1)),
+    metadata = list(warm_start_policy = "auto")
+  ),
+  list(
+    set_id = "cold",
+    parameters = list(reference = list(alpha = 0.1)),
+    metadata = list(warm_start_policy = "cold")
+  )
+)
+treatment_manifest <- app_glofas_median_screen_candidate_manifest(treatment_space)
+stopifnot(nrow(treatment_manifest) == 2L)

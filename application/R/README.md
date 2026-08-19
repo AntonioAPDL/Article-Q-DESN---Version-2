@@ -127,6 +127,11 @@ Tracked helper files:
   engine while producing no candidates. Median fits are never labeled as
   distributional CRPS; eligible candidates still require diagnostic review, a
   cold p50 confirmation, and a full multi-quantile refit before promotion.
+- `glofas_median_response_surface_campaign.R`: deterministic construction of
+  the 56-fit alpha/rho/tau response-surface campaign around the completed
+  Stage-A leader. It verifies the anchor evidence, creates linked and
+  block-specific subdesigns, preserves warm/cold canaries as distinct
+  numerical treatments, and enforces the 150-iteration/20-core contract.
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.
@@ -136,8 +141,9 @@ Tracked helper files:
 - `reservoir_screening.R`: sampler-free D-ESN reservoir diagnostics and
   early-rejection helpers. These inspect recurrent-layer stability, leaky
   effective radii, state degeneracy, saturation, correlation redundancy,
-  effective rank, conditioning, optional cheap validation, and seed-level
-  aggregation. The helpers are advisory by default and do not launch VB or
+  effective rank, conditioning, empirical two-block initial-condition
+  forgetting, optional cheap validation, and seed-level aggregation. The
+  helpers are advisory by default and do not launch VB or
   MCMC; `application/scripts/03_screen_reservoir_design.R` is the standalone
   pre-stage that writes screening tables for a fresh run id.
 - `make_manuscript_outputs.R`

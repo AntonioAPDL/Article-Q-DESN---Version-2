@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -128,6 +129,25 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertEqual(status, "running")
             self.assertTrue(live)
 
+    def test_health_recognizes_terminal_reservoir_rejection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            run_dir = output_root / "runs" / "candidate_run"
+            log_path = output_root / "logs" / "candidate.log"
+            run_dir.mkdir(parents=True)
+            (run_dir / ".reservoir_preflight_rejected").write_text(
+                "rejected\n",
+                encoding="utf-8",
+            )
+            row = {
+                "candidate_id": "candidate",
+                "run_dir": str(run_dir),
+                "log_path": str(log_path),
+            }
+            status, live = health.reconcile_status(row, {}, {})
+            self.assertEqual(status, "rejected")
+            self.assertFalse(live)
+
     def test_scheduler_retry_pending_supersedes_old_worker_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp) / "runtime"
@@ -154,6 +174,32 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             row = self.make_manifest_row(tmp)
             scheduler.validate_manifest([row], Path(tmp), [0], 1)
 
+    def test_manifest_integrity_hashes_shared_warm_source_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            warm_fit = Path(tmp) / "source_fit.rds"
+            warm_fit.write_bytes(b"shared warm-start fixture")
+            warm_hash = hashlib.sha256(warm_fit.read_bytes()).hexdigest()
+            row.update({
+                "warm_start_source_fit_object": str(warm_fit),
+                "warm_start_source_sha256": warm_hash,
+            })
+            second = dict(row)
+            second.update({
+                "candidate_id": "candidate_second",
+                "priority": "2",
+                "run_id": "candidate_second_run",
+                "run_dir": str(Path(tmp) / "runs" / "candidate_second_run"),
+                "log_path": str(Path(tmp) / "logs" / "candidate_second.log"),
+            })
+            with mock.patch.object(
+                scheduler,
+                "sha256_file",
+                wraps=scheduler.sha256_file,
+            ) as digest:
+                scheduler.validate_manifest([row, second], Path(tmp), [0], 1)
+            self.assertEqual(digest.call_count, 3)
+
     def test_manifest_integrity_rejects_changed_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             row = self.make_manifest_row(tmp)
@@ -165,6 +211,21 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             row = self.make_manifest_row(tmp)
             row["run_dir"] = str(Path(tmp).parent / "outside")
+            with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_checks_owned_preflight_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            row.update({
+                "reservoir_preflight_enabled": "true",
+                "reservoir_preflight_run_id": "candidate_preflight",
+                "reservoir_preflight_summary_path": str(
+                    Path(tmp) / "runs" / "candidate_preflight" / "tables" / "summary.csv"
+                ),
+            })
+            scheduler.validate_manifest([row], Path(tmp), [0], 1)
+            row["reservoir_preflight_summary_path"] = str(Path(tmp).parent / "outside.csv")
             with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
                 scheduler.validate_manifest([row], Path(tmp), [0], 1)
 

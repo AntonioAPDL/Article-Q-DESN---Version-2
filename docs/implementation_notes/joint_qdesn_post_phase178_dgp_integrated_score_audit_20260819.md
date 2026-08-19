@@ -147,6 +147,52 @@ Rscript application/scripts/263_check_joint_qdesn_post_phase178_dgp_scores.R \
 The audit uses manifest-verified per-cell checkpoints so an interrupted
 post-processing run resumes completed cells without recomputing MCMC.
 
+## Production Result
+
+The protected current-grid audit completed over all 45 source-complete
+candidate-replicate cells inherited from Phase178: five case-specific decision
+cells, three protected DGP replicates per template, and the original 180 MCMC
+workers. The frozen contract manifest verifies 9/9 files and the final audit
+manifest verifies 35/35 files. All 45 forecast-information checks pass, all
+three frozen source-manifest groups verify, all 60 family/formula checks pass,
+and all 35 oracle-minimum checks pass. The largest analytic-versus-numerical
+expected-loss discrepancy is (1.86\times 10^{-13}); the largest fixed-seed
+Monte Carlo discrepancy is 0.00401, within the predeclared tolerance.
+
+The DGP-integrated decision retains the exact Phase174 parity specification in
+all five targeted cells. Across the 15 template aggregates, score ratios to
+parity range from 0.99940 to 1.00123. These differences are far inside the
+predeclared 0.5% practical near-tie margin. No challenger attains practical
+superiority on any of its three protected replicates; median posterior
+practical-superiority probabilities range only from 0.172 to 0.322, against a
+required 0.95. The result therefore does not support carrying an MAE-selected
+challenger into Phase179 merely because it changed an oracle-recovery metric.
+
+The overall gate is `review`, not `fail`. All posterior score values are finite
+and all contract crossing counts are zero. Twenty-eight of 45 score-functional
+diagnostics pass; 17 remain review-level, primarily because bulk effective
+sample size is below 400, with a small number also reaching the rank-R-hat
+review boundary. Raw pre-contract crossing rates range from 0.0119 to 0.0440,
+which exceeds the deliberately conservative 0.01 review threshold, while the
+mean absolute isotonic adjustment divided by the DGP scale remains small
+(0.00076 to 0.00484). Independent product-posterior coupling checks pass for
+all applicable cells. These findings support parity retention while preserving
+functional-mixing and raw-coherence flags for the future confirmation design.
+
+The original Phase178 oracle-MAE decisions remain immutable provenance: they
+selected three non-parity templates and two parity templates. The separate
+article-action audit selects five parity templates. This is an intentional
+change of decision target, not a retroactive rewrite of Phase178.
+
+Production artifacts are stored at:
+
+`application/cache/joint_qdesn_post_phase178_dgp_score_audit_20260819`
+
+The SHA-256 digest of its top-level manifest is
+`9fb289b4ec87613c9fa3adff55dc556ca3853435c2442a5ef36db74c0056aa20`.
+The frozen score-contract manifest digest is
+`51e5ee7b875e9df3fefe9ae35ecc09f761b5ee8312c2416af64674eb6da5f6c7`.
+
 ## Artifacts
 
 The frozen contract directory contains the score, quadrature, coupling,
@@ -173,6 +219,9 @@ from point summaries.
 ## Stage Boundaries
 
 - The legacy MAE-centered Phase179 launcher remains unauthorized.
+- Any new Phase179 freeze must consume the parity-only templates in
+  `phase179_selected_templates.csv` and preserve the review diagnostics above;
+  it must not silently revive the historical MAE-selected challengers.
 - No article table, figure, or manuscript file is modified by this stage.
 - No 19-level model is fit here. Dense-grid fitting is a separately frozen
   later campaign using actual 19-level refits, not interpolation.

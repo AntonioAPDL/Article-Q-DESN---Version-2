@@ -234,6 +234,15 @@ The implementation boundary is checked with:
 - `Rscript application/tests/test_joint_exqdesn_phase170_default_promotion.R`;
 - `Rscript application/tests/test_joint_exqdesn_phase171_175_article_confirmation.R`.
 
+## Phase178 closeout
+
+The protected exact-M0 ranking campaign subsequently completed 180/180 chain
+workers with zero failures and published its canonical audit under the
+original forecast-oracle-MAE ranking contract. The final integrity checks,
+historical selections, diagnostic limitations, retained-draw policy, and the
+blocked legacy Phase179 transition are recorded in
+`joint_exqdesn_phase178_post_m0_ranking_closeout_20260819.md`.
+
 The production preflight must additionally resolve exactly five target cells,
 21 templates, 48 protected DGP rows, and 126 VB candidate-replicate rows before
 fixture generation begins.

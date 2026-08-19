@@ -170,6 +170,21 @@ Nonwinning heavy fit/design objects are deleted only after the whole campaign
 is terminal and the ranking has been written. Eligible candidates and, when no
 candidate is eligible, the top-ranked candidate remain protected.
 
+### Launch incident and correction
+
+The first orchestration attempt on 2026-08-19 was stopped within its first
+minute when live stage inspection showed that R had serialized the preflight
+flag as uppercase `TRUE`, while the shell worker accepted only lowercase
+`true`. No candidate completed, no score was produced, and no heavy fit object
+was retained. The 6.3 MB partial runtime root was removed in full.
+
+The scheduler now validates and canonicalizes supported Boolean spellings
+before exporting worker variables, and the worker independently normalizes or
+rejects its preflight flag. Regression tests cover uppercase R-style values and
+invalid inputs. Only a newly materialized runtime root from the corrective
+commit may be used for the campaign; none of the bypassed computations are
+eligible evidence.
+
 ## Scoring and decisions
 
 Primary screening score is forecast-window p50 check loss. Historical guards

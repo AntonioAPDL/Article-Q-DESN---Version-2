@@ -37,6 +37,15 @@ def is_true(value):
     return str(value).strip().lower() in {"1", "true", "t", "yes", "y"}
 
 
+def canonical_bool(value):
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "t", "yes", "y"}:
+        return "true"
+    if normalized in {"0", "false", "f", "no", "n", ""}:
+        return "false"
+    raise ValueError(f"Invalid boolean value: {value}")
+
+
 def available_memory_gb():
     values = {}
     with open("/proc/meminfo", encoding="utf-8") as handle:
@@ -142,7 +151,10 @@ def validate_manifest(rows, output_root, cores, max_parallel):
         require_within(row["run_dir"], runs_root, "Run directory")
         require_within(row["log_path"], logs_root, "Log path")
 
-        if is_true(row.get("reservoir_preflight_enabled", "false")):
+        preflight_enabled = canonical_bool(
+            row.get("reservoir_preflight_enabled", "false")
+        ) == "true"
+        if preflight_enabled:
             preflight_summary = row.get("reservoir_preflight_summary_path", "").strip()
             preflight_run_id = row.get("reservoir_preflight_run_id", "").strip()
             if not preflight_summary or not preflight_run_id:
@@ -353,7 +365,9 @@ def main():
                 "MKL_NUM_THREADS": "1",
                 "VECLIB_MAXIMUM_THREADS": "1",
                 "NUMEXPR_NUM_THREADS": "1",
-                "GLOFAS_RESERVOIR_PREFLIGHT_ENABLED": row.get("reservoir_preflight_enabled", "false"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_ENABLED": canonical_bool(
+                    row.get("reservoir_preflight_enabled", "false")
+                ),
                 "GLOFAS_RESERVOIR_PREFLIGHT_TARGET": row.get("reservoir_preflight_target", "reservoir"),
                 "GLOFAS_RESERVOIR_PREFLIGHT_REJECT_DECISION": row.get("reservoir_preflight_reject_decision", "reject"),
                 "GLOFAS_RESERVOIR_PREFLIGHT_RUN_ID": row.get("reservoir_preflight_run_id", ""),
@@ -361,7 +375,9 @@ def main():
                 "GLOFAS_RESERVOIR_PREFLIGHT_MAX_CORR_FEATURES_FULL": row.get("reservoir_preflight_max_corr_features_full", "5000"),
                 "GLOFAS_RESERVOIR_PREFLIGHT_CORR_BLOCK_SIZE": row.get("reservoir_preflight_corr_block_size", "512"),
                 "GLOFAS_RESERVOIR_PREFLIGHT_SPECTRAL_RADIUS_EXACT_MAX_N": row.get("reservoir_preflight_spectral_radius_exact_max_n", "512"),
-                "GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION": row.get("reservoir_preflight_cheap_validation", "false"),
+                "GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION": canonical_bool(
+                    row.get("reservoir_preflight_cheap_validation", "false")
+                ),
             })
             process = subprocess.Popen(
                 command,

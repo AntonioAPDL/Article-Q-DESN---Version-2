@@ -70,6 +70,12 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         self.assertTrue(health.pid_alive(str(os.getpid())))
         self.assertFalse(scheduler.pid_alive("not-a-pid"))
 
+    def test_scheduler_canonicalizes_r_style_boolean_values(self):
+        self.assertEqual(scheduler.canonical_bool("TRUE"), "true")
+        self.assertEqual(scheduler.canonical_bool("FALSE"), "false")
+        with self.assertRaisesRegex(ValueError, "Invalid boolean value"):
+            scheduler.canonical_bool("maybe")
+
     def test_absolute_runtime_config_can_be_made_repo_relative(self):
         config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"
         self.assertEqual(

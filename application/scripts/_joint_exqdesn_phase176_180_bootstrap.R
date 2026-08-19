@@ -17,7 +17,8 @@ for (file in c(
   "joint_exqdesn_phase170_default_promotion.R",
   "joint_exqdesn_phase171_175_article_confirmation.R",
   "joint_exqdesn_phase176_180_post_m0_recovery.R",
-  "joint_qdesn_dgp_integrated_acrps.R"
+  "joint_qdesn_dgp_integrated_acrps.R",
+  "joint_qdesn_phase179_dgp_score_confirmation.R"
 )) source(app_path("application/R", file))
 
 app_joint_exqdesn_phase176_180_arg <- function(name, default = NULL) {

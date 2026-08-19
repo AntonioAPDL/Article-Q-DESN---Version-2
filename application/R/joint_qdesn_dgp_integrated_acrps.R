@@ -1149,15 +1149,36 @@ app_joint_qdesn_postscore_pairing_stability <- function(sensitivity, contract) {
     interaction(sensitivity$mcmc_case_id, drop = TRUE, lex.order = TRUE)
   )
   app_joint_qdesn_bind_rows(lapply(groups, function(x) {
-    reference <- x[x$pairing_seed == contract$primary_pairing_seed, , drop = FALSE]
-    if (!nrow(reference)) reference <- x[1L, , drop = FALSE]
+    metadata <- x[1L, c(
+      "mcmc_case_id", "phase178_template_id", "case_id",
+      "base_scenario_id", "dgp_replicate_id", "fit_structure", "variant_id"
+    ), drop = FALSE]
+    if (identical(x$fit_structure[[1L]], "joint")) {
+      return(data.frame(
+        metadata,
+        coupling_variants = nrow(x),
+        maximum_relative_mean_shift = 0,
+        maximum_q025_shift = 0,
+        maximum_q975_shift = 0,
+        pairing_status = "not_applicable",
+        stringsAsFactors = FALSE
+      ))
+    }
+    score_columns <- c(
+      "posterior_score_mean", "posterior_score_q025", "posterior_score_q975"
+    )
+    if (any(!is.finite(as.matrix(x[, score_columns, drop = FALSE])))) {
+      stop("Nonfinite independent product-posterior sensitivity score")
+    }
+    reference_index <- which(
+      !is.na(x$pairing_seed) & x$pairing_seed == contract$primary_pairing_seed
+    )
+    if (!length(reference_index)) reference_index <- 1L
+    reference <- x[reference_index[[1L]], , drop = FALSE]
     spread <- max(abs(x$posterior_score_mean - reference$posterior_score_mean[[1L]])) /
       pmax(abs(reference$posterior_score_mean[[1L]]), .Machine$double.eps)
     data.frame(
-      x[1L, c(
-        "mcmc_case_id", "phase178_template_id", "case_id",
-        "base_scenario_id", "dgp_replicate_id", "fit_structure", "variant_id"
-      ), drop = FALSE],
+      metadata,
       coupling_variants = nrow(x),
       maximum_relative_mean_shift = spread,
       maximum_q025_shift = max(x$posterior_score_q025) - min(x$posterior_score_q025),

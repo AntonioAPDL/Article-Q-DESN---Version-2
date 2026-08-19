@@ -89,6 +89,41 @@ expect_true(all(vapply(independent_a, function(x) {
   identical(sort(x), sort(selected))
 }, logical(1L))), "Independent product coupling is not draw-balanced.")
 
+pairing_fixture <- rbind(
+  data.frame(
+    mcmc_case_id = "joint_case", phase178_template_id = "joint_template",
+    case_id = "joint", base_scenario_id = "base", dgp_replicate_id = "r001",
+    fit_structure = "joint", variant_id = "parity", pairing_seed = NA_integer_,
+    posterior_score_mean = 0.30, posterior_score_q025 = 0.29,
+    posterior_score_q975 = 0.31, stringsAsFactors = FALSE
+  ),
+  data.frame(
+    mcmc_case_id = "independent_case", phase178_template_id = "independent_template",
+    case_id = "independent", base_scenario_id = "base", dgp_replicate_id = "r001",
+    fit_structure = "independent", variant_id = "parity",
+    pairing_seed = c(
+      contract$primary_pairing_seed,
+      contract$alternate_pairing_seeds[[1L]]
+    ),
+    posterior_score_mean = c(0.30, 0.3001),
+    posterior_score_q025 = c(0.29, 0.2901),
+    posterior_score_q975 = c(0.31, 0.3101), stringsAsFactors = FALSE
+  )
+)
+pairing_stability <- app_joint_qdesn_postscore_pairing_stability(
+  pairing_fixture, contract
+)
+expect_true(
+  pairing_stability$pairing_status[pairing_stability$fit_structure == "joint"] ==
+    "not_applicable",
+  "Joint posterior draws were incorrectly treated as product-posterior pairings."
+)
+expect_true(
+  pairing_stability$pairing_status[pairing_stability$fit_structure == "independent"] ==
+    "pass",
+  "Stable independent product-posterior pairings did not pass."
+)
+
 set.seed(3201)
 n_keep <- 80L; p <- 2L; n_time <- 18L; K <- length(tau)
 fit <- list(

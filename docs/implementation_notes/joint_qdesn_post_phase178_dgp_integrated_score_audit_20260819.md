@@ -189,7 +189,7 @@ Production artifacts are stored at:
 `application/cache/joint_qdesn_post_phase178_dgp_score_audit_20260819`
 
 The SHA-256 digest of its top-level manifest is
-`9fb289b4ec87613c9fa3adff55dc556ca3853435c2442a5ef36db74c0056aa20`.
+`d4d8d126583182736bf0c66bf1dab6b283973f17e70faa4740af163514416a11`.
 The frozen score-contract manifest digest is
 `51e5ee7b875e9df3fefe9ae35ecc09f761b5ee8312c2416af64674eb6da5f6c7`.
 

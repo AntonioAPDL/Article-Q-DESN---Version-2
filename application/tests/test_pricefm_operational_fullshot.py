@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -285,3 +286,78 @@ def test_campaign_hard_codes_20_physical_workers_and_taskset(tmp_path: Path) -> 
     assert '"one_model_per_physical_core": True' in source
     assert "registry_mutated=False" in source
     assert "article_mutated=False" in source
+
+
+def test_campaign_preserves_venv_entrypoint_and_preflights_exact_python(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_python = tmp_path / "python3.11"
+    real_python.write_text("fixture\n")
+    venv_python = tmp_path / "venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.symlink_to(real_python)
+    args = argparse.Namespace(
+        python=str(venv_python), config="c", raw_csv="r", upstream_root="u",
+        artifact_root=str(tmp_path / "pricefm" / "benchmarks" / "campaign"),
+        reference_window_root="w", qdesn_registry="q", log_root=str(tmp_path / "logs"),
+        workers=20, required_idle_physical_cores=20, max_core_utilization=0.1,
+        cpu_sample_seconds=0.01, poll_seconds=1, minimum_memory_gib=1,
+        minimum_disk_gib=1, maximum_load_1m=99, maximum_attempts=2,
+        global_lock_path=str(tmp_path / "pricefm.lock"),
+    )
+    campaign = campaign_module.Campaign(args)
+    assert campaign.python == venv_python
+    assert campaign.python != real_python
+
+    observed = {}
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        payload = {
+            "sys_executable": str(venv_python),
+            "sys_prefix": str(tmp_path / "venv"),
+            "sys_base_prefix": "/usr",
+            "python": "3.11.13",
+            "numpy": "2.0.2",
+            "pandas": "2.2.3",
+            "tensorflow": "2.18.0",
+        }
+        return SimpleNamespace(returncode=0, stdout=json.dumps(payload) + "\n", stderr="")
+
+    monkeypatch.setattr(campaign_module.subprocess, "run", fake_run)
+    preflight = campaign.validate_python_environment()
+    assert observed["command"][0] == str(venv_python)
+    assert preflight["status"] == "passed"
+    assert preflight["numpy"] == "2.0.2"
+    frozen = json.loads((Path(args.log_root) / "python_environment_preflight.json").read_text())
+    assert frozen["requested_python"] == str(venv_python)
+
+
+def test_campaign_python_preflight_rejects_missing_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    python = tmp_path / "venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("fixture\n")
+    args = argparse.Namespace(
+        python=str(python), config="c", raw_csv="r", upstream_root="u",
+        artifact_root=str(tmp_path / "pricefm" / "benchmarks" / "campaign"),
+        reference_window_root="w", qdesn_registry="q", log_root=str(tmp_path / "logs"),
+        workers=20, required_idle_physical_cores=20, max_core_utilization=0.1,
+        cpu_sample_seconds=0.01, poll_seconds=1, minimum_memory_gib=1,
+        minimum_disk_gib=1, maximum_load_1m=99, maximum_attempts=2,
+        global_lock_path=str(tmp_path / "pricefm.lock"),
+    )
+    campaign = campaign_module.Campaign(args)
+    monkeypatch.setattr(
+        campaign_module.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=1, stdout="", stderr="ModuleNotFoundError: No module named 'numpy'"
+        ),
+    )
+    with pytest.raises(RuntimeError, match="preflight failed"):
+        campaign.validate_python_environment()
+    frozen = json.loads((Path(args.log_root) / "python_environment_preflight.json").read_text())
+    assert frozen["status"] == "failed"
+    assert "numpy" in frozen["stderr"]

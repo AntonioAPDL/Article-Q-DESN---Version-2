@@ -46,6 +46,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--minimum-disk-gib", type=float, default=150.0)
     p.add_argument("--maximum-load-1m", type=float, default=36.0)
     p.add_argument("--maximum-attempts", type=int, default=2)
+    p.add_argument("--global-lock-path", default="")
     return p
 
 
@@ -55,16 +56,42 @@ class Campaign:
         if args.workers != 20 or args.required_idle_physical_cores != 20:
             raise ValueError("This preregistered campaign requires exactly 20 workers and 20 idle physical cores")
         self.script_root = Path(__file__).resolve().parent
-        self.python = Path(args.python).resolve()
+        # Preserve the venv entrypoint. Resolving this symlink selects the system
+        # interpreter and silently drops the PriceFM Python environment.
+        self.python = Path(os.path.abspath(os.path.expanduser(args.python)))
         self.root = Path(args.artifact_root).resolve()
         self.log_root = Path(args.log_root).resolve()
         self.log_root.mkdir(parents=True, exist_ok=True)
         self.health_path = self.log_root / "campaign_health.json"
         self.events_path = self.log_root / "campaign_events.jsonl"
         self._lock_handle = None
+        raw_global_lock = getattr(args, "global_lock_path", "")
+        self.global_lock_path = (
+            Path(os.path.abspath(os.path.expanduser(raw_global_lock)))
+            if raw_global_lock
+            else self.root.parents[1] / "locks" / "pricefm_exclusive_campaign.lock"
+        )
+        self._global_lock_handle = None
         self.lock_acquired = False
 
     def acquire_lock(self) -> None:
+        self.global_lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._global_lock_handle = self.global_lock_path.open("a+", encoding="utf-8")
+        try:
+            fcntl.flock(self._global_lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise RuntimeError(
+                f"Another PriceFM campaign owns {self.global_lock_path}"
+            ) from error
+        self._global_lock_handle.seek(0)
+        self._global_lock_handle.truncate()
+        self._global_lock_handle.write(json.dumps({
+            "pid": os.getpid(),
+            "campaign": self.root.name,
+            "acquired_utc": datetime.now(timezone.utc).isoformat(),
+        }) + "\n")
+        self._global_lock_handle.flush()
+
         lock_path = self.log_root / "campaign.lock"
         self._lock_handle = lock_path.open("w", encoding="utf-8")
         try:
@@ -74,6 +101,54 @@ class Campaign:
         self._lock_handle.write(str(os.getpid()))
         self._lock_handle.flush()
         self.lock_acquired = True
+
+    def validate_python_environment(self) -> dict[str, object]:
+        if not self.python.is_file():
+            raise FileNotFoundError(self.python)
+        probe = (
+            "import json,sys,numpy,pandas,tensorflow;"
+            "print(json.dumps({"
+            "'sys_executable':sys.executable,'sys_prefix':sys.prefix,"
+            "'sys_base_prefix':sys.base_prefix,'python':sys.version.split()[0],"
+            "'numpy':numpy.__version__,'pandas':pandas.__version__,"
+            "'tensorflow':tensorflow.__version__},sort_keys=True))"
+        )
+        result = subprocess.run(
+            [str(self.python), "-c", probe],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=thread_limited_environment(),
+        )
+        if result.returncode != 0:
+            atomic_write_json(self.log_root / "python_environment_preflight.json", {
+                "status": "failed",
+                "requested_python": str(self.python),
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            })
+            raise RuntimeError(
+                f"PriceFM Python environment preflight failed for {self.python}"
+            )
+        try:
+            payload = json.loads(result.stdout.strip().splitlines()[-1])
+        except (IndexError, json.JSONDecodeError) as error:
+            raise RuntimeError("Python environment preflight returned invalid JSON") from error
+        observed = Path(os.path.abspath(payload["sys_executable"]))
+        if observed != self.python:
+            raise RuntimeError(
+                f"Python entrypoint drift: requested {self.python}, observed {observed}"
+            )
+        if payload["sys_prefix"] == payload["sys_base_prefix"]:
+            raise RuntimeError(f"PriceFM interpreter is not inside a venv: {self.python}")
+        preflight = {
+            "status": "passed",
+            "requested_python": str(self.python),
+            **payload,
+        }
+        atomic_write_json(self.log_root / "python_environment_preflight.json", preflight)
+        return preflight
 
     def write_launch_contract(self) -> None:
         scripts = sorted(self.script_root.glob("19[0-7]_*.py")) + [
@@ -306,10 +381,16 @@ class Campaign:
 
     def run(self) -> None:
         self.acquire_lock()
+        python_preflight = self.validate_python_environment()
         self.write_launch_contract()
-        if not self.python.is_file():
-            raise FileNotFoundError(self.python)
-        self.update("startup", "validated", artifact_root=str(self.root), log_root=str(self.log_root))
+        self.update(
+            "startup",
+            "validated",
+            artifact_root=str(self.root),
+            log_root=str(self.log_root),
+            global_lock=str(self.global_lock_path),
+            python_preflight=python_preflight,
+        )
 
         preparation = self.root / "provenance" / "preparation_summary.json"
         if not preparation.is_file():

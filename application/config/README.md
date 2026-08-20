@@ -22,6 +22,11 @@ Planned files:
   the completed Stage-A D2/m720 leader. It freezes the SHA-pinned anchor,
   approved alpha/rho support, RHS sentinels, warm/cold canaries, two-block
   reservoir preflight, `max_iter=150`, and 20 unique single-core workers.
+- `glofas_p50_alpha_tau_focused_20260820.yaml`: authorized 20-fit refinement
+  around the completed response-surface leader. It fixes `rho=.95` and shared
+  RHS `tau0=.1`, resolves linked alpha-by-discrepancy-`tau0` interactions,
+  tests six block-specific leak-rate contrasts, includes two cold controls,
+  and retains the same preflight, historical guardrails, and full7 gate.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

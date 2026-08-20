@@ -220,3 +220,43 @@ Runtime artifacts remain ignored. Tracked source, tests, this campaign YAML,
 and this implementation note define how they are regenerated. This scientific
 lane does not merge main, publish Overleaf, launch full7 automatically, or
 modify PriceFM, validation, joint-QDESN, or package-engine work.
+
+## Completed campaign closeout
+
+The corrected campaign reached a terminal state on 2026-08-20:
+
+| Outcome | Count |
+|---|---:|
+| Completed and scored VB fits | 39 |
+| Reservoir-preflight rejections | 17 |
+| Fit failures | 0 |
+| Total candidates | 56 |
+
+All 39 fitted candidates converged and passed the technical and historical
+guards. No candidate passed the prospectively frozen 3% forecast-improvement
+gate, so the campaign did not authorize full7 or article promotion.
+
+The best numerical candidate was
+`linked_alpha_profile_010_b20be44357`, with linked leak rate `.10`,
+`rho=.95`, shared RHS `tau0=.1`, and discrepancy RHS `tau0=.001`.
+Its forecast p50 check loss was `0.7943859912`, a `0.556%` improvement over
+FR09. The linked `.075` candidate was nearly tied. The rho profile was flat
+at the scale relevant to selection, low leak rates failed effective-rank
+preflight, and large leak rates failed saturation diagnostics. Discrepancy RHS
+`tau0` values `1e-4` and `1e-6` were the only promising prior refinements.
+
+The first automatic closeout wrote the complete ranking and selection files,
+then failed because its executable did not source `artifact_hygiene.R`.
+The finalizer now records a cleanup dry run before deletion, recovers interrupted
+cleanup from terminal markers and file existence, preserves prior cleanup
+evidence on rerun, and writes `finalization_status.csv`. No fit was rerun.
+The ranking and selection hashes remained:
+
+```text
+ranking   9eaa950720f58b23c4de1b24087ff110c4f91d42884bddea5b964dfb8f66dcd2
+selection fc4aa254ab8480039cd5aa2b0c987a6cd995ce7eec473504c942d11dd5e36439
+```
+
+Guarded cleanup removed 76 nonwinner heavy files totaling 46.70 GiB and
+retained the rank-1 fit and design. The focused follow-up is documented in
+`docs/implementation_notes/glofas_p50_alpha_tau_focused_20260820.md`.

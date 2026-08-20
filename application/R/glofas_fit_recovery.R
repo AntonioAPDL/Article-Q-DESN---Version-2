@@ -486,7 +486,7 @@ app_glofas_fit_recovery_cleanup <- function(
   runs_root,
   execute = FALSE,
   protected = FALSE,
-  completion_marker = ".fit_recovery_complete"
+  completion_marker = c(".fit_recovery_complete", ".reservoir_preflight_rejected")
 ) {
   run_dir <- normalizePath(run_dir, mustWork = TRUE)
   runs_root <- normalizePath(runs_root, mustWork = TRUE)
@@ -495,12 +495,18 @@ app_glofas_fit_recovery_cleanup <- function(
     stop("Cleanup target is outside the declared recovery runs root.", call. = FALSE)
   }
   inventory <- app_glofas_fit_recovery_heavy_inventory(run_dir)
-  inventory$action <- if (isTRUE(protected)) "keep_protected" else "delete_candidate"
-  inventory$executed <- FALSE
+  inventory$action <- rep(
+    if (isTRUE(protected)) "keep_protected" else "delete_candidate",
+    nrow(inventory)
+  )
+  inventory$executed <- rep(FALSE, nrow(inventory))
   if (!isTRUE(protected) && isTRUE(execute)) {
-    marker <- file.path(run_dir, completion_marker)
-    if (!file.exists(marker)) {
-      stop(sprintf("Refusing cleanup without completion marker: %s.", marker), call. = FALSE)
+    markers <- file.path(run_dir, completion_marker)
+    if (!any(file.exists(markers))) {
+      stop(sprintf(
+        "Refusing cleanup without a terminal marker; expected one of: %s.",
+        paste(markers, collapse = ", ")
+      ), call. = FALSE)
     }
     if (nrow(inventory)) {
       removed <- file.remove(inventory$path)

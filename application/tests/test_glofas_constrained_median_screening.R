@@ -476,6 +476,109 @@ block_specific <- campaign_manifest$candidate_role == "block_specific_alpha"
 stopifnot(all(campaign_manifest$reference.alpha[block_specific] != campaign_manifest$discrepancy.alpha[block_specific]))
 stopifnot(!any(app_as_bool_vec(campaign_manifest$require_linked_desn[block_specific])))
 
+focused_definition <- app_read_yaml(app_path(
+  "application/config/glofas_p50_alpha_tau_focused_20260820.yaml"
+))
+focused_anchor_fixture <- list(
+  candidate_id = "linked_alpha_profile_010_b20be44357",
+  ranking_path = "/tmp/focused_ranking.csv",
+  config_path = "/tmp/focused_anchor_config.yaml",
+  fit_object_path = "/tmp/focused_anchor_fit.rds"
+)
+focused_space <- app_glofas_median_campaign_space(
+  focused_definition,
+  anchor = focused_anchor_fixture
+)
+focused_manifest <- app_glofas_median_screen_candidate_manifest(focused_space)
+focused_manifest_again <- app_glofas_median_screen_candidate_manifest(focused_space)
+stopifnot(nrow(focused_manifest) == 20L)
+stopifnot(identical(focused_manifest$candidate_id, focused_manifest_again$candidate_id))
+stopifnot(!anyDuplicated(focused_manifest$candidate_id))
+stopifnot(sum(focused_manifest$warm_start_policy == "cold") == 2L)
+stopifnot(sum(focused_manifest$candidate_role == "linked_alpha_tau_interaction") == 12L)
+stopifnot(sum(focused_manifest$candidate_role == "block_specific_alpha_refinement") == 6L)
+stopifnot(sum(focused_manifest$candidate_role == "cold_confirmation") == 2L)
+stopifnot(all(focused_manifest$reference.rho == 0.95))
+stopifnot(all(focused_manifest$discrepancy.rho == 0.95))
+stopifnot(all(focused_manifest$reference.rhs_tau0 == 0.1))
+stopifnot(identical(
+  sort(unique(focused_manifest$discrepancy.rhs_tau0)),
+  c(1e-6, 1e-4, 1e-3)
+))
+stopifnot(all(focused_manifest$reference.D == 2L))
+stopifnot(all(focused_manifest$discrepancy.D == 2L))
+stopifnot(all(focused_manifest$reference.n == 200L))
+stopifnot(all(focused_manifest$discrepancy.n == 200L))
+stopifnot(all(focused_manifest$reference.m == 720L))
+stopifnot(all(focused_manifest$discrepancy.m == 720L))
+stopifnot(as.integer(focused_space$fixed$inference$max_iter) == 150L)
+stopifnot(as.integer(focused_space$fixed$inference$max_iter_hard_cap) == 150L)
+stopifnot(as.integer(focused_space$scheduler$max_parallel) == 20L)
+focused_block <- focused_manifest$candidate_role == "block_specific_alpha_refinement"
+stopifnot(all(focused_manifest$reference.alpha[focused_block] != focused_manifest$discrepancy.alpha[focused_block]))
+stopifnot(!any(app_as_bool_vec(focused_manifest$require_linked_desn[focused_block])))
+stopifnot(all(is.na(focused_manifest$warm_start_source_fit_object[
+  focused_manifest$warm_start_policy == "cold"
+])))
+stopifnot(all(nzchar(focused_manifest$warm_start_source_fit_object[
+  focused_manifest$warm_start_policy == "auto"
+])))
+
+cleanup_existing <- data.frame(
+  candidate_id = c("a", "b"),
+  path = c("/tmp/a.rds", "/tmp/b.rds"),
+  action = c("delete_candidate", "keep_protected"),
+  executed = c(TRUE, FALSE),
+  stringsAsFactors = FALSE
+)
+cleanup_current <- data.frame(
+  candidate_id = c("a", "c"),
+  path = c("/tmp/a.rds", "/tmp/c.rds"),
+  action = c("delete_candidate", "delete_candidate"),
+  executed = c(FALSE, TRUE),
+  stringsAsFactors = FALSE
+)
+cleanup_merged <- app_glofas_median_screen_merge_cleanup_reports(
+  cleanup_existing,
+  cleanup_current
+)
+stopifnot(nrow(cleanup_merged) == 3L)
+stopifnot(isTRUE(cleanup_merged$executed[cleanup_merged$candidate_id == "a"][[1L]]))
+stopifnot(identical(cleanup_merged$candidate_id, c("a", "b", "c")))
+stopifnot(identical(
+  app_glofas_median_screen_merge_cleanup_reports(data.frame(), cleanup_existing),
+  cleanup_existing
+))
+stopifnot(identical(
+  app_glofas_median_screen_merge_cleanup_reports(cleanup_existing, data.frame()),
+  cleanup_existing
+))
+
+cleanup_existing_path <- tempfile("cleanup_existing_", fileext = ".rds")
+cleanup_missing_path <- tempfile("cleanup_missing_", fileext = ".rds")
+saveRDS(1, cleanup_existing_path)
+cleanup_dry_run <- data.frame(
+  candidate_id = c("kept", "deleted"),
+  path = c(cleanup_existing_path, cleanup_missing_path),
+  action = c("keep_protected", "delete_candidate"),
+  executed = FALSE,
+  stringsAsFactors = FALSE
+)
+cleanup_recovered <- app_glofas_median_screen_recover_cleanup_dry_run(cleanup_dry_run)
+stopifnot(!cleanup_recovered$executed[cleanup_recovered$candidate_id == "kept"])
+stopifnot(cleanup_recovered$executed[cleanup_recovered$candidate_id == "deleted"])
+unlink(cleanup_existing_path)
+
+finalizer_lines <- readLines(app_path(
+  "application/scripts/glofas_constrained_median_screen_finalize.R"
+))
+artifact_source_line <- grep("artifact_hygiene[.]R", finalizer_lines)
+recovery_source_line <- grep("glofas_fit_recovery[.]R", finalizer_lines)
+stopifnot(length(artifact_source_line) == 1L)
+stopifnot(length(recovery_source_line) == 1L)
+stopifnot(artifact_source_line < recovery_source_line)
+stopifnot(any(grepl("finalization_status[.]csv", finalizer_lines)))
+
 interaction_a <- app_glofas_median_campaign_maximin_pairs(
   campaign_definition$campaign$support$alpha,
   campaign_definition$campaign$support$rho,

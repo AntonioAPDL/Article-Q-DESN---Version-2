@@ -155,7 +155,88 @@ app_glofas_median_campaign_candidate <- function(
   )
 }
 
+app_glofas_median_campaign_focused_candidates <- function(campaign, anchor) {
+  entries <- campaign$campaign$focused_candidates %||% list()
+  if (!length(entries)) {
+    stop("Focused campaign requires at least one explicit candidate.", call. = FALSE)
+  }
+  required <- c(
+    "set_id", "label", "role", "alpha_reference", "alpha_discrepancy",
+    "rho_reference", "rho_discrepancy", "tau0_reference", "tau0_discrepancy",
+    "warm_start_policy", "require_linked_desn"
+  )
+  candidates <- lapply(seq_along(entries), function(i) {
+    entry <- entries[[i]]
+    missing <- required[!vapply(required, function(name) {
+      value <- entry[[name]]
+      !is.null(value) && length(value) == 1L && !is.na(value[[1L]]) &&
+        nzchar(as.character(value[[1L]]))
+    }, logical(1L))]
+    if (length(missing)) {
+      stop(sprintf(
+        "Focused candidate %d is missing: %s.",
+        i, paste(missing, collapse = ", ")
+      ), call. = FALSE)
+    }
+    numeric_values <- vapply(c(
+      "alpha_reference", "alpha_discrepancy", "rho_reference",
+      "rho_discrepancy", "tau0_reference", "tau0_discrepancy"
+    ), function(name) as.numeric(entry[[name]]), numeric(1L))
+    if (any(!is.finite(numeric_values)) ||
+        any(numeric_values[c("alpha_reference", "alpha_discrepancy")] <= 0) ||
+        any(numeric_values[c("alpha_reference", "alpha_discrepancy")] > 1) ||
+        any(numeric_values[c("rho_reference", "rho_discrepancy")] <= 0) ||
+        any(numeric_values[c("tau0_reference", "tau0_discrepancy")] <= 0)) {
+      stop(sprintf("Focused candidate %d has invalid alpha, rho, or tau0 values.", i), call. = FALSE)
+    }
+    linked <- app_as_bool(entry$require_linked_desn)
+    if (linked && (!isTRUE(all.equal(
+      numeric_values[["alpha_reference"]], numeric_values[["alpha_discrepancy"]], tolerance = 0
+    )) || !isTRUE(all.equal(
+      numeric_values[["rho_reference"]], numeric_values[["rho_discrepancy"]], tolerance = 0
+    )))) {
+      stop(sprintf("Focused candidate %d declares linked DESNs but uses different dynamics.", i), call. = FALSE)
+    }
+    app_glofas_median_campaign_candidate(
+      set_id = entry$set_id,
+      label = entry$label,
+      role = entry$role,
+      alpha_reference = numeric_values[["alpha_reference"]],
+      alpha_discrepancy = numeric_values[["alpha_discrepancy"]],
+      rho_reference = numeric_values[["rho_reference"]],
+      rho_discrepancy = numeric_values[["rho_discrepancy"]],
+      tau_reference = numeric_values[["tau0_reference"]],
+      tau_discrepancy = numeric_values[["tau0_discrepancy"]],
+      anchor = anchor,
+      warm_start_policy = as.character(entry$warm_start_policy),
+      require_linked_desn = linked
+    )
+  })
+  labels <- vapply(candidates, function(x) x$candidate_label, character(1L))
+  if (anyDuplicated(labels)) stop("Focused candidate labels must be unique.", call. = FALSE)
+  treatment_key <- vapply(candidates, function(x) {
+    p <- x$parameters
+    paste(
+      formatC(c(
+        p$reference$alpha, p$discrepancy$alpha,
+        p$reference$rho, p$discrepancy$rho,
+        p$reference$rhs_tau0, p$discrepancy$rhs_tau0
+      ), digits = 15L, format = "fg", flag = "#"),
+      x$metadata$warm_start_policy,
+      sep = "\r",
+      collapse = "\r"
+    )
+  }, character(1L))
+  if (anyDuplicated(treatment_key)) {
+    stop("Focused candidates contain duplicate scientific/initialization treatments.", call. = FALSE)
+  }
+  candidates
+}
+
 app_glofas_median_campaign_candidates <- function(campaign, anchor) {
+  if (length(campaign$campaign$focused_candidates %||% list())) {
+    return(app_glofas_median_campaign_focused_candidates(campaign, anchor))
+  }
   design <- campaign$campaign$design %||% list()
   support <- campaign$campaign$support %||% list()
   anchor_alpha <- as.numeric(design$anchor_alpha %||% NA_real_)

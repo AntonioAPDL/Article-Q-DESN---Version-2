@@ -1020,3 +1020,47 @@ app_glofas_median_screen_select_balanced_stage_b <- function(ranking, top_k = 20
   rownames(selected) <- NULL
   selected
 }
+
+app_glofas_median_screen_merge_cleanup_reports <- function(existing, current) {
+  existing <- existing %||% data.frame()
+  current <- current %||% data.frame()
+  rows <- list(existing, current)
+  rows <- rows[vapply(rows, function(x) is.data.frame(x) && nrow(x) > 0L, logical(1L))]
+  combined <- app_bind_rows_fill(rows)
+  if (!nrow(combined)) return(combined)
+  required <- c("candidate_id", "path", "action", "executed")
+  missing <- setdiff(required, names(combined))
+  if (length(missing)) {
+    stop(sprintf(
+      "Cleanup report is missing required columns: %s.",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  combined$executed <- app_as_bool_vec(combined$executed)
+  key <- paste(combined$candidate_id, combined$path, sep = "\r")
+  priority <- ifelse(combined$executed, 0L, 1L)
+  ordering <- order(key, priority)
+  combined <- combined[ordering, , drop = FALSE]
+  key <- key[ordering]
+  combined <- combined[!duplicated(key), , drop = FALSE]
+  combined <- combined[order(combined$candidate_id, combined$path), , drop = FALSE]
+  rownames(combined) <- NULL
+  combined
+}
+
+app_glofas_median_screen_recover_cleanup_dry_run <- function(dry_run) {
+  if (!is.data.frame(dry_run) || !nrow(dry_run)) return(data.frame())
+  required <- c("candidate_id", "path", "action", "executed")
+  missing <- setdiff(required, names(dry_run))
+  if (length(missing)) {
+    stop(sprintf(
+      "Cleanup dry run is missing required columns: %s.",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  recovered <- dry_run
+  recovered$executed <- app_as_bool_vec(recovered$executed)
+  deletable <- recovered$action == "delete_candidate"
+  recovered$executed[deletable] <- !file.exists(recovered$path[deletable])
+  recovered
+}

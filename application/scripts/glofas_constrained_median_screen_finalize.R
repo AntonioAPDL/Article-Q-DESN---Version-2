@@ -6,6 +6,7 @@ repo_root <- normalizePath(
 )
 source(file.path(repo_root, "application/R/00_packages.R"))
 app_set_repo_root(repo_root)
+source(app_path("application/R/artifact_hygiene.R"))
 source(app_path("application/R/model_contract.R"))
 source(app_path("application/R/feature_contract.R"))
 source(app_path("application/R/glofas_fit_recovery.R"))
@@ -165,10 +166,38 @@ decision <- data.frame(
 )
 app_write_csv(decision, file.path(output_root, "selection_decision.csv"))
 
+cleanup_report_path <- file.path(output_root, "cleanup", "cleanup_report.csv")
+cleanup_dry_run_path <- file.path(output_root, "cleanup", "dry_run_cleanup.csv")
+protected <- character()
 if (app_as_bool(args$cleanup)) {
   if (!all(terminal)) stop("Cleanup is prohibited for a partial batch.", call. = FALSE)
   protected <- ranking$candidate_id[ranking$eligible_for_full7_review]
   if (!length(protected)) protected <- ranking$candidate_id[[1L]]
+
+  dry_run_rows <- list()
+  for (i in seq_len(nrow(manifest))) {
+    dry_run <- app_glofas_fit_recovery_cleanup(
+      manifest$run_dir[[i]],
+      runs_root = file.path(output_root, "runs"),
+      execute = FALSE,
+      protected = manifest$candidate_id[[i]] %in% protected
+    )
+    if (nrow(dry_run)) {
+      dry_run$candidate_id <- manifest$candidate_id[[i]]
+      dry_run_rows[[length(dry_run_rows) + 1L]] <- dry_run
+    }
+  }
+  existing_dry_run <- if (file.exists(cleanup_dry_run_path)) {
+    app_read_csv(cleanup_dry_run_path)
+  } else {
+    data.frame()
+  }
+  dry_run_report <- app_glofas_median_screen_merge_cleanup_reports(
+    existing_dry_run,
+    app_bind_rows_fill(dry_run_rows)
+  )
+  app_write_csv(dry_run_report, cleanup_dry_run_path)
+
   cleanup_rows <- list()
   for (i in seq_len(nrow(manifest))) {
     cleanup <- app_glofas_fit_recovery_cleanup(
@@ -182,7 +211,41 @@ if (app_as_bool(args$cleanup)) {
       cleanup_rows[[length(cleanup_rows) + 1L]] <- cleanup
     }
   }
-  app_write_csv(app_bind_rows_fill(cleanup_rows), file.path(output_root, "cleanup", "cleanup_report.csv"))
+  existing_cleanup <- if (file.exists(cleanup_report_path)) {
+    app_read_csv(cleanup_report_path)
+  } else {
+    app_glofas_median_screen_recover_cleanup_dry_run(dry_run_report)
+  }
+  cleanup_report <- app_glofas_median_screen_merge_cleanup_reports(
+    existing_cleanup,
+    app_bind_rows_fill(cleanup_rows)
+  )
+  app_write_csv(cleanup_report, cleanup_report_path)
 }
 
-cat(file.path(output_root, "constrained_median_ranking.csv"), "\n")
+ranking_path <- file.path(output_root, "constrained_median_ranking.csv")
+selection_path <- file.path(output_root, "selection_decision.csv")
+app_write_csv(data.frame(
+  status = "completed",
+  timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+  batch_complete = all(terminal),
+  completed_candidates = sum(fit_complete),
+  preflight_rejected_candidates = sum(preflight_rejected),
+  terminal_candidates = sum(terminal),
+  total_candidates = length(terminal),
+  cleanup_requested = app_as_bool(args$cleanup),
+  protected_candidates = paste(protected, collapse = ";"),
+  ranking_path = ranking_path,
+  ranking_sha256 = app_sha256_file(ranking_path),
+  selection_path = selection_path,
+  selection_sha256 = app_sha256_file(selection_path),
+  cleanup_report_path = if (file.exists(cleanup_report_path)) cleanup_report_path else NA_character_,
+  cleanup_report_sha256 = if (file.exists(cleanup_report_path)) {
+    app_sha256_file(cleanup_report_path)
+  } else {
+    NA_character_
+  },
+  stringsAsFactors = FALSE
+), file.path(output_root, "finalization_status.csv"))
+
+cat(ranking_path, "\n")

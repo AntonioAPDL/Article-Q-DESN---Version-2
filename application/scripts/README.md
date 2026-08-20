@@ -39,14 +39,19 @@ Launch-safety contract:
   no-reduction DESN candidates, set `n_tilde[d-1]` equal to the previous layer
   width so the article reservoir generator uses an identity inter-layer state
   map.
-- `glofas_median_response_surface_prepare.R` verifies the frozen Stage-A p50
-  leader and materializes the reviewed 56-candidate alpha/rho/tau campaign.
-  Its generated launcher uses 20 one-thread workers, runs a two-block
-  reservoir preflight before each VB fit, and invokes complete-batch ranking
-  and guarded cleanup after the scheduler exits.
+- `glofas_median_response_surface_prepare.R` verifies a SHA-pinned p50 anchor
+  and materializes either the reviewed 56-candidate alpha/rho/tau campaign or
+  the explicit 20-candidate focused alpha/tau refinement. Generated launchers
+  use 20 one-thread workers, run a two-block reservoir preflight before each VB
+  fit, and invoke complete-batch ranking and guarded cleanup after the scheduler
+  exits.
 - `glofas_constrained_median_screen_orchestrate.sh` is the resumable runtime
   wrapper used by generated constrained-screen launchers. It records an atomic
   orchestration status and never launches full7 or promotes outputs.
+- `glofas_constrained_median_screen_finalize.R` writes hash-bearing
+  finalization status, persists a cleanup dry run before deletion, accepts fit
+  completion and reservoir-rejection terminal markers, and preserves cleanup
+  evidence across interrupted or repeated closeout attempts.
 - `glofas_reservoir_preflight_gate.R` normalizes each sampler-free reservoir
   decision. `repair` proceeds with recorded warnings; `reject` becomes a
   terminal early-rejection marker and skips VB.

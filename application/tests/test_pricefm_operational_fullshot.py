@@ -36,6 +36,9 @@ winner_module = load_script("pricefm_select_winners", "194_select_pricefm_operat
 test_module = load_script("pricefm_score_test", "195_score_pricefm_operational_test.py")
 closeout_module = load_script("pricefm_closeout", "196_closeout_pricefm_operational_fullshot.py")
 campaign_module = load_script("pricefm_campaign", "197_launch_pricefm_operational_campaign.py")
+elastic_module = load_script(
+    "pricefm_elastic_campaign", "198_launch_pricefm_operational_elastic_campaign.py"
+)
 
 
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -361,3 +364,218 @@ def test_campaign_python_preflight_rejects_missing_environment(
     frozen = json.loads((Path(args.log_root) / "python_environment_preflight.json").read_text())
     assert frozen["status"] == "failed"
     assert "numpy" in frozen["stderr"]
+
+
+def elastic_args(tmp_path: Path, **overrides: object) -> argparse.Namespace:
+    values = {
+        "python": str(tmp_path / "venv" / "bin" / "python"),
+        "config": "c",
+        "raw_csv": "r",
+        "upstream_root": "u",
+        "artifact_root": str(tmp_path / "pricefm" / "benchmarks" / "campaign"),
+        "reference_window_root": "w",
+        "qdesn_registry": "q",
+        "log_root": str(tmp_path / "logs"),
+        "minimum_dispatch_workers": 1,
+        "maximum_workers": 20,
+        "max_core_utilization": 0.1,
+        "cpu_sample_seconds": 0.01,
+        "consecutive_sample_gap_seconds": 0.0,
+        "resource_poll_seconds": 1.0,
+        "status_poll_seconds": 1.0,
+        "minimum_memory_gib": 128.0,
+        "minimum_disk_gib": 150.0,
+        "maximum_projected_load": 60.0,
+        "niceness": 10,
+        "maximum_attempts": 2,
+        "global_lock_path": str(tmp_path / "pricefm.lock"),
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def core(package: int, number: int, *logical_cpus: int) -> dict[str, object]:
+    return {"package": package, "core": number, "logical_cpus": list(logical_cpus)}
+
+
+def test_elastic_capacity_uses_only_stable_nonactive_physical_cores() -> None:
+    idle = [core(0, 0, 0, 32), core(0, 1, 4, 36), core(1, 0, 1, 33)]
+    selected, evidence = elastic_module.stable_dispatch_capacity(
+        current_idle=idle,
+        previous_idle_keys={(0, 0), (0, 1), (1, 0)},
+        active_core_keys={(0, 1)},
+        active_count=1,
+        load_1m=57.2,
+        minimum_dispatch_workers=1,
+        maximum_workers=20,
+        maximum_projected_load=60.0,
+    )
+    assert [elastic_module.physical_key(item) for item in selected] == [(0, 0), (1, 0)]
+    assert evidence["stable_idle_physical_cores"] == 2
+    assert evidence["dispatch_slots"] == 2
+    assert evidence["projected_load"] == pytest.approx(59.2)
+
+
+def test_elastic_capacity_respects_load_and_minimum_dispatch() -> None:
+    idle = [core(0, 0, 0, 32), core(0, 1, 4, 36)]
+    blocked_by_load, load_evidence = elastic_module.stable_dispatch_capacity(
+        idle, {(0, 0), (0, 1)}, set(), 0, 60.1, 1, 20, 60.0
+    )
+    assert blocked_by_load == []
+    assert load_evidence["load_slots"] == 0
+    blocked_by_minimum, minimum_evidence = elastic_module.stable_dispatch_capacity(
+        idle[:1], {(0, 0)}, set(), 0, 55.0, 2, 20, 60.0
+    )
+    assert blocked_by_minimum == []
+    assert minimum_evidence["dispatch_slots"] == 0
+
+
+def test_elastic_snapshot_requires_two_consecutive_idle_samples(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    campaign = elastic_module.ElasticCampaign(elastic_args(tmp_path))
+    samples = iter([
+        {
+            "idle_cores": [core(0, 0, 0, 32), core(0, 1, 4, 36)],
+            "idle_keys": {(0, 0), (0, 1)},
+            "n_idle_physical_cores": 2,
+            "n_physical_cores": 32,
+            "available_memory_gib": 400.0,
+            "free_disk_gib": 300.0,
+            "load_1m": 55.0,
+        },
+        {
+            "idle_cores": [core(0, 1, 4, 36), core(1, 0, 1, 33)],
+            "idle_keys": {(0, 1), (1, 0)},
+            "n_idle_physical_cores": 2,
+            "n_physical_cores": 32,
+            "available_memory_gib": 400.0,
+            "free_disk_gib": 300.0,
+            "load_1m": 55.0,
+        },
+    ])
+    monkeypatch.setattr(campaign, "resource_sample", lambda: next(samples))
+    monkeypatch.setattr(elastic_module.time, "sleep", lambda _: None)
+    selected, evidence = campaign.stable_resource_snapshot(set(), 0)
+    assert [elastic_module.physical_key(item) for item in selected] == [(0, 1)]
+    assert evidence["stable_idle_physical_cores"] == 1
+    assert evidence["memory_gate"] is True
+    assert evidence["disk_gate"] is True
+
+
+def test_elastic_campaign_preserves_exact_venv_and_pins_nice_worker(tmp_path: Path) -> None:
+    real_python = tmp_path / "python3.11"
+    real_python.write_text("fixture\n")
+    venv_python = tmp_path / "venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.symlink_to(real_python)
+    campaign = elastic_module.ElasticCampaign(
+        elastic_args(tmp_path, python=str(venv_python))
+    )
+    assert campaign.python == venv_python
+    command = campaign.pinned_command(core(1, 0, 1, 33), [str(venv_python), "worker.py"])
+    assert command[:7] == ["nice", "-n", "10", "taskset", "-c", "1,33", str(venv_python)]
+    assert command[-1] == "worker.py"
+
+
+def test_elastic_pool_skips_hash_verified_completed_work(tmp_path: Path) -> None:
+    campaign = elastic_module.ElasticCampaign(elastic_args(tmp_path))
+    trial = tmp_path / "trial"
+    trial.mkdir()
+    checkpoint = trial / "best_model.keras"
+    checkpoint.write_bytes(b"fixture model\n")
+    common.atomic_write_json(trial / "status.json", {
+        "status": "completed",
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": common.sha256_file(checkpoint),
+    })
+    manifest = tmp_path / "manifest.csv"
+    write_csv(manifest, [{"trial_dir": str(trial), "seed": 1}])
+
+    def should_not_launch(_: int) -> list[str]:
+        raise AssertionError("Completed work was relaunched")
+
+    campaign.run_pool(
+        "fixture_fit", manifest, should_not_launch, campaign.fit_complete, "trial_dir"
+    )
+    health = json.loads((Path(campaign.args.log_root) / "campaign_health.json").read_text())
+    assert health["status"] == "completed"
+    assert health["completed"] == 1
+    assert health["remaining"] == 0
+
+
+def test_elastic_pool_dispatches_and_completes_actual_pending_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    campaign = elastic_module.ElasticCampaign(elastic_args(
+        tmp_path, resource_poll_seconds=0.0, status_poll_seconds=0.0
+    ))
+    rows = [
+        {"task_dir": str(tmp_path / f"task_{index}"), "seed": index + 1}
+        for index in range(3)
+    ]
+    manifest = tmp_path / "pending.csv"
+    write_csv(manifest, rows)
+    available = [core(0, 0, 0, 32), core(0, 1, 4, 36)]
+    capacity = {
+        "stable_idle_physical_cores": 2,
+        "dispatch_slots": 2,
+        "projected_load": 52.0,
+    }
+    monkeypatch.setattr(
+        campaign,
+        "stable_resource_snapshot",
+        lambda active_keys, active_count: (available[: max(0, 2 - active_count)], capacity),
+    )
+    monkeypatch.setattr(elastic_module.time, "sleep", lambda _: None)
+    launched: list[int] = []
+
+    class FakeProcess:
+        def __init__(self, command, **kwargs):
+            index = int(command[-1])
+            launched.append(index)
+            task_dir = Path(rows[index]["task_dir"])
+            task_dir.mkdir(parents=True, exist_ok=True)
+            (task_dir / "done").write_text("completed\n")
+            self.pid = 1000 + index
+
+        def poll(self):
+            return 0
+
+    monkeypatch.setattr(elastic_module.subprocess, "Popen", FakeProcess)
+
+    def completion(row: dict[str, str], verify: bool = True) -> bool:
+        return (Path(row["task_dir"]) / "done").is_file()
+
+    campaign.run_pool(
+        "fixture_elastic_fit",
+        manifest,
+        lambda index: ["fixture-worker", str(index)],
+        completion,
+        "task_dir",
+    )
+    assert sorted(launched) == [0, 1, 2]
+    health = json.loads((Path(campaign.args.log_root) / "campaign_health.json").read_text())
+    assert health["status"] == "completed"
+    assert health["completed"] == 3
+    assert health["remaining"] == 0
+    assert health["capacity"] == capacity
+
+
+def test_elastic_scheduler_changes_orchestration_not_science() -> None:
+    source = (SCRIPT_ROOT / "198_launch_pricefm_operational_elastic_campaign.py").read_text()
+    for script in (
+        "190_prepare_pricefm_operational_fullshot.py",
+        "191_run_pricefm_operational_fullshot_trial.py",
+        "192_select_pricefm_operational_phase1.py",
+        "193_prepare_pricefm_operational_phase2.py",
+        "194_select_pricefm_operational_winners.py",
+        "195_score_pricefm_operational_test.py",
+        "196_closeout_pricefm_operational_fullshot.py",
+    ):
+        assert script in source
+    assert '"scientific_protocol_changed": False' in source
+    assert "registry_mutated=False" in source
+    assert "article_mutated=False" in source
+    assert '"nice", "-n"' in source
+    assert '"taskset", "-c"' in source

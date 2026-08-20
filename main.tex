@@ -1825,6 +1825,19 @@ check loss were replaced. Those two displayed criteria are arithmetic means
 over three chains with 20,000 retained draws each; fit RMSE and all
 \(p=0.50\) criteria retain their previous metric-level sources.
 
+A forecast-first follow-up then revisited the Gaussian-mixture \(p=0.25\)
+exAL--RHS case under the exact scale-collapsed transition. Its three-chain
+means reduced forecast MAE from 3.396 to 1.819 and forecast check loss from
+4.586 to 4.488; the fit criterion remained at its previous metric-level
+source. A subsequent adaptive forecast-gap campaign evaluated eight
+case-specific Q--DESN candidates with three full-budget chains per candidate.
+It replaced three additional forecast criteria: Gaussian-mixture \(p=0.50\)
+AL--RHS forecast MAE decreased from 2.368 to 0.907 and check loss from 5.585
+to 5.441, while Gaussian \(p=0.05\) AL--RHS check loss decreased from 1.264
+to 1.221. Every replacement is a strict three-chain mean improvement; no fit
+criterion changed. Diagnostic grades remain part of the provenance record but
+were not used to veto a lower finite forecast criterion.
+
 Before regenerating the article tables, we also audited every Q--DESN forecast
 criterion against its archived lead-level rolling-origin paths. All 72 forecast
 metric roles, two for each of the 36 model--family--quantile--inference cells,

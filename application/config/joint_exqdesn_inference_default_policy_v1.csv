@@ -1,2 +1,0 @@
-policy_version,inference_family,default_method_id,evidence_phase,evidence_status,effective_date,notes
-joint_exqdesn_default_policy_v1,mcmc,M0_v_collapsed_support_logit,phase170,production_default,2026-08-08,"Exact v-augmented sigma-collapsed support-logit transition; M1b remains an explicit candidate because Phase170 quantile-path invariance retained review cells."

@@ -2858,7 +2858,7 @@ app_joint_exqdesn_phase174_stage_assets <- function(
   winner_table <- app_joint_qdesn_phase155_winner_table(winners)
   replication_table <- app_joint_qdesn_phase155_replication_table(phase153_contrasts)
   protocol <- data.frame(
-    Item = c("Evidence layers", "Synthetic mechanisms", "Model comparison", "Quantile grid", "Fit window", "Forecast protocol", "MCMC effort", "Reported quantile-grid action", "Replicated robustness evidence"),
+    Item = c("Validation components", "Synthetic mechanisms", "Model comparison", "Quantile grid", "Fit window", "Forecast protocol", "MCMC effort", "Reported quantile-grid summary", "Replicated robustness check"),
     Value = c(
       "Scenario-specific VB and structured-VB initialization followed by MCMC confirmation for reported quantile-grid summaries.",
       "Eight mechanisms: three bridge cases and five stress cases with known conditional quantile paths.",
@@ -2867,8 +2867,8 @@ app_joint_exqdesn_phase174_stage_assets <- function(
       "500 observations after the pre-specified DESN washout.",
       "No-refit held-out forecasts at origins separated by 30 observations, scored at leads 1-30.",
       "The preserved AL rows retain their archived article-grade effort. Functionally qualified exAL updates use eight chains with 24,000 iterations and 5,000 retained draws per chain; held exAL comparisons retain their verified historical effort.",
-      "Scores validate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics.",
-      sprintf("The replicated robustness layer contains %d independent data-generating realizations and is retained unchanged.", phase153_assessment$completed_candidates[[1L]])
+      "Scores evaluate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics.",
+      sprintf("The replicated robustness check contains %d independent replicated VB fits and is retained unchanged.", phase153_assessment$completed_candidates[[1L]])
     ), stringsAsFactors = FALSE
   )
   gates <- data.frame(

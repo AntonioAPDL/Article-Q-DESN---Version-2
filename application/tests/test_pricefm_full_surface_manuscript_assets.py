@@ -148,6 +148,9 @@ def test_full_surface_manuscript_export_writes_compact_assets(tmp_path):
     assert "\\PricefmFullInputSetSummaryTable" in text
     assert "\\PricefmFullHorizonDiagnosticSummaryTable" in text
     assert (tmp_path / "tables" / "pricefm_full_main_summary.tex").exists()
+    main_summary = (tmp_path / "tables" / "pricefm_full_main_summary.tex").read_text()
+    assert "Comparison set" in main_summary
+    assert "Scope" not in main_summary
     assert (tmp_path / "tables" / "pricefm_full_input_set_summary.tex").exists()
     assert (tmp_path / "tables" / "pricefm_full_horizon_diagnostic_summary.tex").exists()
     assert "Stage-M" not in (tmp_path / "tables" / "pricefm_full_source_summary.tex").read_text()

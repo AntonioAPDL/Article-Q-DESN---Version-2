@@ -271,7 +271,7 @@ def write_benchmark_table(path: Path, frame: pd.DataFrame) -> Path:
     ] for _, r in frame.iterrows()]
     return write_text(path, tabular(
         [
-            "Scope", "Rows", "Q--DESN wins", "Near ties", "PriceFM wins",
+            "Comparison set", "Rows", "Q--DESN wins", "Near ties", "PriceFM wins",
             "Q--DESN AQL", "PriceFM AQL", "Mean $\\Delta$", "Median $\\Delta$",
         ],
         rows,

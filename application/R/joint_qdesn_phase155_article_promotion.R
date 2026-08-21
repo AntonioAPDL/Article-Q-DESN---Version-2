@@ -606,9 +606,9 @@ app_joint_qdesn_phase155_gate_summary <- function(src, winners) {
 app_joint_qdesn_phase155_protocol_table <- function(src) {
   data.frame(
     Item = c(
-      "Evidence layers", "Synthetic mechanisms", "Model comparison",
+      "Validation components", "Synthetic mechanisms", "Model comparison",
       "Quantile grid", "Fit window", "Forecast protocol", "MCMC effort",
-      "Reported quantile-grid action", "Replicated robustness evidence"
+      "Reported quantile-grid summary", "Replicated robustness check"
     ),
     Value = c(
       "Scenario-specific VB and VB-LD calibration and initialization, followed by exact-control MCMC confirmation.",
@@ -618,8 +618,8 @@ app_joint_qdesn_phase155_protocol_table <- function(src) {
       "500 observations after the pre-specified DESN washout.",
       "No-refit held-out forecasts at origins separated by 30 observations, scored at leads 1-30.",
       "Four chains and 3,000 retained draws per AL case; eight chains and 12,000 retained draws per exAL case.",
-      "Scores validate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics.",
-      sprintf("The replicated robustness layer uses %d independent data-generating realizations: 50 replicates for each of 32 scenario-model comparisons.", as.integer(src$phase153_assessment$completed_candidates[[1L]]))
+      "Scores evaluate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics.",
+      sprintf("The replicated robustness check uses %d independent replicated VB fits: 50 replicates for each of 32 scenario-model comparisons.", as.integer(src$phase153_assessment$completed_candidates[[1L]]))
     ),
     stringsAsFactors = FALSE
   )

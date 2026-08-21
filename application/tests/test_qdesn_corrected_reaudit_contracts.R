@@ -79,15 +79,15 @@ stopifnot(identical(cfg$covariates$source_policy, "realized_history_and_blended_
 stopifnot(isTRUE(cfg$covariates$allow_realized_future_blend))
 stopifnot(identical(cfg$prediction$posterior_predictive_sampling, "disabled"))
 assert_contains("application/R/fit_qdesn_latent_path.R", "d_feature_future <- discrepancy_baseline_future")
-assert_contains("main.tex", "\\GlofasApplicationCurrentDiscrepancyTransitionStrategy{} contract")
-assert_contains("main.tex", "realized-history and blended GEFS forecast information")
+assert_contains("main.tex", "\\GlofasApplicationCurrentDiscrepancyTransitionStrategy{} rule")
+assert_contains("main.tex", "realized-history and blended Global Ensemble Forecast System")
 assert_not_contains("main.tex", "forecast-window discrepancy reservoir is driven by the horizon-keyed contrast")
 
-# PriceFM is a retrospective replay with realized-ex-post target leads in every
+# PriceFM is a retrospective comparison with retrospectively observed target leads in every
 # selected row and additional neighbor leads for graph-derived rows.
-assert_contains("main.tex", "Both input policies use realized-ex-post")
-assert_contains("main.tex", "target load, solar, and wind lead covariates")
-assert_contains("main.tex", "add realized-ex-post neighbor lead summaries")
+assert_contains("main.tex", "Both input policies use retrospectively")
+assert_contains("main.tex", "target-region load, solar, and wind lead covariates")
+assert_contains("main.tex", "add retrospectively observed neighboring-region lead")
 manifest <- jsonlite::fromJSON(app_path("tables/pricefm_paper_aligned_main_comparison_manifest.json"))
 stopifnot(identical(manifest$applicability$cross_panel_comparison, "context_only_not_head_to_head"))
 

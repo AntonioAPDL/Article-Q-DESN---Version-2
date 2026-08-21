@@ -230,6 +230,6 @@ stopifnot(any(grepl("GlofasApplicationCurrentReferenceReservoirDepth", registry_
 stopifnot(any(grepl("GlofasApplicationCurrentDiscrepancyReservoirDepth", registry_tex, fixed = TRUE)))
 stopifnot(any(grepl("GlofasApplicationCurrentObservedHistoryCrps", registry_tex, fixed = TRUE)))
 score_tex <- readLines(app_path(tmp_registry_dir, "tables", "current_score.tex"))
-stopifnot(any(grepl("Q--DESN calibration", score_tex, fixed = TRUE)))
+stopifnot(any(grepl("Q--DESN correction", score_tex, fixed = TRUE)))
 stopifnot(any(grepl("Raw GloFAS", score_tex, fixed = TRUE)))
 })

@@ -1,7 +1,7 @@
 # Phase 155 article promotion for the balanced joint QDESN validation.
 #
 # This stage consumes the frozen Phase 153 replicated VB and Phase 154 MCMC
-# evidence. It verifies source manifests and rebuilds article-facing tables; it
+# evidence. It verifies source manifests and rebuilds reported tables; it
 # does not fit a model or recompute validation scores.
 
 app_joint_qdesn_phase155_default_dir <- function() {
@@ -454,7 +454,7 @@ app_joint_qdesn_phase155_write_main_table <- function(data, path) {
     "\\end{tabular}",
     "}%",
     paste0(
-      "\\caption{Scenario-level MCMC confirmation for the joint multi-quantile validation study. ",
+      "\\caption{Scenario-level MCMC validation analysis for the joint multi-quantile validation study. ",
       "Entries are forecast MAE with fit-window MAE and the number of raw forecast-window adjacent-level crossings in parentheses, written as forecast MAE (fit MAE; raw crossings). ",
       "Boldface marks the lowest forecast MAE within each scenario. QDESN uses the \\(\\AL\\) working likelihood, exQDESN uses the \\(\\exAL\\) working likelihood, and \\RHS{} denotes the regularized horseshoe prior. ",
       "All scores use the monotone quantile-grid reporting rule; raw crossings are retained only as pre-rearrangement diagnostics.}"
@@ -581,10 +581,10 @@ app_joint_qdesn_phase155_gate_summary <- function(src, winners) {
       ifelse(identical(app_joint_qdesn_phase155_source_gate(src), "pass"), "review", "fail")
     ),
     detail = c(
-      sprintf("%d/%d final evidence-set hashes verified.", sum(src$phase154_manifest$verified), nrow(src$phase154_manifest)),
-      sprintf("%d/%d nested source hashes verified.", sum(src$source_manifests$verified), nrow(src$source_manifests)),
+      sprintf("%d/%d final validation-record checks verified.", sum(src$phase154_manifest$verified), nrow(src$phase154_manifest)),
+      sprintf("%d/%d nested source-record checks verified.", sum(src$source_manifests$verified), nrow(src$source_manifests)),
       sprintf("%d/%d replicated-VB hashes verified.", sum(src$phase153_manifest$verified), nrow(src$phase153_manifest)),
-      "All 32 scenario-model comparisons are present exactly once.",
+      "All 32 scenario--model comparisons are present exactly once.",
       sprintf("%d/32 comparisons match the pre-specified scenario-specific controls.", sum(as.logical(x$exact_control_match))),
       sprintf("%d/32 comparisons meet the pre-specified model-specific MCMC effort tier.", sum(as.logical(x$article_grade))),
       "All retained draws and reported quantile-grid scores are finite.",
@@ -611,7 +611,7 @@ app_joint_qdesn_phase155_protocol_table <- function(src) {
       "Reported quantile-grid summary", "Replicated robustness check"
     ),
     Value = c(
-      "Scenario-specific VB and VB-LD calibration and initialization, followed by exact-control MCMC confirmation.",
+      "Scenario-specific VB and VB-LD calibration and initialization, followed by MCMC validation.",
       "Eight mechanisms: three bridge cases and five stress cases with known conditional quantile paths.",
       "Joint and independent quantile regressions under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior.",
       "0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95.",
@@ -637,7 +637,7 @@ app_joint_qdesn_phase155_claim_audit <- function(case_summary, winners, src) {
     ),
     status = c("pass", "pass", "pass", "review", "pass", "pass", "pass", "pass", "pass"),
     evidence = c(
-      sprintf("%d scenario-model comparisons; %d exact-control and %d article-grade.", nrow(case_summary), sum(case_summary$exact_control_match), sum(case_summary$article_grade)),
+      sprintf("%d scenario--model comparisons; %d exact-control and %d reporting-tier MCMC comparisons.", nrow(case_summary), sum(case_summary$exact_control_match), sum(case_summary$article_grade)),
       sprintf("Forecast-MAE lowest-score counts: Joint AL=%d, Independent AL=%d, Joint exAL=%d, Independent exAL=%d.", count(forecast, "joint_qdesn_rhs_vb"), count(forecast, "qdesn_rhs_independent_vb"), count(forecast, "joint_exqdesn_rhs_vb"), count(forecast, "exqdesn_rhs_independent_vb")),
       sprintf("Fit-MAE lowest-score counts: Joint AL=%d and Independent exAL=%d; the other rows have zero.", count(fit, "joint_qdesn_rhs_vb"), count(fit, "exqdesn_rhs_independent_vb")),
       sprintf("Raw forecast crossings total %d and are concentrated in Independent AL (%d of %d).", sum(case_summary$mcmc_forecast_raw_crossing_pairs), sum(case_summary$mcmc_forecast_raw_crossing_pairs[case_summary$source_model_id == "qdesn_rhs_independent_vb"]), sum(case_summary$mcmc_forecast_raw_crossing_pairs)),
@@ -685,9 +685,9 @@ app_joint_qdesn_run_phase155_article_promotion <- function(
   gate_summary <- app_joint_qdesn_phase155_gate_summary(src, winners)
   gate_table <- gate_summary[, c("gate", "status", "detail"), drop = FALSE]
   gate_labels <- c(
-    phase154_final_manifest = "final MCMC evidence-set manifest",
-    phase154_source_manifests = "MCMC source manifests",
-    phase153_replication_manifest = "replicated VB manifest"
+    phase154_final_manifest = "final MCMC validation record",
+    phase154_source_manifests = "MCMC source records",
+    phase153_replication_manifest = "replicated VB record"
   )
   gate_table$gate <- ifelse(
     gate_table$gate %in% names(gate_labels),
@@ -695,6 +695,8 @@ app_joint_qdesn_run_phase155_article_promotion <- function(
     gsub("_", " ", gate_table$gate, fixed = TRUE)
   )
   names(gate_table) <- c("Criterion", "Status", "Detail")
+  gate_table$Status <- ifelse(gate_table$Status == "pass", "Pass",
+    ifelse(gate_table$Status == "review", "Review", gate_table$Status))
   protocol <- app_joint_qdesn_phase155_protocol_table(src)
   claim_audit <- app_joint_qdesn_phase155_claim_audit(case_summary, winners, src)
 
@@ -715,7 +717,7 @@ app_joint_qdesn_run_phase155_article_promotion <- function(
     gate_tex = app_joint_qdesn_phase155_write_latex_table(
       gate_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"),
-      "Reproducibility checks and diagnostic criteria for the balanced MCMC confirmation evidence set. Review denotes retained raw-crossing diagnostics, not a failure of the scored monotone quantile grid.",
+      "Diagnostic checks for the balanced MCMC multi-quantile validation. The checks verify complete scenario--model coverage, finite reported scores, variational initialization, and separation of raw and post-rearrangement crossing diagnostics.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary",
       "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}l>{\\raggedright\\arraybackslash}p{0.60\\textwidth}@{}",
       size = "\\scriptsize",
@@ -805,7 +807,7 @@ app_joint_qdesn_run_phase155_article_promotion <- function(
   writeLines(c(
     "# Joint QDESN Phase 155 Article Update",
     "",
-    "Phase 155 rebuilds reported joint-validation tables from the archived Phase 154 balanced MCMC evidence set and the Phase 153 replicated VB robustness evidence set.",
+    "Phase 155 rebuilds reported joint-validation tables from the Phase 154 balanced MCMC validation record and the Phase 153 replicated VB robustness record.",
     "",
     sprintf("- Phase 154 MCMC cells: `%d/32`", nrow(case_summary)),
     sprintf("- Phase 153 independent VB fits: `%d/1600`", promotion$phase153_vb_fits[[1L]]),
@@ -903,7 +905,7 @@ app_joint_qdesn_run_phase155_article_audit <- function(
       "stale_five_of_eight_removed", "stale_gamma_sensitivity_claim_removed"
     ),
     status = c(
-      ifelse(app_joint_qdesn_phase155_text_contains(main_tex, "balanced MCMC confirmation"), "pass", "fail"),
+      ifelse(app_joint_qdesn_phase155_text_contains(main_tex, "balanced MCMC validation"), "pass", "fail"),
       ifelse(app_joint_qdesn_phase155_text_contains(main_tex, "50 independently generated fixtures"), "pass", "fail"),
       ifelse(app_joint_qdesn_phase155_text_contains(main_tex, "four of the eight") && app_joint_qdesn_phase155_text_contains(main_tex, "two scenarios each"), "pass", "fail"),
       ifelse(app_joint_qdesn_phase155_text_contains(main_tex, "six of the eight fit windows"), "pass", "fail"),

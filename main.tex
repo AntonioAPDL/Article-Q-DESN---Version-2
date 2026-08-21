@@ -124,7 +124,7 @@ For multi-quantile reporting, we distinguish independent level-wise regressions
 followed by a pre-specified monotone rearrangement from a joint quantile-vector
 regression that shares information through adjacent quantile-specific
 coefficient innovations. Synthetic studies, a one-origin retrospective GloFAS
-streamflow case, and a retrospective PriceFM replay show when this
+streamflow case, and a retrospective PriceFM comparison show when this
 fixed-feature Bayesian regression approach improves finite-grid quantile
 scores. The evidence supports limited claims: the reported bands are
 model-based quantile summaries, the finite-grid score denoted \(\aCRPS\) is a
@@ -1728,17 +1728,17 @@ are \(T_{\mathrm{fit}}=500\) and \(T_{\mathrm{fit}}=5000\), corresponding to
 training windows \(8501{:}9000\) and \(4001{:}9000\). Forecast evaluation uses
 a rolling-origin, no-refit state-update protocol over the held-out block. The
 primary protocol has maximum lead \(H_{\max}=30\) and origin stride \(30\).
-The reported tables use this pre-specified protocol and the archived validation
-record for source identity, model specification, and scoring metadata.
+The reported tables use this pre-specified protocol and the validation record
+for source identity, model specification, and scoring metadata.
 
 \subsection{Single-Quantile Competing Methods}
 
 For each family and target quantile level in the single-quantile validation
-evidence set, the reported Q--DESN comparison varies the working likelihood and
+comparison, the reported Q--DESN rows vary the working likelihood and
 inference method while using regularized-horseshoe (RHS) coefficient shrinkage.
 Entries labeled Q--DESN AL--RHS use the AL working likelihood, whereas entries
 labeled Q--DESN exAL--RHS use the exAL working likelihood. Historical ridge
-fits are not included because they have not been replayed under the corrected
+fits are not included because they have not been reprocessed under the corrected
 train-only preprocessing rule. The reservoir specification, random seed,
 source identifiers, and software version for every displayed metric are retained
 in the reproducibility record.
@@ -1764,7 +1764,7 @@ correlation, and check loss at the target level \(p\). Forecast accuracy is
 evaluated only on outcomes not used for fitting, under common forecast origins
 and leads for every model. The reported tables show fit recovery and
 forecast scoring; runtime, row-completion, and source-identity diagnostics are
-retained in the archived validation record.
+retained in the validation record.
 
 For single-level quantile fits, the primary proper score is check loss at the
 fitted level. Quantile MAE and quantile RMSE compare the fitted or forecast
@@ -1781,11 +1781,11 @@ quantile level, the tables report deterministic criterion values for that
 source design rather than Monte Carlo means over repeated data sets. Any
 boldface or ranking in the displayed MCMC tables is interpreted within a fixed
 family, quantile level, fit-window, model family, and metric. The displayed
-Q--DESN values form a case-specific, metric-wise candidate envelope: each
-entry is the best finite value observed for that model, family, quantile level,
-and metric. Consequently, entries within one model row may originate from
-different candidate specifications or replicate seeds. The contributing
-candidate, diagnostic signoff, and source identifier for every displayed entry
+Q--DESN values form a case-specific, metric-level summary: each entry is the
+best finite value observed for that model, family, quantile level, and metric.
+Consequently, entries within one model row may originate from different
+candidate specifications or replicate seeds. The contributing
+candidate specification, diagnostic status, and source identifier for every displayed entry
 are retained in the reproducibility record.
 
 \subsection{Single-Quantile Fit and Forecast Results}
@@ -1796,7 +1796,7 @@ The verified protocol uses the 500-observation training window
 with leads 1--30 and origin stride 30, and the three target levels
 \(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-normal}--%
 \ref{tab:simulation-500obs-mcmc-gausmix} report the selected MCMC
-family-specific metric envelopes. The entries are generated from lead-level
+family-specific metric summaries. The entries are generated from lead-level
 rolling-origin interface rows: fit RMSE measures recovery of the known oracle
 quantile path on the training window, forecast MAE measures oracle-quantile
 forecast error averaged across scored rolling-origin lead-target pairs, and
@@ -1805,8 +1805,8 @@ Runtime and metric-level reproducibility information are retained separately.
 Boldface marks the lowest displayed MCMC value within each quantile level and
 metric, not a global ranking across different statistical criteria. Diagnostic
 status is disclosed rather than used as a hard metric-exclusion rule: daggers
-mark rows with a contributing WARN source, and double daggers mark rows with a
-contributing FAIL source.
+mark rows with a warning in the supporting diagnostic record, and double
+daggers mark rows with a failed diagnostic check.
 
 All displayed Q--DESN and exQ--DESN values were recomputed after restricting
 feature scaling and every other learned preprocessing quantity to observations
@@ -1874,16 +1874,16 @@ criterion. Each cell prints the absolute criterion value, while shading gives
 its ratio to the lowest value among the four models for that family, quantile
 level, and criterion. Outlined cells are the within-comparison minima; darker
 cells indicate larger multiplicative departures. Plus signs and crosses mark
-values whose contributing metric source has a WARN or FAIL signoff,
-respectively. Because the displayed record is a metric-wise candidate
-envelope, cells need not originate from a common specification or replicate
-seed. All criteria are lower-is-better. Forecast criteria use the held-out
-window of length 1000 with leads 1--30 and origin stride 30.}
+values whose supporting diagnostic record contains a warning or failed
+diagnostic check, respectively. Because the displayed record is a
+metric-specific summary, cells need not originate from a common specification
+or replicate seed. All criteria are lower-is-better. Forecast criteria use the
+held-out window of length 1000 with leads 1--30 and origin stride 30.}
 \label{fig:independent-simulation-mcmc-metric-envelope}
 \end{figure}
 
-\noindent\textbf{Displayed evidence boundary.}
-The result tables are derived from the archived validation evidence without
+\noindent\textbf{Displayed validation comparison.}
+The result tables are derived from the validation records without
 altering the underlying source tables. The reproducibility record stores the
 source identities, table-generation hashes, row counts, compact replacements,
 and remaining diagnostic qualifications. The displayed MCMC tables should
@@ -1915,7 +1915,7 @@ from its corresponding variational fit and retains the scenario-specific
 specification fixed before sampling. All comparisons concern posterior
 quantile-grid paths; they do not validate a scalar predictive density formed
 by multiplying or mixing the component working likelihoods.
-The updated evidence set preserves all 16 AL rows. For the 16 exAL rows, it
+The updated validation table preserves all 16 AL rows. For the 16 exAL rows, it
 uses the prospectively selected exact-M0 evidence in 11 scenario--model
 comparisons whose reported quantile functionals satisfy the stability
 criterion and retains five previously verified rows where that functional is
@@ -1928,7 +1928,7 @@ The selected regression is fit across
 \[
 \tau\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}.
 \]
-The balanced confirmation grid uses eight synthetic data-generating mechanisms,
+The balanced MCMC comparison grid uses eight synthetic data-generating mechanisms,
 a pre-specified feature design, and a 500-observation fit window. The three bridge
 mechanisms use Gaussian, Laplace, and Gaussian-mixture innovations. The five
 stress mechanisms introduce asymmetric tails, persistent heavy tails,
@@ -1952,7 +1952,7 @@ nonlinear, and normal mechanisms. Independent QDESN RHS is lowest in the
 asymmetric-tail, regime-shift, and Student-\(t\) location-scale mechanisms,
 while Independent exQDESN RHS is lowest in the Gaussian-mixture and
 persistent-heavy-tail mechanisms. Joint exQDESN RHS is not the forecast-MAE
-minimum in this evidence set. These numerical lowest-scoring methods are
+minimum in this validation comparison. These numerical lowest-scoring methods are
 descriptive because complete best-versus-runner-up Monte Carlo error is unavailable whenever a
 retained historical row is involved.
 
@@ -1975,7 +1975,7 @@ replicated AL--exAL contrasts.
 \section{Application: GloFAS Retrospective Streamflow Quantile Forecasting}
 \label{sec:data}
 
-\noindent\textbf{Reference case.}
+\noindent\textbf{Retrospective case study.}
 The empirical application considers a medium-range retrospective streamflow
 quantile-forecasting case using the Global Flood Awareness System (GloFAS) and
 a reference gauge record. GloFAS is a global hydrological forecast and monitoring system
@@ -2005,10 +2005,10 @@ origin \(T\) for horizon \(h=1,\ldots,H\). The values
 held out during prediction and used only later for validation.
 
 \noindent\textbf{Retrospective information set.}
-The reported reference run uses the forecast origin
+The reported analysis uses the forecast origin
 \GlofasApplicationCurrentOriginDate{} and scores seven fitted quantile levels
 over \GlofasApplicationCurrentScoredHorizons{} issued target dates. The
-application is therefore an audited retrospective reference case rather than a
+application is therefore an audited single-origin retrospective case rather than a
 basin-wide, multi-origin, or deployable operational evaluation. Its response
 values are held out for scoring, but the selected covariate policy includes
 realized-history and blended Global Ensemble Forecast System (GEFS) forecast
@@ -2086,7 +2086,7 @@ g_{T+h,m}^{\mathrm{ens}}\mid q^{\mathrm{glo}}_{p_0,T+h},\sigma_{\mathrm{glo}},\g
 \quad h=1,\ldots,H,\quad m=1,\ldots,M.
 \end{align*}
 This display gives the general exAL form. The AL specialization used by the
-selected reference-case run omits \(s\)-latent variables and \(\gamma\) blocks,
+selected AL analysis omits \(s\)-latent variables and \(\gamma\) blocks,
 and replaces the exAL constants by the corresponding AL constants at the fitted
 level.
 The issued ensemble members enter through a working likelihood that treats
@@ -2102,13 +2102,13 @@ the default application model shares \(\sigma_{\mathrm{glo}}\) and
 rows; under the AL specialization, only the corresponding
 \(\sigma_{\mathrm{glo}}\) block is shared.
 
-For this reference-case analysis, the seven fitted quantile levels are
+For this retrospective analysis, the seven fitted quantile levels are
 \(0.05\), \(0.15\), \(0.35\), \(0.50\), \(0.65\), \(0.80\), and \(0.95\).
 They are fitted independently with the AL special case and the VB approximation.
 This choice is deliberate: the streamflow application is intended as a fast
-retrospective quantile-regression workflow, so the reported run uses Q--DESN under AL rather than
+retrospective quantile-regression analysis, so the reported run uses Q--DESN under AL rather than
 exQDESN under exAL. This application therefore uses the independent-fit and
-monotone-reporting workflow, not the joint quantile-vector regression of
+monotone-rearrangement analysis, not the joint quantile-vector regression of
 Section~\ref{subsec:joint-qdesn}. The variational quantile summaries are then
 passed through the monotone rearrangement. The selected
 reported output uses the following reporting convention:
@@ -2144,9 +2144,9 @@ The two coefficient blocks use separate regularized-horseshoe global scales,
 \(\tau_{0,\mathrm{disc}}=\GlofasApplicationCurrentDiscrepancyRhsTau{}\),
 respectively. A configuration snapshot and selection record document the data
 version, preprocessing choices, selected files, and fitted specification for
-this reference run.
+this retrospective analysis.
 
-\subsection{Reference Application Results}
+\subsection{Retrospective Application Results}
 
 The selected fit was audited over
 \GlofasApplicationCurrentObservedHistoryDates{} observed dates through the
@@ -2161,7 +2161,7 @@ sensitivity analysis.
 
 \noindent\textbf{Forecast-window scores.}
 Table~\ref{tab:glofas-application-score} reports the forecast scores for the
-reported retrospective reference run. Relative to raw GloFAS, Q--DESN reduces
+reported retrospective analysis. Relative to raw GloFAS, Q--DESN reduces
 the mean check loss from \(\GlofasApplicationCurrentRawCheckLoss{}\) to
 \(\GlofasApplicationCurrentQdesnCheckLoss{}\), the interval score from
 \(\GlofasApplicationCurrentRawIntervalScore{}\) to
@@ -2172,12 +2172,12 @@ increases from \(\GlofasApplicationCurrentRawMeanCoverage{}\) to
 \(\GlofasApplicationCurrentQdesnMeanCoverage{}\), but the Q--DESN value remains
 far below the nominal 90\% level. These summaries describe one audited
 forecast origin under a blended retrospective information set and should be
-read as a reference-case score improvement, not as multi-origin operational
+read as a single-origin score improvement, not as multi-origin operational
 validation or evidence of calibrated predictive intervals.
 
 \begin{table}[!htbp]
 \centering
-\caption{Forecast scoring for the GloFAS retrospective reference case.
+\caption{Forecast scoring for the GloFAS retrospective analysis.
 Scores are computed on the transformed streamflow scale for the
 forecast origin \GlofasApplicationCurrentOriginDate{}. Lower check loss,
 interval score, and \(\aCRPS\) are better; \(\aCRPS\) is the finite-grid
@@ -2193,7 +2193,7 @@ reduction in mean check loss.}
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentCorrectedPathsFigure}
 \caption{Discrepancy-corrected Q--DESN quantile paths for the GloFAS
-retrospective reference case. The figure shows the final 60 observed dates through the
+retrospective analysis. The figure shows the final 60 observed dates through the
 forecast origin (vertical dashed line) and the subsequent 28-day issued
 forecast window. Black denotes observed USGS streamflow before the origin,
 red denotes the held-out USGS measurements, and orange denotes retrospective
@@ -2205,7 +2205,7 @@ is the dashed gray path.}
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
-\caption{Synthesized Q--DESN quantile bands for the GloFAS retrospective reference case over
+\caption{Synthesized Q--DESN quantile bands for the GloFAS retrospective analysis over
 the final 60 observed dates and the subsequent 28-day forecast window. The
 nested blue bands are the 90\%, 65\%, and 30\% quantile intervals, and the blue
 path is the median. The vertical dashed line marks the forecast origin. Black
@@ -2217,17 +2217,16 @@ post-origin targets in Table~\ref{tab:glofas-application-score}.}
 \end{figure}
 
 Reproducibility checks confirm the data extraction, selected files, score table,
-and VB convergence record used for this reference case. The VB fits required
+and VB convergence record used for this retrospective analysis. The VB fits required
 \GlofasApplicationCurrentVbIterations{} iterations. Future model specifications
-can replace this reference case through the same selection
-record and output aliases, without changing the application model
-statement.
+can replace this fit through the same documented selection record without
+changing the application model statement.
 
-\section{Application: PriceFM Retrospective Electricity-Price Replay}
+\section{Application: PriceFM Retrospective Electricity-Price Comparison}
 \label{sec:pricefm-application}
 
-\noindent\textbf{Replay target.}
-As a second empirical case, we consider a retrospective replay of
+\noindent\textbf{Benchmark target.}
+As a second empirical case, we consider a retrospective comparison of
 probabilistic day-ahead electricity-price forecasts using version~4 of the
 PriceFM benchmark
 \citep{YuEtAl2026PriceFM}. The current benchmark release spans 1~January~2022
@@ -2238,7 +2237,7 @@ The released data cover European bidding regions at 15-minute resolution and
 include day-ahead price, load, solar, and wind forecasts. PriceFM itself is a
 graph-informed foundation model: it uses region-level exogenous information
 and a sparse graph mask derived from the European transmission topology. Our
-reported comparison is a 114-region--fold replay against fold-aligned PriceFM
+reported comparison is a 114 region--fold comparison against fold-aligned PriceFM
 predictions, not a deployable operational forecast exercise or a claim about
 the full paper-wide PriceFM evaluation.
 
@@ -2262,12 +2261,12 @@ PriceFM predictions. Across the benchmark, \PricefmFullTargetOnlyRows{}
 selected region/fold evaluations use own-region predictors and
 \PricefmFullGraphRows{} selected region/fold evaluations use graph-derived
 PriceFM neighborhood summaries. Both input policies use retrospectively
-observed target-region load, solar, and wind lead covariates in the replay;
+observed target-region load, solar, and wind lead covariates in the comparison;
 graph-derived rows add retrospectively observed neighboring-region lead
 summaries. The score comparison is therefore
 retrospective and fold-aligned, not an origin-available operational comparison.
 The benchmark is interpreted as an application of the selected Q--DESN
-quantile-regression workflow recorded by the analysis records. It is not used as
+quantile-regression analysis recorded by the validation records. It is not used as
 evidence for the joint quantile-vector RHS prior unless a future PriceFM run
 explicitly fits and selects that joint regression under the same fold-aligned
 protocol.
@@ -2281,7 +2280,7 @@ region-specific fits.
 
 \subsection{Full-Surface Results}
 
-\noindent\textbf{Aggregate replay.}
+\noindent\textbf{Aggregate comparison.}
 Across the aligned benchmark, Q--DESN has lower AQL in
 \PricefmFullQdesnWins{} of \PricefmFullRegionFolds{} region/fold evaluations
 (\PricefmFullQdesnWinRate{}), \PricefmFullQdesnClose{} evaluations are
@@ -2293,12 +2292,12 @@ AQL in \PricefmFullPricefmWins{} evaluations. The mean Q--DESN AQL is
 \PricefmFullMedianDeltaAql{}. The aggregate difference is therefore modest
 rather than uniform. The fold-level supplementary summary shows that the mean
 \(\Delta\) AQL is most negative in fold 2, modestly negative in fold 1, and
-essentially neutral in fold 3. On the same 114-comparison replay surface, the
+essentially neutral in fold 3. On the same 114-comparison panel, the
 region--fold macro mean AQCR is \PricefmAlignedQdesnAqcr{} for Q--DESN and
 \PricefmAlignedPricefmAqcr{} for the released PriceFM checkpoint. Mean MAE is
 \PricefmAlignedQdesnMae{} versus \PricefmAlignedPricefmMae{}, and mean RMSE is
 \PricefmAlignedQdesnRmse{} versus \PricefmAlignedPricefmRmse{}, respectively.
-Thus Q--DESN reduces replayed AQL, MAE, and RMSE by approximately
+Thus Q--DESN reduces aligned AQL, MAE, and RMSE by approximately
 \PricefmAlignedAqlReduction{}, \PricefmAlignedMaeReduction{}, and
 \PricefmAlignedRmseReduction{}, while retaining a nonzero quantile-crossing
 rate.
@@ -2306,26 +2305,26 @@ rate.
 \begin{table}[!htbp]
 \centering
 \caption{PriceFM-aligned retrospective model comparison. The first panel reports direct
-region--fold macro means from the common 38-region, three-fold replay; boldface marks
+region--fold macro means from the common 38-region, three-fold comparison; boldface marks
 the better of those two directly aligned rows. The second panel reproduces the
 full-shot values in Table~II of PriceFM version~4
 \citep{YuEtAl2026PriceFM}. The paper-reported panel uses a distinct fitted-model
 and aggregation pipeline and is therefore contextual rather than a
-head-to-head ranking against the replay panel. AQL, MAE, and RMSE are in
+head-to-head ranking against the aligned comparison panel. AQL, MAE, and RMSE are in
 EUR/MWh; AQCR is in percent. Rank is reproduced only for the paper-reported
 panel; dashes indicate that no cross-panel rank is assigned. Lower is better.
-The replay uses retrospectively observed target covariate leads in all
+The comparison uses retrospectively observed target covariate leads in all
 selected rows and additional retrospectively observed neighboring-region leads
 in graph-derived rows.}
 \label{tab:pricefm-paper-aligned-main-comparison}
 \input{\PricefmPaperAlignedMainComparisonTable}
 \end{table}
 
-The directly replayed checkpoint is the appropriate distribution-level
+The directly aligned checkpoint is the appropriate distribution-level
 comparator because its predictions are aligned row by row with the Q--DESN
 predictions. Its AQL differs from the PriceFM paper's optimized full-shot AQL,
 so the two PriceFM rows are deliberately not conflated. Numerically, the
-Q--DESN replay AQL lies within the range reported for the graph baselines in
+aligned Q--DESN AQL lies within the range reported for the graph baselines in
 PriceFM Table~II, but differences in fitted objects and aggregation preclude a
 cross-panel rank claim. The fold-level win, tie, and loss summary from the
 previous main-text table is retained as a supplementary diagnostic.
@@ -2350,10 +2349,10 @@ horizon-block scores.
 
 \noindent\textbf{Remaining gaps.}
 The resulting evidence supports a conservative interpretation. In this
-retrospective replay, Q--DESN is a competitive fixed-reservoir quantile-regression baseline
+retrospective comparison, Q--DESN is a competitive fixed-reservoir quantile-regression baseline
 against fold-aligned PriceFM predictions on the aligned benchmark panel, with
 lower mean and median AQL and lower region--fold macro MAE and RMSE in aggregate. This
-descriptive advantage is relative to the released checkpoint replay, not to the
+descriptive advantage is relative to the released checkpoint comparison, not to the
 separately reported optimized full-shot PriceFM result, and it is not
 accompanied here by a paired uncertainty interval.
 It is not uniformly lower than PriceFM: fold 3 is nearly tied on average, and
@@ -2377,7 +2376,7 @@ Bayesian quantile inference on the regression coefficients. This separation is u
 computationally: posterior simulation and VB update only the coefficients,
 likelihood, and shrinkage parameters, while the recurrent weights, reducers,
 scaling constants, and washout convention remain fixed. The empirical results
-therefore evaluate a conditional Bayesian quantile-regression workflow. They should not be
+therefore evaluate a conditional Bayesian quantile-regression analysis. They should not be
 interpreted as posterior averaging over reservoir architectures or as a fully
 Bayesian treatment of recurrent network uncertainty.
 
@@ -2412,8 +2411,8 @@ known conditional quantile paths. The GloFAS application is an audited
 one-origin retrospective streamflow quantile-forecasting case using computationally light
 independent Q--DESN AL--VB fits, blended future weather covariates, monotone
 reporting, and an undercovered nominal 90\% interval. The PriceFM comparison is
-a retrospective fold-aligned replay against stored benchmark predictions with
-retrospectively observed lead covariates. These studies support the reported workflows
+a retrospective fold-aligned comparison against stored benchmark predictions with
+retrospectively observed lead covariates. These studies support the reported analyses
 under their own protocols, not a universal ranking of Q--DESN over all dynamic
 quantile or foundation-model alternatives.
 
@@ -2430,7 +2429,7 @@ quantile-vector prior can be interpreted as application-level evidence rather
 than a synthetic validation result.
 
 Within these boundaries, the article establishes Q--DESN as a reproducible
-fixed-feature Bayesian quantile-regression workflow whose inference, monotone
+fixed-feature Bayesian quantile-regression analysis whose inference, monotone
 reporting, diagnostics, and empirical validation are tied to explicit
 protocols.
 

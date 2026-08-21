@@ -190,7 +190,7 @@ if (grepl("QDESN ridge|exQDESN ridge|VB--LD|Final TT500", table_text) ||
     !grepl("Q--DESN AL--RHS", table_text, fixed = TRUE) ||
     !grepl("Q--DESN exAL--RHS", table_text, fixed = TRUE) ||
     !grepl("Forecast check loss", table_text, fixed = TRUE) ||
-    !grepl("predeclared repeated-chain aggregate", table_text, fixed = TRUE)) {
+    !grepl("pre-specified repeated-chain aggregate", table_text, fixed = TRUE)) {
   stop("Generated tables contain a stale label or omit a required label.", call. = FALSE)
 }
 

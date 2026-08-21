@@ -483,7 +483,7 @@ app_joint_qdesn_run_phase126_article_assets <- function(
       gate_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"),
       "Validation gates for the Phase 125 balanced MCMC evidence packet used to build the article-facing joint QDESN tables.",
-      "tab:joint-qdesn-article-validation-mcmc-balanced-gate-summary",
+      "tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.24\\textwidth}l>{\\raggedright\\arraybackslash}p{0.58\\textwidth}@{}",
       size = "\\scriptsize",
       resize = TRUE

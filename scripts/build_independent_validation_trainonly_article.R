@@ -364,7 +364,7 @@ table_rows <- function(inference_value, family) {
 
 write_family_table <- function(family, path) {
   lines <- c(
-    "% Generated from the corrected independent-validation handoff.",
+    "% Generated from the corrected independent-validation record.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -402,7 +402,7 @@ write_family_table <- function(family, path) {
 
 write_mcmc_table <- function(family, path) {
   lines <- c(
-    "% Generated from the corrected independent-validation handoff.",
+    "% Generated from the corrected independent-validation record.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -419,8 +419,8 @@ write_mcmc_table <- function(family, path) {
     sprintf(
       paste0(
         "\\caption{MCMC single-quantile fit-and-forecast comparison for the %s simulation family. ",
-        "The Q--DESN entries form a fixed case-specific metric envelope and can therefore draw different ",
-        "criteria from different calibrated fits. A confirmed criterion may instead use its predeclared ",
+        "The Q--DESN entries form a fixed case-specific metric-wise summary and can therefore draw different ",
+        "criteria from different calibrated fits. A confirmed criterion may instead use its pre-specified ",
         "repeated-chain aggregate, as identified in the metric-level record. Q--DESN preprocessing is ",
         "estimated only from the training ",
         "window. Forecast criteria average rolling-origin lead-target pairs over a held-out window of length ",
@@ -459,7 +459,7 @@ for (family in names(family_paths)) {
 
 protocol_path <- resolve_article(outputs$protocol_tex)
 writeLines(c(
-  "% Generated from the corrected independent-validation handoff.",
+  "% Generated from the corrected independent-validation record.",
   "\\begin{table}[!htbp]",
   "\\centering",
   "\\small",
@@ -498,7 +498,7 @@ writeLines(c(
 
 combined_path <- resolve_article(outputs$combined_tex)
 combined <- c(
-  "% Generated from the corrected independent-validation handoff.",
+  "% Generated from the corrected independent-validation record.",
   "\\begingroup",
   "\\scriptsize",
   "\\setlength{\\tabcolsep}{2.0pt}",
@@ -683,7 +683,7 @@ artifact_paths <- c(
 artifact_hashes <- tools::sha256sum(artifact_paths)
 relative_article <- function(path) substring(normalizePath(path, winslash = "/"), nchar(repo_root) + 2L)
 manifest_lines <- c(
-  "Independent single-quantile corrected article handoff",
+  "Independent single-quantile corrected article record",
   sprintf("promotion_id: %s", config$promotion_id),
   sprintf("promotion_status: %s", config$promotion_status),
   sprintf("scientific_decision: %s", config$scientific_decision),
@@ -733,7 +733,7 @@ writeLines(c(
   sprintf("source_manifest_sha256: %s", sha256(source_manifest_path)),
   sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
-  "selection_policy: fixed case-specific metric envelope; diagnostic status retained but not excluded",
+  "selection_policy: fixed case-specific metric-wise summary; diagnostic status retained but not excluded",
   "qdesn_preprocessing_scope: train_only",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),

@@ -524,6 +524,83 @@ stopifnot(all(nzchar(focused_manifest$warm_start_source_fit_object[
   focused_manifest$warm_start_policy == "auto"
 ])))
 
+structural_definition <- app_read_yaml(app_path(
+  "application/config/glofas_p50_structural_memory_geometry_20260821.yaml"
+))
+structural_anchor_fixture <- list(
+  candidate_id = "block_alpha_refinement_019_b1b26b2d8e",
+  ranking_path = "/tmp/structural_ranking.csv",
+  config_path = "/tmp/structural_anchor_config.yaml",
+  fit_object_path = "/tmp/structural_anchor_fit.rds"
+)
+structural_space <- app_glofas_median_structural_space(
+  structural_definition,
+  anchor = structural_anchor_fixture
+)
+structural_manifest <- app_glofas_median_screen_candidate_manifest(structural_space)
+structural_manifest_again <- app_glofas_median_screen_candidate_manifest(structural_space)
+stopifnot(nrow(structural_manifest) == 48L)
+stopifnot(identical(structural_manifest$candidate_id, structural_manifest_again$candidate_id))
+stopifnot(!anyDuplicated(structural_manifest$candidate_id))
+stopifnot(!anyDuplicated(structural_manifest$candidate_label))
+stopifnot(sum(structural_manifest$warm_start_policy == "cold") == 1L)
+stopifnot(sum(structural_manifest$warm_start_policy == "auto") == 47L)
+stopifnot(all(is.na(structural_manifest$warm_start_source_fit_object[
+  structural_manifest$warm_start_policy == "cold"
+])))
+stopifnot(all(nzchar(structural_manifest$warm_start_source_fit_object[
+  structural_manifest$warm_start_policy == "auto"
+])))
+structural_role_expected <- c(
+  structural_repeatability_control = 2L,
+  symmetric_memory_direct_profile = 13L,
+  symmetric_architecture_profile = 14L,
+  architecture_memory_interaction = 6L,
+  block_specific_architecture_profile = 6L,
+  block_specific_memory_profile = 7L
+)
+structural_role_observed <- table(structural_manifest$candidate_role)
+stopifnot(identical(
+  as.integer(structural_role_observed[names(structural_role_expected)]),
+  unname(structural_role_expected)
+))
+stopifnot(as.integer(structural_space$fixed$inference$max_iter) == 150L)
+stopifnot(as.integer(structural_space$fixed$inference$max_iter_hard_cap) == 150L)
+stopifnot(as.integer(structural_space$scheduler$max_parallel) == 20L)
+stopifnot(!any(app_as_bool_vec(structural_manifest$require_linked_desn)))
+stopifnot(max(as.integer(structural_manifest$reference.D)) == 8L)
+stopifnot(max(as.integer(structural_manifest$reference.n)) == 500L)
+stopifnot(max(as.integer(structural_manifest$reference.m)) == 1080L)
+stopifnot(all(
+  as.integer(structural_manifest$reference.reservoir_output_lag_max) ==
+    as.integer(structural_manifest$reference.m)
+))
+stopifnot(all(
+  as.integer(structural_manifest$discrepancy.reservoir_covariate_lag_max) ==
+    as.integer(structural_manifest$discrepancy.m)
+))
+for (block in c("reference", "discrepancy")) {
+  D <- as.integer(structural_manifest[[paste0(block, ".D")]])
+  n <- as.integer(structural_manifest[[paste0(block, ".n")]])
+  n_tilde <- as.integer(structural_manifest[[paste0(block, ".n_tilde")]])
+  stopifnot(all(is.na(n_tilde[D == 1L])))
+  stopifnot(all(n_tilde[D > 1L] == n[D > 1L]))
+}
+structural_anchor_rows <- structural_manifest$candidate_role == "structural_repeatability_control"
+stopifnot(all(structural_manifest$reference.alpha[structural_anchor_rows] == 0.10))
+stopifnot(all(structural_manifest$discrepancy.alpha[structural_anchor_rows] == 0.075))
+stopifnot(all(structural_manifest$reference.rhs_tau0[structural_anchor_rows] == 0.10))
+stopifnot(all(structural_manifest$discrepancy.rhs_tau0[structural_anchor_rows] == 1e-4))
+asymmetric_row <- structural_manifest[
+  structural_manifest$candidate_label == "ref_d1n350_disc_d2n200",
+  , drop = FALSE
+]
+stopifnot(nrow(asymmetric_row) == 1L)
+stopifnot(as.integer(asymmetric_row$reference.D) == 1L)
+stopifnot(as.integer(asymmetric_row$reference.n) == 350L)
+stopifnot(as.integer(asymmetric_row$discrepancy.D) == 2L)
+stopifnot(as.integer(asymmetric_row$discrepancy.n) == 200L)
+
 cleanup_existing <- data.frame(
   candidate_id = c("a", "b"),
   path = c("/tmp/a.rds", "/tmp/b.rds"),

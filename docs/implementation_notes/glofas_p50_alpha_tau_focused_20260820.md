@@ -139,3 +139,28 @@ After completion:
 
 This campaign does not modify PriceFM, validation, joint-QDESN, package-engine,
 main, or Overleaf branches.
+
+## Completed closeout
+
+The campaign completed on 2026-08-21 with 20/20 terminal candidates: 18 were
+fit and scored, two were rejected by the prospective reservoir preflight, and
+none failed operationally. All 18 fits reached the VB stopping rule in 97--129
+iterations under the 150-iteration cap. The rejected linked `alpha=.0625`
+candidates had relative effective-rank diagnostics below the accepted range;
+they were not silently compared as valid reservoirs.
+
+Rank 1 was `block_alpha_refinement_019_b1b26b2d8e`, with reference leak `.10`,
+discrepancy leak `.075`, reference `tau0=.1`, and discrepancy `tau0=1e-4`. Its
+forecast p50 check loss was `0.7941855821`, a `0.581%` gain over FR09, while
+the all-history observed log1p MAE was `0.0620357637`. All observed-fit hard
+guards passed, but no candidate reached the prospectively frozen 3% forecast
+gate. Consequently no full7 run or article promotion was authorized.
+
+The complete-batch evidence is retained under the ignored runtime root. The
+frozen ranking SHA-256 is
+`b7ab9df4ae8351df3fbc2338fb974122ab2239d0fa96c4870c98a93444eebf70`.
+Post-completion cleanup removed 34 nonprotected heavy objects (20.99 GiB) and
+kept the rank-1 fit and design as the next campaign's hash-pinned source.
+
+The next experiment is the structural memory/geometry campaign documented in
+`docs/implementation_notes/glofas_p50_structural_memory_geometry_20260821.md`.

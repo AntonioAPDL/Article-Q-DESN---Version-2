@@ -2781,14 +2781,14 @@ app_joint_exqdesn_phase174_relabel_generated_file <- function(path, source_line 
   )
   lines <- gsub(
     "% Source: frozen Phase 154 balanced MCMC evidence.",
-    source_line %||% "% Source: frozen Phase174 balanced MCMC evidence.",
+    source_line %||% "% Source: archived Phase174 balanced MCMC evidence.",
     lines, fixed = TRUE
   )
   lines <- gsub(
     "All scores use the monotone quantile-grid contract; raw crossings are retained only as pre-contract diagnostics.",
     paste(
-      "All scores use the monotone quantile-grid contract; raw crossings are retained only as pre-contract diagnostics.",
-      "Updated exAL rows are used only when quantile-path stability gates pass; otherwise the previously verified MCMC result is retained."
+      "All scores use the monotone quantile-grid reporting rule; raw crossings are retained only as pre-rearrangement diagnostics.",
+      "Updated exAL rows are used only when quantile-path stability criteria pass; otherwise the previously verified MCMC result is retained."
     ),
     lines, fixed = TRUE
   )
@@ -2858,21 +2858,21 @@ app_joint_exqdesn_phase174_stage_assets <- function(
   winner_table <- app_joint_qdesn_phase155_winner_table(winners)
   replication_table <- app_joint_qdesn_phase155_replication_table(phase153_contrasts)
   protocol <- data.frame(
-    Item = c("Evidence layers", "Synthetic mechanisms", "Model comparison", "Quantile grid", "Fit window", "Forecast protocol", "MCMC effort", "Predictive contract", "Replicated robustness evidence"),
+    Item = c("Evidence layers", "Synthetic mechanisms", "Model comparison", "Quantile grid", "Fit window", "Forecast protocol", "MCMC effort", "Reported quantile-grid action", "Replicated robustness evidence"),
     Value = c(
-      "Scenario-specific VB and structured-VB initialization followed by MCMC confirmation for article-facing quantile-grid summaries.",
+      "Scenario-specific VB and structured-VB initialization followed by MCMC confirmation for reported quantile-grid summaries.",
       "Eight mechanisms: three bridge cases and five stress cases with known conditional quantile paths.",
-      "Joint and independent readouts under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior.",
+      "Joint and independent quantile regressions under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior.",
       "0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95.",
-      "500 observations after the declared DESN washout.",
+      "500 observations after the pre-specified DESN washout.",
       "No-refit held-out forecasts at origins separated by 30 observations, scored at leads 1-30.",
-      "The preserved AL rows retain their frozen article-grade effort. Functionally qualified exAL updates use eight chains with 24,000 iterations and 5,000 retained draws per chain; held exAL cells retain their verified historical effort.",
-      "Scores validate posterior quantile-grid summaries after the declared monotone rule; raw crossings remain diagnostics.",
-      sprintf("The replicated robustness layer contains %d fresh-fixture VB fits and is retained unchanged.", phase153_assessment$completed_candidates[[1L]])
+      "The preserved AL rows retain their archived article-grade effort. Functionally qualified exAL updates use eight chains with 24,000 iterations and 5,000 retained draws per chain; held exAL comparisons retain their verified historical effort.",
+      "Scores validate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics.",
+      sprintf("The replicated robustness layer contains %d independent data-generating realizations and is retained unchanged.", phase153_assessment$completed_candidates[[1L]])
     ), stringsAsFactors = FALSE
   )
   gates <- data.frame(
-    gate = c("phase174_manifest", "balanced_grid", "unchanged_al_rows", "qualified_exal_source", "finite_scores", "provided_initialization", "contract_crossings", "raw_crossings", "article_staging"),
+    gate = c("phase174_manifest", "balanced_grid", "unchanged_al_rows", "qualified_exal_source", "finite_scores", "provided_initialization", "post_rearrangement_crossings", "raw_crossings", "reported_assets"),
     status = c(
       "pass", "pass", "pass", "pass", "pass", "pass", "pass",
       if (sum(case_summary$mcmc_forecast_raw_crossing_pairs) > 0L) "review" else "pass",
@@ -2880,28 +2880,28 @@ app_joint_exqdesn_phase174_stage_assets <- function(
     ),
     detail = c(
       sprintf("%d/%d Phase174 artifact hashes verify.", sum(packet_verification$status == "pass"), nrow(packet_verification)),
-      "All 32 scenario-model cells are present exactly once.",
-      "All 16 AL rows are value-identical to the current frozen article packet.",
+      "All 32 scenario-model comparisons are present exactly once.",
+      "All 16 AL rows are value-identical to the current archived evidence set.",
       sprintf(
-        "%d exAL rows use functionally qualified Phase173 M0 evidence; %d held cells retain verified historical exAL evidence.",
+        "%d exAL rows use functionally qualified Phase173 M0 evidence; %d held comparisons retain verified historical exAL evidence.",
         sum(case_summary$source_block_id == "phase173_m0_exal"),
         sum(case_summary$source_model_id %in% app_joint_exqdesn_phase174_exal_model_ids() & case_summary$source_block_id != "phase173_m0_exal")
       ),
-      "All article-facing fit and forecast scores are finite.",
+      "All reported fit and forecast scores are finite.",
       "Every MCMC row records provided variational initialization.",
-      sprintf("Contract crossings=%d.", sum(case_summary$mcmc_fit_contract_crossing_pairs + case_summary$mcmc_forecast_contract_crossing_pairs)),
-      sprintf("Raw forecast crossings=%d and remain pre-contract diagnostics.", sum(case_summary$mcmc_forecast_raw_crossing_pairs)),
-      "Assets are staged outside tracked tables and require explicit Phase175 approval."
+      sprintf("Crossings after the monotone rearrangement=%d.", sum(case_summary$mcmc_fit_contract_crossing_pairs + case_summary$mcmc_forecast_contract_crossing_pairs)),
+      sprintf("Raw forecast crossings=%d and remain pre-rearrangement diagnostics.", sum(case_summary$mcmc_forecast_raw_crossing_pairs)),
+      "Generated assets are archived outside tracked tables and require explicit approval before replacement."
     ), stringsAsFactors = FALSE
   )
   claim_audit <- data.frame(
     claim_id = c("balanced_grid", "al_unchanged", "exal_qualified_source", "quantile_grid_contract", "scalar_density_scope", "winner_precision"),
     status = c("pass", "pass", "pass", "pass", "pass", if (any(winner_mc$interpretation != "resolved_at_available_mc_precision")) "review" else "pass"),
     evidence = c(
-      "Eight scenarios and four model rows form 32 complete cells.",
+      "Eight scenarios and four model rows form 32 complete comparisons.",
       "The 16 AL cells were preserved without value changes.",
       "Each exAL row traces either to functionally qualified Phase173 M0 evidence or to the verified historical fallback declared by Phase173B.",
-      "All scores use monotone contract quantiles; raw crossings are separate diagnostics.",
+      "All scores use the monotone reporting rule; raw crossings are separate diagnostics.",
       "No scalar posterior predictive density claim is introduced.",
       "Numerical winners are recomputed; near ties are retained in the Monte Carlo error audit."
     ), stringsAsFactors = FALSE
@@ -2916,20 +2916,20 @@ app_joint_exqdesn_phase174_stage_assets <- function(
   app_ensure_dir(tables_dir)
   table_paths <- c(
     protocol_csv = app_joint_qdesn_phase155_write_csv(protocol, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_protocol.csv")),
-    protocol_tex = app_joint_qdesn_phase155_write_latex_table(protocol, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_protocol.tex"), "Protocol for the balanced joint multi-quantile validation. Variational methods initialize the chains, while MCMC supplies the article-facing quantile-grid summaries.", "tab:joint-qdesn-article-validation-mcmc-balanced-protocol", "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}>{\\raggedright\\arraybackslash}p{0.67\\textwidth}@{}", size = "\\small"),
+    protocol_tex = app_joint_qdesn_phase155_write_latex_table(protocol, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_protocol.tex"), "Protocol for the balanced joint multi-quantile validation. Variational methods initialize the chains, while MCMC supplies the reported quantile-grid summaries.", "tab:joint-qdesn-article-validation-mcmc-balanced-protocol", "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}>{\\raggedright\\arraybackslash}p{0.67\\textwidth}@{}", size = "\\small"),
     model_csv = app_joint_qdesn_phase155_write_csv(main_data, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_model_summary.csv")),
     model_tex = app_joint_qdesn_phase155_write_main_table(main_data, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_model_summary.tex")),
     scenario_csv = app_joint_qdesn_phase155_write_csv(case_summary, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_scenario_summary.csv")),
     gate_csv = app_joint_qdesn_phase155_write_csv(gates, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.csv")),
-    gate_tex = app_joint_qdesn_phase155_write_latex_table(setNames(gates, c("Gate", "Status", "Detail")), file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"), "Reproducibility and diagnostic gates for the balanced MCMC confirmation packet.", "tab:joint-qdesn-article-validation-mcmc-balanced-gate-summary", "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}l>{\\raggedright\\arraybackslash}p{0.60\\textwidth}@{}", size = "\\scriptsize", resize = TRUE),
+    gate_tex = app_joint_qdesn_phase155_write_latex_table(setNames(gates, c("Criterion", "Status", "Detail")), file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"), "Reproducibility checks and diagnostic criteria for the balanced MCMC confirmation evidence set.", "tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary", "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}l>{\\raggedright\\arraybackslash}p{0.60\\textwidth}@{}", size = "\\scriptsize", resize = TRUE),
     winner_csv = app_joint_qdesn_phase155_write_csv(winners, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_winner_summary.csv")),
-    winner_tex = app_joint_qdesn_phase155_write_latex_table(winner_table, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_winner_summary.tex"), "Lowest MCMC value within each scenario and metric. Numerical winners are descriptive; unresolved Monte Carlo margins are reported as near ties in the audit.", "tab:joint-qdesn-article-validation-mcmc-balanced-winner-summary", "@{}>{\\raggedright\\arraybackslash}p{0.20\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}@{}", size = "\\scriptsize", resize = TRUE),
+    winner_tex = app_joint_qdesn_phase155_write_latex_table(winner_table, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_winner_summary.tex"), "Lowest MCMC value within each scenario and metric. Numerical lowest-scoring methods are descriptive; unresolved Monte Carlo margins are reported as near ties in the audit.", "tab:joint-qdesn-article-validation-mcmc-balanced-winner-summary", "@{}>{\\raggedright\\arraybackslash}p{0.20\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}@{}", size = "\\scriptsize", resize = TRUE),
     replication_csv = app_joint_qdesn_phase155_write_csv(replication_table, file.path(tables_dir, "joint_qdesn_article_validation_phase153_replication_summary.csv")),
-    replication_tex = app_joint_qdesn_phase155_write_latex_table(replication_table, file.path(tables_dir, "joint_qdesn_article_validation_phase153_replication_summary.tex"), "Replicated VB comparison of AL and exAL forecast quantile-path MAE over 50 fresh fixtures per scenario. Entries are the median paired difference AL minus exAL, with the percentage of replicates favoring AL in parentheses.", "tab:joint-qdesn-article-validation-phase153-replication-summary", "@{}>{\\raggedright\\arraybackslash}p{0.30\\textwidth}rrr@{}", size = "\\scriptsize")
+    replication_tex = app_joint_qdesn_phase155_write_latex_table(replication_table, file.path(tables_dir, "joint_qdesn_article_validation_phase153_replication_summary.tex"), "Replicated VB comparison of AL and exAL forecast quantile-path MAE over 50 independent data-generating realizations per scenario. Entries are the median paired difference AL minus exAL, with the percentage of replicates favoring AL in parentheses.", "tab:joint-qdesn-article-validation-phase153-replication-summary", "@{}>{\\raggedright\\arraybackslash}p{0.30\\textwidth}rrr@{}", size = "\\scriptsize")
   )
   table_paths[["scenario_tex"]] <- app_joint_qdesn_phase155_write_wrapper(table_paths[["model_tex"]], file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_scenario_summary.tex"), "Compatibility alias for the Phase174 scenario-level main table.")
   table_paths[["main_wrapper"]] <- app_joint_qdesn_phase155_write_wrapper(table_paths[["model_tex"]], file.path(tables_dir, "joint_qdesn_article_validation_tables.tex"), "Compact Phase174 balanced MCMC article table.")
-  table_paths[["provenance_wrapper"]] <- app_joint_qdesn_phase155_write_wrapper(table_paths[c("protocol_tex", "gate_tex", "winner_tex", "replication_tex")], file.path(tables_dir, "joint_qdesn_article_validation_provenance_tables.tex"), "Phase174 protocol, diagnostic, metric-winner, and replicated-VB tables.")
+  table_paths[["provenance_wrapper"]] <- app_joint_qdesn_phase155_write_wrapper(table_paths[c("protocol_tex", "gate_tex", "winner_tex", "replication_tex")], file.path(tables_dir, "joint_qdesn_article_validation_provenance_tables.tex"), "Phase174 protocol, diagnostic, metric-specific, and replicated-VB tables.")
   invisible(vapply(table_paths[grepl("\\.tex$", table_paths)], app_joint_exqdesn_phase174_relabel_generated_file, character(1L)))
   asset_manifest <- data.frame(
     label = names(table_paths),

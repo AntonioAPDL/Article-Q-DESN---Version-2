@@ -79,7 +79,7 @@ execution:
 
 scheduler:
   max_parallel: 20
-  cores: [0, 1, 2, 3, 4, 5, 6, 7, 9, 12, 13, 20, 22, 25, 28, 30, 32, 33, 34, 38]
+  cores: [1, 2, 3, 4, 6, 8, 9, 12, 13, 14, 20, 22, 25, 28, 30, 32, 33, 36, 38, 39]
   max_load: 63
   min_memory_gb: 96
   min_disk_gb: 150

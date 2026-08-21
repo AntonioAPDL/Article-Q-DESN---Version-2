@@ -389,8 +389,8 @@ write_family_table <- function(family, path) {
         "Q--DESN rows use preprocessing estimated only from observations available through the fitting origin. ",
         "Forecast criteria average rolling-origin lead-target pairs over the held-out window of length 1000, ",
         "using leads 1--30 and origin stride 30. Lower values are better; boldface marks the best displayed ",
-        "value within each inference panel, target level, and criterion. A dagger or double dagger records a ",
-        "contributing WARN or FAIL diagnostic, respectively.}"
+        "value within each inference panel, target level, and criterion. A dagger marks a warning in the ",
+        "supporting diagnostic record; a double dagger marks a failed diagnostic check.}"
       ),
       family_labels[[family]]
     ),
@@ -419,14 +419,14 @@ write_mcmc_table <- function(family, path) {
     sprintf(
       paste0(
         "\\caption{MCMC single-quantile fit-and-forecast comparison for the %s simulation family. ",
-        "The Q--DESN entries form a fixed case-specific metric-wise summary and can therefore draw different ",
-        "criteria from different calibrated fits. A confirmed criterion may instead use its pre-specified ",
-        "repeated-chain aggregate, as identified in the metric-level record. Q--DESN preprocessing is ",
+        "The Q--DESN entries form a fixed case-specific metric-level summary and can therefore draw different ",
+        "criteria from different calibrated fits. When repeated-chain results are available, the table uses ",
+        "the pre-specified repeated-chain aggregate identified in the metric-level record. Q--DESN preprocessing is ",
         "estimated only from the training ",
         "window. Forecast criteria average rolling-origin lead-target pairs over a held-out window of length ",
         "1000 using leads 1--30 and origin stride 30. Lower values are better, and boldface marks the best ",
-        "displayed value within each target level and criterion. A dagger or double dagger records a ",
-        "contributing WARN or FAIL diagnostic, respectively.}"
+        "displayed value within each target level and criterion. A dagger marks a warning in the supporting ",
+        "diagnostic record; a double dagger marks a failed diagnostic check.}"
       ),
       family_labels[[family]]
     ),
@@ -733,7 +733,7 @@ writeLines(c(
   sprintf("source_manifest_sha256: %s", sha256(source_manifest_path)),
   sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
-  "selection_policy: fixed case-specific metric-wise summary; diagnostic status retained but not excluded",
+  "selection_policy: fixed case-specific metric-level summary; diagnostic status retained but not excluded",
   "qdesn_preprocessing_scope: train_only",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),

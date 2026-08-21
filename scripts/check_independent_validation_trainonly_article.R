@@ -215,7 +215,7 @@ if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fix
     !grepl("A subsequent adaptive forecast-gap campaign", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
     !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
-    !grepl("train-only preprocessing replay", supp_text, fixed = TRUE) ||
+    !grepl("train-only preprocessing correction", supp_text, fixed = TRUE) ||
     !grepl("A later paired confirmation targeted", supp_text, fixed = TRUE) ||
     !grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE)) {
   stop("Manuscript prose is not wired to the corrected artifacts.", call. = FALSE)

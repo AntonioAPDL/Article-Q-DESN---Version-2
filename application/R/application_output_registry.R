@@ -39,7 +39,7 @@ app_manifest_optional_role_path <- function(manifest, role = NULL, role_pattern 
 app_application_model_label <- function(model_id, model_family) {
   family <- tolower(as.character(model_family %||% ""))
   id <- tolower(as.character(model_id %||% ""))
-  if (grepl("qdesn", family) || grepl("qdesn", id)) return("Q--DESN readout")
+  if (grepl("qdesn", family) || grepl("qdesn", id)) return("Q--DESN correction")
   if (grepl("raw_glofas", family) || grepl("raw_glofas", id)) return("Raw GloFAS")
   as.character(model_id)
 }

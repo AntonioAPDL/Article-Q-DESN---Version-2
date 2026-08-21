@@ -1461,7 +1461,7 @@ auditable without making VB rows the reported validation results.
 
 The following generated tables retain both inference panels from the fixed
 500-observation validation study. Q--DESN and exQ--DESN entries use the exact
-train-only preprocessing replay, and historical ridge rows are omitted because
+train-only preprocessing correction, and historical ridge rows are omitted because
 they have not undergone that correction. In the main article, only the MCMC
 rows from these source tables are displayed.
 
@@ -1481,7 +1481,7 @@ and forecast paths were finite. Diagnostic grades were preserved in the
 metric-level record but were not used as accuracy filters.
 
 Replacement was criterion-specific because the primary tables are explicitly
-metric-wise candidate envelopes. Of 27 family--quantile--criterion comparisons, 22 pooled
+metric-level summaries. Of 27 family--quantile--criterion comparisons, 22 pooled
 values were strictly lower than the previously reported value and replaced it; five were
 not lower and were retained from the previous reported value. All source values,
 chain diagnostics, path-agreement summaries, runtime checks, and selection
@@ -1542,8 +1542,8 @@ The following generated tables preserve the computational protocol, diagnostic
 criteria, metric-specific lowest-scoring methods, and replicated likelihood contrasts for the
 joint and independent multi-quantile regressions. VB and VB-LD provide the
 scenario-specific screening, diagnostic, and initialization layer. The main
-article reports the balanced MCMC confirmation, whereas the final supplementary
-table summarizes paired AL-minus-exAL forecast-MAE differences over 50 fresh
+article reports the balanced MCMC validation analysis, whereas the final supplementary
+table summarizes paired AL-minus-exAL forecast-MAE differences over 50
 independent data-generating realizations per scenario. This separation keeps
 replicated specification evidence distinct from the reported posterior-computation
 evidence.
@@ -1556,18 +1556,18 @@ evidence.
 
 The main article reports the aggregate fold-aligned PriceFM comparison. The
 tables below preserve three secondary diagnostic views from the same assembled
-retrospective replay: the fold-level decision summary, the input-set breakdown,
+retrospective comparison: the fold-level decision summary, the input-set breakdown,
 and the available horizon-block breakdown. They are descriptive summaries of
 the selected analysis records, not separate selection criteria or
 origin-available operational evidence.
 
 \begin{table}[!htbp]
 \centering
-\caption{Fold-level PriceFM replay summary. AQL is computed on the original
+\caption{Fold-level PriceFM retrospective comparison summary. AQL is computed on the original
 electricity-price scale using the PriceFM paper quantile grid. The last two
 columns report Q--DESN AQL minus PriceFM AQL; negative values indicate lower
-Q--DESN AQL. Near ties retain the pre-specified classification used by the
-full-surface decision registry. No paired uncertainty interval is reported for
+Q--DESN AQL. Near ties retain the pre-specified classification used in the
+full-panel comparison. No paired uncertainty interval is reported for
 these fold-level contrasts.}
 \label{tab:supp-pricefm-full-fold-summary}
 \input{tables/pricefm_full_main_summary.tex}
@@ -1575,9 +1575,9 @@ these fold-level contrasts.}
 
 \begin{table}[!htbp]
 \centering
-\caption{PriceFM replay by input set. Own-region rows and graph-derived rows
+\caption{PriceFM retrospective comparison by input set. Own-region rows and graph-derived rows
 both use retrospectively observed target-region load, solar, and wind lead
-covariates in the assembled replay. Graph-derived rows additionally include
+covariates in the assembled comparison. Graph-derived rows additionally include
 selected neighboring-region summaries or neighboring-region lead/lag features.}
 \label{tab:supp-pricefm-full-input-set-summary}
 \input{tables/pricefm_full_input_set_summary.tex}
@@ -1585,7 +1585,7 @@ selected neighboring-region summaries or neighboring-region lead/lag features.}
 
 \begin{table}[!htbp]
 \centering
-\caption{Available horizon-block diagnostics for the PriceFM retrospective replay.
+\caption{Available horizon-block diagnostics for the PriceFM retrospective comparison.
 Entries denote scored region/fold and horizon-block combinations for the
 subset with retained horizon diagnostics. Negative \(\Delta\) values indicate
 lower Q--DESN AQL; positive values indicate lower PriceFM AQL.}

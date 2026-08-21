@@ -1511,6 +1511,16 @@ whereas AL candidates retained their pre-specified AL transition. All replacemen
 decisions, chain-level metrics, diagnostic grades, and source hashes are
 preserved in the compact validation record; no fitted-model binary is retained.
 
+A final targeted confirmation used the same three-chain, 5,000-iteration
+burn-in and 20,000-retained-iteration contract for two remaining case-specific
+forecast gaps. It replaced Gaussian $p=0.05$ AL--RHS forecast MAE and check
+loss by strictly lower three-chain means, improving them by 17.8\% and 1.7\%
+relative to the immediately preceding authority. It likewise replaced
+Gaussian-mixture $p=0.50$ exAL--RHS forecast MAE and check loss, improving
+them by 44.6\% and 2.2\%. No fit criterion was replaced. The compact record
+retains all six chain summaries, the two exact DESN/RHS specifications, source
+hashes, diagnostic grades, and rollback values.
+
 \clearpage
 \subsection{Single-Quantile Five-Chain MCMC Sensitivity}
 \label{subsec:supp-independent-five-chain-sensitivity}

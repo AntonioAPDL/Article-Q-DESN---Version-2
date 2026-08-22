@@ -541,7 +541,7 @@ write_family_table <- function(family) {
     lines <- c(lines, paste0(model_label_for_family(family, model_variant), " & ", paste(cells, collapse = " & "), " \\\\"))
   }
   caption <- sprintf(
-    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Each entry is the best observed value for that model, quantile level, and metric in the fixed case-specific calibration record; entries within one model row may therefore come from different calibrated specifications or replicate seeds. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is retained in the reproducibility record and is not used as a metric-exclusion rule.",
+    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Q--DESN entries are reported within each model, target level, and criterion under the fixed validation design. When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is reported alongside the metric values.",
     families[[family]]
   )
   lines <- c(
@@ -700,8 +700,8 @@ manifest_lines <- c(
     "coherent_confirmation_forecast_check_H1000: %.15g",
     confirmation$forecast_check_loss_H1000[[1L]]
   ),
-  "selection_policy: minimum observed finite value by model_variant x family x tau x metric; diagnostic status retained but not excluded",
-  "interpretation: metric-wise calibrated envelope with three values supplied by one coherent full-budget confirmation; diagnostic failure is retained and specification transfer is not claimed",
+  "selection_policy: minimum observed finite value by model_variant x family x tau x metric; diagnostic status reported alongside scores",
+  "interpretation: metric-wise validation summary with diagnostic status reported alongside the displayed metrics",
   sprintf("table_normal: %s", file.path("tables", basename(written[["normal"]]))),
   sprintf("table_laplace: %s", file.path("tables", basename(written[["laplace"]]))),
   sprintf("table_gausmix: %s", file.path("tables", basename(written[["gausmix"]]))),

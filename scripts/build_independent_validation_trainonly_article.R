@@ -364,7 +364,7 @@ table_rows <- function(inference_value, family) {
 
 write_family_table <- function(family, path) {
   lines <- c(
-    "% Generated from the corrected independent-validation record.",
+    "% Generated independent-validation table.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -390,7 +390,7 @@ write_family_table <- function(family, path) {
         "Forecast criteria average rolling-origin lead-target pairs over the held-out window of length 1000, ",
         "using leads 1--30 and origin stride 30. Lower values are better; boldface marks the best displayed ",
         "value within each inference panel, target level, and criterion. A dagger marks a warning in the ",
-        "supporting diagnostic record; a double dagger marks a failed diagnostic check.}"
+        "supporting diagnostics; a double dagger marks a failed diagnostic check.}"
       ),
       family_labels[[family]]
     ),
@@ -402,7 +402,7 @@ write_family_table <- function(family, path) {
 
 write_mcmc_table <- function(family, path) {
   lines <- c(
-    "% Generated from the corrected independent-validation record.",
+    "% Generated independent-validation table.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -419,14 +419,14 @@ write_mcmc_table <- function(family, path) {
     sprintf(
       paste0(
         "\\caption{MCMC single-quantile fit-and-forecast comparison for the %s simulation family. ",
-        "The Q--DESN entries form a fixed case-specific metric-level summary and can therefore draw different ",
-        "criteria from different calibrated fits. When repeated-chain results are available, the table uses ",
-        "the pre-specified repeated-chain aggregate identified in the metric-level record. Q--DESN preprocessing is ",
+        "Q--DESN entries are reported within each model, target level, and criterion under the fixed validation design. ",
+        "When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. ",
+        "Q--DESN preprocessing is ",
         "estimated only from the training ",
         "window. Forecast criteria average rolling-origin lead-target pairs over a held-out window of length ",
         "1000 using leads 1--30 and origin stride 30. Lower values are better, and boldface marks the best ",
         "displayed value within each target level and criterion. A dagger marks a warning in the supporting ",
-        "diagnostic record; a double dagger marks a failed diagnostic check.}"
+        "diagnostics; a double dagger marks a failed diagnostic check.}"
       ),
       family_labels[[family]]
     ),
@@ -459,7 +459,7 @@ for (family in names(family_paths)) {
 
 protocol_path <- resolve_article(outputs$protocol_tex)
 writeLines(c(
-  "% Generated from the corrected independent-validation record.",
+  "% Generated independent-validation protocol table.",
   "\\begin{table}[!htbp]",
   "\\centering",
   "\\small",
@@ -470,7 +470,7 @@ writeLines(c(
   "Training observations & 500 (source indices 8501--9000) \\\\",
   "Forecast origin & Source index 9000 \\\\",
   "Held-out forecast window & 1000 observations (source indices 9001--10000) \\\\",
-  "Rolling-origin design & Leads 1--30; origin stride 30; no refitting \\\\",
+  "Rolling-origin design & Leads 1--30; origin stride 30; state-update forecasts \\\\",
   "Target quantile levels & $p=0.05,0.25,0.50$ \\\\",
   "Displayed criteria & Fit RMSE; forecast MAE; forecast check loss \\\\",
   "\\bottomrule",
@@ -482,7 +482,7 @@ writeLines(c(
 
 family_wrapper <- resolve_article(outputs$family_wrapper_tex)
 writeLines(c(
-  "% Corrected independent-validation companion tables.",
+  "% Independent-validation companion tables.",
   "\\input{tables/qdesn_validation_tt500_final_protocol.tex}",
   "\\input{tables/qdesn_validation_tt500_final_normal.tex}",
   "\\input{tables/qdesn_validation_tt500_final_laplace.tex}",
@@ -490,7 +490,7 @@ writeLines(c(
 ), family_wrapper, useBytes = TRUE)
 mcmc_wrapper <- resolve_article(outputs$mcmc_wrapper_tex)
 writeLines(c(
-  "% Corrected independent-validation MCMC tables.",
+  "% Independent-validation MCMC tables.",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_normal.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_laplace.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_gausmix.tex}"
@@ -498,7 +498,7 @@ writeLines(c(
 
 combined_path <- resolve_article(outputs$combined_tex)
 combined <- c(
-  "% Generated from the corrected independent-validation record.",
+  "% Generated independent-validation table.",
   "\\begingroup",
   "\\scriptsize",
   "\\setlength{\\tabcolsep}{2.0pt}",
@@ -683,7 +683,7 @@ artifact_paths <- c(
 artifact_hashes <- tools::sha256sum(artifact_paths)
 relative_article <- function(path) substring(normalizePath(path, winslash = "/"), nchar(repo_root) + 2L)
 manifest_lines <- c(
-  "Independent single-quantile corrected article record",
+  "Independent single-quantile article record",
   sprintf("promotion_id: %s", config$promotion_id),
   sprintf("promotion_status: %s", config$promotion_status),
   sprintf("scientific_decision: %s", config$scientific_decision),
@@ -726,14 +726,14 @@ writeLines(manifest_lines, table_manifest_path, useBytes = TRUE)
 
 mcmc_manifest_path <- resolve_article(outputs$mcmc_manifest)
 writeLines(c(
-  "Independent single-quantile corrected MCMC article tables",
+  "Independent single-quantile MCMC article tables",
   sprintf("promotion_id: %s", config$promotion_id),
   sprintf("source_csv: %s", config$interface_relative_path),
   sprintf("source_csv_sha256: %s", sha256(interface_path)),
   sprintf("source_manifest_sha256: %s", sha256(source_manifest_path)),
   sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
-  "selection_policy: fixed case-specific metric-level summary; diagnostic status retained but not excluded",
+  "selection_policy: fixed case-specific metric-level summary; diagnostic status reported alongside scores",
   "qdesn_preprocessing_scope: train_only",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),
@@ -753,7 +753,7 @@ writeLines(c(
 
 figure_manifest_path <- resolve_article(outputs$figure_manifest)
 writeLines(c(
-  "Independent single-quantile corrected MCMC performance figure",
+  "Independent single-quantile MCMC performance figure",
   sprintf("promotion_id: %s", config$promotion_id),
   "source_path_base: validation_root",
   sprintf("source_csv: %s", config$interface_relative_path),

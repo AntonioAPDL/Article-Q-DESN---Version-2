@@ -190,7 +190,9 @@ if (grepl("QDESN ridge|exQDESN ridge|VB--LD|Final TT500", table_text) ||
     !grepl("Q--DESN AL--RHS", table_text, fixed = TRUE) ||
     !grepl("Q--DESN exAL--RHS", table_text, fixed = TRUE) ||
     !grepl("Forecast check loss", table_text, fixed = TRUE) ||
-    !grepl("pre-specified repeated-chain aggregate", table_text, fixed = TRUE)) {
+    !grepl("corresponding repeated-chain average", table_text, fixed = TRUE) ||
+    grepl("metric-level record", table_text, fixed = TRUE) ||
+    grepl("different calibrated fits", table_text, fixed = TRUE)) {
   stop("Generated tables contain a stale label or omit a required label.", call. = FALSE)
 }
 
@@ -209,15 +211,20 @@ supp_text <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"), warn 
 if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fixed = TRUE) ||
     !grepl("figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf", main_text,
            fixed = TRUE) ||
-    !grepl("train-only preprocessing", main_text, fixed = TRUE) ||
-    !grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
-    !grepl("A forecast-first follow-up then revisited", main_text, fixed = TRUE) ||
-    !grepl("A subsequent forecast-gap analysis", main_text, fixed = TRUE) ||
+    !grepl("train-window preprocessing rule", main_text, fixed = TRUE) ||
+    !grepl("Forecast criteria are computed from lead-level rolling-origin paths", main_text,
+           fixed = TRUE) ||
+    !grepl("This convention gives a single reporting", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
+    grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
+    grepl("A forecast-first follow-up then revisited", main_text, fixed = TRUE) ||
+    grepl("A subsequent forecast-gap analysis", main_text, fixed = TRUE) ||
     !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
-    !grepl("train-only preprocessing correction", supp_text, fixed = TRUE) ||
-    !grepl("A later paired confirmation targeted", supp_text, fixed = TRUE) ||
-    !grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE)) {
+    !grepl("train-window preprocessing rule", supp_text, fixed = TRUE) ||
+    !grepl("Independent exAL MCMC Sampler Details", supp_text, fixed = TRUE) ||
+    !grepl("For each family--quantile comparison", supp_text, fixed = TRUE) ||
+    grepl("A later paired confirmation targeted", supp_text, fixed = TRUE) ||
+    grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE)) {
   stop("Manuscript prose is not wired to the corrected artifacts.", call. = FALSE)
 }
 

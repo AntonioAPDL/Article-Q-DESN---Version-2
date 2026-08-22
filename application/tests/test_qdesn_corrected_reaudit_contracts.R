@@ -83,11 +83,12 @@ assert_contains("main.tex", "\\GlofasApplicationCurrentDiscrepancyTransitionStra
 assert_contains("main.tex", "realized-history and blended Global Ensemble Forecast System")
 assert_not_contains("main.tex", "forecast-window discrepancy reservoir is driven by the horizon-keyed contrast")
 
-# PriceFM is a retrospective comparison with retrospectively observed target leads in every
-# selected row and additional neighbor leads for graph-derived rows.
+# PriceFM is a retrospective comparison with retrospectively observed own-region
+# leads in every selected row and additional neighbor leads when neighborhood
+# summaries are included.
 assert_contains("main.tex", "Both input policies use retrospectively")
-assert_contains("main.tex", "target-region load, solar, and wind lead covariates")
-assert_contains("main.tex", "add retrospectively observed neighboring-region lead")
+assert_contains("main.tex", "own-region load, solar, and wind lead covariates")
+assert_contains("main.tex", "evaluations with neighborhood summaries add retrospectively observed neighboring-region lead")
 manifest <- jsonlite::fromJSON(app_path("tables/pricefm_paper_aligned_main_comparison_manifest.json"))
 stopifnot(identical(manifest$applicability$cross_panel_comparison, "context_only_not_head_to_head"))
 

@@ -212,7 +212,7 @@ if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fix
     !grepl("train-only preprocessing", main_text, fixed = TRUE) ||
     !grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
     !grepl("A forecast-first follow-up then revisited", main_text, fixed = TRUE) ||
-    !grepl("A subsequent adaptive forecast-gap campaign", main_text, fixed = TRUE) ||
+    !grepl("A subsequent forecast-gap analysis", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
     !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
     !grepl("train-only preprocessing correction", supp_text, fixed = TRUE) ||

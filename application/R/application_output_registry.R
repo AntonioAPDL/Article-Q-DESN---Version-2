@@ -473,13 +473,13 @@ app_write_current_application_selection <- function(
     spread_calibration_id = as.character(spread_row$calibration_id[[1L]] %||% "none"),
     spread_calibration_description = if (spread_enabled) {
       sprintf(
-        "A no-refit reporting-time spread calibration is applied around quantile %s, with multiplicative factor %s and additive half-width %s.",
+        "An additional spread calibration is applied before display around quantile %s, with multiplicative factor %s and additive half-width %s.",
         app_format_decimal(spread_row$center_quantile[[1L]], 2L),
         app_format_decimal(spread_row$spread_calibration_factor[[1L]], 1L),
         app_format_decimal(spread_row$spread_calibration_additive_width[[1L]], 1L)
       )
     } else {
-      "No reporting-time spread calibration is applied; the displayed bands are synthesized from the fitted quantile models and then monotonized."
+      "No additional spread calibration is applied before display; the displayed bands are synthesized from the fitted quantile models and then passed through monotone rearrangement."
     },
     observed_history_acrps = if (nrow(observed_row)) app_format_decimal(observed_history_acrps, 4L) else "",
     observed_history_crps = if (nrow(observed_row)) app_format_decimal(observed_history_acrps, 4L) else "",

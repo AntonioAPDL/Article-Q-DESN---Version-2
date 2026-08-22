@@ -72,7 +72,7 @@ extended asymmetric Laplace (\(\exAL\)) working likelihood. The \(\exAL\)
 notation follows the main article's convention for the quantile-fixed
 generalized asymmetric Laplace construction of \citet{yan2025new}, keeping
 exQDESN and exDQLM labels aligned with the same likelihood choice. The
-augmented posterior target
+augmented posterior distribution
 includes the regression coefficients, likelihood scale and asymmetry, auxiliary
 mixture variables, and shrinkage parameters. The derivations cover complete-data
 augmented posterior densities for the default ridge prior and the Nishimura--Suchard
@@ -85,7 +85,7 @@ The notation is aligned with the main article.
 \end{abstract}
 
 \section{Purpose and Relation to the Main Article}
-\label{sec:supp_scope}
+\label{sec:supp_relation_main}
 
 The main article introduces Q--DESN, describes the fixed deep reservoir feature
 map in the notation and model-specification sections, and records the simulation
@@ -101,13 +101,13 @@ regression derivations used by \pkg{exdqlm}
 Q--DESN regression by replacing ordinary covariate rows with rows of the fixed
 DESN design matrix.
 
-The augmented posterior target, MCMC sampler, model-specific mean-field update
+The augmented posterior distribution, MCMC sampler, model-specific mean-field update
 structure, and ELBO monitor are stated so that the computations are recoverable
 without consulting implementation code. Ridge
 is the default coefficient prior. The main article uses \(\RHS\) for the
 regularized horseshoe coefficient prior, while \texttt{rhs\_ns} denotes the
 Nishimura--Suchard product representation used for closed-form scale updates.
-The main article states the posterior target and algorithms; this supplement
+The main article states the posterior distribution and algorithms; this supplement
 contains the recoverable full conditionals, variational factors, and objective
 terms that support those algorithms. When the exAL block is active, smooth
 Taylor/Laplace statements are branchwise away from \(\gamma=0\); the AL point
@@ -116,7 +116,7 @@ arguments at zero.
 The supplement first records the reservoir-design checklist, then gives the
 fixed-design likelihood, prior, MCMC, variational, and ELBO details for the
 single-level regression. It next derives the joint quantile-vector extension,
-states the monotone reporting rules, preserves supplementary validation
+states the monotone rearrangement details, preserves supplementary validation
 evidence, and closes with the GloFAS forecast-discrepancy model.
 
 \section{Reservoir Design Diagnostics}
@@ -151,20 +151,20 @@ states can reduce the effective rank of \(\mat X\). \\
 \(m\) & Explicit lag memory entering the reservoir input & Choose a
 domain-informed grid and require all lags to be available at the forecast
 origin. & Excessive lags increase dimension and can leak future information if
-alignment is not audited. \\
+alignment is not checked. \\
 \(\{\alpha_d\},\{\rho_d\}\) & Reservoir time scale, persistence, and stability &
 Co-tune because both affect memory. Near-one radii require empirical stability
 checks. & Saturation, state collapse, or sensitivity to initial conditions. \\
 \(\{\pi^{(W)}_d\},\{\pi^{(\mathrm{in})}_d\}\) and input scaling & Internal
 connectivity and input excitation & Fix from a small set of literature-guided
-defaults; broaden the search when diagnostics show under-excitation or
+defaults; broaden the search when diagnostics show weak state variation or
 saturation. & Too sparse can reduce richness; too dense or strongly driven can
 saturate nonlinear states. \\
 \(f,k,T_0\) & Nonlinearity, bridge transformation, and initial-condition
 washout & Fix before reservoir selection, with \(T_0\) chosen relative to the
 memory scale. & Short washout can leave initial-condition artifacts. \\
 Seed & Realization of the random feature map & Treat as a robustness variable,
-not as a hidden tuning parameter. Refit top candidates over multiple seeds. &
+not as a hidden tuning parameter. Refit leading specifications over multiple seeds. &
 A single selected seed can overstate validation performance. \\
 \bottomrule
 \end{tabularx}
@@ -390,8 +390,8 @@ where the last line is omitted when \(\zeta^2\) is fixed.
 
 \subsection{Augmented Posterior Densities}
 
-\noindent\textbf{Augmented target convention.}
-The augmented posterior targets below include each AL or exAL mixture variable
+\noindent\textbf{Augmented-posterior convention.}
+The augmented posterior distributions below include each AL or exAL mixture variable
 once. The inverse-gamma variables in the \texttt{rhs\_ns} prior augment only
 the shrinkage scales, not the likelihood.
 
@@ -936,7 +936,7 @@ baseline. Equivalently, for the single-quantile limit set
 directly to \(\Delta_1=\vect\beta_1\). The baseline in the multi-quantile
 derivation below is therefore a slope-path device, not an intercept term. In
 this limit, the baseline RHS hierarchy and its variational factors are simply
-absent; the innovation RHS hierarchy is the ordinary single-level RHS prior.
+absent; the adjacent-difference RHS hierarchy is the ordinary single-level RHS prior.
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
 \begin{align}
@@ -991,12 +991,12 @@ quantile-specific working-likelihood factors.
 
 For a genuine multi-quantile grid, let
 \(\vect\beta_{\mathrm{base}}\in\R^r\) denote a baseline slope vector. Adjacent
-innovations are
+coefficient differences are
 \[
 \Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}},\qquad
 \Delta_q=\vect\beta_q-\vect\beta_{q-1},\quad q=2,\ldots,Q.
 \]
-The baseline slope and adjacent innovations use separate RHS hierarchies:
+The baseline slope and adjacent differences use separate RHS hierarchies:
 \begin{align}
 \beta_{\mathrm{base},j}\mid\lambda^0_j,\tau^0,\zeta_0
 &\sim\Normal(0,V^0_j),&
@@ -1015,7 +1015,7 @@ V^\Delta_{q,j}
 \end{align}
 The local and global half-Cauchy scales use the inverse-gamma augmentation in
 \eqref{eq:supp_hs_aux}; it is applied once to the baseline coefficients and
-separately to each adjacent innovation block.
+separately to each adjacent-difference block.
 
 Let \(\mat H\in\R^{Qr\times Qr}\) be the block first-difference matrix
 satisfying
@@ -1051,7 +1051,7 @@ used by both the MCMC and VB updates.
 \subsection{Complete-Data Posterior}
 
 Let \(\Theta_{\Delta}\) collect all local, global, auxiliary, and slab scales
-for the innovation RHS hierarchy, and let \(\Theta_0\) collect the
+for the adjacent-difference RHS hierarchy, and let \(\Theta_0\) collect the
 corresponding baseline RHS scales. Up to constants not depending on unknowns,
 the complete-data posterior for the multi-quantile case is
 \begin{align}
@@ -1090,7 +1090,7 @@ generalized posterior and is not part of the article evidence path.
 For \(Q=1\), remove
 \(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), and the baseline-prior factor
 from \eqref{eq:supp_joint_complete_posterior}, set
-\(\Delta_1=\vect\beta_1\), and use the innovation RHS hierarchy as the
+\(\Delta_1=\vect\beta_1\), and use the adjacent-difference RHS hierarchy as the
 ordinary single-level RHS hierarchy.
 
 \subsection{Gaussian Blocks}
@@ -1263,10 +1263,10 @@ and
 \sim
 \IG\left(1,\frac{1}{(\tau^0)^2}+\frac{1}{(\tau_0^0)^2}\right).
 \]
-For each innovation block \(q\), replace \(\beta_{\mathrm{base},j}\),
+For each adjacent-difference block \(q\), replace \(\beta_{\mathrm{base},j}\),
 \(\lambda^0_j\), and \(\tau^0\) by \(\Delta_{q,j}\),
 \(\lambda^\Delta_{q,j}\), and \(\tau^\Delta_q\). If the slab scale is random
-and shared across innovation blocks, then
+and shared across adjacent-difference blocks, then
 \[
 \zeta_\Delta^2\mid\cdots
 \sim
@@ -1290,7 +1290,7 @@ controls. For \(Q=1\), use the collapsed convention
 \(\Delta_1=\vect\beta_1\), and skip every baseline update below.
 \begin{enumerate}[label=(\arabic*)]
 \item Initialize \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), likelihood
-parameters, exAL latent variables, and innovation RHS scales. If \(Q>1\),
+parameters, exAL latent variables, and adjacent-difference RHS scales. If \(Q>1\),
 also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
 \item Repeat:
   \begin{enumerate}[label=(\alph*)]
@@ -1307,7 +1307,7 @@ also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
   \item draw unconstrained intercepts from their Gaussian conditionals, or
   update the monotone-gap transformed block when exact intercept ordering is
   imposed;
-  \item draw innovation RHS scales, and if \(Q>1\) draw baseline RHS scales,
+  \item draw adjacent-difference RHS scales, and if \(Q>1\) draw baseline RHS scales,
   from their inverse-gamma full conditionals;
   \item update each exAL \((\sigma_q,\gamma_q)\) block on transformed
   coordinates targeting \eqref{eq:supp_joint_sigma_gamma_kernel}; for AL,
@@ -1337,11 +1337,11 @@ The raw crossing count is
 \[
 C_{\mathrm{raw}}=\sum_{q=2}^Q\sum_{t=1}^T\ind\{g_{q,t}<0\}.
 \]
-If reported quantile curves are projected or rearranged, the corresponding
-reported crossing count should be computed after that pre-specified monotone
-rule. The maximum and mean absolute projection adjustments are useful
-diagnostics because a zero reported crossing count alone does not show whether
-the joint prior produced coherent raw paths or whether the reporting rule
+If fitted quantile curves are projected or rearranged, the corresponding
+post-rearrangement crossing count should be computed after that stated monotone
+rearrangement. The maximum and mean absolute projection adjustments are useful
+diagnostics because a zero post-rearrangement crossing count alone does not show whether
+the joint prior produced coherent raw paths or whether the monotone rearrangement
 made large repairs. On a bounded feature domain
 \(\tilde{\vect x}_t\in[-1,1]^r\), the sufficient condition
 \[
@@ -1356,7 +1356,7 @@ hard-constraint step is added.
 \label{sec:forecast_synthesis}
 
 Quantile forecast propagation carries posterior or variational draws through the fixed
-reservoir, whereas monotone reporting is a post-processing rule for
+reservoir, whereas monotone rearrangement is a post-processing step for
 independently fitted quantile levels rather than a joint multi-quantile
 posterior model. For fitted ordinates
 \(\widehat{\vect q}_t=(\widehat q_{1,t},\ldots,\widehat q_{K,t})^\top\) at
@@ -1369,14 +1369,14 @@ levels \(p_1<\cdots<p_K\), the default rule is
 \qquad w_k>0.
 \label{eq:supp_monotone_projection}
 \end{equation}
-The article uses equal weights unless a validation or application protocol
+The article uses equal weights unless a validation or application design
 specifies otherwise in advance. The rule may be applied draw by draw when joint posterior
 or variational quantile-path draws are available, or to posterior summary
 ordinates when only summary grids are retained. Draw-level projection preserves
 more posterior dependence information; summary-level projection is a reporting
-repair for a displayed grid.
+adjustment for a displayed grid.
 
-For a single-level fit at target \(p_0\), write a posterior draw or a draw from
+For a single-level fit at level \(p_0\), write a posterior draw or a draw from
 the variational approximation as
 \(\theta_{p_0}^{(m)}
 =(\vect\beta_{p_0}^{(m)},\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)})\). Forecasting
@@ -1403,7 +1403,7 @@ fitted \(p_k\).
 For a joint quantile-vector regression, a posterior or variational draw returns a
 raw quantile vector over \(p_1,\ldots,p_Q\). It does not produce one replicated
 future response for each quantile level. If recursive lag inputs require a
-future response path, that path must be generated by a pre-specified propagation rule.
+future response path, that path must be generated by a stated propagation rule.
 For draw \(m\) at horizon \(h\), write
 \[
 \mu_{q,T+h}^{(m)}
@@ -1414,11 +1414,11 @@ For draw \(m\) at horizon \(h\), write
 and let
 \(\vect q_{T+h}^{(m)}
 =(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
-is required, apply the pre-specified monotone rearrangement, such as isotonic projection
+is required, apply the stated monotone rearrangement, such as isotonic projection
 or rearrangement
 \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010},
 and set \(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered
-grid defines \(Q_{T+h}^{*,(m)}(u)\) under the pre-specified interpolation and
+grid defines \(Q_{T+h}^{*,(m)}(u)\) under the stated interpolation and
 endpoint convention. A scalar synthesized response draw is then
 \[
 u_{T+h}^{(m,r)}\sim\Unif(0,1),
@@ -1426,23 +1426,24 @@ u_{T+h}^{(m,r)}\sim\Unif(0,1),
 y_{T+h}^{(m,r)}
 =Q_{T+h}^{*,(m)}\!\left(u_{T+h}^{(m,r)}\right).
 \]
-This is inverse-CDF sampling from the pre-specified, draw-specific reported
+This is inverse-CDF sampling from the stated draw-specific
 quantile curve. It is not obtained by mixing the quantile-specific working
 likelihoods, normalizing their product, or drawing separately from their
 AL/exAL factors.
 
 When separate models are fit at ordered quantile levels \(p_1<\cdots<p_K\),
-the article uses a monotone reporting rule only after fitting. That rule
-operates on fitted target-quantile summaries, not on off-target quantiles from
+the article uses monotone rearrangement only after fitting. It
+operates on fitted quantile summaries, not on off-target quantiles from
 the working likelihoods, and may use isotonic projection
 \eqref{eq:supp_monotone_projection} or monotone rearrangement
 \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. The ordered grid defines
-a reported quantile curve by linear interpolation on \([p_1,p_K]\). Outside the
+a quantile curve by linear interpolation on \([p_1,p_K]\). Outside the
 fitted grid, the article reports grid-level summaries and avoids tail
 extrapolation unless an application explicitly states an endpoint convention.
 For recursive distributional simulation from an independently fitted grid, a
-common-history propagation rule is preferred: at each horizon, form all target
-ordinates from the same current lag history, apply the monotone rule, sample
+common-history propagation rule is preferred: at each horizon, form all fitted
+quantile ordinates from the same current lag history, apply the monotone
+rearrangement, sample
 one \(u\sim\Unif(0,1)\), set \(y=Q^*(u)\), and feed that same synthesized
 response into all level-specific reservoir recursions for the next horizon.
 This avoids combining quantiles produced under different future response
@@ -1498,18 +1499,18 @@ Gaussian \(p=0.05\) forecast MAE and forecast check loss, by 6.1\% and 0.5\%,
 respectively. The corresponding fit RMSE and all three Gaussian \(p=0.50\)
 criteria did not satisfy the rule and remain unchanged.
 
-Two later forecast-focused confirmations retained the same metric-wise
-replacement principle. First, three exact-transition chains for the
+Two later forecast-focused confirmations retained the same metric-specific
+replacement criterion. First, three exact-transition chains for the
 Gaussian-mixture \(p=0.25\) exAL--RHS case reduced forecast MAE by 46.4\% and
-forecast check loss by 2.1\%. Second, an adaptive campaign screened eight
-case-specific AL--RHS and exAL--RHS candidates and confirmed each with three
+forecast check loss by 2.1\%. Second, a follow-up analysis evaluated eight
+case-specific AL--RHS and exAL--RHS specifications and confirmed each with three
 full-budget chains. It replaced the Gaussian-mixture \(p=0.50\) AL--RHS
 forecast MAE and check loss, by 61.7\% and 2.6\%, respectively, and the
 Gaussian \(p=0.05\) AL--RHS forecast check loss by 3.4\%. No fit criterion was
-replaced. The exact scale-collapsed transition was used for exAL candidates,
-whereas AL candidates retained their pre-specified AL transition. All replacement
+replaced. The exact scale-collapsed transition was used for exAL specifications,
+whereas AL specifications retained their pre-specified AL transition. All replacement
 decisions, chain-level metrics, diagnostic grades, and source hashes are
-preserved in the compact validation record; no fitted-model binary is retained.
+preserved in the compact reproducibility record; no fitted-model binary is retained.
 
 \clearpage
 \subsection{Single-Quantile Five-Chain MCMC Sensitivity}
@@ -1518,7 +1519,7 @@ preserved in the compact validation record; no fitted-model binary is retained.
 The primary single-quantile MCMC tables report case-specific metric envelopes,
 so their fit and forecast entries need not arise from one common selected
 fit. As a robustness check, we revisited the Gaussian \(p=0.25\) comparison
-using five independently seeded chains for each candidate design. For each
+using five independently seeded chains for each model specification. For each
 chain, the posterior point path was computed first; the reported sensitivity
 path is the coordinatewise median of those five paths. All criteria were then
 recomputed from that path. This construction is a robustness summary of
@@ -1556,7 +1557,7 @@ evidence.
 
 The main article reports the aggregate fold-aligned PriceFM comparison. The
 tables below preserve three secondary diagnostic views from the same assembled
-retrospective comparison: the fold-level decision summary, the input-set breakdown,
+retrospective comparison: the fold-level comparison summary, the input-set breakdown,
 and the available horizon-block breakdown. They are descriptive summaries of
 the selected analysis records, not separate selection criteria or
 origin-available operational evidence.
@@ -1575,10 +1576,11 @@ these fold-level contrasts.}
 
 \begin{table}[!htbp]
 \centering
-\caption{PriceFM retrospective comparison by input set. Own-region rows and graph-derived rows
-both use retrospectively observed target-region load, solar, and wind lead
-covariates in the assembled comparison. Graph-derived rows additionally include
-selected neighboring-region summaries or neighboring-region lead/lag features.}
+\caption{PriceFM retrospective comparison by input set. Own-region rows and rows with
+neighborhood summaries both use retrospectively observed own-region load,
+solar, and wind lead covariates in the assembled comparison. Rows with
+neighborhood summaries additionally include selected neighboring-region
+summaries or neighboring-region lead/lag features.}
 \label{tab:supp-pricefm-full-input-set-summary}
 \input{tables/pricefm_full_input_set_summary.tex}
 \end{table}

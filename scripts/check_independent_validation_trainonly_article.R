@@ -8,9 +8,26 @@ script_path <- normalizePath(
   mustWork = TRUE
 )
 repo_root <- normalizePath(file.path(dirname(script_path), ".."), winslash = "/", mustWork = TRUE)
-config_path <- file.path(repo_root, "application", "config", "independent_validation_trainonly_v1.yaml")
+args <- commandArgs(trailingOnly = TRUE)
+get_arg <- function(flag, default) {
+  idx <- which(args == flag)
+  if (!length(idx) || idx[[1L]] == length(args)) return(default)
+  args[[idx[[1L]] + 1L]]
+}
+config_path <- normalizePath(
+  get_arg(
+    "--config",
+    file.path(repo_root, "application", "config", "independent_validation_trainonly_v1.yaml")
+  ),
+  winslash = "/",
+  mustWork = TRUE
+)
 config <- yaml::read_yaml(config_path)
-validation_root <- normalizePath(config$validation_root, winslash = "/", mustWork = TRUE)
+validation_root <- normalizePath(
+  get_arg("--validation-root", config$validation_root),
+  winslash = "/",
+  mustWork = TRUE
+)
 sha256 <- function(path) unname(tools::sha256sum(path)[[1L]])
 as_bool <- function(x) {
   if (is.logical(x)) return(!is.na(x) & x)
@@ -39,12 +56,21 @@ source_ledger_path <- resolve_validation(config$source_ledger_relative_path)
 article_delta_path <- resolve_validation(config$article_delta_relative_path)
 promotion_decision_path <- resolve_validation(config$promotion_decision_ledger_relative_path)
 remaining_gap_path <- resolve_validation(config$remaining_gap_ledger_relative_path)
+promotion_effect_path <- resolve_validation(config$promotion_effect_relative_path)
+chain_evidence_path <- resolve_validation(config$chain_evidence_relative_path)
+promoted_specifications_path <- resolve_validation(config$promoted_specifications_relative_path)
+rollback_ledger_path <- resolve_validation(config$rollback_ledger_relative_path)
 if (!identical(sha256(interface_path), as.character(config$interface_sha256)) ||
     !identical(sha256(source_manifest_path), as.character(config$manifest_sha256)) ||
     !identical(sha256(source_ledger_path), as.character(config$source_ledger_sha256)) ||
     !identical(sha256(article_delta_path), as.character(config$article_delta_sha256)) ||
     !identical(sha256(promotion_decision_path), as.character(config$promotion_decision_ledger_sha256)) ||
-    !identical(sha256(remaining_gap_path), as.character(config$remaining_gap_ledger_sha256))) {
+    !identical(sha256(remaining_gap_path), as.character(config$remaining_gap_ledger_sha256)) ||
+    !identical(sha256(promotion_effect_path), as.character(config$promotion_effect_sha256)) ||
+    !identical(sha256(chain_evidence_path), as.character(config$chain_evidence_sha256)) ||
+    !identical(sha256(promoted_specifications_path),
+               as.character(config$promoted_specifications_sha256)) ||
+    !identical(sha256(rollback_ledger_path), as.character(config$rollback_ledger_sha256))) {
   stop("Pinned validation input hashes do not match.", call. = FALSE)
 }
 
@@ -86,6 +112,14 @@ if (!identical(as.character(source_manifest$promotion_id), as.character(config$p
                as.integer(config$article_numeric_updates_from_rendered_base)) ||
     !identical(as.integer(source_manifest$retained_iterations_per_chain),
                as.integer(config$retained_iterations_per_chain)) ||
+    !identical(as.character(source_manifest$promotion_effect_from_v8_sha256),
+               as.character(config$promotion_effect_sha256)) ||
+    !identical(as.character(source_manifest$chain_evidence_sha256),
+               as.character(config$chain_evidence_sha256)) ||
+    !identical(as.character(source_manifest$promoted_specifications_sha256),
+               as.character(config$promoted_specifications_sha256)) ||
+    !identical(as.character(source_manifest$rollback_ledger_sha256),
+               as.character(config$rollback_ledger_sha256)) ||
     !identical(as.integer(source_manifest$binary_payload_count), 0L) ||
     !isTRUE(source_manifest$storage_policy_pass)) {
   stop("The adaptive-confirmation manifest does not match the pinned article contract.",
@@ -121,13 +155,13 @@ if (anyDuplicated(source_key) || !setequal(source_key, expected_key) ||
 }
 delta_required <- c(
   "inference", "model_variant", "family", "tau", "metric", "rendered_v6_value",
-  "authoritative_v8_value", "relative_gain_pct", "source_promotion_id"
+  "authoritative_value", "relative_gain_pct", "source_promotion_id"
 )
 if (!all(delta_required %in% names(article_delta)) ||
     nrow(article_delta) != as.integer(config$article_numeric_updates_from_rendered_base) ||
     anyDuplicated(with(article_delta, paste(inference, model_variant, family, tau, metric))) ||
     any(!article_delta$metric %in% metric_cols) ||
-    any(article_delta$authoritative_v8_value >= article_delta$rendered_v6_value) ||
+    any(article_delta$authoritative_value >= article_delta$rendered_v6_value) ||
     any(article_delta$relative_gain_pct <= 0)) {
   stop("The article-delta ledger violates the strict-improvement contract.", call. = FALSE)
 }
@@ -140,7 +174,7 @@ delta_matches <- vapply(seq_len(nrow(article_delta)), function(i) {
     drop = FALSE
   ]
   nrow(source_row) == 1L &&
-    abs(as.numeric(source_row[[row$metric]][[1L]]) - row$authoritative_v8_value) < 1e-12 &&
+    abs(as.numeric(source_row[[row$metric]][[1L]]) - row$authoritative_value) < 1e-12 &&
     identical(as.character(source_row$source_promotion_id[[1L]]),
               as.character(row$source_promotion_id[[1L]]))
 }, logical(1L))
@@ -211,22 +245,26 @@ if (nrow(figure_data) != 108L || file.info(figure_pdf_path)$size < 5000L ||
 main_text <- paste(readLines(file.path(repo_root, "main.tex"), warn = FALSE), collapse = "\n")
 supp_text <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"), warn = FALSE), collapse = "\n")
 if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fixed = TRUE) ||
-    !grepl("figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf", main_text,
-           fixed = TRUE) ||
+    grepl("figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf", main_text,
+          fixed = TRUE) ||
     !grepl("train-window preprocessing rule", main_text, fixed = TRUE) ||
-    !grepl("Forecast criteria are computed from lead-level rolling-origin paths", main_text,
-           fixed = TRUE) ||
-    !grepl("This convention gives a single reporting", main_text, fixed = TRUE) ||
+    !grepl("Two case-specific repeated-chain confirmations", main_text, fixed = TRUE) ||
+    !grepl("The supplement gives VB companion panels", main_text, fixed = TRUE) ||
+    !grepl("five-chain sensitivity analysis", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
     grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
     grepl("A forecast-first follow-up then revisited", main_text, fixed = TRUE) ||
     grepl("A subsequent forecast-gap analysis", main_text, fixed = TRUE) ||
+    grepl("A subsequent adaptive forecast-gap campaign", main_text, fixed = TRUE) ||
+    grepl("A further targeted confirmation retained", main_text, fixed = TRUE) ||
     !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
     !grepl("train-window preprocessing rule", supp_text, fixed = TRUE) ||
     !grepl("Independent exAL MCMC Sampler Details", supp_text, fixed = TRUE) ||
     !grepl("For each family--quantile comparison", supp_text, fixed = TRUE) ||
+    !grepl("Two additional case-specific confirmations used", supp_text, fixed = TRUE) ||
     grepl("A later paired confirmation targeted", supp_text, fixed = TRUE) ||
-    grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE)) {
+    grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE) ||
+    grepl("A final targeted confirmation used", supp_text, fixed = TRUE)) {
   stop("Manuscript prose is not wired to the corrected artifacts.", call. = FALSE)
 }
 

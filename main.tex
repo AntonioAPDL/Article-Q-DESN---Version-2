@@ -1687,6 +1687,15 @@ exAL--RHS MCMC rows use the \(v\)-augmented transition described in the
 supplement, which separates the scale update from the shape update and samples
 the shape on the logit transform of its bounded support.
 
+Two case-specific repeated-chain confirmations yielded four further strict
+forecast improvements. For Gaussian \(p=0.05\), AL--RHS reduced forecast MAE
+from 8.410 to 6.917 and forecast check loss from 1.221 to 1.200. For the
+Gaussian-mixture family at \(p=0.50\), exAL--RHS reduced forecast MAE from
+2.562 to 1.420 and forecast check loss from 5.610 to 5.487. These replacements
+are three-chain means. Fit RMSE and all other displayed criteria retain their
+previous metric-specific sources, and diagnostic grades remain disclosed in
+the supporting record.
+
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
 The supplement gives VB companion panels for the same source trajectories and a

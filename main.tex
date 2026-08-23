@@ -1731,6 +1731,15 @@ all aligned with the same source trajectory, target level, training window,
 forecast origins, and scored leads. This convention gives a single reporting
 definition for Q--DESN, DQLM, and exDQLM within the 500-observation benchmark.
 
+Two case-specific repeated-chain confirmations yielded four further strict
+forecast improvements. For Gaussian \(p=0.05\), AL--RHS reduced forecast MAE
+from 8.410 to 6.917 and forecast check loss from 1.221 to 1.200. For the
+Gaussian-mixture family at \(p=0.50\), exAL--RHS reduced forecast MAE from
+2.562 to 1.420 and forecast check loss from 5.610 to 5.487. These replacements
+are three-chain means. Fit RMSE and all other displayed criteria retain their
+previous metric-specific sources, and diagnostic grades remain disclosed in
+the supporting record.
+
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
 Figure~\ref{fig:independent-simulation-mcmc-metric-envelope} provides a

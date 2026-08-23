@@ -82,12 +82,27 @@ promotion_decision_path <- resolve_validation(
   "Promotion decision ledger"
 )
 remaining_gap_path <- resolve_validation(config$remaining_gap_ledger_relative_path, "Remaining-gap ledger")
+promotion_effect_path <- resolve_validation(config$promotion_effect_relative_path, "Promotion effect")
+chain_evidence_path <- resolve_validation(config$chain_evidence_relative_path, "Chain evidence")
+promoted_specifications_path <- resolve_validation(
+  config$promoted_specifications_relative_path,
+  "Promoted specifications"
+)
+rollback_ledger_path <- resolve_validation(config$rollback_ledger_relative_path, "Rollback ledger")
 verify_hash(interface_path, config$interface_sha256, "Interface")
 verify_hash(source_manifest_path, config$manifest_sha256, "Manifest")
 verify_hash(source_ledger_path, config$source_ledger_sha256, "Source ledger")
 verify_hash(article_delta_path, config$article_delta_sha256, "Article delta")
 verify_hash(promotion_decision_path, config$promotion_decision_ledger_sha256, "Promotion decision ledger")
 verify_hash(remaining_gap_path, config$remaining_gap_ledger_sha256, "Remaining-gap ledger")
+verify_hash(promotion_effect_path, config$promotion_effect_sha256, "Promotion effect")
+verify_hash(chain_evidence_path, config$chain_evidence_sha256, "Chain evidence")
+verify_hash(
+  promoted_specifications_path,
+  config$promoted_specifications_sha256,
+  "Promoted specifications"
+)
+verify_hash(rollback_ledger_path, config$rollback_ledger_sha256, "Rollback ledger")
 
 source_manifest <- jsonlite::read_json(source_manifest_path, simplifyVector = TRUE)
 source_ledger <- read.csv(source_ledger_path, check.names = FALSE, stringsAsFactors = FALSE)
@@ -128,6 +143,14 @@ if (!identical(as.character(source_manifest$promotion_id), as.character(config$p
                as.character(config$promotion_decision_ledger_sha256)) ||
     !identical(as.character(source_manifest$remaining_gap_ledger_sha256),
                as.character(config$remaining_gap_ledger_sha256)) ||
+    !identical(as.character(source_manifest$promotion_effect_from_v8_sha256),
+               as.character(config$promotion_effect_sha256)) ||
+    !identical(as.character(source_manifest$chain_evidence_sha256),
+               as.character(config$chain_evidence_sha256)) ||
+    !identical(as.character(source_manifest$promoted_specifications_sha256),
+               as.character(config$promoted_specifications_sha256)) ||
+    !identical(as.character(source_manifest$rollback_ledger_sha256),
+               as.character(config$rollback_ledger_sha256)) ||
     !identical(as.character(source_manifest$source_registry_hash_value),
                as.character(config$source_registry_hash_value))) {
   stop("The source manifest violates the article configuration.", call. = FALSE)
@@ -208,15 +231,15 @@ if (nrow(source) != as.integer(config$expected_rows) || anyDuplicated(key) ||
 }
 delta_required <- c(
   "inference", "model_variant", "family", "tau", "metric", "rendered_v6_value",
-  "authoritative_v8_value", "relative_gain_pct", "source_promotion_id"
+  "authoritative_value", "relative_gain_pct", "source_promotion_id"
 )
 if (!all(delta_required %in% names(article_delta)) ||
     nrow(article_delta) != as.integer(config$article_numeric_updates_from_rendered_base) ||
     anyDuplicated(with(article_delta, paste(inference, model_variant, family, tau, metric))) ||
     any(!article_delta$metric %in% metric_cols) ||
     any(!is.finite(article_delta$rendered_v6_value)) ||
-    any(!is.finite(article_delta$authoritative_v8_value)) ||
-    any(article_delta$authoritative_v8_value >= article_delta$rendered_v6_value) ||
+    any(!is.finite(article_delta$authoritative_value)) ||
+    any(article_delta$authoritative_value >= article_delta$rendered_v6_value) ||
     any(article_delta$relative_gain_pct <= 0)) {
   stop("The article-delta ledger violates the strict-improvement contract.", call. = FALSE)
 }
@@ -229,12 +252,12 @@ delta_matches <- vapply(seq_len(nrow(article_delta)), function(i) {
     drop = FALSE
   ]
   nrow(source_row) == 1L &&
-    abs(as.numeric(source_row[[row$metric]][[1L]]) - row$authoritative_v8_value) < 1e-12 &&
+    abs(as.numeric(source_row[[row$metric]][[1L]]) - row$authoritative_value) < 1e-12 &&
     identical(as.character(source_row$source_promotion_id[[1L]]),
               as.character(row$source_promotion_id[[1L]]))
 }, logical(1L))
 if (!all(delta_matches)) {
-  stop("The article-delta ledger does not match the pinned v8 interface.", call. = FALSE)
+  stop("The article-delta ledger does not match the pinned interface.", call. = FALSE)
 }
 qdesn_rows <- grepl("^qdesn_", source$model_variant)
 if (!all(source$preprocessing_scope[qdesn_rows] == "train_only")) {
@@ -689,6 +712,14 @@ manifest_lines <- c(
   sprintf("source_ledger_sha256: %s", sha256(source_ledger_path)),
   sprintf("article_delta: %s", config$article_delta_relative_path),
   sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
+  sprintf("promotion_effect: %s", config$promotion_effect_relative_path),
+  sprintf("promotion_effect_sha256: %s", sha256(promotion_effect_path)),
+  sprintf("chain_evidence: %s", config$chain_evidence_relative_path),
+  sprintf("chain_evidence_sha256: %s", sha256(chain_evidence_path)),
+  sprintf("promoted_specifications: %s", config$promoted_specifications_relative_path),
+  sprintf("promoted_specifications_sha256: %s", sha256(promoted_specifications_path)),
+  sprintf("rollback_ledger: %s", config$rollback_ledger_relative_path),
+  sprintf("rollback_ledger_sha256: %s", sha256(rollback_ledger_path)),
   sprintf("article_numeric_updates: %d", nrow(article_delta)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
   sprintf("row_count: %d", nrow(source)),

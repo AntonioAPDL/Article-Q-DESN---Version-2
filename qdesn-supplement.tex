@@ -1477,6 +1477,15 @@ track the exAL shape and scale coordinates, path agreement, and runtime. These
 diagnostics are disclosed next to the metric values; the accuracy criteria in
 the main tables remain fit RMSE, forecast MAE, and forecast check loss.
 
+Two additional case-specific confirmations used three independent chains,
+with 5,000 burn-in and 20,000 retained iterations per chain. For Gaussian
+$p=0.05$, the AL--RHS forecast MAE and check loss improved by 17.8\% and
+1.7\%, respectively. For the Gaussian-mixture family at $p=0.50$, the
+exAL--RHS forecast MAE and check loss improved by 44.6\% and 2.2\%.
+No fit criterion changed. The reproducibility record retains the six chain
+summaries, the two case-specific DESN/RHS specifications, source hashes,
+diagnostic grades, and rollback values.
+
 \clearpage
 \subsection{Single-Quantile Five-Chain MCMC Sensitivity}
 \label{subsec:supp-independent-five-chain-sensitivity}

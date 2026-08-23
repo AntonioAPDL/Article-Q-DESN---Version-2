@@ -1,4 +1,3 @@
-% Generated balanced MCMC validation protocol table.
 \begin{table}[!htbp]
 \centering
 \small
@@ -7,17 +6,17 @@
 Item & Value
 \\
 \midrule
-Validation components & Scenario-specific VB and structured-VB initialization followed by MCMC validation for reported quantile-grid summaries. \\
+Evaluation components & Scenario-specific VB and structured-VB initialization followed by MCMC analysis for reported quantile-grid summaries. \\
 Synthetic mechanisms & Eight mechanisms: three bridge cases and five stress cases with known conditional quantile paths. \\
 Model comparison & Joint and independent readouts under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior. \\
 Quantile grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95. \\
 Fit window & 500 observations after the pre-specified DESN washout. \\
 Forecast protocol & Held-out rolling-origin forecasts at origins separated by 30 observations, scored at leads 1-30. \\
-MCMC effort & AL rows use the stated MCMC effort for the balanced comparison. Eleven exAL comparisons use eight chains with 24,000 iterations and 5,000 retained draws per chain; five exAL comparisons use the stable MCMC summaries selected under the same validation design. \\
+MCMC effort & AL rows use the stated MCMC effort for the balanced comparison. Eleven exAL comparisons use eight chains with 24,000 iterations and 5,000 retained draws per chain; five exAL comparisons use stable MCMC summaries from the same scenario-level evaluation design. \\
 Reported quantile-grid summary & Scores evaluate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics. \\
 Replicated robustness check & The replicated robustness check contains 1600 independent VB fits. \\
 \bottomrule
 \end{tabular}
-\caption{Protocol for the balanced joint multi-quantile validation. Variational methods initialize the chains, while MCMC supplies the reported quantile-grid summaries.}
+\caption{Protocol for the balanced joint multi-quantile evaluation. Variational methods initialize the chains, while MCMC supplies the reported quantile-grid summaries.}
 \label{tab:joint-qdesn-article-validation-mcmc-balanced-protocol}
 \end{table}

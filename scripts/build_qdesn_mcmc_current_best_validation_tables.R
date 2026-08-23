@@ -541,7 +541,7 @@ write_family_table <- function(family) {
     lines <- c(lines, paste0(model_label_for_family(family, model_variant), " & ", paste(cells, collapse = " & "), " \\\\"))
   }
   caption <- sprintf(
-    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Q--DESN entries are reported within each model, target level, and criterion under the fixed validation design. When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is reported alongside the metric values.",
+    "MCMC single-quantile fit-and-forecast comparison for the %s simulation family. Q--DESN entries are reported within each model, target level, and criterion under the fixed evaluation design. When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. Forecast entries average scored rolling-origin lead-target pairs over the held-out forecast window of length 1000 using leads 1--30 with origin stride 30. Lower values are better, and boldface marks the lowest displayed value within each quantile level and metric. A dagger indicates that at least one contributing metric source has a WARN signoff, while a double dagger indicates at least one FAIL source. Diagnostic status is reported alongside the metric values.",
     families[[family]]
   )
   lines <- c(
@@ -561,7 +561,6 @@ written <- vapply(family_order, write_family_table, character(1L))
 
 wrapper <- file.path(out_dir, "qdesn_validation_tt500_final_mcmc_tables.tex")
 writeLines(c(
-  "% Article-facing independent simulation MCMC tables.",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_normal.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_laplace.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_gausmix.tex}"

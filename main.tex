@@ -1733,29 +1733,6 @@ definition for Q--DESN, DQLM, and exDQLM within the 500-observation benchmark.
 
 \input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
 
-Figure~\ref{fig:independent-simulation-mcmc-metric-envelope} provides a
-cross-family view of the same comparisons. Its shading is normalized only
-within a fixed family, quantile level, and metric; the printed cell values
-retain the absolute scale. The colors therefore show relative departures from
-the best displayed value without combining RMSE, MAE, and check loss into a
-single criterion.
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\textwidth]{figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf}
-\caption{MCMC performance across the independent single-quantile simulation
-families. Columns identify the data-generating family and rows identify the
-criterion. Each cell prints the absolute criterion value, while shading gives
-its ratio to the lowest value among the four models for that family, quantile
-level, and criterion. Outlined cells are the within-comparison minima; darker
-cells indicate larger multiplicative departures. Plus signs and crosses mark
-values whose supporting diagnostics contain a warning or failed check,
-respectively. Entries are interpreted within each family, quantile level, and
-criterion; all criteria are lower-is-better. Forecast criteria use the held-out
-window of length 1000 with leads 1--30 and origin stride 30.}
-\label{fig:independent-simulation-mcmc-metric-envelope}
-\end{figure}
-
 \noindent\textbf{Displayed simulation comparison.}
 The displayed MCMC tables are the reported simulation study for this fixed
 dynamic design. They are interpreted within the 500-observation setting, the

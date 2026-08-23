@@ -2,7 +2,6 @@
 # Keep this list sorted. The snapshot builder adds .gitignore and README.md.
 figures/glofas_application/diagnostics/glofas_fr09_authoritative_full7_qdesn_synthesized_bands__glofas_fr09_authoritative_full7_20260811.pdf
 figures/glofas_application/glofas_qdesn_discrepancy_corrected_quantile_paths__glofas_fr09_authoritative_full7_20260811.pdf
-figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf
 main.tex
 qdesn-supplement.tex
 refs.bib

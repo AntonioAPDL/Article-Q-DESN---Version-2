@@ -364,7 +364,6 @@ table_rows <- function(inference_value, family) {
 
 write_family_table <- function(family, path) {
   lines <- c(
-    "% Generated independent-validation table.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -402,7 +401,6 @@ write_family_table <- function(family, path) {
 
 write_mcmc_table <- function(family, path) {
   lines <- c(
-    "% Generated independent-validation table.",
     "\\begin{table}[!htbp]",
     "\\centering",
     "\\scriptsize",
@@ -419,7 +417,7 @@ write_mcmc_table <- function(family, path) {
     sprintf(
       paste0(
         "\\caption{MCMC single-quantile fit-and-forecast comparison for the %s simulation family. ",
-        "Q--DESN entries are reported within each model, target level, and criterion under the fixed validation design. ",
+        "Q--DESN entries are reported within each model, target level, and criterion under the fixed evaluation design. ",
         "When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. ",
         "Q--DESN preprocessing is ",
         "estimated only from the training ",
@@ -459,7 +457,6 @@ for (family in names(family_paths)) {
 
 protocol_path <- resolve_article(outputs$protocol_tex)
 writeLines(c(
-  "% Generated independent-validation protocol table.",
   "\\begin{table}[!htbp]",
   "\\centering",
   "\\small",
@@ -482,7 +479,6 @@ writeLines(c(
 
 family_wrapper <- resolve_article(outputs$family_wrapper_tex)
 writeLines(c(
-  "% Independent-validation companion tables.",
   "\\input{tables/qdesn_validation_tt500_final_protocol.tex}",
   "\\input{tables/qdesn_validation_tt500_final_normal.tex}",
   "\\input{tables/qdesn_validation_tt500_final_laplace.tex}",
@@ -490,7 +486,6 @@ writeLines(c(
 ), family_wrapper, useBytes = TRUE)
 mcmc_wrapper <- resolve_article(outputs$mcmc_wrapper_tex)
 writeLines(c(
-  "% Independent-validation MCMC tables.",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_normal.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_laplace.tex}",
   "\\input{tables/qdesn_validation_tt500_final_mcmc_gausmix.tex}"
@@ -498,7 +493,6 @@ writeLines(c(
 
 combined_path <- resolve_article(outputs$combined_tex)
 combined <- c(
-  "% Generated independent-validation table.",
   "\\begingroup",
   "\\scriptsize",
   "\\setlength{\\tabcolsep}{2.0pt}",
@@ -733,7 +727,7 @@ writeLines(c(
   sprintf("source_manifest_sha256: %s", sha256(source_manifest_path)),
   sprintf("article_delta_sha256: %s", sha256(article_delta_path)),
   sprintf("source_registry_hash: %s", config$source_registry_hash_value),
-  "selection_policy: fixed case-specific metric-level summary; diagnostic status reported alongside scores",
+  "selection_policy: fixed metric-specific summary; diagnostic status reported alongside scores",
   "qdesn_preprocessing_scope: train_only",
   sprintf("rolling_rebaseline_state: %s", config$rolling_rebaseline_state),
   sprintf("qdesn_forecast_metric_contract: %s", config$qdesn_forecast_metric_contract),

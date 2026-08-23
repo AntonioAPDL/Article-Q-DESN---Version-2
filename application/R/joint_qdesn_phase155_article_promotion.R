@@ -454,10 +454,10 @@ app_joint_qdesn_phase155_write_main_table <- function(data, path) {
     "\\end{tabular}",
     "}%",
     paste0(
-      "\\caption{Scenario-level MCMC validation analysis for the joint multi-quantile validation study. ",
+      "\\caption{Scenario-level MCMC evaluation for the joint multi-quantile simulation study. ",
       "Entries are forecast MAE with fit-window MAE and the number of raw forecast-window adjacent-level crossings in parentheses, written as forecast MAE (fit MAE; raw crossings). ",
       "Boldface marks the lowest forecast MAE within each scenario. QDESN uses the \\(\\AL\\) working likelihood, exQDESN uses the \\(\\exAL\\) working likelihood, and \\RHS{} denotes the regularized horseshoe prior. ",
-      "All scores use the monotone quantile-grid reporting rule; raw crossings are retained only as pre-rearrangement diagnostics.}"
+      "All scores use the monotone quantile grid; raw crossings are retained only as pre-rearrangement diagnostics.}"
     ),
     "\\label{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}",
     "\\end{table}"
@@ -606,17 +606,17 @@ app_joint_qdesn_phase155_gate_summary <- function(src, winners) {
 app_joint_qdesn_phase155_protocol_table <- function(src) {
   data.frame(
     Item = c(
-      "Validation components", "Synthetic mechanisms", "Model comparison",
+      "Evaluation components", "Synthetic mechanisms", "Model comparison",
       "Quantile grid", "Fit window", "Forecast protocol", "MCMC effort",
       "Reported quantile-grid summary", "Replicated robustness check"
     ),
     Value = c(
-      "Scenario-specific VB and VB-LD calibration and initialization, followed by MCMC validation.",
+      "Scenario-specific VB and VB-LD calibration and initialization, followed by MCMC analysis.",
       "Eight mechanisms: three bridge cases and five stress cases with known conditional quantile paths.",
       "Joint and independent quantile regressions under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior.",
       "0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95.",
       "500 observations after the pre-specified DESN washout.",
-      "No-refit held-out forecasts at origins separated by 30 observations, scored at leads 1-30.",
+      "Held-out forecasts at origins separated by 30 observations, scored at leads 1-30.",
       "Four chains and 3,000 retained draws per AL case; eight chains and 12,000 retained draws per exAL case.",
       "Scores evaluate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics.",
       sprintf("The replicated robustness check uses %d independent replicated VB fits: 50 replicates for each of 32 scenario-model comparisons.", as.integer(src$phase153_assessment$completed_candidates[[1L]]))
@@ -717,7 +717,7 @@ app_joint_qdesn_run_phase155_article_promotion <- function(
     gate_tex = app_joint_qdesn_phase155_write_latex_table(
       gate_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"),
-      "Diagnostic checks for the balanced MCMC multi-quantile validation. The checks verify complete scenario--model coverage, finite reported scores, variational initialization, and separation of raw and post-rearrangement crossing diagnostics.",
+      "Diagnostic summary for the balanced MCMC multi-quantile evaluation. The checks verify complete scenario--model coverage, finite reported scores, variational initialization, and separation of raw and post-rearrangement crossing diagnostics.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary",
       "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}l>{\\raggedright\\arraybackslash}p{0.60\\textwidth}@{}",
       size = "\\scriptsize",
@@ -727,7 +727,7 @@ app_joint_qdesn_run_phase155_article_promotion <- function(
     winner_tex = app_joint_qdesn_phase155_write_latex_table(
       winner_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_winner_summary.tex"),
-      "Lowest MCMC value within each scenario and metric. The winning model varies by metric and mechanism; the table is a diagnostic summary rather than evidence for a universal ordering.",
+      "Method with the lowest displayed MCMC value within each scenario and metric. Numerical rankings are descriptive when Monte Carlo margins are unresolved.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-winner-summary",
       "@{}>{\\raggedright\\arraybackslash}p{0.20\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}@{}",
       size = "\\scriptsize",

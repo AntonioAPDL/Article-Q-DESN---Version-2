@@ -192,8 +192,10 @@ if (grepl("QDESN ridge|exQDESN ridge|VB--LD|Final TT500", table_text) ||
     !grepl("Forecast check loss", table_text, fixed = TRUE) ||
     !grepl("corresponding repeated-chain average", table_text, fixed = TRUE) ||
     grepl("metric-level record", table_text, fixed = TRUE) ||
+    grepl("metric-level summary", table_text, fixed = TRUE) ||
+    grepl("under the fixed validation design", table_text, fixed = TRUE) ||
     grepl("different calibrated fits", table_text, fixed = TRUE)) {
-  stop("Generated tables contain a stale label or omit a required label.", call. = FALSE)
+  stop("Article tables contain a stale label or omit a required label.", call. = FALSE)
 }
 
 figure_data_path <- resolve_article(config$outputs$figure_data)

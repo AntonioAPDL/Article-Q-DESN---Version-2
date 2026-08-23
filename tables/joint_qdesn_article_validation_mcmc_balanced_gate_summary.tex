@@ -1,25 +1,24 @@
-% Generated balanced MCMC validation diagnostic table.
 \begin{table}[!htbp]
 \centering
 \scriptsize
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.23\textwidth}l>{\raggedright\arraybackslash}p{0.60\textwidth}@{}}
 \toprule
-Criterion & Status & Detail
+Check & Result & Detail
 \\
 \midrule
-Source verification & Pass & All source checks for the validation summary pass. \\
-Complete comparison grid & Pass & All 32 scenario--model comparisons are present exactly once. \\
-AL rows & Pass & The 16 AL rows are included in the balanced MCMC comparison. \\
-exAL comparison rows & Pass & Eleven exAL rows use the scale-collapsed analysis; five comparisons use stable MCMC summaries selected under the same validation design. \\
-Finite reported scores & Pass & All reported fit and forecast scores are finite. \\
-Variational initialization & Pass & Every MCMC row records variational initialization. \\
-Crossings after monotone rearrangement & Pass & Crossings after the monotone rearrangement equal 0. \\
-Raw crossing diagnostics & Review & Raw forecast crossings equal 25 and remain pre-rearrangement diagnostics. \\
-Table generation & Pass & Generated tables are reproduced from the stated validation inputs before inclusion. \\
+Comparison inputs & Complete & The data-generating mechanisms, model classes, and score definitions are specified for the reported summary. \\
+Complete comparison grid & Complete & All 32 scenario--model comparisons are present exactly once. \\
+AL rows & Complete & The 16 AL rows are included in the balanced MCMC comparison. \\
+exAL comparison rows & Complete & Eleven exAL rows use the scale-collapsed analysis; five comparisons use stable MCMC summaries from the same scenario-level evaluation design. \\
+Finite reported scores & Finite & All reported fit and forecast scores are finite. \\
+Variational initialization & Available & Every MCMC row uses variational initialization. \\
+Crossings after monotone rearrangement & None & Crossings after the monotone rearrangement equal 0. \\
+Raw crossing diagnostics & Present & Raw forecast crossings equal 25 and remain pre-rearrangement diagnostics. \\
+Summary construction & Consistent & The table entries follow the stated evaluation inputs. \\
 \bottomrule
 \end{tabular}
 }%
-\caption{Diagnostic checks for the balanced MCMC multi-quantile validation. The checks verify complete scenario--model coverage, finite reported scores, variational initialization, and separation of raw and post-rearrangement crossing diagnostics.}
+\caption{Diagnostic summary for the balanced MCMC multi-quantile evaluation. The checks verify complete scenario--model coverage, finite reported scores, variational initialization, and separation of raw and post-rearrangement crossing diagnostics.}
 \label{tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary}
 \end{table}

@@ -205,11 +205,12 @@ for (family in c("normal", "laplace", "gausmix")) {
   lines <- readLines(table_path, warn = FALSE)
   if (!identical(
     lines[[1L]],
-    "% Generated independent-validation table."
+    "\\begin{table}[!htbp]"
   ) ||
-      !any(grepl("under the fixed validation design", lines, fixed = TRUE)) ||
+      !any(grepl("under the fixed evaluation design", lines, fixed = TRUE)) ||
       !any(grepl("supporting diagnostics", lines, fixed = TRUE)) ||
       any(grepl("fixed case-specific calibration record", lines, fixed = TRUE)) ||
+      any(grepl("under the fixed validation design", lines, fixed = TRUE)) ||
       any(grepl("reproducibility record", lines, fixed = TRUE)) ||
       any(grepl("/home/jaguir26/local/src", lines, fixed = TRUE))) {
     stop(sprintf("Publication wording check failed for %s.", family), call. = FALSE)

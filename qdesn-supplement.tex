@@ -101,31 +101,30 @@ regression derivations used by \pkg{exdqlm}
 Q--DESN regression by replacing ordinary covariate rows with rows of the fixed
 DESN design matrix.
 
-The augmented posterior distribution, MCMC sampler, model-specific mean-field update
-structure, and ELBO monitor are stated so that the computations are recoverable
-without consulting implementation code. Ridge
+The augmented posterior distribution, MCMC sampler, model-specific mean-field
+update structure, and ELBO monitor are stated as mathematical objects. Ridge
 is the default coefficient prior. The main article uses \(\RHS\) for the
 regularized horseshoe coefficient prior, while \texttt{rhs\_ns} denotes the
 Nishimura--Suchard product representation used for closed-form scale updates.
 The main article states the posterior distribution and algorithms; this supplement
-contains the recoverable full conditionals, variational factors, and objective
-terms that support those algorithms. When the exAL block is active, smooth
+contains the full conditionals, variational factors, and objective terms that
+support those algorithms. When the exAL block is active, smooth
 Taylor/Laplace statements are branchwise away from \(\gamma=0\); the AL point
 is an exact nested special case, so generic two-sided Hessian arguments at zero
 require separate one-sided analysis.
-The supplement first records the reservoir-design checklist, then gives the
+The supplement first gives the reservoir-design checklist, then gives the
 fixed-design likelihood, prior, MCMC, variational, and ELBO details for the
 single-level regression. It next derives the joint quantile-vector extension,
-states the monotone rearrangement details, preserves supplementary validation
-evidence, and closes with the GloFAS forecast-discrepancy model.
+states the monotone rearrangement details, presents supplementary simulation
+tables, and closes with the GloFAS forecast-discrepancy model.
 
 \section{Reservoir Design Diagnostics}
 \label{sec:supp_reservoir_diagnostics}
 
-The main article treats the reservoir as a fixed feature map selected before
-posterior inference. Table~\ref{tab:supp-reservoir-selection} records the
+The main article treats the reservoir as a fixed feature map specified before
+posterior inference. Table~\ref{tab:supp-reservoir-selection} summarizes the
 component-level checklist behind that fixed-feature design decision.
-These checks are reproducibility diagnostics for the deterministic feature
+These checks are feature-construction diagnostics for the deterministic feature
 construction. Posterior uncertainty is placed on the regression, likelihood,
 and shrinkage quantities conditional on that construction.
 
@@ -138,14 +137,14 @@ and shrinkage quantities conditional on that construction.
 >{\raggedright\arraybackslash}p{0.28\textwidth}
 >{\raggedright\arraybackslash}X@{}}
 \toprule
-Component & Role in the fixed feature map & Selection rule & Main diagnostic risk \\
+Component & Role in the fixed feature map & Design rule & Main diagnostic risk \\
 \midrule
 \(D\) & Number of reservoir layers and hierarchy of time scales &
-Search over a small set and retain additional depth only when validation scores
+Search over a small set and retain additional depth only when predictive scores
 improve after seed checks. &
 Unnecessary depth can add unstable or redundant features. \\
 \(\{n_d\},\{\tilde n_d\}\) & Reservoir capacity and lower-layer feature
-dimension & Treat as the main complexity control, with reduction sizes selected
+dimension & Treat as the main complexity control, with reduction sizes chosen
 as part of the same feature map. &
 Large designs can overfit or produce poorly conditioned regressions; redundant
 states can reduce the effective rank of \(\mat X\). \\
@@ -162,11 +161,11 @@ defaults; broaden the search when diagnostics show weak state variation or
 saturation. & Too sparse can reduce richness; too dense or strongly driven can
 saturate nonlinear states. \\
 \(f,k,T_0\) & Nonlinearity, bridge transformation, and initial-condition
-washout & Fix before reservoir selection, with \(T_0\) chosen relative to the
+washout & Fix before feature-map comparison, with \(T_0\) chosen relative to the
 memory scale. & Short washout can leave initial-condition artifacts. \\
 Seed & Realization of the random feature map & Treat as a robustness variable
 and compare leading specifications over multiple seeds. &
-A single selected seed can overstate validation performance. \\
+A single seed can overstate predictive performance. \\
 \bottomrule
 \end{tabularx}
 \endgroup
@@ -686,11 +685,11 @@ or \texttt{rhs\_ns}, and MCMC controls.
 \label{sec:cavi}
 
 The article uses VB--LD as a model-specific computational approximation for
-screening, warm starts, and selected application fits. The approximation is
+screening, warm starts, and specific application fits. The approximation is
 mean-field for the conditionally conjugate augmented blocks and uses the
 Laplace--Delta method of \citet{wang2013nonconjugatevb} only for the
 non-conjugate exAL scale-asymmetry block \((\sigma,\gamma)\). This section
-records the generic fixed-design updates; application-specific GloFAS factors
+gives the generic fixed-design updates; application-specific GloFAS factors
 are given separately in Section~\ref{subsec:glofas_vb}.
 
 For a single target level \(p_0\), use the mean-field family
@@ -1322,8 +1321,8 @@ mean-field computational approximation, with Wang--Blei Laplace--Delta updates
 only for the non-conjugate exAL scale-asymmetry factors
 \citep{wang2013nonconjugatevb}. The generic fixed-design factorization and
 ELBO decomposition are given in Sections~\ref{sec:cavi}--\ref{sec:elbo}; the
-joint implementation applies those same factors to the stacked Gaussian block,
-with selected-covariance bookkeeping recorded in the implementation outputs.
+joint computation applies those same factors to the stacked Gaussian block, with
+the required covariance blocks retained for the coordinate updates.
 
 \subsection{Crossing Diagnostics}
 
@@ -1445,17 +1444,17 @@ This avoids combining quantiles produced under different future response
 histories.
 
 \clearpage
-\section{Supplementary Validation Tables}
+\section{Supplementary Simulation and Application Tables}
 \label{sec:supp_validation_tables}
 
-The main article reports MCMC-only validation summaries. This section gives the
-VB companion panels, balanced joint-validation diagnostics, and full generated
-table captions for the same simulation settings.
+The main article reports MCMC summaries for the simulation comparisons. This
+section gives the VB companion panels, balanced joint-evaluation diagnostics,
+and additional table captions for the same simulation settings.
 
-\subsection{Single-Quantile VB Companion Panels}
+\subsection{Single-Quantile VB Summaries}
 
-The following generated tables give both inference panels from the fixed
-500-observation validation study. Q--DESN and exQ--DESN entries use the
+The following supplementary tables give both inference panels from the fixed
+500-observation simulation study. Q--DESN and exQ--DESN entries use the
 train-window preprocessing rule, and ridge rows are omitted from the reported
 comparison. In the main article, only the MCMC rows from these tables are
 displayed.
@@ -1482,31 +1481,31 @@ the main tables remain fit RMSE, forecast MAE, and forecast check loss.
 \subsection{Single-Quantile Five-Chain MCMC Sensitivity}
 \label{subsec:supp-independent-five-chain-sensitivity}
 
-The primary single-quantile MCMC tables report case-specific metric summaries.
+The primary single-quantile MCMC tables report metric-specific summaries.
 For the Gaussian \(p=0.25\) comparison, a five-chain sensitivity analysis uses
 five independently seeded chains for each model specification. For each chain,
 the posterior point path is computed first; the reported sensitivity path is the
 coordinatewise median of those five paths. All criteria are then recomputed
 from that path. This construction summarizes chain-specific point estimates.
 
-Among the complete five-chain designs, one coherent design was selected per
+Among the complete five-chain designs, one coherent design is reported per
 working likelihood. Relative to the corresponding primary envelope, the
 coherent \(\AL\)--\(\RHS\) design reduced fit RMSE by 8.4\% and forecast MAE by
 1.6\%, while its forecast check loss increased by 0.4\%. The coherent
 \(\exAL\)--\(\RHS\) design reduced fit RMSE by 18.3\%, forecast MAE by 8.7\%, and
-forecast check loss by 0.4\%. These results support robustness of the selected
-Q--DESN behavior under independent MCMC seeds.
+forecast check loss by 0.4\%. These results support robustness of the reported
+Q--DESN summaries under independent MCMC seeds.
 
 \input{tables/qdesn_validation_mcmc_five_chain_sensitivity.tex}
 
 \clearpage
-\subsection{Joint Multi-Quantile Balanced MCMC Details}
+\subsection{Joint Multi-Quantile MCMC Evaluation Details}
 
-The following generated tables give the computational protocol, diagnostic
-criteria, metric-specific lowest-scoring methods, and replicated likelihood
-contrasts for the joint and independent multi-quantile regressions. VB and
+The following tables give the MCMC settings, crossing diagnostics,
+metric-specific lowest displayed scores, and replicated likelihood contrasts
+for the joint and independent multi-quantile regressions. VB and
 VB-LD provide scenario-specific screening, diagnostics, and MCMC
-initialization. The main article reports the balanced MCMC validation analysis;
+initialization. The main article reports the balanced MCMC evaluation;
 the final supplementary table summarizes paired AL-minus-exAL forecast-MAE
 differences over 50 independent data-generating realizations per scenario.
 
@@ -1517,10 +1516,10 @@ differences over 50 independent data-generating realizations per scenario.
 \label{subsec:supp_pricefm_diagnostics}
 
 The main article reports the aggregate fold-aligned PriceFM comparison. The
-tables below preserve three secondary diagnostic views from the same assembled
+tables below give three secondary diagnostic views from the same assembled
 retrospective comparison: the fold-level comparison summary, the input-set breakdown,
 and the available horizon-block breakdown. They are descriptive summaries of
-the selected analysis records, not separate selection criteria or
+the reported retrospective comparison rather than separate comparison criteria or
 origin-available operational evidence.
 
 \begin{table}[!htbp]
@@ -1540,7 +1539,7 @@ these fold-level contrasts.}
 \caption{PriceFM retrospective comparison by input set. Own-region rows and rows with
 neighborhood summaries both use retrospectively observed own-region load,
 solar, and wind lead covariates in the assembled comparison. Rows with
-neighborhood summaries additionally include selected neighboring-region
+neighborhood summaries additionally include chosen neighboring-region
 summaries or neighboring-region lead/lag features.}
 \label{tab:supp-pricefm-full-input-set-summary}
 \input{tables/pricefm_full_input_set_summary.tex}
@@ -1568,7 +1567,7 @@ quantile and the GloFAS discrepancy receive separate coefficient vectors. The
 historical reservoir states are fixed after preprocessing and washout. At
 issued forecast horizons, however, the reference path is unobserved at the
 forecast origin, so future reservoir states may depend on latent future
-reference values. This section records the fixed-design conditional
+reference values. This section gives the fixed-design conditional
 calculations used by the bridge model and by any latent-path sampler
 conditional on a proposed future path. The full latent-path posterior also
 contains the missing future reference values and the induced future reservoir
@@ -1628,7 +1627,7 @@ q^{\mathrm{glo}}_{p_0,i}
 Thus \(\vect\beta_{p_0}\) represents the reference-process quantile regression and
 \(\vect\alpha_{p_0}\) represents the GloFAS discrepancy innovation at the same
 level. In the historical rows, \(\vect x_i^{\mathrm{disc}}\) is driven by
-\(g_i^{\mathrm{ret}}-y_i\). In the selected retrospective forecast-window
+\(g_i^{\mathrm{ret}}-y_i\). In the reported retrospective forecast-window
 specification, the
 future discrepancy feature is \emph{persistence anchored}: it repeats the last
 available historical retrospective discrepancy on the transformed scale and
@@ -1638,15 +1637,15 @@ then applies the learned discrepancy regression. The recursive path
 at the fitted level, is an alternative specification for future sensitivity
 analysis.
 
-\noindent\textbf{Selected reporting rule.}
-Stacking source contributions conditional on the selected state construction
+\noindent\textbf{Reported summary rule.}
+Stacking source contributions conditional on the specified state construction
 gives a vector \(\vect z\), a design matrix \(\mat H\), and source labels
 \(c_i\). With observed historical data only, \(\mat H\) is fixed. Under the
-selected reporting rule, the reported forecast-window summaries are
+reported summary rule, the forecast-window summaries are
 variational quantile summaries passed through the monotone rearrangement.
 
 \noindent\textbf{Forecast-time decomposition.}
-The forecast-time use of the selected decomposition is additive around the
+The forecast-time decomposition is additive around the
 persistence baseline. For horizons covered by an issued GloFAS ensemble at
 origin \(T\), the ensemble informs the forecast-system evidence and the raw
 GloFAS comparator. The Q--DESN reported reference quantile is
@@ -2203,9 +2202,9 @@ For the latent-path ensemble-likelihood model, the variational family is
 augmented by a factor \(q_F(\vect y_F)\), where
 \(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\). Write
 \(z_i^c(\vect y_F)=z_{i0}^c+\vect u_i^\top\vect y_F\), where
-\(\vect u_i=\vect0\) for observed rows and selects the appropriate future
+\(\vect u_i=\vect0\) for observed rows and identifies the appropriate future
 reference value for forecast-window reference rows. The forecast-window
-feature row is \(\vect h_i^c(\vect y_F)\), because output lags in the
+fixed-design row is \(\vect h_i^c(\vect y_F)\), because output lags in the
 reservoir input may depend on \(\vect y_F\). For a current coefficient factor
 \(q_\theta=\Normal(\vect m_\theta,\mat\Sigma_\theta)\), define
 \[
@@ -2232,7 +2231,7 @@ For AL, the future-path Laplace target is, up to constants not depending on
 \right],
 \label{eq:supp_glofas_latent_path_al_ld_target}
 \end{equation}
-where \(\mathcal I_F\) contains rows whose response or feature row depends on
+where \(\mathcal I_F\) contains rows whose response or fixed-design row depends on
 the future path. Terms independent of \(\vect y_F\), including the
 \(A_0^2\E(v_i^{c_i})\) part of the Gaussian likelihood and the exponential
 latent-prior terms, are handled in the complete-data ELBO and omitted from the
@@ -2294,9 +2293,10 @@ Also,
 \approx
 \vect a_i^c\bar z_i^c+\mat J_i\mat V_F\vect u_i .
 \]
-Second-order mean corrections can be added for selected low-dimensional
-summaries, but they are not required for the first implementation because they
-would require Hessians for all reservoir features.
+Second-order mean corrections can be added for chosen low-dimensional
+summaries. The first-order construction above avoids featurewise Hessian
+calculations while retaining the mean and covariance terms needed for the
+Gaussian future-path approximation.
 
 \noindent\textbf{Entropy and objective.}
 Replacing fixed-design products by

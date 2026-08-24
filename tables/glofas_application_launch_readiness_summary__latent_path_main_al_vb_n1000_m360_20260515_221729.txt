@@ -1,6 +1,0 @@
-GloFAS Q-DESN launch-readiness report
-Run: latent_path_main_al_vb_n1000_m360_20260515_221729
-Required checks: 33
-Required failures: 0
-
-All required preflight checks passed. The final launch has not been executed by this stage.

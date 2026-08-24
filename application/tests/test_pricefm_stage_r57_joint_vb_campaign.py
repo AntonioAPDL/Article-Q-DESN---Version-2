@@ -6,6 +6,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+import pytest
 import yaml
 
 
@@ -131,7 +132,11 @@ def test_r57_runner_completes_tiny_train_val_case(tmp_path):
     assert summary["status"] == "completed"
     assert summary["test_accessed"] is False
     assert summary["joint_dimension"] == 21
+    assert summary["postfit_contract_pending"] is True
     assert (model / "joint_vb_initialization.rds").is_file()
+    method = pd.read_csv(model / "model_method_summary.csv")
+    assert method.iloc[0].model_family == "joint_qdesn_readout"
+    assert method.iloc[0].likelihood_family == "al"
     assert not (adapter / "X_test.csv").exists()
 
 
@@ -156,6 +161,32 @@ def test_r57_launcher_assigns_one_lane_per_cpu(tmp_path, monkeypatch):
     assert summary["completed_or_skipped"] == 4
     assert {cpu for _, cpu in seen} == {4, 6}
     assert summary["one_process_per_cpu"] is True
+
+
+def test_r57_launcher_honors_graceful_stop_before_dispatch(tmp_path, monkeypatch):
+    module = load("r57_launcher_stop", "203_launch_pricefm_stage_r57_joint_vb.py")
+    manifest = tmp_path / "launch_manifest.csv"
+    rows = [
+        {"case_id": f"c{i}", "region": f"R{i}", "fold": 1,
+         "config": str(tmp_path / f"c{i}.yaml"), "output_dir": str(tmp_path / f"out{i}")}
+        for i in range(3)
+    ]
+    pd.DataFrame(rows).to_csv(manifest, index=False)
+    stop_file = tmp_path / "STOP"
+    stop_file.touch()
+
+    def forbidden_launch(*_args, **_kwargs):
+        raise AssertionError("No case should be dispatched after the stop sentinel exists")
+
+    monkeypatch.setattr(module, "launch_one", forbidden_launch)
+    args = module.parser().parse_args([
+        "--manifest", str(manifest), "--runner", str(tmp_path / "runner.R"),
+        "--cpu-list", "4,6", "--workers", "2", "--stop-file", str(stop_file),
+    ])
+    summary = module.run(args)
+    assert summary["status"] == "stopped_before_completion"
+    assert summary["not_launched_stop_requested"] == 3
+    assert summary["completed_or_skipped"] == 0
 
 
 def test_r57_closeout_selects_on_validation_without_test_ledger(tmp_path):
@@ -196,6 +227,9 @@ def test_r57_closeout_selects_on_validation_without_test_ledger(tmp_path):
         "--authority-dir", str(authority_dir), "--grid-dir", str(grid_dir),
         "--output-dir", str(output), "--expected-cases", "2",
     ])
+    with pytest.raises(RuntimeError, match="superseded by the Stage-R58"):
+        module.run(args)
+    args.legacy_raw_gate_authorized = True
     summary = module.run(args)
     decisions = pd.read_csv(output / "pricefm_stage_r57_joint_vb_validation_decision_freeze.csv")
     queue = pd.read_csv(output / "pricefm_stage_r57_joint_mcmc_confirmation_queue.csv")

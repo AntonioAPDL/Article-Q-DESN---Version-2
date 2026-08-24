@@ -25,6 +25,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--resume", type=parse_bool, default=True)
     p.add_argument("--force", type=parse_bool, default=False)
     p.add_argument("--case-limit", type=int, default=0)
+    p.add_argument(
+        "--stop-file", type=Path, default=None,
+        help="Gracefully stop dispatching new cases when this sentinel exists",
+    )
     return p
 
 
@@ -79,9 +83,21 @@ def launch_one(row: dict, cpu: int, runner: Path, resume: bool, force: bool) -> 
     }
 
 
-def launch_lane(rows: list[dict], cpu: int, runner: Path, resume: bool, force: bool, callback) -> list[dict]:
+def launch_lane(
+    rows: list[dict], cpu: int, runner: Path, resume: bool, force: bool,
+    callback, stop_file: Path | None = None,
+) -> list[dict]:
     results = []
-    for row in rows:
+    for index, row in enumerate(rows):
+        if stop_file is not None and stop_file.is_file():
+            for pending in rows[index:]:
+                result = {
+                    **pending, "cpu": cpu, "status": "not_launched_stop_requested",
+                    "returncode": "", "worker_log": "",
+                }
+                results.append(result)
+                callback(result)
+            break
         result = launch_one(row, cpu, runner, resume, force)
         results.append(result)
         callback(result)
@@ -134,17 +150,26 @@ def run(args: argparse.Namespace) -> dict:
     results = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [
-            pool.submit(launch_lane, lane, cpus[index], args.runner, args.resume, args.force, record)
+            pool.submit(
+                launch_lane, lane, cpus[index], args.runner, args.resume, args.force,
+                record, args.stop_file,
+            )
             for index, lane in enumerate(lanes) if lane
         ]
         for future in as_completed(futures):
             results.extend(future.result())
     failed = sum(row["status"] == "failed" for row in results)
+    not_launched = sum(row["status"] == "not_launched_stop_requested" for row in results)
     summary = {
-        "status": "completed" if failed == 0 and len(results) == len(rows) else "completed_with_failures",
+        "status": (
+            "completed" if failed == 0 and not_launched == 0 and len(results) == len(rows)
+            else "stopped_before_completion" if not_launched > 0 and failed == 0
+            else "completed_with_failures"
+        ),
         "manifest_cases": len(rows),
         "completed_or_skipped": sum(row["status"] in {"completed", "skipped_completed"} for row in results),
         "failed": failed,
+        "not_launched_stop_requested": not_launched,
         "workers": workers,
         "cpu_ids": cpus[:workers],
         "one_process_per_cpu": True,

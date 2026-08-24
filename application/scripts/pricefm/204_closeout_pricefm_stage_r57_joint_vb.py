@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Close out Stage-R57 using validation evidence only."""
+"""Legacy raw-gate closeout retained behind an explicit compatibility guard."""
 
 from __future__ import annotations
 
@@ -27,6 +27,10 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--grid-dir", type=Path, default=GRID)
     p.add_argument("--output-dir", type=Path, default=OUTPUT)
     p.add_argument("--expected-cases", type=int, default=114)
+    p.add_argument(
+        "--legacy-raw-gate-authorized", type=parse_bool, default=False,
+        help="Explicitly reproduce the superseded zero-raw-crossing gate",
+    )
     p.add_argument("--force", type=parse_bool, default=False)
     return p
 
@@ -70,6 +74,12 @@ def validation_metric(path: Path, method_id: str) -> float:
 
 
 def run(args: argparse.Namespace) -> dict:
+    if not args.legacy_raw_gate_authorized:
+        raise RuntimeError(
+            "Stage-R57 legacy raw-crossing closeout is superseded by the Stage-R58 "
+            "dual-role recovery audit; pass --legacy-raw-gate-authorized true only "
+            "to reproduce the historical gate."
+        )
     output = args.output_dir.resolve()
     prepare_output(output, args.force)
     authority_path = args.authority_dir / "pricefm_stage_r57_joint_case_authority.csv"

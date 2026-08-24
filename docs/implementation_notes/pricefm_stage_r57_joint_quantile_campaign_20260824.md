@@ -113,3 +113,13 @@ The Python suite covers the 114-case prep contract, a real tiny joint AL fit,
 CPU-lane scheduling, sealed-test isolation, and validation-only closeout. No test
 adapter, registry mutation, article edit, or manuscript asset is produced by
 Stage-R57.
+
+## Live recovery amendment
+
+The 2026-08-24 live audit identified a recoverable postfit metadata failure and a
+scoring-policy mismatch with the repository-wide joint monotone contract. The
+fit campaign remains scientifically usable. The authoritative recovery,
+dual-role audit, and continuation gates are documented in
+`pricefm_stage_r57_r58_joint_recovery_20260824.md`; that note supersedes the
+zero-raw-crossing hard gate above until the full-surface scoring contract is
+explicitly frozen.

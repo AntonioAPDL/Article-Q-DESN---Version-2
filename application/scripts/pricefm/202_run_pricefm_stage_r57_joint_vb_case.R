@@ -189,6 +189,25 @@ main <- function() {
     stringsAsFactors = FALSE
   )
   utils::write.csv(parameter_summary, file.path(out, "model_parameter_summary.csv"), row.names = FALSE)
+  method_summary <- data.frame(
+    method_id = cfg$method_id,
+    model_family = "joint_qdesn_readout",
+    likelihood_family = cfg$likelihood_family,
+    prior_family = "rhs_ns",
+    target_label = "joint_seven_quantile_validation",
+    preserves_full_data_target = TRUE,
+    approximate = TRUE,
+    chunking_mode = "joint_vb_dense",
+    converged = isTRUE(fit$converged),
+    iter = nrow(fit$trace),
+    train_seconds = as.numeric(elapsed),
+    n_train = length(y_train),
+    n_features = ncol(Z_train),
+    warm_start_enabled = FALSE,
+    warm_start_strategy = "joint_initialization",
+    stringsAsFactors = FALSE
+  )
+  utils::write.csv(method_summary, file.path(out, "model_method_summary.csv"), row.names = FALSE)
   checkpoint <- list(
     format = "pricefm_stage_r57_joint_vb_initialization_v1",
     case_id = cfg$case_id,
@@ -237,7 +256,8 @@ main <- function() {
   utils::write.csv(source_manifest, file.path(out, "source_manifest.csv"), row.names = FALSE)
 
   removed <- character()
-  if (isTRUE(cfg$cleanup_adapter_after_success)) {
+  cleanup_deferred <- isTRUE(cfg$cleanup_adapter_after_success)
+  if (isTRUE(cfg$cleanup_adapter_after_success) && isFALSE(cfg$defer_cleanup_to_repair %||% TRUE)) {
     patterns <- c("^X_(train|val)\\.csv$", "^y_(train|val)\\.csv$", "^rows_(train|val)\\.csv$", "^rows_all\\.csv$")
     candidates <- list.files(adapter, full.names = TRUE)
     remove_paths <- candidates[vapply(basename(candidates), function(name) any(vapply(patterns, grepl, logical(1L), x = name)), logical(1L))]
@@ -268,6 +288,8 @@ main <- function() {
     checkpoint = checkpoint_path,
     checkpoint_sha256 = app_sha256_file(checkpoint_path),
     adapter_heavy_files_removed = removed,
+    adapter_cleanup_deferred_to_repair = cleanup_deferred && !length(removed),
+    postfit_contract_pending = TRUE,
     split_firewall = "train_validation_only",
     test_accessed = FALSE,
     registry_mutation_authorized = FALSE,

@@ -110,6 +110,11 @@ def test_pava_matches_monotone_pooling():
     fitted = module.pava(np.array([0.0, 2.0, 1.0, 3.0, 2.0]))
     assert np.allclose(fitted, [0.0, 1.5, 1.5, 2.5, 2.5])
     assert np.all(np.diff(fitted) >= 0)
+    rng = np.random.default_rng(20260824)
+    raw = rng.normal(size=(100, 7))
+    vectorized = module.pava_rows(raw)
+    scalar = np.vstack([module.pava(row) for row in raw])
+    assert np.allclose(vectorized, scalar, atol=1e-12, rtol=0)
 
 
 def test_r57_repair_recovers_without_refit_and_is_idempotent(tmp_path):
@@ -127,12 +132,44 @@ def test_r57_repair_recovers_without_refit_and_is_idempotent(tmp_path):
     assert summary["models_refit"] == 0
     assert repaired["postfit_repaired"] is True
     assert repaired["test_accessed"] is False
+    assert repaired["adapter_cleanup_completed"] is True
+    assert set(repaired["adapter_heavy_files_removed"]) == {
+        "X_train.csv", "X_val.csv", "y_train.csv", "y_val.csv",
+        "rows_train.csv", "rows_val.csv", "rows_all.csv",
+    }
     assert contract_diag.contract_crossing_pairs.sum() == 0
     assert (model / "model_method_summary.csv").is_file()
     assert (model / "joint_vb_initialization.rds").is_file()
     assert not (adapter / "X_train.csv").exists()
     second = module.run(args)
     assert second["status_counts"] == {"already_repaired": 1}
+
+
+def test_r57_repair_reuses_complete_generic_metrics(tmp_path, monkeypatch):
+    module = load("r57_repair_reuse", "205_repair_pricefm_stage_r57_joint_vb_postfit.py")
+    manifest, model, _ = make_repair_fixture(tmp_path)
+    pd.DataFrame([
+        {"method_id": "joint_qdesn_exal_rhs_ns_vb1", "split": "val", "unit": "scaled", "AQL": 0.4},
+        {"method_id": "joint_qdesn_exal_rhs_ns_vb1", "split": "val", "unit": "original", "AQL": 4.0},
+    ]).to_csv(model / "metric_summary.csv", index=False)
+    for name in (
+        "metric_by_horizon.csv", "metric_by_horizon_group.csv",
+        "predictions_with_naive_scaled.csv",
+    ):
+        (model / name).write_text("fixture\n")
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Verified generic metrics must not be recomputed")
+
+    monkeypatch.setattr(module.subprocess, "run", forbidden)
+    args = module.parser().parse_args([
+        "--manifest", str(manifest), "--output-dir", str(tmp_path / "repair"),
+        "--require-original-metrics", "false",
+    ])
+    summary = module.run(args)
+    repaired = json.loads((model / "job_summary.json").read_text())
+    assert summary["postfit_complete"] == 1
+    assert repaired["generic_summary_mode"] == "reused_and_replay_verified"
 
 
 def test_r57_repair_rejects_nonvalidation_predictions(tmp_path):

@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -33,6 +34,10 @@ FIT_ARTIFACTS = {
     "model_predictions_scaled.csv", "model_trace_summary.csv",
     "model_parameter_summary.csv", "crossing_diagnostics.csv",
     "joint_vb_initialization.rds",
+}
+GENERIC_METRIC_ARTIFACTS = {
+    "metric_summary.csv", "metric_by_horizon.csv", "metric_by_horizon_group.csv",
+    "predictions_with_naive_scaled.csv",
 }
 CHANGE_COLUMNS = (
     "max_beta_change", "max_gamma_change", "max_sigma_change", "max_qhat_change",
@@ -88,6 +93,29 @@ def pava(values: np.ndarray) -> np.ndarray:
             levels[-2:] = [level]
             weights[-2:] = [weight]
     return np.asarray([level for level, weight in zip(levels, weights) for _ in range(weight)])
+
+
+def pava_rows(values: np.ndarray) -> np.ndarray:
+    """Vectorized equal-weight isotonic regression across many short rows."""
+    y = np.asarray(values, dtype=float)
+    if y.ndim != 2 or y.shape[1] < 1 or not np.isfinite(y).all():
+        raise ValueError("Row-wise PAVA requires one finite matrix")
+    prefix = np.concatenate([np.zeros((len(y), 1)), np.cumsum(y, axis=1)], axis=1)
+    width = y.shape[1]
+    interval_means = {
+        (start, end): (prefix[:, end + 1] - prefix[:, start]) / (end - start + 1)
+        for start in range(width) for end in range(start, width)
+    }
+    fitted = np.empty_like(y)
+    for index in range(width):
+        lower_envelopes = []
+        for start in range(index + 1):
+            upper = np.column_stack([
+                interval_means[(start, end)] for end in range(index, width)
+            ])
+            lower_envelopes.append(upper.min(axis=1))
+        fitted[:, index] = np.column_stack(lower_envelopes).max(axis=1)
+    return fitted
 
 
 def runtime_config(path: Path) -> dict:
@@ -182,32 +210,44 @@ def contract_predictions(model: Path, cfg: dict) -> tuple[pd.DataFrame, pd.DataF
     if set(raw.split.astype(str)) != {"val"}:
         raise RuntimeError("R57 postfit repair refuses predictions outside validation")
     taus = np.asarray(cfg["quantiles"], dtype=float)
-    pieces = []
-    diagnostics = []
-    for (origin, horizon), block in raw.groupby(["origin_id", "horizon"], sort=True):
-        block = block.sort_values("tau").copy()
-        observed = block.tau.to_numpy(dtype=float)
-        if len(block) != len(taus) or not np.allclose(observed, taus, atol=1e-12, rtol=0):
-            raise RuntimeError(f"Nonrectangular quantile grid for {origin}/{horizon}")
-        raw_values = block.pred_scaled.to_numpy(dtype=float)
-        fitted = pava(raw_values)
-        adjustment = fitted - raw_values
-        block["pred_scaled_raw"] = raw_values
-        block["pred_scaled"] = fitted
-        block["contract_adjustment"] = adjustment
-        pieces.append(block)
-        raw_diff = np.diff(raw_values)
-        contract_diff = np.diff(fitted)
-        diagnostics.append({
-            "origin_id": origin, "horizon": int(horizon),
-            "raw_crossing_pairs": int((raw_diff < -1e-10).sum()),
-            "contract_crossing_pairs": int((contract_diff < -1e-10).sum()),
-            "adjusted_quantiles": int((np.abs(adjustment) > 1e-10).sum()),
-            "max_abs_adjustment": float(np.max(np.abs(adjustment))),
-            "mean_abs_adjustment": float(np.mean(np.abs(adjustment))),
-        })
-    contract = pd.concat(pieces, ignore_index=True)
-    diag = pd.DataFrame(diagnostics)
+    if raw.duplicated(["origin_id", "horizon", "tau"]).any():
+        raise RuntimeError("Raw predictions contain duplicate origin/horizon/tau rows")
+    wide = raw.pivot(index=["origin_id", "horizon"], columns="tau", values="pred_scaled")
+    observed = np.asarray(wide.columns, dtype=float)
+    if len(observed) != len(taus) or not np.allclose(observed, taus, atol=1e-12, rtol=0):
+        raise RuntimeError("Raw predictions do not contain the declared quantile grid")
+    wide = wide.reindex(columns=list(taus))
+    if wide.isna().any().any() or len(raw) != len(wide) * len(taus):
+        raise RuntimeError("Raw predictions do not form a rectangular quantile grid")
+    raw_values = wide.to_numpy(dtype=float)
+    fitted = pava_rows(raw_values)
+    adjustment = fitted - raw_values
+    raw_diff = np.diff(raw_values, axis=1)
+    contract_diff = np.diff(fitted, axis=1)
+    origins = wide.index.get_level_values("origin_id").to_numpy()
+    horizons = wide.index.get_level_values("horizon").to_numpy(dtype=int)
+    method_ids = raw.method_id.astype(str).unique()
+    if len(method_ids) != 1:
+        raise RuntimeError("R57 repair requires one joint method per case")
+    contract = pd.DataFrame({
+        "method_id": np.repeat(method_ids[0], len(wide) * len(taus)),
+        "prediction_role": np.repeat("monotone_contract", len(wide) * len(taus)),
+        "split": np.repeat("val", len(wide) * len(taus)),
+        "origin_id": np.repeat(origins, len(taus)),
+        "horizon": np.repeat(horizons, len(taus)),
+        "tau": np.tile(taus, len(wide)),
+        "pred_scaled_raw": raw_values.ravel(),
+        "pred_scaled": fitted.ravel(),
+        "contract_adjustment": adjustment.ravel(),
+    })
+    diag = pd.DataFrame({
+        "origin_id": origins, "horizon": horizons,
+        "raw_crossing_pairs": (raw_diff < -1e-10).sum(axis=1).astype(int),
+        "contract_crossing_pairs": (contract_diff < -1e-10).sum(axis=1).astype(int),
+        "adjusted_quantiles": (np.abs(adjustment) > 1e-10).sum(axis=1).astype(int),
+        "max_abs_adjustment": np.max(np.abs(adjustment), axis=1),
+        "mean_abs_adjustment": np.mean(np.abs(adjustment), axis=1),
+    })
     summary = {
         "validation_rows": int(len(diag)),
         "raw_crossing_rows": int((diag.raw_crossing_pairs > 0).sum()),
@@ -303,6 +343,25 @@ def cleanup_adapter(adapter: Path) -> list[str]:
     return removed
 
 
+def adapter_cleanup_complete(adapter: Path) -> bool:
+    return not any((adapter / name).is_file() for name in HEAVY_NAMES)
+
+
+def reusable_generic_metrics(model: Path, method_id: str) -> bool:
+    if not all((model / name).is_file() for name in GENERIC_METRIC_ARTIFACTS):
+        return False
+    try:
+        frame = pd.read_csv(model / "metric_summary.csv")
+    except Exception:
+        return False
+    rows = frame[
+        frame.method_id.astype(str).eq(str(method_id))
+        & frame.split.astype(str).eq("val")
+        & frame.unit.astype(str).eq("original")
+    ]
+    return len(rows) == 1 and math.isfinite(float(rows.iloc[0].AQL))
+
+
 def fit_is_terminal(model: Path) -> bool:
     """Reject a case while its runner can still be writing postfit artifacts."""
     summary_path = model / "job_summary.json"
@@ -336,7 +395,13 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
     cfg = runtime_config(config_path)
     adapter = Path(cfg["adapter_dir"])
     if already_repaired(model) and not args.force:
+        payload = existing_summary(model / "job_summary.json")
         removed = cleanup_adapter(adapter) if args.cleanup_heavy else []
+        previous = list(payload.get("adapter_heavy_files_removed", []))
+        payload["adapter_heavy_files_removed"] = sorted(set(previous + removed))
+        payload["adapter_cleanup_completed"] = adapter_cleanup_complete(adapter)
+        payload["last_repair_code_sha256"] = sha256(Path(__file__).resolve())
+        write_json(model / "job_summary.json", payload)
         return {
             "case_id": case_id, "region": cfg["region"], "fold": int(cfg["fold"]),
             "status": "already_repaired", "cleanup_files_removed": len(removed),
@@ -359,15 +424,26 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
     method_path = model / "model_method_summary.csv"
     atomic_csv(method_summary(cfg, model, adapter, trace), method_path)
 
-    if not args.skip_summarizer:
+    if args.skip_summarizer:
+        generic_summary_mode = "explicit_test_skip"
+    elif reusable_generic_metrics(model, cfg["method_id"]):
+        generic_summary_mode = "reused_and_replay_verified"
+    else:
+        env = os.environ.copy()
+        for name in (
+            "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+            "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS",
+        ):
+            env[name] = "1"
         result = subprocess.run(
             [str(args.python_bin), str(args.summarizer), "--smoke-config", str(cfg["smoke_config"]),
              "--run-dir", str(model)],
-            text=True, capture_output=True, check=False,
+            text=True, capture_output=True, check=False, env=env,
         )
-        (model / "validation_summary.log").write_text(result.stdout + result.stderr)
+        (model / "postfit_validation_summary.log").write_text(result.stdout + result.stderr)
         if result.returncode != 0:
             raise RuntimeError(f"{case_id}: validation summarizer exited {result.returncode}")
+        generic_summary_mode = "rerun_after_method_metadata_repair"
     if not (model / "metric_summary.csv").is_file():
         raise RuntimeError(f"{case_id}: validation metric summary is absent")
 
@@ -412,8 +488,6 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         "repair_script": Path(__file__).resolve(),
     })
     atomic_csv(manifest, manifest_path)
-    removed = cleanup_adapter(adapter) if args.cleanup_heavy else []
-
     payload = {
         "status": "completed", "fit_completed": True, "postfit_repaired": True,
         "case_id": case_id, "region": cfg["region"], "fold": int(cfg["fold"]),
@@ -431,11 +505,20 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         "contract_mean_abs_adjustment": contract_summary["mean_abs_adjustment"],
         "checkpoint": str(checkpoint), "checkpoint_sha256": sha256(checkpoint),
         "source_manifest": str(manifest_path), "source_manifest_sha256": sha256(manifest_path),
-        "adapter_heavy_files_removed": removed,
+        "repair_execution_script_sha256": sha256(Path(__file__).resolve()),
+        "generic_summary_mode": generic_summary_mode,
+        "adapter_heavy_files_removed": [],
+        "adapter_cleanup_completed": adapter_cleanup_complete(adapter),
         "split_firewall": "train_validation_only", "test_accessed": False,
         "selection_role": "validation_only", "mcmc_launch_authorized": False,
         "registry_mutation_authorized": False, "article_mutation_authorized": False,
     }
+    # A completed summary is durable before cleanup, so interruption cannot strand
+    # a validated case after its reconstructible adapter rows are removed.
+    write_json(model / "job_summary.json", payload)
+    removed = cleanup_adapter(adapter) if args.cleanup_heavy else []
+    payload["adapter_heavy_files_removed"] = removed
+    payload["adapter_cleanup_completed"] = adapter_cleanup_complete(adapter)
     write_json(model / "job_summary.json", payload)
     return {
         "case_id": case_id, "region": cfg["region"], "fold": int(cfg["fold"]),

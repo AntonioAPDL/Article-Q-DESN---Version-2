@@ -125,6 +125,13 @@ only terminal cases. A terminal case must have all five fit artifacts and a
 `job_summary.json` newer than those artifacts. This prevents repair from racing a
 worker that is still writing.
 
+The first production pass repaired 36 terminal cases with zero failures and zero
+refits; 78 cases were not yet fit-complete at that pass. Its exact code is frozen
+in task-branch commit `8443f7f`. Subsequent passes use a vectorized equal-weight
+PAVA that is fixture-checked against the scalar algorithm, cap numerical library
+threads at one per postfit worker, and reuse existing generic metric artifacts
+only after the raw original-scale AQL is replayed and verified.
+
 For each accepted case it:
 
 - enforces the train/validation split firewall and rejects test predictions;
@@ -139,6 +146,10 @@ For each accepted case it:
 - optionally removes only `X_train.csv`, `X_val.csv`, `y_train.csv`,
   `y_val.csv`, `rows_train.csv`, `rows_val.csv`, and `rows_all.csv` after all
   checks pass.
+
+The completed repaired summary is written before optional deletion and then
+updated after deletion. An interruption therefore cannot leave a scientifically
+validated case dependent on adapter rows that have already been removed.
 
 The checkpoint, predictions, metrics, trace, parameter and method summaries,
 crossing diagnostics, manifests, logs, and configuration files are retained.

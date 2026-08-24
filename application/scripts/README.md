@@ -451,6 +451,15 @@ Rscript application/scripts/00_audit_generated_artifacts.R \
 
 This inventory reports generated `.rds`, `.rda`, `.RData`, and large local
 artifacts under ignored application output roots. It does not remove files.
+
+Constrained p50 campaigns have separate strict and forensic closeout paths.
+`glofas_constrained_median_screen_resume.sh` retries only failed candidates;
+`glofas_p50_structural_closeout_audit.R` performs the paired no-refit
+uncertainty audit after strict completion; and
+`glofas_reservoir_preflight_policy_audit.R` calibrates a prospective screening
+policy without changing recorded decisions. See
+`docs/implementation_notes/glofas_structural_closeout_20260823.md` for the
+complete gate and retention contract.
 For cleanup planning across runs, use the run-level inventory:
 
 ```sh

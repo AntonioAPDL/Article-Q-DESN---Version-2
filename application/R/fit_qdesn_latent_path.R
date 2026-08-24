@@ -636,6 +636,19 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   cfg_beta <- app_qdesn_block_config(cfg, "reference")
   cfg_alpha <- if (isTRUE(two_block)) app_qdesn_block_config(cfg, "discrepancy") else cfg_beta
   drop <- app_qdesn_common_washout(cfg, drop = drop)
+  row_alignment <- app_feature_contract_common_history_alignment(
+    configs = if (isTRUE(two_block)) {
+      list(reference = cfg_beta, discrepancy = cfg_alpha)
+    } else {
+      list(reference = cfg_beta)
+    },
+    requested_drop = drop
+  )
+  drop <- unique(row_alignment$common_drop)
+  if (length(drop) != 1L || !is.finite(drop)) {
+    stop("Feature-block history alignment did not produce one common drop.", call. = FALSE)
+  }
+  drop <- as.integer(drop)
   horizon_scale <- app_discrepancy_horizon_scale(panel, cfg)
   latent_feature_strategy <- app_prediction_contract(
     cfg,
@@ -804,6 +817,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     base_panel_full = base_panel_full,
     base_panel_disc_full = base_panel_disc_full,
     keep_idx = feature_beta$keep_idx,
+    row_alignment = row_alignment,
     latent_data = latent_data,
     future_key = latent_data$future_key,
     y_future_init = app_latent_path_initial_future(latent_data, p0),

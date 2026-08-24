@@ -312,6 +312,19 @@ app_make_glofas_discrepancy_data <- function(
   cfg_beta <- app_qdesn_block_config(cfg, "reference")
   cfg_alpha <- if (isTRUE(two_block)) app_qdesn_block_config(cfg, "discrepancy") else cfg_beta
   drop <- app_qdesn_common_washout(cfg, drop = drop)
+  row_alignment <- app_feature_contract_common_history_alignment(
+    configs = if (isTRUE(two_block)) {
+      list(reference = cfg_beta, discrepancy = cfg_alpha)
+    } else {
+      list(reference = cfg_beta)
+    },
+    requested_drop = drop
+  )
+  drop <- unique(row_alignment$common_drop)
+  if (length(drop) != 1L || !is.finite(drop)) {
+    stop("Feature-block history alignment did not produce one common drop.", call. = FALSE)
+  }
+  drop <- as.integer(drop)
   if (isTRUE(two_block) && isTRUE(include_ensemble_training)) {
     stop(
       paste(
@@ -536,6 +549,7 @@ app_make_glofas_discrepancy_data <- function(
     base_panel = base_panel,
     row_info = row_info,
     keep_idx = feature$keep_idx,
+    row_alignment = row_alignment,
     feature_meta = feature$meta,
     feature_meta_beta = feature$meta,
     feature_meta_alpha = feature_meta_alpha,

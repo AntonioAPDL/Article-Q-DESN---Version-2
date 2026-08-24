@@ -16,7 +16,7 @@ MIN_DISK_GB="$7"
 RUN_FINALIZER="$8"
 CLEANUP="$9"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-STATUS_PATH="${OUTPUT_ROOT}/orchestration_status.csv"
+STATUS_PATH="${OUTPUT_ROOT}/resume_orchestration_status.csv"
 
 write_status() {
   local status="$1"
@@ -43,6 +43,11 @@ trap on_exit EXIT
 
 cd "$REPO_ROOT"
 write_status "running"
+if [[ -f "${OUTPUT_ROOT}/scheduler_state.csv" ]]; then
+  cp "${OUTPUT_ROOT}/scheduler_state.csv" \
+    "${OUTPUT_ROOT}/scheduler_state_before_resume_$(date +%Y%m%dT%H%M%S).csv"
+fi
+
 python3 application/scripts/glofas_fit_recovery_scheduler.py \
   --manifest "$MANIFEST" \
   --output-root "$OUTPUT_ROOT" \
@@ -50,11 +55,13 @@ python3 application/scripts/glofas_fit_recovery_scheduler.py \
   --cores "$CORES" \
   --max-load "$MAX_LOAD" \
   --min-memory-gb "$MIN_MEMORY_GB" \
-  --min-disk-gb "$MIN_DISK_GB"
+  --min-disk-gb "$MIN_DISK_GB" \
+  --retry-failed
 
 if [[ "$RUN_FINALIZER" == "true" ]]; then
   Rscript application/scripts/glofas_constrained_median_screen_finalize.R \
     --output_root "$OUTPUT_ROOT" \
+    --mode strict \
     --cleanup "$CLEANUP"
 fi
 

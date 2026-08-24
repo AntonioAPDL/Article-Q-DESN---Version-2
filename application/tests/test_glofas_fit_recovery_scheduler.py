@@ -175,6 +175,47 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertEqual(status, "pending")
             self.assertFalse(live)
 
+    def test_retry_failed_selects_only_failed_unfinished_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            rows = []
+            template = self.make_manifest_row(tmp)
+            for candidate_id in ("failed", "unknown", "completed", "rejected"):
+                row = dict(template)
+                row.update({
+                    "candidate_id": candidate_id,
+                    "priority": str(len(rows) + 1),
+                    "run_id": f"{candidate_id}_run",
+                    "run_dir": str(output_root / "runs" / f"{candidate_id}_run"),
+                    "log_path": str(output_root / "logs" / f"{candidate_id}.log"),
+                })
+                Path(row["run_dir"]).mkdir(parents=True)
+                rows.append(row)
+            status_dir = output_root / "status"
+            status_dir.mkdir(parents=True)
+            (status_dir / "failed.csv").write_text(
+                "candidate_id,status,timestamp,pid,exit_code\n"
+                "failed,failed,2026-08-23T00:00:00+00:00,999999999,1\n",
+                encoding="utf-8",
+            )
+            (Path(rows[2]["run_dir"]) / ".fit_recovery_complete").write_text(
+                "complete\n", encoding="utf-8"
+            )
+            (Path(rows[3]["run_dir"]) / ".reservoir_preflight_rejected").write_text(
+                "rejected\n", encoding="utf-8"
+            )
+
+            states = {
+                row["candidate_id"]: scheduler.reconcile_existing_candidate(
+                    row, output_root, {}, retry_failed=True
+                )["status"]
+                for row in rows
+            }
+            self.assertEqual(states["failed"], "pending")
+            self.assertEqual(states["unknown"], "excluded_from_failed_retry")
+            self.assertEqual(states["completed"], "completed_existing")
+            self.assertEqual(states["rejected"], "rejected_existing")
+
     def test_manifest_integrity_accepts_owned_hashed_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             row = self.make_manifest_row(tmp)

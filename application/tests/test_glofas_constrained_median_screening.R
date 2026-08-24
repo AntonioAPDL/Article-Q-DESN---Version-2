@@ -87,6 +87,56 @@ stopifnot(identical(
   0:89
 ))
 
+screen_state_root <- tempfile("median_screen_states_")
+dir.create(file.path(screen_state_root, "status"), recursive = TRUE)
+screen_state_runs <- file.path(screen_state_root, "runs", c("complete", "rejected", "failed"))
+invisible(vapply(screen_state_runs, dir.create, logical(1L), recursive = TRUE))
+file.create(file.path(screen_state_runs[[1L]], ".fit_recovery_complete"))
+file.create(file.path(screen_state_runs[[2L]], ".reservoir_preflight_rejected"))
+utils::write.csv(
+  data.frame(status = "failed", exit_code = 1L),
+  file.path(screen_state_root, "status", "failed.csv"),
+  row.names = FALSE
+)
+screen_states <- app_glofas_median_screen_candidate_states(
+  data.frame(
+    candidate_id = c("complete", "rejected", "failed"),
+    run_dir = screen_state_runs,
+    stringsAsFactors = FALSE
+  ),
+  screen_state_root
+)
+stopifnot(identical(screen_states$state, c("completed", "preflight_rejected", "failed")))
+stopifnot(identical(screen_states$terminal_for_strict_closeout, c(TRUE, TRUE, FALSE)))
+unlink(screen_state_root, recursive = TRUE)
+
+screen_retention_ranking <- data.frame(
+  candidate_id = c("fit_b", "fit_a", "control"),
+  screen_rank = c(2L, 1L, 3L),
+  eligible_for_full7_review = c(FALSE, FALSE, FALSE),
+  stringsAsFactors = FALSE
+)
+screen_retention_manifest <- data.frame(
+  candidate_id = c("fit_a", "fit_b", "control"),
+  candidate_role = c("exploration", "exploration", "warm_control"),
+  stringsAsFactors = FALSE
+)
+stopifnot(identical(
+  app_glofas_median_screen_protected_candidates(
+    screen_retention_ranking, screen_retention_manifest, top_n = 2L
+  ),
+  c("fit_a", "fit_b", "control")
+))
+
+screen_bootstrap_a <- app_glofas_median_screen_moving_block_bootstrap(
+  rep(-0.1, 30L), block_length = 5L, replicates = 200L, seed = 17L
+)
+screen_bootstrap_b <- app_glofas_median_screen_moving_block_bootstrap(
+  rep(-0.1, 30L), block_length = 5L, replicates = 200L, seed = 17L
+)
+stopifnot(identical(screen_bootstrap_a, screen_bootstrap_b))
+stopifnot(screen_bootstrap_a$ci_upper[[1L]] < 0)
+
 screen_space <- list(
   version = "1.0",
   screen_id = "fixture_screen",

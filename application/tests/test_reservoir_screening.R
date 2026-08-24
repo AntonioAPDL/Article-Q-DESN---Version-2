@@ -62,6 +62,39 @@ rank_hi <- app_compute_state_matrix_diagnostics(matrix(rnorm(100 * 8), 100, 8), 
 rank_lo <- app_compute_state_matrix_diagnostics(cbind(dup_x, dup_x, dup_x), config = cfg_screen)
 stopifnot(rank_hi$relative_effective_rank_entropy > rank_lo$relative_effective_rank_entropy)
 
+set.seed(20260823)
+rank_action_base <- stats::rnorm(200)
+rank_action_states <- replicate(
+  30L,
+  rank_action_base + 1.0e-3 * stats::rnorm(200)
+)
+rank_action_reject <- app_compute_state_matrix_diagnostics(
+  rank_action_states,
+  app_reservoir_diagnostic_config(
+    dead_fraction_reject = 1,
+    saturation_check = FALSE,
+    near_duplicate_fraction_reject = Inf,
+    corr_fraction_reject_at_090 = Inf,
+    condition_z_reject = Inf,
+    condition_cov_reject = Inf,
+    low_effective_rank_action = "reject"
+  )
+)
+rank_action_repair <- app_compute_state_matrix_diagnostics(
+  rank_action_states,
+  app_reservoir_diagnostic_config(
+    dead_fraction_reject = 1,
+    saturation_check = FALSE,
+    near_duplicate_fraction_reject = Inf,
+    corr_fraction_reject_at_090 = Inf,
+    condition_z_reject = Inf,
+    condition_cov_reject = Inf,
+    low_effective_rank_action = "repair"
+  )
+)
+stopifnot(identical(rank_action_reject$decision, "reject"))
+stopifnot(identical(rank_action_repair$decision, "repair"))
+
 ill_base <- rnorm(100)
 ill_mat <- cbind(ill_base, ill_base + rnorm(100) * 1.0e-8)
 ill_cfg <- app_reservoir_diagnostic_config(condition_z_warn = 10, condition_z_reject = 100)
@@ -143,6 +176,7 @@ stopifnot(all(c("reference_reservoir", "discrepancy_reservoir", "reference_reado
 two_state_rows <- app_state_report_rows(two_report)
 stopifnot(nrow(two_state_rows) == 4L)
 stopifnot(all(c("reference", "discrepancy") %in% stats::na.omit(unique(two_state_rows$semantic_block))))
+stopifnot(all(c("effective_rank_entropy", "effective_rank_participation") %in% names(two_state_rows)))
 
 layer_cfg <- list(
   reservoir = list(

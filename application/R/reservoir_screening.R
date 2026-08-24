@@ -50,6 +50,7 @@ app_reservoir_diagnostic_config <- function(..., allow_unknown = FALSE) {
     corr_fraction_reject_at_090 = 0.50,
     relative_effective_rank_warn = 0.15,
     relative_effective_rank_reject = 0.05,
+    low_effective_rank_action = "reject",
     condition_z_warn = 1.0e4,
     condition_z_reject = 1.0e6,
     condition_cov_warn = 1.0e8,
@@ -94,6 +95,10 @@ app_reservoir_diagnostic_config <- function(..., allow_unknown = FALSE) {
   defaults$corr_quantile_probs <- sort(unique(as.numeric(defaults$corr_quantile_probs)))
   defaults$validation_metric <- tolower(as.character(defaults$validation_metric %||% "pinball")[[1L]])
   defaults$cheap_readout <- tolower(as.character(defaults$cheap_readout %||% "ridge")[[1L]])
+  defaults$low_effective_rank_action <- match.arg(
+    tolower(as.character(defaults$low_effective_rank_action %||% "reject")[[1L]]),
+    c("reject", "repair")
+  )
   defaults$pruning_prefer <- match.arg(
     as.character(defaults$pruning_prefer %||% "variance")[[1L]],
     c("variance", "validation", "original_order")
@@ -529,7 +534,9 @@ app_compute_state_matrix_diagnostics <- function(
     !standardization_pass ||
     dead_fraction > config$dead_fraction_reject ||
     (is.finite(saturation_fraction) && saturation_fraction > config$saturation_fraction_reject) ||
-    (is.finite(rank$relative_effective_rank_entropy) && rank$relative_effective_rank_entropy < config$relative_effective_rank_reject) ||
+    (identical(config$low_effective_rank_action, "reject") &&
+      is.finite(rank$relative_effective_rank_entropy) &&
+      rank$relative_effective_rank_entropy < config$relative_effective_rank_reject) ||
     (!is.finite(rank$condition_z) || rank$condition_z > config$condition_z_reject) ||
     (!is.finite(rank$condition_cov) || rank$condition_cov > config$condition_cov_reject)
 
@@ -1594,6 +1601,8 @@ app_state_report_row <- function(seed_report, report = seed_report$state_report)
     saturation_fraction = report$saturation_fraction,
     near_duplicate_fraction = report$near_duplicate_fraction,
     max_abs_corr = report$max_abs_corr,
+    effective_rank_entropy = report$effective_rank_entropy,
+    effective_rank_participation = report$effective_rank_participation,
     relative_effective_rank_entropy = report$relative_effective_rank_entropy,
     relative_effective_rank_participation = report$relative_effective_rank_participation,
     condition_z = report$condition_z,

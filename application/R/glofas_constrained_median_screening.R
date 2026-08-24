@@ -1021,6 +1021,149 @@ app_glofas_median_screen_select_balanced_stage_b <- function(ranking, top_k = 20
   selected
 }
 
+app_glofas_median_screen_candidate_states <- function(manifest, output_root) {
+  required <- c("candidate_id", "run_dir")
+  missing <- setdiff(required, names(manifest))
+  if (!is.data.frame(manifest) || !nrow(manifest) || length(missing)) {
+    stop(sprintf(
+      "Candidate-state census requires a nonempty manifest with: %s.",
+      paste(required, collapse = ", ")
+    ), call. = FALSE)
+  }
+  output_root <- normalizePath(output_root, mustWork = TRUE)
+  rows <- lapply(seq_len(nrow(manifest)), function(i) {
+    candidate_id <- as.character(manifest$candidate_id[[i]])
+    run_dir <- as.character(manifest$run_dir[[i]])
+    complete <- file.exists(file.path(run_dir, ".fit_recovery_complete"))
+    rejected <- file.exists(file.path(run_dir, ".reservoir_preflight_rejected"))
+    worker_path <- file.path(output_root, "status", paste0(candidate_id, ".csv"))
+    worker <- if (file.exists(worker_path)) app_read_csv(worker_path) else data.frame()
+    worker <- if (nrow(worker)) worker[nrow(worker), , drop = FALSE] else worker
+    worker_status <- if (nrow(worker) && "status" %in% names(worker)) {
+      as.character(worker$status[[1L]])
+    } else ""
+    state <- if (complete) {
+      "completed"
+    } else if (rejected) {
+      "preflight_rejected"
+    } else if (identical(worker_status, "failed")) {
+      "failed"
+    } else if (identical(worker_status, "running")) {
+      "running_or_stale"
+    } else {
+      "pending_or_unknown"
+    }
+    data.frame(
+      candidate_id = candidate_id,
+      state = state,
+      worker_status = worker_status,
+      worker_exit_code = if (nrow(worker) && "exit_code" %in% names(worker)) {
+        as.character(worker$exit_code[[1L]])
+      } else "",
+      run_dir = run_dir,
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- app_bind_rows_fill(rows)
+  out$terminal_for_strict_closeout <- out$state %in% c("completed", "preflight_rejected")
+  out
+}
+
+app_glofas_median_screen_protected_candidates <- function(
+  ranking,
+  manifest,
+  top_n = 2L,
+  keep_controls = TRUE,
+  explicit = character()
+) {
+  if (!is.data.frame(ranking) || !nrow(ranking) ||
+      !all(c("candidate_id", "screen_rank") %in% names(ranking))) {
+    stop("Retention protection requires a nonempty ranked candidate table.", call. = FALSE)
+  }
+  if (!is.data.frame(manifest) || !nrow(manifest) || !"candidate_id" %in% names(manifest)) {
+    stop("Retention protection requires a nonempty candidate manifest.", call. = FALSE)
+  }
+  top_n <- suppressWarnings(as.integer(top_n[[1L]]))
+  if (!is.finite(top_n) || top_n < 0L) stop("top_n must be a nonnegative integer.", call. = FALSE)
+  ranked <- ranking[order(as.integer(ranking$screen_rank), ranking$candidate_id), , drop = FALSE]
+  protected <- if (top_n) head(as.character(ranked$candidate_id), top_n) else character()
+  if ("eligible_for_full7_review" %in% names(ranked)) {
+    protected <- c(
+      protected,
+      as.character(ranked$candidate_id[app_as_bool_vec(ranked$eligible_for_full7_review)])
+    )
+  }
+  if (isTRUE(keep_controls) && "candidate_role" %in% names(manifest)) {
+    is_control <- grepl("control", as.character(manifest$candidate_role), ignore.case = TRUE)
+    protected <- c(protected, as.character(manifest$candidate_id[is_control]))
+  }
+  explicit <- trimws(as.character(unlist(explicit, use.names = FALSE)))
+  explicit <- explicit[nzchar(explicit)]
+  unknown <- setdiff(explicit, as.character(manifest$candidate_id))
+  if (length(unknown)) {
+    stop(sprintf(
+      "Explicit retention candidates are not in the manifest: %s.",
+      paste(unknown, collapse = ", ")
+    ), call. = FALSE)
+  }
+  unique(c(protected, explicit))
+}
+
+app_glofas_median_screen_moving_block_bootstrap <- function(
+  differences,
+  block_length = 5L,
+  replicates = 10000L,
+  seed = 20260823L
+) {
+  differences <- as.numeric(differences)
+  differences <- differences[is.finite(differences)]
+  n <- length(differences)
+  block_length <- suppressWarnings(as.integer(block_length[[1L]]))
+  replicates <- suppressWarnings(as.integer(replicates[[1L]]))
+  seed <- suppressWarnings(as.integer(seed[[1L]]))
+  if (n < 2L) stop("Moving-block bootstrap requires at least two finite differences.", call. = FALSE)
+  if (!is.finite(block_length) || block_length < 1L || block_length > n) {
+    stop("block_length must lie between one and the series length.", call. = FALSE)
+  }
+  if (!is.finite(replicates) || replicates < 100L) {
+    stop("replicates must be at least 100.", call. = FALSE)
+  }
+  if (!is.finite(seed)) stop("seed must be finite.", call. = FALSE)
+  starts_needed <- ceiling(n / block_length)
+  old_seed_exists <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  if (old_seed_exists) old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  on.exit({
+    if (old_seed_exists) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+  set.seed(seed)
+  draws <- numeric(replicates)
+  offsets <- seq.int(0L, block_length - 1L)
+  for (b in seq_len(replicates)) {
+    starts <- sample.int(n, starts_needed, replace = TRUE)
+    index <- as.vector(vapply(starts, function(start) {
+      ((start - 1L + offsets) %% n) + 1L
+    }, integer(block_length)))
+    draws[[b]] <- mean(differences[index[seq_len(n)]])
+  }
+  ci <- unname(stats::quantile(draws, c(0.025, 0.975), names = FALSE, type = 8))
+  data.frame(
+    n = n,
+    block_length = block_length,
+    replicates = replicates,
+    seed = seed,
+    mean_difference = mean(differences),
+    bootstrap_se = stats::sd(draws),
+    ci_lower = ci[[1L]],
+    ci_upper = ci[[2L]],
+    probability_improvement = mean(draws < 0),
+    stringsAsFactors = FALSE
+  )
+}
+
 app_glofas_median_screen_merge_cleanup_reports <- function(existing, current) {
   existing <- existing %||% data.frame()
   current <- current %||% data.frame()

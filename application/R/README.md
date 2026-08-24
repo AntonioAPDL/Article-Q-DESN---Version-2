@@ -145,7 +145,10 @@ Tracked helper files:
   forgetting, optional cheap validation, and seed-level aggregation. The
   helpers are advisory by default and do not launch VB or
   MCMC; `application/scripts/03_screen_reservoir_design.R` is the standalone
-  pre-stage that writes screening tables for a fresh run id.
+  pre-stage that writes screening tables for a fresh run id. Absolute and
+  relative effective ranks are serialized together. The default v1 policy
+  retains low relative rank as a hard rejection; a prospective campaign may
+  set `low_effective_rank_action = "repair"` without reinterpreting prior runs.
 - `make_manuscript_outputs.R`
 - `promote_application_outputs.R`: promotion guards and provenance-map helpers
   used by `scripts/08_promote_application_outputs.R`. Final-launch promotion

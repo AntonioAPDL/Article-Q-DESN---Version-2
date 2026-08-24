@@ -15,28 +15,40 @@ source(app_path("application/R/glofas_constrained_median_screening.R"))
 args <- app_parse_args(list(
   output_root = "",
   allow_partial = FALSE,
-  cleanup = FALSE
+  cleanup = FALSE,
+  mode = "strict",
+  protect_top_n = 2L,
+  protect_controls = TRUE,
+  protect_candidate_ids = ""
 ))
 if (!nzchar(as.character(args$output_root %||% ""))) {
   stop("--output_root is required.", call. = FALSE)
 }
 output_root <- app_resolve_path(args$output_root, must_work = TRUE)
+mode <- match.arg(tolower(as.character(args$mode %||% "strict")), c("strict", "forensic"))
+forensic <- identical(mode, "forensic")
+if (forensic && app_as_bool(args$cleanup)) {
+  stop("Cleanup is prohibited during a forensic closeout.", call. = FALSE)
+}
+artifact_root <- if (forensic) file.path(output_root, "forensic_closeout") else output_root
+app_ensure_dir(artifact_root)
+artifact_path <- function(name) file.path(artifact_root, name)
 manifest <- app_read_csv(file.path(output_root, "runtime_manifest.csv"))
 space <- app_read_yaml(file.path(output_root, "screening_space_snapshot.yaml"))
 
-fit_complete <- vapply(manifest$run_dir, function(path) {
-  file.exists(file.path(path, ".fit_recovery_complete"))
-}, logical(1L))
-preflight_rejected <- vapply(manifest$run_dir, function(path) {
-  file.exists(file.path(path, ".reservoir_preflight_rejected"))
-}, logical(1L))
+candidate_states <- app_glofas_median_screen_candidate_states(manifest, output_root)
+fit_complete <- candidate_states$state == "completed"
+preflight_rejected <- candidate_states$state == "preflight_rejected"
+failed <- candidate_states$state == "failed"
 terminal <- fit_complete | preflight_rejected
-if (!all(terminal) && !app_as_bool(args$allow_partial)) {
+allow_partial <- forensic || app_as_bool(args$allow_partial)
+if (!all(terminal) && !allow_partial) {
   stop(sprintf(
     "Screen is incomplete: %d/%d candidates reached a terminal state. Use --allow_partial true only for an explicitly provisional ranking.",
     sum(terminal), length(terminal)
   ), call. = FALSE)
 }
+app_write_csv(candidate_states, artifact_path("candidate_state_census.csv"))
 finished <- manifest[fit_complete, , drop = FALSE]
 if (!nrow(finished)) stop("No completed candidates are available to finalize.", call. = FALSE)
 
@@ -70,10 +82,10 @@ preflight_rows <- lapply(seq_len(nrow(manifest)), function(i) {
   ), drop = FALSE]
 })
 preflight_gates <- app_bind_rows_fill(preflight_rows)
-app_write_csv(preflight_gates, file.path(output_root, "reservoir_preflight_gates_all.csv"))
+app_write_csv(preflight_gates, artifact_path("reservoir_preflight_gates_all.csv"))
 app_write_csv(
   preflight_gates[!app_as_bool_vec(preflight_gates$gate_pass), , drop = FALSE],
-  file.path(output_root, "reservoir_preflight_rejections.csv")
+  artifact_path("reservoir_preflight_rejections.csv")
 )
 
 observed_rows <- list()
@@ -134,21 +146,29 @@ ranking <- app_glofas_median_screen_rank(
 ranking <- merge(ranking, technical, by = c("candidate_id", "technical_gate_pass"), all.x = TRUE, sort = FALSE)
 ranking <- merge(ranking, manifest, by = "candidate_id", all.x = TRUE, sort = FALSE)
 ranking <- ranking[order(ranking$screen_rank), , drop = FALSE]
-ranking$ranking_scope <- if (all(terminal)) "complete_batch" else "provisional_partial_batch"
+ranking$ranking_scope <- if (all(terminal)) {
+  "complete_batch"
+} else if (forensic) {
+  "forensic_partial_batch"
+} else {
+  "provisional_partial_batch"
+}
 ranking$selection_metric_note <- paste(
   "p50 uses check loss and MAE; genuine distributional CRPS requires",
   "an independently fitted multi-quantile confirmation"
 )
 
-app_write_csv(observed, file.path(output_root, "observed_fit_scores_all.csv"))
-app_write_csv(forecast, file.path(output_root, "forecast_p50_scores_all.csv"))
-app_write_csv(technical, file.path(output_root, "technical_gates_all.csv"))
-app_write_csv(ranking, file.path(output_root, "constrained_median_ranking.csv"))
+app_write_csv(observed, artifact_path("observed_fit_scores_all.csv"))
+app_write_csv(forecast, artifact_path("forecast_p50_scores_all.csv"))
+app_write_csv(technical, artifact_path("technical_gates_all.csv"))
+app_write_csv(ranking, artifact_path("constrained_median_ranking.csv"))
 
 decision <- data.frame(
   batch_complete = all(terminal),
   completed_candidates = sum(fit_complete),
   preflight_rejected_candidates = sum(preflight_rejected),
+  failed_candidates = sum(failed),
+  incomplete_candidates = sum(!terminal & !failed),
   terminal_candidates = sum(terminal),
   total_candidates = length(terminal),
   eligible_candidates = sum(ranking$eligible_for_full7_review),
@@ -157,22 +177,70 @@ decision <- data.frame(
   } else NA_character_,
   auto_promote = FALSE,
   auto_launch_full7 = FALSE,
-  next_gate = if (any(ranking$eligible_for_full7_review)) {
+  next_gate = if (!all(terminal)) {
+    "repair_failed_or_incomplete_candidates_then_strict_finalize"
+  } else if (any(ranking$eligible_for_full7_review)) {
     "diagnostic_review_then_cold_p50_refit_then_full7_confirmation"
   } else {
     "revise_user_supplied_screening_space"
   },
   stringsAsFactors = FALSE
 )
-app_write_csv(decision, file.path(output_root, "selection_decision.csv"))
+app_write_csv(decision, artifact_path("selection_decision.csv"))
 
-cleanup_report_path <- file.path(output_root, "cleanup", "cleanup_report.csv")
-cleanup_dry_run_path <- file.path(output_root, "cleanup", "dry_run_cleanup.csv")
-protected <- character()
+explicit_protection <- strsplit(
+  as.character(args$protect_candidate_ids %||% ""),
+  ",",
+  fixed = TRUE
+)[[1L]]
+protected <- app_glofas_median_screen_protected_candidates(
+  ranking = ranking,
+  manifest = manifest,
+  top_n = args$protect_top_n,
+  keep_controls = app_as_bool(args$protect_controls),
+  explicit = explicit_protection
+)
+retention <- manifest[, intersect(
+  c("candidate_id", "candidate_set", "candidate_label", "candidate_role", "run_id", "run_dir"),
+  names(manifest)
+), drop = FALSE]
+retention$screen_rank <- ranking$screen_rank[match(retention$candidate_id, ranking$candidate_id)]
+retention$eligible_for_full7_review <- ranking$eligible_for_full7_review[
+  match(retention$candidate_id, ranking$candidate_id)
+]
+retention$candidate_state <- candidate_states$state[
+  match(retention$candidate_id, candidate_states$candidate_id)
+]
+retention$protected <- retention$candidate_id %in% protected
+retention$retention_action <- ifelse(
+  retention$protected,
+  "keep_heavy_artifacts",
+  ifelse(retention$candidate_state == "preflight_rejected", "no_fit_payload", "delete_heavy_artifacts_after_audit")
+)
+app_write_csv(retention, artifact_path("retention_decision.csv"))
+
+cleanup_report_path <- artifact_path(file.path("cleanup", "cleanup_report.csv"))
+cleanup_dry_run_path <- artifact_path(file.path("cleanup", "dry_run_cleanup.csv"))
 if (app_as_bool(args$cleanup)) {
   if (!all(terminal)) stop("Cleanup is prohibited for a partial batch.", call. = FALSE)
-  protected <- ranking$candidate_id[ranking$eligible_for_full7_review]
-  if (!length(protected)) protected <- ranking$candidate_id[[1L]]
+
+  retained_rows <- lapply(protected, function(candidate_id) {
+    run_dir <- manifest$run_dir[match(candidate_id, manifest$candidate_id)]
+    inventory <- app_glofas_fit_recovery_heavy_inventory(run_dir)
+    if (!nrow(inventory)) return(data.frame())
+    inventory$candidate_id <- candidate_id
+    inventory$sha256 <- vapply(inventory$path, app_sha256_file, character(1L))
+    inventory
+  })
+  retained_manifest <- app_bind_rows_fill(retained_rows)
+  if (!ncol(retained_manifest)) {
+    retained_manifest <- data.frame(
+      path = character(), extension = character(), size_bytes = numeric(),
+      candidate_id = character(), sha256 = character(),
+      stringsAsFactors = FALSE
+    )
+  }
+  app_write_csv(retained_manifest, artifact_path("retained_heavy_artifact_manifest.csv"))
 
   dry_run_rows <- list()
   for (i in seq_len(nrow(manifest))) {
@@ -223,14 +291,24 @@ if (app_as_bool(args$cleanup)) {
   app_write_csv(cleanup_report, cleanup_report_path)
 }
 
-ranking_path <- file.path(output_root, "constrained_median_ranking.csv")
-selection_path <- file.path(output_root, "selection_decision.csv")
+ranking_path <- artifact_path("constrained_median_ranking.csv")
+selection_path <- artifact_path("selection_decision.csv")
+status_label <- if (forensic) {
+  "forensic_partial_closeout"
+} else if (all(terminal)) {
+  "strict_closeout_completed"
+} else {
+  "provisional_partial_closeout"
+}
 app_write_csv(data.frame(
-  status = "completed",
+  status = status_label,
   timestamp = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+  mode = mode,
   batch_complete = all(terminal),
   completed_candidates = sum(fit_complete),
   preflight_rejected_candidates = sum(preflight_rejected),
+  failed_candidates = sum(failed),
+  incomplete_candidates = sum(!terminal & !failed),
   terminal_candidates = sum(terminal),
   total_candidates = length(terminal),
   cleanup_requested = app_as_bool(args$cleanup),
@@ -246,6 +324,35 @@ app_write_csv(data.frame(
     NA_character_
   },
   stringsAsFactors = FALSE
-), file.path(output_root, "finalization_status.csv"))
+), artifact_path("finalization_status.csv"))
+
+closeout_evidence <- c(
+  "candidate_state_census.csv",
+  "reservoir_preflight_gates_all.csv",
+  "reservoir_preflight_rejections.csv",
+  "observed_fit_scores_all.csv",
+  "forecast_p50_scores_all.csv",
+  "technical_gates_all.csv",
+  "constrained_median_ranking.csv",
+  "selection_decision.csv",
+  "retention_decision.csv",
+  "finalization_status.csv",
+  if (file.exists(artifact_path("retained_heavy_artifact_manifest.csv"))) {
+    "retained_heavy_artifact_manifest.csv"
+  },
+  if (file.exists(cleanup_dry_run_path)) file.path("cleanup", "dry_run_cleanup.csv"),
+  if (file.exists(cleanup_report_path)) file.path("cleanup", "cleanup_report.csv")
+)
+closeout_evidence <- unique(closeout_evidence[nzchar(closeout_evidence)])
+closeout_paths <- artifact_path(closeout_evidence)
+if (any(!file.exists(closeout_paths))) {
+  stop("Closeout evidence packet is incomplete after finalization.", call. = FALSE)
+}
+app_write_csv(data.frame(
+  artifact = closeout_evidence,
+  path = closeout_paths,
+  sha256 = vapply(closeout_paths, app_sha256_file, character(1L)),
+  stringsAsFactors = FALSE
+), artifact_path("closeout_artifact_manifest.csv"))
 
 cat(ranking_path, "\n")

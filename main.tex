@@ -633,9 +633,9 @@ overall fitted quantile level toward zero.
 
 \noindent\textbf{Ridge prior.}
 For the non-intercept coefficients
-\(\vect\beta_{1:r}=(\beta_1,\ldots,\beta_r)^\top\), the default ridge prior is
+\(\vect\beta_{\mathrm{slope}}=(\beta_1,\ldots,\beta_r)^\top\), the default ridge prior is
 \begin{equation}
-\vect\beta_{1:r}\mid\kappa_\beta^2
+\vect\beta_{\mathrm{slope}}\mid\kappa_\beta^2
 \sim \Normal(\zeros{r},\,\kappa_\beta^2\Id{r}),
 \label{eq:ridge-prior-main}
 \end{equation}
@@ -754,7 +754,7 @@ weakly regularized independently or represented through ordered gaps when a
 stronger monotonicity convention is desired.
 
 This construction generalizes the single-level RHS Q--DESN by replacing the
-single intercept-slope coefficient vector \((\beta_0,\vect\beta_{1:r})\) with
+single intercept-slope coefficient vector \((\beta_0,\vect\beta_{\mathrm{slope}})\) with
 \(\{(\alpha_q,\vect\beta_q)\}_{q=1}^Q\). For \(Q=1\), the individual RHS
 Q--DESN is recovered by taking \(\alpha_1\) as the single-level intercept and
 identifying \(\vect\beta_1\) with the single-level non-intercept slope vector,
@@ -1275,7 +1275,7 @@ In Q--DESN these results enter as diagnostics, sensitivity analyses, and
 possible ablations. After the feature map is fixed, posterior inference is for
 the quantile-regression parameters conditional on that feature map.
 
-The empirical design fixes the training and validation windows, held-out test
+The empirical design fixes the fitting and validation periods, held-out test
 period, forecast origins, horizons, quantile levels, input transformations, and
 scoring rules before feature maps are compared. Numerical checks then verify
 input alignment, feature dimensions, washout handling, finite state values,
@@ -1328,7 +1328,7 @@ first asks whether a single-quantile Q--DESN regression can recover and forecast
 known dynamic quantile path under a 500-observation benchmark following the
 family-based comparison strategy of \citet{yan2025new}. The target quantile
 level is fixed in advance, the data-generating mechanism is known, and
-competing models are compared under matched error families, fit-window sizes,
+competing models are compared under matched error families, fitting-sample sizes,
 and quantile levels. The second asks whether a joint multi-quantile regression can
 recover several known conditional quantile paths under posterior simulation and
 maintain coherent raw quantile grids over a fixed set of levels. Companion
@@ -1344,8 +1344,8 @@ We write \(p\) for the single target level in the first study and \(\tau\) for
 levels in the multi-quantile grid.
 
 The main-text tables report MCMC summaries under fixed evaluation designs:
-data-generating mechanisms, rolling-origin definitions, fit and forecast
-windows, scoring rules, and model classes are specified before the reported
+data-generating mechanisms, rolling-origin definitions, fitting samples,
+forecast-validation periods, scoring rules, and model classes are specified before the reported
 comparisons are formed. The supplement gives VB companion panels and additional
 diagnostic summaries for the same simulation settings. The single-quantile and
 multi-quantile studies use separate fixed designs, so their results are
@@ -1410,16 +1410,18 @@ harmonic pairs in the initial state.}
 
 \subsection{Single-Quantile Fit and Forecast Protocol}
 
-Each source trajectory contains \(T_{\mathrm{warm}}=2000\) warmup values and
-\(T_{\mathrm{main}}=10000\) main source values. All indices below refer to the
-main source scale after warmup removal. The fitting origin is source index
-\(9000\), and the held-out block is \(9001{:}10000\). The two fit-window sizes
-are \(T_{\mathrm{fit}}=500\) and \(T_{\mathrm{fit}}=5000\), corresponding to
-training windows \(8501{:}9000\) and \(4001{:}9000\). Forecast evaluation uses
-a rolling-origin state-update protocol over the held-out block. The
-primary protocol has maximum lead \(H_{\max}=30\) and origin stride \(30\).
-The reported tables use this pre-specified protocol for all model
-specifications and score calculations.
+Each synthetic series is first run for \(T_{\mathrm{warm}}=2000\) warmup
+observations, which are discarded before analysis. The next
+\(T_{\mathrm{main}}=10000\) observations form the retained series used for
+fitting and validation. Models are fit at the end of the first 9000 retained
+observations, and the final 1000 retained observations are held out for
+forecast evaluation. We report two fitting-sample sizes,
+\(T_{\mathrm{fit}}=500\) and \(T_{\mathrm{fit}}=5000\), using respectively the
+500 or 5000 observations immediately preceding the fitting origin. Forecast
+scores are computed from rolling origins within the held-out period; origins
+are spaced 30 observations apart, and each origin is scored for horizons up to
+30 steps ahead. The same protocol is used for all model specifications and
+score calculations.
 
 \subsection{Single-Quantile Competing Methods}
 
@@ -1429,12 +1431,12 @@ inference method while using regularized-horseshoe (RHS) coefficient shrinkage.
 Entries labeled Q--DESN AL--RHS use the AL working likelihood, whereas entries
 labeled Q--DESN exAL--RHS use the exAL working likelihood. Historical ridge
 fits are omitted from the main comparison because the reported comparison
-focuses on Bayesian shrinkage fits under the train-window preprocessing rule.
+focuses on Bayesian shrinkage fits under the fitting-sample preprocessing rule.
 The reservoir specification and random seed are fixed for every displayed
 metric.
 Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
-fit-window, and forecast-origin protocol using \pkg{exdqlm}
+fitting-sample size, and forecast-evaluation protocol using \pkg{exdqlm}
 \citep{exdqlmRPackage}.
 
 The primary comparison is a fixed-design benchmark against structured dynamic
@@ -1447,10 +1449,10 @@ and future sensitivity analyses.
 
 Let \(\widehat q_t\) denote a posterior or variational summary of the fitted
 conditional \(p\)-quantile, such as the posterior median of the linear-predictor
-location. Because the oracle path \(\mu_t\) is known, fit-window recovery can
+location. Because the oracle path \(\mu_t\) is known, fitting-sample recovery can
 be evaluated using quantile mean absolute error, quantile RMSE, bias,
 correlation, and check loss at the target level \(p\). Forecast accuracy is
-evaluated on held-out outcomes under common forecast origins and leads for
+evaluated on held-out outcomes under common forecast origins and horizons for
 every model. The reported tables show fit recovery and forecast scoring.
 
 For single-level quantile fits, the primary proper score is check loss at the
@@ -1461,9 +1463,9 @@ metrics therefore answer different questions and are reported separately.
 
 Because the simulation uses one fixed data-generating realization for each family and
 quantile level, the tables report deterministic criterion values for that
-source design rather than Monte Carlo means over repeated data sets. Any
+data-generating realization rather than Monte Carlo means over repeated data sets. Any
 boldface or ranking in the displayed MCMC tables is interpreted within a fixed
-family, quantile level, fit-window, model family, and metric. The displayed
+family, quantile level, fitting-sample size, model family, and metric. The displayed
 Q--DESN values form a metric-specific summary: each entry is the
 best finite value observed for that model, family, quantile level, and metric.
 Consequently, entries within one model row may originate from different
@@ -1472,15 +1474,16 @@ diagnostic status.
 
 \subsection{Single-Quantile Fit and Forecast Results}
 
-The evaluation uses the 500-observation training window
-\(8501{:}9000\), the held-out block \(9001{:}10000\), rolling-origin forecasts
-with leads 1--30 and origin stride 30, and the three target levels
+The main comparison uses the shorter fitting design: 500 observations before
+the fitting origin, followed by 1000 held-out observations for forecast
+scoring. Forecast scores use rolling origins spaced 30 observations apart and
+horizons up to 30 steps ahead, at the three target levels
 \(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-normal}--%
 \ref{tab:simulation-500obs-mcmc-gausmix} report the MCMC family-specific
-metric summaries. The entries are computed from lead-level
-rolling-origin interface rows: fit RMSE measures recovery of the known oracle
-quantile path on the training window, forecast MAE measures oracle-quantile
-forecast error averaged across scored rolling-origin lead-target pairs, and
+metric summaries. The entries are computed from horizon-level rolling-origin
+comparisons: fit RMSE measures recovery of the known oracle quantile path on
+the fitting sample, forecast MAE measures oracle-quantile
+forecast error averaged across scored origin-horizon pairs, and
 forecast check loss scores realized observations at the fitted quantile level.
 Boldface marks the lowest displayed MCMC value within each quantile level and
 metric. Diagnostic status is disclosed alongside the scores: daggers mark rows
@@ -1490,7 +1493,7 @@ rows with a failed diagnostic check.
 All displayed Q--DESN and exQ--DESN values use feature scaling and other
 learned preprocessing quantities estimated from observations available through
 the fitting origin. The DQLM and exDQLM baselines use the same source
-trajectories, training window, forecast origins, leads, and scoring rules. The
+trajectories, fitting sample, forecast origins, horizons, and scoring rules. The
 exAL--RHS MCMC rows use the \(v\)-augmented transition described in the
 supplement, which separates the scale update from the shape update and samples
 the shape on the logit transform of its bounded support.
@@ -1531,7 +1534,7 @@ The exAL rows include eleven scale-collapsed fits whose quantile summaries
 satisfy the stability criterion and five stable exAL specifications from the
 same scenario-level evaluation design. Mixing qualifications are reported in
 the diagnostic summaries. Across the scale-collapsed exAL fits,
-fit-window MAE improves consistently, while forecast MAE improves in five of
+fitting-sample MAE improves consistently, while forecast MAE improves in five of
 the sixteen exAL scenario--model comparisons.
 
 Each regression is fit across
@@ -1539,7 +1542,7 @@ Each regression is fit across
 \tau\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}.
 \]
 The balanced MCMC comparison grid uses eight synthetic data-generating mechanisms,
-a pre-specified feature design, and a 500-observation fit window. The three bridge
+a pre-specified feature design, and a 500-observation fitting sample. The three bridge
 mechanisms use Gaussian, Laplace, and Gaussian-mixture innovations. The five
 stress mechanisms introduce asymmetric tails, persistent heavy tails,
 Student-\(t\) errors, regime shifts, and nonlinear reservoir-friendly dynamics.
@@ -1555,8 +1558,8 @@ rearrangement are retained as numerical coherence diagnostics.
 \noindent\textbf{Scenario-level results.}
 Table~\ref{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}
 summarizes the balanced MCMC analysis at the scenario level. Entries
-report forecast MAE against the oracle quantile grid, with fit-window MAE and
-raw forecast-window crossing counts in parentheses; boldface marks the lowest
+report forecast MAE against the oracle quantile grid, with fitting-sample MAE and
+raw held-out crossing counts in parentheses; boldface marks the lowest
 within-scenario forecast MAE. Joint QDESN RHS is lowest in the Laplace,
 nonlinear, and normal mechanisms. Independent QDESN RHS is lowest in the
 asymmetric-tail, regime-shift, and Student-\(t\) location-scale mechanisms,
@@ -1568,9 +1571,9 @@ Monte Carlo error is unavailable for all comparisons.
 
 \noindent\textbf{Coherence diagnostics and interpretation.}
 Fit recovery gives a complementary result: Joint QDESN RHS has the lowest MAE
-in five of the eight fit windows, with Independent exQDESN RHS lowest in the
+in five of the eight fitting samples, with Independent exQDESN RHS lowest in the
 three remaining cases. Quantile coherence also distinguishes the regression structures.
-Independent QDESN RHS accounts for 24 of the 25 raw forecast-window crossings;
+Independent QDESN RHS accounts for 24 of the 25 raw held-out crossings;
 Joint QDESN RHS accounts for one, and both exAL rows account for none. All 32
 rows have zero crossings after the monotone rearrangement. The replicated VB
 experiment further gives lower median paired forecast MAE to AL than exAL for
@@ -1636,11 +1639,11 @@ reference history and the same covariate policy. The discrepancy block
 reservoir, reducer, and washout conventions. For \(t>T\), the reported
 retrospective specification uses the
 \GlofasApplicationCurrentDiscrepancyTransitionStrategy{} rule:
-the forecast-window discrepancy feature is anchored at the last historical
+the future discrepancy feature is anchored at the last historical
 retrospective discrepancy and the discrepancy regression models an adjustment
 around that persistence baseline. The empirical issued-ensemble quantile is
 retained as a raw GloFAS comparator and as part of the forecast-system evidence
-table; the forecast-window ESN feature map for the discrepancy is driven by the
+table; the future ESN feature map for the discrepancy is driven by the
 persistence-anchored discrepancy state.
 
 For a fixed quantile level \(p_0\), the reference-process quantile is
@@ -1751,12 +1754,12 @@ forecast origin. After monotone rearrangement, its observational-window
 \(\aCRPS\) was \(\GlofasApplicationCurrentObservedHistoryAcrps{}\), and
 empirical 90\% interval coverage was
 \(\GlofasApplicationCurrentObservedHistoryCoverage{}\). This evidence governs
-the specification choice; the forecast window remains a held-out assessment.
+the specification choice; the forecast period remains a held-out assessment.
 The retrospective diagnostic evaluation also identified occasional extreme fitted values in the
 \(p_0=0.95\) path, so the upper-tail component remains subject to targeted
 sensitivity analysis.
 
-\noindent\textbf{Forecast-window scores.}
+\noindent\textbf{Forecast-period scores.}
 Table~\ref{tab:glofas-application-score} reports the forecast scores for the
 reported retrospective analysis. Relative to raw GloFAS, Q--DESN reduces
 the mean check loss from \(\GlofasApplicationCurrentRawCheckLoss{}\) to
@@ -1790,14 +1793,14 @@ mean check loss.}
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
 \caption{Synthesized Q--DESN quantile bands for the GloFAS retrospective analysis over
-the final 60 observed dates and the following 28-day forecast window. The
+the final 60 observed dates and the following 28-day forecast period. The
 nested blue bands are the 90\%, 65\%, and 30\% quantile intervals, and the blue
 path is the median. The vertical dashed line marks the forecast origin. Black
 and red paths denote observed and held-out USGS streamflow, respectively;
 orange denotes retrospective GloFAS, and thin gray paths show all 51 issued
 GloFAS ensemble members, with their median dashed. Forecast scores use the
 held-out measurements in Table~\ref{tab:glofas-application-score}.}
-\label{fig:glofas-application-forecast-window}
+\label{fig:glofas-application-forecast-period}
 \end{figure}
 
 \section{Application: PriceFM Retrospective Electricity-Price Comparison}

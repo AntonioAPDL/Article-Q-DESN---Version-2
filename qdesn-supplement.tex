@@ -1589,7 +1589,9 @@ states.
 Fix a quantile level \(p_0\). Let \(y_t\) denote transformed reference
 streamflow, \(g_t^{\mathrm{ret}}\) the retrospective GloFAS product, and
 \(g_{T+h,m}^{\mathrm{ens}}\) GloFAS ensemble member \(m\) at forecast origin
-\(T\) and horizon \(h\). Let \(\mathcal I_{\mathrm{ref}}\) index reference
+\(T\) and horizon \(h\). Write
+\(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\) for the future reference path. Let
+\(\mathcal I_{\mathrm{ref}}\) index reference
 observations and let \(\mathcal I_{\mathrm{glo}}\) index both retrospective
 and issued-ensemble GloFAS values. For \(i\in\mathcal I_c\),
 \(c\in\mathcal C=\{\mathrm{ref},\mathrm{glo}\}\), write the observed value as
@@ -1636,7 +1638,7 @@ q^{\mathrm{glo}}_{p_0,i}
 Thus \(\vect\beta_{p_0}\) represents the reference-process quantile regression and
 \(\vect\alpha_{p_0}\) represents the GloFAS discrepancy innovation at the same
 level. In the historical rows, \(\vect x_i^{\mathrm{disc}}\) is driven by
-\(g_i^{\mathrm{ret}}-y_i\). In the reported retrospective forecast-window
+\(g_i^{\mathrm{ret}}-y_i\). In the reported retrospective forecast-period
 specification, the
 future discrepancy feature is \emph{persistence anchored}: it repeats the last
 available historical retrospective discrepancy on the transformed scale and
@@ -1650,7 +1652,7 @@ analysis.
 Stacking source contributions conditional on the specified state construction
 gives a vector \(\vect z\), a design matrix \(\mat H\), and source labels
 \(c_i\). With observed historical data only, \(\mat H\) is fixed. Under the
-reported summary rule, the forecast-window summaries are
+reported summary rule, the forecast-period summaries are
 variational quantile summaries passed through the monotone rearrangement.
 
 \noindent\textbf{Forecast-time decomposition.}
@@ -1830,9 +1832,9 @@ p(\tau_b^2\mid\xi_b)p(\xi_b)p(\zeta_b^2)
 The fixed-design posterior is the corresponding joint density viewed as a
 function of unknown quantities conditional on \((\vect z,\mat H)\). In the
 latent-path ensemble-likelihood model, \(\mat H\) should be read as
-\(\mat H(\vect y_{T+1:T+H})\) for forecast-window rows, and the posterior is
+\(\mat H(\vect y_F)\) for forecast-period rows, and the posterior is
 augmented by the missing future reference path.
-Forecast-window output inputs are strictly lagged: the design row for
+Forecast-period output inputs are strictly lagged: the design row for
 \(T+h\) may depend on \(y_{T+h-1},y_{T+h-2},\ldots\), but not on
 \(y_{T+h}\) itself.
 
@@ -2002,7 +2004,7 @@ the separate \(\beta\)- and \(\alpha\)-block RHS scales, source scales
 \(\vect y_F\).
 \item For each MCMC iteration:
   \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, recompute the forecast-window rows of
+  \item for the latent-path model, recompute the forecast-period rows of
   \(\mat H(\vect y_F)\);
   \item draw each \(v_i^c\mid\cdot\) from the GIG full conditional in
   \eqref{eq:supp_glofas_v_mcmc} for exAL or
@@ -2023,7 +2025,7 @@ the separate \(\beta\)- and \(\alpha\)-block RHS scales, source scales
   componentwise move targeting the complete-data posterior
   \eqref{eq:supp_glofas_joint_exal_rhs} or
   \eqref{eq:supp_glofas_joint_al_rhs} with \(\mat H=\mat H(\vect y_F)\),
-  recomputing only forecast-window state rows after a proposal;
+  recomputing only forecast-period state rows after a proposal;
   \item store retained draws and diagnostics after burn-in, with thinning only
   if used.
   \end{enumerate}
@@ -2208,11 +2210,10 @@ h\{T_c(\hat{\vect\eta}_c)\}
 
 \noindent\textbf{Future-path factor.}
 For the latent-path ensemble-likelihood model, the variational family is
-augmented by a factor \(q_F(\vect y_F)\), where
-\(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\). Write
+augmented by a factor \(q_F(\vect y_F)\) for the future reference path. Write
 \(z_i^c(\vect y_F)=z_{i0}^c+\vect u_i^\top\vect y_F\), where
 \(\vect u_i=\vect0\) for observed rows and identifies the appropriate future
-reference value for forecast-window reference rows. The forecast-window
+reference value for forecast-period reference rows. The forecast-period
 fixed-design row is \(\vect h_i^c(\vect y_F)\), because output lags in the
 reservoir input may depend on \(\vect y_F\). For a current coefficient factor
 \(q_\theta=\Normal(\vect m_\theta,\mat\Sigma_\theta)\), define

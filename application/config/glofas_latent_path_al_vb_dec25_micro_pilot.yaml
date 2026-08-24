@@ -1,0 +1,272 @@
+version: 0.1
+application_name: glofas_latent_path_al_vb_dec25_micro_pilot
+description: >
+  One-cutoff Dec. 25, 2022 micro-pilot profile for the latent-path
+  ensemble-likelihood Q-DESN application model. This is the practical launch
+  gate between the two-horizon smoke and the large median-only pilot: it uses
+  the same real source bundle and recursive posterior-draw contract, but keeps
+  the horizon, reservoir, lag window, and draw count small enough for repeated
+  end-to-end preflight runs.
+
+application_model:
+  contract: latent_path_ensemble_likelihood
+  max_history_rows: 365
+  max_ensemble_members_per_horizon: 5
+
+paths:
+  input_bundle: application/config/input_bundle_authoritative_dec25.yaml
+  input_bundle_manifest_template: application/manifests/input_bundle_manifest_TEMPLATE.csv
+  input_bundle_manifest: application/manifests/input_bundle_manifest.csv
+  input_manifest: application/manifests/input_manifest.csv
+  input_manifest_template: application/manifests/input_manifest_TEMPLATE.csv
+  schema: application/manifests/expected_schema.yaml
+  source_registry: application/config/authoritative_cutoff_sources.csv
+  cutoffs: application/config/cutoffs_dec25_latent_micro_pilot.csv
+  quantile_grid: application/config/quantile_grid_mcmc_diagnostic.csv
+  model_grid: application/config/model_grid_latent_path_al_vb_dec25_micro_pilot.csv
+  figure_specs: application/config/figure_specs_dec25_latent_micro_pilot.yaml
+  data_local: application/data_local
+  cache: application/cache/latent_path_al_vb_dec25_micro_pilot
+  runs: application/runs
+  logs: application/logs
+  generated_outputs: application/outputs/generated
+  promoted_tables: tables
+  promoted_figures: figures
+
+dependencies:
+  qdesn_engine: exdqlm
+  qdesn_engine_load_mode: local_source
+  qdesn_engine_repo_hint: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0
+  qdesn_engine_expected_repo_hint: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0
+  qdesn_engine_required_load_mode: local_source
+  qdesn_engine_required_branch: validation/shared-fitforecast-v2-1.0.0
+  qdesn_engine_required_commit: d075941313186b15853e94c2a2cad7d0fec410d8
+  qdesn_engine_min_version: 1.0.0
+  qdesn_engine_disallowed_paths:
+    - /data/jaguir26/local/src/exdqlm__wt__qdesn_fitforecast_0p5p0
+    - /data/jaguir26/local/src/exdqlm__wt__validation_fitforecast_0p5p0
+    - /data/jaguir26/local/src/exdqlm__wt__glofas_discrepancy_qdesn
+    - /data/jaguir26/local/src/exdqlm__wt__qdesn_0p4p0_integration
+    - /data/jaguir26/local/src/exdqlm__wt__validation_rerun_after_0p4p0_integration
+    - /home/jaguir26/local
+  qdesn_engine_required_for:
+    - qdesn_glofas_discrepancy
+  fail_if_qdesn_engine_missing: true
+
+data:
+  forecast_system: GloFAS
+  reference_process: transformed gauge streamflow
+  transform:
+    response: log1p
+    forecast: log1p
+    inverse_response: expm1
+  calendar:
+    horizon_unit: days
+    require_target_date_equals_origin_plus_horizon: true
+  ensemble:
+    member_factorization: conditionally_independent_given_forecast_system_quantile
+    exchangeable_members: true
+
+forecast_protocol:
+  default_horizon_min: 1
+  default_horizon_max: 7
+  require_common_origins_across_models: true
+  require_common_targets_across_models: true
+  require_no_target_leakage: false
+
+covariates:
+  enabled: true
+  variables:
+    - ppt
+    - soil
+  source_policy: realized_history_and_blended_gefs_forecast
+  allow_realized_future_blend: true
+  forecast:
+    handoff_root: application/data_local/upstream_jerez/gefs_nwm_forecast_runs/gefs_nwm_forecast_manifest_source_native_tranche1_20260406T194500Z/handoff_forecasts/site=11160500/run_id=gefs_nwm_forecast_manifest_source_native_tranche1_20260406T194500Z
+    horizon_days: 30
+  readout:
+    include_lags: true
+    lags:
+      range: [0, 14]
+    standardize: true
+    scale_reference: retrospective_train
+  ppt:
+    reduction: q85
+    dry_day_threshold_mm: 0
+    noisy_blend:
+      enabled: true
+      noise_sd: 30
+      noise_seed: 20260415
+      noise_distribution: normal
+      floor_at_zero: true
+    observed_blend:
+      enabled: true
+      observed_weight: 0.50
+      observed_zero_stay_prob: 0.90
+      observed_zero_stay_seed: 20260415
+  soil:
+    reduction: q85
+    noisy_blend:
+      enabled: true
+      noise_sd: 0.05
+      noise_seed: 20260415
+      noise_distribution: abs_normal
+      floor_at_zero: false
+    observed_blend:
+      enabled: true
+      observed_weight: 0.50
+
+prediction:
+  contract_version: "0.3"
+  target: reference_quantile_from_glofas_discrepancy
+  horizon_scope: issued_glofas_only
+  q_g_source: posterior_model_quantile
+  discrepancy_feature_strategy: recursive_latent_path
+  prediction_unit: posterior_draw
+  posterior_draw_contract: q_y_draw_equals_q_g_draw_minus_d_g_draw
+  posterior_predictive_sampling: disabled
+  beyond_issued_horizon: disabled
+
+feature_contract:
+  version: "latent_path_v0.3"
+  two_block_design: true
+  reservoir_input:
+    internal_bias: true
+    output_lags:
+      range: [1, 7]
+    covariates:
+      ppt:
+        range: [0, 7]
+      soil:
+        range: [0, 7]
+    standardize: true
+  readout:
+    add_intercept: true
+    include_reservoir_state: true
+    reservoir_state_lags: []
+    include_input_block: false
+    input_block:
+      output_lags:
+        range: [1, 7]
+      covariates:
+        ppt:
+          range: [0, 7]
+        soil:
+          range: [0, 7]
+      include_internal_bias: false
+    include_horizon_scaled: true
+    standardize_output_lags: true
+    standardize_non_intercept: false
+  forecast_alignment:
+    output_lags_anchor: target_date
+    covariate_lags_anchor: target_date
+
+reservoir:
+  D: 1
+  "n":
+    - 25
+  n_tilde: []
+  m: 7
+  washout: 30
+  alpha:
+    - 0.30
+  rho:
+    - 0.90
+  pi_w:
+    - 0.10
+  pi_in:
+    - 0.60
+  act_f: tanh
+  act_k: identity
+  standardize_inputs: true
+  add_bias: true
+  seed: 20260513
+
+inference:
+  default_method: vb_ld
+  likelihood_family: al
+  diagnostic_method: mcmc
+  diagnostic_likelihood_family: al
+  coefficient_prior_default: rhs
+  coefficient_prior_dense_baseline: ridge
+  vb_ld:
+    max_iter: 3
+    min_iter_elbo: 1
+    tol: 1.0e-4
+    tol_par: 1.0e-4
+    n_samp_xi: 150
+    n_draws: 32
+    rhs_tau0: 1.0e-4
+    rhs_slab_s2: 4.0
+    rhs_a_zeta: 2.0
+    rhs_b_zeta: 4.0
+    rhs_alpha_tau0: 1.0e-4
+    rhs_alpha_slab_s2: 4.0
+    rhs_alpha_a_zeta: 2.0
+    rhs_alpha_b_zeta: 4.0
+    rhs_freeze_tau_warmup_iters: 0
+    rhs_update_every: 1
+    rhs_min_tau_updates: 1
+    intercept_prec: 1.0e-9
+    sigma_a: 2.0
+    sigma_b: 1.0
+    elbo_check_frequency: 1
+    save_elbo_trace: true
+    save_parameter_summaries: true
+    future_moment_strategy: streamed_grouped
+    future_update_strategy: linearized_delta
+    future_objective_strategy: grouped
+    dense_debug_allowed: false
+  mcmc:
+    n_iter: 100
+    burn_in: 50
+    thin: 1
+    rhs_tau0: 1.0e-4
+    rhs_slab_s2: 4.0
+    rhs_a_zeta: 2.0
+    rhs_b_zeta: 4.0
+    rhs_alpha_tau0: 1.0e-4
+    rhs_alpha_slab_s2: 4.0
+    rhs_alpha_a_zeta: 2.0
+    rhs_alpha_b_zeta: 4.0
+    rhs_n_inner: 1
+    intercept_prec: 1.0e-9
+    sigma_a: 2.0
+    sigma_b: 1.0
+
+scoring:
+  primary:
+    - check_loss
+  intervals: []
+  event_thresholds: []
+
+post_analysis:
+  enabled: false
+  run_after_outputs: false
+  trace_skip: 5
+  credible_level: 0.95
+  recent_history_n: 200
+  forecast_window:
+    before_days: 30
+    after_days: 30
+
+execution:
+  require_input_manifest: true
+  write_session_info: true
+  write_git_state: true
+  stop_on_failed_required_model: true
+  inference_support:
+    allow_unsupported_design_gate: false
+    require_supported_for_input_check: true
+    require_supported_for_model_fit: true
+    note: >
+      The latent-path micro-pilot fit is article-side AL-VB. Because this profile
+      includes covariates inside the reservoir input, deterministic reservoir
+      construction and recursive continuation are handled by the article-side
+      covariate-aware kernel.
+  prelaunch:
+    enabled: true
+    purpose: latent_path_al_vb_micro_pilot
+  final_launch:
+    enabled: false
+    note: this micro-pilot profile is not a manuscript-scale application launch

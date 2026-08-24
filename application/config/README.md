@@ -17,6 +17,23 @@ Planned files:
   It names the planned exAL and VB-LD rows and permits input and design gates
   before every requested inference route is available; model fitting remains
   fail-closed for unsupported required rows.
+- `glofas_p50_alpha_rho_tau_response_surface_20260819.yaml`: authorized,
+  exact-cardinality definition for the 56-fit response-surface campaign around
+  the completed Stage-A D2/m720 leader. It freezes the SHA-pinned anchor,
+  approved alpha/rho support, RHS sentinels, warm/cold canaries, two-block
+  reservoir preflight, `max_iter=150`, and 20 unique single-core workers.
+- `glofas_p50_alpha_tau_focused_20260820.yaml`: authorized 20-fit refinement
+  around the completed response-surface leader. It fixes `rho=.95` and shared
+  RHS `tau0=.1`, resolves linked alpha-by-discrepancy-`tau0` interactions,
+  tests six block-specific leak-rate contrasts, includes two cold controls,
+  and retains the same preflight, historical guardrails, and full7 gate.
+- `glofas_p50_structural_memory_geometry_20260821.yaml`: authorized 48-fit
+  structural campaign over memory, direct lags, depth, width, and two-block
+  asymmetry, with bounded diagnostics and guarded retention.
+- `glofas_screening_program_closeout_20260824.yaml`: immutable no-refit
+  closeout contract for the four completed constrained-median phases. It pins
+  terminal counts, ranking hashes, leaders, the FR09 gate, the paired audit,
+  and protected Stage-A finalists.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

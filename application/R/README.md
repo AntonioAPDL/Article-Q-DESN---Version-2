@@ -41,7 +41,10 @@ Tracked helper files:
 - `model_contract.R`: application-model contract helpers. These distinguish
   the frozen `origin_state_bridge` workflow from the target
   `latent_path_ensemble_likelihood` workflow and record source-parameter
-  ownership for GloFAS likelihood rows.
+  ownership for GloFAS likelihood rows. The block-config resolver preserves the
+  legacy shared reservoir specification by default while permitting explicit,
+  independently validated reference and discrepancy reservoir, input-lag, and
+  readout overrides.
 - `feature_contract.R`: normalized readout-feature contract for the GloFAS
   discrepancy model. It parses output and covariate lag specifications,
   separates the reservoir's internal input bias from the readout intercept, and
@@ -115,6 +118,27 @@ Tracked helper files:
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS
   distributional-selection workflow.
+- `glofas_constrained_median_screening.R`: deterministic expansion of reviewed
+  two-block p50 screening spaces, including linked DESN profiles with exact
+  cardinality checks and score-balanced prior-expansion anchors; block-specific
+  config materialization, SHA-pinned baseline verification, semantic warm-start
+  policy, historical-fit constraints, and forecast check-loss ranking. The FR09 template can first be
+  run with `--audit_only true`, which verifies the promoted evidence and frozen
+  engine while producing no candidates. Median fits are never labeled as
+  distributional CRPS; eligible candidates still require diagnostic review, a
+  cold p50 confirmation, and a full multi-quantile refit before promotion.
+- `glofas_median_response_surface_campaign.R`: deterministic construction of
+  the 56-fit alpha/rho/tau response-surface campaign around the completed
+  Stage-A leader. It verifies the anchor evidence, creates linked and
+  block-specific subdesigns, preserves warm/cold canaries as distinct
+  numerical treatments, and enforces the 150-iteration/20-core contract.
+- `glofas_median_structural_campaign.R`: deterministic construction of the
+  bounded structural memory/geometry campaign, including block-asymmetric
+  designs and no-reduction deep reservoirs.
+- `glofas_screening_program_closeout.R`: fail-closed verification of phase
+  counts, immutable ranking hashes, leaders, promotion gates, and the paired
+  mechanism decision across all completed constrained-median campaigns. It
+  never launches a fit.
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.
@@ -124,10 +148,14 @@ Tracked helper files:
 - `reservoir_screening.R`: sampler-free D-ESN reservoir diagnostics and
   early-rejection helpers. These inspect recurrent-layer stability, leaky
   effective radii, state degeneracy, saturation, correlation redundancy,
-  effective rank, conditioning, optional cheap validation, and seed-level
-  aggregation. The helpers are advisory by default and do not launch VB or
+  effective rank, conditioning, empirical two-block initial-condition
+  forgetting, optional cheap validation, and seed-level aggregation. The
+  helpers are advisory by default and do not launch VB or
   MCMC; `application/scripts/03_screen_reservoir_design.R` is the standalone
-  pre-stage that writes screening tables for a fresh run id.
+  pre-stage that writes screening tables for a fresh run id. Absolute and
+  relative effective ranks are serialized together. The default v1 policy
+  retains low relative rank as a hard rejection; a prospective campaign may
+  set `low_effective_rank_action = "repair"` without reinterpreting prior runs.
 - `make_manuscript_outputs.R`
 - `promote_application_outputs.R`: promotion guards and provenance-map helpers
   used by `scripts/08_promote_application_outputs.R`. Final-launch promotion

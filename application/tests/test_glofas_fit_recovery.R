@@ -99,6 +99,30 @@ done_cleanup <- app_glofas_fit_recovery_cleanup(
 )
 stopifnot(isTRUE(done_cleanup$executed[[1L]]))
 stopifnot(!file.exists(done_cleanup$path[[1L]]))
+
+rejected_dir <- file.path(cleanup_root, "run_rejected")
+dir.create(file.path(rejected_dir, "objects"), recursive = TRUE)
+saveRDS(list(x = 2), file.path(rejected_dir, "objects", "rejected_fit.rds"))
+writeLines("rejected", file.path(rejected_dir, ".reservoir_preflight_rejected"))
+rejected_cleanup <- app_glofas_fit_recovery_cleanup(
+  rejected_dir,
+  runs_root = cleanup_root,
+  execute = TRUE
+)
+stopifnot(nrow(rejected_cleanup) == 1L)
+stopifnot(isTRUE(rejected_cleanup$executed[[1L]]))
+stopifnot(!file.exists(rejected_cleanup$path[[1L]]))
+
+empty_rejected_dir <- file.path(cleanup_root, "empty_rejected")
+dir.create(empty_rejected_dir, recursive = TRUE)
+writeLines("rejected", file.path(empty_rejected_dir, ".reservoir_preflight_rejected"))
+empty_rejected_cleanup <- app_glofas_fit_recovery_cleanup(
+  empty_rejected_dir,
+  runs_root = cleanup_root,
+  execute = TRUE
+)
+stopifnot(is.data.frame(empty_rejected_cleanup))
+stopifnot(nrow(empty_rejected_cleanup) == 0L)
 unlink(cleanup_root, recursive = TRUE)
 
 portability_dates <- as.Date("2022-01-01") + 0:3

@@ -174,6 +174,68 @@ app_feature_contract_reservoir_covariate_lags <- function(cfg) {
   app_feature_contract(cfg)$reservoir_input$covariate_lags
 }
 
+app_feature_contract_history_requirement <- function(cfg, block = NA_character_) {
+  contract <- app_feature_contract(cfg)
+  lag_groups <- list(
+    reservoir_output = contract$reservoir_input$output_lags,
+    reservoir_covariates = unlist(
+      contract$reservoir_input$covariate_lags,
+      use.names = FALSE
+    ),
+    readout_reservoir_state = contract$readout$reservoir_state_lags,
+    readout_output = if (isTRUE(contract$readout$include_input_block)) {
+      contract$readout$input_block$output_lags
+    } else integer(0),
+    readout_covariates = if (isTRUE(contract$readout$include_input_block)) {
+      unlist(contract$readout$input_block$covariates, use.names = FALSE)
+    } else integer(0)
+  )
+  maxima <- vapply(lag_groups, function(x) {
+    x <- suppressWarnings(as.integer(unlist(x, use.names = FALSE)))
+    x <- x[is.finite(x)]
+    if (length(x)) max(x) else 0L
+  }, integer(1L))
+  required_drop <- max(c(maxima, 0L))
+  data.frame(
+    block = as.character(block %||% NA_character_),
+    reservoir_output_lag_max = maxima[["reservoir_output"]],
+    reservoir_covariate_lag_max = maxima[["reservoir_covariates"]],
+    readout_reservoir_state_lag_max = maxima[["readout_reservoir_state"]],
+    readout_output_lag_max = maxima[["readout_output"]],
+    readout_covariate_lag_max = maxima[["readout_covariates"]],
+    required_history_drop = required_drop,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_feature_contract_common_history_alignment <- function(
+  configs,
+  requested_drop = 0L,
+  block_names = names(configs)
+) {
+  if (!is.list(configs) || !length(configs)) {
+    stop("History alignment requires at least one feature-block config.", call. = FALSE)
+  }
+  requested_drop <- suppressWarnings(as.integer((requested_drop %||% 0L)[[1L]]))
+  if (!is.finite(requested_drop) || requested_drop < 0L) {
+    stop("requested_drop must be one nonnegative integer.", call. = FALSE)
+  }
+  if (is.null(block_names) || length(block_names) != length(configs) || any(!nzchar(block_names))) {
+    block_names <- paste0("block_", seq_along(configs))
+  }
+  requirements <- app_bind_rows_fill(lapply(seq_along(configs), function(i) {
+    app_feature_contract_history_requirement(configs[[i]], block = block_names[[i]])
+  }))
+  common_drop <- max(c(requested_drop, requirements$required_history_drop, 0L))
+  requirements$requested_drop <- requested_drop
+  requirements$common_drop <- common_drop
+  requirements$additional_alignment_drop <- common_drop - pmax(
+    requested_drop,
+    requirements$required_history_drop
+  )
+  requirements
+}
+
 app_feature_contract_covariate_lag_columns <- function(cfg) {
   lags_by_var <- app_feature_contract_covariate_lags(cfg)
   if (!length(lags_by_var)) return(character(0))

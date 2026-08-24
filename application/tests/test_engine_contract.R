@@ -1,16 +1,36 @@
 latent_cfg <- app_read_config(app_path("application/config/glofas_latent_path_al_vb_dec25_main.yaml"))
-engine_report <- app_check_qdesn_engine_api(
+historical_engine_report <- app_check_qdesn_engine_api(
   latent_cfg,
   require_discrepancy = FALSE,
   stop_on_failure = FALSE
 )
+stopifnot(is.list(historical_engine_report))
+
+# Historical configs retain their exact provenance pins. The shared engine
+# worktree may legitimately move later, so exercise a valid current pin without
+# rewriting the historical config or weakening production source checks.
+active_cfg <- latent_cfg
+active_repo <- app_qdesn_engine_repo_hint(active_cfg)
+active_cfg$dependencies$qdesn_engine_required_branch <- app_qdesn_engine_repo_branch(active_repo)
+active_cfg$dependencies$qdesn_engine_required_commit <- app_qdesn_engine_repo_sha(active_repo)
+engine_report <- app_check_qdesn_engine_api(
+  active_cfg,
+  require_discrepancy = FALSE,
+  stop_on_failure = FALSE
+)
 stopifnot(is.list(engine_report))
-stopifnot(identical(engine_report$engine, latent_cfg$dependencies$qdesn_engine))
+stopifnot(identical(engine_report$engine, active_cfg$dependencies$qdesn_engine))
 stopifnot(isTRUE(engine_report$ok))
 stopifnot(isTRUE(engine_report$source_policy_ok))
 stopifnot(!"qdesn_fit_discrepancy" %in% engine_report$required_exports)
-stopifnot(identical(engine_report$repo_git_sha, latent_cfg$dependencies$qdesn_engine_required_commit))
-stopifnot(identical(engine_report$repo_branch, latent_cfg$dependencies$qdesn_engine_required_branch))
+stopifnot(identical(engine_report$repo_git_sha, active_cfg$dependencies$qdesn_engine_required_commit))
+stopifnot(identical(engine_report$repo_branch, active_cfg$dependencies$qdesn_engine_required_branch))
+if (!identical(
+  latent_cfg$dependencies$qdesn_engine_required_commit,
+  active_cfg$dependencies$qdesn_engine_required_commit
+)) {
+  stopifnot(!isTRUE(historical_engine_report$source_policy_ok))
+}
 engine_row <- app_qdesn_engine_contract_row(engine_report)
 stopifnot(all(c(
   "engine", "installed", "required_exports", "missing_exports", "repo_branch",
@@ -20,8 +40,8 @@ stopifnot(all(c(
   "min_version", "ok", "message"
 ) %in% names(engine_row)))
 stopifnot(identical(engine_row$load_mode, "local_source"))
-stopifnot(identical(engine_row$repo_hint, latent_cfg$dependencies$qdesn_engine_repo_hint))
-stopifnot(identical(engine_row$required_commit, latent_cfg$dependencies$qdesn_engine_required_commit))
+stopifnot(identical(engine_row$repo_hint, active_cfg$dependencies$qdesn_engine_repo_hint))
+stopifnot(identical(engine_row$required_commit, active_cfg$dependencies$qdesn_engine_required_commit))
 
 origin_report <- app_check_qdesn_engine_api(
   cfg,

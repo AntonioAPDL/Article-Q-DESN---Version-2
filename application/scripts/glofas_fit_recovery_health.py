@@ -91,6 +91,7 @@ def available_memory_gb():
 def reconcile_status(row, scheduler, worker):
     run_dir = pathlib.Path(row["run_dir"])
     complete = (run_dir / ".fit_recovery_complete").exists()
+    rejected = (run_dir / ".reservoir_preflight_rejected").exists()
     score = pathlib.Path(row["log_path"]).parents[1] / "scores" / (
         row["candidate_id"] + "_observed_fit_scores.csv"
     )
@@ -102,6 +103,8 @@ def reconcile_status(row, scheduler, worker):
 
     if complete and score.exists():
         return "completed", live
+    if rejected:
+        return "rejected", live
     if live and (
         worker_status == "running"
         or scheduler_status in {"running", "running_external"}
@@ -186,6 +189,7 @@ def main():
         "running": str(counts.get("running", 0)),
         "pending": str(counts.get("pending", 0)),
         "failed": str(counts.get("failed", 0)),
+        "rejected": str(counts.get("rejected", 0)),
         "stale": str(counts.get("stale", 0)),
     }]
     write_csv(output_root / "health_resources.csv", resource)

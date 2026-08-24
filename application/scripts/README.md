@@ -39,6 +39,22 @@ Launch-safety contract:
   no-reduction DESN candidates, set `n_tilde[d-1]` equal to the previous layer
   width so the article reservoir generator uses an identity inter-layer state
   map.
+- `glofas_median_response_surface_prepare.R` verifies a SHA-pinned p50 anchor
+  and materializes either the reviewed 56-candidate alpha/rho/tau campaign or
+  the explicit 20-candidate focused alpha/tau refinement. Generated launchers
+  use 20 one-thread workers, run a two-block reservoir preflight before each VB
+  fit, and invoke complete-batch ranking and guarded cleanup after the scheduler
+  exits.
+- `glofas_constrained_median_screen_orchestrate.sh` is the resumable runtime
+  wrapper used by generated constrained-screen launchers. It records an atomic
+  orchestration status and never launches full7 or promotes outputs.
+- `glofas_constrained_median_screen_finalize.R` writes hash-bearing
+  finalization status, persists a cleanup dry run before deletion, accepts fit
+  completion and reservoir-rejection terminal markers, and preserves cleanup
+  evidence across interrupted or repeated closeout attempts.
+- `glofas_reservoir_preflight_gate.R` normalizes each sampler-free reservoir
+  decision. `repair` proceeds with recorded warnings; `reject` becomes a
+  terminal early-rejection marker and skips VB.
 - `03_collect_reservoir_screening_shards.R` merges parallel
   `03_screen_reservoir_candidate_grid.R` shard outputs and writes ranked local
   summaries for selecting candidates after a background screening campaign.
@@ -435,6 +451,22 @@ Rscript application/scripts/00_audit_generated_artifacts.R \
 
 This inventory reports generated `.rds`, `.rda`, `.RData`, and large local
 artifacts under ignored application output roots. It does not remove files.
+
+Constrained p50 campaigns have separate strict and forensic closeout paths.
+`glofas_constrained_median_screen_resume.sh` retries only failed candidates;
+`glofas_p50_structural_closeout_audit.R` performs the paired no-refit
+uncertainty audit after strict completion; and
+`glofas_reservoir_preflight_policy_audit.R` calibrates a prospective screening
+policy without changing recorded decisions. See
+`docs/implementation_notes/glofas_structural_closeout_20260823.md` for the
+complete gate and retention contract.
+`glofas_p50_structural_closeout_watch.py` may supervise a long selective replay:
+it waits for a successful resume, reruns strict closeout and both audits, and
+cleans only nonprotected heavy artifacts when no cold, full7, or article gate
+is active. It never launches a model or edits article files.
+`glofas_screening_program_closeout.R` then verifies the cumulative four-phase
+contract and writes a frozen decision under the ignored runtime tree. It does
+not refit, cold-confirm, launch full7, or update article files.
 For cleanup planning across runs, use the run-level inventory:
 
 ```sh

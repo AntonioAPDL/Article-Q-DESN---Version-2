@@ -30,6 +30,47 @@ stopifnot(identical(contract$readout$input_block$output_lags, c(1L, 3L)))
 stopifnot(isTRUE(contract$readout$add_intercept))
 stopifnot(isFALSE(contract$readout$input_block$include_internal_bias))
 
+history_requirement <- app_feature_contract_history_requirement(fc_cfg, "reference")
+stopifnot(history_requirement$required_history_drop[[1L]] == 5L)
+stopifnot(history_requirement$reservoir_output_lag_max[[1L]] == 5L)
+stopifnot(history_requirement$readout_output_lag_max[[1L]] == 3L)
+
+history_disc_cfg <- fc_cfg
+history_disc_cfg$reservoir$m <- 7L
+history_disc_cfg$feature_contract$reservoir_input$output_lags <- list(range = c(1L, 7L))
+history_disc_cfg$feature_contract$readout$input_block$output_lags <- list(values = c(1L, 6L))
+history_alignment <- app_feature_contract_common_history_alignment(
+  list(reference = fc_cfg, discrepancy = history_disc_cfg),
+  requested_drop = 4L
+)
+stopifnot(identical(history_alignment$block, c("reference", "discrepancy")))
+stopifnot(identical(history_alignment$required_history_drop, c(5L, 7L)))
+stopifnot(identical(history_alignment$common_drop, c(7L, 7L)))
+stopifnot(identical(history_alignment$additional_alignment_drop, c(2L, 0L)))
+
+equal_alignment <- app_feature_contract_common_history_alignment(
+  list(reference = fc_cfg, discrepancy = fc_cfg),
+  requested_drop = 8L
+)
+stopifnot(identical(equal_alignment$common_drop, c(8L, 8L)))
+stopifnot(all(equal_alignment$additional_alignment_drop == 0L))
+
+no_direct_cfg <- fc_cfg
+no_direct_cfg$feature_contract$readout$include_input_block <- FALSE
+no_direct_cfg$feature_contract$readout$input_block$output_lags <- list(values = 99L)
+stopifnot(
+  app_feature_contract_history_requirement(no_direct_cfg)$required_history_drop[[1L]] == 5L
+)
+
+bad_history_drop_message <- tryCatch(
+  {
+    app_feature_contract_common_history_alignment(list(reference = fc_cfg), -1L)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("nonnegative integer", bad_history_drop_message, fixed = TRUE))
+
 res_cov_cfg <- fc_cfg
 res_cov_cfg$covariates$enabled <- TRUE
 res_cov_cfg$feature_contract$reservoir_input$covariates <- list(

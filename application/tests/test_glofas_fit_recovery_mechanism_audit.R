@@ -41,3 +41,22 @@ stopifnot(identical(
   mechanism_decision$primary_mechanism[[1L]],
   "discrepancy_state_or_readout_extrapolation"
 ))
+
+mechanism_cfg <- list(
+  reservoir = list(m = 2L),
+  feature_contract = list(
+    reservoir_input = list(output_lags = list(range = c(1L, 2L))),
+    readout = list(include_input_block = FALSE),
+    blocks = list(
+      reference = list(reservoir = list(m = 3L)),
+      discrepancy = list(reservoir = list(m = 7L))
+    )
+  )
+)
+mechanism_context <- list(
+  cfg = mechanism_cfg,
+  two_block_design = TRUE
+)
+mechanism_block_configs <- app_glofas_mechanism_block_configs(mechanism_context)
+stopifnot(mechanism_block_configs$reference$reservoir$m == 3L)
+stopifnot(mechanism_block_configs$discrepancy$reservoir$m == 7L)

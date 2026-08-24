@@ -376,6 +376,11 @@ app_make_latent_path_future_builder <- function(context) {
     qfit_alpha <- context$qfit_alpha %||% context$qfit
     feature_meta_beta <- context$feature_meta_beta %||% context$feature_meta
     feature_meta_alpha <- context$feature_meta_alpha %||% context$feature_meta
+    cfg_beta <- context$cfg_beta %||% app_qdesn_block_config(context$cfg, "reference")
+    cfg_alpha <- context$cfg_alpha %||% app_qdesn_block_config(
+      context$cfg,
+      if (isTRUE(two_block)) "discrepancy" else "reference"
+    )
 
     cont_beta <- app_qdesn_continue_latent_path(
       qfit = qfit_beta,
@@ -393,7 +398,7 @@ app_make_latent_path_future_builder <- function(context) {
     assembled_beta <- app_build_readout_feature_matrix(
       reservoir_X = cont_beta$X_future_core,
       panel = combined_beta_panel,
-      cfg = context$cfg,
+      cfg = cfg_beta,
       output_anchor_dates = context$latent_data$future_key$target_date,
       covariate_target_dates = context$latent_data$future_key$target_date,
       horizon = context$latent_data$future_key$horizon,
@@ -407,7 +412,7 @@ app_make_latent_path_future_builder <- function(context) {
       feature_info = feature_info_beta,
       future_key = context$latent_data$future_key,
       feature_meta = feature_meta_beta,
-      cfg = context$cfg
+      cfg = cfg_beta
     )
     res_rows_beta <- which(feature_info_beta$block == "reservoir_state")
     J_beta <- vector("list", length(J_direct_beta))
@@ -457,7 +462,7 @@ app_make_latent_path_future_builder <- function(context) {
       assembled_alpha <- app_build_readout_feature_matrix(
         reservoir_X = cont_alpha$X_future_core,
         panel = combined_alpha_panel,
-        cfg = context$cfg,
+        cfg = cfg_alpha,
         output_anchor_dates = context$latent_data$future_key$target_date,
         covariate_target_dates = context$latent_data$future_key$target_date,
         horizon = context$latent_data$future_key$horizon,
@@ -471,7 +476,7 @@ app_make_latent_path_future_builder <- function(context) {
         feature_info = feature_info_alpha,
         future_key = context$latent_data$future_key,
         feature_meta = feature_meta_alpha,
-        cfg = context$cfg
+        cfg = cfg_alpha
       )
       res_rows_alpha <- which(feature_info_alpha$block == "reservoir_state")
       J_alpha <- vector("list", length(J_direct_alpha))
@@ -628,7 +633,22 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
 
   seed <- suppressWarnings(as.integer(app_model_row_value(model_row, "reservoir_seed", cfg$reservoir$seed %||% 20260513L)))
   if (!is.finite(seed)) seed <- as.integer(cfg$reservoir$seed %||% 20260513L)
-  drop <- drop %||% as.integer(cfg$reservoir$washout %||% cfg$reservoir$m %||% 0L)
+  cfg_beta <- app_qdesn_block_config(cfg, "reference")
+  cfg_alpha <- if (isTRUE(two_block)) app_qdesn_block_config(cfg, "discrepancy") else cfg_beta
+  drop <- app_qdesn_common_washout(cfg, drop = drop)
+  row_alignment <- app_feature_contract_common_history_alignment(
+    configs = if (isTRUE(two_block)) {
+      list(reference = cfg_beta, discrepancy = cfg_alpha)
+    } else {
+      list(reference = cfg_beta)
+    },
+    requested_drop = drop
+  )
+  drop <- unique(row_alignment$common_drop)
+  if (length(drop) != 1L || !is.finite(drop)) {
+    stop("Feature-block history alignment did not produce one common drop.", call. = FALSE)
+  }
+  drop <- as.integer(drop)
   horizon_scale <- app_discrepancy_horizon_scale(panel, cfg)
   latent_feature_strategy <- app_prediction_contract(
     cfg,
@@ -640,7 +660,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   beta_block <- time_design_step("beta_feature_block", {
     app_latent_path_feature_block(
     panel = base_panel_full,
-    cfg = cfg,
+    cfg = cfg_beta,
     model_row = model_row,
     drop = drop,
     seed = beta_seed,
@@ -656,7 +676,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     alpha_block <- time_design_step("alpha_feature_block", {
       app_latent_path_feature_block(
       panel = base_panel_disc_full,
-      cfg = cfg,
+      cfg = cfg_alpha,
       model_row = model_row,
       drop = drop,
       seed = alpha_seed,
@@ -733,6 +753,8 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   glofas_future_quantile_path <- app_latent_path_glofas_quantile_path(latent_data, p0)
   context <- list(
     cfg = cfg,
+    cfg_beta = cfg_beta,
+    cfg_alpha = cfg_alpha,
     model_row = model_row,
     latent_data = latent_data,
     qfit = qfit_beta,
@@ -749,7 +771,11 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     feature_strategy = latent_feature_strategy,
     discrepancy_transition_strategy = discrepancy_transition_strategy,
     discrepancy_baseline_fixed = discrepancy_baseline_fixed,
-    covariate_timeline = app_panel_covariate_timeline(base_panel_full, required = isTRUE(app_qdesn_reservoir_uses_covariates(cfg))),
+    covariate_timeline = app_panel_covariate_timeline(
+      base_panel_full,
+      required = isTRUE(app_qdesn_reservoir_uses_covariates(cfg_beta)) ||
+        isTRUE(app_qdesn_reservoir_uses_covariates(cfg_alpha))
+    ),
     two_block_design = two_block,
     glofas_future_quantile_path = glofas_future_quantile_path,
     future_discrepancy_convention = if (isTRUE(two_block) && identical(
@@ -781,12 +807,17 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     feature_meta = feature_beta$meta,
     feature_meta_beta = feature_beta$meta,
     feature_meta_alpha = feature_alpha$meta,
+    block_config_beta = cfg_beta,
+    block_config_alpha = cfg_alpha,
+    block_config_hash_beta = app_qdesn_block_config_hash(cfg, "reference"),
+    block_config_hash_alpha = app_qdesn_block_config_hash(cfg, if (isTRUE(two_block)) "discrepancy" else "reference"),
     readout_scale_info = feature_beta$readout_scale_info,
     readout_scale_info_alpha = feature_alpha$readout_scale_info,
     base_panel = base_panel,
     base_panel_full = base_panel_full,
     base_panel_disc_full = base_panel_disc_full,
     keep_idx = feature_beta$keep_idx,
+    row_alignment = row_alignment,
     latent_data = latent_data,
     future_key = latent_data$future_key,
     y_future_init = app_latent_path_initial_future(latent_data, p0),
@@ -934,6 +965,8 @@ app_hash_latent_path_design <- function(x, probe = NULL) {
 	      discrepancy_baseline_future = probe$discrepancy_baseline_future %||% rep(0, nrow(x$future_key)),
 	      discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
 	      two_block_design = isTRUE(x$two_block_design %||% FALSE),
+	      block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
+	      block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
 	      future_discrepancy_convention = x$future_discrepancy_convention %||% NA_character_,
 	      design_version = x$design_version
 	    ),
@@ -1017,6 +1050,8 @@ app_latent_path_design_summary <- function(x, probe = NULL) {
     feature_contract_version = (x$feature_meta %||% list())$feature_contract$version %||% NA_character_,
     design_version = x$design_version %||% "latent_path_v0.1",
     two_block_design = isTRUE(x$two_block_design %||% FALSE),
+    block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
+    block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
     discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
     discrepancy_baseline_fixed_min = min(as.numeric(x$discrepancy_baseline_fixed %||% 0)),
     discrepancy_baseline_fixed_max = max(as.numeric(x$discrepancy_baseline_fixed %||% 0)),
@@ -1063,6 +1098,10 @@ app_latent_path_fit_diagnostics <- function(result) {
   base$vb_warm_start_sigma_used <- app_as_bool(warm_start$sigma_used %||% FALSE)
   base$vb_warm_start_source <- warm_start$source_path %||% NA_character_
   base$vb_warm_start_source_sha256 <- warm_start$source_sha256 %||% NA_character_
+  base$vb_warm_start_contract_required <- app_as_bool(warm_start$contract_required %||% FALSE)
+  base$vb_warm_start_compatibility_mode <- warm_start$compatibility_mode %||% NA_character_
+  base$vb_warm_start_compatibility_class <- warm_start$compatibility_class %||% NA_character_
+  base$vb_warm_start_compatibility_message <- warm_start$compatibility_message %||% NA_character_
   base$vb_warm_start_message <- warm_start$message %||% NA_character_
   base
 }
@@ -1243,6 +1282,10 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
   design_summary <- time_stage("summarize_latent_path_design", {
     app_latent_path_design_summary(design)
   })
+  fit$warm_start_contract <- app_latent_path_warm_start_contract(
+    design,
+    design_hash = design_summary$design_hash[[1L]]
+  )
   stage_timing_df <- if (length(stage_timing)) {
     do.call(rbind, stage_timing)
   } else {

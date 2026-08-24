@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -69,6 +70,12 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         self.assertTrue(health.pid_alive(str(os.getpid())))
         self.assertFalse(scheduler.pid_alive("not-a-pid"))
 
+    def test_scheduler_canonicalizes_r_style_boolean_values(self):
+        self.assertEqual(scheduler.canonical_bool("TRUE"), "true")
+        self.assertEqual(scheduler.canonical_bool("FALSE"), "false")
+        with self.assertRaisesRegex(ValueError, "Invalid boolean value"):
+            scheduler.canonical_bool("maybe")
+
     def test_absolute_runtime_config_can_be_made_repo_relative(self):
         config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"
         self.assertEqual(
@@ -128,6 +135,25 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertEqual(status, "running")
             self.assertTrue(live)
 
+    def test_health_recognizes_terminal_reservoir_rejection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            run_dir = output_root / "runs" / "candidate_run"
+            log_path = output_root / "logs" / "candidate.log"
+            run_dir.mkdir(parents=True)
+            (run_dir / ".reservoir_preflight_rejected").write_text(
+                "rejected\n",
+                encoding="utf-8",
+            )
+            row = {
+                "candidate_id": "candidate",
+                "run_dir": str(run_dir),
+                "log_path": str(log_path),
+            }
+            status, live = health.reconcile_status(row, {}, {})
+            self.assertEqual(status, "rejected")
+            self.assertFalse(live)
+
     def test_scheduler_retry_pending_supersedes_old_worker_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp) / "runtime"
@@ -149,10 +175,77 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertEqual(status, "pending")
             self.assertFalse(live)
 
+    def test_retry_failed_selects_only_failed_unfinished_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            rows = []
+            template = self.make_manifest_row(tmp)
+            for candidate_id in ("failed", "unknown", "completed", "rejected"):
+                row = dict(template)
+                row.update({
+                    "candidate_id": candidate_id,
+                    "priority": str(len(rows) + 1),
+                    "run_id": f"{candidate_id}_run",
+                    "run_dir": str(output_root / "runs" / f"{candidate_id}_run"),
+                    "log_path": str(output_root / "logs" / f"{candidate_id}.log"),
+                })
+                Path(row["run_dir"]).mkdir(parents=True)
+                rows.append(row)
+            status_dir = output_root / "status"
+            status_dir.mkdir(parents=True)
+            (status_dir / "failed.csv").write_text(
+                "candidate_id,status,timestamp,pid,exit_code\n"
+                "failed,failed,2026-08-23T00:00:00+00:00,999999999,1\n",
+                encoding="utf-8",
+            )
+            (Path(rows[2]["run_dir"]) / ".fit_recovery_complete").write_text(
+                "complete\n", encoding="utf-8"
+            )
+            (Path(rows[3]["run_dir"]) / ".reservoir_preflight_rejected").write_text(
+                "rejected\n", encoding="utf-8"
+            )
+
+            states = {
+                row["candidate_id"]: scheduler.reconcile_existing_candidate(
+                    row, output_root, {}, retry_failed=True
+                )["status"]
+                for row in rows
+            }
+            self.assertEqual(states["failed"], "pending")
+            self.assertEqual(states["unknown"], "excluded_from_failed_retry")
+            self.assertEqual(states["completed"], "completed_existing")
+            self.assertEqual(states["rejected"], "rejected_existing")
+
     def test_manifest_integrity_accepts_owned_hashed_inputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             row = self.make_manifest_row(tmp)
             scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_hashes_shared_warm_source_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            warm_fit = Path(tmp) / "source_fit.rds"
+            warm_fit.write_bytes(b"shared warm-start fixture")
+            warm_hash = hashlib.sha256(warm_fit.read_bytes()).hexdigest()
+            row.update({
+                "warm_start_source_fit_object": str(warm_fit),
+                "warm_start_source_sha256": warm_hash,
+            })
+            second = dict(row)
+            second.update({
+                "candidate_id": "candidate_second",
+                "priority": "2",
+                "run_id": "candidate_second_run",
+                "run_dir": str(Path(tmp) / "runs" / "candidate_second_run"),
+                "log_path": str(Path(tmp) / "logs" / "candidate_second.log"),
+            })
+            with mock.patch.object(
+                scheduler,
+                "sha256_file",
+                wraps=scheduler.sha256_file,
+            ) as digest:
+                scheduler.validate_manifest([row, second], Path(tmp), [0], 1)
+            self.assertEqual(digest.call_count, 3)
 
     def test_manifest_integrity_rejects_changed_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,6 +258,21 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             row = self.make_manifest_row(tmp)
             row["run_dir"] = str(Path(tmp).parent / "outside")
+            with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_checks_owned_preflight_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            row.update({
+                "reservoir_preflight_enabled": "true",
+                "reservoir_preflight_run_id": "candidate_preflight",
+                "reservoir_preflight_summary_path": str(
+                    Path(tmp) / "runs" / "candidate_preflight" / "tables" / "summary.csv"
+                ),
+            })
+            scheduler.validate_manifest([row], Path(tmp), [0], 1)
+            row["reservoir_preflight_summary_path"] = str(Path(tmp).parent / "outside.csv")
             with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
                 scheduler.validate_manifest([row], Path(tmp), [0], 1)
 

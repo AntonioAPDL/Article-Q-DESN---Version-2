@@ -1,0 +1,74 @@
+version: '1.0'
+screen_id: SET_ME
+launch_authorized: false
+output_root: local_trackers/runtime_configs/SET_ME
+
+base:
+  config: SET_ME_TO_REVIEWED_BASE_CONFIG
+  model_grid: SET_ME_TO_REVIEWED_BASE_MODEL_GRID
+  candidate_id: fr09_persistence_innovation
+  source_fit_object: null
+  source_fit_sha256: null
+  source_contract: null
+
+fixed:
+  quantile_level: 0.5
+  inference:
+    max_iter: 400
+    max_iter_hard_cap: 400
+    tol: 0.0001
+    tol_par: 0.0001
+    n_draws: 2000
+    n_samp_xi: 500
+  parameters:
+    reference:
+      pi_w: 0.03
+      pi_in: 1.0
+    discrepancy:
+      pi_w: 0.03
+      pi_in: 1.0
+
+# These values document the audited FR09 comparison point. Recheck them against
+# the promoted registry before materializing a real screen.
+baseline:
+  forecast_p50_check_loss_mean: 0.798826956115941
+  observed_log1p_mae_all: 0.0624424466662982
+  observed_log1p_mae_last1000: 0.0388437273850094
+  observed_log1p_mae_last200: 0.05360828353558
+  observed_log1p_mae_last50: 0.178787719773148
+
+selection:
+  require_vb_converged: false
+  policy:
+    max_observed_ratio_all: 1.05
+    max_observed_ratio_last1000: 1.05
+    max_observed_ratio_last200: 1.10
+    max_observed_ratio_last50: 1.15
+    last50_is_hard_gate: false
+    min_forecast_improvement_fraction: 0.03
+
+execution:
+  max_candidates: 500
+
+scheduler:
+  max_parallel: 4
+  cores: [0, 1, 2, 3]
+
+# Supply reviewed ranges here. Each set is expanded independently, which makes
+# staged or coordinate-wise screens possible without an accidental global
+# Cartesian explosion. Supported names are documented in the implementation
+# note. Example shape only:
+# candidate_sets:
+#   - set_id: alpha_local
+#     fixed:
+#       reference:
+#         D: 4
+#         'n': 100
+#         n_tilde: 100
+#     varying:
+#       reference:
+#         alpha: [0.05, 0.10]
+#       discrepancy:
+#         alpha: [0.05, 0.10]
+candidate_sets: []
+explicit_candidates: []

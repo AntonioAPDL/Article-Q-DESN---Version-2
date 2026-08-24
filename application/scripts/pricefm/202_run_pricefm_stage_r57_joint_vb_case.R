@@ -1,0 +1,291 @@
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(yaml)
+  library(jsonlite)
+  library(data.table)
+})
+
+`%||%` <- function(x, y) if (is.null(x) || !length(x)) y else x
+args <- commandArgs(trailingOnly = TRUE)
+arg <- function(flag, default = NULL) {
+  index <- match(flag, args)
+  if (is.na(index) || index == length(args)) default else args[[index + 1L]]
+}
+bool_arg <- function(flag, default = FALSE) {
+  tolower(as.character(arg(flag, default))) %in% c("1", "true", "yes", "y")
+}
+
+config_path <- arg("--config")
+if (is.null(config_path)) stop("--config is required", call. = FALSE)
+resume <- bool_arg("--resume", TRUE)
+force <- bool_arg("--force", FALSE)
+cfg <- yaml::read_yaml(config_path)$pricefm_stage_r57_joint_vb
+out <- normalizePath(cfg$output_dir, mustWork = FALSE)
+adapter <- normalizePath(cfg$adapter_dir, mustWork = FALSE)
+summary_path <- file.path(out, "job_summary.json")
+
+write_json <- function(path, payload) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  jsonlite::write_json(payload, path, auto_unbox = TRUE, pretty = TRUE, null = "null")
+  cat("\n", file = path, append = TRUE)
+}
+
+if (resume && !force && file.exists(summary_path)) {
+  existing <- tryCatch(jsonlite::read_json(summary_path, simplifyVector = TRUE), error = function(e) NULL)
+  if (!is.null(existing) && identical(existing$status, "completed") && file.exists(file.path(out, "metric_summary.csv"))) {
+    cat(jsonlite::toJSON(existing, auto_unbox = TRUE, pretty = TRUE), "\n")
+    quit(status = 0L)
+  }
+}
+if (dir.exists(out) && (force || !resume)) {
+  keep_log <- file.path(out, "worker.log")
+  paths <- setdiff(list.files(out, full.names = TRUE, all.files = TRUE, no.. = TRUE), keep_log)
+  if (length(paths)) unlink(paths, recursive = TRUE, force = TRUE)
+}
+dir.create(out, recursive = TRUE, showWarnings = FALSE)
+
+fail <- function(message) {
+  payload <- list(
+    status = "failed", case_id = cfg$case_id, region = cfg$region, fold = as.integer(cfg$fold),
+    error = as.character(message), registry_mutation_authorized = FALSE,
+    article_mutation_authorized = FALSE
+  )
+  write_json(summary_path, payload)
+  stop(message, call. = FALSE)
+}
+
+main <- function() {
+  allowed_splits <- as.character(unlist(cfg$allowed_splits, use.names = FALSE))
+  if (!identical(allowed_splits, c("train", "val")) || isTRUE(cfg$test_access_authorized)) {
+    fail("Stage-R57 fit firewall permits exactly train and validation.")
+  }
+  smoke <- yaml::read_yaml(cfg$smoke_config)$pricefm_desn_smoke
+  smoke_splits <- as.character(unlist(smoke$splits, use.names = FALSE))
+  if (!identical(smoke_splits, c("train", "val"))) {
+    fail("Adapter config attempted to materialize a split outside train/validation.")
+  }
+  if (!identical(as.character(smoke$region), as.character(cfg$region)) ||
+      as.integer(smoke$fold) != as.integer(cfg$fold)) {
+    fail("Runtime and adapter region/fold contracts disagree.")
+  }
+  quantiles <- as.numeric(unlist(cfg$quantiles, use.names = FALSE))
+  if (!identical(round(quantiles, 12), round(c(0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90), 12))) {
+    fail("Stage-R57 quantile ladder changed.")
+  }
+
+  adapter_manifest_path <- file.path(adapter, "adapter_manifest.json")
+  rebuild <- TRUE
+  if (file.exists(adapter_manifest_path)) {
+    old <- tryCatch(jsonlite::read_json(adapter_manifest_path, simplifyVector = FALSE), error = function(e) NULL)
+    old_splits <- if (is.null(old$splits)) character() else names(old$splits)
+    required_files <- unlist(lapply(allowed_splits, function(split) {
+      file.path(adapter, paste0(c("X_", "y_", "rows_"), split, ".csv"))
+    }), use.names = FALSE)
+    rebuild <- !identical(old_splits, allowed_splits) || !all(file.exists(required_files))
+    if ("test" %in% old_splits || file.exists(file.path(adapter, "X_test.csv"))) {
+      fail("A test adapter exists inside the Stage-R57 fit workspace.")
+    }
+  }
+  if (rebuild) {
+    if (dir.exists(adapter)) unlink(adapter, recursive = TRUE, force = TRUE)
+    status <- system2(
+      cfg$python_bin,
+      c(cfg$adapter_builder, "--smoke-config", cfg$smoke_config, "--force", "true"),
+      stdout = file.path(out, "adapter_build.log"),
+      stderr = file.path(out, "adapter_build.log")
+    )
+    if (!identical(status, 0L)) fail(sprintf("Adapter build failed with status %s.", status))
+  }
+  if (file.exists(file.path(adapter, "X_test.csv")) || file.exists(file.path(adapter, "rows_test.csv"))) {
+    fail("Test material was created despite the Stage-R57 split firewall.")
+  }
+
+  source_root <- normalizePath(cfg$source_root, mustWork = TRUE)
+  source(file.path(source_root, "application/R/00_packages.R"))
+  app_set_repo_root(source_root)
+  source(file.path(source_root, "application/R/joint_qvp_qdesn.R"))
+  source(file.path(source_root, "application/R/joint_exqdesn_exact_structured_inference.R"))
+  source(file.path(source_root, "application/R/joint_exqdesn_inference_dispatch.R"))
+  source(file.path(source_root, "application/R/pricefm_joint_quantile_inference.R"))
+
+  read_matrix <- function(path) {
+    value <- as.matrix(data.table::fread(path, header = FALSE, showProgress = FALSE))
+    storage.mode(value) <- "double"
+    value
+  }
+  read_rows <- function(split) data.table::fread(file.path(adapter, paste0("rows_", split, ".csv")), showProgress = FALSE)
+  X_train <- read_matrix(file.path(adapter, "X_train.csv"))
+  y_train <- as.numeric(read_matrix(file.path(adapter, "y_train.csv"))[, 1L])
+  X_val <- read_matrix(file.path(adapter, "X_val.csv"))
+  rows_val <- read_rows("val")
+  if (nrow(X_train) != length(y_train) || nrow(X_val) != nrow(rows_val)) {
+    fail("Adapter row dimensions are inconsistent.")
+  }
+  Z_train <- app_pricefm_joint_strip_intercept(X_train)
+  rm(X_train)
+  gc(verbose = FALSE)
+  if (ncol(Z_train) * length(quantiles) > as.integer(cfg$max_dense_dim)) {
+    fail("Joint coefficient dimension exceeds the deliberately declared dense VB bound.")
+  }
+
+  started <- proc.time()[["elapsed"]]
+  common <- list(
+    y = y_train,
+    Z = Z_train,
+    tau = quantiles,
+    max_iter = as.integer(cfg$max_iter),
+    tol = as.numeric(cfg$tol),
+    tau0 = as.numeric(cfg$tau0),
+    anchor_tau0 = as.numeric(cfg$tau0),
+    innovation_tau0 = as.numeric(cfg$tau0),
+    a_sigma = as.numeric(cfg$a_sigma),
+    b_sigma = as.numeric(cfg$b_sigma),
+    alpha_min_spacing = 0,
+    max_dense_dim = as.integer(cfg$max_dense_dim),
+    rhs_vb_inner = as.integer(cfg$rhs_vb_inner)
+  )
+  fit <- if (identical(cfg$likelihood_family, "al")) {
+    do.call(app_joint_qvp_fit_al_vb_tiny, common)
+  } else if (identical(cfg$likelihood_family, "exal")) {
+    do.call(app_joint_exqdesn_fit_vb_dispatch, c(list(method_id = "VB1_structured_v"), common))
+  } else {
+    fail(sprintf("Unsupported likelihood family '%s'.", cfg$likelihood_family))
+  }
+  elapsed <- proc.time()[["elapsed"]] - started
+  beta <- as.numeric(fit$beta_mean)
+  alpha <- as.numeric(fit$alpha_mean)
+  sigma <- as.numeric(fit$sigma_mean)
+  gamma <- if (is.null(fit$gamma_mean)) rep(NA_real_, length(quantiles)) else as.numeric(fit$gamma_mean)
+  if (any(!is.finite(beta)) || any(!is.finite(alpha)) || any(!is.finite(sigma)) || any(sigma <= 0)) {
+    fail("Joint VB returned nonfinite core summaries.")
+  }
+  pred_val <- app_pricefm_joint_predict(X_val, beta, alpha, quantiles)
+  crossing <- app_joint_qvp_crossing_diagnostics(pred_val, quantiles)
+  prediction_rows <- do.call(rbind, lapply(seq_along(quantiles), function(k) {
+    data.frame(
+      method_id = cfg$method_id,
+      split = "val",
+      origin_id = rows_val$origin_id,
+      horizon = as.integer(rows_val$horizon),
+      tau = quantiles[[k]],
+      pred_scaled = as.numeric(pred_val[, k]),
+      stringsAsFactors = FALSE
+    )
+  }))
+  utils::write.csv(prediction_rows, file.path(out, "model_predictions_scaled.csv"), row.names = FALSE)
+  utils::write.csv(fit$trace, file.path(out, "model_trace_summary.csv"), row.names = FALSE)
+  utils::write.csv(crossing, file.path(out, "crossing_diagnostics.csv"), row.names = FALSE)
+  parameter_summary <- data.frame(
+    method_id = cfg$method_id,
+    tau = quantiles,
+    alpha = alpha,
+    sigma = sigma,
+    gamma = gamma,
+    beta_l2 = vapply(seq_along(quantiles), function(k) {
+      p <- ncol(Z_train)
+      sqrt(sum(beta[((k - 1L) * p + 1L):(k * p)]^2))
+    }, numeric(1L)),
+    stringsAsFactors = FALSE
+  )
+  utils::write.csv(parameter_summary, file.path(out, "model_parameter_summary.csv"), row.names = FALSE)
+  checkpoint <- list(
+    format = "pricefm_stage_r57_joint_vb_initialization_v1",
+    case_id = cfg$case_id,
+    likelihood_family = cfg$likelihood_family,
+    method_id = cfg$method_id,
+    beta = beta,
+    alpha = alpha,
+    sigma = sigma,
+    gamma = gamma,
+    rhs_state = fit$rhs_state,
+    tau = quantiles,
+    p = ncol(Z_train),
+    intercept_removed = TRUE,
+    source_config_sha256 = cfg$source_config_sha256
+  )
+  checkpoint_path <- file.path(out, "joint_vb_initialization.rds")
+  saveRDS(checkpoint, checkpoint_path, compress = "xz")
+
+  skip_summary <- isTRUE(cfg$skip_summary_for_test %||% FALSE)
+  if (!skip_summary) {
+    status <- system2(
+      cfg$python_bin,
+      c(cfg$summarizer, "--smoke-config", cfg$smoke_config, "--run-dir", out),
+      stdout = file.path(out, "validation_summary.log"),
+      stderr = file.path(out, "validation_summary.log")
+    )
+    if (!identical(status, 0L)) fail(sprintf("Validation summarizer failed with status %s.", status))
+  } else {
+    utils::write.csv(data.frame(
+      method_id = cfg$method_id, split = "val", unit = "scaled", AQL = mean(abs(pred_val)),
+      stringsAsFactors = FALSE
+    ), file.path(out, "metric_summary.csv"), row.names = FALSE)
+  }
+  metric <- utils::read.csv(file.path(out, "metric_summary.csv"), stringsAsFactors = FALSE)
+  if (!any(metric$method_id == cfg$method_id & metric$split == "val")) {
+    fail("Validation metric summary lacks the Stage-R57 joint method.")
+  }
+
+  source_manifest <- data.frame(
+    label = c("runtime_config", "source_config", "adapter_manifest", "vb_initialization", "validation_metrics"),
+    path = c(config_path, cfg$source_config, adapter_manifest_path, checkpoint_path, file.path(out, "metric_summary.csv")),
+    stringsAsFactors = FALSE
+  )
+  source_manifest$sha256 <- vapply(source_manifest$path, app_sha256_file, character(1L))
+  source_manifest$bytes <- as.numeric(file.info(source_manifest$path)$size)
+  utils::write.csv(source_manifest, file.path(out, "source_manifest.csv"), row.names = FALSE)
+
+  removed <- character()
+  if (isTRUE(cfg$cleanup_adapter_after_success)) {
+    patterns <- c("^X_(train|val)\\.csv$", "^y_(train|val)\\.csv$", "^rows_(train|val)\\.csv$", "^rows_all\\.csv$")
+    candidates <- list.files(adapter, full.names = TRUE)
+    remove_paths <- candidates[vapply(basename(candidates), function(name) any(vapply(patterns, grepl, logical(1L), x = name)), logical(1L))]
+    if (length(remove_paths)) {
+      removed <- basename(remove_paths)
+      unlink(remove_paths, force = TRUE)
+    }
+  }
+  payload <- list(
+    status = "completed",
+    case_id = cfg$case_id,
+    region = cfg$region,
+    fold = as.integer(cfg$fold),
+    likelihood_family = cfg$likelihood_family,
+    method_id = cfg$method_id,
+    vb_method_id = cfg$vb_method_id,
+    n_train = length(y_train),
+    n_validation = nrow(X_val),
+    n_slopes = ncol(Z_train),
+    joint_dimension = length(beta),
+    quantiles = quantiles,
+    tau0 = as.numeric(cfg$tau0),
+    converged = isTRUE(fit$converged),
+    iterations = nrow(fit$trace),
+    elapsed_seconds = as.numeric(elapsed),
+    validation_crossing_rows = sum(crossing$n_crossing_pairs > 0),
+    validation_crossing_pairs = sum(crossing$n_crossing_pairs),
+    checkpoint = checkpoint_path,
+    checkpoint_sha256 = app_sha256_file(checkpoint_path),
+    adapter_heavy_files_removed = removed,
+    split_firewall = "train_validation_only",
+    test_accessed = FALSE,
+    registry_mutation_authorized = FALSE,
+    article_mutation_authorized = FALSE
+  )
+  write_json(summary_path, payload)
+  payload
+}
+
+result <- tryCatch(main(), error = function(error) {
+  if (!file.exists(summary_path)) {
+    write_json(summary_path, list(
+      status = "failed", case_id = cfg$case_id, region = cfg$region,
+      fold = as.integer(cfg$fold), error = conditionMessage(error),
+      registry_mutation_authorized = FALSE, article_mutation_authorized = FALSE
+    ))
+  }
+  message(conditionMessage(error))
+  quit(status = 1L)
+})
+cat(jsonlite::toJSON(result, auto_unbox = TRUE, pretty = TRUE), "\n")

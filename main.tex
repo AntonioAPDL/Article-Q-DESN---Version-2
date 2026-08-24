@@ -383,55 +383,19 @@ tables.
 
 \noindent
 The notation separates deterministic reservoir quantities from stochastic
-coefficient and likelihood quantities. Table~\ref{tab:notation} summarizes the
-recurring objects. Matrices and vectors are bold, as in \(\mat W\) and
-\(\vect x\); scalar observations, latent states, and parameters use standard
-lowercase notation unless they are named constants. The symbols \(\IG\),
-\(\GIG\), and \(\TN\) denote inverse-gamma, generalized inverse Gaussian, and
-positive-truncated Normal distributions. For a square matrix \(\mat A\), write
-\(\rho(\mat A)=\max_i |\lambda_i(\mat A)|\), where
+coefficient and likelihood quantities. Matrices and vectors are bold, as in
+\(\mat W\) and \(\vect x\); scalar observations, latent states, and parameters
+use standard lowercase notation unless they are named constants. The symbols
+\(\IG\), \(\GIG\), and \(\TN\) denote inverse-gamma, generalized inverse
+Gaussian, and positive-truncated Normal distributions. For a square matrix
+\(\mat A\), write \(\rho(\mat A)=\max_i |\lambda_i(\mat A)|\), where
 \(\{\lambda_i(\mat A)\}\) are the eigenvalues. Thus \(\rho(\cdot)\) denotes
 spectral radius, while \(\rho_d\in(0,1)\) denotes the target spectral radius
 for layer \(d\). Indices use \(d=1,\dots,D\) and \(t=1,\dots,T\). When
-conditioning information is shown explicitly, \(Q_p(y\mid\cdot)\) denotes
-the conditional \(p\)-quantile of the scalar response. The identity matrix,
-zero vector,
-and one vector of dimension \(m\) are denoted by \(\Id{m}\), \(\zeros{m}\),
-and \(\ones{m}\), respectively.
-
-\begin{table}[t]
-\centering
-\begingroup
-\TableStyle
-\begin{tabularx}{\textwidth}{@{}
->{\raggedright\arraybackslash}p{0.18\textwidth}
-Y
->{\raggedright\arraybackslash}p{0.25\textwidth}@{}}
-\toprule
-Symbol & Description & Dimension and support \\
-\midrule
-$y_t$ & scalar response at time $t$ & scalar \\
-$p_0,\ p_k$ & single-level and quantile-grid probabilities & $(0,1)$ \\
-$\vect z_t$ & exogenous covariates & $q\times1$ \\
-$\vect u_t$ & response lags and exogenous covariates & $(m+q)\times1$ \\
-$\vect h_{t,d}$ & reservoir state at layer $d$ & $n_d\times1$ \\
-$\tilde{\vect h}_{t,d}$ & reduced state at layer $d$ & $\tilde n_d\times1$ \\
-$\alpha_d,\rho_d$ & layer leak and target spectral radius & $[0,1]$ and $(0,1)$ \\
-$\tilde{\vect x}_t$ & feature vector without intercept & $r\times1$ \\
-$\vect x_t$ & DESN design vector with intercept & $(r+1)\times1$ \\
-$\mat X$ & fixed DESN design matrix after washout & $T\times(r+1)$ \\
-$\vect\beta$ & quantile-regression coefficients & $(r+1)\times1$ \\
-$\kappa_\beta^2$ & default ridge slope-prior variance & positive \\
-$\sigma,\gamma$ & exAL scale and asymmetry parameters & $\sigma>0,\ \gamma\in(L,U)$ \\
-$(\lambda_j,\tau,\zeta)$ & local, global, and slab shrinkage scales & positive \\
-\bottomrule
-\end{tabularx}
-\endgroup
-\caption{Key notation used throughout. Reservoir quantities are drawn or
-constructed once, held fixed after washout, and collected in the design
-matrix \(\mat X\).}
-\label{tab:notation}
-\end{table}
+conditioning information is shown explicitly, \(Q_p(y\mid\cdot)\) denotes the
+conditional \(p\)-quantile of the scalar response. The identity matrix, zero
+vector, and one vector of dimension \(m\) are denoted by \(\Id{m}\),
+\(\zeros{m}\), and \(\ones{m}\), respectively.
 
 \subsection{Deep Echo State Network (DESN)}
 \label{subsec:desn}
@@ -1967,19 +1931,6 @@ mean check loss.}
 \label{tab:glofas-application-score}
 \input{\GlofasApplicationCurrentScoreTable}
 \end{table}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentCorrectedPathsFigure}
-\caption{Discrepancy-corrected Q--DESN quantile paths for the GloFAS
-retrospective analysis. The figure shows the final 60 observed dates through the
-forecast origin (vertical dashed line) and the following 28-day issued
-forecast window. Black denotes observed USGS streamflow before the origin,
-red denotes the held-out USGS measurements, and orange denotes retrospective
-GloFAS. Thin gray paths are all 51 issued GloFAS ensemble members; their median
-is the dashed gray path.}
-\label{fig:glofas-application-corrected-paths}
-\end{figure}
 
 \begin{figure}[H]
 \centering

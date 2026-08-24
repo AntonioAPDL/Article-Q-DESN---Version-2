@@ -153,9 +153,17 @@ validation, joint-QDESN, package-engine, authoritative main, or Overleaf.
 - [x] Preserve prospective observed-fit and forecast gates.
 - [x] Add reservoir preflight and bounded storage cleanup.
 - [x] Add deterministic tests for cardinality, profiles, lags, and warm policy.
-- [ ] Materialize and verify all runtime contracts.
-- [ ] Re-audit active cores immediately before launch.
-- [ ] Launch 20 one-thread workers without disturbing other lanes.
-- [ ] Complete/finalize the 48-candidate batch.
-- [ ] Cold-confirm up to three qualifying candidates.
-- [ ] Run full7 only after cold p50 confirmation.
+- [x] Materialize and verify all runtime contracts.
+- [x] Re-audit active cores immediately before launch.
+- [x] Launch 20 one-thread workers without disturbing other lanes.
+- [x] Complete/finalize the 48-candidate batch: 25 fits, 23 preflight
+  rejections, and no unresolved failures.
+- [x] Apply the prospective cold-confirmation gate. No candidate qualified.
+- [x] Apply the prospective full7 gate. No full7 run was warranted or launched.
+
+The final leader was `symmetric_memory_direct_009_9c3d23fb3a`, with forecast
+p50 check loss 0.793895 and a 0.617% gain over FR09. Its paired improvement over
+the focused anchor was inside the warm/cold repeatability envelope and its
+moving-block interval crossed zero. See
+`docs/implementation_notes/glofas_screening_program_closeout_20260824.md` for
+the cumulative decision.

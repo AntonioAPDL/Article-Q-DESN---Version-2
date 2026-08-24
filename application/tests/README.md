@@ -30,6 +30,9 @@ Tracked tests:
   Stage-A design, and the exact 56-candidate alpha/rho/tau response-surface
   campaign with retained warm/cold canaries, plus the deterministic
   48-candidate structural memory/geometry campaign.
+- `test_glofas_screening_program_closeout.R`: cumulative phase census,
+  leader selection, no-promotion decision, and fail-closed ranking-hash drift
+  for the completed GloFAS constrained-median program.
 - `test_latent_path_design.R`: application-model contract parsing,
   latent-path state continuation, requested versus effective issued-horizon
   handling, synthetic AL fixture generation, scaling of reservoir lag inputs,

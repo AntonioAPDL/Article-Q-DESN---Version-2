@@ -27,6 +27,13 @@ Planned files:
   RHS `tau0=.1`, resolves linked alpha-by-discrepancy-`tau0` interactions,
   tests six block-specific leak-rate contrasts, includes two cold controls,
   and retains the same preflight, historical guardrails, and full7 gate.
+- `glofas_p50_structural_memory_geometry_20260821.yaml`: authorized 48-fit
+  structural campaign over memory, direct lags, depth, width, and two-block
+  asymmetry, with bounded diagnostics and guarded retention.
+- `glofas_screening_program_closeout_20260824.yaml`: immutable no-refit
+  closeout contract for the four completed constrained-median phases. It pins
+  terminal counts, ranking hashes, leaders, the FR09 gate, the paired audit,
+  and protected Stage-A finalists.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

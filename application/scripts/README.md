@@ -464,6 +464,9 @@ complete gate and retention contract.
 it waits for a successful resume, reruns strict closeout and both audits, and
 cleans only nonprotected heavy artifacts when no cold, full7, or article gate
 is active. It never launches a model or edits article files.
+`glofas_screening_program_closeout.R` then verifies the cumulative four-phase
+contract and writes a frozen decision under the ignored runtime tree. It does
+not refit, cold-confirm, launch full7, or update article files.
 For cleanup planning across runs, use the run-level inventory:
 
 ```sh

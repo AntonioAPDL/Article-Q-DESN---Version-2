@@ -132,6 +132,13 @@ Tracked helper files:
   Stage-A leader. It verifies the anchor evidence, creates linked and
   block-specific subdesigns, preserves warm/cold canaries as distinct
   numerical treatments, and enforces the 150-iteration/20-core contract.
+- `glofas_median_structural_campaign.R`: deterministic construction of the
+  bounded structural memory/geometry campaign, including block-asymmetric
+  designs and no-reduction deep reservoirs.
+- `glofas_screening_program_closeout.R`: fail-closed verification of phase
+  counts, immutable ranking hashes, leaders, promotion gates, and the paired
+  mechanism decision across all completed constrained-median campaigns. It
+  never launches a fit.
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.

@@ -242,8 +242,9 @@ Pass:
 - [x] Freeze three promotions and two parity decisions.
 - [x] Verify the 25-file Phase179 audit.
 - [x] Inventory all 32 article cells and retained draws.
-- [ ] Freeze and verify the Phase179 closeout packet.
-- [ ] Commit, push, and issue the clean integration handoff.
+- [x] Freeze and verify the Phase179 closeout packet.
+- [x] Commit and push the closeout implementation.
+- [x] Issue the clean integration handoff in the containing task commit.
 - [ ] Integrate through the integration coordinator.
 - [ ] Create a fresh main-based JOINT branch.
 - [ ] Freeze and run the 96-worker matched article-fixture confirmation.

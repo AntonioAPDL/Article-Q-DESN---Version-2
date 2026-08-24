@@ -26,6 +26,9 @@ app_joint_qdesn_phase179_dirs <- function(
     ),
     audit = file.path(
       cache_root, "joint_qdesn_phase179_dgp_score_confirmation_audit_20260819"
+    ),
+    closeout = file.path(
+      cache_root, "joint_qdesn_phase179_dgp_score_confirmation_closeout_20260824"
     )
   )
 }
@@ -834,4 +837,412 @@ app_joint_qdesn_phase179_finalize_confirmation <- function(
     stop("Phase179 confirmation audit manifest failed.", call. = FALSE)
   }
   list(out_dir = final_dir, assessment = assessment, decisions = decisions, reused = FALSE)
+}
+
+app_joint_qdesn_phase179_balanced_source_completeness <- function(
+  cache_root = app_joint_exqdesn_phase164_cache_root()
+) {
+  phase174 <- file.path(cache_root, "joint_qdesn_phase174_balanced_mcmc_final_20260809")
+  phase172 <- file.path(
+    cache_root, "joint_exqdesn_phase172_m0_balanced_article_confirmation_20260809"
+  )
+  al_sources <- c(
+    joint_qdesn_rhs_vb = file.path(cache_root, "joint_qdesn_phase154_mcmc_joint_al_20260730"),
+    qdesn_rhs_independent_vb = file.path(
+      cache_root, "joint_qdesn_phase154_mcmc_independent_al_20260730"
+    )
+  )
+  phase174_check <- app_joint_exqdesn_verify_manifest(phase174, "phase174")
+  if (any(phase174_check$status != "pass")) {
+    stop("Phase179 closeout cannot inventory an unverifiable Phase174 packet.", call. = FALSE)
+  }
+  authority <- app_read_csv(file.path(phase174, "final_mcmc_case_summary.csv"))
+  if (nrow(authority) != 32L || any(table(authority$source_model_id) != 8L)) {
+    stop("Phase174 balanced authority is not an 8-by-4 model grid.", call. = FALSE)
+  }
+
+  phase172_check <- app_joint_exqdesn_verify_manifest(phase172, "phase172")
+  if (any(phase172_check$status != "pass")) {
+    stop("Phase172 retained-draw packet is not hash verified.", call. = FALSE)
+  }
+  worker_inventory <- app_read_csv(file.path(phase172, "worker_manifest_inventory.csv"))
+  app_check_required_columns(worker_inventory, c(
+    "mcmc_case_id", "fit_structure", "chain_id", "manifest_path",
+    "manifest_sha256", "verified"
+  ), "Phase172 worker manifest inventory")
+  manifest_exists <- file.exists(worker_inventory$manifest_path)
+  manifest_sha_verified <- rep(FALSE, nrow(worker_inventory))
+  manifest_sha_verified[manifest_exists] <- tolower(vapply(
+    worker_inventory$manifest_path[manifest_exists], app_sha256_file, character(1L)
+  )) == tolower(worker_inventory$manifest_sha256[manifest_exists])
+  if (nrow(worker_inventory) != 128L ||
+      !all(app_as_bool_vec(worker_inventory$verified)) ||
+      !all(manifest_sha_verified)) {
+    stop("Phase172 retained worker-manifest inventory failed closed.", call. = FALSE)
+  }
+
+  exal_candidates <- file.path(phase172, "candidates")
+  exal_dirs <- list.dirs(exal_candidates, recursive = FALSE, full.names = TRUE)
+  exal_models <- c(
+    joint_exqdesn_rhs_vb = "joint",
+    exqdesn_rhs_independent_vb = "independent"
+  )
+  exal_rows <- lapply(names(exal_models), function(model_id) {
+      structure <- exal_models[[model_id]]
+      suffix <- paste0("__", structure, "$")
+      dirs <- exal_dirs[grepl(suffix, basename(exal_dirs))]
+      complete <- vapply(dirs, function(path) {
+        draws <- file.path(path, sprintf("chain_%02d", 1:8), "checkpoint", "posterior_draws.csv.gz")
+        manifests <- file.path(path, sprintf("chain_%02d", 1:8), "artifact_manifest.csv")
+        inventory_rows <- worker_inventory[
+          worker_inventory$mcmc_case_id == basename(path) &
+            worker_inventory$fit_structure == structure,
+          , drop = FALSE
+        ]
+        all(file.exists(draws)) && all(file.exists(manifests)) &&
+          nrow(inventory_rows) == 8L &&
+          all(app_as_bool_vec(inventory_rows$verified))
+      }, logical(1L))
+      data.frame(
+        source_model_id = model_id, likelihood_family = "exAL",
+        fit_structure = structure, article_cells = 8L,
+        canonical_action_rows_available = 8L,
+        posterior_draw_cells_available = sum(complete),
+        worker_manifests_expected = 64L,
+        worker_manifests_verified = sum(
+          worker_inventory$fit_structure == structure & manifest_sha_verified
+        ),
+        source_manifest_verified = TRUE,
+        posterior_draw_status = if (length(dirs) == 8L && all(complete)) {
+          "source_complete_retained_phase172"
+        } else "source_incomplete",
+        retained_source_dir = phase172,
+        next_action = "reuse_verified_draws_except_matched_promoted_cells",
+        stringsAsFactors = FALSE
+      )
+    }
+  )
+  al_rows <- lapply(names(al_sources), function(model_id) {
+    source <- al_sources[[model_id]]
+    source_check <- app_joint_exqdesn_verify_manifest(source, model_id)
+    source_verified <- nrow(source_check) > 0L && all(source_check$status == "pass")
+    draw_files <- if (dir.exists(source)) {
+      list.files(source, pattern = "^posterior_draws[.]csv[.]gz$", recursive = TRUE)
+    } else character()
+    data.frame(
+      source_model_id = model_id, likelihood_family = "AL",
+      fit_structure = if (startsWith(model_id, "joint_")) "joint" else "independent",
+      article_cells = 8L,
+      canonical_action_rows_available = sum(authority$source_model_id == model_id),
+      posterior_draw_cells_available = 0L,
+      worker_manifests_expected = 0L, worker_manifests_verified = 0L,
+      source_manifest_verified = source_verified,
+      posterior_draw_status = if (!length(draw_files)) {
+        "action_only_rerun_required"
+      } else "unexpected_draw_inventory_review",
+      retained_source_dir = source,
+      next_action = "rerun_balanced_article_fixture_for_posterior_score_intervals",
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- app_joint_qdesn_bind_rows(c(al_rows, exal_rows))
+  out <- out[match(c(
+    "joint_qdesn_rhs_vb", "qdesn_rhs_independent_vb",
+    "joint_exqdesn_rhs_vb", "exqdesn_rhs_independent_vb"
+  ), out$source_model_id), , drop = FALSE]
+  if (anyNA(out$source_model_id) || sum(out$article_cells) != 32L ||
+      sum(out$posterior_draw_cells_available) != 16L ||
+      !all(out$source_manifest_verified) ||
+      sum(out$worker_manifests_verified) != 128L) {
+    stop("Balanced posterior-draw source inventory failed closed.", call. = FALSE)
+  }
+  out
+}
+
+app_joint_qdesn_phase179_closeout_tables <- function(
+  assessment, decisions, controls, score_summary, mcmc_summary,
+  parameter_diagnostics, pairing, runtime, source_completeness
+) {
+  app_check_required_columns(assessment, c(
+    "workers_planned", "workers_complete", "workers_failed",
+    "confirmation_cases", "target_cells", "promoted_nonparity",
+    "retained_parity", "contract_crossing_pairs"
+  ), "Phase179 closeout assessment")
+  app_check_required_columns(decisions, c(
+    "case_id", "base_scenario_id", "fit_structure", "final_selected_template_id",
+    "final_selected_variant_id", "promoted_nonparity", "fresh_replicates",
+    "median_score_ratio_vs_parity", "relative_score_improvement",
+    "lower_score_replicate_fraction", "median_probability_lower_score",
+    "median_forecast_oracle_mae_ratio", "maximum_forecast_oracle_mae_ratio",
+    "median_fit_oracle_mae_ratio", "maximum_fit_oracle_mae_ratio",
+    "source_and_implementation_pass", "score_functional_hard_pass",
+    "oracle_safeguard_pass", "directional_gain_confirmed", "gate_status"
+  ), "Phase179 closeout decisions")
+  app_check_required_columns(controls, c(
+    "case_id", "phase178_template_id", "variant_id", "tau0", "zeta2",
+    "alpha_prior_sd", "source_control_row_sha256", "phase179_final_role"
+  ), "Phase179 closeout controls")
+  app_check_required_columns(score_summary, c(
+    "case_id", "phase178_template_id", "dgp_replicate_id",
+    "posterior_score_mean", "posterior_score_median", "posterior_score_q025",
+    "posterior_score_q975", "canonical_action_dgp_integrated_acrps",
+    "score_rank_rhat", "score_bulk_ess", "score_tail_ess",
+    "raw_crossing_rate", "contract_crossing_pairs", "score_functional_status"
+  ), "Phase179 closeout posterior scores")
+  app_check_required_columns(mcmc_summary, c(
+    "mcmc_case_id", "implementation_status", "scalar_mixing_status",
+    "forecast_contract_crossing_pairs"
+  ), "Phase179 closeout MCMC summary")
+  app_check_required_columns(parameter_diagnostics, c(
+    "parameter", "rank_rhat", "bulk_ess", "tail_ess"
+  ), "Phase179 closeout parameter diagnostics")
+  app_check_required_columns(pairing, c(
+    "fit_structure", "maximum_relative_mean_shift", "pairing_status"
+  ), "Phase179 closeout pairing audit")
+  app_check_required_columns(runtime, c("worker_id", "elapsed_seconds"), "Phase179 runtime")
+  app_check_required_columns(source_completeness, c(
+    "source_model_id", "article_cells", "posterior_draw_cells_available",
+    "worker_manifests_verified", "source_manifest_verified"
+  ), "Phase179 balanced source completeness")
+
+  hard_pass <- nrow(assessment) == 1L && assessment$workers_planned[[1L]] == 384L &&
+    assessment$workers_complete[[1L]] == 384L && assessment$workers_failed[[1L]] == 0L &&
+    assessment$confirmation_cases[[1L]] == 24L && assessment$target_cells[[1L]] == 5L &&
+    assessment$promoted_nonparity[[1L]] == 3L && assessment$retained_parity[[1L]] == 2L &&
+    assessment$contract_crossing_pairs[[1L]] == 0L && nrow(decisions) == 5L &&
+    sum(app_as_bool_vec(decisions$promoted_nonparity)) == 3L &&
+    all(app_as_bool_vec(decisions$source_and_implementation_pass)) &&
+    all(app_as_bool_vec(decisions$score_functional_hard_pass)) &&
+    all(app_as_bool_vec(decisions$oracle_safeguard_pass)) &&
+    !anyDuplicated(decisions$case_id) && !anyDuplicated(controls$case_id) &&
+    nrow(controls) == 5L &&
+    all(mcmc_summary$implementation_status == "pass") &&
+    all(mcmc_summary$forecast_contract_crossing_pairs == 0L) &&
+    nrow(mcmc_summary) == 24L && nrow(score_summary) == 24L &&
+    !anyDuplicated(paste(
+      score_summary$case_id, score_summary$phase178_template_id,
+      score_summary$dgp_replicate_id, sep = "::"
+    )) &&
+    all(is.finite(unlist(score_summary[, c(
+      "posterior_score_mean", "posterior_score_median", "posterior_score_q025",
+      "posterior_score_q975", "canonical_action_dgp_integrated_acrps",
+      "score_rank_rhat", "score_bulk_ess", "score_tail_ess", "raw_crossing_rate"
+    ), drop = FALSE]))) &&
+    all(score_summary$score_functional_status %in% c("pass", "review")) &&
+    all(score_summary$contract_crossing_pairs == 0L) &&
+    nrow(pairing) == 24L && all(pairing$pairing_status == "pass") &&
+    all(is.finite(pairing$maximum_relative_mean_shift)) &&
+    nrow(runtime) == 384L && !anyDuplicated(runtime$worker_id) &&
+    all(is.finite(runtime$elapsed_seconds)) && all(runtime$elapsed_seconds > 0) &&
+    nrow(source_completeness) == 4L &&
+    sum(source_completeness$article_cells) == 32L &&
+    sum(source_completeness$posterior_draw_cells_available) == 16L &&
+    sum(source_completeness$worker_manifests_verified) == 128L &&
+    all(app_as_bool_vec(source_completeness$source_manifest_verified))
+  if (!hard_pass) stop("Phase179 closeout hard evidence gate failed.", call. = FALSE)
+
+  selected <- app_joint_qdesn_bind_rows(lapply(seq_len(nrow(decisions)), function(ii) {
+    decision <- decisions[ii, , drop = FALSE]
+    block <- score_summary[
+      score_summary$case_id == decision$case_id[[1L]] &
+        score_summary$phase178_template_id == decision$final_selected_template_id[[1L]],
+      , drop = FALSE
+    ]
+    if (nrow(block) != 3L) stop("Selected control lacks three score replicates.", call. = FALSE)
+    data.frame(
+      case_id = decision$case_id[[1L]], base_scenario_id = decision$base_scenario_id[[1L]],
+      fit_structure = decision$fit_structure[[1L]],
+      final_selected_template_id = decision$final_selected_template_id[[1L]],
+      final_selected_variant_id = decision$final_selected_variant_id[[1L]],
+      promoted_nonparity = decision$promoted_nonparity[[1L]],
+      relative_score_improvement = decision$relative_score_improvement[[1L]],
+      lower_score_replicate_fraction = decision$lower_score_replicate_fraction[[1L]],
+      median_probability_lower_score = decision$median_probability_lower_score[[1L]],
+      median_posterior_score_mean = stats::median(block$posterior_score_mean),
+      median_canonical_action_score = stats::median(
+        block$canonical_action_dgp_integrated_acrps
+      ),
+      maximum_score_rank_rhat = max(block$score_rank_rhat),
+      minimum_score_bulk_ess = min(block$score_bulk_ess),
+      minimum_score_tail_ess = min(block$score_tail_ess),
+      median_raw_crossing_rate = stats::median(block$raw_crossing_rate),
+      maximum_raw_crossing_rate = max(block$raw_crossing_rate),
+      contract_crossing_pairs = sum(block$contract_crossing_pairs),
+      score_functional_pass_replicates = sum(block$score_functional_status == "pass"),
+      gate_status = decision$gate_status[[1L]], stringsAsFactors = FALSE
+    )
+  }))
+  selected <- merge(
+    selected,
+    controls[, c(
+      "case_id", "phase178_template_id", "tau0", "zeta2", "alpha_prior_sd",
+      "source_control_row_sha256", "phase179_final_role"
+    ), drop = FALSE],
+    by.x = c("case_id", "final_selected_template_id"),
+    by.y = c("case_id", "phase178_template_id"), all.x = TRUE, sort = FALSE
+  )
+  if (anyNA(selected$source_control_row_sha256)) {
+    stop("Phase179 closeout could not resolve a selected frozen control.", call. = FALSE)
+  }
+
+  parameter_blocks <- app_joint_qdesn_bind_rows(lapply(
+    split(parameter_diagnostics, parameter_diagnostics$parameter), function(x) {
+      data.frame(
+        parameter = x$parameter[[1L]], diagnostic_rows = nrow(x),
+        maximum_rank_rhat = max(x$rank_rhat, na.rm = TRUE),
+        median_rank_rhat = stats::median(x$rank_rhat, na.rm = TRUE),
+        minimum_bulk_ess = min(x$bulk_ess, na.rm = TRUE),
+        median_bulk_ess = stats::median(x$bulk_ess, na.rm = TRUE),
+        minimum_tail_ess = min(x$tail_ess, na.rm = TRUE),
+        median_tail_ess = stats::median(x$tail_ess, na.rm = TRUE),
+        stringsAsFactors = FALSE
+      )
+    }
+  ))
+  parameter_blocks <- parameter_blocks[order(parameter_blocks$parameter), , drop = FALSE]
+
+  evidence <- data.frame(
+    phase_id = "joint_qdesn_phase179_dgp_score_confirmation_closeout_v1",
+    gate_status = "review",
+    implementation_hard_gates = "pass",
+    workers_complete = assessment$workers_complete[[1L]],
+    workers_failed = assessment$workers_failed[[1L]],
+    score_cells = nrow(score_summary),
+    score_functional_pass = sum(score_summary$score_functional_status == "pass"),
+    score_functional_review = sum(score_summary$score_functional_status == "review"),
+    scalar_mixing_review = sum(mcmc_summary$scalar_mixing_status == "review"),
+    promoted_nonparity = sum(app_as_bool_vec(decisions$promoted_nonparity)),
+    retained_parity = sum(!app_as_bool_vec(decisions$promoted_nonparity)),
+    contract_crossing_pairs = sum(score_summary$contract_crossing_pairs),
+    maximum_raw_crossing_rate = max(score_summary$raw_crossing_rate),
+    independent_pairing_maximum_relative_shift = max(
+      pairing$maximum_relative_mean_shift[pairing$fit_structure == "independent"]
+    ),
+    worker_core_hours = sum(runtime$elapsed_seconds) / 3600,
+    article_fixture_used_for_selection = FALSE,
+    article_assets_mutated = FALSE,
+    ready_for_integration = TRUE,
+    ready_for_article_launch_from_current_branch = FALSE,
+    stringsAsFactors = FALSE
+  )
+  next_stage <- data.frame(
+    stage_order = 1:4,
+    stage = c(
+      "integrate_phase179_scientific_branch",
+      "matched_article_fixture_confirmation",
+      "balanced_32_cell_posterior_score_completion",
+      "dense_19_level_quantile_grid"
+    ),
+    status = c(
+      "ready_for_integration", "blocked_pending_integration",
+      "blocked_pending_article_confirmation", "deferred"
+    ),
+    planned_cases = c(NA_integer_, 6L, 32L, NA_integer_),
+    planned_workers = c(NA_integer_, 96L, 128L, NA_integer_),
+    primary_metric = c(
+      "dgp_integrated_acrps", "dgp_integrated_acrps",
+      "dgp_integrated_acrps", "not_frozen"
+    ),
+    source_rule = c(
+      "integration_coordinator_merges_only_after_handoff",
+      "three_confirmed_challengers_plus_matched_parity",
+      "reuse_16_verified_exAL_cells_and_rerun_16_AL_cells_with_8_chains",
+      "separate_refit_contract_after_current_grid_article_packet"
+    ),
+    article_mutation_allowed = FALSE,
+    stringsAsFactors = FALSE
+  )
+  list(
+    evidence = evidence, selected = selected, parameter_blocks = parameter_blocks,
+    source_completeness = source_completeness, next_stage = next_stage
+  )
+}
+
+app_joint_qdesn_phase179_freeze_closeout <- function(
+  cache_root = app_joint_exqdesn_phase164_cache_root(), audit_dir = NULL,
+  out_dir = NULL, source_completeness = NULL, force = FALSE
+) {
+  dirs <- app_joint_qdesn_phase179_dirs(cache_root)
+  audit_dir <- audit_dir %||% dirs$audit
+  out_dir <- out_dir %||% dirs$closeout
+  audit_check <- app_joint_exqdesn_verify_manifest(audit_dir, "phase179_score_audit")
+  if (any(audit_check$status != "pass")) {
+    stop("Phase179 closeout source manifest failed.", call. = FALSE)
+  }
+  if (!force && file.exists(file.path(out_dir, "artifact_manifest.csv"))) {
+    check <- app_joint_exqdesn_verify_manifest(out_dir, "phase179_score_closeout")
+    if (all(check$status == "pass")) {
+      return(list(
+        out_dir = normalizePath(out_dir),
+        assessment = app_read_csv(file.path(out_dir, "closeout_assessment.csv")),
+        reused = TRUE
+      ))
+    }
+  }
+  read <- function(name) app_read_csv(file.path(audit_dir, name))
+  if (is.null(source_completeness)) {
+    source_completeness <- app_joint_qdesn_phase179_balanced_source_completeness(cache_root)
+  }
+  tables <- app_joint_qdesn_phase179_closeout_tables(
+    assessment = read("assessment.csv"),
+    decisions = read("case_specific_confirmation_decision.csv"),
+    controls = read("final_case_specific_controls.csv"),
+    score_summary = read("posterior_dgp_integrated_acrps_summary.csv"),
+    mcmc_summary = read("mcmc_case_summary.csv"),
+    parameter_diagnostics = read("mcmc_parameter_diagnostics.csv"),
+    pairing = read("score_pairing_stability.csv"),
+    runtime = read("runtime_summary.csv"),
+    source_completeness = source_completeness
+  )
+  final_dir <- normalizePath(out_dir, mustWork = FALSE)
+  tmp <- paste0(final_dir, ".tmp.", Sys.getpid())
+  if (dir.exists(tmp)) unlink(tmp, recursive = TRUE, force = TRUE)
+  app_ensure_dir(tmp)
+  write <- function(x, name) app_joint_qvp_write_csv(x, file.path(tmp, name))
+  readme <- file.path(tmp, "README.md")
+  writeLines(c(
+    "# Phase179 DGP-score confirmation closeout", "",
+    "This packet closes the 384-chain protected confirmation and verifies its final audit.",
+    "Three case-specific challengers are promoted and two cells retain parity.",
+    "The overall gate remains review because raw crossings and scalar alpha/trend mixing remain diagnostic concerns.",
+    "Gamma and sigma diagnostics are healthy; every reported contract grid is noncrossing.",
+    "The next production launch is blocked until this branch is integrated onto a fresh main-based JOINT branch.",
+    "No article fixture, dense-grid model, article asset, main branch, or Overleaf branch is changed here."
+  ), readme, useBytes = TRUE)
+  paths <- c(
+    source_audit_manifest_verification = write(
+      audit_check, "source_audit_manifest_verification.csv"
+    ),
+    closeout_assessment = write(tables$evidence, "closeout_assessment.csv"),
+    final_case_specific_decisions = write(
+      read("case_specific_confirmation_decision.csv"),
+      "final_case_specific_decisions.csv"
+    ),
+    final_case_specific_controls = write(
+      read("final_case_specific_controls.csv"), "final_case_specific_controls.csv"
+    ),
+    selected_score_diagnostics = write(
+      tables$selected, "selected_score_diagnostics.csv"
+    ),
+    parameter_block_diagnostics = write(
+      tables$parameter_blocks, "parameter_block_diagnostics.csv"
+    ),
+    balanced_source_completeness = write(
+      tables$source_completeness, "balanced_source_completeness.csv"
+    ),
+    next_stage_contract = write(tables$next_stage, "next_stage_contract.csv"),
+    provenance = write(app_joint_qvp_provenance_rows(), "provenance.csv"),
+    README = normalizePath(readme, mustWork = TRUE)
+  )
+  app_joint_exqdesn_write_manifest(paths, tmp)
+  if (dir.exists(final_dir)) {
+    quarantine <- paste0(final_dir, ".superseded.", format(Sys.time(), "%Y%m%dT%H%M%S"))
+    if (!file.rename(final_dir, quarantine)) {
+      stop("Could not quarantine prior Phase179 closeout.", call. = FALSE)
+    }
+  }
+  if (!file.rename(tmp, final_dir)) stop("Could not publish Phase179 closeout.", call. = FALSE)
+  check <- app_joint_exqdesn_verify_manifest(final_dir, "phase179_score_closeout")
+  if (any(check$status != "pass")) stop("Phase179 closeout manifest failed.", call. = FALSE)
+  list(out_dir = final_dir, assessment = tables$evidence, reused = FALSE)
 }

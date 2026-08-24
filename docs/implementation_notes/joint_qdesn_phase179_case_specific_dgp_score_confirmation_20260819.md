@@ -120,3 +120,27 @@ universal specification.  Once its fresh-seed decisions are frozen, only the
 qualified case-specific controls may proceed to article-fixture confirmation.
 Article assets remain the responsibility of the later audited integration
 stage.
+
+## Production result
+
+The production campaign completed on 2026-08-24:
+
+- 384/384 chain workers completed with no failure;
+- 24/24 candidate-replicate cases were finalized;
+- the 25-file audit manifest verifies by size and SHA-256;
+- all score values are finite and all contract crossing counts are zero;
+- 23 score functionals pass and one remains review-level;
+- three challengers are promoted and two cells retain parity.
+
+The promoted controls are independent normal bridge at `tau0 = 0.9975`,
+independent regime shift at `tau0 = 0.3350`, and joint regime shift at
+`tau0 = 0.1005`. Independent Laplace bridge and independent persistent heavy
+tail retain their parity controls. All controls preserve their own DESN and RHS
+settings; no universal specification is selected.
+
+Gamma and sigma diagnostics are healthy under exact M0. The residual scalar
+mixing review is concentrated in alpha/intercept and trend coefficients. Raw
+crossings also remain review evidence, while the scored monotone contract is
+noncrossing. The complete interpretation and next-stage source inventory are
+frozen in
+`joint_qdesn_phase179_phase180_unified_score_closeout_plan_20260824.md`.

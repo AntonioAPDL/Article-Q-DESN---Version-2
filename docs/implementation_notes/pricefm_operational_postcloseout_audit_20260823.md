@@ -31,7 +31,7 @@ The canonical artifact root is:
 ```
 
 The post-closeout output is retained below that root in
-`post_closeout_audit/`. It contains 17 CSV, JSON, and Markdown files and no
+`post_closeout_audit/`. It contains 18 CSV, JSON, and Markdown files and no
 fitted-model object or launch configuration.
 
 ## Audit wiring

@@ -185,10 +185,22 @@ runtime <- ranking[ranking$candidate_id %in% top_ids, c(
 if (nrow(scheduler)) {
   runtime$started_at <- scheduler$started_at[match(runtime$candidate_id, scheduler$candidate_id)]
   runtime$finished_at <- scheduler$finished_at[match(runtime$candidate_id, scheduler$candidate_id)]
-  runtime$wall_hours <- as.numeric(
-    as.POSIXct(runtime$finished_at, tz = "UTC") - as.POSIXct(runtime$started_at, tz = "UTC"),
+  parse_scheduler_time <- function(value) {
+    value <- trimws(as.character(value))
+    parsed <- rep(as.POSIXct(NA, tz = "UTC"), length(value))
+    present <- !is.na(value) & nzchar(value)
+    parsed[present] <- suppressWarnings(as.POSIXct(
+      value[present],
+      format = "%Y-%m-%dT%H:%M:%S%z",
+      tz = "UTC"
+    ))
+    parsed
+  }
+  runtime$wall_hours <- as.numeric(difftime(
+    parse_scheduler_time(runtime$finished_at),
+    parse_scheduler_time(runtime$started_at),
     units = "hours"
-  )
+  ))
 }
 
 control_scores <- ranking[

@@ -60,6 +60,20 @@ bash application/scripts/glofas_constrained_median_screen_resume.sh \
 The scheduler's `--retry-failed` contract preserves all completed and
 preflight-rejected markers and schedules only failed, non-running rows.
 
+For a long replay, the fail-closed watcher can complete the approved closeout
+without an interactive session:
+
+```bash
+python3 application/scripts/glofas_p50_structural_closeout_watch.py \
+  --output-root <runtime-root>
+```
+
+It waits for `resume_orchestration_status.csv`, reruns strict finalization and
+both audits, and executes retention cleanup only when the audit requests no
+cold confirmation, full7 decision, or article integration. It never launches
+additional fits or modifies article files; any active scientific gate stops
+the watcher before cleanup.
+
 ## Statistical closeout
 
 After strict completion, run:

@@ -460,6 +460,10 @@ uncertainty audit after strict completion; and
 policy without changing recorded decisions. See
 `docs/implementation_notes/glofas_structural_closeout_20260823.md` for the
 complete gate and retention contract.
+`glofas_p50_structural_closeout_watch.py` may supervise a long selective replay:
+it waits for a successful resume, reruns strict closeout and both audits, and
+cleans only nonprotected heavy artifacts when no cold, full7, or article gate
+is active. It never launches a model or edits article files.
 For cleanup planning across runs, use the run-level inventory:
 
 ```sh

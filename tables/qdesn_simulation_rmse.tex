@@ -8,7 +8,7 @@
 \cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(l){7-8}
 \(\tau\) & Model & VB & MCMC & VB & MCMC & VB & MCMC \\
 \midrule
-\multicolumn{8}{@{}l}{\emph{Effective training size \(T=500\)}}\\
+\multicolumn{8}{@{}l}{\emph{Effective fitting-sample size \(T=500\)}}\\
 \addlinespace[0.15em]
 \(0.05\) & \(\mathrm{DQLM}\) & 24.89 & 24.88 & 29.83 & 29.95 & 33.87 & 34.23 \\
  & \(\mathrm{exDQLM}\) & 24.11 & 19.58 & 26.05 & 20.12 & 32.31 & 23.91 \\
@@ -31,7 +31,7 @@
  & Q--DESN \(\AL\)--\RHS{} & \textbf{3.74} & 4.25 & \textbf{4.08} & 4.66 & \textbf{5.72} & 6.33 \\
  & Q--DESN \(\exAL\)--\RHS{} & 3.85 & 4.37 & 4.09 & 4.70 & 5.72 & 6.38 \\
 \midrule
-\multicolumn{8}{@{}l}{\emph{Effective training size \(T=5000\)}}\\
+\multicolumn{8}{@{}l}{\emph{Effective fitting-sample size \(T=5000\)}}\\
 \addlinespace[0.15em]
 \(0.05\) & \(\mathrm{DQLM}\) & 7.41 & 7.43 & 10.11 & 10.18 & 10.46 & 10.51 \\
  & \(\mathrm{exDQLM}\) & 6.96 & 6.50 & 8.64 & 7.96 & 9.49 & 8.80 \\
@@ -55,6 +55,6 @@
  & Q--DESN \(\exAL\)--\RHS{} & \textbf{3.63} & 4.41 & 4.62 & 5.16 & 4.77 & 5.50 \\
 \bottomrule
 \end{tabular}
-\caption{Simulation study. RMSE for the fitted conditional quantile path. Values compare VB and MCMC against the known target path on the post-washout training window. Boldface indicates the smallest RMSE among DQLM, exDQLM, and the four Q--DESN likelihood--prior specifications, across both inference methods, for the corresponding family, quantile level, and training size.}
+\caption{Simulation study. RMSE for the fitted conditional quantile path. Values compare VB and MCMC against the known target path on the post-washout fitting sample. Boldface indicates the smallest RMSE among DQLM, exDQLM, and the four Q--DESN likelihood--prior specifications, across both inference methods, for the corresponding family, quantile level, and fitting-sample size.}
 \label{tab:simulation-rmse}
 \end{table}

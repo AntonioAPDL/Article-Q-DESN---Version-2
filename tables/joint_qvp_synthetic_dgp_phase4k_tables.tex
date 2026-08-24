@@ -16,7 +16,7 @@ Forecast origins & 9000 held-out origins \\
 Tau grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95 \\
 Train/test lengths & 1000 / 1000 retained observations \\
 VB controls & max iter 720; adaptive grid 720, 960 \\
-Rolling-origin controls & refit stride 30; forecast-origin stride 10 \\
+Rolling-origin controls & refitting every 30 observations; forecast origins spaced 10 observations apart \\
 Diagnostic status & raw crossings retained; reported quantiles are monotone \\
 \bottomrule
 \end{tabular}
@@ -57,7 +57,7 @@ Mean truth MAE & 0.0922 & truth-distance criterion satisfied \\
 Mean truth RMSE & 0.1220 & truth-distance criterion satisfied \\
 Mean check loss & 0.1595 & finite forecast score \\
 Mean WIS & 0.3191 & finite interval score \\
-Mean CRPS-grid score & 0.3641 & finite grid score \\
+Mean aCRPS & 0.3641 & finite grid score \\
 Mean absolute hit-rate error & 0.0342 & max absolute error 0.29 \\
 Reported crossing pairs & 0 & monotonicity criterion satisfied \\
 Raw crossing pairs & 27 & retained diagnostic \\

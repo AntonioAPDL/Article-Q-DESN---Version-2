@@ -10,8 +10,8 @@ Evaluation components & Scenario-specific VB and structured-VB initialization fo
 Synthetic mechanisms & Eight mechanisms: three bridge cases and five stress cases with known conditional quantile paths. \\
 Model comparison & Joint and independent readouts under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior. \\
 Quantile grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95. \\
-Fit window & 500 observations after the pre-specified DESN washout. \\
-Forecast protocol & Held-out rolling-origin forecasts at origins separated by 30 observations, scored at leads 1-30. \\
+Fitting sample & 500 observations after the pre-specified DESN washout. \\
+Forecast protocol & Rolling-origin forecasts in the held-out period, with origins spaced 30 observations apart and horizons up to 30 steps ahead. \\
 MCMC effort & AL rows use the stated MCMC effort for the balanced comparison. Eleven exAL comparisons use eight chains with 24,000 iterations and 5,000 retained draws per chain; five exAL comparisons use stable MCMC summaries from the same scenario-level evaluation design. \\
 Reported quantile-grid summary & Scores evaluate posterior quantile-grid summaries after the pre-specified monotone rule; raw crossings remain diagnostics. \\
 Replicated robustness check & The replicated robustness check contains 1600 independent VB fits. \\

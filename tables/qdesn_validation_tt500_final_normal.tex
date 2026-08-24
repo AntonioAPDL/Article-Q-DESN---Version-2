@@ -24,6 +24,6 @@ Q--DESN exAL--RHS$^{\ddagger}$ & 2.149 & \textbf{2.863} & \textbf{1.080} & \text
 \bottomrule
 \end{tabular}%
 }
-\caption{Single-quantile fit-and-forecast comparison for the Gaussian simulation family. Q--DESN rows use preprocessing estimated only from observations available through the fitting origin. Forecast criteria average rolling-origin lead-target pairs over the held-out window of length 1000, using leads 1--30 and origin stride 30. Lower values are better; boldface marks the best displayed value within each inference panel, target level, and criterion. A dagger marks a warning in the supporting diagnostics; a double dagger marks a failed diagnostic check.}
+\caption{Single-quantile fit-and-forecast comparison for the Gaussian simulation family. Q--DESN rows use preprocessing estimated only from observations available through the fitting origin. Forecast criteria average over the scored origin-horizon pairs in the 1000-observation held-out period, with origins spaced 30 observations apart and horizons up to 30 steps ahead. Lower values are better; boldface marks the best displayed value within each inference panel, target level, and criterion. A dagger marks a warning in the supporting diagnostics; a double dagger marks a failed diagnostic check.}
 \label{tab:simulation-500obs-final-normal}
 \end{table}

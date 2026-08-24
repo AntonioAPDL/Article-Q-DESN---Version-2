@@ -73,6 +73,7 @@ def test_r57_prep_materializes_114_firewalled_cases(tmp_path, monkeypatch):
     smoke = yaml.safe_load(Path(manifest.iloc[0].smoke_config).read_text())["pricefm_desn_smoke"]
     assert runtime["allowed_splits"] == ["train", "val"]
     assert runtime["test_access_authorized"] is False
+    assert runtime["python_bin"] == str(Path(sys.executable).absolute())
     assert smoke["splits"] == ["train", "val"]
     assert smoke["quantiles"] == list(module.TAUS)
 

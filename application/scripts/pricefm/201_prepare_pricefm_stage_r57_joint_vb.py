@@ -125,7 +125,9 @@ def case_payload(row, args, grid: Path, runs: Path) -> tuple[dict, dict, dict]:
             "adapter_dir": str(adapter_dir.resolve()),
             "output_dir": str(model_dir.resolve()),
             "source_root": str(args.source_root.resolve()),
-            "python_bin": str(args.python_bin.resolve()),
+            # Preserve the virtual-environment entry point. Resolving this symlink
+            # to /usr/bin/python would silently discard the PriceFM environment.
+            "python_bin": str(args.python_bin.absolute()),
             "adapter_builder": str((args.source_root / "application/scripts/pricefm/07_build_desn_direct_horizon_adapter.py").resolve()),
             "summarizer": str((args.source_root / "application/scripts/pricefm/09_summarize_desn_model_smoke.py").resolve()),
             "allowed_splits": ["train", "val"],

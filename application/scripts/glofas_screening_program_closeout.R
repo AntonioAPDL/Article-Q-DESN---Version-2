@@ -47,4 +47,3 @@ app_write_csv(data.frame(
 ), file.path(output_root, "audit_status.csv"))
 
 cat(normalizePath(file.path(output_root, "program_decision.csv"), mustWork = TRUE), "\n")
-

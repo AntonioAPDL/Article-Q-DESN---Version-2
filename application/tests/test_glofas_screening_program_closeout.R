@@ -61,4 +61,3 @@ stopifnot(inherits(try(
   app_glofas_screening_program_closeout(drifted),
   silent = TRUE
 ), "try-error"))
-

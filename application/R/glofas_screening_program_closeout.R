@@ -78,7 +78,6 @@ app_glofas_screening_program_phase_summary <- function(phase) {
     stringsAsFactors = FALSE
   )
 }
-
 app_glofas_screening_program_closeout <- function(contract) {
   phases <- contract$phases %||% list()
   if (!length(phases)) stop("Closeout contract requires at least one phase.", call. = FALSE)
@@ -159,4 +158,3 @@ app_glofas_screening_program_closeout <- function(contract) {
   )
   list(phases = summaries, decision = decision_row)
 }
-

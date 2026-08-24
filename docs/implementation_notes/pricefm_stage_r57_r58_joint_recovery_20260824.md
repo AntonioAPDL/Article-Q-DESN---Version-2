@@ -58,6 +58,32 @@ median crossing-row rate 6.10%. The 25 completed exAL cases had a median 18.71%
 gain, median final change 0.0501, and median crossing-row rate 0.712%. These are
 partial descriptive results, not a validation-selected family comparison.
 
+### Post-hardening production snapshot
+
+At the first background-monitor poll on 2026-08-24 at approximately 18:22 EDT:
+
+| Quantity | Value |
+| --- | ---: |
+| Postfit-repaired cases | 38 / 114 |
+| Active one-core fit workers | 8 |
+| Queued cases | 68 |
+| Total remaining, active plus queued | 76 |
+| Raw validation improvements | 38 / 38 |
+| Monotone-contract validation improvements | 38 / 38 |
+| Provisional dual-role VB initializers | 38 |
+| Strict raw candidates | 0 |
+| Integrity failures | 0 |
+| AL / exAL repaired | 7 / 31 |
+| Convergence plus crossing review | 36 |
+| Convergence-only review | 2 |
+| Live R57 run-tree storage | 3.6 GB |
+| Free filesystem space | about 497 GB |
+
+All 38 compact initializers and all 38 `feature_map_matrix.npz` files were
+retained. Zero reconstructible adapter matrix/row files remained in those
+repaired cases, zero checkpoint paths were missing, and no test split was opened.
+The active fit workers were each using roughly 95--99% of their pinned CPU.
+
 ## Failure diagnosis
 
 The expensive fit did not fail. Each affected case wrote the finite joint
@@ -189,6 +215,11 @@ R58 audit. It launches no fit and no MCMC. It retains an append-only event ledge
 stops after three consecutive operational errors, and exits successfully only
 when all 114 cases are repaired and R58 reports
 `full_surface_ready_for_scoring_contract_freeze`.
+
+The live monitor is `pricefm_stage_r57_recovery_20260824`; its append-only log is
+`application/data_local/pricefm/logs/pricefm_stage_r57_recovery_20260824.tmux.log`
+in the artifact workspace. The scientific fit session remains
+`pricefm_stage_r57_joint_vb_20260824` and was not interrupted or relaunched.
 
 ## Reproducible commands
 

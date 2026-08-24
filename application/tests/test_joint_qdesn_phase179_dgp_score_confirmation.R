@@ -162,7 +162,8 @@ closeout_parameters <- data.frame(
 closeout_pairing <- data.frame(
   fit_structure = rep(c("joint", "independent"), each = 12L),
   maximum_relative_mean_shift = rep(c(0, 1e-05), each = 12L),
-  pairing_status = "pass", stringsAsFactors = FALSE
+  pairing_status = rep(c("not_applicable", "pass"), each = 12L),
+  stringsAsFactors = FALSE
 )
 closeout_runtime <- data.frame(
   worker_id = seq_len(384L), elapsed_seconds = 3600, stringsAsFactors = FALSE

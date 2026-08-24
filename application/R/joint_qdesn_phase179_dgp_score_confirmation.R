@@ -1030,7 +1030,10 @@ app_joint_qdesn_phase179_closeout_tables <- function(
     ), drop = FALSE]))) &&
     all(score_summary$score_functional_status %in% c("pass", "review")) &&
     all(score_summary$contract_crossing_pairs == 0L) &&
-    nrow(pairing) == 24L && all(pairing$pairing_status == "pass") &&
+    nrow(pairing) == 24L &&
+    all(pairing$pairing_status[pairing$fit_structure == "independent"] == "pass") &&
+    all(pairing$pairing_status[pairing$fit_structure == "joint"] == "not_applicable") &&
+    all(pairing$maximum_relative_mean_shift[pairing$fit_structure == "joint"] == 0) &&
     all(is.finite(pairing$maximum_relative_mean_shift)) &&
     nrow(runtime) == 384L && !anyDuplicated(runtime$worker_id) &&
     all(is.finite(runtime$elapsed_seconds)) && all(runtime$elapsed_seconds > 0) &&

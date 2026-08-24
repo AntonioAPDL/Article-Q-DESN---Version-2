@@ -77,6 +77,15 @@ def atomic_csv(frame: pd.DataFrame, path: Path) -> None:
     tmp.replace(path)
 
 
+def atomic_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    with tmp.open("w") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    tmp.replace(path)
+
+
 def pava(values: np.ndarray) -> np.ndarray:
     """Equal-weight PAVA, matching stats::isoreg on an ordered tau grid."""
     y = np.asarray(values, dtype=float)
@@ -351,6 +360,9 @@ def reusable_generic_metrics(model: Path, method_id: str) -> bool:
     if not all((model / name).is_file() for name in GENERIC_METRIC_ARTIFACTS):
         return False
     try:
+        for name in GENERIC_METRIC_ARTIFACTS:
+            if pd.read_csv(model / name, nrows=1).empty:
+                return False
         frame = pd.read_csv(model / "metric_summary.csv")
     except Exception:
         return False
@@ -401,7 +413,7 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         payload["adapter_heavy_files_removed"] = sorted(set(previous + removed))
         payload["adapter_cleanup_completed"] = adapter_cleanup_complete(adapter)
         payload["last_repair_code_sha256"] = sha256(Path(__file__).resolve())
-        write_json(model / "job_summary.json", payload)
+        atomic_json(model / "job_summary.json", payload)
         return {
             "case_id": case_id, "region": cfg["region"], "fold": int(cfg["fold"]),
             "status": "already_repaired", "cleanup_files_removed": len(removed),
@@ -515,11 +527,11 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
     }
     # A completed summary is durable before cleanup, so interruption cannot strand
     # a validated case after its reconstructible adapter rows are removed.
-    write_json(model / "job_summary.json", payload)
+    atomic_json(model / "job_summary.json", payload)
     removed = cleanup_adapter(adapter) if args.cleanup_heavy else []
     payload["adapter_heavy_files_removed"] = removed
     payload["adapter_cleanup_completed"] = adapter_cleanup_complete(adapter)
-    write_json(model / "job_summary.json", payload)
+    atomic_json(model / "job_summary.json", payload)
     return {
         "case_id": case_id, "region": cfg["region"], "fold": int(cfg["fold"]),
         "status": "repaired", "converged": trace["converged"],

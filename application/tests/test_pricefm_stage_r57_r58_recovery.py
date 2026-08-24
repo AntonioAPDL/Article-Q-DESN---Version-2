@@ -156,7 +156,7 @@ def test_r57_repair_reuses_complete_generic_metrics(tmp_path, monkeypatch):
         "metric_by_horizon.csv", "metric_by_horizon_group.csv",
         "predictions_with_naive_scaled.csv",
     ):
-        (model / name).write_text("fixture\n")
+        pd.DataFrame([{"fixture": 1}]).to_csv(model / name, index=False)
 
     def forbidden(*_args, **_kwargs):
         raise AssertionError("Verified generic metrics must not be recomputed")
@@ -170,6 +170,7 @@ def test_r57_repair_reuses_complete_generic_metrics(tmp_path, monkeypatch):
     repaired = json.loads((model / "job_summary.json").read_text())
     assert summary["postfit_complete"] == 1
     assert repaired["generic_summary_mode"] == "reused_and_replay_verified"
+    assert not (model / "job_summary.json.tmp").exists()
 
 
 def test_r57_repair_rejects_nonvalidation_predictions(tmp_path):

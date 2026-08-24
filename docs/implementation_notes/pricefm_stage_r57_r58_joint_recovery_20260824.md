@@ -147,9 +147,10 @@ For each accepted case it:
   `y_val.csv`, `rows_train.csv`, `rows_val.csv`, and `rows_all.csv` after all
   checks pass.
 
-The completed repaired summary is written before optional deletion and then
-updated after deletion. An interruption therefore cannot leave a scientifically
-validated case dependent on adapter rows that have already been removed.
+The completed repaired summary is atomically written before optional deletion
+and atomically updated after deletion. An interruption therefore cannot leave a
+scientifically validated case dependent on adapter rows that have already been
+removed or expose a partially written terminal summary.
 
 The checkpoint, predictions, metrics, trace, parameter and method summaries,
 crossing diagnostics, manifests, logs, and configuration files are retained.

@@ -1,9 +1,0 @@
-"Scenario","Joint: AL-exAL","Independent: AL-exAL","Replicates"
-"Asymmetric Laplace Tail","-0.054 (100%)","-0.042 (94%)",50
-"Gaussian-Mixture Bridge","-0.047 (96%)","-0.045 (96%)",50
-"Laplace Bridge","-0.045 (96%)","-0.037 (92%)",50
-"Nonlinear Reservoir Friendly","-0.047 (94%)","-0.044 (94%)",50
-"Normal Bridge","-0.031 (94%)","-0.027 (92%)",50
-"Persistent Heavy Tail","-0.035 (88%)","-0.031 (82%)",50
-"Regime Shift","-0.037 (70%)","-0.041 (96%)",50
-"Student-t Location-Scale","-0.043 (86%)","-0.037 (84%)",50

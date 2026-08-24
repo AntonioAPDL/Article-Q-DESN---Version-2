@@ -235,7 +235,6 @@ gives MCMC and model-specific VB--LD computation and evaluates the resulting
 procedures in simulations and two retrospective applications. The applications
 are interpreted under their stated covariates and forecast origins.
 
-\noindent\textbf{What the empirical studies evaluate.}
 The empirical sections use Q--DESN in three ways. The single-quantile
 simulation compares QDESN and exQDESN regressions with DQLM and exDQLM
 baselines. The joint simulation isolates multi-quantile coefficient sharing
@@ -919,7 +918,6 @@ by \(\kappa_\beta^2\) when that scale is assigned a prior.
 \subsection{Joint Quantile-Vector Regression with DESN Features}
 \label{subsec:joint-qdesn}
 
-\noindent\textbf{Joint quantile-regression model.}
 The single-level model can be fit independently over a grid of quantile levels,
 with separate regression coefficients at each level.
 When several conditional quantiles are estimated together, let
@@ -1102,7 +1100,6 @@ scored quantile grids.
 \subsection{Single-Level Augmented Posterior}
 \label{subsec:posterior-target}
 
-\noindent\textbf{Single-level posterior.}
 For one probability level \(p_0\), the Q--DESN posterior conditions on the
 fixed DESN design and updates only the regression coefficients,
 working-likelihood, and shrinkage parameters. Let \(\mat Z\) denote the
@@ -1223,7 +1220,6 @@ non-conjugate treatment.
 
 \subsection{Markov Chain Monte Carlo}
 
-\noindent\textbf{Sampler structure.}
 The augmented likelihood and shrinkage hierarchy give a partially Gibbs
 sampler. Closed-form blocks are sampled from their named full conditionals;
 the complete-data targets, full conditionals, CAVI factors, and ELBO terms for
@@ -1275,7 +1271,6 @@ blocks.}
 \subsection{Variational Approximation}
 \label{sec:vb}
 
-\noindent\textbf{VB--LD approximation.}
 For lower-cost screening, warm starts, and companion validation panels, we also
 use a mean-field variational approximation to the same augmented target. The
 Gaussian, GIG, positive-truncated Normal, inverse-gamma, and RHS scale factors
@@ -1310,7 +1305,6 @@ the monotone rearrangement details are given in the supplement.
 \section{Multi-Step Quantile Forecasting and Scoring}
 \label{sec:forecast}
 
-\noindent\textbf{Quantile paths and monotone rearrangement.}
 For a forecast origin \(T\), a quantile path is the sequence of fitted
 conditional quantiles over horizons \(h=1,\ldots,H\). A single-level Q--DESN
 fit supplies this path for one probability level \(p_0\). A grid of
@@ -1663,7 +1657,6 @@ diagnostic status.
 
 \subsection{Single-Quantile Fit and Forecast Results}
 
-\noindent\textbf{Evaluation protocol.}
 The evaluation uses the 500-observation training window
 \(8501{:}9000\), the held-out block \(9001{:}10000\), rolling-origin forecasts
 with leads 1--30 and origin stride 30, and the three target levels
@@ -2008,7 +2001,6 @@ held-out measurements in Table~\ref{tab:glofas-application-score}.}
 \section{Application: PriceFM Retrospective Electricity-Price Comparison}
 \label{sec:pricefm-application}
 
-\noindent\textbf{Benchmark quantity.}
 As a second empirical case, we consider a retrospective comparison of
 probabilistic day-ahead electricity-price forecasts using version~4 of the
 PriceFM benchmark
@@ -2059,7 +2051,6 @@ based on that comparison.
 
 \subsection{Full-Surface Results}
 
-\noindent\textbf{Aggregate comparison.}
 Across the aligned benchmark, Q--DESN has lower AQL in
 \PricefmFullQdesnWins{} of \PricefmFullRegionFolds{} region/fold evaluations
 (\PricefmFullQdesnWinRate{}), \PricefmFullQdesnClose{} evaluations are
@@ -2123,7 +2114,6 @@ Horizon-block diagnostics are available for \PricefmFullHorizonRows{} of the
 indicate lower Q--DESN AQL. Because the horizon summaries cover a retained
 subset of the aligned panel, they are interpreted descriptively.
 
-\noindent\textbf{Interpretation.}
 The resulting evidence supports a conservative interpretation. In this
 retrospective comparison, Q--DESN is a competitive fixed-reservoir
 quantile-regression baseline against fold-aligned PriceFM predictions, with

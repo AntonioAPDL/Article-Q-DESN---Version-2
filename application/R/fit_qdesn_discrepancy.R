@@ -163,7 +163,9 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
       save_elbo_trace = app_as_bool(vb_cfg$save_elbo_trace %||% TRUE),
       save_parameter_summaries = app_as_bool(vb_cfg$save_parameter_summaries %||% TRUE),
       profile_substeps = app_as_bool(vb_diag_cfg$profile_substeps %||% vb_cfg$profile_substeps %||% FALSE),
-      trace_iterations = app_as_bool(vb_diag_cfg$trace_iterations %||% vb_cfg$trace_iterations %||% FALSE)
+      trace_iterations = app_as_bool(vb_diag_cfg$trace_iterations %||% vb_cfg$trace_iterations %||% FALSE),
+      fixed_iterations = app_as_bool(vb_diag_cfg$fixed_iterations %||% FALSE),
+      stop_after_iteration = suppressWarnings(as.integer(vb_diag_cfg$stop_after_iteration %||% NA_integer_))
     ),
     future_moment_strategy = tolower(as.character(vb_cfg$future_moment_strategy %||% "streamed_grouped")),
     future_update_strategy = tolower(as.character(vb_cfg$future_update_strategy %||% "linearized_delta")),
@@ -176,6 +178,9 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
   }
   if (!is.null(vb_cfg$warm_start)) {
     out$warm_start <- vb_cfg$warm_start
+  }
+  if (!is.null(vb_cfg$checkpoint)) {
+    out$checkpoint <- vb_cfg$checkpoint
   }
   if (!is.null(vb_cfg$draw_backend) && nzchar(as.character(vb_cfg$draw_backend))) {
     out$draw_backend <- tolower(as.character(vb_cfg$draw_backend)[[1L]])

@@ -9,7 +9,8 @@ app_default_fit_artifact_policy <- function() {
     retain_fit_object = TRUE,
     retain_design_object = TRUE,
     retain_prediction_design_object = TRUE,
-    retain_reference_fit_object = TRUE
+    retain_reference_fit_object = TRUE,
+    compact_latent_path_design = TRUE
   )
 }
 
@@ -53,6 +54,171 @@ app_maybe_save_rds <- function(object, path, retained = TRUE) {
   app_ensure_dir(dirname(path))
   saveRDS(object, path)
   app_prefer_repo_relative_path(path)
+}
+
+app_path_within_root <- function(path, root) {
+  path <- normalizePath(path, mustWork = file.exists(path))
+  root <- normalizePath(root, mustWork = TRUE)
+  identical(path, root) || startsWith(path, paste0(root, .Platform$file.sep))
+}
+
+app_runtime_paths_under_root <- function(root, exclude_pids = Sys.getpid()) {
+  root <- normalizePath(root, mustWork = TRUE)
+  proc_dirs <- list.dirs("/proc", recursive = FALSE, full.names = TRUE)
+  proc_dirs <- proc_dirs[grepl("/[0-9]+$", proc_dirs)]
+  proc_pids <- suppressWarnings(as.integer(basename(proc_dirs)))
+  proc_dirs <- proc_dirs[is.na(proc_pids) | !proc_pids %in% as.integer(exclude_pids)]
+  paths <- character()
+  for (proc_dir in proc_dirs) {
+    cwd <- tryCatch(
+      suppressWarnings(normalizePath(file.path(proc_dir, "cwd"), mustWork = TRUE)),
+      error = function(e) NA_character_
+    )
+    if (!is.na(cwd) && app_path_within_root(cwd, root)) paths <- c(paths, cwd)
+    cmdline <- tryCatch(
+      suppressWarnings(readBin(file.path(proc_dir, "cmdline"), "raw", n = 1.0e6)),
+      error = function(e) raw()
+    )
+    if (length(cmdline)) {
+      boundaries <- c(0L, which(cmdline == as.raw(0)), length(cmdline) + 1L)
+      fields <- vapply(seq_len(length(boundaries) - 1L), function(i) {
+        from <- boundaries[[i]] + 1L
+        to <- boundaries[[i + 1L]] - 1L
+        if (from > to) return("")
+        rawToChar(cmdline[from:to])
+      }, character(1L))
+      candidates <- fields[startsWith(fields, root)]
+      paths <- c(paths, candidates[file.exists(candidates)])
+    }
+  }
+  tmux_paths <- tryCatch(
+    system2(
+      "tmux",
+      c("list-panes", "-a", "-F", shQuote("#{pane_current_path}")),
+      stdout = TRUE,
+      stderr = FALSE
+    ),
+    error = function(e) character()
+  )
+  tmux_paths <- tmux_paths[nzchar(tmux_paths) & startsWith(tmux_paths, root)]
+  sort(unique(normalizePath(c(paths, tmux_paths), mustWork = FALSE)))
+}
+
+app_glofas_heavy_artifact_manifest <- function(
+  runs_root,
+  delete_run_ids = character(),
+  protected_run_ids = character(),
+  active_paths = app_runtime_paths_under_root(runs_root),
+  terminal_markers = c(
+    ".fit_recovery_complete", ".reservoir_preflight_rejected",
+    ".fit_recovery_failed", ".fit_recovery_aborted"
+  )
+) {
+  runs_root <- normalizePath(runs_root, mustWork = TRUE)
+  paths <- list.files(runs_root, recursive = TRUE, full.names = TRUE, all.files = TRUE)
+  paths <- paths[file.exists(paths) & !dir.exists(paths)]
+  ext <- tolower(tools::file_ext(paths))
+  heavy <- ext %in% app_generated_artifact_extensions() |
+    grepl("(__design|checkpoint)[.]rds$", basename(paths), ignore.case = TRUE)
+  paths <- normalizePath(paths[heavy], mustWork = TRUE)
+  if (!length(paths)) {
+    return(data.frame(
+      path = character(), run_id = character(), size_bytes = numeric(), sha256 = character(),
+      ownership = character(), lifecycle_class = character(), reason = character(),
+      action = character(), stringsAsFactors = FALSE
+    ))
+  }
+  prefix <- paste0(runs_root, .Platform$file.sep)
+  relative <- sub(prefix, "", paths, fixed = TRUE)
+  run_id <- vapply(strsplit(relative, .Platform$file.sep, fixed = TRUE), `[[`, character(1L), 1L)
+  active_paths <- normalizePath(active_paths[file.exists(active_paths)], mustWork = FALSE)
+  is_active <- vapply(paths, function(path) {
+    any(vapply(active_paths, function(active) {
+      identical(path, active) || startsWith(path, paste0(active, .Platform$file.sep)) ||
+        startsWith(active, paste0(dirname(path), .Platform$file.sep))
+    }, logical(1L)))
+  }, logical(1L))
+  run_dirs <- file.path(runs_root, run_id)
+  terminal <- vapply(run_dirs, function(run_dir) {
+    any(file.exists(file.path(run_dir, terminal_markers)))
+  }, logical(1L))
+  protected <- run_id %in% as.character(protected_run_ids)
+  requested <- run_id %in% as.character(delete_run_ids)
+  lifecycle_class <- ifelse(
+    is_active, "active_current",
+    ifelse(
+      protected, "authoritative_or_contender",
+      ifelse(requested & terminal, "old_regenerable_heavy_artifact", "unknown_or_not_approved")
+    )
+  )
+  action <- ifelse(lifecycle_class == "old_regenerable_heavy_artifact", "delete", "keep")
+  reason <- ifelse(
+    is_active, "path is referenced by an active process or tmux pane",
+    ifelse(
+      protected, "run is explicitly protected",
+      ifelse(
+        requested & !terminal, "requested run lacks an audited terminal marker",
+        ifelse(requested, "explicitly approved terminal run; heavy object is regenerable", "run was not explicitly approved for cleanup")
+      )
+    )
+  )
+  data.frame(
+    path = paths,
+    run_id = run_id,
+    size_bytes = app_file_size_bytes(paths),
+    sha256 = vapply(paths, app_sha256_file, character(1L)),
+    ownership = "glofas_task_runs_root",
+    lifecycle_class = lifecycle_class,
+    reason = reason,
+    action = action,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_glofas_execute_artifact_manifest <- function(
+  manifest,
+  runs_root,
+  execute = FALSE,
+  active_paths = app_runtime_paths_under_root(runs_root)
+) {
+  runs_root <- normalizePath(runs_root, mustWork = TRUE)
+  out <- manifest
+  out$executed <- FALSE
+  out$execution_status <- ifelse(out$action == "delete", "dry_run", "kept")
+  if (!isTRUE(execute) || !nrow(out)) return(out)
+  selected <- which(out$action == "delete")
+  active_paths <- normalizePath(active_paths[file.exists(active_paths)], mustWork = FALSE)
+  validated_paths <- character(length(selected))
+  for (j in seq_along(selected)) {
+    i <- selected[[j]]
+    if (!identical(out$ownership[[i]], "glofas_task_runs_root") ||
+        !identical(out$lifecycle_class[[i]], "old_regenerable_heavy_artifact")) {
+      stop("Cleanup manifest contains an unapproved ownership or lifecycle class.", call. = FALSE)
+    }
+    path <- normalizePath(out$path[[i]], mustWork = TRUE)
+    if (!app_path_within_root(path, runs_root)) {
+      stop(sprintf("Cleanup path escaped the owned GloFAS root: %s.", path), call. = FALSE)
+    }
+    became_active <- any(vapply(active_paths, function(active) {
+      identical(path, active) || startsWith(path, paste0(active, .Platform$file.sep)) ||
+        startsWith(active, paste0(dirname(path), .Platform$file.sep))
+    }, logical(1L)))
+    if (isTRUE(became_active)) {
+      stop(sprintf("Cleanup candidate became active after dry-run inventory: %s.", path), call. = FALSE)
+    }
+    if (!identical(app_sha256_file(path), out$sha256[[i]])) {
+      stop(sprintf("Cleanup candidate changed after dry-run inventory: %s.", path), call. = FALSE)
+    }
+    validated_paths[[j]] <- path
+  }
+  for (j in seq_along(selected)) {
+    i <- selected[[j]]
+    path <- validated_paths[[j]]
+    if (!file.remove(path)) stop(sprintf("Could not remove cleanup candidate: %s.", path), call. = FALSE)
+    out$executed[[i]] <- TRUE
+    out$execution_status[[i]] <- "deleted_verified"
+  }
+  out
 }
 
 app_git_ls_files <- function(args = character()) {

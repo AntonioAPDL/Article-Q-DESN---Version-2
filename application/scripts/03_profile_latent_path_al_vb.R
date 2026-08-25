@@ -17,6 +17,8 @@ source(app_path("application/R/latent_path_design.R"))
 source(app_path("application/R/discrepancy_design.R"))
 source(app_path("application/R/forecast_contract.R"))
 source(app_path("application/R/fit_qdesn_discrepancy.R"))
+source(app_path("application/R/latent_path_runtime_backend.R"))
+source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/fit_qdesn_latent_path.R"))
 
@@ -28,7 +30,11 @@ args <- app_parse_args(list(
   future_laplace = "false",
   save_design = "true",
   force_heavy = "false",
-  dense_future_moments_mb_limit = "16000"
+  dense_future_moments_mb_limit = "16000",
+  profile_substeps = "true",
+  fixed_iterations = "0",
+  repetitions = "3",
+  benchmark_draws = "8"
 ))
 
 cfg <- app_read_config(app_path(args$config))
@@ -53,11 +59,13 @@ tryCatch({
   }
 
   steps <- list()
+  substep_rows <- list()
+  benchmark_rows <- list()
   object_rows <- list()
   assessment_rows <- list()
-  rss_mb <- function() {
+  rss_mb <- function(field = "VmRSS") {
     status <- tryCatch(readLines(sprintf("/proc/%d/status", Sys.getpid()), warn = FALSE), error = function(e) character())
-    hit <- grep("^VmRSS:", status, value = TRUE)
+    hit <- grep(paste0("^", field, ":"), status, value = TRUE)
     if (!length(hit)) return(NA_real_)
     value <- suppressWarnings(as.numeric(strsplit(hit[[1L]], "[[:space:]]+")[[1L]][2L]))
     value / 1024
@@ -77,23 +85,34 @@ tryCatch({
     invisible(gc())
     mem_before <- sum(gc()[, "used"])
     rss_before <- rss_mb()
-    start <- proc.time()[["elapsed"]]
+    proc_before <- proc.time()
     value <- force(expr)
-    elapsed <- proc.time()[["elapsed"]] - start
+    proc_after <- proc.time()
+    elapsed <- proc_after[["elapsed"]] - proc_before[["elapsed"]]
     mem_after <- sum(gc()[, "used"])
     rss_after <- rss_mb()
     steps[[length(steps) + 1L]] <<- data.frame(
       step = name,
       elapsed_seconds = elapsed,
+      user_seconds = proc_after[["user.self"]] - proc_before[["user.self"]],
+      system_seconds = proc_after[["sys.self"]] - proc_before[["sys.self"]],
       gc_used_before = mem_before,
       gc_used_after = mem_after,
       rss_mb_before = rss_before,
       rss_mb_after = rss_after,
       rss_mb_delta = rss_after - rss_before,
+      hwm_mb_after = rss_mb("VmHWM"),
       stringsAsFactors = FALSE
     )
     app_write_csv(app_bind_rows_fill(steps), file.path(run_dirs$tables, "latent_path_profile_steps.csv"))
     value
+  }
+  record_substeps <- function(parent_step, timing, repetition = NA_integer_) {
+    if (!is.data.frame(timing) || !nrow(timing)) return(invisible(NULL))
+    timing$parent_step <- parent_step
+    timing$repetition <- as.integer(repetition)
+    substep_rows[[length(substep_rows) + 1L]] <<- timing
+    invisible(NULL)
   }
 
   design <- record_step("build_latent_path_design", {
@@ -205,6 +224,10 @@ tryCatch({
     app_write_csv(summary, file.path(run_dirs$tables, "latent_path_profile_summary.csv"))
     app_write_csv(step_table, file.path(run_dirs$tables, "latent_path_profile_steps.csv"))
     app_write_csv(app_bind_rows_fill(object_rows), file.path(run_dirs$tables, "latent_path_profile_object_sizes.csv"))
+    app_write_csv(
+      app_latent_runtime_backend_manifest(fail_closed = TRUE),
+      file.path(run_dirs$manifest, "latent_path_runtime_backend.csv")
+    )
     if (app_as_bool(args$save_design)) {
       saveRDS(design, file.path(run_dirs$objects, "latent_path_profile_design.rds"))
     }
@@ -225,9 +248,14 @@ tryCatch({
   row_moments <- record_step("row_moments_initial_path", {
     app_latent_row_moments(
       design, y0, y_cov, theta_mean, theta_cov,
-      strategy = future_moment_strategy
+      strategy = future_moment_strategy,
+      profile_substeps = app_as_bool(args$profile_substeps)
     )
   })
+  record_substeps(
+    "row_moments_initial_path",
+    attr(row_moments, "substep_timing", exact = TRUE)
+  )
   record_object("row_moments_initial_path", row_moments)
   constants <- app_latent_al_constants(as.numeric(row$quantile_level[[1L]]))
   sigma_state <- record_step("sigma_state_initialization", {
@@ -246,11 +274,105 @@ tryCatch({
   )
   if (app_as_bool(args$update_theta)) {
     theta_update <- record_step("theta_update_one_iteration", {
-      app_latent_update_theta(row_moments, v_state$inv_mean, sigma_state, constants, prior_state, chunking = vb_args$chunking %||% NULL)
+      app_latent_update_theta(
+        row_moments, v_state$inv_mean, sigma_state, constants, prior_state,
+        chunking = vb_args$chunking %||% NULL,
+        profile_substeps = app_as_bool(args$profile_substeps)
+      )
     })
+    record_substeps(
+      "theta_update_one_iteration",
+      attr(theta_update, "substep_timing", exact = TRUE)
+    )
     record_object("theta_update_one_iteration", theta_update)
   } else {
     theta_update <- NULL
+  }
+
+  fixed_iterations <- suppressWarnings(as.integer(args$fixed_iterations))
+  repetitions <- suppressWarnings(as.integer(args$repetitions))
+  benchmark_draws <- suppressWarnings(as.integer(args$benchmark_draws))
+  if (!is.finite(fixed_iterations) || fixed_iterations < 0L) fixed_iterations <- 0L
+  if (!is.finite(repetitions) || repetitions < 1L) repetitions <- 1L
+  if (!is.finite(benchmark_draws) || benchmark_draws < 1L) benchmark_draws <- 8L
+  if (fixed_iterations > 0L) {
+    benchmark_args <- vb_args
+    benchmark_args$max_iter <- fixed_iterations
+    benchmark_args$n_draws <- benchmark_draws
+    benchmark_args$diagnostics <- modifyList(
+      benchmark_args$diagnostics %||% list(),
+      list(
+        fixed_iterations = TRUE,
+        profile_substeps = app_as_bool(args$profile_substeps),
+        trace_iterations = FALSE
+      )
+    )
+    benchmark_args$checkpoint <- list(enabled = FALSE)
+    for (replicate_id in seq_len(repetitions)) {
+      invisible(gc())
+      gc_before <- sum(gc()[, "used"])
+      rss_before <- rss_mb()
+      proc_before <- proc.time()
+      benchmark_fit <- app_fit_latent_path_al_vb_core(
+        design = design,
+        p0 = as.numeric(row$quantile_level[[1L]]),
+        coefficient_prior = app_map_qdesn_prior(row$coefficient_prior[[1L]]),
+        vb_args = benchmark_args,
+        seed = as.integer(row$reservoir_seed[[1L]] %||% cfg$reservoir$seed %||% 20260513L)
+      )
+      proc_after <- proc.time()
+      elapsed <- proc_after[["elapsed"]] - proc_before[["elapsed"]]
+      timing <- benchmark_fit$vb_diagnostics$iteration_timing
+      iterative <- timing[is.finite(timing$iteration) & timing$step != "checkpoint_write", , drop = FALSE]
+      backend <- benchmark_fit$vb_diagnostics$runtime_backend %||% data.frame()
+      fit_substeps <- benchmark_fit$vb_diagnostics$substep_timing
+      root_substeps <- if (is.data.frame(fit_substeps) && nrow(fit_substeps)) {
+        fit_substeps[!grepl(".", fit_substeps$step, fixed = TRUE), , drop = FALSE]
+      } else {
+        data.frame()
+      }
+      substep_seconds <- if (nrow(root_substeps)) {
+        sum(root_substeps$elapsed_seconds)
+      } else {
+        0
+      }
+      benchmark_rows[[length(benchmark_rows) + 1L]] <- data.frame(
+        run_id = basename(run_dirs$run_dir),
+        candidate_id = row$fit_id[[1L]],
+        quantile = as.numeric(row$quantile_level[[1L]]),
+        engine = "exact_optimized",
+        backend = if (nrow(backend)) backend$backend[[1L]] else NA_character_,
+        blas_threads = if (nrow(backend)) backend$openblas_num_threads[[1L]] else NA_character_,
+        cpu_set = if (nrow(backend)) backend$cpu_affinity[[1L]] else NA_character_,
+        repetition = replicate_id,
+        fixed_iterations = fixed_iterations,
+        elapsed_seconds = elapsed,
+        user_seconds = proc_after[["user.self"]] - proc_before[["user.self"]],
+        system_seconds = proc_after[["sys.self"]] - proc_before[["sys.self"]],
+        measured_iteration_seconds = sum(iterative$elapsed_seconds),
+        seconds_per_iteration = sum(iterative$elapsed_seconds) / fixed_iterations,
+        named_substep_seconds = substep_seconds,
+        named_substep_fraction = substep_seconds / max(sum(iterative$elapsed_seconds), .Machine$double.eps),
+        rss_mb_before = rss_before,
+        rss_mb_after = rss_mb(),
+        max_rss_mb = rss_mb("VmHWM"),
+        gc_used_delta = sum(gc()[, "used"]) - gc_before,
+        final_objective = tail(benchmark_fit$vb_diagnostics$elbo_trace, 1L),
+        convergence_metric = tail(benchmark_fit$vb_diagnostics$parameter_change_trace, 1L),
+        theta_precision_repaired = benchmark_fit$vb_diagnostics$theta_precision_repaired,
+        state_hash = app_latent_path_contract_hash(
+          benchmark_fit$variational_state,
+          prefix = "latent_profile_state_"
+        ),
+        stringsAsFactors = FALSE
+      )
+      if (is.data.frame(fit_substeps) && nrow(fit_substeps)) {
+        fit_substeps$repetition <- replicate_id
+        fit_substeps$parent_step <- paste0("fixed_k_", fixed_iterations)
+        substep_rows[[length(substep_rows) + 1L]] <- fit_substeps
+      }
+      rm(benchmark_fit)
+    }
   }
   if (app_as_bool(args$future_laplace)) {
     future_laplace_update <- record_step("future_path_laplace_one_iteration", {
@@ -281,6 +403,21 @@ tryCatch({
   }
 
   step_table <- app_bind_rows_fill(steps)
+  benchmark_table <- app_bind_rows_fill(benchmark_rows)
+  benchmark_summary <- if (nrow(benchmark_table)) {
+    values <- benchmark_table$seconds_per_iteration
+    data.frame(
+      repetitions = nrow(benchmark_table),
+      fixed_iterations = unique(benchmark_table$fixed_iterations)[[1L]],
+      median_seconds_per_iteration = stats::median(values),
+      iqr_seconds_per_iteration = stats::IQR(values),
+      coefficient_of_variation = if (mean(values) > 0) stats::sd(values) / mean(values) else NA_real_,
+      deterministic_state_hash = length(unique(benchmark_table$state_hash)) == 1L,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    data.frame()
+  }
   summary <- data.frame(
     fit_id = row$fit_id[[1L]],
     model_id = row$model_id[[1L]],
@@ -313,6 +450,13 @@ tryCatch({
   app_write_csv(step_table, file.path(run_dirs$tables, "latent_path_profile_steps.csv"))
   app_write_csv(app_bind_rows_fill(object_rows), file.path(run_dirs$tables, "latent_path_profile_object_sizes.csv"))
   app_write_csv(app_bind_rows_fill(assessment_rows), file.path(run_dirs$tables, "latent_path_vb_structure_assessment.csv"))
+  app_write_csv(app_bind_rows_fill(substep_rows), file.path(run_dirs$tables, "latent_path_profile_substeps.csv"))
+  app_write_csv(benchmark_table, file.path(run_dirs$tables, "latent_path_fixed_iteration_benchmarks.csv"))
+  app_write_csv(benchmark_summary, file.path(run_dirs$tables, "latent_path_fixed_iteration_benchmark_summary.csv"))
+  app_write_csv(
+    app_latent_runtime_backend_manifest(fail_closed = TRUE),
+    file.path(run_dirs$manifest, "latent_path_runtime_backend.csv")
+  )
   if (app_as_bool(args$save_design)) {
     saveRDS(design, file.path(run_dirs$objects, "latent_path_profile_design.rds"))
   }

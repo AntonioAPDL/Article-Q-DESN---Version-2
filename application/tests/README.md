@@ -12,7 +12,9 @@ Tracked tests:
   directory reuse guards, and safe non-fitting stage plans.
 - `test_artifact_hygiene.R`: report-only inventory of generated or heavy
   artifacts, including run-level summaries for cleanup planning, protecting
-  the repo from accidentally staged fit outputs.
+  the repo from accidentally staged fit outputs. It also exercises scoped
+  GloFAS cleanup manifests, active/authoritative protections, and verified
+  deletion of explicitly approved terminal-run payloads.
 - `test_engine_contract.R`: package boundary, required exports, and prior mapping.
 - `test_vb_preparation.R`: VB preparation config, model grid,
   inference-support gate, VB argument normalization, and method-aware
@@ -42,6 +44,17 @@ Tracked tests:
   streamed-grouped VB moment equivalence, grouped objective equivalence, and
   the linearized Delta future-path update for the target ensemble-likelihood
   model.
+- `test_latent_path_runtime_optimization.R`: exact paired-statistics and
+  fallback algebra, compact-design semantic round trips and direct-fit
+  equivalence, immutable reference-feature cache environment fallback, hits,
+  invalidation, corruption, and lock failures, runtime-backend manifests, and
+  uninterrupted versus interrupted/resumed VB identity.
+- `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
+  controls, OpenBLAS path/hash rejection, and terminal execution manifests.
+- `test_glofas_fit_recovery_scheduler.py`: physical-core and NUMA-aware CPU
+  allocation, disjoint multithread sets, checkpoint-aware restart with owned
+  checkpoint paths, and owned reference-cache roots in addition to the
+  existing bounded scheduler gates.
 - `test_no_leakage.R`: forecast-origin information sets and target dates.
 - `test_quantile_grid.R`: sorted quantile levels and monotone synthesis output.
 - `test_reproducibility.R`: fixed seeds, stable run IDs, and required artifacts.

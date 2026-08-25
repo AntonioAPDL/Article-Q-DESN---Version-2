@@ -1489,11 +1489,14 @@ The main comparison uses the shorter fitting design: 500 observations before
 the fitting origin, followed by 1000 held-out observations for forecast
 scoring. Forecast scores use rolling origins spaced 30 observations apart and
 horizons up to 30 steps ahead, at the three target levels
-\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-intervals-normal}--%
-\ref{tab:simulation-500obs-mcmc-intervals-gausmix} report the MCMC
-family-specific posterior metric summaries.
+\(p=0.05,0.25,0.50\). Figures~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals}--%
+\ref{fig:simulation-500obs-mcmc-forecast-check-loss-intervals} summarize the
+MCMC posterior metric distributions; the supplement gives the corresponding
+numerical tables.
 
 \input{tables/qdesn_validation_500obs_metric_intervals_prose.tex}
+
+\input{tables/qdesn_validation_500obs_metric_interval_contract_clarification.tex}
 
 All displayed Q--DESN and exQ--DESN values use feature scaling and other
 learned preprocessing quantities estimated from observations available through
@@ -1505,12 +1508,13 @@ the shape on the logit transform of its bounded support.
 
 \input{tables/qdesn_validation_500obs_metric_interval_results_v10.tex}
 
-\input{tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex}
+\input{tables/qdesn_validation_500obs_mcmc_metric_interval_figures.tex}
 
-The supplement gives approximate VB interval panels for the same source
-trajectories. It also retains a separate five-chain point-path sensitivity
-analysis for the Gaussian family at \(p=0.25\); that sensitivity calculation is
-not used to form the draw-wise metric intervals reported here.
+The supplement gives the exact numerical MCMC tables and approximate VB
+interval panels for the same source trajectories. It also retains a separate
+five-chain point-path sensitivity analysis for the Gaussian family at
+\(p=0.25\); that sensitivity calculation is kept separate from the draw-wise
+metric intervals reported here.
 
 \subsection{Joint Multi-Quantile Study with a Pre-Specified Feature Design}
 

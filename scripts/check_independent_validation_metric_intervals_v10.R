@@ -87,14 +87,17 @@ main <- paste(readLines(file.path(repo_root, "main.tex"), warn = FALSE), collaps
 supplement <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"), warn = FALSE), collapse = "\n")
 main_required <- c(
   "tables/qdesn_validation_500obs_metric_intervals_prose.tex",
+  "tables/qdesn_validation_500obs_metric_interval_contract_clarification.tex",
   "tables/qdesn_validation_500obs_metric_interval_results_v10.tex",
-  "tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex",
-  "tab:simulation-500obs-mcmc-intervals-normal",
-  "tab:simulation-500obs-mcmc-intervals-gausmix",
+  "tables/qdesn_validation_500obs_mcmc_metric_interval_figures.tex",
+  "fig:simulation-500obs-mcmc-fit-rmse-intervals",
+  "fig:simulation-500obs-mcmc-forecast-check-loss-intervals",
   "draw-wise criteria",
   "empirical 0.025 and 0.975"
 )
 supp_required <- c(
+  "tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex",
+  "tables/qdesn_validation_500obs_vb_metric_interval_figures.tex",
   "tables/qdesn_validation_500obs_vb_metric_interval_tables.tex",
   "draw-wise fit RMSE",
   "approximate"
@@ -152,6 +155,25 @@ if (any(!grepl("\\begin{table}[!ht]", family_table_text, fixed = TRUE)) ||
     any(grepl("oracle training path", family_table_text, fixed = TRUE)) ||
     any(nchar(sub(".*(\\\\caption\\{[^\n]+).*", "\\1", family_table_text)) > 700L)) {
   stop("The compact family-table presentation contract failed.", call. = FALSE)
+}
+
+figure_files <- file.path(repo_root, "figures", "independent_simulation", c(
+  "qdesn_validation_500obs_mcmc_fit_rmse_intervals.pdf",
+  "qdesn_validation_500obs_mcmc_forecast_mae_intervals.pdf",
+  "qdesn_validation_500obs_mcmc_forecast_check_loss_intervals.pdf",
+  "qdesn_validation_500obs_vb_fit_rmse_intervals.pdf",
+  "qdesn_validation_500obs_vb_forecast_mae_intervals.pdf",
+  "qdesn_validation_500obs_vb_forecast_check_loss_intervals.pdf"
+))
+figure_wrappers <- file.path(repo_root, "tables", c(
+  "qdesn_validation_500obs_mcmc_metric_interval_figures.tex",
+  "qdesn_validation_500obs_vb_metric_interval_figures.tex",
+  "qdesn_validation_500obs_metric_interval_contract_clarification.tex"
+))
+if (any(!file.exists(figure_files)) ||
+    any(file.info(figure_files)$size <= 10000L) ||
+    any(!file.exists(figure_wrappers))) {
+  stop("The metric-interval figure presentation is incomplete.", call. = FALSE)
 }
 
 cat("INDEPENDENT_METRIC_INTERVAL_CHECK=PASS\n")

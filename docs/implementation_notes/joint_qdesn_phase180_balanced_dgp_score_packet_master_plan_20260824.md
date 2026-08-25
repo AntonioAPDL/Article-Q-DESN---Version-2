@@ -494,10 +494,11 @@ frozen initialization controls.
 The independent-AL starts are reconstructed from the manifest-verified
 Phase154 VB quantile paths, intercept means, and scale means under the same
 case-specific controls. Coefficient means are recovered against the frozen
-design and accepted only when they reproduce the retained raw VB quantile path
-within a relative numerical tolerance of (10^{-8}). This avoids treating a
-numerically invalid duplicate VB refit as evidence against the already frozen
-independent-AL specification.
+design by rank-aware least squares; aliased coefficients use a finite zero
+representative. The result is accepted only when it reproduces the retained raw
+VB quantile path within a relative numerical tolerance of `1e-8`. This avoids
+treating a numerically invalid duplicate VB refit as evidence against the
+already frozen independent-AL specification.
 
 The chain runner must preserve compact posterior parameter draws in
 `checkpoint/posterior_draws.csv.gz`; no `.RData` or `.rds` model object is

@@ -662,9 +662,12 @@ app_joint_qdesn_phase180_phase154_independent_al_init <- function(cell, fixture)
            call. = FALSE)
     }
     qhat[, k] <- as.numeric(block$qhat_raw[index])
-    beta[, k] <- qr.solve(
+    least_squares <- stats::lm.fit(
       fixture$Z, qhat[, k] - as.numeric(scale$alpha_mean[[k]])
     )
+    coefficient <- as.numeric(least_squares$coefficients)
+    coefficient[is.na(coefficient)] <- 0
+    beta[, k] <- coefficient
   }
   reconstructed <- fixture$Z %*% beta + matrix(
     as.numeric(scale$alpha_mean), nrow(fixture$Z), K, byrow = TRUE

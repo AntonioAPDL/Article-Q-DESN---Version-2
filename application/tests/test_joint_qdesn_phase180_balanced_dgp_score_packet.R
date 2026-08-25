@@ -150,8 +150,10 @@ phase154_source <- file.path(
 )
 dir.create(phase154_source, recursive = TRUE, showWarnings = FALSE)
 alpha_source <- c(-0.4, 0, 0.4)
+Z_source <- cbind(x1 = Z[, 1L], x1_duplicate = Z[, 1L])
 beta_source <- matrix(c(0.2, -0.1, 0.3, -0.2, 0.4, -0.3), 2L, 3L)
-qhat_source <- Z %*% beta_source + matrix(alpha_source, n, 3L, byrow = TRUE)
+qhat_source <- Z_source %*% beta_source +
+  matrix(alpha_source, n, 3L, byrow = TRUE)
 phase154_scale <- data.frame(
   scenario_id = "synthetic", source_model_id = "qdesn_rhs_independent_vb",
   inference = "VB", quantile_index = seq_along(tau), tau = tau,
@@ -187,12 +189,12 @@ phase154_fit <- app_joint_qdesn_phase180_phase154_independent_al_init(
   data.frame(
     scenario_id = "synthetic", source_model_id = "qdesn_rhs_independent_vb",
     source_dir = phase154_source, stringsAsFactors = FALSE
-  ), fixture
+  ), within(fixture, Z <- Z_source)
 )
-expect_equal(phase154_fit$beta_mean, as.numeric(beta_source),
-             "Phase180 did not reconstruct the Phase154 independent-AL beta mean.")
+expect_true(all(is.finite(phase154_fit$beta_mean)),
+            "Phase180 did not produce finite coefficients for a singular design.")
 expect_equal(phase154_fit$qhat_mean, qhat_source,
-             "Phase180 did not reproduce the Phase154 independent-AL quantile path.")
+             "Phase180 did not reproduce the Phase154 path under a singular design.")
 unlink(phase154_source, recursive = TRUE, force = TRUE)
 
 control <- data.frame(

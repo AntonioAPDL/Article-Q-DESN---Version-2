@@ -1,0 +1,37 @@
+policy_section,policy_name,value,value_type,rationale
+identity,policy_version,joint_qdesn_phase179_dgp_score_confirmation_v1,character,Prospective policy for fresh protected confirmation after the frozen Phase178 and postscore audits.
+scope,selection_scope,case_specific_scenario_readout,character,Each scenario-readout cell keeps its own frozen DESN control and tau0; no universal specification is selected.
+scope,expected_target_cells,5,integer,Five unresolved exQDESN scenario-readout cells enter the post-Phase178 decision.
+scope,expected_selected_nonparity,3,integer,The frozen current-grid numerical minima contain three nonparity challengers and two parity selections.
+scope,expected_confirmation_templates,8,integer,Selected plus parity controls deduplicate to eight templates across the five cells.
+scope,expected_confirmation_replicates,3,integer,Three previously protected and unused confirmation DGP replicates are available per base scenario.
+scope,expected_confirmation_cases,24,integer,Eight case-specific templates times three protected replicates.
+scope,expected_confirmation_workers,384,integer,Twenty-four candidate-replicate cases times sixteen independent chains.
+selection,primary_metric,median_posterior_score_mean,character,DGP-integrated expected finite-grid quantile score is the prospective selection metric.
+selection,selection_rule,within_case_numerical_minimum,character,Choose the smallest finite score independently within each case and break exact ties deterministically by template id.
+selection,relative_gain_floor,0,numeric,Any strictly positive score gain may advance; the earlier half-percent practical margin remains historical only.
+selection,protected_replicate_direction_floor,0.6666666666666667,numeric,Fresh confirmation requires the selected challenger to improve on at least two of three matched replicates.
+selection,posterior_probability_reporting_only,true,logical,Posterior lower-score probabilities and intervals are reported but are not a superiority gate under the user-directed any-gain policy.
+guardrail,median_oracle_recovery_ratio_ceiling,1.05,numeric,Median fit and forecast oracle-path error ratios may not degrade materially relative to parity.
+guardrail,maximum_oracle_recovery_ratio_ceiling,1.10,numeric,No protected replicate may show more than ten-percent oracle-path degradation.
+guardrail,score_rank_rhat_hard_ceiling,1.10,numeric,Only clearly unstable score functionals are promotion-blocking; the preferred 1.05 threshold remains a review diagnostic.
+guardrail,score_bulk_ess_hard_floor,50,numeric,Extremely low score-functional bulk ESS blocks promotion while moderate mixing limitations remain review evidence.
+guardrail,score_tail_ess_hard_floor,50,numeric,Extremely low score-functional tail ESS blocks promotion while moderate mixing limitations remain review evidence.
+guardrail,score_rank_rhat_review_ceiling,1.05,numeric,Score rank R-hat above 1.05 is reported as review evidence.
+guardrail,score_bulk_ess_review_floor,400,numeric,Score bulk ESS below 400 is reported as review evidence.
+guardrail,score_tail_ess_review_floor,200,numeric,Score tail ESS below 200 is reported as review evidence.
+guardrail,raw_crossing_rate_review,0.01,numeric,Raw draw crossing rates above one percent remain visible review evidence.
+guardrail,contract_crossing_pairs_required,0,integer,Reported monotone-contract quantile paths must not cross.
+compute,inference_method_id,M0_v_collapsed_support_logit,character,All confirmation draws use the promoted exact-M0 exAL method.
+compute,n_chains,16,integer,Sixteen chains improve functional precision and permit robust chain-allocation diagnostics.
+compute,n_iter,48000,integer,Confirmation chain length inherited from the frozen Phase178 compute policy.
+compute,burn,8000,integer,Confirmation burn-in inherited from the frozen Phase178 compute policy.
+compute,thin,8,integer,Confirmation thinning inherited from the frozen Phase178 compute policy.
+compute,score_draws_per_chain,1000,integer,Chain-balanced score reconstruction spans the retained chain while bounding post-processing cost.
+compute,independent_product_pairing_seed,17819001,integer,Independent quantile posteriors use the previously frozen product-posterior coupling seed.
+source,protected_partition,confirmation,character,Only the previously frozen and uninspected confirmation DGP seeds may be used.
+source,exact_m0_required,true,logical,No pre-M0 sampler result may enter the confirmation.
+source,article_fixture_selection_allowed,false,logical,Article fixtures remain excluded from selection and protected confirmation.
+source,dense_grid_authorized,false,logical,The seven-level current grid remains fixed; dense-grid fitting is a later separate campaign.
+promotion,promote_any_confirmed_gain,true,logical,A challenger is promoted when fresh protected evidence shows any positive score gain and all hard safeguards pass.
+promotion,global_specification_selected,false,logical,Promotion is always per case and never defines one DESN or tau0 specification for all scenarios.

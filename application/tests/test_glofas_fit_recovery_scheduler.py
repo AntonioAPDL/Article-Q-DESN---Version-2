@@ -97,9 +97,14 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
 4,0,0,0,Y
 5,1,1,1,Y
 """
-        with mock.patch.object(scheduler.subprocess, "check_output", return_value=fixture), \
+        with mock.patch.object(
+                scheduler.subprocess, "check_output", return_value=fixture
+             ) as check_output, \
                 mock.patch.object(scheduler.os, "sched_getaffinity", return_value=set(range(6))):
             self.assertEqual(scheduler.discover_physical_cpus(), [0, 1, 2, 3])
+        call_kwargs = check_output.call_args[1]
+        self.assertTrue(call_kwargs["universal_newlines"])
+        self.assertNotIn("text", call_kwargs)
 
     def test_reference_feature_cache_must_remain_in_owned_output_root(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -98,7 +98,7 @@ def parse_cpu_list(value):
 def discover_physical_cpus():
     output = subprocess.check_output(
         ["lscpu", "-p=CPU,CORE,SOCKET,NODE,ONLINE"],
-        text=True,
+        universal_newlines=True,
     )
     allowed = set(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None
     first_thread = {}

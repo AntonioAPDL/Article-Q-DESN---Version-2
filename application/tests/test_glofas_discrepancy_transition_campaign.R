@@ -171,6 +171,17 @@ validated_cutoffs <- app_glofas_transition_validate_cutoffs(
   repo_root = app_repo_root()
 )
 stopifnot(nrow(validated_cutoffs) == 4L)
+portable_cutoffs <- do.call(rbind, cutoff_rows)
+portable_cutoffs$bundle_dir <- file.path(
+  "application/data_local",
+  basename(portable_cutoffs$bundle_dir)
+)
+portable_validated <- app_glofas_transition_validate_cutoffs(
+  portable_cutoffs,
+  repo_root = tempfile("absent_repo_root_"),
+  data_local_root = cutoff_root
+)
+stopifnot(nrow(portable_validated) == 4L)
 bad_cutoffs <- validated_cutoffs
 bad_cutoffs$origin_date[[1L]] <- as.Date("2022-12-25")
 stopifnot(inherits(try(

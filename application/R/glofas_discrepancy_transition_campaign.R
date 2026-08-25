@@ -87,7 +87,11 @@ app_glofas_transition_required_cutoff_columns <- function() {
   )
 }
 
-app_glofas_transition_validate_cutoffs <- function(x, repo_root = app_repo_root()) {
+app_glofas_transition_validate_cutoffs <- function(
+  x,
+  repo_root = app_repo_root(),
+  data_local_root = NULL
+) {
   if (!is.data.frame(x) || !nrow(x)) {
     stop("The discrepancy-transition cutoff registry is empty.", call. = FALSE)
   }
@@ -125,6 +129,11 @@ app_glofas_transition_validate_cutoffs <- function(x, repo_root = app_repo_root(
   }
   bundle_path <- vapply(x$bundle_dir, function(path) {
     candidate <- if (grepl("^/", path)) path else file.path(repo_root, path)
+    if (!file.exists(candidate) && !is.null(data_local_root) &&
+        startsWith(path, "application/data_local/")) {
+      relative <- substring(path, nchar("application/data_local/") + 1L)
+      candidate <- file.path(data_local_root, relative)
+    }
     normalizePath(candidate, mustWork = TRUE)
   }, character(1L))
   required <- c(

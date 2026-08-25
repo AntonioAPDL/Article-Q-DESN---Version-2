@@ -93,10 +93,20 @@ if (!identical(app_sha256_file(base_grid_path), baseline$artifacts$base_model_gr
 
 candidate_path <- resolve_repo(campaign$candidate_registry, must_work = TRUE)
 cutoff_path <- resolve_repo(campaign$cutoff_registry, must_work = TRUE)
+base_cfg <- app_read_config(base_config_path)
+data_local_root <- as.character(base_cfg$paths$data_local %||% "")
+if (!nzchar(data_local_root) || !dir.exists(data_local_root)) {
+  stop(
+    "The frozen FR09 config does not resolve to an existing data_local root.",
+    call. = FALSE
+  )
+}
+data_local_root <- normalizePath(data_local_root, mustWork = TRUE)
 candidates <- app_glofas_transition_validate_candidates(app_read_csv(candidate_path))
 cutoffs <- app_glofas_transition_validate_cutoffs(
   app_read_csv(cutoff_path),
-  repo_root = repo_root
+  repo_root = repo_root,
+  data_local_root = data_local_root
 )
 expected_count <- nrow(candidates) * nrow(cutoffs)
 if (expected_count != 48L) {
@@ -115,7 +125,6 @@ for (dir in c(
   app_ensure_dir(file.path(output_root, dir))
 }
 schema_path <- app_path("application/manifests/expected_schema.yaml")
-base_cfg <- app_read_config(base_config_path)
 base_grid <- app_read_csv(base_grid_path)
 if (sum(base_grid$model_family == "qdesn_glofas_discrepancy") != 1L ||
     sum(base_grid$model_family == "raw_glofas") != 1L) {

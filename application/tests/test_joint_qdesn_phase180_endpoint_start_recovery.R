@@ -69,6 +69,18 @@ expect_true(setequal(
   unique(unsafe_preflight$worker_id[unsafe_preflight$status == "fail"]),
   c(1L, contract$n_chains)
 ), "The recovery preflight did not isolate the two historical endpoint failures.")
+corrected <- app_joint_qdesn_phase180_replace_gamma_starts(unsafe, starts)
+non_gamma <- unsafe$parameter != "gamma"
+expect_true(
+  identical(corrected$value[non_gamma], unsafe$value[non_gamma]) &&
+    identical(corrected$start_role[non_gamma], unsafe$start_role[non_gamma]),
+  "Gamma recovery changed a non-gamma parent start value."
+)
+corrected_preflight <- app_joint_qdesn_phase180_m0_start_preflight(
+  corrected, plan, contract$tau
+)
+expect_true(all(corrected_preflight$status == "pass"),
+            "Gamma-only parent-start replacement failed M0 preflight.")
 
 checkpoint_root <- file.path(
   tempdir(), paste0("phase180-recovery-checkpoint-", Sys.getpid())

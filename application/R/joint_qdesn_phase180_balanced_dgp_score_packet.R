@@ -613,6 +613,35 @@ app_joint_qdesn_phase180_chain_start_hash <- function(starts) {
   app_joint_exqdesn_phase172_table_hash(starts)
 }
 
+app_joint_qdesn_phase180_replace_gamma_starts <- function(original, proposed) {
+  required <- c(
+    "mcmc_case_id", "chain_id", "parameter", "quantile_index", "value",
+    "start_role"
+  )
+  app_check_required_columns(original, required, "original Phase180 starts")
+  app_check_required_columns(proposed, required, "proposed Phase180 starts")
+  key <- function(x) paste(
+    x$mcmc_case_id, x$chain_id, x$parameter, x$quantile_index
+  )
+  original_key <- key(original)
+  proposed_key <- key(proposed)
+  if (anyDuplicated(original_key) || anyDuplicated(proposed_key) ||
+      !setequal(original_key, proposed_key)) {
+    stop("Phase180 gamma recovery start keys do not match the parent freeze.",
+         call. = FALSE)
+  }
+  gamma <- original$parameter == "gamma"
+  match_index <- match(original_key[gamma], proposed_key)
+  if (anyNA(match_index) || any(proposed$parameter[match_index] != "gamma")) {
+    stop("Phase180 gamma recovery could not align gamma start rows.",
+         call. = FALSE)
+  }
+  corrected <- original
+  corrected$value[gamma] <- proposed$value[match_index]
+  corrected$start_role[gamma] <- proposed$start_role[match_index]
+  corrected
+}
+
 app_joint_qdesn_phase180_m0_start_preflight <- function(starts, plan, tau) {
   exal <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
   rows <- lapply(seq_len(nrow(exal)), function(ii) {
@@ -1869,17 +1898,16 @@ app_joint_qdesn_phase180_prepare_recovery <- function(
   recovery_plan <- inventory$failed
   key <- paste(recovery_plan$mcmc_case_id, recovery_plan$chain_id)
   corrected_key <- paste(corrected_all$mcmc_case_id, corrected_all$chain_id)
-  corrected <- corrected_all[corrected_key %in% key, , drop = FALSE]
+  proposed <- corrected_all[corrected_key %in% key, , drop = FALSE]
   original_key <- paste(freeze$starts$mcmc_case_id, freeze$starts$chain_id)
   original <- freeze$starts[original_key %in% key, , drop = FALSE]
-  if (nrow(corrected) != nrow(original) ||
-      anyDuplicated(paste(
-        corrected$mcmc_case_id, corrected$chain_id, corrected$parameter,
-        corrected$quantile_index
-      ))) {
+  if (nrow(proposed) != nrow(original)) {
     stop("Phase180 recovery could not construct one corrected start table.",
          call. = FALSE)
   }
+  corrected <- app_joint_qdesn_phase180_replace_gamma_starts(
+    original, proposed
+  )
   plan_rows <- freeze$plan[freeze$plan$worker_id %in% recovery_plan$worker_id,
                            , drop = FALSE]
   old_preflight <- app_joint_qdesn_phase180_m0_start_preflight(

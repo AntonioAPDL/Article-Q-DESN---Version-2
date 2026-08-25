@@ -751,18 +751,19 @@ dense-grid sensitivity work begins.
 - [x] Add source-registry, chain-worker, health, finalizer, staging, and handoff
       scripts.
 - [x] Add focused tests and run all adjacent JOINT tests.
-- [ ] Freeze the 32-cell source registry and 21-cell rerun plan.
-- [ ] Verify all reused Phase172 manifests.
-- [ ] Freeze article fixture identity and all control-row hashes.
-- [ ] Freeze globally unique chain and component seeds.
-- [ ] Verify exactly 168 planned chain workers.
-- [ ] Freeze the CPU lease and compute budget.
-- [ ] Review the freeze before `--execute`.
+- [x] Freeze the 32-cell source registry and 21-cell rerun plan.
+- [x] Verify all reused Phase172 manifests.
+- [x] Freeze article fixture identity and all control-row hashes.
+- [x] Freeze globally unique chain and component seeds.
+- [x] Verify exactly 168 planned chain workers.
+- [x] Freeze the CPU lease and compute budget.
+- [x] Review the freeze before `--execute`.
 
 ### Production and closeout
 
-- [ ] Launch the five final exAL cells and 16 AL cells.
-- [ ] Monitor completion without inspecting metrics for retuning.
+- [x] Launch the five final exAL cells and 16 AL cells.
+- [x] Monitor the original campaign to its natural terminal state without
+      inspecting metrics for retuning.
 - [ ] Require 168/168 workers and zero failures, or invoke only the frozen
       completion-aware recovery path.
 - [ ] Apply same-specification extension only where score-functional gates
@@ -780,25 +781,37 @@ dense-grid sensitivity work begins.
 
 - [ ] Freeze and implement the separate 19-level dense-grid study.
 
-## 17. Immediate Next Action
+## 17. Execution Addendum: Endpoint-Start Recovery
 
-The Phase180 module, versioned contract, resumable workers, completion-aware CPU
-queue, finalizer, article staging, handoff, and focused tests are implemented.
-All four sampler routes (joint and independent under AL and exact-M0 exAL) pass
-a deterministic interface regression, and the adjacent Phase155, Phase171--180,
-Phase179, post-Phase178 score, and article-asset tests pass. The next command
-must prepare and validate the real freeze from committed code without launching.
-Production execution begins only after the freeze proves:
+The original production campaign reached a closed terminal state with 158 of
+168 workers complete, ten failed, and none remaining. All 128 AL workers and 30
+of 40 newly required exAL workers passed. The ten failures are chains 1 and 8
+in five exAL cells, and every failure occurred before iteration one with the
+same `weights must be positive.` receipt.
 
-- exactly 32 final cells;
-- exactly 11 verified reuses;
-- exactly 21 rerun cells;
-- exactly 168 unique chain workers;
-- correct case-specific controls;
-- unchanged seven-level fixtures;
-- complete, collision-free seed and source hashes.
+An exact replay isolated the cause to native-support gamma starts clipped to
+within `1e-6` of the exAL support endpoints. Those starts trigger cancellation
+in the legacy M0 working constants at `tau = 0.25` or `tau = 0.75`, producing a
+negative initial working weight. The same worker enters the unchanged exact-M0
+sampler when gamma is initialized in a bounded support-logit interior.
 
-There is no scientific reason to wait for another JOINT job, and there is no
-scientific reason to launch another broad screen. The remaining work is a
-bounded final-evidence completion campaign followed by deterministic scoring
-and article staging.
+The optimal next action is therefore the ten-worker initialization amendment
+documented in
+`joint_qdesn_phase180_endpoint_start_recovery_20260825.md`. It preserves the
+158 verified workers and all frozen scientific controls. A full rerun, a new
+DESN screen, or a sampler-target change is neither needed nor authorized.
+
+After committed recovery code passes focused tests, the amendment must:
+
+1. hash the parent freeze, 158 preserved worker/checkpoint manifests, and ten
+   original failure records;
+2. prove the original ten starts fail and corrected support-logit starts pass
+   the actual M0 preflight;
+3. rerun exactly the ten failed worker IDs with unchanged seeds and budgets;
+4. require 168/168 overall completion;
+5. finalize the 32-cell DGP-integrated score packet and apply the already
+   frozen score-functional and crossing gates;
+6. stage, but not publish, article-safe assets and the integration handoff.
+
+There is no active Phase180 computation to wait for. The remaining execution is
+bounded recovery followed by deterministic closeout.

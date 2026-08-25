@@ -29,6 +29,14 @@ app_joint_qdesn_phase180_dirs <- function(
       cache_root,
       "joint_qdesn_phase180_balanced_dgp_score_chains_20260824_orchestration"
     ),
+    recovery_freeze = file.path(
+      cache_root,
+      "joint_qdesn_phase180_balanced_dgp_score_recovery_freeze_20260825"
+    ),
+    recovery_orchestration = file.path(
+      cache_root,
+      "joint_qdesn_phase180_balanced_dgp_score_recovery_20260825_orchestration"
+    ),
     score_work = file.path(
       cache_root, "joint_qdesn_phase180_balanced_dgp_score_work_20260824"
     ),
@@ -574,23 +582,99 @@ app_joint_qdesn_phase180_chain_starts <- function(init_rows, rerun, contract) {
       )
       cursor <- cursor + 1L
       if (length(gamma)) {
-        bounds <- t(vapply(seq_along(gamma), function(k) {
-          support <- app_joint_exqdesn_support(contract$tau[[k]])
-          c(support$lower[[1L]], support$upper[[1L]])
-        }, numeric(2L)))
-        offset <- seq(-0.30, 0.30, length.out = contract$n_chains)[[chain_id]]
-        width <- bounds[, 2L] - bounds[, 1L]
-        value <- pmin(pmax(gamma + offset * width, bounds[, 1L] + 1e-6),
-                      bounds[, 2L] - 1e-6)
+        value <- vapply(seq_along(gamma), function(k) {
+          base_eta <- app_joint_exqdesn_gamma_to_support_eta(
+            contract$tau[[k]], gamma[[k]]
+          )
+          center_eta <- min(max(base_eta, -1.5), 1.5)
+          eta <- center_eta + seq(
+            -2.5, 2.5, length.out = contract$n_chains
+          )[[chain_id]]
+          app_joint_exqdesn_support_eta_to_gamma(contract$tau[[k]], eta)
+        }, numeric(1L))
         rows[[cursor]] <- data.frame(
           mcmc_case_id = cell$mcmc_case_id[[1L]], chain_id = chain_id,
           parameter = "gamma", quantile_index = seq_along(gamma), value = value,
-          start_role = "deterministic_support_dispersion", stringsAsFactors = FALSE
+          start_role = "deterministic_support_logit_dispersion_v2",
+          stringsAsFactors = FALSE
         )
         cursor <- cursor + 1L
       }
     }
   }
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_qdesn_phase180_chain_start_hash <- function(starts) {
+  starts <- starts[order(
+    starts$mcmc_case_id, starts$chain_id, starts$parameter,
+    starts$quantile_index
+  ), , drop = FALSE]
+  app_joint_exqdesn_phase172_table_hash(starts)
+}
+
+app_joint_qdesn_phase180_m0_start_preflight <- function(starts, plan, tau) {
+  exal <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
+  rows <- lapply(seq_len(nrow(exal)), function(ii) {
+    job <- exal[ii, , drop = FALSE]
+    block <- starts[
+      starts$mcmc_case_id == job$mcmc_case_id[[1L]] &
+        starts$chain_id == job$chain_id[[1L]], , drop = FALSE
+    ]
+    sigma <- block[block$parameter == "sigma", , drop = FALSE]
+    gamma <- block[block$parameter == "gamma", , drop = FALSE]
+    sigma <- sigma$value[order(sigma$quantile_index)]
+    gamma <- gamma$value[order(gamma$quantile_index)]
+    if (length(sigma) != length(tau) || length(gamma) != length(tau)) {
+      stop("Phase180 exAL start preflight found malformed parameter blocks.",
+           call. = FALSE)
+    }
+    app_joint_qdesn_bind_rows(lapply(seq_along(tau), function(k) {
+      support <- app_joint_exqdesn_support(tau[[k]])
+      constants <- tryCatch(
+        app_joint_qvp_exal_constants(tau[[k]], gamma[[k]]),
+        error = function(e) NULL
+      )
+      exact <- tryCatch(
+        app_joint_exqdesn_constants(tau[[k]], gamma[[k]]),
+        error = function(e) NULL
+      )
+      B <- if (is.null(constants)) NA_real_ else constants$B[[1L]]
+      weight <- 1 / (B * sigma[[k]]^2)
+      pass <- is.finite(gamma[[k]]) && gamma[[k]] > support$lower[[1L]] &&
+        gamma[[k]] < support$upper[[1L]] && is.finite(sigma[[k]]) &&
+        sigma[[k]] > 0 && !is.null(constants) &&
+        all(is.finite(unlist(
+          constants[, c("A", "B", "lambda"), drop = FALSE],
+          use.names = FALSE
+        ))) && B > 0 &&
+        is.finite(weight) && weight > 0
+      data.frame(
+        worker_id = job$worker_id[[1L]],
+        mcmc_case_id = job$mcmc_case_id[[1L]],
+        scenario_id = job$scenario_id[[1L]],
+        source_model_id = job$source_model_id[[1L]],
+        fit_structure = job$fit_structure[[1L]],
+        chain_id = job$chain_id[[1L]], quantile_index = k, tau = tau[[k]],
+        sigma_start = sigma[[k]], gamma_start = gamma[[k]],
+        support_lower = support$lower[[1L]],
+        support_upper = support$upper[[1L]],
+        support_eta = if (pass || is.finite(gamma[[k]])) {
+          tryCatch(
+            app_joint_exqdesn_gamma_to_support_eta(tau[[k]], gamma[[k]]),
+            error = function(e) NA_real_
+          )
+        } else NA_real_,
+        legacy_A = if (is.null(constants)) NA_real_ else constants$A[[1L]],
+        legacy_B = B,
+        legacy_lambda = if (is.null(constants)) NA_real_ else constants$lambda[[1L]],
+        exact_B = if (is.null(exact)) NA_real_ else exact$B[[1L]],
+        initial_weight = weight,
+        status = if (pass) "pass" else "fail",
+        stringsAsFactors = FALSE
+      )
+    }))
+  })
   app_joint_qdesn_bind_rows(rows)
 }
 
@@ -974,9 +1058,14 @@ app_joint_qdesn_phase180_prepare <- function(
   init <- app_joint_qdesn_bind_rows(lapply(initialization, `[[`, "init"))
   init_audit <- app_joint_qdesn_bind_rows(lapply(initialization, `[[`, "audit"))
   starts <- app_joint_qdesn_phase180_chain_starts(init, rerun, contract)
+  start_preflight <- app_joint_qdesn_phase180_m0_start_preflight(
+    starts, plan, contract$tau
+  )
   if (any(init_audit$status != "pass") ||
       length(unique(init$mcmc_case_id)) != contract$expected_rerun_cells ||
-      anyDuplicated(components$component_seed)) {
+      anyDuplicated(components$component_seed) ||
+      nrow(start_preflight) != sum(plan$likelihood_family == "exAL") *
+        length(contract$tau) || any(start_preflight$status != "pass")) {
     stop("Phase180 initialization or seed gate failed.", call. = FALSE)
   }
   source_hash <- function(path) app_sha256_file(file.path(path, "artifact_manifest.csv"))
@@ -1075,6 +1164,9 @@ app_joint_qdesn_phase180_prepare <- function(
     ),
     vb_initialization = write(init, "vb_initialization.csv"),
     chain_start_values = write(starts, "chain_start_values.csv"),
+    chain_start_preflight = write(
+      start_preflight, "chain_start_preflight.csv"
+    ),
     vb_initialization_audit = write(init_audit, "vb_initialization_audit.csv"),
     compute_budget = write(compute, "compute_budget.csv"),
     readiness_assessment = write(readiness, "readiness_assessment.csv"),
@@ -1220,7 +1312,8 @@ app_joint_qdesn_phase180_sampler_rows <- function(fit, fixture, job) {
 }
 
 app_joint_qdesn_phase180_write_checkpoint <- function(
-  fit, fixture, job, component, elapsed_seconds, freeze_dir, worker_dir
+  fit, fixture, job, component, elapsed_seconds, freeze_dir, worker_dir,
+  recovery_context = NULL
 ) {
   path <- app_joint_qdesn_phase180_checkpoint_dir(worker_dir)
   if (dir.exists(path)) {
@@ -1250,6 +1343,13 @@ app_joint_qdesn_phase180_write_checkpoint <- function(
     init_source = fit$init_source %||% "provided",
     elapsed_seconds = as.numeric(elapsed_seconds),
     freeze_manifest_sha256 = app_sha256_file(file.path(freeze_dir, "artifact_manifest.csv")),
+    execution_code_commit = recovery_context$execution_code_commit %||%
+      job$code_commit[[1L]],
+    recovery_id = recovery_context$recovery_id %||% NA_character_,
+    recovery_amendment_manifest_sha256 =
+      recovery_context$amendment_manifest_sha256 %||% NA_character_,
+    recovery_start_row_sha256 =
+      recovery_context$start_row_sha256 %||% NA_character_,
     checkpoint_role = "phase180_balanced_postfit_prescore",
     stringsAsFactors = FALSE
   )
@@ -1275,7 +1375,7 @@ app_joint_qdesn_phase180_write_checkpoint <- function(
 }
 
 app_joint_qdesn_phase180_load_checkpoint <- function(
-  worker_dir, fixture, job, component, freeze_dir
+  worker_dir, fixture, job, component, freeze_dir, recovery_context = NULL
 ) {
   if (!app_joint_qdesn_phase180_checkpoint_complete(worker_dir)) {
     stop("Phase180 checkpoint is incomplete.", call. = FALSE)
@@ -1291,6 +1391,16 @@ app_joint_qdesn_phase180_load_checkpoint <- function(
     component_seed_table_sha256 = app_joint_exqdesn_phase172_table_hash(component),
     freeze_manifest_sha256 = app_sha256_file(file.path(freeze_dir, "artifact_manifest.csv"))
   )
+  if (!is.null(recovery_context)) {
+    expected <- c(
+      expected,
+      execution_code_commit = recovery_context$execution_code_commit,
+      recovery_id = recovery_context$recovery_id,
+      recovery_amendment_manifest_sha256 =
+        recovery_context$amendment_manifest_sha256,
+      recovery_start_row_sha256 = recovery_context$start_row_sha256
+    )
+  }
   actual <- vapply(names(expected), function(name) {
     as.character(metadata[[name]][[1L]])
   }, character(1L))
@@ -1386,10 +1496,45 @@ app_joint_qdesn_phase180_score_meta <- function(job) {
 }
 
 app_joint_qdesn_phase180_run_worker <- function(
-  freeze_dir, worker_id, reuse_completed = TRUE, failure_dir = NULL
+  freeze_dir, worker_id, reuse_completed = TRUE, failure_dir = NULL,
+  recovery_dir = NULL
 ) {
   freeze <- app_joint_qdesn_phase180_load_freeze(freeze_dir)
   worker_id <- as.integer(worker_id)[[1L]]
+  recovery_context <- NULL
+  if (!is.null(recovery_dir) && nzchar(recovery_dir)) {
+    recovery <- app_joint_qdesn_phase180_load_recovery(recovery_dir)
+    if (normalizePath(freeze$dir) != normalizePath(recovery$parent$dir)) {
+      stop("Recovery amendment does not reference the requested parent freeze.",
+           call. = FALSE)
+    }
+    recovery_context <- app_joint_qdesn_phase180_recovery_context(
+      recovery, worker_id
+    )
+    execution_commit <- app_joint_qdesn_phase180_git_output(c(
+      "rev-parse", "HEAD"
+    ))
+    worktree_status <- app_joint_qdesn_phase180_git_output(c(
+      "status", "--porcelain"
+    ))
+    if (is.na(execution_commit) ||
+        execution_commit != recovery_context$execution_code_commit ||
+        (!is.na(worktree_status) && nzchar(worktree_status))) {
+      stop(
+        "Recovery workers require the clean execution commit frozen by the amendment.",
+        call. = FALSE
+      )
+    }
+    key <- paste(freeze$starts$mcmc_case_id, freeze$starts$chain_id)
+    context_key <- paste(
+      recovery_context$starts$mcmc_case_id,
+      recovery_context$starts$chain_id
+    )[[1L]]
+    freeze$starts <- app_joint_qdesn_bind_rows(list(
+      freeze$starts[key != context_key, , drop = FALSE],
+      recovery_context$starts
+    ))
+  }
   job <- freeze$plan[freeze$plan$worker_id == worker_id, , drop = FALSE]
   if (nrow(job) != 1L) stop("Unknown Phase180 worker id.", call. = FALSE)
   worker_dir <- job$worker_output_dir[[1L]]
@@ -1431,14 +1576,15 @@ app_joint_qdesn_phase180_run_worker <- function(
     )
     checkpoint <- if (has_checkpoint) {
       app_joint_qdesn_phase180_load_checkpoint(
-        worker_dir, fixture, job, component, freeze$dir
+        worker_dir, fixture, job, component, freeze$dir, recovery_context
       )
     } else {
       started <- proc.time()[["elapsed"]]
       fit <- app_joint_qdesn_phase180_fit_chain(job, control, fixture, init)
       elapsed <- proc.time()[["elapsed"]] - started
       app_joint_qdesn_phase180_write_checkpoint(
-        fit, fixture, job, component, elapsed, freeze$dir, worker_dir
+        fit, fixture, job, component, elapsed, freeze$dir, worker_dir,
+        recovery_context
       )
     }
     fit <- checkpoint$fit; draws <- checkpoint$draws
@@ -1475,6 +1621,8 @@ app_joint_qdesn_phase180_run_worker <- function(
       min_sigma = min(fit$sigma_draws), max_sigma = max(fit$sigma_draws),
       min_gamma = if (!is.null(fit$gamma_draws)) min(fit$gamma_draws) else NA_real_,
       max_gamma = if (!is.null(fit$gamma_draws)) max(fit$gamma_draws) else NA_real_,
+      recovery_id = recovery_context$recovery_id %||% NA_character_,
+      recovered_from_pre_iteration_failure = !is.null(recovery_context),
       elapsed_seconds = checkpoint$metadata$elapsed_seconds[[1L]],
       stringsAsFactors = FALSE
     )
@@ -1488,6 +1636,9 @@ app_joint_qdesn_phase180_run_worker <- function(
       sprintf("- Chain: %d", job$chain_id[[1L]]),
       sprintf("- Likelihood/sampler: `%s` / `%s`", job$likelihood_family[[1L]],
               job$inference_method_id[[1L]]),
+      if (!is.null(recovery_context)) {
+        sprintf("- Recovery amendment: `%s`", recovery_context$recovery_id)
+      } else "- Recovery amendment: none",
       "- This worker is evaluation-only and cannot change a frozen model control.",
       "- Posterior draws use compressed CSV; no serialized R workspace is retained."
     ), readme, useBytes = TRUE)
@@ -1575,6 +1726,454 @@ app_joint_qdesn_phase180_health <- function(
     ),
     by_case = by_case, plan = plan
   )
+}
+
+app_joint_qdesn_phase180_recovery_inventory <- function(
+  freeze, parent_orchestration_dir
+) {
+  health <- app_joint_qdesn_phase180_health(
+    freeze$dir, parent_orchestration_dir
+  )
+  failed <- health$plan[health$plan$state == "failed", , drop = FALSE]
+  if (health$summary$remaining[[1L]] != 0L || nrow(failed) != 10L ||
+      any(failed$likelihood_family != "exAL") ||
+      any(!failed$chain_id %in% c(1L, freeze$contract$n_chains))) {
+    stop("Phase180 recovery requires exactly ten closed exAL endpoint failures.",
+         call. = FALSE)
+  }
+  failure_rows <- lapply(seq_len(nrow(failed)), function(ii) {
+    job <- failed[ii, , drop = FALSE]
+    receipt_path <- file.path(
+      parent_orchestration_dir, "failures",
+      sprintf("worker_%04d.csv", job$worker_id[[1L]])
+    )
+    log_path <- file.path(
+      parent_orchestration_dir, "logs",
+      sprintf("worker_%04d.log", job$worker_id[[1L]])
+    )
+    exit_path <- file.path(
+      parent_orchestration_dir, "exits",
+      sprintf("worker_%04d.exit", job$worker_id[[1L]])
+    )
+    if (any(!file.exists(c(receipt_path, log_path, exit_path))) ||
+        app_joint_qdesn_phase180_checkpoint_complete(job$worker_output_dir[[1L]])) {
+      stop("A Phase180 recovery failure lacks its immutable receipt or has a checkpoint.",
+           call. = FALSE)
+    }
+    receipt <- app_read_csv(receipt_path)
+    exit_code <- suppressWarnings(as.integer(readLines(exit_path, warn = FALSE)[[1L]]))
+    if (nrow(receipt) != 1L || receipt$worker_id[[1L]] != job$worker_id[[1L]] ||
+        receipt$message[[1L]] != "weights must be positive." ||
+        !is.finite(exit_code) || exit_code == 0L) {
+      stop("Phase180 recovery encountered an unexpected failure signature.",
+           call. = FALSE)
+    }
+    data.frame(
+      worker_id = job$worker_id[[1L]],
+      mcmc_case_id = job$mcmc_case_id[[1L]],
+      scenario_id = job$scenario_id[[1L]],
+      source_model_id = job$source_model_id[[1L]],
+      fit_structure = job$fit_structure[[1L]],
+      chain_id = job$chain_id[[1L]], chain_seed = job$chain_seed[[1L]],
+      failure_message = receipt$message[[1L]], exit_code = exit_code,
+      receipt_path = normalizePath(receipt_path),
+      receipt_sha256 = app_sha256_file(receipt_path),
+      log_path = normalizePath(log_path), log_sha256 = app_sha256_file(log_path),
+      exit_path = normalizePath(exit_path), exit_sha256 = app_sha256_file(exit_path),
+      checkpoint_present = FALSE, stringsAsFactors = FALSE
+    )
+  })
+  complete <- health$plan[health$plan$state == "complete", , drop = FALSE]
+  if (nrow(complete) != 158L) {
+    stop("Phase180 recovery expected 158 verified parent workers.", call. = FALSE)
+  }
+  preserved <- app_joint_qdesn_bind_rows(lapply(seq_len(nrow(complete)), function(ii) {
+    path <- complete$worker_output_dir[[ii]]
+    worker_manifest <- file.path(path, "artifact_manifest.csv")
+    checkpoint_manifest <- file.path(path, "checkpoint", "artifact_manifest.csv")
+    if (!app_joint_qdesn_phase180_worker_complete(path)) {
+      stop("A preserved Phase180 worker no longer verifies.", call. = FALSE)
+    }
+    data.frame(
+      worker_id = complete$worker_id[[ii]],
+      mcmc_case_id = complete$mcmc_case_id[[ii]],
+      chain_id = complete$chain_id[[ii]], worker_dir = normalizePath(path),
+      worker_manifest_sha256 = app_sha256_file(worker_manifest),
+      checkpoint_manifest_sha256 = app_sha256_file(checkpoint_manifest),
+      status = "pass", stringsAsFactors = FALSE
+    )
+  }))
+  list(
+    health = health,
+    failed = failed,
+    failures = app_joint_qdesn_bind_rows(failure_rows),
+    preserved = preserved
+  )
+}
+
+app_joint_qdesn_phase180_prepare_recovery <- function(
+  cache_root = app_joint_exqdesn_phase164_cache_root(),
+  freeze_dir = NULL, parent_orchestration_dir = NULL, out_dir = NULL,
+  force = FALSE
+) {
+  dirs <- app_joint_qdesn_phase180_dirs(cache_root)
+  freeze_dir <- freeze_dir %||% dirs$freeze
+  parent_orchestration_dir <- parent_orchestration_dir %||% dirs$orchestration
+  out_dir <- out_dir %||% dirs$recovery_freeze
+  if (!force && file.exists(file.path(out_dir, "artifact_manifest.csv"))) {
+    check <- tryCatch(
+      app_joint_exqdesn_verify_manifest(out_dir, "phase180_recovery_freeze"),
+      error = function(e) NULL
+    )
+    if (!is.null(check) && all(check$status == "pass")) {
+      recovery <- app_joint_qdesn_phase180_load_recovery(out_dir)
+      execution_commit <- app_joint_qdesn_phase180_git_output(c(
+        "rev-parse", "HEAD"
+      ))
+      if (is.na(execution_commit) ||
+          recovery$identity$execution_code_commit[[1L]] != execution_commit) {
+        stop(
+          paste0(
+            "Existing Phase180 recovery freeze belongs to another commit; ",
+            "rerun preparation with --force after reviewing the change."
+          ),
+          call. = FALSE
+        )
+      }
+      return(list(
+        out_dir = normalizePath(out_dir),
+        plan = recovery$plan,
+        readiness = app_read_csv(file.path(
+          out_dir, "readiness_assessment.csv"
+        )),
+        reused = TRUE
+      ))
+    }
+  }
+  freeze <- app_joint_qdesn_phase180_load_freeze(freeze_dir)
+  inventory <- app_joint_qdesn_phase180_recovery_inventory(
+    freeze, parent_orchestration_dir
+  )
+  git_status <- app_joint_qdesn_phase180_git_output(c("status", "--porcelain"))
+  if (!is.na(git_status) && nzchar(git_status)) {
+    stop("Commit Phase180 recovery code before freezing production recovery.",
+         call. = FALSE)
+  }
+  execution_commit <- app_joint_qdesn_phase180_git_output(c("rev-parse", "HEAD"))
+  if (is.na(execution_commit) || !nzchar(execution_commit)) {
+    stop("Could not resolve the Phase180 recovery execution commit.", call. = FALSE)
+  }
+  corrected_all <- app_joint_qdesn_phase180_chain_starts(
+    freeze$init, freeze$controls, freeze$contract
+  )
+  recovery_plan <- inventory$failed
+  key <- paste(recovery_plan$mcmc_case_id, recovery_plan$chain_id)
+  corrected_key <- paste(corrected_all$mcmc_case_id, corrected_all$chain_id)
+  corrected <- corrected_all[corrected_key %in% key, , drop = FALSE]
+  original_key <- paste(freeze$starts$mcmc_case_id, freeze$starts$chain_id)
+  original <- freeze$starts[original_key %in% key, , drop = FALSE]
+  if (nrow(corrected) != nrow(original) ||
+      anyDuplicated(paste(
+        corrected$mcmc_case_id, corrected$chain_id, corrected$parameter,
+        corrected$quantile_index
+      ))) {
+    stop("Phase180 recovery could not construct one corrected start table.",
+         call. = FALSE)
+  }
+  plan_rows <- freeze$plan[freeze$plan$worker_id %in% recovery_plan$worker_id,
+                           , drop = FALSE]
+  old_preflight <- app_joint_qdesn_phase180_m0_start_preflight(
+    original, plan_rows, freeze$contract$tau
+  )
+  old_preflight$start_version <- "original_phase180"
+  new_preflight <- app_joint_qdesn_phase180_m0_start_preflight(
+    corrected, plan_rows, freeze$contract$tau
+  )
+  new_preflight$start_version <- "recovery_support_logit_v2"
+  failed_old <- unique(old_preflight$worker_id[old_preflight$status == "fail"])
+  if (!setequal(failed_old, recovery_plan$worker_id) ||
+      any(new_preflight$status != "pass")) {
+    stop("Phase180 recovery start correction did not isolate and remove the failure.",
+         call. = FALSE)
+  }
+  sigma_old <- original[original$parameter == "sigma", , drop = FALSE]
+  sigma_new <- corrected[corrected$parameter == "sigma", , drop = FALSE]
+  sigma_key <- function(x) paste(x$mcmc_case_id, x$chain_id, x$quantile_index)
+  sigma_new <- sigma_new[match(sigma_key(sigma_old), sigma_key(sigma_new)), , drop = FALSE]
+  if (anyNA(sigma_new$value) || !isTRUE(all.equal(
+    sigma_old$value, sigma_new$value, tolerance = 0
+  ))) {
+    stop("Phase180 recovery must not alter sigma starts.", call. = FALSE)
+  }
+  recovery_plan$recovery_id <- "phase180_endpoint_start_recovery_v1"
+  recovery_plan$recovery_role <- "initialization_only_same_target_same_seed"
+  recovery_plan$parent_freeze_manifest_sha256 <- app_sha256_file(file.path(
+    freeze$dir, "artifact_manifest.csv"
+  ))
+  recovery_plan$execution_code_commit <- execution_commit
+  recovery_plan$corrected_start_row_sha256 <- vapply(
+    seq_len(nrow(recovery_plan)), function(ii) {
+      block <- corrected[
+        corrected$mcmc_case_id == recovery_plan$mcmc_case_id[[ii]] &
+          corrected$chain_id == recovery_plan$chain_id[[ii]], , drop = FALSE
+      ]
+      app_joint_qdesn_phase180_chain_start_hash(block)
+    }, character(1L)
+  )
+  failure_match <- match(recovery_plan$worker_id, inventory$failures$worker_id)
+  recovery_plan$original_failure_receipt_sha256 <-
+    inventory$failures$receipt_sha256[failure_match]
+  parent_identity <- data.frame(
+    recovery_id = "phase180_endpoint_start_recovery_v1",
+    parent_freeze_dir = freeze$dir,
+    parent_freeze_manifest_sha256 = recovery_plan$parent_freeze_manifest_sha256[[1L]],
+    parent_orchestration_dir = normalizePath(parent_orchestration_dir),
+    parent_planned_workers = nrow(freeze$plan),
+    parent_verified_workers = nrow(inventory$preserved),
+    parent_failed_workers = nrow(inventory$failures),
+    execution_code_commit = execution_commit,
+    scientific_change = "gamma_start_coordinate_only",
+    sampler_target_changed = FALSE, chain_seed_changed = FALSE,
+    component_seed_changed = FALSE, model_control_changed = FALSE,
+    fixture_changed = FALSE, mcmc_budget_changed = FALSE,
+    stringsAsFactors = FALSE
+  )
+  readiness <- data.frame(
+    recovery_id = parent_identity$recovery_id,
+    gate_status = "pass", recovery_workers = nrow(recovery_plan),
+    preserved_verified_workers = nrow(inventory$preserved),
+    original_failure_signatures_matched = length(failed_old),
+    corrected_start_rows = nrow(corrected),
+    corrected_preflight_failures = sum(new_preflight$status != "pass"),
+    recommendation = "launch_ten_worker_initialization_recovery",
+    stringsAsFactors = FALSE
+  )
+  final_dir <- normalizePath(out_dir, mustWork = FALSE)
+  tmp <- paste0(final_dir, ".tmp.", Sys.getpid())
+  if (dir.exists(tmp)) unlink(tmp, recursive = TRUE, force = TRUE)
+  app_ensure_dir(tmp)
+  write <- function(x, name) app_joint_qvp_write_csv(x, file.path(tmp, name))
+  readme <- file.path(tmp, "README.md")
+  writeLines(c(
+    "# Phase180 endpoint-start recovery amendment", "",
+    "This immutable amendment recovers only the ten exAL chains that failed before iteration one.",
+    "The parent freeze, controls, fixtures, budgets, worker identities, and random seeds are unchanged.",
+    "Only gamma starts move from numerically unsafe native-support endpoints to bounded support-logit interiors.",
+    "All 158 verified parent workers and all original failure receipts remain hash-audited.",
+    "The amendment does not change the M0 posterior target or authorize scientific reranking."
+  ), readme, useBytes = TRUE)
+  paths <- c(
+    parent_freeze_identity = write(parent_identity, "parent_freeze_identity.csv"),
+    recovery_worker_plan = write(recovery_plan, "recovery_worker_plan.csv"),
+    recovery_chain_start_values = write(
+      corrected, "recovery_chain_start_values.csv"
+    ),
+    original_and_recovery_start_preflight = write(
+      app_joint_qdesn_bind_rows(list(old_preflight, new_preflight)),
+      "original_and_recovery_start_preflight.csv"
+    ),
+    original_failure_inventory = write(
+      inventory$failures, "original_failure_inventory.csv"
+    ),
+    preserved_worker_manifest_inventory = write(
+      inventory$preserved, "preserved_worker_manifest_inventory.csv"
+    ),
+    readiness_assessment = write(readiness, "readiness_assessment.csv"),
+    provenance = write(app_joint_qvp_provenance_rows(), "provenance.csv"),
+    README = normalizePath(readme, mustWork = TRUE)
+  )
+  app_joint_exqdesn_write_manifest(paths, tmp)
+  if (dir.exists(final_dir)) {
+    quarantine <- paste0(final_dir, ".superseded.", format(Sys.time(), "%Y%m%dT%H%M%S"))
+    if (!file.rename(final_dir, quarantine)) {
+      stop("Could not quarantine prior Phase180 recovery freeze.", call. = FALSE)
+    }
+  }
+  if (!file.rename(tmp, final_dir)) {
+    stop("Could not publish the Phase180 recovery freeze.", call. = FALSE)
+  }
+  check <- app_joint_exqdesn_verify_manifest(final_dir, "phase180_recovery_freeze")
+  if (any(check$status != "pass")) {
+    stop("Phase180 recovery freeze manifest failed.", call. = FALSE)
+  }
+  list(out_dir = final_dir, plan = recovery_plan, readiness = readiness, reused = FALSE)
+}
+
+app_joint_qdesn_phase180_load_recovery <- function(recovery_dir) {
+  check <- app_joint_exqdesn_verify_manifest(
+    recovery_dir, "phase180_recovery_freeze"
+  )
+  if (any(check$status != "pass")) {
+    stop("Phase180 recovery freeze manifest failed.", call. = FALSE)
+  }
+  identity <- app_read_csv(file.path(recovery_dir, "parent_freeze_identity.csv"))
+  plan <- app_read_csv(file.path(recovery_dir, "recovery_worker_plan.csv"))
+  starts <- app_read_csv(file.path(recovery_dir, "recovery_chain_start_values.csv"))
+  failures <- app_read_csv(file.path(
+    recovery_dir, "original_failure_inventory.csv"
+  ))
+  parent <- app_joint_qdesn_phase180_load_freeze(identity$parent_freeze_dir[[1L]])
+  parent_hash <- app_sha256_file(file.path(parent$dir, "artifact_manifest.csv"))
+  parent_plan <- parent$plan[
+    parent$plan$worker_id %in% plan$worker_id, , drop = FALSE
+  ]
+  plan_key <- paste(plan$mcmc_case_id, plan$chain_id)
+  start_key <- paste(
+    starts$mcmc_case_id, starts$chain_id, starts$parameter,
+    starts$quantile_index
+  )
+  parent_starts <- parent$starts[
+    paste(parent$starts$mcmc_case_id, parent$starts$chain_id) %in% plan_key,
+    , drop = FALSE
+  ]
+  parent_start_key <- paste(
+    parent_starts$mcmc_case_id, parent_starts$chain_id,
+    parent_starts$parameter, parent_starts$quantile_index
+  )
+  if (nrow(identity) != 1L ||
+      identity$parent_freeze_manifest_sha256[[1L]] != parent_hash ||
+      nrow(plan) != 10L || anyDuplicated(plan$worker_id) ||
+      nrow(failures) != 10L || anyDuplicated(failures$worker_id) ||
+      !setequal(plan$worker_id, failures$worker_id) ||
+      nrow(parent_plan) != nrow(plan) ||
+      !setequal(parent_plan$worker_id, plan$worker_id) ||
+      anyDuplicated(start_key) || !setequal(start_key, parent_start_key)) {
+    stop("Phase180 recovery parent identity or worker plan is malformed.",
+         call. = FALSE)
+  }
+  list(
+    dir = normalizePath(recovery_dir), verification = check,
+    identity = identity, plan = plan, starts = starts, parent = parent,
+    manifest_sha256 = app_sha256_file(file.path(recovery_dir, "artifact_manifest.csv"))
+  )
+}
+
+app_joint_qdesn_phase180_recovery_context <- function(recovery, worker_id) {
+  row <- recovery$plan[recovery$plan$worker_id == worker_id, , drop = FALSE]
+  if (nrow(row) != 1L) stop("Worker is not authorized by the recovery amendment.", call. = FALSE)
+  starts <- recovery$starts[
+    recovery$starts$mcmc_case_id == row$mcmc_case_id[[1L]] &
+      recovery$starts$chain_id == row$chain_id[[1L]], , drop = FALSE
+  ]
+  if (app_joint_qdesn_phase180_chain_start_hash(starts) !=
+      row$corrected_start_row_sha256[[1L]]) {
+    stop("Recovery chain-start hash differs from its amendment.", call. = FALSE)
+  }
+  list(
+    starts = starts, recovery_id = row$recovery_id[[1L]],
+    execution_code_commit = row$execution_code_commit[[1L]],
+    amendment_manifest_sha256 = recovery$manifest_sha256,
+    start_row_sha256 = row$corrected_start_row_sha256[[1L]]
+  )
+}
+
+app_joint_qdesn_phase180_recovery_provenance_audit <- function(recovery_dir) {
+  recovery <- app_joint_qdesn_phase180_load_recovery(recovery_dir)
+  preserved <- app_read_csv(file.path(
+    recovery$dir, "preserved_worker_manifest_inventory.csv"
+  ))
+  failures <- app_read_csv(file.path(
+    recovery$dir, "original_failure_inventory.csv"
+  ))
+  preserved_status <- vapply(seq_len(nrow(preserved)), function(ii) {
+    path <- preserved$worker_dir[[ii]]
+    app_joint_qdesn_phase180_worker_complete(path) &&
+      app_sha256_file(file.path(path, "artifact_manifest.csv")) ==
+        preserved$worker_manifest_sha256[[ii]] &&
+      app_sha256_file(file.path(path, "checkpoint", "artifact_manifest.csv")) ==
+        preserved$checkpoint_manifest_sha256[[ii]]
+  }, logical(1L))
+  failure_status <- vapply(seq_len(nrow(failures)), function(ii) {
+    all(file.exists(c(
+      failures$receipt_path[[ii]], failures$log_path[[ii]], failures$exit_path[[ii]]
+    ))) &&
+      app_sha256_file(failures$receipt_path[[ii]]) == failures$receipt_sha256[[ii]] &&
+      app_sha256_file(failures$log_path[[ii]]) == failures$log_sha256[[ii]] &&
+      app_sha256_file(failures$exit_path[[ii]]) == failures$exit_sha256[[ii]]
+  }, logical(1L))
+  recovered <- app_joint_qdesn_bind_rows(lapply(seq_len(nrow(recovery$plan)), function(ii) {
+    row <- recovery$plan[ii, , drop = FALSE]
+    path <- row$worker_output_dir[[1L]]
+    metadata_path <- file.path(path, "checkpoint", "checkpoint_metadata.csv")
+    metadata <- if (file.exists(metadata_path)) app_read_csv(metadata_path) else data.frame()
+    identity_pass <- nrow(metadata) == 1L && all(c(
+      "execution_code_commit", "recovery_id",
+      "recovery_amendment_manifest_sha256", "recovery_start_row_sha256"
+    ) %in% names(metadata)) &&
+      metadata$execution_code_commit[[1L]] == row$execution_code_commit[[1L]] &&
+      metadata$recovery_id[[1L]] == row$recovery_id[[1L]] &&
+      metadata$recovery_amendment_manifest_sha256[[1L]] == recovery$manifest_sha256 &&
+      metadata$recovery_start_row_sha256[[1L]] == row$corrected_start_row_sha256[[1L]]
+    data.frame(
+      worker_id = row$worker_id[[1L]],
+      mcmc_case_id = row$mcmc_case_id[[1L]], chain_id = row$chain_id[[1L]],
+      worker_manifest_verified = app_joint_qdesn_phase180_worker_complete(path),
+      checkpoint_recovery_identity_verified = identity_pass,
+      original_failure_receipt_preserved = failure_status[
+        match(row$worker_id[[1L]], failures$worker_id)
+      ],
+      preserved_parent_inventory_unchanged = all(preserved_status),
+      status = if (
+        app_joint_qdesn_phase180_worker_complete(path) && identity_pass &&
+          all(preserved_status) && all(failure_status)
+      ) "pass" else "fail",
+      stringsAsFactors = FALSE
+    )
+  }))
+  if (nrow(preserved) != 158L || nrow(failures) != 10L ||
+      nrow(recovered) != 10L || any(recovered$status != "pass")) {
+    stop("Phase180 recovery provenance failed closed.", call. = FALSE)
+  }
+  recovered
+}
+
+app_joint_qdesn_phase180_recovery_health <- function(
+  recovery_dir, orchestration_dir = NULL
+) {
+  recovery <- app_joint_qdesn_phase180_load_recovery(recovery_dir)
+  complete <- vapply(
+    recovery$plan$worker_output_dir,
+    app_joint_qdesn_phase180_worker_complete, logical(1L)
+  )
+  exits <- if (!is.null(orchestration_dir)) {
+    file.path(
+      orchestration_dir, "exits",
+      sprintf("worker_%04d.exit", recovery$plan$worker_id)
+    )
+  } else rep("", nrow(recovery$plan))
+  failed <- vapply(exits, function(path) {
+    if (!nzchar(path) || !file.exists(path)) return(FALSE)
+    value <- suppressWarnings(as.integer(readLines(path, warn = FALSE)[[1L]]))
+    is.finite(value) && value != 0L
+  }, logical(1L))
+  state <- ifelse(complete, "complete", ifelse(failed, "failed", "remaining"))
+  plan <- recovery$plan
+  plan$state <- state
+  parent_health <- app_joint_qdesn_phase180_health(
+    recovery$parent$dir,
+    recovery$identity$parent_orchestration_dir[[1L]]
+  )
+  summary <- data.frame(
+    stage = "phase180_endpoint_start_recovery",
+    planned = nrow(plan), complete = sum(complete),
+    failed = sum(failed & !complete), remaining = sum(!complete & !failed),
+    percent_complete = 100 * mean(complete),
+    overall_phase180_complete = parent_health$summary$complete[[1L]],
+    overall_phase180_failed = parent_health$summary$failed[[1L]],
+    overall_phase180_remaining = parent_health$summary$remaining[[1L]],
+    stringsAsFactors = FALSE
+  )
+  by_case <- app_joint_qdesn_bind_rows(lapply(
+    split(plan, plan$mcmc_case_id), function(x) {
+      data.frame(
+        mcmc_case_id = x$mcmc_case_id[[1L]], scenario_id = x$scenario_id[[1L]],
+        source_model_id = x$source_model_id[[1L]], planned = nrow(x),
+        complete = sum(x$state == "complete"), failed = sum(x$state == "failed"),
+        remaining = sum(x$state == "remaining"), stringsAsFactors = FALSE
+      )
+    }
+  ))
+  list(summary = summary, by_case = by_case, plan = plan)
 }
 
 app_joint_qdesn_phase180_final_source_plan <- function(freeze) {
@@ -1806,6 +2405,20 @@ app_joint_qdesn_phase180_finalize <- function(
   if (health$summary$failed[[1L]] > 0L || health$summary$remaining[[1L]] > 0L) {
     stop("Phase180 cannot finalize before all 168 new workers pass.", call. = FALSE)
   }
+  recovery_audit <- if (file.exists(file.path(
+    dirs$recovery_freeze, "artifact_manifest.csv"
+  ))) {
+    app_joint_qdesn_phase180_recovery_provenance_audit(dirs$recovery_freeze)
+  } else {
+    data.frame(
+      worker_id = integer(), mcmc_case_id = character(), chain_id = integer(),
+      worker_manifest_verified = logical(),
+      checkpoint_recovery_identity_verified = logical(),
+      original_failure_receipt_preserved = logical(),
+      preserved_parent_inventory_unchanged = logical(), status = character(),
+      stringsAsFactors = FALSE
+    )
+  }
   if (!force && file.exists(file.path(out_dir, "artifact_manifest.csv"))) {
     check <- tryCatch(
       app_joint_exqdesn_verify_manifest(out_dir, "phase180_packet"),
@@ -1913,7 +2526,7 @@ app_joint_qdesn_phase180_finalize <- function(
   hard_fail <- any(score_summary$contract_crossing_pairs != 0L) ||
     any(!is.finite(score_summary$posterior_score_mean)) ||
     any(!is.finite(score_summary$canonical_action_dgp_integrated_acrps)) ||
-    any(!plan$worker_manifest_verified)
+    any(!plan$worker_manifest_verified) || any(recovery_audit$status != "pass")
   functional_review <- any(score_summary$score_functional_status != "pass") ||
     any(pairing$pairing_status == "review")
   coherence_review <- any(score_summary$coherence_status == "review")
@@ -1931,6 +2544,7 @@ app_joint_qdesn_phase180_finalize <- function(
     ),
     new_workers_complete = health$summary$complete[[1L]],
     new_workers_failed = health$summary$failed[[1L]],
+    initialization_recovery_workers = nrow(recovery_audit),
     score_functional_pass = sum(score_summary$score_functional_status == "pass"),
     score_functional_review = sum(score_summary$score_functional_status != "pass"),
     coherence_review = sum(score_summary$coherence_status == "review"),
@@ -1969,6 +2583,9 @@ app_joint_qdesn_phase180_finalize <- function(
     ),
     worker_health_summary = write(health$summary, "worker_health_summary.csv"),
     worker_health_by_case = write(health$by_case, "worker_health_by_case.csv"),
+    recovery_amendment_verification = write(
+      recovery_audit, "recovery_amendment_verification.csv"
+    ),
     score_contract = write(freeze$contract$table, "phase180_score_contract.csv"),
     dgp_family_parameterization_audit = write(
       formula, "dgp_family_parameterization_audit.csv"

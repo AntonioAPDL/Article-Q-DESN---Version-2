@@ -1,3 +1,0 @@
-region,fold,selected_method_id,selection_metric_value,test_AQL,test_MAE,test_RMSE,experiment_id,lag_window,feature_dim,depth,units,alpha,rho,input_scale,tau0,seed
-DE_LU,2,qdesn_exal_rhs_ns_exact_chunked,6.181033226244428,7.017319539273442,14.034639078546885,21.20316344872794,rf_p0_f23_d1n120_l072_a0p50_r0p90_in0p50_seed20260601,72,120,1,[120],0.5,0.9,0.5,0.001,20260601
-DE_LU,3,qdesn_exal_rhs_ns_exact_chunked,6.765380958671593,8.559254084491604,17.118508168983208,26.95498212668296,rf_p0_f23_d1n080_l096_a0p50_r0p90_in0p50_seed20260601,96,80,1,[80],0.5,0.9,0.5,0.001,20260601

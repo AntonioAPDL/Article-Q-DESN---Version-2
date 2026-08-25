@@ -16,9 +16,17 @@ app_covariates_enabled <- function(cfg) {
 app_covariate_variables <- function(cfg) {
   vars <- as.character(unlist((cfg$covariates %||% list())$variables %||% c("ppt", "soil"), use.names = FALSE))
   vars <- unique(vars[nzchar(vars)])
-  unknown <- setdiff(vars, c("ppt", "soil"))
+  supported <- c("ppt", "soil")
+  if (identical(as.character(cfg$.__qdesn_block__ %||% ""), "discrepancy")) {
+    supported <- c(supported, "glofas_level", "glofas_anomaly")
+  }
+  unknown <- setdiff(vars, supported)
   if (length(unknown)) {
-    stop(sprintf("Unsupported model covariates: %s. This workflow permits only ppt and soil.", paste(unknown, collapse = ", ")), call. = FALSE)
+    stop(sprintf(
+      "Unsupported model covariates for the %s block: %s.",
+      as.character(cfg$.__qdesn_block__ %||% "global/reference"),
+      paste(unknown, collapse = ", ")
+    ), call. = FALSE)
   }
   vars
 }
@@ -181,11 +189,15 @@ app_covariate_future_policy <- function(cfg) {
       realized_history_and_gefs_forecast = "gefs_only",
       realized_history_and_oracle_future = "oracle_realized",
       external_forecast_table = "external_table",
+      realized_history_and_origin_persistence = "origin_persistence",
       "gefs_realized_blend"
     )
   }
   future_policy <- tolower(as.character(future_policy[[1L]]))
-  allowed <- c("gefs_only", "gefs_realized_blend", "oracle_realized", "external_table")
+  allowed <- c(
+    "gefs_only", "gefs_realized_blend", "oracle_realized",
+    "external_table", "origin_persistence"
+  )
   if (!future_policy %in% allowed) {
     stop(sprintf(
       "Unsupported covariates.future_policy '%s'. Use one of: %s.",
@@ -199,6 +211,7 @@ app_covariate_future_policy <- function(cfg) {
     future_policy,
     oracle_realized = "realized_future_oracle",
     external_table = "external_table",
+    origin_persistence = "historical_origin",
     "gefs_handoff"
   )
   allow_realized_future <- app_covariate_bool(
@@ -283,7 +296,7 @@ app_validate_covariate_source_policy <- function(cfg, manifest = NULL, cutoff_ro
   }, logical(1L))
   uses_realized_future <- identical(policy$future_policy, "oracle_realized") ||
     identical(policy$future_policy, "gefs_realized_blend") ||
-    any(per_var_uses_realized)
+    (identical(policy$future_policy, "gefs_only") && any(per_var_uses_realized))
 
   status <- "PASS"
   messages <- character()
@@ -322,7 +335,9 @@ app_validate_covariate_source_policy <- function(cfg, manifest = NULL, cutoff_ro
   out <- data.frame(
     future_policy = policy$future_policy,
     source_provider = policy$source_provider,
-    deployable_forecast_covariates = policy$future_policy %in% c("gefs_only", "external_table") && !uses_realized_future,
+    deployable_forecast_covariates = policy$future_policy %in% c(
+      "gefs_only", "external_table", "origin_persistence"
+    ) && !uses_realized_future,
     uses_realized_future = uses_realized_future,
     allow_realized_future = policy$allow_realized_future,
     status = status,
@@ -480,6 +495,54 @@ app_oracle_future_covariate <- function(realized, cutoff_date, horizon_max, cfg,
   )
 }
 
+app_origin_persistence_future_covariate <- function(
+  realized,
+  cutoff_date,
+  horizon_max,
+  cfg,
+  variable
+) {
+  variable <- as.character(variable)[[1L]]
+  dates <- seq(
+    as.Date(cutoff_date) + 1L,
+    as.Date(cutoff_date) + as.integer(horizon_max),
+    by = "day"
+  )
+  available <- realized[
+    realized$date <= as.Date(cutoff_date) &
+      is.finite(realized[[variable]]),
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(available)) {
+    stop(sprintf(
+      "origin_persistence has no finite historical %s value through %s.",
+      variable,
+      as.character(cutoff_date)
+    ), call. = FALSE)
+  }
+  value <- rep(utils::tail(available[[variable]], 1L), length(dates))
+  data.frame(
+    date = dates,
+    value = as.numeric(value),
+    realized_value = NA_real_,
+    gefs_reduced_value = NA_real_,
+    blend_noise = 0,
+    source_role = "forecast_origin_persistence",
+    source_policy = "origin_persistence",
+    source_provider = "historical_origin",
+    source_variable = variable,
+    source_path = attr(realized, "source_path") %||% NA_character_,
+    source_sha256 = app_covariate_source_hash(
+      attr(realized, "source_path") %||% NA_character_
+    ),
+    uses_realized_future = FALSE,
+    source = sprintf("last observed %s available at forecast origin", variable),
+    leakage_status = "causal origin-only fallback; no realized future value used",
+    stringsAsFactors = FALSE
+  )
+}
+
 app_external_future_covariate <- function(cfg, cutoff_date, horizon_max, variable) {
   variable <- as.character(variable)[[1L]]
   ext <- ((cfg$covariates %||% list())$forecast %||% list())$external_table
@@ -568,7 +631,14 @@ app_build_model_covariate_timeline <- function(cfg, manifest, cutoff_row, panel 
         app_blend_forecast_covariate(realized, reduced, cutoff_date, horizon_max, cfg, v)
       },
       oracle_realized = app_oracle_future_covariate(realized, cutoff_date, horizon_max, cfg, v),
-      external_table = app_external_future_covariate(cfg, cutoff_date, horizon_max, v)
+      external_table = app_external_future_covariate(cfg, cutoff_date, horizon_max, v),
+      origin_persistence = app_origin_persistence_future_covariate(
+        realized,
+        cutoff_date,
+        horizon_max,
+        cfg,
+        v
+      )
     )
   }
 
@@ -718,7 +788,11 @@ app_append_covariate_lags <- function(X, target_dates, panel, cfg) {
 app_covariate_timeline_summary <- function(timeline) {
   if (is.null(timeline)) return(data.frame())
   vars <- attr(timeline, "variables") %||% c("ppt", "soil")
-  known_roles <- c("retrospective_realized", "forecast_blended", "forecast_gefs", "oracle_realized", "forecast_external")
+  known_roles <- c(
+    "retrospective_realized", "forecast_blended", "forecast_gefs",
+    "oracle_realized", "forecast_external", "forecast_origin_persistence",
+    "retrospective_glofas_context", "issued_glofas_quantile_context"
+  )
   rows <- lapply(vars, function(v) {
     role_col <- paste0(v, "_role")
     role <- as.character(timeline[[role_col]] %||% rep(NA_character_, nrow(timeline)))

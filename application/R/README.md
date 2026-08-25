@@ -134,6 +134,13 @@ Tracked helper files:
 - `glofas_fit_recovery.R`: observed-history reconstruction, single-quantile
   scoring, candidate comparison, and guarded artifact cleanup for GloFAS fit
   recovery experiments.
+- `glofas_discrepancy_transition.R`: normalized legacy and factorized
+  discrepancy-transition contracts; strictly causal last, rolling, median, and
+  EWMA anchors; discrepancy-only issued-GloFAS level/anomaly context; transition
+  provenance; and deterministic causal baselines.
+- `glofas_discrepancy_transition_campaign.R`: validation and materialization
+  helpers for the frozen multi-origin p50 bridge, origin-persistence weather
+  policy, forecast/discrepancy scoring, and equal-origin aggregation.
 - `glofas_fit_recovery_selection.R`: manifest validation, common-date
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS

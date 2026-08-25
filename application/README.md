@@ -193,6 +193,31 @@ system BLAS alternatives, or infer scientific equivalence from a kernel
 microbenchmark. Adoption requires fixed-iteration FR09 state/prediction gates
 and controlled throughput evidence.
 
+### Causal Discrepancy-Transition Development
+
+The tracked transition campaign tests whether forecast-window error is driven
+by the rule that carries the observed GloFAS-minus-USGS discrepancy through the
+forecast origin. It preserves FR09 reservoir geometry, two separate DESNs,
+block-specific seeds, RHS priors, likelihood, and exact dense VB-LD. Only the
+causal discrepancy anchor and optional discrepancy-only issued-GloFAS context
+change.
+
+`config/glofas_discrepancy_transition_campaign_20260825.yaml` freezes the
+12-candidate, four-origin p50 bridge. Three GloFAS-v3.1 origins determine the
+ranking; one v2.1 origin is supplemental. Every replay replaces future PPT and
+soil moisture with an origin-persistence fallback, so no realized future
+weather enters development scoring. The 2022-12-25 origin, full-seven-quantile
+reruns, promotion, and article updates remain disabled until a candidate passes
+the declared development and cold-confirmation gates.
+
+Prepare with `scripts/glofas_discrepancy_transition_prepare.R`, launch through
+`scripts/glofas_discrepancy_transition_launch.sh`, and monitor with
+`scripts/glofas_discrepancy_transition_health.py`. The bounded scheduler uses
+20 one-thread workers, exact checkpoint resume, a hash-pinned serial OpenBLAS
+child process, and an owned immutable reference-feature cache. Finalization
+ranks origins with equal weight and removes non-protected heavy artifacts only
+after all 48 fits are terminal.
+
 Application outputs move through three layers:
 
 ```text

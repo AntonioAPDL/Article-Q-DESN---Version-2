@@ -40,12 +40,25 @@ app_parse_lag_spec <- function(spec, default = integer(0), allow_zero = TRUE, la
   sort(unique(vals))
 }
 
+app_feature_contract_supported_covariates <- function(cfg) {
+  base <- c("ppt", "soil")
+  if (identical(as.character(cfg$.__qdesn_block__ %||% ""), "discrepancy")) {
+    return(c(base, "glofas_level", "glofas_anomaly"))
+  }
+  base
+}
+
 app_feature_contract_covariate_variables <- function(cfg) {
   vars <- as.character(unlist((cfg$covariates %||% list())$variables %||% c("ppt", "soil"), use.names = FALSE))
   vars <- unique(vars[nzchar(vars)])
-  unknown <- setdiff(vars, c("ppt", "soil"))
+  supported <- app_feature_contract_supported_covariates(cfg)
+  unknown <- setdiff(vars, supported)
   if (length(unknown)) {
-    stop(sprintf("Unsupported model covariates: %s. This workflow permits only ppt and soil.", paste(unknown, collapse = ", ")), call. = FALSE)
+    stop(sprintf(
+      "Unsupported model covariates for the %s block: %s.",
+      as.character(cfg$.__qdesn_block__ %||% "global/reference"),
+      paste(unknown, collapse = ", ")
+    ), call. = FALSE)
   }
   vars
 }
@@ -69,7 +82,7 @@ app_feature_contract_parse_covariate_lags <- function(cov_spec, cfg) {
   }
   vars <- names(cov_spec)
   vars <- vars[nzchar(vars)]
-  unknown <- setdiff(vars, c("ppt", "soil"))
+  unknown <- setdiff(vars, app_feature_contract_supported_covariates(cfg))
   if (length(unknown)) {
     stop(sprintf("Unsupported feature-contract covariates: %s.", paste(unknown, collapse = ", ")), call. = FALSE)
   }

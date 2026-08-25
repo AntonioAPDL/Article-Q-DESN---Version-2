@@ -1,0 +1,52 @@
+schema_version: glofas_discrepancy_transition_campaign_v1
+campaign_id: glofas_discrepancy_transition_bridge_20260825
+scientific_lane: glofas_latent_path_application
+article_result_frozen: glofas_fr09_authoritative_full7_20260811
+base_commit: 5d41b73b27cdb59448fd4dd945e2f653baf9ac6b
+baseline_registry: application/config/glofas_constrained_median_baseline_fr09.yaml
+candidate_registry: application/config/glofas_discrepancy_transition_candidates_20260825.csv
+cutoff_registry: application/config/glofas_discrepancy_transition_cutoffs_20260825.csv
+quantile_level: 0.50
+weather_policy: origin_persistence
+inference:
+  method: vb_ld
+  max_iter: 150
+  max_iter_hard_cap: 150
+  min_iter_elbo: 20
+  tol: 0.0001
+  tol_par: 0.0001
+  n_samp_xi: 500
+  n_draws: 2000
+  checkpoint:
+    enabled: true
+    every_iterations: 25
+    every_minutes: 20
+    keep_previous: true
+    keep_on_success: false
+scoring:
+  primary_metric: future_p50_check_loss
+  primary_origin_role: primary_v31
+  minimum_primary_origin_wins: 2
+  required_relative_improvement: 0.03
+  repeatability_absolute_envelope: 0.000603
+  maximum_primary_origin_regression: 0.10
+  observed_all_relative_guardrail: 0.03
+  observed_trailing_relative_guardrail: 0.05
+  observed_trailing_windows: [200, 50]
+  causal_baseline_gate: true
+execution:
+  max_parallel: 20
+  backend: openblas_serial
+  backend_threads: 1
+  max_load: 60
+  minimum_memory_gb: 64
+  minimum_disk_gb: 150
+  poll_seconds: 30
+  retain_top_candidate_count: 3
+  retain_comparator_heavy: true
+  automatic_terminal_cleanup: true
+adjudication:
+  december_2022_enabled: false
+  full7_enabled: false
+  article_update_enabled: false
+  note: Development ranking must be frozen and cold-confirmed before any adjudication, full7 rerun, or article update.

@@ -67,6 +67,16 @@ Planned files:
   closeout contract for the four completed constrained-median phases. It pins
   terminal counts, ranking hashes, leaders, the FR09 gate, the paired audit,
   and protected Stage-A finalists.
+- `glofas_discrepancy_transition_campaign_20260825.yaml`: frozen 48-fit causal
+  transition bridge with p50-only inference, three primary v3.1 origins, one
+  supplemental v2.1 origin, exact runtime controls, fixed selection gates, and
+  all later adjudication/promotion actions disabled.
+- `glofas_discrepancy_transition_candidates_20260825.csv`: 12 ordered anchor
+  and issued-GloFAS-context candidates, including the exact legacy FR09
+  comparator.
+- `glofas_discrepancy_transition_cutoffs_20260825.csv`: historical replay
+  registry and source-vintage roles. Every enabled row declares the causal
+  `origin_persistence` future-weather policy.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the
@@ -312,6 +322,12 @@ Prediction-contract convention:
   inputs at the last observed discrepancy. This is a fitted model contract,
   not post-processing or forecast clipping. It must be selected by blocked
   historical validation before any full-quantile or manuscript use.
+- New transition experiments should use the nested
+  `prediction.discrepancy_transition` contract. It separates `anchor`,
+  `evolution`, and discrepancy-only `context`; the legacy strategy remains
+  supported without changing its design hash or numerical path. Issued-GloFAS
+  context may enter only the discrepancy reservoir/readout, never the reference
+  block.
 - Final manuscript launches are not allowed to use a prediction contract whose
   name begins with `pilot_`, and discrepancy rows must use `prediction_unit:
   posterior_draw`.

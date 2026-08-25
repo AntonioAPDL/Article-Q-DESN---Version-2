@@ -126,6 +126,31 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             checkpoint.write_bytes(b"changed")
             self.assertFalse(scheduler.checkpoint_valid({"checkpoint_path": str(checkpoint)}))
 
+    def test_worker_environment_enables_only_valid_checkpoint_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            checkpoint = Path(tmp) / "runs" / "candidate_run" / "objects" / "fit.rds"
+            checkpoint.parent.mkdir(parents=True)
+            checkpoint.write_bytes(b"checkpoint")
+            digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+            Path(str(checkpoint) + ".sha256").write_text(digest + "\n", encoding="utf-8")
+            row["checkpoint_path"] = str(checkpoint)
+            env = scheduler.build_worker_environment(
+                row,
+                {"resume_checkpoint": "true"},
+                str(Path(tmp) / "cache"),
+                base_env={"PATH": os.environ.get("PATH", "")},
+            )
+            self.assertEqual(env["GLOFAS_CHECKPOINT_RESUME"], "true")
+            checkpoint.write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "without a valid payload"):
+                scheduler.build_worker_environment(
+                    row,
+                    {"resume_checkpoint": "true"},
+                    str(Path(tmp) / "cache"),
+                    base_env={},
+                )
+
     def test_absolute_runtime_config_can_be_made_repo_relative(self):
         config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"
         self.assertEqual(

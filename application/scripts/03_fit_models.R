@@ -15,6 +15,7 @@ source(app_path("application/R/engine_contract.R"))
 source(app_path("application/R/model_contract.R"))
 source(app_path("application/R/feature_contract.R"))
 source(app_path("application/R/covariate_design.R"))
+source(app_path("application/R/glofas_discrepancy_transition.R"))
 source(app_path("application/R/build_qdesn_features.R"))
 source(app_path("application/R/latent_path_design.R"))
 source(app_path("application/R/discrepancy_design.R"))
@@ -29,7 +30,8 @@ source(app_path("application/R/fit_qdesn_latent_path.R"))
 args <- app_parse_args(list(
   config = "application/config/glofas_discrepancy_application.yaml",
   run_id = NULL,
-  confirm_final_launch = FALSE
+  confirm_final_launch = FALSE,
+  checkpoint_resume = NULL
 ))
 cfg <- app_read_config(app_path(args$config))
 app_validate_application_model_contract(cfg)
@@ -182,7 +184,15 @@ for (i in seq_len(nrow(model_grid))) {
           checkpoint_path <- app_resolve_path(checkpoint_path, must_work = FALSE)
         }
         checkpoint_cfg$path <- checkpoint_path
+        if (!is.null(args$checkpoint_resume)) {
+          checkpoint_cfg$resume <- app_as_bool(args$checkpoint_resume)
+        }
         fit_cfg$inference$vb_ld$checkpoint <- checkpoint_cfg
+      } else if (!is.null(args$checkpoint_resume) && app_as_bool(args$checkpoint_resume)) {
+        stop(
+          "Checkpoint resume was requested for a fit without checkpointing enabled.",
+          call. = FALSE
+        )
       }
       if (app_is_latent_path_contract(cfg, row)) {
         result <- app_fit_qdesn_latent_path(panel, fit_cfg, row)

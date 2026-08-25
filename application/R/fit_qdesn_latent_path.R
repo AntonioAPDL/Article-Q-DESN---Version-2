@@ -186,20 +186,7 @@ app_latent_path_default_cutoff_row <- function(cfg) {
 }
 
 app_latent_path_discrepancy_transition_strategy <- function(cfg) {
-  strategy <- as.character(
-    (cfg$prediction %||% list())$discrepancy_transition_strategy %||% "recursive_level"
-  )
-  allowed <- c("recursive_level", "persistence_anchored_innovation")
-  if (length(strategy) != 1L || is.na(strategy) || !strategy %in% allowed) {
-    stop(
-      sprintf(
-        "prediction.discrepancy_transition_strategy must be one of: %s.",
-        paste(allowed, collapse = ", ")
-      ),
-      call. = FALSE
-    )
-  }
-  strategy
+  app_glofas_discrepancy_transition_contract(cfg)$strategy_label
 }
 
 app_latent_path_discrepancy_lag_one <- function(panel, anchor_dates) {
@@ -401,7 +388,8 @@ app_make_latent_path_future_builder <- function(context) {
       y_history = context$y_history_full,
       y_future = y_future,
       future_dates = context$latent_data$future_key$target_date,
-      covariate_timeline = context$covariate_timeline,
+      covariate_timeline = context$covariate_timeline_beta %||%
+        context$covariate_timeline,
       return_jacobian = TRUE,
       active_jacobian = isTRUE(compiled$active_jacobian),
       compiled_inputs = beta_input_contract,
@@ -499,18 +487,28 @@ app_make_latent_path_future_builder <- function(context) {
       J_beta[[h]] <- Jh
     }
 
-    persistence_static <- FALSE
+    transition_contract <- context$discrepancy_transition_contract %||%
+      app_glofas_discrepancy_transition_contract(context$cfg)
+    static_anchor <- FALSE
     if (isTRUE(two_block)) {
       qg_path <- as.numeric(context$glofas_future_quantile_path)
       if (length(qg_path) != length(y_future) || any(!is.finite(qg_path))) {
         stop("Two-block latent-path future builder requires a finite GloFAS quantile path.", call. = FALSE)
       }
       transition_strategy <- context$discrepancy_transition_strategy %||% "recursive_level"
-      if (identical(transition_strategy, "persistence_anchored_innovation")) {
-        discrepancy_baseline_future <- rep(
-          utils::tail(as.numeric(context$d_history_full), 1L),
-          length(y_future)
+      static_anchor <- app_glofas_discrepancy_transition_is_static(
+        transition_contract
+      )
+      if (isTRUE(static_anchor)) {
+        discrepancy_baseline_future <- as.numeric(
+          context$discrepancy_baseline_future
         )
+        if (length(discrepancy_baseline_future) != length(y_future)) {
+          stop(
+            "Static discrepancy anchor length does not match the future path.",
+            call. = FALSE
+          )
+        }
         d_feature_future <- discrepancy_baseline_future
       } else {
         discrepancy_baseline_future <- rep(0, length(y_future))
@@ -519,8 +517,7 @@ app_make_latent_path_future_builder <- function(context) {
       if (any(!is.finite(discrepancy_baseline_future)) || any(!is.finite(d_feature_future))) {
         stop("Discrepancy future baselines and feature paths must be finite.", call. = FALSE)
       }
-      persistence_static <- identical(transition_strategy, "persistence_anchored_innovation")
-      alpha_cache_valid <- isTRUE(compiled$enabled) && isTRUE(persistence_static) &&
+      alpha_cache_valid <- isTRUE(compiled$enabled) && isTRUE(static_anchor) &&
         !is.null(compiled$alpha_static)
       if (isTRUE(alpha_cache_valid)) {
         cont_alpha <- compiled$alpha_static$continuation
@@ -538,11 +535,12 @@ app_make_latent_path_future_builder <- function(context) {
           y_history = context$d_history_full,
           y_future = d_feature_future,
           future_dates = context$latent_data$future_key$target_date,
-          covariate_timeline = context$covariate_timeline,
+          covariate_timeline = context$covariate_timeline_alpha %||%
+            context$covariate_timeline,
           # Reference mode intentionally preserves the former compute-then-zero
           # path so exact A/B canaries compare the optimized shortcut to an
           # independent numerical oracle.
-          return_jacobian = !isTRUE(persistence_static) || !isTRUE(compiled$enabled),
+          return_jacobian = !isTRUE(static_anchor) || !isTRUE(compiled$enabled),
           active_jacobian = isTRUE(compiled$active_jacobian),
           compiled_inputs = alpha_input_contract,
           compile_inputs = isTRUE(compiled$enabled),
@@ -572,7 +570,7 @@ app_make_latent_path_future_builder <- function(context) {
           fit_scale = FALSE
         )
         feature_info_alpha <- assembled_alpha$feature_info
-        if (isTRUE(persistence_static)) {
+        if (isTRUE(static_anchor)) {
           J_alpha <- lapply(seq_len(nrow(context$latent_data$future_key)), function(h) {
             matrix(0, nrow = ncol(assembled_alpha$X), ncol = length(y_future))
           })
@@ -632,7 +630,7 @@ app_make_latent_path_future_builder <- function(context) {
       J_g_key[[h]] <- rbind(J_beta[[h]], J_alpha[[h]])
     }
     paired_future_jacobian <- isTRUE(compiled$enabled) &&
-      (!isTRUE(two_block) || isTRUE(persistence_static))
+      (!isTRUE(two_block) || isTRUE(static_anchor))
 
     if (isTRUE(compiled$enabled) && !is.null(compiled$future_rows)) {
       ens <- compiled$future_rows$ensemble
@@ -679,22 +677,29 @@ app_make_latent_path_future_builder <- function(context) {
       }
     }
     if (isTRUE(compiled$enabled) && is.null(compiled$contract_hash)) {
+      compiled_payload <- list(
+        future_key = context$latent_data$future_key,
+        ensemble_future_index = ens_future_index,
+        beta_signature = beta_signature,
+        alpha_columns = as.character(feature_info_alpha$column_name),
+        active_jacobian = isTRUE(compiled$active_jacobian),
+        reference_readout_template = !is.null(compiled$beta_readout),
+        beta_input_contract_hash =
+          compiled$beta_input_contract$contract_hash %||% NA_character_,
+        alpha_input_contract_hash =
+          compiled$alpha_input_contract$contract_hash %||% NA_character_,
+        paired_future_jacobian = isTRUE(paired_future_jacobian),
+        persistence_static = isTRUE(static_anchor)
+      )
+      if (identical(
+        transition_contract$origin %||% "",
+        "factorized_contract"
+      )) {
+        compiled_payload$discrepancy_transition_contract_hash <-
+          transition_contract$contract_hash %||% NA_character_
+      }
       compiled$contract_hash <- app_latent_path_contract_hash(
-        list(
-          future_key = context$latent_data$future_key,
-          ensemble_future_index = ens_future_index,
-          beta_signature = beta_signature,
-          alpha_columns = as.character(feature_info_alpha$column_name),
-          active_jacobian = isTRUE(compiled$active_jacobian),
-          reference_readout_template = !is.null(compiled$beta_readout),
-          beta_input_contract_hash = compiled$beta_input_contract$contract_hash %||% NA_character_,
-          alpha_input_contract_hash = compiled$alpha_input_contract$contract_hash %||% NA_character_,
-          paired_future_jacobian = isTRUE(paired_future_jacobian),
-          persistence_static = identical(
-            context$discrepancy_transition_strategy,
-            "persistence_anchored_innovation"
-          )
-        ),
+        compiled_payload,
         prefix = "latent_compiled_future_"
       )
     }
@@ -722,6 +727,7 @@ app_make_latent_path_future_builder <- function(context) {
       discrepancy_feature_path = d_feature_future,
       discrepancy_baseline_future = discrepancy_baseline_future,
       discrepancy_transition_strategy = context$discrepancy_transition_strategy %||% "recursive_level",
+      discrepancy_transition_contract = transition_contract,
       two_block_design = two_block,
       future_discrepancy_convention = context$future_discrepancy_convention,
       compiled_future_contract = list(
@@ -961,10 +967,16 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   cutoff_row <- cutoff_row %||% app_latent_path_default_cutoff_row(cfg)
   latent_data <- app_make_glofas_latent_path_data(panel, cfg, cutoff_row, model_row)
   two_block <- isTRUE(app_discrepancy_uses_two_blocks(cfg))
-  discrepancy_transition_strategy <- app_latent_path_discrepancy_transition_strategy(cfg)
-  if (!isTRUE(two_block) && !identical(discrepancy_transition_strategy, "recursive_level")) {
+  discrepancy_transition_contract <-
+    app_glofas_discrepancy_transition_contract(cfg)
+  discrepancy_transition_strategy <-
+    discrepancy_transition_contract$strategy_label
+  if (!isTRUE(two_block) &&
+      app_glofas_discrepancy_transition_is_static(
+        discrepancy_transition_contract
+      )) {
     stop(
-      "Persistence-anchored discrepancy innovations require feature_contract.two_block_design = true.",
+      "Anchored discrepancy innovations require feature_contract.two_block_design = true.",
       call. = FALSE
     )
   }
@@ -1006,7 +1018,14 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   seed <- suppressWarnings(as.integer(app_model_row_value(model_row, "reservoir_seed", cfg$reservoir$seed %||% 20260513L)))
   if (!is.finite(seed)) seed <- as.integer(cfg$reservoir$seed %||% 20260513L)
   cfg_beta <- app_qdesn_block_config(cfg, "reference")
-  cfg_alpha <- if (isTRUE(two_block)) app_qdesn_block_config(cfg, "discrepancy") else cfg_beta
+  cfg_alpha <- if (isTRUE(two_block)) {
+    app_glofas_discrepancy_context_block_config(
+      app_qdesn_block_config(cfg, "discrepancy"),
+      discrepancy_transition_contract
+    )
+  } else {
+    cfg_beta
+  }
   drop <- app_qdesn_common_washout(cfg, drop = drop)
   row_alignment <- app_feature_contract_common_history_alignment(
     configs = if (isTRUE(two_block)) {
@@ -1057,9 +1076,29 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   beta_block <- beta_cache$beta_block
   feature_beta <- beta_block$feature
   qfit_beta <- beta_block$qfit
+  glofas_future_quantile_path <- app_latent_path_glofas_quantile_path(
+    latent_data,
+    p0
+  )
 
   if (isTRUE(two_block)) {
     base_panel_disc_full <- app_latent_path_discrepancy_panel(base_panel_full)
+    alpha_timeline <- app_glofas_discrepancy_context_timeline(
+      base_timeline = app_panel_covariate_timeline(
+        base_panel_full,
+        required = FALSE
+      ),
+      latent_data = latent_data,
+      p0 = p0,
+      contract = discrepancy_transition_contract
+    )
+    if (!is.null(alpha_timeline)) {
+      attr(base_panel_disc_full, "model_covariate_timeline") <- alpha_timeline
+      attr(base_panel_disc_full, "model_covariate_meta") <- list(
+        variables = attr(alpha_timeline, "variables"),
+        scale_params = attr(alpha_timeline, "scale_params")
+      )
+    }
     alpha_block <- time_design_step("alpha_feature_block", {
       app_latent_path_feature_block(
       panel = base_panel_disc_full,
@@ -1098,10 +1137,14 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     app_make_augmented_discrepancy_design(X_beta_stack, source, X_alpha_stack)
   })
   discrepancy_baseline_fixed <- if (identical(
-    discrepancy_transition_strategy,
-    "persistence_anchored_innovation"
+    discrepancy_transition_contract$evolution$method,
+    "static_anchor_innovation"
   )) {
-    app_latent_path_discrepancy_lag_one(base_panel_disc_full, base_panel$target_date)
+    app_glofas_discrepancy_historical_anchor(
+      base_panel_disc_full,
+      base_panel$target_date,
+      discrepancy_transition_contract
+    )
   } else {
     rep(0, nrow(base_panel))
   }
@@ -1137,7 +1180,28 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   p_beta <- ncol(X_beta)
   p_alpha <- ncol(X_alpha)
   intercept_index <- sort(unique(c(app_constant_one_columns(X_beta), p_beta + app_constant_one_columns(X_alpha))))
-  glofas_future_quantile_path <- app_latent_path_glofas_quantile_path(latent_data, p0)
+  discrepancy_baseline_future <- if (
+    app_glofas_discrepancy_transition_is_static(
+      discrepancy_transition_contract
+    )
+  ) {
+    app_glofas_discrepancy_future_anchor(
+      base_panel_disc_full,
+      latent_data$origin_date,
+      nrow(latent_data$future_key),
+      discrepancy_transition_contract
+    )
+  } else {
+    rep(0, nrow(latent_data$future_key))
+  }
+  covariate_timeline_beta <- app_panel_covariate_timeline(
+    base_panel_full,
+    required = isTRUE(app_qdesn_reservoir_uses_covariates(cfg_beta))
+  )
+  covariate_timeline_alpha <- app_panel_covariate_timeline(
+    base_panel_disc_full,
+    required = isTRUE(app_qdesn_reservoir_uses_covariates(cfg_alpha))
+  )
   context <- list(
     cfg = cfg,
     cfg_beta = cfg_beta,
@@ -1157,20 +1221,34 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     horizon_scale = horizon_scale,
     feature_strategy = latent_feature_strategy,
     discrepancy_transition_strategy = discrepancy_transition_strategy,
+    discrepancy_transition_contract = discrepancy_transition_contract,
     runtime_optimization = cfg$runtime_optimization %||% list(),
     discrepancy_baseline_fixed = discrepancy_baseline_fixed,
-    covariate_timeline = app_panel_covariate_timeline(
-      base_panel_full,
-      required = isTRUE(app_qdesn_reservoir_uses_covariates(cfg_beta)) ||
-        isTRUE(app_qdesn_reservoir_uses_covariates(cfg_alpha))
-    ),
+    discrepancy_baseline_future = discrepancy_baseline_future,
+    covariate_timeline = covariate_timeline_beta,
+    covariate_timeline_beta = covariate_timeline_beta,
+    covariate_timeline_alpha = covariate_timeline_alpha,
     two_block_design = two_block,
     glofas_future_quantile_path = glofas_future_quantile_path,
-    future_discrepancy_convention = if (isTRUE(two_block) && identical(
-      discrepancy_transition_strategy,
-      "persistence_anchored_innovation"
-    )) {
+    future_discrepancy_convention = if (
+      isTRUE(two_block) &&
+        identical(discrepancy_transition_contract$origin, "legacy_strategy") &&
+        identical(
+          discrepancy_transition_strategy,
+          "persistence_anchored_innovation"
+        )
+    ) {
       "last_observed_discrepancy_plus_learned_innovation"
+    } else if (
+      isTRUE(two_block) &&
+        app_glofas_discrepancy_transition_is_static(
+          discrepancy_transition_contract
+        )
+    ) {
+      paste0(
+        discrepancy_transition_contract$anchor$method,
+        "_discrepancy_anchor_plus_learned_innovation"
+      )
     } else if (isTRUE(two_block)) {
       "recursive_glofas_quantile_minus_latent_reference_path"
     } else {
@@ -1210,7 +1288,22 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     block_config_beta = cfg_beta,
     block_config_alpha = cfg_alpha,
     block_config_hash_beta = app_qdesn_block_config_hash(cfg, "reference"),
-    block_config_hash_alpha = app_qdesn_block_config_hash(cfg, if (isTRUE(two_block)) "discrepancy" else "reference"),
+    block_config_hash_alpha = if (length(
+      app_glofas_discrepancy_context_variables(
+        discrepancy_transition_contract
+      )
+    ) > 0L) {
+      app_qdesn_effective_block_config_hash(
+        cfg_alpha,
+        if (isTRUE(two_block)) "discrepancy" else "reference",
+        include_covariates = TRUE
+      )
+    } else {
+      app_qdesn_block_config_hash(
+        cfg,
+        if (isTRUE(two_block)) "discrepancy" else "reference"
+      )
+    },
     readout_scale_info = feature_beta$readout_scale_info,
     readout_scale_info_alpha = feature_alpha$readout_scale_info,
     base_panel = base_panel,
@@ -1224,15 +1317,13 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     y_future_oracle = latent_data$y_future_oracle,
     glofas_future_quantile_path = glofas_future_quantile_path,
     discrepancy_baseline_fixed = discrepancy_baseline_fixed,
-    discrepancy_baseline_future = if (identical(
-      discrepancy_transition_strategy,
-      "persistence_anchored_innovation"
-    )) {
-      rep(utils::tail(as.numeric(base_panel_disc_full$y_transformed), 1L), nrow(latent_data$future_key))
-    } else {
-      rep(0, nrow(latent_data$future_key))
-    },
+    discrepancy_baseline_future = discrepancy_baseline_future,
     discrepancy_transition_strategy = discrepancy_transition_strategy,
+    discrepancy_transition_contract = discrepancy_transition_contract,
+    discrepancy_ensemble_context = app_glofas_discrepancy_ensemble_context_summary(
+      latent_data,
+      p0
+    ),
     future_context = context,
     future_builder = app_make_latent_path_future_builder(context),
     beta_index = seq_len(p_beta),
@@ -1241,11 +1332,25 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     p0 = p0,
     feature_strategy = context$feature_strategy,
     horizon_scale = horizon_scale,
-    design_version = if (isTRUE(two_block) && identical(
-      discrepancy_transition_strategy,
-      "persistence_anchored_innovation"
-    )) {
+    design_version = if (
+      isTRUE(two_block) &&
+        identical(
+          discrepancy_transition_contract$origin,
+          "legacy_strategy"
+        ) &&
+        identical(
+          discrepancy_transition_strategy,
+          "persistence_anchored_innovation"
+        )
+    ) {
       "latent_path_two_block_persistence_innovation_v0.1"
+    } else if (
+      isTRUE(two_block) &&
+        app_glofas_discrepancy_transition_is_static(
+          discrepancy_transition_contract
+        )
+    ) {
+      "latent_path_two_block_anchor_innovation_v0.2"
     } else if (isTRUE(two_block)) {
       "latent_path_two_block_v0.3"
     } else if (isTRUE(app_qdesn_reservoir_uses_covariates(cfg))) {
@@ -1412,38 +1517,44 @@ app_hash_latent_path_design <- function(x, probe = NULL) {
   app_validate_glofas_latent_path_design(x, probe = probe)
   tmp <- tempfile("glofas_latent_path_design_", fileext = ".rds")
   on.exit(unlink(tmp), add = TRUE)
-  saveRDS(
-    list(
-      z_fixed = x$z_fixed,
-      H_fixed = x$H_fixed,
-      source_fixed = as.character(x$source_fixed),
-      row_info_fixed = x$row_info_fixed,
-      future_key = x$future_key,
-      y_future_init = x$y_future_init,
-      H_y_init = probe$H_y,
-      H_g_key_init = app_latent_future_H_g_key(probe),
-      g_future_index = app_latent_future_g_index(probe),
-	      row_info_y = probe$row_info_y,
-	      row_info_g = probe$row_info_g,
-	      X_beta = x$X_beta %||% x$X_base,
-	      X_alpha = x$X_alpha %||% x$X_base,
-	      feature_info_beta = x$feature_info_beta %||% x$feature_info,
-	      feature_info_alpha = x$feature_info_alpha %||% x$feature_info,
-	      p0 = x$p0,
-	      beta_index = x$beta_index,
-	      alpha_index = x$alpha_index,
-	      intercept_index = x$intercept_index,
-	      discrepancy_baseline_fixed = x$discrepancy_baseline_fixed %||% rep(0, nrow(x$X_alpha %||% x$X_base)),
-	      discrepancy_baseline_future = probe$discrepancy_baseline_future %||% rep(0, nrow(x$future_key)),
-	      discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
-	      two_block_design = isTRUE(x$two_block_design %||% FALSE),
-	      block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
-	      block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
-	      future_discrepancy_convention = x$future_discrepancy_convention %||% NA_character_,
-	      design_version = x$design_version
-	    ),
-	    tmp
-	  )
+  payload <- list(
+    z_fixed = x$z_fixed,
+    H_fixed = x$H_fixed,
+    source_fixed = as.character(x$source_fixed),
+    row_info_fixed = x$row_info_fixed,
+    future_key = x$future_key,
+    y_future_init = x$y_future_init,
+    H_y_init = probe$H_y,
+    H_g_key_init = app_latent_future_H_g_key(probe),
+    g_future_index = app_latent_future_g_index(probe),
+    row_info_y = probe$row_info_y,
+    row_info_g = probe$row_info_g,
+    X_beta = x$X_beta %||% x$X_base,
+    X_alpha = x$X_alpha %||% x$X_base,
+    feature_info_beta = x$feature_info_beta %||% x$feature_info,
+    feature_info_alpha = x$feature_info_alpha %||% x$feature_info,
+    p0 = x$p0,
+    beta_index = x$beta_index,
+    alpha_index = x$alpha_index,
+    intercept_index = x$intercept_index,
+    discrepancy_baseline_fixed = x$discrepancy_baseline_fixed %||%
+      rep(0, nrow(x$X_alpha %||% x$X_base)),
+    discrepancy_baseline_future = probe$discrepancy_baseline_future %||%
+      rep(0, nrow(x$future_key)),
+    discrepancy_transition_strategy = x$discrepancy_transition_strategy %||%
+      "recursive_level",
+    two_block_design = isTRUE(x$two_block_design %||% FALSE),
+    block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
+    block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
+    future_discrepancy_convention = x$future_discrepancy_convention %||%
+      NA_character_,
+    design_version = x$design_version
+  )
+  transition_contract <- x$discrepancy_transition_contract %||% list()
+  if (identical(transition_contract$origin %||% "", "factorized_contract")) {
+    payload$discrepancy_transition_contract <- transition_contract
+  }
+  saveRDS(payload, tmp)
   app_sha256_file(tmp)
 }
 
@@ -1465,12 +1576,33 @@ app_latent_path_design_summary <- function(x, probe = NULL) {
   n_res_input_cov_beta <- if (nrow(reservoir_info_beta)) sum(reservoir_info_beta$input_block == "covariate_lag") else NA_integer_
   n_res_input_output_alpha <- if (nrow(reservoir_info_alpha)) sum(reservoir_info_alpha$input_block == "output_lag") else NA_integer_
   n_res_input_cov_alpha <- if (nrow(reservoir_info_alpha)) sum(reservoir_info_alpha$input_block == "covariate_lag") else NA_integer_
-  covariate_timeline <- (x$future_context %||% list())$covariate_timeline %||% NULL
+  covariate_timeline <- (x$future_context %||% list())$covariate_timeline_beta %||%
+    (x$future_context %||% list())$covariate_timeline %||% NULL
+  covariate_timeline_alpha <-
+    (x$future_context %||% list())$covariate_timeline_alpha %||%
+      covariate_timeline
   covariate_policy_audit <- if (!is.null(covariate_timeline)) app_covariate_policy_audit(covariate_timeline) else data.frame()
   covariate_future_policy <- if (!is.null(covariate_timeline)) attr(covariate_timeline, "covariate_future_policy") %||% NA_character_ else NA_character_
   covariate_source_provider <- if (!is.null(covariate_timeline)) attr(covariate_timeline, "covariate_source_provider") %||% NA_character_ else NA_character_
   covariate_uses_realized_future <- if (nrow(covariate_policy_audit)) any(covariate_policy_audit$n_uses_realized_future > 0, na.rm = TRUE) else NA
   covariate_source_manifest_hash <- if (!is.null(covariate_timeline)) app_covariate_source_manifest_hash(covariate_timeline) else NA_character_
+  alpha_covariate_source_manifest_hash <- if (!is.null(covariate_timeline_alpha)) {
+    app_covariate_source_manifest_hash(covariate_timeline_alpha)
+  } else {
+    NA_character_
+  }
+  transition_contract <- x$discrepancy_transition_contract %||% NULL
+  if (is.null(transition_contract)) {
+    context_cfg <- (x$future_context %||% list())$cfg %||% list(
+      prediction = list(
+        discrepancy_transition_strategy =
+          x$discrepancy_transition_strategy %||% "recursive_level"
+      )
+    )
+    transition_contract <- app_glofas_discrepancy_transition_contract(
+      context_cfg
+    )
+  }
   pairing <- x$fixed_pairing_certificate %||% list()
   serialization <- x$serialization_contract %||% list()
   future_contract <- probe$compiled_future_contract %||% list()
@@ -1531,6 +1663,15 @@ app_latent_path_design_summary <- function(x, probe = NULL) {
     block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
     block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
     discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
+    discrepancy_anchor_method = transition_contract$anchor$method,
+    discrepancy_anchor_window = transition_contract$anchor$window,
+    discrepancy_anchor_half_life = transition_contract$anchor$half_life,
+    discrepancy_evolution_method = transition_contract$evolution$method,
+    discrepancy_context_variables = paste(
+      app_glofas_discrepancy_context_variables(transition_contract),
+      collapse = ";"
+    ),
+    discrepancy_transition_contract_hash = transition_contract$contract_hash,
     discrepancy_baseline_fixed_min = min(as.numeric(x$discrepancy_baseline_fixed %||% 0)),
     discrepancy_baseline_fixed_max = max(as.numeric(x$discrepancy_baseline_fixed %||% 0)),
     discrepancy_baseline_future = paste(
@@ -1560,6 +1701,8 @@ app_latent_path_design_summary <- function(x, probe = NULL) {
     covariate_source_provider = covariate_source_provider,
     covariate_uses_realized_future = covariate_uses_realized_future,
     covariate_source_manifest_hash = covariate_source_manifest_hash,
+    discrepancy_covariate_source_manifest_hash =
+      alpha_covariate_source_manifest_hash,
     design_hash = app_hash_latent_path_design(x, probe = probe),
     stringsAsFactors = FALSE
   )
@@ -1656,6 +1799,12 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
   if (length(discrepancy_baseline_future) != H || any(!is.finite(discrepancy_baseline_future))) {
     stop("Latent-path prediction requires one finite discrepancy baseline per future date.", call. = FALSE)
   }
+  transition_contract <- result$design$discrepancy_transition_contract %||%
+    app_glofas_discrepancy_transition_contract(cfg)
+  transition_context <- paste(
+    app_glofas_discrepancy_context_variables(transition_contract),
+    collapse = ";"
+  )
   rows <- vector("list", n_draw * H)
   k <- 1L
   for (s in seq_len(n_draw)) {
@@ -1696,6 +1845,11 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
         q_g_model_draw = q_g[[h]],
         latent_y_draw = y_draws[s, h],
         discrepancy_transition_strategy = result$design$discrepancy_transition_strategy %||% "recursive_level",
+        discrepancy_anchor_method = transition_contract$anchor$method,
+        discrepancy_evolution_method = transition_contract$evolution$method,
+        discrepancy_context_variables = transition_context,
+        discrepancy_transition_contract_hash =
+          transition_contract$contract_hash,
         discrepancy_baseline = discrepancy_baseline_future[[h]],
         prediction_state_strategy = if (isTRUE(use_linearization)) "first_order_delta" else "exact_rebuild",
         raw_glofas_quantile = app_ensemble_quantile(
@@ -1728,6 +1882,7 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
 	      design_version = result$design$design_version,
 	      feature_strategy = result$design$feature_strategy %||% contract$discrepancy_feature_strategy,
 	      discrepancy_transition_strategy = result$design$discrepancy_transition_strategy %||% "recursive_level",
+	      discrepancy_transition_contract = transition_contract,
 	      prediction_state_strategy = if (isTRUE(use_linearization)) "first_order_delta" else "exact_rebuild",
 	      p0 = result$design$p0
 	    ),
@@ -1742,6 +1897,11 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
 	      design_version = result$design$design_version,
 	      feature_strategy = result$design$feature_strategy %||% contract$discrepancy_feature_strategy,
 	      discrepancy_transition_strategy = result$design$discrepancy_transition_strategy %||% "recursive_level",
+	      discrepancy_anchor_method = transition_contract$anchor$method,
+	      discrepancy_evolution_method = transition_contract$evolution$method,
+	      discrepancy_context_variables = transition_context,
+	      discrepancy_transition_contract_hash =
+	        transition_contract$contract_hash,
 	      stringsAsFactors = FALSE
 	    )
 	  )

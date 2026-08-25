@@ -62,7 +62,8 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
     y_history = context$y_history_full,
     y_future = y_future,
     future_dates = context$latent_data$future_key$target_date,
-    covariate_timeline = context$covariate_timeline,
+    covariate_timeline = context$covariate_timeline_beta %||%
+      context$covariate_timeline,
     return_jacobian = FALSE
   )
   panel_beta <- app_latent_path_combined_panel(
@@ -97,10 +98,11 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
     stop("The two-block exact rebuild requires a finite GloFAS quantile path.", call. = FALSE)
   }
   transition_strategy <- context$discrepancy_transition_strategy %||% "recursive_level"
-  if (identical(transition_strategy, "persistence_anchored_innovation")) {
-    discrepancy_baseline_future <- rep(
-      utils::tail(as.numeric(context$d_history_full), 1L),
-      length(y_future)
+  transition_contract <- context$discrepancy_transition_contract %||%
+    app_glofas_discrepancy_transition_contract(context$cfg)
+  if (app_glofas_discrepancy_transition_is_static(transition_contract)) {
+    discrepancy_baseline_future <- as.numeric(
+      context$discrepancy_baseline_future
     )
     discrepancy_future <- discrepancy_baseline_future
   } else {
@@ -112,7 +114,8 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
     y_history = context$d_history_full,
     y_future = discrepancy_future,
     future_dates = context$latent_data$future_key$target_date,
-    covariate_timeline = context$covariate_timeline,
+    covariate_timeline = context$covariate_timeline_alpha %||%
+      context$covariate_timeline,
     return_jacobian = FALSE
   )
   panel_alpha <- app_latent_path_combined_panel(
@@ -139,7 +142,8 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
     continuation_alpha = continuation_alpha,
     discrepancy_future = discrepancy_future,
     discrepancy_baseline_future = discrepancy_baseline_future,
-    discrepancy_transition_strategy = transition_strategy
+    discrepancy_transition_strategy = transition_strategy,
+    discrepancy_transition_contract = transition_contract
   )
 }
 

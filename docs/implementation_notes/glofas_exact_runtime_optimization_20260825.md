@@ -276,7 +276,20 @@ The final lane validation produced these outcomes:
 - the complete repository harness passed the latent-path RHS warmup and GloFAS
   p95 launch-contract blocks, then stopped at the documented unrelated
   `nrow(promoted) == 18L` assertion;
+- a post-commit FR09 p50 K=1 canary completed on the pinned serial OpenBLAS
+  backend with `engine_source_dirty=FALSE`, no precision repair, finite
+  objective `5888.34100453789`, and state hash
+  `c3e1e4241dd29d7c7b6a8e65c88e0b31661a7aedfa65a6ed7c81117db77aea4f`;
 - `git diff --check` and the lane-scope audit passed.
+
+The clean-source canary used implementation commit
+`31867dc339510241562dba3789b6efed5a14845a`, engine source hash
+`3e63fb4a94c03b778f201c5018f2ea6bdd9f841c05518769ae40c360a9d8b97a`,
+and backend fingerprint
+`ca87c85a753509421ad4df2e2c44a357c8c98cb37f79ca592666d805fec5e88b`.
+Its 63,076,019-byte result object was checksum-frozen and removed after the
+CSV/JSON/backend evidence was written; the cleanup record is
+`fr09_clean_source_release_artifact_cleanup.csv`.
 
 ## Operational Defaults
 

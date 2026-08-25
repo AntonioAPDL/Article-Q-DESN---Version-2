@@ -1447,22 +1447,32 @@ histories.
 \section{Supplementary Simulation and Application Tables}
 \label{sec:supp_validation_tables}
 
-The main article reports posterior metric intervals for the MCMC simulation
-comparisons. This section gives the approximate VB companion panels, balanced
-joint-evaluation diagnostics, and additional table captions for the same
-simulation settings.
+The main article summarizes the single-quantile MCMC posterior metric
+distributions graphically. This section gives the corresponding numerical MCMC
+tables, the approximate VB companion panels, balanced joint-evaluation
+diagnostics, and additional table captions for the same simulation settings.
 
+\subsection{Single-Quantile MCMC Posterior Metric Tables}
+
+The following tables give the numerical posterior means and equal-tailed 95\%
+intervals corresponding to the MCMC interval figures in the main article.
+Q--DESN and exQ--DESN entries use fitting-sample preprocessing, and ridge rows
+are omitted. Each criterion retains the case-specific source selected before
+interval evaluation; consequently, criteria within a model row can come from
+different specifications. The intervals condition on the fixed simulated data,
+evaluation grid, and reservoir realization.
+
+\input{tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex}
+
+\clearpage
 \subsection{Single-Quantile VB Posterior Metric Intervals}
 
-The following supplementary tables report approximate posterior means and
-equal-tailed 95\% intervals for the same draw-wise fit RMSE, forecast MAE, and
-forecast check-loss criteria used in the main article. Q--DESN and exQ--DESN
-entries use fitting-sample preprocessing, and ridge rows are omitted. Each
-criterion retains the frozen case-specific source selected before interval
-replay; consequently, criteria within a model row can come from different
-specifications. The intervals condition on the fixed simulated data,
-evaluation grid, and reservoir realization and do not include uncertainty from
-the preceding model-selection stage.
+The following supplementary figures and tables report approximate posterior
+means and equal-tailed 95\% variational intervals for the same draw-wise fit RMSE,
+forecast MAE, and forecast check-loss criteria. They provide a companion view
+of the VB calculations used during the single-quantile comparison.
+
+\input{tables/qdesn_validation_500obs_vb_metric_interval_figures.tex}
 
 \input{tables/qdesn_validation_500obs_vb_metric_interval_tables.tex}
 

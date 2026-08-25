@@ -1447,19 +1447,24 @@ histories.
 \section{Supplementary Simulation and Application Tables}
 \label{sec:supp_validation_tables}
 
-The main article reports MCMC summaries for the simulation comparisons. This
-section gives the VB companion panels, balanced joint-evaluation diagnostics,
-and additional table captions for the same simulation settings.
+The main article reports posterior metric intervals for the MCMC simulation
+comparisons. This section gives the approximate VB companion panels, balanced
+joint-evaluation diagnostics, and additional table captions for the same
+simulation settings.
 
-\subsection{Single-Quantile VB Summaries}
+\subsection{Single-Quantile VB Posterior Metric Intervals}
 
-The following supplementary tables give both inference panels from the fixed
-500-observation simulation study. Q--DESN and exQ--DESN entries use the
-train-window preprocessing rule, and ridge rows are omitted from the reported
-comparison. In the main article, only the MCMC rows from these tables are
-displayed.
+The following supplementary tables report approximate posterior means and
+equal-tailed 95\% intervals for the same draw-wise fit RMSE, forecast MAE, and
+forecast check-loss criteria used in the main article. Q--DESN and exQ--DESN
+entries use fitting-sample preprocessing, and ridge rows are omitted. Each
+criterion retains the frozen case-specific source selected before interval
+replay; consequently, criteria within a model row can come from different
+specifications. The intervals condition on the fixed simulated data,
+evaluation grid, and reservoir realization and do not include uncertainty from
+the preceding model-selection stage.
 
-\input{tables/qdesn_validation_tt500_final_tables.tex}
+\input{tables/qdesn_validation_500obs_vb_metric_interval_tables.tex}
 
 \clearpage
 \subsection{Independent exAL MCMC Sampler Details}
@@ -1471,26 +1476,24 @@ The sampler updates the exAL shape on a
 logit transform of its bounded support, draws the scale conditionally, and then
 computes the fitted and forecast quantile paths used by the scoring tables.
 
-For each family--quantile comparison, the reported MCMC summaries are based on
-independent chains with finite fitted and forecast paths. Diagnostic summaries
-track the exAL shape and scale coordinates, path agreement, and runtime. These
-diagnostics are disclosed next to the metric values; the accuracy criteria in
-the main tables remain fit RMSE, forecast MAE, and forecast check loss.
-
-Two additional case-specific confirmations used three independent chains,
-with 5,000 burn-in and 20,000 retained iterations per chain. For Gaussian
-$p=0.05$, the AL--RHS forecast MAE and check loss improved by 17.8\% and
-1.7\%, respectively. For the Gaussian-mixture family at $p=0.50$, the
-exAL--RHS forecast MAE and check loss improved by 44.6\% and 2.2\%.
-No fit criterion changed. The supporting materials retain the six chain
-summaries, the two case-specific DESN/RHS specifications, diagnostic grades,
-and rollback values.
+For each family--quantile--criterion source, the interval replay pools 12,000
+metric draws from three independently seeded chains. Diagnostic summaries
+track between-chain agreement for each draw-wise criterion. Of 162 pooled
+source--metric diagnostics, 159 pass and 3 are warnings; 2 warning-marked
+sources contribute to displayed table cells. Warnings are retained as
+disclosures rather than used as metric-exclusion rules. The compact validation
+record preserves source identifiers, metric roles, draw counts, chain counts,
+diagnostic grades, and artifact hashes without retaining fitted-model binary
+payloads.
 
 \clearpage
-\subsection{Single-Quantile Five-Chain MCMC Sensitivity}
+\subsection{Single-Quantile Five-Chain Point-Path Sensitivity}
 \label{subsec:supp-independent-five-chain-sensitivity}
 
-The primary single-quantile MCMC tables report metric-specific summaries.
+The primary single-quantile MCMC tables report draw-wise posterior metric
+summaries. The earlier analysis below instead evaluates criteria once on a
+posterior point-path summary and is retained only as a separate chain-sensitivity
+check; it is not pooled with, or used to rank, the posterior metric intervals.
 For the Gaussian \(p=0.25\) comparison, a five-chain sensitivity analysis uses
 five independently seeded chains for each model specification. For each chain,
 the posterior point path is computed first; the reported sensitivity path is the

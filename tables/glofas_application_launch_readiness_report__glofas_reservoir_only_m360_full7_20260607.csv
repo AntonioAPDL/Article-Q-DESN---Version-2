@@ -1,7 +1,0 @@
-"category","check","passed","detail"
-"sources","all_required_source_runs_complete",TRUE,"glofas_reservoir_only_m360_full7_20260607_p05=TRUE; glofas_reservoir_only_m360_full7_20260607_p15=TRUE; glofas_reservoir_only_m360_full7_20260607_p35=TRUE; glofas_reservoir_only_m360_full7_20260607_p50=TRUE; glofas_reservoir_only_m360_full7_20260607_p65=TRUE; glofas_reservoir_only_m360_full7_20260607_p80=TRUE; glofas_reservoir_only_m360_full7_20260607_p95=TRUE"
-"sources","all_target_quantiles_available",TRUE,"0.05, 0.15, 0.35, 0.5, 0.65, 0.8, 0.95"
-"predictions","duplicate_prediction_keys_absent",TRUE,"key: model_id, origin_date, target_date, horizon, quantile_level"
-"synthesis","post_synthesis_crossings_absent",TRUE,"crossing_pairs_after=0"
-"metrics","score_summary_exists",TRUE,"/data/jaguir26/local/src/Article-Q-DESN/application/runs/glofas_reservoir_only_m360_full7_20260607_synthesis_final/tables/score_summary.csv"
-"figures","manuscript_figures_exist",TRUE,"/data/jaguir26/local/src/Article-Q-DESN/application/outputs/generated/glofas_reservoir_only_m360_full7_20260607_synthesis_final/figures/glofas_qdesn_discrepancy_corrected_quantile_paths.pdf; /data/jaguir26/local/src/Article-Q-DESN/application/outputs/generated/glofas_reservoir_only_m360_full7_20260607_synthesis_final/figures/glofas_qdesn_discrepancy_draws_by_horizon.pdf"

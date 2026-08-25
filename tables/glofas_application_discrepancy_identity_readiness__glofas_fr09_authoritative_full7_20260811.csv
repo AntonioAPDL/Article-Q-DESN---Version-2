@@ -1,6 +1,0 @@
-"check","passed","detail"
-"independent_prediction_reference_identity",TRUE,"max_abs=1.021e-14"
-"independent_prediction_glofas_identity",TRUE,"max_abs=1.021e-14"
-"posterior_draw_reference_identity",TRUE,"max_abs=1.066e-14"
-"monotone_synthesis_identity_expected",TRUE,"qhat_monotone is post-hoc isotonic synthesis; it is not required to preserve q_g = q_y + d_g unless q_g or d_g are reprojected too"
-"monotone_synthesis_identity_error_recorded",TRUE,"max_abs=0.06182; recorded as synthesis adjustment, not a sign failure"

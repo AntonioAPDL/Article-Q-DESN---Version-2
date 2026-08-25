@@ -15,6 +15,10 @@ app_joint_qdesn_phase180_dirs <- function(
     freeze = file.path(
       cache_root, "joint_qdesn_phase180_balanced_dgp_score_freeze_20260824"
     ),
+    initialization_work = file.path(
+      cache_root,
+      "joint_qdesn_phase180_balanced_dgp_score_initialization_work_20260824"
+    ),
     fixtures = file.path(
       cache_root, "joint_qdesn_phase180_article_fixture_shards_20260824"
     ),
@@ -670,6 +674,85 @@ app_joint_qdesn_phase180_initialize_cell <- function(cell, fixture_dir) {
   list(init = init, audit = audit)
 }
 
+app_joint_qdesn_phase180_init_cache_complete <- function(path, identity) {
+  if (!file.exists(file.path(path, "artifact_manifest.csv"))) return(FALSE)
+  check <- tryCatch(
+    app_joint_exqdesn_verify_manifest(path, "phase180_initialization_cache"),
+    error = function(e) NULL
+  )
+  if (is.null(check) || any(check$status != "pass")) return(FALSE)
+  actual <- tryCatch(
+    app_read_csv(file.path(path, "cache_identity.csv")),
+    error = function(e) NULL
+  )
+  if (is.null(actual) || nrow(actual) != 1L) return(FALSE)
+  fields <- names(identity)
+  if (!all(fields %in% names(actual))) return(FALSE)
+  identical(
+    vapply(actual[1L, fields, drop = FALSE], as.character, character(1L)),
+    vapply(identity[1L, fields, drop = FALSE], as.character, character(1L))
+  )
+}
+
+app_joint_qdesn_phase180_initialize_cached <- function(
+  cell, fixture_dir, work_dir, force = FALSE
+) {
+  path <- file.path(work_dir, cell$mcmc_case_id[[1L]])
+  identity <- data.frame(
+    mcmc_case_id = cell$mcmc_case_id[[1L]],
+    source_control_row_sha256 = cell$source_control_row_sha256[[1L]],
+    fixture_manifest_sha256 = app_sha256_file(file.path(
+      fixture_dir, "artifact_manifest.csv"
+    )),
+    code_commit = app_joint_exqdesn_phase171_git_value(c("rev-parse", "HEAD")),
+    stringsAsFactors = FALSE
+  )
+  if (!force && app_joint_qdesn_phase180_init_cache_complete(path, identity)) {
+    return(list(
+      init = app_read_csv(file.path(path, "vb_initialization.csv")),
+      audit = app_read_csv(file.path(path, "vb_initialization_audit.csv")),
+      cache_status = "reused_verified"
+    ))
+  }
+  result <- app_joint_qdesn_phase180_initialize_cell(cell, fixture_dir)
+  tmp <- paste0(path, ".tmp.", Sys.getpid())
+  if (dir.exists(tmp)) unlink(tmp, recursive = TRUE, force = TRUE)
+  app_ensure_dir(tmp)
+  readme <- file.path(tmp, "README.md")
+  writeLines(c(
+    "# Phase180 compact VB initialization cache", "",
+    "This cache is keyed by code commit, frozen control-row hash, and fixture manifest.",
+    "It retains compact initialization values and diagnostics, not fitted R objects."
+  ), readme, useBytes = TRUE)
+  paths <- c(
+    vb_initialization = app_joint_qvp_write_csv(
+      result$init, file.path(tmp, "vb_initialization.csv")
+    ),
+    vb_initialization_audit = app_joint_qvp_write_csv(
+      result$audit, file.path(tmp, "vb_initialization_audit.csv")
+    ),
+    cache_identity = app_joint_qvp_write_csv(
+      identity, file.path(tmp, "cache_identity.csv")
+    ),
+    README = normalizePath(readme, mustWork = TRUE)
+  )
+  app_joint_exqdesn_write_manifest(paths, tmp)
+  if (dir.exists(path)) {
+    quarantine <- paste0(
+      path, ".superseded.", format(Sys.time(), "%Y%m%dT%H%M%S")
+    )
+    if (!file.rename(path, quarantine)) {
+      stop("Could not quarantine stale Phase180 initialization cache.", call. = FALSE)
+    }
+  }
+  if (!file.rename(tmp, path) ||
+      !app_joint_qdesn_phase180_init_cache_complete(path, identity)) {
+    stop("Phase180 initialization cache failed atomic publication.", call. = FALSE)
+  }
+  result$cache_status <- "computed"
+  result
+}
+
 app_joint_qdesn_phase180_worker_plan <- function(rerun, dirs, contract) {
   rows <- list(); worker_id <- 0L
   for (ii in seq_len(nrow(rerun))) {
@@ -795,8 +878,10 @@ app_joint_qdesn_phase180_prepare <- function(
   components <- app_joint_qdesn_phase180_component_seed_plan(plan, contract$tau)
   cases <- rerun[order(rerun$cell_index), , drop = FALSE]
   initialize <- function(ii) try(
-    app_joint_qdesn_phase180_initialize_cell(cases[ii, , drop = FALSE], fixture_dir),
-    silent = TRUE
+    app_joint_qdesn_phase180_initialize_cached(
+      cases[ii, , drop = FALSE], fixture_dir, dirs$initialization_work,
+      force = force
+    ), silent = TRUE
   )
   initialization <- if (.Platform$OS.type != "windows" && n_vb_cores > 1L) {
     parallel::mclapply(

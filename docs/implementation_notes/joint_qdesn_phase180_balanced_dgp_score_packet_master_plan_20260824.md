@@ -485,6 +485,12 @@ The preparation script must not launch. It must first write and verify the
 source registry, fixture identity, control hashes, chain/component seeds,
 worker plan, compute budget, and expected manifests.
 
+Preparation caches each compact VB initializer separately. Reuse requires a
+valid SHA-256 manifest and exact agreement on code commit, frozen control-row
+hash, and fixture-manifest hash. This cache stores no fitted R workspace and
+exists only to make a late preparation failure resumable without weakening the
+frozen initialization controls.
+
 The chain runner must preserve compact posterior parameter draws in
 `checkpoint/posterior_draws.csv.gz`; no `.RData` or `.rds` model object is
 required. Worker manifests must hash the checkpoint metadata, draws, sampler

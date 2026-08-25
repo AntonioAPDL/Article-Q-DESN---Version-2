@@ -2,9 +2,9 @@
 
 file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1L]
 root <- normalizePath(file.path(dirname(sub("^--file=", "", file_arg)), "..", ".."))
-source(file.path(root, "application/R/00_packages.R")); app_set_repo_root(root)
-source(app_path("application/scripts/_joint_exqdesn_phase176_180_bootstrap.R"))
-source(app_path("application/R/joint_qdesn_phase180_balanced_dgp_score_packet.R"))
+source(file.path(
+  root, "application/scripts/_joint_qdesn_phase180_balanced_score_bootstrap.R"
+))
 
 expect_true <- function(value, message) {
   if (!isTRUE(value)) stop(message, call. = FALSE)
@@ -14,6 +14,50 @@ expect_equal <- function(x, y, message, tolerance = 1e-12) {
 }
 
 contract <- app_joint_qdesn_phase180_read_contract()
+expect_true(exists("app_joint_qdesn_parse_iter_grid", mode = "function"),
+            "Phase180 bootstrap omitted the AL adaptive-VB parser.")
+control_probe <- app_joint_qdesn_phase122_controls_from_row(data.frame(
+  vb_max_iter = 4L, adaptive_vb_max_iter_grid = "4,8", vb_tol = 1e-4,
+  rhs_vb_inner = 1L, tau0 = 0.5, zeta2 = 16, a_sigma = 2, b_sigma = 1,
+  alpha_prior_sd = "1", alpha_min_spacing = 0, gamma_init_policy = "zero",
+  review_adjustment_threshold = 1e-3, max_dense_dim = 100L,
+  stringsAsFactors = FALSE
+))
+expect_equal(control_probe$adaptive_vb_max_iter_grid, c(4L, 8L),
+             "Phase180 AL controls did not parse the adaptive-VB grid.")
+
+cache_test <- file.path(tempdir(), paste0("phase180-init-cache-", Sys.getpid()))
+dir.create(cache_test, recursive = TRUE, showWarnings = FALSE)
+cache_identity <- data.frame(
+  mcmc_case_id = "test_case", source_control_row_sha256 = "control_hash",
+  fixture_manifest_sha256 = "fixture_hash", code_commit = "commit_hash",
+  stringsAsFactors = FALSE
+)
+cache_readme <- file.path(cache_test, "README.md")
+writeLines("Phase180 test initialization cache", cache_readme)
+cache_paths <- c(
+  vb_initialization = app_joint_qvp_write_csv(
+    data.frame(value = 1), file.path(cache_test, "vb_initialization.csv")
+  ),
+  vb_initialization_audit = app_joint_qvp_write_csv(
+    data.frame(status = "pass"),
+    file.path(cache_test, "vb_initialization_audit.csv")
+  ),
+  cache_identity = app_joint_qvp_write_csv(
+    cache_identity, file.path(cache_test, "cache_identity.csv")
+  ),
+  README = normalizePath(cache_readme, mustWork = TRUE)
+)
+invisible(app_joint_exqdesn_write_manifest(cache_paths, cache_test))
+expect_true(app_joint_qdesn_phase180_init_cache_complete(
+  cache_test, cache_identity
+), "Phase180 rejected a valid initialization cache.")
+cache_identity$code_commit <- "different_commit"
+expect_true(!app_joint_qdesn_phase180_init_cache_complete(
+  cache_test, cache_identity
+), "Phase180 reused an initialization cache across code commits.")
+unlink(cache_test, recursive = TRUE, force = TRUE)
+
 expect_equal(contract$tau, c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95),
              "Phase180 tau grid changed.")
 expect_equal(contract$weights_qs, c(0.025, 0.10, 0.20, 0.25, 0.20, 0.10, 0.025),
@@ -71,9 +115,9 @@ fake <- list(
 frame <- app_joint_qdesn_phase180_draw_frame(fake)
 tmp_worker <- file.path(tempdir(), paste0("phase180-read-fit-", Sys.getpid()))
 dir.create(file.path(tmp_worker, "checkpoint"), recursive = TRUE, showWarnings = FALSE)
-app_joint_exqdesn_phase157_write_gzip_csv(
+invisible(app_joint_exqdesn_phase157_write_gzip_csv(
   frame, file.path(tmp_worker, "checkpoint", "posterior_draws.csv.gz")
-)
+))
 read_fit <- app_joint_qdesn_phase180_read_fit(
   tmp_worker, c(0.25, 0.75), 1801L, 1L
 )

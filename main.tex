@@ -1415,9 +1415,9 @@ observations, which are discarded before analysis. The next
 \(T_{\mathrm{main}}=10000\) observations form the retained series used for
 fitting and validation. Models are fit at the end of the first 9000 retained
 observations, and the final 1000 retained observations are held out for
-forecast evaluation. We report two fitting-sample sizes,
-\(T_{\mathrm{fit}}=500\) and \(T_{\mathrm{fit}}=5000\), using respectively the
-500 or 5000 observations immediately preceding the fitting origin. Forecast
+forecast evaluation. The reported single-quantile comparison uses
+\(T_{\mathrm{fit}}=500\), namely observations 8501--9000 immediately preceding
+the fitting origin. Forecast
 scores are computed from rolling origins within the held-out period; origins
 are spaced 30 observations apart, and each origin is scored for horizons up to
 30 steps ahead. The same protocol is used for all model specifications and
@@ -1432,8 +1432,8 @@ Entries labeled Q--DESN AL--RHS use the AL working likelihood, whereas entries
 labeled Q--DESN exAL--RHS use the exAL working likelihood. Historical ridge
 fits are omitted from the main comparison because the reported comparison
 focuses on Bayesian shrinkage fits under the fitting-sample preprocessing rule.
-The reservoir specification and random seed are fixed for every displayed
-metric.
+Each displayed metric retains its frozen case-specific reservoir specification
+and random seed.
 Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
 fitting-sample size, and forecast-evaluation protocol using \pkg{exdqlm}
@@ -1447,30 +1447,41 @@ and future sensitivity analyses.
 
 \subsection{Single-Quantile Criteria for Comparison}
 
-Let \(\widehat q_t\) denote a posterior or variational summary of the fitted
-conditional \(p\)-quantile, such as the posterior median of the linear-predictor
-location. Because the oracle path \(\mu_t\) is known, fitting-sample recovery can
-be evaluated using quantile mean absolute error, quantile RMSE, bias,
-correlation, and check loss at the target level \(p\). Forecast accuracy is
-evaluated on held-out outcomes under common forecast origins and horizons for
-every model. The reported tables show fit recovery and forecast scoring.
+Let \(q_{p,t}^{(b)}\) be retained draw \(b\) of the conditional \(p\)-quantile
+at fitting index \(t\), and let \(q_{p,r}^{(b)}\) be the corresponding forecast
+draw for rolling-origin pair \(r\). Write \(\mathcal I\) for the 500 fitting
+indices and \(\mathcal G\) for the 1000 scored origin--horizon pairs. Because
+the oracle path \(\mu\) is known, the draw-wise criteria are
+\begin{align}
+R_{\mathrm{fit}}^{(b)}
+  &=\left\{\frac{1}{|\mathcal I|}\sum_{t\in\mathcal I}
+    \bigl(q_{p,t}^{(b)}-\mu_t\bigr)^2\right\}^{1/2}, \\
+A_{\mathrm{fore}}^{(b)}
+  &=\frac{1}{|\mathcal G|}\sum_{r\in\mathcal G}
+    \left|q_{p,r}^{(b)}-\mu_r\right|, \\
+C_{\mathrm{fore}}^{(b)}
+  &=\frac{1}{|\mathcal G|}\sum_{r\in\mathcal G}
+    \rho_p\!\left(y_r-q_{p,r}^{(b)}\right),
+\end{align}
+where \(\rho_p(u)=u\{p-\ind(u<0)\}\), and \(\mu_r\) and \(y_r\) denote the
+oracle quantile and realized outcome for pair \(r\). Thus fit RMSE and forecast
+MAE measure recovery of the oracle quantile path, whereas forecast check loss
+is a proper score against realized observations.
 
-For single-level quantile fits, the primary proper score is check loss at the
-fitted level. Quantile MAE and quantile RMSE compare the fitted or forecast
-quantile summary directly with the known oracle quantile path, while check
-loss scores realized observations relative to the reported quantile. These
-metrics therefore answer different questions and are reported separately.
+For each criterion \(M^{(b)}\), the tables report the posterior mean
+\(B^{-1}\sum_{b=1}^B M^{(b)}\) and the empirical 0.025 and 0.975 posterior
+quantiles. The VB panels use draws from the variational approximation and are
+therefore approximate. Because the criteria are nonlinear functions of the
+quantile path, these posterior means generally differ from applying a criterion
+once to a posterior point path.
 
-Because the simulation uses one fixed data-generating realization for each family and
-quantile level, the tables report deterministic criterion values for that
-data-generating realization rather than Monte Carlo means over repeated data sets. Any
-boldface or ranking in the displayed MCMC tables is interpreted within a fixed
-family, quantile level, fitting-sample size, model family, and metric. The displayed
-Q--DESN values form a metric-specific summary: each entry is the
-best finite value observed for that model, family, quantile level, and metric.
-Consequently, entries within one model row may originate from different
-model specifications. The supplementary tables identify the corresponding
-diagnostic status.
+The source specification for each model, family, target level, and criterion
+was frozen from the preceding case-specific calibration record before the
+interval replay. Entries within a model row can therefore come from different
+specifications. The intervals condition on the selected specification, the
+fixed simulated data set, the rolling-origin grid, and the case-specific
+reservoir realization; they do not incorporate repeated-simulation,
+reservoir-design, or model-selection uncertainty.
 
 \subsection{Single-Quantile Fit and Forecast Results}
 
@@ -1478,17 +1489,11 @@ The main comparison uses the shorter fitting design: 500 observations before
 the fitting origin, followed by 1000 held-out observations for forecast
 scoring. Forecast scores use rolling origins spaced 30 observations apart and
 horizons up to 30 steps ahead, at the three target levels
-\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-normal}--%
-\ref{tab:simulation-500obs-mcmc-gausmix} report the MCMC family-specific
-metric summaries. The entries are computed from horizon-level rolling-origin
-comparisons: fit RMSE measures recovery of the known oracle quantile path on
-the fitting sample, forecast MAE measures oracle-quantile
-forecast error averaged across scored origin-horizon pairs, and
-forecast check loss scores realized observations at the fitted quantile level.
-Boldface marks the lowest displayed MCMC value within each quantile level and
-metric. Diagnostic status is disclosed alongside the scores: daggers mark rows
-with a warning in the supporting diagnostic summary, and double daggers mark
-rows with a failed diagnostic check.
+\(p=0.05,0.25,0.50\). Tables~\ref{tab:simulation-500obs-mcmc-intervals-normal}--%
+\ref{tab:simulation-500obs-mcmc-intervals-gausmix} report the MCMC
+family-specific posterior metric summaries.
+
+\input{tables/qdesn_validation_500obs_metric_intervals_prose.tex}
 
 All displayed Q--DESN and exQ--DESN values use feature scaling and other
 learned preprocessing quantities estimated from observations available through
@@ -1498,21 +1503,14 @@ exAL--RHS MCMC rows use the \(v\)-augmented transition described in the
 supplement, which separates the scale update from the shape update and samples
 the shape on the logit transform of its bounded support.
 
-Two case-specific repeated-chain confirmations yielded four further strict
-forecast improvements. For Gaussian \(p=0.05\), AL--RHS reduced forecast MAE
-from 8.410 to 6.917 and forecast check loss from 1.221 to 1.200. For the
-Gaussian-mixture family at \(p=0.50\), exAL--RHS reduced forecast MAE from
-2.562 to 1.420 and forecast check loss from 5.610 to 5.487. These replacements
-are three-chain means. Fit RMSE and all other displayed criteria retain their
-previous metric-specific sources, and diagnostic grades remain disclosed in
-the supporting record.
+\input{tables/qdesn_validation_500obs_metric_interval_results_v10.tex}
 
-\input{tables/qdesn_validation_tt500_final_mcmc_tables.tex}
+\input{tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex}
 
-The supplement gives VB companion panels for the same source trajectories and a
-five-chain sensitivity analysis for the Gaussian family at \(p=0.25\). The
-sensitivity analysis assesses whether the reported Q--DESN summaries persist
-across independently seeded chains using a common posterior point-path summary.
+The supplement gives approximate VB interval panels for the same source
+trajectories. It also retains a separate five-chain point-path sensitivity
+analysis for the Gaussian family at \(p=0.25\); that sensitivity calculation is
+not used to form the draw-wise metric intervals reported here.
 
 \subsection{Joint Multi-Quantile Study with a Pre-Specified Feature Design}
 

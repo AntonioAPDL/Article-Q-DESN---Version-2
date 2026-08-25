@@ -1,2 +1,0 @@
-"candidate_id","quantile_level","n_dates","observed_max","fitted_q95","fitted_q99","fitted_max","max_inverse_transform_abs_error","fitted_max_to_observed_max","n_above_observed_max","fraction_above_observed_max","n_above_2x_observed_max","n_above_5x_observed_max","n_above_20x_observed_max","tail_review_required"
-"fr09_persistence_innovation",0.95,12495,241.259533031999,23.132338516531,159.11147936506,26208.4305071518,0,108.63168877839,82,0.00656262505002001,43,21,5,TRUE

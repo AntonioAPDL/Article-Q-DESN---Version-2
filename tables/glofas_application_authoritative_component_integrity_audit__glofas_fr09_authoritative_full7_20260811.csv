@@ -1,8 +1,0 @@
-"quantile_id","fit_exists","fit_hash_match","config_exists","config_hash_match","model_grid_exists","model_grid_hash_match","fit_complete"
-"p05",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-"p15",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-"p35",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-"p50",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-"p65",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-"p80",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE
-"p95",TRUE,TRUE,TRUE,TRUE,TRUE,TRUE,TRUE

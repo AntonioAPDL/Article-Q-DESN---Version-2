@@ -1,0 +1,5 @@
+Each metric is recomputed for every retained conditional-quantile draw. Table entries report the posterior mean and equal-tailed 95\% credible interval of the resulting draw-wise metric. The fit criterion is oracle-path RMSE over the 500-observation training window; forecast MAE and check loss aggregate the same 1,000 rolling-origin lead-target pairs used by the point comparison. These intervals condition on the fixed simulated data set, evaluation grid, and case-specific reservoir realization, and therefore do not represent repeated-simulation or reservoir-design uncertainty. Variational Bayes intervals are approximate.
+
+The displayed specifications remain metric- and case-specific selections frozen before this interval campaign. Q--DESN and exQ--DESN intervals use conditional-quantile path draws; DQLM and exDQLM use latent-state quantile draws. Response-predictive draws are not used to form the metric intervals.
+
+Among the 162 pooled MCMC source--metric diagnostics, 159 pass and 3 are warnings; 2 warning-marked metrics contribute to displayed table cells. Warnings remain disclosure fields and do not alter metric inclusion.

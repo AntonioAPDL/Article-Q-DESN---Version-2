@@ -1,0 +1,58 @@
+validation_root: /data/jaguir26/local/src/exdqlm__wt__shared_fitforecast_v2_1p0p0
+promotion_id: qdesn_dqlm_500obs_metric_intervals_v10_20260824
+promotion_relative_path: validation/fitforecast_v2/promotions/qdesn_dqlm_500obs_metric_intervals_v10_20260824
+promotion_manifest_sha256: b8b6006666a9167d1fea3a2ac76a90d7bde30dcbac5fab6bc21f4b3e716c5798
+promotion_file_ledger_sha256: 0a11fde26fe963c91cda7b326ff04211b1bd5e3cad9b083f84b8b38dcfc3d298
+interface_sha256: 9d845ad06686b82c5ce57b2762784d92da7a846990843f9e9fd9a0d445b061b4
+article_asset_manifest_sha256: 2c268d5cac16fc151e384a9311a59579276e1dec094a84f0d2421ea956e0a248
+validation_handoff_commit: 4790c9814855e06aa34505a9da32533e2748fdf6
+scientific_execution_commit: e7479a930f5c9c56fa315ad18cbab9f73016c8b4
+run_id: independent_metric_intervals_v1_production_20260823_225856
+rollback_authority: qdesn_dqlm_500obs_trainonly_article_v9_canonical_gap_20260821
+estimator_id: posterior_mean_draw_metric_equal_tailed_95cri_v1
+expected:
+  jobs: 198
+  sources: 90
+  source_metric_rows: 270
+  metric_roles: 216
+  interface_rows: 72
+  vb_rows: 36
+  mcmc_rows: 36
+  mcmc_diagnostic_rows: 162
+  mcmc_diagnostic_pass_rows: 159
+  mcmc_diagnostic_warn_rows: 3
+  displayed_warning_metrics: 2
+  article_assets: 9
+  article_generated_artifacts: 13
+  vb_draws: 10000
+  mcmc_draws: 12000
+  mcmc_chains: 3
+  mcmc_metric_cells: 27
+  mcmc_winner_interval_overlaps: 27
+  qdesn_mcmc_winner_cells: 19
+  mcmc_winner_dqlm: 4
+  mcmc_winner_exdqlm: 4
+  mcmc_winner_qdesn_al_rhs_ns: 8
+  mcmc_winner_qdesn_exal_rhs_ns: 11
+  models:
+    - dqlm
+    - exdqlm
+    - qdesn_al_rhs_ns
+    - qdesn_exal_rhs_ns
+  families:
+    - normal
+    - laplace
+    - gausmix
+  taus:
+    - 0.05
+    - 0.25
+    - 0.50
+  inference:
+    - vb
+    - mcmc
+outputs:
+  portable_summary: tables/qdesn_validation_500obs_metric_intervals_v10_summary.csv
+  mcmc_diagnostics: tables/qdesn_validation_500obs_mcmc_metric_diagnostics_v10.csv
+  mcmc_comparison: tables/qdesn_validation_500obs_mcmc_metric_comparison_v10.csv
+  results_prose: tables/qdesn_validation_500obs_metric_interval_results_v10.tex
+  article_manifest: tables/qdesn_validation_500obs_metric_intervals_v10_manifest.txt

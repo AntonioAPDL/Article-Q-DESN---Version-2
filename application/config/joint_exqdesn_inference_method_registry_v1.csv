@@ -1,0 +1,9 @@
+registry_version,method_id,inference_family,augmentation,scale_shape_factor,gamma_coordinate,sigma_collapsed,exact_target,candidate_role,legacy_default,enabled,description
+joint_exqdesn_inference_v1,VB0_point_v,vb,v,point_gamma_gig_sigma,native_gamma,FALSE,FALSE,baseline,FALSE,TRUE,Current exAL VB-LD point-gamma implementation exposed under an explicit immutable identifier.
+joint_exqdesn_inference_v1,VB1_structured_v,vb,v,structured_qgamma_qsigma_given_gamma,native_gamma,TRUE,FALSE,candidate,FALSE,TRUE,Structured scale-shape variational factor under the current v augmentation.
+joint_exqdesn_inference_v1,VB2_structured_u,vb,u_equals_Bgamma_v,structured_qgamma_qsigma_given_gamma,native_gamma,TRUE,FALSE,candidate,FALSE,TRUE,Structured scale-shape variational factor under u equals B-gamma times v.
+joint_exqdesn_inference_v1,MCMC_legacy_default,mcmc,v,conditional_sigma_gamma,native_gamma,FALSE,TRUE,compatibility,TRUE,TRUE,Historical bounded-slice wrapper selected only when no explicit MCMC method is supplied.
+joint_exqdesn_inference_v1,M0_v_collapsed_support_logit,mcmc,v,sigma_collapsed_gamma,support_logit,TRUE,TRUE,baseline,FALSE,TRUE,Phase157b exact v-augmented sigma-collapsed support-logit transition.
+joint_exqdesn_inference_v1,M1b_u_collapsed_support_logit,mcmc,u_equals_Bgamma_v,sigma_collapsed_gamma,support_logit,TRUE,TRUE,candidate,FALSE,TRUE,Exact u-augmented sigma-collapsed transition in the native-support logit coordinate.
+joint_exqdesn_inference_v1,M1_u_collapsed_p_logit,mcmc,u_equals_Bgamma_v,sigma_collapsed_gamma,p_gamma_logit,TRUE,TRUE,candidate,FALSE,TRUE,Exact u-augmented sigma-collapsed transition in logit p-gamma coordinates.
+joint_exqdesn_inference_v1,K_branch_inverse_cdf,control,u_equals_Bgamma_v,sigma_collapsed_gamma,branch_inverse_cdf,TRUE,TRUE,fixed_state_reference,FALSE,TRUE,Branch-normalized quadrature and inverse-CDF fixed-state correctness reference; not a default production sampler.

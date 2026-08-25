@@ -1,0 +1,401 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_median_de_lu_spec_screen_20260531
+  purpose: >
+    Non-launching screening grid for finding a stronger PriceFM DESN/RHS_NS
+    baseline after the L8640, m=30 runs underperformed naive baselines.
+
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_full_median_warmstart.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_median_de_lu_spec_screen_20260531
+    run_root: application/data_local/pricefm/runs/pricefm_median_de_lu_spec_screen_20260531
+
+  scope:
+    regions: [DE_LU]
+    folds: [1]
+    quantiles: [0.50]
+    horizons: all
+    ranking_split: val
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+
+  fixed:
+    lead_window: 96
+    feature_map: window_desn_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    default_jobs: 1
+    qdesn_likelihoods: [al, exal]
+    warm_start_enabled: true
+    exact_equivalence_train_rows: 1000
+
+  launch:
+    recommended_first_pass:
+      priorities: [1]
+      experiment_jobs: 3
+      cell_jobs: 1
+      build_windows: false
+      note: >
+        Priority 1 uses mostly L96 plus L192 diagnostics. L96 windows already
+        exist in the default pipeline; L192 windows must be built if selected.
+    recommended_weekly_pass:
+      priorities: [2]
+      experiment_jobs: 2
+      cell_jobs: 1
+      build_windows: true
+    recommended_long_context_pass:
+      priorities: [3, 4]
+      experiment_jobs: 1
+      cell_jobs: 1
+      build_windows: true
+
+  interpretation:
+    train_origin_limit_note: >
+      With one midnight origin per day, fold 1 cannot literally provide 3000
+      origins. The adapter records requested/available/selected origins; for
+      L8640 fold 1 this currently resolves to 884 selected origins.
+    no_launch_note: >
+      This grid is a preparation artifact only. Use the preparation script to
+      generate configs, then launch selected experiments explicitly.
+
+  experiments:
+    - id: l096_m030_tau1em4_seed20260530_ref
+      stage: reference_existing
+      lag_window: 96
+      feature_dim: 30
+      tau0: 1.0e-4
+      seed: 20260530
+      priority: 0
+      rationale: Current closest model run; keep as the comparison anchor.
+
+    - id: l096_m060_tau1em4_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 60
+      tau0: 1.0e-4
+      seed: 20260531
+      priority: 1
+      rationale: Test whether modestly wider recent-window projection helps.
+
+    - id: l096_m060_tau3em4_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 60
+      tau0: 3.0e-4
+      seed: 20260531
+      priority: 1
+      rationale: Same recent window/features with an intermediate RHS scale.
+
+    - id: l096_m060_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 60
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Same window/features with weaker RHS shrinkage.
+
+    - id: l096_m120_tau3em4_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 120
+      tau0: 3.0e-4
+      seed: 20260531
+      priority: 1
+      rationale: Larger recent-window projection with moderate shrinkage.
+
+    - id: l096_m120_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Larger recent-window projection with intermediate shrinkage.
+
+    - id: l096_m120_tau3em3_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 120
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Larger recent-window projection with moderately weak shrinkage.
+
+    - id: l096_m120_tau1em2_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 120
+      tau0: 1.0e-2
+      seed: 20260531
+      priority: 1
+      rationale: Larger recent-window projection with weaker shrinkage.
+
+    - id: l096_m240_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 240
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Wide recent-window projection; tests whether m=120 is still too compressed.
+
+    - id: l096_m240_tau3em3_seed20260531
+      stage: primary_screen
+      lag_window: 96
+      feature_dim: 240
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Wide recent-window projection with weaker shrinkage.
+
+    - id: l096_m120_tau1em3_ps0p5_seed20260531
+      stage: projection_scale_diagnostic
+      lag_window: 96
+      feature_dim: 120
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Check whether the tanh random features are under/over-scaled.
+
+    - id: l096_m120_tau1em3_ps2p0_seed20260531
+      stage: projection_scale_diagnostic
+      lag_window: 96
+      feature_dim: 120
+      projection_scale: 2.0
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: High-scale tanh diagnostic for feature saturation.
+
+    - id: l096_flat_tau1em3_seed20260531
+      stage: feature_map_diagnostic
+      lag_window: 96
+      feature_map: flat_direct
+      feature_dim: 0
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Direct raw-window diagnostic; if this wins, random projection is the bottleneck.
+
+    - id: l192_m060_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 192
+      feature_dim: 60
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Two-day context with modest projection size.
+
+    - id: l192_m120_tau3em4_seed20260531
+      stage: primary_screen
+      lag_window: 192
+      feature_dim: 120
+      tau0: 3.0e-4
+      seed: 20260531
+      priority: 1
+      rationale: Two-day context with moderate shrinkage.
+
+    - id: l192_m120_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 192
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Two-day context near the center of the search.
+
+    - id: l192_m120_tau3em3_seed20260531
+      stage: primary_screen
+      lag_window: 192
+      feature_dim: 120
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Two-day context with weaker shrinkage.
+
+    - id: l192_m240_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 192
+      feature_dim: 240
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 1
+      rationale: Wider two-day projection; tests feature-capacity limit.
+
+    - id: l672_m120_tau3em4_seed20260531
+      stage: primary_screen
+      lag_window: 672
+      feature_dim: 120
+      tau0: 3.0e-4
+      seed: 20260531
+      priority: 2
+      rationale: One-week context with moderate shrinkage.
+
+    - id: l672_m120_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 672
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: Wider one-week projection.
+
+    - id: l672_m120_tau3em3_seed20260531
+      stage: primary_screen
+      lag_window: 672
+      feature_dim: 120
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: One-week projection with moderately weak shrinkage.
+
+    - id: l672_m120_tau1em2_seed20260531
+      stage: primary_screen
+      lag_window: 672
+      feature_dim: 120
+      tau0: 1.0e-2
+      seed: 20260531
+      priority: 2
+      rationale: Wider one-week projection with weaker shrinkage.
+
+    - id: l672_m240_tau1em3_seed20260531
+      stage: primary_screen
+      lag_window: 672
+      feature_dim: 240
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: High-capacity one-week context.
+
+    - id: l672_m240_tau3em3_seed20260531
+      stage: primary_screen
+      lag_window: 672
+      feature_dim: 240
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: High-capacity one-week context with weaker shrinkage.
+
+    - id: l1344_m120_tau1em3_seed20260531
+      stage: weekly_extension
+      lag_window: 1344
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: Two-week context after the short-window screen.
+
+    - id: l1344_m120_tau3em3_seed20260531
+      stage: weekly_extension
+      lag_window: 1344
+      feature_dim: 120
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: Two-week context with weaker shrinkage.
+
+    - id: l1344_m240_tau3em3_seed20260531
+      stage: weekly_extension
+      lag_window: 1344
+      feature_dim: 240
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 2
+      rationale: High-capacity two-week context.
+
+    - id: l2688_m240_tau1em3_seed20260531
+      stage: secondary_screen
+      lag_window: 2688
+      feature_dim: 240
+      tau0: 1.0e-3
+      seed: 20260531
+      priority: 3
+      rationale: Four-week context with enough features to avoid severe compression.
+
+    - id: l2688_m240_tau3em3_seed20260531
+      stage: secondary_screen
+      lag_window: 2688
+      feature_dim: 240
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 3
+      rationale: Four-week context with moderately weak shrinkage.
+
+    - id: l2688_m240_tau1em2_seed20260531
+      stage: secondary_screen
+      lag_window: 2688
+      feature_dim: 240
+      tau0: 1.0e-2
+      seed: 20260531
+      priority: 3
+      rationale: Four-week context with weaker shrinkage.
+
+    - id: l2688_m480_tau3em3_seed20260531
+      stage: secondary_screen
+      lag_window: 2688
+      feature_dim: 480
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 3
+      rationale: Expensive four-week diagnostic; run only after shorter contexts.
+
+    - id: l8640_m240_tau3em3_seed20260531
+      stage: secondary_screen
+      lag_window: 8640
+      feature_dim: 240
+      tau0: 3.0e-3
+      seed: 20260531
+      priority: 4
+      rationale: Revisit 90-day context only with a less extreme projection bottleneck.
+
+    - id: l8640_m240_tau1em2_seed20260531
+      stage: secondary_screen
+      lag_window: 8640
+      feature_dim: 240
+      tau0: 1.0e-2
+      seed: 20260531
+      priority: 4
+      rationale: High-cost 90-day diagnostic; run only if shorter contexts fail.
+
+    - id: l8640_m480_tau1em2_seed20260531
+      stage: secondary_screen
+      lag_window: 8640
+      feature_dim: 480
+      tau0: 1.0e-2
+      seed: 20260531
+      priority: 4
+      rationale: Very expensive 90-day diagnostic; run only with explicit approval.
+
+    - id: l096_m120_tau1em3_seed20260601
+      stage: seed_robustness
+      lag_window: 96
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 5
+      rationale: Seed replicate for top recent-window candidate.
+
+    - id: l096_m120_tau1em3_seed20260602
+      stage: seed_robustness
+      lag_window: 96
+      feature_dim: 120
+      tau0: 1.0e-3
+      seed: 20260602
+      priority: 5
+      rationale: Second seed replicate for top recent-window candidate.
+
+    - id: l672_m240_tau3em3_seed20260601
+      stage: seed_robustness
+      lag_window: 672
+      feature_dim: 240
+      tau0: 3.0e-3
+      seed: 20260601
+      priority: 5
+      rationale: Seed replicate for top one-week candidate.

@@ -625,6 +625,75 @@ app_joint_qdesn_phase180_apply_chain_start <- function(
   init
 }
 
+app_joint_qdesn_phase180_phase154_independent_al_init <- function(cell, fixture) {
+  source_dir <- cell$source_dir[[1L]]
+  check <- app_joint_exqdesn_verify_manifest(
+    source_dir, "phase154_independent_al_initialization_source"
+  )
+  if (any(check$status != "pass")) {
+    stop("Phase154 independent-AL initialization source failed its manifest.",
+         call. = FALSE)
+  }
+  scale <- app_read_csv(file.path(source_dir, "scale_parameter_summary.csv"))
+  qhat_rows <- app_read_csv(file.path(source_dir, "fit_quantiles_raw.csv"))
+  convergence <- app_read_csv(file.path(source_dir, "vb_convergence_audit.csv"))
+  keep <- function(x) {
+    x$scenario_id == cell$scenario_id[[1L]] &
+      x$source_model_id == cell$source_model_id[[1L]] &
+      x$inference == "VB"
+  }
+  scale <- scale[keep(scale), , drop = FALSE]
+  qhat_rows <- qhat_rows[keep(qhat_rows), , drop = FALSE]
+  convergence <- convergence[keep(convergence), , drop = FALSE]
+  K <- length(fixture$tau); p <- ncol(fixture$Z)
+  if (nrow(scale) != K || nrow(convergence) != 1L ||
+      anyDuplicated(scale$quantile_index) ||
+      !identical(sort(as.numeric(scale$tau)), sort(as.numeric(fixture$tau)))) {
+    stop("Phase154 independent-AL VB summary is incomplete.", call. = FALSE)
+  }
+  scale <- scale[order(scale$quantile_index), , drop = FALSE]
+  qhat <- matrix(NA_real_, nrow(fixture$Z), K)
+  beta <- matrix(NA_real_, p, K)
+  for (k in seq_len(K)) {
+    block <- qhat_rows[qhat_rows$quantile_index == k, , drop = FALSE]
+    index <- match(fixture$row_meta$full_time_index, block$full_time_index)
+    if (nrow(block) != nrow(fixture$Z) || anyNA(index)) {
+      stop("Phase154 independent-AL quantile path does not match the fixture.",
+           call. = FALSE)
+    }
+    qhat[, k] <- as.numeric(block$qhat_raw[index])
+    beta[, k] <- qr.solve(
+      fixture$Z, qhat[, k] - as.numeric(scale$alpha_mean[[k]])
+    )
+  }
+  reconstructed <- fixture$Z %*% beta + matrix(
+    as.numeric(scale$alpha_mean), nrow(fixture$Z), K, byrow = TRUE
+  )
+  tolerance <- 1e-8 * max(1, max(abs(qhat)))
+  if (any(!is.finite(c(beta, scale$alpha_mean, scale$sigma_mean))) ||
+      any(scale$sigma_mean <= 0) ||
+      max(abs(reconstructed - qhat)) > tolerance) {
+    stop("Phase154 independent-AL VB coefficient reconstruction failed.",
+         call. = FALSE)
+  }
+  beta_mean <- as.numeric(beta)
+  fits <- lapply(seq_len(K), function(k) {
+    list(
+      beta_mean = beta[, k], alpha_mean = scale$alpha_mean[[k]],
+      sigma_mean = scale$sigma_mean[[k]], converged = convergence$converged[[1L]]
+    )
+  })
+  list(
+    beta_mean = beta_mean, alpha_mean = as.numeric(scale$alpha_mean),
+    sigma_mean = as.numeric(scale$sigma_mean), qhat_mean = reconstructed,
+    fits = fits, converged = isTRUE(convergence$converged[[1L]]),
+    initialization_source_manifest_sha256 = app_sha256_file(file.path(
+      source_dir, "artifact_manifest.csv"
+    )),
+    initialization_source_role = "phase154_verified_vb_path_reconstruction"
+  )
+}
+
 app_joint_qdesn_phase180_initialize_cell <- function(cell, fixture_dir) {
   loaded <- app_joint_qdesn_phase180_load_fixture(cell$scenario_id[[1L]], fixture_dir)
   fixture <- loaded$fixture
@@ -634,6 +703,9 @@ app_joint_qdesn_phase180_initialize_cell <- function(cell, fixture_dir) {
     candidate$inference_method_id <- "VB1_structured_v"
     fit <- app_joint_exqdesn_phase178_fit_structured_v(candidate, fixture)
     method_id <- "VB1_structured_v"
+  } else if (cell$fit_structure[[1L]] == "independent") {
+    fit <- app_joint_qdesn_phase180_phase154_independent_al_init(cell, fixture)
+    method_id <- "phase154_verified_vb_path_reconstruction"
   } else {
     spec <- app_joint_qdesn_phase122_select_spec(cell$source_model_id[[1L]])
     controls <- app_joint_qdesn_phase122_controls_from_row(cell, n_cores = 1L)

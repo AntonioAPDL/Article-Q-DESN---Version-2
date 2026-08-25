@@ -140,7 +140,61 @@ n <- 36L
 Z <- cbind(x1 = stats::rnorm(n), x2 = stats::rnorm(n))
 tau <- c(0.25, 0.50, 0.75)
 y <- 0.3 + 0.5 * Z[, 1L] - 0.2 * Z[, 2L] + stats::rnorm(n, sd = 0.7)
-fixture <- list(y = y, Z = Z, tau = tau)
+fixture <- list(
+  y = y, Z = Z, tau = tau,
+  row_meta = data.frame(full_time_index = seq_len(n))
+)
+
+phase154_source <- file.path(
+  tempdir(), paste0("phase180-phase154-source-", Sys.getpid())
+)
+dir.create(phase154_source, recursive = TRUE, showWarnings = FALSE)
+alpha_source <- c(-0.4, 0, 0.4)
+beta_source <- matrix(c(0.2, -0.1, 0.3, -0.2, 0.4, -0.3), 2L, 3L)
+qhat_source <- Z %*% beta_source + matrix(alpha_source, n, 3L, byrow = TRUE)
+phase154_scale <- data.frame(
+  scenario_id = "synthetic", source_model_id = "qdesn_rhs_independent_vb",
+  inference = "VB", quantile_index = seq_along(tau), tau = tau,
+  alpha_mean = alpha_source, sigma_mean = c(0.8, 0.9, 1.0),
+  stringsAsFactors = FALSE
+)
+phase154_qhat <- app_joint_qdesn_bind_rows(lapply(seq_along(tau), function(k) {
+  data.frame(
+    scenario_id = "synthetic", source_model_id = "qdesn_rhs_independent_vb",
+    inference = "VB", quantile_index = k, tau = tau[[k]],
+    full_time_index = seq_len(n), qhat_raw = qhat_source[, k],
+    stringsAsFactors = FALSE
+  )
+}))
+phase154_convergence <- data.frame(
+  scenario_id = "synthetic", source_model_id = "qdesn_rhs_independent_vb",
+  inference = "VB", converged = TRUE, stringsAsFactors = FALSE
+)
+phase154_paths <- c(
+  scale = app_joint_qvp_write_csv(
+    phase154_scale, file.path(phase154_source, "scale_parameter_summary.csv")
+  ),
+  qhat = app_joint_qvp_write_csv(
+    phase154_qhat, file.path(phase154_source, "fit_quantiles_raw.csv")
+  ),
+  convergence = app_joint_qvp_write_csv(
+    phase154_convergence,
+    file.path(phase154_source, "vb_convergence_audit.csv")
+  )
+)
+invisible(app_joint_exqdesn_write_manifest(phase154_paths, phase154_source))
+phase154_fit <- app_joint_qdesn_phase180_phase154_independent_al_init(
+  data.frame(
+    scenario_id = "synthetic", source_model_id = "qdesn_rhs_independent_vb",
+    source_dir = phase154_source, stringsAsFactors = FALSE
+  ), fixture
+)
+expect_equal(phase154_fit$beta_mean, as.numeric(beta_source),
+             "Phase180 did not reconstruct the Phase154 independent-AL beta mean.")
+expect_equal(phase154_fit$qhat_mean, qhat_source,
+             "Phase180 did not reproduce the Phase154 independent-AL quantile path.")
+unlink(phase154_source, recursive = TRUE, force = TRUE)
+
 control <- data.frame(
   alpha_prior_sd = "1", tau0 = 0.5, zeta2 = 16,
   a_sigma = 2, b_sigma = 1, alpha_min_spacing = 0,

@@ -734,20 +734,44 @@ app_latent_quad_theta <- function(h, theta_mean, theta_cov) {
   as.numeric(crossprod(h, theta_cov %*% h)) + sum(h * theta_mean)^2
 }
 
+app_latent_quad_theta_rows <- function(H, theta_mean, theta_cov) {
+  H <- as.matrix(H)
+  theta_mean <- as.numeric(theta_mean)
+  theta_cov <- as.matrix(theta_cov)
+  rowSums((H %*% theta_cov) * H) + as.numeric(H %*% theta_mean)^2
+}
+
+app_latent_jacobian_trace_theta <- function(J, y_cov, theta_mean, theta_cov) {
+  J <- as.matrix(J)
+  if (!nrow(J) || !ncol(J) || !any(J != 0) || !any(y_cov != 0)) return(0)
+  theta_mean <- as.numeric(theta_mean)
+  theta_cov <- as.matrix(theta_cov)
+  J_cov <- theta_cov %*% J
+  cov_part <- sum(y_cov * crossprod(J, J_cov))
+  j_mean <- as.numeric(crossprod(J, theta_mean))
+  mean_part <- as.numeric(crossprod(j_mean, y_cov %*% j_mean))
+  cov_part + mean_part
+}
+
 app_latent_trace_S_theta_parts <- function(h, J, y_cov, theta_mean, theta_cov) {
   h <- as.numeric(h)
   theta_mean <- as.numeric(theta_mean)
   theta_cov <- as.matrix(theta_cov)
   out <- app_latent_quad_theta(h, theta_mean, theta_cov)
-  J <- as.matrix(J)
-  if (nrow(J) && ncol(J) && any(J != 0) && any(y_cov != 0)) {
-    J_cov <- theta_cov %*% J
-    cov_part <- sum(y_cov * crossprod(J, J_cov))
-    j_mean <- as.numeric(crossprod(J, theta_mean))
-    mean_part <- as.numeric(crossprod(j_mean, y_cov %*% j_mean))
-    out <- out + cov_part + mean_part
+  out + app_latent_jacobian_trace_theta(J, y_cov, theta_mean, theta_cov)
+}
+
+app_latent_future_has_paired_jacobians <- function(future) {
+  if (!isTRUE(future$paired_future_jacobian) ||
+      length(future$J_y) != length(future$J_g_key)) {
+    return(FALSE)
   }
-  out
+  all(vapply(seq_along(future$J_y), function(h) {
+    identical(
+      unname(as.matrix(future$J_y[[h]])),
+      unname(as.matrix(future$J_g_key[[h]]))
+    )
+  }, logical(1L)))
 }
 
 app_latent_add_S_precision <- function(precision, coeff, h, J, y_cov) {
@@ -755,6 +779,16 @@ app_latent_add_S_precision <- function(precision, coeff, h, J, y_cov) {
   if (!is.finite(coeff) || abs(coeff) <= 0) return(precision)
   h <- as.numeric(h)
   precision <- precision + coeff * tcrossprod(h)
+  J <- as.matrix(J)
+  if (nrow(J) && ncol(J) && any(J != 0) && any(y_cov != 0)) {
+    precision <- precision + coeff * (J %*% y_cov %*% t(J))
+  }
+  precision
+}
+
+app_latent_add_J_precision <- function(precision, coeff, J, y_cov) {
+  coeff <- as.numeric(coeff)
+  if (!is.finite(coeff) || abs(coeff) <= 0) return(precision)
   J <- as.matrix(J)
   if (nrow(J) && ncol(J) && any(J != 0) && any(y_cov != 0)) {
     precision <- precision + coeff * (J %*% y_cov %*% t(J))
@@ -858,6 +892,107 @@ app_latent_row_moments_dense_debug <- function(design, y_mean, y_cov, theta_mean
   )
 }
 
+app_latent_pairing_certificate_hash <- function(certificate) {
+  payload <- certificate
+  payload$contract_hash <- NULL
+  app_latent_path_contract_hash(payload, prefix = "latent_fixed_pairing_")
+}
+
+app_latent_pairing_certificate <- function(
+  X_beta_stack,
+  source,
+  beta_index,
+  alpha_index,
+  feature_names = NULL,
+  tol = 0,
+  optimization_enabled = TRUE
+) {
+  source <- as.character(source)
+  y_index <- which(source == "Y")
+  g_index <- which(source == "G")
+  paired <- length(y_index) > 0L && length(y_index) == length(g_index)
+  if (isTRUE(paired)) {
+    lhs <- as.matrix(X_beta_stack[y_index, , drop = FALSE])
+    rhs <- as.matrix(X_beta_stack[g_index, , drop = FALSE])
+    paired <- if (tol <= 0) {
+      identical(unname(lhs), unname(rhs))
+    } else {
+      isTRUE(all.equal(lhs, rhs, tolerance = tol, check.attributes = FALSE))
+    }
+  }
+  payload <- list(
+    schema_version = "latent_path_fixed_pairing_v1",
+    paired_beta_rows = isTRUE(paired),
+    n_y = length(y_index),
+    n_g = length(g_index),
+    n_beta = ncol(as.matrix(X_beta_stack)),
+    beta_index = as.integer(beta_index),
+    alpha_index = as.integer(alpha_index),
+    feature_names = as.character(feature_names %||% character()),
+    y_feature_rows = seq_along(y_index),
+    g_feature_rows = seq_along(g_index),
+    optimization_enabled = isTRUE(optimization_enabled),
+    construction = "validated_equal_ordered_beta_rows",
+    beta_rows_hash = if (isTRUE(paired)) {
+      app_latent_path_contract_hash(
+        unname(lhs),
+        prefix = "latent_fixed_paired_beta_rows_"
+      )
+    } else {
+      NA_character_
+    }
+  )
+  payload$contract_hash <- app_latent_pairing_certificate_hash(payload)
+  payload
+}
+
+app_latent_pairing_certificate_valid <- function(certificate, block = NULL) {
+  if (is.null(certificate) ||
+      !identical(certificate$schema_version, "latent_path_fixed_pairing_v1") ||
+      !nzchar(as.character(certificate$contract_hash %||% "")) ||
+      !identical(
+        as.character(certificate$contract_hash),
+        app_latent_pairing_certificate_hash(certificate)
+      )) {
+    return(FALSE)
+  }
+  if (isTRUE(certificate$paired_beta_rows) &&
+      !nzchar(as.character(certificate$beta_rows_hash %||% ""))) {
+    return(FALSE)
+  }
+  if (is.null(block)) return(TRUE)
+  if (!identical(as.integer(certificate$n_y), as.integer(length(block$y_index))) ||
+      !identical(as.integer(certificate$n_g), as.integer(length(block$g_index))) ||
+      !identical(as.integer(certificate$n_beta), as.integer(ncol(block$X_beta_stack))) ||
+      !identical(as.integer(certificate$beta_index), as.integer(block$beta_index)) ||
+      !identical(as.integer(certificate$alpha_index), as.integer(block$alpha_index))) {
+    return(FALSE)
+  }
+  if (length(certificate$feature_names) && length(block$feature_names) &&
+      !identical(as.character(certificate$feature_names), as.character(block$feature_names))) {
+    return(FALSE)
+  }
+  TRUE
+}
+
+app_latent_pairing_certificate_matches_block <- function(certificate, block) {
+  if (!app_latent_pairing_certificate_valid(certificate, block = block)) return(FALSE)
+  if (!isTRUE(certificate$paired_beta_rows)) return(TRUE)
+  y_idx <- block$y_index
+  g_idx <- block$g_index
+  if (!length(y_idx) || length(y_idx) != length(g_idx)) return(FALSE)
+  lhs <- unname(as.matrix(block$X_beta_stack[y_idx, , drop = FALSE]))
+  rhs <- unname(as.matrix(block$X_beta_stack[g_idx, , drop = FALSE]))
+  if (!identical(lhs, rhs)) return(FALSE)
+  identical(
+    as.character(certificate$beta_rows_hash),
+    app_latent_path_contract_hash(
+      lhs,
+      prefix = "latent_fixed_paired_beta_rows_"
+    )
+  )
+}
+
 app_latent_fixed_block_design <- function(design = NULL, fixed = NULL, verify_dense = TRUE, tol = 1.0e-10) {
   source <- NULL
   beta_index <- NULL
@@ -865,6 +1000,7 @@ app_latent_fixed_block_design <- function(design = NULL, fixed = NULL, verify_de
   H <- NULL
   X_beta <- NULL
   X_alpha <- NULL
+  pairing_certificate <- NULL
   if (!is.null(fixed) && !is.null(fixed$block)) {
     block <- fixed$block
     source <- as.character(block$source)
@@ -872,19 +1008,25 @@ app_latent_fixed_block_design <- function(design = NULL, fixed = NULL, verify_de
     alpha_index <- as.integer(block$alpha_index)
     X_beta <- as.matrix(block$X_beta_stack)
     X_alpha <- as.matrix(block$X_alpha_stack)
+    pairing_certificate <- block$pairing_certificate %||% NULL
     H <- if (!is.null(fixed$H)) as.matrix(fixed$H) else NULL
   } else if (!is.null(design)) {
     source <- as.character(design$source_fixed)
     beta_index <- as.integer(design$beta_index %||% integer(0))
     alpha_index <- as.integer(design$alpha_index %||% integer(0))
     H <- if (!is.null(design$H_fixed)) as.matrix(design$H_fixed) else NULL
+    pairing_certificate <- design$fixed_pairing_certificate %||% NULL
     if (!is.null(design$X_beta_stack)) {
       X_beta <- as.matrix(design$X_beta_stack)
+    } else if (!is.null(design$X_beta) && !is.null(design$row_info_fixed$feature_row)) {
+      X_beta <- as.matrix(design$X_beta[as.integer(design$row_info_fixed$feature_row), , drop = FALSE])
     } else if (!is.null(H) && length(beta_index)) {
       X_beta <- H[, beta_index, drop = FALSE]
     }
     if (!is.null(design$X_alpha_stack)) {
       X_alpha <- as.matrix(design$X_alpha_stack)
+    } else if (!is.null(design$X_alpha) && !is.null(design$row_info_fixed$feature_row)) {
+      X_alpha <- as.matrix(design$X_alpha[as.integer(design$row_info_fixed$feature_row), , drop = FALSE])
     } else if (!is.null(H) && length(alpha_index)) {
       X_alpha <- H[, alpha_index, drop = FALSE]
     }
@@ -930,6 +1072,7 @@ app_latent_fixed_block_design <- function(design = NULL, fixed = NULL, verify_de
     beta_index = beta_index,
     alpha_index = alpha_index,
     feature_names = if (!is.null(H) && !is.null(colnames(H))) colnames(H) else NULL,
+    pairing_certificate = pairing_certificate,
     p = p,
     n = n
   )
@@ -945,6 +1088,13 @@ app_latent_diagonal_values <- function(A, tol = 0) {
 }
 
 app_latent_fixed_block_has_paired_beta_rows <- function(block, tol = 1.0e-10) {
+  certificate <- block$pairing_certificate %||% NULL
+  if (!is.null(certificate)) {
+    if (!app_latent_pairing_certificate_valid(certificate, block = block)) return(FALSE)
+    if (identical(certificate$optimization_enabled, FALSE)) return(FALSE)
+    if (!isTRUE(certificate$paired_beta_rows)) return(FALSE)
+    return(TRUE)
+  }
   y_idx <- block$y_index
   g_idx <- block$g_index
   if (!length(y_idx) || length(y_idx) != length(g_idx)) return(FALSE)
@@ -954,6 +1104,28 @@ app_latent_fixed_block_has_paired_beta_rows <- function(block, tol = 1.0e-10) {
     tolerance = tol,
     check.attributes = FALSE
   ))
+}
+
+app_latent_weighted_crossprod <- function(X, Y = X, w, symmetric = identical(X, Y), method = NULL) {
+  X <- as.matrix(X)
+  Y <- as.matrix(Y)
+  w <- as.numeric(w)
+  if (nrow(X) != nrow(Y) || nrow(X) != length(w)) {
+    stop("Weighted crossproduct inputs are not row aligned.", call. = FALSE)
+  }
+  if (any(!is.finite(w))) stop("Weighted crossproduct weights must be finite.", call. = FALSE)
+  method <- tolower(as.character(method %||% getOption(
+    "qdesn.latent.weighted_crossprod",
+    "multiply"
+  ))[[1L]])
+  if (identical(method, "sqrt") && isTRUE(symmetric) && all(w >= 0)) {
+    Xw <- X * sqrt(w)
+    return(crossprod(Xw))
+  }
+  if (!identical(method, "multiply")) {
+    stop(sprintf("Unsupported weighted crossproduct method '%s'.", method), call. = FALSE)
+  }
+  crossprod(X, Y * w)
 }
 
 app_latent_substep_timer <- function(enabled = FALSE) {
@@ -1104,7 +1276,13 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
   }
 
   fixed_block <- timer$time("fixed_block_guard", {
-    app_latent_fixed_block_design(design = design)
+    certificate <- design$fixed_pairing_certificate %||% NULL
+    certified_optimized <- isTRUE(certificate$optimization_enabled) &&
+      app_latent_pairing_certificate_valid(certificate)
+    app_latent_fixed_block_design(
+      design = design,
+      verify_dense = !isTRUE(certified_optimized)
+    )
   })
   fixed_block_moments <- timer$time("fixed_block_moments", {
     app_latent_fixed_row_moments_block(
@@ -1145,18 +1323,45 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
   e_y <- numeric(H_future)
   b_y <- vector("list", H_future)
   trace_y <- numeric(H_future)
+  paired_future_jacobian <- app_latent_future_has_paired_jacobians(future)
+  paired_trace_terms <- if (isTRUE(paired_future_jacobian)) {
+    timer$time("future_paired_trace_terms", {
+      jacobian_trace <- vapply(seq_len(H_future), function(h) {
+        app_latent_jacobian_trace_theta(
+          J_y[[h]], y_cov, theta_mean, theta_cov
+        )
+      }, numeric(1L))
+      list(
+        trace_y = app_latent_quad_theta_rows(
+          H_y, theta_mean, theta_cov
+        ) + jacobian_trace,
+        trace_g = app_latent_quad_theta_rows(
+          H_g_key, theta_mean, theta_cov
+        ) + jacobian_trace
+      )
+    })
+  } else {
+    NULL
+  }
   y_loop <- timer$time("future_y_loop", {
     R_y_local <- numeric(H_future)
     e_y_local <- numeric(H_future)
     b_y_local <- vector("list", H_future)
     trace_y_local <- numeric(H_future)
+    if (isTRUE(paired_future_jacobian)) {
+      trace_y_local <- paired_trace_terms$trace_y
+    }
     for (h in seq_len(H_future)) {
       J <- as.matrix(J_y[[h]])
       if (!all(dim(J) == c(p, H_future))) {
         stop("Future Y Jacobian has incompatible dimensions.", call. = FALSE)
       }
       h_vec <- as.numeric(H_y[h, ])
-      trace_y_local[[h]] <- app_latent_trace_S_theta_parts(h_vec, J, y_cov, theta_mean, theta_cov)
+      if (!isTRUE(paired_future_jacobian)) {
+        trace_y_local[[h]] <- app_latent_trace_S_theta_parts(
+          h_vec, J, y_cov, theta_mean, theta_cov
+        )
+      }
       b_y_local[[h]] <- h_vec * y_mean[[h]] + as.numeric(J %*% y_cov[, h, drop = FALSE])
       z_second <- y_mean[[h]]^2 + y_cov[h, h]
       R_y_local[[h]] <- max(as.numeric(z_second - 2 * sum(b_y_local[[h]] * theta_mean) + trace_y_local[[h]]), 1.0e-12)
@@ -1176,13 +1381,20 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
   g_key_loop <- timer$time("future_g_key_loop", {
     trace_g_local <- numeric(H_future)
     u_g_local <- numeric(H_future)
+    if (isTRUE(paired_future_jacobian)) {
+      trace_g_local <- paired_trace_terms$trace_g
+    }
     for (h in seq_len(H_future)) {
       J <- as.matrix(J_g_key[[h]])
       if (!all(dim(J) == c(p, H_future))) {
         stop("Future GloFAS keyed Jacobian has incompatible dimensions.", call. = FALSE)
       }
       h_vec <- as.numeric(H_g_key[h, ])
-      trace_g_local[[h]] <- app_latent_trace_S_theta_parts(h_vec, J, y_cov, theta_mean, theta_cov)
+      if (!isTRUE(paired_future_jacobian)) {
+        trace_g_local[[h]] <- app_latent_trace_S_theta_parts(
+          h_vec, J, y_cov, theta_mean, theta_cov
+        )
+      }
       u_g_local[[h]] <- sum(h_vec * theta_mean)
     }
     list(trace_g = trace_g_local, u_g = u_g_local)
@@ -1214,6 +1426,7 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
     g_future_index = g_future_index,
     g_index_by_h = split(seq_along(g_future_index), factor(g_future_index, levels = seq_len(H_future))),
     z_g = z_g,
+    paired_future_jacobian = isTRUE(paired_future_jacobian),
     y_mean = as.numeric(y_mean),
     y_second = as.numeric(y_mean)^2 + diag(y_cov),
     y_cov = as.matrix(y_cov),
@@ -1324,52 +1537,78 @@ app_latent_fixed_theta_stats_block <- function(row_moments, e_inv_v, sigma_state
   p <- block$p
   precision <- matrix(0, p, p)
   rhs <- numeric(p)
-  if (length(y_idx)) {
-    sig_y <- sigma_state$inv_mean[["Y"]]
-    w_y <- as.numeric(sig_y * e_inv_v[y_idx] / constants$B)
-    c_y <- as.numeric(sig_y / constants$B * (e_inv_v[y_idx] * fixed$z[y_idx] - constants$A))
+  paired_beta <- app_latent_fixed_block_has_paired_beta_rows(block)
+  sig_y <- if (length(y_idx)) sigma_state$inv_mean[["Y"]] else NA_real_
+  sig_g <- if (length(g_idx)) sigma_state$inv_mean[["G"]] else NA_real_
+  w_y <- if (length(y_idx)) as.numeric(sig_y * e_inv_v[y_idx] / constants$B) else numeric()
+  c_y <- if (length(y_idx)) {
+    as.numeric(sig_y / constants$B * (e_inv_v[y_idx] * fixed$z[y_idx] - constants$A))
+  } else {
+    numeric()
+  }
+  w_g <- if (length(g_idx)) as.numeric(sig_g * e_inv_v[g_idx] / constants$B) else numeric()
+  c_g <- if (length(g_idx)) {
+    as.numeric(sig_g / constants$B * (e_inv_v[g_idx] * fixed$z[g_idx] - constants$A))
+  } else {
+    numeric()
+  }
+  if (isTRUE(paired_beta)) {
     Xb_y <- Xb[y_idx, , drop = FALSE]
-    y_stats <- timer$time("fixed_theta_y_beta", {
+    paired_stats <- timer$time("fixed_theta_paired_beta_fused", {
       list(
-        precision = crossprod(Xb_y, Xb_y * w_y),
-        rhs = as.numeric(crossprod(Xb_y, c_y))
+        precision = app_latent_weighted_crossprod(Xb_y, w = w_y + w_g),
+        rhs = as.numeric(crossprod(Xb_y, c_y + c_g))
       )
     })
-    precision[beta, beta] <- precision[beta, beta] + y_stats$precision
-    rhs[beta] <- rhs[beta] + y_stats$rhs
+    precision[beta, beta] <- precision[beta, beta] + paired_stats$precision
+    rhs[beta] <- rhs[beta] + paired_stats$rhs
+  }
+  if (length(y_idx)) {
+    if (!isTRUE(paired_beta)) {
+      Xb_y <- Xb[y_idx, , drop = FALSE]
+      y_stats <- timer$time("fixed_theta_y_beta", {
+        list(
+          precision = app_latent_weighted_crossprod(Xb_y, w = w_y),
+          rhs = as.numeric(crossprod(Xb_y, c_y))
+        )
+      })
+      precision[beta, beta] <- precision[beta, beta] + y_stats$precision
+      rhs[beta] <- rhs[beta] + y_stats$rhs
+    }
   }
   if (length(g_idx)) {
-    sig_g <- sigma_state$inv_mean[["G"]]
-    w_g <- as.numeric(sig_g * e_inv_v[g_idx] / constants$B)
-    c_g <- as.numeric(sig_g / constants$B * (e_inv_v[g_idx] * fixed$z[g_idx] - constants$A))
     Xb_g <- Xb[g_idx, , drop = FALSE]
     Xa_g <- Xa[g_idx, , drop = FALSE]
-    P_bb_g <- timer$time("fixed_theta_g_beta_beta", {
-      crossprod(Xb_g, Xb_g * w_g)
-    })
+    P_bb_g <- if (!isTRUE(paired_beta)) timer$time("fixed_theta_g_beta_beta", {
+      app_latent_weighted_crossprod(Xb_g, w = w_g)
+    }) else NULL
     P_ba_g <- timer$time("fixed_theta_g_beta_alpha", {
       crossprod(Xb_g, Xa_g * w_g)
     })
     P_aa_g <- timer$time("fixed_theta_g_alpha_alpha", {
       crossprod(Xa_g, Xa_g * w_g)
     })
-    precision[beta, beta] <- precision[beta, beta] + P_bb_g
+    if (!is.null(P_bb_g)) precision[beta, beta] <- precision[beta, beta] + P_bb_g
     precision[beta, alpha] <- precision[beta, alpha] + P_ba_g
     precision[alpha, beta] <- precision[alpha, beta] + t(P_ba_g)
     precision[alpha, alpha] <- precision[alpha, alpha] + P_aa_g
     rhs_g <- timer$time("fixed_theta_g_rhs", {
       list(
-        beta = as.numeric(crossprod(Xb_g, c_g)),
+        beta = if (!isTRUE(paired_beta)) as.numeric(crossprod(Xb_g, c_g)) else numeric(),
         alpha = as.numeric(crossprod(Xa_g, c_g))
       )
     })
-    rhs[beta] <- rhs[beta] + rhs_g$beta
+    if (!isTRUE(paired_beta)) rhs[beta] <- rhs[beta] + rhs_g$beta
     rhs[alpha] <- rhs[alpha] + rhs_g$alpha
   }
   if (!is.null(block$feature_names) && length(block$feature_names) == p) {
     dimnames(precision) <- list(block$feature_names, block$feature_names)
   }
-  out <- list(precision = 0.5 * (precision + t(precision)), rhs = rhs)
+  out <- list(
+    precision = 0.5 * (precision + t(precision)),
+    rhs = rhs,
+    paired_beta_path = isTRUE(paired_beta)
+  )
   attr(out, "substep_timing") <- timer$collect()
   out
 }
@@ -1427,48 +1666,91 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
     n_y <- as.integer(future$n_y)
     offset <- fixed$n
     sig_y <- sigma_state$inv_mean[["Y"]]
-    future_y_stats <- timer$time("theta_future_y", {
-      precision_y <- matrix(0, p, p)
-      rhs_y <- numeric(p)
-      for (h in seq_len(n_y)) {
-        i <- offset + h
-        h_vec <- as.numeric(future$H_y[h, ])
-        J <- as.matrix(future$J_y[[h]])
-        c_i <- sig_y * e_inv_v[[i]] / constants$B
-        precision_y <- app_latent_add_S_precision(precision_y, c_i, h_vec, J, future$y_cov)
-        rhs_y <- rhs_y + sig_y / constants$B * (e_inv_v[[i]] * future$b_y[[h]] - constants$A * h_vec)
-      }
-      list(precision = precision_y, rhs = rhs_y)
-    })
-    precision <- precision + future_y_stats$precision
-    rhs <- rhs + future_y_stats$rhs
     sig_g <- sigma_state$inv_mean[["G"]]
     g_index_by_h <- future$g_index_by_h %||%
       split(seq_along(future$g_future_index), factor(future$g_future_index, levels = seq_len(n_y)))
-    future_g_stats <- timer$time("theta_future_g", {
-      precision_g <- matrix(0, p, p)
-      rhs_g <- numeric(p)
-      for (h in seq_len(n_y)) {
-        idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
-        if (!length(idx)) next
-        global_idx <- offset + n_y + idx
-        einv <- e_inv_v[global_idx]
-        z <- future$z_g[idx]
-        h_vec <- as.numeric(future$H_g_key[h, ])
-        J <- as.matrix(future$J_g_key[[h]])
-        precision_g <- app_latent_add_S_precision(
-          precision_g,
-          sig_g * sum(einv) / constants$B,
-          h_vec,
-          J,
-          future$y_cov
+    if (isTRUE(future$paired_future_jacobian)) {
+      future_paired_stats <- timer$time("theta_future_paired_jacobian", {
+        e_y <- e_inv_v[offset + seq_len(n_y)]
+        coeff_y <- sig_y * e_y / constants$B
+        coeff_g <- numeric(n_y)
+        rhs_weight_g <- numeric(n_y)
+        for (h in seq_len(n_y)) {
+          idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
+          if (!length(idx)) next
+          global_idx <- offset + n_y + idx
+          einv <- e_inv_v[global_idx]
+          coeff_g[[h]] <- sig_g * sum(einv) / constants$B
+          rhs_weight_g[[h]] <- sig_g / constants$B * (
+            sum(einv * future$z_g[idx]) - constants$A * length(idx)
+          )
+        }
+        precision_future <- app_latent_weighted_crossprod(
+          future$H_y,
+          w = coeff_y
+        ) + app_latent_weighted_crossprod(
+          future$H_g_key,
+          w = coeff_g
         )
-        rhs_g <- rhs_g + sig_g / constants$B * (h_vec * sum(einv * z) - constants$A * length(idx) * h_vec)
-      }
-      list(precision = precision_g, rhs = rhs_g)
-    })
-    precision <- precision + future_g_stats$precision
-    rhs <- rhs + future_g_stats$rhs
+        for (h in seq_len(n_y)) {
+          precision_future <- app_latent_add_J_precision(
+            precision_future,
+            coeff_y[[h]] + coeff_g[[h]],
+            future$J_y[[h]],
+            future$y_cov
+          )
+        }
+        b_y <- do.call(cbind, future$b_y)
+        rhs_y <- as.numeric(b_y %*% (sig_y * e_y / constants$B)) -
+          sig_y * constants$A / constants$B * colSums(future$H_y)
+        rhs_g <- as.numeric(crossprod(future$H_g_key, rhs_weight_g))
+        list(precision = precision_future, rhs = rhs_y + rhs_g)
+      })
+      precision <- precision + future_paired_stats$precision
+      rhs <- rhs + future_paired_stats$rhs
+    } else {
+      future_y_stats <- timer$time("theta_future_y", {
+        precision_y <- matrix(0, p, p)
+        rhs_y <- numeric(p)
+        for (h in seq_len(n_y)) {
+          i <- offset + h
+          h_vec <- as.numeric(future$H_y[h, ])
+          J <- as.matrix(future$J_y[[h]])
+          c_i <- sig_y * e_inv_v[[i]] / constants$B
+          precision_y <- app_latent_add_S_precision(precision_y, c_i, h_vec, J, future$y_cov)
+          rhs_y <- rhs_y + sig_y / constants$B * (e_inv_v[[i]] * future$b_y[[h]] - constants$A * h_vec)
+        }
+        list(precision = precision_y, rhs = rhs_y)
+      })
+      precision <- precision + future_y_stats$precision
+      rhs <- rhs + future_y_stats$rhs
+      future_g_stats <- timer$time("theta_future_g", {
+        precision_g <- matrix(0, p, p)
+        rhs_g <- numeric(p)
+        for (h in seq_len(n_y)) {
+          idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
+          if (!length(idx)) next
+          global_idx <- offset + n_y + idx
+          einv <- e_inv_v[global_idx]
+          z <- future$z_g[idx]
+          h_vec <- as.numeric(future$H_g_key[h, ])
+          J <- as.matrix(future$J_g_key[[h]])
+          precision_g <- app_latent_add_S_precision(
+            precision_g,
+            sig_g * sum(einv) / constants$B,
+            h_vec,
+            J,
+            future$y_cov
+          )
+          rhs_g <- rhs_g + sig_g / constants$B * (
+            h_vec * sum(einv * z) - constants$A * length(idx) * h_vec
+          )
+        }
+        list(precision = precision_g, rhs = rhs_g)
+      })
+      precision <- precision + future_g_stats$precision
+      rhs <- rhs + future_g_stats$rhs
+    }
     update <- timer$time("theta_solve_spd", {
       app_latent_solve_spd(precision, rhs)
     })
@@ -2099,6 +2381,24 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   p <- ncol(design$H_fixed)
   H_future <- nrow(design$future_key)
   if (!H_future) stop("Latent-path design has no future horizon.", call. = FALSE)
+  fixed_pairing_certificate <- design$fixed_pairing_certificate %||% NULL
+  if (isTRUE(fixed_pairing_certificate$optimization_enabled) &&
+      isTRUE(fixed_pairing_certificate$paired_beta_rows)) {
+    fixed_pairing_block <- app_latent_fixed_block_design(
+      design = design,
+      verify_dense = FALSE
+    )
+    if (is.null(fixed_pairing_block) ||
+        !app_latent_pairing_certificate_matches_block(
+          fixed_pairing_certificate,
+          fixed_pairing_block
+        )) {
+      stop(
+        "Latent-path fixed-row pairing certificate does not match the design.",
+        call. = FALSE
+      )
+    }
+  }
 
   constants <- app_latent_al_constants(p0)
   seed <- as.integer(seed %||% vb_args$seed %||% 20260513L)
@@ -2106,8 +2406,17 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   min_iter <- as.integer(vb_args$min_iter_elbo %||% 5L)
   tol <- as.numeric(vb_args$tol %||% 1.0e-4)
   n_draws <- as.integer(vb_args$n_draws %||% 500L)
+  diagnostics_args <- vb_args$diagnostics %||% list()
+  fixed_iterations <- isTRUE(diagnostics_args$fixed_iterations %||% FALSE)
+  stop_after_iteration <- suppressWarnings(as.integer(
+    diagnostics_args$stop_after_iteration %||% NA_integer_
+  ))
   if (!is.finite(max_iter) || max_iter < 1L) max_iter <- 200L
   if (!is.finite(n_draws) || n_draws < 1L) n_draws <- 500L
+  if (is.finite(stop_after_iteration) &&
+      (stop_after_iteration < 1L || stop_after_iteration > max_iter)) {
+    stop("diagnostics.stop_after_iteration must be between 1 and max_iter.", call. = FALSE)
+  }
   rhs_control <- app_latent_normalize_rhs_control(vb_args$rhs %||% list())
   rhs_active <- tolower(as.character(coefficient_prior %||% "rhs_ns")) %in% c("rhs", "rhs_ns")
   minimum_rhs_convergence_iter <- if (rhs_active) {
@@ -2115,7 +2424,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   } else {
     1L
   }
-  if (max_iter < minimum_rhs_convergence_iter) {
+  if (max_iter < minimum_rhs_convergence_iter && !isTRUE(fixed_iterations)) {
     stop(
       sprintf(
         paste(
@@ -2133,7 +2442,6 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   future_objective_strategy <- app_latent_future_objective_strategy(vb_args)
   future_update_strategy <- app_latent_future_update_strategy(vb_args)
   chunking <- app_latent_normalize_chunking_control(vb_args$chunking %||% NULL)
-  diagnostics_args <- vb_args$diagnostics %||% list()
   profile_substeps <- isTRUE(diagnostics_args$profile_substeps %||% vb_args$profile_substeps %||% FALSE)
   draw_backend <- tolower(as.character(
     vb_args$draw_backend %||%
@@ -2182,62 +2490,256 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     invisible(NULL)
   }
 
-  set.seed(seed)
-  warm_start <- app_latent_path_warm_start_prepare(design, vb_args, p = p, H_future = H_future)
-  theta_mean <- warm_start$theta_mean %||% rep(0, p)
-  theta_cov <- warm_start$theta_cov %||% diag(1, p)
-  y_mean <- warm_start$y_mean %||% as.numeric(design$y_future_init)
-  y_cov <- warm_start$y_cov %||% diag(rep(stats::var(design$z_fixed, na.rm = TRUE) %||% 1, H_future))
-  if (any(!is.finite(diag(y_cov))) || any(diag(y_cov) <= 0)) y_cov <- diag(1, H_future)
-
-  prior_state <- time_step(NA_integer_, "prior_initialization", {
-    app_latent_prior_state_init(
-      p = p,
-      prior = coefficient_prior,
-      intercept_index = design$intercept_index,
-      vb_args = vb_args,
-      beta_index = design$beta_index %||% NULL,
-      alpha_index = design$alpha_index %||% NULL
-    )
-  })
-  if (isTRUE(warm_start$diagnostics$theta_used)) {
-    prior_state <- time_step(NA_integer_, "warm_start_prior_update", {
-      app_latent_prior_state_update(
-        prior_state,
-        theta_mean,
-        theta_cov,
-        iter = 0L,
-        update_global = rhs_control$freeze_tau_warmup_iters == 0L
-      )
-    })
-  }
-  row_moments <- time_step(NA_integer_, "initial_row_moments", {
-    app_latent_row_moments(
-      design, y_mean, y_cov, theta_mean, theta_cov,
-      strategy = future_moment_strategy,
-      profile_substeps = profile_substeps
-    )
-  })
-  append_substeps(NA_integer_, "initial_row_moments", attr(row_moments, "substep_timing", exact = TRUE))
-  sigma_state <- if (!is.null(warm_start$sigma_state)) {
-    time_step(NA_integer_, "warm_start_sigma_initialization", {
-      warm_start$sigma_state
-    })
+  checkpoint_cfg <- if (exists("app_latent_checkpoint_config", mode = "function")) {
+    app_latent_checkpoint_config(vb_args)
   } else {
-    time_step(NA_integer_, "sigma_initialization", {
-      app_latent_source_sigma_init(row_moments$source, vb_args$prior_sigma %||% list(a = 2, b = 1))
-    })
+    list(enabled = FALSE, resume = FALSE)
   }
-  v_state <- time_step(NA_integer_, "initial_v_update", {
-    app_latent_update_v(row_moments, sigma_state, constants)
-  })
+  if (isTRUE(checkpoint_cfg$enabled) && !nzchar(checkpoint_cfg$path %||% "")) {
+    stop("Exact checkpointing is enabled but checkpoint.path is empty.", call. = FALSE)
+  }
+  if (is.finite(stop_after_iteration) && !isTRUE(checkpoint_cfg$enabled)) {
+    stop("A controlled iteration stop requires exact checkpointing to be enabled.", call. = FALSE)
+  }
+  runtime_backend <- if (exists("app_latent_runtime_backend_manifest", mode = "function")) {
+    app_latent_runtime_backend_manifest(fail_closed = TRUE)
+  } else {
+    data.frame(backend = "unrecorded", stringsAsFactors = FALSE)
+  }
+  checkpoint_contract <- if (isTRUE(checkpoint_cfg$enabled)) {
+    app_latent_checkpoint_contract(
+      design = design,
+      p0 = p0,
+      coefficient_prior = coefficient_prior,
+      vb_args = vb_args,
+      seed = seed
+    )
+  } else {
+    NULL
+  }
+  checkpoint_diagnostics <- list(
+    enabled = isTRUE(checkpoint_cfg$enabled),
+    resumed = FALSE,
+    recovered_previous = FALSE,
+    source_path = NA_character_,
+    path = checkpoint_cfg$path %||% NA_character_,
+    contract_hash = checkpoint_contract$contract_hash %||% NA_character_,
+    writes = 0L,
+    write_seconds = 0,
+    iteration_loaded = 0L,
+    schema_version = checkpoint_cfg$schema_version %||% NA_character_
+  )
+
+  set.seed(seed)
   objective <- numeric(max_iter)
   par_change <- numeric(max_iter)
   repaired_theta <- logical(max_iter)
   rhs_gate_trace <- logical(max_iter)
   rhs_trace <- list()
+  start_iter <- 1L
 
-  for (iter in seq_len(max_iter)) {
+  if (isTRUE(checkpoint_cfg$enabled) && isTRUE(checkpoint_cfg$resume)) {
+    checkpoint_payload <- app_latent_checkpoint_read(
+      checkpoint_cfg$path,
+      expected_contract = checkpoint_contract,
+      allow_previous = isTRUE(checkpoint_cfg$keep_previous)
+    )
+    completed_iter <- as.integer(checkpoint_payload$iteration_completed)
+    if (completed_iter >= max_iter) {
+      stop(
+        sprintf("Checkpoint already completed iteration %d for max_iter=%d.", completed_iter, max_iter),
+        call. = FALSE
+      )
+    }
+    if (is.finite(stop_after_iteration) && stop_after_iteration <= completed_iter) {
+      stop(
+        "diagnostics.stop_after_iteration must exceed the loaded checkpoint iteration.",
+        call. = FALSE
+      )
+    }
+    theta_mean <- as.numeric(checkpoint_payload$state$theta_mean)
+    theta_cov <- as.matrix(checkpoint_payload$state$theta_cov)
+    y_mean <- as.numeric(checkpoint_payload$state$y_mean)
+    y_cov <- as.matrix(checkpoint_payload$state$y_cov)
+    sigma_state <- checkpoint_payload$state$sigma_state
+    v_state <- checkpoint_payload$state$v_state
+    prior_state <- checkpoint_payload$state$prior_state
+    warm_start <- checkpoint_payload$state$warm_start %||% list(
+      diagnostics = list(enabled = FALSE, used = FALSE, message = "resumed exact checkpoint")
+    )
+    trace <- checkpoint_payload$traces
+    if (completed_iter > 0L) {
+      objective[seq_len(completed_iter)] <- as.numeric(trace$objective)
+      par_change[seq_len(completed_iter)] <- as.numeric(trace$par_change)
+      repaired_theta[seq_len(completed_iter)] <- as.logical(trace$repaired_theta)
+      rhs_gate_trace[seq_len(completed_iter)] <- as.logical(trace$rhs_gate_trace)
+    }
+    rhs_trace <- trace$rhs_trace %||% list()
+    if (is.data.frame(trace$iteration_timing) && nrow(trace$iteration_timing)) {
+      iteration_timing <- list(trace$iteration_timing)
+    }
+    if (is.data.frame(trace$substep_timing) && nrow(trace$substep_timing)) {
+      substep_timing <- list(trace$substep_timing)
+    }
+    if (!is.null(checkpoint_payload$rng_state) && length(checkpoint_payload$rng_state)) {
+      assign(".Random.seed", checkpoint_payload$rng_state, envir = .GlobalEnv)
+    }
+    row_moments <- time_step(completed_iter, "resume_row_moments", {
+      app_latent_row_moments(
+        design, y_mean, y_cov, theta_mean, theta_cov,
+        strategy = future_moment_strategy,
+        profile_substeps = profile_substeps
+      )
+    })
+    append_substeps(
+      completed_iter,
+      "resume_row_moments",
+      attr(row_moments, "substep_timing", exact = TRUE)
+    )
+    start_iter <- completed_iter + 1L
+    checkpoint_diagnostics$resumed <- TRUE
+    checkpoint_diagnostics$recovered_previous <- isTRUE(attr(
+      checkpoint_payload,
+      "checkpoint_recovered_previous",
+      exact = TRUE
+    ))
+    checkpoint_diagnostics$source_path <- attr(
+      checkpoint_payload,
+      "checkpoint_path",
+      exact = TRUE
+    ) %||% checkpoint_cfg$path
+    checkpoint_diagnostics$iteration_loaded <- completed_iter
+    prior_checkpoint_diag <- checkpoint_payload$metadata$checkpoint_diagnostics %||% list()
+    checkpoint_diagnostics$writes <- as.integer(prior_checkpoint_diag$writes %||% 0L)
+    checkpoint_diagnostics$write_seconds <- as.numeric(
+      prior_checkpoint_diag$write_seconds %||% 0
+    )
+  } else {
+    warm_start <- app_latent_path_warm_start_prepare(design, vb_args, p = p, H_future = H_future)
+    theta_mean <- warm_start$theta_mean %||% rep(0, p)
+    theta_cov <- warm_start$theta_cov %||% diag(1, p)
+    y_mean <- warm_start$y_mean %||% as.numeric(design$y_future_init)
+    y_cov <- warm_start$y_cov %||% diag(rep(stats::var(design$z_fixed, na.rm = TRUE) %||% 1, H_future))
+    if (any(!is.finite(diag(y_cov))) || any(diag(y_cov) <= 0)) y_cov <- diag(1, H_future)
+
+    prior_state <- time_step(NA_integer_, "prior_initialization", {
+      app_latent_prior_state_init(
+        p = p,
+        prior = coefficient_prior,
+        intercept_index = design$intercept_index,
+        vb_args = vb_args,
+        beta_index = design$beta_index %||% NULL,
+        alpha_index = design$alpha_index %||% NULL
+      )
+    })
+    if (isTRUE(warm_start$diagnostics$theta_used)) {
+      prior_state <- time_step(NA_integer_, "warm_start_prior_update", {
+        app_latent_prior_state_update(
+          prior_state,
+          theta_mean,
+          theta_cov,
+          iter = 0L,
+          update_global = rhs_control$freeze_tau_warmup_iters == 0L
+        )
+      })
+    }
+    row_moments <- time_step(NA_integer_, "initial_row_moments", {
+      app_latent_row_moments(
+        design, y_mean, y_cov, theta_mean, theta_cov,
+        strategy = future_moment_strategy,
+        profile_substeps = profile_substeps
+      )
+    })
+    append_substeps(NA_integer_, "initial_row_moments", attr(row_moments, "substep_timing", exact = TRUE))
+    sigma_state <- if (!is.null(warm_start$sigma_state)) {
+      time_step(NA_integer_, "warm_start_sigma_initialization", {
+        warm_start$sigma_state
+      })
+    } else {
+      time_step(NA_integer_, "sigma_initialization", {
+        app_latent_source_sigma_init(row_moments$source, vb_args$prior_sigma %||% list(a = 2, b = 1))
+      })
+    }
+    v_state <- time_step(NA_integer_, "initial_v_update", {
+      app_latent_update_v(row_moments, sigma_state, constants)
+    })
+  }
+
+  last_checkpoint_time <- proc.time()[["elapsed"]]
+  completed_iterations <- start_iter - 1L
+  write_checkpoint <- function(iter, force = FALSE) {
+    if (!isTRUE(checkpoint_cfg$enabled)) return(invisible(FALSE))
+    elapsed_since <- proc.time()[["elapsed"]] - last_checkpoint_time
+    due <- isTRUE(force) ||
+      (iter %% checkpoint_cfg$every_iterations == 0L) ||
+      (is.finite(checkpoint_cfg$every_seconds) && elapsed_since >= checkpoint_cfg$every_seconds)
+    if (!isTRUE(due)) return(invisible(FALSE))
+    iteration_timing_df <- if (length(iteration_timing)) {
+      do.call(rbind, iteration_timing)
+    } else {
+      data.frame(iteration = integer(), step = character(), elapsed_seconds = numeric())
+    }
+    substep_timing_df <- if (length(substep_timing)) {
+      do.call(rbind, substep_timing)
+    } else {
+      data.frame(
+        iteration = integer(), parent_step = character(), step = character(),
+        elapsed_seconds = numeric()
+      )
+    }
+    payload <- app_latent_checkpoint_payload(
+      contract = checkpoint_contract,
+      iteration_completed = iter,
+      state = list(
+        theta_mean = theta_mean,
+        theta_cov = theta_cov,
+        y_mean = y_mean,
+        y_cov = y_cov,
+        sigma_state = sigma_state,
+        v_state = v_state,
+        prior_state = prior_state,
+        warm_start = warm_start
+      ),
+      traces = list(
+        objective = objective[seq_len(iter)],
+        par_change = par_change[seq_len(iter)],
+        repaired_theta = repaired_theta[seq_len(iter)],
+        rhs_gate_trace = rhs_gate_trace[seq_len(iter)],
+        rhs_trace = rhs_trace,
+        iteration_timing = iteration_timing_df,
+        substep_timing = substep_timing_df
+      ),
+      rng_state = get(".Random.seed", envir = .GlobalEnv, inherits = FALSE),
+      metadata = list(
+        checkpoint_diagnostics = modifyList(
+          checkpoint_diagnostics,
+          list(writes = checkpoint_diagnostics$writes + 1L)
+        ),
+        runtime_backend = runtime_backend
+      )
+    )
+    write_started <- proc.time()[["elapsed"]]
+    app_latent_checkpoint_write(
+      payload,
+      checkpoint_cfg$path,
+      compress = checkpoint_cfg$compress,
+      keep_previous = checkpoint_cfg$keep_previous
+    )
+    write_elapsed <- proc.time()[["elapsed"]] - write_started
+    checkpoint_diagnostics$writes <<- checkpoint_diagnostics$writes + 1L
+    checkpoint_diagnostics$write_seconds <<- checkpoint_diagnostics$write_seconds + write_elapsed
+    checkpoint_diagnostics$last_iteration <<- as.integer(iter)
+    checkpoint_diagnostics$last_written_at <<- format(Sys.time(), tz = "UTC", usetz = TRUE)
+    iteration_timing[[length(iteration_timing) + 1L]] <<- data.frame(
+      iteration = as.integer(iter),
+      step = "checkpoint_write",
+      elapsed_seconds = as.numeric(write_elapsed),
+      stringsAsFactors = FALSE
+    )
+    last_checkpoint_time <<- proc.time()[["elapsed"]]
+    invisible(TRUE)
+  }
+  for (iter in seq.int(start_iter, max_iter)) {
     old <- c(theta_mean, y_mean, sigma_state$inv_mean)
     theta_update <- time_step(iter, "theta_update", {
       app_latent_update_theta(
@@ -2318,15 +2820,23 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     })
     new <- c(theta_mean, y_mean, sigma_state$inv_mean)
     par_change[[iter]] <- max(abs(new - old) / pmax(1, abs(old)))
-    if (iter >= min_iter && isTRUE(rhs_gate$passed) &&
-        is.finite(par_change[[iter]]) && par_change[[iter]] < tol) {
-      objective <- objective[seq_len(iter)]
-      par_change <- par_change[seq_len(iter)]
-      repaired_theta <- repaired_theta[seq_len(iter)]
-      rhs_gate_trace <- rhs_gate_trace[seq_len(iter)]
+    completed_iterations <- iter
+    converged_now <- !isTRUE(fixed_iterations) && iter >= min_iter && isTRUE(rhs_gate$passed) &&
+      is.finite(par_change[[iter]]) && par_change[[iter]] < tol
+    controlled_stop_now <- is.finite(stop_after_iteration) && iter >= stop_after_iteration
+    write_checkpoint(iter, force = isTRUE(converged_now) || isTRUE(controlled_stop_now) || iter == max_iter)
+    if (isTRUE(controlled_stop_now)) {
+      app_latent_checkpoint_stop(iter, checkpoint_cfg$path)
+    }
+    if (isTRUE(converged_now)) {
       break
     }
   }
+
+  objective <- objective[seq_len(completed_iterations)]
+  par_change <- par_change[seq_len(completed_iterations)]
+  repaired_theta <- repaired_theta[seq_len(completed_iterations)]
+  rhs_gate_trace <- rhs_gate_trace[seq_len(completed_iterations)]
 
   rhs_trace <- rhs_trace[vapply(rhs_trace, nrow, integer(1L)) > 0L]
   rhs_trace_df <- if (length(rhs_trace)) {
@@ -2335,7 +2845,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     data.frame()
   }
   rhs_diagnostics <- app_latent_prior_rhs_diagnostics(prior_state, length(objective))
-  final_converged <- isTRUE(rhs_diagnostics$convergence_gate_passed) &&
+  final_converged <- !isTRUE(fixed_iterations) && isTRUE(rhs_diagnostics$convergence_gate_passed) &&
     is.finite(tail(par_change, 1L)) && tail(par_change, 1L) < tol
 
   theta_draws <- time_step(NA_integer_, "theta_draw_generation", {
@@ -2366,6 +2876,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     do.call(rbind, substep_timing)
   } else {
     data.frame(iteration = integer(), parent_step = character(), step = character(), elapsed_seconds = numeric())
+  }
+  checkpoint_diagnostics$removed_on_success <- FALSE
+  if (isTRUE(checkpoint_cfg$enabled) && !isTRUE(checkpoint_cfg$keep_on_success)) {
+    app_latent_checkpoint_remove(checkpoint_cfg$path)
+    checkpoint_diagnostics$removed_on_success <- TRUE
   }
   list(
     method = "vb",
@@ -2405,6 +2920,9 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       iteration_timing = iteration_timing_df,
       substep_timing = substep_timing_df,
       warm_start = warm_start$diagnostics,
+      fixed_iterations = fixed_iterations,
+      checkpoint = checkpoint_diagnostics,
+      runtime_backend = runtime_backend,
       objective_type = "first_order_delta_expected_log_joint"
     ),
     variational_state = list(

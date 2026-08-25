@@ -160,6 +160,39 @@ fold-2/fold-3 paper-quantile grid generated from that registry is tracked as
 
 ## Application Artifact Lifecycle
 
+### Exact GloFAS Runtime Controls
+
+The latent-path AL-VB engine has an exact-runtime optimization layer that does
+not alter the model, likelihood, priors, design dimensions, convergence rule,
+or dense variational covariance. The layer consists of:
+
+- an isolated numerical-backend wrapper with hash-pinned libraries and explicit
+  CPU/thread allocation;
+- compiled immutable future-contract metadata and an exact structural-zero
+  persistence discrepancy Jacobian;
+- certified paired historical sufficient statistics with a reference fallback;
+- compact, versioned design serialization with a stable semantic hash;
+- exact atomic checkpoint/resume tied to design, engine, config, RNG, and
+  backend contracts;
+- optional immutable sharing of the quantile-invariant reference feature block;
+- dry-run-first lifecycle cleanup restricted to explicitly owned GloFAS runs.
+
+Use `scripts/glofas_exact_runtime_benchmark.R` for kernel, real-design future,
+serialization, fixed-iteration, exact checkpoint/resume, and converged-fit
+canaries. Use
+`scripts/glofas_numerical_backend_exec.py` to isolate a selected backend and
+`scripts/glofas_artifact_lifecycle.R` for scoped cleanup. Long campaigns should
+continue through `glofas_fit_recovery_scheduler.py`, which supports disjoint
+physical CPU sets, exact-checkpoint reconciliation, and an owned shared
+reference-feature cache. Generated benchmark data and checkpoints remain under
+ignored runtime roots; only code, tests, configs, and compact provenance belong
+in Git.
+
+OpenBLAS qualification is local to each child process. Never relink R, change
+system BLAS alternatives, or infer scientific equivalence from a kernel
+microbenchmark. Adoption requires fixed-iteration FR09 state/prediction gates
+and controlled throughput evidence.
+
 Application outputs move through three layers:
 
 ```text

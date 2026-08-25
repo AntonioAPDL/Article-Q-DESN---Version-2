@@ -179,7 +179,17 @@ qfit <- list(
   meta = toy_meta
 )
 cont <- app_qdesn_continue_latent_path(qfit, y_history = y_hist, y_future = y_future, return_jacobian = TRUE)
+cont_active <- app_qdesn_continue_latent_path(
+  qfit,
+  y_history = y_hist,
+  y_future = y_future,
+  return_jacobian = TRUE,
+  active_jacobian = TRUE
+)
 stopifnot(inherits(cont, "qdesn_latent_path_continuation"))
+stopifnot(isTRUE(cont_active$active_jacobian))
+stopifnot(identical(cont_active$X_future_core, cont$X_future_core))
+stopifnot(identical(cont_active$J_future_core, cont$J_future_core))
 stopifnot(isTRUE(all.equal(cont$X_future_core[, 1], H_full[(length(y_hist) + 1L):length(y_full), 1], tolerance = 1.0e-12)))
 stopifnot(isTRUE(all.equal(cont$input_lag_matrix[1L, ], c(5, 4), check.attributes = FALSE)))
 stopifnot(isTRUE(all.equal(cont$input_lag_matrix[2L, ], c(6, 5), check.attributes = FALSE)))
@@ -279,6 +289,100 @@ cont_cov <- app_qdesn_continue_latent_path(
   covariate_timeline = cov_timeline,
   return_jacobian = TRUE
 )
+cont_cov_active <- app_qdesn_continue_latent_path(
+  qfit_cov_article,
+  y_history = cov_panel$y_transformed,
+  y_future = cov_y_future,
+  future_dates = cov_future_dates,
+  covariate_timeline = cov_timeline,
+  return_jacobian = TRUE,
+  active_jacobian = TRUE
+)
+cont_cov_compiled <- app_qdesn_continue_latent_path(
+  qfit_cov_article,
+  y_history = cov_panel$y_transformed,
+  y_future = cov_y_future,
+  future_dates = cov_future_dates,
+  covariate_timeline = cov_timeline,
+  return_jacobian = TRUE,
+  compile_inputs = TRUE
+)
+compiled_cov_inputs <- cont_cov_compiled$compiled_input_contract
+cont_cov_compiled_reuse <- app_qdesn_continue_latent_path(
+  qfit_cov_article,
+  y_history = cov_panel$y_transformed,
+  y_future = cov_y_future,
+  future_dates = cov_future_dates,
+  covariate_timeline = cov_timeline,
+  return_jacobian = TRUE,
+  compiled_inputs = compiled_cov_inputs
+)
+cont_cov_compiled_active <- app_qdesn_continue_latent_path(
+  qfit_cov_article,
+  y_history = cov_panel$y_transformed,
+  y_future = cov_y_future,
+  future_dates = cov_future_dates,
+  covariate_timeline = cov_timeline,
+  return_jacobian = TRUE,
+  active_jacobian = TRUE,
+  compiled_inputs = compiled_cov_inputs
+)
+stopifnot(isTRUE(cont_cov_active$active_jacobian))
+stopifnot(identical(cont_cov_active$X_future_core, cont_cov$X_future_core))
+stopifnot(identical(cont_cov_active$J_future_core, cont_cov$J_future_core))
+stopifnot(identical(cont_cov_compiled$X_future_core, cont_cov$X_future_core))
+stopifnot(identical(cont_cov_compiled$J_future_core, cont_cov$J_future_core))
+stopifnot(identical(cont_cov_compiled$input_lag_matrix, cont_cov$input_lag_matrix))
+stopifnot(identical(cont_cov_compiled$future_input_audit, cont_cov$future_input_audit))
+stopifnot(identical(cont_cov_compiled_reuse$X_future_core, cont_cov$X_future_core))
+stopifnot(identical(cont_cov_compiled_reuse$J_future_core, cont_cov$J_future_core))
+stopifnot(identical(cont_cov_compiled_active$X_future_core, cont_cov$X_future_core))
+stopifnot(identical(cont_cov_compiled_active$J_future_core, cont_cov$J_future_core))
+stopifnot(nzchar(compiled_cov_inputs$contract_hash))
+bad_compiled_hash <- compiled_cov_inputs
+bad_compiled_hash$static_values[1L, 1L] <- bad_compiled_hash$static_values[1L, 1L] + 1
+bad_compiled_hash_msg <- tryCatch(
+  {
+    app_qdesn_validate_compiled_future_inputs(
+      bad_compiled_hash,
+      qfit_cov_article$meta$reservoir_input_spec,
+      cov_future_dates
+    )
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("hash mismatch", bad_compiled_hash_msg, fixed = TRUE))
+bad_compiled_na <- compiled_cov_inputs
+bad_compiled_na$future_index[1L, 1L] <- NA_real_
+bad_compiled_na_msg <- tryCatch(
+  {
+    app_qdesn_validate_compiled_future_inputs(
+      bad_compiled_na,
+      spec = qfit_cov_article$meta$reservoir_input_spec,
+      future_dates = cov_future_dates,
+      verify_hash = FALSE
+    )
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("incompatible", bad_compiled_na_msg, fixed = TRUE))
+bad_compiled_causality <- compiled_cov_inputs
+bad_compiled_causality$future_index[1L, 1L] <- 1L
+bad_compiled_causality_msg <- tryCatch(
+  {
+    app_qdesn_validate_compiled_future_inputs(
+      bad_compiled_causality,
+      qfit_cov_article$meta$reservoir_input_spec,
+      cov_future_dates,
+      verify_hash = FALSE
+    )
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("strict causality", bad_compiled_causality_msg, fixed = TRUE))
 stopifnot(isTRUE(cont_cov$covariate_jacobian_zero))
 stopifnot(isTRUE(all.equal(cont_cov$input_lag_matrix[1L, c("y_lag_1", "y_lag_2")], c(10, 9), check.attributes = FALSE)))
 stopifnot(isTRUE(all.equal(cont_cov$input_lag_matrix[2L, c("y_lag_1", "y_lag_2")], c(11, 10), check.attributes = FALSE)))

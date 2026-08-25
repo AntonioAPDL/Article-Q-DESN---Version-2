@@ -8,6 +8,8 @@ source(file.path(repo_root, "application/R/00_packages.R"))
 app_set_repo_root(repo_root)
 source(app_path("application/R/model_contract.R"))
 source(app_path("application/R/feature_contract.R"))
+source(app_path("application/R/latent_path_runtime_backend.R"))
+source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/glofas_constrained_median_screening.R"))
 

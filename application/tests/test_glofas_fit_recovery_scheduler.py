@@ -76,6 +76,56 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid boolean value"):
             scheduler.canonical_bool("maybe")
 
+    def test_scheduler_builds_disjoint_cpu_sets(self):
+        self.assertEqual(
+            scheduler.build_cpu_sets("0,1,2,3", "", 2),
+            [[0, 1], [2, 3]],
+        )
+        self.assertEqual(
+            scheduler.build_cpu_sets("", "0,4;1,5", 2),
+            [[0, 4], [1, 5]],
+        )
+        with self.assertRaisesRegex(ValueError, "disjoint"):
+            scheduler.build_cpu_sets("", "0,1;1,2", 2)
+
+    def test_scheduler_spreads_auto_physical_cores(self):
+        fixture = """# CPU,CORE,SOCKET,NODE,ONLINE
+0,0,0,0,Y
+1,1,1,1,Y
+2,2,0,0,Y
+3,3,1,1,Y
+4,0,0,0,Y
+5,1,1,1,Y
+"""
+        with mock.patch.object(scheduler.subprocess, "check_output", return_value=fixture), \
+                mock.patch.object(scheduler.os, "sched_getaffinity", return_value=set(range(6))):
+            self.assertEqual(scheduler.discover_physical_cpus(), [0, 1, 2, 3])
+
+    def test_reference_feature_cache_must_remain_in_owned_output_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            cache_root = output_root / "cache" / "reference_features"
+            self.assertEqual(
+                scheduler.resolve_reference_feature_cache_root(
+                    cache_root, output_root
+                ),
+                str(cache_root.resolve()),
+            )
+            with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
+                scheduler.resolve_reference_feature_cache_root(
+                    Path(tmp).parent / "outside", output_root
+                )
+
+    def test_valid_checkpoint_requires_matching_sidecar_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint = Path(tmp) / "fit.checkpoint.rds"
+            checkpoint.write_bytes(b"checkpoint")
+            digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+            Path(str(checkpoint) + ".sha256").write_text(digest + "\n", encoding="utf-8")
+            self.assertTrue(scheduler.checkpoint_valid({"checkpoint_path": str(checkpoint)}))
+            checkpoint.write_bytes(b"changed")
+            self.assertFalse(scheduler.checkpoint_valid({"checkpoint_path": str(checkpoint)}))
+
     def test_absolute_runtime_config_can_be_made_repo_relative(self):
         config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"
         self.assertEqual(
@@ -259,6 +309,26 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             row = self.make_manifest_row(tmp)
             row["run_dir"] = str(Path(tmp).parent / "outside")
             with self.assertRaisesRegex(ValueError, "escapes its owned runtime root"):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_requires_owned_checkpoint_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            run_dir = Path(row["run_dir"])
+            row.update({
+                "checkpoint_resume_enabled": "true",
+                "checkpoint_path": str(run_dir / "objects" / "fit.checkpoint.rds"),
+            })
+            scheduler.validate_manifest([row], Path(tmp), [0], 1)
+            row["checkpoint_path"] = str(Path(tmp) / "runs" / "other" / "fit.rds")
+            with self.assertRaisesRegex(ValueError, "Checkpoint path escapes"):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
+
+    def test_manifest_integrity_rejects_resume_without_checkpoint_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            row["checkpoint_resume_enabled"] = "true"
+            with self.assertRaisesRegex(ValueError, "enabled without a path"):
                 scheduler.validate_manifest([row], Path(tmp), [0], 1)
 
     def test_manifest_integrity_checks_owned_preflight_path(self):

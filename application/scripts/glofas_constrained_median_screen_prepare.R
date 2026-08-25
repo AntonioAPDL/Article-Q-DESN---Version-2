@@ -10,6 +10,8 @@ source(app_path("application/R/artifact_hygiene.R"))
 source(app_path("application/R/engine_contract.R"))
 source(app_path("application/R/model_contract.R"))
 source(app_path("application/R/feature_contract.R"))
+source(app_path("application/R/latent_path_runtime_backend.R"))
+source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/glofas_constrained_median_screening.R"))
 

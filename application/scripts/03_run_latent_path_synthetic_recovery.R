@@ -18,6 +18,8 @@ source(app_path("application/R/forecast_contract.R"))
 source(app_path("application/R/fit_qdesn_discrepancy.R"))
 source(app_path("application/R/fit_qdesn_latent_path.R"))
 source(app_path("application/R/simulate_latent_path.R"))
+source(app_path("application/R/latent_path_runtime_backend.R"))
+source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/latent_path_recovery.R"))
 

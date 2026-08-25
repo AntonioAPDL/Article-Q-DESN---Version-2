@@ -4,6 +4,39 @@ This directory stores tracked configuration files for the GloFAS application.
 Configuration should be declarative: scripts read these files and should not
 hard-code forecast origins, quantile levels, model grids, or output paths.
 
+Prospective latent-path runs may opt into exact runtime controls without
+changing the scientific specification:
+
+```yaml
+runtime_optimization:
+  paired_fixed_stats: true
+  compiled_future_contract: true
+  reference_feature_cache:
+    enabled: true
+    root: ""        # or QDESN_REFERENCE_FEATURE_CACHE_ROOT from the scheduler
+    wait_seconds: 600
+
+inference:
+  vb_ld:
+    checkpoint:
+      enabled: true
+      resume: true
+      path: ""      # 03_fit_models.R creates a fit-specific path when blank
+      every_iterations: 100
+      every_minutes: 30
+      keep_previous: true
+      keep_on_success: false
+```
+
+The numerical backend is selected by the child-process launcher rather than
+the scientific YAML. External libraries require a concrete path and SHA-256;
+all thread controls and CPU sets are recorded in the runtime manifest. Exact
+resume rejects a changed backend, design, engine, seed, or semantic VB config.
+The checkpoint triggers are dual safeguards: the first of 100 iterations or
+30 minutes writes an atomic checkpoint. The 100-iteration cadence added 0.324%
+measured write overhead in the full FR09 K=50 interruption/resume canary while
+preserving the complete resumed state and draws bit-for-bit.
+
 Final manuscript-facing promotions should use tracked configs from this
 directory. Local runtime variants under `local_trackers/runtime_configs/` are
 useful for sweeps and overnight launches, but they are ignored operational

@@ -18,7 +18,10 @@ Tracked helper files:
   `.rda`, `.RData`, and large local artifacts under ignored application output
   roots. These helpers never delete files. They include both file-level
   inventories and run-level summaries for deciding which unselected run
-  objects can be cleaned after promotion.
+  objects can be cleaned after promotion. The GloFAS lifecycle extension is
+  fail-closed: it requires explicit terminal run IDs, protects active paths and
+  named contenders, hashes every proposed file in the dry run, and rechecks
+  both ownership and hashes before deletion.
 - `input_contract.R`
 - `engine_contract.R`
   plus the inference-support gate for package-backed discrepancy fits. The
@@ -96,7 +99,11 @@ Tracked helper files:
   GloFAS empirical quantile path minus the latent reference path. It also
   records requested versus effective issued horizons, keyed future GloFAS
   design metadata, and first-order Delta prediction metadata for posterior-draw
-  quantiles.
+  quantiles. Its exact-runtime path compiles immutable future date/lag/member
+  maps, caches the persistence discrepancy continuation, and exposes a true
+  reference builder for numerical canaries. An optional content-addressed
+  reference-feature cache shares only quantile-invariant DESN foundations; it
+  validates panel/config/seed/code hashes and never shares mutable VB state.
 - `latent_path_vb_al.R`: article-side AL-VB implementation for the
   latent-path ensemble-likelihood model. It keeps a dense debug path for small
   equivalence tests, uses streamed grouped future moments for the production
@@ -106,7 +113,20 @@ Tracked helper files:
   release/convergence diagnostics, and stores the final future-state
   linearization for draw-level prediction. The application adapter defaults to
   25 frozen global-scale iterations; low-level callers must request a warmup
-  explicitly.
+  explicitly. The exact-runtime implementation adds a one-time fixed-row
+  pairing certificate, fused paired beta sufficient statistics with an
+  explicit fallback, fixed-iteration profiling controls, backend provenance,
+  and exact atomic checkpoint/resume. These paths preserve the same dense
+  covariance VB approximation; they do not introduce stochastic, mini-batch,
+  low-rank, or otherwise approximate inference.
+- `latent_path_runtime_backend.R`: fail-closed provenance for bundled R BLAS or
+  a child-process-only, hash-pinned OpenBLAS library. It records the effective
+  preload, thread controls, reported BLAS/LAPACK libraries, and CPU affinity;
+  it never changes system alternatives or the host R installation.
+- `latent_path_checkpoint.R`: versioned exact-VB checkpoints containing all
+  variational states, traces, RNG state, engine/design/backend contracts, and
+  timing accumulators. Writes are round-trip validated, hashed, fsynced, and
+  atomically installed while retaining one prior valid checkpoint.
 - `figure_provenance.R`
 - `plot_input_diagnostics.R`
 - `synthesize_quantiles.R`: monotone quantile-grid synthesis and crossing

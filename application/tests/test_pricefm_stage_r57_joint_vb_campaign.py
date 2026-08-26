@@ -133,10 +133,13 @@ def test_r57_runner_completes_tiny_train_val_case(tmp_path):
     assert summary["test_accessed"] is False
     assert summary["joint_dimension"] == 21
     assert summary["postfit_contract_pending"] is True
+    assert summary["output_checkpoint_format"] == "pricefm_joint_vb_checkpoint_v2"
+    assert summary["initialization_mode"] == "cold"
     assert (model / "joint_vb_initialization.rds").is_file()
     method = pd.read_csv(model / "model_method_summary.csv")
     assert method.iloc[0].model_family == "joint_qdesn_readout"
     assert method.iloc[0].likelihood_family == "al"
+    assert not bool(method.iloc[0].warm_start_enabled)
     assert not (adapter / "X_test.csv").exists()
 
 

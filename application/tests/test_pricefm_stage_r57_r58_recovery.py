@@ -266,6 +266,24 @@ def test_r58_rejects_test_outcomes_in_authority(tmp_path):
         module.run(args)
 
 
+def test_r58_full_surface_report_does_not_instruct_r57_to_continue():
+    module = load("r58_complete_report", "206_audit_pricefm_stage_r58_joint_recovery.py")
+    summary = {
+        "status": "full_surface_ready_for_scoring_contract_freeze",
+        "expected_cases": 114, "postfit_complete": 114, "remaining_cases": 0,
+        "dual_role_validation_improvements": 112,
+        "provisional_vb_initializer_candidates": 112, "strict_raw_candidates": 0,
+    }
+    report = module.render_report(
+        summary,
+        pd.DataFrame([{"likelihood_family": "al", "postfit_complete": 27}]),
+        pd.DataFrame([{"gate": "full", "passed": True}]),
+    )
+    assert "No further Stage-R57 fitting or postfit repair is required" in report
+    assert "Let R57 finish" not in report
+    assert "Freeze monotone-contract validation AQL" in report
+
+
 def test_recovery_monitor_only_repairs_and_audits(tmp_path, monkeypatch):
     module = load("r57_recovery_monitor", "207_monitor_pricefm_stage_r57_recovery.py")
     manifest = tmp_path / "manifest.csv"

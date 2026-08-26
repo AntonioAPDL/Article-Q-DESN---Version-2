@@ -183,6 +183,7 @@ def existing_summary(path: Path) -> dict:
 
 def method_summary(cfg: dict, model: Path, adapter: Path, health: dict) -> pd.DataFrame:
     old = existing_summary(model / "job_summary.json")
+    initialization_mode = str(cfg.get("initialization", {}).get("mode", "cold"))
     n_train = old.get("n_train")
     n_features = old.get("n_slopes")
     if n_train is None and (adapter / "y_train.csv").is_file():
@@ -206,8 +207,8 @@ def method_summary(cfg: dict, model: Path, adapter: Path, health: dict) -> pd.Da
         "chunking_mode": "joint_vb_dense", "converged": health["converged"],
         "iter": health["iterations"], "train_seconds": elapsed,
         "train_seconds_source": elapsed_source, "n_train": n_train,
-        "n_features": n_features, "warm_start_enabled": False,
-        "warm_start_strategy": "joint_initialization",
+        "n_features": n_features, "warm_start_enabled": initialization_mode != "cold",
+        "warm_start_strategy": initialization_mode,
     }])
 
 
@@ -423,6 +424,7 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         return {"case_id": case_id, "status": "not_fit_complete", "missing": ";".join(missing)}
     if not fit_is_terminal(model):
         return {"case_id": case_id, "status": "fit_postprocess_active"}
+    fit_summary = existing_summary(model / "job_summary.json")
     smoke_payload = yaml.safe_load(Path(cfg["smoke_config"]).read_text())
     smoke = smoke_payload["pricefm_desn_smoke"]
     if list(smoke.get("splits", [])) != ["train", "val"]:
@@ -486,7 +488,7 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
 
     checkpoint = model / "joint_vb_initialization.rds"
     manifest_path = model / "source_manifest.csv"
-    manifest = source_manifest({
+    manifest_sources = {
         "runtime_config": config_path, "source_config": Path(cfg["source_config"]),
         "adapter_manifest": adapter / "adapter_manifest.json",
         "feature_manifest": adapter / "feature_manifest.json",
@@ -498,7 +500,11 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         "trace": model / "model_trace_summary.csv",
         "method_summary": method_path,
         "repair_script": Path(__file__).resolve(),
-    })
+    }
+    initialization_cfg = cfg.get("initialization", {})
+    if initialization_cfg.get("checkpoint"):
+        manifest_sources["initialization_checkpoint"] = Path(initialization_cfg["checkpoint"])
+    manifest = source_manifest(manifest_sources)
     atomic_csv(manifest, manifest_path)
     payload = {
         "status": "completed", "fit_completed": True, "postfit_repaired": True,
@@ -506,6 +512,23 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         "likelihood_family": cfg["likelihood_family"], "method_id": cfg["method_id"],
         "vb_method_id": cfg["vb_method_id"], "quantiles": list(map(float, cfg["quantiles"])),
         "tau0": float(cfg["tau0"]), "converged": trace["converged"],
+        "stage": cfg.get("stage", "R57"),
+        "source_case_id": cfg.get("source_case_id", case_id),
+        "initialization_mode": fit_summary.get(
+            "initialization_mode", initialization_cfg.get("mode", "cold")
+        ),
+        "initialization_checkpoint": fit_summary.get(
+            "initialization_checkpoint", initialization_cfg.get("checkpoint", "")
+        ),
+        "initialization_checkpoint_sha256": fit_summary.get(
+            "initialization_checkpoint_sha256", initialization_cfg.get("checkpoint_sha256", "")
+        ),
+        "output_checkpoint_format": fit_summary.get(
+            "output_checkpoint_format",
+            "pricefm_joint_vb_checkpoint_v2"
+            if cfg.get("stage") == "R60"
+            else "pricefm_stage_r57_joint_vb_initialization_v1",
+        ),
         "iterations": trace["iterations"], "final_max_change": trace["final_max_change"],
         "last5_change_slope": trace["last5_change_slope"],
         "validation_crossing_rows": raw_crossing["crossing_rows"],

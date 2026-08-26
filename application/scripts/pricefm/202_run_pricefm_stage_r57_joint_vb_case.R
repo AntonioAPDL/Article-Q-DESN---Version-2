@@ -129,6 +129,49 @@ main <- function() {
     fail("Joint coefficient dimension exceeds the deliberately declared dense VB bound.")
   }
 
+  initialization <- cfg$initialization %||% list(mode = "cold")
+  initialization_mode <- as.character(initialization$mode %||% "cold")
+  initialization_checkpoint <- ""
+  initialization_checkpoint_sha256 <- ""
+  fit_init <- NULL
+  if (!identical(initialization_mode, "cold")) {
+    allowed_modes <- c("core_plus_rhs_warm_restart_v1", "exact_full_state_continuation_v2")
+    if (!(initialization_mode %in% allowed_modes)) {
+      fail(sprintf("Unsupported initialization mode '%s'.", initialization_mode))
+    }
+    initialization_checkpoint <- normalizePath(initialization$checkpoint, mustWork = TRUE)
+    initialization_checkpoint_sha256 <- app_sha256_file(initialization_checkpoint)
+    if (!identical(initialization_checkpoint_sha256, as.character(initialization$checkpoint_sha256))) {
+      fail("Initialization checkpoint hash does not match the prepared contract.")
+    }
+    checkpoint_in <- readRDS(initialization_checkpoint)
+    expected_format <- if (identical(initialization_mode, "core_plus_rhs_warm_restart_v1")) {
+      "pricefm_stage_r57_joint_vb_initialization_v1"
+    } else "pricefm_joint_vb_checkpoint_v2"
+    if (!identical(as.character(checkpoint_in$format), expected_format)) {
+      fail(sprintf("Initialization checkpoint format is not %s.", expected_format))
+    }
+    source_case_id <- as.character(initialization$source_case_id %||% cfg$case_id)
+    if (!identical(as.character(checkpoint_in$case_id), source_case_id) ||
+        !identical(as.character(checkpoint_in$likelihood_family), as.character(cfg$likelihood_family)) ||
+        as.integer(checkpoint_in$p) != ncol(Z_train) ||
+        !identical(round(as.numeric(checkpoint_in$tau), 12), round(quantiles, 12))) {
+      fail("Initialization checkpoint is incompatible with the prepared case contract.")
+    }
+    if (identical(initialization_mode, "core_plus_rhs_warm_restart_v1")) {
+      fit_init <- list(
+        beta_mean = checkpoint_in$beta,
+        alpha_mean = checkpoint_in$alpha,
+        sigma_mean = checkpoint_in$sigma,
+        gamma_mean = if (identical(cfg$likelihood_family, "exal")) checkpoint_in$gamma else NULL,
+        rhs_state = checkpoint_in$rhs_state
+      )
+    } else {
+      if (!is.list(checkpoint_in$fit_state)) fail("Version-2 checkpoint lacks full fit_state.")
+      fit_init <- checkpoint_in$fit_state
+    }
+  }
+
   started <- proc.time()[["elapsed"]]
   common <- list(
     y = y_train,
@@ -143,7 +186,8 @@ main <- function() {
     b_sigma = as.numeric(cfg$b_sigma),
     alpha_min_spacing = 0,
     max_dense_dim = as.integer(cfg$max_dense_dim),
-    rhs_vb_inner = as.integer(cfg$rhs_vb_inner)
+    rhs_vb_inner = as.integer(cfg$rhs_vb_inner),
+    init = fit_init
   )
   fit <- if (identical(cfg$likelihood_family, "al")) {
     do.call(app_joint_qvp_fit_al_vb_tiny, common)
@@ -203,13 +247,18 @@ main <- function() {
     train_seconds = as.numeric(elapsed),
     n_train = length(y_train),
     n_features = ncol(Z_train),
-    warm_start_enabled = FALSE,
-    warm_start_strategy = "joint_initialization",
+    warm_start_enabled = !identical(initialization_mode, "cold"),
+    warm_start_strategy = initialization_mode,
     stringsAsFactors = FALSE
   )
   utils::write.csv(method_summary, file.path(out, "model_method_summary.csv"), row.names = FALSE)
+  state_fields <- intersect(c(
+    "beta_mean", "beta_cov", "alpha_mean", "sigma_mean", "sigma_shape", "sigma_rate",
+    "gamma_mean", "v_mean", "v_inv_mean", "u_mean", "u_inv_mean", "s_mean", "s2_mean",
+    "block_moments", "rhs_state"
+  ), names(fit))
   checkpoint <- list(
-    format = "pricefm_stage_r57_joint_vb_initialization_v1",
+    format = "pricefm_joint_vb_checkpoint_v2",
     case_id = cfg$case_id,
     likelihood_family = cfg$likelihood_family,
     method_id = cfg$method_id,
@@ -218,10 +267,14 @@ main <- function() {
     sigma = sigma,
     gamma = gamma,
     rhs_state = fit$rhs_state,
+    fit_state = fit[state_fields],
     tau = quantiles,
     p = ncol(Z_train),
     intercept_removed = TRUE,
-    source_config_sha256 = cfg$source_config_sha256
+    source_config_sha256 = cfg$source_config_sha256,
+    initialization_mode = initialization_mode,
+    initialization_checkpoint = initialization_checkpoint,
+    initialization_checkpoint_sha256 = initialization_checkpoint_sha256
   )
   checkpoint_path <- file.path(out, "joint_vb_initialization.rds")
   saveRDS(checkpoint, checkpoint_path, compress = "xz")
@@ -247,10 +300,16 @@ main <- function() {
   }
 
   source_manifest <- data.frame(
-    label = c("runtime_config", "source_config", "adapter_manifest", "vb_initialization", "validation_metrics"),
+    label = c("runtime_config", "source_config", "adapter_manifest", "vb_checkpoint_v2", "validation_metrics"),
     path = c(config_path, cfg$source_config, adapter_manifest_path, checkpoint_path, file.path(out, "metric_summary.csv")),
     stringsAsFactors = FALSE
   )
+  if (nzchar(initialization_checkpoint)) {
+    source_manifest <- rbind(source_manifest, data.frame(
+      label = "initialization_checkpoint", path = initialization_checkpoint,
+      stringsAsFactors = FALSE
+    ))
+  }
   source_manifest$sha256 <- vapply(source_manifest$path, app_sha256_file, character(1L))
   source_manifest$bytes <- as.numeric(file.info(source_manifest$path)$size)
   utils::write.csv(source_manifest, file.path(out, "source_manifest.csv"), row.names = FALSE)
@@ -280,6 +339,10 @@ main <- function() {
     joint_dimension = length(beta),
     quantiles = quantiles,
     tau0 = as.numeric(cfg$tau0),
+    initialization_mode = initialization_mode,
+    initialization_checkpoint = initialization_checkpoint,
+    initialization_checkpoint_sha256 = initialization_checkpoint_sha256,
+    output_checkpoint_format = checkpoint$format,
     converged = isTRUE(fit$converged),
     iterations = nrow(fit$trace),
     elapsed_seconds = as.numeric(elapsed),

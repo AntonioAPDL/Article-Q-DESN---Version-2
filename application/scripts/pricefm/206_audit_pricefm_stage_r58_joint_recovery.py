@@ -261,13 +261,45 @@ def markdown_table(frame: pd.DataFrame) -> str:
 def render_report(summary: dict, family: pd.DataFrame, gates: pd.DataFrame) -> str:
     family_table = markdown_table(family) if len(family) else "No repaired cases yet."
     gate_table = markdown_table(gates)
+    if summary["status"] == "full_surface_ready_for_scoring_contract_freeze":
+        decision = (
+            "The complete 114-case validation surface is repaired and integrity-verified. "
+            "No further Stage-R57 fitting or postfit repair is required. The next action is "
+            "to freeze the joint scoring contract, diagnose the two validation nonwinners, "
+            "and preserve the sealed-test firewall."
+        )
+        next_action = (
+            "Freeze monotone-contract validation AQL as the primary joint score and raw-joint "
+            "AQL as an audit diagnostic. Then compare bounded initializer-stability repairs for "
+            "the two validation nonwinners. Only after that validation decision is frozen may "
+            "the sealed test ledger be opened for audit. MCMC, registry, and article actions "
+            "remain separately blocked."
+        )
+    elif summary["status"] == "partial_or_complete_surface_with_integrity_failures":
+        decision = (
+            "The current validation surface contains integrity failures. Repair or quarantine "
+            "those artifacts before freezing any scientific decision."
+        )
+        next_action = (
+            "Resolve every reported integrity failure, rerun the idempotent postfit repair, "
+            "and repeat this audit. Do not freeze selection or open the sealed test ledger."
+        )
+    else:
+        decision = (
+            "Stage-R57 is incomplete. Continue only the missing terminal postfit repairs without "
+            "refitting completed models."
+        )
+        next_action = (
+            "Let the remaining Stage-R57 cases finish, run the idempotent postfit repair until "
+            "all expected cases are repaired, and repeat this audit before freezing the scoring "
+            "contract."
+        )
     return f"""# PriceFM Stage-R58 joint recovery audit
 
 ## Decision
 
-Status: `{summary['status']}`. Stage-R57 should continue to the complete 114-case
-validation surface while terminal cases are repaired without refitting. No MCMC,
-test audit, registry mutation, or article mutation is authorized by this audit.
+Status: `{summary['status']}`. {decision} No MCMC, test audit, registry mutation,
+or article mutation is authorized by this audit.
 
 ## Current surface
 
@@ -295,11 +327,7 @@ contract must be frozen before MCMC eligibility can be declared.
 
 ## Required next action
 
-Let R57 finish, run the idempotent postfit repair until all 114 cases are repaired,
-then rerun this audit and freeze the raw-versus-monotone scoring policy. Only after
-that full-surface validation decision may a bounded MCMC confirmation manifest be
-designed. The sealed test ledger remains unopened until validation selection is
-frozen.
+{next_action}
 """
 
 
@@ -370,6 +398,11 @@ def run(args: argparse.Namespace) -> dict:
         ])
     atomic_csv(evidence_manifest(evidence), output / "source_manifest.csv")
     test_opened = bool(cases.test_opened.any())
+    recommended_action = "continue_r57_repair_all_cases_then_repeat_r58_audit"
+    if status == "partial_or_complete_surface_with_integrity_failures":
+        recommended_action = "repair_or_quarantine_integrity_failures_then_repeat_r58_audit"
+    elif status == "full_surface_ready_for_scoring_contract_freeze":
+        recommended_action = "freeze_joint_scoring_contract_then_run_initializer_stability_and_targeted_repair"
     summary = {
         "status": status, "expected_cases": int(args.expected_cases),
         "postfit_complete": postfit_complete,
@@ -383,7 +416,7 @@ def run(args: argparse.Namespace) -> dict:
         "selection_frozen": False, "joint_scoring_contract_frozen": False,
         "test_opened": test_opened, "mcmc_launch_authorized": False,
         "registry_mutation_authorized": False, "article_mutation_authorized": False,
-        "recommended_action": "continue_r57_repair_all_cases_then_freeze_scoring_contract",
+        "recommended_action": recommended_action,
     }
     write_json(output / "summary.json", summary)
     (output / "pricefm_stage_r58_joint_recovery_report.md").write_text(

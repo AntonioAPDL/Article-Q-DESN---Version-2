@@ -12365,6 +12365,55 @@ app_joint_qvp_normalize_init <- function(init, K, p) {
   out
 }
 
+app_joint_qvp_restore_rhs_vb_state <- function(rhs_state, K, p, fallback) {
+  if (is.null(rhs_state)) return(fallback)
+  expected <- c("anchor", if (K > 1L) paste0("delta_", 2:K) else character())
+  if (!is.list(rhs_state) || !setequal(names(rhs_state), expected)) {
+    stop("Initial RHS state has incompatible blocks.", call. = FALSE)
+  }
+  validate_block <- function(block, label) {
+    vector_fields <- c("lambda2", "nu")
+    optional_vectors <- c("lambda2_inv_mean", "nu_inv_mean", "theta_second_mean")
+    scalar_fields <- c("tau2", "xi", "tau0")
+    optional_scalars <- c("tau2_inv_mean", "xi_inv_mean", "zeta2_inv_mean")
+    for (field in vector_fields) {
+      value <- as.numeric(block[[field]])
+      if (length(value) != p || any(!is.finite(value)) || any(value <= 0)) {
+        stop(sprintf("Initial RHS %s.%s is incompatible.", label, field), call. = FALSE)
+      }
+    }
+    for (field in optional_vectors) {
+      if (!is.null(block[[field]])) {
+        value <- as.numeric(block[[field]])
+        if (length(value) != p || any(!is.finite(value)) || any(value <= 0)) {
+          stop(sprintf("Initial RHS %s.%s is incompatible.", label, field), call. = FALSE)
+        }
+      }
+    }
+    for (field in scalar_fields) {
+      value <- as.numeric(block[[field]])
+      if (length(value) != 1L || !is.finite(value) || value <= 0) {
+        stop(sprintf("Initial RHS %s.%s is incompatible.", label, field), call. = FALSE)
+      }
+    }
+    for (field in optional_scalars) {
+      if (!is.null(block[[field]])) {
+        value <- as.numeric(block[[field]])
+        if (length(value) != 1L || !is.finite(value) || value < 0) {
+          stop(sprintf("Initial RHS %s.%s is incompatible.", label, field), call. = FALSE)
+        }
+      }
+    }
+    zeta2 <- as.numeric(block$zeta2)
+    if (length(zeta2) != 1L || is.na(zeta2) || zeta2 <= 0) {
+      stop(sprintf("Initial RHS %s.zeta2 is incompatible.", label), call. = FALSE)
+    }
+    block
+  }
+  restored <- lapply(expected, function(name) validate_block(rhs_state[[name]], name))
+  stats::setNames(restored, expected)
+}
+
 app_joint_qvp_alpha_prior_spec <- function(y, tau, alpha_prior_mean = NULL, alpha_prior_sd = Inf) {
   y <- as.numeric(y)
   tau <- app_joint_qvp_validate_tau_grid(tau)
@@ -14569,7 +14618,8 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   alpha_prior_sd = Inf,
   alpha_min_spacing = 0,
   max_dense_dim = 300L,
-  rhs_vb_inner = 5L
+  rhs_vb_inner = 5L,
+  init = NULL
 ) {
   y <- as.numeric(y)
   Z <- app_joint_qvp_check_design(Z)
@@ -14588,20 +14638,50 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   }
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(
+  normalized_init <- app_joint_qvp_normalize_init(init, K, p)
+  default_rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
     anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
   )
+  rhs_state <- app_joint_qvp_restore_rhs_vb_state(init$rhs_state %||% NULL, K, p, default_rhs_state)
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
-  beta_mean <- rep(0, K * p)
-  beta_cov <- solve(as.matrix(prior$P_beta + Matrix::Diagonal(K * p) * 1.0e-8))
-  alpha <- sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
-  sigma_shape <- rep(a_sigma + 1.5 * kappa * Tn, K)
-  sigma_rate <- rep(b_sigma + max(stats::var(y), 1.0e-3), K)
-  v_mean <- matrix(1, nrow = Tn, ncol = K)
-  v_inv_mean <- matrix(1, nrow = Tn, ncol = K)
+  beta_mean <- normalized_init$beta %||% rep(0, K * p)
+  default_beta_cov <- solve(as.matrix(prior$P_beta + Matrix::Diagonal(K * p) * 1.0e-8))
+  beta_cov <- if (!is.null(init$beta_cov)) {
+    value <- as.matrix(init$beta_cov)
+    if (!identical(dim(value), c(K * p, K * p)) || any(!is.finite(value))) {
+      stop("Initial beta covariance is incompatible.", call. = FALSE)
+    }
+    value
+  } else default_beta_cov
+  alpha <- normalized_init$alpha %||% sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
+  default_sigma_shape <- rep(a_sigma + 1.5 * kappa * Tn, K)
+  sigma_shape <- if (!is.null(init$sigma_shape)) as.numeric(init$sigma_shape) else default_sigma_shape
+  if (length(sigma_shape) != K || any(!is.finite(sigma_shape)) || any(sigma_shape <= 1)) {
+    stop("Initial sigma shape is incompatible.", call. = FALSE)
+  }
+  sigma_rate <- if (!is.null(init$sigma_rate)) {
+    as.numeric(init$sigma_rate)
+  } else if (!is.null(normalized_init$sigma)) {
+    normalized_init$sigma * (sigma_shape - 1)
+  } else {
+    rep(b_sigma + max(stats::var(y), 1.0e-3), K)
+  }
+  if (length(sigma_rate) != K || any(!is.finite(sigma_rate)) || any(sigma_rate <= 0)) {
+    stop("Initial sigma rate is incompatible.", call. = FALSE)
+  }
+  restore_matrix <- function(value, default, label) {
+    if (is.null(value)) return(default)
+    value <- as.matrix(value)
+    if (!identical(dim(value), c(Tn, K)) || any(!is.finite(value)) || any(value <= 0)) {
+      stop(sprintf("Initial %s is incompatible.", label), call. = FALSE)
+    }
+    value
+  }
+  v_mean <- restore_matrix(init$v_mean %||% NULL, matrix(1, nrow = Tn, ncol = K), "v_mean")
+  v_inv_mean <- restore_matrix(init$v_inv_mean %||% NULL, matrix(1, nrow = Tn, ncol = K), "v_inv_mean")
   trace <- vector("list", max_iter)
   monitor_trace <- vector("list", max_iter)
   elbo_trace <- vector("list", max_iter)

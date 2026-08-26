@@ -1185,6 +1185,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   method_id = NULL
 ) {
   augmentation <- match.arg(augmentation)
+  external_init_supplied <- !is.null(init)
   if (!identical(as.numeric(kappa), 1)) {
     stop("Structured exAL inference is initially restricted to kappa = 1.", call. = FALSE)
   }
@@ -1227,11 +1228,14 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   beta_mean <- normalized_init$beta %||% rep(0, K * p)
   alpha <- normalized_init$alpha %||% sort(as.numeric(stats::quantile(y, tau, names = FALSE, type = 8)))
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(
+  default_rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
     anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
   )
+  rhs_state <- if (external_init_supplied) {
+    app_joint_qvp_restore_rhs_vb_state(init$rhs_state %||% NULL, K, p, default_rhs_state)
+  } else default_rhs_state
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
   beta_cov <- if (!is.null(init$beta_cov) && identical(dim(as.matrix(init$beta_cov)), c(K * p, K * p))) {
@@ -1273,9 +1277,19 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   s2_mean <- if (!is.null(init$s2_mean) && identical(dim(as.matrix(init$s2_mean)), c(Tn, K))) {
     as.matrix(init$s2_mean)
   } else matrix(1, Tn, K)
-  block_moments <- lapply(seq_len(K), function(k) {
+  default_block_moments <- lapply(seq_len(K), function(k) {
     app_joint_exqdesn_point_scale_shape_moments(tau[[k]], gamma[[k]], sigma_mean[[k]])
   })
+  block_moments <- if (!is.null(init$block_moments)) {
+    candidate <- init$block_moments
+    valid <- is.list(candidate) && length(candidate) == K && all(vapply(
+      candidate,
+      function(value) is.numeric(value) && length(value) > 0L && all(is.finite(value)),
+      logical(1L)
+    ))
+    if (!valid) stop("Initial structured scale-shape moments are incompatible.", call. = FALSE)
+    candidate
+  } else default_block_moments
   trace <- vector("list", max_iter)
   quadrature_rows <- list()
   block_rows <- list()
@@ -1467,6 +1481,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     p_gamma_mean = vapply(block_moments, `[[`, numeric(1L), "p_gamma_mean"),
     s_mean = s_mean,
     s2_mean = s2_mean,
+    block_moments = block_moments,
     rhs_state = rhs_state,
     rhs_prior_summary = rhs_summary,
     qhat_mean = qhat_mean,

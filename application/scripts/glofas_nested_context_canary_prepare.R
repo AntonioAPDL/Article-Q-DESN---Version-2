@@ -21,13 +21,15 @@ for (name in c("candidates", "runs", "logs", "scores", "status", "tables", "comm
 
 prior_root <- app_path("local_trackers/runtime_configs/glofas_context_prior_repair_20260826")
 repair_root <- app_path("local_trackers/runtime_configs/glofas_discrepancy_context_repair_20260825")
+source_cache <- file.path(prior_root, "common_cache", "may11_2022")
+shared_cache <- file.path(output_root, "common_cache", "may11_2022")
 augmented_config <- file.path(prior_root, "candidates/ctxsd_0100/may11_2022/config_p50.yaml")
 baseline_config <- file.path(repair_root, "candidates/t01_last/may11_2022/config_p50.yaml")
 source_fit <- file.path(
   repair_root,
   "runs/glofas_discrepancy_context_repair_20260825_t01_last_may11_2022/objects/qdesn_transition_t01_last_may11_2022_p50.rds"
 )
-required <- c(augmented_config, baseline_config, source_fit)
+required <- c(augmented_config, baseline_config, source_fit, file.path(source_cache, "application_panel.rds"))
 if (!all(file.exists(required))) {
   stop(sprintf("Required retained evidence is missing: %s", paste(required[!file.exists(required)], collapse = ", ")), call. = FALSE)
 }
@@ -35,6 +37,14 @@ source_object <- readRDS(source_fit)
 source_contract <- source_object$warm_start_contract %||% NULL
 if (is.null(source_contract) || is.null(source_contract$theta_names)) {
   stop("The retained T01 source fit lacks named warm-start coordinates.", call. = FALSE)
+}
+app_ensure_dir(shared_cache)
+if (!file.copy(
+    file.path(source_cache, "application_panel.rds"),
+    file.path(shared_cache, "application_panel.rds"),
+    overwrite = FALSE
+  )) {
+  stop("Could not materialize the immutable May application panel.", call. = FALSE)
 }
 
 arms <- data.frame(
@@ -71,7 +81,7 @@ for (i in seq_len(nrow(arms))) {
   cfg$paths$quantile_grid <- file.path(candidate_dir, "quantile_grid_p50.csv")
   cfg$paths$runs <- file.path(output_root, "runs")
   cfg$paths$logs <- file.path(output_root, "logs")
-  cfg$paths$cache <- file.path(output_root, "common_cache", id)
+  cfg$paths$cache <- shared_cache
   cfg$paths$generated_outputs <- file.path(output_root, "generated")
   cfg$inference$vb_ld$max_iter <- 150L
   cfg$inference$vb_ld$max_iter_hard_cap <- 150L

@@ -1,0 +1,13 @@
+candidate_id,anchor_method,anchor_window,anchor_half_life,glofas_level,glofas_anomaly,anomaly_window,context_in_reservoir,context_in_readout,context_lags,priority,enabled,role,retain_heavy,notes
+t01_last,last,,,false,false,50,true,true,0,1,true,legacy_mechanism_comparator,true,Factorized form of the FR09 last-value static anchor without added GloFAS context.
+t02_mean14,rolling_mean,14,,false,false,50,true,true,0,2,true,anchor_bridge,false,Causal trailing-14 mean discrepancy anchor.
+t03_mean30,rolling_mean,30,,false,false,50,true,true,0,3,true,anchor_bridge,false,Causal trailing-30 mean discrepancy anchor.
+t04_mean50,rolling_mean,50,,false,false,50,true,true,0,4,true,anchor_bridge,false,Causal trailing-50 mean discrepancy anchor.
+t05_mean90,rolling_mean,90,,false,false,50,true,true,0,5,true,anchor_bridge,false,Causal trailing-90 mean discrepancy anchor.
+t06_median30,rolling_median,30,,false,false,50,true,true,0,6,true,anchor_bridge,false,Causal trailing-30 median discrepancy anchor.
+t07_median50,rolling_median,50,,false,false,50,true,true,0,7,true,anchor_bridge,false,Causal trailing-50 median discrepancy anchor.
+t08_ewma14,ewma,,14,false,false,50,true,true,0,8,true,anchor_bridge,false,Causal discrepancy EWMA with 14-day half-life.
+t09_ewma30,ewma,,30,false,false,50,true,true,0,9,true,anchor_bridge,false,Causal discrepancy EWMA with 30-day half-life.
+t10_last_gctx,last,,,true,true,50,true,true,0,10,true,context_bridge,false,Last-value anchor with discrepancy-only issued GloFAS level and anomaly context.
+t11_mean30_gctx,rolling_mean,30,,true,true,50,true,true,0,11,true,context_bridge,false,Trailing-30 mean anchor with discrepancy-only issued GloFAS level and anomaly context.
+t12_mean50_gctx,rolling_mean,50,,true,true,50,true,true,0,12,true,context_bridge,false,Trailing-50 mean anchor with discrepancy-only issued GloFAS level and anomaly context.

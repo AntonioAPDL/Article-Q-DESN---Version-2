@@ -1,0 +1,5 @@
+cutoff_id,origin_date,bundle_dir,glofas_source_id,future_policy,selection_role,priority,enabled,notes
+nov12_2021,2021-11-12,application/data_local/frozen_inputs/authoritative_cutoffs/cutoff_date=2021-11-12,glofas_hist_v31_lisflood_cons,origin_persistence,primary_v31,1,true,Primary v3.1 development origin; future PPT and soil use the causal origin-persistence fallback.
+dec21_2021,2021-12-21,application/data_local/frozen_inputs/authoritative_cutoffs/cutoff_date=2021-12-21,glofas_hist_v31_lisflood_cons,origin_persistence,primary_v31,2,true,Primary v3.1 development origin; future PPT and soil use the causal origin-persistence fallback.
+may11_2022,2022-05-11,application/data_local/frozen_inputs/authoritative_cutoffs/cutoff_date=2022-05-11,glofas_hist_v31_lisflood_cons,origin_persistence,primary_v31,3,true,Primary v3.1 development origin; future PPT and soil use the causal origin-persistence fallback.
+jan23_2021,2021-01-23,application/data_local/frozen_inputs/authoritative_cutoffs/cutoff_date=2021-01-23,glofas_hist_v21_htessel_cons,origin_persistence,supplemental_v21,4,true,Supplemental source-vintage sensitivity origin; never sufficient by itself for advancement.

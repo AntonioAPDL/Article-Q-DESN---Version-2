@@ -12,7 +12,7 @@ args <- app_parse_args(list(
   candidate_id = "",
   run_dir = "",
   output_root = "local_trackers/runtime_configs/glofas_fit_recovery_20260730/scores",
-  cutoff_date = "2022-12-25",
+  cutoff_date = "",
   windows = "all,1000,500,200,100,50"
 ))
 if (!nzchar(args$candidate_id) || !nzchar(args$run_dir)) {
@@ -35,10 +35,25 @@ if (length(quantile_levels) != 1L || quantile_levels[[1L]] <= 0 || quantile_leve
   stop("Observed-fit scoring requires exactly one valid quantile level.", call. = FALSE)
 }
 quantile_level <- quantile_levels[[1L]]
+cutoff_date <- trimws(as.character(args$cutoff_date %||% ""))
+if (!nzchar(cutoff_date)) {
+  prediction_path <- file.path(run_dir, "tables", "prediction_quantiles.csv")
+  if (!file.exists(prediction_path)) {
+    stop("Observed-fit scoring cannot infer the cutoff without prediction_quantiles.csv.", call. = FALSE)
+  }
+  predictions <- app_read_csv(prediction_path)
+  origins <- unique(as.Date(predictions$origin_date[!is.na(predictions$origin_date)]))
+  if (length(origins) != 1L) {
+    stop("Observed-fit scoring requires exactly one inferable forecast origin.", call. = FALSE)
+  }
+  cutoff_date <- as.character(origins[[1L]])
+}
+cutoff_date <- as.Date(cutoff_date)
+if (is.na(cutoff_date)) stop("Observed-fit scoring received an invalid cutoff date.", call. = FALSE)
 history <- app_glofas_fit_recovery_history(
   raw_history,
   candidate_id = args$candidate_id,
-  cutoff_date = as.Date(args$cutoff_date)
+  cutoff_date = cutoff_date
 )
 history$quantile_level <- quantile_level
 scores <- app_glofas_fit_recovery_score_history(history, windows = windows, tau = quantile_level)

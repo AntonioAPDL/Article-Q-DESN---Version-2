@@ -182,3 +182,28 @@ stopifnot(all(oracle_timeline$ppt_role[oracle_timeline$date > as.Date("2021-01-1
 oracle_future_row <- oracle_timeline[oracle_timeline$date == as.Date("2021-01-12"), , drop = FALSE]
 stopifnot(abs(oracle_future_row$ppt - obs_ppt) < 1.0e-12)
 stopifnot(sum(oracle_timeline$ppt_uses_realized_future, na.rm = TRUE) == 5L)
+
+origin_cfg <- cov_cfg
+origin_cfg$covariates$source_policy <- NULL
+origin_cfg$covariates$future_policy <- "origin_persistence"
+origin_cfg$covariates$allow_realized_future <- FALSE
+origin_cfg$covariates$forecast$handoff_root <- NULL
+origin_timeline <- app_build_model_covariate_timeline(
+  origin_cfg,
+  truncated_manifest,
+  cutoff,
+  panel = panel_stub
+)
+origin_future <- origin_timeline$date > as.Date("2021-01-10")
+stopifnot(all(
+  origin_timeline$ppt_role[origin_future] == "forecast_origin_persistence"
+))
+stopifnot(all(origin_timeline$ppt[origin_future] == 9))
+stopifnot(all(abs(origin_timeline$soil[origin_future] - 0.30) < 1e-12))
+stopifnot(!any(origin_timeline$ppt_uses_realized_future, na.rm = TRUE))
+origin_policy <- app_validate_covariate_source_policy(
+  origin_cfg,
+  truncated_manifest,
+  cutoff
+)
+stopifnot(isTRUE(origin_policy$deployable_forecast_covariates[[1L]]))

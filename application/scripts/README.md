@@ -385,6 +385,23 @@ replays use explicitly oracle-realized future precipitation and soil moisture,
 so they diagnose portability but do not represent operational forecast skill.
 The finalizer never starts a seven-quantile run automatically.
 
+## Causal GloFAS Discrepancy-Transition Bridge
+
+`glofas_discrepancy_transition_prepare.R` verifies the frozen FR09 base-config
+and model-grid hashes, materializes four causal historical panels, checks that
+future PPT/soil values use origin persistence, and writes 48 unique configs and
+runtime-manifest rows. `glofas_discrepancy_transition_launch.sh` delegates them
+to the generic scheduler with 20 one-thread serial-OpenBLAS workers, exact
+checkpoint resume, and an owned reference-feature cache.
+
+Use `glofas_discrepancy_transition_health.py` or the companion watch script for
+counts and per-run progress. Once every run is terminal,
+`glofas_discrepancy_transition_finalize.R` recomputes future reference and
+discrepancy-proxy scores, applies historical and numerical guardrails, ranks
+the three v3.1 origins with equal weight, reports the v2.1 origin separately,
+and performs protected terminal cleanup. It cannot evaluate December 2022,
+launch full7, promote outputs, or edit article files.
+
 ## GloFAS Full-Quantile Scientific Audit
 
 `glofas_fit_recovery_full7_scientific_audit.R` closes out a completed

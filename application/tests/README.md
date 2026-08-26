@@ -55,6 +55,12 @@ Tracked tests:
   allocation, disjoint multithread sets, checkpoint-aware restart with owned
   checkpoint paths, and owned reference-cache roots in addition to the
   existing bounded scheduler gates.
+- `test_glofas_discrepancy_transition.R`: legacy mapping, strictly prior
+  anchors, discrepancy-only context, issued-ensemble provenance, and causal
+  baseline construction.
+- `test_glofas_discrepancy_transition_campaign.R`: candidate/cutoff cardinality,
+  exact FR09 comparator routing, origin-persistence weather, no-leakage gates,
+  future discrepancy scoring, and equal-origin aggregation.
 - `test_no_leakage.R`: forecast-origin information sets and target dates.
 - `test_quantile_grid.R`: sorted quantile levels and monotone synthesis output.
 - `test_reproducibility.R`: fixed seeds, stable run IDs, and required artifacts.

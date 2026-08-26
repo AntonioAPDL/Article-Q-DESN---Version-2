@@ -97,9 +97,14 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
 4,0,0,0,Y
 5,1,1,1,Y
 """
-        with mock.patch.object(scheduler.subprocess, "check_output", return_value=fixture), \
+        with mock.patch.object(
+                scheduler.subprocess, "check_output", return_value=fixture
+             ) as check_output, \
                 mock.patch.object(scheduler.os, "sched_getaffinity", return_value=set(range(6))):
             self.assertEqual(scheduler.discover_physical_cpus(), [0, 1, 2, 3])
+        call_kwargs = check_output.call_args[1]
+        self.assertTrue(call_kwargs["universal_newlines"])
+        self.assertNotIn("text", call_kwargs)
 
     def test_reference_feature_cache_must_remain_in_owned_output_root(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -125,6 +130,31 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertTrue(scheduler.checkpoint_valid({"checkpoint_path": str(checkpoint)}))
             checkpoint.write_bytes(b"changed")
             self.assertFalse(scheduler.checkpoint_valid({"checkpoint_path": str(checkpoint)}))
+
+    def test_worker_environment_enables_only_valid_checkpoint_resume(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            checkpoint = Path(tmp) / "runs" / "candidate_run" / "objects" / "fit.rds"
+            checkpoint.parent.mkdir(parents=True)
+            checkpoint.write_bytes(b"checkpoint")
+            digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+            Path(str(checkpoint) + ".sha256").write_text(digest + "\n", encoding="utf-8")
+            row["checkpoint_path"] = str(checkpoint)
+            env = scheduler.build_worker_environment(
+                row,
+                {"resume_checkpoint": "true"},
+                str(Path(tmp) / "cache"),
+                base_env={"PATH": os.environ.get("PATH", "")},
+            )
+            self.assertEqual(env["GLOFAS_CHECKPOINT_RESUME"], "true")
+            checkpoint.write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "without a valid payload"):
+                scheduler.build_worker_environment(
+                    row,
+                    {"resume_checkpoint": "true"},
+                    str(Path(tmp) / "cache"),
+                    base_env={},
+                )
 
     def test_absolute_runtime_config_can_be_made_repo_relative(self):
         config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"

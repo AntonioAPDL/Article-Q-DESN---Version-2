@@ -9,7 +9,8 @@ source(file.path(repo_root, "application/R/00_packages.R"))
 app_set_repo_root(repo_root)
 for (file in c(
   "input_contract.R", "engine_contract.R", "model_contract.R", "feature_contract.R",
-  "covariate_design.R", "build_application_panel.R", "build_qdesn_features.R",
+  "covariate_design.R", "glofas_discrepancy_transition.R",
+  "build_application_panel.R", "build_qdesn_features.R",
   "latent_path_design.R", "simulate_latent_path.R", "latent_path_runtime_backend.R",
   "latent_path_checkpoint.R", "latent_path_vb_al.R", "latent_path_recovery.R",
   "discrepancy_design.R", "forecast_contract.R", "fit_qdesn_discrepancy.R",

@@ -139,6 +139,10 @@ app_qdesn_block_config <- function(cfg, block = c("reference", "discrepancy")) {
     cfg$reservoir %||% list(),
     override[["reservoir"]] %||% list()
   )
+  out$covariates <- app_qdesn_deep_merge(
+    cfg$covariates %||% list(),
+    override[["covariates"]] %||% list()
+  )
 
   fc_name <- if (!is.null(cfg$feature_contract)) "feature_contract" else if (!is.null(cfg$features)) "features" else "feature_contract"
   fc <- cfg[[fc_name]] %||% list()
@@ -217,17 +221,32 @@ app_qdesn_hash_object <- function(x, prefix = "qdesn_contract_") {
   app_sha256_file(path)
 }
 
-app_qdesn_block_config_hash <- function(cfg, block = c("reference", "discrepancy")) {
+app_qdesn_effective_block_config_hash <- function(
+  block_cfg,
+  block = c("reference", "discrepancy"),
+  include_covariates = FALSE
+) {
   block <- match.arg(block)
-  block_cfg <- app_qdesn_block_config(cfg, block)
   contract <- app_feature_contract(block_cfg)
-  app_qdesn_hash_object(list(
+  payload <- list(
     block = block,
     reservoir = block_cfg$reservoir,
     reservoir_input = contract$reservoir_input,
     readout = contract$readout,
     forecast_alignment = contract$forecast_alignment
-  ))
+  )
+  if (isTRUE(include_covariates)) {
+    payload$covariates <- block_cfg$covariates
+  }
+  app_qdesn_hash_object(payload)
+}
+
+app_qdesn_block_config_hash <- function(cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  app_qdesn_effective_block_config_hash(
+    app_qdesn_block_config(cfg, block),
+    block
+  )
 }
 
 app_qdesn_common_washout <- function(cfg, drop = NULL) {

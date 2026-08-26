@@ -98,7 +98,7 @@ def parse_cpu_list(value):
 def discover_physical_cpus():
     output = subprocess.check_output(
         ["lscpu", "-p=CPU,CORE,SOCKET,NODE,ONLINE"],
-        text=True,
+        universal_newlines=True,
     )
     allowed = set(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None
     first_thread = {}
@@ -187,6 +187,49 @@ def resolve_reference_feature_cache_root(path, output_root):
     if not str(path or "").strip():
         return ""
     return str(require_within(path, output_root, "Reference feature cache"))
+
+
+def build_worker_environment(row, state, reference_feature_cache_root, base_env=None):
+    """Build the fail-closed worker environment for one manifest row."""
+    env = dict(base_env or os.environ)
+    env.update({
+        "GLOFAS_RESERVOIR_PREFLIGHT_ENABLED": canonical_bool(
+            row.get("reservoir_preflight_enabled", "false")
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_TARGET": row.get(
+            "reservoir_preflight_target", "reservoir"
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_REJECT_DECISION": row.get(
+            "reservoir_preflight_reject_decision", "reject"
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_RUN_ID": row.get(
+            "reservoir_preflight_run_id", ""
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_SUMMARY_PATH": row.get(
+            "reservoir_preflight_summary_path", ""
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_MAX_CORR_FEATURES_FULL": row.get(
+            "reservoir_preflight_max_corr_features_full", "5000"
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_CORR_BLOCK_SIZE": row.get(
+            "reservoir_preflight_corr_block_size", "512"
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_SPECTRAL_RADIUS_EXACT_MAX_N": row.get(
+            "reservoir_preflight_spectral_radius_exact_max_n", "512"
+        ),
+        "GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION": canonical_bool(
+            row.get("reservoir_preflight_cheap_validation", "false")
+        ),
+        "GLOFAS_CHECKPOINT_RESUME": canonical_bool(
+            state.get("resume_checkpoint", "false")
+        ),
+        "QDESN_REFERENCE_FEATURE_CACHE_ROOT": reference_feature_cache_root,
+    })
+    if env["GLOFAS_CHECKPOINT_RESUME"] == "true" and not checkpoint_valid(row):
+        raise ValueError(
+            f"Checkpoint resume requested without a valid payload for {row['candidate_id']}"
+        )
+    return env
 
 
 def validate_manifest(rows, output_root, cores, max_parallel):
@@ -539,23 +582,11 @@ def main():
                 "--", "bash", str(repo_root / "application/scripts/glofas_fit_recovery_run_candidate.sh"),
                 candidate_id, row["config_path"], row["run_id"], str(output_root),
             ])
-            env = os.environ.copy()
-            env.update({
-                "GLOFAS_RESERVOIR_PREFLIGHT_ENABLED": canonical_bool(
-                    row.get("reservoir_preflight_enabled", "false")
-                ),
-                "GLOFAS_RESERVOIR_PREFLIGHT_TARGET": row.get("reservoir_preflight_target", "reservoir"),
-                "GLOFAS_RESERVOIR_PREFLIGHT_REJECT_DECISION": row.get("reservoir_preflight_reject_decision", "reject"),
-                "GLOFAS_RESERVOIR_PREFLIGHT_RUN_ID": row.get("reservoir_preflight_run_id", ""),
-                "GLOFAS_RESERVOIR_PREFLIGHT_SUMMARY_PATH": row.get("reservoir_preflight_summary_path", ""),
-                "GLOFAS_RESERVOIR_PREFLIGHT_MAX_CORR_FEATURES_FULL": row.get("reservoir_preflight_max_corr_features_full", "5000"),
-                "GLOFAS_RESERVOIR_PREFLIGHT_CORR_BLOCK_SIZE": row.get("reservoir_preflight_corr_block_size", "512"),
-                "GLOFAS_RESERVOIR_PREFLIGHT_SPECTRAL_RADIUS_EXACT_MAX_N": row.get("reservoir_preflight_spectral_radius_exact_max_n", "512"),
-                "GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION": canonical_bool(
-                    row.get("reservoir_preflight_cheap_validation", "false")
-                ),
-                "QDESN_REFERENCE_FEATURE_CACHE_ROOT": reference_feature_cache_root,
-            })
+            env = build_worker_environment(
+                row,
+                states[candidate_id],
+                reference_feature_cache_root,
+            )
             process = subprocess.Popen(
                 command,
                 cwd=repo_root,

@@ -25,6 +25,7 @@ PREFLIGHT_MAX_CORR="${GLOFAS_RESERVOIR_PREFLIGHT_MAX_CORR_FEATURES_FULL:-5000}"
 PREFLIGHT_CORR_BLOCK="${GLOFAS_RESERVOIR_PREFLIGHT_CORR_BLOCK_SIZE:-512}"
 PREFLIGHT_SPECTRAL_EXACT="${GLOFAS_RESERVOIR_PREFLIGHT_SPECTRAL_RADIUS_EXACT_MAX_N:-512}"
 PREFLIGHT_CHEAP_VALIDATION="${GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION:-false}"
+CHECKPOINT_RESUME="${GLOFAS_CHECKPOINT_RESUME:-false}"
 
 case "${PREFLIGHT_ENABLED,,}" in
   true|t|1|yes|y) PREFLIGHT_ENABLED="true" ;;
@@ -124,7 +125,8 @@ write_status "running" "$CURRENT_STAGE"
 Rscript application/scripts/03_fit_models.R \
   --config "$CONFIG_ARG" \
   --run_id "$RUN_ID" \
-  --confirm_final_launch true
+  --confirm_final_launch true \
+  --checkpoint_resume "$CHECKPOINT_RESUME"
 
 CURRENT_STAGE="04_score_models"
 write_status "running" "$CURRENT_STAGE"

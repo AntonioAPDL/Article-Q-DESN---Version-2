@@ -7,11 +7,16 @@ MAX_PARALLEL="${2:-18}"
 CORE_SPEC="${3:-auto}"
 MANIFEST="${OUTPUT_ROOT}/runtime_manifest_stage1.csv"
 STATUS_FILE="${OUTPUT_ROOT}/status/supervisor.csv"
+PREFLIGHT_MARKER="${OUTPUT_ROOT}/.context_prior_preflight_passed"
 BACKEND_LIBRARY="$(readlink -f /lib64/libopenblas.so.0)"
 BACKEND_SHA256="$(sha256sum "$BACKEND_LIBRARY" | awk '{print $1}')"
 
 if [[ ! -s "$MANIFEST" ]]; then
   echo "Missing prepared context-prior manifest: $MANIFEST" >&2
+  exit 2
+fi
+if [[ ! -s "$PREFLIGHT_MARKER" ]]; then
+  echo "Missing passed real-design preflight: $PREFLIGHT_MARKER" >&2
   exit 2
 fi
 if (( MAX_PARALLEL < 1 || MAX_PARALLEL > 18 )); then

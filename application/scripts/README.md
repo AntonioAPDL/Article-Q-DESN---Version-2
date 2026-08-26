@@ -421,7 +421,11 @@ initial failed gate, and writes the resume commit and evidence hashes.
 `glofas_context_prior_repair_launch.sh` runs the bounded follow-up campaign
 prepared by the same repair materializer. It evaluates six fixed-Gaussian
 scales for the single direct GloFAS-level discrepancy coefficient at three
-primary origins, using at most 18 serial one-core workers. Checkpoints hash the
+primary origins, using at most 18 serial one-core workers. Before launch,
+`glofas_context_prior_repair_preflight.R` builds a real design, proves all six
+scales map to the intended non-intercept alpha coefficient, validates T01
+state-only compatibility, and checks unique prior/checkpoint hashes. The
+launcher fails closed without that marker. Checkpoints hash the
 prior assignment, source T01 fits are state-only warm starts, and finalization
 reports coefficient and contribution audits plus the exact reconstruction
 identity. Terminal cleanup retains only the leading heavy candidates and the

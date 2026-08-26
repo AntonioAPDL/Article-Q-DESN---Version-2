@@ -1738,6 +1738,17 @@ app_latent_path_fit_diagnostics <- function(result) {
   base$vb_warm_start_compatibility_mode <- warm_start$compatibility_mode %||% NA_character_
   base$vb_warm_start_compatibility_class <- warm_start$compatibility_class %||% NA_character_
   base$vb_warm_start_compatibility_message <- warm_start$compatibility_message %||% NA_character_
+  base$vb_warm_start_mapping_hash <- warm_start$mapping_hash %||% NA_character_
+  base$vb_warm_start_common_coordinate_count <- as.integer(
+    warm_start$common_coordinate_count %||% NA_integer_
+  )
+  base$vb_warm_start_new_coordinate_count <- as.integer(
+    warm_start$new_coordinate_count %||% NA_integer_
+  )
+  base$vb_warm_start_new_coordinate_names <- warm_start$new_coordinate_names %||% NA_character_
+  base$vb_warm_start_new_coordinate_sd <- as.numeric(
+    warm_start$new_coordinate_sd %||% NA_real_
+  )
   base$vb_warm_start_message <- warm_start$message %||% NA_character_
   checkpoint <- result$fit$vb_diagnostics$checkpoint %||% list(enabled = FALSE)
   base$vb_checkpoint_enabled <- app_as_bool(checkpoint$enabled %||% FALSE)

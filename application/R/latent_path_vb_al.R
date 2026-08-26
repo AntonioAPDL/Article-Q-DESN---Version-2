@@ -2142,8 +2142,8 @@ app_latent_extract_future_linearization <- function(row_moments, design) {
   )
 }
 
-app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, constants, theta_mean, theta_cov, prior_state) {
-  val <- 0
+app_latent_approx_objective_components <- function(row_moments, e_v, e_inv_v, sigma_state, constants, theta_mean, theta_cov, prior_state) {
+  likelihood <- stats::setNames(c(0, 0), c("Y", "G"))
   source <- app_latent_all_source(row_moments)
   R <- app_latent_all_R(row_moments)
   e <- app_latent_all_e(row_moments)
@@ -2151,15 +2151,27 @@ app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, 
     idx <- which(source == src)
     if (!length(idx)) next
     sig_inv <- sigma_state$inv_mean[[src]]
-    val <- val +
-      sum(
-        -0.5 * sigma_state$log_mean[[src]] -
-          sig_inv * e_v[idx] -
-          sig_inv * (e_inv_v[idx] * R[idx] - 2 * constants$A * e[idx] + constants$A^2 * e_v[idx]) / (2 * constants$B)
-      )
+    likelihood[[src]] <- sum(
+      -0.5 * sigma_state$log_mean[[src]] -
+        sig_inv * e_v[idx] -
+        sig_inv * (e_inv_v[idx] * R[idx] - 2 * constants$A * e[idx] + constants$A^2 * e_v[idx]) / (2 * constants$B)
+    )
   }
   e_theta2 <- theta_mean^2 + diag(theta_cov)
-  val - 0.5 * sum(prior_state$prior_precision * e_theta2)
+  prior <- -0.5 * sum(prior_state$prior_precision * e_theta2)
+  c(
+    likelihood_Y = unname(likelihood[["Y"]]),
+    likelihood_G = unname(likelihood[["G"]]),
+    coefficient_prior = prior,
+    total = sum(likelihood) + prior
+  )
+}
+
+app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, constants, theta_mean, theta_cov, prior_state) {
+  unname(app_latent_approx_objective_components(
+    row_moments, e_v, e_inv_v, sigma_state, constants,
+    theta_mean, theta_cov, prior_state
+  )[["total"]])
 }
 
 app_latent_path_warm_start_config <- function(vb_args = list()) {
@@ -2176,10 +2188,11 @@ app_latent_path_warm_start_config <- function(vb_args = list()) {
     require_future = app_as_bool(cfg$require_future %||% TRUE),
     require_sigma = app_as_bool(cfg$require_sigma %||% FALSE),
     covariance_jitter = as.numeric(cfg$covariance_jitter %||% 1.0e-8),
+    new_coordinate_sd = as.numeric(cfg$new_coordinate_sd %||% 1),
     require_contract = app_as_bool(cfg$require_contract %||% FALSE),
     compatibility_mode = match.arg(
       as.character(cfg$compatibility_mode %||% "exact_design"),
-      c("exact_design", "coordinate_transfer", "state_only")
+      c("exact_design", "coordinate_transfer", "nested_coordinate_transfer", "state_only")
     ),
     source_contract = cfg$source_contract %||% cfg$contract %||% NULL
   )
@@ -2234,8 +2247,42 @@ app_latent_path_read_warm_start_contract <- function(x) {
   stop("Warm-start contract paths must be YAML, JSON, or RDS.", call. = FALSE)
 }
 
+app_latent_path_nested_coordinate_map <- function(source, target) {
+  source_names <- as.character(source$theta_names %||% character())
+  target_names <- as.character(target$theta_names %||% character())
+  if (length(source_names) != as.integer(source$n_theta) ||
+      length(target_names) != as.integer(target$n_theta) ||
+      any(!nzchar(source_names)) || any(!nzchar(target_names))) {
+    stop("Nested coordinate transfer requires complete non-empty theta names.", call. = FALSE)
+  }
+  if (anyDuplicated(source_names) || anyDuplicated(target_names)) {
+    stop("Nested coordinate transfer requires unique theta names in both designs.", call. = FALSE)
+  }
+  source_to_target <- match(source_names, target_names)
+  if (anyNA(source_to_target)) {
+    stop(
+      sprintf(
+        "Nested coordinate target is missing source coordinates: %s.",
+        paste(source_names[is.na(source_to_target)], collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  new_target_index <- setdiff(seq_along(target_names), source_to_target)
+  if (!length(new_target_index)) {
+    stop("Nested coordinate transfer requires at least one target-only coordinate.", call. = FALSE)
+  }
+  mapping <- list(
+    source_to_target = as.integer(source_to_target),
+    new_target_index = as.integer(new_target_index),
+    new_target_names = target_names[new_target_index]
+  )
+  mapping$mapping_hash <- app_latent_path_contract_hash(mapping, "nested_theta_map_")
+  mapping
+}
+
 app_latent_path_warm_start_compatibility <- function(source, target, mode = "exact_design") {
-  mode <- match.arg(mode, c("exact_design", "coordinate_transfer", "state_only"))
+  mode <- match.arg(mode, c("exact_design", "coordinate_transfer", "nested_coordinate_transfer", "state_only"))
   required <- c("design_hash", "quantile_level", "n_theta", "theta_names_hash", "n_future", "future_key_hash")
   missing_source <- setdiff(required, names(source %||% list()))
   missing_target <- setdiff(required, names(target %||% list()))
@@ -2286,6 +2333,28 @@ app_latent_path_warm_start_compatibility <- function(source, target, mode = "exa
       sigma_allowed = TRUE,
       message = "feature coordinates and future key matched; design values differ"
     ))
+  }
+  if (identical(mode, "nested_coordinate_transfer") && same_quantile && same_future) {
+    mapping <- tryCatch(
+      app_latent_path_nested_coordinate_map(source, target),
+      error = function(e) e
+    )
+    if (!inherits(mapping, "error")) {
+      return(c(
+        list(
+          accepted = TRUE,
+          class = "nested_coordinate_transfer",
+          theta_allowed = TRUE,
+          future_allowed = TRUE,
+          sigma_allowed = TRUE,
+          message = sprintf(
+            "mapped %d common coordinates by name and initialized %d target-only coordinates",
+            length(mapping$source_to_target), length(mapping$new_target_index)
+          )
+        ),
+        mapping
+      ))
+    }
   }
   if (identical(mode, "state_only") && same_quantile && same_future) {
     return(list(
@@ -2385,7 +2454,8 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
     y_mean = NULL,
     y_cov = NULL,
     sigma_state = NULL,
-    diagnostics = diagnostics
+    diagnostics = diagnostics,
+    diagnostic_reference = list()
   )
   if (!isTRUE(cfg$enabled)) return(out)
   if (is.null(cfg$fit_object) || !nzchar(as.character(cfg$fit_object[[1L]]))) {
@@ -2414,6 +2484,10 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
     )
     out$diagnostics$compatibility_class <- compatibility$class
     out$diagnostics$compatibility_message <- compatibility$message
+    out$diagnostics$mapping_hash <- compatibility$mapping_hash %||% NA_character_
+    out$diagnostics$common_coordinate_count <- length(compatibility$source_to_target %||% integer())
+    out$diagnostics$new_coordinate_count <- length(compatibility$new_target_index %||% integer())
+    out$diagnostics$new_coordinate_names <- paste(compatibility$new_target_names %||% character(), collapse = "|")
     if (!isTRUE(compatibility$accepted)) stop(compatibility$message, call. = FALSE)
   }
 
@@ -2424,16 +2498,46 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
   if (isTRUE(cfg$use_theta) && isTRUE(theta_allowed)) {
     theta_mean <- fit$variational_state$theta_mean %||% fit$summary$theta_mean %||% NULL
     theta_cov <- fit$variational_state$theta_cov %||% fit$summary$theta_cov %||% NULL
-    ok <- !is.null(theta_mean) && length(theta_mean) == p && !is.null(theta_cov)
+    nested <- identical(compatibility$class %||% "", "nested_coordinate_transfer")
+    expected_theta <- if (nested) as.integer(source_contract$n_theta) else p
+    ok <- !is.null(theta_mean) && length(theta_mean) == expected_theta && !is.null(theta_cov)
     if (!ok) {
-      msg <- sprintf("theta warm start unavailable or dimension-mismatched; expected length %d.", p)
+      msg <- sprintf("theta warm start unavailable or dimension-mismatched; expected length %d.", expected_theta)
       if (isTRUE(cfg$require_theta)) stop(msg, call. = FALSE)
       messages <- c(messages, msg)
+    } else if (nested) {
+      if (!is.finite(cfg$new_coordinate_sd) || cfg$new_coordinate_sd <= 0) {
+        stop("warm_start.new_coordinate_sd must be finite and positive.", call. = FALSE)
+      }
+      source_cov <- app_latent_path_warm_start_cov(
+        theta_cov, expected_theta, cfg$covariance_jitter, "source theta_cov"
+      )
+      map <- compatibility$source_to_target
+      new_idx <- compatibility$new_target_index
+      target_mean <- rep(0, p)
+      target_mean[map] <- as.numeric(theta_mean)
+      target_cov <- matrix(0, p, p)
+      target_cov[map, map] <- source_cov
+      target_cov[cbind(new_idx, new_idx)] <- cfg$new_coordinate_sd^2
+      dimnames(target_cov) <- list(colnames(design$H_fixed), colnames(design$H_fixed))
+      names(target_mean) <- colnames(design$H_fixed)
+      out$theta_mean <- target_mean
+      out$theta_cov <- app_latent_path_warm_start_cov(
+        target_cov, p, cfg$covariance_jitter, "nested theta_cov"
+      )
+      out$diagnostics$theta_used <- TRUE
+      out$diagnostics$new_coordinate_sd <- cfg$new_coordinate_sd
+      out$diagnostic_reference$theta_mean <- target_mean
+      out$diagnostic_reference$common_target_index <- map
+      out$diagnostic_reference$new_target_index <- new_idx
     } else {
       out$theta_mean <- as.numeric(theta_mean)
       names(out$theta_mean) <- colnames(design$H_fixed) %||% names(theta_mean)
       out$theta_cov <- app_latent_path_warm_start_cov(theta_cov, p, cfg$covariance_jitter, "theta_cov")
       out$diagnostics$theta_used <- TRUE
+      out$diagnostic_reference$theta_mean <- out$theta_mean
+      out$diagnostic_reference$common_target_index <- seq_len(p)
+      out$diagnostic_reference$new_target_index <- integer()
     }
   } else if (isTRUE(cfg$use_theta) && !isTRUE(theta_allowed)) {
     messages <- c(messages, "theta transfer disabled by semantic compatibility policy")
@@ -2451,6 +2555,7 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
       out$y_mean <- as.numeric(y_mean)
       out$y_cov <- app_latent_path_warm_start_cov(y_cov, H_future, cfg$covariance_jitter, "y_future_cov")
       out$diagnostics$future_used <- TRUE
+      out$diagnostic_reference$y_mean <- out$y_mean
     }
   } else if (isTRUE(cfg$use_future) && !isTRUE(future_allowed)) {
     messages <- c(messages, "future-path transfer disabled by semantic compatibility policy")
@@ -2642,6 +2747,16 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   repaired_theta <- logical(max_iter)
   rhs_gate_trace <- logical(max_iter)
   rhs_trace <- list()
+  mechanism_trace <- matrix(
+    NA_real_,
+    nrow = max_iter,
+    ncol = 9L,
+    dimnames = list(NULL, c(
+      "likelihood_Y", "likelihood_G", "coefficient_prior", "total",
+      "context_coefficient", "common_theta_rmse", "common_theta_max_abs",
+      "future_path_rmse", "future_path_max_abs"
+    ))
+  )
   start_iter <- 1L
 
   if (isTRUE(checkpoint_cfg$enabled) && isTRUE(checkpoint_cfg$resume)) {
@@ -2681,6 +2796,10 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       rhs_gate_trace[seq_len(completed_iter)] <- as.logical(trace$rhs_gate_trace)
     }
     rhs_trace <- trace$rhs_trace %||% list()
+    prior_mechanism_trace <- trace$mechanism_trace %||% NULL
+    if (is.matrix(prior_mechanism_trace) && nrow(prior_mechanism_trace) == completed_iter) {
+      mechanism_trace[seq_len(completed_iter), colnames(prior_mechanism_trace)] <- prior_mechanism_trace
+    }
     if (is.data.frame(trace$iteration_timing) && nrow(trace$iteration_timing)) {
       iteration_timing <- list(trace$iteration_timing)
     }
@@ -2813,6 +2932,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
         repaired_theta = repaired_theta[seq_len(iter)],
         rhs_gate_trace = rhs_gate_trace[seq_len(iter)],
         rhs_trace = rhs_trace,
+        mechanism_trace = mechanism_trace[seq_len(iter), , drop = FALSE],
         iteration_timing = iteration_timing_df,
         substep_timing = substep_timing_df
       ),
@@ -2919,12 +3039,31 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     rhs_gate <- app_latent_prior_rhs_gate(prior_state, iter)
     rhs_gate_trace[[iter]] <- isTRUE(rhs_gate$passed)
 
-    objective[[iter]] <- time_step(iter, "objective", {
-      app_latent_approx_objective(
+    objective_components <- time_step(iter, "objective", {
+      app_latent_approx_objective_components(
         row_moments, v_state$mean, v_state$inv_mean, sigma_state,
         constants, theta_mean, theta_cov, prior_state
       )
     })
+    objective[[iter]] <- unname(objective_components[["total"]])
+    mechanism_trace[iter, names(objective_components)] <- objective_components
+    theta_reference <- warm_start$diagnostic_reference$theta_mean %||% NULL
+    common_index <- warm_start$diagnostic_reference$common_target_index %||% integer()
+    if (!is.null(theta_reference) && length(common_index)) {
+      common_delta <- theta_mean[common_index] - theta_reference[common_index]
+      mechanism_trace[iter, "common_theta_rmse"] <- sqrt(mean(common_delta^2))
+      mechanism_trace[iter, "common_theta_max_abs"] <- max(abs(common_delta))
+    }
+    new_index <- warm_start$diagnostic_reference$new_target_index %||% integer()
+    if (length(new_index) == 1L) {
+      mechanism_trace[iter, "context_coefficient"] <- theta_mean[new_index]
+    }
+    future_reference <- warm_start$diagnostic_reference$y_mean %||% NULL
+    if (!is.null(future_reference) && length(future_reference) == length(y_mean)) {
+      future_delta <- y_mean - future_reference
+      mechanism_trace[iter, "future_path_rmse"] <- sqrt(mean(future_delta^2))
+      mechanism_trace[iter, "future_path_max_abs"] <- max(abs(future_delta))
+    }
     new <- c(theta_mean, y_mean, sigma_state$inv_mean)
     par_change[[iter]] <- max(abs(new - old) / pmax(1, abs(old)))
     completed_iterations <- iter
@@ -2944,6 +3083,12 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   par_change <- par_change[seq_len(completed_iterations)]
   repaired_theta <- repaired_theta[seq_len(completed_iterations)]
   rhs_gate_trace <- rhs_gate_trace[seq_len(completed_iterations)]
+  mechanism_trace <- as.data.frame(
+    mechanism_trace[seq_len(completed_iterations), , drop = FALSE],
+    stringsAsFactors = FALSE
+  )
+  mechanism_trace$iteration <- seq_len(completed_iterations)
+  mechanism_trace <- mechanism_trace[, c("iteration", setdiff(names(mechanism_trace), "iteration")), drop = FALSE]
 
   rhs_trace <- rhs_trace[vapply(rhs_trace, nrow, integer(1L)) > 0L]
   rhs_trace_df <- if (length(rhs_trace)) {
@@ -3017,6 +3162,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       elbo_trace = objective,
       max_parameter_change = tail(par_change, 1L),
       parameter_change_trace = par_change,
+      mechanism_trace = mechanism_trace,
       rhs_global_scale = rhs_diagnostics,
       fixed_gaussian_prior = fixed_gaussian_diagnostics,
       rhs_global_scale_trace = rhs_trace_df,

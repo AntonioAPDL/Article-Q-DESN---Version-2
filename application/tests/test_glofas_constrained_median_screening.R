@@ -313,6 +313,60 @@ coordinate_warm <- app_latent_path_warm_start_prepare(
 )
 stopifnot(isTRUE(coordinate_warm$diagnostics$theta_used))
 stopifnot(identical(coordinate_warm$diagnostics$compatibility_class, "coordinate_transfer"))
+
+nested_design <- warm_design_mismatch
+nested_design$H_fixed <- matrix(
+  0,
+  nrow = 4L,
+  ncol = 3L,
+  dimnames = list(NULL, c("beta__x", "context__causal", "alpha__x"))
+)
+nested_warm <- app_latent_path_warm_start_prepare(
+  nested_design,
+  vb_args = list(warm_start = list(
+    enabled = TRUE,
+    fit_object = warm_fit_path,
+    require_contract = TRUE,
+    compatibility_mode = "nested_coordinate_transfer",
+    new_coordinate_sd = 0.1,
+    use_sigma = FALSE
+  )),
+  p = 3L,
+  H_future = 2L
+)
+stopifnot(identical(
+  nested_warm$diagnostics$compatibility_class,
+  "nested_coordinate_transfer"
+))
+stopifnot(identical(nested_warm$theta_mean, c(beta__x = 0.1, context__causal = 0, alpha__x = 0.2)))
+stopifnot(max(abs(
+  unname(nested_warm$theta_cov[c(1L, 3L), c(1L, 3L)]) - diag(2)
+)) < 1.0e-12)
+stopifnot(abs(unname(nested_warm$theta_cov[2L, 2L]) - 0.01) < 1.0e-12)
+stopifnot(all(nested_warm$theta_cov[2L, c(1L, 3L)] == 0))
+stopifnot(nzchar(nested_warm$diagnostics$mapping_hash))
+stopifnot(identical(nested_warm$diagnostics$new_coordinate_names, "context__causal"))
+
+duplicate_nested_design <- nested_design
+colnames(duplicate_nested_design$H_fixed)[[3L]] <- "beta__x"
+duplicate_nested_error <- tryCatch(
+  {
+    app_latent_path_warm_start_prepare(
+      duplicate_nested_design,
+      vb_args = list(warm_start = list(
+        enabled = TRUE,
+        fit_object = warm_fit_path,
+        require_contract = TRUE,
+        compatibility_mode = "nested_coordinate_transfer"
+      )),
+      p = 3L,
+      H_future = 2L
+    )
+    NULL
+  },
+  error = function(e) e
+)
+stopifnot(inherits(duplicate_nested_error, "error"))
 unlink(warm_fit_path)
 
 observed_fixture <- rbind(

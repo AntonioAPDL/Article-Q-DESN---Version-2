@@ -254,6 +254,21 @@ fit_checkpoint_reference <- app_fit_latent_path_al_vb_core(
 )
 stopifnot(identical(fit_checkpoint_reference$vb_diagnostics$iterations, 6L))
 stopifnot(!isTRUE(fit_checkpoint_reference$vb_diagnostics$converged))
+mechanism_reference_unit <- fit_checkpoint_reference$vb_diagnostics$mechanism_trace
+stopifnot(nrow(mechanism_reference_unit) == 6L)
+stopifnot(all(c(
+  "likelihood_Y", "likelihood_G", "coefficient_prior", "total"
+) %in% names(mechanism_reference_unit)))
+stopifnot(max(abs(
+  mechanism_reference_unit$total -
+    (mechanism_reference_unit$likelihood_Y +
+      mechanism_reference_unit$likelihood_G +
+      mechanism_reference_unit$coefficient_prior)
+)) < 1.0e-12)
+stopifnot(identical(
+  as.numeric(mechanism_reference_unit$total),
+  fit_checkpoint_reference$vb_diagnostics$elbo_trace
+))
 fit_checkpoint_paired <- app_fit_latent_path_al_vb_core(
   design = design_checkpoint_paired,
   p0 = sim_checkpoint_unit$p0,
@@ -350,6 +365,10 @@ stopifnot(identical(
 stopifnot(identical(
   fit_checkpoint_reference$vb_diagnostics$parameter_change_trace,
   fit_checkpoint_resumed$vb_diagnostics$parameter_change_trace
+))
+stopifnot(identical(
+  fit_checkpoint_reference$vb_diagnostics$mechanism_trace,
+  fit_checkpoint_resumed$vb_diagnostics$mechanism_trace
 ))
 stopifnot(max(abs(
   fit_checkpoint_reference$summary$theta_mean - fit_checkpoint_resumed$summary$theta_mean

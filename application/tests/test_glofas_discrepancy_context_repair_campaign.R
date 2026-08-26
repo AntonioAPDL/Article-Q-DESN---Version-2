@@ -165,11 +165,14 @@ design_fixture <- list(
     target_date = as.Date("2020-01-05") + 0:1,
     horizon = 1:2
   ),
-  future_builder = function(y) list(
-    X_alpha_future = cbind(
-      c(0.1, 0.2), c(0.3, 0.4), c(2.5, 3.5)
+  future_builder = function(y) {
+    stopifnot(length(y) == 2L)
+    list(
+      X_alpha_future = cbind(
+        c(0.1, 0.2), c(0.3, 0.4), c(2.5, 3.5)
+      )
     )
-  ),
+  },
   latent_data = list(origin_date = as.Date("2020-01-04"))
 )
 fit_fixture <- list(
@@ -182,7 +185,7 @@ fit_fixture <- list(
   variational_state = list(
     theta_mean = c(0.1, 0.2, 0.3),
     theta_cov = diag(c(0.01, 0.02, 0.03)),
-    y_mean = c(0, 0)
+    y_future_mean = c(0, 0)
   )
 )
 context_audit <- app_glofas_context_repair_context_audit(

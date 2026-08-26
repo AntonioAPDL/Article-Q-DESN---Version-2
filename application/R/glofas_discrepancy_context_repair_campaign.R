@@ -519,7 +519,16 @@ app_glofas_context_repair_context_audit <- function(
     theta_sd <- sqrt(pmax(diag(as.matrix(fit$variational_state$theta_cov)), 0))
     names(theta_mean) <- theta_names
     names(theta_sd) <- theta_names
-    future_design <- design$future_builder(fit$variational_state$y_mean)
+    y_future_mean <- fit$variational_state$y_future_mean %||%
+      fit$summary$y_future_mean %||% NULL
+    if (is.null(y_future_mean) ||
+        length(y_future_mean) != length(design_future_dates)) {
+      stop(
+        "Context diagnostics require one latent-path mean per future date.",
+        call. = FALSE
+      )
+    }
+    future_design <- design$future_builder(y_future_mean)
     X_alpha_future <- as.matrix(future_design$X_alpha_future)
     if (nrow(X_alpha_future) != length(design_future_dates)) {
       stop("Context diagnostics found a future design/date length mismatch.", call. = FALSE)

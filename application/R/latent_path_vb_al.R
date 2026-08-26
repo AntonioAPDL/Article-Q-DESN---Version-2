@@ -249,15 +249,30 @@ app_latent_rhs_minimum_convergence_iteration <- function(control) {
   iter + 1L
 }
 
-app_latent_rhs_state_init <- function(p, intercept_index, args, rhs_control = NULL) {
+app_latent_rhs_state_init <- function(
+  p,
+  intercept_index,
+  args,
+  rhs_control = NULL,
+  exclude_index = integer(0)
+) {
   tau0 <- as.numeric(args$tau0 %||% 1)
   a_zeta <- as.numeric(args$a_zeta %||% 2)
   b_zeta <- as.numeric(args$b_zeta %||% 4)
   if (!is.finite(tau0) || tau0 <= 0) stop("RHS tau0 must be positive.", call. = FALSE)
-  penalized <- setdiff(seq_len(p), as.integer(intercept_index %||% integer(0)))
+  exclude_index <- sort(unique(as.integer(exclude_index %||% integer(0))))
+  if (length(exclude_index) &&
+      any(!is.finite(exclude_index) | exclude_index < 1L | exclude_index > p)) {
+    stop("RHS excluded coefficient indices are outside the coefficient block.", call. = FALSE)
+  }
+  penalized <- setdiff(
+    seq_len(p),
+    c(as.integer(intercept_index %||% integer(0)), exclude_index)
+  )
   state <- list(
     prior = "rhs_ns",
     penalized = penalized,
+    excluded = exclude_index,
     intercept_index = as.integer(intercept_index %||% integer(0)),
     intercept_prec = as.numeric(args$intercept_prec %||% 1.0e-9),
     tau0 = tau0,
@@ -282,6 +297,47 @@ app_latent_rhs_state_init <- function(p, intercept_index, args, rhs_control = NU
   )
   state$prior_precision <- app_latent_rhs_prior_precision(state, p)
   state
+}
+
+app_latent_normalize_fixed_gaussian_groups <- function(groups, p, intercept_index = integer(0)) {
+  if (is.null(groups) || !length(groups)) return(list())
+  if (!is.list(groups)) {
+    stop("Fixed Gaussian prior groups must be supplied as a list.", call. = FALSE)
+  }
+  normalized <- lapply(seq_along(groups), function(i) {
+    group <- groups[[i]]
+    if (!is.list(group)) {
+      stop("Each fixed Gaussian prior group must be a list.", call. = FALSE)
+    }
+    group_names <- names(groups)
+    fallback_name <- if (!is.null(group_names) && length(group_names) >= i &&
+        nzchar(group_names[[i]])) group_names[[i]] else paste0("group_", i)
+    name <- as.character(group$name %||% fallback_name)[[1L]]
+    index <- sort(unique(as.integer(group$global_index %||% group$index %||% integer(0))))
+    sd <- as.numeric(group$sd %||% NA_real_)
+    if (!nzchar(name) || !length(index)) {
+      stop("Fixed Gaussian prior groups require a nonempty name and coefficient indices.", call. = FALSE)
+    }
+    if (any(!is.finite(index) | index < 1L | index > p)) {
+      stop(sprintf("Fixed Gaussian group '%s' contains an invalid coefficient index.", name), call. = FALSE)
+    }
+    if (any(index %in% as.integer(intercept_index %||% integer(0)))) {
+      stop(sprintf("Fixed Gaussian group '%s' cannot include an intercept.", name), call. = FALSE)
+    }
+    if (length(sd) != 1L || !is.finite(sd) || sd <= 0) {
+      stop(sprintf("Fixed Gaussian group '%s' requires one positive finite standard deviation.", name), call. = FALSE)
+    }
+    list(name = name, global_index = index, sd = sd, precision = 1 / sd^2)
+  })
+  names(normalized) <- vapply(normalized, `[[`, character(1L), "name")
+  if (anyDuplicated(names(normalized))) {
+    stop("Fixed Gaussian prior group names must be unique.", call. = FALSE)
+  }
+  all_index <- unlist(lapply(normalized, `[[`, "global_index"), use.names = FALSE)
+  if (anyDuplicated(all_index)) {
+    stop("Fixed Gaussian prior groups cannot overlap.", call. = FALSE)
+  }
+  normalized
 }
 
 app_latent_rhs_prior_precision <- function(state, p) {
@@ -346,11 +402,17 @@ app_latent_rhs_state_update <- function(state, theta_mean, theta_cov, iter = 1L,
 }
 
 app_latent_prior_state_combine_precision <- function(state, p) {
-  if (!identical(state$prior, "block_rhs_ns")) return(state$prior_precision)
-  prec <- rep(NA_real_, p)
-  for (block_name in names(state$blocks)) {
-    block <- state$blocks[[block_name]]
-    prec[block$global_index] <- block$state$prior_precision
+  if (identical(state$prior, "block_rhs_ns")) {
+    prec <- rep(NA_real_, p)
+    for (block_name in names(state$blocks)) {
+      block <- state$blocks[[block_name]]
+      prec[block$global_index] <- block$state$prior_precision
+    }
+  } else {
+    prec <- as.numeric(state$prior_precision)
+  }
+  for (group in state$fixed_gaussian_groups %||% list()) {
+    prec[group$global_index] <- group$precision
   }
   if (any(!is.finite(prec))) stop("Block RHS prior precision is incomplete.", call. = FALSE)
   pmax(prec, 1.0e-12)
@@ -367,9 +429,16 @@ app_latent_prior_state_init <- function(
   intercept_index,
   vb_args,
   beta_index = NULL,
-  alpha_index = NULL
+  alpha_index = NULL,
+  fixed_gaussian_groups = NULL
 ) {
   prior <- tolower(as.character(prior %||% "rhs_ns"))
+  fixed_groups <- app_latent_normalize_fixed_gaussian_groups(
+    fixed_gaussian_groups,
+    p = p,
+    intercept_index = intercept_index
+  )
+  fixed_index <- unlist(lapply(fixed_groups, `[[`, "global_index"), use.names = FALSE)
   if (prior %in% c("rhs", "rhs_ns")) {
     beta_index <- as.integer(beta_index %||% integer(0))
     alpha_index <- as.integer(alpha_index %||% integer(0))
@@ -381,13 +450,15 @@ app_latent_prior_state_init <- function(
         p = length(beta_index),
         intercept_index = app_latent_prior_block_intercepts(beta_index, intercept_index),
         args = beta_args,
-        rhs_control = vb_args$rhs %||% list()
+        rhs_control = vb_args$rhs %||% list(),
+        exclude_index = match(intersect(beta_index, fixed_index), beta_index)
       )
       alpha_state <- app_latent_rhs_state_init(
         p = length(alpha_index),
         intercept_index = app_latent_prior_block_intercepts(alpha_index, intercept_index),
         args = alpha_args,
-        rhs_control = vb_args$rhs %||% list()
+        rhs_control = vb_args$rhs %||% list(),
+        exclude_index = match(intersect(alpha_index, fixed_index), alpha_index)
       )
       out <- list(
         prior = "block_rhs_ns",
@@ -395,17 +466,22 @@ app_latent_prior_state_init <- function(
           beta = list(global_index = beta_index, state = beta_state),
           alpha = list(global_index = alpha_index, state = alpha_state)
         ),
-        intercept_index = as.integer(intercept_index %||% integer(0))
+        intercept_index = as.integer(intercept_index %||% integer(0)),
+        fixed_gaussian_groups = fixed_groups
       )
       out$prior_precision <- app_latent_prior_state_combine_precision(out, p)
       return(out)
     }
-    return(app_latent_rhs_state_init(
+    out <- app_latent_rhs_state_init(
       p,
       intercept_index,
       vb_args$beta_rhs %||% list(),
-      rhs_control = vb_args$rhs %||% list()
-    ))
+      rhs_control = vb_args$rhs %||% list(),
+      exclude_index = fixed_index
+    )
+    out$fixed_gaussian_groups <- fixed_groups
+    out$prior_precision <- app_latent_prior_state_combine_precision(out, p)
+    return(out)
   }
   if (identical(prior, "ridge")) {
     prec <- as.numeric((vb_args$beta_ridge %||% list())$precision %||% vb_args$ridge_precision %||% 1)
@@ -413,18 +489,48 @@ app_latent_prior_state_init <- function(
     out <- list(
       prior = "ridge",
       prior_precision = rep(prec, p),
-      intercept_index = as.integer(intercept_index %||% integer(0))
+      intercept_index = as.integer(intercept_index %||% integer(0)),
+      fixed_gaussian_groups = fixed_groups
     )
     if (length(out$intercept_index)) out$prior_precision[out$intercept_index] <- intercept_prec
-    out$prior_precision <- pmax(out$prior_precision, 1.0e-12)
+    out$prior_precision <- app_latent_prior_state_combine_precision(out, p)
     return(out)
   }
   stop(sprintf("Unsupported latent-path VB prior '%s'.", prior), call. = FALSE)
 }
 
+app_latent_prior_fixed_gaussian_diagnostics <- function(state, theta_mean, theta_cov) {
+  groups <- state$fixed_gaussian_groups %||% list()
+  if (!length(groups)) return(data.frame())
+  rows <- lapply(groups, function(group) {
+    idx <- group$global_index
+    data.frame(
+      group = group$name,
+      standard_deviation = group$sd,
+      precision = group$precision,
+      n_coefficients = length(idx),
+      coefficient_l2 = sqrt(sum(theta_mean[idx]^2)),
+      posterior_second_moment = sum(theta_mean[idx]^2 + diag(theta_cov)[idx]),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
 app_latent_prior_state_update <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
   if (identical(state$prior, "rhs_ns")) {
-    return(app_latent_rhs_state_update(state, theta_mean, theta_cov, iter = iter, update_global = update_global))
+    state <- app_latent_rhs_state_update(
+      state,
+      theta_mean,
+      theta_cov,
+      iter = iter,
+      update_global = update_global
+    )
+    state$prior_precision <- app_latent_prior_state_combine_precision(
+      state,
+      length(theta_mean)
+    )
+    return(state)
   }
   if (identical(state$prior, "block_rhs_ns")) {
     for (block_name in names(state$blocks)) {
@@ -2629,7 +2735,8 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
         intercept_index = design$intercept_index,
         vb_args = vb_args,
         beta_index = design$beta_index %||% NULL,
-        alpha_index = design$alpha_index %||% NULL
+        alpha_index = design$alpha_index %||% NULL,
+        fixed_gaussian_groups = vb_args$fixed_gaussian_groups %||% NULL
       )
     })
     if (isTRUE(warm_start$diagnostics$theta_used)) {
@@ -2845,6 +2952,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     data.frame()
   }
   rhs_diagnostics <- app_latent_prior_rhs_diagnostics(prior_state, length(objective))
+  fixed_gaussian_diagnostics <- app_latent_prior_fixed_gaussian_diagnostics(
+    prior_state,
+    theta_mean,
+    theta_cov
+  )
   final_converged <- !isTRUE(fixed_iterations) && isTRUE(rhs_diagnostics$convergence_gate_passed) &&
     is.finite(tail(par_change, 1L)) && tail(par_change, 1L) < tol
 
@@ -2906,6 +3018,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       max_parameter_change = tail(par_change, 1L),
       parameter_change_trace = par_change,
       rhs_global_scale = rhs_diagnostics,
+      fixed_gaussian_prior = fixed_gaussian_diagnostics,
       rhs_global_scale_trace = rhs_trace_df,
       rhs_convergence_gate_trace = rhs_gate_trace,
       rhs_minimum_convergence_iteration = minimum_rhs_convergence_iter,

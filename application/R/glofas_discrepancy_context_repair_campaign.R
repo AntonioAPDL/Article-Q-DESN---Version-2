@@ -92,6 +92,87 @@ app_glofas_context_repair_validate_candidates <- function(x) {
   x[order(x$priority), , drop = FALSE]
 }
 
+app_glofas_context_prior_validate_candidates <- function(x) {
+  required <- c(
+    app_glofas_transition_required_candidate_columns(),
+    "execution_stage", "warm_start_source_candidate",
+    "warm_start_compatibility_mode", "warm_start_use_theta",
+    "warm_start_use_future", "warm_start_use_sigma", "context_prior_sd"
+  )
+  missing <- setdiff(required, names(x))
+  if (length(missing)) {
+    stop(sprintf(
+      "The context-prior registry is missing: %s.",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  enabled <- x[app_as_bool_vec(x$enabled), , drop = FALSE]
+  if (!nrow(enabled)) stop("No context-prior candidate is enabled.", call. = FALSE)
+
+  synthetic <- enabled[1L, , drop = FALSE]
+  synthetic$candidate_id <- "t01_last"
+  synthetic$anchor_method <- "last"
+  synthetic$anchor_window <- NA_integer_
+  synthetic$anchor_half_life <- NA_real_
+  synthetic$glofas_level <- FALSE
+  synthetic$glofas_anomaly <- FALSE
+  synthetic$context_in_reservoir <- TRUE
+  synthetic$context_in_readout <- TRUE
+  synthetic$context_lags <- "0"
+  synthetic$priority <- max(as.integer(enabled$priority), na.rm = TRUE) + 1L
+  synthetic$enabled <- TRUE
+  synthetic$role <- "legacy_mechanism_comparator"
+  augmented <- rbind(enabled, synthetic)
+  validated <- app_glofas_transition_validate_candidates(augmented)
+  validated <- validated[validated$candidate_id != "t01_last", , drop = FALSE]
+
+  validated$execution_stage <- as.character(validated$execution_stage)
+  validated$warm_start_source_candidate <- as.character(
+    validated$warm_start_source_candidate
+  )
+  validated$warm_start_compatibility_mode <- as.character(
+    validated$warm_start_compatibility_mode
+  )
+  validated$warm_start_use_theta <- app_as_bool_vec(validated$warm_start_use_theta)
+  validated$warm_start_use_future <- app_as_bool_vec(validated$warm_start_use_future)
+  validated$warm_start_use_sigma <- app_as_bool_vec(validated$warm_start_use_sigma)
+  validated$context_prior_sd <- as.numeric(validated$context_prior_sd)
+
+  if (any(validated$execution_stage != "stage1") ||
+      any(validated$warm_start_source_candidate != "t01_last") ||
+      any(validated$warm_start_compatibility_mode != "state_only") ||
+      any(validated$warm_start_use_theta) ||
+      any(!validated$warm_start_use_future) ||
+      any(!validated$warm_start_use_sigma)) {
+    stop("Context-prior candidates require T01 state-only warm starts without theta transfer.", call. = FALSE)
+  }
+  if (any(validated$anchor_method != "last") ||
+      any(!validated$glofas_level) || any(validated$glofas_anomaly) ||
+      any(validated$context_in_reservoir) ||
+      any(!validated$context_in_readout) ||
+      any(validated$context_lags != "0")) {
+    stop("Context-prior candidates must isolate lag-zero GloFAS level in the direct readout.", call. = FALSE)
+  }
+  if (any(!is.finite(validated$context_prior_sd) |
+      validated$context_prior_sd <= 0) ||
+      anyDuplicated(validated$context_prior_sd)) {
+    stop("Context-prior standard deviations must be positive, finite, and unique.", call. = FALSE)
+  }
+  validated[order(validated$priority), , drop = FALSE]
+}
+
+app_glofas_context_prior_apply_candidate <- function(cfg, candidate) {
+  cfg <- app_glofas_transition_apply_candidate(cfg, candidate)
+  cfg$inference$vb_ld$context_fixed_gaussian <- list(
+    enabled = TRUE,
+    name = "alpha_glofas_level_context",
+    variables = list("glofas_level"),
+    lags = list(0L),
+    sd = as.numeric(candidate$context_prior_sd[[1L]])
+  )
+  cfg
+}
+
 app_glofas_context_repair_source_inventory <- function(
   source_root,
   expected_manifest_sha256,
@@ -340,6 +421,24 @@ app_glofas_context_repair_context_audit <- function(
   timeline <- (design$feature_meta_alpha %||% list())$covariate_timeline %||%
     data.frame()
   origin_date <- as.Date((design$latent_data %||% list())$origin_date %||% NA)
+  history_dates <- as.Date((design$feature_meta_alpha %||% list())$history_dates %||%
+    character())
+  history_keep <- as.integer(design$keep_idx %||% seq_len(nrow(design$X_alpha)))
+  design_history_dates <- if (length(history_dates) && length(history_keep)) {
+    history_dates[history_keep]
+  } else {
+    as.Date(character())
+  }
+  design_future_dates <- as.Date((design$future_key %||% data.frame())$target_date %||%
+    character())
+  if (length(design_history_dates) != nrow(design$X_alpha) ||
+      any(is.na(design_history_dates))) {
+    stop("Context diagnostics require one finite history date per discrepancy design row.", call. = FALSE)
+  }
+  if (!length(design_future_dates) || any(is.na(design_future_dates))) {
+    stop("Context diagnostics require finite future target dates.", call. = FALSE)
+  }
+  support_dates <- unique(c(design_history_dates, design_future_dates))
   context_rows <- list()
   if (!length(variables)) {
     context_rows[[1L]] <- data.frame(
@@ -357,11 +456,15 @@ app_glofas_context_repair_context_audit <- function(
       }
       raw <- as.numeric(timeline[[variable]])
       scaled <- as.numeric(timeline[[scaled_name]])
+      on_design_support <- as.Date(timeline$date) %in% support_dates
       historical <- as.Date(timeline$date) <= origin_date
       future <- as.Date(timeline$date) > origin_date
       hraw <- raw[historical & is.finite(raw)]
       fraw <- raw[future & is.finite(raw)]
       fscaled <- scaled[future & is.finite(scaled)]
+      if (!length(hraw) || !length(fraw) || !length(fscaled)) {
+        stop(sprintf("Context timeline has empty historical or future support for '%s'.", variable), call. = FALSE)
+      }
       params <- (attr(timeline, "scale_params") %||% list())[[variable]] %||%
         list(center = NA_real_, scale = NA_real_)
       context_rows[[length(context_rows) + 1L]] <- data.frame(
@@ -382,7 +485,15 @@ app_glofas_context_repair_context_audit <- function(
         future_outside_history_fraction = mean(
           fraw < min(hraw) | fraw > max(hraw)
         ),
-        all_finite = all(is.finite(c(raw, scaled))),
+        n_timeline_rows = length(raw),
+        n_design_support_rows = sum(on_design_support),
+        n_unmatched_timeline_rows = sum(!on_design_support),
+        n_nonfinite_timeline_rows = sum(!is.finite(raw) | !is.finite(scaled)),
+        n_nonfinite_design_support_rows = sum(
+          on_design_support & (!is.finite(raw) | !is.finite(scaled))
+        ),
+        all_finite = all(is.finite(raw[on_design_support])) &&
+          all(is.finite(scaled[on_design_support])),
         uses_realized_future = any(
           app_as_bool_vec(timeline[[paste0(variable, "_uses_realized_future")]] %||%
             FALSE)
@@ -400,6 +511,7 @@ app_glofas_context_repair_context_audit <- function(
     drop = FALSE
   ]
   coefficient_rows <- list()
+  contribution_rows <- list()
   if (nrow(direct)) {
     theta_names <- fit$warm_start_contract$theta_names %||%
       names(fit$variational_state$theta_mean)
@@ -407,8 +519,20 @@ app_glofas_context_repair_context_audit <- function(
     theta_sd <- sqrt(pmax(diag(as.matrix(fit$variational_state$theta_cov)), 0))
     names(theta_mean) <- theta_names
     names(theta_sd) <- theta_names
+    future_design <- design$future_builder(fit$variational_state$y_mean)
+    X_alpha_future <- as.matrix(future_design$X_alpha_future)
+    if (nrow(X_alpha_future) != length(design_future_dates)) {
+      stop("Context diagnostics found a future design/date length mismatch.", call. = FALSE)
+    }
+    fixed_contract <- fit$fixed_gaussian_prior_contract %||% list(enabled = FALSE)
+    fixed_groups <- fixed_contract$groups %||% list()
     for (i in seq_len(nrow(direct))) {
       theta_name <- paste0("alpha__", direct$column_name[[i]])
+      local_index <- match(direct$column_name[[i]], feature_info$column_name)
+      group_hit <- vapply(fixed_groups, function(group) {
+        direct$column_name[[i]] %in% as.character(group$column_name %||% character())
+      }, logical(1L))
+      prior_group <- if (any(group_hit)) fixed_groups[[which(group_hit)[[1L]]]] else NULL
       coefficient_rows[[length(coefficient_rows) + 1L]] <- data.frame(
         candidate_id = candidate_id,
         cutoff_id = cutoff_id,
@@ -417,8 +541,63 @@ app_glofas_context_repair_context_audit <- function(
         theta_name = theta_name,
         posterior_mean = unname(theta_mean[[theta_name]] %||% NA_real_),
         posterior_sd = unname(theta_sd[[theta_name]] %||% NA_real_),
+        prior_group = as.character(prior_group$name %||% "alpha_rhs"),
+        prior_standard_deviation = as.numeric(prior_group$sd %||% NA_real_),
+        prior_contract_hash = as.character(fixed_contract$contract_hash %||% NA_character_),
         stringsAsFactors = FALSE
       )
+      x_history <- as.numeric(design$X_alpha[, local_index])
+      x_future <- as.numeric(X_alpha_future[, local_index])
+      coefficient_mean <- unname(theta_mean[[theta_name]] %||% NA_real_)
+      coefficient_sd <- unname(theta_sd[[theta_name]] %||% NA_real_)
+      summarize_contribution <- function(values, dates, period) {
+        contribution <- values * coefficient_mean
+        uncertainty <- abs(values) * coefficient_sd
+        data.frame(
+          candidate_id = candidate_id,
+          cutoff_id = cutoff_id,
+          variable = as.character(direct$variable[[i]]),
+          lag = as.integer(direct$lag[[i]]),
+          period = period,
+          n = length(values),
+          value_min = min(values),
+          value_max = max(values),
+          contribution_mean = mean(contribution),
+          contribution_mean_abs = mean(abs(contribution)),
+          contribution_min = min(contribution),
+          contribution_max = max(contribution),
+          contribution_posterior_sd_mean = mean(uncertainty),
+          start_date = as.character(min(dates)),
+          end_date = as.character(max(dates)),
+          all_finite = all(is.finite(c(values, contribution, uncertainty))),
+          stringsAsFactors = FALSE
+        )
+      }
+      contribution_rows[[length(contribution_rows) + 1L]] <- summarize_contribution(
+        x_history,
+        design_history_dates,
+        "observed_all"
+      )
+      for (window in c(200L, 50L)) {
+        idx <- utils::tail(seq_along(x_history), min(window, length(x_history)))
+        contribution_rows[[length(contribution_rows) + 1L]] <- summarize_contribution(
+          x_history[idx],
+          design_history_dates[idx],
+          paste0("observed_last", window)
+        )
+      }
+      contribution_rows[[length(contribution_rows) + 1L]] <- summarize_contribution(
+        x_future,
+        design_future_dates,
+        "future"
+      )
+      for (h in seq_along(x_future)) {
+        contribution_rows[[length(contribution_rows) + 1L]] <- summarize_contribution(
+          x_future[h],
+          design_future_dates[h],
+          paste0("future_h", h)
+        )
+      }
     }
   }
 
@@ -465,6 +644,7 @@ app_glofas_context_repair_context_audit <- function(
   list(
     context = app_bind_rows_fill(context_rows),
     coefficients = app_bind_rows_fill(coefficient_rows),
+    contributions = app_bind_rows_fill(contribution_rows),
     states = state_row
   )
 }

@@ -29,9 +29,19 @@ resolve_repo <- function(path, must_work = FALSE) {
 output_root <- resolve_repo(args$output_root, must_work = TRUE)
 manifest <- app_read_csv(file.path(output_root, "runtime_manifest.csv"))
 campaign <- app_read_yaml(file.path(output_root, "campaign_snapshot.yaml"))
-candidates <- app_glofas_context_repair_validate_candidates(
-  app_read_csv(file.path(output_root, "candidate_registry_snapshot.csv"))
+context_prior_campaign <- identical(
+  as.character(campaign$schema_version),
+  "glofas_context_prior_repair_campaign_v1"
 )
+candidates <- if (isTRUE(context_prior_campaign)) {
+  app_glofas_context_prior_validate_candidates(
+    app_read_csv(file.path(output_root, "candidate_registry_snapshot.csv"))
+  )
+} else {
+  app_glofas_context_repair_validate_candidates(
+    app_read_csv(file.path(output_root, "candidate_registry_snapshot.csv"))
+  )
+}
 
 state_paths <- file.path(
   output_root,
@@ -69,6 +79,7 @@ diagnostic_rows <- list()
 history_rows <- list()
 context_rows <- list()
 coefficient_rows <- list()
+contribution_rows <- list()
 state_design_rows <- list()
 for (i in seq_len(nrow(manifest))) {
   row <- manifest[i, , drop = FALSE]
@@ -159,6 +170,7 @@ for (i in seq_len(nrow(manifest))) {
   )
   context_rows[[length(context_rows) + 1L]] <- context_audit$context
   coefficient_rows[[length(coefficient_rows) + 1L]] <- context_audit$coefficients
+  contribution_rows[[length(contribution_rows) + 1L]] <- context_audit$contributions
   state_design_rows[[length(state_design_rows) + 1L]] <- context_audit$states
   history_path <- file.path(
     output_root,
@@ -178,12 +190,62 @@ for (i in seq_len(nrow(manifest))) {
   gc(FALSE)
 }
 
+if (isTRUE(context_prior_campaign)) {
+  source_root <- normalizePath(campaign$source_campaign$root, mustWork = TRUE)
+  reference_ids <- c("t01_last", "c01_level_readout")
+  source_candidates <- app_read_csv(file.path(source_root, "candidate_registry_snapshot.csv"))
+  source_candidates <- source_candidates[
+    source_candidates$candidate_id %in% reference_ids,
+    ,
+    drop = FALSE
+  ]
+  source_candidates$context_prior_sd <- NA_real_
+  candidates <- app_bind_rows_fill(list(candidates, source_candidates))
+  source_scores <- app_read_csv(file.path(source_root, "tables", "context_repair_run_scores.csv"))
+  source_horizon <- app_read_csv(file.path(source_root, "tables", "context_repair_horizon_scores.csv"))
+  source_horizon$reconstruction_identity_error <-
+    as.numeric(source_horizon$q_y_hat) + as.numeric(source_horizon$discrepancy_hat) -
+    as.numeric(source_horizon$q_g_hat)
+  source_scores$reconstruction_identity_max_abs <- vapply(
+    seq_len(nrow(source_scores)),
+    function(i) {
+      block <- source_horizon[
+        source_horizon$candidate_id == source_scores$candidate_id[[i]] &
+          source_horizon$cutoff_id == source_scores$cutoff_id[[i]],
+        ,
+        drop = FALSE
+      ]
+      if (nrow(block)) max(abs(block$reconstruction_identity_error)) else NA_real_
+    },
+    numeric(1L)
+  )
+  score_rows[[length(score_rows) + 1L]] <- source_scores[
+    source_scores$candidate_id %in% reference_ids, , drop = FALSE
+  ]
+  horizon_rows[[length(horizon_rows) + 1L]] <- source_horizon[
+    source_horizon$candidate_id %in% reference_ids, , drop = FALSE
+  ]
+  source_diagnostics <- app_read_csv(file.path(
+    source_root, "tables", "context_repair_fit_diagnostics.csv"
+  ))
+  diagnostic_rows[[length(diagnostic_rows) + 1L]] <- source_diagnostics[
+    source_diagnostics$candidate_id %in% reference_ids, , drop = FALSE
+  ]
+  source_history <- app_read_csv(file.path(
+    source_root, "tables", "context_repair_observed_fit_scores.csv"
+  ))
+  history_rows[[length(history_rows) + 1L]] <- source_history[
+    source_history$base_candidate_id %in% reference_ids, , drop = FALSE
+  ]
+}
+
 scores <- app_bind_rows_fill(score_rows)
 horizon <- app_bind_rows_fill(horizon_rows)
 diagnostics <- app_bind_rows_fill(diagnostic_rows)
 history <- app_bind_rows_fill(history_rows)
 context_audit <- app_bind_rows_fill(context_rows)
 coefficient_audit <- app_glofas_context_repair_bind_nonempty(coefficient_rows)
+contribution_audit <- app_glofas_context_repair_bind_nonempty(contribution_rows)
 state_design_audit <- app_bind_rows_fill(state_design_rows)
 app_write_csv(scores, file.path(output_root, "tables", "context_repair_run_scores.csv"))
 app_write_csv(horizon, file.path(output_root, "tables", "context_repair_horizon_scores.csv"))
@@ -191,6 +253,7 @@ app_write_csv(diagnostics, file.path(output_root, "tables", "context_repair_fit_
 app_write_csv(history, file.path(output_root, "tables", "context_repair_observed_fit_scores.csv"))
 app_write_csv(context_audit, file.path(output_root, "tables", "context_extrapolation_audit.csv"))
 app_write_csv(coefficient_audit, file.path(output_root, "tables", "context_coefficient_audit.csv"))
+app_write_csv(contribution_audit, file.path(output_root, "tables", "context_contribution_audit.csv"))
 app_write_csv(state_design_audit, file.path(output_root, "tables", "context_state_design_audit.csv"))
 
 primary <- scores[scores$selection_role == campaign$scoring$primary_origin_role, , drop = FALSE]
@@ -200,11 +263,12 @@ if (length(unique(primary$cutoff_id)) != 3L) {
 aggregate <- app_glofas_transition_equal_origin_aggregate(primary)
 aggregate <- merge(
   aggregate,
-  candidates[, c(
+  candidates[, intersect(c(
     "candidate_id", "anchor_method", "anchor_window", "anchor_half_life",
     "glofas_level", "glofas_anomaly", "context_in_reservoir",
-    "context_in_readout", "role", "priority", "execution_stage"
-  )],
+    "context_in_readout", "role", "priority", "execution_stage",
+    "context_prior_sd"
+  ), names(candidates))],
   by = "candidate_id",
   all.x = TRUE
 )
@@ -260,6 +324,9 @@ origin_gate <- do.call(rbind, lapply(unique(origin_compare$candidate_id), functi
     worst_glofas_reconstruction_ratio = max(
       block$glofas_reconstruction_mae /
         pmax(block$glofas_reconstruction_mae_t01, .Machine$double.eps)
+    ),
+    worst_reconstruction_identity_error = max(
+      abs(block$reconstruction_identity_max_abs), na.rm = TRUE
     ),
     stringsAsFactors = FALSE
   )
@@ -336,7 +403,10 @@ ranking$passes_observed_all_gate <- ranking$worst_observed_all_regression <=
   as.numeric(campaign$scoring$observed_all_relative_guardrail)
 ranking$passes_observed_trailing_gate <- ranking$worst_observed_trailing_regression <=
   as.numeric(campaign$scoring$observed_trailing_relative_guardrail)
-ranking$passes_reconstruction_gate <- ranking$worst_glofas_reconstruction_ratio <= 1.10
+ranking$passes_reconstruction_gate <- ranking$worst_glofas_reconstruction_ratio <=
+  as.numeric(campaign$scoring$reconstruction_ratio_limit %||% 1.10)
+ranking$passes_reconstruction_identity_gate <-
+  ranking$worst_reconstruction_identity_error <= 1.0e-10
 comparator_bias <- ranking$future_bias[ranking$candidate_id == comparator_id]
 if (length(comparator_bias) != 1L || !is.finite(comparator_bias)) {
   stop("The continued T01 bias is missing from repair ranking.", call. = FALSE)
@@ -357,6 +427,7 @@ ranking$passes_all_development_gates <- with(ranking,
     passes_causal_baseline_gate & passes_origin_win_gate &
     passes_origin_regression_gate & passes_observed_all_gate &
     passes_observed_trailing_gate & passes_reconstruction_gate &
+    passes_reconstruction_identity_gate &
     passes_bias_gate &
     passes_numerical_gate
 )
@@ -371,9 +442,17 @@ app_write_csv(ranking, file.path(output_root, "tables", "context_repair_candidat
 passing <- ranking$candidate_id[ranking$passes_all_development_gates]
 decision <- data.frame(
   decision = if (length(passing)) {
-    "context_repair_candidate_requires_cold_confirmation"
+    if (isTRUE(context_prior_campaign)) {
+      "context_prior_candidate_requires_cold_confirmation"
+    } else {
+      "context_repair_candidate_requires_cold_confirmation"
+    }
   } else {
-    "no_context_repair_candidate_passed_frozen_development_gates"
+    if (isTRUE(context_prior_campaign)) {
+      "no_context_prior_candidate_passed_frozen_development_gates"
+    } else {
+      "no_context_repair_candidate_passed_frozen_development_gates"
+    }
   },
   selected_candidate = if (length(passing)) passing[[1L]] else NA_character_,
   exploratory_leader = ranking$candidate_id[[1L]],
@@ -424,6 +503,13 @@ writeLines(c(
 ), file.path(output_root, "FINALIZATION_SUMMARY.txt"))
 writeLines(
   format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
-  file.path(output_root, ".context_repair_campaign_complete")
+  file.path(
+    output_root,
+    if (isTRUE(context_prior_campaign)) {
+      ".context_prior_campaign_complete"
+    } else {
+      ".context_repair_campaign_complete"
+    }
+  )
 )
 cat(file.path(output_root, "tables", "context_repair_candidate_ranking.csv"), "\n")

@@ -91,6 +91,7 @@ def main():
     manifest = read_csv(root / "runtime_manifest.csv")
     if not manifest:
         raise SystemExit(f"Missing or empty runtime manifest: {root}")
+    prior_campaign = any(row.get("context_prior_sd", "") not in ("", "NA") for row in manifest)
     state_rows = []
     for name in ("scheduler_state_stage0.csv", "scheduler_state_stage1.csv"):
         state_rows.extend(read_csv(root / name))
@@ -109,7 +110,11 @@ def main():
     done = counts["completed"]
     remaining = total - done
     percent = 100.0 * done / total
-    print("GloFAS discrepancy-context repair")
+    print(
+        "GloFAS context-prior repair"
+        if prior_campaign
+        else "GloFAS discrepancy-context repair"
+    )
     print(
         f"total={total} completed={done} ({percent:.1f}%) "
         f"running={counts['running']} pending={counts['pending']} "
@@ -127,14 +132,15 @@ def main():
             f"{stage}: completed={stage_done}/{len(block)} "
             f"running={stage_running} failed={stage_failed}"
         )
-    print(
-        "stage0_gate="
-        + (
-            "passed" if (root / ".stage0_passed").exists()
-            else "failed" if (root / ".stage0_failed").exists()
-            else "pending"
+    if not prior_campaign:
+        print(
+            "stage0_gate="
+            + (
+                "passed" if (root / ".stage0_passed").exists()
+                else "failed" if (root / ".stage0_failed").exists()
+                else "pending"
+            )
         )
-    )
     gate_summary = read_last_csv(root / "tables" / "stage0_gate_summary.csv")
     if gate_summary and "required_passed" in gate_summary:
         print(

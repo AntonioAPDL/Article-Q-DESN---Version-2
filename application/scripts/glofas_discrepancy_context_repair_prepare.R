@@ -67,9 +67,14 @@ profile_manifest_row <- function(
 
 campaign_path <- resolve_repo(args$campaign, must_work = TRUE)
 campaign <- app_read_yaml(campaign_path)
-if (!identical(
-  as.character(campaign$schema_version),
-  "glofas_discrepancy_context_repair_campaign_v1"
+campaign_schema <- as.character(campaign$schema_version)
+context_prior_campaign <- identical(
+  campaign_schema,
+  "glofas_context_prior_repair_campaign_v1"
+)
+if (!campaign_schema %in% c(
+  "glofas_discrepancy_context_repair_campaign_v1",
+  "glofas_context_prior_repair_campaign_v1"
 )) {
   stop("Unsupported discrepancy-context repair campaign schema.", call. = FALSE)
 }
@@ -104,7 +109,11 @@ if (!nzchar(data_local_root) || !dir.exists(data_local_root)) {
   )
 }
 data_local_root <- normalizePath(data_local_root, mustWork = TRUE)
-candidates <- app_glofas_context_repair_validate_candidates(app_read_csv(candidate_path))
+candidates <- if (isTRUE(context_prior_campaign)) {
+  app_glofas_context_prior_validate_candidates(app_read_csv(candidate_path))
+} else {
+  app_glofas_context_repair_validate_candidates(app_read_csv(candidate_path))
+}
 cutoffs <- app_glofas_transition_validate_cutoffs(
   app_read_csv(cutoff_path),
   repo_root = repo_root,
@@ -118,9 +127,10 @@ if (expected_count != as.integer(campaign$execution$expected_total_fits)) {
   ), call. = FALSE)
 }
 if (as.integer(campaign$inference$max_iter) != 300L ||
-    as.integer(campaign$execution$max_parallel) != 20L ||
+    as.integer(campaign$execution$max_parallel) < 1L ||
+    as.integer(campaign$execution$max_parallel) > 20L ||
     as.integer(campaign$execution$backend_threads) != 1L) {
-  stop("The repair campaign requires max_iter=300 and 20 one-thread workers.", call. = FALSE)
+  stop("The repair campaign requires max_iter=300 and at most 20 one-thread workers.", call. = FALSE)
 }
 
 source_root <- if (nzchar(as.character(args$source_root))) {
@@ -128,9 +138,16 @@ source_root <- if (nzchar(as.character(args$source_root))) {
 } else {
   normalizePath(campaign$source_campaign$root, mustWork = TRUE)
 }
-for (entry in c("transition_candidate_ranking.csv", "transition_decision.csv")) {
+source_evidence <- c(
+  as.character(campaign$source_campaign$ranking_file %||%
+    "tables/transition_candidate_ranking.csv"),
+  as.character(campaign$source_campaign$decision_file %||%
+    "tables/transition_decision.csv")
+)
+for (entry in source_evidence) {
   path <- file.path(source_root, "tables", entry)
-  expected_hash <- if (entry == "transition_candidate_ranking.csv") {
+  if (grepl("^tables/", entry)) path <- file.path(source_root, entry)
+  expected_hash <- if (identical(entry, source_evidence[[1L]])) {
     campaign$source_campaign$ranking_sha256
   } else {
     campaign$source_campaign$decision_sha256
@@ -393,7 +410,11 @@ for (i in seq_len(nrow(candidates))) {
     app_write_csv(model_grid, model_grid_path)
 
     cfg <- app_glofas_transition_set_origin_persistence(base_cfg)
-    cfg <- app_glofas_transition_apply_candidate(cfg, candidate)
+    cfg <- if (isTRUE(context_prior_campaign)) {
+      app_glofas_context_prior_apply_candidate(cfg, candidate)
+    } else {
+      app_glofas_transition_apply_candidate(cfg, candidate)
+    }
     cfg$.__config_path__ <- NULL
     cfg$application_name <- paste0("glofas_transition_", candidate_id, "_", cutoff_id)
     source <- source_inventory[
@@ -527,6 +548,7 @@ for (i in seq_len(nrow(candidates))) {
         warm_start_use_future = candidate$warm_start_use_future[[1L]],
         warm_start_use_sigma = candidate$warm_start_use_sigma[[1L]],
         reservoir_preflight_enabled = FALSE,
+        context_prior_sd = as.numeric((candidate$context_prior_sd %||% NA_real_)[[1L]]),
         status = "prepared_not_launched",
         stringsAsFactors = FALSE
       ),
@@ -598,10 +620,22 @@ provenance <- data.frame(
 )
 app_write_csv(provenance, file.path(output_root, "provenance.csv"))
 writeLines(c(
-  "Causal GloFAS discrepancy-context repair prepared but not launched.",
+  if (isTRUE(context_prior_campaign)) {
+    "Causal GloFAS context-specific prior repair prepared but not launched."
+  } else {
+    "Causal GloFAS discrepancy-context repair prepared but not launched."
+  },
   "FR09 DESN geometry, separate block seeds, and separate RHS priors are frozen.",
-  "Stage 0 strictly continues retained T01/T10 fits before Stage 1 can start.",
-  "Stage 1 is a complete 3-by-3 context-variable and placement factorial.",
+  if (isTRUE(context_prior_campaign)) {
+    "The direct standardized GloFAS-level coefficient receives an isolated fixed Gaussian prior."
+  } else {
+    "Stage 0 strictly continues retained T01/T10 fits before Stage 1 can start."
+  },
+  if (isTRUE(context_prior_campaign)) {
+    "Six prospective prior scales are evaluated over three primary origins."
+  } else {
+    "Stage 1 is a complete 3-by-3 context-variable and placement factorial."
+  },
   "All historical replays use origin-persistence future PPT/soil and no realized future values.",
   "Three v3.1 origins determine ranking; no supplemental origin is run here.",
   "December 2022, full7, and article updates remain disabled."

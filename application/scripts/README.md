@@ -418,6 +418,16 @@ resume it verifies the original campaign and runtime-manifest hashes, confirms
 that all Stage-1 fits transfer only future/sigma state from T01, snapshots the
 initial failed gate, and writes the resume commit and evidence hashes.
 
+`glofas_context_prior_repair_launch.sh` runs the bounded follow-up campaign
+prepared by the same repair materializer. It evaluates six fixed-Gaussian
+scales for the single direct GloFAS-level discrepancy coefficient at three
+primary origins, using at most 18 serial one-core workers. Checkpoints hash the
+prior assignment, source T01 fits are state-only warm starts, and finalization
+reports coefficient and contribution audits plus the exact reconstruction
+identity. Terminal cleanup retains only the leading heavy candidates and the
+declared comparators; cold confirmation, full7, promotion, and article changes
+remain disabled.
+
 ## GloFAS Full-Quantile Scientific Audit
 
 `glofas_fit_recovery_full7_scientific_audit.R` closes out a completed

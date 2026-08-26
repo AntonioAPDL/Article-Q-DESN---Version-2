@@ -67,6 +67,10 @@ Tracked tests:
   the prospective aggregate-bias guardrail. It also verifies the evidence-bound
   required-anchor/advisory-comparator decision and rejects unsafe Stage-1 theta
   or non-T01 warm-start dependencies.
+- `test_glofas_context_prior_repair.R`: fixed-Gaussian/RHS prior separation,
+  feature-metadata coefficient mapping, overlap/intercept rejection, prior-scale
+  checkpoint hashing, context-candidate registry constraints, and exact
+  discrepancy reconstruction identity.
 - `test_no_leakage.R`: forecast-origin information sets and target dates.
 - `test_quantile_grid.R`: sorted quantile levels and monotone synthesis output.
 - `test_reproducibility.R`: fixed seeds, stable run IDs, and required artifacts.

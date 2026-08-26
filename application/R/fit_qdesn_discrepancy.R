@@ -149,6 +149,7 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
       b_zeta = as.numeric(vb_cfg$rhs_alpha_b_zeta %||% vb_cfg$rhs_b_zeta %||% mcmc_cfg$rhs_alpha_b_zeta %||% mcmc_cfg$rhs_b_zeta %||% 4),
       intercept_prec = as.numeric(vb_cfg$intercept_prec %||% mcmc_cfg$intercept_prec %||% 1.0e-9)
     ),
+    context_fixed_gaussian = vb_cfg$context_fixed_gaussian %||% NULL,
     prior_sigma = list(
       a = as.numeric(vb_cfg$sigma_a %||% mcmc_cfg$sigma_a %||% 2),
       b = as.numeric(vb_cfg$sigma_b %||% mcmc_cfg$sigma_b %||% 1)

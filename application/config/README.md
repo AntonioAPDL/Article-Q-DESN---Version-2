@@ -93,6 +93,13 @@ Planned files:
   all stable T01 anchors, preserves semantic/finiteness checks for every fit,
   treats T10 as an advisory comparator with at least two stable canaries, and
   permits Stage 1 only because every new fit is state-warm-started from T01.
+- `glofas_context_prior_repair_campaign_20260826.yaml` and
+  `glofas_context_prior_repair_candidates_20260826.csv`: 18-fit p50 campaign
+  over six prospective fixed-Gaussian standard deviations and three primary
+  origins. Every candidate keeps the frozen T01 transition and FR09 geometry,
+  adds only lag-zero GloFAS level to the discrepancy direct readout, transfers
+  future/sigma state but never coefficients from T01, and preserves the frozen
+  historical, reconstruction, numerical, and forecast-improvement gates.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

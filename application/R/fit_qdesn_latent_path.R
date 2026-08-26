@@ -1752,6 +1752,28 @@ app_latent_path_fit_diagnostics <- function(result) {
   base$vb_checkpoint_write_seconds <- as.numeric(checkpoint$write_seconds %||% 0)
   base$vb_checkpoint_contract_hash <- checkpoint$contract_hash %||% NA_character_
   base$vb_checkpoint_schema_version <- checkpoint$schema_version %||% NA_character_
+  fixed_prior <- result$fit$fixed_gaussian_prior_contract %||%
+    result$fixed_gaussian_prior_contract %||% list(enabled = FALSE, groups = list())
+  fixed_groups <- fixed_prior$groups %||% list()
+  base$vb_fixed_gaussian_prior_enabled <- app_as_bool(fixed_prior$enabled %||% FALSE)
+  base$vb_fixed_gaussian_prior_contract_hash <-
+    fixed_prior$contract_hash %||% NA_character_
+  base$vb_fixed_gaussian_prior_group_count <- length(fixed_groups)
+  base$vb_fixed_gaussian_prior_coefficient_count <- sum(vapply(
+    fixed_groups,
+    function(group) length(group$global_index %||% integer(0)),
+    integer(1L)
+  ))
+  base$vb_fixed_gaussian_prior_groups <- paste(vapply(
+    fixed_groups,
+    function(group) as.character(group$name %||% NA_character_)[[1L]],
+    character(1L)
+  ), collapse = ";")
+  base$vb_fixed_gaussian_prior_sds <- paste(vapply(
+    fixed_groups,
+    function(group) as.numeric(group$sd %||% NA_real_)[[1L]],
+    numeric(1L)
+  ), collapse = ";")
   backend <- result$fit$vb_diagnostics$runtime_backend %||% data.frame()
   base$vb_numerical_backend <- if (nrow(backend)) backend$backend[[1L]] else NA_character_
   base$vb_numerical_backend_verified <- if (nrow(backend)) {
@@ -1907,6 +1929,64 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
 	  )
 }
 
+app_latent_path_context_fixed_gaussian_contract <- function(design, spec) {
+  if (is.null(spec) || !length(spec) || !app_as_bool(spec$enabled %||% FALSE)) {
+    return(list(enabled = FALSE, groups = list(), contract_hash = NA_character_))
+  }
+  if (!is.data.frame(design$feature_info_alpha) || !nrow(design$feature_info_alpha)) {
+    stop("Context-specific Gaussian priors require discrepancy feature metadata.", call. = FALSE)
+  }
+  variables <- unique(as.character(unlist(spec$variables %||% "glofas_level")))
+  variables <- variables[nzchar(variables)]
+  lags <- sort(unique(as.integer(unlist(spec$lags %||% 0L))))
+  sd <- as.numeric(spec$sd %||% NA_real_)
+  if (!length(variables) || any(!variables %in% c("glofas_level", "glofas_anomaly"))) {
+    stop("Context-specific Gaussian priors require supported GloFAS variables.", call. = FALSE)
+  }
+  if (!length(lags) || any(!is.finite(lags) | lags < 0L)) {
+    stop("Context-specific Gaussian prior lags must be nonnegative integers.", call. = FALSE)
+  }
+  if (length(sd) != 1L || !is.finite(sd) || sd <= 0) {
+    stop("Context-specific Gaussian prior sd must be positive and finite.", call. = FALSE)
+  }
+  info <- design$feature_info_alpha
+  selected <- which(
+    as.character(info$block) == "direct_covariate_lag" &
+      as.character(info$variable) %in% variables &
+      as.integer(info$lag) %in% lags
+  )
+  expected <- length(variables) * length(lags)
+  if (length(selected) != expected) {
+    stop(sprintf(
+      "Context-specific Gaussian prior matched %d discrepancy columns; expected %d.",
+      length(selected), expected
+    ), call. = FALSE)
+  }
+  if (anyDuplicated(paste(info$variable[selected], info$lag[selected], sep = "::"))) {
+    stop("Context-specific Gaussian prior feature assignments are not unique.", call. = FALSE)
+  }
+  global_index <- as.integer(design$alpha_index[selected])
+  group <- list(
+    name = as.character(spec$name %||% "alpha_context_level")[[1L]],
+    global_index = global_index,
+    sd = sd,
+    variable = as.character(info$variable[selected]),
+    lag = as.integer(info$lag[selected]),
+    column_name = as.character(info$column_name[selected])
+  )
+  payload <- list(
+    enabled = TRUE,
+    groups = list(group),
+    alpha_column_names = as.character(info$column_name),
+    theta_column_names = colnames(design$H_fixed)
+  )
+  payload$contract_hash <- app_qdesn_hash_object(
+    payload,
+    prefix = "latent_context_fixed_gaussian_"
+  )
+  payload
+}
+
 app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, drop = NULL) {
   stage_timing <- list()
   time_stage <- function(step, expr) {
@@ -1948,6 +2028,11 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
       likelihood_family = likelihood_family
     )
   })
+  fixed_gaussian_contract <- app_latent_path_context_fixed_gaussian_contract(
+    design,
+    vb_args$context_fixed_gaussian %||% NULL
+  )
+  vb_args$fixed_gaussian_groups <- fixed_gaussian_contract$groups
   vb_args$likelihood_family <- likelihood_family
   fit <- time_stage("fit_latent_path_al_vb_core", {
     app_fit_latent_path_al_vb_core(
@@ -1965,6 +2050,7 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
     design,
     design_hash = design_summary$design_hash[[1L]]
   )
+  fit$fixed_gaussian_prior_contract <- fixed_gaussian_contract
   stage_timing_df <- if (length(stage_timing)) {
     do.call(rbind, stage_timing)
   } else {
@@ -1989,6 +2075,7 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
     design_summary = design_summary,
     mcmc_args = list(),
     vb_args = vb_args,
+    fixed_gaussian_prior_contract = fixed_gaussian_contract,
     status = "completed",
     message = "latent-path AL-VB fit completed"
   )

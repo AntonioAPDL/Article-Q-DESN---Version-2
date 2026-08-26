@@ -116,7 +116,11 @@ Tracked helper files:
   explicitly. The exact-runtime implementation adds a one-time fixed-row
   pairing certificate, fused paired beta sufficient statistics with an
   explicit fallback, fixed-iteration profiling controls, backend provenance,
-  and exact atomic checkpoint/resume. These paths preserve the same dense
+  and exact atomic checkpoint/resume. A declared, non-overlapping subset of
+  non-intercept coefficients may receive fixed zero-mean Gaussian priors while
+  the remaining beta/alpha blocks retain independent RHS states. The fixed
+  groups are excluded from RHS scale updates, recorded in diagnostics, and
+  included in checkpoint contracts. These paths preserve the same dense
   covariance VB approximation; they do not introduce stochastic, mini-batch,
   low-rank, or otherwise approximate inference.
 - `latent_path_runtime_backend.R`: fail-closed provenance for bundled R BLAS or
@@ -145,7 +149,10 @@ Tracked helper files:
   and context-variable/placement factorial contracts, hashed warm-start source
   resolution, numerical stability checks, causal context extrapolation and
   state diagnostics, coefficient attribution, the forecast-bias gate, and the
-  evidence-bound required-anchor/advisory-comparator resume decision.
+  evidence-bound required-anchor/advisory-comparator resume decision. It also
+  supports the subsequent context-prior repair campaign, which isolates the
+  lag-zero direct GloFAS-level coefficient under a fixed Gaussian prior without
+  changing the separate reference/discrepancy reservoirs or their RHS priors.
 - `glofas_fit_recovery_selection.R`: manifest validation, common-date
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS

@@ -128,9 +128,9 @@ stopifnot(nrow(app_glofas_context_repair_bind_nonempty(list(
 ))) == 0L)
 
 timeline <- data.frame(
-  date = as.Date("2020-01-01") + 0:5,
-  glofas_level = c(1, 2, 3, 4, 5, 6),
-  glofas_level_scaled = c(-1.5, -0.5, 0.5, 1.5, 2.5, 3.5),
+  date = as.Date("2019-12-31") + 0:6,
+  glofas_level = c(NA, 1, 2, 3, 4, 5, 6),
+  glofas_level_scaled = c(NA, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5),
   glofas_level_uses_realized_future = FALSE,
   stringsAsFactors = FALSE
 )
@@ -141,7 +141,6 @@ design_fixture <- list(
   discrepancy_transition_contract = list(
     context = list(glofas_level = TRUE, glofas_anomaly = FALSE)
   ),
-  feature_meta_alpha = list(covariate_timeline = timeline),
   feature_info_alpha = data.frame(
     block = c("reservoir_state", "reservoir_state", "direct_covariate_lag"),
     variable = c(NA, NA, "glofas_level"),
@@ -150,9 +149,26 @@ design_fixture <- list(
     stringsAsFactors = FALSE
   ),
   X_alpha = cbind(
-    c(-0.5, 0.1, 0.5, 0.2, -0.1, 0.3),
-    c(0.2, -0.4, 0.4, -0.2, 0.6, -0.6),
-    timeline$glofas_level_scaled
+    c(-0.5, 0.1, 0.5, 0.2),
+    c(0.2, -0.4, 0.4, -0.2),
+    timeline$glofas_level_scaled[2:5]
+  ),
+  keep_idx = 1:4,
+  feature_meta_alpha = c(
+    list(
+      covariate_timeline = timeline,
+      history_dates = as.Date("2020-01-01") + 0:3
+    ),
+    list()
+  ),
+  future_key = data.frame(
+    target_date = as.Date("2020-01-05") + 0:1,
+    horizon = 1:2
+  ),
+  future_builder = function(y) list(
+    X_alpha_future = cbind(
+      c(0.1, 0.2), c(0.3, 0.4), c(2.5, 3.5)
+    )
   ),
   latent_data = list(origin_date = as.Date("2020-01-04"))
 )
@@ -165,7 +181,8 @@ fit_fixture <- list(
   ),
   variational_state = list(
     theta_mean = c(0.1, 0.2, 0.3),
-    theta_cov = diag(c(0.01, 0.02, 0.03))
+    theta_cov = diag(c(0.01, 0.02, 0.03)),
+    y_mean = c(0, 0)
   )
 )
 context_audit <- app_glofas_context_repair_context_audit(
@@ -175,6 +192,12 @@ stopifnot(nrow(context_audit$context) == 1L)
 stopifnot(context_audit$context$future_outside_history_fraction[[1L]] == 1)
 stopifnot(nrow(context_audit$coefficients) == 1L)
 stopifnot(context_audit$coefficients$posterior_mean[[1L]] == 0.3)
+stopifnot(context_audit$context$n_unmatched_timeline_rows[[1L]] == 1L)
+stopifnot(context_audit$context$n_nonfinite_timeline_rows[[1L]] == 1L)
+stopifnot(context_audit$context$n_nonfinite_design_support_rows[[1L]] == 0L)
+stopifnot(isTRUE(context_audit$context$all_finite[[1L]]))
+stopifnot(nrow(context_audit$contributions) == 6L)
+stopifnot(all(context_audit$contributions$all_finite))
 stopifnot(context_audit$states$n_state_columns[[1L]] == 2L)
 stopifnot(is.finite(context_audit$states$state_effective_rank[[1L]]))
 

@@ -302,6 +302,7 @@ app_glofas_transition_metric_row <- function(
   d_error <- d_hat - d_proxy
   q_error <- q_y - y
   g_error <- q_g_hat - raw_q_g
+  reconstruction_identity_error <- q_y + d_hat - q_g_hat
   correlation <- if (length(d_hat) > 1L && stats::sd(d_hat) > 0 &&
       stats::sd(d_proxy) > 0) stats::cor(d_hat, d_proxy) else NA_real_
   data.frame(
@@ -320,6 +321,7 @@ app_glofas_transition_metric_row <- function(
     discrepancy_proxy_correlation = correlation,
     glofas_reconstruction_mae = mean(abs(g_error)),
     glofas_reconstruction_rmse = sqrt(mean(g_error^2)),
+    reconstruction_identity_max_abs = max(abs(reconstruction_identity_error)),
     stringsAsFactors = FALSE
   )
 }
@@ -374,6 +376,8 @@ app_glofas_transition_score_prediction_table <- function(
     discrepancy_hat = as.numeric(q$d_g_hat),
     discrepancy_proxy = as.numeric(q$raw_glofas_quantile) -
       as.numeric(q$y_reference),
+    reconstruction_identity_error = as.numeric(q$qhat) +
+      as.numeric(q$d_g_hat) - as.numeric(q$q_g_hat),
     check_loss = app_glofas_transition_check_loss(q$y_reference, q$qhat, 0.5),
     stringsAsFactors = FALSE
   )
@@ -467,7 +471,8 @@ app_glofas_transition_equal_origin_aggregate <- function(scores) {
     "future_p50_check_loss", "future_mae", "future_rmse", "future_bias",
     "discrepancy_proxy_mae", "discrepancy_proxy_rmse",
     "discrepancy_proxy_bias", "discrepancy_proxy_correlation",
-    "glofas_reconstruction_mae", "glofas_reconstruction_rmse"
+    "glofas_reconstruction_mae", "glofas_reconstruction_rmse",
+    "reconstruction_identity_max_abs"
   )
   rows <- lapply(unique(scores$candidate_id), function(candidate_id) {
     block <- scores[scores$candidate_id == candidate_id, , drop = FALSE]

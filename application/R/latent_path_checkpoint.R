@@ -25,6 +25,7 @@ app_latent_checkpoint_semantic_vb_args <- function(vb_args = list()) {
   fields <- c(
     "max_iter", "min_iter_elbo", "tol", "tol_par", "n_samp_xi", "n_draws",
     "seed", "beta_prior_type", "beta_rhs", "alpha_rhs", "prior_sigma", "rhs",
+    "fixed_gaussian_groups",
     "future_moment_strategy", "future_update_strategy", "future_objective_strategy",
     "chunking", "draw_backend", "likelihood_family"
   )

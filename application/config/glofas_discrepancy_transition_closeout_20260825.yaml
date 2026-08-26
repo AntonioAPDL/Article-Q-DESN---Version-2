@@ -1,0 +1,90 @@
+version: "1.0"
+campaign_id: glofas_discrepancy_transition_bridge_20260825
+scientific_lane: glofas_latent_path_application
+launch_implementation_commit: 7e17bfd760ac0b1a17c47bcea3060ac43d390d32
+runtime_root: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825
+terminal_state:
+  total: 48
+  completed: 48
+  failed: 0
+  stopped: 0
+  completion_percent: 100
+  finalized_at: "2026-08-25T19:23:46-0400"
+comparison_contract:
+  quantile_level: 0.50
+  primary_origin_role: primary_v31
+  primary_origin_count: 3
+  supplemental_origin_count: 1
+  weather_policy: origin_persistence
+  uses_realized_future_weather: false
+  comparator: t01_last
+  authoritative_article_result: glofas_fr09_authoritative_full7_20260811
+result:
+  decision: no_transition_candidate_passed_frozen_development_gates
+  selected_candidate: null
+  exploratory_leader: t10_last_gctx
+  exploratory_leader_primary_check_loss: 0.0701508796286583
+  comparator_primary_check_loss: 0.0800962938792798
+  exploratory_leader_relative_gain: 0.124168220137764
+  exploratory_leader_primary_origin_wins: 2
+  exploratory_leader_worst_primary_origin_regression: 0.0157352702889562
+  exploratory_leader_worst_observed_all_regression: 0.737994909573168
+  exploratory_leader_worst_observed_trailing_regression: 0.767785076027859
+  best_causal_baseline: last
+  best_causal_baseline_check_loss: 0.0828208263285697
+  all_exploratory_leader_fits_converged: false
+  failed_development_gates:
+    - observed_all
+    - observed_trailing
+    - numerical_convergence
+  december_2022_evaluated: false
+  full7_launched: false
+  article_update_authorized: false
+retention:
+  automatic_terminal_cleanup_completed: true
+  heavy_candidates_preserved:
+    - t01_last
+    - t08_ewma14
+    - t10_last_gctx
+  preserve_compact_evidence_for_all_candidates: true
+evidence:
+  provenance:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/provenance.csv
+    sha256: 8e4fbbfd51b5da7ff31d58dab6c553c4330b51ce82e3082ccad957fd62151985
+  runtime_manifest:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/runtime_manifest.csv
+    sha256: cc95c193372529d2495dadc854b6092c4f07741dfd9e90104ddcdacdd5ffb0e8
+  finalization_status:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/finalization_status.csv
+    sha256: 19bbc5c5d534231dd007084ce7e3accd14d5b3a7ebe0fcd0c58d65743de3c7e7
+  candidate_ranking:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/transition_candidate_ranking.csv
+    sha256: 3ff6e5d18a1af5eb42f948d2117b22a6c67d8584b3a330eb8fd19abb4b73581d
+  decision:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/transition_decision.csv
+    sha256: ae9cbfcd84269086be566db90860ecaf1c40a2c0ab9b9f553a7a8861057b0a64
+  origin_comparison:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/transition_origin_comparison.csv
+    sha256: de8c57dc26eb1351099ca8438226968af75d10f88f5734413697ad95a0cec2dc
+  observed_guardrails:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/transition_observed_guardrail_comparison.csv
+    sha256: e1bf77d9351a8dd9c5dee58675b8400e4d3c4cfcb06994ce982ddb98498220b1
+  fit_diagnostics:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/transition_fit_diagnostics.csv
+    sha256: 6461fa3f1bc5d906edb69ae024ff862f75aa59c52daddacc98236f8d02cd1fe0
+  causal_baseline_ranking:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/causal_baseline_ranking.csv
+    sha256: 81c823c61d701de0dbfccaa449a5693a557aa40f26e35b831bfa21f64bd82084
+  panel_audit:
+    path: local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825/tables/panel_audit.csv
+    sha256: ee66bdb4131302b0cae3b7293a2ab9f74b605758d9b7784f44cc3c64e54a87f0
+next_phase:
+  status: required_before_any_promotion
+  objective: isolate and regularize the issued-GloFAS context signal without sacrificing pre-cutoff fit
+  required_steps:
+    - continue exact-design T01 and T10 fits to numerical convergence
+    - audit T10 context scaling and the May-2022 historical-fit regression
+    - ablate GloFAS level versus anomaly and reservoir versus direct-readout placement
+    - retain the frozen multi-origin and observed-fit guardrails
+    - cold-confirm any repaired leader before full7 or article evaluation
+

@@ -77,6 +77,11 @@ Planned files:
 - `glofas_discrepancy_transition_cutoffs_20260825.csv`: historical replay
   registry and source-vintage roles. Every enabled row declares the causal
   `origin_persistence` future-weather policy.
+- `glofas_discrepancy_transition_closeout_20260825.yaml`: immutable terminal
+  record for the completed 48-fit bridge. It pins evidence hashes, the
+  no-promotion decision, the exploratory T10 context signal, failed historical
+  and numerical gates, protected heavy artifacts, and the required repair
+  sequence before any full7 or article action.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

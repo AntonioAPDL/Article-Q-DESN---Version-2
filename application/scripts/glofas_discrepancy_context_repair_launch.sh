@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUTPUT_ROOT="${1:-${REPO_ROOT}/local_trackers/runtime_configs/glofas_discrepancy_context_repair_20260825}"
 MAX_PARALLEL="${2:-20}"
+CORE_SPEC="${3:-auto}"
 STAGE0_MANIFEST="${OUTPUT_ROOT}/runtime_manifest_stage0.csv"
 STAGE1_MANIFEST="${OUTPUT_ROOT}/runtime_manifest_stage1.csv"
 STATUS_FILE="${OUTPUT_ROOT}/status/supervisor.csv"
@@ -51,7 +52,7 @@ run_scheduler() {
     --min-memory-gb 64 \
     --min-disk-gb 150 \
     --poll-seconds 30 \
-    --cores auto \
+    --cores "$CORE_SPEC" \
     --numerical-backend openblas_serial \
     --backend-threads 1 \
     --backend-library "$BACKEND_LIBRARY" \

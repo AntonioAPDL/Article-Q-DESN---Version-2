@@ -72,7 +72,36 @@ for (i in seq_len(nrow(qrows))) {
       model_row = row,
       cutoff_row = cutoff_row
     )
-    design_rows[[i]] <- app_latent_path_design_summary(design)
+    summary <- app_latent_path_design_summary(design)
+    warm_cfg <- app_latent_path_warm_start_config(cfg$inference$vb_ld %||% list())
+    if (isTRUE(warm_cfg$enabled)) {
+      source_contract <- app_latent_path_warm_start_contract_from_fit(
+        warm_cfg$fit_object
+      )
+      target_contract <- app_latent_path_warm_start_contract(design)
+      compatibility <- app_latent_path_warm_start_compatibility(
+        source_contract,
+        target_contract,
+        mode = warm_cfg$compatibility_mode
+      )
+      summary$warm_start_preflight_enabled <- TRUE
+      summary$warm_start_preflight_accepted <- compatibility$accepted
+      summary$warm_start_preflight_class <- compatibility$class
+      summary$warm_start_preflight_message <- compatibility$message
+      summary$warm_start_source_design_hash <- source_contract$design_hash
+      summary$warm_start_target_design_hash <- target_contract$design_hash
+      if (!isTRUE(compatibility$accepted)) {
+        stop(compatibility$message, call. = FALSE)
+      }
+    } else {
+      summary$warm_start_preflight_enabled <- FALSE
+      summary$warm_start_preflight_accepted <- NA
+      summary$warm_start_preflight_class <- "cold"
+      summary$warm_start_preflight_message <- "warm start disabled"
+      summary$warm_start_source_design_hash <- NA_character_
+      summary$warm_start_target_design_hash <- summary$design_hash
+    }
+    design_rows[[i]] <- summary
     rm(design)
     invisible(gc())
     next

@@ -141,6 +141,10 @@ Tracked helper files:
 - `glofas_discrepancy_transition_campaign.R`: validation and materialization
   helpers for the frozen multi-origin p50 bridge, origin-persistence weather
   policy, forecast/discrepancy scoring, and equal-origin aggregation.
+- `glofas_discrepancy_context_repair_campaign.R`: frozen T01/T10 continuation
+  and context-variable/placement factorial contracts, hashed warm-start source
+  resolution, numerical stability checks, causal context extrapolation and
+  state diagnostics, coefficient attribution, and the forecast-bias gate.
 - `glofas_fit_recovery_selection.R`: manifest validation, common-date
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS

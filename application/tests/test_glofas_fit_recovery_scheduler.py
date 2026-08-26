@@ -121,6 +121,17 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
                     Path(tmp).parent / "outside", output_root
                 )
 
+    def test_scheduler_stage_state_file_stays_in_owned_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                scheduler.resolve_state_path(tmp, "scheduler_state_stage0.csv"),
+                Path(tmp) / "scheduler_state_stage0.csv",
+            )
+            with self.assertRaisesRegex(ValueError, "plain CSV filename"):
+                scheduler.resolve_state_path(tmp, "../state.csv")
+            with self.assertRaisesRegex(ValueError, "plain CSV filename"):
+                scheduler.resolve_state_path(tmp, "state.json")
+
     def test_valid_checkpoint_requires_matching_sidecar_hash(self):
         with tempfile.TemporaryDirectory() as tmp:
             checkpoint = Path(tmp) / "fit.checkpoint.rds"

@@ -1,0 +1,11 @@
+candidate_id,anchor_method,anchor_window,anchor_half_life,glofas_level,glofas_anomaly,anomaly_window,context_in_reservoir,context_in_readout,context_lags,priority,enabled,role,retain_heavy,execution_stage,warm_start_source_candidate,warm_start_compatibility_mode,warm_start_use_theta,warm_start_use_future,warm_start_use_sigma,notes
+t01_last,last,,,false,false,50,true,true,0,1,true,legacy_mechanism_comparator,true,stage0,t01_last,exact_design,true,true,true,Exact-design continuation of the no-context FR09 transition comparator.
+t10_last_gctx,last,,,true,true,50,true,true,0,2,true,context_continuation,true,stage0,t10_last_gctx,exact_design,true,true,true,Exact-design continuation of the prior exploratory context leader.
+c01_level_readout,last,,,true,false,50,false,true,0,3,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS level enters only the direct discrepancy readout.
+c02_anomaly_readout,last,,,false,true,50,false,true,0,4,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS anomaly enters only the direct discrepancy readout.
+c03_both_readout,last,,,true,true,50,false,true,0,5,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS level and anomaly enter only the direct discrepancy readout.
+c04_level_reservoir,last,,,true,false,50,true,false,0,6,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS level enters only the discrepancy reservoir.
+c05_anomaly_reservoir,last,,,false,true,50,true,false,0,7,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS anomaly enters only the discrepancy reservoir.
+c06_both_reservoir,last,,,true,true,50,true,false,0,8,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS level and anomaly enter only the discrepancy reservoir.
+c07_level_both,last,,,true,false,50,true,true,0,9,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS level enters both the discrepancy reservoir and direct readout.
+c08_anomaly_both,last,,,false,true,50,true,true,0,10,true,context_factorial,false,stage1,t01_last,state_only,false,true,true,GloFAS anomaly enters both the discrepancy reservoir and direct readout.

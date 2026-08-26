@@ -61,6 +61,10 @@ Tracked tests:
 - `test_glofas_discrepancy_transition_campaign.R`: candidate/cutoff cardinality,
   exact FR09 comparator routing, origin-persistence weather, no-leakage gates,
   future discrepancy scoring, and equal-origin aggregation.
+- `test_glofas_discrepancy_context_repair_campaign.R`: frozen T01/T10
+  continuation, complete context-variable/placement factorial, strict warm-start
+  modes, stable-at-cap numerical gate, context extrapolation diagnostics, and
+  the prospective aggregate-bias guardrail.
 - `test_no_leakage.R`: forecast-origin information sets and target dates.
 - `test_quantile_grid.R`: sorted quantile levels and monotone synthesis output.
 - `test_reproducibility.R`: fixed seeds, stable run IDs, and required artifacts.

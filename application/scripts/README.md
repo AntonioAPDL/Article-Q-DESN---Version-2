@@ -402,6 +402,14 @@ the three v3.1 origins with equal weight, reports the v2.1 origin separately,
 and performs protected terminal cleanup. It cannot evaluate December 2022,
 launch full7, promote outputs, or edit article files.
 
+`glofas_discrepancy_context_repair_prepare.R` consumes the frozen bridge and
+materializes independent Stage-0 and Stage-1 manifests. The matching launch
+script runs six strict exact-design continuations and a fail-closed numerical
+gate before the 24-fit context factorial. The stage gate, finalizer, health,
+and watch scripts record warm-start semantics, causal context extrapolation,
+state-design and coefficient diagnostics, the prospective bias guardrail,
+bounded cleanup, and a development-only decision packet.
+
 ## GloFAS Full-Quantile Scientific Audit
 
 `glofas_fit_recovery_full7_scientific_audit.R` closes out a completed

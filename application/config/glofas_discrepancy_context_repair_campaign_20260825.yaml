@@ -1,0 +1,72 @@
+schema_version: glofas_discrepancy_context_repair_campaign_v1
+campaign_id: glofas_discrepancy_context_repair_20260825
+scientific_lane: glofas_latent_path_application
+article_result_frozen: glofas_fr09_authoritative_full7_20260811
+candidate_registry: application/config/glofas_discrepancy_context_repair_candidates_20260825.csv
+cutoff_registry: application/config/glofas_discrepancy_context_repair_cutoffs_20260825.csv
+baseline_registry: application/config/glofas_constrained_median_baseline_fr09.yaml
+source_campaign:
+  root: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/glofas_discrepancy_transition_20260825/local_trackers/runtime_configs/glofas_discrepancy_transition_bridge_20260825
+  runtime_manifest_sha256: cc95c193372529d2495dadc854b6092c4f07741dfd9e90104ddcdacdd5ffb0e8
+  ranking_sha256: 3ff6e5d18a1af5eb42f948d2117b22a6c67d8584b3a330eb8fd19abb4b73581d
+  decision_sha256: ae9cbfcd84269086be566db90860ecaf1c40a2c0ab9b9f553a7a8861057b0a64
+quantile_level: 0.50
+weather_policy: origin_persistence
+frozen_transition:
+  anchor_method: last
+  evolution_method: static_anchor_innovation
+  anomaly_window: 50
+  context_lags: [0]
+inference:
+  method: vb_ld
+  max_iter: 300
+  max_iter_hard_cap: 300
+  min_iter_elbo: 20
+  tol: 0.0001
+  tol_par: 0.0001
+  n_samp_xi: 500
+  n_draws: 2000
+  checkpoint:
+    enabled: true
+    every_iterations: 25
+    every_minutes: 20
+    keep_previous: true
+    keep_on_success: false
+numerical_gate:
+  require_warm_start: true
+  require_semantic_contract: true
+  stable_elbo_tail_relative_range: 0.0005
+  stable_final_parameter_change: 0.0005
+scoring:
+  primary_metric: future_p50_check_loss
+  primary_origin_role: primary_v31
+  minimum_primary_origin_wins: 2
+  required_relative_improvement: 0.03
+  repeatability_absolute_envelope: 0.000603
+  maximum_primary_origin_regression: 0.10
+  observed_all_relative_guardrail: 0.03
+  observed_trailing_relative_guardrail: 0.05
+  observed_trailing_windows: [200, 50]
+  aggregate_bias_absolute_tolerance: 0.02
+  reconstruction_ratio_limit: 1.10
+  causal_baseline_gate: true
+execution:
+  expected_stage0_fits: 6
+  expected_stage1_fits: 24
+  expected_total_fits: 30
+  max_parallel: 20
+  backend: openblas_serial
+  backend_threads: 1
+  max_load: 60
+  minimum_memory_gb: 64
+  minimum_disk_gb: 150
+  poll_seconds: 30
+  retain_top_candidate_count: 3
+  retain_comparators: [t01_last, t10_last_gctx]
+  automatic_terminal_cleanup: true
+adjudication:
+  supplemental_origin_enabled: false
+  december_2022_enabled: false
+  full7_enabled: false
+  article_update_enabled: false
+  note: Stage 0 must pass before the context factorial. Confirmation, December 2022, full7, and article promotion require separate approval.

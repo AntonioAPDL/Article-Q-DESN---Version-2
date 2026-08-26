@@ -48,6 +48,14 @@ def parse_args():
         action="store_true",
         help="Retry non-running candidates whose worker status is failed.",
     )
+    parser.add_argument(
+        "--state-name",
+        default="scheduler_state.csv",
+        help=(
+            "CSV filename for scheduler state inside output-root. This lets "
+            "a staged campaign keep independent, resumable scheduler ledgers."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -187,6 +195,13 @@ def resolve_reference_feature_cache_root(path, output_root):
     if not str(path or "").strip():
         return ""
     return str(require_within(path, output_root, "Reference feature cache"))
+
+
+def resolve_state_path(output_root, state_name):
+    state_name = pathlib.Path(state_name)
+    if state_name.name != str(state_name) or state_name.suffix.lower() != ".csv":
+        raise ValueError("state-name must be a plain CSV filename")
+    return pathlib.Path(output_root) / state_name
 
 
 def build_worker_environment(row, state, reference_feature_cache_root, base_env=None):
@@ -453,7 +468,7 @@ def main():
             raise ValueError("OpenBLAS scheduling requires --backend-library and --backend-sha256")
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "logs").mkdir(exist_ok=True)
-    state_path = output_root / "scheduler_state.csv"
+    state_path = resolve_state_path(output_root, args.state_name)
     stop_path = output_root / "STOP"
     previous_states = {
         row["candidate_id"]: row

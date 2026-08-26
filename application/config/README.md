@@ -82,6 +82,12 @@ Planned files:
   no-promotion decision, the exploratory T10 context signal, failed historical
   and numerical gates, protected heavy artifacts, and the required repair
   sequence before any full7 or article action.
+- `glofas_discrepancy_context_repair_campaign_20260825.yaml`: staged p50 repair
+  contract in which six exact-design T01/T10 continuations must pass before 24
+  context-factorial fits may launch. Its candidate and cutoff CSVs isolate
+  GloFAS level versus anomaly and discrepancy reservoir versus direct-readout
+  placement across the same three primary origins while FR09 geometry, priors,
+  anchor, seeds, and causal weather policy remain frozen.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

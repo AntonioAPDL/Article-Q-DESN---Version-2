@@ -1,0 +1,23 @@
+schema_version: glofas_discrepancy_context_repair_stage0_gate_amendment_v1
+campaign_id: glofas_discrepancy_context_repair_20260825
+decision_id: stable_t01_anchor_with_t10_advisory_comparator
+evidence_binding:
+  runtime_manifest_sha256: 3e13502021aa5d5ac4aef3585f583059adb2fa25975870de09df5bc868fba31a
+  campaign_snapshot_sha256: 4a3a6d64d2a7c56ac7a28f5050e5e162bc637f6aa9da52f113ac1b9ee4b428cb
+required_anchor_candidates: [t01_last]
+advisory_comparator_candidates: [t10_last_gctx]
+expected_required_fits: 3
+expected_advisory_fits: 3
+minimum_advisory_numerical_passes: 2
+stage1_warm_source_candidates: [t01_last]
+preserve_all_warm_contracts: true
+preserve_all_finiteness_checks: true
+preserve_numerical_thresholds: true
+rationale: >-
+  All three exact-design T01 continuations passed. Two of three T10 canaries
+  passed, while the May T10 fit remained finite and semantically valid but
+  numerically unstable and historically overfit. Stage 1 transfers only
+  compatible future and sigma state from T01, never T10 coefficients or T10
+  latent state. T10 is therefore retained as an advisory diagnostic comparator
+  rather than an execution dependency. The original numerical thresholds and
+  all final scientific promotion gates remain unchanged.

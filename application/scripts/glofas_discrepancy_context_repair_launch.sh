@@ -7,6 +7,7 @@ MAX_PARALLEL="${2:-20}"
 CORE_SPEC="${3:-auto}"
 STAGE0_MANIFEST="${OUTPUT_ROOT}/runtime_manifest_stage0.csv"
 STAGE1_MANIFEST="${OUTPUT_ROOT}/runtime_manifest_stage1.csv"
+STAGE0_GATE_POLICY="${REPO_ROOT}/application/config/glofas_discrepancy_context_repair_stage0_gate_amendment_20260825.yaml"
 STATUS_FILE="${OUTPUT_ROOT}/status/supervisor.csv"
 BACKEND_LIBRARY="$(readlink -f /lib64/libopenblas.so.0)"
 BACKEND_SHA256="$(sha256sum "$BACKEND_LIBRARY" | awk '{print $1}')"
@@ -74,7 +75,8 @@ if [[ ! -f "${OUTPUT_ROOT}/.stage0_passed" ]]; then
   CURRENT_STAGE="stage0_gate"
   write_status "running" "$CURRENT_STAGE"
   Rscript application/scripts/glofas_discrepancy_context_repair_stage0_gate.R \
-    --output_root "$OUTPUT_ROOT"
+    --output_root "$OUTPUT_ROOT" \
+    --policy_path "$STAGE0_GATE_POLICY"
 fi
 
 if [[ ! -f "${OUTPUT_ROOT}/.stage0_passed" ]]; then

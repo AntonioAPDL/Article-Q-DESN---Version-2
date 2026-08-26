@@ -88,6 +88,11 @@ Planned files:
   GloFAS level versus anomaly and discrepancy reservoir versus direct-readout
   placement across the same three primary origins while FR09 geometry, priors,
   anchor, seeds, and causal weather policy remain frozen.
+- `glofas_discrepancy_context_repair_stage0_gate_amendment_20260825.yaml`:
+  evidence-bound recovery policy after the first Stage-0 execution. It requires
+  all stable T01 anchors, preserves semantic/finiteness checks for every fit,
+  treats T10 as an advisory comparator with at least two stable canaries, and
+  permits Stage 1 only because every new fit is state-warm-started from T01.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the

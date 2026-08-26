@@ -135,6 +135,17 @@ def main():
             else "pending"
         )
     )
+    gate_summary = read_last_csv(root / "tables" / "stage0_gate_summary.csv")
+    if gate_summary and "required_passed" in gate_summary:
+        print(
+            "stage0_policy="
+            f"required={gate_summary.get('required_passed', '')}/"
+            f"{gate_summary.get('required_fits', '')} "
+            f"advisory={gate_summary.get('advisory_passed', '')}/"
+            f"{gate_summary.get('advisory_fits', '')} "
+            f"semantic_contracts={gate_summary.get('all_semantic_contracts_pass', '')} "
+            f"authorized={gate_summary.get('stage1_authorized', '')}"
+        )
     ranking = read_csv(root / "tables" / "context_repair_candidate_ranking.csv")
     if ranking:
         leader = ranking[0]

@@ -64,7 +64,9 @@ Tracked tests:
 - `test_glofas_discrepancy_context_repair_campaign.R`: frozen T01/T10
   continuation, complete context-variable/placement factorial, strict warm-start
   modes, stable-at-cap numerical gate, context extrapolation diagnostics, and
-  the prospective aggregate-bias guardrail.
+  the prospective aggregate-bias guardrail. It also verifies the evidence-bound
+  required-anchor/advisory-comparator decision and rejects unsafe Stage-1 theta
+  or non-T01 warm-start dependencies.
 - `test_no_leakage.R`: forecast-origin information sets and target dates.
 - `test_quantile_grid.R`: sorted quantile levels and monotone synthesis output.
 - `test_reproducibility.R`: fixed seeds, stable run IDs, and required artifacts.

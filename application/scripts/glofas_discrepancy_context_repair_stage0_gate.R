@@ -17,7 +17,11 @@ source(app_path("application/R/glofas_discrepancy_transition_campaign.R"))
 source(app_path("application/R/glofas_discrepancy_context_repair_campaign.R"))
 
 args <- app_parse_args(list(
-  output_root = "local_trackers/runtime_configs/glofas_discrepancy_context_repair_20260825"
+  output_root = "local_trackers/runtime_configs/glofas_discrepancy_context_repair_20260825",
+  policy_path = paste0(
+    "application/config/",
+    "glofas_discrepancy_context_repair_stage0_gate_amendment_20260825.yaml"
+  )
 ))
 output_root <- if (grepl("^/", args$output_root)) {
   normalizePath(args$output_root, mustWork = TRUE)
@@ -25,10 +29,63 @@ output_root <- if (grepl("^/", args$output_root)) {
   normalizePath(app_path(args$output_root), mustWork = TRUE)
 }
 manifest <- app_read_csv(file.path(output_root, "runtime_manifest_stage0.csv"))
+stage1_manifest <- app_read_csv(file.path(output_root, "runtime_manifest_stage1.csv"))
 campaign <- app_read_yaml(file.path(output_root, "campaign_snapshot.yaml"))
+policy_path <- if (grepl("^/", args$policy_path)) {
+  normalizePath(args$policy_path, mustWork = TRUE)
+} else {
+  normalizePath(app_path(args$policy_path), mustWork = TRUE)
+}
+policy <- app_read_yaml(policy_path)
 source_inventory <- app_read_csv(file.path(output_root, "source_fit_inventory.csv"))
 if (nrow(manifest) != as.integer(campaign$execution$expected_stage0_fits)) {
   stop("Stage-0 manifest cardinality changed.", call. = FALSE)
+}
+if (!identical(
+    as.character(policy$schema_version),
+    "glofas_discrepancy_context_repair_stage0_gate_amendment_v1"
+  ) || !identical(as.character(policy$campaign_id), as.character(campaign$campaign_id))) {
+  stop("Stage-0 gate amendment identity is invalid.", call. = FALSE)
+}
+runtime_manifest_path <- file.path(output_root, "runtime_manifest.csv")
+campaign_snapshot_path <- file.path(output_root, "campaign_snapshot.yaml")
+if (!identical(
+    app_sha256_file(runtime_manifest_path),
+    as.character(policy$evidence_binding$runtime_manifest_sha256)
+  ) || !identical(
+    app_sha256_file(campaign_snapshot_path),
+    as.character(policy$evidence_binding$campaign_snapshot_sha256)
+  )) {
+  stop("Stage-0 gate amendment does not match this runtime packet.", call. = FALSE)
+}
+dependency_audit <- app_glofas_context_repair_validate_stage1_dependency(
+  stage1_manifest, policy
+)
+app_write_csv(
+  dependency_audit,
+  file.path(output_root, "tables", "stage1_warm_dependency_audit.csv")
+)
+
+initial_evidence <- c(
+  "stage0_gate_summary.csv",
+  "stage0_numerical_gate.csv",
+  "stage0_source_score_comparison.csv"
+)
+if (file.exists(file.path(output_root, ".stage0_failed"))) {
+  dir.create(file.path(output_root, "status"), recursive = TRUE, showWarnings = FALSE)
+  failed_snapshot <- file.path(output_root, "status", "stage0_failed_initial.txt")
+  if (!file.exists(failed_snapshot)) {
+    file.copy(file.path(output_root, ".stage0_failed"), failed_snapshot)
+  }
+  for (name in initial_evidence) {
+    source_path <- file.path(output_root, "tables", name)
+    target_path <- file.path(
+      output_root, "tables", sub("[.]csv$", "_initial.csv", name)
+    )
+    if (file.exists(source_path) && !file.exists(target_path)) {
+      file.copy(source_path, target_path)
+    }
+  }
 }
 
 rows <- list()
@@ -115,6 +172,8 @@ audit$passes_warm_contract <- with(audit,
 audit$passes_finiteness <- audit$finite_theta & audit$finite_sigma
 audit$passes_stage0_gate <- audit$passes_warm_contract &
   audit$passes_finiteness & audit$vb_numerical_gate
+gate_decision <- app_glofas_context_repair_stage0_gate_decision(audit, policy)
+audit <- gate_decision$audit
 app_write_csv(audit, file.path(output_root, "tables", "stage0_numerical_gate.csv"))
 app_write_csv(scores, file.path(output_root, "tables", "stage0_transition_scores.csv"))
 
@@ -124,17 +183,13 @@ t10 <- aggregate$future_p50_check_loss[aggregate$candidate_id == "t10_last_gctx"
 if (length(t01) != 1L || length(t10) != 1L) {
   stop("Stage 0 lacks unique T01/T10 aggregate scores.", call. = FALSE)
 }
-summary <- data.frame(
-  stage0_fits = nrow(audit),
-  stage0_passed = sum(audit$passes_stage0_gate),
-  stage0_failed = sum(!audit$passes_stage0_gate),
+summary <- cbind(gate_decision$summary, data.frame(
   t01_future_p50_check_loss = t01,
   t10_future_p50_check_loss = t10,
   t10_relative_gain_vs_t01 = (t01 - t10) / t01,
-  stage1_authorized = all(audit$passes_stage0_gate),
   checked_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
   stringsAsFactors = FALSE
-)
+))
 app_write_csv(summary, file.path(output_root, "tables", "stage0_gate_summary.csv"))
 
 source_root <- normalizePath(campaign$source_campaign$root, mustWork = TRUE)
@@ -167,12 +222,50 @@ app_write_csv(
   continuation_compare,
   file.path(output_root, "tables", "stage0_source_score_comparison.csv")
 )
+policy_snapshot <- file.path(output_root, "stage0_gate_policy_snapshot.yaml")
+if (!file.copy(policy_path, policy_snapshot, overwrite = TRUE)) {
+  stop("Could not snapshot the Stage-0 gate amendment.", call. = FALSE)
+}
+git_value <- function(args) {
+  value <- system2("git", c("-C", repo_root, args), stdout = TRUE, stderr = TRUE)
+  if (!length(value)) NA_character_ else value[[1L]]
+}
+resume_provenance <- data.frame(
+  field = c(
+    "resumed_at", "repo_head", "repo_tree", "repo_branch", "policy_path",
+    "policy_sha256", "runtime_manifest_sha256", "campaign_snapshot_sha256",
+    "stage0_numerical_gate_sha256", "stage0_source_score_comparison_sha256",
+    "stage1_dependency_audit_sha256", "stage1_authorized"
+  ),
+  value = c(
+    format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),
+    git_value(c("rev-parse", "HEAD")),
+    git_value(c("rev-parse", "HEAD^{tree}")),
+    git_value(c("rev-parse", "--abbrev-ref", "HEAD")),
+    policy_path,
+    app_sha256_file(policy_snapshot),
+    app_sha256_file(runtime_manifest_path),
+    app_sha256_file(campaign_snapshot_path),
+    app_sha256_file(file.path(output_root, "tables", "stage0_numerical_gate.csv")),
+    app_sha256_file(file.path(output_root, "tables", "stage0_source_score_comparison.csv")),
+    app_sha256_file(file.path(output_root, "tables", "stage1_warm_dependency_audit.csv")),
+    as.character(summary$stage1_authorized[[1L]])
+  ),
+  stringsAsFactors = FALSE
+)
+app_write_csv(
+  resume_provenance,
+  file.path(output_root, "stage0_gate_resume_provenance.csv")
+)
 if (!isTRUE(summary$stage1_authorized[[1L]])) {
   writeLines(
     "Stage 0 failed; Stage 1 is not authorized.",
     file.path(output_root, ".stage0_failed")
   )
   stop("Stage 0 did not pass its frozen numerical and warm-start gate.", call. = FALSE)
+}
+if (file.exists(file.path(output_root, ".stage0_failed"))) {
+  unlink(file.path(output_root, ".stage0_failed"))
 }
 writeLines(
   format(Sys.time(), "%Y-%m-%dT%H:%M:%S%z"),

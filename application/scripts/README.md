@@ -410,6 +410,14 @@ and watch scripts record warm-start semantics, causal context extrapolation,
 state-design and coefficient diagnostics, the prospective bias guardrail,
 bounded cleanup, and a development-only decision packet.
 
+The evidence-bound Stage-0 amendment keeps T01 as the required numerical
+anchor and T10 as an advisory comparator. It never relaxes fit-level numerical
+thresholds: every fit must remain finite and semantically valid, all three T01
+continuations must pass, and at least two T10 canaries must pass. Before a
+resume it verifies the original campaign and runtime-manifest hashes, confirms
+that all Stage-1 fits transfer only future/sigma state from T01, snapshots the
+initial failed gate, and writes the resume commit and evidence hashes.
+
 ## GloFAS Full-Quantile Scientific Audit
 
 `glofas_fit_recovery_full7_scientific_audit.R` closes out a completed

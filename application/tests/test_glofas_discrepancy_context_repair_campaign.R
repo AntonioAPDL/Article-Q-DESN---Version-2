@@ -47,6 +47,71 @@ stopifnot(isTRUE(trace_summary$vb_numerical_gate[[1L]]))
 trace_fit$vb_diagnostics$parameter_change_trace[[300L]] <- 0.002
 stopifnot(!app_glofas_context_repair_trace_summary(trace_fit)$vb_numerical_gate[[1L]])
 
+gate_policy <- app_read_yaml(app_path(
+  paste0(
+    "application/config/",
+    "glofas_discrepancy_context_repair_stage0_gate_amendment_20260825.yaml"
+  )
+))
+gate_fixture <- data.frame(
+  base_candidate_id = rep(c("t01_last", "t10_last_gctx"), each = 3L),
+  passes_warm_contract = TRUE,
+  passes_finiteness = TRUE,
+  vb_numerical_gate = c(TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
+  passes_stage0_gate = c(TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
+  stringsAsFactors = FALSE
+)
+gate_result <- app_glofas_context_repair_stage0_gate_decision(
+  gate_fixture, gate_policy
+)
+stopifnot(isTRUE(gate_result$summary$stage1_authorized[[1L]]))
+stopifnot(gate_result$summary$required_passed[[1L]] == 3L)
+stopifnot(gate_result$summary$advisory_passed[[1L]] == 2L)
+stopifnot(identical(
+  as.character(gate_result$audit$gate_role),
+  c(rep("required_anchor", 3L), rep("advisory_comparator", 3L))
+))
+required_failure <- gate_fixture
+required_failure$vb_numerical_gate[[1L]] <- FALSE
+required_failure$passes_stage0_gate[[1L]] <- FALSE
+stopifnot(!app_glofas_context_repair_stage0_gate_decision(
+  required_failure, gate_policy
+)$summary$stage1_authorized[[1L]])
+semantic_failure <- gate_fixture
+semantic_failure$passes_warm_contract[[6L]] <- FALSE
+semantic_failure$passes_stage0_gate[[6L]] <- FALSE
+stopifnot(!app_glofas_context_repair_stage0_gate_decision(
+  semantic_failure, gate_policy
+)$summary$stage1_authorized[[1L]])
+advisory_failure <- gate_fixture
+advisory_failure$vb_numerical_gate[5:6] <- FALSE
+advisory_failure$passes_stage0_gate[5:6] <- FALSE
+stopifnot(!app_glofas_context_repair_stage0_gate_decision(
+  advisory_failure, gate_policy
+)$summary$stage1_authorized[[1L]])
+
+stage1_dependency <- data.frame(
+  candidate_id = c("c01", "c02"),
+  warm_start_source_candidate = "t01_last",
+  warm_start_compatibility_mode = "state_only",
+  warm_start_use_theta = FALSE,
+  warm_start_use_future = TRUE,
+  warm_start_use_sigma = TRUE,
+  stringsAsFactors = FALSE
+)
+dependency_result <- app_glofas_context_repair_validate_stage1_dependency(
+  stage1_dependency, gate_policy
+)
+stopifnot(all(dependency_result$dependency_contract_pass))
+bad_dependency <- stage1_dependency
+bad_dependency$warm_start_use_theta[[1L]] <- TRUE
+stopifnot(inherits(try(
+  app_glofas_context_repair_validate_stage1_dependency(
+    bad_dependency, gate_policy
+  ),
+  silent = TRUE
+), "try-error"))
+
 timeline <- data.frame(
   date = as.Date("2020-01-01") + 0:5,
   glofas_level = c(1, 2, 3, 4, 5, 6),

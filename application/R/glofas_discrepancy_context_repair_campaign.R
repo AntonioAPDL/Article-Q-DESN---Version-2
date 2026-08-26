@@ -213,6 +213,115 @@ app_glofas_context_repair_trace_summary <- function(fit) {
   )
 }
 
+app_glofas_context_repair_stage0_gate_decision <- function(audit, policy) {
+  required_columns <- c(
+    "base_candidate_id", "passes_warm_contract", "passes_finiteness",
+    "vb_numerical_gate", "passes_stage0_gate"
+  )
+  missing <- setdiff(required_columns, names(audit))
+  if (length(missing)) {
+    stop(sprintf(
+      "The Stage-0 audit is missing: %s.", paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  required_ids <- as.character(unlist(policy$required_anchor_candidates))
+  advisory_ids <- as.character(unlist(policy$advisory_comparator_candidates))
+  if (!length(required_ids) || !length(advisory_ids) ||
+      any(!nzchar(c(required_ids, advisory_ids))) ||
+      anyDuplicated(c(required_ids, advisory_ids))) {
+    stop(
+      "Stage-0 policy requires disjoint, nonempty anchor and advisory IDs.",
+      call. = FALSE
+    )
+  }
+  observed_ids <- unique(as.character(audit$base_candidate_id))
+  if (!setequal(observed_ids, c(required_ids, advisory_ids))) {
+    stop("Stage-0 policy candidates do not match the audit.", call. = FALSE)
+  }
+  required_idx <- audit$base_candidate_id %in% required_ids
+  advisory_idx <- audit$base_candidate_id %in% advisory_ids
+  expected_required <- as.integer(policy$expected_required_fits)
+  expected_advisory <- as.integer(policy$expected_advisory_fits)
+  minimum_advisory <- as.integer(policy$minimum_advisory_numerical_passes)
+  if (sum(required_idx) != expected_required ||
+      sum(advisory_idx) != expected_advisory) {
+    stop("Stage-0 required/advisory cardinality changed.", call. = FALSE)
+  }
+  if (!is.finite(minimum_advisory) || minimum_advisory < 0L ||
+      minimum_advisory > expected_advisory) {
+    stop("Stage-0 minimum advisory passes are invalid.", call. = FALSE)
+  }
+
+  audit$gate_role <- ifelse(required_idx, "required_anchor", "advisory_comparator")
+  audit$required_for_stage1 <- required_idx
+  audit$passes_semantic_gate <- audit$passes_warm_contract & audit$passes_finiteness
+  required_authorized <- all(audit$passes_stage0_gate[required_idx])
+  all_semantic_authorized <- all(audit$passes_semantic_gate)
+  advisory_passes <- sum(audit$passes_stage0_gate[advisory_idx])
+  advisory_minimum_met <- advisory_passes >= minimum_advisory
+  stage1_authorized <- required_authorized && all_semantic_authorized &&
+    advisory_minimum_met
+
+  summary <- data.frame(
+    stage0_fits = nrow(audit),
+    stage0_passed = sum(audit$passes_stage0_gate),
+    stage0_failed = sum(!audit$passes_stage0_gate),
+    required_fits = sum(required_idx),
+    required_passed = sum(audit$passes_stage0_gate[required_idx]),
+    required_failed = sum(!audit$passes_stage0_gate[required_idx]),
+    advisory_fits = sum(advisory_idx),
+    advisory_passed = advisory_passes,
+    advisory_failed = sum(!audit$passes_stage0_gate[advisory_idx]),
+    minimum_advisory_numerical_passes = minimum_advisory,
+    required_anchor_authorized = required_authorized,
+    all_semantic_contracts_pass = all_semantic_authorized,
+    advisory_minimum_met = advisory_minimum_met,
+    stage1_authorized = stage1_authorized,
+    authorization_basis = "stable_required_anchor_with_advisory_comparator",
+    stringsAsFactors = FALSE
+  )
+  list(audit = audit, summary = summary)
+}
+
+app_glofas_context_repair_validate_stage1_dependency <- function(manifest, policy) {
+  required_columns <- c(
+    "candidate_id", "warm_start_source_candidate",
+    "warm_start_compatibility_mode", "warm_start_use_theta",
+    "warm_start_use_future", "warm_start_use_sigma"
+  )
+  missing <- setdiff(required_columns, names(manifest))
+  if (length(missing)) {
+    stop(sprintf(
+      "The Stage-1 manifest is missing: %s.", paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  allowed_sources <- as.character(unlist(policy$stage1_warm_source_candidates))
+  if (!length(allowed_sources) || any(!nzchar(allowed_sources))) {
+    stop("Stage-1 policy lacks warm-source candidates.", call. = FALSE)
+  }
+  theta <- app_as_bool_vec(manifest$warm_start_use_theta)
+  future <- app_as_bool_vec(manifest$warm_start_use_future)
+  sigma <- app_as_bool_vec(manifest$warm_start_use_sigma)
+  checks <- data.frame(
+    candidate_id = as.character(manifest$candidate_id),
+    source_candidate = as.character(manifest$warm_start_source_candidate),
+    source_is_allowed = manifest$warm_start_source_candidate %in% allowed_sources,
+    state_only_compatibility = manifest$warm_start_compatibility_mode == "state_only",
+    theta_transfer_disabled = !theta,
+    future_transfer_enabled = future,
+    sigma_transfer_enabled = sigma,
+    stringsAsFactors = FALSE
+  )
+  checks$dependency_contract_pass <- with(checks,
+    source_is_allowed & state_only_compatibility & theta_transfer_disabled &
+      future_transfer_enabled & sigma_transfer_enabled
+  )
+  if (!all(checks$dependency_contract_pass)) {
+    stop("Stage-1 warm-start dependency contract failed.", call. = FALSE)
+  }
+  checks
+}
+
 app_glofas_context_repair_context_audit <- function(
   design,
   fit,

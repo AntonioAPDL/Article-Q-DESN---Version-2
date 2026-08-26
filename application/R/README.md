@@ -144,7 +144,8 @@ Tracked helper files:
 - `glofas_discrepancy_context_repair_campaign.R`: frozen T01/T10 continuation
   and context-variable/placement factorial contracts, hashed warm-start source
   resolution, numerical stability checks, causal context extrapolation and
-  state diagnostics, coefficient attribution, and the forecast-bias gate.
+  state diagnostics, coefficient attribution, the forecast-bias gate, and the
+  evidence-bound required-anchor/advisory-comparator resume decision.
 - `glofas_fit_recovery_selection.R`: manifest validation, common-date
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS

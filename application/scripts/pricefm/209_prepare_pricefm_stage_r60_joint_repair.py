@@ -127,7 +127,10 @@ def run(args: argparse.Namespace) -> dict:
     if forbidden & set(repair.columns):
         raise RuntimeError("Test outcomes leaked into the R60 repair queue")
 
-    sources = authority.merge(
+    authority_source = authority.drop(
+        columns=["current_authoritative_validation_AQL"], errors="ignore"
+    )
+    sources = authority_source.merge(
         old_manifest[["case_id", "config", "smoke_config", "output_dir"]],
         on="case_id", how="inner", validate="one_to_one",
     )

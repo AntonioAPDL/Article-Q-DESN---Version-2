@@ -128,6 +128,7 @@ def test_r60_prep_materializes_only_two_arms_per_failed_case(tmp_path, monkeypat
         authority_rows.append({
             "case_id": case_id, "region": f"R{index}", "fold": 2,
             "likelihood_family": likelihood, "source_config": str(source_config),
+            "current_authoritative_validation_AQL": 2.0,
         })
         manifest_rows.append({
             "case_id": case_id, "config": str(runtime), "smoke_config": str(smoke),

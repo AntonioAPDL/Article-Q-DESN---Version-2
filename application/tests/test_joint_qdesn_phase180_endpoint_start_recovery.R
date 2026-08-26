@@ -132,15 +132,25 @@ unlink(checkpoint_root, recursive = TRUE, force = TRUE)
 cache_root <- "/data/jaguir26/local/src/Article-Q-DESN---Version-2/application/cache"
 dirs <- app_joint_qdesn_phase180_dirs(cache_root)
 if (dir.exists(dirs$freeze) && dir.exists(dirs$orchestration)) {
-  frozen <- app_joint_qdesn_phase180_load_freeze(dirs$freeze)
-  inventory <- app_joint_qdesn_phase180_recovery_inventory(
-    frozen, dirs$orchestration
-  )
-  expect_true(
-    nrow(inventory$preserved) == 158L && nrow(inventory$failures) == 10L &&
-      all(inventory$failures$failure_message == "weights must be positive."),
-    "Real Phase180 recovery inventory differs from the frozen 158/10 diagnosis."
-  )
+  if (file.exists(file.path(dirs$recovery_freeze, "artifact_manifest.csv"))) {
+    recovery <- app_joint_qdesn_phase180_recovery_provenance_audit(
+      dirs$recovery_freeze
+    )
+    expect_true(
+      nrow(recovery) == 10L && all(recovery$status == "pass"),
+      "Completed Phase180 recovery provenance does not verify ten workers."
+    )
+  } else {
+    frozen <- app_joint_qdesn_phase180_load_freeze(dirs$freeze)
+    inventory <- app_joint_qdesn_phase180_recovery_inventory(
+      frozen, dirs$orchestration
+    )
+    expect_true(
+      nrow(inventory$preserved) == 158L && nrow(inventory$failures) == 10L &&
+        all(inventory$failures$failure_message == "weights must be positive."),
+      "Real Phase180 recovery inventory differs from the frozen 158/10 diagnosis."
+    )
+  }
 }
 
 cat("Phase180 endpoint-start recovery tests passed.\n")

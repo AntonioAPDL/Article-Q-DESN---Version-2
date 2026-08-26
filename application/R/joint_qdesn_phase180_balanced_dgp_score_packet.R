@@ -1342,7 +1342,8 @@ app_joint_qdesn_phase180_sampler_rows <- function(fit, fixture, job) {
 
 app_joint_qdesn_phase180_write_checkpoint <- function(
   fit, fixture, job, component, elapsed_seconds, freeze_dir, worker_dir,
-  recovery_context = NULL
+  recovery_context = NULL,
+  checkpoint_role = "phase180_balanced_postfit_prescore"
 ) {
   path <- app_joint_qdesn_phase180_checkpoint_dir(worker_dir)
   if (dir.exists(path)) {
@@ -1379,7 +1380,7 @@ app_joint_qdesn_phase180_write_checkpoint <- function(
       recovery_context$amendment_manifest_sha256 %||% NA_character_,
     recovery_start_row_sha256 =
       recovery_context$start_row_sha256 %||% NA_character_,
-    checkpoint_role = "phase180_balanced_postfit_prescore",
+    checkpoint_role = as.character(checkpoint_role)[[1L]],
     stringsAsFactors = FALSE
   )
   paths <- c(

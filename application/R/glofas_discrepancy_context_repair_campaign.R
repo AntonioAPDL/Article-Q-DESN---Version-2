@@ -322,6 +322,13 @@ app_glofas_context_repair_validate_stage1_dependency <- function(manifest, polic
   checks
 }
 
+app_glofas_context_repair_bind_nonempty <- function(rows) {
+  keep <- vapply(rows, function(x) {
+    is.data.frame(x) && nrow(x) > 0L
+  }, logical(1L))
+  app_bind_rows_fill(rows[keep])
+}
+
 app_glofas_context_repair_context_audit <- function(
   design,
   fit,

@@ -112,6 +112,21 @@ stopifnot(inherits(try(
   silent = TRUE
 ), "try-error"))
 
+mixed_rows <- list(
+  data.frame(),
+  data.frame(candidate_id = "c01", posterior_mean = 0.25),
+  data.frame(),
+  data.frame(candidate_id = "c02", posterior_sd = 0.10)
+)
+mixed_bound <- app_glofas_context_repair_bind_nonempty(mixed_rows)
+stopifnot(nrow(mixed_bound) == 2L)
+stopifnot(setequal(
+  names(mixed_bound), c("candidate_id", "posterior_mean", "posterior_sd")
+))
+stopifnot(nrow(app_glofas_context_repair_bind_nonempty(list(
+  data.frame(), data.frame()
+))) == 0L)
+
 timeline <- data.frame(
   date = as.Date("2020-01-01") + 0:5,
   glofas_level = c(1, 2, 3, 4, 5, 6),

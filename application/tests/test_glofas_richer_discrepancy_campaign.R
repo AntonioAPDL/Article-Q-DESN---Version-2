@@ -17,3 +17,8 @@ stopifnot(space$scheduler$max_parallel == 20L)
 manifest <- app_glofas_median_screen_candidate_manifest(space)
 stopifnot(nrow(manifest) == 21L)
 stopifnot(sum(manifest$candidate_role == "low_alpha_health_canary") == 4L)
+
+preflight_script <- readLines(app_path("application/scripts/03_screen_reservoir_design.R"), warn = FALSE)
+vb_source <- 'source(app_path("application/R/latent_path_vb_al.R"))'
+design_source <- 'source(app_path("application/R/latent_path_design.R"))'
+stopifnot(match(vb_source, preflight_script) < match(design_source, preflight_script))

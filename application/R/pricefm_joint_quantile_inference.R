@@ -236,3 +236,178 @@ app_pricefm_joint_predict <- function(X, beta, alpha, tau, intercept_tolerance =
   }
   Z %*% app_joint_qvp_beta_matrix(beta, K, p) + matrix(alpha, nrow(Z), K, byrow = TRUE)
 }
+
+app_pricefm_joint_individual_sigma <- function(fit) {
+  value <- if (!is.null(fit$qsiggam$sigma_mean)) {
+    as.numeric(fit$qsiggam$sigma_mean)[[1L]]
+  } else if (!is.null(fit$misc$sigma_trace)) {
+    values <- as.numeric(fit$misc$sigma_trace)
+    values <- values[is.finite(values) & values > 0]
+    if (length(values)) utils::tail(values, 1L) else NA_real_
+  } else {
+    omega2 <- as.numeric(fit$omega2$mean %||% fit$omega2$mode %||% NA_real_)[[1L]]
+    if (is.finite(omega2) && omega2 > 0) sqrt(omega2) else NA_real_
+  }
+  if (!is.finite(value) || value <= 0) stop("Independent initializer fit lacks a finite positive scale.", call. = FALSE)
+  value
+}
+
+app_pricefm_joint_individual_gamma <- function(fit) {
+  value <- if (!is.null(fit$qsiggam$gamma_mean)) {
+    as.numeric(fit$qsiggam$gamma_mean)[[1L]]
+  } else if (!is.null(fit$misc$gamma_trace)) {
+    values <- as.numeric(fit$misc$gamma_trace)
+    values <- values[is.finite(values)]
+    if (length(values)) utils::tail(values, 1L) else NA_real_
+  } else NA_real_
+  value
+}
+
+app_pricefm_joint_independent_fits_to_init <- function(fits, tau, n_features) {
+  tau <- app_joint_qvp_validate_tau_grid(tau)
+  K <- length(tau)
+  n_features <- as.integer(n_features)
+  if (!is.list(fits) || length(fits) != K || n_features < 2L) {
+    stop("Independent initializer requires one fit per quantile and an intercept-bearing design.", call. = FALSE)
+  }
+  extracted <- lapply(seq_len(K), function(k) {
+    fit <- fits[[k]]
+    beta <- as.numeric(fit$qbeta$m %||% fit$beta$mean %||% numeric())
+    covariance <- as.matrix(fit$qbeta$V %||% fit$beta$cov %||% matrix(numeric(), 0L, 0L))
+    if (
+      length(beta) != n_features || !identical(dim(covariance), c(n_features, n_features)) ||
+        any(!is.finite(beta)) || any(!is.finite(covariance))
+    ) {
+      stop(sprintf("Independent initializer quantile %s has incompatible beta moments.", tau[[k]]), call. = FALSE)
+    }
+    list(
+      intercept = beta[[1L]],
+      slopes = beta[-1L],
+      slope_covariance = covariance[-1L, -1L, drop = FALSE],
+      sigma = app_pricefm_joint_individual_sigma(fit),
+      gamma = app_pricefm_joint_individual_gamma(fit),
+      converged = isTRUE(fit$converged),
+      iterations = as.integer(fit$iter %||% NA_integer_)
+    )
+  })
+  raw_alpha <- vapply(extracted, `[[`, numeric(1L), "intercept")
+  alpha <- if (is.unsorted(raw_alpha, strictly = FALSE)) {
+    as.numeric(stats::isoreg(seq_along(raw_alpha), raw_alpha)$yf)
+  } else raw_alpha
+  slope_covariances <- lapply(extracted, `[[`, "slope_covariance")
+  beta_cov <- as.matrix(Matrix::bdiag(lapply(slope_covariances, Matrix::Matrix, sparse = FALSE)))
+  init <- list(
+    beta_mean = unlist(lapply(extracted, `[[`, "slopes"), use.names = FALSE),
+    beta_cov = beta_cov,
+    alpha_mean = alpha,
+    sigma_mean = vapply(extracted, `[[`, numeric(1L), "sigma"),
+    iterations_completed = 0L
+  )
+  gamma <- vapply(extracted, `[[`, numeric(1L), "gamma")
+  if (all(is.finite(gamma))) init$gamma_mean <- gamma
+  diagnostics <- data.frame(
+    quantile_index = seq_len(K),
+    tau = tau,
+    raw_intercept = raw_alpha,
+    initialized_intercept = alpha,
+    intercept_projected = abs(raw_alpha - alpha) > 1.0e-12,
+    beta_l2 = vapply(extracted, function(x) sqrt(sum(x$slopes^2)), numeric(1L)),
+    sigma = init$sigma_mean,
+    gamma = gamma,
+    converged = vapply(extracted, `[[`, logical(1L), "converged"),
+    iterations = vapply(extracted, `[[`, integer(1L), "iterations"),
+    stringsAsFactors = FALSE
+  )
+  list(init = init, diagnostics = diagnostics)
+}
+
+app_pricefm_joint_fit_independent_initializer <- function(X, y, tau, likelihood_family, smoke_cfg, seed) {
+  if (!requireNamespace("exdqlm", quietly = TRUE)) {
+    stop("The exdqlm package must be loaded before fitting the independent initializer.", call. = FALSE)
+  }
+  X <- as.matrix(X)
+  storage.mode(X) <- "double"
+  y <- as.numeric(y)
+  tau <- app_joint_qvp_validate_tau_grid(tau)
+  likelihood_family <- match.arg(tolower(likelihood_family), c("al", "exal"))
+  if (nrow(X) != length(y) || ncol(X) < 2L || any(!is.finite(X)) || any(!is.finite(y))) {
+    stop("Independent initializer received an invalid training design.", call. = FALSE)
+  }
+  set.seed(as.integer(seed))
+  rhs_cfg <- smoke_cfg$rhs_ns %||% list()
+  rhs <- list(
+    tau0 = as.numeric(rhs_cfg$tau0 %||% 0.001),
+    shrink_intercept = isTRUE(rhs_cfg$shrink_intercept %||% FALSE),
+    freeze_tau_iters = as.integer(rhs_cfg$freeze_tau_iters %||% 5L),
+    freeze_tau_warmup_iters = as.integer(rhs_cfg$freeze_tau_warmup_iters %||% 5L)
+  )
+  normal_fit <- exdqlm::normal_desn_fit(
+    X, y,
+    beta_prior_type = "rhs_ns",
+    omega_prior = smoke_cfg$normal$omega_prior,
+    rhs = rhs,
+    control = smoke_cfg$normal$vb_control
+  )
+  qcfg <- smoke_cfg$qdesn_vb
+  control <- exdqlm::exal_make_vb_control(
+    max_iter = as.integer(qcfg$max_iter),
+    min_iter_elbo = as.integer(qcfg$min_iter_elbo),
+    tol = as.numeric(qcfg$tol),
+    tol_par = as.numeric(qcfg$tol_par),
+    n_samp_xi = as.integer(qcfg$n_samp_xi),
+    progress_every = 1000000L,
+    verbose = FALSE,
+    chunking = qcfg$chunking
+  )
+  make_init <- function(source_fit, gamma_zero = FALSE) {
+    beta_mean <- source_fit$qbeta$m %||% source_fit$beta$mean
+    beta_cov <- source_fit$qbeta$V %||% source_fit$beta$cov
+    out <- list(beta_m = as.numeric(beta_mean), beta_V = as.matrix(beta_cov))
+    if (!is.null(source_fit$beta_prior$state)) out$beta_state <- source_fit$beta_prior$state
+    out$sigma <- app_pricefm_joint_individual_sigma(source_fit)
+    if (gamma_zero) out$gamma <- 0
+    out
+  }
+  fit_one <- function(likelihood, quantile, init) {
+    beta_prior_obj <- exdqlm::beta_prior("rhs_ns", rhs = rhs)
+    exdqlm::exal_ldvb_fit(
+      y = y,
+      X = X,
+      p0 = quantile,
+      gamma_bounds = c(exdqlm:::L.fn(quantile), exdqlm:::U.fn(quantile)),
+      likelihood_family = likelihood,
+      al_fixed_gamma = 0,
+      beta_prior_obj = beta_prior_obj,
+      prior_sigma = qcfg$prior_sigma,
+      prior_gamma = qcfg$prior_gamma,
+      vb_control = control,
+      init = init
+    )
+  }
+  configured_order <- as.numeric(unlist(
+    smoke_cfg$warm_start$qdesn$al$tau_order %||% numeric(),
+    use.names = FALSE
+  ))
+  configured_order <- configured_order[is.finite(configured_order) & configured_order %in% tau]
+  fit_order <- c(configured_order, tau[!tau %in% configured_order])
+  al_by_key <- list()
+  previous <- normal_fit
+  for (quantile in fit_order) {
+    fit <- fit_one("al", quantile, make_init(previous))
+    al_by_key[[sprintf("%.12g", quantile)]] <- fit
+    previous <- fit
+  }
+  selected <- if (identical(likelihood_family, "al")) {
+    al_by_key
+  } else {
+    stats::setNames(lapply(tau, function(quantile) {
+      source_fit <- al_by_key[[sprintf("%.12g", quantile)]]
+      fit_one("exal", quantile, make_init(source_fit, gamma_zero = TRUE))
+    }), sprintf("%.12g", tau))
+  }
+  ordered <- lapply(tau, function(quantile) selected[[sprintf("%.12g", quantile)]])
+  mapped <- app_pricefm_joint_independent_fits_to_init(ordered, tau, ncol(X))
+  mapped$diagnostics$likelihood_family <- likelihood_family
+  mapped$diagnostics$initializer_role <- "training_only_independent_quantile_vb"
+  mapped
+}

@@ -1168,6 +1168,8 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   zeta2 = Inf,
   anchor_tau0 = tau0,
   innovation_tau0 = tau0,
+  anchor_init_tau = anchor_tau0,
+  innovation_init_tau = innovation_tau0,
   anchor_zeta2 = zeta2,
   innovation_zeta2 = zeta2,
   a_sigma = 0.1,
@@ -1179,6 +1181,8 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   max_dense_dim = 300L,
   init = NULL,
   rhs_vb_inner = 5L,
+  rhs_freeze_iters = 0L,
+  inherit_al_bootstrap_rhs = FALSE,
   quadrature_nodes = c(4L, 8L, 12L),
   quadrature_tolerance = 1.0e-6,
   diagnostic_stride = 10L,
@@ -1186,6 +1190,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
 ) {
   augmentation <- match.arg(augmentation)
   external_init_supplied <- !is.null(init)
+  bootstrap_init_supplied <- FALSE
   if (!identical(as.numeric(kappa), 1)) {
     stop("Structured exAL inference is initially restricted to kappa = 1.", call. = FALSE)
   }
@@ -1198,8 +1203,13 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   if (nrow(Z) != Tn) stop("length(y) must match nrow(Z).", call. = FALSE)
   max_iter <- as.integer(max_iter)
   rhs_vb_inner <- as.integer(rhs_vb_inner)
+  rhs_freeze_iters <- as.integer(rhs_freeze_iters)
   diagnostic_stride <- as.integer(diagnostic_stride)
-  if (max_iter < 1L || !is.finite(tol) || tol <= 0 || rhs_vb_inner < 1L || diagnostic_stride < 1L) {
+  if (
+    max_iter < 1L || !is.finite(tol) || tol <= 0 || rhs_vb_inner < 1L ||
+      length(rhs_freeze_iters) != 1L || is.na(rhs_freeze_iters) || rhs_freeze_iters < 0L ||
+      diagnostic_stride < 1L
+  ) {
     stop("Invalid structured-VB controls.", call. = FALSE)
   }
   if (K * p > as.integer(max_dense_dim)) {
@@ -1212,13 +1222,16 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
       max_iter = min(max_iter, 25L), tol = tol, kappa = 1,
       tau0 = tau0, zeta2 = zeta2,
       anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
+      anchor_init_tau = anchor_init_tau, innovation_init_tau = innovation_init_tau,
       anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
       a_sigma = a_sigma, b_sigma = b_sigma,
       alpha_prior_mean = alpha_prior_mean, alpha_prior_sd = alpha_prior_sd,
       alpha_min_spacing = alpha_min_spacing,
-      max_dense_dim = max_dense_dim, rhs_vb_inner = rhs_vb_inner
+      max_dense_dim = max_dense_dim, rhs_vb_inner = rhs_vb_inner,
+      rhs_freeze_iters = rhs_freeze_iters
     )
     init <- al_init
+    bootstrap_init_supplied <- TRUE
     normalized_init <- app_joint_qvp_normalize_init(al_init, K, p)
   }
   gamma <- normalized_init$gamma %||%
@@ -1231,9 +1244,11 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   default_rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
+    anchor_init_tau = anchor_init_tau, innovation_init_tau = innovation_init_tau,
     anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
   )
-  rhs_state <- if (external_init_supplied) {
+  inherit_bootstrap <- bootstrap_init_supplied && isTRUE(inherit_al_bootstrap_rhs)
+  rhs_state <- if (external_init_supplied || inherit_bootstrap) {
     app_joint_qvp_restore_rhs_vb_state(init$rhs_state %||% NULL, K, p, default_rhs_state)
   } else default_rhs_state
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
@@ -1277,6 +1292,12 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   s2_mean <- if (!is.null(init$s2_mean) && identical(dim(as.matrix(init$s2_mean)), c(Tn, K))) {
     as.matrix(init$s2_mean)
   } else matrix(1, Tn, K)
+  iteration_offset <- if (external_init_supplied || inherit_bootstrap) {
+    as.integer(init$iterations_completed %||% 0L)
+  } else 0L
+  if (length(iteration_offset) != 1L || is.na(iteration_offset) || iteration_offset < 0L) {
+    stop("Initial iterations_completed must be a nonnegative integer.", call. = FALSE)
+  }
   default_block_moments <- lapply(seq_len(K), function(k) {
     app_joint_exqdesn_point_scale_shape_moments(tau[[k]], gamma[[k]], sigma_mean[[k]])
   })
@@ -1291,6 +1312,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     candidate
   } else default_block_moments
   trace <- vector("list", max_iter)
+  rhs_trace <- vector("list", max_iter)
   quadrature_rows <- list()
   block_rows <- list()
   gamma_trace <- matrix(NA_real_, max_iter, K)
@@ -1300,6 +1322,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   qhat_old <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) + matrix(alpha, Tn, K, byrow = TRUE)
   rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
   for (iter in seq_len(max_iter)) {
+    global_iter <- iteration_offset + iter
     beta_old <- beta_mean
     gamma_old <- gamma
     sigma_old <- sigma_mean
@@ -1419,14 +1442,32 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
         )
       }
     }
-    rhs_update <- app_joint_qvp_update_rhs_vb_state(
-      rhs_state = rhs_state, beta_mean = beta_mean, beta_cov = beta_cov,
-      K = K, p = p, n_inner = rhs_vb_inner
-    )
+    rhs_update_performed <- global_iter > rhs_freeze_iters
+    rhs_update <- if (rhs_update_performed) {
+      app_joint_qvp_update_rhs_vb_state(
+        rhs_state = rhs_state, beta_mean = beta_mean, beta_cov = beta_cov,
+        K = K, p = p, n_inner = rhs_vb_inner
+      )
+    } else {
+      list(
+        state = rhs_state,
+        moments = app_joint_qvp_difference_moments(beta_mean, beta_cov, K, p)
+      )
+    }
     rhs_state <- rhs_update$state
     prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
     prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
     rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
+    eta_second <- rhs_update$moments$second
+    rhs_summary$iter <- iter
+    rhs_summary$global_iter <- global_iter
+    rhs_summary$rhs_update_performed <- rhs_update_performed
+    rhs_summary$rhs_freeze_active <- !rhs_update_performed
+    rhs_summary$coefficient_second_moment_sum <- vapply(seq_len(K), function(k) {
+      idx <- ((k - 1L) * p + 1L):(k * p)
+      sum(eta_second[idx])
+    }, numeric(1L))
+    rhs_trace[[iter]] <- rhs_summary
     qhat <- fitted_no_alpha + matrix(alpha, Tn, K, byrow = TRUE)
     max_beta_change <- max(abs(beta_mean - beta_old))
     max_gamma_change <- max(abs(gamma - gamma_old))
@@ -1440,12 +1481,15 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     sigma_trace[iter, ] <- sigma_mean
     trace[[iter]] <- data.frame(
       iter = iter,
+      global_iter = global_iter,
       max_beta_change = max_beta_change,
       max_gamma_change = max_gamma_change,
       max_sigma_change = max_sigma_change,
       max_qhat_change = max_qhat_change,
       rhs_mean_precision = mean(rhs_summary$mean_precision),
       rhs_max_precision = max(rhs_summary$max_precision),
+      rhs_update_performed = rhs_update_performed,
+      rhs_freeze_active = !rhs_update_performed,
       scale_shape_log_normalizer = scale_shape_log_normalizer,
       prior_quadratic = prior_quadratic,
       beta_entropy_logdet = beta_entropy_logdet,
@@ -1457,6 +1501,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     if (max(max_beta_change, max_gamma_change, max_sigma_change, max_qhat_change) < tol) {
       converged <- TRUE
       trace <- trace[seq_len(iter)]
+      rhs_trace <- rhs_trace[seq_len(iter)]
       gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
       sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
       break
@@ -1483,10 +1528,13 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     s2_mean = s2_mean,
     block_moments = block_moments,
     rhs_state = rhs_state,
+    rhs_diagnostics = do.call(rbind, rhs_trace),
     rhs_prior_summary = rhs_summary,
     qhat_mean = qhat_mean,
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
     trace = trace_df,
+    iterations_completed = iteration_offset + nrow(trace_df),
+    inherited_al_bootstrap_rhs = inherit_bootstrap,
     gamma_trace = gamma_trace,
     sigma_trace = sigma_trace,
     quadrature_trace = quadrature_trace,

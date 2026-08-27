@@ -81,6 +81,17 @@ def scientific_hash(smoke: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def portable_data_config(source: Path, destination: Path, repo: Path) -> None:
+    payload = yaml.safe_load(source.read_text())
+    block = payload.get("pricefm", {})
+    for key in ("raw_dir", "interim_dir", "processed_dir", "external_repo_dir", "log_dir"):
+        value = block.get(key)
+        if value and not Path(value).is_absolute():
+            block[key] = str((repo / value).absolute())
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(yaml.safe_dump(payload, sort_keys=False))
+
+
 def run(args: argparse.Namespace) -> dict:
     repo = args.artifact_repo.resolve()
     grid = args.grid_dir.resolve()
@@ -94,6 +105,7 @@ def run(args: argparse.Namespace) -> dict:
     if len(gaps) != args.expected_gaps or gaps.match_status.ne("exact_comparator_missing").any():
         raise RuntimeError(f"Expected exactly {args.expected_gaps} unresolved exact-comparator gaps")
     config_dir = grid / "configs/smoke"
+    data_config_dir = grid / "configs/data"
     config_dir.mkdir(parents=True, exist_ok=True)
     manifest_rows = []
     source_rows = []
@@ -102,6 +114,11 @@ def run(args: argparse.Namespace) -> dict:
         source_path = Path(source.source_config).resolve()
         payload = yaml.safe_load(source_path.read_text())
         original = payload["pricefm_desn_smoke"]
+        source_data_config = Path(original["data_config"])
+        if not source_data_config.is_absolute():
+            source_data_config = (repo / source_data_config).absolute()
+        replay_data_config = data_config_dir / f"{gap.case_id}.yaml"
+        portable_data_config(source_data_config, replay_data_config, repo)
         for tau in TAUS:
             smoke = copy.deepcopy(original)
             case_id = f"r62gap_{str(gap.region).lower()}_f{int(gap.fold)}_tau{tau_slug(tau)}"
@@ -109,6 +126,7 @@ def run(args: argparse.Namespace) -> dict:
             smoke["splits"] = ["train", "val"]
             # Preserve a virtualenv symlink so Python can discover pyvenv.cfg.
             smoke["python_bin"] = str(args.python_bin.absolute())
+            smoke["data_config"] = str(replay_data_config.absolute())
             smoke["quantiles"] = [float(tau)]
             smoke["adapter"]["output_dir"] = str(cell / "adapter")
             smoke["run"]["output_dir"] = str(cell / "model")
@@ -134,6 +152,7 @@ def run(args: argparse.Namespace) -> dict:
                 "status": "prepared_exact_gap_completion_not_launched",
             })
             source_rows.append({"path": str(config_path), "sha256": sha256(config_path), "bytes": config_path.stat().st_size})
+        source_rows.append({"path": str(replay_data_config), "sha256": sha256(replay_data_config), "bytes": replay_data_config.stat().st_size})
         source_rows.append({"path": str(source_path), "sha256": sha256(source_path), "bytes": source_path.stat().st_size})
     manifest = pd.DataFrame(manifest_rows)
     manifest_path = grid / "launch_manifest.csv"

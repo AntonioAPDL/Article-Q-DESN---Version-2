@@ -26,7 +26,7 @@ def source_case(repo, case_id, region, fold):
     data = repo / "data.yaml"
     data.write_text("pricefm:\n  regions: [AA]\n")
     smoke = {"pricefm_desn_smoke": {
-        "data_config": str(data), "package_path": str(repo / "package"),
+        "data_config": "data.yaml", "package_path": str(repo / "package"),
         "region": region, "fold": fold, "splits": ["train", "val", "test"],
         "horizons": list(range(1, 97)), "quantiles": [0.5], "feature_policy": "target_only",
         "adapter": {"output_dir": str(cell / "adapter"), "feature_map": "window_reservoir_v1", "feature_dim": 8, "depth": 1, "units": [8], "alpha": 0.2, "rho": 0.95, "input_scale": 0.2, "projection_scale": 1.0, "recurrent_sparsity": 0.05, "state_output": "final_layer", "seed": 11},
@@ -70,6 +70,8 @@ def test_gap_prep_materializes_exact_train_validation_jobs(tmp_path, monkeypatch
         smoke = yaml.safe_load(Path(path).read_text())["pricefm_desn_smoke"]
         assert smoke["splits"] == ["train", "val"]
         assert smoke["python_bin"] == str(module.PYTHON.absolute())
+        assert Path(smoke["data_config"]).is_absolute()
+        assert Path(smoke["data_config"]).is_file()
         assert smoke["qdesn_vb"]["likelihoods"] == ["al", "exal"]
 
 

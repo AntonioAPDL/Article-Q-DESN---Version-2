@@ -69,7 +69,7 @@ def test_gap_prep_materializes_exact_train_validation_jobs(tmp_path, monkeypatch
     for path in manifest.config:
         smoke = yaml.safe_load(Path(path).read_text())["pricefm_desn_smoke"]
         assert smoke["splits"] == ["train", "val"]
-        assert smoke["python_bin"] == str(module.PYTHON.resolve())
+        assert smoke["python_bin"] == str(module.PYTHON.absolute())
         assert smoke["qdesn_vb"]["likelihoods"] == ["al", "exal"]
 
 

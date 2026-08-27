@@ -107,7 +107,8 @@ def run(args: argparse.Namespace) -> dict:
             case_id = f"r62gap_{str(gap.region).lower()}_f{int(gap.fold)}_tau{tau_slug(tau)}"
             cell = runs / case_id / "cells" / f"region={gap.region}" / f"fold={int(gap.fold)}"
             smoke["splits"] = ["train", "val"]
-            smoke["python_bin"] = str(args.python_bin.resolve())
+            # Preserve a virtualenv symlink so Python can discover pyvenv.cfg.
+            smoke["python_bin"] = str(args.python_bin.absolute())
             smoke["quantiles"] = [float(tau)]
             smoke["adapter"]["output_dir"] = str(cell / "adapter")
             smoke["run"]["output_dir"] = str(cell / "model")

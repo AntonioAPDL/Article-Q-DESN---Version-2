@@ -129,7 +129,8 @@ def run(args: argparse.Namespace) -> dict:
     lock = threading.Lock()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(run_one, row, cpus[index % workers], code_root, args.python_bin.resolve()): row["case_id"]
+            # Preserve the virtualenv symlink so Python discovers pyvenv.cfg.
+            pool.submit(run_one, row, cpus[index % workers], code_root, args.python_bin.absolute()): row["case_id"]
             for index, row in enumerate(manifest.to_dict("records"))
         }
         for future in as_completed(futures):

@@ -124,3 +124,9 @@ def test_launcher_recognizes_durable_fit_for_postfit_resume(tmp_path):
     for name in ("model_predictions_scaled.csv", "model_method_summary.csv", "run_manifest.json"):
         (output / name).write_text("durable\n")
     assert module.fit_artifacts_complete(output)
+
+
+def test_launcher_preserves_virtualenv_symlink():
+    source = (SCRIPTS / "218_launch_pricefm_stage_r62_gap_completion.py").read_text()
+    assert "args.python_bin.absolute()" in source
+    assert "args.python_bin.resolve()" not in source

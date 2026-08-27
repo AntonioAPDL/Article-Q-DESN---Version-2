@@ -33,11 +33,23 @@ summary <- read.csv(summary_path, check.names = FALSE)
 diagnostics <- read.csv(diagnostics_path, check.names = FALSE)
 comparison <- read.csv(comparison_path, check.names = FALSE)
 expected <- config$expected
+diagnostic_grade_columns <- c(
+  "fit_diagnostic_grade", "forecast_mae_diagnostic_grade",
+  "forecast_check_diagnostic_grade"
+)
+if (any(!diagnostic_grade_columns %in% names(summary))) {
+  stop("The interval summary is missing diagnostic-grade columns.", call. = FALSE)
+}
+mcmc_summary_warn <- sum(unlist(
+  summary[summary$inference == "mcmc", diagnostic_grade_columns],
+  use.names = FALSE
+) == "WARN")
 if (nrow(summary) != as.integer(expected$interface_rows) ||
     sum(summary$inference == "vb") != as.integer(expected$vb_rows) ||
     sum(summary$inference == "mcmc") != as.integer(expected$mcmc_rows) ||
     nrow(diagnostics) != as.integer(expected$mcmc_diagnostic_rows) ||
-    sum(diagnostics$diagnostic_grade == "WARN") != as.integer(expected$mcmc_diagnostic_warn_rows)) {
+    sum(diagnostics$diagnostic_grade == "WARN") != as.integer(expected$mcmc_diagnostic_warn_rows) ||
+    mcmc_summary_warn != as.integer(expected$displayed_warning_metrics)) {
   stop("The generated v10 article summaries have stale counts.", call. = FALSE)
 }
 winner_counts <- table(factor(
@@ -63,14 +75,18 @@ manifest <- readLines(manifest_path, warn = FALSE)
 required_manifest_values <- c(
   config$promotion_id, config$run_id, config$validation_handoff_commit,
   config$scientific_execution_commit, config$rollback_authority,
-  config$estimator_id, config$promotion_manifest_sha256,
-  config$promotion_file_ledger_sha256, config$interface_sha256,
-  config$article_asset_manifest_sha256
+  config$estimator_id, config$decision_manifest_sha256,
+  config$article_asset_manifest_sha256,
+  sprintf("updated_roles: %d", as.integer(config$expected$updated_roles)),
+  sprintf("inherited_roles: %d", as.integer(config$expected$inherited_roles))
 )
 if (any(!vapply(required_manifest_values, function(value) {
   any(grepl(as.character(value), manifest, fixed = TRUE))
 }, logical(1L)))) {
   stop("The generated article manifest is missing pinned provenance.", call. = FALSE)
+}
+if (tools::sha256sum(summary_path) != config$article_summary_sha256) {
+  stop("The interval summary hash is stale.", call. = FALSE)
 }
 
 entries <- grep("^  tables/[^:]+: [[:xdigit:]]{64}$", manifest, value = TRUE)
@@ -180,4 +196,4 @@ cat("INDEPENDENT_METRIC_INTERVAL_CHECK=PASS\n")
 cat(sprintf("ROWS=%d VB=%d MCMC=%d SOURCE_WARN=%d\n",
             nrow(summary), sum(summary$inference == "vb"),
             sum(summary$inference == "mcmc"),
-            sum(diagnostics$diagnostic_grade == "WARN")))
+            mcmc_summary_warn))

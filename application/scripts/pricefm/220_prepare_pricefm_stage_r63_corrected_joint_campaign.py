@@ -135,6 +135,7 @@ def run(args: argparse.Namespace) -> dict:
             "arm_id": arm["arm_id"], "region": str(queue_by_case.loc[target.case_id].region),
             "fold": int(queue_by_case.loc[target.case_id].fold), "likelihood_family": arm["likelihood_family"],
             "method_id": f"joint_qdesn_{arm['likelihood_family']}_rhs_ns_vb_r63_{arm['arm_id']}",
+            "vb_method_id": "AL_joint_cavi" if arm["likelihood_family"] == "al" else "VB1_structured_v",
             "source_method_id": METHODS[arm["likelihood_family"]],
             "source_experiment_id": old_runtime["source_experiment_id"],
             "source_config": old_runtime["source_config"], "source_config_sha256": old_runtime["source_config_sha256"],

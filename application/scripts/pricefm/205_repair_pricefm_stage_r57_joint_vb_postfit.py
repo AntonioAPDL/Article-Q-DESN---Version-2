@@ -129,9 +129,11 @@ def pava_rows(values: np.ndarray) -> np.ndarray:
 
 def runtime_config(path: Path) -> dict:
     payload = yaml.safe_load(path.read_text())
-    cfg = payload.get("pricefm_stage_r57_joint_vb") if isinstance(payload, dict) else None
+    cfg = None
+    if isinstance(payload, dict):
+        cfg = payload.get("pricefm_stage_r57_joint_vb") or payload.get("pricefm_stage_r61_joint_mechanism")
     if not isinstance(cfg, dict):
-        raise RuntimeError(f"Invalid R57 runtime config: {path}")
+        raise RuntimeError(f"Invalid joint runtime config: {path}")
     return cfg
 
 

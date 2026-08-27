@@ -45,3 +45,10 @@ def test_r63_closeout_requires_both_validation_baselines():
     assert "beats_independent and beats_old_joint" in source
     assert '"mcmc_launch_authorized": False' in source
     assert '"test_opened": False' in source
+
+
+def test_shared_postfit_accepts_r61_r63_runtime_schema():
+    source = (SCRIPTS / "205_repair_pricefm_stage_r57_joint_vb_postfit.py").read_text()
+    assert 'payload.get("pricefm_stage_r61_joint_mechanism")' in source
+    prep = (SCRIPTS / "220_prepare_pricefm_stage_r63_corrected_joint_campaign.py").read_text()
+    assert '"vb_method_id": "AL_joint_cavi"' in prep

@@ -1,3 +1,0 @@
-"model_id","model_family","n_quantile_levels","quantile_levels","n","check_loss_mean","mae_to_observation","rmse_to_observation","bias_to_observation","interval_score_mean","interval_coverage_mean","crps_quantile_grid_mean"
-"qdesn_glofas_discrepancy_fr09_authoritative","qdesn_glofas_discrepancy",7,"0.05;0.15;0.35;0.50;0.65;0.80;0.95",196,0.56541337777938,1.59067505563697,1.86339384910062,-1.55266900990569,10.8031757845375,0.357142857142857,1.1318775063192
-"raw_glofas_fr09_authoritative","raw_glofas",7,"0.05;0.15;0.35;0.50;0.65;0.80;0.95",196,0.763942704562467,1.76680142961777,1.9728598848738,-1.76680142961777,25.2027636659504,0,1.44235863997326

@@ -1,0 +1,50 @@
+version: 0.1
+description: >
+  Input-diagnostic figures produced before model fitting. These figures are
+  generated from the audited application panel and are not promoted into the
+  manuscript until their provenance is reviewed.
+
+graphics:
+  device: pdf
+  width: 7.0
+  height: 4.5
+
+figures:
+  input_coverage_timeline:
+    enabled: true
+    filename: input_coverage_timeline.pdf
+    title: Input record coverage
+
+  reference_glofas_retrospective_series:
+    enabled: true
+    filename: reference_glofas_retrospective_series.pdf
+    title: Reference and GloFAS retrospective series
+
+  glofas_ensemble_fan_selected_origins:
+    enabled: true
+    filename: glofas_ensemble_fan_selected_origins.pdf
+    title: GloFAS ensemble fan for selected origins
+    max_origins: 4
+
+  horizon_member_availability_heatmap:
+    enabled: true
+    filename: horizon_member_availability_heatmap.pdf
+    title: Ensemble member availability by origin and horizon
+
+  reference_glofas_retrospective_scatter:
+    enabled: true
+    filename: reference_glofas_retrospective_scatter.pdf
+    title: Reference versus GloFAS retrospective
+
+  retrospective_discrepancy_by_month:
+    enabled: true
+    filename: retrospective_discrepancy_by_month.pdf
+    title: Retrospective discrepancy by target month
+
+  cutoff_source_diagnostic:
+    enabled: false
+    filename: cutoff_source_diagnostic.pdf
+    title: Cutoff-centered GloFAS and reference streamflow
+    window_before_days: 30
+    window_after_days: 30
+    max_members: 51

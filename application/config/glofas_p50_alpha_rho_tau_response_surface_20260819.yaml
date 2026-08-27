@@ -1,0 +1,150 @@
+version: '1.0'
+screen_id: glofas_p50_alpha_rho_tau_response_surface_20260819
+launch_authorized: true
+output_root: local_trackers/runtime_configs/glofas_p50_alpha_rho_tau_response_surface_20260819
+
+base:
+  baseline_contract: application/config/glofas_constrained_median_baseline_fr09.yaml
+  candidate_id: fr09_persistence_innovation
+
+fixed:
+  quantile_level: 0.5
+  inference:
+    max_iter: 150
+    max_iter_hard_cap: 150
+    min_iter_elbo: 20
+    tol: 0.0001
+    tol_par: 0.0001
+    n_draws: 2000
+    n_samp_xi: 500
+    rhs_freeze_tau_warmup_iters: 50
+    rhs_update_every: 1
+    rhs_min_tau_updates: 1
+  parameters:
+    reference:
+      D: 2
+      'n': 200
+      n_tilde: 200
+      m: 720
+      washout: 500
+      alpha: 0.20
+      rho: 0.95
+      pi_w: 0.03
+      pi_in: 1.0
+      win_scale_global: 0.18
+      win_scale_bias: 0.18
+      seed: 20260512
+      reservoir_output_lag_max: 720
+      reservoir_covariate_lag_max: 720
+      direct_output_lag_max: 180
+      direct_covariate_lag_max: 180
+      include_input_block: true
+      rhs_tau0: 0.10
+    discrepancy:
+      D: 2
+      'n': 200
+      n_tilde: 200
+      m: 720
+      washout: 500
+      alpha: 0.20
+      rho: 0.95
+      pi_w: 0.03
+      pi_in: 1.0
+      win_scale_global: 0.18
+      win_scale_bias: 0.18
+      seed: 20261521
+      reservoir_output_lag_max: 720
+      reservoir_covariate_lag_max: 720
+      direct_output_lag_max: 180
+      direct_covariate_lag_max: 180
+      include_input_block: true
+      rhs_tau0: 0.001
+
+selection:
+  require_vb_converged: false
+  policy:
+    max_observed_ratio_all: 1.05
+    max_observed_ratio_last1000: 1.05
+    max_observed_ratio_last200: 1.10
+    max_observed_ratio_last50: 1.15
+    last50_is_hard_gate: false
+    min_forecast_improvement_fraction: 0.03
+
+confirmation:
+  require_cold_p50_refit_for_transferred_state: true
+  require_authoritative_controls_for_finalist: true
+  authoritative_max_iter: 150
+  authoritative_tol: 0.0001
+  authoritative_tol_par: 0.0001
+  require_full7_before_promotion: true
+  selection_metric_after_full7: genuine_quantile_grid_crps
+
+contracts:
+  require_same_desn_by_default: true
+
+reservoir_preflight:
+  enabled: true
+  diagnostic_target: reservoir
+  reject_decision: reject
+  max_corr_features_full: 5000
+  corr_block_size: 512
+  spectral_radius_exact_max_n: 512
+  cheap_validation: false
+
+finalization:
+  run_after_scheduler: true
+  cleanup_after_complete_batch: true
+
+execution:
+  expected_candidates: 56
+  max_candidates: 56
+
+scheduler:
+  max_parallel: 20
+  cores: [0, 1, 2, 3, 4, 5, 6, 7, 9, 12, 13, 20, 22, 25, 28, 30, 32, 33, 34, 38]
+  max_load: 63
+  min_memory_gb: 96
+  min_disk_gb: 150
+
+campaign:
+  anchor:
+    candidate_id: linked_stage_a_109_de5070bceb
+    ranking_path: local_trackers/runtime_configs/glofas_p50_linked_d1d2_stage_a_20260811/constrained_median_ranking.csv
+    ranking_sha256: 88631b0a4945b4bc793682bf2a5fa624aa3b821043acdbbf5212ebe537792446
+    config_path: local_trackers/runtime_configs/glofas_p50_linked_d1d2_stage_a_20260811/candidates/linked_stage_a_109_de5070bceb/config_p50.yaml
+    config_sha256: e383c2c543e17d7ddbb1a72869b88c8b0e807983c267b4da4f05f57af7cc3e0b
+    fit_object_path: local_trackers/runtime_configs/glofas_p50_linked_d1d2_stage_a_20260811/runs/glofas_p50_linked_d1d2_stage_a_20260811_linked_stage_a_109_de5070bceb/objects/qdesn_constrained_median_linked_stage_a_109_de5070bceb_p50.rds
+    fit_object_sha256: bf51acb2e4bb7d715d881633f1830afe1fbebad2b75ffee295789ca3d7b9abd6
+  design:
+    anchor_alpha: 0.20
+    anchor_rho: 0.95
+    anchor_tau0_reference: 0.10
+    anchor_tau0_discrepancy: 0.001
+    interaction_count: 12
+  support:
+    alpha: [0.005, 0.01, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15, 0.175, 0.20, 0.225, 0.25, 0.30, 0.40, 0.60, 0.92]
+    rho: [0.50, 0.70, 0.80, 0.85, 0.90, 0.95, 0.99]
+    tau0: [1.0e-6, 1.0e-5, 1.0e-4, 1.0e-3, 3.0e-3, 1.0e-2, 3.0e-2, 1.0e-1, 3.0e-1, 1.0]
+  tau_sentinels:
+    - {reference: 1.0e-6, discrepancy: 1.0e-3}
+    - {reference: 1.0e-3, discrepancy: 1.0e-3}
+    - {reference: 1.0e-2, discrepancy: 1.0e-3}
+    - {reference: 1.0, discrepancy: 1.0e-3}
+    - {reference: 1.0e-1, discrepancy: 1.0e-6}
+    - {reference: 1.0e-1, discrepancy: 1.0e-4}
+    - {reference: 1.0e-1, discrepancy: 1.0e-2}
+    - {reference: 1.0e-1, discrepancy: 1.0e-1}
+  block_specific_alpha_pairs:
+    - {reference: 0.20, discrepancy: 0.20}
+    - {reference: 0.10, discrepancy: 0.20}
+    - {reference: 0.15, discrepancy: 0.20}
+    - {reference: 0.25, discrepancy: 0.20}
+    - {reference: 0.30, discrepancy: 0.20}
+    - {reference: 0.20, discrepancy: 0.10}
+    - {reference: 0.20, discrepancy: 0.15}
+    - {reference: 0.20, discrepancy: 0.25}
+    - {reference: 0.20, discrepancy: 0.30}
+    - {reference: 0.10, discrepancy: 0.30}
+    - {reference: 0.30, discrepancy: 0.10}
+    - {reference: 0.15, discrepancy: 0.25}
+    - {reference: 0.25, discrepancy: 0.15}

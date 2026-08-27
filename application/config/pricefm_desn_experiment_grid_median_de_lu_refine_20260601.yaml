@@ -1,0 +1,225 @@
+pricefm_desn_experiment_grid:
+  grid_id: pricefm_median_de_lu_refine_20260601
+  purpose: >
+    Focused PriceFM median refinement grid for DE_LU fold 1 after the
+    20260531 screen. The screen showed that short lag windows, wider projected
+    DESN features, and lower tanh projection scales are the most promising
+    practical direction. The flat-direct diagnostic remains a benchmark upper
+    bound, not a routine launch target.
+
+  base:
+    data_config: application/config/pricefm_data_pipeline.yaml
+    full_config: application/config/pricefm_desn_model_full_median_warmstart.yaml
+    generated_root: application/data_local/pricefm/experiment_grids/pricefm_median_de_lu_refine_20260601
+    run_root: application/data_local/pricefm/runs/pricefm_median_de_lu_refine_20260601
+
+  scope:
+    regions: [DE_LU]
+    folds: [1]
+    quantiles: [0.50]
+    horizons: all
+    ranking_split: val
+    audit_split: test
+    ranking_unit: original
+    ranking_metric: AQL
+
+  fixed:
+    lead_window: 96
+    feature_map: window_desn_v1
+    include_intercept: true
+    shrink_intercept: false
+    train_origin_limit: 3000
+    train_origin_selection: tail
+    row_chunk_size: 512
+    projection_scale: 1.0
+    default_jobs: 1
+    qdesn_likelihoods: [al, exal]
+    warm_start_enabled: true
+    exact_equivalence_train_rows: 1000
+
+  launch:
+    recommended_first_pass:
+      priorities: [1]
+      experiment_jobs: 10
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Priority 1 is the practical refinement screen. It avoids flat-direct
+        and weekly contexts, and should be launched only after dry-run config
+        generation passes.
+    recommended_capacity_pass:
+      priorities: [2]
+      experiment_jobs: 3
+      cell_jobs: 1
+      build_windows: true
+      note: >
+        Priority 2 includes higher-capacity and seed-robustness cells. It is
+        intentionally smaller-parallel because m=480/720 cells can allocate
+        several GB per R process.
+
+  interpretation:
+    convergence_policy: >
+      The inherited PriceFM median warm-start config now enforces at least 50
+      VB iterations and at most 100 iterations for iterative normal RHS_NS and
+      Q-DESN AL/exAL VB fits. This prevents the refinement screen from ranking
+      visually under-converged fits while keeping launch time bounded.
+    tau0_policy: >
+      The 20260531 screen showed Q-DESN predictions were effectively unchanged
+      across tau0 values at fixed feature map. This grid keeps tau0 fixed at
+      1e-3 and spends the budget on feature geometry.
+    flat_direct_policy: >
+      The flat-direct diagnostic won the test audit but took roughly 170
+      minutes for one DE_LU/fold cell. It is retained as an upper-bound
+      diagnostic from the previous screen, but excluded from this routine
+      refinement grid.
+
+  experiments:
+    - id: l072_m240_ps0p5_tau1em3_seed20260601
+      stage: short_context_refine
+      lag_window: 72
+      feature_dim: 240
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Check whether slightly less than one day of history improves the short-horizon bias.
+
+    - id: l096_m240_ps0p35_tau1em3_seed20260601
+      stage: scale_refine
+      lag_window: 96
+      feature_dim: 240
+      projection_scale: 0.35
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Lower projection scale near the m=240 validation winner.
+
+    - id: l096_m240_ps0p5_tau1em3_seed20260601
+      stage: scale_refine
+      lag_window: 96
+      feature_dim: 240
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Combine the best practical m=240 region with the promising lower scale.
+
+    - id: l096_m240_ps0p75_tau1em3_seed20260601
+      stage: scale_refine
+      lag_window: 96
+      feature_dim: 240
+      projection_scale: 0.75
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Middle scale between the old default and the successful 0.5 diagnostic.
+
+    - id: l096_m360_ps0p35_tau1em3_seed20260601
+      stage: capacity_scale_refine
+      lag_window: 96
+      feature_dim: 360
+      projection_scale: 0.35
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: More features with low saturation risk.
+
+    - id: l096_m360_ps0p5_tau1em3_seed20260601
+      stage: capacity_scale_refine
+      lag_window: 96
+      feature_dim: 360
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Main capacity step from the m=240 validation winner.
+
+    - id: l096_m360_ps0p75_tau1em3_seed20260601
+      stage: capacity_scale_refine
+      lag_window: 96
+      feature_dim: 360
+      projection_scale: 0.75
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Capacity step with moderate activation scale.
+
+    - id: l096_m480_ps0p5_tau1em3_seed20260601
+      stage: capacity_refine
+      lag_window: 96
+      feature_dim: 480
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Practical high-capacity cell, still much cheaper than flat-direct.
+
+    - id: l128_m240_ps0p5_tau1em3_seed20260601
+      stage: context_refine
+      lag_window: 128
+      feature_dim: 240
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: Slightly longer than one day without moving to the weaker L192 regime.
+
+    - id: l144_m240_ps0p5_tau1em3_seed20260601
+      stage: context_refine
+      lag_window: 144
+      feature_dim: 240
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 1
+      rationale: One-and-a-half-day context as a conservative L192 neighbor.
+
+    - id: l096_m480_ps0p35_tau1em3_seed20260601
+      stage: capacity_scale_refine
+      lag_window: 96
+      feature_dim: 480
+      projection_scale: 0.35
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 2
+      rationale: High capacity with lower pre-tanh saturation.
+
+    - id: l096_m480_ps0p75_tau1em3_seed20260601
+      stage: capacity_scale_refine
+      lag_window: 96
+      feature_dim: 480
+      projection_scale: 0.75
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 2
+      rationale: High capacity with moderate activation scale.
+
+    - id: l096_m720_ps0p5_tau1em3_seed20260601
+      stage: high_capacity_diagnostic
+      lag_window: 96
+      feature_dim: 720
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260601
+      priority: 2
+      rationale: Expensive near-flat diagnostic that tests whether random projection capacity remains the bottleneck.
+
+    - id: l096_m240_ps0p5_tau1em3_seed20260602
+      stage: seed_robustness
+      lag_window: 96
+      feature_dim: 240
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260602
+      priority: 2
+      rationale: Seed replicate for the main practical refinement candidate.
+
+    - id: l096_m360_ps0p5_tau1em3_seed20260602
+      stage: seed_robustness
+      lag_window: 96
+      feature_dim: 360
+      projection_scale: 0.5
+      tau0: 1.0e-3
+      seed: 20260602
+      priority: 2
+      rationale: Seed replicate for the main capacity-step candidate.

@@ -1,0 +1,123 @@
+version: '1.0'
+baseline_id: glofas_fr09_authoritative_full7_20260811
+candidate_id: fr09_persistence_innovation
+status: promoted_authoritative
+
+artifacts:
+  base_config:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/candidates/fr09_persistence_innovation/p50/config_p50.yaml
+    sha256: 736fcb6b6d812f1d97a32c078e4c8e27653fa1a997e6ef0b3ecdc5e885fa2621
+  base_model_grid:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/candidates/fr09_persistence_innovation/p50/model_grid_p50.csv
+    sha256: 998a324f9068d96b9639267f25c85823fdd2bb0e1e077eb274a9f3d97aaafc35
+  source_fit:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/runs/glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p50/objects/qdesn_transition_full7_fr09_persistence_innovation_p50.rds
+    sha256: d086eff5c9878581ff152893d3fbbc89b45fafe3d83c202383ca1cdbd7e4d663
+  observed_scores:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/scores/fr09_persistence_innovation__p50_observed_fit_scores.csv
+    sha256: c5d782b0c36e97f5a4ae1be00081eac1aa2ff65085e9626d22f96a67c05a7505
+  forecast_scores:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/runs/glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p50/tables/score_summary.csv
+    sha256: 0ce9d0a9245db8aaeecc85badfb53fc3e4311b2e45001d81d9227df298f864e8
+  design_summary:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/runs/glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p50/tables/qdesn_discrepancy_design_summary.csv
+    sha256: f622e457d8c8d61376ce9c4d3f9487bc83d67b7cacc3f979fe4097e5d107454c
+  prediction_quantiles:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_fit_recovery_20260730/local_trackers/runtime_configs/glofas_fit_recovery_transition_full7_20260808/runs/glofas_fit_recovery_transition_full7_20260808_fr09_persistence_innovation_p50/tables/prediction_quantiles.csv
+    sha256: de6d084d25c4fee75ac5cd2e627fed4b59c0b4f5bccd487ea788e26df6b3152f
+  source_warm_contract:
+    path: application/config/glofas_constrained_median_fr09_warm_start_contract.yaml
+    sha256: 5450c607360ac65f910e070c21b4e910f8447196b352b6a02cdcb9f31ed54f22
+  authoritative_model_spec:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_fr09_authoritative_full7_20260811/authoritative_model_spec.csv
+    sha256: d94b384ad40f76da7c09b28a9579d6ae0a9998f582d42b3ccb987aeba23e14ff
+  promotion_decision:
+    path: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_fr09_authoritative_full7_20260811/promotion_decision.csv
+    sha256: 1a499d952a0d481cc0658db270d380370b52e1af790cbc598b8e87ea5cce1cfb
+
+metrics:
+  forecast_p50_check_loss_mean: 0.798826956115941
+  observed_log1p_mae_all: 0.0624424466662982
+  observed_log1p_mae_last1000: 0.0388437273850094
+  observed_log1p_mae_last200: 0.05360828353558
+  observed_log1p_mae_last50: 0.178787719773148
+  p50_distributional_crps_available: false
+  metric_note: A single p50 fit supports check loss and MAE, not genuine distributional CRPS.
+
+engine:
+  name: exdqlm
+  load_mode: local_source
+  repo_hint: /data/jaguir26/local/src/exdqlm__wt__article_app_engine_73c043f
+  required_branch: article/app-engine-73c043f
+  required_commit: 73c043f0436b508808366f312350fd44c2d06771
+  minimum_version: 1.0.0
+
+current_values:
+  reference:
+    input_stream: transformed_reference_streamflow_history
+    D: 1
+    'n': 300
+    n_tilde: none
+    m: 360
+    washout: 500
+    alpha: 0.1
+    rho: 0.95
+    pi_w: 0.03
+    pi_in: 1.0
+    win_scale_global: 0.18
+    win_scale_bias: 0.18
+    input_bound: none
+    activation: tanh
+    reduction_activation: identity
+    standardize_inputs: true
+    add_internal_bias: true
+    seed: 20260512
+    reservoir_output_lags: '1:360'
+    reservoir_ppt_lags: '0:360'
+    reservoir_soil_lags: '0:360'
+    direct_output_lags: '1:180'
+    direct_ppt_lags: '0:180'
+    direct_soil_lags: '0:180'
+    direct_readout_input_block: true
+    rhs_tau0: 0.1
+  discrepancy:
+    input_stream: retrospective_glofas_minus_reference_discrepancy
+    D: 1
+    'n': 300
+    n_tilde: none
+    m: 360
+    washout: 500
+    alpha: 0.1
+    rho: 0.95
+    pi_w: 0.03
+    pi_in: 1.0
+    win_scale_global: 0.18
+    win_scale_bias: 0.18
+    input_bound: none
+    activation: tanh
+    reduction_activation: identity
+    standardize_inputs: true
+    add_internal_bias: true
+    seed: 20261521
+    reservoir_output_lags: '1:360'
+    reservoir_ppt_lags: '0:360'
+    reservoir_soil_lags: '0:360'
+    direct_output_lags: '1:180'
+    direct_ppt_lags: '0:180'
+    direct_soil_lags: '0:180'
+    direct_readout_input_block: true
+    transition_strategy: persistence_anchored_innovation
+    rhs_tau0: 0.001
+  rhs:
+    slab_s2: 1.0
+    a_zeta: 2.0
+    b_zeta: 4.0
+    freeze_global_scale_iterations: 50
+  inference:
+    likelihood: AL
+    method: VB-LD
+    max_iter: 1000
+    tol: 0.0001
+    tol_par: 0.0001
+    n_draws: 2000
+    n_samp_xi: 500

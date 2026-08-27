@@ -257,6 +257,7 @@ def discover_bundles(repo: Path, panel_root: Path) -> tuple[pd.DataFrame, list[d
                 "tau": tau,
                 "model_dir": resolve(repo, row["model_dir"]),
                 "adapter_dir": resolve(repo, row["adapter_dir"]),
+                "config_path": resolve(repo, row["config_path"]) if row.get("config_path") else None,
             })
 
     ledger_rows: list[dict] = []
@@ -272,7 +273,7 @@ def discover_bundles(repo: Path, panel_root: Path) -> tuple[pd.DataFrame, list[d
             config_paths = []
             feature_paths = []
             for component in components:
-                config_path = component["model_dir"].parent / "config.yaml"
+                config_path = component["config_path"] or component["model_dir"].parent / "config.yaml"
                 contract, data_path = scientific_contract(repo, config_path, cache)
                 semantic, feature_path = feature_semantics(component["adapter_dir"])
                 contracts.append(contract)

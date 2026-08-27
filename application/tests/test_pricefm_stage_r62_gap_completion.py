@@ -91,16 +91,18 @@ def test_gap_closeout_recomputes_panel_validation_aql(tmp_path):
             {"method_id": module.METHODS[0], "split": "val", "unit": "original", "AQL": 1 + index, "AQCR": 0, "MAE": 2, "RMSE": 3},
             {"method_id": module.METHODS[1], "split": "val", "unit": "original", "AQL": 2 + index, "AQCR": 0, "MAE": 3, "RMSE": 4},
         ]).to_csv(model / "metric_summary.csv", index=False)
-        rows.append({"case_id": f"case{index}", "region": "AA", "fold": 1, "tau": tau, "output_dir": str(model), "adapter_dir": str(model.parent / "adapter")})
+        rows.append({"case_id": f"case{index}", "region": "AA", "fold": 1, "tau": tau, "output_dir": str(model), "adapter_dir": str(model.parent / "adapter"), "config": str(tmp_path / f"config{index}.yaml")})
         status.append({"case_id": f"case{index}", "status": "completed"})
     manifest = tmp_path / "manifest.csv"; launch = tmp_path / "status.csv"
     pd.DataFrame(rows).to_csv(manifest, index=False); pd.DataFrame(status).to_csv(launch, index=False)
     args = module.parser().parse_args(["--manifest", str(manifest), "--launch-status", str(launch), "--output-dir", str(tmp_path / "output")])
     summary = module.run(args)
     metric = pd.read_csv(tmp_path / "output/panel_metric.csv")
+    status_frame = pd.read_csv(tmp_path / "output/panel_status.csv")
     assert summary["complete_jobs"] == 7
     assert metric.loc[metric.method_id.eq(module.METHODS[0]), "AQL"].iloc[0] == 4.0
     assert set(metric.split) == {"val"}
+    assert "config_path" in status_frame.columns
 
 
 def test_launcher_requires_explicit_authorization(tmp_path):

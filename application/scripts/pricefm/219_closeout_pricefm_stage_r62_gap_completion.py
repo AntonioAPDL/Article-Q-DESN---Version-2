@@ -57,6 +57,7 @@ def run(args: argparse.Namespace) -> dict:
             "region": row.region, "fold": int(row.fold), "id": row.case_id,
             "tau": float(row.tau), "complete": is_complete,
             "model_dir": str(model), "adapter_dir": row.adapter_dir,
+            "config_path": row.config,
         })
         if not is_complete:
             continue

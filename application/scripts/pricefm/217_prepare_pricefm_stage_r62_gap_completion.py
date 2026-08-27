@@ -84,6 +84,7 @@ def scientific_hash(smoke: dict) -> str:
 def portable_data_config(source: Path, destination: Path, repo: Path) -> None:
     payload = yaml.safe_load(source.read_text())
     block = payload.get("pricefm", {})
+    block["allow_absolute_local_paths"] = True
     for key in ("raw_dir", "interim_dir", "processed_dir", "external_repo_dir", "log_dir"):
         value = block.get(key)
         if value and not Path(value).is_absolute():

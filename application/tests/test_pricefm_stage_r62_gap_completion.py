@@ -72,6 +72,7 @@ def test_gap_prep_materializes_exact_train_validation_jobs(tmp_path, monkeypatch
         assert smoke["python_bin"] == str(module.PYTHON.absolute())
         assert Path(smoke["data_config"]).is_absolute()
         assert Path(smoke["data_config"]).is_file()
+        assert yaml.safe_load(Path(smoke["data_config"]).read_text())["pricefm"]["allow_absolute_local_paths"] is True
         assert smoke["qdesn_vb"]["likelihoods"] == ["al", "exal"]
 
 

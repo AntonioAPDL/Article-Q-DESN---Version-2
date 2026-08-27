@@ -40,6 +40,7 @@ repo_path <- function(path) {
 source(repo_path("application/scripts/pricefm/pricefm_horizon_readout.R"), local = TRUE)
 
 cfg <- yaml::read_yaml(repo_path(cfg_path))$pricefm_desn_smoke
+python_bin <- repo_path(cfg$python_bin %||% "application/data_local/pricefm/venv/bin/python")
 out_dir <- repo_path(cfg$run$output_dir)
 adapter_dir <- repo_path(cfg$adapter$output_dir)
 if (dir.exists(out_dir) && !force) {
@@ -53,7 +54,7 @@ if (!file.exists(file.path(adapter_dir, "adapter_manifest.json"))) {
     "--smoke-config", repo_path(cfg_path),
     "--force", "true"
   )
-  status <- system2(repo_path("application/data_local/pricefm/venv/bin/python"), cmd)
+  status <- system2(python_bin, cmd)
   if (!identical(status, 0L)) stop("Adapter build failed.", call. = FALSE)
 }
 

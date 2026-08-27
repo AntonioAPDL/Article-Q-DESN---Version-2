@@ -69,7 +69,14 @@ def test_gap_prep_materializes_exact_train_validation_jobs(tmp_path, monkeypatch
     for path in manifest.config:
         smoke = yaml.safe_load(Path(path).read_text())["pricefm_desn_smoke"]
         assert smoke["splits"] == ["train", "val"]
+        assert smoke["python_bin"] == str(module.PYTHON.resolve())
         assert smoke["qdesn_vb"]["likelihoods"] == ["al", "exal"]
+
+
+def test_smoke_runner_accepts_configured_python_environment():
+    source = (SCRIPTS / "08_run_desn_model_smoke.R").read_text()
+    assert 'cfg$python_bin %||% "application/data_local/pricefm/venv/bin/python"' in source
+    assert "system2(python_bin, cmd)" in source
 
 
 def test_gap_closeout_recomputes_panel_validation_aql(tmp_path):

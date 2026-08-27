@@ -23,6 +23,7 @@ R57 = DATA / "authoritative/pricefm_stage_r57_joint_authority_freeze_20260824/pr
 GRID = DATA / "experiment_grids/pricefm_stage_r62_gap_completion_20260827"
 RUNS = DATA / "runs/pricefm_stage_r62_gap_completion_20260827"
 OUTPUT = DATA / "authoritative/pricefm_stage_r62_gap_completion_prep_20260827"
+PYTHON = DATA / "venv/bin/python"
 TAUS = (0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90)
 
 
@@ -35,6 +36,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--run-dir", type=Path, default=RUNS)
     p.add_argument("--output-dir", type=Path, default=OUTPUT)
     p.add_argument("--expected-gaps", type=int, default=6)
+    p.add_argument("--python-bin", type=Path, default=PYTHON)
     p.add_argument("--force", type=parse_bool, default=False)
     return p
 
@@ -105,6 +107,7 @@ def run(args: argparse.Namespace) -> dict:
             case_id = f"r62gap_{str(gap.region).lower()}_f{int(gap.fold)}_tau{tau_slug(tau)}"
             cell = runs / case_id / "cells" / f"region={gap.region}" / f"fold={int(gap.fold)}"
             smoke["splits"] = ["train", "val"]
+            smoke["python_bin"] = str(args.python_bin.resolve())
             smoke["quantiles"] = [float(tau)]
             smoke["adapter"]["output_dir"] = str(cell / "adapter")
             smoke["run"]["output_dir"] = str(cell / "model")

@@ -6,7 +6,7 @@
 app_glofas_median_screen_parameters <- function() {
   block_fields <- c(
     "D", "n", "n_tilde", "m", "washout", "alpha", "rho", "pi_w", "pi_in",
-    "win_scale_global", "win_scale_bias", "seed", "reservoir_output_lag_max",
+    "win_scale_global", "win_scale_bias", "fan_in_target", "seed", "reservoir_output_lag_max",
     "reservoir_covariate_lag_max", "direct_output_lag_max",
     "direct_covariate_lag_max", "include_input_block", "rhs_tau0"
   )
@@ -81,6 +81,9 @@ app_glofas_median_screen_validate_value <- function(name, value) {
     stop(sprintf("Screening parameter %s must lie in [0, 1].", name), call. = FALSE)
   }
   if (grepl("rho$|win_scale|rhs_tau0$", name) && value_num <= 0) {
+    stop(sprintf("Screening parameter %s must be positive.", name), call. = FALSE)
+  }
+  if (grepl("fan_in_target$", name) && value_num <= 0) {
     stop(sprintf("Screening parameter %s must be positive.", name), call. = FALSE)
   }
   invisible(value_num)
@@ -457,6 +460,17 @@ app_glofas_median_screen_homogeneous <- function(x, D, name) {
   stop(sprintf("Cannot resize heterogeneous %s to D=%d without an explicit candidate value.", name, D), call. = FALSE)
 }
 
+app_glofas_median_screen_fan_in_pi <- function(target, D, n_tilde, output_lag_max, covariate_lag_max) {
+  target <- as.numeric(target)
+  D <- as.integer(D)
+  q_first <- as.integer(output_lag_max) + 2L * (as.integer(covariate_lag_max) + 1L)
+  q_input <- c(q_first, as.integer(n_tilde))
+  if (length(q_input) != D || any(!is.finite(q_input)) || any(q_input < 1L)) {
+    stop("Cannot derive fan-in probabilities from the candidate input dimensions.", call. = FALSE)
+  }
+  pmin(1, target / q_input)
+}
+
 app_glofas_median_screen_apply_block <- function(cfg, row, block) {
   prefix <- paste0(block, ".")
   override <- app_qdesn_block_override(cfg, block)
@@ -495,6 +509,17 @@ app_glofas_median_screen_apply_block <- function(cfg, row, block) {
       ppt = list(range = c(0L, as.integer(covariate_max))),
       soil = list(range = c(0L, as.integer(covariate_max)))
     )
+  }
+  fan_in_target <- app_glofas_median_screen_row_value(row, paste0(prefix, "fan_in_target"), NULL)
+  if (!is.null(fan_in_target)) {
+    effective_output_max <- as.integer(output_max %||% max(unlist(reservoir_input$output_lags$range)))
+    effective_covariate_max <- as.integer(
+      covariate_max %||% max(unlist(reservoir_input$covariates$ppt$range))
+    )
+    reservoir$pi_in <- app_glofas_median_screen_fan_in_pi(
+      fan_in_target, D, reservoir$n_tilde, effective_output_max, effective_covariate_max
+    )
+    override[["reservoir"]] <- reservoir
   }
   if (length(reservoir_input)) override[["reservoir_input"]] <- reservoir_input
 

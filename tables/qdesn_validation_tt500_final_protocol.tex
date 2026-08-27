@@ -5,10 +5,10 @@
 \toprule
 Component & Fixed protocol \\
 \midrule
-Fitting observations & 500 observations immediately preceding the fitting origin \\
-Forecast origin & End of the first 9000 retained observations \\
-Held-out forecast period & Final 1000 retained observations \\
-Rolling-origin design & Origins spaced 30 observations apart; horizons up to 30 steps ahead; state-update forecasts \\
+Training observations & 500 (source indices 8501--9000) \\
+Forecast origin & Source index 9000 \\
+Held-out forecast window & 1000 observations (source indices 9001--10000) \\
+Rolling-origin design & Leads 1--30; origin stride 30; state-update forecasts \\
 Target quantile levels & $p=0.05,0.25,0.50$ \\
 Displayed criteria & Fit RMSE; forecast MAE; forecast check loss \\
 \bottomrule

@@ -456,4 +456,27 @@ grouped_finalize_text <- paste(readLines(app_path(
 stopifnot(grepl('compatibility_mode = "numerical_design"', grouped_prepare_text, fixed = TRUE))
 stopifnot(grepl('"numerically_equivalent_design"', grouped_finalize_text, fixed = TRUE))
 
+finalizer_source_matches <- regmatches(
+  grouped_finalize_text,
+  gregexpr('application/R/[A-Za-z0-9_]+\\.R', grouped_finalize_text, perl = TRUE)
+)[[1L]]
+finalizer_source_paths <- unique(finalizer_source_matches[finalizer_source_matches != ""])
+finalizer_source_env <- new.env(parent = globalenv())
+for (source_path in finalizer_source_paths) {
+  sys.source(app_path(source_path), envir = finalizer_source_env)
+}
+finalizer_required_functions <- c(
+  "app_qdesn_continue_latent_path",
+  "app_qdesn_reservoir_input_row",
+  "app_qdesn_compile_future_input_contract",
+  "app_qdesn_validate_compiled_future_inputs",
+  "app_build_readout_feature_matrix",
+  "app_latent_path_combined_panel",
+  "app_glofas_mechanism_exact_future_design",
+  "app_glofas_grouped_rhs_contributions"
+)
+stopifnot(all(vapply(finalizer_required_functions, function(function_name) {
+  exists(function_name, envir = finalizer_source_env, inherits = FALSE)
+}, logical(1L))))
+
 cat("Latent-path grouped-RHS and GloFAS campaign tests passed.\n")

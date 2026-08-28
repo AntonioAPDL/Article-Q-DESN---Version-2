@@ -263,8 +263,9 @@ time-varying conditional quantiles. The DQLM combines a linear state evolution
 with Bayesian quantile regression
 \citep{GoncalvesMigonBastos2020DQLM}. The extended DQLM (exDQLM) of
 \citet{barata2021_flex_quantile} adds the corresponding asymmetric-likelihood
-flexibility, and both models are implemented in the Comprehensive R Archive
-Network (CRAN) package \pkg{exdqlm} \citep{exdqlmRPackage}. Q--DESN
+flexibility, and both models are implemented in version 1.1.1 of the
+Comprehensive R Archive Network (CRAN) package \pkg{exdqlm}
+\citep{exdqlmRPackage}. Q--DESN
 represents temporal dependence through fixed nonlinear reservoir features. The DQLM and
 exDQLM fits therefore serve as structured linear dynamic quantile comparators
 under the same held-out forecast evaluation.
@@ -1433,7 +1434,8 @@ specification and realization were selected before held-out evaluation and then
 held fixed.
 Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
-fitting-sample size, and forecast-evaluation design using \pkg{exdqlm}
+fitting-sample size, and forecast-evaluation design using the inference
+implementation released as version 1.1.1 of the CRAN package \pkg{exdqlm}
 \citep{exdqlmRPackage}.
 
 The primary comparison is a fixed-design benchmark against structured dynamic

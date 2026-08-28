@@ -55,6 +55,19 @@ Launch-safety contract:
 - `glofas_reservoir_preflight_gate.R` normalizes each sampler-free reservoir
   decision. `repair` proceeds with recorded warnings; `reject` becomes a
   terminal early-rejection marker and skips VB.
+- `glofas_discrepancy_equivalence_audit.R` consumes only completed, hash-pinned
+  retained GloFAS p50 fit/design objects and independently tests why distinct
+  discrepancy reservoirs can produce nearly identical forecast paths. It
+  loads one candidate at a time, writes compact evidence under an ignored
+  output root, and fails before writing `DIAGNOSTIC_COMPLETE.txt` if any
+  artifact, cache, alignment, parity, identity, score, or transition contract
+  fails. It does not fit, launch, promote, clean, or edit article outputs.
+
+```sh
+Rscript application/scripts/glofas_discrepancy_equivalence_audit.R \
+  --runtime_root /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827 \
+  --output_root local_trackers/runtime_configs/glofas_discrepancy_equivalence_audit_20260827
+```
 - `03_collect_reservoir_screening_shards.R` merges parallel
   `03_screen_reservoir_candidate_grid.R` shard outputs and writes ranked local
   summaries for selecting candidates after a background screening campaign.

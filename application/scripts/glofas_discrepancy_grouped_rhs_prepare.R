@@ -253,7 +253,7 @@ for (i in seq_len(nrow(candidates))) {
   checkpoint_path <- file.path(run_dir, "checkpoints", paste0(fit_id, ".rds"))
   cfg$inference$vb_ld$checkpoint <- list(
     enabled = TRUE,
-    resume = TRUE,
+    resume = FALSE,
     path = checkpoint_path,
     every_iterations = as.integer(campaign$execution$checkpoint_every_iterations),
     every_minutes = as.numeric(campaign$execution$checkpoint_every_minutes),

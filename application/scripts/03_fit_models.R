@@ -172,6 +172,7 @@ for (i in seq_len(nrow(model_grid))) {
     } else if (identical(row$model_family[[1L]], "qdesn_glofas_discrepancy")) {
       fit_cfg <- cfg
       checkpoint_cfg <- (fit_cfg$inference$vb_ld %||% list())$checkpoint %||% list()
+      checkpoint_cfg <- app_latent_checkpoint_apply_resume_override(checkpoint_cfg)
       if (app_as_bool(checkpoint_cfg$enabled %||% FALSE)) {
         checkpoint_path <- as.character(checkpoint_cfg$path %||% "")[[1L]]
         if (!nzchar(checkpoint_path)) {

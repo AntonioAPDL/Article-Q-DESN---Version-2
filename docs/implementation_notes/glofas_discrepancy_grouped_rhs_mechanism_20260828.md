@@ -163,6 +163,15 @@ and hash-validated checkpoints. A `STOP` marker halts new launches without
 killing active workers. A1 is never materialized into execution merely because
 A0 finishes; the frozen A0 decision file must authorize it.
 
+Prepared candidate configs set `checkpoint.resume=false` for a safe first
+start. The scheduler changes the effective worker setting to `true` only when
+both the candidate checkpoint and its SHA-256 sidecar exist and validate. The
+effective choice is recorded in scheduler state. This distinction was added
+after the first production launch attempt failed safely before iteration 1
+because the preparer had incorrectly paired `resume=true` with a nonexistent
+checkpoint; that task-owned attempt was stopped, audited, and discarded before
+relaunch.
+
 Use:
 
 ```bash
@@ -244,11 +253,11 @@ authorized fit was started:
 | Changed/new R source parsing | Passed, 12/12 files |
 | Changed/new Python byte compilation | Passed, 4/4 files |
 | Orchestrator `bash -n` | Passed |
-| Scheduler/resource unit tests | Passed, 24/24 |
+| Scheduler/resource unit tests | Passed, 25/25, including first-start versus validated-resume selection |
 | Grouped-RHS algebra and campaign tests | Passed in the repository R harness |
 | Existing RHS warmup and p95 launch-contract tests | Passed in the repository R harness |
 | Full R harness | Reached and passed all GloFAS tests, then stopped at the known unrelated shared-validation assertion `nrow(promoted) == 18L` |
-| Unauthorized preparation rehearsal | Passed: 18 candidates, 8 A0, 10 A1, 14 warm, 4 cold; launch correctly refused |
+| Corrected unauthorized preparation rehearsal | Passed: 18 candidates, 8 A0, 10 A1, 14 warm, 4 cold; 18/18 safe first starts, 18/18 recovery-capable; launch correctly refused |
 | Retained D16 semantic partition | Passed: 542 direct, 1,024 reservoir, and one intercept feature |
 | Retained D16 contribution identity | Passed: maximum absolute reconstruction error `1.221e-15` |
 | Retained D16 penalized reservoir RMS share | `0.00338556`, establishing the prospective control value |

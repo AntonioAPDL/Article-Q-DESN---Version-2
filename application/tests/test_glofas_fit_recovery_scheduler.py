@@ -193,6 +193,23 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             checkpoint.write_bytes(b"changed")
             self.assertFalse(scheduler.checkpoint_valid({"checkpoint_path": str(checkpoint)}))
 
+    def test_checkpoint_resume_requires_enabled_valid_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            checkpoint = Path(tmp) / "fit.checkpoint.rds"
+            row = {
+                "checkpoint_resume_enabled": "true",
+                "checkpoint_path": str(checkpoint),
+            }
+            self.assertFalse(scheduler.checkpoint_resume_requested(row))
+            checkpoint.write_bytes(b"checkpoint")
+            digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+            Path(str(checkpoint) + ".sha256").write_text(
+                digest + "\n", encoding="utf-8"
+            )
+            self.assertTrue(scheduler.checkpoint_resume_requested(row))
+            row["checkpoint_resume_enabled"] = "false"
+            self.assertFalse(scheduler.checkpoint_resume_requested(row))
+
     def test_absolute_runtime_config_can_be_made_repo_relative(self):
         config = REPO_ROOT / "local_trackers" / "runtime" / "config.yaml"
         self.assertEqual(

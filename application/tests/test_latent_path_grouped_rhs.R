@@ -16,6 +16,18 @@ grouped_cfg <- app_qdesn_normalize_rhs_alpha_grouping(list(
     tau0 = list(direct = 0.1, reservoir = 0.2)
   )
 ))
+stopifnot(!app_latent_checkpoint_apply_resume_override(
+  list(enabled = TRUE, resume = TRUE),
+  "false"
+)$resume)
+stopifnot(app_latent_checkpoint_apply_resume_override(
+  list(enabled = TRUE, resume = FALSE),
+  "true"
+)$resume)
+stopifnot(app_latent_checkpoint_apply_resume_override(
+  list(enabled = TRUE, resume = FALSE),
+  ""
+)$resume == FALSE)
 stopifnot(isTRUE(grouped_cfg$enabled))
 stopifnot(identical(names(grouped_cfg$tau0), c("direct", "reservoir")))
 stopifnot(identical(

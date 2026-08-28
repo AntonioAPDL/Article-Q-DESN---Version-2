@@ -428,6 +428,13 @@ def checkpoint_valid(row):
     return bool(expected) and sha256_file(path).lower() == expected
 
 
+def checkpoint_resume_requested(row):
+    return (
+        is_true(row.get("checkpoint_resume_enabled", "false"))
+        and checkpoint_valid(row)
+    )
+
+
 def reconcile_existing_candidate(row, output_root, previous, retry_failed=False):
     """Classify one manifest row before scheduling any work."""
     candidate_id = row["candidate_id"]
@@ -485,7 +492,7 @@ def reconcile_existing_candidate(row, output_root, previous, retry_failed=False)
                 "finished_at": worker.get("timestamp", ""),
                 "return_code": worker.get("exit_code", ""),
             })
-    elif checkpoint_valid(row) and is_true(row.get("checkpoint_resume_enabled", "false")):
+    elif checkpoint_resume_requested(row):
         state["status"] = "pending"
         state["resume_checkpoint"] = "true"
     return state
@@ -583,9 +590,7 @@ def main():
                 state["finished_at"] = worker.get("timestamp", timestamp())
                 state["return_code"] = worker.get("exit_code", "")
             elif not pid_alive(state["pid"]):
-                resumable = checkpoint_valid(row) and is_true(
-                    row.get("checkpoint_resume_enabled", "false")
-                )
+                resumable = checkpoint_resume_requested(row)
                 state["status"] = "pending" if resumable else "failed_stale"
                 state["resume_checkpoint"] = "true" if resumable else "false"
                 state["finished_at"] = timestamp()
@@ -720,6 +725,9 @@ def main():
                     row.get("reservoir_preflight_cheap_validation", "false")
                 ),
                 "QDESN_REFERENCE_FEATURE_CACHE_ROOT": reference_feature_cache_root,
+                "QDESN_CHECKPOINT_RESUME": canonical_bool(
+                    checkpoint_resume_requested(row)
+                ),
             })
             process = subprocess.Popen(
                 command,
@@ -736,6 +744,9 @@ def main():
                 "backend_threads": str(args.backend_threads),
                 "backend_manifest_path": str(backend_manifest_path),
                 "reference_feature_cache_root": reference_feature_cache_root,
+                "resume_checkpoint": canonical_bool(
+                    checkpoint_resume_requested(row)
+                ),
                 "pid": str(process.pid),
                 "started_at": timestamp(),
             })

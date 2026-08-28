@@ -21,6 +21,17 @@ app_latent_checkpoint_config <- function(vb_args = list()) {
   )
 }
 
+app_latent_checkpoint_apply_resume_override <- function(
+  checkpoint,
+  override = Sys.getenv("QDESN_CHECKPOINT_RESUME", unset = "")
+) {
+  checkpoint <- checkpoint %||% list()
+  override <- trimws(as.character(override %||% "")[[1L]])
+  if (!nzchar(override)) return(checkpoint)
+  checkpoint$resume <- app_as_bool(override)
+  checkpoint
+}
+
 app_latent_checkpoint_semantic_vb_args <- function(vb_args = list()) {
   fields <- c(
     "max_iter", "min_iter_elbo", "tol", "tol_par", "n_samp_xi", "n_draws",

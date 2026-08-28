@@ -1614,6 +1614,11 @@ app_latent_path_fit_diagnostics <- function(result) {
   base$vb_checkpoint_write_seconds <- as.numeric(checkpoint$write_seconds %||% 0)
   base$vb_checkpoint_contract_hash <- checkpoint$contract_hash %||% NA_character_
   base$vb_checkpoint_schema_version <- checkpoint$schema_version %||% NA_character_
+  base$vb_prior_declared_hash <- result$fit$vb_diagnostics$prior_declared_hash %||% NA_character_
+  base$vb_prior_effective_hash <- result$fit$vb_diagnostics$prior_effective_hash %||% NA_character_
+  base$vb_rhs_alpha_group_layout_hash <-
+    result$fit$vb_diagnostics$rhs_alpha_group_layout_hash %||% NA_character_
+  base$vb_rhs_alpha_grouping_enabled <- !is.null(result$fit$rhs_alpha_group_layout)
   backend <- result$fit$vb_diagnostics$runtime_backend %||% data.frame()
   base$vb_numerical_backend <- if (nrow(backend)) backend$backend[[1L]] else NA_character_
   base$vb_numerical_backend_verified <- if (nrow(backend)) {
@@ -1886,6 +1891,24 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
       likelihood_family = likelihood_family
     )
   })
+  alpha_intercept_index <- app_latent_prior_block_intercepts(
+    design$alpha_index,
+    design$intercept_index
+  )
+  alpha_group_layout <- time_stage("prepare_alpha_rhs_group_layout", {
+    app_qdesn_alpha_rhs_group_layout(
+      feature_info = design$feature_info_alpha,
+      intercept_index = alpha_intercept_index,
+      grouping = vb_args$alpha_rhs$global_grouping
+    )
+  })
+  if (!is.null(alpha_group_layout)) {
+    vb_args$alpha_rhs$global_groups <- alpha_group_layout
+  }
+  vb_args$prior_contract <- app_qdesn_latent_vb_prior_contract(
+    vb_args,
+    alpha_layout = alpha_group_layout
+  )
   vb_args$likelihood_family <- likelihood_family
   fit <- time_stage("fit_latent_path_al_vb_core", {
     app_fit_latent_path_al_vb_core(
@@ -1896,6 +1919,12 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
       seed = seed
     )
   })
+  fit$prior_contract <- vb_args$prior_contract
+  fit$rhs_alpha_group_layout <- alpha_group_layout
+  fit$vb_diagnostics$prior_declared_hash <- vb_args$prior_contract$declared_hash
+  fit$vb_diagnostics$prior_effective_hash <- vb_args$prior_contract$effective_hash
+  fit$vb_diagnostics$rhs_alpha_group_layout_hash <-
+    alpha_group_layout$layout_hash %||% NA_character_
   design_summary <- time_stage("summarize_latent_path_design", {
     app_latent_path_design_summary(design)
   })

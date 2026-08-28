@@ -1,0 +1,102 @@
+version: 1
+campaign_id: glofas_discrepancy_grouped_rhs_stage_a_20260828
+description: >-
+  Prospective p50 mechanism screen for separate direct and reservoir global RHS
+  scales in the GloFAS discrepancy readout. A0 is authorized; A1 is conditional
+  on the frozen mechanism-activation decision.
+launch_authorized: true
+article_update_authorized: false
+quantile_level: 0.50
+
+source:
+  candidate_id: richer_discrepancy_initial_014_91b5493969
+  config: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/candidates/richer_discrepancy_initial_014_91b5493969/config_p50.yaml
+  config_sha256: f10c28663863b9517c4be327d9279624d7d17d80f4e787e2ed22577251cd9dd9
+  model_grid: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/candidates/richer_discrepancy_initial_014_91b5493969/model_grid_p50.csv
+  model_grid_sha256: 9ed32a45e641d83e1d8371c760384e3e10d6847c8ef7d619e1cf077a78745c7c
+  application_panel: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/common_cache/application_panel.rds
+  application_panel_sha256: a815c093733ea411dffb40a678c50454d0291c60fa393b73b68d15ddfdb9ca1c
+  fit_object: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_014_91b5493969/objects/qdesn_constrained_median_richer_discrepancy_initial_014_91b5493969_p50.rds
+  fit_object_sha256: 68ae1c539d17ff46e84436f7edb4385e74c2bec994456ec6102a73ea26b1a062
+  design_object: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_014_91b5493969/objects/qdesn_constrained_median_richer_discrepancy_initial_014_91b5493969_p50__design.rds
+  design_object_sha256: c5a188229c93a3d2613c283cc62d56c163a160ddf55fb775d30e107a5ace26a5
+  forecast_summary: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_014_91b5493969/tables/post_fit_forecast_window_summary.csv
+  forecast_summary_sha256: 37a92b2f82012731be500e5b87212a5af732523daa9e606fb4e9dd06e86cc736
+  observed_scores: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/scores/richer_discrepancy_initial_014_91b5493969_observed_fit_scores.csv
+  observed_scores_sha256: 3b24d0eb9660d520b02f95f90f7684d3aac58e748214f36f1e3e59e8aad4608f
+
+baselines:
+  immutable_article_id: FR09
+  current_engine_fr09_candidate_id: richer_discrepancy_initial_001_bc57c0cae9
+  current_engine_fr09_observed_scores: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/scores/richer_discrepancy_initial_001_bc57c0cae9_observed_fit_scores.csv
+  current_engine_fr09_observed_scores_sha256: 2797d6139794690608520048df25c2069020f0d8f2a84fa5e14f9430d720d3cf
+  current_engine_fr09_forecast_summary: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_001_bc57c0cae9/tables/post_fit_forecast_window_summary.csv
+  current_engine_fr09_forecast_summary_sha256: 51dc59935a1c7848c8f23e58cf0dc5f3ab458f5cc732e572eec17dd3cc9935b8
+  discrepancy_equivalence_paths: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/glofas_discrepancy_equivalence_20260827/local_trackers/runtime_configs/glofas_discrepancy_equivalence_audit_20260827/tables/discrepancy_paths.csv
+  discrepancy_equivalence_paths_sha256: 0ccbbf114ae5171347d135cad812eaa2f144b5c5d83c70921802f9be27618d3d
+  discrepancy_equivalence_complete: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/glofas_discrepancy_equivalence_20260827/local_trackers/runtime_configs/glofas_discrepancy_equivalence_audit_20260827/DIAGNOSTIC_COMPLETE.txt
+  discrepancy_equivalence_complete_sha256: f7b8523ab1337a7fa3c9a6b3f3613380a23ec9e5fc7b2695ac81bc2d4949671b
+  persistence_discrepancy_mae: 1.476720
+
+frozen_model:
+  reference: FR09 D1 width 300 memory 360 alpha 0.10 rho 0.95 seed 20260512
+  discrepancy: retained D16 width 64 memory 1080 alpha 0.075 rho 0.95 seed 20261521
+  transition: persistence_anchored_innovation
+  beta_tau0: 0.10
+  ungrouped_alpha_tau0: 1.0e-4
+  a_zeta: 2.0
+  b_zeta: 4.0
+  slab_s2_declared_inert: 1.0
+  rhs_global_scale_warmup_iterations: 50
+
+inference:
+  max_iter: 200
+  max_iter_hard_cap: 200
+  min_iter_elbo: 20
+  tol: 1.0e-4
+  tol_par: 1.0e-4
+  n_draws: 1000
+  n_samp_xi: 500
+
+decision:
+  score_identity_tolerance: 1.0e-10
+  practical_equivalence_relative: 0.005
+  practical_equivalence_absolute: 1.0e-4
+  scale_separation_ratio_min: 2.0
+  reservoir_share_absolute_min: 0.05
+  reservoir_share_multiplier_over_control: 5.0
+  reservoir_only_relative_gain_min: 0.01
+  scientific_gain_over_ungrouped_min: 0.05
+  finalist_gain_over_fr09_min: 0.03
+  historical_all_relative_degradation_max: 0.02
+  historical_last1000_relative_degradation_max: 0.02
+  historical_last200_relative_degradation_max: 0.05
+  historical_last50_warning_relative_degradation: 0.10
+
+execution:
+  output_root: local_trackers/runtime_configs/glofas_discrepancy_grouped_rhs_stage_a_20260828
+  max_workers: 20
+  a0_calibration_jobs: 4
+  calibration_iterations: 10
+  memory_reserve_gb: 48
+  minimum_free_disk_gb: 120
+  maximum_load: 120
+  poll_seconds: 30
+  numerical_backend: openblas_serial
+  backend_threads: 1
+  backend_library: /usr/lib64/libopenblas-r0.3.15.so
+  backend_library_sha256: 11edc3faddac3c5a78506cb111e74053ebf19baaba63cf72cc8fbc212b59fdf9
+  reference_feature_cache: true
+  checkpoint_every_iterations: 50
+  checkpoint_every_minutes: 30
+  retain_fit_object_during_campaign: true
+  retain_design_object_during_campaign: true
+  cleanup_is_dry_run_first: true
+
+waves:
+  A0:
+    expected_candidates: 8
+    authorized: true
+  A1:
+    expected_candidates: 10
+    authorized: conditional_mechanism_activation_only

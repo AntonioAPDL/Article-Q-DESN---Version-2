@@ -6,6 +6,7 @@ import datetime as dt
 import hashlib
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,24 @@ def parse_args():
     parser.add_argument("--min-memory-gb", type=float, default=48.0)
     parser.add_argument("--min-disk-gb", type=float, default=120.0)
     parser.add_argument("--poll-seconds", type=int, default=60)
+    parser.add_argument(
+        "--state-file",
+        default="",
+        help="Optional scheduler-state CSV path inside output-root.",
+    )
+    parser.add_argument(
+        "--calibration-jobs",
+        type=int,
+        default=0,
+        help="Initially cap concurrency at this many jobs until calibration-iterations are observed.",
+    )
+    parser.add_argument("--calibration-iterations", type=int, default=10)
+    parser.add_argument("--memory-reserve-gb", type=float, default=48.0)
+    parser.add_argument(
+        "--memory-safety-log",
+        default="",
+        help="Optional resource-calibration CSV path inside output-root.",
+    )
     parser.add_argument("--cores", default="3,7,11,15")
     parser.add_argument(
         "--cpu-sets",
@@ -77,6 +96,79 @@ def available_memory_gb():
     return values["MemAvailable"] / 1024.0 / 1024.0
 
 
+def process_tree_snapshot():
+    """Read parent links and resident memory once for all visible processes."""
+    children = {}
+    rss_kb = {}
+    for entry in pathlib.Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / "stat").read_text(encoding="utf-8").split()
+            parent = int(stat[3])
+            status = (entry / "status").read_text(encoding="utf-8")
+        except (FileNotFoundError, ProcessLookupError, PermissionError, ValueError):
+            continue
+        children.setdefault(parent, []).append(int(entry.name))
+        match = re.search(r"^VmRSS:\s+(\d+)\s+kB$", status, flags=re.MULTILINE)
+        rss_kb[int(entry.name)] = int(match.group(1)) if match else 0
+    return children, rss_kb
+
+
+def process_tree_rss_gb(root_pid, snapshot=None):
+    """Return resident memory for a process and all descendants."""
+    try:
+        root_pid = int(root_pid)
+    except (TypeError, ValueError):
+        return 0.0
+    children, rss_kb = snapshot if snapshot is not None else process_tree_snapshot()
+    stack = [root_pid]
+    seen = set()
+    total = 0
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        total += rss_kb.get(pid, 0)
+        stack.extend(children.get(pid, []))
+    return total / 1024.0 / 1024.0
+
+
+def max_logged_iteration(path):
+    path = pathlib.Path(path)
+    if not path.exists():
+        return 0
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0
+    values = [int(value) for value in re.findall(r"\[latent-path VB\] iter=(\d+)\b", text)]
+    return max(values, default=0)
+
+
+def memory_safe_parallel_jobs(
+    max_parallel,
+    available_gb,
+    campaign_rss_gb,
+    memory_reserve_gb,
+    peak_per_fit_gb,
+    calibration_ready,
+    calibration_target,
+):
+    if calibration_ready and peak_per_fit_gb > 0:
+        pre_campaign_available = available_gb + campaign_rss_gb
+        safe = max(1, int((pre_campaign_available - memory_reserve_gb) // peak_per_fit_gb))
+    elif calibration_ready:
+        safe = max_parallel
+    else:
+        safe = max(1, calibration_target)
+    limit = min(max_parallel, safe)
+    if not calibration_ready:
+        limit = min(limit, max(1, calibration_target))
+    return safe, limit
+
+
 def parse_cpu_list(value):
     values = []
     for token in str(value or "").split(","):
@@ -98,7 +190,7 @@ def parse_cpu_list(value):
 def discover_physical_cpus():
     output = subprocess.check_output(
         ["lscpu", "-p=CPU,CORE,SOCKET,NODE,ONLINE"],
-        text=True,
+        universal_newlines=True,
     )
     allowed = set(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None
     first_thread = {}
@@ -163,6 +255,14 @@ def read_manifest(path):
         rows = list(csv.DictReader(handle))
     rows.sort(key=lambda row: int(float(row["priority"])))
     return rows
+
+
+def read_csv_rows(path):
+    path = pathlib.Path(path)
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
 
 def sha256_file(path):
@@ -393,6 +493,12 @@ def reconcile_existing_candidate(row, output_root, previous, retry_failed=False)
 
 def main():
     args = parse_args()
+    if args.calibration_jobs < 0:
+        raise ValueError("calibration-jobs must be nonnegative")
+    if args.calibration_iterations < 1:
+        raise ValueError("calibration-iterations must be positive")
+    if args.memory_reserve_gb < 0:
+        raise ValueError("memory-reserve-gb must be nonnegative")
     repo_root = pathlib.Path(__file__).resolve().parents[2]
     output_root = pathlib.Path(args.output_root).resolve()
     reference_feature_cache_root = resolve_reference_feature_cache_root(
@@ -410,13 +516,24 @@ def main():
             raise ValueError("OpenBLAS scheduling requires --backend-library and --backend-sha256")
     output_root.mkdir(parents=True, exist_ok=True)
     (output_root / "logs").mkdir(exist_ok=True)
-    state_path = output_root / "scheduler_state.csv"
+    state_path = pathlib.Path(args.state_file).resolve() if args.state_file else output_root / "scheduler_state.csv"
+    require_within(state_path, output_root, "Scheduler state")
+    memory_safety_path = (
+        pathlib.Path(args.memory_safety_log).resolve()
+        if args.memory_safety_log
+        else output_root / "status" / "scheduler_memory_safety.csv"
+    )
+    require_within(memory_safety_path, output_root, "Memory-safety log")
     stop_path = output_root / "STOP"
     previous_states = {
         row["candidate_id"]: row
         for row in read_manifest(state_path)
     } if state_path.exists() else {}
     active = {}
+    calibration_target = min(args.calibration_jobs, len(manifest))
+    calibration_ids = [row["candidate_id"] for row in manifest[:calibration_target]]
+    peak_rss_gb = {candidate_id: 0.0 for candidate_id in calibration_ids}
+    resource_rows = read_csv_rows(memory_safety_path)
     states = {
         row["candidate_id"]: reconcile_existing_candidate(
             row,
@@ -474,6 +591,54 @@ def main():
                 state["finished_at"] = timestamp()
                 state["return_code"] = "worker_pid_not_alive"
 
+        active_rss = {}
+        active_iterations = {}
+        process_snapshot = process_tree_snapshot() if active else ({}, {})
+        for candidate_id, item in active.items():
+            rss = process_tree_rss_gb(item["process"].pid, process_snapshot)
+            active_rss[candidate_id] = rss
+            active_iterations[candidate_id] = max_logged_iteration(states[candidate_id]["log_path"])
+            if candidate_id in peak_rss_gb:
+                peak_rss_gb[candidate_id] = max(peak_rss_gb[candidate_id], rss)
+
+        calibration_ready = calibration_target == 0
+        if calibration_target:
+            calibration_ready = all(
+                states[candidate_id]["status"] in {
+                    "completed", "completed_existing", "failed", "failed_existing",
+                    "rejected", "rejected_existing",
+                }
+                or active_iterations.get(candidate_id, 0) >= args.calibration_iterations
+                for candidate_id in calibration_ids
+            )
+        observed_peaks = [value for value in peak_rss_gb.values() if value > 0]
+        peak_per_fit = max(observed_peaks, default=0.0)
+        available_gb = available_memory_gb()
+        campaign_rss_gb = sum(active_rss.values())
+        memory_safe_jobs, current_parallel_limit = memory_safe_parallel_jobs(
+            args.max_parallel,
+            available_gb,
+            campaign_rss_gb,
+            args.memory_reserve_gb,
+            peak_per_fit,
+            calibration_ready,
+            calibration_target,
+        )
+        resource_rows.append({
+            "timestamp": timestamp(),
+            "available_memory_gb": f"{available_gb:.6f}",
+            "campaign_active_rss_gb": f"{campaign_rss_gb:.6f}",
+            "calibration_jobs": str(calibration_target),
+            "calibration_iterations": str(args.calibration_iterations),
+            "calibration_ready": canonical_bool(calibration_ready),
+            "measured_peak_rss_per_fit_gb": f"{peak_per_fit:.6f}",
+            "memory_reserve_gb": f"{args.memory_reserve_gb:.6f}",
+            "memory_safe_jobs": str(memory_safe_jobs),
+            "parallel_limit": str(current_parallel_limit),
+            "active_jobs": str(len(active)),
+        })
+        atomic_csv(memory_safety_path, resource_rows, list(resource_rows[0].keys()))
+
         pending = [
             row for row in manifest
             if states[row["candidate_id"]]["status"] == "pending"
@@ -492,7 +657,7 @@ def main():
             break
 
         load = os.getloadavg()[0]
-        memory_gb = available_memory_gb()
+        memory_gb = available_gb
         disk_gb = shutil.disk_usage(output_root).free / (1024.0 ** 3)
         occupied_sets = {x["cpu_set"] for x in active.values()}
         occupied_sets.update(
@@ -512,7 +677,7 @@ def main():
         while (
             pending
             and free_cpu_sets
-            and len(active) + external_count < args.max_parallel
+            and len(active) + external_count < current_parallel_limit
             and resources_ok
         ):
             row = pending.pop(0)

@@ -89,6 +89,7 @@ discrepancy_draw_check_rows <- list()
 vb_iteration_timing_rows <- list()
 vb_stage_timing_rows <- list()
 vb_substep_timing_rows <- list()
+vb_rhs_global_scale_rows <- list()
 k_fit <- 1L
 k_pred <- 1L
 k_draw <- 1L
@@ -100,6 +101,7 @@ k_disc_draw_check <- 1L
 k_vb_timing <- 1L
 k_vb_stage_timing <- 1L
 k_vb_substep_timing <- 1L
+k_vb_rhs_global_scale <- 1L
 
 append_qdesn_stage_timing <- function(timing, result, stage_prefix = NULL) {
   if (!is.data.frame(timing) || !nrow(timing)) return(invisible(NULL))
@@ -207,6 +209,16 @@ for (i in seq_len(nrow(model_grid))) {
       }
       append_qdesn_stage_timing(result$fit$vb_diagnostics$stage_timing %||% data.frame(), result)
       append_qdesn_substep_timing(result$fit$vb_diagnostics$substep_timing %||% data.frame(), result)
+      rhs_trace <- result$fit$vb_diagnostics$rhs_global_scale_trace %||% data.frame()
+      if (is.data.frame(rhs_trace) && nrow(rhs_trace)) {
+        rhs_trace$fit_id <- result$fit_id
+        rhs_trace$model_id <- result$model_id
+        rhs_trace$quantile_level <- result$quantile_level
+        rhs_trace$likelihood_family <- result$likelihood_family
+        rhs_trace$coefficient_prior <- result$coefficient_prior
+        vb_rhs_global_scale_rows[[k_vb_rhs_global_scale]] <- rhs_trace
+        k_vb_rhs_global_scale <- k_vb_rhs_global_scale + 1L
+      }
       fit_path <- file.path(run_dirs$objects, paste0(row$fit_id[[1L]], ".rds"))
       design_path <- file.path(run_dirs$objects, paste0(row$fit_id[[1L]], "__design.rds"))
       retain_fit_object <- app_fit_artifact_retained(artifact_policy, "retain_fit_object")
@@ -467,6 +479,12 @@ if (length(vb_substep_timing_rows)) {
   app_write_csv(
     app_bind_rows_fill(vb_substep_timing_rows),
     file.path(run_dirs$tables, "qdesn_discrepancy_vb_substep_timing.csv")
+  )
+}
+if (length(vb_rhs_global_scale_rows)) {
+  app_write_csv(
+    app_bind_rows_fill(vb_rhs_global_scale_rows),
+    file.path(run_dirs$tables, "qdesn_discrepancy_rhs_global_scale_trace.csv")
   )
 }
 if (length(discrepancy_draw_check_rows)) {

@@ -193,6 +193,17 @@ system BLAS alternatives, or infer scientific equivalence from a kernel
 microbenchmark. Adoption requires fixed-iteration FR09 state/prediction gates
 and controlled throughput evidence.
 
+The discrepancy readout also supports an opt-in semantic grouped-RHS contract
+through `inference.vb_ld.rhs_alpha_grouping`. The only implemented grouping is
+`direct_reservoir`: direct output/covariate/horizon features and reservoir
+state features receive separate global `tau0` values, local coefficient scales
+remain distinct, the dynamic regularizer remains shared, and intercepts remain
+unpenalized. Grouping is disabled by default, so legacy fits are unchanged.
+See
+`docs/implementation_notes/glofas_discrepancy_grouped_rhs_mechanism_20260828.md`
+for the mathematical contract, prospective p50 campaign, runtime gates, and
+cleanup protocol.
+
 Application outputs move through three layers:
 
 ```text

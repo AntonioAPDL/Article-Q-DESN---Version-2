@@ -217,6 +217,212 @@ app_qdesn_hash_object <- function(x, prefix = "qdesn_contract_") {
   app_sha256_file(path)
 }
 
+app_qdesn_normalize_rhs_alpha_grouping <- function(vb_cfg = list()) {
+  raw <- vb_cfg$rhs_alpha_grouping %||% list(enabled = FALSE)
+  if (is.logical(raw) && length(raw) == 1L) raw <- list(enabled = raw)
+  if (!is.list(raw)) {
+    stop("inference.vb_ld.rhs_alpha_grouping must be a mapping or one logical value.", call. = FALSE)
+  }
+  unknown <- setdiff(names(raw), c("enabled", "mode", "tau0"))
+  if (length(unknown)) {
+    stop(sprintf(
+      "rhs_alpha_grouping contains unsupported fields: %s.",
+      paste(unknown, collapse = ", ")
+    ), call. = FALSE)
+  }
+  enabled <- app_as_bool(raw$enabled %||% FALSE)
+  mode <- tolower(as.character(raw$mode %||% "direct_reservoir")[[1L]])
+  if (!mode %in% c("direct_reservoir")) {
+    stop(sprintf("Unsupported RHS alpha grouping mode '%s'.", mode), call. = FALSE)
+  }
+  if (!enabled) {
+    return(list(
+      schema_version = "qdesn_rhs_alpha_grouping_v1",
+      enabled = FALSE,
+      mode = "legacy_single",
+      tau0 = numeric()
+    ))
+  }
+  tau0 <- raw$tau0 %||% list()
+  if (!is.list(tau0) || is.null(names(tau0))) {
+    stop("Enabled RHS alpha grouping requires named tau0 values.", call. = FALSE)
+  }
+  required <- c("direct", "reservoir")
+  missing <- setdiff(required, names(tau0))
+  extra <- setdiff(names(tau0), required)
+  if (length(missing) || length(extra)) {
+    stop(sprintf(
+      "Grouped alpha tau0 must contain exactly direct and reservoir (missing: %s; extra: %s).",
+      paste(missing, collapse = ", "), paste(extra, collapse = ", ")
+    ), call. = FALSE)
+  }
+  values <- stats::setNames(
+    vapply(required, function(name) as.numeric(tau0[[name]])[[1L]], numeric(1L)),
+    required
+  )
+  if (any(!is.finite(values) | values <= 0)) {
+    stop("Every grouped alpha tau0 value must be finite and positive.", call. = FALSE)
+  }
+  list(
+    schema_version = "qdesn_rhs_alpha_grouping_v1",
+    enabled = TRUE,
+    mode = mode,
+    tau0 = values
+  )
+}
+
+app_qdesn_alpha_rhs_group_layout <- function(feature_info, intercept_index, grouping) {
+  grouping <- grouping %||% list(enabled = FALSE)
+  if (!isTRUE(grouping$enabled)) return(NULL)
+  if (!is.data.frame(feature_info) || !nrow(feature_info)) {
+    stop("Grouped alpha RHS requires nonempty semantic feature metadata.", call. = FALSE)
+  }
+  required <- c("column_index", "column_name", "block", "variable", "is_intercept")
+  missing <- setdiff(required, names(feature_info))
+  if (length(missing)) {
+    stop(sprintf(
+      "Grouped alpha feature metadata is missing: %s.",
+      paste(missing, collapse = ", ")
+    ), call. = FALSE)
+  }
+  p <- nrow(feature_info)
+  column_index <- as.integer(feature_info$column_index)
+  if (!identical(column_index, seq_len(p)) || anyDuplicated(feature_info$column_name)) {
+    stop("Grouped alpha feature metadata must be ordered, contiguous, and uniquely named.", call. = FALSE)
+  }
+  semantic_intercept <- which(
+    app_as_bool_vec(feature_info$is_intercept) |
+      as.character(feature_info$block) == "readout_intercept"
+  )
+  intercept_index <- sort(unique(as.integer(intercept_index %||% integer())))
+  if (!identical(intercept_index, as.integer(semantic_intercept))) {
+    stop("Grouped alpha intercept indices disagree with semantic feature metadata.", call. = FALSE)
+  }
+  block <- as.character(feature_info$block)
+  direct_blocks <- c("direct_output_lag", "direct_covariate_lag", "horizon")
+  reservoir_blocks <- c("reservoir_state", "reservoir_state_lag")
+  groups <- list(
+    direct = which(block %in% direct_blocks & !(seq_len(p) %in% intercept_index)),
+    reservoir = which(block %in% reservoir_blocks & !(seq_len(p) %in% intercept_index))
+  )
+  if (any(vapply(groups, length, integer(1L)) == 0L)) {
+    empty <- names(groups)[vapply(groups, length, integer(1L)) == 0L]
+    stop(sprintf("Grouped alpha layout has empty groups: %s.", paste(empty, collapse = ", ")), call. = FALSE)
+  }
+  penalized <- setdiff(seq_len(p), intercept_index)
+  assigned <- unlist(groups, use.names = FALSE)
+  if (anyDuplicated(assigned) || !identical(sort(assigned), penalized)) {
+    unknown <- setdiff(penalized, assigned)
+    stop(sprintf(
+      "Grouped alpha layout is not an exact partition; unassigned blocks: %s.",
+      paste(unique(block[unknown]), collapse = ", ")
+    ), call. = FALSE)
+  }
+  group_name <- rep("intercept", p)
+  for (name in names(groups)) group_name[groups[[name]]] <- name
+  metadata <- data.frame(
+    column_index = column_index,
+    column_name = as.character(feature_info$column_name),
+    block = block,
+    variable = as.character(feature_info$variable),
+    is_intercept = seq_len(p) %in% intercept_index,
+    rhs_global_group = group_name,
+    stringsAsFactors = FALSE
+  )
+  hash_input <- list(
+    schema_version = "qdesn_rhs_alpha_group_layout_v1",
+    mode = grouping$mode,
+    p = p,
+    intercept_index = intercept_index,
+    groups = groups,
+    metadata = metadata
+  )
+  list(
+    schema_version = "qdesn_rhs_alpha_group_layout_v1",
+    enabled = TRUE,
+    mode = grouping$mode,
+    p = p,
+    penalized = penalized,
+    intercept_index = intercept_index,
+    groups = groups,
+    tau0 = grouping$tau0,
+    metadata = metadata,
+    layout_hash = app_qdesn_hash_object(hash_input, prefix = "qdesn_rhs_alpha_layout_")
+  )
+}
+
+app_qdesn_latent_vb_prior_contract <- function(vb_args, alpha_layout = NULL) {
+  beta <- vb_args$beta_rhs %||% list()
+  alpha <- vb_args$alpha_rhs %||% list()
+  grouping <- alpha$global_grouping %||% list(enabled = FALSE, mode = "legacy_single")
+  declared <- list(
+    schema_version = "qdesn_latent_vb_prior_declared_v1",
+    beta = list(
+      tau0 = as.numeric(beta$tau0), slab_s2 = as.numeric(beta$s2),
+      a_zeta = as.numeric(beta$a_zeta), b_zeta = as.numeric(beta$b_zeta),
+      intercept_prec = as.numeric(beta$intercept_prec)
+    ),
+    alpha = list(
+      tau0 = as.numeric(alpha$tau0), slab_s2 = as.numeric(alpha$s2),
+      a_zeta = as.numeric(alpha$a_zeta), b_zeta = as.numeric(alpha$b_zeta),
+      intercept_prec = as.numeric(alpha$intercept_prec), grouping = grouping
+    )
+  )
+  effective_alpha <- if (isTRUE(grouping$enabled)) {
+    list(
+      prior = "grouped_rhs_ns",
+      global_tau0 = grouping$tau0,
+      local_lambda_hierarchy = TRUE,
+      shared_dynamic_zeta = list(a_zeta = as.numeric(alpha$a_zeta), b_zeta = as.numeric(alpha$b_zeta)),
+      intercept_prec = as.numeric(alpha$intercept_prec),
+      group_layout_hash = alpha_layout$layout_hash %||% NA_character_
+    )
+  } else {
+    list(
+      prior = "rhs_ns",
+      global_tau0 = as.numeric(alpha$tau0),
+      local_lambda_hierarchy = TRUE,
+      shared_dynamic_zeta = list(a_zeta = as.numeric(alpha$a_zeta), b_zeta = as.numeric(alpha$b_zeta)),
+      intercept_prec = as.numeric(alpha$intercept_prec)
+    )
+  }
+  effective <- list(
+    schema_version = "qdesn_latent_vb_prior_effective_v1",
+    beta = list(
+      prior = "rhs_ns", global_tau0 = as.numeric(beta$tau0),
+      local_lambda_hierarchy = TRUE,
+      dynamic_zeta = list(a_zeta = as.numeric(beta$a_zeta), b_zeta = as.numeric(beta$b_zeta)),
+      intercept_prec = as.numeric(beta$intercept_prec)
+    ),
+    alpha = effective_alpha
+  )
+  ledger <- data.frame(
+    field = c(
+      "beta.tau0", "beta.slab_s2", "beta.a_zeta", "beta.b_zeta",
+      "alpha.tau0", "alpha.slab_s2", "alpha.a_zeta", "alpha.b_zeta",
+      "alpha.grouping"
+    ),
+    operative = c(TRUE, FALSE, TRUE, TRUE, !isTRUE(grouping$enabled), FALSE, TRUE, TRUE, isTRUE(grouping$enabled)),
+    reason = c(
+      "beta global RHS scale", "accepted legacy metadata; not consumed by latent-path VB",
+      "beta dynamic regularization", "beta dynamic regularization",
+      if (isTRUE(grouping$enabled)) "replaced by grouped alpha tau0 values" else "alpha global RHS scale",
+      "accepted legacy metadata; not consumed by latent-path VB",
+      "shared alpha dynamic regularization", "shared alpha dynamic regularization",
+      if (isTRUE(grouping$enabled)) "direct/reservoir global RHS scales" else "legacy single alpha scale"
+    ),
+    stringsAsFactors = FALSE
+  )
+  list(
+    schema_version = "qdesn_latent_vb_prior_contract_v1",
+    declared = declared,
+    effective = effective,
+    declared_hash = app_qdesn_hash_object(declared, prefix = "qdesn_prior_declared_"),
+    effective_hash = app_qdesn_hash_object(effective, prefix = "qdesn_prior_effective_"),
+    field_ledger = ledger
+  )
+}
+
 app_qdesn_block_config_hash <- function(cfg, block = c("reference", "discrepancy")) {
   block <- match.arg(block)
   block_cfg <- app_qdesn_block_config(cfg, block)

@@ -345,6 +345,166 @@ app_latent_rhs_state_update <- function(state, theta_mean, theta_cov, iter = 1L,
   state
 }
 
+app_latent_grouped_rhs_prior_precision <- function(state, p) {
+  prec <- rep(as.numeric(state$intercept_prec %||% 1.0e-9), p)
+  for (group_name in names(state$global_groups)) {
+    idx <- state$global_groups[[group_name]]
+    prec[idx] <- as.numeric(state$e_inv_tau2[[group_name]]) * state$e_inv_lambda2[idx] +
+      as.numeric(state$e_inv_zeta2)
+  }
+  pmax(prec, 1.0e-12)
+}
+
+app_latent_grouped_rhs_state_init <- function(p, intercept_index, args, rhs_control = NULL) {
+  layout <- args$global_groups %||% NULL
+  if (!is.list(layout) || !isTRUE(layout$enabled)) {
+    stop("Grouped RHS initialization requires an enabled semantic group layout.", call. = FALSE)
+  }
+  if (!identical(as.integer(layout$p), as.integer(p))) {
+    stop("Grouped RHS layout dimension does not match the coefficient block.", call. = FALSE)
+  }
+  intercept_index <- sort(unique(as.integer(intercept_index %||% integer())))
+  if (!identical(intercept_index, sort(unique(as.integer(layout$intercept_index))))) {
+    stop("Grouped RHS layout intercepts do not match the coefficient block.", call. = FALSE)
+  }
+  groups <- lapply(layout$groups, function(index) sort(unique(as.integer(index))))
+  if (!length(groups) || is.null(names(groups)) || any(!nzchar(names(groups)))) {
+    stop("Grouped RHS layout must contain named nonempty groups.", call. = FALSE)
+  }
+  penalized <- setdiff(seq_len(p), intercept_index)
+  assigned <- unlist(groups, use.names = FALSE)
+  if (any(vapply(groups, length, integer(1L)) == 0L) || anyDuplicated(assigned) ||
+      !identical(sort(assigned), penalized)) {
+    stop("Grouped RHS layout must partition every penalized coefficient exactly once.", call. = FALSE)
+  }
+  tau0 <- as.numeric(layout$tau0[names(groups)])
+  names(tau0) <- names(groups)
+  if (any(!is.finite(tau0) | tau0 <= 0)) {
+    stop("Grouped RHS tau0 values must be finite and positive.", call. = FALSE)
+  }
+  a_zeta <- as.numeric(args$a_zeta %||% 2)
+  b_zeta <- as.numeric(args$b_zeta %||% 4)
+  state <- list(
+    prior = "grouped_rhs_ns",
+    penalized = penalized,
+    intercept_index = intercept_index,
+    intercept_prec = as.numeric(args$intercept_prec %||% 1.0e-9),
+    global_groups = groups,
+    group_layout_hash = as.character(layout$layout_hash %||% NA_character_),
+    tau0 = tau0,
+    a_zeta = a_zeta,
+    b_zeta = b_zeta,
+    e_inv_lambda2 = rep(1, p),
+    e_inv_nu = rep(1, p),
+    e_inv_tau2 = stats::setNames(1 / tau0^2, names(groups)),
+    e_inv_xi = stats::setNames(rep(1, length(groups)), names(groups)),
+    e_inv_zeta2 = a_zeta / b_zeta,
+    rhs_control = app_latent_normalize_rhs_control(rhs_control),
+    tau_update_count = 0L,
+    group_tau_update_count = stats::setNames(integer(length(groups)), names(groups)),
+    first_tau_update_iter = NA_integer_,
+    group_first_tau_update_iter = stats::setNames(rep(NA_integer_, length(groups)), names(groups)),
+    last_tau_update_iter = NA_integer_,
+    group_last_tau_update_iter = stats::setNames(rep(NA_integer_, length(groups)), names(groups)),
+    has_post_warmup_tau_update = FALSE,
+    last_update_iteration = 0L,
+    last_warmup_active = FALSE,
+    last_global_update_performed = FALSE,
+    last_update_reason = "initialization",
+    last_global_relative_change = 0,
+    last_group_global_relative_change = stats::setNames(rep(0, length(groups)), names(groups)),
+    last_coefficient_l2 = NA_real_,
+    last_group_coefficient_l2 = stats::setNames(rep(NA_real_, length(groups)), names(groups))
+  )
+  state$prior_precision <- app_latent_grouped_rhs_prior_precision(state, p)
+  state
+}
+
+app_latent_grouped_rhs_state_update <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
+  p <- length(theta_mean)
+  if (!identical(as.integer(p), as.integer(length(state$prior_precision)))) {
+    stop("Grouped RHS update coefficient dimension changed.", call. = FALSE)
+  }
+  e_theta2 <- as.numeric(theta_mean^2 + diag(theta_cov))
+  schedule <- app_latent_rhs_global_schedule(state, iter = iter, update_global = update_global)
+  state$last_update_iteration <- schedule$iteration
+  state$last_warmup_active <- schedule$warmup_active
+  state$last_global_update_performed <- schedule$global_update_performed
+  state$last_update_reason <- schedule$reason
+  state$last_global_relative_change <- 0
+  state$last_group_global_relative_change[] <- 0
+  state$last_coefficient_l2 <- sqrt(sum(theta_mean[state$penalized]^2))
+
+  for (group_name in names(state$global_groups)) {
+    idx <- state$global_groups[[group_name]]
+    state$last_group_coefficient_l2[[group_name]] <- sqrt(sum(theta_mean[idx]^2))
+    lambda_rate <- pmax(
+      state$e_inv_nu[idx] + 0.5 * e_theta2[idx] * state$e_inv_tau2[[group_name]],
+      1.0e-12
+    )
+    state$e_inv_lambda2[idx] <- 1 / lambda_rate
+    state$e_inv_nu[idx] <- 1 / pmax(1 + state$e_inv_lambda2[idx], 1.0e-12)
+  }
+
+  if (isTRUE(schedule$global_update_performed)) {
+    old_tau <- state$e_inv_tau2
+    old_xi <- state$e_inv_xi
+    for (group_name in names(state$global_groups)) {
+      idx <- state$global_groups[[group_name]]
+      tau_shape <- (length(idx) + 1) / 2
+      tau_rate <- pmax(
+        state$e_inv_xi[[group_name]] +
+          0.5 * sum(e_theta2[idx] * state$e_inv_lambda2[idx]),
+        1.0e-12
+      )
+      state$e_inv_tau2[[group_name]] <- tau_shape / tau_rate
+      state$e_inv_xi[[group_name]] <- 1 / pmax(
+        1 / state$tau0[[group_name]]^2 + state$e_inv_tau2[[group_name]],
+        1.0e-12
+      )
+      relative_change <- max(abs(
+        c(state$e_inv_tau2[[group_name]], state$e_inv_xi[[group_name]]) -
+          c(old_tau[[group_name]], old_xi[[group_name]])
+      ) / pmax(1, abs(c(old_tau[[group_name]], old_xi[[group_name]]))))
+      state$last_group_global_relative_change[[group_name]] <- relative_change
+      state$group_tau_update_count[[group_name]] <-
+        as.integer(state$group_tau_update_count[[group_name]]) + 1L
+      if (!is.finite(state$group_first_tau_update_iter[[group_name]])) {
+        state$group_first_tau_update_iter[[group_name]] <- schedule$iteration
+      }
+      state$group_last_tau_update_iter[[group_name]] <- schedule$iteration
+    }
+    state$last_global_relative_change <- max(state$last_group_global_relative_change)
+    state$tau_update_count <- as.integer(state$tau_update_count %||% 0L) + 1L
+    if (!is.finite(state$first_tau_update_iter)) state$first_tau_update_iter <- schedule$iteration
+    state$last_tau_update_iter <- schedule$iteration
+    if (schedule$iteration > state$rhs_control$freeze_tau_warmup_iters) {
+      state$has_post_warmup_tau_update <- TRUE
+    }
+  }
+
+  idx <- state$penalized
+  zeta_shape <- state$a_zeta + length(idx) / 2
+  zeta_rate <- pmax(state$b_zeta + 0.5 * sum(e_theta2[idx]), 1.0e-12)
+  state$e_inv_zeta2 <- zeta_shape / zeta_rate
+  state$prior_precision <- app_latent_grouped_rhs_prior_precision(state, p)
+  state
+}
+
+app_latent_rhs_state_init_dispatch <- function(p, intercept_index, args, rhs_control = NULL) {
+  if (isTRUE((args$global_groups %||% list())$enabled)) {
+    return(app_latent_grouped_rhs_state_init(p, intercept_index, args, rhs_control))
+  }
+  app_latent_rhs_state_init(p, intercept_index, args, rhs_control)
+}
+
+app_latent_rhs_state_update_dispatch <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
+  if (identical(state$prior, "grouped_rhs_ns")) {
+    return(app_latent_grouped_rhs_state_update(state, theta_mean, theta_cov, iter, update_global))
+  }
+  app_latent_rhs_state_update(state, theta_mean, theta_cov, iter, update_global)
+}
+
 app_latent_prior_state_combine_precision <- function(state, p) {
   if (!identical(state$prior, "block_rhs_ns")) return(state$prior_precision)
   prec <- rep(NA_real_, p)
@@ -383,7 +543,7 @@ app_latent_prior_state_init <- function(
         args = beta_args,
         rhs_control = vb_args$rhs %||% list()
       )
-      alpha_state <- app_latent_rhs_state_init(
+      alpha_state <- app_latent_rhs_state_init_dispatch(
         p = length(alpha_index),
         intercept_index = app_latent_prior_block_intercepts(alpha_index, intercept_index),
         args = alpha_args,
@@ -423,13 +583,15 @@ app_latent_prior_state_init <- function(
 }
 
 app_latent_prior_state_update <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
-  if (identical(state$prior, "rhs_ns")) {
-    return(app_latent_rhs_state_update(state, theta_mean, theta_cov, iter = iter, update_global = update_global))
+  if (state$prior %in% c("rhs_ns", "grouped_rhs_ns")) {
+    return(app_latent_rhs_state_update_dispatch(
+      state, theta_mean, theta_cov, iter = iter, update_global = update_global
+    ))
   }
   if (identical(state$prior, "block_rhs_ns")) {
     for (block_name in names(state$blocks)) {
       idx <- state$blocks[[block_name]]$global_index
-      state$blocks[[block_name]]$state <- app_latent_rhs_state_update(
+      state$blocks[[block_name]]$state <- app_latent_rhs_state_update_dispatch(
         state = state$blocks[[block_name]]$state,
         theta_mean = as.numeric(theta_mean[idx]),
         theta_cov = as.matrix(theta_cov[idx, idx, drop = FALSE]),
@@ -444,62 +606,194 @@ app_latent_prior_state_update <- function(state, theta_mean, theta_cov, iter = 1
 }
 
 app_latent_prior_rhs_states <- function(state) {
-  if (identical(state$prior, "rhs_ns")) return(list(all = state))
+  if (state$prior %in% c("rhs_ns", "grouped_rhs_ns")) return(list(all = state))
   if (identical(state$prior, "block_rhs_ns")) {
     return(lapply(state$blocks, function(block) block$state))
   }
   list()
 }
 
+app_latent_rhs_trace_rows <- function(block, block_name, iter) {
+  make_row <- function(
+    label,
+    group,
+    idx,
+    effective_tau,
+    e_inv_tau2,
+    e_inv_xi,
+    relative_change,
+    coefficient_l2,
+    tau_update_count
+  ) {
+    local_scale <- if (length(idx)) {
+      1 / sqrt(pmax(block$e_inv_lambda2[idx], 1.0e-12))
+    } else numeric()
+    data.frame(
+      iteration = as.integer(iter),
+      block = label,
+      parent_block = block_name,
+      global_group = group,
+      group_size = length(idx),
+      group_layout_hash = as.character(block$group_layout_hash %||% NA_character_),
+      warmup_active = isTRUE(block$last_warmup_active),
+      global_update_performed = isTRUE(block$last_global_update_performed),
+      update_reason = as.character(block$last_update_reason %||% NA_character_),
+      effective_tau = as.numeric(effective_tau),
+      e_inv_tau2 = as.numeric(e_inv_tau2),
+      e_inv_xi = as.numeric(e_inv_xi),
+      e_inv_zeta2 = as.numeric(block$e_inv_zeta2),
+      global_relative_change = as.numeric(relative_change),
+      coefficient_l2 = as.numeric(coefficient_l2),
+      local_scale_median = if (length(local_scale)) stats::median(local_scale) else NA_real_,
+      local_scale_max = if (length(local_scale)) max(local_scale) else NA_real_,
+      tau_update_count = as.integer(tau_update_count),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!identical(block$prior, "grouped_rhs_ns")) {
+    idx <- block$penalized
+    return(make_row(
+      block_name, "legacy_single", idx,
+      sqrt(1 / pmax(as.numeric(block$e_inv_tau2), 1.0e-12)),
+      block$e_inv_tau2, block$e_inv_xi,
+      block$last_global_relative_change %||% NA_real_,
+      block$last_coefficient_l2 %||% NA_real_,
+      block$tau_update_count %||% 0L
+    ))
+  }
+  rows <- list(make_row(
+    block_name, "all", block$penalized, NA_real_, NA_real_, NA_real_,
+    block$last_global_relative_change %||% NA_real_,
+    block$last_coefficient_l2 %||% NA_real_,
+    block$tau_update_count %||% 0L
+  ))
+  for (group_name in names(block$global_groups)) {
+    rows[[length(rows) + 1L]] <- make_row(
+      paste(block_name, group_name, sep = "."), group_name,
+      block$global_groups[[group_name]],
+      sqrt(1 / pmax(block$e_inv_tau2[[group_name]], 1.0e-12)),
+      block$e_inv_tau2[[group_name]], block$e_inv_xi[[group_name]],
+      block$last_group_global_relative_change[[group_name]],
+      block$last_group_coefficient_l2[[group_name]],
+      block$group_tau_update_count[[group_name]]
+    )
+  }
+  do.call(rbind, rows)
+}
+
 app_latent_prior_rhs_trace <- function(state, iter) {
   states <- app_latent_prior_rhs_states(state)
   if (!length(states)) return(data.frame())
   rows <- lapply(names(states), function(block_name) {
-    block <- states[[block_name]]
-    idx <- block$penalized
-    local_scale <- if (length(idx)) 1 / sqrt(pmax(block$e_inv_lambda2[idx], 1.0e-12)) else numeric()
-    data.frame(
-      iteration = as.integer(iter),
-      block = block_name,
-      warmup_active = isTRUE(block$last_warmup_active),
-      global_update_performed = isTRUE(block$last_global_update_performed),
-      update_reason = as.character(block$last_update_reason %||% NA_character_),
-      effective_tau = sqrt(1 / pmax(as.numeric(block$e_inv_tau2), 1.0e-12)),
-      e_inv_tau2 = as.numeric(block$e_inv_tau2),
-      e_inv_xi = as.numeric(block$e_inv_xi),
-      e_inv_zeta2 = as.numeric(block$e_inv_zeta2),
-      global_relative_change = as.numeric(block$last_global_relative_change %||% NA_real_),
-      coefficient_l2 = as.numeric(block$last_coefficient_l2 %||% NA_real_),
-      local_scale_median = if (length(local_scale)) stats::median(local_scale) else NA_real_,
-      local_scale_max = if (length(local_scale)) max(local_scale) else NA_real_,
-      tau_update_count = as.integer(block$tau_update_count %||% 0L),
-      stringsAsFactors = FALSE
-    )
+    app_latent_rhs_trace_rows(states[[block_name]], block_name, iter)
   })
   do.call(rbind, rows)
+}
+
+app_latent_rhs_gate_rows <- function(block, block_name, iter) {
+  control <- block$rhs_control %||% app_latent_normalize_rhs_control()
+  required <- control$min_tau_updates
+  gate_row <- function(label, group, update_count, first_update) {
+    enough_updates <- as.integer(update_count %||% 0L) >= required
+    needs_response <- required > 0L || control$freeze_tau_warmup_iters > 0L
+    coefficient_response <- !needs_response ||
+      (is.finite(first_update) && as.integer(iter) > first_update)
+    data.frame(
+      block = label,
+      parent_block = block_name,
+      global_group = group,
+      enough_tau_updates = enough_updates,
+      coefficient_response_after_release = coefficient_response,
+      passed = enough_updates && coefficient_response,
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!identical(block$prior, "grouped_rhs_ns")) {
+    return(gate_row(
+      block_name, "legacy_single", block$tau_update_count %||% 0L,
+      block$first_tau_update_iter %||% NA_integer_
+    ))
+  }
+  group_rows <- lapply(names(block$global_groups), function(group_name) {
+    gate_row(
+      paste(block_name, group_name, sep = "."), group_name,
+      block$group_tau_update_count[[group_name]],
+      block$group_first_tau_update_iter[[group_name]]
+    )
+  })
+  groups <- do.call(rbind, group_rows)
+  aggregate <- data.frame(
+    block = block_name,
+    parent_block = block_name,
+    global_group = "all",
+    enough_tau_updates = all(groups$enough_tau_updates),
+    coefficient_response_after_release = all(groups$coefficient_response_after_release),
+    passed = all(groups$passed),
+    stringsAsFactors = FALSE
+  )
+  rbind(aggregate, groups)
 }
 
 app_latent_prior_rhs_gate <- function(state, iter) {
   states <- app_latent_prior_rhs_states(state)
   if (!length(states)) return(list(passed = TRUE, blocks = data.frame()))
   rows <- lapply(names(states), function(block_name) {
-    block <- states[[block_name]]
-    control <- block$rhs_control %||% app_latent_normalize_rhs_control()
-    required <- control$min_tau_updates
-    enough_updates <- as.integer(block$tau_update_count %||% 0L) >= required
-    needs_response <- required > 0L || control$freeze_tau_warmup_iters > 0L
-    coefficient_response <- !needs_response ||
-      (is.finite(block$first_tau_update_iter) && as.integer(iter) > block$first_tau_update_iter)
-    data.frame(
-      block = block_name,
-      enough_tau_updates = enough_updates,
-      coefficient_response_after_release = coefficient_response,
-      passed = enough_updates && coefficient_response,
-      stringsAsFactors = FALSE
-    )
+    app_latent_rhs_gate_rows(states[[block_name]], block_name, iter)
   })
   blocks <- do.call(rbind, rows)
   list(passed = all(blocks$passed), blocks = blocks)
+}
+
+app_latent_rhs_diagnostic_rows <- function(block, block_name, gate_rows) {
+  control <- block$rhs_control
+  make_row <- function(label, group, update_count, first_update, last_update, effective_tau, e_inv_tau2, e_inv_xi, coefficient_l2) {
+    gate_row <- gate_rows[gate_rows$block == label, , drop = FALSE]
+    data.frame(
+      block = label,
+      parent_block = block_name,
+      global_group = group,
+      group_layout_hash = as.character(block$group_layout_hash %||% NA_character_),
+      freeze_tau_warmup_iters = control$freeze_tau_warmup_iters,
+      update_every = control$update_every,
+      min_tau_updates = control$min_tau_updates,
+      tau_update_count = as.integer(update_count %||% 0L),
+      first_tau_update_iter = as.integer(first_update %||% NA_integer_),
+      last_tau_update_iter = as.integer(last_update %||% NA_integer_),
+      effective_tau = as.numeric(effective_tau),
+      e_inv_tau2 = as.numeric(e_inv_tau2),
+      e_inv_xi = as.numeric(e_inv_xi),
+      coefficient_l2 = as.numeric(coefficient_l2 %||% NA_real_),
+      enough_tau_updates = gate_row$enough_tau_updates[[1L]],
+      coefficient_response_after_release = gate_row$coefficient_response_after_release[[1L]],
+      gate_passed = gate_row$passed[[1L]],
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!identical(block$prior, "grouped_rhs_ns")) {
+    return(make_row(
+      block_name, "legacy_single", block$tau_update_count,
+      block$first_tau_update_iter, block$last_tau_update_iter,
+      sqrt(1 / pmax(as.numeric(block$e_inv_tau2), 1.0e-12)),
+      block$e_inv_tau2, block$e_inv_xi, block$last_coefficient_l2
+    ))
+  }
+  rows <- list(make_row(
+    block_name, "all", block$tau_update_count,
+    block$first_tau_update_iter, block$last_tau_update_iter,
+    NA_real_, NA_real_, NA_real_, block$last_coefficient_l2
+  ))
+  for (group_name in names(block$global_groups)) {
+    rows[[length(rows) + 1L]] <- make_row(
+      paste(block_name, group_name, sep = "."), group_name,
+      block$group_tau_update_count[[group_name]],
+      block$group_first_tau_update_iter[[group_name]],
+      block$group_last_tau_update_iter[[group_name]],
+      sqrt(1 / pmax(block$e_inv_tau2[[group_name]], 1.0e-12)),
+      block$e_inv_tau2[[group_name]], block$e_inv_xi[[group_name]],
+      block$last_group_coefficient_l2[[group_name]]
+    )
+  }
+  do.call(rbind, rows)
 }
 
 app_latent_prior_rhs_diagnostics <- function(state, iter) {
@@ -515,25 +809,7 @@ app_latent_prior_rhs_diagnostics <- function(state, iter) {
   }
   rows <- lapply(names(states), function(block_name) {
     block <- states[[block_name]]
-    control <- block$rhs_control
-    gate_row <- gate$blocks[gate$blocks$block == block_name, , drop = FALSE]
-    data.frame(
-      block = block_name,
-      freeze_tau_warmup_iters = control$freeze_tau_warmup_iters,
-      update_every = control$update_every,
-      min_tau_updates = control$min_tau_updates,
-      tau_update_count = as.integer(block$tau_update_count %||% 0L),
-      first_tau_update_iter = as.integer(block$first_tau_update_iter %||% NA_integer_),
-      last_tau_update_iter = as.integer(block$last_tau_update_iter %||% NA_integer_),
-      effective_tau = sqrt(1 / pmax(as.numeric(block$e_inv_tau2), 1.0e-12)),
-      e_inv_tau2 = as.numeric(block$e_inv_tau2),
-      e_inv_xi = as.numeric(block$e_inv_xi),
-      coefficient_l2 = as.numeric(block$last_coefficient_l2 %||% NA_real_),
-      enough_tau_updates = gate_row$enough_tau_updates[[1L]],
-      coefficient_response_after_release = gate_row$coefficient_response_after_release[[1L]],
-      gate_passed = gate_row$passed[[1L]],
-      stringsAsFactors = FALSE
-    )
+    app_latent_rhs_diagnostic_rows(block, block_name, gate$blocks)
   })
   controls <- lapply(states, function(block) block$rhs_control)
   list(

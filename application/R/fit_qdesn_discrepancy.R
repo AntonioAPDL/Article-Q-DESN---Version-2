@@ -125,6 +125,7 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
       call. = FALSE
     )
   }
+  alpha_grouping <- app_qdesn_normalize_rhs_alpha_grouping(vb_cfg)
   out <- list(
     max_iter = max_iter,
     max_iter_hard_cap = max_iter_hard_cap,
@@ -147,7 +148,8 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
       s2 = as.numeric(vb_cfg$rhs_alpha_slab_s2 %||% vb_cfg$rhs_slab_s2 %||% mcmc_cfg$rhs_alpha_slab_s2 %||% mcmc_cfg$rhs_slab_s2 %||% 4),
       a_zeta = as.numeric(vb_cfg$rhs_alpha_a_zeta %||% vb_cfg$rhs_a_zeta %||% mcmc_cfg$rhs_alpha_a_zeta %||% mcmc_cfg$rhs_a_zeta %||% 2),
       b_zeta = as.numeric(vb_cfg$rhs_alpha_b_zeta %||% vb_cfg$rhs_b_zeta %||% mcmc_cfg$rhs_alpha_b_zeta %||% mcmc_cfg$rhs_b_zeta %||% 4),
-      intercept_prec = as.numeric(vb_cfg$intercept_prec %||% mcmc_cfg$intercept_prec %||% 1.0e-9)
+      intercept_prec = as.numeric(vb_cfg$intercept_prec %||% mcmc_cfg$intercept_prec %||% 1.0e-9),
+      global_grouping = alpha_grouping
     ),
     prior_sigma = list(
       a = as.numeric(vb_cfg$sigma_a %||% mcmc_cfg$sigma_a %||% 2),
@@ -185,6 +187,7 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
   if (!is.null(vb_cfg$draw_backend) && nzchar(as.character(vb_cfg$draw_backend))) {
     out$draw_backend <- tolower(as.character(vb_cfg$draw_backend)[[1L]])
   }
+  out$prior_contract <- app_qdesn_latent_vb_prior_contract(out)
   out
 }
 
@@ -391,8 +394,12 @@ app_discrepancy_fit_diagnostics <- function(result) {
     rhs_alpha_tau_update_count = app_discrepancy_rhs_diag_value(result$fit, "alpha", "tau_update_count"),
     rhs_beta_effective_tau = app_discrepancy_rhs_diag_value(result$fit, "beta", "effective_tau"),
     rhs_alpha_effective_tau = app_discrepancy_rhs_diag_value(result$fit, "alpha", "effective_tau"),
+    rhs_alpha_direct_effective_tau = app_discrepancy_rhs_diag_value(result$fit, "alpha.direct", "effective_tau"),
+    rhs_alpha_reservoir_effective_tau = app_discrepancy_rhs_diag_value(result$fit, "alpha.reservoir", "effective_tau"),
     rhs_beta_gate_passed = app_discrepancy_rhs_diag_value(result$fit, "beta", "gate_passed"),
     rhs_alpha_gate_passed = app_discrepancy_rhs_diag_value(result$fit, "alpha", "gate_passed"),
+    rhs_alpha_direct_gate_passed = app_discrepancy_rhs_diag_value(result$fit, "alpha.direct", "gate_passed"),
+    rhs_alpha_reservoir_gate_passed = app_discrepancy_rhs_diag_value(result$fit, "alpha.reservoir", "gate_passed"),
     stringsAsFactors = FALSE
   )
 }

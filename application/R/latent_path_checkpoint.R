@@ -24,7 +24,7 @@ app_latent_checkpoint_config <- function(vb_args = list()) {
 app_latent_checkpoint_semantic_vb_args <- function(vb_args = list()) {
   fields <- c(
     "max_iter", "min_iter_elbo", "tol", "tol_par", "n_samp_xi", "n_draws",
-    "seed", "beta_prior_type", "beta_rhs", "alpha_rhs", "prior_sigma", "rhs",
+    "seed", "beta_prior_type", "beta_rhs", "alpha_rhs", "prior_contract", "prior_sigma", "rhs",
     "future_moment_strategy", "future_update_strategy", "future_objective_strategy",
     "chunking", "draw_backend", "likelihood_family"
   )
@@ -42,6 +42,13 @@ app_latent_checkpoint_engine_hash <- function() {
     "app_latent_update_future_gaussian_delta",
     "app_latent_update_v",
     "app_latent_update_sigma",
+    "app_qdesn_alpha_rhs_group_layout",
+    "app_qdesn_latent_vb_prior_contract",
+    "app_latent_grouped_rhs_prior_precision",
+    "app_latent_grouped_rhs_state_init",
+    "app_latent_grouped_rhs_state_update",
+    "app_latent_rhs_state_init_dispatch",
+    "app_latent_rhs_state_update_dispatch",
     "app_latent_prior_state_update",
     "app_latent_approx_objective",
     "app_fit_latent_path_al_vb_core"

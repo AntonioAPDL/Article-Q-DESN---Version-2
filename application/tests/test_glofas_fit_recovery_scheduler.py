@@ -26,6 +26,10 @@ health = load_script_module(
     "glofas_fit_recovery_health",
     "application/scripts/glofas_fit_recovery_health.py",
 )
+cpu_selector = load_script_module(
+    "glofas_select_free_cpus",
+    "application/scripts/glofas_select_free_cpus.py",
+)
 
 
 class GlofasFitRecoverySchedulerTests(unittest.TestCase):
@@ -100,6 +104,69 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
         with mock.patch.object(scheduler.subprocess, "check_output", return_value=fixture), \
                 mock.patch.object(scheduler.os, "sched_getaffinity", return_value=set(range(6))):
             self.assertEqual(scheduler.discover_physical_cpus(), [0, 1, 2, 3])
+
+    def test_cpu_selector_collapses_hyperthread_siblings(self):
+        fixture = """# CPU,CORE,SOCKET,NODE,ONLINE
+0,0,0,0,Y
+1,1,0,0,Y
+32,0,0,0,Y
+33,1,0,0,Y
+"""
+        with mock.patch.object(
+            cpu_selector.subprocess,
+            "check_output",
+            return_value=fixture,
+        ), mock.patch.object(
+            cpu_selector.os,
+            "sched_getaffinity",
+            return_value={0, 1, 32, 33},
+        ):
+            representatives, mapping = cpu_selector.cpu_topology()
+        self.assertEqual(representatives, [0, 1])
+        self.assertEqual(mapping[32], 0)
+        self.assertEqual(mapping[33], 1)
+
+    def test_scheduler_memory_calibration_limits_parallelism(self):
+        safe, limit = scheduler.memory_safe_parallel_jobs(
+            max_parallel=20,
+            available_gb=100,
+            campaign_rss_gb=20,
+            memory_reserve_gb=40,
+            peak_per_fit_gb=10,
+            calibration_ready=True,
+            calibration_target=4,
+        )
+        self.assertEqual((safe, limit), (8, 8))
+        safe, limit = scheduler.memory_safe_parallel_jobs(
+            max_parallel=20,
+            available_gb=100,
+            campaign_rss_gb=0,
+            memory_reserve_gb=40,
+            peak_per_fit_gb=0,
+            calibration_ready=False,
+            calibration_target=4,
+        )
+        self.assertEqual((safe, limit), (4, 4))
+
+    def test_scheduler_reads_latest_logged_vb_iteration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "worker.log"
+            path.write_text(
+                "[latent-path VB] iter=3 step=theta elapsed=1\n"
+                "[latent-path VB] iter=11 step=theta elapsed=1\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(scheduler.max_logged_iteration(path), 11)
+
+    def test_scheduler_process_tree_rss_uses_one_snapshot(self):
+        snapshot = (
+            {10: [11, 12], 11: [13]},
+            {10: 1024, 11: 2048, 12: 3072, 13: 4096},
+        )
+        self.assertAlmostEqual(
+            scheduler.process_tree_rss_gb(10, snapshot),
+            10 / 1024,
+        )
 
     def test_reference_feature_cache_must_remain_in_owned_output_root(self):
         with tempfile.TemporaryDirectory() as tmp:

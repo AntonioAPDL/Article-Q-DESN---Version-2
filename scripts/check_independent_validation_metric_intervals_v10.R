@@ -8,6 +8,7 @@ script_path <- normalizePath(
 )
 repo_root <- normalizePath(file.path(dirname(script_path), ".."), winslash = "/", mustWork = TRUE)
 args <- commandArgs(trailingOnly = TRUE)
+archive_only <- "--archive-only" %in% args
 arg_value <- function(flag, default) {
   at <- which(args == flag)
   if (!length(at) || at[[1L]] == length(args)) return(default)
@@ -118,13 +119,15 @@ supp_required <- c(
   "draw-wise fitting-sample",
   "approximate"
 )
-if (any(!vapply(main_required, grepl, logical(1L), x = main, fixed = TRUE)) ||
-    any(!vapply(supp_required, grepl, logical(1L), x = supplement, fixed = TRUE)) ||
-    grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main, fixed = TRUE) ||
-    grepl("tables/qdesn_validation_tt500_final_tables.tex", supplement, fixed = TRUE) ||
-    grepl("Two case-specific repeated-chain confirmations yielded", main, fixed = TRUE) ||
-    grepl("deterministic criterion values", main, fixed = TRUE)) {
-  stop("The manuscripts are not consistently wired to v10.", call. = FALSE)
+if (!archive_only) {
+  if (any(!vapply(main_required, grepl, logical(1L), x = main, fixed = TRUE)) ||
+      any(!vapply(supp_required, grepl, logical(1L), x = supplement, fixed = TRUE)) ||
+      grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main, fixed = TRUE) ||
+      grepl("tables/qdesn_validation_tt500_final_tables.tex", supplement, fixed = TRUE) ||
+      grepl("Two case-specific repeated-chain confirmations yielded", main, fixed = TRUE) ||
+      grepl("deterministic criterion values", main, fixed = TRUE)) {
+    stop("The manuscripts are not consistently wired to v10.", call. = FALSE)
+  }
 }
 
 results_prose <- paste(readLines(results_prose_path, warn = FALSE), collapse = "\n")
@@ -192,7 +195,11 @@ if (any(!file.exists(figure_files)) ||
   stop("The metric-interval figure presentation is incomplete.", call. = FALSE)
 }
 
-cat("INDEPENDENT_METRIC_INTERVAL_CHECK=PASS\n")
+cat(if (archive_only) {
+  "INDEPENDENT_METRIC_INTERVAL_ARCHIVE_CHECK=PASS\n"
+} else {
+  "INDEPENDENT_METRIC_INTERVAL_CHECK=PASS\n"
+})
 cat(sprintf("ROWS=%d VB=%d MCMC=%d SOURCE_WARN=%d\n",
             nrow(summary), sum(summary$inference == "vb"),
             sum(summary$inference == "mcmc"),

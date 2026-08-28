@@ -128,11 +128,9 @@ source(app_path("application/tests/test_promotion_contract.R"))
 source(app_path("application/tests/test_application_output_registry.R"))
 source(app_path("application/tests/test_post_fit_analysis.R"))
 source(app_path("application/tests/test_validation_interface_contract.R"))
-source(app_path("application/tests/test_shared_validation_tt500_exdqlm_dqlm_vb_current_best.R"))
-source(app_path("application/tests/test_shared_validation_tt500_stage3_override.R"))
-source(app_path("application/tests/test_shared_validation_tt500_stage4_override.R"))
-source(app_path("application/tests/test_shared_validation_tt500_vb_competitiveness.R"))
-source(app_path("application/tests/test_shared_validation_tt500_mcmc_al_rhs_recalibration.R"))
-source(app_path("application/tests/test_shared_validation_tt500_exdqlm_dqlm_mcmc_current_best.R"))
+# The v12 full-surface test supersedes the six tt500 tests tied to historical
+# summary-override schemas. It verifies their current point-table roles together
+# with the estimator-separated posterior-interval projection.
+source(app_path("application/tests/test_independent_validation_exdqlm_1p1p1_article_v12.R"))
 
 cat("Application tests completed.\n")

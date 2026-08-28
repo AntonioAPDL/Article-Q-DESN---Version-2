@@ -209,10 +209,10 @@ retain closed-form inverse-gamma forms
 \citep{NishimuraSuchard2023SSS,MakalicSchmidt2016SimpleSampler}.
 Markov chain Monte Carlo (MCMC) is used for posterior simulation when
 computational cost permits. A mean-field variational Bayes (VB) approximation
-is used in analyses requiring many repeated fits.
-For non-conjugate \(\exAL\) scale-asymmetry blocks, the VB approximation uses
-the Laplace--Delta approximation of \citet{wang2013nonconjugatevb}; the label
-VB--LD refers to this model-specific approximation.
+is used in analyses requiring many repeated fits. For the non-conjugate
+Q--DESN \(\exAL\) scale--asymmetry block, the VB approximation uses the
+Laplace--Delta construction of \citet{wang2013nonconjugatevb}; the label
+VB--LD refers to this Q--DESN approximation.
 
 This article makes three principal contributions. First, it introduces
 Q--DESN as Bayesian conditional-quantile regression on a fixed DESN feature
@@ -263,8 +263,8 @@ time-varying conditional quantiles. The DQLM combines a linear state evolution
 with Bayesian quantile regression
 \citep{GoncalvesMigonBastos2020DQLM}. The extended DQLM (exDQLM) of
 \citet{barata2021_flex_quantile} adds the corresponding asymmetric-likelihood
-flexibility, and both models are implemented in the Comprehensive R Archive
-Network (CRAN) package \pkg{exdqlm} \citep{exdqlmRPackage}. Q--DESN
+flexibility, and both models are implemented in the R package \pkg{exdqlm}
+\citep{exdqlmRPackage}. Q--DESN
 represents temporal dependence through fixed nonlinear reservoir features. The DQLM and
 exDQLM fits therefore serve as structured linear dynamic quantile comparators
 under the same held-out forecast evaluation.
@@ -1434,7 +1434,10 @@ held fixed.
 Dynamic quantile linear model (DQLM) and extended dynamic quantile linear
 model (exDQLM) baselines are fit to the same family, quantile level,
 fitting-sample size, and forecast-evaluation design using \pkg{exdqlm}
-\citep{exdqlmRPackage}.
+\citep{exdqlmRPackage}. The exDQLM calculations use version 1.1.1, with its
+partially collapsed MCMC update and structured
+\(q(\gamma)q(\sigma\mid\gamma)\) variational approximation for the
+scale--asymmetry block.
 
 The primary comparison is a fixed-design benchmark against structured dynamic
 quantile linear models under linear dynamic mechanisms that favor those
@@ -1492,7 +1495,7 @@ horizons up to 30 steps ahead, at the three target levels
 MCMC posterior metric distributions; the supplement gives the corresponding
 numerical tables.
 
-\input{tables/qdesn_validation_500obs_metric_intervals_prose.tex}
+\input{tables/qdesn_validation_500obs_metric_intervals_v12_prose.tex}
 
 \input{tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex}
 
@@ -1500,13 +1503,13 @@ All displayed Q--DESN and exQ--DESN values use feature scaling and other
 preprocessing quantities estimated from observations available through the
 fitting origin. The DQLM and exDQLM baselines use the same simulated
 trajectories, fitting sample, forecast origins, horizons, and scoring rules. The
-exAL--RHS MCMC rows use the \(v\)-augmented transition described in the
+Q--DESN exAL--RHS MCMC rows use the \(v\)-augmented transition described in the
 supplement, which separates the scale update from the shape update and samples
 the shape on the logit transform of its bounded support.
 
-\input{tables/qdesn_validation_500obs_metric_interval_results_v10.tex}
+\input{tables/qdesn_validation_500obs_metric_interval_results_v12.tex}
 
-\input{tables/qdesn_validation_500obs_mcmc_metric_interval_figures.tex}
+\input{tables/qdesn_validation_500obs_v12_mcmc_metric_interval_figures.tex}
 
 The supplement gives the complete numerical MCMC tables and approximate VB
 intervals, together with a five-chain point-path sensitivity analysis for the

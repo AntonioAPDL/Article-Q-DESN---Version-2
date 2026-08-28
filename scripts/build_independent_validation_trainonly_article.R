@@ -480,11 +480,11 @@ write_mcmc_table <- function(family, path) {
       paste0(
         "\\caption{MCMC single-quantile fit-and-forecast comparison for the %s simulation family. ",
         "Q--DESN entries are reported within each model, target level, and criterion under the fixed evaluation design. ",
-        "When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. ",
+        "Repeated-chain entries report the mean of the corresponding chain-specific summaries. ",
         "Q--DESN preprocessing is ",
         "estimated only from the training ",
         "window. Forecast criteria average rolling-origin lead-target pairs over a held-out window of length ",
-        "1000 using leads 1--30 and origin stride 30. Lower values are better, and boldface marks the best ",
+        "1000 using leads 1--30 and origin stride 30. Lower values are better, and boldface marks the lowest ",
         "displayed value within each target level and criterion. A dagger marks a warning in the supporting ",
         "diagnostics; a double dagger marks a failed diagnostic check.}"
       ),

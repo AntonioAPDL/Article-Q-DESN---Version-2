@@ -115,7 +115,7 @@ supp_required <- c(
   "tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex",
   "tables/qdesn_validation_500obs_vb_metric_interval_figures.tex",
   "tables/qdesn_validation_500obs_vb_metric_interval_tables.tex",
-  "draw-wise fit RMSE",
+  "draw-wise fitting-sample",
   "approximate"
 )
 if (any(!vapply(main_required, grepl, logical(1L), x = main, fixed = TRUE)) ||
@@ -129,7 +129,7 @@ if (any(!vapply(main_required, grepl, logical(1L), x = main, fixed = TRUE)) ||
 
 results_prose <- paste(readLines(results_prose_path, warn = FALSE), collapse = "\n")
 if (!grepl("19 of the 27", results_prose, fixed = TRUE) ||
-    !grepl("all 27 cells", tolower(results_prose), fixed = TRUE)) {
+    !grepl("all 27 comparisons", tolower(results_prose), fixed = TRUE)) {
   stop("The generated interpretation is stale.", call. = FALSE)
 }
 

@@ -256,11 +256,11 @@ app_joint_qdesn_phase126_make_model_table <- function(model) {
     `Fit MAE` = vapply(model$mcmc_fit_truth_mae, app_joint_qdesn_phase126_fmt_num, character(1L), digits = 3),
     `Forecast MAE` = vapply(model$mcmc_forecast_truth_mae, app_joint_qdesn_phase126_fmt_num, character(1L), digits = 3),
     `Check loss` = vapply(model$mcmc_forecast_check_loss, app_joint_qdesn_phase126_fmt_num, character(1L), digits = 3),
-    `Grid CRPS` = vapply(model$mcmc_forecast_crps_grid, app_joint_qdesn_phase126_fmt_num, character(1L), digits = 3),
+    aCRPS = vapply(model$mcmc_forecast_crps_grid, app_joint_qdesn_phase126_fmt_num, character(1L), digits = 3),
     `Hit error` = vapply(model$mcmc_abs_hit_rate_error, app_joint_qdesn_phase126_fmt_num, character(1L), digits = 3),
     `Raw crossings` = vapply(model$mcmc_forecast_raw_crossing_pairs, app_joint_qdesn_phase126_fmt_int, character(1L)),
-    `Contract crossings` = vapply(model$mcmc_forecast_contract_crossing_pairs, app_joint_qdesn_phase126_fmt_int, character(1L)),
-    Gate = model$gate_status,
+    `Crossings after rearrangement` = vapply(model$mcmc_forecast_contract_crossing_pairs, app_joint_qdesn_phase126_fmt_int, character(1L)),
+    `Diagnostic status` = model$gate_status,
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
@@ -285,7 +285,7 @@ app_joint_qdesn_phase126_make_scenario_table <- function(case, bold_winners = FA
       vals[[block$model_label[[ii]]]] <- val
     }
     data.frame(
-      Scenario = block$scenario_label[[1L]],
+      `Simulation setting` = block$scenario_label[[1L]],
       `Joint QDESN` = vals[["Joint QDESN RHS"]],
       `Independent QDESN` = vals[["Independent QDESN RHS"]],
       `Joint exQDESN` = vals[["Joint exQDESN RHS"]],
@@ -307,7 +307,7 @@ app_joint_qdesn_phase126_make_gate_table <- function(gate) {
   )
   out <- gate[keep, c("gate", "status", "detail"), drop = FALSE]
   out$gate <- gsub("_", " ", out$gate, fixed = TRUE)
-  names(out) <- c("Gate", "Status", "Detail")
+  names(out) <- c("Check", "Result", "Detail")
   out
 }
 
@@ -316,7 +316,7 @@ app_joint_qdesn_phase126_make_winner_table <- function(winners) {
     mcmc_fit_truth_mae = "Fit MAE",
     mcmc_forecast_truth_mae = "Forecast MAE",
     mcmc_forecast_check_loss_mean = "Check loss",
-    crps_grid_mean = "Grid CRPS"
+    crps_grid_mean = "aCRPS"
   )
   rows <- lapply(unique(winners$scenario_id), function(sc) {
     block <- winners[winners$scenario_id == sc & winners$metric %in% names(metrics), , drop = FALSE]
@@ -329,11 +329,11 @@ app_joint_qdesn_phase126_make_winner_table <- function(winners) {
       )
     }
     data.frame(
-      Scenario = block$scenario_label[[1L]],
-      `Fit MAE winner` = vals[["Fit MAE"]],
-      `Forecast MAE winner` = vals[["Forecast MAE"]],
-      `Check-loss winner` = vals[["Check loss"]],
-      `Grid-CRPS winner` = vals[["Grid CRPS"]],
+      `Simulation setting` = block$scenario_label[[1L]],
+      `Lowest fit MAE` = vals[["Fit MAE"]],
+      `Lowest forecast MAE` = vals[["Forecast MAE"]],
+      `Lowest check loss` = vals[["Check loss"]],
+      `Lowest aCRPS` = vals[["aCRPS"]],
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
@@ -348,24 +348,24 @@ app_joint_qdesn_phase126_protocol_table <- function(src) {
   tau_grid <- tau_grid[!is.na(tau_grid)]
   data.frame(
     Item = c(
-      "Evidence layer",
-      "Synthetic scenarios",
-      "Model rows",
+      "Computational analysis",
+      "Simulation settings",
+      "Model comparison",
       "Quantile grid",
-      "Fit window",
-      "Forecast window",
-      "Prediction contract",
-      "Diagnostic policy"
+      "Fitting sample",
+      "Forecast evaluation",
+      "Reported quantile-grid summary",
+      "Diagnostics"
     ),
     Value = c(
-      "VB/VB-LD screening and calibration followed by VB-initialized MCMC confirmation.",
-      sprintf("%d mechanisms: three bridge cases and five stress cases with known conditional quantile paths.", n_scenarios),
-      sprintf("%d readout-likelihood combinations: Joint QDESN RHS, Independent QDESN RHS, Joint exQDESN RHS, and Independent exQDESN RHS.", n_models),
+      "VB and VB-LD comparisons followed by MCMC initialized from the variational estimates.",
+      sprintf("%d data-generating mechanisms with known conditional quantile paths and several innovation distributions and dynamic structures.", n_scenarios),
+      sprintf("%d joint or independently estimated quantile-regression and working-likelihood combinations.", n_models),
       if (length(tau_grid)) gsub(",", ", ", tau_grid[[1L]], fixed = TRUE) else "0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95",
       sprintf("%s observations after DESN washout.", unique(src$case$n_train)[[1L]] %||% 500),
-      "No-refit held-out forecast scoring over the common validation origin grid inherited from the frozen validation fixtures.",
-      "Scores validate posterior quantile grids/readout paths, not a scalar posterior predictive density.",
-      "Reported scores use monotone contract quantile grids; raw adjacent-level crossings are retained as pre-contract diagnostics."
+      "Held-out rolling-origin forecast evaluation using a common set of origins for all methods.",
+      "Scores evaluate posterior summaries of the fitted quantile grid.",
+      "Scores use quantiles after monotone rearrangement; adjacent-level crossings before rearrangement are reported separately."
     ),
     stringsAsFactors = FALSE
   )
@@ -452,7 +452,7 @@ app_joint_qdesn_run_phase126_article_assets <- function(
     protocol_tex = app_joint_qdesn_phase126_write_latex_table(
       protocol,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_protocol.tex"),
-      "Balanced joint multi-quantile MCMC validation protocol. The table records the evidence layer, scenario scope, predictive contract, and diagnostic policy used for the article-facing summaries.",
+      "Design of the joint multi-quantile MCMC evaluation.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-protocol",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.24\\textwidth}>{\\raggedright\\arraybackslash}p{0.66\\textwidth}@{}",
       size = "\\small"
@@ -461,7 +461,7 @@ app_joint_qdesn_run_phase126_article_assets <- function(
     model_tex = app_joint_qdesn_phase126_write_latex_table(
       model_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_model_summary.tex"),
-      "Balanced MCMC confirmation summary for the joint multi-quantile validation study. Each row averages over the same eight synthetic scenarios. QDESN denotes the AL working likelihood, exQDESN denotes the exAL working likelihood, Joint and Independent indicate the readout structure, and RHS denotes the regularized horseshoe prior. Fit and forecast MAE compare posterior quantile grids with oracle conditional quantiles; check loss and grid CRPS score the reported monotone quantile grid. Raw crossings are pre-contract diagnostics, whereas contract crossings are measured after the declared monotone rearrangement used for scoring.",
+      "MCMC summary for the joint multi-quantile simulation study. Each row averages over the same eight simulation settings. QDESN denotes the AL working likelihood, exQDESN denotes the exAL working likelihood, Joint and Independent indicate joint or level-specific estimation, and RHS denotes the regularized horseshoe prior. Fit and forecast MAE compare posterior quantile grids with true conditional quantiles; check loss and finite-grid aCRPS evaluate the monotonically rearranged quantile grid. Crossings before and after rearrangement are reported separately.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-model-summary",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.22\\textwidth}rrrrrrrrl@{}",
       size = "\\scriptsize",
@@ -471,7 +471,7 @@ app_joint_qdesn_run_phase126_article_assets <- function(
     scenario_tex = app_joint_qdesn_phase126_write_latex_table(
       scenario_latex_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_scenario_summary.tex"),
-      "Scenario-level balanced MCMC forecast recovery. Entries report forecast MAE with fit-window MAE in parentheses; boldface marks the lowest forecast MAE within each scenario. The table is a mechanism-specific diagnostic, not a uniform global ranking.",
+      "MCMC forecast evaluation by simulation setting. Entries report forecast MAE with fitting-sample MAE in parentheses; boldface marks the lowest forecast MAE within each simulation setting.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-scenario-summary",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.26\\textwidth}rrrr@{}",
       size = "\\scriptsize",
@@ -482,7 +482,7 @@ app_joint_qdesn_run_phase126_article_assets <- function(
     gate_tex = app_joint_qdesn_phase126_write_latex_table(
       gate_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"),
-      "Validation gates for the Phase 125 balanced MCMC evidence packet used to build the article-facing joint QDESN tables.",
+      "Diagnostic summary for the joint multi-quantile MCMC analysis.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.24\\textwidth}l>{\\raggedright\\arraybackslash}p{0.58\\textwidth}@{}",
       size = "\\scriptsize",
@@ -492,7 +492,7 @@ app_joint_qdesn_run_phase126_article_assets <- function(
     winner_tex = app_joint_qdesn_phase126_write_latex_table(
       winner_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_winner_summary.tex"),
-      "Per-scenario metric winners in the balanced MCMC confirmation grid. The winner can differ by metric, so this table is intended for diagnostic interpretation rather than a single-model ranking.",
+      "Method with the lowest displayed value for each simulation setting and evaluation criterion. The minimizing method can differ across criteria.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-winner-summary",
       align = "@{}>{\\raggedright\\arraybackslash}p{0.21\\textwidth}>{\\raggedright\\arraybackslash}p{0.17\\textwidth}>{\\raggedright\\arraybackslash}p{0.17\\textwidth}>{\\raggedright\\arraybackslash}p{0.17\\textwidth}>{\\raggedright\\arraybackslash}p{0.17\\textwidth}@{}",
       size = "\\scriptsize",
@@ -625,7 +625,14 @@ app_joint_qdesn_run_phase126_article_asset_audit <- function(
       ifelse(app_joint_qdesn_phase126_text_contains(main_tex, "joint_qdesn_article_validation_mcmc_balanced_model_summary.tex"), "pass", "fail"),
       ifelse(!app_joint_qdesn_phase126_text_contains(main_tex, "joint_qdesn_article_validation_mcmc_main_summary.tex"), "pass", "fail"),
       ifelse(app_joint_qdesn_phase126_text_contains(main_tex, "eight synthetic") || app_joint_qdesn_phase126_text_contains(main_tex, "eight-scenario"), "pass", "fail"),
-      ifelse(app_joint_qdesn_phase126_text_contains(main_tex, "32") && app_joint_qdesn_phase126_text_contains(main_tex, "scenario--model"), "pass", "fail"),
+      ifelse(
+        app_joint_qdesn_phase126_text_contains(main_tex, "32") && any(vapply(
+          c("mechanism--model", "simulation-setting--model", "scenario--model"),
+          function(pattern) app_joint_qdesn_phase126_text_contains(main_tex, pattern),
+          logical(1L)
+        )),
+        "pass", "fail"
+      ),
       ifelse(app_joint_qdesn_phase126_text_contains(main_tex, "quantile-grid") || app_joint_qdesn_phase126_text_contains(main_tex, "quantile grid"), "pass", "fail"),
       ifelse(!app_joint_qdesn_phase126_text_contains(main_tex, "scalar posterior predictive density validation"), "pass", "fail"),
       ifelse(!app_joint_qdesn_phase126_text_contains(main_tex, "nine synthetic data-generating mechanisms") && !app_joint_qdesn_phase126_text_contains(main_tex, "all nine mechanisms"), "pass", "fail"),

@@ -51,6 +51,11 @@ Tracked tests:
   uninterrupted versus interrupted/resumed VB identity.
 - `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
   controls, OpenBLAS path/hash rejection, and terminal execution manifests.
+- `test_glofas_discrepancy_equivalence_audit.R`: component-path algebra,
+  block-specific prediction hashes, explicit block-seed precedence, cache
+  isolation, feature sentinels, paired/unpaired permutations, serialization,
+  contribution reconstruction, state summaries, score/identity checks, stale
+  status precedence, and fail-closed diagnostic classification.
 - `test_glofas_fit_recovery_scheduler.py`: physical-core and NUMA-aware CPU
   allocation, disjoint multithread sets, checkpoint-aware restart with owned
   checkpoint paths, and owned reference-cache roots in addition to the

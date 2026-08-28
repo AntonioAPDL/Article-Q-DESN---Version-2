@@ -794,6 +794,7 @@ app_latent_reference_feature_cache_contract <- function(
   model_contract[c("fit_id", "model_id", "quantile_level")] <- NULL
   contract <- list(
     schema_version = "glofas_reference_feature_cache_contract_v1",
+    block_role = "reference",
     panel_hash = app_latent_path_contract_hash(
       base_panel_full,
       prefix = "latent_reference_panel_"
@@ -821,6 +822,10 @@ app_latent_reference_feature_cache_path <- function(cache_cfg, contract) {
 }
 
 app_latent_reference_feature_cache_validate <- function(payload, contract) {
+  block_role <- as.character(contract$block_role %||% "reference")[[1L]]
+  if (!identical(block_role, "reference")) {
+    stop("Reference feature cache contracts cannot contain discrepancy-block payloads.", call. = FALSE)
+  }
   if (!is.list(payload) ||
       !identical(payload$schema_version, "glofas_reference_feature_cache_v1") ||
       !identical(payload$contract$contract_hash, contract$contract_hash) ||
@@ -1625,6 +1630,60 @@ app_latent_path_fit_diagnostics <- function(result) {
   base
 }
 
+app_latent_path_component_paths <- function(
+  X_beta,
+  X_alpha,
+  beta,
+  alpha,
+  discrepancy_baseline = NULL
+) {
+  X_beta <- as.matrix(X_beta)
+  X_alpha <- as.matrix(X_alpha)
+  beta <- as.numeric(beta)
+  alpha <- as.numeric(alpha)
+  if (nrow(X_beta) != nrow(X_alpha)) {
+    stop("Reference and discrepancy prediction designs must have the same row count.", call. = FALSE)
+  }
+  if (ncol(X_beta) != length(beta) || ncol(X_alpha) != length(alpha)) {
+    stop("Prediction designs and coefficient blocks are not aligned.", call. = FALSE)
+  }
+  discrepancy_baseline <- as.numeric(
+    discrepancy_baseline %||% rep(0, nrow(X_alpha))
+  )
+  if (length(discrepancy_baseline) != nrow(X_alpha) || any(!is.finite(discrepancy_baseline))) {
+    stop("Prediction requires one finite discrepancy baseline per row.", call. = FALSE)
+  }
+  q_y <- as.numeric(X_beta %*% beta)
+  d_g <- discrepancy_baseline + as.numeric(X_alpha %*% alpha)
+  list(q_y = q_y, d_g = d_g, q_g = q_y + d_g)
+}
+
+app_latent_path_prediction_block_hash <- function(
+  X,
+  feature_info,
+  future_key,
+  block,
+  block_config_hash = NA_character_
+) {
+  X <- as.matrix(X)
+  if (nrow(feature_info) != ncol(X)) {
+    stop("Prediction block hashing requires aligned features and metadata.", call. = FALSE)
+  }
+  key <- future_key[, intersect(c("target_date", "horizon"), names(future_key)), drop = FALSE]
+  if ("target_date" %in% names(key)) key$target_date <- as.character(as.Date(key$target_date))
+  app_latent_path_contract_hash(
+    list(
+      schema_version = "glofas_prediction_block_v1",
+      block = as.character(block),
+      block_config_hash = as.character(block_config_hash),
+      future_key = key,
+      feature_info = feature_info,
+      X = X
+    ),
+    prefix = paste0("glofas_prediction_", block, "_")
+  )
+}
+
 app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
   required_result <- c("fit", "design", "fit_id", "model_id", "model_family", "quantile_level")
   missing_result <- setdiff(required_result, names(result))
@@ -1650,6 +1709,32 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
     length(linearization$J_x) == H &&
     nrow(linearization$X_future) == H &&
     length(linearization$y_mean) == H
+  if (isTRUE(use_linearization)) {
+    summary_X_beta <- as.matrix(linearization$X_beta_future %||% linearization$X_future)
+    summary_X_alpha <- as.matrix(linearization$X_alpha_future %||% linearization$X_future)
+  } else {
+    summary_future <- result$design$future_builder(as.numeric(result$fit$variational_state$y_future_mean))
+    summary_X_beta <- as.matrix(summary_future$X_beta_future %||% summary_future$X_future)
+    summary_X_alpha <- as.matrix(summary_future$X_alpha_future %||% summary_future$X_future)
+  }
+  beta_feature_info <- result$design$feature_info_beta %||% result$design$feature_info
+  alpha_feature_info <- result$design$feature_info_alpha %||% result$design$feature_info
+  beta_feature_counts <- app_readout_feature_counts(beta_feature_info)
+  alpha_feature_counts <- app_readout_feature_counts(alpha_feature_info)
+  beta_prediction_design_hash <- app_latent_path_prediction_block_hash(
+    summary_X_beta,
+    beta_feature_info,
+    result$design$future_key,
+    "beta",
+    result$design$block_config_hash_beta %||% NA_character_
+  )
+  alpha_prediction_design_hash <- app_latent_path_prediction_block_hash(
+    summary_X_alpha,
+    alpha_feature_info,
+    result$design$future_key,
+    "alpha",
+    result$design$block_config_hash_alpha %||% NA_character_
+  )
   discrepancy_baseline_future <- as.numeric(
     result$design$discrepancy_baseline_future %||% rep(0, H)
   )
@@ -1674,9 +1759,16 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
     }
     beta <- theta[s, result$design$beta_index]
     alpha <- theta[s, result$design$alpha_index]
-    q_y <- as.numeric(X_beta %*% beta)
-    d_g <- discrepancy_baseline_future + as.numeric(X_alpha %*% alpha)
-    q_g <- q_y + d_g
+    components <- app_latent_path_component_paths(
+      X_beta,
+      X_alpha,
+      beta,
+      alpha,
+      discrepancy_baseline_future
+    )
+    q_y <- components$q_y
+    d_g <- components$d_g
+    q_g <- components$q_g
     for (h in seq_len(H)) {
       rows[[k]] <- data.frame(
         draw_id = sprintf("%s:draw_%05d", result$fit_id, s),
@@ -1737,7 +1829,13 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
 	      quantile_level = result$quantile_level,
 	      n_prediction_rows = H,
 	      n_prediction_features = ncol(result$design$X_base %||% result$design$X_beta),
+	      n_beta_prediction_features = ncol(summary_X_beta),
+	      n_alpha_prediction_features = ncol(summary_X_alpha),
+	      n_beta_reservoir_features = beta_feature_counts$n_reservoir_features,
+	      n_alpha_reservoir_features = alpha_feature_counts$n_reservoir_features,
 	      prediction_design_hash = prediction_design_hash,
+	      beta_prediction_design_hash = beta_prediction_design_hash,
+	      alpha_prediction_design_hash = alpha_prediction_design_hash,
 	      prediction_state_strategy = if (isTRUE(use_linearization)) "first_order_delta" else "exact_rebuild",
 	      design_version = result$design$design_version,
 	      feature_strategy = result$design$feature_strategy %||% contract$discrepancy_feature_strategy,

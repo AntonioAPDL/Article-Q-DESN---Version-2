@@ -138,6 +138,13 @@ Tracked helper files:
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS
   distributional-selection workflow.
+- `glofas_discrepancy_equivalence_audit.R`: white-box, no-refit diagnostics
+  for architecture-insensitive GloFAS discrepancy forecasts. It certifies
+  status and artifact lineage, feature/coefficient alignment, cache isolation,
+  serialization, exact discrepancy prediction, posterior identities,
+  block/layer contributions, post-fit ablations, state geometry, RHS scales,
+  and a fail-closed root-cause decision. It never launches a fit or authorizes
+  full7 or article promotion.
 - `glofas_constrained_median_screening.R`: deterministic expansion of reviewed
   two-block p50 screening spaces, including linked DESN profiles with exact
   cardinality checks and score-balanced prior-expansion anchors; block-specific

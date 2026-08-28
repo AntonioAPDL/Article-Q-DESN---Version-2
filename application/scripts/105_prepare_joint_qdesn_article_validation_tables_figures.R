@@ -104,7 +104,7 @@ figure_scenario_label <- function(x) {
   out <- ifelse(out == "Nonlinear Reservoir Friendly", "Nonlinear Reservoir", out)
   out <- ifelse(out == "Student T Location Scale", "Student-t Loc.-Scale", out)
   out <- ifelse(out == "Student t Location Scale", "Student-t Loc.-Scale", out)
-  out <- ifelse(out == "Gaussian Mixture Bridge", "Gaussian-Mixture Bridge", out)
+  out <- ifelse(out == "Gaussian Mixture Bridge", "Gaussian-Mixture Benchmark", out)
   out
 }
 
@@ -269,12 +269,12 @@ make_scenario_summary <- function(scenario_metric, scenario_summary, include_ind
     }
     best <- block$model_id[which.min(block$truth_mae)]
     data.frame(
-      Scenario = scenario_label(sc),
+      `Simulation setting` = scenario_label(sc),
       Family = family_label(scenario_summary$distribution_family[match(sc, scenario_summary$scenario_id)]),
       `Joint QDESN` = vals[["joint_qdesn_rhs_vb"]],
       `Independent QDESN` = vals[["qdesn_rhs_independent_vb"]],
       `Joint exQDESN` = vals[["joint_exqdesn_rhs_vb"]],
-      `Best stable row` = article_model_label(block$display_label[block$model_id == best][[1L]]),
+      `Lowest stable score` = article_model_label(block$display_label[block$model_id == best][[1L]]),
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
@@ -288,15 +288,15 @@ make_convergence_adjustment_table <- function(model_summary, conv_gate, fit_asse
     fta <- fit_assessment[fit_assessment$model_id == id, , drop = FALSE]
     fca <- forecast_assessment[forecast_assessment$model_id == id, , drop = FALSE]
     cg <- conv_gate[conv_gate$model_id == id, , drop = FALSE]
-    gate <- if (!nrow(cg)) "not audited" else if (any(cg$gate_recommendation == "review")) "review" else "pass with note"
+    gate <- if (!nrow(cg)) "not assessed" else if (any(cg$gate_recommendation == "review")) "review" else "satisfactory with note"
     data.frame(
       Model = article_model_label(fta$display_label[[1L]]),
       `Fit max-iter rows` = fmt_int(sum(fta$reached_max_iter, na.rm = TRUE)),
       `Forecast max-iter rows` = fmt_int(sum(fca$reached_max_iter, na.rm = TRUE)),
       `Forecast raw crossings` = fmt_int(sum(fca$raw_crossing_pairs, na.rm = TRUE)),
-      `Contract crossings` = fmt_int(sum(fca$contract_crossing_pairs, na.rm = TRUE)),
+      `Crossings after rearrangement` = fmt_int(sum(fca$contract_crossing_pairs, na.rm = TRUE)),
       `Max adjustment` = fmt_num(max(fca$max_abs_adjustment, na.rm = TRUE), 3),
-      `Convergence audit` = gate,
+      `Convergence assessment` = gate,
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
@@ -311,15 +311,15 @@ make_exal_diagnostic_table <- function(tail_dir) {
   tau075 <- raw[raw$likelihood == "exal" & abs(raw$tau - 0.75) < 1.0e-12, , drop = FALSE]
   ags075 <- ags[ags$likelihood == "exal" & abs(ags$tau - 0.75) < 1.0e-12 & ags$diagnostic_scope == "current_grid_reproduction", , drop = FALSE]
   data.frame(
-    Diagnostic = "Independent exQDESN RHS held out",
-    Scenario = scenario_label(assess$scenario_id[[1L]]),
+    Diagnostic = "Independent exQDESN RHS assessment",
+    `Simulation setting` = scenario_label(assess$scenario_id[[1L]]),
     Tau = fmt_num(assess$primary_tau[[1L]], 2),
     Status = gsub("_", " ", assess$status[[1L]], fixed = TRUE),
     `Raw MAE` = if (nrow(tau075)) fmt_num(tau075$raw_truth_mae[[1L]], 1) else "--",
-    `Contract MAE` = if (nrow(tau075)) fmt_num(tau075$contract_truth_mae[[1L]], 1) else "--",
+    `MAE after rearrangement` = if (nrow(tau075)) fmt_num(tau075$contract_truth_mae[[1L]], 1) else "--",
     `alpha mean` = if (nrow(ags075)) fmt_num(ags075$alpha_mean[[1L]], 1) else "--",
     `sigma mean` = if (nrow(ags075)) fmt_num(ags075$sigma_mean[[1L]], 4) else "--",
-    Treatment = "excluded from main table",
+    Reporting = "excluded from the main table",
     stringsAsFactors = FALSE,
     check.names = FALSE
   )
@@ -334,28 +334,28 @@ make_protocol_table <- function(fixture_dir, fit_dir, forecast_dir, model_summar
   classes <- paste(sprintf("%s (%d)", names(table(scenario$scenario_class)), as.integer(table(scenario$scenario_class))), collapse = "; ")
   data.frame(
     Item = c(
-      "Synthetic scenarios",
-      "Scenario classes",
+      "Simulation settings",
+      "Innovation and dynamic structures",
       "Tau grid",
-      "Source geometry",
-      "Analysis split",
-      "Forecast protocol",
+      "Simulated series",
+      "Fitting and evaluation samples",
+      "Forecast evaluation",
       "VB controls",
       "Reported model rows",
       "Held-out diagnostic row",
       "Scoring and diagnostics"
     ),
     Value = c(
-      sprintf("%d bridge and stress DGPs", nrow(scenario)),
+      sprintf("%d data-generating mechanisms", nrow(scenario)),
       classes,
       gsub(",", ", ", scenario$tau_grid[[1L]], fixed = TRUE),
-      sprintf("%d simulated rows; %d DGP warmup rows; %d effective rows", split$simulated_length[[1L]], split$dgp_warmup_length[[1L]], split$effective_length[[1L]]),
-      sprintf("%d DESN washout, %d fit, %d validation rows", split$desn_washout_length[[1L]], split$fit_length[[1L]], split$validation_length[[1L]]),
-      sprintf("%d no-refit origin blocks, leads %d--%d, stride %d", nrow(origins), min(origins$lead_start), max(origins$lead_end), origins$origin_stride[[1L]]),
+      sprintf("%d simulated observations, including %d discarded initial observations and %d retained observations", split$simulated_length[[1L]], split$dgp_warmup_length[[1L]], split$effective_length[[1L]]),
+      sprintf("%d-observation DESN washout, %d-observation fitting sample, and %d-observation evaluation sample", split$desn_washout_length[[1L]], split$fit_length[[1L]], split$validation_length[[1L]]),
+      sprintf("%d rolling forecast origins, horizons %d--%d, and origin spacing %d", nrow(origins), min(origins$lead_start), max(origins$lead_end), origins$origin_stride[[1L]]),
       sprintf("VB max iter %s with adaptive grid %s; RHS tau0 = %s", fit_cfg$vb_max_iter[[1L]], fit_cfg$adaptive_vb_max_iter_grid[[1L]], fit_cfg$tau0[[1L]]),
       paste(model_summary$article_label[model_summary$main_table_included], collapse = "; "),
       "Independent exQDESN RHS, due to localized K=1 exAL instability",
-      "Truth MAE/RMSE, check loss, finite-grid aCRPS, hit-rate error, interval diagnostics, raw and contract crossing diagnostics"
+      "MAE and RMSE relative to true conditional quantiles, check loss, finite-grid aCRPS, hit-rate error, interval diagnostics, and crossings before and after rearrangement"
     ),
     stringsAsFactors = FALSE
   )
@@ -518,7 +518,7 @@ forecast_scenario_plot$Model <- figure_model_label(forecast_scenario_plot$displa
 table_paths <- c(
   protocol_csv = write_csv(protocol_table, file.path(tables_dir, "joint_qdesn_simulation_vb_protocol.csv")),
   protocol_tex = write_latex_table(protocol_table, file.path(tables_dir, "joint_qdesn_simulation_vb_protocol.tex"),
-    "Protocol for the joint multi-quantile QDESN synthetic validation. All reported rows use the same frozen DGP fixtures, oracle quantiles, fit window, validation origins, and scoring rules.",
+    "Design of the joint multi-quantile QDESN simulation study. All reported comparisons use the same simulated series, true conditional quantiles, fitting sample, forecast origins, and evaluation criteria.",
     "tab:joint-qdesn-vb-protocol",
     align = "@{}>{\\raggedright\\arraybackslash}p{0.28\\textwidth}>{\\raggedright\\arraybackslash}p{0.62\\textwidth}@{}"
   ),
@@ -532,7 +532,7 @@ table_paths <- c(
   ),
   scenario_summary_csv = write_csv(scenario_table, file.path(tables_dir, "joint_qdesn_simulation_vb_scenario_summary.csv")),
   scenario_summary_tex = write_latex_table(scenario_table, file.path(tables_dir, "joint_qdesn_simulation_vb_scenario_summary.tex"),
-    "Forecast distance to true conditional quantiles by synthetic scenario. Entries report MAE with RMSE in parentheses.",
+    "Forecast distance to true conditional quantiles by simulation setting. Entries report MAE with RMSE in parentheses.",
     "tab:joint-qdesn-vb-scenario-summary",
     align = "@{}>{\\raggedright\\arraybackslash}p{0.24\\textwidth}>{\\raggedright\\arraybackslash}p{0.14\\textwidth}rrrr@{}",
     size = "\\scriptsize",
@@ -540,7 +540,7 @@ table_paths <- c(
   ),
   convergence_adjustment_csv = write_csv(convergence_adjustment_table, file.path(tables_dir, "joint_qdesn_simulation_vb_convergence_adjustment_summary.csv")),
   convergence_adjustment_tex = write_latex_table(convergence_adjustment_table, file.path(tables_dir, "joint_qdesn_simulation_vb_convergence_adjustment_summary.tex"),
-    "Convergence and raw monotonicity diagnostics for the reported rows. Scored quantiles satisfy the monotone output contract; raw crossings remain visible as diagnostics.",
+    "Convergence and monotonicity diagnostics for the reported comparisons. Scores use quantiles after monotone rearrangement; crossings before rearrangement are reported separately.",
     "tab:joint-qdesn-vb-convergence-adjustment",
     align = "@{}>{\\raggedright\\arraybackslash}p{0.22\\textwidth}rrrrrr@{}",
     size = "\\scriptsize",
@@ -548,7 +548,7 @@ table_paths <- c(
   ),
   exal_diagnostic_csv = write_csv(exal_diagnostic_table, file.path(tables_dir, "joint_qdesn_simulation_vb_exal_diagnostic_summary.csv")),
   exal_diagnostic_tex = write_latex_table(exal_diagnostic_table, file.path(tables_dir, "joint_qdesn_simulation_vb_exal_diagnostic_summary.tex"),
-    "Diagnostic reason for holding independent exQDESN RHS out of the main article table.",
+    "Diagnostic assessment for the independent exQDESN RHS comparison.",
     "tab:joint-qdesn-vb-exal-diagnostic",
     align = "@{}>{\\raggedright\\arraybackslash}p{0.21\\textwidth}>{\\raggedright\\arraybackslash}p{0.16\\textwidth}rrrrrr>{\\raggedright\\arraybackslash}p{0.18\\textwidth}@{}",
     size = "\\scriptsize",
@@ -562,9 +562,9 @@ table_paths[["article_wrapper"]] <- write_wrapper(
 
 figure_paths <- c(
   forecast_truth_mae_heatmap = make_heatmap(file.path(figures_dir, "joint_qdesn_simulation_forecast_truth_mae_heatmap.pdf"),
-    forecast_scenario_plot, "truth_mae", "Forecast truth MAE by scenario and model", "Mean absolute error"),
+    forecast_scenario_plot, "truth_mae", "Forecast truth MAE by simulation setting and model", "Mean absolute error"),
   check_loss_heatmap = make_heatmap(file.path(figures_dir, "joint_qdesn_simulation_check_loss_heatmap.pdf"),
-    forecast_scenario_plot, "check_loss_mean", "Forecast check loss by scenario and model", "Check loss"),
+    forecast_scenario_plot, "check_loss_mean", "Forecast check loss by simulation setting and model", "Check loss"),
   truth_by_tau = plot_truth_by_tau(file.path(figures_dir, "joint_qdesn_simulation_truth_by_tau.pdf"), truth_distance, stable_ids),
   raw_adjustment_diagnostics = plot_raw_adjustment(file.path(figures_dir, "joint_qdesn_simulation_raw_adjustment_diagnostics.pdf"), forecast_assessment),
   overlay_normal_bridge = plot_overlay(file.path(figures_dir, "joint_qdesn_simulation_overlay_normal_bridge.pdf"), forecast_truth, "normal_bridge"),

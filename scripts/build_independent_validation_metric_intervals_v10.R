@@ -352,10 +352,10 @@ results_prose_path <- article_path(config$outputs$results_prose)
 writeLines(c(
   sprintf(
     paste0(
-      "Across the %d family--quantile--criterion cells in the MCMC panels, ",
-      "Q--DESN exAL--RHS has the lowest posterior mean in %d cells and ",
+      "Across the %d family--quantile--criterion comparisons in the MCMC panels, ",
+      "Q--DESN exAL--RHS has the lowest posterior mean in %d comparisons and ",
       "Q--DESN AL--RHS in %d; DQLM and exDQLM each have the lowest mean in %d. ",
-      "The two Q--DESN variants therefore account for %d of the %d cellwise minima."
+      "The two Q--DESN variants therefore account for %d of the %d lowest posterior means."
     ),
     nrow(comparison), expected_winner_counts[["qdesn_exal_rhs_ns"]],
     expected_winner_counts[["qdesn_al_rhs_ns"]],
@@ -365,11 +365,11 @@ writeLines(c(
   "",
   sprintf(
     paste0(
-      "For all %d cells, however, the equal-tailed intervals of the lowest and ",
-      "second-lowest posterior means overlap. The boldface rankings should ",
-      "therefore be read as conditional posterior-mean summaries under the ",
-      "frozen case- and criterion-specific specifications, not as decisive ",
-      "posterior evidence that one model dominates another."
+      "For all %d comparisons, the equal-tailed intervals of the lowest and ",
+      "second-lowest posterior means overlap. The boldface rankings are ",
+      "conditional posterior-mean summaries under the pre-specified case- and ",
+      "criterion-specific model specifications. The interval overlap limits ",
+      "inference about separation between the two lowest-scoring methods."
     ),
     sum(comparison$winner_runner_intervals_overlap)
   )

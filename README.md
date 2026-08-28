@@ -1,4 +1,4 @@
-# Bayesian Quantile Readouts for Deep Echo State Networks
+# Bayesian Quantile Deep Echo State Networks for Nonlinear Time Series
 
 This repository contains the working manuscript, supplement, bibliography, and
 simulation tables for the Q--DESN article.
@@ -13,9 +13,8 @@ simulation tables for the Q--DESN article.
   used for manuscript revisions.
 - `scripts/build_qdesn_simulation_tables.R`: script used to regenerate the
   simulation tables from external validation outputs.
-- `application/`: article-owned application code and reproducibility contracts,
-  including the current GloFAS retrospective reference case and PriceFM replay
-  outputs. Local data, caches, runs, logs, and generated outputs are ignored.
+- `application/`: code and configuration for the GloFAS and PriceFM analyses.
+  Local data, intermediate calculations, logs, and generated outputs are ignored.
 - `docs/`: audit notes, revision logs, and implementation notes.
 
 ## Build
@@ -38,14 +37,14 @@ pdflatex -interaction=nonstopmode -halt-on-error qdesn-supplement.tex
 pdflatex -interaction=nonstopmode -halt-on-error qdesn-supplement.tex
 ```
 
-Generated auxiliary LaTeX artifacts are intentionally not tracked. The main
-PDF may be refreshed when syncing a manuscript-facing change to `origin/main`.
+Generated auxiliary LaTeX files are intentionally not tracked. The main PDF
+may be refreshed when updating the article source on `origin/main`.
 
 ## arXiv Source Bundle
 
-Do not upload the whole repository to arXiv. The repository contains historical
-implementation notes, local workflow documentation, and application source files
-that are useful for reproducibility but are not part of the submission source.
+Do not upload the whole repository to arXiv. It contains historical
+implementation notes, local development records, and application source files
+that are not part of the submission source.
 
 Build a clean source bundle with:
 
@@ -53,10 +52,10 @@ Build a clean source bundle with:
 scripts/build_arxiv_source_bundle.sh
 ```
 
-The script copies the manifest-controlled article dependency closure from
-`overleaf/article_files.txt` into a timestamped directory under `/tmp`,
-preserving the same relative paths used by the TeX sources. Compile checks for
-the main article and supplement should be run from that bundle before upload.
+The script copies the article and supplement files listed in
+`overleaf/article_files.txt` to a timestamped directory under `/tmp` while
+preserving their relative paths. Compile the main article and supplement from
+that directory before upload.
 
 For the arXiv web form, the likely primary archive is `stat` and the likely
 primary class is `stat.ME`. The license choice is an author decision; use the
@@ -79,11 +78,10 @@ behind the current draft.
 ## Simulation Tables
 
 The checked-in simulation tables are already included by `main.tex` and the
-supplement. They report the current article-facing validation summaries using
-fixed source identities, declared fit and forecast windows, and common scoring
-rules. Table-regeneration details are preserved in `docs/implementation_notes/`
-and in the external validation records; they are intentionally not part of the
-preprint source bundle.
+supplement. They report the simulation results under the stated fitting and
+forecast periods and common scoring rules. Table-generation details are
+preserved in `docs/implementation_notes/` and are intentionally excluded from
+the preprint source bundle.
 
 The older fit-only table builder,
 `scripts/build_qdesn_simulation_tables.R`, is historical and should not be used
@@ -91,10 +89,9 @@ for the current fit-and-forecast result tables.
 
 ## GloFAS Application
 
-The current manuscript-facing GloFAS application is organized under
-`application/`. Start with `application/README.md` and the current authority
-record `docs/implementation_notes/glofas_fr09_authoritative_full7_promotion_20260811.md`.
-The workflow is intentionally article-owned: it defines the input contract,
-model grid, forecast-origin protocol, scoring outputs, and manuscript
-table/figure provenance used by the GloFAS section. Large or private inputs and
-generated runs should remain in ignored local directories.
+The GloFAS application is organized under `application/`. Start with
+`application/README.md`; detailed implementation notes are available in
+`docs/implementation_notes/`. The analysis specifies the input data, model
+grid, forecast-origin design, scoring rules, and manuscript tables and figures.
+Large or private inputs and generated results should remain in ignored local
+directories.

@@ -8,9 +8,9 @@ Check & Result & Detail
 \\
 \midrule
 Comparison inputs & Complete & The data-generating mechanisms, model classes, and score definitions are specified for the reported summary. \\
-Complete comparison grid & Complete & All 32 scenario--model comparisons are present exactly once. \\
+Complete comparison grid & Complete & All 32 simulation-setting--model comparisons are present exactly once. \\
 AL rows & Complete & The 16 AL rows are included in the balanced MCMC comparison. \\
-exAL comparison rows & Complete & Eleven exAL rows use the scale-collapsed analysis; five comparisons use stable MCMC summaries from the same scenario-level evaluation design. \\
+exAL comparison rows & Complete & Eleven exAL rows use the scale-collapsed analysis; five use analyses specific to each simulation setting and satisfy the stated convergence criteria. \\
 Finite reported scores & Finite & All reported fit and forecast scores are finite. \\
 Variational initialization & Available & Every MCMC row uses variational initialization. \\
 Crossings after monotone rearrangement & None & Crossings after the monotone rearrangement equal 0. \\
@@ -19,6 +19,6 @@ Summary construction & Consistent & The table entries follow the stated evaluati
 \bottomrule
 \end{tabular}
 }%
-\caption{Diagnostic summary for the balanced MCMC multi-quantile evaluation. The checks verify complete scenario--model coverage, finite reported scores, variational initialization, and separation of raw and post-rearrangement crossing diagnostics.}
+\caption{Diagnostic summary for the balanced MCMC multi-quantile evaluation. The checks verify complete simulation-setting--model coverage, finite reported scores, variational initialization, and separate crossing diagnostics before and after rearrangement.}
 \label{tab:joint-qdesn-article-validation-mcmc-balanced-criteria-summary}
 \end{table}

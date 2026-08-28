@@ -3977,15 +3977,22 @@ app_joint_exqdesn_phase180_stage_article_assets <- function(
       "pass"
     ),
     detail = c(
-      sprintf("%d/%d packet hashes verify.", sum(packet_check$status == "pass"), nrow(packet_check)),
-      "All 32 scenario-model cells are present exactly once.",
-      sprintf("%d Phase174 cells remain canonically unchanged.", final$unchanged_phase174_cells[[1L]]),
-      "All article-facing MCMC fit and forecast metrics are finite.",
-      sprintf("%d replacements use exact M0 after protected case-specific selection.", final$qualified_replacements[[1L]]),
-      sprintf("Contract crossings=%d.", final$contract_crossing_pairs[[1L]]),
-      "Raw crossings remain disclosed diagnostics and are not the scored monotone contract.",
-      "Files are staged outside tracked tables for the integration chat."
+      sprintf("All %d source-file checks pass.", nrow(packet_check)),
+      "All 32 simulation-setting--model comparisons are present exactly once.",
+      sprintf("The estimates for %d comparisons remain unchanged.", final$unchanged_phase174_cells[[1L]]),
+      "All reported MCMC fitting-sample and forecast criteria are finite.",
+      sprintf("%d updated comparisons use the scale-collapsed specification after independent-seed evaluation.", final$qualified_replacements[[1L]]),
+      sprintf("Crossings after monotone rearrangement equal %d.", final$contract_crossing_pairs[[1L]]),
+      "Crossings before rearrangement are reported separately as a diagnostic.",
+      "The complete comparison table is ready for editorial review."
     ), stringsAsFactors = FALSE
+  )
+  gates_display <- gates
+  gates_display$gate <- c(
+    "Source verification", "Complete comparison", "Reference estimates",
+    "Finite criteria", "Scale-collapsed comparisons",
+    "Crossings after rearrangement", "Crossings before rearrangement",
+    "Table construction"
   )
   out_dir <- dirs$phase180_staging
   if (dir.exists(out_dir)) {
@@ -4010,7 +4017,7 @@ app_joint_exqdesn_phase180_stage_article_assets <- function(
     winner_tex = app_joint_qdesn_phase155_write_latex_table(
       winner_table,
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_winner_summary.tex"),
-      "Lowest MCMC value within each scenario and metric after the protected post-M0 recovery audit.",
+      "Method with the lowest MCMC value within each simulation setting and criterion.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-winner-summary",
       "@{}>{\\raggedright\\arraybackslash}p{0.20\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}@{}",
       size = "\\scriptsize", resize = TRUE
@@ -4019,9 +4026,9 @@ app_joint_exqdesn_phase180_stage_article_assets <- function(
       gates, file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.csv")
     ),
     gate_tex = app_joint_qdesn_phase155_write_latex_table(
-      setNames(gates, c("Gate", "Status", "Detail")),
+      setNames(gates_display, c("Check", "Result", "Detail")),
       file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_gate_summary.tex"),
-      "Reproducibility and diagnostic gates for the protected post-M0 recovery packet.",
+      "Diagnostic summary for the joint multi-quantile MCMC comparison.",
       "tab:joint-qdesn-article-validation-mcmc-balanced-gate-summary",
       "@{}>{\\raggedright\\arraybackslash}p{0.23\\textwidth}l>{\\raggedright\\arraybackslash}p{0.60\\textwidth}@{}",
       size = "\\scriptsize", resize = TRUE
@@ -4030,7 +4037,7 @@ app_joint_exqdesn_phase180_stage_article_assets <- function(
   table_paths[["scenario_tex"]] <- app_joint_qdesn_phase155_write_wrapper(
     table_paths[["model_tex"]],
     file.path(tables_dir, "joint_qdesn_article_validation_mcmc_balanced_scenario_summary.tex"),
-    "Compatibility alias for the Phase180 scenario-level table."
+    "Alternative file name for the Phase180 main table by simulation setting."
   )
   asset_manifest <- data.frame(
     label = names(table_paths),

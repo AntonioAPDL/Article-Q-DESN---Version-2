@@ -103,7 +103,7 @@ main <- paste(readLines(file.path(repo_root, "main.tex"), warn = FALSE), collaps
 supplement <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"), warn = FALSE), collapse = "\n")
 main_required <- c(
   "tables/qdesn_validation_500obs_metric_intervals_prose.tex",
-  "tables/qdesn_validation_500obs_metric_interval_contract_clarification.tex",
+  "tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex",
   "tables/qdesn_validation_500obs_metric_interval_results_v10.tex",
   "tables/qdesn_validation_500obs_mcmc_metric_interval_figures.tex",
   "fig:simulation-500obs-mcmc-fit-rmse-intervals",
@@ -184,7 +184,7 @@ figure_files <- file.path(repo_root, "figures", "independent_simulation", c(
 figure_wrappers <- file.path(repo_root, "tables", c(
   "qdesn_validation_500obs_mcmc_metric_interval_figures.tex",
   "qdesn_validation_500obs_vb_metric_interval_figures.tex",
-  "qdesn_validation_500obs_metric_interval_contract_clarification.tex"
+  "qdesn_validation_500obs_metric_dependence_sensitivity.tex"
 ))
 if (any(!file.exists(figure_files)) ||
     any(file.info(figure_files)$size <= 10000L) ||

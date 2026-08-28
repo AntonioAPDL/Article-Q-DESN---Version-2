@@ -716,9 +716,9 @@ app_joint_qdesn_run_article_validation_assets <- function(
     ),
     vb_model_csv = app_joint_qdesn_article_write_csv(vb_summary, file.path(tables_dir, "joint_qdesn_article_validation_vb_model_summary.csv")),
     vb_model_tex = app_joint_qdesn_article_write_latex_table(vb_table, file.path(tables_dir, "joint_qdesn_article_validation_vb_model_summary.tex"),
-      "Compact joint multi-quantile synthetic validation summary averaged over the nine mechanisms in Table~\\ref{tab:joint-qdesn-article-validation-protocol}; this is not a single empirical data set. Rows labeled QDESN use the AL likelihood, rows labeled exQDESN use the exAL likelihood, and the model name indicates whether the readout is joint or independently fit by quantile. Fit and forecast MAE are computed against known conditional quantiles, check loss scores realized observations, aCRPS summarizes a finite fitted quantile grid by trapezoidal integration of pinball loss, hit-rate error summarizes marginal calibration, and raw crossings count adjacent quantile crossings before monotone rearrangement.",
+      "Entries are averages across the joint multi-quantile simulation mechanisms in Table~\\ref{tab:joint-qdesn-article-validation-protocol}. Entries labeled QDESN use the AL likelihood, entries labeled exQDESN use the exAL likelihood, and the model name indicates whether the regression is estimated jointly or separately at each quantile level. Fit and forecast MAE are computed against known conditional quantiles, check loss scores realized observations, aCRPS approximates integrated check loss across the finite evaluation grid using trapezoidal weights, hit-rate error summarizes marginal calibration, and raw crossings count adjacent quantile crossings before monotone rearrangement.",
       "tab:joint-qdesn-article-validation-vb-model-summary",
-      align = "@{}>{\\raggedright\\arraybackslash}p{0.22\\textwidth}rrrrrr@{}",
+      align = "@{}>{\\raggedright\\arraybackslash}p{0.28\\textwidth}rrrrrr@{}",
       size = "\\scriptsize",
       resize = TRUE
     ),

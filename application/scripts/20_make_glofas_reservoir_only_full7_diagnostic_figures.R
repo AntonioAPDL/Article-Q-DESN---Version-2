@@ -442,8 +442,8 @@ figures <- c(figures, crps_by_horizon = save_plot(
     ggplot2::geom_point(size = 1.5) +
     ggplot2::scale_color_manual(values = model_palette) +
     ggplot2::labs(
-      title = "Quantile-Grid CRPS by Forecast Horizon",
-      x = "Horizon (days)", y = "CRPS grid", color = "Model"
+      title = "aCRPS by Forecast Horizon",
+      x = "Horizon (days)", y = "aCRPS", color = "Model"
     ) +
     theme_diag(),
   figure_name("crps_by_horizon"), 8.6, 4.8

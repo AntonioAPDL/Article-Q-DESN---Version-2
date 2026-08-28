@@ -157,9 +157,9 @@ Q_{t,h}(p_0)=F_{t,h}^{-1}(p_0)
 When the forecasting question concerns one probability level, a single fitted
 conditional quantile is the relevant summary. When several levels are fitted,
 the resulting finite grid can be rearranged into a monotone quantile curve.
-Such a curve is a predictive summary over the chosen grid. A full predictive
-distribution additionally requires a construction that couples the levels into
-a distribution
+Such a curve is a predictive summary over the chosen grid. A complete
+predictive distribution additionally specifies the quantile function between
+the fitted levels and its behavior in the two tails
 \citep{GneitingRaftery2007,GneitingKatzfuss2014,BarlowBrunk1972IsotonicDual,
 chernozhukov2010}.
 
@@ -1104,26 +1104,22 @@ gives the monotone-rearrangement details.
 
 For a forecast origin \(T\), a quantile path is the sequence of fitted
 conditional quantiles over horizons \(h=1,\ldots,H\). A single-level Q--DESN
-fit supplies this path for one probability level \(p_0\). A grid of
-independent fits supplies one path for each fitted level \(p_1<\cdots<p_K\),
-but the resulting grid need not be monotone at every horizon. When a monotone
-finite-grid quantile curve is needed for display or scoring, the default
-rearrangement is the weighted isotonic projection
+fit supplies this path for one probability level \(p_0\). Independent fits at
+\(K\) levels \(p_1<\cdots<p_K\) supply one path at each level, and their raw
+quantile estimates may cross. We obtain ordered quantiles for display and
+scoring with the weighted isotonic projection
 \begin{equation}
-\vect q_t^*
+\vect q_{T,h}^*
 =
-\argmin_{q_1\le\cdots\le q_K}
-\sum_{k=1}^K w_k(\widehat q_{k,t}-q_k)^2,
+\argmin_{z_1\le\cdots\le z_K}
+\sum_{k=1}^K w_k(\widehat q_{T,h,k}-z_k)^2,
 \qquad w_k>0,
 \label{eq:monotone-reporting-main}
 \end{equation}
-with equal weights unless an evaluation design specifies another choice in
-advance. The ordered grid is then linearly interpolated over \([p_1,p_K]\).
-Outside the fitted range, the article reports grid-level summaries unless an
-application explicitly states an endpoint convention. This rearrangement is a
-deterministic summary of fitted quantile levels. A full predictive
-distribution requires an additional interpolation, tail, and coupling
-construction.
+where \(\vect q_{T,h}^*=(z_1,\ldots,z_K)^\top\) at the minimizer. The
+reported analyses use \(w_k=1\). When forecasts between fitted levels are
+needed, linear interpolation defines the quantile curve over \([p_1,p_K]\);
+any extension into the two tails is specified separately for the application.
 
 \subsection{Multi-Step Quantile Forecast Summaries}
 \label{subsec:forecast_hstep}
@@ -1167,17 +1163,16 @@ For the joint quantile-vector regression, a draw contains the coefficients and
 likelihood parameters at each quantile level. The same future design vector
 then returns the raw fitted quantile vector
 \[
-\mu_{q,T+h}^{(m)}
+\mu_{j,T+h}^{(m)}
 =
-\alpha_q^{(m)}
-+\tilde{\vect x}_{T+h}^{(m)\top}\vect\beta_q^{(m)},
-\qquad q=1,\ldots,Q.
+\alpha_j^{(m)}
++\tilde{\vect x}_{T+h}^{(m)\top}\vect\beta_j^{(m)},
+\qquad j=1,\ldots,Q.
 \]
 Let
 \(\vect q_{T+h}^{(m)}
 = (\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). This vector
-estimates the conditional quantile path over the fitted grid. A scalar response
-predictive distribution requires the separate propagation rule below.
+estimates the conditional quantile path over the fitted grid.
 
 If exact monotonicity is required before scoring or display, let
 \(\mathcal M\) denote the stated monotone rearrangement, such as isotonic
@@ -1186,33 +1181,58 @@ projection or rearrangement
 \[
 \vect q_{T+h}^{*,(m)}=\mathcal M\{\vect q_{T+h}^{(m)}\}.
 \]
-The ordered grid defines a draw-specific quantile curve
-\(Q_{T+h}^{*,(m)}(u)\) under the stated interpolation and endpoint convention.
-For recursive prediction, a scalar future response is sampled from the
-interpolated quantile curve as described in the supplement:
-\[
-u_{T+h}^{(m,r)}\sim\Unif(0,1),
-\qquad
-y_{T+h}^{(m,r)}=Q_{T+h}^{*,(m)}\!\left(u_{T+h}^{(m,r)}\right).
-\]
-The interpolation and endpoint convention determine the quantile curve used
-for this recursive propagation.
+The ordered values define a draw-specific quantile curve on the fitted
+interval \([p_1,p_Q]\) by linear interpolation. The reported joint study
+evaluates this finite grid using fixed forecast-design rows derived from the
+simulated series. Recursive response simulation over \((0,1)\) would
+additionally require a specified tail extension.
 
-Single-level forecasts are scored by check loss at the fitted probability
-level. For a quantile grid, this article also uses \(\aCRPS\), defined as a
-finite-grid integrated check-loss score:
-\[
-\aCRPS(y;\vect q)
-=2\sum_{k=1}^K \omega_k \rho_{p_k}(y-q_k),
-\qquad
+For forecast evaluation, let \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), and
+write \(\mathcal P_K=\{p_1,\ldots,p_K\}\) for the probability levels used to
+compute the score. The evaluation levels may differ from the fitted levels
+when an estimated quantile function is available at other probabilities. For
+one forecast origin and horizon, let
+\(q_{T,h,k}^*\) be the reported conditional \(p_k\)-quantile of
+\(Y_{T+h}\mid\mathcal F_T\), after monotone rearrangement when it is applied,
+and let \(y\) be the realized response. The check loss is
+\begin{equation}
 \rho_p(e)=e\{p-\ind(e<0)\}.
-\]
-The weights \(\omega_k\) are the trapezoidal quadrature weights over the
-fitted probability grid. Thus \(\aCRPS\) approximates the CRPS identity based
-on integrated quantile loss over the available grid. Full
-continuous-distribution CRPS requires a complete quantile function and the
-corresponding integral. This distinction matters for the application tables
-below, where \(\aCRPS\) compares finite sets of fitted quantile summaries.
+\label{eq:check-loss-main}
+\end{equation}
+For a predictive distribution \(F\) with finite first moment and quantile
+function \(F^{-1}\), the continuous ranked probability score (CRPS) has the
+integrated check-loss representation \citep{GneitingRaftery2007}:
+\begin{equation}
+\operatorname{CRPS}(F,y)
+=2\int_0^1 \rho_p\!\left\{y-F^{-1}(p)\right\}\,dp.
+\label{eq:crps-integrated-check-main}
+\end{equation}
+When quantile forecasts are evaluated on \(\mathcal P_K\), we use the
+finite-grid trapezoidal approximation over \([p_1,p_K]\),
+\begin{equation}
+\aCRPS_{\mathcal P_K}(y;\vect q_{T,h}^*)
+=2\sum_{k=1}^K \omega_k
+  \rho_{p_k}\!\left(y-q_{T,h,k}^*\right),
+\label{eq:acrps-main}
+\end{equation}
+where
+\begin{equation}
+\begin{aligned}
+\omega_1&=\frac{p_2-p_1}{2},
+&\omega_k&=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\le k\le K-1,
+&\omega_K&=\frac{p_K-p_{K-1}}{2}.
+\end{aligned}
+\label{eq:acrps-weights-main}
+\end{equation}
+These weights satisfy \(\sum_{k=1}^K\omega_k=p_K-p_1\), so \(\aCRPS\)
+retains the scale of integrated check loss over the covered probability range.
+The joint simulation and GloFAS analyses use seven common evaluation levels
+with endpoints \(p_1=0.05\) and \(p_K=0.95\), so their trapezoidal weights sum
+to \(0.90\). For fitted quantile regressions, the evaluation levels coincide
+with the fitted grid. The joint simulation first forms quantile estimates from
+the pooled posterior means of the MCMC coefficient draws and then applies
+monotone rearrangement. GloFAS applies monotone rearrangement to the
+variational posterior-mean quantile estimates.
 
 % ============================================================
 \section{Model Diagnostics and Reservoir Specification}
@@ -1275,10 +1295,11 @@ simulations with a known conditional quantile path, quantile-path RMSE, mean
 absolute error, bias, and correlation assess recovery of the true path. In both
 simulations and applications, forecast scores must use common forecast origins
 and horizons. For one fitted quantile level, check loss is the proper score for
-the reported quantile. For a quantile grid, interval score, empirical coverage,
-interval length, and \(\aCRPS\) evaluate the finite set of fitted quantile
-summaries. Calibration of posterior credible bands under a misspecified working
-likelihood requires separate assessment.
+the reported quantile. Across several levels, \(\aCRPS\) approximates
+integrated check loss over the evaluation grid, while interval score, empirical
+coverage, and interval length describe selected central intervals. Calibration
+of posterior credible bands under a misspecified working likelihood requires
+separate assessment.
 
 Reservoir specifications vary depth, width, lag length, washout, leak rate,
 spectral radius, sparsity, input scaling, and activation. Specifications are
@@ -1439,10 +1460,11 @@ C_{\mathrm{fore}}^{(b)}
   &=\frac{1}{|\mathcal G|}\sum_{r\in\mathcal G}
     \rho_p\!\left(y_r-q_{p,r}^{(b)}\right),
 \end{align}
-where \(\rho_p(u)=u\{p-\ind(u<0)\}\), and \(\mu_r\) and \(y_r\) denote the
-oracle quantile and realized outcome for pair \(r\). Thus fit RMSE and forecast
-MAE measure recovery of the oracle quantile path, whereas forecast check loss
-is a proper score against realized observations.
+where \(\rho_p\) is the check loss in Eq.~\eqref{eq:check-loss-main}, and
+\(\mu_r\) and \(y_r\) denote the oracle quantile and realized outcome for pair
+\(r\). Thus fit RMSE and forecast MAE measure recovery of the oracle quantile
+path, whereas forecast check loss is a proper score against realized
+observations.
 
 For each criterion \(M^{(b)}\), the tables report the posterior mean
 \(B^{-1}\sum_{b=1}^B M^{(b)}\) and the empirical 0.025 and 0.975 posterior
@@ -1472,7 +1494,7 @@ numerical tables.
 
 \input{tables/qdesn_validation_500obs_metric_intervals_prose.tex}
 
-\input{tables/qdesn_validation_500obs_metric_interval_contract_clarification.tex}
+\input{tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex}
 
 All displayed Q--DESN and exQ--DESN values use feature scaling and other
 preprocessing quantities estimated from observations available through the
@@ -1525,13 +1547,14 @@ benchmark mechanisms use Gaussian, Laplace, and Gaussian-mixture innovations.
 Five more challenging mechanisms introduce asymmetric tails, persistent heavy
 tails, Student-\(t\) errors, regime shifts, and nonlinear dynamics represented
 by reservoir features. The resulting grid contains 32 mechanism--model
-combinations. Fitted and forecast
-quantiles are compared with the known conditional quantile paths; realized
-observations are scored by check loss and finite-grid \(\aCRPS\); and hit-rate
-error measures the absolute difference between the empirical proportion of
-observations below the fitted quantile and the nominal quantile level. Reported scores use the pre-specified monotone
-rearrangement, while adjacent-level crossings before rearrangement summarize
-departures from monotonicity.
+combinations. Fitted and forecast quantiles are compared with the known
+conditional quantile paths. Realized observations are scored by check loss and
+\(\aCRPS\) over the seven evaluation levels, and hit-rate error measures the
+absolute difference between the empirical proportion of observations below
+the fitted quantile and the nominal level. The reported \(\aCRPS\) uses the
+quantile curve obtained from pooled posterior means of the MCMC coefficient
+draws after monotone rearrangement; adjacent-level crossings before
+rearrangement summarize departures from monotonicity.
 
 \input{tables/joint_qdesn_article_validation_mcmc_balanced_model_summary.tex}
 
@@ -1735,8 +1758,8 @@ performance and interval calibration.
 \caption{Forecast scoring for the GloFAS retrospective analysis.
 Scores are computed on the transformed streamflow scale for the
 forecast origin \GlofasApplicationCurrentOriginDate{}. Lower check loss,
-interval score, and \(\aCRPS\) are better; \(\aCRPS\) is the finite-grid
-trapezoidal integrated check-loss score over the seven fitted levels. Mean
+interval score, and \(\aCRPS\) are better; \(\aCRPS\) is computed from
+Eq.~\eqref{eq:acrps-main} at seven common evaluation levels. Mean
 coverage reports empirical coverage for the nominal 90\% interval and
 is interpreted descriptively. The final column gives the relative reduction in
 mean check loss.}

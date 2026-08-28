@@ -20,6 +20,8 @@ source:
   fit_object_sha256: 68ae1c539d17ff46e84436f7edb4385e74c2bec994456ec6102a73ea26b1a062
   design_object: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_014_91b5493969/objects/qdesn_constrained_median_richer_discrepancy_initial_014_91b5493969_p50__design.rds
   design_object_sha256: c5a188229c93a3d2613c283cc62d56c163a160ddf55fb775d30e107a5ace26a5
+  runtime_backend_manifest: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_014_91b5493969/manifest/latent_path_runtime_backend.csv
+  runtime_backend_manifest_sha256: 04b6eaf8a862c60a65ce43ffc60a0a76df6c422470a52771b43b84eaffa7875b
   forecast_summary: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/runs/glofas_richer_discrepancy_initial_20260827_richer_discrepancy_initial_014_91b5493969/tables/post_fit_forecast_window_summary.csv
   forecast_summary_sha256: 37a92b2f82012731be500e5b87212a5af732523daa9e606fb4e9dd06e86cc736
   observed_scores: /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827/scores/richer_discrepancy_initial_014_91b5493969_observed_fit_scores.csv
@@ -92,6 +94,10 @@ execution:
   retain_fit_object_during_campaign: true
   retain_design_object_during_campaign: true
   cleanup_is_dry_run_first: true
+  warm_start_numerical_equivalence:
+    absolute_tolerance: 1.0e-10
+    scaled_rmse_tolerance: 1.0e-12
+    chunk_elements: 1000000
 
 waves:
   A0:

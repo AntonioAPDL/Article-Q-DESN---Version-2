@@ -1600,6 +1600,14 @@ app_latent_path_fit_diagnostics <- function(result) {
   base$vb_warm_start_compatibility_mode <- warm_start$compatibility_mode %||% NA_character_
   base$vb_warm_start_compatibility_class <- warm_start$compatibility_class %||% NA_character_
   base$vb_warm_start_compatibility_message <- warm_start$compatibility_message %||% NA_character_
+  base$vb_warm_start_numerical_certificate_path <-
+    warm_start$numerical_certificate_path %||% NA_character_
+  base$vb_warm_start_numerical_certificate_sha256 <-
+    warm_start$numerical_certificate_sha256 %||% NA_character_
+  base$vb_warm_start_numerical_max_abs <-
+    as.numeric(warm_start$numerical_max_abs %||% NA_real_)
+  base$vb_warm_start_numerical_max_scaled_rmse <-
+    as.numeric(warm_start$numerical_max_scaled_rmse %||% NA_real_)
   base$vb_warm_start_message <- warm_start$message %||% NA_character_
   checkpoint <- result$fit$vb_diagnostics$checkpoint %||% list(enabled = FALSE)
   base$vb_checkpoint_enabled <- app_as_bool(checkpoint$enabled %||% FALSE)

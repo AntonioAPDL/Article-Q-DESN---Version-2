@@ -37,7 +37,7 @@ app_latent_checkpoint_semantic_vb_args <- function(vb_args = list()) {
     "max_iter", "min_iter_elbo", "tol", "tol_par", "n_samp_xi", "n_draws",
     "seed", "beta_prior_type", "beta_rhs", "alpha_rhs", "prior_contract", "prior_sigma", "rhs",
     "future_moment_strategy", "future_update_strategy", "future_objective_strategy",
-    "chunking", "draw_backend", "likelihood_family"
+    "chunking", "draw_backend", "likelihood_family", "warm_start"
   )
   out <- vb_args[intersect(fields, names(vb_args))]
   out$diagnostics <- list(
@@ -62,6 +62,10 @@ app_latent_checkpoint_engine_hash <- function() {
     "app_latent_rhs_state_update_dispatch",
     "app_latent_prior_state_update",
     "app_latent_approx_objective",
+    "app_latent_path_warm_start_config",
+    "app_latent_path_warm_start_compatibility",
+    "app_latent_path_read_numerical_design_certificate",
+    "app_latent_path_warm_start_prepare",
     "app_fit_latent_path_al_vb_core"
   )
   bodies <- lapply(function_names, function(name) {

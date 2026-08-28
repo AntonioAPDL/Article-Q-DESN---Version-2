@@ -2332,6 +2332,341 @@ app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, 
   val - 0.5 * sum(prior_state$prior_precision * e_theta2)
 }
 
+app_latent_path_numerical_field_metrics <- function(
+  source,
+  target,
+  field,
+  absolute_tolerance,
+  scaled_rmse_tolerance,
+  chunk_elements = 1.0e6
+) {
+  source_dim <- dim(source)
+  target_dim <- dim(target)
+  if (!identical(source_dim, target_dim) || length(source) != length(target)) {
+    return(data.frame(
+      field = field,
+      n = max(length(source), length(target)),
+      max_abs = Inf,
+      rmse = Inf,
+      scale = NA_real_,
+      scaled_rmse = Inf,
+      finite = FALSE,
+      dimensions_match = FALSE,
+      passed = FALSE,
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (!is.numeric(source) || !is.numeric(target)) {
+    stop(sprintf("Numerical design field '%s' must be numeric.", field), call. = FALSE)
+  }
+  n <- length(source)
+  if (!n) {
+    return(data.frame(
+      field = field, n = 0, max_abs = 0, rmse = 0, scale = 1,
+      scaled_rmse = 0, finite = TRUE, dimensions_match = TRUE, passed = TRUE,
+      stringsAsFactors = FALSE
+    ))
+  }
+  chunk_elements <- max(1L, as.integer(chunk_elements))
+  max_abs <- 0
+  sum_sq_diff <- 0
+  sum_sq_source <- 0
+  sum_sq_target <- 0
+  finite <- TRUE
+  for (first in seq.int(1L, n, by = chunk_elements)) {
+    last <- min(n, first + chunk_elements - 1L)
+    source_chunk <- source[first:last]
+    target_chunk <- target[first:last]
+    if (any(!is.finite(source_chunk)) || any(!is.finite(target_chunk))) {
+      finite <- FALSE
+      break
+    }
+    difference <- target_chunk - source_chunk
+    max_abs <- max(max_abs, max(abs(difference)))
+    sum_sq_diff <- sum_sq_diff + sum(difference^2)
+    sum_sq_source <- sum_sq_source + sum(source_chunk^2)
+    sum_sq_target <- sum_sq_target + sum(target_chunk^2)
+  }
+  rmse <- if (finite) sqrt(sum_sq_diff / n) else Inf
+  scale <- if (finite) max(1, sqrt(sum_sq_source / n), sqrt(sum_sq_target / n)) else NA_real_
+  scaled_rmse <- if (finite) rmse / scale else Inf
+  passed <- finite && max_abs <= absolute_tolerance && scaled_rmse <= scaled_rmse_tolerance
+  data.frame(
+    field = field,
+    n = n,
+    max_abs = max_abs,
+    rmse = rmse,
+    scale = scale,
+    scaled_rmse = scaled_rmse,
+    finite = finite,
+    dimensions_match = TRUE,
+    passed = passed,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_latent_path_numerical_future_snapshot <- function(
+  design,
+  design_object_sha256 = NA_character_
+) {
+  probe <- app_latent_path_future_probe(design)
+  contract <- app_latent_path_warm_start_contract(design)
+  list(
+    schema_version = "latent_path_numerical_future_snapshot_v1",
+    design_object_sha256 = as.character(design_object_sha256),
+    warm_start_contract = contract,
+    H_y_init = as.matrix(probe$H_y),
+    H_g_key_init = as.matrix(app_latent_future_H_g_key(probe)),
+    discrepancy_baseline_future = as.numeric(
+      probe$discrepancy_baseline_future %||% rep(0, nrow(design$future_key))
+    ),
+    g_future_index = as.integer(app_latent_future_g_index(probe)),
+    row_info_y = probe$row_info_y,
+    row_info_g = probe$row_info_g,
+    runtime_backend = if (exists("app_latent_runtime_backend_contract", mode = "function")) {
+      app_latent_runtime_backend_contract(fail_closed = TRUE)
+    } else {
+      list(backend = "unrecorded")
+    }
+  )
+}
+
+app_latent_path_numerical_structural_contract <- function(
+  design,
+  future_snapshot = NULL,
+  probe = NULL
+) {
+  if (is.null(future_snapshot)) {
+    probe <- app_latent_path_future_probe(design, probe = probe)
+    future_snapshot <- list(
+      g_future_index = as.integer(app_latent_future_g_index(probe)),
+      row_info_y = probe$row_info_y,
+      row_info_g = probe$row_info_g
+    )
+  }
+  list(
+    schema_version = "latent_path_numerical_structure_v1",
+    numeric_dimensions = list(
+      z_fixed = length(design$z_fixed),
+      H_fixed = dim(design$H_fixed),
+      X_beta = dim(design$X_beta %||% design$X_base),
+      X_alpha = dim(design$X_alpha %||% design$X_base),
+      y_future_init = length(design$y_future_init),
+      H_y_init = dim(future_snapshot$H_y_init %||% probe$H_y),
+      H_g_key_init = dim(future_snapshot$H_g_key_init %||% app_latent_future_H_g_key(probe)),
+      discrepancy_baseline_fixed = length(
+        design$discrepancy_baseline_fixed %||% rep(0, nrow(design$X_alpha %||% design$X_base))
+      ),
+      discrepancy_baseline_future = length(
+        future_snapshot$discrepancy_baseline_future %||%
+          probe$discrepancy_baseline_future %||% rep(0, nrow(design$future_key))
+      )
+    ),
+    source_fixed = as.character(design$source_fixed),
+    row_info_fixed = design$row_info_fixed,
+    future_key = design$future_key,
+    g_future_index = as.integer(future_snapshot$g_future_index),
+    row_info_y = future_snapshot$row_info_y,
+    row_info_g = future_snapshot$row_info_g,
+    feature_info_beta = design$feature_info_beta %||% design$feature_info,
+    feature_info_alpha = design$feature_info_alpha %||% design$feature_info,
+    p0 = as.numeric(design$p0),
+    beta_index = as.integer(design$beta_index),
+    alpha_index = as.integer(design$alpha_index),
+    intercept_index = as.integer(design$intercept_index),
+    discrepancy_transition_strategy = as.character(
+      design$discrepancy_transition_strategy %||% "recursive_level"
+    ),
+    two_block_design = isTRUE(design$two_block_design %||% FALSE),
+    block_config_hash_beta = as.character(design$block_config_hash_beta %||% NA_character_),
+    block_config_hash_alpha = as.character(design$block_config_hash_alpha %||% NA_character_),
+    future_discrepancy_convention = as.character(
+      design$future_discrepancy_convention %||% NA_character_
+    ),
+    design_version = as.character(design$design_version %||% NA_character_)
+  )
+}
+
+app_latent_path_numerical_design_certificate <- function(
+  source_design,
+  source_future_snapshot,
+  target_design,
+  source_design_object_sha256,
+  source_future_snapshot_sha256,
+  absolute_tolerance = 1.0e-10,
+  scaled_rmse_tolerance = 1.0e-12,
+  chunk_elements = 1.0e6
+) {
+  if (!is.list(source_future_snapshot) ||
+      !identical(
+        source_future_snapshot$schema_version,
+        "latent_path_numerical_future_snapshot_v1"
+      )) {
+    stop("Numerical warm-start source snapshot has an unsupported schema.", call. = FALSE)
+  }
+  if (!identical(
+    tolower(as.character(source_future_snapshot$design_object_sha256)),
+    tolower(as.character(source_design_object_sha256))
+  )) {
+    stop("Numerical warm-start source snapshot is bound to a different design object.", call. = FALSE)
+  }
+  absolute_tolerance <- as.numeric(absolute_tolerance)
+  scaled_rmse_tolerance <- as.numeric(scaled_rmse_tolerance)
+  if (!is.finite(absolute_tolerance) || absolute_tolerance <= 0 ||
+      !is.finite(scaled_rmse_tolerance) || scaled_rmse_tolerance <= 0) {
+    stop("Numerical warm-start tolerances must be finite and positive.", call. = FALSE)
+  }
+  target_probe <- app_latent_path_future_probe(target_design)
+  target_future <- list(
+    H_y_init = as.matrix(target_probe$H_y),
+    H_g_key_init = as.matrix(app_latent_future_H_g_key(target_probe)),
+    discrepancy_baseline_future = as.numeric(
+      target_probe$discrepancy_baseline_future %||% rep(0, nrow(target_design$future_key))
+    ),
+    g_future_index = as.integer(app_latent_future_g_index(target_probe)),
+    row_info_y = target_probe$row_info_y,
+    row_info_g = target_probe$row_info_g
+  )
+  source_structure <- app_latent_path_numerical_structural_contract(
+    source_design,
+    future_snapshot = source_future_snapshot
+  )
+  target_structure <- app_latent_path_numerical_structural_contract(
+    target_design,
+    future_snapshot = target_future,
+    probe = target_probe
+  )
+  source_structure_hash <- app_latent_path_contract_hash(
+    source_structure,
+    "latent_numerical_structure_"
+  )
+  target_structure_hash <- app_latent_path_contract_hash(
+    target_structure,
+    "latent_numerical_structure_"
+  )
+  numeric_pairs <- list(
+    z_fixed = list(source_design$z_fixed, target_design$z_fixed),
+    H_fixed = list(source_design$H_fixed, target_design$H_fixed),
+    X_beta = list(source_design$X_beta %||% source_design$X_base, target_design$X_beta %||% target_design$X_base),
+    X_alpha = list(source_design$X_alpha %||% source_design$X_base, target_design$X_alpha %||% target_design$X_base),
+    y_future_init = list(source_design$y_future_init, target_design$y_future_init),
+    H_y_init = list(source_future_snapshot$H_y_init, target_future$H_y_init),
+    H_g_key_init = list(source_future_snapshot$H_g_key_init, target_future$H_g_key_init),
+    discrepancy_baseline_fixed = list(
+      source_design$discrepancy_baseline_fixed %||% rep(0, nrow(source_design$X_alpha %||% source_design$X_base)),
+      target_design$discrepancy_baseline_fixed %||% rep(0, nrow(target_design$X_alpha %||% target_design$X_base))
+    ),
+    discrepancy_baseline_future = list(
+      source_future_snapshot$discrepancy_baseline_future,
+      target_future$discrepancy_baseline_future
+    )
+  )
+  metrics <- do.call(rbind, lapply(names(numeric_pairs), function(field) {
+    pair <- numeric_pairs[[field]]
+    app_latent_path_numerical_field_metrics(
+      pair[[1L]],
+      pair[[2L]],
+      field = field,
+      absolute_tolerance = absolute_tolerance,
+      scaled_rmse_tolerance = scaled_rmse_tolerance,
+      chunk_elements = chunk_elements
+    )
+  }))
+  source_contract <- source_future_snapshot$warm_start_contract
+  target_contract <- app_latent_path_warm_start_contract(target_design)
+  structural_pass <- identical(source_structure_hash, target_structure_hash)
+  passed <- structural_pass && nrow(metrics) > 0L && all(metrics$passed)
+  list(
+    schema_version = "latent_path_numerical_design_certificate_v1",
+    passed = passed,
+    source_design_object_sha256 = as.character(source_design_object_sha256),
+    source_future_snapshot_sha256 = as.character(source_future_snapshot_sha256),
+    source_design_hash = as.character(source_contract$design_hash),
+    target_design_hash = as.character(target_contract$design_hash),
+    source_contract_hash = app_latent_path_contract_hash(source_contract, "warm_source_contract_"),
+    target_contract_hash = app_latent_path_contract_hash(target_contract, "warm_target_contract_"),
+    source_structure_hash = source_structure_hash,
+    target_structure_hash = target_structure_hash,
+    structural_pass = structural_pass,
+    absolute_tolerance = absolute_tolerance,
+    scaled_rmse_tolerance = scaled_rmse_tolerance,
+    maximum_absolute_difference = max(metrics$max_abs),
+    maximum_scaled_rmse = max(metrics$scaled_rmse),
+    field_metrics = metrics,
+    source_runtime_backend = source_future_snapshot$runtime_backend,
+    target_runtime_backend = if (exists("app_latent_runtime_backend_contract", mode = "function")) {
+      app_latent_runtime_backend_contract(fail_closed = TRUE)
+    } else {
+      list(backend = "unrecorded")
+    }
+  )
+}
+
+app_latent_path_read_numerical_design_certificate <- function(
+  path,
+  expected_sha256,
+  absolute_tolerance,
+  scaled_rmse_tolerance
+) {
+  resolved <- app_resolve_path(as.character(path[[1L]]), must_work = TRUE)
+  observed_sha256 <- tolower(app_sha256_file(resolved))
+  expected_sha256 <- tolower(as.character(expected_sha256[[1L]]))
+  if (!nzchar(expected_sha256) || !identical(observed_sha256, expected_sha256)) {
+    stop("Numerical warm-start certificate SHA-256 mismatch.", call. = FALSE)
+  }
+  certificate <- readRDS(resolved)
+  required <- c(
+    "schema_version", "passed", "source_design_hash", "target_design_hash",
+    "source_contract_hash", "target_contract_hash", "structural_pass",
+    "source_structure_hash", "target_structure_hash", "absolute_tolerance",
+    "scaled_rmse_tolerance", "maximum_absolute_difference",
+    "maximum_scaled_rmse", "field_metrics"
+  )
+  missing <- setdiff(required, names(certificate %||% list()))
+  if (length(missing) || !identical(
+    certificate$schema_version,
+    "latent_path_numerical_design_certificate_v1"
+  )) {
+    stop("Numerical warm-start certificate is incomplete or has an unsupported schema.", call. = FALSE)
+  }
+  metric_fields <- c("field", "max_abs", "scaled_rmse", "passed")
+  if (!isTRUE(certificate$passed) || !isTRUE(certificate$structural_pass) ||
+      !identical(
+        as.character(certificate$source_structure_hash),
+        as.character(certificate$target_structure_hash)
+      ) ||
+      !is.data.frame(certificate$field_metrics) ||
+      !nrow(certificate$field_metrics) ||
+      length(setdiff(metric_fields, names(certificate$field_metrics))) ||
+      !all(certificate$field_metrics$passed) ||
+      any(!is.finite(certificate$field_metrics$max_abs)) ||
+      any(!is.finite(certificate$field_metrics$scaled_rmse))) {
+    stop("Numerical warm-start certificate did not pass its frozen design checks.", call. = FALSE)
+  }
+  if (!isTRUE(all.equal(
+    as.numeric(certificate$absolute_tolerance),
+    as.numeric(absolute_tolerance),
+    tolerance = 0
+  )) || !isTRUE(all.equal(
+    as.numeric(certificate$scaled_rmse_tolerance),
+    as.numeric(scaled_rmse_tolerance),
+    tolerance = 0
+  ))) {
+    stop("Numerical warm-start certificate tolerances differ from the candidate contract.", call. = FALSE)
+  }
+  if (!is.finite(as.numeric(certificate$maximum_absolute_difference)) ||
+      !is.finite(as.numeric(certificate$maximum_scaled_rmse)) ||
+      as.numeric(certificate$maximum_absolute_difference) > as.numeric(absolute_tolerance) ||
+      as.numeric(certificate$maximum_scaled_rmse) > as.numeric(scaled_rmse_tolerance)) {
+    stop("Numerical warm-start certificate exceeds its frozen tolerances.", call. = FALSE)
+  }
+  list(
+    certificate = certificate,
+    path = app_prefer_repo_relative_path(resolved),
+    sha256 = observed_sha256
+  )
+}
+
 app_latent_path_warm_start_config <- function(vb_args = list()) {
   cfg <- vb_args$warm_start %||% list(enabled = FALSE)
   if (is.logical(cfg) && length(cfg) == 1L) cfg <- list(enabled = cfg)
@@ -2349,9 +2684,15 @@ app_latent_path_warm_start_config <- function(vb_args = list()) {
     require_contract = app_as_bool(cfg$require_contract %||% FALSE),
     compatibility_mode = match.arg(
       as.character(cfg$compatibility_mode %||% "exact_design"),
-      c("exact_design", "coordinate_transfer", "state_only")
+      c("exact_design", "numerical_design", "coordinate_transfer", "state_only")
     ),
-    source_contract = cfg$source_contract %||% cfg$contract %||% NULL
+    source_contract = cfg$source_contract %||% cfg$contract %||% NULL,
+    numerical_design_certificate = cfg$numerical_design_certificate %||% NULL,
+    numerical_design_certificate_sha256 = cfg$numerical_design_certificate_sha256 %||% NULL,
+    numerical_absolute_tolerance = as.numeric(cfg$numerical_absolute_tolerance %||% 1.0e-10),
+    numerical_scaled_rmse_tolerance = as.numeric(
+      cfg$numerical_scaled_rmse_tolerance %||% 1.0e-12
+    )
   )
 }
 
@@ -2404,8 +2745,13 @@ app_latent_path_read_warm_start_contract <- function(x) {
   stop("Warm-start contract paths must be YAML, JSON, or RDS.", call. = FALSE)
 }
 
-app_latent_path_warm_start_compatibility <- function(source, target, mode = "exact_design") {
-  mode <- match.arg(mode, c("exact_design", "coordinate_transfer", "state_only"))
+app_latent_path_warm_start_compatibility <- function(
+  source,
+  target,
+  mode = "exact_design",
+  numerical_certificate = NULL
+) {
+  mode <- match.arg(mode, c("exact_design", "numerical_design", "coordinate_transfer", "state_only"))
   required <- c("design_hash", "quantile_level", "n_theta", "theta_names_hash", "n_future", "future_key_hash")
   missing_source <- setdiff(required, names(source %||% list()))
   missing_target <- setdiff(required, names(target %||% list()))
@@ -2446,6 +2792,34 @@ app_latent_path_warm_start_compatibility <- function(source, target, mode = "exa
       sigma_allowed = TRUE,
       message = "exact semantic design contract matched"
     ))
+  }
+  if (identical(mode, "numerical_design") && same_quantile && same_theta && same_future) {
+    certificate <- numerical_certificate %||% list()
+    source_contract_hash <- app_latent_path_contract_hash(source, "warm_source_contract_")
+    target_contract_hash <- app_latent_path_contract_hash(target, "warm_target_contract_")
+    certificate_match <- isTRUE(certificate$passed) &&
+      isTRUE(certificate$structural_pass) &&
+      identical(as.character(certificate$source_design_hash), source_hash) &&
+      identical(as.character(certificate$target_design_hash), target_hash) &&
+      identical(as.character(certificate$source_contract_hash), source_contract_hash) &&
+      identical(as.character(certificate$target_contract_hash), target_contract_hash)
+    if (certificate_match) {
+      return(list(
+        accepted = TRUE,
+        class = "numerically_equivalent_design",
+        theta_allowed = TRUE,
+        future_allowed = TRUE,
+        sigma_allowed = TRUE,
+        message = sprintf(
+          paste(
+            "semantic coordinates and hash-pinned numerical certificate matched",
+            "(max_abs=%.3e; max_scaled_rmse=%.3e)"
+          ),
+          as.numeric(certificate$maximum_absolute_difference),
+          as.numeric(certificate$maximum_scaled_rmse)
+        )
+      ))
+    }
   }
   if (identical(mode, "coordinate_transfer") && same_quantile && same_theta && same_future) {
     return(list(
@@ -2547,6 +2921,10 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
     compatibility_mode = cfg$compatibility_mode,
     compatibility_class = if (isTRUE(cfg$require_contract)) NA_character_ else "legacy_dimension_only",
     compatibility_message = NA_character_,
+    numerical_certificate_path = NA_character_,
+    numerical_certificate_sha256 = NA_character_,
+    numerical_max_abs = NA_real_,
+    numerical_max_scaled_rmse = NA_real_,
     message = if (isTRUE(cfg$enabled)) NA_character_ else "warm start disabled"
   )
   out <- list(
@@ -2577,10 +2955,36 @@ app_latent_path_warm_start_prepare <- function(design, vb_args = list(), p, H_fu
       stop("Strict warm start requires a source semantic contract.", call. = FALSE)
     }
     target_contract <- app_latent_path_warm_start_contract(design)
+    numerical_certificate <- NULL
+    if (identical(cfg$compatibility_mode, "numerical_design")) {
+      if (is.null(cfg$numerical_design_certificate) ||
+          is.null(cfg$numerical_design_certificate_sha256)) {
+        stop(
+          "Numerical-design warm start requires a certificate path and SHA-256.",
+          call. = FALSE
+        )
+      }
+      certificate_read <- app_latent_path_read_numerical_design_certificate(
+        cfg$numerical_design_certificate,
+        cfg$numerical_design_certificate_sha256,
+        cfg$numerical_absolute_tolerance,
+        cfg$numerical_scaled_rmse_tolerance
+      )
+      numerical_certificate <- certificate_read$certificate
+      out$diagnostics$numerical_certificate_path <- certificate_read$path
+      out$diagnostics$numerical_certificate_sha256 <- certificate_read$sha256
+      out$diagnostics$numerical_max_abs <- as.numeric(
+        numerical_certificate$maximum_absolute_difference
+      )
+      out$diagnostics$numerical_max_scaled_rmse <- as.numeric(
+        numerical_certificate$maximum_scaled_rmse
+      )
+    }
     compatibility <- app_latent_path_warm_start_compatibility(
       source_contract,
       target_contract,
-      mode = cfg$compatibility_mode
+      mode = cfg$compatibility_mode,
+      numerical_certificate = numerical_certificate
     )
     out$diagnostics$compatibility_class <- compatibility$class
     out$diagnostics$compatibility_message <- compatibility$message

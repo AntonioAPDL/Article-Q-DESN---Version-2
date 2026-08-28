@@ -29,6 +29,18 @@ app_glofas_grouped_rhs_validate_campaign <- function(campaign) {
       !identical(as.character(execution$numerical_backend %||% ""), "openblas_serial")) {
     stop("Campaign execution values disagree with the reviewed resource contract.", call. = FALSE)
   }
+  numerical <- execution$warm_start_numerical_equivalence %||% list()
+  if (!isTRUE(all.equal(
+    as.numeric(numerical$absolute_tolerance %||% NA_real_),
+    1.0e-10,
+    tolerance = 0
+  )) || !isTRUE(all.equal(
+    as.numeric(numerical$scaled_rmse_tolerance %||% NA_real_),
+    1.0e-12,
+    tolerance = 0
+  )) || as.integer(numerical$chunk_elements %||% NA_integer_) != 1000000L) {
+    stop("Campaign numerical warm-start tolerances disagree with the reviewed contract.", call. = FALSE)
+  }
   decision <- unlist(campaign$decision %||% list(), use.names = TRUE)
   decision_numeric <- suppressWarnings(as.numeric(decision))
   if (!length(decision_numeric) || any(!is.finite(decision_numeric)) || any(decision_numeric < 0)) {

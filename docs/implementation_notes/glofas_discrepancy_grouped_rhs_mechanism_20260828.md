@@ -77,20 +77,20 @@ frozen A0 activation rule passes.
 | ID | Role | Direct `tau0` | Reservoir `tau0` | Initialization |
 |---|---|---:|---:|---|
 | `grhs_a0_01` | Legacy D16 repeat | single 1e-4 | single 1e-4 | cold |
-| `grhs_a0_02` | Initialization canary | single 1e-4 | single 1e-4 | exact-design warm |
+| `grhs_a0_02` | Initialization canary | single 1e-4 | single 1e-4 | numerical-design warm |
 | `grhs_a0_03` | Equal grouped canary | 1e-4 | 1e-4 | cold |
-| `grhs_a0_04` | Reverse-direction control | 1e-2 | 1e-4 | exact-design warm |
+| `grhs_a0_04` | Reverse-direction control | 1e-2 | 1e-4 | numerical-design warm |
 | `grhs_a0_05` | Direct-only fitted canary | single 1e-4 | absent | cold |
 | `grhs_a0_06` | Reservoir-only fitted canary | absent | single 1e-4 | cold |
-| `grhs_a0_07` | Directional moderate | 1e-5 | 1e-2 | exact-design warm |
-| `grhs_a0_08` | Directional strong | 1e-6 | 1e-1 | exact-design warm |
+| `grhs_a0_07` | Directional moderate | 1e-5 | 1e-2 | numerical-design warm |
+| `grhs_a0_08` | Directional strong | 1e-6 | 1e-1 | numerical-design warm |
 
 ### Conditional A1
 
 A1 evaluates the Cartesian support
 `tau0_direct in {1e-6,1e-5,1e-4,1e-3}` and
 `tau0_reservoir in {1e-3,1e-2,1e-1}`, excluding the two combinations already
-run as A0 directional candidates. Every A1 fit uses the verified exact-design
+run as A0 directional candidates. Every A1 fit uses the verified numerical-design
 warm start. The candidate generator asserts 8/10 wave counts, unique IDs,
 unique numerical-treatment hashes, positive grouped scales, and declared-only
 duplicate model hashes for the warm/cold initialization canary.
@@ -136,7 +136,7 @@ promote a model.
 
 Technical eligibility requires a completed p50 fit, finite theta and sigma,
 declared convergence, passed beta and alpha RHS release gates, passed draw and
-forecast identities, exact warm/cold treatment, exact prior and semantic-layout
+forecast identities, prospectively frozen warm/cold treatment, exact prior and semantic-layout
 hashes, and exact reconstruction of the discrepancy innovation from direct,
 reservoir, and intercept contributions.
 
@@ -172,12 +172,15 @@ because the preparer had incorrectly paired `resume=true` with a nonexistent
 checkpoint; that task-owned attempt was stopped, audited, and discarded before
 relaunch.
 
-Use:
+Materialize through the backend-aware wrapper so the retained source is
+snapshotted under its original bundled R BLAS and the target certificate is
+constructed under the campaign's pinned serial OpenBLAS:
 
 ```bash
-Rscript application/scripts/glofas_discrepancy_grouped_rhs_prepare.R \
-  --campaign application/config/glofas_discrepancy_grouped_rhs_stage_a_20260827.yaml \
-  --authorize_launch true
+bash application/scripts/glofas_discrepancy_grouped_rhs_materialize.sh \
+  application/config/glofas_discrepancy_grouped_rhs_stage_a_20260827.yaml \
+  local_trackers/runtime_configs/glofas_discrepancy_grouped_rhs_stage_a_20260828 \
+  true
 
 bash local_trackers/runtime_configs/glofas_discrepancy_grouped_rhs_stage_a_20260828/launch_stage_a.sh
 
@@ -253,7 +256,8 @@ authorized fit was started:
 | Changed/new R source parsing | Passed, 12/12 files |
 | Changed/new Python byte compilation | Passed, 4/4 files |
 | Orchestrator `bash -n` | Passed |
-| Scheduler/resource unit tests | Passed, 25/25, including first-start versus validated-resume selection |
+| Scheduler/resource unit tests | Passed, 26/26, including first-start versus validated-resume selection and certificate ownership/hash enforcement |
+| Numerical backend unit tests | Passed, 5/5 |
 | Grouped-RHS algebra and campaign tests | Passed in the repository R harness |
 | Existing RHS warmup and p95 launch-contract tests | Passed in the repository R harness |
 | Full R harness | Reached and passed all GloFAS tests, then stopped at the known unrelated shared-validation assertion `nrow(promoted) == 18L` |
@@ -261,6 +265,11 @@ authorized fit was started:
 | Retained D16 semantic partition | Passed: 542 direct, 1,024 reservoir, and one intercept feature |
 | Retained D16 contribution identity | Passed: maximum absolute reconstruction error `1.221e-15` |
 | Retained D16 penalized reservoir RMS share | `0.00338556`, establishing the prospective control value |
+| Real cross-backend structural certificate | Passed: identical structural hash `2a00fb244a8de0edfad62d2a50b71e71d21d08c3263704993057031bc5b10230` |
+| Real cross-backend numerical certificate | Passed: max absolute difference `1.535e-12`; max scaled RMSE `1.641e-14` |
+| Backend-aware 18-candidate rehearsal | Passed: 4 A0 cold, 4 A0 numerical-design warm, 10 A1 numerical-design warm; launch refused with exit 2 |
+| Bundled-source snapshot determinism | Passed twice with identical SHA-256 `08c2ddbad94af1eb40d903435006c2a3eebdece9b9ad847a201c49a5237d0935` |
+| Numerical-design certificate determinism | Passed with SHA-256 `34887ebf530bd4c1e1e34ddcd9ba48b2c71a7817be4b65ff05b39fe936c53498` |
 | `git diff --check` | Passed |
 
 The production partition result differs from the earlier D32 aggregate
@@ -268,3 +277,43 @@ diagnostic because it uses the retained D16 geometry and the campaign's exact
 penalized direct-versus-reservoir definition. It strengthens the reason for the
 experiment: under the geometry used for Stage A, the reservoir contribution is
 only about 0.34% before grouped shrinkage is introduced.
+
+## Cross-backend warm-start incident and correction
+
+The first corrected production start established that checkpoint selection and
+the grouped-RHS cold path were healthy, but all four A0 warm candidates stopped
+before iteration 1. Their semantic quantile, coefficient coordinates, future
+key, and block contracts matched; only the byte-exact design hash differed.
+The retained source fit used bundled R BLAS, while this campaign deliberately
+uses the pinned serial OpenBLAS runtime. A direct field audit found no scientific
+design difference: `X_beta`, `z_fixed`, and `y_future_init` were identical;
+the largest observed differences in `H_fixed` and `X_alpha` were
+`1.535e-12`, with relative RMSE below `1.89e-14`. The old exact hash therefore
+correctly rejected a byte-level difference, but was too strict for a reviewed
+cross-backend warm start.
+
+The correction does not weaken `exact_design` or reuse the permissive
+`coordinate_transfer` mode. It adds a separate `numerical_design` contract:
+
+1. regenerate the retained source future probe under the original bundled R
+   BLAS and bind it to the retained design, fit contract, and SHA-256;
+2. rebuild one target design under the hash-pinned serial OpenBLAS used by all
+   candidates;
+3. require exact equality of dimensions, row/feature metadata, future keys,
+   coefficient coordinates, transition convention, seeds/config hashes, and
+   all other structural fields;
+4. compare nine numerical fields in bounded chunks, including historical and
+   future design matrices, with prospectively frozen limits of `1e-10` maximum
+   absolute difference and `1e-12` scaled RMSE;
+5. persist a small SHA-256-bound certificate and require every warm worker to
+   reproduce its exact target design hash before transferring coefficients,
+   future state, or source scales; and
+6. require the same certificate hash, compatibility class, and numerical limits
+   again during finalization.
+
+This avoids reading the 1 GB retained design in every warm worker while still
+checking the actual design values once under both numerical backends. Any
+structural change, larger numerical perturbation, altered certificate,
+different target design hash, or tolerance change fails closed. The partial
+attempt contained no completed candidate and no scientific result; it was
+stopped only within this task lane and is not eligible for reuse.

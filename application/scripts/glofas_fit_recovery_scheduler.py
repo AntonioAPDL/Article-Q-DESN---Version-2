@@ -392,6 +392,33 @@ def validate_manifest(rows, output_root, cores, max_parallel):
                     f"Warm-start source hash changed for {row['candidate_id']}"
                 )
 
+        certificate_path = row.get(
+            "warm_start_numerical_certificate", ""
+        ).strip()
+        certificate_hash = row.get(
+            "warm_start_numerical_certificate_sha256", ""
+        ).strip()
+        if bool(certificate_path) != bool(certificate_hash):
+            raise ValueError(
+                "Numerical warm-start certificate path/hash must be supplied "
+                f"together for {row['candidate_id']}"
+            )
+        if certificate_path:
+            certificate_path = require_within(
+                certificate_path,
+                output_root,
+                "Numerical warm-start certificate",
+            )
+            if not certificate_path.is_file():
+                raise ValueError(
+                    f"Numerical warm-start certificate is missing for {row['candidate_id']}"
+                )
+            if cached_sha256(certificate_path) != certificate_hash:
+                raise ValueError(
+                    "Numerical warm-start certificate hash changed for "
+                    f"{row['candidate_id']}"
+                )
+
 
 def read_last_csv(path):
     path = pathlib.Path(path)

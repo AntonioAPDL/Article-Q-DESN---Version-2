@@ -155,10 +155,33 @@ for (i in seq_len(nrow(manifest))) {
     future = app_as_bool(diagnostics$vb_warm_start_future_used[[1L]])
   )
   warm_start_contract_pass <- if (warm_expected) {
-    all(warm_flags) && identical(
-      as.character(diagnostics$vb_warm_start_compatibility_mode[[1L]]),
-      "exact_design"
+    expected_certificate_sha <- as.character(
+      candidate_row$numerical_certificate_sha256[[1L]]
     )
+    all(warm_flags) &&
+      identical(
+        as.character(diagnostics$vb_warm_start_compatibility_mode[[1L]]),
+        "numerical_design"
+      ) &&
+      identical(
+        as.character(diagnostics$vb_warm_start_compatibility_class[[1L]]),
+        "numerically_equivalent_design"
+      ) &&
+      nzchar(expected_certificate_sha) &&
+      identical(
+        tolower(as.character(
+          diagnostics$vb_warm_start_numerical_certificate_sha256[[1L]]
+        )),
+        tolower(expected_certificate_sha)
+      ) &&
+      is.finite(as.numeric(diagnostics$vb_warm_start_numerical_max_abs[[1L]])) &&
+      as.numeric(diagnostics$vb_warm_start_numerical_max_abs[[1L]]) <=
+        as.numeric(candidate_row$numerical_absolute_tolerance[[1L]]) &&
+      is.finite(as.numeric(
+        diagnostics$vb_warm_start_numerical_max_scaled_rmse[[1L]]
+      )) &&
+      as.numeric(diagnostics$vb_warm_start_numerical_max_scaled_rmse[[1L]]) <=
+        as.numeric(candidate_row$numerical_scaled_rmse_tolerance[[1L]])
   } else {
     !any(warm_flags)
   }

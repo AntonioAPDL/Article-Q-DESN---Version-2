@@ -6,21 +6,32 @@ repo_root <- normalizePath(
 )
 source(file.path(repo_root, "application/R/00_packages.R"))
 app_set_repo_root(repo_root)
+source(app_path("application/R/input_contract.R"))
+source(app_path("application/R/launch_control.R"))
 source(app_path("application/R/artifact_hygiene.R"))
 source(app_path("application/R/engine_contract.R"))
 source(app_path("application/R/model_contract.R"))
 source(app_path("application/R/feature_contract.R"))
+source(app_path("application/R/covariate_design.R"))
+source(app_path("application/R/build_qdesn_features.R"))
+source(app_path("application/R/latent_path_design.R"))
+source(app_path("application/R/discrepancy_design.R"))
+source(app_path("application/R/forecast_contract.R"))
+source(app_path("application/R/fit_qdesn_reference.R"))
 source(app_path("application/R/latent_path_runtime_backend.R"))
 source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/fit_qdesn_discrepancy.R"))
+source(app_path("application/R/fit_qdesn_latent_path.R"))
 source(app_path("application/R/glofas_constrained_median_screening.R"))
 source(app_path("application/R/glofas_discrepancy_grouped_rhs_campaign.R"))
 
 args <- app_parse_args(list(
   campaign = "application/config/glofas_discrepancy_grouped_rhs_stage_a_20260827.yaml",
   output_root = "",
-  authorize_launch = FALSE
+  authorize_launch = FALSE,
+  source_future_snapshot = "",
+  source_future_snapshot_sha256 = ""
 ))
 
 resolve_path <- function(path, must_work = FALSE) {
@@ -45,6 +56,23 @@ git_value <- function(...) {
 campaign_path <- resolve_path(args$campaign, must_work = TRUE)
 campaign <- app_read_yaml(campaign_path)
 app_glofas_grouped_rhs_validate_campaign(campaign)
+preparation_backend <- app_latent_runtime_backend_manifest(fail_closed = TRUE)
+if (nrow(preparation_backend) != 1L ||
+    !identical(
+      as.character(preparation_backend$backend[[1L]]),
+      as.character(campaign$execution$numerical_backend)
+    ) || !identical(
+      tolower(as.character(preparation_backend$external_library_sha256[[1L]])),
+      tolower(as.character(campaign$execution$backend_library_sha256))
+    )) {
+  stop("Campaign preparation must run under the frozen target numerical backend.", call. = FALSE)
+}
+source_snapshot_path <- resolve_path(as.character(args$source_future_snapshot), must_work = TRUE)
+source_snapshot_sha256 <- tolower(as.character(args$source_future_snapshot_sha256))
+if (!nzchar(source_snapshot_sha256) ||
+    !identical(tolower(app_sha256_file(source_snapshot_path)), source_snapshot_sha256)) {
+  stop("Bundled-BLAS source future snapshot failed its SHA-256 contract.", call. = FALSE)
+}
 authorized <- app_as_bool(args$authorize_launch) && app_as_bool(campaign$launch_authorized %||% FALSE)
 if (app_as_bool(args$authorize_launch) && !app_as_bool(campaign$launch_authorized %||% FALSE)) {
   stop("Launch authorization was requested but the reviewed campaign is not authorized.", call. = FALSE)
@@ -96,6 +124,11 @@ source_audit <- rbind(
   verify_artifact(source_cfg$application_panel, source_cfg$application_panel_sha256, "application_panel"),
   verify_artifact(source_cfg$fit_object, source_cfg$fit_object_sha256, "retained_d16_fit"),
   verify_artifact(source_cfg$design_object, source_cfg$design_object_sha256, "retained_d16_design"),
+  verify_artifact(
+    source_cfg$runtime_backend_manifest,
+    source_cfg$runtime_backend_manifest_sha256,
+    "retained_d16_runtime_backend"
+  ),
   verify_artifact(source_cfg$forecast_summary, source_cfg$forecast_summary_sha256, "retained_d16_forecast_summary"),
   verify_artifact(source_cfg$observed_scores, source_cfg$observed_scores_sha256, "retained_d16_observed_scores"),
   verify_artifact(
@@ -145,6 +178,108 @@ if (!file.exists(panel_target) && !file.copy(
 if (!identical(app_sha256_file(panel_target), source_cfg$application_panel_sha256)) {
   stop("Campaign application-panel copy failed its SHA-256 check.", call. = FALSE)
 }
+
+snapshot_target <- file.path(output_root, "retained_d16_bundled_future_snapshot.rds")
+if (!file.copy(source_snapshot_path, snapshot_target, copy.mode = TRUE, copy.date = TRUE) ||
+    !identical(tolower(app_sha256_file(snapshot_target)), source_snapshot_sha256)) {
+  stop("Could not preserve the verified bundled-BLAS future snapshot.", call. = FALSE)
+}
+source_future_snapshot <- readRDS(snapshot_target)
+if (!identical(
+  app_latent_path_contract_hash(
+    source_future_snapshot$warm_start_contract,
+    "source_snapshot_contract_"
+  ),
+  app_latent_path_contract_hash(source_contract, "source_snapshot_contract_")
+)) {
+  stop("Bundled-BLAS future snapshot and retained fit contracts disagree.", call. = FALSE)
+}
+
+q50_index <- base_grid$model_family == "qdesn_glofas_discrepancy" &
+  abs(suppressWarnings(as.numeric(base_grid$quantile_level)) - 0.5) < 1.0e-12
+if (sum(q50_index) != 1L) {
+  stop("Retained D16 model grid must contain exactly one p50 discrepancy model.", call. = FALSE)
+}
+certificate_cfg <- base_cfg
+certificate_cfg$paths$cache <- file.path(output_root, "common_cache")
+panel <- readRDS(panel_target)
+source_design <- app_latent_path_restore_legacy_view(readRDS(
+  source_audit$path[source_audit$label == "retained_d16_design"]
+))
+target_design <- app_make_glofas_latent_path_design(
+  panel = panel,
+  cfg = certificate_cfg,
+  model_row = base_grid[q50_index, , drop = FALSE]
+)
+numerical_cfg <- campaign$execution$warm_start_numerical_equivalence
+numerical_certificate <- app_latent_path_numerical_design_certificate(
+  source_design = source_design,
+  source_future_snapshot = source_future_snapshot,
+  target_design = target_design,
+  source_design_object_sha256 = source_cfg$design_object_sha256,
+  source_future_snapshot_sha256 = source_snapshot_sha256,
+  absolute_tolerance = numerical_cfg$absolute_tolerance,
+  scaled_rmse_tolerance = numerical_cfg$scaled_rmse_tolerance,
+  chunk_elements = numerical_cfg$chunk_elements
+)
+if (!isTRUE(numerical_certificate$passed)) {
+  failed_fields <- numerical_certificate$field_metrics$field[
+    !numerical_certificate$field_metrics$passed
+  ]
+  stop(
+    sprintf(
+      "Cross-backend warm-start design certificate failed (structure=%s; fields=%s).",
+      numerical_certificate$structural_pass,
+      paste(failed_fields, collapse = ",")
+    ),
+    call. = FALSE
+  )
+}
+certificate_path <- file.path(output_root, "warm_start_numerical_design_certificate.rds")
+saveRDS(numerical_certificate, certificate_path, version = 2L, compress = FALSE)
+certificate_sha256 <- app_sha256_file(certificate_path)
+certificate_readback <- app_latent_path_read_numerical_design_certificate(
+  certificate_path,
+  certificate_sha256,
+  numerical_cfg$absolute_tolerance,
+  numerical_cfg$scaled_rmse_tolerance
+)
+compatibility_preflight <- app_latent_path_warm_start_compatibility(
+  source_contract,
+  app_latent_path_warm_start_contract(target_design),
+  mode = "numerical_design",
+  numerical_certificate = certificate_readback$certificate
+)
+if (!isTRUE(compatibility_preflight$accepted) || !identical(
+  compatibility_preflight$class,
+  "numerically_equivalent_design"
+)) {
+  stop("Prepared numerical-design certificate failed worker compatibility preflight.", call. = FALSE)
+}
+app_write_csv(
+  numerical_certificate$field_metrics,
+  file.path(output_root, "warm_start_numerical_design_field_metrics.csv")
+)
+app_write_csv(
+  data.frame(
+    passed = numerical_certificate$passed,
+    structural_pass = numerical_certificate$structural_pass,
+    source_design_hash = numerical_certificate$source_design_hash,
+    target_design_hash = numerical_certificate$target_design_hash,
+    source_structure_hash = numerical_certificate$source_structure_hash,
+    target_structure_hash = numerical_certificate$target_structure_hash,
+    absolute_tolerance = numerical_certificate$absolute_tolerance,
+    scaled_rmse_tolerance = numerical_certificate$scaled_rmse_tolerance,
+    maximum_absolute_difference = numerical_certificate$maximum_absolute_difference,
+    maximum_scaled_rmse = numerical_certificate$maximum_scaled_rmse,
+    worker_compatibility_class = compatibility_preflight$class,
+    certificate_sha256 = certificate_sha256,
+    stringsAsFactors = FALSE
+  ),
+  file.path(output_root, "warm_start_numerical_design_certificate_summary.csv")
+)
+rm(panel, source_design, target_design)
+gc(verbose = FALSE)
 
 engine <- app_check_qdesn_engine_api(
   base_cfg,
@@ -206,7 +341,7 @@ for (i in seq_len(nrow(candidates))) {
   )
   if (identical(row$warm_start_policy[[1L]], "warm")) {
     if (!isTRUE(warm$enabled) || !identical(warm$compatibility_mode, "exact_design") || !isTRUE(warm$use_theta)) {
-      stop(sprintf("Candidate %s did not pass exact-design coefficient warm-start compatibility.", candidate_id), call. = FALSE)
+      stop(sprintf("Candidate %s did not preserve the reviewed semantic design.", candidate_id), call. = FALSE)
     }
     cfg$inference$vb_ld$warm_start <- list(
       enabled = TRUE,
@@ -218,9 +353,18 @@ for (i in seq_len(nrow(candidates))) {
       require_future = TRUE,
       require_sigma = FALSE,
       require_contract = TRUE,
-      compatibility_mode = "exact_design",
+      compatibility_mode = "numerical_design",
       source_contract = source_contract,
+      numerical_design_certificate = certificate_path,
+      numerical_design_certificate_sha256 = certificate_sha256,
+      numerical_absolute_tolerance = numerical_cfg$absolute_tolerance,
+      numerical_scaled_rmse_tolerance = numerical_cfg$scaled_rmse_tolerance,
       covariance_jitter = 1e-8
+    )
+    warm$compatibility_mode <- "numerical_design"
+    warm$reason <- paste(
+      "semantic design is unchanged; source and target numerical designs passed",
+      "the hash-pinned cross-backend equivalence certificate"
     )
   } else {
     cfg$inference$vb_ld$warm_start <- list(enabled = FALSE)
@@ -287,6 +431,8 @@ for (i in seq_len(nrow(candidates))) {
     reservoir_preflight_enabled = FALSE,
     warm_start_source_fit_object = if (isTRUE(warm$enabled)) source_fit_path else "",
     warm_start_source_sha256 = if (isTRUE(warm$enabled)) source_cfg$fit_object_sha256 else "",
+    warm_start_numerical_certificate = if (isTRUE(warm$enabled)) certificate_path else "",
+    warm_start_numerical_certificate_sha256 = if (isTRUE(warm$enabled)) certificate_sha256 else "",
     scientific_model_hash = hashes$scientific_model_hash,
     treatment_hash = hashes$treatment_hash,
     prior_declared_hash = hashes$prior_declared_hash,
@@ -302,6 +448,17 @@ for (i in seq_len(nrow(candidates))) {
     discrepancy_design_signature = app_glofas_median_screen_design_signature(cfg, "discrepancy"),
     source_fit_sha256 = source_cfg$fit_object_sha256,
     warm_start_compatibility = warm$compatibility_mode,
+    numerical_certificate_sha256 = if (isTRUE(warm$enabled)) certificate_sha256 else "",
+    numerical_absolute_tolerance = if (isTRUE(warm$enabled)) {
+      as.numeric(numerical_cfg$absolute_tolerance)
+    } else {
+      NA_real_
+    },
+    numerical_scaled_rmse_tolerance = if (isTRUE(warm$enabled)) {
+      as.numeric(numerical_cfg$scaled_rmse_tolerance)
+    } else {
+      NA_real_
+    },
     max_iter = 200L,
     full7_authorized = FALSE,
     article_update_authorized = FALSE,
@@ -332,7 +489,10 @@ provenance <- data.frame(
   field = c(
     "prepared_at", "repo_root", "branch", "head", "origin_main", "campaign_path",
     "campaign_sha256", "output_root", "candidate_count", "a0_count", "a1_count",
-    "launch_authorized", "source_contract_hash", "engine_repo", "engine_branch", "engine_commit"
+    "launch_authorized", "source_contract_hash", "source_future_snapshot_sha256",
+    "numerical_certificate_sha256", "numerical_certificate_source_design_hash",
+    "numerical_certificate_target_design_hash", "preparation_backend",
+    "preparation_backend_library_sha256", "engine_repo", "engine_branch", "engine_commit"
   ),
   value = c(
     format(Sys.time(), tz = "UTC", usetz = TRUE), repo_root,
@@ -341,6 +501,10 @@ provenance <- data.frame(
     output_root, nrow(runtime_manifest), sum(runtime_manifest$wave == "A0"),
     sum(runtime_manifest$wave == "A1"), authorized,
     app_latent_path_contract_hash(source_contract, "source_contract_"),
+    source_snapshot_sha256, certificate_sha256,
+    numerical_certificate$source_design_hash, numerical_certificate$target_design_hash,
+    preparation_backend$backend[[1L]],
+    preparation_backend$external_library_sha256[[1L]],
     engine$repo_hint, engine$repo_branch, engine$repo_git_sha
   ),
   stringsAsFactors = FALSE

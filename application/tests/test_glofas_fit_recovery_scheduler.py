@@ -53,6 +53,8 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             "log_path": str(root / "logs" / "candidate.log"),
             "warm_start_source_fit_object": "",
             "warm_start_source_sha256": "",
+            "warm_start_numerical_certificate": "",
+            "warm_start_numerical_certificate_sha256": "",
         }
 
     def test_scheduler_state_roundtrip_is_priority_ordered(self):
@@ -380,6 +382,39 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             ) as digest:
                 scheduler.validate_manifest([row, second], Path(tmp), [0], 1)
             self.assertEqual(digest.call_count, 3)
+
+    def test_manifest_integrity_hashes_owned_numerical_certificate_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.make_manifest_row(tmp)
+            certificate = Path(tmp) / "warm_start_certificate.rds"
+            certificate.write_bytes(b"numerical certificate fixture")
+            certificate_hash = hashlib.sha256(certificate.read_bytes()).hexdigest()
+            row.update({
+                "warm_start_numerical_certificate": str(certificate),
+                "warm_start_numerical_certificate_sha256": certificate_hash,
+            })
+            second = dict(row)
+            second.update({
+                "candidate_id": "candidate_second",
+                "priority": "2",
+                "run_id": "candidate_second_run",
+                "run_dir": str(Path(tmp) / "runs" / "candidate_second_run"),
+                "log_path": str(Path(tmp) / "logs" / "candidate_second.log"),
+            })
+            with mock.patch.object(
+                scheduler,
+                "sha256_file",
+                wraps=scheduler.sha256_file,
+            ) as digest:
+                scheduler.validate_manifest([row, second], Path(tmp), [0], 1)
+            self.assertEqual(digest.call_count, 3)
+
+            certificate.write_bytes(b"changed certificate")
+            with self.assertRaisesRegex(
+                ValueError,
+                "certificate hash changed",
+            ):
+                scheduler.validate_manifest([row], Path(tmp), [0], 1)
 
     def test_manifest_integrity_rejects_changed_config(self):
         with tempfile.TemporaryDirectory() as tmp:

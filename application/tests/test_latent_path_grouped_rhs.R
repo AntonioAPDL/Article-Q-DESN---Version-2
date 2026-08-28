@@ -396,8 +396,12 @@ score_fixture <- data.frame(
   horizon = 1:28,
   raw_glofas_quantile = seq(5, 32),
   y_reference = seq(3, 30),
+  q_y_mean = seq(5, 32) + 0.025 - rep(c(1, 3), 14L),
+  q_g_mean = seq(5, 32) + 0.025,
+  d_g_mean = rep(c(1, 3), 14L),
   d_g_median = rep(c(1, 3), 14L),
-  q_y_median = seq(5, 32) - rep(c(1, 3), 14L),
+  q_g_median = seq(5, 32) + 0.02,
+  q_y_median = seq(5, 32) - rep(c(1, 3), 14L) + 0.01,
   stringsAsFactors = FALSE
 )
 score_identity <- app_glofas_grouped_rhs_score_identity(score_fixture, "fixture")
@@ -407,7 +411,18 @@ stopifnot(score_all$algebra_identity_passed)
 stopifnot(score_all$model_identity_passed)
 stopifnot(abs(score_all$discrepancy_mae - score_all$corrected_reference_mae) < 1.0e-14)
 stopifnot(abs(score_all$corrected_reference_p50_check_loss - 0.5 * score_all$discrepancy_mae) < 1.0e-14)
+stopifnot(abs(score_all$posterior_mean_identity_max_abs) < 1.0e-14)
+stopifnot(abs(score_all$marginal_median_nonadditivity_max_abs - 0.01) < 1.0e-14)
+stopifnot(abs(score_all$raw_correction_vs_model_q_y_median_max_abs - 0.01) < 1.0e-14)
+stopifnot(abs(score_all$modeled_q_g_vs_raw_max_abs - 0.02) < 1.0e-14)
 score_fixture$q_y_median[[1L]] <- score_fixture$q_y_median[[1L]] + 0.1
+score_identity_nonadditive <- app_glofas_grouped_rhs_score_identity(
+  score_fixture, "fixture_nonadditive"
+)
+stopifnot(score_identity_nonadditive$summary$identity_passed[
+  score_identity_nonadditive$summary$lead_group == "all"
+])
+score_fixture$q_y_mean[[1L]] <- score_fixture$q_y_mean[[1L]] + 0.1
 score_identity_bad <- app_glofas_grouped_rhs_score_identity(score_fixture, "fixture_bad")
 stopifnot(!score_identity_bad$summary$identity_passed[score_identity_bad$summary$lead_group == "all"])
 

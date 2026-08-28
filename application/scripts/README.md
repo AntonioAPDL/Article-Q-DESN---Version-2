@@ -348,6 +348,21 @@ metrics. It uses the posterior-draw identity
 `post_analysis.run_after_outputs: true` is set, `run_all.R` executes this stage
 after `05_make_outputs.R`.
 
+Grouped-RHS campaign finalization distinguishes draw/mean identities from
+summary agreement. Posterior draws and posterior means must satisfy
+`q_y = q_g - d_g`, and discrepancy error must equal the negative raw-correction
+error. Componentwise marginal medians need not add, and a modeled `q_g` need
+not equal the external raw ensemble median when `q_g_source` is
+`posterior_model_quantile`; both differences are diagnostic rather than
+technical failures.
+
+`glofas_discrepancy_grouped_rhs_resume_a1.sh` is the fail-closed recovery path
+for a materialized campaign whose A0 fits were finalized after an orchestration
+interruption. It requires a clean pushed task branch, verifies the original
+campaign hashes and corrected A0 decision hashes, locks the runtime root,
+records the recovery HEAD, schedules only the conditional A1 manifest, and
+then performs the complete Stage-A finalization. It never repeats A0 fits.
+
 Workflow stages:
 
 - `00_register_input_bundle.R`

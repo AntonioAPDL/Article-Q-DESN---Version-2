@@ -249,7 +249,11 @@ app_glofas_grouped_rhs_candidate_hashes <- function(cfg, row) {
 }
 
 app_glofas_grouped_rhs_score_identity <- function(forecast, candidate_id, tolerance = 1e-10) {
-  required <- c("target_date", "horizon", "raw_glofas_quantile", "y_reference", "d_g_median", "q_y_median")
+  required <- c(
+    "target_date", "horizon", "raw_glofas_quantile", "y_reference",
+    "q_y_mean", "q_g_mean", "d_g_mean",
+    "q_y_median", "q_g_median", "d_g_median"
+  )
   missing <- setdiff(required, names(forecast))
   if (!is.data.frame(forecast) || !nrow(forecast) || length(missing)) {
     stop(sprintf("Forecast summary is empty or missing: %s.", paste(missing, collapse = ", ")), call. = FALSE)
@@ -259,6 +263,13 @@ app_glofas_grouped_rhs_score_identity <- function(forecast, candidate_id, tolera
   corrected_reference <- as.numeric(forecast$raw_glofas_quantile) - predicted_discrepancy
   discrepancy_error <- predicted_discrepancy - observed_discrepancy
   corrected_error <- corrected_reference - as.numeric(forecast$y_reference)
+  posterior_mean_identity_error <- as.numeric(forecast$q_y_mean) -
+    (as.numeric(forecast$q_g_mean) - as.numeric(forecast$d_g_mean))
+  marginal_median_nonadditivity <- as.numeric(forecast$q_y_median) -
+    (as.numeric(forecast$q_g_median) - as.numeric(forecast$d_g_median))
+  raw_correction_vs_model_q_y_median <- as.numeric(forecast$q_y_median) - corrected_reference
+  modeled_q_g_vs_raw <- as.numeric(forecast$q_g_median) -
+    as.numeric(forecast$raw_glofas_quantile)
   path <- data.frame(
     candidate_id = candidate_id,
     target_date = as.Date(forecast$target_date),
@@ -269,8 +280,13 @@ app_glofas_grouped_rhs_score_identity <- function(forecast, candidate_id, tolera
     predicted_discrepancy = predicted_discrepancy,
     corrected_reference = corrected_reference,
     model_q_y_median = as.numeric(forecast$q_y_median),
+    model_q_g_median = as.numeric(forecast$q_g_median),
     discrepancy_error = discrepancy_error,
     corrected_reference_error = corrected_error,
+    posterior_mean_identity_error = posterior_mean_identity_error,
+    marginal_median_nonadditivity = marginal_median_nonadditivity,
+    raw_correction_vs_model_q_y_median = raw_correction_vs_model_q_y_median,
+    modeled_q_g_vs_raw = modeled_q_g_vs_raw,
     stringsAsFactors = FALSE
   )
   if (anyDuplicated(path$horizon) || !identical(sort(path$horizon), seq_len(28L))) {
@@ -286,8 +302,9 @@ app_glofas_grouped_rhs_score_identity <- function(forecast, candidate_id, tolera
     error <- path$discrepancy_error[index]
     corrected <- path$corrected_reference_error[index]
     algebra_error <- max(abs(abs(error) - abs(corrected)))
-    model_identity_error <- max(abs(
-      path$model_q_y_median[index] - path$corrected_reference[index]
+    model_identity_error <- max(abs(path$posterior_mean_identity_error[index]))
+    raw_correction_agreement <- max(abs(
+      path$raw_correction_vs_model_q_y_median[index]
     ))
     data.frame(
       candidate_id = candidate_id,
@@ -299,7 +316,15 @@ app_glofas_grouped_rhs_score_identity <- function(forecast, candidate_id, tolera
       corrected_reference_mae = mean(abs(corrected)),
       corrected_reference_p50_check_loss = mean(0.5 * abs(corrected)),
       max_rowwise_absolute_error_identity = algebra_error,
-      model_summary_vs_constructed_correction_max_abs = model_identity_error,
+      posterior_mean_identity_max_abs = model_identity_error,
+      marginal_median_nonadditivity_max_abs = max(abs(
+        path$marginal_median_nonadditivity[index]
+      )),
+      raw_correction_vs_model_q_y_median_max_abs = raw_correction_agreement,
+      modeled_q_g_vs_raw_max_abs = max(abs(path$modeled_q_g_vs_raw[index])),
+      # Retained for output-schema continuity; this is an agreement diagnostic,
+      # not a model identity when q_g_source is posterior_model_quantile.
+      model_summary_vs_constructed_correction_max_abs = raw_correction_agreement,
       identity_tolerance = tolerance,
       algebra_identity_passed = algebra_error <= tolerance,
       model_identity_passed = model_identity_error <= tolerance,

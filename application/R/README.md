@@ -145,6 +145,13 @@ Tracked helper files:
   block/layer contributions, post-fit ablations, state geometry, RHS scales,
   and a fail-closed root-cause decision. It never launches a fit or authorizes
   full7 or article promotion.
+- `glofas_discrepancy_grouped_rhs_campaign.R`: grouped direct/reservoir RHS
+  campaign contracts and p50 scoring. Its technical identity gate uses the
+  exact posterior-mean relation `q_y = q_g - d_g` and the rowwise equality of
+  discrepancy and raw-correction absolute errors. A model-implied `q_y`
+  marginal median is not required to equal `raw GloFAS - median(d_g)` when the
+  configured source is `posterior_model_quantile`; that difference and
+  marginal-median nonadditivity are retained as non-gating diagnostics.
 - `glofas_constrained_median_screening.R`: deterministic expansion of reviewed
   two-block p50 screening spaces, including linked DESN profiles with exact
   cardinality checks and score-balanced prior-expansion anchors; block-specific

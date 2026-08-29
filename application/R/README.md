@@ -145,6 +145,13 @@ Tracked helper files:
   block/layer contributions, post-fit ablations, state geometry, RHS scales,
   and a fail-closed root-cause decision. It never launches a fit or authorizes
   full7 or article promotion.
+- `glofas_discrepancy_transition_information_audit.R`: fixed-feature
+  transition operators and pre-screen diagnostics for the GloFAS discrepancy
+  model. It distinguishes the legacy static-origin adjustment from damped and
+  cumulative innovation mappings, tests transformed designs and Jacobians,
+  audits historical/future target semantics and future-block identifiability,
+  labels current-event information provenance, and emits a launch-locked draft
+  registry. No helper in this file changes the production fit contract.
 - `glofas_constrained_median_screening.R`: deterministic expansion of reviewed
   two-block p50 screening spaces, including linked DESN profiles with exact
   cardinality checks and score-balanced prior-expansion anchors; block-specific

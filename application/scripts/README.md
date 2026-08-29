@@ -68,6 +68,19 @@ Rscript application/scripts/glofas_discrepancy_equivalence_audit.R \
   --runtime_root /data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/runtime_configs/glofas_richer_discrepancy_initial_20260827 \
   --output_root local_trackers/runtime_configs/glofas_discrepancy_equivalence_audit_20260827
 ```
+- `glofas_discrepancy_transition_information_audit.R` consumes the completed
+  grouped-RHS decision and selected retained p50 bundles. It verifies the
+  historical one-step and future static-origin contracts, measures future
+  reference/discrepancy design overlap, produces explicitly non-promotable
+  no-refit transition counterfactuals, audits issued versus realized-future
+  information, and writes a launch-locked screening registry. It never changes
+  the fitter or starts a model.
+
+```sh
+Rscript application/scripts/glofas_discrepancy_transition_information_audit.R \
+  --source_root /absolute/path/to/glofas_discrepancy_grouped_rhs_stage_a_20260828 \
+  --output_root local_trackers/runtime_configs/glofas_discrepancy_transition_information_audit_20260828
+```
 - `03_collect_reservoir_screening_shards.R` merges parallel
   `03_screen_reservoir_candidate_grid.R` shard outputs and writes ranked local
   summaries for selecting candidates after a background screening campaign.

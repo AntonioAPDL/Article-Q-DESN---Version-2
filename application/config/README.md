@@ -412,3 +412,10 @@ validated:
   synthesized finite quantile grid, runtime, and fit status. Here aCRPS is the
   trapezoidal approximation to integrated check loss over the covered
   probability range.
+
+`glofas_discrepancy_transition_information_screen_TEMPLATE.yaml` is a
+prospective, deliberately non-runnable contract for reviewing a fixed-origin
+p50 transition/information screen. It freezes the legacy/damped/cumulative
+semantics, separates retrospective blended, issued-only, and oracle covariate
+roles, excludes unsupported ensemble-spread training, and requires an explicit
+approval token before any candidate materialization or launch code is added.

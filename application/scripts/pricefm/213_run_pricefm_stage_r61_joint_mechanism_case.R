@@ -271,7 +271,7 @@ main <- function() {
   last5 <- utils::tail(valid_changes, 5L)
   slope <- if (length(last5) >= 2L) stats::coef(stats::lm(last5 ~ seq_along(last5)))[[2L]] else NA_real_
   payload <- list(
-    status = "completed", stage = "R61", case_id = cfg$case_id,
+    status = "completed", stage = cfg$stage %||% "R61", case_id = cfg$case_id,
     source_case_id = cfg$source_case_id, arm_id = cfg$arm_id,
     region = cfg$region, fold = as.integer(cfg$fold), likelihood_family = cfg$likelihood_family,
     method_id = cfg$method_id, initialization_mode = initialization_mode,

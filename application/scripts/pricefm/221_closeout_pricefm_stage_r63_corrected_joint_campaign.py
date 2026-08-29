@@ -131,5 +131,12 @@ def run(args: argparse.Namespace) -> dict:
     write_json(output / "summary.json", result); return result
 
 
+def command_exit_code(summary: dict) -> int:
+    """A blocked or incomplete closeout must not look successful to a shell."""
+    return 0 if summary.get("status") == "completed_r63_validation_closeout" else 1
+
+
 if __name__ == "__main__":
-    print(json.dumps(run(parser().parse_args()), indent=2, sort_keys=True))
+    result = run(parser().parse_args())
+    print(json.dumps(result, indent=2, sort_keys=True))
+    raise SystemExit(command_exit_code(result))

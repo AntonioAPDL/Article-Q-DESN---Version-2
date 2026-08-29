@@ -28,7 +28,9 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def make_repair_fixture(tmp_path, case_id="case_a", prediction_split="val"):
+def make_repair_fixture(
+    tmp_path, case_id="case_a", prediction_split="val", runtime_schema="r57",
+):
     adapter = tmp_path / case_id / "adapter"
     model = tmp_path / case_id / "model"
     adapter.mkdir(parents=True)
@@ -41,14 +43,25 @@ def make_repair_fixture(tmp_path, case_id="case_a", prediction_split="val"):
         "adapter": {"output_dir": str(adapter)}, "run": {"output_dir": str(model)},
     }}, sort_keys=False))
     config = tmp_path / case_id / "runtime.yaml"
-    config.write_text(yaml.safe_dump({"pricefm_stage_r57_joint_vb": {
+    runtime = {
         "case_id": case_id, "region": "AA", "fold": 1,
         "likelihood_family": "exal", "method_id": "joint_qdesn_exal_rhs_ns_vb1",
         "vb_method_id": "VB1_structured_v", "source_method_id": "qdesn_exal_rhs_ns_exact_chunked",
         "source_experiment_id": "fixture", "source_config": str(source),
         "smoke_config": str(smoke), "adapter_dir": str(adapter), "output_dir": str(model),
         "quantiles": TAUS, "tau0": 0.001, "tol": 1e-4,
-    }}, sort_keys=False))
+    }
+    root = "pricefm_stage_r57_joint_vb"
+    if runtime_schema == "r63":
+        root = "pricefm_stage_r61_joint_mechanism"
+        runtime["stage"] = "R63"
+        runtime.pop("tau0")
+        runtime["rhs_control"] = {
+            "anchor_tau0": 0.001, "innovation_tau0": 0.0005,
+            "anchor_init_tau": 1.0, "innovation_init_tau": 0.05,
+            "freeze_iters": 5, "vb_inner": 5,
+        }
+    config.write_text(yaml.safe_dump({root: runtime}, sort_keys=False))
 
     np.savetxt(adapter / "X_train.csv", np.ones((4, 3)), delimiter=",")
     np.savetxt(adapter / "y_train.csv", np.arange(4)[:, None], delimiter=",")
@@ -143,6 +156,31 @@ def test_r57_repair_recovers_without_refit_and_is_idempotent(tmp_path):
     assert not (adapter / "X_train.csv").exists()
     second = module.run(args)
     assert second["status_counts"] == {"already_repaired": 1}
+
+
+def test_r63_split_rhs_schema_repairs_and_preserves_both_scales(tmp_path):
+    module = load("r63_split_rhs_repair", "205_repair_pricefm_stage_r57_joint_vb_postfit.py")
+    manifest, model, _ = make_repair_fixture(tmp_path, runtime_schema="r63")
+    args = module.parser().parse_args([
+        "--manifest", str(manifest), "--output-dir", str(tmp_path / "repair"),
+        "--skip-summarizer", "true", "--require-original-metrics", "false",
+    ])
+    summary = module.run(args)
+    repaired = json.loads((model / "job_summary.json").read_text())
+    assert summary["postfit_complete"] == 1
+    assert summary["repair_failures"] == 0
+    assert repaired["stage"] == "R63"
+    assert repaired["tau0"] == pytest.approx(0.001)
+    assert repaired["anchor_tau0"] == pytest.approx(0.001)
+    assert repaired["innovation_tau0"] == pytest.approx(0.0005)
+    assert repaired["rhs_control"]["innovation_tau0"] == pytest.approx(0.0005)
+    assert repaired["n_train"] == 4
+    assert repaired["n_validation"] == 2
+    assert repaired["n_slopes"] == 2
+    assert repaired["joint_dimension"] == 14
+    assert repaired["elapsed_seconds"] == pytest.approx(12.5)
+    assert module.command_exit_code(summary) == 0
+    assert module.command_exit_code({"repair_failures": 1}) == 1
 
 
 def test_r57_repair_reuses_complete_generic_metrics(tmp_path, monkeypatch):

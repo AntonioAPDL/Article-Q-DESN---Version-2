@@ -52,3 +52,15 @@ def test_shared_postfit_accepts_r61_r63_runtime_schema():
     assert 'payload.get("pricefm_stage_r61_joint_mechanism")' in source
     prep = (SCRIPTS / "220_prepare_pricefm_stage_r63_corrected_joint_campaign.py").read_text()
     assert '"vb_method_id": "AL_joint_cavi"' in prep
+
+
+def test_r63_runner_and_closeout_propagate_stage_and_blocked_status():
+    runner = (SCRIPTS / "213_run_pricefm_stage_r61_joint_mechanism_case.R").read_text()
+    assert 'stage = cfg$stage %||% "R61"' in runner
+    spec = importlib.util.spec_from_file_location(
+        "r63closeout", SCRIPTS / "221_closeout_pricefm_stage_r63_corrected_joint_campaign.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.command_exit_code({"status": "completed_r63_validation_closeout"}) == 0
+    assert module.command_exit_code({"status": "incomplete_or_integrity_blocked"}) == 1

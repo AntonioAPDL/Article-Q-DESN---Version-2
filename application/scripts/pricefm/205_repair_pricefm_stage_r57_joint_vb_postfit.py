@@ -137,6 +137,36 @@ def runtime_config(path: Path) -> dict:
     return cfg
 
 
+def rhs_scale_metadata(cfg: dict) -> dict:
+    """Normalize legacy scalar and split joint-RHS scale contracts."""
+    rhs_control = cfg.get("rhs_control")
+    if isinstance(rhs_control, dict):
+        required = {"anchor_tau0", "innovation_tau0"}
+        missing = sorted(required - set(rhs_control))
+        if missing:
+            raise RuntimeError(f"Joint RHS control lacks fields: {missing}")
+        anchor_tau0 = float(rhs_control["anchor_tau0"])
+        innovation_tau0 = float(rhs_control["innovation_tau0"])
+        normalized_control = dict(rhs_control)
+    elif "tau0" in cfg:
+        anchor_tau0 = innovation_tau0 = float(cfg["tau0"])
+        normalized_control = {
+            "anchor_tau0": anchor_tau0,
+            "innovation_tau0": innovation_tau0,
+        }
+    else:
+        raise RuntimeError("Joint runtime config lacks scalar or split RHS tau0 controls")
+    if not all(math.isfinite(value) and value > 0 for value in (anchor_tau0, innovation_tau0)):
+        raise RuntimeError("Joint RHS tau0 controls must be finite and positive")
+    return {
+        # Retain the scalar alias for legacy readers while preserving the split contract.
+        "tau0": anchor_tau0,
+        "anchor_tau0": anchor_tau0,
+        "innovation_tau0": innovation_tau0,
+        "rhs_control": normalized_control,
+    }
+
+
 def trace_health(path: Path, tol: float) -> dict:
     trace = pd.read_csv(path)
     columns = [name for name in CHANGE_COLUMNS if name in trace.columns]
@@ -181,6 +211,46 @@ def existing_summary(path: Path) -> dict:
         return json.loads(path.read_text()) if path.is_file() else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def preserved_fit_metadata(model: Path, cfg: dict, summary: dict) -> dict:
+    """Retain or reconstruct compact fit dimensions after adapter cleanup."""
+    method = pd.read_csv(model / "model_method_summary.csv")
+    method_row = method.iloc[0] if len(method) else pd.Series(dtype=object)
+
+    def finite_value(value):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        return numeric if math.isfinite(numeric) else None
+
+    n_train = finite_value(summary.get("n_train"))
+    if n_train is None:
+        n_train = finite_value(method_row.get("n_train"))
+    n_slopes = finite_value(summary.get("n_slopes"))
+    if n_slopes is None:
+        n_slopes = finite_value(method_row.get("n_features"))
+    n_validation = finite_value(summary.get("n_validation"))
+    if n_validation is None:
+        raw = pd.read_csv(
+            model / "model_predictions_scaled.csv", usecols=["origin_id", "horizon"],
+        )
+        n_validation = float(len(raw.drop_duplicates(["origin_id", "horizon"])))
+    joint_dimension = finite_value(summary.get("joint_dimension"))
+    if joint_dimension is None and n_slopes is not None:
+        joint_dimension = n_slopes * len(cfg["quantiles"])
+    elapsed = finite_value(summary.get("elapsed_seconds"))
+    if elapsed is None:
+        elapsed = finite_value(method_row.get("train_seconds"))
+    values = {
+        "n_train": n_train, "n_validation": n_validation, "n_slopes": n_slopes,
+        "joint_dimension": joint_dimension, "elapsed_seconds": elapsed,
+    }
+    return {
+        key: int(value) if key != "elapsed_seconds" else float(value)
+        for key, value in values.items() if value is not None
+    }
 
 
 def method_summary(cfg: dict, model: Path, adapter: Path, health: dict) -> pd.DataFrame:
@@ -411,6 +481,7 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
     adapter = Path(cfg["adapter_dir"])
     if already_repaired(model) and not args.force:
         payload = existing_summary(model / "job_summary.json")
+        payload.update(preserved_fit_metadata(model, cfg, payload))
         removed = cleanup_adapter(adapter) if args.cleanup_heavy else []
         previous = list(payload.get("adapter_heavy_files_removed", []))
         payload["adapter_heavy_files_removed"] = sorted(set(previous + removed))
@@ -513,7 +584,7 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         "case_id": case_id, "region": cfg["region"], "fold": int(cfg["fold"]),
         "likelihood_family": cfg["likelihood_family"], "method_id": cfg["method_id"],
         "vb_method_id": cfg["vb_method_id"], "quantiles": list(map(float, cfg["quantiles"])),
-        "tau0": float(cfg["tau0"]), "converged": trace["converged"],
+        **rhs_scale_metadata(cfg), "converged": trace["converged"],
         "stage": cfg.get("stage", "R57"),
         "source_case_id": cfg.get("source_case_id", case_id),
         "initialization_mode": fit_summary.get(
@@ -550,6 +621,7 @@ def repair_case(row: pd.Series, args: argparse.Namespace) -> dict:
         "selection_role": "validation_only", "mcmc_launch_authorized": False,
         "registry_mutation_authorized": False, "article_mutation_authorized": False,
     }
+    payload.update(preserved_fit_metadata(model, cfg, fit_summary))
     # A completed summary is durable before cleanup, so interruption cannot strand
     # a validated case after its reconstructible adapter rows are removed.
     atomic_json(model / "job_summary.json", payload)
@@ -611,5 +683,12 @@ def run(args: argparse.Namespace) -> dict:
     return summary
 
 
+def command_exit_code(summary: dict) -> int:
+    """Expose scientific repair failures to shell orchestration."""
+    return 1 if int(summary.get("repair_failures", 0)) else 0
+
+
 if __name__ == "__main__":
-    print(json.dumps(run(parser().parse_args()), indent=2, sort_keys=True))
+    result = run(parser().parse_args())
+    print(json.dumps(result, indent=2, sort_keys=True))
+    raise SystemExit(command_exit_code(result))

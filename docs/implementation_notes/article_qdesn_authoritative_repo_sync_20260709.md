@@ -1,5 +1,12 @@
 # Article-Q-DESN authoritative repository sync note
 
+> **Historical record—superseded on 2026-08-29.** Do not reuse the
+> browser-based GitHub/Overleaf synchronization or branch-resolution procedure
+> described below. The mandatory current workflow is command-line Git only; see
+> CONTRIBUTING.md and
+> docs/implementation_notes/git_only_integration_overleaf_publication_20260829.md.
+> The text below is retained solely as incident history.
+
 Date: 2026-07-09
 
 ## Authoritative repository
@@ -85,6 +92,7 @@ Future article work should be committed only to:
 https://github.com/AntonioAPDL/Article-Q-DESN---Version-2.git
 ```
 
-After a pushed article commit, the Overleaf project linked to
-`AntonioAPDL/Article-Q-DESN---Version-2` should use **Pull GitHub changes into
-Overleaf**.
+At the time of this incident, the project used **Pull GitHub changes into
+Overleaf** after a pushed article commit. That browser workflow is now
+superseded and prohibited; the current one-way direct-Git publisher is defined
+in the warning above.

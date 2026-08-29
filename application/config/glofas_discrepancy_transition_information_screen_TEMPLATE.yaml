@@ -1,0 +1,118 @@
+version: '0.1'
+screen_id: GLOFAS_TRANSITION_INFORMATION_REVIEW_REQUIRED
+status: prospective_template_not_launchable
+
+launch_control:
+  launch_authorized: false
+  production_screen_launched: false
+  required_approval_token: GLOFAS_TRANSITION_INFORMATION_SCREEN_APPROVED
+  approval_token: null
+  reason: >-
+    The transition, context, scoring, and historical-guard contracts require
+    explicit scientific review before candidate materialization.
+
+scientific_scope:
+  application: glofas_discrepancy
+  quantiles: [0.50]
+  forecast_origin: '2022-12-25'
+  multiple_cutoffs: false
+  authoritative_control: glofas_fr09_authoritative_full7_20260811
+  primary_objective: forecast_window_p50_check_loss
+  direct_objective: forecast_discrepancy_mae
+  article_update_authorized: false
+  full7_authorized: false
+
+frozen_geometry:
+  mechanism_screen: FR09_D1
+  conditional_confirmation: retained_D16_geometry
+  reference_block_fixed: true
+  discrepancy_block_geometry_fixed_within_stage: true
+  rationale: >-
+    Isolate transition and information effects before spending computation on
+    another reservoir architecture grid.
+
+transition_contract:
+  historical_target: one_step_discrepancy_increment
+  future_anchor: last_observed_discrepancy
+  fixed_feature_linear_family: true
+  candidate_phi: [0.00, 0.50, 0.75, 0.90, 1.00]
+  semantics:
+    phi_0: legacy_static_origin_adjustment
+    phi_1: cumulative_one_step_innovations
+    intermediate: damped_innovation_recurrence
+  fully_recursive_discrepancy_reservoir: deferred
+
+context_contract:
+  status: requires_scientific_review
+  variables: [glofas_level, glofas_anomaly]
+  historical_source: retrospective_glofas_available_by_target_date
+  future_source: issued_ensemble_p50_available_at_origin
+  enters_reference_block: false
+  enters_discrepancy_reservoir: false
+  enters_discrepancy_direct_readout: true
+  dedicated_rhs_group: true
+  ensemble_spread: diagnostic_only_no_historical_training_analogue
+  future_usgs_used: false
+
+covariate_contracts:
+  retrospective_application:
+    policy: gefs_realized_blend
+    uses_realized_future: true
+    promotion_role: retrospective_case_only
+  operational_diagnostic:
+    policy: issued_gefs_only
+    uses_realized_future: false
+    promotion_role: report_separately
+  oracle_diagnostic:
+    policy: realized_future_only
+    uses_realized_future: true
+    promotion_role: information_ceiling_not_model_selection
+
+draft_candidates:
+  - id: l0_legacy
+    stage: control
+    phi: 0.00
+    context: none
+  - id: t1_phi050
+    stage: transition
+    phi: 0.50
+    context: none
+  - id: t2_phi075
+    stage: transition
+    phi: 0.75
+    context: none
+  - id: t3_phi090
+    stage: transition
+    phi: 0.90
+    context: none
+  - id: t4_phi100
+    stage: transition
+    phi: 1.00
+    context: none
+  - id: c1_context
+    stage: information
+    phi: 0.00
+    context: glofas_level_anomaly_direct_only
+  - id: tc1_selected
+    stage: conditional_combination
+    phi: selected_after_transition_review
+    context: glofas_level_anomaly_direct_only
+
+prospective_gates:
+  minimum_forecast_gain_vs_cold_legacy: 0.05
+  repeatability_gate_required: true
+  historical_windows: [all, last1000, last200, last50]
+  historical_tolerance: REVIEW_REQUIRED
+  finite_fit_required: true
+  declared_convergence_required: true
+  exact_reconstruction_required: true
+  cold_confirmation_required: true
+  alternate_seed_confirmation_required: true
+  no_refit_diagnostics_can_rank_candidates: false
+
+execution:
+  max_iter: REVIEW_REQUIRED
+  parallel_workers: REVIEW_REQUIRED
+  warm_start_policy: exact_design_only_after_cold_equivalence_canary
+  retain_heavy_artifacts: controls_and_finalists_only
+  launch_command: null

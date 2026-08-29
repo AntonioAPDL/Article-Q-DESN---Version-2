@@ -56,6 +56,11 @@ Tracked tests:
   isolation, feature sentinels, paired/unpaired permutations, serialization,
   contribution reconstruction, state summaries, score/identity checks, stale
   status precedence, and fail-closed diagnostic classification.
+- `test_glofas_discrepancy_transition_information_audit.R`: exact legacy,
+  damped, and cumulative transition operators; recurrence, transformed-design,
+  and transformed-Jacobian identities; invalid-contract rejection; historical
+  target decomposition; future component-space overlap; no-refit diagnostic
+  labeling; and the launch-locked draft registry.
 - `test_glofas_fit_recovery_scheduler.py`: physical-core and NUMA-aware CPU
   allocation, disjoint multithread sets, checkpoint-aware restart with owned
   checkpoint paths, and owned reference-cache roots in addition to the

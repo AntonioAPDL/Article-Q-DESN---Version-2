@@ -1,6 +1,6 @@
 # This is an article-only deployment branch. Existing allowlisted files remain
 # tracked, but new research-code, documentation, table, and figure artifacts
-# must be added first to GitHub main and then to overleaf/article_files.txt.
+# must be added first to origin/main and then to overleaf/article_files.txt.
 /application/
 /docs/
 /scripts/

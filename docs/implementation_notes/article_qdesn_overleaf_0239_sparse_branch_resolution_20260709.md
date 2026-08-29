@@ -1,5 +1,12 @@
 # Article-Q-DESN Overleaf 0239 Sparse Branch Resolution, 2026-07-09
 
+> **Historical record—superseded on 2026-08-29.** Do not reuse the
+> browser-based GitHub/Overleaf synchronization or branch-resolution procedure
+> described below. The mandatory current workflow is command-line Git only; see
+> CONTRIBUTING.md and
+> docs/implementation_notes/git_only_integration_overleaf_publication_20260829.md.
+> The text below is retained solely as incident history.
+
 ## Context
 
 During an Overleaf GitHub pull, Overleaf created the temporary branch:

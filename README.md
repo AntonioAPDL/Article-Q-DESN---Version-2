@@ -3,6 +3,40 @@
 This repository contains the working manuscript, supplement, bibliography, and
 simulation tables for the Q--DESN article.
 
+## Authoritative Git Workflow
+
+`origin/main` is the sole research and manuscript authority. Integration and
+publication use command-line Git only. Never use Overleaf's **Sync with
+GitHub** feature, a GitHub extension, GitHub CLI or web merges, timestamped
+`overleaf-*` branches, bidirectional Overleaf synchronization, or a
+force-push.
+
+Every frozen lane is merged with `--no-ff` in a fresh integration worktree
+created from freshly fetched `origin/main`. After verification, the tested
+integration branch is pushed first; `origin/main` is fetched and checked again
+before the guarded normal push to `origin/main`. The final remote hash is then
+read back with another fetch.
+
+The corresponding command-line workflow is implemented by:
+
+- `scripts/publish_integration_main_git_only.sh`, for the guarded integration
+  branch and `origin/main` update; and
+- `scripts/publish_overleaf_article_snapshot.sh`, for the one-way article
+  projection from the verified `origin/main` commit.
+
+Overleaf receives only the manifest-defined snapshot. Its deployment refs must
+finish at the same commit and tree:
+
+```text
+origin/overleaf/article-snapshot == overleaf-direct/main
+```
+
+The generated snapshot includes `SOURCE_AUTHORITY.txt`, which identifies its
+exact `origin/main` source. The Overleaf browser is for review and compilation,
+not for authoritative editing or merging. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for the required integration, publication, authentication, and recovery
+procedure.
+
 ## Main Files
 
 - `main.tex`: main article.

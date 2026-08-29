@@ -11,7 +11,11 @@ source(app_path("application/R/feature_contract.R"))
 
 args <- app_parse_args(list(
   baseline_registry = "application/config/glofas_constrained_median_baseline_fr09.yaml",
-  output_root = "local_trackers/runtime_configs/glofas_fr09_shared_reference_input_p50_20260829"
+  output_root = "local_trackers/runtime_configs/glofas_fr09_shared_reference_input_p50_20260829",
+  candidate_id = "fr09_shared_reference_input_single_readout_p50",
+  reference_tau0 = 0.1,
+  discrepancy_tau0 = 0.001,
+  run_date = "20260829"
 ))
 
 resolve_path <- function(path, base = repo_root, must_work = TRUE) {
@@ -51,6 +55,20 @@ if (!identical(registry$baseline_id, "glofas_fr09_authoritative_full7_20260811")
 base_config_path <- verify_declared(registry$artifacts$base_config, "FR09 base config")
 base_model_grid_path <- verify_declared(registry$artifacts$base_model_grid, "FR09 model grid")
 base_cfg <- app_read_yaml(base_config_path)
+candidate_id <- as.character(args$candidate_id[[1L]])
+run_date <- as.character(args$run_date[[1L]])
+reference_tau0 <- suppressWarnings(as.numeric(args$reference_tau0[[1L]]))
+discrepancy_tau0 <- suppressWarnings(as.numeric(args$discrepancy_tau0[[1L]]))
+if (!grepl("^[a-z0-9][a-z0-9_]*$", candidate_id)) {
+  stop("candidate_id must contain lowercase letters, digits, and underscores only.", call. = FALSE)
+}
+if (!grepl("^[0-9]{8}$", run_date)) {
+  stop("run_date must use YYYYMMDD format.", call. = FALSE)
+}
+if (!is.finite(reference_tau0) || reference_tau0 <= 0 ||
+    !is.finite(discrepancy_tau0) || discrepancy_tau0 <= 0) {
+  stop("Both RHS tau0 values must be positive and finite.", call. = FALSE)
+}
 
 source_path <- function(path) {
   resolve_path(path, base = dirname(base_config_path), must_work = TRUE)
@@ -96,9 +114,8 @@ if (sum(qrow) != 1L || sum(rrow) != 1L) {
   stop("The FR09 source grid must contain one Q-DESN row and one raw comparator row.", call. = FALSE)
 }
 
-candidate_id <- "fr09_shared_reference_input_single_readout_p50"
 fit_id <- paste0("qdesn_", candidate_id)
-run_id <- paste0("glofas_", candidate_id, "_20260829")
+run_id <- paste0("glofas_", candidate_id, "_", run_date)
 grid$fit_id[qrow] <- fit_id
 grid$model_id[qrow] <- fit_id
 grid$fit_id[rrow] <- paste0("raw_glofas_", candidate_id)
@@ -106,17 +123,20 @@ grid$model_id[rrow] <- grid$fit_id[rrow]
 grid$config_hash <- "RUNTIME_CONFIG_HASH_RECORDED_IN_MANIFEST"
 grid$notes[qrow] <- paste(
   "FR09 p50 controlled input ablation: separate reservoirs receive the same reference/PPT/soil stream;",
-  "the common direct input block appears only in the reference readout"
+  "the common direct input block appears only in the reference readout; RHS tau0 =",
+  format(reference_tau0, scientific = TRUE), "and", format(discrepancy_tau0, scientific = TRUE)
 )
 grid$notes[rrow] <- "Immutable raw GloFAS p50 comparator"
 model_grid_path <- file.path(output_root, "candidate", "model_grid_p50.csv")
 app_write_csv(grid, model_grid_path)
 
 cfg <- base_cfg
-cfg$application_name <- "glofas_fr09_shared_reference_input_single_readout_p50"
+cfg$application_name <- paste0("glofas_", candidate_id)
 cfg$description <- paste(
   "Controlled FR09 p50 refit with two independently seeded DESNs driven by the same transformed",
-  "reference streamflow/PPT/soil input and one common direct readout input block."
+  "reference streamflow/PPT/soil input and one common direct readout input block; reference and",
+  "discrepancy RHS tau0 values are", format(reference_tau0, scientific = TRUE), "and",
+  format(discrepancy_tau0, scientific = TRUE), "respectively."
 )
 cfg$paths$input_bundle <- snapshots$input_bundle
 cfg$paths$input_bundle_manifest <- snapshots$input_bundle_manifest
@@ -138,6 +158,10 @@ cfg$feature_contract$blocks <- list(
     readout = list(include_input_block = FALSE)
   )
 )
+cfg$inference$vb_ld$rhs_tau0 <- reference_tau0
+cfg$inference$vb_ld$rhs_alpha_tau0 <- discrepancy_tau0
+cfg$inference$mcmc$rhs_tau0 <- reference_tau0
+cfg$inference$mcmc$rhs_alpha_tau0 <- discrepancy_tau0
 cfg$inference$vb_ld$warm_start <- list(
   enabled = FALSE,
   reason = "FR09 has a different alpha-readout dimension and is not an exact-design warm start"
@@ -241,6 +265,7 @@ writeLines(c(
   "The discrepancy likelihood target remains the persistence-anchored GloFAS-minus-reference innovation.",
   "Only the discrepancy feature input stream and duplicate direct readout block change.",
   "The two reservoirs remain separate and use seeds 20260512 and 20261521.",
+  sprintf("RHS tau0 values: reference=%s; discrepancy=%s.", reference_tau0, discrepancy_tau0),
   "No warm start, automatic promotion, or automatic seven-quantile launch is permitted."
 ), file.path(output_root, "README.txt"))
 cat(normalizePath(runtime_path, mustWork = TRUE), "\n")

@@ -1439,6 +1439,12 @@ CRAN package \pkg{exdqlm} \citep{exdqlmRPackage}. The exDQLM calculations use it
 partially collapsed MCMC update and structured
 \(q(\gamma)q(\sigma\mid\gamma)\) variational approximation for the
 scale--asymmetry block.
+For rolling-origin MCMC evaluation, the initial parameter posterior is retained
+while the filtering distribution is updated sequentially using the responses
+available at each origin. In the exDQLM analysis, the observation-error mean
+and variance used in this update are averaged over paired retained draws of the
+scale and asymmetry parameters. The updated state is then propagated over the
+requested forecast horizons.
 
 The primary comparison is a fixed-design benchmark against structured dynamic
 quantile linear models under linear dynamic mechanisms that favor those
@@ -1496,7 +1502,7 @@ horizons up to 30 steps ahead, at the three target levels
 MCMC posterior metric distributions; the supplement gives the corresponding
 numerical tables.
 
-\input{tables/qdesn_validation_500obs_metric_intervals_v12_prose.tex}
+\input{tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex}
 
 \input{tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex}
 
@@ -1508,9 +1514,9 @@ Q--DESN exAL--RHS MCMC rows use the \(v\)-augmented transition described in the
 supplement, which separates the scale update from the shape update and samples
 the shape on the logit transform of its bounded support.
 
-\input{tables/qdesn_validation_500obs_metric_interval_results_v12.tex}
+\input{tables/qdesn_validation_500obs_metric_interval_results_v14.tex}
 
-\input{tables/qdesn_validation_500obs_v13_mcmc_metric_interval_figures.tex}
+\input{tables/qdesn_validation_500obs_v14_mcmc_metric_interval_figures.tex}
 
 The supplement gives the complete numerical MCMC tables and approximate VB
 intervals, together with a five-chain point-path sensitivity analysis for the

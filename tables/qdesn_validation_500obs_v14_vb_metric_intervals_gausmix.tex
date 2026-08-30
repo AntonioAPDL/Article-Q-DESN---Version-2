@@ -1,0 +1,28 @@
+\begin{table}[!ht]
+\centering
+\scriptsize
+\setstretch{1}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}clccc@{}}
+\toprule
+Target & Model & Fit RMSE & Forecast MAE & Forecast check loss \\
+\midrule
+$p=0.05$ & DQLM & \shortstack{\textbf{2.680}\\{\scriptsize [2.597, 2.764]}} & \shortstack{\textbf{5.278}\\{\scriptsize [5.158, 5.402]}} & \shortstack{\textbf{1.635}\\{\scriptsize [1.597, 1.672]}} \\
+ & exDQLM & \shortstack{4.648\\{\scriptsize [4.541, 4.758]}} & \shortstack{9.345\\{\scriptsize [9.198, 9.489]}} & \shortstack{1.947\\{\scriptsize [1.894, 2.000]}} \\
+ & Q--DESN AL--RHS & \shortstack{7.058\\{\scriptsize [6.608, 7.507]}} & \shortstack{7.766\\{\scriptsize [6.691, 9.058]}} & \shortstack{1.911\\{\scriptsize [1.725, 2.180]}} \\
+ & Q--DESN exAL--RHS & \shortstack{5.853\\{\scriptsize [5.288, 6.412]}} & \shortstack{5.424\\{\scriptsize [3.725, 8.184]}} & \shortstack{1.710\\{\scriptsize [1.565, 1.964]}} \\
+\addlinespace[2pt]
+$p=0.25$ & DQLM & \shortstack{1.866\\{\scriptsize [1.765, 1.963]}} & \shortstack{4.909\\{\scriptsize [4.771, 5.054]}} & \shortstack{4.879\\{\scriptsize [4.808, 4.950]}} \\
+ & exDQLM & \shortstack{\textbf{1.793}\\{\scriptsize [1.693, 1.898]}} & \shortstack{4.286\\{\scriptsize [4.153, 4.419]}} & \shortstack{4.787\\{\scriptsize [4.718, 4.856]}} \\
+ & Q--DESN AL--RHS & \shortstack{3.732\\{\scriptsize [3.169, 4.306]}} & \shortstack{\textbf{4.019}\\{\scriptsize [3.006, 5.869]}} & \shortstack{\textbf{4.713}\\{\scriptsize [4.567, 4.941]}} \\
+ & Q--DESN exAL--RHS & \shortstack{3.140\\{\scriptsize [2.467, 3.824]}} & \shortstack{4.648\\{\scriptsize [2.586, 9.186]}} & \shortstack{4.782\\{\scriptsize [4.537, 5.374]}} \\
+\addlinespace[2pt]
+$p=0.50$ & DQLM & \shortstack{1.485\\{\scriptsize [1.402, 1.567]}} & \shortstack{2.719\\{\scriptsize [2.604, 2.835]}} & \shortstack{5.652\\{\scriptsize [5.578, 5.725]}} \\
+ & exDQLM & \shortstack{\textbf{1.480}\\{\scriptsize [1.396, 1.564]}} & \shortstack{\textbf{2.718}\\{\scriptsize [2.604, 2.835]}} & \shortstack{\textbf{5.652}\\{\scriptsize [5.579, 5.725]}} \\
+ & Q--DESN AL--RHS & \shortstack{2.517\\{\scriptsize [1.962, 3.081]}} & \shortstack{3.615\\{\scriptsize [1.947, 7.221]}} & \shortstack{5.814\\{\scriptsize [5.515, 6.598]}} \\
+ & Q--DESN exAL--RHS & \shortstack{2.560\\{\scriptsize [2.006, 3.135]}} & \shortstack{3.695\\{\scriptsize [1.990, 7.261]}} & \shortstack{5.832\\{\scriptsize [5.522, 6.610]}} \\
+\bottomrule
+\end{tabular}
+\caption{Approximate posterior metric intervals for the Gaussian mixture single-quantile simulation family. Entries are variational posterior means with equal-tailed approximate 95\% intervals; lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion.}
+\label{tab:simulation-500obs-vb-intervals-gausmix}
+\end{table}

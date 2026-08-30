@@ -1,0 +1,150 @@
+validation_root: ../exdqlm__wt__integrate_independent_exdqlm_mcmc_rolling_state_fix_v1_20260829
+validation_authority_commit: 5b85bb3a3894a88968e4987f330e3ec66711f9c7
+projection_id: qdesn_dqlm_500obs_article_v14_exdqlm_mcmc_rolling_state_fix_20260829
+point_authority_id: qdesn_dqlm_500obs_trainonly_article_v14_rolling_state_fix_20260829
+interval_authority_id: qdesn_dqlm_500obs_metric_interval_reporting_v14_rolling_state_fix_20260829
+packet_relative_path: validation/fitforecast_v2/promotions/independent_exdqlm_1p1p1_scoped_compatibility_v2_20260828
+packet:
+  handoff: integration_handoff.json
+  handoff_sha256: ee766efc1ef2579cca1dd4a94d753cc26c258afe04d2ed99ee5d71c355440f94
+  file_manifest: output_file_manifest.csv
+  file_manifest_sha256: 50a1d033bf8f9b166ab2ca50e9244ed0e6b630d4529a3e3195b3fafaa9823870
+  point_candidate: candidate_point_interface_exdqlm_only_replacement.csv
+  point_candidate_sha256: b5be6f9eac67f6597c2921f2620208e5f9a4ecad0c2ed6e94ac09f09aac705cb
+  interval_candidate: candidate_interval_roles_exdqlm_only_replacement.csv
+  interval_candidate_sha256: f2860023bb12ac0eb7273e444aad785b03b39e76c5f1125fa7e807c73b2faf29
+  mcmc_diagnostics: mcmc_metric_diagnostics.csv
+  mcmc_diagnostics_sha256: fdfe7ae1b02a22c052930e70b7e0f38367155676f762ce73a0be324fb5174bde
+  source_point_summary: source_point_metric_summary.csv
+  source_point_summary_sha256: b9016bad228903bc301329a911f86b32e994d2ab7680b6c2e3b9d2232608a336
+  source_interval_summary: source_interval_summary.csv
+  source_interval_summary_sha256: b7c4693d20c984bbc94dbe069e59a4b75b041dadea9d98caa29242e1ce614b7f
+  point_winner_ledger: point_winner_change_ledger.csv
+  point_winner_ledger_sha256: d9c5a239b8dc0df56f11697b9b331022087aafd10a4578f2fe2345fd1f7b456a
+  interval_winner_ledger: interval_winner_change_ledger.csv
+  interval_winner_ledger_sha256: fa75f95dab60dc55a1c6c65b1cec2146dfdd86a572aaf644bafc4ea03662f7e4
+rolling_packet_relative_path: validation/fitforecast_v2/promotions/independent_exdqlm_mcmc_rolling_state_fix_v1_20260829
+rolling_packet:
+  handoff: integration_handoff.json
+  handoff_sha256: 580f49d714ae25b564e328528abcd6e3de7a0811331b5679dcf8159f5a2d6c74
+  artifact_manifest: artifact_manifest.csv
+  artifact_manifest_sha256: d445f517c9d3edd9ae7069a36f19e619eb88abe6c8cf420e50c52ccda65db991
+  replacement_contract: replacement_contract.csv
+  replacement_contract_sha256: 69b20fdad550587294cae53632e42438a18752559de75d3d390a46e38e6685e3
+  point_candidate: scientific/candidate_point_exdqlm_mcmc_rows.csv
+  point_candidate_sha256: 6ca60d82b3e57a79ff61142fa14c8f6999a4ae3bd6dee41e23465c4d126e3316
+  interval_candidate: scientific/candidate_interval_exdqlm_mcmc_roles.csv
+  interval_candidate_sha256: 698bd5ab83b96ae6d50116dbacc7a3fdf76b9e40af12c85d89fc30d0573336ca
+  mcmc_diagnostics: scientific/mcmc_metric_diagnostics.csv
+  mcmc_diagnostics_sha256: e1781757ee2fbae9a831e810ada1041d85e7278bc6076997a1afd68520533c04
+package:
+  version: 1.1.1
+  source_commit: 6dba6f2863705e0e90f0ce19e0c75d106d022a52
+  source_tarball_sha256: 6d51bf8e745e1a45bcc111fd578561cbf56b23b07e70eab5d95bd6e561243db1
+inherited_diagnostic_replay:
+  replay_id: idolp_v2_winner_three_chain_pool
+  superseded_replay_id: imi_v1_source_073
+  diagnostic_code: validation/fitforecast_v2/R/metric_intervals_v1.R
+  diagnostic_code_sha256: 50e53ec358a40bba41558ab45f01dc6bf2e07d208feaca7ed550c1064541831a
+  draw_1: validation/fitforecast_v2/audits/independent_location_orthogonalized_tau0_v2_20260827/metric_draws/interval_replay_chain_01_metric_draws.csv.gz
+  draw_1_sha256: ead99b06489d57306ec80fc4cdc8e96f173a57a6c17801da85e47a7c0668848e
+  draw_2: validation/fitforecast_v2/audits/independent_location_orthogonalized_tau0_v2_20260827/metric_draws/interval_replay_chain_02_metric_draws.csv.gz
+  draw_2_sha256: 76ca75722ac8cac990118b557bd8c3fad8de7700e4325de10d8d496b0101d7a4
+  draw_3: validation/fitforecast_v2/audits/independent_location_orthogonalized_tau0_v2_20260827/metric_draws/interval_replay_chain_03_metric_draws.csv.gz
+  draw_3_sha256: 7922ca62bee2fa55ada9575e76791f32c7bf856368d7dfabd67e48f075931aff
+expected:
+  point_rows: 72
+  exdqlm_point_rows: 18
+  interval_roles: 216
+  exdqlm_interval_roles: 54
+  non_exdqlm_interval_roles: 162
+  interval_primary_estimator_roles: 214
+  interval_inherited_estimator_roles: 2
+  rolling_point_rows: 9
+  rolling_interval_roles: 27
+  portable_interval_rows: 72
+  mcmc_diagnostic_rows: 162
+  mcmc_diagnostic_replays: 54
+  mcmc_diagnostic_pass_rows: 158
+  mcmc_diagnostic_warn_rows: 4
+  displayed_warning_metrics: 5
+  displayed_warning_keys:
+    - mcmc|exdqlm|gausmix|0.25|forecast_mae
+    - mcmc|exdqlm|laplace|0.05|forecast_mae
+    - mcmc|qdesn_al_rhs_ns|normal|0.05|forecast_check
+    - mcmc|qdesn_al_rhs_ns|normal|0.05|forecast_mae
+    - mcmc|qdesn_exal_rhs_ns|gausmix|0.25|forecast_check
+  metric_diagnostic_warning_keys:
+    - imi_v1_source_070|forecast_check_loss
+    - imi_v1_source_083|forecast_check_loss
+    - rolling_state_v1_gausmix_0p25|forecast_mae
+    - rolling_state_v1_laplace_0p05|forecast_mae
+  mcmc_metric_cells: 27
+  mcmc_winner_interval_overlaps: 27
+  mcmc_point_winner_dqlm: 2
+  mcmc_point_winner_exdqlm: 9
+  mcmc_point_winner_qdesn_al_rhs_ns: 5
+  mcmc_point_winner_qdesn_exal_rhs_ns: 11
+  mcmc_winner_dqlm: 4
+  mcmc_winner_exdqlm: 5
+  mcmc_winner_qdesn_al_rhs_ns: 8
+  mcmc_winner_qdesn_exal_rhs_ns: 10
+  models:
+    - dqlm
+    - exdqlm
+    - qdesn_al_rhs_ns
+    - qdesn_exal_rhs_ns
+  families:
+    - normal
+    - laplace
+    - gausmix
+  taus:
+    - 0.05
+    - 0.25
+    - 0.50
+  inference:
+    - vb
+    - mcmc
+  metric_roles:
+    - fit
+    - forecast_mae
+    - forecast_check
+estimator_separation:
+  point_exdqlm: fixed_path_point_metric_three_chain_mean_v1
+  interval_primary: posterior_mean_draw_metric_equal_tailed_95cri_v1
+  interval_inherited: chain_balanced_draw_metric_equal_tailed_95cri_v1
+  interval_display_center: posterior_mean
+preserved_asset:
+  path: tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex
+  sha256: 74c165ad4b29f00808e058750d8f6a320b5454f97ae7133d1260ae9794d5ee2b
+baseline:
+  article_commit: 1cc6fe8badffaf168af34c27d464e253833d7273
+  interval_summary: tables/qdesn_validation_500obs_metric_intervals_v10_summary.csv
+  interval_summary_sha256: 62562aa4df24afeded022782b7a1dcfda480bd04d06519b76034a6c48050d912
+  mcmc_diagnostics: tables/qdesn_validation_500obs_mcmc_metric_diagnostics_v10.csv
+  mcmc_diagnostics_sha256: b89466686f9f29486420769cb37d8eaea74ec6b88f5089b1aed99d87055684dd
+outputs:
+  point_summary: tables/qdesn_validation_500obs_trainonly_summary.csv
+  point_compatibility_summary: tables/qdesn_validation_tt500_final_summary.csv
+  point_protocol: tables/qdesn_validation_tt500_final_protocol.tex
+  point_family_wrapper: tables/qdesn_validation_tt500_final_tables.tex
+  point_combined: tables/qdesn_validation_tt500_final_combined.tex
+  point_normal: tables/qdesn_validation_tt500_final_normal.tex
+  point_laplace: tables/qdesn_validation_tt500_final_laplace.tex
+  point_gausmix: tables/qdesn_validation_tt500_final_gausmix.tex
+  point_mcmc_wrapper: tables/qdesn_validation_tt500_final_mcmc_tables.tex
+  point_mcmc_normal: tables/qdesn_validation_tt500_final_mcmc_normal.tex
+  point_mcmc_laplace: tables/qdesn_validation_tt500_final_mcmc_laplace.tex
+  point_mcmc_gausmix: tables/qdesn_validation_tt500_final_mcmc_gausmix.tex
+  point_table_manifest: tables/qdesn_validation_tt500_final_manifest.txt
+  point_mcmc_manifest: tables/qdesn_validation_tt500_mcmc_current_best_manifest.txt
+  point_figure_data: tables/qdesn_validation_mcmc_figure_data.csv
+  point_figure_manifest: tables/qdesn_validation_mcmc_figure_manifest.txt
+  point_figure_pdf: figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf
+  interval_summary: tables/qdesn_validation_500obs_metric_intervals_v14_summary.csv
+  interval_diagnostics: tables/qdesn_validation_500obs_mcmc_metric_diagnostics_v14.csv
+  interval_comparison: tables/qdesn_validation_500obs_mcmc_metric_comparison_v14.csv
+  interval_results: tables/qdesn_validation_500obs_metric_interval_results_v14.tex
+  interval_prose: tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex
+  interval_manifest: tables/qdesn_validation_500obs_metric_intervals_v14_manifest.txt
+  projection_manifest: tables/qdesn_validation_500obs_exdqlm_1p1p1_article_v14_manifest.txt

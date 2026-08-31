@@ -318,21 +318,23 @@ app_joint_qdesn_phase182_dense_fixture_full_complete <- function(
   path, scenario_ids, tau
 ) {
   required <- c(
-    "frozen_registry.csv", "registry_validation.csv", "scenario_summary.csv",
+    "run_config.csv", "frozen_registry.csv", "scenario_summary.csv",
     "observed_series.csv", "design_matrix.csv", "true_quantile_wide.csv",
     "true_quantile_long.csv", "split_metadata.csv", "dgp_parameters.csv",
-    "crossing_summary.csv", "provenance.csv", "README.md", "artifact_manifest.csv"
+    "forecast_origin_plan.csv", "oracle_policy.csv", "crossing_summary.csv",
+    "fixture_validation.csv", "provenance.csv", "README.md",
+    "artifact_manifest.csv"
   )
   if (!dir.exists(path) || any(!file.exists(file.path(path, required)))) return(FALSE)
-  check <- tryCatch(
-    app_joint_exqdesn_verify_manifest(path, "phase182_dense_fixture_full"),
+  artifacts <- tryCatch(
+    app_joint_qdesn_load_fixture_artifacts(path),
     error = function(e) NULL
   )
-  if (is.null(check) || any(check$status != "pass")) return(FALSE)
-  summary <- tryCatch(app_read_csv(file.path(path, "scenario_summary.csv")),
-                      error = function(e) NULL)
-  truth <- tryCatch(app_read_csv(file.path(path, "true_quantile_long.csv")),
-                    error = function(e) NULL)
+  if (is.null(artifacts) ||
+      any(artifacts$manifest_verification$status != "pass") ||
+      any(artifacts$fixture_validation$status != "pass")) return(FALSE)
+  summary <- artifacts$scenario_summary
+  truth <- artifacts$true_long
   !is.null(summary) && !is.null(truth) &&
     identical(sort(unique(summary$scenario_id)), sort(unique(scenario_ids))) &&
     all(vapply(summary$tau_grid, function(x) {
@@ -442,8 +444,8 @@ app_joint_qdesn_phase182_materialize_dense_fixture_full <- function(
   registry <- app_joint_qdesn_phase182_dense_registry_rows(registry, tau)
   tmp <- paste0(final_dir, ".tmp.", Sys.getpid())
   if (dir.exists(tmp)) unlink(tmp, recursive = TRUE, force = TRUE)
-  app_joint_qvp_materialize_synthetic_dgp_registry(
-    out_dir = tmp, registry = registry
+  app_joint_qdesn_materialize_simulation_fixtures(
+    out_dir = tmp, registry = registry, scenario_ids = scenario_ids
   )
   audit <- app_joint_qdesn_phase182_dense_fixture_audit(
     source_dir, tmp, scenario_ids, tau

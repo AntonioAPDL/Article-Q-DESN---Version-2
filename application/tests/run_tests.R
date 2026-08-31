@@ -133,9 +133,12 @@ source(app_path("application/tests/test_promotion_contract.R"))
 source(app_path("application/tests/test_application_output_registry.R"))
 source(app_path("application/tests/test_post_fit_analysis.R"))
 source(app_path("application/tests/test_validation_interface_contract.R"))
-# The v12 full-surface test supersedes the six tt500 tests tied to historical
+# The v14 full-surface test supersedes the six tt500 tests tied to historical
 # summary-override schemas. It verifies their current point-table roles together
 # with the estimator-separated posterior-interval projection.
-source(app_path("application/tests/test_independent_validation_exdqlm_1p1p1_article_v12.R"))
+source(app_path("application/tests/test_independent_validation_exdqlm_mcmc_rolling_state_fix_article_v14.R"))
+source(app_path("application/tests/test_independent_validation_dgp_oracle_figures_v14.R"))
+source(app_path("application/tests/test_joint_qdesn_phase181_article_projection.R"))
+source(app_path("application/tests/test_joint_qdesn_phase181_interval_figures.R"))
 
 cat("Application tests completed.\n")

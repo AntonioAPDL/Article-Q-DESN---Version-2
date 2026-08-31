@@ -1414,10 +1414,13 @@ use isotonic projection \eqref{eq:supp_monotone_projection} or monotone
 rearrangement \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. Linear
 interpolation defines a quantile function over \([p_1,p_K]\), and reported
 summaries are restricted to this fitted range. The reported joint study
-evaluates the joint and independently estimated quantile grids on the same
-fixed forecast-design rows derived from the simulated series. Recursive
-response simulation over \((0,1)\) would additionally require a tail extension
-and a rule for propagating a common simulated history across quantile levels.
+uses a sequential conditional evaluation. Coefficients and reservoir weights
+remain fixed throughout the held-out period, while a realized response becomes
+available before it enters the lag vector for subsequent evaluation times.
+Joint and independently estimated quantile grids are scored on the same 990
+origin--horizon rows for each simulation setting. A free-running response
+trajectory over \((0,1)\) would additionally require a tail extension and a
+rule for propagating one simulated history across quantile levels.
 
 Forecast scores use the following convention. Let
 \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), and write
@@ -1457,10 +1460,52 @@ Thus \(\sum_k\omega_k=p_K-p_1\). The joint simulation and GloFAS analyses
 use seven common evaluation levels with endpoints 0.05 and 0.95, so their
 weights sum to 0.90. For fitted quantile regressions, the evaluation levels
 coincide with the fitted grid. Their interior levels differ between studies;
-comparisons of \(\aCRPS\) are therefore made within each study. The joint
-simulation applies monotone rearrangement to quantile estimates formed from
-the pooled posterior means of the MCMC coefficient draws. GloFAS applies it to
-the variational posterior-mean quantile estimates.
+comparisons of \(\aCRPS\) are therefore made within each study.
+
+The joint simulation also evaluates the quantile grid with respect to the
+known conditional response distribution. Let \(\mathcal G\) denote its
+origin--horizon evaluation set, let \(F_{0,r}\) be the true conditional
+distribution for evaluation pair \(r\), and let
+\(\vect q_r^{*,(b)}=(q_{r,1}^{*,(b)},\ldots,q_{r,K}^{*,(b)})^\top\) be the
+monotonically rearranged quantile vector from posterior draw \(b\). The
+data-generating-process (DGP)-integrated finite-grid quantile score is
+\begin{equation}
+S_{\mathrm{DGP}}^{(b)}
+=\frac{2}{|\mathcal G|}
+\sum_{r\in\mathcal G}\sum_{k=1}^K\omega_k
+\E_{Y_r\sim F_{0,r}}
+\left[
+\rho_{p_k}\!\left\{Y_r-q_{r,k}^{*,(b)}\right\}
+\right].
+\label{eq:supp-dgp-integrated-score}
+\end{equation}
+For the seven-level grid, the weights are
+\[
+(0.025,\ 0.10,\ 0.20,\ 0.25,\ 0.20,\ 0.10,\ 0.025),
+\]
+which sum to 0.90 and retain the scale of integrated check loss over
+\([0.05,0.95]\). The expectation in
+Eq.~\eqref{eq:supp-dgp-integrated-score} is evaluated analytically or by
+deterministic numerical integration under the known simulation mechanism.
+It averages over the conditional response distribution at the fixed held-out
+design points and conditions on the simulated fitting series and selected
+specification. Its posterior interval therefore excludes repeated-simulation
+and model-selection uncertainty.
+
+For a joint fit, each score draw uses the quantile vector from one joint
+posterior draw and therefore retains its cross-quantile dependence. For
+independently estimated levels, the marginal draws are combined with a
+pre-specified seeded product coupling that allocates each chain evenly across
+the paired draws. Joint-minus-independent contrasts use a separate
+pre-specified within-chain permutation to pair the resulting scalar score
+draws. The resulting posterior contrast intervals are conditional on this
+pairing, which defines the coupling between separately fitted models.
+Posterior means and equal-tailed 95\% intervals of
+\(S_{\mathrm{DGP}}^{(b)}\) form the primary comparison. The score evaluated
+at the posterior-mean quantile curve is reported separately as a sensitivity
+summary. GloFAS applies monotone rearrangement to its variational
+posterior-mean quantile estimates and uses realized outcomes in
+Eq.~\eqref{eq:supp-acrps}.
 
 Response-level posterior predictive draws determine an empirical predictive
 quantile function that can be evaluated on any prespecified grid; integrating
@@ -1488,7 +1533,7 @@ separately. Consequently, criteria within a displayed model row can correspond
 to different fitted specifications. The intervals condition on the
 simulated data, evaluation grid, and reservoir realization.
 
-\input{tables/qdesn_validation_500obs_v12_mcmc_metric_interval_tables.tex}
+\input{tables/qdesn_validation_500obs_v14_mcmc_metric_interval_tables.tex}
 
 \clearpage
 \subsection{Single-Quantile VB Posterior Metric Intervals}
@@ -1498,9 +1543,9 @@ equal-tailed 95\% variational intervals for the same draw-wise fitting-sample
 root-mean-square error (RMSE), forecast mean absolute error (MAE), and forecast
 check-loss criteria.
 
-\input{tables/qdesn_validation_500obs_v12_vb_metric_interval_figures.tex}
+\input{tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex}
 
-\input{tables/qdesn_validation_500obs_v12_vb_metric_interval_tables.tex}
+\input{tables/qdesn_validation_500obs_v14_vb_metric_interval_tables.tex}
 
 \clearpage
 \subsection{Single-Quantile Computation and Diagnostics}
@@ -1524,6 +1569,20 @@ from its full conditional distribution. Its variational calculation uses the
 structured factorization \(q(\gamma)q(\sigma\mid\gamma)\). These model-specific
 computations produce the
 quantile-path draws evaluated by the common criteria above.
+For retained pairs \((\sigma_b,\gamma_b)\),
+\(b=1,\ldots,B_{\mathrm{post}}\), let
+\[
+m_{\varepsilon,b}=\sigma_b\{A(\gamma_b)+\lambda(\gamma_b)\sqrt{2/\pi}\},\qquad
+V_{\varepsilon,b}=\sigma_b^2\{B(\gamma_b)+A(\gamma_b)^2
+  +\lambda(\gamma_b)^2(1-2/\pi)\}.
+\]
+The rolling-origin filter uses
+\(\bar m_\varepsilon=B_{\mathrm{post}}^{-1}\sum_b m_{\varepsilon,b}\) and
+\(\bar V_\varepsilon=B_{\mathrm{post}}^{-1}
+\sum_b(V_{\varepsilon,b}+m_{\varepsilon,b}^2)-\bar m_\varepsilon^2\).
+The parameter posterior from the initial fit is retained, while observations
+available at successive origins update the state filter before forecasts are
+propagated over the requested horizons.
 
 The MCMC metric distributions generally pool 12,000 retained evaluations from
 three independently initialized chains. The Q--DESN AL--RHS Gaussian
@@ -1534,7 +1593,8 @@ Across 54 fitted configurations and three criteria, 158 of the 162 diagnostic
 comparisons satisfy the specified criteria and four receive warnings. Five of
 the 108 displayed MCMC summaries are marked by daggers because their
 corresponding fits warrant additional caution. These include the exDQLM
-Gaussian-mixture \(p=0.25\) forecast MAE and forecast check-loss summaries.
+Gaussian-mixture \(p=0.25\) forecast MAE and Laplace \(p=0.05\) forecast MAE
+summaries.
 
 \clearpage
 \subsection{Single-Quantile Five-Chain Point-Path Sensitivity}
@@ -1563,16 +1623,33 @@ limited sensitivity to MCMC initialization for the selected specifications.
 \clearpage
 \subsection{Joint Multi-Quantile MCMC Evaluation Details}
 
-The following tables give the MCMC settings, quantile-crossing diagnostics,
-minimum scores for each criterion, and replicated likelihood contrasts for the
-joint and independent multi-quantile regressions. VB and VB--LD provide
-preliminary comparisons and initial values for the MCMC analysis. The main
-article reports the MCMC comparison over the complete set of simulation
-settings; the final
-table summarizes paired AL-minus-exAL forecast-MAE differences over 50
-independent data-generating realizations for each simulation setting.
+The following tables give the MCMC allocation,
+joint-minus-independent DGP-integrated score contrasts, quantile-crossing
+counts, and forecast quantile-path recovery diagnostics. All 16 paired score
+intervals include zero. MCMC diagnostics for the posterior score meet the
+pre-specified rank-normalized \(\widehat R\) and effective-sample-size
+thresholds in 21 of 32 comparisons; the remaining 11 comparisons are
+interpreted cautiously.
+
+For the independent \(\exAL\) analyses, the scale-collapsed update yields maximum
+rank-normalized \(\widehat R\) values of approximately 1.020 for \(\gamma\)
+and 1.016 for \(\sigma\), with minimum bulk effective sample sizes of
+approximately 410 and 472, respectively. The corresponding joint-fit values
+are approximately 1.015 and 1.012, with minimum bulk effective sample sizes
+of 849 and 959. All 16 \(\exAL\) comparisons use this scale-collapsed update
+separately at each quantile level. The weaker remaining diagnostics occur
+mainly in intercept and coefficient coordinates. Crossings in
+Table~\ref{tab:supp-joint-qdesn-crossings} refer to the posterior-mean
+quantile grids. The table also reports draw-level crossing rates, for which
+10 of the 32 scenario--model comparisons meet the pre-specified diagnostic
+criterion and 22 warrant review.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
+
+The final table reports a separate 50-replicate variational sensitivity
+analysis. Its paired \(\AL\)-minus-\(\exAL\) forecast-MAE differences assess
+recovery of the known quantile paths; the MCMC DGP-integrated score remains
+the ranking criterion in the main comparison.
 
 \clearpage
 \subsection{PriceFM Application Diagnostic Breakdowns}

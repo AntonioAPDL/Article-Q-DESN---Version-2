@@ -1,0 +1,22 @@
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.23\textwidth}rrrr@{}}
+\toprule
+Simulation setting & \shortstack{Joint Q--DESN\\\(\AL\)--\(\RHS\)} & \shortstack{Independent Q--DESN\\\(\AL\)--\(\RHS\)} & \shortstack{Joint exQDESN\\\(\exAL\)--\(\RHS\)} & \shortstack{Independent exQDESN\\\(\exAL\)--\(\RHS\)} \\
+\midrule
+Asymmetric-Laplace tail & 0.3170 [0.3147, 0.3213] & 0.3167 [0.3149, 0.3196] & \textbf{0.3163 [0.3143, 0.3200]} & 0.3168 [0.3147, 0.3205] \\
+Gaussian-mixture innovations & 0.3866 [0.3843, 0.3897] & \textbf{0.3865 [0.3844, 0.3895]} & 0.3870 [0.3841, 0.3911] & 0.3872 [0.3842, 0.3917] \\
+Laplace innovations & \textbf{0.3220 [0.3204, 0.3252]} & 0.3228 [0.3210, 0.3253] & 0.3220 [0.3201, 0.3254] & 0.3231 [0.3206, 0.3282] \\
+Nonlinear reservoir dynamics & \textbf{0.4273 [0.4247, 0.4305]} & 0.4285 [0.4254, 0.4323] & 0.4293 [0.4258, 0.4342] & 0.4302 [0.4262, 0.4356] \\
+Gaussian innovations & \textbf{0.3101 [0.3080, 0.3135]} & 0.3108 [0.3084, 0.3144] & 0.3119 [0.3084, 0.3179] & 0.3120 [0.3087, 0.3173] \\
+Persistent heavy tails & 0.3644 [0.3614, 0.3685] & 0.3636 [0.3607, 0.3675] & 0.3643 [0.3608, 0.3698] & \textbf{0.3629 [0.3601, 0.3677]} \\
+Regime shift & 0.4369 [0.4264, 0.4587] & \textbf{0.4311 [0.4263, 0.4417]} & 0.4394 [0.4269, 0.4639] & 0.4315 [0.4264, 0.4426] \\
+Student-\(t\) location--scale & \textbf{0.3362 [0.3343, 0.3395]} & 0.3368 [0.3349, 0.3398] & 0.3377 [0.3346, 0.3441] & 0.3372 [0.3348, 0.3413] \\
+\bottomrule
+\end{tabular}
+}%
+\caption{Posterior data-generating-process-integrated finite-grid quantile scores for the joint multi-quantile simulation. Entries are posterior means with equal-tailed 95\% credible intervals. The score averages the seven-level integrated check loss over the known conditional response distribution and the held-out forecast design. Lower values are better; boldface identifies the numerical minimum, based on the unrounded posterior means, within each simulation setting. Because every joint-minus-independent posterior contrast interval under the pre-specified pairing includes zero, the bolded comparisons are descriptive.}
+\label{tab:joint-qdesn-dgp-integrated-score}
+\end{table}

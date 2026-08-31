@@ -33,6 +33,10 @@ history.
 
 ## Implementation Notes
 
+- `implementation_notes/git_only_integration_overleaf_publication_20260829.md`:
+  sole supported command-line Git procedure for guarded scientific integration,
+  article-only snapshot construction, direct Overleaf publication, verification,
+  and safe retry after an interrupted two-remote update.
 - `implementation_notes/qdesn_inferential_object_and_terminology_contract_20260815.md`:
   current terminology authority for readout summaries, reported actions,
   working-likelihood simulations, and aCRPS.

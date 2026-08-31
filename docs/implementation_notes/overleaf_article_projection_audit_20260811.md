@@ -1,5 +1,12 @@
 # Overleaf Article-Projection Audit, 2026-08-11
 
+> **Historical record—superseded on 2026-08-29.** Do not reuse the
+> browser-based GitHub/Overleaf synchronization or branch-resolution procedure
+> described below. The mandatory current workflow is command-line Git only; see
+> CONTRIBUTING.md and
+> docs/implementation_notes/git_only_integration_overleaf_publication_20260829.md.
+> The text below is retained solely as incident history.
+
 ## Decision
 
 The authoritative GitHub `main` branch remains the complete research

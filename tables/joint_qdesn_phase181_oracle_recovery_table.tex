@@ -1,0 +1,22 @@
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.23\textwidth}rrrr@{}}
+\toprule
+Simulation setting & \shortstack{Joint Q--DESN\\\(\AL\)--\(\RHS\)} & \shortstack{Independent Q--DESN\\\(\AL\)--\(\RHS\)} & \shortstack{Joint exQDESN\\\(\exAL\)--\(\RHS\)} & \shortstack{Independent exQDESN\\\(\exAL\)--\(\RHS\)} \\
+\midrule
+Asymmetric-Laplace tail & 0.087 (0.136) & 0.086 (0.141) & 0.094 (0.150) & 0.089 (0.146) \\
+Gaussian-mixture innovations & 0.095 (0.126) & 0.098 (0.131) & 0.106 (0.132) & 0.094 (0.119) \\
+Laplace innovations & 0.085 (0.117) & 0.094 (0.133) & 0.111 (0.147) & 0.105 (0.144) \\
+Nonlinear reservoir dynamics & 0.104 (0.141) & 0.116 (0.153) & 0.155 (0.200) & 0.149 (0.194) \\
+Gaussian innovations & 0.083 (0.110) & 0.082 (0.109) & 0.114 (0.133) & 0.100 (0.117) \\
+Persistent heavy tails & 0.130 (0.169) & 0.125 (0.166) & 0.128 (0.167) & 0.108 (0.141) \\
+Regime shift & 0.151 (0.170) & 0.101 (0.124) & 0.180 (0.217) & 0.103 (0.127) \\
+Student-\(t\) location--scale & 0.072 (0.095) & 0.072 (0.098) & 0.116 (0.146) & 0.095 (0.121) \\
+\bottomrule
+\end{tabular}
+}%
+\caption{Forecast quantile-path recovery in the joint multi-quantile simulation. Entries are mean absolute error with root-mean-square error in parentheses for the monotonically rearranged posterior-mean forecast quantile paths, computed relative to the known conditional quantiles. These diagnostics complement the data-generating-process-integrated score comparison in the main article.}
+\label{tab:supp-joint-qdesn-oracle-recovery}
+\end{table}

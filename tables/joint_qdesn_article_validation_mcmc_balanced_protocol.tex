@@ -6,17 +6,19 @@
 Item & Value
 \\
 \midrule
-Evaluation components & Variational approximations computed separately for each simulation setting provide the initial values for the MCMC analysis. \\
+Evaluation components & Variational approximations provide initial values; MCMC draws determine the reported posterior score distributions and paired contrasts. \\
 Simulation settings & Eight data-generating mechanisms with known conditional quantile paths, spanning Gaussian, Laplace, Gaussian-mixture, asymmetric-Laplace, and Student-\(t\) innovations with several dynamic structures. \\
-Model comparison & Joint and independently estimated quantile regressions under AL (QDESN) and exAL (exQDESN), all with the regularized horseshoe prior. \\
+Model comparison & Joint and independently estimated quantile regressions under \(\AL\) (Q--DESN) and \(\exAL\) (exQDESN), all with the regularized horseshoe prior. \\
 Quantile grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95. \\
 Fitting sample & 500 observations after the pre-specified DESN washout. \\
-Forecast evaluation & Rolling-origin forecasts in the held-out period, with origins spaced 30 observations apart and horizons up to 30 steps ahead. \\
-MCMC effort & AL rows use the stated MCMC effort for the complete comparison. MCMC effort varies across exAL comparisons: eleven use eight chains with 24,000 iterations and 5,000 retained draws per chain; the remaining five use analyses specific to each simulation setting and satisfy the stated convergence criteria. \\
-Reported quantile-grid summary & Scores evaluate posterior quantile-grid summaries after monotone rearrangement; crossings before rearrangement are reported as a diagnostic. \\
+Forecast evaluation & Sequential conditional forecasts on 990 aligned origin--horizon rows per comparison. Coefficients and reservoir weights remain fixed, while newly observed responses enter subsequent lag vectors. \\
+MCMC effort & Every comparison uses eight chains. Fourteen \(\AL\) comparisons use 8,000 iterations, 2,000 burn-in iterations, and thinning by 4; two use 24,000, 4,000, and 4. Five \(\exAL\) comparisons use 24,000, 4,000, and 4; eleven use 48,000, 8,000, and 8. \\
+Posterior score summary & Each reported score distribution and paired contrast uses 8,000 chain-balanced score draws. Entries are posterior means with equal-tailed 95\% credible intervals. \\
+Contrast construction & Joint-minus-independent posterior contrasts use a pre-specified within-chain pairing of scalar score draws and are conditional on that pairing. \\
+Quantile ordering & Scores are computed after monotone rearrangement; crossings in the posterior-mean forecast quantile grids are reported before and after rearrangement. \\
 Repeated-simulation comparison & The repeated-simulation comparison contains 1600 independent VB fits. \\
 \bottomrule
 \end{tabular}
-\caption{Design of the joint multi-quantile evaluation. Variational methods initialize the chains, while MCMC supplies the reported quantile-grid summaries.}
+\caption{Design of the joint multi-quantile evaluation. Variational methods initialize the chains, while MCMC supplies the reported DGP-integrated finite-grid score summaries.}
 \label{tab:joint-qdesn-article-validation-mcmc-balanced-protocol}
 \end{table}

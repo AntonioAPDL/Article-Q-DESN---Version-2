@@ -1,0 +1,16 @@
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}rrr@{}}
+\toprule
+Model & \shortstack{Before\\rearrangement} & \shortstack{After\\rearrangement} & \shortstack{Mean draw-level\\crossing rate (\%)} \\
+\midrule
+Joint Q--DESN \(\AL\)--\(\RHS\) & 1 & 0 & 0.35 \\
+Independent Q--DESN \(\AL\)--\(\RHS\) & 25 & 0 & 1.42 \\
+Joint exQDESN \(\exAL\)--\(\RHS\) & 0 & 0 & 1.50 \\
+Independent exQDESN \(\exAL\)--\(\RHS\) & 0 & 0 & 3.37 \\
+\bottomrule
+\end{tabular}
+\caption{Adjacent-level crossings in the posterior-mean forecast quantile grids, summed over the eight simulation settings. Counts before rearrangement describe departures from monotonicity in the fitted quantiles; monotone rearrangement produces ordered grids in all 32 scenario--model comparisons. Within a setting, the draw-level rate is the number of adjacent-level crossings divided by the six adjacent quantile pairs across 8,000 draws and 990 forecast rows; the final column averages this rate over the eight settings for each model.}
+\label{tab:supp-joint-qdesn-crossings}
+\end{table}

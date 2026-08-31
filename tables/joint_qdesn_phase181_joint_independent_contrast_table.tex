@@ -1,0 +1,20 @@
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.39\textwidth}rr@{}}
+\toprule
+Simulation setting & \(\AL\) & \(\exAL\) \\
+\midrule
+Asymmetric-Laplace tail & 0.0003 [-0.0035, 0.0049] & -0.0004 [-0.0047, 0.0038] \\
+Gaussian-mixture innovations & 0.0000 [-0.0038, 0.0038] & -0.0002 [-0.0055, 0.0050] \\
+Laplace innovations & -0.0008 [-0.0039, 0.0027] & -0.0011 [-0.0065, 0.0032] \\
+Nonlinear reservoir dynamics & -0.0012 [-0.0059, 0.0033] & -0.0009 [-0.0073, 0.0055] \\
+Gaussian innovations & -0.0008 [-0.0051, 0.0035] & -0.0001 [-0.0066, 0.0068] \\
+Persistent heavy tails & 0.0009 [-0.0042, 0.0060] & 0.0014 [-0.0047, 0.0077] \\
+Regime shift & 0.0058 [-0.0095, 0.0285] & 0.0079 [-0.0090, 0.0329] \\
+Student-\(t\) location--scale & -0.0006 [-0.0042, 0.0033] & 0.0006 [-0.0047, 0.0076] \\
+\bottomrule
+\end{tabular}
+\caption{Joint-minus-independent posterior contrasts in the data-generating-process-integrated finite-grid quantile score. Entries are means with equal-tailed 95\% intervals from 8,000 score draws under the pre-specified within-chain pairing; negative values favor joint estimation. The intervals are conditional on this pairing, and every interval includes zero.}
+\label{tab:supp-joint-qdesn-dgp-score-contrasts}
+\end{table}

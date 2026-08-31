@@ -766,15 +766,27 @@ app_joint_qdesn_postscore_case_meta <- function(jobs, context) {
   )
 }
 
-app_joint_qdesn_postscore_case <- function(jobs, freeze, contract) {
+app_joint_qdesn_postscore_case <- function(
+  jobs, freeze, contract, fixture_loader = NULL, fit_loader = NULL
+) {
   jobs <- jobs[order(jobs$chain_id), , drop = FALSE]
-  loaded <- app_joint_exqdesn_phase178_load_candidate_fixture(
-    jobs[1L, , drop = FALSE], freeze$config$fixture_dir[[1L]]
-  )
+  if (is.null(fixture_loader)) {
+    fixture_loader <- function(jobs, freeze) {
+      app_joint_exqdesn_phase178_load_candidate_fixture(
+        jobs[1L, , drop = FALSE], freeze$config$fixture_dir[[1L]]
+      )
+    }
+  }
+  if (is.null(fit_loader)) {
+    fit_loader <- function(jobs, fixture, freeze) {
+      app_joint_exqdesn_phase178_load_m0_fits(jobs, fixture)
+    }
+  }
+  loaded <- fixture_loader(jobs, freeze)
   fixture <- loaded$fixture
   context <- app_joint_qdesn_postscore_forecast_context(loaded, fixture)
   forecast <- context$forecast
-  fits <- app_joint_exqdesn_phase178_load_m0_fits(jobs, fixture)
+  fits <- fit_loader(jobs, fixture, freeze)
   meta <- app_joint_qdesn_postscore_case_meta(jobs, context)
   oracle <- app_joint_qdesn_postscore_score_matrix(
     forecast$true_q, forecast$y, context$mu, context$sigma, context$sc,
@@ -1118,9 +1130,11 @@ app_joint_qdesn_postscore_joint_independent_contrasts <- function(
     if (length(joint_ids) != 1L || length(independent_ids) != 1L) next
     joint <- block[block$mcmc_case_id == joint_ids, , drop = FALSE]
     independent <- block[block$mcmc_case_id == independent_ids, , drop = FALSE]
+    contrast_seed_base <- contract$contrast_pairing_seed %||%
+      (contract$primary_pairing_seed + 90000L)
     paired <- app_joint_qdesn_postscore_pair_scalar_draws(
       joint, independent,
-      contract$primary_pairing_seed + 90000L + cursor,
+      contrast_seed_base + cursor,
       joint_ids, independent_ids
     )
     meta <- data.frame(

@@ -1230,10 +1230,38 @@ retains the scale of integrated check loss over the covered probability range.
 The joint simulation and GloFAS analyses use seven common evaluation levels
 with endpoints \(p_1=0.05\) and \(p_K=0.95\), so their trapezoidal weights sum
 to \(0.90\). For fitted quantile regressions, the evaluation levels coincide
-with the fitted grid. The joint simulation first forms quantile estimates from
-the pooled posterior means of the MCMC coefficient draws and then applies
-monotone rearrangement. GloFAS applies monotone rearrangement to the
-variational posterior-mean quantile estimates.
+with the fitted grid.
+
+In simulations, the known conditional response distribution permits a
+distribution-averaged version of the same finite-grid score. Let
+\(\mathcal G\) index the evaluated origin--horizon pairs, let \(F_{0,r}\)
+denote the true conditional distribution for pair \(r\), and let
+\(q_{r,k}^{*,(b)}\) be the monotonically rearranged \(p_k\)-quantile from
+posterior draw \(b\). We call the resulting quantity the
+data-generating-process (DGP)-integrated finite-grid quantile score and define
+it by
+\begin{equation}
+S_{\mathrm{DGP}}^{(b)}
+=\frac{2}{|\mathcal G|}
+\sum_{r\in\mathcal G}\sum_{k=1}^K \omega_k
+\E_{Y_r\sim F_{0,r}}
+\left[
+\rho_{p_k}\!\left\{Y_r-q_{r,k}^{*,(b)}\right\}
+\right].
+\label{eq:dgp-integrated-score-main}
+\end{equation}
+The posterior draws produce a posterior distribution for
+\(S_{\mathrm{DGP}}\). Its mean and equal-tailed 95\% credible interval are
+the primary summaries in the joint simulation. The expectation averages over
+the known conditional response distribution at the held-out design points,
+while conditioning on the simulated fitting series and selected model
+specification. The interval therefore excludes variation across newly
+generated fitting series and model selection. The score of the
+posterior-mean quantile curve and scores against realized outcomes provide
+additional diagnostics. In the applications, where \(F_{0,r}\) is unknown,
+forecast evaluation uses the realized \(\aCRPS\) in
+Eq.~\eqref{eq:acrps-main}. GloFAS applies monotone rearrangement to its
+variational posterior-mean quantile estimates before scoring.
 
 % ============================================================
 \section{Model Diagnostics and Reservoir Specification}
@@ -1524,80 +1552,63 @@ Gaussian family at \(p=0.25\).
 
 \subsection{Joint Multi-Quantile Study with a Pre-Specified Feature Design}
 
-The second simulation study assesses whether a shared quantile-vector
-regression can recover several conditional quantile paths simultaneously under
-a feature design fixed before evaluation. Reservoir and prior specifications
-are selected separately for each mechanism and model using VB or VB--LD. A
-replicated sensitivity analysis fits the 32 mechanism--model combinations to
-50 independently generated realizations per comparison, for 1,600 variational
-fits in total. We then conduct an MCMC analysis over the same four
-regression--likelihood combinations:
-Joint QDESN RHS, Independent QDESN RHS, Joint exQDESN RHS, and Independent
-exQDESN RHS. Each MCMC analysis is initialized from its corresponding
-variational approximation and uses the mechanism-specific specification fixed
-before sampling. The
-comparison is restricted to posterior quantile-grid paths under the stated
-working likelihoods.
-
-Of the 16 exAL comparisons, eleven use the scale-collapsed MCMC specification.
-Five retain the preceding MCMC specification because the corresponding
-scale-collapsed estimates did not satisfy the pre-specified functional-stability
-criterion. The supplement reports the associated convergence diagnostics.
-Across the scale-collapsed exAL fits,
-fitting-sample MAE improves consistently, while forecast MAE improves in five of
-the sixteen exAL comparisons.
-
-Each regression is fit across
+The second simulation study assesses whether estimating a quantile vector
+jointly improves forecast accuracy or coherence relative to fitting the same
+levels independently. Each regression is fit at
 \[
 \tau\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}.
 \]
-The MCMC comparison uses eight synthetic data-generating mechanisms, a
-pre-specified feature design, and a 500-observation fitting sample. Three
-benchmark mechanisms use Gaussian, Laplace, and Gaussian-mixture innovations.
-Five more challenging mechanisms introduce asymmetric tails, persistent heavy
-tails, Student-\(t\) errors, regime shifts, and nonlinear dynamics represented
-by reservoir features. The resulting grid contains 32 mechanism--model
-combinations. Fitted and forecast quantiles are compared with the known
-conditional quantile paths. Realized observations are scored by check loss and
-\(\aCRPS\) over the seven evaluation levels, and hit-rate error measures the
-absolute difference between the empirical proportion of observations below
-the fitted quantile and the nominal level. The reported \(\aCRPS\) uses the
-quantile curve obtained from pooled posterior means of the MCMC coefficient
-draws after monotone rearrangement; adjacent-level crossings before
-rearrangement summarize departures from monotonicity.
+The comparison uses eight synthetic mechanisms, a 500-observation fitting
+sample, and a pre-specified feature and prior specification for each
+mechanism--model combination. Three mechanisms use Gaussian, Laplace, and
+Gaussian-mixture innovations. The remaining five introduce asymmetric tails,
+persistent heavy tails, Student-\(t\) errors, a regime shift, and nonlinear
+dynamics represented by reservoir features. We compare joint and independent
+Q--DESN regressions under the \(\AL\) and \(\exAL\) working likelihoods, all
+with regularized-horseshoe shrinkage, giving 32 comparisons.
 
-\input{tables/joint_qdesn_article_validation_mcmc_balanced_model_summary.tex}
+The held-out analysis is sequentially conditional. Regression coefficients
+and reservoir weights remain fixed, while newly observed response lags become
+available as evaluation advances through the held-out period. Each
+mechanism--model comparison contains 990 aligned origin--horizon evaluations.
+The four model classes use the same evaluation indices and known conditional
+response distributions. Variational approximations provide initial values for
+the MCMC analysis. Every \(\exAL\) fit uses the scale-collapsed update for
+\((\gamma,\sigma)\) described in the supplement.
 
-\noindent\textbf{Results by simulation setting.}
-Table~\ref{tab:joint-qdesn-article-validation-mcmc-balanced-model-summary}
-summarizes the MCMC analysis for each simulation setting. Entries report
-forecast MAE against the true conditional quantile grid, with fitting-sample MAE
-and forecast-period crossings before rearrangement in parentheses; boldface
-marks the lowest forecast MAE within each setting. Joint QDESN RHS is lowest in the Laplace,
-nonlinear, and normal mechanisms. Independent QDESN RHS is lowest in the
-asymmetric-tail, regime-shift, and Student-\(t\) location-scale mechanisms,
-while Independent exQDESN RHS is lowest in the Gaussian-mixture and
-persistent-heavy-tail mechanisms. Joint exQDESN RHS has larger forecast MAE
-than at least one competing structure in each mechanism. These numerical
-rankings are descriptive because Monte Carlo uncertainty for differences
-between the two lowest-scoring methods is unavailable for all comparisons.
+The primary criterion is \(S_{\mathrm{DGP}}\) in
+Eq.~\eqref{eq:dgp-integrated-score-main}, computed for every retained MCMC
+draw after monotone rearrangement. Joint fits preserve posterior dependence
+across quantile levels within each draw. Draws from independently fitted
+levels are combined using a pre-specified, chain-balanced product coupling
+detailed in the supplement. The product of the level-specific working
+likelihoods serves as a composite objective for the quantile-indexed
+coefficients; predictive evaluation is based on the resulting quantile vector.
+Forecast MAE and RMSE compare the estimated paths with the known conditional
+quantiles and are reported as recovery diagnostics.
 
-\noindent\textbf{Quantile-crossing results.}
-Fit recovery gives a complementary result: Joint QDESN RHS has the lowest MAE
-in five of the eight fitting samples, with Independent exQDESN RHS lowest in the
-three remaining cases. Quantile-crossing behavior also distinguishes the
-regression structures. Independent QDESN RHS accounts for 24 of the 25
-forecast-period crossings before rearrangement;
-Joint QDESN RHS accounts for one, and both exAL methods account for none. All 32
-comparisons have zero crossings after the monotone rearrangement. The replicated VB
-experiment further gives lower median paired forecast MAE to AL than exAL for
-both regression structures in every mechanism, although the frequency and size of
-the differences vary by mechanism. Joint QDESN--RHS has the lowest fitting-sample
-MAE in five mechanisms and one forecast-period crossing before rearrangement;
-its forecast MAE is lowest in three mechanisms. Forecast performance varies by
-mechanism. The
-supplement reports the MCMC settings, crossing diagnostics, results for each
-criterion, and replicated AL--exAL contrasts.
+\input{tables/joint_qdesn_phase181_dgp_integrated_score_table.tex}
+
+Table~\ref{tab:joint-qdesn-dgp-integrated-score} gives the posterior mean and
+equal-tailed 95\% credible interval of the DGP-integrated score. Joint methods
+have the smallest numerical mean in five of eight settings: the
+asymmetric-Laplace-tail, Laplace-innovation, nonlinear-dynamics,
+Gaussian-innovation, and Student-\(t\) location--scale settings. Independent
+methods have the smallest mean for Gaussian-mixture innovations, persistent
+heavy tails, and the regime shift. Within likelihood family, the joint mean is
+lower in nine of the 16 comparisons. All 16 joint-minus-independent posterior
+contrast intervals under the pre-specified pairing include zero, so the
+numerical rankings are interpreted descriptively.
+
+The posterior-mean forecast grids show one adjacent-level crossing
+for joint Q--DESN under \(\AL\), compared with 25 for the corresponding
+independent regressions. Neither \(\exAL\) method crosses on these
+posterior-mean grids, and monotone rearrangement yields ordered quantiles in all 32
+comparisons. Draw-level crossing frequencies and MCMC diagnostics provide a
+broader assessment in the supplement. MCMC diagnostics for the posterior
+score meet the pre-specified numerical thresholds in 21 of 32 comparisons;
+the remaining 11 are interpreted cautiously. A separate 50-replicate variational analysis
+is retained as a sensitivity study of quantile-path recovery.
 
 \section{Application: GloFAS Retrospective Streamflow Quantile Forecasting}
 \label{sec:data}

@@ -176,13 +176,19 @@ is selected.
 - [x] Preserve the immutable Phase180 packet and hashes.
 - [x] Reconcile prior extension plans with the current mean-improvement rule.
 - [x] Freeze the 19-cell trigger and 152-worker budget.
-- [ ] Verify compact initialization and support-logit-v2 starts.
-- [ ] Run 152 independently seeded extension workers.
-- [ ] Verify every worker and checkpoint manifest.
-- [ ] Reconstruct extension posterior score functionals.
-- [ ] Apply strict lower-mean promotion after hard gates.
-- [ ] Recompose and verify exactly 32 selected cells and 16 contrasts.
-- [ ] Stage article-safe tables and wording with review disclosure.
-- [ ] Freeze a clean integration handoff on the dedicated JOINT branch.
+- [x] Verify compact initialization and support-logit-v2 starts.
+- [x] Run 152 independently seeded extension workers.
+- [x] Verify every worker and checkpoint manifest.
+- [x] Reconstruct extension posterior score functionals.
+- [x] Apply strict lower-mean promotion after hard gates.
+- [x] Recompose and verify exactly 32 selected cells and 16 contrasts.
+- [x] Stage article-safe tables and wording with review disclosure.
+- [x] Freeze a clean integration handoff on the dedicated JOINT branch.
 
 Dense-grid fitting remains deferred until this current-grid extension closes.
+
+Phase181 closed with 152/152 workers complete, zero failures, 13 lower-mean
+source promotions, 32 finite final cells, 16 joint-minus-independent
+contrasts, and zero contract crossings. The final interpretation and ordered
+next-stage contract are recorded in
+`joint_qdesn_phase181_final_closeout_and_dense_grid_plan_20260830.md`.

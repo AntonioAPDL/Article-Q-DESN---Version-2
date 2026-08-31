@@ -350,11 +350,14 @@ app_joint_qdesn_phase182_compare_table <- function(source, dense, scenario_ids, 
   source <- source[source$scenario_id %in% scenario_ids, , drop = FALSE]
   dense <- dense[dense$scenario_id %in% scenario_ids, , drop = FALSE]
   if (!identical(names(source), names(dense))) {
-    return(data.frame(
-      table_name = table_name, source_rows = nrow(source), dense_rows = nrow(dense),
-      identical_columns = FALSE, max_numeric_abs_diff = NA_real_,
-      status = "fail", stringsAsFactors = FALSE
-    ))
+    if (!setequal(names(source), names(dense))) {
+      return(data.frame(
+        table_name = table_name, source_rows = nrow(source), dense_rows = nrow(dense),
+        identical_columns = FALSE, max_numeric_abs_diff = NA_real_,
+        status = "fail", stringsAsFactors = FALSE
+      ))
+    }
+    dense <- dense[names(source)]
   }
   key <- intersect(c("scenario_id", "full_time_index", "time_index", "role_index"), names(source))
   if (length(key)) {

@@ -101,6 +101,15 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
                 mock.patch.object(scheduler.os, "sched_getaffinity", return_value=set(range(6))):
             self.assertEqual(scheduler.discover_physical_cpus(), [0, 1, 2, 3])
 
+    def test_auto_core_discovery_is_python36_compatible(self):
+        fixture = "# CPU,CORE,SOCKET,NODE,ONLINE\n0,0,0,0,Y\n"
+        with mock.patch.object(scheduler.subprocess, "check_output", return_value=fixture) as check, \
+                mock.patch.object(scheduler.os, "sched_getaffinity", return_value={0}):
+            self.assertEqual(scheduler.discover_physical_cpus(), [0])
+        kwargs = check.call_args[1]
+        self.assertTrue(kwargs["universal_newlines"])
+        self.assertNotIn("text", kwargs)
+
     def test_reference_feature_cache_must_remain_in_owned_output_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp) / "runtime"

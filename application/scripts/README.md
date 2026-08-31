@@ -493,6 +493,24 @@ is active. It never launches a model or edits article files.
 `glofas_screening_program_closeout.R` then verifies the cumulative four-phase
 contract and writes a frozen decision under the ignored runtime tree. It does
 not refit, cold-confirm, launch full7, or update article files.
+
+The shared-reference-input discrepancy-prior sensitivity campaign is prepared
+and launched with:
+
+```sh
+Rscript application/scripts/glofas_discrepancy_tau0_screen_prepare.R
+Rscript application/scripts/glofas_discrepancy_tau0_screen_preflight.R
+application/scripts/glofas_discrepancy_tau0_screen_launch.sh
+```
+
+This campaign reuses the completed discrepancy `tau0=0.1` cold fit, runs only
+the new `0.3, 1, 3, 10` levels plus one `tau0=1` cold canary, and changes no
+DESN geometry, inputs, readout membership, seeds, or shared RHS prior. The
+preflight validates hashes, exact-design warm compatibility, and candidate-
+specific prior reinitialization before any fit starts. The finalizer ranks
+forecast-window p50 check loss and direct discrepancy error subject to the
+frozen FR09 history guardrails. It cannot promote a fit, launch all seven
+quantiles, change article files, or clean retained evidence.
 For cleanup planning across runs, use the run-level inventory:
 
 ```sh

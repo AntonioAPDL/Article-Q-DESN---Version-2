@@ -32,6 +32,11 @@ Tracked tests:
   Stage-A design, and the exact 56-candidate alpha/rho/tau response-surface
   campaign with retained warm/cold canaries, plus the deterministic
   48-candidate structural memory/geometry campaign.
+- `test_glofas_discrepancy_tau0_screen.R`: one-axis discrepancy-prior
+  treatments, fixed support and labels, FR09 historical guardrails,
+  persistence-based forecast scoring, fail-closed ranking, and warm/cold
+  equivalence thresholds. The live preflight separately rebuilds the retained
+  design and verifies exact-design transfer and candidate-specific prior reset.
 - `test_glofas_screening_program_closeout.R`: cumulative phase census,
   leader selection, no-promotion decision, and fail-closed ranking-hash drift
   for the completed GloFAS constrained-median program.

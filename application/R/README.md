@@ -153,6 +153,12 @@ Tracked helper files:
   block/layer contributions, post-fit ablations, state geometry, RHS scales,
   and a fail-closed root-cause decision. It never launches a fit or authorizes
   full7 or article promotion.
+- `glofas_discrepancy_tau0_screen.R`: the one-axis p50 screen for relaxing the
+  discrepancy RHS global-scale initialization while freezing the FR09 shared-
+  input geometry and shared RHS prior. It defines the immutable treatment
+  support, exact-design warm-start audit, persistence comparison, FR09
+  historical guardrails, warm/cold equivalence rule, and nonautomatic
+  selection gate. Existing `tau0=0.1` evidence is reused instead of refit.
 - `glofas_discrepancy_transition_information_audit.R`: fixed-feature
   transition operators and pre-screen diagnostics for the GloFAS discrepancy
   model. It distinguishes the legacy static-origin adjustment from damped and

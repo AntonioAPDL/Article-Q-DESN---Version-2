@@ -1,0 +1,53 @@
+contract_section,contract_name,value,value_type,rationale
+identity,contract_version,joint_qdesn_phase182_dense_grid_crossing_v1,character,Versioned production contract for the dense-grid crossing refit and post-score packet.
+scope,expected_scenarios,8,integer,The balanced joint validation article fixture contains eight frozen synthetic mechanisms.
+scope,expected_models,4,integer,Joint and independent readouts are evaluated under AL and exAL.
+scope,expected_final_cells,32,integer,Every scenario-model cell is refit on the dense grid.
+scope,expected_reuse_cells,0,integer,No current-grid posterior draws are reused after changing the quantile grid.
+scope,expected_rerun_cells,32,integer,All frozen case-specific controls are rerun on the dense grid.
+scope,expected_new_workers,256,integer,Every rerun cell uses eight independently seeded chains.
+score,current_tau_grid,"0.05,0.10,0.25,0.50,0.75,0.90,0.95",numeric_vector,Current article grid used by Phase180 and Phase181.
+score,tau_grid,"0.05,0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,0.95",numeric_vector,Dense nineteen-level grid used only for the crossing stress refit.
+score,trapezoidal_weights,"0.025,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.05,0.025",numeric_vector,Trapezoidal weights for twice the expected check loss over the reported tau interval.
+score,weight_sum,0.90,numeric,The dense grid covers the interval from 0.05 to 0.95.
+score,primary_metric,dgp_integrated_acrps,character,Known-DGP expected finite-grid quantile score for the issued quantile action.
+score,article_label,DGP-integrated finite-grid quantile score,character,Article-facing score label that avoids implying a scalar posterior predictive density.
+score,score_draws_per_chain,1000,integer,Equal retained posterior score-draw budget for every dense-grid cell and chain.
+score,sensitivity_draws_per_chain,250,integer,Bounded draw budget for independent coupling-seed sensitivity.
+score,score_chunk_size,40,integer,Bounds dense-grid score reconstruction memory without changing the estimand.
+score,primary_pairing_seed,182900101,integer,Frozen product-posterior coupling seed for independent quantile fits.
+score,sensitivity_pairing_seeds,"182900211,182900307,182900419",integer_vector,Independent coupling sensitivity seeds.
+score,contrast_pairing_seed,182901001,integer,Frozen scalar score-draw pairing seed for joint-minus-independent contrasts.
+score,credible_interval,0.95,numeric,Equal-tailed posterior interval reported with mean median and canonical action.
+diagnostics,score_rank_rhat_ceiling,1.05,numeric,Review threshold for the posterior score functional.
+diagnostics,score_bulk_ess_floor,400,numeric,Review threshold for bulk effective sample size of the score functional.
+diagnostics,score_tail_ess_floor,200,numeric,Review threshold for tail effective sample size of the score functional.
+diagnostics,raw_crossing_rate_review,0.02,numeric,Dense-grid raw crossings above two percent of opportunities trigger review.
+diagnostics,standardized_adjustment_review,0.01,numeric,Average monotone adjustment above one percent of DGP scale triggers review.
+diagnostics,regret_tolerance,1e-10,numeric,Numerical tolerance for the oracle minimum audit.
+diagnostics,practical_relative_margin,0,numeric,Any finite posterior-score mean improvement may be promoted later after source-complete audit.
+diagnostics,posterior_probability_floor,0.50,numeric,Compatibility field; Phase182 is descriptive and does not impose superiority probability as a hard gate.
+diagnostics,protected_replicate_direction_floor,0,numeric,Compatibility field; dense-grid article fixture has one frozen replicate per scenario.
+diagnostics,oracle_recovery_ratio_ceiling,1.10,numeric,Oracle recovery degradation threshold retained as a review safeguard.
+diagnostics,analytic_integration_tolerance,1e-8,numeric,Tolerance for closed-form versus numerical expected-check-loss validation.
+diagnostics,monte_carlo_tolerance,0.01,numeric,Tolerance for the deterministic Monte Carlo formula audit.
+compute,n_chains_per_cell,8,integer,Common chain allocation for all dense-grid final cells.
+compute,al_n_iter,24000,integer,Phase181 AL chain length retained for the dense-grid stress refit.
+compute,al_burn,4000,integer,Phase181 AL warmup removal retained for the dense-grid stress refit.
+compute,al_thin,4,integer,Phase181 AL thinning interval retained for the dense-grid stress refit.
+compute,exal_n_iter,48000,integer,Phase181 exact-M0 exAL chain length retained for the dense-grid stress refit.
+compute,exal_burn,8000,integer,Phase181 exact-M0 exAL warmup removal retained for the dense-grid stress refit.
+compute,exal_thin,8,integer,Phase181 exact-M0 exAL thinning interval retained for the dense-grid stress refit.
+compute,sigma_upper_multiplier,50,numeric,Preserves the existing scale-support policy relative to the VB scale initializer.
+compute,chain_seed_base,382000000,integer,Disjoint seed namespace for Phase182 dense-grid chains.
+compute,tau_seed_stride,1009,integer,Disjoint within-chain component seed stride for independent quantile fits.
+compute,default_concurrent_workers,20,integer,Operational concurrency target for one-core workers on an audited CPU list.
+source,case_specific_controls_preserved,true,logical,DESN and RHS controls remain scenario-model specific from the Phase181 selected authority.
+source,desn_or_tau0_retuning_allowed,false,logical,Phase182 changes only the reported quantile grid and refits on that grid.
+source,article_fixture_selection_allowed,false,logical,The article fixture evaluates frozen controls and cannot select new controls.
+source,global_specification_selected,false,logical,No universal DESN or tau0 specification is selected across all scenarios.
+source,partial_publication_allowed,false,logical,Final score packets fail closed until all 32 dense-grid cells are complete.
+source,draw_reuse_allowed_after_grid_change,false,logical,Current-grid posterior draws cannot be reused or interpolated after changing tau.
+article,article_assets_mutated_by_prepare_or_workers,false,logical,Preparation and sampling never modify manuscript assets.
+article,dense_grid_authorized,true,logical,Nineteen-level fitting is explicitly authorized for this separately frozen campaign.
+article,claim_status,diagnostic_crossing_stress_test,character,Dense-grid results are crossing/coherence evidence until a later article integration decision.

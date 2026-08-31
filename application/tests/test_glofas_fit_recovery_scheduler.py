@@ -234,6 +234,39 @@ class GlofasFitRecoverySchedulerTests(unittest.TestCase):
             self.assertEqual(status, "pending")
             self.assertFalse(live)
 
+    def test_scheduler_failed_retry_resumes_only_valid_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "runtime"
+            row = self.make_manifest_row(tmp)
+            checkpoint = Path(row["run_dir"]) / "objects" / "fit.checkpoint.rds"
+            checkpoint.parent.mkdir(parents=True)
+            checkpoint.write_bytes(b"checkpoint")
+            digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+            Path(str(checkpoint) + ".sha256").write_text(digest + "\n", encoding="utf-8")
+            row.update({
+                "checkpoint_resume_enabled": "true",
+                "checkpoint_path": str(checkpoint),
+            })
+            status_dir = output_root / "status"
+            status_dir.mkdir(parents=True)
+            (status_dir / "candidate.csv").write_text(
+                "candidate_id,status,stage,timestamp,run_id,pid,exit_code\n"
+                "candidate,failed,03_fit_models,2026-08-31T00:00:00-04:00,candidate_run,999999999,1\n",
+                encoding="utf-8",
+            )
+            state = scheduler.reconcile_existing_candidate(
+                row, output_root, {}, retry_failed=True
+            )
+            self.assertEqual(state["status"], "pending")
+            self.assertEqual(state["resume_checkpoint"], "true")
+
+            checkpoint.write_bytes(b"changed")
+            state = scheduler.reconcile_existing_candidate(
+                row, output_root, {}, retry_failed=True
+            )
+            self.assertEqual(state["status"], "pending")
+            self.assertEqual(state["resume_checkpoint"], "false")
+
     def test_retry_failed_selects_only_failed_unfinished_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp) / "runtime"

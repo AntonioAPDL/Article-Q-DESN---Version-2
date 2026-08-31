@@ -378,6 +378,8 @@ def reconcile_existing_candidate(row, output_root, previous, retry_failed=False)
     elif worker.get("status") == "failed":
         if retry_failed:
             state["status"] = "pending"
+            if checkpoint_valid(row) and is_true(row.get("checkpoint_resume_enabled", "false")):
+                state["resume_checkpoint"] = "true"
         else:
             state.update({
                 "status": "failed_existing",
@@ -553,6 +555,10 @@ def main():
                 "GLOFAS_RESERVOIR_PREFLIGHT_SPECTRAL_RADIUS_EXACT_MAX_N": row.get("reservoir_preflight_spectral_radius_exact_max_n", "512"),
                 "GLOFAS_RESERVOIR_PREFLIGHT_CHEAP_VALIDATION": canonical_bool(
                     row.get("reservoir_preflight_cheap_validation", "false")
+                ),
+                "GLOFAS_CHECKPOINT_PATH": row.get("checkpoint_path", "").strip(),
+                "GLOFAS_CHECKPOINT_RESUME": states[candidate_id].get(
+                    "resume_checkpoint", "false"
                 ),
                 "QDESN_REFERENCE_FEATURE_CACHE_ROOT": reference_feature_cache_root,
             })

@@ -44,7 +44,7 @@ tau0_candidate_cfg$inference$vb_ld$rhs_alpha_tau0 <- 1
 tau0_candidate_cfg$inference$vb_ld$max_iter <- 400L
 tau0_candidate_cfg$inference$vb_ld$max_iter_hard_cap <- 400L
 tau0_candidate_cfg$inference$vb_ld$warm_start <- list(enabled = TRUE)
-tau0_candidate_cfg$inference$vb_ld$checkpoint <- list(enabled = TRUE, resume = TRUE)
+tau0_candidate_cfg$inference$vb_ld$checkpoint <- list(enabled = TRUE, resume = FALSE)
 tau0_candidate_cfg$inference$mcmc$rhs_alpha_tau0 <- 1
 tau0_candidate_cfg$execution$final_launch <- list(enabled = TRUE, note = "screen")
 tau0_candidate_cfg$execution$artifacts <- list(retain_fit_object = TRUE, retain_design_object = TRUE)

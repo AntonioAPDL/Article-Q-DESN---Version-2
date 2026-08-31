@@ -171,7 +171,10 @@ for (i in seq_len(nrow(model_grid))) {
       fit_cfg <- cfg
       checkpoint_cfg <- (fit_cfg$inference$vb_ld %||% list())$checkpoint %||% list()
       if (app_as_bool(checkpoint_cfg$enabled %||% FALSE)) {
-        checkpoint_path <- as.character(checkpoint_cfg$path %||% "")[[1L]]
+        checkpoint_path <- Sys.getenv("GLOFAS_CHECKPOINT_PATH", unset = "")
+        if (!nzchar(checkpoint_path)) {
+          checkpoint_path <- as.character(checkpoint_cfg$path %||% "")[[1L]]
+        }
         if (!nzchar(checkpoint_path)) {
           checkpoint_path <- file.path(
             run_dirs$objects,
@@ -179,7 +182,17 @@ for (i in seq_len(nrow(model_grid))) {
           )
         } else {
           checkpoint_path <- gsub("\\{fit_id\\}", row$fit_id[[1L]], checkpoint_path)
-          checkpoint_path <- app_resolve_path(checkpoint_path, must_work = FALSE)
+          checkpoint_path <- if (grepl("^/", checkpoint_path)) {
+            normalizePath(checkpoint_path, mustWork = FALSE)
+          } else if (dirname(checkpoint_path) %in% c(".", "")) {
+            normalizePath(file.path(run_dirs$objects, checkpoint_path), mustWork = FALSE)
+          } else {
+            app_resolve_path(checkpoint_path, must_work = FALSE)
+          }
+        }
+        checkpoint_resume <- Sys.getenv("GLOFAS_CHECKPOINT_RESUME", unset = "")
+        if (nzchar(checkpoint_resume)) {
+          checkpoint_cfg$resume <- app_as_bool(checkpoint_resume)
         }
         checkpoint_cfg$path <- checkpoint_path
         fit_cfg$inference$vb_ld$checkpoint <- checkpoint_cfg

@@ -116,7 +116,7 @@ app_glofas_discrepancy_tau0_apply_config <- function(
   }
   cfg$inference$vb_ld$checkpoint <- list(
     enabled = TRUE,
-    resume = TRUE,
+    resume = FALSE,
     path = "{fit_id}__vb_checkpoint.rds",
     every_iterations = 25L,
     every_minutes = 20,
@@ -189,7 +189,7 @@ app_glofas_discrepancy_tau0_assert_one_axis <- function(
     hard_cap = identical(as.integer(candidate_cfg$inference$vb_ld$max_iter_hard_cap), as.integer(expected_max_iter)),
     warm_start = identical(app_as_bool(candidate_cfg$inference$vb_ld$warm_start$enabled), isTRUE(warm)),
     checkpoint = app_as_bool(candidate_cfg$inference$vb_ld$checkpoint$enabled),
-    checkpoint_resume = app_as_bool(candidate_cfg$inference$vb_ld$checkpoint$resume),
+    checkpoint_resume_initially_disabled = !app_as_bool(candidate_cfg$inference$vb_ld$checkpoint$resume),
     p50 = TRUE
   )
   if (!all(checks)) {

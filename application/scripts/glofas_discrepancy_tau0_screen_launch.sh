@@ -5,6 +5,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUTPUT_ROOT="${1:-${REPO_ROOT}/local_trackers/runtime_configs/glofas_discrepancy_tau0_relax_p50_20260831}"
 SOURCE_ROOT="${2:-${REPO_ROOT}/local_trackers/runtime_configs/glofas_fr09_shared_reference_input_tau1em1_p50_20260829}"
 MAX_PARALLEL="${GLOFAS_TAU0_MAX_PARALLEL:-5}"
+RETRY_FAILED="${GLOFAS_TAU0_RETRY_FAILED:-false}"
 MANIFEST="${OUTPUT_ROOT}/candidate_registry.csv"
 LAUNCH_LOG="${OUTPUT_ROOT}/logs/campaign_launcher.log"
 LOCK_PATH="${OUTPUT_ROOT}/status/campaign_launcher.lock"
@@ -27,6 +28,14 @@ on_exit() {
 trap on_exit EXIT
 
 echo "[$(date -Is)] GloFAS discrepancy tau0 campaign launcher started."
+case "${RETRY_FAILED,,}" in
+  true|t|1|yes|y) RETRY_ARGS=(--retry-failed) ;;
+  false|f|0|no|n|"") RETRY_ARGS=() ;;
+  *)
+    echo "Invalid GLOFAS_TAU0_RETRY_FAILED value: ${RETRY_FAILED}" >&2
+    exit 2
+    ;;
+esac
 if [[ ! -f "${MANIFEST}" ]]; then
   Rscript application/scripts/glofas_discrepancy_tau0_screen_prepare.R \
     --source_root "${SOURCE_ROOT}" \
@@ -49,7 +58,8 @@ python3 application/scripts/glofas_fit_recovery_scheduler.py \
   --poll-seconds 60 \
   --cores auto \
   --numerical-backend bundled_rblas \
-  --backend-threads 1
+  --backend-threads 1 \
+  "${RETRY_ARGS[@]}"
 
 Rscript application/scripts/glofas_discrepancy_tau0_screen_finalize.R \
   --manifest "${MANIFEST}" \

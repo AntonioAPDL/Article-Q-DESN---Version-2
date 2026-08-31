@@ -96,6 +96,54 @@ cells <- app_joint_qdesn_bind_rows(lapply(seq_len(32L), function(ii) {
     stringsAsFactors = FALSE
   )
 }))
+
+fake_fit <- list(
+  beta_mean = c(0.1, -0.2), alpha_mean = c(-0.5, 0, 0.5),
+  sigma_mean = c(0.8, 1, 1.2), gamma_mean = rep(NA_real_, 3L)
+)
+al_cell <- cells[cells$source_model_id == "qdesn_rhs_independent_vb", , drop = FALSE][1L, ]
+al_rows <- app_joint_qdesn_phase182_init_rows(
+  fake_fit, al_cell, "dense_grid_independent_al_vb"
+)
+expect_true(
+  setequal(unique(al_rows$parameter_block), c("beta", "alpha", "sigma")) &&
+    all(is.finite(al_rows$value)),
+  "Phase182 AL initialization retained the structural NA gamma placeholder."
+)
+exal_cell <- cells[cells$source_model_id == "joint_exqdesn_rhs_vb", , drop = FALSE][1L, ]
+expect_true(
+  inherits(try(
+    app_joint_qdesn_phase182_init_rows(
+      fake_fit, exal_cell, "VB1_structured_v_dense_grid"
+    ), silent = TRUE
+  ), "try-error"),
+  "Phase182 exAL initialization accepted nonfinite gamma values."
+)
+fake_fit$gamma_mean <- c(-0.1, 0, 0.1)
+exal_rows <- app_joint_qdesn_phase182_init_rows(
+  fake_fit, exal_cell, "VB1_structured_v_dense_grid"
+)
+expect_true(
+  "gamma" %in% exal_rows$parameter_block && all(is.finite(exal_rows$value)),
+  "Phase182 exAL initialization did not retain finite gamma values."
+)
+
+alpha_repaired <- app_joint_qdesn_phase182_strict_order_alpha(
+  c(0, 0, 0, 1), alpha_min_spacing = 0, y = c(-1, 0, 1)
+)
+expect_true(
+  all(diff(alpha_repaired) > 0) &&
+    is.finite(attr(alpha_repaired, "max_abs_adjustment")),
+  "Phase182 failed to repair tied dense-grid intercepts."
+)
+alpha_spaced <- app_joint_qdesn_phase182_strict_order_alpha(
+  c(0.2, -0.1, 0.2), alpha_min_spacing = 0.05, y = c(-1, 0, 1)
+)
+expect_true(
+  all(diff(alpha_spaced) > 0.05),
+  "Phase182 failed to enforce strict feasibility beyond alpha_min_spacing."
+)
+
 dirs <- list(chains = file.path(tempdir(), "phase182-test-chains"))
 plan_a <- app_joint_qdesn_phase182_worker_plan(cells, dirs, contract)
 plan_b <- app_joint_qdesn_phase182_worker_plan(cells, dirs, contract)

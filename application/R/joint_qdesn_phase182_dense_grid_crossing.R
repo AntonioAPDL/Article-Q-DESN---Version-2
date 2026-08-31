@@ -597,14 +597,144 @@ app_joint_qdesn_phase182_materialize_fixture_shards <- function(
   list(out_dir = final_dir, shard_manifest = shard_manifest, reused = FALSE)
 }
 
+app_joint_qdesn_phase182_init_rows <- function(fit, cell, method_id) {
+  likelihood <- as.character(cell$likelihood_family[[1L]])
+  fit_for_init <- fit
+  if (identical(likelihood, "AL")) {
+    # Independent AL fits expose an NA gamma placeholder for table alignment.
+    # Gamma is not part of the AL parameter contract and must not enter MCMC.
+    fit_for_init$gamma_mean <- NULL
+  } else if (!identical(likelihood, "exAL")) {
+    stop("Phase182 initialization has an unknown likelihood family.", call. = FALSE)
+  } else if (is.null(fit_for_init$gamma_mean) ||
+             any(!is.finite(as.numeric(fit_for_init$gamma_mean)))) {
+    stop("Phase182 exAL initialization requires finite gamma values.", call. = FALSE)
+  }
+  app_joint_qdesn_phase180_init_rows(fit_for_init, cell, method_id)
+}
+
+app_joint_qdesn_phase182_strict_order_alpha <- function(
+  alpha, alpha_min_spacing = 0, y = NULL
+) {
+  alpha <- as.numeric(alpha)
+  alpha_min_spacing <- as.numeric(alpha_min_spacing)[[1L]]
+  if (!length(alpha) || any(!is.finite(alpha)) ||
+      !is.finite(alpha_min_spacing) || alpha_min_spacing < 0) {
+    stop("Phase182 ordered-alpha inputs are invalid.", call. = FALSE)
+  }
+  scale_candidates <- c(1, max(abs(alpha)))
+  if (!is.null(y)) {
+    y <- as.numeric(y)
+    y <- y[is.finite(y)]
+    if (length(y)) {
+      scale_candidates <- c(
+        scale_candidates, stats::mad(y), stats::IQR(y), stats::sd(y)
+      )
+    }
+  }
+  data_scale <- max(scale_candidates[is.finite(scale_candidates)], na.rm = TRUE)
+  numerical_gap <- max(sqrt(.Machine$double.eps) * data_scale, 1.0e-10)
+  required_gap <- alpha_min_spacing + numerical_gap
+  ordered <- sort(alpha)
+  repaired <- ordered
+  if (length(repaired) > 1L) {
+    for (k in 2:length(repaired)) {
+      repaired[[k]] <- max(repaired[[k]], repaired[[k - 1L]] + required_gap)
+    }
+  }
+  repaired <- repaired + mean(ordered) - mean(repaired)
+  if (length(repaired) > 1L && any(diff(repaired) <= alpha_min_spacing)) {
+    stop("Phase182 could not construct strictly feasible ordered intercepts.",
+         call. = FALSE)
+  }
+  attr(repaired, "max_abs_adjustment") <- max(abs(repaired - alpha))
+  attr(repaired, "numerical_gap") <- numerical_gap
+  repaired
+}
+
+app_joint_qdesn_phase182_repair_joint_warm_start <- function(
+  warm, cell, fixture
+) {
+  K <- length(fixture$tau)
+  p <- ncol(fixture$Z)
+  required <- c("beta_mean", "alpha_mean", "sigma_mean")
+  if (!is.list(warm) || any(!required %in% names(warm)) ||
+      length(warm$beta_mean) != K * p || length(warm$alpha_mean) != K ||
+      length(warm$sigma_mean) != K ||
+      any(!is.finite(c(warm$beta_mean, warm$alpha_mean, warm$sigma_mean))) ||
+      any(warm$sigma_mean <= 0)) {
+    stop("Phase182 joint exAL warm start is malformed.", call. = FALSE)
+  }
+  repaired <- app_joint_qdesn_phase182_strict_order_alpha(
+    warm$alpha_mean,
+    alpha_min_spacing = as.numeric(cell$alpha_min_spacing[[1L]]),
+    y = fixture$y
+  )
+  adjustment <- attr(repaired, "max_abs_adjustment")
+  warm$alpha_mean <- as.numeric(repaired)
+  warm$alpha <- NULL
+  attr(warm, "phase182_alpha_adjustment") <- adjustment
+  warm
+}
+
+app_joint_qdesn_phase182_independent_al_warm_start <- function(cell, fixture) {
+  controls <- app_joint_qdesn_phase122_controls_from_row(cell, n_cores = 1L)
+  warm <- app_joint_qdesn_fit_independent_readiness(
+    fixture, controls, likelihood = "al"
+  )
+  warm$gamma_mean <- app_joint_qdesn_gamma_init_for_policy(
+    fixture$tau, controls
+  )
+  warm
+}
+
+app_joint_qdesn_phase182_is_ordering_error <- function(error) {
+  inherits(error, "error") && grepl(
+    "Ordered intercept bounds collapsed", conditionMessage(error), fixed = TRUE
+  )
+}
+
+app_joint_qdesn_phase182_fit_exal_initialization <- function(cell, fixture) {
+  candidate <- cell
+  candidate$inference_method_id <- "VB1_structured_v"
+  args <- app_joint_exqdesn_phase166_control_args(candidate, fixture)
+  fallback_reason <- NA_character_
+  warm_source <- "phase166_vb0_point_v"
+  warm <- tryCatch(
+    app_joint_exqdesn_phase166_vb0_warm_start(candidate, fixture),
+    error = function(e) e
+  )
+  if (inherits(warm, "error")) {
+    if (!app_joint_qdesn_phase182_is_ordering_error(warm)) stop(warm)
+    fallback_reason <- conditionMessage(warm)
+    warm_source <- "dense_grid_independent_al_ordering_fallback"
+    warm <- app_joint_qdesn_phase182_independent_al_warm_start(cell, fixture)
+  }
+  warm <- if (identical(cell$fit_structure[[1L]], "joint")) {
+    app_joint_qdesn_phase182_repair_joint_warm_start(warm, cell, fixture)
+  } else warm
+  alpha_adjustment <- attr(warm, "phase182_alpha_adjustment") %||% 0
+  fit <- do.call(
+    if (identical(cell$fit_structure[[1L]], "joint")) {
+      app_joint_exqdesn_fit_vb_dispatch
+    } else app_joint_exqdesn_fit_independent_vb_dispatch,
+    c(list(
+      method_id = "VB1_structured_v", y = fixture$y, Z = fixture$Z,
+      tau = fixture$tau, init = warm
+    ), args)
+  )
+  attr(fit, "phase182_warm_start_source") <- warm_source
+  attr(fit, "phase182_warm_start_fallback_reason") <- fallback_reason
+  attr(fit, "phase182_warm_start_alpha_adjustment") <- alpha_adjustment
+  fit
+}
+
 app_joint_qdesn_phase182_initialize_cell <- function(cell, fixture_dir) {
   loaded <- app_joint_qdesn_phase180_load_fixture(cell$scenario_id[[1L]], fixture_dir)
   fixture <- loaded$fixture
   started <- proc.time()[["elapsed"]]
   if (cell$likelihood_family[[1L]] == "exAL") {
-    candidate <- cell
-    candidate$inference_method_id <- "VB1_structured_v"
-    fit <- app_joint_exqdesn_phase178_fit_structured_v(candidate, fixture)
+    fit <- app_joint_qdesn_phase182_fit_exal_initialization(cell, fixture)
     method_id <- "VB1_structured_v_dense_grid"
   } else {
     spec <- app_joint_qdesn_phase122_select_spec(cell$source_model_id[[1L]])
@@ -615,7 +745,7 @@ app_joint_qdesn_phase182_initialize_cell <- function(cell, fixture_dir) {
     } else "dense_grid_joint_al_vb"
   }
   elapsed <- proc.time()[["elapsed"]] - started
-  init <- app_joint_qdesn_phase180_init_rows(fit, cell, method_id)
+  init <- app_joint_qdesn_phase182_init_rows(fit, cell, method_id)
   qhat <- app_joint_qdesn_predict_fit(fit, fixture$Z, fixture$tau)
   contract <- app_joint_qdesn_apply_monotone_contract(qhat, fixture$tau)
   finite <- all(is.finite(c(
@@ -642,6 +772,13 @@ app_joint_qdesn_phase182_initialize_cell <- function(cell, fixture_dir) {
     vb_converged = vb_converged,
     fit_raw_crossing_pairs = sum(contract$raw_crossing$n_crossing_pairs),
     fit_contract_crossing_pairs = sum(contract$contract_crossing$n_crossing_pairs),
+    warm_start_source = attr(fit, "phase182_warm_start_source") %||% NA_character_,
+    warm_start_fallback_reason = attr(
+      fit, "phase182_warm_start_fallback_reason"
+    ) %||% NA_character_,
+    warm_start_alpha_adjustment = attr(
+      fit, "phase182_warm_start_alpha_adjustment"
+    ) %||% NA_real_,
     elapsed_seconds = elapsed,
     status = if (finite && sum(contract$contract_crossing$n_crossing_pairs) == 0L) {
       "pass"

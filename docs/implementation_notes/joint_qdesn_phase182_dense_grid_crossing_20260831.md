@@ -128,3 +128,34 @@ all 256 workers complete, manifests verify, finite scores are available for all
 32 cells, contract crossings remain zero, and the dense-grid raw-crossing
 patterns support the crossing/coherence claim without overstating mixing or
 posterior predictive-density evidence.
+
+## Preparation Recovery Audit
+
+The first complete preparation attempt from commit
+`477938f5128cfbc5105245def5575b0a569543d8` stopped before freeze publication
+and before any MCMC worker began. Dense fixture generation succeeded, but only
+23 of 32 VB initialization caches were published.
+
+The nine failures had two isolated causes:
+
+- all eight independent AL fits exposed an `NA` gamma placeholder used for
+  output alignment; the generic compact-initialization writer incorrectly
+  treated it as an AL parameter;
+- the joint exAL regime-shift warm start reached tied ordered intercepts on the
+  nineteen-level grid, causing an empty numerical update interval even though
+  the frozen scientific control has `alpha_min_spacing = 0`.
+
+The recovery is intentionally limited to initialization plumbing. AL compact
+initializations now exclude gamma by likelihood contract. Joint exAL warm
+starts are projected to a strictly feasible ordered-intercept vector using a
+scale-aware numerical gap. If the historical joint point-VB warm start itself
+fails with the same ordering error, Phase182 uses nineteen independent AL fits
+as a deterministic data-driven warm start and records that fallback. This does
+not change the DESN, RHS, `tau0`, exAL likelihood, exact-M0 MCMC kernel, seeds,
+or scoring contract.
+
+Every initialization audit records the warm-start source, fallback reason, and
+maximum intercept adjustment. Unexpected errors still fail closed. The failed
+orchestration evidence remains excluded from the scientific packet, and the
+production launch may resume only after all 32 initialization caches and the
+256-worker freeze verify under one clean committed code version.

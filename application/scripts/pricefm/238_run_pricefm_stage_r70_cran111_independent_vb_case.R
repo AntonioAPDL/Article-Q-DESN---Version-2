@@ -406,7 +406,10 @@ dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 if (!file.exists(file.path(adapter_dir, "adapter_manifest.json"))) {
   python_bin <- python_bin_override %||% cfg$python_bin
-  python_bin <- normalizePath(path.expand(as.character(python_bin)), mustWork = TRUE)
+  python_bin <- path.expand(as.character(python_bin))
+  if (!file.exists(python_bin)) {
+    stop("R70 Python environment is missing: ", python_bin, call. = FALSE)
+  }
   build_script <- file.path(repo_root, "application/scripts/pricefm/07_build_desn_direct_horizon_adapter.py")
   status <- system2(
     python_bin,

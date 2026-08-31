@@ -238,6 +238,7 @@ def test_r70_runner_uses_cran_public_api_and_no_model_rds_persistence():
     assert "exalStaticLDVB" in runner
     assert "X_test.csv" in runner
     assert "binary_model_artifact_written = FALSE" in runner
+    assert "python_bin <- normalizePath" not in runner
     assert "saveRDS(" not in runner
     assert "::normal_desn_fit" not in runner
     assert "::qdesn_fit_vb" not in runner

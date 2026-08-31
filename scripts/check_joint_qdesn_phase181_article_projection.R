@@ -184,13 +184,21 @@ manifest <- read.csv(
   check.names = FALSE
 )
 stopifnot(
-  nrow(manifest) == 11L,
+  nrow(manifest) >= 11L,
   all(c(
     "artifact_id", "tracked_path", "source_sha256", "tracked_sha256",
     "source_commit", "scientific_closeout_commit", "integration_source_commit",
     "derivation_note"
   ) %in% names(manifest))
 )
+required_manifest_ids <- c(
+  "scenario_model_summary", "numerical_winner_summary",
+  "mean_metric_decisions", "joint_independent_contrasts",
+  "supplemental_diagnostics", "crossing_provenance", "wording_guidance",
+  "dgp_integrated_score_table", "joint_independent_contrast_table",
+  "crossing_summary", "oracle_recovery_table"
+)
+stopifnot(all(required_manifest_ids %in% manifest$artifact_id))
 contrast_manifest <- manifest[
   manifest$artifact_id == "joint_independent_contrasts",
   ,

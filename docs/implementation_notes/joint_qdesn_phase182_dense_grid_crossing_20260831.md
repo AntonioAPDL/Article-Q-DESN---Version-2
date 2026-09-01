@@ -159,3 +159,26 @@ maximum intercept adjustment. Unexpected errors still fail closed. The failed
 orchestration evidence remains excluded from the scientific packet, and the
 production launch may resume only after all 32 initialization caches and the
 256-worker freeze verify under one clean committed code version.
+
+### Second preparation finding
+
+The first recovery launch removed both original error signatures, but stopped
+again before freeze publication with 23 verified caches and nine compact-table
+construction errors. The independent AL API stores `beta_mean` inside each of
+its `K` component fits and does not expose a combined top-level coefficient
+vector. Once the irrelevant gamma placeholder was correctly removed, this
+previously masked zero-length beta block became visible. The same component
+representation supplies the regime-shift joint-exAL ordering fallback, so one
+normalization contract accounts for all nine unpublished cells.
+
+Phase182 now reconstructs independent coefficients in tau-major order,
+reconstructs the scalar alpha and sigma blocks, and requires exact `K * p`,
+`K`, and `K` dimensions. Gamma is absent under AL and is reconstructed with
+length `K` under exAL. Every block must be finite and every sigma value must be
+positive before compact initialization is allowed. Preparation failures now
+name the exact cell, likelihood, and fit structure instead of returning an
+opaque aggregate fork error.
+
+This second repair remains representational only. It does not change fitted
+quantiles, posterior targets, case-specific controls, the dense grid, MCMC
+iterations, or the score contract.

@@ -128,6 +128,68 @@ expect_true(
   "Phase182 exAL initialization did not retain finite gamma values."
 )
 
+component_fits <- lapply(seq_len(3L), function(k) list(
+  beta_mean = c(k / 10, -k / 20), alpha_mean = k / 5,
+  sigma_mean = 0.5 + k / 10, gamma_mean = NA_real_
+))
+independent_al_fit <- list(
+  fits = component_fits, alpha_mean = vapply(
+    component_fits, function(x) x$alpha_mean, numeric(1L)
+  ),
+  sigma_mean = vapply(
+    component_fits, function(x) x$sigma_mean, numeric(1L)
+  ),
+  gamma_mean = rep(NA_real_, 3L)
+)
+small_fixture <- list(
+  tau = c(0.1, 0.5, 0.9), Z = matrix(1:8, nrow = 4, ncol = 2),
+  y = c(-1, -0.2, 0.3, 1.1)
+)
+normalized_al <- app_joint_qdesn_phase182_normalize_fit_contract(
+  independent_al_fit, al_cell, small_fixture,
+  fit_structure = "independent", likelihood = "AL"
+)
+expect_true(
+  length(normalized_al$beta_mean) == 6L &&
+    identical(normalized_al$beta_mean, unlist(lapply(
+      component_fits, `[[`, "beta_mean"
+    ), use.names = FALSE)) &&
+    is.null(normalized_al$gamma_mean) &&
+    all(is.finite(c(
+      normalized_al$beta_mean, normalized_al$alpha_mean,
+      normalized_al$sigma_mean
+    ))),
+  "Phase182 did not reconstruct the independent AL compact fit contract."
+)
+normalized_al$gamma_mean <- c(-0.1, 0, 0.1)
+normalized_al$fits <- lapply(seq_along(normalized_al$fits), function(k) {
+  out <- normalized_al$fits[[k]]
+  out$gamma_mean <- normalized_al$gamma_mean[[k]]
+  out
+})
+normalized_fallback <- app_joint_qdesn_phase182_normalize_fit_contract(
+  normalized_al, exal_cell, small_fixture,
+  fit_structure = "independent", likelihood = "exAL"
+)
+expect_true(
+  length(normalized_fallback$beta_mean) == 6L &&
+    length(normalized_fallback$gamma_mean) == 3L &&
+    all(is.finite(normalized_fallback$gamma_mean)),
+  "Phase182 did not normalize the independent-AL exAL fallback contract."
+)
+malformed_error <- try(
+  app_joint_qdesn_phase182_init_rows(
+    list(alpha_mean = 0, sigma_mean = 1), al_cell,
+    "dense_grid_independent_al_vb"
+  ), silent = TRUE
+)
+expect_true(
+  inherits(malformed_error, "try-error") && grepl(
+    al_cell$mcmc_case_id[[1L]], as.character(malformed_error), fixed = TRUE
+  ),
+  "Phase182 malformed compact initialization error lacks its cell id."
+)
+
 alpha_repaired <- app_joint_qdesn_phase182_strict_order_alpha(
   c(0, 0, 0, 1), alpha_min_spacing = 0, y = c(-1, 0, 1)
 )

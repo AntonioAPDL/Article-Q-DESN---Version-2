@@ -610,7 +610,79 @@ app_joint_qdesn_phase182_init_rows <- function(fit, cell, method_id) {
              any(!is.finite(as.numeric(fit_for_init$gamma_mean)))) {
     stop("Phase182 exAL initialization requires finite gamma values.", call. = FALSE)
   }
+  required <- c("beta_mean", "alpha_mean", "sigma_mean")
+  empty <- required[vapply(required, function(field) {
+    is.null(fit_for_init[[field]]) || !length(fit_for_init[[field]])
+  }, logical(1L))]
+  if (length(empty)) {
+    stop(sprintf(
+      "Phase182 compact initialization for '%s' lacks: %s.",
+      cell$mcmc_case_id[[1L]], paste(empty, collapse = ", ")
+    ), call. = FALSE)
+  }
   app_joint_qdesn_phase180_init_rows(fit_for_init, cell, method_id)
+}
+
+app_joint_qdesn_phase182_normalize_fit_contract <- function(
+  fit, cell, fixture, fit_structure = NULL, likelihood = NULL
+) {
+  if (!is.list(fit)) {
+    stop("Phase182 can normalize only list-based fit objects.", call. = FALSE)
+  }
+  K <- length(fixture$tau)
+  p <- ncol(fixture$Z)
+  fit_structure <- fit_structure %||% as.character(cell$fit_structure[[1L]])
+  likelihood <- likelihood %||% as.character(cell$likelihood_family[[1L]])
+  if (!fit_structure %in% c("joint", "independent") ||
+      !likelihood %in% c("AL", "exAL")) {
+    stop("Phase182 fit normalization received an unknown contract.", call. = FALSE)
+  }
+  if (identical(fit_structure, "independent")) {
+    if (is.null(fit$fits) || length(fit$fits) != K) {
+      stop("Phase182 independent fit does not contain K component fits.",
+           call. = FALSE)
+    }
+    beta_by_tau <- lapply(fit$fits, function(component) {
+      as.numeric(component$beta_mean)
+    })
+    beta_lengths <- vapply(beta_by_tau, length, integer(1L))
+    if (any(beta_lengths != p)) {
+      stop("Phase182 independent component beta dimensions are invalid.",
+           call. = FALSE)
+    }
+    fit$beta_mean <- unlist(beta_by_tau, use.names = FALSE)
+    fit$alpha_mean <- vapply(
+      fit$fits, function(component) as.numeric(component$alpha_mean)[[1L]],
+      numeric(1L)
+    )
+    fit$sigma_mean <- vapply(
+      fit$fits, function(component) as.numeric(component$sigma_mean)[[1L]],
+      numeric(1L)
+    )
+    if (identical(likelihood, "exAL")) {
+      fit$gamma_mean <- vapply(
+        fit$fits, function(component) as.numeric(component$gamma_mean)[[1L]],
+        numeric(1L)
+      )
+    }
+  }
+  if (identical(likelihood, "AL")) fit$gamma_mean <- NULL
+  expected <- c(beta_mean = K * p, alpha_mean = K, sigma_mean = K)
+  if (identical(likelihood, "exAL")) expected <- c(expected, gamma_mean = K)
+  malformed <- names(expected)[vapply(names(expected), function(field) {
+    value <- as.numeric(fit[[field]])
+    length(value) != expected[[field]] || any(!is.finite(value))
+  }, logical(1L))]
+  if (length(malformed) || any(as.numeric(fit$sigma_mean) <= 0)) {
+    stop(sprintf(
+      "Phase182 normalized fit for '%s' has invalid blocks: %s.",
+      cell$mcmc_case_id[[1L]],
+      paste(unique(c(malformed, if (any(as.numeric(fit$sigma_mean) <= 0)) {
+        "sigma_mean_nonpositive"
+      })), collapse = ", ")
+    ), call. = FALSE)
+  }
+  fit
 }
 
 app_joint_qdesn_phase182_strict_order_alpha <- function(
@@ -685,7 +757,14 @@ app_joint_qdesn_phase182_independent_al_warm_start <- function(cell, fixture) {
   warm$gamma_mean <- app_joint_qdesn_gamma_init_for_policy(
     fixture$tau, controls
   )
-  warm
+  if (!is.null(warm$fits)) {
+    for (k in seq_along(warm$fits)) {
+      warm$fits[[k]]$gamma_mean <- warm$gamma_mean[[k]]
+    }
+  }
+  app_joint_qdesn_phase182_normalize_fit_contract(
+    warm, cell, fixture, fit_structure = "independent", likelihood = "exAL"
+  )
 }
 
 app_joint_qdesn_phase182_is_ordering_error <- function(error) {
@@ -744,6 +823,7 @@ app_joint_qdesn_phase182_initialize_cell <- function(cell, fixture_dir) {
       "dense_grid_independent_al_vb"
     } else "dense_grid_joint_al_vb"
   }
+  fit <- app_joint_qdesn_phase182_normalize_fit_contract(fit, cell, fixture)
   elapsed <- proc.time()[["elapsed"]] - started
   init <- app_joint_qdesn_phase182_init_rows(fit, cell, method_id)
   qhat <- app_joint_qdesn_predict_fit(fit, fixture$Z, fixture$tau)
@@ -985,12 +1065,22 @@ app_joint_qdesn_phase182_prepare <- function(
   if (anyDuplicated(components$component_seed)) {
     stop("Phase182 component seed plan has collisions.", call. = FALSE)
   }
-  initialize <- function(ii) try(
-    app_joint_qdesn_phase182_initialize_cached(
-      cells[ii, , drop = FALSE], fixture_dir, dirs$initialization_work,
-      force = force
-    ), silent = TRUE
-  )
+  initialize <- function(ii) {
+    cell <- cells[ii, , drop = FALSE]
+    tryCatch(
+      app_joint_qdesn_phase182_initialize_cached(
+        cell, fixture_dir, dirs$initialization_work, force = force
+      ),
+      error = function(e) structure(
+        sprintf(
+          "Phase182 cell '%s' (%s/%s) failed: %s",
+          cell$mcmc_case_id[[1L]], cell$likelihood_family[[1L]],
+          cell$fit_structure[[1L]], conditionMessage(e)
+        ),
+        class = c("try-error", "character"), condition = e
+      )
+    )
+  }
   initialization <- if (.Platform$OS.type != "windows" && n_vb_cores > 1L) {
     parallel::mclapply(
       seq_len(nrow(cells)), initialize,

@@ -71,7 +71,7 @@ worker_script <- paste(
   "set -euo pipefail",
   sprintf("cd %s", shQuote(repo_root)),
   "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1",
-  worker_lines,
+  paste(worker_lines, collapse = "\n"),
   "wait",
   sprintf(
     "Rscript application/scripts/42_check_glofas_normal_part2_ridge_screen.R --runtime_root %s >> %s 2>&1",

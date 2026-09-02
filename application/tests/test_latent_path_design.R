@@ -279,6 +279,53 @@ stopifnot(identical(
   qfit_cov_article$meta$reservoir_input_columns,
   c("y_lag_1", "y_lag_2", "ppt_lag_0", "ppt_lag_1", "soil_lag_0", "soil_lag_1")
 ))
+
+aux_timeline <- data.frame(
+  date = cov_dates[1:10],
+  usgs = cov_panel$y_transformed,
+  glofas = cov_panel$g_transformed,
+  usgs_role = "historical_usgs",
+  glofas_role = "historical_retrospective_glofas",
+  stringsAsFactors = FALSE
+)
+aux_panel <- cov_panel
+attr(aux_panel, "model_auxiliary_timeline") <- aux_timeline
+aux_latent_cfg <- cov_latent_cfg
+aux_latent_cfg$feature_contract$reservoir_input$covariates <- list()
+aux_latent_cfg$feature_contract$reservoir_input$auxiliary_lags <- list(
+  usgs = list(values = c(1L, 2L)),
+  glofas = list(values = 1L)
+)
+qfit_aux_article <- app_qdesn_build_article_design_full(aux_panel, aux_latent_cfg, seed = 20260514L, drop = 2L)
+stopifnot(isTRUE(qfit_aux_article$meta$reservoir_auxiliary_lags_enabled))
+stopifnot(identical(
+  qfit_aux_article$meta$reservoir_input_columns,
+  c("y_lag_1", "y_lag_2", "usgs_lag_1", "usgs_lag_2", "glofas_lag_1")
+))
+aux_input <- app_qdesn_reservoir_input_matrix(
+  aux_panel,
+  aux_latent_cfg,
+  spec = qfit_aux_article$meta$reservoir_input_spec
+)
+stopifnot(isTRUE(all.equal(aux_input$X[5L, c("y_lag_1", "y_lag_2")], c(4, 3), check.attributes = FALSE)))
+stopifnot(isTRUE(all.equal(aux_input$X[5L, c("usgs_lag_1", "usgs_lag_2")], c(4, 3), check.attributes = FALSE)))
+stopifnot(isTRUE(all.equal(aux_input$X[5L, "glofas_lag_1"], 4.1, check.attributes = FALSE)))
+stopifnot(any(aux_input$audit$input_block == "auxiliary_lag"))
+stopifnot(!any(grepl("^usgs_lag_|^glofas_lag_", colnames(qfit_aux_article$X))))
+aux_continue_msg <- tryCatch(
+  {
+    app_qdesn_continue_latent_path(
+      qfit_aux_article,
+      y_history = aux_panel$y_transformed,
+      y_future = c(11, 12),
+      future_dates = as.Date("2026-02-11") + 0:1
+    )
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("Reservoir auxiliary lags", aux_continue_msg, fixed = TRUE))
+
 cov_future_dates <- as.Date("2026-02-11") + 0:2
 cov_y_future <- c(11, 12, 13)
 cont_cov <- app_qdesn_continue_latent_path(

@@ -86,6 +86,43 @@ app_feature_contract_parse_reservoir_covariate_lags <- function(reservoir_input,
   app_feature_contract_parse_covariate_lags(reservoir_input$covariates, cfg)
 }
 
+app_feature_contract_parse_reservoir_auxiliary_lags <- function(reservoir_input, has_new_contract) {
+  if (!isTRUE(has_new_contract)) return(list())
+  if (!"auxiliary_lags" %in% names(reservoir_input)) return(list())
+  aux_spec <- reservoir_input$auxiliary_lags
+  if (is.null(aux_spec)) return(list())
+  if (!is.list(aux_spec) || is.data.frame(aux_spec)) {
+    stop("feature_contract.reservoir_input.auxiliary_lags must be a named list.", call. = FALSE)
+  }
+  if (!length(aux_spec)) return(list())
+  if (is.null(names(aux_spec))) {
+    stop("feature_contract.reservoir_input.auxiliary_lags must be a named list.", call. = FALSE)
+  }
+  vars <- names(aux_spec)
+  vars <- vars[nzchar(vars)]
+  if (!length(vars)) return(list())
+  bad_names <- vars[!grepl("^[A-Za-z][A-Za-z0-9_]*$", vars)]
+  if (length(bad_names)) {
+    stop(
+      sprintf(
+        "Unsupported reservoir auxiliary lag names: %s. Use simple alphanumeric names.",
+        paste(bad_names, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  out <- list()
+  for (v in vars) {
+    out[[v]] <- app_parse_lag_spec(
+      aux_spec[[v]],
+      default = integer(0),
+      allow_zero = FALSE,
+      label = sprintf("%s reservoir auxiliary lags", v)
+    )
+  }
+  out[vapply(out, length, integer(1L)) > 0L]
+}
+
 app_feature_contract_parse_bool <- function(x, default = FALSE) {
   if (is.null(x) || !length(x)) return(isTRUE(default))
   if (exists("app_as_bool", mode = "function", inherits = TRUE)) {
@@ -209,6 +246,10 @@ app_feature_contract <- function(cfg) {
     cfg,
     has_new_contract = has_new_contract
   )
+  reservoir_auxiliary_lags <- app_feature_contract_parse_reservoir_auxiliary_lags(
+    reservoir_input,
+    has_new_contract = has_new_contract
+  )
   reservoir_dlm_components <- app_feature_contract_parse_dlm_components(
     reservoir_input,
     default_lags = reservoir_output_lags,
@@ -253,6 +294,7 @@ app_feature_contract <- function(cfg) {
       internal_bias = isTRUE(reservoir_input$internal_bias %||% TRUE),
       output_lags = reservoir_output_lags,
       covariate_lags = reservoir_covariate_lags,
+      auxiliary_lags = reservoir_auxiliary_lags,
       dlm_components = reservoir_dlm_components,
       standardize = isTRUE(reservoir_input$standardize %||% (cfg$reservoir$standardize_inputs %||% FALSE))
     ),
@@ -285,12 +327,20 @@ app_feature_contract_reservoir_covariate_lags <- function(cfg) {
   app_feature_contract(cfg)$reservoir_input$covariate_lags
 }
 
+app_feature_contract_reservoir_auxiliary_lags <- function(cfg) {
+  app_feature_contract(cfg)$reservoir_input$auxiliary_lags
+}
+
 app_feature_contract_history_requirement <- function(cfg, block = NA_character_) {
   contract <- app_feature_contract(cfg)
   lag_groups <- list(
     reservoir_output = contract$reservoir_input$output_lags,
     reservoir_covariates = unlist(
       contract$reservoir_input$covariate_lags,
+      use.names = FALSE
+    ),
+    reservoir_auxiliary = unlist(
+      contract$reservoir_input$auxiliary_lags,
       use.names = FALSE
     ),
     readout_reservoir_state = contract$readout$reservoir_state_lags,
@@ -314,6 +364,7 @@ app_feature_contract_history_requirement <- function(cfg, block = NA_character_)
     block = as.character(block %||% NA_character_),
     reservoir_output_lag_max = maxima[["reservoir_output"]],
     reservoir_covariate_lag_max = maxima[["reservoir_covariates"]],
+    reservoir_auxiliary_lag_max = maxima[["reservoir_auxiliary"]],
     reservoir_dlm_component_lag_max = maxima[["reservoir_dlm_components"]],
     readout_reservoir_state_lag_max = maxima[["readout_reservoir_state"]],
     readout_output_lag_max = maxima[["readout_output"]],
@@ -359,6 +410,12 @@ app_feature_contract_covariate_lag_columns <- function(cfg) {
 
 app_feature_contract_reservoir_covariate_lag_columns <- function(cfg) {
   lags_by_var <- app_feature_contract_reservoir_covariate_lags(cfg)
+  if (!length(lags_by_var)) return(character(0))
+  unlist(lapply(names(lags_by_var), function(v) sprintf("%s_lag_%d", v, lags_by_var[[v]])), use.names = FALSE)
+}
+
+app_feature_contract_reservoir_auxiliary_lag_columns <- function(cfg) {
+  lags_by_var <- app_feature_contract_reservoir_auxiliary_lags(cfg)
   if (!length(lags_by_var)) return(character(0))
   unlist(lapply(names(lags_by_var), function(v) sprintf("%s_lag_%d", v, lags_by_var[[v]])), use.names = FALSE)
 }

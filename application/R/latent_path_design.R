@@ -61,6 +61,8 @@ app_qdesn_reservoir_input_spec <- function(cfg) {
   output_lags <- as.integer(contract$reservoir_input$output_lags %||% integer(0))
   covariate_lags <- contract$reservoir_input$covariate_lags %||% list()
   covariate_lags <- covariate_lags[vapply(covariate_lags, length, integer(1L)) > 0L]
+  auxiliary_lags <- contract$reservoir_input$auxiliary_lags %||% list()
+  auxiliary_lags <- auxiliary_lags[vapply(auxiliary_lags, length, integer(1L)) > 0L]
   dlm_components <- contract$reservoir_input$dlm_components %||% list(enabled = FALSE)
 
   columns <- character(0)
@@ -84,6 +86,20 @@ app_qdesn_reservoir_input_spec <- function(cfg) {
       info[[k]] <- data.frame(
         column_name = sprintf("%s_lag_%d", v, lags),
         input_block = "covariate_lag",
+        variable = v,
+        lag = lags,
+        stringsAsFactors = FALSE
+      )
+      k <- k + 1L
+    }
+  }
+  if (length(auxiliary_lags)) {
+    for (v in names(auxiliary_lags)) {
+      lags <- as.integer(auxiliary_lags[[v]])
+      columns <- c(columns, sprintf("%s_lag_%d", v, lags))
+      info[[k]] <- data.frame(
+        column_name = sprintf("%s_lag_%d", v, lags),
+        input_block = "auxiliary_lag",
         variable = v,
         lag = lags,
         stringsAsFactors = FALSE
@@ -123,10 +139,12 @@ app_qdesn_reservoir_input_spec <- function(cfg) {
     info = info,
     output_lags = output_lags,
     covariate_lags = covariate_lags,
+    auxiliary_lags = auxiliary_lags,
     dlm_component_lags = if (isTRUE(dlm_components$enabled %||% FALSE)) as.integer(dlm_components$lags) else integer(0),
     dlm_component_families = if (isTRUE(dlm_components$enabled %||% FALSE)) as.character(dlm_components$feature_families) else character(0),
     dlm_components = dlm_components,
     uses_covariates = length(covariate_lags) > 0L,
+    uses_auxiliary_lags = length(auxiliary_lags) > 0L,
     uses_dlm_components = isTRUE(dlm_components$enabled %||% FALSE),
     standardize = isTRUE(contract$reservoir_input$standardize),
     internal_bias = isTRUE(contract$reservoir_input$internal_bias),
@@ -165,6 +183,14 @@ app_qdesn_covariate_lookup <- function(timeline, variable, date) {
   }
   role <- if (role_col %in% names(timeline)) as.character(timeline[[role_col]][[idx]]) else "covariate"
   list(value = value, role = role, source = "covariate_timeline")
+}
+
+app_panel_auxiliary_timeline <- function(panel, required = FALSE) {
+  out <- attr(panel, "model_auxiliary_timeline", exact = TRUE)
+  if (is.null(out) && isTRUE(required)) {
+    stop("Reservoir auxiliary lags require a model_auxiliary_timeline attribute.", call. = FALSE)
+  }
+  out
 }
 
 app_qdesn_response_lookup <- function(history_dates, y_history, date, future_dates = NULL, y_future = NULL, h_current = NULL) {
@@ -244,6 +270,11 @@ app_qdesn_reservoir_input_row <- function(
         "DLM-augmented reservoir inputs are currently historical-screening features and cannot be used in latent-path continuation.",
         call. = FALSE
       )
+    } else if (identical(input_block, "auxiliary_lag")) {
+      stop(
+        "Reservoir auxiliary lags are historical-screening features and cannot be used in latent-path continuation.",
+        call. = FALSE
+      )
     } else {
       looked <- app_qdesn_covariate_lookup(covariate_timeline, variable, lookup_date)
       values[[j]] <- looked$value
@@ -306,6 +337,12 @@ app_qdesn_compile_future_input_contract <- function(
   if (any(as.character(info$input_block) == "dlm_component_lag")) {
     stop(
       "DLM-augmented reservoir inputs cannot be compiled for latent future continuation.",
+      call. = FALSE
+    )
+  }
+  if (any(as.character(info$input_block) == "auxiliary_lag")) {
+    stop(
+      "Reservoir auxiliary lags cannot be compiled for latent future continuation.",
       call. = FALSE
     )
   }
@@ -490,6 +527,16 @@ app_qdesn_reservoir_input_matrix <- function(panel, cfg, spec = NULL) {
   y_history <- as.numeric(panel$y_transformed)
   if (any(!is.finite(y_history))) stop("Reservoir input history contains non-finite response values.", call. = FALSE)
   covariate_timeline <- if (isTRUE(spec$uses_covariates)) app_panel_covariate_timeline(panel, required = TRUE) else NULL
+  auxiliary_timeline <- if (isTRUE(spec$uses_auxiliary_lags %||% FALSE)) app_panel_auxiliary_timeline(panel, required = TRUE) else NULL
+  if (!is.null(auxiliary_timeline)) {
+    if (!"date" %in% names(auxiliary_timeline)) {
+      stop("Reservoir auxiliary timeline is missing a date column.", call. = FALSE)
+    }
+    auxiliary_timeline$date <- as.Date(auxiliary_timeline$date)
+    auxiliary_timeline <- auxiliary_timeline[order(auxiliary_timeline$date), , drop = FALSE]
+    auxiliary_timeline <- auxiliary_timeline[!duplicated(auxiliary_timeline$date), , drop = FALSE]
+    if (!nrow(auxiliary_timeline)) stop("Reservoir auxiliary timeline is empty.", call. = FALSE)
+  }
   dlm_timeline <- NULL
   if (isTRUE(spec$uses_dlm_components %||% FALSE)) {
     dlm_cols <- as.character(spec$dlm_component_families)
@@ -594,6 +641,53 @@ app_qdesn_reservoir_input_matrix <- function(panel, cfg, spec = NULL) {
         roles = paste(sort(unique(roles)), collapse = ";"),
         stringsAsFactors = FALSE
       )
+    } else if (identical(input_block, "auxiliary_lag")) {
+      if (is.null(auxiliary_timeline) || !nrow(auxiliary_timeline)) {
+        stop("Reservoir auxiliary input matrix requires an auxiliary timeline.", call. = FALSE)
+      }
+      if (!variable %in% names(auxiliary_timeline)) {
+        stop(sprintf("Reservoir auxiliary timeline is missing '%s'.", variable), call. = FALSE)
+      }
+      idx <- match(lookup_dates, auxiliary_timeline$date)
+      initial <- is.na(idx) & lookup_dates < min(auxiliary_timeline$date, na.rm = TRUE)
+      missing <- is.na(idx) & !initial
+      if (any(missing)) {
+        missing_dates <- sort(unique(lookup_dates[missing]))
+        stop(
+          sprintf(
+            "Missing auxiliary history for reservoir input %s at %s.",
+            as.character(spec$info$column_name[[j]]),
+            paste(utils::head(as.character(missing_dates), 10L), collapse = ", ")
+          ),
+          call. = FALSE
+        )
+      }
+      vals <- numeric(n)
+      vals[!initial] <- as.numeric(auxiliary_timeline[[variable]][idx[!initial]])
+      if (any(!is.finite(vals))) {
+        stop(sprintf("Non-finite values in reservoir input %s.", as.character(spec$info$column_name[[j]])), call. = FALSE)
+      }
+      X[, j] <- vals
+      role_col <- paste0(variable, "_role")
+      roles <- rep("initial_zero_padding", n)
+      if (role_col %in% names(auxiliary_timeline)) {
+        roles[!initial] <- as.character(auxiliary_timeline[[role_col]][idx[!initial]])
+      } else {
+        roles[!initial] <- paste0(variable, "_history")
+      }
+      summaries[[j]] <- data.frame(
+        column_name = as.character(spec$info$column_name[[j]]),
+        input_block = "auxiliary_lag",
+        variable = variable,
+        lag = lag,
+        n_rows = n,
+        n_initial_zero_padding = sum(initial),
+        n_history = sum(!initial),
+        n_covariate = 0L,
+        n_auxiliary = sum(!initial),
+        roles = paste(sort(unique(roles)), collapse = ";"),
+        stringsAsFactors = FALSE
+      )
     } else if (identical(input_block, "dlm_component_lag")) {
       idx <- match(lookup_dates, dlm_timeline$target_date)
       initial <- is.na(idx) & lookup_dates < min(dlm_timeline$target_date, na.rm = TRUE)
@@ -636,6 +730,7 @@ app_qdesn_reservoir_input_matrix <- function(panel, cfg, spec = NULL) {
     X = X,
     audit = app_bind_rows_fill(summaries),
     covariate_timeline = covariate_timeline,
+    auxiliary_timeline = auxiliary_timeline,
     dlm_timeline = dlm_timeline
   )
 }
@@ -840,8 +935,11 @@ app_qdesn_roll_article_reservoir <- function(input_matrix, reservoir, meta) {
 
 app_qdesn_build_article_design_full <- function(panel, cfg, seed = NULL, drop = NULL) {
   spec <- app_qdesn_reservoir_input_spec(cfg)
-  if (!isTRUE(spec$uses_covariates) && !isTRUE(spec$uses_dlm_components %||% FALSE)) {
-    stop("Article-side reservoir design is reserved for covariate-aware or DLM-augmented reservoir input contracts.", call. = FALSE)
+  if (!length(spec$output_lags) &&
+      !isTRUE(spec$uses_covariates) &&
+      !isTRUE(spec$uses_auxiliary_lags %||% FALSE) &&
+      !isTRUE(spec$uses_dlm_components %||% FALSE)) {
+    stop("Article-side reservoir design requires at least one historical reservoir input contract.", call. = FALSE)
   }
   seed <- suppressWarnings(as.integer(seed %||% (cfg$reservoir %||% list())$seed %||% 20260513L))
   if (!is.finite(seed)) seed <- 20260513L
@@ -860,6 +958,7 @@ app_qdesn_build_article_design_full <- function(panel, cfg, seed = NULL, drop = 
     input_lag_warmup = max(c(
       spec$output_lags,
       unlist(spec$covariate_lags, use.names = FALSE),
+      unlist(spec$auxiliary_lags, use.names = FALSE),
       spec$dlm_component_lags,
       0L
     )),
@@ -880,6 +979,8 @@ app_qdesn_build_article_design_full <- function(panel, cfg, seed = NULL, drop = 
     reservoir_input_info = spec$info,
     reservoir_covariates_enabled = isTRUE(spec$uses_covariates),
     reservoir_covariate_columns = spec$info$column_name[spec$info$input_block == "covariate_lag"],
+    reservoir_auxiliary_lags_enabled = isTRUE(spec$uses_auxiliary_lags %||% FALSE),
+    reservoir_auxiliary_columns = spec$info$column_name[spec$info$input_block == "auxiliary_lag"],
     reservoir_dlm_components_enabled = isTRUE(spec$uses_dlm_components %||% FALSE),
     reservoir_dlm_component_columns = spec$info$column_name[spec$info$input_block == "dlm_component_lag"],
     reservoir_dlm_component_families = spec$dlm_component_families,
@@ -889,6 +990,7 @@ app_qdesn_build_article_design_full <- function(panel, cfg, seed = NULL, drop = 
     reservoir_input_scale_params = scaled$scale_params,
     reservoir_input_audit_summary = input$audit,
     covariate_timeline = input$covariate_timeline,
+    auxiliary_timeline = input$auxiliary_timeline,
     dlm_timeline = input$dlm_timeline,
     history_dates = as.Date(panel$target_date),
     y_history = as.numeric(panel$y_transformed)
@@ -1127,6 +1229,12 @@ app_qdesn_continue_latent_path_covariate <- function(
   if (isTRUE(spec$uses_dlm_components %||% FALSE)) {
     stop(
       "DLM-augmented reservoir inputs are Part 1 historical-screening features and cannot be used in latent-path continuation.",
+      call. = FALSE
+    )
+  }
+  if (isTRUE(spec$uses_auxiliary_lags %||% FALSE)) {
+    stop(
+      "Reservoir auxiliary lags are Part 2 historical-screening features and cannot be used in latent-path continuation.",
       call. = FALSE
     )
   }

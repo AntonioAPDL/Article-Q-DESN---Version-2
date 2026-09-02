@@ -81,6 +81,7 @@ stopifnot(nrow(paired$panel) == nrow(toy_panel))
 stopifnot(max(abs(paired$panel$d_g_transformed - (toy_g - toy_y))) < 1.0e-12)
 stopifnot(!anyDuplicated(paired$panel$target_date))
 stopifnot(!is.null(attr(paired$panel, "model_covariate_timeline", exact = TRUE)))
+stopifnot(!is.null(attr(paired$panel, "model_auxiliary_timeline", exact = TRUE)))
 
 ref_cfg <- app_glofas_normal_part2_component_cfg(normal_part2_cfg, toy_candidate, "reference")
 disc_cfg <- app_glofas_normal_part2_component_cfg(normal_part2_cfg, toy_candidate, "discrepancy")
@@ -90,6 +91,24 @@ stopifnot(identical(app_feature_contract(ref_cfg)$reservoir_input$output_lags, 1
 stopifnot(identical(app_feature_contract(disc_cfg)$reservoir_input$covariate_lags$ppt, 0:2))
 stopifnot(!isTRUE(app_feature_contract(ref_cfg)$readout$include_input_block))
 stopifnot(!isTRUE(app_feature_contract(disc_cfg)$readout$include_input_block))
+
+toy_full_candidate <- toy_candidate
+toy_full_candidate$candidate_id <- "toy_part2_full_hist"
+toy_full_candidate$disc_input_contract <- "disc_full_hist"
+toy_full_candidate$disc_auxiliary_lag_max <- 2L
+disc_full_cfg <- app_glofas_normal_part2_component_cfg(normal_part2_cfg, toy_full_candidate, "discrepancy")
+disc_full_contract <- app_feature_contract(disc_full_cfg)
+stopifnot(identical(disc_full_contract$reservoir_input$auxiliary_lags$glofas, 1:2))
+stopifnot(identical(disc_full_contract$reservoir_input$auxiliary_lags$usgs, 1:2))
+stopifnot(identical(disc_full_contract$reservoir_input$covariate_lags$ppt, 0:2))
+
+toy_disc_only <- toy_candidate
+toy_disc_only$candidate_id <- "toy_part2_disc_only"
+toy_disc_only$disc_input_contract <- "disc_only"
+disc_only_cfg <- app_glofas_normal_part2_component_cfg(normal_part2_cfg, toy_disc_only, "discrepancy")
+disc_only_contract <- app_feature_contract(disc_only_cfg)
+stopifnot(!length(disc_only_contract$reservoir_input$auxiliary_lags))
+stopifnot(!length(disc_only_contract$reservoir_input$covariate_lags))
 
 bridge_design <- app_glofas_normal_part2_build_design(
   normal_part2_cfg,
@@ -111,6 +130,30 @@ stopifnot(!any(grepl(
   )
 )))
 
+bridge_full_design <- app_glofas_normal_part2_build_design(
+  normal_part2_cfg,
+  toy_full_candidate,
+  panel_bundle = toy_bundle
+)
+disc_input_columns <- bridge_full_design$discrepancy$component_design$design_meta$reservoir_input_columns
+stopifnot(any(grepl("^glofas_lag_", disc_input_columns)))
+stopifnot(any(grepl("^usgs_lag_", disc_input_columns)))
+stopifnot(!any(grepl("^glofas_lag_|^usgs_lag_", bridge_full_design$discrepancy$feature_info$column_name)))
+
+reference_cache <- app_glofas_normal_part2_prepare_reference_cache(
+  normal_part2_cfg,
+  toy_full_candidate,
+  panel_bundle = toy_bundle
+)
+bridge_cached <- app_glofas_normal_part2_build_design(
+  normal_part2_cfg,
+  toy_full_candidate,
+  panel_bundle = toy_bundle,
+  reference_cache = reference_cache
+)
+stopifnot(identical(bridge_cached$reference$X, bridge_full_design$reference$X))
+stopifnot(identical(bridge_cached$dates, bridge_full_design$dates))
+
 ridge <- app_glofas_normal_part2_score_ridge_candidate(
   normal_part2_cfg,
   toy_candidate,
@@ -121,6 +164,15 @@ stopifnot(is.finite(ridge$summary$corrected_valid_mean_crps[[1L]]))
 stopifnot(is.finite(ridge$summary$discrepancy_valid_mean_crps[[1L]]))
 stopifnot(identical(ridge$summary$valid_mean_crps[[1L]], ridge$summary$corrected_valid_mean_crps[[1L]]))
 stopifnot(all(c("reference_pred_mean", "discrepancy_pred_mean", "corrected_pred_mean") %in% names(ridge$detail)))
+
+ridge_cached <- app_glofas_normal_part2_score_ridge_candidate(
+  normal_part2_cfg,
+  toy_full_candidate,
+  panel_bundle = toy_bundle,
+  reference_cache = reference_cache
+)
+stopifnot(identical(ridge_cached$summary$status[[1L]], "completed"))
+stopifnot(is.finite(ridge_cached$summary$corrected_valid_mean_crps[[1L]]))
 
 warm_pack <- app_glofas_normal_part2_fit_ridge_components(
   normal_part2_cfg,
@@ -157,6 +209,17 @@ stopifnot(identical(sort(unique(rhs$trace$component)), c("discrepancy", "referen
 stopifnot(identical(sort(unique(rhs$activity$component)), c("discrepancy", "reference")))
 stopifnot(rhs$summary$reference_iterations[[1L]] == 5L)
 stopifnot(rhs$summary$discrepancy_iterations[[1L]] == 5L)
+
+manifest <- app_glofas_normal_part2_ridge_candidate_manifest(candidate_prefix = "toy_part2ridge")
+stopifnot(nrow(manifest) == 2250L)
+stopifnot(all(c(
+  "disc_input_contract", "disc_geometry_id", "disc_dynamics_id",
+  "disc_include_glofas_lags", "disc_include_usgs_lags"
+) %in% names(manifest)))
+stopifnot(identical(sort(unique(manifest$disc_input_contract)), sort(app_glofas_normal_part2_input_contracts()$disc_input_contract)))
+stopifnot(all(manifest$ref_n_vector == "3000"))
+stopifnot(all(manifest$ref_alpha == 0.50))
+stopifnot(all(manifest$ref_rho == 0.90))
 
 real_cfg_path <- "local_trackers/runtime_configs/glofas_fr09_shared_reference_input_tau1em1_p50_20260829/candidate/config_p50.yaml"
 if (file.exists(real_cfg_path)) {

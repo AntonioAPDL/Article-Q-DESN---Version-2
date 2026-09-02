@@ -85,6 +85,38 @@ stopifnot(identical(
   c("ppt_lag_0", "ppt_lag_1", "ppt_lag_2", "soil_lag_0", "soil_lag_3")
 ))
 
+dlm_fc_cfg <- res_cov_cfg
+dlm_fc_cfg$feature_contract$reservoir_input$dlm_components <- list(
+  enabled = TRUE,
+  timing = "filtered",
+  feature_families = c("dlm_level", "dlm_mean"),
+  lags = list(values = c(1L, 2L)),
+  source = "structural_normal_dlm",
+  covariate_mode = "transfer_plus_readout",
+  backend = "cpp"
+)
+dlm_contract <- app_feature_contract(dlm_fc_cfg)
+stopifnot(isTRUE(dlm_contract$reservoir_input$dlm_components$enabled))
+stopifnot(identical(dlm_contract$reservoir_input$dlm_components$lags, 1:2))
+stopifnot(identical(
+  app_feature_contract_reservoir_dlm_component_lag_columns(dlm_fc_cfg),
+  c("dlm_level_lag_1", "dlm_level_lag_2", "dlm_mean_lag_1", "dlm_mean_lag_2")
+))
+stopifnot(app_feature_contract_history_requirement(dlm_fc_cfg)$reservoir_dlm_component_lag_max[[1L]] == 2L)
+
+dlm_smoothed_cfg <- dlm_fc_cfg
+dlm_smoothed_cfg$feature_contract$reservoir_input$dlm_components$timing <- "smoothed"
+dlm_smoothed_msg <- tryCatch(
+  {
+    app_feature_contract(dlm_smoothed_cfg)
+    ""
+  },
+  error = conditionMessage
+)
+stopifnot(grepl("Smoothed DLM components", dlm_smoothed_msg, fixed = TRUE))
+dlm_smoothed_cfg$feature_contract$reservoir_input$dlm_components$allow_smoothed_predictive <- TRUE
+stopifnot(identical(app_feature_contract(dlm_smoothed_cfg)$reservoir_input$dlm_components$timing, "smoothed"))
+
 bad_fc_cfg <- fc_cfg
 bad_fc_cfg$feature_contract$readout$input_block$include_internal_bias <- TRUE
 bad_msg <- tryCatch(

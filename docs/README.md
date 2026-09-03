@@ -37,6 +37,10 @@ history.
   sole supported command-line Git procedure for guarded scientific integration,
   article-only snapshot construction, direct Overleaf publication, verification,
   and safe retry after an interrupted two-remote update.
+- `implementation_notes/desn_family_model_selection_methodology_20260903.md`:
+  cross-lane staged DESN model-selection methodology for the GloFAS application,
+  PriceFM application, and joint Q-DESN evaluation workflows, including the
+  Normal ridge/RHS initialization ladder and promotion gates.
 - `implementation_notes/qdesn_inferential_object_and_terminology_contract_20260815.md`:
   current terminology authority for readout summaries, reported actions,
   working-likelihood simulations, and aCRPS.

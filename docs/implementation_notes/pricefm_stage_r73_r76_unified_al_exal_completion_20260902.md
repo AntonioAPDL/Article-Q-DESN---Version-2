@@ -192,6 +192,25 @@ The launcher is resumable only from a `completed` terminal whose every output
 hash still matches. Failed, partial, missing, or changed tasks are rerun. Each R
 process is single-threaded and pinned to one logical CPU.
 
+### Launch record
+
+R76 was launched after all preparation, mechanism, stability, source-hash, and
+resource gates passed:
+
+- code commit: `7f8ded379ecc8dcc4e339115c9323635a2cff60b`;
+- tmux session: `pricefm_stage_r76_repaired_exal_20260902`;
+- workers: 20 single-threaded processes, one per logical CPU;
+- CPU list: `33,35,36,40,41,43,44,46,48,49,50,51,53,54,55,57,58,59,61,62`;
+- launch log:
+  `application/data_local/pricefm/logs/pricefm_stage_r76_repaired_exal_surface_20260902.tmux.log`;
+- initial state: running, 294 remaining, zero failed terminals, zero binary model
+  artifacts, and no test access;
+- initial resources: approximately 542 GiB free disk and 305 GiB available
+  memory after worker initialization.
+
+The CPU list was selected from an eight-second occupancy audit. Existing
+GloFAS and joint-validation processes were neither stopped nor repinned.
+
 ## Downstream closeout, not yet authorized
 
 After all 294 tasks finish, the next read-only stage should:

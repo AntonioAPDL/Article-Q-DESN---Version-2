@@ -1,0 +1,181 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index b6ff5db..fc7f4aa 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -1,6 +1,6 @@
+ Package: exdqlm
+ Title: Extended Dynamic Quantile Linear Models
+-Version: 1.1.1
++Version: 1.1.1.9001
+ Authors@R: 
+     c(person(given = "Raquel", family = "Barata",
+              role = c("aut", "cre"),
+@@ -42,6 +42,8 @@ URL: https://github.com/AntonioAPDL/exdqlm
+ BugReports: https://github.com/AntonioAPDL/exdqlm/issues
+ Config/roxygen2/version: 8.0.0
+ NeedsCompilation: yes
++Config/PriceFM/base-tarball-sha256: 3f3ed643ded7602fd62357d7f62024ca9071e0096214456650ed2de79722443e
++Config/PriceFM/repair: scale-aware-SPD-Cholesky-with-telemetry
+ Packaged: 2026-08-26 21:25:25 UTC; raquel
+-Repository: CRAN
++Repository: PriceFM-local
+ Date/Publication: 2026-08-28 19:00:02 UTC
+diff --git a/R/pricefm_spd_repair.R b/R/pricefm_spd_repair.R
+new file mode 100644
+index 0000000..12f9c66
+--- /dev/null
++++ b/R/pricefm_spd_repair.R
+@@ -0,0 +1,75 @@
++.pricefm_safe_spd_chol <- function(A, context = "qbeta", iter = NA_integer_) {
++  A <- as.matrix(A)
++  if (length(dim(A)) != 2L || nrow(A) != ncol(A) || !nrow(A)) {
++    stop("PriceFM SPD repair requires a nonempty square matrix.", call. = FALSE)
++  }
++  if (any(!is.finite(A))) {
++    stop("PriceFM SPD repair rejected non-finite precision matrix entries.", call. = FALSE)
++  }
++  p <- nrow(A)
++  make_result <- function(chol, path, jitter, scale, attempts) {
++    list(
++      chol = chol,
++      diagnostics = data.frame(
++        context = as.character(context),
++        iter = as.integer(iter),
++        factorization_path = as.character(path),
++        absolute_jitter = as.numeric(jitter),
++        matrix_scale = as.numeric(scale),
++        relative_jitter = as.numeric(jitter / scale),
++        attempts = as.integer(attempts),
++        stringsAsFactors = FALSE
++      )
++    )
++  }
++
++  scale0 <- max(1, max(abs(diag(A))))
++  direct <- tryCatch(chol(A), error = function(e) NULL)
++  if (!is.null(direct)) {
++    return(make_result(direct, "direct", 0, scale0, 1L))
++  }
++
++  legacy <- tryCatch(chol(A + 1e-10 * diag(p)), error = function(e) NULL)
++  if (!is.null(legacy)) {
++    return(make_result(legacy, "legacy_absolute_1e-10", 1e-10, scale0, 2L))
++  }
++
++  A_sym <- (A + t(A)) / 2
++  scale <- max(1, max(abs(diag(A_sym))), max(abs(A_sym)))
++  relative_ladder <- c(
++    .Machine$double.eps, 1e-15, 1e-14, 1e-13, 1e-12,
++    1e-11, 1e-10, 1e-9, 1e-8
++  )
++  attempts <- 2L
++  original_diag <- diag(A_sym)
++  for (relative in relative_ladder) {
++    jitter <- scale * relative
++    candidate <- A_sym
++    diag(candidate) <- original_diag + jitter
++    if (identical(diag(candidate), original_diag)) next
++    attempts <- attempts + 1L
++    factor <- tryCatch(chol(candidate), error = function(e) NULL)
++    if (!is.null(factor)) {
++      return(make_result(
++        factor,
++        "scale_aware_symmetric_relative",
++        jitter,
++        scale,
++        attempts
++      ))
++    }
++  }
++  stop(
++    sprintf(
++      paste0(
++        "PriceFM SPD repair exhausted bounded jitter ladder ",
++        "(context=%s, iter=%s, p=%d, scale=%.17g, max_relative_jitter=1e-8)."
++      ),
++      context,
++      as.character(iter),
++      p,
++      scale
++    ),
++    call. = FALSE
++  )
++}
+diff --git a/R/utils.R b/R/utils.R
+index 66b789f..67f5fc2 100644
+--- a/R/utils.R
++++ b/R/utils.R
+@@ -1582,6 +1582,7 @@ .run_static_dqlm_cavi <- function(
+   delta_elbo <- numeric(0)
+   controls <- .vb_joint_controls(tol_state = tol, has_gamma = FALSE)
+   stop_reason <- "max_iter"
++  spd_factorization_trace <- vector("list", as.integer(max_iter))
+ 
+   .exdqlm_progress(
+     "LDVB start",
+@@ -1599,8 +1600,9 @@ .run_static_dqlm_cavi <- function(
+     Xw <- X * sqrt(W)
+     prior_sys <- beta_prior_obj$beta_system_vb(beta_state)
+     V_inv <- crossprod(Xw) + prior_sys$Prec
+-    Uc <- tryCatch(chol(V_inv), error = function(e) NULL)
+-    if (is.null(Uc)) Uc <- chol(V_inv + 1e-10 * diag(p))
++    spd <- .pricefm_safe_spd_chol(V_inv, context = "static_al_qbeta", iter = iter)
++    Uc <- spd$chol
++    spd_factorization_trace[[iter]] <- spd$diagnostics
+     V_beta <- chol2inv(Uc)
+ 
+     rhs <- prior_sys$h + (kappa / B_tau) * (
+@@ -1757,6 +1759,14 @@ .run_static_dqlm_cavi <- function(
+         delta_elbo = delta_elbo,
+         sigma_has_init = TRUE
+       ),
++      spd_factorization = {
++        keep <- Filter(Negate(is.null), spd_factorization_trace[seq_len(iter)])
++        if (length(keep)) {
++          do.call(rbind, keep)
++        } else {
++          data.frame()
++        }
++      },
+       convergence = list(
+         converged = converged,
+         stop_reason = stop_reason,
+diff --git a/R/exalStaticLDVB.R b/R/exalStaticLDVB.R
+index 594d33f..9f78e91 100644
+--- a/R/exalStaticLDVB.R
++++ b/R/exalStaticLDVB.R
+@@ -1660,6 +1660,7 @@ exalStaticLDVB <- function(
+   stop_reason <- "max_iter"
+   converged <- FALSE
+   timing_totals["init_xi"] <- proc.time()[3] - t0
++  spd_factorization_trace <- vector("list", as.integer(max_iter))
+   for (iter in 1:max_iter) {
+     iter_start_time <- if (isTRUE(ld_ctrl$profile_timing)) proc.time()[3] else NA_real_
+     qbeta_elapsed <- qv_elapsed <- qs_elapsed <- ld_mode_elapsed <- NA_real_
+@@ -1674,8 +1675,9 @@ exalStaticLDVB <- function(
+     Xw <- X * sqrt(W)
+     prior_sys <- beta_prior_obj$beta_system_vb(beta_state)
+     V_inv <- crossprod(Xw) + prior_sys$Prec
+-    Uc <- tryCatch(chol(V_inv), error = function(e) NULL)
+-    if (is.null(Uc)) Uc <- chol(V_inv + 1e-10 * diag(p))
++    spd <- .pricefm_safe_spd_chol(V_inv, context = "static_exal_qbeta", iter = iter)
++    Uc <- spd$chol
++    spd_factorization_trace[[iter]] <- spd$diagnostics
+     V_beta_new <- chol2inv(Uc)
+ 
+     # m = V ( V0^{-1} b0 + X^T [ xi1 diag(E[1/v]) y - xi_lambda (E[1/v] * E[s]) - xi_A 1 ] )
+@@ -2639,6 +2641,14 @@ exalStaticLDVB <- function(
+         delta_s = delta_s,
+         delta_elbo = delta_elbo
+       ),
++      spd_factorization = {
++        keep <- Filter(Negate(is.null), spd_factorization_trace[seq_len(iter)])
++        if (length(keep)) {
++          do.call(rbind, keep)
++        } else {
++          data.frame()
++        }
++      },
+       convergence = list(
+         converged = converged,
+         stop_reason = stop_reason,

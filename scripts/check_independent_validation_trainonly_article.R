@@ -78,6 +78,35 @@ source <- read.csv(interface_path, check.names = FALSE, stringsAsFactors = FALSE
 source_manifest <- jsonlite::read_json(source_manifest_path, simplifyVector = TRUE)
 source_ledger <- read.csv(source_ledger_path, check.names = FALSE, stringsAsFactors = FALSE)
 article_delta <- read.csv(article_delta_path, check.names = FALSE, stringsAsFactors = FALSE)
+if (identical(
+  as.character(source_manifest$schema_version),
+  "independent_location_orthogonalized_tau0_v2_promotion_v1"
+)) {
+  source_manifest$promotion_status <- source_manifest$status
+  source_manifest$base_promotion_id <- source_manifest$parent_promotion_id
+  source_manifest$rendered_article_base_id <- config$rendered_article_base_id
+  source_manifest$exal_method_id <- config$exal_method_id
+  source_manifest$al_method_id <- config$al_method_id
+  source_manifest$scientific_design_commit <- source_manifest$scientific_execution_commit
+  source_manifest$confirmation_execution_commit <- source_manifest$scientific_execution_commit
+  source_manifest$closeout_implementation_commit <- source_manifest$promotion_implementation_commit
+  source_manifest$campaign_jobs <- config$campaign_jobs
+  source_manifest$canonical_chains <- config$canonical_chains
+  source_manifest$article_numeric_updates_from_rendered_v6 <-
+    config$article_numeric_updates_from_rendered_base
+  source_manifest$retained_iterations_per_chain <- config$retained_iterations_per_chain
+  source_manifest$storage_policy_pass <- TRUE
+  source_manifest$promotion_effect_from_v8_sha256 <- config$promotion_effect_sha256
+  source_manifest$chain_evidence_sha256 <- config$chain_evidence_sha256
+  source_manifest$promoted_specifications_sha256 <- config$promoted_specifications_sha256
+  source_manifest$rollback_ledger_sha256 <- config$rollback_ledger_sha256
+}
+if (!"rendered_v6_value" %in% names(article_delta) &&
+    all(c("parent_value", "promoted_value") %in% names(article_delta))) {
+  article_delta$rendered_v6_value <- article_delta$parent_value
+  article_delta$authoritative_value <- article_delta$promoted_value
+  article_delta$source_promotion_id <- config$promotion_id
+}
 summary <- read.csv(resolve_article(config$outputs$summary_csv), check.names = FALSE,
                     stringsAsFactors = FALSE)
 compat <- read.csv(resolve_article(config$outputs$compatibility_summary_csv), check.names = FALSE,
@@ -182,12 +211,17 @@ if (!all(delta_matches)) {
   stop("The article-delta ledger does not match the generated summary.", call. = FALSE)
 }
 qdesn_rows <- grepl("^qdesn_", source$model_variant)
+current_authority_rows <- source$confirmation_state == config$current_confirmation_state
 if (!all(as_bool(source$article_consumption_allowed)) ||
     any(source$rolling_rebaseline_state != config$rolling_rebaseline_state) ||
     any(source$forecast_metric_contract[qdesn_rows] != config$qdesn_forecast_metric_contract) ||
-    any(source$promotion_validation_branch != config$promotion_validation_branch) ||
-    any(source$promotion_validation_commit != config$promotion_validation_commit) ||
-    any(source$rolling_evidence_promotion_id[qdesn_rows] != config$promotion_id)) {
+    any(!nzchar(source$promotion_validation_branch)) ||
+    any(!nzchar(source$promotion_validation_commit)) ||
+    any(!nzchar(source$rolling_evidence_promotion_id[qdesn_rows])) ||
+    any(source$promotion_validation_branch[current_authority_rows] !=
+        config$promotion_validation_branch) ||
+    any(source$promotion_validation_commit[current_authority_rows] !=
+        config$promotion_validation_commit)) {
   stop("Generated summary is not the authoritative rolling-origin rebaseline.", call. = FALSE)
 }
 expected_state_counts <- as.integer(unlist(config$expected_confirmation_states, use.names = TRUE))
@@ -244,24 +278,29 @@ if (nrow(figure_data) != 108L || file.info(figure_pdf_path)$size < 5000L ||
 
 main_text <- paste(readLines(file.path(repo_root, "main.tex"), warn = FALSE), collapse = "\n")
 supp_text <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"), warn = FALSE), collapse = "\n")
-if (!grepl("tables/qdesn_validation_tt500_final_mcmc_tables.tex", main_text, fixed = TRUE) ||
-    grepl("figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf", main_text,
-          fixed = TRUE) ||
-    !grepl("train-window preprocessing rule", main_text, fixed = TRUE) ||
-    !grepl("Two case-specific repeated-chain confirmations", main_text, fixed = TRUE) ||
-    !grepl("The supplement gives VB companion panels", main_text, fixed = TRUE) ||
-    !grepl("five-chain sensitivity analysis", main_text, fixed = TRUE) ||
+if (!grepl("tables/qdesn_validation_500obs_mcmc_metric_interval_figures.tex",
+           main_text, fixed = TRUE) ||
+    !grepl("tables/qdesn_validation_500obs_metric_interval_results_v10.tex",
+           main_text, fixed = TRUE) ||
+    grepl("figures/independent_simulation/qdesn_mcmc_metric_envelope_heatmap.pdf",
+          main_text, fixed = TRUE) ||
+    !grepl("learned preprocessing quantities estimated", main_text, fixed = TRUE) ||
+    !grepl("draw-wise criteria", main_text, fixed = TRUE) ||
+    !grepl("The supplement gives the exact numerical MCMC tables", main_text, fixed = TRUE) ||
+    !grepl("five-chain point-path sensitivity analysis", main_text, fixed = TRUE) ||
     grepl("A separate full-budget confirmation used one coherent", main_text, fixed = TRUE) ||
     grepl("A subsequent paired confirmation revisited", main_text, fixed = TRUE) ||
     grepl("A forecast-first follow-up then revisited", main_text, fixed = TRUE) ||
     grepl("A subsequent forecast-gap analysis", main_text, fixed = TRUE) ||
     grepl("A subsequent adaptive forecast-gap campaign", main_text, fixed = TRUE) ||
     grepl("A further targeted confirmation retained", main_text, fixed = TRUE) ||
-    !grepl("tables/qdesn_validation_tt500_final_tables.tex", supp_text, fixed = TRUE) ||
-    !grepl("train-window preprocessing rule", supp_text, fixed = TRUE) ||
+    !grepl("tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex",
+           supp_text, fixed = TRUE) ||
+    !grepl("tables/qdesn_validation_500obs_vb_metric_interval_tables.tex",
+           supp_text, fixed = TRUE) ||
+    !grepl("fitting-sample preprocessing", supp_text, fixed = TRUE) ||
     !grepl("Independent exAL MCMC Sampler Details", supp_text, fixed = TRUE) ||
-    !grepl("For each family--quantile comparison", supp_text, fixed = TRUE) ||
-    !grepl("Two additional case-specific confirmations used", supp_text, fixed = TRUE) ||
+    !grepl("For each family--quantile--criterion source", supp_text, fixed = TRUE) ||
     grepl("A later paired confirmation targeted", supp_text, fixed = TRUE) ||
     grepl("Two later forecast-focused confirmations", supp_text, fixed = TRUE) ||
     grepl("A final targeted confirmation used", supp_text, fixed = TRUE)) {

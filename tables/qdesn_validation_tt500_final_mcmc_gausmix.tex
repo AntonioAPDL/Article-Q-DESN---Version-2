@@ -10,12 +10,12 @@ Model & \multicolumn{3}{c}{$p=0.05$} & \multicolumn{3}{c}{$p=0.25$} & \multicolu
  & Fit RMSE & Forecast MAE & Forecast check loss & Fit RMSE & Forecast MAE & Forecast check loss & Fit RMSE & Forecast MAE & Forecast check loss \\
 \midrule
 DQLM & 2.623 & 3.003 & \textbf{1.505} & 4.740 & 2.487 & 4.540 & 2.226 & 1.932 & 5.556 \\
-exDQLM & \textbf{2.554} & 23.91 & 5.857 & 1.381 & 8.941 & 5.649 & 2.408 & 2.207 & 5.607 \\
+exDQLM & \textbf{2.595} & 4.054 & 1.559 & \textbf{1.337} & 1.690 & 4.514 & 2.228 & 1.932 & 5.556 \\
 Q--DESN AL--RHS$^{\dagger}$ & 3.154 & 3.006 & 1.564 & 1.855 & \textbf{0.9122} & \textbf{4.467} & 1.271 & \textbf{0.9074} & \textbf{5.441} \\
-Q--DESN exAL--RHS$^{\ddagger}$ & 3.354 & \textbf{2.913} & 1.527 & \textbf{1.380} & 1.819 & 4.488 & \textbf{0.9177} & 1.420 & 5.487 \\
+Q--DESN exAL--RHS$^{\ddagger}$ & 3.354 & \textbf{2.913} & 1.527 & 1.380 & 1.819 & 4.488 & \textbf{0.9177} & 1.420 & 5.487 \\
 \bottomrule
 \end{tabular}%
 }
-\caption{MCMC single-quantile fit-and-forecast comparison for the Gaussian mixture simulation family. Q--DESN entries are reported within each model, target level, and criterion under the fixed evaluation design. When repeated-chain summaries are available, the displayed value uses the corresponding repeated-chain average. Q--DESN preprocessing is estimated only from the training window. Forecast criteria average rolling-origin lead-target pairs over a held-out window of length 1000 using leads 1--30 and origin stride 30. Lower values are better, and boldface marks the best displayed value within each target level and criterion. A dagger marks a warning in the supporting diagnostics; a double dagger marks a failed diagnostic check.}
+\caption{MCMC single-quantile comparison for the Gaussian mixture simulation family. Fit RMSE evaluates recovery of the true conditional quantile over the 500-observation training sample. Forecast MAE and check loss average the rolling-origin evaluations over the 1,000-observation test sample, using leads 1--30 and origin stride 30. Lower values are better; boldface marks the lowest unrounded value by target and criterion.}
 \label{tab:simulation-500obs-mcmc-gausmix}
 \end{table}

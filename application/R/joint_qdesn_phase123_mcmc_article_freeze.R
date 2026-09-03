@@ -482,7 +482,7 @@ app_joint_qdesn_phase123_article_model_table <- function(model_summary) {
     `Fit MAE` = vapply(model_summary$mcmc_fit_truth_mae, app_joint_qdesn_phase123_fmt_num, character(1L), digits = 3),
     `Forecast MAE` = vapply(model_summary$mcmc_forecast_truth_mae, app_joint_qdesn_phase123_fmt_num, character(1L), digits = 3),
     `Check loss` = vapply(model_summary$mcmc_forecast_check_loss, app_joint_qdesn_phase123_fmt_num, character(1L), digits = 3),
-    `Grid CRPS` = vapply(model_summary$mcmc_forecast_crps_grid, app_joint_qdesn_phase123_fmt_num, character(1L), digits = 3),
+    aCRPS = vapply(model_summary$mcmc_forecast_crps_grid, app_joint_qdesn_phase123_fmt_num, character(1L), digits = 3),
     `Hit error` = vapply(model_summary$mcmc_abs_hit_rate_error, app_joint_qdesn_phase123_fmt_num, character(1L), digits = 3),
     `Raw crossings` = vapply(model_summary$mcmc_forecast_raw_crossing_pairs, app_joint_qdesn_phase123_fmt_int, character(1L)),
     `Status` = model_summary$gate_status,

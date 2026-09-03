@@ -4,6 +4,39 @@ This directory stores tracked configuration files for the GloFAS application.
 Configuration should be declarative: scripts read these files and should not
 hard-code forecast origins, quantile levels, model grids, or output paths.
 
+Prospective latent-path runs may opt into exact runtime controls without
+changing the scientific specification:
+
+```yaml
+runtime_optimization:
+  paired_fixed_stats: true
+  compiled_future_contract: true
+  reference_feature_cache:
+    enabled: true
+    root: ""        # or QDESN_REFERENCE_FEATURE_CACHE_ROOT from the scheduler
+    wait_seconds: 600
+
+inference:
+  vb_ld:
+    checkpoint:
+      enabled: true
+      resume: true
+      path: ""      # 03_fit_models.R creates a fit-specific path when blank
+      every_iterations: 100
+      every_minutes: 30
+      keep_previous: true
+      keep_on_success: false
+```
+
+The numerical backend is selected by the child-process launcher rather than
+the scientific YAML. External libraries require a concrete path and SHA-256;
+all thread controls and CPU sets are recorded in the runtime manifest. Exact
+resume rejects a changed backend, design, engine, seed, or semantic VB config.
+The checkpoint triggers are dual safeguards: the first of 100 iterations or
+30 minutes writes an atomic checkpoint. The 100-iteration cadence added 0.324%
+measured write overhead in the full FR09 K=50 interruption/resume canary while
+preserving the complete resumed state and draws bit-for-bit.
+
 Final manuscript-facing promotions should use tracked configs from this
 directory. Local runtime variants under `local_trackers/runtime_configs/` are
 useful for sweeps and overnight launches, but they are ignored operational
@@ -17,6 +50,23 @@ Planned files:
   It names the planned exAL and VB-LD rows and permits input and design gates
   before every requested inference route is available; model fitting remains
   fail-closed for unsupported required rows.
+- `glofas_p50_alpha_rho_tau_response_surface_20260819.yaml`: authorized,
+  exact-cardinality definition for the 56-fit response-surface campaign around
+  the completed Stage-A D2/m720 leader. It freezes the SHA-pinned anchor,
+  approved alpha/rho support, RHS sentinels, warm/cold canaries, two-block
+  reservoir preflight, `max_iter=150`, and 20 unique single-core workers.
+- `glofas_p50_alpha_tau_focused_20260820.yaml`: authorized 20-fit refinement
+  around the completed response-surface leader. It fixes `rho=.95` and shared
+  RHS `tau0=.1`, resolves linked alpha-by-discrepancy-`tau0` interactions,
+  tests six block-specific leak-rate contrasts, includes two cold controls,
+  and retains the same preflight, historical guardrails, and full7 gate.
+- `glofas_p50_structural_memory_geometry_20260821.yaml`: authorized 48-fit
+  structural campaign over memory, direct lags, depth, width, and two-block
+  asymmetry, with bounded diagnostics and guarded retention.
+- `glofas_screening_program_closeout_20260824.yaml`: immutable no-refit
+  closeout contract for the four completed constrained-median phases. It pins
+  terminal counts, ranking hashes, leaders, the FR09 gate, the paired audit,
+  and protected Stage-A finalists.
 - `glofas_discrepancy_prelaunch_dryrun.yaml`: small launch-readiness workflow
   that must pass before the final application configuration is run.
 - `input_bundle.yaml`: local frozen-input registration contract. It names the
@@ -359,6 +409,13 @@ validated:
   ridge as the dense baseline.
 - Quantile grid: `0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95`.
 - Scores: check loss, interval coverage, interval score, aCRPS from the
-  synthesized finite quantile grid, runtime, and fit status. Here aCRPS
-  denotes a finite-grid trapezoidal integrated pinball score, not full
-  continuous-distribution CRPS.
+  synthesized finite quantile grid, runtime, and fit status. Here aCRPS is the
+  trapezoidal approximation to integrated check loss over the covered
+  probability range.
+
+`glofas_discrepancy_transition_information_screen_TEMPLATE.yaml` is a
+prospective, deliberately non-runnable contract for reviewing a fixed-origin
+p50 transition/information screen. It freezes the legacy/damped/cumulative
+semantics, separates retrospective blended, issued-only, and oracle covariate
+roles, excludes unsupported ensemble-spread training, and requires an explicit
+approval token before any candidate materialization or launch code is added.

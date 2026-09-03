@@ -1,5 +1,12 @@
 # Article-Q-DESN Overleaf Sparse Update Repair, 2026-07-09
 
+> **Historical record—superseded on 2026-08-29.** Do not reuse the
+> browser-based GitHub/Overleaf synchronization or branch-resolution procedure
+> described below. The mandatory current workflow is command-line Git only; see
+> CONTRIBUTING.md and
+> docs/implementation_notes/git_only_integration_overleaf_publication_20260829.md.
+> The text below is retained solely as incident history.
+
 ## Context
 
 The authoritative Article-Q-DESN repository is:
@@ -42,5 +49,6 @@ The key audit artifacts are:
 - `origin_main_main_tex_snapshot.tex`
 - `commit_ids.before_repair.txt`
 
-After this repair reaches GitHub `main`, Overleaf should pull from GitHub
-again and receive the full article tree rather than the blank starter project.
+The historical repair was followed by another browser pull so that Overleaf
+received the restored tree. That action must not be repeated; current
+publication uses the guarded one-way direct-Git procedure named above.

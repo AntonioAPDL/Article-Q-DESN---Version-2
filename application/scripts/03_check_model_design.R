@@ -17,6 +17,8 @@ source(app_path("application/R/build_qdesn_features.R"))
 source(app_path("application/R/latent_path_design.R"))
 source(app_path("application/R/discrepancy_design.R"))
 source(app_path("application/R/forecast_contract.R"))
+source(app_path("application/R/latent_path_runtime_backend.R"))
+source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/fit_qdesn_latent_path.R"))
 

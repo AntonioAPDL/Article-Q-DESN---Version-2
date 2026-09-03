@@ -89,4 +89,24 @@ local({
     FALSE
   }, error = function(e) grepl("incomplete", conditionMessage(e), fixed = TRUE))
   stopifnot(failed)
+
+  discrepancy <- expand.grid(
+    target_date = c(history_dates, forecast_dates),
+    quantile_level = tau,
+    correction = c("independent_fit", "monotone_implied"),
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  )
+  discrepancy$quantile_id <- paste0("p", sprintf("%02d", round(100 * discrepancy$quantile_level)))
+  discrepancy$phase <- ifelse(discrepancy$target_date <= cutoff, "pre_cutoff_history", "post_cutoff_forecast")
+  discrepancy$observed_discrepancy <- rep(seq(-0.4, 0.2, length.out = length(tau)), each = length(c(history_dates, forecast_dates)))
+  discrepancy$estimate <- discrepancy$observed_discrepancy + ifelse(discrepancy$correction == "independent_fit", 0.02, 0.01)
+  discrepancy_context <- app_prepare_glofas_discrepancy_context(
+    discrepancy,
+    cutoff_date = cutoff,
+    history_observations = 5L,
+    expected_forecast_dates = forecast_dates
+  )
+  stopifnot(all(discrepancy_context$audit$passed))
+  stopifnot(nrow(discrepancy_context$trace) == (5L + 2L) * length(tau) * 2L)
 })

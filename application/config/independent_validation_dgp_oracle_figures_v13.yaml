@@ -1,0 +1,42 @@
+projection_id: independent_validation_dgp_oracle_figures_v13_20260829
+article_minimum_commit: 16bfa889c03978e0869373bf985de2f91172142f
+validation_root: ../exdqlm__wt__independent_dgp_oracle_reference_v1_1p0p0
+validation_authority_commit: 309fe2b71523afbaf38d568c2935c97fe38c3453
+oracle:
+  relative_path: validation/fitforecast_v2/promotions/independent_dgp_oracle_reference_v1_20260828/article_assets/qdesn_validation_500obs_dgp_oracle_reference_v1.csv
+  sha256: 1adc9c8c83b3564ef84be90e146286feac604484638ee31bbe684b66cbe928a8
+inputs:
+  interval_summary: tables/qdesn_validation_500obs_metric_intervals_v12_summary.csv
+  interval_summary_sha256: 99a25b4e77e319279d4750f847c2a4895891b8b55aea0b7301b63be3008b4357
+expected:
+  interval_rows: 72
+  figure_rows: 216
+  oracle_rows: 27
+  models:
+    - dqlm
+    - exdqlm
+    - qdesn_al_rhs_ns
+    - qdesn_exal_rhs_ns
+  families:
+    - normal
+    - laplace
+    - gausmix
+  taus:
+    - 0.05
+    - 0.25
+    - 0.50
+  inference:
+    - mcmc
+    - vb
+  metric_roles:
+    - fit_rmse
+    - forecast_mae
+    - forecast_check
+outputs:
+  oracle_asset: tables/qdesn_validation_500obs_dgp_oracle_reference_v1.csv
+  figure_data: tables/qdesn_validation_500obs_dgp_oracle_figure_data_v13.csv
+  manifest: tables/qdesn_validation_500obs_dgp_oracle_figures_v13_manifest.txt
+  mcmc_wrapper: tables/qdesn_validation_500obs_v13_mcmc_metric_interval_figures.tex
+  vb_wrapper: tables/qdesn_validation_500obs_v13_vb_metric_interval_figures.tex
+  figure_directory: figures/independent_simulation
+  figure_prefix: qdesn_validation_500obs_v13

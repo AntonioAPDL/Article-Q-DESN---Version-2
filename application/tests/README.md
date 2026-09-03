@@ -12,7 +12,9 @@ Tracked tests:
   directory reuse guards, and safe non-fitting stage plans.
 - `test_artifact_hygiene.R`: report-only inventory of generated or heavy
   artifacts, including run-level summaries for cleanup planning, protecting
-  the repo from accidentally staged fit outputs.
+  the repo from accidentally staged fit outputs. It also exercises scoped
+  GloFAS cleanup manifests, active/authoritative protections, and verified
+  deletion of explicitly approved terminal-run payloads.
 - `test_engine_contract.R`: package boundary, required exports, and prior mapping.
 - `test_vb_preparation.R`: VB preparation config, model grid,
   inference-support gate, VB argument normalization, and method-aware
@@ -23,7 +25,21 @@ Tracked tests:
 - `test_reservoir_screening.R`: sampler-free reservoir diagnostics, including
   spectral-radius and leaky-effective checks, finite/dead/saturated state
   guards, correlation redundancy, pruning, effective rank, conditioning,
-  serialization, seed aggregation, and a tiny fake-design integration path.
+  serialization, seed aggregation, semantic two-block initial-condition
+  forgetting, and a tiny fake-design integration path.
+- `test_glofas_constrained_median_screening.R`: constrained p50 range
+  expansion, semantic warm starts, historical/forecast gates, the frozen
+  Stage-A design, and the exact 56-candidate alpha/rho/tau response-surface
+  campaign with retained warm/cold canaries, plus the deterministic
+  48-candidate structural memory/geometry campaign.
+- `test_glofas_discrepancy_tau0_screen.R`: one-axis discrepancy-prior
+  treatments, fixed support and labels, FR09 historical guardrails,
+  persistence-based forecast scoring, fail-closed ranking, and warm/cold
+  equivalence thresholds. The live preflight separately rebuilds the retained
+  design and verifies exact-design transfer and candidate-specific prior reset.
+- `test_glofas_screening_program_closeout.R`: cumulative phase census,
+  leader selection, no-promotion decision, and fail-closed ranking-hash drift
+  for the completed GloFAS constrained-median program.
 - `test_latent_path_design.R`: application-model contract parsing,
   latent-path state continuation, requested versus effective issued-horizon
   handling, synthetic AL fixture generation, scaling of reservoir lag inputs,
@@ -33,6 +49,27 @@ Tracked tests:
   streamed-grouped VB moment equivalence, grouped objective equivalence, and
   the linearized Delta future-path update for the target ensemble-likelihood
   model.
+- `test_latent_path_runtime_optimization.R`: exact paired-statistics and
+  fallback algebra, compact-design semantic round trips and direct-fit
+  equivalence, immutable reference-feature cache environment fallback, hits,
+  invalidation, corruption, and lock failures, runtime-backend manifests, and
+  uninterrupted versus interrupted/resumed VB identity.
+- `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
+  controls, OpenBLAS path/hash rejection, and terminal execution manifests.
+- `test_glofas_discrepancy_equivalence_audit.R`: component-path algebra,
+  block-specific prediction hashes, explicit block-seed precedence, cache
+  isolation, feature sentinels, paired/unpaired permutations, serialization,
+  contribution reconstruction, state summaries, score/identity checks, stale
+  status precedence, and fail-closed diagnostic classification.
+- `test_glofas_discrepancy_transition_information_audit.R`: exact legacy,
+  damped, and cumulative transition operators; recurrence, transformed-design,
+  and transformed-Jacobian identities; invalid-contract rejection; historical
+  target decomposition; future component-space overlap; no-refit diagnostic
+  labeling; and the launch-locked draft registry.
+- `test_glofas_fit_recovery_scheduler.py`: physical-core and NUMA-aware CPU
+  allocation, disjoint multithread sets, checkpoint-aware restart with owned
+  checkpoint paths, and owned reference-cache roots in addition to the
+  existing bounded scheduler gates.
 - `test_no_leakage.R`: forecast-origin information sets and target dates.
 - `test_quantile_grid.R`: sorted quantile levels and monotone synthesis output.
 - `test_reproducibility.R`: fixed seeds, stable run IDs, and required artifacts.

@@ -1,0 +1,49 @@
+contract_section,contract_name,value,value_type,rationale
+identity,contract_version,joint_qdesn_phase180_balanced_dgp_score_packet_v1,character,Versioned production contract for the balanced 32-cell posterior score packet.
+scope,expected_scenarios,8,integer,The article fixture contains eight frozen synthetic mechanisms.
+scope,expected_models,4,integer,Joint and independent readouts are evaluated under AL and exAL.
+scope,expected_final_cells,32,integer,Every scenario-model cell must be source complete.
+scope,expected_phase172_reuse_cells,11,integer,Eleven exact-M0 exAL article cells retain valid Phase172 checkpoints.
+scope,expected_rerun_cells,21,integer,Five Phase179-resolved exAL cells and sixteen AL cells require retained posterior draws.
+scope,expected_new_workers,168,integer,Every rerun cell uses eight independently seeded chains.
+score,tau_grid,"0.05,0.10,0.25,0.50,0.75,0.90,0.95",numeric_vector,Current article quantile grid; dense-grid fitting remains deferred.
+score,trapezoidal_weights,"0.025,0.10,0.20,0.25,0.20,0.10,0.025",numeric_vector,Trapezoidal weights for twice the check loss without renormalizing the covered tau range.
+score,weight_sum,0.90,numeric,The current grid covers the interval from 0.05 to 0.95.
+score,primary_metric,dgp_integrated_acrps,character,Known-DGP expected finite-grid quantile score for the issued quantile action.
+score,article_label,DGP-integrated finite-grid quantile score,character,Article-facing term that avoids implying a scalar predictive density.
+score,score_draws_per_chain,1000,integer,Equal retained score-draw budget for every final cell and chain.
+score,sensitivity_draws_per_chain,250,integer,Bounded draw budget for independent coupling-seed sensitivity.
+score,score_chunk_size,50,integer,Bounds score reconstruction memory without changing the estimand.
+score,primary_pairing_seed,180900101,integer,Frozen product-posterior coupling seed for independent quantile fits.
+score,sensitivity_pairing_seeds,"180900211,180900307,180900419",integer_vector,Independent coupling sensitivity seeds.
+score,contrast_pairing_seed,180901001,integer,Frozen scalar score-draw pairing seed for joint-minus-independent contrasts.
+score,credible_interval,0.95,numeric,Equal-tailed posterior interval reported with mean median and canonical action.
+diagnostics,score_rank_rhat_ceiling,1.05,numeric,Review threshold for the posterior score functional.
+diagnostics,score_bulk_ess_floor,400,numeric,Review threshold for bulk effective sample size of the score functional.
+diagnostics,score_tail_ess_floor,200,numeric,Review threshold for tail effective sample size of the score functional.
+diagnostics,raw_crossing_rate_review,0.01,numeric,Raw crossings above one percent of opportunities trigger review.
+diagnostics,standardized_adjustment_review,0.01,numeric,Average monotone adjustment above one percent of DGP scale triggers review.
+diagnostics,regret_tolerance,1e-10,numeric,Numerical tolerance for the oracle minimum audit.
+diagnostics,practical_relative_margin,0.01,numeric,Descriptive one-percent margin for contrast summaries; not a tuning gate.
+diagnostics,posterior_probability_floor,0.95,numeric,Reporting threshold retained for compatibility; it does not retune final controls.
+diagnostics,protected_replicate_direction_floor,0.6666666667,numeric,Historical compatibility field; article-fixture evaluation has one frozen replicate.
+diagnostics,oracle_recovery_ratio_ceiling,1.10,numeric,Historical safeguard retained for score-engine compatibility.
+diagnostics,analytic_integration_tolerance,1e-8,numeric,Tolerance for closed-form versus numerical expected-check-loss validation.
+diagnostics,monte_carlo_tolerance,0.01,numeric,Tolerance for the deterministic Monte Carlo formula audit.
+compute,n_chains_per_cell,8,integer,Common chain allocation for all final cells.
+compute,al_n_iter,8000,integer,Production AL chain length.
+compute,al_burn,2000,integer,Production AL burn-in.
+compute,al_thin,4,integer,Production AL thinning interval.
+compute,exal_n_iter,24000,integer,Production exact-M0 exAL chain length.
+compute,exal_burn,4000,integer,Production exact-M0 exAL burn-in.
+compute,exal_thin,4,integer,Production exact-M0 exAL thinning interval.
+compute,sigma_upper_multiplier,50,numeric,Conservative finite upper support relative to the VB scale initializer.
+compute,chain_seed_base,180500000,integer,Disjoint seed namespace for Phase180 article completion chains.
+compute,tau_seed_stride,1009,integer,Disjoint within-chain component seed stride for independent quantile fits.
+compute,default_concurrent_workers,40,integer,Operational concurrency subject to the shared CPU lease.
+source,article_fixture_selection_allowed,false,logical,The article fixture evaluates already frozen case-specific controls and cannot retune them.
+source,global_specification_selected,false,logical,DESN and RHS controls remain scenario and readout specific.
+source,phase172_reuse_policy,verified_final_control_match_only,character,Historical draws are reused only when the final Phase179 control did not replace the Phase172 cell.
+source,partial_publication_allowed,false,logical,Final score and article packets fail closed until all 32 cells are complete.
+article,article_assets_mutated_by_prepare_or_workers,false,logical,Preparation and sampling never modify manuscript assets.
+article,dense_grid_authorized,false,logical,Nineteen-level fitting is a later separately frozen campaign.

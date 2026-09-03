@@ -93,6 +93,7 @@ tryCatch({
   seed_rows <- list()
   state_rows <- list()
   layer_rows <- list()
+  forgetting_rows <- list()
   suggestion_rows <- list()
 
   for (i in seq_len(nrow(qrows))) {
@@ -121,6 +122,7 @@ tryCatch({
     seed_rows[[length(seed_rows) + 1L]] <- app_bind_rows_fill(lapply(report$per_seed_reports, app_seed_report_row))
     state_rows[[length(state_rows) + 1L]] <- app_bind_rows_fill(lapply(report$per_seed_reports, app_state_report_rows))
     layer_rows[[length(layer_rows) + 1L]] <- app_bind_rows_fill(lapply(report$per_seed_reports, app_layer_report_rows))
+    forgetting_rows[[length(forgetting_rows) + 1L]] <- app_bind_rows_fill(lapply(report$per_seed_reports, app_forgetting_report_rows))
     suggestion_rows[[length(suggestion_rows) + 1L]] <- app_bind_rows_fill(lapply(report$per_seed_reports, app_repair_suggestion_rows))
   }
 
@@ -129,6 +131,7 @@ tryCatch({
   app_write_csv(app_bind_rows_fill(seed_rows), file.path(run_dirs$tables, "reservoir_screening_seed_reports.csv"))
   app_write_csv(app_bind_rows_fill(state_rows), file.path(run_dirs$tables, "reservoir_screening_state_diagnostics.csv"))
   app_write_csv(app_bind_rows_fill(layer_rows), file.path(run_dirs$tables, "reservoir_screening_layer_stability.csv"))
+  app_write_csv(app_bind_rows_fill(forgetting_rows), file.path(run_dirs$tables, "reservoir_screening_initial_condition_forgetting.csv"))
   app_write_csv(app_bind_rows_fill(suggestion_rows), file.path(run_dirs$tables, "reservoir_screening_repair_suggestions.csv"))
 
   manifest <- list(

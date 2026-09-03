@@ -1,0 +1,8 @@
+"topic","required_wording"
+"headline_metric","DGP-integrated finite-grid quantile score is the main forecast comparison."
+"promotion","A Phase181 source replaces Phase180 only after a strictly lower finite mean and hard-gate pass."
+"mixing","R-hat and ESS reviews are disclosed but are not promotion vetoes under the frozen user rule."
+"crossings","Raw crossings diagnose pre-contract coherence; reported contract crossings are zero."
+"oracle_recovery","Fit and forecast MAE/RMSE compare issued paths with known oracle quantiles."
+"predictive_contract","The joint composite likelihood is not asserted to be a scalar predictive density."
+"winner_language","Numerical minima remain descriptive, especially for review-level diagnostics."

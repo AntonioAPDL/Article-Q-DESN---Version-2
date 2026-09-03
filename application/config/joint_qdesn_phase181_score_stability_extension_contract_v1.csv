@@ -1,0 +1,40 @@
+contract_section,contract_name,value,value_type,rationale
+identity,contract_version,joint_qdesn_phase181_score_stability_extension_v1,character,Versioned same-specification posterior-score stability extension.
+source,parent_phase180_freeze_manifest_sha256,75dd6bde7e410767549442c606df562e4ea8019d32375abc0533ce2ea3d83c07,sha256,Locks the immutable Phase180 preparation source.
+source,parent_phase180_packet_manifest_sha256,93287a327f1b820e89de0cb4df295e15f6264fd2f96d157931cd17d23558b3e6,sha256,Locks the immutable 32-cell Phase180 baseline packet.
+scope,expected_total_cells,32,integer,The final selected packet remains balanced over eight scenarios and four models.
+scope,expected_extension_cells,19,integer,Seventeen score-review cells plus two additional chain-mean-instability cells are extended.
+scope,expected_unaffected_cells,13,integer,Cells without either extension trigger retain their verified Phase180 sources.
+scope,expected_al_extension_cells,7,integer,Seven AL cells have review-level score-function diagnostics.
+scope,expected_exal_extension_cells,12,integer,Ten exAL score-review cells plus two unstable score-pass cells are extended.
+scope,n_chains_per_cell,8,integer,Every affected cell is compared using one complete balanced eight-chain extension.
+scope,expected_extension_workers,152,integer,Nineteen affected cells times eight chains.
+selection,score_functional_review_triggers_extension,true,logical,Every Phase180 score-functional review cell receives additional same-specification computation.
+selection,chain_loo_relative_mean_shift_threshold,0.05,numeric,A maximum leave-one-chain-out mean shift above five percent triggers extension even if formal score diagnostics pass.
+selection,promotion_primary_metric,posterior_score_mean,character,The known-DGP expected finite-grid posterior score mean is the user-declared promotion metric.
+selection,promotion_rule,strict_lower_finite_mean,character,Any strictly lower finite extension mean is promoted after hard gates pass.
+selection,minimum_absolute_mean_improvement,0,numeric,No practical-effect margin is imposed on estimator replacement.
+selection,mixing_blocks_promotion,false,logical,R-hat and ESS remain review diagnostics and do not veto a lower eligible mean.
+selection,raw_coherence_review_blocks_promotion,false,logical,Raw crossings and adjustment frequency remain review diagnostics when contract crossings are zero.
+selection,global_specification_selected,false,logical,DESN and tau0 controls remain fixed and case specific.
+selection,desn_or_tau0_retuning_allowed,false,logical,This phase changes Monte Carlo effort and starts only.
+hard_gate,complete_chain_manifests_required,true,logical,All eight extension workers must verify before a cell can be promoted.
+hard_gate,finite_draws_and_scores_required,true,logical,Nonfinite posterior draws or scores are implementation failures.
+hard_gate,zero_contract_crossings_required,true,logical,Reported quantile grids must remain monotone.
+hard_gate,source_hashes_required,true,logical,Parent and selected source manifests must verify.
+compute,al_n_iter,24000,integer,Predeclared same-specification AL extension length.
+compute,al_burn,4000,integer,Predeclared AL warmup removal.
+compute,al_thin,4,integer,Predeclared AL retention interval.
+compute,exal_n_iter,48000,integer,Predeclared exact-M0 exAL extension length.
+compute,exal_burn,8000,integer,Predeclared exAL warmup removal.
+compute,exal_thin,8,integer,Predeclared exAL retention interval.
+compute,sigma_upper_multiplier,50,numeric,Preserves the Phase180 scale-support policy.
+compute,chain_seed_base,281000000,integer,Disjoint Phase181 chain-seed namespace.
+compute,tau_seed_stride,1009,integer,Preserves disjoint independent-quantile component seeds.
+compute,default_concurrent_workers,40,integer,Operational concurrency remains subject to an audited CPU list.
+score,score_draws_per_chain,1000,integer,Matches Phase180 posterior score reconstruction.
+score,current_quantile_grid,"0.05,0.10,0.25,0.50,0.75,0.90,0.95",numeric_vector,Dense-grid fitting remains a separate future campaign.
+article,article_fixture_role,same_specification_estimator_extension,character,The frozen article fixture may compare Monte Carlo estimators but cannot retune DESN or tau0.
+article,claim_status,descriptive,character,Mean-selected results remain descriptive when mixing or coherence diagnostics are review level.
+article,automatic_manuscript_mutation_allowed,false,logical,Only article-safe staging is generated on the scientific branch.
+article,dense_grid_authorized,false,logical,Dense-grid fitting is outside Phase181.

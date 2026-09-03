@@ -115,13 +115,229 @@ app_qdesn_discrepancy_seed_offset <- function(cfg) {
   as.integer(offset)
 }
 
-app_qdesn_block_seed <- function(model_row, cfg, block = c("reference", "discrepancy")) {
+app_qdesn_deep_merge <- function(base, override) {
+  if (is.null(override) || !length(override)) return(base)
+  if (is.null(base) || !is.list(base) || !is.list(override)) return(override)
+  utils::modifyList(base, override, keep.null = TRUE)
+}
+
+app_qdesn_block_override <- function(cfg, block = c("reference", "discrepancy")) {
   block <- match.arg(block)
+  fc <- cfg$feature_contract %||% cfg$features %||% list()
+  override <- (fc$blocks %||% list())[[block]] %||% list()
+  if (!is.list(override)) {
+    stop(sprintf("feature_contract.blocks.%s must be a mapping.", block), call. = FALSE)
+  }
+  override
+}
+
+app_qdesn_block_input_stream <- function(cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  override <- app_qdesn_block_override(cfg, block)
+  default <- if (identical(block, "reference")) "reference" else "discrepancy"
+  stream_raw <- as.character(override[["input_stream"]] %||% default)
+  if (length(stream_raw) != 1L || is.na(stream_raw) || !nzchar(trimws(stream_raw))) {
+    stop(sprintf(
+      "feature_contract.blocks.%s.input_stream must be one nonempty value.",
+      block
+    ), call. = FALSE)
+  }
+  stream <- tolower(trimws(stream_raw))
+  aliases <- c(
+    reference_history = "reference",
+    transformed_reference_streamflow_history = "reference",
+    discrepancy_history = "discrepancy",
+    retrospective_glofas_minus_reference_discrepancy = "discrepancy"
+  )
+  if (stream %in% names(aliases)) stream <- aliases[[stream]]
+  if (!stream %in% c("reference", "discrepancy")) {
+    stop(sprintf(
+      "feature_contract.blocks.%s.input_stream must be 'reference' or 'discrepancy'.",
+      block
+    ), call. = FALSE)
+  }
+  if (identical(block, "reference") && !identical(stream, "reference")) {
+    stop("The reference Q-DESN input stream must remain 'reference'.", call. = FALSE)
+  }
+  stream
+}
+
+app_qdesn_block_config <- function(cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  override <- app_qdesn_block_override(cfg, block)
+  out <- cfg
+  out$reservoir <- app_qdesn_deep_merge(
+    cfg$reservoir %||% list(),
+    override[["reservoir"]] %||% list()
+  )
+
+  fc_name <- if (!is.null(cfg$feature_contract)) "feature_contract" else if (!is.null(cfg$features)) "features" else "feature_contract"
+  fc <- cfg[[fc_name]] %||% list()
+  fc$reservoir_input <- app_qdesn_deep_merge(
+    fc$reservoir_input %||% list(),
+    override[["reservoir_input"]] %||% list()
+  )
+  fc$readout <- app_qdesn_deep_merge(
+    fc$readout %||% list(),
+    override[["readout"]] %||% list()
+  )
+  out[[fc_name]] <- fc
+  out$.__qdesn_block__ <- block
+  out$.__qdesn_input_stream__ <- app_qdesn_block_input_stream(cfg, block)
+  out
+}
+
+app_qdesn_validate_reservoir_spec <- function(reservoir, label = "reservoir") {
+  if (!is.list(reservoir)) stop(sprintf("%s must be a mapping.", label), call. = FALSE)
+  D <- suppressWarnings(as.integer(reservoir$D %||% 1L))
+  if (length(D) != 1L || !is.finite(D) || D < 1L) {
+    stop(sprintf("%s.D must be one positive integer.", label), call. = FALSE)
+  }
+  check_length <- function(name, allowed) {
+    value <- unlist(reservoir[[name]] %||% numeric(), use.names = FALSE)
+    if (length(value) && !(length(value) %in% allowed)) {
+      stop(sprintf(
+        "%s.%s must have length %s for D=%d; observed length %d.",
+        label,
+        name,
+        paste(allowed, collapse = " or "),
+        D,
+        length(value)
+      ), call. = FALSE)
+    }
+    invisible(value)
+  }
+  n <- check_length("n", c(1L, D))
+  n_tilde_allowed <- if (D == 1L) c(0L, 1L) else c(1L, D - 1L)
+  n_tilde <- check_length("n_tilde", n_tilde_allowed)
+  for (name in c("alpha", "rho", "pi_w", "pi_in")) check_length(name, c(1L, D))
+  if (length(n) && any(!is.finite(as.numeric(n)) | as.numeric(n) < 1)) {
+    stop(sprintf("%s.n must contain positive finite values.", label), call. = FALSE)
+  }
+  if (length(n_tilde) && any(!is.finite(as.numeric(n_tilde)) | as.numeric(n_tilde) < 1)) {
+    stop(sprintf("%s.n_tilde must contain positive finite values.", label), call. = FALSE)
+  }
+  alpha <- as.numeric(unlist(reservoir$alpha %||% numeric(), use.names = FALSE))
+  if (length(alpha) && any(!is.finite(alpha) | alpha <= 0 | alpha > 1)) {
+    stop(sprintf("%s.alpha must lie in (0, 1].", label), call. = FALSE)
+  }
+  rho <- as.numeric(unlist(reservoir$rho %||% numeric(), use.names = FALSE))
+  if (length(rho) && any(!is.finite(rho) | rho < 0)) {
+    stop(sprintf("%s.rho must be nonnegative and finite.", label), call. = FALSE)
+  }
+  for (name in c("pi_w", "pi_in")) {
+    value <- as.numeric(unlist(reservoir[[name]] %||% numeric(), use.names = FALSE))
+    if (length(value) && any(!is.finite(value) | value < 0 | value > 1)) {
+      stop(sprintf("%s.%s must lie in [0, 1].", label, name), call. = FALSE)
+    }
+  }
+  invisible(TRUE)
+}
+
+app_qdesn_validate_block_configs <- function(cfg) {
+  for (block in c("reference", "discrepancy")) {
+    block_cfg <- app_qdesn_block_config(cfg, block)
+    app_qdesn_validate_reservoir_spec(block_cfg$reservoir, sprintf("%s reservoir", block))
+    app_qdesn_block_input_stream(cfg, block)
+  }
+  invisible(TRUE)
+}
+
+app_qdesn_hash_object <- function(x, prefix = "qdesn_contract_") {
+  path <- tempfile(prefix, fileext = ".rds")
+  on.exit(unlink(path), add = TRUE)
+  saveRDS(x, path, version = 2L)
+  app_sha256_file(path)
+}
+
+app_qdesn_block_config_hash <- function(cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  block_cfg <- app_qdesn_block_config(cfg, block)
+  contract <- app_feature_contract(block_cfg)
+  app_qdesn_hash_object(list(
+    block = block,
+    input_stream = app_qdesn_block_input_stream(cfg, block),
+    reservoir = block_cfg$reservoir,
+    reservoir_input = contract$reservoir_input,
+    readout = contract$readout,
+    forecast_alignment = contract$forecast_alignment
+  ))
+}
+
+app_qdesn_common_washout <- function(cfg, drop = NULL) {
+  if (!is.null(drop)) {
+    drop <- suppressWarnings(as.integer(drop[[1L]]))
+    if (!is.finite(drop) || drop < 0L) stop("drop must be a nonnegative integer.", call. = FALSE)
+    return(drop)
+  }
+  values <- vapply(c("reference", "discrepancy"), function(block) {
+    block_cfg <- app_qdesn_block_config(cfg, block)
+    suppressWarnings(as.integer((block_cfg$reservoir %||% list())$washout %||% 0L))
+  }, integer(1L))
+  if (any(!is.finite(values) | values < 0L)) {
+    stop("Reference and discrepancy washout values must be nonnegative integers.", call. = FALSE)
+  }
+  max(values)
+}
+
+app_qdesn_block_seed_resolution <- function(model_row, cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  override <- app_qdesn_block_override(cfg, block)
+  wrapper_seed <- suppressWarnings(as.integer(override[["reservoir_seed"]] %||% NA_integer_))
+  nested_seed <- suppressWarnings(as.integer(
+    (override[["reservoir"]] %||% list())[["seed"]] %||% NA_integer_
+  ))
+  wrapper_seed <- if (length(wrapper_seed) && is.finite(wrapper_seed[[1L]])) {
+    as.integer(wrapper_seed[[1L]])
+  } else {
+    NA_integer_
+  }
+  nested_seed <- if (length(nested_seed) && is.finite(nested_seed[[1L]])) {
+    as.integer(nested_seed[[1L]])
+  } else {
+    NA_integer_
+  }
   base_seed <- app_model_row_reservoir_seed(model_row, cfg)
   if (!is.finite(base_seed)) base_seed <- app_config_reservoir_seed(cfg)
   if (!is.finite(base_seed)) base_seed <- 20260511L
-  if (identical(block, "reference")) return(as.integer(base_seed))
-  as.integer(base_seed + app_qdesn_discrepancy_seed_offset(cfg))
+  fallback_seed <- if (identical(block, "reference")) {
+    as.integer(base_seed)
+  } else {
+    as.integer(base_seed + app_qdesn_discrepancy_seed_offset(cfg))
+  }
+  effective_seed <- if (is.finite(wrapper_seed)) {
+    wrapper_seed
+  } else if (is.finite(nested_seed)) {
+    nested_seed
+  } else {
+    fallback_seed
+  }
+  source <- if (is.finite(wrapper_seed)) {
+    sprintf("feature_contract.blocks.%s.reservoir_seed", block)
+  } else if (is.finite(nested_seed)) {
+    sprintf("feature_contract.blocks.%s.reservoir.seed", block)
+  } else if (identical(block, "reference")) {
+    "model_grid_or_config_reservoir_seed"
+  } else {
+    "model_grid_or_config_reservoir_seed_plus_discrepancy_offset"
+  }
+  data.frame(
+    block = block,
+    wrapper_seed = wrapper_seed,
+    nested_seed = nested_seed,
+    fallback_seed = fallback_seed,
+    effective_seed = as.integer(effective_seed),
+    seed_source = source,
+    explicit_seed_conflict = is.finite(wrapper_seed) && is.finite(nested_seed) &&
+      !identical(wrapper_seed, nested_seed),
+    precedence_rule = "wrapper_reservoir_seed_then_nested_reservoir_seed_then_fallback",
+    stringsAsFactors = FALSE
+  )
+}
+
+app_qdesn_block_seed <- function(model_row, cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  app_qdesn_block_seed_resolution(model_row, cfg, block)$effective_seed[[1L]]
 }
 
 app_qdesn_seed_contract_report <- function(cfg, model_grid, require_match = NULL) {
@@ -145,6 +361,11 @@ app_qdesn_seed_contract_report <- function(cfg, model_grid, require_match = NULL
       reference_reservoir_seed = integer(),
       discrepancy_reservoir_seed = integer(),
       discrepancy_reservoir_seed_offset = integer(),
+      reference_seed_source = character(),
+      discrepancy_seed_source = character(),
+      reference_explicit_seed_conflict = logical(),
+      discrepancy_explicit_seed_conflict = logical(),
+      block_seed_precedence_rule = character(),
       config_model_seed_match = logical(),
       require_config_model_seed_match = logical(),
       two_block_design = logical(),
@@ -160,8 +381,10 @@ app_qdesn_seed_contract_report <- function(cfg, model_grid, require_match = NULL
     has_row_seed <- length(raw_row_seed) && is.finite(raw_row_seed[[1L]])
     row_seed <- if (has_row_seed) as.integer(raw_row_seed[[1L]]) else NA_integer_
     effective_seed <- app_model_row_reservoir_seed(row, cfg)
-    reference_seed <- app_qdesn_block_seed(row, cfg, "reference")
-    discrepancy_seed <- app_qdesn_block_seed(row, cfg, "discrepancy")
+    reference_resolution <- app_qdesn_block_seed_resolution(row, cfg, "reference")
+    discrepancy_resolution <- app_qdesn_block_seed_resolution(row, cfg, "discrepancy")
+    reference_seed <- reference_resolution$effective_seed[[1L]]
+    discrepancy_seed <- discrepancy_resolution$effective_seed[[1L]]
     offset <- discrepancy_seed - reference_seed
     match <- !has_row_seed || !is.finite(cfg_seed) || identical(as.integer(row_seed), as.integer(cfg_seed))
     ok <- !require_match || isTRUE(match)
@@ -177,6 +400,11 @@ app_qdesn_seed_contract_report <- function(cfg, model_grid, require_match = NULL
       reference_reservoir_seed = reference_seed,
       discrepancy_reservoir_seed = discrepancy_seed,
       discrepancy_reservoir_seed_offset = offset,
+      reference_seed_source = reference_resolution$seed_source[[1L]],
+      discrepancy_seed_source = discrepancy_resolution$seed_source[[1L]],
+      reference_explicit_seed_conflict = reference_resolution$explicit_seed_conflict[[1L]],
+      discrepancy_explicit_seed_conflict = discrepancy_resolution$explicit_seed_conflict[[1L]],
+      block_seed_precedence_rule = reference_resolution$precedence_rule[[1L]],
       config_model_seed_match = isTRUE(match),
       require_config_model_seed_match = require_match,
       two_block_design = app_qdesn_two_block_design(cfg),
@@ -202,6 +430,28 @@ app_validate_qdesn_seed_contract <- function(cfg, model_grid, require_match = NU
   failed <- report[report$status != "ok", , drop = FALSE]
   if (nrow(failed)) {
     stop(paste(failed$message, collapse = "; "), call. = FALSE)
+  }
+  invisible(report)
+}
+
+app_validate_qdesn_block_seed_resolution <- function(
+  cfg,
+  model_row,
+  conflict_action = c("record", "error")
+) {
+  conflict_action <- match.arg(conflict_action)
+  report <- app_bind_rows_fill(lapply(c("reference", "discrepancy"), function(block) {
+    app_qdesn_block_seed_resolution(model_row, cfg, block)
+  }))
+  conflicts <- report[report$explicit_seed_conflict, , drop = FALSE]
+  if (identical(conflict_action, "error") && nrow(conflicts)) {
+    stop(
+      sprintf(
+        "Conflicting explicit Q-DESN block seeds: %s. The documented wrapper field has precedence.",
+        paste(conflicts$block, collapse = ", ")
+      ),
+      call. = FALSE
+    )
   }
   invisible(report)
 }

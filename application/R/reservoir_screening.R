@@ -35,6 +35,7 @@ app_reservoir_diagnostic_config <- function(..., allow_unknown = FALSE) {
     leaky_effective_radius_check = TRUE,
     initial_forgetting_ratio_max = 1.0e-2,
     initial_forgetting_final_max = NULL,
+    initial_forgetting_zero_tol = 1.0e-12,
     dead_std_tol = 1.0e-8,
     dead_fraction_warn = 0.10,
     dead_fraction_reject = 0.30,
@@ -49,6 +50,7 @@ app_reservoir_diagnostic_config <- function(..., allow_unknown = FALSE) {
     corr_fraction_reject_at_090 = 0.50,
     relative_effective_rank_warn = 0.15,
     relative_effective_rank_reject = 0.05,
+    low_effective_rank_action = "reject",
     condition_z_warn = 1.0e4,
     condition_z_reject = 1.0e6,
     condition_cov_warn = 1.0e8,
@@ -93,6 +95,10 @@ app_reservoir_diagnostic_config <- function(..., allow_unknown = FALSE) {
   defaults$corr_quantile_probs <- sort(unique(as.numeric(defaults$corr_quantile_probs)))
   defaults$validation_metric <- tolower(as.character(defaults$validation_metric %||% "pinball")[[1L]])
   defaults$cheap_readout <- tolower(as.character(defaults$cheap_readout %||% "ridge")[[1L]])
+  defaults$low_effective_rank_action <- match.arg(
+    tolower(as.character(defaults$low_effective_rank_action %||% "reject")[[1L]]),
+    c("reject", "repair")
+  )
   defaults$pruning_prefer <- match.arg(
     as.character(defaults$pruning_prefer %||% "variance")[[1L]],
     c("variance", "validation", "original_order")
@@ -103,6 +109,10 @@ app_reservoir_diagnostic_config <- function(..., allow_unknown = FALSE) {
   )
   if (!is.finite(defaults$washout) || defaults$washout < 0L) {
     stop("Reservoir diagnostic washout must be a nonnegative integer.", call. = FALSE)
+  }
+  defaults$initial_forgetting_zero_tol <- as.numeric(defaults$initial_forgetting_zero_tol)
+  if (!is.finite(defaults$initial_forgetting_zero_tol) || defaults$initial_forgetting_zero_tol < 0) {
+    stop("Initial-condition forgetting zero tolerance must be finite and nonnegative.", call. = FALSE)
   }
   class(defaults) <- c("app_reservoir_diagnostic_config", "list")
   defaults
@@ -524,7 +534,9 @@ app_compute_state_matrix_diagnostics <- function(
     !standardization_pass ||
     dead_fraction > config$dead_fraction_reject ||
     (is.finite(saturation_fraction) && saturation_fraction > config$saturation_fraction_reject) ||
-    (is.finite(rank$relative_effective_rank_entropy) && rank$relative_effective_rank_entropy < config$relative_effective_rank_reject) ||
+    (identical(config$low_effective_rank_action, "reject") &&
+      is.finite(rank$relative_effective_rank_entropy) &&
+      rank$relative_effective_rank_entropy < config$relative_effective_rank_reject) ||
     (!is.finite(rank$condition_z) || rank$condition_z > config$condition_z_reject) ||
     (!is.finite(rank$condition_cov) || rank$condition_cov > config$condition_cov_reject)
 
@@ -819,8 +831,16 @@ app_empirical_initial_condition_forgetting_test <- function(
   late <- d[(length(d) - half + 1L):length(d)]
   early_med <- stats::median(early, na.rm = TRUE)
   late_med <- stats::median(late, na.rm = TRUE)
-  ratio <- if (is.finite(early_med) && early_med > 0) late_med / early_med else NA_real_
   final <- tail(d, 1L)
+  zero_tol <- config$initial_forgetting_zero_tol
+  ratio <- if (is.finite(early_med) && early_med > zero_tol) {
+    late_med / early_med
+  } else if (is.finite(early_med) && is.finite(late_med) && is.finite(final) &&
+             early_med <= zero_tol && late_med <= zero_tol && final <= zero_tol) {
+    0
+  } else {
+    Inf
+  }
   passed <- is.finite(ratio) && ratio <= config$initial_forgetting_ratio_max &&
     (is.null(config$initial_forgetting_final_max) || final <= config$initial_forgetting_final_max)
   warnings <- if (isTRUE(passed)) character() else "initial-condition forgetting ratio exceeds threshold"
@@ -1128,6 +1148,51 @@ app_latent_path_semantic_layer_reports <- function(
   out
 }
 
+app_latent_path_semantic_forgetting_reports <- function(
+  design,
+  config = NULL
+) {
+  config <- app_reservoir_as_config(config)
+  blocks <- list(
+    reference = list(
+      qfit = design$future_context$qfit_beta %||% design$qfit_beta %||% NULL,
+      cfg = design$block_config_beta %||% design$future_context$cfg_beta %||% NULL,
+      panel = design$base_panel_full %||% design$future_context$base_panel_full %||% NULL
+    ),
+    discrepancy = list(
+      qfit = design$future_context$qfit_alpha %||% design$qfit_alpha %||% NULL,
+      cfg = design$block_config_alpha %||% design$future_context$cfg_alpha %||% NULL,
+      panel = design$base_panel_disc_full %||% design$future_context$base_panel_disc_full %||% NULL
+    )
+  )
+  out <- list()
+  for (block in names(blocks)) {
+    item <- blocks[[block]]
+    qfit <- item$qfit
+    block_cfg <- item$cfg
+    panel <- item$panel
+    report <- if (is.null(qfit) || is.null(block_cfg) || is.null(panel) ||
+                  !exists("app_qdesn_reservoir_input_matrix", mode = "function")) {
+      app_empirical_initial_condition_forgetting_test(config = config)
+    } else {
+      spec <- app_qdesn_reservoir_input_spec(block_cfg)
+      input <- app_qdesn_reservoir_input_matrix(panel, block_cfg, spec = spec)
+      block_config <- config
+      block_config$washout <- as.integer(qfit$meta$drop %||% (block_cfg$reservoir %||% list())$washout %||% config$washout)
+      app_empirical_initial_condition_forgetting_test(
+        input_matrix = input$X,
+        reservoir = qfit$reservoir,
+        meta = qfit$meta,
+        config = block_config
+      )
+    }
+    report$semantic_block <- block
+    report$reservoir_seed <- qfit$reservoir$seed %||% NA_integer_
+    out[[block]] <- report
+  }
+  out
+}
+
 app_evaluate_qdesn_design_object <- function(
   design,
   config = NULL,
@@ -1147,6 +1212,7 @@ app_evaluate_qdesn_design_object <- function(
   )
   if (length(semantic_reports)) {
     layer_reports <- app_latent_path_semantic_layer_reports(design, config = config)
+    forgetting_reports <- app_latent_path_semantic_forgetting_reports(design, config = config)
     if (!length(layer_reports) && !is.null(reservoir)) {
       layer_reports <- app_compute_layer_stability_diagnostics(reservoir = reservoir, config = config)
     }
@@ -1156,13 +1222,20 @@ app_evaluate_qdesn_design_object <- function(
     } else {
       character()
     }
+    forgetting_decisions <- if (length(forgetting_reports)) {
+      vapply(forgetting_reports, function(x) x$decision, character(1L))
+    } else {
+      character()
+    }
     semantic_suggestions <- unlist(lapply(semantic_reports, function(x) x$repair_suggestions %||% character()), use.names = FALSE)
     layer_suggestions <- unlist(lapply(layer_reports, function(x) x$repair_suggestions %||% character()), use.names = FALSE)
+    forgetting_suggestions <- unlist(lapply(forgetting_reports, function(x) x$repair_suggestions %||% character()), use.names = FALSE)
     out <- list(
       spec_id = metadata$spec_id %||% design$fit_id %||% design$model_id %||% NA_character_,
       seed = reservoir$seed %||% metadata$seed %||% NA_integer_,
       layer_reports = layer_reports,
-      forgetting_report = NULL,
+      forgetting_report = forgetting_reports[[1L]] %||% NULL,
+      semantic_forgetting_reports = forgetting_reports,
       state_report = semantic_reports[[1L]],
       readout_state_report = NULL,
       semantic_state_reports = semantic_reports,
@@ -1170,8 +1243,8 @@ app_evaluate_qdesn_design_object <- function(
       baseline_validation_score = NA_real_,
       validation_metric = config$validation_metric,
       validation_pass = NA,
-      decision = app_screening_worst_decision(c(semantic_decisions, layer_decisions)),
-      repair_suggestions = unique(c(semantic_suggestions, layer_suggestions)),
+      decision = app_screening_worst_decision(c(semantic_decisions, layer_decisions, forgetting_decisions)),
+      repair_suggestions = unique(c(semantic_suggestions, layer_suggestions, forgetting_suggestions)),
       metadata = modifyList(
         list(
           two_block_design = TRUE,
@@ -1461,6 +1534,12 @@ app_seed_report_row <- function(report) {
     function(x) length(x$warnings %||% character()),
     integer(1L)
   ))
+  forgetting_reports <- report$semantic_forgetting_reports %||% list()
+  forgetting_decision <- if (length(forgetting_reports)) {
+    app_screening_worst_decision(vapply(forgetting_reports, function(x) x$decision, character(1L)))
+  } else {
+    report$forgetting_report$decision %||% NA_character_
+  }
   data.frame(
     spec_id = report$spec_id,
     fit_id = report$metadata$fit_id %||% report$spec_id,
@@ -1470,7 +1549,7 @@ app_seed_report_row <- function(report) {
     semantic_state_decision = semantic_decision,
     n_semantic_state_reports = length(report$semantic_state_reports %||% list()),
     layer_decision = app_screening_worst_decision(vapply(report$layer_reports, function(x) x$decision, character(1L)) %||% "pass"),
-    forgetting_decision = report$forgetting_report$decision %||% NA_character_,
+    forgetting_decision = forgetting_decision,
     cheap_validation_score = report$cheap_validation_score,
     baseline_validation_score = report$baseline_validation_score,
     validation_pass = report$validation_pass,
@@ -1478,6 +1557,35 @@ app_seed_report_row <- function(report) {
     n_repair_suggestions = length(report$repair_suggestions %||% character()),
     stringsAsFactors = FALSE
   )
+}
+
+app_forgetting_report_rows <- function(seed_report) {
+  reports <- seed_report$semantic_forgetting_reports %||% list()
+  if (!length(reports) && !is.null(seed_report$forgetting_report)) {
+    reports <- list(unspecified = seed_report$forgetting_report)
+  }
+  rows <- lapply(names(reports), function(block) {
+    report <- reports[[block]]
+    data.frame(
+      spec_id = seed_report$spec_id,
+      fit_id = seed_report$metadata$fit_id %||% seed_report$spec_id,
+      seed = seed_report$seed,
+      semantic_block = report$semantic_block %||% block,
+      reservoir_seed = report$reservoir_seed %||% NA_integer_,
+      ran = isTRUE(report$ran),
+      skip_reason = report$skip_reason %||% "",
+      n_steps = report$n_steps,
+      n_state_features = report$n_state_features,
+      early_distance_median = report$early_distance_median,
+      late_distance_median = report$late_distance_median,
+      final_distance = report$final_distance,
+      forgetting_ratio = report$forgetting_ratio,
+      passed = report$passed,
+      decision = report$decision,
+      stringsAsFactors = FALSE
+    )
+  })
+  app_bind_rows_fill(rows)
 }
 
 app_state_report_row <- function(seed_report, report = seed_report$state_report) {
@@ -1493,6 +1601,8 @@ app_state_report_row <- function(seed_report, report = seed_report$state_report)
     saturation_fraction = report$saturation_fraction,
     near_duplicate_fraction = report$near_duplicate_fraction,
     max_abs_corr = report$max_abs_corr,
+    effective_rank_entropy = report$effective_rank_entropy,
+    effective_rank_participation = report$effective_rank_participation,
     relative_effective_rank_entropy = report$relative_effective_rank_entropy,
     relative_effective_rank_participation = report$relative_effective_rank_participation,
     condition_z = report$condition_z,

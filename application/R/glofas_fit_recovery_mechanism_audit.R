@@ -14,6 +14,16 @@ app_glofas_mechanism_draw_indices <- function(n_draws, n_subset = 5L) {
   unique(as.integer(round(seq(1L, n_draws, length.out = min(n_draws, n_subset)))))
 }
 
+app_glofas_mechanism_block_configs <- function(context) {
+  list(
+    reference = context$cfg_beta %||% app_qdesn_block_config(context$cfg, "reference"),
+    discrepancy = context$cfg_alpha %||% app_qdesn_block_config(
+      context$cfg,
+      if (isTRUE(context$two_block_design %||% FALSE)) "discrepancy" else "reference"
+    )
+  )
+}
+
 app_glofas_mechanism_linearized_design <- function(linearization, y_future, block = c("beta", "alpha")) {
   block <- match.arg(block)
   X <- as.matrix(if (identical(block, "beta")) {
@@ -44,6 +54,9 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
   qfit_alpha <- context$qfit_alpha %||% context$qfit
   feature_meta_beta <- context$feature_meta_beta %||% context$feature_meta
   feature_meta_alpha <- context$feature_meta_alpha %||% context$feature_meta
+  block_configs <- app_glofas_mechanism_block_configs(context)
+  cfg_beta <- block_configs$reference
+  cfg_alpha <- block_configs$discrepancy
   continuation_beta <- app_qdesn_continue_latent_path(
     qfit = qfit_beta,
     y_history = context$y_history_full,
@@ -60,7 +73,7 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
   readout_beta <- app_build_readout_feature_matrix(
     reservoir_X = continuation_beta$X_future_core,
     panel = panel_beta,
-    cfg = context$cfg,
+    cfg = cfg_beta,
     output_anchor_dates = context$latent_data$future_key$target_date,
     covariate_target_dates = context$latent_data$future_key$target_date,
     horizon = context$latent_data$future_key$horizon,
@@ -110,7 +123,7 @@ app_glofas_mechanism_exact_future_design <- function(design, y_future) {
   readout_alpha <- app_build_readout_feature_matrix(
     reservoir_X = continuation_alpha$X_future_core,
     panel = panel_alpha,
-    cfg = context$cfg,
+    cfg = cfg_alpha,
     output_anchor_dates = context$latent_data$future_key$target_date,
     covariate_target_dates = context$latent_data$future_key$target_date,
     horizon = context$latent_data$future_key$horizon,

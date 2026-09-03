@@ -80,7 +80,7 @@ verify_manifest(out_dir)
 main_tex <- tempfile("phase155_main_", fileext = ".tex")
 supp_tex <- tempfile("phase155_supp_", fileext = ".tex")
 writeLines(c(
-  "The balanced MCMC confirmation provides posterior quantile-grid readout paths, not a scalar predictive density.",
+  "The balanced MCMC validation provides posterior quantile-grid readout paths, not a scalar predictive density.",
   "The replicated VB layer uses 50 independently generated fixtures per cell.",
   "Joint AL wins four of the eight scenarios; the other rows win two scenarios each.",
   "Joint AL is best in six of the eight fit windows.",

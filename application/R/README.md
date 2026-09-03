@@ -18,7 +18,10 @@ Tracked helper files:
   `.rda`, `.RData`, and large local artifacts under ignored application output
   roots. These helpers never delete files. They include both file-level
   inventories and run-level summaries for deciding which unselected run
-  objects can be cleaned after promotion.
+  objects can be cleaned after promotion. The GloFAS lifecycle extension is
+  fail-closed: it requires explicit terminal run IDs, protects active paths and
+  named contenders, hashes every proposed file in the dry run, and rechecks
+  both ownership and hashes before deletion.
 - `input_contract.R`
 - `engine_contract.R`
   plus the inference-support gate for package-backed discrepancy fits. The
@@ -41,7 +44,10 @@ Tracked helper files:
 - `model_contract.R`: application-model contract helpers. These distinguish
   the frozen `origin_state_bridge` workflow from the target
   `latent_path_ensemble_likelihood` workflow and record source-parameter
-  ownership for GloFAS likelihood rows.
+  ownership for GloFAS likelihood rows. The block-config resolver preserves the
+  legacy shared reservoir specification by default while permitting explicit,
+  independently validated reference and discrepancy reservoir, input-lag, and
+  readout overrides.
 - `feature_contract.R`: normalized readout-feature contract for the GloFAS
   discrepancy model. It parses output and covariate lag specifications,
   separates the reservoir's internal input bias from the readout intercept, and
@@ -72,7 +78,13 @@ Tracked helper files:
   block for the shared quantile and discrepancy readouts. Version 0.3 supports
   separate reference and discrepancy feature blocks, producing stacked designs
   of the form `[X_Y, 0]` for reference rows and `[X_Y, X_D]` for retrospective
-  GloFAS rows.
+  GloFAS rows. Under the latent-path contract,
+  `feature_contract.blocks.discrepancy.input_stream` explicitly selects whether
+  the separate discrepancy reservoir consumes the retrospective discrepancy
+  history (the default) or the same reference/PPT/soil stream as the reference
+  reservoir. This does not change the discrepancy likelihood response. A block
+  override of `readout.include_input_block: false` removes duplicated direct
+  lags while retaining that input inside the reservoir recursion.
 - `forecast_contract.R`: prediction-contract validation and row builders for
   issued-horizon GloFAS quantile correction. This file owns the recorded
   pilot relationship `qhat = q_g_hat - d_g_hat` and the final draw-level
@@ -93,7 +105,13 @@ Tracked helper files:
   GloFAS empirical quantile path minus the latent reference path. It also
   records requested versus effective issued horizons, keyed future GloFAS
   design metadata, and first-order Delta prediction metadata for posterior-draw
-  quantiles.
+  quantiles. Its exact-runtime path compiles immutable future date/lag/member
+  maps, caches a persistence discrepancy continuation only when its feature
+  stream is static, and exposes a true reference builder for numerical
+  canaries. A shared-reference discrepancy stream remains dynamic in the
+  latent future path and carries its own validated Jacobian. An optional content-addressed
+  reference-feature cache shares only quantile-invariant DESN foundations; it
+  validates panel/config/seed/code hashes and never shares mutable VB state.
 - `latent_path_vb_al.R`: article-side AL-VB implementation for the
   latent-path ensemble-likelihood model. It keeps a dense debug path for small
   equivalence tests, uses streamed grouped future moments for the production
@@ -103,7 +121,20 @@ Tracked helper files:
   release/convergence diagnostics, and stores the final future-state
   linearization for draw-level prediction. The application adapter defaults to
   25 frozen global-scale iterations; low-level callers must request a warmup
-  explicitly.
+  explicitly. The exact-runtime implementation adds a one-time fixed-row
+  pairing certificate, fused paired beta sufficient statistics with an
+  explicit fallback, fixed-iteration profiling controls, backend provenance,
+  and exact atomic checkpoint/resume. These paths preserve the same dense
+  covariance VB approximation; they do not introduce stochastic, mini-batch,
+  low-rank, or otherwise approximate inference.
+- `latent_path_runtime_backend.R`: fail-closed provenance for bundled R BLAS or
+  a child-process-only, hash-pinned OpenBLAS library. It records the effective
+  preload, thread controls, reported BLAS/LAPACK libraries, and CPU affinity;
+  it never changes system alternatives or the host R installation.
+- `latent_path_checkpoint.R`: versioned exact-VB checkpoints containing all
+  variational states, traces, RNG state, engine/design/backend contracts, and
+  timing accumulators. Writes are round-trip validated, hashed, fsynced, and
+  atomically installed while retaining one prior valid checkpoint.
 - `figure_provenance.R`
 - `plot_input_diagnostics.R`
 - `synthesize_quantiles.R`: monotone quantile-grid synthesis and crossing
@@ -115,6 +146,47 @@ Tracked helper files:
   alignment, independent and post-hoc isotonic distributional scoring,
   convergence/warm-start gates, and ranking for the staged GloFAS
   distributional-selection workflow.
+- `glofas_discrepancy_equivalence_audit.R`: white-box, no-refit diagnostics
+  for architecture-insensitive GloFAS discrepancy forecasts. It certifies
+  status and artifact lineage, feature/coefficient alignment, cache isolation,
+  serialization, exact discrepancy prediction, posterior identities,
+  block/layer contributions, post-fit ablations, state geometry, RHS scales,
+  and a fail-closed root-cause decision. It never launches a fit or authorizes
+  full7 or article promotion.
+- `glofas_discrepancy_tau0_screen.R`: the one-axis p50 screen for relaxing the
+  discrepancy RHS global-scale initialization while freezing the FR09 shared-
+  input geometry and shared RHS prior. It defines the immutable treatment
+  support, exact-design warm-start audit, persistence comparison, FR09
+  historical guardrails, warm/cold equivalence rule, and nonautomatic
+  selection gate. Existing `tau0=0.1` evidence is reused instead of refit.
+- `glofas_discrepancy_transition_information_audit.R`: fixed-feature
+  transition operators and pre-screen diagnostics for the GloFAS discrepancy
+  model. It distinguishes the legacy static-origin adjustment from damped and
+  cumulative innovation mappings, tests transformed designs and Jacobians,
+  audits historical/future target semantics and future-block identifiability,
+  labels current-event information provenance, and emits a launch-locked draft
+  registry. No helper in this file changes the production fit contract.
+- `glofas_constrained_median_screening.R`: deterministic expansion of reviewed
+  two-block p50 screening spaces, including linked DESN profiles with exact
+  cardinality checks and score-balanced prior-expansion anchors; block-specific
+  config materialization, SHA-pinned baseline verification, semantic warm-start
+  policy, historical-fit constraints, and forecast check-loss ranking. The FR09 template can first be
+  run with `--audit_only true`, which verifies the promoted evidence and frozen
+  engine while producing no candidates. Median fits are never labeled as
+  distributional CRPS; eligible candidates still require diagnostic review, a
+  cold p50 confirmation, and a full multi-quantile refit before promotion.
+- `glofas_median_response_surface_campaign.R`: deterministic construction of
+  the 56-fit alpha/rho/tau response-surface campaign around the completed
+  Stage-A leader. It verifies the anchor evidence, creates linked and
+  block-specific subdesigns, preserves warm/cold canaries as distinct
+  numerical treatments, and enforces the 150-iteration/20-core contract.
+- `glofas_median_structural_campaign.R`: deterministic construction of the
+  bounded structural memory/geometry campaign, including block-asymmetric
+  designs and no-reduction deep reservoirs.
+- `glofas_screening_program_closeout.R`: fail-closed verification of phase
+  counts, immutable ranking hashes, leaders, promotion gates, and the paired
+  mechanism decision across all completed constrained-median campaigns. It
+  never launches a fit.
 - `hybrid_quantile_synthesis.R`: no-refit raw/Q-DESN hybrid-candidate
   builders for completed multi-quantile GloFAS synthesis runs. These helpers
   are diagnostic and do not promote article-facing outputs by themselves.
@@ -124,10 +196,14 @@ Tracked helper files:
 - `reservoir_screening.R`: sampler-free D-ESN reservoir diagnostics and
   early-rejection helpers. These inspect recurrent-layer stability, leaky
   effective radii, state degeneracy, saturation, correlation redundancy,
-  effective rank, conditioning, optional cheap validation, and seed-level
-  aggregation. The helpers are advisory by default and do not launch VB or
+  effective rank, conditioning, empirical two-block initial-condition
+  forgetting, optional cheap validation, and seed-level aggregation. The
+  helpers are advisory by default and do not launch VB or
   MCMC; `application/scripts/03_screen_reservoir_design.R` is the standalone
-  pre-stage that writes screening tables for a fresh run id.
+  pre-stage that writes screening tables for a fresh run id. Absolute and
+  relative effective ranks are serialized together. The default v1 policy
+  retains low relative rank as a hard rejection; a prospective campaign may
+  set `low_effective_rank_action = "repair"` without reinterpreting prior runs.
 - `make_manuscript_outputs.R`
 - `promote_application_outputs.R`: promotion guards and provenance-map helpers
   used by `scripts/08_promote_application_outputs.R`. Final-launch promotion

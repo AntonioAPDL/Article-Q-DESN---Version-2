@@ -21,6 +21,8 @@ source(app_path("application/R/discrepancy_design.R"))
 source(app_path("application/R/forecast_contract.R"))
 source(app_path("application/R/fit_qdesn_reference.R"))
 source(app_path("application/R/fit_qdesn_discrepancy.R"))
+source(app_path("application/R/latent_path_runtime_backend.R"))
+source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/fit_qdesn_latent_path.R"))
 
@@ -41,6 +43,10 @@ app_validate_fit_stage_launch_request(
 )
 run_dirs <- app_create_run_dirs(cfg, run_id = run_id)
 app_stage_start("03_fit_models", run_dirs)
+app_write_csv(
+  app_latent_runtime_backend_manifest(fail_closed = TRUE),
+  file.path(run_dirs$manifest, "latent_path_runtime_backend.csv")
+)
 
 panel_path <- file.path(app_config_path(cfg, "cache"), "application_panel.rds")
 if (!file.exists(panel_path)) stop(sprintf("Missing application panel: %s", panel_path), call. = FALSE)
@@ -162,10 +168,39 @@ for (i in seq_len(nrow(model_grid))) {
       )
       list(status = "completed")
     } else if (identical(row$model_family[[1L]], "qdesn_glofas_discrepancy")) {
+      fit_cfg <- cfg
+      checkpoint_cfg <- (fit_cfg$inference$vb_ld %||% list())$checkpoint %||% list()
+      if (app_as_bool(checkpoint_cfg$enabled %||% FALSE)) {
+        checkpoint_path <- Sys.getenv("GLOFAS_CHECKPOINT_PATH", unset = "")
+        if (!nzchar(checkpoint_path)) {
+          checkpoint_path <- as.character(checkpoint_cfg$path %||% "")[[1L]]
+        }
+        if (!nzchar(checkpoint_path)) {
+          checkpoint_path <- file.path(
+            run_dirs$objects,
+            paste0(row$fit_id[[1L]], "__vb_checkpoint.rds")
+          )
+        } else {
+          checkpoint_path <- gsub("\\{fit_id\\}", row$fit_id[[1L]], checkpoint_path)
+          checkpoint_path <- if (grepl("^/", checkpoint_path)) {
+            normalizePath(checkpoint_path, mustWork = FALSE)
+          } else if (dirname(checkpoint_path) %in% c(".", "")) {
+            normalizePath(file.path(run_dirs$objects, checkpoint_path), mustWork = FALSE)
+          } else {
+            app_resolve_path(checkpoint_path, must_work = FALSE)
+          }
+        }
+        checkpoint_resume <- Sys.getenv("GLOFAS_CHECKPOINT_RESUME", unset = "")
+        if (nzchar(checkpoint_resume)) {
+          checkpoint_cfg$resume <- app_as_bool(checkpoint_resume)
+        }
+        checkpoint_cfg$path <- checkpoint_path
+        fit_cfg$inference$vb_ld$checkpoint <- checkpoint_cfg
+      }
       if (app_is_latent_path_contract(cfg, row)) {
-        result <- app_fit_qdesn_latent_path(panel, cfg, row)
+        result <- app_fit_qdesn_latent_path(panel, fit_cfg, row)
       } else {
-        result <- app_fit_qdesn_discrepancy(panel, cfg, row)
+        result <- app_fit_qdesn_discrepancy(panel, fit_cfg, row)
       }
       discrepancy_fit_diagnostic_rows[[k_disc_diag]] <- if (app_is_latent_path_contract(cfg, row)) {
         app_latent_path_fit_diagnostics(result)
@@ -197,7 +232,14 @@ for (i in seq_len(nrow(model_grid))) {
         result
       )
       save_start <- proc.time()[["elapsed"]]
-      design_for_save <- if (app_is_latent_path_contract(cfg, row)) app_latent_path_drop_runtime_cache(result$design) else result$design
+      design_for_save <- if (app_is_latent_path_contract(cfg, row)) {
+        app_latent_path_drop_runtime_cache(
+          result$design,
+          compact = app_fit_artifact_retained(artifact_policy, "compact_latent_path_design")
+        )
+      } else {
+        result$design
+      }
       design_object_path <- app_maybe_save_rds(design_for_save, design_path, retained = retain_design_object)
       append_qdesn_stage_timing(
         data.frame(stage = "save_design_object", elapsed_seconds = proc.time()[["elapsed"]] - save_start, stringsAsFactors = FALSE),

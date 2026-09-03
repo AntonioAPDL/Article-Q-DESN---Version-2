@@ -131,6 +131,37 @@ app_qdesn_block_override <- function(cfg, block = c("reference", "discrepancy"))
   override
 }
 
+app_qdesn_block_input_stream <- function(cfg, block = c("reference", "discrepancy")) {
+  block <- match.arg(block)
+  override <- app_qdesn_block_override(cfg, block)
+  default <- if (identical(block, "reference")) "reference" else "discrepancy"
+  stream_raw <- as.character(override[["input_stream"]] %||% default)
+  if (length(stream_raw) != 1L || is.na(stream_raw) || !nzchar(trimws(stream_raw))) {
+    stop(sprintf(
+      "feature_contract.blocks.%s.input_stream must be one nonempty value.",
+      block
+    ), call. = FALSE)
+  }
+  stream <- tolower(trimws(stream_raw))
+  aliases <- c(
+    reference_history = "reference",
+    transformed_reference_streamflow_history = "reference",
+    discrepancy_history = "discrepancy",
+    retrospective_glofas_minus_reference_discrepancy = "discrepancy"
+  )
+  if (stream %in% names(aliases)) stream <- aliases[[stream]]
+  if (!stream %in% c("reference", "discrepancy")) {
+    stop(sprintf(
+      "feature_contract.blocks.%s.input_stream must be 'reference' or 'discrepancy'.",
+      block
+    ), call. = FALSE)
+  }
+  if (identical(block, "reference") && !identical(stream, "reference")) {
+    stop("The reference Q-DESN input stream must remain 'reference'.", call. = FALSE)
+  }
+  stream
+}
+
 app_qdesn_block_config <- function(cfg, block = c("reference", "discrepancy")) {
   block <- match.arg(block)
   override <- app_qdesn_block_override(cfg, block)
@@ -152,6 +183,7 @@ app_qdesn_block_config <- function(cfg, block = c("reference", "discrepancy")) {
   )
   out[[fc_name]] <- fc
   out$.__qdesn_block__ <- block
+  out$.__qdesn_input_stream__ <- app_qdesn_block_input_stream(cfg, block)
   out
 }
 
@@ -206,6 +238,7 @@ app_qdesn_validate_block_configs <- function(cfg) {
   for (block in c("reference", "discrepancy")) {
     block_cfg <- app_qdesn_block_config(cfg, block)
     app_qdesn_validate_reservoir_spec(block_cfg$reservoir, sprintf("%s reservoir", block))
+    app_qdesn_block_input_stream(cfg, block)
   }
   invisible(TRUE)
 }
@@ -223,6 +256,7 @@ app_qdesn_block_config_hash <- function(cfg, block = c("reference", "discrepancy
   contract <- app_feature_contract(block_cfg)
   app_qdesn_hash_object(list(
     block = block,
+    input_stream = app_qdesn_block_input_stream(cfg, block),
     reservoir = block_cfg$reservoir,
     reservoir_input = contract$reservoir_input,
     readout = contract$readout,

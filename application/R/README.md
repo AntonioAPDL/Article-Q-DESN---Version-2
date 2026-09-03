@@ -78,7 +78,13 @@ Tracked helper files:
   block for the shared quantile and discrepancy readouts. Version 0.3 supports
   separate reference and discrepancy feature blocks, producing stacked designs
   of the form `[X_Y, 0]` for reference rows and `[X_Y, X_D]` for retrospective
-  GloFAS rows.
+  GloFAS rows. Under the latent-path contract,
+  `feature_contract.blocks.discrepancy.input_stream` explicitly selects whether
+  the separate discrepancy reservoir consumes the retrospective discrepancy
+  history (the default) or the same reference/PPT/soil stream as the reference
+  reservoir. This does not change the discrepancy likelihood response. A block
+  override of `readout.include_input_block: false` removes duplicated direct
+  lags while retaining that input inside the reservoir recursion.
 - `forecast_contract.R`: prediction-contract validation and row builders for
   issued-horizon GloFAS quantile correction. This file owns the recorded
   pilot relationship `qhat = q_g_hat - d_g_hat` and the final draw-level
@@ -100,8 +106,10 @@ Tracked helper files:
   records requested versus effective issued horizons, keyed future GloFAS
   design metadata, and first-order Delta prediction metadata for posterior-draw
   quantiles. Its exact-runtime path compiles immutable future date/lag/member
-  maps, caches the persistence discrepancy continuation, and exposes a true
-  reference builder for numerical canaries. An optional content-addressed
+  maps, caches a persistence discrepancy continuation only when its feature
+  stream is static, and exposes a true reference builder for numerical
+  canaries. A shared-reference discrepancy stream remains dynamic in the
+  latent future path and carries its own validated Jacobian. An optional content-addressed
   reference-feature cache shares only quantile-invariant DESN foundations; it
   validates panel/config/seed/code hashes and never shares mutable VB state.
 - `latent_path_vb_al.R`: article-side AL-VB implementation for the
@@ -145,6 +153,12 @@ Tracked helper files:
   block/layer contributions, post-fit ablations, state geometry, RHS scales,
   and a fail-closed root-cause decision. It never launches a fit or authorizes
   full7 or article promotion.
+- `glofas_discrepancy_tau0_screen.R`: the one-axis p50 screen for relaxing the
+  discrepancy RHS global-scale initialization while freezing the FR09 shared-
+  input geometry and shared RHS prior. It defines the immutable treatment
+  support, exact-design warm-start audit, persistence comparison, FR09
+  historical guardrails, warm/cold equivalence rule, and nonautomatic
+  selection gate. Existing `tau0=0.1` evidence is reused instead of refit.
 - `glofas_discrepancy_transition_information_audit.R`: fixed-feature
   transition operators and pre-screen diagnostics for the GloFAS discrepancy
   model. It distinguishes the legacy static-origin adjustment from damped and

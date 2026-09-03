@@ -86,6 +86,148 @@ app_feature_contract_parse_reservoir_covariate_lags <- function(reservoir_input,
   app_feature_contract_parse_covariate_lags(reservoir_input$covariates, cfg)
 }
 
+app_feature_contract_parse_reservoir_auxiliary_lags <- function(reservoir_input, has_new_contract) {
+  if (!isTRUE(has_new_contract)) return(list())
+  if (!"auxiliary_lags" %in% names(reservoir_input)) return(list())
+  aux_spec <- reservoir_input$auxiliary_lags
+  if (is.null(aux_spec)) return(list())
+  if (!is.list(aux_spec) || is.data.frame(aux_spec)) {
+    stop("feature_contract.reservoir_input.auxiliary_lags must be a named list.", call. = FALSE)
+  }
+  if (!length(aux_spec)) return(list())
+  if (is.null(names(aux_spec))) {
+    stop("feature_contract.reservoir_input.auxiliary_lags must be a named list.", call. = FALSE)
+  }
+  vars <- names(aux_spec)
+  vars <- vars[nzchar(vars)]
+  if (!length(vars)) return(list())
+  bad_names <- vars[!grepl("^[A-Za-z][A-Za-z0-9_]*$", vars)]
+  if (length(bad_names)) {
+    stop(
+      sprintf(
+        "Unsupported reservoir auxiliary lag names: %s. Use simple alphanumeric names.",
+        paste(bad_names, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  out <- list()
+  for (v in vars) {
+    out[[v]] <- app_parse_lag_spec(
+      aux_spec[[v]],
+      default = integer(0),
+      allow_zero = FALSE,
+      label = sprintf("%s reservoir auxiliary lags", v)
+    )
+  }
+  out[vapply(out, length, integer(1L)) > 0L]
+}
+
+app_feature_contract_parse_bool <- function(x, default = FALSE) {
+  if (is.null(x) || !length(x)) return(isTRUE(default))
+  if (exists("app_as_bool", mode = "function", inherits = TRUE)) {
+    return(isTRUE(app_as_bool(x[[1L]])))
+  }
+  val <- tolower(trimws(as.character(x[[1L]])))
+  val %in% c("true", "t", "1", "yes", "y")
+}
+
+app_feature_contract_parse_character_values <- function(x, default = character(), label = "values") {
+  if (is.null(x) || !length(x)) return(as.character(default))
+  if (length(x) == 1L && is.character(x)) {
+    x <- unlist(strsplit(gsub("[[:space:]]+", "", x), "[,;|]", perl = TRUE), use.names = FALSE)
+  }
+  out <- as.character(unlist(x, use.names = FALSE))
+  out <- unique(out[nzchar(out)])
+  if (!length(out)) {
+    stop(sprintf("%s must contain at least one nonempty value.", label), call. = FALSE)
+  }
+  out
+}
+
+app_feature_contract_default_dlm_component_families <- function() {
+  c(
+    "dlm_level",
+    "dlm_seasonal_1",
+    "dlm_seasonal_2",
+    "dlm_seasonal_67",
+    "dlm_transfer",
+    "dlm_direct_covariate",
+    "dlm_mean"
+  )
+}
+
+app_feature_contract_parse_dlm_components <- function(
+  reservoir_input,
+  default_lags = integer(0),
+  has_new_contract = TRUE
+) {
+  if (!isTRUE(has_new_contract) || !"dlm_components" %in% names(reservoir_input)) {
+    return(list(enabled = FALSE))
+  }
+  spec <- reservoir_input$dlm_components %||% list()
+  enabled <- app_feature_contract_parse_bool(spec$enabled %||% TRUE, default = TRUE)
+  if (!isTRUE(enabled)) return(list(enabled = FALSE))
+
+  timing <- tolower(trimws(as.character(spec$timing %||% "filtered")[[1L]]))
+  if (!timing %in% c("one_step_forecast", "filtered", "smoothed")) {
+    stop("reservoir input DLM component timing must be one_step_forecast, filtered, or smoothed.", call. = FALSE)
+  }
+  allow_smoothed_predictive <- app_feature_contract_parse_bool(
+    spec$allow_smoothed_predictive %||% FALSE,
+    default = FALSE
+  )
+  if (identical(timing, "smoothed") && !isTRUE(allow_smoothed_predictive)) {
+    stop(
+      paste(
+        "Smoothed DLM components use future observations and are blocked from",
+        "predictive reservoir inputs unless allow_smoothed_predictive is TRUE."
+      ),
+      call. = FALSE
+    )
+  }
+
+  feature_families <- app_feature_contract_parse_character_values(
+    spec$feature_families %||% app_feature_contract_default_dlm_component_families(),
+    default = app_feature_contract_default_dlm_component_families(),
+    label = "reservoir input DLM feature_families"
+  )
+  allowed <- c(
+    app_feature_contract_default_dlm_component_families(),
+    "dlm_residual",
+    "dlm_filtered_residual",
+    "dlm_smoothed_residual"
+  )
+  unknown <- setdiff(feature_families, allowed)
+  if (length(unknown)) {
+    stop(sprintf("Unsupported reservoir input DLM feature families: %s.", paste(unknown, collapse = ", ")), call. = FALSE)
+  }
+  lags <- app_parse_lag_spec(
+    spec$lags %||% default_lags,
+    default = default_lags,
+    allow_zero = FALSE,
+    label = "reservoir input DLM component lags"
+  )
+  if (!length(lags)) {
+    stop("reservoir input DLM component lags cannot be empty.", call. = FALSE)
+  }
+  if (any(grepl("residual", feature_families)) && any(lags == 0L)) {
+    stop("DLM residual lag 0 is forbidden because it leaks the observed response.", call. = FALSE)
+  }
+
+  list(
+    enabled = TRUE,
+    timing = timing,
+    feature_families = feature_families,
+    lags = lags,
+    source = as.character(spec$source %||% "structural_normal_dlm")[[1L]],
+    covariate_mode = as.character(spec$covariate_mode %||% "transfer_plus_readout")[[1L]],
+    backend = as.character(spec$backend %||% "cpp")[[1L]],
+    components_path = as.character(spec$components_path %||% NA_character_)[[1L]],
+    allow_smoothed_predictive = isTRUE(allow_smoothed_predictive)
+  )
+}
+
 app_feature_contract <- function(cfg) {
   fc <- cfg$feature_contract %||% cfg$features %||% list()
   has_new_contract <- length(fc) > 0L
@@ -102,6 +244,15 @@ app_feature_contract <- function(cfg) {
   reservoir_covariate_lags <- app_feature_contract_parse_reservoir_covariate_lags(
     reservoir_input,
     cfg,
+    has_new_contract = has_new_contract
+  )
+  reservoir_auxiliary_lags <- app_feature_contract_parse_reservoir_auxiliary_lags(
+    reservoir_input,
+    has_new_contract = has_new_contract
+  )
+  reservoir_dlm_components <- app_feature_contract_parse_dlm_components(
+    reservoir_input,
+    default_lags = reservoir_output_lags,
     has_new_contract = has_new_contract
   )
 
@@ -143,6 +294,8 @@ app_feature_contract <- function(cfg) {
       internal_bias = isTRUE(reservoir_input$internal_bias %||% TRUE),
       output_lags = reservoir_output_lags,
       covariate_lags = reservoir_covariate_lags,
+      auxiliary_lags = reservoir_auxiliary_lags,
+      dlm_components = reservoir_dlm_components,
       standardize = isTRUE(reservoir_input$standardize %||% (cfg$reservoir$standardize_inputs %||% FALSE))
     ),
     readout = list(
@@ -174,6 +327,10 @@ app_feature_contract_reservoir_covariate_lags <- function(cfg) {
   app_feature_contract(cfg)$reservoir_input$covariate_lags
 }
 
+app_feature_contract_reservoir_auxiliary_lags <- function(cfg) {
+  app_feature_contract(cfg)$reservoir_input$auxiliary_lags
+}
+
 app_feature_contract_history_requirement <- function(cfg, block = NA_character_) {
   contract <- app_feature_contract(cfg)
   lag_groups <- list(
@@ -182,12 +339,19 @@ app_feature_contract_history_requirement <- function(cfg, block = NA_character_)
       contract$reservoir_input$covariate_lags,
       use.names = FALSE
     ),
+    reservoir_auxiliary = unlist(
+      contract$reservoir_input$auxiliary_lags,
+      use.names = FALSE
+    ),
     readout_reservoir_state = contract$readout$reservoir_state_lags,
     readout_output = if (isTRUE(contract$readout$include_input_block)) {
       contract$readout$input_block$output_lags
     } else integer(0),
     readout_covariates = if (isTRUE(contract$readout$include_input_block)) {
       unlist(contract$readout$input_block$covariates, use.names = FALSE)
+    } else integer(0),
+    reservoir_dlm_components = if (isTRUE((contract$reservoir_input$dlm_components %||% list())$enabled %||% FALSE)) {
+      contract$reservoir_input$dlm_components$lags
     } else integer(0)
   )
   maxima <- vapply(lag_groups, function(x) {
@@ -200,6 +364,8 @@ app_feature_contract_history_requirement <- function(cfg, block = NA_character_)
     block = as.character(block %||% NA_character_),
     reservoir_output_lag_max = maxima[["reservoir_output"]],
     reservoir_covariate_lag_max = maxima[["reservoir_covariates"]],
+    reservoir_auxiliary_lag_max = maxima[["reservoir_auxiliary"]],
+    reservoir_dlm_component_lag_max = maxima[["reservoir_dlm_components"]],
     readout_reservoir_state_lag_max = maxima[["readout_reservoir_state"]],
     readout_output_lag_max = maxima[["readout_output"]],
     readout_covariate_lag_max = maxima[["readout_covariates"]],
@@ -246,6 +412,18 @@ app_feature_contract_reservoir_covariate_lag_columns <- function(cfg) {
   lags_by_var <- app_feature_contract_reservoir_covariate_lags(cfg)
   if (!length(lags_by_var)) return(character(0))
   unlist(lapply(names(lags_by_var), function(v) sprintf("%s_lag_%d", v, lags_by_var[[v]])), use.names = FALSE)
+}
+
+app_feature_contract_reservoir_auxiliary_lag_columns <- function(cfg) {
+  lags_by_var <- app_feature_contract_reservoir_auxiliary_lags(cfg)
+  if (!length(lags_by_var)) return(character(0))
+  unlist(lapply(names(lags_by_var), function(v) sprintf("%s_lag_%d", v, lags_by_var[[v]])), use.names = FALSE)
+}
+
+app_feature_contract_reservoir_dlm_component_lag_columns <- function(cfg) {
+  dlm <- app_feature_contract(cfg)$reservoir_input$dlm_components %||% list(enabled = FALSE)
+  if (!isTRUE(dlm$enabled %||% FALSE)) return(character(0))
+  unlist(lapply(dlm$feature_families, function(v) sprintf("%s_lag_%d", v, dlm$lags)), use.names = FALSE)
 }
 
 app_y_lag_matrix <- function(panel, anchor_dates, lags, scale_params = NULL, standardize = TRUE) {

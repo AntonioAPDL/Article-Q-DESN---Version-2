@@ -390,6 +390,16 @@ app_make_latent_path_future_builder <- function(context) {
       context$cfg,
       if (isTRUE(two_block)) "discrepancy" else "reference"
     )
+    discrepancy_input_stream <- if (isTRUE(two_block)) {
+      as.character(
+        context$discrepancy_input_stream %||%
+          app_qdesn_block_input_stream(context$cfg, "discrepancy")
+      )[[1L]]
+    } else {
+      "reference"
+    }
+    alpha_uses_reference_input <- isTRUE(two_block) &&
+      identical(discrepancy_input_stream, "reference")
 
     beta_input_contract <- if (isTRUE(compiled$enabled)) {
       compiled$beta_input_contract %||% NULL
@@ -499,7 +509,7 @@ app_make_latent_path_future_builder <- function(context) {
       J_beta[[h]] <- Jh
     }
 
-    persistence_static <- FALSE
+    alpha_feature_static <- FALSE
     if (isTRUE(two_block)) {
       qg_path <- as.numeric(context$glofas_future_quantile_path)
       if (length(qg_path) != length(y_future) || any(!is.finite(qg_path))) {
@@ -519,8 +529,9 @@ app_make_latent_path_future_builder <- function(context) {
       if (any(!is.finite(discrepancy_baseline_future)) || any(!is.finite(d_feature_future))) {
         stop("Discrepancy future baselines and feature paths must be finite.", call. = FALSE)
       }
-      persistence_static <- identical(transition_strategy, "persistence_anchored_innovation")
-      alpha_cache_valid <- isTRUE(compiled$enabled) && isTRUE(persistence_static) &&
+      alpha_feature_static <- identical(transition_strategy, "persistence_anchored_innovation") &&
+        !isTRUE(alpha_uses_reference_input)
+      alpha_cache_valid <- isTRUE(compiled$enabled) && isTRUE(alpha_feature_static) &&
         !is.null(compiled$alpha_static)
       if (isTRUE(alpha_cache_valid)) {
         cont_alpha <- compiled$alpha_static$continuation
@@ -533,16 +544,27 @@ app_make_latent_path_future_builder <- function(context) {
         } else {
           NULL
         }
+        alpha_history <- if (isTRUE(alpha_uses_reference_input)) {
+          context$y_history_full
+        } else {
+          context$d_history_full
+        }
+        alpha_future <- if (isTRUE(alpha_uses_reference_input)) y_future else d_feature_future
+        alpha_panel <- if (isTRUE(alpha_uses_reference_input)) {
+          context$base_panel_full
+        } else {
+          context$base_panel_disc_full
+        }
+        alpha_derivative_sign <- if (isTRUE(alpha_uses_reference_input)) 1 else -1
         cont_alpha <- app_qdesn_continue_latent_path(
           qfit = qfit_alpha,
-          y_history = context$d_history_full,
-          y_future = d_feature_future,
+          y_history = alpha_history,
+          y_future = alpha_future,
           future_dates = context$latent_data$future_key$target_date,
           covariate_timeline = context$covariate_timeline,
-          # Reference mode intentionally preserves the former compute-then-zero
-          # path so exact A/B canaries compare the optimized shortcut to an
-          # independent numerical oracle.
-          return_jacobian = !isTRUE(persistence_static) || !isTRUE(compiled$enabled),
+          # A discrepancy block driven by the latent reference path is dynamic,
+          # even under persistence-anchored discrepancy innovations.
+          return_jacobian = !isTRUE(alpha_feature_static) || !isTRUE(compiled$enabled),
           active_jacobian = isTRUE(compiled$active_jacobian),
           compiled_inputs = alpha_input_contract,
           compile_inputs = isTRUE(compiled$enabled),
@@ -555,9 +577,9 @@ app_make_latent_path_future_builder <- function(context) {
           cont_alpha$compiled_input_contract <- NULL
         }
         combined_alpha_panel <- app_latent_path_combined_panel(
-          base_panel = context$base_panel_disc_full,
+          base_panel = alpha_panel,
           latent_data = context$latent_data,
-          y_future = d_feature_future
+          y_future = alpha_future
         )
         assembled_alpha <- app_build_readout_feature_matrix(
           reservoir_X = cont_alpha$X_future_core,
@@ -572,7 +594,7 @@ app_make_latent_path_future_builder <- function(context) {
           fit_scale = FALSE
         )
         feature_info_alpha <- assembled_alpha$feature_info
-        if (isTRUE(persistence_static)) {
+        if (isTRUE(alpha_feature_static)) {
           J_alpha <- lapply(seq_len(nrow(context$latent_data$future_key)), function(h) {
             matrix(0, nrow = ncol(assembled_alpha$X), ncol = length(y_future))
           })
@@ -594,12 +616,12 @@ app_make_latent_path_future_builder <- function(context) {
           res_rows_alpha <- which(feature_info_alpha$block == "reservoir_state")
           J_alpha <- vector("list", length(J_direct_alpha))
           for (h in seq_along(J_direct_alpha)) {
-            Jh <- -J_direct_alpha[[h]]
+            Jh <- alpha_derivative_sign * J_direct_alpha[[h]]
             if (length(res_rows_alpha)) {
               if (length(res_rows_alpha) != nrow(cont_alpha$J_future_core[[h]])) {
                 stop("Discrepancy reservoir sensitivity dimension does not match readout feature rows.", call. = FALSE)
               }
-              Jh[res_rows_alpha, ] <- -cont_alpha$J_future_core[[h]]
+              Jh[res_rows_alpha, ] <- alpha_derivative_sign * cont_alpha$J_future_core[[h]]
             }
             J_alpha[[h]] <- Jh
           }
@@ -632,7 +654,7 @@ app_make_latent_path_future_builder <- function(context) {
       J_g_key[[h]] <- rbind(J_beta[[h]], J_alpha[[h]])
     }
     paired_future_jacobian <- isTRUE(compiled$enabled) &&
-      (!isTRUE(two_block) || isTRUE(persistence_static))
+      (!isTRUE(two_block) || isTRUE(alpha_feature_static))
 
     if (isTRUE(compiled$enabled) && !is.null(compiled$future_rows)) {
       ens <- compiled$future_rows$ensemble
@@ -690,10 +712,8 @@ app_make_latent_path_future_builder <- function(context) {
           beta_input_contract_hash = compiled$beta_input_contract$contract_hash %||% NA_character_,
           alpha_input_contract_hash = compiled$alpha_input_contract$contract_hash %||% NA_character_,
           paired_future_jacobian = isTRUE(paired_future_jacobian),
-          persistence_static = identical(
-            context$discrepancy_transition_strategy,
-            "persistence_anchored_innovation"
-          )
+          persistence_static = isTRUE(alpha_feature_static),
+          discrepancy_input_stream = discrepancy_input_stream
         ),
         prefix = "latent_compiled_future_"
       )
@@ -722,6 +742,7 @@ app_make_latent_path_future_builder <- function(context) {
       discrepancy_feature_path = d_feature_future,
       discrepancy_baseline_future = discrepancy_baseline_future,
       discrepancy_transition_strategy = context$discrepancy_transition_strategy %||% "recursive_level",
+      discrepancy_input_stream = discrepancy_input_stream,
       two_block_design = two_block,
       future_discrepancy_convention = context$future_discrepancy_convention,
       compiled_future_contract = list(
@@ -1012,6 +1033,11 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   if (!is.finite(seed)) seed <- as.integer(cfg$reservoir$seed %||% 20260513L)
   cfg_beta <- app_qdesn_block_config(cfg, "reference")
   cfg_alpha <- if (isTRUE(two_block)) app_qdesn_block_config(cfg, "discrepancy") else cfg_beta
+  discrepancy_input_stream <- if (isTRUE(two_block)) {
+    app_qdesn_block_input_stream(cfg, "discrepancy")
+  } else {
+    "reference"
+  }
   drop <- app_qdesn_common_washout(cfg, drop = drop)
   row_alignment <- app_feature_contract_common_history_alignment(
     configs = if (isTRUE(two_block)) {
@@ -1065,15 +1091,20 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
 
   if (isTRUE(two_block)) {
     base_panel_disc_full <- app_latent_path_discrepancy_panel(base_panel_full)
+    alpha_input_panel_full <- if (identical(discrepancy_input_stream, "reference")) {
+      base_panel_full
+    } else {
+      base_panel_disc_full
+    }
     alpha_block <- time_design_step("alpha_feature_block", {
       app_latent_path_feature_block(
-      panel = base_panel_disc_full,
-      cfg = cfg_alpha,
-      model_row = model_row,
-      drop = drop,
-      seed = alpha_seed,
-      feature_strategy = latent_feature_strategy,
-      horizon_scale = horizon_scale
+        panel = alpha_input_panel_full,
+        cfg = cfg_alpha,
+        model_row = model_row,
+        drop = drop,
+        seed = alpha_seed,
+        feature_strategy = latent_feature_strategy,
+        horizon_scale = horizon_scale
       )
     })
     feature_alpha <- alpha_block$feature
@@ -1086,6 +1117,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     }
   } else {
     base_panel_disc_full <- app_latent_path_discrepancy_panel(base_panel_full)
+    alpha_input_panel_full <- base_panel_full
     feature_alpha <- feature_beta
     qfit_alpha <- qfit_beta
   }
@@ -1162,6 +1194,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     horizon_scale = horizon_scale,
     feature_strategy = latent_feature_strategy,
     discrepancy_transition_strategy = discrepancy_transition_strategy,
+    discrepancy_input_stream = discrepancy_input_stream,
     runtime_optimization = cfg$runtime_optimization %||% list(),
     discrepancy_baseline_fixed = discrepancy_baseline_fixed,
     covariate_timeline = app_panel_covariate_timeline(
@@ -1214,6 +1247,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     feature_meta_alpha = feature_alpha$meta,
     block_config_beta = cfg_beta,
     block_config_alpha = cfg_alpha,
+    discrepancy_input_stream = discrepancy_input_stream,
     block_config_hash_beta = app_qdesn_block_config_hash(cfg, "reference"),
     block_config_hash_alpha = app_qdesn_block_config_hash(cfg, if (isTRUE(two_block)) "discrepancy" else "reference"),
     readout_scale_info = feature_beta$readout_scale_info,
@@ -1246,7 +1280,9 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     p0 = p0,
     feature_strategy = context$feature_strategy,
     horizon_scale = horizon_scale,
-    design_version = if (isTRUE(two_block) && identical(
+    design_version = if (isTRUE(two_block) && identical(discrepancy_input_stream, "reference")) {
+      "latent_path_two_block_shared_reference_input_v0.1"
+    } else if (isTRUE(two_block) && identical(
       discrepancy_transition_strategy,
       "persistence_anchored_innovation"
     )) {
@@ -1438,12 +1474,13 @@ app_hash_latent_path_design <- function(x, probe = NULL) {
 	      beta_index = x$beta_index,
 	      alpha_index = x$alpha_index,
 	      intercept_index = x$intercept_index,
-	      discrepancy_baseline_fixed = x$discrepancy_baseline_fixed %||% rep(0, nrow(x$X_alpha %||% x$X_base)),
-	      discrepancy_baseline_future = probe$discrepancy_baseline_future %||% rep(0, nrow(x$future_key)),
-	      discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
-	      two_block_design = isTRUE(x$two_block_design %||% FALSE),
-	      block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
-	      block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
+      discrepancy_baseline_fixed = x$discrepancy_baseline_fixed %||% rep(0, nrow(x$X_alpha %||% x$X_base)),
+      discrepancy_baseline_future = probe$discrepancy_baseline_future %||% rep(0, nrow(x$future_key)),
+      discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
+      discrepancy_input_stream = x$discrepancy_input_stream %||% "discrepancy",
+      two_block_design = isTRUE(x$two_block_design %||% FALSE),
+      block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
+      block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
 	      future_discrepancy_convention = x$future_discrepancy_convention %||% NA_character_,
 	      design_version = x$design_version
 	    ),
@@ -1536,6 +1573,7 @@ app_latent_path_design_summary <- function(x, probe = NULL) {
     block_config_hash_beta = x$block_config_hash_beta %||% NA_character_,
     block_config_hash_alpha = x$block_config_hash_alpha %||% NA_character_,
     discrepancy_transition_strategy = x$discrepancy_transition_strategy %||% "recursive_level",
+    discrepancy_input_stream = x$discrepancy_input_stream %||% "discrepancy",
     discrepancy_baseline_fixed_min = min(as.numeric(x$discrepancy_baseline_fixed %||% 0)),
     discrepancy_baseline_fixed_max = max(as.numeric(x$discrepancy_baseline_fixed %||% 0)),
     discrepancy_baseline_future = paste(

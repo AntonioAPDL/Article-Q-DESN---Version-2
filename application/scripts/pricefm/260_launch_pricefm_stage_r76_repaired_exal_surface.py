@@ -102,17 +102,28 @@ def available_memory_gib() -> float:
     return values["MemAvailable"] / 1024**2
 
 
-def cpu_snapshot() -> dict[int, float]:
-    usage = {cpu: 0.0 for cpu in range(os.cpu_count() or 0)}
-    result = subprocess.run(
-        ["ps", "-e", "-o", "psr=,pcpu="], text=True, capture_output=True, check=False
-    )
-    for line in result.stdout.splitlines():
-        try:
-            cpu, percent = line.split()
-            usage[int(cpu)] += float(percent)
-        except (ValueError, KeyError):
+def _proc_cpu_times() -> dict[int, tuple[int, int]]:
+    values = {}
+    for line in Path("/proc/stat").read_text().splitlines():
+        fields = line.split()
+        if not fields or not fields[0].startswith("cpu") or not fields[0][3:].isdigit():
             continue
+        ticks = [int(value) for value in fields[1:]]
+        total = sum(ticks)
+        idle = ticks[3] + (ticks[4] if len(ticks) > 4 else 0)
+        values[int(fields[0][3:])] = (total, idle)
+    return values
+
+
+def cpu_snapshot(interval_seconds: float = 0.75) -> dict[int, float]:
+    before = _proc_cpu_times()
+    time.sleep(interval_seconds)
+    after = _proc_cpu_times()
+    usage = {}
+    for cpu in sorted(set(before) & set(after)):
+        total = after[cpu][0] - before[cpu][0]
+        idle = after[cpu][1] - before[cpu][1]
+        usage[cpu] = 100.0 * (1.0 - idle / total) if total > 0 else 100.0
     return usage
 
 

@@ -85,7 +85,7 @@ run_task <- function() {
                "joint_model_authorized", "mcmc_authorized")
   task_stage <- as.character(task$stage)
   diagnostic_mode <- task_stage %in% c("R80D", "R82D") && isTRUE(task$diagnostic_mode)
-  scientific_repair_mode <- identical(task_stage, "R83") && !isTRUE(task$diagnostic_mode)
+  scientific_repair_mode <- task_stage %in% c("R83", "R87") && !isTRUE(task$diagnostic_mode)
   if (!(identical(task_stage, "R76") || diagnostic_mode || scientific_repair_mode) ||
       !identical(as.character(task$likelihood_family), "exal") ||
       !identical(as.character(task$selection_split), "val") ||
@@ -98,6 +98,10 @@ run_task <- function() {
       !identical(sha256(task$al_parameter_path), task$al_parameter_sha256) ||
       !identical(sha256(task$al_source_terminal), task$al_source_terminal_sha256)) {
     stop("R76 immutable source hash mismatch.", call. = FALSE)
+  }
+  if (!is.null(task$runner_script) &&
+      !identical(sha256(task$runner_script), task$runner_script_sha256)) {
+    stop("R76 runner hash mismatch.", call. = FALSE)
   }
   runtime <- jsonlite::read_json(task$runtime_manifest, simplifyVector = TRUE)
   runtime_contract <- if (identical(task_stage, "R82D") || scientific_repair_mode) {
@@ -275,7 +279,7 @@ run_task <- function() {
     summary = fit$diagnostics$rhs$summary %||% fit$beta_prior$summary %||% list()
   ), file.path(output, "rhs_diagnostics.json"))
   repair_initialization_file <- NULL
-  if (task_stage %in% c("R82D", "R83")) {
+  if (task_stage %in% c("R82D", "R83", "R87")) {
     repair_initialization_file <- "structured_initialization.json"
     write_json(list(
       mode = fit$misc$sigmagam_initialization %||% NULL,

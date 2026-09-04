@@ -14,7 +14,7 @@ def test_runner_persists_field_level_failure_diagnostics():
     assert 'stage = "terminal_contract"' in text
     assert "failed_fields = contract$failed_fields" in text
     assert 'task_stage %in% c("R80D", "R82D")' in text
-    assert 'scientific_repair_mode <- identical(task_stage, "R83")' in text
+    assert 'scientific_repair_mode <- task_stage %in% c("R83", "R87")' in text
     assert "exdqlm.pricefm_failure_callback" in text
 
 

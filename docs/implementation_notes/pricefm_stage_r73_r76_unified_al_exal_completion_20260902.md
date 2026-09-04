@@ -231,6 +231,23 @@ After all 294 tasks finish, the next read-only stage should:
 
 ## Commands and evidence locations
 
+## Post-run R77/R78 decision (2026-09-04)
+
+R76 terminated with 280 completed and 14 failed atoms. The failures affect 11
+cases and occur only at tau 0.25 (nine) and tau 0.75 (five). One terminal names
+a non-finite structured gamma grid; the other thirteen were collapsed into the
+runner's aggregate finite-output contract. Stage R77 therefore freezes a
+read-only failure atlas and keeps every retry blocked. Stage R78 adds compact,
+field-level failure diagnostics for future executions without writing fitted
+models or opening test data. A bounded retry is not authorized until isolated
+numerical tests identify and validate a general repair that preserves successful
+R76 behavior.
+
+The efficient continuation is: R77 evidence freeze, R78 observability, isolated
+R79 numerical diagnosis, and at most a 14-atom R80 retry. The complete 294-task
+surface must not be relaunched. Validation-only AL/exAL selection and any test,
+registry, or article action remain downstream gates.
+
 Core validation commands:
 
 ```bash

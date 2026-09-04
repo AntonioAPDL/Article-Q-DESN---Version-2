@@ -1,6 +1,11 @@
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-r75_assert_repair_package <- function(library, expected_version = "1.1.1.9002") {
+r75_assert_repair_package <- function(
+    library,
+    expected_version = getOption("pricefm.expected_exdqlm_version", "1.1.1.9002"),
+    expected_repair = getOption(
+      "pricefm.expected_exdqlm_repair", "scale-aware-SPD-plus-large-n-GIG"
+    )) {
   library <- normalizePath(library, mustWork = TRUE)
   if ("exdqlm" %in% loadedNamespaces()) {
     loaded_path <- normalizePath(find.package("exdqlm"), mustWork = TRUE)
@@ -15,8 +20,7 @@ r75_assert_repair_package <- function(library, expected_version = "1.1.1.9002") 
   if (!identical(as.character(description$Version), expected_version) ||
       !identical(as.character(description$Repository), "PriceFM-local") ||
       !identical(as.character(description[["Config/PriceFM/base-tarball-sha256"]]), expected_base) ||
-      !identical(as.character(description[["Config/PriceFM/repair"]]),
-                 "scale-aware-SPD-plus-large-n-GIG")) {
+      !identical(as.character(description[["Config/PriceFM/repair"]]), expected_repair)) {
     stop("R75 package provenance metadata is invalid.", call. = FALSE)
   }
   exports <- getNamespaceExports(namespace)

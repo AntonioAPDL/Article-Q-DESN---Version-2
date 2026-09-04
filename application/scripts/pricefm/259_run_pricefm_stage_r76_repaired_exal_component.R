@@ -36,6 +36,33 @@ sha256 <- function(path) {
 read_matrix <- function(path) as.matrix(utils::read.csv(path, header = FALSE, check.names = FALSE))
 read_vector <- function(path) as.numeric(read_matrix(path)[, 1L])
 
+finite_check <- function(name, value) {
+  flat <- suppressWarnings(as.numeric(value))
+  list(
+    field = name, length = length(flat), finite = all(is.finite(flat)),
+    nonfinite_count = sum(!is.finite(flat)),
+    min_finite = if (any(is.finite(flat))) min(flat[is.finite(flat)]) else NA_real_,
+    max_finite = if (any(is.finite(flat))) max(flat[is.finite(flat)]) else NA_real_
+  )
+}
+
+validate_fit_contract <- function(beta, covariance, sigma, gamma, prediction, trace,
+                                  required_trace, updates, minimum_updates) {
+  values <- list(beta = beta, covariance = covariance, sigma = sigma, gamma = gamma,
+                 prediction = prediction)
+  for (name in required_trace) values[[paste0("trace.", name)]] <- trace[[name]]
+  checks <- lapply(names(values), function(name) finite_check(name, values[[name]]))
+  checks[[length(checks) + 1L]] <- list(
+    field = "structured_updates", length = 1L,
+    finite = is.finite(updates) && updates >= minimum_updates,
+    nonfinite_count = as.integer(!is.finite(updates)), min_finite = updates,
+    max_finite = updates, required_minimum = minimum_updates
+  )
+  failed <- vapply(checks, function(item) !isTRUE(item$finite), logical(1L))
+  list(passed = !any(failed), checks = checks,
+       failed_fields = vapply(checks[failed], `[[`, character(1L), "field"))
+}
+
 task_path <- get_arg("--task-config")
 code_root <- get_arg("--code-root")
 preflight_only <- as_flag(get_arg("--preflight-only", "false"))
@@ -56,7 +83,10 @@ write_json(list(
 run_task <- function() {
   blocked <- c("test_access_authorized", "registry_mutation_authorized", "article_mutation_authorized",
                "joint_model_authorized", "mcmc_authorized")
-  if (!identical(as.character(task$stage), "R76") ||
+  task_stage <- as.character(task$stage)
+  diagnostic_mode <- task_stage %in% c("R80D", "R82D") && isTRUE(task$diagnostic_mode)
+  scientific_repair_mode <- identical(task_stage, "R83") && !isTRUE(task$diagnostic_mode)
+  if (!(identical(task_stage, "R76") || diagnostic_mode || scientific_repair_mode) ||
       !identical(as.character(task$likelihood_family), "exal") ||
       !identical(as.character(task$selection_split), "val") ||
       any(vapply(blocked, function(name) isTRUE(task[[name]]), logical(1L)))) {
@@ -70,10 +100,43 @@ run_task <- function() {
     stop("R76 immutable source hash mismatch.", call. = FALSE)
   }
   runtime <- jsonlite::read_json(task$runtime_manifest, simplifyVector = TRUE)
-  if (!identical(runtime$status, "installed_pricefm_local_large_n_gig_repair") ||
+  runtime_contract <- if (identical(task_stage, "R82D") || scientific_repair_mode) {
+    list(
+      status = "installed_structured_initialization_repair_runtime",
+      version = "1.1.1.9004",
+      repair = paste0(
+        "scale-aware-SPD-plus-large-n-GIG-plus-failure-diagnostics-",
+        "plus-structured-plugin-init"
+      )
+    )
+  } else if (identical(task_stage, "R80D")) {
+    list(
+      status = "installed_diagnostic_runtime",
+      version = "1.1.1.9003",
+      repair = "scale-aware-SPD-plus-large-n-GIG-plus-failure-diagnostics"
+    )
+  } else {
+    list(
+      status = "installed_pricefm_local_large_n_gig_repair",
+      version = "1.1.1.9002",
+      repair = "scale-aware-SPD-plus-large-n-GIG"
+    )
+  }
+  allowed_runtime <- runtime_contract$status
+  if (!identical(runtime$status, allowed_runtime) ||
       !identical(runtime$base_tarball_sha256,
                  "3f3ed643ded7602fd62357d7f62024ca9071e0096214456650ed2de79722443e")) {
     stop("R76 runtime manifest is invalid.", call. = FALSE)
+  }
+  if (diagnostic_mode || scientific_repair_mode) {
+    options(
+      pricefm.expected_exdqlm_version = runtime_contract$version,
+      pricefm.expected_exdqlm_repair = runtime_contract$repair,
+      exdqlm.pricefm_failure_callback = function(event) {
+        write_json(c(list(task_id = task$task_id, stage = "structured_update_exception"), event,
+                     list(test_loaded = FALSE)), file.path(output, "failure_diagnostics.json"))
+      }
+    )
   }
   source(file.path(code_root, "application/scripts/pricefm/pricefm_stage_r67_cran111_adapter.R"), local = TRUE)
   source(file.path(code_root, "application/scripts/pricefm/pricefm_stage_r72_repair_adapter.R"), local = TRUE)
@@ -129,9 +192,19 @@ run_task <- function() {
     postwarmup_damping_iters = as.integer(task$postwarmup_damping_iters),
     min_postwarmup_updates = as.integer(task$min_postwarmup_updates)
   )
-  fit <- r75_fit_quantile(
-    task$r_library, X_train, y_train, task$tau, rhs, qcfg, profile,
-    init = list(beta = beta_init, sigma = sigma_init, gamma = 0), seed = task$seed
+  fit <- tryCatch(
+    r75_fit_quantile(
+      task$r_library, X_train, y_train, task$tau, rhs, qcfg, profile,
+      init = list(beta = beta_init, sigma = sigma_init, gamma = 0), seed = task$seed
+    ),
+    error = function(error) {
+      write_json(list(
+        stage = "fit_exception", error_class = class(error),
+        error_message = conditionMessage(error), task_id = task$task_id,
+        tau = task$tau, test_loaded = FALSE
+      ), file.path(output, "fit_exception.json"))
+      stop(error)
+    }
   )
   beta <- as.numeric(fit$qbeta$m)
   covariance <- as.matrix(fit$qbeta$V)
@@ -146,9 +219,21 @@ run_task <- function() {
     c("sigma", "gamma", "delta_state", "delta_sigma", "delta_gamma", "delta_s"),
     names(trace)
   )
-  required <- c(beta, covariance, sigma, gamma, prediction, unlist(trace[required_trace]))
-  if (any(!is.finite(required)) || updates < as.integer(task$min_postwarmup_updates)) {
-    stop("R76 fit failed finite-output or structured-update contract.", call. = FALSE)
+  contract <- validate_fit_contract(
+    beta, covariance, sigma, gamma, prediction, trace, required_trace, updates,
+    as.integer(task$min_postwarmup_updates)
+  )
+  if (!contract$passed) {
+    write_json(list(
+      stage = "terminal_contract", task_id = task$task_id, tau = task$tau,
+      failed_fields = contract$failed_fields, checks = contract$checks,
+      iter = as.integer(fit$iter), converged = isTRUE(fit$converged),
+      structured_updates = updates, test_loaded = FALSE
+    ), file.path(output, "failure_diagnostics.json"))
+    stop(
+      paste0("R76 fit failed fields: ", paste(contract$failed_fields, collapse = ", "), "."),
+      call. = FALSE
+    )
   }
   method_id <- as.character(task$method_id)
   predictions <- data.frame(
@@ -189,6 +274,17 @@ run_task <- function() {
     preflight = fit$diagnostics$rhs$preflight %||% list(),
     summary = fit$diagnostics$rhs$summary %||% fit$beta_prior$summary %||% list()
   ), file.path(output, "rhs_diagnostics.json"))
+  repair_initialization_file <- NULL
+  if (task_stage %in% c("R82D", "R83")) {
+    repair_initialization_file <- "structured_initialization.json"
+    write_json(list(
+      mode = fit$misc$sigmagam_initialization %||% NULL,
+      initial_xi = fit$misc$sigmagam_initial_xi %||% list(),
+      package_version = package$version,
+      package_repair = package$repair,
+      test_loaded = FALSE
+    ), file.path(output, repair_initialization_file))
+  }
   write_json(list(
     source_al_beta = task$al_beta_path, source_al_beta_sha256 = task$al_beta_sha256,
     source_al_parameter = task$al_parameter_path,
@@ -201,6 +297,7 @@ run_task <- function() {
     "beta_summary.csv", "vb_trace.csv", "spd_factorization_trace.csv",
     "structured_grid.csv", "rhs_diagnostics.json", "warm_start_manifest.json"
   )
+  if (!is.null(repair_initialization_file)) files <- c(files, repair_initialization_file)
   hashes <- setNames(lapply(file.path(output, files), sha256), files)
   write_json(list(
     status = "completed", task_id = task$task_id, case_id = task$case_id,

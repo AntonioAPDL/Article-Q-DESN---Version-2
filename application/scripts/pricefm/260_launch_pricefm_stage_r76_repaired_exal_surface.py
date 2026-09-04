@@ -212,7 +212,10 @@ def run_one(row: dict[str, Any], cpu: int, code_root: Path) -> dict[str, Any]:
     ]
     started = time.time()
     with log.open("a") as handle:
-        handle.write(f"START stage=R76 task={row['task_id']} cpu={cpu} time={started}\n")
+        handle.write(
+            f"START stage={row.get('stage', 'R76')} task={row['task_id']} "
+            f"cpu={cpu} time={started}\n"
+        )
         handle.write("COMMAND " + " ".join(command) + "\n")
         handle.flush()
         result = subprocess.run(command, cwd=code_root, env=env, stdout=handle, stderr=subprocess.STDOUT)

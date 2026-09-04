@@ -126,6 +126,16 @@ validation predictions. Test metrics are admissible only after coefficient
 dimensions, feature order, validation rows, scalers, and validation predictions
 replay within a pre-registered numerical tolerance. It compares test AQL with
 both the authoritative Q-DESN and cached fold-aligned PriceFM references.
+The historical authority is universally available only as case-level
+seven-quantile AQL for Q-DESN and PriceFM. Some generations retain subgroup
+metrics, but others point to aggregate registries or median-run geometry.
+Accordingly, dual superiority is tested at case level. Candidate quantile and
+horizon metrics are complete-surface diagnostics, not comparisons against
+invented historical subgroup values.
+The scoring worker removes regenerated `X_val`, `y_val`, `X_test`, and `y_test`
+matrices after scoring, but retains their pre-cleanup hashes, the test row
+ledger, predictions, validation replay, adapter manifests, and terminal hash
+ledger. This bounds persistent storage while preserving deterministic replay.
 
 ### R91: promotion and integration handoff
 
@@ -133,7 +143,7 @@ A region/fold may enter the promotion queue only when its frozen candidate:
 
 - has a complete finite seven-quantile test surface;
 - beats both authoritative Q-DESN and cached PriceFM on test AQL;
-- passes pre-registered quantile and horizon harm guards;
+- has complete finite metrics for all seven quantiles and all four horizon blocks;
 - passes all replay, provenance, and hash gates.
 
 R91 writes read-only decision tables, figure data, prose recommendations, and a
@@ -141,6 +151,16 @@ frozen integration handoff. It does not edit the registry or article and does
 not push `main`; the integration coordinator owns those actions. If no case
 passes, the valid outcome is a documented negative result with no article
 mutation.
+
+### Gated finalizer
+
+The R87-to-R91 finalizer polls for the immutable R87 launch summary and stops
+on any R87 task failure. After a clean 280/280 closeout it executes R88, R89,
+and R90 preparation in order. It waits until 20 independently sampled idle
+logical CPUs pass resource gates, launches one scoring-only case per CPU, and
+then runs R91. Test access requires its explicit command-line authorization;
+all fitting and mutation flags remain false. The finalizer cannot publish or
+modify an article, registry, joint model, or MCMC result.
 
 ## Operational stops
 

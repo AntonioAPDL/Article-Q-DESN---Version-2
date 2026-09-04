@@ -28,6 +28,10 @@ RUNTIME = {
         "1.1.1.9004",
         "scale-aware-SPD-plus-large-n-GIG-plus-failure-diagnostics-plus-structured-plugin-init",
     ),
+    "R87": (
+        "1.1.1.9004",
+        "scale-aware-SPD-plus-large-n-GIG-plus-failure-diagnostics-plus-structured-plugin-init",
+    ),
 }
 
 
@@ -120,7 +124,7 @@ def audit_output(output: Path, task_id: str, source_stage: str) -> dict[str, Any
         "predictions_scaled.csv", "method_summary.csv", "parameter_summary.csv",
         "beta_summary.csv", "vb_trace.csv", "warm_start_manifest.json",
     ]
-    if source_stage == "R83":
+    if source_stage in {"R83", "R87"}:
         required.append("structured_initialization.json")
     hashes = terminal.get("artifact_sha256") or {}
     for name in required:

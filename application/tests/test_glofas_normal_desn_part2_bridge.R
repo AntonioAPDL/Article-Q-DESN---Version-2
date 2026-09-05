@@ -1,3 +1,18 @@
+if (!exists("app_glofas_normal_part2_candidate_template", mode = "function")) {
+  source("application/R/00_packages.R")
+  app_set_repo_root(getwd())
+  source(app_path("application/R/input_contract.R"))
+  source(app_path("application/R/model_contract.R"))
+  source(app_path("application/R/feature_contract.R"))
+  source(app_path("application/R/covariate_design.R"))
+  source(app_path("application/R/build_application_panel.R"))
+  source(app_path("application/R/latent_path_design.R"))
+  source("application/R/discrepancy_design.R")
+  source("application/R/latent_path_vb_al.R")
+  source("application/R/glofas_normal_desn_part1_screening.R")
+  source("application/R/glofas_normal_desn_part2_bridge.R")
+}
+
 normal_part2_cfg <- list(
   data = list(transform = list(response = "identity", forecast = "identity")),
   covariates = list(enabled = TRUE, variables = c("ppt", "soil")),
@@ -207,8 +222,21 @@ stopifnot(is.finite(rhs$summary$discrepancy_valid_mean_crps[[1L]]))
 stopifnot(nrow(rhs$trace) == 10L)
 stopifnot(identical(sort(unique(rhs$trace$component)), c("discrepancy", "reference")))
 stopifnot(identical(sort(unique(rhs$activity$component)), c("discrepancy", "reference")))
+stopifnot(identical(sort(unique(rhs$coefficients$component)), c("discrepancy", "reference")))
 stopifnot(rhs$summary$reference_iterations[[1L]] == 5L)
 stopifnot(rhs$summary$discrepancy_iterations[[1L]] == 5L)
+
+collect_root <- tempfile("part2_rhs_collect_")
+dir.create(file.path(collect_root, "scores"), recursive = TRUE)
+dir.create(file.path(collect_root, "tables"), recursive = TRUE)
+app_write_csv(rhs$summary, file.path(collect_root, "scores", "toy_rhs_summary.csv"))
+app_write_csv(rhs$detail, file.path(collect_root, "scores", "toy_rhs_validation_detail.csv"))
+rhs_scores <- app_glofas_normal_part2_collect_rhs_scores(collect_root)
+stopifnot(file.exists(file.path(collect_root, "tables", "part2_rhs_scores_latest.csv")))
+stopifnot(file.exists(file.path(collect_root, "tables", "part2_rhs_validation_detail_latest.csv")))
+stopifnot(nrow(rhs_scores) == 1L)
+stopifnot(identical(rhs_scores$status[[1L]], "completed"))
+stopifnot(rhs_scores$rank_corrected_valid_crps[[1L]] == 1L)
 
 manifest <- app_glofas_normal_part2_ridge_candidate_manifest(candidate_prefix = "toy_part2ridge")
 stopifnot(nrow(manifest) == 2250L)

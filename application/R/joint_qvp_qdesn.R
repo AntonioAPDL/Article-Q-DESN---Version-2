@@ -12365,6 +12365,23 @@ app_joint_qvp_normalize_init <- function(init, K, p) {
   out
 }
 
+app_joint_qvp_progress_append <- function(path, row) {
+  if (is.null(path) || !nzchar(as.character(path[[1L]]))) return(invisible(FALSE))
+  path <- as.character(path[[1L]])
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  row <- as.data.frame(row, stringsAsFactors = FALSE)
+  utils::write.table(
+    row,
+    file = path,
+    append = file.exists(path),
+    sep = ",",
+    row.names = FALSE,
+    col.names = !file.exists(path),
+    qmethod = "double"
+  )
+  invisible(TRUE)
+}
+
 app_joint_qvp_alpha_prior_spec <- function(y, tau, alpha_prior_mean = NULL, alpha_prior_sd = Inf) {
   y <- as.numeric(y)
   tau <- app_joint_qvp_validate_tau_grid(tau)
@@ -14556,6 +14573,7 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   tau,
   max_iter = 100L,
   tol = 1.0e-5,
+  min_iter = 1L,
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
@@ -14569,7 +14587,11 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   alpha_prior_sd = Inf,
   alpha_min_spacing = 0,
   max_dense_dim = 300L,
-  rhs_vb_inner = 5L
+  rhs_vb_inner = 5L,
+  init = NULL,
+  progress_path = NULL,
+  progress_every = 0L,
+  progress_label = NULL
 ) {
   y <- as.numeric(y)
   Z <- app_joint_qvp_check_design(Z)
@@ -14579,13 +14601,19 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   p <- ncol(Z)
   if (nrow(Z) != Tn) stop("length(y) must match nrow(Z).", call. = FALSE)
   max_iter <- as.integer(max_iter)
+  min_iter <- as.integer(min_iter)
   if (max_iter <= 0L || !is.finite(tol) || tol <= 0) stop("Invalid VB controls.", call. = FALSE)
+  if (!is.finite(min_iter) || min_iter < 1L) stop("min_iter must be positive.", call. = FALSE)
+  min_iter <- min(min_iter, max_iter)
   if (!is.finite(kappa) || kappa <= 0) stop("kappa must be positive.", call. = FALSE)
   rhs_vb_inner <- as.integer(rhs_vb_inner)
   if (rhs_vb_inner <= 0L) stop("rhs_vb_inner must be positive.", call. = FALSE)
+  progress_every <- as.integer(progress_every %||% 0L)
+  if (!is.finite(progress_every) || progress_every < 0L) progress_every <- 0L
   if (K * p > max_dense_dim) {
     stop("Tiny AL-VB prototype stores dense q(beta) covariance; reduce dimensions or raise max_dense_dim deliberately.", call. = FALSE)
   }
+  init <- app_joint_qvp_normalize_init(init, K, p)
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
   rhs_state <- app_joint_qvp_initialize_rhs_state(
@@ -14595,13 +14623,29 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   )
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
-  beta_mean <- rep(0, K * p)
+  beta_mean <- init$beta %||% rep(0, K * p)
   beta_cov <- solve(as.matrix(prior$P_beta + Matrix::Diagonal(K * p) * 1.0e-8))
-  alpha <- sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
+  alpha <- init$alpha %||% sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
   sigma_shape <- rep(a_sigma + 1.5 * kappa * Tn, K)
   sigma_rate <- rep(b_sigma + max(stats::var(y), 1.0e-3), K)
+  if (!is.null(init$sigma)) {
+    sigma_rate <- pmax(as.numeric(init$sigma) * pmax(sigma_shape - 1, .Machine$double.eps), .Machine$double.eps)
+  }
   v_mean <- matrix(1, nrow = Tn, ncol = K)
   v_inv_mean <- matrix(1, nrow = Tn, ncol = K)
+  if (!is.null(init$beta) || !is.null(init$alpha) || !is.null(init$sigma)) {
+    beta_mat_init <- app_joint_qvp_beta_matrix(beta_mean, K, p)
+    fitted_init <- Z %*% beta_mat_init
+    sigma_inv_init <- sigma_shape / sigma_rate
+    for (k in seq_len(K)) {
+      r_init <- y - alpha[[k]] - fitted_init[, k]
+      chi_init <- kappa * sigma_inv_init[[k]] * pmax(r_init^2, .Machine$double.eps) / constants$B[[k]]
+      psi_init <- kappa * sigma_inv_init[[k]] * (constants$A[[k]]^2 / constants$B[[k]] + 2)
+      lambda_v <- 1 - kappa / 2
+      v_mean[, k] <- app_joint_qvp_gig_moment(lambda_v, chi_init, psi_init, 1)
+      v_inv_mean[, k] <- app_joint_qvp_gig_moment(lambda_v, chi_init, psi_init, -1)
+    }
+  }
   trace <- vector("list", max_iter)
   monitor_trace <- vector("list", max_iter)
   elbo_trace <- vector("list", max_iter)
@@ -14718,14 +14762,54 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	      partial_elbo = partial_elbo,
 	      stringsAsFactors = FALSE
 	    )
-		    if (max_beta_change < tol) {
-		      converged <- TRUE
+        if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
+          app_joint_qvp_progress_append(
+            progress_path,
+            data.frame(
+              label = as.character(progress_label %||% "al_vb"),
+              iter = iter,
+              max_iter = max_iter,
+              min_iter = min_iter,
+              converged = FALSE,
+              max_beta_change = max_beta_change,
+              max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
+              rhs_mean_precision = mean(rhs_summary$mean_precision),
+              rhs_max_precision = max(rhs_summary$max_precision),
+              monitor = monitor,
+              partial_elbo = partial_elbo,
+              timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+              stringsAsFactors = FALSE
+            )
+          )
+        }
+		    if (iter >= min_iter && max_beta_change < tol) {
+			      converged <- TRUE
 		      trace <- trace[seq_len(iter)]
 		      monitor_trace <- monitor_trace[seq_len(iter)]
 		      elbo_trace <- elbo_trace[seq_len(iter)]
           sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
-		      break
-		    }
+            if (progress_every > 0L) {
+              app_joint_qvp_progress_append(
+                progress_path,
+                data.frame(
+                  label = as.character(progress_label %||% "al_vb"),
+                  iter = iter,
+                  max_iter = max_iter,
+                  min_iter = min_iter,
+                  converged = TRUE,
+                  max_beta_change = max_beta_change,
+                  max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
+                  rhs_mean_precision = mean(rhs_summary$mean_precision),
+                  rhs_max_precision = max(rhs_summary$max_precision),
+                  monitor = monitor,
+                  partial_elbo = partial_elbo,
+                  timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                  stringsAsFactors = FALSE
+                )
+              )
+            }
+			      break
+			    }
 		  }
 	  sigma_mean <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
 	  qhat_mean <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) +

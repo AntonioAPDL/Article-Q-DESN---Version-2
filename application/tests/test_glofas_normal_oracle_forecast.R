@@ -115,6 +115,12 @@ toy_forecast <- app_glofas_oracle_recursive_forecast(
   future_dates = future_dates,
   covariate_timeline = toy_timeline
 )
+toy_forecast_r <- app_glofas_oracle_recursive_forecast(
+  fitted = toy_fit,
+  future_dates = future_dates,
+  covariate_timeline = toy_timeline,
+  forecast_backend = "r"
+)
 stopifnot(length(toy_forecast$pred_mean) == length(future_dates))
 stopifnot(all(is.finite(toy_forecast$pred_mean)))
 stopifnot(all(is.finite(toy_forecast$pred_sd)), all(toy_forecast$pred_sd > 0))
@@ -131,6 +137,31 @@ stopifnot(isTRUE(all.equal(
 stopifnot(any(toy_forecast$future_input_audit$role == "latent_future_usgs"))
 stopifnot(any(toy_forecast$future_input_audit$role == "oracle_realized_future"))
 stopifnot(!any(grepl(app_glofas_oracle_forbidden_source_regex(), unlist(toy_forecast$future_input_audit), perl = TRUE)))
+if (app_glofas_oracle_load_cpp(required = FALSE)) {
+  toy_forecast_cpp <- app_glofas_oracle_recursive_forecast(
+    fitted = toy_fit,
+    future_dates = future_dates,
+    covariate_timeline = toy_timeline,
+    forecast_backend = "cpp"
+  )
+  stopifnot(identical(toy_forecast_cpp$forecast_backend, "cpp_d1_plugin_recursive"))
+  stopifnot(isTRUE(all.equal(toy_forecast_cpp$pred_mean, toy_forecast_r$pred_mean, tolerance = 1e-12)))
+  stopifnot(isTRUE(all.equal(toy_forecast_cpp$input_lag_matrix, toy_forecast_r$input_lag_matrix, tolerance = 1e-12)))
+}
+
+saved_fit_path <- file.path(tempdir(), paste0("toy_oracle_fit_", Sys.getpid(), ".rds"))
+saveRDS(toy_fit$fit, saved_fit_path, version = 2L)
+toy_fit_reused <- app_glofas_oracle_prepare_part1_fitted(
+  base_cfg = oracle_cfg,
+  candidate_row = toy_candidate,
+  panel_bundle = toy_bundle,
+  method = "ridge",
+  fit_object_path = saved_fit_path,
+  reuse_fit = TRUE
+)
+stopifnot(isTRUE(toy_fit_reused$fit_reused))
+stopifnot(identical(toy_fit_reused$fit_reuse_contract, "deterministic_design_rebuilt_and_saved_fit_moments_reused"))
+stopifnot(isTRUE(all.equal(unname(toy_fit_reused$fit$beta_mean), unname(toy_fit$fit$beta_mean), tolerance = 0)))
 
 toy_draw_forecast <- app_glofas_oracle_draw_recursive_forecast(
   fitted = toy_fit,
@@ -171,6 +202,29 @@ stopifnot(identical(toy_draw_forecast$forecast_mode, "draw_recursive"))
 stopifnot(identical(toy_draw_forecast$n_draws, 12L))
 stopifnot(any(toy_draw_forecast$future_input_audit$role == "latent_future_usgs"))
 stopifnot(!any(grepl(app_glofas_oracle_forbidden_source_regex(), unlist(toy_draw_forecast$future_input_audit), perl = TRUE)))
+if (app_glofas_oracle_load_cpp(required = FALSE)) {
+  toy_draw_forecast_r <- app_glofas_oracle_draw_recursive_forecast(
+    fitted = toy_fit,
+    future_dates = future_dates,
+    covariate_timeline = toy_timeline,
+    n_draws = 12L,
+    seed = 20260903L,
+    forecast_backend = "r",
+    progress_every = 0L
+  )
+  toy_draw_forecast_cpp <- app_glofas_oracle_draw_recursive_forecast(
+    fitted = toy_fit,
+    future_dates = future_dates,
+    covariate_timeline = toy_timeline,
+    n_draws = 12L,
+    seed = 20260903L,
+    forecast_backend = "cpp"
+  )
+  stopifnot(identical(toy_draw_forecast_cpp$forecast_backend, "cpp_d1_draw_recursive"))
+  stopifnot(isTRUE(all.equal(as.numeric(toy_draw_forecast_cpp$forecast_draws), as.numeric(toy_draw_forecast_r$forecast_draws), tolerance = 1e-12)))
+  stopifnot(isTRUE(all.equal(as.numeric(toy_draw_forecast_cpp$conditional_mean_draws), as.numeric(toy_draw_forecast_r$conditional_mean_draws), tolerance = 1e-12)))
+  stopifnot(isTRUE(all.equal(toy_draw_forecast_cpp$input_lag_matrix, toy_draw_forecast_r$input_lag_matrix, tolerance = 1e-12)))
+}
 
 future_truth <- data.frame(
   date = future_dates,
@@ -332,6 +386,10 @@ write_result <- app_glofas_oracle_write_result(
 stopifnot(file.exists(file.path(tmp_dir, "tables", "toy_summary.csv")))
 stopifnot(file.exists(file.path(tmp_dir, "figures", "toy_forecast_full_history.pdf")))
 stopifnot(length(write_result$figures) == 3L)
+toy_summary <- app_read_csv(file.path(tmp_dir, "tables", "toy_summary.csv"))
+stopifnot("forecast_backend" %in% names(toy_summary))
+stopifnot("fit_reused" %in% names(toy_summary))
+stopifnot("fit_reuse_contract" %in% names(toy_summary))
 
 tmp_draw_dir <- tempfile("oracle_forecast_draw_write_")
 write_draw_result <- app_glofas_oracle_write_result(

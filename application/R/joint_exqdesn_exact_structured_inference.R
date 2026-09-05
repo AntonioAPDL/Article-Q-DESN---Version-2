@@ -1163,6 +1163,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   augmentation = c("v", "u"),
   max_iter = 100L,
   tol = 1.0e-5,
+  min_iter = 1L,
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
@@ -1182,7 +1183,10 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   quadrature_nodes = c(4L, 8L, 12L),
   quadrature_tolerance = 1.0e-6,
   diagnostic_stride = 10L,
-  method_id = NULL
+  method_id = NULL,
+  progress_path = NULL,
+  progress_every = 0L,
+  progress_label = NULL
 ) {
   augmentation <- match.arg(augmentation)
   if (!identical(as.numeric(kappa), 1)) {
@@ -1196,11 +1200,16 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   p <- ncol(Z)
   if (nrow(Z) != Tn) stop("length(y) must match nrow(Z).", call. = FALSE)
   max_iter <- as.integer(max_iter)
+  min_iter <- as.integer(min_iter)
   rhs_vb_inner <- as.integer(rhs_vb_inner)
   diagnostic_stride <- as.integer(diagnostic_stride)
   if (max_iter < 1L || !is.finite(tol) || tol <= 0 || rhs_vb_inner < 1L || diagnostic_stride < 1L) {
     stop("Invalid structured-VB controls.", call. = FALSE)
   }
+  if (!is.finite(min_iter) || min_iter < 1L) stop("min_iter must be positive.", call. = FALSE)
+  min_iter <- min(min_iter, max_iter)
+  progress_every <- as.integer(progress_every %||% 0L)
+  if (!is.finite(progress_every) || progress_every < 0L) progress_every <- 0L
   if (K * p > as.integer(max_dense_dim)) {
     stop("Structured exAL VB stores dense q(beta) covariance; raise max_dense_dim deliberately.", call. = FALSE)
   }
@@ -1424,7 +1433,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     coordinate_monitor <- scale_shape_log_normalizer - prior_quadratic + beta_entropy_logdet
     gamma_trace[iter, ] <- gamma
     sigma_trace[iter, ] <- sigma_mean
-    trace[[iter]] <- data.frame(
+	    trace[[iter]] <- data.frame(
       iter = iter,
       max_beta_change = max_beta_change,
       max_gamma_change = max_gamma_change,
@@ -1437,16 +1446,60 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
       beta_entropy_logdet = beta_entropy_logdet,
       coordinate_monitor = coordinate_monitor,
       all_quadrature_converged = all(vapply(block_updates, `[[`, logical(1L), "converged")),
-      stringsAsFactors = FALSE
-    )
-    qhat_old <- qhat
-    if (max(max_beta_change, max_gamma_change, max_sigma_change, max_qhat_change) < tol) {
-      converged <- TRUE
-      trace <- trace[seq_len(iter)]
-      gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
-      sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
-      break
+	      stringsAsFactors = FALSE
+	    )
+    if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
+      app_joint_qvp_progress_append(
+        progress_path,
+        data.frame(
+          label = as.character(progress_label %||% "exal_structured_vb"),
+          iter = iter,
+          max_iter = max_iter,
+          min_iter = min_iter,
+          converged = FALSE,
+          max_beta_change = max_beta_change,
+          max_gamma_change = max_gamma_change,
+          max_sigma_change = max_sigma_change,
+          max_qhat_change = max_qhat_change,
+          rhs_mean_precision = mean(rhs_summary$mean_precision),
+          rhs_max_precision = max(rhs_summary$max_precision),
+          coordinate_monitor = coordinate_monitor,
+          all_quadrature_converged = all(vapply(block_updates, `[[`, logical(1L), "converged")),
+          timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+          stringsAsFactors = FALSE
+        )
+      )
     }
+	    qhat_old <- qhat
+	    if (iter >= min_iter && max(max_beta_change, max_gamma_change, max_sigma_change, max_qhat_change) < tol) {
+	      converged <- TRUE
+	      trace <- trace[seq_len(iter)]
+	      gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
+	      sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
+      if (progress_every > 0L) {
+        app_joint_qvp_progress_append(
+          progress_path,
+          data.frame(
+            label = as.character(progress_label %||% "exal_structured_vb"),
+            iter = iter,
+            max_iter = max_iter,
+            min_iter = min_iter,
+            converged = TRUE,
+            max_beta_change = max_beta_change,
+            max_gamma_change = max_gamma_change,
+            max_sigma_change = max_sigma_change,
+            max_qhat_change = max_qhat_change,
+            rhs_mean_precision = mean(rhs_summary$mean_precision),
+            rhs_max_precision = max(rhs_summary$max_precision),
+            coordinate_monitor = coordinate_monitor,
+            all_quadrature_converged = all(vapply(block_updates, `[[`, logical(1L), "converged")),
+            timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+	      break
+	    }
   }
   qhat_mean <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) + matrix(alpha, Tn, K, byrow = TRUE)
   trace_df <- do.call(rbind, trace)

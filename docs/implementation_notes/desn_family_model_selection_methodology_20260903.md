@@ -207,6 +207,46 @@ then MCMC for the last four quantile model classes, initialized from VB
 
 The GloFAS application should move through four stages.
 
+### GloFAS Deliverable Ladder
+
+The GloFAS lane should treat the following deliverables as the complete target
+surface. This makes the staged logic explicit: each simpler model is useful
+only if it either becomes a defensible diagnostic result or provides a
+validated initializer/specification for the next, more article-facing model.
+
+| Stage | Scientific target | Required model deliverables | Required forecast deliverables | Promotion role |
+|---|---|---|---|---|
+| G1. Univariate USGS | Learn the observed USGS dynamics through the cutoff without using retrospective GloFAS or forecast ensembles. | Best Normal ridge; best Normal RHS VB initialized from ridge; best independent Q-DESN AL RHS VB; best independent Q-DESN exAL RHS VB; if promoted, all seven quantiles for AL and exAL at `0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95`; best joint-quantile AL RHS VB and exAL RHS VB across those quantiles. | Forecasts for the winning Normal ridge, Normal RHS VB, independent AL/exAL seven-quantile fits, and joint AL/exAL seven-quantile fits, with the future covariate source labelled as oracle/retrospective or operational. | Supplies the reference/USGS DESN geometry, memory, lag, dynamics, prior, and warm-start states for later GloFAS bridge models. |
+| G2. Univariate observed discrepancy | Learn the historical discrepancy `d_t = g_t - y_t` through the cutoff and test whether the discrepancy path contains learnable dynamic signal. | Best Normal ridge; best Normal RHS VB initialized from ridge; best independent Q-DESN AL RHS VB; best independent Q-DESN exAL RHS VB; if promoted, all seven quantiles for AL and exAL at `0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95`; best joint-quantile AL RHS VB and exAL RHS VB across those quantiles. | Forecasts for the winning discrepancy Normal ridge, Normal RHS VB, independent AL/exAL seven-quantile fits, and joint AL/exAL seven-quantile fits, with recursive discrepancy-input handling audited explicitly. | Supplies the discrepancy DESN geometry, input contract, prior, and warm-start states for the historical joint USGS/GloFAS model. |
+| G3. Joint historical USGS and GloFAS | Fit paired retrospective USGS and GloFAS through the cutoff using a reference DESN and a discrepancy DESN. | Best joint historical Normal ridge; best joint historical Normal RHS VB; best independent Q-DESN AL RHS VB; best independent Q-DESN exAL RHS VB; if promoted, all seven quantiles for AL and exAL at `0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95`; best joint-quantile AL RHS VB and exAL RHS VB. | Forecasts from the winning historical joint Normal and quantile models, still excluding issued forecast ensembles unless the forecast contract explicitly introduces them. | Tests whether the G1 reference and G2 discrepancy winners work together before the missing-future-USGS/ensemble application is attempted. |
+| G4. Joint USGS, GloFAS, and forecast ensemble | Fit the article-facing GloFAS model with issued forecast ensembles and missing future USGS values. | Best Normal ridge and Normal RHS VB only as diagnostics/initializers where the likelihood contract permits them; best independent Q-DESN AL RHS VB; best independent Q-DESN exAL RHS VB; all seven quantiles at `0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95`; best final joint-quantile AL RHS VB and exAL RHS VB. | Final forecast-window synthesis, forecast figures, horizon-wise scores, uncertainty bands, ensemble-member comparisons, and article-ready provenance. | Only this stage can replace the authoritative GloFAS article result after full completion, visual audit, score/guardrail checks, and coordinator integration. |
+
+This ladder is aligned with the overall strategy, with two important
+constraints. First, the Normal ridge and Normal RHS models are not replacements
+for the article's quantile model; they are fast screens, diagnostic probes, and
+warm-start sources. Second, running all seven quantiles is a promotion action,
+not a default action for every exploratory row. A model should reach the
+seven-quantile AL/exAL and joint-quantile deliverables only after the focal
+screening target is competitive and the observational-window guardrails are
+acceptable.
+
+Rolling-origin forecasts are not required for the current GloFAS deliverable
+ladder. The required forecast check is the single authoritative-cutoff forecast
+for each promoted stage winner. Rolling-origin machinery may remain available
+as an optional robustness diagnostic, but it should not block Part 1 closeout,
+Part 2 discrepancy work, or final GloFAS synthesis.
+
+The Part 1 deliverable closeout launcher is intentionally fail-closed. The
+requested bundle has 17 one-core slots: one Normal ridge forecast, seven
+independent AL quantile fits, seven independent exAL quantile fits, one joint
+AL quantile fit, and one joint exAL quantile fit. At the time this methodology
+note was updated, only the Normal ridge oracle forecast has a concrete GloFAS
+Part 1 runner. The independent and joint quantile rows must remain blocked
+until audited GloFAS Part 1 wrappers exist for those exact likelihood and
+forecast/scoring contracts. This prevents a deferred scheduler from launching
+placeholder commands, validation-only code, or a model whose target differs
+from the declared Part 1 USGS closeout target.
+
 ### G1. Univariate USGS
 
 Fit USGS through the cutoff using no direct readout input block unless an
@@ -252,6 +292,18 @@ y_hat_t = g_t - d_hat_t
 reported as a guardrail. A candidate that improves discrepancy CRPS but damages
 the corrected USGS path should not be promoted.
 
+The active Part 2 bridge screen follows the same fail-closed automation pattern
+as G1. The running ridge phase must finish with zero failures before any Normal
+RHS VB jobs are prepared. The RHS VB phase should select the top ridge
+candidates by corrected historical validation CRPS, rebuild exact two-component
+ridge warm starts, and then run a sparse tau0 grid. The current default
+deferred RHS screen uses the top 10 ridge candidates, fixed reference
+`tau0=1`, discrepancy `tau0` in `{1, 0.1, 0.01, 0.001}`, `max_iter=100`,
+`min_iter=30`, and 20 one-thread workers. After the RHS screen finishes, the
+selected winner is frozen into a post-RHS closeout manifest. Forecast and
+quantile closeout jobs remain blocked until audited Part 2 historical-bridge
+forecast and AL/exAL quantile runners exist for the exact model contract.
+
 ### G3. Joint Historical USGS And GloFAS
 
 This is the intended intermediate model before introducing issued forecast
@@ -259,18 +311,31 @@ ensembles. It should use the winners from G1 and G2 to initialize a two-componen
 historical model:
 
 ```text
-y_t^usgs   = q(x_t^q) + d(x_t^d) + eps_t^usgs
-y_t^glofas = q(x_t^q)             + eps_t^glofas
+y_t^usgs   = q(x_t^q)                 + eps_t^usgs
+y_t^glofas = q(x_t^q) + d(x_t^d)     + eps_t^glofas
 ```
 
 Here `q(x_t^q)` is the reference DESN readout and `d(x_t^d)` is the discrepancy
-DESN readout. The two DESNs may share the same numerical specification, but they
-must have separate seeds, separate design hashes, and separate RHS states. The
-input contracts may differ, especially for the discrepancy component.
+DESN readout under the same sign convention as G2: `d_t = g_t - y_t`.
+Therefore the implied corrected USGS path remains `g_t - d_hat_t`. The two
+DESNs may share the same numerical specification, but they must have separate
+seeds, separate design hashes, and separate RHS states. The input contracts may
+differ, especially for the discrepancy component.
 
 Start with Normal ridge/RHS versions of this historical joint model. Only after
 that bridge is healthy should the same geometry be moved into the median
 quantile AL RHS VB model.
+
+The implementation is split into two explicit execution stages. The historical
+launcher fits Normal ridge and block-RHS VB from frozen G1/G2 winners. A separate
+continuation chain then reuses those exact Normal fits, produces both Normal
+fixed-origin forecasts, fits and forecasts independent AL/exAL quantiles through
+the declared warm-start DAG, and finally fits and forecasts the joint AL/exAL
+models. The continuation is fail-closed on winner, design-cache, Normal-fit, and
+initializer SHA256 values. It uses separate reference/discrepancy coefficient
+and RHS factors, the structured `VB1_structured_v` exAL scale/shape update, and
+a two-reservoir C++ recursive forecast backend. It intentionally performs no
+quantile synthesis and no rolling-origin evaluation at G3.
 
 ### G4. Joint USGS, GloFAS, And Forecast Ensemble
 

@@ -702,7 +702,8 @@ app_glofas_normal_part2_score_from_fits <- function(
   rhs_tau0_reference = NA_real_,
   rhs_tau0_discrepancy = NA_real_,
   trace = NULL,
-  activity = NULL
+  activity = NULL,
+  coefficients = NULL
 ) {
   train_idx <- split$train_idx
   valid_idx <- split$valid_idx
@@ -811,6 +812,7 @@ app_glofas_normal_part2_score_from_fits <- function(
     detail = detail,
     trace = trace %||% data.frame(),
     activity = activity %||% data.frame(),
+    coefficients = coefficients %||% data.frame(),
     reference_fit = reference_fit,
     discrepancy_fit = discrepancy_fit,
     design = design
@@ -927,7 +929,8 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
     rhs_tau0_reference = tau0_reference,
     rhs_tau0_discrepancy = tau0_discrepancy,
     trace = trace,
-    activity = activity
+    activity = activity,
+    coefficients = app_bind_rows_fill(list(ref_coef, disc_coef))
   )
 }
 
@@ -1180,5 +1183,32 @@ app_glofas_normal_part2_collect_scores <- function(root) {
   }
   app_write_csv(summaries, file.path(root, "tables", "part2_ridge_scores_latest.csv"))
   app_write_csv(details, file.path(root, "tables", "part2_ridge_validation_detail_latest.csv"))
+  summaries
+}
+
+app_glofas_normal_part2_collect_rhs_scores <- function(root) {
+  root <- normalizePath(root, mustWork = TRUE)
+  score_files <- list.files(file.path(root, "scores"), pattern = "_rhs_summary[.]csv$", full.names = TRUE)
+  detail_files <- list.files(file.path(root, "scores"), pattern = "_rhs_validation_detail[.]csv$", full.names = TRUE)
+  summaries <- app_bind_rows_fill(lapply(score_files, app_read_csv))
+  details <- app_bind_rows_fill(lapply(detail_files, app_read_csv))
+  if (nrow(summaries)) {
+    numeric_cols <- grep(
+      "(_crps|_mae|_rmse|_mean_sd|_abs_error|runtime_seconds|n_|alpha|rho|tau0|iterations|effective_tau|elbo)",
+      names(summaries),
+      value = TRUE
+    )
+    for (nm in numeric_cols) summaries[[nm]] <- suppressWarnings(as.numeric(summaries[[nm]]))
+    summaries <- summaries[order(summaries$status != "completed", summaries$valid_mean_crps), , drop = FALSE]
+    summaries$rank_corrected_valid_crps <- seq_len(nrow(summaries))
+    if ("discrepancy_valid_mean_crps" %in% names(summaries)) {
+      completed <- summaries$status == "completed"
+      ranks <- rep(NA_integer_, nrow(summaries))
+      ranks[completed] <- rank(summaries$discrepancy_valid_mean_crps[completed], ties.method = "first")
+      summaries$rank_discrepancy_valid_crps <- ranks
+    }
+  }
+  app_write_csv(summaries, file.path(root, "tables", "part2_rhs_scores_latest.csv"))
+  app_write_csv(details, file.path(root, "tables", "part2_rhs_validation_detail_latest.csv"))
   summaries
 }

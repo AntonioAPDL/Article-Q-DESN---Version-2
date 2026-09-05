@@ -45,6 +45,36 @@ app_glofas_oracle_resolve_repo_path <- function(path, root_candidates = NULL, mu
   normalizePath(attempts[[1L]], mustWork = FALSE)
 }
 
+app_glofas_oracle_load_cpp <- function(required = FALSE) {
+  if (exists("glofas_oracle_d1_draw_recursive_cpp", mode = "function", inherits = TRUE) &&
+      exists("glofas_oracle_d1_plugin_recursive_cpp", mode = "function", inherits = TRUE)) {
+    return(TRUE)
+  }
+  if (!requireNamespace("Rcpp", quietly = TRUE) || !requireNamespace("RcppArmadillo", quietly = TRUE)) {
+    if (isTRUE(required)) {
+      stop("The optimized oracle forecast backend requires Rcpp and RcppArmadillo.", call. = FALSE)
+    }
+    return(FALSE)
+  }
+  cpp_path <- app_path("application/src/glofas_oracle_desn_forecast.cpp")
+  if (!file.exists(cpp_path)) {
+    if (isTRUE(required)) {
+      stop(sprintf("Missing optimized oracle forecast backend: %s", cpp_path), call. = FALSE)
+    }
+    return(FALSE)
+  }
+  ok <- tryCatch({
+    Rcpp::sourceCpp(cpp_path, rebuild = FALSE, showOutput = FALSE)
+    TRUE
+  }, error = function(e) {
+    if (isTRUE(required)) stop(conditionMessage(e), call. = FALSE)
+    FALSE
+  })
+  ok &&
+    exists("glofas_oracle_d1_draw_recursive_cpp", mode = "function", inherits = TRUE) &&
+    exists("glofas_oracle_d1_plugin_recursive_cpp", mode = "function", inherits = TRUE)
+}
+
 app_glofas_oracle_config_path <- function(cfg, key, root_candidates = NULL, must_work = TRUE) {
   val <- (cfg$paths %||% list())[[key]]
   if (is.null(val)) stop(sprintf("Config path '%s' is not defined.", key), call. = FALSE)
@@ -560,6 +590,97 @@ app_glofas_oracle_fit_part1 <- function(
   )
 }
 
+app_glofas_oracle_load_part1_fit_object <- function(
+  fit_object_path,
+  method = c("rhs", "ridge")
+) {
+  method <- match.arg(method)
+  fit_object_path <- app_glofas_oracle_resolve_repo_path(fit_object_path, must_work = TRUE)
+  fit <- readRDS(fit_object_path)
+  if (is.list(fit) && "fit" %in% names(fit) && is.list(fit$fit)) fit <- fit$fit
+  if (!is.list(fit) || !"beta_mean" %in% names(fit)) {
+    stop(sprintf("Fit object does not contain beta moments: %s", fit_object_path), call. = FALSE)
+  }
+  p <- as.integer(fit$p %||% length(fit$beta_mean))
+  if (!is.finite(p) || p < 1L || length(fit$beta_mean) != p) {
+    stop("Fit object has inconsistent coefficient dimension.", call. = FALSE)
+  }
+  if (any(!is.finite(as.numeric(fit$beta_mean)))) {
+    stop("Fit object beta_mean contains non-finite values.", call. = FALSE)
+  }
+  if (identical(method, "rhs") && is.null(fit$beta_cov) && is.null(fit$precision_chol)) {
+    stop("Draw-recursive RHS forecast reuse requires beta_cov or precision_chol.", call. = FALSE)
+  }
+  fit$fit_object_path <- fit_object_path
+  fit
+}
+
+app_glofas_oracle_prepare_part1_fitted <- function(
+  base_cfg,
+  candidate_row,
+  panel_bundle,
+  method = c("rhs", "ridge"),
+  max_iter = NULL,
+  min_iter = NULL,
+  tol = NULL,
+  fit_object_path = NULL,
+  reuse_fit = TRUE
+) {
+  method <- match.arg(method)
+  if (!isTRUE(reuse_fit) || is.null(fit_object_path) || !nzchar(as.character(fit_object_path))) {
+    out <- app_glofas_oracle_fit_part1(
+      base_cfg = base_cfg,
+      candidate_row = candidate_row,
+      panel_bundle = panel_bundle,
+      method = method,
+      max_iter = max_iter,
+      min_iter = min_iter,
+      tol = tol
+    )
+    out$fit_reused <- FALSE
+    out$fit_object_path <- NA_character_
+    out$fit_reuse_contract <- "fit_computed_in_forecast_call"
+    return(out)
+  }
+
+  started <- Sys.time()
+  candidate_row <- app_glofas_oracle_complete_part1_candidate_row(candidate_row)
+  if (!is.null(max_iter)) candidate_row$rhs_max_iter <- as.integer(max_iter)
+  if (!is.null(min_iter)) candidate_row$rhs_min_iter <- as.integer(min_iter)
+  if (!is.null(tol)) candidate_row$rhs_tol <- as.numeric(tol)
+  design <- app_glofas_oracle_build_part1_design(
+    base_cfg = base_cfg,
+    candidate_row = candidate_row,
+    panel_bundle = panel_bundle
+  )
+  fit <- app_glofas_oracle_load_part1_fit_object(fit_object_path, method = method)
+  if (ncol(design$X) != as.integer(fit$p %||% length(fit$beta_mean))) {
+    stop(
+      sprintf(
+        "Reusable fit dimension mismatch: design has %d columns but fit has %d coefficients.",
+        ncol(design$X),
+        as.integer(fit$p %||% length(fit$beta_mean))
+      ),
+      call. = FALSE
+    )
+  }
+  if (is.null(names(fit$beta_mean)) || length(names(fit$beta_mean)) != ncol(design$X)) {
+    names(fit$beta_mean) <- colnames(design$X)
+  }
+  list(
+    method = method,
+    candidate_row = candidate_row,
+    design = design,
+    fit = fit,
+    ridge_fit = NULL,
+    warm_start = NULL,
+    fit_runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
+    fit_reused = TRUE,
+    fit_object_path = as.character(fit$fit_object_path %||% fit_object_path),
+    fit_reuse_contract = "deterministic_design_rebuilt_and_saved_fit_moments_reused"
+  )
+}
+
 app_glofas_oracle_validate_forecastable_qfit <- function(qfit) {
   spec <- (qfit$meta %||% list())$reservoir_input_spec %||% NULL
   if (is.null(spec)) stop("Forecast continuation requires qfit$meta$reservoir_input_spec.", call. = FALSE)
@@ -570,6 +691,41 @@ app_glofas_oracle_validate_forecastable_qfit <- function(qfit) {
     stop("Auxiliary-lag reservoir inputs cannot yet be recursively forecast without declared future auxiliary streams.", call. = FALSE)
   }
   invisible(TRUE)
+}
+
+app_glofas_oracle_d1_cpp_supported <- function(fitted, component_prefix = "") {
+  if (nzchar(as.character(component_prefix %||% ""))) return(FALSE)
+  design <- fitted$design
+  reservoir <- design$reservoir %||% list()
+  meta <- design$design_meta %||% list()
+  spec <- meta$reservoir_input_spec %||% NULL
+  if (is.null(spec) ||
+      !identical(as.integer(reservoir$D %||% NA_integer_), 1L) ||
+      isTRUE(spec$uses_dlm_components %||% FALSE) ||
+      isTRUE(spec$uses_auxiliary_lags %||% FALSE)) {
+    return(FALSE)
+  }
+  act_f <- as.character(reservoir$act_f %||% "tanh")
+  input_bound <- as.character(meta$input_bound %||% "none")
+  if (!act_f %in% c("tanh", "identity") || !input_bound %in% c("none", "tanh")) return(FALSE)
+  W <- reservoir$W[[1L]] %||% NULL
+  Win <- reservoir$Win[[1L]] %||% NULL
+  states <- app_qdesn_last_states(list(reservoir = reservoir, states = design$states, meta = meta))
+  state0 <- states[[1L]] %||% NULL
+  if (is.null(W) || is.null(Win) || is.null(state0)) return(FALSE)
+  expected_names <- c("readout_intercept", paste0("reservoir_", sprintf("%04d", seq_along(state0))))
+  identical(colnames(design$X), expected_names)
+}
+
+app_glofas_oracle_compiled_future_inputs <- function(qfit, future_dates, covariate_timeline = NULL) {
+  meta <- qfit$meta %||% list()
+  app_qdesn_compile_future_input_contract(
+    spec = meta$reservoir_input_spec,
+    history_dates = as.Date(meta$history_dates),
+    y_history = as.numeric(meta$y_history),
+    future_dates = as.Date(future_dates),
+    covariate_timeline = covariate_timeline %||% meta$covariate_timeline %||% NULL
+  )
 }
 
 app_glofas_oracle_make_readout_row <- function(core, readout_colnames, component_prefix = "") {
@@ -690,8 +846,10 @@ app_glofas_oracle_recursive_forecast <- function(
   fitted,
   future_dates,
   covariate_timeline = NULL,
-  component_prefix = ""
+  component_prefix = "",
+  forecast_backend = c("auto", "cpp", "r")
 ) {
+  forecast_backend <- match.arg(forecast_backend)
   design <- fitted$design
   fit <- fitted$fit
   qfit <- list(
@@ -718,18 +876,75 @@ app_glofas_oracle_recursive_forecast <- function(
   X_future <- matrix(NA_real_, nrow = H, ncol = ncol(design$X))
   colnames(X_future) <- colnames(design$X)
 
-  for (h in seq_len(H)) {
-    row <- app_qdesn_reservoir_input_row(
-      spec = qfit$meta$reservoir_input_spec,
-      history_dates = history_dates,
-      y_history = y_history,
-      target_date = future_dates[[h]],
-      covariate_timeline = covariate_timeline,
-      future_dates = future_dates,
-      y_future = y_future,
-      h_current = h
+  compiled_inputs <- app_glofas_oracle_compiled_future_inputs(
+    qfit,
+    future_dates = future_dates,
+    covariate_timeline = covariate_timeline
+  )
+  cpp_supported <- app_glofas_oracle_d1_cpp_supported(fitted, component_prefix = component_prefix)
+  use_cpp <- identical(forecast_backend, "cpp") ||
+    (identical(forecast_backend, "auto") && isTRUE(cpp_supported) && app_glofas_oracle_load_cpp(required = FALSE))
+  if (identical(forecast_backend, "cpp") && (!isTRUE(cpp_supported) || !app_glofas_oracle_load_cpp(required = TRUE))) {
+    stop("Requested C++ oracle forecast backend is not supported for this fitted object.", call. = FALSE)
+  }
+
+  if (isTRUE(use_cpp)) {
+    states0 <- app_qdesn_last_states(qfit)[[1L]]
+    cpp_out <- glofas_oracle_d1_plugin_recursive_cpp(
+      W = as.matrix(design$reservoir$W[[1L]]),
+      Win = as.matrix(design$reservoir$Win[[1L]]),
+      state0 = as.numeric(states0),
+      static_values = as.matrix(compiled_inputs$static_values),
+      future_index = matrix(as.integer(compiled_inputs$future_index), nrow = H),
+      lag_center = as.numeric(qfit$meta$lag_center),
+      lag_scale = as.numeric(qfit$meta$lag_scale),
+      standardize_inputs = isTRUE(qfit$meta$standardize_inputs %||% FALSE),
+      input_bound = as.character(qfit$meta$input_bound %||% "none"),
+      win_scale_global = as.numeric(qfit$meta$win_scale_global %||% 1),
+      win_scale_bias = as.numeric(qfit$meta$win_scale_bias %||% 1),
+      alpha = as.numeric(design$reservoir$alpha[[1L]]),
+      beta_mean = as.numeric(fit$beta_mean),
+      act_f = as.character(design$reservoir$act_f %||% "tanh")
     )
-    states <- app_qdesn_continue_one_step(states, row$value, design$reservoir, qfit$meta)
+    X_future <- as.matrix(cpp_out$X_future)
+    colnames(X_future) <- colnames(design$X)
+    input_rows <- as.matrix(cpp_out$input_rows)
+    colnames(input_rows) <- qfit$meta$reservoir_input_spec$columns
+    pred <- app_glofas_normal_predict(fit, X_future, chunk_size = 64L)
+    pred_mean <- pred$mean
+    pred_sd <- pred$sd
+    y_future <- pred_mean
+    audit <- compiled_inputs$audit
+    app_latent_path_validate_no_usgs_leakage(
+      data.frame(date = audit$input_date, role = audit$role, stringsAsFactors = FALSE),
+      cutoff_date = max(history_dates)
+    )
+    app_glofas_oracle_validate_no_forbidden_sources(audit, label = "oracle forecast input audit")
+    return(list(
+      future_dates = future_dates,
+      pred_mean = pred_mean,
+      pred_sd = pred_sd,
+      pred_median = pred_mean,
+      pred_q025 = pred_mean - 1.96 * pred_sd,
+      pred_q975 = pred_mean + 1.96 * pred_sd,
+      X_future = X_future,
+      input_lag_matrix = input_rows,
+      future_input_audit = audit,
+      y_future_plugin = y_future,
+      forecast_mode = "plugin_mean_recursive",
+      forecast_backend = as.character(cpp_out$backend %||% "cpp_d1_plugin_recursive"),
+      n_draws = 0L,
+      seed = NA_integer_
+    ))
+  }
+
+  for (h in seq_len(H)) {
+    row_value <- compiled_inputs$static_values[h, ]
+    future_cols <- which(compiled_inputs$future_index[h, ] > 0L)
+    if (length(future_cols)) {
+      row_value[future_cols] <- y_future[compiled_inputs$future_index[h, future_cols]]
+    }
+    states <- app_qdesn_continue_one_step(states, row_value, design$reservoir, qfit$meta)
     core <- app_qdesn_readout_row_from_states(states, design$reservoir)
     Xrow <- app_glofas_oracle_make_readout_row(core, colnames(design$X), component_prefix = component_prefix)
     pred <- app_glofas_normal_predict(fit, Xrow, chunk_size = 1L)
@@ -737,10 +952,9 @@ app_glofas_oracle_recursive_forecast <- function(
     pred_sd[[h]] <- pred$sd[[1L]]
     y_future[[h]] <- pred_mean[[h]]
     X_future[h, ] <- Xrow
-    input_rows[h, ] <- row$value
-    audit_rows[[h]] <- row$audit
+    input_rows[h, ] <- row_value
   }
-  audit <- app_bind_rows_fill(audit_rows)
+  audit <- compiled_inputs$audit
   app_latent_path_validate_no_usgs_leakage(
     data.frame(date = audit$input_date, role = audit$role, stringsAsFactors = FALSE),
     cutoff_date = max(history_dates)
@@ -758,6 +972,7 @@ app_glofas_oracle_recursive_forecast <- function(
     future_input_audit = audit,
     y_future_plugin = y_future,
     forecast_mode = "plugin_mean_recursive",
+    forecast_backend = "r_compiled_inputs_plugin_recursive",
     n_draws = 0L,
     seed = NA_integer_
   )
@@ -769,8 +984,11 @@ app_glofas_oracle_draw_recursive_forecast <- function(
   covariate_timeline = NULL,
   component_prefix = "",
   n_draws = 500L,
-  seed = 20260903L
+  seed = 20260903L,
+  forecast_backend = c("auto", "cpp", "r"),
+  progress_every = NULL
 ) {
+  forecast_backend <- match.arg(forecast_backend)
   design <- fitted$design
   fit <- fitted$fit
   method <- match.arg(fitted$method %||% "rhs", c("rhs", "ridge"))
@@ -798,11 +1016,24 @@ app_glofas_oracle_draw_recursive_forecast <- function(
   input_sum <- matrix(0, nrow = H, ncol = ncol(input_template))
   colnames(input_sum) <- colnames(input_template)
   audit_rows <- vector("list", H)
+  progress_every <- as.integer(progress_every %||% max(50L, floor(n_draws / 10L)))
+  if (!is.finite(progress_every) || progress_every < 1L) progress_every <- 0L
+  compiled_inputs <- app_glofas_oracle_compiled_future_inputs(
+    qfit,
+    future_dates = future_dates,
+    covariate_timeline = covariate_timeline
+  )
+  cpp_supported <- app_glofas_oracle_d1_cpp_supported(fitted, component_prefix = component_prefix)
+  use_cpp <- identical(forecast_backend, "cpp") ||
+    (identical(forecast_backend, "auto") && isTRUE(cpp_supported) && app_glofas_oracle_load_cpp(required = FALSE))
+  if (identical(forecast_backend, "cpp") && (!isTRUE(cpp_supported) || !app_glofas_oracle_load_cpp(required = TRUE))) {
+    stop("Requested C++ oracle draw-recursive backend is not supported for this fitted object.", call. = FALSE)
+  }
 
   timing <- list()
   time_part <- function(step, expr) {
     started <- proc.time()[["elapsed"]]
-    value <- force(expr)
+    value <- eval.parent(substitute(expr))
     timing[[length(timing) + 1L]] <<- data.frame(
       step = step,
       elapsed_seconds = as.numeric(proc.time()[["elapsed"]] - started),
@@ -815,38 +1046,70 @@ app_glofas_oracle_draw_recursive_forecast <- function(
     draws <- time_part("posterior_parameter_draws", {
       app_glofas_oracle_parameter_draws(fit, method = method, n_draws = n_draws, seed = NULL)
     })
-    for (s in seq_len(n_draws)) {
-      states <- app_qdesn_last_states(qfit)
-      y_future <- rep(NA_real_, H)
-      beta_s <- as.numeric(draws$beta[s, ])
-      sigma_s <- as.numeric(draws$sigma[[s]])
-      for (h in seq_len(H)) {
-        row <- app_qdesn_reservoir_input_row(
-          spec = qfit$meta$reservoir_input_spec,
-          history_dates = history_dates,
-          y_history = y_history,
-          target_date = future_dates[[h]],
-          covariate_timeline = covariate_timeline,
-          future_dates = future_dates,
-          y_future = y_future,
-          h_current = h
+    if (isTRUE(use_cpp)) {
+      time_part("recursive_draw_forecast_cpp_d1", {
+        z_obs <- matrix(stats::rnorm(H * n_draws), nrow = H, ncol = n_draws)
+        states0 <- app_qdesn_last_states(qfit)[[1L]]
+        cpp_out <- glofas_oracle_d1_draw_recursive_cpp(
+          W = as.matrix(design$reservoir$W[[1L]]),
+          Win = as.matrix(design$reservoir$Win[[1L]]),
+          state0 = as.numeric(states0),
+          static_values = as.matrix(compiled_inputs$static_values),
+          future_index = matrix(as.integer(compiled_inputs$future_index), nrow = H),
+          lag_center = as.numeric(qfit$meta$lag_center),
+          lag_scale = as.numeric(qfit$meta$lag_scale),
+          standardize_inputs = isTRUE(qfit$meta$standardize_inputs %||% FALSE),
+          input_bound = as.character(qfit$meta$input_bound %||% "none"),
+          win_scale_global = as.numeric(qfit$meta$win_scale_global %||% 1),
+          win_scale_bias = as.numeric(qfit$meta$win_scale_bias %||% 1),
+          alpha = as.numeric(design$reservoir$alpha[[1L]]),
+          beta_draws = as.matrix(draws$beta),
+          sigma_draws = as.numeric(draws$sigma),
+          z_obs = z_obs,
+          act_f = as.character(design$reservoir$act_f %||% "tanh")
         )
-        states <- app_qdesn_continue_one_step(states, row$value, design$reservoir, qfit$meta)
-        core <- app_qdesn_readout_row_from_states(states, design$reservoir)
-        Xrow <- app_glofas_oracle_make_readout_row(core, colnames(design$X), component_prefix = component_prefix)
-        mu_h <- sum(as.numeric(Xrow) * beta_s)
-        y_h <- stats::rnorm(1L, mean = mu_h, sd = sigma_s)
-        mu_draws[h, s] <- mu_h
-        y_draws[h, s] <- y_h
-        y_future[[h]] <- y_h
-        input_sum[h, ] <- input_sum[h, ] + as.numeric(row$value)
-        if (s == 1L) audit_rows[[h]] <- row$audit
+        y_draws[,] <- as.matrix(cpp_out$forecast_draws)
+        mu_draws[,] <- as.matrix(cpp_out$conditional_mean_draws)
+        input_sum[,] <- as.matrix(cpp_out$input_mean) * n_draws
+        attr(y_draws, "forecast_backend") <- as.character(cpp_out$backend %||% "cpp_d1_draw_recursive")
+        NULL
+      })
+    } else {
+      future_positions <- lapply(seq_len(H), function(h) which(compiled_inputs$future_index[h, ] > 0L))
+      future_indices <- lapply(seq_len(H), function(h) compiled_inputs$future_index[h, future_positions[[h]]])
+      time_part("recursive_draw_forecast_r_compiled_inputs", {
+        for (s in seq_len(n_draws)) {
+          if (progress_every > 0L && (s == 1L || s == n_draws || s %% progress_every == 0L)) {
+            message(sprintf("draw-recursive forecast progress: draw %d/%d", s, n_draws))
+          }
+          states <- app_qdesn_last_states(qfit)
+          y_future <- rep(NA_real_, H)
+          beta_s <- as.numeric(draws$beta[s, ])
+          sigma_s <- as.numeric(draws$sigma[[s]])
+          for (h in seq_len(H)) {
+            row_value <- compiled_inputs$static_values[h, ]
+            if (length(future_positions[[h]])) {
+              row_value[future_positions[[h]]] <- y_future[future_indices[[h]]]
+            }
+            states <- app_qdesn_continue_one_step(states, row_value, design$reservoir, qfit$meta)
+            core <- app_qdesn_readout_row_from_states(states, design$reservoir)
+            Xrow <- app_glofas_oracle_make_readout_row(core, colnames(design$X), component_prefix = component_prefix)
+            mu_h <- sum(as.numeric(Xrow) * beta_s)
+            y_h <- stats::rnorm(1L, mean = mu_h, sd = sigma_s)
+            mu_draws[h, s] <- mu_h
+            y_draws[h, s] <- y_h
+            y_future[[h]] <- y_h
+            input_sum[h, ] <- input_sum[h, ] + as.numeric(row_value)
+          }
+        }
+        attr(y_draws, "forecast_backend") <- "r_compiled_inputs_draw_recursive"
+        NULL
+      })
       }
-    }
     draws
   })
 
-  audit <- app_bind_rows_fill(audit_rows)
+  audit <- compiled_inputs$audit
   app_latent_path_validate_no_usgs_leakage(
     data.frame(date = audit$input_date, role = audit$role, stringsAsFactors = FALSE),
     cutoff_date = max(history_dates)
@@ -882,6 +1145,7 @@ app_glofas_oracle_draw_recursive_forecast <- function(
     conditional_mean_draws = mu_draws,
     draw_summary = draw_summary,
     forecast_mode = "draw_recursive",
+    forecast_backend = attr(y_draws, "forecast_backend", exact = TRUE) %||% if (isTRUE(use_cpp)) "cpp_d1_draw_recursive" else "r_compiled_inputs_draw_recursive",
     n_draws = n_draws,
     seed = as.integer(seed),
     beta_draw_backend = result$beta_draw_backend,
@@ -1096,12 +1360,16 @@ app_glofas_oracle_write_result <- function(result, root, run_label = "oracle_for
     effective_horizon = as.integer(result$effective_horizon),
     max_covariate_horizon = as.integer(result$max_covariate_horizon),
     max_score_horizon = as.integer(result$max_score_horizon),
-    n_draws = as.integer(result$forecast$n_draws %||% 0L),
-    seed = as.integer(result$forecast$seed %||% NA_integer_),
-    beta_draw_backend = as.character(result$forecast$beta_draw_backend %||% NA_character_),
-    sigma_draw_backend = as.character(result$forecast$sigma_draw_backend %||% NA_character_),
-    fit_runtime_seconds = as.numeric(result$fitted$fit_runtime_seconds),
-    forecast_runtime_seconds = as.numeric(result$forecast_runtime_seconds),
+	    n_draws = as.integer(result$forecast$n_draws %||% 0L),
+	    seed = as.integer(result$forecast$seed %||% NA_integer_),
+	    forecast_backend = as.character(result$forecast$forecast_backend %||% NA_character_),
+	    beta_draw_backend = as.character(result$forecast$beta_draw_backend %||% NA_character_),
+	    sigma_draw_backend = as.character(result$forecast$sigma_draw_backend %||% NA_character_),
+	    fit_reused = isTRUE(result$fitted$fit_reused %||% FALSE),
+	    fit_object_path = as.character(result$fitted$fit_object_path %||% NA_character_),
+	    fit_reuse_contract = as.character(result$fitted$fit_reuse_contract %||% "fit_computed_in_forecast_call"),
+	    fit_runtime_seconds = as.numeric(result$fitted$fit_runtime_seconds),
+	    forecast_runtime_seconds = as.numeric(result$forecast_runtime_seconds),
     iterations = as.integer(result$fitted$fit$iterations %||% 0L),
     converged = isTRUE(result$fitted$fit$converged),
     future_mean_crps = app_glofas_oracle_score_scalar(result$scores, "future_mean_crps"),
@@ -1114,10 +1382,14 @@ app_glofas_oracle_write_result <- function(result, root, run_label = "oracle_for
   app_write_yaml(
     list(
       run_label = run_label,
-      diagnostic_type = "oracle_realized_recursive_forecast",
-      forecast_mode = summary$forecast_mode[[1L]],
-      n_draws = as.integer(summary$n_draws[[1L]]),
-      seed = as.integer(summary$seed[[1L]]),
+	      diagnostic_type = "oracle_realized_recursive_forecast",
+	      forecast_mode = summary$forecast_mode[[1L]],
+	      forecast_backend = summary$forecast_backend[[1L]],
+	      fit_reused = isTRUE(summary$fit_reused[[1L]]),
+	      fit_object_path = summary$fit_object_path[[1L]],
+	      fit_reuse_contract = summary$fit_reuse_contract[[1L]],
+	      n_draws = as.integer(summary$n_draws[[1L]]),
+	      seed = as.integer(summary$seed[[1L]]),
       forbidden_sources = c("GEFS", "CEFS"),
       future_covariate_policy = "realized retrospective ppt/soil only",
       response_leakage_policy = if (identical(summary$forecast_mode[[1L]], "draw_recursive")) {
@@ -1190,11 +1462,16 @@ app_glofas_oracle_forecast_part1_single <- function(
   max_iter = NULL,
   min_iter = NULL,
   tol = NULL,
+  fit_object_path = NULL,
+  reuse_fit = TRUE,
+  forecast_backend = c("auto", "cpp", "r"),
+  progress_every = NULL,
   root_candidates = NULL
 ) {
   target <- match.arg(target)
   method <- match.arg(method)
   forecast_mode <- match.arg(forecast_mode)
+  forecast_backend <- match.arg(forecast_backend)
   candidate_row <- candidate_row %||% app_glofas_oracle_default_part1_winner_row()
   candidate_row <- app_glofas_oracle_complete_part1_candidate_row(candidate_row)
   bundle <- app_glofas_oracle_prepare_panel_bundle(
@@ -1204,14 +1481,16 @@ app_glofas_oracle_forecast_part1_single <- function(
     target = target,
     root_candidates = root_candidates
   )
-  fitted <- app_glofas_oracle_fit_part1(
+  fitted <- app_glofas_oracle_prepare_part1_fitted(
     base_cfg = base_cfg,
     candidate_row = candidate_row,
     panel_bundle = bundle,
     method = method,
     max_iter = max_iter,
     min_iter = min_iter,
-    tol = tol
+    tol = tol,
+    fit_object_path = fit_object_path,
+    reuse_fit = isTRUE(reuse_fit)
   )
   started <- Sys.time()
   forecast <- if (identical(forecast_mode, "draw_recursive")) {
@@ -1220,13 +1499,16 @@ app_glofas_oracle_forecast_part1_single <- function(
       future_dates = bundle$future_dates,
       covariate_timeline = attr(bundle$panel, "model_covariate_timeline", exact = TRUE),
       n_draws = n_draws,
-      seed = seed
+      seed = seed,
+      forecast_backend = forecast_backend,
+      progress_every = progress_every
     )
   } else {
     app_glofas_oracle_recursive_forecast(
       fitted = fitted,
       future_dates = bundle$future_dates,
-      covariate_timeline = attr(bundle$panel, "model_covariate_timeline", exact = TRUE)
+      covariate_timeline = attr(bundle$panel, "model_covariate_timeline", exact = TRUE),
+      forecast_backend = forecast_backend
     )
   }
   path_table <- app_glofas_oracle_path_table(fitted, forecast, future_truth = bundle$future_truth)
@@ -1276,11 +1558,14 @@ app_glofas_oracle_forecast_part1_rolling <- function(
   max_iter = NULL,
   min_iter = NULL,
   tol = NULL,
+  forecast_backend = c("auto", "cpp", "r"),
+  progress_every = NULL,
   root_candidates = NULL
 ) {
   target <- match.arg(target)
   method <- match.arg(method)
   forecast_mode <- match.arg(forecast_mode)
+  forecast_backend <- match.arg(forecast_backend)
   candidate_row <- candidate_row %||% app_glofas_oracle_default_part1_winner_row()
   plan <- app_glofas_oracle_origin_plan(
     cfg = base_cfg,
@@ -1306,6 +1591,10 @@ app_glofas_oracle_forecast_part1_rolling <- function(
       max_iter = max_iter,
       min_iter = min_iter,
       tol = tol,
+      fit_object_path = NULL,
+      reuse_fit = FALSE,
+      forecast_backend = forecast_backend,
+      progress_every = progress_every,
       root_candidates = root_candidates
     )
     fut <- res$path_table[res$path_table$segment == "oracle_realized_forecast", , drop = FALSE]

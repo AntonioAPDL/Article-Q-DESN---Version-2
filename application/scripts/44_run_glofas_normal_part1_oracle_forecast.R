@@ -35,6 +35,10 @@ args <- app_parse_args(list(
   max_iter = "",
   min_iter = "",
   tol = "",
+  fit_object_path = "",
+  reuse_fit = "true",
+  forecast_backend = "auto",
+  progress_every = "",
   forecast_mode = "plugin_mean_recursive",
   n_draws = "500",
   seed = "20260903",
@@ -53,6 +57,10 @@ horizon_days <- if (nzchar(as.character(args$horizon_days))) as.integer(args$hor
 max_iter <- if (nzchar(as.character(args$max_iter))) as.integer(args$max_iter) else NULL
 min_iter <- if (nzchar(as.character(args$min_iter))) as.integer(args$min_iter) else NULL
 tol <- if (nzchar(as.character(args$tol))) as.numeric(args$tol) else NULL
+fit_object_path <- if (nzchar(as.character(args$fit_object_path))) as.character(args$fit_object_path) else NULL
+reuse_fit <- tolower(as.character(args$reuse_fit)) %in% c("true", "1", "yes", "y")
+forecast_backend <- as.character(args$forecast_backend)
+progress_every <- if (nzchar(as.character(args$progress_every))) as.integer(args$progress_every) else NULL
 forecast_mode <- as.character(args$forecast_mode)
 n_draws <- as.integer(args$n_draws)
 seed <- as.integer(args$seed)
@@ -71,7 +79,11 @@ result <- app_glofas_oracle_forecast_part1_single(
   retain_draws = retain_draws,
   max_iter = max_iter,
   min_iter = min_iter,
-  tol = tol
+  tol = tol,
+  fit_object_path = fit_object_path,
+  reuse_fit = reuse_fit,
+  forecast_backend = forecast_backend,
+  progress_every = progress_every
 )
 written <- app_glofas_oracle_write_result(
   result = result,

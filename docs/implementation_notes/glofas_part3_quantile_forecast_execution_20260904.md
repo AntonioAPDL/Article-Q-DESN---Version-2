@@ -106,3 +106,65 @@ structured exAL, joint AL, score semantics, C++/R equivalence for Normal and
 quantile recursion, discrepancy sign identity, and the complete scheduler DAG.
 An actual-data two-day Normal forecast and reduced-iteration AL median canary
 remain mandatory on the execution host before the production scheduler starts.
+
+## Jerez Execution Handoff
+
+Run this continuation from a new dedicated Jerez worktree at the exact task
+branch commit. Do not change the active worktree that produced the Part 2
+forecast chain and Part 3 Normal fits.
+
+The read-only prerequisites are expected at:
+
+```text
+/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_part2_rhs_jerez_20260904/
+  local_trackers/runtime_configs/glofas_part3_normal_historical_jerez_20260904
+```
+
+That runtime must contain completed `normal_ridge_joint` and
+`normal_rhs_vb_joint` jobs, their fit objects, their SHA-backed execution
+contracts, and `configs/part3_frozen_g1_g2_winners.csv`. Preparation fails
+closed until all of those conditions hold.
+
+From the new Jerez worktree, run the focused tests listed above and then prepare
+the continuation:
+
+```bash
+Rscript application/scripts/72_prepare_glofas_part3_quantile_forecast_runtime.R \
+  --base_config "$BASE_CONFIG" \
+  --winner_manifest "$WINNERS" \
+  --normal_runtime_root "$NORMAL_ROOT" \
+  --runtime_root "$RUN_ROOT" \
+  --horizon_days 30
+```
+
+Before production, use scripts 73 and 74 in a separate smoke runtime for a
+two-day, eight-draw retained Normal RHS forecast and a two-iteration independent
+AL median fit/forecast. Require the C++ backend and do not reuse the smoke fit.
+
+Prepare and launch the production DAG only after both canaries pass:
+
+```bash
+python3 application/scripts/75_prepare_glofas_part3_quantile_forecast_chain.py \
+  --repo-root "$CODE_WT" \
+  --runtime-root "$RUN_ROOT" \
+  --max-iter 100 \
+  --min-iter 30 \
+  --tol 0.01 \
+  --horizon-days 30 \
+  --normal-draws 500 \
+  --forecast-backend cpp
+
+python3 application/scripts/76_launch_glofas_part3_quantile_forecast_chain.py \
+  --runtime-root "$RUN_ROOT" \
+  --workers 20 \
+  --poll-seconds 60 \
+  --session-prefix glofas_p3_qf_jerez_20260904 \
+  --background
+```
+
+Monitor with script 77 using the same runtime root and session prefix. Declare
+the Jerez result ready for Muscat import only at 18/18 completed, zero failed,
+zero running, and zero pending, after auditing every initializer, fit, forecast,
+trace, execution contract, date window, and SHA256. Package all scientific fit
+and forecast deliverables, but exclude the reconstructible heavy design cache
+and never track runtime outputs in Git.

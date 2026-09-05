@@ -16,7 +16,19 @@ ARTIFACT_REPO = Path("/data/jaguir26/local/src/Article-Q-DESN")
 DATA = ARTIFACT_REPO / "application/data_local/pricefm"
 R87_GRID = DATA / "experiment_grids/pricefm_stage_r87_homogeneous_exal_refit_20260904"
 R90_GRID = DATA / "experiment_grids/pricefm_stage_r90_scoring_only_test_audit_20260905"
+R88_OUTPUT = DATA / "authoritative/pricefm_stage_r88_repaired_exal_surface_closeout_20260905"
+R89_OUTPUT = DATA / "authoritative/pricefm_stage_r89_validation_family_selection_20260905"
+R90_PREP = DATA / "authoritative/pricefm_stage_r90_scoring_only_test_prep_20260905"
 OUTPUT = DATA / "authoritative/pricefm_stage_r91_test_audit_and_promotion_20260905"
+RECOVERY_LOG = DATA / "logs/pricefm_stage_r87_to_r91_finalizer_recovery_20260905.log"
+EXPECTED_PYTHON_ENVIRONMENT = {
+    "python": "3.11.13",
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "scikit_learn": "1.8.0",
+    "pyyaml": "6.0.3",
+    "joblib": "1.5.3",
+}
 
 
 def parser() -> argparse.ArgumentParser:
@@ -57,6 +69,52 @@ def require_unchanged_head(code_root: Path, expected: str) -> None:
     observed = code_head(code_root)
     if observed != expected:
         raise RuntimeError(f"Finalizer code HEAD changed: expected {expected}, observed {observed}")
+
+
+def python_executable(path: Path) -> Path:
+    """Return an absolute executable path without dereferencing a venv symlink."""
+    expanded = path.expanduser()
+    return expanded.absolute() if not expanded.is_absolute() else expanded
+
+
+def inspect_python_environment(python: Path) -> dict[str, str]:
+    probe = (
+        "import json,platform,sys,joblib,numpy,pandas,sklearn,yaml;"
+        "print(json.dumps({'executable':sys.executable,'prefix':sys.prefix,"
+        "'python':platform.python_version(),'numpy':numpy.__version__,"
+        "'pandas':pandas.__version__,'scikit_learn':sklearn.__version__,"
+        "'pyyaml':yaml.__version__,'joblib':joblib.__version__},sort_keys=True))"
+    )
+    result = subprocess.run(
+        [str(python), "-c", probe], capture_output=True, text=True,
+    )
+    if result.returncode:
+        raise RuntimeError(f"PriceFM Python environment probe failed: {result.stderr.strip()}")
+    observed = json.loads(result.stdout.strip())
+    mismatches = {
+        name: {"expected": expected, "observed": observed.get(name)}
+        for name, expected in EXPECTED_PYTHON_ENVIRONMENT.items()
+        if observed.get(name) != expected
+    }
+    expected_prefix = str(python.parent.parent.absolute())
+    if observed.get("prefix") != expected_prefix:
+        mismatches["prefix"] = {
+            "expected": expected_prefix, "observed": observed.get("prefix"),
+        }
+    if mismatches:
+        raise RuntimeError(f"PriceFM Python environment mismatch: {mismatches}")
+    return observed
+
+
+def require_summary(path: Path, expected: dict[str, Any]) -> dict[str, Any]:
+    observed = json.loads(path.read_text())
+    mismatches = {
+        name: {"expected": value, "observed": observed.get(name)}
+        for name, value in expected.items() if observed.get(name) != value
+    }
+    if mismatches:
+        raise RuntimeError(f"Unexpected materialized boundary in {path}: {mismatches}")
+    return observed
 
 
 def resource_preflight(command: list[str], cwd: Path, log_path: Path) -> bool:
@@ -101,75 +159,107 @@ def wait_for_r87(
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if not args.authorize_test_audit:
         raise RuntimeError("R88-R91 finalization requires explicit --authorize-test-audit")
-    code_root = args.code_root.resolve(); python = args.python_bin.resolve()
+    code_root = args.code_root.resolve(); python = python_executable(args.python_bin)
     if not python.is_file():
         raise FileNotFoundError(python)
     frozen_code_head = code_head(code_root)
     state_path = R90_GRID / "finalizer_state.json"
-    log_path = DATA / "logs/pricefm_stage_r87_to_r91_finalizer_20260905.log"
+    log_path = RECOVERY_LOG
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    atomic_json(state_path, {
-        "status": "starting", "frozen_code_head": frozen_code_head, "test_opened": False,
-    })
-    wait_for_r87(args.poll_seconds, state_path, code_root, frozen_code_head)
-    require_unchanged_head(code_root, frozen_code_head)
-    stages = (
-        "282_closeout_pricefm_stage_r88_repaired_exal_surface.py",
-        "283_select_pricefm_stage_r89_validation_family.py",
-        "284_prepare_pricefm_stage_r90_scoring_only_test_audit.py",
-    )
-    for stage in stages:
-        require_unchanged_head(code_root, frozen_code_head)
+    current_stage = "environment_preflight"
+    test_opened = False
+    environment: dict[str, str] | None = None
+    try:
+        environment = inspect_python_environment(python)
         atomic_json(state_path, {
-            "status": f"running_{stage[:3]}", "frozen_code_head": frozen_code_head,
-            "test_opened": False,
+            "status": "starting", "frozen_code_head": frozen_code_head,
+            "python_environment": environment, "test_opened": False,
         })
-        run_command([
-            str(python), str(code_root / "application/scripts/pricefm" / stage), "--force",
-        ], code_root, log_path)
+        current_stage = "r87_completion_gate"
+        wait_for_r87(args.poll_seconds, state_path, code_root, frozen_code_head)
+        require_unchanged_head(code_root, frozen_code_head)
+        stages = (
+            ("r88", "282_closeout_pricefm_stage_r88_repaired_exal_surface.py"),
+            ("r89", "283_select_pricefm_stage_r89_validation_family.py"),
+            ("r90_prep", "284_prepare_pricefm_stage_r90_scoring_only_test_audit.py"),
+        )
+        for current_stage, stage in stages:
+            require_unchanged_head(code_root, frozen_code_head)
+            atomic_json(state_path, {
+                "status": f"running_{current_stage}", "frozen_code_head": frozen_code_head,
+                "python_environment": environment, "test_opened": False,
+            })
+            run_command([
+                str(python), str(code_root / "application/scripts/pricefm" / stage), "--force",
+            ], code_root, log_path)
+            if current_stage == "r88":
+                require_summary(R88_OUTPUT / "summary.json", {
+                    "atoms": 294, "cases": 42, "eligible_exal_cases": 32,
+                    "fallback_al_cases": 10, "test_opened": False,
+                })
+            elif current_stage == "r89":
+                require_summary(R89_OUTPUT / "summary.json", {
+                    "cases": 56, "selected_atoms": 392, "exal_selected_cases": 32,
+                    "al_selected_cases": 24, "test_opened": False,
+                })
+            else:
+                require_summary(R90_PREP / "summary.json", {
+                    "cases": 56, "selected_atoms": 392, "model_refits_authorized": 0,
+                    "test_opened": False,
+                })
 
-    launcher = code_root / "application/scripts/pricefm/286_launch_pricefm_stage_r90_scoring_only_test_audit.py"
-    preflight = [
-        str(python), str(launcher), "--code-root", str(code_root),
-        "--workers", str(args.scoring_workers), "--preflight-only",
-    ]
-    while True:
-        require_unchanged_head(code_root, frozen_code_head)
-        atomic_json(state_path, {
-            "status": "waiting_for_r90_resources", "frozen_code_head": frozen_code_head,
-            "test_opened": False,
-        })
-        try:
+        launcher = code_root / "application/scripts/pricefm/286_launch_pricefm_stage_r90_scoring_only_test_audit.py"
+        preflight = [
+            str(python), str(launcher), "--code-root", str(code_root),
+            "--workers", str(args.scoring_workers), "--preflight-only",
+        ]
+        current_stage = "r90_resource_preflight"
+        while True:
+            require_unchanged_head(code_root, frozen_code_head)
+            atomic_json(state_path, {
+                "status": "waiting_for_r90_resources", "frozen_code_head": frozen_code_head,
+                "python_environment": environment, "test_opened": False,
+            })
             if resource_preflight(preflight, code_root, log_path):
                 break
-        except RuntimeError:
-            atomic_json(state_path, {"status": "failed_r90_scientific_preflight", "test_opened": False})
-            raise
-        time.sleep(args.poll_seconds)
-    require_unchanged_head(code_root, frozen_code_head)
-    atomic_json(state_path, {
-        "status": "running_r90_scoring_only_test_audit", "frozen_code_head": frozen_code_head,
-        "test_opened": True,
-    })
-    run_command([
-        str(python), str(launcher), "--code-root", str(code_root),
-        "--workers", str(args.scoring_workers), "--authorize",
-    ], code_root, log_path)
-    require_unchanged_head(code_root, frozen_code_head)
-    atomic_json(state_path, {
-        "status": "running_r91_closeout", "frozen_code_head": frozen_code_head,
-        "test_opened": True,
-    })
-    run_command([
-        str(python), str(code_root / "application/scripts/pricefm/287_closeout_pricefm_stage_r91_test_audit_and_promotion.py"),
-        "--force",
-    ], code_root, log_path)
-    summary = json.loads((OUTPUT / "summary.json").read_text())
-    atomic_json(state_path, {
-        "status": "completed", "frozen_code_head": frozen_code_head,
-        "r91_summary": summary, "test_opened": True,
-    })
-    return summary
+            time.sleep(args.poll_seconds)
+
+        current_stage = "r90_scoring_only_test_audit"
+        require_unchanged_head(code_root, frozen_code_head)
+        atomic_json(state_path, {
+            "status": "running_r90_scoring_only_test_audit", "frozen_code_head": frozen_code_head,
+            "python_environment": environment, "test_opened": True,
+        })
+        test_opened = True
+        run_command([
+            str(python), str(launcher), "--code-root", str(code_root),
+            "--workers", str(args.scoring_workers), "--authorize",
+        ], code_root, log_path)
+
+        current_stage = "r91_closeout"
+        require_unchanged_head(code_root, frozen_code_head)
+        atomic_json(state_path, {
+            "status": "running_r91_closeout", "frozen_code_head": frozen_code_head,
+            "python_environment": environment, "test_opened": True,
+        })
+        run_command([
+            str(python), str(code_root / "application/scripts/pricefm/287_closeout_pricefm_stage_r91_test_audit_and_promotion.py"),
+            "--force",
+        ], code_root, log_path)
+        summary = json.loads((OUTPUT / "summary.json").read_text())
+        atomic_json(state_path, {
+            "status": "completed", "frozen_code_head": frozen_code_head,
+            "python_environment": environment, "r91_summary": summary, "test_opened": True,
+        })
+        return summary
+    except Exception as error:
+        atomic_json(state_path, {
+            "status": "failed", "failed_stage": current_stage,
+            "error_type": type(error).__name__, "error": str(error),
+            "frozen_code_head": frozen_code_head, "python_environment": environment,
+            "test_opened": test_opened,
+        })
+        raise
 
 
 def main() -> int:

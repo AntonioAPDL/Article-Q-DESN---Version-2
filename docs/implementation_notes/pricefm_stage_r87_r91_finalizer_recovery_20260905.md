@@ -88,3 +88,51 @@ remain unchanged as evidence.
 This is the minimum nonredundant path to complete the independent PriceFM VB
 comparison while preserving validation-only selection and a one-time test
 audit.
+
+## Materialized recovery result
+
+The repaired finalizer completed on commit
+`bcbb71c5e57d5664bf517d9386e67bf61ea860a3`. R88, R89, R90, and R91 all
+returned zero. R90 scored 56/56 cases with 20 workers, performed zero model
+refits, and reproduced every frozen validation prediction within a maximum
+absolute difference of `1.82e-12`. All 392 quantile metrics and 1,568
+quantile-by-horizon-block metrics are finite and uniquely keyed. All four
+source manifests re-hash without discrepancy, and R90 removed every temporary
+validation/test design or response matrix after scoring.
+
+R91 found 16 cases below authoritative Q-DESN, 30 below cached PriceFM, and 12
+strictly below both. Eleven dual winners use repaired exAL and one uses AL.
+
+| Case | Family | Candidate AQL | Q-DESN AQL | PriceFM AQL | Gain vs Q-DESN |
+|---|---|---:|---:|---:|---:|
+| IT_NORD fold 3 | exAL | 4.455446 | 4.584470 | 5.840089 | 0.129024 |
+| SE_3 fold 1 | exAL | 7.563096 | 7.620994 | 7.628088 | 0.057899 |
+| IT_CNOR fold 1 | exAL | 4.692527 | 4.723481 | 5.940016 | 0.030955 |
+| DK_2 fold 2 | exAL | 6.314902 | 6.331814 | 8.251471 | 0.016913 |
+| HU fold 1 | exAL | 7.871386 | 7.884141 | 8.500270 | 0.012755 |
+| ES fold 1 | AL | 5.232137 | 5.243147 | 5.959308 | 0.011010 |
+| DK_2 fold 3 | exAL | 7.407690 | 7.411013 | 9.368512 | 0.003323 |
+| AT fold 1 | exAL | 6.739250 | 6.741377 | 7.402188 | 0.002127 |
+| LV fold 3 | exAL | 12.838358 | 12.840327 | 13.756953 | 0.001969 |
+| FR fold 3 | exAL | 5.719495 | 5.720239 | 6.817623 | 0.000743 |
+| BE fold 2 | exAL | 6.396754 | 6.396922 | 6.496657 | 0.000167 |
+| DK_1 fold 3 | exAL | 7.212994 | 7.213099 | 7.943293 | 0.000105 |
+
+The complete 56-case candidate surface has mean test AQL 6.704209, compared
+with 6.607637 for authoritative Q-DESN and 6.897056 for cached PriceFM. It is
+therefore 1.462% worse than the current Q-DESN surface but 2.796% better than
+PriceFM on the unweighted case mean. Replacing only the 12 registered dual
+winners would change mean authoritative Q-DESN AQL from 6.607637 to 6.602869,
+an improvement of 0.004768 or 0.072%.
+
+The promotion queue is valid under the pre-registered strict ordering rule,
+but effect sizes against Q-DESN are often small: six exceed 0.1%, three exceed
+0.5%, and one exceeds 1%. Article prose must therefore describe targeted
+case-level gains, not uniform or material global dominance. The strongest
+new evidence is IT_NORD fold 3, followed by SE_3 fold 1 and IT_CNOR fold 1.
+The smaller deterministic wins remain valid registry candidates but should not
+be exaggerated as practically large improvements.
+
+R91 is read-only. No registry, article, joint-model, or MCMC authority was
+changed. The 12-row queue is ready for integration-coordinator review under
+the existing case-specific promotion contract.

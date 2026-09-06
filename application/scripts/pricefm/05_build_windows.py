@@ -7,8 +7,9 @@ import argparse
 from pathlib import Path
 
 from pricefm_common import (
-    load_config, now_utc, parse_bool, parser, pricefm_block, processed_dir,
-    refuse_incompatible, require_modules, summarize, write_json,
+    configured_split_names, load_config, now_utc, parse_bool, parser,
+    pricefm_block, processed_dir, refuse_incompatible, require_modules, summarize,
+    write_json,
 )
 
 
@@ -113,13 +114,11 @@ def save_windows_npz(windows, out_path, manifest):
 def build_context(split_frames, split_name):
     import pandas as pd
 
-    if split_name == "train":
-        return split_frames["train"], "train"
-    if split_name == "val":
-        return pd.concat([split_frames["train"], split_frames["val"]]), "train+val"
-    if split_name == "test":
-        return pd.concat([split_frames["train"], split_frames["val"], split_frames["test"]]), "train+val+test"
-    raise ValueError("Unknown split: {}".format(split_name))
+    names = [name for name in ("train", "val", "test") if name in split_frames]
+    if split_name not in names:
+        raise ValueError("Unknown or unavailable split: {}".format(split_name))
+    included = names[:names.index(split_name) + 1]
+    return pd.concat([split_frames[name] for name in included]), "+".join(included)
 
 
 def main():
@@ -174,13 +173,14 @@ def main():
             raise ValueError("No split specification for fold {}".format(fold))
 
         split_dir = scaled_root / "fold_{}".format(fold)
+        split_names = configured_split_names(split_spec)
         frames = {}
-        for split_name in ("train", "val", "test"):
+        for split_name in split_names:
             frame = pd.read_parquet(split_dir / "{}_scaled.parquet".format(split_name))
             frames[split_name] = ensure_market_index(frame, spec["split_time_col"], spec["time_col"])
 
         for region in regions:
-            for split_name in ("train", "val", "test"):
+            for split_name in split_names:
                 context, context_name = build_context(frames, split_name)
                 target_start, target_end = split_spec[split_name]
                 boundary_mode = (

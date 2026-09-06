@@ -4,17 +4,16 @@
 from __future__ import print_function
 
 from pricefm_common import (
-    load_config, now_utc, parser, pricefm_block, processed_dir,
-    refuse_incompatible, require_modules, summarize, write_json,
+    configured_split_names, load_config, now_utc, parser, pricefm_block,
+    processed_dir, refuse_incompatible, require_modules, summarize, write_json,
 )
 
 
-def fit_transform_scalers_per_region(train, val, test, regions, x_features, y_features):
+def fit_transform_scalers_per_region(frames, regions, x_features, y_features):
     from sklearn.preprocessing import RobustScaler
 
-    train_s = train.copy()
-    val_s = val.copy()
-    test_s = test.copy()
+    train = frames["train"]
+    scaled = {name: frame.copy() for name, frame in frames.items()}
     scalers = {}
 
     for region in regions:
@@ -28,12 +27,9 @@ def fit_transform_scalers_per_region(train, val, test, regions, x_features, y_fe
         x_scaler.fit(train[x_cols])
         y_scaler.fit(train[y_cols])
 
-        train_s[x_cols] = x_scaler.transform(train[x_cols])
-        val_s[x_cols] = x_scaler.transform(val[x_cols])
-        test_s[x_cols] = x_scaler.transform(test[x_cols])
-        train_s[y_cols] = y_scaler.transform(train[y_cols])
-        val_s[y_cols] = y_scaler.transform(val[y_cols])
-        test_s[y_cols] = y_scaler.transform(test[y_cols])
+        for name, frame in frames.items():
+            scaled[name][x_cols] = x_scaler.transform(frame[x_cols])
+            scaled[name][y_cols] = y_scaler.transform(frame[y_cols])
 
         scalers[region] = {
             "x_cols": x_cols,
@@ -42,7 +38,7 @@ def fit_transform_scalers_per_region(train, val, test, regions, x_features, y_fe
             "y_scaler": y_scaler,
         }
 
-    return train_s, val_s, test_s, scalers
+    return scaled, scalers
 
 
 def main():
@@ -70,21 +66,23 @@ def main():
         scaler_dir = scaler_root / "fold_{}".format(fold)
         scaled_dir.mkdir(parents=True, exist_ok=True)
         scaler_dir.mkdir(parents=True, exist_ok=True)
-        for name in ["train_scaled.parquet", "val_scaled.parquet", "test_scaled.parquet"]:
-            refuse_incompatible(scaled_dir / name, args.force)
+        split_names = configured_split_names(split_spec)
+        for name in split_names:
+            refuse_incompatible(scaled_dir / "{}_scaled.parquet".format(name), args.force)
         refuse_incompatible(scaler_dir / "per_region_separate_xy_scalers.joblib", args.force)
         refuse_incompatible(scaler_dir / "scaling_manifest.json", args.force)
 
-        train = pd.read_parquet(split_dir / "train.parquet")
-        val = pd.read_parquet(split_dir / "val.parquet")
-        test = pd.read_parquet(split_dir / "test.parquet")
-
-        train_s, val_s, test_s, scalers = fit_transform_scalers_per_region(
-            train, val, test, spec["regions"], x_features, y_features
+        frames = {
+            name: pd.read_parquet(split_dir / "{}.parquet".format(name))
+            for name in split_names
+        }
+        scaled, scalers = fit_transform_scalers_per_region(
+            frames, spec["regions"], x_features, y_features
         )
-        train_s.to_parquet(scaled_dir / "train_scaled.parquet", compression="zstd")
-        val_s.to_parquet(scaled_dir / "val_scaled.parquet", compression="zstd")
-        test_s.to_parquet(scaled_dir / "test_scaled.parquet", compression="zstd")
+        for name, frame in scaled.items():
+            frame.to_parquet(
+                scaled_dir / "{}_scaled.parquet".format(name), compression="zstd"
+            )
 
         scaler_file = scaler_dir / "per_region_separate_xy_scalers.joblib"
         joblib.dump(scalers, scaler_file)
@@ -94,6 +92,7 @@ def main():
             "scaling_mode": spec["scaling"]["mode"],
             "scaler": "sklearn.preprocessing.RobustScaler",
             "fit_on": "training split only",
+            "configured_splits": split_names,
             "regions": sorted(scalers.keys()),
             "x_features": x_features,
             "y_features": y_features,

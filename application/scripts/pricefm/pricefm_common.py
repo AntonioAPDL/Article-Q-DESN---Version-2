@@ -16,6 +16,20 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = "application/config/pricefm_data_pipeline.yaml"
+SPLIT_ORDER = ("train", "val", "test")
+
+
+def configured_split_names(split_spec):
+    """Return supported split names in temporal order."""
+    names = [name for name in SPLIT_ORDER if name in split_spec]
+    if "train" not in names:
+        raise ValueError("Every PriceFM fold must define a train split.")
+    unsupported = sorted(
+        key for key in split_spec if key != "fold" and key not in SPLIT_ORDER
+    )
+    if unsupported:
+        raise ValueError("Unsupported PriceFM split names: {}".format(", ".join(unsupported)))
+    return names
 
 
 def parse_bool(value):

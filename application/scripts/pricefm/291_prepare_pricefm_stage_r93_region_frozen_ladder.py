@@ -42,6 +42,9 @@ DEFAULT_GENERATED = (
     DATA_ROOT / "experiment_grids/pricefm_stage_r93_region_frozen_ridge_20260906"
 )
 DEFAULT_RUN_ROOT = DATA_ROOT / "runs/pricefm_stage_r93_region_frozen_ridge_20260906"
+DEFAULT_PROCESSED_ROOT = (
+    DATA_ROOT / "processed_stage_r93_region_frozen_20260906"
+)
 DEFAULT_NORMAL_RUNTIME_ROOT = (
     DATA_ROOT / "runtime_sources/exdqlm_pricefm_r93_normal_exact_names"
 )
@@ -395,6 +398,9 @@ def make_base_configs(
         value = Path(str(data_cfg[key]))
         if not value.is_absolute():
             data_cfg[key] = str(artifact_repo / value)
+    data_cfg["processed_dir"] = str(
+        artifact_repo / "application/data_local/pricefm/processed_stage_r93_region_frozen_20260906"
+    )
     data_cfg["allow_absolute_local_paths"] = True
     data_cfg["splits"] = copy.deepcopy(INNER_SPLITS)
     data_cfg["pilot"] = {"enabled": True, "region": target_region, "fold": 101}

@@ -42,6 +42,13 @@ Fold-1 training interval:
 The original Fold-1 validation interval begins at 2024-09-01 and is reserved
 for confirmation. Outer test/forecast windows are absent from the Ridge config.
 
+The internal folds are materialized under the dedicated ignored root
+`application/data_local/pricefm/processed_stage_r93_region_frozen_20260906`.
+The split, scaler, and window builders honor only the configured `train,val`
+surface; they neither require nor create a synthetic test split. The launcher
+can prepare this dependency with `--prepare-data true`, refuses ambiguous
+partial data state, and records live launch status after each gate and fit.
+
 ## Ladder
 
 1. Rank Ridge candidates by median inner-validation AQL, then worst-window AQL,
@@ -82,6 +89,10 @@ worktree.
 - `application/tests/test_pricefm_stage_r93_normal_runtime.py`
 - stage-selective switches in `08_run_desn_model_smoke.R`
 - R93 metadata propagation in `12_prepare_desn_experiment_grid.py`
+- observational-only split/scaler/window support in `03_make_splits.py`,
+  `04_fit_scalers.py`, and `05_build_windows.py`
+- resumable pre-data and live-status gates in `13_run_desn_experiment_grid.py`
+- `application/tests/test_pricefm_observational_only_pipeline.py`
 
 The first script materializes and validates the Ridge grid. After all Ridge
 results exist, the second script refuses partial/nonconverged surfaces, rejects

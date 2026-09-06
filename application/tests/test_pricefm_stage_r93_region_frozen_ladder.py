@@ -137,6 +137,8 @@ def test_r93_prep_includes_all_fold_controls_and_quarantines_test(tmp_path):
     assert base_data["allow_absolute_local_paths"] is True
     for key in ["raw_dir", "interim_dir", "processed_dir"]:
         assert Path(base_data[key]).is_absolute()
+    assert Path(base_data["processed_dir"]).name == "processed_stage_r93_region_frozen_20260906"
+    assert all("test" not in split for split in base_data["splits"])
     assert Path(base_full["package_path"]) == tmp_path
     assert grid["scope"]["splits"] == ["train", "val"]
     assert grid["scope"]["folds"] == [101, 102, 103]

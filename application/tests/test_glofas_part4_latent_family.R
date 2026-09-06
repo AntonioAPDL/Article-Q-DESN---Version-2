@@ -70,6 +70,39 @@ probe <- toy_design$future_builder(toy_design$y_future_init)
 stopifnot(all(abs(tapply(probe$weight_g, probe$g_future_index, sum) - 1) < 1.0e-12))
 stopifnot(nzchar(app_glofas_part4_state_contract_hash(toy_design)))
 
+set.seed(20260906L)
+batch_theta_cov <- crossprod(matrix(rnorm(16L), 4L, 4L)) / 10
+batch_theta_mean <- rnorm(4L)
+batch_y_cov <- crossprod(matrix(rnorm(4L), 2L, 2L)) / 10
+batch_J <- probe$J_g_key
+batch_coeff <- c(0.7, 1.3)
+legacy_precision <- matrix(0, 4L, 4L)
+for (h in seq_along(batch_J)) {
+  legacy_precision <- app_latent_add_J_precision(
+    legacy_precision, batch_coeff[[h]], batch_J[[h]], batch_y_cov
+  )
+}
+batched_precision <- matrix(0, 4L, 4L)
+batched_block <- app_latent_weighted_jacobian_precision(batch_J, batch_coeff, batch_y_cov)
+batched_precision[batched_block$index, batched_block$index] <- batched_block$value
+stopifnot(max(abs(legacy_precision - batched_precision)) < 1.0e-10)
+legacy_trace <- vapply(batch_J, function(J) {
+  app_latent_jacobian_trace_theta(J, batch_y_cov, batch_theta_mean, batch_theta_cov)
+}, numeric(1L))
+batched_trace <- app_latent_jacobian_trace_theta_batch(
+  batch_J, batch_y_cov, batch_theta_mean, batch_theta_cov
+)
+stopifnot(max(abs(legacy_trace - batched_trace)) < 1.0e-10)
+draw_cov_probe <- crossprod(matrix(rnorm(16L), 4L, 4L)) + diag(0.1, 4L)
+draws_checked <- app_latent_mvn_draws_exact(
+  rep(0, 4L), draw_cov_probe, 8L, seed = 101L, assume_symmetric = FALSE
+)
+draws_certified <- app_latent_mvn_draws_exact(
+  rep(0, 4L), draw_cov_probe, 8L, seed = 101L, assume_symmetric = TRUE
+)
+stopifnot(max(abs(as.numeric(draws_checked) - as.numeric(draws_certified))) < 1.0e-12)
+stopifnot(identical(attr(draws_certified, "backend", exact = TRUE), "chol"))
+
 gig_half <- app_latent_gig_half_moments(c(0.5, 2), c(3, 4))
 gig_general <- app_latent_gig_moments(0.5, c(0.5, 2), c(3, 4))
 stopifnot(max(abs(gig_half$mean - gig_general$mean)) < 1.0e-10)
@@ -107,8 +140,42 @@ base_args <- list(
   min_beta_updates = 2L, rhs = list(freeze_tau_warmup_iters = 0L, update_every = 1L, min_tau_updates = 0L)
 )
 normal_ridge <- app_fit_latent_path_normal_vb_core(toy_design, "ridge", base_args, seed = 11L)
+normal_cache_probe <- app_latent_normal_fixed_cache(toy_design)
+stopifnot(isTRUE(normal_cache_probe$paired_beta_crossproduct))
+stopifnot(identical(normal_cache_probe$Y$Pbb, normal_cache_probe$G$Pbb))
 stopifnot(normal_ridge$vb_diagnostics$iterations == 3L)
 stopifnot(normal_ridge$vb_diagnostics$beta_update_count == 2L)
+normal_legacy <- app_fit_latent_path_normal_vb_core(
+  toy_design,
+  "ridge",
+  modifyList(base_args, list(normal_exact_optimization = FALSE)),
+  seed = 11L
+)
+stopifnot(isTRUE(normal_ridge$vb_diagnostics$normal_exact_optimization))
+stopifnot(!isTRUE(normal_legacy$vb_diagnostics$normal_exact_optimization))
+stopifnot(identical(normal_ridge$vb_diagnostics$fixed_cache_schema, "latent_normal_fixed_cache_v1"))
+stopifnot(nrow(normal_ridge$vb_diagnostics$iteration_timing) > 0L)
+stopifnot(nrow(normal_ridge$vb_diagnostics$stage_timing) == 3L)
+stopifnot(isTRUE(all.equal(
+  normal_ridge$summary$theta_mean,
+  normal_legacy$summary$theta_mean,
+  tolerance = 1.0e-9
+)))
+stopifnot(isTRUE(all.equal(
+  normal_ridge$summary$theta_cov,
+  normal_legacy$summary$theta_cov,
+  tolerance = 1.0e-9
+)))
+stopifnot(isTRUE(all.equal(
+  normal_ridge$summary$y_future_mean,
+  normal_legacy$summary$y_future_mean,
+  tolerance = 1.0e-9
+)))
+stopifnot(isTRUE(all.equal(
+  normal_ridge$summary$sigma_mean,
+  normal_legacy$summary$sigma_mean,
+  tolerance = 1.0e-9
+)))
 normal_init <- app_glofas_part4_initializer(normal_ridge, toy_design)
 normal_rhs <- app_fit_latent_path_normal_vb_core(
   toy_design, "rhs_ns", modifyList(base_args, list(initial_state = normal_init)), seed = 12L
@@ -144,6 +211,8 @@ exal_args <- modifyList(base_args, list(
 exal_fit <- app_fit_latent_path_exal_vb_core(toy_design, 0.5, "ridge", exal_args, seed = 14L)
 stopifnot(all(is.finite(exal_fit$summary$theta_mean)))
 stopifnot(identical(names(exal_fit$summary$gamma_mean), c("Y", "G")))
+stopifnot(nrow(exal_fit$vb_diagnostics$iteration_timing) > 0L)
+stopifnot(nrow(exal_fit$vb_diagnostics$stage_timing) == 3L)
 
 joint_args <- modifyList(base_args, list(
   tol = 1.0e-6, joint_outer_max_iter = 1L, joint_outer_min_iter = 1L,

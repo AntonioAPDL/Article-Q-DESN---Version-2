@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import hashlib
 import os
 import shlex
 import subprocess
@@ -13,11 +14,18 @@ from pathlib import Path
 
 THREAD_ENV = {
     "OMP_NUM_THREADS": "1",
+    "OMP_THREAD_LIMIT": "1",
     "OPENBLAS_NUM_THREADS": "1",
+    "GOTO_NUM_THREADS": "1",
     "MKL_NUM_THREADS": "1",
+    "BLIS_NUM_THREADS": "1",
     "VECLIB_MAXIMUM_THREADS": "1",
     "NUMEXPR_NUM_THREADS": "1",
 }
+OPENBLAS_CANDIDATES = (
+    "/lib64/libopenblas.so",
+    "/usr/lib64/libopenblas.so",
+)
 APPROVAL_TOKEN = "RUN_GLOFAS_PART4_LATENT_FAMILY"
 
 
@@ -56,6 +64,43 @@ def shell_join(parts):
     return " ".join(shlex.quote(str(part)) for part in parts)
 
 
+def resolve_blas_library(value):
+    requested = str(value or "auto")
+    if requested.lower() == "auto":
+        candidates = [Path(path) for path in OPENBLAS_CANDIDATES]
+    elif requested.lower() in {"none", "bundled"}:
+        return None
+    else:
+        candidates = [Path(requested)]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise SystemExit(
+        "optimized BLAS library is required but unavailable; checked: "
+        + ", ".join(str(path) for path in candidates)
+    )
+
+
+def runtime_env(blas_library):
+    env = os.environ.copy()
+    env.update(THREAD_ENV)
+    if blas_library is not None:
+        digest = hashlib.sha256()
+        with blas_library.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+        existing = env.get("LD_PRELOAD", "").strip()
+        env["LD_PRELOAD"] = str(blas_library) + ((":" + existing) if existing else "")
+        env["QDESN_NUMERICAL_BACKEND"] = "openblas_serial"
+        env["QDESN_BLAS_LIBRARY_PATH"] = str(blas_library)
+        env["QDESN_BLAS_LIBRARY_SHA256"] = digest.hexdigest()
+    else:
+        env["QDESN_NUMERICAL_BACKEND"] = "bundled_rblas"
+        env.pop("QDESN_BLAS_LIBRARY_PATH", None)
+        env.pop("QDESN_BLAS_LIBRARY_SHA256", None)
+    return env
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", required=True)
@@ -65,6 +110,7 @@ def main():
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--approval-token", default="")
     parser.add_argument("--background", action="store_true")
+    parser.add_argument("--blas-library", default="auto")
     args = parser.parse_args()
     if not args.execute or args.approval_token != APPROVAL_TOKEN:
         raise SystemExit(
@@ -74,6 +120,8 @@ def main():
     if args.workers < 1 or args.workers > 18:
         raise SystemExit("workers must be in 1..18; each model worker is single-threaded")
     runtime = resolve(args.runtime_root)
+    blas_library = resolve_blas_library(args.blas_library)
+    env = runtime_env(blas_library)
     manifest_path = runtime / "configs" / "part4_model_manifest.csv"
     if not manifest_path.exists():
         raise SystemExit(f"missing Part 4 manifest: {manifest_path}")
@@ -86,6 +134,7 @@ def main():
             sys.executable, str(Path(__file__).resolve()),
             "--runtime-root", str(runtime), "--workers", str(args.workers),
             "--poll-seconds", str(args.poll_seconds), "--session-prefix", args.session_prefix,
+            "--blas-library", str(blas_library) if blas_library is not None else "none",
             "--execute", "--approval-token", APPROVAL_TOKEN,
         ]
         log = runtime / "logs" / "part4_scheduler.log"
@@ -94,6 +143,7 @@ def main():
             ["tmux", "new-session", "-d", "-s", scheduler_session,
              f"{shell_join(command)} >> {shlex.quote(str(log))} 2>&1"],
             check=True,
+            env=env,
         )
         print(f"scheduler_session={scheduler_session}")
         print(f"scheduler_log={log}")
@@ -107,8 +157,9 @@ def main():
     logs_dir = runtime / "logs"
     for directory in (status_dir, scripts_dir, logs_dir):
         directory.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
-    env.update(THREAD_ENV)
+    print(f"numerical_backend={env['QDESN_NUMERICAL_BACKEND']}", flush=True)
+    print(f"blas_library={env.get('QDESN_BLAS_LIBRARY_PATH', '')}", flush=True)
+    print(f"blas_sha256={env.get('QDESN_BLAS_LIBRARY_SHA256', '')}", flush=True)
 
     while True:
         completed = {row["run_id"] for row in rows if (status_dir / f"{row['run_id']}.completed").exists()}
@@ -141,6 +192,10 @@ def main():
             wrapper.write_text(
                 "#!/usr/bin/env bash\nset -euo pipefail\n" +
                 "\n".join(f"export {key}={value}" for key, value in THREAD_ENV.items()) +
+                "\n" + f"export QDESN_NUMERICAL_BACKEND={shlex.quote(env['QDESN_NUMERICAL_BACKEND'])}" +
+                ("\n" + f"export QDESN_BLAS_LIBRARY_PATH={shlex.quote(env['QDESN_BLAS_LIBRARY_PATH'])}" if blas_library is not None else "") +
+                ("\n" + f"export QDESN_BLAS_LIBRARY_SHA256={shlex.quote(env['QDESN_BLAS_LIBRARY_SHA256'])}" if blas_library is not None else "") +
+                ("\n" + f"export LD_PRELOAD={shlex.quote(env['LD_PRELOAD'])}" if blas_library is not None else "") +
                 "\n" + shell_join(command) + "\n",
                 encoding="utf-8",
             )

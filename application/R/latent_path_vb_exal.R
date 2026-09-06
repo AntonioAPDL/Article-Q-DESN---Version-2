@@ -143,6 +143,7 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
   min_beta_updates <- as.integer(vb_args$min_beta_updates %||% 1L)
   progress_every <- as.integer(vb_args$progress_every %||% 1L)
   progress_path <- as.character(vb_args$progress_path %||% "")[[1L]]
+  profile_substeps <- isTRUE((vb_args$diagnostics %||% list())$profile_substeps %||% FALSE)
   if (max_iter < 1L || min_iter < 1L || min_iter > max_iter || tol <= 0 ||
       freeze_beta < 0L || freeze_beta >= max_iter || freeze_beta + min_beta_updates > max_iter) {
     stop("Invalid exAL latent-path VB controls.", call. = FALSE)
@@ -157,7 +158,10 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     beta_index = design$beta_index, alpha_index = design$alpha_index
   )
   prior_state <- app_latent_prior_apply_addition(prior_state, vb_args$prior_addition %||% NULL)
-  row_moments <- app_latent_row_moments(design, y_mean, y_cov, theta_mean, theta_cov)
+  row_moments <- app_latent_row_moments(
+    design, y_mean, y_cov, theta_mean, theta_cov,
+    profile_substeps = profile_substeps
+  )
   source <- app_latent_all_source(row_moments)
   n_rows <- length(source)
   gamma_init <- as.numeric((vb_args$initial_state %||% list())$gamma %||% app_joint_qvp_default_gamma(p0))
@@ -179,31 +183,46 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
   s_mean <- rep(sqrt(2 / pi), n_rows)
   s2_mean <- rep(1, n_rows)
   trace <- vector("list", max_iter)
+  iteration_timing <- vector("list", max_iter)
   quadrature_trace <- list()
   beta_update_count <- 0L
   converged <- FALSE
   started <- Sys.time()
 
   for (iter in seq_len(max_iter)) {
+    timing <- list()
+    timed <- function(name, expr) {
+      start <- proc.time()[["elapsed"]]
+      value <- force(expr)
+      timing[[length(timing) + 1L]] <<- data.frame(
+        step = name,
+        elapsed_seconds = proc.time()[["elapsed"]] - start,
+        stringsAsFactors = FALSE
+      )
+      value
+    }
     old <- c(theta_mean, y_mean, unlist(lapply(block_moments, `[[`, "sigma_mean")), gamma)
     beta_updated <- iter > freeze_beta
-    working <- app_latent_exal_working_state(row_moments, latent_inv, s_mean, block_moments)
+    working <- timed("working_state", app_latent_exal_working_state(
+      row_moments, latent_inv, s_mean, block_moments
+    ))
     if (isTRUE(beta_updated)) {
-      theta_update <- app_latent_update_theta(
+      theta_update <- timed("theta_update", app_latent_update_theta(
         working$row_moments,
         working$effective_precision,
         working$sigma_proxy,
         list(A = 0, B = 1),
         prior_state,
-        chunking = vb_args$chunking %||% NULL
-      )
+        chunking = vb_args$chunking %||% NULL,
+        profile_substeps = profile_substeps
+      ))
       theta_mean <- as.numeric(theta_update$mean)
-      theta_cov <- (theta_update$cov + t(theta_update$cov)) / 2
+      theta_cov <- theta_update$cov
       beta_update_count <- beta_update_count + 1L
     }
     n_fixed <- row_moments$fixed$n
     n_y <- row_moments$future$n_y
-    future_update <- app_latent_update_future_gaussian_delta(
+    future_update <- timed("future_update", app_latent_update_future_gaussian_delta(
       row_moments,
       y_mean,
       theta_mean,
@@ -213,20 +232,23 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       list(A = 0, B = 1),
       response_offset_y = working$response_offset[n_fixed + seq_len(n_y)],
       response_offset_g = working$response_offset[n_fixed + n_y + seq_len(row_moments$future$n_g)]
-    )
+    ))
     y_mean <- future_update$mean
     y_cov <- future_update$cov
-    row_moments <- app_latent_row_moments(design, y_mean, y_cov, theta_mean, theta_cov)
-    local <- app_latent_exal_local_update(
+    row_moments <- timed("row_moments", app_latent_row_moments(
+      design, y_mean, y_cov, theta_mean, theta_cov,
+      profile_substeps = profile_substeps
+    ))
+    local <- timed("local_update", app_latent_exal_local_update(
       row_moments, block_moments, latent_mean, latent_inv, s_mean, s2_mean
-    )
+    ))
     latent_mean <- local$latent_mean
     latent_inv <- local$latent_inv
     s_mean <- local$s_mean
     s2_mean <- local$s2_mean
-    scale_updates <- app_latent_exal_scale_shape_update(
+    scale_updates <- timed("scale_shape_update", app_latent_exal_scale_shape_update(
       row_moments, p0, latent_mean, latent_inv, s_mean, s2_mean, vb_args
-    )
+    ))
     for (src in c("Y", "G")) {
       block_moments[[src]] <- scale_updates[[src]]$moments
       gamma[[src]] <- block_moments[[src]][["gamma_mean"]]
@@ -238,11 +260,14 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
         )
       }
     }
-    prior_state <- app_latent_prior_state_update(prior_state, theta_mean, theta_cov, iter = iter)
+    prior_state <- timed("prior_update", app_latent_prior_state_update(
+      prior_state, theta_mean, theta_cov, iter = iter
+    ))
     gate <- app_latent_prior_rhs_gate(prior_state, iter)
     now <- c(theta_mean, y_mean, unlist(lapply(block_moments, `[[`, "sigma_mean")), gamma)
     change <- max(abs(now - old) / pmax(1, abs(old)))
     eligible <- iter >= min_iter && beta_update_count >= min_beta_updates && isTRUE(gate$passed)
+    iteration_timing[[iter]] <- transform(do.call(rbind, timing), iteration = iter)
     trace[[iter]] <- data.frame(
       iteration = iter,
       beta_updated = beta_updated,
@@ -271,15 +296,31 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     }
   }
   trace <- do.call(rbind, trace[vapply(trace, is.data.frame, logical(1L))])
-  theta_draws <- app_latent_mvn_draws_exact(theta_mean, theta_cov, n_draws, seed + 11L)
-  y_draws <- app_latent_mvn_draws_exact(y_mean, y_cov, n_draws, seed + 17L)
-  sigma_draws <- vapply(c("Y", "G"), function(src) {
+  iteration_timing <- do.call(rbind, iteration_timing[vapply(iteration_timing, is.data.frame, logical(1L))])
+  post_fit_timing <- list()
+  post_timed <- function(name, expr) {
+    start <- proc.time()[["elapsed"]]
+    value <- force(expr)
+    post_fit_timing[[length(post_fit_timing) + 1L]] <<- data.frame(
+      step = name,
+      elapsed_seconds = proc.time()[["elapsed"]] - start,
+      stringsAsFactors = FALSE
+    )
+    value
+  }
+  theta_draws <- post_timed("theta_draw_generation", app_latent_mvn_draws_exact(
+    theta_mean, theta_cov, n_draws, seed + 11L, assume_symmetric = TRUE
+  ))
+  y_draws <- post_timed("future_draw_generation", app_latent_mvn_draws_exact(
+    y_mean, y_cov, n_draws, seed + 17L, assume_symmetric = TRUE
+  ))
+  sigma_draws <- post_timed("sigma_draw_generation", vapply(c("Y", "G"), function(src) {
     mean <- block_moments[[src]][["sigma_mean"]]
     second <- block_moments[[src]][["sigma2_mean"]]
     variance <- pmax(second - mean^2, 1.0e-12)
     log_var <- log1p(variance / mean^2)
     stats::rlnorm(n_draws, log(mean) - log_var / 2, sqrt(log_var))
-  }, numeric(n_draws))
+  }, numeric(n_draws)))
   colnames(sigma_draws) <- c("sigma_Y", "sigma_G")
   colnames(theta_draws) <- colnames(design$H_fixed)
   colnames(y_draws) <- sprintf("y_future_%02d", seq_len(horizon))
@@ -301,6 +342,8 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       iterations = nrow(trace),
       parameter_change_trace = trace$parameter_change,
       iteration_trace = trace,
+      iteration_timing = iteration_timing,
+      stage_timing = do.call(rbind, post_fit_timing),
       quadrature_trace = app_bind_rows_fill(quadrature_trace),
       freeze_beta_warmup_iters = freeze_beta,
       beta_update_count = beta_update_count,

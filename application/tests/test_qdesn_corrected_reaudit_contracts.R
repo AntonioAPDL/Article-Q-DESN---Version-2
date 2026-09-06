@@ -119,6 +119,33 @@ assert_contains("main.tex", "own-region load, solar, and wind lead covariates")
 assert_contains("main.tex", "evaluations with neighborhood summaries add retrospectively observed neighboring-region lead")
 manifest <- jsonlite::fromJSON(app_path("tables/pricefm_paper_aligned_main_comparison_manifest.json"))
 stopifnot(identical(manifest$applicability$cross_panel_comparison, "context_only_not_head_to_head"))
+aligned <- utils::read.csv(
+  app_path("tables/pricefm_paper_aligned_main_comparison.csv"),
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+qdesn_aligned <- aligned[aligned$model_family == "qdesn_case_specific", , drop = FALSE]
+pricefm_aligned <- aligned[aligned$model_family == "pricefm_phase1_released_checkpoint", , drop = FALSE]
+stopifnot(nrow(qdesn_aligned) == 1L, nrow(pricefm_aligned) == 1L)
+stopifnot(abs(qdesn_aligned$AQL - 6.823677420470439) < 1.0e-12)
+stopifnot(abs(qdesn_aligned$AQCR_percent - 2.579293032015585) < 1.0e-12)
+stopifnot(abs(qdesn_aligned$MAE - 16.721997707630997) < 1.0e-12)
+stopifnot(abs(qdesn_aligned$RMSE - 25.449231419703835) < 1.0e-12)
+stopifnot(abs(pricefm_aligned$AQL - 7.038685346534470) < 1.0e-12)
+updates <- utils::read.csv(
+  app_path("tables/pricefm_r91_selective_promotions.csv"),
+  stringsAsFactors = FALSE,
+  check.names = FALSE
+)
+stopifnot(nrow(updates) == 12L)
+stopifnot(sum(updates$selected_family == "exal") == 11L)
+stopifnot(sum(updates$selected_family == "al") == 1L)
+stopifnot(all(updates$promoted_qdesn_AQL < updates$old_qdesn_AQL))
+stopifnot(all(updates$promoted_qdesn_AQL < updates$pricefm_AQL))
+assert_contains("main.tex", "AL and exAL specifications were chosen using validation AQL")
+assert_contains("main.tex", "case-specific replacements")
+assert_contains("qdesn-supplement.tex", "tab:supp-pricefm-selective-updates")
+assert_contains("overleaf/article_files.txt", "tables/pricefm_r91_selective_promotions.tex")
 
 # The visible score label is aCRPS. Legacy variable names remain as
 # compatibility aliases, while current-output labels identify the finite-grid
@@ -130,12 +157,12 @@ assert_contains("main.tex", "q_{T,h,k}^*")
 assert_contains("main.tex", "\\sum_{k=1}^K\\omega_k=p_K-p_1")
 assert_contains("main.tex", "integrated check-loss")
 assert_contains("main.tex", "with finite first moment")
-assert_contains("main.tex", "pooled posterior means of the MCMC coefficient draws")
+assert_contains("main.tex", "posterior-mean quantile curve")
 assert_contains("main.tex", "variational posterior-mean quantile estimates")
 assert_contains("qdesn-supplement.tex", "Response-level posterior predictive")
 assert_contains("qdesn-supplement.tex", "fitted \\(p\\)-level quantile")
-assert_contains("main.tex", "fixed forecast-design rows derived from the")
-assert_contains("qdesn-supplement.tex", "fixed forecast-design rows derived from the")
+assert_contains("main.tex", "held-out design points")
+assert_contains("qdesn-supplement.tex", "fixed held-out")
 assert_not_contains("main.tex", "stated interpolation and tail specification")
 assert_not_contains("qdesn-supplement.tex", "stated interpolation and tail specification")
 assert_not_contains("main.tex", "pinball loss")

@@ -9,13 +9,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PAPER_QUANTILES = [0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90]
 DEFAULT_OUTPUT_CLOSEOUT_DIR = (
     "application/data_local/pricefm/authoritative/"
-    "pricefm_full_surface_decision_closeout_20260704"
+    "pricefm_stage_r92_selective_promotion_20260905"
 )
 
 
@@ -144,6 +145,11 @@ def fmt_pct(value: Any, digits: int = 1) -> str:
     return f"{100.0 * float(value):.{digits}f}\\%"
 
 
+def require_close(observed: Any, expected: Any, label: str, tolerance: float = 1e-10) -> None:
+    if not np.isclose(float(observed), float(expected), atol=tolerance, rtol=0.0):
+        raise ValueError(f"{label} changed: {observed} != {expected}")
+
+
 def tabular(headers: list[str], rows: list[list[str]], align: str) -> str:
     lines = [r"\begin{tabular}{" + align + "}", r"\toprule"]
     lines.append(" & ".join(headers) + r" \\")
@@ -151,6 +157,22 @@ def tabular(headers: list[str], rows: list[list[str]], align: str) -> str:
     for row in rows:
         lines.append(" & ".join(row) + r" \\")
     lines.extend([r"\bottomrule", r"\end{tabular}"])
+    return "\n".join(lines) + "\n"
+
+
+def manuscript_tabular(headers: list[str], rows: list[list[str]], align: str) -> str:
+    lines = [
+        r"\begingroup",
+        r"\TableStyle",
+        r"\scriptsize",
+        r"\setlength{\tabcolsep}{3pt}",
+        r"\begin{tabular}{@{}" + align + r"@{}}",
+        r"\toprule",
+        " & ".join(headers) + r" \\",
+        r"\midrule",
+    ]
+    lines.extend(" & ".join(row) + r" \\" for row in rows)
+    lines.extend([r"\bottomrule", r"\end{tabular}", r"\endgroup"])
     return "\n".join(lines) + "\n"
 
 
@@ -269,10 +291,12 @@ def write_benchmark_table(path: Path, frame: pd.DataFrame) -> Path:
         fmt_num(r["mean_delta_AQL"]),
         fmt_num(r["median_delta_AQL"]),
     ] for _, r in frame.iterrows()]
-    return write_text(path, tabular(
+    return write_text(path, manuscript_tabular(
         [
-            "Comparison set", "Rows", "Q--DESN wins", "Near ties", "PriceFM wins",
-            "Q--DESN AQL", "PriceFM AQL", "Mean $\\Delta$", "Median $\\Delta$",
+            "Comparison set", "$n$", r"\shortstack{Q--DESN\\lower}",
+            r"\shortstack{Near\\ties}", r"\shortstack{PriceFM\\lower}",
+            r"\shortstack{Mean\\Q--DESN AQL}", r"\shortstack{Mean\\PriceFM AQL}",
+            r"\shortstack{Mean\\$\Delta$}", r"\shortstack{Median\\$\Delta$}",
         ],
         rows,
         "lrrrrrrrr",
@@ -289,10 +313,11 @@ def write_input_set_table(path: Path, frame: pd.DataFrame) -> Path:
         fmt_num(r["mean_delta_AQL"]),
         fmt_num(r["median_delta_AQL"]),
     ] for _, r in frame.iterrows()]
-    return write_text(path, tabular(
+    return write_text(path, manuscript_tabular(
         [
-            "Input set", "Rows", "Q--DESN wins", "Near ties",
-            "PriceFM wins", "Mean $\\Delta$", "Median $\\Delta$",
+            "Input set", "$n$", r"\shortstack{Q--DESN\\lower}",
+            r"\shortstack{Near\\ties}", r"\shortstack{PriceFM\\lower}",
+            r"\shortstack{Mean\\$\Delta$}", r"\shortstack{Median\\$\Delta$}",
         ],
         rows,
         "lrrrrrr",
@@ -317,7 +342,7 @@ def write_method_table(path: Path, frame: pd.DataFrame) -> Path:
     rows = [[
         method_label(r["method_id"]), str(int(r["n"])), fmt_num(r["mean_AQL"]),
         fmt_num(r["median_AQL"]), fmt_num(r["min_AQL"]), fmt_num(r["max_AQL"]),
-    ] for _, r in frame.sort_values("mean_AQL").iterrows()]
+    ] for _, r in frame.sort_values(["mean_AQL", "method_id"], kind="mergesort").iterrows()]
     return write_text(path, tabular(
         ["Method", "Rows", "Mean AQL", "Median AQL", "Min AQL", "Max AQL"],
         rows,
@@ -375,9 +400,29 @@ def write_horizon_table(path: Path, frame: pd.DataFrame) -> Path:
     ))
 
 
+def write_manuscript_horizon_table(path: Path, frame: pd.DataFrame) -> Path:
+    rows = [[
+        latex_escape(r["horizon_group"]), str(int(r["n"])), str(int(r["qdesn_wins"])),
+        fmt_num(r["mean_delta_AQL"]), fmt_num(r["median_delta_AQL"]),
+    ] for _, r in frame.iterrows()]
+    return write_text(path, manuscript_tabular(
+        [
+            "Horizon block", "$n$", r"\shortstack{Q--DESN\\lower}",
+            r"\shortstack{Mean\\$\Delta$}", r"\shortstack{Median\\$\Delta$}",
+        ],
+        rows,
+        "lrrrr",
+    ))
+
+
 def write_top_table(path: Path, registry: pd.DataFrame) -> Path:
-    wins = registry.sort_values("delta_AQL_qdesn_minus_pricefm").head(6).copy()
-    losses = registry.sort_values("delta_AQL_qdesn_minus_pricefm", ascending=False).head(6).copy()
+    wins = registry.sort_values(
+        ["delta_AQL_qdesn_minus_pricefm", "region", "fold"], kind="mergesort",
+    ).head(6).copy()
+    losses = registry.sort_values(
+        ["delta_AQL_qdesn_minus_pricefm", "region", "fold"],
+        ascending=[False, True, True], kind="mergesort",
+    ).head(6).copy()
     wins.insert(0, "side", "Largest Q--DESN gains")
     losses.insert(0, "side", "Largest PriceFM gains")
     show = pd.concat([wins, losses], ignore_index=True)
@@ -399,7 +444,9 @@ def write_top_table(path: Path, registry: pd.DataFrame) -> Path:
 
 def write_priority_table(path: Path, registry: pd.DataFrame) -> Path:
     priority = registry[registry["rescue_tier"].eq("priority0")].sort_values(
-        "delta_AQL_qdesn_minus_pricefm", ascending=False,
+        ["delta_AQL_qdesn_minus_pricefm", "region", "fold"],
+        ascending=[False, True, True],
+        kind="mergesort",
     ).head(12)
     rows = [[
         latex_escape(f"{r['region']}/{int(r['fold'])}"),
@@ -427,7 +474,9 @@ def plot_assets(figure_dir: Path, registry: pd.DataFrame, horizons: pd.DataFrame
     out.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
 
-    ordered = registry.sort_values("delta_AQL_qdesn_minus_pricefm").reset_index(drop=True).copy()
+    ordered = registry.sort_values(
+        ["delta_AQL_qdesn_minus_pricefm", "region", "fold"], kind="mergesort",
+    ).reset_index(drop=True).copy()
     positions = list(range(len(ordered)))
     labels = (ordered["region"] + " f" + ordered["fold"].astype(str)).tolist()
     colors = ordered["decision_label"].map({
@@ -447,7 +496,7 @@ def plot_assets(figure_dir: Path, registry: pd.DataFrame, horizons: pd.DataFrame
     ax.axvline(0.0, color="#222222", linewidth=1)
     ax.set_xlabel("AQL difference: Q-DESN minus PriceFM")
     ax.set_ylabel("Region/fold rank by AQL difference")
-    ax.set_title("Full configured PriceFM comparison")
+    ax.set_title("PriceFM retrospective comparison")
     fig.tight_layout()
     path = out / "pricefm_full_qdesn_pricefm_delta.png"
     fig.savefig(path, dpi=180)
@@ -461,6 +510,8 @@ def plot_assets(figure_dir: Path, registry: pd.DataFrame, horizons: pd.DataFrame
             values="horizon_delta_AQL_qdesn_minus_pricefm",
             aggfunc="first",
         )
+        expected_groups = ["1-24", "25-48", "49-72", "73-96"]
+        pivot = pivot.reindex(columns=expected_groups)
         fig, ax = plt.subplots(figsize=(8.5, 7.0))
         im = ax.imshow(pivot.to_numpy(), aspect="auto", cmap="coolwarm", vmin=-2.0, vmax=2.0)
         ax.set_xticks(range(len(pivot.columns)))
@@ -473,7 +524,7 @@ def plot_assets(figure_dir: Path, registry: pd.DataFrame, horizons: pd.DataFrame
         ax.set_yticks(tick_idx)
         ax.set_yticklabels([f"{pivot.index[i][0]} f{pivot.index[i][1]}" for i in tick_idx], fontsize=7)
         ax.set_xlabel("Forecast horizon block")
-        ax.set_title("Available horizon-block diagnostics")
+        ax.set_title("AQL differences by forecast horizon")
         cbar = fig.colorbar(im, ax=ax)
         cbar.set_label("Q-DESN minus PriceFM AQL")
         fig.tight_layout()
@@ -491,25 +542,190 @@ def write_current_outputs(path: Path, macros: dict[str, str]) -> Path:
     return write_text(path, "\n".join(lines) + "\n")
 
 
-def validate_closeout(summary: dict[str, Any], registry: pd.DataFrame) -> None:
+def validate_closeout(
+    summary: dict[str, Any],
+    registry: pd.DataFrame,
+    methods: pd.DataFrame,
+    horizons: pd.DataFrame,
+    horizon_summary: pd.DataFrame,
+) -> None:
     if summary.get("status") != "completed":
         raise ValueError("full-surface closeout status is not completed")
     if int(summary.get("n_region_folds", -1)) != int(registry.shape[0]):
         raise ValueError("full-surface closeout row count disagrees with registry")
     if int(summary.get("n_region_folds", -1)) != 114:
         raise ValueError("full-surface closeout is not the configured 114-cell benchmark")
+    if registry.duplicated(["region", "fold"]).any():
+        raise ValueError("full-surface registry has duplicate region/fold keys")
+    if registry.region.nunique() != 38 or registry.fold.nunique() != 3:
+        raise ValueError("full-surface registry is not the configured 38-region, three-fold panel")
+    numeric = ["qdesn_AQL", "pricefm_AQL", "delta_AQL_qdesn_minus_pricefm"]
+    numeric_values = registry[numeric].apply(pd.to_numeric, errors="coerce")
+    if not numeric_values.notna().all().all() or not np.isfinite(numeric_values.to_numpy()).all():
+        raise ValueError("full-surface registry contains nonfinite score values")
+    if not np.allclose(
+        numeric_values["delta_AQL_qdesn_minus_pricefm"],
+        numeric_values["qdesn_AQL"] - numeric_values["pricefm_AQL"],
+        atol=1e-12,
+        rtol=0.0,
+    ):
+        raise ValueError("full-surface registry AQL differences do not reproduce")
+    observed_counts = registry["decision_label"].value_counts().to_dict()
+    declared_counts = summary.get("decision_counts")
+    if declared_counts and observed_counts != {str(k): int(v) for k, v in declared_counts.items()}:
+        raise ValueError("full-surface decision counts disagree with registry")
+    if summary.get("expected_quantiles") and [float(x) for x in summary["expected_quantiles"]] != PAPER_QUANTILES:
+        raise ValueError("full-surface quantile grid changed")
+    if summary.get("stage") == "pricefm_stage_r92_selective_promotion":
+        if observed_counts != {"qdesn_wins": 66, "qdesn_close": 12, "pricefm_wins": 36}:
+            raise ValueError("R92 decision counts changed")
+        if int(summary.get("promoted_rows", -1)) != 12 or int(summary.get("unchanged_rows", -1)) != 102:
+            raise ValueError("R92 selective-update counts changed")
+        exact_integer_fields = {
+            "cases": 56,
+            "promoted_exal_rows": 11,
+            "promoted_al_rows": 1,
+            "likelihood_family_changes": 1,
+            "n_horizon_diagnostic_region_folds": 72,
+            "horizon_rows": 288,
+            "replaced_horizon_rows": 20,
+            "replaced_horizon_cases": 5,
+        }
+        for name, expected in exact_integer_fields.items():
+            if int(summary.get(name, -1)) != expected:
+                raise ValueError(f"R92 summary field changed: {name}")
+        for name, expected in {
+            "full_56_candidate_mean_AQL": 6.704209343364271,
+            "full_56_authoritative_mean_AQL": 6.60763711322849,
+            "full_56_pricefm_mean_AQL": 6.897055829293184,
+            "mean_qdesn_AQL": 6.823677420470439,
+            "mean_pricefm_AQL": 7.038685346534470,
+        }.items():
+            require_close(summary.get(name), expected, f"R92 {name}")
+        if registry.feature_policy.astype(str).str.contains("graph").sum() != 56:
+            raise ValueError("R92 neighboring-region predictor count changed")
+        if registry.feature_policy.astype(str).eq("target_only").sum() != 58:
+            raise ValueError("R92 own-region predictor count changed")
+
+    require_unique_horizon_keys = ["region", "fold", "horizon_group"]
+    if horizons.duplicated(require_unique_horizon_keys).any():
+        raise ValueError("full-surface horizon diagnostics contain duplicate keys")
+    horizon_numeric = pd.to_numeric(
+        horizons["horizon_delta_AQL_qdesn_minus_pricefm"], errors="coerce"
+    )
+    if not np.isfinite(horizon_numeric).all():
+        raise ValueError("full-surface horizon diagnostics contain nonfinite AQL differences")
+    expected_groups = {"1-24", "25-48", "49-72", "73-96"}
+    observed_groups = set(horizons.horizon_group.astype(str))
+    if observed_groups != expected_groups:
+        raise ValueError("full-surface horizon groups changed")
+    if not horizons.groupby(["region", "fold"]).horizon_group.apply(
+        lambda values: set(values.astype(str)) == expected_groups
+    ).all():
+        raise ValueError("full-surface horizon diagnostics are incomplete")
+    registry_keys = set(zip(registry.region.astype(str), registry.fold.astype(int)))
+    horizon_keys = set(zip(horizons.region.astype(str), horizons.fold.astype(int)))
+    if not horizon_keys.issubset(registry_keys):
+        raise ValueError("full-surface horizon diagnostics contain an unknown region/fold")
+
+    reconstructed_horizons = (
+        horizons.assign(
+            horizon_delta_AQL_qdesn_minus_pricefm=horizon_numeric,
+        )
+        .groupby("horizon_group", as_index=False)
+        .agg(
+            n=("region", "size"),
+            qdesn_wins=("horizon_delta_AQL_qdesn_minus_pricefm", lambda values: int((values < 0).sum())),
+            mean_delta_AQL=("horizon_delta_AQL_qdesn_minus_pricefm", "mean"),
+            median_delta_AQL=("horizon_delta_AQL_qdesn_minus_pricefm", "median"),
+        )
+        .sort_values("horizon_group")
+        .reset_index(drop=True)
+    )
+    supplied_horizons = horizon_summary.sort_values("horizon_group").reset_index(drop=True)
+    if reconstructed_horizons[["horizon_group", "n", "qdesn_wins"]].astype(str).to_dict("records") != supplied_horizons[["horizon_group", "n", "qdesn_wins"]].astype(str).to_dict("records"):
+        raise ValueError("full-surface horizon summary counts do not reproduce")
+    if not np.allclose(
+        reconstructed_horizons[["mean_delta_AQL", "median_delta_AQL"]],
+        supplied_horizons[["mean_delta_AQL", "median_delta_AQL"]],
+        atol=1e-12,
+        rtol=0.0,
+    ):
+        raise ValueError("full-surface horizon summary statistics do not reproduce")
+
+    expected_methods = []
+    for method_id, values in (
+        ("qdesn_selected", registry.qdesn_AQL),
+        ("pricefm_phase1_pretraining", registry.pricefm_AQL),
+    ):
+        expected_methods.append({
+            "method_id": method_id,
+            "n": len(values),
+            "mean_AQL": values.mean(),
+            "median_AQL": values.median(),
+            "min_AQL": values.min(),
+            "max_AQL": values.max(),
+        })
+    expected_method_frame = pd.DataFrame(expected_methods).sort_values("method_id").reset_index(drop=True)
+    supplied_method_frame = methods.sort_values("method_id").reset_index(drop=True)
+    if supplied_method_frame.method_id.astype(str).tolist() != expected_method_frame.method_id.tolist():
+        raise ValueError("full-surface method summary identifiers changed")
+    if not np.allclose(
+        supplied_method_frame[["n", "mean_AQL", "median_AQL", "min_AQL", "max_AQL"]],
+        expected_method_frame[["n", "mean_AQL", "median_AQL", "min_AQL", "max_AQL"]],
+        atol=1e-12,
+        rtol=0.0,
+    ):
+        raise ValueError("full-surface method summary does not reproduce")
 
 
 def build(args: argparse.Namespace) -> dict[str, Any]:
     closeout = repo_path(args.closeout_dir)
     table_dir = Path(args.table_dir)
     figure_dir = Path(args.figure_dir)
-    summary = read_json_required(closeout / "summary.json", "full-surface summary")
-    registry = read_csv_required(closeout / "pricefm_full_surface_decision_registry.csv", "full-surface registry")
-    methods = read_csv_required(closeout / "pricefm_full_surface_method_summary.csv", "full-surface method summary")
-    horizons = read_csv_required(closeout / "pricefm_full_surface_horizon_diagnostics.csv", "full-surface horizon diagnostics")
-    horizon_summary = read_csv_required(closeout / "pricefm_full_surface_horizon_summary.csv", "full-surface horizon summary")
-    validate_closeout(summary, registry)
+    source_inputs = {
+        "summary": closeout / "summary.json",
+        "decision_registry": closeout / "pricefm_full_surface_decision_registry.csv",
+        "method_summary": closeout / "pricefm_full_surface_method_summary.csv",
+        "horizon_diagnostics": closeout / "pricefm_full_surface_horizon_diagnostics.csv",
+        "horizon_summary": closeout / "pricefm_full_surface_horizon_summary.csv",
+    }
+    summary = read_json_required(source_inputs["summary"], "full-surface summary")
+    registry = read_csv_required(source_inputs["decision_registry"], "full-surface registry")
+    methods = read_csv_required(source_inputs["method_summary"], "full-surface method summary")
+    horizons = read_csv_required(source_inputs["horizon_diagnostics"], "full-surface horizon diagnostics")
+    horizon_summary = read_csv_required(source_inputs["horizon_summary"], "full-surface horizon summary")
+    if summary.get("stage") == "pricefm_stage_r92_selective_promotion":
+        source_inputs.update({
+            "promoted_case_metrics": closeout / "pricefm_stage_r92_promoted_case_metrics.csv",
+            "promotion_ledger": closeout / "pricefm_stage_r92_promotion_ledger.csv",
+            "source_manifest": closeout / "source_manifest.csv",
+            "report": closeout / "pricefm_stage_r92_selective_promotion_report.md",
+        })
+        missing = [str(path) for path in source_inputs.values() if not path.is_file()]
+        if missing:
+            raise FileNotFoundError(f"R92 source is incomplete: {missing}")
+        declared_hashes = summary.get("output_sha256", {})
+        for role, path in source_inputs.items():
+            if role == "summary":
+                continue
+            declared = str(declared_hashes.get(role, ""))
+            observed = sha256_file_or_blank(path)
+            if not declared or observed != declared:
+                raise ValueError(f"R92 source hash changed for {role}: {observed}")
+    validate_closeout(summary, registry, methods, horizons, horizon_summary)
+    horizon_order = {name: index for index, name in enumerate(["1-24", "25-48", "49-72", "73-96"])}
+    horizons["_order"] = horizons["horizon_group"].map(horizon_order)
+    horizons = horizons.sort_values(["region", "fold", "_order"]).drop(columns="_order").reset_index(drop=True)
+    horizon_summary["_order"] = horizon_summary["horizon_group"].map(horizon_order)
+    horizon_summary = horizon_summary.sort_values("_order").drop(columns="_order").reset_index(drop=True)
+    if summary.get("stage") == "pricefm_stage_r92_selective_promotion":
+        if len(horizons) != 288 or horizons[["region", "fold"]].drop_duplicates().shape[0] != 72:
+            raise ValueError("R92 horizon diagnostics changed dimensions")
+        if not horizons.groupby(["region", "fold"]).size().eq(4).all():
+            raise ValueError("R92 horizon diagnostics are incomplete")
+        if horizon_summary.horizon_group.tolist() != ["1-24", "25-48", "49-72", "73-96"]:
+            raise ValueError("R92 horizon summary changed groups")
 
     benchmark = benchmark_summary(registry)
     input_sets = input_set_summary(registry)
@@ -522,7 +738,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     files = []
     benchmark_table = write_benchmark_table(table_dir / "pricefm_full_main_summary.tex", benchmark)
     input_set_table = write_input_set_table(table_dir / "pricefm_full_input_set_summary.tex", input_sets)
-    horizon_table = write_horizon_table(
+    horizon_table = write_manuscript_horizon_table(
         table_dir / "pricefm_full_horizon_diagnostic_summary.tex",
         horizon_summary,
     )
@@ -562,31 +778,46 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "PricefmFullMedianDeltaAql": fmt_num(registry["delta_AQL_qdesn_minus_pricefm"].median()),
         "PricefmFullGraphRows": str(int(registry["feature_policy"].astype(str).str.contains("graph").sum())),
         "PricefmFullTargetOnlyRows": str(int(registry["feature_policy"].astype(str).eq("target_only").sum())),
-        "PricefmFullBridgeRows": str(int(registry["source_class"].eq("provenance_bridge_30").sum())),
-        "PricefmFullStageMRows": str(int(registry["source_class"].eq("stage_m").sum())),
-        "PricefmFullRthreeqRows": str(int(registry["source_class"].eq("current_r3q").sum())),
         "PricefmFullHorizonRows": str(horizon_cells),
         "PricefmFullPaperQuantiles": ", ".join(f"{x:.2f}" for x in PAPER_QUANTILES),
         "PricefmFullMainSummaryTable": repo_relative(benchmark_table),
-        "PricefmFullInputSetSummaryTable": repo_relative(input_set_table),
-        "PricefmFullHorizonDiagnosticSummaryTable": repo_relative(horizon_table),
-        "PricefmFullFoldSummaryTable": repo_relative(fold_table),
-        "PricefmFullMethodSummaryTable": repo_relative(method_table),
-        "PricefmFullDecisionSummaryTable": repo_relative(decision_table),
-        "PricefmFullSourceSummaryTable": repo_relative(source_table),
-        "PricefmFullFeatureSummaryTable": repo_relative(feature_table),
-        "PricefmFullHorizonSummaryTable": repo_relative(old_horizon_table),
-        "PricefmFullTopWinsLossesTable": repo_relative(top_table),
-        "PricefmFullPriorityRescueTable": repo_relative(priority_table),
-        "PricefmFullDeltaFigure": repo_relative(figures["delta_figure"]),
-        "PricefmFullHorizonFigure": repo_relative(figures.get("horizon_figure", "")),
+        "PricefmSelectionComparedRows": str(int(summary.get("cases", 56))),
+        "PricefmSelectionUpdatedRows": str(int(summary.get("promoted_rows", 0))),
+        "PricefmSelectionCandidateMeanAql": fmt_num(summary.get("full_56_candidate_mean_AQL")),
+        "PricefmSelectionReferenceMeanAql": fmt_num(summary.get("full_56_authoritative_mean_AQL")),
     }
     outputs = write_current_outputs(table_dir / "pricefm_full_current_outputs.tex", macros)
     files.append(outputs)
     files.extend(figures.values())
 
+    asset_summary = {
+        "status": "completed",
+        "n_region_folds": n_rows,
+        "n_qdesn_wins": n_qwins,
+        "n_qdesn_close": n_close,
+        "n_pricefm_wins": n_pfwins,
+        "mean_delta_AQL_qdesn_minus_pricefm": float(registry["delta_AQL_qdesn_minus_pricefm"].mean()),
+        "current_outputs": repo_relative(outputs),
+        "source_closeout": repo_relative(closeout),
+        "manifest": repo_relative(table_dir / "pricefm_full_article_asset_manifest.json"),
+    }
+    asset_summary_path = write_json(table_dir / "pricefm_full_article_asset_summary.json", asset_summary)
+    files.append(asset_summary_path)
     manifest = {
-        "summary": summary,
+        "source": {
+            "closeout": repo_relative(closeout),
+            "summary_sha256": sha256_file_or_blank(closeout / "summary.json"),
+            "registry_sha256": sha256_file_or_blank(closeout / "pricefm_full_surface_decision_registry.csv"),
+            "inputs": [
+                {
+                    "role": role,
+                    "path": repo_relative(path),
+                    "sha256": sha256_file_or_blank(path),
+                    "bytes": path.stat().st_size,
+                }
+                for role, path in source_inputs.items()
+            ],
+        },
         "files": [
             {
                 "path": repo_relative(path),
@@ -600,18 +831,9 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         table_dir / "pricefm_full_article_asset_manifest.json",
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
     )
-    files.append(manifest_path)
-    asset_summary = {
-        "status": "completed",
-        "n_region_folds": n_rows,
-        "n_qdesn_wins": n_qwins,
-        "n_qdesn_close": n_close,
-        "n_pricefm_wins": n_pfwins,
-        "mean_delta_AQL_qdesn_minus_pricefm": float(registry["delta_AQL_qdesn_minus_pricefm"].mean()),
-        "current_outputs": repo_relative(outputs),
-        "manifest": repo_relative(manifest_path),
-    }
-    write_json(table_dir / "pricefm_full_article_asset_summary.json", asset_summary)
+    for row in manifest["files"]:
+        if sha256_file_or_blank(row["path"]) != row["sha256"] or repo_path(row["path"]).stat().st_size != row["bytes"]:
+            raise RuntimeError(f"Generated PriceFM asset changed before manifest verification: {row['path']}")
     print(json.dumps(asset_summary, indent=2, sort_keys=True))
     return asset_summary
 

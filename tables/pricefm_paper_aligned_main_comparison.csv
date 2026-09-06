@@ -1,5 +1,5 @@
 panel,evaluation_strategy,model,model_family,AQL,AQCR_percent,MAE,RMSE,paper_rank,value_source,cross_panel_role
-direct_replay,fold_aligned_released_checkpoint_replay,Selected Q-DESN,qdesn_case_specific,6.826019439122782,2.6443754958218095,16.727651141081658,25.453091657606794,,local_authoritative_metric_reconstruction,direct_comparison
+direct_replay,fold_aligned_released_checkpoint_replay,Selected Q-DESN,qdesn_case_specific,6.823677420470439,2.5792930320155847,16.721997707631,25.449231419703835,,r92_selective_promotion_reconstruction,direct_comparison
 direct_replay,fold_aligned_released_checkpoint_replay,Released PriceFM checkpoint,pricefm_phase1_released_checkpoint,7.03868534653447,0.0,17.27366671978033,26.335538393719123,,local_authoritative_metric_reconstruction,direct_comparison
 paper_table_ii,full_shot,Naive1,naive,15.29,0.00,22.06,34.68,11,YuEtAl2026PriceFM_arxiv_v4_table_ii,context_only
 paper_table_ii,full_shot,Naive2,naive,15.35,0.00,23.31,34.31,13,YuEtAl2026PriceFM_arxiv_v4_table_ii,context_only

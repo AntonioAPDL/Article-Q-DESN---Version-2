@@ -1,54 +1,54 @@
 {
   "files": [
     {
-      "bytes": 443,
+      "bytes": 641,
       "path": "tables/pricefm_full_main_summary.tex",
-      "sha256": "03c3726f016d791a837243e2ef0323b6e21ec5671e6d23c6e1a723328f3e6e5e"
+      "sha256": "867d0e78bc214ad88820306defc8e7aad68b8241e25f2ac418226ee3603ba34e"
     },
     {
-      "bytes": 285,
+      "bytes": 448,
       "path": "tables/pricefm_full_input_set_summary.tex",
-      "sha256": "360e1e779836d1eedf7b8ca336e8d4eef034d7eb4a08fedd4b2b75fa83323f6f"
+      "sha256": "cd5fa23a95f092a34c88d15b4f8c3f0f3e95c6ce2b0d25b349536ae2d8336fb9"
     },
     {
-      "bytes": 284,
+      "bytes": 406,
       "path": "tables/pricefm_full_horizon_diagnostic_summary.tex",
-      "sha256": "f99ec223b1cf68602a7fddcb5123e823cd549542c292e5e86d73300647c82d94"
+      "sha256": "551a121e76cc61d1dc9cb10bda44371d0a8810040bacd857ef0abcb92d466515"
     },
     {
       "bytes": 307,
       "path": "tables/pricefm_full_fold_summary.tex",
-      "sha256": "a25934ea9f4b6e196eddba2ce3605299ab954d1dd70e8e772bf52f6bb8c5d807"
+      "sha256": "fe7c8f4cce9142896c217a5e0fa6aae774e339c50f861904171987766a1f45ed"
     },
     {
       "bytes": 238,
       "path": "tables/pricefm_full_method_summary.tex",
-      "sha256": "48162e5f081203f718421ae9a2598b4894c449529a37cafb0e5324add26e54e3"
+      "sha256": "6d9bb1d9d34340caa9f5d2ea3b515d56dfeac6c458f6b94c8151726e6264a687"
     },
     {
       "bytes": 233,
       "path": "tables/pricefm_full_decision_summary.tex",
-      "sha256": "f548ffc160cabef2e3d55d9f5400dd1c73411dd7b809181d4fbd0da9e9fef40d"
+      "sha256": "3448426f68f1a9ee90773dd85873a292b488fcffee2cac389cd1e80d50760e86"
     },
     {
       "bytes": 310,
       "path": "tables/pricefm_full_source_summary.tex",
-      "sha256": "718cc16158096fc698c77b6817698a677b0b45a78c8ffdf4fb020f904d6aebf6"
+      "sha256": "29b8a7fd7ae8b55f890976779e58dc00c966ecf0031a7f2dccd5db83b9301dfa"
     },
     {
       "bytes": 317,
       "path": "tables/pricefm_full_feature_summary.tex",
-      "sha256": "52e567d7d05d2ba8918666a697e1e956f9b1ce45162e4e7740ecc13e80e27440"
+      "sha256": "07c672b3db4d54d93e8485aa445884eeed0a6163a51ff6897e82a2216137939c"
     },
     {
       "bytes": 284,
       "path": "tables/pricefm_full_horizon_summary.tex",
-      "sha256": "f99ec223b1cf68602a7fddcb5123e823cd549542c292e5e86d73300647c82d94"
+      "sha256": "2ea4241ba6f067e1a84ac94ac38f6fb9f8d4099125ee1f1628f7ce32f236335f"
     },
     {
       "bytes": 1136,
       "path": "tables/pricefm_full_top_wins_losses.tex",
-      "sha256": "a8c716d07d232369801e4cea007f3a7d0d673eef9a58e6966f76c168e02b2a1b"
+      "sha256": "7701fa4507c2572a82346a17c2318541cc9fa46c70f69c3e649d8ca733dae957"
     },
     {
       "bytes": 1235,
@@ -56,64 +56,85 @@
       "sha256": "a6bfcbc81985c22b7b78eb3d8b8ba4644af300feee0743c7c4fa13207e329a58"
     },
     {
-      "bytes": 2124,
+      "bytes": 952,
       "path": "tables/pricefm_full_current_outputs.tex",
-      "sha256": "68ffca2872aa55982dfbc0342fbdf2f8f7a176e2fe5f25ea83893b4f8ca22104"
+      "sha256": "ea1bfd065089a5d6a2700793369ca67202291428c7983a26696e12a6222010fd"
     },
     {
-      "bytes": 69049,
+      "bytes": 68979,
       "path": "figures/pricefm_application/pricefm_full_qdesn_pricefm_delta.png",
-      "sha256": "140208e9628d517c8623cc8dd6ce950a39a0c2e4a30c16ce6b781e09ffc60760"
+      "sha256": "69788179633a1ff43eadc399db08c08250a293a159548dff69cb9e9cb23a5863"
     },
     {
-      "bytes": 73073,
+      "bytes": 73039,
       "path": "figures/pricefm_application/pricefm_full_horizon_delta_heatmap.png",
-      "sha256": "3ccb2e958585b12b5ccd6e7e47cff83074e83f5e45a6dd6eeee8281b95c9b7e6"
+      "sha256": "08a0800784a6399d54f542295b2142be214de10c936e5c5b7742eed55e08227b"
+    },
+    {
+      "bytes": 429,
+      "path": "tables/pricefm_full_article_asset_summary.json",
+      "sha256": "9a37a266db70d26bdcf55d8506d3cb9dede3e973588f5c6e4f915140459ee4ff"
     }
   ],
-  "summary": {
-    "comparison_status_completed": true,
-    "decision_counts": {
-      "pricefm_wins": 36,
-      "qdesn_close": 12,
-      "qdesn_wins": 66
-    },
-    "expected_quantiles": [
-      0.1,
-      0.25,
-      0.45,
-      0.5,
-      0.55,
-      0.75,
-      0.9
+  "source": {
+    "closeout": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905",
+    "inputs": [
+      {
+        "bytes": 4229,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/summary.json",
+        "role": "summary",
+        "sha256": "ec878a5689273bd1f07c2e7cc2542105c0b71611f1f87e942b72b428afd7ac68"
+      },
+      {
+        "bytes": 112831,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_full_surface_decision_registry.csv",
+        "role": "decision_registry",
+        "sha256": "3922a06a965e8eac6320edbc2cb38464c007c51698814b419271690f9a4c9f87"
+      },
+      {
+        "bytes": 244,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_full_surface_method_summary.csv",
+        "role": "method_summary",
+        "sha256": "e9360aba0f606038441d1ae5e442ccacd4b6e09c43c8bf11a4b1153083de254b"
+      },
+      {
+        "bytes": 13912,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_full_surface_horizon_diagnostics.csv",
+        "role": "horizon_diagnostics",
+        "sha256": "a7e9bd5de2de4900225c37e62c9bddc7d04e89223074630c3562de39fa92342b"
+      },
+      {
+        "bytes": 268,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_full_surface_horizon_summary.csv",
+        "role": "horizon_summary",
+        "sha256": "40f0c66fb1f9b10ed789b7f23561aafe1ad8b025f0b04bd738a3e3b623be4f44"
+      },
+      {
+        "bytes": 10215,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_stage_r92_promoted_case_metrics.csv",
+        "role": "promoted_case_metrics",
+        "sha256": "e3cd2649809df6befd950283c5c2813506ed87747cf39a84db3f6456ad94c3fc"
+      },
+      {
+        "bytes": 10229,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_stage_r92_promotion_ledger.csv",
+        "role": "promotion_ledger",
+        "sha256": "ab6e0238450ac9bca9674ccd28517a87f2266837c594a84b3d5be4e74a96dde7"
+      },
+      {
+        "bytes": 24863,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/source_manifest.csv",
+        "role": "source_manifest",
+        "sha256": "acd44652d53788ecd337bf0b3fe388e9a368ff3ccb7b567015f6e030ec116b63"
+      },
+      {
+        "bytes": 799,
+        "path": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905/pricefm_stage_r92_selective_promotion_report.md",
+        "role": "report",
+        "sha256": "7ddde06d8ddcc4887669c187e55e913e0a453c1eb036b7b08e11473b98e1a1f3"
+      }
     ],
-    "fits_models": false,
-    "launches_models": false,
-    "mean_delta_AQL_qdesn_minus_pricefm": -0.21266590741168667,
-    "median_delta_AQL_qdesn_minus_pricefm": -0.0828163895796008,
-    "mutates_manuscript": false,
-    "n_binary_artifacts": 0,
-    "n_folds": 3,
-    "n_horizon_diagnostic_region_folds": 72,
-    "n_region_folds": 114,
-    "n_regions": 38,
-    "outputs": {
-      "decision_registry": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_decision_registry.csv",
-      "horizon_diagnostics": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_horizon_diagnostics.csv",
-      "horizon_summary": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_horizon_summary.csv",
-      "method_summary": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/pricefm_full_surface_method_summary.csv",
-      "source_manifest": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/source_manifest.csv",
-      "summary_json": "application/data_local/pricefm/authoritative/pricefm_full_surface_decision_closeout_20260704/summary.json"
-    },
-    "qdesn_win_rate": 0.5789473684210527,
-    "recommended_next_action": "build_full_surface_manuscript_assets",
-    "row_alignment_complete": true,
-    "source_class_counts": {
-      "current_r3q": 42,
-      "provenance_bridge_30": 30,
-      "stage_m": 42
-    },
-    "stage": "pricefm_full_surface_decision_closeout",
-    "status": "completed"
+    "registry_sha256": "3922a06a965e8eac6320edbc2cb38464c007c51698814b419271690f9a4c9f87",
+    "summary_sha256": "ec878a5689273bd1f07c2e7cc2542105c0b71611f1f87e942b72b428afd7ac68"
   }
 }

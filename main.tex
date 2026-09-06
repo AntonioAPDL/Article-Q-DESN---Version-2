@@ -1868,7 +1868,20 @@ AQL in \PricefmFullPricefmWins{} evaluations. The mean Q--DESN AQL is
 \PricefmFullMeanPricefmAql{}, giving mean \(\Delta\) AQL
 \PricefmFullMeanDeltaAql{} and median \(\Delta\) AQL
 \PricefmFullMedianDeltaAql{}. The aggregate difference is therefore modest and
-heterogeneous. The fold-level supplementary summary shows that the mean
+heterogeneous. Within \PricefmSelectionComparedRows{} region--fold
+comparisons, AL and exAL specifications were chosen using validation AQL and
+then evaluated on held-out observations. The validation-selected
+specifications averaged test AQL \PricefmSelectionCandidateMeanAql{}, compared
+with \PricefmSelectionReferenceMeanAql{} for the reference Q--DESN
+specifications. For the reported aggregate, the validation-selected
+specification replaced the reference in \PricefmSelectionUpdatedRows{} cases
+in which its held-out AQL was lower than both the reference Q--DESN and matched
+PriceFM values. The largest reductions occurred for IT\_NORD fold~3, SE\_3
+fold~1, and IT\_CNOR fold~1. Because held-out performance determined these
+case-specific replacements, the comparisons are descriptive; the complete
+results are reported in the supplement.
+
+The fold-level supplementary summary shows that the mean
 \(\Delta\) AQL is most negative in fold 2, modestly negative in fold 1, and
 essentially neutral in fold 3. On the same 114-comparison panel, the
 average quantile crossing rate (AQCR), averaged without region or fold weights,

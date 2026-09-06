@@ -1,10 +1,11 @@
 {
   "current_outputs": "tables/pricefm_full_current_outputs.tex",
   "manifest": "tables/pricefm_full_article_asset_manifest.json",
-  "mean_delta_AQL_qdesn_minus_pricefm": -0.21266590741168662,
+  "mean_delta_AQL_qdesn_minus_pricefm": -0.21500792606402971,
   "n_pricefm_wins": 36,
   "n_qdesn_close": 12,
   "n_qdesn_wins": 66,
   "n_region_folds": 114,
+  "source_closeout": "application/data_local/pricefm/authoritative/pricefm_stage_r92_selective_promotion_20260905",
   "status": "completed"
 }

@@ -1,0 +1,157 @@
+diff --git a/DESCRIPTION b/DESCRIPTION
+index fc7f4aa..3b58c7d 100644
+--- a/DESCRIPTION
++++ b/DESCRIPTION
+@@ -1,6 +1,6 @@
+ Package: exdqlm
+ Title: Extended Dynamic Quantile Linear Models
+-Version: 1.1.1.9001
++Version: 1.1.1.9002
+ Authors@R: 
+     c(person(given = "Raquel", family = "Barata",
+              role = c("aut", "cre"),
+@@ -43,7 +43,8 @@ BugReports: https://github.com/AntonioAPDL/exdqlm/issues
+ Config/roxygen2/version: 8.0.0
+ NeedsCompilation: yes
+ Config/PriceFM/base-tarball-sha256: 3f3ed643ded7602fd62357d7f62024ca9071e0096214456650ed2de79722443e
+-Config/PriceFM/repair: scale-aware-SPD-Cholesky-with-telemetry
++Config/PriceFM/parent-repair: scale-aware-SPD-Cholesky-with-telemetry
++Config/PriceFM/repair: scale-aware-SPD-plus-large-n-GIG
+ Packaged: 2026-08-26 21:25:25 UTC; raquel
+ Repository: PriceFM-local
+ Date/Publication: 2026-08-28 19:00:02 UTC
+diff --git a/R/exal_sigmagam_structured.R b/R/exal_sigmagam_structured.R
+index 1d2d1db..0274ef2 100644
+--- a/R/exal_sigmagam_structured.R
++++ b/R/exal_sigmagam_structured.R
+@@ -82,6 +82,59 @@
+   list(A = A, B = B, lambda = lambda, chi = chi, psi = psi, k = k, cross = cross)
+ }
+ 
++.pricefm_log_bessel_k_uniform <- function(x, nu) {
++  x <- as.numeric(x)[1L]
++  order <- abs(as.numeric(nu)[1L])
++  if (!is.finite(x) || x <= 0 || !is.finite(order) || order <= 0) {
++    return(NA_real_)
++  }
++  z <- x / order
++  root <- sqrt(1 + z * z)
++  eta <- root + log(z) - log1p(root)
++  t <- 1 / root
++  u1 <- (3 * t - 5 * t^3) / 24
++  u2 <- (81 * t^2 - 462 * t^4 + 385 * t^6) / 1152
++  series <- 1 - u1 / order + u2 / (order * order)
++  if (!all(is.finite(c(z, root, eta, series))) || series <= 0) {
++    return(NA_real_)
++  }
++  0.5 * (log(pi) - log(2 * order)) - 0.25 * log1p(z * z) -
++    order * eta + log(series)
++}
++
++.pricefm_log_bessel_k <- function(x, nu) {
++  x <- as.numeric(x)[1L]
++  nu <- as.numeric(nu)[1L]
++  if (!is.finite(x) || x <= 0 || !is.finite(nu)) return(NA_real_)
++  direct <- suppressWarnings(besselK(x, nu = abs(nu), expon.scaled = TRUE))
++  if (abs(nu) <= 500 && length(direct) == 1L && is.finite(direct) && direct > 0) {
++    return(structure(log(direct) - x, backend = "base_R_scaled"))
++  }
++  value <- .pricefm_log_bessel_k_uniform(x, nu)
++  if (!is.finite(value)) return(NA_real_)
++  structure(value, backend = "uniform_large_order")
++}
++
++.pricefm_bessel_order_derivative <- function(x, nu, order = 1L) {
++  order <- as.integer(order)[1L]
++  scale <- max(1, abs(as.numeric(nu)[1L]))
++  h <- if (order == 1L) max(1e-5, 1e-5 * scale) else max(1e-4, 1e-4 * scale)
++  values <- vapply(
++    c(-2, -1, 0, 1, 2),
++    function(step) as.numeric(.pricefm_log_bessel_k(x, nu + step * h)),
++    numeric(1L)
++  )
++  if (any(!is.finite(values))) return(NA_real_)
++  if (order == 1L) {
++    return((values[1L] - 8 * values[2L] + 8 * values[4L] - values[5L]) / (12 * h))
++  }
++  if (order == 2L) {
++    return((-values[5L] + 16 * values[4L] - 30 * values[3L] +
++      16 * values[2L] - values[1L]) / (12 * h^2))
++  }
++  stop("Unsupported Bessel order derivative.", call. = FALSE)
++}
++
+ .exal_gig_log_integral <- function(k, chi, psi, eps = 1e-12) {
+   k <- as.numeric(k)[1L]
+   chi <- as.numeric(chi)[1L]
+@@ -94,7 +147,8 @@
+     return(k * log(chi / 2) + lgamma(-k))
+   }
+   z <- sqrt(chi * psi)
+-  logK <- log(pmax(besselK(z, nu = k, expon.scaled = TRUE), 1e-300)) - z
++  logK <- as.numeric(.pricefm_log_bessel_k(z, k))
++  if (!is.finite(logK)) return(-Inf)
+   log(2) + 0.5 * k * (log(chi) - log(psi)) + logK
+ }
+ 
+@@ -113,8 +167,9 @@
+     return(exp(r * log(chi / 2) + lgamma(alpha - r) - lgamma(alpha)))
+   }
+   z <- sqrt(chi * psi)
+-  log_num <- log(pmax(besselK(z, nu = k + r, expon.scaled = TRUE), 1e-300))
+-  log_den <- log(pmax(besselK(z, nu = k, expon.scaled = TRUE), 1e-300))
++  log_num <- as.numeric(.pricefm_log_bessel_k(z, k + r))
++  log_den <- as.numeric(.pricefm_log_bessel_k(z, k))
++  if (!all(is.finite(c(log_num, log_den)))) return(NA_real_)
+   exp(0.5 * r * (log(chi) - log(psi)) + log_num - log_den)
+ }
+ 
+@@ -131,11 +186,8 @@
+     return(log(chi / 2) - digamma(alpha))
+   }
+   z <- sqrt(chi * psi)
+-  h <- 1e-5
+-  logK <- function(nu) {
+-    log(pmax(besselK(z, nu = nu, expon.scaled = TRUE), 1e-300)) - z
+-  }
+-  0.5 * (log(chi) - log(psi)) + (logK(k + h) - logK(k - h)) / (2 * h)
++  derivative <- .pricefm_bessel_order_derivative(z, k, order = 1L)
++  0.5 * (log(chi) - log(psi)) + derivative
+ }
+ 
+ .exal_gig_varlog <- function(k, chi, psi, eps = 1e-12) {
+@@ -150,12 +202,8 @@
+     return(psigamma(alpha, deriv = 1L))
+   }
+   z <- sqrt(chi * psi)
+-  h <- 1e-4
+-  logK <- function(nu) {
+-    log(pmax(besselK(z, nu = nu, expon.scaled = TRUE), 1e-300)) - z
+-  }
+-  out <- (logK(k + h) - 2 * logK(k) + logK(k - h)) / (h^2)
+-  if (is.finite(out) && out >= 0) out else NA_real_
++  out <- .pricefm_bessel_order_derivative(z, k, order = 2L)
++  if (is.finite(out) && out >= -sqrt(.Machine$double.eps)) max(out, 0) else NA_real_
+ }
+ 
+ .exal_gig_entropy_one <- function(k, chi, psi, E_inv, E_x, E_log, eps = 1e-12) {
+diff --git a/R/exalStaticLDVB.R b/R/exalStaticLDVB.R
+index 9f78e91..78d49d9 100644
+--- a/R/exalStaticLDVB.R
++++ b/R/exalStaticLDVB.R
+@@ -1669,5 +1669,6 @@ exalStaticLDVB <- function(
+     xi_eval_elapsed <- elbo_elapsed <- trace_elapsed <- NA_real_
+     prev_m_beta <- m_beta
++    prev_E_s <- E_s
+     gamma_prev <- g_from_eta(eta_hat)
+     sigma_prev <- exp(ell_hat)
+ 
+@@ -2234,7 +2235,7 @@ exalStaticLDVB <- function(
+     d_beta <- max(abs(m_beta_new - prev_m_beta))
+     d_sigma <- abs(sigma_cur - sigma_prev)
+     d_gamma <- abs(gamma_cur - gamma_prev)
+-    d_s <- .exal_static_ld_rel_change(s_mom$Es, E_s)
++    d_s <- .exal_static_ld_rel_change(E_s, prev_E_s)
+     d_elbo <- if (iter >= 2L) elbo_new - elbo_old else NA_real_
+     delta_relaxed_signoff_ok <- isTRUE(ld_stabilized) &&
+       TRUE &&

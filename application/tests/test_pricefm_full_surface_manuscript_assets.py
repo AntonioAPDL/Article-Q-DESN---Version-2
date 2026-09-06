@@ -145,8 +145,8 @@ def test_full_surface_manuscript_export_writes_compact_assets(tmp_path):
     assert outputs.exists()
     text = outputs.read_text()
     assert "\\PricefmFullMainSummaryTable" in text
-    assert "\\PricefmFullInputSetSummaryTable" in text
-    assert "\\PricefmFullHorizonDiagnosticSummaryTable" in text
+    assert "\\PricefmSelectionComparedRows" in text
+    assert "\\PricefmSelectionUpdatedRows" in text
     assert (tmp_path / "tables" / "pricefm_full_main_summary.tex").exists()
     main_summary = (tmp_path / "tables" / "pricefm_full_main_summary.tex").read_text()
     assert "Comparison set" in main_summary
@@ -159,4 +159,7 @@ def test_full_surface_manuscript_export_writes_compact_assets(tmp_path):
     paths = {row["path"] for row in manifest["files"]}
     assert str(tmp_path / "tables" / "pricefm_full_main_summary.tex") in paths
     assert str(tmp_path / "tables" / "pricefm_full_input_set_summary.tex") in paths
+    for row in manifest["files"]:
+        path = Path(row["path"])
+        assert path.stat().st_size == row["bytes"]
     assert len(list((tmp_path / "figures").glob("*.png"))) == 2

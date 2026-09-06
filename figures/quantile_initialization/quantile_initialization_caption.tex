@@ -1,0 +1,17 @@
+Sequential initialization centered at the median for a probability grid that
+contains 0.50. A Gaussian ridge regression initializes a Gaussian regression
+with a regularized-horseshoe (RHS) prior fitted by variational Bayes (VB), and
+compatible estimates from that fit supply starting values for the median
+asymmetric Laplace (AL) regression. Independent AL regressions are then
+initialized successively
+from the nearest completed level on either side of 0.50. Each AL fit initializes
+the extended asymmetric Laplace (exAL) regression at the matching probability
+level. The complete independent AL and exAL grids initialize their respective
+joint regressions. For a given statistical model, its VB fit supplies starting
+values for Markov chain Monte Carlo (MCMC). Solid arrows denote initialization;
+the dashed arrow denotes comparison using the prespecified validation
+criterion. The joint simulation and the GloFAS and PriceFM analyses use this
+initialization procedure; the independent validation study uses a separate
+procedure. Here
+exAL refers to the quantile-fixed generalized asymmetric Laplace working
+likelihood.

@@ -272,6 +272,16 @@ stopifnot(is.null(app_glofas_part4_root_initializer_from_manifest(
 )))
 
 graph <- app_glofas_part4_launch_manifest("part4_graph_test")
+stopifnot(identical(app_glofas_part4_parse_dependencies(NA_character_), character()))
+stopifnot(identical(app_glofas_part4_parse_dependencies(""), character()))
+stopifnot(identical(app_glofas_part4_parse_dependencies("root|median"), c("root", "median")))
+empty_dependencies <- app_glofas_part4_parse_dependencies("")
+empty_missing <- if (length(empty_dependencies)) {
+  empty_dependencies[!file.exists(file.path(tempdir(), paste0(empty_dependencies, ".completed")))]
+} else {
+  character()
+}
+stopifnot(identical(empty_missing, character()))
 stopifnot(nrow(graph) == 18L)
 stopifnot(sum(graph$part4_family == "normal_ridge_diagnostic") == 1L)
 stopifnot(sum(graph$part4_family == "normal_rhs_vb_diagnostic") == 1L)

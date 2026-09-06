@@ -646,6 +646,13 @@ app_glofas_part4_job_dependencies <- function(run_label, family, quantile = NA_r
   stop(sprintf("Unknown Part 4 family '%s'.", family), call. = FALSE)
 }
 
+app_glofas_part4_parse_dependencies <- function(value) {
+  value <- as.character(value %||% "")
+  if (!length(value) || is.na(value[[1L]]) || !nzchar(value[[1L]])) return(character())
+  dependencies <- strsplit(value[[1L]], "\\|", fixed = FALSE)[[1L]]
+  dependencies[nzchar(dependencies)]
+}
+
 app_glofas_part4_launch_manifest <- function(
     run_label,
     selected_anchor_manifest = NULL,

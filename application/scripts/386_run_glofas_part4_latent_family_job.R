@@ -33,9 +33,12 @@ running <- file.path(runtime_root, "status", paste0(job_id, ".running"))
 completed <- file.path(runtime_root, "status", paste0(job_id, ".completed"))
 failed <- file.path(runtime_root, "status", paste0(job_id, ".failed"))
 if (file.exists(completed)) stop(sprintf("Part 4 job already completed: %s.", job_id), call. = FALSE)
-dependencies <- strsplit(as.character(job$dependencies[[1L]] %||% ""), "\\|", fixed = FALSE)[[1L]]
-dependencies <- dependencies[nzchar(dependencies)]
-missing_dependencies <- dependencies[!file.exists(file.path(runtime_root, "status", paste0(dependencies, ".completed")))]
+dependencies <- app_glofas_part4_parse_dependencies(job$dependencies[[1L]])
+missing_dependencies <- if (length(dependencies)) {
+  dependencies[!file.exists(file.path(runtime_root, "status", paste0(dependencies, ".completed")))]
+} else {
+  character()
+}
 if (length(missing_dependencies)) {
   stop(sprintf("Part 4 job dependencies are incomplete: %s.", paste(missing_dependencies, collapse = ", ")), call. = FALSE)
 }

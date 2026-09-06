@@ -42,6 +42,10 @@ DEFAULT_SOURCE_ROOT = os.environ.get(
     "APP_GLOFAS_JEREZ_SOURCE_ROOT",
     "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_part2_rhs_jerez_20260904",
 )
+DEFAULT_PART3_SOURCE_ROOT = os.environ.get(
+    "APP_GLOFAS_JEREZ_PART3_SOURCE_ROOT",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_part3_quantile_forecast_jerez_20260904",
+)
 DEFAULT_BASE_CONFIG = (
     f"{DEFAULT_SOURCE_ROOT}/local_trackers/runtime_configs/"
     "glofas_fr09_shared_reference_input_tau1em1_p50_20260829/candidate/config_p50.yaml"
@@ -49,6 +53,14 @@ DEFAULT_BASE_CONFIG = (
 DEFAULT_PART2_RHS_RUNTIME = (
     f"{DEFAULT_SOURCE_ROOT}/local_trackers/runtime_configs/"
     "glofas_normal_part2_rhs_top50_jerez_recovery_20260904"
+)
+DEFAULT_PART2_OLD_QUANTILE_RUNTIME = (
+    f"{DEFAULT_SOURCE_ROOT}/local_trackers/runtime_configs/"
+    "glofas_part2_bridge_forecast_chain_jerez_20260904"
+)
+DEFAULT_PART3_OLD_QUANTILE_RUNTIME = (
+    f"{DEFAULT_PART3_SOURCE_ROOT}/local_trackers/runtime_configs/"
+    "glofas_part3_quantile_forecast_jerez_20260904"
 )
 DEFAULT_PART3_WINNER_MANIFEST = (
     f"{DEFAULT_SOURCE_ROOT}/local_trackers/runtime_configs/"
@@ -145,6 +157,9 @@ def worker_cmd(args: argparse.Namespace, *, part: str, job_id: str, job_type: st
         "--forecast_backend", args.forecast_backend,
         "--freeze_beta_warmup_iters", str(args.freeze_beta_warmup_iters),
         "--min_beta_updates", str(args.min_beta_updates),
+        "--quantile_route", args.quantile_route,
+        "--part2_old_quantile_runtime_root", args.part2_old_quantile_runtime_root,
+        "--part3_old_quantile_runtime_root", args.part3_old_quantile_runtime_root,
     ]
     if part == "part2":
         cmd.extend([
@@ -199,7 +214,7 @@ def init_matrix(args: argparse.Namespace) -> list[dict]:
         row(part, "independent_al_q0p50", "readout_rhs_scale_latent", "same-model old q0.50 or final normal_rhs_vb", "choose_best_finite_initial_objective", "Old fits are evidence only until Dec25 design and sign are certified.")
         for tau in ("0.35", "0.20", "0.05", "0.65", "0.80", "0.95"):
             parent = {"0.35": "q0p50", "0.20": "q0p35", "0.05": "q0p20", "0.65": "q0p50", "0.80": "q0p65", "0.95": "q0p80"}[tau]
-            row(part, f"independent_al_{qslug(tau)}", "readout_rhs_scale_latent", f"same-model old {qslug(tau)} or final independent_al_{parent}", "choose_best_finite_initial_objective", "Adjacent final AL is always a valid fallback route.")
+            row(part, f"independent_al_{qslug(tau)}", "readout_rhs_scale_latent", f"same-model old {qslug(tau)}, final normal_rhs_vb, or final independent_al_{parent}", "choose_best_finite_initial_objective", "Same-quantile old fits allow parallel AL when certified; adjacent final AL remains the sequential fallback route.")
         for tau in QUANTILES:
             row(part, f"independent_exal_{qslug(tau)}", "readout_rhs_scale_gamma_latent", f"final independent_al_{qslug(tau)}", "required_initializer", "Each exAL starts from the same-tau final AL.")
         row(part, "joint_al_all7", "joint_readout_rhs_scale_latent", "all seven final independent AL fits", "required_initializer", "No crossing fix or synthesis is introduced.")
@@ -308,6 +323,16 @@ def build_jobs(args: argparse.Namespace, runtime: Path) -> list[dict]:
         )
         add_job(
             rows, runtime, args,
+            job_id=f"{part}_initializer_audit",
+            part=part,
+            stage="initializer_audit",
+            deps=(f"{part}_fit_normal_rhs_vb",),
+            command=worker_cmd(args, part=part, job_id=f"{part}_initializer_audit", job_type="initializer_audit"),
+            role="certified_same_tau_quantile_initializer_audit",
+            initializer_policy="same_tau_old_fit_or_final_normal_rhs_best_objective",
+        )
+        add_job(
+            rows, runtime, args,
             job_id=f"{part}_forecast_normal_ridge",
             part=part,
             stage="forecast",
@@ -339,6 +364,14 @@ def build_jobs(args: argparse.Namespace, runtime: Path) -> list[dict]:
             slug = qslug(tau)
             job_id = f"{part}_fit_independent_al_{slug}"
             dep = al_parent[tau]
+            if args.quantile_route == "same_tau_parallel":
+                al_deps = (f"{part}_fit_normal_rhs_vb", f"{part}_initializer_audit")
+                al_init = "AUTO_AUDIT"
+                init_policy = "audited_same_tau_old_fit_or_final_normal_rhs_best_objective"
+            else:
+                al_deps = (dep, f"{part}_initializer_audit")
+                al_init = dep
+                init_policy = "sequential_adjacent_final_al_fallback_after_initializer_audit"
             add_job(
                 rows, runtime, args,
                 job_id=job_id,
@@ -348,10 +381,10 @@ def build_jobs(args: argparse.Namespace, runtime: Path) -> list[dict]:
                 tau=tau,
                 likelihood="AL",
                 fit_structure="independent",
-                deps=(dep,),
-                command=worker_cmd(args, part=part, job_id=job_id, job_type="fit", model_family="independent_al", likelihood="AL", fit_structure="independent", tau=tau, init_fit_job_ids=dep),
+                deps=al_deps,
+                command=worker_cmd(args, part=part, job_id=job_id, job_type="fit", model_family="independent_al", likelihood="AL", fit_structure="independent", tau=tau, init_fit_job_ids=al_init),
                 role="final_dec25_independent_al_fit",
-                initializer_policy="certified_same_tau_old_fit_or_dependency_fit_best_objective",
+                initializer_policy=init_policy,
             )
             add_job(
                 rows, runtime, args,
@@ -458,6 +491,7 @@ def write_plan(runtime: Path, args: argparse.Namespace, rows: list[dict]) -> Pat
         part_rows = [row for row in rows if row["part"] == part]
         counts[part] = {
             "design_cache_jobs": sum(row["stage"] == "design_cache" for row in part_rows),
+            "initializer_audit_jobs": sum(row["stage"] == "initializer_audit" for row in part_rows),
             "fit_jobs": sum(row["stage"] == "fit" for row in part_rows),
             "forecast_jobs": sum(row["stage"] == "forecast" for row in part_rows),
             "package_jobs": sum(row["stage"] == "package" for row in part_rows),
@@ -484,16 +518,17 @@ def write_plan(runtime: Path, args: argparse.Namespace, rows: list[dict]) -> Pat
         "",
         "## Job Counts",
         "",
-        "| Part | Design Caches | Final Fits | Forecasts | Packages |",
-        "|---|---:|---:|---:|---:|",
+        "| Part | Design Caches | Initializer Audits | Final Fits | Forecasts | Packages |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
     for part in ("part2", "part3"):
         c = counts[part]
-        lines.append(f"| {part} | {c['design_cache_jobs']} | {c['fit_jobs']} | {c['forecast_jobs']} | {c['package_jobs']} |")
+        lines.append(f"| {part} | {c['design_cache_jobs']} | {c['initializer_audit_jobs']} | {c['fit_jobs']} | {c['forecast_jobs']} | {c['package_jobs']} |")
     lines.extend([
         "",
         "Total production model fits and forecasts prepared: `72` (`36` per part).",
-        "Package jobs are included in the DAG but are not model fits.",
+        "Initializer-audit and package jobs are included in the DAG but are not model fits.",
+        f"Quantile route prepared: `{args.quantile_route}`.",
         "",
         "## Dependency Rules",
         "",
@@ -501,7 +536,8 @@ def write_plan(runtime: Path, args: argparse.Namespace, rows: list[dict]) -> Pat
         "- Final ridge fits depend only on their part-specific design cache.",
         "- Each Normal RHS/VB fit depends only on the matching final ridge fit.",
         "- Forecast jobs are separate retryable jobs and hash-verify the retained final fit.",
-        "- Independent AL uses the conservative certified chain: `.50 -> .35/.65 -> .20/.80 -> .05/.95` unless the initializer audit certifies a faster same-quantile route before launch.",
+        "- `same_tau_parallel` runs all seven independent AL fits for a part after the Normal RHS fit and initializer audit certify finite compatible starts.",
+        "- `sequential_fallback` keeps the `.50 -> .35/.65 -> .20/.80 -> .05/.95` AL chain when same-quantile starts cannot be certified.",
         "- Each exAL tau waits for the same-tau final AL fit.",
         "- Joint AL waits for all seven final AL fits; joint exAL waits for all seven final exAL fits.",
         "",
@@ -554,9 +590,12 @@ def main() -> int:
     parser.add_argument("--part2-rhs-runtime-root", dest="part2_rhs_runtime_root", default=DEFAULT_PART2_RHS_RUNTIME)
     parser.add_argument("--part2-rhs-candidate-id", dest="part2_rhs_candidate_id", default="normal_part2_rhs_top16_part2ridge_targeted_0016_disc_covars__D1_n2500__a080_r070__reftau1e00_disctau1em03")
     parser.add_argument("--part2-candidate-id", dest="part2_candidate_id", default="part2ridge_targeted_0016_disc_covars__D1_n2500__a080_r070")
+    parser.add_argument("--part2-old-quantile-runtime-root", dest="part2_old_quantile_runtime_root", default=DEFAULT_PART2_OLD_QUANTILE_RUNTIME)
+    parser.add_argument("--part3-old-quantile-runtime-root", dest="part3_old_quantile_runtime_root", default=DEFAULT_PART3_OLD_QUANTILE_RUNTIME)
     parser.add_argument("--part3-winner-manifest", dest="part3_winner_manifest", default=DEFAULT_PART3_WINNER_MANIFEST)
     parser.add_argument("--package-output-dir", dest="package_output_dir", default="local_trackers/muscat_handoffs")
-    parser.add_argument("--workers", type=int, default=20)
+    parser.add_argument("--workers", type=int, default=40)
+    parser.add_argument("--quantile-route", dest="quantile_route", choices=("same_tau_parallel", "sequential_fallback"), default="same_tau_parallel")
     parser.add_argument("--max-iter", dest="max_iter", type=int, default=100)
     parser.add_argument("--min-iter", dest="min_iter", type=int, default=30)
     parser.add_argument("--tol", type=float, default=0.01)
@@ -573,8 +612,8 @@ def main() -> int:
         runtime = (repo_root() / args.runtime_root).resolve()
     for sub in ("configs", "tables", "logs", "status", "scripts", "docs", "manifests", "objects", "scores", "traces", "coefficients", "forecasts", "figures"):
         (runtime / sub).mkdir(parents=True, exist_ok=True)
-    if args.workers < 1 or args.workers > 20:
-        raise SystemExit("Use 1..20 one-thread workers for this Dec25 relaunch DAG.")
+    if args.workers < 1 or args.workers > 40:
+        raise SystemExit("Use 1..40 one-thread workers for this Dec25 relaunch DAG.")
     if args.max_iter < args.min_iter or args.min_iter < 1 or args.tol <= 0:
         raise SystemExit("Invalid VB controls.")
     if args.freeze_beta_warmup_iters < 0 or args.min_beta_updates < 0:
@@ -589,7 +628,10 @@ def main() -> int:
         "part2_rhs_runtime_root": args.part2_rhs_runtime_root,
         "part2_rhs_candidate_id": args.part2_rhs_candidate_id,
         "part2_candidate_id": args.part2_candidate_id,
+        "part2_old_quantile_runtime_root": args.part2_old_quantile_runtime_root,
+        "part3_old_quantile_runtime_root": args.part3_old_quantile_runtime_root,
         "part3_winner_manifest": args.part3_winner_manifest,
+        "quantile_route": args.quantile_route,
         "source_freeze_root": args.source_freeze_root,
         "thread_guards": {
             "OMP_NUM_THREADS": "1",
@@ -615,6 +657,7 @@ def main() -> int:
             "model_fit_jobs": sum(row["stage"] == "fit" for row in jobs),
             "forecast_jobs": sum(row["stage"] == "forecast" for row in jobs),
             "design_cache_jobs": sum(row["stage"] == "design_cache" for row in jobs),
+            "initializer_audit_jobs": sum(row["stage"] == "initializer_audit" for row in jobs),
             "package_jobs": sum(row["stage"] == "package" for row in jobs),
             "part2_fits": sum(row["part"] == "part2" and row["stage"] == "fit" for row in jobs),
             "part2_forecasts": sum(row["part"] == "part2" and row["stage"] == "forecast" for row in jobs),

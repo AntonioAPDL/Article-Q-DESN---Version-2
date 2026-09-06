@@ -37,6 +37,10 @@ default_source_root <- Sys.getenv(
   "APP_GLOFAS_JEREZ_SOURCE_ROOT",
   unset = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_part2_rhs_jerez_20260904"
 )
+default_part3_source_root <- Sys.getenv(
+  "APP_GLOFAS_JEREZ_PART3_SOURCE_ROOT",
+  unset = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_part3_quantile_forecast_jerez_20260904"
+)
 default_base_config <- file.path(
   default_source_root,
   "local_trackers/runtime_configs/glofas_fr09_shared_reference_input_tau1em1_p50_20260829/candidate/config_p50.yaml"
@@ -44,6 +48,14 @@ default_base_config <- file.path(
 default_part2_rhs_runtime <- file.path(
   default_source_root,
   "local_trackers/runtime_configs/glofas_normal_part2_rhs_top50_jerez_recovery_20260904"
+)
+default_part2_old_quantile_runtime <- file.path(
+  default_source_root,
+  "local_trackers/runtime_configs/glofas_part2_bridge_forecast_chain_jerez_20260904"
+)
+default_part3_old_quantile_runtime <- file.path(
+  default_part3_source_root,
+  "local_trackers/runtime_configs/glofas_part3_quantile_forecast_jerez_20260904"
 )
 default_part3_winner_manifest <- file.path(
   default_source_root,
@@ -66,6 +78,8 @@ args <- app_parse_args(list(
   rhs_runtime_root = default_part2_rhs_runtime,
   rhs_candidate_id = "normal_part2_rhs_top16_part2ridge_targeted_0016_disc_covars__D1_n2500__a080_r070__reftau1e00_disctau1em03",
   candidate_id = "part2ridge_targeted_0016_disc_covars__D1_n2500__a080_r070",
+  part2_old_quantile_runtime_root = default_part2_old_quantile_runtime,
+  part3_old_quantile_runtime_root = default_part3_old_quantile_runtime,
   winner_manifest = default_part3_winner_manifest,
   part3_candidate_id = "part3_frozen_g1_g2_joint_historical",
   origin_date = "2022-12-25",
@@ -78,6 +92,7 @@ args <- app_parse_args(list(
   forecast_backend = "cpp",
   freeze_beta_warmup_iters = "20",
   min_beta_updates = "30",
+  quantile_route = "same_tau_parallel",
   require_cpp = "false"
 ))
 
@@ -93,7 +108,9 @@ model_family <- as.character(args$model_family[[1L]])
 horizon_days <- as.integer(args$horizon_days)
 origin_date <- as.Date(args$origin_date)
 if (!part %in% c("part2", "part3")) stop("--part must be part2 or part3.", call. = FALSE)
-if (!job_type %in% c("design_cache", "fit", "forecast")) stop("--job_type must be design_cache, fit, or forecast.", call. = FALSE)
+if (!job_type %in% c("design_cache", "initializer_audit", "fit", "forecast")) {
+  stop("--job_type must be design_cache, initializer_audit, fit, or forecast.", call. = FALSE)
+}
 if (!nzchar(job_id)) stop("--job_id is required.", call. = FALSE)
 app_glofas_dec25_assert_window(origin_date, horizon_days, label = paste("Dec25 job", job_id))
 
@@ -110,6 +127,15 @@ writeLines(format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), running_path)
 cache_path <- function(part) file.path(runtime_root, "configs", paste0(part, "_final_dec25_design_cache.rds"))
 fit_path <- function(id) file.path(runtime_root, "objects", paste0(id, "_fit.rds"))
 warm_path <- function(id) file.path(runtime_root, "objects", paste0(id, "_warm_start.rds"))
+
+qslug <- function(tau) {
+  paste0("q", sub("\\.", "p", sprintf("%.2f", as.numeric(tau))))
+}
+
+first_string <- function(x, default = "") {
+  x <- as.character(x %||% default)
+  if (!length(x) || is.na(x[[1L]])) default else x[[1L]]
+}
 
 parse_tau <- function(part, x) {
   x <- trimws(as.character(x[[1L]] %||% ""))
@@ -132,6 +158,214 @@ resolve_job_fit_paths <- function(ids) {
     normalizePath(path, mustWork = TRUE)
   }, character(1L))
   unname(paths)
+}
+
+old_quantile_fit_path <- function(part, model_family, tau) {
+  slug <- qslug(tau)
+  if (identical(part, "part2")) {
+    root <- app_resolve_path(args$part2_old_quantile_runtime_root, must_work = FALSE)
+    file.path(root, paste0(model_family, "_", slug), "objects", paste0("part2_", model_family, "_", slug, "_bridge_forecast_fit.rds"))
+  } else {
+    root <- app_resolve_path(args$part3_old_quantile_runtime_root, must_work = FALSE)
+    file.path(root, "objects", paste0(model_family, "_", slug, "_fit.rds"))
+  }
+}
+
+same_hash <- function(a, b) {
+  a <- first_string(a)
+  b <- first_string(b)
+  nzchar(a) && nzchar(b) && identical(a, b)
+}
+
+part2_final_design_hash <- function(cache) {
+  first_string(cache$design_hash[["discrepancy_full"]] %||%
+    cache$forecast_design$design_hash %||%
+    cache$design_hash[[1L]] %||% "")
+}
+
+part3_final_design_hash <- function(cache) {
+  first_string(cache$design$design_hash[["part3_stacked_full"]] %||%
+    cache$design_hash[["part3_stacked_full"]] %||%
+    cache$design_hash[[1L]] %||% "")
+}
+
+fit_design_hash <- function(fit, part) {
+  hash <- fit$final_dec25_design_hash %||% fit$design_hash %||% fit$manifest$design_hash %||% ""
+  if (is.list(hash)) {
+    key <- if (identical(part, "part3")) "part3_stacked_full" else "discrepancy_full"
+    hash <- hash[[key]] %||% hash[[1L]] %||% ""
+  }
+  if (length(hash) > 1L) {
+    key <- if (identical(part, "part3")) "part3_stacked_full" else "discrepancy_full"
+    hash <- hash[[key]] %||% hash[[1L]]
+  }
+  first_string(hash)
+}
+
+part2_initializer_objective <- function(path, cache, tau) {
+  fit <- readRDS(path)
+  y <- as.numeric(cache$forecast_design$y)
+  Z <- as.matrix(cache$forecast_design$X[, -1L, drop = FALSE])
+  init <- app_glofas_part1_quantile_init_from_fit(fit, y = y, Z = Z, tau = tau, source_path = path)
+  beta_mat <- app_joint_qvp_beta_matrix(init$beta_mean, length(tau), ncol(Z))
+  qhat <- as.numeric(Z %*% beta_mat[, 1L] + init$alpha_mean[[1L]])
+  mean(app_glofas_part1_quantile_check_loss(y, qhat, tau), na.rm = TRUE)
+}
+
+part3_initializer_objective <- function(path, cache, tau) {
+  init <- app_glofas_part3_quantile_init_one(path, cache$design, tau)
+  qhat_reference <- as.numeric(cache$design$reference$X %*% init$beta_reference)
+  qhat_discrepancy <- as.numeric(cache$design$discrepancy$X %*% init$beta_discrepancy)
+  qhat_glofas <- qhat_reference + qhat_discrepancy
+  mean(c(
+    app_glofas_part3_quantile_check_loss(cache$design$y_reference, qhat_reference, tau),
+    app_glofas_part3_quantile_check_loss(cache$design$g_retrospective, qhat_glofas, tau)
+  ), na.rm = TRUE)
+}
+
+safe_initializer_objective <- function(path, cache, tau) {
+  tryCatch(
+    if (identical(part, "part2")) part2_initializer_objective(path, cache, tau) else part3_initializer_objective(path, cache, tau),
+    error = function(e) structure(NA_real_, error = conditionMessage(e))
+  )
+}
+
+audit_old_quantile_candidate <- function(cache, model_family, tau) {
+  path <- old_quantile_fit_path(part, model_family, tau)
+  exists <- file.exists(path)
+  sha <- if (exists) app_sha256_file(path) else NA_character_
+  fit <- if (exists) tryCatch(readRDS(path), error = function(e) structure(list(), read_error = conditionMessage(e))) else list()
+  read_error <- attr(fit, "read_error", exact = TRUE) %||% ""
+  source_tau <- as.numeric(fit$tau %||% NA_real_)
+  tau_ok <- length(source_tau) == 1L && is.finite(source_tau) && abs(source_tau - as.numeric(tau)) < 1.0e-12
+  dim_ok <- FALSE
+  target_ok <- FALSE
+  hash_ok <- FALSE
+  if (exists && !nzchar(read_error)) {
+    if (identical(part, "part2")) {
+      dim_ok <- length(as.numeric(fit$beta_mean %||% numeric())) == ncol(cache$forecast_design$X) - 1L
+      target_ok <- identical(as.character(fit$target %||% ""), "observed_discrepancy_retrospective_glofas_minus_usgs")
+      hash_ok <- same_hash(fit_design_hash(fit, part), part2_final_design_hash(cache))
+    } else {
+      dim_ok <- nrow(as.matrix(fit$beta_reference_mean %||% matrix())) == cache$design$p_beta &&
+        nrow(as.matrix(fit$beta_discrepancy_mean %||% matrix())) == cache$design$p_alpha
+      target_ok <- identical(as.character(fit$target %||% "two_component_usgs_reference_and_glofas_discrepancy"), "two_component_usgs_reference_and_glofas_discrepancy")
+      hash_ok <- same_hash(fit_design_hash(fit, part), part3_final_design_hash(cache))
+    }
+  }
+  compatible <- exists && !nzchar(read_error) && tau_ok && dim_ok && target_ok && hash_ok
+  reason <- c(
+    if (!exists) "missing_old_fit" else character(),
+    if (nzchar(read_error)) paste0("read_error:", read_error) else character(),
+    if (exists && !tau_ok) "tau_mismatch" else character(),
+    if (exists && !dim_ok) "dimension_mismatch" else character(),
+    if (exists && !target_ok) "target_or_sign_not_certified" else character(),
+    if (exists && !hash_ok) "final_design_hash_not_certified" else character()
+  )
+  objective <- if (exists && !nzchar(read_error) && tau_ok && dim_ok) safe_initializer_objective(path, cache, tau) else NA_real_
+  data.frame(
+    part = part,
+    model_family = model_family,
+    tau = sprintf("%.2f", as.numeric(tau)),
+    candidate_source = "same_tau_old_fit",
+    source_path = if (exists) normalizePath(path, mustWork = TRUE) else path,
+    source_sha256 = sha,
+    source_exists = exists,
+    object_class = paste(class(fit), collapse = ";"),
+    target_sign_certified = target_ok,
+    feature_order_certified = hash_ok,
+    scaling_certified = hash_ok,
+    design_hash_certified = hash_ok,
+    quantile_certified = tau_ok,
+    dimension_certified = dim_ok,
+    compatible = compatible,
+    initial_objective_on_final_design = as.numeric(objective),
+    objective_error = attr(objective, "error", exact = TRUE) %||% "",
+    selected = FALSE,
+    selection_reason = "",
+    rejection_reason = if (length(reason)) paste(reason, collapse = "|") else "",
+    stringsAsFactors = FALSE
+  )
+}
+
+audit_normal_rhs_candidate <- function(cache, model_family, tau) {
+  path <- fit_path(paste0(part, "_fit_normal_rhs_vb"))
+  if (!file.exists(path)) stop(sprintf("Initializer audit requires final Normal RHS fit at %s.", path), call. = FALSE)
+  objective <- safe_initializer_objective(path, cache, tau)
+  finite_objective <- is.finite(as.numeric(objective))
+  data.frame(
+    part = part,
+    model_family = model_family,
+    tau = sprintf("%.2f", as.numeric(tau)),
+    candidate_source = "final_normal_rhs_vb",
+    source_path = normalizePath(path, mustWork = TRUE),
+    source_sha256 = app_sha256_file(path),
+    source_exists = TRUE,
+    object_class = paste(class(readRDS(path)), collapse = ";"),
+    target_sign_certified = TRUE,
+    feature_order_certified = TRUE,
+    scaling_certified = TRUE,
+    design_hash_certified = TRUE,
+    quantile_certified = TRUE,
+    dimension_certified = TRUE,
+    compatible = finite_objective,
+    initial_objective_on_final_design = as.numeric(objective),
+    objective_error = attr(objective, "error", exact = TRUE) %||% "",
+    selected = FALSE,
+    selection_reason = "",
+    rejection_reason = if (finite_objective) "" else "nonfinite_objective",
+    stringsAsFactors = FALSE
+  )
+}
+
+write_initializer_audit <- function(cache) {
+  rows <- list()
+  for (tau_value in app_glofas_part2_bridge_quantile_grid()) {
+    rows[[length(rows) + 1L]] <- audit_old_quantile_candidate(cache, "independent_al", tau_value)
+    rows[[length(rows) + 1L]] <- audit_normal_rhs_candidate(cache, "independent_al", tau_value)
+    rows[[length(rows) + 1L]] <- audit_old_quantile_candidate(cache, "independent_exal", tau_value)
+  }
+  out <- app_bind_rows_fill(rows)
+  out$selected <- as.logical(out$selected)
+  for (tau_label in unique(out$tau[out$model_family == "independent_al"])) {
+    idx <- which(out$model_family == "independent_al" & out$tau == tau_label &
+      out$compatible & is.finite(out$initial_objective_on_final_design))
+    if (!length(idx)) {
+      stop(sprintf("No finite compatible Part %s AL initializer for tau %s.", part, tau_label), call. = FALSE)
+    }
+    best <- idx[which.min(out$initial_objective_on_final_design[idx])]
+    out$selected[[best]] <- TRUE
+    out$selection_reason[[best]] <- "best_finite_compatible_initial_objective_on_final_dec25_design"
+  }
+  path <- file.path(runtime_root, "tables", paste0(part, "_initializer_audit.csv"))
+  app_write_csv(out, path)
+  summary <- data.frame(
+    job_id = job_id,
+    part = part,
+    job_type = job_type,
+    quantile_route = as.character(args$quantile_route),
+    audit_path = normalizePath(path, mustWork = TRUE),
+    selected_al_initializers = sum(out$model_family == "independent_al" & out$selected),
+    old_al_certified = sum(out$model_family == "independent_al" & out$candidate_source == "same_tau_old_fit" & out$compatible),
+    old_exal_certified = sum(out$model_family == "independent_exal" & out$candidate_source == "same_tau_old_fit" & out$compatible),
+    stringsAsFactors = FALSE
+  )
+  write_contract(summary)
+  invisible(out)
+}
+
+resolve_audited_al_initializer <- function(part, tau) {
+  if (length(tau) != 1L) stop("Audited same-tau initializer lookup requires one tau.", call. = FALSE)
+  path <- file.path(runtime_root, "tables", paste0(part, "_initializer_audit.csv"))
+  if (!file.exists(path)) stop(sprintf("Missing initializer audit table: %s", path), call. = FALSE)
+  audit <- app_read_csv(path)
+  selected <- audit[audit$model_family == "independent_al" &
+    abs(as.numeric(audit$tau) - as.numeric(tau)) < 1.0e-12 &
+    tolower(as.character(audit$selected)) %in% c("true", "1", "yes"), , drop = FALSE]
+  if (nrow(selected) != 1L) stop(sprintf("Expected one selected AL initializer for tau %.2f.", as.numeric(tau)), call. = FALSE)
+  source_path <- as.character(selected$source_path[[1L]])
+  if (!file.exists(source_path)) stop(sprintf("Selected initializer does not exist: %s", source_path), call. = FALSE)
+  normalizePath(source_path, mustWork = TRUE)
 }
 
 write_contract <- function(fields) {
@@ -210,7 +444,17 @@ main <- function() {
   cache <- readRDS(cache_path(part))
   design_sha <- app_sha256_file(cache_path(part))
   tau <- parse_tau(part, args$tau)
-  init_paths <- resolve_job_fit_paths(args$init_fit_job_ids)
+
+  if (identical(job_type, "initializer_audit")) {
+    write_initializer_audit(cache)
+    return(invisible(TRUE))
+  }
+
+  init_paths <- if (identical(as.character(args$init_fit_job_ids), "AUTO_AUDIT")) {
+    resolve_audited_al_initializer(part, tau)
+  } else {
+    resolve_job_fit_paths(args$init_fit_job_ids)
+  }
 
   if (identical(job_type, "fit")) {
     if (identical(part, "part2")) {

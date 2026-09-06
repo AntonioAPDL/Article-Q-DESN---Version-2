@@ -56,14 +56,14 @@ def deps(row: dict) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", required=True)
-    parser.add_argument("--workers", type=int, default=20)
+    parser.add_argument("--workers", type=int, default=40)
     parser.add_argument("--poll-seconds", type=int, default=60)
     parser.add_argument("--session-prefix", default="glofas_dec25_final_jerez_20260905")
     parser.add_argument("--background", action="store_true")
     args = parser.parse_args()
 
-    if args.workers < 1 or args.workers > 20:
-        raise SystemExit("workers must be in 1..20 for this workflow")
+    if args.workers < 1 or args.workers > 40:
+        raise SystemExit("workers must be in 1..40 for this workflow")
     runtime = resolve(args.runtime_root)
     manifest = runtime / "tables" / "final_dec25_job_manifest.csv"
     if not manifest.exists():

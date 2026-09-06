@@ -38,15 +38,17 @@ with tempfile.TemporaryDirectory(prefix="glofas_dec25_runtime_test_") as tmp:
         check=True,
     )
     manifest = read_csv(runtime / "tables" / "final_dec25_job_manifest.csv")
-    assert len(manifest) == 78
+    assert len(manifest) == 80
     counts = {}
     for row in manifest:
         counts[(row["part"], row["stage"])] = counts.get((row["part"], row["stage"]), 0) + 1
     assert counts[("part2", "design_cache")] == 1
+    assert counts[("part2", "initializer_audit")] == 1
     assert counts[("part2", "fit")] == 18
     assert counts[("part2", "forecast")] == 18
     assert counts[("part2", "package")] == 2
     assert counts[("part3", "design_cache")] == 1
+    assert counts[("part3", "initializer_audit")] == 1
     assert counts[("part3", "fit")] == 18
     assert counts[("part3", "forecast")] == 18
     assert counts[("part3", "package")] == 2
@@ -57,14 +59,18 @@ with tempfile.TemporaryDirectory(prefix="glofas_dec25_runtime_test_") as tmp:
                 assert dep in by_id, (row["job_id"], dep)
     assert by_id["part2_fit_normal_ridge"]["dependencies"] == "part2_design_cache"
     assert by_id["part2_fit_normal_rhs_vb"]["dependencies"] == "part2_fit_normal_ridge"
+    assert by_id["part2_initializer_audit"]["dependencies"] == "part2_fit_normal_rhs_vb"
     assert by_id["part2_forecast_normal_rhs_vb"]["dependencies"] == "part2_fit_normal_rhs_vb"
-    assert by_id["part2_fit_independent_al_q0p50"]["dependencies"] == "part2_fit_normal_rhs_vb"
-    assert by_id["part2_fit_independent_al_q0p35"]["dependencies"] == "part2_fit_independent_al_q0p50"
-    assert by_id["part2_fit_independent_al_q0p20"]["dependencies"] == "part2_fit_independent_al_q0p35"
-    assert by_id["part2_fit_independent_al_q0p05"]["dependencies"] == "part2_fit_independent_al_q0p20"
-    assert by_id["part2_fit_independent_al_q0p65"]["dependencies"] == "part2_fit_independent_al_q0p50"
-    assert by_id["part2_fit_independent_al_q0p80"]["dependencies"] == "part2_fit_independent_al_q0p65"
-    assert by_id["part2_fit_independent_al_q0p95"]["dependencies"] == "part2_fit_independent_al_q0p80"
+    for tau_slug in ("q0p05", "q0p20", "q0p35", "q0p50", "q0p65", "q0p80", "q0p95"):
+        al = by_id[f"part2_fit_independent_al_{tau_slug}"]
+        assert set(al["dependencies"].split("|")) == {"part2_fit_normal_rhs_vb", "part2_initializer_audit"}
+        command = json.loads(al["command_json"])
+        assert command[command.index("--init_fit_job_ids") + 1] == "AUTO_AUDIT"
+    for tau_slug in ("q0p05", "q0p20", "q0p35", "q0p50", "q0p65", "q0p80", "q0p95"):
+        al = by_id[f"part3_fit_independent_al_{tau_slug}"]
+        assert set(al["dependencies"].split("|")) == {"part3_fit_normal_rhs_vb", "part3_initializer_audit"}
+        command = json.loads(al["command_json"])
+        assert command[command.index("--init_fit_job_ids") + 1] == "AUTO_AUDIT"
     assert set(by_id["part2_fit_joint_al_all7"]["dependencies"].split("|")) == {
         "part2_fit_independent_al_q0p05",
         "part2_fit_independent_al_q0p20",
@@ -78,6 +84,7 @@ with tempfile.TemporaryDirectory(prefix="glofas_dec25_runtime_test_") as tmp:
     metadata = json.loads((runtime / "configs" / "final_dec25_relaunch_metadata.json").read_text(encoding="utf-8"))
     assert metadata["job_counts"]["model_fit_jobs"] == 36
     assert metadata["job_counts"]["forecast_jobs"] == 36
+    assert metadata["job_counts"]["initializer_audit_jobs"] == 2
     assert metadata["production_launched"] is False
 
     out = subprocess.check_output(
@@ -94,10 +101,10 @@ with tempfile.TemporaryDirectory(prefix="glofas_dec25_runtime_test_") as tmp:
     assert "TOTAL" in out
     health = read_csv(runtime / "tables" / "final_dec25_health_latest.csv")
     total = next(row for row in health if row["part"] == "TOTAL")
-    assert total["total"] == "78"
+    assert total["total"] == "80"
     assert total["completed"] == "0"
     assert total["ready"] == "2"
-    assert total["left_to_finish"] == "78"
+    assert total["left_to_finish"] == "80"
 
     (runtime / "status" / "part2_design_cache.completed").write_text("test\n", encoding="utf-8")
     subprocess.run(

@@ -400,13 +400,16 @@ app_joint_shared_score_ridge <- function(fixture, candidate, contract) {
   score <- app_joint_shared_acrps(design$y[va], qhat, design$tau)
   oracle <- qhat - design$true_q[va, , drop = FALSE]
   diagnostic_pass <- isTRUE(design$diagnostic$finite_design[[1L]]) &&
-    is.finite(design$diagnostic$condition_number[[1L]]) &&
-    design$diagnostic$condition_number[[1L]] <= contract$max_condition_number &&
     is.finite(design$diagnostic$state_saturation_fraction[[1L]]) &&
     design$diagnostic$state_saturation_fraction[[1L]] <= contract$max_state_saturation
+  condition_pass <- is.finite(design$diagnostic$condition_number[[1L]]) &&
+    design$diagnostic$condition_number[[1L]] <= contract$max_condition_number
+  rank_pass <- design$diagnostic$effective_rank[[1L]] == ncol(design$X)
   summary <- cbind(candidate, design$diagnostic, data.frame(
     status = "completed", observational_selector = "realized_finite_grid_acrps",
     hard_gate_status = if (diagnostic_pass) "pass" else "fail",
+    condition_gate_status = if (condition_pass) "pass" else "review",
+    rank_gate_status = if (rank_pass) "pass" else "review",
     calibration_acrps_mean = mean(score), calibration_acrps_sd = stats::sd(score),
     calibration_exact_gaussian_crps = mean(app_glofas_normal_crps(design$y[va], pred$mean, pred$sd)),
     calibration_mae = mean(abs(pred$mean - design$y[va])),
@@ -680,6 +683,8 @@ app_joint_shared_finalize_ridge <- function(root) {
     rho = x$rho[[1L]], pi_w = x$pi_w[[1L]], pi_in = x$pi_in[[1L]], input_scale = x$input_scale[[1L]],
     reservoir_seed = x$reservoir_seed[[1L]], replicate_count = nrow(x),
     hard_gate_status = if (all(x$hard_gate_status == "pass")) "pass" else "fail",
+    condition_gate_status = if (all(x$condition_gate_status == "pass")) "pass" else "review",
+    rank_gate_status = if (all(x$rank_gate_status == "pass")) "pass" else "review",
     calibration_acrps_mean = mean(x$calibration_acrps_mean),
     calibration_acrps_between_rep_sd = stats::sd(x$calibration_acrps_mean),
     calibration_exact_gaussian_crps_mean = mean(x$calibration_exact_gaussian_crps),

@@ -44,6 +44,11 @@ source, Git, and runtime plans are persisted and hashed before workers start.
 Each worker writes a terminal marker and compact CSV evidence. Launch scripts
 are restartable and skip only terminal workers.
 
+Condition number and raw rank are review diagnostics because every Gaussian
+screening readout is explicitly regularized. They do not exclude the mandatory
+authority anchor by themselves; nonfinite designs or scores and excessive
+reservoir saturation remain hard failures.
+
 ## Stage Graph
 
 ```text

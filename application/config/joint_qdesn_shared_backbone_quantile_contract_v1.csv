@@ -1,0 +1,39 @@
+section,name,value,type,description
+identity,contract_version,joint_shared_backbone_quantile_v1,character,Frozen Regime Shift quantile-continuation pilot contract.
+identity,parent_head,a56bfde3a9f8f91b0e2e6c59fe67c7c216dd032d,character,Completed shared-backbone screening implementation commit.
+identity,parent_final_manifest_sha256,0018f72e63443ff8630e2c539eff41b0cc4026f75421b55ff0dcbe0e8ffb31cf,character,Expected final parent artifact-manifest hash.
+identity,parent_selected_sha256,a7fd8b99ac0a8aea21e781bed41537560bfd2970f78410be8f98310278940ef7,character,Expected selected shared-backbone row hash.
+identity,parent_decision_sha256,6ab5ce1d6c77f0804be238431b283886aa9687e36a9e4f50ad9c72bb374df607,character,Expected parent selection-decision hash.
+scope,pilot_scenario,regime_shift,character,Scenario-specific pilot selected by the parent screen.
+scope,quantile_grid,"0.05;0.10;0.25;0.50;0.75;0.90;0.95",numeric_vector,Current seven-level joint-validation grid.
+scope,evaluation_replicates,3,integer,Fresh non-article protected DGP replicates.
+scope,evaluation_seed_base,202609710,integer,Disjoint first seed for the protected continuation pilot.
+scope,selection_policy,observational_only_frozen_parent,character,No protected score may change the selected design or prior control.
+forecast,origin_stride,30,integer,Forecast origins are spaced every 30 observations.
+forecast,max_lead,30,integer,Each no-refit origin scores leads 1 through 30.
+gaussian,ridge_tau2,10000,numeric,Gaussian ridge prior variance used for the full-window warm start.
+gaussian,intercept_variance,1000000,numeric,Gaussian ridge intercept prior variance.
+gaussian,sigma_shape,2,numeric,Gaussian inverse-gamma shape.
+gaussian,sigma_rate,1,numeric,Gaussian inverse-gamma rate.
+gaussian,rhs_max_iter,600,integer,Maximum full-window Gaussian RHS iterations.
+gaussian,rhs_min_iter,75,integer,Minimum full-window Gaussian RHS iterations.
+gaussian,rhs_tolerance,0.00001,numeric,Gaussian RHS convergence tolerance.
+quantile,al_max_iter,1200,integer,Maximum AL variational iterations.
+quantile,exal_max_iter,1600,integer,Maximum structured exAL variational iterations.
+quantile,vb_tolerance,0.00001,numeric,Quantile VB convergence tolerance.
+quantile,rhs_vb_inner,10,integer,RHS coordinate passes per variational iteration.
+quantile,rhs_freeze_iters,0,integer,No global-scale freeze after the supplied initialization.
+quantile,a_sigma,2,numeric,Finite-mean working-scale prior shape.
+quantile,b_sigma,1,numeric,Working-scale prior rate.
+quantile,alpha_prior_sd_multiplier,4,numeric,Weak proper alpha prior SD relative to Gaussian residual SD.
+quantile,alpha_min_spacing,0,numeric,Ordered joint intercepts may meet but not reverse.
+quantile,max_dense_dim,300,integer,Explicit dense covariance ceiling.
+quantile,exal_vb_method,VB1_structured_v,character,Established structured-v exAL variational method.
+quantile,gamma_init_policy,default,character,Default support-valid gamma initialization.
+runtime,max_workers,10,integer,Maximum concurrent one-thread workers.
+runtime,blas_threads,1,integer,Numerical threads per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority while Phase182 remains active.
+gates,require_finite_outputs,true,logical,Nonfinite fits or predictions are hard failures.
+gates,require_zero_contract_crossings,true,logical,Reported monotone-contract forecasts must not cross.
+gates,allow_max_iter_review,true,logical,Finite max-iteration fits are retained as review rather than failed.
+gates,protected_selection_forbidden,true,logical,Protected scores are evaluation-only and cannot tune the pipeline.

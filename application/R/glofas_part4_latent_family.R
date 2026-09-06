@@ -212,7 +212,8 @@ app_glofas_part4_historical_initializer <- function(
 
 app_glofas_part4_root_initializer_from_manifest <- function(anchor_manifest, design) {
   if (!is.data.frame(anchor_manifest) || !nrow(anchor_manifest)) return(NULL)
-  row <- app_glofas_part4_anchor_row(anchor_manifest, "historical_joint_anchor")
+  row <- app_glofas_part4_optional_anchor_row(anchor_manifest, "historical_joint_anchor")
+  if (!nrow(row)) return(NULL)
   path <- as.character(app_glofas_part4_row_value(row, "fit_object_path", ""))
   sha <- as.character(app_glofas_part4_row_value(row, "fit_object_sha256", ""))
   if (!nzchar(path) && !nzchar(sha)) return(NULL)

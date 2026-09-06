@@ -93,6 +93,10 @@ anchors_valid <- app_glofas_part4_validate_anchor_manifest(part4_anchors)
 stopifnot(nrow(anchors_valid) == 3L)
 stopifnot(identical(app_glofas_part4_parse_int_vector("10 x 2", "n"), c(10L, 10L)))
 
+part4_required_anchors <- part4_anchors[part4_anchors$role != "historical_joint_anchor", , drop = FALSE]
+required_anchors_valid <- app_glofas_part4_validate_anchor_manifest(part4_required_anchors)
+stopifnot(nrow(required_anchors_valid) == 2L)
+
 unfrozen <- part4_anchors
 unfrozen$frozen[[2L]] <- FALSE
 blocked_unfrozen <- tryCatch({
@@ -125,6 +129,16 @@ stopifnot(isFALSE(cfg$covariates$ppt$forecast_noise$enabled))
 stopifnot(isFALSE(cfg$covariates$soil$realized_future_correction$enabled))
 stopifnot(!grepl("gefs|cefs", tolower(paste(unlist(cfg$covariates), collapse = "\n"))))
 
+cfg_without_part3 <- app_glofas_part4_config_from_anchors(
+  part4_toy_cfg,
+  part4_required_anchors,
+  quantile = 0.50,
+  run_label = "part4_toy_without_part3"
+)
+stopifnot(cfg_without_part3$inference$vb_ld$rhs_tau0 == 0.1)
+stopifnot(cfg_without_part3$inference$vb_ld$rhs_alpha_tau0 == 0.001)
+stopifnot(identical(cfg_without_part3$part4_anchor_manifest$selected_historical_joint_candidate_id, ""))
+
 contract_checks <- app_glofas_part4_validate_no_forecast_contract(cfg)
 stopifnot(all(contract_checks$status == "pass"))
 
@@ -149,6 +163,14 @@ stopifnot(nrow(manifest_ready) == 18L)
 stopifnot(sum(manifest_ready$status == "ready_after_operator_launch_approval") == 1L)
 stopifnot(manifest_ready$status[manifest_ready$part4_family == "normal_ridge_diagnostic"] == "ready_after_operator_launch_approval")
 stopifnot(sum(manifest_ready$status == "blocked_until_dependencies_complete") == 17L)
+
+manifest_ready_without_part3 <- app_glofas_part4_launch_manifest(
+  run_label = "toy_ready_without_part3",
+  selected_anchor_manifest = part4_required_anchors,
+  base_cfg = part4_toy_cfg
+)
+stopifnot(nrow(manifest_ready_without_part3) == 18L)
+stopifnot(sum(manifest_ready_without_part3$status == "ready_after_operator_launch_approval") == 1L)
 
 tmp_root <- file.path(tempdir(), "glofas_part4_toy_bundle")
 if (dir.exists(tmp_root)) unlink(tmp_root, recursive = TRUE)

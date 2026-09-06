@@ -1,6 +1,7 @@
 # GloFAS Part 4 fixed ensemble-likelihood launch contract.
 #
-# This module prepares gated Part 4 artifacts from frozen G1/G2/G3 winners. It
+# This module prepares gated Part 4 artifacts from frozen G1/G2 winners. An
+# exact-design Part 3 joint fit may be supplied as an optional initializer. It
 # does not fit models. Production execution is delegated to the explicit Part 4
 # family workers and remains blocked until separate operator approval.
 
@@ -55,7 +56,11 @@ app_glofas_part4_required_anchor_columns <- function() {
 }
 
 app_glofas_part4_expected_anchor_roles <- function() {
-  c("reference_anchor", "discrepancy_anchor", "historical_joint_anchor")
+  c("reference_anchor", "discrepancy_anchor")
+}
+
+app_glofas_part4_allowed_anchor_roles <- function() {
+  c(app_glofas_part4_expected_anchor_roles(), "historical_joint_anchor")
 }
 
 app_glofas_part4_truthy <- function(x) {
@@ -151,6 +156,15 @@ app_glofas_part4_anchor_row <- function(anchor_manifest, role) {
   anchor_manifest[idx, , drop = FALSE]
 }
 
+app_glofas_part4_optional_anchor_row <- function(anchor_manifest, role) {
+  idx <- which(tolower(trimws(anchor_manifest$role)) == role)
+  if (length(idx) > 1L) {
+    stop(sprintf("Expected at most one Part 4 anchor row for role '%s'.", role), call. = FALSE)
+  }
+  if (!length(idx)) return(anchor_manifest[0L, , drop = FALSE])
+  anchor_manifest[idx, , drop = FALSE]
+}
+
 app_glofas_part4_validate_anchor_manifest <- function(anchor_manifest, require_frozen = TRUE) {
   if (!is.data.frame(anchor_manifest) || !nrow(anchor_manifest)) {
     stop("Part 4 selected-anchor manifest is empty.", call. = FALSE)
@@ -166,6 +180,13 @@ app_glofas_part4_validate_anchor_manifest <- function(anchor_manifest, require_f
     stop(sprintf(
       "Part 4 selected-anchor manifest is missing roles: %s",
       paste(missing_roles, collapse = ", ")
+    ), call. = FALSE)
+  }
+  unknown_roles <- setdiff(unique(anchor_manifest$role), app_glofas_part4_allowed_anchor_roles())
+  if (length(unknown_roles)) {
+    stop(sprintf(
+      "Part 4 selected-anchor manifest has unsupported roles: %s",
+      paste(unknown_roles, collapse = ", ")
     ), call. = FALSE)
   }
   duplicate_roles <- unique(anchor_manifest$role[duplicated(anchor_manifest$role)])
@@ -190,7 +211,7 @@ app_glofas_part4_validate_anchor_manifest <- function(anchor_manifest, require_f
       paste(bad_status, collapse = ", ")
     ), call. = FALSE)
   }
-  for (role in app_glofas_part4_expected_anchor_roles()) {
+  for (role in anchor_manifest$role) {
     row <- app_glofas_part4_anchor_row(anchor_manifest, role)
     for (name in c("m", "output_lag_max", "covariate_lag_max", "washout")) {
       app_glofas_part4_numeric_scalar(row[[name]], sprintf("%s.%s", role, name), nonnegative = TRUE)
@@ -201,19 +222,23 @@ app_glofas_part4_validate_anchor_manifest <- function(anchor_manifest, require_f
     app_glofas_part4_numeric_scalar(row$seed, sprintf("%s.seed", role), nonnegative = TRUE)
     app_glofas_part4_numeric_scalar(row$rhs_tau0, sprintf("%s.rhs_tau0", role), positive = TRUE)
   }
-  historical <- app_glofas_part4_anchor_row(anchor_manifest, "historical_joint_anchor")
-  fit_path <- as.character(app_glofas_part4_row_value(historical, "fit_object_path", ""))
-  fit_sha <- tolower(as.character(app_glofas_part4_row_value(historical, "fit_object_sha256", "")))
-  if (xor(nzchar(fit_path), nzchar(fit_sha))) {
-    stop("Historical joint anchor fit_object_path and fit_object_sha256 must be supplied together.", call. = FALSE)
-  }
-  if (nzchar(fit_path)) {
-    if (!grepl("^[0-9a-f]{64}$", fit_sha)) {
-      stop("Historical joint anchor fit_object_sha256 is malformed.", call. = FALSE)
+  for (role in anchor_manifest$role) {
+    row <- app_glofas_part4_anchor_row(anchor_manifest, role)
+    fit_path <- as.character(app_glofas_part4_row_value(row, "fit_object_path", ""))
+    fit_sha <- tolower(as.character(app_glofas_part4_row_value(row, "fit_object_sha256", "")))
+    if (xor(nzchar(fit_path), nzchar(fit_sha))) {
+      stop(sprintf(
+        "%s fit_object_path and fit_object_sha256 must be supplied together.", role
+      ), call. = FALSE)
     }
-    resolved_fit <- app_resolve_path(fit_path, must_work = TRUE)
-    if (!identical(tolower(app_sha256_file(resolved_fit)), fit_sha)) {
-      stop("Historical joint anchor fit object does not match its declared SHA256.", call. = FALSE)
+    if (nzchar(fit_path)) {
+      if (!grepl("^[0-9a-f]{64}$", fit_sha)) {
+        stop(sprintf("%s fit_object_sha256 is malformed.", role), call. = FALSE)
+      }
+      resolved_fit <- app_resolve_path(fit_path, must_work = TRUE)
+      if (!identical(tolower(app_sha256_file(resolved_fit)), fit_sha)) {
+        stop(sprintf("%s fit object does not match its declared SHA256.", role), call. = FALSE)
+      }
     }
   }
   anchor_manifest
@@ -324,10 +349,11 @@ app_glofas_part4_block_override <- function(row, base_reservoir, block = c("refe
 }
 
 app_glofas_part4_joint_tau0 <- function(anchor_manifest, role, fallback) {
-  joint <- app_glofas_part4_anchor_row(anchor_manifest, "historical_joint_anchor")
+  joint <- app_glofas_part4_optional_anchor_row(anchor_manifest, "historical_joint_anchor")
   field <- if (identical(role, "reference")) "rhs_tau0_reference" else "rhs_tau0_discrepancy"
   value <- app_glofas_part4_row_value(joint, field, default = fallback)
-  app_glofas_part4_numeric_scalar(value, sprintf("historical_joint_anchor.%s", field), positive = TRUE)
+  label <- if (nrow(joint)) sprintf("historical_joint_anchor.%s", field) else sprintf("%s_anchor.rhs_tau0", role)
+  app_glofas_part4_numeric_scalar(value, label, positive = TRUE)
 }
 
 app_glofas_part4_config_from_anchors <- function(
@@ -411,9 +437,11 @@ app_glofas_part4_config_from_anchors <- function(
   cfg$part4_anchor_manifest <- list(
     selected_reference_candidate_id = as.character(ref$candidate_id[[1L]]),
     selected_discrepancy_candidate_id = as.character(disc$candidate_id[[1L]]),
-    selected_historical_joint_candidate_id = as.character(
-      app_glofas_part4_anchor_row(anchors, "historical_joint_anchor")$candidate_id[[1L]]
-    ),
+    selected_historical_joint_candidate_id = as.character(app_glofas_part4_row_value(
+      app_glofas_part4_optional_anchor_row(anchors, "historical_joint_anchor"),
+      "candidate_id",
+      ""
+    )),
     reference_design_hash = as.character(ref$design_hash[[1L]]),
     discrepancy_design_hash = as.character(disc$design_hash[[1L]]),
     part4_family = part4_family
@@ -471,7 +499,7 @@ app_glofas_part4_make_model_grid <- function(
     config_hash = "TO_BE_COMPUTED",
     notes = c(
       rep("Raw issued GloFAS ensemble baseline for fixed Part 4 synthesis.", length(quantile)),
-      rep(sprintf("Part 4 %s component; gated by selected G1/G2/G3 anchors.", part4_family), length(quantile))
+      rep(sprintf("Part 4 %s component; gated by selected Part 1/Part 2 geometry anchors.", part4_family), length(quantile))
     ),
     stringsAsFactors = FALSE
   )
@@ -666,7 +694,11 @@ app_glofas_part4_launch_manifest <- function(
   }
   ref <- if (nrow(anchors)) app_glofas_part4_anchor_row(anchors, "reference_anchor") else data.frame()
   disc <- if (nrow(anchors)) app_glofas_part4_anchor_row(anchors, "discrepancy_anchor") else data.frame()
-  joint <- if (nrow(anchors)) app_glofas_part4_anchor_row(anchors, "historical_joint_anchor") else data.frame()
+  joint <- if (nrow(anchors)) {
+    app_glofas_part4_optional_anchor_row(anchors, "historical_joint_anchor")
+  } else {
+    data.frame()
+  }
   rows <- list()
   add_row <- function(part4_family, quantile = NA_real_) {
     status <- app_glofas_part4_manifest_status_from_gates(
@@ -696,7 +728,7 @@ app_glofas_part4_launch_manifest <- function(
       run_id = run_id,
       dependencies = paste(dependencies, collapse = "|"),
       initializer_policy = if (!length(dependencies)) {
-        "validated_part3_coefficients_if_path_and_sha_present_else_cold"
+        "optional_exact_design_part3_initializer_else_cold_closed_form_ridge"
       } else {
         "exact_dependency_fit"
       },
@@ -782,7 +814,7 @@ app_glofas_part4_prepare_bundle <- function(
       cfg$execution <- cfg$execution %||% list()
       cfg$execution$final_launch <- cfg$execution$final_launch %||% list()
       cfg$execution$final_launch$enabled <- TRUE
-      cfg$execution$final_launch$note <- "Part 4 fixed ensemble-likelihood synthesis candidate prepared from frozen G1/G2/G3 anchors."
+      cfg$execution$final_launch$note <- "Part 4 fixed ensemble-likelihood candidate prepared from frozen Part 1/Part 2 geometry anchors; Part 3 initializer optional."
       cfg$post_analysis <- cfg$post_analysis %||% list()
       cfg$post_analysis$run_after_outputs <- TRUE
       cfg$inference$likelihood_family <- if (grepl("exal", family, fixed = TRUE)) {

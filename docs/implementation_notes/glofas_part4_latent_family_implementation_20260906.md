@@ -168,7 +168,7 @@ updates then begin, and at least 10 coefficient updates are required before
 convergence. The freeze is applied only when an initializer exists; a cold
 root fit is not frozen around arbitrary zeros.
 
-An optional Part 3 initializer is accepted only when the selected-anchor
+An optional, exact-design Part 3 initializer is accepted only when the selected-anchor
 manifest contains both `fit_object_path` and `fit_object_sha256`. The loader
 verifies the SHA256 digest, coefficient dimensions, and coefficient names.
 It transfers compatible coefficient moments but initializes the new Part 4
@@ -220,8 +220,12 @@ Focused tests:
 
 ## Preparation
 
-Preparation requires a frozen three-row selected-anchor manifest with roles
-`reference_anchor`, `discrepancy_anchor`, and `historical_joint_anchor`.
+Preparation requires a frozen two-row selected-anchor manifest with roles
+`reference_anchor` and `discrepancy_anchor`. A `historical_joint_anchor` row is
+optional and is used only when it supplies a hash-verified coefficient-compatible
+Part 3 fit. Without that row, the closed-form Part 4 Normal Ridge root is fitted
+cold, which loses no iterative warm-start benefit; its exact Part 4 fit then
+initializes Normal RHS/VB and the remainder of the dependency graph.
 The reference and discrepancy rows provide their frozen DESN geometries,
 lag contracts, seeds, and RHS `tau0` values. The historical joint row records
 the selected Part 3 provenance and may optionally provide the exact fit path

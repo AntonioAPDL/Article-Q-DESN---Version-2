@@ -83,6 +83,7 @@ stopifnot(ncol(reservoir_design$X) == 5L, all(is.finite(reservoir_design$X)))
 
 ridge <- app_joint_shared_score_ridge(selector, reservoir, contract)
 stopifnot(is.finite(ridge$summary$calibration_acrps_mean), ridge$summary$protected_rows_loaded == 0L)
+stopifnot(ridge$summary$hard_gate_status == "pass")
 stopifnot(all(app_joint_shared_acrps(c(0, 1), matrix(c(0, 1), 2L, length(contract$tau)), contract$tau) == 0))
 
 aggregate <- data.frame(

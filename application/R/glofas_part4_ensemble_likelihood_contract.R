@@ -319,8 +319,8 @@ app_glofas_part4_lag_contract <- function(row, label = "anchor") {
   list(
     output_lags = if (output_lag_max > 0L) list(range = c(1L, output_lag_max)) else integer(0),
     covariates = list(
-      variables = c("ppt", "soil"),
-      lags = list(range = c(0L, covariate_lag_max))
+      ppt = list(range = c(0L, covariate_lag_max)),
+      soil = list(range = c(0L, covariate_lag_max))
     ),
     standardize = TRUE
   )

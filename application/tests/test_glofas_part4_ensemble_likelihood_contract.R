@@ -215,3 +215,7 @@ stopifnot(health$summary$value[health$summary$metric == "configured_model_rows"]
 
 script_status <- system2("bash", c("-n", shQuote(bundle$launch_path)))
 stopifnot(identical(script_status, 0L))
+
+prepare_script <- readLines(app_path("application/scripts/61_prepare_glofas_part4_ensemble_likelihood_launch.R"))
+stopifnot(any(grepl('require_input_files = "false"', prepare_script, fixed = TRUE)))
+stopifnot(any(grepl("require_input_files = app_as_bool(args$require_input_files)", prepare_script, fixed = TRUE)))

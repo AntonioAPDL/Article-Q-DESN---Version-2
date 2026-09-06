@@ -1,8 +1,8 @@
 # GloFAS Part 4 fixed ensemble-likelihood launch contract.
 #
 # This module prepares gated Part 4 artifacts from frozen G1/G2/G3 winners. It
-# does not fit models. The actual scientific fit remains the existing
-# latent_path_ensemble_likelihood workflow.
+# does not fit models. Production execution is delegated to the explicit Part 4
+# family workers and remains blocked until separate operator approval.
 
 app_glofas_part4_quantile_grid <- function() {
   c(0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95)
@@ -23,17 +23,10 @@ app_glofas_part4_model_families <- function() {
       "normal_rhs_vb_diagnostic"
     ),
     likelihood_family = c("al", "exal", "al", "exal", "normal", "normal"),
-    inference_method = c("vb_ld", "vb_ld", "vb_ld", "vb_ld", "ridge", "vb"),
+    inference_method = rep("vb_ld", 6L),
     coefficient_prior = c("rhs", "rhs", "rhs", "rhs", "ridge", "rhs"),
     quantile_slots = c(7L, 7L, 1L, 1L, 1L, 1L),
-    executable_status = c(
-      "p50_canary_ready_after_operator_launch_approval",
-      "blocked_until_exal_latent_path_adapter_is_audited",
-      "blocked_until_independent_al_full7_and_joint_adapter_are_audited",
-      "blocked_until_independent_exal_and_joint_adapter_are_audited",
-      "blocked_diagnostic_not_part4_scientific_target",
-      "blocked_diagnostic_not_part4_scientific_target"
-    ),
+    executable_status = rep("implemented_tested_not_launched", 6L),
     stringsAsFactors = FALSE
   )
 }
@@ -208,6 +201,21 @@ app_glofas_part4_validate_anchor_manifest <- function(anchor_manifest, require_f
     app_glofas_part4_numeric_scalar(row$seed, sprintf("%s.seed", role), nonnegative = TRUE)
     app_glofas_part4_numeric_scalar(row$rhs_tau0, sprintf("%s.rhs_tau0", role), positive = TRUE)
   }
+  historical <- app_glofas_part4_anchor_row(anchor_manifest, "historical_joint_anchor")
+  fit_path <- as.character(app_glofas_part4_row_value(historical, "fit_object_path", ""))
+  fit_sha <- tolower(as.character(app_glofas_part4_row_value(historical, "fit_object_sha256", "")))
+  if (xor(nzchar(fit_path), nzchar(fit_sha))) {
+    stop("Historical joint anchor fit_object_path and fit_object_sha256 must be supplied together.", call. = FALSE)
+  }
+  if (nzchar(fit_path)) {
+    if (!grepl("^[0-9a-f]{64}$", fit_sha)) {
+      stop("Historical joint anchor fit_object_sha256 is malformed.", call. = FALSE)
+    }
+    resolved_fit <- app_resolve_path(fit_path, must_work = TRUE)
+    if (!identical(tolower(app_sha256_file(resolved_fit)), fit_sha)) {
+      stop("Historical joint anchor fit object does not match its declared SHA256.", call. = FALSE)
+    }
+  }
   anchor_manifest
 }
 
@@ -343,8 +351,33 @@ app_glofas_part4_config_from_anchors <- function(
   cfg$prediction$q_g_source <- "posterior_model_quantile"
   cfg$prediction$prediction_unit <- "posterior_draw"
   cfg$prediction$beyond_issued_horizon <- "disabled"
-  cfg$prediction$part4_scope <- "fixed_issued_ensemble_likelihood_synthesis"
+  cfg$prediction$part4_scope <- "fixed_issued_ensemble_latent_path"
   cfg$prediction$rolling_origin_enabled <- FALSE
+
+  cfg$covariates <- cfg$covariates %||% list()
+  cfg$covariates$enabled <- TRUE
+  cfg$covariates$variables <- c("ppt", "soil")
+  cfg$covariates$source_policy <- "realized_history_and_oracle_future"
+  cfg$covariates$future_policy <- "oracle_realized"
+  cfg$covariates$allow_realized_future <- TRUE
+  cfg$covariates$allow_realized_future_blend <- FALSE
+  cfg$covariates$forecast <- list(
+    provider = "realized_future_oracle",
+    horizon_days = 28L
+  )
+  for (variable in c("ppt", "soil")) {
+    cfg$covariates[[variable]] <- cfg$covariates[[variable]] %||% list()
+    cfg$covariates[[variable]]$forecast_noise <- list(enabled = FALSE)
+    cfg$covariates[[variable]]$noisy_blend <- list(enabled = FALSE)
+    cfg$covariates[[variable]]$realized_future_correction <- list(
+      enabled = FALSE,
+      observed_weight = 0
+    )
+    cfg$covariates[[variable]]$observed_blend <- list(
+      enabled = FALSE,
+      observed_weight = 0
+    )
+  }
 
   cfg$feature_contract <- cfg$feature_contract %||% cfg$features %||% list()
   cfg$feature_contract$version <- cfg$feature_contract$version %||% "0.3"
@@ -405,29 +438,40 @@ app_glofas_part4_make_model_grid <- function(
     quantile,
     part4_family = "independent_al_rhs_vb",
     reservoir_seed = NA_integer_) {
-  qid <- app_glofas_part4_quantile_id(quantile)
-  likelihood_family <- if (identical(part4_family, "independent_exal_rhs_vb")) "exal" else "al"
+  quantile <- as.numeric(quantile)
+  qid <- vapply(quantile, app_glofas_part4_quantile_id, character(1L))
+  likelihood_family <- if (grepl("exal", part4_family, fixed = TRUE)) {
+    "exal"
+  } else if (grepl("normal", part4_family, fixed = TRUE)) {
+    "normal"
+  } else {
+    "al"
+  }
+  prior <- if (identical(part4_family, "normal_ridge_diagnostic")) "ridge" else "rhs"
   data.frame(
     fit_id = c(
       sprintf("raw_glofas_part4_%s_%s", run_label, qid),
       sprintf("qdesn_part4_%s_%s", run_label, qid)
     ),
     model_id = c(
-      sprintf("raw_glofas_part4_%s", run_label),
-      sprintf("qdesn_part4_%s", run_label)
+      rep(sprintf("raw_glofas_part4_%s", run_label), length(quantile)),
+      rep(sprintf("qdesn_part4_%s", run_label), length(quantile))
     ),
-    model_family = c("raw_glofas", "qdesn_glofas_discrepancy"),
-    quantile_level = rep(as.numeric(quantile), 2L),
-    inference_method = c("none", "vb_ld"),
-    coefficient_prior = c("none", "rhs"),
-    reservoir_seed = c(NA_integer_, reservoir_seed),
-    likelihood_family = c("none", likelihood_family),
+    model_family = c(
+      rep("raw_glofas", length(quantile)),
+      rep("qdesn_glofas_discrepancy", length(quantile))
+    ),
+    quantile_level = rep(quantile, 2L),
+    inference_method = c(rep("none", length(quantile)), rep("vb_ld", length(quantile))),
+    coefficient_prior = c(rep("none", length(quantile)), rep(prior, length(quantile))),
+    reservoir_seed = c(rep(NA_integer_, length(quantile)), rep(reservoir_seed, length(quantile))),
+    likelihood_family = c(rep("none", length(quantile)), rep(likelihood_family, length(quantile))),
     required = TRUE,
     enabled = TRUE,
     config_hash = "TO_BE_COMPUTED",
     notes = c(
-      "Raw issued GloFAS ensemble baseline for fixed Part 4 synthesis.",
-      sprintf("Part 4 %s quantile component; gated by selected G1/G2/G3 anchors.", part4_family)
+      rep("Raw issued GloFAS ensemble baseline for fixed Part 4 synthesis.", length(quantile)),
+      rep(sprintf("Part 4 %s component; gated by selected G1/G2/G3 anchors.", part4_family), length(quantile))
     ),
     stringsAsFactors = FALSE
   )
@@ -530,22 +574,48 @@ app_glofas_part4_manifest_status_from_gates <- function(
     quantile) {
   if (!isTRUE(anchors_ok)) return("blocked_missing_frozen_g1_g2_g3_anchor_manifest")
   if (!isTRUE(source_ok)) return("blocked_part4_source_or_contract_audit_failed")
-  if (identical(part4_family, "independent_al_rhs_vb")) {
-    if (abs(as.numeric(quantile) - 0.50) < 1.0e-12) {
-      return("ready_after_operator_launch_approval")
+  if (identical(part4_family, "normal_ridge_diagnostic")) {
+    return("ready_after_operator_launch_approval")
+  }
+  "blocked_until_dependencies_complete"
+}
+
+app_glofas_part4_job_id <- function(run_label, family, quantile = NA_real_) {
+  qid <- if (is.finite(as.numeric(quantile))) {
+    paste0("_", app_glofas_part4_quantile_id(quantile))
+  } else {
+    ""
+  }
+  sprintf("%s_%s%s", run_label, family, qid)
+}
+
+app_glofas_part4_job_dependencies <- function(run_label, family, quantile = NA_real_) {
+  id <- function(f, q = NA_real_) app_glofas_part4_job_id(run_label, f, q)
+  if (identical(family, "normal_ridge_diagnostic")) return(character())
+  if (identical(family, "normal_rhs_vb_diagnostic")) return(id("normal_ridge_diagnostic"))
+  if (identical(family, "independent_al_rhs_vb")) {
+    q <- as.numeric(quantile)
+    parent <- if (abs(q - 0.50) < 1.0e-12) {
+      id("normal_rhs_vb_diagnostic")
+    } else {
+      parent_q <- c(`0.35` = 0.50, `0.20` = 0.35, `0.05` = 0.20,
+                    `0.65` = 0.50, `0.80` = 0.65, `0.95` = 0.80)
+      value <- parent_q[[sprintf("%.2f", q)]]
+      if (is.null(value)) stop(sprintf("Unsupported Part 4 AL quantile %.4f.", q), call. = FALSE)
+      id("independent_al_rhs_vb", value)
     }
-    return("blocked_until_p50_canary_passes")
+    return(parent)
   }
-  if (identical(part4_family, "independent_exal_rhs_vb")) {
-    return("blocked_until_exal_latent_path_adapter_is_audited")
+  if (identical(family, "independent_exal_rhs_vb")) {
+    return(id("independent_al_rhs_vb", as.numeric(quantile)))
   }
-  if (identical(part4_family, "joint_al_rhs_vb")) {
-    return("blocked_until_independent_al_full7_and_joint_adapter_are_audited")
+  if (identical(family, "joint_al_rhs_vb")) {
+    return(vapply(app_glofas_part4_quantile_grid(), function(q) id("independent_al_rhs_vb", q), character(1L)))
   }
-  if (identical(part4_family, "joint_exal_rhs_vb")) {
-    return("blocked_until_independent_exal_and_joint_adapter_are_audited")
+  if (identical(family, "joint_exal_rhs_vb")) {
+    return(vapply(app_glofas_part4_quantile_grid(), function(q) id("independent_exal_rhs_vb", q), character(1L)))
   }
-  "blocked_diagnostic_not_part4_scientific_target"
+  stop(sprintf("Unknown Part 4 family '%s'.", family), call. = FALSE)
 }
 
 app_glofas_part4_launch_manifest <- function(
@@ -606,6 +676,8 @@ app_glofas_part4_launch_manifest <- function(
       quantile %||% 0.50
     )
     qid <- if (is.finite(as.numeric(quantile))) app_glofas_part4_quantile_id(quantile) else ""
+    run_id <- app_glofas_part4_job_id(run_label, part4_family, quantile)
+    dependencies <- app_glofas_part4_job_dependencies(run_label, part4_family, quantile)
     rows[[length(rows) + 1L]] <<- data.frame(
       run_label = run_label,
       part4_family = part4_family,
@@ -621,17 +693,23 @@ app_glofas_part4_launch_manifest <- function(
       config_path = "",
       model_grid_path = "",
       quantile_grid_path = "",
-      run_id = if (nzchar(qid)) sprintf("%s_%s_%s", run_label, part4_family, qid) else sprintf("%s_%s", run_label, part4_family),
+      run_id = run_id,
+      dependencies = paste(dependencies, collapse = "|"),
+      initializer_policy = if (!length(dependencies)) {
+        "validated_part3_coefficients_if_path_and_sha_present_else_cold"
+      } else {
+        "exact_dependency_fit"
+      },
       launch_command = "",
       stringsAsFactors = FALSE
     )
   }
-  for (q in app_glofas_part4_quantile_grid()) add_row("independent_al_rhs_vb", q)
+  add_row("normal_ridge_diagnostic")
+  add_row("normal_rhs_vb_diagnostic")
+  for (q in c(0.50, 0.35, 0.65, 0.20, 0.80, 0.05, 0.95)) add_row("independent_al_rhs_vb", q)
   for (q in app_glofas_part4_quantile_grid()) add_row("independent_exal_rhs_vb", q)
   add_row("joint_al_rhs_vb")
   add_row("joint_exal_rhs_vb")
-  add_row("normal_ridge_diagnostic")
-  add_row("normal_rhs_vb_diagnostic")
   app_bind_rows_fill(rows)
 }
 
@@ -643,7 +721,13 @@ app_glofas_part4_prepare_bundle <- function(
     require_frozen = TRUE,
     allow_forbidden_sources = FALSE,
     dry_run = TRUE,
-    write_candidate_configs = TRUE) {
+    write_candidate_configs = TRUE,
+    max_iter = 100L,
+    min_iter = 30L,
+    tol = 0.01,
+    freeze_beta_warmup_iters = 20L,
+    min_beta_updates = 10L,
+    n_draws = 500L) {
   base_cfg <- app_read_config(app_resolve_path(base_config_path, must_work = TRUE))
   anchors <- NULL
   if (!is.null(anchor_manifest_path) && nzchar(as.character(anchor_manifest_path))) {
@@ -666,17 +750,19 @@ app_glofas_part4_prepare_bundle <- function(
   )
 
   can_materialize <- !is.null(anchors) &&
-    any(manifest$status == "ready_after_operator_launch_approval") &&
+    any(!grepl("^blocked_missing|^blocked_part4", manifest$status)) &&
     isTRUE(write_candidate_configs)
 
   if (isTRUE(can_materialize)) {
     anchors_valid <- app_glofas_part4_validate_anchor_manifest(anchors, require_frozen = require_frozen)
+    selected_anchor_path <- file.path(configs_dir, "selected_anchor_manifest.csv")
+    app_write_csv(anchors_valid, selected_anchor_path)
     for (i in seq_len(nrow(manifest))) {
       row <- manifest[i, , drop = FALSE]
-      if (!identical(row$part4_family[[1L]], "independent_al_rhs_vb")) next
-      q <- as.numeric(row$quantile[[1L]])
-      qid <- row$quantile_id[[1L]]
-      cand_dir <- file.path(configs_dir, qid)
+      family <- row$part4_family[[1L]]
+      q <- if (nzchar(row$quantile[[1L]])) as.numeric(row$quantile[[1L]]) else app_glofas_part4_quantile_grid()
+      qid <- if (nzchar(row$quantile_id[[1L]])) row$quantile_id[[1L]] else "all7"
+      cand_dir <- file.path(configs_dir, row$run_id[[1L]])
       app_ensure_dir(cand_dir)
       qgrid_path <- file.path(cand_dir, sprintf("quantile_grid_%s.csv", qid))
       model_grid_path <- file.path(cand_dir, sprintf("model_grid_%s.csv", qid))
@@ -687,26 +773,46 @@ app_glofas_part4_prepare_bundle <- function(
         base_cfg,
         anchors_valid,
         quantile = q,
-        part4_family = row$part4_family[[1L]],
+        part4_family = family,
         run_label = run_id,
         require_frozen = require_frozen
       )
       cfg$paths$quantile_grid <- app_prefer_repo_relative_path(qgrid_path)
       cfg$paths$model_grid <- app_prefer_repo_relative_path(model_grid_path)
-      cfg$paths$cache <- file.path("application", "cache", run_id)
-      cfg$paths$runs <- file.path("application", "runs")
-      cfg$paths$logs <- file.path("application", "logs")
-      cfg$paths$generated_outputs <- file.path("application", "outputs")
       cfg$execution <- cfg$execution %||% list()
       cfg$execution$final_launch <- cfg$execution$final_launch %||% list()
       cfg$execution$final_launch$enabled <- TRUE
       cfg$execution$final_launch$note <- "Part 4 fixed ensemble-likelihood synthesis candidate prepared from frozen G1/G2/G3 anchors."
       cfg$post_analysis <- cfg$post_analysis %||% list()
       cfg$post_analysis$run_after_outputs <- TRUE
+      cfg$inference$likelihood_family <- if (grepl("exal", family, fixed = TRUE)) {
+        "exal"
+      } else if (grepl("normal", family, fixed = TRUE)) {
+        "normal"
+      } else {
+        "al"
+      }
+      cfg$inference$default_method <- "vb_ld"
+      cfg$inference$vb_ld$max_iter <- as.integer(max_iter)
+      cfg$inference$vb_ld$min_iter_elbo <- as.integer(min_iter)
+      cfg$inference$vb_ld$tol <- as.numeric(tol)
+      cfg$inference$vb_ld$tol_par <- as.numeric(tol)
+      cfg$inference$vb_ld$freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters)
+      cfg$inference$vb_ld$min_beta_updates <- as.integer(min_beta_updates)
+      cfg$inference$vb_ld$progress_every <- 1L
+      cfg$inference$vb_ld$n_draws <- as.integer(n_draws)
+      cfg$part4_execution <- list(
+        model_fit_only = TRUE,
+        separate_forecast_stage = FALSE,
+        future_usgs_role = "latent_during_fit_post_fit_scoring_only",
+        ensemble_weight_contract = "one_over_members_within_horizon",
+        common_ensemble_center_across_quantiles = TRUE,
+        crossing_fix = FALSE
+      )
       model_grid <- app_glofas_part4_make_model_grid(
         run_label = run_label,
         quantile = q,
-        part4_family = row$part4_family[[1L]],
+        part4_family = family,
         reservoir_seed = as.integer(cfg$reservoir$seed %||% NA_integer_)
       )
       app_write_csv(qgrid, qgrid_path)
@@ -721,16 +827,11 @@ app_glofas_part4_prepare_bundle <- function(
       manifest$config_path[[i]] <- app_prefer_repo_relative_path(config_path)
       manifest$model_grid_path[[i]] <- app_prefer_repo_relative_path(model_grid_path)
       manifest$quantile_grid_path[[i]] <- app_prefer_repo_relative_path(qgrid_path)
-      if (identical(manifest$status[[i]], "ready_after_operator_launch_approval")) {
-        log_path <- file.path("application", "logs", sprintf("%s.log", run_id))
-        command <- sprintf(
-          "Rscript application/scripts/run_all.R --config %s --run_id %s --preflight true --confirm_final_launch true > %s 2>&1",
-          shQuote(app_prefer_repo_relative_path(config_path)),
-          shQuote(run_id),
-          shQuote(log_path)
-        )
-        manifest$launch_command[[i]] <- command
-      }
+      manifest$launch_command[[i]] <- sprintf(
+        "Rscript application/scripts/386_run_glofas_part4_latent_family_job.R --runtime_root %s --job_id %s",
+        shQuote(app_prefer_repo_relative_path(runtime_abs)),
+        shQuote(run_id)
+      )
     }
   }
 
@@ -743,7 +844,7 @@ app_glofas_part4_prepare_bundle <- function(
     "set -euo pipefail",
     sprintf("echo %s", shQuote(sprintf("Prepared manifest: %s", manifest_path))),
     "echo 'No models are launched by default.'",
-    "echo 'Run only a ready_after_operator_launch_approval command after p50 canary approval.'",
+    "echo 'Use application/scripts/387_launch_glofas_part4_latent_family_dag.py only after explicit operator approval.'",
     ""
   )
   app_ensure_dir(dirname(launch_path))
@@ -761,12 +862,23 @@ app_glofas_part4_prepare_bundle <- function(
     } else {
       ""
     },
+    selected_anchor_manifest_path = if (exists("selected_anchor_path", inherits = FALSE)) {
+      app_prefer_repo_relative_path(selected_anchor_path)
+    } else {
+      ""
+    },
     manifest_path = app_prefer_repo_relative_path(manifest_path),
     launch_path = app_prefer_repo_relative_path(launch_path),
     rows = nrow(manifest),
     ready_rows = sum(manifest$status == "ready_after_operator_launch_approval"),
     blocked_rows = sum(grepl("^blocked", manifest$status)),
     dry_run = app_as_bool(dry_run),
+    max_iter = as.integer(max_iter),
+    min_iter = as.integer(min_iter),
+    tol = as.numeric(tol),
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates),
+    n_draws = as.integer(n_draws),
     launched = FALSE
   )
   metadata_path <- file.path(configs_dir, "part4_launch_metadata.json")
@@ -792,7 +904,7 @@ app_glofas_part4_check_bundle <- function(runtime_root) {
       "manifest_rows",
       "ready_after_operator_launch_approval",
       "blocked",
-      "configured_independent_al_rows",
+      "configured_model_rows",
       "completed_markers",
       "failed_markers"
     ),

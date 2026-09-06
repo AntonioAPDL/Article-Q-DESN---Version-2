@@ -934,7 +934,8 @@ app_joint_exqdesn_structured_terms_grid <- function(
   b_sigma = 0.1,
   gamma_prior_type = "none",
   gamma_prior_center = 0,
-  gamma_prior_sd_eta = NA_real_
+  gamma_prior_sd_eta = NA_real_,
+  observation_weight = NULL
 ) {
   augmentation <- match.arg(augmentation)
   tau <- app_joint_exqdesn_assert_scalar_tau(tau)
@@ -946,8 +947,10 @@ app_joint_exqdesn_structured_terms_grid <- function(
   s_mean <- as.numeric(s_mean)
   s2_mean <- as.numeric(s2_mean)
   n <- length(r_mean)
+  observation_weight <- as.numeric(observation_weight %||% rep(1, n))
   if (!length(gamma) || !n ||
       any(vapply(list(r2_mean, latent_mean, latent_inv_mean, s_mean, s2_mean), length, integer(1L)) != n) ||
+      length(observation_weight) != n || any(!is.finite(observation_weight)) || any(observation_weight <= 0) ||
       any(!is.finite(c(gamma, r_mean, r2_mean, latent_mean, latent_inv_mean, s_mean, s2_mean))) ||
       any(r2_mean < 0) || any(latent_mean <= 0) || any(latent_inv_mean <= 0) || any(s2_mean < 0)) {
     stop("Structured scale-shape grid moments are malformed.", call. = FALSE)
@@ -958,24 +961,25 @@ app_joint_exqdesn_structured_terms_grid <- function(
   lambda <- constants$lambda
   k <- constants$k
   p_gamma <- constants$p_gamma
-  nu <- rep(-a_sigma - 1.5 * n, length(gamma))
-  sum_r2_inv <- sum(r2_mean * latent_inv_mean)
-  sum_r <- sum(r_mean)
-  sum_latent <- sum(latent_mean)
-  sum_s2_inv <- sum(s2_mean * latent_inv_mean)
-  sum_sr_inv <- sum(s_mean * r_mean * latent_inv_mean)
-  sum_s <- sum(s_mean)
+  n_eff <- sum(observation_weight)
+  nu <- rep(-a_sigma - 1.5 * n_eff, length(gamma))
+  sum_r2_inv <- sum(observation_weight * r2_mean * latent_inv_mean)
+  sum_r <- sum(observation_weight * r_mean)
+  sum_latent <- sum(observation_weight * latent_mean)
+  sum_s2_inv <- sum(observation_weight * s2_mean * latent_inv_mean)
+  sum_sr_inv <- sum(observation_weight * s_mean * r_mean * latent_inv_mean)
+  sum_s <- sum(observation_weight * s_mean)
   if (identical(augmentation, "u")) {
     chi <- 2 * b_sigma + sum_r2_inv - (1 - 2 * p_gamma) * sum_r + 0.25 * sum_latent
     psi <- lambda^2 * sum_s2_inv
     cross <- lambda * (sum_sr_inv - k * sum_s)
-    log_shape <- n * log(constants$cp)
+    log_shape <- n_eff * log(constants$cp)
   } else {
     chi <- 2 * b_sigma + 2 * sum_latent +
       (sum_r2_inv - 2 * A * sum_r + A^2 * sum_latent) / B
     psi <- lambda^2 * sum_s2_inv / B
     cross <- lambda / B * (sum_sr_inv - A * sum_s)
-    log_shape <- -0.5 * n * log(B)
+    log_shape <- -0.5 * n_eff * log(B)
   }
   log_prior <- app_joint_exqdesn_gamma_log_prior(
     tau, gamma, gamma_prior_type, gamma_prior_center, gamma_prior_sd_eta
@@ -1090,6 +1094,7 @@ app_joint_exqdesn_structured_scale_shape_update <- function(
   gamma_prior_type = "none",
   gamma_prior_center = 0,
   gamma_prior_sd_eta = NA_real_,
+  observation_weight = NULL,
   quadrature_nodes = c(4L, 8L, 12L),
   quadrature_tolerance = 1.0e-6
 ) {
@@ -1108,7 +1113,8 @@ app_joint_exqdesn_structured_scale_shape_update <- function(
     b_sigma = b_sigma,
     gamma_prior_type = gamma_prior_type,
     gamma_prior_center = gamma_prior_center,
-    gamma_prior_sd_eta = gamma_prior_sd_eta
+    gamma_prior_sd_eta = gamma_prior_sd_eta,
+    observation_weight = observation_weight
   )
   quadrature <- app_joint_exqdesn_normalize_branch_quadrature(
     tau = tau,

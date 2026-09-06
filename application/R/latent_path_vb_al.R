@@ -55,6 +55,31 @@ app_latent_gig_half_moments <- function(chi, psi) {
   )
 }
 
+app_latent_gig_moments <- function(lambda, chi, psi) {
+  lambda <- as.numeric(lambda)
+  chi <- pmax(as.numeric(chi), 1.0e-12)
+  psi <- pmax(as.numeric(psi), 1.0e-12)
+  if (length(lambda) == 1L) lambda <- rep(lambda, length(chi))
+  if (length(lambda) != length(chi) || length(psi) != length(chi)) {
+    stop("GIG moment parameters are not aligned.", call. = FALSE)
+  }
+  z <- sqrt(chi * psi)
+  ratio <- function(order) {
+    numerator <- besselK(z, nu = lambda + order, expon.scaled = TRUE)
+    denominator <- besselK(z, nu = lambda, expon.scaled = TRUE)
+    out <- numerator / pmax(denominator, .Machine$double.xmin)
+    if (any(!is.finite(out))) stop("Non-finite weighted GIG moment.", call. = FALSE)
+    out
+  }
+  list(
+    mean = sqrt(chi / psi) * ratio(1),
+    inv_mean = sqrt(psi / chi) * ratio(-1),
+    lambda = lambda,
+    chi = chi,
+    psi = psi
+  )
+}
+
 app_latent_near_pd_inverse <- function(A, jitter = 1.0e-8) {
   A <- as.matrix(A)
   A <- (A + t(A)) / 2
@@ -424,7 +449,14 @@ app_latent_prior_state_init <- function(
 
 app_latent_prior_state_update <- function(state, theta_mean, theta_cov, iter = 1L, update_global = NULL) {
   if (identical(state$prior, "rhs_ns")) {
-    return(app_latent_rhs_state_update(state, theta_mean, theta_cov, iter = iter, update_global = update_global))
+    state <- app_latent_rhs_state_update(state, theta_mean, theta_cov, iter = iter, update_global = update_global)
+    if (!is.null(state$prior_addition)) {
+      state$prior_precision <- pmax(
+        state$prior_precision + as.numeric(state$prior_addition$diagonal),
+        1.0e-12
+      )
+    }
+    return(state)
   }
   if (identical(state$prior, "block_rhs_ns")) {
     for (block_name in names(state$blocks)) {
@@ -438,8 +470,31 @@ app_latent_prior_state_update <- function(state, theta_mean, theta_cov, iter = 1
       )
     }
     state$prior_precision <- app_latent_prior_state_combine_precision(state, length(theta_mean))
+    if (!is.null(state$prior_addition)) {
+      state$prior_precision <- pmax(
+        state$prior_precision + as.numeric(state$prior_addition$diagonal),
+        1.0e-12
+      )
+    }
     return(state)
   }
+  state
+}
+
+app_latent_prior_apply_addition <- function(state, addition = NULL) {
+  if (is.null(addition)) {
+    state$prior_linear <- numeric(length(state$prior_precision))
+    return(state)
+  }
+  diagonal <- as.numeric(addition$diagonal %||% numeric())
+  linear <- as.numeric(addition$linear %||% rep(0, length(diagonal)))
+  if (length(diagonal) != length(state$prior_precision) || length(linear) != length(diagonal) ||
+      any(!is.finite(diagonal)) || any(diagonal < 0) || any(!is.finite(linear))) {
+    stop("External latent-path prior addition is malformed.", call. = FALSE)
+  }
+  state$prior_precision <- pmax(state$prior_precision + diagonal, 1.0e-12)
+  state$prior_linear <- linear
+  state$prior_addition <- list(diagonal = diagonal, linear = linear)
   state
 }
 
@@ -544,12 +599,16 @@ app_latent_prior_rhs_diagnostics <- function(state, iter) {
   )
 }
 
-app_latent_source_sigma_init <- function(source, prior_sigma) {
+app_latent_source_sigma_init <- function(source, prior_sigma, weight = NULL) {
   source <- factor(as.character(source), levels = c("Y", "G"))
+  weight <- as.numeric(weight %||% rep(1, length(source)))
+  if (length(weight) != length(source) || any(!is.finite(weight)) || any(weight <= 0)) {
+    stop("Initial latent-path likelihood weights must be finite, positive, and row aligned.", call. = FALSE)
+  }
   a0 <- as.numeric(prior_sigma$a %||% 2)
   b0 <- as.numeric(prior_sigma$b %||% 1)
-  tab <- table(source)
-  shape <- a0 + 1.5 * as.numeric(tab[c("Y", "G")])
+  effective_n <- vapply(c("Y", "G"), function(src) sum(weight[source == src]), numeric(1L))
+  shape <- a0 + 1.5 * effective_n
   names(shape) <- c("Y", "G")
   rate <- rep(b0 + 1, 2L)
   names(rate) <- c("Y", "G")
@@ -811,13 +870,14 @@ app_latent_row_moments_dense_debug <- function(design, y_mean, y_cov, theta_mean
     source = source_fixed,
     R = pmax(z_fixed^2 - 2 * z_fixed * fixed_mean + fixed_second, 1.0e-12),
     e = z_fixed - fixed_mean,
-    n = nrow(H_fixed)
+    n = nrow(H_fixed),
+    weight = as.numeric(design$weight_fixed %||% rep(1, nrow(H_fixed)))
   )
   theta_second <- theta_cov + tcrossprod(theta_mean)
 
   rows <- list()
   k <- 1L
-  add_row <- function(z_mean, z_second, h_mean, S, b, source, row_info, is_future, future_index = NA_integer_) {
+  add_row <- function(z_mean, z_second, h_mean, S, b, source, row_info, is_future, future_index = NA_integer_, weight = 1) {
     h_mean <- as.numeric(h_mean)
     S <- as.matrix(S)
     b <- as.numeric(b)
@@ -833,6 +893,7 @@ app_latent_row_moments_dense_debug <- function(design, y_mean, y_cov, theta_mean
       row_info = row_info,
       is_future = is_future,
       future_index = future_index,
+      weight = as.numeric(weight),
       R = max(R, 1.0e-12),
       e = e
     )
@@ -863,6 +924,7 @@ app_latent_row_moments_dense_debug <- function(design, y_mean, y_cov, theta_mean
       row_info = future$row_info_y[h, , drop = FALSE],
       is_future = TRUE,
       future_index = h
+      , weight = 1
     )
   }
   for (i in seq_len(nrow(H_g))) {
@@ -880,6 +942,7 @@ app_latent_row_moments_dense_debug <- function(design, y_mean, y_cov, theta_mean
       row_info = future$row_info_g[i, , drop = FALSE],
       is_future = TRUE,
       future_index = hidx
+      , weight = as.numeric(future$weight_g[[i]] %||% 1)
     )
   }
 
@@ -1315,7 +1378,8 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
     source = source_fixed,
     R = fixed_R,
     e = fixed_e,
-    n = nrow(H_fixed)
+    n = nrow(H_fixed),
+    weight = as.numeric(design$weight_fixed %||% rep(1, nrow(H_fixed)))
   )
   if (!is.null(fixed_block_moments)) fixed$block <- fixed_block
 
@@ -1437,6 +1501,8 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
     e_g = e_g,
     row_info_y = future$row_info_y,
     row_info_g = future$row_info_g,
+    weight_y = as.numeric(future$weight_y %||% rep(1, H_future)),
+    weight_g = as.numeric(future$weight_g %||% rep(1, length(z_g))),
     n_y = H_future,
     n_g = length(z_g)
   )
@@ -1502,6 +1568,19 @@ app_latent_all_e <- function(row_moments) {
   c(row_moments$fixed$e, vapply(rows, `[[`, numeric(1L), "e"))
 }
 
+app_latent_all_weight <- function(row_moments) {
+  fixed_weight <- as.numeric(row_moments$fixed$weight %||% rep(1, row_moments$fixed$n))
+  if (identical(row_moments$strategy, "streamed_grouped")) {
+    return(c(
+      fixed_weight,
+      as.numeric(row_moments$future$weight_y %||% rep(1, row_moments$future$n_y)),
+      as.numeric(row_moments$future$weight_g %||% rep(1, row_moments$future$n_g))
+    ))
+  }
+  rows <- row_moments$rows %||% list()
+  c(fixed_weight, vapply(rows, function(x) as.numeric(x$weight %||% 1), numeric(1L)))
+}
+
 app_latent_fixed_theta_stats_chunks <- function(row_moments, e_inv_v, sigma_state, constants, chunks = NULL) {
   fixed <- row_moments$fixed
   p <- ncol(fixed$H)
@@ -1514,9 +1593,10 @@ app_latent_fixed_theta_stats_chunks <- function(row_moments, e_inv_v, sigma_stat
     src <- chunk$source
     H <- fixed$H[idx, , drop = FALSE]
     sig_inv <- sigma_state$inv_mean[[src]]
-    w <- as.numeric(sig_inv * e_inv_v[idx] / constants$B)
+    obs_weight <- as.numeric(fixed$weight[idx] %||% rep(1, length(idx)))
+    w <- as.numeric(obs_weight * sig_inv * e_inv_v[idx] / constants$B)
     precision <- precision + crossprod(H, H * w)
-    rhs <- rhs + as.numeric(crossprod(H, sig_inv / constants$B * (e_inv_v[idx] * fixed$z[idx] - constants$A)))
+    rhs <- rhs + as.numeric(crossprod(H, obs_weight * sig_inv / constants$B * (e_inv_v[idx] * fixed$z[idx] - constants$A)))
   }
   list(precision = 0.5 * (precision + t(precision)), rhs = rhs)
 }
@@ -1540,15 +1620,16 @@ app_latent_fixed_theta_stats_block <- function(row_moments, e_inv_v, sigma_state
   paired_beta <- app_latent_fixed_block_has_paired_beta_rows(block)
   sig_y <- if (length(y_idx)) sigma_state$inv_mean[["Y"]] else NA_real_
   sig_g <- if (length(g_idx)) sigma_state$inv_mean[["G"]] else NA_real_
-  w_y <- if (length(y_idx)) as.numeric(sig_y * e_inv_v[y_idx] / constants$B) else numeric()
+  fixed_weight <- as.numeric(fixed$weight %||% rep(1, fixed$n))
+  w_y <- if (length(y_idx)) as.numeric(fixed_weight[y_idx] * sig_y * e_inv_v[y_idx] / constants$B) else numeric()
   c_y <- if (length(y_idx)) {
-    as.numeric(sig_y / constants$B * (e_inv_v[y_idx] * fixed$z[y_idx] - constants$A))
+    as.numeric(fixed_weight[y_idx] * sig_y / constants$B * (e_inv_v[y_idx] * fixed$z[y_idx] - constants$A))
   } else {
     numeric()
   }
-  w_g <- if (length(g_idx)) as.numeric(sig_g * e_inv_v[g_idx] / constants$B) else numeric()
+  w_g <- if (length(g_idx)) as.numeric(fixed_weight[g_idx] * sig_g * e_inv_v[g_idx] / constants$B) else numeric()
   c_g <- if (length(g_idx)) {
-    as.numeric(sig_g / constants$B * (e_inv_v[g_idx] * fixed$z[g_idx] - constants$A))
+    as.numeric(fixed_weight[g_idx] * sig_g / constants$B * (e_inv_v[g_idx] * fixed$z[g_idx] - constants$A))
   } else {
     numeric()
   }
@@ -1622,9 +1703,10 @@ app_latent_fixed_sigma_stats_chunks <- function(row_moments, e_v, e_inv_v, const
     idx <- chunk$index
     if (!length(idx)) next
     src <- chunk$source
-    shape[[src]] <- shape[[src]] + 1.5 * length(idx)
+    obs_weight <- as.numeric(fixed$weight[idx] %||% rep(1, length(idx)))
+    shape[[src]] <- shape[[src]] + 1.5 * sum(obs_weight)
     quad <- e_inv_v[idx] * fixed$R[idx] - 2 * constants$A * fixed$e[idx] + constants$A^2 * e_v[idx]
-    rate[[src]] <- rate[[src]] + sum(e_v[idx] + quad / (2 * constants$B))
+    rate[[src]] <- rate[[src]] + sum(obs_weight * (e_v[idx] + quad / (2 * constants$B)))
   }
   list(shape = shape, rate = rate)
 }
@@ -1636,7 +1718,7 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
   precision <- timer$time("theta_prior_precision", {
     diag(prior_state$prior_precision, p)
   })
-  rhs <- numeric(p)
+  rhs <- as.numeric(prior_state$prior_linear %||% numeric(p))
   fixed <- row_moments$fixed
   fixed_chunks <- if (isTRUE(chunking$enabled)) app_latent_make_source_row_chunks(fixed$source, chunking$chunk_size) else NULL
   fixed_stats <- timer$time("theta_fixed_stats", {
@@ -1671,7 +1753,9 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
       split(seq_along(future$g_future_index), factor(future$g_future_index, levels = seq_len(n_y)))
     if (isTRUE(future$paired_future_jacobian)) {
       future_paired_stats <- timer$time("theta_future_paired_jacobian", {
-        e_y <- e_inv_v[offset + seq_len(n_y)]
+        weight_y <- as.numeric(future$weight_y %||% rep(1, n_y))
+        weight_g <- as.numeric(future$weight_g %||% rep(1, future$n_g))
+        e_y <- e_inv_v[offset + seq_len(n_y)] * weight_y
         coeff_y <- sig_y * e_y / constants$B
         coeff_g <- numeric(n_y)
         rhs_weight_g <- numeric(n_y)
@@ -1679,10 +1763,10 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
           idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
           if (!length(idx)) next
           global_idx <- offset + n_y + idx
-          einv <- e_inv_v[global_idx]
+          einv <- e_inv_v[global_idx] * weight_g[idx]
           coeff_g[[h]] <- sig_g * sum(einv) / constants$B
           rhs_weight_g[[h]] <- sig_g / constants$B * (
-            sum(einv * future$z_g[idx]) - constants$A * length(idx)
+            sum(einv * future$z_g[idx]) - constants$A * sum(weight_g[idx])
           )
         }
         precision_future <- app_latent_weighted_crossprod(
@@ -1716,9 +1800,10 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
           i <- offset + h
           h_vec <- as.numeric(future$H_y[h, ])
           J <- as.matrix(future$J_y[[h]])
-          c_i <- sig_y * e_inv_v[[i]] / constants$B
+          weight_i <- as.numeric((future$weight_y %||% rep(1, n_y))[[h]])
+          c_i <- weight_i * sig_y * e_inv_v[[i]] / constants$B
           precision_y <- app_latent_add_S_precision(precision_y, c_i, h_vec, J, future$y_cov)
-          rhs_y <- rhs_y + sig_y / constants$B * (e_inv_v[[i]] * future$b_y[[h]] - constants$A * h_vec)
+          rhs_y <- rhs_y + weight_i * sig_y / constants$B * (e_inv_v[[i]] * future$b_y[[h]] - constants$A * h_vec)
         }
         list(precision = precision_y, rhs = rhs_y)
       })
@@ -1731,7 +1816,8 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
           idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
           if (!length(idx)) next
           global_idx <- offset + n_y + idx
-          einv <- e_inv_v[global_idx]
+          weight_i <- as.numeric((future$weight_g %||% rep(1, future$n_g))[idx])
+          einv <- e_inv_v[global_idx] * weight_i
           z <- future$z_g[idx]
           h_vec <- as.numeric(future$H_g_key[h, ])
           J <- as.matrix(future$J_g_key[[h]])
@@ -1743,7 +1829,7 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
             future$y_cov
           )
           rhs_g <- rhs_g + sig_g / constants$B * (
-            h_vec * sum(einv * z) - constants$A * length(idx) * h_vec
+            h_vec * sum(einv * z) - constants$A * sum(weight_i) * h_vec
           )
         }
         list(precision = precision_g, rhs = rhs_g)
@@ -1771,9 +1857,10 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
       i <- offset + j
       row <- row_moments$rows[[j]]
       sig_inv <- sigma_state$inv_mean[[row$source]]
-      c_i <- sig_inv * e_inv_v[[i]] / constants$B
+      weight_i <- as.numeric(row$weight %||% 1)
+      c_i <- weight_i * sig_inv * e_inv_v[[i]] / constants$B
       precision_rows <- precision_rows + c_i * row$S
-      rhs_rows <- rhs_rows + sig_inv / constants$B * (e_inv_v[[i]] * row$b - constants$A * row$h_mean)
+      rhs_rows <- rhs_rows + weight_i * sig_inv / constants$B * (e_inv_v[[i]] * row$b - constants$A * row$h_mean)
     }
     list(precision = precision_rows, rhs = rhs_rows)
   })
@@ -1789,6 +1876,7 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
 app_latent_update_v <- function(row_moments, sigma_state, constants) {
   source <- app_latent_all_source(row_moments)
   R <- app_latent_all_R(row_moments)
+  weight <- app_latent_all_weight(row_moments)
   n_total <- length(R)
   chi <- numeric(n_total)
   psi <- numeric(n_total)
@@ -1796,10 +1884,10 @@ app_latent_update_v <- function(row_moments, sigma_state, constants) {
     idx <- which(source == src)
     if (!length(idx)) next
     sig_inv <- sigma_state$inv_mean[[src]]
-    chi[idx] <- sig_inv * R[idx] / constants$B
-    psi[idx] <- sig_inv * (constants$A^2 / constants$B + 2)
+    chi[idx] <- weight[idx] * sig_inv * R[idx] / constants$B
+    psi[idx] <- weight[idx] * sig_inv * (constants$A^2 / constants$B + 2)
   }
-  app_latent_gig_half_moments(chi, psi)
+  app_latent_gig_moments(1 - weight / 2, chi, psi)
 }
 
 app_latent_update_sigma <- function(row_moments, e_v, e_inv_v, constants, prior_sigma, chunking = NULL) {
@@ -1811,6 +1899,7 @@ app_latent_update_sigma <- function(row_moments, e_v, e_inv_v, constants, prior_
   source <- app_latent_all_source(row_moments)
   R <- app_latent_all_R(row_moments)
   e <- app_latent_all_e(row_moments)
+  weight <- app_latent_all_weight(row_moments)
   fixed_n <- as.integer(row_moments$fixed$n %||% 0L)
   if (isTRUE(chunking$enabled) && fixed_n > 0L) {
     fixed_chunks <- app_latent_make_source_row_chunks(row_moments$fixed$source, chunking$chunk_size)
@@ -1830,9 +1919,9 @@ app_latent_update_sigma <- function(row_moments, e_v, e_inv_v, constants, prior_
   for (src in c("Y", "G")) {
     idx <- row_idx[source[row_idx] == src]
     if (!length(idx)) next
-    shape[[src]] <- shape[[src]] + 1.5 * length(idx)
+    shape[[src]] <- shape[[src]] + 1.5 * sum(weight[idx])
     quad <- e_inv_v[idx] * R[idx] - 2 * constants$A * e[idx] + constants$A^2 * e_v[idx]
-    rate[[src]] <- rate[[src]] + sum(e_v[idx] + quad / (2 * constants$B))
+    rate[[src]] <- rate[[src]] + sum(weight[idx] * (e_v[idx] + quad / (2 * constants$B)))
   }
   app_latent_ig_expectations(shape, pmax(rate, 1.0e-12))
 }
@@ -1870,11 +1959,12 @@ app_latent_future_objective <- function(y_future, design, theta_mean, theta_cov,
       u <- sum(h_vec * theta_mean)
       s <- app_latent_quad_theta(h_vec, theta_mean, theta_cov)
       global_idx <- g_offset + idx
-      einv <- e_inv_v[global_idx]
+      weight_g <- as.numeric(future$weight_g %||% rep(1, future$n_g))[idx]
+      einv <- e_inv_v[global_idx] * weight_g
       z <- z_g[idx]
       value <- value -
         sig_inv * (sum(einv * z^2) - 2 * u * sum(einv * z) + s * sum(einv)) / (2 * constants$B) +
-        sig_inv * constants$A * (sum(z) - length(idx) * u) / constants$B
+        sig_inv * constants$A * sum(weight_g * (z - u)) / constants$B
     }
     return(value)
   }
@@ -1882,13 +1972,14 @@ app_latent_future_objective <- function(y_future, design, theta_mean, theta_cov,
     stop(sprintf("Unsupported latent future objective strategy '%s'.", strategy), call. = FALSE)
   }
 
-  add_contrib <- function(z, h, source, row_index) {
+  add_contrib <- function(z, h, source, row_index, weight = 1) {
     e <- z - sum(h * theta_mean)
     R <- z^2 - 2 * z * sum(h * theta_mean) + app_latent_quad_theta(h, theta_mean, theta_cov)
     sig_inv <- sigma_state$inv_mean[[source]]
-    value <<- value -
-      sig_inv * e_inv_v[[row_index]] * R / (2 * constants$B) +
-      sig_inv * constants$A * e / constants$B
+    value <<- value + weight * (
+      -sig_inv * e_inv_v[[row_index]] * R / (2 * constants$B) +
+        sig_inv * constants$A * e / constants$B
+    )
   }
 
   for (h in seq_len(nrow(future$H_y))) {
@@ -1897,7 +1988,10 @@ app_latent_future_objective <- function(y_future, design, theta_mean, theta_cov,
   g_offset <- row_offset + nrow(future$H_y)
   H_g <- app_latent_future_H_g_expanded(future)
   for (i in seq_len(nrow(H_g))) {
-    add_contrib(future$z_g[[i]], H_g[i, ], "G", g_offset + i)
+    add_contrib(
+      future$z_g[[i]], H_g[i, ], "G", g_offset + i,
+      weight = as.numeric(future$weight_g[[i]] %||% 1)
+    )
   }
   value
 }
@@ -1929,7 +2023,18 @@ app_latent_update_future_gaussian <- function(y_start, design, theta_mean, theta
   )
 }
 
-app_latent_update_future_gaussian_delta <- function(row_moments, y_start, theta_mean, theta_cov, e_inv_v, sigma_state, constants, jitter = 1.0e-8) {
+app_latent_update_future_gaussian_delta <- function(
+  row_moments,
+  y_start,
+  theta_mean,
+  theta_cov,
+  e_inv_v,
+  sigma_state,
+  constants,
+  jitter = 1.0e-8,
+  response_offset_y = NULL,
+  response_offset_g = NULL
+) {
   if (!identical(row_moments$strategy, "streamed_grouped")) {
     stop("The linearized Delta future update requires streamed grouped row moments.", call. = FALSE)
   }
@@ -1941,8 +2046,14 @@ app_latent_update_future_gaussian_delta <- function(row_moments, y_start, theta_
   theta_cov <- as.matrix(theta_cov)
   theta_mean <- as.numeric(theta_mean)
   offset <- row_moments$fixed$n
+  response_offset_y <- as.numeric(response_offset_y %||% rep(0, H))
+  response_offset_g <- as.numeric(response_offset_g %||% rep(0, future$n_g))
+  if (length(response_offset_y) != H || length(response_offset_g) != future$n_g ||
+      any(!is.finite(c(response_offset_y, response_offset_g)))) {
+    stop("Latent future response offsets are not aligned.", call. = FALSE)
+  }
 
-  add_linearized_row <- function(h_vec, J, z0, a, sig_inv, einv, source_count = 1) {
+  add_linearized_row <- function(h_vec, J, z0, a, sig_inv, einv, source_count = 1, weight = 1) {
     h_vec <- as.numeric(h_vec)
     J <- as.matrix(J)
     a <- as.numeric(a)
@@ -1953,9 +2064,9 @@ app_latent_update_future_gaussian_delta <- function(row_moments, y_start, theta_
     Q <- crossprod(J, theta_cov %*% J) + tcrossprod(lbar)
     g <- lbar * e0 + cov_term
     list(
-      precision = sig_inv * einv / constants$B * Q,
-      rhs = -sig_inv * einv / constants$B * g +
-        sig_inv * constants$A / constants$B * source_count * lbar
+      precision = weight * sig_inv * einv / constants$B * Q,
+      rhs = -weight * sig_inv * einv / constants$B * g +
+        weight * sig_inv * constants$A / constants$B * source_count * lbar
     )
   }
 
@@ -1966,11 +2077,12 @@ app_latent_update_future_gaussian_delta <- function(row_moments, y_start, theta_
     row <- add_linearized_row(
       h_vec = future$H_y[h, ],
       J = future$J_y[[h]],
-      z0 = y_start[[h]],
+      z0 = y_start[[h]] - response_offset_y[[h]],
       a = a,
       sig_inv = sig_y,
       einv = e_inv_v[[offset + h]],
-      source_count = 1
+      source_count = 1,
+      weight = as.numeric((future$weight_y %||% rep(1, H))[[h]])
     )
     precision <- precision + row$precision
     rhs <- rhs + row$rhs
@@ -1990,13 +2102,14 @@ app_latent_update_future_gaussian_delta <- function(row_moments, y_start, theta_
     cov_term <- as.numeric(crossprod(J, theta_cov %*% h_vec))
     Q <- crossprod(J, theta_cov %*% J) + tcrossprod(lbar)
     global_idx <- offset + H + idx
-    einv <- e_inv_v[global_idx]
-    z <- future$z_g[idx]
+    weight_g <- as.numeric(future$weight_g %||% rep(1, future$n_g))[idx]
+    einv <- e_inv_v[global_idx] * weight_g
+    z <- future$z_g[idx] - response_offset_g[idx]
     sum_einv <- sum(einv)
     sum_g <- lbar * (sum(einv * z) - h_mean * sum_einv) + cov_term * sum_einv
     precision <- precision + sig_g * sum_einv / constants$B * Q
     rhs <- rhs - sig_g / constants$B * sum_g +
-      sig_g * constants$A / constants$B * length(idx) * lbar
+      sig_g * constants$A / constants$B * sum(weight_g) * lbar
   }
 
   update <- app_latent_solve_spd(precision, rhs, jitter = jitter)
@@ -2041,19 +2154,21 @@ app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, 
   source <- app_latent_all_source(row_moments)
   R <- app_latent_all_R(row_moments)
   e <- app_latent_all_e(row_moments)
+  weight <- app_latent_all_weight(row_moments)
   for (src in c("Y", "G")) {
     idx <- which(source == src)
     if (!length(idx)) next
     sig_inv <- sigma_state$inv_mean[[src]]
     val <- val +
-      sum(
+      sum(weight[idx] * (
         -0.5 * sigma_state$log_mean[[src]] -
           sig_inv * e_v[idx] -
           sig_inv * (e_inv_v[idx] * R[idx] - 2 * constants$A * e[idx] + constants$A^2 * e_v[idx]) / (2 * constants$B)
-      )
+      ))
   }
   e_theta2 <- theta_mean^2 + diag(theta_cov)
-  val - 0.5 * sum(prior_state$prior_precision * e_theta2)
+  val - 0.5 * sum(prior_state$prior_precision * e_theta2) +
+    sum(as.numeric(prior_state$prior_linear %||% numeric(length(theta_mean))) * theta_mean)
 }
 
 app_latent_path_warm_start_config <- function(vb_args = list()) {
@@ -2406,6 +2521,8 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   min_iter <- as.integer(vb_args$min_iter_elbo %||% 5L)
   tol <- as.numeric(vb_args$tol %||% 1.0e-4)
   n_draws <- as.integer(vb_args$n_draws %||% 500L)
+  freeze_beta_warmup_iters <- as.integer(vb_args$freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(vb_args$min_beta_updates %||% 1L)
   diagnostics_args <- vb_args$diagnostics %||% list()
   fixed_iterations <- isTRUE(diagnostics_args$fixed_iterations %||% FALSE)
   stop_after_iteration <- suppressWarnings(as.integer(
@@ -2413,6 +2530,14 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   ))
   if (!is.finite(max_iter) || max_iter < 1L) max_iter <- 200L
   if (!is.finite(n_draws) || n_draws < 1L) n_draws <- 500L
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L ||
+      freeze_beta_warmup_iters >= max_iter) {
+    stop("freeze_beta_warmup_iters must be between zero and max_iter - 1.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 1L ||
+      freeze_beta_warmup_iters + min_beta_updates > max_iter) {
+    stop("min_beta_updates is incompatible with beta freezing and max_iter.", call. = FALSE)
+  }
   if (is.finite(stop_after_iteration) &&
       (stop_after_iteration < 1L || stop_after_iteration > max_iter)) {
     stop("diagnostics.stop_after_iteration must be between 1 and max_iter.", call. = FALSE)
@@ -2535,6 +2660,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   par_change <- numeric(max_iter)
   repaired_theta <- logical(max_iter)
   rhs_gate_trace <- logical(max_iter)
+  beta_update_trace <- logical(max_iter)
   rhs_trace <- list()
   start_iter <- 1L
 
@@ -2573,6 +2699,9 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       par_change[seq_len(completed_iter)] <- as.numeric(trace$par_change)
       repaired_theta[seq_len(completed_iter)] <- as.logical(trace$repaired_theta)
       rhs_gate_trace[seq_len(completed_iter)] <- as.logical(trace$rhs_gate_trace)
+      beta_update_trace[seq_len(completed_iter)] <- as.logical(
+        trace$beta_update_trace %||% rep(TRUE, completed_iter)
+      )
     }
     rhs_trace <- trace$rhs_trace %||% list()
     if (is.data.frame(trace$iteration_timing) && nrow(trace$iteration_timing)) {
@@ -2615,11 +2744,38 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       prior_checkpoint_diag$write_seconds %||% 0
     )
   } else {
-    warm_start <- app_latent_path_warm_start_prepare(design, vb_args, p = p, H_future = H_future)
-    theta_mean <- warm_start$theta_mean %||% rep(0, p)
-    theta_cov <- warm_start$theta_cov %||% diag(1, p)
-    y_mean <- warm_start$y_mean %||% as.numeric(design$y_future_init)
-    y_cov <- warm_start$y_cov %||% diag(rep(stats::var(design$z_fixed, na.rm = TRUE) %||% 1, H_future))
+    explicit <- vb_args$initial_state %||% NULL
+    if (!is.null(explicit)) {
+      theta_mean <- as.numeric(explicit$theta_mean %||% numeric())
+      theta_cov <- as.matrix(explicit$theta_cov %||% matrix(numeric(), 0L, 0L))
+      y_mean <- as.numeric(explicit$y_future_mean %||% numeric())
+      y_cov <- as.matrix(explicit$y_future_cov %||% matrix(numeric(), 0L, 0L))
+      if (length(theta_mean) != p || !identical(dim(theta_cov), c(p, p)) ||
+          length(y_mean) != H_future || !identical(dim(y_cov), c(H_future, H_future)) ||
+          any(!is.finite(c(theta_mean, theta_cov, y_mean, y_cov)))) {
+        stop("Explicit AL latent-path initializer has incompatible dimensions or non-finite values.", call. = FALSE)
+      }
+      warm_start <- list(
+        sigma_state = explicit$sigma_state %||% NULL,
+        diagnostics = list(
+          enabled = TRUE,
+          used = TRUE,
+          theta_used = TRUE,
+          future_used = TRUE,
+          sigma_used = !is.null(explicit$sigma_state),
+          source_path = as.character((explicit$provenance %||% list())$source_path %||% NA_character_),
+          source_sha256 = as.character((explicit$provenance %||% list())$source_sha256 %||% NA_character_),
+          compatibility_class = "explicit_validated_state",
+          message = "explicit dimension-validated Part 4 initializer"
+        )
+      )
+    } else {
+      warm_start <- app_latent_path_warm_start_prepare(design, vb_args, p = p, H_future = H_future)
+      theta_mean <- warm_start$theta_mean %||% rep(0, p)
+      theta_cov <- warm_start$theta_cov %||% diag(1, p)
+      y_mean <- warm_start$y_mean %||% as.numeric(design$y_future_init)
+      y_cov <- warm_start$y_cov %||% diag(rep(stats::var(design$z_fixed, na.rm = TRUE) %||% 1, H_future))
+    }
     if (any(!is.finite(diag(y_cov))) || any(diag(y_cov) <= 0)) y_cov <- diag(1, H_future)
 
     prior_state <- time_step(NA_integer_, "prior_initialization", {
@@ -2632,6 +2788,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
         alpha_index = design$alpha_index %||% NULL
       )
     })
+    prior_state <- app_latent_prior_apply_addition(prior_state, vb_args$prior_addition %||% NULL)
     if (isTRUE(warm_start$diagnostics$theta_used)) {
       prior_state <- time_step(NA_integer_, "warm_start_prior_update", {
         app_latent_prior_state_update(
@@ -2657,7 +2814,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       })
     } else {
       time_step(NA_integer_, "sigma_initialization", {
-        app_latent_source_sigma_init(row_moments$source, vb_args$prior_sigma %||% list(a = 2, b = 1))
+        app_latent_source_sigma_init(
+          app_latent_all_source(row_moments),
+          vb_args$prior_sigma %||% list(a = 2, b = 1),
+          weight = app_latent_all_weight(row_moments)
+        )
       })
     }
     v_state <- time_step(NA_integer_, "initial_v_update", {
@@ -2705,6 +2866,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
         par_change = par_change[seq_len(iter)],
         repaired_theta = repaired_theta[seq_len(iter)],
         rhs_gate_trace = rhs_gate_trace[seq_len(iter)],
+        beta_update_trace = beta_update_trace[seq_len(iter)],
         rhs_trace = rhs_trace,
         iteration_timing = iteration_timing_df,
         substep_timing = substep_timing_df
@@ -2741,21 +2903,27 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   }
   for (iter in seq.int(start_iter, max_iter)) {
     old <- c(theta_mean, y_mean, sigma_state$inv_mean)
-    theta_update <- time_step(iter, "theta_update", {
-      app_latent_update_theta(
-        row_moments,
-        v_state$inv_mean,
-        sigma_state,
-        constants,
-        prior_state,
-        chunking = chunking,
-        profile_substeps = profile_substeps
-      )
-    })
-    append_substeps(iter, "theta_update", attr(theta_update, "substep_timing", exact = TRUE))
-    theta_mean <- as.numeric(theta_update$mean)
-    theta_cov <- (theta_update$cov + t(theta_update$cov)) / 2
-    repaired_theta[[iter]] <- isTRUE(theta_update$repaired)
+    beta_update_trace[[iter]] <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_update_trace[[iter]])) {
+      theta_update <- time_step(iter, "theta_update", {
+        app_latent_update_theta(
+          row_moments,
+          v_state$inv_mean,
+          sigma_state,
+          constants,
+          prior_state,
+          chunking = chunking,
+          profile_substeps = profile_substeps
+        )
+      })
+      append_substeps(iter, "theta_update", attr(theta_update, "substep_timing", exact = TRUE))
+      theta_mean <- as.numeric(theta_update$mean)
+      theta_cov <- (theta_update$cov + t(theta_update$cov)) / 2
+      repaired_theta[[iter]] <- isTRUE(theta_update$repaired)
+    } else {
+      time_step(iter, "theta_update_frozen", invisible(NULL))
+      repaired_theta[[iter]] <- FALSE
+    }
 
     future_update <- time_step(iter, "future_update", {
       if (identical(future_update_strategy, "linearized_delta")) {
@@ -2821,7 +2989,9 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     new <- c(theta_mean, y_mean, sigma_state$inv_mean)
     par_change[[iter]] <- max(abs(new - old) / pmax(1, abs(old)))
     completed_iterations <- iter
-    converged_now <- !isTRUE(fixed_iterations) && iter >= min_iter && isTRUE(rhs_gate$passed) &&
+    beta_update_count <- sum(beta_update_trace[seq_len(iter)])
+    converged_now <- !isTRUE(fixed_iterations) && iter >= min_iter &&
+      beta_update_count >= min_beta_updates && isTRUE(rhs_gate$passed) &&
       is.finite(par_change[[iter]]) && par_change[[iter]] < tol
     controlled_stop_now <- is.finite(stop_after_iteration) && iter >= stop_after_iteration
     write_checkpoint(iter, force = isTRUE(converged_now) || isTRUE(controlled_stop_now) || iter == max_iter)
@@ -2837,6 +3007,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   par_change <- par_change[seq_len(completed_iterations)]
   repaired_theta <- repaired_theta[seq_len(completed_iterations)]
   rhs_gate_trace <- rhs_gate_trace[seq_len(completed_iterations)]
+  beta_update_trace <- beta_update_trace[seq_len(completed_iterations)]
 
   rhs_trace <- rhs_trace[vapply(rhs_trace, nrow, integer(1L)) > 0L]
   rhs_trace_df <- if (length(rhs_trace)) {
@@ -2845,7 +3016,8 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     data.frame()
   }
   rhs_diagnostics <- app_latent_prior_rhs_diagnostics(prior_state, length(objective))
-  final_converged <- !isTRUE(fixed_iterations) && isTRUE(rhs_diagnostics$convergence_gate_passed) &&
+  final_converged <- !isTRUE(fixed_iterations) && sum(beta_update_trace) >= min_beta_updates &&
+    isTRUE(rhs_diagnostics$convergence_gate_passed) &&
     is.finite(tail(par_change, 1L)) && tail(par_change, 1L) < tol
 
   theta_draws <- time_step(NA_integer_, "theta_draw_generation", {
@@ -2908,6 +3080,10 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       rhs_global_scale = rhs_diagnostics,
       rhs_global_scale_trace = rhs_trace_df,
       rhs_convergence_gate_trace = rhs_gate_trace,
+      beta_update_trace = beta_update_trace,
+      beta_update_count = sum(beta_update_trace),
+      freeze_beta_warmup_iters = freeze_beta_warmup_iters,
+      min_beta_updates = min_beta_updates,
       rhs_minimum_convergence_iteration = minimum_rhs_convergence_iter,
       theta_precision_repaired = any(repaired_theta),
       future_moment_strategy = future_moment_strategy,

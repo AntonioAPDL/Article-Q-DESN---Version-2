@@ -60,6 +60,20 @@ Tracked tests:
   equivalence, immutable reference-feature cache environment fallback, hits,
   invalidation, corruption, and lock failures, runtime-backend manifests, and
   uninterrupted versus interrupted/resumed VB identity.
+- `test_glofas_part4_ensemble_likelihood_contract.R`: frozen Part 1/2/3
+  anchor validation, inherited two-DESN geometry, no-forecast source gates,
+  the complete 18-job family manifest, dependency blocking, and dry-run bundle
+  materialization without fitting.
+- `test_glofas_part4_latent_family.R`: tiny recursive Normal Ridge, Normal
+  RHS/VB, AL, exAL, and joint-AL fits; future-USGS truth isolation; normalized
+  ensemble likelihood weights; coefficient-freeze accounting; structured
+  exAL updates; adjacent-quantile RHS terms; compact fit storage; and
+  transformed/original-scale scoring.
+- `test_glofas_part4_latent_family_scheduler.py`: fail-closed production
+  launch authorization and manifest-backed prepared-state health reporting.
+
+The complete Part 4 statistical, execution, and artifact contract is recorded
+in `docs/implementation_notes/glofas_part4_latent_family_implementation_20260906.md`.
 - `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
   controls, OpenBLAS path/hash rejection, and terminal execution manifests.
 - `test_glofas_discrepancy_equivalence_audit.R`: component-path algebra,

@@ -1653,37 +1653,36 @@ recovery of the known quantile paths; the MCMC DGP-integrated score remains
 the ranking criterion in the main comparison.
 
 \clearpage
-\subsection{PriceFM Application Diagnostic Breakdowns}
+\subsection{Additional PriceFM Results}
 \label{subsec:supp_pricefm_diagnostics}
 
-The main article reports the aggregate PriceFM comparison over the same region
-and fold combinations. The tables below summarize results by fold, predictor
-set, and forecast-horizon group. All three summaries use the same retrospective
-information set described in the main article.
+The main article reports the aggregate, fold-specific, and forecast-lead-specific
+PriceFM comparisons. The tables below compare the selected and reference
+Q--DESN specifications and summarize results by predictor set. Both use the
+retrospective information set described in the main article.
 
 Within \PricefmSelectionComparedRows{} region--fold comparisons, AL and exAL
 specifications were chosen using validation AQL and then evaluated on held-out
 observations. The validation-selected specifications averaged test AQL
 \PricefmSelectionCandidateMeanAql{}, compared with
 \PricefmSelectionReferenceMeanAql{} for the reference Q--DESN specifications.
-For the reported aggregate, the validation-selected specification replaced
-the reference in the \PricefmSelectionUpdatedRows{} cases listed in
+The reported aggregate uses the validation-selected specification in the
+\PricefmSelectionUpdatedRows{} cases listed in
 Table~\ref{tab:supp-pricefm-selective-updates}, where its held-out AQL was lower
 than both the reference Q--DESN and matched PriceFM values.
 The retained alternatives use exAL except for ES fold~1, which uses AL. Only
 IT\_NORD fold~3 changes the working-likelihood family relative to the reference
-specification. The comparisons are
-descriptive because held-out performance determined the case-specific
-replacements.
+specification. The comparisons are descriptive because held-out performance
+determined which specification was included.
 
 \begin{table}[!htbp]
 \centering
-\caption{Case-specific Q--DESN updates in the PriceFM retrospective
-comparison. Each row gives a validation-selected specification whose held-out
-AQL is lower than both the reference Q--DESN value and the matched released
-PriceFM value. The final column is the reduction from the reference Q--DESN
-AQL. Values are
-reported on the original electricity-price scale.}
+\caption{Comparison of selected and reference Q--DESN specifications in the
+PriceFM retrospective analysis. Each row gives a validation-selected
+specification whose held-out AQL is lower than both the reference Q--DESN value
+and the matched PriceFM value. The final column is the reduction from the
+reference Q--DESN AQL. Values are reported on the original electricity-price
+scale.}
 \label{tab:supp-pricefm-selective-updates}
 \resizebox{\textwidth}{!}{%
 \input{tables/pricefm_r91_selective_promotions.tex}
@@ -1692,36 +1691,14 @@ reported on the original electricity-price scale.}
 
 \begin{table}[!htbp]
 \centering
-\caption{PriceFM retrospective comparison by fold. Average quantile loss (AQL)
-is computed on the original electricity-price scale using the quantile levels
-reported in the PriceFM paper. The last two
-columns report Q--DESN AQL minus PriceFM AQL; negative values indicate lower
-Q--DESN AQL. Near ties retain the pre-specified classification used in the
-full-panel comparison. No paired uncertainty interval is reported for
-these fold-level contrasts.}
-\label{tab:supp-pricefm-full-fold-summary}
-\input{tables/pricefm_full_main_summary.tex}
-\end{table}
-
-\begin{table}[!htbp]
-\centering
 \caption{PriceFM retrospective comparison by predictor set. Own-region rows and rows with
 neighborhood summaries both use retrospectively observed own-region load,
 solar, and wind lead covariates in the retrospective comparison. Rows with
 neighborhood summaries additionally include chosen neighboring-region
-summaries or neighboring-region lead/lag features.}
+summaries or neighboring-region lead/lag features. The two PriceFM columns
+count relative AQL advantages of at most 5\% and greater than 5\%, respectively.}
 \label{tab:supp-pricefm-full-input-set-summary}
 \input{tables/pricefm_full_input_set_summary.tex}
-\end{table}
-
-\begin{table}[!htbp]
-\centering
-\caption{PriceFM retrospective comparison by forecast-horizon group.
-Entries denote scored region--fold and forecast-horizon combinations for the
-subset with horizon-specific results. Negative \(\Delta\) values indicate
-lower Q--DESN AQL; positive values indicate lower PriceFM AQL.}
-\label{tab:supp-pricefm-full-horizon-diagnostic-summary}
-\input{tables/pricefm_full_horizon_diagnostic_summary.tex}
 \end{table}
 
 \clearpage

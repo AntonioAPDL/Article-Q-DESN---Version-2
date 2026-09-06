@@ -85,7 +85,9 @@ app_glofas_part1_quantile_default_controls <- function(
   init_fit_path = NULL,
   init_fit_paths = NULL,
   progress_path = NULL,
-  progress_every = 0L
+  progress_every = 0L,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   list(
     max_iter = as.integer(max_iter),
@@ -105,7 +107,9 @@ app_glofas_part1_quantile_default_controls <- function(
     init_fit_path = init_fit_path,
     init_fit_paths = init_fit_paths,
     progress_path = progress_path,
-    progress_every = as.integer(progress_every)
+    progress_every = as.integer(progress_every),
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates)
   )
 }
 
@@ -346,7 +350,9 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   init = NULL,
   progress_path = NULL,
   progress_every = 0L,
-  progress_label = "joint_al_blockmf"
+  progress_label = "joint_al_blockmf",
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   y <- as.numeric(y)
   Z <- as.matrix(Z)
@@ -355,6 +361,15 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   K <- length(tau)
   p <- ncol(Z)
   Tn <- length(y)
+  freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(min_beta_updates %||% 0L)
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
+    stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 0L) {
+    stop("min_beta_updates must be nonnegative.", call. = FALSE)
+  }
+  freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, as.integer(max_iter))
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, "empirical_quantile", alpha_prior_sd)
   init <- app_joint_qvp_normalize_init(init, K, p)
@@ -366,10 +381,13 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   v_mean <- matrix(1, Tn, K)
   v_inv_mean <- matrix(1, Tn, K)
   rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  beta_var_current <- replicate(K, rep(0, Tn), simplify = FALSE)
+  cov_diag_current <- replicate(K, rep(0, p), simplify = FALSE)
   trace <- vector("list", max_iter)
   sigma_trace <- matrix(NA_real_, max_iter, K)
   colnames(sigma_trace) <- paste0("tau_", format(tau, trim = TRUE))
   converged <- FALSE
+  beta_update_count <- 0L
   for (iter in seq_len(max_iter)) {
     beta_old <- beta_mat
     sigma_old <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
@@ -378,21 +396,31 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     cov_diag <- vector("list", K)
     jitter_max <- 0
     sigma_inv <- sigma_shape / sigma_rate
-    for (kk in seq_len(K)) {
-      w <- sigma_inv[[kk]] * v_inv_mean[, kk] / constants$B[[kk]]
-      linear <- sigma_inv[[kk]] / constants$B[[kk]] *
-        (v_inv_mean[, kk] * (y - alpha[[kk]]) - constants$A[[kk]])
-      solved <- app_glofas_part1_quantile_solve_block(
-        Z = Z,
-        weight = w,
-        linear = linear,
-        prior_diag = prior_terms$diag[[kk]],
-        prior_linear = prior_terms$linear[[kk]]
-      )
-      beta_mat[, kk] <- solved$beta
-      beta_var[[kk]] <- rowSums((Z %*% solved$cov) * Z)
-      cov_diag[[kk]] <- solved$cov_diag
-      jitter_max <- max(jitter_max, solved$jitter)
+    beta_updated <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_updated)) {
+      for (kk in seq_len(K)) {
+        w <- sigma_inv[[kk]] * v_inv_mean[, kk] / constants$B[[kk]]
+        linear <- sigma_inv[[kk]] / constants$B[[kk]] *
+          (v_inv_mean[, kk] * (y - alpha[[kk]]) - constants$A[[kk]])
+        solved <- app_glofas_part1_quantile_solve_block(
+          Z = Z,
+          weight = w,
+          linear = linear,
+          prior_diag = prior_terms$diag[[kk]],
+          prior_linear = prior_terms$linear[[kk]]
+        )
+        beta_mat[, kk] <- solved$beta
+        beta_var[[kk]] <- rowSums((Z %*% solved$cov) * Z)
+        cov_diag[[kk]] <- solved$cov_diag
+        jitter_max <- max(jitter_max, solved$jitter)
+      }
+      beta_var_current <- beta_var
+      cov_diag_current <- cov_diag
+      beta_update_count <- beta_update_count + 1L
+    } else {
+      beta_var <- beta_var_current
+      cov_diag <- cov_diag_current
+      jitter_max <- NA_real_
     }
     fitted_no_alpha <- Z %*% beta_mat
     for (kk in seq_len(K)) {
@@ -424,8 +452,15 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     sigma_trace[iter, ] <- sigma_mean
     max_beta_change <- max(abs(beta_mat - beta_old))
     max_sigma_change <- max(abs(sigma_mean - sigma_old))
+    convergence_eligible <- iter >= min_iter &&
+      iter > freeze_beta_warmup_iters &&
+      beta_update_count >= min_beta_updates
     trace[[iter]] <- data.frame(
       iter = iter,
+      beta_updated = isTRUE(beta_updated),
+      beta_update_count = as.integer(beta_update_count),
+      freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+      convergence_eligible = isTRUE(convergence_eligible),
       max_beta_change = max_beta_change,
       max_sigma_change = max_sigma_change,
       max_jitter = jitter_max,
@@ -438,7 +473,7 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
       app_joint_qvp_progress_append(progress_path, transform(trace[[iter]], label = progress_label, max_iter = max_iter, min_iter = min_iter, converged = FALSE, timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
     }
-    if (iter >= min_iter && max(max_beta_change, max_sigma_change) < tol) {
+    if (isTRUE(convergence_eligible) && max(max_beta_change, max_sigma_change) < tol) {
       converged <- TRUE
       trace <- trace[seq_len(iter)]
       sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
@@ -498,7 +533,9 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   init = NULL,
   progress_path = NULL,
   progress_every = 0L,
-  progress_label = "joint_exal_blockmf"
+  progress_label = "joint_exal_blockmf",
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   y <- as.numeric(y)
   Z <- as.matrix(Z)
@@ -507,6 +544,15 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   K <- length(tau)
   p <- ncol(Z)
   Tn <- length(y)
+  freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(min_beta_updates %||% 0L)
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
+    stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 0L) {
+    stop("min_beta_updates must be nonnegative.", call. = FALSE)
+  }
+  freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, as.integer(max_iter))
   init <- app_joint_qvp_normalize_init(init, K, p)
   gamma <- init$gamma %||% app_joint_qvp_default_gamma(tau)
   gamma <- app_joint_qvp_check_gamma(tau, gamma)
@@ -521,11 +567,14 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   s_mean <- matrix(sqrt(2 / pi), Tn, K)
   s2_mean <- matrix(1, Tn, K)
   rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  beta_var_current <- replicate(K, rep(0, Tn), simplify = FALSE)
+  cov_diag_current <- replicate(K, rep(0, p), simplify = FALSE)
   trace <- vector("list", max_iter)
   gamma_trace <- matrix(NA_real_, max_iter, K)
   sigma_trace <- matrix(NA_real_, max_iter, K)
   colnames(gamma_trace) <- colnames(sigma_trace) <- paste0("tau_", format(tau, trim = TRUE))
   converged <- FALSE
+  beta_update_count <- 0L
   for (iter in seq_len(max_iter)) {
     beta_old <- beta_mat
     gamma_old <- gamma
@@ -535,22 +584,32 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     beta_var <- vector("list", K)
     cov_diag <- vector("list", K)
     jitter_max <- 0
-    for (kk in seq_len(K)) {
-      w <- sigma_inv_mean[[kk]] * v_inv_mean[, kk] / constants$B[[kk]]
-      shifted_y <- y - alpha[[kk]] - constants$lambda[[kk]] * sigma_mean[[kk]] * s_mean[, kk]
-      linear <- sigma_inv_mean[[kk]] / constants$B[[kk]] *
-        (v_inv_mean[, kk] * shifted_y - constants$A[[kk]])
-      solved <- app_glofas_part1_quantile_solve_block(
-        Z = Z,
-        weight = w,
-        linear = linear,
-        prior_diag = prior_terms$diag[[kk]],
-        prior_linear = prior_terms$linear[[kk]]
-      )
-      beta_mat[, kk] <- solved$beta
-      beta_var[[kk]] <- rowSums((Z %*% solved$cov) * Z)
-      cov_diag[[kk]] <- solved$cov_diag
-      jitter_max <- max(jitter_max, solved$jitter)
+    beta_updated <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_updated)) {
+      for (kk in seq_len(K)) {
+        w <- sigma_inv_mean[[kk]] * v_inv_mean[, kk] / constants$B[[kk]]
+        shifted_y <- y - alpha[[kk]] - constants$lambda[[kk]] * sigma_mean[[kk]] * s_mean[, kk]
+        linear <- sigma_inv_mean[[kk]] / constants$B[[kk]] *
+          (v_inv_mean[, kk] * shifted_y - constants$A[[kk]])
+        solved <- app_glofas_part1_quantile_solve_block(
+          Z = Z,
+          weight = w,
+          linear = linear,
+          prior_diag = prior_terms$diag[[kk]],
+          prior_linear = prior_terms$linear[[kk]]
+        )
+        beta_mat[, kk] <- solved$beta
+        beta_var[[kk]] <- rowSums((Z %*% solved$cov) * Z)
+        cov_diag[[kk]] <- solved$cov_diag
+        jitter_max <- max(jitter_max, solved$jitter)
+      }
+      beta_var_current <- beta_var
+      cov_diag_current <- cov_diag
+      beta_update_count <- beta_update_count + 1L
+    } else {
+      beta_var <- beta_var_current
+      cov_diag <- cov_diag_current
+      jitter_max <- NA_real_
     }
     fitted_no_alpha <- Z %*% beta_mat
     for (kk in seq_len(K)) {
@@ -619,11 +678,18 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     max_beta_change <- max(abs(beta_mat - beta_old))
     max_gamma_change <- max(abs(gamma - gamma_old))
     max_sigma_change <- max(abs(sigma_mean - sigma_old))
+    convergence_eligible <- iter >= min_iter &&
+      iter > freeze_beta_warmup_iters &&
+      beta_update_count >= min_beta_updates
     monitor <- -likelihood_quadratic - latent_linear - positive_shift_quadratic
     gamma_trace[iter, ] <- gamma
     sigma_trace[iter, ] <- sigma_mean
     trace[[iter]] <- data.frame(
       iter = iter,
+      beta_updated = isTRUE(beta_updated),
+      beta_update_count = as.integer(beta_update_count),
+      freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+      convergence_eligible = isTRUE(convergence_eligible),
       max_beta_change = max_beta_change,
       max_gamma_change = max_gamma_change,
       max_sigma_change = max_sigma_change,
@@ -637,7 +703,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
       app_joint_qvp_progress_append(progress_path, transform(trace[[iter]], label = progress_label, max_iter = max_iter, min_iter = min_iter, converged = FALSE, timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
     }
-    if (iter >= min_iter && max(max_beta_change, max_gamma_change, max_sigma_change) < tol) {
+    if (isTRUE(convergence_eligible) && max(max_beta_change, max_gamma_change, max_sigma_change) < tol) {
       converged <- TRUE
       trace <- trace[seq_len(iter)]
       gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
@@ -760,7 +826,9 @@ app_glofas_part1_quantile_fit_readout <- function(
       init = init,
       progress_path = progress_path,
       progress_every = progress_every,
-      progress_label = model_family
+      progress_label = model_family,
+      freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
+      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
     )
   } else if (identical(model_family, "joint_al") && use_blockmf) {
     fit <- app_glofas_part1_quantile_fit_al_blockmf(
@@ -779,7 +847,9 @@ app_glofas_part1_quantile_fit_readout <- function(
       init = init,
       progress_path = progress_path,
       progress_every = progress_every,
-      progress_label = "joint_al_blockmf"
+      progress_label = "joint_al_blockmf",
+      freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
+      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
     )
   } else if (identical(model_family, "independent_exal") || (identical(model_family, "joint_exal") && !use_blockmf)) {
     al_init <- init
@@ -805,7 +875,9 @@ app_glofas_part1_quantile_fit_readout <- function(
           rhs_vb_inner = as.integer(controls$rhs_vb_inner),
           progress_path = progress_path,
           progress_every = progress_every,
-          progress_label = paste0(model_family, "_al_prefit")
+          progress_label = paste0(model_family, "_al_prefit"),
+          freeze_beta_warmup_iters = 0L,
+          min_beta_updates = 0L
         )
       }
     }
@@ -830,7 +902,9 @@ app_glofas_part1_quantile_fit_readout <- function(
       rhs_vb_inner = as.integer(controls$rhs_vb_inner),
       progress_path = progress_path,
       progress_every = progress_every,
-      progress_label = model_family
+      progress_label = model_family,
+      freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
+      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
     )
   } else if (identical(model_family, "joint_exal") && use_blockmf) {
     fit <- app_glofas_part1_quantile_fit_exal_blockmf(
@@ -849,7 +923,9 @@ app_glofas_part1_quantile_fit_readout <- function(
       init = init,
       progress_path = progress_path,
       progress_every = progress_every,
-      progress_label = "joint_exal_blockmf"
+      progress_label = "joint_exal_blockmf",
+      freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
+      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
     )
   } else {
     stop(sprintf("Unsupported Part 1 quantile model_family '%s'.", model_family), call. = FALSE)
@@ -1282,6 +1358,8 @@ app_glofas_part1_quantile_oracle_forecast <- function(
   init_fit_paths = NULL,
   progress_path = NULL,
   progress_every = 0L,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L,
   forecast_backend = c("auto", "cpp", "r"),
   root_candidates = NULL
 ) {
@@ -1318,7 +1396,9 @@ app_glofas_part1_quantile_oracle_forecast <- function(
     init_fit_path = init_fit_path,
     init_fit_paths = init_fit_paths,
     progress_path = progress_path,
-    progress_every = progress_every
+    progress_every = progress_every,
+    freeze_beta_warmup_iters = freeze_beta_warmup_iters,
+    min_beta_updates = min_beta_updates
   )
   fit <- app_glofas_part1_quantile_fit_readout(
     y = prepared$design$y,

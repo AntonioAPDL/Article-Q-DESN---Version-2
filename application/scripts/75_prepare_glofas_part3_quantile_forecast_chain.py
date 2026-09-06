@@ -109,7 +109,7 @@ def main() -> int:
     fit_script = str(repo / "application/scripts/74_run_glofas_part3_quantile_fit_forecast.R")
     fit_path = lambda job: str(runtime / "objects" / f"{job}_fit.rds")
     al_parent = {
-        "0.50": "normal_rhs_forecast",
+        "0.50": "normal_rhs_vb_forecast",
         "0.35": "independent_al_q0p50", "0.20": "independent_al_q0p35", "0.05": "independent_al_q0p20",
         "0.65": "independent_al_q0p50", "0.80": "independent_al_q0p65", "0.95": "independent_al_q0p80",
     }

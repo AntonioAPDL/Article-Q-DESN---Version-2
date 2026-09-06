@@ -18,6 +18,7 @@ source(app_path("application/R/covariate_design.R"))
 source(app_path("application/R/build_application_panel.R"))
 source(app_path("application/R/latent_path_design.R"))
 source(app_path("application/R/discrepancy_design.R"))
+source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_desn_part2_bridge.R"))
 

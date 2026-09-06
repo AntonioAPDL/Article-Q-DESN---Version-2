@@ -20,7 +20,9 @@ app_glofas_part3_quantile_default_controls <- function(
   progress_every = 1L,
   quadrature_nodes = c(4L, 8L, 12L),
   quadrature_tolerance = 1.0e-6,
-  diagnostic_stride = 10L
+  diagnostic_stride = 10L,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   list(
     max_iter = as.integer(max_iter),
@@ -38,7 +40,9 @@ app_glofas_part3_quantile_default_controls <- function(
     progress_every = as.integer(progress_every),
     quadrature_nodes = as.integer(quadrature_nodes),
     quadrature_tolerance = as.numeric(quadrature_tolerance),
-    diagnostic_stride = as.integer(diagnostic_stride)
+    diagnostic_stride = as.integer(diagnostic_stride),
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates)
   )
 }
 
@@ -58,6 +62,10 @@ app_glofas_part3_validate_quantile_controls <- function(controls) {
   }
   if (!length(controls$quadrature_nodes) || any(controls$quadrature_nodes < 2L)) {
     stop("Part 3 exAL quadrature node counts must be at least two.", call. = FALSE)
+  }
+  if (!is.finite(controls$freeze_beta_warmup_iters) || controls$freeze_beta_warmup_iters < 0L ||
+      !is.finite(controls$min_beta_updates) || controls$min_beta_updates < 0L) {
+    stop("Part 3 quantile beta-freeze controls must be nonnegative.", call. = FALSE)
   }
   invisible(TRUE)
 }
@@ -231,8 +239,9 @@ app_glofas_part3_quantile_initialize <- function(init, design, tau) {
 app_glofas_part3_quantile_progress <- function(path, row) {
   if (is.null(path) || !nzchar(as.character(path))) return(invisible(NULL))
   app_ensure_dir(dirname(path))
-  old <- if (file.exists(path)) app_read_csv(path) else data.frame()
-  app_write_csv(app_bind_rows_fill(list(old, row)), path)
+  old <- if (file.exists(path)) app_read_csv(path) else NULL
+  combined <- if (is.null(old) || !nrow(old)) row else app_bind_rows_fill(list(old, row))
+  app_write_csv(combined, path)
   invisible(path)
 }
 
@@ -353,6 +362,9 @@ app_glofas_part3_quantile_fit <- function(
   stop_reason <- "max_iter"
   started <- Sys.time()
   constants_al <- if (identical(likelihood, "AL")) app_joint_qvp_al_constants(tau) else NULL
+  beta_update_count <- 0L
+  freeze_beta_warmup_iters <- min(as.integer(controls$freeze_beta_warmup_iters %||% 0L), controls$max_iter)
+  min_beta_updates <- as.integer(controls$min_beta_updates %||% 0L)
 
   for (iter in seq_len(controls$max_iter)) {
     old_reference <- beta_reference
@@ -363,6 +375,7 @@ app_glofas_part3_quantile_fit <- function(
     prior_discrepancy <- app_glofas_part3_rhs_prior_terms(rhs_discrepancy, beta_discrepancy)
     jitter_max <- 0L
     all_quadrature_converged <- TRUE
+    beta_updated <- iter > freeze_beta_warmup_iters
 
     for (kk in seq_len(K)) {
       if (identical(likelihood, "AL")) {
@@ -377,35 +390,39 @@ app_glofas_part3_quantile_fit <- function(
         linear <- w * z - moments[["lambda_over_B_mean"]] * s_mean[, kk] * latent_inv_mean[, kk] -
           moments[["A_inv_B_sigma_mean"]]
       }
-      solved <- app_glofas_part3_quantile_working_update(
-        R = R,
-        D = D,
-        y = y,
-        g = g,
-        weight_y = w[seq_len(Tn)],
-        weight_g = w[Tn + seq_len(Tn)],
-        linear_y = linear[seq_len(Tn)],
-        linear_g = linear[Tn + seq_len(Tn)],
-        beta_reference = beta_reference[, kk],
-        beta_discrepancy = beta_discrepancy[, kk],
-        prior_reference = list(
-          diagonal = prior_reference$diagonal[[kk]],
-          linear = prior_reference$linear[[kk]]
-        ),
-        prior_discrepancy = list(
-          diagonal = prior_discrepancy$diagonal[[kk]],
-          linear = prior_discrepancy$linear[[kk]]
+      if (isTRUE(beta_updated)) {
+        solved <- app_glofas_part3_quantile_working_update(
+          R = R,
+          D = D,
+          y = y,
+          g = g,
+          weight_y = w[seq_len(Tn)],
+          weight_g = w[Tn + seq_len(Tn)],
+          linear_y = linear[seq_len(Tn)],
+          linear_g = linear[Tn + seq_len(Tn)],
+          beta_reference = beta_reference[, kk],
+          beta_discrepancy = beta_discrepancy[, kk],
+          prior_reference = list(
+            diagonal = prior_reference$diagonal[[kk]],
+            linear = prior_reference$linear[[kk]]
+          ),
+          prior_discrepancy = list(
+            diagonal = prior_discrepancy$diagonal[[kk]],
+            linear = prior_discrepancy$linear[[kk]]
+          )
         )
-      )
-      beta_reference[, kk] <- solved$reference$mean
-      beta_discrepancy[, kk] <- solved$discrepancy$mean
-      variance_reference[, kk] <- solved$reference$variance_diag
-      variance_discrepancy[, kk] <- solved$discrepancy$variance_diag
-      jitter_max <- max(jitter_max, solved$reference$jitter_attempt, solved$discrepancy$jitter_attempt)
+        beta_reference[, kk] <- solved$reference$mean
+        beta_discrepancy[, kk] <- solved$discrepancy$mean
+        variance_reference[, kk] <- solved$reference$variance_diag
+        variance_discrepancy[, kk] <- solved$discrepancy$variance_diag
+        jitter_max <- max(jitter_max, solved$reference$jitter_attempt, solved$discrepancy$jitter_attempt)
+      } else {
+        jitter_max <- NA_integer_
+      }
       q_reference <- as.numeric(R %*% beta_reference[, kk])
       q_discrepancy <- as.numeric(D %*% beta_discrepancy[, kk])
-      var_reference <- app_glofas_part3_prediction_variance(R, solved$reference$covariance)
-      var_discrepancy <- app_glofas_part3_prediction_variance(D, solved$discrepancy$covariance)
+      var_reference <- as.numeric(R^2 %*% pmax(variance_reference[, kk], 0))
+      var_discrepancy <- as.numeric(D^2 %*% pmax(variance_discrepancy[, kk], 0))
       residual <- c(y - q_reference, g - q_reference - q_discrepancy)
       residual_second <- c(
         (y - q_reference)^2 + var_reference,
@@ -484,6 +501,7 @@ app_glofas_part3_quantile_fit <- function(
         }
       }
     }
+    if (isTRUE(beta_updated)) beta_update_count <- beta_update_count + 1L
 
     for (inner in seq_len(controls$rhs_vb_inner)) {
       rhs_reference <- app_glofas_part3_rhs_update(
@@ -510,12 +528,19 @@ app_glofas_part3_quantile_fit <- function(
       max_reference_change, max_discrepancy_change, max_sigma_change,
       max_gamma_change, max_path_change
     )
+    convergence_eligible <- iter >= controls$min_iter &&
+      iter > freeze_beta_warmup_iters &&
+      beta_update_count >= min_beta_updates
     trace[[iter]] <- data.frame(
       iter = iter,
       max_iter = controls$max_iter,
       min_iter = controls$min_iter,
       likelihood = likelihood,
       fit_structure = fit_structure,
+      beta_updated = isTRUE(beta_updated),
+      beta_update_count = as.integer(beta_update_count),
+      freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+      convergence_eligible = isTRUE(convergence_eligible),
       max_reference_change = max_reference_change,
       max_discrepancy_change = max_discrepancy_change,
       max_sigma_change = max_sigma_change,
@@ -551,7 +576,7 @@ app_glofas_part3_quantile_fit <- function(
     }
     q_reference_old <- q_reference
     q_discrepancy_old <- q_discrepancy
-    if (iter >= controls$min_iter && max_change <= controls$tol &&
+    if (isTRUE(convergence_eligible) && max_change <= controls$tol &&
         (!identical(likelihood, "exAL") || all_quadrature_converged)) {
       converged <- TRUE
       stop_reason <- "tolerance"

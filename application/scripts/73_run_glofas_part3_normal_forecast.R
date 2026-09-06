@@ -8,11 +8,13 @@ source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_oracle_forecast.R"))
 source(app_path("application/R/glofas_part3_historical_forecast.R"))
+source(app_path("application/R/glofas_dec25_final_refit_workflow.R"))
 
 args <- app_parse_args(list(
   runtime_root = "", design_cache = "", design_cache_sha256 = "",
   fit_path = "", fit_sha256 = "", method = "rhs", job_id = "",
-  horizon_days = "30", n_draws = "500", seed = "20260904", backend = "auto"
+  horizon_days = "30", n_draws = "500", seed = "20260904", backend = "auto",
+  origin_date = "", allow_missing_future_truth = "false", require_final_dec25 = "false"
 ))
 runtime_root <- app_resolve_path(args$runtime_root, must_work = TRUE)
 job_id <- as.character(args$job_id)
@@ -26,13 +28,19 @@ tryCatch({
   fit_path <- app_resolve_path(args$fit_path, must_work = TRUE)
   if (!identical(tolower(app_sha256_file(cache_path)), tolower(args$design_cache_sha256))) stop("Part 3 design-cache SHA256 mismatch.", call. = FALSE)
   if (!identical(tolower(app_sha256_file(fit_path)), tolower(args$fit_sha256))) stop("Part 3 Normal-fit SHA256 mismatch.", call. = FALSE)
-  cache <- readRDS(cache_path)
-  fit <- readRDS(fit_path)
-  forecast <- app_glofas_part3_normal_forecast(
-    design = cache$design, split = cache$split, fit = fit,
-    method = args$method, horizon_days = as.integer(args$horizon_days),
-    n_draws = as.integer(args$n_draws), seed = as.integer(args$seed), backend = args$backend
-  )
+	  cache <- readRDS(cache_path)
+	  fit <- readRDS(fit_path)
+  origin_date <- if (nzchar(as.character(args$origin_date))) as.Date(args$origin_date) else NULL
+  if (tolower(as.character(args$require_final_dec25)) %in% c("true", "1", "yes", "y")) {
+    app_glofas_dec25_assert_window(origin_date %||% cache$origin$origin_date %||% as.Date("1900-01-01"), as.integer(args$horizon_days), label = "Part 3 Normal final forecast")
+  }
+	  forecast <- app_glofas_part3_normal_forecast(
+	    design = cache$design, split = cache$split, fit = fit,
+	    method = args$method, horizon_days = as.integer(args$horizon_days),
+	    n_draws = as.integer(args$n_draws), seed = as.integer(args$seed), backend = args$backend,
+    origin_date = origin_date %||% cache$origin$origin_date %||% NULL,
+    allow_missing_future_truth = tolower(as.character(args$allow_missing_future_truth)) %in% c("true", "1", "yes", "y")
+	  )
   written <- app_glofas_part3_write_forecast(forecast, cache$design, runtime_root, job_id)
   contract <- data.frame(
     job_id = job_id, method = args$method, fit_path = fit_path,

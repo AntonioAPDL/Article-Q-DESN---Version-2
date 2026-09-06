@@ -40,7 +40,11 @@ with tempfile.TemporaryDirectory() as tmp:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 18
     keyed = {row["job_id"]: row for row in rows}
-    assert keyed["independent_al_q0p50"]["dependencies"] == "normal_rhs_forecast"
+    for row in rows:
+        for dep in row["dependencies"].split("|"):
+            if dep:
+                assert dep in keyed, (row["job_id"], dep)
+    assert keyed["independent_al_q0p50"]["dependencies"] == "normal_rhs_vb_forecast"
     assert keyed["independent_al_q0p35"]["dependencies"] == "independent_al_q0p50"
     assert keyed["independent_al_q0p20"]["dependencies"] == "independent_al_q0p35"
     assert keyed["independent_al_q0p05"]["dependencies"] == "independent_al_q0p20"

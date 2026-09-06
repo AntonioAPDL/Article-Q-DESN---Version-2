@@ -608,8 +608,11 @@ app_glofas_oracle_load_part1_fit_object <- function(
   if (any(!is.finite(as.numeric(fit$beta_mean)))) {
     stop("Fit object beta_mean contains non-finite values.", call. = FALSE)
   }
-  if (identical(method, "rhs") && is.null(fit$beta_cov) && is.null(fit$precision_chol)) {
-    stop("Draw-recursive RHS forecast reuse requires beta_cov or precision_chol.", call. = FALSE)
+  if (identical(method, "rhs") &&
+      is.null(fit$beta_cov) &&
+      is.null(fit$precision_chol) &&
+      is.null(fit$beta_var_diag)) {
+    stop("Draw-recursive RHS forecast reuse requires beta_cov, precision_chol, or beta_var_diag.", call. = FALSE)
   }
   fit$fit_object_path <- fit_object_path
   fit
@@ -791,7 +794,23 @@ app_glofas_oracle_beta_deviation_draws <- function(fit, n_draws, use_precision_c
     }
   }
   cov <- fit$beta_cov %||% fit$precision_inv %||% NULL
-  if (is.null(cov)) stop("Fit object lacks beta covariance or precision inverse for draws.", call. = FALSE)
+  if (is.null(cov)) {
+    beta_var_diag <- fit$beta_var_diag %||% NULL
+    if (is.null(beta_var_diag)) {
+      stop("Fit object lacks beta covariance, precision inverse, or beta variance diagonal for draws.", call. = FALSE)
+    }
+    beta_var_diag <- as.numeric(beta_var_diag)
+    if (length(beta_var_diag) != p ||
+        any(!is.finite(beta_var_diag)) ||
+        any(beta_var_diag < 0)) {
+      stop("Fit beta_var_diag is not finite, nonnegative, and dimension-compatible.", call. = FALSE)
+    }
+    z <- matrix(stats::rnorm(p * n_draws), nrow = p, ncol = n_draws)
+    out <- t(sweep(z, 1L, sqrt(pmax(beta_var_diag, 0)), "*"))
+    attr(out, "backend") <- "beta_var_diag_independent"
+    attr(out, "covariance_semantics") <- "marginal_beta_diagonal"
+    return(out)
+  }
   out <- app_latent_mvn_draws_exact(rep(0, p), as.matrix(cov), n_draws, seed = NULL, backend = "chol_eigen_fallback")
   attr(out, "backend") <- paste0("covariance_", attr(out, "backend", exact = TRUE) %||% "chol_eigen_fallback")
   out
@@ -815,11 +834,16 @@ app_glofas_oracle_parameter_draws <- function(
     sigma2 <- app_glofas_oracle_inverse_gamma_draws(fit$sigma_a, fit$sigma_b, n_draws)
     if (identical(method, "ridge")) {
       base_fit <- fit
+      scale_ridge_deviation_by_sigma <- !is.null(fit$precision_chol) || !is.null(fit$precision_inv)
       if (!is.null(fit$precision_inv) && is.finite(fit$sigma2_mean %||% NA_real_)) {
         base_fit$beta_cov <- as.matrix(fit$precision_inv)
       }
       dev <- app_glofas_oracle_beta_deviation_draws(base_fit, n_draws, use_precision_chol = TRUE)
-      beta <- sweep(dev, 1L, sqrt(pmax(sigma2, .Machine$double.eps)), "*")
+      beta <- if (isTRUE(scale_ridge_deviation_by_sigma)) {
+        sweep(dev, 1L, sqrt(pmax(sigma2, .Machine$double.eps)), "*")
+      } else {
+        dev
+      }
     } else {
       dev <- app_glofas_oracle_beta_deviation_draws(fit, n_draws, use_precision_chol = TRUE)
       beta <- dev

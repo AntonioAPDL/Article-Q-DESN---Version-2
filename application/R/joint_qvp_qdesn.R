@@ -14591,7 +14591,9 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   init = NULL,
   progress_path = NULL,
   progress_every = 0L,
-  progress_label = NULL
+  progress_label = NULL,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   y <- as.numeric(y)
   Z <- app_joint_qvp_check_design(Z)
@@ -14602,9 +14604,18 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   if (nrow(Z) != Tn) stop("length(y) must match nrow(Z).", call. = FALSE)
   max_iter <- as.integer(max_iter)
   min_iter <- as.integer(min_iter)
+  freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(min_beta_updates %||% 0L)
   if (max_iter <= 0L || !is.finite(tol) || tol <= 0) stop("Invalid VB controls.", call. = FALSE)
   if (!is.finite(min_iter) || min_iter < 1L) stop("min_iter must be positive.", call. = FALSE)
   min_iter <- min(min_iter, max_iter)
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
+    stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 0L) {
+    stop("min_beta_updates must be nonnegative.", call. = FALSE)
+  }
+  freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, max_iter)
   if (!is.finite(kappa) || kappa <= 0) stop("kappa must be positive.", call. = FALSE)
   rhs_vb_inner <- as.integer(rhs_vb_inner)
   if (rhs_vb_inner <= 0L) stop("rhs_vb_inner must be positive.", call. = FALSE)
@@ -14653,22 +14664,27 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   colnames(sigma_trace) <- paste0("tau_", seq_len(K))
   rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
   converged <- FALSE
+  beta_update_count <- 0L
   for (iter in seq_len(max_iter)) {
     beta_old <- beta_mean
     sigma_inv <- sigma_shape / sigma_rate
-    precision <- prior$P_beta
-    rhs <- rep(0, K * p)
-    for (k in seq_len(K)) {
-      idx_beta <- ((k - 1L) * p + 1L):(k * p)
-      w <- kappa * sigma_inv[[k]] * v_inv_mean[, k] / constants$B[[k]]
-      precision[idx_beta, idx_beta] <- precision[idx_beta, idx_beta] + Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*% Matrix::Diagonal(x = w) %*% Matrix::Matrix(Z, sparse = TRUE)
-      rhs[idx_beta] <- as.numeric(Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*%
-        (kappa * sigma_inv[[k]] / constants$B[[k]] *
-           (v_inv_mean[, k] * (y - alpha[[k]]) - constants$A[[k]])))
+    beta_updated <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_updated)) {
+      precision <- prior$P_beta
+      rhs <- rep(0, K * p)
+      for (k in seq_len(K)) {
+        idx_beta <- ((k - 1L) * p + 1L):(k * p)
+        w <- kappa * sigma_inv[[k]] * v_inv_mean[, k] / constants$B[[k]]
+        precision[idx_beta, idx_beta] <- precision[idx_beta, idx_beta] + Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*% Matrix::Diagonal(x = w) %*% Matrix::Matrix(Z, sparse = TRUE)
+        rhs[idx_beta] <- as.numeric(Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*%
+          (kappa * sigma_inv[[k]] / constants$B[[k]] *
+             (v_inv_mean[, k] * (y - alpha[[k]]) - constants$A[[k]])))
+      }
+      precision <- Matrix::forceSymmetric(precision)
+      beta_mean <- as.numeric(Matrix::solve(precision, rhs))
+      beta_cov <- solve(as.matrix(precision))
+      beta_update_count <- beta_update_count + 1L
     }
-    precision <- Matrix::forceSymmetric(precision)
-    beta_mean <- as.numeric(Matrix::solve(precision, rhs))
-    beta_cov <- solve(as.matrix(precision))
     beta_mat <- app_joint_qvp_beta_matrix(beta_mean, K, p)
     fitted_no_alpha <- Z %*% beta_mat
     beta_var_by_k <- lapply(seq_len(K), function(k) {
@@ -14749,12 +14765,19 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	    )
 	    monitor_trace[[iter]] <- app_joint_qvp_monitor_row(iter, monitor_terms)
 		    elbo_trace[[iter]] <- elbo_terms
-		    max_beta_change <- max(abs(beta_mean - beta_old))
-		    monitor <- -data_terms$likelihood_quadratic - data_terms$latent_rate - prior_quadratic + beta_entropy_logdet
+	    max_beta_change <- max(abs(beta_mean - beta_old))
+	    monitor <- -data_terms$likelihood_quadratic - data_terms$latent_rate - prior_quadratic + beta_entropy_logdet
+        convergence_eligible <- iter >= min_iter &&
+          iter > freeze_beta_warmup_iters &&
+          beta_update_count >= min_beta_updates
         sigma_trace[iter, ] <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
 		    trace[[iter]] <- data.frame(
-	      iter = iter,
-	      max_beta_change = max_beta_change,
+		      iter = iter,
+          beta_updated = isTRUE(beta_updated),
+          beta_update_count = as.integer(beta_update_count),
+          freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+          convergence_eligible = isTRUE(convergence_eligible),
+		      max_beta_change = max_beta_change,
 	      max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
 	      rhs_mean_precision = mean(rhs_summary$mean_precision),
 	      rhs_max_precision = max(rhs_summary$max_precision),
@@ -14770,8 +14793,12 @@ app_joint_qvp_fit_al_vb_tiny <- function(
               iter = iter,
               max_iter = max_iter,
               min_iter = min_iter,
-              converged = FALSE,
-              max_beta_change = max_beta_change,
+	              converged = FALSE,
+              beta_updated = isTRUE(beta_updated),
+              beta_update_count = as.integer(beta_update_count),
+              freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+              convergence_eligible = isTRUE(convergence_eligible),
+	              max_beta_change = max_beta_change,
               max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
               rhs_mean_precision = mean(rhs_summary$mean_precision),
               rhs_max_precision = max(rhs_summary$max_precision),
@@ -14782,7 +14809,7 @@ app_joint_qvp_fit_al_vb_tiny <- function(
             )
           )
         }
-		    if (iter >= min_iter && max_beta_change < tol) {
+			    if (isTRUE(convergence_eligible) && max_beta_change < tol) {
 			      converged <- TRUE
 		      trace <- trace[seq_len(iter)]
 		      monitor_trace <- monitor_trace[seq_len(iter)]
@@ -14796,8 +14823,12 @@ app_joint_qvp_fit_al_vb_tiny <- function(
                   iter = iter,
                   max_iter = max_iter,
                   min_iter = min_iter,
-                  converged = TRUE,
-                  max_beta_change = max_beta_change,
+	                  converged = TRUE,
+                  beta_updated = isTRUE(beta_updated),
+                  beta_update_count = as.integer(beta_update_count),
+                  freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+                  convergence_eligible = isTRUE(convergence_eligible),
+	                  max_beta_change = max_beta_change,
                   max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
                   rhs_mean_precision = mean(rhs_summary$mean_precision),
                   rhs_max_precision = max(rhs_summary$max_precision),
@@ -14843,7 +14874,9 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	    objective_diagnostics = objective_diagnostics,
 	    monitor_label = "al_vb_coordinate_monitor",
 	    elbo_label = "al_vb_rhs_accounted_elbo_missing_alpha_entropy_log_precision_approx",
-    converged = converged,
+	    converged = converged,
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates),
     tau = tau,
     kappa = kappa,
     alpha_prior_mean = alpha_prior$mean,

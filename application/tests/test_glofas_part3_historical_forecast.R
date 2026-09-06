@@ -50,6 +50,20 @@ design <- list(
   d_g = seq(-0.2, 0.2, length.out = 10)
 )
 design$g_retrospective <- design$y_reference + design$d_g
+split <- list(train_idx = 1:6, valid_idx = 7:10)
+origin <- app_glofas_part3_forecast_origin(design, split, horizon_days = 4L)
+stopifnot(all(origin$future_dates == dates[7:10]))
+named_design <- design
+names(named_design$dates) <- paste0("d", seq_along(named_design$dates))
+origin_named <- app_glofas_part3_forecast_origin(named_design, split, horizon_days = 4L)
+stopifnot(all(origin_named$future_dates == dates[7:10]))
+gapped_design <- design
+gapped_design$dates[[8L]] <- gapped_design$dates[[8L]] + 1
+gap_error <- tryCatch({
+  app_glofas_part3_forecast_origin(gapped_design, split, horizon_days = 4L)
+  FALSE
+}, error = function(e) grepl("contiguous daily horizon", conditionMessage(e), fixed = TRUE))
+stopifnot(isTRUE(gap_error))
 cpp_normal$origin <- list(origin_index = 6L, origin_date = dates[[6L]], future_index = 7:10, future_dates = dates[7:10], horizon_days = 4L)
 cpp_normal$historical <- list(
   reference = matrix(design$y_reference + 0.01, ncol = 1L),

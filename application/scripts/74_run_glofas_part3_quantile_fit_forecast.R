@@ -13,13 +13,16 @@ source(app_path("application/R/glofas_normal_desn_part3_joint_bridge.R"))
 source(app_path("application/R/glofas_part3_partitioned_rhs.R"))
 source(app_path("application/R/glofas_part3_quantile_bridge.R"))
 source(app_path("application/R/glofas_part3_historical_forecast.R"))
+source(app_path("application/R/glofas_dec25_final_refit_workflow.R"))
 
 args <- app_parse_args(list(
   runtime_root = "", design_cache = "", design_cache_sha256 = "", job_id = "",
   likelihood = "AL", fit_structure = "independent", tau = "0.50", init_fit_paths = "",
   max_iter = "100", min_iter = "30", tol = "0.01", tau0_reference = "1",
   tau0_discrepancy = "0.001", slab_s2 = "1", a_zeta = "2", b_zeta = "4",
-  rhs_vb_inner = "5", progress_every = "1", horizon_days = "30", backend = "auto"
+  rhs_vb_inner = "5", progress_every = "1", horizon_days = "30", backend = "auto",
+  freeze_beta_warmup_iters = "0", min_beta_updates = "0",
+  origin_date = "", allow_missing_future_truth = "false", require_final_dec25 = "false"
 ))
 runtime_root <- app_resolve_path(args$runtime_root, must_work = TRUE)
 job_id <- as.character(args$job_id)
@@ -35,8 +38,12 @@ split_paths <- function(x) {
 
 tryCatch({
   cache_path <- app_resolve_path(args$design_cache, must_work = TRUE)
-  if (!identical(tolower(app_sha256_file(cache_path)), tolower(args$design_cache_sha256))) stop("Part 3 design-cache SHA256 mismatch.", call. = FALSE)
-  cache <- readRDS(cache_path)
+	  if (!identical(tolower(app_sha256_file(cache_path)), tolower(args$design_cache_sha256))) stop("Part 3 design-cache SHA256 mismatch.", call. = FALSE)
+	  cache <- readRDS(cache_path)
+  origin_date <- if (nzchar(as.character(args$origin_date))) as.Date(args$origin_date) else NULL
+  if (tolower(as.character(args$require_final_dec25)) %in% c("true", "1", "yes", "y")) {
+    app_glofas_dec25_assert_window(origin_date %||% cache$origin$origin_date %||% as.Date("1900-01-01"), as.integer(args$horizon_days), label = "Part 3 quantile final forecast")
+  }
   tau <- as.numeric(split_paths(args$tau))
   init_paths <- split_paths(args$init_fit_paths)
   init <- if (length(init_paths)) {
@@ -55,7 +62,9 @@ tryCatch({
     tau0_reference = as.numeric(args$tau0_reference), tau0_discrepancy = as.numeric(args$tau0_discrepancy),
     slab_s2 = as.numeric(args$slab_s2), a_zeta = as.numeric(args$a_zeta), b_zeta = as.numeric(args$b_zeta),
     rhs_vb_inner = as.integer(args$rhs_vb_inner), progress_path = progress_path,
-    progress_every = as.integer(args$progress_every)
+    progress_every = as.integer(args$progress_every),
+    freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(args$min_beta_updates)
   )
   fit <- app_glofas_part3_quantile_fit(
     design = cache$design, split = cache$split, tau = tau,
@@ -63,10 +72,12 @@ tryCatch({
     controls = controls, init = init, fit_id = job_id
   )
   fitted <- app_glofas_part3_write_quantile_result(fit, cache$design, cache$split, runtime_root, job_id)
-  forecast <- app_glofas_part3_quantile_forecast(
-    design = cache$design, split = cache$split, fit = fit,
-    horizon_days = as.integer(args$horizon_days), backend = args$backend
-  )
+	  forecast <- app_glofas_part3_quantile_forecast(
+	    design = cache$design, split = cache$split, fit = fit,
+	    horizon_days = as.integer(args$horizon_days), backend = args$backend,
+    origin_date = origin_date %||% cache$origin$origin_date %||% NULL,
+    allow_missing_future_truth = tolower(as.character(args$allow_missing_future_truth)) %in% c("true", "1", "yes", "y")
+	  )
   forecasted <- app_glofas_part3_write_forecast(forecast, cache$design, runtime_root, job_id)
   init_rows <- data.frame(
     path = init_paths,

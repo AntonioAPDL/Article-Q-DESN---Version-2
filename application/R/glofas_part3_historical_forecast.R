@@ -24,9 +24,33 @@ app_glofas_part3_load_forecast_cpp <- function(required = TRUE) {
   ok
 }
 
-app_glofas_part3_forecast_origin <- function(design, split, horizon_days = 30L) {
+app_glofas_part3_forecast_origin <- function(
+  design,
+  split = NULL,
+  horizon_days = 30L,
+  origin_date = NULL,
+  allow_missing_future_indices = FALSE
+) {
   horizon_days <- as.integer(horizon_days)
   if (!is.finite(horizon_days) || horizon_days < 1L) stop("Part 3 horizon must be positive.", call. = FALSE)
+  if (!is.null(origin_date)) {
+    origin_date <- as.Date(origin_date)
+    origin_index <- match(origin_date, as.Date(design$dates))
+    if (is.na(origin_index)) stop("Part 3 explicit forecast origin is absent from design dates.", call. = FALSE)
+    future_dates <- seq.Date(origin_date + 1L, by = "day", length.out = horizon_days)
+    future_idx <- match(future_dates, as.Date(design$dates))
+    if (!isTRUE(allow_missing_future_indices) && anyNA(future_idx)) {
+      stop("Part 3 explicit forecast future dates are absent from design dates.", call. = FALSE)
+    }
+    return(list(
+      origin_index = as.integer(origin_index),
+      origin_date = origin_date,
+      future_index = as.integer(future_idx),
+      future_dates = future_dates,
+      horizon_days = horizon_days
+    ))
+  }
+  if (is.null(split)) stop("Part 3 forecast requires a split unless origin_date is explicit.", call. = FALSE)
   train_idx <- as.integer(split$train_idx)
   valid_idx <- as.integer(split$valid_idx)
   if (!length(train_idx) || !length(valid_idx) || max(train_idx) >= min(valid_idx)) {
@@ -35,7 +59,8 @@ app_glofas_part3_forecast_origin <- function(design, split, horizon_days = 30L) 
   future_idx <- utils::head(valid_idx, horizon_days)
   if (length(future_idx) < horizon_days) stop("Part 3 validation period is shorter than the requested horizon.", call. = FALSE)
   expected <- seq.Date(as.Date(design$dates[max(train_idx)]) + 1, by = "day", length.out = horizon_days)
-  if (!identical(as.Date(design$dates[future_idx]), expected)) {
+  actual <- as.Date(design$dates[future_idx])
+  if (length(actual) != length(expected) || anyNA(actual) || any(actual != expected)) {
     stop("Part 3 fixed-origin forecast dates are not a contiguous daily horizon.", call. = FALSE)
   }
   list(
@@ -174,11 +199,19 @@ app_glofas_part3_quantile_forecast <- function(
   split,
   fit,
   horizon_days = 30L,
-  backend = c("auto", "cpp", "r")
+  backend = c("auto", "cpp", "r"),
+  origin_date = NULL,
+  allow_missing_future_truth = FALSE
 ) {
   backend <- match.arg(backend)
   if (!inherits(fit, "glofas_part3_quantile_fit")) stop("Expected a Part 3 quantile fit.", call. = FALSE)
-  origin <- app_glofas_part3_forecast_origin(design, split, horizon_days)
+  origin <- app_glofas_part3_forecast_origin(
+    design,
+    split,
+    horizon_days,
+    origin_date = origin_date,
+    allow_missing_future_indices = allow_missing_future_truth
+  )
   reference <- app_glofas_part3_component_context(design, "reference", origin)
   discrepancy <- app_glofas_part3_component_context(design, "discrepancy", origin)
   beta_reference <- t(as.matrix(fit$beta_reference_mean))
@@ -271,13 +304,21 @@ app_glofas_part3_normal_forecast <- function(
   horizon_days = 30L,
   n_draws = 500L,
   seed = 20260904L,
-  backend = c("auto", "cpp", "r")
+  backend = c("auto", "cpp", "r"),
+  origin_date = NULL,
+  allow_missing_future_truth = FALSE
 ) {
   method <- match.arg(method)
   backend <- match.arg(backend)
   n_draws <- as.integer(n_draws)
   if (!is.finite(n_draws) || n_draws < 2L) stop("Part 3 Normal forecast needs at least two draws.", call. = FALSE)
-  origin <- app_glofas_part3_forecast_origin(design, split, horizon_days)
+  origin <- app_glofas_part3_forecast_origin(
+    design,
+    split,
+    horizon_days,
+    origin_date = origin_date,
+    allow_missing_future_indices = allow_missing_future_truth
+  )
   reference <- app_glofas_part3_component_context(design, "reference", origin)
   discrepancy <- app_glofas_part3_component_context(design, "discrepancy", origin)
   draws <- app_glofas_part3_normal_draws(fit, method, n_draws, seed)

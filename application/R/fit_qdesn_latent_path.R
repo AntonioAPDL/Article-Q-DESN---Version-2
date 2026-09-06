@@ -1,5 +1,41 @@
 # Article-side adapter skeleton for the latent-path ensemble-likelihood model.
 
+app_make_glofas_latent_path_scoring_truth <- function(panel, future_key) {
+  app_check_required_columns(panel, c("target_date", "y_transformed"), "application panel")
+  dates <- as.Date(future_key$target_date)
+  values <- vapply(dates, function(d) {
+    y <- as.numeric(panel$y_transformed[as.Date(panel$target_date) == d])
+    y <- y[is.finite(y)]
+    if (length(y)) y[[1L]] else NA_real_
+  }, numeric(1L))
+  data.frame(
+    target_date = dates,
+    horizon = as.integer(future_key$horizon),
+    y_reference = values,
+    scoring_only = TRUE,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_redact_glofas_latent_path_future_truth <- function(x) {
+  truth_columns <- intersect(
+    c("y", "y_raw", "y_transformed", "y_reference", "usgs", "usgs_raw", "usgs_transformed"),
+    names(x)
+  )
+  for (name in truth_columns) x[[name]] <- NA_real_
+  x
+}
+
+app_glofas_latent_path_ensemble_weights <- function(g_ensemble) {
+  key <- paste(as.Date(g_ensemble$target_date), as.integer(g_ensemble$horizon))
+  counts <- ave(rep(1, nrow(g_ensemble)), key, FUN = length)
+  weights <- 1 / as.numeric(counts)
+  if (any(!is.finite(weights)) || any(weights <= 0)) {
+    stop("Latent-path ensemble weights must be finite and positive.", call. = FALSE)
+  }
+  weights
+}
+
 app_make_glofas_latent_path_data <- function(panel, cfg, cutoff_row, model_row = NULL) {
   app_validate_application_model_contract(cfg, model_row)
   if (!app_is_latent_path_contract(cfg, model_row)) {
@@ -51,6 +87,7 @@ app_make_glofas_latent_path_data <- function(panel, cfg, cutoff_row, model_row =
     keep <- unlist(lapply(split(seq_len(nrow(g_ens)), split_key), utils::head, n = member_limit), use.names = FALSE)
     g_ens <- g_ens[sort(keep), , drop = FALSE]
   }
+  g_ens$ensemble_weight <- app_glofas_latent_path_ensemble_weights(g_ens)
 
   available_horizons <- sort(unique(as.integer(g_ens$horizon)))
   if (any(!is.finite(available_horizons))) {
@@ -84,11 +121,6 @@ app_make_glofas_latent_path_data <- function(panel, cfg, cutoff_row, model_row =
     stop("Latent-path model requires one forecast horizon per target date.", call. = FALSE)
   }
 
-  y_future_oracle <- vapply(future_key$target_date, function(d) {
-    vals <- panel$y_transformed[panel$target_date == d & is.finite(panel$y_transformed)]
-    if (length(vals)) vals[[1L]] else NA_real_
-  }, numeric(1L))
-
   source_scope <- app_application_model_contract_row(cfg, model_row)
   out <- list(
     cutoff_id = as.character(cutoff_row$cutoff_id[[1L]] %||% NA_character_),
@@ -104,9 +136,9 @@ app_make_glofas_latent_path_data <- function(panel, cfg, cutoff_row, model_row =
     historical_panel = hist_panel,
     y_history = y_hist,
     g_retro = g_retro,
-    g_ensemble = g_ens,
+    g_ensemble = app_redact_glofas_latent_path_future_truth(g_ens),
     future_key = future_key,
-    y_future_oracle = y_future_oracle,
+    future_truth_policy = "physically_excluded_from_fit_objects_scoring_sidecar_only",
     source_parameter_scope = source_scope,
     application_model_contract = app_application_model_contract(cfg, model_row)
   )
@@ -138,6 +170,15 @@ app_validate_glofas_latent_path_data <- function(x) {
   }
   if (!identical(as.character(x$source_parameter_scope$issued_glofas_role[[1L]]), "likelihood_rows")) {
     stop("Latent-path data object must treat issued GloFAS rows as likelihood rows.", call. = FALSE)
+  }
+  key <- paste(as.Date(x$g_ensemble$target_date), as.integer(x$g_ensemble$horizon))
+  weight_sum <- tapply(as.numeric(x$g_ensemble$ensemble_weight), key, sum)
+  if (any(!is.finite(weight_sum)) || any(abs(weight_sum - 1) > 1.0e-12)) {
+    stop("Latent-path issued-ensemble weights must sum to one within each horizon.", call. = FALSE)
+  }
+  leaked <- intersect(c("y", "y_raw", "y_transformed", "y_reference", "usgs", "usgs_raw", "usgs_transformed"), names(x$g_ensemble))
+  if (length(leaked) && any(vapply(x$g_ensemble[leaked], function(v) any(is.finite(as.numeric(v))), logical(1L)))) {
+    stop("Latent-path fit data contains future USGS truth.", call. = FALSE)
   }
   invisible(TRUE)
 }
@@ -216,8 +257,8 @@ app_latent_path_discrepancy_lag_one <- function(panel, anchor_dates) {
   out
 }
 
-app_latent_path_initial_future <- function(latent_data, p0) {
-  qg <- app_latent_path_glofas_quantile_path(latent_data, p0)
+app_latent_path_initial_future <- function(latent_data, p0 = NULL) {
+  qg <- app_latent_path_glofas_center_path(latent_data)
   d_hist <- as.numeric(latent_data$g_retro$g_transformed) - as.numeric(latent_data$y_history$y_transformed)
   d0 <- stats::median(d_hist[is.finite(d_hist)], na.rm = TRUE)
   if (!is.finite(d0)) d0 <- 0
@@ -237,6 +278,21 @@ app_latent_path_glofas_quantile_path <- function(latent_data, p0) {
     stop("Unable to compute finite GloFAS future quantile path for latent-path design.", call. = FALSE)
   }
   qg
+}
+
+app_latent_path_glofas_center_path <- function(latent_data, method = "weighted_mean") {
+  method <- match.arg(method, "weighted_mean")
+  center <- vapply(seq_len(nrow(latent_data$future_key)), function(i) {
+    idx <- as.Date(latent_data$g_ensemble$target_date) == as.Date(latent_data$future_key$target_date[[i]]) &
+      as.integer(latent_data$g_ensemble$horizon) == as.integer(latent_data$future_key$horizon[[i]])
+    g <- as.numeric(latent_data$g_ensemble$g_transformed[idx])
+    w <- as.numeric(latent_data$g_ensemble$ensemble_weight[idx])
+    sum(w * g) / sum(w)
+  }, numeric(1L))
+  if (any(!is.finite(center))) {
+    stop("Unable to compute a finite common GloFAS ensemble center path.", call. = FALSE)
+  }
+  center
 }
 
 app_latent_path_discrepancy_panel <- function(panel) {
@@ -511,9 +567,9 @@ app_make_latent_path_future_builder <- function(context) {
 
     alpha_feature_static <- FALSE
     if (isTRUE(two_block)) {
-      qg_path <- as.numeric(context$glofas_future_quantile_path)
+      qg_path <- as.numeric(context$glofas_future_center_path)
       if (length(qg_path) != length(y_future) || any(!is.finite(qg_path))) {
-        stop("Two-block latent-path future builder requires a finite GloFAS quantile path.", call. = FALSE)
+        stop("Two-block latent-path future builder requires a finite common GloFAS center path.", call. = FALSE)
       }
       transition_strategy <- context$discrepancy_transition_strategy %||% "recursive_level"
       if (identical(transition_strategy, "persistence_anchored_innovation")) {
@@ -680,6 +736,7 @@ app_make_latent_path_future_builder <- function(context) {
         source = "G", row_role = "issued_glofas_ensemble",
         future_index = ens_future_index, origin_date = ens$origin_date,
         target_date = ens$target_date, horizon = ens$horizon, member = ens$member,
+        likelihood_weight = as.numeric(ens$ensemble_weight),
         stringsAsFactors = FALSE
       )
       row_info_g_key <- data.frame(
@@ -729,6 +786,7 @@ app_make_latent_path_future_builder <- function(context) {
       J_g_key = J_g_key,
       paired_future_jacobian = isTRUE(paired_future_jacobian),
       z_g = as.numeric(ens$g_transformed) - discrepancy_baseline_future[ens_future_index],
+      weight_g = as.numeric(ens$ensemble_weight),
       row_info_y = row_info_y,
       row_info_g_key = row_info_g_key,
       row_info_g = row_info_g,
@@ -997,8 +1055,11 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   p0 <- as.numeric(model_row$quantile_level[[1L]])
   method <- app_normalize_qdesn_method(model_row$inference_method[[1L]])
   likelihood_family <- app_model_row_likelihood_family(model_row, cfg)
-  if (!identical(method, "vb") || !identical(likelihood_family, "al")) {
-    stop("The executable latent-path fitter currently supports inference_method = vb_ld and likelihood_family = al.", call. = FALSE)
+  if (!identical(method, "vb") || !likelihood_family %in% c("normal", "al", "exal")) {
+    stop(
+      "The executable latent-path fitter requires VB and likelihood_family in {normal, al, exal}.",
+      call. = FALSE
+    )
   }
   design_timing <- list()
   time_design_step <- function(step, expr) {
@@ -1174,7 +1235,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   p_beta <- ncol(X_beta)
   p_alpha <- ncol(X_alpha)
   intercept_index <- sort(unique(c(app_constant_one_columns(X_beta), p_beta + app_constant_one_columns(X_alpha))))
-  glofas_future_quantile_path <- app_latent_path_glofas_quantile_path(latent_data, p0)
+  glofas_future_center_path <- app_latent_path_glofas_center_path(latent_data)
   context <- list(
     cfg = cfg,
     cfg_beta = cfg_beta,
@@ -1203,7 +1264,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
         isTRUE(app_qdesn_reservoir_uses_covariates(cfg_alpha))
     ),
     two_block_design = two_block,
-    glofas_future_quantile_path = glofas_future_quantile_path,
+    glofas_future_center_path = glofas_future_center_path,
     future_discrepancy_convention = if (isTRUE(two_block) && identical(
       discrepancy_transition_strategy,
       "persistence_anchored_innovation"
@@ -1218,6 +1279,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
   out <- list(
     z_fixed = as.numeric(z_fixed),
     H_fixed = H_fixed,
+    weight_fixed = rep(1, length(z_fixed)),
     source_fixed = source,
     row_info_fixed = row_info_fixed,
     X_beta = X_beta,
@@ -1260,8 +1322,8 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     latent_data = latent_data,
     future_key = latent_data$future_key,
     y_future_init = app_latent_path_initial_future(latent_data, p0),
-    y_future_oracle = latent_data$y_future_oracle,
-    glofas_future_quantile_path = glofas_future_quantile_path,
+    future_truth_policy = latent_data$future_truth_policy,
+    glofas_future_center_path = glofas_future_center_path,
     discrepancy_baseline_fixed = discrepancy_baseline_fixed,
     discrepancy_baseline_future = if (identical(
       discrepancy_transition_strategy,
@@ -1456,6 +1518,7 @@ app_hash_latent_path_design <- function(x, probe = NULL) {
   saveRDS(
     list(
       z_fixed = x$z_fixed,
+      weight_fixed = x$weight_fixed %||% rep(1, length(x$z_fixed)),
       H_fixed = x$H_fixed,
       source_fixed = as.character(x$source_fixed),
       row_info_fixed = x$row_info_fixed,
@@ -1464,6 +1527,9 @@ app_hash_latent_path_design <- function(x, probe = NULL) {
       H_y_init = probe$H_y,
       H_g_key_init = app_latent_future_H_g_key(probe),
       g_future_index = app_latent_future_g_index(probe),
+	      z_g_init = as.numeric(probe$z_g),
+	      weight_g_init = as.numeric(probe$weight_g %||% rep(1, length(probe$z_g))),
+	      glofas_future_center_path = as.numeric(x$glofas_future_center_path %||% numeric()),
 	      row_info_y = probe$row_info_y,
 	      row_info_g = probe$row_info_g,
 	      X_beta = x$X_beta %||% x$X_base,
@@ -1776,6 +1842,23 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
   discrepancy_baseline_future <- as.numeric(
     result$design$discrepancy_baseline_future %||% rep(0, H)
   )
+  scoring_truth <- app_make_glofas_latent_path_scoring_truth(panel, result$design$future_key)
+  y_reference <- scoring_truth$y_reference
+  glofas_center <- as.numeric(
+    result$design$glofas_future_center_path %||%
+      app_latent_path_glofas_center_path(result$design$latent_data)
+  )
+  glofas_empirical_quantile <- vapply(seq_len(H), function(h) {
+    app_ensemble_quantile(
+      result$design$latent_data$g_ensemble[
+        result$design$latent_data$g_ensemble$target_date == result$design$future_key$target_date[[h]] &
+          result$design$latent_data$g_ensemble$horizon == result$design$future_key$horizon[[h]],
+        ,
+        drop = FALSE
+      ],
+      as.numeric(result$quantile_level)
+    )
+  }, numeric(1L))
   if (length(discrepancy_baseline_future) != H || any(!is.finite(discrepancy_baseline_future))) {
     stop("Latent-path prediction requires one finite discrepancy baseline per future date.", call. = FALSE)
   }
@@ -1828,16 +1911,11 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
         discrepancy_transition_strategy = result$design$discrepancy_transition_strategy %||% "recursive_level",
         discrepancy_baseline = discrepancy_baseline_future[[h]],
         prediction_state_strategy = if (isTRUE(use_linearization)) "first_order_delta" else "exact_rebuild",
-        raw_glofas_quantile = app_ensemble_quantile(
-          result$design$latent_data$g_ensemble[
-            result$design$latent_data$g_ensemble$target_date == result$design$future_key$target_date[[h]] &
-              result$design$latent_data$g_ensemble$horizon == result$design$future_key$horizon[[h]],
-            ,
-            drop = FALSE
-          ],
-          as.numeric(result$quantile_level)
-        ),
-        y_reference = result$design$y_future_oracle[[h]],
+        raw_glofas_quantile = glofas_center[[h]],
+        raw_glofas_center = glofas_center[[h]],
+        raw_glofas_empirical_quantile = glofas_empirical_quantile[[h]],
+        y_reference = y_reference[[h]],
+        y_reference_role = "post_fit_scoring_only",
         prediction_design_hash = prediction_design_hash,
         stringsAsFactors = FALSE
       )
@@ -1883,7 +1961,13 @@ app_predict_qdesn_latent_path_draws <- function(result, panel, cfg, model_row) {
 	  )
 }
 
-app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, drop = NULL) {
+app_fit_qdesn_latent_path <- function(
+    panel,
+    cfg,
+    model_row,
+    cutoff_row = NULL,
+    drop = NULL,
+    vb_overrides = list()) {
   stage_timing <- list()
   time_stage <- function(step, expr) {
     start <- proc.time()[["elapsed"]]
@@ -1912,8 +1996,8 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
   prior <- app_map_qdesn_prior(model_row$coefficient_prior[[1L]])
   seed <- suppressWarnings(as.integer(app_model_row_value(model_row, "reservoir_seed", cfg$reservoir$seed %||% 20260513L)))
   if (!is.finite(seed)) seed <- as.integer(cfg$reservoir$seed %||% 20260513L)
-  if (!identical(method, "vb") || !identical(likelihood_family, "al")) {
-    stop("Latent-path fitting currently supports AL-VB only.", call. = FALSE)
+  if (!identical(method, "vb") || !likelihood_family %in% c("normal", "al", "exal")) {
+    stop("Latent-path fitting requires VB with Normal, AL, or exAL likelihood.", call. = FALSE)
   }
 
   vb_args <- time_stage("prepare_vb_args", {
@@ -1924,15 +2008,34 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
       likelihood_family = likelihood_family
     )
   })
+  if (length(vb_overrides)) vb_args <- modifyList(vb_args, vb_overrides)
   vb_args$likelihood_family <- likelihood_family
-  fit <- time_stage("fit_latent_path_al_vb_core", {
-    app_fit_latent_path_al_vb_core(
-      design = design,
-      p0 = p0,
-      coefficient_prior = prior,
-      vb_args = vb_args,
-      seed = seed
-    )
+  fit_stage <- sprintf("fit_latent_path_%s_vb_core", likelihood_family)
+  fit <- time_stage(fit_stage, {
+    if (identical(likelihood_family, "normal")) {
+      app_fit_latent_path_normal_vb_core(
+        design = design,
+        coefficient_prior = prior,
+        vb_args = vb_args,
+        seed = seed
+      )
+    } else if (identical(likelihood_family, "exal")) {
+      app_fit_latent_path_exal_vb_core(
+        design = design,
+        p0 = p0,
+        coefficient_prior = prior,
+        vb_args = vb_args,
+        seed = seed
+      )
+    } else {
+      app_fit_latent_path_al_vb_core(
+        design = design,
+        p0 = p0,
+        coefficient_prior = prior,
+        vb_args = vb_args,
+        seed = seed
+      )
+    }
   })
   design_summary <- time_stage("summarize_latent_path_design", {
     app_latent_path_design_summary(design)
@@ -1966,6 +2069,6 @@ app_fit_qdesn_latent_path <- function(panel, cfg, model_row, cutoff_row = NULL, 
     mcmc_args = list(),
     vb_args = vb_args,
     status = "completed",
-    message = "latent-path AL-VB fit completed"
+    message = sprintf("latent-path %s-VB fit completed", likelihood_family)
   )
 }

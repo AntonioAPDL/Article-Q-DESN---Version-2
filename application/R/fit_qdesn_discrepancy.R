@@ -171,6 +171,9 @@ app_make_qdesn_discrepancy_vb_args <- function(cfg, prior, seed = NULL, likeliho
     future_update_strategy = tolower(as.character(vb_cfg$future_update_strategy %||% "linearized_delta")),
     future_objective_strategy = tolower(as.character(vb_cfg$future_objective_strategy %||% "grouped")),
     dense_debug_allowed = app_as_bool(vb_cfg$dense_debug_allowed %||% FALSE),
+    freeze_beta_warmup_iters = as.integer(vb_cfg$freeze_beta_warmup_iters %||% 0L),
+    min_beta_updates = as.integer(vb_cfg$min_beta_updates %||% 1L),
+    progress_every = as.integer(vb_cfg$progress_every %||% 1L),
     ld_block_active = identical(likelihood_family, "exal")
   )
   if (!is.null(vb_cfg$chunking)) {
@@ -477,7 +480,16 @@ app_summarize_discrepancy_draw_predictions <- function(draws) {
     "cbind(q_y_draw, q_g_draw, d_g_draw, raw_glofas_quantile, y_reference) ~",
     paste(key_cols, collapse = " + ")
   ))
-  out <- stats::aggregate(aggregate_formula, data = draws, FUN = mean, na.rm = TRUE)
+  mean_or_missing <- function(x) {
+    if (all(is.na(x))) return(NA_real_)
+    mean(x, na.rm = TRUE)
+  }
+  out <- stats::aggregate(
+    aggregate_formula,
+    data = draws,
+    FUN = mean_or_missing,
+    na.action = stats::na.pass
+  )
   names(out)[names(out) == "q_y_draw"] <- "qhat"
   names(out)[names(out) == "q_g_draw"] <- "q_g_hat"
   names(out)[names(out) == "d_g_draw"] <- "d_g_hat"

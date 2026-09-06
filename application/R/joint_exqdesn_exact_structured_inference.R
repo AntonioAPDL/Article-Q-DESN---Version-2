@@ -934,7 +934,8 @@ app_joint_exqdesn_structured_terms_grid <- function(
   b_sigma = 0.1,
   gamma_prior_type = "none",
   gamma_prior_center = 0,
-  gamma_prior_sd_eta = NA_real_
+  gamma_prior_sd_eta = NA_real_,
+  observation_weight = NULL
 ) {
   augmentation <- match.arg(augmentation)
   tau <- app_joint_exqdesn_assert_scalar_tau(tau)
@@ -946,8 +947,10 @@ app_joint_exqdesn_structured_terms_grid <- function(
   s_mean <- as.numeric(s_mean)
   s2_mean <- as.numeric(s2_mean)
   n <- length(r_mean)
+  observation_weight <- as.numeric(observation_weight %||% rep(1, n))
   if (!length(gamma) || !n ||
       any(vapply(list(r2_mean, latent_mean, latent_inv_mean, s_mean, s2_mean), length, integer(1L)) != n) ||
+      length(observation_weight) != n || any(!is.finite(observation_weight)) || any(observation_weight <= 0) ||
       any(!is.finite(c(gamma, r_mean, r2_mean, latent_mean, latent_inv_mean, s_mean, s2_mean))) ||
       any(r2_mean < 0) || any(latent_mean <= 0) || any(latent_inv_mean <= 0) || any(s2_mean < 0)) {
     stop("Structured scale-shape grid moments are malformed.", call. = FALSE)
@@ -958,24 +961,25 @@ app_joint_exqdesn_structured_terms_grid <- function(
   lambda <- constants$lambda
   k <- constants$k
   p_gamma <- constants$p_gamma
-  nu <- rep(-a_sigma - 1.5 * n, length(gamma))
-  sum_r2_inv <- sum(r2_mean * latent_inv_mean)
-  sum_r <- sum(r_mean)
-  sum_latent <- sum(latent_mean)
-  sum_s2_inv <- sum(s2_mean * latent_inv_mean)
-  sum_sr_inv <- sum(s_mean * r_mean * latent_inv_mean)
-  sum_s <- sum(s_mean)
+  n_eff <- sum(observation_weight)
+  nu <- rep(-a_sigma - 1.5 * n_eff, length(gamma))
+  sum_r2_inv <- sum(observation_weight * r2_mean * latent_inv_mean)
+  sum_r <- sum(observation_weight * r_mean)
+  sum_latent <- sum(observation_weight * latent_mean)
+  sum_s2_inv <- sum(observation_weight * s2_mean * latent_inv_mean)
+  sum_sr_inv <- sum(observation_weight * s_mean * r_mean * latent_inv_mean)
+  sum_s <- sum(observation_weight * s_mean)
   if (identical(augmentation, "u")) {
     chi <- 2 * b_sigma + sum_r2_inv - (1 - 2 * p_gamma) * sum_r + 0.25 * sum_latent
     psi <- lambda^2 * sum_s2_inv
     cross <- lambda * (sum_sr_inv - k * sum_s)
-    log_shape <- n * log(constants$cp)
+    log_shape <- n_eff * log(constants$cp)
   } else {
     chi <- 2 * b_sigma + 2 * sum_latent +
       (sum_r2_inv - 2 * A * sum_r + A^2 * sum_latent) / B
     psi <- lambda^2 * sum_s2_inv / B
     cross <- lambda / B * (sum_sr_inv - A * sum_s)
-    log_shape <- -0.5 * n * log(B)
+    log_shape <- -0.5 * n_eff * log(B)
   }
   log_prior <- app_joint_exqdesn_gamma_log_prior(
     tau, gamma, gamma_prior_type, gamma_prior_center, gamma_prior_sd_eta
@@ -1090,6 +1094,7 @@ app_joint_exqdesn_structured_scale_shape_update <- function(
   gamma_prior_type = "none",
   gamma_prior_center = 0,
   gamma_prior_sd_eta = NA_real_,
+  observation_weight = NULL,
   quadrature_nodes = c(4L, 8L, 12L),
   quadrature_tolerance = 1.0e-6
 ) {
@@ -1108,7 +1113,8 @@ app_joint_exqdesn_structured_scale_shape_update <- function(
     b_sigma = b_sigma,
     gamma_prior_type = gamma_prior_type,
     gamma_prior_center = gamma_prior_center,
-    gamma_prior_sd_eta = gamma_prior_sd_eta
+    gamma_prior_sd_eta = gamma_prior_sd_eta,
+    observation_weight = observation_weight
   )
   quadrature <- app_joint_exqdesn_normalize_branch_quadrature(
     tau = tau,
@@ -1163,6 +1169,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   augmentation = c("v", "u"),
   max_iter = 100L,
   tol = 1.0e-5,
+  min_iter = 1L,
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
@@ -1186,7 +1193,12 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   quadrature_nodes = c(4L, 8L, 12L),
   quadrature_tolerance = 1.0e-6,
   diagnostic_stride = 10L,
-  method_id = NULL
+  method_id = NULL,
+  progress_path = NULL,
+  progress_every = 0L,
+  progress_label = NULL,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   augmentation <- match.arg(augmentation)
   external_init_supplied <- !is.null(init)
@@ -1202,9 +1214,12 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   p <- ncol(Z)
   if (nrow(Z) != Tn) stop("length(y) must match nrow(Z).", call. = FALSE)
   max_iter <- as.integer(max_iter)
+  min_iter <- as.integer(min_iter)
   rhs_vb_inner <- as.integer(rhs_vb_inner)
   rhs_freeze_iters <- as.integer(rhs_freeze_iters)
   diagnostic_stride <- as.integer(diagnostic_stride)
+  freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(min_beta_updates %||% 0L)
   if (
     max_iter < 1L || !is.finite(tol) || tol <= 0 || rhs_vb_inner < 1L ||
       length(rhs_freeze_iters) != 1L || is.na(rhs_freeze_iters) || rhs_freeze_iters < 0L ||
@@ -1212,6 +1227,17 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   ) {
     stop("Invalid structured-VB controls.", call. = FALSE)
   }
+  if (!is.finite(min_iter) || min_iter < 1L) stop("min_iter must be positive.", call. = FALSE)
+  min_iter <- min(min_iter, max_iter)
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
+    stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 0L) {
+    stop("min_beta_updates must be nonnegative.", call. = FALSE)
+  }
+  freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, max_iter)
+  progress_every <- as.integer(progress_every %||% 0L)
+  if (!is.finite(progress_every) || progress_every < 0L) progress_every <- 0L
   if (K * p > as.integer(max_dense_dim)) {
     stop("Structured exAL VB stores dense q(beta) covariance; raise max_dense_dim deliberately.", call. = FALSE)
   }
@@ -1321,34 +1347,39 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   converged <- FALSE
   qhat_old <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) + matrix(alpha, Tn, K, byrow = TRUE)
   rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
+  beta_update_count <- 0L
   for (iter in seq_len(max_iter)) {
     global_iter <- iteration_offset + iter
     beta_old <- beta_mean
     gamma_old <- gamma
     sigma_old <- sigma_mean
-    precision <- prior$P_beta
-    rhs <- rep(0, K * p)
-    for (k in seq_len(K)) {
-      idx <- ((k - 1L) * p + 1L):(k * p)
-      m <- block_moments[[k]]
-      if (identical(augmentation, "u")) {
-        w <- m[["sigma_inv_mean"]] * latent_inv_mean[, k]
-        linear <- w * (y - alpha[[k]]) -
-          m[["lambda_mean"]] * s_mean[, k] * latent_inv_mean[, k] -
-          m[["k_sigma_inv_mean"]]
-      } else {
-        w <- m[["inv_B_sigma_mean"]] * latent_inv_mean[, k]
-        linear <- w * (y - alpha[[k]]) -
-          m[["lambda_over_B_mean"]] * s_mean[, k] * latent_inv_mean[, k] -
-          m[["A_inv_B_sigma_mean"]]
+    beta_updated <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_updated)) {
+      precision <- prior$P_beta
+      rhs <- rep(0, K * p)
+      for (k in seq_len(K)) {
+        idx <- ((k - 1L) * p + 1L):(k * p)
+        m <- block_moments[[k]]
+        if (identical(augmentation, "u")) {
+          w <- m[["sigma_inv_mean"]] * latent_inv_mean[, k]
+          linear <- w * (y - alpha[[k]]) -
+            m[["lambda_mean"]] * s_mean[, k] * latent_inv_mean[, k] -
+            m[["k_sigma_inv_mean"]]
+        } else {
+          w <- m[["inv_B_sigma_mean"]] * latent_inv_mean[, k]
+          linear <- w * (y - alpha[[k]]) -
+            m[["lambda_over_B_mean"]] * s_mean[, k] * latent_inv_mean[, k] -
+            m[["A_inv_B_sigma_mean"]]
+        }
+        Zs <- Matrix::Matrix(Z, sparse = TRUE)
+        precision[idx, idx] <- precision[idx, idx] + Matrix::t(Zs) %*% Matrix::Diagonal(x = w) %*% Zs
+        rhs[idx] <- as.numeric(Matrix::t(Zs) %*% linear)
       }
-      Zs <- Matrix::Matrix(Z, sparse = TRUE)
-      precision[idx, idx] <- precision[idx, idx] + Matrix::t(Zs) %*% Matrix::Diagonal(x = w) %*% Zs
-      rhs[idx] <- as.numeric(Matrix::t(Zs) %*% linear)
+      precision <- Matrix::forceSymmetric(precision)
+      beta_mean <- as.numeric(Matrix::solve(precision, rhs))
+      beta_cov <- solve(as.matrix(precision))
+      beta_update_count <- beta_update_count + 1L
     }
-    precision <- Matrix::forceSymmetric(precision)
-    beta_mean <- as.numeric(Matrix::solve(precision, rhs))
-    beta_cov <- solve(as.matrix(precision))
     beta_mat <- app_joint_qvp_beta_matrix(beta_mean, K, p)
     fitted_no_alpha <- Z %*% beta_mat
     beta_var <- lapply(seq_len(K), function(k) {
@@ -1477,11 +1508,18 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     beta_entropy_logdet <- 0.5 * app_joint_qvp_beta_logdet(beta_cov)
     scale_shape_log_normalizer <- sum(vapply(block_updates, `[[`, numeric(1L), "log_normalizer"))
     coordinate_monitor <- scale_shape_log_normalizer - prior_quadratic + beta_entropy_logdet
+    convergence_eligible <- iter >= min_iter &&
+      iter > freeze_beta_warmup_iters &&
+      beta_update_count >= min_beta_updates
     gamma_trace[iter, ] <- gamma
     sigma_trace[iter, ] <- sigma_mean
-    trace[[iter]] <- data.frame(
+	    trace[[iter]] <- data.frame(
       iter = iter,
       global_iter = global_iter,
+      beta_updated = isTRUE(beta_updated),
+      beta_update_count = as.integer(beta_update_count),
+      freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+      convergence_eligible = isTRUE(convergence_eligible),
       max_beta_change = max_beta_change,
       max_gamma_change = max_gamma_change,
       max_sigma_change = max_sigma_change,
@@ -1495,17 +1533,69 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
       beta_entropy_logdet = beta_entropy_logdet,
       coordinate_monitor = coordinate_monitor,
       all_quadrature_converged = all(vapply(block_updates, `[[`, logical(1L), "converged")),
-      stringsAsFactors = FALSE
-    )
-    qhat_old <- qhat
-    if (max(max_beta_change, max_gamma_change, max_sigma_change, max_qhat_change) < tol) {
-      converged <- TRUE
-      trace <- trace[seq_len(iter)]
-      rhs_trace <- rhs_trace[seq_len(iter)]
-      gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
-      sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
-      break
+	      stringsAsFactors = FALSE
+	    )
+    if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
+      app_joint_qvp_progress_append(
+        progress_path,
+        data.frame(
+          label = as.character(progress_label %||% "exal_structured_vb"),
+          iter = iter,
+          max_iter = max_iter,
+          min_iter = min_iter,
+	          converged = FALSE,
+          beta_updated = isTRUE(beta_updated),
+          beta_update_count = as.integer(beta_update_count),
+          freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+          convergence_eligible = isTRUE(convergence_eligible),
+	          max_beta_change = max_beta_change,
+          max_gamma_change = max_gamma_change,
+          max_sigma_change = max_sigma_change,
+          max_qhat_change = max_qhat_change,
+          rhs_mean_precision = mean(rhs_summary$mean_precision),
+          rhs_max_precision = max(rhs_summary$max_precision),
+          coordinate_monitor = coordinate_monitor,
+          all_quadrature_converged = all(vapply(block_updates, `[[`, logical(1L), "converged")),
+          timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+          stringsAsFactors = FALSE
+        )
+      )
     }
+	    qhat_old <- qhat
+		    if (isTRUE(convergence_eligible) && max(max_beta_change, max_gamma_change, max_sigma_change, max_qhat_change) < tol) {
+	      converged <- TRUE
+	      trace <- trace[seq_len(iter)]
+	      rhs_trace <- rhs_trace[seq_len(iter)]
+	      gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
+	      sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
+      if (progress_every > 0L) {
+        app_joint_qvp_progress_append(
+          progress_path,
+          data.frame(
+            label = as.character(progress_label %||% "exal_structured_vb"),
+            iter = iter,
+            max_iter = max_iter,
+            min_iter = min_iter,
+	            converged = TRUE,
+            beta_updated = isTRUE(beta_updated),
+            beta_update_count = as.integer(beta_update_count),
+            freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+            convergence_eligible = isTRUE(convergence_eligible),
+            max_beta_change = max_beta_change,
+            max_gamma_change = max_gamma_change,
+            max_sigma_change = max_sigma_change,
+            max_qhat_change = max_qhat_change,
+            rhs_mean_precision = mean(rhs_summary$mean_precision),
+            rhs_max_precision = max(rhs_summary$max_precision),
+            coordinate_monitor = coordinate_monitor,
+            all_quadrature_converged = all(vapply(block_updates, `[[`, logical(1L), "converged")),
+            timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+	      break
+	    }
   }
   qhat_mean <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) + matrix(alpha, Tn, K, byrow = TRUE)
   trace_df <- do.call(rbind, trace)
@@ -1548,6 +1638,8 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     scale_shape_factor = "q_gamma_q_sigma_given_gamma",
     monitor_label = "structured_cavi_coordinate_monitor_not_full_elbo",
     objective_accounting_status = "partial_missing_local_and_point_alpha_entropy",
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates),
     alpha_prior_mean = alpha_prior$mean,
     alpha_prior_sd = alpha_prior$sd,
     alpha_prior_mean_source = alpha_prior$mean_source,

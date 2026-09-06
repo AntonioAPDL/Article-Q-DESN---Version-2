@@ -902,6 +902,29 @@ app_glofas_normal_predict <- function(fit, X_new, chunk_size = NULL) {
     sd <- sqrt(pmax(sigma2 + param_var, .Machine$double.eps))
     return(list(mean = mu, sd = sd, leverage = param_var / max(sigma2, .Machine$double.eps)))
   }
+  beta_var_diag <- fit$beta_var_diag %||% NULL
+  if (!is.null(beta_var_diag) && is.null(fit$precision_inv)) {
+    beta_var_diag <- as.numeric(beta_var_diag)
+    if (length(beta_var_diag) != fit$p ||
+        any(!is.finite(beta_var_diag)) ||
+        any(beta_var_diag < 0)) {
+      stop("fit$beta_var_diag has incompatible values.", call. = FALSE)
+    }
+    chunk_size <- as.integer(chunk_size %||% nrow(X_new))
+    if (!is.finite(chunk_size) || chunk_size < 1L) chunk_size <- nrow(X_new)
+    param_var <- numeric(nrow(X_new))
+    starts <- seq.int(1L, nrow(X_new), by = chunk_size)
+    for (st in starts) {
+      en <- min(nrow(X_new), st + chunk_size - 1L)
+      Xi <- X_new[st:en, , drop = FALSE]
+      param_var[st:en] <- as.numeric((Xi^2) %*% beta_var_diag)
+    }
+    sd <- sqrt(pmax(sigma2 + param_var, .Machine$double.eps))
+    return(list(mean = mu, sd = sd, leverage = param_var / max(sigma2, .Machine$double.eps)))
+  }
+  if (is.null(fit$precision_inv)) {
+    stop("fit must contain beta_cov, beta_var_diag, or precision_inv for predictive standard deviations.", call. = FALSE)
+  }
   solved <- X_new %*% fit$precision_inv
   leverage <- rowSums(solved * X_new)
   sd <- sqrt(pmax(sigma2 * (1 + leverage), .Machine$double.eps))
@@ -1460,6 +1483,8 @@ app_glofas_normal_rhs_fit <- function(
   rhs_update_every = 1L,
   freeze_tau_warmup_iters = 0L,
   min_tau_updates = 0L,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L,
   intercept_prec = 1.0e-9,
   jitter = 1.0e-8
 ) {
@@ -1475,10 +1500,19 @@ app_glofas_normal_rhs_fit <- function(
   min_iter <- as.integer(min_iter)
   tol <- as.numeric(tol)
   tau0 <- as.numeric(tau0)
+  freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(min_beta_updates %||% 0L)
   if (!is.finite(max_iter) || max_iter < 1L) stop("max_iter must be positive.", call. = FALSE)
   if (!is.finite(min_iter) || min_iter < 1L) stop("min_iter must be positive.", call. = FALSE)
   if (!is.finite(tol) || tol < 0) stop("tol must be finite and nonnegative.", call. = FALSE)
   if (!is.finite(tau0) || tau0 <= 0) stop("tau0 must be positive.", call. = FALSE)
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
+    stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 0L) {
+    stop("min_beta_updates must be nonnegative.", call. = FALSE)
+  }
+  freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, max_iter)
   p <- ncol(X)
   n <- nrow(X)
   app_glofas_normal_part1_validate_ridge_warm_start(ridge_warm_start, strict_hash = FALSE)
@@ -1531,9 +1565,11 @@ app_glofas_normal_rhs_fit <- function(
   chol_P <- NULL
   converged <- FALSE
   final_delta <- NA_real_
+  beta_update_count <- 0L
   started <- Sys.time()
   for (iter in seq_len(max_iter)) {
     m_old <- m
+    V_old <- V
     sigma2_old <- if (sigma_a > 1) sigma_b / (sigma_a - 1) else sigma_b / sigma_a
     e_inv_sigma2 <- sigma_a / sigma_b
     prior_prec <- app_latent_rhs_prior_precision(rhs_state, p)
@@ -1544,9 +1580,17 @@ app_glofas_normal_rhs_fit <- function(
     diag(Pn) <- diag(Pn) + prior_prec
     hn <- e_inv_sigma2 * stats$Xty
     sol <- app_glofas_normal_spd_solve(Pn, hn, jitter = jitter)
-    m <- sol$x
-    V <- sol$inv
-    chol_P <- sol$chol
+    beta_updated <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_updated)) {
+      m <- sol$x
+      V <- sol$inv
+      chol_P <- sol$chol
+      beta_update_count <- beta_update_count + 1L
+    } else {
+      m <- m_old
+      V <- V_old
+      chol_P <- diag(1 / sqrt(pmax(diag(V), .Machine$double.eps)), p)
+    }
     Emm <- V + tcrossprod(m)
     sse <- stats$yty - 2 * as.numeric(crossprod(m, stats$Xty)) + sum(stats$XtX * Emm)
     sse <- max(as.numeric(sse), .Machine$double.eps)
@@ -1560,7 +1604,7 @@ app_glofas_normal_rhs_fit <- function(
       update_global = NULL
     )
     sigma2_new <- if (sigma_a > 1) sigma_b / (sigma_a - 1) else sigma_b / sigma_a
-    beta_delta <- max(abs(m - m_old))
+    beta_delta <- if (isTRUE(beta_updated)) max(abs(m - m_old)) else 0
     sigma_delta <- abs(sigma2_new - sigma2_old) / max(1, abs(sigma2_old))
     final_delta <- max(beta_delta, sigma_delta)
     diag_row <- app_glofas_normal_rhs_state_diagnostics(rhs_state, p)
@@ -1594,9 +1638,16 @@ app_glofas_normal_rhs_fit <- function(
       NA_real_
     }
     elbo_row$partial_elbo <- elbo_row$normal_rhs_partial_elbo
+    convergence_eligible <- iter >= min_iter &&
+      iter > freeze_beta_warmup_iters &&
+      beta_update_count >= min_beta_updates
     trace[[iter]] <- cbind(
       data.frame(
         iter = iter,
+        beta_updated = isTRUE(beta_updated),
+        beta_update_count = as.integer(beta_update_count),
+        freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+        convergence_eligible = isTRUE(convergence_eligible),
         sigma2_mean = sigma2_new,
         beta_max_abs_delta = beta_delta,
         sigma2_relative_delta = sigma_delta,
@@ -1608,7 +1659,7 @@ app_glofas_normal_rhs_fit <- function(
       diag_row,
       elbo_row
     )
-    if (iter >= min_iter && final_delta <= tol) {
+    if (isTRUE(convergence_eligible) && final_delta <= tol) {
       converged <- TRUE
       trace <- trace[seq_len(iter)]
       break
@@ -1630,6 +1681,8 @@ app_glofas_normal_rhs_fit <- function(
     rhs_tau0 = tau0,
     a_zeta = a_zeta,
     b_zeta = b_zeta,
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates),
     trace = trace_df,
     converged = converged,
     iterations = nrow(trace_df),

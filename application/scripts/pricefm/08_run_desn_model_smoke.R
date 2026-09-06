@@ -110,6 +110,8 @@ exact_rows <- list()
 warm_rows <- list()
 trace_rows <- list()
 parameter_rows <- list()
+normal_beta_mean_rows <- list()
+normal_beta_cov_diag_rows <- list()
 
 append_predictions <- function(method_id, split, rows, pred_mat) {
   pred_mat <- as.matrix(pred_mat)
@@ -155,6 +157,41 @@ rhs <- list(
 )
 
 normal_predict_quantiles <- function(fit, X_new, seed) {
+  predictive_mode <- tolower(as.character(
+    cfg$normal$predictive_quantile_mode %||% "posterior_mc"
+  )[1L])
+  if (identical(predictive_mode, "analytic_student_t")) {
+    if (!isTRUE(fit$misc$exact_closed_form)) {
+      stop("analytic_student_t prediction requires a closed-form scaled-Ridge fit.", call. = FALSE)
+    }
+    X_new <- as.matrix(X_new)
+    location <- as.numeric(X_new %*% fit$beta$mean)
+    leverage <- rowSums((X_new %*% fit$beta$precision_inv) * X_new)
+    scale <- sqrt(pmax(
+      (as.numeric(fit$omega2$b) / as.numeric(fit$omega2$a)) * (1 + leverage),
+      .Machine$double.eps
+    ))
+    offsets <- stats::qt(quantiles, df = 2 * as.numeric(fit$omega2$a))
+    return(sweep(outer(scale, offsets), 1L, location, `+`))
+  }
+  if (identical(predictive_mode, "analytic_normal")) {
+    X_new <- as.matrix(X_new)
+    beta_cov <- as.matrix(fit$beta$cov)
+    if (!all(dim(beta_cov) == c(ncol(X_new), ncol(X_new)))) {
+      stop("analytic_normal prediction requires a compatible beta covariance.", call. = FALSE)
+    }
+    omega2_mean <- as.numeric(fit$omega2$mean)[1L]
+    if (!is.finite(omega2_mean) || omega2_mean <= 0) {
+      stop("analytic_normal prediction requires a finite positive omega2 mean.", call. = FALSE)
+    }
+    location <- as.numeric(X_new %*% fit$beta$mean)
+    parameter_variance <- rowSums((X_new %*% beta_cov) * X_new)
+    scale <- sqrt(pmax(omega2_mean + parameter_variance, .Machine$double.eps))
+    return(sweep(outer(scale, stats::qnorm(quantiles)), 1L, location, `+`))
+  }
+  if (!identical(predictive_mode, "posterior_mc")) {
+    stop("Unsupported normal predictive_quantile_mode: ", predictive_mode, call. = FALSE)
+  }
   pred <- exdqlm::normal_desn_posterior_predict(
     fit,
     X_new = X_new,
@@ -179,6 +216,21 @@ training_cfg <- cfg$training %||% list()
 as_config_vec <- function(x, default = character()) {
   if (is.null(x)) return(default)
   as.character(unlist(x, use.names = FALSE))
+}
+
+normal_prior_types <- unique(tolower(as_config_vec(
+  cfg$normal$prior_types %||% c("scaled_ridge", "rhs_ns")
+)))
+bad_normal_prior_types <- setdiff(normal_prior_types, c("scaled_ridge", "rhs_ns"))
+if (length(bad_normal_prior_types)) {
+  stop(
+    "Unsupported normal prior type(s): ",
+    paste(bad_normal_prior_types, collapse = ", "),
+    call. = FALSE
+  )
+}
+if (normal_enabled && !length(normal_prior_types)) {
+  stop("normal prior_types must be nonempty when normal fitting is enabled.", call. = FALSE)
 }
 
 tau_key <- function(tau) sprintf("%.12g", as.numeric(tau))
@@ -322,12 +374,17 @@ if (qdesn_weighting_enabled) {
   y_q_train <- y_train
   rows_q_train <- rows_train
 }
-qdesn_likelihoods <- unique(tolower(as_config_vec(cfg$qdesn_vb$likelihoods %||% c("al", "exal"))))
+qdesn_enabled <- if (is.null(cfg$qdesn_vb$enabled)) TRUE else isTRUE(cfg$qdesn_vb$enabled)
+qdesn_likelihoods <- if (qdesn_enabled) {
+  unique(tolower(as_config_vec(cfg$qdesn_vb$likelihoods %||% c("al", "exal"))))
+} else {
+  character()
+}
 bad_likelihoods <- setdiff(qdesn_likelihoods, c("al", "exal"))
 if (length(bad_likelihoods)) {
   stop("Unsupported qdesn_vb likelihood(s): ", paste(bad_likelihoods, collapse = ", "), call. = FALSE)
 }
-if (!length(qdesn_likelihoods)) {
+if (qdesn_enabled && !length(qdesn_likelihoods)) {
   stop("qdesn_vb likelihoods must be nonempty.", call. = FALSE)
 }
 qdesn_readout_modes <- unique(tolower(as_config_vec(cfg$qdesn_vb$readout_modes %||% "shared_static")))
@@ -636,6 +693,18 @@ fit_normal <- function(method_id, prior_type) {
     tau = NA_real_,
     fit = fit
   )
+  normal_beta_mean_rows[[length(normal_beta_mean_rows) + 1L]] <<- data.frame(
+    method_id = method_id,
+    feature_index = seq_along(fit$beta$mean),
+    beta_mean = as.numeric(fit$beta$mean),
+    stringsAsFactors = FALSE
+  )
+  normal_beta_cov_diag_rows[[length(normal_beta_cov_diag_rows) + 1L]] <<- data.frame(
+    method_id = method_id,
+    feature_index = seq_along(fit$beta$mean),
+    beta_cov_diag = as.numeric(diag(as.matrix(fit$beta$cov))),
+    stringsAsFactors = FALSE
+  )
   if (warm_record_diagnostics && identical(prior_type, "rhs_ns")) {
     append_warm(
       method_id = method_id,
@@ -897,6 +966,7 @@ fit_qdesn_horizon_separate <- function(likelihood, shared_fits) {
 
 run_nested_validation <- function() {
   nested_cfg <- cfg$nested_validation %||% list(enabled = FALSE)
+  if (!qdesn_enabled) return(invisible(NULL))
   if (!isTRUE(nested_cfg$enabled %||% FALSE)) return(invisible(NULL))
   nested <- pricefm_build_nested_temporal_folds(
     rows_train,
@@ -1215,6 +1285,7 @@ run_nested_validation <- function() {
 }
 
 run_exact_equivalence <- function() {
+  if (!qdesn_enabled) return(invisible(NULL))
   spec <- cfg$exact_equivalence
   if (!isTRUE(spec$enabled)) return(invisible(NULL))
   n_eq <- min(as.integer(spec$train_rows %||% 600L), nrow(X_train))
@@ -1243,8 +1314,12 @@ run_exact_equivalence <- function() {
 
 normal_fits <- list()
 if (normal_enabled) {
-  normal_fits$normal_scaled_ridge <- fit_normal("normal_scaled_ridge", "scaled_ridge")
-  normal_fits$normal_rhs_ns <- fit_normal("normal_rhs_ns", "rhs_ns")
+  if ("scaled_ridge" %in% normal_prior_types) {
+    normal_fits$normal_scaled_ridge <- fit_normal("normal_scaled_ridge", "scaled_ridge")
+  }
+  if ("rhs_ns" %in% normal_prior_types) {
+    normal_fits$normal_rhs_ns <- fit_normal("normal_rhs_ns", "rhs_ns")
+  }
 }
 run_exact_equivalence()
 run_nested_validation()
@@ -1279,6 +1354,16 @@ if (length(trace_rows)) {
 if (length(parameter_rows)) {
   utils::write.csv(do.call(rbind, parameter_rows), file.path(out_dir, "model_parameter_summary.csv"), row.names = FALSE)
 }
+if (length(normal_beta_mean_rows)) {
+  utils::write.csv(do.call(rbind, normal_beta_mean_rows), file.path(out_dir, "normal_beta_mean.csv"), row.names = FALSE)
+}
+if (length(normal_beta_cov_diag_rows)) {
+  utils::write.csv(
+    do.call(rbind, normal_beta_cov_diag_rows),
+    file.path(out_dir, "normal_beta_cov_diag.csv"),
+    row.names = FALSE
+  )
+}
 
 write_json(file.path(out_dir, "run_manifest.json"), list(
   config = cfg_path,
@@ -1289,6 +1374,10 @@ write_json(file.path(out_dir, "run_manifest.json"), list(
   horizons = horizons,
   configured_splits = configured_splits,
   evaluation_splits = evaluation_splits,
+  normal_enabled = normal_enabled,
+  normal_prior_types = normal_prior_types,
+  normal_predictive_quantile_mode = cfg$normal$predictive_quantile_mode %||% "posterior_mc",
+  qdesn_enabled = qdesn_enabled,
   qdesn_likelihoods = qdesn_likelihoods,
   qdesn_readout_modes = qdesn_readout_modes,
   horizon_readout = list(

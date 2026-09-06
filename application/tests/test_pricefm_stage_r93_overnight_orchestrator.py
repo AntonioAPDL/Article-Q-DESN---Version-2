@@ -79,3 +79,20 @@ def test_controller_contract_stops_before_test_and_downstream_mutations():
     assert "wait_for_resources" in text
     assert "quarantine_partial" in text
     assert '"OMP_NUM_THREADS": "1"' in text
+    assert '"--accept-coarse-winner-without-refinement", "true"' in text
+    assert '"--expected-coarse-winner-id"' in text
+    assert '"--expected-coarse-winner-tau0"' in text
+
+
+def test_coarse_acceptance_is_bound_to_an_expected_winner():
+    module = load_script()
+    args = module.parser().parse_args([
+        "--approval-token", module.APPROVAL_TOKEN,
+        "--expected-code-head", "fixture",
+        "--accept-coarse-winner-without-refinement",
+        "--expected-coarse-winner-id", "r93_winner",
+        "--expected-coarse-winner-tau0", "0.01",
+    ])
+    assert args.accept_coarse_winner_without_refinement is True
+    assert args.expected_coarse_winner_id == "r93_winner"
+    assert args.expected_coarse_winner_tau0 == pytest.approx(0.01)

@@ -64,6 +64,60 @@ def test_conditional_tau0_refinement_is_bounded_and_data_dependent():
     assert decision["reason"] == "interior_tau0_with_clear_margin"
 
 
+def test_refinement_separates_structural_presence_from_numerical_eligibility():
+    module = load_script()
+    ranked = ranked_tau0([
+        {"experiment_id": "high", "parent_ridge_candidate_id": "g", "tau0": 1e-2,
+         "median_validation_AQL": 1.0},
+        {"experiment_id": "low", "parent_ridge_candidate_id": "g", "tau0": 1e-4,
+         "median_validation_AQL": 1.001},
+        {"experiment_id": "middle", "parent_ridge_candidate_id": "g", "tau0": 1e-3,
+         "median_validation_AQL": 1.02},
+    ])
+    ranked.loc[ranked.experiment_id.eq("middle"), "selection_eligible"] = False
+
+    decision = module.refinement_decision(ranked, 0.01)
+
+    assert decision["winning_experiment_id"] == "high"
+    assert decision["coarse_surface_structurally_complete"] is True
+    assert decision["coarse_surface_arm_count"] == 3
+    assert decision["coarse_surface_eligible_arm_count"] == 2
+    assert decision["coarse_surface_ineligible_experiment_ids"] == ["middle"]
+    assert "coarse_tau0_numerically_incomplete" in decision["refinement_triggers"]
+
+
+def test_exact_coarse_winner_can_be_accepted_without_changing_selection():
+    module = load_script()
+    decision = {
+        "winning_experiment_id": "winner",
+        "winning_tau0": 0.01,
+        "refinement_required": True,
+        "reason": "coarse_tau0_boundary",
+    }
+
+    amended = module.apply_coarse_winner_acceptance(
+        decision,
+        accepted=True,
+        expected_winner_id="winner",
+        expected_winner_tau0=0.01,
+    )
+
+    assert amended["pre_registered_refinement_required"] is True
+    assert amended["pre_registered_refinement_reason"] == "coarse_tau0_boundary"
+    assert amended["refinement_required"] is False
+    assert amended["protocol_amendment"] is True
+    assert amended["selection_changed_by_amendment"] is False
+    assert amended["test_evidence_consulted"] is False
+
+    with pytest.raises(RuntimeError, match="ID does not match"):
+        module.apply_coarse_winner_acceptance(
+            decision,
+            accepted=True,
+            expected_winner_id="different",
+            expected_winner_tau0=0.01,
+        )
+
+
 def make_quantile_closeout(tmp_path: Path, *, exal_eligible=True, add_test=False):
     module = load_script()
     output = tmp_path / "output"

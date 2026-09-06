@@ -50,6 +50,12 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--resource-timeout-seconds", type=int, default=30 * 60)
     p.add_argument("--code-root", type=Path, default=Path.cwd())
     p.add_argument("--expected-code-head", required=True)
+    p.add_argument(
+        "--accept-coarse-winner-without-refinement",
+        action="store_true",
+    )
+    p.add_argument("--expected-coarse-winner-id", default="")
+    p.add_argument("--expected-coarse-winner-tau0", type=float)
     p.add_argument("--output-root", type=Path, default=OUTPUT)
     p.add_argument("--log", type=Path, default=LOG)
     return p
@@ -133,6 +139,11 @@ class Controller:
             "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "code_root": str(self.code_root), "expected_code_head": args.expected_code_head,
             "cpu_ids": parse_cpu_list(args.cpu_list), "workers": args.workers,
+            "accept_coarse_winner_without_refinement": bool(
+                args.accept_coarse_winner_without_refinement
+            ),
+            "expected_coarse_winner_id": str(args.expected_coarse_winner_id),
+            "expected_coarse_winner_tau0": args.expected_coarse_winner_tau0,
             "test_opened": False, "registry_mutated": False,
             "article_mutated": False, "joint_or_mcmc_authorized": False,
             "history": [],
@@ -233,6 +244,13 @@ class Controller:
             raise RuntimeError(f"selected CPU exceeds host count {total}")
         if not PYTHON.is_file() or not R_SCRIPT.is_file():
             raise FileNotFoundError("pinned PriceFM Python or Rscript is absent")
+        if self.args.accept_coarse_winner_without_refinement and (
+            not self.args.expected_coarse_winner_id
+            or self.args.expected_coarse_winner_tau0 is None
+        ):
+            raise RuntimeError(
+                "coarse-winner acceptance requires the expected winner ID and tau0"
+            )
         head = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=self.code_root, text=True
         ).strip()
@@ -329,9 +347,18 @@ class Controller:
         summary_path = self.output / stage_dir / "summary.json"
         if not summary_path.is_file():
             self.quarantine_partial(self.output / stage_dir, action)
+            command = [PYTHON, ADVANCE, action, "--output-root", self.output]
+            if action == "close-rhs" and self.args.accept_coarse_winner_without_refinement:
+                command.extend([
+                    "--accept-coarse-winner-without-refinement", "true",
+                    "--expected-coarse-winner-id",
+                    self.args.expected_coarse_winner_id,
+                    "--expected-coarse-winner-tau0",
+                    self.args.expected_coarse_winner_tau0,
+                ])
             self.command(
                 action,
-                [PYTHON, ADVANCE, action, "--output-root", self.output],
+                command,
             )
         summary = json.loads(summary_path.read_text())
         if not str(summary.get("status", "")).startswith(("completed", "validation_family_frozen")):

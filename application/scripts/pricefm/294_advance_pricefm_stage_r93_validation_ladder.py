@@ -86,6 +86,13 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--inner-folds", default="101,102,103")
     p.add_argument("--expected-coarse-arms", type=int, default=90)
     p.add_argument("--refinement-relative-gap", type=float, default=0.01)
+    p.add_argument(
+        "--accept-coarse-winner-without-refinement",
+        type=parse_bool,
+        default=False,
+    )
+    p.add_argument("--expected-coarse-winner-id", default="")
+    p.add_argument("--expected-coarse-winner-tau0", type=float)
     p.add_argument("--force", type=parse_bool, default=False)
     p.add_argument("--allow-fixture-counts", action="store_true")
     return p
@@ -264,35 +271,110 @@ def refinement_decision(
     if eligible.empty:
         raise RuntimeError("no converged normal-RHS arm is selection-eligible")
     winner = eligible.iloc[0]
-    geometry = eligible[
-        eligible.parent_ridge_candidate_id.astype(str).eq(
+    structural_geometry = ranked[
+        ranked.parent_ridge_candidate_id.astype(str).eq(
             str(winner.parent_ridge_candidate_id)
         )
     ].sort_values("median_validation_AQL")
-    if len(geometry) != len(coarse_tau0):
+    observed_tau0 = pd.to_numeric(
+        structural_geometry.tau0, errors="coerce"
+    ).tolist()
+    structurally_complete = (
+        len(structural_geometry) == len(coarse_tau0)
+        and all(math.isfinite(value) for value in observed_tau0)
+        and all(
+            sum(math.isclose(value, expected) for value in observed_tau0) == 1
+            for expected in coarse_tau0
+        )
+    )
+    if not structurally_complete:
         raise RuntimeError("winning geometry lacks the complete coarse tau0 surface")
-    best = float(geometry.iloc[0].median_validation_AQL)
-    second = float(geometry.iloc[1].median_validation_AQL)
-    relative_gap = (second - best) / max(abs(best), np.finfo(float).eps)
+
+    geometry = structural_geometry[
+        structural_geometry.selection_eligible.map(bool)
+    ].sort_values("median_validation_AQL")
+    best = float(winner.median_validation_AQL)
+    if len(geometry) >= 2:
+        second = float(geometry.iloc[1].median_validation_AQL)
+        relative_gap = (second - best) / max(abs(best), np.finfo(float).eps)
+        near_tie = relative_gap <= threshold
+    else:
+        relative_gap = None
+        near_tie = False
     winning_tau0 = float(winner.tau0)
     boundary = math.isclose(winning_tau0, min(coarse_tau0)) or math.isclose(
         winning_tau0, max(coarse_tau0)
     )
-    required = bool(boundary or relative_gap <= threshold)
+    numerically_incomplete = len(geometry) != len(coarse_tau0)
+    triggers = []
+    if boundary:
+        triggers.append("coarse_tau0_boundary")
+    if near_tie:
+        triggers.append("coarse_tau0_near_tie")
+    if numerically_incomplete:
+        triggers.append("coarse_tau0_numerically_incomplete")
+    required = bool(triggers)
     return {
         "refinement_required": required,
-        "reason": (
-            "coarse_tau0_boundary" if boundary else
-            "coarse_tau0_near_tie" if required else
-            "interior_tau0_with_clear_margin"
-        ),
+        "reason": triggers[0] if triggers else "interior_tau0_with_clear_margin",
+        "refinement_triggers": triggers,
         "winning_experiment_id": str(winner.experiment_id),
         "parent_ridge_candidate_id": str(winner.parent_ridge_candidate_id),
         "winning_tau0": winning_tau0,
         "winning_median_validation_AQL": best,
         "same_geometry_second_best_relative_gap": relative_gap,
         "relative_gap_threshold": float(threshold),
+        "coarse_surface_structurally_complete": structurally_complete,
+        "coarse_surface_arm_count": int(len(structural_geometry)),
+        "coarse_surface_eligible_arm_count": int(len(geometry)),
+        "coarse_surface_ineligible_experiment_ids": structural_geometry.loc[
+            ~structural_geometry.selection_eligible.map(bool), "experiment_id"
+        ].astype(str).tolist(),
     }
+
+
+def apply_coarse_winner_acceptance(
+    decision: dict[str, Any],
+    *,
+    accepted: bool,
+    expected_winner_id: str,
+    expected_winner_tau0: float | None,
+) -> dict[str, Any]:
+    if not accepted:
+        return decision
+    if not expected_winner_id or expected_winner_tau0 is None:
+        raise RuntimeError(
+            "coarse-winner acceptance requires the expected winner ID and tau0"
+        )
+    if str(decision["winning_experiment_id"]) != str(expected_winner_id):
+        raise RuntimeError("coarse-winner acceptance ID does not match the selected arm")
+    if not math.isclose(
+        float(decision["winning_tau0"]),
+        float(expected_winner_tau0),
+        rel_tol=1e-12,
+        abs_tol=0.0,
+    ):
+        raise RuntimeError("coarse-winner acceptance tau0 does not match the selected arm")
+
+    amended = copy.deepcopy(decision)
+    amended.update({
+        "pre_registered_refinement_required": bool(
+            decision["refinement_required"]
+        ),
+        "pre_registered_refinement_reason": str(decision["reason"]),
+        "refinement_required": False,
+        "reason": "explicit_coarse_winner_acceptance_without_refinement",
+        "protocol_amendment": True,
+        "protocol_amendment_scope": "normal_rhs_tau0_refinement_only",
+        "protocol_amendment_rationale": (
+            "accept the fully converged coarse validation winner; the planned "
+            "refinement does not bracket the upper-boundary winner and would "
+            "add normal-likelihood tuning before the target quantile fit"
+        ),
+        "selection_changed_by_amendment": False,
+        "test_evidence_consulted": False,
+    })
+    return amended
 
 
 def experiment_map(grid_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -666,6 +748,12 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
     if len(cells) != len(arms) * len(folds):
         raise RuntimeError("coarse RHS cell surface is incomplete")
     decision = refinement_decision(ranked, args.refinement_relative_gap)
+    decision = apply_coarse_winner_acceptance(
+        decision,
+        accepted=bool(args.accept_coarse_winner_without_refinement),
+        expected_winner_id=str(args.expected_coarse_winner_id),
+        expected_winner_tau0=args.expected_coarse_winner_tau0,
+    )
     winner = ranked[ranked.selection_eligible.map(bool)].iloc[0]
     write_csv(stage / "pricefm_stage_r93_rhs_coarse_cell_metrics.csv", cells)
     write_csv(stage / "pricefm_stage_r93_rhs_coarse_ranking.csv", ranked)
@@ -680,6 +768,18 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         next_action = "launch_refinement"
     else:
         final_contract = selected_contract(winner, grid_path)
+        final_contract.update({
+            "tau0_selection_resolution": str(decision["reason"]),
+            "coarse_winner_acceptance_without_refinement": bool(
+                args.accept_coarse_winner_without_refinement
+            ),
+            "pre_registered_refinement_required": bool(
+                decision.get("pre_registered_refinement_required", False)
+            ),
+            "selection_changed_by_protocol_amendment": bool(
+                decision.get("selection_changed_by_amendment", False)
+            ),
+        })
         next_grid, contract_path, _ = build_outer_grid(
             grid_path, final_contract, stage, args.outer_generated_root,
             args.outer_run_root, args.outer_processed_root,
@@ -697,6 +797,9 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         "winner_tau0": float(winner.tau0),
         "winner_median_validation_AQL": float(winner.median_validation_AQL),
         "refinement": decision,
+        "coarse_winner_acceptance_without_refinement": bool(
+            args.accept_coarse_winner_without_refinement
+        ),
         "next_action": next_action, "next_grid": str(next_grid),
         "next_manifest": str(next_manifest),
         "test_opened": False, "registry_mutated": False, "article_mutated": False,

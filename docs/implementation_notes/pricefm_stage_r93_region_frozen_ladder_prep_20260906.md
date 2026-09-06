@@ -99,3 +99,7 @@ results exist, the second script refuses partial/nonconverged surfaces, rejects
 any test-row contamination, applies the deterministic top-30 selector, and
 materializes the 30-by-3 coarse normal-RHS grid. Both grids carry false launch
 authorization. Registry, article, MCMC, joint fitting, and launch remain blocked.
+
+The validated continuation implementation and overnight operating contract are
+documented in
+`docs/implementation_notes/pricefm_stage_r93_overnight_validation_ladder_20260906.md`.

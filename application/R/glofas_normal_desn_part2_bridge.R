@@ -702,7 +702,8 @@ app_glofas_normal_part2_score_from_fits <- function(
   rhs_tau0_reference = NA_real_,
   rhs_tau0_discrepancy = NA_real_,
   trace = NULL,
-  activity = NULL
+  activity = NULL,
+  coefficients = NULL
 ) {
   train_idx <- split$train_idx
   valid_idx <- split$valid_idx
@@ -811,6 +812,7 @@ app_glofas_normal_part2_score_from_fits <- function(
     detail = detail,
     trace = trace %||% data.frame(),
     activity = activity %||% data.frame(),
+    coefficients = coefficients %||% data.frame(),
     reference_fit = reference_fit,
     discrepancy_fit = discrepancy_fit,
     design = design
@@ -875,6 +877,8 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
   update_every <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_update_every", 1L))
   freeze_tau <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_freeze_tau_warmup_iters", 0L))
   min_tau_updates <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_min_tau_updates", 0L))
+  freeze_beta <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_freeze_beta_warmup_iters", 0L))
+  min_beta_updates <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_min_beta_updates", 0L))
   ref_fit <- app_glofas_normal_rhs_fit(
     X = design$reference$X[split$train_idx, , drop = FALSE],
     y = design$reference$y[split$train_idx],
@@ -885,7 +889,9 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
     tol = tol,
     rhs_update_every = update_every,
     freeze_tau_warmup_iters = freeze_tau,
-    min_tau_updates = min_tau_updates
+    min_tau_updates = min_tau_updates,
+    freeze_beta_warmup_iters = freeze_beta,
+    min_beta_updates = min_beta_updates
   )
   disc_fit <- app_glofas_normal_rhs_fit(
     X = design$discrepancy$X[split$train_idx, , drop = FALSE],
@@ -897,7 +903,9 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
     tol = tol,
     rhs_update_every = update_every,
     freeze_tau_warmup_iters = freeze_tau,
-    min_tau_updates = min_tau_updates
+    min_tau_updates = min_tau_updates,
+    freeze_beta_warmup_iters = freeze_beta,
+    min_beta_updates = min_beta_updates
   )
   ref_trace <- ref_fit$trace
   disc_trace <- disc_fit$trace
@@ -927,7 +935,8 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
     rhs_tau0_reference = tau0_reference,
     rhs_tau0_discrepancy = tau0_discrepancy,
     trace = trace,
-    activity = activity
+    activity = activity,
+    coefficients = app_bind_rows_fill(list(ref_coef, disc_coef))
   )
 }
 
@@ -1169,6 +1178,56 @@ app_glofas_normal_part2_collect_scores <- function(root) {
       value = TRUE
     )
     for (nm in numeric_cols) summaries[[nm]] <- suppressWarnings(as.numeric(summaries[[nm]]))
+    status <- if ("status" %in% names(summaries)) as.character(summaries$status) else rep(NA_character_, nrow(summaries))
+    completed <- status == "completed"
+    score_col <- intersect(c("corrected_valid_mean_crps", "valid_mean_crps", "ridge_corrected_valid_mean_crps"), names(summaries))[1L]
+    id_col <- intersect(c("rhs_candidate_id", "candidate_id"), names(summaries))[1L]
+    id_sort <- if (length(id_col) && !is.na(id_col)) as.character(summaries[[id_col]]) else rep("", nrow(summaries))
+    if (length(score_col) && !is.na(score_col)) {
+      score <- suppressWarnings(as.numeric(summaries[[score_col]]))
+      score_sort <- ifelse(completed & is.finite(score), score, Inf)
+      ord <- order(!completed, score_sort, id_sort)
+      summaries <- summaries[ord, , drop = FALSE]
+      status <- status[ord]
+      score <- score[ord]
+      completed <- status == "completed"
+      ranks <- rep(NA_integer_, nrow(summaries))
+      ok <- completed & is.finite(score)
+      ranks[ok] <- rank(score[ok], ties.method = "first")
+      summaries$rank_corrected_valid_crps <- ranks
+    } else {
+      ord <- order(!completed, id_sort)
+      summaries <- summaries[ord, , drop = FALSE]
+      summaries$rank_corrected_valid_crps <- NA_integer_
+      completed <- if ("status" %in% names(summaries)) as.character(summaries$status) == "completed" else rep(FALSE, nrow(summaries))
+    }
+    if ("discrepancy_valid_mean_crps" %in% names(summaries)) {
+      completed <- if ("status" %in% names(summaries)) as.character(summaries$status) == "completed" else rep(FALSE, nrow(summaries))
+      discrepancy_score <- suppressWarnings(as.numeric(summaries$discrepancy_valid_mean_crps))
+      ranks <- rep(NA_integer_, nrow(summaries))
+      ok <- completed & is.finite(discrepancy_score)
+      ranks[ok] <- rank(discrepancy_score[ok], ties.method = "first")
+      summaries$rank_discrepancy_valid_crps <- ranks
+    }
+  }
+  app_write_csv(summaries, file.path(root, "tables", "part2_ridge_scores_latest.csv"))
+  app_write_csv(details, file.path(root, "tables", "part2_ridge_validation_detail_latest.csv"))
+  summaries
+}
+
+app_glofas_normal_part2_collect_rhs_scores <- function(root) {
+  root <- normalizePath(root, mustWork = TRUE)
+  score_files <- list.files(file.path(root, "scores"), pattern = "_rhs_summary[.]csv$", full.names = TRUE)
+  detail_files <- list.files(file.path(root, "scores"), pattern = "_rhs_validation_detail[.]csv$", full.names = TRUE)
+  summaries <- app_bind_rows_fill(lapply(score_files, app_read_csv))
+  details <- app_bind_rows_fill(lapply(detail_files, app_read_csv))
+  if (nrow(summaries)) {
+    numeric_cols <- grep(
+      "(_crps|_mae|_rmse|_mean_sd|_abs_error|runtime_seconds|n_|alpha|rho|tau0|iterations|effective_tau|elbo)",
+      names(summaries),
+      value = TRUE
+    )
+    for (nm in numeric_cols) summaries[[nm]] <- suppressWarnings(as.numeric(summaries[[nm]]))
     summaries <- summaries[order(summaries$status != "completed", summaries$valid_mean_crps), , drop = FALSE]
     summaries$rank_corrected_valid_crps <- seq_len(nrow(summaries))
     if ("discrepancy_valid_mean_crps" %in% names(summaries)) {
@@ -1178,7 +1237,7 @@ app_glofas_normal_part2_collect_scores <- function(root) {
       summaries$rank_discrepancy_valid_crps <- ranks
     }
   }
-  app_write_csv(summaries, file.path(root, "tables", "part2_ridge_scores_latest.csv"))
-  app_write_csv(details, file.path(root, "tables", "part2_ridge_validation_detail_latest.csv"))
+  app_write_csv(summaries, file.path(root, "tables", "part2_rhs_scores_latest.csv"))
+  app_write_csv(details, file.path(root, "tables", "part2_rhs_validation_detail_latest.csv"))
   summaries
 }

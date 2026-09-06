@@ -12427,6 +12427,23 @@ app_joint_qvp_restore_rhs_vb_state <- function(rhs_state, K, p, fallback) {
   stats::setNames(restored, expected)
 }
 
+app_joint_qvp_progress_append <- function(path, row) {
+  if (is.null(path) || !nzchar(as.character(path[[1L]]))) return(invisible(FALSE))
+  path <- as.character(path[[1L]])
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  row <- as.data.frame(row, stringsAsFactors = FALSE)
+  utils::write.table(
+    row,
+    file = path,
+    append = file.exists(path),
+    sep = ",",
+    row.names = FALSE,
+    col.names = !file.exists(path),
+    qmethod = "double"
+  )
+  invisible(TRUE)
+}
+
 app_joint_qvp_alpha_prior_spec <- function(y, tau, alpha_prior_mean = NULL, alpha_prior_sd = Inf) {
   y <- as.numeric(y)
   tau <- app_joint_qvp_validate_tau_grid(tau)
@@ -14618,6 +14635,7 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   tau,
   max_iter = 100L,
   tol = 1.0e-5,
+  min_iter = 1L,
   kappa = 1,
   tau0 = 1,
   zeta2 = Inf,
@@ -14635,7 +14653,12 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   max_dense_dim = 300L,
   rhs_vb_inner = 5L,
   rhs_freeze_iters = 0L,
-  init = NULL
+  init = NULL,
+  progress_path = NULL,
+  progress_every = 0L,
+  progress_label = NULL,
+  freeze_beta_warmup_iters = 0L,
+  min_beta_updates = 0L
 ) {
   y <- as.numeric(y)
   Z <- app_joint_qvp_check_design(Z)
@@ -14645,7 +14668,19 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   p <- ncol(Z)
   if (nrow(Z) != Tn) stop("length(y) must match nrow(Z).", call. = FALSE)
   max_iter <- as.integer(max_iter)
+  min_iter <- as.integer(min_iter)
+  freeze_beta_warmup_iters <- as.integer(freeze_beta_warmup_iters %||% 0L)
+  min_beta_updates <- as.integer(min_beta_updates %||% 0L)
   if (max_iter <= 0L || !is.finite(tol) || tol <= 0) stop("Invalid VB controls.", call. = FALSE)
+  if (!is.finite(min_iter) || min_iter < 1L) stop("min_iter must be positive.", call. = FALSE)
+  min_iter <- min(min_iter, max_iter)
+  if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
+    stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(min_beta_updates) || min_beta_updates < 0L) {
+    stop("min_beta_updates must be nonnegative.", call. = FALSE)
+  }
+  freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, max_iter)
   if (!is.finite(kappa) || kappa <= 0) stop("kappa must be positive.", call. = FALSE)
   rhs_vb_inner <- as.integer(rhs_vb_inner)
   if (rhs_vb_inner <= 0L) stop("rhs_vb_inner must be positive.", call. = FALSE)
@@ -14653,25 +14688,28 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   if (length(rhs_freeze_iters) != 1L || is.na(rhs_freeze_iters) || rhs_freeze_iters < 0L) {
     stop("rhs_freeze_iters must be a nonnegative integer.", call. = FALSE)
   }
+  progress_every <- as.integer(progress_every %||% 0L)
+  if (!is.finite(progress_every) || progress_every < 0L) progress_every <- 0L
   if (K * p > max_dense_dim) {
     stop("Tiny AL-VB prototype stores dense q(beta) covariance; reduce dimensions or raise max_dense_dim deliberately.", call. = FALSE)
   }
+  raw_init <- init
+  normalized_init <- app_joint_qvp_normalize_init(raw_init, K, p)
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
-  normalized_init <- app_joint_qvp_normalize_init(init, K, p)
   default_rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
     anchor_init_tau = anchor_init_tau, innovation_init_tau = innovation_init_tau,
     anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
   )
-  rhs_state <- app_joint_qvp_restore_rhs_vb_state(init$rhs_state %||% NULL, K, p, default_rhs_state)
+  rhs_state <- app_joint_qvp_restore_rhs_vb_state(raw_init$rhs_state %||% NULL, K, p, default_rhs_state)
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
   beta_mean <- normalized_init$beta %||% rep(0, K * p)
   default_beta_cov <- solve(as.matrix(prior$P_beta + Matrix::Diagonal(K * p) * 1.0e-8))
-  beta_cov <- if (!is.null(init$beta_cov)) {
-    value <- as.matrix(init$beta_cov)
+  beta_cov <- if (!is.null(raw_init$beta_cov)) {
+    value <- as.matrix(raw_init$beta_cov)
     if (!identical(dim(value), c(K * p, K * p)) || any(!is.finite(value))) {
       stop("Initial beta covariance is incompatible.", call. = FALSE)
     }
@@ -14679,12 +14717,12 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   } else default_beta_cov
   alpha <- normalized_init$alpha %||% sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
   default_sigma_shape <- rep(a_sigma + 1.5 * kappa * Tn, K)
-  sigma_shape <- if (!is.null(init$sigma_shape)) as.numeric(init$sigma_shape) else default_sigma_shape
+  sigma_shape <- if (!is.null(raw_init$sigma_shape)) as.numeric(raw_init$sigma_shape) else default_sigma_shape
   if (length(sigma_shape) != K || any(!is.finite(sigma_shape)) || any(sigma_shape <= 1)) {
     stop("Initial sigma shape is incompatible.", call. = FALSE)
   }
-  sigma_rate <- if (!is.null(init$sigma_rate)) {
-    as.numeric(init$sigma_rate)
+  sigma_rate <- if (!is.null(raw_init$sigma_rate)) {
+    as.numeric(raw_init$sigma_rate)
   } else if (!is.null(normalized_init$sigma)) {
     normalized_init$sigma * (sigma_shape - 1)
   } else {
@@ -14701,9 +14739,25 @@ app_joint_qvp_fit_al_vb_tiny <- function(
     }
     value
   }
-  v_mean <- restore_matrix(init$v_mean %||% NULL, matrix(1, nrow = Tn, ncol = K), "v_mean")
-  v_inv_mean <- restore_matrix(init$v_inv_mean %||% NULL, matrix(1, nrow = Tn, ncol = K), "v_inv_mean")
-  iteration_offset <- as.integer(init$iterations_completed %||% 0L)
+  default_v_mean <- matrix(1, nrow = Tn, ncol = K)
+  default_v_inv_mean <- matrix(1, nrow = Tn, ncol = K)
+  if (!is.null(normalized_init) &&
+      (!is.null(normalized_init$beta) || !is.null(normalized_init$alpha) || !is.null(normalized_init$sigma))) {
+    beta_mat_init <- app_joint_qvp_beta_matrix(beta_mean, K, p)
+    fitted_init <- Z %*% beta_mat_init
+    sigma_inv_init <- sigma_shape / sigma_rate
+    for (k in seq_len(K)) {
+      r_init <- y - alpha[[k]] - fitted_init[, k]
+      chi_init <- kappa * sigma_inv_init[[k]] * pmax(r_init^2, .Machine$double.eps) / constants$B[[k]]
+      psi_init <- kappa * sigma_inv_init[[k]] * (constants$A[[k]]^2 / constants$B[[k]] + 2)
+      lambda_v <- 1 - kappa / 2
+      default_v_mean[, k] <- app_joint_qvp_gig_moment(lambda_v, chi_init, psi_init, 1)
+      default_v_inv_mean[, k] <- app_joint_qvp_gig_moment(lambda_v, chi_init, psi_init, -1)
+    }
+  }
+  v_mean <- restore_matrix(raw_init$v_mean %||% NULL, default_v_mean, "v_mean")
+  v_inv_mean <- restore_matrix(raw_init$v_inv_mean %||% NULL, default_v_inv_mean, "v_inv_mean")
+  iteration_offset <- as.integer(raw_init$iterations_completed %||% 0L)
   if (length(iteration_offset) != 1L || is.na(iteration_offset) || iteration_offset < 0L) {
     stop("Initial iterations_completed must be a nonnegative integer.", call. = FALSE)
   }
@@ -14715,23 +14769,28 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   colnames(sigma_trace) <- paste0("tau_", seq_len(K))
   rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
   converged <- FALSE
+  beta_update_count <- 0L
   for (iter in seq_len(max_iter)) {
     global_iter <- iteration_offset + iter
     beta_old <- beta_mean
     sigma_inv <- sigma_shape / sigma_rate
-    precision <- prior$P_beta
-    rhs <- rep(0, K * p)
-    for (k in seq_len(K)) {
-      idx_beta <- ((k - 1L) * p + 1L):(k * p)
-      w <- kappa * sigma_inv[[k]] * v_inv_mean[, k] / constants$B[[k]]
-      precision[idx_beta, idx_beta] <- precision[idx_beta, idx_beta] + Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*% Matrix::Diagonal(x = w) %*% Matrix::Matrix(Z, sparse = TRUE)
-      rhs[idx_beta] <- as.numeric(Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*%
-        (kappa * sigma_inv[[k]] / constants$B[[k]] *
-           (v_inv_mean[, k] * (y - alpha[[k]]) - constants$A[[k]])))
+    beta_updated <- iter > freeze_beta_warmup_iters
+    if (isTRUE(beta_updated)) {
+      precision <- prior$P_beta
+      rhs <- rep(0, K * p)
+      for (k in seq_len(K)) {
+        idx_beta <- ((k - 1L) * p + 1L):(k * p)
+        w <- kappa * sigma_inv[[k]] * v_inv_mean[, k] / constants$B[[k]]
+        precision[idx_beta, idx_beta] <- precision[idx_beta, idx_beta] + Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*% Matrix::Diagonal(x = w) %*% Matrix::Matrix(Z, sparse = TRUE)
+        rhs[idx_beta] <- as.numeric(Matrix::t(Matrix::Matrix(Z, sparse = TRUE)) %*%
+          (kappa * sigma_inv[[k]] / constants$B[[k]] *
+             (v_inv_mean[, k] * (y - alpha[[k]]) - constants$A[[k]])))
+      }
+      precision <- Matrix::forceSymmetric(precision)
+      beta_mean <- as.numeric(Matrix::solve(precision, rhs))
+      beta_cov <- solve(as.matrix(precision))
+      beta_update_count <- beta_update_count + 1L
     }
-    precision <- Matrix::forceSymmetric(precision)
-    beta_mean <- as.numeric(Matrix::solve(precision, rhs))
-    beta_cov <- solve(as.matrix(precision))
     beta_mat <- app_joint_qvp_beta_matrix(beta_mean, K, p)
     fitted_no_alpha <- Z %*% beta_mat
     beta_var_by_k <- lapply(seq_len(K), function(k) {
@@ -14830,13 +14889,20 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	    )
 	    monitor_trace[[iter]] <- app_joint_qvp_monitor_row(iter, monitor_terms)
 		    elbo_trace[[iter]] <- elbo_terms
-		    max_beta_change <- max(abs(beta_mean - beta_old))
-		    monitor <- -data_terms$likelihood_quadratic - data_terms$latent_rate - prior_quadratic + beta_entropy_logdet
+	    max_beta_change <- max(abs(beta_mean - beta_old))
+	    monitor <- -data_terms$likelihood_quadratic - data_terms$latent_rate - prior_quadratic + beta_entropy_logdet
+        convergence_eligible <- iter >= min_iter &&
+          iter > freeze_beta_warmup_iters &&
+          beta_update_count >= min_beta_updates
         sigma_trace[iter, ] <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
-	    trace[[iter]] <- data.frame(
-	      iter = iter,
-	      global_iter = global_iter,
-	      max_beta_change = max_beta_change,
+    trace[[iter]] <- data.frame(
+      iter = iter,
+      global_iter = global_iter,
+      beta_updated = isTRUE(beta_updated),
+      beta_update_count = as.integer(beta_update_count),
+      freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+      convergence_eligible = isTRUE(convergence_eligible),
+      max_beta_change = max_beta_change,
 	      max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
 	      rhs_mean_precision = mean(rhs_summary$mean_precision),
 	      rhs_max_precision = max(rhs_summary$max_precision),
@@ -14846,15 +14912,63 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	      partial_elbo = partial_elbo,
 	      stringsAsFactors = FALSE
 	    )
-		    if (max_beta_change < tol) {
-		      converged <- TRUE
-	      trace <- trace[seq_len(iter)]
-	      monitor_trace <- monitor_trace[seq_len(iter)]
-	      elbo_trace <- elbo_trace[seq_len(iter)]
-	      rhs_trace <- rhs_trace[seq_len(iter)]
+        if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
+          app_joint_qvp_progress_append(
+            progress_path,
+            data.frame(
+              label = as.character(progress_label %||% "al_vb"),
+              iter = iter,
+              max_iter = max_iter,
+              min_iter = min_iter,
+	              converged = FALSE,
+              beta_updated = isTRUE(beta_updated),
+              beta_update_count = as.integer(beta_update_count),
+              freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+              convergence_eligible = isTRUE(convergence_eligible),
+	              max_beta_change = max_beta_change,
+              max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
+              rhs_mean_precision = mean(rhs_summary$mean_precision),
+              rhs_max_precision = max(rhs_summary$max_precision),
+              monitor = monitor,
+              partial_elbo = partial_elbo,
+              timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+              stringsAsFactors = FALSE
+            )
+          )
+        }
+			    if (isTRUE(convergence_eligible) && max_beta_change < tol) {
+			      converged <- TRUE
+		      trace <- trace[seq_len(iter)]
+		      monitor_trace <- monitor_trace[seq_len(iter)]
+		      elbo_trace <- elbo_trace[seq_len(iter)]
+          rhs_trace <- rhs_trace[seq_len(iter)]
           sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
-		      break
-		    }
+            if (progress_every > 0L) {
+              app_joint_qvp_progress_append(
+                progress_path,
+                data.frame(
+                  label = as.character(progress_label %||% "al_vb"),
+                  iter = iter,
+                  max_iter = max_iter,
+                  min_iter = min_iter,
+	                  converged = TRUE,
+                  beta_updated = isTRUE(beta_updated),
+                  beta_update_count = as.integer(beta_update_count),
+                  freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
+                  convergence_eligible = isTRUE(convergence_eligible),
+	                  max_beta_change = max_beta_change,
+                  max_sigma_mean = max(sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)),
+                  rhs_mean_precision = mean(rhs_summary$mean_precision),
+                  rhs_max_precision = max(rhs_summary$max_precision),
+                  monitor = monitor,
+                  partial_elbo = partial_elbo,
+                  timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                  stringsAsFactors = FALSE
+                )
+              )
+            }
+			      break
+			    }
 		  }
 	  sigma_mean <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
 	  qhat_mean <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) +
@@ -14890,7 +15004,11 @@ app_joint_qvp_fit_al_vb_tiny <- function(
 	    objective_diagnostics = objective_diagnostics,
 	    monitor_label = "al_vb_coordinate_monitor",
 	    elbo_label = "al_vb_rhs_accounted_elbo_missing_alpha_entropy_log_precision_approx",
-    converged = converged,
+	    converged = converged,
+    rhs_freeze_iters = as.integer(rhs_freeze_iters),
+    freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(min_beta_updates),
+    beta_update_count = as.integer(beta_update_count),
     tau = tau,
     kappa = kappa,
     alpha_prior_mean = alpha_prior$mean,

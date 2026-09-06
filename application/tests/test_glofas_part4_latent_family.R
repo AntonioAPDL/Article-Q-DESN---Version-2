@@ -266,6 +266,11 @@ bad_historical_hash <- tryCatch({
 stopifnot(isTRUE(bad_historical_hash))
 unlink(historical_fit_path)
 
+stopifnot(is.null(app_glofas_part4_root_initializer_from_manifest(
+  data.frame(role = c("reference_anchor", "discrepancy_anchor"), stringsAsFactors = FALSE),
+  toy_design
+)))
+
 graph <- app_glofas_part4_launch_manifest("part4_graph_test")
 stopifnot(nrow(graph) == 18L)
 stopifnot(sum(graph$part4_family == "normal_ridge_diagnostic") == 1L)

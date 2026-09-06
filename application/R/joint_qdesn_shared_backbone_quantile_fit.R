@@ -24,6 +24,12 @@ app_joint_shared_quantile_read_contract <- function(
     if (nrow(row) != 1L) stop(sprintf("Missing unique quantile contract field '%s'.", name), call. = FALSE)
     as.character(row$value[[1L]])
   }
+  get_optional <- function(name, default = "") {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (!nrow(row)) return(default)
+    if (nrow(row) != 1L) stop(sprintf("Non-unique optional quantile contract field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
   tau <- as.numeric(strsplit(get("quantile_grid"), ";", fixed = TRUE)[[1L]])
   out <- list(
     table = tab, path = normalizePath(path, mustWork = TRUE), version = get("contract_version"),
@@ -31,6 +37,7 @@ app_joint_shared_quantile_read_contract <- function(
     parent_final_manifest_sha256 = get("parent_final_manifest_sha256"),
     parent_selected_sha256 = get("parent_selected_sha256"),
     parent_decision_sha256 = get("parent_decision_sha256"),
+    parent_git_state_sha256 = get_optional("parent_git_state_sha256"),
     pilot_scenario = get("pilot_scenario"), tau = tau,
     evaluation_replicates = as.integer(get("evaluation_replicates")),
     evaluation_seed_base = as.integer(get("evaluation_seed_base")),
@@ -68,7 +75,8 @@ app_joint_shared_quantile_parent_files <- function(parent_dir) {
   c(
     final_manifest = file.path(parent_dir, "final_artifact_manifest.csv"),
     selected_backbone = file.path(parent_dir, "selected_shared_backbone.csv"),
-    selection_decision = file.path(parent_dir, "shared_backbone_selection_decision.csv")
+    selection_decision = file.path(parent_dir, "shared_backbone_selection_decision.csv"),
+    source_git_state = file.path(parent_dir, "source_git_state.csv")
   )
 }
 
@@ -80,7 +88,9 @@ app_joint_shared_quantile_verify_parent <- function(parent_dir, contract) {
   expected <- c(
     final_manifest = contract$parent_final_manifest_sha256,
     selected_backbone = contract$parent_selected_sha256,
-    selection_decision = contract$parent_decision_sha256
+    selection_decision = contract$parent_decision_sha256,
+    source_git_state = if (nzchar(contract$parent_git_state_sha256))
+      contract$parent_git_state_sha256 else app_sha256_file(files[["source_git_state"]])
   )
   parent_manifest <- app_joint_shared_verify_manifest(parent_dir, files[["final_manifest"]])
   out <- data.frame(
@@ -88,17 +98,22 @@ app_joint_shared_quantile_verify_parent <- function(parent_dir, contract) {
     expected_sha256 = unname(expected[names(files)]), observed_sha256 = unname(observed),
     hash_verified = unname(observed) == unname(expected[names(files)]), stringsAsFactors = FALSE
   )
-  out$nested_manifest_verified <- c(all(parent_manifest$verified), NA, NA)
+  out$nested_manifest_verified <- c(all(parent_manifest$verified), NA, NA, NA)
   if (any(!out$hash_verified) || !all(parent_manifest$verified)) {
     stop("Parent shared-backbone freeze failed hash verification.", call. = FALSE)
   }
   selected <- app_read_csv(files[["selected_backbone"]])
   decision <- app_read_csv(files[["selection_decision"]])
+  source_git_state <- app_read_csv(files[["source_git_state"]])
   if (nrow(selected) != 1L || nrow(decision) != 1L ||
       selected$scenario_id[[1L]] != contract$pilot_scenario ||
       decision$status[[1L]] != "SHARED_BACKBONE_SELECTED_NOT_YET_QUANTILE_FIT" ||
       decision$selected_candidate_id[[1L]] != selected$candidate_id[[1L]]) {
     stop("Parent selected-backbone decision is internally inconsistent.", call. = FALSE)
+  }
+  if (nrow(source_git_state) != 1L ||
+      !identical(as.character(source_git_state$head[[1L]]), contract$parent_head)) {
+    stop("Parent source Git HEAD does not match the frozen quantile contract.", call. = FALSE)
   }
   list(verification = out, selected = selected, decision = decision)
 }
@@ -323,9 +338,10 @@ app_joint_shared_quantile_dependency_rows <- function(plan, job) {
 
 app_joint_shared_quantile_prepare <- function(
   out_dir = app_joint_shared_quantile_default_root(),
-  parent_dir = app_joint_shared_quantile_default_parent()
+  parent_dir = app_joint_shared_quantile_default_parent(),
+  contract_path = app_joint_shared_quantile_contract_path()
 ) {
-  contract <- app_joint_shared_quantile_read_contract()
+  contract <- app_joint_shared_quantile_read_contract(contract_path)
   out_dir <- normalizePath(out_dir, mustWork = FALSE)
   if (dir.exists(out_dir) && length(list.files(out_dir, all.files = TRUE, no.. = TRUE))) {
     stop("Refusing to overwrite a nonempty quantile continuation output directory.", call. = FALSE)
@@ -334,8 +350,13 @@ app_joint_shared_quantile_prepare <- function(
   app_ensure_dir(file.path(out_dir, "designs")); app_ensure_dir(file.path(out_dir, "workers"))
   parent <- app_joint_shared_quantile_verify_parent(parent_dir, contract)
   selected <- parent$selected
-  if (abs(selected$rhs_tau0[[1L]] - 1) > 1e-12 || selected$design_class[[1L]] != "direct") {
+  if (identical(contract$version, "joint_shared_backbone_quantile_v1") &&
+      (abs(selected$rhs_tau0[[1L]] - 1) > 1e-12 || selected$design_class[[1L]] != "direct")) {
     stop("The frozen Regime Shift parent winner no longer matches the audited direct/tau0=1 package.", call. = FALSE)
+  }
+  if (!is.finite(selected$rhs_tau0[[1L]]) || selected$rhs_tau0[[1L]] <= 0 ||
+      !selected$design_class[[1L]] %in% c("direct", "reservoir", "hybrid")) {
+    stop("The selected family backbone has an invalid design class or RHS control.", call. = FALSE)
   }
   registry <- app_joint_qdesn_load_simulation_registry()
   sc <- registry[registry$scenario_id == contract$pilot_scenario, , drop = FALSE]

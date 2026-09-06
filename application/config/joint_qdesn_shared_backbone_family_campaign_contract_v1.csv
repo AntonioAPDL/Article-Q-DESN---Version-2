@@ -1,0 +1,23 @@
+section,name,value,type,description
+identity,contract_version,joint_shared_backbone_family_campaign_v1,character,Frozen seven-family extension contract.
+scope,article_scenarios,8,integer,Number of scenarios in the authoritative 32-row article packet.
+scope,campaign_scenarios,7,integer,Remaining scenarios screened after the completed Regime Shift pilot.
+scope,retained_pilot_scenario,regime_shift,character,Completed pilot retained without rerunning.
+scope,models_per_scenario,4,integer,Independent and joint QDESN and exQDESN VB continuations.
+scope,quantile_grid,"0.05;0.10;0.25;0.50;0.75;0.90;0.95",numeric_vector,Current seven-level validation grid.
+scope,calibration_replicates,3,integer,Non-article observational-selection replicates per scenario.
+scope,evaluation_replicates,3,integer,Fresh non-article protected evaluation replicates per scenario.
+screening,novel_candidates,192,integer,Novel Gaussian ridge designs per scenario.
+screening,authority_anchors,1,integer,Mandatory current-authority design anchor per scenario.
+screening,ridge_jobs_per_scenario,579,integer,193 designs times three calibration replicates.
+screening,rhs_jobs_per_scenario,450,integer,Thirty designs times five tau0 values times three replicates.
+quantile,vb_jobs_per_scenario,51,integer,Three Gaussian refits and forty-eight quantile VB jobs.
+runtime,max_workers,10,integer,Maximum concurrent one-thread workers across the campaign.
+runtime,blas_threads,1,integer,Numerical threads inside each worker.
+runtime,nice_level,10,integer,Reduced priority while the separate Phase182 campaign is active.
+policy,selection_window,observational_fit_only,character,DESN and tau0 selection use only the inner observational split.
+policy,protected_scores_for_selection,false,logical,Protected forecasts cannot select or retune a specification.
+policy,article_fixture_used,false,logical,Article fixtures are reserved for later MCMC confirmation.
+policy,vb_is_article_authority,false,logical,VB is readiness and initialization evidence only.
+policy,mcmc_launched,false,logical,This campaign does not launch MCMC.
+policy,article_assets_modified,false,logical,This campaign cannot modify article assets.

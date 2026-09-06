@@ -468,11 +468,14 @@ app_joint_shared_git_state <- function() {
 app_joint_shared_prepare_ridge <- function(
   out_dir = app_joint_shared_default_root(),
   authority_registry = app_joint_shared_default_authority_registry(),
-  scenario_id = NULL
+  scenario_id = NULL,
+  contract_path = app_joint_shared_contract_path(),
+  scenario_registry_path = app_joint_shared_scenario_path(),
+  authority_manifest = file.path(dirname(authority_registry), "artifact_manifest.csv")
 ) {
-  contract <- app_joint_shared_read_contract()
+  contract <- app_joint_shared_read_contract(contract_path)
   scenario_id <- as.character(scenario_id %||% contract$pilot_scenario)
-  scenarios <- app_joint_shared_read_scenarios()
+  scenarios <- app_joint_shared_read_scenarios(scenario_registry_path)
   selected_scenario <- scenarios[scenarios$scenario_id == scenario_id, , drop = FALSE]
   if (nrow(selected_scenario) != 1L || !isTRUE(selected_scenario$enabled[[1L]]) ||
       !identical(selected_scenario$selection_unit[[1L]], "scenario_specific")) {
@@ -484,7 +487,7 @@ app_joint_shared_prepare_ridge <- function(
   }
   app_ensure_dir(out_dir); app_ensure_dir(file.path(out_dir, "fixtures")); app_ensure_dir(file.path(out_dir, "workers"))
   authority_registry <- normalizePath(authority_registry, mustWork = TRUE)
-  authority_manifest <- file.path(dirname(authority_registry), "artifact_manifest.csv")
+  authority_manifest <- normalizePath(authority_manifest, mustWork = TRUE)
   authority_registry_sha <- app_sha256_file(authority_registry)
   authority_manifest_sha <- app_sha256_file(authority_manifest)
   if (!identical(authority_registry_sha, contract$authority_registry_sha256) ||

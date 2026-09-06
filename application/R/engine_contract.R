@@ -581,7 +581,7 @@ app_qdesn_discrepancy_inference_support <- function(cfg, model_grid, engine_repo
     prior <- app_map_qdesn_prior(row$coefficient_prior[[1L]])
     latent_article_side <- app_qdesn_is_latent_path_contract(cfg, row) &&
       identical(method, "vb") &&
-      identical(likelihood, "al") &&
+      likelihood %in% c("normal", "al", "exal") &&
       prior %in% c("rhs_ns", "ridge") &&
       isTRUE(engine_report$ok)
     hit <- caps[
@@ -593,7 +593,7 @@ app_qdesn_discrepancy_inference_support <- function(cfg, model_grid, engine_repo
     ]
     supported <- nrow(hit) > 0L || isTRUE(latent_article_side)
     support_note <- if (isTRUE(latent_article_side)) {
-      "Article-side latent-path AL-VB fitter; configured engine supplies the fixed DESN feature map."
+      "Article-side latent-path Normal/AL/exAL VB fitter; configured engine supplies the fixed DESN feature map."
     } else if (supported && "notes" %in% names(hit)) {
       hit$notes[[1L]]
     } else {

@@ -86,7 +86,15 @@ stopifnot(nrow(latent_data$y_history) == 5L)
 stopifnot(nrow(latent_data$g_retro) == 5L)
 stopifnot(nrow(latent_data$g_ensemble) == 6L)
 stopifnot(nrow(latent_data$future_key) == 2L)
-stopifnot(isTRUE(all.equal(latent_data$y_future_oracle, c(15, 16), check.attributes = FALSE)))
+stopifnot(is.null(latent_data$y_future_oracle))
+stopifnot(all(!is.finite(latent_data$g_ensemble$y_transformed)))
+stopifnot(isTRUE(all.equal(
+  app_make_glofas_latent_path_scoring_truth(latent_panel, latent_data$future_key)$y_reference,
+  c(15, 16),
+  check.attributes = FALSE
+)))
+stopifnot(all(abs(tapply(latent_data$g_ensemble$ensemble_weight,
+  latent_data$g_ensemble$target_date, sum) - 1) < 1.0e-12))
 stopifnot(identical(latent_data$source_parameter_scope$glofas_scale_scope, "retrospective_and_issued_glofas"))
 latent_summary <- app_latent_path_data_summary(latent_data, data.frame(fit_id = "fit1", model_id = "mod1"))
 stopifnot(identical(latent_summary$application_model_contract, "latent_path_ensemble_likelihood"))
@@ -131,7 +139,12 @@ stopifnot(sim_data$horizon_max == 4L)
 stopifnot(sim_data$requested_horizon_max == 6L)
 stopifnot(identical(sim_data$horizon_scope, "available_issued_ensemble_horizon"))
 stopifnot(nrow(sim_data$g_ensemble) == 20L)
-stopifnot(isTRUE(all.equal(sim_data$y_future_oracle, sim$truth$y[sim$truth$is_future], tolerance = 1.0e-12)))
+stopifnot(is.null(sim_data$y_future_oracle))
+stopifnot(isTRUE(all.equal(
+  app_make_glofas_latent_path_scoring_truth(sim$panel, sim_data$future_key)$y_reference,
+  sim$truth$y[sim$truth$is_future],
+  tolerance = 1.0e-12
+)))
 
 toy_reservoir <- list(
   D = 1L,
@@ -547,6 +560,7 @@ simple_future_builder <- local({
       J_g_key = J_g_key,
       J_g = lapply(idx, function(i) J_g_key[[i]]),
       z_g = g_ens0$g_transformed,
+      weight_g = rep(1 / 3, nrow(g_ens0)),
       row_info_y = data.frame(source = "Y", future_index = seq_len(H), target_date = future_key0$target_date, horizon = future_key0$horizon),
       row_info_g_key = data.frame(source = "G", future_index = seq_len(H), target_date = future_key0$target_date, horizon = future_key0$horizon),
       row_info_g = data.frame(source = "G", future_index = idx, target_date = g_ens0$target_date, horizon = g_ens0$horizon, member = g_ens0$member)
@@ -654,7 +668,7 @@ two_block_design <- list(
   future_builder = two_block_future_builder,
   future_key = data.frame(target_date = as.Date("2026-03-01") + 0:2, horizon = 1:3),
   y_future_init = c(1.0, 1.1, 1.2),
-  y_future_oracle = c(1.05, 1.15, 1.25),
+  future_truth_policy = "physically_excluded_from_fit_objects_scoring_sidecar_only",
   latent_data = list(
     origin_date = as.Date("2026-02-28"),
     future_key = data.frame(target_date = as.Date("2026-03-01") + 0:2, horizon = 1:3),
@@ -663,6 +677,7 @@ two_block_design <- list(
       horizon = rep(1:3, each = 2L),
       member = sprintf("m%02d", 1:6),
       g_transformed = c(1.9, 2.1, 2.1, 2.3, 2.3, 2.5),
+      ensemble_weight = rep(1 / 2, 6L),
       stringsAsFactors = FALSE
     )
   ),

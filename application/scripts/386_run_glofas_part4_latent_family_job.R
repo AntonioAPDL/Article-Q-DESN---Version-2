@@ -29,6 +29,10 @@ if (nrow(job) != 1L) stop(sprintf("Expected one manifest row for job %s.", job_i
 for (sub in c("objects", "predictions", "scores", "traces", "coefficients", "logs", "status", "manifests")) {
   app_ensure_dir(file.path(runtime_root, sub))
 }
+
+blas_manifest <- app_latent_runtime_backend_manifest(fail_closed = TRUE)
+blas_manifest$job_id <- job_id
+app_write_csv(blas_manifest, file.path(runtime_root, "manifests", paste0(job_id, "_blas_runtime.csv")))
 running <- file.path(runtime_root, "status", paste0(job_id, ".running"))
 completed <- file.path(runtime_root, "status", paste0(job_id, ".completed"))
 failed <- file.path(runtime_root, "status", paste0(job_id, ".failed"))
@@ -99,6 +103,11 @@ run_job <- function() {
     prior = app_map_qdesn_prior(model_rows$coefficient_prior[[1L]]),
     seed = as.integer(model_rows$reservoir_seed[[1L]]),
     likelihood_family = as.character(model_rows$likelihood_family[[1L]])
+  )
+  vb_args$normal_exact_optimization <- TRUE
+  vb_args$diagnostics <- modifyList(
+    vb_args$diagnostics %||% list(),
+    list(profile_substeps = TRUE)
   )
   vb_args$progress_path <- file.path(runtime_root, "traces", paste0(job_id, "_live.csv"))
   dependency_paths <- app_glofas_part4_dependency_artifact_paths(runtime_root, dependencies)
@@ -182,6 +191,20 @@ run_job <- function() {
     app_write_csv(coefficients, coefficient_path)
   }
 
+  iteration_timing <- if (family %in% c("joint_al_rhs_vb", "joint_exal_rhs_vb")) {
+    app_bind_rows_fill(lapply(seq_along(joint$fits), function(i) {
+      timing <- joint$fits[[i]]$vb_diagnostics$iteration_timing %||% data.frame()
+      if (!nrow(timing)) return(data.frame())
+      transform(
+        timing,
+        quantile_level = as.numeric(joint$tau[[i]]),
+        joint_inner_fit_index = as.integer(i)
+      )
+    }))
+  } else {
+    result$fit$vb_diagnostics$iteration_timing %||% data.frame()
+  }
+
   prediction_path <- file.path(runtime_root, "predictions", paste0(job_id, "_posterior_draws.csv.gz"))
   score_path <- file.path(runtime_root, "scores", paste0(job_id, "_by_horizon.csv"))
   summary_path <- file.path(runtime_root, "scores", paste0(job_id, "_summary.csv"))
@@ -194,6 +217,8 @@ run_job <- function() {
   app_write_csv(score_rows, score_path)
   app_write_csv(score_summary, summary_path)
   app_write_csv(trace, trace_path)
+  timing_path <- file.path(runtime_root, "traces", paste0(job_id, "_iteration_timing.csv"))
+  if (nrow(iteration_timing)) app_write_csv(iteration_timing, timing_path)
   artifacts <- c(
     fit_side_path,
     prediction_path,
@@ -201,6 +226,8 @@ run_job <- function() {
     summary_path,
     trace_path,
     coefficient_path,
+    file.path(runtime_root, "manifests", paste0(job_id, "_blas_runtime.csv")),
+    if (file.exists(timing_path)) timing_path else character(),
     if (exists("grid_score", inherits = FALSE)) {
       file.path(runtime_root, "scores", paste0(job_id, "_grid_crps_by_date.csv"))
     } else {

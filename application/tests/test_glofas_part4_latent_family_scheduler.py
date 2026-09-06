@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import csv
+import hashlib
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -11,6 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = ROOT / "application/scripts/387_launch_glofas_part4_latent_family_dag.py"
 CHECKER = ROOT / "application/scripts/388_check_glofas_part4_latent_family_dag.py"
+SPEC = importlib.util.spec_from_file_location("part4_launcher", LAUNCHER)
+part4_launcher = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(part4_launcher)
 
 
 class Part4SchedulerContractTest(unittest.TestCase):
@@ -48,6 +53,19 @@ class Part4SchedulerContractTest(unittest.TestCase):
             check=True,
         )
         self.assertIn("part4_latent_family,18,0,0,0,18,18", result.stdout)
+
+    def test_serial_openblas_environment_is_hashed_and_pinned(self):
+        library = self.runtime / "libopenblas.so"
+        library.write_bytes(b"part4-test-library")
+        env = part4_launcher.runtime_env(library)
+        self.assertEqual(env["QDESN_NUMERICAL_BACKEND"], "openblas_serial")
+        self.assertEqual(env["QDESN_BLAS_LIBRARY_PATH"], str(library))
+        self.assertEqual(
+            env["QDESN_BLAS_LIBRARY_SHA256"],
+            hashlib.sha256(library.read_bytes()).hexdigest(),
+        )
+        self.assertTrue(all(env[key] == "1" for key in part4_launcher.THREAD_ENV))
+        self.assertEqual(env["LD_PRELOAD"].split(":", 1)[0], str(library))
 
 
 if __name__ == "__main__":

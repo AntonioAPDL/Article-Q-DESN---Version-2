@@ -90,9 +90,9 @@ app_latent_near_pd_inverse <- function(A, jitter = 1.0e-8) {
   list(inverse = (inv + t(inv)) / 2, repaired = (cov + t(cov)) / 2, eigenvalues = vals)
 }
 
-app_latent_solve_spd <- function(A, b, jitter = 1.0e-8) {
+app_latent_solve_spd <- function(A, b, jitter = 1.0e-8, assume_symmetric = FALSE) {
   A <- as.matrix(A)
-  A <- (A + t(A)) / 2
+  if (!isTRUE(assume_symmetric)) A <- (A + t(A)) / 2
   chol_result <- tryCatch(chol(A), error = function(e) NULL)
   if (!is.null(chol_result)) {
     return(list(
@@ -124,7 +124,14 @@ app_latent_mvn_draws <- function(mean, cov, n_draws, seed = NULL) {
   sweep(Z %*% t(root), 2L, mean, "+")
 }
 
-app_latent_mvn_draws_exact <- function(mean, cov, n_draws, seed = NULL, backend = "chol_eigen_fallback") {
+app_latent_mvn_draws_exact <- function(
+  mean,
+  cov,
+  n_draws,
+  seed = NULL,
+  backend = "chol_eigen_fallback",
+  assume_symmetric = FALSE
+) {
   mean <- as.numeric(mean)
   cov <- as.matrix(cov)
   backend <- tolower(as.character(backend %||% "chol_eigen_fallback")[[1L]])
@@ -144,8 +151,8 @@ app_latent_mvn_draws_exact <- function(mean, cov, n_draws, seed = NULL, backend 
     )
     value
   }
-  cov_sym <- time_part("symmetrize", {
-    (cov + t(cov)) / 2
+  cov_sym <- time_part(if (isTRUE(assume_symmetric)) "reuse_symmetric" else "symmetrize", {
+    if (isTRUE(assume_symmetric)) cov else (cov + t(cov)) / 2
   })
   if (!is.null(seed)) set.seed(as.integer(seed))
   Z <- time_part("random_normals", {
@@ -855,6 +862,79 @@ app_latent_add_J_precision <- function(precision, coeff, J, y_cov) {
   precision
 }
 
+app_latent_jacobian_active_rows <- function(J_list) {
+  if (!length(J_list)) return(integer(0))
+  sort(unique(unlist(lapply(J_list, function(J) {
+    J <- as.matrix(J)
+    which(rowSums(abs(J)) > 0)
+  }), use.names = FALSE)))
+}
+
+app_latent_covariance_jacobian_batch <- function(theta_cov, J_list) {
+  if (!length(J_list)) {
+    return(list(index = integer(0), J = list(), sigma_J = list()))
+  }
+  active_rows <- app_latent_jacobian_active_rows(J_list)
+  if (!length(active_rows)) {
+    empty <- lapply(J_list, function(J) matrix(0, 0L, ncol(as.matrix(J))))
+    return(list(index = integer(0), J = empty, sigma_J = empty))
+  }
+  J_active <- lapply(J_list, function(J) as.matrix(J)[active_rows, , drop = FALSE])
+  widths <- vapply(J_active, ncol, integer(1L))
+  J_stack <- do.call(cbind, J_active)
+  sigma_J_stack <- theta_cov[active_rows, active_rows, drop = FALSE] %*% J_stack
+  ends <- cumsum(widths)
+  starts <- ends - widths + 1L
+  sigma_J <- lapply(seq_along(J_active), function(i) {
+    sigma_J_stack[, starts[[i]]:ends[[i]], drop = FALSE]
+  })
+  list(index = active_rows, J = J_active, sigma_J = sigma_J)
+}
+
+app_latent_weighted_jacobian_precision <- function(J_list, coeff, y_cov) {
+  coeff <- as.numeric(coeff)
+  if (length(J_list) != length(coeff)) {
+    stop("Jacobian list and precision coefficients are not aligned.", call. = FALSE)
+  }
+  active_terms <- which(is.finite(coeff) & coeff > 0)
+  if (!length(active_terms) || !any(y_cov != 0)) {
+    return(list(index = integer(0), value = NULL))
+  }
+  J_list <- J_list[active_terms]
+  coeff <- coeff[active_terms]
+  active_rows <- app_latent_jacobian_active_rows(J_list)
+  if (!length(active_rows)) return(list(index = integer(0), value = NULL))
+
+  y_cov <- 0.5 * (as.matrix(y_cov) + t(as.matrix(y_cov)))
+  eig <- eigen(y_cov, symmetric = TRUE)
+  eig_tol <- max(1, max(abs(eig$values))) * 1.0e-12
+  if (any(eig$values < -eig_tol)) {
+    stop("Future latent covariance is not positive semidefinite.", call. = FALSE)
+  }
+  keep <- which(eig$values > eig_tol)
+  if (!length(keep)) return(list(index = integer(0), value = NULL))
+  root <- sweep(eig$vectors[, keep, drop = FALSE], 2L, sqrt(eig$values[keep]), `*`)
+  weighted_blocks <- Map(function(J, weight) {
+    sqrt(weight) * (as.matrix(J)[active_rows, , drop = FALSE] %*% root)
+  }, J_list, coeff)
+  U <- do.call(cbind, weighted_blocks)
+  list(index = active_rows, value = tcrossprod(U))
+}
+
+app_latent_jacobian_trace_theta_batch <- function(J_list, y_cov, theta_mean, theta_cov) {
+  if (!length(J_list)) return(numeric(0))
+  if (!any(y_cov != 0)) return(rep(0, length(J_list)))
+  batch <- app_latent_covariance_jacobian_batch(theta_cov, J_list)
+  if (!length(batch$index)) return(rep(0, length(J_list)))
+  vapply(seq_along(batch$J), function(i) {
+    J <- batch$J[[i]]
+    sigma_J <- batch$sigma_J[[i]]
+    cov_part <- sum(y_cov * crossprod(J, sigma_J))
+    j_mean <- as.numeric(crossprod(J, theta_mean[batch$index]))
+    cov_part + as.numeric(crossprod(j_mean, y_cov %*% j_mean))
+  }, numeric(1L))
+}
+
 app_latent_row_moments_dense_debug <- function(design, y_mean, y_cov, theta_mean, theta_cov) {
   future <- design$future_builder(y_mean)
   H_fixed <- as.matrix(design$H_fixed)
@@ -1306,7 +1386,16 @@ app_latent_fixed_row_moments_block <- function(block, z_fixed, theta_mean, theta
   out
 }
 
-app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta_mean, theta_cov, profile_substeps = FALSE) {
+app_latent_row_moments_streamed_grouped <- function(
+  design,
+  y_mean,
+  y_cov,
+  theta_mean,
+  theta_cov,
+  profile_substeps = FALSE,
+  fixed_moment_strategy = c("full", "skip")
+) {
+  fixed_moment_strategy <- match.arg(fixed_moment_strategy)
   timer <- app_latent_substep_timer(profile_substeps)
   future <- timer$time("future_builder", {
     design$future_builder(y_mean)
@@ -1347,15 +1436,19 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
       verify_dense = !isTRUE(certified_optimized)
     )
   })
-  fixed_block_moments <- timer$time("fixed_block_moments", {
-    app_latent_fixed_row_moments_block(
-      fixed_block,
-      z_fixed,
-      theta_mean,
-      theta_cov,
-      profile_substeps = profile_substeps
-    )
-  })
+  fixed_block_moments <- if (identical(fixed_moment_strategy, "skip")) {
+    list(R = rep(NA_real_, length(z_fixed)), e = rep(NA_real_, length(z_fixed)))
+  } else {
+    timer$time("fixed_block_moments", {
+      app_latent_fixed_row_moments_block(
+        fixed_block,
+        z_fixed,
+        theta_mean,
+        theta_cov,
+        profile_substeps = profile_substeps
+      )
+    })
+  }
   if (is.null(fixed_block_moments)) {
     dense_fixed <- timer$time("fixed_dense_fallback", {
       fixed_mean <- as.numeric(H_fixed %*% theta_mean)
@@ -1388,44 +1481,37 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
   b_y <- vector("list", H_future)
   trace_y <- numeric(H_future)
   paired_future_jacobian <- app_latent_future_has_paired_jacobians(future)
-  paired_trace_terms <- if (isTRUE(paired_future_jacobian)) {
-    timer$time("future_paired_trace_terms", {
-      jacobian_trace <- vapply(seq_len(H_future), function(h) {
-        app_latent_jacobian_trace_theta(
-          J_y[[h]], y_cov, theta_mean, theta_cov
-        )
-      }, numeric(1L))
-      list(
-        trace_y = app_latent_quad_theta_rows(
-          H_y, theta_mean, theta_cov
-        ) + jacobian_trace,
-        trace_g = app_latent_quad_theta_rows(
-          H_g_key, theta_mean, theta_cov
-        ) + jacobian_trace
+  future_trace_terms <- timer$time("future_batched_trace_terms", {
+    jacobian_trace_y <- app_latent_jacobian_trace_theta_batch(
+      J_y, y_cov, theta_mean, theta_cov
+    )
+    jacobian_trace_g <- if (isTRUE(paired_future_jacobian)) {
+      jacobian_trace_y
+    } else {
+      app_latent_jacobian_trace_theta_batch(
+        J_g_key, y_cov, theta_mean, theta_cov
       )
-    })
-  } else {
-    NULL
-  }
+    }
+    list(
+      trace_y = app_latent_quad_theta_rows(
+        H_y, theta_mean, theta_cov
+      ) + jacobian_trace_y,
+      trace_g = app_latent_quad_theta_rows(
+        H_g_key, theta_mean, theta_cov
+      ) + jacobian_trace_g
+    )
+  })
   y_loop <- timer$time("future_y_loop", {
     R_y_local <- numeric(H_future)
     e_y_local <- numeric(H_future)
     b_y_local <- vector("list", H_future)
-    trace_y_local <- numeric(H_future)
-    if (isTRUE(paired_future_jacobian)) {
-      trace_y_local <- paired_trace_terms$trace_y
-    }
+    trace_y_local <- future_trace_terms$trace_y
     for (h in seq_len(H_future)) {
       J <- as.matrix(J_y[[h]])
       if (!all(dim(J) == c(p, H_future))) {
         stop("Future Y Jacobian has incompatible dimensions.", call. = FALSE)
       }
       h_vec <- as.numeric(H_y[h, ])
-      if (!isTRUE(paired_future_jacobian)) {
-        trace_y_local[[h]] <- app_latent_trace_S_theta_parts(
-          h_vec, J, y_cov, theta_mean, theta_cov
-        )
-      }
       b_y_local[[h]] <- h_vec * y_mean[[h]] + as.numeric(J %*% y_cov[, h, drop = FALSE])
       z_second <- y_mean[[h]]^2 + y_cov[h, h]
       R_y_local[[h]] <- max(as.numeric(z_second - 2 * sum(b_y_local[[h]] * theta_mean) + trace_y_local[[h]]), 1.0e-12)
@@ -1443,37 +1529,22 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
   trace_g <- numeric(H_future)
   u_g <- numeric(H_future)
   g_key_loop <- timer$time("future_g_key_loop", {
-    trace_g_local <- numeric(H_future)
-    u_g_local <- numeric(H_future)
-    if (isTRUE(paired_future_jacobian)) {
-      trace_g_local <- paired_trace_terms$trace_g
-    }
+    trace_g_local <- future_trace_terms$trace_g
+    u_g_local <- as.numeric(H_g_key %*% theta_mean)
     for (h in seq_len(H_future)) {
       J <- as.matrix(J_g_key[[h]])
       if (!all(dim(J) == c(p, H_future))) {
         stop("Future GloFAS keyed Jacobian has incompatible dimensions.", call. = FALSE)
       }
-      h_vec <- as.numeric(H_g_key[h, ])
-      if (!isTRUE(paired_future_jacobian)) {
-        trace_g_local[[h]] <- app_latent_trace_S_theta_parts(
-          h_vec, J, y_cov, theta_mean, theta_cov
-        )
-      }
-      u_g_local[[h]] <- sum(h_vec * theta_mean)
     }
     list(trace_g = trace_g_local, u_g = u_g_local)
   })
   trace_g <- g_key_loop$trace_g
   u_g <- g_key_loop$u_g
   g_member_loop <- timer$time("future_g_member_loop", {
-    R_g_local <- numeric(length(z_g))
-    e_g_local <- numeric(length(z_g))
-    for (i in seq_along(z_g)) {
-      h <- g_future_index[[i]]
-      z <- z_g[[i]]
-      R_g_local[[i]] <- max(as.numeric(z^2 - 2 * z * u_g[[h]] + trace_g[[h]]), 1.0e-12)
-      e_g_local[[i]] <- as.numeric(z - u_g[[h]])
-    }
+    fitted_g <- u_g[g_future_index]
+    R_g_local <- pmax(z_g^2 - 2 * z_g * fitted_g + trace_g[g_future_index], 1.0e-12)
+    e_g_local <- z_g - fitted_g
     list(R_g = R_g_local, e_g = e_g_local)
   })
   R_g <- g_member_loop$R_g
@@ -1528,7 +1599,16 @@ app_latent_row_moments_streamed_grouped <- function(design, y_mean, y_cov, theta
   out
 }
 
-app_latent_row_moments <- function(design, y_mean, y_cov, theta_mean, theta_cov, strategy = "streamed_grouped", profile_substeps = FALSE) {
+app_latent_row_moments <- function(
+  design,
+  y_mean,
+  y_cov,
+  theta_mean,
+  theta_cov,
+  strategy = "streamed_grouped",
+  profile_substeps = FALSE,
+  fixed_moment_strategy = "full"
+) {
   strategy <- tolower(as.character(strategy %||% "streamed_grouped"))
   if (identical(strategy, "dense_debug")) {
     return(app_latent_row_moments_dense_debug(design, y_mean, y_cov, theta_mean, theta_cov))
@@ -1540,7 +1620,8 @@ app_latent_row_moments <- function(design, y_mean, y_cov, theta_mean, theta_cov,
       y_cov,
       theta_mean,
       theta_cov,
-      profile_substeps = profile_substeps
+      profile_substeps = profile_substeps,
+      fixed_moment_strategy = fixed_moment_strategy
     ))
   }
   stop(sprintf("Unsupported latent-path row-moment strategy '%s'.", strategy), call. = FALSE)
@@ -1711,7 +1792,16 @@ app_latent_fixed_sigma_stats_chunks <- function(row_moments, e_v, e_inv_v, const
   list(shape = shape, rate = rate)
 }
 
-app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants, prior_state, chunking = NULL, profile_substeps = FALSE) {
+app_latent_update_theta <- function(
+  row_moments,
+  e_inv_v,
+  sigma_state,
+  constants,
+  prior_state,
+  chunking = NULL,
+  profile_substeps = FALSE,
+  fixed_stats_override = NULL
+) {
   timer <- app_latent_substep_timer(profile_substeps)
   chunking <- app_latent_normalize_chunking_control(chunking)
   p <- ncol(row_moments$fixed$H)
@@ -1721,15 +1811,19 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
   rhs <- as.numeric(prior_state$prior_linear %||% numeric(p))
   fixed <- row_moments$fixed
   fixed_chunks <- if (isTRUE(chunking$enabled)) app_latent_make_source_row_chunks(fixed$source, chunking$chunk_size) else NULL
-  fixed_stats <- timer$time("theta_fixed_stats", {
-    app_latent_fixed_theta_stats_block(
-      row_moments,
-      e_inv_v,
-      sigma_state,
-      constants,
-      profile_substeps = profile_substeps
-    )
-  })
+  fixed_stats <- if (!is.null(fixed_stats_override)) {
+    fixed_stats_override
+  } else {
+    timer$time("theta_fixed_stats", {
+      app_latent_fixed_theta_stats_block(
+        row_moments,
+        e_inv_v,
+        sigma_state,
+        constants,
+        profile_substeps = profile_substeps
+      )
+    })
+  }
   if (is.null(fixed_stats)) {
     fixed_stats <- timer$time("theta_fixed_dense_fallback", {
       app_latent_fixed_theta_stats_chunks(
@@ -1776,13 +1870,14 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
           future$H_g_key,
           w = coeff_g
         )
-        for (h in seq_len(n_y)) {
-          precision_future <- app_latent_add_J_precision(
-            precision_future,
-            coeff_y[[h]] + coeff_g[[h]],
-            future$J_y[[h]],
-            future$y_cov
-          )
+        jacobian_precision <- app_latent_weighted_jacobian_precision(
+          future$J_y,
+          coeff_y + coeff_g,
+          future$y_cov
+        )
+        if (length(jacobian_precision$index)) {
+          idx <- jacobian_precision$index
+          precision_future[idx, idx] <- precision_future[idx, idx] + jacobian_precision$value
         }
         b_y <- do.call(cbind, future$b_y)
         rhs_y <- as.numeric(b_y %*% (sig_y * e_y / constants$B)) -
@@ -1794,51 +1889,60 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
       rhs <- rhs + future_paired_stats$rhs
     } else {
       future_y_stats <- timer$time("theta_future_y", {
-        precision_y <- matrix(0, p, p)
-        rhs_y <- numeric(p)
-        for (h in seq_len(n_y)) {
-          i <- offset + h
-          h_vec <- as.numeric(future$H_y[h, ])
-          J <- as.matrix(future$J_y[[h]])
-          weight_i <- as.numeric((future$weight_y %||% rep(1, n_y))[[h]])
-          c_i <- weight_i * sig_y * e_inv_v[[i]] / constants$B
-          precision_y <- app_latent_add_S_precision(precision_y, c_i, h_vec, J, future$y_cov)
-          rhs_y <- rhs_y + weight_i * sig_y / constants$B * (e_inv_v[[i]] * future$b_y[[h]] - constants$A * h_vec)
+        weight_y <- as.numeric(future$weight_y %||% rep(1, n_y))
+        e_y <- e_inv_v[offset + seq_len(n_y)]
+        coeff_y <- weight_y * sig_y * e_y / constants$B
+        precision_y <- app_latent_weighted_crossprod(future$H_y, w = coeff_y)
+        jacobian_precision <- app_latent_weighted_jacobian_precision(
+          future$J_y,
+          coeff_y,
+          future$y_cov
+        )
+        if (length(jacobian_precision$index)) {
+          idx <- jacobian_precision$index
+          precision_y[idx, idx] <- precision_y[idx, idx] + jacobian_precision$value
         }
+        b_y <- do.call(cbind, future$b_y)
+        rhs_y <- as.numeric(b_y %*% (weight_y * sig_y * e_y / constants$B)) -
+          as.numeric(crossprod(future$H_y, weight_y * sig_y * constants$A / constants$B))
         list(precision = precision_y, rhs = rhs_y)
       })
       precision <- precision + future_y_stats$precision
       rhs <- rhs + future_y_stats$rhs
       future_g_stats <- timer$time("theta_future_g", {
-        precision_g <- matrix(0, p, p)
-        rhs_g <- numeric(p)
+        coeff_g <- numeric(n_y)
+        rhs_weight_g <- numeric(n_y)
+        weight_g <- as.numeric(future$weight_g %||% rep(1, future$n_g))
         for (h in seq_len(n_y)) {
           idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
           if (!length(idx)) next
           global_idx <- offset + n_y + idx
-          weight_i <- as.numeric((future$weight_g %||% rep(1, future$n_g))[idx])
+          weight_i <- weight_g[idx]
           einv <- e_inv_v[global_idx] * weight_i
           z <- future$z_g[idx]
-          h_vec <- as.numeric(future$H_g_key[h, ])
-          J <- as.matrix(future$J_g_key[[h]])
-          precision_g <- app_latent_add_S_precision(
-            precision_g,
-            sig_g * sum(einv) / constants$B,
-            h_vec,
-            J,
-            future$y_cov
-          )
-          rhs_g <- rhs_g + sig_g / constants$B * (
-            h_vec * sum(einv * z) - constants$A * sum(weight_i) * h_vec
+          coeff_g[[h]] <- sig_g * sum(einv) / constants$B
+          rhs_weight_g[[h]] <- sig_g / constants$B * (
+            sum(einv * z) - constants$A * sum(weight_i)
           )
         }
+        precision_g <- app_latent_weighted_crossprod(future$H_g_key, w = coeff_g)
+        jacobian_precision <- app_latent_weighted_jacobian_precision(
+          future$J_g_key,
+          coeff_g,
+          future$y_cov
+        )
+        if (length(jacobian_precision$index)) {
+          idx <- jacobian_precision$index
+          precision_g[idx, idx] <- precision_g[idx, idx] + jacobian_precision$value
+        }
+        rhs_g <- as.numeric(crossprod(future$H_g_key, rhs_weight_g))
         list(precision = precision_g, rhs = rhs_g)
       })
       precision <- precision + future_g_stats$precision
       rhs <- rhs + future_g_stats$rhs
     }
     update <- timer$time("theta_solve_spd", {
-      app_latent_solve_spd(precision, rhs)
+      app_latent_solve_spd(precision, rhs, assume_symmetric = TRUE)
     })
     substep_timing <- timer$collect()
     fixed_substeps <- attr(fixed_stats, "substep_timing", exact = TRUE)
@@ -1867,7 +1971,7 @@ app_latent_update_theta <- function(row_moments, e_inv_v, sigma_state, constants
   precision <- precision + dense_future_stats$precision
   rhs <- rhs + dense_future_stats$rhs
   update <- timer$time("theta_solve_spd", {
-    app_latent_solve_spd(precision, rhs)
+    app_latent_solve_spd(precision, rhs, assume_symmetric = TRUE)
   })
   attr(update, "substep_timing") <- timer$collect()
   update
@@ -2053,15 +2157,34 @@ app_latent_update_future_gaussian_delta <- function(
     stop("Latent future response offsets are not aligned.", call. = FALSE)
   }
 
-  add_linearized_row <- function(h_vec, J, z0, a, sig_inv, einv, source_count = 1, weight = 1) {
+  add_linearized_row <- function(
+    h_vec,
+    J_active,
+    active_rows,
+    sigma_J,
+    sigma_h,
+    z0,
+    a,
+    sig_inv,
+    einv,
+    source_count = 1,
+    weight = 1
+  ) {
     h_vec <- as.numeric(h_vec)
-    J <- as.matrix(J)
+    J_active <- as.matrix(J_active)
     a <- as.numeric(a)
     h_mean <- sum(h_vec * theta_mean)
-    lbar <- a - as.numeric(crossprod(J, theta_mean))
-    cov_term <- as.numeric(crossprod(J, theta_cov %*% h_vec))
+    if (length(active_rows)) {
+      lbar <- a - as.numeric(crossprod(J_active, theta_mean[active_rows]))
+      cov_term <- as.numeric(crossprod(J_active, sigma_h))
+      covariance_precision <- crossprod(J_active, sigma_J)
+    } else {
+      lbar <- a
+      cov_term <- numeric(length(a))
+      covariance_precision <- matrix(0, length(a), length(a))
+    }
     e0 <- as.numeric(z0 - h_mean)
-    Q <- crossprod(J, theta_cov %*% J) + tcrossprod(lbar)
+    Q <- covariance_precision + tcrossprod(lbar)
     g <- lbar * e0 + cov_term
     list(
       precision = weight * sig_inv * einv / constants$B * Q,
@@ -2070,13 +2193,29 @@ app_latent_update_future_gaussian_delta <- function(
     )
   }
 
+  batch_y <- app_latent_covariance_jacobian_batch(theta_cov, future$J_y)
+  batch_g <- app_latent_covariance_jacobian_batch(theta_cov, future$J_g_key)
+  sigma_H_y <- if (length(batch_y$index)) {
+    theta_cov[batch_y$index, , drop = FALSE] %*% t(future$H_y)
+  } else {
+    matrix(0, 0L, H)
+  }
+  sigma_H_g <- if (length(batch_g$index)) {
+    theta_cov[batch_g$index, , drop = FALSE] %*% t(future$H_g_key)
+  } else {
+    matrix(0, 0L, H)
+  }
+
   sig_y <- sigma_state$inv_mean[["Y"]]
   for (h in seq_len(H)) {
     a <- numeric(H)
     a[[h]] <- 1
     row <- add_linearized_row(
       h_vec = future$H_y[h, ],
-      J = future$J_y[[h]],
+      J_active = batch_y$J[[h]],
+      active_rows = batch_y$index,
+      sigma_J = batch_y$sigma_J[[h]],
+      sigma_h = sigma_H_y[, h, drop = TRUE],
       z0 = y_start[[h]] - response_offset_y[[h]],
       a = a,
       sig_inv = sig_y,
@@ -2096,11 +2235,17 @@ app_latent_update_future_gaussian_delta <- function(
     idx <- as.integer(g_index_by_h[[h]] %||% integer(0))
     if (!length(idx)) next
     h_vec <- as.numeric(future$H_g_key[h, ])
-    J <- as.matrix(future$J_g_key[[h]])
+    J <- batch_g$J[[h]]
     h_mean <- sum(h_vec * theta_mean)
-    lbar <- zero_a - as.numeric(crossprod(J, theta_mean))
-    cov_term <- as.numeric(crossprod(J, theta_cov %*% h_vec))
-    Q <- crossprod(J, theta_cov %*% J) + tcrossprod(lbar)
+    if (length(batch_g$index)) {
+      lbar <- zero_a - as.numeric(crossprod(J, theta_mean[batch_g$index]))
+      cov_term <- as.numeric(crossprod(J, sigma_H_g[, h, drop = TRUE]))
+      Q <- crossprod(J, batch_g$sigma_J[[h]]) + tcrossprod(lbar)
+    } else {
+      lbar <- zero_a
+      cov_term <- numeric(H)
+      Q <- matrix(0, H, H)
+    }
     global_idx <- offset + H + idx
     weight_g <- as.numeric(future$weight_g %||% rep(1, future$n_g))[idx]
     einv <- e_inv_v[global_idx] * weight_g
@@ -2918,7 +3063,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       })
       append_substeps(iter, "theta_update", attr(theta_update, "substep_timing", exact = TRUE))
       theta_mean <- as.numeric(theta_update$mean)
-      theta_cov <- (theta_update$cov + t(theta_update$cov)) / 2
+      theta_cov <- theta_update$cov
       repaired_theta[[iter]] <- isTRUE(theta_update$repaired)
     } else {
       time_step(iter, "theta_update_frozen", invisible(NULL))
@@ -3021,12 +3166,18 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     is.finite(tail(par_change, 1L)) && tail(par_change, 1L) < tol
 
   theta_draws <- time_step(NA_integer_, "theta_draw_generation", {
-    app_latent_mvn_draws_exact(theta_mean, theta_cov, n_draws, seed = seed + 11L, backend = draw_backend)
+    app_latent_mvn_draws_exact(
+      theta_mean, theta_cov, n_draws, seed = seed + 11L,
+      backend = draw_backend, assume_symmetric = TRUE
+    )
   })
   theta_draw_backend <- attr(theta_draws, "backend", exact = TRUE) %||% NA_character_
   append_substeps(NA_integer_, "theta_draw_generation", attr(theta_draws, "substep_timing", exact = TRUE))
   y_draws <- time_step(NA_integer_, "future_draw_generation", {
-    app_latent_mvn_draws_exact(y_mean, y_cov, n_draws, seed = seed + 17L, backend = draw_backend)
+    app_latent_mvn_draws_exact(
+      y_mean, y_cov, n_draws, seed = seed + 17L,
+      backend = draw_backend, assume_symmetric = TRUE
+    )
   })
   y_draw_backend <- attr(y_draws, "backend", exact = TRUE) %||% NA_character_
   append_substeps(NA_integer_, "future_draw_generation", attr(y_draws, "substep_timing", exact = TRUE))

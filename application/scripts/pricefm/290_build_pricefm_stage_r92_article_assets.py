@@ -415,49 +415,11 @@ def latex_escape(value: Any) -> str:
     return "".join(replacements.get(char, char) for char in text)
 
 
-def context_model_label(value: str) -> str:
-    labels = {"Naive1": r"Na\"ive$^{1}$", "Naive2": r"Na\"ive$^{2}$", "Naive3": r"Na\"ive$^{3}$"}
-    return labels.get(value, latex_escape(value))
-
-
-def build_comparison_tex(frame: pd.DataFrame) -> str:
-    direct = frame[frame.panel.eq("direct_replay")].reset_index(drop=True)
-    context = frame[frame.panel.eq("paper_table_ii")].reset_index(drop=True)
-    qdesn = direct[direct.model_family.eq("qdesn_case_specific")].iloc[0]
-    pricefm = direct[direct.model_family.eq("pricefm_phase1_released_checkpoint")].iloc[0]
-    lines = [
-        r"\begingroup", r"\TableStyle", r"\scriptsize", r"\setlength{\tabcolsep}{5pt}",
-        r"\begin{tabular}{@{}lrrrrr@{}}", r"\toprule",
-        r"& \multicolumn{2}{c}{Probabilistic} & \multicolumn{2}{c}{Pointwise} & \\",
-        r"\cmidrule(lr){2-3}\cmidrule(lr){4-5}",
-        r"Model & AQL & AQCR (\%) & MAE & RMSE & Rank \\", r"\midrule",
-        r"\multicolumn{6}{@{}l}{\textit{Direct fold-aligned comparison (this article; 114 region/fold evaluations)}} \\",
-        f"Reported Q--DESN & \\textbf{{{float(qdesn.AQL):.2f}}} & {float(qdesn.AQCR_percent):.2f} & "
-        f"\\textbf{{{float(qdesn.MAE):.2f}}} & \\textbf{{{float(qdesn.RMSE):.2f}}} & -- " + r"\\",
-        f"Fixed PriceFM predictions & {float(pricefm.AQL):.2f} & \\textbf{{{float(pricefm.AQCR_percent):.2f}}} & "
-        f"{float(pricefm.MAE):.2f} & {float(pricefm.RMSE):.2f} & -- " + r"\\",
-        r"\addlinespace[3pt]",
-        r"\multicolumn{6}{@{}l}{\textit{PriceFM v4 Table II (paper-reported all-region fitted evaluation)}} \\",
-    ]
-    group_breaks = {3, 8, 13}
-    for index, row in context.iterrows():
-        if index in group_breaks:
-            lines.append(r"\addlinespace[1pt]")
-        values = [f"{float(row[name]):.2f}" for name in ("AQL", "AQCR_percent", "MAE", "RMSE")]
-        rank = str(row.paper_rank)
-        if str(row.model) == "PriceFM":
-            values = [rf"\textbf{{{value}}}" for value in values]
-            rank = rf"\textbf{{{rank}}}"
-        lines.append(f"{context_model_label(str(row.model))} & " + " & ".join(values + [rank]) + " " + r"\\")
-    lines.extend([r"\bottomrule", r"\end{tabular}", r"\endgroup"])
-    return "\n".join(lines) + "\n"
-
-
 def build_promotion_tex(ledger: pd.DataFrame) -> str:
     lines = [
         r"\begingroup", r"\TableStyle", r"\scriptsize", r"\setlength{\tabcolsep}{4pt}",
         r"\begin{tabular}{@{}llrrrr@{}}", r"\toprule",
-        r"Region--fold & Working likelihood & Updated Q--DESN AQL & Reference Q--DESN AQL & PriceFM AQL & AQL reduction \\",
+        r"Region--fold & Working likelihood & Selected Q--DESN AQL & Reference Q--DESN AQL & PriceFM AQL & AQL reduction \\",
         r"\midrule",
     ]
     for row in ledger.itertuples(index=False):
@@ -478,7 +440,6 @@ def write_current_outputs(path: Path, qdesn: dict[str, float], pricefm: dict[str
         "RMSE": 100.0 * (pricefm["RMSE"] - qdesn["RMSE"]) / pricefm["RMSE"],
     }
     text = "\n".join([
-        r"\newcommand{\PricefmPaperAlignedMainComparisonTable}{tables/pricefm_paper_aligned_main_comparison.tex}",
         rf"\newcommand{{\PricefmAlignedQdesnAqcr}}{{{qdesn['AQCR_percent']:.2f}\%}}",
         rf"\newcommand{{\PricefmAlignedPricefmAqcr}}{{{pricefm['AQCR_percent']:.2f}\%}}",
         rf"\newcommand{{\PricefmAlignedQdesnMae}}{{{qdesn['MAE']:.3f}}}",
@@ -624,18 +585,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         updated.loc[qindex, name] = repr(value)
     updated.loc[qindex, "value_source"] = "r92_selective_promotion_reconstruction"
     comparison_csv = table_dir / "pricefm_paper_aligned_main_comparison.csv"
-    comparison_tex = table_dir / "pricefm_paper_aligned_main_comparison.tex"
     current_outputs = table_dir / "pricefm_paper_aligned_current_outputs.tex"
     promotion_csv = table_dir / "pricefm_r91_selective_promotions.csv"
     promotion_tex = table_dir / "pricefm_r91_selective_promotions.tex"
     updated.to_csv(comparison_csv, index=False, lineterminator="\n")
-    comparison_tex.write_text(build_comparison_tex(updated))
     ledger = ledger.sort_values(["AQL_gain", "region", "fold"], ascending=[False, True, True], kind="mergesort").reset_index(drop=True)
     ledger.to_csv(promotion_csv, index=False, lineterminator="\n")
     promotion_tex.write_text(build_promotion_tex(ledger))
     reductions = write_current_outputs(current_outputs, qdesn, pricefm)
 
-    outputs = [comparison_csv, comparison_tex, current_outputs, promotion_csv, promotion_tex]
+    outputs = [comparison_csv, current_outputs, promotion_csv, promotion_tex]
     output_records = [
         {"path": f"tables/{path.name}", "sha256": sha256(path), "bytes": path.stat().st_size}
         for path in outputs
@@ -672,7 +631,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "protected_context": {
             "rows": 14,
             "canonical_sha256": protected_hash,
-            "role": "PriceFM version 4 Table II context",
+            "role": "archived PriceFM version 4 Table II context; excluded from manuscript tables",
+        },
+        "published_comparison": {
+            "external_table_rows": 0,
+            "overall_and_fold_table": "tables/pricefm_full_main_summary.tex",
+            "horizon_table": "tables/pricefm_full_horizon_diagnostic_summary.tex",
         },
         "direct_comparison_metrics": {"qdesn": qdesn, "pricefm": pricefm},
         "relative_reductions_percent": reductions,

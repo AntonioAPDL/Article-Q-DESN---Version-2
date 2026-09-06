@@ -40,7 +40,7 @@ def run_builder(module, source: Path, context: Path, destination: Path):
     )
 
 
-def test_r92_article_assets_preserve_context_and_reproduce_metrics(tmp_path):
+def test_r92_article_assets_archive_context_and_publish_matched_metrics(tmp_path):
     if not R92.is_dir():
         pytest.skip("Materialized PriceFM R92 evidence is not available")
     module = load_script()
@@ -80,12 +80,24 @@ def test_r92_article_assets_preserve_context_and_reproduce_metrics(tmp_path):
     assert np.isclose(promotions.iloc[-1]["AQL_gain"], 0.00010492623488733699, atol=1e-12)
     promotion_tex = (tables / "pricefm_r91_selective_promotions.tex").read_text()
     assert "0.000105" in promotion_tex
+    assert "Selected Q--DESN AQL" in promotion_tex
+    assert "Updated Q--DESN AQL" not in promotion_tex
+    assert not (tables / "pricefm_paper_aligned_main_comparison.tex").exists()
+    current_outputs = (
+        tables / "pricefm_paper_aligned_current_outputs.tex"
+    ).read_text()
+    assert "PricefmPaperAlignedMainComparisonTable" not in current_outputs
 
     manifest_path = tables / "pricefm_paper_aligned_main_comparison_manifest.json"
     manifest = json.loads(manifest_path.read_text())
     assert manifest["protected_context"]["rows"] == 14
     assert manifest["applicability"]["cross_panel_comparison"] == "context_only_not_head_to_head"
-    assert len(manifest["outputs"]) == 5
+    assert manifest["published_comparison"] == {
+        "external_table_rows": 0,
+        "overall_and_fold_table": "tables/pricefm_full_main_summary.tex",
+        "horizon_table": "tables/pricefm_full_horizon_diagnostic_summary.tex",
+    }
+    assert len(manifest["outputs"]) == 4
     assert all(Path(row["path"]).parent == Path("tables") for row in manifest["outputs"])
     assert Path(manifest["generator"]["path"]).name == SCRIPT.name
     for row in manifest["outputs"]:

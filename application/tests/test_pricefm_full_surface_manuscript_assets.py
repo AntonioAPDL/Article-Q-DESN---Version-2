@@ -151,8 +151,25 @@ def test_full_surface_manuscript_export_writes_compact_assets(tmp_path):
     main_summary = (tmp_path / "tables" / "pricefm_full_main_summary.tex").read_text()
     assert "Comparison set" in main_summary
     assert "Scope" not in main_summary
+    assert "Near" not in main_summary
+    assert r"\shortstack{PriceFM\\lower by $\leq 5\%$}" in main_summary
+    assert r"\shortstack{PriceFM\\lower by $>5\%$}" in main_summary
+    assert "Overall & 114 & 38 & 38 & 38" in main_summary
+    assert "Fold 1 & 38 & 38 & 0 & 0" in main_summary
+    assert "Fold 2 & 38 & 0 & 38 & 0" in main_summary
+    assert "Fold 3 & 38 & 0 & 0 & 38" in main_summary
     assert (tmp_path / "tables" / "pricefm_full_input_set_summary.tex").exists()
-    assert (tmp_path / "tables" / "pricefm_full_horizon_diagnostic_summary.tex").exists()
+    horizon_path = tmp_path / "tables" / "pricefm_full_horizon_diagnostic_summary.tex"
+    assert horizon_path.exists()
+    horizon_summary = horizon_path.read_text()
+    assert "Forecast-lead block" in horizon_summary
+    assert "1--24 & 12 & 0 & 0.200 & 0.200" in horizon_summary
+    assert "25--48 & 12 & 12 & -0.400 & -0.400" in horizon_summary
+    assert "49--72 & 12 & 12 & -0.100 & -0.100" in horizon_summary
+    assert "73--96 & 12 & 0 & 0.050 & 0.050" in horizon_summary
+    input_summary = (tmp_path / "tables" / "pricefm_full_input_set_summary.tex").read_text()
+    assert "Near" not in input_summary
+    assert r"\shortstack{PriceFM\\lower by $\leq 5\%$}" in input_summary
     assert "Stage-M" not in (tmp_path / "tables" / "pricefm_full_source_summary.tex").read_text()
 
     manifest = json.loads((tmp_path / "tables" / "pricefm_full_article_asset_manifest.json").read_text())

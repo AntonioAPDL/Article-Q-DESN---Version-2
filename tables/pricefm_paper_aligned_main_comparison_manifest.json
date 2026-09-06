@@ -21,7 +21,7 @@
   },
   "generator": {
     "path": "application/scripts/pricefm/290_build_pricefm_stage_r92_article_assets.py",
-    "sha256": "33a734862c7914ea41a03b685e882fa36ad306f73ef70202e91dea9fb032809d"
+    "sha256": "04c9c6c5a31018f1cd12b0dad2de66929f4f819edcf06e828c732e4938d62b39"
   },
   "outputs": [
     {
@@ -30,14 +30,9 @@
       "sha256": "873e6cd28a26de916bbd4a0d096549057e443469aff084a9c12a4d03cd0c07ca"
     },
     {
-      "bytes": 1477,
-      "path": "tables/pricefm_paper_aligned_main_comparison.tex",
-      "sha256": "03b7e4e2bc90e242cceba45e076e7896804cbae8f5762d37d13daf7a0defc3b1"
-    },
-    {
-      "bytes": 528,
+      "bytes": 425,
       "path": "tables/pricefm_paper_aligned_current_outputs.tex",
-      "sha256": "40688d0f3b56aeae675b1c02d034933422e0c0754ddd8a6b9c1830d8377be8f7"
+      "sha256": "3b82a09cf42bd20b0bd76adc7bbf1f2dedb90810b031b1641c73776656ed41c1"
     },
     {
       "bytes": 10190,
@@ -45,9 +40,9 @@
       "sha256": "4d47aa52d44ff49187dd49a7921e590df39832a2927ce67ef9e68991f8023a1b"
     },
     {
-      "bytes": 1066,
+      "bytes": 1067,
       "path": "tables/pricefm_r91_selective_promotions.tex",
-      "sha256": "e5054afcd5e60d436726a5160d4f11c84d6a1dc2773018325f8256bbb90ba87e"
+      "sha256": "292d7ed3a8a152fd7b3f39773c076962cd4138777e66607a153a5098920a665f"
     }
   ],
   "paper_source": {
@@ -61,8 +56,13 @@
   },
   "protected_context": {
     "canonical_sha256": "9152364cf66f5bb2bef0e37c7e3747ac797d12784367671ae4686448f05a3f25",
-    "role": "PriceFM version 4 Table II context",
+    "role": "archived PriceFM version 4 Table II context; excluded from manuscript tables",
     "rows": 14
+  },
+  "published_comparison": {
+    "external_table_rows": 0,
+    "horizon_table": "tables/pricefm_full_horizon_diagnostic_summary.tex",
+    "overall_and_fold_table": "tables/pricefm_full_main_summary.tex"
   },
   "relative_reductions_percent": {
     "AQL": 3.054660287803473,

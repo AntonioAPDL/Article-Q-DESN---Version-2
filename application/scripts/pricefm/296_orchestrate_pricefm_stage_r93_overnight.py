@@ -120,6 +120,7 @@ class Controller:
         self.output.mkdir(parents=True, exist_ok=True)
         self.state_path = self.output / "orchestrator/state.json"
         self.lock_path = self.output / "orchestrator/lock"
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         self.args.log.parent.mkdir(parents=True, exist_ok=True)
         self.log_handle = self.args.log.open("a", buffering=1)
         self.lock_handle = self.lock_path.open("w")

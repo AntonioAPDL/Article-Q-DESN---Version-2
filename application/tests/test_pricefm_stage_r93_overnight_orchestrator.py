@@ -49,6 +49,24 @@ def test_grid_counts_uses_experiment_rows_only(tmp_path):
     }
 
 
+def test_controller_creates_nested_lock_and_state_directory(tmp_path):
+    module = load_script()
+    args = module.parser().parse_args([
+        "--approval-token", module.APPROVAL_TOKEN,
+        "--expected-code-head", "fixture",
+        "--output-root", str(tmp_path / "nested/output"),
+        "--log", str(tmp_path / "logs/controller.log"),
+    ])
+    controller = module.Controller(args)
+    try:
+        assert controller.lock_path.is_file()
+        assert controller.state_path.is_file()
+        assert controller.state["phase"] == "preflight"
+    finally:
+        controller.log_handle.close()
+        controller.lock_handle.close()
+
+
 def test_controller_contract_stops_before_test_and_downstream_mutations():
     text = SCRIPT.read_text()
     assert 'APPROVAL_TOKEN = "RUN_PRICEFM_R93_VALIDATION_LADDER"' in text

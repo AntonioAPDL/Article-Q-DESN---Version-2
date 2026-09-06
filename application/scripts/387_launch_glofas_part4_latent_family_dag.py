@@ -48,7 +48,10 @@ def dependencies(row):
 
 
 def session_name(prefix, job_id):
-    return f"{prefix}_{job_id}".replace(".", "p")[:96]
+    raw = f"{prefix}_{job_id}".replace(".", "p")
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    stem_limit = 96 - len(digest) - 1
+    return f"{raw[:stem_limit]}_{digest}"
 
 
 def tmux_alive(name):

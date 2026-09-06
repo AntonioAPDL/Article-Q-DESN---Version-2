@@ -67,6 +67,23 @@ class Part4SchedulerContractTest(unittest.TestCase):
         self.assertTrue(all(env[key] == "1" for key in part4_launcher.THREAD_ENV))
         self.assertEqual(env["LD_PRELOAD"].split(":", 1)[0], str(library))
 
+    def test_long_job_ids_produce_distinct_bounded_session_names(self):
+        prefix = "glofas_p4_exactopt_r2_20260906"
+        common = "glofas_part4_latent_family_dec25_exactopt_r2_fivecore_20260906_"
+        job_ids = [
+            common + "normal_ridge_diagnostic",
+            common + "normal_rhs_vb_diagnostic",
+            common + "independent_al_rhs_vb_p50",
+            common + "independent_al_rhs_vb_p35",
+            common + "independent_exal_rhs_vb_p50",
+            common + "joint_al_rhs_vb",
+            common + "joint_exal_rhs_vb",
+        ]
+        names = [part4_launcher.session_name(prefix, job_id) for job_id in job_ids]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertTrue(all(len(name) <= 96 for name in names))
+        self.assertEqual(names, [part4_launcher.session_name(prefix, job_id) for job_id in job_ids])
+
 
 if __name__ == "__main__":
     unittest.main()

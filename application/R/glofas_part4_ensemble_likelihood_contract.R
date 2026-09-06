@@ -766,6 +766,7 @@ app_glofas_part4_prepare_bundle <- function(
     allow_forbidden_sources = FALSE,
     dry_run = TRUE,
     write_candidate_configs = TRUE,
+    require_input_files = FALSE,
     max_iter = 100L,
     min_iter = 30L,
     tol = 0.01,
@@ -773,6 +774,22 @@ app_glofas_part4_prepare_bundle <- function(
     min_beta_updates = 10L,
     n_draws = 500L) {
   base_cfg <- app_read_config(app_resolve_path(base_config_path, must_work = TRUE))
+  if (isTRUE(require_input_files)) {
+    input_check <- app_validate_input_manifest(
+      app_config_path(base_cfg, "input_manifest"),
+      app_config_path(base_cfg, "schema"),
+      require_files = TRUE
+    )
+    if (!isTRUE(input_check$ok)) {
+      stop(
+        sprintf(
+          "Part 4 preparation input preflight failed: %s",
+          paste(input_check$issues, collapse = " | ")
+        ),
+        call. = FALSE
+      )
+    }
+  }
   anchors <- NULL
   if (!is.null(anchor_manifest_path) && nzchar(as.character(anchor_manifest_path))) {
     anchors <- app_read_csv(app_resolve_path(anchor_manifest_path, must_work = TRUE))
@@ -917,6 +934,7 @@ app_glofas_part4_prepare_bundle <- function(
     ready_rows = sum(manifest$status == "ready_after_operator_launch_approval"),
     blocked_rows = sum(grepl("^blocked", manifest$status)),
     dry_run = app_as_bool(dry_run),
+    require_input_files = isTRUE(require_input_files),
     max_iter = as.integer(max_iter),
     min_iter = as.integer(min_iter),
     tol = as.numeric(tol),

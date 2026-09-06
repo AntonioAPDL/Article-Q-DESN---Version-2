@@ -186,6 +186,17 @@ tmp_cfg_path <- file.path(tempdir(), "part4_toy_base.yaml")
 tmp_anchor_path <- file.path(tempdir(), "part4_toy_anchors.csv")
 app_write_yaml(part4_toy_cfg, tmp_cfg_path)
 app_write_csv(part4_anchors, tmp_anchor_path)
+missing_input_preflight <- tryCatch({
+  app_glofas_part4_prepare_bundle(
+    base_config_path = tmp_cfg_path,
+    anchor_manifest_path = tmp_anchor_path,
+    run_label = "part4_toy_bundle_missing_inputs",
+    runtime_root = file.path(tempdir(), "glofas_part4_toy_bundle_missing_inputs"),
+    require_input_files = TRUE
+  )
+  FALSE
+}, error = function(e) grepl("preparation input preflight failed", conditionMessage(e), fixed = TRUE))
+stopifnot(isTRUE(missing_input_preflight))
 bundle <- app_glofas_part4_prepare_bundle(
   base_config_path = tmp_cfg_path,
   anchor_manifest_path = tmp_anchor_path,

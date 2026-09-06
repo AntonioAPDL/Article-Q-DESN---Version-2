@@ -80,6 +80,10 @@ app_latent_runtime_engine_source_manifest <- function() {
     "application/R/latent_path_checkpoint.R",
     "application/R/latent_path_design.R",
     "application/R/latent_path_vb_al.R",
+    "application/R/latent_path_vb_normal.R",
+    "application/R/latent_path_vb_exal.R",
+    "application/R/latent_path_vb_joint.R",
+    "application/R/glofas_part4_latent_family.R",
     "application/R/fit_qdesn_latent_path.R",
     "application/R/fit_qdesn_discrepancy.R"
   )

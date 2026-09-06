@@ -1,0 +1,83 @@
+% All coordinates are in millimetres. No scaling or clipping is used.
+\begin{tikzpicture}[x=1mm,y=1mm]
+  \node[qi/heading,anchor=west] at (0,0) {Preliminary Gaussian regressions};
+  \node[qi/gaussian,minimum width=35mm] (ridge) at (17.5,-11)
+    {Gaussian ridge\\regression};
+  \node[qi/gaussian,minimum width=42mm] (rhs) at (62,-11)
+    {Gaussian regression\\with \RHS{} prior (VB)};
+  \draw[qi/arrow] (ridge.east) -- (rhs.west);
+
+  \node[qi/heading,anchor=west] at (0,-24)
+    {Independent quantile regressions};
+  \node[qi/note,anchor=west] at (0,-29) {Variational fits};
+  \node[qi/note,anchor=west] at (98,-11)
+    {$\mathcal T=\{\tau_1<\cdots<\tau_m=0.50<\cdots<\tau_K\}$};
+  \node[qi/heading,align=center] at (146,-26.5)
+    {Joint quantile\\regressions};
+
+  \node[qi/al,minimum width=16mm] (al1) at (8,-40)
+    {$\AL(\tau_1)$};
+  \node[qi/al,minimum width=20mm] (allo) at (37,-40)
+    {$\AL(\tau_{m-1})$};
+  \node[qi/al,minimum width=19mm] (almed) at (62,-40)
+    {$\AL(0.50)$\\median};
+  \node[qi/al,minimum width=20mm] (alhi) at (87,-40)
+    {$\AL(\tau_{m+1})$};
+  \node[qi/al,minimum width=16mm] (alK) at (116,-40)
+    {$\AL(\tau_K)$};
+  \node[qi/dots] (aldotslo) at (21.5,-40) {$\cdots$};
+  \node[qi/dots] (aldotshi) at (102.5,-40) {$\cdots$};
+  \draw[qi/arrow] (rhs.south) -- (almed.north);
+  \draw[qi/arrow] (almed.west) -- (allo.east);
+  \draw[qi/arrow] (allo.west) -- (aldotslo.east);
+  \draw[qi/arrow] (aldotslo.west) -- (al1.east);
+  \draw[qi/arrow] (almed.east) -- (alhi.west);
+  \draw[qi/arrow] (alhi.east) -- (aldotshi.west);
+  \draw[qi/arrow] (aldotshi.east) -- (alK.west);
+
+  \node[qi/exal,minimum width=16mm] (ex1) at (8,-64)
+    {$\exAL(\tau_1)$};
+  \node[qi/exal,minimum width=20mm] (exlo) at (37,-64)
+    {$\exAL(\tau_{m-1})$};
+  \node[qi/exal,minimum width=19mm] (exmed) at (62,-64)
+    {$\exAL(0.50)$};
+  \node[qi/exal,minimum width=20mm] (exhi) at (87,-64)
+    {$\exAL(\tau_{m+1})$};
+  \node[qi/exal,minimum width=16mm] (exK) at (116,-64)
+    {$\exAL(\tau_K)$};
+  \node[qi/dots] at (21.5,-64) {$\cdots$};
+  \node[qi/dots] at (102.5,-64) {$\cdots$};
+  \foreach \a/\b in {al1/ex1,allo/exlo,almed/exmed,alhi/exhi,alK/exK}
+    \draw[qi/arrow] (\a.south) -- (\b.north);
+
+  \draw[qi/collection] (124.8,-34.3) -- (127,-34.3)
+    -- (127,-45.7) -- (124.8,-45.7);
+  \draw[qi/collection] (124.8,-58.3) -- (127,-58.3)
+    -- (127,-69.7) -- (124.8,-69.7);
+  \node[qi/al,minimum width=25mm] (jointal) at (146,-40)
+    {Joint AL\\regression (VB)};
+  \node[qi/exal,minimum width=25mm] (jointex) at (146,-64)
+    {Joint exAL\\regression (VB)};
+  \draw[qi/arrow] (127,-40) -- (jointal.west);
+  \draw[qi/arrow] (127,-64) -- (jointex.west);
+  \node[qi/note,align=center] at (145,-49) {complete AL grid};
+  \node[qi/note,align=center] at (145,-73) {complete exAL grid};
+
+  \draw[draw=qiGaussian,line width=0.35pt] (0,-80) -- (159,-80);
+  \node[qi/heading,anchor=west] at (0,-87) {Posterior simulation};
+  \node[qi/heading,anchor=west] at (82,-87) {Model comparison};
+  \node[qi/base,minimum width=29mm] (vb) at (14.5,-98)
+    {VB fit\\of model $M$};
+  \node[qi/base,minimum width=31mm] (mcmc) at (59,-98)
+    {MCMC for the\\same model $M$};
+  \draw[qi/arrow] (vb.east) -- (mcmc.west);
+  \node[qi/note,anchor=north,align=center] at (36.5,-106)
+    {same statistical specification};
+  \node[qi/base,minimum width=33mm] (candidates) at (99,-98)
+    {Fitted candidate\\specifications};
+  \node[qi/base,minimum width=37mm] (criterion) at (140.5,-98)
+    {Prespecified\\validation criterion};
+  \draw[qi/comparison] (candidates.east) -- (criterion.west);
+  \node[qi/note,anchor=north,align=center] at (120,-106)
+    {comparison after fitting};
+\end{tikzpicture}

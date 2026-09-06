@@ -113,7 +113,7 @@ fixed-design likelihood and prior, MCMC and variational computation, the joint
 quantile-vector extension, monotone rearrangement, supplementary empirical
 results, and the GloFAS forecast-discrepancy model.
 
-\section{Reservoir Specification and Diagnostics}
+\section{Reservoir Specification, Selection, and Diagnostics}
 \label{sec:supp_reservoir_diagnostics}
 
 Table~\ref{tab:supp-reservoir-selection} summarizes the reservoir-design
@@ -134,7 +134,7 @@ Component & Role in the fixed feature map & Design consideration & Potential con
 \midrule
 \(D\) & Number of reservoir layers and hierarchy of time scales &
 Evaluate a small prespecified set and retain additional depth only when
-held-out forecast criteria improve consistently across reservoir realizations. &
+validation forecast criteria improve consistently across reservoir realizations. &
 Unnecessary depth can add numerically unstable or redundant design columns. \\
 \(\{n_d\},\{\tilde n_d\}\) & Number of reservoir states and lower-layer feature
 dimension & Treat as the main complexity control, with reduction sizes chosen
@@ -169,6 +169,87 @@ Held-out scores can vary materially across realizations. \\
 Q--DESN feature map.}
 \label{tab:supp-reservoir-selection}
 \end{table}
+
+\subsection{Validation-Based Selection and Initialization}
+\label{sec:supp_selection_initialization}
+
+For a fixed statistical specification \(\mathcal M\), reservoir candidates
+\(\mathcal R_j\) are compared on the designated validation observations using
+the criterion stated for the analysis. The response convention, information
+set, design rows, transformations, feature ordering, scaling quantities, and
+forecast definition are held common across candidates. Reservoir states are
+also checked for finite values, concentration near the activation bounds,
+near-constant columns, and severe numerical dependence. With
+\(\mathcal C=\{\mathcal R_1,\ldots,\mathcal R_J\}\), the selected
+specification satisfies
+\[
+\widehat{\mathcal R}_{\mathcal M}
+\in
+\argmin_{\mathcal R_j\in\mathcal C}
+S_{\mathrm{val}}(\mathcal R_j;\mathcal M).
+\]
+The selected \(\widehat{\mathcal R}_{\mathcal M}\) is held fixed for
+evaluation.
+
+Suppose that the probability grid is
+\[
+\mathcal T=\{\tau_1<\cdots<\tau_m=0.50<\cdots<\tau_K\}.
+\]
+After the Gaussian ridge and Gaussian \(\RHS\)--VB fits, compatible estimates
+from the latter initialize the median AL regression. The lower side of the AL
+grid is fitted in the order
+\[
+0.50\ \longrightarrow\ \tau_{m-1}\ \longrightarrow\ \cdots\
+\longrightarrow\ \tau_1,
+\]
+and the upper side is fitted in the order
+\[
+0.50\ \longrightarrow\ \tau_{m+1}\ \longrightarrow\ \cdots\
+\longrightarrow\ \tau_K.
+\]
+Thus each AL regression is initialized from the nearest completed level on the
+same side of the median. For every \(k=1,\ldots,K\), the completed AL fit at
+\(\tau_k\) initializes the exAL fit at \(\tau_k\). The exAL regressions may
+therefore be fitted as soon as their matching AL fits are available.
+
+The joint AL regression is initialized from the complete collection of
+independent AL fits, and the joint exAL regression is initialized from the
+complete collection of independent exAL fits. Let
+\(\widehat{\alpha}^{\,\mathrm{ind}}_{\tau_k}\) and
+\(\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_k}\) denote the independent
+intercept and slope estimates from the matching likelihood family. Initial
+values for the level-specific joint coefficients are
+\[
+\alpha_k^{(0)}
+=\widehat{\alpha}^{\,\mathrm{ind}}_{\tau_k},
+\qquad
+\vect\beta_k^{(0)}
+=\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_k},
+\qquad k=1,\ldots,K.
+\]
+Under the adjacent-difference parameterization in
+Section~\ref{sec:joint_qdesn_supp}, the corresponding initial differences are
+\begin{equation}
+\vect\Delta_k^{(0)}
+=\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_k}
+-\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_{k-1}},
+\qquad k=2,\ldots,K.
+\label{eq:supp-joint-initial-differences}
+\end{equation}
+Independent AL estimates are used for joint AL, and independent exAL estimates
+are used for joint exAL.
+
+When the source and destination models differ, only parameters with
+corresponding interpretations are used to construct starting values. Gaussian
+residual scale and AL or exAL scale have different parameterizations, so the
+initial value of the destination scale is obtained under its own
+parameterization. Parameters specific to the exAL likelihood or coefficient
+prior are initialized within their respective supports. For a VB-to-MCMC
+initialization, the response, data period, design matrix, feature ordering,
+transformations, reservoir realization, likelihood, probability level or grid,
+parameterization, and prior specification agree. MCMC then targets the
+posterior distribution of that same model. Convergence is assessed using the
+diagnostics stated for the empirical analysis.
 
 \section{Distributional Conventions}
 \label{sec:dist_conventions}

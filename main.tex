@@ -39,6 +39,7 @@
 \definecolor{qtealfill}{HTML}{EFF7F6}
 \definecolor{qgoldfill}{HTML}{FFF8EA}
 \definecolor{qline}{HTML}{CFD8E3}
+\input{figures/quantile_initialization/quantile_initialization_styles.tex}
 
 % ---- Citations & hyperlinks ----
 \usepackage[round,authoryear]{natbib}
@@ -356,7 +357,8 @@ Section~\ref{sec:model} presents the Q--DESN model and prior specification,
 including independent and joint multi-quantile extensions.
 Section~\ref{sec:inference} describes posterior computation, while
 Sections~\ref{sec:forecast}--\ref{sec:selection} describe multi-step quantile
-summaries, finite-grid scoring, and reservoir diagnostics.
+summaries, finite-grid scoring, and the selection and assessment of reservoir
+specifications.
 Section~\ref{sec:simulation} presents the simulation design, and
 Sections~\ref{sec:data}--\ref{sec:pricefm-application} give streamflow and
 electricity-price forecasting applications.
@@ -1264,7 +1266,7 @@ Eq.~\eqref{eq:acrps-main}. GloFAS applies monotone rearrangement to its
 variational posterior-mean quantile estimates before scoring.
 
 % ============================================================
-\section{Model Diagnostics and Reservoir Specification}
+\section{Reservoir Specification, Selection, and Diagnostics}
 \label{sec:selection}
 
 Let
@@ -1283,13 +1285,73 @@ likelihood, and shrinkage parameters conditional on the specified fixed feature
 map. Integrating over reservoir specifications would require an additional
 hierarchical model.
 
+\subsection{Validation-Based Selection and Sequential Initialization}
+
+Let \(\mathcal C=\{\mathcal R_1,\ldots,\mathcal R_J\}\) be the candidate
+reservoir specifications considered in a given analysis, and let
+\(\mathcal M\) denote a fixed choice of working likelihood, coefficient prior,
+and inferential method. The fitting, validation, and held-out evaluation
+periods are specified before the comparison. For a validation score
+\(S_{\mathrm{val}}\) for which smaller values are preferred, the selected
+reservoir specification satisfies
+\begin{equation}
+\widehat{\mathcal R}_{\mathcal M}
+\in
+\argmin_{\mathcal R_j\in\mathcal C}
+S_{\mathrm{val}}(\mathcal R_j;\mathcal M).
+\label{eq:reservoir-validation-selection}
+\end{equation}
+All candidates within a comparison use the same response definition,
+information set, fitting and validation observations, forecast origins,
+horizons, and scoring convention. Input transformations and feature
+construction follow the same information convention. State diagnostics are
+examined with the validation score, and the final held-out period is reserved
+for evaluation. The criterion used in each empirical study is given with its
+design and results.
+
+For the joint simulation and the GloFAS and PriceFM analyses, model fitting on
+a probability grid containing 0.50 uses sequential initialization centered at
+the median. Figure~\ref{fig:quantile-sequential-initialization} summarizes the
+ordering. A Gaussian ridge regression initializes a Gaussian regression with
+an \RHS{} prior fitted by VB. Compatible estimates from this fit initialize the
+median AL regression. The remaining independent AL regressions are initialized
+successively from the nearest fitted level toward each tail. Each AL fit then
+initializes the exAL regression at the same probability level. Once all
+independent fits from a likelihood family are available, they initialize the
+corresponding joint quantile regression. A completed VB fit also supplies
+starting values for MCMC under the same statistical specification. The
+independent single-quantile validation study uses the initialization procedure
+reported with that study.
+
+\begin{figure}[!htbp]
+  \centering
+  \input{figures/quantile_initialization/quantile_initialization_picture.tex}
+  \caption[Sequential initialization centered at the median]{%
+    \input{figures/quantile_initialization/quantile_initialization_caption.tex}%
+  }
+  \label{fig:quantile-sequential-initialization}
+\end{figure}
+
+Initialization supplies numerical starting values; model comparison uses the
+validation criterion in Eq.~\eqref{eq:reservoir-validation-selection}. For
+transitions between different likelihoods, priors, or probability levels,
+only parameters with corresponding interpretations are used to construct
+starting values. Parameters specific to the destination model are initialized
+within their admissible parameter spaces. Each independent quantile regression
+retains its own likelihood and variational objective. The complete collections
+of level-specific estimates provide the corresponding coefficient and
+likelihood starting values for the joint regressions. The supplement gives the
+exact ordering and the initialization of the joint coefficient differences.
+
+\subsection{State Diagnostics and Sensitivity}
+
 The ESN literature treats these choices as application-dependent design parameters.
 Reservoir size controls the number and diversity of state variables, while leak rates and spectral radii jointly
 affect memory and stability, and input scaling determines how strongly the
 reservoir is driven into nonlinear regimes
 \citep{JaegerLukoseviciusPopoviciSiewert2007LeakyESN,Lukosevicius2012PracticalGuideESN}.
 For deep reservoirs, stacking layers can create hierarchical temporal
-representations, with additional depth justified by held-out forecast criteria and
+representations, with additional depth justified by validation forecast criteria and
 state diagnostics
 \citep{GallicchioMicheliPedrelli2018DeepESNDesign}. The condition
 \(\rho_d<1\) is a useful conservative design choice. For a driven nonlinear
@@ -1332,7 +1394,7 @@ separate assessment.
 
 Reservoir specifications vary depth, width, lag length, washout, leak rate,
 spectral radius, sparsity, input scaling, and activation. Specifications are
-compared using fitting-period criteria and state diagnostics, including
+compared using the designated model-selection criterion and state diagnostics, including
 comparisons across reservoir realizations when computationally feasible. The
 selected specification is held fixed for evaluation. Comparisons between VB
 and MCMC and across fixed feature maps are reported as sensitivity analyses.

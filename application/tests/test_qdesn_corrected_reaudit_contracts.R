@@ -119,6 +119,15 @@ assert_contains("main.tex", "own-region load, solar, and wind lead covariates")
 assert_contains("main.tex", "evaluations with neighborhood summaries add retrospectively observed neighboring-region lead")
 manifest <- jsonlite::fromJSON(app_path("tables/pricefm_paper_aligned_main_comparison_manifest.json"))
 stopifnot(identical(manifest$applicability$cross_panel_comparison, "context_only_not_head_to_head"))
+stopifnot(identical(manifest$published_comparison$external_table_rows, 0L))
+stopifnot(identical(
+  manifest$published_comparison$overall_and_fold_table,
+  "tables/pricefm_full_main_summary.tex"
+))
+stopifnot(identical(
+  manifest$published_comparison$horizon_table,
+  "tables/pricefm_full_horizon_diagnostic_summary.tex"
+))
 aligned <- utils::read.csv(
   app_path("tables/pricefm_paper_aligned_main_comparison.csv"),
   stringsAsFactors = FALSE,
@@ -143,8 +152,50 @@ stopifnot(sum(updates$selected_family == "al") == 1L)
 stopifnot(all(updates$promoted_qdesn_AQL < updates$old_qdesn_AQL))
 stopifnot(all(updates$promoted_qdesn_AQL < updates$pricefm_AQL))
 assert_contains("main.tex", "AL and exAL specifications were chosen using validation AQL")
-assert_contains("main.tex", "case-specific replacements")
+assert_contains("main.tex", "The reported aggregate uses the selected specification")
+assert_contains("main.tex", "\\input{tables/pricefm_full_main_summary.tex}")
+assert_contains("main.tex", "\\input{tables/pricefm_full_horizon_diagnostic_summary.tex}")
+assert_contains("main.tex", "forecast-lead-specific results")
+assert_contains(
+  "tables/pricefm_full_main_summary.tex",
+  "Overall & 114 & 66 & 12 & 36 & 6.824 & 7.039 & -0.215 & -0.083"
+)
+assert_contains("tables/pricefm_full_main_summary.tex", "PriceFM\\\\lower by $\\leq 5\\%$")
+assert_not_contains("tables/pricefm_full_main_summary.tex", "Near\\\\ties")
+assert_contains(
+  "tables/pricefm_full_main_summary.tex",
+  "Fold 3 & 38 & 14 & 4 & 20 & 6.998 & 6.993 & 0.005 & 0.281"
+)
+assert_contains(
+  "tables/pricefm_full_horizon_diagnostic_summary.tex",
+  "1--24 & 72 & 22 & 0.415 & 0.351"
+)
+assert_contains(
+  "tables/pricefm_full_horizon_diagnostic_summary.tex",
+  "73--96 & 72 & 42 & -0.155 & -0.114"
+)
+assert_contains("tables/pricefm_full_horizon_diagnostic_summary.tex", "Forecast-lead block")
+assert_not_contains("main.tex", "PriceFM v4 Table II")
+assert_not_contains("main.tex", "tab:pricefm-paper-aligned-main-comparison")
+for (external_model in c(
+  "Naive1", "Naive2", "Naive3", "FEDFormer", "PatchTST", "iTransformer",
+  "TimesNet", "TimeXer", "GraphConv", "GraphAttn", "GraphSAGE",
+  "GraphDiffusion", "GraphARMA"
+)) {
+  assert_not_contains("main.tex", external_model)
+}
+assert_not_contains(
+  "tables/pricefm_paper_aligned_current_outputs.tex",
+  "PricefmPaperAlignedMainComparisonTable"
+)
+assert_not_contains(
+  "overleaf/article_files.txt",
+  "tables/pricefm_paper_aligned_main_comparison.tex"
+)
 assert_contains("qdesn-supplement.tex", "tab:supp-pricefm-selective-updates")
+assert_contains("qdesn-supplement.tex", "Comparison of selected and reference Q--DESN specifications")
+assert_not_contains("qdesn-supplement.tex", "tab:supp-pricefm-full-fold-summary")
+assert_not_contains("qdesn-supplement.tex", "tab:supp-pricefm-full-horizon-diagnostic-summary")
 assert_contains("overleaf/article_files.txt", "tables/pricefm_r91_selective_promotions.tex")
 
 # The visible score label is aCRPS. Legacy variable names remain as

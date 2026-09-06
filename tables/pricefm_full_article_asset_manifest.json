@@ -1,19 +1,19 @@
 {
   "files": [
     {
-      "bytes": 641,
+      "bytes": 669,
       "path": "tables/pricefm_full_main_summary.tex",
-      "sha256": "867d0e78bc214ad88820306defc8e7aad68b8241e25f2ac418226ee3603ba34e"
+      "sha256": "8933e1b5fa2c43c073806cb5d714448a27c0731eebe14123c8e32661db6baa4d"
     },
     {
-      "bytes": 448,
+      "bytes": 476,
       "path": "tables/pricefm_full_input_set_summary.tex",
-      "sha256": "cd5fa23a95f092a34c88d15b4f8c3f0f3e95c6ce2b0d25b349536ae2d8336fb9"
+      "sha256": "ca851ba1230190d060510d7f1990a8d1d72ed4416f43c8d0ddf13df01b7b8659"
     },
     {
-      "bytes": 406,
+      "bytes": 416,
       "path": "tables/pricefm_full_horizon_diagnostic_summary.tex",
-      "sha256": "551a121e76cc61d1dc9cb10bda44371d0a8810040bacd857ef0abcb92d466515"
+      "sha256": "7ca21246999ee686f48d709547be5831c1192316a1f897f3ce0bdfff0173c95e"
     },
     {
       "bytes": 307,
@@ -21,9 +21,9 @@
       "sha256": "fe7c8f4cce9142896c217a5e0fa6aae774e339c50f861904171987766a1f45ed"
     },
     {
-      "bytes": 238,
+      "bytes": 229,
       "path": "tables/pricefm_full_method_summary.tex",
-      "sha256": "6d9bb1d9d34340caa9f5d2ea3b515d56dfeac6c458f6b94c8151726e6264a687"
+      "sha256": "368d1b14afcdc4bf87233d2e58826f3a3e61bd4b8269b4b17882aaf35fc97c5b"
     },
     {
       "bytes": 233,
@@ -41,9 +41,9 @@
       "sha256": "07c672b3db4d54d93e8485aa445884eeed0a6163a51ff6897e82a2216137939c"
     },
     {
-      "bytes": 284,
+      "bytes": 294,
       "path": "tables/pricefm_full_horizon_summary.tex",
-      "sha256": "2ea4241ba6f067e1a84ac94ac38f6fb9f8d4099125ee1f1628f7ce32f236335f"
+      "sha256": "5f49c466fbd6ae1ed975b372ae629a5fda4981ae49750f026f143f5bce13b541"
     },
     {
       "bytes": 1136,

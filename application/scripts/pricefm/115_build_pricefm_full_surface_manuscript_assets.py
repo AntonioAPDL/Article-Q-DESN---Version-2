@@ -95,10 +95,19 @@ def latex_escape(value: Any) -> str:
     return "".join(repl.get(ch, ch) for ch in text)
 
 
+def horizon_group_label(value: Any) -> str:
+    """Typeset an integer forecast-lead range with a LaTeX en dash."""
+    text = "" if pd.isna(value) else str(value)
+    endpoints = text.split("-")
+    if len(endpoints) == 2 and all(endpoint.isdigit() for endpoint in endpoints):
+        return "--".join(endpoints)
+    return latex_escape(text)
+
+
 def method_label(value: Any) -> str:
     labels = {
         "pricefm_phase1_pretraining": "PriceFM",
-        "qdesn_selected": r"Reported Q--DESN",
+        "qdesn_selected": r"Q--DESN",
         "qdesn_exal_rhs_ns_exact_chunked": r"exQDESN",
         "qdesn_al_rhs_ns_exact_chunked": r"QDESN",
     }
@@ -294,7 +303,8 @@ def write_benchmark_table(path: Path, frame: pd.DataFrame) -> Path:
     return write_text(path, manuscript_tabular(
         [
             "Comparison set", "$n$", r"\shortstack{Q--DESN\\lower}",
-            r"\shortstack{Near\\ties}", r"\shortstack{PriceFM\\lower}",
+            r"\shortstack{PriceFM\\lower by $\leq 5\%$}",
+            r"\shortstack{PriceFM\\lower by $>5\%$}",
             r"\shortstack{Mean\\Q--DESN AQL}", r"\shortstack{Mean\\PriceFM AQL}",
             r"\shortstack{Mean\\$\Delta$}", r"\shortstack{Median\\$\Delta$}",
         ],
@@ -316,7 +326,8 @@ def write_input_set_table(path: Path, frame: pd.DataFrame) -> Path:
     return write_text(path, manuscript_tabular(
         [
             "Input set", "$n$", r"\shortstack{Q--DESN\\lower}",
-            r"\shortstack{Near\\ties}", r"\shortstack{PriceFM\\lower}",
+            r"\shortstack{PriceFM\\lower by $\leq 5\%$}",
+            r"\shortstack{PriceFM\\lower by $>5\%$}",
             r"\shortstack{Mean\\$\Delta$}", r"\shortstack{Median\\$\Delta$}",
         ],
         rows,
@@ -390,11 +401,11 @@ def write_feature_table(path: Path, frame: pd.DataFrame) -> Path:
 
 def write_horizon_table(path: Path, frame: pd.DataFrame) -> Path:
     rows = [[
-        latex_escape(r["horizon_group"]), str(int(r["n"])), str(int(r["qdesn_wins"])),
+        horizon_group_label(r["horizon_group"]), str(int(r["n"])), str(int(r["qdesn_wins"])),
         fmt_num(r["mean_delta_AQL"]), fmt_num(r["median_delta_AQL"]),
     ] for _, r in frame.iterrows()]
     return write_text(path, tabular(
-        ["Horizon block", "Rows", "Q--DESN wins", "Mean $\\Delta$", "Median $\\Delta$"],
+        ["Forecast-lead block", "Rows", "Q--DESN wins", "Mean $\\Delta$", "Median $\\Delta$"],
         rows,
         "lrrrr",
     ))
@@ -402,12 +413,12 @@ def write_horizon_table(path: Path, frame: pd.DataFrame) -> Path:
 
 def write_manuscript_horizon_table(path: Path, frame: pd.DataFrame) -> Path:
     rows = [[
-        latex_escape(r["horizon_group"]), str(int(r["n"])), str(int(r["qdesn_wins"])),
+        horizon_group_label(r["horizon_group"]), str(int(r["n"])), str(int(r["qdesn_wins"])),
         fmt_num(r["mean_delta_AQL"]), fmt_num(r["median_delta_AQL"]),
     ] for _, r in frame.iterrows()]
     return write_text(path, manuscript_tabular(
         [
-            "Horizon block", "$n$", r"\shortstack{Q--DESN\\lower}",
+            "Forecast-lead block", "$n$", r"\shortstack{Q--DESN\\lower}",
             r"\shortstack{Mean\\$\Delta$}", r"\shortstack{Median\\$\Delta$}",
         ],
         rows,

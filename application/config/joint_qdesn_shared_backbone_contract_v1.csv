@@ -1,0 +1,30 @@
+section,name,value,type,description
+identity,contract_version,joint_shared_backbone_v1,character,Frozen shared-backbone pilot contract.
+identity,authority_registry_sha256,d522a20942e77169788929dcb1ad29c0c987efca057e95ead08f4a14e6222386,character,Expected Phase180 selected-cell registry hash.
+identity,authority_manifest_sha256,75dd6bde7e410767549442c606df562e4ea8019d32375abc0533ce2ea3d83c07,character,Expected Phase180 parent artifact-manifest hash.
+scope,pilot_scenario,regime_shift,character,First scenario used to validate the general workflow.
+scope,quantile_grid,"0.05;0.10;0.25;0.50;0.75;0.90;0.95",numeric_vector,Seven-level quantile grid used by the current validation study.
+observational,desn_washout_rows,500,integer,Rows used only to initialize reservoir states.
+observational,fit_rows,500,integer,Complete observational fit window.
+observational,inner_training_rows,350,integer,Chronologically first fit rows used to estimate screening models.
+observational,inner_calibration_rows,150,integer,Chronologically last fit rows used to select controls.
+observational,protected_validation_rows,1000,integer,Rows excluded from all model selection.
+ridge,novel_candidate_count,192,integer,Maximum number of novel Gaussian ridge architectures.
+ridge,advance_count,30,integer,Exact number of effective designs advanced to Gaussian RHS.
+ridge,ridge_tau2,10000,numeric,Gaussian ridge coefficient prior variance.
+ridge,intercept_variance,1000000,numeric,Gaussian ridge intercept prior variance.
+ridge,sigma_shape,2,numeric,Inverse-gamma shape hyperparameter.
+ridge,sigma_rate,1,numeric,Inverse-gamma rate hyperparameter.
+ridge,calibration_replicates,3,integer,Independent DGP replicates used for observational-window selection.
+ridge,calibration_seed_base,202609610,integer,First disjoint seed namespace for observational calibration fixtures.
+rhs,tau0_grid,"1;0.1;0.01;0.001;0.0001",numeric_vector,Frozen Gaussian RHS sparsity grid.
+rhs,max_iter,300,integer,Maximum Gaussian RHS VB iterations.
+rhs,min_iter,50,integer,Minimum Gaussian RHS VB iterations.
+rhs,tolerance,0.0001,numeric,Gaussian RHS VB convergence tolerance.
+runtime,max_workers,10,integer,Maximum concurrent screening workers.
+runtime,blas_threads,1,integer,Threads allowed inside each worker.
+runtime,nice_level,10,integer,Reduced scheduling priority while Phase182 is active.
+gates,max_condition_number,1000000000000,numeric,Review ceiling for the training readout condition estimate.
+gates,max_state_saturation,0.25,numeric,Review ceiling for the fraction of near-saturated states.
+gates,require_finite_scores,true,logical,All selector scores must be finite.
+gates,protected_selection_forbidden,true,logical,Protected validation rows cannot be loaded by selector workers.

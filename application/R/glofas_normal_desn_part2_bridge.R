@@ -57,6 +57,41 @@ app_glofas_normal_part2_input_contracts <- function() {
   )
 }
 
+app_glofas_normal_part2_reference_input_contracts <- function() {
+  data.frame(
+    ref_input_contract = c(
+      "reference_usgs_covars",
+      "reference_glofas_covars"
+    ),
+    ref_include_covariates = c(TRUE, TRUE),
+    ref_include_glofas_lags = c(FALSE, TRUE),
+    ref_include_usgs_aux_lags = c(FALSE, FALSE),
+    ref_include_discrepancy_lags = c(FALSE, FALSE),
+    ref_input_description = c(
+      "USGS/reference lags plus ppt/soil history",
+      "USGS/reference lags plus retrospective GloFAS and ppt/soil history"
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_glofas_normal_part2_reference_contract_row <- function(contract_id) {
+  contract_id <- as.character(contract_id %||% "reference_usgs_covars")[[1L]]
+  contracts <- app_glofas_normal_part2_reference_input_contracts()
+  out <- contracts[contracts$ref_input_contract == contract_id, , drop = FALSE]
+  if (nrow(out) != 1L) {
+    stop(
+      sprintf(
+        "Unknown Part 2/3 reference input contract '%s'. Expected one of: %s.",
+        contract_id,
+        paste(contracts$ref_input_contract, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  out
+}
+
 app_glofas_normal_part2_contract_row <- function(contract_id) {
   contract_id <- as.character(contract_id %||% "disc_covars")[[1L]]
   contracts <- app_glofas_normal_part2_input_contracts()
@@ -72,6 +107,47 @@ app_glofas_normal_part2_contract_row <- function(contract_id) {
     )
   }
   out
+}
+
+app_glofas_normal_part2_apply_reference_input_contract <- function(cfg, candidate_row) {
+  contract_id <- app_glofas_normal_part2_row_value(candidate_row, "input_contract", "reference_usgs_covars", prefix = "ref")
+  spec <- app_glofas_normal_part2_reference_contract_row(contract_id)
+  reservoir_input <- cfg$feature_contract$reservoir_input %||% list()
+  if (!app_as_bool(spec$ref_include_covariates[[1L]])) {
+    reservoir_input$covariates <- list()
+  }
+  aux_lag_max <- as.integer(app_glofas_normal_part2_row_value(
+    candidate_row,
+    "auxiliary_lag_max",
+    app_glofas_normal_part2_row_value(candidate_row, "output_lag_max", 360L, prefix = "ref"),
+    prefix = "ref"
+  ))
+  if (!is.finite(aux_lag_max) || aux_lag_max < 1L) {
+    aux_lag_max <- as.integer(app_glofas_normal_part2_row_value(
+      candidate_row,
+      "output_lag_max",
+      360L,
+      prefix = "ref"
+    ))
+  }
+  auxiliary_lags <- list()
+  if (app_as_bool(spec$ref_include_glofas_lags[[1L]])) {
+    auxiliary_lags$glofas <- list(range = c(1L, aux_lag_max))
+  }
+  if (app_as_bool(spec$ref_include_usgs_aux_lags[[1L]])) {
+    auxiliary_lags$usgs <- list(range = c(1L, aux_lag_max))
+  }
+  if (app_as_bool(spec$ref_include_discrepancy_lags[[1L]])) {
+    auxiliary_lags$discrepancy <- list(range = c(1L, aux_lag_max))
+  }
+  reservoir_input$auxiliary_lags <- auxiliary_lags
+  cfg$feature_contract$reservoir_input <- reservoir_input
+  cfg$feature_contract$version <- paste(
+    as.character(cfg$feature_contract$version %||% "glofas_normal_part2"),
+    as.character(contract_id),
+    sep = "_"
+  )
+  cfg
 }
 
 app_glofas_normal_part2_apply_discrepancy_input_contract <- function(cfg, candidate_row) {
@@ -107,6 +183,44 @@ app_glofas_normal_part2_apply_discrepancy_input_contract <- function(cfg, candid
   cfg
 }
 
+app_glofas_normal_part2_apply_append_preserving_win <- function(cfg, candidate_row, component) {
+  component <- match.arg(component, c("reference", "discrepancy"))
+  prefix <- if (identical(component, "reference")) "ref" else "disc"
+  enabled <- app_as_bool(app_glofas_normal_part2_row_value(
+    candidate_row,
+    "append_preserve_win",
+    FALSE,
+    prefix = prefix
+  ))
+  if (!isTRUE(enabled)) return(cfg)
+  baseline_m_input <- as.integer(app_glofas_normal_part2_row_value(
+    candidate_row,
+    "win_preserve_m_input",
+    NA_integer_,
+    prefix = prefix
+  ))
+  extension_seed <- as.integer(app_glofas_normal_part2_row_value(
+    candidate_row,
+    "win_extension_seed",
+    NA_integer_,
+    prefix = prefix
+  ))
+  if (!is.finite(baseline_m_input) || baseline_m_input < 1L) {
+    stop(sprintf("%s_win_preserve_m_input must be a positive integer.", prefix), call. = FALSE)
+  }
+  if (!is.finite(extension_seed)) {
+    stop(sprintf("%s_win_extension_seed must be finite when append-preserving W_in is enabled.", prefix), call. = FALSE)
+  }
+  cfg$reservoir$append_preserve_win <- list(
+    enabled = TRUE,
+    baseline_m_input = as.integer(baseline_m_input),
+    extension_seed = as.integer(extension_seed),
+    component = component,
+    source = "part3_cross_input_challenger"
+  )
+  cfg
+}
+
 app_glofas_normal_part2_component_cfg <- function(base_cfg, candidate_row, component) {
   component <- match.arg(component, c("reference", "discrepancy"))
   defaults <- app_glofas_normal_part2_default_values()
@@ -123,9 +237,13 @@ app_glofas_normal_part2_component_cfg <- function(base_cfg, candidate_row, compo
     seed = app_glofas_normal_part2_row_value(candidate_row, "seed", seed_default, prefix = prefix),
     washout = app_glofas_normal_part2_row_value(candidate_row, "washout", defaults$washout, prefix = prefix)
   )
+  if (identical(component, "reference")) {
+    cfg <- app_glofas_normal_part2_apply_reference_input_contract(cfg, candidate_row)
+  }
   if (identical(component, "discrepancy")) {
     cfg <- app_glofas_normal_part2_apply_discrepancy_input_contract(cfg, candidate_row)
   }
+  cfg <- app_glofas_normal_part2_apply_append_preserving_win(cfg, candidate_row, component)
   cfg
 }
 
@@ -272,7 +390,9 @@ app_glofas_normal_part2_reference_cache_key <- function(candidate_row) {
   candidate_row <- candidate_row[1L, , drop = FALSE]
   fields <- c(
     "ref_n_vector", "ref_m", "ref_output_lag_max", "ref_covariate_lag_max",
-    "ref_washout", "ref_alpha", "ref_rho", "ref_seed",
+    "ref_auxiliary_lag_max", "ref_input_contract", "ref_washout", "ref_alpha",
+    "ref_rho", "ref_seed", "ref_append_preserve_win", "ref_win_preserve_m_input",
+    "ref_win_extension_seed",
     "ridge_tau2", "intercept_var", "sigma_a", "sigma_b", "validation_n"
   )
   present <- intersect(fields, names(candidate_row))

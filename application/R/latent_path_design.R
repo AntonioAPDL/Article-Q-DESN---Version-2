@@ -833,6 +833,30 @@ app_qdesn_make_reducer <- function(n_from, n_to) {
   Q / rs
 }
 
+app_qdesn_parse_bool <- function(x, default = FALSE) {
+  if (is.null(x) || !length(x)) return(isTRUE(default))
+  if (is.logical(x)) return(isTRUE(x[[1L]]))
+  value <- tolower(trimws(as.character(x[[1L]])))
+  value %in% c("true", "t", "yes", "y", "1")
+}
+
+app_qdesn_sparse_weights_with_seed <- function(nr, nc, prob, dist = "normal", seed) {
+  old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+    get(".Random.seed", envir = .GlobalEnv)
+  } else {
+    NULL
+  }
+  on.exit({
+    if (is.null(old_seed)) {
+      if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) rm(".Random.seed", envir = .GlobalEnv)
+    } else {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+  set.seed(as.integer(seed))
+  app_qdesn_sparse_weights(nr, nc, prob, dist)
+}
+
 app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
   r <- cfg$reservoir %||% list()
   D <- as.integer(r$D %||% 1L)
@@ -857,6 +881,22 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
   if (length(rho) != D || any(rho <= 0 | rho >= 1)) stop("Invalid reservoir rho.", call. = FALSE)
   if (length(pi_w) != D || any(pi_w <= 0 | pi_w > 1)) stop("Invalid reservoir pi_w.", call. = FALSE)
   if (length(pi_in) != D || any(pi_in <= 0 | pi_in > 1)) stop("Invalid reservoir pi_in.", call. = FALSE)
+  append_preserve <- r$append_preserve_win %||% list()
+  append_preserve_enabled <- app_qdesn_parse_bool(append_preserve$enabled %||% FALSE)
+  baseline_m_input <- as.integer(append_preserve$baseline_m_input %||% m_input)
+  extension_seed <- as.integer(append_preserve$extension_seed %||% (as.integer(seed) + 104729L + as.integer(m_input)))
+  if (isTRUE(append_preserve_enabled)) {
+    if (!is.finite(baseline_m_input) || baseline_m_input < 0L || baseline_m_input > as.integer(m_input)) {
+      stop("append_preserve_win.baseline_m_input must be in [0, m_input].", call. = FALSE)
+    }
+    if (!is.finite(extension_seed)) {
+      stop("append_preserve_win.extension_seed must be finite.", call. = FALSE)
+    }
+  } else {
+    baseline_m_input <- as.integer(m_input)
+    extension_seed <- NA_integer_
+  }
+  first_layer_input_width <- if (isTRUE(append_preserve_enabled)) baseline_m_input + 1L else as.integer(m_input) + 1L
 
   old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) get(".Random.seed", envir = .GlobalEnv) else NULL
   on.exit({
@@ -874,7 +914,7 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
   W <- vector("list", D)
   Qred <- vector("list", max(0L, D - 1L))
   Q_is_identity <- logical(max(0L, D - 1L))
-  Win[[1L]] <- app_qdesn_sparse_weights(n[[1L]], as.integer(m_input) + 1L, pi_in[[1L]], in_dist)
+  Win[[1L]] <- app_qdesn_sparse_weights(n[[1L]], first_layer_input_width, pi_in[[1L]], in_dist)
   W[[1L]] <- app_qdesn_sparse_weights(n[[1L]], n[[1L]], pi_w[[1L]], w_dist)
   if (D >= 2L) {
     for (d in 2:D) {
@@ -895,6 +935,22 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
     W[[d]] <- (rho[[d]] / sr) * W[[d]]
     W[[d]] <- app_qdesn_enforce_leaky_radius(W[[d]], alpha[[d]])
   }
+  if (isTRUE(append_preserve_enabled)) {
+    extension_width <- as.integer(m_input) - baseline_m_input
+    if (extension_width > 0L) {
+      extension <- app_qdesn_sparse_weights_with_seed(
+        n[[1L]],
+        extension_width,
+        pi_in[[1L]],
+        in_dist,
+        seed = extension_seed
+      )
+      Win[[1L]] <- cbind(Win[[1L]], extension)
+    }
+    if (ncol(Win[[1L]]) != as.integer(m_input) + 1L) {
+      stop("append-preserving W_in generation produced an invalid first-layer width.", call. = FALSE)
+    }
+  }
   list(
     D = D,
     n = n,
@@ -913,7 +969,15 @@ app_qdesn_generate_article_reservoir <- function(cfg, seed, m_input) {
     pi_in = pi_in,
     w_dist = w_dist,
     in_dist = in_dist,
-    seed = as.integer(seed)
+    seed = as.integer(seed),
+    append_preserve_win = list(
+      enabled = isTRUE(append_preserve_enabled),
+      baseline_m_input = as.integer(baseline_m_input),
+      extension_m_input = as.integer(as.integer(m_input) - baseline_m_input),
+      extension_seed = as.integer(extension_seed),
+      preserved_first_layer_columns = as.integer(baseline_m_input + 1L),
+      note = "First-layer bias and original input weights are generated with the baseline RNG stream; appended input weights use extension_seed after recurrent W generation."
+    )
   )
 }
 

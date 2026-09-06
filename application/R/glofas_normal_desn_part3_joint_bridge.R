@@ -192,6 +192,261 @@ app_glofas_normal_part3_candidate_from_winners <- function(
   )
 }
 
+app_glofas_normal_part3_cross_input_contract_id <- function() {
+  "part3_cross_ref_glofas_disc_glofas_reservoir_inputs_v1"
+}
+
+app_glofas_normal_part3_baseline_reservoir_m_input <- function(output_lag_max, covariate_lag_max) {
+  output_lag_max <- as.integer(output_lag_max)
+  covariate_lag_max <- as.integer(covariate_lag_max)
+  if (!is.finite(output_lag_max) || output_lag_max < 1L) {
+    stop("output_lag_max must be positive for the Part 3 baseline input count.", call. = FALSE)
+  }
+  if (!is.finite(covariate_lag_max) || covariate_lag_max < 0L) {
+    stop("covariate_lag_max must be nonnegative for the Part 3 baseline input count.", call. = FALSE)
+  }
+  as.integer(output_lag_max + 2L * (covariate_lag_max + 1L))
+}
+
+app_glofas_normal_part3_cross_input_challenger_candidate <- function(
+  winner_manifest,
+  candidate_id = "part3_cross_input_normal_challenger_ref_glofas_disc_glofas",
+  require_frozen = TRUE,
+  extension_seed = 20260905L
+) {
+  row <- app_glofas_normal_part3_candidate_from_winners(
+    winner_manifest,
+    candidate_id = candidate_id,
+    require_frozen = require_frozen
+  )
+  extension_seed <- as.integer(extension_seed)
+  if (!is.finite(extension_seed)) stop("extension_seed must be finite.", call. = FALSE)
+  row$part3_input_contract <- app_glofas_normal_part3_cross_input_contract_id()
+  row$ref_input_contract <- "reference_glofas_covars"
+  row$disc_input_contract <- "disc_glofas_covars"
+  row$ref_auxiliary_lag_max <- as.integer(row$ref_output_lag_max[[1L]])
+  row$disc_auxiliary_lag_max <- as.integer(row$disc_output_lag_max[[1L]])
+  row$ref_append_preserve_win <- TRUE
+  row$disc_append_preserve_win <- TRUE
+  row$ref_win_preserve_m_input <- app_glofas_normal_part3_baseline_reservoir_m_input(
+    row$ref_output_lag_max[[1L]],
+    row$ref_covariate_lag_max[[1L]]
+  )
+  row$disc_win_preserve_m_input <- app_glofas_normal_part3_baseline_reservoir_m_input(
+    row$disc_output_lag_max[[1L]],
+    row$disc_covariate_lag_max[[1L]]
+  )
+  row$ref_win_extension_seed <- as.integer(extension_seed + 101L)
+  row$disc_win_extension_seed <- as.integer(extension_seed + 202L)
+  row$cross_input_description <- paste(
+    "Reference reservoir: USGS lags plus retrospective GloFAS lags plus PPT/soil;",
+    "discrepancy reservoir: discrepancy lags plus retrospective GloFAS lags plus PPT/soil;",
+    "all lagged inputs enter reservoirs only."
+  )
+  row
+}
+
+app_glofas_normal_part3_object_sha256 <- function(x) {
+  tmp <- tempfile("part3_cross_input_hash_", fileext = ".rds")
+  on.exit(unlink(tmp), add = TRUE)
+  saveRDS(x, tmp, version = 2L)
+  app_sha256_file(tmp)
+}
+
+app_glofas_normal_part3_input_lag_audit <- function(design) {
+  one <- function(component, component_design) {
+    info <- component_design$design_meta$reservoir_input_info
+    if (is.null(info) || !is.data.frame(info) || !nrow(info)) {
+      stop(sprintf("%s component is missing reservoir input metadata.", component), call. = FALSE)
+    }
+    pieces <- split(info, paste(info$input_block, info$variable, sep = "::"))
+    app_bind_rows_fill(lapply(pieces, function(x) {
+      data.frame(
+        component = component,
+        input_block = as.character(x$input_block[[1L]]),
+        variable = as.character(x$variable[[1L]]),
+        n_lags = nrow(x),
+        min_lag = min(as.integer(x$lag)),
+        max_lag = max(as.integer(x$lag)),
+        lag_values = paste(as.integer(x$lag), collapse = ","),
+        stringsAsFactors = FALSE
+      )
+    }))
+  }
+  app_bind_rows_fill(list(
+    one("reference", design$reference$component_design),
+    one("discrepancy", design$discrepancy$component_design)
+  ))
+}
+
+app_glofas_normal_part3_raw_input_lags <- function(design) {
+  one <- function(component, component_design) {
+    info <- component_design$design_meta$reservoir_input_info
+    if (is.null(info) || !is.data.frame(info) || !nrow(info)) {
+      stop(sprintf("%s component is missing reservoir input metadata.", component), call. = FALSE)
+    }
+    info$component <- component
+    info
+  }
+  app_bind_rows_fill(list(
+    one("reference", design$reference$component_design),
+    one("discrepancy", design$discrepancy$component_design)
+  ))
+}
+
+app_glofas_normal_part3_expect_lags <- function(info, component, input_block, variable, expected) {
+  idx <- info$component == component & info$input_block == input_block & info$variable == variable
+  observed <- sort(as.integer(info$lag[which(idx)]))
+  expected <- sort(as.integer(expected))
+  identical(observed, expected)
+}
+
+app_glofas_normal_part3_reservoir_activity <- function(design, max_rank_rows = 1000L) {
+  one <- function(component, X) {
+    X <- as.matrix(X)
+    if (ncol(X) > 1L) X_state <- X[, -1L, drop = FALSE] else X
+    storage.mode(X_state) <- "double"
+    row_idx <- seq_len(nrow(X_state))
+    if (length(row_idx) > max_rank_rows) {
+      row_idx <- unique(round(seq(1, nrow(X_state), length.out = max_rank_rows)))
+    }
+    Xs <- X_state[row_idx, , drop = FALSE]
+    Xs <- sweep(Xs, 2L, colMeans(Xs), "-")
+    singular_values <- suppressWarnings(svd(Xs, nu = 0L, nv = 0L)$d)
+    energy <- singular_values^2
+    p <- if (sum(energy) > 0) energy / sum(energy) else rep(0, length(energy))
+    effective_rank <- if (length(p) && sum(p > 0) > 0) exp(-sum(p[p > 0] * log(p[p > 0]))) else 0
+    data.frame(
+      component = component,
+      n_rows = nrow(X_state),
+      n_state_features = ncol(X_state),
+      finite = all(is.finite(X_state)),
+      min_value = min(X_state),
+      max_value = max(X_state),
+      mean_abs_value = mean(abs(X_state)),
+      sd_median = stats::median(apply(X_state, 2L, stats::sd)),
+      saturation_abs_gt_0p95 = mean(abs(X_state) > 0.95),
+      saturation_abs_gt_0p99 = mean(abs(X_state) > 0.99),
+      rank_sample_rows = length(row_idx),
+      effective_rank_entropy_sample = as.numeric(effective_rank),
+      numerical_rank_sample = sum(singular_values > max(singular_values, 0) * 1.0e-8),
+      stringsAsFactors = FALSE
+    )
+  }
+  app_bind_rows_fill(list(
+    one("reference", design$reference$X),
+    one("discrepancy", design$discrepancy$X)
+  ))
+}
+
+app_glofas_normal_part3_win_preservation_audit <- function(design) {
+  one <- function(component, component_design) {
+    cfg <- component_design$cfg
+    reservoir <- component_design$reservoir
+    append <- reservoir$append_preserve_win %||% list()
+    baseline_m_input <- as.integer(append$baseline_m_input %||% NA_integer_)
+    preserved_cols <- as.integer(append$preserved_first_layer_columns %||% (baseline_m_input + 1L))
+    if (!isTRUE(append$enabled %||% FALSE)) {
+      stop(sprintf("%s component did not use append-preserving W_in generation.", component), call. = FALSE)
+    }
+    baseline_cfg <- cfg
+    baseline_cfg$reservoir$append_preserve_win <- NULL
+    baseline <- app_qdesn_generate_article_reservoir(
+      baseline_cfg,
+      seed = as.integer((cfg$reservoir %||% list())$seed),
+      m_input = baseline_m_input
+    )
+    w_gap <- max(abs(as.matrix(reservoir$W[[1L]]) - as.matrix(baseline$W[[1L]])))
+    win_gap <- max(abs(
+      as.matrix(reservoir$Win[[1L]])[, seq_len(preserved_cols), drop = FALSE] -
+        as.matrix(baseline$Win[[1L]])[, seq_len(preserved_cols), drop = FALSE]
+    ))
+    data.frame(
+      component = component,
+      append_preserve_enabled = TRUE,
+      baseline_m_input = baseline_m_input,
+      augmented_m_input = as.integer(reservoir$m_input),
+      extension_m_input = as.integer(append$extension_m_input %||% NA_integer_),
+      extension_seed = as.integer(append$extension_seed %||% NA_integer_),
+      preserved_first_layer_columns = preserved_cols,
+      recurrent_w_max_abs_gap = w_gap,
+      preserved_win_max_abs_gap = win_gap,
+      recurrent_w_preserved = is.finite(w_gap) && w_gap <= 0,
+      input_weight_block_preserved = is.finite(win_gap) && win_gap <= 0,
+      baseline_w_sha256 = app_glofas_normal_part3_object_sha256(baseline$W[[1L]]),
+      augmented_w_sha256 = app_glofas_normal_part3_object_sha256(reservoir$W[[1L]]),
+      baseline_win_preserved_block_sha256 = app_glofas_normal_part3_object_sha256(
+        baseline$Win[[1L]][, seq_len(preserved_cols), drop = FALSE]
+      ),
+      augmented_win_preserved_block_sha256 = app_glofas_normal_part3_object_sha256(
+        reservoir$Win[[1L]][, seq_len(preserved_cols), drop = FALSE]
+      ),
+      appended_win_block_sha256 = app_glofas_normal_part3_object_sha256(
+        reservoir$Win[[1L]][, (preserved_cols + 1L):ncol(reservoir$Win[[1L]]), drop = FALSE]
+      ),
+      stringsAsFactors = FALSE
+    )
+  }
+  app_bind_rows_fill(list(
+    one("reference", design$reference$component_design),
+    one("discrepancy", design$discrepancy$component_design)
+  ))
+}
+
+app_glofas_normal_part3_validate_cross_input_design <- function(design, candidate_row) {
+  candidate_row <- candidate_row[1L, , drop = FALSE]
+  if (!identical(as.character(candidate_row$part3_input_contract[[1L]]), app_glofas_normal_part3_cross_input_contract_id())) {
+    stop("Part 3 cross-input challenger requires the named cross-input contract.", call. = FALSE)
+  }
+  app_glofas_normal_part3_validate_design(design)
+  if (any(grepl("^direct_", as.character(design$feature_info$block)))) {
+    stop("Part 3 cross-input challenger must not add direct readout input columns.", call. = FALSE)
+  }
+  raw_info <- app_glofas_normal_part3_raw_input_lags(design)
+  info <- app_glofas_normal_part3_input_lag_audit(design)
+  ref_out <- seq_len(as.integer(candidate_row$ref_output_lag_max[[1L]]))
+  ref_aux <- seq_len(as.integer(candidate_row$ref_auxiliary_lag_max[[1L]]))
+  ref_cov <- 0:as.integer(candidate_row$ref_covariate_lag_max[[1L]])
+  disc_out <- seq_len(as.integer(candidate_row$disc_output_lag_max[[1L]]))
+  disc_aux <- seq_len(as.integer(candidate_row$disc_auxiliary_lag_max[[1L]]))
+  disc_cov <- 0:as.integer(candidate_row$disc_covariate_lag_max[[1L]])
+  checks <- c(
+    app_glofas_normal_part3_expect_lags(raw_info, "reference", "output_lag", "y", ref_out),
+    app_glofas_normal_part3_expect_lags(raw_info, "reference", "auxiliary_lag", "glofas", ref_aux),
+    app_glofas_normal_part3_expect_lags(raw_info, "reference", "covariate_lag", "ppt", ref_cov),
+    app_glofas_normal_part3_expect_lags(raw_info, "reference", "covariate_lag", "soil", ref_cov),
+    app_glofas_normal_part3_expect_lags(raw_info, "discrepancy", "output_lag", "y", disc_out),
+    app_glofas_normal_part3_expect_lags(raw_info, "discrepancy", "auxiliary_lag", "glofas", disc_aux),
+    app_glofas_normal_part3_expect_lags(raw_info, "discrepancy", "covariate_lag", "ppt", disc_cov),
+    app_glofas_normal_part3_expect_lags(raw_info, "discrepancy", "covariate_lag", "soil", disc_cov)
+  )
+  if (!all(checks)) {
+    stop("Part 3 cross-input challenger lag sets do not match the contract.", call. = FALSE)
+  }
+  forbidden <- subset(raw_info, input_block == "auxiliary_lag" & (
+    component == "reference" & variable %in% c("usgs", "discrepancy") |
+      component == "discrepancy" & variable %in% c("usgs", "discrepancy")
+  ))
+  if (nrow(forbidden)) {
+    stop("Part 3 cross-input challenger has a forbidden auxiliary stream.", call. = FALSE)
+  }
+  if (any(raw_info$input_block %in% c("output_lag", "auxiliary_lag") & as.integer(raw_info$lag) <= 0L)) {
+    stop("Part 3 cross-input challenger cannot use contemporaneous Y/G/D inputs.", call. = FALSE)
+  }
+  if (any(!is.finite(design$H)) || any(!is.finite(design$z))) {
+    stop("Part 3 cross-input challenger design contains non-finite values.", call. = FALSE)
+  }
+  win <- app_glofas_normal_part3_win_preservation_audit(design)
+  if (!all(win$recurrent_w_preserved) || !all(win$input_weight_block_preserved)) {
+    stop("Part 3 cross-input challenger failed W/W_in preservation checks.", call. = FALSE)
+  }
+  list(
+    input_lag_audit = info,
+    win_preservation_audit = win,
+    reservoir_activity = app_glofas_normal_part3_reservoir_activity(design)
+  )
+}
+
 app_glofas_normal_part3_feature_info <- function(component_info, column_names, block, offset = 0L) {
   p <- length(column_names)
   if (is.null(component_info) || !is.data.frame(component_info) || !nrow(component_info)) {
@@ -612,7 +867,9 @@ app_glofas_normal_part3_score_from_fit <- function(
     discrepancy_mean = disc_valid$mean,
     discrepancy_sd = disc_valid$sd,
     joint_usgs_mean = joint_valid_y$mean,
+    joint_usgs_sd = joint_valid_y$sd,
     joint_glofas_mean = joint_valid_g$mean,
+    joint_glofas_sd = joint_valid_g$sd,
     corrected_usgs_mean = corrected_valid$mean,
     corrected_usgs_sd = corrected_valid$sd,
     stringsAsFactors = FALSE

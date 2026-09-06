@@ -1,0 +1,11 @@
+axis,values,role
+depth,"1;2;3",novel_architecture
+retained_state_budget,"24;48;96;192",novel_architecture
+width_shape,"flat;tapered",novel_architecture
+state_reduction,"false;true",novel_architecture
+alpha_schedule,"fast;balanced;slow;fast_to_slow;slow_to_fast",novel_architecture
+rho,"0.75;0.90;0.98",novel_architecture
+input_scale,"0.10;0.25;0.50",novel_architecture
+design_class,"reservoir;hybrid",novel_architecture
+pi_w,"0.10;0.20",novel_architecture
+pi_in,"1.0",fixed

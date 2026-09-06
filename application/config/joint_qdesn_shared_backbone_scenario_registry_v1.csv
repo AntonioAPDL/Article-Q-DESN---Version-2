@@ -1,0 +1,9 @@
+enabled,scenario_id,scenario_order,role,selection_unit
+true,regime_shift,1,pilot,scenario_specific
+false,asymmetric_laplace_tail,2,future_extension,scenario_specific
+false,gaussian_mixture_bridge,3,future_extension,scenario_specific
+false,laplace_bridge,4,future_extension,scenario_specific
+false,nonlinear_reservoir_friendly,5,future_extension,scenario_specific
+false,normal_bridge,6,future_extension,scenario_specific
+false,persistent_heavy_tail,7,future_extension,scenario_specific
+false,student_t_location_scale,8,future_extension,scenario_specific

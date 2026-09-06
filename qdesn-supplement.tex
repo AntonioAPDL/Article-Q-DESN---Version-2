@@ -44,6 +44,7 @@
 \newcommand{\TableStyle}{\footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.08}}
 
 \input{tables/glofas_application_current_outputs.tex}
+\input{tables/pricefm_full_current_outputs.tex}
 
 \newcounter{suppalgorithm}
 \renewcommand{\thesuppalgorithm}{S\arabic{suppalgorithm}}
@@ -1659,6 +1660,35 @@ The main article reports the aggregate PriceFM comparison over the same region
 and fold combinations. The tables below summarize results by fold, predictor
 set, and forecast-horizon group. All three summaries use the same retrospective
 information set described in the main article.
+
+Within \PricefmSelectionComparedRows{} region--fold comparisons, AL and exAL
+specifications were chosen using validation AQL and then evaluated on held-out
+observations. The validation-selected specifications averaged test AQL
+\PricefmSelectionCandidateMeanAql{}, compared with
+\PricefmSelectionReferenceMeanAql{} for the reference Q--DESN specifications.
+For the reported aggregate, the validation-selected specification replaced
+the reference in the \PricefmSelectionUpdatedRows{} cases listed in
+Table~\ref{tab:supp-pricefm-selective-updates}, where its held-out AQL was lower
+than both the reference Q--DESN and matched PriceFM values.
+The retained alternatives use exAL except for ES fold~1, which uses AL. Only
+IT\_NORD fold~3 changes the working-likelihood family relative to the reference
+specification. The comparisons are
+descriptive because held-out performance determined the case-specific
+replacements.
+
+\begin{table}[!htbp]
+\centering
+\caption{Case-specific Q--DESN updates in the PriceFM retrospective
+comparison. Each row gives a validation-selected specification whose held-out
+AQL is lower than both the reference Q--DESN value and the matched released
+PriceFM value. The final column is the reduction from the reference Q--DESN
+AQL. Values are
+reported on the original electricity-price scale.}
+\label{tab:supp-pricefm-selective-updates}
+\resizebox{\textwidth}{!}{%
+\input{tables/pricefm_r91_selective_promotions.tex}
+}
+\end{table}
 
 \begin{table}[!htbp]
 \centering

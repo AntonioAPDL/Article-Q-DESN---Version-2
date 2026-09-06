@@ -282,6 +282,14 @@ empty_missing <- if (length(empty_dependencies)) {
   character()
 }
 stopifnot(identical(empty_missing, character()))
+stopifnot(identical(
+  app_glofas_part4_dependency_artifact_paths(tempdir(), character()),
+  character()
+))
+stopifnot(identical(
+  basename(app_glofas_part4_dependency_artifact_paths(tempdir(), c("ridge", "rhs"))),
+  c("ridge_fit_side.rds", "rhs_fit_side.rds")
+))
 stopifnot(nrow(graph) == 18L)
 stopifnot(sum(graph$part4_family == "normal_ridge_diagnostic") == 1L)
 stopifnot(sum(graph$part4_family == "normal_rhs_vb_diagnostic") == 1L)

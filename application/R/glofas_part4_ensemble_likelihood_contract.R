@@ -653,6 +653,11 @@ app_glofas_part4_parse_dependencies <- function(value) {
   dependencies[nzchar(dependencies)]
 }
 
+app_glofas_part4_dependency_artifact_paths <- function(runtime_root, dependencies) {
+  if (!length(dependencies)) return(character())
+  file.path(runtime_root, "objects", paste0(dependencies, "_fit_side.rds"))
+}
+
 app_glofas_part4_launch_manifest <- function(
     run_label,
     selected_anchor_manifest = NULL,

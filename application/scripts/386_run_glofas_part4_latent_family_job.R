@@ -101,7 +101,7 @@ run_job <- function() {
     likelihood_family = as.character(model_rows$likelihood_family[[1L]])
   )
   vb_args$progress_path <- file.path(runtime_root, "traces", paste0(job_id, "_live.csv"))
-  dependency_paths <- file.path(runtime_root, "objects", paste0(dependencies, "_fit_side.rds"))
+  dependency_paths <- app_glofas_part4_dependency_artifact_paths(runtime_root, dependencies)
   dependency_results <- lapply(dependency_paths, readRDS)
   started <- Sys.time()
 

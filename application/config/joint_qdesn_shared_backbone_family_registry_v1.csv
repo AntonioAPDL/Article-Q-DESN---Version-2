@@ -1,0 +1,9 @@
+enabled,scenario_id,scenario_order,role,selection_unit,calibration_seed_base,evaluation_seed_base,article_seed
+true,asymmetric_laplace_tail,1,screen_and_quantile,scenario_specific,202610100,202610150,202607205
+true,gaussian_mixture_bridge,2,screen_and_quantile,scenario_specific,202610200,202610250,202607203
+true,laplace_bridge,3,screen_and_quantile,scenario_specific,202610300,202610350,202607202
+true,nonlinear_reservoir_friendly,4,screen_and_quantile,scenario_specific,202610400,202610450,202607209
+true,normal_bridge,5,screen_and_quantile,scenario_specific,202610500,202610550,202607201
+true,persistent_heavy_tail,6,screen_and_quantile,scenario_specific,202610600,202610650,202607207
+false,regime_shift,7,retained_completed_pilot,scenario_specific,202609610,202609710,202607208
+true,student_t_location_scale,8,screen_and_quantile,scenario_specific,202610800,202610850,202607204

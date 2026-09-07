@@ -41,7 +41,7 @@ def parser() -> argparse.ArgumentParser:
 def atomic_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f"{path.name}.tmp.{os.getpid()}")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n")
     temporary.replace(path)
 
 

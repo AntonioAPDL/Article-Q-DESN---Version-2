@@ -225,3 +225,12 @@ def test_r94_controller_stops_before_test_and_requires_token():
     assert '"stopped_before_allfold_and_test"' in text
     assert '"test_access_authorized": False' in text
     assert "303_closeout_pricefm_stage_r94_validation_family.py" in text
+
+
+def test_r94_controller_state_serializes_path_commands(tmp_path):
+    module = load("306_orchestrate_pricefm_stage_r94.py")
+    state = tmp_path / "controller_state.json"
+    module.atomic_json(state, {"command": [Path("/tmp/python"), Path("script.py")]})
+    assert json.loads(state.read_text()) == {
+        "command": ["/tmp/python", "script.py"],
+    }

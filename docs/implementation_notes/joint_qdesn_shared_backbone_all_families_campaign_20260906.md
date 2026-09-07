@@ -122,8 +122,39 @@ Rscript application/scripts/check_joint_qdesn_shared_backbone_family_campaign.R 
 - [x] Add campaign health and failure-closed finalization.
 - [x] Freeze a future 32-cell MCMC handoff schema without launching MCMC.
 - [x] Pass the three focused regression tests.
-- [ ] Prepare and verify the real seven-family campaign packet.
-- [ ] Run one real worker as an end-to-end launch sentinel.
-- [ ] Commit and push the dedicated JOINT branch.
-- [ ] Launch in background and confirm live worker progress.
-- [ ] After completion, freeze results and prepare the separate MCMC protocol.
+- [x] Prepare and verify the real seven-family campaign packet.
+- [x] Run one real worker as an end-to-end launch sentinel.
+- [x] Commit and push the dedicated JOINT branch.
+- [x] Launch in background and confirm live worker progress.
+- [x] Complete 7,560/7,560 jobs with zero failures.
+- [x] Verify all 98 nested artifacts and all seven final-manifest entries.
+- [x] Freeze eight case-specific backbones and the 32-cell future MCMC plan.
+- [x] Close the VB phase without launching MCMC or changing article assets.
+
+## Final Status
+
+The campaign completed at `2026-09-07T03:59:27Z` with exit code zero. All
+seven new scenario packets and the retained Regime Shift pilot are complete.
+The final decision is
+`VB_FAMILY_CAMPAIGN_COMPLETE_READY_TO_FREEZE_MCMC_PROTOCOL`.
+
+The protected VB comparison is diagnostic rather than article-authoritative.
+Independent exQDESN had the lowest mean DGP-integrated aCRPS in each of the
+seven new scenarios. Joint exQDESN nevertheless reduced mean raw crossings
+from 535 to 222 and had zero raw crossings in five scenarios. All reported
+contract-crossing counts are zero. These results justify proceeding to the
+predeclared MCMC confirmation; they do not justify a further forecast-selected
+VB screen.
+
+The frozen runtime packet is:
+
+```text
+application/cache/joint_qdesn_shared_backbone_family_campaign_20260906
+```
+
+Its size is approximately 391 MiB. The final artifact-manifest SHA-256 is
+`30e2714224b503a19f23f57a8e094378f6475f824358e9568327088d7f0f45a2`.
+The packet remains ignored and must not be committed or projected to Overleaf.
+The next scientific branch must first refit the four selected VB models on
+each scenario's designated article observational window and freeze those 32
+matched initializers before launching MCMC.

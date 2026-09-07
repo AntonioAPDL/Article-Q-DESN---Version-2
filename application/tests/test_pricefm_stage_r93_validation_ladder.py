@@ -162,6 +162,7 @@ def test_quantile_closeout_selects_only_a_complete_eligible_family(tmp_path):
     summary = module.run(args)
     assert summary["selected_family"] == "exal"
     assert summary["status"] == "validation_family_frozen_awaiting_test_audit_authorization"
+    assert summary["test_opened"] is False
     assert summary["test_access_authorized"] is False
     assert summary["registry_mutation_authorized"] is False
 

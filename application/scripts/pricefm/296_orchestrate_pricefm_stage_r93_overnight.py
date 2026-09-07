@@ -15,6 +15,12 @@ import sys
 import time
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from pricefm_region_frozen_contract import validate_pretest_firewall
+
 
 ARTIFACT_REPO = Path("/data/jaguir26/local/src/Article-Q-DESN")
 DATA = ARTIFACT_REPO / "application/data_local/pricefm"
@@ -363,8 +369,7 @@ class Controller:
         summary = json.loads(summary_path.read_text())
         if not str(summary.get("status", "")).startswith(("completed", "validation_family_frozen")):
             raise RuntimeError(f"invalid {action} summary: {summary_path}")
-        if summary.get("test_opened") is not False:
-            raise RuntimeError(f"{action} violated the test firewall")
+        validate_pretest_firewall(summary, label=action)
         return summary
 
     def launch_grid(self, label: str, grid: Path, expected: int, root: Path) -> None:

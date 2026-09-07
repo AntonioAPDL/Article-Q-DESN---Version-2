@@ -802,7 +802,8 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "next_action": next_action, "next_grid": str(next_grid),
         "next_manifest": str(next_manifest),
-        "test_opened": False, "registry_mutated": False, "article_mutated": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutated": False, "article_mutated": False,
         "joint_or_mcmc_authorized": False,
     }
     write_json(stage / "summary.json", summary)
@@ -856,7 +857,8 @@ def action_close_refinement(args: argparse.Namespace) -> dict[str, Any]:
         "winner_median_validation_AQL": float(winner.median_validation_AQL),
         "next_action": "launch_outer_normal_confirmation",
         "next_grid": str(outer_grid), "next_manifest": str(contract_path),
-        "test_opened": False, "registry_mutated": False, "article_mutated": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutated": False, "article_mutated": False,
         "joint_or_mcmc_authorized": False,
     }
     write_json(stage / "summary.json", summary)
@@ -931,7 +933,8 @@ def action_close_outer(args: argparse.Namespace) -> dict[str, Any]:
         "quantile_task": str(task_path), "quantile_config": str(config_path),
         "quantile_output_dir": task["output_dir"],
         "next_action": "launch_quantile_validation_ladder",
-        "test_opened": False, "registry_mutated": False, "article_mutated": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutated": False, "article_mutated": False,
         "joint_or_mcmc_authorized": False,
     }
     write_json(stage / "summary.json", summary)
@@ -991,6 +994,7 @@ def action_close_quantile(args: argparse.Namespace) -> dict[str, Any]:
         "selected_validation_AQL_original": float(winner.validation_AQL_original),
         "selection_rule": "complete_numerically_eligible_family_minimum_reserved_fold1_validation_AQL",
         "per_quantile_family_mixing": False,
+        "test_opened": False,
         "test_access_authorized": False,
         "registry_mutation_authorized": False,
         "article_mutation_authorized": False,

@@ -1,0 +1,55 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_shared_backbone_article_score_packet_v1,character,Tracked deterministic score contract for the completed Jerez JOINT shared-backbone article-confirmation MCMC packet.
+scope,runtime_root,application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907,character,Ignored Jerez runtime root that contains verified VB and MCMC evidence.
+scope,expected_source_jobs,7560,integer,Imported shared-backbone source jobs required before article-window scoring.
+scope,expected_source_failures,0,integer,No imported source failures are allowed.
+scope,expected_vb_components,136,integer,Article-window VB components required for compact MCMC initializers.
+scope,expected_initializers,32,integer,One compact top-level initializer per scenario-model cell.
+scope,expected_mcmc_workers,160,integer,All Jerez MCMC chain workers required before score reconstruction.
+scope,expected_scenarios,8,integer,The article fixture contains eight synthetic mechanisms.
+scope,expected_models,4,integer,Joint and independent QDESN/exQDESN readouts are compared within AL and exAL likelihood families.
+scope,expected_model_cells,32,integer,Eight scenarios by four model families.
+scope,expected_contrasts,16,integer,One joint-minus-independent contrast for AL and one for exAL in each scenario.
+score,primary_metric,dgp_integrated_acrps,character,Known-DGP expected finite-grid quantile score for the issued quantile action.
+score,score_scale,twice_check_loss,character,Each ordinate is twice the quantile check loss.
+score,tau_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Frozen seven-level article quantile grid.
+score,trapezoidal_weights,0.025;0.100;0.200;0.250;0.200;0.100;0.025,numeric_vector,Trapezoidal weights for the finite observed tau range.
+score,renormalize_weights,false,logical,Weights are not rescaled beyond the observed 0.05 to 0.95 tau range.
+score,forecast_row_source,design_score_local,character,Forecast scoring uses exactly design$score_local and no tuning-window or outcome-selected subset.
+score,canonical_action,posterior_mean_parameter_path_then_rowwise_isotonic,character,Pool retained posterior means by chain-balanced parameter path and apply the existing rowwise monotone contract.
+score,posterior_point_summary,mean,character,Primary comparison uses posterior score mean.
+score,posterior_sensitivity_summary,median,character,Posterior median is retained as a compact robustness diagnostic.
+score,credible_interval,0.95,numeric,Equal-tailed posterior interval probability.
+score,credible_interval_probabilities,0.025;0.975,numeric_vector,Equal-tailed 95 percent interval endpoints.
+draws,score_draws_per_chain,750,integer,Equally spaced retained draws per chain used for primary score uncertainty; this uses all AL retained draws and a chain-balanced exAL subset.
+draws,sensitivity_draws_per_chain,250,integer,Equally spaced retained draws per chain used for independent coupling-seed sensitivity.
+draws,draw_selection,equally_spaced_retained_indices,character,Draw selection covers the retained span without outcome-dependent subsampling.
+draws,chunk_size,50,integer,Maximum score-draw chunk size for qhat reconstruction.
+coupling,joint_draw_coupling,preserve_retained_joint_draw_identity,character,Joint model draws preserve cross-tau retained-draw identity.
+coupling,independent_draw_coupling,within_chain_seeded_per_tau_permutation,character,Independent models use seeded within-chain per-tau permutations to represent product posterior coupling.
+coupling,primary_pairing_seed,2026090801,integer,Frozen primary independent product-posterior coupling seed.
+coupling,sensitivity_pairing_seeds,2026090802;2026090803;2026090804,integer_vector,Frozen alternate independent coupling seeds for sensitivity only.
+coupling,contrast_pairing_seed,2026090901,integer,Frozen scalar score-draw pairing seed for joint-minus-independent contrasts.
+diagnostics,qhat_equivalence_tolerance,1e-8,numeric,Maximum absolute difference allowed between reconstructed posterior-mean qhat and each worker's stored validation paths.
+diagnostics,score_rank_rhat_ceiling,1.05,numeric,Preferred rank-normalized Rhat ceiling for score functionals.
+diagnostics,score_bulk_ess_floor,400,numeric,Preferred bulk ESS floor for score functionals.
+diagnostics,score_tail_ess_floor,200,numeric,Preferred tail ESS floor for score functionals.
+diagnostics,raw_crossing_rate_review,0.01,numeric,Raw pre-contract crossing rate above one percent is review-level.
+diagnostics,standardized_adjustment_review,0.01,numeric,Mean monotone adjustment over DGP scale above one percent is review-level.
+diagnostics,regret_tolerance,1e-10,numeric,Hard tolerance for negative expected regret against the oracle score.
+diagnostics,analytic_integration_tolerance,1e-8,numeric,Tolerance for analytic versus numerical expected-check-loss validation.
+diagnostics,monte_carlo_tolerance,0.01,numeric,Tolerance for deterministic Monte Carlo formula validation.
+decision,comparison_center,posterior_mean,character,A strictly lower posterior mean is the descriptive numerical ordering.
+decision,interval_interpretation,overlap_is_uncertainty_not_equality,character,Overlapping equal-tailed 95 percent intervals imply uncertain strength of evidence and do not erase numerical ordering.
+decision,practical_relative_margin,0.01,numeric,One-percent relative margin used for descriptive practical contrast summaries.
+decision,posterior_probability_floor,0.95,numeric,Probability threshold retained for evidence-strength labels rather than retuning.
+decision,descriptive_improvement_policy,strictly_lower_mean,character,Any strictly favorable posterior mean is retained as a descriptive gain.
+secondary,realized_score,finite_grid_realized_acrps,character,Realized finite-grid aCRPS is secondary.
+secondary,average_quantile_loss,unweighted_average_check_loss,character,Average quantile loss across rows and tau is secondary.
+secondary,oracle_recovery,fit_and_forecast_mae_rmse,character,Fit and forecast oracle MAE/RMSE are recovery diagnostics.
+secondary,raw_crossings,pre_contract_coherence_diagnostic,character,Raw crossings are diagnostics only before the monotone contract.
+hard_gate,finite_values,required,character,All score values and reconstructed draw blocks must be finite.
+hard_gate,contract_crossings,zero_required,character,Contracted quantile grids must have zero crossing pairs.
+hard_gate,source_completeness,fail_closed,character,Missing or incomplete source, VB, initializer, or MCMC evidence stops score finalization.
+hard_gate,manifest_verification,all_entries_verified,character,Worker, final, and packet manifests must verify by size and SHA-256.
+hard_gate,phase182_scope,separate_dense_grid_lane,character,The Muscat Phase182 19-level dense-grid crossing lane is excluded from this seven-level score packet.

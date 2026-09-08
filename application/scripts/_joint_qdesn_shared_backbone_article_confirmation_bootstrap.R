@@ -29,7 +29,8 @@ for (path in c(
   "joint_qdesn_shared_backbone_screening.R",
   "joint_qdesn_shared_backbone_quantile_fit.R",
   "joint_qdesn_shared_backbone_family_campaign.R",
-  "joint_qdesn_shared_backbone_article_confirmation.R"
+  "joint_qdesn_shared_backbone_article_confirmation.R",
+  "joint_qdesn_shared_backbone_article_score_packet.R"
 )) source(app_path("application/R", path))
 
 app_joint_article_arg <- function(name, default = NULL) {

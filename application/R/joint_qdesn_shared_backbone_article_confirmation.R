@@ -1409,7 +1409,9 @@ app_joint_article_overdispersed_start <- function(init, job, tau) {
       idx <- ((k - 1L) * p + 1L):(k * p)
       one <- list(beta_mean = out$beta_mean[idx],
         alpha_mean = out$alpha_mean[[k]], sigma_mean = out$sigma_mean[[k]])
-      if (!is.null(out$gamma_mean)) one$gamma_mean <- out$gamma_mean[[k]]
+      if (!is.null(out$gamma_mean) && length(out$gamma_mean)) {
+        one$gamma_mean <- out$gamma_mean[[k]]
+      }
       one
     })
   }
@@ -1575,12 +1577,14 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     thin = as.integer(job$thin[[1L]]), seed = as.integer(job$chain_seed[[1L]]),
     kappa = 1, tau0 = as.numeric(job$rhs_tau0[[1L]]),
     zeta2 = Inf, a_sigma = contract$a_sigma, b_sigma = contract$b_sigma,
-    alpha_prior_mean = init$alpha_mean,
+    alpha_prior_mean = if (job$fit_structure[[1L]] == "independent") {
+      "empirical_quantile"
+    } else init$alpha_mean,
     alpha_prior_sd = contract$alpha_prior_sd_multiplier,
     alpha_min_spacing = if (job$fit_structure[[1L]] == "joint") {
       contract$alpha_min_spacing
     } else 0,
-    max_dense_dim = contract$max_dense_dim,
+    max_dense_dim = 0L,
     sigma_bounds = c(1e-8, max(1, 20 * max(init$sigma_mean))),
     init = init
   )
@@ -1605,7 +1609,7 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
       one$tau <- design$tau[[k]]
       one$seed <- as.integer(job$chain_seed[[1L]] + k * job$tau_seed_stride[[1L]])
       one$alpha_min_spacing <- 0
-      one$alpha_prior_mean <- init$alpha_mean[[k]]
+      one$alpha_prior_mean <- "empirical_quantile"
       one$init <- init$fits[[k]]
       do.call(app_joint_qvp_fit_al_mcmc_tiny, one)
     })

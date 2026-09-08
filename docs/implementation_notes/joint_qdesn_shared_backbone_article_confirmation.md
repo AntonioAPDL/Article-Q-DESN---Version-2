@@ -51,7 +51,10 @@ requires `JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC`, a clean synced
 execution branch, the verified VB final manifest, and a maximum of 40
 concurrent chain workers. It resumes completed chains, records batch receipts,
 stops on failed or malformed worker manifests, and writes a final MCMC artifact
-manifest before producing the score-packet handoff.
+manifest before producing the score-packet handoff. Article MCMC forces the
+existing sparse precision-draw backend to avoid non-pivoted dense Cholesky
+failures in high-dimensional joint cells while preserving the same posterior
+target.
 
 Generated runtime belongs under:
 

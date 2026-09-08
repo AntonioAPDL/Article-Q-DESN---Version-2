@@ -145,6 +145,9 @@ stopifnot(
   identical(start1$beta_mean, start2$beta_mean),
   identical(start1$gamma_mean, start2$gamma_mean),
   !identical(start1$beta_mean, start3$beta_mean),
+  length(start1$fits[[1L]]$beta_mean) == 2L,
+  length(start1$fits[[1L]]$alpha_mean) == 1L,
+  length(start1$fits[[1L]]$sigma_mean) == 1L,
   all(start1$sigma_mean > 0),
   all(is.finite(start1$gamma_mean))
 )

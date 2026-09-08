@@ -119,6 +119,13 @@ def test_generated_data_config_opens_only_preregistered_test_folds(tmp_path, mon
     assert Path(spec["processed_dir"]).is_absolute()
 
 
+def test_launcher_keeps_hashed_launch_summary_stable_after_closeout():
+    text = (SCRIPTS / "313_launch_pricefm_stage_r96_scoring_only_test.py").read_text()
+    assert 'args.manifest.parent / "closeout_status.json"' in text
+    assert 'result["closeout"] = closeout' in text
+    assert 'return result' in text
+
+
 def test_r96_static_firewalls_require_scoring_token_and_forbid_model_fit():
     prep = (SCRIPTS / "311_prepare_pricefm_stage_r96_scoring_only_test.py").read_text()
     worker = (SCRIPTS / "312_run_pricefm_stage_r96_scoring_only_fold.py").read_text()

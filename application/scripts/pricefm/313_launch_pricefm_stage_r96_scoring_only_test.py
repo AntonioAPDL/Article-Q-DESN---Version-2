@@ -390,6 +390,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "registry_mutated": False, "article_mutated": False,
     }
     atomic_json(args.manifest.parent / "launch_summary.json", summary)
+    result = dict(summary)
     if completed == 3:
         closeout_script = args.code_root / "application/scripts/pricefm/314_closeout_pricefm_stage_r96_scoring_only_test.py"
         closeout_log = args.manifest.parent / "closeout.log"
@@ -399,14 +400,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "--prep-dir", str(args.prep_dir),
             "--output-dir", str(args.closeout_output_dir),
         ], closeout_log, args.code_root.resolve(), [cpus[0]])
-        summary["closeout"] = {
+        closeout = {
             "returncode": code, "log": str(closeout_log),
             "output_dir": str(args.closeout_output_dir),
         }
+        atomic_json(args.manifest.parent / "closeout_status.json", {
+            "status": "completed" if code == 0 else "failed",
+            **closeout,
+        })
+        result["closeout"] = closeout
         if code:
             summary["status"] = "completed_scoring_closeout_failed"
-        atomic_json(args.manifest.parent / "launch_summary.json", summary)
-    return summary
+            atomic_json(args.manifest.parent / "launch_summary.json", summary)
+            result["status"] = summary["status"]
+    return result
 
 
 def main() -> int:

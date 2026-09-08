@@ -49,6 +49,11 @@ current authoritative Q-DESN and cached PriceFM within the same fold.
    crossing diagnostics. It creates only a promotion-review queue; registry and
    article mutation remain false.
 
+The report renderer uses Pandas' optional `tabulate==0.9.0` dependency in the
+preserved PriceFM virtual environment. The launcher keeps the launch summary
+immutable once closeout begins and records closeout execution separately, so a
+closeout source manifest cannot be invalidated by a later status rewrite.
+
 ## Promotion gate
 
 A fold enters the review queue only when all conditions hold:

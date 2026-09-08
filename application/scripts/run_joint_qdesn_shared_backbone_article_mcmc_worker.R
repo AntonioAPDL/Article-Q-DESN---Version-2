@@ -14,17 +14,23 @@ if (!is.finite(worker_id)) stop("--worker-id is required.", call. = FALSE)
 tryCatch(
   app_joint_article_run_mcmc_worker(args$root, worker_id),
   error = function(e) {
+    msg <- conditionMessage(e)
+    if (grepl("^(Refusing MCMC launch|Production workers require|MCMC launch blocked)",
+        msg)) {
+      message(msg)
+      quit(status = 64L)
+    }
     out <- app_joint_article_mcmc_worker_dir(args$root, worker_id)
     app_ensure_dir(out)
     if (!file.exists(file.path(out, "failure.csv"))) {
       app_write_csv(data.frame(
-        worker_id = worker_id, status = "failed", error_message = conditionMessage(e),
+        worker_id = worker_id, status = "failed", error_message = msg,
         recorded_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
         stringsAsFactors = FALSE
       ), file.path(out, "failure.csv"))
     }
     writeLines("failed", file.path(out, "FAILED"))
-    message(conditionMessage(e))
+    message(msg)
     quit(status = 1L)
   }
 )

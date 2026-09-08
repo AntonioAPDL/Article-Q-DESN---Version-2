@@ -1446,6 +1446,15 @@ app_joint_article_mcmc_launch_guard <- function(root) {
   TRUE
 }
 
+app_joint_article_assert_mcmc_production_allowed <- function(require_synced = TRUE) {
+  if (!identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION"), "MCMC")) {
+    stop("Refusing MCMC launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC.",
+         call. = FALSE)
+  }
+  app_joint_article_assert_clean_execution(require_synced = require_synced)
+  invisible(TRUE)
+}
+
 app_joint_article_draw_frame <- function(fit) {
   blocks <- list(
     beta = as.data.frame(fit$beta_draws, check.names = FALSE),
@@ -1480,16 +1489,68 @@ app_joint_article_write_gzip_csv <- function(x, path) {
   invisible(path)
 }
 
-app_joint_article_run_mcmc_worker <- function(root, worker_id) {
+app_joint_article_mcmc_manifest_verified <- function(worker_dir) {
+  manifest_path <- file.path(worker_dir, "artifact_manifest.csv")
+  if (!file.exists(file.path(worker_dir, "DONE")) || !file.exists(manifest_path)) {
+    return(FALSE)
+  }
+  check <- tryCatch(app_joint_shared_verify_manifest(worker_dir, manifest_path),
+    error = function(e) NULL)
+  is.data.frame(check) && nrow(check) > 0L && all(check$verified)
+}
+
+app_joint_article_mcmc_worker_state <- function(root, plan = NULL) {
   root <- normalizePath(root, mustWork = TRUE)
+  if (is.null(plan)) plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  dirs <- vapply(plan$worker_id, function(id) app_joint_article_mcmc_worker_dir(root, id),
+    character(1L))
+  done <- vapply(dirs, app_joint_article_mcmc_manifest_verified, logical(1L))
+  malformed_done <- file.exists(file.path(dirs, "DONE")) &
+    file.exists(file.path(dirs, "artifact_manifest.csv")) & !done
+  data.frame(
+    worker_id = plan$worker_id,
+    done = done,
+    failed = file.exists(file.path(dirs, "FAILED")) |
+      file.exists(file.path(dirs, "failure.csv")) | malformed_done,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message,
+  started = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  out <- app_joint_article_mcmc_worker_dir(root, worker_id)
+  app_ensure_dir(out)
+  job <- tryCatch({
+    plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+    plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
+  }, error = function(e) data.frame())
+  if (!nrow(job)) {
+    job <- data.frame(worker_id = as.integer(worker_id), stringsAsFactors = FALSE)
+  }
+  failure <- cbind(job, data.frame(
+    status = "failed",
+    error_message = as.character(error_message),
+    runtime_seconds = if (is.null(started)) NA_real_ else
+      as.numeric(difftime(Sys.time(), started, units = "secs")),
+    recorded_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  ))
+  app_write_csv(failure, file.path(out, "failure.csv"))
+  writeLines("failed", file.path(out, "FAILED"))
+  invisible(out)
+}
+
+app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = TRUE) {
+  root <- normalizePath(root, mustWork = TRUE)
+  app_joint_article_assert_mcmc_production_allowed(require_synced = require_synced)
   app_joint_article_mcmc_launch_guard(root)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
   job <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
   if (nrow(job) != 1L) stop("Article MCMC worker_id is not unique.", call. = FALSE)
   out <- app_joint_article_mcmc_worker_dir(root, worker_id)
-  if (file.exists(file.path(out, "DONE")) &&
-      file.exists(file.path(out, "artifact_manifest.csv"))) {
+  if (app_joint_article_mcmc_manifest_verified(out)) {
     return(invisible(out))
   }
   if (dir.exists(out) && length(list.files(out, all.files = TRUE, no.. = TRUE))) {
@@ -1500,6 +1561,7 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id) {
   tmp <- paste0(out, ".tmp.", Sys.getpid())
   unlink(tmp, recursive = TRUE, force = TRUE)
   app_ensure_dir(tmp)
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
   design <- readRDS(job$design_path[[1L]])
   init_rows <- app_read_csv(file.path(root, "vb_initialization_rows.csv"))
   init <- app_joint_article_reconstruct_init(init_rows, job, design$tau, ncol(design$Z))
@@ -1573,6 +1635,7 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id) {
     forecast_contract_crossing_pairs = sum(qhat_forecast_contract$contract_crossing$n_crossing_pairs),
     gamma_sigma_diagnostics_retained = job$likelihood_family[[1L]] == "exAL",
     runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
+    execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
     production_launched = TRUE,
     stringsAsFactors = FALSE
   )
@@ -1592,24 +1655,139 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id) {
   invisible(out)
 }
 
+app_joint_article_run_mcmc_queue <- function(
+  root,
+  max_workers = 40L,
+  require_synced = TRUE
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  app_joint_article_assert_mcmc_production_allowed(require_synced = require_synced)
+  contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  max_workers <- as.integer(max_workers)[[1L]]
+  if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
+      max_workers > contract$maximum_concurrency) {
+    stop(sprintf("MCMC max_workers must be between 1 and the frozen ceiling %d.",
+      contract$maximum_concurrency), call. = FALSE)
+  }
+  app_joint_article_mcmc_launch_guard(root)
+  Sys.setenv(
+    OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+    VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1"
+  )
+  lock_dir <- file.path(root, "mcmc_queue.lock")
+  if (!dir.create(lock_dir, showWarnings = FALSE)) {
+    stop("MCMC queue lock already exists; refusing a duplicate launch.",
+         call. = FALSE)
+  }
+  on.exit(unlink(lock_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  app_write_csv(data.frame(
+    pid = Sys.getpid(),
+    started_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    root = root,
+    max_workers = max_workers,
+    execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
+    production_phase = "MCMC",
+    stringsAsFactors = FALSE
+  ), file.path(lock_dir, "owner.csv"))
+  app_write_csv(app_joint_article_execution_git_state(),
+    file.path(root, "mcmc_execution_git_state.csv"))
+  app_write_csv(data.frame(
+    started_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    root = root,
+    max_workers = max_workers,
+    execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
+    production_phase = "MCMC",
+    stringsAsFactors = FALSE
+  ), file.path(root, "mcmc_queue_launch_receipt.csv"))
+  repeat {
+    plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+    state <- app_joint_article_mcmc_worker_state(root, plan)
+    health <- app_joint_article_check_mcmc(root)$summary
+    health$completed_workers <- sum(state$done)
+    health$failed_workers <- sum(state$failed)
+    health$remaining_workers <- sum(!state$done & !state$failed)
+    health$production_launched <- any(state$done)
+    health$gate_status <- if (health$launch_gate_ready[[1L]] &&
+        health$completed_workers[[1L]] == nrow(plan) &&
+        health$failed_workers[[1L]] == 0L) "pass" else "fail"
+    app_joint_article_atomic_write_csv(health, file.path(root, "mcmc_queue_health.csv"))
+    if (!isTRUE(health$launch_gate_ready[[1L]])) {
+      stop("MCMC queue stopped because the VB/initializer launch gate is not ready.",
+           call. = FALSE)
+    }
+    if (health$failed_workers[[1L]] > 0L) {
+      stop("MCMC queue stopped because at least one worker failed.",
+           call. = FALSE)
+    }
+    if (health$completed_workers[[1L]] == nrow(plan)) break
+    pending <- state$worker_id[!state$done & !state$failed]
+    if (!length(pending)) {
+      stop("MCMC queue has remaining work but no runnable workers.",
+           call. = FALSE)
+    }
+    batch <- head(pending, max_workers)
+    batch_id <- length(list.files(root,
+      pattern = "^mcmc_queue_batch_[0-9][0-9][0-9][.]csv$")) + 1L
+    app_write_csv(data.frame(
+      launched_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+      worker_id = batch,
+      stringsAsFactors = FALSE
+    ), file.path(root, sprintf("mcmc_queue_batch_%03d.csv", batch_id)))
+    run_one <- function(worker_id) {
+      started <- Sys.time()
+      tryCatch({
+        app_joint_article_run_mcmc_worker(root, worker_id, require_synced = FALSE)
+        data.frame(worker_id = worker_id, status = "completed",
+          error_message = "", stringsAsFactors = FALSE)
+      }, error = function(e) {
+        app_joint_article_record_mcmc_failure(root, worker_id,
+          conditionMessage(e), started = started)
+        data.frame(worker_id = worker_id, status = "failed",
+          error_message = conditionMessage(e), stringsAsFactors = FALSE)
+      })
+    }
+    result <- if (.Platform$OS.type != "windows" && length(batch) > 1L) {
+      parallel::mclapply(batch, run_one,
+        mc.cores = min(max_workers, length(batch)), mc.preschedule = FALSE)
+    } else lapply(batch, run_one)
+    result <- app_joint_qdesn_bind_rows(result)
+    app_write_csv(result, file.path(root, sprintf(
+      "mcmc_queue_batch_%03d_result.csv", batch_id)))
+    if (any(result$status != "completed")) {
+      stop("MCMC queue batch failed; inspect worker failure.csv files.",
+           call. = FALSE)
+    }
+  }
+  final_health <- app_joint_article_check_mcmc(root)
+  if (!identical(final_health$summary$gate_status[[1L]], "pass")) {
+    stop("MCMC queue finished without satisfying the 160/160 gate.",
+         call. = FALSE)
+  }
+  app_write_csv(data.frame(
+    completed_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    mcmc_workers_completed = final_health$summary$completed_workers[[1L]],
+    mcmc_workers_failed = final_health$summary$failed_workers[[1L]],
+    production_phase = "MCMC",
+    stringsAsFactors = FALSE
+  ), file.path(root, "mcmc_queue_completion_receipt.csv"))
+  final <- app_joint_article_finalize_confirmation(root)
+  list(summary = final_health$summary, final = final)
+}
+
 app_joint_article_check_mcmc <- function(root) {
   root <- normalizePath(root, mustWork = TRUE)
   launch_ready <- tryCatch({
     app_joint_article_mcmc_launch_guard(root); TRUE
   }, error = function(e) FALSE)
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
-  dirs <- vapply(plan$worker_id, function(id) app_joint_article_mcmc_worker_dir(root, id),
-    character(1L))
-  done <- file.exists(file.path(dirs, "DONE")) &
-    file.exists(file.path(dirs, "artifact_manifest.csv"))
-  failed <- file.exists(file.path(dirs, "FAILED")) |
-    file.exists(file.path(dirs, "failure.csv"))
+  state <- app_joint_article_mcmc_worker_state(root, plan)
   summary <- data.frame(
-    expected_workers = nrow(plan), completed_workers = sum(done),
-    failed_workers = sum(failed), remaining_workers = sum(!done & !failed),
+    expected_workers = nrow(plan), completed_workers = sum(state$done),
+    failed_workers = sum(state$failed),
+    remaining_workers = sum(!state$done & !state$failed),
     launch_gate_ready = launch_ready,
-    production_launched = any(done),
-    gate_status = if (launch_ready && all(done) && !any(failed)) "pass" else "fail",
+    production_launched = any(state$done),
+    gate_status = if (launch_ready && all(state$done) && !any(state$failed)) "pass" else "fail",
     stringsAsFactors = FALSE
   )
   app_joint_article_atomic_write_csv(summary, file.path(root, "mcmc_health_summary.csv"))
@@ -1618,20 +1796,96 @@ app_joint_article_check_mcmc <- function(root) {
 
 app_joint_article_finalize_confirmation <- function(root) {
   root <- normalizePath(root, mustWork = TRUE)
+  contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
   check <- app_joint_article_check_mcmc(root)
   if (!identical(check$summary$gate_status[[1L]], "pass")) {
     stop("Cannot finalize JOINT article confirmation before all MCMC workers verify.",
          call. = FALSE)
   }
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  worker_verification <- app_joint_qdesn_bind_rows(lapply(plan$worker_id, function(id) {
+    dir <- app_joint_article_mcmc_worker_dir(root, id)
+    check_one <- app_joint_shared_verify_manifest(dir, file.path(dir, "artifact_manifest.csv"))
+    cbind(data.frame(worker_id = id, stringsAsFactors = FALSE), check_one)
+  }))
+  if (any(!worker_verification$verified)) {
+    stop("Article MCMC worker manifest verification failed.", call. = FALSE)
+  }
+  worker_verification_path <- app_write_csv(worker_verification,
+    file.path(root, "mcmc_worker_manifest_verification.csv"))
+  posterior_summary <- app_joint_qdesn_bind_rows(lapply(plan$worker_id, function(id) {
+    app_read_csv(file.path(app_joint_article_mcmc_worker_dir(root, id),
+      "posterior_summary.csv"))
+  }))
+  if (nrow(posterior_summary) != contract$total_chain_workers ||
+      anyDuplicated(posterior_summary$worker_id) ||
+      any(!app_as_bool_vec(posterior_summary$production_launched))) {
+    stop("Article MCMC posterior summary registry is malformed.",
+         call. = FALSE)
+  }
+  posterior_summary_path <- app_write_csv(posterior_summary,
+    file.path(root, "mcmc_posterior_summary_registry.csv"))
+  worker_registry <- app_joint_qdesn_bind_rows(lapply(plan$worker_id, function(id) {
+    path <- file.path(app_joint_article_mcmc_worker_dir(root, id),
+      "artifact_manifest.csv")
+    data.frame(
+      worker_id = id,
+      relative_path = file.path("mcmc_workers", sprintf("worker_%04d", id),
+        "artifact_manifest.csv"),
+      size_bytes = as.numeric(file.info(path)$size),
+      sha256 = app_sha256_file(path),
+      stringsAsFactors = FALSE
+    )
+  }))
+  worker_registry_path <- app_write_csv(worker_registry,
+    file.path(root, "mcmc_worker_artifact_registry.csv"))
   assessment <- data.frame(
     status = "MCMC_COMPLETE_READY_FOR_SCORE_PACKET",
+    mcmc_workers_completed = check$summary$completed_workers[[1L]],
+    mcmc_workers_failed = check$summary$failed_workers[[1L]],
+    worker_manifests_verified = length(unique(worker_verification$worker_id)),
     production_launched = TRUE,
     article_assets_modified = FALSE,
     primary_score = "dgp_integrated_finite_grid_acrps",
+    completed_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
     stringsAsFactors = FALSE
   )
-  app_write_csv(assessment, file.path(root, "final_confirmation_assessment.csv"))
-  list(assessment = assessment)
+  assessment_path <- app_write_csv(assessment,
+    file.path(root, "final_confirmation_assessment.csv"))
+  worker_manifest_paths <- stats::setNames(
+    file.path(root, worker_registry$relative_path),
+    paste0("mcmc_worker_manifest__", sprintf("%03d", worker_registry$worker_id))
+  )
+  optional <- c(
+    mcmc_queue_launch_receipt = file.path(root, "mcmc_queue_launch_receipt.csv"),
+    mcmc_queue_completion_receipt = file.path(root, "mcmc_queue_completion_receipt.csv"),
+    mcmc_execution_git_state = file.path(root, "mcmc_execution_git_state.csv")
+  )
+  optional <- optional[file.exists(optional)]
+  closeout_files <- c(
+    final_confirmation_assessment = assessment_path,
+    mcmc_health_summary = file.path(root, "mcmc_health_summary.csv"),
+    mcmc_worker_plan = file.path(root, "mcmc_worker_plan.csv"),
+    model_cell_plan = file.path(root, "model_cell_plan.csv"),
+    scoring_contract = file.path(root, "scoring_contract.csv"),
+    vb_final_artifact_manifest = file.path(root, "vb_final_artifact_manifest.csv"),
+    mcmc_posterior_summary_registry = posterior_summary_path,
+    mcmc_worker_manifest_verification = worker_verification_path,
+    mcmc_worker_artifact_registry = worker_registry_path,
+    optional,
+    worker_manifest_paths
+  )
+  app_joint_shared_write_manifest(root, closeout_files,
+    filename = "mcmc_final_artifact_manifest.csv")
+  closeout <- app_joint_shared_verify_manifest(root,
+    file.path(root, "mcmc_final_artifact_manifest.csv"))
+  if (any(!closeout$verified)) {
+    stop("Article MCMC final artifact manifest failed verification.",
+         call. = FALSE)
+  }
+  app_write_csv(closeout, file.path(root, "mcmc_final_manifest_verification.csv"))
+  list(assessment = assessment, summary = check$summary,
+    worker_verification = worker_verification, closeout = closeout)
 }
 
 app_joint_article_parity_fixture <- function() {

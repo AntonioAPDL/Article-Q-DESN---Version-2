@@ -32,8 +32,8 @@ case "${MODE}" in
       echo "Refusing MCMC launch: set JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC after explicit authorization." >&2
       exit 64
     fi
-    "${RSCRIPT}" "${SCRIPT_DIR}/check_joint_qdesn_shared_backbone_article_mcmc.R" --root "${ROOT}"
-    echo "MCMC launch authorization detected; submit chain workers with run_joint_qdesn_shared_backbone_article_mcmc_worker.R." >&2
+    "${RSCRIPT}" "${SCRIPT_DIR}/run_joint_qdesn_shared_backbone_article_mcmc_queue.R" \
+      --root "${ROOT}" --max-workers "${JOINT_ARTICLE_CONFIRMATION_MCMC_WORKERS:-40}"
     ;;
   *)
     echo "Usage: $0 [--dry-run|--preflight|--launch-vb|--launch-mcmc]" >&2

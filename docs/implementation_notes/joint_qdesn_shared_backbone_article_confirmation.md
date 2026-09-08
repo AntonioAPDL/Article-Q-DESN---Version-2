@@ -45,6 +45,14 @@ runs dependency-ready VB jobs in batches up to the frozen host ceiling, records
 batch receipts, reuses completed workers, stops on the first failed worker, and
 finalizes the 32 compact initializer packets after the 136/136 gate.
 
+The MCMC launch driver is
+`application/scripts/run_joint_qdesn_shared_backbone_article_mcmc_queue.R`. It
+requires `JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC`, a clean synced
+execution branch, the verified VB final manifest, and a maximum of 40
+concurrent chain workers. It resumes completed chains, records batch receipts,
+stops on failed or malformed worker manifests, and writes a final MCMC artifact
+manifest before producing the score-packet handoff.
+
 Generated runtime belongs under:
 
 ```text

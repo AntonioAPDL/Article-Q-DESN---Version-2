@@ -93,9 +93,18 @@ stopifnot(
 )
 ready_jobs <- app_joint_article_ready_vb_jobs(root)
 stopifnot(length(ready_jobs) == 8L, all(ready_jobs == 1:8))
+initial_mcmc_state <- app_joint_article_mcmc_worker_state(root)
+stopifnot(
+  nrow(initial_mcmc_state) == 160L,
+  !any(initial_mcmc_state$done),
+  !any(initial_mcmc_state$failed)
+)
 queue_guard_failed <- inherits(try(app_joint_article_run_vb_queue(root, max_workers = 1L),
   silent = TRUE), "try-error")
 stopifnot(queue_guard_failed)
+mcmc_queue_guard_failed <- inherits(try(app_joint_article_run_mcmc_queue(root,
+  max_workers = 1L), silent = TRUE), "try-error")
+stopifnot(mcmc_queue_guard_failed)
 guard_failed <- inherits(try(app_joint_article_mcmc_launch_guard(root), silent = TRUE),
   "try-error")
 stopifnot(guard_failed)

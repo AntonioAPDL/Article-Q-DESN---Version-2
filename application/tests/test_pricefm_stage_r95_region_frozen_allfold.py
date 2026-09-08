@@ -184,6 +184,8 @@ def test_r95_prep_materializes_exact_dependency_graph_and_test_firewall(tmp_path
     data = yaml.safe_load((args.grid_dir / "configs/pricefm_stage_r95_train_validation_data.yaml").read_text())
     assert all(set(split) == {"fold", "train", "val"} for split in data["pricefm"]["splits"])
     assert data["pricefm"]["windows"]["lag_window"] == 240
+    normal = yaml.safe_load((args.grid_dir / "configs/pricefm_stage_r95_normal_rhs.yaml").read_text())
+    assert normal["pricefm_desn_full"]["python_bin"].endswith("/pricefm/venv/bin/python")
     tasks = [json.loads(Path(path).read_text()) for path in manifest.task_config]
     for fold in (2, 3):
         normal = next(task for task in tasks if task["fold"] == fold and task["likelihood_family"] == "normal_rhs")

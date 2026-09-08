@@ -196,7 +196,9 @@ def normal_full_config(
             "data_config": str(data_config.resolve()),
             "package_path": str(normal_package.resolve()),
             "rscript_bin": str(R_SCRIPT),
-            "python_bin": str(PYTHON.resolve()),
+            # Preserve the venv entrypoint instead of resolving its interpreter
+            # symlink to the system Python, which would lose the venv packages.
+            "python_bin": str(PYTHON),
             "scope": {
                 "regions": [str(frozen["region"])],
                 "folds": list(FOLDS),

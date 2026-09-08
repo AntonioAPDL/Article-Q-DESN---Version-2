@@ -88,6 +88,10 @@ hash reproduce. Invalid partial outputs are moved to a stage-owned quarantine
 before one permitted retry. A filesystem lock prevents duplicate launchers.
 The scheduler writes atomic liveness state throughout the run.
 
+The generated normal configuration preserves the PriceFM virtual-environment
+entrypoint literally. It must not resolve that symlink to the system Python,
+because doing so bypasses the venv dependency context during preprocessing.
+
 ## Commands
 
 Materialize after code validation and after the task branch is committed and

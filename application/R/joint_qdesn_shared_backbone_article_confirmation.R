@@ -1603,11 +1603,11 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
   } else if (job$fit_structure[[1L]] == "joint") {
     do.call(app_joint_qvp_fit_al_mcmc_tiny, common)
   } else {
-    common$tau_seed_stride <- as.integer(job$tau_seed_stride[[1L]])
+    tau_seed_stride <- as.integer(job$tau_seed_stride[[1L]])
     fits <- lapply(seq_along(design$tau), function(k) {
       one <- common
       one$tau <- design$tau[[k]]
-      one$seed <- as.integer(job$chain_seed[[1L]] + k * job$tau_seed_stride[[1L]])
+      one$seed <- as.integer(job$chain_seed[[1L]] + k * tau_seed_stride)
       one$alpha_min_spacing <- 0
       one$alpha_prior_mean <- "empirical_quantile"
       one$init <- init$fits[[k]]

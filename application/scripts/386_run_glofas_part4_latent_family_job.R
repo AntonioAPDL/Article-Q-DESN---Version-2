@@ -122,34 +122,19 @@ run_job <- function() {
     )
     fit_side_path <- file.path(runtime_root, "objects", paste0(job_id, "_fit_side.rds"))
     app_glofas_part4_atomic_save_rds(joint, fit_side_path)
-    predictions <- scores <- vector("list", nrow(model_rows))
-    coefficient_rows <- vector("list", nrow(model_rows))
-    for (i in seq_len(nrow(model_rows))) {
-      qdesign <- app_glofas_part4_design_for_quantile(design, model_rows$quantile_level[[i]])
-      result <- app_glofas_part4_result_from_core(joint$fits[[i]], qdesign, model_rows[i, , drop = FALSE])
-      pred <- app_predict_qdesn_latent_path_draws(result, panel, cfg, model_rows[i, , drop = FALSE])
-      predictions[[i]] <- pred$draws
-      scores[[i]] <- app_glofas_part4_score_prediction(
-        pred,
-        likelihood,
-        inverse_response = inverse_response
-      )$by_horizon
-      coefficient_rows[[i]] <- transform(
-        app_glofas_part4_coefficient_summary(result),
-        job_id = job_id,
-        quantile_level = as.numeric(model_rows$quantile_level[[i]])
-      )
-    }
-    prediction_rows <- do.call(rbind, predictions)
-    score_rows <- do.call(rbind, scores)
-    grid_score <- app_glofas_part4_quantile_grid_crps(score_rows)
+    materialized <- app_glofas_part4_materialize_joint(
+      joint, design, model_rows, panel, cfg, likelihood, job_id, inverse_response
+    )
+    prediction_rows <- materialized$prediction_rows
+    score_rows <- materialized$score_rows
+    grid_score <- materialized$grid_score
     score_summary <- cbind(
       data.frame(job_id = job_id, family = family, runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs"))),
       grid_score$summary
     )
     app_write_csv(grid_score$by_date, file.path(runtime_root, "scores", paste0(job_id, "_grid_crps_by_date.csv")))
     coefficient_path <- file.path(runtime_root, "coefficients", paste0(job_id, "_coefficients.csv"))
-    app_write_csv(do.call(rbind, coefficient_rows), coefficient_path)
+    app_write_csv(materialized$coefficient_rows, coefficient_path)
     trace <- joint$trace
   } else {
     initializer <- if (length(dependency_results)) {
@@ -192,15 +177,7 @@ run_job <- function() {
   }
 
   iteration_timing <- if (family %in% c("joint_al_rhs_vb", "joint_exal_rhs_vb")) {
-    app_bind_rows_fill(lapply(seq_along(joint$fits), function(i) {
-      timing <- joint$fits[[i]]$vb_diagnostics$iteration_timing %||% data.frame()
-      if (!nrow(timing)) return(data.frame())
-      transform(
-        timing,
-        quantile_level = as.numeric(joint$tau[[i]]),
-        joint_inner_fit_index = as.integer(i)
-      )
-    }))
+    materialized$iteration_timing
   } else {
     result$fit$vb_diagnostics$iteration_timing %||% data.frame()
   }

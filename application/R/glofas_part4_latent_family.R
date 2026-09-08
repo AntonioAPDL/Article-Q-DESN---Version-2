@@ -412,7 +412,15 @@ app_glofas_part4_fit_independent <- function(design, model_row, vb_args, initial
   app_glofas_part4_result_from_core(fit, design, model_row)
 }
 
-app_glofas_part4_fit_joint <- function(design, model_rows, likelihood, independent_results, vb_args, seed = NULL) {
+app_glofas_part4_fit_joint <- function(
+  design,
+  model_rows,
+  likelihood,
+  independent_results = NULL,
+  vb_args,
+  seed = NULL,
+  initial_joint_fit = NULL
+) {
   tau <- as.numeric(model_rows$quantile_level)
   ord <- order(tau)
   tau <- tau[ord]
@@ -425,7 +433,61 @@ app_glofas_part4_fit_joint <- function(design, model_rows, likelihood, independe
     likelihood = likelihood,
     independent_fits = independent_results,
     vb_args = vb_args,
-    seed = seed
+    seed = seed,
+    initial_joint_fit = initial_joint_fit
+  )
+}
+
+app_glofas_part4_materialize_joint <- function(
+  joint,
+  design,
+  model_rows,
+  panel,
+  cfg,
+  likelihood,
+  job_id,
+  inverse_response = "expm1"
+) {
+  tau <- as.numeric(model_rows$quantile_level)
+  ord <- order(tau)
+  model_rows <- model_rows[ord, , drop = FALSE]
+  if (length(joint$fits) != nrow(model_rows) ||
+      any(abs(as.numeric(joint$tau) - as.numeric(model_rows$quantile_level)) > 1.0e-12)) {
+    stop("The joint fit and model-grid quantile coordinates do not match.", call. = FALSE)
+  }
+  predictions <- scores <- coefficient_rows <- vector("list", nrow(model_rows))
+  for (i in seq_len(nrow(model_rows))) {
+    qdesign <- app_glofas_part4_design_for_quantile(design, model_rows$quantile_level[[i]])
+    result <- app_glofas_part4_result_from_core(
+      joint$fits[[i]], qdesign, model_rows[i, , drop = FALSE]
+    )
+    pred <- app_predict_qdesn_latent_path_draws(result, panel, cfg, model_rows[i, , drop = FALSE])
+    predictions[[i]] <- pred$draws
+    scores[[i]] <- app_glofas_part4_score_prediction(
+      pred, likelihood, inverse_response = inverse_response
+    )$by_horizon
+    coefficient_rows[[i]] <- transform(
+      app_glofas_part4_coefficient_summary(result),
+      job_id = job_id,
+      quantile_level = as.numeric(model_rows$quantile_level[[i]])
+    )
+  }
+  score_rows <- do.call(rbind, scores)
+  iteration_timing <- app_bind_rows_fill(lapply(seq_along(joint$fits), function(i) {
+    timing <- joint$fits[[i]]$vb_diagnostics$iteration_timing %||% data.frame()
+    if (!nrow(timing)) return(data.frame())
+    transform(
+      timing,
+      quantile_level = as.numeric(joint$tau[[i]]),
+      joint_inner_fit_index = as.integer(i)
+    )
+  }))
+  list(
+    prediction_rows = do.call(rbind, predictions),
+    score_rows = score_rows,
+    grid_score = app_glofas_part4_quantile_grid_crps(score_rows),
+    coefficient_rows = do.call(rbind, coefficient_rows),
+    iteration_timing = iteration_timing
   )
 }
 

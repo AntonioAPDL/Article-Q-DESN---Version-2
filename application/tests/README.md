@@ -68,12 +68,20 @@ Tracked tests:
   RHS/VB, AL, exAL, and joint-AL fits; future-USGS truth isolation; normalized
   ensemble likelihood weights; coefficient-freeze accounting; structured
   exAL updates; adjacent-quantile RHS terms; compact fit storage; and
-  transformed/original-scale scoring.
+  transformed/original-scale scoring. It also verifies exact interrupted-versus-
+  resumed joint-VB identity, strict outer-plus-inner convergence, retained RHS
+  block compatibility, inner-to-outer RHS warmup conversion, fail-closed
+  schedule rebasing, post-release coefficient response, and rejection of
+  incompatible continuation grids.
 - `test_glofas_part4_latent_family_scheduler.py`: fail-closed production
   launch authorization and manifest-backed prepared-state health reporting.
 
 The complete Part 4 statistical, execution, and artifact contract is recorded
 in `docs/implementation_notes/glofas_part4_latent_family_implementation_20260906.md`.
+The convergence-qualification worker and article-safe closeout builder are
+`application/scripts/389_continue_glofas_part4_joint_fit.R`,
+`application/scripts/390_build_glofas_part4_authoritative_package.R`, and
+`application/scripts/392_check_glofas_part4_authoritative_package.R`.
 - `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
   controls, OpenBLAS path/hash rejection, and terminal execution manifests.
 - `test_glofas_discrepancy_equivalence_audit.R`: component-path algebra,

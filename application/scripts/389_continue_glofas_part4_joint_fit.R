@@ -30,7 +30,10 @@ args <- app_parse_args(list(
   inner_max_iter = 30L,
   inner_min_iter = 10L,
   outer_tol = 1.0e-3,
-  n_draws = 500L
+  n_draws = 500L,
+  joint_rhs_freeze_outer_iters = 5L,
+  joint_rhs_min_tau_updates = 1L,
+  allow_rhs_schedule_rebase = FALSE
 ))
 
 source_root <- app_resolve_path(args$source_runtime_root, must_work = TRUE)
@@ -131,9 +134,13 @@ run_continuation <- function() {
   vb_args$joint_outer_tol <- as.numeric(args$outer_tol)
   vb_args$joint_inner_max_iter <- as.integer(args$inner_max_iter)
   vb_args$joint_inner_min_iter <- as.integer(args$inner_min_iter)
+  vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
+  vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
+  vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase, FALSE)
   vb_args$n_draws <- as.integer(args$n_draws)
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||
+      vb_args$joint_rhs_freeze_outer_iters < 0L || vb_args$joint_rhs_min_tau_updates < 0L ||
       !is.finite(vb_args$joint_outer_tol) || vb_args$joint_outer_tol <= 0) {
     stop("Invalid continuation controls.", call. = FALSE)
   }
@@ -189,6 +196,7 @@ run_continuation <- function() {
       converged = joint$converged,
       converged_outer = joint$converged_outer,
       converged_inner = joint$converged_inner,
+      converged_rhs = joint$converged_rhs,
       stopping_reason = joint$stopping_reason,
       stringsAsFactors = FALSE
     ),
@@ -207,6 +215,11 @@ run_continuation <- function() {
     }, numeric(1L)),
     stringsAsFactors = FALSE
   ), convergence_path)
+
+  rhs_gate_path <- file.path(output_root, "traces", paste0(output_job_id, "_rhs_convergence_gate.csv"))
+  rhs_rebase_path <- file.path(output_root, "manifests", paste0(output_job_id, "_rhs_schedule_rebase.csv"))
+  app_write_csv(joint$rhs_convergence_diagnostics, rhs_gate_path)
+  app_write_csv(joint$rhs_schedule_rebase_audit, rhs_rebase_path)
 
   provenance_path <- file.path(output_root, "manifests", paste0(output_job_id, "_continuation_provenance.csv"))
   code_head <- trimws(system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE))
@@ -231,6 +244,11 @@ run_continuation <- function() {
     additional_outer_max_iter = vb_args$joint_outer_max_iter,
     inner_max_iter = vb_args$joint_inner_max_iter,
     inner_min_iter = vb_args$joint_inner_min_iter,
+    inherited_rhs_freeze_vb_iters = joint$rhs_schedule$inherited$freeze_tau_warmup_iters,
+    joint_rhs_freeze_outer_iters = joint$rhs_schedule$effective$freeze_tau_warmup_iters,
+    joint_rhs_min_tau_updates = joint$rhs_schedule$effective$min_tau_updates,
+    joint_rhs_schedule_conversion = joint$rhs_schedule$conversion,
+    joint_rhs_schedule_rebased = any(joint$rhs_schedule_rebase_audit$schedule_rebased),
     outer_tol = vb_args$joint_outer_tol,
     n_draws = vb_args$n_draws,
     cutoff = "2022-12-25",
@@ -243,7 +261,7 @@ run_continuation <- function() {
   artifacts <- c(
     fit_path, prediction_path, score_path, grid_path, summary_path, trace_path,
     if (file.exists(timing_path)) timing_path else character(),
-    coefficient_path, convergence_path, provenance_path,
+    coefficient_path, convergence_path, rhs_gate_path, rhs_rebase_path, provenance_path,
     file.path(output_root, "manifests", paste0(output_job_id, "_blas_runtime.csv"))
   )
   artifact_manifest_path <- file.path(output_root, "manifests", paste0(output_job_id, "_artifacts.csv"))
@@ -256,6 +274,7 @@ run_continuation <- function() {
     sprintf("completed_at=%s", format(Sys.time(), tz = "UTC", usetz = TRUE)),
     sprintf("fit_side_sha256=%s", app_sha256_file(fit_path)),
     sprintf("converged=%s", joint$converged),
+    sprintf("converged_rhs=%s", joint$converged_rhs),
     sprintf("stopping_reason=%s", joint$stopping_reason)
   ), completed)
   invisible(joint)

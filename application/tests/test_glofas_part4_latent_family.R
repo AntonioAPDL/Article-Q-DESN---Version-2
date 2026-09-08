@@ -226,7 +226,10 @@ joint_fit <- app_fit_latent_path_joint_vb_core(
 )
 stopifnot(identical(joint_fit$fit_structure, "joint_adjacent_rhs"))
 stopifnot(nrow(joint_fit$trace) == 1L)
-stopifnot(identical(joint_fit$converged, joint_fit$converged_outer && joint_fit$converged_inner))
+stopifnot(identical(
+  joint_fit$converged,
+  joint_fit$converged_outer && joint_fit$converged_inner && joint_fit$converged_rhs
+))
 
 joint_continued <- app_fit_latent_path_joint_vb_core(
   designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
@@ -252,6 +255,46 @@ stopifnot(max(abs(
 stopifnot(max(abs(
   joint_continued$beta_discrepancy_mean - joint_uninterrupted$beta_discrepancy_mean
 )) < 1.0e-10)
+
+warmup_joint_args <- modifyList(joint_args, list(
+  tol = 1.0e6,
+  joint_outer_tol = 1.0e6,
+  joint_outer_max_iter = 1L,
+  joint_outer_min_iter = 1L,
+  joint_inner_max_iter = 2L,
+  joint_inner_min_iter = 2L,
+  rhs = list(freeze_tau_warmup_iters = 50L, update_every = 1L, min_tau_updates = 1L)
+))
+joint_warmup_only <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  independent_fits = list(al_fit, al_fit), vb_args = warmup_joint_args, seed = 16L
+)
+stopifnot(joint_warmup_only$rhs_schedule$effective$freeze_tau_warmup_iters == 25L)
+stopifnot(!joint_warmup_only$converged_rhs)
+stopifnot(all(joint_warmup_only$rhs_summary_reference$tau_update_count == 0L))
+
+rebased_joint_args <- modifyList(warmup_joint_args, list(
+  joint_outer_max_iter = 2L,
+  joint_rhs_freeze_outer_iters = 1L,
+  joint_rhs_allow_schedule_rebase = TRUE
+))
+joint_after_rhs_release <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  vb_args = rebased_joint_args, seed = 16L, initial_joint_fit = joint_warmup_only
+)
+stopifnot(joint_after_rhs_release$converged_rhs)
+stopifnot(joint_after_rhs_release$converged)
+stopifnot(all(joint_after_rhs_release$rhs_schedule_rebase_audit$schedule_rebased))
+stopifnot(min(joint_after_rhs_release$rhs_summary_reference$tau_update_count) >= 2L)
+
+rebase_forbidden_args <- rebased_joint_args
+rebase_forbidden_args$joint_rhs_allow_schedule_rebase <- FALSE
+stopifnot(inherits(try(
+  app_fit_latent_path_joint_vb_core(
+    designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+    vb_args = rebase_forbidden_args, seed = 16L, initial_joint_fit = joint_warmup_only
+  ), silent = TRUE
+), "try-error"))
 
 bad_joint_tau <- joint_fit
 bad_joint_tau$tau <- c(0.2, 0.8)

@@ -226,6 +226,49 @@ joint_fit <- app_fit_latent_path_joint_vb_core(
 )
 stopifnot(identical(joint_fit$fit_structure, "joint_adjacent_rhs"))
 stopifnot(nrow(joint_fit$trace) == 1L)
+stopifnot(identical(joint_fit$converged, joint_fit$converged_outer && joint_fit$converged_inner))
+
+joint_continued <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  vb_args = joint_args, seed = 15L, initial_joint_fit = joint_fit
+)
+stopifnot(nrow(joint_continued$trace) == 2L)
+stopifnot(identical(joint_continued$trace$outer_iteration, 1:2))
+stopifnot(joint_continued$previous_outer_iterations == 1L)
+stopifnot(joint_continued$continuation_count == 1L)
+
+joint_two_outer_args <- modifyList(joint_args, list(
+  joint_outer_max_iter = 2L,
+  joint_outer_min_iter = 2L,
+  joint_outer_tol = 1.0e-14
+))
+joint_uninterrupted <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  independent_fits = list(al_fit, al_fit), vb_args = joint_two_outer_args, seed = 15L
+)
+stopifnot(max(abs(
+  joint_continued$beta_reference_mean - joint_uninterrupted$beta_reference_mean
+)) < 1.0e-10)
+stopifnot(max(abs(
+  joint_continued$beta_discrepancy_mean - joint_uninterrupted$beta_discrepancy_mean
+)) < 1.0e-10)
+
+bad_joint_tau <- joint_fit
+bad_joint_tau$tau <- c(0.2, 0.8)
+stopifnot(inherits(try(
+  app_fit_latent_path_joint_vb_core(
+    designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+    vb_args = joint_args, seed = 15L, initial_joint_fit = bad_joint_tau
+  ), silent = TRUE
+), "try-error"))
+bad_joint_rhs <- joint_fit
+bad_joint_rhs$rhs_state_reference[[1L]]$tau0 <- 0.5
+stopifnot(inherits(try(
+  app_fit_latent_path_joint_vb_core(
+    designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+    vb_args = joint_args, seed = 15L, initial_joint_fit = bad_joint_rhs
+  ), silent = TRUE
+), "try-error"))
 
 g <- data.frame(
   target_date = rep(as.Date("2026-02-01") + 0:1, each = 2L),

@@ -155,8 +155,8 @@ app_latent_joint_validate_continuation <- function(
           stop("The joint continuation RHS schedule differs from the requested schedule.", call. = FALSE)
         }
         if (as.integer(state$tau_update_count %||% 0L) != 0L ||
-            outer_offset < effective$freeze_tau_warmup_iters) {
-          stop("RHS schedule rebasing is allowed only after a completed warmup with zero global-scale updates.", call. = FALSE)
+            outer_offset + 1L < effective$freeze_tau_warmup_iters) {
+          stop("RHS schedule rebasing requires zero prior global-scale updates and a completed warmup no later than the next outer sweep.", call. = FALSE)
         }
         state$rhs_control <- effective
       }

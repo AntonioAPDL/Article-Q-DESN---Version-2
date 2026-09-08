@@ -28,6 +28,10 @@ forecast_pdf <- file.path(
   figure_dir, "joint_qdesn_phase181_forecast_dgp_score_intervals.pdf"
 )
 wrapper <- file.path(table_dir, "joint_qdesn_phase181_interval_figures.tex")
+fit_wrapper <- file.path(table_dir, "joint_qdesn_phase181_fit_interval_figure.tex")
+forecast_wrapper <- file.path(
+  table_dir, "joint_qdesn_phase181_forecast_interval_figure.tex"
+)
 article_summary_path <- file.path(
   table_dir, "joint_qdesn_phase181_article_scenario_model_summary.csv"
 )
@@ -35,7 +39,8 @@ manifest_path <- file.path(
   table_dir, "joint_qdesn_phase181_article_asset_manifest.csv"
 )
 
-for (path in c(summary_path, fit_pdf, forecast_pdf, wrapper,
+for (path in c(summary_path, fit_pdf, forecast_pdf, wrapper, fit_wrapper,
+               forecast_wrapper,
                article_summary_path, manifest_path)) {
   expect_true(file.exists(path), paste("Missing required joint figure asset:", path))
 }
@@ -181,24 +186,35 @@ expect_true(
 
 main <- paste(readLines(file.path(repo_root, "main.tex"), warn = FALSE),
               collapse = "\n")
+supp <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"), warn = FALSE),
+              collapse = "\n")
 wrapper_text <- paste(readLines(wrapper, warn = FALSE), collapse = "\n")
+fit_wrapper_text <- paste(readLines(fit_wrapper, warn = FALSE), collapse = "\n")
+forecast_wrapper_text <- paste(
+  readLines(forecast_wrapper, warn = FALSE), collapse = "\n"
+)
 article_files <- readLines(
   file.path(repo_root, "overleaf", "article_files.txt"), warn = FALSE
 )
 expect_true(
-  grepl("\\input{tables/joint_qdesn_phase181_interval_figures.tex}",
+  grepl("\\input{tables/joint_qdesn_phase181_forecast_interval_figure.tex}",
         main, fixed = TRUE) &&
-    grepl("fig:joint-qdesn-phase181-fit-rmse-intervals", wrapper_text,
+    grepl("\\input{tables/joint_qdesn_phase181_fit_interval_figure.tex}",
+          supp, fixed = TRUE) &&
+    grepl("fig:joint-qdesn-phase181-fit-rmse-intervals", fit_wrapper_text,
           fixed = TRUE) &&
-    grepl("fig:joint-qdesn-phase181-forecast-acrps-intervals", wrapper_text,
+    grepl("fig:joint-qdesn-phase181-forecast-acrps-intervals",
+          forecast_wrapper_text,
           fixed = TRUE),
-  "The main article does not include the new joint interval figures."
+  "The main and supplement do not contain the expected split joint figures."
 )
 expect_true(
   all(c(
     "figures/joint_qdesn_simulation/joint_qdesn_phase181_fit_oracle_rmse_intervals.pdf",
     "figures/joint_qdesn_simulation/joint_qdesn_phase181_forecast_dgp_score_intervals.pdf",
-    "tables/joint_qdesn_phase181_interval_figures.tex"
+    "tables/joint_qdesn_phase181_interval_figures.tex",
+    "tables/joint_qdesn_phase181_fit_interval_figure.tex",
+    "tables/joint_qdesn_phase181_forecast_interval_figure.tex"
   ) %in% article_files),
   "Overleaf article file list is missing the new joint figure assets."
 )

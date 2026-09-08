@@ -286,6 +286,10 @@ for (path in figure_paths) {
 }
 
 main_text <- paste(readLines(article_path("main.tex"), warn = FALSE), collapse = "\n")
+supplement_text <- paste(
+  readLines(article_path("qdesn-supplement.tex"), warn = FALSE),
+  collapse = "\n"
+)
 for (inf in c("mcmc", "vb")) {
   wrapper_path <- article_path(sprintf(
     "tables/qdesn_validation_500obs_v14_%s_metric_interval_figures.tex", inf
@@ -298,12 +302,20 @@ for (inf in c("mcmc", "vb")) {
   }
 }
 for (label in c(
-  "fig:simulation-500obs-mcmc-fit-rmse-intervals",
+  "fig:simulation-500obs-mcmc-forecast-mae-intervals",
   "fig:simulation-500obs-mcmc-forecast-check-loss-intervals"
 )) {
   check(grepl(paste0("\\\\ref\\{", label, "\\}"), main_text),
         paste(label, "main reference"))
 }
+check(
+  grepl(
+    "\\input{tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex}",
+    supplement_text,
+    fixed = TRUE
+  ),
+  "fit-recovery figure moved to supplement"
+)
 
 prose_text <- paste(readLines(article_path(config$outputs$interval_prose), warn = FALSE),
                     collapse = "\n")

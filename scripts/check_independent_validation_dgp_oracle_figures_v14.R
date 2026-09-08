@@ -178,8 +178,14 @@ main_text <- paste(readLines(article_path("main.tex"), warn = FALSE), collapse =
 supplement_text <- paste(
   readLines(article_path("qdesn-supplement.tex"), warn = FALSE), collapse = "\n"
 )
-check(grepl(config$outputs$mcmc_wrapper, main_text, fixed = TRUE),
-      "main article uses v14 MCMC wrapper")
+check(grepl(
+  "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
+  main_text, fixed = TRUE
+), "main article uses the v14 MCMC forecast wrapper")
+check(grepl(
+  "tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex",
+  supplement_text, fixed = TRUE
+), "supplement uses the v14 MCMC fit-recovery wrapper")
 check(grepl(config$outputs$vb_wrapper, supplement_text, fixed = TRUE),
       "supplement uses v14 VB wrapper")
 check(!grepl("v12_mcmc_metric_interval_figures", main_text, fixed = TRUE),

@@ -145,7 +145,7 @@ supp_joint_tables <- paste(
 stopifnot(
   grepl(
     "\\input{tables/joint_qdesn_phase181_dgp_integrated_score_table.tex}",
-    main,
+    supp,
     fixed = TRUE
   ),
   grepl(

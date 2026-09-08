@@ -152,6 +152,78 @@ stopifnot(
   all(is.finite(start1$gamma_mean))
 )
 
+audit_job <- exal_jobs[exal_jobs$fit_structure == "joint", , drop = FALSE][1, ,
+  drop = FALSE]
+audit_design <- readRDS(audit_job$design_path[[1L]])
+audit_p <- ncol(audit_design$Z)
+audit_K <- length(audit_design$tau)
+audit_rows <- app_joint_qdesn_bind_rows(list(
+  data.frame(
+    model_cell_id = audit_job$model_cell_id[[1L]],
+    parameter_block = "beta",
+    parameter_index = seq_len(audit_K * audit_p),
+    value = rep(0.05, audit_K * audit_p),
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    model_cell_id = audit_job$model_cell_id[[1L]],
+    parameter_block = "alpha",
+    parameter_index = seq_len(audit_K),
+    value = seq(-0.5, 0.5, length.out = audit_K),
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    model_cell_id = audit_job$model_cell_id[[1L]],
+    parameter_block = "sigma",
+    parameter_index = seq_len(audit_K),
+    value = rep(1, audit_K),
+    stringsAsFactors = FALSE
+  ),
+  data.frame(
+    model_cell_id = audit_job$model_cell_id[[1L]],
+    parameter_block = "gamma",
+    parameter_index = seq_len(audit_K),
+    value = rep(0, audit_K),
+    stringsAsFactors = FALSE
+  )
+))
+app_write_csv(audit_rows, file.path(root, "vb_initialization_rows.csv"))
+start_preflight <- app_joint_article_mcmc_start_preflight(
+  root, audit_job$worker_id[[1L]]
+)
+initial_precision <- app_joint_article_mcmc_initial_precision_audit(
+  root, audit_job$worker_id[[1L]]
+)
+stopifnot(
+  nrow(start_preflight) == audit_K,
+  all(start_preflight$status == "pass"),
+  nrow(initial_precision) == 1L,
+  initial_precision$status[[1L]] == "pass"
+)
+fake_attempt <- file.path(root, "fake_mcmc_attempt")
+fake_worker <- file.path(fake_attempt, "mcmc_workers",
+  sprintf("worker_%04d", audit_job$worker_id[[1L]]))
+app_ensure_dir(fake_worker)
+fake_failure <- cbind(audit_job, data.frame(
+  status = "failed",
+  error_message = "leading principal minor of order 99 is not positive",
+  runtime_seconds = 1,
+  recorded_at = "2026-09-08 00:00:00 UTC",
+  stringsAsFactors = FALSE
+))
+app_write_csv(fake_failure, file.path(fake_worker, "failure.csv"))
+writeLines("failed", file.path(fake_worker, "FAILED"))
+failure_audit <- app_joint_article_write_mcmc_failure_audit(
+  root, attempt_dir = fake_attempt
+)
+stopifnot(
+  nrow(failure_audit$failure_inventory) == 1L,
+  failure_audit$assessment$failed_joint_exal_workers[[1L]] == 1L,
+  failure_audit$assessment$start_preflight_failures[[1L]] == 0L,
+  isTRUE(failure_audit$assessment$initial_precision_all_pass[[1L]]),
+  all(failure_audit$manifest_verification$verified)
+)
+
 scoring <- app_read_csv(file.path(root, "scoring_contract.csv"))
 stopifnot(
   scoring$primary_score[[1L]] == "dgp_integrated_finite_grid_acrps",

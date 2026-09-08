@@ -1419,6 +1419,323 @@ app_joint_article_overdispersed_start <- function(init, job, tau) {
   out
 }
 
+app_joint_article_mcmc_attempt_root <- function(root, attempt_dir = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  if (is.null(attempt_dir) || !nzchar(as.character(attempt_dir)[[1L]])) {
+    return(root)
+  }
+  normalizePath(attempt_dir, mustWork = TRUE)
+}
+
+app_joint_article_mcmc_failure_inventory <- function(root, attempt_dir = NULL) {
+  attempt_root <- app_joint_article_mcmc_attempt_root(root, attempt_dir)
+  worker_root <- file.path(attempt_root, "mcmc_workers")
+  files <- list.files(worker_root, pattern = "failure[.]csv$", recursive = TRUE,
+    full.names = TRUE)
+  empty <- data.frame(
+    worker_id = integer(), scenario_id = character(), model_id = character(),
+    chain_id = integer(), likelihood_family = character(),
+    fit_structure = character(), error_message = character(),
+    runtime_seconds = numeric(), recorded_at = character(),
+    failure_path = character(), failure_sha256 = character(),
+    stringsAsFactors = FALSE
+  )
+  if (!length(files)) return(empty)
+  rows <- lapply(files, function(path) {
+    x <- app_read_csv(path)
+    x$failure_path <- normalizePath(path, mustWork = TRUE)
+    x$failure_sha256 <- app_sha256_file(path)
+    x
+  })
+  out <- app_joint_qdesn_bind_rows(rows)
+  keep <- intersect(names(empty), names(out))
+  out <- out[, keep, drop = FALSE]
+  missing <- setdiff(names(empty), names(out))
+  for (name in missing) out[[name]] <- empty[[name]]
+  out[order(out$worker_id), names(empty), drop = FALSE]
+}
+
+app_joint_article_mcmc_completed_inventory <- function(root, attempt_dir = NULL) {
+  attempt_root <- app_joint_article_mcmc_attempt_root(root, attempt_dir)
+  worker_root <- file.path(attempt_root, "mcmc_workers")
+  files <- list.files(worker_root, pattern = "posterior_summary[.]csv$",
+    recursive = TRUE, full.names = TRUE)
+  if (!length(files)) {
+    return(data.frame(
+      worker_id = integer(), scenario_id = character(), model_id = character(),
+      chain_id = integer(), likelihood_family = character(),
+      fit_structure = character(), n_keep = integer(),
+      precision_repair_count = integer(),
+      precision_repair_max_relative_jitter = numeric(),
+      runtime_seconds = numeric(), execution_code_commit = character(),
+      worker_dir = character(), manifest_verified = logical(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  rows <- lapply(files, function(path) {
+    x <- app_read_csv(path)
+    worker_dir <- dirname(path)
+    x$worker_dir <- normalizePath(worker_dir, mustWork = TRUE)
+    x$manifest_verified <- app_joint_article_mcmc_manifest_verified(worker_dir)
+    x
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_article_mcmc_start_preflight <- function(root, worker_ids = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  plan <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
+  if (!is.null(worker_ids)) {
+    plan <- plan[plan$worker_id %in% as.integer(worker_ids), , drop = FALSE]
+  }
+  if (!nrow(plan)) {
+    return(data.frame(
+      worker_id = integer(), scenario_id = character(), model_id = character(),
+      chain_id = integer(), tau = numeric(), sigma_start = numeric(),
+      gamma_start = numeric(), support_lower = numeric(),
+      support_upper = numeric(), support_eta = numeric(),
+      B = numeric(), weight_proxy = numeric(), status = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  init_rows <- app_read_csv(file.path(root, "vb_initialization_rows.csv"))
+  rows <- lapply(seq_len(nrow(plan)), function(ii) {
+    job <- plan[ii, , drop = FALSE]
+    design <- readRDS(job$design_path[[1L]])
+    init <- app_joint_article_reconstruct_init(init_rows, job, design$tau,
+      ncol(design$Z))
+    start <- app_joint_article_overdispersed_start(init, job, design$tau)
+    support <- app_joint_qvp_exal_support(design$tau)
+    app_joint_qdesn_bind_rows(lapply(seq_along(design$tau), function(k) {
+      constants <- tryCatch(
+        app_joint_qvp_exal_constants(design$tau[[k]], start$gamma_mean[[k]]),
+        error = function(e) NULL
+      )
+      B <- if (is.null(constants)) NA_real_ else constants$B[[1L]]
+      eta <- tryCatch(app_joint_exqdesn_gamma_to_support_eta(
+        design$tau[[k]], start$gamma_mean[[k]]
+      ), error = function(e) NA_real_)
+      weight_proxy <- 1 / (B * start$sigma_mean[[k]]^2)
+      ok <- is.finite(start$sigma_mean[[k]]) && start$sigma_mean[[k]] > 0 &&
+        is.finite(start$gamma_mean[[k]]) &&
+        start$gamma_mean[[k]] > support$lower[[k]] &&
+        start$gamma_mean[[k]] < support$upper[[k]] &&
+        is.finite(eta) && is.finite(B) && B > 0 &&
+        is.finite(weight_proxy) && weight_proxy > 0
+      data.frame(
+        worker_id = job$worker_id[[1L]],
+        scenario_id = job$scenario_id[[1L]],
+        model_id = job$model_id[[1L]],
+        chain_id = job$chain_id[[1L]],
+        tau = design$tau[[k]],
+        sigma_start = start$sigma_mean[[k]],
+        gamma_start = start$gamma_mean[[k]],
+        support_lower = support$lower[[k]],
+        support_upper = support$upper[[k]],
+        support_eta = eta,
+        B = B,
+        weight_proxy = weight_proxy,
+        status = if (ok) "pass" else "fail",
+        stringsAsFactors = FALSE
+      )
+    }))
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_article_mcmc_initial_precision_audit <- function(root,
+  worker_ids = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  app_require_namespace("Matrix")
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  plan <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
+  if (!is.null(worker_ids)) {
+    plan <- plan[plan$worker_id %in% as.integer(worker_ids), , drop = FALSE]
+  }
+  if (!nrow(plan)) {
+    return(data.frame(
+      worker_id = integer(), scenario_id = character(), model_id = character(),
+      chain_id = integer(), dimension = integer(), fit_rows = integer(),
+      p = integer(), K = integer(), dense_chol_ok = logical(),
+      sparse_chol_ok = logical(), min_eigen = numeric(), max_eigen = numeric(),
+      condition_number = numeric(), min_weight = numeric(),
+      max_weight = numeric(), min_precision_diag = numeric(),
+      max_precision_diag = numeric(), status = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  init_rows <- app_read_csv(file.path(root, "vb_initialization_rows.csv"))
+  rows <- lapply(seq_len(nrow(plan)), function(ii) {
+    job <- plan[ii, , drop = FALSE]
+    design <- readRDS(job$design_path[[1L]])
+    Z <- design$Z[design$fit_local, , drop = FALSE]
+    y <- design$y[design$fit_local]
+    tau <- design$tau
+    K <- length(tau)
+    p <- ncol(Z)
+    init <- app_joint_article_reconstruct_init(init_rows, job, tau, p)
+    init <- app_joint_article_overdispersed_start(init, job, tau)
+    set.seed(as.integer(job$chain_seed[[1L]]))
+    constants <- app_joint_qvp_exal_constants(tau, init$gamma_mean)
+    v <- matrix(rep(init$sigma_mean, each = length(y)), nrow = length(y),
+      ncol = K)
+    s <- matrix(abs(stats::rnorm(length(y) * K)), nrow = length(y), ncol = K)
+    rhs_state <- app_joint_qvp_initialize_rhs_state(
+      K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]), zeta2 = Inf
+    )
+    prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
+    prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor,
+      prior_state$innovations)
+    work <- app_joint_qvp_build_working_response(
+      y = y, Z = Z, beta = init$beta_mean, alpha = init$alpha_mean,
+      tau = tau, sigma = init$sigma_mean, v = v, kappa = 1,
+      likelihood = "exal", gamma = init$gamma_mean, s = s
+    )
+    beta_update <- app_joint_qvp_beta_gaussian_update(
+      work$Z_stack, work$y_star, work$weights, prior$P_beta
+    )
+    dense <- as.matrix(beta_update$precision)
+    dense_chol_ok <- !inherits(try(chol(dense), silent = TRUE), "try-error")
+    sparse_chol_ok <- !inherits(try(Matrix::Cholesky(
+      Matrix::forceSymmetric(beta_update$precision), LDL = FALSE, perm = TRUE
+    ), silent = TRUE), "try-error")
+    ev <- eigen(dense, symmetric = TRUE, only.values = TRUE)$values
+    diag_values <- diag(dense)
+    data.frame(
+      worker_id = job$worker_id[[1L]],
+      scenario_id = job$scenario_id[[1L]],
+      model_id = job$model_id[[1L]],
+      chain_id = job$chain_id[[1L]],
+      dimension = length(beta_update$mean),
+      fit_rows = length(y),
+      p = p,
+      K = K,
+      dense_chol_ok = dense_chol_ok,
+      sparse_chol_ok = sparse_chol_ok,
+      min_eigen = min(ev),
+      max_eigen = max(ev),
+      condition_number = max(ev) / max(min(ev), .Machine$double.eps),
+      min_weight = min(work$weights),
+      max_weight = max(work$weights),
+      min_precision_diag = min(diag_values),
+      max_precision_diag = max(diag_values),
+      status = if (dense_chol_ok && sparse_chol_ok &&
+        all(is.finite(c(ev, work$weights, diag_values))) &&
+        min(ev) > 0) "pass" else "fail",
+      stringsAsFactors = FALSE
+    )
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_article_write_mcmc_failure_audit <- function(root,
+  attempt_dir = NULL, out_dir = NULL, worker_ids = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  attempt_root <- app_joint_article_mcmc_attempt_root(root, attempt_dir)
+  if (is.null(out_dir) || !nzchar(as.character(out_dir)[[1L]])) {
+    stamp <- format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC")
+    out_dir <- file.path(root, "diagnostics",
+      paste0("mcmc_failure_audit_", stamp))
+  }
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  if (dir.exists(out_dir)) {
+    stop("MCMC failure audit output directory already exists.", call. = FALSE)
+  }
+  app_ensure_dir(out_dir)
+  failure_inventory <- app_joint_article_mcmc_failure_inventory(root,
+    attempt_root)
+  if (is.null(worker_ids)) worker_ids <- unique(failure_inventory$worker_id)
+  completed_inventory <- app_joint_article_mcmc_completed_inventory(root,
+    attempt_root)
+  start_preflight <- app_joint_article_mcmc_start_preflight(root, worker_ids)
+  initial_precision <- app_joint_article_mcmc_initial_precision_audit(root,
+    worker_ids)
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  plan_subset <- plan[plan$worker_id %in% as.integer(worker_ids), ,
+    drop = FALSE]
+  assessment <- data.frame(
+    audit_status = if (nrow(failure_inventory)) {
+      "joint_exal_precision_failure_localized"
+    } else {
+      "no_failures_found"
+    },
+    root = root,
+    source_attempt_dir = attempt_root,
+    failed_workers = nrow(failure_inventory),
+    failed_joint_exal_workers = sum(
+      failure_inventory$model_id == "joint_exqdesn_rhs_mcmc"
+    ),
+    completed_workers_in_attempt = nrow(completed_inventory),
+    start_preflight_failures = sum(start_preflight$status != "pass"),
+    initial_precision_failures = sum(initial_precision$status != "pass"),
+    initial_precision_all_pass = all(initial_precision$status == "pass"),
+    precision_repair_recommendation =
+      "enable_strict_scale_aware_precision_draw_repair_for_exal",
+    tau_or_tau0_change_recommended = FALSE,
+    production_relaunch_required = nrow(failure_inventory) > 0L,
+    created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
+    stringsAsFactors = FALSE
+  )
+  readme <- file.path(out_dir, "README.md")
+  writeLines(c(
+    "# JOINT Article MCMC Failure Audit",
+    "",
+    "This audit is generated from ignored runtime evidence. It does not modify",
+    "production worker directories, selected backbones, tau grids, tau0 values,",
+    "article assets, or source evidence.",
+    "",
+    "The audit reconstructs deterministic exAL chain starts and the first",
+    "beta precision update from the frozen article worker plan. A passing",
+    "initial precision audit means failures occurred during dynamic MCMC",
+    "state evolution rather than from malformed compact VB initializers."
+  ), readme, useBytes = TRUE)
+  paths <- c(
+    README = readme,
+    assessment = app_write_csv(assessment, file.path(out_dir,
+      "audit_assessment.csv")),
+    failure_inventory = app_write_csv(failure_inventory, file.path(out_dir,
+      "failed_worker_inventory.csv")),
+    completed_inventory = app_write_csv(completed_inventory, file.path(out_dir,
+      "completed_worker_inventory.csv")),
+    worker_plan_subset = app_write_csv(plan_subset, file.path(out_dir,
+      "failed_worker_plan_subset.csv")),
+    start_preflight = app_write_csv(start_preflight, file.path(out_dir,
+      "failed_worker_start_preflight.csv")),
+    initial_precision = app_write_csv(initial_precision, file.path(out_dir,
+      "failed_worker_initial_precision.csv"))
+  )
+  queue_files <- c(
+    mcmc_queue_launch_receipt = file.path(attempt_root,
+      "mcmc_queue_launch_receipt.csv"),
+    mcmc_execution_git_state = file.path(attempt_root,
+      "mcmc_execution_git_state.csv"),
+    mcmc_health_summary = file.path(attempt_root, "mcmc_health_summary.csv"),
+    mcmc_queue_health = file.path(attempt_root, "mcmc_queue_health.csv")
+  )
+  queue_files <- queue_files[file.exists(queue_files)]
+  if (length(queue_files)) {
+    copied <- file.path(out_dir, basename(queue_files))
+    file.copy(queue_files, copied, overwrite = FALSE)
+    names(copied) <- names(queue_files)
+    paths <- c(paths, copied)
+  }
+  app_joint_shared_write_manifest(out_dir, paths)
+  verification <- app_joint_shared_verify_manifest(out_dir,
+    file.path(out_dir, "artifact_manifest.csv"))
+  app_write_csv(verification, file.path(out_dir,
+    "artifact_manifest_verification.csv"))
+  list(
+    out_dir = out_dir,
+    assessment = assessment,
+    failure_inventory = failure_inventory,
+    start_preflight = start_preflight,
+    initial_precision = initial_precision,
+    manifest_verification = verification
+  )
+}
+
 app_joint_article_mcmc_launch_guard <- function(root) {
   root <- normalizePath(root, mustWork = TRUE)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
@@ -1589,6 +1906,10 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     init = init
   )
   fit <- if (job$likelihood_family[[1L]] == "exAL") {
+    common$precision_repair <- TRUE
+    common$precision_repair_start_rel <- 1.0e-12
+    common$precision_repair_max_rel <- 1.0e-8
+    common$precision_repair_growth <- 10
     common$gamma_init <- init$gamma_mean
     common$gamma_slice_width <- 1
     common$gamma_slice_max_steps <- 100L
@@ -1638,15 +1959,31 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     forecast_raw_crossing_pairs = sum(qhat_forecast_contract$raw_crossing$n_crossing_pairs),
     forecast_contract_crossing_pairs = sum(qhat_forecast_contract$contract_crossing$n_crossing_pairs),
     gamma_sigma_diagnostics_retained = job$likelihood_family[[1L]] == "exAL",
+    precision_repair_enabled = isTRUE(fit$precision_repair_enabled %||% FALSE),
+    precision_repair_count = as.integer(fit$precision_repair_count %||% 0L),
+    precision_repair_max_relative_jitter =
+      as.numeric(fit$precision_repair_max_rel_used %||% 0),
     runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
     production_launched = TRUE,
+    stringsAsFactors = FALSE
+  )
+  precision_diagnostics <- fit$precision_repair_diagnostics %||% data.frame(
+    status = character(), backend = character(), dimension = integer(),
+    attempt = integer(), jitter_relative = numeric(),
+    jitter_absolute = numeric(), diagonal_scale = numeric(),
+    error_message = character(), iteration = integer(),
+    min_weight = numeric(), max_weight = numeric(),
+    min_sigma = numeric(), max_sigma = numeric(),
+    min_gamma = numeric(), max_gamma = numeric(),
     stringsAsFactors = FALSE
   )
   paths <- c(
     posterior_draws = app_joint_article_write_gzip_csv(draws,
       file.path(tmp, "posterior_draws.csv.gz")),
     posterior_summary = app_write_csv(summary, file.path(tmp, "posterior_summary.csv")),
+    precision_repair_diagnostics = app_write_csv(precision_diagnostics,
+      file.path(tmp, "precision_repair_diagnostics.csv")),
     qhat_fit_mean = app_write_csv(as.data.frame(qhat_fit),
       file.path(tmp, "qhat_fit_mean.csv")),
     qhat_validation_mean = app_write_csv(as.data.frame(qhat_forecast_all),

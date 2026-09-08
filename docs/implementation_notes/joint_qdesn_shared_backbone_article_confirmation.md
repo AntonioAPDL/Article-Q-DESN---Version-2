@@ -56,6 +56,40 @@ existing sparse precision-draw backend to avoid non-pivoted dense Cholesky
 failures in high-dimensional joint cells while preserving the same posterior
 target.
 
+The first MCMC launch on Jerez localized a second, narrower numerical issue:
+joint exQDESN/exAL exact-M0 chains can encounter a Cholesky failure in the
+weighted beta precision draw after dynamic gamma/sigma/latent/RHS evolution.
+The failed workers had valid compact VB initializers, interior support-logit
+gamma starts, positive scale starts, and well-conditioned first-iteration beta
+precision matrices. That diagnosis rules out tau-grid changes, tau0
+reselection, forecast-window leakage, malformed initializer manifests, and
+endpoint gamma starts as efficient first fixes.
+
+The implemented repair is therefore intentionally local. Exact-M0 exAL article
+workers enable a scale-aware precision-draw fallback that first tries the
+existing sparse Cholesky path and then adds diagonal jitter only after a
+factorization failure. The jitter is relative to the precision diagonal scale,
+starts at `1e-12`, and fails closed above `1e-8`. Every repaired draw records
+iteration, backend, relative/absolute jitter, scale, weights, gamma, and sigma
+diagnostics in `precision_repair_diagnostics.csv`; unrepaired successful draws
+only contribute zero counts in `posterior_summary.csv`. AL workers do not
+enable this repair.
+
+The companion audit script
+`application/scripts/audit_joint_qdesn_shared_backbone_article_mcmc_failures.R`
+rebuilds a reproducible failure packet from either an active runtime or a
+quarantined MCMC attempt. It writes failure inventory, completed-worker
+inventory, deterministic exAL start preflight, first-iteration precision audit,
+queue receipts, and a verifying manifest under the ignored runtime diagnostics
+directory. The audit is evidence generation only; it does not modify selected
+backbones, tau grids, tau0 values, worker outputs, or article assets.
+
+Relaunch policy after this repair is to quarantine flawed or partial MCMC
+attempts, keep their audit packets, and restart the active `mcmc_workers/`
+runtime from a clean synced execution commit. The 160-worker gate remains
+unchanged: all workers must complete, all worker manifests must verify, and the
+final MCMC manifest must verify before score-packet analysis.
+
 Generated runtime belongs under:
 
 ```text

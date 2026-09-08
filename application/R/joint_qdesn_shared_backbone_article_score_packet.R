@@ -1291,7 +1291,10 @@ app_joint_article_score_finalize <- function(
       out_dir, file.path(out_dir, "artifact_manifest.csv")
     )
     health <- app_read_csv(file.path(out_dir, "packet_health_summary.csv"))
-    if (all(check$verified)) {
+    current_head <- app_joint_article_git_value(c("rev-parse", "HEAD"))
+    current_health <- "execution_code_commit" %in% names(health) &&
+      all(health$execution_code_commit == current_head)
+    if (all(check$verified) && current_health) {
       return(list(out_dir = out_dir, health = health, reused = TRUE))
     }
   }

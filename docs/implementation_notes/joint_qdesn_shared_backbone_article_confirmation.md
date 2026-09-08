@@ -2,7 +2,7 @@
 
 Date: 2026-09-07
 
-Status: `IMPLEMENTED_LAUNCH_FREE_PREFLIGHT`
+Status: `READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW`
 
 This lane prepares the fixed article-fixture VB/MCMC workflow for the completed
 JOINT QDESN shared-backbone family campaign. It does not select a new DESN
@@ -107,3 +107,60 @@ mirrored Jerez R 4.6.0 environment it freezes design fingerprint
 initializer dimensions `14/14/7/7`, AL summary values
 `0.152213091439/0.235467134628/0.150980779259`, monotone contract crossings
 `0`, and qhat fingerprint prefix `3456dbca657c`.
+
+## Closeout Addendum: 2026-09-08
+
+The Jerez continuation completed the article-fixture confirmation without
+modifying manuscript files or tracked article tables/figures. Final health now
+verifies 7,560/7,560 imported source jobs, 136/136 article-window VB
+components, 32/32 compact initializers, and 160/160 MCMC chain workers, all
+with zero failures. The MCMC worker manifest verification covers exactly 160
+workers; the final VB and MCMC manifests verify every entry. The exAL article
+workers used the exact-M0 method with the local scale-aware precision-draw
+repair enabled only for exAL chains.
+
+The deterministic score packet is:
+
+```text
+application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907/score_packet
+```
+
+The score packet was built from commit
+`66bd9c6feff6a03881fcf3c0f0351e00f69022f4` with the frozen contract
+`application/config/joint_qdesn_shared_backbone_article_score_contract_v1.csv`.
+The packet status is `READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW`:
+32 finite posterior score rows, 16 joint-minus-independent contrasts, eight
+scenario winners, 10/10 computation re-audit gates passing, zero contract
+crossing pairs, and a fully verified packet artifact manifest. The contract
+score is known-DGP expected finite-grid quantile score,
+`dgp_integrated_acrps`, using seven-level trapezoidal weights
+`0.025,0.100,0.200,0.250,0.200,0.100,0.025` on twice quantile check loss over
+`design$score_local`.
+
+The score results are article-safe candidates only. Seven of eight descriptive
+numerical minima are independent exQDESN/exAL/RHS; `laplace_bridge` has a small
+joint exQDESN/exAL/RHS numerical edge. All winner-versus-runner-up 95 percent
+intervals overlap, so the ranking should be described as numerical/descriptive
+unless a later integration review adopts stricter language. The 16
+joint-minus-independent contrasts have zero contract crossings on both sides;
+five intervals directionally favor independent models, and 11 overlap zero.
+
+The frozen planning files were not rewritten. Stale values such as
+`PENDING_VB_GATE`, `BLOCKED_UNTIL_VB_136_OF_136`, and
+`NOT_LAUNCHED_REQUIRES_SEPARATE_FROZEN_CONFIRMATION` are documented as
+superseded by the final health evidence in
+`score_packet/plan_status_supersession_audit.csv`.
+
+Precision repair evidence is retained in
+`score_packet/precision_repair_summary.csv`: all 32 cells pass the precision
+repair audit, 96 exAL workers had repair enabled, eight workers used at least
+one repair, 34 total precision repairs were recorded, and the maximum relative
+jitter was `1e-12`. Scalar gamma/sigma diagnostics for the 16 exAL cells are
+retained as review-level diagnostics, not rejection gates, because the score
+and quantile-functionals are stable and all contract crossings are zero.
+
+For transfer, retain the complete ignored runtime. The generated
+`score_packet/transfer_inventory.csv` covers 2,867 files and 470,322,631 bytes;
+the inventory hash is
+`ad9cb207cc504354cd09e5a892c65553d1f5061691b9064f2d451791b78ed069`. Do not
+delete Jerez runtime artifacts before Muscat confirms the transferred hashes.

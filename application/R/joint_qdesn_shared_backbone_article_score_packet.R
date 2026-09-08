@@ -146,9 +146,15 @@ app_joint_article_score_reaudit <- function(
 ) {
   root <- normalizePath(root, mustWork = TRUE)
   out_path <- file.path(root, "computation_closeout_reaudit.csv")
+  current_head <- app_joint_article_git_value(c("rev-parse", "HEAD"))
   if (file.exists(out_path)) {
     audit <- app_read_csv(out_path)
-    if (nrow(audit) && all(audit$status == "pass")) return(audit)
+    if (nrow(audit) &&
+        all(audit$status == "pass") &&
+        "execution_code_commit" %in% names(audit) &&
+        all(audit$execution_code_commit == current_head)) {
+      return(audit)
+    }
   }
 
   source <- app_read_csv(file.path(root, "source_final_health.csv"))
@@ -308,7 +314,7 @@ app_joint_article_score_reaudit <- function(
   )
   audit <- app_bind_rows_fill(rows)
   audit$created_at <- format(Sys.time(), tz = "UTC", usetz = TRUE)
-  audit$execution_code_commit <- app_joint_article_git_value(c("rev-parse", "HEAD"))
+  audit$execution_code_commit <- current_head
   app_write_csv(audit, out_path)
   if (any(audit$status != "pass")) {
     stop("Jerez computation closeout re-audit failed.", call. = FALSE)
@@ -1344,11 +1350,14 @@ app_joint_article_score_finalize <- function(
     sha256 = app_sha256_file(score_contract_out),
     stringsAsFactors = FALSE
   )
+  reaudit_out <- file.path(out_dir, "computation_closeout_reaudit.csv")
+  file.copy(file.path(root, "computation_closeout_reaudit.csv"),
+            reaudit_out, overwrite = TRUE)
   write <- function(x, name) app_write_csv(x, file.path(out_dir, name))
   paths <- c(
     score_contract = normalizePath(score_contract_out, mustWork = TRUE),
     score_contract_sha256 = write(score_contract_sha, "score_contract_sha256.csv"),
-    computation_closeout_reaudit = file.path(root, "computation_closeout_reaudit.csv"),
+    computation_closeout_reaudit = normalizePath(reaudit_out, mustWork = TRUE),
     formula_and_quadrature_audit = write(formula, "formula_and_quadrature_audit.csv"),
     source_completeness_audit = write(source_audit, "source_completeness_audit.csv"),
     posterior_dgp_integrated_acrps_draws =

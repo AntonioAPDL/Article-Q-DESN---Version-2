@@ -251,13 +251,28 @@ app_joint_exqdesn_combine_independent_mcmc <- function(fits, Z, tau, seed = NA_i
   }
   beta_draws <- matrix(NA_real_, n_keep, K * p)
   alpha_draws <- sigma_draws <- gamma_draws <- matrix(NA_real_, n_keep, K)
+  precision_records <- list()
   for (k in seq_len(K)) {
     idx <- ((k - 1L) * p + 1L):(k * p)
     beta_draws[, idx] <- fits[[k]]$beta_draws
     alpha_draws[, k] <- fits[[k]]$alpha_draws[, 1L]
     sigma_draws[, k] <- fits[[k]]$sigma_draws[, 1L]
     gamma_draws[, k] <- fits[[k]]$gamma_draws[, 1L]
+    if (is.data.frame(fits[[k]]$precision_repair_diagnostics) &&
+        nrow(fits[[k]]$precision_repair_diagnostics)) {
+      block <- fits[[k]]$precision_repair_diagnostics
+      block$quantile_index <- k
+      precision_records[[length(precision_records) + 1L]] <- block
+    }
   }
+  precision_counts <- vapply(
+    fits, function(x) as.integer(x$precision_repair_count %||% 0L),
+    integer(1L)
+  )
+  precision_max <- vapply(
+    fits, function(x) as.numeric(x$precision_repair_max_rel_used %||% 0),
+    numeric(1L)
+  )
   beta_mean <- colMeans(beta_draws)
   alpha_mean <- colMeans(alpha_draws)
   qhat <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) + matrix(alpha_mean, nrow(Z), K, byrow = TRUE)
@@ -274,6 +289,25 @@ app_joint_exqdesn_combine_independent_mcmc <- function(fits, Z, tau, seed = NA_i
     qhat_mean = qhat,
     tau = tau,
     seed = seed,
+    precision_repair_enabled = any(vapply(
+      fits, function(x) isTRUE(x$precision_repair_enabled), logical(1L)
+    )),
+    precision_repair_count = sum(precision_counts),
+    precision_repair_max_rel_used = max(c(0, precision_max), na.rm = TRUE),
+    precision_repair_diagnostics = if (length(precision_records)) {
+      do.call(rbind, precision_records)
+    } else {
+      data.frame(
+        status = character(), backend = character(), dimension = integer(),
+        attempt = integer(), jitter_relative = numeric(),
+        jitter_absolute = numeric(), diagonal_scale = numeric(),
+        error_message = character(), iteration = integer(),
+        min_weight = numeric(), max_weight = numeric(),
+        min_sigma = numeric(), max_sigma = numeric(),
+        min_gamma = numeric(), max_gamma = numeric(),
+        quantile_index = integer(), stringsAsFactors = FALSE
+      )
+    },
     fit_structure = "independent",
     inference_method_id = fits[[1L]]$inference_method_id,
     component_method_ids = vapply(fits, `[[`, character(1L), "inference_method_id"),

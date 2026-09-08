@@ -110,6 +110,41 @@ m0 <- do.call(
 stopifnot(identical(m0$gamma_update, "collapsed_logit_slice"))
 stopifnot(identical(m0$inference_method_id, "M0_v_collapsed_support_logit"))
 
+original_m0_kernel <- app_joint_qvp_fit_exal_mcmc_tiny
+m0_kernel_calls <- 0L
+app_joint_qvp_fit_exal_mcmc_tiny <- function(...) {
+  m0_kernel_calls <<- m0_kernel_calls + 1L
+  original_m0_kernel(...)
+}
+single_call_m0 <- tryCatch(
+  do.call(
+    app_joint_exqdesn_fit_mcmc_dispatch,
+    c(list(method_id = "M0_v_collapsed_support_logit"), mcmc_args)
+  ),
+  finally = {
+    app_joint_qvp_fit_exal_mcmc_tiny <<- original_m0_kernel
+  }
+)
+rm(original_m0_kernel)
+stopifnot(
+  m0_kernel_calls == 1L,
+  identical(single_call_m0$inference_method_id,
+    "M0_v_collapsed_support_logit")
+)
+m0_repair <- do.call(
+  app_joint_exqdesn_fit_mcmc_dispatch,
+  c(list(
+    method_id = "M0_v_collapsed_support_logit",
+    precision_repair = TRUE,
+    precision_repair_max_rel = 1.0e-8
+  ), mcmc_args)
+)
+stopifnot(
+  isTRUE(m0_repair$precision_repair_enabled),
+  is.data.frame(m0_repair$precision_repair_diagnostics),
+  m0_repair$precision_repair_count >= 0L
+)
+
 m1b <- app_joint_exqdesn_fit_mcmc_dispatch(
   method_id = "M1b_u_collapsed_support_logit",
   y = fixture$y,

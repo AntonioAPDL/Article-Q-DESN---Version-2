@@ -676,9 +676,9 @@ The regularized horseshoe can be written directly as in
 updates, however, the direct global-local block includes an extra
 \(\{1+\tau^2\lambda_j^2/\zeta^2\}^{1/2}\) factor, so the ordinary horseshoe
 updates for \((\tau,\lambda_j)\) are not preserved. We therefore use the
-equivalent product representation of \citet{NishimuraSuchard2023SSS}, which
-keeps the same conditional coefficient prior while restoring closed-form scale
-updates:
+product construction of \citet{NishimuraSuchard2023SSS}. It gives the same
+conditional Gaussian coefficient variance in \eqref{eq:rhs-var} while
+retaining closed-form updates for the local, global, and slab scales:
 \begin{equation}
 p(\beta_j,\lambda_j\mid\tau,\zeta)
 \propto
@@ -710,6 +710,31 @@ The slab scale is either fixed or assigned
 \end{equation}
 Under \eqref{eq:ns-joint-prior}, this prior remains compatible with
 closed-form updating \citep{NishimuraSuchard2023SSS}.
+
+\noindent\textbf{Reference calibration of the global scale.}
+The global parameter \(\tau\) is random, whereas \(\tau_0\) is the fixed scale
+of its half-Cauchy hyperprior. For a new analysis with standardized penalized
+columns, a useful Gaussian reference calibration is
+\begin{equation}
+\tau_{0,\mathrm{ref}}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref}}}{\sqrt{N_{\mathrm{fit}}}},
+\qquad 0<m_0<r,
+\label{eq:rhs-global-reference-main}
+\end{equation}
+where \(N_{\mathrm{fit}}\) is the number of fitting observations,
+\(\sigma_{\mathrm{ref}}\) is a residual-scale reference from a preliminary
+Gaussian fit, and \(m_0\) is an elicited reference for the number of
+non-intercept coefficients expected to escape strong global shrinkage
+\citep{PiironenVehtari2017RHS}. If the response is also standardized,
+\(\sigma_{\mathrm{ref}}=1\) gives the corresponding unit-scale reference.
+Equation~\eqref{eq:rhs-global-reference-main} is an exact effective-size
+calculation only for an ordinary horseshoe under an orthogonal Gaussian
+reference design. For correlated DESN features and a finite slab, it provides
+an interpretable scale rather than an exact sparsity statement. When Normal,
+AL, and exAL regressions use the same standardized design, retaining this
+common Gaussian reference keeps their coefficient-prior scales comparable;
+the supplement gives the derivation and likelihood-information alternatives.
 
 The likelihood parameters are assigned
 \(\sigma\sim\IG(a_\sigma,b_\sigma)\) and
@@ -1342,6 +1367,10 @@ retains its own likelihood and variational objective. The complete collections
 of level-specific estimates provide the corresponding coefficient and
 likelihood starting values for the joint regressions. The supplement gives the
 exact ordering and the initialization of the joint coefficient differences.
+Sequential initialization does not alter the coefficient prior. Models that
+share a standardized design may use the common Gaussian reference in
+Eq.~\eqref{eq:rhs-global-reference-main}, while distinct coefficient blocks are
+calibrated separately.
 
 \subsection{State Diagnostics and Sensitivity}
 
@@ -1810,10 +1839,9 @@ discrepancy, with their reservoir specifications reported in the supplement.
 Forecast-period discrepancy states follow the persistence-plus-adjustment
 specification described above.
 
-The two coefficient blocks use separate regularized-horseshoe global scales,
-\(\tau_{0,\mathrm{ref}}=\GlofasApplicationCurrentSharedRhsTau{}\) and
-\(\tau_{0,\mathrm{disc}}=\GlofasApplicationCurrentDiscrepancyRhsTau{}\),
-respectively.
+The reference-process and discrepancy coefficient blocks use separate
+regularized-horseshoe hierarchies, allowing their global shrinkage scales to be
+inferred independently.
 
 \subsection{Retrospective Application Results}
 

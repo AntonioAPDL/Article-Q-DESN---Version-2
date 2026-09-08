@@ -81,26 +81,42 @@ al_fit <- readRDS(al_fit_path)
 al_convergence <- data.frame(
   family = "Joint AL", converged = isTRUE(al_fit$converged),
   outer_converged = isTRUE(al_fit$converged_outer), inner_converged = isTRUE(al_fit$converged_inner),
+  rhs_converged = isTRUE(al_fit$converged_rhs),
   outer_iterations = nrow(al_fit$trace), continuation_count = al_fit$continuation_count,
   stopping_reason = al_fit$stopping_reason, cumulative_runtime_seconds = al_fit$runtime_seconds,
   stringsAsFactors = FALSE
 )
-if (!isTRUE(al_fit$converged) || !isTRUE(al_fit$converged_outer) || !isTRUE(al_fit$converged_inner)) {
-  stop("Joint AL did not pass both outer and inner convergence gates.", call. = FALSE)
+if (!isTRUE(al_fit$converged) || !isTRUE(al_fit$converged_outer) ||
+    !isTRUE(al_fit$converged_inner) || !isTRUE(al_fit$converged_rhs)) {
+  stop("Joint AL did not pass the outer, inner, and RHS convergence gates.", call. = FALSE)
 }
+al_rhs_certificate <- merge(
+  al_fit$rhs_convergence_diagnostics,
+  al_fit$rhs_schedule_rebase_audit,
+  by = c("component", "rhs_block"), all = TRUE
+)
+al_rhs_certificate$family <- "Joint AL"
 rm(al_fit)
 invisible(gc())
 exal_fit <- readRDS(exal_fit_path)
 exal_convergence <- data.frame(
   family = "Joint exAL", converged = isTRUE(exal_fit$converged),
   outer_converged = isTRUE(exal_fit$converged_outer), inner_converged = isTRUE(exal_fit$converged_inner),
+  rhs_converged = isTRUE(exal_fit$converged_rhs),
   outer_iterations = nrow(exal_fit$trace), continuation_count = exal_fit$continuation_count,
   stopping_reason = exal_fit$stopping_reason, cumulative_runtime_seconds = exal_fit$runtime_seconds,
   stringsAsFactors = FALSE
 )
+exal_rhs_certificate <- merge(
+  exal_fit$rhs_convergence_diagnostics,
+  exal_fit$rhs_schedule_rebase_audit,
+  by = c("component", "rhs_block"), all = TRUE
+)
+exal_rhs_certificate$family <- "Joint exAL"
 rm(exal_fit)
 invisible(gc())
 convergence <- rbind(al_convergence, exal_convergence)
+rhs_certificate <- app_bind_rows_fill(list(al_rhs_certificate, exal_rhs_certificate))
 
 score_file <- function(root, job, suffix = "by_horizon") {
   file.path(root, "scores", paste0(job, "_", suffix, ".csv"))
@@ -252,6 +268,13 @@ history_q <- do.call(cbind, lapply(tau_grid, function(q) {
   as.numeric(design$X_beta %*% as.numeric(beta$mean))
 }))
 colnames(history_q) <- format(tau_grid, trim = TRUE)
+history_d <- do.call(cbind, lapply(tau_grid, function(q) {
+  block <- al_coef[abs(as.numeric(al_coef$quantile_level) - q) < 1.0e-12, , drop = FALSE]
+  alpha <- block[startsWith(block$coefficient, "alpha__"), , drop = FALSE]
+  if (nrow(alpha) != ncol(design$X_alpha)) stop("Joint AL discrepancy coefficient/design mismatch.", call. = FALSE)
+  as.numeric(design$X_alpha %*% as.numeric(alpha$mean))
+}))
+colnames(history_d) <- format(tau_grid, trim = TRUE)
 history_truth <- as.numeric(panel$y_transformed)
 history_windows <- list(all = seq_along(history_truth), last1000 = tail(seq_along(history_truth), 1000L),
                         last200 = tail(seq_along(history_truth), 200L), last50 = tail(seq_along(history_truth), 50L))
@@ -326,21 +349,43 @@ paths <- c(
   history_csv = file.path(table_dir, paste0("glofas_application_part4_historical_guardrail__", tag, ".csv")),
   common_csv = file.path(table_dir, paste0("glofas_application_part4_common_grid_tradeoff__", tag, ".csv")),
   convergence_csv = file.path(table_dir, paste0("glofas_application_part4_joint_convergence__", tag, ".csv")),
+  rhs_certificate_csv = file.path(table_dir, paste0("glofas_application_part4_rhs_release_certificate__", tag, ".csv")),
   spec_csv = file.path(table_dir, paste0("glofas_application_part4_model_spec__", tag, ".csv")),
+  decision_csv = file.path(table_dir, paste0("glofas_application_part4_selection_decision__", tag, ".csv")),
   score_tex = file.path(table_dir, paste0("glofas_application_part4_forecast_scores__", tag, ".tex")),
+  all_scores_tex = file.path(table_dir, paste0("glofas_application_part4_all_family_scores__", tag, ".tex")),
   guardrail_tex = file.path(table_dir, paste0("glofas_application_part4_historical_guardrail__", tag, ".tex")),
   outputs_tex = file.path(table_dir, paste0("glofas_application_part4_current_outputs__", tag, ".tex")),
-  main_figure = file.path(figure_dir, paste0("glofas_part4_joint_al_last30_issued28__", tag, ".pdf"))
+  main_figure = file.path(figure_dir, paste0("glofas_part4_joint_al_last30_issued28__", tag, ".pdf")),
+  grouped_figure = file.path(figure_dir, "diagnostics", paste0("glofas_part4_grouped_family_comparison__", tag, ".pdf")),
+  grouped_scores = file.path(table_dir, paste0("glofas_application_part4_grouped_family_scores__", tag, ".csv")),
+  grouped_script = app_path("application", "scripts", "391_plot_glofas_part4_grouped_family_comparison.R")
 )
 write.csv(forecast_scores, paths[["forecast_csv"]], row.names = FALSE)
 write.csv(historical_guardrail, paths[["history_csv"]], row.names = FALSE)
 write.csv(common_grid, paths[["common_csv"]], row.names = FALSE)
 write.csv(convergence, paths[["convergence_csv"]], row.names = FALSE)
+write.csv(rhs_certificate, paths[["rhs_certificate_csv"]], row.names = FALSE)
 write.csv(model_spec, paths[["spec_csv"]], row.names = FALSE)
 
 selected <- forecast_scores[forecast_scores$family == "Joint AL", , drop = FALSE]
 raw <- forecast_scores[forecast_scores$family == "Raw GloFAS", , drop = FALSE]
 repo_relative <- function(path) substring(normalizePath(path, mustWork = FALSE), nchar(normalizePath(repo_root)) + 2L)
+selection_decision <- data.frame(
+  selected_family = "Joint AL",
+  authority_scope = "Part4 issued-window latent-path ensemble-likelihood experiment",
+  quantile_grid = paste(format(tau_grid, trim = TRUE), collapse = ","),
+  selected_crps_grid_log1p = selected$crps_grid_log1p,
+  raw_glofas_crps_grid_log1p = raw$crps_grid_log1p,
+  crps_reduction_vs_raw = selected$crps_reduction_vs_raw,
+  normal_ridge_numerically_lower = forecast_scores$crps_grid_log1p[forecast_scores$family == "Normal Ridge"] < selected$crps_grid_log1p,
+  normal_ridge_role = "Normal diagnostic baseline with severe interval undercoverage; not the selected quantile model",
+  historical_guardrail = "failed versus FR09; preserve and disclose FR09 as stronger historical benchmark",
+  crossing_fix = "none",
+  scientific_status = "selected_after_outer_and_inner_convergence_qualification",
+  stringsAsFactors = FALSE
+)
+write.csv(selection_decision, paths[["decision_csv"]], row.names = FALSE)
 score_tex <- c(
   "\\begin{tabular}{lrrrrrr}", "\\toprule",
   "Model & Horizons & Check loss & Interval score & CRPS & Coverage & CRPS reduction \\\\",
@@ -351,6 +396,20 @@ score_tex <- c(
   "\\bottomrule", "\\end{tabular}"
 )
 writeLines(score_tex, paths[["score_tex"]])
+all_scores_tex <- c(
+  "\\begin{tabular}{lrrrrr}", "\\toprule",
+  "Model & CRPS (log1p) & CRPS (original) & Coverage & CPU hours & Converged \\\\",
+  "\\midrule",
+  vapply(seq_len(nrow(forecast_scores)), function(i) sprintf(
+    "%s & %.4f & %.3f & %.3f & %.2f & %s \\\\",
+    forecast_scores$family[[i]], forecast_scores$crps_grid_log1p[[i]],
+    forecast_scores$crps_grid_original[[i]], forecast_scores$coverage90[[i]],
+    forecast_scores$runtime_seconds[[i]] / 3600,
+    if (isTRUE(forecast_scores$converged[[i]])) "yes" else "no"
+  ), character(1L)),
+  "\\bottomrule", "\\end{tabular}"
+)
+writeLines(all_scores_tex, paths[["all_scores_tex"]])
 guardrail_tex <- c(
   "\\begin{tabular}{lrrr}", "\\toprule",
   "Historical window & FR09 CRPS & Part 4 Joint AL CRPS & Relative change \\\\", "\\midrule",
@@ -364,6 +423,9 @@ writeLines(guardrail_tex, paths[["guardrail_tex"]])
 
 outputs <- c(
   sprintf("\\newcommand{\\GlofasApplicationCurrentRunId}{\\detokenize{%s}}", tag),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentConfigPath}{\\detokenize{%s}}", repo_relative(paths[["spec_csv"]])),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentPromotionManifest}{\\detokenize{%s}}", repo_relative(paths[["decision_csv"]])),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentSelectionManifest}{\\detokenize{%s}}", repo_relative(paths[["decision_csv"]])),
   sprintf("\\newcommand{\\GlofasApplicationCurrentCandidateId}{\\detokenize{%s}}", al_job),
   "\\newcommand{\\GlofasApplicationCurrentDiscrepancyTransitionStrategy}{\\detokenize{joint latent-path ensemble likelihood}}",
   sprintf("\\newcommand{\\GlofasApplicationCurrentScoreTable}{%s}", repo_relative(paths[["score_tex"]])),
@@ -378,10 +440,26 @@ outputs <- c(
   sprintf("\\newcommand{\\GlofasApplicationCurrentQdesnAcrps}{%.4f}", selected$crps_grid_log1p),
   sprintf("\\newcommand{\\GlofasApplicationCurrentRawAcrps}{%.4f}", raw$crps_grid_log1p),
   sprintf("\\newcommand{\\GlofasApplicationCurrentAcrpsReduction}{%.1f\\%%}", 100 * selected$crps_reduction_vs_raw),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentQdesnCrps}{%.4f}", selected$crps_grid_log1p),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentRawCrps}{%.4f}", raw$crps_grid_log1p),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentCrpsReduction}{%.1f\\%%}", 100 * selected$crps_reduction_vs_raw),
   sprintf("\\newcommand{\\GlofasApplicationCurrentQdesnMeanCoverage}{%.3f}", selected$coverage90),
   sprintf("\\newcommand{\\GlofasApplicationCurrentRawMeanCoverage}{%.3f}", raw$coverage90),
   "\\newcommand{\\GlofasApplicationCurrentScoredHorizons}{28}",
   "\\newcommand{\\GlofasApplicationCurrentOriginDate}{2022-12-25}",
+  sprintf("\\newcommand{\\GlofasApplicationCurrentVbIterations}{%d joint outer iterations after one exact continuation}", al_convergence$outer_iterations),
+  "\\newcommand{\\GlofasApplicationCurrentReservoirDepth}{1}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirSize}{3000}",
+  "\\newcommand{\\GlofasApplicationCurrentReducerSize}{none}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirMemory}{360}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirWashout}{500}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirAlpha}{0.5}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirRho}{0.9}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirPiW}{0.03}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirPiIn}{1}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirWinScaleGlobal}{0.18}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirWinScaleBias}{0.18}",
+  "\\newcommand{\\GlofasApplicationCurrentReservoirSeed}{20260512}",
   "\\newcommand{\\GlofasApplicationCurrentReferenceReservoirDepth}{1}",
   "\\newcommand{\\GlofasApplicationCurrentReferenceReservoirSize}{3000}",
   "\\newcommand{\\GlofasApplicationCurrentReferenceReducerSize}{none}",
@@ -407,7 +485,12 @@ outputs <- c(
   "\\newcommand{\\GlofasApplicationCurrentDiscrepancyReservoirSeed}{20261521}",
   "\\newcommand{\\GlofasApplicationCurrentSharedRhsTau}{1}",
   "\\newcommand{\\GlofasApplicationCurrentDiscrepancyRhsTau}{0.001}",
+  "\\newcommand{\\GlofasApplicationCurrentRhsTau}{1}",
   "\\newcommand{\\GlofasApplicationCurrentSpreadCalibrationEnabled}{no}",
+  "\\newcommand{\\GlofasApplicationCurrentSpreadCalibrationFactor}{1.0}",
+  "\\newcommand{\\GlofasApplicationCurrentSpreadCalibrationAdditiveWidth}{0.0}",
+  "\\newcommand{\\GlofasApplicationCurrentSpreadCalibrationCenterQuantile}{0.50}",
+  "\\newcommand{\\GlofasApplicationCurrentSpreadCalibrationId}{\\detokenize{none}}",
   "\\newcommand{\\GlofasApplicationCurrentSpreadCalibrationDescription}{\\detokenize{No spread calibration or crossing correction was applied.}}",
   sprintf("\\newcommand{\\GlofasApplicationCurrentObservedHistoryAcrps}{%.4f}", historical_new$crps_grid_log1p[historical_new$window == "all"]),
   sprintf("\\newcommand{\\GlofasApplicationCurrentObservedHistoryCoverage}{%.3f}", historical_new$coverage90[historical_new$window == "all"]),
@@ -418,38 +501,50 @@ writeLines(outputs, paths[["outputs_tex"]])
 message("Building the article-scale Joint AL path figure...")
 history_idx <- which(panel$target_date >= cutoff - 29L & panel$target_date <= cutoff)
 history_paths <- do.call(rbind, lapply(seq_along(tau_grid), function(k) data.frame(
-  target_date = panel$target_date[history_idx], quantile_level = tau_grid[[k]],
-  target = "USGS latent path", value = history_q[history_idx, k], segment = "Historical fit",
-  stringsAsFactors = FALSE
+  target_date = rep(panel$target_date[history_idx], 2L), quantile_level = tau_grid[[k]],
+  target = rep(c("USGS latent path", "GloFAS - USGS discrepancy"), each = length(history_idx)),
+  value = c(history_q[history_idx, k], history_d[history_idx, k]),
+  segment = "Historical fit", stringsAsFactors = FALSE
 )))
 joint_prediction <- read.csv(gzfile(prediction_file(continuation_root, al_job)), stringsAsFactors = FALSE)
 joint_prediction$target_date <- as.Date(joint_prediction$target_date)
 key <- interaction(joint_prediction$target_date, joint_prediction$quantile_level, drop = TRUE)
 forecast_paths <- do.call(rbind, lapply(split(joint_prediction, key), function(block) data.frame(
   target_date = unique(block$target_date), quantile_level = unique(block$quantile_level),
-  target = "USGS latent path", value = mean(block$q_y_draw), segment = "Issued latent path",
+  target = c("USGS latent path", "GloFAS - USGS discrepancy"),
+  value = c(mean(block$q_y_draw), mean(block$d_g_draw)), segment = "Issued latent path",
   stringsAsFactors = FALSE
 )))
 plot_paths <- rbind(history_paths, forecast_paths)
-observed <- rbind(
-  data.frame(target_date = panel$target_date[history_idx], value = panel$y_transformed[history_idx], series = "Observed history"),
-  data.frame(target_date = truth_sidecar$target_date, value = truth_sidecar$y_transformed, series = "Withheld truth (scoring only)")
-)
 ensemble_mean <- aggregate(g_transformed ~ target_date, ensemble, mean)
+observed <- rbind(
+  data.frame(target_date = panel$target_date[history_idx], target = "USGS latent path", value = panel$y_transformed[history_idx], series = "Observed history"),
+  data.frame(target_date = panel$target_date[history_idx], target = "GloFAS - USGS discrepancy", value = panel$g_transformed[history_idx] - panel$y_transformed[history_idx], series = "Observed history"),
+  data.frame(target_date = truth_sidecar$target_date, target = "USGS latent path", value = truth_sidecar$y_transformed, series = "Withheld truth (scoring only)"),
+  data.frame(target_date = truth_sidecar$target_date, target = "GloFAS - USGS discrepancy", value = ensemble_mean$g_transformed - truth_sidecar$y_transformed, series = "Withheld truth (scoring only)")
+)
+retrospective <- data.frame(
+  target_date = panel$target_date[history_idx], target = "USGS latent path",
+  value = panel$g_transformed[history_idx]
+)
+ensemble$target <- "USGS latent path"
+ensemble_mean$target <- "USGS latent path"
 tau_colors <- c("0.05"="#3558A6", "0.2"="#4C86B5", "0.35"="#45A69A", "0.5"="#238443", "0.65"="#C49A21", "0.8"="#E06B26", "0.95"="#B83242")
 p <- ggplot() +
   geom_line(data = ensemble, aes(target_date, g_transformed, group = member), color = "#9CC7CE", alpha = 0.25, linewidth = 0.23) +
   geom_line(data = ensemble_mean, aes(target_date, g_transformed), color = "#005D6A", linewidth = 0.95) +
+  geom_line(data = retrospective, aes(target_date, value), color = "#00839B", linewidth = 0.82) +
   geom_line(data = observed, aes(target_date, value, color = series), linewidth = 0.95) +
   geom_line(data = plot_paths, aes(target_date, value, color = factor(quantile_level), linetype = segment, group = interaction(quantile_level, segment)), linewidth = 0.82) +
   geom_vline(xintercept = cutoff, linetype = "dotted", color = "#5D6870") +
   scale_color_manual(values = c("Observed history"="#181818", "Withheld truth (scoring only)"="#7B2C83", tau_colors), name = NULL) +
   scale_linetype_manual(values = c("Historical fit"="dashed", "Issued latent path"="solid"), name = NULL) +
   scale_x_date(date_breaks = "14 days", date_labels = "%b %d", limits = c(cutoff - 29L, issued_end), expand = expansion(mult = c(0.01, 0.02))) +
+  facet_grid(rows = vars(factor(target, levels = c("USGS latent path", "GloFAS - USGS discrepancy"))), scales = "free_y") +
   labs(
     title = "GloFAS Part 4: joint AL Q-DESN latent USGS path",
     subtitle = sprintf("Last 30 historical dates and 28 issued horizons; 51 GloFAS members; log1p scale; 7-q CRPS %.4f", selected$crps_grid_log1p),
-    x = "Date", y = "log(USGS discharge + 1)", color = NULL
+    x = "Date", y = "Fitted log1p scale", color = NULL
   ) +
   theme_minimal(base_size = 11) +
   theme(
@@ -458,7 +553,7 @@ p <- ggplot() +
     legend.position = "top", legend.key.width = grid::unit(1.1, "cm"),
     plot.margin = margin(8, 12, 8, 8)
   ) + guides(color = guide_legend(nrow = 2, byrow = TRUE))
-ggsave(paths[["main_figure"]], p, width = 11.5, height = 6.8, device = cairo_pdf)
+ggsave(paths[["main_figure"]], p, width = 11.5, height = 8.2, device = cairo_pdf)
 
 rm(design)
 invisible(gc())

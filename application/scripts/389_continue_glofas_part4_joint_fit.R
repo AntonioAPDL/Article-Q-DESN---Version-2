@@ -136,7 +136,7 @@ run_continuation <- function() {
   vb_args$joint_inner_min_iter <- as.integer(args$inner_min_iter)
   vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
   vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
-  vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase, FALSE)
+  vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase)
   vb_args$n_draws <- as.integer(args$n_draws)
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||

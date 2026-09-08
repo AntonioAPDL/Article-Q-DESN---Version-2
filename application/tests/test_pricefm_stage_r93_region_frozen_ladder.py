@@ -43,12 +43,13 @@ def fixture(tmp_path: Path):
     pd.DataFrame([
         {
             "region": "SE_2", "fold": fold, "qdesn_method_id": "qdesn_exal_rhs_ns_exact_chunked",
+            "experiment_id": experiment,
             "qdesn_AQL": aql, "pricefm_AQL": pricefm, "decision_label": decision,
         }
-        for fold, aql, pricefm, decision in [
-            (1, 6.4456386889, 4.2135339868, "pricefm_wins"),
-            (2, 3.0275322919, 3.6377627079, "qdesn_wins"),
-            (3, 5.3023264652, 4.6333665507, "pricefm_wins"),
+        for fold, experiment, aql, pricefm, decision in [
+            (1, "broad", 6.4456386889, 4.2135339868, "pricefm_wins"),
+            (2, "local2", 3.0275322919, 3.6377627079, "qdesn_wins"),
+            (3, "local3", 5.3023264652, 4.6333665507, "pricefm_wins"),
         ]
     ]).to_csv(r92, index=False)
     specs = [
@@ -155,16 +156,16 @@ def test_r93_prep_includes_all_fold_controls_and_quarantines_test(tmp_path):
     assert continuation["firewalls"]["forecast_window_selects_or_retunes"] is False
 
 
-def test_r93_rejects_changed_authoritative_control(tmp_path):
+def test_r93_rejects_control_from_a_different_authoritative_experiment(tmp_path):
     module = load_script()
     args = args_for(module, tmp_path)
     frame = pd.read_csv(args.control_registry)
-    frame.loc[frame.fold.eq(2), "alpha"] = 0.35
+    frame.loc[frame.fold.eq(2), "experiment_id"] = "wrong_experiment"
     frame.to_csv(args.control_registry, index=False)
     try:
         module.run(args)
     except RuntimeError as exc:
-        assert "fold 2 control spec changed" in str(exc)
+        assert "control experiment IDs differ" in str(exc)
     else:
         raise AssertionError("R93 should reject a changed authoritative fold control")
 

@@ -415,7 +415,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if int(args.expected_candidates) != 240 or folds != [101, 102, 103] or int(args.top_k) != 30:
             raise RuntimeError("production R93 contract requires 240 candidates, folds 101-103, and top-k 30")
         controls = candidates[candidates.candidate_role.eq("authoritative_fold_geometry_control")]
-        if sorted(controls.source_fold.astype(int).tolist()) != [1, 2, 3]:
+        represented_folds = sorted({
+            int(value)
+            for cell in controls.source_fold.astype(str)
+            for value in cell.split(";")
+            if value
+        })
+        if represented_folds != [1, 2, 3]:
             raise RuntimeError("all three authoritative fold controls must be present")
     if not (0 < int(args.top_k) <= len(candidates)):
         raise ValueError("top-k must be positive and no larger than candidate count")

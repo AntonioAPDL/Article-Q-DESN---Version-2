@@ -411,9 +411,8 @@ def build_refinement_grid(
         fingerprint = hashlib.sha256(
             f"{winner.parent_ridge_candidate_id}|rhs_refinement|{tau0:.17g}".encode()
         ).hexdigest()
-        experiment_id = (
-            f"r93_se2_rhs_refine_t{tau_token(tau0)}_{fingerprint[:10]}"
-        )
+        region_token = str(winner.region).lower().replace("_", "")
+        experiment_id = f"r93_{region_token}_rhs_refine_t{tau_token(tau0)}_{fingerprint[:10]}"
         item.update({
             "id": experiment_id,
             "stage": "pricefm_stage_r93_normal_rhs_tau0_refinement",

@@ -67,10 +67,10 @@ POLICY_WEIGHTS = {
     "graph_summary_mean_std": 0.20,
     "graph_khop": 0.10,
 }
-EXPECTED_CONTROL_SPECS = {
-    1: {"depth": 2, "units": [120, 120], "lag_window": 96, "alpha": 0.40, "rho": 0.90, "input_scale": 0.25},
-    2: {"depth": 2, "units": [80, 80], "lag_window": 96, "alpha": 0.50, "rho": 0.90, "input_scale": 0.20},
-    3: {"depth": 3, "units": [40, 40, 40], "lag_window": 96, "alpha": 0.45, "rho": 0.90, "input_scale": 0.35},
+SUPPORTED_CONTROL_POLICIES = {
+    *POLICY_WEIGHTS,
+    "graph_neighbor_direct",
+    "graph_neighbor_spread_summary",
 }
 
 
@@ -83,6 +83,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--grid-config", type=Path, default=None)
     p.add_argument("--generated-root", type=Path, default=DEFAULT_GENERATED)
     p.add_argument("--run-root", type=Path, default=DEFAULT_RUN_ROOT)
+    p.add_argument("--processed-root", type=Path, default=DEFAULT_PROCESSED_ROOT)
     p.add_argument("--artifact-repo", type=Path, default=ARTIFACT_REPO)
     p.add_argument("--normal-runtime-source", type=Path, default=DEFAULT_NORMAL_RUNTIME)
     p.add_argument("--normal-runtime-manifest", type=Path, default=DEFAULT_NORMAL_RUNTIME_MANIFEST)
@@ -93,6 +94,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--write-grid", type=parse_bool, default=True)
     p.add_argument("--force", type=parse_bool, default=False)
     p.add_argument("--allow-fixture-hashes", action="store_true")
+    p.add_argument("--expected-r92-sha256", default=R92_SHA256)
+    p.add_argument("--expected-control-sha256", default=CONTROL_REGISTRY_SHA256)
     return p
 
 
@@ -130,7 +133,8 @@ def units_value(value: Any) -> list[int]:
 def semantic_fingerprint(row: dict[str, Any]) -> str:
     keys = [
         "region", "feature_policy", "lag_window", "depth", "units", "alpha", "rho",
-        "input_scale", "state_output", "seed",
+        "input_scale", "state_output", "seed", "graph_degree", "neighbor_regions",
+        "max_neighbor_regions",
     ]
     payload = {key: row[key] for key in keys}
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -158,25 +162,14 @@ def candidate_geometries() -> list[list[int]]:
     ]
 
 
-def expected_spec_matches(row: pd.Series, expected: dict[str, Any]) -> bool:
-    return (
-        int(row["depth"]) == expected["depth"]
-        and units_value(row["units"]) == expected["units"]
-        and int(row["lag_window"]) == expected["lag_window"]
-        and abs(float(row["alpha"]) - expected["alpha"]) < 1e-12
-        and abs(float(row["rho"]) - expected["rho"]) < 1e-12
-        and abs(float(row["input_scale"]) - expected["input_scale"]) < 1e-12
-    )
-
-
 def read_authority(args: argparse.Namespace) -> tuple[pd.DataFrame, pd.DataFrame]:
     for path in (args.r92_registry, args.control_registry, args.template_grid):
         if not path.exists() or path.stat().st_size == 0:
             raise FileNotFoundError(path)
     if not args.allow_fixture_hashes:
-        if sha256_file(args.r92_registry) != R92_SHA256:
+        if sha256_file(args.r92_registry) != str(args.expected_r92_sha256):
             raise RuntimeError("R92 registry hash does not match the frozen authority")
-        if sha256_file(args.control_registry) != CONTROL_REGISTRY_SHA256:
+        if sha256_file(args.control_registry) != str(args.expected_control_sha256):
             raise RuntimeError("control registry hash does not match the frozen authority")
 
     registry = pd.read_csv(args.r92_registry, low_memory=False)
@@ -188,10 +181,17 @@ def read_authority(args: argparse.Namespace) -> tuple[pd.DataFrame, pd.DataFrame
         raise RuntimeError(f"R92 does not contain exactly three folds for {region}")
     if sorted(controls.fold.astype(int).tolist()) != [1, 2, 3]:
         raise RuntimeError(f"control registry does not contain exactly three folds for {region}")
-    for fold, expected in EXPECTED_CONTROL_SPECS.items():
-        row = controls[controls.fold.astype(int).eq(fold)].iloc[0]
-        if not expected_spec_matches(row, expected):
-            raise RuntimeError(f"authoritative {region} fold {fold} control spec changed")
+    required = {
+        "experiment_id", "feature_policy", "lag_window", "depth", "units",
+        "alpha", "rho", "input_scale", "state_output", "seed", "tau0",
+    }
+    missing = sorted(required - set(controls.columns))
+    if missing:
+        raise RuntimeError(f"control registry omits required specification fields: {missing}")
+    if controls.experiment_id.astype(str).str.strip().eq("").any():
+        raise RuntimeError(f"authoritative {region} controls contain an empty experiment ID")
+    if not set(controls.feature_policy.astype(str)).issubset(SUPPORTED_CONTROL_POLICIES):
+        raise RuntimeError(f"authoritative {region} controls contain an unsupported feature policy")
     return r92_region.sort_values("fold"), controls.sort_values("fold")
 
 
@@ -222,8 +222,10 @@ def verify_normal_runtime(args: argparse.Namespace) -> Path:
 
 def control_ledger(r92: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFrame:
     authority = r92[[
-        "region", "fold", "qdesn_method_id", "qdesn_AQL", "pricefm_AQL", "decision_label"
+        "region", "fold", "experiment_id", "qdesn_method_id", "qdesn_AQL",
+        "pricefm_AQL", "decision_label"
     ]].rename(columns={
+        "experiment_id": "authority_experiment_id",
         "qdesn_method_id": "authority_qdesn_method_id",
         "qdesn_AQL": "authority_qdesn_AQL",
         "pricefm_AQL": "authority_pricefm_AQL",
@@ -234,6 +236,10 @@ def control_ledger(r92: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFrame:
         on=["region", "fold"],
         validate="one_to_one",
     )
+    mismatch = merged.experiment_id.astype(str) != merged.authority_experiment_id.astype(str)
+    if mismatch.any():
+        bad = merged.loc[mismatch, ["region", "fold", "experiment_id", "authority_experiment_id"]]
+        raise RuntimeError(f"control experiment IDs differ from R92 authority: {bad.to_dict('records')}")
     rows = []
     for row in merged.itertuples(index=False):
         units = units_value(row.units)
@@ -242,7 +248,7 @@ def control_ledger(r92: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFrame:
             "source_fold": int(row.fold),
             "source_experiment_id": row.experiment_id,
             "source_method_id": row.authority_qdesn_method_id,
-            "feature_policy": row.feature_policy,
+            "feature_policy": str(row.feature_policy),
             "lag_window": int(row.lag_window),
             "depth": int(row.depth),
             "units": json.dumps(units, separators=(",", ":")),
@@ -252,6 +258,9 @@ def control_ledger(r92: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFrame:
             "state_output": row.state_output,
             "source_seed": int(row.seed),
             "source_tau0": float(row.tau0),
+            "graph_degree": int(row.graph_degree) if "graph_degree" in merged and pd.notna(row.graph_degree) else 1,
+            "neighbor_regions": row.neighbor_regions if "neighbor_regions" in merged and pd.notna(row.neighbor_regions) else "[]",
+            "max_neighbor_regions": int(row.max_neighbor_regions) if "max_neighbor_regions" in merged and pd.notna(row.max_neighbor_regions) else None,
             "historical_qdesn_AQL_audit_only": float(row.authority_qdesn_AQL),
             "historical_pricefm_AQL_audit_only": float(row.authority_pricefm_AQL),
             "historical_decision_audit_only": row.authority_decision_label,
@@ -260,38 +269,55 @@ def control_ledger(r92: pd.DataFrame, controls: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values("source_fold").reset_index(drop=True)
 
 
-def graph_fields(region: str, all_regions: list[str], policy: str) -> dict[str, Any]:
+def graph_fields(
+    region: str, all_regions: list[str], policy: str,
+    *, spatial: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if policy == "target_only":
         return {
             "input_scope": "local_target_only",
             "output_scope": "target_region_path",
             "lead_covariate_status": "realized_ex_post",
             "spatial_information_set": "local_only_not_pricefm_graph",
+            "graph_degree": 0, "neighbor_regions": [], "max_neighbor_regions": 0,
         }
+    spatial = {"graph_degree": 1, **dict(spatial or {})}
     graph = graph_scope_manifest_for_policy(
-        region, all_regions, policy, spatial={"graph_degree": 1}
+        region, all_regions, policy, spatial=spatial,
     )
     fields = {
-        "graph_degree": 1,
+        "graph_degree": int(spatial["graph_degree"]),
         "graph_source": graph["graph_source"],
         "graph_hash": graph["graph_hash"],
         "neighbor_regions": graph["neighbor_regions"],
         "max_neighbor_regions": len(graph["neighbor_regions"]),
         "output_scope": "target_region_path",
         "lead_covariate_status": "realized_ex_post",
-        "spatial": {"graph_degree": 1},
+        "spatial": spatial,
     }
     if policy == "graph_khop":
         fields.update({
             "input_scope": f"pricefm_graph_khop_degree1_n{len(graph['neighbor_regions'])}",
             "spatial_information_set": "pricefm_released_graph_khop_full_feature_concat",
         })
-    else:
+    elif policy in {"graph_summary_mean", "graph_summary_mean_std"}:
         suffix = "mean" if policy == "graph_summary_mean" else "mean_std"
         fields.update({
             "input_scope": f"pricefm_graph_summary_{suffix}_degree1_n{len(graph['neighbor_regions'])}",
             "spatial_information_set": f"pricefm_released_graph_summary_{suffix}",
         })
+    elif policy == "graph_neighbor_direct":
+        fields.update({
+            "input_scope": f"pricefm_graph_neighbor_direct_degree1_n{len(graph['neighbor_regions'])}",
+            "spatial_information_set": "pricefm_neighbor_augmented_direct",
+        })
+    elif policy == "graph_neighbor_spread_summary":
+        fields.update({
+            "input_scope": f"pricefm_graph_neighbor_spread_summary_degree1_n{len(graph['neighbor_regions'])}",
+            "spatial_information_set": "pricefm_neighbor_augmented_spread_summary",
+        })
+    else:
+        raise RuntimeError(f"unsupported PriceFM feature policy: {policy}")
     return fields
 
 
@@ -303,13 +329,14 @@ def build_candidates(
     region = str(args.target_region)
     quotas = quota_counts(int(args.candidate_count))
     rows: list[dict[str, Any]] = []
+    control_by_fingerprint: dict[str, dict[str, Any]] = {}
     for source in controls.itertuples(index=False):
         row = {
             "region": region,
             "candidate_role": "authoritative_fold_geometry_control",
             "source_fold": str(int(source.source_fold)),
-            "source_experiment_id": source.source_experiment_id,
-            "feature_policy": "target_only",
+            "source_experiment_id": str(source.source_experiment_id),
+            "feature_policy": str(source.feature_policy),
             "lag_window": int(source.lag_window),
             "depth": int(source.depth),
             "units": json.loads(source.units),
@@ -320,9 +347,28 @@ def build_candidates(
             "state_output": str(source.state_output),
             "seed": int(source.source_seed),
         }
-        row.update(graph_fields(region, all_regions, row["feature_policy"]))
+        neighbor_regions = json.loads(source.neighbor_regions) if isinstance(source.neighbor_regions, str) else list(source.neighbor_regions)
+        spatial = {"graph_degree": int(source.graph_degree)}
+        if neighbor_regions:
+            spatial["neighbor_regions"] = neighbor_regions
+        if source.max_neighbor_regions is not None and not pd.isna(source.max_neighbor_regions):
+            spatial["max_neighbor_regions"] = int(source.max_neighbor_regions)
+        row.update(graph_fields(region, all_regions, row["feature_policy"], spatial=spatial))
         row["semantic_fingerprint"] = semantic_fingerprint(row)
-        rows.append(row)
+        fingerprint = row["semantic_fingerprint"]
+        if fingerprint in control_by_fingerprint:
+            existing = control_by_fingerprint[fingerprint]
+            existing["source_fold"] = ";".join(sorted(
+                {*(str(existing["source_fold"]).split(";")), str(row["source_fold"])},
+                key=int,
+            ))
+            existing["source_experiment_id"] = ";".join(sorted({
+                *str(existing["source_experiment_id"]).split(";"),
+                str(row["source_experiment_id"]),
+            }))
+        else:
+            control_by_fingerprint[fingerprint] = row
+            rows.append(row)
 
     axes = itertools.product(
         candidate_geometries(),
@@ -332,6 +378,12 @@ def build_candidates(
         [0.15, 0.20, 0.25, 0.35, 0.50],
     )
     base_specs = list(axes)
+    policy_fields = {
+        policy: graph_fields(region, all_regions, policy)
+        for policy in quotas
+    }
+    unsupported_controls = sum(row["feature_policy"] not in quotas for row in rows)
+    quotas = quota_counts(int(args.candidate_count) - unsupported_controls)
     for policy, quota in quotas.items():
         existing = sum(row["feature_policy"] == policy for row in rows)
         needed = quota - existing
@@ -353,7 +405,7 @@ def build_candidates(
                 "state_output": "final_layer",
                 "seed": int(args.search_seed),
             }
-            row.update(graph_fields(region, all_regions, policy))
+            row.update(copy.deepcopy(policy_fields[policy]))
             row["semantic_fingerprint"] = semantic_fingerprint(row)
             score = hashlib.sha256(
                 f"{args.search_seed}|{policy}|{row['semantic_fingerprint']}".encode("utf-8")
@@ -385,7 +437,7 @@ def build_candidates(
 
 def make_base_configs(
     template: dict[str, Any], output: Path, target_region: str, artifact_repo: Path,
-    normal_runtime: Path,
+    normal_runtime: Path, processed_root: Path,
 ) -> tuple[Path, Path, list[str]]:
     grid = template[GRID_BLOCK]
     data_source = repo_path(grid["base"]["data_config"])
@@ -398,9 +450,7 @@ def make_base_configs(
         value = Path(str(data_cfg[key]))
         if not value.is_absolute():
             data_cfg[key] = str(artifact_repo / value)
-    data_cfg["processed_dir"] = str(
-        artifact_repo / "application/data_local/pricefm/processed_stage_r93_region_frozen_20260906"
-    )
+    data_cfg["processed_dir"] = str(processed_root.resolve())
     data_cfg["allow_absolute_local_paths"] = True
     data_cfg["splits"] = copy.deepcopy(INNER_SPLITS)
     data_cfg["pilot"] = {"enabled": True, "region": target_region, "fold": 101}
@@ -610,7 +660,7 @@ def continuation_contract(args: argparse.Namespace) -> dict[str, Any]:
             "warm_start": "internal deterministic scaled-Ridge reconstruction on identical X/y",
         },
         "freeze": {
-            "scope": "one DESN geometry and one tau0 for SE_2",
+            "scope": f"one DESN geometry and one tau0 for {args.target_region}",
             "forbidden_dimensions": ["fold", "quantile", "forecast/test performance"],
             "outer_validation_confirmation_required": True,
         },
@@ -648,13 +698,26 @@ def build_gates(
     candidates: pd.DataFrame, controls: pd.DataFrame, grid: dict[str, Any],
     grid_written: bool, args: argparse.Namespace,
 ) -> pd.DataFrame:
-    quotas = quota_counts(int(args.candidate_count))
-    observed_quotas = candidates.feature_policy.value_counts().to_dict()
+    unsupported_controls = candidates[
+        ~candidates.feature_policy.isin(POLICY_WEIGHTS)
+    ]
+    quotas = quota_counts(int(args.candidate_count) - len(unsupported_controls))
+    observed_quotas = candidates[
+        candidates.feature_policy.isin(POLICY_WEIGHTS)
+    ].feature_policy.value_counts().to_dict()
     cfg = grid[GRID_BLOCK]
     gates = [
         ("candidate_count", len(candidates) == args.candidate_count, f"{len(candidates)}"),
-        ("mandatory_fold_controls", len(controls) == 3 and candidates.candidate_role.str.startswith("authoritative").sum() == 3, "folds 1,2,3"),
+        (
+            "mandatory_fold_controls",
+            len(controls) == 3 and all(
+                str(experiment_id) in ";".join(candidates.source_experiment_id.astype(str))
+                for experiment_id in controls.source_experiment_id
+            ),
+            "all three fold authorities represented; duplicate specifications may share one arm",
+        ),
         ("policy_quotas", observed_quotas == quotas, json.dumps(observed_quotas, sort_keys=True)),
+        ("extra_policies_are_controls_only", unsupported_controls.candidate_role.str.startswith("authoritative").all(), ";".join(sorted(unsupported_controls.feature_policy.unique()))),
         ("unique_semantic_fingerprints", candidates.semantic_fingerprint.is_unique, str(candidates.semantic_fingerprint.nunique())),
         ("ridge_top_30", args.ridge_top_k == 30 and args.ridge_top_k < len(candidates), str(args.ridge_top_k)),
         ("three_inner_temporal_folds", [x["fold"] for x in INNER_SPLITS] == [101, 102, 103], "101,102,103"),
@@ -674,8 +737,8 @@ def report_text(summary: dict[str, Any]) -> str:
 
 ## Decision
 
-The first executable phase is prepared but not launched. It targets `SE_2`, the worst
-R92 region by mean Q-DESN minus PriceFM AQL, and treats the three current fold-specific
+The first executable phase is prepared but not launched. It targets `{summary['target_region']}`
+and treats the three current fold-specific
 winner geometries as mandatory Ridge controls. Their historical test scores are retained
 only in a separate audit ledger and never enter selection.
 
@@ -715,7 +778,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     controls = control_ledger(r92, raw_controls)
     template = load_yaml(args.template_grid)
     data_path, full_path, all_regions = make_base_configs(
-        template, output, str(args.target_region), args.artifact_repo.resolve(), normal_runtime
+        template, output, str(args.target_region), args.artifact_repo.resolve(),
+        normal_runtime, args.processed_root,
     )
     candidates = build_candidates(controls, all_regions, args)
     grid = build_grid(template, candidates, data_path, full_path, args)

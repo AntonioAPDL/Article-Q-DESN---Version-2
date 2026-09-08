@@ -126,9 +126,10 @@ fit:
   converted to five joint outer sweeps because every outer sweep runs at
   least 10 inner coefficient iterations. The retained original joint fits
   completed those five warmup sweeps with zero global-scale updates. The
-  closeout continuation therefore preserves their fitted states, releases
-  the global scale at outer sweep 6, and cannot converge until at least one
-  later sweep updates the coefficients under the released scale;
+  closeout continuation therefore preserves their fitted states. Joint AL
+  releases the global scale at outer sweep 6. Joint exAL first completes its
+  fifth warmup sweep, then releases at sweep 6. Neither fit can converge until
+  at least one later sweep updates the coefficients under the released scale;
 - state the `1/51` per-member horizon weighting;
 - state the future-truth firewall and the 28-day issued limit;
 - avoid implying that MCMC was run for the selected Part 4 application;

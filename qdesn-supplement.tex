@@ -436,14 +436,15 @@ p_{\mathrm{ns}}(\beta_j,\lambda_j\mid\tau,\zeta)
 \end{equation}
 Equation~\eqref{eq:supp_ns_joint} is the marginal joint description after the
 half-Cauchy auxiliary variable for the local scale has been integrated out. The
-MCMC and VB derivations use the equivalent augmented product
+MCMC and VB derivations use the corresponding augmented product
 \[
 \Normal(\beta_j\mid0,\tau^2\lambda_j^2)\,
 \Normal(0\mid\beta_j,\zeta^2)
 \]
 together with inverse-gamma auxiliaries for \(\lambda_j^2\), \(\nu_j\),
-\(\tau^2\), and \(\xi\). This augmented product representation is the one used
-in the augmented posterior densities below.
+\(\tau^2\), and \(\xi\). Normalizing factors that depend on the scale
+parameters are retained. This augmented product representation is the one used
+in the posterior densities below.
 Equivalently, the conditional coefficient law is Gaussian with effective
 variance
 \begin{equation}
@@ -466,6 +467,146 @@ For inverse-gamma scale updates, use the half-Cauchy augmentation
 \label{eq:supp_zeta_prior}
 \end{align}
 where the last line is omitted when \(\zeta^2\) is fixed.
+
+\subsection{Reference Calibration of the Global Shrinkage Scale}
+\label{subsec:supp-rhs-global-scale}
+
+The hierarchy in Eq.~\eqref{eq:supp_hs_aux} distinguishes the posterior random
+global scale \(\tau\) from the fixed hyperprior scale \(\tau_0\). The latter
+should reflect the response scale, the amount of information in the fitting
+sample, the number of penalized coefficients, and prior information about
+coefficient activity. We first state the Gaussian reference calculation of
+\citet{PiironenVehtari2017RHS} and then describe its use for Q--DESN.
+
+Let \(N_{\mathrm{fit}}\) be the number of fitting observations, let \(r\) be
+the number of standardized non-intercept columns, and let
+\(\sigma_{\mathrm{ref}}>0\) be a residual-scale reference. Under an orthogonal
+Gaussian design, the ordinary-horseshoe shrinkage factor for coefficient \(j\)
+is
+\begin{equation}
+\kappa_j
+=\left(1+
+\frac{N_{\mathrm{fit}}\tau^2\lambda_j^2}
+{\sigma_{\mathrm{ref}}^2}
+\right)^{-1}.
+\label{eq:supp-rhs-kappa-reference}
+\end{equation}
+If
+\(m_{\mathrm{eff}}=\sum_{j=1}^r(1-\kappa_j)\), integration over the
+half-Cauchy local scales gives
+\begin{equation}
+\E(m_{\mathrm{eff}}\mid\tau,\sigma_{\mathrm{ref}})
+=r\frac{a}{1+a},
+\qquad
+a=\frac{\tau\sqrt{N_{\mathrm{fit}}}}{\sigma_{\mathrm{ref}}}.
+\label{eq:supp-rhs-effective-size-reference}
+\end{equation}
+Equating Eq.~\eqref{eq:supp-rhs-effective-size-reference} to an elicited prior
+reference \(m_0\in(0,r)\) and using the resulting scale for the half-Cauchy
+hyperprior gives
+\begin{equation}
+\tau_{0,\mathrm{ref}}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref}}}{\sqrt{N_{\mathrm{fit}}}}.
+\label{eq:supp-rhs-tau0-gaussian-reference}
+\end{equation}
+Here \(m_0\) represents prior information about the number of coefficients
+expected to escape strong global shrinkage; it is not a model size selected by
+validation. When both the response and the penalized columns are standardized
+using the fitting observations, setting \(\sigma_{\mathrm{ref}}=1\) gives the
+unit-scale version of Eq.~\eqref{eq:supp-rhs-tau0-gaussian-reference}. If only
+the design columns are standardized, \(\sigma_{\mathrm{ref}}\) should remain
+on the response scale and may be obtained from the preliminary Gaussian fit.
+
+Equations~\eqref{eq:supp-rhs-kappa-reference}--%
+\eqref{eq:supp-rhs-tau0-gaussian-reference} give an exact effective-size
+relationship for the ordinary horseshoe under the stated orthogonal Gaussian
+reference. They are not an exact effective-size identity for the prior in
+Eq.~\eqref{eq:supp_ns_joint}. In particular, the finite slab changes the
+coefficient variance when a local scale is large, and the DESN design can be
+strongly correlated. We therefore use
+Eq.~\eqref{eq:supp-rhs-tau0-gaussian-reference} as an interpretable reference
+calibration for the Nishimura--Suchard construction, not as a guarantee that
+the posterior contains exactly \(m_0\) active coefficients.
+
+\noindent\textbf{Likelihood-information alternatives.}
+A likelihood-specific reference can be obtained by replacing the Gaussian
+location information with the information under the working likelihood. Let
+\(I_{\mu,\mathrm{ref}}\) be the one-observation Fisher information for the
+location parameter at a specified reference state. The corresponding local
+information match is
+\begin{equation}
+\tau_{0,\mathcal L}
+=\frac{m_0}{r-m_0}
+ \{N_{\mathrm{fit}}I_{\mu,\mathrm{ref}}\}^{-1/2}.
+\label{eq:supp-rhs-tau0-information-reference}
+\end{equation}
+For the AL density at probability level \(p_0\), the location score equals
+\(\{p_0-\ind(y<\mu)\}/\sigma\) except at \(y=\mu\), an event of probability
+zero under the continuous working likelihood. Hence
+\begin{equation}
+I_{\mu,\mathrm{AL}}
+=\frac{p_0(1-p_0)}{\sigma^2},
+\qquad
+\tau_{0,\mathrm{AL},p_0}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref},p_0}}
+ {\sqrt{N_{\mathrm{fit}}p_0(1-p_0)}}.
+\label{eq:supp-rhs-tau0-al-reference}
+\end{equation}
+For the exAL likelihood, write the standardized density as
+\(g_{p_0}(z;\gamma)\), where \(z=(y-\mu)/\sigma\), and define
+\begin{equation}
+J_{p_0}(\gamma)
+=\E\left[
+\left\{\frac{\partial}{\partial z}
+\log g_{p_0}(Z;\gamma)\right\}^{2}
+\right].
+\label{eq:supp-exal-standardized-location-information}
+\end{equation}
+Then \(I_{\mu,\mathrm{exAL}}=J_{p_0}(\gamma)/\sigma^2\), which gives
+\begin{equation}
+\tau_{0,\mathrm{exAL},p_0}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref},p_0}}
+ {\sqrt{N_{\mathrm{fit}}J_{p_0}(\gamma_{\mathrm{ref}})}}.
+\label{eq:supp-rhs-tau0-exal-reference}
+\end{equation}
+At the nested AL reference \(\gamma_{\mathrm{ref}}=0\),
+\(J_{p_0}(0)=p_0(1-p_0)\), so
+Eq.~\eqref{eq:supp-rhs-tau0-exal-reference} reduces to
+Eq.~\eqref{eq:supp-rhs-tau0-al-reference}. These information-based scales are
+local reference calculations under the working likelihoods. They do not
+correct likelihood misspecification or establish frequentist calibration.
+Equation~\eqref{eq:supp-rhs-tau0-information-reference} uses equally weighted
+likelihood contributions. For a weighted or composite likelihood, the
+corresponding reference should use the total expected location curvature of
+the stated likelihood rather than substituting its raw number of rows for
+\(N_{\mathrm{fit}}\).
+
+\noindent\textbf{Recommendation for the model sequence.}
+When the preliminary Gaussian, AL, and exAL regressions use the same
+standardized design, the common value in
+Eq.~\eqref{eq:supp-rhs-tau0-gaussian-reference} is the preferred default for
+comparing the likelihood families. It holds the coefficient-prior scale fixed
+while each model retains its own likelihood and posterior. The AL and exAL
+information references are useful sensitivity specifications when
+likelihood-specific curvature matching is the scientific objective.
+
+For joint quantile regressions, the baseline slope and adjacent-difference
+blocks may be calibrated separately. An elicited value \(m_0^0\) applies to
+the baseline coefficients, while values \(m_{0,q}^{\Delta}\) apply to the
+adjacent differences. Choosing smaller \(m_{0,q}^{\Delta}\) expresses a
+stronger prior belief that neighboring quantile levels have similar slopes.
+Likewise, application models with distinct reference-process and discrepancy
+designs should calibrate those blocks separately when their dimensions,
+standardizations, or prior activity beliefs differ.
+
+A reproducible specification therefore records
+\(N_{\mathrm{fit}}\), \(r\), \(m_0\), \(\sigma_{\mathrm{ref}}\), the
+observations used for standardization, and whether the Gaussian or a
+likelihood-information reference was used. Sequential initialization changes
+only numerical starting values and does not change this prior specification.
 
 \subsection{Augmented Posterior Densities}
 

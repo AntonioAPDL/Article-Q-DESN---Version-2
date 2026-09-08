@@ -10,6 +10,12 @@ or in a clearly documented vendored module if vendoring becomes necessary.
 Tracked helper files:
 
 - `00_packages.R`
+- `rhs_global_scale_reference.R`: validated reference calculations for the
+  regularized-horseshoe global-scale hyperprior. The Gaussian calculation may
+  be shared across likelihood families using the same standardized design;
+  AL and exAL standardized-location-information variants are available for
+  sensitivity specifications. The helper does not select a prior or refit a
+  model.
 - `launch_control.R`: explicit launch guards for expensive workflows. It blocks
   retired run identifiers, requires `--confirm_final_launch true` before any
   final-launch configuration reaches `03_fit_models.R`, and refuses to reuse

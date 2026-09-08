@@ -382,7 +382,7 @@ selection_decision <- data.frame(
   normal_ridge_role = "Normal diagnostic baseline with severe interval undercoverage; not the selected quantile model",
   historical_guardrail = "failed versus FR09; preserve and disclose FR09 as stronger historical benchmark",
   crossing_fix = "none",
-  scientific_status = "selected_after_outer_and_inner_convergence_qualification",
+  scientific_status = "selected_after_outer_inner_and_rhs_convergence_qualification",
   stringsAsFactors = FALSE
 )
 write.csv(selection_decision, paths[["decision_csv"]], row.names = FALSE)
@@ -447,7 +447,7 @@ outputs <- c(
   sprintf("\\newcommand{\\GlofasApplicationCurrentRawMeanCoverage}{%.3f}", raw$coverage90),
   "\\newcommand{\\GlofasApplicationCurrentScoredHorizons}{28}",
   "\\newcommand{\\GlofasApplicationCurrentOriginDate}{2022-12-25}",
-  sprintf("\\newcommand{\\GlofasApplicationCurrentVbIterations}{%d joint outer iterations after one exact continuation}", al_convergence$outer_iterations),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentVbIterations}{%d joint outer iterations after one schedule-qualified state continuation}", al_convergence$outer_iterations),
   "\\newcommand{\\GlofasApplicationCurrentReservoirDepth}{1}",
   "\\newcommand{\\GlofasApplicationCurrentReservoirSize}{3000}",
   "\\newcommand{\\GlofasApplicationCurrentReducerSize}{none}",

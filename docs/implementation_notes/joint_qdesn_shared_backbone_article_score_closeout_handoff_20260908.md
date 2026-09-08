@@ -17,7 +17,7 @@ Score packet:
 `application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907/score_packet`
 
 Execution commit:
-`66bd9c6feff6a03881fcf3c0f0351e00f69022f4`
+recorded in `score_packet/packet_health_summary.csv`
 
 ## Health Check
 
@@ -34,7 +34,7 @@ Execution commit:
 | Scenario winners | 8 | 8 | 0 | pass | `score_packet/scenario_winner_summary.csv` |
 | Contract crossings | 0 | 0 | 0 | pass | `score_packet/crossing_and_adjustment_summary.csv` |
 | Packet manifest | 26 | 26 | 0 | pass | `score_packet/artifact_manifest_verification.csv` |
-| Transfer inventory | 2,867 files | 2,867 files | 0 | pass | `score_packet/transfer_inventory.csv` |
+| Transfer inventory | generated | generated | 0 | pass | `score_packet/transfer_inventory.csv`; `score_packet/transfer_storage_summary.csv` |
 
 Remaining computational runs: 0 VB, 0 MCMC, 0 score cells. The only remaining
 work is Muscat transfer and integration review.
@@ -140,10 +140,8 @@ Runtime transfer inventory:
 `score_packet/transfer_inventory.csv`
 
 Storage summary:
-2,867 files, 470,322,631 bytes, 2,817 required files, 50 optional files.
-
-Inventory hash:
-`ad9cb207cc504354cd09e5a892c65553d1f5061691b9064f2d451791b78ed069`
+recorded in `score_packet/transfer_storage_summary.csv`, including total files,
+total bytes, required/optional counts, and the transfer-inventory SHA-256.
 
 Use `rsync` from a host that can see both endpoints:
 

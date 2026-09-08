@@ -1220,8 +1220,13 @@ app_joint_article_score_transfer_inventory <- function(root, out_path) {
   all_files <- list.files(root, recursive = TRUE, all.files = TRUE,
                           full.names = TRUE, no.. = TRUE)
   all_files <- all_files[file.info(all_files)$isdir %in% FALSE]
-  out_abs <- normalizePath(out_path, mustWork = FALSE)
-  all_files <- all_files[normalizePath(all_files, mustWork = TRUE) != out_abs]
+  excluded <- normalizePath(c(
+    out_path,
+    file.path(dirname(out_path), "transfer_storage_summary.csv")
+  ), mustWork = FALSE)
+  all_files <- all_files[
+    !(normalizePath(all_files, mustWork = TRUE) %in% excluded)
+  ]
   rel <- substring(normalizePath(all_files, mustWork = TRUE), nchar(root) + 2L)
   role <- ifelse(grepl("^mcmc_workers/", rel), "mcmc_worker_output",
     ifelse(grepl("^workers/", rel), "vb_worker_output",

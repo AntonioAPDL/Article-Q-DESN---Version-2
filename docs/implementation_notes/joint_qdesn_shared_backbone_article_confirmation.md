@@ -125,8 +125,8 @@ The deterministic score packet is:
 application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907/score_packet
 ```
 
-The score packet was built from commit
-`66bd9c6feff6a03881fcf3c0f0351e00f69022f4` with the frozen contract
+The score packet records its execution commit in
+`score_packet/packet_health_summary.csv` and uses the frozen contract
 `application/config/joint_qdesn_shared_backbone_article_score_contract_v1.csv`.
 The packet status is `READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW`:
 32 finite posterior score rows, 16 joint-minus-independent contrasts, eight
@@ -160,7 +160,8 @@ retained as review-level diagnostics, not rejection gates, because the score
 and quantile-functionals are stable and all contract crossings are zero.
 
 For transfer, retain the complete ignored runtime. The generated
-`score_packet/transfer_inventory.csv` covers 2,867 files and 470,322,631 bytes;
-the inventory hash is
-`ad9cb207cc504354cd09e5a892c65553d1f5061691b9064f2d451791b78ed069`. Do not
-delete Jerez runtime artifacts before Muscat confirms the transferred hashes.
+`score_packet/transfer_inventory.csv` and
+`score_packet/transfer_storage_summary.csv` record the exact file count, byte
+count, required/optional classification counts, and transfer-inventory hash. Do
+not delete Jerez runtime artifacts before Muscat confirms the transferred
+hashes.

@@ -1,0 +1,2 @@
+profile_id,host,required_rscript,r_library_root,runtime_root,source_worktree,initial_concurrency,maximum_concurrency,min_data_free_gib,blas_threads,production_launched
+jerez_20260907,jerez.be.ucsc.edu,/data/jaguir26/local/opt/R/4.6.0/bin/Rscript,/data/jaguir26/local/opt/R/4.6.0/lib64/R/library,application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907,/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_shared_backbone_all_families_20260906,32,40,100,1,FALSE

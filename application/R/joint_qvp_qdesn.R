@@ -11848,6 +11848,15 @@ app_joint_qvp_rhs_state_to_prior <- function(rhs_state) {
   )
 }
 
+app_joint_qvp_rhs_tau2_shape <- function(block_size) {
+  block_size <- as.numeric(block_size)
+  if (length(block_size) != 1L || !is.finite(block_size) ||
+      block_size < 1 || block_size != floor(block_size)) {
+    stop("RHS global-scale shape requires a positive integer block size.", call. = FALSE)
+  }
+  (block_size + 1) / 2
+}
+
 app_joint_qvp_update_rhs_block <- function(block, theta) {
   theta <- as.numeric(theta)
   p <- length(theta)
@@ -11859,7 +11868,7 @@ app_joint_qvp_update_rhs_block <- function(block, theta) {
   block$nu <- app_joint_qvp_rinvgamma(p, shape = 1, rate = 1 + 1 / block$lambda2)
   block$tau2 <- app_joint_qvp_rinvgamma(
     1,
-    shape = p / 2,
+    shape = app_joint_qvp_rhs_tau2_shape(p),
     rate = 1 / block$xi + 0.5 * sum(theta^2 / block$lambda2)
   )
   block$xi <- app_joint_qvp_rinvgamma(1, shape = 1, rate = 1 / (block$tau0^2) + 1 / block$tau2)
@@ -11918,7 +11927,7 @@ app_joint_qvp_update_rhs_vb_block <- function(block, theta_second, n_inner = 5L)
     lambda2_inv <- inv_clip(1 / lambda2_rate)
     nu_inv <- inv_clip(1 / (1 + lambda2_inv))
     tau2_rate <- inv_clip(xi_inv + 0.5 * sum(theta_second * lambda2_inv))
-    tau2_shape <- p / 2
+    tau2_shape <- app_joint_qvp_rhs_tau2_shape(p)
     tau2_inv <- inv_clip(tau2_shape / tau2_rate)
     xi_inv <- inv_clip(1 / (1 / tau0^2 + tau2_inv))
     if (zeta_finite) {
@@ -12039,16 +12048,16 @@ app_joint_qvp_rhs_vb_block_accounting <- function(block, p) {
   lambda_rate <- lambda_shape / lambda2_inv
   nu_shape <- rep(1, p)
   nu_rate <- nu_shape / nu_inv
-  tau_shape <- p / 2
+  tau_shape <- app_joint_qvp_rhs_tau2_shape(p)
   tau_rate <- tau_shape / tau2_inv
   xi_shape <- 1
   xi_rate <- xi_shape / xi_inv
   a_lambda <- 0.5
   a_nu <- 0.5
-  a_tau <- 0
+  a_tau <- 0.5
   tau0 <- as.numeric(block$tau0 %||% 1)[[1L]]
   if (!is.finite(tau0) || tau0 <= 0) stop("RHS accounting tau0 must be positive.", call. = FALSE)
-  a_xi <- 1
+  a_xi <- 0.5
   xi_prior_rate <- 1 / tau0^2
   elog_lambda <- app_joint_qvp_inv_gamma_log_mean(lambda_shape, lambda_rate)
   elog_nu <- app_joint_qvp_inv_gamma_log_mean(nu_shape, nu_rate)
@@ -12061,7 +12070,9 @@ app_joint_qvp_rhs_vb_block_accounting <- function(block, p) {
   scale_prior <- scale_prior + sum(
     -lgamma(a_nu) - (a_nu + 1) * elog_nu - nu_inv
   )
-  scale_prior <- scale_prior + (-(a_tau + 1) * elog_tau - xi_inv * tau2_inv)
+  scale_prior <- scale_prior +
+    a_tau * (-elog_xi) - lgamma(a_tau) -
+      (a_tau + 1) * elog_tau - xi_inv * tau2_inv
   scale_prior <- scale_prior +
     a_xi * log(xi_prior_rate) - lgamma(a_xi) -
       (a_xi + 1) * elog_xi - xi_prior_rate * xi_inv

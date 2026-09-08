@@ -39,6 +39,12 @@ top-level chain workers. The launcher defaults to `--dry-run`; production modes
 require both explicit later user authorization and the matching
 `JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION` environment value.
 
+The VB launch driver is
+`application/scripts/run_joint_qdesn_shared_backbone_article_vb_queue.R`. It
+runs dependency-ready VB jobs in batches up to the frozen host ceiling, records
+batch receipts, reuses completed workers, stops on the first failed worker, and
+finalizes the 32 compact initializer packets after the 136/136 gate.
+
 Generated runtime belongs under:
 
 ```text

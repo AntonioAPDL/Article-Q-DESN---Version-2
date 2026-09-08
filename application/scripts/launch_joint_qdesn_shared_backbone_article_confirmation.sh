@@ -24,7 +24,8 @@ case "${MODE}" in
       exit 64
     fi
     "${RSCRIPT}" "${SCRIPT_DIR}/check_joint_qdesn_shared_backbone_article_vb.R" --root "${ROOT}"
-    echo "VB launch authorization detected; submit dependency-aware workers with run_joint_qdesn_shared_backbone_article_vb_worker.R." >&2
+    "${RSCRIPT}" "${SCRIPT_DIR}/run_joint_qdesn_shared_backbone_article_vb_queue.R" \
+      --root "${ROOT}" --max-workers "${JOINT_ARTICLE_CONFIRMATION_VB_WORKERS:-32}"
     ;;
   --launch-mcmc)
     if [[ "${JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION:-}" != "MCMC" ]]; then

@@ -91,6 +91,11 @@ stopifnot(
   check$summary$expected_vb_components[[1L]] == 136L,
   check$summary$mcmc_launch_blocked[[1L]]
 )
+ready_jobs <- app_joint_article_ready_vb_jobs(root)
+stopifnot(length(ready_jobs) == 8L, all(ready_jobs == 1:8))
+queue_guard_failed <- inherits(try(app_joint_article_run_vb_queue(root, max_workers = 1L),
+  silent = TRUE), "try-error")
+stopifnot(queue_guard_failed)
 guard_failed <- inherits(try(app_joint_article_mcmc_launch_guard(root), silent = TRUE),
   "try-error")
 stopifnot(guard_failed)

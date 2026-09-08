@@ -188,6 +188,31 @@ app_joint_article_assert_execution_branch <- function() {
   invisible(TRUE)
 }
 
+app_joint_article_execution_git_state <- function() {
+  data.frame(
+    branch = app_joint_article_git_value(c("rev-parse", "--abbrev-ref", "HEAD")),
+    head = app_joint_article_git_value(c("rev-parse", "HEAD")),
+    upstream = app_joint_article_git_value(c("rev-parse", "@{upstream}")),
+    ahead_behind = app_joint_article_git_value(c("rev-list", "--left-right", "--count", "@{upstream}...HEAD")),
+    tracked_status = app_joint_article_git_value(c("status", "--porcelain", "--untracked-files=no")),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_article_assert_clean_execution <- function(require_synced = TRUE) {
+  app_joint_article_assert_execution_branch()
+  state <- app_joint_article_execution_git_state()
+  if (!identical(state$tracked_status[[1L]], "")) {
+    stop("Production workers require a clean tracked execution worktree.",
+         call. = FALSE)
+  }
+  if (isTRUE(require_synced) && !identical(state$ahead_behind[[1L]], "0\t0")) {
+    stop("Production workers require the execution branch to be synchronized with upstream.",
+         call. = FALSE)
+  }
+  invisible(state)
+}
+
 app_joint_article_data_free_gib <- function(path = "/data") {
   out <- system2("df", c("-Pk", path), stdout = TRUE)
   parts <- strsplit(trimws(out[[length(out)]]), "[[:space:]]+")[[1L]]
@@ -792,6 +817,7 @@ app_joint_article_prepare <- function(
   )
   files <- c(
     frozen_contract = app_write_csv(contract$table, file.path(out_dir, "frozen_contract.csv")),
+    execution_git_state = app_write_csv(app_joint_article_execution_git_state(), file.path(out_dir, "execution_git_state.csv")),
     host_preflight = app_write_csv(host, file.path(out_dir, "host_preflight.csv")),
     source_git_state = app_write_csv(source$source_git, file.path(out_dir, "source_git_state.csv")),
     source_top_hash_verification = app_write_csv(source$top_hashes, file.path(out_dir, "source_top_hash_verification.csv")),
@@ -991,6 +1017,8 @@ app_joint_article_run_vb_worker <- function(root, job_id) {
       converged = isTRUE(compact$converged %||% fit$converged),
       runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
       design_fingerprint = design$design_fingerprint,
+      execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
+      production_launched = TRUE,
       stringsAsFactors = FALSE
     ))
   summary_path <- app_write_csv(summary, file.path(tmp, "summary.csv"))
@@ -1015,6 +1043,130 @@ app_joint_article_run_vb_worker <- function(root, job_id) {
   if (!file.rename(tmp, out)) stop("Could not publish article VB worker output.",
     call. = FALSE)
   invisible(out)
+}
+
+app_joint_article_vb_worker_state <- function(root, plan = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  if (is.null(plan)) plan <- app_read_csv(file.path(root, "vb_worker_plan.csv"))
+  dirs <- vapply(plan$job_id, function(id) app_joint_article_vb_worker_dir(root, id),
+    character(1L))
+  data.frame(
+    job_id = plan$job_id,
+    done = file.exists(file.path(dirs, "DONE")) &
+      file.exists(file.path(dirs, "artifact_manifest.csv")),
+    failed = file.exists(file.path(dirs, "FAILED")) |
+      file.exists(file.path(dirs, "failure.csv")),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_article_ready_vb_jobs <- function(root, plan = NULL, state = NULL) {
+  root <- normalizePath(root, mustWork = TRUE)
+  if (is.null(plan)) plan <- app_read_csv(file.path(root, "vb_worker_plan.csv"))
+  if (is.null(state)) state <- app_joint_article_vb_worker_state(root, plan)
+  if (any(state$failed)) return(integer())
+  completed <- state$job_id[state$done]
+  pending <- plan$job_id[!plan$job_id %in% completed]
+  ready <- vapply(pending, function(id) {
+    job <- plan[plan$job_id == id, , drop = FALSE]
+    deps <- app_joint_article_dependency_rows(plan, job)
+    !nrow(deps) || all(deps$job_id %in% completed)
+  }, logical(1L))
+  pending[ready]
+}
+
+app_joint_article_run_vb_queue <- function(
+  root,
+  max_workers = 32L,
+  require_synced = TRUE
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  if (!identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION"), "VB")) {
+    stop("Refusing VB launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=VB.",
+         call. = FALSE)
+  }
+  app_joint_article_assert_clean_execution(require_synced = require_synced)
+  contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  max_workers <- as.integer(max_workers)[[1L]]
+  if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
+      max_workers > contract$maximum_concurrency) {
+    stop(sprintf("VB max_workers must be between 1 and the frozen ceiling %d.",
+      contract$maximum_concurrency), call. = FALSE)
+  }
+  Sys.setenv(
+    OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+    VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1"
+  )
+  app_write_csv(data.frame(
+    started_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    root = root, max_workers = max_workers,
+    execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
+    production_phase = "VB",
+    mcmc_launched = FALSE,
+    stringsAsFactors = FALSE
+  ), file.path(root, "vb_queue_launch_receipt.csv"))
+  repeat {
+    plan <- app_read_csv(file.path(root, "vb_worker_plan.csv"))
+    state <- app_joint_article_vb_worker_state(root, plan)
+    health <- app_joint_article_vb_health(root)
+    app_joint_article_atomic_write_csv(health, file.path(root, "vb_queue_health.csv"))
+    if (health$failed[[1L]] > 0L) {
+      stop("VB queue stopped because at least one worker failed.", call. = FALSE)
+    }
+    if (health$completed[[1L]] == contract$expected_total_components) break
+    ready <- app_joint_article_ready_vb_jobs(root, plan, state)
+    ready <- ready[!ready %in% state$job_id[state$done]]
+    if (!length(ready)) {
+      stop("VB queue has pending work but no dependency-ready jobs.", call. = FALSE)
+    }
+    batch <- head(ready, max_workers)
+    batch_id <- length(list.files(root,
+      pattern = "^vb_queue_batch_[0-9][0-9][0-9][.]csv$")) + 1L
+    batch_receipt <- data.frame(
+      launched_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+      job_id = batch,
+      stringsAsFactors = FALSE
+    )
+    app_write_csv(batch_receipt, file.path(root, sprintf(
+      "vb_queue_batch_%03d.csv", batch_id
+    )))
+    run_one <- function(job_id) {
+      tryCatch({
+        app_joint_article_run_vb_worker(root, job_id)
+        data.frame(job_id = job_id, status = "completed", error_message = "",
+          stringsAsFactors = FALSE)
+      }, error = function(e) {
+        data.frame(job_id = job_id, status = "failed",
+          error_message = conditionMessage(e), stringsAsFactors = FALSE)
+      })
+    }
+    result <- if (.Platform$OS.type != "windows" && length(batch) > 1L) {
+      parallel::mclapply(batch, run_one,
+        mc.cores = min(max_workers, length(batch)), mc.preschedule = FALSE)
+    } else lapply(batch, run_one)
+    result <- app_joint_qdesn_bind_rows(result)
+    app_write_csv(result, file.path(root, sprintf(
+      "vb_queue_batch_%03d_result.csv", batch_id)))
+    if (any(result$status != "completed")) {
+      stop("VB queue batch failed; inspect worker failure.csv files.",
+           call. = FALSE)
+    }
+  }
+  final_health <- app_joint_article_check_vb(root, require_complete = FALSE)
+  if (final_health$health$completed[[1L]] != contract$expected_total_components ||
+      final_health$health$failed[[1L]] != 0L) {
+    stop("VB queue finished without satisfying the 136/136 gate.",
+         call. = FALSE)
+  }
+  app_write_csv(data.frame(
+    completed_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    vb_components_completed = final_health$health$completed[[1L]],
+    vb_components_failed = final_health$health$failed[[1L]],
+    production_phase = "VB",
+    mcmc_launched = FALSE,
+    stringsAsFactors = FALSE
+  ), file.path(root, "vb_queue_completion_receipt.csv"))
+  final_health
 }
 
 app_joint_article_load_vb_fit <- function(root, job) {
@@ -1138,8 +1290,8 @@ app_joint_article_finalize_vb <- function(root) {
     stop("Article VB initializer manifest violates the 32-cell gate.",
          call. = FALSE)
   }
-  app_write_csv(init_rows, file.path(root, "vb_initialization_rows.csv"))
-  app_write_csv(manifest, file.path(root, "vb_initializer_manifest.csv"))
+  init_rows_path <- app_write_csv(init_rows, file.path(root, "vb_initialization_rows.csv"))
+  init_manifest_path <- app_write_csv(manifest, file.path(root, "vb_initializer_manifest.csv"))
   summary <- data.frame(
     status = "VB_COMPLETE_INITIALIZERS_READY_MCMC_STILL_NOT_LAUNCHED",
     vb_components_completed = contract$expected_total_components,
@@ -1148,8 +1300,53 @@ app_joint_article_finalize_vb <- function(root) {
     production_launched = FALSE,
     stringsAsFactors = FALSE
   )
-  app_write_csv(summary, file.path(root, "vb_finalization_summary.csv"))
-  list(summary = summary, manifest = manifest, initialization_rows = init_rows)
+  summary_path <- app_write_csv(summary, file.path(root, "vb_finalization_summary.csv"))
+  worker_registry <- app_joint_qdesn_bind_rows(lapply(plan$job_id, function(id) {
+    path <- file.path(app_joint_article_vb_worker_dir(root, id), "artifact_manifest.csv")
+    data.frame(
+      job_id = id,
+      relative_path = file.path("workers", sprintf("worker_%04d", id),
+        "artifact_manifest.csv"),
+      size_bytes = as.numeric(file.info(path)$size),
+      sha256 = app_sha256_file(path),
+      stringsAsFactors = FALSE
+    )
+  }))
+  worker_registry_path <- app_write_csv(worker_registry,
+    file.path(root, "vb_worker_artifact_registry.csv"))
+  initializer_paths <- stats::setNames(
+    file.path(root, manifest$relative_path),
+    paste0("initializer__", sprintf("%02d", seq_len(nrow(manifest))))
+  )
+  worker_manifest_paths <- stats::setNames(
+    file.path(root, worker_registry$relative_path),
+    paste0("worker_manifest__", sprintf("%03d", worker_registry$job_id))
+  )
+  closeout_files <- c(
+    vb_finalization_summary = summary_path,
+    vb_initialization_rows = init_rows_path,
+    vb_initializer_manifest = init_manifest_path,
+    vb_worker_artifact_registry = worker_registry_path,
+    vb_worker_plan = file.path(root, "vb_worker_plan.csv"),
+    model_cell_plan = file.path(root, "model_cell_plan.csv"),
+    mcmc_worker_plan = file.path(root, "mcmc_worker_plan.csv"),
+    source_top_hash_verification = file.path(root, "source_top_hash_verification.csv"),
+    source_nested_manifest_verification = file.path(root, "source_nested_manifest_verification.csv"),
+    host_preflight = file.path(root, "host_preflight.csv"),
+    initializer_paths,
+    worker_manifest_paths
+  )
+  app_joint_shared_write_manifest(root, closeout_files,
+    filename = "vb_final_artifact_manifest.csv")
+  closeout <- app_joint_shared_verify_manifest(root,
+    file.path(root, "vb_final_artifact_manifest.csv"))
+  if (any(!closeout$verified)) {
+    stop("Article VB final artifact manifest failed verification.",
+         call. = FALSE)
+  }
+  app_write_csv(closeout, file.path(root, "vb_final_manifest_verification.csv"))
+  list(summary = summary, manifest = manifest, initialization_rows = init_rows,
+    worker_registry = worker_registry, closeout = closeout)
 }
 
 app_joint_article_reconstruct_init <- function(rows, cell, tau, p) {
@@ -1226,8 +1423,10 @@ app_joint_article_mcmc_launch_guard <- function(root) {
   health <- app_joint_article_vb_health(root)
   cells <- app_read_csv(file.path(root, "model_cell_plan.csv"))
   manifest_path <- file.path(root, "vb_initializer_manifest.csv")
+  final_manifest_path <- file.path(root, "vb_final_artifact_manifest.csv")
   if (health$completed[[1L]] != contract$expected_total_components ||
-      health$failed[[1L]] != 0L || !file.exists(manifest_path)) {
+      health$failed[[1L]] != 0L || !file.exists(manifest_path) ||
+      !file.exists(final_manifest_path)) {
     stop("MCMC launch blocked: VB is not 136/136 with a 32-initializer manifest.",
          call. = FALSE)
   }
@@ -1237,6 +1436,11 @@ app_joint_article_mcmc_launch_guard <- function(root) {
       any(!paths_ok) || anyDuplicated(manifest$model_cell_id) ||
       !setequal(manifest$model_cell_id, cells$model_cell_id)) {
     stop("MCMC launch blocked: compact initializer manifest does not verify.",
+         call. = FALSE)
+  }
+  final_check <- app_joint_shared_verify_manifest(root, final_manifest_path)
+  if (any(!final_check$verified)) {
+    stop("MCMC launch blocked: VB final artifact manifest does not verify.",
          call. = FALSE)
   }
   TRUE

@@ -98,4 +98,9 @@ No current table, figure, result registry, or manuscript claim is replaced by
 this commit. Corrected article results require a separately frozen scientific
 rerun, validation packet, and coordinator integration. Until then, the
 Phase181 numerical assets must be treated as requiring replacement before the
-next article publication.
+final scientific closeout. Editorial revisions may proceed while those assets
+remain explicitly provisional.
+
+The decision to defer those scientific reruns while completing the editorial
+revision, together with the mandatory project-closeout criteria, is recorded in
+`docs/implementation_notes/joint_qvp_rhs_deferred_rerun_register_20260908.md`.

@@ -9,6 +9,9 @@
 
 \usepackage{amsmath,amssymb,amsfonts,mathtools,bm,booktabs,tabularx,array}
 \usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,fit,positioning}
 \usepackage{enumitem}
 \usepackage[round,authoryear]{natbib}
 \usepackage{hyperref}
@@ -34,7 +37,7 @@
 \newcommand{\Unif}{\operatorname{Unif}}
 \newcommand{\AL}{\operatorname{AL}}
 \newcommand{\exAL}{\operatorname{exAL}}
-\newcommand{\RHS}{\operatorname{RHS}}
+\newcommand{\RHS}{\ensuremath{\operatorname{RHS}}}
 \newcommand{\aCRPS}{\operatorname{aCRPS}}
 \newcommand{\elbo}{\mathcal{L}}
 \newcommand{\logit}{\operatorname{logit}}
@@ -45,6 +48,7 @@
 
 \input{tables/glofas_application_current_outputs.tex}
 \input{tables/pricefm_full_current_outputs.tex}
+\input{figures/quantile_initialization/quantile_initialization_styles.tex}
 
 \newcounter{suppalgorithm}
 \renewcommand{\thesuppalgorithm}{S\arabic{suppalgorithm}}
@@ -250,6 +254,15 @@ transformations, reservoir realization, likelihood, probability level or grid,
 parameterization, and prior specification agree. MCMC then targets the
 posterior distribution of that same model. Convergence is assessed using the
 diagnostics stated for the empirical analysis.
+
+\begin{figure}[!htbp]
+  \centering
+  \input{figures/quantile_initialization/quantile_initialization_picture.tex}
+  \caption[Sequential initialization centered at the median]{%
+    \input{figures/quantile_initialization/quantile_initialization_caption.tex}%
+  }
+  \label{fig:supp-quantile-sequential-initialization}
+\end{figure}
 
 \section{Distributional Conventions}
 \label{sec:dist_conventions}
@@ -905,8 +918,8 @@ computationally efficient approximate inference. The approximation is
 mean-field over the conditionally conjugate blocks and uses the Laplace--Delta
 method of \citet{wang2013nonconjugatevb} for the nonconjugate exAL
 scale--asymmetry block \((\sigma,\gamma)\). This section
-gives the generic fixed-design updates; application-specific GloFAS factors
-are given separately in Section~\ref{subsec:glofas_vb}.
+gives the generic fixed-design updates; the application-specific GloFAS
+factorization is given in Section~\ref{subsec:glofas_likelihoods}.
 
 For a single target level \(p_0\), use the mean-field family
 \begin{equation}
@@ -1745,30 +1758,24 @@ This section provides numerical values corresponding to the single-quantile
 MCMC figures, analogous variational summaries, and additional comparisons of
 joint and independently estimated quantiles.
 
-\subsection{Single-Quantile MCMC Posterior Metric Tables}
+\subsection{Single-Quantile Posterior Metric Summaries}
 
-The following tables give posterior means and equal-tailed 95\% credible
-intervals for
-the criteria displayed in the MCMC figures. Q--DESN and exQ--DESN entries use
-fitting-sample preprocessing, and ridge rows are omitted. Within each model and
-simulation setting, the specification minimizing each criterion was selected
-separately. Consequently, criteria within a displayed model row can correspond
-to different fitted specifications. The intervals condition on the
-simulated data, evaluation grid, and reservoir realization.
+The MCMC and VB tables are paired by data-generating family. They give posterior
+means and equal-tailed 95\% intervals for fitting-sample root-mean-square error
+(RMSE), forecast mean absolute error (MAE), and forecast check loss. Q--DESN
+and exQ--DESN entries use fitting-sample preprocessing, and ridge rows are
+omitted. Each criterion was minimized separately within model and simulation
+setting, so entries within a row, and the MCMC and VB panels, can correspond to
+different selected specifications. The intervals condition on the simulated
+data, evaluation grid, and reservoir realization and are not a controlled
+comparison of approximation error.
 
-\input{tables/qdesn_validation_500obs_v14_mcmc_metric_interval_tables.tex}
+\input{tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex}
 
 \clearpage
-\subsection{Single-Quantile VB Posterior Metric Intervals}
-
-The following figures and tables report approximate posterior means and
-equal-tailed 95\% variational intervals for the same draw-wise fitting-sample
-root-mean-square error (RMSE), forecast mean absolute error (MAE), and forecast
-check-loss criteria.
+\input{tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex}
 
 \input{tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex}
-
-\input{tables/qdesn_validation_500obs_v14_vb_metric_interval_tables.tex}
 
 \clearpage
 \subsection{Single-Quantile Computation and Diagnostics}
@@ -1853,6 +1860,10 @@ intervals include zero. MCMC diagnostics for the posterior score meet the
 pre-specified rank-normalized \(\widehat R\) and effective-sample-size
 thresholds in 21 of 32 comparisons; the remaining 11 comparisons are
 interpreted cautiously.
+
+\input{tables/joint_qdesn_phase181_dgp_integrated_score_table.tex}
+
+\input{tables/joint_qdesn_phase181_fit_interval_figure.tex}
 
 For the independent \(\exAL\) analyses, the scale-collapsed update yields maximum
 rank-normalized \(\widehat R\) values of approximately 1.020 for \(\gamma\)
@@ -2059,803 +2070,126 @@ input scales
 \(\GlofasApplicationCurrentDiscrepancyReservoirWinScaleGlobal{}/\GlofasApplicationCurrentDiscrepancyReservoirWinScaleBias{}\),
 and random-number seed \(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\).
 
-\subsection{AL and exAL Working Likelihoods}
+\subsection{Source-Specific Likelihood and Computation}
 \label{subsec:glofas_likelihoods}
 
-For exAL, each source \(c\in\mathcal C\) has scale and asymmetry parameters
-\((\sigma_c,\gamma_c)\). Conditional on latent variables
-\(\{v_i^c,s_i^c:i\in\mathcal I_c\}\),
-\begin{align}
-v_i^c\mid\sigma_c&\sim\Exp(\text{rate}=1/\sigma_c),&
-s_i^c&\sim\TN(0,1),\\
-z_i^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,v_i^c,s_i^c
-&\sim
-\Normal\left(
+Let \(c\in\mathcal C=\{\mathrm{ref},\mathrm{glo}\}\) identify the reference
+and GloFAS sources, and let \(\mathcal I_c\) index their contributions. The
+augmented design rows \(\vect h_i^c\) defined above give
+\begin{equation}
+\begin{aligned}
+v_i^c\mid\sigma_c&\sim\Exp(\mathrm{rate}=1/\sigma_c),
+&s_i^c&\sim\TN(0,1),\\
+z_i^c\mid\cdot&\sim\Normal\!\left(
 \vect h_i^{c\top}\vect\theta_{p_0}
 +\sigma_cD_{\gamma_c}s_i^c+A_{\gamma_c}v_i^c,
-\sigma_cB_{\gamma_c}v_i^c
-\right).
+\sigma_cB_{\gamma_c}v_i^c\right).
+\end{aligned}
 \label{eq:supp_glofas_exal_hierarchy}
-\end{align}
-The marginal \(p_0\)-quantile of \(z_i^c\mid\vect h_i^c\) is
-\(\vect h_i^{c\top}\vect\theta_{p_0}\). The AL working likelihood is obtained
-by omitting \(s_i^c\) and \(\gamma_c\), replacing \(A_{\gamma_c}\) and
-\(B_{\gamma_c}\) with \(A_0\) and \(B_0\), and using
-\begin{equation}
-z_i^c\mid\vect\theta_{p_0},\sigma_c,v_i^c
-\sim
-\Normal\left(
-\vect h_i^{c\top}\vect\theta_{p_0}+A_0v_i^c,
-\sigma_cB_0v_i^c
-\right).
-\label{eq:supp_glofas_al_hierarchy}
 \end{equation}
+The conditional \(p_0\)-quantile is
+\(\vect h_i^{c\top}\vect\theta_{p_0}\). The AL specialization omits
+\(s_i^c\) and \(\gamma_c\) and uses the AL constants \(A_0,B_0\).
 
-The GloFAS observations \(\mathcal I_{\mathrm{glo}}\) may contain both retrospective values and
-issued ensemble members. Ensemble members at a common origin and horizon enter
-through a working-likelihood factorization that treats them as conditionally
-independent and exchangeable given the forecast-system quantile path and the
-GloFAS likelihood parameters. This factorization is motivated by the
-operational ensemble construction, in which perturbed initial states and model
-perturbations generate distinct forecast alternatives
-\citep{ECMWF2026ENSGeneration}; it is a working-likelihood approximation for
-the regression analysis.
+Retrospective GloFAS values and issued ensemble members share the GloFAS
+source parameters. Members at a common origin and horizon are treated as
+conditionally independent and exchangeable given the forecast-system quantile
+path. Because the operational ensemble is generated from perturbed initial
+states and model perturbations \citep{ECMWF2026ENSGeneration}, this
+factorization is a working-likelihood approximation, not a claim that the
+members are marginally independent.
 
-\subsection{Default Regularized-Horseshoe Coefficient Prior}
-\label{subsec:glofas_rhs_prior}
-
-For the application derivation, the regularized horseshoe is the default
-coefficient prior. Let \(\mathcal J_\beta\) and \(\mathcal J_\alpha\) denote the
-non-intercept entries of \(\vect\beta_{p_0}\) and \(\vect\alpha_{p_0}\). The
-reference and discrepancy intercepts are assigned weak Gaussian priors. For
-block \(b\in\{\beta,\alpha\}\) and \(j\in\mathcal J_b\), write the corresponding
-coefficient as \(\theta_{b,j}\). The product representation uses
+The reference and discrepancy slope blocks have separate regularized-horseshoe
+hierarchies. Writing their penalized index sets as \(\mathcal J_\beta\) and
+\(\mathcal J_\alpha\), the prior for each block \(b\in\{\beta,\alpha\}\) is
+the product representation in Section~\ref{sec:priors}, with its own
+\((\tau_b,\lambda_{b,j},\zeta_b)\); the two intercepts have weak Gaussian
+priors. Source-specific likelihood scales and, under exAL, asymmetry parameters
+complete the model. Conditional on a fixed augmented design \(\mat H\), the
+posterior is proportional to
 \begin{equation}
-\Normal(\theta_{b,j}\mid0,\tau_b^2\lambda_{b,j}^2)
-\Normal(0\mid\theta_{b,j},\zeta_b^2).
-\label{eq:supp_glofas_rhs_product}
-\end{equation}
-Conditional on the scales, this factor is proportional in \(\theta_{b,j}\) to a
-Gaussian density with variance
-\begin{equation}
-V_{b,j}=\left(\zeta_b^{-2}+\tau_b^{-2}\lambda_{b,j}^{-2}\right)^{-1}.
-\label{eq:supp_glofas_rhs_cond}
-\end{equation}
-The auxiliary representation for
-\((\lambda_{b,j}^2,\nu_{b,j},\tau_b^2,\xi_b,\zeta_b^2)\) is the same as
-\eqref{eq:supp_hs_aux}--\eqref{eq:supp_zeta_prior}, with
-\(\beta_j\) replaced by \(\theta_{b,j}\) and \(r\) replaced by
-\(|\mathcal J_b|\). The two regularized-horseshoe hierarchies are independent a priori, although
-the Gaussian coefficient update couples \(\vect\beta_{p_0}\) and
-\(\vect\alpha_{p_0}\) through the augmented likelihood. The source-specific
-exAL scale and asymmetry parameters are the only non-conjugate components introduced by
-the working likelihood.
-
-\subsection{Complete-Data Posterior}
-\label{subsec:glofas_posterior}
-
-Let
-\[
-\Theta_b
-=\{(\lambda_{b,j}^2,\nu_{b,j}):j\in\mathcal J_b\},\tau_b^2,\xi_b,\zeta_b^2,
-\qquad b\in\{\beta,\alpha\},
-\]
-and let \(\vect v^c=(v_i^c:i\in\mathcal I_c)\) and
-\(\vect s^c=(s_i^c:i\in\mathcal I_c)\). Under exAL,
-\begin{align}
-&p(\vect z,\{\vect v^c,\vect s^c,\sigma_c,\gamma_c\}_{c\in\mathcal C},
-\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha\mid\mat H)
-\nonumber\\
-&\quad\propto
-\prod_{c\in\mathcal C}
-\left[
-\left\{
-\prod_{i\in\mathcal I_c}
+\prod_{c\in\mathcal C}\prod_{i\in\mathcal I_c}
 p(z_i^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,v_i^c,s_i^c,\vect h_i^c)
 p(v_i^c\mid\sigma_c)p(s_i^c)
-\right\}
-p(\sigma_c)\pi_{\gamma_c}(\gamma_c)\ind\{L<\gamma_c<U\}
-\right]
-\nonumber\\
-&\qquad\times
-p(\vect\theta_{\mathrm{int}})
-\prod_{b\in\{\beta,\alpha\}}
-\Biggl[
-\prod_{j\in\mathcal J_b}
-\left\{
-\Normal(\theta_{b,j}\mid0,\tau_b^2\lambda_{b,j}^2)
-\Normal(0\mid\theta_{b,j},\zeta_b^2)
-p(\lambda_{b,j}^2\mid\nu_{b,j})p(\nu_{b,j})
-\right\}
-\nonumber\\
-&\qquad\qquad\times
-p(\tau_b^2\mid\xi_b)p(\xi_b)p(\zeta_b^2)
-\Biggr].
+\prod_{c\in\mathcal C}p(\sigma_c)\pi_{\gamma_c}(\gamma_c)
+\;p(\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha),
 \label{eq:supp_glofas_joint_exal_rhs}
-\end{align}
-Here \(p(\vect\theta_{\mathrm{int}})\) denotes the weak Gaussian prior for the
-two intercepts. Under AL,
-\begin{align}
-&p(\vect z,\{\vect v^c,\sigma_c\}_{c\in\mathcal C},
-\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha\mid\mat H)
-\nonumber\\
-&\quad\propto
-\prod_{c\in\mathcal C}
-\left[
-\left\{
-\prod_{i\in\mathcal I_c}
-p(z_i^c\mid\vect\theta_{p_0},\sigma_c,v_i^c,\vect h_i^c)
-p(v_i^c\mid\sigma_c)
-\right\}
-p(\sigma_c)
-\right]
-\nonumber\\
-&\qquad\times
-p(\vect\theta_{\mathrm{int}})
-\prod_{b\in\{\beta,\alpha\}}
-\Biggl[
-\prod_{j\in\mathcal J_b}
-\left\{
-\Normal(\theta_{b,j}\mid0,\tau_b^2\lambda_{b,j}^2)
-\Normal(0\mid\theta_{b,j},\zeta_b^2)
-p(\lambda_{b,j}^2\mid\nu_{b,j})p(\nu_{b,j})
-\right\}
-\nonumber\\
-&\qquad\qquad\times
-p(\tau_b^2\mid\xi_b)p(\xi_b)p(\zeta_b^2)
-\Biggr].
-\label{eq:supp_glofas_joint_al_rhs}
-\end{align}
-The fixed-design posterior is the corresponding joint density viewed as a
-function of unknown quantities conditional on \((\vect z,\mat H)\). In the
-latent-path ensemble-likelihood model, \(\mat H\) should be read as
-\(\mat H(\vect y_F)\) for forecast-period rows, and the posterior is
-augmented by the missing future reference path.
-Forecast-period output inputs are strictly lagged: the design row for
-\(T+h\) may depend on \(y_{T+h-1},y_{T+h-2},\ldots\), but not on
-\(y_{T+h}\) itself.
-
-\subsection{Full Conditional Posteriors}
-\label{subsec:glofas_conditionals}
-
-The full conditionals follow from the augmented Gaussian representation.
-Define, for exAL,
-\[
-z_i^{c\star}
-=z_i^c-\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c,\qquad
-w_i^c=(\sigma_cB_{\gamma_c}v_i^c)^{-1}.
-\]
-For AL, use
-\[
-z_i^{c\star}=z_i^c-A_0v_i^c,\qquad
-w_i^c=(\sigma_cB_0v_i^c)^{-1}.
-\]
-Stacking \(z_i^{c\star}\) and \(w_i^c\) over sources gives
-\(\vect z^\star\) and \(\mat\Omega=\diag(w_i^c)\). Let
-\(\mat P_\theta\) denote the conditional prior precision implied by the
-weak Gaussian intercept priors and the RHS scales, with diagonal entries
-\(\tau^{-2}\lambda_j^{-2}+\zeta^{-2}\) for \(j\in\mathcal J\). Let
-\(\vect b_\theta\) collect the prior means, with zero entries for RHS-shrunk
-coefficients. Then
-\begin{align}
-\mat\Sigma_{\theta\mid\cdot}
-&=(\mat H^\top\mat\Omega\mat H+\mat P_\theta)^{-1},\\
-\vect m_{\theta\mid\cdot}
-&=\mat\Sigma_{\theta\mid\cdot}
-(\mat H^\top\mat\Omega\vect z^\star+\mat P_\theta\vect b_\theta),\\
-\vect\theta_{p_0}\mid\cdot
-&\sim
-\Normal(\vect m_{\theta\mid\cdot},\mat\Sigma_{\theta\mid\cdot}).
-\label{eq:supp_glofas_theta_mcmc}
-\end{align}
-
-For exAL latent variables, define
-\[
-\delta_i^c
-=z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--\sigma_cD_{\gamma_c}s_i^c,
-\qquad
-\chi_i^c=\frac{(\delta_i^c)^2}{\sigma_cB_{\gamma_c}},
-\qquad
-\psi_i^c=\frac{A_{\gamma_c}^2}{\sigma_cB_{\gamma_c}}+\frac{2}{\sigma_c}.
-\]
-Then
-\begin{equation}
-v_i^c\mid\cdot\sim\GIG(1/2,\chi_i^c,\psi_i^c).
-\label{eq:supp_glofas_v_mcmc}
 \end{equation}
-For \(s_i^c\), set
-\(\mu_{0i}^c=z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--A_{\gamma_c}v_i^c\). Then
-\begin{align}
-a_{s,i}^c&=1+\frac{\sigma_cD_{\gamma_c}^2}{B_{\gamma_c}v_i^c},&
-m_{s,i}^c&=
-\frac{D_{\gamma_c}\mu_{0i}^c}
-{B_{\gamma_c}v_i^c+\sigma_cD_{\gamma_c}^2},\\
-s_i^c\mid\cdot&\sim\TN(m_{s,i}^c,(a_{s,i}^c)^{-1}).
-\label{eq:supp_glofas_s_mcmc}
-\end{align}
-For AL,
+with the same AL omissions. This form is the general fixed-design augmented
+posterior with source-specific likelihood parameters and two coefficient-prior
+blocks.
+
+Consequently, the MCMC and variational updates are obtained from
+Sections~\ref{sec:mcmc}--\ref{sec:elbo} by replacing \((\vect y,\mat X)\)
+with the stacked \((\vect z,\mat H)\), applying likelihood-parameter and latent
+updates within source, and applying RHS updates within coefficient block. The
+coefficient factor remains Gaussian. Under exAL, each source has its own
+transformed scale--asymmetry update; under AL, each source scale retains its
+inverse-gamma update. This substitution preserves the general posterior target
+rather than defining a separate application-specific inferential method.
+
+The reported retrospective analysis uses independent AL Q--DESN regressions
+fitted by VB at seven probability levels. It conditions on the
+persistence-anchored forecast design described above and therefore does not use
+the latent-future-path extension below. Quantile summaries are rearranged only
+after the level-wise fits have been obtained.
+
+\subsection{Latent Future-Path Extension}
+\label{subsec:glofas_latent_path}
+
+An alternative specification allows forecast-period reservoir rows to depend
+on an unobserved future reference path
+\(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\). In that case the augmented design
+is \(\mat H(\vect y_F)\), and the posterior in
+Eq.~\eqref{eq:supp_glofas_joint_exal_rhs} is augmented by \(\vect y_F\).
+Strict lagging is required: the row for \(T+h\) may depend on earlier future
+values but not on \(y_{T+h}\) itself.
+
+For a variational approximation, introduce \(q_F(\vect y_F)\). Let
+\(\ell_F(\vect y_F)\) be the expected augmented log likelihood, under all
+other current variational factors, for the rows whose responses or design
+vectors depend on \(\vect y_F\). At its mode \(\widehat{\vect y}_F\), define
 \begin{equation}
-v_i^c\mid\cdot
-\sim
-\GIG\left(
-1/2,
-\frac{(z_i^c-\vect h_i^{c\top}\vect\theta_{p_0})^2}{\sigma_cB_0},
-\frac{A_0^2}{\sigma_cB_0}+\frac{2}{\sigma_c}
-\right).
-\label{eq:supp_glofas_al_v_mcmc}
-\end{equation}
-If \(\sigma_c\sim\IG(a_{\sigma,c},b_{\sigma,c})\), then under AL
-\begin{align}
-\sigma_c\mid\cdot
-&\sim
-\IG\left(
-a_{\sigma,c}+\frac{3n_c}{2},
-b_{\sigma,c}+\sum_{i\in\mathcal I_c}v_i^c
-+\frac12\sum_{i\in\mathcal I_c}
-\frac{(z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}-A_0v_i^c)^2}
-{B_0v_i^c}
-\right),
-\label{eq:supp_glofas_al_sigma_mcmc}
-\end{align}
-where \(n_c=|\mathcal I_c|\).
-
-For exAL, update \((\sigma_c,\gamma_c)\) source by source. The joint
-log-kernel is
-\begin{align}
-\ell_c(\sigma_c,\gamma_c)
-&=
--\frac12\sum_{i\in\mathcal I_c}\log(\sigma_cB_{\gamma_c}v_i^c)
--\frac12\sum_{i\in\mathcal I_c}
-\frac{
-\{z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c\}^2}
-{\sigma_cB_{\gamma_c}v_i^c}
-\nonumber\\
-&\quad
--n_c\log\sigma_c-\sum_{i\in\mathcal I_c}\frac{v_i^c}{\sigma_c}
--(a_{\sigma,c}+1)\log\sigma_c-\frac{b_{\sigma,c}}{\sigma_c}
-+\log\pi_{\gamma_c}(\gamma_c),
-\label{eq:supp_glofas_sigmagam_kernel}
-\end{align}
-for \(L<\gamma_c<U\), with value \(-\infty\) outside this interval. This
-kernel is the target for the source-specific scale and asymmetry update.
-
-For each block \(b\in\{\beta,\alpha\}\) and \(j\in\mathcal J_b\), the RHS
-scale updates are
-\begin{align}
-\lambda_{b,j}^2\mid\cdot
-&\sim
-\IG\left(1,\frac{1}{\nu_{b,j}}+\frac{\theta_{b,j}^2}{2\tau_b^2}\right),\\
-\nu_{b,j}\mid\cdot
-&\sim
-\IG\left(1,1+\frac{1}{\lambda_{b,j}^2}\right),\\
-\tau_b^2\mid\cdot
-&\sim
-\IG\left(\frac{|\mathcal J_b|+1}{2},
-\frac{1}{\xi_b}+\frac12\sum_{j\in\mathcal J_b}\frac{\theta_{b,j}^2}{\lambda_{b,j}^2}\right),\\
-\xi_b\mid\cdot
-&\sim
-\IG\left(1,\frac{1}{\tau_{0,b}^2}+\frac{1}{\tau_b^2}\right),\\
-\zeta_b^2\mid\cdot
-&\sim
-\IG\left(a_{\zeta,b}+\frac{|\mathcal J_b|}{2},
-b_{\zeta,b}+\frac12\sum_{j\in\mathcal J_b}\theta_{b,j}^2\right),
-\label{eq:supp_glofas_rhs_mcmc}
-\end{align}
-with the final line omitted when the slab scale is fixed.
-
-\subsection{MCMC Sampler}
-\label{subsec:glofas_mcmc}
-
-For exAL, use unconstrained coordinates
-\[
-\eta_{\sigma,c}=\log\sigma_c,\qquad
-\eta_{\gamma,c}=\logit\{(\gamma_c-L)/(U-L)\}.
-\]
-The slice sampler targets
-\begin{equation}
-\ell_c\{T_c(\vect\eta_c)\}+\log|J_{T_c}(\vect\eta_c)|,
-\qquad
-\vect\eta_c=(\eta_{\gamma,c},\eta_{\sigma,c})^\top,
-\label{eq:supp_glofas_slice_target}
-\end{equation}
-where \(T_c\) maps unconstrained coordinates to
-\((\gamma_c,\sigma_c)\). This bivariate slice update may be replaced by a
-Laplace-informed proposal or by one-dimensional conditional slice updates, but
-the target density is \eqref{eq:supp_glofas_slice_target}.
-
-\begin{suppalgorithm}{MCMC sampler for the GloFAS forecast-discrepancy model}
-\label{alg:glofas_mcmc}
-\emph{Input:} stacked observations \(\vect z\), source labels \(c_i\), target
-quantile \(p_0\), likelihood choice AL or exAL, RHS hyperparameters, MCMC
-controls, and either a fixed augmented design \(\mat H\) or a mapping from a
-proposed future reference path to its reservoir states and design rows.
-\begin{enumerate}[label=(\arabic*)]
-\item Initialize
-\(\vect\theta_{p_0}=(\vect\beta_{p_0}^\top,\vect\alpha_{p_0}^\top)^\top\),
-the separate \(\beta\)- and \(\alpha\)-block RHS scales, source scales
-\(\{\sigma_c\}\), latent variables \(\{v_i^c\}\), and, for exAL,
-\(\{\gamma_c,s_i^c\}\). For the latent-path model, also initialize
-\(\vect y_F\).
-\item For each MCMC iteration:
-  \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, recompute the forecast-period rows of
-  \(\mat H(\vect y_F)\);
-  \item draw each \(v_i^c\mid\cdot\) from the GIG full conditional in
-  \eqref{eq:supp_glofas_v_mcmc} for exAL or
-  \eqref{eq:supp_glofas_al_v_mcmc} for AL;
-  \item for exAL, draw each \(s_i^c\mid\cdot\) from
-  \eqref{eq:supp_glofas_s_mcmc};
-  \item draw
-  \(\vect\theta_{p_0}\mid\cdot\sim
-  \Normal(\vect m_{\theta\mid\cdot},\mat\Sigma_{\theta\mid\cdot})\)
-  using \eqref{eq:supp_glofas_theta_mcmc};
-  \item for each block \(b\in\{\beta,\alpha\}\), draw the RHS local, global,
-  auxiliary, and slab scales from \eqref{eq:supp_glofas_rhs_mcmc};
-  \item for AL, draw each \(\sigma_c\mid\cdot\) from
-  \eqref{eq:supp_glofas_al_sigma_mcmc};
-  \item for exAL, update each \((\sigma_c,\gamma_c)\) by slice sampling on
-  the transformed target \eqref{eq:supp_glofas_slice_target};
-  \item for the latent-path model, update \(\vect y_F\) using a
-  Metropolis--Hastings, slice-sampling, or componentwise transition targeting
-  the complete-data posterior
-  \eqref{eq:supp_glofas_joint_exal_rhs} or
-  \eqref{eq:supp_glofas_joint_al_rhs} with \(\mat H=\mat H(\vect y_F)\),
-  recomputing only forecast-period state rows after a proposal;
-  \item store retained draws and diagnostics after burn-in, with thinning only
-  if used.
-  \end{enumerate}
-\end{enumerate}
-\end{suppalgorithm}
-
-\subsection{Variational Bayes and CAVI Updates}
-\label{subsec:glofas_vb}
-
-\noindent\textbf{Mean-field family.}
-For exAL, use the mean-field family
-\begin{equation}
-q=
-q_\theta(\vect\theta_{p_0})
-q_{\Theta_\beta}(\Theta_\beta)
-q_{\Theta_\alpha}(\Theta_\alpha)
-\prod_{c\in\mathcal C}
-\left[
-q_{\sigma_c,\gamma_c}(\sigma_c,\gamma_c)
-\prod_{i\in\mathcal I_c}q_{v_i^c}(v_i^c)q_{s_i^c}(s_i^c)
-\right]
-\label{eq:supp_glofas_vb_family}
-\end{equation}
-where each \(q_{\Theta_b}\) factorizes over the auxiliary inverse-gamma RHS
-components used in Section~\ref{subsec:glofas_rhs_prior}.
-For AL, replace \(q_{\sigma_c,\gamma_c}\) by \(q_{\sigma_c}\) and omit
-\(q_{s_i^c}\). The coefficient factor is Gaussian. Let
-\[
-\bar w_i^c=\E\{(\sigma_cB_{\gamma_c}v_i^c)^{-1}\},
-\qquad
-\bar m_i^c=
-\E\left[
-\frac{z_i^c-\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c}
-{\sigma_cB_{\gamma_c}v_i^c}
-\right]
-\]
-for exAL, with \(A_{\gamma_c},B_{\gamma_c},D_{\gamma_c}\) replaced by
-\(A_0,B_0,0\) for AL. Stacking \(\bar w_i^c\) and \(\bar m_i^c\) gives
-\(\bar{\mat\Omega}\) and \(\bar{\vect m}\). Let
-\(\bar{\mat P}_\theta\) replace each block-specific RHS precision by
-\(\E(\tau_b^{-2})\E(\lambda_{b,j}^{-2})+\E(\zeta_b^{-2})\). Then
-\begin{align}
-q_\theta(\vect\theta_{p_0})&=\Normal(\vect m_\theta,\mat\Sigma_\theta),\\
-\mat\Sigma_\theta&=(\mat H^\top\bar{\mat\Omega}\mat H+\bar{\mat P}_\theta)^{-1},\\
-\vect m_\theta&=\mat\Sigma_\theta(\mat H^\top\bar{\vect m}
-+\bar{\mat P}_\theta\vect b_\theta).
-\label{eq:supp_glofas_vb_theta}
-\end{align}
-
-\noindent\textbf{Regression residual moments.}
-For each contribution, define
-\[
-\bar r_i^c=z_i^c-\vect h_i^{c\top}\vect m_\theta,\qquad
-\overline{(r_i^c)^2}
-=(\bar r_i^c)^2+\vect h_i^{c\top}\mat\Sigma_\theta\vect h_i^c .
-\]
-
-\noindent\textbf{AL coordinate factors.}
-For AL,
-\begin{align}
-q(v_i^c)
-&=
-\GIG\left(
-1/2,
-B_0^{-1}\E(\sigma_c^{-1})\overline{(r_i^c)^2},
-\E(\sigma_c^{-1})\left(\frac{A_0^2}{B_0}+2\right)
-\right),
-\label{eq:supp_glofas_vb_al_v}\\
-q(\sigma_c)
-&=
-\IG(a_{\sigma,c}^\star,b_{\sigma,c}^\star),\\
-a_{\sigma,c}^\star
-&=a_{\sigma,c}+\frac{3n_c}{2},\\
-b_{\sigma,c}^\star
-&=
-b_{\sigma,c}+\sum_{i\in\mathcal I_c}\E(v_i^c)
-+\frac{1}{2B_0}\sum_{i\in\mathcal I_c}
-\left[
-\overline{(r_i^c)^2}\E\{(v_i^c)^{-1}\}
--2A_0\bar r_i^c+A_0^2\E(v_i^c)
-\right].
-\label{eq:supp_glofas_vb_al_sigma}
-\end{align}
-
-\noindent\textbf{exAL coordinate factors.}
-For exAL, define source-specific branchwise smooth expectations
-\[
-M_{1c}=\E\{(\sigma_cB_{\gamma_c})^{-1}\},\quad
-M_{2c}=\E(D_{\gamma_c}/B_{\gamma_c}),\quad
-M_{3c}=\E(\sigma_cD_{\gamma_c}^2/B_{\gamma_c}),\quad
-M_{4c}=\E(A_{\gamma_c}D_{\gamma_c}/B_{\gamma_c}),
-\]
-and
-\[
-M_{5c}=\E\{A_{\gamma_c}^2/(\sigma_cB_{\gamma_c})+2/\sigma_c\}.
-\]
-These expectations involve the source-specific exAL scale and asymmetry factor
-and are evaluated by Laplace--Delta within the active \(\gamma_c\) branch. The
-AL point \(\gamma_c=0\) is handled as the nested AL case rather than by a
-generic two-sided Hessian. The latent factors are
-\begin{align}
-q(v_i^c)
-&=
-\GIG(1/2,\bar\chi_i^c,\bar\psi_i^c),\\
-\bar\chi_i^c
-&=
-M_{1c}\overline{(r_i^c)^2}
--2M_{2c}\bar r_i^c\E(s_i^c)
-+M_{3c}\E\{(s_i^c)^2\},\\
-\bar\psi_i^c&=M_{5c},
-\label{eq:supp_glofas_vb_exal_v}\\
-q(s_i^c)&=\TN(m_{s,i}^{c,\mathrm{VB}},V_{s,i}^{c,\mathrm{VB}}),\\
-V_{s,i}^{c,\mathrm{VB}}
-&=\left[1+M_{3c}\E\{(v_i^c)^{-1}\}\right]^{-1},\\
-m_{s,i}^{c,\mathrm{VB}}
-&=
-V_{s,i}^{c,\mathrm{VB}}
-\left[
-M_{2c}\bar r_i^c\E\{(v_i^c)^{-1}\}-M_{4c}
-\right].
-\label{eq:supp_glofas_vb_exal_s}
-\end{align}
-
-\noindent\textbf{RHS coordinate factors.}
-The RHS CAVI updates are applied independently to each block
-\(b\in\{\beta,\alpha\}\):
-\begin{align}
-q(\lambda_{b,j}^2)
-&=\IG\left(1,\ \E(\nu_{b,j}^{-1})
-+\frac12\overline{\theta_{b,j}^2}\E(\tau_b^{-2})\right),\\
-q(\nu_{b,j})
-&=\IG\left(1,\ 1+\E(\lambda_{b,j}^{-2})\right),\\
-q(\tau_b^2)
-&=\IG\left(\frac{|\mathcal J_b|+1}{2},
-\E(\xi_b^{-1})
-+\frac12\sum_{j\in\mathcal J_b}\overline{\theta_{b,j}^2}
-\E(\lambda_{b,j}^{-2})\right),\\
-q(\xi_b)
-&=\IG\left(1,\ \tau_{0,b}^{-2}+\E(\tau_b^{-2})\right),\\
-q(\zeta_b^2)
-&=\IG\left(a_{\zeta,b}+\frac{|\mathcal J_b|}{2},
-b_{\zeta,b}+\frac12\sum_{j\in\mathcal J_b}\overline{\theta_{b,j}^2}\right),
-\label{eq:supp_glofas_vb_rhs}
-\end{align}
-where
-\(\overline{\theta_{b,j}^2}=m_{\theta,bj}^2+(\mat\Sigma_\theta)_{bj,bj}\).
-
-\noindent\textbf{Source scale--asymmetry factor.}
-For exAL, the source-specific Laplace--Delta target is
-\begin{align}
-\ell_{c,\mathrm{LD}}(\vect\eta_c)
-&=
-\E_{q_{-(\sigma_c,\gamma_c)}}\{
-\log p(\vect z^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,
-\vect v^c,\vect s^c,\{\vect h_i^c:i\in\mathcal I_c\})
-\nonumber\\
-&\qquad
-+\log p(\vect v^c\mid\sigma_c)
-+\log p(\sigma_c)+\log\pi_{\gamma_c}(\gamma_c)
-\}
-+\log|J_{T_c}(\vect\eta_c)|.
-\label{eq:supp_glofas_ld_target}
-\end{align}
-At the mode \(\hat{\vect\eta}_c\), with Hessian
-\(\mat K_c=\nabla^2\ell_{c,\mathrm{LD}}(\hat{\vect\eta}_c)\), set
-\begin{equation}
-q_{\sigma_c,\gamma_c}(\vect\eta_c)
-\approx
-\Normal\{\hat{\vect\eta}_c,(-\mat K_c)^{-1}\}.
-\label{eq:supp_glofas_ld_gaussian}
-\end{equation}
-For any branchwise smooth function \(h(\sigma_c,\gamma_c)\),
-\begin{equation}
-\E\{h(\sigma_c,\gamma_c)\}
-\approx
-h\{T_c(\hat{\vect\eta}_c)\}
-+\frac12\tr\left[
-\nabla^2_\eta h\{T_c(\hat{\vect\eta}_c)\}(-\mat K_c)^{-1}
-\right].
-\label{eq:supp_glofas_delta}
-\end{equation}
-
-\noindent\textbf{Future-path factor.}
-For the latent-path ensemble-likelihood model, the variational family is
-augmented by a factor \(q_F(\vect y_F)\) for the future reference path. Write
-\(z_i^c(\vect y_F)=z_{i0}^c+\vect u_i^\top\vect y_F\), where
-\(\vect u_i=\vect0\) for observed rows and identifies the appropriate future
-reference value for forecast-period reference rows. The forecast-period
-fixed-design row is \(\vect h_i^c(\vect y_F)\), because output lags in the
-reservoir input may depend on \(\vect y_F\). For a current coefficient factor
-\(q_\theta=\Normal(\vect m_\theta,\mat\Sigma_\theta)\), define
-\[
-e_i^c(\vect y_F)
-=z_i^c(\vect y_F)-\vect h_i^c(\vect y_F)^\top\vect m_\theta,
-\qquad
-R_i^c(\vect y_F)
-=\{e_i^c(\vect y_F)\}^2+
-\vect h_i^c(\vect y_F)^\top
-\mat\Sigma_\theta\vect h_i^c(\vect y_F).
-\]
-
-\noindent\textbf{Future-path likelihood target.}
-For AL, the future-path Laplace target is, up to constants not depending on
-\(\vect y_F\),
-\begin{equation}
-\ell_F^{\mathrm{AL}}(\vect y_F)
-=
--\frac{1}{2B_0}\sum_{i\in\mathcal I_F}
-\E(\sigma_{c_i}^{-1})
-\left[
-\E\{(v_i^{c_i})^{-1}\}R_i^{c_i}(\vect y_F)
--2A_0e_i^{c_i}(\vect y_F)
-\right],
-\label{eq:supp_glofas_latent_path_al_ld_target}
-\end{equation}
-where \(\mathcal I_F\) contains rows whose response or fixed-design row depends on
-the future path. Terms independent of \(\vect y_F\), including the
-\(A_0^2\E(v_i^{c_i})\) part of the Gaussian likelihood and the exponential
-latent-prior terms, are handled in the complete-data ELBO and omitted from the
-future-path mode or Hessian. For exAL, the corresponding target is
-\begin{align}
-\ell_F^{\mathrm{exAL}}(\vect y_F)
-&=
--\frac12\sum_{i\in\mathcal I_F}
-\left[
-M_{1,c_i}\E\{(v_i^{c_i})^{-1}\}R_i^{c_i}(\vect y_F)
--2M_{2,c_i}\E(s_i^{c_i})\E\{(v_i^{c_i})^{-1}\}
-e_i^{c_i}(\vect y_F)
--2M_{6,c_i}e_i^{c_i}(\vect y_F)
-\right],
-\label{eq:supp_glofas_latent_path_exal_ld_target}
-\end{align}
-with
-\[
-M_{6,c}=\E\{A_{\gamma_c}/(\sigma_cB_{\gamma_c})\}.
-\]
-The remaining exAL terms in the complete-data likelihood and latent-prior
-density are independent of \(\vect y_F\) and are included in the ELBO
-decomposition below.
-
-\noindent\textbf{Future-path Gaussian approximation.}
-At the mode \(\hat{\vect y}_F\), set
-\[
-\mat K_F=-\nabla^2_{\vect y_F}\ell_F(\hat{\vect y}_F),
+\mat K_F=-\nabla^2\ell_F(\widehat{\vect y}_F),
 \qquad
 q_F(\vect y_F)\approx
-\Normal(\hat{\vect y}_F,\mat K_F^{-1}),
-\]
-with any Hessian regularization reported with the numerical diagnostics.
-Delta-method
-moments of the nonlinear state map are then used in the remaining coordinate
-updates.
-
-\noindent\textbf{Delta moments.}
-If \(\mat J_i\) is the Jacobian of \(\vect h_i^c(\vect y_F)\) at
-\(\hat{\vect y}_F\), and \(\mat V_F=\mat K_F^{-1}\), then the default
-first-order Delta moments are
-\[
-\vect a_i^c
-\approx
-\vect h_i^c(\hat{\vect y}_F),
+\Normal(\widehat{\vect y}_F,\mat K_F^{-1}).
+\label{eq:supp_glofas_future_path_factor}
+\end{equation}
+For a design row \(\vect h_i^c(\vect y_F)\), let \(\mat J_i\) be its Jacobian
+at the mode and \(\mat V_F=\mat K_F^{-1}\). The first-order moments used in
+the remaining coordinate updates are
+\begin{equation}
+\E\{\vect h_i^c(\vect y_F)\}
+\approx\vect h_i^c(\widehat{\vect y}_F),
 \qquad
-\mat S_i^c
+\E\{\vect h_i^c\vect h_i^{c\top}\}
 \approx
-\vect a_i^c\vect a_i^{c\top}
-+\mat J_i\mat V_F\mat J_i^\top .
-\]
-Also,
-\[
-\bar z_i^c=z_{i0}^c+\vect u_i^\top\hat{\vect y}_F,
-\qquad
-\overline{(z_i^c)^2}
-=(\bar z_i^c)^2+\vect u_i^\top\mat V_F\vect u_i,
-\qquad
-\vect b_i^c
-\approx
-\vect a_i^c\bar z_i^c+\mat J_i\mat V_F\vect u_i .
-\]
-Second-order mean corrections can be added for chosen low-dimensional
-summaries. The first-order construction above avoids featurewise Hessian
-calculations while retaining the mean and covariance terms needed for the
-Gaussian future-path approximation.
+\vect a_i^c\vect a_i^{c\top}+\mat J_i\mat V_F\mat J_i^\top,
+\label{eq:supp_glofas_future_path_delta}
+\end{equation}
+where \(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). Cross-moments with
+responses that are components of \(\vect y_F\) include the corresponding
+Jacobian--covariance term. The entropy contribution is
+\(\tfrac12\log|2\pi e\mat V_F|\). Thus the monitored objective is a
+Laplace--Delta approximation to the nonlinear latent-path ELBO and reduces to
+the fixed-design ELBO when the future path is absent or held fixed.
 
-\noindent\textbf{Entropy and objective.}
-Replacing fixed-design products by
-\((\vect a_i^c,\mat S_i^c,\vect b_i^c,\bar z_i^c,
-\overline{(z_i^c)^2})\) gives the latent-path VB--LD updates. The entropy
-contribution of the future-path factor is
-\[
-H(q_F)=\frac12\log |2\pi e\,\mat V_F|.
-\]
-The resulting monitored objective is a Laplace--Delta approximation to the
-ELBO of the nonlinear latent-path model.
+For MCMC, a proposal for \(\vect y_F\) is evaluated under the same augmented
+posterior after recomputing only the affected forecast-period state rows. The
+conditional Gaussian coefficient, latent-variable, source-parameter, and RHS
+updates otherwise retain the forms in the general derivation.
 
-\begin{suppalgorithm}{Variational Bayes updates for the GloFAS forecast-discrepancy model}
-\label{alg:glofas_vb}
-\emph{Input:} stacked observations \(\vect z\), source labels \(c_i\), target
-quantile \(p_0\), likelihood choice AL or exAL, block-specific RHS hyperparameters,
-convergence controls, and either a fixed augmented design \(\mat H\) or a
-mapping from a proposed future reference path to its reservoir states and
-design rows.
-\begin{enumerate}[label=(\arabic*)]
-\item Initialize \(q_\theta\), latent factors, source scale factors, and RHS
-scale factors. For the latent-path model, also initialize \(q_F\).
-\item Repeat until convergence:
-  \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, set \(q_F\) by the Laplace target
-  \eqref{eq:supp_glofas_latent_path_al_ld_target} for AL or
-  \eqref{eq:supp_glofas_latent_path_exal_ld_target} for exAL, then recompute
-  the Delta-method design moments;
-  \item set \(q(v_i^c)\) by \eqref{eq:supp_glofas_vb_al_v} for AL or
-  \eqref{eq:supp_glofas_vb_exal_v} for exAL;
-  \item for exAL, set \(q(s_i^c)\) by
-  \eqref{eq:supp_glofas_vb_exal_s};
-  \item set \(q_\theta\) by \eqref{eq:supp_glofas_vb_theta};
-  \item set the beta and alpha RHS factors by \eqref{eq:supp_glofas_vb_rhs};
-  \item for AL, set each \(q(\sigma_c)\) by
-  \eqref{eq:supp_glofas_vb_al_sigma};
-  \item for exAL, set each \(q_{\sigma_c,\gamma_c}\) by
-  \eqref{eq:supp_glofas_ld_target}--\eqref{eq:supp_glofas_ld_gaussian};
-  \item recompute branchwise smooth expectations by \eqref{eq:supp_glofas_delta} and
-  monitor the ELBO, or the Laplace--Delta ELBO approximation when \(q_F\) is
-  present.
-  \end{enumerate}
-\item Return variational factors, fitted reference and discrepancy summaries,
-forecast summaries, ELBO history, and convergence diagnostics.
-\end{enumerate}
-\end{suppalgorithm}
-
-\subsection{ELBO}
-\label{subsec:glofas_elbo}
-
-\noindent\textbf{Application ELBO.}
-For exAL, the application ELBO is
-\begin{align}
-\elbo(q)
-&=
-\sum_{c\in\mathcal C}
-\left[
-\E_q\{\log p(\vect z^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,
-\vect v^c,\vect s^c,\mat H)\}
-+\E_q\{\log p(\vect v^c\mid\sigma_c)\}
-+\E_q\{\log p(\vect s^c)\}
-\right.
-\nonumber\\
-&\qquad\left.
-+\E_q\{\log p(\sigma_c)\}
-+\E_q\{\log\pi_{\gamma_c}(\gamma_c)\}
-\right]
-+\E_q\{\log p(\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha)\}
-+H(q).
-\label{eq:supp_glofas_elbo_decomp}
-\end{align}
-
-\noindent\textbf{Likelihood terms.}
-For AL, omit the \(s\)-latent and \(\gamma_c\) prior terms. The exAL
-likelihood term for source \(c\) is
-\begin{align}
-\elbo_{\mathrm{like},c}
-&=
--\frac{n_c}{2}\log(2\pi)
--\frac12\sum_{i\in\mathcal I_c}
-\left[
-\E(\log\sigma_c)+\E(\log B_{\gamma_c})+\E(\log v_i^c)
-\right]
-\nonumber\\
-&\quad
--\frac12\sum_{i\in\mathcal I_c}
-\E\left[
-\frac{
-\{z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c\}^2}
-{\sigma_cB_{\gamma_c}v_i^c}
-\right].
-\label{eq:supp_glofas_elbo_like}
-\end{align}
-The corresponding AL likelihood term is
-\begin{align}
-\elbo_{\mathrm{like},c}^{\mathrm{AL}}
-&=
--\frac{n_c}{2}\log(2\pi)
--\frac12\sum_{i\in\mathcal I_c}
-\left[
-\E(\log\sigma_c)+\log B_0+\E(\log v_i^c)
-\right]
-\nonumber\\
-&\quad
--\frac12\sum_{i\in\mathcal I_c}
-\E\left[
-\frac{
-\{z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}-A_0v_i^c\}^2}
-{\sigma_cB_0v_i^c}
-\right].
-\label{eq:supp_glofas_elbo_like_al}
-\end{align}
-
-\noindent\textbf{Latent-path objective.}
-For the latent-path model, these likelihood terms are evaluated with the
-Laplace--Delta future-path moments above, and \(H(q)\) includes
-\(H(q_F)\). Thus the monitored quantity is an ELBO approximation for the
-nonlinear latent-path model; it reduces to the fixed-design ELBO when
-\(\vect y_F\) is absent or held fixed.
-
-\noindent\textbf{Prior and entropy terms.}
-The latent and source-parameter prior terms are
-\begin{align}
-\elbo_{v,c}
-&=
--n_c\E(\log\sigma_c)-\E(\sigma_c^{-1})
-\sum_{i\in\mathcal I_c}\E(v_i^c),\\
-\elbo_{s,c}
-&=
-n_c\log2-\frac{n_c}{2}\log(2\pi)
--\frac12\sum_{i\in\mathcal I_c}\E\{(s_i^c)^2\},\\
-\elbo_{\sigma,c}
-&=
-a_{\sigma,c}\log b_{\sigma,c}-\log\Gamma(a_{\sigma,c})
--(a_{\sigma,c}+1)\E(\log\sigma_c)-b_{\sigma,c}\E(\sigma_c^{-1}),\\
-\elbo_{\gamma,c}
-&=\E\{\log\pi_{\gamma_c}(\gamma_c)\}.
-\label{eq:supp_glofas_elbo_source_terms}
-\end{align}
-The RHS coefficient-prior and shrinkage-scale terms are the corresponding
-blockwise RHS ELBO terms, with \(\vect\beta\) replaced separately by the
-non-intercept entries of \(\vect\beta_{p_0}\) and \(\vect\alpha_{p_0}\);
-the decomposition follows the generic regularized-horseshoe representation in
-Sections~\ref{sec:cavi}--\ref{sec:elbo}.
-Entropy terms are summed over the Gaussian coefficient factor, GIG latent
-factors, truncated-normal latent factors, inverse-gamma RHS factors, and the
-source-specific Laplace--Delta factors.
-Terms involving smooth nonlinear functions of \((\sigma_c,\gamma_c)\) are
-evaluated with the same Laplace--Delta approximation used in
-\eqref{eq:supp_glofas_delta}.
-
-\subsection{Limiting Cases and Computational Checks}
+\subsection{Limiting Cases and Checks}
 \label{subsec:glofas_checks}
 
-The derivation has several useful reductions. If the GloFAS source is removed
-and \(\vect\alpha_{p_0}\) is omitted, the model reduces to the ordinary
-Q--DESN regression in Sections~\ref{sec:model_joint}--\ref{sec:elbo}. If
-\(\gamma_c=0\) and the \(s_i^c\) variables are omitted, the exAL updates reduce
-to the AL updates with constants \(A_0\) and \(B_0\). The coefficient update
-remains Gaussian because the augmented likelihood and the RHS prior are
-conditionally Gaussian. The RHS hierarchy contributes only inverse-gamma scale
-updates under the product representation; the source-specific scale and
-asymmetry block is the non-conjugate component. Finally, the MCMC
-sampler and the variational approximation are written for the same augmented
-working model when the likelihood family, source labels, and reservoir-state
-specification are matched. The ELBO in \eqref{eq:supp_glofas_elbo_decomp} is therefore an
-approximate objective for the corresponding variational factorization. Direct
-checks of posterior marginals or interval properties require separate
-comparison with posterior simulation.
+Removing the GloFAS source and discrepancy coefficients recovers the ordinary
+Q--DESN regression. Setting \(\gamma_c=0\) and omitting the positive-shift
+latents recovers AL. Fixed future design rows recover the general fixed-design
+posterior and ELBO. These reductions, strict forecast lagging, source indexing,
+and agreement between MCMC and variational parameterizations provide direct
+implementation checks; posterior calibration remains an empirical question.
+
 
 \bibliographystyle{apalike}
 \bibliography{refs}

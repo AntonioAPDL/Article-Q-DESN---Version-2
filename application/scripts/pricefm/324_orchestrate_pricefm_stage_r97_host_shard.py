@@ -12,6 +12,7 @@ import math
 import os
 from pathlib import Path
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -100,6 +101,8 @@ def load_contract(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("only a frozen shard contract can run")
     if payload.get("host") != args.host:
         raise RuntimeError("requested host differs from the shard contract")
+    if not socket.gethostname().lower().startswith(args.host.lower()):
+        raise RuntimeError(f"the {args.host} shard contract cannot run on {socket.gethostname()}")
     if int(payload.get("workers", -1)) != int(args.workers):
         raise RuntimeError("worker count differs from the frozen shard contract")
     if Path(payload["campaign_root"]).resolve() != args.campaign_root.resolve():

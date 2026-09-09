@@ -198,6 +198,26 @@ def test_host_contract_rejects_preview_mode(tmp_path: Path) -> None:
         HOST.load_contract(args)
 
 
+def test_host_contract_rejects_wrong_machine(tmp_path: Path, monkeypatch) -> None:
+    contract = sealed_payload({
+        "mode": "freeze", "host": "jerez", "workers": 2,
+        "campaign_root": str(tmp_path), "regions": [],
+        "parent_campaign_contract": {}, "checkpoint": {}, "assignment": {},
+        "launch_authorized": False, "global_test_scoring_authorized": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutation_authorized": False, "article_mutation_authorized": False,
+        "joint_model_authorized": False, "mcmc_authorized": False,
+    }, "shard_contract_sha256")
+    path = tmp_path / "contract.json"
+    atomic_write_json(path, contract)
+    monkeypatch.setattr(HOST.socket, "gethostname", lambda: "muscat.be.ucsc.edu")
+    args = SimpleNamespace(
+        shard_contract=path, host="jerez", workers=2, campaign_root=tmp_path,
+    )
+    with pytest.raises(RuntimeError, match="cannot run on muscat"):
+        HOST.load_contract(args)
+
+
 def test_screening_scheduler_caps_each_region_at_two_models(tmp_path: Path, monkeypatch) -> None:
     manifest_roots = {}
     for region in ("A", "B"):

@@ -4,6 +4,10 @@ app_joint_article_contract_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v1.csv")
 }
 
+app_joint_article_corrected_contract_path <- function() {
+  app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v2.csv")
+}
+
 app_joint_article_host_profiles_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_host_profiles_v1.csv")
 }
@@ -38,8 +42,14 @@ app_joint_article_read_contract <- function(
          call. = FALSE)
   }
   get <- function(name) app_joint_article_contract_value(tab, name)
+  has <- function(name) name %in% tab$name
+  get_optional <- function(name, default) if (has(name)) get(name) else default
   bool <- function(name) identical(tolower(get(name)), "true")
+  bool_optional <- function(name, default) {
+    if (has(name)) identical(tolower(get(name)), "true") else isTRUE(default)
+  }
   num <- function(name) as.numeric(get(name))
+  num_optional <- function(name, default) if (has(name)) as.numeric(get(name)) else default
   int <- function(name) as.integer(get(name))
   nums <- function(name) as.numeric(strsplit(get(name), ";", fixed = TRUE)[[1L]])
   out <- list(
@@ -96,6 +106,23 @@ app_joint_article_read_contract <- function(
     b_sigma = num("b_sigma"),
     alpha_prior_sd_multiplier = num("alpha_prior_sd_multiplier"),
     alpha_min_spacing = num("alpha_min_spacing"),
+    rhs_slab_variance = num_optional("rhs_slab_variance", NA_real_),
+    rhs_slab_fixed = bool_optional("rhs_slab_fixed", FALSE),
+    coefficient_hierarchy = get_optional(
+      "coefficient_hierarchy", "first_quantile_anchor_adjacent_differences"),
+    ordered_intercepts = bool_optional("ordered_intercepts", TRUE),
+    alpha_prior_center_policy = get_optional(
+      "alpha_prior_center_policy", "gaussian_location_quantiles"),
+    alpha_prior_sd_policy = get_optional(
+      "alpha_prior_sd_policy", "gaussian_residual_scale_multiplier"),
+    sigma_lower_bound = num_optional("sigma_lower_bound", 0),
+    sigma_upper_bound = num_optional("sigma_upper_bound", Inf),
+    posterior_target_hash_required = bool_optional(
+      "posterior_target_hash_required", TRUE),
+    projection_rule = get_optional(
+      "projection_rule", "weighted_isotonic_equal_weights"),
+    draw_coupling = get_optional(
+      "draw_coupling", "matched_draw_index_with_repeated_permutation_sensitivity"),
     max_dense_dim = int("max_dense_dim"),
     exal_vb_method = get("exal_vb_method"),
     gamma_init_policy = get("gamma_init_policy"),
@@ -154,7 +181,88 @@ app_joint_article_read_contract <- function(
     stop("JOINT article confirmation inference or scoring method is not frozen.",
          call. = FALSE)
   }
+  app_joint_qvp_validate_sigma_bounds(c(
+    out$sigma_lower_bound, out$sigma_upper_bound))
+  if (identical(out$version, "joint_shared_backbone_article_confirmation_v2")) {
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance <= 0 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts ||
+        !identical(out$alpha_prior_center_policy,
+          "gaussian_location_quantiles") ||
+        !identical(out$alpha_prior_sd_policy,
+          "gaussian_residual_scale_multiplier") ||
+        out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 50L || out$maximum_concurrency != 50L) {
+      stop("Corrected JOINT article confirmation contract violates the common-posterior gate.",
+        call. = FALSE)
+    }
+  }
   out
+}
+
+app_joint_article_resolve_posterior_target <- function(root, job, design,
+    contract) {
+  plan <- app_read_csv(file.path(root, "vb_worker_plan.csv"))
+  gaussian_job <- app_joint_article_find_job(
+    plan, job$scenario_id[[1L]], "gaussian_rhs_initializer")
+  gaussian <- app_joint_article_load_vb_fit(root, gaussian_job)
+  zeta2 <- if (isTRUE(contract$rhs_slab_fixed)) {
+    value <- as.numeric(contract$rhs_slab_variance)
+    if (length(value) != 1L || !is.finite(value) || value <= 0) {
+      stop("A fixed RHS slab requires one positive finite contract variance.",
+        call. = FALSE)
+    }
+    value[[1L]]
+  } else {
+    as.numeric(gaussian$initializer$zeta2)[[1L]]
+  }
+  alpha_mean <- as.numeric(gaussian$initializer$alpha_mean)
+  alpha_sd <- as.numeric(gaussian$initializer$alpha_prior_sd)
+  data_design_fingerprint <- design$posterior_data_design_fingerprint %||%
+    app_joint_qvp_sha256_text(paste(
+      "joint_qdesn_posterior_data_design_v1",
+      paste(design$fit_local, collapse = ";"),
+      paste(colnames(design$Z), collapse = ";"),
+      paste(format(design$y[design$fit_local], digits = 17L,
+        scientific = TRUE), collapse = ";"),
+      paste(format(design$Z[design$fit_local, , drop = FALSE], digits = 17L,
+        scientific = TRUE), collapse = ";"),
+      sep = "|"
+    ))
+  target <- app_joint_posterior_contract(
+    likelihood_family = job$likelihood_family[[1L]],
+    fit_structure = job$fit_structure[[1L]],
+    tau = design$tau,
+    design_fingerprint = data_design_fingerprint,
+    kappa = 1,
+    tau0 = as.numeric(job$rhs_tau0[[1L]]),
+    zeta2 = zeta2,
+    slab_fixed = contract$rhs_slab_fixed,
+    a_sigma = contract$a_sigma,
+    b_sigma = contract$b_sigma,
+    alpha_prior_mean = alpha_mean,
+    alpha_prior_sd = alpha_sd,
+    alpha_min_spacing = if (job$fit_structure[[1L]] == "joint") {
+      contract$alpha_min_spacing
+    } else 0,
+    sigma_bounds = c(contract$sigma_lower_bound, contract$sigma_upper_bound),
+    coefficient_hierarchy = if (job$fit_structure[[1L]] == "joint") {
+      contract$coefficient_hierarchy
+    } else {
+      "independent_quantile_specific_rhs"
+    },
+    ordered_intercepts = job$fit_structure[[1L]] == "joint" &&
+      contract$ordered_intercepts,
+    gamma_prior_type = "none",
+    score_definition = contract$primary_score,
+    projection_rule = contract$projection_rule,
+    draw_coupling = contract$draw_coupling
+  )
+  target
 }
 
 app_joint_article_read_host_profile <- function(
@@ -1204,7 +1312,8 @@ app_joint_article_stack_independent_for_cell <- function(root, plan, cell, contr
   gaussian <- app_joint_article_load_vb_fit(root,
     app_joint_article_find_job(plan, cell$scenario_id[[1L]], "gaussian_rhs_initializer"))
   out$rhs_state <- app_joint_qvp_initialize_rhs_state(length(design$tau), p,
-    tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2)
+    tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2,
+    slab_fixed = contract$rhs_slab_fixed)
   out$rhs_state <- app_joint_qvp_update_rhs_vb_state(
     out$rhs_state, beta, cov, length(design$tau), p,
     n_inner = contract$rhs_vb_inner)$state
@@ -1389,6 +1498,7 @@ app_joint_article_reconstruct_init <- function(rows, cell, tau, p) {
 }
 
 app_joint_article_overdispersed_start <- function(init, job, tau) {
+  app_joint_posterior_assert_initialization_only(init)
   set.seed(as.integer(job$chain_start_seed[[1L]]))
   K <- length(tau)
   p <- length(init$beta_mean) / K
@@ -1576,13 +1686,16 @@ app_joint_article_mcmc_initial_precision_audit <- function(root,
     p <- ncol(Z)
     init <- app_joint_article_reconstruct_init(init_rows, job, tau, p)
     init <- app_joint_article_overdispersed_start(init, job, tau)
+    target <- app_joint_article_resolve_posterior_target(root, job, design,
+      app_joint_article_read_contract(file.path(root, "frozen_contract.csv")))
     set.seed(as.integer(job$chain_seed[[1L]]))
     constants <- app_joint_qvp_exal_constants(tau, init$gamma_mean)
     v <- matrix(rep(init$sigma_mean, each = length(y)), nrow = length(y),
       ncol = K)
     s <- matrix(abs(stats::rnorm(length(y) * K)), nrow = length(y), ncol = K)
     rhs_state <- app_joint_qvp_initialize_rhs_state(
-      K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]), zeta2 = Inf
+      K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]), zeta2 = target$zeta2,
+      slab_fixed = target$slab_fixed
     )
     prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
     prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor,
@@ -1884,6 +1997,7 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
   design <- readRDS(job$design_path[[1L]])
   init_rows <- app_read_csv(file.path(root, "vb_initialization_rows.csv"))
   init <- app_joint_article_reconstruct_init(init_rows, job, design$tau, ncol(design$Z))
+  target <- app_joint_article_resolve_posterior_target(root, job, design, contract)
   init <- app_joint_article_overdispersed_start(init, job, design$tau)
   started <- Sys.time()
   common <- list(
@@ -1893,16 +2007,13 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     n_iter = as.integer(job$n_iter[[1L]]), burn = as.integer(job$burn[[1L]]),
     thin = as.integer(job$thin[[1L]]), seed = as.integer(job$chain_seed[[1L]]),
     kappa = 1, tau0 = as.numeric(job$rhs_tau0[[1L]]),
-    zeta2 = Inf, a_sigma = contract$a_sigma, b_sigma = contract$b_sigma,
-    alpha_prior_mean = if (job$fit_structure[[1L]] == "independent") {
-      "empirical_quantile"
-    } else init$alpha_mean,
-    alpha_prior_sd = contract$alpha_prior_sd_multiplier,
-    alpha_min_spacing = if (job$fit_structure[[1L]] == "joint") {
-      contract$alpha_min_spacing
-    } else 0,
+    zeta2 = target$zeta2, a_sigma = target$a_sigma, b_sigma = target$b_sigma,
+    slab_fixed = target$slab_fixed,
+    alpha_prior_mean = target$alpha_prior_mean,
+    alpha_prior_sd = target$alpha_prior_sd,
+    alpha_min_spacing = target$alpha_min_spacing,
     max_dense_dim = 0L,
-    sigma_bounds = c(1e-8, max(1, 20 * max(init$sigma_mean))),
+    sigma_bounds = target$sigma_bounds,
     init = init
   )
   fit <- if (job$likelihood_family[[1L]] == "exAL") {
@@ -1930,7 +2041,8 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
       one$tau <- design$tau[[k]]
       one$seed <- as.integer(job$chain_seed[[1L]] + k * tau_seed_stride)
       one$alpha_min_spacing <- 0
-      one$alpha_prior_mean <- "empirical_quantile"
+      one$alpha_prior_mean <- target$alpha_prior_mean[[k]]
+      one$alpha_prior_sd <- target$alpha_prior_sd[[k]]
       one$init <- init$fits[[k]]
       do.call(app_joint_qvp_fit_al_mcmc_tiny, one)
     })
@@ -1963,6 +2075,7 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     precision_repair_count = as.integer(fit$precision_repair_count %||% 0L),
     precision_repair_max_relative_jitter =
       as.numeric(fit$precision_repair_max_rel_used %||% 0),
+    posterior_target_sha256 = target$hash,
     runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
     production_launched = TRUE,
@@ -1982,6 +2095,8 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     posterior_draws = app_joint_article_write_gzip_csv(draws,
       file.path(tmp, "posterior_draws.csv.gz")),
     posterior_summary = app_write_csv(summary, file.path(tmp, "posterior_summary.csv")),
+    posterior_target_contract = app_write_csv(target$fields,
+      file.path(tmp, "posterior_target_contract.csv")),
     precision_repair_diagnostics = app_write_csv(precision_diagnostics,
       file.path(tmp, "precision_repair_diagnostics.csv")),
     qhat_fit_mean = app_write_csv(as.data.frame(qhat_fit),
@@ -2164,6 +2279,10 @@ app_joint_article_finalize_confirmation <- function(root) {
     stop("Article MCMC posterior summary registry is malformed.",
          call. = FALSE)
   }
+  target_hash_audit <- app_joint_article_target_hash_audit(
+    posterior_summary, contract)
+  target_hash_audit_path <- app_write_csv(target_hash_audit,
+    file.path(root, "mcmc_posterior_target_hash_audit.csv"))
   posterior_summary_path <- app_write_csv(posterior_summary,
     file.path(root, "mcmc_posterior_summary_registry.csv"))
   worker_registry <- app_joint_qdesn_bind_rows(lapply(plan$worker_id, function(id) {
@@ -2185,6 +2304,7 @@ app_joint_article_finalize_confirmation <- function(root) {
     mcmc_workers_completed = check$summary$completed_workers[[1L]],
     mcmc_workers_failed = check$summary$failed_workers[[1L]],
     worker_manifests_verified = length(unique(worker_verification$worker_id)),
+    posterior_target_cells_verified = nrow(target_hash_audit),
     production_launched = TRUE,
     article_assets_modified = FALSE,
     primary_score = "dgp_integrated_finite_grid_acrps",
@@ -2211,6 +2331,7 @@ app_joint_article_finalize_confirmation <- function(root) {
     scoring_contract = file.path(root, "scoring_contract.csv"),
     vb_final_artifact_manifest = file.path(root, "vb_final_artifact_manifest.csv"),
     mcmc_posterior_summary_registry = posterior_summary_path,
+    mcmc_posterior_target_hash_audit = target_hash_audit_path,
     mcmc_worker_manifest_verification = worker_verification_path,
     mcmc_worker_artifact_registry = worker_registry_path,
     optional,
@@ -2227,6 +2348,62 @@ app_joint_article_finalize_confirmation <- function(root) {
   app_write_csv(closeout, file.path(root, "mcmc_final_manifest_verification.csv"))
   list(assessment = assessment, summary = check$summary,
     worker_verification = worker_verification, closeout = closeout)
+}
+
+app_joint_article_target_hash_audit <- function(posterior_summary, contract) {
+  if (!isTRUE(contract$posterior_target_hash_required)) {
+    return(data.frame(
+      model_cell_id = character(), n_chains = integer(),
+      posterior_target_sha256 = character(), verified = logical(),
+      stringsAsFactors = FALSE
+    ))
+  }
+  app_check_required_columns(posterior_summary, c(
+    "model_cell_id", "likelihood_family", "posterior_target_sha256"
+  ), "JOINT article posterior target summary")
+  hashes <- trimws(as.character(posterior_summary$posterior_target_sha256))
+  if (any(!grepl("^[0-9a-f]{64}$", hashes))) {
+    stop("Posterior-target hashes must be nonempty lowercase SHA-256 values.",
+      call. = FALSE)
+  }
+  groups <- split(seq_len(nrow(posterior_summary)), posterior_summary$model_cell_id)
+  rows <- lapply(names(groups), function(cell_id) {
+    idx <- groups[[cell_id]]
+    unique_hash <- unique(hashes[idx])
+    likelihood <- unique(as.character(posterior_summary$likelihood_family[idx]))
+    if (length(unique_hash) != 1L) {
+      stop(sprintf("Posterior target differs across chains for model cell '%s'.",
+        cell_id), call. = FALSE)
+    }
+    if (length(likelihood) != 1L || !likelihood %in% c("AL", "exAL")) {
+      stop(sprintf("Likelihood family is malformed for model cell '%s'.",
+        cell_id), call. = FALSE)
+    }
+    expected_chains <- if (likelihood == "exAL") {
+      as.integer(contract$exal_chains_per_cell)
+    } else {
+      as.integer(contract$al_chains_per_cell)
+    }
+    if (length(idx) != expected_chains) {
+      stop(sprintf("Model cell '%s' has %d chains; expected %d.",
+        cell_id, length(idx), expected_chains), call. = FALSE)
+    }
+    data.frame(
+      model_cell_id = cell_id,
+      likelihood_family = likelihood,
+      n_chains = length(idx),
+      posterior_target_sha256 = unique_hash,
+      verified = TRUE,
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- app_joint_qdesn_bind_rows(rows)
+  expected_cells <- as.integer(contract$expected_top_level_initializers)
+  if (nrow(out) != expected_cells || anyDuplicated(out$model_cell_id)) {
+    stop("Posterior-target hash audit does not cover the complete model-cell grid.",
+      call. = FALSE)
+  }
+  out[order(out$model_cell_id), , drop = FALSE]
 }
 
 app_joint_article_parity_fixture <- function() {

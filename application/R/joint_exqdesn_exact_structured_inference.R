@@ -1173,6 +1173,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
   innovation_init_tau = innovation_tau0,
   anchor_zeta2 = zeta2,
   innovation_zeta2 = zeta2,
+  slab_fixed = FALSE,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -1244,6 +1245,7 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
       anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
       anchor_init_tau = anchor_init_tau, innovation_init_tau = innovation_init_tau,
       anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
+      slab_fixed = slab_fixed,
       a_sigma = a_sigma, b_sigma = b_sigma,
       alpha_prior_mean = alpha_prior_mean, alpha_prior_sd = alpha_prior_sd,
       alpha_min_spacing = alpha_min_spacing,
@@ -1265,7 +1267,8 @@ app_joint_exqdesn_fit_exal_vb_structured <- function(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
     anchor_init_tau = anchor_init_tau, innovation_init_tau = innovation_init_tau,
-    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
+    slab_fixed = slab_fixed
   )
   inherit_bootstrap <- bootstrap_init_supplied && isTRUE(inherit_al_bootstrap_rhs)
   rhs_state <- if (external_init_supplied || inherit_bootstrap) {

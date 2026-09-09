@@ -16,6 +16,10 @@ Tracked helper files:
   AL and exAL standardized-location-information variants are available for
   sensitivity specifications. The helper does not select a prior or refit a
   model.
+- `joint_qdesn_posterior_contract.R`: canonical posterior-target records for
+  shared Q--DESN AL and exAL comparisons. It hashes likelihood, design,
+  shrinkage, intercept-prior, support, ordering, scoring, projection, and
+  draw-coupling choices separately from chain-specific starting values.
 - `launch_control.R`: explicit launch guards for expensive workflows. It blocks
   retired run identifiers, requires `--confirm_final_launch true` before any
   final-launch configuration reaches `03_fit_models.R`, and refuses to reuse

@@ -279,7 +279,7 @@ figure_paths <- unlist(lapply(c("mcmc", "vb"), function(inf) {
     inf, c("fit_rmse", "forecast_mae", "forecast_check_loss")
   )
 }), use.names = FALSE)
-check(length(figure_paths) == 6L, "six interval figures declared")
+check(length(figure_paths) == 6L, "six interval-figure assets retained")
 for (path in figure_paths) {
   full <- article_path(path)
   check(file.exists(full) && file.info(full)$size > 10000, paste(path, "substantive"))
@@ -290,17 +290,25 @@ supplement_text <- paste(
   readLines(article_path("qdesn-supplement.tex"), warn = FALSE),
   collapse = "\n"
 )
-for (inf in c("mcmc", "vb")) {
-  wrapper_path <- article_path(sprintf(
-    "tables/qdesn_validation_500obs_v14_%s_metric_interval_figures.tex", inf
-  ))
-  wrapper_text <- paste(readLines(wrapper_path, warn = FALSE), collapse = "\n")
-  for (label_id in c("fit-rmse", "forecast-mae", "forecast-check-loss")) {
-    label <- sprintf("fig:simulation-500obs-%s-%s-intervals", inf, label_id)
-    check(grepl(paste0("\\\\label\\{", label, "\\}"), wrapper_text),
-          paste(label, "wrapper label"))
-  }
-}
+mcmc_fit_wrapper <- paste(readLines(article_path(
+  "tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex"
+), warn = FALSE), collapse = "\n")
+mcmc_forecast_wrapper <- paste(readLines(article_path(
+  "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex"
+), warn = FALSE), collapse = "\n")
+vb_fit_wrapper <- paste(readLines(article_path(
+  "tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex"
+), warn = FALSE), collapse = "\n")
+check(grepl("fig:simulation-500obs-mcmc-fit-rmse-intervals",
+            mcmc_fit_wrapper, fixed = TRUE), "active MCMC fitting wrapper")
+check(grepl("fig:simulation-500obs-mcmc-forecast-mae-intervals",
+            mcmc_forecast_wrapper, fixed = TRUE) &&
+      grepl("fig:simulation-500obs-mcmc-forecast-check-loss-intervals",
+            mcmc_forecast_wrapper, fixed = TRUE), "active MCMC forecast wrapper")
+check(grepl("fig:simulation-500obs-vb-fit-rmse-intervals",
+            vb_fit_wrapper, fixed = TRUE) &&
+      !grepl("fig:simulation-500obs-vb-forecast-", vb_fit_wrapper, fixed = TRUE),
+      "active VB fitting wrapper excludes repeated forecast figures")
 for (label in c(
   "fig:simulation-500obs-mcmc-forecast-mae-intervals",
   "fig:simulation-500obs-mcmc-forecast-check-loss-intervals"
@@ -316,6 +324,9 @@ check(
   ),
   "fit-recovery figure moved to supplement"
 )
+article_files <- readLines(article_path("overleaf/article_files.txt"), warn = FALSE)
+check(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
+      "inactive VB forecast figures excluded from article snapshot")
 
 prose_text <- paste(readLines(article_path(config$outputs$interval_prose), warn = FALSE),
                     collapse = "\n")
@@ -363,5 +374,7 @@ check(length(grep(
 )) == 1L, "Overleaf manifest retains aCRPS sensitivity asset")
 
 cat("INDEPENDENT_EXDQLM_MCMC_ROLLING_STATE_FIX_ARTICLE_V14_CHECK=PASS\n")
-cat(sprintf("CHECKS=%d POINT_ROWS=%d INTERVAL_ROLES=%d FIGURES=%d\n",
-            check_count, nrow(point), nrow(roles), length(figure_paths)))
+cat(sprintf(
+  "CHECKS=%d POINT_ROWS=%d INTERVAL_ROLES=%d ACTIVE_FIGURES=4 RETAINED_FIGURES=%d\n",
+  check_count, nrow(point), nrow(roles), length(figure_paths)
+))

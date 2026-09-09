@@ -110,6 +110,17 @@ for (pdf in pdfs) {
   info <- system2("pdfinfo", pdf, stdout = TRUE, stderr = TRUE)
   expect(any(grepl("^Pages:[[:space:]]+1$", info)),
          paste("Expected a one-page vector figure:", pdf))
+  images <- system2("pdfimages", c("-list", pdf), stdout = TRUE,
+                    stderr = TRUE)
+  image_rows <- grep(
+    "^[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+image", images,
+    value = TRUE
+  )
+  expect(is.null(attr(images, "status")) && length(image_rows) == 0L,
+         paste("Expected no embedded raster image:", pdf))
+  fonts <- system2("pdffonts", pdf, stdout = TRUE, stderr = TRUE)
+  expect(is.null(attr(fonts, "status")) && length(fonts) > 2L,
+         paste("Expected vector text in:", pdf))
 }
 
 cat(paste0(

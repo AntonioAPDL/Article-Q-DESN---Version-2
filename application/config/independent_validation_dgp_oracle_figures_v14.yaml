@@ -38,5 +38,9 @@ outputs:
   manifest: tables/qdesn_validation_500obs_dgp_oracle_figures_v14_manifest.txt
   mcmc_wrapper: tables/qdesn_validation_500obs_v14_mcmc_metric_interval_figures.tex
   vb_wrapper: tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex
+  mcmc_fit_wrapper: tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex
+  mcmc_forecast_wrapper: tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex
+  figure_style: scripts/qdesn_evaluation_figure_style.R
+  figure_renderer: scripts/render_qdesn_evaluation_figures.R
   figure_directory: figures/independent_simulation
   figure_prefix: qdesn_validation_500obs_v14

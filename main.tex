@@ -8,37 +8,16 @@
 \usepackage{setspace}
 \onehalfspacing
 
-% ---- Math & theorems ----
+% ---- Mathematics ----
 \usepackage{amsmath, amssymb, mathtools, bm}
-\usepackage{amsthm}
 \numberwithin{equation}{section}
 
-% ---- Figures, tables, algorithms ----
-\usepackage{xcolor}
+% ---- Figures and tables ----
 \usepackage{graphicx}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta,calc,fit,positioning}
-\usepackage{subcaption}
 \usepackage{array}
 \usepackage{tabularx}
 \usepackage{booktabs}
 \usepackage{float}
-\usepackage{algorithm}
-\usepackage{algorithmic}
-
-% ---- Diagram palette ----
-\definecolor{qnavy}{HTML}{17365D}
-\definecolor{qnavysoft}{HTML}{355374}
-\definecolor{qteal}{HTML}{1B7F83}
-\definecolor{qtealdark}{HTML}{0B5D63}
-\definecolor{qgold}{HTML}{B9831F}
-\definecolor{qgolddark}{HTML}{8A610D}
-\definecolor{qink}{HTML}{1F252B}
-\definecolor{qmuted}{HTML}{667085}
-\definecolor{qpanel}{HTML}{F7F9FC}
-\definecolor{qtealfill}{HTML}{EFF7F6}
-\definecolor{qgoldfill}{HTML}{FFF8EA}
-\definecolor{qline}{HTML}{CFD8E3}
 
 % ---- Citations & hyperlinks ----
 \usepackage[round,authoryear]{natbib}
@@ -49,9 +28,9 @@
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\Normal}{\mathcal{N}}
-\newcommand{\TN}{\mathcal{N}^+}
+\newcommand{\TN}{\mathcal{N}^{+}}
 \newcommand{\ind}{\mathbf{1}}
-\newcommand{\diag}{\mathrm{diag}}
+\newcommand{\diag}{\operatorname{diag}}
 \newcommand{\vect}[1]{\bm{#1}}
 \newcommand{\mat}[1]{\bm{#1}}
 \DeclareMathOperator{\argmin}{arg\,min}
@@ -60,13 +39,16 @@
 \DeclareMathOperator{\GIG}{GIG}
 
 % Distributions as macros for consistency
-\newcommand{\Exp}{\mathrm{Exp}}
-\newcommand{\Unif}{\mathrm{Unif}}
-\newcommand{\AL}{\mathrm{AL}}
-\newcommand{\exAL}{\mathrm{exAL}}
-\newcommand{\aCRPS}{\mathrm{aCRPS}}
-\newcommand{\RHS}{\ensuremath{\mathrm{RHS}}}
+\newcommand{\Exp}{\operatorname{Exp}}
+\newcommand{\Unif}{\operatorname{Unif}}
+\newcommand{\AL}{\operatorname{AL}}
+\newcommand{\exAL}{\operatorname{exAL}}
+\newcommand{\aCRPS}{\operatorname{aCRPS}}
+\newcommand{\RHS}{\ensuremath{\operatorname{RHS}}}
 \newcommand{\pkg}[1]{\textsf{#1}}
+% Plain-text alternative descriptions accompany article figures without
+% changing the typeset output. They can be copied into a submission system.
+\newcommand{\figalt}[1]{}
 \newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\TableStyle}{%
   \footnotesize
@@ -85,17 +67,6 @@
 \newcommand{\Id}[1]{\mat I_{#1}}
 \newcommand{\zeros}[1]{\vect 0_{#1}}
 \newcommand{\ones}[1]{\vect 1_{#1}}
-
-% ---- Theorem-style environments ----
-\theoremstyle{plain}
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{lemma}[theorem]{Lemma}
-\theoremstyle{definition}
-\newtheorem{definition}[theorem]{Definition}
-\newtheorem{assumption}[theorem]{Assumption}
-\theoremstyle{remark}
-\newtheorem{remark}[theorem]{Remark}
 
 % ---- Title & metadata ----
 \title{\vspace{-0.6cm}Bayesian Quantile Deep Echo State Networks\\for Nonlinear Time Series}
@@ -208,10 +179,8 @@ numerical results.
 % ============================================================
 \section{Fixed-Feature Bayesian Quantile Models}
 \label{sec:model}
-\label{sec:notation}
 
 \subsection{Deep echo state network features}
-\label{subsec:desn}
 
 Let \(\vect u_t=(y_{t-1},\ldots,y_{t-m},\vect z_t^\top)^\top\) contain response
 lags and exogenous variables. For layer \(d\), \(\bar{\mat W}_d\) is a fixed
@@ -220,31 +189,29 @@ sparse recurrent matrix scaled to target spectral radius \(\rho_d\),
 rate, and \(\mat Q_{d-1}\) reduces the preceding layer. With
 \(\tilde{\vect h}_{t,d-1}=\mat Q_{d-1}\vect h_{t,d-1}\), the state recursion is
 \begin{equation}
-\begin{aligned}
-\vect h_{t,1}
-&=(1-\alpha_1)\vect h_{t-1,1}
+\begin{alignedat}{2}
+\text{First layer:}\quad &\vect h_{t,1}
+&&=(1-\alpha_1)\vect h_{t-1,1}
 +\alpha_1 f(\bar{\mat W}_1\vect h_{t-1,1}
 +\mat W_1^{\mathrm{in}}\vect u_t),\\
-\vect h_{t,d}
-&=(1-\alpha_d)\vect h_{t-1,d}
+\text{Higher layers:}\quad &\vect h_{t,d}
+&&=(1-\alpha_d)\vect h_{t-1,d}
 +\alpha_d f(\bar{\mat W}_d\vect h_{t-1,d}
 +\mat W_d^{\mathrm{in}}\tilde{\vect h}_{t,d-1}),\quad d=2,\ldots,D,\\
-\tilde{\vect x}_t
-&=\big[\vect h_{t,D}^\top,k(\tilde{\vect h}_{t,1})^\top,\ldots,
+\text{Regression features:}\quad &\tilde{\vect x}_t
+&&=\big[\vect h_{t,D}^\top,k(\tilde{\vect h}_{t,1})^\top,\ldots,
 k(\tilde{\vect h}_{t,D-1})^\top,\vect u_t^\top\big]^\top,
 \qquad \vect x_t=(1,\tilde{\vect x}_t^\top)^\top.
-\end{aligned}
+\end{alignedat}
 \label{eq:desn-hierarchy}
 \end{equation}
-The reservoir matrices, reducers, transformations, scaling quantities, and
-washout are determined from the fitting information and then held fixed.
+The reservoir quantities in Eq.~\eqref{eq:desn-hierarchy}, including scaling
+and washout, are determined from the fitting information and then held fixed.
 Posterior inference is therefore conditional on
 \(\mat X=(\vect x_1,\ldots,\vect x_T)^\top\). The supplement gives the random
 weight construction, dimensions, initialization, and washout conventions.
 
 \subsection{Single-level Q--DESN}
-\label{subsec:qdesn}
-\label{subsec:exal}
 
 At probability level \(p_0\), the marginal working model is
 \begin{equation}
@@ -256,15 +223,20 @@ y_t\mid\vect x_t,\vect\beta,\sigma,\gamma
 where \(\vect x_t^\top\vect\beta\) is the fitted conditional
 \(p_0\)-quantile, \(\sigma>0\) is a scale, and \(\gamma\in(L,U)\) controls
 shape. The quantile-fixing construction determines \((L,U)\) and functions
-\(A(\gamma)\), \(B(\gamma)\), and \(\lambda(\gamma)\). Computation uses
+\(A_{p_0}(\gamma)\), \(B_{p_0}(\gamma)\), and
+\(D_{p_0}(\gamma)\), where the latter is the exAL positive-shift coefficient.
+Computation uses
 \begin{equation}
-\begin{aligned}
-v_t\mid\sigma&\sim\Exp(\mathrm{rate}=1/\sigma),
-&s_t&\sim\TN(0,1),\\
-y_t\mid\cdot&\sim\Normal\!\left(
-\vect x_t^\top\vect\beta+\lambda(\gamma)\sigma s_t+A(\gamma)v_t,
-B(\gamma)\sigma v_t\right).
-\end{aligned}
+\begin{alignedat}{2}
+\text{Latent variables:}\quad
+&v_t\mid\sigma&&\sim\Exp(\mathrm{rate}=1/\sigma),
+\qquad s_t\sim\TN(0,1),\\
+\text{Gaussian conditional:}\quad
+&y_t\mid\cdot&&\sim\Normal\!\left(
+\vect x_t^\top\vect\beta+D_{p_0}(\gamma)\sigma s_t
++A_{p_0}(\gamma)v_t,
+B_{p_0}(\gamma)\sigma v_t\right).
+\end{alignedat}
 \label{eq:qdesn-aug}
 \end{equation}
 Integrating out \((s_t,v_t)\) recovers Eq.~\eqref{eq:qdesn-marginal-main}.
@@ -288,7 +260,8 @@ V_j=\left(\zeta^{-2}+\tau^{-2}\lambda_j^{-2}\right)^{-1},
 \end{equation}
 with \(\lambda_j\sim C^+(0,1)\) and \(\tau\sim C^+(0,\tau_0)\). The product
 density and all scale-dependent normalizing factors are stated in the
-supplement.
+supplement; Eq.~\eqref{eq:rhs-var} also shows how the slab bounds the effective
+coefficient variance.
 
 \noindent\textbf{Reference calibration of the global scale.}
 The hyperprior scale \(\tau_0\) controls overall shrinkage. With standardized
@@ -301,7 +274,8 @@ calibration of \citet{PiironenVehtari2017RHS} is
 =\frac{m_0}{r-m_0}\frac{\sigma_{\mathrm{ref}}}{\sqrt{N_{\mathrm{fit}}}}.
 \label{eq:rhs-global-reference-main}
 \end{equation}
-We recommend this common reference when comparing the Gaussian, AL, and exAL
+We recommend the scale in Eq.~\eqref{eq:rhs-global-reference-main} when
+comparing the Gaussian, AL, and exAL
 models on the same standardized design; it fixes the coefficient-prior scale
 while each likelihood retains its own posterior. Likelihood-information
 calibrations and separate choices for joint-model coefficient blocks are given
@@ -310,32 +284,33 @@ in the supplement.
 \subsection{Joint quantile-vector regression}
 \label{subsec:joint-qdesn}
 
-For \(0<p_1<\cdots<p_Q<1\), the joint model uses
+For \(0<p_1<\cdots<p_K<1\), the joint model uses
 \begin{equation}
-Q_{p_q}(y_t\mid\mathcal F_t)
-=\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q,
-\qquad q=1,\ldots,Q,
+Q_{p_k}(y_t\mid\mathcal F_t)
+=\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k,
+\qquad k=1,\ldots,K.
 \label{eq:joint-qdesn-readout}
 \end{equation}
-and multiplies the \(Q\) quantile-specific AL or exAL contributions. This is an
+The joint regression in Eq.~\eqref{eq:joint-qdesn-readout} multiplies the
+\(K\) quantile-specific AL or exAL contributions. This is an
 untempered composite working likelihood for repeated use of the response
 series. Let \(\vect\beta_{\mathrm{base}}\) be a baseline slope and define
 \[
 \vect\Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}},
 \qquad
-\vect\Delta_q=\vect\beta_q-\vect\beta_{q-1},\quad q=2,\ldots,Q.
+\vect\Delta_k=\vect\beta_k-\vect\beta_{k-1},\quad k=2,\ldots,K.
 \]
 Separate RHS hierarchies are assigned to the baseline and to each
-\(\vect\Delta_q\). This distinguishes effects shared across levels from
-departures between neighboring levels. For \(Q=1\), the baseline block is
+\(\vect\Delta_k\). This distinguishes effects shared across levels from
+departures between neighboring levels. For \(K=1\), the baseline block is
 omitted and the RHS prior is placed directly on
 \(\vect\Delta_1=\vect\beta_1\).
 
 Adjacent-difference shrinkage favors similar neighboring slopes, but the gap
 \[
-Q_{p_q}(y_t\mid\mathcal F_t)-Q_{p_{q-1}}(y_t\mid\mathcal F_t)
-=(\alpha_q-\alpha_{q-1})
-+\tilde{\vect x}_t^\top(\vect\beta_q-\vect\beta_{q-1})
+Q_{p_k}(y_t\mid\mathcal F_t)-Q_{p_{k-1}}(y_t\mid\mathcal F_t)
+=(\beta_{0k}-\beta_{0,k-1})
++\tilde{\vect x}_t^\top(\vect\beta_k-\vect\beta_{k-1})
 \]
 need not be positive. We consequently report crossings before rearrangement
 and apply an explicit monotone reporting rule when ordered output is required.
@@ -382,18 +357,18 @@ draw of the fitted conditional quantile. Sampling the AL or exAL working
 likelihood instead produces a response trajectory; the two summaries are not
 interchangeable. The supplement gives the complete recursive constructions.
 
-For independent fits on
-\(\mathcal P_K=\{p_1,\ldots,p_K\}\), with \(K\geq2\), the raw estimates may
+For independent fits at \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), the raw estimates may
 cross. We write \(q_{T,h,k}^*\) for the reported value after the monotone
 transformation.
 The reported analyses use equal-weight isotonic projection,
 \begin{equation}
 \vect q_{T,h}^*
 =\argmin_{z_1\le\cdots\le z_K}
-\sum_{k=1}^K(\widehat q_{T,h,k}-z_k)^2,
+\sum_{k=1}^K(\widehat q_{T,h,k}-z_k)^2.
 \label{eq:monotone-reporting-main}
 \end{equation}
-with the study-specific choice of draw-level or summary-level projection stated
+The projection in Eq.~\eqref{eq:monotone-reporting-main} is applied at the
+study-specific choice of draw level or summary level stated
 with the results. In analyses based on summary-level projection, the
 posterior-mean quantile curve or variational posterior-mean quantile estimates
 are transformed before scoring. Linear interpolation defines the quantile curve only over
@@ -412,30 +387,35 @@ integrated check-loss representation
 =2\int_0^1\rho_p\{y-F^{-1}(p)\}\,dp.
 \label{eq:crps-integrated-check-main}
 \end{equation}
-For a finite evaluation grid \(\mathcal P_K=\{p_1,\ldots,p_K\}\), we report
-the trapezoidal approximation over its covered range,
+For the finite evaluation grid \(p_1,\ldots,p_K\), we approximate
+Eq.~\eqref{eq:crps-integrated-check-main} by the trapezoidal rule over its
+covered range,
 \begin{equation}
-\aCRPS_{\mathcal P_K}(y;\vect q^*)
-=2\sum_{k=1}^K\omega_k\rho_{p_k}(y-q_k^*),
-\quad
-\omega_1=\frac{p_2-p_1}{2},\quad
-\omega_k=\frac{p_{k+1}-p_{k-1}}{2},\quad
-\omega_K=\frac{p_K-p_{K-1}}{2}.
+\begin{alignedat}{2}
+\text{Finite-grid score:}\quad
+&\aCRPS_{p_1:p_K}(y;\vect q^*)
+&&=2\sum_{k=1}^K\omega_k\rho_{p_k}(y-q_k^*),\\
+\text{Trapezoidal weights:}\quad
+&\omega_1&&=\frac{p_2-p_1}{2},\qquad
+\omega_k=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\leq k\leq K-1,\\
+&\omega_K&&=\frac{p_K-p_{K-1}}{2}.
+\end{alignedat}
 \label{eq:acrps-main}
 \end{equation}
-Here the middle expression applies for \(2\le k\le K-1\), and
+The weights satisfy
 \(\sum_{k=1}^K\omega_k=p_K-p_1\). Thus \(\aCRPS\) retains the scale of integrated
 check loss over the fitted range rather than representing a full-distribution
 CRPS.
 
 In the joint simulation the true conditional response distribution is known.
-For held-out origin--horizon pairs \(r\in\mathcal G\), posterior draw \(b\),
-and rearranged quantiles \(q_{r,k}^{*,(b)}\), we also use
+For \(N_{\mathrm{eval}}\) held-out origin--horizon pairs, posterior draw \(b\),
+and rearranged quantiles \(q_{\ell,k}^{*,(b)}\), we also use
 \begin{equation}
 S_{\mathrm{DGP}}^{(b)}
-=\frac{2}{|\mathcal G|}\sum_{r\in\mathcal G}\sum_{k=1}^K\omega_k
-\E_{Y_r\sim F_{0,r}}
-\left[\rho_{p_k}\{Y_r-q_{r,k}^{*,(b)}\}\right].
+=\frac{2}{N_{\mathrm{eval}}}\sum_{\ell=1}^{N_{\mathrm{eval}}}
+\sum_{k=1}^K\omega_k
+\E_{Y_\ell\sim F_{0,\ell}}
+\left[\rho_{p_k}\{Y_\ell-q_{\ell,k}^{*,(b)}\}\right].
 \label{eq:dgp-integrated-score-main}
 \end{equation}
 This finite-grid score averages over the known conditional response
@@ -443,16 +423,16 @@ distribution at the fixed held-out design points. Its interval excludes
 repeated-simulation and model-selection uncertainty; the supplement records
 the coupling used for independently fitted levels.
 
-For a statistical model \(\mathcal M\), reservoir candidates
-\(\mathcal C=\{\mathcal R_1,\ldots,\mathcal R_J\}\) are compared by a stated
-validation criterion,
+For a statistical model \(M\), reservoir candidates
+\(R_1,\ldots,R_J\) are compared by a stated validation criterion,
 \begin{equation}
-\widehat{\mathcal R}_{\mathcal M}
-\in\argmin_{\mathcal R_j\in\mathcal C}
-S_{\mathrm{val}}(\mathcal R_j;\mathcal M),
+\widehat R_M
+\in\argmin_{R_j:\,j=1,\ldots,J}
+S_{\mathrm{val}}(R_j;M).
 \label{eq:reservoir-selection-main}
 \end{equation}
-and the selected specification is fixed before held-out evaluation. The
+After selection by Eq.~\eqref{eq:reservoir-selection-main}, the specification
+is fixed before held-out evaluation. The
 response convention, information set, forecast origins and horizons,
 transformations, feature ordering, and score remain common within a comparison.
 State checks cover finite values, activation saturation, near-constant or
@@ -496,8 +476,8 @@ dynamic. Q--DESN represents those paths through
 high-dimensional deterministic reservoir features. The design therefore
 separates two questions: how accurately a fitted model recovers the known
 conditional quantile path, and how well it forecasts held-out dynamic blocks.
-We write \(p\) for the single target level in the first study and \(\tau\) for
-levels in the multi-quantile grid.
+We use \(p\) for a single target level and \(p_k\), \(k=1,\ldots,K\), for a
+multi-quantile grid.
 
 The main-text tables report MCMC summaries under fixed evaluation designs:
 data-generating mechanisms, rolling-origin definitions, fitting samples,
@@ -510,30 +490,29 @@ distinct comparisons and provide complementary evidence.
 \subsection{Single-Quantile Dynamic Data-Generating Processes}
 
 For each error family \(f\) and target quantile level
-\(p\in\{0.05,0.25,0.50\}\), the synthetic series is generated as
-\[
-y_{t,p,f}=\mu_{t,f}+\varepsilon_{t,p,f},\qquad
-\varepsilon_{t,p,f}=e_{t,f}-H_f^{-1}(p),
-\]
-where \(H_f\) is the distribution function of the raw error \(e_{t,f}\).
-The shift by \(H_f^{-1}(p)\) makes the \(p\)-quantile of
-\(\varepsilon_{t,p,f}\) equal to zero. Hence
-\[
-Q_p(y_{t,p,f}\mid \vect\theta_{t,f})=\mu_{t,f}.
-\]
-The true conditional quantile path is generated by a six-dimensional dynamic linear
-state with local level, local slope, and two harmonic pairs:
-\[
-\mu_{t,f}=\vect F^\top \vect\theta_{t,f},\qquad
-\vect F=(1,0,1,0,1,0)^\top,
-\]
-with local linear trend and two sine--cosine harmonic pairs. The seasonal
-period is \(90\), the harmonics are \(1\) and \(2\), and the state
-innovation covariance \(\mat W_\theta\) has diagonal square roots
-\[
-\sqrt{\diag(\mat W_\theta)}
-=(0.005,\ 0.00002,\ 0.004,\ 0.004,\ 0.003,\ 0.003).
-\]
+\(p\in\{0.05,0.25,0.50\}\), the synthetic series and its conditional
+quantile path are
+\begin{equation}
+\begin{alignedat}{2}
+\text{Centered innovation:}\quad
+&\varepsilon_{t,p,f}&&=e_{t,f}-H_f^{-1}(p),\\
+\text{Observation:}\quad
+&y_{t,p,f}&&=\mu_{t,f}+\varepsilon_{t,p,f},\\
+\text{Conditional quantile:}\quad
+&Q_p(y_{t,p,f}\mid\vect\theta_{t,f})&&=\mu_{t,f}
+=\vect F^\top\vect\theta_{t,f},
+\qquad \vect F=(1,0,1,0,1,0)^\top.
+\end{alignedat}
+\label{eq:single-quantile-dgp-main}
+\end{equation}
+In Eq.~\eqref{eq:single-quantile-dgp-main}, \(H_f\) is the distribution
+function of the raw error \(e_{t,f}\), so the centering makes the
+\(p\)-quantile of \(\varepsilon_{t,p,f}\) zero. The
+six-dimensional state contains a local level, local slope, and two
+sine--cosine harmonic pairs. The seasonal period is \(90\), the harmonics are
+\(1\) and \(2\), and the state innovation covariance satisfies
+\(\sqrt{\diag(\mat W_\theta)}
+=(0.005,0.00002,0.004,0.004,0.003,0.003)\).
 The initial covariance is \(\mat C_0=0.01\Id{6}\), and each simulated
 trajectory is initialized deterministically at the family-specific state in
 Table~\ref{tab:simulation-dgp}. For a fixed family, the same latent path
@@ -611,24 +590,24 @@ analyses.
 \subsection{Single-Quantile Criteria for Comparison}
 
 Let \(q_{p,t}^{(b)}\) be retained draw \(b\) of the conditional \(p\)-quantile
-at fitting index \(t\), and let \(q_{p,r}^{(b)}\) be the corresponding forecast
-draw for rolling-origin pair \(r\). Write \(\mathcal I\) for the 500 fitting
-indices and \(\mathcal G\) for the 1000 scored origin--horizon pairs. Because
-the oracle path \(\mu\) is known, the draw-wise criteria are
+at fitting index \(t\), and let \(q_{p,\ell}^{(b)}\) be the corresponding
+forecast draw for origin--horizon pair \(\ell\). With
+\(N_{\mathrm{fit}}=500\) and \(N_{\mathrm{eval}}=1000\), the draw-wise
+criteria are
 \begin{align}
-R_{\mathrm{fit}}^{(b)}
-  &=\left\{\frac{1}{|\mathcal I|}\sum_{t\in\mathcal I}
+\text{Fit RMSE:}\quad R_{\mathrm{fit}}^{(b)}
+  &=\left\{\frac{1}{N_{\mathrm{fit}}}\sum_{t=1}^{N_{\mathrm{fit}}}
     \bigl(q_{p,t}^{(b)}-\mu_t\bigr)^2\right\}^{1/2}, \\
-A_{\mathrm{fore}}^{(b)}
-  &=\frac{1}{|\mathcal G|}\sum_{r\in\mathcal G}
-    \left|q_{p,r}^{(b)}-\mu_r\right|, \\
-C_{\mathrm{fore}}^{(b)}
-  &=\frac{1}{|\mathcal G|}\sum_{r\in\mathcal G}
-    \rho_p\!\left(y_r-q_{p,r}^{(b)}\right),
+\text{Forecast MAE:}\quad A_{\mathrm{fore}}^{(b)}
+  &=\frac{1}{N_{\mathrm{eval}}}\sum_{\ell=1}^{N_{\mathrm{eval}}}
+    \left|q_{p,\ell}^{(b)}-\mu_\ell\right|, \\
+\text{Forecast check loss:}\quad C_{\mathrm{fore}}^{(b)}
+  &=\frac{1}{N_{\mathrm{eval}}}\sum_{\ell=1}^{N_{\mathrm{eval}}}
+    \rho_p\!\left(y_\ell-q_{p,\ell}^{(b)}\right),
 \end{align}
 where \(\rho_p\) is the check loss in Eq.~\eqref{eq:check-loss-main}, and
-\(\mu_r\) and \(y_r\) denote the oracle quantile and realized outcome for pair
-\(r\). Thus fit RMSE and forecast MAE measure recovery of the oracle quantile
+\(\mu_\ell\) and \(y_\ell\) denote the oracle quantile and realized outcome
+for pair \(\ell\). Thus fit RMSE and forecast MAE measure recovery of the oracle quantile
 path, whereas forecast check loss is a proper score against realized
 observations.
 
@@ -668,11 +647,9 @@ five-chain sensitivity analysis are reported in the supplement.
 
 \subsection{Joint Multi-Quantile Study with a Shared Feature Design}
 
-The second simulation study compares joint and independent estimation of the
+The second simulation study compares joint and independent estimation at the
 seven levels
-\[
-\tau\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}
-\]
+\(p_k\in\{0.05,0.10,0.25,0.50,0.75,0.90,0.95\}\)
 under the \(\AL\) and \(\exAL\) working likelihoods. Eight mechanisms span
 Gaussian, Laplace, Gaussian-mixture, asymmetric-tail, persistent-heavy-tail,
 Student-\(t\), regime-shift, and nonlinear dynamics. For each mechanism, one
@@ -738,7 +715,7 @@ statistical quantile correction relative to a United States Geological Survey
 
 Let \(T\) be the forecast origin, \(y_t\) the transformed USGS record through
 \(T\), \(g_t^{\mathrm{ret}}\) the retrospective GloFAS series, and
-\(g_{T+h,m}^{\mathrm{ens}}\) issued ensemble member \(m\) at horizon \(h\).
+\(g_{T+h,e}^{\mathrm{ens}}\) issued ensemble member \(e\) at horizon \(h\).
 The held-out \(y_{T+h}\) values are used only for evaluation. The analysis
 uses origin \GlofasApplicationCurrentOriginDate{} and scores seven probability
 levels over \GlofasApplicationCurrentScoredHorizons{} target dates. Its
@@ -760,7 +737,7 @@ probability level \(p_0\),
 \[
 q^{\mathrm{ref}}_{p_0,t}=\vect x_t^{\mathrm{ref}\top}\vect\beta_{p_0},
 \qquad
-d^{\mathrm{glo}}_{p_0,t}=\vect x_t^{\mathrm{disc}\top}\vect\alpha_{p_0},
+d^{\mathrm{glo}}_{p_0,t}=\vect x_t^{\mathrm{disc}\top}\vect\delta_{p_0},
 \qquad
 q^{\mathrm{glo}}_{p_0,t}=q^{\mathrm{ref}}_{p_0,t}+d^{\mathrm{glo}}_{p_0,t}.
 \]
@@ -800,6 +777,10 @@ from zero coverage does not resolve the substantial Q--DESN undercoverage.
 Multi-origin evaluation using only covariates available at each origin is
 needed to assess real-time performance and calibration.
 
+Figure~\ref{fig:glofas-application-forecast-period} places the reported
+quantile intervals against the observed history, held-out gauge record, and
+issued GloFAS ensemble over the single forecast window.
+
 \begin{table}[!htbp]
 \centering
 \caption{Forecast scoring for the GloFAS retrospective analysis.
@@ -825,6 +806,10 @@ and red paths denote observed and held-out USGS streamflow, respectively;
 orange denotes retrospective GloFAS, and thin gray paths show all 51 issued
 GloFAS ensemble members, with their median dashed. Forecast scores use the
 held-out measurements in Table~\ref{tab:glofas-application-score}.}
+\figalt{Observed and held-out streamflow are shown with the retrospective and
+issued GloFAS ensemble over a 28-day forecast window. Nested Q--DESN quantile
+bands widen after the marked forecast origin but substantially under-cover the
+held-out observations.}
 \label{fig:glofas-application-forecast-period}
 \end{figure}
 

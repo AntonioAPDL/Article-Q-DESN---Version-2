@@ -1,23 +1,38 @@
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures/independent_simulation/qdesn_validation_500obs_v14_mcmc_forecast_mae_intervals.pdf}
-\caption{MCMC posterior uncertainty for forecast MAE in the single-quantile
-simulation. Horizontal segments show equal-tailed 95\% posterior intervals and
-crosses show posterior means. Each panel has its own horizontal scale; lower is
-better. The dashed line marks the exact DGP value of zero for quantile-path
-error. Intervals condition on the simulated series, evaluation design, and
-case-specific selected specification.}
+\caption{MCMC forecast quantile-path mean absolute error (MAE) in the
+single-quantile simulation. Points are posterior means and horizontal segments
+are equal-tailed 95\% posterior intervals; lower values are better. Navy
+circles identify the \(\AL\) models and muted-brick triangles the \(\exAL\)
+models; filled symbols denote Q--DESN and open symbols the corresponding
+dynamic quantile linear model. Panels A--I identify the data-generating family
+and probability level and use separate horizontal scales. The dashed line
+marks the exact data-generating-process value of zero. A dagger marks one of
+the five recorded diagnostic qualifications across the two forecast figures;
+it does not denote statistical significance. Intervals condition on the
+simulated series, evaluation design, and case-specific selected specification.}
+\figalt{Nine panels compare posterior forecast-MAE means and 95 percent
+intervals for four models across three innovation families and three
+probability levels. Lower values are better. Three points carry diagnostic
+daggers.}
 \label{fig:simulation-500obs-mcmc-forecast-mae-intervals}
 \end{figure}
 
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{figures/independent_simulation/qdesn_validation_500obs_v14_mcmc_forecast_check_loss_intervals.pdf}
-\caption{MCMC posterior uncertainty for forecast check loss in the
-single-quantile simulation. Horizontal segments show equal-tailed 95\%
-posterior intervals and crosses show posterior means. Each panel has its own
-horizontal scale; lower is better. The dashed line marks population expected
-check loss at the true conditional quantile. Conditional finite-sample
-intervals may cross this reference.}
+\caption{MCMC forecast check loss in the single-quantile simulation. Points
+are posterior means and horizontal segments are equal-tailed 95\% posterior
+intervals; lower values are better. Model encodings and panels are as in
+Figure~\ref{fig:simulation-500obs-mcmc-forecast-mae-intervals}, with separate
+horizontal scales. The dashed line marks population expected check loss at the
+true conditional quantile; conditional finite-sample intervals may cross this
+reference. Daggers identify two recorded diagnostic qualifications and do not
+denote statistical significance.}
+\figalt{Nine panels compare posterior forecast-check-loss means and 95 percent
+intervals for four models across three innovation families and three
+probability levels. Lower values are better. Two points carry diagnostic
+daggers.}
 \label{fig:simulation-500obs-mcmc-forecast-check-loss-intervals}
 \end{figure}

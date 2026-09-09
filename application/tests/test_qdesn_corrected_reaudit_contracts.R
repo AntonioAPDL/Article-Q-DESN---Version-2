@@ -202,7 +202,9 @@ assert_contains("overleaf/article_files.txt", "tables/pricefm_r91_selective_prom
 # compatibility aliases, while current-output labels identify the finite-grid
 # score precisely.
 assert_contains("main.tex", "\\(\\aCRPS\\)")
-assert_contains("main.tex", "\\mathcal P_K=\\{p_1,\\ldots,p_K\\}")
+assert_contains("main.tex", "finite evaluation grid \\(p_1,\\ldots,p_K\\)")
+assert_contains("main.tex", "\\aCRPS_{p_1:p_K}")
+assert_not_contains("main.tex", "\\mathcal P_K")
 assert_contains("main.tex", "K\\geq2")
 assert_contains("main.tex", "q_{T,h,k}^*")
 assert_contains("main.tex", "\\sum_{k=1}^K\\omega_k=p_K-p_1")

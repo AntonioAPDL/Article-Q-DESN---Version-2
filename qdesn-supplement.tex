@@ -44,6 +44,7 @@
 \newcommand{\expit}{\operatorname{expit}}
 \DeclareMathOperator{\argmin}{arg\,min}
 \newcommand{\pkg}[1]{\textsf{#1}}
+\newcommand{\figalt}[1]{}
 \newcommand{\TableStyle}{\footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.08}}
 
 \input{tables/glofas_application_current_outputs.tex}
@@ -177,71 +178,68 @@ Q--DESN feature map.}
 \subsection{Validation-Based Selection and Initialization}
 \label{sec:supp_selection_initialization}
 
-For a fixed statistical specification \(\mathcal M\), reservoir candidates
-\(\mathcal R_j\) are compared on the designated validation observations using
+For a fixed statistical specification \(M\), reservoir candidates
+\(R_j\) are compared on the designated validation observations using
 the criterion stated for the analysis. The response convention, information
 set, design rows, transformations, feature ordering, scaling quantities, and
 forecast definition are held common across candidates. Reservoir states are
 also checked for finite values, concentration near the activation bounds,
-near-constant columns, and severe numerical dependence. With
-\(\mathcal C=\{\mathcal R_1,\ldots,\mathcal R_J\}\), the selected
+near-constant columns, and severe numerical dependence. The selected
 specification satisfies
 \[
-\widehat{\mathcal R}_{\mathcal M}
+\widehat R_M
 \in
-\argmin_{\mathcal R_j\in\mathcal C}
-S_{\mathrm{val}}(\mathcal R_j;\mathcal M).
+\argmin_{R_j:\,j=1,\ldots,J}
+S_{\mathrm{val}}(R_j;M).
 \]
-The selected \(\widehat{\mathcal R}_{\mathcal M}\) is held fixed for
+The selected \(\widehat R_M\) is held fixed for
 evaluation.
 
-Suppose that the probability grid is
-\[
-\mathcal T=\{\tau_1<\cdots<\tau_m=0.50<\cdots<\tau_K\}.
-\]
+Suppose that the probability grid satisfies
+\(p_1<\cdots<p_m=0.50<\cdots<p_K\).
 After the Gaussian ridge and Gaussian \(\RHS\)--VB fits, compatible estimates
 from the latter initialize the median AL regression. The lower side of the AL
 grid is fitted in the order
 \[
-0.50\ \longrightarrow\ \tau_{m-1}\ \longrightarrow\ \cdots\
-\longrightarrow\ \tau_1,
+0.50\ \longrightarrow\ p_{m-1}\ \longrightarrow\ \cdots\
+\longrightarrow\ p_1,
 \]
 and the upper side is fitted in the order
 \[
-0.50\ \longrightarrow\ \tau_{m+1}\ \longrightarrow\ \cdots\
-\longrightarrow\ \tau_K.
+0.50\ \longrightarrow\ p_{m+1}\ \longrightarrow\ \cdots\
+\longrightarrow\ p_K.
 \]
 Thus each AL regression is initialized from the nearest completed level on the
 same side of the median. For every \(k=1,\ldots,K\), the completed AL fit at
-\(\tau_k\) initializes the exAL fit at \(\tau_k\). The exAL regressions may
+\(p_k\) initializes the exAL fit at \(p_k\). The exAL regressions may
 therefore be fitted as soon as their matching AL fits are available.
 
 The joint AL regression is initialized from the complete collection of
 independent AL fits, and the joint exAL regression is initialized from the
 complete collection of independent exAL fits. Let
-\(\widehat{\alpha}^{\,\mathrm{ind}}_{\tau_k}\) and
-\(\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_k}\) denote the independent
+\(\widehat\beta_{0k}^{\,\mathrm{ind}}\) and
+\(\widehat{\vect\beta}_k^{\,\mathrm{ind}}\) denote the independent
 intercept and slope estimates from the matching likelihood family. Initial
 values for the level-specific joint coefficients are
 \[
-\alpha_k^{(0)}
-=\widehat{\alpha}^{\,\mathrm{ind}}_{\tau_k},
+\beta_{0k}^{(0)}
+=\widehat\beta_{0k}^{\,\mathrm{ind}},
 \qquad
 \vect\beta_k^{(0)}
-=\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_k},
+=\widehat{\vect\beta}_k^{\,\mathrm{ind}},
 \qquad k=1,\ldots,K.
 \]
 Under the adjacent-difference parameterization in
 Section~\ref{sec:joint_qdesn_supp}, the corresponding initial differences are
 \begin{equation}
 \vect\Delta_k^{(0)}
-=\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_k}
--\widehat{\vect\beta}^{\,\mathrm{ind}}_{\tau_{k-1}},
+=\widehat{\vect\beta}_k^{\,\mathrm{ind}}
+-\widehat{\vect\beta}_{k-1}^{\,\mathrm{ind}},
 \qquad k=2,\ldots,K.
 \label{eq:supp-joint-initial-differences}
 \end{equation}
 Independent AL estimates are used for joint AL, and independent exAL estimates
-are used for joint exAL.
+are used for joint exAL in Eq.~\eqref{eq:supp-joint-initial-differences}.
 
 When the source and destination models differ, only parameters with
 corresponding interpretations are used to construct starting values. Gaussian
@@ -261,6 +259,11 @@ diagnostics stated for the empirical analysis.
   \caption[Sequential initialization centered at the median]{%
     \input{figures/quantile_initialization/quantile_initialization_caption.tex}%
   }
+  \figalt{A Gaussian ridge regression initializes a Gaussian regularized-horseshoe
+  variational fit, which initializes the median AL regression. Independent AL
+  fits then proceed outward toward both tails; each initializes the exAL fit at
+  the same probability level. Complete independent grids initialize the
+  corresponding joint models, and fitted variational models initialize MCMC.}
   \label{fig:supp-quantile-sequential-initialization}
 \end{figure}
 
@@ -307,16 +310,19 @@ g(\gamma)=2\Phi(-|\gamma|)\exp(\gamma^2/2),\qquad
 p_\gamma=\ind\{\gamma<0\}
 +\frac{p_0-\ind\{\gamma<0\}}{g(\gamma)}.
 \]
-Then
+Then, with the fixed probability level shown explicitly when needed,
 \[
-A_\gamma=\frac{1-2p_\gamma}{p_\gamma(1-p_\gamma)},\quad
-B_\gamma=\frac{2}{p_\gamma(1-p_\gamma)},\quad
-C_\gamma=\{\ind\{\gamma>0\}-p_\gamma\}^{-1},\quad
-D_\gamma=C_\gamma|\gamma|.
+\begin{alignedat}{2}
+A_{p_0}(\gamma)\equiv A_\gamma
+&=\frac{1-2p_\gamma}{p_\gamma(1-p_\gamma)},
+&\qquad B_{p_0}(\gamma)\equiv B_\gamma
+&=\frac{2}{p_\gamma(1-p_\gamma)},\\
+C_\gamma&=\{\ind\{\gamma>0\}-p_\gamma\}^{-1},
+& D_\gamma\equiv D_{p_0}(\gamma)&=C_\gamma|\gamma|.
+\end{alignedat}
 \]
-The main article denotes the same exAL shift coefficient by
-\(\lambda(\gamma)=C(\gamma)|\gamma|\); the supplement uses \(D_\gamma\)
-to reduce visual clutter in posterior kernels.
+The shorthand \(D_\gamma\) reduces visual clutter in posterior kernels and is
+distinct from the regularized-horseshoe local scales \(\lambda_j\).
 
 \noindent\textbf{AL nesting and branchwise regularity.}
 When \(\gamma=0\) and the \(s_t\) latents are omitted, the exAL hierarchy
@@ -359,8 +365,9 @@ the layer states satisfy
 \label{eq:supp_desn_layerd}\\
 \tilde{\vect h}_{t,d-1}&=\mat Q_{d-1}\vect h_{t,d-1},
 \end{align}
-where \(\bar{\mat W}_d=\rho_d\mat W_d/\rho(\mat W_d)\). The fixed feature
-vector is
+where \(\bar{\mat W}_d=\rho_d\mat W_d/\rho(\mat W_d)\). The layer
+recursions in Eqs.~\eqref{eq:supp_desn_layer1} and
+\eqref{eq:supp_desn_layerd} define the fixed feature vector
 \begin{equation}
 \tilde{\vect x}_t
 =\{ \vect h_{t,D}^\top,\ k(\tilde{\vect h}_{t,1})^\top,\ldots,
@@ -468,6 +475,7 @@ V_j=\left(\zeta^{-2}+\tau^{-2}\lambda_j^{-2}\right)^{-1}
 =\frac{\zeta^2\tau^2\lambda_j^2}{\zeta^2+\tau^2\lambda_j^2}.
 \label{eq:supp_rhs_cond_beta}
 \end{equation}
+Equation~\eqref{eq:supp_rhs_cond_beta} makes the finite-slab bound explicit.
 For inverse-gamma scale updates, use the half-Cauchy augmentation
 \citep{MakalicSchmidt2016SimpleSampler}:
 \begin{align}
@@ -479,7 +487,8 @@ For inverse-gamma scale updates, use the half-Cauchy augmentation
 \zeta^2&\sim\IG(a_\zeta,b_\zeta),
 \label{eq:supp_zeta_prior}
 \end{align}
-where the last line is omitted when \(\zeta^2\) is fixed.
+The slab update in Eq.~\eqref{eq:supp_zeta_prior} is omitted when
+\(\zeta^2\) is fixed.
 
 \subsection{Reference Calibration of the Global Shrinkage Scale}
 \label{subsec:supp-rhs-global-scale}
@@ -549,7 +558,7 @@ location information with the information under the working likelihood. Let
 location parameter at a specified reference state. The corresponding local
 information match is
 \begin{equation}
-\tau_{0,\mathcal L}
+\tau_{0,f}
 =\frac{m_0}{r-m_0}
  \{N_{\mathrm{fit}}I_{\mu,\mathrm{ref}}\}^{-1/2}.
 \label{eq:supp-rhs-tau0-information-reference}
@@ -577,7 +586,8 @@ J_{p_0}(\gamma)
 \right].
 \label{eq:supp-exal-standardized-location-information}
 \end{equation}
-Then \(I_{\mu,\mathrm{exAL}}=J_{p_0}(\gamma)/\sigma^2\), which gives
+Equation~\eqref{eq:supp-exal-standardized-location-information} implies
+\(I_{\mu,\mathrm{exAL}}=J_{p_0}(\gamma)/\sigma^2\), which gives
 \begin{equation}
 \tau_{0,\mathrm{exAL},p_0}
 =\frac{m_0}{r-m_0}
@@ -608,8 +618,8 @@ likelihood-specific curvature matching is the scientific objective.
 
 For joint quantile regressions, the baseline slope and adjacent-difference
 blocks may be calibrated separately. An elicited value \(m_0^0\) applies to
-the baseline coefficients, while values \(m_{0,q}^{\Delta}\) apply to the
-adjacent differences. Choosing smaller \(m_{0,q}^{\Delta}\) expresses a
+the baseline coefficients, while values \(m_{0,k}^{\Delta}\) apply to the
+adjacent differences. Choosing smaller \(m_{0,k}^{\Delta}\) expresses a
 stronger prior belief that neighboring quantile levels have similar slopes.
 Likewise, application models with distinct reference-process and discrepancy
 designs should calibrate those blocks separately when their dimensions,
@@ -624,76 +634,37 @@ only numerical starting values and does not change this prior specification.
 \subsection{Augmented Posterior Densities}
 
 \noindent\textbf{Augmented-posterior convention.}
-The augmented posterior distributions below include each AL or exAL mixture variable
-once. The inverse-gamma variables in this representation augment only
-the shrinkage scales; the likelihood augmentation is provided by the AL or exAL
-mixture variables.
-
-Let \(\vect v=(v_1,\ldots,v_T)^\top\) and
-\(\vect s=(s_1,\ldots,s_T)^\top\). Under exAL and ridge,
-\begin{align}
-p(\vect y,\vect v,\vect s,\vect\beta,\sigma,\gamma\mid\mat X)
-&=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\vect x_t)
-p(v_t\mid\sigma)p(s_t)\right\}
-p(\vect\beta)p(\sigma)\pi_\gamma(\gamma)\ind\{L<\gamma<U\}.
-\label{eq:supp_joint_exal_ridge}
-\end{align}
-\noindent\textbf{RHS target.}
-Under exAL and the regularized-horseshoe prior, with
-\(\Theta_{\mathrm{rhs}}=(\vect\lambda^2,\vect\nu,\tau^2,\xi,\zeta^2)\),
-\begin{align}
-&p(\vect y,\vect v,\vect s,\vect\beta,\sigma,\gamma,\Theta_{\mathrm{rhs}}\mid\mat X)
-\nonumber\\
-&\quad=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\vect x_t)
-p(v_t\mid\sigma)p(s_t)\right\}
-p(\beta_0)
-\prod_{j=1}^r
-\left\{\Normal(\beta_j\mid0,\tau^2\lambda_j^2)
-\Normal(0\mid\beta_j,\zeta^2)\right\}
-\nonumber\\
-&\qquad\times
-\prod_{j=1}^r p(\lambda_j^2\mid\nu_j)p(\nu_j)
-p(\tau^2\mid\xi)p(\xi)p(\zeta^2)
-p(\sigma)\pi_\gamma(\gamma)\ind\{L<\gamma<U\}.
-\label{eq:supp_joint_exal_rhs}
-\end{align}
-\noindent\textbf{AL reductions.}
-The AL joint distributions are obtained by dropping \(\vect s\) and \(\gamma\),
-replacing \(A_\gamma,B_\gamma\) by \(A_0,B_0\), and using
-\eqref{eq:supp_al_hierarchy}. Thus, for example, the AL target with a ridge
-prior is
-\begin{align}
-p(\vect y,\vect v,\vect\beta,\sigma\mid\mat X)
-&=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,v_t,\vect x_t)p(v_t\mid\sigma)\right\}
-p(\vect\beta)p(\sigma).
-\label{eq:supp_joint_al_ridge}
-\end{align}
-The AL target with the regularized-horseshoe prior is, analogously,
-\begin{align}
-&p(\vect y,\vect v,\vect\beta,\sigma,\Theta_{\mathrm{rhs}}\mid\mat X)
-\nonumber\\
-&\quad=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,v_t,\vect x_t)p(v_t\mid\sigma)\right\}
-p(\beta_0)
-\prod_{j=1}^r
-\left\{\Normal(\beta_j\mid0,\tau^2\lambda_j^2)
-\Normal(0\mid\beta_j,\zeta^2)\right\}
-\nonumber\\
-&\qquad\times
-\prod_{j=1}^r p(\lambda_j^2\mid\nu_j)p(\nu_j)
-p(\tau^2\mid\xi)p(\xi)p(\zeta^2)p(\sigma).
-\label{eq:supp_joint_al_rhs}
-\end{align}
-The posterior distribution is proportional to the corresponding joint density,
-viewed as a function of unknown parameters and latent variables conditional on
-\((\vect y,\mat X)\).
+Each AL or exAL mixture variable appears once. Inverse-gamma variables augment
+only the shrinkage scales. Let \(f\in\{\mathrm{AL},\mathrm{exAL}\}\), let
+\(\vect a_f=\vect v\) for AL and
+\(\vect a_f=(\vect v^\top,\vect s^\top)^\top\) for exAL, and let
+\(\eta_f\) be empty for AL and equal to \(\gamma\) for exAL. The common
+augmented target is
+\begin{equation}
+\begin{aligned}
+&p(\vect y,\vect a_f,\vect\beta,\sigma,\eta_f,
+\Theta_h\mid\mat X)\\
+&\quad\propto
+\prod_{t=1}^T
+p_f(y_t\mid\vect\beta,\sigma,\eta_f,\vect a_{f,t},\vect x_t)
+p_f(\vect a_{f,t}\mid\sigma)\,
+p_h(\vect\beta,\Theta_h)\,p(\sigma)\,p_f(\eta_f),
+\end{aligned}
+\label{eq:supp-generic-augmented-target}
+\end{equation}
+where \(h\in\{\mathrm{ridge},\mathrm{RHS}\}\). For ridge,
+\(\Theta_h\) is empty and \(p_h(\vect\beta,\Theta_h)\) is
+Eq.~\eqref{eq:supp_ridge_prior}. For RHS,
+\(\Theta_h=(\vect\lambda^2,\vect\nu,\tau^2,\xi,\zeta^2)\), and
+\(p_h\) is the product of the intercept prior, the Gaussian product in
+Eq.~\eqref{eq:supp_ns_joint}, and the scale priors in
+Eq.~\eqref{eq:supp_hs_aux}. The AL factor uses
+Eq.~\eqref{eq:supp_al_hierarchy}; its \(p_f(\eta_f)\) factor is one. The exAL
+factor uses Eq.~\eqref{eq:supp_exal_hierarchy}, includes \(p(s_t)\), and has
+\(p_f(\eta_f)=\pi_\gamma(\gamma)\ind\{L<\gamma<U\}\). Viewed as a function
+of the unknown quantities conditional on \((\vect y,\mat X)\),
+Eq.~\eqref{eq:supp-generic-augmented-target} defines the four posterior
+targets without repeating blocks that differ only by omission.
 
 \section{MCMC Full Conditionals}
 \label{sec:mcmc}
@@ -724,7 +695,7 @@ the regularized-horseshoe prior, set
 \vect b=(b_0,0,\ldots,0)^\top.
 \label{eq:supp_prior_precision_mcmc}
 \end{equation}
-Then
+Using the prior precision in Eq.~\eqref{eq:supp_prior_precision_mcmc},
 \begin{align}
 \mat\Sigma_{\beta\mid\cdot}
 &=(\mat X^\top\mat\Omega\mat X+\mat P)^{-1},\\
@@ -880,6 +851,9 @@ distinction is that the Nishimura--Suchard joint construction preserves the
 ordinary global-local full conditional block given \(\vect\beta\), while the
 direct Piironen--Vehtari joint prior changes these inverse-gamma updates.
 
+Algorithm~\ref{alg:qdesn_mcmc} collects these blocks into the single-level
+sampler and makes the AL and ridge omissions explicit.
+
 \begin{suppalgorithm}{Single-level Q--DESN MCMC sampler}
 \label{alg:qdesn_mcmc}
 \emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
@@ -930,7 +904,8 @@ q_{\sigma,\gamma}(\sigma,\gamma)
 \label{eq:supp_generic_vb_family}
 \end{equation}
 where \(q_s\) and the \(\gamma\) component are omitted for AL, and
-\(q_\Theta\) is omitted under a fixed ridge prior. The coefficient factor is
+\(q_\Theta\) is omitted under a fixed ridge prior. Under the family in
+Eq.~\eqref{eq:supp_generic_vb_family}, the coefficient factor is
 Gaussian. Conditional on the latent variables, both AL and exAL have the form
 \[
 y_t=\vect x_t^\top\vect\beta+d_t+\epsilon_t,\qquad
@@ -938,8 +913,8 @@ y_t=\vect x_t^\top\vect\beta+d_t+\epsilon_t,\qquad
 \]
 with \(d_t=A_0v_t\) and \(\omega_t=B_0\sigma v_t\) for AL, and
 \[
-d_t=\lambda(\gamma)\sigma s_t+A(\gamma)v_t,\qquad
-\omega_t=B(\gamma)\sigma v_t
+d_t=D_{p_0}(\gamma)\sigma s_t+A_{p_0}(\gamma)v_t,\qquad
+\omega_t=B_{p_0}(\gamma)\sigma v_t
 \]
 for exAL. Define the variational canonical moments
 \[
@@ -1061,6 +1036,10 @@ h\{T(\hat{\vect\eta})\}
 with the first term alone giving the Laplace-mode approximation when the delta
 term is omitted.
 
+Algorithm~\ref{alg:qdesn_vb_ld} summarizes the corresponding coordinate
+updates and distinguishes the exact conjugate factors from the Laplace--Delta
+approximation.
+
 \begin{suppalgorithm}{Single-level Q--DESN VB--LD coordinate updates}
 \label{alg:qdesn_vb_ld}
 \emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
@@ -1150,14 +1129,14 @@ The intercepts are kept separate from the high-dimensional slope shrinkage.
 
 \subsection{Stacked exAL Working Likelihood}
 
-Let \(0<p_1<\cdots<p_Q<1\) be the quantile grid. At level \(p_q\),
+Let \(0<p_1<\cdots<p_K<1\) be the quantile grid. At level \(p_k\),
 \[
-Q_{p_q}(y_t\mid\mathcal F_t)=
-\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q,
+Q_{p_k}(y_t\mid\mathcal F_t)=
+\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k,
 \qquad
-\alpha_q\in\R,\quad \vect\beta_q\in\R^r .
+\beta_{0k}\in\R,\quad \vect\beta_k\in\R^r .
 \]
-For \(Q=1\), set \(\alpha_1=\alpha\), \(\vect\beta_1=\vect\beta\), and
+For \(K=1\), set \(\beta_{01}=\beta_0\), \(\vect\beta_1=\vect\beta\), and
 \(\vect\beta_{\mathrm{base}}=\zeros{r}\); assign the regularized-horseshoe
 prior directly to \(\Delta_1=\vect\beta_1\), and omit the baseline hierarchy.
 The adjacent-difference hierarchy then coincides with the single-quantile
@@ -1165,50 +1144,51 @@ regularized-horseshoe prior.
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
 \begin{align}
-v_{q,t}\mid\sigma_q&\sim\Exp(\text{rate}=1/\sigma_q),&
-s_{q,t}&\sim\TN(0,1),\\
-y_t\mid\alpha_q,\vect\beta_q,\sigma_q,\gamma_q,v_{q,t},s_{q,t}
+v_{k,t}\mid\sigma_k&\sim\Exp(\text{rate}=1/\sigma_k),&
+s_{k,t}&\sim\TN(0,1),\\
+y_t\mid\beta_{0k},\vect\beta_k,\sigma_k,\gamma_k,v_{k,t},s_{k,t}
 &\sim
 \Normal\left(
-\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q
-+\sigma_qD_qs_{q,t}+A_qv_{q,t},\,
-\sigma_qB_qv_{q,t}
+\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k
++\sigma_kD_ks_{k,t}+A_kv_{k,t},\,
+\sigma_kB_kv_{k,t}
 \right),
 \label{eq:supp_joint_exal_hierarchy}
 \end{align}
-where \(A_q=A_{p_q}(\gamma_q)\), \(B_q=B_{p_q}(\gamma_q)\), and
-\(D_q=\lambda_{p_q}(\gamma_q)\). The AL special case fixes the AL constants
-and omits \(s_{q,t}\) and \(\gamma_q\).
+where \(A_k=A_{p_k}(\gamma_k)\), \(B_k=B_{p_k}(\gamma_k)\), and
+\(D_k=D_{p_k}(\gamma_k)\). The AL special case fixes the AL constants and
+omits \(s_{k,t}\) and \(\gamma_k\) from
+Eq.~\eqref{eq:supp_joint_exal_hierarchy}.
 
 Define
 \[
-\vect y_{\mathrm{st}}=\ones{Q}\otimes\vect y,\qquad
-\mat Z_{\mathrm{st}}=\Id{Q}\otimes\mat Z,\qquad
-\vect\beta_{\mathrm{st}}=(\vect\beta_1^\top,\ldots,\vect\beta_Q^\top)^\top,
+\vect y_{\mathrm{st}}=\ones{K}\otimes\vect y,\qquad
+\mat Z_{\mathrm{st}}=\Id{K}\otimes\mat Z,\qquad
+\vect\beta_{\mathrm{st}}=(\vect\beta_1^\top,\ldots,\vect\beta_K^\top)^\top,
 \]
 and
 \[
-\vect\alpha_{\mathrm{st}}
+\vect\beta_{0,\mathrm{st}}
 =
-(\alpha_1\ones{T}^\top,\ldots,\alpha_Q\ones{T}^\top)^\top .
+(\beta_{01}\ones{T}^\top,\ldots,\beta_{0K}\ones{T}^\top)^\top .
 \]
 Let
 \[
-d_{q,t}=\sigma_qD_qs_{q,t}+A_qv_{q,t},\qquad
-\omega_{q,t}=\sigma_qB_qv_{q,t},
+d_{k,t}=\sigma_kD_ks_{k,t}+A_kv_{k,t},\qquad
+\omega_{k,t}=\sigma_kB_kv_{k,t},
 \]
 and stack these into \(\vect d\) and
-\(\mat\Omega=\diag(\omega_{q,t})\). Conditional on the latent variables and
+\(\mat\Omega=\diag(\omega_{k,t})\). Conditional on the latent variables and
 likelihood parameters,
 \begin{equation}
-\vect y_{\mathrm{st}}\mid\vect\beta_{\mathrm{st}},\vect\alpha,\vect d,\mat\Omega
+\vect y_{\mathrm{st}}\mid\vect\beta_{\mathrm{st}},\vect\beta_0,\vect d,\mat\Omega
 \sim
 \Normal(
-\vect\alpha_{\mathrm{st}}+\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}+\vect d,\,
+\vect\beta_{0,\mathrm{st}}+\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}+\vect d,\,
 \mat\Omega).
 \label{eq:supp_joint_stacked_likelihood}
 \end{equation}
-The joint analyses use the product of the \(Q\) quantile-specific
+The joint analyses use the product of the \(K\) quantile-specific
 working-likelihood contributions without tempering.
 
 \subsection{Quantile-Indexed Regularized-Horseshoe Prior}
@@ -1219,7 +1199,7 @@ For a genuine multi-quantile grid, let
 coefficient differences are
 \[
 \Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}},\qquad
-\Delta_q=\vect\beta_q-\vect\beta_{q-1},\quad q=2,\ldots,Q.
+\Delta_k=\vect\beta_k-\vect\beta_{k-1},\quad k=2,\ldots,K.
 \]
 The baseline slope and adjacent differences use separate RHS hierarchies:
 \begin{align}
@@ -1230,32 +1210,34 @@ V^0_j
 \frac{\zeta_0^2(\tau^0)^2(\lambda^0_j)^2}
 {\zeta_0^2+(\tau^0)^2(\lambda^0_j)^2},
 \label{eq:supp_joint_baseline_var}\\
-\Delta_{q,j}\mid\lambda^\Delta_{q,j},\tau^\Delta_q,\zeta_\Delta
-&\sim\Normal(0,V^\Delta_{q,j}),&
-V^\Delta_{q,j}
+\Delta_{k,j}\mid\lambda^\Delta_{k,j},\tau^\Delta_k,\zeta_\Delta
+&\sim\Normal(0,V^\Delta_{k,j}),&
+V^\Delta_{k,j}
 &=
-\frac{\zeta_\Delta^2(\tau^\Delta_q)^2(\lambda^\Delta_{q,j})^2}
-{\zeta_\Delta^2+(\tau^\Delta_q)^2(\lambda^\Delta_{q,j})^2}.
+\frac{\zeta_\Delta^2(\tau^\Delta_k)^2(\lambda^\Delta_{k,j})^2}
+{\zeta_\Delta^2+(\tau^\Delta_k)^2(\lambda^\Delta_{k,j})^2}.
 \label{eq:supp_joint_innovation_var}
 \end{align}
-The local and global half-Cauchy scales use the inverse-gamma augmentation in
+The priors in Eqs.~\eqref{eq:supp_joint_baseline_var} and
+\eqref{eq:supp_joint_innovation_var} use the inverse-gamma half-Cauchy
+augmentation in
 \eqref{eq:supp_hs_aux}; it is applied once to the baseline coefficients and
 separately to each adjacent-difference block.
 
-Let \(\mat H\in\R^{Qr\times Qr}\) be the block first-difference matrix
+Let \(\mat H\in\R^{Kr\times Kr}\) be the block first-difference matrix
 satisfying
 \[
 \mat H\vect\beta_{\mathrm{st}}=
 (\vect\beta_1^\top,
 (\vect\beta_2-\vect\beta_1)^\top,\ldots,
-(\vect\beta_Q-\vect\beta_{Q-1})^\top)^\top .
+(\vect\beta_K-\vect\beta_{K-1})^\top)^\top .
 \]
 Set
 \[
 \tilde{\vect\beta}_{\mathrm{base}}=
 (\vect\beta_{\mathrm{base}}^\top,\zeros{r}^\top,\ldots,\zeros{r}^\top)^\top,
 \qquad
-\mat D_\Delta=\diag(V^\Delta_{q,j}:q=1,\ldots,Q,\ j=1,\ldots,r).
+\mat D_\Delta=\diag(V^\Delta_{k,j}:k=1,\ldots,K,\ j=1,\ldots,r).
 \]
 Then the conditional prior over the quantile-indexed slope path can be written as
 \begin{equation}
@@ -1280,31 +1262,31 @@ for the adjacent-difference RHS hierarchy, and let \(\Theta_0\) collect the
 corresponding baseline RHS scales. Up to constants not depending on unknowns,
 the complete-data posterior for the multi-quantile case is
 \begin{align}
-&p(\vect\beta_{\mathrm{st}},\vect\beta_{\mathrm{base}},\vect\alpha,
-\{\sigma_q,\gamma_q\}_{q=1}^Q,
-\{v_{q,t},s_{q,t}\}_{q,t},
+&p(\vect\beta_{\mathrm{st}},\vect\beta_{\mathrm{base}},\vect\beta_0,
+\{\sigma_k,\gamma_k\}_{k=1}^K,
+\{v_{k,t},s_{k,t}\}_{k,t},
 \Theta_0,\Theta_\Delta\mid\vect y,\mat Z)
 \nonumber\\
 &\quad\propto
 \exp\left[
 -\frac{1}{2}
-(\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
+(\vect y_{\mathrm{st}}-\vect\beta_{0,\mathrm{st}}
 -\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)^\top
 \mat\Omega^{-1}
-(\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
+(\vect y_{\mathrm{st}}-\vect\beta_{0,\mathrm{st}}
 -\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)
 \right]
 \nonumber\\
 &\qquad\times
-\prod_{q=1}^Q\prod_{t=1}^T
+\prod_{k=1}^K\prod_{t=1}^T
 \left\{
-(\omega_{q,t})^{-1/2}
-p(v_{q,t}\mid\sigma_q)p(s_{q,t})
+(\omega_{k,t})^{-1/2}
+p(v_{k,t}\mid\sigma_k)p(s_{k,t})
 \right\}
-\prod_{q=1}^Q p(\sigma_q)\pi_{\gamma_q}(\gamma_q)\ind\{L_q<\gamma_q<U_q\}
+\prod_{k=1}^K p(\sigma_k)\pi_{\gamma_k}(\gamma_k)\ind\{L_k<\gamma_k<U_k\}
 \nonumber\\
 &\qquad\times
-p(\vect\alpha)\,
+p(\vect\beta_0)\,
 p(\vect\beta_{\mathrm{base}}\mid\Theta_0)p(\Theta_0)\,
 p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)p(\Theta_\Delta).
 \label{eq:supp_joint_complete_posterior}
@@ -1312,7 +1294,7 @@ p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)p(\Theta_
 The reported analysis uses the untempered complete-data posterior in
 \eqref{eq:supp_joint_complete_posterior}. Weighting the quantile-specific
 contributions would define a different generalized posterior.
-For \(Q=1\), remove
+For \(K=1\), remove
 \(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), and the baseline-prior factor
 from \eqref{eq:supp_joint_complete_posterior}, set
 \(\Delta_1=\vect\beta_1\), and use the adjacent-difference RHS hierarchy as the
@@ -1321,7 +1303,7 @@ ordinary single-level RHS hierarchy.
 \subsection{Gaussian Blocks}
 
 Let
-\(\vect r_\beta=\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}-\vect d\).
+\(\vect r_\beta=\vect y_{\mathrm{st}}-\vect\beta_{0,\mathrm{st}}-\vect d\).
 Combining \eqref{eq:supp_joint_stacked_likelihood} and
 \eqref{eq:supp_joint_qvp_prior} gives
 \begin{align}
@@ -1359,146 +1341,63 @@ This update uses the fact that only the first innovation
 \(\Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}}\) contains \(\vect\beta_{\mathrm{base}}\).
 
 For unconstrained intercepts with independent priors
-\(\alpha_q\sim\Normal(a_{\alpha,q},V_{\alpha,q})\), define
+\(\beta_{0k}\sim\Normal(a_{0k},V_{0k})\), define
 \[
-e_{q,t}^{\alpha}=y_t-d_{q,t}-\tilde{\vect x}_t^\top\vect\beta_q .
+e_{k,t}^{0}=y_t-d_{k,t}-\tilde{\vect x}_t^\top\vect\beta_k .
 \]
 Then
 \begin{align}
-K_{\alpha,q}
-&=V_{\alpha,q}^{-1}+\sum_{t=1}^T\omega_{q,t}^{-1},\\
-m_{\alpha,q}
-&=K_{\alpha,q}^{-1}
+K_{0k}
+&=V_{0k}^{-1}+\sum_{t=1}^T\omega_{k,t}^{-1},\\
+m_{0k}
+&=K_{0k}^{-1}
 \left\{
-V_{\alpha,q}^{-1}a_{\alpha,q}
-+\sum_{t=1}^T\omega_{q,t}^{-1}e_{q,t}^{\alpha}
+V_{0k}^{-1}a_{0k}
++\sum_{t=1}^T\omega_{k,t}^{-1}e_{k,t}^{0}
 \right\},
 \end{align}
-and \(\alpha_q\mid\cdots\sim\Normal(m_{\alpha,q},K_{\alpha,q}^{-1})\). For a
+and \(\beta_{0k}\mid\cdots\sim\Normal(m_{0k},K_{0k}^{-1})\). For a
 monotone-gap version, write
-\(\alpha_q=\alpha_1+\sum_{\ell=2}^q\exp(\eta_\ell)\) for
-\(q\ge2\). The conditional log density for
-\((\alpha_1,\eta_2,\ldots,\eta_Q)\) is the Gaussian likelihood term above plus
+\(\beta_{0k}=\beta_{01}+\sum_{j=2}^k\exp(\eta_j)\) for
+\(k\ge2\). The conditional log density for
+\((\beta_{01},\eta_2,\ldots,\eta_K)\) is the Gaussian likelihood term above plus
 the chosen priors on the transformed coordinates and, if the prior is placed on
 the positive gaps rather than on \(\eta\), the Jacobian
-\(\sum_{\ell=2}^Q\eta_\ell\). This block is then updated by a
+\(\sum_{j=2}^K\eta_j\). This block is then updated by a
 low-dimensional Metropolis--Hastings, slice, or Laplace step.
 
-\subsection{exAL Latent-Variable and Scale Blocks}
+\subsection{Quantile-Indexed Latent and Shrinkage Blocks}
 
-Conditional on the joint quantile-vector regression, each exAL latent update is a
-quantile-indexed copy of the single-level update. Define
-\[
-e_{q,t}^{v}
-=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-\sigma_qD_qs_{q,t}.
-\]
-Then
-\[
-p(v_{q,t}\mid\cdots)
-\propto
-v_{q,t}^{-1/2}
-\exp\left[
--\frac12\left\{
-\chi_{q,t}^{v}v_{q,t}^{-1}
-+\psi_{q,t}^{v}v_{q,t}
-\right\}
-\right],
-\]
-which is a GIG density with
-\[
-\chi_{q,t}^{v}=\frac{(e_{q,t}^{v})^2}{\sigma_qB_q},
-\qquad
-\psi_{q,t}^{v}=\frac{A_q^2}{\sigma_qB_q}+\frac{2}{\sigma_q}.
-\]
-The GIG index is \(1/2\). Terms independent of \(v_{q,t}\) have
-been omitted from the kernel.
+The remaining joint updates do not introduce new distributional forms. At
+level \(k\), the exAL latent-variable and scale--asymmetry updates are
+Eqs.~\eqref{eq:supp_v_mcmc}--\eqref{eq:supp_gamma_mcmc} with
+\(\vect x_t^\top\vect\beta\) replaced by
+\(\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k\) and
+\((\sigma,\gamma,A_\gamma,B_\gamma,D_\gamma,v_t,s_t)\) replaced by their
+level-\(k\) counterparts. The AL case uses
+Eqs.~\eqref{eq:supp_al_v_mcmc}--\eqref{eq:supp_al_sigma_mcmc} and omits
+\((s_{k,t},\gamma_k)\). Each exAL block is evaluated on the transformed
+coordinates
+\(\log\sigma_k\) and
+\(\log\{(\gamma_k-L_k)/(U_k-\gamma_k)\}\), including the transformation
+Jacobian.
 
-For the positive-shift latent variable, define
-\[
-e_{q,t}^{s}
-=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-A_qv_{q,t}.
-\]
-The conditional distribution is positive-truncated Normal with precision and
-mean
-\[
-K_{s,q,t}=1+\frac{\sigma_qD_q^2}{B_qv_{q,t}},
-\qquad
-m_{s,q,t}=K_{s,q,t}^{-1}
-\frac{D_qe_{q,t}^{s}}{B_qv_{q,t}},
-\]
-that is,
-\[
-s_{q,t}\mid\cdots\sim\TN(m_{s,q,t},K_{s,q,t}^{-1}).
-\]
-The AL case omits this update and uses the AL constants in the \(v_{q,t}\)
-kernel.
-
-For each quantile level, the non-conjugate scale-asymmetry block has log
-kernel
-\begin{align}
-\ell_q(\sigma_q,\gamma_q)
-&=
--\frac{1}{2}\sum_{t=1}^T
-\left[
-\log\{\sigma_qB_qv_{q,t}\}
-+
-\frac{
-\{y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q
--\sigma_qD_qs_{q,t}-A_qv_{q,t}\}^2}
-{\sigma_qB_qv_{q,t}}
-\right]
-\nonumber\\
-&\quad
--T\log\sigma_q-\sigma_q^{-1}\sum_{t=1}^Tv_{q,t}
-+\log p(\sigma_q)+\log\pi_{\gamma_q}(\gamma_q).
-\label{eq:supp_joint_sigma_gamma_kernel}
-\end{align}
-This kernel is evaluated on transformed coordinates
-\(\eta_{q,1}=\log\sigma_q\) and
-\(\eta_{q,2}=\log\{(\gamma_q-L_q)/(U_q-\gamma_q)\}\), adding the
-transformation Jacobian for MCMC proposals or the Laplace--Delta approximation.
-
-\subsection{RHS Scale Updates}
-
-The RHS scale updates are copies of the single-level
-Nishimura--Suchard product updates. For a baseline coefficient,
-\[
-\lambda_{0,j}^2\mid\cdots
-\sim
-\IG\left(
-1,\,
-\frac{1}{\nu_{0,j}}+\frac{\beta_{\mathrm{base},j}^2}{2(\tau^0)^2}
-\right),
-\qquad
-\nu_{0,j}\mid\cdots
-\sim
-\IG\left(1,\ 1+\frac{1}{\lambda_{0,j}^2}\right),
-\]
-and
-\[
-(\tau^0)^2\mid\cdots
-\sim
-\IG\left(
-\frac{r+1}{2},\,
-\frac{1}{\xi_0}
-+\frac12\sum_{j=1}^r\frac{\beta_{\mathrm{base},j}^2}{(\lambda^0_j)^2}
-\right),
-\qquad
-\xi_0\mid\cdots
-\sim
-\IG\left(1,\frac{1}{(\tau^0)^2}+\frac{1}{(\tau_0^0)^2}\right).
-\]
-For each adjacent-difference block \(q\), replace \(\beta_{\mathrm{base},j}\),
-\(\lambda^0_j\), and \(\tau^0\) by \(\Delta_{q,j}\),
-\(\lambda^\Delta_{q,j}\), and \(\tau^\Delta_q\). If the slab scale is random
-and shared across adjacent-difference blocks, then
+The baseline and adjacent-difference RHS updates likewise follow
+Eq.~\eqref{eq:supp_rhs_mcmc}. For the baseline, replace
+\((\beta_j,\lambda_j,\tau,\xi,\tau_0)\) by
+\((\beta_{\mathrm{base},j},\lambda_j^0,\tau^0,\xi_0,\tau_0^0)\); for block
+\(k\), replace them by
+\((\Delta_{k,j},\lambda_{k,j}^\Delta,\tau_k^\Delta,
+\xi_k^\Delta,\tau_{0,k}^\Delta)\). Each global-variance conditional has
+shape \((r+1)/2\). If the slab scale is random and shared across
+adjacent-difference blocks, its distinct update is
 \[
 \zeta_\Delta^2\mid\cdots
 \sim
 \IG\left(
-a_{\zeta_\Delta}+\frac{Qr}{2},\,
+a_{\zeta_\Delta}+\frac{Kr}{2},\,
 b_{\zeta_\Delta}
-+\frac12\sum_{q=1}^Q\sum_{j=1}^r\Delta_{q,j}^2
++\frac12\sum_{k=1}^K\sum_{j=1}^r\Delta_{k,j}^2
 \right),
 \]
 with the analogous \(r/2\) update for a random baseline slab scale
@@ -1506,37 +1405,41 @@ with the analogous \(r/2\) update for a random baseline slab scale
 
 \subsection{MCMC Algorithm and VB--LD Pointer}
 
+Algorithm~\ref{alg:joint_qdesn_mcmc} applies the preceding sparse Gaussian,
+level-indexed latent, and RHS blocks to the joint posterior.
+
 \begin{suppalgorithm}{MCMC sampler for the joint quantile-vector Q--DESN posterior}
 \label{alg:joint_qdesn_mcmc}
 \emph{Input:} fixed non-intercept design \(\mat Z\), response \(\vect y\),
-quantile grid \(p_1<\cdots<p_Q\), priors, and MCMC
-controls. For \(Q=1\), use the collapsed convention
+quantile grid \(p_1<\cdots<p_K\), priors, and MCMC
+controls. For \(K=1\), use the collapsed convention
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and
 \(\Delta_1=\vect\beta_1\), and skip every baseline update below.
 \begin{enumerate}[label=(\arabic*)]
-\item Initialize \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), likelihood
-parameters, exAL latent variables, and adjacent-difference RHS scales. If \(Q>1\),
+\item Initialize \(\vect\beta_0\), \(\vect\beta_{\mathrm{st}}\), likelihood
+parameters, exAL latent variables, and adjacent-difference RHS scales. If \(K>1\),
 also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
 \item Repeat:
   \begin{enumerate}[label=(\alph*)]
-  \item draw each \(v_{q,t}\mid\cdot\) from its quantile-indexed GIG full
+  \item draw each \(v_{k,t}\mid\cdot\) from its quantile-indexed GIG full
   conditional; for AL use the AL constants and omit the \(s\)-latent block;
-  \item for exAL, draw each \(s_{q,t}\mid\cdot\) from its
+  \item for exAL, draw each \(s_{k,t}\mid\cdot\) from its
   positive-truncated Normal full conditional;
   \item compute the sparse precision and mean in
   \eqref{eq:supp_joint_beta_conditional}, then draw
   \(\vect\beta_{\mathrm{st}}\mid\cdot\sim
   \Normal(\vect m_\beta,\mat K_\beta^{-1})\);
-  \item if \(Q>1\), draw \(\vect\beta_{\mathrm{base}}\) featurewise from the
+  \item if \(K>1\), draw \(\vect\beta_{\mathrm{base}}\) featurewise from the
   Gaussian baseline conditionals;
   \item draw unconstrained intercepts from their Gaussian conditionals, or
   update the monotone-gap transformed block when exact intercept ordering is
   imposed;
-  \item draw adjacent-difference RHS scales, and if \(Q>1\) draw baseline RHS scales,
+  \item draw adjacent-difference RHS scales, and if \(K>1\) draw baseline RHS scales,
   from their inverse-gamma full conditionals;
-  \item update each exAL \((\sigma_q,\gamma_q)\) block on transformed
-  coordinates targeting \eqref{eq:supp_joint_sigma_gamma_kernel}; for AL,
-  use the corresponding \(\sigma_q\) full conditional and omit \(\gamma_q\);
+  \item update each exAL \((\sigma_k,\gamma_k)\) block on transformed
+  coordinates using the level-indexed form of
+  \eqref{eq:supp_sigmagam_joint_kernel}; for AL,
+  use the corresponding \(\sigma_k\) full conditional and omit \(\gamma_k\);
   \item store retained draws and crossing diagnostics after burn-in.
   \end{enumerate}
 \end{enumerate}
@@ -1552,15 +1455,15 @@ the required covariance blocks retained for the coordinate updates.
 
 \subsection{Crossing Diagnostics}
 
-For adjacent levels \(q-1\) and \(q\), define the fitted gap at time \(t\) by
+For adjacent levels \(k-1\) and \(k\), define the fitted gap at time \(t\) by
 \[
-g_{q,t}=
-(\alpha_q-\alpha_{q-1})
-+\tilde{\vect x}_t^\top(\vect\beta_q-\vect\beta_{q-1}).
+g_{k,t}=
+(\beta_{0k}-\beta_{0,k-1})
++\tilde{\vect x}_t^\top(\vect\beta_k-\vect\beta_{k-1}).
 \]
 The crossing count before rearrangement is
 \[
-C_{\mathrm{raw}}=\sum_{q=2}^Q\sum_{t=1}^T\ind\{g_{q,t}<0\}.
+C_{\mathrm{raw}}=\sum_{k=2}^K\sum_{t=1}^T\ind\{g_{k,t}<0\}.
 \]
 If fitted quantile curves are projected or rearranged, the corresponding
 post-rearrangement crossing count should be computed after that stated monotone
@@ -1569,8 +1472,8 @@ strongly the fitted curves departed from monotonicity before rearrangement. The
 maximum and mean absolute projection adjustments quantify this discrepancy. On a bounded feature domain
 \(\tilde{\vect x}_t\in[-1,1]^r\), the sufficient condition
 \[
-\alpha_q-\alpha_{q-1}\ge
-\|\vect\beta_q-\vect\beta_{q-1}\|_1
+\beta_{0k}-\beta_{0,k-1}\ge
+\|\vect\beta_k-\vect\beta_{k-1}\|_1
 \]
 is a diagnostic reference for adjacent-level separation. Enforcing this
 inequality requires explicit constrained estimation.
@@ -1601,19 +1504,19 @@ grid.
 
 For a single-level fit at level \(p_0\), write a posterior draw or a draw from
 the variational approximation as
-\(\theta_{p_0}^{(m)}
-=(\vect\beta_{p_0}^{(m)},\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)})\). Forecasting
+\(\theta_{p_0}^{(b)}
+=(\vect\beta_{p_0}^{(b)},\sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)})\). Forecasting
 proceeds by propagating the deterministic reservoir state forward from the
 forecast origin. At horizon \(h\), the current lag vector is built from
 observed values for one-step forecasts and from previously simulated values for
 free-running multi-step forecasts. Conditional on the draw and the resulting
 \(p_0\)-indexed design row, the working-likelihood draw is
 \[
-y_{T+h}^{(m,p_0)}
+y_{T+h}^{(b,p_0)}
 \sim
 \exAL_{p_0}
-\left(\vect x_{T+h}^{(m,p_0)\top}\vect\beta_{p_0}^{(m)},
-\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)}\right),
+\left(\vect x_{T+h}^{(b,p_0)\top}\vect\beta_{p_0}^{(b)},
+\sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)}\right),
 \]
 with the \(s\)-latent and \(\gamma\) block omitted for AL. Repetition over
 parameter draws yields response-level simulations when the working likelihood
@@ -1625,24 +1528,24 @@ independently fitted levels, the same recursion is run separately for each
 fitted \(p_k\).
 
 For a joint quantile-vector regression, a posterior or variational draw returns a
-raw quantile vector over \(p_1,\ldots,p_Q\). If recursive lag inputs require a
+raw quantile vector over \(p_1,\ldots,p_K\). If recursive lag inputs require a
 future response path, that path is generated by a stated propagation rule.
-For draw \(m\) at horizon \(h\), write
+For draw \(b\) at horizon \(h\), write
 \[
-\mu_{j,T+h}^{(m)}
-=\alpha_j^{(m)}
-+\tilde{\vect x}_{T+h}^{(m)\top}\vect\beta_j^{(m)},
-\qquad j=1,\ldots,Q,
+\mu_{k,T+h}^{(b)}
+=\beta_{0k}^{(b)}
++\tilde{\vect x}_{T+h}^{(b)\top}\vect\beta_k^{(b)},
+\qquad k=1,\ldots,K,
 \]
 and let
-\(\vect q_{T+h}^{(m)}
-=(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
+\(\vect q_{T+h}^{(b)}
+=(\mu_{1,T+h}^{(b)},\ldots,\mu_{K,T+h}^{(b)})^\top\). If exact monotone output
 is required, apply the stated monotone rearrangement, such as isotonic projection
 or rearrangement
 \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010},
-and set \(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered
+and denote the result by \(\vect q_{T+h}^{*,(b)}\). The ordered
 values define a draw-specific quantile curve on the fitted interval
-\([p_1,p_Q]\) by linear interpolation.
+\([p_1,p_K]\) by linear interpolation.
 
 For independently estimated quantile levels \(p_1<\cdots<p_K\), monotone
 rearrangement is applied to the fitted conditional-quantile summaries and may
@@ -1658,14 +1561,13 @@ origin--horizon rows for each simulation setting. A free-running response
 trajectory over \((0,1)\) would additionally require a tail extension and a
 rule for propagating one simulated history across quantile levels.
 
-Forecast scores use the following convention. Let
-\(0<p_1<\cdots<p_K<1\), with \(K\geq2\), and write
-\(\mathcal P_K=\{p_1,\ldots,p_K\}\) for the evaluation grid. The evaluation
+Forecast scores use \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), as the
+evaluation grid. The evaluation
 levels may differ from the fitted levels when an estimated quantile function
 is available at other probabilities. Let
 \(q_{T,h,k}^*\) denote the reported conditional \(p_k\)-quantile at origin
 \(T\) and horizon \(h\), after monotone rearrangement when it is applied.
-Here \(K\) counts evaluation levels, while \(m\) indexes posterior or
+Here \(K\) counts evaluation levels, while \(b\) indexes posterior or
 variational draws. With check loss
 \(\rho_p(e)=e\{p-\ind(e<0)\}\), the CRPS of a predictive distribution \(F\)
 with finite first moment has the integrated representation
@@ -1675,10 +1577,10 @@ with finite first moment has the integrated representation
 =2\int_0^1\rho_p\!\left\{y-F^{-1}(p)\right\}\,dp.
 \label{eq:supp-crps-integrated-check}
 \end{equation}
-For quantiles evaluated on \(\mathcal P_K\), the reported finite-grid
-approximation over \([p_1,p_K]\) is
+For quantiles evaluated on this grid, the reported finite-grid approximation
+to Eq.~\eqref{eq:supp-crps-integrated-check} over \([p_1,p_K]\) is
 \begin{equation}
-\aCRPS_{\mathcal P_K}(y;\vect q_{T,h}^*)
+\aCRPS_{p_1:p_K}(y;\vect q_{T,h}^*)
 =2\sum_{k=1}^K\omega_k
 \rho_{p_k}\!\left(y-q_{T,h,k}^*\right),
 \label{eq:supp-acrps}
@@ -1692,26 +1594,27 @@ where
 \end{aligned}
 \label{eq:supp-acrps-weights}
 \end{equation}
-Thus \(\sum_k\omega_k=p_K-p_1\). The joint simulation and GloFAS analyses
+The weights in Eq.~\eqref{eq:supp-acrps-weights} satisfy
+\(\sum_k\omega_k=p_K-p_1\). The joint simulation and GloFAS analyses
 use seven common evaluation levels with endpoints 0.05 and 0.95, so their
 weights sum to 0.90. For fitted quantile regressions, the evaluation levels
 coincide with the fitted grid. Their interior levels differ between studies;
 comparisons of \(\aCRPS\) are therefore made within each study.
 
 The joint simulation also evaluates the quantile grid with respect to the
-known conditional response distribution. Let \(\mathcal G\) denote its
-origin--horizon evaluation set, let \(F_{0,r}\) be the true conditional
-distribution for evaluation pair \(r\), and let
-\(\vect q_r^{*,(b)}=(q_{r,1}^{*,(b)},\ldots,q_{r,K}^{*,(b)})^\top\) be the
+known conditional response distribution. Let \(N_{\mathrm{eval}}\) be its
+number of origin--horizon pairs, let \(F_{0,\ell}\) be the true conditional
+distribution for pair \(\ell\), and let
+\(\vect q_\ell^{*,(b)}=(q_{\ell,1}^{*,(b)},\ldots,q_{\ell,K}^{*,(b)})^\top\) be the
 monotonically rearranged quantile vector from posterior draw \(b\). The
 data-generating-process (DGP)-integrated finite-grid quantile score is
 \begin{equation}
 S_{\mathrm{DGP}}^{(b)}
-=\frac{2}{|\mathcal G|}
-\sum_{r\in\mathcal G}\sum_{k=1}^K\omega_k
-\E_{Y_r\sim F_{0,r}}
+=\frac{2}{N_{\mathrm{eval}}}
+\sum_{\ell=1}^{N_{\mathrm{eval}}}\sum_{k=1}^K\omega_k
+\E_{Y_\ell\sim F_{0,\ell}}
 \left[
-\rho_{p_k}\!\left\{Y_r-q_{r,k}^{*,(b)}\right\}
+\rho_{p_k}\!\left\{Y_\ell-q_{\ell,k}^{*,(b)}\right\}
 \right].
 \label{eq:supp-dgp-integrated-score}
 \end{equation}
@@ -1773,6 +1676,11 @@ comparison of approximation error.
 \input{tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex}
 
 \clearpage
+Figures~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals} and
+\ref{fig:simulation-500obs-vb-fit-rmse-intervals} isolate fitting-sample
+quantile-path recovery. They complement the MCMC forecast comparisons in the
+main article without repeating the supplementary forecast tables.
+
 \input{tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex}
 
 \input{tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex}
@@ -1802,9 +1710,9 @@ quantile-path draws evaluated by the common criteria above.
 For retained pairs \((\sigma_b,\gamma_b)\),
 \(b=1,\ldots,B_{\mathrm{post}}\), let
 \[
-m_{\varepsilon,b}=\sigma_b\{A(\gamma_b)+\lambda(\gamma_b)\sqrt{2/\pi}\},\qquad
-V_{\varepsilon,b}=\sigma_b^2\{B(\gamma_b)+A(\gamma_b)^2
-  +\lambda(\gamma_b)^2(1-2/\pi)\}.
+m_{\varepsilon,b}=\sigma_b\{A_p(\gamma_b)+D_p(\gamma_b)\sqrt{2/\pi}\},\qquad
+V_{\varepsilon,b}=\sigma_b^2\{B_p(\gamma_b)+A_p(\gamma_b)^2
+  +D_p(\gamma_b)^2(1-2/\pi)\}.
 \]
 The rolling-origin filter uses
 \(\bar m_\varepsilon=B_{\mathrm{post}}^{-1}\sum_b m_{\varepsilon,b}\) and
@@ -1863,6 +1771,10 @@ allocation.
 
 \input{tables/joint_qdesn_shared_backbone_score_table.tex}
 
+Figure~\ref{fig:joint-qdesn-shared-backbone-fit-rmse} compares
+fitting-sample recovery under the same shared feature design used for the
+forecast-score comparison in the main article.
+
 \input{tables/joint_qdesn_shared_backbone_fit_figure.tex}
 
 The posterior-score diagnostics satisfy the pre-specified rank-normalized
@@ -1876,14 +1788,17 @@ checks and no result is excluded on this basis.
 
 Five paired joint-minus-independent score intervals lie entirely above zero,
 favoring independent estimation, and the other eleven include zero. Raw
-crossings are reported separately from the monotone score contract. All
+crossings are reported separately from the score after monotone
+rearrangement. All
 posterior-mean grids are ordered after rearrangement.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
 
 The displayed shared-backbone calculations used the RHS global-scale update present in
-the frozen execution code. A subsequent source correction changed the shape
-term in that conditional update from \(p/2\) to \((p+1)/2\). No numerical
+the stored calculation. If \(d_\beta\) denotes the number of penalized
+coefficients in a global-scale block, a subsequent source correction changed
+the shape term in that conditional update from \(d_\beta/2\) to
+\((d_\beta+1)/2\). No numerical
 adjustment has been made to the stored results. A confirmatory rerun under the
 corrected update is registered as required before the final archival release;
 until then, this complete shared-backbone analysis is the provisional article
@@ -1967,7 +1882,7 @@ states.
 \noindent\textbf{Observed and future quantities.}
 Fix a quantile level \(p_0\). Let \(y_t\) denote transformed reference
 streamflow, \(g_t^{\mathrm{ret}}\) the retrospective GloFAS product, and
-\(g_{T+h,m}^{\mathrm{ens}}\) GloFAS ensemble member \(m\) at forecast origin
+\(g_{T+h,e}^{\mathrm{ens}}\) GloFAS ensemble member \(e\) at forecast origin
 \(T\) and horizon \(h\). Write
 \(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\) for the future reference path. Let
 \(\mathcal I_{\mathrm{ref}}\) index reference
@@ -1987,7 +1902,7 @@ Define
 =
 \begin{bmatrix}
 \vect\beta_{p_0}\\
-\vect\alpha_{p_0}
+\vect\delta_{p_0}
 \end{bmatrix},
 \qquad
 \vect h_t^{\mathrm{ref}}=
@@ -2012,10 +1927,10 @@ q^{\mathrm{ref}}_{p_0,i}
 q^{\mathrm{glo}}_{p_0,i}
 =\vect h_i^{\mathrm{glo}\,\top}\vect\theta_{p_0}
 =\vect x_i^{\mathrm{ref}\,\top}\vect\beta_{p_0}
-+\vect x_i^{\mathrm{disc}\,\top}\vect\alpha_{p_0}.
++\vect x_i^{\mathrm{disc}\,\top}\vect\delta_{p_0}.
 \]
 Thus \(\vect\beta_{p_0}\) represents the reference-process quantile regression and
-\(\vect\alpha_{p_0}\) represents an additive GloFAS discrepancy component at the same
+\(\vect\delta_{p_0}\) represents an additive GloFAS discrepancy component at the same
 level. In the historical rows, \(\vect x_i^{\mathrm{disc}}\) is driven by
 \(g_i^{\mathrm{ret}}-y_i\). In the reported retrospective forecast-period
 specification, the
@@ -2040,15 +1955,15 @@ persistence baseline. For horizons covered by an issued GloFAS ensemble at
 origin \(T\), the ensemble provides the GloFAS forecasts and the unadjusted
 GloFAS benchmark. The Q--DESN reference quantile is
 \[
-q^{\mathrm{ref},(s)}_{p_0,T+h}
-=\vect x_{T+h}^{\mathrm{ref},(s)\top}\vect\beta_{p_0}^{(s)},
+q^{\mathrm{ref},(b)}_{p_0,T+h}
+=\vect x_{T+h}^{\mathrm{ref},(b)\top}\vect\beta_{p_0}^{(b)},
 \]
 and the associated forecast-system quantile is
 \[
-q^{\mathrm{glo},(s)}_{p_0,T+h}
-=q^{\mathrm{ref},(s)}_{p_0,T+h}
+q^{\mathrm{glo},(b)}_{p_0,T+h}
+=q^{\mathrm{ref},(b)}_{p_0,T+h}
 +d_T^{\mathrm{ret}}
-+\vect x_{T+h}^{\mathrm{disc},(s)\top}\vect\alpha_{p_0}^{(s)}.
++\vect x_{T+h}^{\mathrm{disc},(b)\top}\vect\delta_{p_0}^{(b)}.
 \]
 Here \(d_T^{\mathrm{ret}}\) is the last historical retrospective discrepancy.
 Point summaries are taken after this quantile construction. Observed held-out
@@ -2096,7 +2011,8 @@ z_i^c\mid\cdot&\sim\Normal\!\left(
 \end{aligned}
 \label{eq:supp_glofas_exal_hierarchy}
 \end{equation}
-The conditional \(p_0\)-quantile is
+By Eq.~\eqref{eq:supp_glofas_exal_hierarchy}, the conditional
+\(p_0\)-quantile is
 \(\vect h_i^{c\top}\vect\theta_{p_0}\). The AL specialization omits
 \(s_i^c\) and \(\gamma_c\) and uses the AL constants \(A_0,B_0\).
 
@@ -2109,10 +2025,10 @@ factorization is a working-likelihood approximation, not a claim that the
 members are marginally independent.
 
 The reference and discrepancy slope blocks have separate regularized-horseshoe
-hierarchies. Writing their penalized index sets as \(\mathcal J_\beta\) and
-\(\mathcal J_\alpha\), the prior for each block \(b\in\{\beta,\alpha\}\) is
+hierarchies. Writing their penalized index sets as \(J_\beta\) and
+\(J_\delta\), the prior for each block \(a\in\{\beta,\delta\}\) is
 the product representation in Section~\ref{sec:priors}, with its own
-\((\tau_b,\lambda_{b,j},\zeta_b)\); the two intercepts have weak Gaussian
+\((\tau_a,\lambda_{a,j},\zeta_a)\); the two intercepts have weak Gaussian
 priors. Source-specific likelihood scales and, under exAL, asymmetry parameters
 complete the model. Conditional on a fixed augmented design \(\mat H\), the
 posterior is proportional to
@@ -2121,7 +2037,7 @@ posterior is proportional to
 p(z_i^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,v_i^c,s_i^c,\vect h_i^c)
 p(v_i^c\mid\sigma_c)p(s_i^c)
 \prod_{c\in\mathcal C}p(\sigma_c)\pi_{\gamma_c}(\gamma_c)
-\;p(\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha),
+\;p(\vect\theta_{p_0},\Theta_\beta,\Theta_\delta),
 \label{eq:supp_glofas_joint_exal_rhs}
 \end{equation}
 with the same AL omissions. This form is the general fixed-design augmented
@@ -2165,7 +2081,9 @@ q_F(\vect y_F)\approx
 \Normal(\widehat{\vect y}_F,\mat K_F^{-1}).
 \label{eq:supp_glofas_future_path_factor}
 \end{equation}
-For a design row \(\vect h_i^c(\vect y_F)\), let \(\mat J_i\) be its Jacobian
+The Gaussian approximation in Eq.~\eqref{eq:supp_glofas_future_path_factor}
+is propagated to each design row. Let \(\mat J_i\) be the Jacobian of
+\(\vect h_i^c(\vect y_F)\)
 at the mode and \(\mat V_F=\mat K_F^{-1}\). The first-order moments used in
 the remaining coordinate updates are
 \begin{equation}
@@ -2177,7 +2095,8 @@ the remaining coordinate updates are
 \vect a_i^c\vect a_i^{c\top}+\mat J_i\mat V_F\mat J_i^\top,
 \label{eq:supp_glofas_future_path_delta}
 \end{equation}
-where \(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). Cross-moments with
+Equation~\eqref{eq:supp_glofas_future_path_delta} uses
+\(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). Cross-moments with
 responses that are components of \(\vect y_F\) include the corresponding
 Jacobian--covariance term. The entropy contribution is
 \(\tfrac12\log|2\pi e\mat V_F|\). Thus the monitored objective is a

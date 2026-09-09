@@ -52,11 +52,10 @@ relative_article <- function(path) {
 write_csv <- function(x, path) write.csv(x, path, row.names = FALSE, na = "")
 
 if (!requireNamespace("ggplot2", quietly = TRUE) ||
-    !requireNamespace("scales", quietly = TRUE) ||
-    !requireNamespace("png", quietly = TRUE) ||
     !requireNamespace("yaml", quietly = TRUE)) {
-  stop("yaml, ggplot2, png, and scales are required.", call. = FALSE)
+  stop("yaml and ggplot2 are required.", call. = FALSE)
 }
+source(file.path(repo_root, "scripts", "qdesn_evaluation_figure_style.R"))
 
 ancestor_status <- system2(
   "git", c("-C", repo_root, "merge-base", "--is-ancestor",
@@ -233,185 +232,26 @@ for (name in setdiff(required_oracle, c("family", "tau", "metric_role"))) {
 figure_data_path <- article_path(config$outputs$figure_data)
 write_csv(figure_data, figure_data_path)
 
-render_article_pdf <- function(filename, plot, width = 7.2, height = 6.6, dpi = 300L) {
-  if (!isTRUE(capabilities("cairo"))) {
-    stop("Cairo graphics support is required for stable article figures.", call. = FALSE)
-  }
-  raster_path <- tempfile(pattern = "qdesn-v14-", fileext = ".png")
-  on.exit(unlink(raster_path), add = TRUE)
-  grDevices::png(
-    filename = raster_path, width = round(width * dpi), height = round(height * dpi),
-    units = "px", res = dpi, type = "cairo", bg = "white"
-  )
-  print(plot)
-  grDevices::dev.off()
-  image <- png::readPNG(raster_path)
-  grDevices::pdf(
-    file = filename, width = width, height = height, bg = "white",
-    useDingbats = FALSE, onefile = TRUE, compress = TRUE
-  )
-  grid::grid.newpage()
-  grid::grid.raster(
-    image, x = 0.5, y = 0.5, width = grid::unit(1, "npc"),
-    height = grid::unit(1, "npc"), interpolate = FALSE
-  )
-  grDevices::dev.off()
-  invisible(filename)
-}
-
-model_labels <- c(
-  dqlm = "DQLM", exdqlm = "exDQLM",
-  qdesn_al_rhs_ns = "Q-DESN AL-RHS",
-  qdesn_exal_rhs_ns = "Q-DESN exAL-RHS"
-)
-family_labels <- c(normal = "Gaussian", laplace = "Laplace", gausmix = "Gaussian mixture")
-metric_labels <- c(
-  fit_rmse = "Fit RMSE", forecast_mae = "Forecast MAE",
-  forecast_check = "Forecast check loss"
-)
 metric_files <- c(
   fit_rmse = "fit_rmse", forecast_mae = "forecast_mae",
   forecast_check = "forecast_check_loss"
 )
-metric_label_ids <- c(
-  fit_rmse = "fit-rmse", forecast_mae = "forecast-mae",
-  forecast_check = "forecast-check-loss"
-)
-metric_caption_labels <- c(
-  fit_rmse = "fit RMSE", forecast_mae = "forecast MAE",
-  forecast_check = "forecast check loss"
-)
-figure_data$model_label_plot <- factor(
-  unname(model_labels[figure_data$model_variant]), levels = rev(unname(model_labels[models]))
-)
-figure_data$panel_label_plot <- factor(
-  paste(unname(family_labels[figure_data$family]),
-        sprintf("p = %.2f", figure_data$tau), sep = "\n"),
-  levels = unlist(lapply(unname(family_labels[families]), function(family) {
-    paste(family, sprintf("p = %.2f", taus), sep = "\n")
-  }), use.names = FALSE)
-)
-
-interval_plot <- function(inference, role) {
-  block <- figure_data[
-    figure_data$inference == inference & figure_data$metric_role == role, , drop = FALSE
-  ]
-  references <- unique(block[c("panel_label_plot", "plot_reference_value")])
-  reference_text <- if (role == "forecast_check") {
-    "Black dashed line: population expected DGP oracle check loss"
-  } else {
-    "Black dashed line: exact DGP oracle path error (0)"
-  }
-  ggplot2::ggplot(
-    block, ggplot2::aes(
-      x = posterior_mean, y = model_label_plot, xmin = cri_lower, xmax = cri_upper,
-      colour = model_variant
-    )
-  ) +
-    ggplot2::geom_vline(
-      data = references, ggplot2::aes(xintercept = plot_reference_value),
-      inherit.aes = FALSE, colour = "black", linetype = "dashed", linewidth = 0.55
-    ) +
-    ggplot2::geom_errorbar(orientation = "y", width = 0.18, linewidth = 0.72) +
-    ggplot2::geom_point(shape = 4, size = 2.8, stroke = 1.05) +
-    ggplot2::facet_wrap(~panel_label_plot, ncol = 3L, scales = "free_x") +
-    ggplot2::scale_colour_manual(
-      values = c(
-        dqlm = "#0072B2", exdqlm = "#56B4E9",
-        qdesn_al_rhs_ns = "#D55E00", qdesn_exal_rhs_ns = "#009E73"
-      ),
-      breaks = models, labels = unname(model_labels[models]), drop = FALSE
-    ) +
-    ggplot2::scale_x_continuous(
-      expand = ggplot2::expansion(mult = c(0.04, 0.06)),
-      breaks = scales::breaks_pretty(n = 4L),
-      labels = function(x) sprintf("%.2f", x),
-      guide = ggplot2::guide_axis(check.overlap = TRUE)
-    ) +
-    ggplot2::labs(
-      title = sprintf(
-        "%s: %s", if (inference == "mcmc") "MCMC" else "Variational Bayes",
-        metric_labels[[role]]
-      ),
-      subtitle = paste0(
-        if (inference == "mcmc") {
-          "Posterior mean (x) and equal-tailed 95% credible interval."
-        } else {
-          "Variational posterior mean (x) and equal-tailed approximate 95% interval."
-        },
-        "\n", reference_text
-      ),
-      x = metric_labels[[role]], y = NULL, colour = NULL
-    ) +
-    ggplot2::theme_minimal(base_size = 9.5, base_family = "sans") +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(face = "bold", size = 11.5),
-      plot.subtitle = ggplot2::element_text(size = 8.6, colour = "#333333"),
-      panel.grid.major.y = ggplot2::element_blank(),
-      panel.grid.minor = ggplot2::element_blank(),
-      panel.grid.major.x = ggplot2::element_line(colour = "#E3E3E3", linewidth = 0.3),
-      strip.text = ggplot2::element_text(face = "bold", size = 8.6, lineheight = 0.95),
-      strip.background = ggplot2::element_rect(
-        fill = "#F3F3F3", colour = "#D0D0D0", linewidth = 0.35
-      ),
-      axis.text.x = ggplot2::element_text(size = 7.4),
-      axis.text.y = ggplot2::element_text(size = 7.8, colour = "#222222"),
-      panel.spacing = grid::unit(1.15, "lines"), legend.position = "bottom",
-      plot.margin = ggplot2::margin(7, 7, 5, 7)
-    )
-}
-
 figure_paths <- character(0)
-wrapper_paths <- character(0)
-for (inference in inference_levels) {
-  wrapper_lines <- character(0)
+for (inference in render_inference_levels) {
   for (role in metric_roles) {
+    if (!role %in% render_metric_roles) next
     path <- article_path(file.path(
       config$outputs$figure_directory,
       sprintf("%s_%s_%s_intervals.pdf", config$outputs$figure_prefix,
               inference, metric_files[[role]])
     ))
-    if (inference %in% render_inference_levels && role %in% render_metric_roles) {
-      render_article_pdf(path, interval_plot(inference, role))
-      figure_paths <- c(figure_paths, path)
-    }
-    interval_text <- if (inference == "mcmc") {
-      "equal-tailed 95\\% posterior intervals"
-    } else {
-      "equal-tailed approximate 95\\% variational posterior intervals"
-    }
-    oracle_text <- if (role == "forecast_check") {
-      paste0(
-        "The black dashed line marks the population expected check loss at the true ",
-        "conditional quantile. Because the intervals condition on one simulated series, ",
-        "finite-sample check-loss summaries may cross this population reference."
-      )
-    } else {
-      paste0(
-        "The black dashed line marks the exact DGP oracle value of zero for this ",
-        "conditional-quantile path-error criterion."
-      )
-    }
-    caption <- paste0(
-      if (inference == "mcmc") "MCMC" else "Variational Bayes",
-      " posterior uncertainty for ", metric_caption_labels[[role]],
-      " in the single-quantile simulation study. Horizontal segments show ", interval_text,
-      "; crosses mark posterior means. Each panel uses its own horizontal scale, and lower ",
-      "values are better. ", oracle_text, " Intervals condition on the simulated data, ",
-      "evaluation design, and case-specific model specification."
+    qdesn_save_vector_pdf(
+      path,
+      qdesn_independent_interval_plot(figure_data, inference, role),
+      width = 7.2, height = 6.6
     )
-    wrapper_lines <- c(
-      wrapper_lines, "\\begin{figure}[!htbp]", "\\centering",
-      sprintf("\\includegraphics[width=0.98\\textwidth]{%s}", relative_article(path)),
-      paste0("\\caption{", caption, "}"),
-      sprintf("\\label{fig:simulation-500obs-%s-%s-intervals}",
-              inference, metric_label_ids[[role]]),
-      "\\end{figure}", ""
-    )
+    figure_paths <- c(figure_paths, path)
   }
-  wrapper <- article_path(config$outputs[[paste0(inference, "_wrapper")]])
-  writeLines(head(wrapper_lines, -1L), wrapper, useBytes = TRUE)
-  wrapper_paths <- c(wrapper_paths, wrapper)
 }
 
 cat(sprintf(

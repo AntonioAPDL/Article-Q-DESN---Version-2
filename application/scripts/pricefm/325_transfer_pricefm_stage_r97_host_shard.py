@@ -134,13 +134,16 @@ def inventory(args: argparse.Namespace) -> dict[str, Any]:
     verify_seal(contract, "shard_contract_sha256", label="R97 host shard contract")
     for name in ("parent_campaign_contract", "checkpoint", "assignment"):
         verify_file_record(contract[name], label=f"R97 shard {name}")
+    output = args.output_dir.resolve()
     entries: dict[str, dict[str, Any]] = {}
     for root, role in transfer_roots(contract, args.campaign_root.resolve(), args.scope):
         for path in iter_entries(root):
+            resolved_path = path.absolute()
+            if resolved_path == output or output in resolved_path.parents:
+                continue
             item = record(path, args.base_root.resolve(), role)
             entries.setdefault(item["relative_path"], item)
     rows = [entries[key] for key in sorted(entries)]
-    output = args.output_dir.resolve()
     if output.exists() and any(output.iterdir()) and not args.force:
         raise FileExistsError(output)
     output.mkdir(parents=True, exist_ok=True)

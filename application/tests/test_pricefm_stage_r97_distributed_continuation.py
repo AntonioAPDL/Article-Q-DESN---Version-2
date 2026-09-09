@@ -282,6 +282,37 @@ def test_transfer_inventory_round_trip_and_hash_failure(tmp_path: Path, monkeypa
     assert failure["failures"][0]["reason"] == "sha256_mismatch"
 
 
+def test_transfer_inventory_excludes_its_own_output_subtree(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "base"
+    payload_root = base / "payload"
+    output = payload_root / "inventory"
+    output.mkdir(parents=True)
+    (payload_root / "source.txt").write_text("source")
+    (output / "stale.json").write_text("stale self inventory")
+    parent = base / "parent.json"
+    assignment = base / "assignment.csv"
+    checkpoint = base / "checkpoint.json"
+    parent.write_text("{}")
+    assignment.write_text("region,assigned_host\n")
+    checkpoint.write_text("{}")
+    contract = sealed_payload({
+        "host": "jerez", "regions": [],
+        "parent_campaign_contract": file_record(parent, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+    }, "shard_contract_sha256")
+    contract_path = base / "contract.json"
+    atomic_write_json(contract_path, contract)
+    monkeypatch.setattr(TRANSFER, "transfer_roots", lambda *_: [(payload_root, "payload")])
+    args = SimpleNamespace(
+        shard_contract=contract_path, base_root=base, campaign_root=base,
+        output_dir=output, scope="all", force=True,
+    )
+    summary = TRANSFER.inventory(args)
+    payload = json.loads(Path(summary["manifest"]).read_text())
+    assert [row["relative_path"] for row in payload["entries"]] == ["payload/source.txt"]
+
+
 def test_transfer_rejects_symlink_escape(tmp_path: Path) -> None:
     base = tmp_path / "base"
     base.mkdir()

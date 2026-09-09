@@ -1,0 +1,16 @@
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.42\textwidth}rrrr@{}}
+\toprule
+Model & \shortstack{Fit\\raw} & \shortstack{Forecast\\raw} & \shortstack{After\\rearrangement} & \shortstack{Mean forecast draw\\crossing rate (\%)} \\
+\midrule
+Joint Q--DESN \(\AL\)--\(\RHS\) & 33 & 1426 & 0 & 6.21 \\
+Independent Q--DESN \(\AL\)--\(\RHS\) & 185 & 4705 & 0 & 15.17 \\
+Joint exQDESN \(\exAL\)--\(\RHS\) & 0 & 0 & 0 & 1.60 \\
+Independent exQDESN \(\exAL\)--\(\RHS\) & 0 & 281 & 0 & 11.20 \\
+\bottomrule
+\end{tabular}
+\caption{Adjacent-level crossings for posterior-mean quantile grids, summed over the eight simulation settings. Raw counts are reported before monotone rearrangement; all 32 grids are ordered afterward. The final column averages the draw-level forecast crossing rate across settings.}
+\label{tab:supp-joint-qdesn-shared-backbone-crossings}
+\end{table}

@@ -1853,32 +1853,41 @@ limited sensitivity to MCMC initialization for the selected specifications.
 \clearpage
 \subsection{Joint Multi-Quantile MCMC Evaluation Details}
 
-The following tables give the MCMC allocation,
-joint-minus-independent DGP-integrated score contrasts, quantile-crossing
-counts, and forecast quantile-path recovery diagnostics. All 16 paired score
-intervals include zero. MCMC diagnostics for the posterior score meet the
-pre-specified rank-normalized \(\widehat R\) and effective-sample-size
-thresholds in 21 of 32 comparisons; the remaining 11 comparisons are
-interpreted cautiously.
+The shared-backbone evaluation uses the initialization sequence in
+Figure~\ref{fig:supp-quantile-sequential-initialization}. One scenario-specific
+DESN/RHS specification is selected from source realizations and held common
+across the four model classes. The evaluation realization is used only for the final
+fit and evaluation. Table~\ref{tab:joint-qdesn-shared-backbone-protocol}
+records the 136 variational components, 160 MCMC chains, and retained-draw
+allocation.
 
-\input{tables/joint_qdesn_phase181_dgp_integrated_score_table.tex}
+\input{tables/joint_qdesn_shared_backbone_score_table.tex}
 
-\input{tables/joint_qdesn_phase181_fit_interval_figure.tex}
+\input{tables/joint_qdesn_shared_backbone_fit_figure.tex}
 
-For the independent \(\exAL\) analyses, the scale-collapsed update yields maximum
-rank-normalized \(\widehat R\) values of approximately 1.020 for \(\gamma\)
-and 1.016 for \(\sigma\), with minimum bulk effective sample sizes of
-approximately 410 and 472, respectively. The corresponding joint-fit values
-are approximately 1.015 and 1.012, with minimum bulk effective sample sizes
-of 849 and 959. All 16 \(\exAL\) comparisons use this scale-collapsed update
-separately at each quantile level. The weaker remaining diagnostics occur
-mainly in intercept and coefficient coordinates. Crossings in
-Table~\ref{tab:supp-joint-qdesn-crossings} refer to the posterior-mean
-quantile grids. The table also reports draw-level crossing rates, for which
-10 of the 32 scenario--model comparisons meet the pre-specified diagnostic
-criterion and 22 warrant review.
+The posterior-score diagnostics satisfy the pre-specified rank-normalized
+\(\widehat R\), effective-sample-size, and Monte Carlo error criteria in 21 of
+32 comparisons; the other 11 are retained with review status. All 16
+\(\exAL\) scale--asymmetry assessments are also retained at review level.
+Precision stabilization was enabled for 96 \(\exAL\) chains and invoked in
+eight chains for 34 coefficient updates; the maximum relative diagonal
+perturbation was \(10^{-12}\). All repaired chains satisfy the numerical
+checks and no result is excluded on this basis.
+
+Five paired joint-minus-independent score intervals lie entirely above zero,
+favoring independent estimation, and the other eleven include zero. Raw
+crossings are reported separately from the monotone score contract. All
+posterior-mean grids are ordered after rearrangement.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
+
+The displayed shared-backbone calculations used the RHS global-scale update present in
+the frozen execution code. A subsequent source correction changed the shape
+term in that conditional update from \(p/2\) to \((p+1)/2\). No numerical
+adjustment has been made to the stored results. A confirmatory rerun under the
+corrected update is registered as required before the final archival release;
+until then, this complete shared-backbone analysis is the provisional article
+authority.
 
 The final table reports a separate 50-replicate variational sensitivity
 analysis. Its paired \(\AL\)-minus-\(\exAL\) forecast-MAE differences assess

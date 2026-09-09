@@ -1,0 +1,19 @@
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.25\textwidth}>{\raggedright\arraybackslash}p{0.65\textwidth}@{}}
+\toprule
+Item & Value \\
+\midrule
+Feature design & One scenario-specific DESN/RHS specification selected from independent source realizations and then shared by all four model classes; the evaluation realization was not used for selection. \\
+Quantile grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95. \\
+Sequential initialization & Gaussian ridge to Gaussian RHS--VB; then median-centered independent AL continuation, matching AL-to-exAL initialization, complete independent grids to the corresponding joint fit, and matching VB-to-MCMC initialization. \\
+VB calculation & 136 components: 8 Gaussian RHS, 56 independent AL, 56 independent exAL, 8 joint AL, and 8 joint exAL fits. \\
+MCMC calculation & 160 independently seeded chains. Each AL cell uses four chains of 4,000 iterations with 1,000 burn-in and thinning by 4; each exAL cell uses six chains of 8,000 iterations with 2,000 burn-in and thinning by 4. \\
+Posterior score summary & 3,000 chain-balanced draws per AL cell and 4,500 per exAL cell; entries are posterior means with equal-tailed 95\% intervals. \\
+Forecast evaluation & 990 aligned, sequentially conditional origin--horizon rows per comparison. The DGP-integrated seven-level score is computed after monotone rearrangement. \\
+\bottomrule
+\end{tabular}
+\caption{Design of the shared-backbone joint multi-quantile evaluation. Initialization transfers starting values only; each destination retains its own likelihood, prior, and posterior target.}
+\label{tab:joint-qdesn-shared-backbone-protocol}
+\end{table}

@@ -131,6 +131,20 @@ expect(grepl(
 expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
        "Repeated VB forecast figures remain active in the supplement.")
 
+reader_facing_independent <- paste(c(
+  main,
+  supplement,
+  read_text("tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex"),
+  read_text("tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex"),
+  read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_normal.tex"),
+  read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_laplace.tex"),
+  read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_gausmix.tex")
+), collapse = "\n")
+expect(!grepl(
+  "dagger|diagnostic caution|diagnostic qualification|receive warnings|warning details",
+  reader_facing_independent, ignore.case = TRUE
+), "Internal independent-validation diagnostics remain reader-facing.")
+
 article_files <- readLines(repo_path("overleaf/article_files.txt"), warn = FALSE)
 expect(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
        "Repeated VB forecast figures remain in the article-only snapshot.")
@@ -149,6 +163,6 @@ expect(length(abstract_words) <= 250L,
 cat(sprintf(
   paste0("QDESN_FINAL_MANUSCRIPT_REVISION_CHECK=PASS scientific_files=%d ",
          "independent_roles=216 joint_fit=32 joint_forecast=32 ",
-         "abstract_words=%d\n"),
+         "reader_facing_internal_markers=0 abstract_words=%d\n"),
   length(immutable_hashes), length(abstract_words)
 ))

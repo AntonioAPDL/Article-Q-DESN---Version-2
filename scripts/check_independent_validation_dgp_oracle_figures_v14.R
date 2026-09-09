@@ -23,7 +23,7 @@ check <- function(condition, label) {
   invisible(TRUE)
 }
 
-required_tools <- c("pdfinfo", "pdfimages", "pdffonts", "pdftocairo")
+required_tools <- c("pdfinfo", "pdfimages", "pdffonts", "pdftocairo", "pdftotext")
 check(all(nzchar(Sys.which(required_tools))), "PDF inspection tools are available")
 
 render_once <- function(path) {
@@ -154,6 +154,10 @@ for (relative in active_figures) {
   fonts <- system2("pdffonts", path, stdout = TRUE, stderr = TRUE)
   check(is.null(attr(fonts, "status")) && length(fonts) > 2L,
         paste(relative, "contains vector text"))
+  pdf_text <- system2("pdftotext", c(path, "-"), stdout = TRUE, stderr = TRUE)
+  check(is.null(attr(pdf_text, "status")) &&
+          !any(grepl("dagger|†", pdf_text, ignore.case = TRUE)),
+        paste(relative, "contains no reader-facing diagnostic marker"))
   first <- render_once(path)
   second <- render_once(path)
   check(identical(first, second), paste(relative, "renders repeatably"))
@@ -171,6 +175,11 @@ wrappers <- lapply(wrapper_relatives, function(relative) {
 })
 check(all(vapply(wrappers, grepl, logical(1L), pattern = "\\figalt{", fixed = TRUE)),
       "active wrappers include alternative descriptions")
+check(!any(vapply(
+  wrappers, grepl, logical(1L),
+  pattern = "dagger|diagnostic qualification|diagnostic caution",
+  ignore.case = TRUE
+)), "active wrappers omit internal diagnostic qualifications")
 check(grepl("mcmc-fit-rmse-intervals", wrappers[[1L]], fixed = TRUE),
       "MCMC fitting wrapper has the fitting figure")
 check(grepl("mcmc-forecast-mae-intervals", wrappers[[2L]], fixed = TRUE) &&

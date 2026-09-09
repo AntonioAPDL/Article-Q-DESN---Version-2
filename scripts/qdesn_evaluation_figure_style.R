@@ -109,22 +109,8 @@ qdesn_independent_interval_plot <- function(data, inference, metric_role) {
   block$likelihood_family <- unname(
     qdesn_independent_model_family[as.character(block$model_variant)]
   )
-  block$warning_marker <- ifelse(block$diagnostic_grade == "WARN", "\u2020", "")
 
   references <- unique(block[c("panel_key", "plot_reference_value")])
-  panel_ranges <- lapply(split(block, block$panel_key, drop = TRUE), function(x) {
-    span <- max(x$cri_upper) - min(x$cri_lower)
-    if (!is.finite(span) || span <= 0) span <- max(abs(x$cri_upper), 1) * 0.1
-    data.frame(panel_key = x$panel_key[[1L]], panel_span = span)
-  })
-  panel_ranges <- do.call(rbind, panel_ranges)
-  block <- merge(block, panel_ranges, by = "panel_key", sort = FALSE)
-  block$panel_key <- factor(block$panel_key, levels = panel_keys)
-  block$model_variant <- factor(
-    block$model_variant, levels = rev(qdesn_independent_model_order)
-  )
-  warning_data <- block[block$warning_marker == "\u2020", , drop = FALSE]
-  warning_data$warning_x <- warning_data$cri_upper + 0.055 * warning_data$panel_span
 
   metric_labels <- c(
     fit_rmse = "Fitting-sample quantile-path RMSE",
@@ -160,7 +146,7 @@ qdesn_independent_interval_plot <- function(data, inference, metric_role) {
     ggplot2::scale_x_continuous(
       breaks = function(limits) pretty(limits, n = 3L),
       labels = function(x) formatC(x, format = "f", digits = 2),
-      expand = ggplot2::expansion(mult = c(0.04, 0.12))
+      expand = ggplot2::expansion(mult = c(0.04, 0.04))
     ) +
     ggplot2::labs(x = unname(metric_labels[[metric_role]]), y = NULL) +
     ggplot2::coord_cartesian(clip = "on") +
@@ -184,14 +170,6 @@ qdesn_independent_interval_plot <- function(data, inference, metric_role) {
       panel.spacing = grid::unit(0.95, "lines"),
       plot.margin = ggplot2::margin(5.5, 7.5, 5.5, 5.5)
     )
-
-  if (nrow(warning_data)) {
-    plot <- plot + ggplot2::geom_text(
-      data = warning_data,
-      ggplot2::aes(x = warning_x, y = model_variant, label = warning_marker),
-      inherit.aes = FALSE, size = 3.1, colour = "#242424", vjust = 0.3
-    )
-  }
   plot
 }
 

@@ -293,6 +293,22 @@ def test_transfer_rejects_symlink_escape(tmp_path: Path) -> None:
         TRANSFER.record(link, base, "bad")
 
 
+def test_transfer_accepts_only_hash_pinned_external_symlink(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    outside = tmp_path / "python3.11"
+    outside.write_text("pinned interpreter")
+    link = base / "python"
+    link.symlink_to(outside)
+    monkeypatch.setattr(TRANSFER, "APPROVED_EXTERNAL_SYMLINKS", {
+        str(outside.resolve()): TRANSFER.sha256_file(outside),
+    })
+    item = TRANSFER.record(link, base, "python")
+    assert item["type"] == "symlink"
+    assert item["relative_path"] == "python"
+    assert item["external_target_sha256"] == TRANSFER.sha256_file(outside)
+
+
 def test_reconciliation_rejects_overlapping_region_ownership(tmp_path: Path) -> None:
     campaign = tmp_path / "campaign"
     for host in ("muscat", "jerez"):

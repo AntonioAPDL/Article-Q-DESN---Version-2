@@ -94,8 +94,11 @@ def iter_entries(root: Path) -> Iterable[Path]:
 
 
 def record(path: Path, base_root: Path, role: str) -> dict[str, Any]:
-    relative = relative_to_root(path, base_root)
     if path.is_symlink():
+        try:
+            relative = str(path.absolute().relative_to(base_root.resolve()))
+        except ValueError as error:
+            raise RuntimeError(f"artifact link escapes the declared root: {path.absolute()}") from error
         target = os.readlink(path)
         resolved = path.resolve()
         external_sha256 = None
@@ -116,6 +119,7 @@ def record(path: Path, base_root: Path, role: str) -> dict[str, Any]:
         if external_sha256:
             result["external_target_sha256"] = external_sha256
         return result
+    relative = relative_to_root(path, base_root)
     return {
         "relative_path": relative,
         "role": role,

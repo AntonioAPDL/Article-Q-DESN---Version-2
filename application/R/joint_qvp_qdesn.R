@@ -13159,7 +13159,7 @@ app_joint_qvp_run_synthetic_vb_validation <- function(
 	    validation_assessment = app_joint_qvp_write_csv(validation_assessment, file.path(out_dir, "validation_assessment.csv")),
 	    fit_summary = app_joint_qvp_write_csv(fit_summary, file.path(out_dir, "fit_summary.csv")),
 	    crossing_summary = app_joint_qvp_write_csv(do.call(rbind, crossing_rows), file.path(out_dir, "crossing_summary.csv")),
-	    rhs_prior_summary = app_joint_qvp_write_csv(do.call(rbind, rhs_rows), file.path(out_dir, "rhs_prior_summary.csv")),
+	    rhs_prior_summary = app_joint_qvp_write_csv(app_bind_rows_fill(rhs_rows), file.path(out_dir, "rhs_prior_summary.csv")),
 	    monitor_terms = app_joint_qvp_write_csv(do.call(rbind, monitor_rows), file.path(out_dir, "monitor_terms.csv")),
 	    elbo_terms = app_joint_qvp_write_csv(do.call(rbind, elbo_rows), file.path(out_dir, "elbo_terms.csv")),
 	    objective_diagnostics = app_joint_qvp_write_csv(do.call(rbind, objective_rows), file.path(out_dir, "objective_diagnostics.csv")),

@@ -7,6 +7,13 @@ app_joint_article_score_contract_path <- function() {
   )
 }
 
+app_joint_article_corrected_score_contract_path <- function() {
+  app_path(
+    "application/config",
+    "joint_qdesn_corrected_article_score_contract_v2.csv"
+  )
+}
+
 app_joint_article_score_contract_value <- function(tab, name) {
   row <- tab[tab$name == name, , drop = FALSE]
   if (nrow(row) != 1L) {
@@ -32,6 +39,8 @@ app_joint_article_score_read_contract <- function(
     stop("Jerez score contract names must be unique.", call. = FALSE)
   }
   get <- function(name) app_joint_article_score_contract_value(tab, name)
+  has <- function(name) name %in% tab$name
+  get_optional <- function(name, default) if (has(name)) get(name) else default
   int <- function(name) as.integer(get(name))
   num <- function(name) as.numeric(get(name))
   bool <- function(name) identical(tolower(get(name)), "true")
@@ -50,7 +59,7 @@ app_joint_article_score_read_contract <- function(
       bool("renormalize_weights")) {
     stop("Jerez score contract has malformed tau weights.", call. = FALSE)
   }
-  list(
+  out <- list(
     table = tab,
     path = normalizePath(path, mustWork = TRUE),
     version = get("contract_version"),
@@ -65,11 +74,21 @@ app_joint_article_score_read_contract <- function(
     expected_model_cells = int("expected_model_cells"),
     expected_contrasts = int("expected_contrasts"),
     primary_metric = get("primary_metric"),
+    score_scale = get("score_scale"),
+    forecast_row_source = get("forecast_row_source"),
+    canonical_action = get("canonical_action"),
+    posterior_point_summary = get("posterior_point_summary"),
+    posterior_sensitivity_summary = get("posterior_sensitivity_summary"),
+    credible_interval = num("credible_interval"),
+    credible_interval_probabilities = nums("credible_interval_probabilities"),
     tau = tau,
     weights_qs = weights,
     score_draws_per_chain = int("score_draws_per_chain"),
     sensitivity_draws_per_chain = int("sensitivity_draws_per_chain"),
+    draw_selection = get("draw_selection"),
     chunk_size = int("chunk_size"),
+    joint_draw_coupling = get("joint_draw_coupling"),
+    independent_draw_coupling = get("independent_draw_coupling"),
     primary_pairing_seed = int("primary_pairing_seed"),
     sensitivity_pairing_seeds = ints("sensitivity_pairing_seeds"),
     contrast_pairing_seed = int("contrast_pairing_seed"),
@@ -83,8 +102,50 @@ app_joint_article_score_read_contract <- function(
     analytic_integration_tolerance = num("analytic_integration_tolerance"),
     monte_carlo_tolerance = num("monte_carlo_tolerance"),
     practical_relative_margin = num("practical_relative_margin"),
-    posterior_probability_floor = num("posterior_probability_floor")
+    posterior_probability_floor = num("posterior_probability_floor"),
+    posterior_target_hash_required = identical(get_optional(
+      "posterior_target_hashes", ""), "one_verified_hash_per_model_cell"),
+    historical_packets_separate = identical(get_optional(
+      "historical_packets", "separate_not_mixed"), "separate_not_mixed"),
+    phase182_separate = identical(get_optional(
+      "phase182_scope", "separate_dense_grid_lane"),
+      "separate_dense_grid_lane")
   )
+  if (identical(out$version,
+      "joint_qdesn_corrected_article_score_packet_v2")) {
+    expected_runtime <- file.path(
+      "application", "cache",
+      "joint_qdesn_corrected_article_comparison_jerez_20260909")
+    if (!identical(out$runtime_root, expected_runtime) ||
+        out$expected_source_jobs != 7560L ||
+        out$expected_source_failures != 0L ||
+        out$expected_vb_components != 136L ||
+        out$expected_initializers != 32L ||
+        out$expected_mcmc_workers != 160L ||
+        out$expected_scenarios != 8L || out$expected_models != 4L ||
+        out$expected_model_cells != 32L || out$expected_contrasts != 16L ||
+        !identical(out$primary_metric, "dgp_integrated_acrps") ||
+        !identical(out$score_scale, "twice_check_loss") ||
+        !identical(out$forecast_row_source, "design_score_local") ||
+        !identical(out$canonical_action,
+          "posterior_mean_parameter_path_then_rowwise_isotonic") ||
+        !identical(out$posterior_point_summary, "mean") ||
+        !identical(out$posterior_sensitivity_summary, "median") ||
+        out$credible_interval != 0.95 ||
+        !identical(out$credible_interval_probabilities, c(0.025, 0.975)) ||
+        !identical(out$draw_selection,
+          "equally_spaced_retained_indices") ||
+        !identical(out$joint_draw_coupling,
+          "preserve_retained_joint_draw_identity") ||
+        !identical(out$independent_draw_coupling,
+          "within_chain_seeded_per_tau_permutation") ||
+        !out$posterior_target_hash_required ||
+        !out$historical_packets_separate || !out$phase182_separate) {
+      stop("Corrected JOINT score contract violates the frozen common-posterior gate.",
+        call. = FALSE)
+    }
+  }
+  out
 }
 
 app_joint_article_score_dirs <- function(
@@ -152,7 +213,9 @@ app_joint_article_score_reaudit <- function(
     if (nrow(audit) &&
         all(audit$status == "pass") &&
         "execution_code_commit" %in% names(audit) &&
-        all(audit$execution_code_commit == current_head)) {
+        all(audit$execution_code_commit == current_head) &&
+        (!isTRUE(contract$posterior_target_hash_required) ||
+          "posterior_target_hashes" %in% audit$gate)) {
       return(audit)
     }
   }
@@ -168,6 +231,12 @@ app_joint_article_score_reaudit <- function(
   cells <- app_read_csv(file.path(root, "model_cell_plan.csv"))
   posterior <- app_read_csv(file.path(root, "mcmc_posterior_summary_registry.csv"))
   final <- app_read_csv(file.path(root, "final_confirmation_assessment.csv"))
+  target_path <- file.path(root, "mcmc_posterior_target_hash_audit.csv")
+  target_audit <- if (file.exists(target_path)) {
+    app_read_csv(target_path)
+  } else {
+    data.frame()
+  }
 
   source_expected <- sum(as.integer(source$expected))
   source_complete <- sum(as.integer(source$completed))
@@ -312,6 +381,25 @@ app_joint_article_score_reaudit <- function(
       stringsAsFactors = FALSE
     )
   )
+  if (isTRUE(contract$posterior_target_hash_required)) {
+    target_verified <- nrow(target_audit) == contract$expected_model_cells &&
+      "model_cell_id" %in% names(target_audit) &&
+      "posterior_target_sha256" %in% names(target_audit) &&
+      "verified" %in% names(target_audit) &&
+      !anyDuplicated(target_audit$model_cell_id) &&
+      all(nchar(target_audit$posterior_target_sha256) == 64L) &&
+      all(app_as_bool_vec(target_audit$verified))
+    rows[[length(rows) + 1L]] <- data.frame(
+      gate = "posterior_target_hashes",
+      expected = contract$expected_model_cells,
+      observed = nrow(target_audit),
+      failed = if (target_verified) 0L else contract$expected_model_cells,
+      status = if (target_verified) "pass" else "fail",
+      evidence_path = "mcmc_posterior_target_hash_audit.csv",
+      note = "one verified chain-invariant posterior target per model cell",
+      stringsAsFactors = FALSE
+    )
+  }
   audit <- app_bind_rows_fill(rows)
   audit$created_at <- format(Sys.time(), tz = "UTC", usetz = TRUE)
   audit$execution_code_commit <- current_head
@@ -1287,6 +1375,15 @@ app_joint_article_score_finalize <- function(
 ) {
   root <- normalizePath(root, mustWork = TRUE)
   contract <- app_joint_article_score_read_contract(contract_path)
+  if (identical(contract$version,
+      "joint_qdesn_corrected_article_score_packet_v2")) {
+    expected_root <- normalizePath(
+      app_path(contract$runtime_root), mustWork = FALSE)
+    if (!identical(root, expected_root)) {
+      stop("Corrected JOINT scoring must use its isolated frozen runtime root.",
+        call. = FALSE)
+    }
+  }
   dirs <- app_joint_article_score_dirs(root)
   out_dir <- normalizePath(out_dir %||% dirs$packet, mustWork = FALSE)
   if (dir.exists(out_dir) &&

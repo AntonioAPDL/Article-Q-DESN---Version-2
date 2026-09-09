@@ -419,3 +419,14 @@ p50 transition/information screen. It freezes the legacy/damped/cumulative
 semantics, separates retrospective blended, issued-only, and oracle covariate
 roles, excludes unsupported ensemble-spread training, and requires an explicit
 approval token before any candidate materialization or launch code is added.
+
+The corrected JOINT article comparison is governed jointly by
+`joint_qdesn_shared_backbone_article_confirmation_contract_v2.csv` and
+`joint_qdesn_corrected_article_score_contract_v2.csv`. These contracts retain
+the eight selected shared backbones but refit all 32 model cells under one
+chain-invariant posterior specification. They fix the regularized-horseshoe
+slab variance at one, derive the intercept prior once from the Gaussian fit,
+use positive unbounded scale support, require five chains and one verified
+posterior-target hash per cell, and keep all earlier JOINT packets separate.
+Both production phases remain launch locked and are authorized only on the
+dedicated Jerez execution branch and host profile.

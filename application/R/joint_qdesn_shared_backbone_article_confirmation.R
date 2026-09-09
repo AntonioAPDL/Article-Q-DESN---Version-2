@@ -12,8 +12,10 @@ app_joint_article_host_profiles_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_host_profiles_v1.csv")
 }
 
-app_joint_article_default_root <- function() {
-  app_path("application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907")
+app_joint_article_default_root <- function(
+  contract = app_joint_article_read_contract()
+) {
+  app_path("application/cache", contract$run_tag)
 }
 
 app_joint_article_default_source_runtime <- function(
@@ -57,6 +59,9 @@ app_joint_article_read_contract <- function(
     path = normalizePath(path, mustWork = TRUE),
     version = get("contract_version"),
     run_tag = get("run_tag"),
+    execution_branch = get_optional(
+      "execution_branch", "work/joint-qdesn-article-confirmation-jerez-20260907"),
+    host_profile_id = get_optional("host_profile_id", "jerez_20260907"),
     source_worktree = get("source_worktree"),
     source_head = get("source_head"),
     source_runtime_relative_path = get("source_runtime_relative_path"),
@@ -139,6 +144,8 @@ app_joint_article_read_contract <- function(
     fixture_seed_source = get("fixture_seed_source"),
     chain_seed_base = int("chain_seed_base"),
     component_seed_stride = int("component_seed_stride"),
+    vb_component_seed_base = as.integer(get_optional(
+      "vb_component_seed_base", "202609800")),
     cell_seed_stride = int("cell_seed_stride"),
     chain_seed_stride = int("chain_seed_stride"),
     chain_start_jitter_seed_base = int("chain_start_jitter_seed_base"),
@@ -184,7 +191,7 @@ app_joint_article_read_contract <- function(
   app_joint_qvp_validate_sigma_bounds(c(
     out$sigma_lower_bound, out$sigma_upper_bound))
   if (identical(out$version, "joint_shared_backbone_article_confirmation_v2")) {
-    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance <= 0 ||
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
         !out$rhs_slab_fixed ||
         !identical(out$coefficient_hierarchy,
           "first_quantile_anchor_adjacent_differences") ||
@@ -195,6 +202,9 @@ app_joint_article_read_contract <- function(
           "gaussian_residual_scale_multiplier") ||
         out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
         !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-corrected-article-comparison-jerez-20260909") ||
+        !identical(out$host_profile_id, "jerez_corrected_20260909") ||
         out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
         out$initial_concurrency != 50L || out$maximum_concurrency != 50L) {
       stop("Corrected JOINT article confirmation contract violates the common-posterior gate.",
@@ -287,10 +297,14 @@ app_joint_article_git_value <- function(args, root = app_repo_root()) {
   if (!length(out)) "" else trimws(out[[1L]])
 }
 
-app_joint_article_assert_execution_branch <- function() {
+app_joint_article_assert_execution_branch <- function(
+  contract = app_joint_article_read_contract()
+) {
   branch <- app_joint_article_git_value(c("rev-parse", "--abbrev-ref", "HEAD"))
-  if (!identical(branch, "work/joint-qdesn-article-confirmation-jerez-20260907")) {
-    stop("This workflow must run only from the dedicated JOINT article execution branch.",
+  if (!identical(branch, contract$execution_branch)) {
+    stop(sprintf(
+      "This workflow must run only from the dedicated JOINT branch '%s'.",
+      contract$execution_branch),
          call. = FALSE)
   }
   invisible(TRUE)
@@ -307,8 +321,10 @@ app_joint_article_execution_git_state <- function() {
   )
 }
 
-app_joint_article_assert_clean_execution <- function(require_synced = TRUE) {
-  app_joint_article_assert_execution_branch()
+app_joint_article_assert_clean_execution <- function(
+  contract = app_joint_article_read_contract(), require_synced = TRUE
+) {
+  app_joint_article_assert_execution_branch(contract)
   state <- app_joint_article_execution_git_state()
   if (!identical(state$tracked_status[[1L]], "")) {
     stop("Production workers require a clean tracked execution worktree.",
@@ -327,10 +343,42 @@ app_joint_article_data_free_gib <- function(path = "/data") {
   as.numeric(parts[[4L]]) / 1024^2
 }
 
+app_joint_article_competing_processes <- function() {
+  user <- Sys.info()[["user"]]
+  lines <- tryCatch(system2(
+    "ps", c("-u", user, "-o", "pid=,args="), stdout = TRUE, stderr = FALSE
+  ), error = function(e) character())
+  if (!length(lines)) return(character())
+  pid <- suppressWarnings(as.integer(sub("^\\s*([0-9]+).*$", "\\1", lines)))
+  patterns <- c(
+    "pricefm", "glofas", "phase182",
+    "joint_qdesn_shared_backbone_article_confirmation_jerez_20260907"
+  )
+  keep <- Reduce(`|`, lapply(patterns, grepl, lines, ignore.case = TRUE))
+  trimws(lines[keep & !is.na(pid) & pid != Sys.getpid()])
+}
+
+app_joint_article_assert_capacity_authorized <- function(contract) {
+  if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v2") &&
+      !identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED"),
+        "JEREZ_50_IDLE")) {
+    stop(paste(
+      "Corrected production requires",
+      "JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED=JEREZ_50_IDLE",
+      "after verifying that PriceFM and other scientific campaigns are inactive."
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 app_joint_article_host_preflight <- function(
   contract = app_joint_article_read_contract(),
-  profile = app_joint_article_read_host_profile()
+  profile = NULL
 ) {
+  if (is.null(profile)) {
+    profile <- app_joint_article_read_host_profile(contract$host_profile_id)
+  }
   data_free <- app_joint_article_data_free_gib("/data")
   thread_vars <- c(
     "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
@@ -338,28 +386,67 @@ app_joint_article_host_preflight <- function(
   )
   thread_values <- Sys.getenv(thread_vars, unset = "1")
   lib_ok <- identical(.libPaths(), as.character(profile$r_library_root[[1L]]))
+  required_rscript <- normalizePath(
+    as.character(profile$required_rscript[[1L]]), mustWork = FALSE)
+  active_rscript <- normalizePath(file.path(R.home("bin"), "Rscript"),
+    mustWork = FALSE)
+  required_install_root <- normalizePath(
+    file.path(dirname(required_rscript), ".."), mustWork = FALSE)
+  active_install_root <- normalizePath(
+    file.path(R.home(), "..", ".."), mustWork = FALSE)
+  rscript_ok <- file.exists(required_rscript) &&
+    identical(active_install_root, required_install_root)
   expected_host <- as.character(profile$host[[1L]])
   host_ok <- Sys.info()[["nodename"]] %in% c(expected_host, sub("\\..*$", "", expected_host))
+  logical_cores <- parallel::detectCores(logical = TRUE)
+  competing <- app_joint_article_competing_processes()
+  expected_runtime_root <- file.path("application", "cache", contract$run_tag)
+  profile_ok <- as.integer(profile$initial_concurrency[[1L]]) ==
+      contract$initial_concurrency &&
+    as.integer(profile$maximum_concurrency[[1L]]) ==
+      contract$maximum_concurrency &&
+    as.numeric(profile$min_data_free_gib[[1L]]) == contract$min_data_free_gib &&
+    as.integer(profile$blas_threads[[1L]]) == contract$blas_threads &&
+    identical(as.character(profile$runtime_root[[1L]]), expected_runtime_root) &&
+    identical(as.character(profile$source_worktree[[1L]]),
+      contract$source_worktree) &&
+    !app_as_bool_vec(profile$production_launched)[[1L]]
   out <- data.frame(
     host = Sys.info()[["nodename"]],
     expected_host = expected_host,
     host_ok = host_ok,
+    profile_id = profile$profile_id[[1L]],
+    profile_contract_ok = profile_ok,
     r_home = R.home(),
     r_version = paste(R.version$major, R.version$minor, sep = "."),
+    active_rscript = active_rscript,
+    required_rscript = required_rscript,
+    active_install_root = active_install_root,
+    required_install_root = required_install_root,
+    rscript_ok = rscript_ok,
     lib_paths = paste(.libPaths(), collapse = ";"),
     expected_library_root = profile$r_library_root[[1L]],
     library_root_ok = lib_ok,
     data_free_gib = data_free,
     min_data_free_gib = contract$min_data_free_gib,
     data_free_ok = data_free >= contract$min_data_free_gib,
+    logical_cores = logical_cores,
+    required_logical_cores = contract$maximum_concurrency,
+    logical_cores_ok = is.finite(logical_cores) &&
+      logical_cores >= contract$maximum_concurrency,
+    competing_process_count = length(competing),
+    competing_processes = paste(competing, collapse = " || "),
+    competing_processes_ok = !length(competing),
     thread_values = paste(paste(thread_vars, thread_values, sep = "="), collapse = ";"),
     one_thread_policy = all(thread_values == "1"),
     production_launched = FALSE,
     stringsAsFactors = FALSE
   )
-  if (!out$host_ok[[1L]] || !out$library_root_ok[[1L]] ||
-      !out$data_free_ok[[1L]] || !out$one_thread_policy[[1L]]) {
-    stop("Host preflight failed host, R library, /data capacity, or one-thread policy.",
+  if (!out$host_ok[[1L]] || !out$profile_contract_ok[[1L]] ||
+      !out$rscript_ok[[1L]] || !out$library_root_ok[[1L]] ||
+      !out$data_free_ok[[1L]] || !out$logical_cores_ok[[1L]] ||
+      !out$competing_processes_ok[[1L]] || !out$one_thread_policy[[1L]]) {
+    stop("Host preflight failed host/profile, R executable/library, compute/storage capacity, competing-process, or one-thread policy.",
          call. = FALSE)
   }
   out
@@ -678,7 +765,7 @@ app_joint_article_build_vb_plan <- function(selected, design_manifest, contract)
     paste(app_joint_article_dependency_rows(plan, plan[ii, , drop = FALSE])$job_id,
       collapse = ";")
   }, character(1L))
-  plan$component_seed <- as.integer(202609800L + plan$job_id)
+  plan$component_seed <- as.integer(contract$vb_component_seed_base + plan$job_id)
   counts <- table(plan$model_id)
   if (nrow(plan) != contract$expected_total_components ||
       unname(counts[["gaussian_rhs_initializer"]]) != contract$expected_gaussian_refits ||
@@ -833,13 +920,22 @@ app_joint_article_prepare <- function(
   force = FALSE,
   dry_run = TRUE
 ) {
-  app_joint_article_assert_execution_branch()
   contract <- app_joint_article_read_contract(contract_path)
+  app_joint_article_assert_execution_branch(contract)
   if (!isTRUE(dry_run) && contract$dry_run_preflight_required) {
     stop("Production preparation requires a separate explicit launch instruction.",
          call. = FALSE)
   }
   out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v2")) {
+    expected_out_dir <- normalizePath(
+      app_path("application/cache", contract$run_tag), mustWork = FALSE)
+    if (!identical(out_dir, expected_out_dir)) {
+      stop("Corrected JOINT preparation requires the contract-owned isolated runtime root.",
+        call. = FALSE)
+    }
+  }
   if (dir.exists(out_dir) && length(list.files(out_dir, all.files = TRUE, no.. = TRUE))) {
     if (!isTRUE(force)) {
       existing <- tryCatch(app_joint_shared_verify_manifest(out_dir),
@@ -1193,8 +1289,10 @@ app_joint_article_run_vb_queue <- function(
     stop("Refusing VB launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=VB.",
          call. = FALSE)
   }
-  app_joint_article_assert_clean_execution(require_synced = require_synced)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  app_joint_article_assert_clean_execution(contract, require_synced = require_synced)
+  app_joint_article_assert_capacity_authorized(contract)
+  app_joint_article_host_preflight(contract)
   max_workers <- as.integer(max_workers)[[1L]]
   if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
       max_workers > contract$maximum_concurrency) {
@@ -1878,12 +1976,16 @@ app_joint_article_mcmc_launch_guard <- function(root) {
   TRUE
 }
 
-app_joint_article_assert_mcmc_production_allowed <- function(require_synced = TRUE) {
+app_joint_article_assert_mcmc_production_allowed <- function(
+  contract, require_synced = TRUE
+) {
   if (!identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION"), "MCMC")) {
     stop("Refusing MCMC launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC.",
          call. = FALSE)
   }
-  app_joint_article_assert_clean_execution(require_synced = require_synced)
+  app_joint_article_assert_clean_execution(contract, require_synced = require_synced)
+  app_joint_article_assert_capacity_authorized(contract)
+  app_joint_article_host_preflight(contract)
   invisible(TRUE)
 }
 
@@ -1975,9 +2077,10 @@ app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message
 
 app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = TRUE) {
   root <- normalizePath(root, mustWork = TRUE)
-  app_joint_article_assert_mcmc_production_allowed(require_synced = require_synced)
-  app_joint_article_mcmc_launch_guard(root)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  app_joint_article_assert_mcmc_production_allowed(
+    contract, require_synced = require_synced)
+  app_joint_article_mcmc_launch_guard(root)
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
   job <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
   if (nrow(job) != 1L) stop("Article MCMC worker_id is not unique.", call. = FALSE)
@@ -2117,8 +2220,9 @@ app_joint_article_run_mcmc_queue <- function(
   require_synced = TRUE
 ) {
   root <- normalizePath(root, mustWork = TRUE)
-  app_joint_article_assert_mcmc_production_allowed(require_synced = require_synced)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  app_joint_article_assert_mcmc_production_allowed(
+    contract, require_synced = require_synced)
   max_workers <- as.integer(max_workers)[[1L]]
   if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
       max_workers > contract$maximum_concurrency) {

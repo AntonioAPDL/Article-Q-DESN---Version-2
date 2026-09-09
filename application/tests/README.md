@@ -11,6 +11,10 @@ Tracked tests:
 - `test_joint_qdesn_posterior_contract.R`: posterior-target hashing,
   chain-invariant prior/support fields, initialization-field separation, and
   positive unbounded scale support for corrected JOINT comparisons.
+- `test_joint_qdesn_corrected_article_comparison_contract.R`: frozen Jerez
+  execution and score contracts, fixed-slab and common-prior requirements,
+  five-chain target-hash coverage, historical-packet separation, and
+  launch-script guards for the corrected 32-cell comparison.
 - `test_input_contract.R`: input manifests, hashes, schemas, and date ranges.
 - `test_input_bundle.R`: registration of required and optional bundle inputs.
 - `test_input_figures.R`: pre-model diagnostic figures and figure provenance.

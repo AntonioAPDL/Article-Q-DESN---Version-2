@@ -1,0 +1,97 @@
+section,name,value,type,description
+identity,contract_version,joint_shared_backbone_article_confirmation_v2,character,Corrected common-posterior JOINT article comparison contract.
+identity,run_tag,joint_qdesn_corrected_article_comparison_jerez_20260909,character,Separate ignored runtime tag for the corrected Jerez campaign.
+identity,execution_branch,work/joint-qdesn-corrected-article-comparison-jerez-20260909,character,Only synchronized branch authorized to prepare or execute this campaign.
+identity,host_profile_id,jerez_corrected_20260909,character,Required Jerez host profile for preparation and production.
+source,source_worktree,/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_shared_backbone_all_families_20260906,character,Detached immutable shared-backbone evidence worktree on Jerez.
+source,source_head,50cb2478bcbb9f59abf03203084b86e0a1d44ee6,character,Required detached source worktree HEAD.
+source,source_runtime_relative_path,application/cache/joint_qdesn_shared_backbone_family_campaign_20260906,character,Relative frozen shared-backbone runtime path.
+source,final_artifact_manifest_sha256,30e2714224b503a19f23f57a8e094378f6475f824358e9568327088d7f0f45a2,character,Required source manifest SHA-256.
+source,final_decision_sha256,c97891c4e8af0b6f51e17dd86ed21afacc3411d443152e40d733ca1acc61c1bc,character,Required source decision SHA-256.
+source,final_health_sha256,8ad5c95aa1702525aed9f133b13b124e6eb0e7210efb06d03da05b9b4c43ff2d,character,Required source health SHA-256.
+source,nested_manifest_verification_sha256,e66705973cf3a87e26e1f639143859531a2ed5e41c4cf8bb0dc4e5ccbad708ef,character,Required nested manifest verification SHA-256.
+source,selected_family_backbones_sha256,c7fbc90d34b3ad9600e0ddb9c0462b0015ec6b176c07acd7bb2d6ef84d8de7c3,character,Required selected backbones SHA-256.
+source,seven_family_vb_score_aggregate_sha256,6a634e6f4bf17b1c84c32ec71bdbeeaac51d34e425d592781ea727d6c0dd5a58,character,Required source VB aggregate SHA-256.
+source,seven_family_joint_independent_contrasts_sha256,149d4c3dda5ac72620abe2c05821130cac00a1764b506f0731a4fd576fa0fc3c,character,Required source contrast SHA-256.
+source,future_article_fixture_mcmc_plan_sha256,594e5ecdd77ab3784b51ed07d1e07ba03202ffef331dc9859554efc6ceeae167,character,Required future article MCMC plan SHA-256.
+source,expected_source_jobs,7560,integer,Required completed source jobs.
+source,expected_source_failures,0,integer,No source failure is allowed.
+source,expected_selected_backbones,8,integer,Required scenario-specific backbones.
+source,expected_vb_aggregate_rows,56,integer,Required finite source aggregate rows.
+source,expected_contrast_rows,14,integer,Required finite source contrast rows.
+source,expected_future_cells,32,integer,Required scenario-model cells.
+selection,article_fixture_refit_mode,true,logical,Refit the article window without further selection.
+selection,scenario_specific_backbones,true,logical,Retain the selected backbone for each scenario.
+selection,global_specification_selected,false,logical,Do not substitute one universal backbone.
+selection,article_fixture_used_for_selection,false,logical,Article forecast outcomes do not affect selection.
+selection,desn_or_tau0_screen_allowed,false,logical,No new DESN or tau0 screening is authorized.
+quantile,quantile_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,character,Frozen seven-level quantile grid.
+quantile,center_out_order,0.50;0.25;0.75;0.10;0.90;0.05;0.95,character,Frozen median-outward AL initialization order.
+vb,expected_gaussian_refits,8,integer,One Gaussian RHS refit per scenario.
+vb,expected_independent_al_refits,56,integer,Seven independent AL fits per scenario.
+vb,expected_independent_exal_refits,56,integer,Seven independent exAL fits per scenario.
+vb,expected_joint_al_refits,8,integer,One joint AL fit per scenario.
+vb,expected_joint_exal_refits,8,integer,One joint exAL fit per scenario.
+vb,expected_total_components,136,integer,Complete Gaussian and quantile VB sequence.
+vb,expected_top_level_initializers,32,integer,One compact initializer per model cell.
+vb,gaussian_rhs_max_iter,160,integer,Gaussian RHS VB maximum iterations.
+vb,gaussian_rhs_min_iter,8,integer,Gaussian RHS VB minimum iterations.
+vb,gaussian_rhs_tolerance,1e-05,double,Gaussian RHS VB tolerance.
+vb,al_max_iter,960,integer,AL VB maximum iterations.
+vb,exal_max_iter,960,integer,Structured exAL VB maximum iterations.
+vb,vb_tolerance,0.0001,double,Quantile VB tolerance.
+vb,rhs_vb_inner,10,integer,RHS VB inner iterations.
+vb,rhs_freeze_iters,0,integer,RHS freeze iterations.
+vb,ridge_tau2,100,double,Ridge warm-start prior variance.
+vb,intercept_variance,1000000,double,Gaussian intercept prior variance.
+vb,sigma_shape,2,double,Gaussian inverse-gamma shape.
+vb,sigma_rate,1,double,Gaussian inverse-gamma rate.
+posterior,a_sigma,2,double,Quantile scale inverse-gamma shape.
+posterior,b_sigma,1,double,Quantile scale inverse-gamma rate.
+posterior,alpha_prior_sd_multiplier,2,double,Gaussian residual standard deviation multiplier for the intercept prior.
+posterior,alpha_min_spacing,1e-08,double,Minimum ordered-intercept spacing for joint fits.
+posterior,rhs_slab_variance,1,double,Fixed regularized-horseshoe slab variance for all VB and MCMC fits.
+posterior,rhs_slab_fixed,true,logical,Do not update the fixed slab variance.
+posterior,coefficient_hierarchy,first_quantile_anchor_adjacent_differences,character,Joint slope prior uses the first quantile as anchor and adjacent differences thereafter.
+posterior,ordered_intercepts,true,logical,Joint fits impose the existing ordered-intercept parameterization.
+posterior,alpha_prior_center_policy,gaussian_location_quantiles,character,Resolve intercept prior centers once from the Gaussian fit.
+posterior,alpha_prior_sd_policy,gaussian_residual_scale_multiplier,character,Use the same Gaussian-scale prior standard deviation in VB and MCMC.
+posterior,sigma_lower_bound,0,double,Scale support lower endpoint.
+posterior,sigma_upper_bound,Inf,double,Scale support has no finite upper cap.
+posterior,posterior_target_hash_required,true,logical,Every chain must record the common model-cell posterior hash.
+posterior,projection_rule,weighted_isotonic_equal_weights,character,Use the frozen equal-weight isotonic reporting rule.
+posterior,draw_coupling,matched_draw_index_with_repeated_permutation_sensitivity,character,Preserve joint draws and audit independent product-posterior coupling by repeated permutations.
+vb,max_dense_dim,300,integer,Maximum dense precision dimension for VB.
+vb,exal_vb_method,VB1_structured_v,character,Structured exAL VB method.
+vb,gamma_init_policy,zero,character,Initial exAL shape value policy.
+mcmc,exal_mcmc_method,M0_v_collapsed_support_logit,character,Exact collapsed-scale exAL transition.
+mcmc,al_mcmc_method,AL_latent_GIG_Gibbs,character,AL latent-GIG Gibbs transition.
+mcmc,al_chains_per_cell,5,integer,Five independent AL chains per model cell.
+mcmc,exal_chains_per_cell,5,integer,Five independent exAL chains per model cell.
+mcmc,al_n_iter,4000,integer,AL MCMC iterations per chain.
+mcmc,al_burn,1000,integer,AL burn-in iterations per chain.
+mcmc,al_thin,4,integer,AL thinning interval.
+mcmc,exal_n_iter,8000,integer,exAL MCMC iterations per chain.
+mcmc,exal_burn,2000,integer,exAL burn-in iterations per chain.
+mcmc,exal_thin,4,integer,exAL thinning interval.
+mcmc,total_chain_workers,160,integer,Thirty-two cells with five chains each.
+mcmc,initial_concurrency,50,integer,Authorized Jerez worker concurrency after capacity preflight.
+mcmc,maximum_concurrency,50,integer,Hard Jerez concurrency ceiling.
+seeds,fixture_seed_source,future_article_fixture_mcmc_plan.csv,character,Reuse the frozen article-fixture seeds.
+seeds,vb_component_seed_base,202610000,integer,Separate seed namespace for corrected VB components.
+seeds,chain_seed_base,302609090,integer,Separate seed namespace for corrected MCMC chains.
+seeds,component_seed_stride,1009,integer,Stride for independent quantile components.
+seeds,cell_seed_stride,250000,integer,Stride separating model cells.
+seeds,chain_seed_stride,10000,integer,Stride separating chains.
+seeds,chain_start_jitter_seed_base,402609090,integer,Separate seed namespace for dispersed chain starts.
+runtime,blas_threads,1,integer,One numerical-library thread per worker.
+runtime,min_data_free_gib,100,double,Minimum free space on /data.
+runtime,production_launched,false,logical,Configuration is launch locked until explicit phase authorization.
+runtime,retain_broad_model_dumps,false,logical,Retain compact initializers and required posterior summaries only.
+runtime,dry_run_preflight_required,true,logical,Preparation is launch free.
+scoring,primary_score,dgp_integrated_finite_grid_acrps,character,Primary known-DGP integrated check-loss score.
+scoring,secondary_scores,realized_finite_grid_acrps;average_quantile_loss,character,Secondary realized scores.
+scoring,retain_oracle_recovery,true,logical,Retain fit and forecast oracle recovery.
+scoring,retain_crossing_diagnostics,true,logical,Retain raw and post-projection crossing diagnostics.
+scoring,retain_functional_stability,true,logical,Retain chain-level functional diagnostics.
+scoring,retain_gamma_sigma_diagnostics,true,logical,Retain exAL scale-shape diagnostics.

@@ -9,7 +9,7 @@ Target & Model & Fit RMSE & Forecast MAE & Forecast check loss \\
 \midrule
 $p=0.05$ & DQLM & \shortstack{2.602\\{\scriptsize [1.977, 3.252]}} & \shortstack{3.935\\{\scriptsize [3.830, 4.040]}} & \shortstack{1.113\\{\scriptsize [1.096, 1.131]}} \\
  & exDQLM & \shortstack{\textbf{2.153}\\{\scriptsize [1.368, 3.003]}} & \shortstack{\textbf{2.611}\\{\scriptsize [2.489, 2.733]}} & \shortstack{1.123\\{\scriptsize [1.081, 1.167]}} \\
- & Q--DESN AL--RHS & \shortstack{2.765\\{\scriptsize [2.070, 3.468]}} & \shortstack{7.173\textsuperscript{\(\dagger\)}\\{\scriptsize [2.718, 12.23]}} & \shortstack{1.235\textsuperscript{\(\dagger\)}\\{\scriptsize [1.082, 1.454]}} \\
+ & Q--DESN AL--RHS & \shortstack{2.765\\{\scriptsize [2.070, 3.468]}} & \shortstack{7.173\\{\scriptsize [2.718, 12.23]}} & \shortstack{1.235\\{\scriptsize [1.082, 1.454]}} \\
  & Q--DESN exAL--RHS & \shortstack{2.302\\{\scriptsize [1.529, 3.092]}} & \shortstack{3.654\\{\scriptsize [1.246, 7.917]}} & \shortstack{\textbf{1.112}\\{\scriptsize [1.052, 1.253]}} \\
 \addlinespace[2pt]
 $p=0.25$ & DQLM & \shortstack{2.213\\{\scriptsize [1.531, 2.960]}} & \shortstack{3.156\\{\scriptsize [3.019, 3.294]}} & \shortstack{3.437\\{\scriptsize [3.370, 3.505]}} \\
@@ -23,6 +23,6 @@ $p=0.50$ & DQLM & \shortstack{1.866\\{\scriptsize [1.255, 2.573]}} & \shortstack
  & Q--DESN exAL--RHS & \shortstack{\textbf{1.415}\\{\scriptsize [0.7952, 2.108]}} & \shortstack{\textbf{2.694}\\{\scriptsize [1.027, 6.117]}} & \shortstack{\textbf{4.184}\\{\scriptsize [3.962, 4.821]}} \\
 \bottomrule
 \end{tabular}
-\caption{Posterior metric intervals for the Gaussian single-quantile simulation family. Entries are posterior means with equal-tailed 95\% credible intervals; lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion. A dagger marks a diagnostic caution recorded for the source analysis.}
+\caption{Posterior metric intervals for the Gaussian single-quantile simulation family. Entries are posterior means with equal-tailed 95\% credible intervals; lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion.}
 \label{tab:simulation-500obs-mcmc-intervals-normal}
 \end{table}

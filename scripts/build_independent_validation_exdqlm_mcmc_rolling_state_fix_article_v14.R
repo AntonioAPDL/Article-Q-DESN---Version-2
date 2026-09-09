@@ -804,9 +804,6 @@ interval_cell <- function(row, role, best) {
   center <- as.numeric(row$posterior_mean)
   text <- fmt(center)
   if (isTRUE(best)) text <- paste0("\\textbf{", text, "}")
-  if (identical(as.character(row$diagnostic_grade), "WARN")) {
-    text <- paste0(text, "\\textsuperscript{\\(\\dagger\\)}")
-  }
   paste0("\\shortstack{", text, "\\\\{\\scriptsize [", fmt(row$cri_lower),
          ", ", fmt(row$cri_upper), "]}}")
 }
@@ -840,13 +837,10 @@ render_interval_family <- function(inf, family) {
   } else {
     "posterior means with equal-tailed 95\\% credible intervals"
   }
-  warning_text <- if (inf == "mcmc") {
-    " A dagger marks a diagnostic caution recorded for the source analysis."
-  } else ""
   caption <- sprintf(paste0(
     "%s metric intervals for the %s single-quantile simulation family. Entries are %s; ",
-      "lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion.%s"
-  ), qualifier, family_labels[[family]], interval_text, warning_text)
+      "lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion."
+  ), qualifier, family_labels[[family]], interval_text)
   c(lines, "\\bottomrule", "\\end{tabular}", paste0("\\caption{", caption, "}"),
     sprintf("\\label{tab:simulation-500obs-%s-intervals-%s}", inf, family),
     "\\end{table}")
@@ -1091,12 +1085,6 @@ writeLines(c(
       "estimators: point estimates summarize a single fixed path for VB and chain-level ",
       "fixed paths for MCMC, whereas interval centers are posterior means of draw-wise criteria. ",
       "The two summaries are therefore interpreted separately."
-  ), "",
-  sprintf(
-    paste0(
-      "%d of the 108 displayed MCMC summaries are marked by daggers to indicate ",
-      "diagnostic cautions; the supplement provides details."
-    ), displayed_warning_n
   )
 ), interval_prose_path, useBytes = TRUE)
 

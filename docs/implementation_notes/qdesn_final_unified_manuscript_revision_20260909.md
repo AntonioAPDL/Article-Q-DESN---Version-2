@@ -70,8 +70,10 @@ and specifies the validation gates used below.
   and panel labels that remain interpretable in grayscale.
 - Preserved free horizontal scales where the score magnitudes differ
   materially across data-generating mechanisms.
-- Reported the five independent diagnostic warnings with daggers and the
-  model-specific raw joint crossing counts in the joint forecast caption.
+- Retained model-specific raw joint crossing counts in the joint forecast
+  caption. The five independent diagnostic qualifications remain in the
+  internal validation ledger but are not marked in reader-facing figures or
+  tables.
 - Kept the two inactive independent VB forecast figures in the repository for
   reproducibility but removed them from the article-only publication list.
 

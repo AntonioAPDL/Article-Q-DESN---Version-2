@@ -328,6 +328,18 @@ article_files <- readLines(article_path("overleaf/article_files.txt"), warn = FA
 check(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
       "inactive VB forecast figures excluded from article snapshot")
 
+reader_facing_sources <- c(
+  main_text, supplement_text, mcmc_fit_wrapper, mcmc_forecast_wrapper,
+  vb_fit_wrapper,
+  vapply(c(interval_tables, config$outputs$interval_prose), function(path) {
+    paste(readLines(article_path(path), warn = FALSE), collapse = "\n")
+  }, character(1L))
+)
+check(!any(grepl(
+  "dagger|diagnostic caution|diagnostic qualification|receive warnings|warning details",
+  reader_facing_sources, ignore.case = TRUE
+)), "reader-facing sources omit internal diagnostic qualifications")
+
 prose_text <- paste(readLines(article_path(config$outputs$interval_prose), warn = FALSE),
                     collapse = "\n")
 for (phrase in c(

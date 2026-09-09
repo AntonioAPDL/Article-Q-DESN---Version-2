@@ -8,7 +8,7 @@
 Target & Model & Fit RMSE & Forecast MAE & Forecast check loss \\
 \midrule
 $p=0.05$ & DQLM & \shortstack{\textbf{4.967}\\{\scriptsize [3.787, 6.175]}} & \shortstack{9.817\\{\scriptsize [9.638, 10.00]}} & \shortstack{1.974\\{\scriptsize [1.945, 2.003]}} \\
- & exDQLM & \shortstack{7.250\\{\scriptsize [5.823, 8.610]}} & \shortstack{4.702\textsuperscript{\(\dagger\)}\\{\scriptsize [4.517, 4.891]}} & \shortstack{1.935\\{\scriptsize [1.878, 1.993]}} \\
+ & exDQLM & \shortstack{7.250\\{\scriptsize [5.823, 8.610]}} & \shortstack{4.702\\{\scriptsize [4.517, 4.891]}} & \shortstack{1.935\\{\scriptsize [1.878, 1.993]}} \\
  & Q--DESN AL--RHS & \shortstack{5.324\\{\scriptsize [3.839, 6.647]}} & \shortstack{7.652\\{\scriptsize [4.731, 10.76]}} & \shortstack{2.252\\{\scriptsize [1.903, 2.966]}} \\
  & Q--DESN exAL--RHS & \shortstack{6.593\\{\scriptsize [5.160, 7.967]}} & \shortstack{\textbf{3.980}\\{\scriptsize [2.220, 9.085]}} & \shortstack{\textbf{1.912}\\{\scriptsize [1.840, 2.172]}} \\
 \addlinespace[2pt]
@@ -23,6 +23,6 @@ $p=0.50$ & DQLM & \shortstack{1.784\\{\scriptsize [1.252, 2.374]}} & \shortstack
  & Q--DESN exAL--RHS & \shortstack{1.337\\{\scriptsize [0.7227, 2.002]}} & \shortstack{1.886\\{\scriptsize [0.7423, 4.371]}} & \shortstack{5.112\\{\scriptsize [4.996, 5.447]}} \\
 \bottomrule
 \end{tabular}
-\caption{Posterior metric intervals for the Laplace single-quantile simulation family. Entries are posterior means with equal-tailed 95\% credible intervals; lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion. A dagger marks a diagnostic caution recorded for the source analysis.}
+\caption{Posterior metric intervals for the Laplace single-quantile simulation family. Entries are posterior means with equal-tailed 95\% credible intervals; lower is better, and boldface marks the lowest unrounded posterior mean by target and criterion.}
 \label{tab:simulation-500obs-mcmc-intervals-laplace}
 \end{table}

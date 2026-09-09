@@ -204,6 +204,16 @@ app_joint_shared_quantile_full_design <- function(fixture, candidate, contract) 
     candidate$architecture_signature[[1L]], paste(colnames(Z), collapse = ";"),
     paste(format(Z[fit_local, , drop = FALSE], digits = 16), collapse = ";"), sep = "|"
   ))
+  out$posterior_data_design_fingerprint <- app_joint_qvp_sha256_text(paste(
+    "joint_qdesn_posterior_data_design_v1",
+    paste(out$fit_local, collapse = ";"),
+    paste(colnames(out$Z), collapse = ";"),
+    paste(format(out$y[out$fit_local], digits = 17L, scientific = TRUE),
+      collapse = ";"),
+    paste(format(out$Z[out$fit_local, , drop = FALSE], digits = 17L,
+      scientific = TRUE), collapse = ";"),
+    sep = "|"
+  ))
   if (any(!is.finite(c(X, y, true_q, mu, sigma))) || any(sigma <= 0)) {
     stop("Full continuation design contains invalid values.", call. = FALSE)
   }
@@ -220,6 +230,17 @@ app_joint_shared_quantile_compact_fit <- function(fit) {
   out <- fit[intersect(keep, names(fit))]
   out$type <- "joint_shared_quantile_compact_v1"
   out
+}
+
+app_joint_shared_quantile_resolve_zeta2 <- function(gaussian_fit, contract) {
+  fixed <- as.numeric(contract$rhs_slab_variance %||% NA_real_)[[1L]]
+  if (is.finite(fixed) && fixed > 0) return(fixed)
+  if (!is.null(gaussian_fit$rhs_state$e_inv_zeta2) &&
+      is.finite(gaussian_fit$rhs_state$e_inv_zeta2) &&
+      gaussian_fit$rhs_state$e_inv_zeta2 > 0) {
+    return(1 / gaussian_fit$rhs_state$e_inv_zeta2)
+  }
+  Inf
 }
 
 app_joint_shared_quantile_gaussian_init <- function(gaussian_fit, design, tau, contract) {
@@ -243,12 +264,10 @@ app_joint_shared_quantile_gaussian_init <- function(gaussian_fit, design, tau, c
   sigma <- vapply(seq_along(tau), function(k) {
     max(mean(app_check_loss(y_fit, fit_q[, k], tau[[k]])), residual_sd * 1e-4, 1e-8)
   }, numeric(1L))
-  zeta2 <- if (!is.null(gaussian_fit$rhs_state$e_inv_zeta2) &&
-      is.finite(gaussian_fit$rhs_state$e_inv_zeta2) && gaussian_fit$rhs_state$e_inv_zeta2 > 0) {
-    1 / gaussian_fit$rhs_state$e_inv_zeta2
-  } else Inf
+  zeta2 <- app_joint_shared_quantile_resolve_zeta2(gaussian_fit, contract)
   rhs_state <- app_joint_qvp_initialize_rhs_state(length(tau), p,
-    tau0 = gaussian_fit$rhs_tau0, zeta2 = zeta2)
+    tau0 = gaussian_fit$rhs_tau0, zeta2 = zeta2,
+    slab_fixed = isTRUE(contract$rhs_slab_fixed))
   rhs_state <- app_joint_qvp_update_rhs_vb_state(rhs_state, beta, beta_cov,
     K = length(tau), p = p, n_inner = contract$rhs_vb_inner)$state
   list(
@@ -507,6 +526,7 @@ app_joint_shared_quantile_independent_al_worker <- function(root, job, plan, des
     y = design$y[design$fit_local], Z = design$Z[design$fit_local, , drop = FALSE], tau = target,
     max_iter = contract$al_max_iter, tol = contract$vb_tolerance, kappa = 1,
     tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2,
+    slab_fixed = isTRUE(contract$rhs_slab_fixed),
     a_sigma = contract$a_sigma, b_sigma = contract$b_sigma,
     alpha_prior_mean = gaussian$initializer$alpha_mean[[k]],
     alpha_prior_sd = gaussian$initializer$alpha_prior_sd, alpha_min_spacing = 0,
@@ -528,6 +548,7 @@ app_joint_shared_quantile_independent_exal_worker <- function(root, job, plan, d
     y = design$y[design$fit_local], Z = design$Z[design$fit_local, , drop = FALSE], tau = job$tau[[1L]],
     max_iter = contract$exal_max_iter, tol = contract$vb_tolerance, kappa = 1,
     tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2,
+    slab_fixed = isTRUE(contract$rhs_slab_fixed),
     a_sigma = contract$a_sigma, b_sigma = contract$b_sigma,
     alpha_prior_mean = gaussian$initializer$alpha_mean[[k]],
     alpha_prior_sd = gaussian$initializer$alpha_prior_sd, alpha_min_spacing = 0,
@@ -541,7 +562,8 @@ app_joint_shared_quantile_independent_exal_worker <- function(root, job, plan, d
 }
 
 app_joint_shared_quantile_stack_independent <- function(
-  root, plan, replicate_id, model_id, design, rhs_state = NULL, rhs_vb_inner = 10L
+  root, plan, replicate_id, model_id, design, rhs_state = NULL,
+  rhs_vb_inner = 10L, slab_fixed = FALSE
 ) {
   jobs <- plan[plan$replicate_id == replicate_id & plan$model_id == model_id, , drop = FALSE]
   jobs <- jobs[order(jobs$tau), , drop = FALSE]
@@ -565,7 +587,8 @@ app_joint_shared_quantile_stack_independent <- function(
     gaussian <- app_joint_shared_quantile_load_fit(root,
       app_joint_shared_quantile_gaussian_job(plan, replicate_id))
     rhs_state <- app_joint_qvp_initialize_rhs_state(K, p,
-      tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2)
+      tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2,
+      slab_fixed = isTRUE(slab_fixed))
     rhs_state <- app_joint_qvp_update_rhs_vb_state(
       rhs_state, beta, cov, K, p, n_inner = as.integer(rhs_vb_inner)
     )$state
@@ -579,11 +602,13 @@ app_joint_shared_quantile_joint_al_worker <- function(root, job, plan, design, c
   gaussian <- app_joint_shared_quantile_load_fit(root,
     app_joint_shared_quantile_gaussian_job(plan, job$replicate_id[[1L]]))
   init <- app_joint_shared_quantile_stack_independent(root, plan, job$replicate_id[[1L]],
-    "independent_qdesn_rhs", design, rhs_vb_inner = contract$rhs_vb_inner)
+    "independent_qdesn_rhs", design, rhs_vb_inner = contract$rhs_vb_inner,
+    slab_fixed = contract$rhs_slab_fixed)
   fit <- app_joint_qvp_fit_al_vb_tiny(
     y = design$y[design$fit_local], Z = design$Z[design$fit_local, , drop = FALSE], tau = design$tau,
     max_iter = contract$al_max_iter, tol = contract$vb_tolerance, kappa = 1,
     tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2,
+    slab_fixed = isTRUE(contract$rhs_slab_fixed),
     a_sigma = contract$a_sigma, b_sigma = contract$b_sigma,
     alpha_prior_mean = gaussian$initializer$alpha_mean,
     alpha_prior_sd = gaussian$initializer$alpha_prior_sd,
@@ -601,12 +626,14 @@ app_joint_shared_quantile_joint_exal_worker <- function(root, job, plan, design,
   joint_al <- app_joint_shared_quantile_load_fit(root, joint_al_job)
   init <- app_joint_shared_quantile_stack_independent(root, plan, job$replicate_id[[1L]],
     "independent_exqdesn_rhs", design, rhs_state = joint_al$rhs_state,
-    rhs_vb_inner = contract$rhs_vb_inner)
+    rhs_vb_inner = contract$rhs_vb_inner,
+    slab_fixed = contract$rhs_slab_fixed)
   fit <- app_joint_exqdesn_fit_vb_dispatch(
     method_id = contract$exal_vb_method,
     y = design$y[design$fit_local], Z = design$Z[design$fit_local, , drop = FALSE], tau = design$tau,
     max_iter = contract$exal_max_iter, tol = contract$vb_tolerance, kappa = 1,
     tau0 = gaussian$rhs_tau0, zeta2 = gaussian$initializer$zeta2,
+    slab_fixed = isTRUE(contract$rhs_slab_fixed),
     a_sigma = contract$a_sigma, b_sigma = contract$b_sigma,
     alpha_prior_mean = gaussian$initializer$alpha_mean,
     alpha_prior_sd = gaussian$initializer$alpha_prior_sd,

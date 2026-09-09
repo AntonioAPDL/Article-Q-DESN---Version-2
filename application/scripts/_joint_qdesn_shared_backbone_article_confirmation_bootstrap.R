@@ -16,6 +16,7 @@ app_set_repo_root(repo_root)
 for (path in c(
   "input_contract.R", "synthesize_quantiles.R", "score_forecasts.R",
   "latent_path_vb_al.R", "joint_qvp_qdesn.R",
+  "joint_qdesn_posterior_contract.R",
   "joint_qdesn_simulation_readiness.R", "joint_qdesn_simulation_fixtures.R",
   "joint_qdesn_simulation_validation.R", "joint_qdesn_mcmc_readiness.R",
   "latent_path_design.R",

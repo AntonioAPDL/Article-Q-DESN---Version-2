@@ -8,6 +8,9 @@ Tracked tests:
 - `test_rhs_global_scale_reference.R`: Gaussian, AL, and exAL reference-scale
   calculations, domain checks, and manuscript wording guards for the
   regularized-horseshoe hyperprior guidance.
+- `test_joint_qdesn_posterior_contract.R`: posterior-target hashing,
+  chain-invariant prior/support fields, initialization-field separation, and
+  positive unbounded scale support for corrected JOINT comparisons.
 - `test_input_contract.R`: input manifests, hashes, schemas, and date ranges.
 - `test_input_bundle.R`: registration of required and optional bundle inputs.
 - `test_input_figures.R`: pre-model diagnostic figures and figure provenance.

@@ -11887,7 +11887,8 @@ app_joint_qvp_initialize_rhs_state <- function(
   anchor_init_tau = anchor_tau0,
   innovation_init_tau = innovation_tau0,
   anchor_zeta2 = zeta2,
-  innovation_zeta2 = zeta2
+  innovation_zeta2 = zeta2,
+  slab_fixed = FALSE
 ) {
   validate_scale <- function(x, label, allow_infinite = FALSE) {
     x <- as.numeric(x)[[1L]]
@@ -11901,6 +11902,11 @@ app_joint_qvp_initialize_rhs_state <- function(
   innovation_init_tau <- validate_scale(innovation_init_tau, "innovation_init_tau")
   anchor_zeta2 <- validate_scale(anchor_zeta2, "anchor_zeta2", allow_infinite = TRUE)
   innovation_zeta2 <- validate_scale(innovation_zeta2, "innovation_zeta2", allow_infinite = TRUE)
+  slab_fixed <- isTRUE(slab_fixed)
+  if (slab_fixed && (!is.finite(anchor_zeta2) || !is.finite(innovation_zeta2))) {
+    stop("slab_fixed requires finite anchor and innovation slab variances.",
+      call. = FALSE)
+  }
   make_block <- function(block_tau0, block_init_tau, block_zeta2) {
     list(
       lambda2 = rep(1, p),
@@ -11910,6 +11916,7 @@ app_joint_qvp_initialize_rhs_state <- function(
       tau0 = block_tau0,
       initial_tau = block_init_tau,
       zeta2 = block_zeta2,
+      slab_fixed = slab_fixed,
       a_zeta = 2,
       b_zeta = 4
     )
@@ -11963,7 +11970,7 @@ app_joint_qvp_update_rhs_block <- function(block, theta) {
     rate = 1 / block$xi + 0.5 * sum(theta^2 / block$lambda2)
   )
   block$xi <- app_joint_qvp_rinvgamma(1, shape = 1, rate = 1 / (block$tau0^2) + 1 / block$tau2)
-  if (is.finite(block$zeta2)) {
+  if (is.finite(block$zeta2) && !isTRUE(block$slab_fixed)) {
     block$zeta2 <- app_joint_qvp_rinvgamma(
       1,
       shape = block$a_zeta + p / 2,
@@ -12012,6 +12019,7 @@ app_joint_qvp_update_rhs_vb_block <- function(block, theta_second, n_inner = 5L)
   tau0 <- as.numeric(block$tau0 %||% 1)[[1L]]
   if (!is.finite(tau0) || tau0 <= 0) stop("tau0 must be positive.", call. = FALSE)
   zeta_finite <- is.finite(as.numeric(block$zeta2 %||% Inf)[[1L]])
+  zeta_fixed <- zeta_finite && isTRUE(block$slab_fixed)
   zeta_inv <- if (zeta_finite) inv_clip(block$zeta2_inv_mean %||% (1 / block$zeta2)) else 0
   for (ii in seq_len(n_inner)) {
     lambda2_rate <- inv_clip(nu_inv + 0.5 * theta_second * tau2_inv)
@@ -12021,7 +12029,7 @@ app_joint_qvp_update_rhs_vb_block <- function(block, theta_second, n_inner = 5L)
     tau2_shape <- app_joint_qvp_rhs_tau2_shape(p)
     tau2_inv <- inv_clip(tau2_shape / tau2_rate)
     xi_inv <- inv_clip(1 / (1 / tau0^2 + tau2_inv))
-    if (zeta_finite) {
+    if (zeta_finite && !zeta_fixed) {
       zeta_shape <- as.numeric(block$a_zeta %||% 2)[[1L]] + p / 2
       zeta_rate <- as.numeric(block$b_zeta %||% 4)[[1L]] + 0.5 * sum(theta_second)
       zeta_inv <- inv_clip(zeta_shape / zeta_rate)
@@ -12134,6 +12142,7 @@ app_joint_qvp_rhs_vb_block_accounting <- function(block, p) {
   tau2_inv <- inv_clip(block$tau2_inv_mean %||% (1 / (block$tau2 %||% 1)))
   xi_inv <- inv_clip(block$xi_inv_mean %||% (1 / (block$xi %||% 1)))
   zeta_finite <- is.finite(as.numeric(block$zeta2 %||% Inf)[[1L]])
+  zeta_fixed <- zeta_finite && isTRUE(block$slab_fixed)
   zeta_inv <- if (zeta_finite) inv_clip(block$zeta2_inv_mean %||% (1 / block$zeta2)) else 0
   lambda_shape <- rep(1, p)
   lambda_rate <- lambda_shape / lambda2_inv
@@ -12171,7 +12180,7 @@ app_joint_qvp_rhs_vb_block_accounting <- function(block, p) {
     sum(app_joint_qvp_inv_gamma_entropy(nu_shape, nu_rate)) +
     app_joint_qvp_inv_gamma_entropy(tau_shape, tau_rate) +
     app_joint_qvp_inv_gamma_entropy(xi_shape, xi_rate)
-  if (zeta_finite) {
+  if (zeta_finite && !zeta_fixed) {
     a_zeta <- as.numeric(block$a_zeta %||% 2)[[1L]]
     b_zeta <- as.numeric(block$b_zeta %||% 4)[[1L]]
     zeta_shape <- a_zeta + p / 2
@@ -12592,6 +12601,18 @@ app_joint_qvp_alpha_prior_spec <- function(y, tau, alpha_prior_mean = NULL, alph
   )
 }
 
+app_joint_qvp_validate_sigma_bounds <- function(sigma_bounds) {
+  sigma_bounds <- as.numeric(sigma_bounds)
+  if (length(sigma_bounds) != 2L || any(is.na(sigma_bounds)) ||
+      sigma_bounds[[1L]] < 0 || !is.finite(sigma_bounds[[1L]]) ||
+      sigma_bounds[[2L]] <= sigma_bounds[[1L]] ||
+      (!is.finite(sigma_bounds[[2L]]) && !is.infinite(sigma_bounds[[2L]]))) {
+    stop("sigma_bounds must be an increasing pair with a nonnegative finite lower bound and a finite or infinite upper bound.",
+      call. = FALSE)
+  }
+  sigma_bounds
+}
+
 app_joint_qvp_fit_al_mcmc_tiny <- function(
   y,
   Z,
@@ -12607,6 +12628,7 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   innovation_tau0 = tau0,
   anchor_zeta2 = zeta2,
   innovation_zeta2 = zeta2,
+  slab_fixed = FALSE,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -12636,11 +12658,7 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   if (!is.finite(a_sigma) || a_sigma <= 0 || !is.finite(b_sigma) || b_sigma <= 0) {
     stop("a_sigma and b_sigma must be positive.", call. = FALSE)
   }
-  sigma_bounds <- as.numeric(sigma_bounds)
-  if (length(sigma_bounds) != 2L || any(!is.finite(sigma_bounds)) ||
-      sigma_bounds[[1L]] <= 0 || sigma_bounds[[2L]] <= sigma_bounds[[1L]]) {
-    stop("sigma_bounds must be two increasing positive finite values.", call. = FALSE)
-  }
+  sigma_bounds <- app_joint_qvp_validate_sigma_bounds(sigma_bounds)
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
   init <- app_joint_qvp_normalize_init(init, K, p)
@@ -12651,7 +12669,8 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
-    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
+    slab_fixed = slab_fixed
   )
   keep_idx <- seq.int(burn + 1L, n_iter, by = thin)
   n_keep <- length(keep_idx)
@@ -12729,6 +12748,7 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
     alpha_prior_mean = alpha_prior$mean,
     alpha_prior_sd = alpha_prior$sd,
     alpha_prior_mean_source = alpha_prior$mean_source,
+    sigma_bounds = sigma_bounds,
     seed = seed,
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("joint_qvp_al_mcmc_tiny_%s", format(Sys.time(), "%Y%m%d%H%M%S")),
@@ -14747,6 +14767,7 @@ app_joint_qvp_fit_al_vb_tiny <- function(
   innovation_init_tau = innovation_tau0,
   anchor_zeta2 = zeta2,
   innovation_zeta2 = zeta2,
+  slab_fixed = FALSE,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -14803,7 +14824,8 @@ app_joint_qvp_fit_al_vb_tiny <- function(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
     anchor_init_tau = anchor_init_tau, innovation_init_tau = innovation_init_tau,
-    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
+    slab_fixed = slab_fixed
   )
   rhs_state <- app_joint_qvp_restore_rhs_vb_state(raw_init$rhs_state %||% NULL, K, p, default_rhs_state)
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
@@ -15165,6 +15187,7 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
   innovation_tau0 = tau0,
   anchor_zeta2 = zeta2,
   innovation_zeta2 = zeta2,
+  slab_fixed = FALSE,
   a_sigma = 0.1,
   b_sigma = 0.1,
   alpha_prior_mean = NULL,
@@ -15205,6 +15228,7 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
       innovation_tau0 = innovation_tau0,
       anchor_zeta2 = anchor_zeta2,
       innovation_zeta2 = innovation_zeta2,
+      slab_fixed = slab_fixed,
       a_sigma = a_sigma,
       b_sigma = b_sigma,
       alpha_prior_mean = alpha_prior_mean,
@@ -15222,7 +15246,8 @@ app_joint_qvp_fit_exal_vb_ld_tiny <- function(
   rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
-    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
+    slab_fixed = slab_fixed
   )
   prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
   prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor, prior_state$innovations)
@@ -15721,6 +15746,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   innovation_tau0 = tau0,
   anchor_zeta2 = zeta2,
   innovation_zeta2 = zeta2,
+  slab_fixed = FALSE,
   a_sigma = 0.1,
   b_sigma = 0.1,
   gamma_init = NULL,
@@ -15797,11 +15823,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       any(!is.finite(gamma_sigma_mh_rho) | abs(gamma_sigma_mh_rho) >= 1)) {
     stop("Invalid joint gamma-sigma MH controls.", call. = FALSE)
   }
-  sigma_bounds <- as.numeric(sigma_bounds)
-  if (length(sigma_bounds) != 2L || any(!is.finite(sigma_bounds)) ||
-      sigma_bounds[[1L]] <= 0 || sigma_bounds[[2L]] <= sigma_bounds[[1L]]) {
-    stop("sigma_bounds must be two increasing positive finite values.", call. = FALSE)
-  }
+  sigma_bounds <- app_joint_qvp_validate_sigma_bounds(sigma_bounds)
   init <- app_joint_qvp_normalize_init(init, K, p)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(
     y = y,
@@ -15841,7 +15863,8 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
   rhs_state <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2,
     anchor_tau0 = anchor_tau0, innovation_tau0 = innovation_tau0,
-    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2
+    anchor_zeta2 = anchor_zeta2, innovation_zeta2 = innovation_zeta2,
+    slab_fixed = slab_fixed
   )
   keep_idx <- seq.int(burn + 1L, n_iter, by = thin)
   n_keep <- length(keep_idx)
@@ -16137,6 +16160,7 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
 	    alpha_prior_mean = alpha_prior$mean,
 	    alpha_prior_sd = alpha_prior$sd,
 	    alpha_prior_mean_source = alpha_prior$mean_source,
+	    sigma_bounds = sigma_bounds,
 	    gamma_prior_type = gamma_prior_type,
 	    gamma_prior_center = gamma_prior_center,
 	    gamma_prior_sd_eta = gamma_prior_sd_eta,

@@ -205,6 +205,7 @@ app_joint_exqdesn_fit_independent_vb_dispatch <- function(method_id, y, Z, tau, 
   K <- length(tau)
   p <- ncol(Z)
   extra <- list(...)
+  alpha_prior_mean <- extra$alpha_prior_mean %||% NULL
   alpha_prior_sd <- extra$alpha_prior_sd %||% Inf
   gamma_init <- extra$gamma_init %||% NULL
   fits <- vector("list", K)
@@ -215,6 +216,11 @@ app_joint_exqdesn_fit_independent_vb_dispatch <- function(method_id, y, Z, tau, 
     args$Z <- Z
     args$tau <- tau[[k]]
     args$alpha_min_spacing <- 0
+    if (!is.null(alpha_prior_mean) && !is.character(alpha_prior_mean)) {
+      args$alpha_prior_mean <- if (length(alpha_prior_mean) == 1L) {
+        alpha_prior_mean
+      } else alpha_prior_mean[[k]]
+    }
     args$alpha_prior_sd <- if (length(alpha_prior_sd) == 1L) alpha_prior_sd else alpha_prior_sd[[k]]
     if (!is.null(gamma_init)) args$gamma_init <- if (length(gamma_init) == 1L) gamma_init else gamma_init[[k]]
     args$init <- if (!is.null(init$fits)) init$fits[[k]] else init
@@ -334,6 +340,7 @@ app_joint_exqdesn_fit_independent_mcmc_dispatch <- function(
   tau <- app_joint_qvp_validate_tau_grid(tau)
   Z <- app_joint_qvp_check_design(Z)
   extra <- list(...)
+  alpha_prior_mean <- extra$alpha_prior_mean %||% NULL
   alpha_prior_sd <- extra$alpha_prior_sd %||% Inf
   gamma_init <- extra$gamma_init %||% NULL
   fits <- vector("list", length(tau))
@@ -344,6 +351,11 @@ app_joint_exqdesn_fit_independent_mcmc_dispatch <- function(
     args$tau <- tau[[k]]
     args$seed <- as.integer(seed + k * as.integer(tau_seed_stride))
     args$alpha_min_spacing <- 0
+    if (!is.null(alpha_prior_mean) && !is.character(alpha_prior_mean)) {
+      args$alpha_prior_mean <- if (length(alpha_prior_mean) == 1L) {
+        alpha_prior_mean
+      } else alpha_prior_mean[[k]]
+    }
     args$alpha_prior_sd <- if (length(alpha_prior_sd) == 1L) alpha_prior_sd else alpha_prior_sd[[k]]
     if (!is.null(gamma_init)) args$gamma_init <- if (length(gamma_init) == 1L) gamma_init else gamma_init[[k]]
     args$init <- if (!is.null(init$fits)) init$fits[[k]] else init

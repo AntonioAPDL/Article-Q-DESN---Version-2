@@ -45,6 +45,15 @@ selection failure, or evidence against any model family. Every one of the 37 reg
 directories contains the nonempty intended `ridge_grid.yaml`, and none contains the
 legacy default basename.
 
+The first repaired transition completed AT ranking and materialized all 90 AT RHS
+configurations. BG then exposed a second input-representation defect: 17 region
+manifests store authoritative source folds as integer-like CSV floats (`1.0`, `2.0`,
+`3.0`), while the remaining 20 use integer or semicolon-combined text. All 37
+manifests normalize exactly to folds 1, 2, and 3, with no fractional or nonfinite
+token. The consumer nevertheless called `int("1.0")`. The recovery therefore adds a
+strict parser that accepts mathematically integral representations and rejects
+fractional or nonfinite values. It does not change any fold assignment.
+
 ## Repair contract
 
 1. `319_orchestrate_pricefm_stage_r97_global_campaign.py` passes the actual
@@ -52,7 +61,8 @@ legacy default basename.
 2. The controller fails closed before running downstream code when that grid is
    missing or empty.
 3. A focused test covers both the failed-closed case and the exact path passed to
-   the R93 consumer.
+   the R93 consumer. A second test covers integer, semicolon-combined, and CSV-float
+   fold provenance and confirms that fractional values fail closed.
 4. A recovery Muscat contract changes only the code identity to the tested repair
    commit. It retains the original checkpoint, assignment, ownership, resources,
    and firewalls, records the original sealed contract, and requires the repair

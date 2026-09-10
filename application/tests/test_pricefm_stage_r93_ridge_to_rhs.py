@@ -177,3 +177,10 @@ def test_ridge_closeout_rejects_nonconvergence(tmp_path):
     args = args_for(module, tmp_path, fail_candidate="candidate_03")
     with pytest.raises(RuntimeError, match="not converged"):
         module.run(args)
+
+
+def test_source_fold_parser_accepts_csv_integer_floats_and_rejects_fractions():
+    module = load_script()
+    assert module.parse_source_folds(["1;3", 2.0, "2.000"]) == [1, 2, 3]
+    with pytest.raises(RuntimeError, match="not integer-like"):
+        module.parse_source_folds([1.5])

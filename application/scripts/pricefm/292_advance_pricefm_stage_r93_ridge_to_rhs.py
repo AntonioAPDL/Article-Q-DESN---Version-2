@@ -70,6 +70,22 @@ def parse_floats(value: str) -> list[float]:
     return values
 
 
+def parse_source_folds(values: Any) -> list[int]:
+    result = set()
+    for cell in values:
+        if pd.isna(cell):
+            continue
+        for token in str(cell).split(";"):
+            token = token.strip()
+            if not token:
+                continue
+            number = float(token)
+            if not math.isfinite(number) or not number.is_integer():
+                raise RuntimeError(f"authoritative source fold is not integer-like: {token!r}")
+            result.add(int(number))
+    return sorted(result)
+
+
 def boolish(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "t", "yes", "y"}
 
@@ -415,12 +431,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if int(args.expected_candidates) != 240 or folds != [101, 102, 103] or int(args.top_k) != 30:
             raise RuntimeError("production R93 contract requires 240 candidates, folds 101-103, and top-k 30")
         controls = candidates[candidates.candidate_role.eq("authoritative_fold_geometry_control")]
-        represented_folds = sorted({
-            int(value)
-            for cell in controls.source_fold.astype(str)
-            for value in cell.split(";")
-            if value
-        })
+        represented_folds = parse_source_folds(controls.source_fold)
         if represented_folds != [1, 2, 3]:
             raise RuntimeError("all three authoritative fold controls must be present")
     if not (0 < int(args.top_k) <= len(candidates)):

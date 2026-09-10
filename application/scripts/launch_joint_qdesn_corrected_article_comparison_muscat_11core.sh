@@ -58,6 +58,25 @@ case "${MODE}" in
     run_pinned_r "${SCRIPT_DIR}/run_joint_qdesn_shared_backbone_article_mcmc_queue.R" \
       --root "${ROOT}" --max-workers 11
     ;;
+  --sentinel-mcmc)
+    if [[ "${JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION:-}" != "MCMC" ]]; then
+      printf '%s\n' "Refusing MCMC sentinel without phase-specific authorization." >&2
+      exit 64
+    fi
+    if [[ "${JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED:-}" != "MUSCAT_11_PHYSICAL_SHARED" ]]; then
+      printf '%s\n' "Refusing MCMC sentinel without the audited Muscat 11-core shared-capacity approval." >&2
+      exit 64
+    fi
+    sentinel_worker="${JOINT_ARTICLE_CONFIRMATION_SENTINEL_WORKER:-3}"
+    if [[ ! "${sentinel_worker}" =~ ^[0-9]+$ ]] || (( sentinel_worker < 1 || sentinel_worker > 160 )); then
+      printf '%s\n' "MCMC sentinel worker must be an integer from 1 through 160." >&2
+      exit 64
+    fi
+    run_pinned_r "${SCRIPT_DIR}/check_joint_qdesn_shared_backbone_article_vb.R" \
+      --root "${ROOT}" --require-complete true
+    run_pinned_r "${SCRIPT_DIR}/run_joint_qdesn_shared_backbone_article_mcmc_worker.R" \
+      --root "${ROOT}" --worker-id "${sentinel_worker}"
+    ;;
   --finalize-score)
     run_pinned_r "${SCRIPT_DIR}/check_joint_qdesn_shared_backbone_article_mcmc.R" \
       --root "${ROOT}"
@@ -76,7 +95,7 @@ case "${MODE}" in
     ;;
   *)
     printf '%s\n' \
-      "Usage: $0 [--preflight|--launch-vb|--launch-mcmc|--finalize-score|--run-all]" >&2
+      "Usage: $0 [--preflight|--launch-vb|--sentinel-mcmc|--launch-mcmc|--finalize-score|--run-all]" >&2
     exit 64
     ;;
 esac

@@ -256,6 +256,45 @@ def test_shared_preprocessing_runs_splits_once_across_region_window_sets(tmp_pat
     assert sum(str(module.BUILD_WINDOWS) in call for call in calls) == 2
 
 
+def test_r97_rhs_transition_uses_materialized_ridge_grid_and_fails_closed(tmp_path, monkeypatch):
+    module = load("319_orchestrate_pricefm_stage_r97_global_campaign.py")
+    calls = []
+    materialized = []
+    monkeypatch.setattr(
+        module,
+        "command",
+        lambda cmd, **kwargs: calls.append([str(value) for value in cmd]),
+    )
+    monkeypatch.setattr(
+        module,
+        "materialize_grid",
+        lambda grid, generated, code_root, log: materialized.append(
+            (grid, generated, code_root, log)
+        ),
+    )
+    campaign = module.Campaign.__new__(module.Campaign)
+    campaign.code_root = ROOT
+    paths = {
+        "root": tmp_path / "region",
+        "ridge_prep": tmp_path / "region/ridge_prep",
+        "ridge_generated": tmp_path / "region/ridge_generated",
+        "rhs_prep": tmp_path / "region/rhs_prep",
+        "rhs_generated": tmp_path / "region/rhs_generated",
+        "rhs_runs": tmp_path / "region/rhs_runs",
+    }
+    paths["ridge_prep"].mkdir(parents=True)
+    with pytest.raises(RuntimeError, match="R97 Ridge grid is missing or empty"):
+        campaign.prepare_rhs("R01", paths)
+    assert calls == []
+
+    ridge_grid = paths["ridge_prep"] / "ridge_grid.yaml"
+    ridge_grid.write_text("pricefm_desn_experiment_grid: {}\n")
+    campaign.prepare_rhs("R01", paths)
+    assert len(calls) == 1
+    assert calls[0][calls[0].index("--ridge-grid") + 1] == str(ridge_grid)
+    assert materialized[0][0] == paths["rhs_prep"] / "pricefm_stage_r93_rhs_grid.yaml"
+
+
 def test_screening_compaction_retains_only_selection_evidence(tmp_path):
     module = load("319_orchestrate_pricefm_stage_r97_global_campaign.py")
     run_dir = tmp_path / "experiment"

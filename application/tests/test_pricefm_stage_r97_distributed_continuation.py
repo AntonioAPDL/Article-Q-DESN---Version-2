@@ -51,6 +51,10 @@ FINALIZE = load_numbered(
     "pricefm_stage_r97_finalize",
     "326_finalize_pricefm_stage_r97_distributed_campaign.py",
 )
+RECOVERY = load_numbered(
+    "pricefm_stage_r97_rhs_transition_recovery",
+    "327_prepare_pricefm_stage_r97_rhs_transition_recovery.py",
+)
 
 
 def test_seal_rejects_mutation() -> None:
@@ -216,6 +220,94 @@ def test_host_contract_rejects_wrong_machine(tmp_path: Path, monkeypatch) -> Non
     )
     with pytest.raises(RuntimeError, match="cannot run on muscat"):
         HOST.load_contract(args)
+
+
+def recovery_contract(tmp_path: Path, host: str = "muscat") -> tuple[Path, Path]:
+    parent = tmp_path / "parent.json"
+    checkpoint = tmp_path / "checkpoint.json"
+    assignment = tmp_path / "assignment.csv"
+    parent.write_text("{}\n")
+    checkpoint.write_text("{}\n")
+    assignment.write_text(f"region,assigned_host\nAT,{host}\n")
+    contract = sealed_payload({
+        "mode": "freeze", "host": host, "campaign_root": str(tmp_path / "campaign"),
+        "regions": ["AT"], "workers": 2,
+        "parent_campaign_contract": file_record(parent, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+        "code_git_identity": {
+            "worktree": "/old", "branch": "work/r97", "head": "old-head",
+            "upstream": "origin/work/r97", "upstream_head": "old-head", "clean": True,
+        },
+        "launch_authorized": False, "global_test_scoring_authorized": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutation_authorized": False, "article_mutation_authorized": False,
+        "joint_model_authorized": False, "mcmc_authorized": False,
+    }, "shard_contract_sha256")
+    path = tmp_path / "source_contract.json"
+    atomic_write_json(path, contract)
+    return path, tmp_path / "campaign"
+
+
+def test_rhs_recovery_rebinds_only_code_identity_and_preserves_science(tmp_path, monkeypatch) -> None:
+    source_path, _ = recovery_contract(tmp_path)
+
+    class Identity:
+        clean = True
+        head = "recovery-head"
+        upstream_head = "recovery-head"
+
+        @staticmethod
+        def to_dict():
+            return {
+                "worktree": str(tmp_path), "branch": "work/r97", "head": "recovery-head",
+                "upstream": "origin/work/r97", "upstream_head": "recovery-head", "clean": True,
+            }
+
+    monkeypatch.setattr(RECOVERY, "git_identity", lambda _: Identity())
+    monkeypatch.setattr(
+        RECOVERY.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0),
+    )
+    output = tmp_path / "recovery_contract.json"
+    args = SimpleNamespace(
+        source_contract=source_path, code_root=tmp_path, output=output,
+        host="muscat", force=False,
+    )
+    result = RECOVERY.rebind_contract(args)
+    verify_seal(result, "shard_contract_sha256", label="recovery")
+    source = json.loads(source_path.read_text())
+    assert result["regions"] == source["regions"]
+    assert result["checkpoint"] == source["checkpoint"]
+    assert result["assignment"] == source["assignment"]
+    assert result["code_git_identity"]["head"] == "recovery-head"
+    assert result["transition_recovery"]["scientific_contract_changed"] is False
+
+
+def test_rhs_recovery_aliases_are_relative_hash_identical_and_idempotent(tmp_path, monkeypatch) -> None:
+    contract_path, campaign = recovery_contract(tmp_path, host="jerez")
+    prep = campaign / "regions/AT/ridge_prep"
+    prep.mkdir(parents=True)
+    grid = prep / "ridge_grid.yaml"
+    grid.write_text("pricefm_desn_experiment_grid: {}\n")
+    monkeypatch.setattr(RECOVERY.socket, "gethostname", lambda: "jerez.example")
+    args = SimpleNamespace(
+        shard_contract=contract_path, campaign_root=campaign, host="jerez",
+        output=None, write=False,
+    )
+    preview = RECOVERY.install_aliases(args)
+    alias = prep / RECOVERY.LEGACY_GRID_NAME
+    assert preview["status"] == "preview_only"
+    assert not alias.exists()
+    args.write = True
+    written = RECOVERY.install_aliases(args)
+    assert written["status"] == "aliases_installed_and_verified"
+    assert alias.is_symlink()
+    assert alias.readlink() == Path("ridge_grid.yaml")
+    assert alias.read_bytes() == grid.read_bytes()
+    repeated = RECOVERY.install_aliases(args)
+    assert repeated["aliases"][0]["previously_present"] is True
 
 
 def test_screening_scheduler_caps_each_region_at_two_models(tmp_path: Path, monkeypatch) -> None:

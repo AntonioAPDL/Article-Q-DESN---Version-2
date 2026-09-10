@@ -309,10 +309,14 @@ class Campaign:
         materialize_grid(grid, paths["ridge_generated"], self.code_root, paths["root"] / "logs/materialize_ridge.log")
 
     def prepare_rhs(self, region: str, paths: dict[str, Path]) -> None:
+        ridge_grid = paths["ridge_prep"] / "ridge_grid.yaml"
+        if not ridge_grid.is_file() or ridge_grid.stat().st_size == 0:
+            raise RuntimeError(f"R97 Ridge grid is missing or empty for {region}: {ridge_grid}")
         if not (paths["rhs_prep"] / "summary.json").is_file():
             command([
                 PYTHON, RIDGE_TO_RHS,
                 "--prep-dir", paths["ridge_prep"], "--ridge-generated-root", paths["ridge_generated"],
+                "--ridge-grid", ridge_grid,
                 "--output-dir", paths["rhs_prep"], "--rhs-generated-root", paths["rhs_generated"],
                 "--rhs-run-root", paths["rhs_runs"], "--target-region", region,
             ], cwd=self.code_root, log=paths["root"] / "logs/prepare_rhs.log")

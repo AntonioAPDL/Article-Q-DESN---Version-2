@@ -601,3 +601,18 @@ separate phase authorizations and a maximum of 25 single-thread workers. The
 preflight fails before creating its runtime unless the effective affinity maps
 to 25 distinct physical cores and all competing PriceFM, GloFAS, Phase182,
 historical JOINT, and corrected JOINT processes are absent.
+
+When Muscat is intentionally shared with the frozen PriceFM R97 shard and
+GloFAS Part 4 continuation, use the v4 launcher from its dedicated branch:
+
+```sh
+JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED=MUSCAT_11_PHYSICAL_SHARED \
+  application/scripts/launch_joint_qdesn_corrected_article_comparison_muscat_11core.sh --run-all
+```
+
+The launcher pins every R process to `1-9,16,24`, caps both queues at 11
+single-thread workers, runs preflight before VB, requires all 136 VB components
+before MCMC, requires all 160 MCMC workers before score finalization, and keeps
+the runtime ignored. Its shared-capacity preflight proves the non-overlapping
+11/20/1 physical-core allocation and permits only the exact audited PriceFM and
+GloFAS process families.

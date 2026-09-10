@@ -437,3 +437,12 @@ The Muscat execution adaptation is frozen separately in
 execution branch, isolated runtime/source paths, host profile, concurrency,
 and the fail-closed `0-24` physical-affinity contract. Every scientific,
 seed, posterior-target, and score field remains identical to v2.
+
+The shared-capacity Muscat adaptation is frozen in
+`joint_qdesn_shared_backbone_article_confirmation_contract_v4.csv` and
+`joint_qdesn_corrected_article_score_contract_v4.csv`. It preserves every v3
+scientific, posterior-target, score, and seed field while assigning JOINT to
+11 distinct physical cores (`1-9,16,24`). PriceFM R97 retains its 20-core
+affinity, and physical core 0 (`0,32`) remains outside JOINT for the active
+GloFAS Part 4 continuation. Only those exact two campaigns are allowed to
+coexist; all other protected campaigns fail the preflight closed.

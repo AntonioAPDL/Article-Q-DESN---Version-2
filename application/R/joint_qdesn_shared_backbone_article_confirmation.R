@@ -12,6 +12,10 @@ app_joint_article_muscat_corrected_contract_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v3.csv")
 }
 
+app_joint_article_muscat_shared_contract_path <- function() {
+  app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v4.csv")
+}
+
 app_joint_article_host_profiles_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_host_profiles_v1.csv")
 }
@@ -159,6 +163,11 @@ app_joint_article_read_contract <- function(
     cpu_affinity_list = get_optional("cpu_affinity_list", ""),
     required_physical_cores = int_optional("required_physical_cores", NA_integer_),
     capacity_approval_token = get_optional("capacity_approval_token", ""),
+    shared_capacity_mode = get_optional("shared_capacity_mode", ""),
+    pricefm_reserved_cpu_list = get_optional("pricefm_reserved_cpu_list", ""),
+    glofas_spare_cpu_list = get_optional("glofas_spare_cpu_list", ""),
+    allowed_competing_process_patterns = Filter(nzchar, strsplit(get_optional(
+      "allowed_competing_process_patterns", ""), ";", fixed = TRUE)[[1L]]),
     production_launched = bool("production_launched"),
     retain_broad_model_dumps = bool("retain_broad_model_dumps"),
     dry_run_preflight_required = bool("dry_run_preflight_required"),
@@ -242,6 +251,39 @@ app_joint_article_read_contract <- function(
         !identical(out$capacity_approval_token,
           "MUSCAT_25_PHYSICAL_IDLE")) {
       stop("Muscat corrected JOINT contract violates the frozen common-posterior or physical-affinity gate.",
+        call. = FALSE)
+    }
+  }
+  if (identical(out$version, "joint_shared_backbone_article_confirmation_v4")) {
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts ||
+        !identical(out$alpha_prior_center_policy,
+          "gaussian_location_quantiles") ||
+        !identical(out$alpha_prior_sd_policy,
+          "gaussian_residual_scale_multiplier") ||
+        out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-corrected-article-comparison-muscat-11core-20260909") ||
+        !identical(out$host_profile_id,
+          "muscat_corrected_11core_20260909") ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 11L || out$maximum_concurrency != 11L ||
+        !identical(out$cpu_affinity_list, "1-9,16,24") ||
+        out$required_physical_cores != 11L ||
+        !identical(out$capacity_approval_token,
+          "MUSCAT_11_PHYSICAL_SHARED") ||
+        !identical(out$shared_capacity_mode,
+          "pricefm_r97_glofas_part4") ||
+        !identical(out$pricefm_reserved_cpu_list,
+          "42-47,49-55,57-63") ||
+        !identical(out$glofas_spare_cpu_list, "0,32") ||
+        !identical(out$allowed_competing_process_patterns,
+          c("pricefm_stage_r97", "glofas_part4_joint_convergence_closeout_20260907"))) {
+      stop("Shared-capacity Muscat JOINT contract violates the frozen scientific or CPU-allocation gate.",
         call. = FALSE)
     }
   }
@@ -503,6 +545,49 @@ app_joint_article_cpu_affinity_preflight <- function(
   topology
 }
 
+app_joint_article_shared_capacity_preflight <- function(contract, affinity,
+    sysfs_root = "/sys/devices/system/cpu") {
+  if (!identical(contract$shared_capacity_mode,
+      "pricefm_r97_glofas_part4")) return(NULL)
+  price_ids <- app_joint_article_parse_cpu_list(
+    contract$pricefm_reserved_cpu_list)
+  spare_ids <- app_joint_article_parse_cpu_list(contract$glofas_spare_cpu_list)
+  price <- app_joint_article_cpu_topology(price_ids, sysfs_root)
+  spare <- app_joint_article_cpu_topology(spare_ids, sysfs_root)
+  key <- function(x) unique(paste(x$physical_package_id, x$core_id, sep = ":"))
+  joint_key <- key(affinity)
+  price_key <- key(price)
+  spare_key <- key(spare)
+  logical_cores <- parallel::detectCores(logical = TRUE)
+  all_topology <- app_joint_article_cpu_topology(
+    seq.int(0L, logical_cores - 1L), sysfs_root)
+  all_key <- key(all_topology)
+  verified <- length(joint_key) == 11L && length(price_key) == 20L &&
+    length(spare_key) == 1L && !length(intersect(joint_key, price_key)) &&
+    !length(intersect(joint_key, spare_key)) &&
+    !length(intersect(price_key, spare_key)) &&
+    setequal(c(joint_key, price_key, spare_key), all_key)
+  out <- data.frame(
+    shared_capacity_mode = contract$shared_capacity_mode,
+    joint_cpu_list = contract$cpu_affinity_list,
+    joint_physical_cores = length(joint_key),
+    pricefm_cpu_list = contract$pricefm_reserved_cpu_list,
+    pricefm_physical_cores = length(price_key),
+    glofas_spare_cpu_list = contract$glofas_spare_cpu_list,
+    glofas_spare_physical_cores = length(spare_key),
+    total_physical_cores = length(all_key),
+    joint_pricefm_overlap = length(intersect(joint_key, price_key)),
+    joint_spare_overlap = length(intersect(joint_key, spare_key)),
+    allocation_verified = verified,
+    stringsAsFactors = FALSE
+  )
+  if (!verified) {
+    stop("Shared-capacity physical-core allocation is incomplete or overlapping.",
+      call. = FALSE)
+  }
+  out
+}
+
 app_joint_article_process_table <- function() {
   user <- Sys.info()[["user"]]
   lines <- tryCatch(system2(
@@ -525,7 +610,8 @@ app_joint_article_process_table <- function() {
 
 app_joint_article_competing_processes <- function(
   processes = app_joint_article_process_table(),
-  current_pid = Sys.getpid()
+  current_pid = Sys.getpid(),
+  allowed_patterns = character()
 ) {
   if (!nrow(processes)) return(character())
   excluded <- as.integer(current_pid)
@@ -540,6 +626,7 @@ app_joint_article_competing_processes <- function(
     "joint_qdesn_shared_backbone_article_confirmation_jerez_20260907",
     "joint_qdesn_corrected_article_comparison_jerez_20260909",
     "joint_qdesn_corrected_article_comparison_muscat_25core_20260909",
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909",
     "run_joint_qdesn_shared_backbone_article_vb_queue",
     "run_joint_qdesn_shared_backbone_article_mcmc_queue"
   )
@@ -547,6 +634,11 @@ app_joint_article_competing_processes <- function(
     ignore.case = TRUE))
   rows <- processes[keep & !is.na(processes$pid) &
     !processes$pid %in% excluded, , drop = FALSE]
+  if (nrow(rows) && length(allowed_patterns)) {
+    allowed <- Reduce(`|`, lapply(allowed_patterns, grepl, rows$command,
+      ignore.case = TRUE))
+    rows <- rows[!allowed, , drop = FALSE]
+  }
   sprintf("%d %s", rows$pid, rows$command)
 }
 
@@ -554,8 +646,9 @@ app_joint_article_assert_capacity_authorized <- function(contract) {
   expected <- if (identical(contract$version,
       "joint_shared_backbone_article_confirmation_v2")) {
     "JEREZ_50_IDLE"
-  } else if (identical(contract$version,
-      "joint_shared_backbone_article_confirmation_v3")) {
+  } else if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
     contract$capacity_approval_token
   } else {
     ""
@@ -599,13 +692,20 @@ app_joint_article_host_preflight <- function(
   expected_host <- as.character(profile$host[[1L]])
   host_ok <- Sys.info()[["nodename"]] %in% c(expected_host, sub("\\..*$", "", expected_host))
   logical_cores <- parallel::detectCores(logical = TRUE)
-  competing <- app_joint_article_competing_processes()
-  affinity <- if (identical(contract$version,
-      "joint_shared_backbone_article_confirmation_v3")) {
+  processes <- app_joint_article_process_table()
+  all_competing <- app_joint_article_competing_processes(processes)
+  competing <- app_joint_article_competing_processes(
+    processes, allowed_patterns = contract$allowed_competing_process_patterns)
+  allowed_competing <- setdiff(all_competing, competing)
+  affinity <- if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
     app_joint_article_cpu_affinity_preflight(contract)
   } else {
     NULL
   }
+  shared_capacity <- app_joint_article_shared_capacity_preflight(
+    contract, affinity)
   affinity_ok <- is.null(affinity) || all(affinity$verified)
   effective_affinity <- if (is.null(affinity)) "not_required" else
     affinity$effective_affinity[[1L]]
@@ -659,6 +759,8 @@ app_joint_article_host_preflight <- function(
     competing_process_count = length(competing),
     competing_processes = paste(competing, collapse = " || "),
     competing_processes_ok = !length(competing),
+    allowed_competing_process_count = length(allowed_competing),
+    allowed_competing_processes = paste(allowed_competing, collapse = " || "),
     thread_values = paste(paste(thread_vars, thread_values, sep = "="), collapse = ";"),
     one_thread_policy = all(thread_values == "1"),
     production_launched = FALSE,
@@ -673,6 +775,7 @@ app_joint_article_host_preflight <- function(
          call. = FALSE)
   }
   attr(out, "cpu_affinity_mapping") <- affinity
+  attr(out, "shared_capacity_mapping") <- shared_capacity
   out
 }
 
@@ -1153,7 +1256,8 @@ app_joint_article_prepare <- function(
   out_dir <- normalizePath(out_dir, mustWork = FALSE)
   if (contract$version %in% c(
       "joint_shared_backbone_article_confirmation_v2",
-      "joint_shared_backbone_article_confirmation_v3")) {
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
     expected_out_dir <- normalizePath(
       app_path("application/cache", contract$run_tag), mustWork = FALSE)
     if (!identical(out_dir, expected_out_dir)) {
@@ -1161,8 +1265,9 @@ app_joint_article_prepare <- function(
         call. = FALSE)
     }
   }
-  host <- if (identical(contract$version,
-      "joint_shared_backbone_article_confirmation_v3")) {
+  host <- if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
     # The Muscat gate runs before any runtime directory can be created.
     app_joint_article_host_preflight(contract)
   } else {
@@ -1191,6 +1296,7 @@ app_joint_article_prepare <- function(
   source <- app_joint_article_verify_source(source_root, contract)
   if (is.null(host)) host <- app_joint_article_host_preflight(contract)
   affinity <- attr(host, "cpu_affinity_mapping")
+  shared_capacity <- attr(host, "shared_capacity_mapping")
   app_ensure_dir(out_dir); app_ensure_dir(file.path(out_dir, "workers"))
   app_ensure_dir(file.path(out_dir, "mcmc_workers")); app_ensure_dir(file.path(out_dir, "initializers"))
   designs <- app_joint_article_build_designs(out_dir, source, contract)
@@ -1278,6 +1384,10 @@ app_joint_article_prepare <- function(
   if (!is.null(affinity)) {
     files <- c(files, cpu_affinity_preflight = app_write_csv(
       affinity, file.path(out_dir, "cpu_affinity_preflight.csv")))
+  }
+  if (!is.null(shared_capacity)) {
+    files <- c(files, shared_capacity_preflight = app_write_csv(
+      shared_capacity, file.path(out_dir, "shared_capacity_preflight.csv")))
   }
   writeLines(c(
     "# JOINT article-fixture confirmation preflight", "",

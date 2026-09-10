@@ -211,6 +211,79 @@ stopifnot(
   !any(grepl("101", competing, fixed = TRUE))
 )
 
+# Queue workers may exclude only their lock-authenticated execution family.
+family_processes <- data.frame(
+  pid = c(100L, 101L, 102L, 103L, 900L),
+  ppid = c(1L, 100L, 100L, 101L, 1L),
+  command = c(
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909 queue",
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909 worker 1",
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909 worker 2",
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909 child",
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909 duplicate"
+  ),
+  stringsAsFactors = FALSE
+)
+family_root <- tempfile("joint_mcmc_execution_family_")
+dir.create(file.path(family_root, "mcmc_queue.lock"), recursive = TRUE)
+app_write_csv(data.frame(pid = 100L, root = family_root,
+  stringsAsFactors = FALSE), file.path(family_root, "mcmc_queue.lock", "owner.csv"))
+family <- app_joint_article_verify_execution_family(
+  family_root, processes = family_processes, current_pid = 101L,
+  execution_root_pid = 100L)
+stopifnot(setequal(family, c(100L, 101L, 102L, 103L)))
+strict_competing <- app_joint_article_competing_processes(
+  family_processes, current_pid = 101L)
+stopifnot(
+  any(grepl("100 .*queue", strict_competing)),
+  any(grepl("102 .*worker 2", strict_competing)),
+  any(grepl("900 .*duplicate", strict_competing))
+)
+family_competing <- app_joint_article_competing_processes(
+  family_processes, current_pid = 101L, excluded_pids = family)
+stopifnot(
+  length(family_competing) == 1L,
+  grepl("900 .*duplicate", family_competing[[1L]])
+)
+stopifnot(inherits(try(app_joint_article_verify_execution_family(
+  family_root, processes = family_processes, current_pid = 900L,
+  execution_root_pid = 100L), silent = TRUE), "try-error"))
+app_write_csv(data.frame(pid = 999L, root = family_root,
+  stringsAsFactors = FALSE), file.path(family_root, "mcmc_queue.lock", "owner.csv"))
+stopifnot(inherits(try(app_joint_article_verify_execution_family(
+  family_root, processes = family_processes, current_pid = 101L,
+  execution_root_pid = 100L), silent = TRUE), "try-error"))
+unlink(family_root, recursive = TRUE, force = TRUE)
+
+if (.Platform$OS.type != "windows") {
+  fork_root <- tempfile("joint_mcmc_real_fork_family_")
+  dir.create(file.path(fork_root, "mcmc_queue.lock"), recursive = TRUE)
+  parent_pid <- Sys.getpid()
+  app_write_csv(data.frame(pid = parent_pid, root = fork_root,
+    stringsAsFactors = FALSE), file.path(fork_root, "mcmc_queue.lock", "owner.csv"))
+  fork_results <- parallel::mclapply(1:2, function(index) {
+    ready <- file.path(fork_root, sprintf("ready_%d", Sys.getpid()))
+    writeLines(as.character(Sys.getpid()), ready)
+    deadline <- Sys.time() + 5
+    while (length(list.files(fork_root, pattern = "^ready_")) < 2L &&
+        Sys.time() < deadline) Sys.sleep(0.02)
+    processes <- app_joint_article_process_table()
+    family <- app_joint_article_verify_execution_family(
+      fork_root, processes = processes, current_pid = Sys.getpid(),
+      execution_root_pid = parent_pid)
+    c(parent_present = parent_pid %in% family,
+      worker_present = Sys.getpid() %in% family,
+      family_size = length(family))
+  }, mc.cores = 2L, mc.preschedule = FALSE)
+  stopifnot(
+    length(fork_results) == 2L,
+    all(vapply(fork_results, function(x) all(x[1:2] == 1), logical(1L))),
+    all(vapply(fork_results, function(x) x[["family_size"]] >= 3L,
+      logical(1L)))
+  )
+  unlink(fork_root, recursive = TRUE, force = TRUE)
+}
+
 capacity_guard <- Sys.getenv("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED",
   unset = NA_character_)
 Sys.unsetenv("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED")

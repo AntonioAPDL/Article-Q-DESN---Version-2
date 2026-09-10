@@ -25,7 +25,7 @@ source_root <- app_joint_article_default_source_runtime(contract)
 # Host and capacity behavior has dedicated contract tests. This legacy planning
 # fixture exercises the scientific graph against the immutable Muscat evidence.
 original_host_preflight <- app_joint_article_host_preflight
-app_joint_article_host_preflight <- function(contract, profile = NULL) {
+app_joint_article_host_preflight <- function(contract, profile = NULL, ...) {
   data.frame(host = "portable_test_fixture", production_launched = FALSE,
     stringsAsFactors = FALSE)
 }
@@ -149,6 +149,14 @@ stopifnot(all(manifest_check$verified))
 status_path <- file.path(root, "atomic_status_test.csv")
 app_joint_article_atomic_write_csv(data.frame(a = 1L, status = "pass"), status_path)
 stopifnot(file.exists(status_path), app_read_csv(status_path)$status[[1L]] == "pass")
+refreshed_health <- app_joint_article_refresh_mcmc_queue_health(root)$summary
+queue_health <- app_read_csv(file.path(root, "mcmc_queue_health.csv"))
+stopifnot(
+  identical(refreshed_health$expected_workers, queue_health$expected_workers),
+  identical(refreshed_health$completed_workers, queue_health$completed_workers),
+  identical(refreshed_health$failed_workers, queue_health$failed_workers),
+  identical(refreshed_health$remaining_workers, queue_health$remaining_workers)
+)
 
 bad_contract <- contract
 bad_contract$source_hashes[["final_decision.csv"]] <- paste(rep("0", 64), collapse = "")
@@ -262,11 +270,33 @@ failure_audit <- app_joint_article_write_mcmc_failure_audit(
 )
 stopifnot(
   nrow(failure_audit$failure_inventory) == 1L,
+  failure_audit$failure_inventory$failure_class[[1L]] ==
+    "numerical_precision_factorization",
+  failure_audit$assessment$audit_status[[1L]] ==
+    "joint_exal_precision_failure_localized",
+  failure_audit$assessment$numerical_precision_failures[[1L]] == 1L,
+  failure_audit$assessment$infrastructure_host_preflight_failures[[1L]] == 0L,
   failure_audit$assessment$failed_joint_exal_workers[[1L]] == 1L,
   failure_audit$assessment$start_preflight_failures[[1L]] == 0L,
   isTRUE(failure_audit$assessment$initial_precision_all_pass[[1L]]),
   all(failure_audit$manifest_verification$verified)
 )
+stopifnot(identical(
+  app_joint_article_classify_mcmc_failure(c(
+    "Host preflight failed host/profile",
+    "leading principal minor is not positive",
+    "posterior draw frame contains nonfinite values",
+    "artifact manifest hash mismatch",
+    "unknown worker error"
+  )),
+  c(
+    "infrastructure_host_preflight",
+    "numerical_precision_factorization",
+    "nonfinite_model_output",
+    "manifest_or_provenance",
+    "unclassified"
+  )
+))
 
 scoring <- app_read_csv(file.path(root, "scoring_contract.csv"))
 stopifnot(

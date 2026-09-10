@@ -60,7 +60,7 @@ does not reuse the dormant 25-core runtime or either historical Jerez packet.
 - [x] The 11/20/1 allocation is exhaustive and non-overlapping.
 - [x] Only the two audited active campaign families can pass the process gate.
 - [x] The 11-worker launcher is phase-gated, affinity-pinned, and shell-valid.
-- [ ] Dedicated v4 branch is committed, pushed, clean, and upstream-exact.
+- [x] Dedicated v4 branch and the orchestration recovery are committed and pushed.
 - [ ] Production preflight verifies the live host and frozen source evidence.
 - [ ] Background launch starts and produces healthy worker progress.
 - [ ] Final 136/136 VB, 160/160 MCMC, score packet, manifests, and hashes pass.
@@ -72,3 +72,36 @@ or Overleaf work. Runtime files under `application/cache/` remain ignored. This
 branch is an execution lane only and must be handed to the integration
 coordinator after scientific closeout; it must not merge or publish article
 assets directly.
+
+## MCMC queue preflight recovery
+
+The first 11-worker MCMC batch stopped before sampling. All 11 workers recorded
+the same host-preflight error in less than one second; no worker wrote posterior
+draws, a posterior summary, or a completion receipt. The failed attempt is
+preserved under the ignored runtime path
+`mcmc_attempts/preflight_self_detection_20260910T032727Z`, with an assessment,
+inventory, SHA-256 manifest, and verification receipt.
+
+The cause was orchestration-only. Each forked worker reran the strict process
+gate, which excluded that worker and its descendants but still saw the queue
+parent and sibling workers as competing JOINT processes. The repair does not
+relax the top-level host gate. A worker may exclude an execution family only
+when all of the following hold:
+
+1. the runtime contains an active `mcmc_queue.lock/owner.csv`;
+2. the supplied queue PID and normalized runtime root match that lock exactly;
+3. the worker PID is the queue PID or a descendant in the live process table.
+
+Only the verified queue PID and its descendants are excluded. An unrelated
+process with the same JOINT run tag still blocks execution. Batch health is now
+refreshed immediately after every batch result, and failure audits classify
+recorded errors before recommending an orchestration, numerical, nonfinite, or
+provenance repair.
+
+Recovery verification covers synthetic parent/sibling process trees, an actual
+two-child fork, lock-owner mismatch, non-descendant rejection, duplicate
+same-tag rejection, historical precision-failure classification, and health
+file synchronization. The posterior-target, corrected scientific-contract,
+Muscat host-contract, shared-capacity, and full confirmation tests all pass.
+The only permitted continuation is `--launch-mcmc`; completed VB artifacts must
+not be regenerated.

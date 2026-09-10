@@ -430,3 +430,10 @@ use positive unbounded scale support, require five chains and one verified
 posterior-target hash per cell, and keep all earlier JOINT packets separate.
 Both production phases remain launch locked and are authorized only on the
 dedicated Jerez execution branch and host profile.
+
+The Muscat execution adaptation is frozen separately in
+`joint_qdesn_shared_backbone_article_confirmation_contract_v3.csv` and
+`joint_qdesn_corrected_article_score_contract_v3.csv`. It changes only the
+execution branch, isolated runtime/source paths, host profile, concurrency,
+and the fail-closed `0-24` physical-affinity contract. Every scientific,
+seed, posterior-target, and score field remains identical to v2.

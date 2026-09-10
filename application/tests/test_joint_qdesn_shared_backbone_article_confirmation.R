@@ -3,7 +3,32 @@
 source(file.path(dirname(normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1L]))),
   "..", "scripts", "_joint_qdesn_shared_backbone_article_confirmation_bootstrap.R"))
 
-contract <- app_joint_article_read_contract()
+legacy_contract_table <- app_read_csv(app_joint_article_contract_path())
+muscat_contract <- app_joint_article_read_contract(
+  app_joint_article_muscat_corrected_contract_path()
+)
+legacy_contract_table$value[legacy_contract_table$name == "source_worktree"] <-
+  muscat_contract$source_worktree
+legacy_contract_table <- rbind(legacy_contract_table, data.frame(
+  section = "identity",
+  name = "execution_branch",
+  value = app_joint_article_git_value(c("rev-parse", "--abbrev-ref", "HEAD")),
+  type = "character",
+  description = "Portable test fixture execution branch.",
+  stringsAsFactors = FALSE
+))
+contract_path <- tempfile("joint_article_confirmation_contract_", fileext = ".csv")
+app_write_csv(legacy_contract_table, contract_path)
+contract <- app_joint_article_read_contract(contract_path)
+source_root <- app_joint_article_default_source_runtime(contract)
+
+# Host and capacity behavior has dedicated contract tests. This legacy planning
+# fixture exercises the scientific graph against the immutable Muscat evidence.
+original_host_preflight <- app_joint_article_host_preflight
+app_joint_article_host_preflight <- function(contract, profile = NULL) {
+  data.frame(host = "portable_test_fixture", production_launched = FALSE,
+    stringsAsFactors = FALSE)
+}
 stopifnot(
   identical(contract$tau, c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)),
   contract$expected_total_components == 136L,
@@ -17,7 +42,7 @@ stopifnot(
   !contract$global_specification_selected
 )
 
-source <- app_joint_article_verify_source(contract = contract)
+source <- app_joint_article_verify_source(source_root = source_root, contract = contract)
 stopifnot(
   source$source_git$head[[1L]] == contract$source_head,
   source$source_git$detached[[1L]],
@@ -35,7 +60,10 @@ stopifnot(
 )
 
 root <- tempfile("joint_article_confirmation_test_")
-prep <- app_joint_article_prepare(out_dir = root, force = TRUE, dry_run = TRUE)
+prep <- app_joint_article_prepare(
+  out_dir = root, source_root = source_root, contract_path = contract_path,
+  force = TRUE, dry_run = TRUE
+)
 vb_plan <- prep$vb_plan
 cells <- prep$cells
 mcmc_plan <- prep$mcmc_plan
@@ -109,8 +137,12 @@ guard_failed <- inherits(try(app_joint_article_mcmc_launch_guard(root), silent =
   "try-error")
 stopifnot(guard_failed)
 
-prep_reuse <- app_joint_article_prepare(out_dir = root, dry_run = TRUE)
+prep_reuse <- app_joint_article_prepare(
+  out_dir = root, source_root = source_root, contract_path = contract_path,
+  dry_run = TRUE
+)
 stopifnot(isTRUE(prep_reuse$reused))
+app_joint_article_host_preflight <- original_host_preflight
 
 manifest_check <- app_joint_shared_verify_manifest(root, file.path(root, "artifact_manifest.csv"))
 stopifnot(all(manifest_check$verified))
@@ -188,6 +220,18 @@ audit_rows <- app_joint_qdesn_bind_rows(list(
   )
 ))
 app_write_csv(audit_rows, file.path(root, "vb_initialization_rows.csv"))
+gaussian_job <- app_joint_article_find_job(
+  vb_plan, audit_job$scenario_id[[1L]], "gaussian_rhs_initializer"
+)
+gaussian_worker_dir <- app_joint_article_vb_worker_dir(
+  root, gaussian_job$job_id[[1L]]
+)
+app_ensure_dir(gaussian_worker_dir)
+saveRDS(list(initializer = list(
+  zeta2 = 1,
+  alpha_mean = seq(-1, 1, length.out = audit_K),
+  alpha_prior_sd = rep(1, audit_K)
+)), file.path(gaussian_worker_dir, "fit_initializer.rds"), version = 3L)
 start_preflight <- app_joint_article_mcmc_start_preflight(
   root, audit_job$worker_id[[1L]]
 )
@@ -255,10 +299,10 @@ stopifnot(
   parity$beta_cov_nrow[[1L]] == length(contract$tau) * 2L,
   parity$alpha_length[[1L]] == length(contract$tau),
   parity$sigma_length[[1L]] == length(contract$tau),
-  abs(parity$al_beta_sum[[1L]] - 0.152213091439) < 1e-12,
-  abs(parity$al_alpha[[1L]] - 0.235467134628) < 1e-12,
-  abs(parity$al_sigma[[1L]] - 0.150980779259) < 1e-12,
-  parity$qhat_sha12[[1L]] == "3456dbca657c",
+  abs(parity$al_beta_sum[[1L]] - 0.153580785083) < 1e-12,
+  abs(parity$al_alpha[[1L]] - 0.234872232129) < 1e-12,
+  abs(parity$al_sigma[[1L]] - 0.150875048006) < 1e-12,
+  parity$qhat_sha12[[1L]] == "bb2ce98a737d",
   parity$monotone_contract_crossings[[1L]] == 0L,
   parity$primary_score[[1L]] == "dgp_integrated_finite_grid_acrps",
   all(is.finite(as.numeric(unlist(

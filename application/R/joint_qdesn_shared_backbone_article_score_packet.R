@@ -14,6 +14,13 @@ app_joint_article_corrected_score_contract_path <- function() {
   )
 }
 
+app_joint_article_muscat_corrected_score_contract_path <- function() {
+  app_path(
+    "application/config",
+    "joint_qdesn_corrected_article_score_contract_v3.csv"
+  )
+}
+
 app_joint_article_score_contract_value <- function(tab, name) {
   row <- tab[tab$name == name, , drop = FALSE]
   if (nrow(row) != 1L) {
@@ -142,6 +149,40 @@ app_joint_article_score_read_contract <- function(
         !out$posterior_target_hash_required ||
         !out$historical_packets_separate || !out$phase182_separate) {
       stop("Corrected JOINT score contract violates the frozen common-posterior gate.",
+        call. = FALSE)
+    }
+  }
+  if (identical(out$version,
+      "joint_qdesn_corrected_article_score_packet_v3")) {
+    expected_runtime <- file.path(
+      "application", "cache",
+      "joint_qdesn_corrected_article_comparison_muscat_25core_20260909")
+    if (!identical(out$runtime_root, expected_runtime) ||
+        out$expected_source_jobs != 7560L ||
+        out$expected_source_failures != 0L ||
+        out$expected_vb_components != 136L ||
+        out$expected_initializers != 32L ||
+        out$expected_mcmc_workers != 160L ||
+        out$expected_scenarios != 8L || out$expected_models != 4L ||
+        out$expected_model_cells != 32L || out$expected_contrasts != 16L ||
+        !identical(out$primary_metric, "dgp_integrated_acrps") ||
+        !identical(out$score_scale, "twice_check_loss") ||
+        !identical(out$forecast_row_source, "design_score_local") ||
+        !identical(out$canonical_action,
+          "posterior_mean_parameter_path_then_rowwise_isotonic") ||
+        !identical(out$posterior_point_summary, "mean") ||
+        !identical(out$posterior_sensitivity_summary, "median") ||
+        out$credible_interval != 0.95 ||
+        !identical(out$credible_interval_probabilities, c(0.025, 0.975)) ||
+        !identical(out$draw_selection,
+          "equally_spaced_retained_indices") ||
+        !identical(out$joint_draw_coupling,
+          "preserve_retained_joint_draw_identity") ||
+        !identical(out$independent_draw_coupling,
+          "within_chain_seeded_per_tau_permutation") ||
+        !out$posterior_target_hash_required ||
+        !out$historical_packets_separate || !out$phase182_separate) {
+      stop("Muscat corrected JOINT score contract violates the frozen common-posterior gate.",
         call. = FALSE)
     }
   }
@@ -1339,16 +1380,23 @@ app_joint_article_score_transfer_inventory <- function(root, out_path) {
 }
 
 app_joint_article_score_packet_health <- function(
-  summary, contrast, winners, reaudit, packet_paths
+  summary, contrast, winners, reaudit, packet_paths, contract = NULL
 ) {
+  ready <- nrow(summary) == 32L && nrow(contrast) == 16L &&
+    nrow(winners) == 8L && all(reaudit$status == "pass") &&
+    all(summary$contract_crossing_pairs == 0L) &&
+    all(is.finite(summary$posterior_score_mean))
+  muscat <- !is.null(contract) && identical(contract$version,
+    "joint_qdesn_corrected_article_score_packet_v3")
+  status <- if (muscat) {
+    if (ready) "CORRECTED_JOINT_MUSCAT_PACKET_READY_FOR_COORDINATOR_REVIEW" else
+      "CORRECTED_JOINT_MUSCAT_RUN_BLOCKED"
+  } else {
+    if (ready) "READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW" else
+      "NOT_READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW"
+  }
   data.frame(
-    status = if (
-      nrow(summary) == 32L && nrow(contrast) == 16L && nrow(winners) == 8L &&
-        all(reaudit$status == "pass") &&
-        all(summary$contract_crossing_pairs == 0L) &&
-        all(is.finite(summary$posterior_score_mean))
-    ) "READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW" else
-      "NOT_READY_FOR_MUSCAT_TRANSFER_AND_INTEGRATION_REVIEW",
+    status = status,
     posterior_score_rows = nrow(summary),
     joint_independent_contrasts = nrow(contrast),
     scenario_winners = nrow(winners),
@@ -1375,8 +1423,9 @@ app_joint_article_score_finalize <- function(
 ) {
   root <- normalizePath(root, mustWork = TRUE)
   contract <- app_joint_article_score_read_contract(contract_path)
-  if (identical(contract$version,
-      "joint_qdesn_corrected_article_score_packet_v2")) {
+  if (contract$version %in% c(
+      "joint_qdesn_corrected_article_score_packet_v2",
+      "joint_qdesn_corrected_article_score_packet_v3")) {
     expected_root <- normalizePath(
       app_path(contract$runtime_root), mustWork = FALSE)
     if (!identical(root, expected_root)) {
@@ -1503,12 +1552,14 @@ app_joint_article_score_finalize <- function(
             "article_staging_inventory.csv")
   )
   health <- app_joint_article_score_packet_health(
-    summary, contrast$summary, winners, reaudit, paths
+    summary, contrast$summary, winners, reaudit, paths, contract = contract
   )
   paths <- c(paths, packet_health_summary = write(health, "packet_health_summary.csv"))
   readme <- file.path(out_dir, "README.md")
+  packet_host <- if (identical(contract$version,
+      "joint_qdesn_corrected_article_score_packet_v3")) "Muscat" else "Jerez"
   writeLines(c(
-    "# Jerez JOINT shared-backbone score packet", "",
+    sprintf("# %s JOINT shared-backbone score packet", packet_host), "",
     "This ignored packet deterministically reconstructs posterior scores from",
     "the completed seven-level article-fixture MCMC workers. It does not rerun",
     "VB or MCMC and it does not modify article assets. Phase182 dense-grid",

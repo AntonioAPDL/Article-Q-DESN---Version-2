@@ -589,3 +589,15 @@ distinct environment authorizations, enforce the 50-worker ceiling and
 one-thread policy, and cannot reuse the historical Jerez runtime. Final score
 materialization is unavailable until all 160 workers and all posterior-target
 hash gates pass.
+
+The isolated Muscat adaptation uses:
+
+```sh
+application/scripts/launch_joint_qdesn_corrected_article_comparison_muscat.sh --preflight
+```
+
+Every v3 R invocation is pinned with `taskset -c 0-24`; VB and MCMC retain
+separate phase authorizations and a maximum of 25 single-thread workers. The
+preflight fails before creating its runtime unless the effective affinity maps
+to 25 distinct physical cores and all competing PriceFM, GloFAS, Phase182,
+historical JOINT, and corrected JOINT processes are absent.

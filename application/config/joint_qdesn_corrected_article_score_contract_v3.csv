@@ -1,0 +1,57 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_corrected_article_score_packet_v3,character,Score contract for the corrected common-posterior JOINT comparison on Muscat.
+scope,runtime_root,application/cache/joint_qdesn_corrected_article_comparison_muscat_25core_20260909,character,Ignored corrected Muscat runtime root.
+scope,expected_source_jobs,7560,integer,Imported shared-backbone source jobs required before scoring.
+scope,expected_source_failures,0,integer,No imported source failure is allowed.
+scope,expected_vb_components,136,integer,Complete corrected VB initialization sequence.
+scope,expected_initializers,32,integer,One compact initializer per scenario-model cell.
+scope,expected_mcmc_workers,160,integer,Five chains for each of 32 model cells.
+scope,expected_scenarios,8,integer,Eight synthetic mechanisms.
+scope,expected_models,4,integer,Independent and joint AL and exAL comparisons.
+scope,expected_model_cells,32,integer,Eight scenarios by four model families.
+scope,expected_contrasts,16,integer,Two joint-minus-independent contrasts per scenario.
+score,primary_metric,dgp_integrated_acrps,character,Known-DGP expected finite-grid quantile score.
+score,score_scale,twice_check_loss,character,Each ordinate is twice quantile check loss.
+score,tau_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Frozen seven-level quantile grid.
+score,trapezoidal_weights,0.025;0.100;0.200;0.250;0.200;0.100;0.025,numeric_vector,Trapezoidal weights over the fitted probability range.
+score,renormalize_weights,false,logical,Do not rescale the covered probability range.
+score,forecast_row_source,design_score_local,character,Use the frozen forecast evaluation rows.
+score,canonical_action,posterior_mean_parameter_path_then_rowwise_isotonic,character,Use chain-balanced posterior means followed by the frozen monotone rule.
+score,posterior_point_summary,mean,character,Primary comparison uses the posterior score mean.
+score,posterior_sensitivity_summary,median,character,Retain the posterior median as sensitivity evidence.
+score,credible_interval,0.95,numeric,Equal-tailed posterior interval probability.
+score,credible_interval_probabilities,0.025;0.975,numeric_vector,Equal-tailed interval endpoints.
+draws,score_draws_per_chain,750,integer,Equally spaced retained draws per chain for primary uncertainty.
+draws,sensitivity_draws_per_chain,250,integer,Equally spaced retained draws for coupling sensitivity.
+draws,draw_selection,equally_spaced_retained_indices,character,Cover each retained chain without outcome-dependent subsampling.
+draws,chunk_size,50,integer,Maximum score-draw chunk size.
+coupling,joint_draw_coupling,preserve_retained_joint_draw_identity,character,Preserve cross-level identity for joint posterior draws.
+coupling,independent_draw_coupling,within_chain_seeded_per_tau_permutation,character,Represent independent product posteriors by seeded within-chain permutations.
+coupling,primary_pairing_seed,2026091001,integer,Primary independent coupling seed.
+coupling,sensitivity_pairing_seeds,2026091002;2026091003;2026091004,integer_vector,Alternate independent coupling seeds.
+coupling,contrast_pairing_seed,2026091101,integer,Joint-minus-independent scalar score pairing seed.
+diagnostics,qhat_equivalence_tolerance,1e-8,numeric,Posterior path reconstruction tolerance.
+diagnostics,score_rank_rhat_ceiling,1.05,numeric,Preferred rank-normalized Rhat ceiling.
+diagnostics,score_bulk_ess_floor,400,numeric,Preferred bulk effective sample size floor.
+diagnostics,score_tail_ess_floor,200,numeric,Preferred tail effective sample size floor.
+diagnostics,raw_crossing_rate_review,0.01,numeric,Review raw crossing rates above one percent.
+diagnostics,standardized_adjustment_review,0.01,numeric,Review mean monotone adjustments above one percent of the DGP scale.
+diagnostics,regret_tolerance,1e-10,numeric,Hard negative-regret tolerance.
+diagnostics,analytic_integration_tolerance,1e-8,numeric,Analytic versus numerical integration tolerance.
+diagnostics,monte_carlo_tolerance,0.01,numeric,Deterministic Monte Carlo formula tolerance.
+decision,comparison_center,posterior_mean,character,Use strictly lower posterior means for descriptive ordering.
+decision,interval_interpretation,overlap_is_uncertainty_not_equality,character,Interval overlap limits evidence strength but does not define equality.
+decision,practical_relative_margin,0.01,numeric,One-percent descriptive practical margin.
+decision,posterior_probability_floor,0.95,numeric,Posterior probability threshold for evidence-strength labels.
+decision,descriptive_improvement_policy,strictly_lower_mean,character,Retain numerical ordering as descriptive.
+secondary,realized_score,finite_grid_realized_acrps,character,Secondary realized finite-grid score.
+secondary,average_quantile_loss,unweighted_average_check_loss,character,Secondary average check loss.
+secondary,oracle_recovery,fit_and_forecast_mae_rmse,character,Fit and forecast recovery diagnostics.
+secondary,raw_crossings,pre_contract_coherence_diagnostic,character,Raw crossings are diagnostics before monotone reporting.
+hard_gate,finite_values,required,character,All score and reconstructed path values must be finite.
+hard_gate,contract_crossings,zero_required,character,Reported quantile grids must have zero crossings.
+hard_gate,posterior_target_hashes,one_verified_hash_per_model_cell,character,All five chains in each cell must share one posterior-target hash.
+hard_gate,source_completeness,fail_closed,character,Missing source or fitted evidence stops finalization.
+hard_gate,manifest_verification,all_entries_verified,character,All manifests must verify by size and SHA-256.
+hard_gate,historical_packets,separate_not_mixed,character,Do not mix Phase181 Jerez-v1 or Phase182 cells into this packet.
+hard_gate,phase182_scope,separate_dense_grid_lane,character,The 19-level Phase182 analysis remains separate.

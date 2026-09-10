@@ -8,6 +8,10 @@ app_joint_article_corrected_contract_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v2.csv")
 }
 
+app_joint_article_muscat_corrected_contract_path <- function() {
+  app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v3.csv")
+}
+
 app_joint_article_host_profiles_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_host_profiles_v1.csv")
 }
@@ -53,6 +57,7 @@ app_joint_article_read_contract <- function(
   num <- function(name) as.numeric(get(name))
   num_optional <- function(name, default) if (has(name)) as.numeric(get(name)) else default
   int <- function(name) as.integer(get(name))
+  int_optional <- function(name, default) if (has(name)) as.integer(get(name)) else default
   nums <- function(name) as.numeric(strsplit(get(name), ";", fixed = TRUE)[[1L]])
   out <- list(
     table = tab,
@@ -151,6 +156,9 @@ app_joint_article_read_contract <- function(
     chain_start_jitter_seed_base = int("chain_start_jitter_seed_base"),
     blas_threads = int("blas_threads"),
     min_data_free_gib = num("min_data_free_gib"),
+    cpu_affinity_list = get_optional("cpu_affinity_list", ""),
+    required_physical_cores = int_optional("required_physical_cores", NA_integer_),
+    capacity_approval_token = get_optional("capacity_approval_token", ""),
     production_launched = bool("production_launched"),
     retain_broad_model_dumps = bool("retain_broad_model_dumps"),
     dry_run_preflight_required = bool("dry_run_preflight_required"),
@@ -208,6 +216,32 @@ app_joint_article_read_contract <- function(
         out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
         out$initial_concurrency != 50L || out$maximum_concurrency != 50L) {
       stop("Corrected JOINT article confirmation contract violates the common-posterior gate.",
+        call. = FALSE)
+    }
+  }
+  if (identical(out$version, "joint_shared_backbone_article_confirmation_v3")) {
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts ||
+        !identical(out$alpha_prior_center_policy,
+          "gaussian_location_quantiles") ||
+        !identical(out$alpha_prior_sd_policy,
+          "gaussian_residual_scale_multiplier") ||
+        out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-corrected-article-comparison-muscat-25core-20260909") ||
+        !identical(out$host_profile_id,
+          "muscat_corrected_25core_20260909") ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 25L || out$maximum_concurrency != 25L ||
+        !identical(out$cpu_affinity_list, "0-24") ||
+        out$required_physical_cores != 25L ||
+        !identical(out$capacity_approval_token,
+          "MUSCAT_25_PHYSICAL_IDLE")) {
+      stop("Muscat corrected JOINT contract violates the frozen common-posterior or physical-affinity gate.",
         call. = FALSE)
     }
   }
@@ -343,30 +377,196 @@ app_joint_article_data_free_gib <- function(path = "/data") {
   as.numeric(parts[[4L]]) / 1024^2
 }
 
-app_joint_article_competing_processes <- function() {
+app_joint_article_memory_available_gib <- function(
+  path = "/proc/meminfo"
+) {
+  if (!file.exists(path)) return(NA_real_)
+  lines <- readLines(path, warn = FALSE)
+  row <- grep("^MemAvailable:[[:space:]]+[0-9]+[[:space:]]+kB$", lines,
+    value = TRUE)
+  if (length(row) != 1L) return(NA_real_)
+  as.numeric(sub("^MemAvailable:[[:space:]]+([0-9]+).*$", "\\1", row)) /
+    1024^2
+}
+
+app_joint_article_load_average <- function(path = "/proc/loadavg") {
+  if (!file.exists(path)) return(rep(NA_real_, 3L))
+  fields <- strsplit(readLines(path, n = 1L, warn = FALSE),
+    "[[:space:]]+")[[1L]]
+  suppressWarnings(as.numeric(fields[seq_len(min(3L, length(fields)))]))
+}
+
+app_joint_article_parse_cpu_list <- function(x) {
+  x <- gsub("[[:space:]]", "", as.character(x)[[1L]])
+  if (!nzchar(x)) return(integer())
+  tokens <- strsplit(x, ",", fixed = TRUE)[[1L]]
+  ids <- unlist(lapply(tokens, function(token) {
+    if (grepl("-", token, fixed = TRUE)) {
+      bounds <- suppressWarnings(as.integer(strsplit(token, "-", fixed = TRUE)[[1L]]))
+      if (length(bounds) != 2L || anyNA(bounds) || bounds[[1L]] > bounds[[2L]]) {
+        stop("CPU affinity contains a malformed range.", call. = FALSE)
+      }
+      seq.int(bounds[[1L]], bounds[[2L]])
+    } else {
+      value <- suppressWarnings(as.integer(token))
+      if (length(value) != 1L || is.na(value)) {
+        stop("CPU affinity contains a malformed CPU ID.", call. = FALSE)
+      }
+      value
+    }
+  }), use.names = FALSE)
+  if (!length(ids) || any(ids < 0L) || anyDuplicated(ids)) {
+    stop("CPU affinity IDs must be distinct nonnegative integers.",
+      call. = FALSE)
+  }
+  sort(ids)
+}
+
+app_joint_article_effective_cpu_list <- function(
+  path = "/proc/self/status"
+) {
+  if (!file.exists(path)) {
+    stop("Cannot verify CPU affinity because /proc/self/status is unavailable.",
+      call. = FALSE)
+  }
+  lines <- readLines(path, warn = FALSE)
+  row <- grep("^Cpus_allowed_list:", lines, value = TRUE)
+  if (length(row) != 1L) {
+    stop("Cannot resolve Cpus_allowed_list from /proc/self/status.",
+      call. = FALSE)
+  }
+  app_joint_article_parse_cpu_list(sub("^[^:]+:[[:space:]]*", "", row))
+}
+
+app_joint_article_cpu_topology <- function(
+  cpu_ids,
+  sysfs_root = "/sys/devices/system/cpu"
+) {
+  cpu_ids <- as.integer(cpu_ids)
+  rows <- lapply(cpu_ids, function(cpu) {
+    topology <- file.path(sysfs_root, sprintf("cpu%d", cpu), "topology")
+    package_path <- file.path(topology, "physical_package_id")
+    core_path <- file.path(topology, "core_id")
+    if (!file.exists(package_path) || !file.exists(core_path)) {
+      stop(sprintf("Linux topology is unavailable for CPU %d.", cpu),
+        call. = FALSE)
+    }
+    data.frame(
+      logical_cpu = cpu,
+      physical_package_id = as.integer(readLines(package_path, n = 1L,
+        warn = FALSE)),
+      core_id = as.integer(readLines(core_path, n = 1L, warn = FALSE)),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+app_joint_article_cpu_affinity_preflight <- function(
+  contract,
+  effective_cpu_ids = NULL,
+  sysfs_root = "/sys/devices/system/cpu"
+) {
+  expected <- app_joint_article_parse_cpu_list(contract$cpu_affinity_list)
+  if (!length(expected) || is.na(contract$required_physical_cores)) {
+    stop("The Muscat contract must declare CPU affinity and physical cores.",
+      call. = FALSE)
+  }
+  if (!nzchar(Sys.which("taskset"))) {
+    stop("The Muscat affinity gate requires taskset.", call. = FALSE)
+  }
+  effective <- if (is.null(effective_cpu_ids)) {
+    app_joint_article_effective_cpu_list()
+  } else {
+    sort(as.integer(effective_cpu_ids))
+  }
+  topology <- app_joint_article_cpu_topology(effective, sysfs_root = sysfs_root)
+  physical_key <- paste(topology$physical_package_id, topology$core_id,
+    sep = ":")
+  distinct_physical <- length(unique(physical_key))
+  exact_affinity <- identical(effective, expected)
+  verified <- exact_affinity &&
+    length(effective) == contract$required_physical_cores &&
+    distinct_physical == contract$required_physical_cores
+  topology$expected_affinity <- contract$cpu_affinity_list
+  topology$effective_affinity <- paste(effective, collapse = ",")
+  topology$required_physical_cores <- contract$required_physical_cores
+  topology$distinct_physical_cores <- distinct_physical
+  topology$exact_affinity <- exact_affinity
+  topology$verified <- verified
+  if (!verified) {
+    stop(sprintf(
+      "CPU affinity gate failed: expected %s on %d distinct physical cores; observed %s on %d.",
+      contract$cpu_affinity_list, contract$required_physical_cores,
+      paste(effective, collapse = ","), distinct_physical), call. = FALSE)
+  }
+  topology
+}
+
+app_joint_article_process_table <- function() {
   user <- Sys.info()[["user"]]
   lines <- tryCatch(system2(
-    "ps", c("-u", user, "-o", "pid=,args="), stdout = TRUE, stderr = FALSE
+    "ps", c("-u", user, "-o", "pid=,ppid=,args="), stdout = TRUE,
+    stderr = FALSE
   ), error = function(e) character())
-  if (!length(lines)) return(character())
-  pid <- suppressWarnings(as.integer(sub("^\\s*([0-9]+).*$", "\\1", lines)))
+  if (!length(lines)) {
+    return(data.frame(pid = integer(), ppid = integer(), command = character(),
+      stringsAsFactors = FALSE))
+  }
+  trimmed <- trimws(lines)
+  data.frame(
+    pid = suppressWarnings(as.integer(sub("^([0-9]+).*$", "\\1", trimmed))),
+    ppid = suppressWarnings(as.integer(sub(
+      "^[0-9]+[[:space:]]+([0-9]+).*$", "\\1", trimmed))),
+    command = sub("^[0-9]+[[:space:]]+[0-9]+[[:space:]]*", "", trimmed),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_article_competing_processes <- function(
+  processes = app_joint_article_process_table(),
+  current_pid = Sys.getpid()
+) {
+  if (!nrow(processes)) return(character())
+  excluded <- as.integer(current_pid)
+  repeat {
+    child <- processes$pid[processes$ppid %in% excluded]
+    updated <- unique(c(excluded, child))
+    if (length(updated) == length(excluded)) break
+    excluded <- updated
+  }
   patterns <- c(
     "pricefm", "glofas", "phase182",
-    "joint_qdesn_shared_backbone_article_confirmation_jerez_20260907"
+    "joint_qdesn_shared_backbone_article_confirmation_jerez_20260907",
+    "joint_qdesn_corrected_article_comparison_jerez_20260909",
+    "joint_qdesn_corrected_article_comparison_muscat_25core_20260909",
+    "run_joint_qdesn_shared_backbone_article_vb_queue",
+    "run_joint_qdesn_shared_backbone_article_mcmc_queue"
   )
-  keep <- Reduce(`|`, lapply(patterns, grepl, lines, ignore.case = TRUE))
-  trimws(lines[keep & !is.na(pid) & pid != Sys.getpid()])
+  keep <- Reduce(`|`, lapply(patterns, grepl, processes$command,
+    ignore.case = TRUE))
+  rows <- processes[keep & !is.na(processes$pid) &
+    !processes$pid %in% excluded, , drop = FALSE]
+  sprintf("%d %s", rows$pid, rows$command)
 }
 
 app_joint_article_assert_capacity_authorized <- function(contract) {
-  if (identical(contract$version,
-      "joint_shared_backbone_article_confirmation_v2") &&
+  expected <- if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v2")) {
+    "JEREZ_50_IDLE"
+  } else if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v3")) {
+    contract$capacity_approval_token
+  } else {
+    ""
+  }
+  if (nzchar(expected) &&
       !identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED"),
-        "JEREZ_50_IDLE")) {
+        expected)) {
     stop(paste(
       "Corrected production requires",
-      "JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED=JEREZ_50_IDLE",
-      "after verifying that PriceFM and other scientific campaigns are inactive."
+      sprintf("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED=%s", expected),
+      "after verifying that competing scientific campaigns are inactive."
     ), call. = FALSE)
   }
   invisible(TRUE)
@@ -400,6 +600,18 @@ app_joint_article_host_preflight <- function(
   host_ok <- Sys.info()[["nodename"]] %in% c(expected_host, sub("\\..*$", "", expected_host))
   logical_cores <- parallel::detectCores(logical = TRUE)
   competing <- app_joint_article_competing_processes()
+  affinity <- if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v3")) {
+    app_joint_article_cpu_affinity_preflight(contract)
+  } else {
+    NULL
+  }
+  affinity_ok <- is.null(affinity) || all(affinity$verified)
+  effective_affinity <- if (is.null(affinity)) "not_required" else
+    affinity$effective_affinity[[1L]]
+  distinct_physical <- if (is.null(affinity)) NA_integer_ else
+    affinity$distinct_physical_cores[[1L]]
+  load_average <- app_joint_article_load_average()
   expected_runtime_root <- file.path("application", "cache", contract$run_tag)
   profile_ok <- as.integer(profile$initial_concurrency[[1L]]) ==
       contract$initial_concurrency &&
@@ -430,10 +642,20 @@ app_joint_article_host_preflight <- function(
     data_free_gib = data_free,
     min_data_free_gib = contract$min_data_free_gib,
     data_free_ok = data_free >= contract$min_data_free_gib,
+    memory_available_gib = app_joint_article_memory_available_gib(),
+    load_average_1m = load_average[[1L]],
+    load_average_5m = load_average[[2L]],
+    load_average_15m = load_average[[3L]],
     logical_cores = logical_cores,
     required_logical_cores = contract$maximum_concurrency,
     logical_cores_ok = is.finite(logical_cores) &&
       logical_cores >= contract$maximum_concurrency,
+    expected_cpu_affinity = if (nzchar(contract$cpu_affinity_list))
+      contract$cpu_affinity_list else "not_required",
+    effective_cpu_affinity = effective_affinity,
+    required_physical_cores = contract$required_physical_cores,
+    distinct_physical_cores = distinct_physical,
+    physical_affinity_ok = affinity_ok,
     competing_process_count = length(competing),
     competing_processes = paste(competing, collapse = " || "),
     competing_processes_ok = !length(competing),
@@ -445,10 +667,12 @@ app_joint_article_host_preflight <- function(
   if (!out$host_ok[[1L]] || !out$profile_contract_ok[[1L]] ||
       !out$rscript_ok[[1L]] || !out$library_root_ok[[1L]] ||
       !out$data_free_ok[[1L]] || !out$logical_cores_ok[[1L]] ||
+      !out$physical_affinity_ok[[1L]] ||
       !out$competing_processes_ok[[1L]] || !out$one_thread_policy[[1L]]) {
     stop("Host preflight failed host/profile, R executable/library, compute/storage capacity, competing-process, or one-thread policy.",
          call. = FALSE)
   }
+  attr(out, "cpu_affinity_mapping") <- affinity
   out
 }
 
@@ -927,14 +1151,22 @@ app_joint_article_prepare <- function(
          call. = FALSE)
   }
   out_dir <- normalizePath(out_dir, mustWork = FALSE)
-  if (identical(contract$version,
-      "joint_shared_backbone_article_confirmation_v2")) {
+  if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v2",
+      "joint_shared_backbone_article_confirmation_v3")) {
     expected_out_dir <- normalizePath(
       app_path("application/cache", contract$run_tag), mustWork = FALSE)
     if (!identical(out_dir, expected_out_dir)) {
       stop("Corrected JOINT preparation requires the contract-owned isolated runtime root.",
         call. = FALSE)
     }
+  }
+  host <- if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v3")) {
+    # The Muscat gate runs before any runtime directory can be created.
+    app_joint_article_host_preflight(contract)
+  } else {
+    NULL
   }
   if (dir.exists(out_dir) && length(list.files(out_dir, all.files = TRUE, no.. = TRUE))) {
     if (!isTRUE(force)) {
@@ -956,10 +1188,11 @@ app_joint_article_prepare <- function(
            call. = FALSE)
     }
   }
+  source <- app_joint_article_verify_source(source_root, contract)
+  if (is.null(host)) host <- app_joint_article_host_preflight(contract)
+  affinity <- attr(host, "cpu_affinity_mapping")
   app_ensure_dir(out_dir); app_ensure_dir(file.path(out_dir, "workers"))
   app_ensure_dir(file.path(out_dir, "mcmc_workers")); app_ensure_dir(file.path(out_dir, "initializers"))
-  source <- app_joint_article_verify_source(source_root, contract)
-  host <- app_joint_article_host_preflight(contract)
   designs <- app_joint_article_build_designs(out_dir, source, contract)
   vb_plan <- app_joint_article_build_vb_plan(designs$selected, designs$design_manifest,
     contract)
@@ -1042,6 +1275,10 @@ app_joint_article_prepare <- function(
     scoring_contract = app_write_csv(scoring_contract, file.path(out_dir, "scoring_contract.csv")),
     launch_free_preflight = app_write_csv(readiness, file.path(out_dir, "launch_free_preflight.csv"))
   )
+  if (!is.null(affinity)) {
+    files <- c(files, cpu_affinity_preflight = app_write_csv(
+      affinity, file.path(out_dir, "cpu_affinity_preflight.csv")))
+  }
   writeLines(c(
     "# JOINT article-fixture confirmation preflight", "",
     "This runtime packet verifies the frozen shared-backbone evidence and prepares the article-window VB/MCMC graph.",

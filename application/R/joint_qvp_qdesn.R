@@ -12635,6 +12635,10 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   alpha_prior_sd = Inf,
   alpha_min_spacing = 0,
   max_dense_dim = 250L,
+  precision_repair = FALSE,
+  precision_repair_start_rel = 1.0e-12,
+  precision_repair_max_rel = 1.0e-8,
+  precision_repair_growth = 10,
   sigma_bounds = c(1.0e-8, 1.0e8),
   init = NULL
 ) {
@@ -12677,6 +12681,10 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   beta_draws <- matrix(NA_real_, nrow = n_keep, ncol = K * p)
   alpha_draws <- matrix(NA_real_, nrow = n_keep, ncol = K)
   sigma_draws <- matrix(NA_real_, nrow = n_keep, ncol = K)
+  precision_diag_env <- new.env(parent = emptyenv())
+  precision_repair_records <- list()
+  precision_repair_count <- 0L
+  precision_repair_max_rel_used <- 0
   keep_pos <- 0L
   for (iter in seq_len(n_iter)) {
     prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
@@ -12693,7 +12701,32 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
       likelihood = "al"
     )
     beta_update <- app_joint_qvp_beta_gaussian_update(work$Z_stack, work$y_star, work$weights, prior$P_beta)
-    beta <- app_joint_qvp_precision_draw(beta_update$mean, beta_update$precision, max_dense_dim = max_dense_dim)
+    beta <- app_joint_qvp_precision_draw(
+      beta_update$mean, beta_update$precision, max_dense_dim = max_dense_dim,
+      repair = precision_repair,
+      repair_start_rel = precision_repair_start_rel,
+      repair_max_rel = precision_repair_max_rel,
+      repair_growth = precision_repair_growth,
+      diagnostic_env = precision_diag_env
+    )
+    precision_diag <- precision_diag_env$last_precision_draw
+    if (is.data.frame(precision_diag) && nrow(precision_diag) &&
+        identical(precision_diag$status[[1L]], "repaired")) {
+      precision_diag$iteration <- iter
+      precision_diag$min_weight <- min(work$weights)
+      precision_diag$max_weight <- max(work$weights)
+      precision_diag$min_sigma <- min(sigma)
+      precision_diag$max_sigma <- max(sigma)
+      precision_diag$min_gamma <- NA_real_
+      precision_diag$max_gamma <- NA_real_
+      precision_repair_count <- precision_repair_count + 1L
+      precision_repair_max_rel_used <- max(
+        precision_repair_max_rel_used,
+        precision_diag$jitter_relative[[1L]]
+      )
+      precision_repair_records[[length(precision_repair_records) + 1L]] <-
+        precision_diag
+    }
     rhs_state <- app_joint_qvp_update_rhs_state(rhs_state, beta, K, p)
     beta_mat <- app_joint_qvp_beta_matrix(beta, K, p)
     fitted_no_alpha <- Z %*% beta_mat
@@ -12749,6 +12782,26 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
     alpha_prior_sd = alpha_prior$sd,
     alpha_prior_mean_source = alpha_prior$mean_source,
     sigma_bounds = sigma_bounds,
+    precision_repair_enabled = isTRUE(precision_repair),
+    precision_repair_start_rel = precision_repair_start_rel,
+    precision_repair_max_rel = precision_repair_max_rel,
+    precision_repair_growth = precision_repair_growth,
+    precision_repair_count = precision_repair_count,
+    precision_repair_max_rel_used = precision_repair_max_rel_used,
+    precision_repair_diagnostics = if (length(precision_repair_records)) {
+      do.call(rbind, precision_repair_records)
+    } else {
+      data.frame(
+        status = character(), backend = character(), dimension = integer(),
+        attempt = integer(), jitter_relative = numeric(),
+        jitter_absolute = numeric(), diagonal_scale = numeric(),
+        error_message = character(), iteration = integer(),
+        min_weight = numeric(), max_weight = numeric(),
+        min_sigma = numeric(), max_sigma = numeric(),
+        min_gamma = numeric(), max_gamma = numeric(),
+        stringsAsFactors = FALSE
+      )
+    },
     seed = seed,
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("joint_qvp_al_mcmc_tiny_%s", format(Sys.time(), "%Y%m%d%H%M%S")),

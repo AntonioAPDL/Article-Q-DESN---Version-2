@@ -227,7 +227,29 @@ audit_rows <- app_joint_qdesn_bind_rows(list(
     stringsAsFactors = FALSE
   )
 ))
-app_write_csv(audit_rows, file.path(root, "vb_initialization_rows.csv"))
+al_audit_job <- mcmc_plan[
+  mcmc_plan$likelihood_family == "AL" & mcmc_plan$fit_structure == "joint",
+  , drop = FALSE
+][1, , drop = FALSE]
+al_audit_rows <- app_joint_qdesn_bind_rows(list(
+  data.frame(
+    model_cell_id = al_audit_job$model_cell_id[[1L]],
+    parameter_block = "beta", parameter_index = seq_len(audit_K * audit_p),
+    value = rep(0.05, audit_K * audit_p), stringsAsFactors = FALSE
+  ),
+  data.frame(
+    model_cell_id = al_audit_job$model_cell_id[[1L]],
+    parameter_block = "alpha", parameter_index = seq_len(audit_K),
+    value = seq(-0.5, 0.5, length.out = audit_K), stringsAsFactors = FALSE
+  ),
+  data.frame(
+    model_cell_id = al_audit_job$model_cell_id[[1L]],
+    parameter_block = "sigma", parameter_index = seq_len(audit_K),
+    value = rep(1, audit_K), stringsAsFactors = FALSE
+  )
+))
+app_write_csv(app_joint_qdesn_bind_rows(list(audit_rows, al_audit_rows)),
+  file.path(root, "vb_initialization_rows.csv"))
 gaussian_job <- app_joint_article_find_job(
   vb_plan, audit_job$scenario_id[[1L]], "gaussian_rhs_initializer"
 )
@@ -252,6 +274,21 @@ stopifnot(
   nrow(initial_precision) == 1L,
   initial_precision$status[[1L]] == "pass"
 )
+al_start_preflight <- app_joint_article_mcmc_start_preflight(
+  root, al_audit_job$worker_id[[1L]]
+)
+al_initial_precision <- app_joint_article_mcmc_initial_precision_audit(
+  root, al_audit_job$worker_id[[1L]]
+)
+stopifnot(
+  nrow(al_start_preflight) == audit_K,
+  all(al_start_preflight$likelihood_family == "AL"),
+  all(is.na(al_start_preflight$gamma_start)),
+  all(al_start_preflight$status == "pass"),
+  nrow(al_initial_precision) == 1L,
+  al_initial_precision$likelihood_family[[1L]] == "AL",
+  al_initial_precision$status[[1L]] == "pass"
+)
 fake_attempt <- file.path(root, "fake_mcmc_attempt")
 fake_worker <- file.path(fake_attempt, "mcmc_workers",
   sprintf("worker_%04d", audit_job$worker_id[[1L]]))
@@ -273,10 +310,15 @@ stopifnot(
   failure_audit$failure_inventory$failure_class[[1L]] ==
     "numerical_precision_factorization",
   failure_audit$assessment$audit_status[[1L]] ==
-    "joint_exal_precision_failure_localized",
+    "numerical_precision_failure_localized",
   failure_audit$assessment$numerical_precision_failures[[1L]] == 1L,
   failure_audit$assessment$infrastructure_host_preflight_failures[[1L]] == 0L,
   failure_audit$assessment$failed_joint_exal_workers[[1L]] == 1L,
+  failure_audit$assessment$failed_joint_al_workers[[1L]] == 0L,
+  failure_audit$assessment$failed_al_workers[[1L]] == 0L,
+  failure_audit$assessment$failed_exal_workers[[1L]] == 1L,
+  failure_audit$assessment$precision_repair_recommendation[[1L]] ==
+    "enable_strict_scale_aware_precision_draw_repair_for_affected_likelihood_paths",
   failure_audit$assessment$start_preflight_failures[[1L]] == 0L,
   isTRUE(failure_audit$assessment$initial_precision_all_pass[[1L]]),
   all(failure_audit$manifest_verification$verified)
@@ -297,6 +339,51 @@ stopifnot(identical(
     "unclassified"
   )
 ))
+
+repair_controls <- app_joint_article_mcmc_precision_repair_controls()
+stopifnot(
+  identical(repair_controls$precision_repair, TRUE),
+  repair_controls$precision_repair_start_rel == 1.0e-12,
+  repair_controls$precision_repair_max_rel == 1.0e-8,
+  repair_controls$precision_repair_growth == 10
+)
+empty_precision <- data.frame(
+  status = character(), backend = character(), dimension = integer(),
+  attempt = integer(), jitter_relative = numeric(), jitter_absolute = numeric(),
+  diagonal_scale = numeric(), error_message = character(), iteration = integer(),
+  min_weight = numeric(), max_weight = numeric(), min_sigma = numeric(),
+  max_sigma = numeric(), min_gamma = numeric(), max_gamma = numeric(),
+  stringsAsFactors = FALSE
+)
+repaired_precision <- data.frame(
+  status = "repaired", backend = "sparse", dimension = 2L, attempt = 1L,
+  jitter_relative = 1.0e-12, jitter_absolute = 1.0e-6,
+  diagonal_scale = 1.0e6, error_message = "test", iteration = 4L,
+  min_weight = 1, max_weight = 2, min_sigma = 0.5, max_sigma = 1,
+  min_gamma = NA_real_, max_gamma = NA_real_, stringsAsFactors = FALSE
+)
+component_fit <- function(offset, repaired = FALSE) list(
+  beta_draws = matrix(c(0.1, 0.2) + offset, ncol = 1L),
+  alpha_draws = matrix(c(0, 0.1) + offset, ncol = 1L),
+  sigma_draws = matrix(c(1, 1.1), ncol = 1L),
+  precision_repair_enabled = TRUE,
+  precision_repair_count = if (repaired) 1L else 0L,
+  precision_repair_max_rel_used = if (repaired) 1.0e-12 else 0,
+  precision_repair_diagnostics = if (repaired) repaired_precision else empty_precision,
+  init_source = "test"
+)
+combined_al <- app_joint_qdesn_phase122_combine_independent_chain(
+  list(component_fit(0, TRUE), component_fit(0.1, FALSE)),
+  Z = matrix(c(-1, 0, 1), ncol = 1L), tau = c(0.25, 0.75),
+  chain_id = 1L, seed = 9L
+)
+stopifnot(
+  isTRUE(combined_al$precision_repair_enabled),
+  combined_al$precision_repair_count == 1L,
+  combined_al$precision_repair_max_rel_used == 1.0e-12,
+  nrow(combined_al$precision_repair_diagnostics) == 1L,
+  combined_al$precision_repair_diagnostics$quantile_index[[1L]] == 1L
+)
 
 scoring <- app_read_csv(file.path(root, "scoring_contract.csv"))
 stopifnot(

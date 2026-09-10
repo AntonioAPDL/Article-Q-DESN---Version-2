@@ -56,4 +56,35 @@ stopifnot(
   direct_env$last_precision_draw$jitter_relative[[1L]] == 0
 )
 
+fixture <- app_joint_qvp_simulate_synthetic(
+  Tn = 18L, p = 2L, tau = c(0.25, 0.5, 0.75), seed = 20260910
+)
+al_args <- list(
+  y = fixture$y, Z = fixture$Z, tau = fixture$tau,
+  n_iter = 10L, burn = 4L, thin = 2L, seed = 202609101L,
+  tau0 = 0.5, zeta2 = 1, slab_fixed = TRUE,
+  alpha_prior_mean = "empirical_quantile", alpha_prior_sd = 2,
+  max_dense_dim = 0L
+)
+al_direct <- do.call(app_joint_qvp_fit_al_mcmc_tiny,
+  c(al_args, list(precision_repair = FALSE)))
+al_guarded <- do.call(app_joint_qvp_fit_al_mcmc_tiny,
+  c(al_args, list(
+    precision_repair = TRUE,
+    precision_repair_start_rel = 1.0e-12,
+    precision_repair_max_rel = 1.0e-8,
+    precision_repair_growth = 10
+  )))
+stopifnot(
+  identical(al_direct$beta_draws, al_guarded$beta_draws),
+  identical(al_direct$alpha_draws, al_guarded$alpha_draws),
+  identical(al_direct$sigma_draws, al_guarded$sigma_draws),
+  !isTRUE(al_direct$precision_repair_enabled),
+  isTRUE(al_guarded$precision_repair_enabled),
+  al_guarded$precision_repair_count == 0L,
+  al_guarded$precision_repair_max_rel_used == 0,
+  is.data.frame(al_guarded$precision_repair_diagnostics),
+  nrow(al_guarded$precision_repair_diagnostics) == 0L
+)
+
 cat("JOINT QVP precision draw repair tests passed\n")

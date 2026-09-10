@@ -752,13 +752,28 @@ app_joint_qdesn_phase122_combine_independent_chain <- function(fits_by_tau, Z, t
   alpha_draws <- sigma_draws <- matrix(NA_real_, nrow = n_keep, ncol = K)
   has_gamma <- all(vapply(fits_by_tau, function(x) !is.null(x$gamma_draws), logical(1L)))
   gamma_draws <- if (has_gamma) matrix(NA_real_, nrow = n_keep, ncol = K) else NULL
+  precision_records <- list()
   for (kk in seq_len(K)) {
     idx <- ((kk - 1L) * p + 1L):(kk * p)
     beta_draws[, idx] <- fits_by_tau[[kk]]$beta_draws
     alpha_draws[, kk] <- fits_by_tau[[kk]]$alpha_draws[, 1L]
     sigma_draws[, kk] <- fits_by_tau[[kk]]$sigma_draws[, 1L]
     if (has_gamma) gamma_draws[, kk] <- fits_by_tau[[kk]]$gamma_draws[, 1L]
+    if (is.data.frame(fits_by_tau[[kk]]$precision_repair_diagnostics) &&
+        nrow(fits_by_tau[[kk]]$precision_repair_diagnostics)) {
+      block <- fits_by_tau[[kk]]$precision_repair_diagnostics
+      block$quantile_index <- kk
+      precision_records[[length(precision_records) + 1L]] <- block
+    }
   }
+  precision_counts <- vapply(
+    fits_by_tau, function(x) as.integer(x$precision_repair_count %||% 0L),
+    integer(1L)
+  )
+  precision_max <- vapply(
+    fits_by_tau, function(x) as.numeric(x$precision_repair_max_rel_used %||% 0),
+    numeric(1L)
+  )
   beta_mean <- colMeans(beta_draws)
   alpha_mean <- colMeans(alpha_draws)
   qhat_mean <- Z %*% app_joint_qvp_beta_matrix(beta_mean, K, p) +
@@ -775,6 +790,25 @@ app_joint_qdesn_phase122_combine_independent_chain <- function(fits_by_tau, Z, t
     tau = tau,
     seed = seed,
     chain_id = chain_id,
+    precision_repair_enabled = any(vapply(
+      fits_by_tau, function(x) isTRUE(x$precision_repair_enabled), logical(1L)
+    )),
+    precision_repair_count = sum(precision_counts),
+    precision_repair_max_rel_used = max(c(0, precision_max), na.rm = TRUE),
+    precision_repair_diagnostics = if (length(precision_records)) {
+      do.call(rbind, precision_records)
+    } else {
+      data.frame(
+        status = character(), backend = character(), dimension = integer(),
+        attempt = integer(), jitter_relative = numeric(),
+        jitter_absolute = numeric(), diagonal_scale = numeric(),
+        error_message = character(), iteration = integer(),
+        min_weight = numeric(), max_weight = numeric(),
+        min_sigma = numeric(), max_sigma = numeric(),
+        min_gamma = numeric(), max_gamma = numeric(),
+        quantile_index = integer(), stringsAsFactors = FALSE
+      )
+    },
     init_source = paste(sort(unique(vapply(fits_by_tau, function(x) x$init_source %||% NA_character_, character(1L)))), collapse = ";")
   )
   if (has_gamma) {

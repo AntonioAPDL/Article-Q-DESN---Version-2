@@ -2139,17 +2139,179 @@ app_joint_article_mcmc_completed_inventory <- function(root, attempt_dir = NULL)
   app_joint_qdesn_bind_rows(rows)
 }
 
+app_joint_article_mcmc_resume_compatibility_audit <- function(
+  root,
+  compatible_execution_commits,
+  out_dir = NULL
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  compatible_execution_commits <- unique(trimws(as.character(
+    compatible_execution_commits
+  )))
+  compatible_execution_commits <- compatible_execution_commits[
+    grepl("^[0-9a-f]{40}$", compatible_execution_commits)
+  ]
+  if (!length(compatible_execution_commits)) {
+    stop("At least one full compatible execution commit is required.",
+      call. = FALSE)
+  }
+  current_head <- app_joint_article_git_value(c("rev-parse", "HEAD"))
+  if (is.null(out_dir) || !nzchar(as.character(out_dir)[[1L]])) {
+    out_dir <- file.path(root, "diagnostics", paste0(
+      "mcmc_resume_compatibility_", format(Sys.time(), "%Y%m%dT%H%M%SZ",
+        tz = "UTC")
+    ))
+  }
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  if (dir.exists(out_dir)) {
+    stop("MCMC resume compatibility output directory already exists.",
+      call. = FALSE)
+  }
+  app_ensure_dir(out_dir)
+  contract <- app_joint_article_read_contract(file.path(root,
+    "frozen_contract.csv"))
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  completed <- app_joint_article_mcmc_completed_inventory(root)
+  if (!nrow(completed)) {
+    stop("No completed MCMC workers are available for a resume audit.",
+      call. = FALSE)
+  }
+  rows <- lapply(seq_len(nrow(completed)), function(ii) {
+    summary <- completed[ii, , drop = FALSE]
+    job <- plan[plan$worker_id == summary$worker_id[[1L]], , drop = FALSE]
+    if (nrow(job) != 1L) {
+      stop("Completed MCMC worker does not map uniquely to the worker plan.",
+        call. = FALSE)
+    }
+    worker_dir <- app_joint_article_mcmc_worker_dir(root,
+      summary$worker_id[[1L]])
+    design <- readRDS(job$design_path[[1L]])
+    target <- app_joint_article_resolve_posterior_target(root, job, design,
+      contract)
+    draws <- utils::read.csv(file.path(worker_dir, "posterior_draws.csv.gz"),
+      stringsAsFactors = FALSE, check.names = FALSE)
+    numeric_draws <- vapply(draws, is.numeric, logical(1L))
+    execution_commit <- as.character(summary$execution_code_commit[[1L]])
+    commit_allowed <- execution_commit %in% compatible_execution_commits
+    commit_is_ancestor <- isTRUE(system2(
+      "git", c("merge-base", "--is-ancestor", execution_commit, current_head),
+      stdout = FALSE, stderr = FALSE
+    ) == 0L)
+    repair_enabled <- app_as_bool(summary$precision_repair_enabled[[1L]])
+    repair_count <- as.integer(summary$precision_repair_count[[1L]])
+    repair_max <- as.numeric(
+      summary$precision_repair_max_relative_jitter[[1L]]
+    )
+    likelihood <- as.character(summary$likelihood_family[[1L]])
+    repair_compatible <- is.finite(repair_count) && repair_count >= 0L &&
+      is.finite(repair_max) && repair_max <= 1.0e-8 && (
+        (likelihood == "exAL" && repair_enabled) ||
+        (likelihood == "AL" && (repair_enabled || repair_count == 0L))
+      )
+    equivalence_basis <- if (likelihood == "exAL") {
+      "unchanged_exact_m0_guarded_precision_path"
+    } else if (!repair_enabled && repair_count == 0L) {
+      "unrepaired_direct_al_path_proved_equivalent_by_regression_test"
+    } else {
+      "current_guarded_al_precision_path"
+    }
+    checks <- c(
+      isTRUE(summary$manifest_verified[[1L]]),
+      identical(as.character(summary$posterior_target_sha256[[1L]]),
+        target$hash),
+      nrow(draws) == as.integer(job$n_keep[[1L]]),
+      any(numeric_draws) && all(vapply(draws[numeric_draws], function(x) {
+        all(is.finite(x))
+      }, logical(1L))),
+      commit_allowed,
+      commit_is_ancestor,
+      repair_compatible
+    )
+    data.frame(
+      worker_id = summary$worker_id[[1L]],
+      model_cell_id = summary$model_cell_id[[1L]],
+      scenario_id = summary$scenario_id[[1L]],
+      model_id = summary$model_id[[1L]],
+      likelihood_family = likelihood,
+      fit_structure = summary$fit_structure[[1L]],
+      chain_id = summary$chain_id[[1L]],
+      manifest_verified = summary$manifest_verified[[1L]],
+      posterior_target_verified = identical(
+        as.character(summary$posterior_target_sha256[[1L]]), target$hash
+      ),
+      draws_observed = nrow(draws),
+      draws_expected = as.integer(job$n_keep[[1L]]),
+      draws_all_finite = checks[[4L]],
+      execution_code_commit = execution_commit,
+      execution_commit_allowed = commit_allowed,
+      execution_commit_is_ancestor = commit_is_ancestor,
+      precision_repair_enabled = repair_enabled,
+      precision_repair_count = repair_count,
+      precision_repair_max_relative_jitter = repair_max,
+      precision_policy_compatible = repair_compatible,
+      equivalence_basis = equivalence_basis,
+      status = if (all(checks)) "pass" else "fail",
+      stringsAsFactors = FALSE
+    )
+  })
+  inventory <- app_joint_qdesn_bind_rows(rows)
+  assessment <- data.frame(
+    status = if (all(inventory$status == "pass")) {
+      "COMPLETED_WORKERS_SAFE_TO_RETAIN"
+    } else {
+      "COMPLETED_WORKERS_REQUIRE_RERUN"
+    },
+    completed_workers_audited = nrow(inventory),
+    workers_passed = sum(inventory$status == "pass"),
+    workers_failed = sum(inventory$status != "pass"),
+    compatible_execution_commits = paste(compatible_execution_commits,
+      collapse = ";"),
+    current_head = current_head,
+    created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  )
+  readme <- file.path(out_dir, "README.md")
+  writeLines(c(
+    "# JOINT MCMC Resume Compatibility Audit",
+    "",
+    "This packet verifies whether completed MCMC workers may be retained",
+    "across a numerical-recovery commit. It checks worker manifests, frozen",
+    "posterior-target hashes, retained-draw counts and finiteness, explicit",
+    "execution-commit ancestry, and the bounded precision-repair policy.",
+    "",
+    "An AL worker that completed without repair is compatible because the",
+    "repair-enabled direct path is regression-tested to be draw-for-draw",
+    "identical. The audit preserves the original execution commit."
+  ), readme)
+  paths <- c(
+    README = readme,
+    assessment = app_write_csv(assessment, file.path(out_dir,
+      "resume_compatibility_assessment.csv")),
+    worker_inventory = app_write_csv(inventory, file.path(out_dir,
+      "completed_worker_resume_compatibility.csv"))
+  )
+  manifest <- app_joint_shared_write_manifest(out_dir, paths)
+  verification <- app_joint_shared_verify_manifest(out_dir, manifest)
+  app_write_csv(verification, file.path(out_dir,
+    "artifact_manifest_verification.csv"))
+  if (any(!verification$verified) || any(inventory$status != "pass")) {
+    stop("MCMC resume compatibility audit failed.", call. = FALSE)
+  }
+  list(out_dir = out_dir, assessment = assessment, inventory = inventory,
+    manifest_verification = verification)
+}
+
 app_joint_article_mcmc_start_preflight <- function(root, worker_ids = NULL) {
   root <- normalizePath(root, mustWork = TRUE)
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
-  plan <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
   if (!is.null(worker_ids)) {
     plan <- plan[plan$worker_id %in% as.integer(worker_ids), , drop = FALSE]
   }
   if (!nrow(plan)) {
     return(data.frame(
       worker_id = integer(), scenario_id = character(), model_id = character(),
-      chain_id = integer(), tau = numeric(), sigma_start = numeric(),
+      chain_id = integer(), likelihood_family = character(),
+      fit_structure = character(), tau = numeric(), sigma_start = numeric(),
       gamma_start = numeric(), support_lower = numeric(),
       support_upper = numeric(), support_eta = numeric(),
       B = numeric(), weight_proxy = numeric(), status = character(),
@@ -2163,31 +2325,49 @@ app_joint_article_mcmc_start_preflight <- function(root, worker_ids = NULL) {
     init <- app_joint_article_reconstruct_init(init_rows, job, design$tau,
       ncol(design$Z))
     start <- app_joint_article_overdispersed_start(init, job, design$tau)
-    support <- app_joint_qvp_exal_support(design$tau)
-    app_joint_qdesn_bind_rows(lapply(seq_along(design$tau), function(k) {
-      constants <- tryCatch(
-        app_joint_qvp_exal_constants(design$tau[[k]], start$gamma_mean[[k]]),
+    is_exal <- identical(job$likelihood_family[[1L]], "exAL")
+    support <- if (is_exal) {
+      app_joint_qvp_exal_support(design$tau)
+    } else {
+      list(lower = rep(NA_real_, length(design$tau)),
+        upper = rep(NA_real_, length(design$tau)))
+    }
+    constants <- if (is_exal) {
+      tryCatch(
+        app_joint_qvp_exal_constants(design$tau, start$gamma_mean),
         error = function(e) NULL
       )
-      B <- if (is.null(constants)) NA_real_ else constants$B[[1L]]
-      eta <- tryCatch(app_joint_exqdesn_gamma_to_support_eta(
-        design$tau[[k]], start$gamma_mean[[k]]
-      ), error = function(e) NA_real_)
+    } else {
+      app_joint_qvp_al_constants(design$tau)
+    }
+    app_joint_qdesn_bind_rows(lapply(seq_along(design$tau), function(k) {
+      B <- if (is.null(constants)) NA_real_ else constants$B[[k]]
+      gamma <- if (is_exal) start$gamma_mean[[k]] else NA_real_
+      eta <- if (is_exal) {
+        tryCatch(app_joint_exqdesn_gamma_to_support_eta(
+          design$tau[[k]], gamma
+        ), error = function(e) NA_real_)
+      } else {
+        NA_real_
+      }
       weight_proxy <- 1 / (B * start$sigma_mean[[k]]^2)
+      gamma_ok <- !is_exal || (
+        is.finite(gamma) && gamma > support$lower[[k]] &&
+        gamma < support$upper[[k]] && is.finite(eta)
+      )
       ok <- is.finite(start$sigma_mean[[k]]) && start$sigma_mean[[k]] > 0 &&
-        is.finite(start$gamma_mean[[k]]) &&
-        start$gamma_mean[[k]] > support$lower[[k]] &&
-        start$gamma_mean[[k]] < support$upper[[k]] &&
-        is.finite(eta) && is.finite(B) && B > 0 &&
+        gamma_ok && is.finite(B) && B > 0 &&
         is.finite(weight_proxy) && weight_proxy > 0
       data.frame(
         worker_id = job$worker_id[[1L]],
         scenario_id = job$scenario_id[[1L]],
         model_id = job$model_id[[1L]],
         chain_id = job$chain_id[[1L]],
+        likelihood_family = job$likelihood_family[[1L]],
+        fit_structure = job$fit_structure[[1L]],
         tau = design$tau[[k]],
         sigma_start = start$sigma_mean[[k]],
-        gamma_start = start$gamma_mean[[k]],
+        gamma_start = gamma,
         support_lower = support$lower[[k]],
         support_upper = support$upper[[k]],
         support_eta = eta,
@@ -2206,15 +2386,16 @@ app_joint_article_mcmc_initial_precision_audit <- function(root,
   root <- normalizePath(root, mustWork = TRUE)
   app_require_namespace("Matrix")
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
-  plan <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
   if (!is.null(worker_ids)) {
     plan <- plan[plan$worker_id %in% as.integer(worker_ids), , drop = FALSE]
   }
   if (!nrow(plan)) {
     return(data.frame(
       worker_id = integer(), scenario_id = character(), model_id = character(),
-      chain_id = integer(), dimension = integer(), fit_rows = integer(),
-      p = integer(), K = integer(), dense_chol_ok = logical(),
+      chain_id = integer(), likelihood_family = character(),
+      fit_structure = character(), quantile_index = integer(), tau = numeric(),
+      dimension = integer(), fit_rows = integer(), p = integer(), K = integer(),
+      dense_chol_ok = logical(),
       sparse_chol_ok = logical(), min_eigen = numeric(), max_eigen = numeric(),
       condition_number = numeric(), min_weight = numeric(),
       max_weight = numeric(), min_precision_diag = numeric(),
@@ -2235,56 +2416,89 @@ app_joint_article_mcmc_initial_precision_audit <- function(root,
     init <- app_joint_article_overdispersed_start(init, job, tau)
     target <- app_joint_article_resolve_posterior_target(root, job, design,
       app_joint_article_read_contract(file.path(root, "frozen_contract.csv")))
-    set.seed(as.integer(job$chain_seed[[1L]]))
-    constants <- app_joint_qvp_exal_constants(tau, init$gamma_mean)
-    v <- matrix(rep(init$sigma_mean, each = length(y)), nrow = length(y),
-      ncol = K)
-    s <- matrix(abs(stats::rnorm(length(y) * K)), nrow = length(y), ncol = K)
-    rhs_state <- app_joint_qvp_initialize_rhs_state(
-      K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]), zeta2 = target$zeta2,
-      slab_fixed = target$slab_fixed
-    )
-    prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
-    prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor,
-      prior_state$innovations)
-    work <- app_joint_qvp_build_working_response(
-      y = y, Z = Z, beta = init$beta_mean, alpha = init$alpha_mean,
-      tau = tau, sigma = init$sigma_mean, v = v, kappa = 1,
-      likelihood = "exal", gamma = init$gamma_mean, s = s
-    )
-    beta_update <- app_joint_qvp_beta_gaussian_update(
-      work$Z_stack, work$y_star, work$weights, prior$P_beta
-    )
-    dense <- as.matrix(beta_update$precision)
-    dense_chol_ok <- !inherits(try(chol(dense), silent = TRUE), "try-error")
-    sparse_chol_ok <- !inherits(try(Matrix::Cholesky(
-      Matrix::forceSymmetric(beta_update$precision), LDL = FALSE, perm = TRUE
-    ), silent = TRUE), "try-error")
-    ev <- eigen(dense, symmetric = TRUE, only.values = TRUE)$values
-    diag_values <- diag(dense)
-    data.frame(
-      worker_id = job$worker_id[[1L]],
-      scenario_id = job$scenario_id[[1L]],
-      model_id = job$model_id[[1L]],
-      chain_id = job$chain_id[[1L]],
-      dimension = length(beta_update$mean),
-      fit_rows = length(y),
-      p = p,
-      K = K,
-      dense_chol_ok = dense_chol_ok,
-      sparse_chol_ok = sparse_chol_ok,
-      min_eigen = min(ev),
-      max_eigen = max(ev),
-      condition_number = max(ev) / max(min(ev), .Machine$double.eps),
-      min_weight = min(work$weights),
-      max_weight = max(work$weights),
-      min_precision_diag = min(diag_values),
-      max_precision_diag = max(diag_values),
-      status = if (dense_chol_ok && sparse_chol_ok &&
-        all(is.finite(c(ev, work$weights, diag_values))) &&
-        min(ev) > 0) "pass" else "fail",
-      stringsAsFactors = FALSE
-    )
+    is_joint <- identical(job$fit_structure[[1L]], "joint")
+    components <- if (is_joint) {
+      list(list(
+        quantile_index = NA_integer_, tau = tau,
+        beta = init$beta_mean, alpha = init$alpha_mean,
+        sigma = init$sigma_mean, gamma = init$gamma_mean,
+        seed = as.integer(job$chain_seed[[1L]])
+      ))
+    } else {
+      lapply(seq_len(K), function(k) {
+        idx <- ((k - 1L) * p + 1L):(k * p)
+        fit_init <- if (!is.null(init$fits)) init$fits[[k]] else NULL
+        list(
+          quantile_index = k, tau = tau[[k]],
+          beta = fit_init$beta_mean %||% init$beta_mean[idx],
+          alpha = fit_init$alpha_mean %||% init$alpha_mean[[k]],
+          sigma = fit_init$sigma_mean %||% init$sigma_mean[[k]],
+          gamma = fit_init$gamma_mean %||% if (!is.null(init$gamma_mean)) {
+            init$gamma_mean[[k]]
+          } else NULL,
+          seed = as.integer(job$chain_seed[[1L]] +
+            k * as.integer(job$tau_seed_stride[[1L]]))
+        )
+      })
+    }
+    app_joint_qdesn_bind_rows(lapply(components, function(component) {
+      set.seed(component$seed)
+      component_tau <- as.numeric(component$tau)
+      component_K <- length(component_tau)
+      is_exal <- identical(job$likelihood_family[[1L]], "exAL")
+      v <- matrix(rep(component$sigma, each = length(y)), nrow = length(y),
+        ncol = component_K)
+      s <- if (is_exal) {
+        matrix(abs(stats::rnorm(length(y) * component_K)), nrow = length(y),
+          ncol = component_K)
+      } else NULL
+      rhs_state <- app_joint_qvp_initialize_rhs_state(
+        component_K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]),
+        zeta2 = target$zeta2, slab_fixed = target$slab_fixed
+      )
+      prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
+      prior <- app_joint_qvp_build_prior_precision(component_K, p,
+        prior_state$anchor, prior_state$innovations)
+      work <- app_joint_qvp_build_working_response(
+        y = y, Z = Z, beta = component$beta, alpha = component$alpha,
+        tau = component_tau, sigma = component$sigma, v = v, kappa = 1,
+        likelihood = if (is_exal) "exal" else "al",
+        gamma = if (is_exal) component$gamma else NULL, s = s
+      )
+      beta_update <- app_joint_qvp_beta_gaussian_update(
+        work$Z_stack, work$y_star, work$weights, prior$P_beta
+      )
+      dense <- as.matrix(beta_update$precision)
+      dense_chol_ok <- !inherits(try(chol(dense), silent = TRUE), "try-error")
+      sparse_chol_ok <- !inherits(try(Matrix::Cholesky(
+        Matrix::forceSymmetric(beta_update$precision), LDL = FALSE, perm = TRUE
+      ), silent = TRUE), "try-error")
+      ev <- eigen(dense, symmetric = TRUE, only.values = TRUE)$values
+      diag_values <- diag(dense)
+      data.frame(
+        worker_id = job$worker_id[[1L]],
+        scenario_id = job$scenario_id[[1L]],
+        model_id = job$model_id[[1L]],
+        chain_id = job$chain_id[[1L]],
+        likelihood_family = job$likelihood_family[[1L]],
+        fit_structure = job$fit_structure[[1L]],
+        quantile_index = component$quantile_index,
+        tau = if (component_K == 1L) component_tau else NA_real_,
+        dimension = length(beta_update$mean),
+        fit_rows = length(y), p = p, K = component_K,
+        dense_chol_ok = dense_chol_ok,
+        sparse_chol_ok = sparse_chol_ok,
+        min_eigen = min(ev), max_eigen = max(ev),
+        condition_number = max(ev) / max(min(ev), .Machine$double.eps),
+        min_weight = min(work$weights), max_weight = max(work$weights),
+        min_precision_diag = min(diag_values),
+        max_precision_diag = max(diag_values),
+        status = if (dense_chol_ok && sparse_chol_ok &&
+          all(is.finite(c(ev, work$weights, diag_values))) &&
+          min(ev) > 0) "pass" else "fail",
+        stringsAsFactors = FALSE
+      )
+    }))
   })
   app_joint_qdesn_bind_rows(rows)
 }
@@ -2320,7 +2534,7 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     "no_failures_found"
   } else if (identical(failure_classes,
       "numerical_precision_factorization")) {
-    "joint_exal_precision_failure_localized"
+    "numerical_precision_failure_localized"
   } else if (identical(failure_classes, "infrastructure_host_preflight")) {
     "infrastructure_host_preflight_failure_localized"
   } else if (length(failure_classes) == 1L) {
@@ -2359,6 +2573,11 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     failed_joint_exal_workers = sum(
       failure_inventory$model_id == "joint_exqdesn_rhs_mcmc"
     ),
+    failed_joint_al_workers = sum(
+      failure_inventory$model_id == "joint_qdesn_rhs_mcmc"
+    ),
+    failed_al_workers = sum(failure_inventory$likelihood_family == "AL"),
+    failed_exal_workers = sum(failure_inventory$likelihood_family == "exAL"),
     infrastructure_host_preflight_failures = infrastructure_failure_count,
     numerical_precision_failures = precision_failure_count,
     completed_workers_in_attempt = nrow(completed_inventory),
@@ -2366,7 +2585,7 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     initial_precision_failures = sum(initial_precision$status != "pass"),
     initial_precision_all_pass = all(initial_precision$status == "pass"),
     precision_repair_recommendation = if (precision_failure_count > 0L) {
-      "enable_strict_scale_aware_precision_draw_repair_for_exal"
+      "enable_strict_scale_aware_precision_draw_repair_for_affected_likelihood_paths"
     } else {
       "not_indicated_by_observed_failures"
     },
@@ -2390,7 +2609,7 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     "article assets, or source evidence.",
     "",
     "Failures are classified from their recorded messages before any",
-    "recommendation is made. For exAL failures, the audit also reconstructs",
+    "recommendation is made. For AL and exAL failures, the audit reconstructs",
     "deterministic chain starts and the first beta precision update. A passing",
     "initial precision audit rules out malformed compact VB initializers at",
     "that first update; it does not override the evidence-based failure class."
@@ -2575,6 +2794,15 @@ app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message
   invisible(out)
 }
 
+app_joint_article_mcmc_precision_repair_controls <- function() {
+  list(
+    precision_repair = TRUE,
+    precision_repair_start_rel = 1.0e-12,
+    precision_repair_max_rel = 1.0e-8,
+    precision_repair_growth = 10
+  )
+}
+
 app_joint_article_run_mcmc_worker <- function(root, worker_id,
   require_synced = TRUE, execution_root_pid = NULL) {
   root <- normalizePath(root, mustWork = TRUE)
@@ -2621,11 +2849,8 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id,
     sigma_bounds = target$sigma_bounds,
     init = init
   )
+  common <- c(common, app_joint_article_mcmc_precision_repair_controls())
   fit <- if (job$likelihood_family[[1L]] == "exAL") {
-    common$precision_repair <- TRUE
-    common$precision_repair_start_rel <- 1.0e-12
-    common$precision_repair_max_rel <- 1.0e-8
-    common$precision_repair_growth <- 10
     common$gamma_init <- init$gamma_mean
     common$gamma_slice_width <- 1
     common$gamma_slice_max_steps <- 100L

@@ -159,6 +159,16 @@ jitter was `1e-12`. Scalar gamma/sigma diagnostics for the 16 exAL cells are
 retained as review-level diagnostics, not rejection gates, because the score
 and quantile-functionals are stable and all contract crossings are zero.
 
+The statements above describe the frozen Jerez packet. A later corrected
+Muscat article-fixture campaign exposed the same dynamic beta-precision
+factorization geometry in Joint QDESN AL-RHS. The production safeguard is now
+available to AL with historical defaults unchanged and is enabled uniformly by
+the corrected article-confirmation worker. The direct factorization remains
+the first path, repair remains bounded from `1e-12` through `1e-8`, and AL
+telemetry records weights and sigma while retaining missing gamma fields. This
+numerical extension does not change the selected DESN specifications, RHS
+hyperparameters, seeds, posterior targets, or score contract.
+
 For transfer, retain the complete ignored runtime. The generated
 `score_packet/transfer_inventory.csv` and
 `score_packet/transfer_storage_summary.csv` record the exact file count, byte

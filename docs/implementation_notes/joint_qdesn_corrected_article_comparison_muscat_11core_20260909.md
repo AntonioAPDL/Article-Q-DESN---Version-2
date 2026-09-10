@@ -105,3 +105,37 @@ file synchronization. The posterior-target, corrected scientific-contract,
 Muscat host-contract, shared-capacity, and full confirmation tests all pass.
 The only permitted continuation is `--launch-mcmc`; completed VB artifacts must
 not be regenerated.
+
+## Joint AL precision recovery
+
+The first scientifically active MCMC batch subsequently completed six workers
+and stopped on five numerical failures. All five failures were the chains of
+the `asymmetric_laplace_tail` Joint QDESN AL-RHS cell; each reported that a
+leading principal minor of the 168-dimensional beta precision matrix was not
+positive. The matching five-chain Independent QDESN AL-RHS cell completed, as
+did the first Joint exQDESN exact-M0 chain. Initial precision reconstruction is
+positive definite for every failed Joint AL chain, localizing the failure to
+dynamic latent-weight/RHS evolution rather than the VB initializer, DESN
+backbone, `tau0`, seed plan, or exAL gamma update.
+
+The AL sampler now exposes the same opt-in, scale-aware precision safeguard
+already used by exact-M0 exAL. Article-confirmation workers enable it uniformly:
+the original sparse factorization is always attempted first, relative diagonal
+jitter starts at `1e-12` only after failure, and the sampler fails closed above
+`1e-8`. Joint and independent AL outputs retain repair counts, maximum jitter,
+iteration, matrix scale, latent-weight range, and sigma range. AL gamma fields
+are explicit missing values in the common diagnostic schema.
+
+The direct AL path is regression-tested to be draw-for-draw identical with the
+safeguard enabled or disabled when no repair is needed. Therefore, previously
+completed workers may be retained only after their manifests, posterior-target
+hashes, and execution-commit boundary are explicitly audited. Failed receipts
+must be frozen before retry; seeds, budgets, model specifications, score rules,
+and completed VB artifacts remain unchanged.
+
+The reproducible retention gate is
+`application/scripts/audit_joint_qdesn_shared_backbone_article_mcmc_resume.R`.
+It verifies every retained draw file, manifest, expected draw count, current
+posterior-target hash, compatible execution commit and ancestry, and bounded
+repair status. Its output is an ignored, hash-manifested runtime packet; a
+failed row requires rerunning that worker rather than overriding the gate.

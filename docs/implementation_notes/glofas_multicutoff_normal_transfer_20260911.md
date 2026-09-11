@@ -39,3 +39,16 @@ The ignored runtime contains the materialized four-input manifest, cutoff table,
 
 Normal controls are `max_iter=100`, `min_iter=30`, `tol=0.01`, `min_beta_updates=10`, `n_draws=500`, and one-thread BLAS per worker. The two jobs are dependency-gated: RHS/VB cannot start until the same-cutoff Ridge fit has completed.
 
+## Sequential Overnight Queue
+
+`application/scripts/395_launch_glofas_multicutoff_normal_transfer_queue.py`
+provides a resumable, fail-closed queue for multiple alternate cutoffs. It
+sorts cutoffs chronologically and processes one cutoff at a time. Within each
+cutoff, the existing two-job DAG runs Normal Ridge first and Normal RHS/VB
+second. Consequently, no more than one model from the queue can run at once.
+
+The queue transfers no fitted state across cutoffs. Each Ridge fit is cold at
+its own cutoff; each RHS/VB fit can use only its exact same-cutoff Ridge fit.
+The queue writes an ignored manifest, contract, log, and terminal status marker,
+and generates the standard comparison PDF after each cutoff completes. A failed
+fit stops the queue before any later cutoff is launched.

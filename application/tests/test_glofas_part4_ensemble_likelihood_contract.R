@@ -93,6 +93,10 @@ anchors_valid <- app_glofas_part4_validate_anchor_manifest(part4_anchors)
 stopifnot(nrow(anchors_valid) == 3L)
 stopifnot(identical(app_glofas_part4_parse_int_vector("10 x 2", "n"), c(10L, 10L)))
 
+part4_required_anchors <- part4_anchors[part4_anchors$role != "historical_joint_anchor", , drop = FALSE]
+required_anchors_valid <- app_glofas_part4_validate_anchor_manifest(part4_required_anchors)
+stopifnot(nrow(required_anchors_valid) == 2L)
+
 unfrozen <- part4_anchors
 unfrozen$frozen[[2L]] <- FALSE
 blocked_unfrozen <- tryCatch({
@@ -117,6 +121,31 @@ stopifnot(identical(as.integer(cfg$feature_contract$blocks$discrepancy$reservoir
 stopifnot(isFALSE(cfg$feature_contract$readout$include_input_block))
 stopifnot(cfg$inference$vb_ld$rhs_tau0 == 0.1)
 stopifnot(cfg$inference$vb_ld$rhs_alpha_tau0 == 0.001)
+ref_feature_contract <- app_feature_contract(app_qdesn_block_config(cfg, "reference"))
+disc_feature_contract <- app_feature_contract(app_qdesn_block_config(cfg, "discrepancy"))
+stopifnot(identical(ref_feature_contract$reservoir_input$output_lags, 1:5))
+stopifnot(identical(ref_feature_contract$reservoir_input$covariate_lags$ppt, 0:3))
+stopifnot(identical(ref_feature_contract$reservoir_input$covariate_lags$soil, 0:3))
+stopifnot(identical(disc_feature_contract$reservoir_input$output_lags, 1:6))
+stopifnot(identical(disc_feature_contract$reservoir_input$covariate_lags$ppt, 0:4))
+stopifnot(identical(disc_feature_contract$reservoir_input$covariate_lags$soil, 0:4))
+stopifnot(identical(cfg$covariates$future_policy, "oracle_realized"))
+stopifnot(identical(cfg$covariates$forecast$provider, "realized_future_oracle"))
+stopifnot(identical(cfg$covariates$forecast$horizon_days, 28L))
+stopifnot(isTRUE(cfg$covariates$allow_realized_future))
+stopifnot(isFALSE(cfg$covariates$ppt$forecast_noise$enabled))
+stopifnot(isFALSE(cfg$covariates$soil$realized_future_correction$enabled))
+stopifnot(!grepl("gefs|cefs", tolower(paste(unlist(cfg$covariates), collapse = "\n"))))
+
+cfg_without_part3 <- app_glofas_part4_config_from_anchors(
+  part4_toy_cfg,
+  part4_required_anchors,
+  quantile = 0.50,
+  run_label = "part4_toy_without_part3"
+)
+stopifnot(cfg_without_part3$inference$vb_ld$rhs_tau0 == 0.1)
+stopifnot(cfg_without_part3$inference$vb_ld$rhs_alpha_tau0 == 0.001)
+stopifnot(identical(cfg_without_part3$part4_anchor_manifest$selected_historical_joint_candidate_id, ""))
 
 contract_checks <- app_glofas_part4_validate_no_forecast_contract(cfg)
 stopifnot(all(contract_checks$status == "pass"))
@@ -140,8 +169,16 @@ manifest_ready <- app_glofas_part4_launch_manifest(
 )
 stopifnot(nrow(manifest_ready) == 18L)
 stopifnot(sum(manifest_ready$status == "ready_after_operator_launch_approval") == 1L)
-stopifnot(manifest_ready$status[manifest_ready$part4_family == "independent_al_rhs_vb" & manifest_ready$quantile == "0.50"] == "ready_after_operator_launch_approval")
-stopifnot(sum(manifest_ready$status == "blocked_until_p50_canary_passes") == 6L)
+stopifnot(manifest_ready$status[manifest_ready$part4_family == "normal_ridge_diagnostic"] == "ready_after_operator_launch_approval")
+stopifnot(sum(manifest_ready$status == "blocked_until_dependencies_complete") == 17L)
+
+manifest_ready_without_part3 <- app_glofas_part4_launch_manifest(
+  run_label = "toy_ready_without_part3",
+  selected_anchor_manifest = part4_required_anchors,
+  base_cfg = part4_toy_cfg
+)
+stopifnot(nrow(manifest_ready_without_part3) == 18L)
+stopifnot(sum(manifest_ready_without_part3$status == "ready_after_operator_launch_approval") == 1L)
 
 tmp_root <- file.path(tempdir(), "glofas_part4_toy_bundle")
 if (dir.exists(tmp_root)) unlink(tmp_root, recursive = TRUE)
@@ -149,6 +186,17 @@ tmp_cfg_path <- file.path(tempdir(), "part4_toy_base.yaml")
 tmp_anchor_path <- file.path(tempdir(), "part4_toy_anchors.csv")
 app_write_yaml(part4_toy_cfg, tmp_cfg_path)
 app_write_csv(part4_anchors, tmp_anchor_path)
+missing_input_preflight <- tryCatch({
+  app_glofas_part4_prepare_bundle(
+    base_config_path = tmp_cfg_path,
+    anchor_manifest_path = tmp_anchor_path,
+    run_label = "part4_toy_bundle_missing_inputs",
+    runtime_root = file.path(tempdir(), "glofas_part4_toy_bundle_missing_inputs"),
+    require_input_files = TRUE
+  )
+  FALSE
+}, error = function(e) grepl("preparation input preflight failed", conditionMessage(e), fixed = TRUE))
+stopifnot(isTRUE(missing_input_preflight))
 bundle <- app_glofas_part4_prepare_bundle(
   base_config_path = tmp_cfg_path,
   anchor_manifest_path = tmp_anchor_path,
@@ -157,12 +205,17 @@ bundle <- app_glofas_part4_prepare_bundle(
 )
 stopifnot(file.exists(bundle$manifest_path))
 stopifnot(file.exists(bundle$launch_path))
+stopifnot(file.exists(file.path(tmp_root, "configs", "selected_anchor_manifest.csv")))
 stopifnot(bundle$metadata$ready_rows == 1L)
 stopifnot(bundle$metadata$blocked_rows == 17L)
 health <- app_glofas_part4_check_bundle(tmp_root)
 stopifnot(health$summary$value[health$summary$metric == "manifest_rows"] == 18L)
 stopifnot(health$summary$value[health$summary$metric == "ready_after_operator_launch_approval"] == 1L)
-stopifnot(health$summary$value[health$summary$metric == "configured_independent_al_rows"] == 7L)
+stopifnot(health$summary$value[health$summary$metric == "configured_model_rows"] == 18L)
 
 script_status <- system2("bash", c("-n", shQuote(bundle$launch_path)))
 stopifnot(identical(script_status, 0L))
+
+prepare_script <- readLines(app_path("application/scripts/61_prepare_glofas_part4_ensemble_likelihood_launch.R"))
+stopifnot(any(grepl('require_input_files = "false"', prepare_script, fixed = TRUE)))
+stopifnot(any(grepl("require_input_files = app_as_bool(args$require_input_files)", prepare_script, fixed = TRUE)))

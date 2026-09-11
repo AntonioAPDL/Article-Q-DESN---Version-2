@@ -1,0 +1,3 @@
+"component","D","n","m","output_lags","covariate_lags","alpha","rho","washout","seed","rhs_tau0","direct_readout_inputs"
+"Reference",1,3000,360,"1:360","PPT/soil 0:180",0.5,0.9,500,20260512,1,"none"
+"Discrepancy",1,2500,360,"1:360 discrepancy","PPT/soil 0:180",0.8,0.7,500,20261521,0.001,"none"

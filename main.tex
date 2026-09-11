@@ -358,9 +358,9 @@ likelihood instead produces a response trajectory; the two summaries are not
 interchangeable. The supplement gives the complete recursive constructions.
 
 For independent fits at \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), the raw estimates may
-cross. We write \(q_{T,h,k}^*\) for the reported value after the monotone
-transformation.
-The reported analyses use equal-weight isotonic projection,
+cross. We write \(q_{T,h,k}^*\) for the reported value after a monotone
+transformation when one is applied. The simulation analyses use equal-weight
+isotonic projection,
 \begin{equation}
 \vect q_{T,h}^*
 =\argmin_{z_1\le\cdots\le z_K}
@@ -700,115 +700,128 @@ sensitivity study.
 \label{sec:data}
 
 \noindent\textbf{Retrospective case study.}
-We consider a medium-range streamflow forecast from the Global Flood Awareness
-System (GloFAS), which is jointly developed by the European Commission and the
-European Centre for Medium-Range Weather Forecasts and operated within the
-Copernicus Emergency Management Service
+We consider one medium-range retrospective streamflow experiment using the
+Global Flood Awareness System (GloFAS), which is jointly developed by the
+European Commission and the European Centre for Medium-Range Weather Forecasts
+and operated within the Copernicus Emergency Management Service
 \citep{AlfieriEtAl2013GloFAS,CEMS2026GloFASDocumentation}.
 GloFAS provides ensemble river-discharge forecasts for flood early warning and
-verification \citep{HarriganEtAl2023GloFASForecasts}. Q--DESN supplies a
-statistical quantile correction relative to a United States Geological Survey
-(USGS) gauge record at one forecast origin.
+verification \citep{HarriganEtAl2023GloFASForecasts}. The analysis estimates
+the conditional quantiles of a United States Geological Survey (USGS) gauge
+record while using retrospective and issued GloFAS values to estimate a
+time-varying discrepancy.
 
 \subsection{Data and Forecast-Origin Design}
 
-Let \(T\) be the forecast origin, \(y_t\) the transformed USGS record through
-\(T\), \(g_t^{\mathrm{ret}}\) the retrospective GloFAS series, and
-\(g_{T+h,e}^{\mathrm{ens}}\) issued ensemble member \(e\) at horizon \(h\).
-The held-out \(y_{T+h}\) values are used only for evaluation. The analysis
-uses origin \GlofasApplicationCurrentOriginDate{} and scores seven probability
-levels over \GlofasApplicationCurrentScoredHorizons{} target dates. Its
-covariate specification combines observed history and Global Ensemble Forecast System (GEFS) forecasts
-with realized-future contributions to precipitation
-and soil-moisture covariates. This blended information set makes the analysis
-retrospective; it does not represent a real-time forecast based only on
-information available at \(T\).
+Let \(T\) be the forecast origin, \(y_t=\log(y_t^{\mathrm{USGS}}+1)\) the
+transformed gauge record through \(T\), \(g_t^{\mathrm{ret}}\) the transformed
+retrospective GloFAS series, and \(g_{T+h,e}^{\mathrm{ens}}\) transformed
+issued ensemble member \(e\) at horizon \(h\). The origin is
+\GlofasApplicationCurrentOriginDate{}. The requested window contains 30 days,
+from 26~December~2022 through 24~January~2023, but the issued GloFAS record
+contains \GlofasApplicationCurrentScoredHorizons{} evaluable horizons through
+22~January~2023. All 51 members are retained at each available horizon. Future
+USGS values are excluded from fitting and used only for scoring. The
+forecast-period precipitation and soil-moisture covariates are realized
+PRISM/ERA5 values. The experiment is therefore a retrospective
+oracle-covariate diagnostic, not a real-time forecast based only on information
+available at \(T\).
 
 \subsection{Application Model}
 
-\noindent\textbf{Persistence-anchored discrepancy.}
-Two fixed Q--DESN feature maps represent the reference history and the
-retrospective discrepancy \(g_t^{\mathrm{ret}}-y_t\). For \(t>T\), the
-persistence-plus-adjustment specification anchors the future discrepancy
-feature at its last historical value; subsequent discrepancy features describe
-adjustments around that persistence-anchored discrepancy baseline. For
-probability level \(p_0\),
-\[
-q^{\mathrm{ref}}_{p_0,t}=\vect x_t^{\mathrm{ref}\top}\vect\beta_{p_0},
-\qquad
-d^{\mathrm{glo}}_{p_0,t}=\vect x_t^{\mathrm{disc}\top}\vect\delta_{p_0},
-\qquad
-q^{\mathrm{glo}}_{p_0,t}=q^{\mathrm{ref}}_{p_0,t}+d^{\mathrm{glo}}_{p_0,t}.
-\]
-The reference-process quantile \(q^{\mathrm{ref}}_{p_0,t}\) is the scored
-quantity, and \(d^{\mathrm{glo}}_{p_0,t}\) is the quantile-specific GloFAS
-discrepancy. The reported analysis fits the seven levels \(0.05\), \(0.15\),
-\(0.35\), \(0.50\), \(0.65\), \(0.80\), and \(0.95\) independently with AL
-working likelihoods, separate RHS hierarchies for the two coefficient blocks,
-and VB. Issued ensemble members are treated as conditionally independent and
-exchangeable given the forecast-system quantile path, a working-likelihood
-approximation because the members arise from perturbed initial conditions and
-model perturbations \citep{ECMWF2026ENSGeneration}. Variational posterior-mean
-quantile estimates are monotonically rearranged on the fitted grid. The
-supplement gives the source-specific likelihood, the fixed reservoir
-specifications, and the more general exAL and latent-future-path formulations.
+\noindent\textbf{Latent-path discrepancy model.}
+Two fixed DESN feature maps represent the reference process and the
+GloFAS-minus-USGS discrepancy. For probability level \(p\), write
+\(q_{p,t}=\vect x_t^{\mathrm{ref}\top}\vect\beta_p\) for the reference
+quantile and \(d_{p,t}=\vect x_t^{\mathrm{disc}\top}\vect\delta_p\) for the
+additive discrepancy. On the transformed scale, the historical and issued
+working-likelihood contributions are
+\begin{equation}
+\begin{aligned}
+\text{Reference history:}\quad
+y_t\mid\cdot&\sim\AL_p(q_{p,t},\sigma_Y),\\
+\text{Retrospective GloFAS:}\quad
+g_t^{\mathrm{ret}}\mid\cdot&\sim\AL_p(q_{p,t}+d_{p,t},\sigma_G),\\
+\text{Issued member:}\quad
+g_{T+h,e}^{\mathrm{ens}}\mid\cdot&\sim
+\AL_p(q_{p,T+h}+d_{p,T+h},\sigma_G).
+\end{aligned}
+\label{eq:glofas-part4-main}
+\end{equation}
+The unavailable path \(y_{T+1:T+30}\) is represented as latent during fitting
+and recursively supplies future response lags to the reference reservoir. Each
+of the 51 issued members has weight \(1/51\), so every issued horizon has total
+weight one. This weighting is applied to the augmented complete-data working
+likelihood.
+
+The reported model estimates the seven levels \(0.05\), \(0.20\), \(0.35\),
+\(0.50\), \(0.65\), \(0.80\), and \(0.95\) jointly by VB, with AL working
+likelihoods and adjacent-quantile RHS shrinkage for the reference and
+discrepancy coefficient paths. No crossing correction is applied; the selected
+issued-window grid has no crossings. The supplement gives the source weighting,
+reservoir specifications, latent-path approximation, and convergence record.
 
 \subsection{Retrospective Application Results}
 
-The reported fit was evaluated over
-\GlofasApplicationCurrentObservedHistoryDates{} observed dates through the
-forecast origin. After monotone rearrangement, its observational-window
-\(\aCRPS\) was \(\GlofasApplicationCurrentObservedHistoryAcrps{}\), and
-empirical 90\% interval coverage was
-\(\GlofasApplicationCurrentObservedHistoryCoverage{}\). These fitting-period
-scores were used for model selection, with the forecast period reserved for
-evaluation. The fitted \(p_0=0.95\) quantile occasionally takes extreme values
-in the observational period, so upper-tail forecasts are interpreted
-cautiously.
+The selected Joint AL estimate completed ten outer sweeps. All inner fits and
+RHS release conditions were satisfied, and all 14 reference and discrepancy
+RHS blocks changed after release. Its final maximum parameter change was
+\(0.004154\), above the pre-specified \(0.001\) outer tolerance. We therefore
+describe it as cap-stabilized after RHS release, not as strictly
+outer-converged. No MCMC application fit is reported.
 
 \noindent\textbf{Forecast-period scores.}
-Table~\ref{tab:glofas-application-score} shows lower mean check loss, interval
-score, and \(\aCRPS\) for Q--DESN than for raw GloFAS at this origin. Empirical
-coverage of the nominal 90\% interval is
-\(\GlofasApplicationCurrentQdesnMeanCoverage{}\) for Q--DESN and
-\(\GlofasApplicationCurrentRawMeanCoverage{}\) for raw GloFAS. The improvement
-from zero coverage does not resolve the substantial Q--DESN undercoverage.
-Multi-origin evaluation using only covariates available at each origin is
-needed to assess real-time performance and calibration.
+Table~\ref{tab:glofas-application-score} shows that Joint AL reduces the
+seven-level finite-grid CRPS from \GlofasApplicationCurrentRawCrps{} for raw
+GloFAS to \GlofasApplicationCurrentQdesnCrps{}, a
+\GlofasApplicationCurrentCrpsReduction{} reduction. It also has lower mean
+check loss and interval score. Its empirical 90\% interval coverage is
+\GlofasApplicationCurrentQdesnMeanCoverage{}, compared with
+\GlofasApplicationCurrentRawMeanCoverage{} for raw GloFAS. Independent AL has
+a slightly larger CRPS of \(0.8606\) with the same empirical coverage. A Normal
+Ridge diagnostic has the smaller CRPS \(0.8062\), but only \(0.250\) coverage;
+it is not the selected quantile model.
+
+This issued-window improvement does not extend to the historical fit. On the
+common six-level grid, the Part 4 Joint AL CRPS is 68.6\% larger than FR09 over
+the full history and is 104.2\%, 51.4\%, and 8.6\% larger over the final 1000,
+200, and 50 dates, respectively. FR09 is therefore retained as the stronger
+historical benchmark, while Part 4 is interpreted only for this single-origin
+issued-window experiment.
 
 Figure~\ref{fig:glofas-application-forecast-period} places the reported
-quantile intervals against the observed history, held-out gauge record, and
-issued GloFAS ensemble over the single forecast window.
+quantile paths against the observed history, held-out gauge record, and issued
+GloFAS ensemble over the single forecast window.
 
 \begin{table}[!htbp]
 \centering
-\caption{Forecast scoring for the GloFAS retrospective analysis.
-Scores are computed on the transformed streamflow scale for the
-forecast origin \GlofasApplicationCurrentOriginDate{}. Lower check loss,
-interval score, and \(\aCRPS\) are better; \(\aCRPS\) is computed from
-Eq.~\eqref{eq:acrps-main} at seven common evaluation levels. Mean
-coverage reports empirical coverage for the nominal 90\% interval and
-is interpreted descriptively. The final column gives the relative reduction in
-mean check loss.}
+\caption{Forecast scoring for the GloFAS retrospective analysis at origin
+\GlofasApplicationCurrentOriginDate{}. Scores use the 28 issued horizons and
+are computed on the \(\log(\mathrm{USGS}+1)\) scale. Lower check loss, interval
+score, and finite-grid CRPS are better; the latter is the integrated check-loss
+approximation in Eq.~\eqref{eq:acrps-main} over the seven fitted levels.
+Coverage is empirical coverage of the nominal 90\% interval. The final column
+gives the CRPS reduction relative to raw GloFAS.}
 \label{tab:glofas-application-score}
-\input{\GlofasApplicationCurrentScoreTable}
+\resizebox{\textwidth}{!}{%
+\input{\GlofasApplicationCurrentScoreTable}}
 \end{table}
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
-\caption{Q--DESN quantile intervals for the GloFAS retrospective analysis over
-the final 60 observed dates and the following 28-day forecast period. The
-nested blue bands are the 90\%, 65\%, and 30\% quantile intervals, and the blue
-path is the median. The vertical dashed line marks the forecast origin. Black
-and red paths denote observed and held-out USGS streamflow, respectively;
-orange denotes retrospective GloFAS, and thin gray paths show all 51 issued
-GloFAS ensemble members, with their median dashed. Forecast scores use the
-held-out measurements in Table~\ref{tab:glofas-application-score}.}
-\figalt{Observed and held-out streamflow are shown with the retrospective and
-issued GloFAS ensemble over a 28-day forecast window. Nested Q--DESN quantile
-bands widen after the marked forecast origin but substantially under-cover the
-held-out observations.}
+\caption{Joint AL Q--DESN latent-path analysis over the final 30 historical
+dates and 28 issued GloFAS horizons. The upper panel shows the seven fitted
+USGS quantile paths, with historical fits dashed and issued paths solid;
+observed history is black and withheld USGS values are purple. Thin pale lines
+show the 51 issued GloFAS members. The lower panel shows the corresponding
+GloFAS-minus-USGS discrepancy quantiles and withheld discrepancy. The vertical
+dotted line marks the forecast origin. All values are on the transformed
+scale.}
+\figalt{Two panels show seven Joint AL Q--DESN quantile paths before and after
+the forecast origin. The upper panel compares the latent USGS paths with
+observed and withheld streamflow and the issued GloFAS members; the lower panel
+shows the fitted GloFAS-minus-USGS discrepancy and withheld discrepancy.}
 \label{fig:glofas-application-forecast-period}
 \end{figure}
 
@@ -945,10 +958,12 @@ monotone rearrangement can be used when monotonicity is required.
 The single-quantile dynamic simulations assess recovery and held-out
 forecasting under known data-generating mechanisms. The joint multi-quantile
 study assesses quantile-path recovery and crossings under known conditional
-quantile paths. The GloFAS application studies one
-retrospective streamflow forecast origin with independent Q--DESN AL--VB fits,
-blended future weather covariates, monotone reporting, and undercoverage of the
-nominal 90\% interval. The PriceFM comparison uses matched PriceFM forecasts with
+quantile paths. The GloFAS application studies one retrospective
+oracle-covariate origin with a joint AL--RHS VB latent-path model. Its
+issued-window grid required no crossing correction and achieved near-nominal
+empirical coverage, but the estimate reached its iteration cap before the
+strict outer tolerance and had poorer historical CRPS than FR09. The PriceFM
+comparison uses matched PriceFM forecasts with
 retrospectively observed lead covariates. Broader
 rankings of Q--DESN against dynamic quantile or foundation-model alternatives
 require evaluations across additional data sets, forecast origins, and

@@ -24,6 +24,10 @@ source(app_path("application/R/fit_qdesn_discrepancy.R"))
 source(app_path("application/R/latent_path_runtime_backend.R"))
 source(app_path("application/R/latent_path_checkpoint.R"))
 source(app_path("application/R/latent_path_vb_al.R"))
+source(app_path("application/R/latent_path_vb_normal.R"))
+source(app_path("application/R/joint_qvp_qdesn.R"))
+source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
+source(app_path("application/R/latent_path_vb_exal.R"))
 source(app_path("application/R/fit_qdesn_latent_path.R"))
 
 args <- app_parse_args(list(

@@ -15,9 +15,16 @@ args <- app_parse_args(list(
   run_label = paste0("glofas_part4_ensemble_likelihood_deferred_", format(Sys.time(), "%Y%m%d_%H%M%S")),
   runtime_root = "",
   require_frozen = "true",
+  require_input_files = "false",
   allow_forbidden_sources = "false",
   write_candidate_configs = "true",
-  dry_run = "true"
+  dry_run = "true",
+  max_iter = "100",
+  min_iter = "30",
+  tol = "0.01",
+  freeze_beta_warmup_iters = "20",
+  min_beta_updates = "10",
+  n_draws = "500"
 ))
 
 run_label <- as.character(args$run_label)[[1L]]
@@ -35,9 +42,16 @@ bundle <- app_glofas_part4_prepare_bundle(
   run_label = run_label,
   runtime_root = runtime_root,
   require_frozen = app_as_bool(args$require_frozen),
+  require_input_files = app_as_bool(args$require_input_files),
   allow_forbidden_sources = app_as_bool(args$allow_forbidden_sources),
   dry_run = app_as_bool(args$dry_run),
-  write_candidate_configs = app_as_bool(args$write_candidate_configs)
+  write_candidate_configs = app_as_bool(args$write_candidate_configs),
+  max_iter = as.integer(args$max_iter),
+  min_iter = as.integer(args$min_iter),
+  tol = as.numeric(args$tol),
+  freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
+  min_beta_updates = as.integer(args$min_beta_updates),
+  n_draws = as.integer(args$n_draws)
 )
 
 cat("Part 4 dry-run launch bundle prepared.\n")

@@ -38,9 +38,9 @@ immutable_hashes <- c(
   "tables/joint_qdesn_shared_backbone_score_diagnostics.csv" =
     "370fb8dd06904790650a589953d87086bfec9a0f47a2041cd59a288cc7bdfdb2",
   "tables/glofas_application_current_score_summary.csv" =
-    "6bab28df0739bcf6894db9b4b90e16ba50372fb3f5bcf3896946abb44b293421",
+    "829d4467e4b734d4cd7a0dbab40ba72fe9b9c91c328908461f82f3093167d498",
   "tables/glofas_application_current_selection_manifest.csv" =
-    "c95b0545463b5d843e03d5453c0d43fdf10bfee501353aa9b3122f38c6edfe66",
+    "59792f78a055943cab6dd2e6e3eb829f08df9df6e2f98add05a4bec595b907de",
   "tables/pricefm_paper_aligned_main_comparison.csv" =
     "873e6cd28a26de916bbd4a0d096549057e443469aff084a9c12a4d03cd0c07ca",
   "tables/pricefm_r91_selective_promotions.csv" =

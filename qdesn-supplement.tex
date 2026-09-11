@@ -116,7 +116,7 @@ for \(\gamma<0\) and \(\gamma>0\); the point \(\gamma=0\) is handled under the
 nested AL model. Subsequent sections cover reservoir specification, the
 fixed-design likelihood and prior, MCMC and variational computation, the joint
 quantile-vector extension, monotone rearrangement, supplementary empirical
-results, and the GloFAS forecast-discrepancy model.
+results, and the GloFAS latent-path ensemble-likelihood model.
 
 \section{Reservoir Specification, Selection, and Diagnostics}
 \label{sec:supp_reservoir_diagnostics}
@@ -1642,9 +1642,9 @@ pairing, which defines the coupling between separately fitted models.
 Posterior means and equal-tailed 95\% intervals of
 \(S_{\mathrm{DGP}}^{(b)}\) form the primary comparison. The score evaluated
 at the posterior-mean quantile curve is reported separately as a sensitivity
-summary. GloFAS applies monotone rearrangement to its variational
-posterior-mean quantile estimates and uses realized outcomes in
-Eq.~\eqref{eq:supp-acrps}.
+summary. The GloFAS analysis uses realized outcomes in
+Eq.~\eqref{eq:supp-acrps}; its selected issued-window grid was already ordered,
+so no monotone transformation was applied.
 
 Response-level posterior predictive draws determine an empirical predictive
 quantile function that can be evaluated on any prespecified grid; integrating
@@ -1853,265 +1853,250 @@ count relative AQL advantages of at most 5\% and greater than 5\%, respectively.
 \end{table}
 
 \clearpage
-\section{GloFAS Forecast-Discrepancy Model with DESN Features}
+\section{GloFAS Latent-Path Ensemble-Likelihood Model with DESN Features}
 \label{sec:glofas_discrepancy}
 
 \noindent\textbf{Model overview.}
-The streamflow application combines forecasts from the Global Flood Awareness
-System (GloFAS) with a reference gauge record
-\citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. The reference
-quantile and the GloFAS discrepancy receive separate coefficient vectors. The
-historical reservoir states are fixed after preprocessing and washout. At
-issued forecast horizons, however, the reference path is unobserved at the
-forecast origin, so future reservoir states may depend on latent future
-reference values. This section derives the fixed-design distributions given a
-proposed future reference path and the corresponding latent-path sampler. The
-full latent-path posterior also
-contains the missing future reference values and the induced future reservoir
-states.
+The streamflow application combines the historical and issued Global Flood
+Awareness System (GloFAS) products with a reference gauge record
+\citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. Separate DESN
+feature maps represent the reference process and the GloFAS-minus-reference
+discrepancy. The selected Part 4 analysis is a joint AL--RHS variational fit:
+post-cutoff reference values are latent during fitting, and the issued ensemble
+contributes directly to the same latent-path analysis. It is not a post-fit
+forecast adjustment.
 
-\subsection{Observed Quantities and Augmented Design Matrix}
+\subsection{Observed Quantities and Latent Design}
 \label{subsec:glofas_aug_design}
 
-\noindent\textbf{Observed and future quantities.}
-Fix a quantile level \(p_0\). Let \(y_t\) denote transformed reference
-streamflow, \(g_t^{\mathrm{ret}}\) the retrospective GloFAS product, and
-\(g_{T+h,e}^{\mathrm{ens}}\) GloFAS ensemble member \(e\) at forecast origin
-\(T\) and horizon \(h\). Write
-\(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\) for the future reference path. Let
-\(\mathcal I_{\mathrm{ref}}\) index reference
-observations and let \(\mathcal I_{\mathrm{glo}}\) index both retrospective
-and issued-ensemble GloFAS values. For \(i\in\mathcal I_c\),
-\(c\in\mathcal C=\{\mathrm{ref},\mathrm{glo}\}\), write the observed value as
-\(z_i^c\). The reference feature vector
-\(\vect x_i^{\mathrm{ref}}\) is generated from the reference-process history.
-The discrepancy feature vector \(\vect x_i^{\mathrm{disc}}\) is generated from
-the GloFAS-minus-reference discrepancy path. Both vectors are fixed after
-conditioning on the relevant historical or latent future path.
+Let \(T\) denote 25~December~2022 and let
+\(y_t=\log(y_t^{\mathrm{USGS}}+1)\) be transformed reference streamflow.
+Write \(g_t^{\mathrm{ret}}\) for transformed retrospective GloFAS and
+\(g_{T+h,e}^{\mathrm{ens}}\) for transformed issued member \(e\) at horizon
+\(h\). The requested future path
+\(\vect y_F=(y_{T+1},\ldots,y_{T+30})^\top\) is unobserved during fitting.
+Issued GloFAS values are available for the first 28 horizons, with 51 members
+at each horizon. The withheld USGS values are loaded only after fitting for
+forecast evaluation. Realized PRISM/ERA5 precipitation and soil-moisture
+covariates are used after \(T\), so the calculation is a retrospective
+oracle-covariate diagnostic.
 
-\noindent\textbf{Augmented design.}
-Define
-\[
-\vect\theta_{p_0}
-=
-\begin{bmatrix}
-\vect\beta_{p_0}\\
-\vect\delta_{p_0}
-\end{bmatrix},
-\qquad
-\vect h_t^{\mathrm{ref}}=
-\begin{bmatrix}
-\vect x_t^{\mathrm{ref}}\\
-\vect 0
-\end{bmatrix},
-\qquad
-\vect h_t^{\mathrm{glo}}=
-\begin{bmatrix}
-\vect x_t^{\mathrm{ref}}\\
-\vect x_t^{\mathrm{disc}}
-\end{bmatrix}.
-\]
-The same definition applies to any observation indexed by \(i\). The
-source-specific quantile locations are
-\[
-q^{\mathrm{ref}}_{p_0,i}
-=\vect h_i^{\mathrm{ref}\,\top}\vect\theta_{p_0}
-=\vect x_i^{\mathrm{ref}\,\top}\vect\beta_{p_0},
-\qquad
-q^{\mathrm{glo}}_{p_0,i}
-=\vect h_i^{\mathrm{glo}\,\top}\vect\theta_{p_0}
-=\vect x_i^{\mathrm{ref}\,\top}\vect\beta_{p_0}
-+\vect x_i^{\mathrm{disc}\,\top}\vect\delta_{p_0}.
-\]
-Thus \(\vect\beta_{p_0}\) represents the reference-process quantile regression and
-\(\vect\delta_{p_0}\) represents an additive GloFAS discrepancy component at the same
-level. In the historical rows, \(\vect x_i^{\mathrm{disc}}\) is driven by
-\(g_i^{\mathrm{ret}}-y_i\). In the reported retrospective forecast-period
-specification, the
-future discrepancy predictor uses the last available historical retrospective
-discrepancy on the transformed scale as a persistence baseline and then adds
-the estimated discrepancy regression. The recursive path
-\(\hat q^{\mathrm{ens}}_{p_0,T+h}-y_{T+h}\), where
-\(\hat q^{\mathrm{ens}}_{p_0,T+h}\) is the empirical GloFAS ensemble quantile
-at the fitted level, is an alternative specification for future sensitivity
-analysis.
-
-\noindent\textbf{Forecast summaries.}
-Stacking the reference and GloFAS observations conditional on the specified
-reservoir-state construction gives a vector \(\vect z\), a design matrix \(\mat H\), and
-labels \(c_i\). With observed historical data only, \(\mat H\) is fixed.
-Forecast-period summaries are variational quantile estimates followed by
-monotone rearrangement.
-
-\noindent\textbf{Forecast-time decomposition.}
-The forecast-time decomposition is additive around the
-persistence baseline. For horizons covered by an issued GloFAS ensemble at
-origin \(T\), the ensemble provides the GloFAS forecasts and the unadjusted
-GloFAS benchmark. The Q--DESN reference quantile is
-\[
-q^{\mathrm{ref},(b)}_{p_0,T+h}
-=\vect x_{T+h}^{\mathrm{ref},(b)\top}\vect\beta_{p_0}^{(b)},
-\]
-and the associated forecast-system quantile is
-\[
-q^{\mathrm{glo},(b)}_{p_0,T+h}
-=q^{\mathrm{ref},(b)}_{p_0,T+h}
-+d_T^{\mathrm{ret}}
-+\vect x_{T+h}^{\mathrm{disc},(b)\top}\vect\delta_{p_0}^{(b)}.
-\]
-Here \(d_T^{\mathrm{ret}}\) is the last historical retrospective discrepancy.
-Point summaries are taken after this quantile construction. Observed held-out
-reference flows are reserved for evaluation and excluded from every
-forecast-period lagged-response design row. The analysis remains retrospective because the
-precipitation and soil-moisture predictors include blended contributions from
-weather observations realized after that origin.
-
-\noindent\textbf{Reservoir specification.}
-Separate DESN feature maps are used for the reference process and the GloFAS
-discrepancy. Both maps have depth
-\(D=\GlofasApplicationCurrentReferenceReservoirDepth{}\), layer widths
-\((\GlofasApplicationCurrentReferenceReservoirSize{})\), reducer widths
-\((\GlofasApplicationCurrentReferenceReducerSize{})\), memory
-\(\GlofasApplicationCurrentReferenceReservoirMemory{}\), washout
-\(\GlofasApplicationCurrentReferenceReservoirWashout{}\), spectral radii
-\((\GlofasApplicationCurrentReferenceReservoirRho{})\), recurrent sparsity
-\((\GlofasApplicationCurrentReferenceReservoirPiW{})\), and input inclusion
-probabilities \((\GlofasApplicationCurrentReferenceReservoirPiIn{})\). The
-reference map uses leak rates
-\((\GlofasApplicationCurrentReferenceReservoirAlpha{})\), global and intercept
-input scales
-\(\GlofasApplicationCurrentReferenceReservoirWinScaleGlobal{}/\GlofasApplicationCurrentReferenceReservoirWinScaleBias{}\),
-and random-number seed \(\GlofasApplicationCurrentReferenceReservoirSeed{}\).
-The discrepancy map uses leak rates
-\((\GlofasApplicationCurrentDiscrepancyReservoirAlpha{})\), global and intercept
-input scales
-\(\GlofasApplicationCurrentDiscrepancyReservoirWinScaleGlobal{}/\GlofasApplicationCurrentDiscrepancyReservoirWinScaleBias{}\),
-and random-number seed \(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\).
-
-\subsection{Source-Specific Likelihood and Computation}
-\label{subsec:glofas_likelihoods}
-
-Let \(c\in\mathcal C=\{\mathrm{ref},\mathrm{glo}\}\) identify the reference
-and GloFAS sources, and let \(\mathcal I_c\) index their contributions. The
-augmented design rows \(\vect h_i^c\) defined above give
+For probability level \(p_k\), the reference and discrepancy quantile
+locations are
 \begin{equation}
 \begin{aligned}
-v_i^c\mid\sigma_c&\sim\Exp(\mathrm{rate}=1/\sigma_c),
-&s_i^c&\sim\TN(0,1),\\
-z_i^c\mid\cdot&\sim\Normal\!\left(
-\vect h_i^{c\top}\vect\theta_{p_0}
-+\sigma_cD_{\gamma_c}s_i^c+A_{\gamma_c}v_i^c,
-\sigma_cB_{\gamma_c}v_i^c\right).
+\text{Reference quantile:}\quad
+q_{k,t}
+&=\vect x_t^{\mathrm{ref}\top}\vect\beta_k,\\
+\text{Discrepancy quantile:}\quad
+d_{k,t}
+&=\vect x_t^{\mathrm{disc}\top}\vect\delta_k,\\
+\text{GloFAS quantile:}\quad
+q_{k,t}^{\mathrm{glo}}
+&=q_{k,t}+d_{k,t}.
 \end{aligned}
-\label{eq:supp_glofas_exal_hierarchy}
+\label{eq:supp_glofas_quantile_decomposition}
 \end{equation}
-By Eq.~\eqref{eq:supp_glofas_exal_hierarchy}, the conditional
-\(p_0\)-quantile is
-\(\vect h_i^{c\top}\vect\theta_{p_0}\). The AL specialization omits
-\(s_i^c\) and \(\gamma_c\) and uses the AL constants \(A_0,B_0\).
+Historical reference features are generated from the observed reference
+history, and historical discrepancy features are generated from
+\(g_t^{\mathrm{ret}}-y_t\). After \(T\), the reference and discrepancy
+reservoir states are recomputed as functions of the latent path
+\(\vect y_F\). Strict lagging is imposed: the design row for \(T+h\) may
+depend on earlier latent values but not on \(y_{T+h}\).
 
-Retrospective GloFAS values and issued ensemble members share the GloFAS
-source parameters. Members at a common origin and horizon are treated as
-conditionally independent and exchangeable given the forecast-system quantile
-path. Because the operational ensemble is generated from perturbed initial
-states and model perturbations \citep{ECMWF2026ENSGeneration}, this
-factorization is a working-likelihood approximation, not a claim that the
-members are marginally independent.
+For one probability level, stack the reference and discrepancy coefficients as
+\[
+\vect\theta_k=
+\begin{bmatrix}\vect\beta_k\\ \vect\delta_k\end{bmatrix},
+\qquad
+\vect h_t^{\mathrm{ref}}=
+\begin{bmatrix}\vect x_t^{\mathrm{ref}}\\ \vect 0\end{bmatrix},
+\qquad
+\vect h_t^{\mathrm{glo}}=
+\begin{bmatrix}\vect x_t^{\mathrm{ref}}\\
+\vect x_t^{\mathrm{disc}}\end{bmatrix}.
+\]
+Then \(\vect h_t^{\mathrm{ref}\top}\vect\theta_k=q_{k,t}\) and
+\(\vect h_t^{\mathrm{glo}\top}\vect\theta_k=q_{k,t}+d_{k,t}\).
+Conditional on \(\vect y_F\), these are ordinary fixed-design Q--DESN
+regressions.
 
-The reference and discrepancy slope blocks have separate regularized-horseshoe
-hierarchies. Writing their penalized index sets as \(J_\beta\) and
-\(J_\delta\), the prior for each block \(a\in\{\beta,\delta\}\) is
-the product representation in Section~\ref{sec:priors}, with its own
-\((\tau_a,\lambda_{a,j},\zeta_a)\); the two intercepts have weak Gaussian
-priors. Source-specific likelihood scales and, under exAL, asymmetry parameters
-complete the model. Conditional on a fixed augmented design \(\mat H\), the
-posterior is proportional to
+The selected reference reservoir has depth one, width
+\(\GlofasApplicationCurrentReferenceReservoirSize{}\), memory
+\(\GlofasApplicationCurrentReferenceReservoirMemory{}\), leak rate
+\(\GlofasApplicationCurrentReferenceReservoirAlpha{}\), spectral radius
+\(\GlofasApplicationCurrentReferenceReservoirRho{}\), washout
+\(\GlofasApplicationCurrentReferenceReservoirWashout{}\), and seed
+\(\GlofasApplicationCurrentReferenceReservoirSeed{}\). Its inputs are reference
+lags 1--360 and realized precipitation and soil-moisture lags 0--180. The
+discrepancy reservoir has width
+\(\GlofasApplicationCurrentDiscrepancyReservoirSize{}\), memory
+\(\GlofasApplicationCurrentDiscrepancyReservoirMemory{}\), leak rate
+\(\GlofasApplicationCurrentDiscrepancyReservoirAlpha{}\), spectral radius
+\(\GlofasApplicationCurrentDiscrepancyReservoirRho{}\), washout
+\(\GlofasApplicationCurrentDiscrepancyReservoirWashout{}\), and seed
+\(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\). It uses the
+corresponding discrepancy and weather lags. Neither feature map includes
+direct readout inputs. The reference and discrepancy RHS scales are
+\(\tau_{0,\mathrm{ref}}=\GlofasApplicationCurrentSharedRhsTau{}\) and
+\(\tau_{0,\mathrm{disc}}=\GlofasApplicationCurrentDiscrepancyRhsTau{}\).
+
+\subsection{Weighted Augmented Working Likelihood}
+\label{subsec:glofas_likelihoods}
+
+At each level \(p_k\), reference observations have AL location \(q_{k,t}\),
+whereas retrospective and issued GloFAS observations have location
+\(q_{k,t}+d_{k,t}\). Let \(z_i^c\) and \(\vect h_i^c\) denote an observation
+and design row from source \(c\in\{\mathrm{ref},\mathrm{glo}\}\). The AL
+normal--exponential augmentation is
 \begin{equation}
-\prod_{c\in\mathcal C}\prod_{i\in\mathcal I_c}
-p(z_i^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,v_i^c,s_i^c,\vect h_i^c)
-p(v_i^c\mid\sigma_c)p(s_i^c)
-\prod_{c\in\mathcal C}p(\sigma_c)\pi_{\gamma_c}(\gamma_c)
-\;p(\vect\theta_{p_0},\Theta_\beta,\Theta_\delta),
-\label{eq:supp_glofas_joint_exal_rhs}
+\begin{aligned}
+\text{Latent scale:}\quad
+v_{i,k}^c\mid\sigma_{c,k}
+&\sim\Exp(\mathrm{rate}=1/\sigma_{c,k}),\\
+\text{Conditional observation:}\quad
+z_i^c\mid\cdot
+&\sim\Normal\!\left(
+\vect h_i^{c\top}\vect\theta_k+A_{0,k}v_{i,k}^c,\,
+\sigma_{c,k}B_{0,k}v_{i,k}^c
+\right).
+\end{aligned}
+\label{eq:supp_glofas_al_hierarchy}
 \end{equation}
-with the same AL omissions. This form is the general fixed-design augmented
-posterior with source-specific likelihood parameters and two coefficient-prior
-blocks.
 
-Consequently, the MCMC and variational updates are obtained from
-Sections~\ref{sec:mcmc}--\ref{sec:elbo} by replacing \((\vect y,\mat X)\)
-with the stacked \((\vect z,\mat H)\), applying likelihood-parameter and latent
-updates within source, and applying RHS updates within coefficient block. The
-coefficient factor remains Gaussian. Under exAL, each source has its own
-transformed scale--asymmetry update; under AL, each source scale retains its
-inverse-gamma update. This substitution preserves the general posterior target
-rather than defining a separate application-specific inferential method.
+Define an observation weight \(w_i=1\) for historical reference and
+retrospective GloFAS rows. For an issued member at a fixed horizon,
+\(w_i=1/51\). Hence the 51 issued members contribute total weight one at each
+horizon. The executed augmented working likelihood has the form
+\begin{equation}
+\begin{aligned}
+\text{Weighted augmented likelihood:}\quad
+L_{\mathrm{aug}}(\Theta)
+\ \propto\
+\prod_{k=1}^{K}\prod_{c}\prod_{i\in\mathcal I_c}
+\left[
+p(z_i^c\mid v_{i,k}^c,\Theta_k)\,
+p(v_{i,k}^c\mid\sigma_{c,k})
+\right]^{w_i}.
+\end{aligned}
+\label{eq:supp_glofas_weighted_augmented_likelihood}
+\end{equation}
+This is a complete-data fractional or power-likelihood construction. It
+prevents the issued ensemble from receiving 51 times the weight of one
+historical time point. Because the power is applied before integrating out the
+latent variables, Eq.~\eqref{eq:supp_glofas_weighted_augmented_likelihood} is
+not asserted to be an exact fractional marginal AL posterior.
 
-The reported retrospective analysis uses independent AL Q--DESN regressions
-fitted by VB at seven probability levels. It conditions on the
-persistence-anchored forecast design described above and therefore does not use
-the latent-future-path extension below. Quantile summaries are rearranged only
-after the level-wise fits have been obtained.
+The source-specific scales, coefficient priors, and latent variables are
+updated under this weighted augmentation. The exAL comparator additionally
+contains source-specific shape parameters and positive-shift latent variables,
+using the structured quadrature calculations described earlier. The selected
+application result uses AL, not exAL.
 
-\subsection{Latent Future-Path Extension}
+\subsection{Joint Quantile and Latent-Path Approximation}
 \label{subsec:glofas_latent_path}
 
-An alternative specification allows forecast-period reservoir rows to depend
-on an unobserved future reference path
-\(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\). In that case the augmented design
-is \(\mat H(\vect y_F)\), and the posterior in
-Eq.~\eqref{eq:supp_glofas_joint_exal_rhs} is augmented by \(\vect y_F\).
-Strict lagging is required: the row for \(T+h\) may depend on earlier future
-values but not on \(y_{T+h}\) itself.
+The fitted grid is
+\[
+(0.05,\ 0.20,\ 0.35,\ 0.50,\ 0.65,\ 0.80,\ 0.95).
+\]
+The seven reference coefficient blocks and seven discrepancy coefficient
+blocks are linked by separate adjacent-quantile RHS priors. Computation uses
+mean-field quantile-block coordinate updates initialized from the completed
+independent fits. The construction shares information through these priors; it
+is not a single exact Gaussian update over every coefficient and latent-path
+block.
 
-For a variational approximation, introduce \(q_F(\vect y_F)\). Let
-\(\ell_F(\vect y_F)\) be the expected augmented log likelihood, under all
-other current variational factors, for the rows whose responses or design
-vectors depend on \(\vect y_F\). At its mode \(\widehat{\vect y}_F\), define
+Let \(\ell_F(\vect y_F)\) be the expected weighted augmented log likelihood,
+under the other current variational factors, for terms whose response or
+design depends on \(\vect y_F\). At its mode
+\(\widehat{\vect y}_F\), the latent-path factor is approximated by
 \begin{equation}
-\mat K_F=-\nabla^2\ell_F(\widehat{\vect y}_F),
-\qquad
-q_F(\vect y_F)\approx
+\begin{aligned}
+\text{Latent-path factor:}\quad
+\mat K_F&=-\nabla^2\ell_F(\widehat{\vect y}_F),&
+q_F(\vect y_F)&\approx
 \Normal(\widehat{\vect y}_F,\mat K_F^{-1}).
+\end{aligned}
 \label{eq:supp_glofas_future_path_factor}
 \end{equation}
-The Gaussian approximation in Eq.~\eqref{eq:supp_glofas_future_path_factor}
-is propagated to each design row. Let \(\mat J_i\) be the Jacobian of
-\(\vect h_i^c(\vect y_F)\)
-at the mode and \(\mat V_F=\mat K_F^{-1}\). The first-order moments used in
-the remaining coordinate updates are
+For design row \(\vect h_i^c(\vect y_F)\), let \(\mat J_i\) be its Jacobian at
+the mode and \(\mat V_F=\mat K_F^{-1}\). The first-order moments propagated to
+the remaining updates are
 \begin{equation}
+\begin{aligned}
+\text{Propagated design moments:}\quad
 \E\{\vect h_i^c(\vect y_F)\}
-\approx\vect h_i^c(\widehat{\vect y}_F),
-\qquad
+&\approx \vect a_i^c,\\
 \E\{\vect h_i^c\vect h_i^{c\top}\}
-\approx
-\vect a_i^c\vect a_i^{c\top}+\mat J_i\mat V_F\mat J_i^\top,
+&\approx \vect a_i^c\vect a_i^{c\top}
++\mat J_i\mat V_F\mat J_i^\top,
+\end{aligned}
 \label{eq:supp_glofas_future_path_delta}
 \end{equation}
-Equation~\eqref{eq:supp_glofas_future_path_delta} uses
-\(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). Cross-moments with
-responses that are components of \(\vect y_F\) include the corresponding
-Jacobian--covariance term. The entropy contribution is
-\(\tfrac12\log|2\pi e\mat V_F|\). Thus the monitored objective is a
-Laplace--Delta approximation to the nonlinear latent-path ELBO and reduces to
-the fixed-design ELBO when the future path is absent or held fixed.
+where \(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). The corresponding
+Jacobian--covariance term is retained for cross-moments involving a component
+of \(\vect y_F\). This gives a Laplace--Delta approximation to the nonlinear
+latent-path objective. No separate forecast adapter, future-response
+imputation from the withheld truth, or post-hoc crossing correction is used.
 
-For MCMC, a proposal for \(\vect y_F\) is evaluated under the same augmented
-posterior after recomputing only the affected forecast-period state rows. The
-conditional Gaussian coefficient, latent-variable, source-parameter, and RHS
-updates otherwise retain the forms in the general derivation.
-
-\subsection{Limiting Cases and Checks}
+\subsection{Numerical Qualification and Supplementary Results}
 \label{subsec:glofas_checks}
 
-Removing the GloFAS source and discrepancy coefficients recovers the ordinary
-Q--DESN regression. Setting \(\gamma_c=0\) and omitting the positive-shift
-latents recovers AL. Fixed future design rows recover the general fixed-design
-posterior and ELBO. These reductions, strict forecast lagging, source indexing,
-and agreement between MCMC and variational parameterizations provide direct
-implementation checks; posterior calibration remains an empirical question.
+The inherited 50-iteration RHS warmup corresponds to five joint outer sweeps
+because every sweep contains at least ten inner coefficient iterations. The
+retained source fit completed those five sweeps without a global-scale update.
+The continuation preserved that fitted state, released the global scales at
+sweep 6, and completed five post-release updates through sweep 10. All inner
+fits converged, the RHS gate passed, and every one of the 14 reference and
+discrepancy RHS blocks changed after release. The final maximum parameter
+change was \(0.004153866\), exceeding the strict outer tolerance \(0.001\).
+Accordingly, the selected Joint AL estimate is cap-stabilized after RHS
+release, not strictly outer-converged. The optional Joint exAL continuation was
+stopped; its source fit is retained only as a nonconverged sensitivity result.
+No MCMC fit was used for this application.
 
+\begin{table}[!htbp]
+\centering
+\resizebox{\textwidth}{!}{%
+\input{tables/glofas_application_part4_all_family_scores__glofas_part4_joint_al_sweep10_20260911.tex}}
+\caption{Part 4 issued-window comparison on the transformed scale. The Normal
+rows are diagnostic baselines. Joint AL is the selected quantile model; its
+numerical status is cap-stabilized after RHS release. Joint exAL is retained
+only as a nonconverged sensitivity result. CRPS is the seven-level integrated
+check-loss approximation.}
+\label{tab:supp-glofas-part4-family-scores}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\input{tables/glofas_application_part4_historical_guardrail__glofas_part4_joint_al_sweep10_20260911.tex}
+\caption{Historical CRPS guardrail on the common six-level grid. Positive
+relative changes indicate larger CRPS for Part 4 Joint AL. FR09 remains the
+stronger historical-fit benchmark; Part 4 authority is confined to the
+single-origin issued-window experiment.}
+\label{tab:supp-glofas-part4-historical-guardrail}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.94\textwidth]{figures/glofas_application/diagnostics/glofas_part4_joint_al_convergence_trace__glofas_part4_joint_al_sweep10_20260911.pdf}
+\caption{Outer-iteration parameter-change trace for the selected Joint AL fit.
+The vertical dotted line marks release of the RHS global scales after sweep 5,
+and the horizontal dashed line marks the strict \(0.001\) outer tolerance.
+The fit reached sweep 10 with all inner and RHS conditions satisfied, but the
+final change remained above the strict tolerance.}
+\figalt{The maximum parameter change decreases across ten outer sweeps but
+remains above the strict tolerance. RHS global-scale updates begin at sweep 6.}
+\label{fig:supp-glofas-part4-convergence}
+\end{figure}
+
+Removing the GloFAS source and discrepancy coefficients recovers the ordinary
+Q--DESN regression. Holding the future path fixed recovers the fixed-design
+updates. Strict forecast lagging, the future-truth firewall, source indexing,
+horizon weights, RHS release certificate, and agreement between the stored and
+reconstructed score summaries provide implementation checks. Posterior
+calibration beyond this single origin remains an empirical question.
 
 \bibliographystyle{apalike}
 \bibliography{refs}

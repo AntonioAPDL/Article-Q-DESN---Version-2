@@ -41,6 +41,10 @@ def parser() -> argparse.ArgumentParser:
     rebind.add_argument("--code-root", type=Path, required=True)
     rebind.add_argument("--output", type=Path, required=True)
     rebind.add_argument("--host", choices=("muscat", "jerez"), required=True)
+    rebind.add_argument(
+        "--reason",
+        default="explicit R97 ridge_grid.yaml to R93 Ridge-to-RHS path repair",
+    )
     rebind.add_argument("--force", action="store_true")
 
     aliases = sub.add_parser("install-grid-aliases")
@@ -90,7 +94,7 @@ def rebind_contract(args: argparse.Namespace) -> dict[str, Any]:
     payload = {key: value for key, value in source.items() if key != "shard_contract_sha256"}
     payload["code_git_identity"] = identity.to_dict()
     payload["transition_recovery"] = {
-        "reason": "explicit R97 ridge_grid.yaml to R93 Ridge-to-RHS path repair",
+        "reason": str(args.reason),
         "source_contract": file_record(source_path, "original_frozen_shard_contract"),
         "source_code_git_identity": source["code_git_identity"],
         "scientific_contract_changed": False,
@@ -98,6 +102,8 @@ def rebind_contract(args: argparse.Namespace) -> dict[str, Any]:
         "assignment_changed": False,
         "region_ownership_changed": False,
         "completed_ridge_refit_authorized": False,
+        "completed_rhs_refit_authorized": False,
+        "completed_screening_refit_authorized": False,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     return write_sealed(output, payload, "shard_contract_sha256")

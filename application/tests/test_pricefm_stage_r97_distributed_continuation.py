@@ -274,7 +274,7 @@ def test_rhs_recovery_rebinds_only_code_identity_and_preserves_science(tmp_path,
     output = tmp_path / "recovery_contract.json"
     args = SimpleNamespace(
         source_contract=source_path, code_root=tmp_path, output=output,
-        host="muscat", force=False,
+        host="muscat", force=False, reason="normal-selection schema recovery",
     )
     result = RECOVERY.rebind_contract(args)
     verify_seal(result, "shard_contract_sha256", label="recovery")
@@ -283,7 +283,9 @@ def test_rhs_recovery_rebinds_only_code_identity_and_preserves_science(tmp_path,
     assert result["checkpoint"] == source["checkpoint"]
     assert result["assignment"] == source["assignment"]
     assert result["code_git_identity"]["head"] == "recovery-head"
+    assert result["transition_recovery"]["reason"] == "normal-selection schema recovery"
     assert result["transition_recovery"]["scientific_contract_changed"] is False
+    assert result["transition_recovery"]["completed_rhs_refit_authorized"] is False
 
 
 def test_rhs_recovery_aliases_are_relative_hash_identical_and_idempotent(tmp_path, monkeypatch) -> None:

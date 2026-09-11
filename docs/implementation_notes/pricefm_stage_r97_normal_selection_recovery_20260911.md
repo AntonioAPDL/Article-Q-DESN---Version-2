@@ -127,7 +127,8 @@ controller resume option.
    completes, so the repaired file will be used without restarting healthy fits.
 3. Rebind the Muscat recovery contract to the tested descendant commit while
    preserving the frozen checkpoint, assignment, ownership, worker count, and all
-   scientific firewalls.
+   scientific firewalls. Record the normal-selection schema repair as the explicit
+   recovery reason and forbid refitting either completed screening phase.
 4. Restart only Muscat with its existing 20 one-core CPU assignment. Its 2,880
    Ridge and 1,080 coarse-RHS compaction terminals must all validate and be skipped.
 5. Confirm that AT records its recognized partial-closeout hashes, all 12 coarse

@@ -145,3 +145,14 @@ controller resume option.
 
 No article or registry promotion is justified until that final complete-surface
 closeout exists.
+
+## Subsequent surface-preprocessing recovery
+
+The normal-selection recovery completed all 36 Muscat refinement bundles and
+froze all 12 selected normal contracts. A later, independent orchestration defect
+was then exposed at the next boundary: the shared preprocessing seal removed the
+top-level `pricefm` mapping before passing the configuration to
+`window_npz_path()`, which requires the full mapping. See
+`pricefm_stage_r97_surface_preprocessing_recovery_20260911.md` for the audited
+repair and continuation procedure. The selected contracts and completed model
+artifacts remain authoritative and must not be refitted.

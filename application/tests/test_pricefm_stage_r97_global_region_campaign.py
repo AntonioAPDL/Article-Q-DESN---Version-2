@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import threading
 from types import SimpleNamespace
 
 import joblib
@@ -312,6 +313,84 @@ def test_screening_compaction_retains_only_selection_evidence(tmp_path):
     assert not (model / "large_model.rds").exists()
     assert not adapter.exists()
     assert module.valid_marker(run_dir / "r97_compaction_terminal.json")
+
+
+def test_preprocessing_terminal_preserves_full_config_and_verifies_artifacts(
+    tmp_path, monkeypatch,
+):
+    module = load("319_orchestrate_pricefm_stage_r97_global_campaign.py")
+    grid = tmp_path / "surface_grid"
+    data_path = grid / "configs/train_validation_data.yaml"
+    processed = tmp_path / "processed"
+    active_regions = ["R01", "R02"]
+    payload = {
+        "pricefm": {
+            "regions": active_regions,
+            "processed_dir": str(processed),
+            "splits": [
+                {"fold": fold, "train": ["a", "b"], "val": ["b", "c"]}
+                for fold in (1, 2, 3)
+            ],
+            "windows": {
+                "lag_window": 48,
+                "lead_window": 96,
+                "train_boundary_mode": "contained_half_open",
+                "validation_boundary_mode": "operational_half_open",
+                "test_boundary_mode": "operational_half_open",
+            },
+        }
+    }
+    write_yaml(data_path, payload)
+    pipeline = {
+        "schema_version": 1,
+        "stage": "R97",
+        "region": "R01",
+        "fit_folds": [1, 2, 3],
+        "active_window_regions": active_regions,
+        "processed_dir": str(processed),
+        "generated_data_config": module.file_record(data_path, "R97_train_validation_data"),
+        "test_opened": False,
+        "test_access_authorized": False,
+        "registry_mutation_authorized": False,
+        "article_mutation_authorized": False,
+        "joint_model_authorized": False,
+        "mcmc_authorized": False,
+    }
+    pipeline["pipeline_contract_sha256"] = module.canonical_sha256(pipeline)
+    write_json(grid / "pipeline_contract.json", pipeline)
+
+    for fold in (1, 2, 3):
+        scaler = processed / f"scalers/fold_{fold}/per_region_separate_xy_scalers.joblib"
+        scaler.parent.mkdir(parents=True, exist_ok=True)
+        scaler.write_bytes(f"scaler-{fold}".encode())
+        for region in active_regions:
+            for split in ("train", "val"):
+                window = module.window_npz_path(payload, fold, region, split)
+                window.parent.mkdir(parents=True, exist_ok=True)
+                window.write_bytes(f"{fold}-{region}-{split}".encode())
+
+    calls = []
+    monkeypatch.setattr(module, "prepare_shared_data", lambda *args, **kwargs: calls.append((args, kwargs)))
+    campaign = module.Campaign.__new__(module.Campaign)
+    campaign.preprocess_lock = threading.Lock()
+    campaign.code_root = tmp_path
+    campaign.root = tmp_path / "campaign"
+    campaign.preprocessing_terminal({"surface_grid": grid})
+
+    terminal_path = grid / "preprocessing_terminal.json"
+    terminal = json.loads(terminal_path.read_text())
+    assert len(calls) == 1
+    assert terminal["status"] == "completed"
+    assert terminal["pipeline_contract_sha256"] == pipeline["pipeline_contract_sha256"]
+    assert terminal["test_opened"] is False
+    assert len(terminal["artifacts"]) == 15
+    assert all("test" not in record["role"] for record in terminal["artifacts"])
+
+    campaign.preprocessing_terminal({"surface_grid": grid})
+    assert len(calls) == 1
+    Path(terminal["artifacts"][0]["path"]).write_bytes(b"tampered")
+    with pytest.raises(RuntimeError):
+        campaign.preprocessing_terminal({"surface_grid": grid})
 
 
 def make_campaign_contract(module, path: Path, authority: Path, data: Path, region_names: list[str]) -> dict:

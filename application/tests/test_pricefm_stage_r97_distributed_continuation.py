@@ -286,6 +286,9 @@ def test_rhs_recovery_rebinds_only_code_identity_and_preserves_science(tmp_path,
     assert result["transition_recovery"]["reason"] == "normal-selection schema recovery"
     assert result["transition_recovery"]["scientific_contract_changed"] is False
     assert result["transition_recovery"]["completed_rhs_refit_authorized"] is False
+    assert result["transition_recovery"]["completed_refinement_refit_authorized"] is False
+    assert result["transition_recovery"]["completed_normal_selection_mutation_authorized"] is False
+    assert result["transition_recovery"]["completed_surface_prep_replacement_authorized"] is False
 
 
 def test_rhs_recovery_aliases_are_relative_hash_identical_and_idempotent(tmp_path, monkeypatch) -> None:

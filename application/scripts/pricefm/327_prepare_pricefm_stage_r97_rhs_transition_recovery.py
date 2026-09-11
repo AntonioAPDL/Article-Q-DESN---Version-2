@@ -103,7 +103,10 @@ def rebind_contract(args: argparse.Namespace) -> dict[str, Any]:
         "region_ownership_changed": False,
         "completed_ridge_refit_authorized": False,
         "completed_rhs_refit_authorized": False,
+        "completed_refinement_refit_authorized": False,
         "completed_screening_refit_authorized": False,
+        "completed_normal_selection_mutation_authorized": False,
+        "completed_surface_prep_replacement_authorized": False,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     return write_sealed(output, payload, "shard_contract_sha256")

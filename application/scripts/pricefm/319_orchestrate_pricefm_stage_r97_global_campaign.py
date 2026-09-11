@@ -356,28 +356,100 @@ class Campaign:
     def preprocessing_terminal(self, paths: dict[str, Path]) -> None:
         pipeline_path = paths["surface_grid"] / "pipeline_contract.json"
         pipeline = json.loads(pipeline_path.read_text())
+        pipeline_hash = pipeline.get("pipeline_contract_sha256")
+        unhashed_pipeline = {
+            key: value for key, value in pipeline.items()
+            if key != "pipeline_contract_sha256"
+        }
+        if not isinstance(pipeline_hash, str) or canonical_sha256(unhashed_pipeline) != pipeline_hash:
+            raise RuntimeError("R97 preprocessing pipeline contract hash is invalid")
+        for name in (
+            "test_opened", "test_access_authorized", "registry_mutation_authorized",
+            "article_mutation_authorized", "joint_model_authorized", "mcmc_authorized",
+        ):
+            if pipeline.get(name) is not False:
+                raise RuntimeError(f"R97 preprocessing firewall is open: {name}")
+
         terminal_path = paths["surface_grid"] / "preprocessing_terminal.json"
-        if terminal_path.is_file():
-            return
+        verify_file_record(
+            pipeline["generated_data_config"],
+            label="R97 generated train/validation data contract",
+        )
         data_path = Path(pipeline["generated_data_config"]["path"])
+        data = yaml.safe_load(data_path.read_text())
+        if not isinstance(data, dict) or not isinstance(data.get("pricefm"), dict):
+            raise RuntimeError("R97 generated data contract lacks the top-level pricefm block")
+        spec = data["pricefm"]
+        splits = spec.get("splits")
+        if not isinstance(splits, list) or not splits:
+            raise RuntimeError("R97 generated data contract has no validation splits")
+        allowed_split_fields = {"fold", "train", "val"}
+        if any(set(item) != allowed_split_fields for item in splits):
+            raise RuntimeError("R97 generated data contract must expose train/val splits only")
+        folds = [int(value) for value in pipeline.get("fit_folds", [])]
+        if folds != [1, 2, 3] or {int(item["fold"]) for item in splits} != set(folds):
+            raise RuntimeError("R97 preprocessing folds differ from the frozen three-fold surface")
+        regions = [str(value) for value in pipeline.get("active_window_regions", [])]
+        if not regions or len(regions) != len(set(regions)):
+            raise RuntimeError("R97 preprocessing active regions are empty or duplicated")
+        if not set(regions).issubset({str(value) for value in spec.get("regions", [])}):
+            raise RuntimeError("R97 preprocessing active regions are absent from the data contract")
+        processed = Path(spec["processed_dir"])
+        if processed.resolve() != Path(pipeline["processed_dir"]).resolve():
+            raise RuntimeError("R97 preprocessing output root differs from the pipeline contract")
+
+        expected: list[tuple[Path, str]] = []
+        for fold in folds:
+            expected.append((
+                processed / f"scalers/fold_{fold}/per_region_separate_xy_scalers.joblib",
+                f"fold{fold}_scaler",
+            ))
+            for region in regions:
+                for split in ("train", "val"):
+                    expected.append((
+                        window_npz_path(data, fold, region, split),
+                        f"fold{fold}_{region}_{split}_window",
+                    ))
+
+        def verify_terminal() -> None:
+            terminal = json.loads(terminal_path.read_text())
+            if (
+                terminal.get("status") != "completed"
+                or terminal.get("pipeline_contract_sha256") != pipeline_hash
+                or terminal.get("test_opened") is not False
+            ):
+                raise RuntimeError("R97 preprocessing terminal metadata is invalid")
+            records = terminal.get("artifacts")
+            if not isinstance(records, list) or len(records) != len(expected):
+                raise RuntimeError("R97 preprocessing terminal artifact count is invalid")
+            by_role = {str(record.get("role")): record for record in records}
+            if len(by_role) != len(records) or set(by_role) != {role for _, role in expected}:
+                raise RuntimeError("R97 preprocessing terminal artifact roles are invalid")
+            for path, role in expected:
+                record = by_role[role]
+                if Path(record.get("path", "")).resolve() != path.resolve():
+                    raise RuntimeError(f"R97 preprocessing artifact path differs for {role}")
+                verify_file_record(record, label=f"R97 preprocessing {role}")
+
+        if terminal_path.is_file():
+            verify_terminal()
+            return
         with self.preprocess_lock:
             prepare_shared_data(
-                [data_path], pipeline["active_window_regions"], [1, 2, 3],
+                [data_path], regions, folds,
                 self.code_root, self.root / "validation_preprocessing" / pipeline["region"],
                 shared_base_root=self.root / "validation_preprocessing",
             )
-        data = yaml.safe_load(data_path.read_text())["pricefm"]
-        processed = Path(data["processed_dir"])
-        artifacts = []
-        for fold in (1, 2, 3):
-            artifacts.append(file_record(processed / f"scalers/fold_{fold}/per_region_separate_xy_scalers.joblib", f"fold{fold}_scaler"))
-            for region in pipeline["active_window_regions"]:
-                for split in ("train", "val"):
-                    artifacts.append(file_record(window_npz_path(data, fold, region, split), f"fold{fold}_{region}_{split}_window"))
+        verify_file_record(
+            pipeline["generated_data_config"],
+            label="R97 generated train/validation data contract after preprocessing",
+        )
+        artifacts = [file_record(path, role) for path, role in expected]
         atomic_write_json(terminal_path, {
-            "status": "completed", "pipeline_contract_sha256": pipeline["pipeline_contract_sha256"],
+            "status": "completed", "pipeline_contract_sha256": pipeline_hash,
             "artifacts": artifacts, "test_opened": False,
         })
+        verify_terminal()
 
     def region(self, region: str, cpu: int) -> dict[str, Any]:
         paths = self.paths(region)

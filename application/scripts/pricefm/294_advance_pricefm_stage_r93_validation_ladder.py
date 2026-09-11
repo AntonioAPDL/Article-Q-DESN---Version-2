@@ -55,6 +55,22 @@ WARM_PARENT_BY_TAU = {
 }
 COARSE_TAU0 = [1e-4, 1e-3, 1e-2]
 REFINEMENT_TAU0 = [5e-5, 5e-4, 2e-3]
+COARSE_CLOSEOUT_PARTIAL_FILES = {
+    "pricefm_stage_r93_rhs_coarse_cell_metrics.csv",
+    "pricefm_stage_r93_rhs_coarse_ranking.csv",
+    "pricefm_stage_r93_rhs_refinement_decision.json",
+    "pricefm_stage_r93_rhs_manifest_geometry_audit.csv",
+    "pricefm_stage_r93_rhs_refinement_grid.yaml",
+    "pricefm_stage_r93_rhs_refinement_manifest.csv",
+    "pricefm_stage_r93_outer_normal_grid.yaml",
+    "pricefm_stage_r93_frozen_normal_contract.json",
+    "source_manifest.csv",
+    "incomplete_closeout_recovery.json",
+    "configs/base/pricefm_stage_r93_rhs_refinement_data.yaml",
+    "configs/base/pricefm_stage_r93_rhs_refinement_full.yaml",
+    "configs/base/pricefm_stage_r93_outer_normal_data.yaml",
+    "configs/base/pricefm_stage_r93_outer_normal_full.yaml",
+}
 EXPECTED_R82_VERSION = "1.1.1.9004"
 EXPECTED_R82_REPAIR = (
     "scale-aware-SPD-plus-large-n-GIG-plus-failure-diagnostics-"
@@ -93,6 +109,12 @@ def parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--expected-coarse-winner-id", default="")
     p.add_argument("--expected-coarse-winner-tau0", type=float)
+    p.add_argument(
+        "--resume-incomplete-closeout",
+        type=parse_bool,
+        default=False,
+        help="Replace only a recognized summary-less coarse closeout and record its hashes.",
+    )
     p.add_argument("--force", type=parse_bool, default=False)
     p.add_argument("--allow-fixture-counts", action="store_true")
     return p
@@ -154,6 +176,48 @@ def prepare_output(path: Path, force: bool) -> Path:
         shutil.rmtree(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def prepare_coarse_closeout_output(
+    path: Path, *, force: bool, resume_incomplete: bool
+) -> tuple[Path, list[dict[str, Any]]]:
+    path = path.resolve()
+    if force or not path.exists() or not any(path.iterdir()):
+        return prepare_output(path, force), []
+    if not resume_incomplete:
+        raise FileExistsError(f"output is nonempty: {path}")
+    if (path / "summary.json").exists():
+        raise RuntimeError(f"refusing to replace a completed coarse closeout: {path}")
+
+    prior_files = [item for item in path.rglob("*") if item.is_file() or item.is_symlink()]
+    symlinks = [item for item in prior_files if item.is_symlink()]
+    if symlinks:
+        raise RuntimeError(f"incomplete coarse closeout contains symlinks: {symlinks[0]}")
+    relative = {item.relative_to(path).as_posix() for item in prior_files}
+    unexpected = sorted(relative - COARSE_CLOSEOUT_PARTIAL_FILES)
+    if unexpected:
+        raise RuntimeError(
+            "incomplete coarse closeout contains unexpected files: "
+            + ", ".join(unexpected)
+        )
+    recovery = [
+        {
+            "relative_path": item.relative_to(path).as_posix(),
+            "bytes": item.stat().st_size,
+            "sha256": sha256_file(item),
+            "role": "replaced_incomplete_coarse_closeout_output",
+        }
+        for item in sorted(prior_files)
+    ]
+    shutil.rmtree(path)
+    path.mkdir(parents=True)
+    write_json(path / "incomplete_closeout_recovery.json", {
+        "status": "recognized_incomplete_closeout_replaced",
+        "prior_file_count": len(recovery),
+        "prior_files": recovery,
+        "test_opened": False,
+    })
+    return path, recovery
 
 
 def tau_token(value: float) -> str:
@@ -379,7 +443,64 @@ def apply_coarse_winner_acceptance(
 
 def experiment_map(grid_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     grid = grid_payload[GRID_BLOCK]
-    return {str(item["id"]): item for item in grid["experiments"]}
+    experiments = grid["experiments"]
+    result = {str(item["id"]): item for item in experiments}
+    if len(result) != len(experiments):
+        raise RuntimeError("source grid contains duplicate experiment IDs")
+    return result
+
+
+def positive_integer(value: Any, *, label: str) -> int:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"{label} is not numeric") from exc
+    if not math.isfinite(numeric) or numeric <= 0 or not numeric.is_integer():
+        raise RuntimeError(f"{label} must be a positive integer")
+    return int(numeric)
+
+
+def hydrate_coarse_arm_geometry(
+    arms: pd.DataFrame, coarse_grid: dict[str, Any]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if "experiment_id" not in arms or arms.experiment_id.astype(str).duplicated().any():
+        raise RuntimeError("coarse RHS manifest experiment IDs are missing or duplicated")
+    experiments = experiment_map(coarse_grid)
+    manifest_ids = arms.experiment_id.astype(str).tolist()
+    if set(manifest_ids) != set(experiments):
+        raise RuntimeError("coarse RHS manifest and source-grid experiment IDs differ")
+
+    hydrated = arms.copy()
+    has_manifest_field = "feature_dim" in hydrated
+    values = []
+    audit = []
+    for row_index, experiment_id in enumerate(manifest_ids):
+        source_value = positive_integer(
+            experiments[experiment_id].get("feature_dim"),
+            label=f"source-grid feature_dim for {experiment_id}",
+        )
+        manifest_value = None
+        if has_manifest_field and not pd.isna(hydrated.iloc[row_index]["feature_dim"]):
+            manifest_value = positive_integer(
+                hydrated.iloc[row_index]["feature_dim"],
+                label=f"manifest feature_dim for {experiment_id}",
+            )
+            if manifest_value != source_value:
+                raise RuntimeError(
+                    f"feature_dim mismatch for {experiment_id}: "
+                    f"manifest={manifest_value}, source_grid={source_value}"
+                )
+        values.append(source_value)
+        audit.append({
+            "experiment_id": experiment_id,
+            "field": "feature_dim",
+            "manifest_value": manifest_value,
+            "source_grid_value": source_value,
+            "resolution": "verified" if manifest_value is not None else "recovered_from_source_grid",
+            "passed": True,
+        })
+    hydrated["feature_dim"] = values
+    return hydrated, pd.DataFrame(audit)
 
 
 def copy_base_configs(
@@ -398,6 +519,16 @@ def build_refinement_grid(
     generated_root: Path, run_root: Path,
 ) -> tuple[Path, Path, pd.DataFrame]:
     source = experiment_map(coarse_grid)[str(winner.experiment_id)]
+    source_feature_dim = positive_integer(
+        source.get("feature_dim"),
+        label=f"source-grid feature_dim for {winner.experiment_id}",
+    )
+    winner_feature_dim = positive_integer(
+        winner.get("feature_dim"),
+        label=f"selected feature_dim for {winner.experiment_id}",
+    )
+    if winner_feature_dim != source_feature_dim:
+        raise RuntimeError(f"selected/source-grid feature_dim mismatch for {winner.experiment_id}")
     data_path, full_path, data, full = copy_base_configs(
         coarse_grid, output, "pricefm_stage_r93_rhs_refinement"
     )
@@ -432,7 +563,7 @@ def build_refinement_grid(
             "lag_window": int(winner.lag_window),
             "depth": int(winner.depth),
             "units": winner.units,
-            "feature_dim": int(winner.feature_dim),
+            "feature_dim": source_feature_dim,
             "alpha": float(winner.alpha),
             "rho": float(winner.rho),
             "input_scale": float(winner.input_scale),
@@ -733,7 +864,11 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         args.expected_coarse_arms != 90 or parse_ints(args.inner_folds) != [101, 102, 103]
     ):
         raise RuntimeError("production R93 requires 90 coarse arms on inner folds 101-103")
-    stage = prepare_output(args.output_root / "rhs_coarse_closeout", bool(args.force))
+    stage, incomplete_recovery = prepare_coarse_closeout_output(
+        args.output_root / "rhs_coarse_closeout",
+        force=bool(args.force),
+        resume_incomplete=bool(args.resume_incomplete_closeout),
+    )
     arms_path = args.rhs_prep_dir / "pricefm_stage_r93_rhs_coarse_launch_manifest.csv"
     grid_path = args.rhs_prep_dir / "pricefm_stage_r93_rhs_grid.yaml"
     arms = pd.read_csv(arms_path)
@@ -741,6 +876,8 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError(f"expected {args.expected_coarse_arms} coarse RHS arms, found {len(arms)}")
     if arms.test_access_authorized.map(boolish).any():
         raise RuntimeError("coarse RHS manifest authorizes test access")
+    coarse_grid = load_yaml(grid_path)
+    arms, geometry_audit = hydrate_coarse_arm_geometry(arms, coarse_grid)
     folds = parse_ints(args.inner_folds)
     cells, sources = collect_normal_results(arms, args.rhs_generated_root, folds, args.target_region)
     ranked = rank_normal_arms(arms, cells)
@@ -761,7 +898,7 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
     final_contract = None
     if decision["refinement_required"]:
         next_grid, next_manifest, _ = build_refinement_grid(
-            load_yaml(grid_path), winner, stage,
+            coarse_grid, winner, stage,
             args.refinement_generated_root, args.refinement_run_root,
         )
         next_action = "launch_refinement"
@@ -786,6 +923,7 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         next_manifest = contract_path
         next_action = "launch_outer_normal_confirmation"
     fixed_sources = [source_row(arms_path, "coarse_rhs_arm_manifest"), source_row(grid_path, "coarse_rhs_grid")]
+    write_csv(stage / "pricefm_stage_r93_rhs_manifest_geometry_audit.csv", geometry_audit)
     write_csv(stage / "source_manifest.csv", pd.DataFrame(fixed_sources + sources).drop_duplicates("path"))
     summary = {
         "stage": "pricefm_stage_r93_rhs_coarse_closeout",
@@ -795,6 +933,17 @@ def action_close_rhs(args: argparse.Namespace) -> dict[str, Any]:
         "winner": str(winner.experiment_id),
         "winner_tau0": float(winner.tau0),
         "winner_median_validation_AQL": float(winner.median_validation_AQL),
+        "manifest_geometry": {
+            "field": "feature_dim",
+            "recovered_from_source_grid": int(
+                geometry_audit.resolution.eq("recovered_from_source_grid").sum()
+            ),
+            "verified_against_source_grid": int(
+                geometry_audit.resolution.eq("verified").sum()
+            ),
+            "source_grid_sha256": sha256_file(grid_path),
+        },
+        "incomplete_closeout_recovered": bool(incomplete_recovery),
         "refinement": decision,
         "coarse_winner_acceptance_without_refinement": bool(
             args.accept_coarse_winner_without_refinement

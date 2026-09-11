@@ -9,6 +9,7 @@ import sys
 
 import pandas as pd
 import pytest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -116,6 +117,98 @@ def test_exact_coarse_winner_can_be_accepted_without_changing_selection():
             expected_winner_id="different",
             expected_winner_tau0=0.01,
         )
+
+
+def coarse_grid(experiment_ids, feature_dims):
+    return {
+        "pricefm_desn_experiment_grid": {
+            "experiments": [
+                {"id": experiment_id, "feature_dim": feature_dim}
+                for experiment_id, feature_dim in zip(experiment_ids, feature_dims)
+            ]
+        }
+    }
+
+
+def test_legacy_coarse_manifest_recovers_feature_dim_from_matching_grid():
+    module = load_script()
+    arms = pd.DataFrame({"experiment_id": ["a", "b"], "tau0": [1e-4, 1e-3]})
+
+    hydrated, audit = module.hydrate_coarse_arm_geometry(
+        arms, coarse_grid(["a", "b"], [48, 96])
+    )
+
+    assert hydrated.feature_dim.tolist() == [48, 96]
+    assert set(audit.resolution) == {"recovered_from_source_grid"}
+    assert audit.passed.map(bool).all()
+
+
+def test_coarse_manifest_geometry_mismatch_and_id_drift_fail_closed():
+    module = load_script()
+    arms = pd.DataFrame({"experiment_id": ["a"], "feature_dim": [64]})
+    with pytest.raises(RuntimeError, match="feature_dim mismatch"):
+        module.hydrate_coarse_arm_geometry(arms, coarse_grid(["a"], [48]))
+    with pytest.raises(RuntimeError, match="experiment IDs differ"):
+        module.hydrate_coarse_arm_geometry(
+            pd.DataFrame({"experiment_id": ["b"]}), coarse_grid(["a"], [48])
+        )
+
+
+def test_incomplete_coarse_closeout_resume_is_explicit_hashed_and_bounded(tmp_path):
+    module = load_script()
+    output = tmp_path / "rhs_coarse_closeout"
+    output.mkdir()
+    partial = output / "pricefm_stage_r93_rhs_coarse_ranking.csv"
+    partial.write_text("experiment_id\na\n")
+
+    with pytest.raises(FileExistsError, match="output is nonempty"):
+        module.prepare_coarse_closeout_output(
+            output, force=False, resume_incomplete=False
+        )
+    stage, recovery = module.prepare_coarse_closeout_output(
+        output, force=False, resume_incomplete=True
+    )
+    assert stage == output.resolve()
+    assert len(recovery) == 1
+    assert recovery[0]["relative_path"] == partial.name
+    assert len(recovery[0]["sha256"]) == 64
+    recovery_path = output / "incomplete_closeout_recovery.json"
+    assert json.loads(recovery_path.read_text())["prior_files"] == recovery
+
+    recovery_path.unlink()
+    unexpected = output / "unexpected.txt"
+    unexpected.write_text("do not replace")
+    with pytest.raises(RuntimeError, match="unexpected files"):
+        module.prepare_coarse_closeout_output(
+            output, force=False, resume_incomplete=True
+        )
+    assert unexpected.read_text() == "do not replace"
+
+
+def test_refinement_grid_preserves_verified_feature_dim(tmp_path):
+    module = load_script()
+    data = tmp_path / "data.yaml"
+    full = tmp_path / "full.yaml"
+    data.write_text(yaml.safe_dump({"pricefm": {}}))
+    full.write_text(yaml.safe_dump({"pricefm_desn_full": {"data_config": str(data)}}))
+    payload = coarse_grid(["winner"], [48])
+    payload["pricefm_desn_experiment_grid"].update({
+        "base": {"data_config": str(data), "full_config": str(full)},
+        "experiments": [{"id": "winner", "feature_dim": 48, "tau0": 0.01}],
+    })
+    winner = pd.Series({
+        "experiment_id": "winner", "parent_ridge_candidate_id": "ridge",
+        "ridge_rank": 1, "region": "AT", "feature_policy": "target_only",
+        "lag_window": 48, "depth": 1, "units": "[48]", "feature_dim": 48,
+        "alpha": 0.2, "rho": 0.9, "input_scale": 0.2,
+        "state_output": "final_layer", "seed": 1,
+    })
+
+    _, _, manifest = module.build_refinement_grid(
+        payload, winner, tmp_path / "output", tmp_path / "generated", tmp_path / "runs"
+    )
+
+    assert manifest.feature_dim.tolist() == [48, 48, 48]
 
 
 def make_quantile_closeout(tmp_path: Path, *, exal_eligible=True, add_test=False):

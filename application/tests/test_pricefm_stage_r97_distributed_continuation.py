@@ -181,6 +181,7 @@ def test_host_controller_cannot_open_global_scoring() -> None:
     assert "PREP_SCORING" not in source
     assert "SCORE_CASE" not in source
     assert "global_test_scoring_invoked\": False" in source
+    assert '"--resume-incomplete-closeout"' in source
 
 
 def test_host_contract_rejects_preview_mode(tmp_path: Path) -> None:

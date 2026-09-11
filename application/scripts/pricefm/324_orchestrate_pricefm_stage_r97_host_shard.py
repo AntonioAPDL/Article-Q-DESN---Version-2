@@ -278,7 +278,14 @@ class HostShard:
             coarse_summary = paths["ladder"] / "rhs_coarse_closeout/summary.json"
             if not coarse_summary.is_file():
                 ORIGINAL.command(
-                    [ORIGINAL.PYTHON, ORIGINAL.ADVANCE_RHS, "close-rhs", *self.campaign.advance_args(region, paths)],
+                    [
+                        ORIGINAL.PYTHON,
+                        ORIGINAL.ADVANCE_RHS,
+                        "close-rhs",
+                        *self.campaign.advance_args(region, paths),
+                        "--resume-incomplete-closeout",
+                        "true",
+                    ],
                     cwd=self.args.code_root.resolve(), log=paths["root"] / "logs/close_rhs.log",
                 )
             coarse = json.loads(coarse_summary.read_text())

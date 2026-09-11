@@ -324,6 +324,7 @@ def make_rhs_grid(
                 "lag_window": int(selected_row.lag_window),
                 "depth": int(selected_row.depth),
                 "units": selected_row.units,
+                "feature_dim": int(selected_row.feature_dim),
                 "alpha": float(selected_row.alpha),
                 "rho": float(selected_row.rho),
                 "input_scale": float(selected_row.input_scale),

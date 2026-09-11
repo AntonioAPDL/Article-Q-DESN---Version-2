@@ -152,6 +152,7 @@ def test_ridge_closeout_selects_validation_top_k_and_prepares_rhs(tmp_path):
     rhs = pd.read_csv(args.output_dir / "pricefm_stage_r93_rhs_coarse_launch_manifest.csv")
     assert set(rhs.parent_ridge_candidate_id) == {"candidate_04", "candidate_05"}
     assert set(rhs.tau0.round(7)) == {0.0001, 0.001, 0.01}
+    assert set(rhs.feature_dim) == {32, 40}
     assert not rhs.launch_authorized.map(bool).any()
 
     grid = yaml.safe_load(

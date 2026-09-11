@@ -181,7 +181,10 @@ def main():
         if failed:
             raise SystemExit("Part 4 failed jobs require audit: " + ", ".join(sorted(failed)))
         if len(completed) == len(rows):
-            print("Part 4 DAG complete: 18/18, failed=0", flush=True)
+            print(
+                f"Part 4 DAG complete: {len(completed)}/{len(rows)}, failed=0",
+                flush=True,
+            )
             return 0
         capacity = args.workers - len(active)
         launched = 0

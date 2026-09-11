@@ -84,6 +84,36 @@ class Part4SchedulerContractTest(unittest.TestCase):
         self.assertTrue(all(len(name) <= 96 for name in names))
         self.assertEqual(names, [part4_launcher.session_name(prefix, job_id) for job_id in job_ids])
 
+    def test_completion_summary_uses_manifest_job_count(self):
+        fields = ["run_id", "dependencies"]
+        with (self.runtime / "configs/part4_model_manifest.csv").open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            for index in range(2):
+                run_id = "job_%02d" % index
+                writer.writerow({"run_id": run_id, "dependencies": ""})
+                (self.runtime / "status" / f"{run_id}.completed").write_text("complete\n")
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(LAUNCHER),
+                "--runtime-root",
+                str(self.runtime),
+                "--expected-jobs",
+                "2",
+                "--blas-library",
+                "none",
+                "--execute",
+                "--approval-token",
+                part4_launcher.APPROVAL_TOKEN,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            check=True,
+        )
+        self.assertIn("Part 4 DAG complete: 2/2, failed=0", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

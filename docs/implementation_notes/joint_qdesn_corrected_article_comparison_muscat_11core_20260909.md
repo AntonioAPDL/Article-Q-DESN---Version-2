@@ -139,3 +139,33 @@ It verifies every retained draw file, manifest, expected draw count, current
 posterior-target hash, compatible execution commit and ancestry, and bounded
 repair status. Its output is an ignored, hash-manifested runtime packet; a
 failed row requires rerunning that worker rather than overriding the gate.
+
+## Complete Gaussian precision-system recovery
+
+The resumed queue reached 28 verified completed workers before worker 0021,
+Joint QDESN AL-RHS for `gaussian_mixture_bridge` chain 1, exposed a second
+numerical entry point. This worker failed in `Matrix::solve(K_beta, rhs)` while
+forming the Gaussian conditional mean, before the protected precision draw was
+called. Its initial 203-dimensional precision matrix was finite, positive
+definite, and well conditioned; all four sibling chains completed. This again
+rules out a DESN, `tau0`, initializer, or frozen-target change as the correct
+first response.
+
+The bounded safeguard now treats the conditional mean solve and precision draw
+as one numerical operation. It first executes the historical solve and draw
+unchanged. If either operation fails for a recognized singularity or
+factorization reason, it applies the same scale-aware diagonal jitter to the
+precision, recomputes the mean, and draws under that repaired precision. The
+relative schedule remains `1e-12` through `1e-8`, above which the worker fails
+closed. Telemetry distinguishes `mean_solve` from `draw_factorization`.
+
+Regression tests prove that the healthy direct path is draw-for-draw identical
+and that the prior draw-factorization repair path retains its fixed-seed draw.
+The implementation is shared by Joint AL and exact-M0 exAL MCMC; independent
+fits inherit it through their one-quantile components. No PriceFM file or
+compact-design implementation is modified.
+
+Production may resume only after worker 0021 passes a full-budget sentinel with
+750 finite retained draws, a verified target hash and artifact manifest, and no
+repair above `1e-8`. The other 28 completed workers remain eligible for
+retention only through the explicit resume-compatibility audit.

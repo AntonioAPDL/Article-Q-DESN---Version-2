@@ -283,15 +283,20 @@ app_joint_qvp_build_working_response <- function(
   )
 }
 
-app_joint_qvp_beta_gaussian_update <- function(Z_stack, y_star, weights, P_beta) {
+app_joint_qvp_beta_gaussian_system <- function(Z_stack, y_star, weights, P_beta) {
   app_require_namespace("Matrix")
   weights <- as.numeric(weights)
   if (any(!is.finite(weights)) || any(weights <= 0)) stop("weights must be positive.", call. = FALSE)
   W <- Matrix::Diagonal(x = weights)
   K_beta <- Matrix::forceSymmetric(Matrix::t(Z_stack) %*% W %*% Z_stack + P_beta)
   rhs <- as.numeric(Matrix::t(Z_stack) %*% (weights * as.numeric(y_star)))
-  mean <- as.numeric(Matrix::solve(K_beta, rhs))
-  list(precision = K_beta, mean = mean)
+  list(precision = K_beta, rhs = rhs)
+}
+
+app_joint_qvp_beta_gaussian_update <- function(Z_stack, y_star, weights, P_beta) {
+  system <- app_joint_qvp_beta_gaussian_system(Z_stack, y_star, weights, P_beta)
+  mean <- as.numeric(Matrix::solve(system$precision, system$rhs))
+  list(precision = system$precision, rhs = system$rhs, mean = mean)
 }
 
 app_joint_qvp_precision_draw <- function(
@@ -396,6 +401,166 @@ app_joint_qvp_precision_draw <- function(
   stop(sprintf(
     "Precision draw Cholesky failed after scale-aware repair through relative jitter %.3e: %s",
     repair_max_rel, last_error
+  ), call. = FALSE)
+}
+
+app_joint_qvp_beta_gaussian_draw <- function(
+  Z_stack,
+  y_star,
+  weights,
+  P_beta,
+  max_dense_dim = 250L,
+  force_sparse = FALSE,
+  repair = FALSE,
+  repair_start_rel = 1.0e-12,
+  repair_max_rel = 1.0e-8,
+  repair_growth = 10,
+  diagnostic_env = NULL
+) {
+  app_require_namespace("Matrix")
+  repair <- isTRUE(repair)
+  direct_env <- new.env(parent = emptyenv())
+  update_result <- tryCatch(
+    list(value = app_joint_qvp_beta_gaussian_update(
+      Z_stack, y_star, weights, P_beta
+    )),
+    error = function(e) list(error = e)
+  )
+  if (is.null(update_result$error)) {
+    update <- update_result$value
+    draw_result <- tryCatch(
+      list(value = app_joint_qvp_precision_draw(
+        update$mean, update$precision,
+        max_dense_dim = max_dense_dim,
+        force_sparse = force_sparse,
+        repair = FALSE,
+        diagnostic_env = direct_env
+      )),
+      error = function(e) list(error = e)
+    )
+    if (is.null(draw_result$error)) {
+      diagnostic <- direct_env$last_precision_draw
+      diagnostic$failure_stage <- "none"
+      if (is.environment(diagnostic_env)) {
+        diagnostic_env$last_precision_draw <- diagnostic
+      }
+      return(list(
+        beta = draw_result$value,
+        mean = update$mean,
+        precision = update$precision,
+        rhs = update$rhs
+      ))
+    }
+    failure_stage <- "draw_factorization"
+    initial_error <- draw_result$error
+    system <- list(precision = update$precision, rhs = update$rhs)
+  } else {
+    failure_stage <- "mean_solve"
+    initial_error <- update_result$error
+    repairable <- grepl(
+      paste(
+        "computationally singular", "exactly singular", "leading principal",
+        "positive definite", "cholesky", "chol\\(", "factorization",
+        sep = "|"
+      ),
+      tolower(conditionMessage(initial_error))
+    )
+    if (!repair || !repairable) {
+      stop(conditionMessage(initial_error), call. = FALSE)
+    }
+    system <- app_joint_qvp_beta_gaussian_system(
+      Z_stack, y_star, weights, P_beta
+    )
+  }
+  if (!repair) {
+    stop(conditionMessage(initial_error), call. = FALSE)
+  }
+
+  repair_start_rel <- as.numeric(repair_start_rel)[[1L]]
+  repair_max_rel <- as.numeric(repair_max_rel)[[1L]]
+  repair_growth <- as.numeric(repair_growth)[[1L]]
+  if (!is.finite(repair_start_rel) || repair_start_rel <= 0 ||
+      !is.finite(repair_max_rel) || repair_max_rel < repair_start_rel ||
+      !is.finite(repair_growth) || repair_growth <= 1) {
+    stop("Invalid Gaussian precision-system repair controls.", call. = FALSE)
+  }
+  precision <- Matrix::forceSymmetric(system$precision)
+  rhs <- as.numeric(system$rhs)
+  d <- length(rhs)
+  if (is.null(dim(precision)) || !identical(as.integer(dim(precision)), c(d, d))) {
+    stop("Gaussian precision-system matrix dimension does not match rhs length.",
+      call. = FALSE)
+  }
+  if (any(!is.finite(as.numeric(precision))) || any(!is.finite(rhs))) {
+    stop("Gaussian precision system contains nonfinite values.", call. = FALSE)
+  }
+  backend <- if (d <= max_dense_dim && !isTRUE(force_sparse)) "dense" else "sparse"
+  diag_values <- as.numeric(Matrix::diag(precision))
+  scale <- max(c(1, abs(diag_values[is.finite(diag_values)])), na.rm = TRUE)
+  record <- function(status, attempt, jitter_rel, jitter_abs, error_message) {
+    if (is.environment(diagnostic_env)) {
+      diagnostic_env$last_precision_draw <- data.frame(
+        status = status,
+        backend = backend,
+        dimension = d,
+        attempt = as.integer(attempt),
+        jitter_relative = as.numeric(jitter_rel),
+        jitter_absolute = as.numeric(jitter_abs),
+        diagonal_scale = as.numeric(scale),
+        error_message = as.character(error_message),
+        failure_stage = failure_stage,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
+  initial_error_message <- conditionMessage(initial_error)
+  last_error_message <- initial_error_message
+  rel <- repair_start_rel
+  attempt <- 1L
+  while (rel <= repair_max_rel * (1 + 1.0e-12)) {
+    jitter_abs <- rel * scale
+    precision_try <- Matrix::forceSymmetric(precision + Matrix::Diagonal(
+      n = d, x = rep(jitter_abs, d)
+    ))
+    mean_result <- tryCatch(
+      list(value = as.numeric(Matrix::solve(precision_try, rhs))),
+      error = function(e) list(error = e)
+    )
+    if (is.null(mean_result$error)) {
+      repaired_draw <- tryCatch(
+        list(value = app_joint_qvp_precision_draw(
+          mean_result$value, precision_try,
+          max_dense_dim = max_dense_dim,
+          force_sparse = force_sparse,
+          repair = FALSE
+        )),
+        error = function(e) list(error = e)
+      )
+      if (is.null(repaired_draw$error)) {
+        record("repaired", attempt, rel, jitter_abs, initial_error_message)
+        return(list(
+          beta = repaired_draw$value,
+          mean = mean_result$value,
+          precision = precision_try,
+          rhs = rhs
+        ))
+      }
+      last_error_message <- conditionMessage(repaired_draw$error)
+    } else {
+      last_error_message <- conditionMessage(mean_result$error)
+    }
+    rel <- rel * repair_growth
+    attempt <- attempt + 1L
+  }
+  record("failed", attempt - 1L, repair_max_rel, repair_max_rel * scale,
+    last_error_message)
+  stop(sprintf(
+    paste0(
+      "Gaussian precision-system %s failed after scale-aware repair ",
+      "through relative jitter %.3e: %s"
+    ),
+    failure_stage, repair_max_rel, last_error_message
   ), call. = FALSE)
 }
 
@@ -12700,15 +12865,16 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
       kappa = kappa,
       likelihood = "al"
     )
-    beta_update <- app_joint_qvp_beta_gaussian_update(work$Z_stack, work$y_star, work$weights, prior$P_beta)
-    beta <- app_joint_qvp_precision_draw(
-      beta_update$mean, beta_update$precision, max_dense_dim = max_dense_dim,
+    beta_update <- app_joint_qvp_beta_gaussian_draw(
+      work$Z_stack, work$y_star, work$weights, prior$P_beta,
+      max_dense_dim = max_dense_dim,
       repair = precision_repair,
       repair_start_rel = precision_repair_start_rel,
       repair_max_rel = precision_repair_max_rel,
       repair_growth = precision_repair_growth,
       diagnostic_env = precision_diag_env
     )
+    beta <- beta_update$beta
     precision_diag <- precision_diag_env$last_precision_draw
     if (is.data.frame(precision_diag) && nrow(precision_diag) &&
         identical(precision_diag$status[[1L]], "repaired")) {
@@ -12795,7 +12961,8 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
         status = character(), backend = character(), dimension = integer(),
         attempt = integer(), jitter_relative = numeric(),
         jitter_absolute = numeric(), diagonal_scale = numeric(),
-        error_message = character(), iteration = integer(),
+        error_message = character(), failure_stage = character(),
+        iteration = integer(),
         min_weight = numeric(), max_weight = numeric(),
         min_sigma = numeric(), max_sigma = numeric(),
         min_gamma = numeric(), max_gamma = numeric(),
@@ -15950,15 +16117,16 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
       gamma = gamma,
       s = s
     )
-    beta_update <- app_joint_qvp_beta_gaussian_update(work$Z_stack, work$y_star, work$weights, prior$P_beta)
-    beta <- app_joint_qvp_precision_draw(
-      beta_update$mean, beta_update$precision, max_dense_dim = max_dense_dim,
+    beta_update <- app_joint_qvp_beta_gaussian_draw(
+      work$Z_stack, work$y_star, work$weights, prior$P_beta,
+      max_dense_dim = max_dense_dim,
       repair = precision_repair,
       repair_start_rel = precision_repair_start_rel,
       repair_max_rel = precision_repair_max_rel,
       repair_growth = precision_repair_growth,
       diagnostic_env = precision_diag_env
     )
+    beta <- beta_update$beta
     precision_diag <- precision_diag_env$last_precision_draw
     if (is.data.frame(precision_diag) && nrow(precision_diag) &&
         identical(precision_diag$status[[1L]], "repaired")) {
@@ -16242,7 +16410,8 @@ app_joint_qvp_fit_exal_mcmc_tiny <- function(
         status = character(), backend = character(), dimension = integer(),
         attempt = integer(), jitter_relative = numeric(),
         jitter_absolute = numeric(), diagonal_scale = numeric(),
-        error_message = character(), iteration = integer(),
+        error_message = character(), failure_stage = character(),
+        iteration = integer(),
         min_weight = numeric(), max_weight = numeric(),
         min_sigma = numeric(), max_sigma = numeric(),
         min_gamma = numeric(), max_gamma = numeric(),

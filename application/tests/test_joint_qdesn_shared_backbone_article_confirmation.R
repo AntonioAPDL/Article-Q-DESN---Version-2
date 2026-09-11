@@ -318,7 +318,7 @@ stopifnot(
   failure_audit$assessment$failed_al_workers[[1L]] == 0L,
   failure_audit$assessment$failed_exal_workers[[1L]] == 1L,
   failure_audit$assessment$precision_repair_recommendation[[1L]] ==
-    "enable_strict_scale_aware_precision_draw_repair_for_affected_likelihood_paths",
+    "enable_strict_scale_aware_gaussian_precision_system_repair_for_affected_likelihood_paths",
   failure_audit$assessment$start_preflight_failures[[1L]] == 0L,
   isTRUE(failure_audit$assessment$initial_precision_all_pass[[1L]]),
   all(failure_audit$manifest_verification$verified)
@@ -327,12 +327,14 @@ stopifnot(identical(
   app_joint_article_classify_mcmc_failure(c(
     "Host preflight failed host/profile",
     "leading principal minor is not positive",
+    "'a' is computationally singular, min(d)/max(d)=1.9e-18",
     "posterior draw frame contains nonfinite values",
     "artifact manifest hash mismatch",
     "unknown worker error"
   )),
   c(
     "infrastructure_host_preflight",
+    "numerical_precision_factorization",
     "numerical_precision_factorization",
     "nonfinite_model_output",
     "manifest_or_provenance",
@@ -350,7 +352,8 @@ stopifnot(
 empty_precision <- data.frame(
   status = character(), backend = character(), dimension = integer(),
   attempt = integer(), jitter_relative = numeric(), jitter_absolute = numeric(),
-  diagonal_scale = numeric(), error_message = character(), iteration = integer(),
+  diagonal_scale = numeric(), error_message = character(),
+  failure_stage = character(), iteration = integer(),
   min_weight = numeric(), max_weight = numeric(), min_sigma = numeric(),
   max_sigma = numeric(), min_gamma = numeric(), max_gamma = numeric(),
   stringsAsFactors = FALSE
@@ -358,7 +361,8 @@ empty_precision <- data.frame(
 repaired_precision <- data.frame(
   status = "repaired", backend = "sparse", dimension = 2L, attempt = 1L,
   jitter_relative = 1.0e-12, jitter_absolute = 1.0e-6,
-  diagonal_scale = 1.0e6, error_message = "test", iteration = 4L,
+  diagonal_scale = 1.0e6, error_message = "test",
+  failure_stage = "draw_factorization", iteration = 4L,
   min_weight = 1, max_weight = 2, min_sigma = 0.5, max_sigma = 1,
   min_gamma = NA_real_, max_gamma = NA_real_, stringsAsFactors = FALSE
 )

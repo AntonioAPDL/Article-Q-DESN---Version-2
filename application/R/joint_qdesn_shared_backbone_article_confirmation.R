@@ -2069,7 +2069,11 @@ app_joint_article_classify_mcmc_failure <- function(error_message) {
         message)) {
       "infrastructure_host_preflight"
     } else if (grepl(
-        "leading principal|positive definite|cholesky|chol\\(|precision|factorization",
+        paste(
+          "computationally singular", "exactly singular", "min\\(d\\)/max\\(d\\)",
+          "leading principal", "positive definite", "cholesky", "chol\\(",
+          "precision", "factorization", sep = "|"
+        ),
         message)) {
       "numerical_precision_factorization"
     } else if (grepl("nonfinite|non-finite|nan|infinite|\\binf\\b", message)) {
@@ -2585,7 +2589,7 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     initial_precision_failures = sum(initial_precision$status != "pass"),
     initial_precision_all_pass = all(initial_precision$status == "pass"),
     precision_repair_recommendation = if (precision_failure_count > 0L) {
-      "enable_strict_scale_aware_precision_draw_repair_for_affected_likelihood_paths"
+      "enable_strict_scale_aware_gaussian_precision_system_repair_for_affected_likelihood_paths"
     } else {
       "not_indicated_by_observed_failures"
     },
@@ -2915,7 +2919,8 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id,
     status = character(), backend = character(), dimension = integer(),
     attempt = integer(), jitter_relative = numeric(),
     jitter_absolute = numeric(), diagonal_scale = numeric(),
-    error_message = character(), iteration = integer(),
+    error_message = character(), failure_stage = character(),
+    iteration = integer(),
     min_weight = numeric(), max_weight = numeric(),
     min_sigma = numeric(), max_sigma = numeric(),
     min_gamma = numeric(), max_gamma = numeric(),

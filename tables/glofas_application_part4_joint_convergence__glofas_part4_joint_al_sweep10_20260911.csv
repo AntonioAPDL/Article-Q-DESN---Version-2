@@ -1,0 +1,3 @@
+"family","converged","outer_converged","inner_converged","rhs_converged","outer_iterations","continuation_count","stopping_reason","cumulative_runtime_seconds","numerical_status","selection_eligible","final_parameter_change","outer_tolerance"
+"Joint AL",FALSE,FALSE,TRUE,TRUE,10,1,"max_outer_iterations_outer_tolerance_not_met",334809.870613575,"cap_stabilized_after_rhs_release",TRUE,0.00415386593413292,0.001
+"Joint exAL",FALSE,TRUE,FALSE,FALSE,4,0,"source_fit_not_qualified_inner_and_rhs_optional_continuation_operator_stopped",57129.2964503765,"source_fit_not_qualified",FALSE,0.000865520727200288,0.001

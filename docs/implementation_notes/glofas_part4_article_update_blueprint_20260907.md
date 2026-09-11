@@ -2,6 +2,30 @@
 
 Date: 2026-09-07
 
+Final closeout revision: 2026-09-11
+
+## Final Closeout Status
+
+The expensive scientific campaign is frozen. The original Part 4 DAG is
+`18/18` complete with no failures, and the selected Joint AL continuation
+completed ten total outer sweeps. It did **not** satisfy the strict outer
+tolerance: its final maximum parameter change is `0.004153866`, versus the
+predeclared `0.001` threshold. All inner quantile fits converged, however, and
+all 14 reference/discrepancy RHS blocks passed the release audit, completed
+five global-scale updates, and changed numerically after release.
+
+The publication candidate is therefore classified as
+`cap_stabilized_after_rhs_release`, never as strictly converged. This
+classification is selection-eligible only under the explicit certificate in
+`application/R/glofas_part4_publication_contract.R`. The article and
+supplement must report the iteration cap and failed strict outer tolerance.
+The source Joint exAL fit remains a nonconverged sensitivity result; its
+optional continuation was operator-stopped and is not required for selection.
+
+No additional Part 4 fit, sweep, forecast, or screening launch is required for
+this closeout. The remaining work is deterministic packaging, verification,
+integration, manuscript compilation, and publication.
+
 ## Purpose
 
 This document defines the article-only integration step for the completed
@@ -17,8 +41,8 @@ and the 51 issued GloFAS members contribute weighted likelihood rows.
 
 ## Authority Decision
 
-The intended publication authority is the converged Joint AL/RHS VB Part 4
-fit on the seven-level grid
+The intended publication authority is the cap-stabilized Joint AL/RHS VB
+Part 4 fit at outer sweep 10 on the seven-level grid
 
 ```text
 0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95
@@ -121,15 +145,23 @@ fit:
   fractional marginal AL posterior;
 - describe joint quantiles as mean-field quantile-block coordinate updates
   linked by adjacent-quantile RHS priors;
-- report the exact outer-plus-inner convergence requirement and continuation
-  qualification. The inherited 50-iteration RHS global-scale warmup is
+- report the exact outer-plus-inner convergence rule and its observed outcome.
+  The inherited 50-iteration RHS global-scale warmup is
   converted to five joint outer sweeps because every outer sweep runs at
   least 10 inner coefficient iterations. The retained original joint fits
   completed those five warmup sweeps with zero global-scale updates. The
-  closeout continuation therefore preserves their fitted states. Joint AL
-  releases the global scale at outer sweep 6. Joint exAL first completes its
-  fifth warmup sweep, then releases at sweep 6. Neither fit can converge until
-  at least one later sweep updates the coefficients under the released scale;
+  closeout continuation therefore preserves its fitted state. Joint AL
+  releases the global scale at outer sweep 6 and cannot be selection-eligible
+  until at least one later sweep updates the coefficients under the released
+  scale. Five post-release updates were completed. The strict outer tolerance
+  was still not met at sweep 10, so the fit is a finite-cap estimate rather
+  than a strictly converged optimum. The publication certificate must verify
+  a nonzero coefficient change
+  in every reference and discrepancy RHS block relative to the immutable
+  pre-release source fit. The optional Joint exAL continuation was
+  operator-stopped because it was materially slower and is not required for
+  the selected result. The completed source Joint exAL fit remains an
+  explicitly nonconverged, non-authoritative sensitivity result;
 - state the `1/51` per-member horizon weighting;
 - state the future-truth firewall and the 28-day issued limit;
 - avoid implying that MCMC was run for the selected Part 4 application;
@@ -149,12 +181,15 @@ and `figures/glofas_application/`. Its publication manifest must contain no
 - native-grid historical guardrail in CSV;
 - common-six-grid FR09/Part 4 tradeoff in CSV and TeX;
 - joint convergence certificate in CSV;
+- Sweep 5-to-10 path/score stability table and convergence-trace PDF;
 - RHS schedule-conversion, release, and post-release response certificate;
 - selected reference/discrepancy specification in CSV;
 - proposed current-output macro registry in TeX;
 - Joint AL last-30-plus-issued-28 figure in PDF;
 - grouped Normal, independent-quantile, and joint-quantile comparison PDF;
-- SHA256 publication manifest.
+- SHA256 publication manifest with separate Git-safe and Overleaf-publication
+  flags. The reproduction script is tracked in Git but is not copied to the
+  article-only Overleaf snapshot.
 
 Runtime objects, posterior draw payloads, design caches, logs, status markers,
 and runtime-local reports remain excluded from Git and Overleaf.
@@ -164,9 +199,11 @@ and runtime-local reports remain excluded from Git and Overleaf.
 1. Create an integration branch from the latest fetched `origin/main`.
 2. Apply the Part 4 lane's unique commits in order. Do not blind-merge the
    scientific worktree because it has an older and criss-crossed base history.
-3. Resolve `application/R/joint_exqdesn_exact_structured_inference.R` against
-   current main deliberately; it is the only known source overlap with newer
-   main work.
+3. Resolve `application/R/joint_exqdesn_exact_structured_inference.R`,
+   `application/tests/run_tests.R`, and `application/tests/README.md` against
+   current main deliberately. Preserve current main's RHS global-scale
+   guidance and test registrations while adding the Part 4 observation-weight
+   support and focused test registrations.
 4. Run the Part 4 focused tests and publication-package checker.
 5. Verify every article-safe asset against the publication manifest.
 6. Replace `tables/glofas_application_current_outputs.tex`,
@@ -191,6 +228,8 @@ Allowed:
   this origin.
 - The selected interval has near-nominal empirical coverage for this origin.
 - The analysis is a retrospective oracle-covariate diagnostic.
+- The selected Joint AL estimate completed ten outer sweeps, all inner and RHS
+  gates passed, and the strict outer tolerance was not met.
 
 Not allowed:
 
@@ -200,5 +239,6 @@ Not allowed:
 - claiming exact marginal fractional-AL inference;
 - claiming MCMC application results;
 - claiming monotone rearrangement or a crossing fix;
+- claiming strict Joint AL outer convergence;
 - claiming that Normal Ridge is the selected quantile model merely because
   its transformed-scale point estimate is numerically lower.

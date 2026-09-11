@@ -1,0 +1,15 @@
+"component","rhs_block","freeze_outer_iters","min_tau_updates","tau_update_count","first_tau_update_outer","coefficient_response_after_release","passed","schedule_rebased","source_freeze_iters","effective_freeze_outer_iters","source_tau_update_count","family","max_abs_block_mean_change_from_source"
+"discrepancy","anchor",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00418514354084026
+"discrepancy","delta_2",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00327025315345981
+"discrepancy","delta_3",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.0017787434166543
+"discrepancy","delta_4",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00210357256539079
+"discrepancy","delta_5",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00157545034909959
+"discrepancy","delta_6",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00302945235281367
+"discrepancy","delta_7",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.0143857010668324
+"reference","anchor",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00740804177183161
+"reference","delta_2",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.0091859574487389
+"reference","delta_3",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00422329947339883
+"reference","delta_4",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00387291695318996
+"reference","delta_5",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00395959262156798
+"reference","delta_6",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.00483956894204138
+"reference","delta_7",5,1,5,6,TRUE,TRUE,TRUE,50,5,0,"Joint AL",0.0145353913237459

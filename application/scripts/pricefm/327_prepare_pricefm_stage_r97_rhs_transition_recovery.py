@@ -107,6 +107,11 @@ def rebind_contract(args: argparse.Namespace) -> dict[str, Any]:
         "completed_screening_refit_authorized": False,
         "completed_normal_selection_mutation_authorized": False,
         "completed_surface_prep_replacement_authorized": False,
+        "surface_launch_control_rebind_authorized": True,
+        "normal_convergence_retry_authorized": True,
+        "normal_convergence_retry_max_iter": 500,
+        "normal_convergence_tolerance": 1e-5,
+        "normal_convergence_retry_changes_scientific_specification": False,
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     return write_sealed(output, payload, "shard_contract_sha256")

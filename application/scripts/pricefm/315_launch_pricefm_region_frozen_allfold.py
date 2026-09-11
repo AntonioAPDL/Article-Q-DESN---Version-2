@@ -11,6 +11,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import threading
@@ -42,6 +43,19 @@ THREAD_ENV = (
     "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
     "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "RCPP_PARALLEL_NUM_THREADS",
     "BLIS_NUM_THREADS",
+)
+NORMAL_RECOVERY_TRIGGER = "finite_nonconverged_normal_rhs_at_iteration_ceiling"
+NORMAL_INITIAL_DIAGNOSTICS = (
+    "model_method_summary.csv",
+    "model_parameter_summary.csv",
+    "model_trace_summary.csv",
+    "normal_beta_mean.csv",
+    "normal_beta_cov_diag.csv",
+    "warm_start_diagnostics.csv",
+    "metric_summary.csv",
+    "training_weight_summary.csv",
+    "repo_state.json",
+    "run_manifest.json",
 )
 
 
@@ -221,6 +235,7 @@ def validate_launch_contract(
         raise RuntimeError("Pipeline contract canonical hash changed")
     if control.get("pipeline_contract_sha256") != pipeline_hash:
         raise RuntimeError("Launch control is not bound to the pipeline contract")
+    validate_normal_recovery_policy(control)
     if manifest.empty or manifest.task_id.duplicated().any():
         raise RuntimeError("Executable manifest must contain unique tasks")
     if manifest.pipeline_contract_sha256.astype(str).nunique() != 1 or str(
@@ -265,13 +280,211 @@ def validate_launch_contract(
     return tasks
 
 
+def validate_normal_recovery_policy(control: dict[str, Any]) -> dict[str, Any]:
+    policy = control.get("normal_convergence_recovery")
+    if not isinstance(policy, dict) or policy.get("enabled") is not True:
+        raise RuntimeError("Launch control must explicitly enable bounded normal convergence recovery")
+    if policy.get("trigger") != NORMAL_RECOVERY_TRIGGER:
+        raise RuntimeError("Launch control has an unsupported normal convergence recovery trigger")
+    if int(policy.get("retry_max_iter", 0)) != 500:
+        raise RuntimeError("Normal convergence recovery must use the pre-registered 500-iteration ceiling")
+    if not math.isclose(float(policy.get("tol", math.nan)), 1e-5, rel_tol=0.0, abs_tol=1e-15):
+        raise RuntimeError("Normal convergence recovery must preserve tol=1e-5")
+    if policy.get("preserve_initial_diagnostics") is not True:
+        raise RuntimeError("Normal convergence recovery must preserve initial diagnostics")
+    return policy
+
+
 def artifact_record(path: Path, role: str) -> dict[str, Any]:
     if not path.is_file() or path.stat().st_size == 0:
         raise FileNotFoundError(path)
     return {"path": str(path.resolve()), "role": role, "sha256": sha256(path), "bytes": path.stat().st_size}
 
 
-def write_normal_terminal(task: dict[str, Any]) -> None:
+def normal_model_diagnostics(task: dict[str, Any]) -> dict[str, Any]:
+    model = Path(task["normal_model_dir"])
+    required = (
+        "normal_beta_mean.csv", "normal_beta_cov_diag.csv",
+        "model_parameter_summary.csv", "model_method_summary.csv",
+        "model_predictions_scaled.csv", "model_trace_summary.csv",
+    )
+    missing = [name for name in required if not (model / name).is_file()]
+    if missing:
+        return {"complete": False, "finite": False, "converged": False, "missing": missing}
+    parameters = pd.read_csv(model / "model_parameter_summary.csv")
+    methods = pd.read_csv(model / "model_method_summary.csv")
+    parameter = parameters.loc[parameters.method_id.astype(str).eq("normal_rhs_ns")]
+    method = methods.loc[methods.method_id.astype(str).eq("normal_rhs_ns")]
+    if len(parameter) != 1 or len(method) != 1:
+        return {
+            "complete": False, "finite": False, "converged": False,
+            "reason": "normal_rhs_summary_cardinality",
+        }
+
+    finite = True
+    numeric_checks = {
+        "normal_beta_mean.csv": ("beta_mean",),
+        "normal_beta_cov_diag.csv": ("beta_cov_diag",),
+        "model_predictions_scaled.csv": ("pred_scaled",),
+        "model_parameter_summary.csv": ("beta_l2", "beta_max_abs", "beta_cov_trace", "sigma", "omega2"),
+        "model_trace_summary.csv": ("sigma", "omega2", "beta_max_abs_delta", "parameter_change"),
+    }
+    for name, columns in numeric_checks.items():
+        frame = pd.read_csv(model / name)
+        for column in columns:
+            if column not in frame:
+                finite = False
+                continue
+            values = pd.to_numeric(frame[column], errors="coerce")
+            finite = finite and bool(len(values)) and bool(values.notna().all()) and bool(
+                values.map(math.isfinite).all()
+            )
+    sigma = float(parameter.iloc[0].sigma)
+    finite = finite and math.isfinite(sigma) and sigma > 0
+    return {
+        "complete": True,
+        "finite": bool(finite),
+        "converged": boolish(method.iloc[0].converged),
+        "iterations": int(method.iloc[0]["iter"]),
+        "sigma": sigma,
+        "parameter_change": float(pd.read_csv(model / "model_trace_summary.csv").iloc[-1].parameter_change),
+    }
+
+
+def normal_cell_config(task: dict[str, Any]) -> Path:
+    path = Path(task["normal_model_dir"]).parent / "config.yaml"
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    return path
+
+
+def original_normal_control(task: dict[str, Any]) -> dict[str, Any]:
+    payload = yaml.safe_load(normal_cell_config(task).read_text())
+    return dict(payload["pricefm_desn_smoke"]["normal"]["vb_control"])
+
+
+def normal_partial_is_recognized(task: dict[str, Any], policy: dict[str, Any]) -> bool:
+    if task.get("runner_type") != "normal_full":
+        return False
+    output = Path(task["output_dir"])
+    if not output.is_dir():
+        return False
+    allowed = {
+        "worker.log", "normal_convergence_initial",
+        "normal_convergence_recovery_config.yaml", "normal_convergence_recovery.json",
+    }
+    if any(path.name not in allowed for path in output.iterdir()):
+        return False
+    diagnostics = normal_model_diagnostics(task)
+    if diagnostics.get("converged") and diagnostics.get("finite"):
+        return True
+    control = original_normal_control(task)
+    return bool(
+        diagnostics.get("complete")
+        and diagnostics.get("finite")
+        and not diagnostics.get("converged")
+        and diagnostics.get("iterations") == int(control["max_iter"])
+        and int(control["max_iter"]) < int(policy["retry_max_iter"])
+        and math.isclose(float(control["tol"]), float(policy["tol"]), rel_tol=0.0, abs_tol=1e-15)
+    )
+
+
+def preserve_normal_diagnostics(task: dict[str, Any]) -> list[dict[str, Any]]:
+    source = Path(task["normal_model_dir"])
+    destination = Path(task["output_dir"]) / "normal_convergence_initial"
+    destination.mkdir(parents=True, exist_ok=True)
+    records = []
+    for name in NORMAL_INITIAL_DIAGNOSTICS:
+        path = source / name
+        if not path.is_file():
+            continue
+        target = destination / name
+        if target.exists() and sha256(target) != sha256(path):
+            raise RuntimeError(f"Preserved normal diagnostic changed: {target}")
+        if not target.exists():
+            shutil.copy2(path, target)
+        records.append(artifact_record(target, f"initial_{path.stem}"))
+    if not records:
+        raise RuntimeError("Normal convergence recovery found no diagnostics to preserve")
+    return records
+
+
+def write_normal_recovery_config(task: dict[str, Any], policy: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+    source = normal_cell_config(task)
+    payload = yaml.safe_load(source.read_text())
+    smoke = payload["pricefm_desn_smoke"]
+    original = dict(smoke["normal"]["vb_control"])
+    smoke["normal"]["vb_control"]["max_iter"] = int(policy["retry_max_iter"])
+    smoke["normal"]["vb_control"]["tol"] = float(policy["tol"])
+    output = Path(task["output_dir"]) / "normal_convergence_recovery_config.yaml"
+    temporary = output.with_name(f"{output.name}.tmp.{os.getpid()}")
+    temporary.write_text(yaml.safe_dump(payload, sort_keys=False))
+    temporary.replace(output)
+    return output, original
+
+
+def run_bound_command(command: list[str], cpu: int, code_root: Path, log: Path) -> int:
+    with log.open("a") as handle:
+        process = subprocess.run(
+            ["taskset", "-c", str(cpu), *command], cwd=code_root,
+            env=capped_environment(), stdout=handle, stderr=subprocess.STDOUT, text=True,
+            check=False,
+        )
+    return int(process.returncode)
+
+
+def recover_normal_convergence(
+    task: dict[str, Any], policy: dict[str, Any], cpu: int, code_root: Path, log: Path,
+) -> dict[str, Any]:
+    before = normal_model_diagnostics(task)
+    if before.get("converged") and before.get("finite"):
+        state_path = Path(task["output_dir"]) / "normal_convergence_recovery.json"
+        if not state_path.is_file():
+            return {}
+        state = json.loads(state_path.read_text())
+        state.update({"status": "completed", "final_diagnostics": before})
+        atomic_json(state_path, state)
+        return state
+    if not normal_partial_is_recognized(task, policy):
+        raise RuntimeError(f"Normal-RHS partial is not eligible for bounded recovery: {task['task_id']}")
+
+    initial_records = preserve_normal_diagnostics(task)
+    config_path, original_control = write_normal_recovery_config(task, policy)
+    state_path = Path(task["output_dir"]) / "normal_convergence_recovery.json"
+    state = {
+        "status": "running", "trigger": NORMAL_RECOVERY_TRIGGER,
+        "task_id": task["task_id"], "region": task["region"], "fold": int(task["fold"]),
+        "initial_diagnostics": before, "initial_artifacts": initial_records,
+        "original_vb_control": original_control,
+        "retry_vb_control": {"max_iter": int(policy["retry_max_iter"]), "tol": float(policy["tol"])},
+        "recovery_config": artifact_record(config_path, "normal_convergence_recovery_config"),
+        "scientific_specification_changed": False, "test_opened": False,
+    }
+    atomic_json(state_path, state)
+    payload = yaml.safe_load(config_path.read_text())["pricefm_desn_smoke"]
+    rscript = str(payload.get("rscript_bin", "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"))
+    python = str(payload.get("python_bin", sys.executable))
+    model_code = run_bound_command([
+        rscript, str(code_root / "application/scripts/pricefm/08_run_desn_model_smoke.R"),
+        "--smoke-config", str(config_path), "--force", "true",
+    ], cpu, code_root, log)
+    if model_code != 0:
+        raise RuntimeError(f"Normal convergence recovery model failed: {task['task_id']}")
+    summary_code = run_bound_command([
+        python, str(code_root / "application/scripts/pricefm/09_summarize_desn_model_smoke.py"),
+        "--smoke-config", str(config_path),
+    ], cpu, code_root, log)
+    if summary_code != 0:
+        raise RuntimeError(f"Normal convergence recovery summary failed: {task['task_id']}")
+    after = normal_model_diagnostics(task)
+    if not after.get("complete") or not after.get("finite") or not after.get("converged"):
+        raise RuntimeError(f"Normal-RHS remained ineligible after bounded recovery: {task['task_id']}")
+    state.update({"status": "completed", "final_diagnostics": after})
+    atomic_json(state_path, state)
+    return state
+
+
+def write_normal_terminal(task: dict[str, Any], recovery: dict[str, Any] | None = None) -> None:
     model = Path(task["normal_model_dir"])
     adapter = Path(task["adapter_dir"])
     validate_no_test_adapter(adapter)
@@ -291,25 +504,23 @@ def write_normal_terminal(task: dict[str, Any]) -> None:
     }
     artifacts = [artifact_record(model / name, role) for name, role in model_files.items()]
     artifacts += [artifact_record(adapter / name, role) for name, role in adapter_files.items()]
-    parameters = pd.read_csv(model / "model_parameter_summary.csv")
-    methods = pd.read_csv(model / "model_method_summary.csv")
-    parameter = parameters.loc[parameters.method_id.astype(str).eq("normal_rhs_ns")]
-    method = methods.loc[methods.method_id.astype(str).eq("normal_rhs_ns")]
-    eligible = (
-        len(parameter) == 1 and len(method) == 1
-        and math.isfinite(float(parameter.iloc[0].sigma))
-        and float(parameter.iloc[0].sigma) > 0
-        and boolish(method.iloc[0].converged)
-    )
+    diagnostics = normal_model_diagnostics(task)
+    eligible = diagnostics.get("complete") and diagnostics.get("finite") and diagnostics.get("converged")
     if not eligible or binary_artifacts(model.parent):
         raise RuntimeError(f"Normal-RHS task is not numerically eligible: {task['task_id']}")
     output = Path(task["output_dir"])
     output.mkdir(parents=True, exist_ok=True)
+    if recovery:
+        artifacts.append(artifact_record(output / "normal_convergence_recovery.json", "normal_convergence_recovery"))
+        artifacts.append(artifact_record(output / "normal_convergence_recovery_config.yaml", "normal_convergence_recovery_config"))
+        artifacts.extend(recovery.get("initial_artifacts") or [])
     atomic_json(output / "terminal.json", {
         "status": "completed", "stage": task["stage"], "task_id": task["task_id"],
         "region": task["region"], "fold": int(task["fold"]),
         "likelihood_family": "normal_rhs", "numerical_gate_passed": True,
         "formal_converged": True, "artifacts": artifacts,
+        "normal_convergence_recovery_applied": bool(recovery),
+        "normal_convergence_recovery": recovery or None,
         "pipeline_contract_sha256": task["pipeline_contract_sha256"],
         "test_loaded": False, "test_opened": False, "test_access_authorized": False,
         "binary_model_artifacts_written": False,
@@ -354,31 +565,48 @@ def command_for_task(task: dict[str, Any], code_root: Path) -> list[str]:
     return [rscript, str(Path(task["runner_script"])), "--task-config", task["task_config"], "--code-root", str(code_root)]
 
 
-def run_one(task: dict[str, Any], cpu: int, code_root: Path, poll_seconds: float, update) -> dict[str, Any]:
+def run_one(
+    task: dict[str, Any], cpu: int, code_root: Path, poll_seconds: float, update,
+    normal_recovery_policy: dict[str, Any],
+) -> dict[str, Any]:
     existing = terminal_state(task)
     if existing:
         return {"task_id": task["task_id"], "status": f"skipped_{existing}", "cpu": cpu, "returncode": 0}
     output = Path(task["output_dir"])
-    if output.exists() and any(output.iterdir()):
+    recognized_partial = output.exists() and any(output.iterdir()) and normal_partial_is_recognized(
+        task, normal_recovery_policy,
+    )
+    if output.exists() and any(output.iterdir()) and not recognized_partial:
         raise RuntimeError(f"Invalid partial requires explicit quarantine review: {output}")
     output.mkdir(parents=True, exist_ok=True)
     log = output / "worker.log"
     started = time.time()
-    with log.open("a") as handle:
-        process = subprocess.Popen(
-            ["taskset", "-c", str(cpu), *command_for_task(task, code_root)],
-            cwd=code_root, env=capped_environment(), stdout=handle,
-            stderr=subprocess.STDOUT, text=True,
-        )
-        while process.poll() is None:
-            update(task["task_id"], {"status": "running", "cpu": cpu, "pid": process.pid})
-            time.sleep(max(0.2, poll_seconds))
-    if process.returncode == 0 and task["runner_type"] == "normal_full":
-        write_normal_terminal(task)
+    returncode = 0
+    if not recognized_partial:
+        with log.open("a") as handle:
+            process = subprocess.Popen(
+                ["taskset", "-c", str(cpu), *command_for_task(task, code_root)],
+                cwd=code_root, env=capped_environment(), stdout=handle,
+                stderr=subprocess.STDOUT, text=True,
+            )
+            while process.poll() is None:
+                update(task["task_id"], {"status": "running", "cpu": cpu, "pid": process.pid})
+                time.sleep(max(0.2, poll_seconds))
+        returncode = int(process.returncode)
+    recovery = None
+    if returncode == 0 and task["runner_type"] == "normal_full":
+        diagnostics = normal_model_diagnostics(task)
+        if not diagnostics.get("converged"):
+            recovery = recover_normal_convergence(
+                task, normal_recovery_policy, cpu, code_root, log,
+            )
+        elif (output / "normal_convergence_recovery.json").is_file():
+            recovery = json.loads((output / "normal_convergence_recovery.json").read_text())
+        write_normal_terminal(task, recovery=recovery)
     state = terminal_state(task)
     return {
         "task_id": task["task_id"], "status": state or "failed", "cpu": cpu,
-        "returncode": int(process.returncode), "elapsed_seconds": round(time.time() - started, 3),
+        "returncode": returncode, "elapsed_seconds": round(time.time() - started, 3),
         "worker_log": str(log),
     }
 
@@ -389,6 +617,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     control = json.loads(args.launch_control.read_text())
     manifest = pd.read_csv(args.manifest)
     tasks = validate_launch_contract(region_contract, pipeline, control, manifest)
+    normal_recovery_policy = validate_normal_recovery_policy(control)
     if not 1 <= args.workers <= 20:
         raise RuntimeError("Region-frozen controller requires 1--20 workers")
     cpus, usage = (
@@ -462,7 +691,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         progress = True
                     elif available and all(state == "completed" for state in parent_states):
                         cpu = available.pop(0)
-                        future = pool.submit(run_one, tasks[task_id], cpu, args.code_root.resolve(), args.poll_seconds, update)
+                        future = pool.submit(
+                            run_one, tasks[task_id], cpu, args.code_root.resolve(),
+                            args.poll_seconds, update, normal_recovery_policy,
+                        )
                         running[future] = (task_id, cpu)
                         unfinished.remove(task_id)
                         progress = True

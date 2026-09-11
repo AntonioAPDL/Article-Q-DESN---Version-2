@@ -55,6 +55,10 @@ RECOVERY = load_numbered(
     "pricefm_stage_r97_rhs_transition_recovery",
     "327_prepare_pricefm_stage_r97_rhs_transition_recovery.py",
 )
+SURFACE_RECOVERY = load_numbered(
+    "pricefm_stage_r97_surface_runtime_recovery",
+    "328_prepare_pricefm_stage_r97_surface_runtime_recovery.py",
+)
 
 
 def test_seal_rejects_mutation() -> None:
@@ -289,6 +293,10 @@ def test_rhs_recovery_rebinds_only_code_identity_and_preserves_science(tmp_path,
     assert result["transition_recovery"]["completed_refinement_refit_authorized"] is False
     assert result["transition_recovery"]["completed_normal_selection_mutation_authorized"] is False
     assert result["transition_recovery"]["completed_surface_prep_replacement_authorized"] is False
+    assert result["transition_recovery"]["surface_launch_control_rebind_authorized"] is True
+    assert result["transition_recovery"]["normal_convergence_retry_authorized"] is True
+    assert result["transition_recovery"]["normal_convergence_retry_max_iter"] == 500
+    assert result["transition_recovery"]["normal_convergence_tolerance"] == pytest.approx(1e-5)
 
 
 def test_rhs_recovery_aliases_are_relative_hash_identical_and_idempotent(tmp_path, monkeypatch) -> None:
@@ -361,6 +369,33 @@ def test_screening_scheduler_caps_each_region_at_two_models(tmp_path: Path, monk
     assert shard.run_screening_phase("generated", "ridge")
     assert maxima == {"A": 2, "B": 2}
     assert len(pd.read_csv(shard.root / "ridge_status.csv")) == 8
+
+
+def test_surface_scheduler_isolates_region_failure_and_finishes_other_regions(tmp_path: Path):
+    class FakeCampaign:
+        def paths(self, region):
+            root = tmp_path / region
+            return {"surface_closeout": root / "closeout"}
+
+    shard = HOST.HostShard.__new__(HOST.HostShard)
+    shard.regions = ["A", "B", "C"]
+    shard.cpus = [0, 1, 2, 3]
+    shard.root = tmp_path / "state"
+    shard.root.mkdir()
+    shard.campaign = FakeCampaign()
+    shard.admission_open = lambda: True
+
+    def launch(region, surface, cpus):
+        if region == "A":
+            raise RuntimeError("isolated fixture failure")
+        return {"region": region, "status": "completed_validation_frozen"}
+
+    shard.launch_surface = launch
+    assert shard.run_surfaces({region: {} for region in shard.regions}) is False
+    status = json.loads((shard.root / "surface_status.json").read_text())
+    assert {row["region"] for row in status["completed"]} == {"B", "C"}
+    assert status["failed"][0]["region"] == "A"
+    assert shard.surface_failures == status["failed"]
 
 
 def test_transfer_inventory_round_trip_and_hash_failure(tmp_path: Path, monkeypatch) -> None:

@@ -168,6 +168,8 @@ def test_region_surface_materializes_one_desn_and_exact_45_task_dag(tmp_path, mo
     manifest = pd.read_csv(args.grid_dir / "task_manifest.csv")
     pipeline = json.loads((args.grid_dir / "pipeline_contract.json").read_text())
     generated_data = yaml.safe_load((args.grid_dir / "configs/train_validation_data.yaml").read_text())
+    normal_config = yaml.safe_load((args.grid_dir / "configs/normal_rhs_full.yaml").read_text())
+    launch_control = json.loads((args.grid_dir / "launch_control.json").read_text())
     assert summary["tasks"] == 45
     assert manifest.likelihood_family.value_counts().to_dict() == {
         "al": 21, "exal": 21, "normal_rhs": 3,
@@ -178,6 +180,16 @@ def test_region_surface_materializes_one_desn_and_exact_45_task_dag(tmp_path, mo
     assert pipeline["frozen_desn"]["units"] == "[64,64]"
     assert pipeline["rhs_tau0"] == pytest.approx(0.001)
     assert pipeline["family_selection_rule"].startswith("minimum_fold1_validation_AQL")
+    assert normal_config["pricefm_desn_full"]["normal"]["vb_control"] == {
+        "max_iter": 500, "min_iter": 50, "tol": 1e-5, "verbose": False,
+    }
+    assert launch_control["normal_convergence_recovery"] == {
+        "enabled": True,
+        "trigger": "finite_nonconverged_normal_rhs_at_iteration_ceiling",
+        "retry_max_iter": 500,
+        "tol": 1e-5,
+        "preserve_initial_diagnostics": True,
+    }
 
 
 def test_ridge_bank_preserves_historical_spread_control_inside_240_arm_budget():

@@ -363,24 +363,39 @@ class HostShard:
         width = 2 if len(self.cpus) >= 2 else 1
         pairs = [self.cpus[index:index + width] for index in range(0, len(self.cpus), width)]
         available = list(pairs)
-        running: dict[Any, list[int]] = {}
+        running: dict[Any, tuple[str, list[int]]] = {}
         completed: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
             while queue or running:
                 while queue and available and self.admission_open():
                     cpus = available.pop(0)
                     region = queue.pop(0)
-                    running[pool.submit(self.launch_surface, region, surfaces[region], cpus)] = cpus
+                    running[pool.submit(self.launch_surface, region, surfaces[region], cpus)] = (region, cpus)
                 if running:
                     done, _ = wait(running, return_when=FIRST_COMPLETED)
                     for future in done:
-                        available.append(running.pop(future))
-                        completed.append(future.result())
-                    atomic_write_json(self.root / "surface_status.json", {"completed": completed, "remaining": queue, **firewall()})
+                        region, cpus = running.pop(future)
+                        available.append(cpus)
+                        try:
+                            completed.append(future.result())
+                        except Exception as error:
+                            failed.append({
+                                "region": region,
+                                "status": "failed_closed",
+                                "error": repr(error),
+                            })
+                    atomic_write_json(self.root / "surface_status.json", {
+                        "completed": completed,
+                        "failed": failed,
+                        "remaining": queue,
+                        **firewall(),
+                    })
                 elif queue:
                     self.update(status="drained", phase="quantile_surface", remaining_regions=queue)
                     return False
-        return True
+        self.surface_failures = failed
+        return not failed
 
     def run(self) -> dict[str, Any]:
         self.update(status="running", phase="ridge_preparation")
@@ -400,6 +415,11 @@ class HostShard:
         surfaces = self.prepare_surfaces(selected)
         self.update(phase="allfold_AL_exAL_validation")
         if not self.run_surfaces(surfaces):
+            if getattr(self, "surface_failures", []):
+                return self.finish(
+                    "failed_closed",
+                    error=f"surface failures: {self.surface_failures!r}",
+                )
             return self.finish("drained_incomplete")
         return self.finish("completed_validation_shard")
 

@@ -175,7 +175,7 @@ def full_config(
                 "enabled": True, "prior_types": ["rhs_ns"],
                 "predictive_quantile_mode": "analytic_normal",
                 "omega_prior": {"a": 2.0, "b": 1.0},
-                "vb_control": {"max_iter": 100, "min_iter": 50, "tol": 1e-5, "verbose": False},
+                "vb_control": {"max_iter": 500, "min_iter": 50, "tol": 1e-5, "verbose": False},
             },
             "qdesn_vb": {"enabled": False, "likelihoods": ["al", "exal"]},
             "exact_equivalence": {"enabled": False},
@@ -405,6 +405,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "tasks": len(manifest), "workers": int(args.workers),
         "one_model_process_per_cpu": True, "threads_per_process": 1,
         "git_identity": git.to_dict(), "pipeline_contract_sha256": pipeline_hash,
+        "normal_convergence_recovery": {
+            "enabled": True,
+            "trigger": "finite_nonconverged_normal_rhs_at_iteration_ceiling",
+            "retry_max_iter": 500,
+            "tol": 1e-5,
+            "preserve_initial_diagnostics": True,
+        },
         "launch_authorized": False, "test_opened": False,
         **{name: False for name in BLOCKED},
     }

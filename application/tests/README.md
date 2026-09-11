@@ -73,6 +73,10 @@ Tracked tests:
   block compatibility, inner-to-outer RHS warmup conversion, fail-closed
   schedule rebasing, post-release coefficient response, and rejection of
   incompatible continuation grids.
+- `test_glofas_part4_publication_contract.R`: fail-closed qualification of the
+  ten-sweep Joint AL finite-cap estimate, preservation of its strict
+  nonconvergence flags, complete RHS-release response evidence, and keyed
+  Sweep 5-to-10 path/score stability summaries.
 - `test_glofas_part4_latent_family_scheduler.py`: fail-closed production
   launch authorization and manifest-backed prepared-state health reporting.
 
@@ -81,7 +85,9 @@ in `docs/implementation_notes/glofas_part4_latent_family_implementation_20260906
 The convergence-qualification worker and article-safe closeout builder are
 `application/scripts/389_continue_glofas_part4_joint_fit.R`,
 `application/scripts/390_build_glofas_part4_authoritative_package.R`, and
-`application/scripts/392_check_glofas_part4_authoritative_package.R`.
+`application/scripts/392_check_glofas_part4_authoritative_package.R`. The
+grouped comparison renderer is
+`application/scripts/391_plot_glofas_part4_grouped_family_comparison.R`.
 - `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
   controls, OpenBLAS path/hash rejection, and terminal execution manifests.
 - `test_glofas_discrepancy_equivalence_audit.R`: component-path algebra,

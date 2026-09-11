@@ -1,0 +1,5 @@
+"window","grid","fr09_crps_log1p","part4_joint_al_crps_log1p","relative_change","decision"
+"all","common_6q_0.05_0.35_0.50_0.65_0.80_0.95",0.043845186603694,0.073933426002715,0.686238142192924,"Part4 improves issued forecast but materially worsens historical fit"
+"last1000","common_6q_0.05_0.35_0.50_0.65_0.80_0.95",0.0269070448052622,0.0549313037968564,1.04152125194044,"Part4 improves issued forecast but materially worsens historical fit"
+"last200","common_6q_0.05_0.35_0.50_0.65_0.80_0.95",0.0389178594262992,0.0589070144129714,0.513624214726577,"Part4 improves issued forecast but materially worsens historical fit"
+"last50","common_6q_0.05_0.35_0.50_0.65_0.80_0.95",0.130676736393969,0.141882003201823,0.0857479848140109,"Part4 improves issued forecast but materially worsens historical fit"

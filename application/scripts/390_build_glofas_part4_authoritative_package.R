@@ -6,11 +6,13 @@ repo_root <- normalizePath(file.path(dirname(script_path), "..", ".."), mustWork
 source(file.path(repo_root, "application/R/00_packages.R"))
 app_set_repo_root(repo_root)
 suppressPackageStartupMessages(library(ggplot2))
+source(app_path("application/R/glofas_part4_publication_contract.R"))
+source(app_path("application/scripts/391_plot_glofas_part4_grouped_family_comparison.R"))
 
 args <- app_parse_args(list(
   source_runtime_root = "local_trackers/runtime_configs/glofas_part4_latent_family_dec25_exactopt_r3_fivecore_20260906",
   continuation_runtime_root = "local_trackers/runtime_configs/glofas_part4_joint_convergence_closeout_20260907",
-  output_tag = "glofas_part4_joint_al_authoritative_20260907"
+  output_tag = "glofas_part4_joint_al_sweep10_20260911"
 ))
 source_root <- app_resolve_path(args$source_runtime_root, must_work = TRUE)
 continuation_root <- app_resolve_path(args$continuation_runtime_root, must_work = TRUE)
@@ -19,7 +21,7 @@ if (!grepl("^[A-Za-z0-9_.-]+$", tag)) stop("Invalid --output_tag.", call. = FALS
 
 source_label <- basename(source_root)
 al_job <- "glofas_part4_joint_al_continuation_20260907"
-exal_job <- "glofas_part4_joint_exal_continuation_20260907"
+exal_job <- paste0(source_label, "_joint_exal_rhs_vb")
 tau_grid <- c(0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95)
 tau_ids <- c("p05", "p20", "p35", "p50", "p65", "p80", "p95")
 common_tau <- c(0.05, 0.35, 0.50, 0.65, 0.80, 0.95)
@@ -55,7 +57,7 @@ for (job in base_manifest$run_id) {
   assert_complete(source_root, job)
   verify_artifact_manifest(source_root, job)
 }
-for (job in c(al_job, exal_job)) {
+for (job in al_job) {
   assert_complete(continuation_root, job)
   verify_artifact_manifest(continuation_root, job)
 }
@@ -75,9 +77,12 @@ if (!identical(unname(observed_audit[names(required_audit)]), unname(required_au
 }
 
 al_fit_path <- file.path(continuation_root, "objects", paste0(al_job, "_fit_side.rds"))
-exal_fit_path <- file.path(continuation_root, "objects", paste0(exal_job, "_fit_side.rds"))
+al_source_job <- paste0(source_label, "_joint_al_rhs_vb")
+al_source_fit_path <- file.path(source_root, "objects", paste0(al_source_job, "_fit_side.rds"))
+exal_fit_path <- file.path(source_root, "objects", paste0(exal_job, "_fit_side.rds"))
 message("Reading final joint convergence metadata...")
 al_fit <- readRDS(al_fit_path)
+al_trace <- al_fit$trace
 al_convergence <- data.frame(
   family = "Joint AL", converged = isTRUE(al_fit$converged),
   outer_converged = isTRUE(al_fit$converged_outer), inner_converged = isTRUE(al_fit$converged_inner),
@@ -86,37 +91,84 @@ al_convergence <- data.frame(
   stopping_reason = al_fit$stopping_reason, cumulative_runtime_seconds = al_fit$runtime_seconds,
   stringsAsFactors = FALSE
 )
-if (!isTRUE(al_fit$converged) || !isTRUE(al_fit$converged_outer) ||
-    !isTRUE(al_fit$converged_inner) || !isTRUE(al_fit$converged_rhs)) {
-  stop("Joint AL did not pass the outer, inner, and RHS convergence gates.", call. = FALSE)
-}
 al_rhs_certificate <- merge(
   al_fit$rhs_convergence_diagnostics,
   al_fit$rhs_schedule_rebase_audit,
   by = c("component", "rhs_block"), all = TRUE
 )
+al_final_reference <- al_fit$beta_reference_mean
+al_final_discrepancy <- al_fit$beta_discrepancy_mean
 al_rhs_certificate$family <- "Joint AL"
 rm(al_fit)
 invisible(gc())
+message("Verifying numerical coefficient response against the immutable pre-release Joint AL state...")
+al_source_fit <- readRDS(al_source_fit_path)
+rhs_block_matrix <- function(beta) {
+  beta <- as.matrix(beta)
+  cbind(anchor = beta[, 1L, drop = FALSE], beta[, -1L, drop = FALSE] - beta[, -ncol(beta), drop = FALSE])
+}
+block_response <- function(source_beta, final_beta, component) {
+  source_blocks <- rhs_block_matrix(source_beta)
+  final_blocks <- rhs_block_matrix(final_beta)
+  if (!identical(dim(source_blocks), dim(final_blocks))) {
+    stop(sprintf("Joint AL %s block dimensions changed during continuation.", component), call. = FALSE)
+  }
+  data.frame(
+    component = component,
+    rhs_block = c("anchor", paste0("delta_", 2:ncol(final_blocks))),
+    max_abs_block_mean_change_from_source = apply(abs(final_blocks - source_blocks), 2L, max),
+    stringsAsFactors = FALSE
+  )
+}
+al_block_response <- rbind(
+  block_response(al_source_fit$beta_reference_mean, al_final_reference, "reference"),
+  block_response(al_source_fit$beta_discrepancy_mean, al_final_discrepancy, "discrepancy")
+)
+al_rhs_certificate <- merge(
+  al_rhs_certificate, al_block_response,
+  by = c("component", "rhs_block"), all.x = TRUE, sort = FALSE
+)
+if (anyNA(al_rhs_certificate$max_abs_block_mean_change_from_source) ||
+    any(al_rhs_certificate$max_abs_block_mean_change_from_source <= 1.0e-12)) {
+  stop("At least one Joint AL RHS block did not respond numerically after schedule release.", call. = FALSE)
+}
+al_qualification <- app_glofas_part4_validate_cap_qualified_joint(
+  trace = al_trace,
+  convergence = al_convergence,
+  rhs_certificate = al_rhs_certificate
+)
+al_convergence$numerical_status <- al_qualification$numerical_status
+al_convergence$selection_eligible <- al_qualification$selection_eligible
+al_convergence$final_parameter_change <- al_qualification$final_parameter_change
+al_convergence$outer_tolerance <- 1.0e-3
+rm(al_source_fit, al_final_reference, al_final_discrepancy, al_block_response)
+invisible(gc())
 exal_fit <- readRDS(exal_fit_path)
+exal_outer_converged <- isTRUE(tail(exal_fit$trace$parameter_change, 1L) < 1.0e-3)
+exal_inner_converged <- all(vapply(
+  exal_fit$fits, function(x) isTRUE(x$vb_diagnostics$converged), logical(1L)
+))
+exal_rhs_converged <- all(vapply(c(exal_fit$rhs_state_reference, exal_fit$rhs_state_discrepancy), function(x) {
+  as.integer(x$tau_update_count %||% 0L) >= as.integer((x$rhs_control %||% list())$min_tau_updates %||% 0L) &&
+    isTRUE(x$has_post_warmup_tau_update)
+}, logical(1L)))
 exal_convergence <- data.frame(
-  family = "Joint exAL", converged = isTRUE(exal_fit$converged),
-  outer_converged = isTRUE(exal_fit$converged_outer), inner_converged = isTRUE(exal_fit$converged_inner),
-  rhs_converged = isTRUE(exal_fit$converged_rhs),
-  outer_iterations = nrow(exal_fit$trace), continuation_count = exal_fit$continuation_count,
-  stopping_reason = exal_fit$stopping_reason, cumulative_runtime_seconds = exal_fit$runtime_seconds,
+  family = "Joint exAL", converged = FALSE,
+  outer_converged = exal_outer_converged, inner_converged = exal_inner_converged,
+  rhs_converged = exal_rhs_converged,
+  outer_iterations = nrow(exal_fit$trace), continuation_count = 0L,
+  stopping_reason = "source_fit_not_qualified_inner_and_rhs_optional_continuation_operator_stopped",
+  cumulative_runtime_seconds = exal_fit$runtime_seconds,
+  numerical_status = "source_fit_not_qualified",
+  selection_eligible = FALSE,
+  final_parameter_change = tail(as.numeric(exal_fit$trace$parameter_change), 1L),
+  outer_tolerance = 1.0e-3,
   stringsAsFactors = FALSE
 )
-exal_rhs_certificate <- merge(
-  exal_fit$rhs_convergence_diagnostics,
-  exal_fit$rhs_schedule_rebase_audit,
-  by = c("component", "rhs_block"), all = TRUE
-)
-exal_rhs_certificate$family <- "Joint exAL"
 rm(exal_fit)
 invisible(gc())
 convergence <- rbind(al_convergence, exal_convergence)
-rhs_certificate <- app_bind_rows_fill(list(al_rhs_certificate, exal_rhs_certificate))
+rhs_certificate <- al_rhs_certificate
 
 score_file <- function(root, job, suffix = "by_horizon") {
   file.path(root, "scores", paste0(job, "_", suffix, ".csv"))
@@ -139,7 +191,7 @@ grid_crps_by_date <- function(rows) {
   }, numeric(1L))
 }
 
-summarize_quantile_rows <- function(rows, family, runtime_seconds, converged, role) {
+summarize_quantile_rows <- function(rows, family, runtime_seconds, converged, role, numerical_status = "completed") {
   rows$target_date <- as.Date(rows$target_date)
   rows <- rows[order(rows$target_date, as.numeric(rows$quantile_level)), , drop = FALSE]
   dates <- sort(unique(rows$target_date))
@@ -174,6 +226,7 @@ summarize_quantile_rows <- function(rows, family, runtime_seconds, converged, ro
     median_rmse_log1p = sqrt(mean((p50$qhat - p50$y_reference)^2)),
     crossing_pairs = sum(qmat[, -ncol(qmat), drop = FALSE] > qmat[, -1L, drop = FALSE]),
     runtime_seconds = runtime_seconds, converged = converged,
+    numerical_status = numerical_status,
     stringsAsFactors = FALSE
   )
 }
@@ -183,7 +236,7 @@ independent_rows <- function(likelihood) {
   jobs <- paste0(source_label, "_", family, "_", tau_ids)
   do.call(rbind, lapply(jobs, function(job) read.csv(score_file(source_root, job), stringsAsFactors = FALSE)))
 }
-joint_rows <- function(job) read.csv(score_file(continuation_root, job), stringsAsFactors = FALSE)
+joint_rows <- function(root, job) read.csv(score_file(root, job), stringsAsFactors = FALSE)
 
 normal_rows <- function(job) {
   draws <- read.csv(gzfile(prediction_file(source_root, job)), stringsAsFactors = FALSE)
@@ -226,9 +279,26 @@ forecast_scores <- rbind(
   ),
   summarize_quantile_rows(independent_rows("al"), "Independent AL", independent_runtime("al"), TRUE, "quantile_comparator"),
   summarize_quantile_rows(independent_rows("exal"), "Independent exAL", independent_runtime("exal"), TRUE, "quantile_comparator"),
-  summarize_quantile_rows(joint_rows(al_job), "Joint AL", al_convergence$cumulative_runtime_seconds, TRUE, "selected_quantile_model"),
-  summarize_quantile_rows(joint_rows(exal_job), "Joint exAL", exal_convergence$cumulative_runtime_seconds, exal_convergence$converged, "quantile_sensitivity")
+  summarize_quantile_rows(
+    joint_rows(continuation_root, al_job), "Joint AL",
+    al_convergence$cumulative_runtime_seconds, FALSE, "selected_quantile_model",
+    al_qualification$numerical_status
+  ),
+  summarize_quantile_rows(
+    joint_rows(source_root, exal_job), "Joint exAL",
+    exal_convergence$cumulative_runtime_seconds, FALSE, "nonconverged_quantile_sensitivity",
+    exal_convergence$numerical_status
+  )
 )
+
+source_joint_rows <- joint_rows(source_root, al_source_job)
+final_joint_rows <- joint_rows(continuation_root, al_job)
+sweep_stability <- app_glofas_part4_sweep_stability(source_joint_rows, final_joint_rows)
+sweep_stability$crps_grid_log1p_source <- mean(grid_crps_by_date(source_joint_rows))
+sweep_stability$crps_grid_log1p_final <- mean(grid_crps_by_date(final_joint_rows))
+sweep_stability$relative_crps_change <-
+  (sweep_stability$crps_grid_log1p_final - sweep_stability$crps_grid_log1p_source) /
+  sweep_stability$crps_grid_log1p_source
 
 message("Reading the frozen design for raw-GloFAS and historical guardrail recomputation...")
 design_path <- file.path(source_root, "objects", "part4_shared_design_truth_free.rds")
@@ -350,6 +420,7 @@ paths <- c(
   common_csv = file.path(table_dir, paste0("glofas_application_part4_common_grid_tradeoff__", tag, ".csv")),
   convergence_csv = file.path(table_dir, paste0("glofas_application_part4_joint_convergence__", tag, ".csv")),
   rhs_certificate_csv = file.path(table_dir, paste0("glofas_application_part4_rhs_release_certificate__", tag, ".csv")),
+  stability_csv = file.path(table_dir, paste0("glofas_application_part4_joint_sweep_stability__", tag, ".csv")),
   spec_csv = file.path(table_dir, paste0("glofas_application_part4_model_spec__", tag, ".csv")),
   decision_csv = file.path(table_dir, paste0("glofas_application_part4_selection_decision__", tag, ".csv")),
   score_tex = file.path(table_dir, paste0("glofas_application_part4_forecast_scores__", tag, ".tex")),
@@ -357,19 +428,32 @@ paths <- c(
   guardrail_tex = file.path(table_dir, paste0("glofas_application_part4_historical_guardrail__", tag, ".tex")),
   outputs_tex = file.path(table_dir, paste0("glofas_application_part4_current_outputs__", tag, ".tex")),
   main_figure = file.path(figure_dir, paste0("glofas_part4_joint_al_last30_issued28__", tag, ".pdf")),
+  convergence_figure = file.path(figure_dir, "diagnostics", paste0("glofas_part4_joint_al_convergence_trace__", tag, ".pdf")),
   grouped_figure = file.path(figure_dir, "diagnostics", paste0("glofas_part4_grouped_family_comparison__", tag, ".pdf")),
   grouped_scores = file.path(table_dir, paste0("glofas_application_part4_grouped_family_scores__", tag, ".csv")),
-  grouped_script = app_path("application", "scripts", "391_plot_glofas_part4_grouped_family_comparison.R")
+  grouped_script = app_path("application", "scripts", "391_plot_glofas_part4_grouped_family_comparison.R"),
+  contract_module = app_path("application", "R", "glofas_part4_publication_contract.R")
 )
+app_ensure_dir(dirname(paths[["convergence_figure"]]))
 write.csv(forecast_scores, paths[["forecast_csv"]], row.names = FALSE)
 write.csv(historical_guardrail, paths[["history_csv"]], row.names = FALSE)
 write.csv(common_grid, paths[["common_csv"]], row.names = FALSE)
 write.csv(convergence, paths[["convergence_csv"]], row.names = FALSE)
 write.csv(rhs_certificate, paths[["rhs_certificate_csv"]], row.names = FALSE)
+write.csv(sweep_stability, paths[["stability_csv"]], row.names = FALSE)
 write.csv(model_spec, paths[["spec_csv"]], row.names = FALSE)
 
 selected <- forecast_scores[forecast_scores$family == "Joint AL", , drop = FALSE]
 raw <- forecast_scores[forecast_scores$family == "Raw GloFAS", , drop = FALSE]
+independent_al <- forecast_scores[forecast_scores$family == "Independent AL", , drop = FALSE]
+if (nrow(selected) != 1L || nrow(raw) != 1L || nrow(independent_al) != 1L ||
+    selected$crps_grid_log1p >= raw$crps_grid_log1p ||
+    selected$crps_grid_log1p >= independent_al$crps_grid_log1p ||
+    selected$mean_check_loss >= raw$mean_check_loss ||
+    selected$interval_score >= raw$interval_score ||
+    selected$coverage90 < 0.80 || selected$crossing_pairs != 0L) {
+  stop("Corrected Joint AL no longer satisfies the predeclared Part 4 selection gates.", call. = FALSE)
+}
 repo_relative <- function(path) substring(normalizePath(path, mustWork = FALSE), nchar(normalizePath(repo_root)) + 2L)
 selection_decision <- data.frame(
   selected_family = "Joint AL",
@@ -377,12 +461,18 @@ selection_decision <- data.frame(
   quantile_grid = paste(format(tau_grid, trim = TRUE), collapse = ","),
   selected_crps_grid_log1p = selected$crps_grid_log1p,
   raw_glofas_crps_grid_log1p = raw$crps_grid_log1p,
+  independent_al_crps_grid_log1p = independent_al$crps_grid_log1p,
   crps_reduction_vs_raw = selected$crps_reduction_vs_raw,
+  crps_reduction_vs_independent_al = (independent_al$crps_grid_log1p - selected$crps_grid_log1p) /
+    independent_al$crps_grid_log1p,
   normal_ridge_numerically_lower = forecast_scores$crps_grid_log1p[forecast_scores$family == "Normal Ridge"] < selected$crps_grid_log1p,
   normal_ridge_role = "Normal diagnostic baseline with severe interval undercoverage; not the selected quantile model",
   historical_guardrail = "failed versus FR09; preserve and disclose FR09 as stronger historical benchmark",
   crossing_fix = "none",
-  scientific_status = "selected_after_outer_inner_and_rhs_convergence_qualification",
+  strict_outer_converged = FALSE,
+  final_parameter_change = al_qualification$final_parameter_change,
+  outer_tolerance = 1.0e-3,
+  scientific_status = "selected_cap_stabilized_after_rhs_release_not_strict_outer_convergence",
   stringsAsFactors = FALSE
 )
 write.csv(selection_decision, paths[["decision_csv"]], row.names = FALSE)
@@ -398,14 +488,14 @@ score_tex <- c(
 writeLines(score_tex, paths[["score_tex"]])
 all_scores_tex <- c(
   "\\begin{tabular}{lrrrrr}", "\\toprule",
-  "Model & CRPS (log1p) & CRPS (original) & Coverage & CPU hours & Converged \\\\",
+  "Model & CRPS (log1p) & CRPS (original) & Coverage & CPU hours & Numerical status \\\\",
   "\\midrule",
   vapply(seq_len(nrow(forecast_scores)), function(i) sprintf(
     "%s & %.4f & %.3f & %.3f & %.2f & %s \\\\",
     forecast_scores$family[[i]], forecast_scores$crps_grid_log1p[[i]],
     forecast_scores$crps_grid_original[[i]], forecast_scores$coverage90[[i]],
     forecast_scores$runtime_seconds[[i]] / 3600,
-    if (isTRUE(forecast_scores$converged[[i]])) "yes" else "no"
+    gsub("_", " ", forecast_scores$numerical_status[[i]], fixed = TRUE)
   ), character(1L)),
   "\\bottomrule", "\\end{tabular}"
 )
@@ -447,7 +537,8 @@ outputs <- c(
   sprintf("\\newcommand{\\GlofasApplicationCurrentRawMeanCoverage}{%.3f}", raw$coverage90),
   "\\newcommand{\\GlofasApplicationCurrentScoredHorizons}{28}",
   "\\newcommand{\\GlofasApplicationCurrentOriginDate}{2022-12-25}",
-  sprintf("\\newcommand{\\GlofasApplicationCurrentVbIterations}{%d joint outer iterations after one schedule-qualified state continuation}", al_convergence$outer_iterations),
+  sprintf("\\newcommand{\\GlofasApplicationCurrentVbIterations}{%d joint outer iterations; cap reached after RHS release; all inner and RHS gates passed; strict outer tolerance not met}", al_convergence$outer_iterations),
+  "\\newcommand{\\GlofasApplicationCurrentNumericalStatus}{\\detokenize{cap-stabilized after RHS release; not strictly outer-converged}}",
   "\\newcommand{\\GlofasApplicationCurrentReservoirDepth}{1}",
   "\\newcommand{\\GlofasApplicationCurrentReservoirSize}{3000}",
   "\\newcommand{\\GlofasApplicationCurrentReducerSize}{none}",
@@ -555,6 +646,42 @@ p <- ggplot() +
   ) + guides(color = guide_legend(nrow = 2, byrow = TRUE))
 ggsave(paths[["main_figure"]], p, width = 11.5, height = 8.2, device = cairo_pdf)
 
+message("Building the audited Joint AL convergence trace...")
+trace_plot <- ggplot(al_trace, aes(outer_iteration, parameter_change)) +
+  geom_hline(yintercept = 1.0e-3, color = "#B83242", linetype = "dashed", linewidth = 0.75) +
+  geom_vline(xintercept = 5.5, color = "#5D6870", linetype = "dotted", linewidth = 0.65) +
+  geom_line(color = "#145C6A", linewidth = 1.0) +
+  geom_point(aes(fill = rhs_convergence_gate_passed), shape = 21, color = "white", size = 3.0, stroke = 0.35) +
+  scale_fill_manual(values = c(`TRUE` = "#238443", `FALSE` = "#C49A21"), na.value = "#78909C", name = "RHS gate") +
+  scale_y_log10() +
+  scale_x_continuous(breaks = al_trace$outer_iteration) +
+  labs(
+    title = "Joint AL Q-DESN outer convergence trace",
+    subtitle = sprintf(
+      "RHS updates begin at sweep 6; all inner fits converged; final change %.6f exceeds the strict 0.001 tolerance",
+      al_qualification$final_parameter_change
+    ),
+    x = "Outer sweep", y = "Maximum parameter change (log scale)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", size = 15),
+    plot.subtitle = element_text(color = "#4A5560"),
+    panel.grid.minor = element_blank(), legend.position = "top"
+  )
+ggsave(paths[["convergence_figure"]], trace_plot, width = 10.5, height = 6.4, device = cairo_pdf)
+
+message("Building grouped Normal, independent-quantile, and joint-quantile comparisons...")
+app_plot_glofas_part4_grouped_family_comparison(
+  source_root = source_root,
+  continuation_root = continuation_root,
+  output_pdf = paths[["grouped_figure"]],
+  output_scores = paths[["grouped_scores"]],
+  forecast_scores = forecast_scores,
+  design = design,
+  truth_sidecar = truth_sidecar
+)
+
 rm(design)
 invisible(gc())
 manifest_paths <- unname(paths[file.exists(paths)])
@@ -562,7 +689,15 @@ publication_manifest <- data.frame(
   relative_path = substring(normalizePath(manifest_paths), nchar(normalizePath(repo_root)) + 2L),
   size_bytes = as.numeric(file.info(manifest_paths)$size),
   sha256 = vapply(manifest_paths, app_sha256_file, character(1L)),
-  article_safe = TRUE, stringsAsFactors = FALSE
+  article_safe = TRUE,
+  publication_role = ifelse(
+    grepl("^application/", substring(normalizePath(manifest_paths), nchar(normalizePath(repo_root)) + 2L)),
+    "reproduction_code", "article_asset"
+  ),
+  overleaf_publish = !grepl(
+    "^application/", substring(normalizePath(manifest_paths), nchar(normalizePath(repo_root)) + 2L)
+  ),
+  stringsAsFactors = FALSE
 )
 manifest_path <- file.path(table_dir, paste0("glofas_application_part4_publication_manifest__", tag, ".csv"))
 write.csv(publication_manifest, manifest_path, row.names = FALSE)

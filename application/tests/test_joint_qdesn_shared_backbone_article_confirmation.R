@@ -248,7 +248,17 @@ al_audit_rows <- app_joint_qdesn_bind_rows(list(
     value = rep(1, audit_K), stringsAsFactors = FALSE
   )
 ))
-app_write_csv(app_joint_qdesn_bind_rows(list(audit_rows, al_audit_rows)),
+independent_al_audit_job <- mcmc_plan[
+  mcmc_plan$likelihood_family == "AL" &
+    mcmc_plan$fit_structure == "independent",
+  , drop = FALSE
+][1, , drop = FALSE]
+independent_al_audit_rows <- al_audit_rows
+independent_al_audit_rows$model_cell_id <-
+  independent_al_audit_job$model_cell_id[[1L]]
+app_write_csv(app_joint_qdesn_bind_rows(list(
+  audit_rows, al_audit_rows, independent_al_audit_rows
+)),
   file.path(root, "vb_initialization_rows.csv"))
 gaussian_job <- app_joint_article_find_job(
   vb_plan, audit_job$scenario_id[[1L]], "gaussian_rhs_initializer"
@@ -288,6 +298,16 @@ stopifnot(
   nrow(al_initial_precision) == 1L,
   al_initial_precision$likelihood_family[[1L]] == "AL",
   al_initial_precision$status[[1L]] == "pass"
+)
+independent_al_initial_precision <-
+  app_joint_article_mcmc_initial_precision_audit(
+    root, independent_al_audit_job$worker_id[[1L]]
+  )
+stopifnot(
+  nrow(independent_al_initial_precision) == audit_K,
+  all(independent_al_initial_precision$likelihood_family == "AL"),
+  all(independent_al_initial_precision$fit_structure == "independent"),
+  all(independent_al_initial_precision$status == "pass")
 )
 fake_attempt <- file.path(root, "fake_mcmc_attempt")
 fake_worker <- file.path(fake_attempt, "mcmc_workers",

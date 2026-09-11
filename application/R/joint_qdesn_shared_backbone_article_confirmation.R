@@ -2436,14 +2436,17 @@ app_joint_article_mcmc_initial_precision_audit <- function(root,
       lapply(seq_len(K), function(k) {
         idx <- ((k - 1L) * p + 1L):(k * p)
         fit_init <- if (!is.null(init$fits)) init$fits[[k]] else NULL
+        fit_gamma <- if (!is.null(fit_init) &&
+            length(fit_init$gamma_mean)) fit_init$gamma_mean[[1L]] else NULL
+        init_gamma <- if (length(init$gamma_mean) >= k) {
+          init$gamma_mean[[k]]
+        } else NULL
         list(
           quantile_index = k, tau = tau[[k]],
           beta = fit_init$beta_mean %||% init$beta_mean[idx],
           alpha = fit_init$alpha_mean %||% init$alpha_mean[[k]],
           sigma = fit_init$sigma_mean %||% init$sigma_mean[[k]],
-          gamma = fit_init$gamma_mean %||% if (!is.null(init$gamma_mean)) {
-            init$gamma_mean[[k]]
-          } else NULL,
+          gamma = fit_gamma %||% init_gamma,
           seed = as.integer(job$chain_seed[[1L]] +
             k * as.integer(job$tau_seed_stride[[1L]]))
         )

@@ -11,16 +11,28 @@ runtime_arg <- value_after("--runtime_root")
 if (!nzchar(runtime_arg)) stop("--runtime_root is required.", call. = FALSE)
 runtime_root <- normalizePath(runtime_arg, mustWork = TRUE)
 run_label <- basename(runtime_root)
-cutoff_table <- read.csv(file.path(runtime_root, "configs", "cutoff.csv"), stringsAsFactors = FALSE)
-if (nrow(cutoff_table) != 1L) stop("Expected one cutoff row.", call. = FALSE)
-cutoff <- as.Date(cutoff_table$origin_date[[1L]])
+cutoff_arg <- value_after("--cutoff_date")
+cutoff_path <- file.path(runtime_root, "configs", "cutoff.csv")
+if (nzchar(cutoff_arg)) {
+  cutoff <- as.Date(cutoff_arg)
+  if (is.na(cutoff)) stop("--cutoff_date must use YYYY-MM-DD format.", call. = FALSE)
+} else {
+  if (!file.exists(cutoff_path)) {
+    stop("configs/cutoff.csv is absent; provide --cutoff_date YYYY-MM-DD.", call. = FALSE)
+  }
+  cutoff_table <- read.csv(cutoff_path, stringsAsFactors = FALSE)
+  if (nrow(cutoff_table) != 1L) stop("Expected one cutoff row.", call. = FALSE)
+  cutoff <- as.Date(cutoff_table$origin_date[[1L]])
+}
 issued_end <- cutoff + 28L
 history_start <- cutoff - 29L
 tau_grid <- c(0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95)
 
 manifest <- read.csv(file.path(runtime_root, "configs", "part4_model_manifest.csv"), stringsAsFactors = FALSE)
-if (!identical(sort(manifest$part4_family), sort(c("normal_ridge_diagnostic", "normal_rhs_vb_diagnostic")))) {
-  stop("Normal transfer plot requires exactly the Ridge and RHS/VB jobs.", call. = FALSE)
+normal_families <- c("normal_ridge_diagnostic", "normal_rhs_vb_diagnostic")
+manifest <- manifest[manifest$part4_family %in% normal_families, , drop = FALSE]
+if (nrow(manifest) != 2L || !identical(sort(manifest$part4_family), sort(normal_families))) {
+  stop("Normal transfer plot requires one Ridge and one RHS/VB job.", call. = FALSE)
 }
 if (!all(file.exists(file.path(runtime_root, "status", paste0(manifest$run_id, ".completed"))))) {
   stop("Both Normal transfer jobs must be complete before plotting.", call. = FALSE)
@@ -183,4 +195,3 @@ file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
 if (length(file_arg) == 1L) file.copy(normalizePath(sub("^--file=", "", file_arg), mustWork = TRUE), script_path, overwrite = TRUE)
 cat(sprintf("pdf=%s\n", normalizePath(output_path, mustWork = TRUE)))
 cat(sprintf("scores=%s\n", normalizePath(score_path, mustWork = TRUE)))
-

@@ -118,12 +118,12 @@ def verify_pipeline(path: Path) -> dict[str, Any]:
         "selected_normal_contract", "source_data_config", "generated_data_config",
         "normal_full_config", "runtime_manifest", "runner",
     ):
-        record = payload.get(name)
-        if name == "runner":
-            # The task-bound scientific runner remains hash-pinned below. The launcher
-            # itself is intentionally repaired by this operational recovery.
-            continue
-        verify_file_record(record, label=f"R97 surface pipeline {name}")
+        verify_file_record(payload[name], label=f"R97 surface pipeline {name}")
+    launcher = payload.get("launcher") or {}
+    if not Path(str(launcher.get("path", ""))).is_file():
+        raise RuntimeError("R97 surface pipeline launcher path is absent")
+    # Its historical digest is retained in the immutable pipeline. Only this
+    # operational launcher is expected to differ at a descendant recovery commit.
     return payload
 
 

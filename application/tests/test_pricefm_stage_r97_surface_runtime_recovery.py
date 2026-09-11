@@ -57,8 +57,10 @@ def write_fixture(module, tmp_path: Path) -> tuple[Path, Path, Path]:
     tasks.mkdir(parents=True)
     source = tmp_path / "source.txt"
     runner = tmp_path / "runner.R"
+    launcher = tmp_path / "launcher.py"
     source.write_text("source\n")
     runner.write_text("# runner\n")
+    launcher.write_text("# original launcher\n")
     records = {}
     for name in (
         "selected_normal_contract", "source_data_config", "generated_data_config",
@@ -70,6 +72,7 @@ def write_fixture(module, tmp_path: Path) -> tuple[Path, Path, Path]:
     pipeline = {
         "schema_version": 1, "stage": "R97", "region": "AT",
         **records, "runner": file_record(runner, "runner"),
+        "launcher": file_record(launcher, "launcher"),
         "test_opened": False, "test_access_authorized": False,
         "registry_mutation_authorized": False, "article_mutation_authorized": False,
         "joint_model_authorized": False, "mcmc_authorized": False,
@@ -159,6 +162,9 @@ def test_surface_recovery_rebinds_only_control_and_preserves_surface_hashes(tmp_
         for name in ("pipeline_contract.json", "task_manifest.csv", "preprocessing_terminal.json")
     }
     task_hashes = {path.name: sha256_file(path) for path in (grid / "tasks").glob("*.json")}
+    Path(json.loads((grid / "pipeline_contract.json").read_text())["launcher"]["path"]).write_text(
+        "# repaired operational launcher\n"
+    )
     result = module.run(SimpleNamespace(
         shard_contract=contract, campaign_root=campaign, code_root=tmp_path,
         host="muscat", output_dir=tmp_path / "output", write=True, force=False,
@@ -172,6 +178,15 @@ def test_surface_recovery_rebinds_only_control_and_preserves_surface_hashes(tmp_
     assert control["git_identity"] == Identity.to_dict()
     assert control["normal_convergence_recovery"] == module.RECOVERY_POLICY
     assert control["surface_runtime_recovery"]["DESN_or_tau0_changed"] is False
+
+
+def test_surface_recovery_rejects_changed_scientific_runner(tmp_path):
+    module = load()
+    _, _, grid = write_fixture(module, tmp_path)
+    pipeline = json.loads((grid / "pipeline_contract.json").read_text())
+    Path(pipeline["runner"]["path"]).write_text("# changed scientific runner\n")
+    with pytest.raises(RuntimeError, match="hash changed"):
+        module.verify_pipeline(grid / "pipeline_contract.json")
 
 
 def test_surface_recovery_refuses_to_rebind_live_launcher(tmp_path, monkeypatch):

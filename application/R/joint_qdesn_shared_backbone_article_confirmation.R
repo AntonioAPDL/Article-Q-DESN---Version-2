@@ -2212,12 +2212,14 @@ app_joint_article_mcmc_resume_compatibility_audit <- function(
         (likelihood == "exAL" && repair_enabled) ||
         (likelihood == "AL" && (repair_enabled || repair_count == 0L))
       )
-    equivalence_basis <- if (likelihood == "exAL") {
-      "unchanged_exact_m0_guarded_precision_path"
-    } else if (!repair_enabled && repair_count == 0L) {
-      "unrepaired_direct_al_path_proved_equivalent_by_regression_test"
+    equivalence_basis <- if (repair_enabled && repair_count > 0L) {
+      "legacy_guarded_draw_repair_proved_equivalent_to_guarded_precision_system"
+    } else if (repair_enabled) {
+      "guarded_direct_path_proved_equivalent_by_regression_test"
+    } else if (repair_count == 0L) {
+      "unrepaired_direct_path_proved_equivalent_by_regression_test"
     } else {
-      "current_guarded_al_precision_path"
+      "incompatible_repair_metadata"
     }
     checks <- c(
       isTRUE(summary$manifest_verified[[1L]]),
@@ -2283,9 +2285,11 @@ app_joint_article_mcmc_resume_compatibility_audit <- function(
     "posterior-target hashes, retained-draw counts and finiteness, explicit",
     "execution-commit ancestry, and the bounded precision-repair policy.",
     "",
-    "An AL worker that completed without repair is compatible because the",
-    "repair-enabled direct path is regression-tested to be draw-for-draw",
-    "identical. The audit preserves the original execution commit."
+    "A worker that completed on a direct path is compatible because the new",
+    "complete precision-system guard is regression-tested to be draw-for-draw",
+    "identical. The former guarded draw-repair path is also fixed-seed",
+    "identical to the corresponding complete-system repair. The audit",
+    "preserves every original execution commit."
   ), readme)
   paths <- c(
     README = readme,

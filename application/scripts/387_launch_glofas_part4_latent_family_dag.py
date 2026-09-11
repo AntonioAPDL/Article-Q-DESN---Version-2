@@ -108,6 +108,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-root", required=True)
     parser.add_argument("--workers", type=int, default=18)
+    parser.add_argument("--expected-jobs", type=int, default=18)
     parser.add_argument("--poll-seconds", type=int, default=60)
     parser.add_argument("--session-prefix", default="glofas_part4_latent")
     parser.add_argument("--execute", action="store_true")
@@ -136,6 +137,7 @@ def main():
         command = [
             sys.executable, str(Path(__file__).resolve()),
             "--runtime-root", str(runtime), "--workers", str(args.workers),
+            "--expected-jobs", str(args.expected_jobs),
             "--poll-seconds", str(args.poll_seconds), "--session-prefix", args.session_prefix,
             "--blas-library", str(blas_library) if blas_library is not None else "none",
             "--execute", "--approval-token", APPROVAL_TOKEN,
@@ -153,8 +155,12 @@ def main():
         return 0
 
     rows = read_manifest(manifest_path)
-    if len(rows) != 18:
-        raise SystemExit(f"expected 18 Part 4 model jobs, found {len(rows)}")
+    if args.expected_jobs < 1:
+        raise SystemExit("expected-jobs must be positive")
+    if len(rows) != args.expected_jobs:
+        raise SystemExit(
+            f"expected {args.expected_jobs} Part 4 model jobs, found {len(rows)}"
+        )
     status_dir = runtime / "status"
     scripts_dir = runtime / "scripts"
     logs_dir = runtime / "logs"

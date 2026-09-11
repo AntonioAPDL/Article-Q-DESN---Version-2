@@ -12,6 +12,51 @@ app_glofas_part4_fixed_window <- function() {
   )
 }
 
+app_glofas_part4_window_from_cutoff <- function(
+    cutoff_row,
+    issued_horizon = 28L,
+    ensemble_members = 51L) {
+  required <- c("origin_date", "train_end", "eval_start", "eval_end", "horizon_max")
+  missing <- setdiff(required, names(cutoff_row))
+  if (!is.data.frame(cutoff_row) || nrow(cutoff_row) != 1L || length(missing)) {
+    stop(
+      sprintf(
+        "A one-row cutoff contract with fields %s is required.",
+        paste(required, collapse = ", ")
+      ),
+      call. = FALSE
+    )
+  }
+  cutoff <- as.Date(cutoff_row$origin_date[[1L]])
+  train_end <- as.Date(cutoff_row$train_end[[1L]])
+  forecast_start <- as.Date(cutoff_row$eval_start[[1L]])
+  requested_end <- as.Date(cutoff_row$eval_end[[1L]])
+  requested_horizon <- as.integer(cutoff_row$horizon_max[[1L]])
+  issued_horizon <- as.integer(issued_horizon)
+  ensemble_members <- as.integer(ensemble_members)
+  if (any(is.na(c(cutoff, train_end, forecast_start, requested_end))) ||
+      length(requested_horizon) != 1L || !is.finite(requested_horizon) ||
+      length(issued_horizon) != 1L || !is.finite(issued_horizon) || issued_horizon < 1L ||
+      length(ensemble_members) != 1L || !is.finite(ensemble_members) || ensemble_members < 1L) {
+    stop("Part 4 cutoff-derived window values must be finite and valid.", call. = FALSE)
+  }
+  if (!identical(train_end, cutoff) ||
+      !identical(forecast_start, cutoff + 1L) ||
+      !identical(requested_end, cutoff + requested_horizon) ||
+      issued_horizon > requested_horizon) {
+    stop("Part 4 cutoff dates and horizons are not internally aligned.", call. = FALSE)
+  }
+  list(
+    cutoff = cutoff,
+    forecast_start = forecast_start,
+    requested_forecast_end = requested_end,
+    issued_forecast_end = cutoff + issued_horizon,
+    requested_horizon = requested_horizon,
+    issued_horizon = issued_horizon,
+    ensemble_members = ensemble_members
+  )
+}
+
 app_glofas_part4_build_panel <- function(cfg) {
   validated <- app_validate_input_manifest(
     app_config_path(cfg, "input_manifest"),
@@ -32,8 +77,9 @@ app_glofas_part4_build_panel <- function(cfg) {
 app_glofas_part4_window_audit <- function(
     panel,
     cutoff_row,
-    expected = app_glofas_part4_fixed_window(),
+    expected = NULL,
     strict_members = TRUE) {
+  if (is.null(expected)) expected <- app_glofas_part4_window_from_cutoff(cutoff_row)
   checks <- list(
     origin = identical(as.Date(cutoff_row$origin_date[[1L]]), expected$cutoff),
     train_end = identical(as.Date(cutoff_row$train_end[[1L]]), expected$cutoff),

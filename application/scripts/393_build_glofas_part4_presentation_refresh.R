@@ -466,22 +466,22 @@ quantile_plot <- function(models, history, forecast) {
     geom_line(
       data = history_nonmedian,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.60, linetype = "dashed"
+      linewidth = 0.26, linetype = "dashed"
     ) +
     geom_line(
       data = forecast_nonmedian,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.70
+      linewidth = 0.32
     ) +
     geom_line(
       data = history_median,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.83, linetype = "dashed"
+      linewidth = 0.36, linetype = "dashed"
     ) +
     geom_line(
       data = forecast_median,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.92
+      linewidth = 0.42
     ) +
     scale_color_manual(
       values = quantile_colors, breaks = as.character(tau_grid),
@@ -489,7 +489,7 @@ quantile_plot <- function(models, history, forecast) {
       name = "Probability level"
     ) +
     guides(
-      color = guide_legend(order = 1, nrow = 1, byrow = TRUE, override.aes = list(linewidth = 0.85)),
+      color = guide_legend(order = 1, nrow = 1, byrow = TRUE, override.aes = list(linewidth = 0.50)),
       shape = guide_legend(order = 2, override.aes = list(color = forest, size = 2.4)),
       alpha = guide_legend(
         order = 3,

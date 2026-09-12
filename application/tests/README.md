@@ -77,6 +77,10 @@ Tracked tests:
   ten-sweep Joint AL finite-cap estimate, preservation of its strict
   nonconvergence flags, complete RHS-release response evidence, and keyed
   Sweep 5-to-10 path/score stability summaries.
+- `test_glofas_part4_presentation_refresh.R`: frozen-ledger verification for
+  the six-family article comparison, the supplementary Joint exAL boundary,
+  the common 28-horizon score contract, versioned output aliases, and the
+  one-page vector-figure presentation contract.
 - `test_glofas_part4_latent_family_scheduler.py`: fail-closed production
   launch authorization and manifest-backed prepared-state health reporting.
 
@@ -88,6 +92,10 @@ The convergence-qualification worker and article-safe closeout builder are
 `application/scripts/392_check_glofas_part4_authoritative_package.R`. The
 grouped comparison renderer is
 `application/scripts/391_plot_glofas_part4_grouped_family_comparison.R`.
+The article-facing six-family table and the matched Normal, independent, and
+joint comparison figures are generated and checked by
+`application/scripts/393_build_glofas_part4_presentation_refresh.R` and
+`application/scripts/394_check_glofas_part4_presentation_refresh.R`.
 - `test_glofas_numerical_backend_exec.py`: child-process backend/thread/CPU
   controls, OpenBLAS path/hash rejection, and terminal execution manifests.
 - `test_glofas_discrepancy_equivalence_audit.R`: component-path algebra,

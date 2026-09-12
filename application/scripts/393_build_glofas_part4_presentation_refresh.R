@@ -319,9 +319,9 @@ grid_gray <- "#D8DEE3"
 strip_fill <- "#F0F2F3"
 strip_edge <- "#C8CED3"
 quantile_colors <- c(
-  "0.05" = "#243B53", "0.2" = "#345C78", "0.35" = "#527A91",
-  "0.5" = "#6B6F8E", "0.65" = "#7F5D82", "0.8" = "#8E496F",
-  "0.95" = "#9B3558"
+  "0.05" = "#1B3F5F", "0.2" = "#3E6D8E", "0.35" = "#7095AE",
+  "0.5" = "#9DB8C9", "0.65" = "#7095AE", "0.8" = "#3E6D8E",
+  "0.95" = "#1B3F5F"
 )
 
 context_for <- function(models) {
@@ -466,22 +466,22 @@ quantile_plot <- function(models, history, forecast) {
     geom_line(
       data = history_nonmedian,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.26, linetype = "dashed"
+      linewidth = 0.18, linetype = "dashed"
     ) +
     geom_line(
       data = forecast_nonmedian,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.32
+      linewidth = 0.22
     ) +
     geom_line(
       data = history_median,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.36, linetype = "dashed"
+      linewidth = 0.22, linetype = "dashed"
     ) +
     geom_line(
       data = forecast_median,
       aes(target_date, value, color = factor(quantile_level), group = interaction(model, target, quantile_level)),
-      linewidth = 0.42
+      linewidth = 0.26
     ) +
     scale_color_manual(
       values = quantile_colors, breaks = as.character(tau_grid),
@@ -489,7 +489,7 @@ quantile_plot <- function(models, history, forecast) {
       name = "Probability level"
     ) +
     guides(
-      color = guide_legend(order = 1, nrow = 1, byrow = TRUE, override.aes = list(linewidth = 0.50)),
+      color = guide_legend(order = 1, nrow = 1, byrow = TRUE, override.aes = list(linewidth = 0.42)),
       shape = guide_legend(order = 2, override.aes = list(color = forest, size = 2.4)),
       alpha = guide_legend(
         order = 3,

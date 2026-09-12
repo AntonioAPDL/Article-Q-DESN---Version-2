@@ -47,8 +47,9 @@ The common graphical encoding is:
 - forest-green open circles and a short-dashed line for withheld USGS values
   used only for scoring;
 - dark orange for retrospective GloFAS and issued ensemble members;
-- a blue-to-plum ordered palette for probability levels;
-- very thin dashed quantile paths before the origin and very thin solid paths
+- a restrained single-blue scale whose shade depends on distance from the
+  median, from the lightest median path to the darkest tail paths;
+- hairline dashed quantile paths before the origin and hairline solid paths
   after the origin, with a modestly stronger median path.
 
 ## Reproduction

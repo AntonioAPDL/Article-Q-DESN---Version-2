@@ -48,7 +48,8 @@ The common graphical encoding is:
   used only for scoring;
 - dark orange for retrospective GloFAS and issued ensemble members;
 - a blue-to-plum ordered palette for probability levels;
-- dashed quantile paths before the origin and solid paths after the origin.
+- very thin dashed quantile paths before the origin and very thin solid paths
+  after the origin, with a modestly stronger median path.
 
 ## Reproduction
 

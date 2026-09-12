@@ -69,6 +69,35 @@ def terminal(task: dict[str, Any]) -> tuple[dict[str, Any], Path]:
     return payload, path
 
 
+def normal_parent(
+    tasks: list[dict[str, Any]], selected: list[dict[str, Any]], fold: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Resolve and verify the fold-specific normal parent for quantile atoms."""
+    normals = [
+        task for task in tasks
+        if task.get("runner_type") == "normal_full" and int(task["fold"]) == fold
+    ]
+    if len(normals) != 1:
+        raise RuntimeError(f"R97 fold {fold} does not contain exactly one normal parent")
+    normal = normals[0]
+    if normal.get("likelihood_family") != "normal_rhs":
+        raise RuntimeError(f"R97 fold {fold} normal parent has the wrong family")
+    if {str(task.get("normal_task_id", "")) for task in selected} != {str(normal["task_id"])}:
+        raise RuntimeError(f"R97 fold {fold} quantile atoms do not share the normal parent")
+    if {
+        str(Path(str(task.get("normal_task_output", ""))).resolve()) for task in selected
+    } != {str(Path(normal["output_dir"]).resolve())}:
+        raise RuntimeError(f"R97 fold {fold} quantile atoms do not share the normal output")
+    if {
+        str(Path(str(task.get("adapter_dir", ""))).resolve()) for task in selected
+    } != {str(Path(normal["adapter_dir"]).resolve())}:
+        raise RuntimeError(f"R97 fold {fold} quantile atoms do not share the normal adapter")
+    config = Path(normal["normal_full_config"])
+    if not config.is_file() or sha256_file(config) != str(normal["normal_full_config_sha256"]):
+        raise RuntimeError(f"R97 fold {fold} normal parent configuration hash changed")
+    return normal, file_record(config, "source_case_config")
+
+
 def family_fold(
     tasks: list[dict[str, Any]], family: str, fold: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -79,7 +108,8 @@ def family_fold(
     if len(selected) != 7:
         raise RuntimeError(f"R97 {family} fold {fold} does not contain seven atoms")
     validate_quantiles([task["tau"] for task in selected], label=f"R97 {family} fold {fold}")
-    adapter = Path(selected[0]["adapter_dir"])
+    normal, source_case_config = normal_parent(tasks, selected, fold)
+    adapter = Path(normal["adapter_dir"])
     validate_no_test_adapter(adapter)
     rows_path = adapter / "rows_val.csv"
     rows = pd.read_csv(rows_path)
@@ -106,7 +136,7 @@ def family_fold(
             "beta": file_record(beta_path, f"fold{fold}_{family}_beta"),
             "prediction": file_record(prediction_path, f"fold{fold}_{family}_validation_prediction"),
             "terminal": file_record(terminal_path, f"fold{fold}_{family}_terminal"),
-            "source_case_config": file_record(Path(task["normal_full_config"]), "source_case_config"),
+            "source_case_config": source_case_config,
             "feature_manifest": file_record(adapter / "feature_manifest.json", "feature_manifest"),
             "x_val": file_record(adapter / "X_val.csv", "validation_design"),
             "rows_val": file_record(rows_path, "validation_rows"),

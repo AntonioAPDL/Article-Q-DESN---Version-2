@@ -771,19 +771,28 @@ describe it as cap-stabilized after RHS release, not as strictly
 outer-converged. No MCMC application fit is reported.
 
 \noindent\textbf{Forecast-period scores.}
-Table~\ref{tab:glofas-application-score} shows that Joint AL reduces the
-seven-level finite-grid CRPS from \GlofasApplicationCurrentRawCrps{} for raw
-GloFAS to \GlofasApplicationCurrentQdesnCrps{}, a
-\GlofasApplicationCurrentCrpsReduction{} reduction. It also has lower mean
-check loss and interval score. Its empirical 90\% interval coverage is
-\GlofasApplicationCurrentQdesnMeanCoverage{}, compared with
-\GlofasApplicationCurrentRawMeanCoverage{} for raw GloFAS. Independent AL has
-a slightly larger CRPS of \(0.8606\) with the same empirical coverage. A Normal
-Ridge diagnostic has the smaller CRPS \(0.8062\), but only \(0.250\) coverage;
-it is not the selected quantile model.
+Table~\ref{tab:glofas-application-score} compares the selected Joint AL model
+with the completed independent quantile regressions, two Gaussian predictive
+baselines, and raw GloFAS. Joint AL reduces \(\aCRPS\) from
+\GlofasApplicationCurrentRawAcrps{} for raw GloFAS to
+\GlofasApplicationCurrentQdesnAcrps{}, a
+\GlofasApplicationCurrentAcrpsReduction{} reduction, and has the smallest mean
+check loss and interval score among the quantile-regression models. Independent
+AL gives similar scores and the same empirical 90\% coverage of \(0.929\).
+Independent exAL has larger scores and lower coverage in this forecast window.
+
+The Normal Ridge baseline has the smallest numerical \(\aCRPS\), \(0.8062\),
+but its empirical 90\% coverage is \(0.250\) and its interval score is
+\(13.8539\), compared with \(0.929\) and \(5.3889\) for Joint AL. This
+difference illustrates that the summaries answer distinct questions: mean
+check loss weights the seven levels equally, whereas \(\aCRPS\) uses the
+trapezoidal weights in Eq.~\eqref{eq:acrps-main}, and interval score and
+coverage assess the central forecast interval. The comparisons are descriptive
+for one forecast origin; no sampling-uncertainty calculation for score
+differences is available.
 
 This issued-window improvement does not extend to the historical fit. On the
-common six-level grid, the Part 4 Joint AL CRPS is 68.6\% larger than FR09 over
+common six-level grid, the Part 4 Joint AL \(\aCRPS\) is 68.6\% larger than FR09 over
 the full history and is 104.2\%, 51.4\%, and 8.6\% larger over the final 1000,
 200, and 50 dates, respectively. FR09 is therefore retained as the stronger
 historical benchmark, while Part 4 is interpreted only for this single-origin
@@ -795,33 +804,39 @@ GloFAS ensemble over the single forecast window.
 
 \begin{table}[!htbp]
 \centering
+\TableStyle
 \caption{Forecast scoring for the GloFAS retrospective analysis at origin
 \GlofasApplicationCurrentOriginDate{}. Scores use the 28 issued horizons and
-are computed on the \(\log(\mathrm{USGS}+1)\) scale. Lower check loss, interval
-score, and finite-grid CRPS are better; the latter is the integrated check-loss
-approximation in Eq.~\eqref{eq:acrps-main} over the seven fitted levels.
-Coverage is empirical coverage of the nominal 90\% interval. The final column
-gives the CRPS reduction relative to raw GloFAS.}
+are computed on the \(\log(\mathrm{USGS}+1)\) scale and the common probability
+grid \(0.05,0.20,0.35,0.50,0.65,0.80,0.95\). Mean check loss averages the
+seven level-specific losses equally, whereas \(\aCRPS\) uses the trapezoidal
+weights in Eq.~\eqref{eq:acrps-main}. The Normal rows summarize Gaussian
+predictive distributions on the same dates and probability grid. Lower scores
+are better. Coverage is empirical coverage of the nominal 90\% interval; the
+final column gives the \(\aCRPS\) reduction relative to raw GloFAS.}
 \label{tab:glofas-application-score}
-\resizebox{\textwidth}{!}{%
-\input{\GlofasApplicationCurrentScoreTable}}
+\input{\GlofasApplicationCurrentScoreTable}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
 \caption{Joint AL Q--DESN latent-path analysis over the final 30 historical
-dates and 28 issued GloFAS horizons. The upper panel shows the seven fitted
-USGS quantile paths, with historical fits dashed and issued paths solid;
-observed history is black and withheld USGS values are purple. Thin pale lines
-show the 51 issued GloFAS members. The lower panel shows the corresponding
-GloFAS-minus-USGS discrepancy quantiles and withheld discrepancy. The vertical
-dotted line marks the forecast origin. All values are on the transformed
-scale.}
-\figalt{Two panels show seven Joint AL Q--DESN quantile paths before and after
-the forecast origin. The upper panel compares the latent USGS paths with
-observed and withheld streamflow and the issued GloFAS members; the lower panel
-shows the fitted GloFAS-minus-USGS discrepancy and withheld discrepancy.}
+dates and 28 issued GloFAS horizons. The seven probability levels share a
+blue-to-plum gradient; historical quantile paths are dashed and issued paths
+are solid. Forest-green filled circles joined by a thin solid line denote USGS
+observations available through the origin. Forest-green open circles joined by
+a short-dashed line denote the withheld USGS values used only for scoring.
+Dark-orange lines show retrospective GloFAS and the 51 issued ensemble members.
+The lower panel gives the corresponding GloFAS-minus-USGS discrepancy paths.
+The vertical dotted line marks the forecast origin. No crossing correction is
+applied. All values are on the transformed scale.}
+\figalt{Two panels show the seven Joint AL Q--DESN quantile paths over 30
+historical dates and 28 forecast dates. The upper panel contrasts observed and
+withheld USGS values with retrospective and issued GloFAS values. The lower
+panel shows fitted and observed GloFAS-minus-USGS discrepancies. Historical
+quantile paths are dashed, forecast paths are solid, and a vertical line marks
+the forecast origin.}
 \label{fig:glofas-application-forecast-period}
 \end{figure}
 

@@ -1,0 +1,14 @@
+\begin{tabularx}{\textwidth}{@{}YrrrrrY@{}}
+\toprule
+Model & \shortstack{\(\aCRPS\)\\transformed} & \shortstack{\(\aCRPS\)\\original} & \shortstack{Median\\MAE} & \shortstack{Median\\RMSE} & \shortstack{90\%\\coverage} & Qualification \\
+\midrule
+Joint AL & 0.8374 & 27.132 & 1.374 & 1.531 & 0.929 & Selected; cap-stabilized \\
+Independent AL & 0.8606 & 28.053 & 1.381 & 1.549 & 0.929 & Completed comparator \\
+Independent exAL & 1.0478 & 32.787 & 1.560 & 1.724 & 0.750 & Completed comparator \\
+Normal Ridge & 0.8062 & 32.032 & 0.988 & 1.153 & 0.250 & Gaussian baseline \\
+Normal RHS/VB & 0.9412 & 33.858 & 1.132 & 1.334 & 0.179 & Gaussian baseline \\
+Raw GloFAS & 1.4360 & 39.401 & 1.751 & 1.919 & 0.000 & Issued benchmark \\
+\midrule
+Joint exAL & 1.0063 & 31.829 & 1.516 & 1.675 & 0.786 & Sensitivity; fit not qualified \\
+\bottomrule
+\end{tabularx}

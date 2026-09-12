@@ -45,6 +45,7 @@
 \DeclareMathOperator{\argmin}{arg\,min}
 \newcommand{\pkg}[1]{\textsf{#1}}
 \newcommand{\figalt}[1]{}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\TableStyle}{\footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.08}}
 
 \input{tables/glofas_application_current_outputs.tex}
@@ -2058,21 +2059,66 @@ No MCMC fit was used for this application.
 
 \begin{table}[!htbp]
 \centering
-\resizebox{\textwidth}{!}{%
-\input{tables/glofas_application_part4_all_family_scores__glofas_part4_joint_al_sweep10_20260911.tex}}
-\caption{Part 4 issued-window comparison on the transformed scale. The Normal
-rows are diagnostic baselines. Joint AL is the selected quantile model; its
-numerical status is cap-stabilized after RHS release. Joint exAL is retained
-only as a nonconverged sensitivity result. CRPS is the seven-level integrated
-check-loss approximation.}
+\TableStyle
+\input{\GlofasApplicationCurrentSupplementScoreTable}
+\caption{Complementary Part 4 scores over the 28 issued horizons. Transformed
+scores use \(\log(\mathrm{USGS}+1)\); original-scale \(\aCRPS\), median MAE,
+and median RMSE use USGS streamflow units. All \(\aCRPS\) values use the same
+seven probability levels and trapezoidal weights. Joint AL is the selected
+quantile model and is cap-stabilized after RHS release. Joint exAL is separated
+as a sensitivity result because its source fit did not satisfy the numerical
+qualification rule.}
 \label{tab:supp-glofas-part4-family-scores}
 \end{table}
 
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentNormalComparisonFigure}
+\caption{Gaussian predictive baselines for the GloFAS application. Each panel
+shows the predictive median and central 90\% interval over the final 30
+historical dates and 28 issued horizons. The upper panel uses the recursively
+simulated latent future-response draws that enter the stored score calculation.
+Forest-green filled and open circles distinguish observed and withheld USGS
+values; dark orange denotes retrospective and issued GloFAS values.}
+\figalt{Two panels compare Normal Ridge and Normal regularized-horseshoe
+predictive medians and central 90 percent intervals with observed and withheld
+USGS values. A vertical line marks the forecast origin.}
+\label{fig:supp-glofas-part4-normal-comparison}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentIndependentComparisonFigure}
+\caption{Independent AL and exAL quantile regressions for the GloFAS
+application. Panels use the same dates, probability-level palette, and data
+encoding as the main-text GloFAS figure. Historical
+quantile paths are dashed and issued paths are solid. Panel strips report the
+forecast-window \(\aCRPS\) and empirical coverage of the central 90\% interval.}
+\figalt{Paired panels compare independent AL and exAL quantile paths before and
+after the forecast origin. Observed USGS values use filled green circles,
+withheld values use open green circles, and GloFAS values are orange.}
+\label{fig:supp-glofas-part4-independent-comparison}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentJointComparisonFigure}
+\caption{Joint AL and exAL quantile regressions for the GloFAS application.
+Joint AL is the selected fit. Joint exAL is shown only as a sensitivity result
+because its source fit did not satisfy the numerical qualification rule. The
+common encoding and forecast-window summaries permit a descriptive comparison
+without treating the Joint exAL result as an eligible selection candidate.}
+\figalt{Paired panels compare selected Joint AL quantile paths with unqualified
+Joint exAL sensitivity paths over common historical and forecast dates. A
+vertical line marks the forecast origin.}
+\label{fig:supp-glofas-part4-joint-comparison}
+\end{figure}
+
 \begin{table}[!htbp]
 \centering
-\input{tables/glofas_application_part4_historical_guardrail__glofas_part4_joint_al_sweep10_20260911.tex}
-\caption{Historical CRPS guardrail on the common six-level grid. Positive
-relative changes indicate larger CRPS for Part 4 Joint AL. FR09 remains the
+\input{\GlofasApplicationCurrentHistoricalGuardrailTable}
+\caption{Historical \(\aCRPS\) guardrail on the common six-level grid. Positive
+relative changes indicate larger \(\aCRPS\) for Part 4 Joint AL. FR09 remains the
 stronger historical-fit benchmark; Part 4 authority is confined to the
 single-origin issued-window experiment.}
 \label{tab:supp-glofas-part4-historical-guardrail}

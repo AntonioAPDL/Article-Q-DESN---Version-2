@@ -56,8 +56,8 @@ score_grids <- list(
     w = c(0.025, 0.100, 0.200, 0.250, 0.200, 0.100, 0.025)
   ),
   glofas = list(
-    p = c(0.05, 0.15, 0.35, 0.50, 0.65, 0.80, 0.95),
-    w = c(0.050, 0.150, 0.175, 0.150, 0.150, 0.150, 0.075)
+    p = c(0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95),
+    w = c(0.075, 0.150, 0.150, 0.150, 0.150, 0.150, 0.075)
   )
 )
 for (grid in score_grids) {
@@ -97,19 +97,27 @@ for (tau in c(0.05, 0.25, 0.5, 0.75, 0.95)) {
 assert_contains("qdesn-supplement.tex", "branchwise smooth for")
 assert_contains("qdesn-supplement.tex", "The AL special case")
 
-# The selected GloFAS authority is FR09 persistence-anchored innovation with a
-# retrospective blended future-covariate policy and disabled response-level
-# posterior-predictive sampling.
-cfg <- yaml::read_yaml(app_path("tables/glofas_application_run_config__glofas_fr09_authoritative_full7_20260811.yaml"))
-stopifnot(identical(cfg$prediction$discrepancy_transition_strategy, "persistence_anchored_innovation"))
-stopifnot(identical(cfg$covariates$source_policy, "realized_history_and_blended_gefs_forecast"))
-stopifnot(isTRUE(cfg$covariates$allow_realized_future_blend))
-stopifnot(identical(cfg$prediction$posterior_predictive_sampling, "disabled"))
-assert_contains("application/R/fit_qdesn_latent_path.R", "d_feature_future <- discrepancy_baseline_future")
-assert_contains("main.tex", "persistence-plus-adjustment specification anchors")
-assert_contains("main.tex", "persistence-anchored discrepancy")
-assert_contains("main.tex", "observed history and Global Ensemble Forecast System (GEFS) forecasts")
-assert_not_contains("main.tex", "forecast-window discrepancy reservoir is driven by the horizon-keyed contrast")
+# The selected GloFAS authority is the Part 4 Joint AL latent-path analysis.
+# The future USGS path is latent during fitting, and the issued-member
+# likelihood is normalized to one unit of information at each horizon.
+part4_scores <- read.csv(
+  app_path("tables/glofas_application_part4_forecast_scores__glofas_part4_joint_al_sweep10_20260911.csv"),
+  stringsAsFactors = FALSE
+)
+stopifnot(all(part4_scores$n_scored_horizons == 28L))
+stopifnot(identical(
+  part4_scores$numerical_status[part4_scores$family == "Joint AL"],
+  "cap_stabilized_after_rhs_release"
+))
+stopifnot(identical(
+  part4_scores$numerical_status[part4_scores$family == "Joint exAL"],
+  "source_fit_not_qualified"
+))
+assert_contains("main.tex", "represented as latent during fitting")
+assert_contains("main.tex", "51 issued members has weight \\(1/51\\)")
+assert_contains("main.tex", "No crossing correction is applied")
+assert_contains("main.tex", "cap-stabilized after RHS release")
+assert_not_contains("main.tex", "persistence-anchored discrepancy")
 
 # PriceFM is a retrospective comparison with retrospectively observed own-region
 # leads in every selected row and additional neighbor leads when neighborhood

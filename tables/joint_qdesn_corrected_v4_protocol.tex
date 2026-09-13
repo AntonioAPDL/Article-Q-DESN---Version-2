@@ -1,0 +1,19 @@
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.25\textwidth}>{\raggedright\arraybackslash}p{0.65\textwidth}@{}}
+\toprule
+Item & Specification \\
+\midrule
+Feature design & One scenario-specific DESN/RHS specification is selected on separate source realizations and shared by all four model classes; the evaluation realization is excluded from selection. \\
+Quantile grid & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95. \\
+Sequential initialization & Gaussian ridge initializes Gaussian RHS--VB; independent AL fits proceed outward from the median; each AL fit initializes exAL at the same level; complete independent grids initialize the corresponding joint fits; matching VB fits initialize MCMC. \\
+Common posterior target & All five chains in a model cell share fixed prior hyperparameters and one verified posterior-target hash. Dispersed initial states do not enter prior centers. The RHS global-scale shape uses \((d_\beta+1)/2\). \\
+Posterior simulation & Five chains per model cell. AL chains use 4,000 iterations, 1,000 burn-in iterations, and thinning by four; exAL chains use 8,000 iterations, 2,000 burn-in iterations, and thinning by four. The complete calculation retains 180,000 draws. \\
+Score distribution & The primary summary uses 750 equally spaced retained draws from each chain, or 3,750 chain-balanced draws per model cell. Independent quantile draws use the pre-specified seeded product coupling; joint draws preserve cross-level identity. \\
+Forecast evaluation & Each comparison uses the same 990 sequentially conditional origin--horizon rows. The primary criterion is DGP-integrated \(\aCRPS\) after monotone reporting. \\
+\bottomrule
+\end{tabular}
+\caption{Design of the corrected common-posterior joint multi-quantile evaluation. Initialization transfers starting values only; each destination retains its own likelihood, prior, and posterior target.}
+\label{tab:joint-qdesn-corrected-v4-protocol}
+\end{table}

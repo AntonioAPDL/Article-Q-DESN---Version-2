@@ -36,6 +36,7 @@ from pricefm_r97_distributed_contract import (
 )
 from pricefm_region_frozen_contract import (
     atomic_write_json,
+    canonical_sha256,
     git_identity,
     sha256_file,
     validate_git_identity,
@@ -124,6 +125,13 @@ def validate_completed_surface_inputs(
             raise RuntimeError(f"R97 closeout-only surface is not the exact 45-task DAG: {region}")
         prep = json.loads(prep_path.read_text())
         pipeline = Path(prep.get("pipeline_contract", ""))
+        pipeline_payload = json.loads(pipeline.read_text()) if pipeline.is_file() else {}
+        pipeline_hash = str(pipeline_payload.get("pipeline_contract_sha256", ""))
+        unhashed_pipeline = {
+            key: value
+            for key, value in pipeline_payload.items()
+            if key != "pipeline_contract_sha256"
+        }
         if (
             prep.get("stage") != "R97"
             or prep.get("status") != "completed_launch_grade_not_launched"
@@ -133,7 +141,9 @@ def validate_completed_surface_inputs(
             or prep.get("launch_invoked") is not False
             or Path(prep.get("manifest", "")).resolve() != manifest_path.resolve()
             or not pipeline.is_file()
-            or sha256_file(pipeline) != str(prep.get("pipeline_contract_sha256", ""))
+            or not pipeline_hash
+            or canonical_sha256(unhashed_pipeline) != pipeline_hash
+            or pipeline_hash != str(prep.get("pipeline_contract_sha256", ""))
         ):
             raise RuntimeError(f"R97 closeout-only preparation contract is invalid: {region}")
         invalid = [

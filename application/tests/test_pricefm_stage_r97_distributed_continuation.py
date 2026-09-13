@@ -250,7 +250,10 @@ def test_closeout_only_requires_exact_complete_surface_and_empty_partial_output(
     for root in (grid, prep, closeout):
         root.mkdir(parents=True)
     pipeline = grid / "pipeline_contract.json"
-    pipeline.write_text("{}\n")
+    pipeline_payload = {"stage": "R97", "region": "AT"}
+    pipeline_hash = HOST.canonical_sha256(pipeline_payload)
+    pipeline_payload["pipeline_contract_sha256"] = pipeline_hash
+    atomic_write_json(pipeline, pipeline_payload)
     rows = [
         {"task_id": f"task-{index}", "output_dir": str(region / f"task-{index}")}
         for index in range(45)
@@ -262,7 +265,7 @@ def test_closeout_only_requires_exact_complete_surface_and_empty_partial_output(
         "region": "AT", "tasks": 45, "test_opened": False,
         "launch_invoked": False, "manifest": str(manifest),
         "pipeline_contract": str(pipeline),
-        "pipeline_contract_sha256": HOST.sha256_file(pipeline),
+        "pipeline_contract_sha256": pipeline_hash,
     })
     args = SimpleNamespace(campaign_root=campaign)
     contract = {"regions": ["AT"]}

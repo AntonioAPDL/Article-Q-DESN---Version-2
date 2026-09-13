@@ -1,0 +1,20 @@
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.39\textwidth}rr@{}}
+\toprule
+Simulation setting & \(\AL\) & \(\exAL\) \\
+\midrule
+Asymmetric-Laplace tail & \textbf{0.4263 [0.0184, 0.9880]} & 0.1463 [-0.0037, 0.5677] \\
+Gaussian-mixture innovations & \textbf{0.2044 [0.0368, 0.4678]} & 0.0325 [-0.0060, 0.1397] \\
+Laplace innovations & 0.0378 [-0.0094, 0.0995] & -0.0014 [-0.0217, 0.0199] \\
+Nonlinear reservoir dynamics & \textbf{0.0426 [0.0056, 0.0881]} & \textbf{0.0161 [0.0002, 0.0421]} \\
+Gaussian innovations & 0.0052 [-0.0482, 0.0619] & 0.0008 [-0.0394, 0.0558] \\
+Persistent heavy tails & 0.0094 [-0.0204, 0.0772] & 0.0160 [-0.0142, 0.0787] \\
+Regime shift & 0.0038 [-0.0126, 0.0266] & 0.0087 [-0.0085, 0.0351] \\
+Student-\(t\) location--scale & 0.0192 [-0.0314, 0.1379] & 0.0174 [-0.0224, 0.1089] \\
+\bottomrule
+\end{tabular}
+\caption{Joint-minus-independent contrasts in posterior DGP-integrated \(\aCRPS\). Entries are posterior means with equal-tailed 95\% intervals under the pre-specified chain-balanced pairing. Positive values favor independent estimation. Boldface marks the four intervals lying entirely above zero; the other twelve include zero, and none favors joint estimation.}
+\label{tab:supp-joint-qdesn-corrected-v4-contrasts}
+\end{table}

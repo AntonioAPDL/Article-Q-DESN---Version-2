@@ -1756,48 +1756,51 @@ limited sensitivity to MCMC initialization for the selected specifications.
 \clearpage
 \subsection{Joint Multi-Quantile MCMC Evaluation Details}
 
-The shared-backbone evaluation uses the initialization sequence in
+The corrected shared-backbone evaluation uses the initialization sequence in
 Figure~\ref{fig:supp-quantile-sequential-initialization}. One scenario-specific
 DESN/RHS specification is selected from source realizations and held common
 across the four model classes. The evaluation realization is used only for the final
-fit and evaluation. Table~\ref{tab:joint-qdesn-shared-backbone-protocol}
+fit and evaluation. Table~\ref{tab:joint-qdesn-corrected-v4-protocol}
 records the 136 variational components, 160 MCMC chains, and retained-draw
-allocation.
+allocation. All five chains within a model cell share fixed prior
+hyperparameters and one posterior target; chain-specific dispersion affects
+initial states only.
 
-\input{tables/joint_qdesn_shared_backbone_score_table.tex}
+\input{tables/joint_qdesn_corrected_v4_score_table.tex}
 
-Figure~\ref{fig:joint-qdesn-shared-backbone-fit-rmse} compares
+Figure~\ref{fig:joint-qdesn-corrected-v4-fit-rmse} compares
 fitting-sample recovery under the same shared feature design used for the
 forecast-score comparison in the main article.
 
-\input{tables/joint_qdesn_shared_backbone_fit_figure.tex}
+\input{tables/joint_qdesn_corrected_v4_fit_figure.tex}
 
 The posterior-score diagnostics satisfy the pre-specified rank-normalized
-\(\widehat R\), effective-sample-size, and Monte Carlo error criteria in 21 of
-32 comparisons; the other 11 are retained with review status. All 16
+\(\widehat R\), effective-sample-size, and Monte Carlo error criteria in 22 of
+32 comparisons; the other 10 are retained with review status. All 16
 \(\exAL\) scale--asymmetry assessments are also retained at review level.
-Precision stabilization was enabled for 96 \(\exAL\) chains and invoked in
-eight chains for 34 coefficient updates; the maximum relative diagonal
-perturbation was \(10^{-12}\). All repaired chains satisfy the numerical
-checks and no result is excluded on this basis.
+The least favorable joint nonlinear-reservoir assessment has gamma
+rank-normalized \(\widehat R=1.125\) and bulk effective sample size 41.7.
+Precision stabilization was invoked in 26 joint chains for 159 coefficient
+updates; the maximum relative diagonal perturbation was \(10^{-12}\), below
+the pre-specified \(10^{-8}\) failure threshold. All repaired chains satisfy
+the numerical checks and no result is excluded on this basis.
 
-Five paired joint-minus-independent score intervals lie entirely above zero,
-favoring independent estimation, and the other eleven include zero. Raw
+Four paired joint-minus-independent score intervals lie entirely above zero,
+favoring independent estimation, and the other twelve include zero. Raw
 crossings are reported separately from the score after monotone
 rearrangement. All
 posterior-mean grids are ordered after rearrangement.
 
 \input{tables/joint_qdesn_article_validation_provenance_tables.tex}
 
-The displayed shared-backbone calculations used the RHS global-scale update present in
-the stored calculation. If \(d_\beta\) denotes the number of penalized
-coefficients in a global-scale block, a subsequent source correction changed
-the shape term in that conditional update from \(d_\beta/2\) to
-\((d_\beta+1)/2\). No numerical
-adjustment has been made to the stored results. A confirmatory rerun under the
-corrected update is registered as required before the final archival release;
-until then, this complete shared-backbone analysis is the provisional article
-authority.
+This comparison replaces the earlier provisional packet in full. If
+\(d_\beta\) denotes the number of penalized coefficients in an RHS
+global-scale block, the corrected calculation uses shape
+\((d_\beta+1)/2\). Prior centers and hyperparameters are fixed within each
+model cell and do not depend on dispersed chain-specific starting values.
+Posterior-target hashes agree across all five chains in each of the 32 model
+cells. The replacement is based on the common posterior target; no cell was
+selected according to whether its corrected score improved.
 
 The final table reports a separate 50-replicate variational sensitivity
 analysis. Its paired \(\AL\)-minus-\(\exAL\) forecast-MAE differences assess

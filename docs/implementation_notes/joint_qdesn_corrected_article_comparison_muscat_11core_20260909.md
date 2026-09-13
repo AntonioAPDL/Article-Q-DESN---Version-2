@@ -169,3 +169,48 @@ Production may resume only after worker 0021 passes a full-budget sentinel with
 750 finite retained draws, a verified target hash and artifact manifest, and no
 repair above `1e-8`. The other 28 completed workers remain eligible for
 retention only through the explicit resume-compatibility audit.
+
+## Scientific closeout: 2026-09-12
+
+The corrected campaign is complete. The final authority contains 136/136 VB
+components, 32/32 compact initializers, and 160/160 five-chain MCMC workers
+with zero final failures. All 960 worker artifacts, 173 final MCMC manifest
+entries, and 32 chain-invariant posterior-target hashes verify. The registry
+contains 180,000 retained MCMC draws.
+
+The deterministic v4 score finalizer completed at `2026-09-13 00:48:33 UTC`
+without refitting any model. Its frozen status is
+`CORRECTED_JOINT_MUSCAT_PACKET_READY_FOR_COORDINATOR_REVIEW`. The packet has 32
+model-cell score rows, 16 joint-minus-independent contrasts, eight scenario
+winners, zero contract crossings, 102/102 formula and quadrature checks, and
+26/26 verified packet-manifest entries. The complete transfer inventory has
+2,970 files and 387,506,202 bytes; every size and SHA-256 was independently
+verified.
+
+Independent exQDESN is the posterior-mean numerical winner in seven of eight
+scenarios. Joint exQDESN is lower only for `laplace_bridge`, by 0.001401, and
+that interval overlaps the independent exQDESN interval. All eight
+winner-versus-runner intervals overlap. Moreover, the canonical reported
+quantile action favors independent exQDESN in all eight scenarios, including
+`laplace_bridge`. These are descriptive rankings, not decisive superiority
+claims.
+
+The coherence result is clearer. The canonical Joint exQDESN forecast grids
+have zero raw crossings in all eight scenarios. Independent exQDESN has 269
+raw crossing pairs in `asymmetric_laplace_tail` and zero elsewhere. Canonical
+Joint QDESN AL has 1,197 raw crossing pairs versus 3,522 for Independent QDESN
+AL. The monotone reporting contract removes all crossings for every model.
+
+Scalar diagnostics remain review-level for all 16 exAL cells, and 10/32 score
+functionals are review-level under the frozen R-hat/ESS thresholds. This does
+not invalidate the complete packet because scores, reconstruction, coupling,
+and hard provenance gates pass, but it requires qualified article language.
+The bounded precision repair was used by 26 joint workers for 159 events, all
+at maximum relative jitter `1e-12`.
+
+The corrected packet supersedes Phase181 as the valid common-posterior
+comparison even where its numerical scores are worse. Phase181 remains
+historical sensitivity evidence only. The article, tables, figures, PDF, and
+Overleaf were not modified in this lane. Integration must use the dedicated
+closeout handoff and must preserve Phase182 dense-grid work as a separate
+scientific campaign.

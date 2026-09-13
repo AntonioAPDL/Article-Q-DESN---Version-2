@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 from pathlib import Path
@@ -44,7 +45,10 @@ def parser() -> argparse.ArgumentParser:
     inventory.add_argument("--base-root", type=Path, default=BASE_ROOT)
     inventory.add_argument("--campaign-root", type=Path, default=CAMPAIGN_ROOT)
     inventory.add_argument("--output-dir", type=Path, required=True)
-    inventory.add_argument("--scope", choices=("common", "host", "all"), default="all")
+    inventory.add_argument(
+        "--scope", choices=("common", "host", "results", "all"), default="all",
+        help="Use results only after the host shard has completed validation closeout.",
+    )
     inventory.add_argument("--force", action="store_true")
     verify = sub.add_parser("verify")
     verify.add_argument("--inventory", type=Path, required=True)
@@ -53,24 +57,28 @@ def parser() -> argparse.ArgumentParser:
     return value
 
 
-def transfer_roots(contract: dict[str, Any], campaign_root: Path, scope: str) -> list[tuple[Path, str]]:
-    common = [
-        (PREP_ROOT, "parent_campaign_prep"),
-        (campaign_root / "inner_preprocessing", "shared_inner_preprocessing"),
-        (campaign_root / "processed_inner", "shared_processed_inner"),
-        (DATA_ROOT / "raw", "PriceFM_raw_input"),
-        (DATA_ROOT / "interim", "PriceFM_interim_input"),
-        (DATA_ROOT / "venv", "pinned_PriceFM_python_environment"),
-        (RUNTIME_SOURCE, "normal_runtime_source"),
-        (RUNTIME_LIBRARY, "coherent_exAL_runtime_library"),
-        (Path(contract["parent_campaign_contract"]["path"]), "parent_campaign_contract"),
-        (Path(contract["checkpoint"]["path"]).parent, "distributed_contracts"),
-    ]
-    parent = json.loads(Path(contract["parent_campaign_contract"]["path"]).read_text())
-    common.extend(
-        (Path(parent[name]["path"]), f"parent_{name}")
-        for name in ("authority_registry", "resolved_controls", "se2_reuse", "source_data_config")
-    )
+def transfer_roots(
+    contract: dict[str, Any], campaign_root: Path, scope: str, shard_contract: Path | None = None,
+) -> list[tuple[Path, str]]:
+    common: list[tuple[Path, str]] = []
+    if scope in {"common", "all"}:
+        common = [
+            (PREP_ROOT, "parent_campaign_prep"),
+            (campaign_root / "inner_preprocessing", "shared_inner_preprocessing"),
+            (campaign_root / "processed_inner", "shared_processed_inner"),
+            (DATA_ROOT / "raw", "PriceFM_raw_input"),
+            (DATA_ROOT / "interim", "PriceFM_interim_input"),
+            (DATA_ROOT / "venv", "pinned_PriceFM_python_environment"),
+            (RUNTIME_SOURCE, "normal_runtime_source"),
+            (RUNTIME_LIBRARY, "coherent_exAL_runtime_library"),
+            (Path(contract["parent_campaign_contract"]["path"]), "parent_campaign_contract"),
+            (Path(contract["checkpoint"]["path"]).parent, "distributed_contracts"),
+        ]
+        parent = json.loads(Path(contract["parent_campaign_contract"]["path"]).read_text())
+        common.extend(
+            (Path(parent[name]["path"]), f"parent_{name}")
+            for name in ("authority_registry", "resolved_controls", "se2_reuse", "source_data_config")
+        )
     host = [
         (campaign_root / "regions" / region, f"owned_region_{region}")
         for region in contract["regions"]
@@ -79,6 +87,38 @@ def transfer_roots(contract: dict[str, Any], campaign_root: Path, scope: str) ->
         return common
     if scope == "host":
         return host
+    if scope == "results":
+        if shard_contract is None:
+            raise RuntimeError("results transfer requires the host shard contract path")
+        results = [
+            (campaign_root / "distributed" / contract["host"] / "shard_terminal.json", "host_shard_terminal"),
+            (shard_contract, "host_shard_contract"),
+        ]
+        evidence_names = (
+            "beta", "prediction", "terminal", "source_case_config",
+            "feature_manifest", "x_val", "rows_val", "scaler",
+        )
+        for region in contract["regions"]:
+            closeout = campaign_root / "region_closeouts" / region
+            frozen_path = closeout / "pricefm_stage_r97_frozen_region_surface.json"
+            frozen = json.loads(frozen_path.read_text())
+            for name in ("selected_atom_manifest", "validation_metrics", "pipeline_contract"):
+                verify_file_record(frozen[name], label=f"R97 {region} transfer {name}")
+            selected_path = Path(frozen["selected_atom_manifest"]["path"])
+            with selected_path.open(newline="") as handle:
+                selected = list(csv.DictReader(handle))
+            if len(selected) != 21:
+                raise RuntimeError(f"R97 {region} results transfer requires 21 selected atoms")
+            results.extend([
+                (closeout, f"owned_region_closeout_{region}"),
+                (Path(frozen["pipeline_contract"]["path"]), f"{region}_pipeline_contract"),
+            ])
+            for row in selected:
+                results.extend(
+                    (Path(row[f"{name}_path"]), f"selected_{name}_{region}")
+                    for name in evidence_names
+                )
+        return results
     return common + host
 
 
@@ -136,11 +176,18 @@ def inventory(args: argparse.Namespace) -> dict[str, Any]:
         verify_file_record(contract[name], label=f"R97 shard {name}")
     output = args.output_dir.resolve()
     entries: dict[str, dict[str, Any]] = {}
-    for root, role in transfer_roots(contract, args.campaign_root.resolve(), args.scope):
+    visited: set[str] = set()
+    for root, role in transfer_roots(
+        contract, args.campaign_root.resolve(), args.scope, args.shard_contract.resolve(),
+    ):
         for path in iter_entries(root):
             resolved_path = path.absolute()
             if resolved_path == output or output in resolved_path.parents:
                 continue
+            path_key = str(resolved_path)
+            if path_key in visited:
+                continue
+            visited.add(path_key)
             item = record(path, args.base_root.resolve(), role)
             entries.setdefault(item["relative_path"], item)
     rows = [entries[key] for key in sorted(entries)]

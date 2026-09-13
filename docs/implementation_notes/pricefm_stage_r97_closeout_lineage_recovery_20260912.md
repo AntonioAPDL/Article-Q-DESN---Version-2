@@ -78,6 +78,14 @@ change pipeline manifests. Mixed or ambiguous parent lineage must fail closed.
 - unchanged test, registry, article, joint-model, and MCMC firewalls;
 - hash-verified cross-host evidence before reconciliation.
 
+The final Jerez-to-Muscat transfer uses the dedicated `results` inventory scope.
+Unlike the pre-launch `host` scope, it includes each regional validation closeout,
+the 21 selected atoms' hash-pinned coefficient and validation-replay evidence,
+their scaler/configuration lineage, the completed shard terminal, and the
+descendant shard contract. Unselected screening and quantile-model outputs are
+excluded. This is the exact material required by reconciliation and later frozen
+scoring; test data and global-scoring output are not part of this transfer scope.
+
 The optimal immediate action is to repair and validate closeout while Jerez
 continues fitting. Stopping or relaunching Jerez would discard useful compute
 without addressing the actual defect.

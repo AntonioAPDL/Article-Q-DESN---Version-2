@@ -466,6 +466,86 @@ def test_transfer_inventory_excludes_its_own_output_subtree(tmp_path: Path, monk
     assert [row["relative_path"] for row in payload["entries"]] == ["payload/source.txt"]
 
 
+def test_results_transfer_scope_contains_every_reconciliation_input(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    campaign = base / "campaign"
+    region_root = campaign / "regions/AT"
+    closeout_root = campaign / "region_closeouts/AT"
+    distributed = campaign / "distributed/jerez"
+    for root in (region_root, closeout_root, distributed):
+        root.mkdir(parents=True)
+    unused = region_root / "unselected-heavy.rds"
+    unused.write_text("must not transfer\n")
+    pipeline = region_root / "pipeline.json"
+    pipeline.write_text("{}\n")
+    evidence = {}
+    for name in (
+        "beta", "prediction", "terminal", "source_case_config",
+        "feature_manifest", "x_val", "rows_val", "scaler",
+    ):
+        path = region_root / f"selected_{name}.dat"
+        path.write_text(f"{name}\n")
+        evidence[f"{name}_path"] = str(path)
+        evidence[f"{name}_sha256"] = TRANSFER.sha256_file(path)
+    selected = closeout_root / "pricefm_stage_r97_selected_atom_manifest.csv"
+    pd.DataFrame([evidence] * 21).to_csv(selected, index=False)
+    metrics = closeout_root / "pricefm_stage_r97_family_fold_validation_metrics.csv"
+    metrics.write_text("family,AQL\nal,1\n")
+    frozen = {
+        "selected_atom_manifest": file_record(selected, "selected"),
+        "validation_metrics": file_record(metrics, "metrics"),
+        "pipeline_contract": file_record(pipeline, "pipeline"),
+    }
+    atomic_write_json(closeout_root / "pricefm_stage_r97_frozen_region_surface.json", frozen)
+    (closeout_root / "summary.json").write_text("{}\n")
+    (distributed / "shard_terminal.json").write_text("{}\n")
+    parent = base / "parent.json"
+    assignment = base / "assignment.csv"
+    checkpoint = base / "checkpoint.json"
+    parent.write_text("{}\n")
+    assignment.write_text("region,assigned_host\nAT,jerez\n")
+    checkpoint.write_text("{}\n")
+    contract = sealed_payload({
+        "host": "jerez", "regions": ["AT"],
+        "parent_campaign_contract": file_record(parent, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+    }, "shard_contract_sha256")
+    contract_path = base / "contract.json"
+    atomic_write_json(contract_path, contract)
+    output = base / "inventory"
+    summary = TRANSFER.inventory(SimpleNamespace(
+        shard_contract=contract_path, base_root=base, campaign_root=campaign,
+        output_dir=output, scope="results", force=False,
+    ))
+    payload = json.loads(Path(summary["manifest"]).read_text())
+    paths = {row["relative_path"] for row in payload["entries"]}
+    roles = {row["role"] for row in payload["entries"]}
+    assert {
+        "owned_region_closeout_AT", "host_shard_terminal", "host_shard_contract",
+        "AT_pipeline_contract", "selected_beta_AT", "selected_prediction_AT",
+        "selected_terminal_AT", "selected_source_case_config_AT",
+        "selected_feature_manifest_AT", "selected_x_val_AT", "selected_rows_val_AT",
+        "selected_scaler_AT",
+    } <= roles
+    assert str(unused.relative_to(base)) not in paths
+    assert {
+        str(path.relative_to(base)) for path in (
+            pipeline, selected, metrics, distributed / "shard_terminal.json", contract_path,
+        )
+    } <= paths
+    assert {
+        str(Path(evidence[f"{name}_path"]).relative_to(base))
+        for name in (
+            "beta", "prediction", "terminal", "source_case_config",
+            "feature_manifest", "x_val", "rows_val", "scaler",
+        )
+    } <= paths
+    assert TRANSFER.verify(SimpleNamespace(
+        inventory=Path(summary["manifest"]), target_base_root=base, output=None,
+    ))["status"] == "verified"
+
+
 def test_transfer_rejects_symlink_escape(tmp_path: Path) -> None:
     base = tmp_path / "base"
     base.mkdir()

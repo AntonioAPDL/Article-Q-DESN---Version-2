@@ -593,6 +593,8 @@ def test_scoring_worker_replays_validation_and_scores_test_without_refit(tmp_pat
     assert result["selection_changed"] is False
     assert result["validation_replay_max_abs_diff"] == pytest.approx(0.0)
     assert (output / "test_metric.csv").is_file()
+    assert len(pd.read_csv(output / "test_horizon_metrics.csv")) == 1
+    assert len(pd.read_csv(output / "test_quantile_metrics.csv")) == 7
     assert not (adapter_dir / "X_test.csv").exists()
 
 

@@ -20,7 +20,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from pricefm_metrics import inverse_scale_y, metric_dict
+from pricefm_metrics import average_quantile_loss, inverse_scale_y, metric_dict
 from pricefm_region_frozen_contract import PAPER_QUANTILES, atomic_write_json, file_record
 
 
@@ -165,6 +165,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     truth = inverse_scale_y(np.asarray(y_test, dtype=float), scaler)
     prediction_original = inverse_scale_y(np.column_stack(test_matrix), scaler)
     metrics = metric_dict(truth, prediction_original, PAPER_QUANTILES)
+    horizon_rows = []
+    horizons = rows_test["horizon"].to_numpy(int)
+    for horizon in sorted(set(horizons)):
+        selected_rows = horizons == horizon
+        horizon_rows.append({
+            "region": task["region"], "fold": int(task["fold"]),
+            "selected_family": task["selected_family"], "horizon": int(horizon),
+            "rows": int(selected_rows.sum()),
+            **metric_dict(truth[selected_rows], prediction_original[selected_rows], PAPER_QUANTILES),
+        })
+    quantile_rows = []
+    for index, tau in enumerate(PAPER_QUANTILES):
+        quantile_rows.append({
+            "region": task["region"], "fold": int(task["fold"]),
+            "selected_family": task["selected_family"], "tau": float(tau),
+            "rows": int(len(truth)),
+            "quantile_loss": average_quantile_loss(
+                truth, prediction_original[:, [index]], [tau]
+            ),
+        })
     metric_row = {
         "region": task["region"], "fold": int(task["fold"]),
         "selected_family": task["selected_family"], **metrics,
@@ -176,9 +196,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     replay_path = output / "validation_replay.csv"
     prediction_path = output / "test_predictions_scaled.csv"
     metrics_path = output / "test_metric.csv"
+    horizon_path = output / "test_horizon_metrics.csv"
+    quantile_path = output / "test_quantile_metrics.csv"
     replay.to_csv(replay_path, index=False)
     pd.concat(prediction_frames, ignore_index=True).to_csv(prediction_path, index=False)
     pd.DataFrame([metric_row]).to_csv(metrics_path, index=False)
+    pd.DataFrame(horizon_rows).to_csv(horizon_path, index=False)
+    pd.DataFrame(quantile_rows).to_csv(quantile_path, index=False)
     for name in ("X_train.csv", "y_train.csv", "X_val.csv", "y_val.csv", "X_test.csv", "y_test.csv"):
         path = adapter_dir / name
         if path.exists():
@@ -193,6 +217,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             file_record(replay_path, "validation_replay"),
             file_record(prediction_path, "test_predictions"),
             file_record(metrics_path, "test_metric"),
+            file_record(horizon_path, "test_horizon_metrics"),
+            file_record(quantile_path, "test_quantile_metrics"),
             file_record(adapter_dir / "rows_test.csv", "test_rows"),
             file_record(adapter_dir / "feature_manifest.json", "feature_manifest"),
         ],

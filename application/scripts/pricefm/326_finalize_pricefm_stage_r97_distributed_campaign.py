@@ -60,6 +60,7 @@ def parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--force", action="store_true")
     score = sub.add_parser("score")
     score.add_argument("--reconciliation-terminal", type=Path, required=True)
+    score.add_argument("--scoring-authorization", type=Path, required=True)
     score.add_argument("--campaign-contract", type=Path, default=PREP_ROOT / "pricefm_stage_r97_campaign_contract.json")
     score.add_argument("--campaign-root", type=Path, default=CAMPAIGN_ROOT)
     score.add_argument("--prep-dir", type=Path, default=PREP_ROOT)
@@ -167,13 +168,46 @@ def score(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("R97 validation reconciliation is incomplete")
     if args.approval_token != SCORE_TOKEN:
         raise RuntimeError(f"one-time test scoring requires --approval-token {SCORE_TOKEN}")
+    authorization = json.loads(args.scoring_authorization.read_text())
+    verify_seal(authorization, "scoring_authorization_sha256", label="R98 scoring authorization")
+    expected_flags = {
+        "test_access_authorized": True,
+        "test_opened": False,
+        "model_refit_authorized": False,
+        "selection_change_authorized": False,
+        "registry_mutation_authorized": False,
+        "article_mutation_authorized": False,
+        "joint_model_authorized": False,
+        "mcmc_authorized": False,
+    }
+    if (
+        authorization.get("stage") != "R98"
+        or authorization.get("status") != "authorized_once_for_frozen_R97_test_scoring"
+        or any(authorization.get(name) is not expected for name, expected in expected_flags.items())
+    ):
+        raise RuntimeError("R98 scoring authorization is invalid or opens a blocked action")
+    authorization_reconciliation = verify_file_record(
+        authorization["reconciliation_terminal"], label="R98 reconciliation authorization"
+    )
+    if authorization_reconciliation.resolve() != args.reconciliation_terminal.resolve():
+        raise RuntimeError("R98 scoring authorization names a different reconciliation terminal")
+    authorization_campaign = verify_file_record(
+        authorization["campaign_contract"], label="R98 campaign authorization"
+    )
+    if authorization_campaign.resolve() != args.campaign_contract.resolve():
+        raise RuntimeError("R98 scoring authorization names a different campaign contract")
+    if Path(authorization["campaign_root"]).resolve() != args.campaign_root.resolve():
+        raise RuntimeError("R98 scoring authorization names a different campaign root")
+    for record in authorization.get("scoring_code") or []:
+        verify_file_record(record, label="R98 authorized scoring code")
     if not socket.gethostname().lower().startswith(args.muscat_hostname_prefix.lower()):
         raise RuntimeError("R97 global test scoring is restricted to Muscat")
     if not controller_lock_available(args.campaign_root):
         raise RuntimeError("the original R97 controller is active")
-    muscat_contract = json.loads(Path(reconciliation["muscat_contract"]["path"]).read_text())
-    expected_git = muscat_contract["code_git_identity"]
-    validate_git_identity(args.code_root, expected_git, require_clean=True)
+    terminal_path = args.campaign_root / "distributed/global_scoring_terminal.json"
+    if terminal_path.exists():
+        raise RuntimeError("R97 global test scoring already has a terminal and cannot be reopened")
+    validate_git_identity(args.code_root, authorization["code_git_identity"], require_clean=True)
     cpus, _ = ORIGINAL.choose_cpus(args.workers, 20.0, args.cpu_list)
     campaign_args = SimpleNamespace(
         code_root=args.code_root.resolve(), prep_dir=args.prep_dir.resolve(),
@@ -189,13 +223,15 @@ def score(args: argparse.Namespace) -> dict[str, Any]:
         "SE_2_reused": True,
         "cases": 114,
         "reconciliation": file_record(args.reconciliation_terminal, "validation_reconciliation"),
+        "scoring_authorization": file_record(args.scoring_authorization, "R98_scoring_authorization"),
         "global_closeout": closeout,
         "model_refit_during_test_scoring": False,
+        "selection_changed_during_test_scoring": False,
+        "r98_authority_basis": authorization["authority_transition_policy"]["authority_basis"],
         "registry_mutated": False,
         "article_mutated": False,
     }
-    atomic_path = args.campaign_root / "distributed/global_scoring_terminal.json"
-    write_sealed(atomic_path, result, "global_scoring_terminal_sha256")
+    write_sealed(terminal_path, result, "global_scoring_terminal_sha256")
     return result
 
 

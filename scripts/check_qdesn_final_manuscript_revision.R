@@ -147,6 +147,31 @@ expect(!grepl(
   reader_facing_independent, ignore.case = TRUE
 ), "Internal independent-validation diagnostics remain reader-facing.")
 
+reader_facing_joint <- paste(c(
+  main,
+  supplement,
+  read_text("tables/joint_qdesn_corrected_v4_score_table.tex"),
+  read_text("tables/joint_qdesn_corrected_v4_crossing_table.tex"),
+  read_text("tables/joint_qdesn_corrected_v4_secondary_score_table.tex"),
+  read_text("tables/joint_qdesn_corrected_v4_oracle_recovery_table.tex"),
+  read_text("tables/joint_qdesn_corrected_v4_forecast_figure.tex"),
+  read_text("tables/joint_qdesn_corrected_v4_fit_figure.tex")
+), collapse = "\n")
+expect(!grepl(
+  "canonical-action|Canonical action|black vertical|raw/reported",
+  reader_facing_joint, ignore.case = TRUE
+), "Reader-facing JOINT presentation still contains internal action or count labels.")
+expect(grepl("47,520 adjacent-level", main, fixed = TRUE) &&
+         grepl("2.52\\%", main, fixed = TRUE) &&
+         grepl("7.41\\%", main, fixed = TRUE) &&
+         grepl("0.57\\%", main, fixed = TRUE),
+       "The main article does not report normalized JOINT crossing rates.")
+expect(grepl(
+  "Frequency and magnitude of monotone correction",
+  read_text("tables/joint_qdesn_corrected_v4_crossing_table.tex"),
+  fixed = TRUE
+), "The supplement does not distinguish crossing frequency from adjustment magnitude.")
+
 article_files <- readLines(repo_path("overleaf/article_files.txt"), warn = FALSE)
 expect(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
        "Repeated VB forecast figures remain in the article-only snapshot.")

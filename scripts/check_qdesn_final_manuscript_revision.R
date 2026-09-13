@@ -25,18 +25,20 @@ immutable_hashes <- c(
     "1adc9c8c83b3564ef84be90e146286feac604484638ee31bbe684b66cbe928a8",
   "tables/qdesn_validation_500obs_dgp_oracle_figure_data_v14.csv" =
     "fefad4ff09b221483a2c299a06b7142d41090e06cfa9ad37f396a2551e9f398a",
-  "tables/joint_qdesn_shared_backbone_score_summary.csv" =
-    "05b3b2b0ae69693646573ff1ae50bb4383d0550029d05f581b8339685537f4da",
-  "tables/joint_qdesn_shared_backbone_fit_interval_summary.csv" =
-    "2125e31364eee47d5624ce4ccfa8fcb4ec3a0f8722ae18bc079a012cfb8b1954",
-  "tables/joint_qdesn_shared_backbone_contrast_summary.csv" =
-    "7b249f9199043560014e6064c8c16d9134cdd5548c942296e2a5aecbe548c2d8",
-  "tables/joint_qdesn_shared_backbone_oracle_recovery_summary.csv" =
-    "5a51feae2a1742868fa8e6578a46dc759fd39dc6f325fce88d23ecd43e749d1b",
-  "tables/joint_qdesn_shared_backbone_crossing_summary.csv" =
-    "0ee0efccc96f70893c8c65e6c7da1fbe87e77799fd23768ae6411af5113fa2f6",
-  "tables/joint_qdesn_shared_backbone_score_diagnostics.csv" =
-    "370fb8dd06904790650a589953d87086bfec9a0f47a2041cd59a288cc7bdfdb2",
+  "tables/joint_qdesn_corrected_v4_posterior_dgp_integrated_acrps_summary.csv" =
+    "2470ef53eed99899fea41b1f97cde18687b11c9d9b6455cda8dff8ea29b8adf8",
+  "tables/joint_qdesn_corrected_v4_scenario_winner_summary.csv" =
+    "f98ba9b18f4985afc085d68455e60a7e0bf19fd27bc86022591febd3518b98b2",
+  "tables/joint_qdesn_corrected_v4_joint_independent_contrast_summary.csv" =
+    "49cf419bdf0f4c89280f8b1d6a632c261d9c8b3eee70244376f6589f85a2fc34",
+  "tables/joint_qdesn_corrected_v4_forecast_metric_summary.csv" =
+    "8258d729ede6f577c0abbf3cabeb040d22cec0aafb72606aaa30c32322f8cdd6",
+  "tables/joint_qdesn_corrected_v4_oracle_recovery_summary.csv" =
+    "c160c0e12183ca3e1404e5efad8547dcb0599fe6b562b301a720173398b5d1aa",
+  "tables/joint_qdesn_corrected_v4_crossing_and_adjustment_summary.csv" =
+    "4f1efb0a95f23df485643ff9450272488eb48559c1f85fdd5dfd7c25e6be81e5",
+  "tables/joint_qdesn_corrected_v4_phase181_reconciliation.csv" =
+    "02deccb5d29df490b1031c52c9f3f1ffc817a37ffca4a14aaf3713c93d62274c",
   "tables/glofas_application_current_score_summary.csv" =
     "829d4467e4b734d4cd7a0dbab40ba72fe9b9c91c328908461f82f3093167d498",
   "tables/glofas_application_current_selection_manifest.csv" =
@@ -57,33 +59,33 @@ independent <- read.csv(
   check.names = FALSE
 )
 joint_score <- read.csv(
-  repo_path("tables/joint_qdesn_shared_backbone_score_summary.csv"),
+  repo_path("tables/joint_qdesn_corrected_v4_posterior_dgp_integrated_acrps_summary.csv"),
   check.names = FALSE
 )
-joint_fit <- read.csv(
-  repo_path("tables/joint_qdesn_shared_backbone_fit_interval_summary.csv"),
+joint_oracle <- read.csv(
+  repo_path("tables/joint_qdesn_corrected_v4_oracle_recovery_summary.csv"),
   check.names = FALSE
 )
 crossing <- read.csv(
-  repo_path("tables/joint_qdesn_shared_backbone_crossing_summary.csv"),
+  repo_path("tables/joint_qdesn_corrected_v4_crossing_and_adjustment_summary.csv"),
   check.names = FALSE
 )
 expect(nrow(independent) == 216L &&
          sum(independent$diagnostic_grade == "WARN") == 5L,
        "The independent figure surface or warning count changed.")
-expect(nrow(joint_score) == 32L && nrow(joint_fit) == 32L &&
+expect(nrow(joint_score) == 32L && nrow(joint_oracle) == 64L &&
          all(joint_score$canonical_contract_crossing_pairs == 0L) &&
-         all(joint_fit$canonical_contract_crossing_pairs == 0L),
+         all(crossing$contract_crossing_pairs == 0L),
        "The JOINT article surface or transformed crossings changed.")
 forecast_crossing <- aggregate(
   raw_crossing_pairs ~ source_model_id,
   crossing[crossing$window == "forecast", , drop = FALSE], sum
 )
 expected_crossing <- c(
-  joint_qdesn_rhs_vb = 1426L,
-  qdesn_rhs_independent_vb = 4705L,
+  joint_qdesn_rhs_vb = 1197L,
+  qdesn_rhs_independent_vb = 3522L,
   joint_exqdesn_rhs_vb = 0L,
-  exqdesn_rhs_independent_vb = 281L
+  exqdesn_rhs_independent_vb = 269L
 )
 observed_crossing <- forecast_crossing$raw_crossing_pairs[
   match(names(expected_crossing), forecast_crossing$source_model_id)
@@ -117,7 +119,7 @@ expect(grepl(
   "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
   main, fixed = TRUE
 ), "The main article does not contain the independent forecast figures.")
-expect(grepl("tables/joint_qdesn_shared_backbone_forecast_figure.tex",
+expect(grepl("tables/joint_qdesn_corrected_v4_forecast_figure.tex",
              main, fixed = TRUE),
        "The main article does not contain the JOINT forecast figure.")
 expect(grepl(
@@ -125,7 +127,7 @@ expect(grepl(
   supplement, fixed = TRUE
 ) && grepl("tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex",
            supplement, fixed = TRUE) &&
-  grepl("tables/joint_qdesn_shared_backbone_fit_figure.tex",
+  grepl("tables/joint_qdesn_corrected_v4_fit_figure.tex",
         supplement, fixed = TRUE),
 "The supplement does not contain all fitting-sample figures.")
 expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
@@ -162,7 +164,7 @@ expect(length(abstract_words) <= 250L,
 
 cat(sprintf(
   paste0("QDESN_FINAL_MANUSCRIPT_REVISION_CHECK=PASS scientific_files=%d ",
-         "independent_roles=216 joint_fit=32 joint_forecast=32 ",
+         "independent_roles=216 joint_oracle=64 joint_forecast=32 ",
          "reader_facing_internal_markers=0 abstract_words=%d\n"),
   length(immutable_hashes), length(abstract_words)
 ))

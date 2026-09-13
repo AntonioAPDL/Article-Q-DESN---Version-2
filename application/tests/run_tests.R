@@ -80,6 +80,9 @@ source(app_path("application/tests/test_quantile_grid.R"))
 source(app_path("application/tests/test_joint_qvp_qdesn_algebra.R"))
 source(app_path("application/tests/test_joint_qvp_rhs_global_shape.R"))
 source(app_path("application/tests/test_joint_qdesn_posterior_contract.R"))
+source(app_path("application/tests/test_joint_qdesn_corrected_article_comparison_contract.R"))
+source(app_path("application/tests/test_joint_qdesn_corrected_article_comparison_muscat_contract.R"))
+source(app_path("application/tests/test_joint_qdesn_corrected_article_comparison_muscat_shared_contract.R"))
 source(app_path("application/tests/test_joint_qvp_qdesn_al_mcmc.R"))
 source(app_path("application/tests/test_joint_qvp_qdesn_al_vb.R"))
 source(app_path("application/tests/test_joint_qvp_qdesn_exal_mcmc.R"))
@@ -163,8 +166,8 @@ source(app_path("application/tests/test_validation_interface_contract.R"))
 # with the estimator-separated posterior-interval projection.
 source(app_path("application/tests/test_independent_validation_exdqlm_mcmc_rolling_state_fix_article_v14.R"))
 source(app_path("application/tests/test_independent_validation_dgp_oracle_figures_v14.R"))
-# The shared-backbone projection supersedes the Phase181 article-facing
-# tables and figures while retaining the Phase181 files as historical evidence.
-source(app_path("application/tests/test_joint_qdesn_shared_backbone_article_projection.R"))
+# The corrected common-posterior v4 projection supersedes the Phase181 and
+# historical shared-backbone article-facing assets without mixing their cells.
+source(app_path("application/tests/test_joint_qdesn_corrected_article_projection_v4.R"))
 
 cat("Application tests completed.\n")

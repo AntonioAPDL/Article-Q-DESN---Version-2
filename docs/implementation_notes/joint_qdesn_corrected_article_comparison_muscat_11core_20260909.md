@@ -1,0 +1,216 @@
+# JOINT corrected article comparison: Muscat 11-core execution
+
+## Decision
+
+The original Muscat handoff requested 25 idle physical cores. Its scientific
+contract and implementation were completed on the dedicated 25-core branch,
+but production remained blocked because PriceFM R97 and GloFAS Part 4 were
+healthy and active. On 2026-09-09, the user explicitly authorized use of the
+11 physical cores still available after preserving those campaigns.
+
+This v4 lane changes execution capacity only. It does not change the selected
+scenario-specific backbones, article fixture, seven-level quantile grid,
+regularized-horseshoe posterior, VB/MCMC method, chain count, seeds, posterior
+target, score definition, or promotion contract inherited from v3.
+
+## Frozen physical-core allocation
+
+| Lane | Logical CPU list | Physical cores | Policy |
+|---|---|---:|---|
+| JOINT v4 | `1-9,16,24` | 11 | One logical CPU from each distinct core |
+| PriceFM R97 | `42-47,49-55,57-63` | 20 | Existing pinned allocation, unchanged |
+| GloFAS Part 4 reserve | `0,32` | 1 | Entire sibling pair excluded from JOINT |
+
+The three sets cover all 32 Muscat physical cores without overlap. Reserving
+both logical siblings `0,32` prevents JOINT from competing with the unpinned
+GloFAS continuation on that physical core. The v4 preflight writes both the
+effective JOINT topology and the complete shared-capacity audit before any fit
+starts.
+
+## Scientific workload
+
+- Eight scenario-specific shared backbones from the frozen source campaign.
+- 136 ordered VB components and 32 compact MCMC initializers.
+- 32 article-fixture model cells: joint/independent crossed with AL/exAL.
+- Five chains per cell, for 160 MCMC workers total.
+- Exact M0 exAL method, chain-invariant posterior-target hashes, and one
+  numerical thread per worker.
+- DGP-integrated finite-grid aCRPS as the primary score, with the previously
+  frozen secondary diagnostics and score uncertainty summaries.
+
+## Fail-closed execution contract
+
+The v4 launcher requires the dedicated branch and exact upstream synchronization,
+pinned R 4.6.0 and library, at least 100 GiB free on `/data`, one-thread numerical
+environment variables, exact CPU affinity, verified source hashes, and the
+explicit `MUSCAT_11_PHYSICAL_SHARED` token. It allows only process commands
+belonging to `pricefm_stage_r97` and
+`glofas_part4_joint_convergence_closeout_20260907`; any other protected process
+blocks preparation.
+
+`--run-all` executes the existing stage gates in order: preflight, VB queue,
+complete-VB check, MCMC queue, MCMC check, and score-packet finalization. It
+does not reuse the dormant 25-core runtime or either historical Jerez packet.
+
+## Verification checklist
+
+- [x] v3-to-v4 scientific fields are byte-equivalent after excluding execution metadata.
+- [x] VB component seeds/dependencies and MCMC chain/start seeds are unchanged.
+- [x] The 11 JOINT logical CPUs map to 11 distinct physical cores.
+- [x] The 11/20/1 allocation is exhaustive and non-overlapping.
+- [x] Only the two audited active campaign families can pass the process gate.
+- [x] The 11-worker launcher is phase-gated, affinity-pinned, and shell-valid.
+- [x] Dedicated v4 branch and the orchestration recovery are committed and pushed.
+- [ ] Production preflight verifies the live host and frozen source evidence.
+- [ ] Background launch starts and produces healthy worker progress.
+- [ ] Final 136/136 VB, 160/160 MCMC, score packet, manifests, and hashes pass.
+
+## Boundaries
+
+Do not modify or interrupt PriceFM, GloFAS, Phase182, historical JOINT, article,
+or Overleaf work. Runtime files under `application/cache/` remain ignored. This
+branch is an execution lane only and must be handed to the integration
+coordinator after scientific closeout; it must not merge or publish article
+assets directly.
+
+## MCMC queue preflight recovery
+
+The first 11-worker MCMC batch stopped before sampling. All 11 workers recorded
+the same host-preflight error in less than one second; no worker wrote posterior
+draws, a posterior summary, or a completion receipt. The failed attempt is
+preserved under the ignored runtime path
+`mcmc_attempts/preflight_self_detection_20260910T032727Z`, with an assessment,
+inventory, SHA-256 manifest, and verification receipt.
+
+The cause was orchestration-only. Each forked worker reran the strict process
+gate, which excluded that worker and its descendants but still saw the queue
+parent and sibling workers as competing JOINT processes. The repair does not
+relax the top-level host gate. A worker may exclude an execution family only
+when all of the following hold:
+
+1. the runtime contains an active `mcmc_queue.lock/owner.csv`;
+2. the supplied queue PID and normalized runtime root match that lock exactly;
+3. the worker PID is the queue PID or a descendant in the live process table.
+
+Only the verified queue PID and its descendants are excluded. An unrelated
+process with the same JOINT run tag still blocks execution. Batch health is now
+refreshed immediately after every batch result, and failure audits classify
+recorded errors before recommending an orchestration, numerical, nonfinite, or
+provenance repair.
+
+Recovery verification covers synthetic parent/sibling process trees, an actual
+two-child fork, lock-owner mismatch, non-descendant rejection, duplicate
+same-tag rejection, historical precision-failure classification, and health
+file synchronization. The posterior-target, corrected scientific-contract,
+Muscat host-contract, shared-capacity, and full confirmation tests all pass.
+The only permitted continuation is `--launch-mcmc`; completed VB artifacts must
+not be regenerated.
+
+## Joint AL precision recovery
+
+The first scientifically active MCMC batch subsequently completed six workers
+and stopped on five numerical failures. All five failures were the chains of
+the `asymmetric_laplace_tail` Joint QDESN AL-RHS cell; each reported that a
+leading principal minor of the 168-dimensional beta precision matrix was not
+positive. The matching five-chain Independent QDESN AL-RHS cell completed, as
+did the first Joint exQDESN exact-M0 chain. Initial precision reconstruction is
+positive definite for every failed Joint AL chain, localizing the failure to
+dynamic latent-weight/RHS evolution rather than the VB initializer, DESN
+backbone, `tau0`, seed plan, or exAL gamma update.
+
+The AL sampler now exposes the same opt-in, scale-aware precision safeguard
+already used by exact-M0 exAL. Article-confirmation workers enable it uniformly:
+the original sparse factorization is always attempted first, relative diagonal
+jitter starts at `1e-12` only after failure, and the sampler fails closed above
+`1e-8`. Joint and independent AL outputs retain repair counts, maximum jitter,
+iteration, matrix scale, latent-weight range, and sigma range. AL gamma fields
+are explicit missing values in the common diagnostic schema.
+
+The direct AL path is regression-tested to be draw-for-draw identical with the
+safeguard enabled or disabled when no repair is needed. Therefore, previously
+completed workers may be retained only after their manifests, posterior-target
+hashes, and execution-commit boundary are explicitly audited. Failed receipts
+must be frozen before retry; seeds, budgets, model specifications, score rules,
+and completed VB artifacts remain unchanged.
+
+The reproducible retention gate is
+`application/scripts/audit_joint_qdesn_shared_backbone_article_mcmc_resume.R`.
+It verifies every retained draw file, manifest, expected draw count, current
+posterior-target hash, compatible execution commit and ancestry, and bounded
+repair status. Its output is an ignored, hash-manifested runtime packet; a
+failed row requires rerunning that worker rather than overriding the gate.
+
+## Complete Gaussian precision-system recovery
+
+The resumed queue reached 28 verified completed workers before worker 0021,
+Joint QDESN AL-RHS for `gaussian_mixture_bridge` chain 1, exposed a second
+numerical entry point. This worker failed in `Matrix::solve(K_beta, rhs)` while
+forming the Gaussian conditional mean, before the protected precision draw was
+called. Its initial 203-dimensional precision matrix was finite, positive
+definite, and well conditioned; all four sibling chains completed. This again
+rules out a DESN, `tau0`, initializer, or frozen-target change as the correct
+first response.
+
+The bounded safeguard now treats the conditional mean solve and precision draw
+as one numerical operation. It first executes the historical solve and draw
+unchanged. If either operation fails for a recognized singularity or
+factorization reason, it applies the same scale-aware diagonal jitter to the
+precision, recomputes the mean, and draws under that repaired precision. The
+relative schedule remains `1e-12` through `1e-8`, above which the worker fails
+closed. Telemetry distinguishes `mean_solve` from `draw_factorization`.
+
+Regression tests prove that the healthy direct path is draw-for-draw identical
+and that the prior draw-factorization repair path retains its fixed-seed draw.
+The implementation is shared by Joint AL and exact-M0 exAL MCMC; independent
+fits inherit it through their one-quantile components. No PriceFM file or
+compact-design implementation is modified.
+
+Production may resume only after worker 0021 passes a full-budget sentinel with
+750 finite retained draws, a verified target hash and artifact manifest, and no
+repair above `1e-8`. The other 28 completed workers remain eligible for
+retention only through the explicit resume-compatibility audit.
+
+## Scientific closeout: 2026-09-12
+
+The corrected campaign is complete. The final authority contains 136/136 VB
+components, 32/32 compact initializers, and 160/160 five-chain MCMC workers
+with zero final failures. All 960 worker artifacts, 173 final MCMC manifest
+entries, and 32 chain-invariant posterior-target hashes verify. The registry
+contains 180,000 retained MCMC draws.
+
+The deterministic v4 score finalizer completed at `2026-09-13 00:48:33 UTC`
+without refitting any model. Its frozen status is
+`CORRECTED_JOINT_MUSCAT_PACKET_READY_FOR_COORDINATOR_REVIEW`. The packet has 32
+model-cell score rows, 16 joint-minus-independent contrasts, eight scenario
+winners, zero contract crossings, 102/102 formula and quadrature checks, and
+26/26 verified packet-manifest entries. The complete transfer inventory has
+2,970 files and 387,506,202 bytes; every size and SHA-256 was independently
+verified.
+
+Independent exQDESN is the posterior-mean numerical winner in seven of eight
+scenarios. Joint exQDESN is lower only for `laplace_bridge`, by 0.001401, and
+that interval overlaps the independent exQDESN interval. All eight
+winner-versus-runner intervals overlap. Moreover, the canonical reported
+quantile action favors independent exQDESN in all eight scenarios, including
+`laplace_bridge`. These are descriptive rankings, not decisive superiority
+claims.
+
+The coherence result is clearer. The canonical Joint exQDESN forecast grids
+have zero raw crossings in all eight scenarios. Independent exQDESN has 269
+raw crossing pairs in `asymmetric_laplace_tail` and zero elsewhere. Canonical
+Joint QDESN AL has 1,197 raw crossing pairs versus 3,522 for Independent QDESN
+AL. The monotone reporting contract removes all crossings for every model.
+
+Scalar diagnostics remain review-level for all 16 exAL cells, and 10/32 score
+functionals are review-level under the frozen R-hat/ESS thresholds. This does
+not invalidate the complete packet because scores, reconstruction, coupling,
+and hard provenance gates pass, but it requires qualified article language.
+The bounded precision repair was used by 26 joint workers for 159 events, all
+at maximum relative jitter `1e-12`.
+
+The corrected packet supersedes Phase181 as the valid common-posterior
+comparison even where its numerical scores are worse. Phase181 remains
+historical sensitivity evidence only. The article, tables, figures, PDF, and
+Overleaf were not modified in this lane. Integration must use the dedicated
+closeout handoff and must preserve Phase182 dense-grid work as a separate
+scientific campaign.

@@ -8,12 +8,22 @@ app_joint_article_corrected_contract_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v2.csv")
 }
 
+app_joint_article_muscat_corrected_contract_path <- function() {
+  app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v3.csv")
+}
+
+app_joint_article_muscat_shared_contract_path <- function() {
+  app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_contract_v4.csv")
+}
+
 app_joint_article_host_profiles_path <- function() {
   app_path("application/config/joint_qdesn_shared_backbone_article_confirmation_host_profiles_v1.csv")
 }
 
-app_joint_article_default_root <- function() {
-  app_path("application/cache/joint_qdesn_shared_backbone_article_confirmation_jerez_20260907")
+app_joint_article_default_root <- function(
+  contract = app_joint_article_read_contract()
+) {
+  app_path("application/cache", contract$run_tag)
 }
 
 app_joint_article_default_source_runtime <- function(
@@ -51,12 +61,16 @@ app_joint_article_read_contract <- function(
   num <- function(name) as.numeric(get(name))
   num_optional <- function(name, default) if (has(name)) as.numeric(get(name)) else default
   int <- function(name) as.integer(get(name))
+  int_optional <- function(name, default) if (has(name)) as.integer(get(name)) else default
   nums <- function(name) as.numeric(strsplit(get(name), ";", fixed = TRUE)[[1L]])
   out <- list(
     table = tab,
     path = normalizePath(path, mustWork = TRUE),
     version = get("contract_version"),
     run_tag = get("run_tag"),
+    execution_branch = get_optional(
+      "execution_branch", "work/joint-qdesn-article-confirmation-jerez-20260907"),
+    host_profile_id = get_optional("host_profile_id", "jerez_20260907"),
     source_worktree = get("source_worktree"),
     source_head = get("source_head"),
     source_runtime_relative_path = get("source_runtime_relative_path"),
@@ -139,11 +153,21 @@ app_joint_article_read_contract <- function(
     fixture_seed_source = get("fixture_seed_source"),
     chain_seed_base = int("chain_seed_base"),
     component_seed_stride = int("component_seed_stride"),
+    vb_component_seed_base = as.integer(get_optional(
+      "vb_component_seed_base", "202609800")),
     cell_seed_stride = int("cell_seed_stride"),
     chain_seed_stride = int("chain_seed_stride"),
     chain_start_jitter_seed_base = int("chain_start_jitter_seed_base"),
     blas_threads = int("blas_threads"),
     min_data_free_gib = num("min_data_free_gib"),
+    cpu_affinity_list = get_optional("cpu_affinity_list", ""),
+    required_physical_cores = int_optional("required_physical_cores", NA_integer_),
+    capacity_approval_token = get_optional("capacity_approval_token", ""),
+    shared_capacity_mode = get_optional("shared_capacity_mode", ""),
+    pricefm_reserved_cpu_list = get_optional("pricefm_reserved_cpu_list", ""),
+    glofas_spare_cpu_list = get_optional("glofas_spare_cpu_list", ""),
+    allowed_competing_process_patterns = Filter(nzchar, strsplit(get_optional(
+      "allowed_competing_process_patterns", ""), ";", fixed = TRUE)[[1L]]),
     production_launched = bool("production_launched"),
     retain_broad_model_dumps = bool("retain_broad_model_dumps"),
     dry_run_preflight_required = bool("dry_run_preflight_required"),
@@ -184,7 +208,7 @@ app_joint_article_read_contract <- function(
   app_joint_qvp_validate_sigma_bounds(c(
     out$sigma_lower_bound, out$sigma_upper_bound))
   if (identical(out$version, "joint_shared_backbone_article_confirmation_v2")) {
-    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance <= 0 ||
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
         !out$rhs_slab_fixed ||
         !identical(out$coefficient_hierarchy,
           "first_quantile_anchor_adjacent_differences") ||
@@ -195,9 +219,71 @@ app_joint_article_read_contract <- function(
           "gaussian_residual_scale_multiplier") ||
         out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
         !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-corrected-article-comparison-jerez-20260909") ||
+        !identical(out$host_profile_id, "jerez_corrected_20260909") ||
         out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
         out$initial_concurrency != 50L || out$maximum_concurrency != 50L) {
       stop("Corrected JOINT article confirmation contract violates the common-posterior gate.",
+        call. = FALSE)
+    }
+  }
+  if (identical(out$version, "joint_shared_backbone_article_confirmation_v3")) {
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts ||
+        !identical(out$alpha_prior_center_policy,
+          "gaussian_location_quantiles") ||
+        !identical(out$alpha_prior_sd_policy,
+          "gaussian_residual_scale_multiplier") ||
+        out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-corrected-article-comparison-muscat-25core-20260909") ||
+        !identical(out$host_profile_id,
+          "muscat_corrected_25core_20260909") ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 25L || out$maximum_concurrency != 25L ||
+        !identical(out$cpu_affinity_list, "0-24") ||
+        out$required_physical_cores != 25L ||
+        !identical(out$capacity_approval_token,
+          "MUSCAT_25_PHYSICAL_IDLE")) {
+      stop("Muscat corrected JOINT contract violates the frozen common-posterior or physical-affinity gate.",
+        call. = FALSE)
+    }
+  }
+  if (identical(out$version, "joint_shared_backbone_article_confirmation_v4")) {
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts ||
+        !identical(out$alpha_prior_center_policy,
+          "gaussian_location_quantiles") ||
+        !identical(out$alpha_prior_sd_policy,
+          "gaussian_residual_scale_multiplier") ||
+        out$sigma_lower_bound != 0 || !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-corrected-article-comparison-muscat-11core-20260909") ||
+        !identical(out$host_profile_id,
+          "muscat_corrected_11core_20260909") ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 11L || out$maximum_concurrency != 11L ||
+        !identical(out$cpu_affinity_list, "1-9,16,24") ||
+        out$required_physical_cores != 11L ||
+        !identical(out$capacity_approval_token,
+          "MUSCAT_11_PHYSICAL_SHARED") ||
+        !identical(out$shared_capacity_mode,
+          "pricefm_r97_glofas_part4") ||
+        !identical(out$pricefm_reserved_cpu_list,
+          "42-47,49-55,57-63") ||
+        !identical(out$glofas_spare_cpu_list, "0,32") ||
+        !identical(out$allowed_competing_process_patterns,
+          c("pricefm_stage_r97", "glofas_part4_joint_convergence_closeout_20260907"))) {
+      stop("Shared-capacity Muscat JOINT contract violates the frozen scientific or CPU-allocation gate.",
         call. = FALSE)
     }
   }
@@ -287,10 +373,14 @@ app_joint_article_git_value <- function(args, root = app_repo_root()) {
   if (!length(out)) "" else trimws(out[[1L]])
 }
 
-app_joint_article_assert_execution_branch <- function() {
+app_joint_article_assert_execution_branch <- function(
+  contract = app_joint_article_read_contract()
+) {
   branch <- app_joint_article_git_value(c("rev-parse", "--abbrev-ref", "HEAD"))
-  if (!identical(branch, "work/joint-qdesn-article-confirmation-jerez-20260907")) {
-    stop("This workflow must run only from the dedicated JOINT article execution branch.",
+  if (!identical(branch, contract$execution_branch)) {
+    stop(sprintf(
+      "This workflow must run only from the dedicated JOINT branch '%s'.",
+      contract$execution_branch),
          call. = FALSE)
   }
   invisible(TRUE)
@@ -307,8 +397,10 @@ app_joint_article_execution_git_state <- function() {
   )
 }
 
-app_joint_article_assert_clean_execution <- function(require_synced = TRUE) {
-  app_joint_article_assert_execution_branch()
+app_joint_article_assert_clean_execution <- function(
+  contract = app_joint_article_read_contract(), require_synced = TRUE
+) {
+  app_joint_article_assert_execution_branch(contract)
   state <- app_joint_article_execution_git_state()
   if (!identical(state$tracked_status[[1L]], "")) {
     stop("Production workers require a clean tracked execution worktree.",
@@ -327,10 +419,320 @@ app_joint_article_data_free_gib <- function(path = "/data") {
   as.numeric(parts[[4L]]) / 1024^2
 }
 
+app_joint_article_memory_available_gib <- function(
+  path = "/proc/meminfo"
+) {
+  if (!file.exists(path)) return(NA_real_)
+  lines <- readLines(path, warn = FALSE)
+  row <- grep("^MemAvailable:[[:space:]]+[0-9]+[[:space:]]+kB$", lines,
+    value = TRUE)
+  if (length(row) != 1L) return(NA_real_)
+  as.numeric(sub("^MemAvailable:[[:space:]]+([0-9]+).*$", "\\1", row)) /
+    1024^2
+}
+
+app_joint_article_load_average <- function(path = "/proc/loadavg") {
+  if (!file.exists(path)) return(rep(NA_real_, 3L))
+  fields <- strsplit(readLines(path, n = 1L, warn = FALSE),
+    "[[:space:]]+")[[1L]]
+  suppressWarnings(as.numeric(fields[seq_len(min(3L, length(fields)))]))
+}
+
+app_joint_article_parse_cpu_list <- function(x) {
+  x <- gsub("[[:space:]]", "", as.character(x)[[1L]])
+  if (!nzchar(x)) return(integer())
+  tokens <- strsplit(x, ",", fixed = TRUE)[[1L]]
+  ids <- unlist(lapply(tokens, function(token) {
+    if (grepl("-", token, fixed = TRUE)) {
+      bounds <- suppressWarnings(as.integer(strsplit(token, "-", fixed = TRUE)[[1L]]))
+      if (length(bounds) != 2L || anyNA(bounds) || bounds[[1L]] > bounds[[2L]]) {
+        stop("CPU affinity contains a malformed range.", call. = FALSE)
+      }
+      seq.int(bounds[[1L]], bounds[[2L]])
+    } else {
+      value <- suppressWarnings(as.integer(token))
+      if (length(value) != 1L || is.na(value)) {
+        stop("CPU affinity contains a malformed CPU ID.", call. = FALSE)
+      }
+      value
+    }
+  }), use.names = FALSE)
+  if (!length(ids) || any(ids < 0L) || anyDuplicated(ids)) {
+    stop("CPU affinity IDs must be distinct nonnegative integers.",
+      call. = FALSE)
+  }
+  sort(ids)
+}
+
+app_joint_article_effective_cpu_list <- function(
+  path = "/proc/self/status"
+) {
+  if (!file.exists(path)) {
+    stop("Cannot verify CPU affinity because /proc/self/status is unavailable.",
+      call. = FALSE)
+  }
+  lines <- readLines(path, warn = FALSE)
+  row <- grep("^Cpus_allowed_list:", lines, value = TRUE)
+  if (length(row) != 1L) {
+    stop("Cannot resolve Cpus_allowed_list from /proc/self/status.",
+      call. = FALSE)
+  }
+  app_joint_article_parse_cpu_list(sub("^[^:]+:[[:space:]]*", "", row))
+}
+
+app_joint_article_cpu_topology <- function(
+  cpu_ids,
+  sysfs_root = "/sys/devices/system/cpu"
+) {
+  cpu_ids <- as.integer(cpu_ids)
+  rows <- lapply(cpu_ids, function(cpu) {
+    topology <- file.path(sysfs_root, sprintf("cpu%d", cpu), "topology")
+    package_path <- file.path(topology, "physical_package_id")
+    core_path <- file.path(topology, "core_id")
+    if (!file.exists(package_path) || !file.exists(core_path)) {
+      stop(sprintf("Linux topology is unavailable for CPU %d.", cpu),
+        call. = FALSE)
+    }
+    data.frame(
+      logical_cpu = cpu,
+      physical_package_id = as.integer(readLines(package_path, n = 1L,
+        warn = FALSE)),
+      core_id = as.integer(readLines(core_path, n = 1L, warn = FALSE)),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+app_joint_article_cpu_affinity_preflight <- function(
+  contract,
+  effective_cpu_ids = NULL,
+  sysfs_root = "/sys/devices/system/cpu"
+) {
+  expected <- app_joint_article_parse_cpu_list(contract$cpu_affinity_list)
+  if (!length(expected) || is.na(contract$required_physical_cores)) {
+    stop("The Muscat contract must declare CPU affinity and physical cores.",
+      call. = FALSE)
+  }
+  if (!nzchar(Sys.which("taskset"))) {
+    stop("The Muscat affinity gate requires taskset.", call. = FALSE)
+  }
+  effective <- if (is.null(effective_cpu_ids)) {
+    app_joint_article_effective_cpu_list()
+  } else {
+    sort(as.integer(effective_cpu_ids))
+  }
+  topology <- app_joint_article_cpu_topology(effective, sysfs_root = sysfs_root)
+  physical_key <- paste(topology$physical_package_id, topology$core_id,
+    sep = ":")
+  distinct_physical <- length(unique(physical_key))
+  exact_affinity <- identical(effective, expected)
+  verified <- exact_affinity &&
+    length(effective) == contract$required_physical_cores &&
+    distinct_physical == contract$required_physical_cores
+  topology$expected_affinity <- contract$cpu_affinity_list
+  topology$effective_affinity <- paste(effective, collapse = ",")
+  topology$required_physical_cores <- contract$required_physical_cores
+  topology$distinct_physical_cores <- distinct_physical
+  topology$exact_affinity <- exact_affinity
+  topology$verified <- verified
+  if (!verified) {
+    stop(sprintf(
+      "CPU affinity gate failed: expected %s on %d distinct physical cores; observed %s on %d.",
+      contract$cpu_affinity_list, contract$required_physical_cores,
+      paste(effective, collapse = ","), distinct_physical), call. = FALSE)
+  }
+  topology
+}
+
+app_joint_article_shared_capacity_preflight <- function(contract, affinity,
+    sysfs_root = "/sys/devices/system/cpu") {
+  if (!identical(contract$shared_capacity_mode,
+      "pricefm_r97_glofas_part4")) return(NULL)
+  price_ids <- app_joint_article_parse_cpu_list(
+    contract$pricefm_reserved_cpu_list)
+  spare_ids <- app_joint_article_parse_cpu_list(contract$glofas_spare_cpu_list)
+  price <- app_joint_article_cpu_topology(price_ids, sysfs_root)
+  spare <- app_joint_article_cpu_topology(spare_ids, sysfs_root)
+  key <- function(x) unique(paste(x$physical_package_id, x$core_id, sep = ":"))
+  joint_key <- key(affinity)
+  price_key <- key(price)
+  spare_key <- key(spare)
+  logical_cores <- parallel::detectCores(logical = TRUE)
+  all_topology <- app_joint_article_cpu_topology(
+    seq.int(0L, logical_cores - 1L), sysfs_root)
+  all_key <- key(all_topology)
+  verified <- length(joint_key) == 11L && length(price_key) == 20L &&
+    length(spare_key) == 1L && !length(intersect(joint_key, price_key)) &&
+    !length(intersect(joint_key, spare_key)) &&
+    !length(intersect(price_key, spare_key)) &&
+    setequal(c(joint_key, price_key, spare_key), all_key)
+  out <- data.frame(
+    shared_capacity_mode = contract$shared_capacity_mode,
+    joint_cpu_list = contract$cpu_affinity_list,
+    joint_physical_cores = length(joint_key),
+    pricefm_cpu_list = contract$pricefm_reserved_cpu_list,
+    pricefm_physical_cores = length(price_key),
+    glofas_spare_cpu_list = contract$glofas_spare_cpu_list,
+    glofas_spare_physical_cores = length(spare_key),
+    total_physical_cores = length(all_key),
+    joint_pricefm_overlap = length(intersect(joint_key, price_key)),
+    joint_spare_overlap = length(intersect(joint_key, spare_key)),
+    allocation_verified = verified,
+    stringsAsFactors = FALSE
+  )
+  if (!verified) {
+    stop("Shared-capacity physical-core allocation is incomplete or overlapping.",
+      call. = FALSE)
+  }
+  out
+}
+
+app_joint_article_process_table <- function() {
+  user <- Sys.info()[["user"]]
+  lines <- tryCatch(system2(
+    "ps", c("-u", user, "-o", "pid=,ppid=,args="), stdout = TRUE,
+    stderr = FALSE
+  ), error = function(e) character())
+  if (!length(lines)) {
+    return(data.frame(pid = integer(), ppid = integer(), command = character(),
+      stringsAsFactors = FALSE))
+  }
+  trimmed <- trimws(lines)
+  data.frame(
+    pid = suppressWarnings(as.integer(sub("^([0-9]+).*$", "\\1", trimmed))),
+    ppid = suppressWarnings(as.integer(sub(
+      "^[0-9]+[[:space:]]+([0-9]+).*$", "\\1", trimmed))),
+    command = sub("^[0-9]+[[:space:]]+[0-9]+[[:space:]]*", "", trimmed),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_article_process_family_pids <- function(processes, root_pid) {
+  root_pid <- suppressWarnings(as.integer(root_pid))
+  if (length(root_pid) != 1L || !is.finite(root_pid) ||
+      is.na(root_pid) || root_pid < 1L) {
+    stop("Execution-family root PID must be a positive integer.", call. = FALSE)
+  }
+  if (!nrow(processes) || !root_pid %in% processes$pid) {
+    stop("Execution-family root PID is not present in the process table.",
+      call. = FALSE)
+  }
+  family <- root_pid
+  repeat {
+    children <- processes$pid[!is.na(processes$pid) &
+      processes$ppid %in% family]
+    updated <- unique(c(family, children))
+    if (length(updated) == length(family)) break
+    family <- updated
+  }
+  as.integer(family)
+}
+
+app_joint_article_verify_execution_family <- function(
+  root,
+  processes = app_joint_article_process_table(),
+  current_pid = Sys.getpid(),
+  execution_root_pid
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  lock_owner_path <- file.path(root, "mcmc_queue.lock", "owner.csv")
+  if (!file.exists(lock_owner_path)) {
+    stop("Worker execution context requires the active MCMC queue lock owner.",
+      call. = FALSE)
+  }
+  owner <- app_read_csv(lock_owner_path)
+  if (nrow(owner) != 1L || !all(c("pid", "root") %in% names(owner))) {
+    stop("MCMC queue lock owner is malformed.", call. = FALSE)
+  }
+  owner_pid <- suppressWarnings(as.integer(owner$pid[[1L]]))
+  execution_root_pid <- suppressWarnings(as.integer(execution_root_pid)[[1L]])
+  owner_root <- normalizePath(as.character(owner$root[[1L]]), mustWork = TRUE)
+  if (is.na(owner_pid) || owner_pid < 1L ||
+      is.na(execution_root_pid) || execution_root_pid < 1L ||
+      owner_pid != execution_root_pid || !identical(owner_root, root)) {
+    stop("Worker execution context does not match the active MCMC queue lock.",
+      call. = FALSE)
+  }
+  family <- app_joint_article_process_family_pids(processes, execution_root_pid)
+  current_pid <- suppressWarnings(as.integer(current_pid)[[1L]])
+  if (is.na(current_pid) || !current_pid %in% family) {
+    stop("MCMC worker PID is not a descendant of the verified queue owner.",
+      call. = FALSE)
+  }
+  family
+}
+
+app_joint_article_competing_processes <- function(
+  processes = app_joint_article_process_table(),
+  current_pid = Sys.getpid(),
+  allowed_patterns = character(),
+  excluded_pids = integer()
+) {
+  if (!nrow(processes)) return(character())
+  excluded <- unique(as.integer(c(current_pid, excluded_pids)))
+  excluded <- excluded[!is.na(excluded)]
+  repeat {
+    child <- processes$pid[processes$ppid %in% excluded]
+    updated <- unique(c(excluded, child))
+    if (length(updated) == length(excluded)) break
+    excluded <- updated
+  }
+  patterns <- c(
+    "pricefm", "glofas", "phase182",
+    "joint_qdesn_shared_backbone_article_confirmation_jerez_20260907",
+    "joint_qdesn_corrected_article_comparison_jerez_20260909",
+    "joint_qdesn_corrected_article_comparison_muscat_25core_20260909",
+    "joint_qdesn_corrected_article_comparison_muscat_11core_20260909",
+    "run_joint_qdesn_shared_backbone_article_vb_queue",
+    "run_joint_qdesn_shared_backbone_article_mcmc_queue"
+  )
+  keep <- Reduce(`|`, lapply(patterns, grepl, processes$command,
+    ignore.case = TRUE))
+  rows <- processes[keep & !is.na(processes$pid) &
+    !processes$pid %in% excluded, , drop = FALSE]
+  if (nrow(rows) && length(allowed_patterns)) {
+    allowed <- Reduce(`|`, lapply(allowed_patterns, grepl, rows$command,
+      ignore.case = TRUE))
+    rows <- rows[!allowed, , drop = FALSE]
+  }
+  sprintf("%d %s", rows$pid, rows$command)
+}
+
+app_joint_article_assert_capacity_authorized <- function(contract) {
+  expected <- if (identical(contract$version,
+      "joint_shared_backbone_article_confirmation_v2")) {
+    "JEREZ_50_IDLE"
+  } else if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
+    contract$capacity_approval_token
+  } else {
+    ""
+  }
+  if (nzchar(expected) &&
+      !identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED"),
+        expected)) {
+    stop(paste(
+      "Corrected production requires",
+      sprintf("JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED=%s", expected),
+      "after verifying that competing scientific campaigns are inactive."
+    ), call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 app_joint_article_host_preflight <- function(
   contract = app_joint_article_read_contract(),
-  profile = app_joint_article_read_host_profile()
+  profile = NULL,
+  runtime_root = NULL,
+  execution_root_pid = NULL,
+  processes = NULL,
+  current_pid = Sys.getpid()
 ) {
+  if (is.null(profile)) {
+    profile <- app_joint_article_read_host_profile(contract$host_profile_id)
+  }
   data_free <- app_joint_article_data_free_gib("/data")
   thread_vars <- c(
     "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
@@ -338,30 +740,121 @@ app_joint_article_host_preflight <- function(
   )
   thread_values <- Sys.getenv(thread_vars, unset = "1")
   lib_ok <- identical(.libPaths(), as.character(profile$r_library_root[[1L]]))
+  required_rscript <- normalizePath(
+    as.character(profile$required_rscript[[1L]]), mustWork = FALSE)
+  active_rscript <- normalizePath(file.path(R.home("bin"), "Rscript"),
+    mustWork = FALSE)
+  required_install_root <- normalizePath(
+    file.path(dirname(required_rscript), ".."), mustWork = FALSE)
+  active_install_root <- normalizePath(
+    file.path(R.home(), "..", ".."), mustWork = FALSE)
+  rscript_ok <- file.exists(required_rscript) &&
+    identical(active_install_root, required_install_root)
   expected_host <- as.character(profile$host[[1L]])
   host_ok <- Sys.info()[["nodename"]] %in% c(expected_host, sub("\\..*$", "", expected_host))
+  logical_cores <- parallel::detectCores(logical = TRUE)
+  if (is.null(processes)) processes <- app_joint_article_process_table()
+  execution_family <- integer()
+  execution_context <- "strict_top_level"
+  if (!is.null(execution_root_pid)) {
+    if (is.null(runtime_root)) {
+      stop("Worker execution context requires a runtime root.", call. = FALSE)
+    }
+    execution_family <- app_joint_article_verify_execution_family(
+      runtime_root, processes = processes, current_pid = current_pid,
+      execution_root_pid = execution_root_pid)
+    execution_context <- "verified_mcmc_queue_family"
+  }
+  all_competing <- app_joint_article_competing_processes(
+    processes, current_pid = current_pid, excluded_pids = execution_family)
+  competing <- app_joint_article_competing_processes(
+    processes, current_pid = current_pid,
+    allowed_patterns = contract$allowed_competing_process_patterns,
+    excluded_pids = execution_family)
+  allowed_competing <- setdiff(all_competing, competing)
+  affinity <- if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
+    app_joint_article_cpu_affinity_preflight(contract)
+  } else {
+    NULL
+  }
+  shared_capacity <- app_joint_article_shared_capacity_preflight(
+    contract, affinity)
+  affinity_ok <- is.null(affinity) || all(affinity$verified)
+  effective_affinity <- if (is.null(affinity)) "not_required" else
+    affinity$effective_affinity[[1L]]
+  distinct_physical <- if (is.null(affinity)) NA_integer_ else
+    affinity$distinct_physical_cores[[1L]]
+  load_average <- app_joint_article_load_average()
+  expected_runtime_root <- file.path("application", "cache", contract$run_tag)
+  profile_ok <- as.integer(profile$initial_concurrency[[1L]]) ==
+      contract$initial_concurrency &&
+    as.integer(profile$maximum_concurrency[[1L]]) ==
+      contract$maximum_concurrency &&
+    as.numeric(profile$min_data_free_gib[[1L]]) == contract$min_data_free_gib &&
+    as.integer(profile$blas_threads[[1L]]) == contract$blas_threads &&
+    identical(as.character(profile$runtime_root[[1L]]), expected_runtime_root) &&
+    identical(as.character(profile$source_worktree[[1L]]),
+      contract$source_worktree) &&
+    !app_as_bool_vec(profile$production_launched)[[1L]]
   out <- data.frame(
     host = Sys.info()[["nodename"]],
     expected_host = expected_host,
     host_ok = host_ok,
+    profile_id = profile$profile_id[[1L]],
+    profile_contract_ok = profile_ok,
     r_home = R.home(),
     r_version = paste(R.version$major, R.version$minor, sep = "."),
+    active_rscript = active_rscript,
+    required_rscript = required_rscript,
+    active_install_root = active_install_root,
+    required_install_root = required_install_root,
+    rscript_ok = rscript_ok,
     lib_paths = paste(.libPaths(), collapse = ";"),
     expected_library_root = profile$r_library_root[[1L]],
     library_root_ok = lib_ok,
     data_free_gib = data_free,
     min_data_free_gib = contract$min_data_free_gib,
     data_free_ok = data_free >= contract$min_data_free_gib,
+    memory_available_gib = app_joint_article_memory_available_gib(),
+    load_average_1m = load_average[[1L]],
+    load_average_5m = load_average[[2L]],
+    load_average_15m = load_average[[3L]],
+    logical_cores = logical_cores,
+    required_logical_cores = contract$maximum_concurrency,
+    logical_cores_ok = is.finite(logical_cores) &&
+      logical_cores >= contract$maximum_concurrency,
+    expected_cpu_affinity = if (nzchar(contract$cpu_affinity_list))
+      contract$cpu_affinity_list else "not_required",
+    effective_cpu_affinity = effective_affinity,
+    required_physical_cores = contract$required_physical_cores,
+    distinct_physical_cores = distinct_physical,
+    physical_affinity_ok = affinity_ok,
+    competing_process_count = length(competing),
+    competing_processes = paste(competing, collapse = " || "),
+    competing_processes_ok = !length(competing),
+    allowed_competing_process_count = length(allowed_competing),
+    allowed_competing_processes = paste(allowed_competing, collapse = " || "),
+    execution_context = execution_context,
+    execution_root_pid = if (length(execution_family))
+      as.integer(execution_root_pid)[[1L]] else NA_integer_,
+    excluded_execution_process_count = length(execution_family),
     thread_values = paste(paste(thread_vars, thread_values, sep = "="), collapse = ";"),
     one_thread_policy = all(thread_values == "1"),
     production_launched = FALSE,
     stringsAsFactors = FALSE
   )
-  if (!out$host_ok[[1L]] || !out$library_root_ok[[1L]] ||
-      !out$data_free_ok[[1L]] || !out$one_thread_policy[[1L]]) {
-    stop("Host preflight failed host, R library, /data capacity, or one-thread policy.",
+  if (!out$host_ok[[1L]] || !out$profile_contract_ok[[1L]] ||
+      !out$rscript_ok[[1L]] || !out$library_root_ok[[1L]] ||
+      !out$data_free_ok[[1L]] || !out$logical_cores_ok[[1L]] ||
+      !out$physical_affinity_ok[[1L]] ||
+      !out$competing_processes_ok[[1L]] || !out$one_thread_policy[[1L]]) {
+    stop("Host preflight failed host/profile, R executable/library, compute/storage capacity, competing-process, or one-thread policy.",
          call. = FALSE)
   }
+  attr(out, "cpu_affinity_mapping") <- affinity
+  attr(out, "shared_capacity_mapping") <- shared_capacity
   out
 }
 
@@ -678,7 +1171,7 @@ app_joint_article_build_vb_plan <- function(selected, design_manifest, contract)
     paste(app_joint_article_dependency_rows(plan, plan[ii, , drop = FALSE])$job_id,
       collapse = ";")
   }, character(1L))
-  plan$component_seed <- as.integer(202609800L + plan$job_id)
+  plan$component_seed <- as.integer(contract$vb_component_seed_base + plan$job_id)
   counts <- table(plan$model_id)
   if (nrow(plan) != contract$expected_total_components ||
       unname(counts[["gaussian_rhs_initializer"]]) != contract$expected_gaussian_refits ||
@@ -833,13 +1326,32 @@ app_joint_article_prepare <- function(
   force = FALSE,
   dry_run = TRUE
 ) {
-  app_joint_article_assert_execution_branch()
   contract <- app_joint_article_read_contract(contract_path)
+  app_joint_article_assert_execution_branch(contract)
   if (!isTRUE(dry_run) && contract$dry_run_preflight_required) {
     stop("Production preparation requires a separate explicit launch instruction.",
          call. = FALSE)
   }
   out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v2",
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
+    expected_out_dir <- normalizePath(
+      app_path("application/cache", contract$run_tag), mustWork = FALSE)
+    if (!identical(out_dir, expected_out_dir)) {
+      stop("Corrected JOINT preparation requires the contract-owned isolated runtime root.",
+        call. = FALSE)
+    }
+  }
+  host <- if (contract$version %in% c(
+      "joint_shared_backbone_article_confirmation_v3",
+      "joint_shared_backbone_article_confirmation_v4")) {
+    # The Muscat gate runs before any runtime directory can be created.
+    app_joint_article_host_preflight(contract)
+  } else {
+    NULL
+  }
   if (dir.exists(out_dir) && length(list.files(out_dir, all.files = TRUE, no.. = TRUE))) {
     if (!isTRUE(force)) {
       existing <- tryCatch(app_joint_shared_verify_manifest(out_dir),
@@ -860,10 +1372,12 @@ app_joint_article_prepare <- function(
            call. = FALSE)
     }
   }
+  source <- app_joint_article_verify_source(source_root, contract)
+  if (is.null(host)) host <- app_joint_article_host_preflight(contract)
+  affinity <- attr(host, "cpu_affinity_mapping")
+  shared_capacity <- attr(host, "shared_capacity_mapping")
   app_ensure_dir(out_dir); app_ensure_dir(file.path(out_dir, "workers"))
   app_ensure_dir(file.path(out_dir, "mcmc_workers")); app_ensure_dir(file.path(out_dir, "initializers"))
-  source <- app_joint_article_verify_source(source_root, contract)
-  host <- app_joint_article_host_preflight(contract)
   designs <- app_joint_article_build_designs(out_dir, source, contract)
   vb_plan <- app_joint_article_build_vb_plan(designs$selected, designs$design_manifest,
     contract)
@@ -946,6 +1460,14 @@ app_joint_article_prepare <- function(
     scoring_contract = app_write_csv(scoring_contract, file.path(out_dir, "scoring_contract.csv")),
     launch_free_preflight = app_write_csv(readiness, file.path(out_dir, "launch_free_preflight.csv"))
   )
+  if (!is.null(affinity)) {
+    files <- c(files, cpu_affinity_preflight = app_write_csv(
+      affinity, file.path(out_dir, "cpu_affinity_preflight.csv")))
+  }
+  if (!is.null(shared_capacity)) {
+    files <- c(files, shared_capacity_preflight = app_write_csv(
+      shared_capacity, file.path(out_dir, "shared_capacity_preflight.csv")))
+  }
   writeLines(c(
     "# JOINT article-fixture confirmation preflight", "",
     "This runtime packet verifies the frozen shared-backbone evidence and prepares the article-window VB/MCMC graph.",
@@ -1193,8 +1715,10 @@ app_joint_article_run_vb_queue <- function(
     stop("Refusing VB launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=VB.",
          call. = FALSE)
   }
-  app_joint_article_assert_clean_execution(require_synced = require_synced)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  app_joint_article_assert_clean_execution(contract, require_synced = require_synced)
+  app_joint_article_assert_capacity_authorized(contract)
+  app_joint_article_host_preflight(contract)
   max_workers <- as.integer(max_workers)[[1L]]
   if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
       max_workers > contract$maximum_concurrency) {
@@ -1537,6 +2061,31 @@ app_joint_article_mcmc_attempt_root <- function(root, attempt_dir = NULL) {
   normalizePath(attempt_dir, mustWork = TRUE)
 }
 
+app_joint_article_classify_mcmc_failure <- function(error_message) {
+  vapply(as.character(error_message), function(message) {
+    if (is.na(message)) message <- ""
+    message <- tolower(message)
+    if (grepl("host preflight failed|competing-process|capacity authorization",
+        message)) {
+      "infrastructure_host_preflight"
+    } else if (grepl(
+        paste(
+          "computationally singular", "exactly singular", "min\\(d\\)/max\\(d\\)",
+          "leading principal", "positive definite", "cholesky", "chol\\(",
+          "precision", "factorization", sep = "|"
+        ),
+        message)) {
+      "numerical_precision_factorization"
+    } else if (grepl("nonfinite|non-finite|nan|infinite|\\binf\\b", message)) {
+      "nonfinite_model_output"
+    } else if (grepl("manifest|sha256|hash|provenance|posterior target", message)) {
+      "manifest_or_provenance"
+    } else {
+      "unclassified"
+    }
+  }, character(1L), USE.NAMES = FALSE)
+}
+
 app_joint_article_mcmc_failure_inventory <- function(root, attempt_dir = NULL) {
   attempt_root <- app_joint_article_mcmc_attempt_root(root, attempt_dir)
   worker_root <- file.path(attempt_root, "mcmc_workers")
@@ -1546,6 +2095,7 @@ app_joint_article_mcmc_failure_inventory <- function(root, attempt_dir = NULL) {
     worker_id = integer(), scenario_id = character(), model_id = character(),
     chain_id = integer(), likelihood_family = character(),
     fit_structure = character(), error_message = character(),
+    failure_class = character(),
     runtime_seconds = numeric(), recorded_at = character(),
     failure_path = character(), failure_sha256 = character(),
     stringsAsFactors = FALSE
@@ -1553,6 +2103,7 @@ app_joint_article_mcmc_failure_inventory <- function(root, attempt_dir = NULL) {
   if (!length(files)) return(empty)
   rows <- lapply(files, function(path) {
     x <- app_read_csv(path)
+    x$failure_class <- app_joint_article_classify_mcmc_failure(x$error_message)
     x$failure_path <- normalizePath(path, mustWork = TRUE)
     x$failure_sha256 <- app_sha256_file(path)
     x
@@ -1592,17 +2143,183 @@ app_joint_article_mcmc_completed_inventory <- function(root, attempt_dir = NULL)
   app_joint_qdesn_bind_rows(rows)
 }
 
+app_joint_article_mcmc_resume_compatibility_audit <- function(
+  root,
+  compatible_execution_commits,
+  out_dir = NULL
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  compatible_execution_commits <- unique(trimws(as.character(
+    compatible_execution_commits
+  )))
+  compatible_execution_commits <- compatible_execution_commits[
+    grepl("^[0-9a-f]{40}$", compatible_execution_commits)
+  ]
+  if (!length(compatible_execution_commits)) {
+    stop("At least one full compatible execution commit is required.",
+      call. = FALSE)
+  }
+  current_head <- app_joint_article_git_value(c("rev-parse", "HEAD"))
+  if (is.null(out_dir) || !nzchar(as.character(out_dir)[[1L]])) {
+    out_dir <- file.path(root, "diagnostics", paste0(
+      "mcmc_resume_compatibility_", format(Sys.time(), "%Y%m%dT%H%M%SZ",
+        tz = "UTC")
+    ))
+  }
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  if (dir.exists(out_dir)) {
+    stop("MCMC resume compatibility output directory already exists.",
+      call. = FALSE)
+  }
+  app_ensure_dir(out_dir)
+  contract <- app_joint_article_read_contract(file.path(root,
+    "frozen_contract.csv"))
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  completed <- app_joint_article_mcmc_completed_inventory(root)
+  if (!nrow(completed)) {
+    stop("No completed MCMC workers are available for a resume audit.",
+      call. = FALSE)
+  }
+  rows <- lapply(seq_len(nrow(completed)), function(ii) {
+    summary <- completed[ii, , drop = FALSE]
+    job <- plan[plan$worker_id == summary$worker_id[[1L]], , drop = FALSE]
+    if (nrow(job) != 1L) {
+      stop("Completed MCMC worker does not map uniquely to the worker plan.",
+        call. = FALSE)
+    }
+    worker_dir <- app_joint_article_mcmc_worker_dir(root,
+      summary$worker_id[[1L]])
+    design <- readRDS(job$design_path[[1L]])
+    target <- app_joint_article_resolve_posterior_target(root, job, design,
+      contract)
+    draws <- utils::read.csv(file.path(worker_dir, "posterior_draws.csv.gz"),
+      stringsAsFactors = FALSE, check.names = FALSE)
+    numeric_draws <- vapply(draws, is.numeric, logical(1L))
+    execution_commit <- as.character(summary$execution_code_commit[[1L]])
+    commit_allowed <- execution_commit %in% compatible_execution_commits
+    commit_is_ancestor <- isTRUE(system2(
+      "git", c("merge-base", "--is-ancestor", execution_commit, current_head),
+      stdout = FALSE, stderr = FALSE
+    ) == 0L)
+    repair_enabled <- app_as_bool(summary$precision_repair_enabled[[1L]])
+    repair_count <- as.integer(summary$precision_repair_count[[1L]])
+    repair_max <- as.numeric(
+      summary$precision_repair_max_relative_jitter[[1L]]
+    )
+    likelihood <- as.character(summary$likelihood_family[[1L]])
+    repair_compatible <- is.finite(repair_count) && repair_count >= 0L &&
+      is.finite(repair_max) && repair_max <= 1.0e-8 && (
+        (likelihood == "exAL" && repair_enabled) ||
+        (likelihood == "AL" && (repair_enabled || repair_count == 0L))
+      )
+    equivalence_basis <- if (repair_enabled && repair_count > 0L) {
+      "legacy_guarded_draw_repair_proved_equivalent_to_guarded_precision_system"
+    } else if (repair_enabled) {
+      "guarded_direct_path_proved_equivalent_by_regression_test"
+    } else if (repair_count == 0L) {
+      "unrepaired_direct_path_proved_equivalent_by_regression_test"
+    } else {
+      "incompatible_repair_metadata"
+    }
+    checks <- c(
+      isTRUE(summary$manifest_verified[[1L]]),
+      identical(as.character(summary$posterior_target_sha256[[1L]]),
+        target$hash),
+      nrow(draws) == as.integer(job$n_keep[[1L]]),
+      any(numeric_draws) && all(vapply(draws[numeric_draws], function(x) {
+        all(is.finite(x))
+      }, logical(1L))),
+      commit_allowed,
+      commit_is_ancestor,
+      repair_compatible
+    )
+    data.frame(
+      worker_id = summary$worker_id[[1L]],
+      model_cell_id = summary$model_cell_id[[1L]],
+      scenario_id = summary$scenario_id[[1L]],
+      model_id = summary$model_id[[1L]],
+      likelihood_family = likelihood,
+      fit_structure = summary$fit_structure[[1L]],
+      chain_id = summary$chain_id[[1L]],
+      manifest_verified = summary$manifest_verified[[1L]],
+      posterior_target_verified = identical(
+        as.character(summary$posterior_target_sha256[[1L]]), target$hash
+      ),
+      draws_observed = nrow(draws),
+      draws_expected = as.integer(job$n_keep[[1L]]),
+      draws_all_finite = checks[[4L]],
+      execution_code_commit = execution_commit,
+      execution_commit_allowed = commit_allowed,
+      execution_commit_is_ancestor = commit_is_ancestor,
+      precision_repair_enabled = repair_enabled,
+      precision_repair_count = repair_count,
+      precision_repair_max_relative_jitter = repair_max,
+      precision_policy_compatible = repair_compatible,
+      equivalence_basis = equivalence_basis,
+      status = if (all(checks)) "pass" else "fail",
+      stringsAsFactors = FALSE
+    )
+  })
+  inventory <- app_joint_qdesn_bind_rows(rows)
+  assessment <- data.frame(
+    status = if (all(inventory$status == "pass")) {
+      "COMPLETED_WORKERS_SAFE_TO_RETAIN"
+    } else {
+      "COMPLETED_WORKERS_REQUIRE_RERUN"
+    },
+    completed_workers_audited = nrow(inventory),
+    workers_passed = sum(inventory$status == "pass"),
+    workers_failed = sum(inventory$status != "pass"),
+    compatible_execution_commits = paste(compatible_execution_commits,
+      collapse = ";"),
+    current_head = current_head,
+    created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  )
+  readme <- file.path(out_dir, "README.md")
+  writeLines(c(
+    "# JOINT MCMC Resume Compatibility Audit",
+    "",
+    "This packet verifies whether completed MCMC workers may be retained",
+    "across a numerical-recovery commit. It checks worker manifests, frozen",
+    "posterior-target hashes, retained-draw counts and finiteness, explicit",
+    "execution-commit ancestry, and the bounded precision-repair policy.",
+    "",
+    "A worker that completed on a direct path is compatible because the new",
+    "complete precision-system guard is regression-tested to be draw-for-draw",
+    "identical. The former guarded draw-repair path is also fixed-seed",
+    "identical to the corresponding complete-system repair. The audit",
+    "preserves every original execution commit."
+  ), readme)
+  paths <- c(
+    README = readme,
+    assessment = app_write_csv(assessment, file.path(out_dir,
+      "resume_compatibility_assessment.csv")),
+    worker_inventory = app_write_csv(inventory, file.path(out_dir,
+      "completed_worker_resume_compatibility.csv"))
+  )
+  manifest <- app_joint_shared_write_manifest(out_dir, paths)
+  verification <- app_joint_shared_verify_manifest(out_dir, manifest)
+  app_write_csv(verification, file.path(out_dir,
+    "artifact_manifest_verification.csv"))
+  if (any(!verification$verified) || any(inventory$status != "pass")) {
+    stop("MCMC resume compatibility audit failed.", call. = FALSE)
+  }
+  list(out_dir = out_dir, assessment = assessment, inventory = inventory,
+    manifest_verification = verification)
+}
+
 app_joint_article_mcmc_start_preflight <- function(root, worker_ids = NULL) {
   root <- normalizePath(root, mustWork = TRUE)
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
-  plan <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
   if (!is.null(worker_ids)) {
     plan <- plan[plan$worker_id %in% as.integer(worker_ids), , drop = FALSE]
   }
   if (!nrow(plan)) {
     return(data.frame(
       worker_id = integer(), scenario_id = character(), model_id = character(),
-      chain_id = integer(), tau = numeric(), sigma_start = numeric(),
+      chain_id = integer(), likelihood_family = character(),
+      fit_structure = character(), tau = numeric(), sigma_start = numeric(),
       gamma_start = numeric(), support_lower = numeric(),
       support_upper = numeric(), support_eta = numeric(),
       B = numeric(), weight_proxy = numeric(), status = character(),
@@ -1616,31 +2333,49 @@ app_joint_article_mcmc_start_preflight <- function(root, worker_ids = NULL) {
     init <- app_joint_article_reconstruct_init(init_rows, job, design$tau,
       ncol(design$Z))
     start <- app_joint_article_overdispersed_start(init, job, design$tau)
-    support <- app_joint_qvp_exal_support(design$tau)
-    app_joint_qdesn_bind_rows(lapply(seq_along(design$tau), function(k) {
-      constants <- tryCatch(
-        app_joint_qvp_exal_constants(design$tau[[k]], start$gamma_mean[[k]]),
+    is_exal <- identical(job$likelihood_family[[1L]], "exAL")
+    support <- if (is_exal) {
+      app_joint_qvp_exal_support(design$tau)
+    } else {
+      list(lower = rep(NA_real_, length(design$tau)),
+        upper = rep(NA_real_, length(design$tau)))
+    }
+    constants <- if (is_exal) {
+      tryCatch(
+        app_joint_qvp_exal_constants(design$tau, start$gamma_mean),
         error = function(e) NULL
       )
-      B <- if (is.null(constants)) NA_real_ else constants$B[[1L]]
-      eta <- tryCatch(app_joint_exqdesn_gamma_to_support_eta(
-        design$tau[[k]], start$gamma_mean[[k]]
-      ), error = function(e) NA_real_)
+    } else {
+      app_joint_qvp_al_constants(design$tau)
+    }
+    app_joint_qdesn_bind_rows(lapply(seq_along(design$tau), function(k) {
+      B <- if (is.null(constants)) NA_real_ else constants$B[[k]]
+      gamma <- if (is_exal) start$gamma_mean[[k]] else NA_real_
+      eta <- if (is_exal) {
+        tryCatch(app_joint_exqdesn_gamma_to_support_eta(
+          design$tau[[k]], gamma
+        ), error = function(e) NA_real_)
+      } else {
+        NA_real_
+      }
       weight_proxy <- 1 / (B * start$sigma_mean[[k]]^2)
+      gamma_ok <- !is_exal || (
+        is.finite(gamma) && gamma > support$lower[[k]] &&
+        gamma < support$upper[[k]] && is.finite(eta)
+      )
       ok <- is.finite(start$sigma_mean[[k]]) && start$sigma_mean[[k]] > 0 &&
-        is.finite(start$gamma_mean[[k]]) &&
-        start$gamma_mean[[k]] > support$lower[[k]] &&
-        start$gamma_mean[[k]] < support$upper[[k]] &&
-        is.finite(eta) && is.finite(B) && B > 0 &&
+        gamma_ok && is.finite(B) && B > 0 &&
         is.finite(weight_proxy) && weight_proxy > 0
       data.frame(
         worker_id = job$worker_id[[1L]],
         scenario_id = job$scenario_id[[1L]],
         model_id = job$model_id[[1L]],
         chain_id = job$chain_id[[1L]],
+        likelihood_family = job$likelihood_family[[1L]],
+        fit_structure = job$fit_structure[[1L]],
         tau = design$tau[[k]],
         sigma_start = start$sigma_mean[[k]],
-        gamma_start = start$gamma_mean[[k]],
+        gamma_start = gamma,
         support_lower = support$lower[[k]],
         support_upper = support$upper[[k]],
         support_eta = eta,
@@ -1659,15 +2394,16 @@ app_joint_article_mcmc_initial_precision_audit <- function(root,
   root <- normalizePath(root, mustWork = TRUE)
   app_require_namespace("Matrix")
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
-  plan <- plan[plan$likelihood_family == "exAL", , drop = FALSE]
   if (!is.null(worker_ids)) {
     plan <- plan[plan$worker_id %in% as.integer(worker_ids), , drop = FALSE]
   }
   if (!nrow(plan)) {
     return(data.frame(
       worker_id = integer(), scenario_id = character(), model_id = character(),
-      chain_id = integer(), dimension = integer(), fit_rows = integer(),
-      p = integer(), K = integer(), dense_chol_ok = logical(),
+      chain_id = integer(), likelihood_family = character(),
+      fit_structure = character(), quantile_index = integer(), tau = numeric(),
+      dimension = integer(), fit_rows = integer(), p = integer(), K = integer(),
+      dense_chol_ok = logical(),
       sparse_chol_ok = logical(), min_eigen = numeric(), max_eigen = numeric(),
       condition_number = numeric(), min_weight = numeric(),
       max_weight = numeric(), min_precision_diag = numeric(),
@@ -1688,56 +2424,92 @@ app_joint_article_mcmc_initial_precision_audit <- function(root,
     init <- app_joint_article_overdispersed_start(init, job, tau)
     target <- app_joint_article_resolve_posterior_target(root, job, design,
       app_joint_article_read_contract(file.path(root, "frozen_contract.csv")))
-    set.seed(as.integer(job$chain_seed[[1L]]))
-    constants <- app_joint_qvp_exal_constants(tau, init$gamma_mean)
-    v <- matrix(rep(init$sigma_mean, each = length(y)), nrow = length(y),
-      ncol = K)
-    s <- matrix(abs(stats::rnorm(length(y) * K)), nrow = length(y), ncol = K)
-    rhs_state <- app_joint_qvp_initialize_rhs_state(
-      K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]), zeta2 = target$zeta2,
-      slab_fixed = target$slab_fixed
-    )
-    prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
-    prior <- app_joint_qvp_build_prior_precision(K, p, prior_state$anchor,
-      prior_state$innovations)
-    work <- app_joint_qvp_build_working_response(
-      y = y, Z = Z, beta = init$beta_mean, alpha = init$alpha_mean,
-      tau = tau, sigma = init$sigma_mean, v = v, kappa = 1,
-      likelihood = "exal", gamma = init$gamma_mean, s = s
-    )
-    beta_update <- app_joint_qvp_beta_gaussian_update(
-      work$Z_stack, work$y_star, work$weights, prior$P_beta
-    )
-    dense <- as.matrix(beta_update$precision)
-    dense_chol_ok <- !inherits(try(chol(dense), silent = TRUE), "try-error")
-    sparse_chol_ok <- !inherits(try(Matrix::Cholesky(
-      Matrix::forceSymmetric(beta_update$precision), LDL = FALSE, perm = TRUE
-    ), silent = TRUE), "try-error")
-    ev <- eigen(dense, symmetric = TRUE, only.values = TRUE)$values
-    diag_values <- diag(dense)
-    data.frame(
-      worker_id = job$worker_id[[1L]],
-      scenario_id = job$scenario_id[[1L]],
-      model_id = job$model_id[[1L]],
-      chain_id = job$chain_id[[1L]],
-      dimension = length(beta_update$mean),
-      fit_rows = length(y),
-      p = p,
-      K = K,
-      dense_chol_ok = dense_chol_ok,
-      sparse_chol_ok = sparse_chol_ok,
-      min_eigen = min(ev),
-      max_eigen = max(ev),
-      condition_number = max(ev) / max(min(ev), .Machine$double.eps),
-      min_weight = min(work$weights),
-      max_weight = max(work$weights),
-      min_precision_diag = min(diag_values),
-      max_precision_diag = max(diag_values),
-      status = if (dense_chol_ok && sparse_chol_ok &&
-        all(is.finite(c(ev, work$weights, diag_values))) &&
-        min(ev) > 0) "pass" else "fail",
-      stringsAsFactors = FALSE
-    )
+    is_joint <- identical(job$fit_structure[[1L]], "joint")
+    components <- if (is_joint) {
+      list(list(
+        quantile_index = NA_integer_, tau = tau,
+        beta = init$beta_mean, alpha = init$alpha_mean,
+        sigma = init$sigma_mean, gamma = init$gamma_mean,
+        seed = as.integer(job$chain_seed[[1L]])
+      ))
+    } else {
+      lapply(seq_len(K), function(k) {
+        idx <- ((k - 1L) * p + 1L):(k * p)
+        fit_init <- if (!is.null(init$fits)) init$fits[[k]] else NULL
+        fit_gamma <- if (!is.null(fit_init) &&
+            length(fit_init$gamma_mean)) fit_init$gamma_mean[[1L]] else NULL
+        init_gamma <- if (length(init$gamma_mean) >= k) {
+          init$gamma_mean[[k]]
+        } else NULL
+        list(
+          quantile_index = k, tau = tau[[k]],
+          beta = fit_init$beta_mean %||% init$beta_mean[idx],
+          alpha = fit_init$alpha_mean %||% init$alpha_mean[[k]],
+          sigma = fit_init$sigma_mean %||% init$sigma_mean[[k]],
+          gamma = fit_gamma %||% init_gamma,
+          seed = as.integer(job$chain_seed[[1L]] +
+            k * as.integer(job$tau_seed_stride[[1L]]))
+        )
+      })
+    }
+    app_joint_qdesn_bind_rows(lapply(components, function(component) {
+      set.seed(component$seed)
+      component_tau <- as.numeric(component$tau)
+      component_K <- length(component_tau)
+      is_exal <- identical(job$likelihood_family[[1L]], "exAL")
+      v <- matrix(rep(component$sigma, each = length(y)), nrow = length(y),
+        ncol = component_K)
+      s <- if (is_exal) {
+        matrix(abs(stats::rnorm(length(y) * component_K)), nrow = length(y),
+          ncol = component_K)
+      } else NULL
+      rhs_state <- app_joint_qvp_initialize_rhs_state(
+        component_K, p, tau0 = as.numeric(job$rhs_tau0[[1L]]),
+        zeta2 = target$zeta2, slab_fixed = target$slab_fixed
+      )
+      prior_state <- app_joint_qvp_rhs_state_to_prior(rhs_state)
+      prior <- app_joint_qvp_build_prior_precision(component_K, p,
+        prior_state$anchor, prior_state$innovations)
+      work <- app_joint_qvp_build_working_response(
+        y = y, Z = Z, beta = component$beta, alpha = component$alpha,
+        tau = component_tau, sigma = component$sigma, v = v, kappa = 1,
+        likelihood = if (is_exal) "exal" else "al",
+        gamma = if (is_exal) component$gamma else NULL, s = s
+      )
+      beta_update <- app_joint_qvp_beta_gaussian_update(
+        work$Z_stack, work$y_star, work$weights, prior$P_beta
+      )
+      dense <- as.matrix(beta_update$precision)
+      dense_chol_ok <- !inherits(try(chol(dense), silent = TRUE), "try-error")
+      sparse_chol_ok <- !inherits(try(Matrix::Cholesky(
+        Matrix::forceSymmetric(beta_update$precision), LDL = FALSE, perm = TRUE
+      ), silent = TRUE), "try-error")
+      ev <- eigen(dense, symmetric = TRUE, only.values = TRUE)$values
+      diag_values <- diag(dense)
+      data.frame(
+        worker_id = job$worker_id[[1L]],
+        scenario_id = job$scenario_id[[1L]],
+        model_id = job$model_id[[1L]],
+        chain_id = job$chain_id[[1L]],
+        likelihood_family = job$likelihood_family[[1L]],
+        fit_structure = job$fit_structure[[1L]],
+        quantile_index = component$quantile_index,
+        tau = if (component_K == 1L) component_tau else NA_real_,
+        dimension = length(beta_update$mean),
+        fit_rows = length(y), p = p, K = component_K,
+        dense_chol_ok = dense_chol_ok,
+        sparse_chol_ok = sparse_chol_ok,
+        min_eigen = min(ev), max_eigen = max(ev),
+        condition_number = max(ev) / max(min(ev), .Machine$double.eps),
+        min_weight = min(work$weights), max_weight = max(work$weights),
+        min_precision_diag = min(diag_values),
+        max_precision_diag = max(diag_values),
+        status = if (dense_chol_ok && sparse_chol_ok &&
+          all(is.finite(c(ev, work$weights, diag_values))) &&
+          min(ev) > 0) "pass" else "fail",
+        stringsAsFactors = FALSE
+      )
+    }))
   })
   app_joint_qdesn_bind_rows(rows)
 }
@@ -1767,24 +2539,72 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
   plan_subset <- plan[plan$worker_id %in% as.integer(worker_ids), ,
     drop = FALSE]
+  failure_classes <- unique(failure_inventory$failure_class)
+  failure_classes <- failure_classes[nzchar(failure_classes)]
+  audit_status <- if (!nrow(failure_inventory)) {
+    "no_failures_found"
+  } else if (identical(failure_classes,
+      "numerical_precision_factorization")) {
+    "numerical_precision_failure_localized"
+  } else if (identical(failure_classes, "infrastructure_host_preflight")) {
+    "infrastructure_host_preflight_failure_localized"
+  } else if (length(failure_classes) == 1L) {
+    paste0(failure_classes, "_failure_localized")
+  } else {
+    "mixed_failure_classes_require_review"
+  }
+  failure_class_summary <- if (nrow(failure_inventory)) {
+    out <- stats::aggregate(
+      list(failed_workers = failure_inventory$worker_id),
+      by = list(
+        failure_class = failure_inventory$failure_class,
+        likelihood_family = failure_inventory$likelihood_family,
+        fit_structure = failure_inventory$fit_structure
+      ),
+      FUN = length
+    )
+    out[order(out$failure_class, out$likelihood_family,
+      out$fit_structure), , drop = FALSE]
+  } else {
+    data.frame(
+      failure_class = character(), likelihood_family = character(),
+      fit_structure = character(), failed_workers = integer(),
+      stringsAsFactors = FALSE
+    )
+  }
+  precision_failure_count <- sum(
+    failure_inventory$failure_class == "numerical_precision_factorization")
+  infrastructure_failure_count <- sum(
+    failure_inventory$failure_class == "infrastructure_host_preflight")
   assessment <- data.frame(
-    audit_status = if (nrow(failure_inventory)) {
-      "joint_exal_precision_failure_localized"
-    } else {
-      "no_failures_found"
-    },
+    audit_status = audit_status,
     root = root,
     source_attempt_dir = attempt_root,
     failed_workers = nrow(failure_inventory),
     failed_joint_exal_workers = sum(
       failure_inventory$model_id == "joint_exqdesn_rhs_mcmc"
     ),
+    failed_joint_al_workers = sum(
+      failure_inventory$model_id == "joint_qdesn_rhs_mcmc"
+    ),
+    failed_al_workers = sum(failure_inventory$likelihood_family == "AL"),
+    failed_exal_workers = sum(failure_inventory$likelihood_family == "exAL"),
+    infrastructure_host_preflight_failures = infrastructure_failure_count,
+    numerical_precision_failures = precision_failure_count,
     completed_workers_in_attempt = nrow(completed_inventory),
     start_preflight_failures = sum(start_preflight$status != "pass"),
     initial_precision_failures = sum(initial_precision$status != "pass"),
     initial_precision_all_pass = all(initial_precision$status == "pass"),
-    precision_repair_recommendation =
-      "enable_strict_scale_aware_precision_draw_repair_for_exal",
+    precision_repair_recommendation = if (precision_failure_count > 0L) {
+      "enable_strict_scale_aware_gaussian_precision_system_repair_for_affected_likelihood_paths"
+    } else {
+      "not_indicated_by_observed_failures"
+    },
+    orchestration_repair_recommendation = if (infrastructure_failure_count > 0L) {
+      "verify_queue_execution_lineage_before_worker_preflight"
+    } else {
+      "not_indicated_by_observed_failures"
+    },
     tau_or_tau0_change_recommended = FALSE,
     production_relaunch_required = nrow(failure_inventory) > 0L,
     created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
@@ -1799,10 +2619,11 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     "production worker directories, selected backbones, tau grids, tau0 values,",
     "article assets, or source evidence.",
     "",
-    "The audit reconstructs deterministic exAL chain starts and the first",
-    "beta precision update from the frozen article worker plan. A passing",
-    "initial precision audit means failures occurred during dynamic MCMC",
-    "state evolution rather than from malformed compact VB initializers."
+    "Failures are classified from their recorded messages before any",
+    "recommendation is made. For AL and exAL failures, the audit reconstructs",
+    "deterministic chain starts and the first beta precision update. A passing",
+    "initial precision audit rules out malformed compact VB initializers at",
+    "that first update; it does not override the evidence-based failure class."
   ), readme, useBytes = TRUE)
   paths <- c(
     README = readme,
@@ -1810,6 +2631,8 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
       "audit_assessment.csv")),
     failure_inventory = app_write_csv(failure_inventory, file.path(out_dir,
       "failed_worker_inventory.csv")),
+    failure_class_summary = app_write_csv(failure_class_summary,
+      file.path(out_dir, "failure_class_summary.csv")),
     completed_inventory = app_write_csv(completed_inventory, file.path(out_dir,
       "completed_worker_inventory.csv")),
     worker_plan_subset = app_write_csv(plan_subset, file.path(out_dir,
@@ -1819,13 +2642,15 @@ app_joint_article_write_mcmc_failure_audit <- function(root,
     initial_precision = app_write_csv(initial_precision, file.path(out_dir,
       "failed_worker_initial_precision.csv"))
   )
+  attempt_snapshot_root <- if (dir.exists(file.path(attempt_root,
+      "root_snapshot"))) file.path(attempt_root, "root_snapshot") else attempt_root
   queue_files <- c(
-    mcmc_queue_launch_receipt = file.path(attempt_root,
+    mcmc_queue_launch_receipt = file.path(attempt_snapshot_root,
       "mcmc_queue_launch_receipt.csv"),
-    mcmc_execution_git_state = file.path(attempt_root,
+    mcmc_execution_git_state = file.path(attempt_snapshot_root,
       "mcmc_execution_git_state.csv"),
-    mcmc_health_summary = file.path(attempt_root, "mcmc_health_summary.csv"),
-    mcmc_queue_health = file.path(attempt_root, "mcmc_queue_health.csv")
+    mcmc_health_summary = file.path(attempt_snapshot_root, "mcmc_health_summary.csv"),
+    mcmc_queue_health = file.path(attempt_snapshot_root, "mcmc_queue_health.csv")
   )
   queue_files <- queue_files[file.exists(queue_files)]
   if (length(queue_files)) {
@@ -1878,12 +2703,19 @@ app_joint_article_mcmc_launch_guard <- function(root) {
   TRUE
 }
 
-app_joint_article_assert_mcmc_production_allowed <- function(require_synced = TRUE) {
+app_joint_article_assert_mcmc_production_allowed <- function(
+  contract, require_synced = TRUE, runtime_root = NULL,
+  execution_root_pid = NULL
+) {
   if (!identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION"), "MCMC")) {
     stop("Refusing MCMC launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC.",
          call. = FALSE)
   }
-  app_joint_article_assert_clean_execution(require_synced = require_synced)
+  app_joint_article_assert_clean_execution(contract, require_synced = require_synced)
+  app_joint_article_assert_capacity_authorized(contract)
+  app_joint_article_host_preflight(
+    contract, runtime_root = runtime_root,
+    execution_root_pid = execution_root_pid)
   invisible(TRUE)
 }
 
@@ -1973,11 +2805,23 @@ app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message
   invisible(out)
 }
 
-app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = TRUE) {
+app_joint_article_mcmc_precision_repair_controls <- function() {
+  list(
+    precision_repair = TRUE,
+    precision_repair_start_rel = 1.0e-12,
+    precision_repair_max_rel = 1.0e-8,
+    precision_repair_growth = 10
+  )
+}
+
+app_joint_article_run_mcmc_worker <- function(root, worker_id,
+  require_synced = TRUE, execution_root_pid = NULL) {
   root <- normalizePath(root, mustWork = TRUE)
-  app_joint_article_assert_mcmc_production_allowed(require_synced = require_synced)
-  app_joint_article_mcmc_launch_guard(root)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  app_joint_article_assert_mcmc_production_allowed(
+    contract, require_synced = require_synced, runtime_root = root,
+    execution_root_pid = execution_root_pid)
+  app_joint_article_mcmc_launch_guard(root)
   plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
   job <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
   if (nrow(job) != 1L) stop("Article MCMC worker_id is not unique.", call. = FALSE)
@@ -2016,11 +2860,8 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     sigma_bounds = target$sigma_bounds,
     init = init
   )
+  common <- c(common, app_joint_article_mcmc_precision_repair_controls())
   fit <- if (job$likelihood_family[[1L]] == "exAL") {
-    common$precision_repair <- TRUE
-    common$precision_repair_start_rel <- 1.0e-12
-    common$precision_repair_max_rel <- 1.0e-8
-    common$precision_repair_growth <- 10
     common$gamma_init <- init$gamma_mean
     common$gamma_slice_width <- 1
     common$gamma_slice_max_steps <- 100L
@@ -2085,7 +2926,8 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
     status = character(), backend = character(), dimension = integer(),
     attempt = integer(), jitter_relative = numeric(),
     jitter_absolute = numeric(), diagonal_scale = numeric(),
-    error_message = character(), iteration = integer(),
+    error_message = character(), failure_stage = character(),
+    iteration = integer(),
     min_weight = numeric(), max_weight = numeric(),
     min_sigma = numeric(), max_sigma = numeric(),
     min_gamma = numeric(), max_gamma = numeric(),
@@ -2111,14 +2953,22 @@ app_joint_article_run_mcmc_worker <- function(root, worker_id, require_synced = 
   invisible(out)
 }
 
+app_joint_article_refresh_mcmc_queue_health <- function(root) {
+  check <- app_joint_article_check_mcmc(root)
+  app_joint_article_atomic_write_csv(check$summary,
+    file.path(normalizePath(root, mustWork = TRUE), "mcmc_queue_health.csv"))
+  check
+}
+
 app_joint_article_run_mcmc_queue <- function(
   root,
   max_workers = 40L,
   require_synced = TRUE
 ) {
   root <- normalizePath(root, mustWork = TRUE)
-  app_joint_article_assert_mcmc_production_allowed(require_synced = require_synced)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
+  app_joint_article_assert_mcmc_production_allowed(
+    contract, require_synced = require_synced)
   max_workers <- as.integer(max_workers)[[1L]]
   if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
       max_workers > contract$maximum_concurrency) {
@@ -2136,8 +2986,9 @@ app_joint_article_run_mcmc_queue <- function(
          call. = FALSE)
   }
   on.exit(unlink(lock_dir, recursive = TRUE, force = TRUE), add = TRUE)
+  queue_pid <- Sys.getpid()
   app_write_csv(data.frame(
-    pid = Sys.getpid(),
+    pid = queue_pid,
     started_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
     root = root,
     max_workers = max_workers,
@@ -2158,15 +3009,7 @@ app_joint_article_run_mcmc_queue <- function(
   repeat {
     plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
     state <- app_joint_article_mcmc_worker_state(root, plan)
-    health <- app_joint_article_check_mcmc(root)$summary
-    health$completed_workers <- sum(state$done)
-    health$failed_workers <- sum(state$failed)
-    health$remaining_workers <- sum(!state$done & !state$failed)
-    health$production_launched <- any(state$done)
-    health$gate_status <- if (health$launch_gate_ready[[1L]] &&
-        health$completed_workers[[1L]] == nrow(plan) &&
-        health$failed_workers[[1L]] == 0L) "pass" else "fail"
-    app_joint_article_atomic_write_csv(health, file.path(root, "mcmc_queue_health.csv"))
+    health <- app_joint_article_refresh_mcmc_queue_health(root)$summary
     if (!isTRUE(health$launch_gate_ready[[1L]])) {
       stop("MCMC queue stopped because the VB/initializer launch gate is not ready.",
            call. = FALSE)
@@ -2192,7 +3035,9 @@ app_joint_article_run_mcmc_queue <- function(
     run_one <- function(worker_id) {
       started <- Sys.time()
       tryCatch({
-        app_joint_article_run_mcmc_worker(root, worker_id, require_synced = FALSE)
+        app_joint_article_run_mcmc_worker(
+          root, worker_id, require_synced = FALSE,
+          execution_root_pid = queue_pid)
         data.frame(worker_id = worker_id, status = "completed",
           error_message = "", stringsAsFactors = FALSE)
       }, error = function(e) {
@@ -2209,6 +3054,7 @@ app_joint_article_run_mcmc_queue <- function(
     result <- app_joint_qdesn_bind_rows(result)
     app_write_csv(result, file.path(root, sprintf(
       "mcmc_queue_batch_%03d_result.csv", batch_id)))
+    app_joint_article_refresh_mcmc_queue_health(root)
     if (any(result$status != "completed")) {
       stop("MCMC queue batch failed; inspect worker failure.csv files.",
            call. = FALSE)

@@ -665,7 +665,9 @@ independent \(\AL\) fits proceed toward the two tails. Each \(\exAL\) fit is
 initialized from the \(\AL\) fit at the same level, the complete independent
 grids initialize the corresponding joint fits, and each completed VB fit
 initializes MCMC for the same model. These transfers determine starting values
-only. The supplement gives the complete calculation and chain allocation.
+only. Within each model cell, all five MCMC chains share fixed prior
+hyperparameters and the same posterior target. The supplement gives the
+complete calculation and chain allocation.
 
 Held-out evaluation is sequentially conditional: regression coefficients and
 reservoir weights remain fixed, while newly observed response lags enter later
@@ -675,26 +677,30 @@ Eq.~\eqref{eq:dgp-integrated-score-main}, computed for each retained MCMC draw
 after monotone rearrangement. Independent quantile draws are combined by the
 pre-specified chain-balanced product coupling described in the supplement.
 
-Figure~\ref{fig:joint-qdesn-shared-backbone-forecast-score} shows the complete
+Figure~\ref{fig:joint-qdesn-corrected-v4-forecast-acrps} shows the corrected
 posterior score comparison. Independent exQDESN has the smallest numerical
 posterior mean in seven mechanisms; joint exQDESN is smallest for the Laplace
-mechanism. The marginal intervals for the numerical winner and runner-up
-overlap in every mechanism. Of the 16 paired joint-minus-independent
-contrasts, five intervals favor independent estimation and eleven include
-zero; none favors joint estimation. The evidence therefore does not support a
-general forecast advantage from joint estimation under this shared design.
+mechanism. The canonical reported quantile grid instead favors independent
+exQDESN in all eight mechanisms, including the Laplace mechanism. The marginal
+intervals for the numerical winner and runner-up overlap in every mechanism.
+Of the 16 paired joint-minus-independent contrasts, four intervals favor
+independent estimation and twelve include zero; none favors joint estimation.
+The evidence therefore does not support a general forecast advantage from
+joint estimation under this shared design.
 
-\input{tables/joint_qdesn_shared_backbone_forecast_figure.tex}
+\input{tables/joint_qdesn_corrected_v4_forecast_figure.tex}
 
-Before rearrangement, the posterior-mean forecast grids contain 1,426 crossings
-for joint Q--DESN, 4,705 for independent Q--DESN, none for joint exQDESN, and
-281 for independent exQDESN, summed over the eight mechanisms. Rearrangement
-produces ordered grids in all 32 comparisons. Posterior-score diagnostics meet
-the pre-specified criteria in 21 comparisons and warrant review in 11; all 16
-\(\exAL\) scale--asymmetry assessments remain at review level. Exact scores,
-fit recovery, crossing rates, and computational diagnostics are reported in
-the supplement. A separate 50-replicate variational analysis is retained as a
-sensitivity study.
+Before rearrangement, the canonical posterior-mean forecast grids contain
+1,197 crossings for joint Q--DESN, 3,522 for independent Q--DESN, none for
+joint exQDESN, and 269 for independent exQDESN, summed over the eight
+mechanisms. Joint exQDESN is therefore the most coherent raw specification in
+this comparison, although its predictive score is not uniformly lowest.
+Rearrangement produces ordered grids in all 32 comparisons. Posterior-score
+diagnostics meet the pre-specified criteria in 22 comparisons and warrant
+review in 10; all 16 \(\exAL\) scale--asymmetry assessments remain at review
+level. Exact scores, fit recovery, crossing rates, and computational
+diagnostics are reported in the supplement. A separate 50-replicate
+variational analysis is retained as a sensitivity study.
 
 \section{Application: GloFAS Retrospective Streamflow Quantile Forecasting}
 \label{sec:data}

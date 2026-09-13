@@ -571,3 +571,48 @@ This writes `tables/glofas_application_current_outputs.tex`,
 uses these current-output aliases instead of hard-coding run-specific promoted
 file names. To replace the application run later, promote the new run and
 regenerate the current-output registry from its promotion manifest.
+
+The corrected seven-level JOINT comparison has one phase-aware entry point:
+
+```sh
+application/scripts/launch_joint_qdesn_corrected_article_comparison.sh --preflight
+JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=VB \
+  application/scripts/launch_joint_qdesn_corrected_article_comparison.sh --launch-vb
+JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC \
+  application/scripts/launch_joint_qdesn_corrected_article_comparison.sh --launch-mcmc
+application/scripts/launch_joint_qdesn_corrected_article_comparison.sh --finalize-score
+```
+
+Run these commands only from the synchronized corrected JOINT branch on Jerez.
+The preflight creates no fitted result. The two production phases require
+distinct environment authorizations, enforce the 50-worker ceiling and
+one-thread policy, and cannot reuse the historical Jerez runtime. Final score
+materialization is unavailable until all 160 workers and all posterior-target
+hash gates pass.
+
+The isolated Muscat adaptation uses:
+
+```sh
+application/scripts/launch_joint_qdesn_corrected_article_comparison_muscat.sh --preflight
+```
+
+Every v3 R invocation is pinned with `taskset -c 0-24`; VB and MCMC retain
+separate phase authorizations and a maximum of 25 single-thread workers. The
+preflight fails before creating its runtime unless the effective affinity maps
+to 25 distinct physical cores and all competing PriceFM, GloFAS, Phase182,
+historical JOINT, and corrected JOINT processes are absent.
+
+When Muscat is intentionally shared with the frozen PriceFM R97 shard and
+GloFAS Part 4 continuation, use the v4 launcher from its dedicated branch:
+
+```sh
+JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED=MUSCAT_11_PHYSICAL_SHARED \
+  application/scripts/launch_joint_qdesn_corrected_article_comparison_muscat_11core.sh --run-all
+```
+
+The launcher pins every R process to `1-9,16,24`, caps both queues at 11
+single-thread workers, runs preflight before VB, requires all 136 VB components
+before MCMC, requires all 160 MCMC workers before score finalization, and keeps
+the runtime ignored. Its shared-capacity preflight proves the non-overlapping
+11/20/1 physical-core allocation and permits only the exact audited PriceFM and
+GloFAS process families.

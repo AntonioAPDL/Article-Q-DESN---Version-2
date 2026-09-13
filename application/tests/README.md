@@ -11,6 +11,19 @@ Tracked tests:
 - `test_joint_qdesn_posterior_contract.R`: posterior-target hashing,
   chain-invariant prior/support fields, initialization-field separation, and
   positive unbounded scale support for corrected JOINT comparisons.
+- `test_joint_qdesn_corrected_article_comparison_contract.R`: frozen Jerez
+  execution and score contracts, fixed-slab and common-prior requirements,
+  five-chain target-hash coverage, historical-packet separation, and
+  launch-script guards for the corrected 32-cell comparison.
+- `test_joint_qdesn_corrected_article_comparison_muscat_contract.R`: exact
+  v2-to-v3 scientific-contract equivalence, Muscat host/runtime isolation,
+  25-distinct-physical-core affinity, capacity/process guards, unchanged seed
+  plans, and pinned-launcher checks for the corrected 32-cell comparison.
+- `test_joint_qdesn_corrected_article_comparison_muscat_shared_contract.R`:
+  exact v3-to-v4 scientific and seed equivalence, the non-overlapping
+  11/20/1 JOINT/PriceFM/GloFAS physical-core partition, the narrow competing
+  process allowlist, isolated runtime paths, and pinned 11-worker launcher
+  checks for the corrected 32-cell comparison.
 - `test_input_contract.R`: input manifests, hashes, schemas, and date ranges.
 - `test_input_bundle.R`: registration of required and optional bundle inputs.
 - `test_input_figures.R`: pre-model diagnostic figures and figure provenance.

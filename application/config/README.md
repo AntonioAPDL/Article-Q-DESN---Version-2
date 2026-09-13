@@ -419,3 +419,30 @@ p50 transition/information screen. It freezes the legacy/damped/cumulative
 semantics, separates retrospective blended, issued-only, and oracle covariate
 roles, excludes unsupported ensemble-spread training, and requires an explicit
 approval token before any candidate materialization or launch code is added.
+
+The corrected JOINT article comparison is governed jointly by
+`joint_qdesn_shared_backbone_article_confirmation_contract_v2.csv` and
+`joint_qdesn_corrected_article_score_contract_v2.csv`. These contracts retain
+the eight selected shared backbones but refit all 32 model cells under one
+chain-invariant posterior specification. They fix the regularized-horseshoe
+slab variance at one, derive the intercept prior once from the Gaussian fit,
+use positive unbounded scale support, require five chains and one verified
+posterior-target hash per cell, and keep all earlier JOINT packets separate.
+Both production phases remain launch locked and are authorized only on the
+dedicated Jerez execution branch and host profile.
+
+The Muscat execution adaptation is frozen separately in
+`joint_qdesn_shared_backbone_article_confirmation_contract_v3.csv` and
+`joint_qdesn_corrected_article_score_contract_v3.csv`. It changes only the
+execution branch, isolated runtime/source paths, host profile, concurrency,
+and the fail-closed `0-24` physical-affinity contract. Every scientific,
+seed, posterior-target, and score field remains identical to v2.
+
+The shared-capacity Muscat adaptation is frozen in
+`joint_qdesn_shared_backbone_article_confirmation_contract_v4.csv` and
+`joint_qdesn_corrected_article_score_contract_v4.csv`. It preserves every v3
+scientific, posterior-target, score, and seed field while assigning JOINT to
+11 distinct physical cores (`1-9,16,24`). PriceFM R97 retains its 20-core
+affinity, and physical core 0 (`0,32`) remains outside JOINT for the active
+GloFAS Part 4 continuation. Only those exact two campaigns are allowed to
+coexist; all other protected campaigns fail the preflight closed.

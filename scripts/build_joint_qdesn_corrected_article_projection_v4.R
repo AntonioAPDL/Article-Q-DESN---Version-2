@@ -225,11 +225,10 @@ score_table <- c(
   "\\setlength{\\tabcolsep}{3.7pt}",
   "\\renewcommand{\\arraystretch}{1.04}",
   "\\resizebox{\\textwidth}{!}{%",
-  "\\begin{tabular}{@{}>{\\raggedright\\arraybackslash}p{0.18\\textwidth}>{\\raggedright\\arraybackslash}p{0.25\\textwidth}rrcrr@{}}",
+  "\\begin{tabular}{@{}>{\\raggedright\\arraybackslash}p{0.20\\textwidth}>{\\raggedright\\arraybackslash}p{0.30\\textwidth}rrc@{}}",
   "\\toprule",
   paste0("Simulation setting & Model & Posterior mean & Median & ",
-         "Equal-tailed 95\\% interval & Canonical action & ",
-         "\\shortstack{Crossings\\\\raw/reported} \\\\"),
+         "Equal-tailed 95\\% interval \\\\"),
   "\\midrule"
 )
 for (ss in seq_along(scenario_order)) {
@@ -237,21 +236,16 @@ for (ss in seq_along(scenario_order)) {
   block <- score[score$scenario_id == sid, , drop = FALSE]
   block <- block[match(model_order, block$source_model_id), , drop = FALSE]
   mean_min <- which.min(block$posterior_score_mean)
-  action_min <- which.min(block$canonical_action_dgp_integrated_acrps)
   for (jj in seq_len(nrow(block))) {
     setting <- if (jj == 1L) scenario_tex[[sid]] else ""
     mean_value <- sprintf("%.4f", block$posterior_score_mean[[jj]])
-    action_value <- sprintf("%.4f", block$canonical_action_dgp_integrated_acrps[[jj]])
     if (jj == mean_min) mean_value <- paste0("\\textbf{", mean_value, "}")
-    if (jj == action_min) action_value <- paste0("\\underline{", action_value, "}")
     interval <- sprintf("[%.4f, %.4f]", block$posterior_score_q025[[jj]],
                         block$posterior_score_q975[[jj]])
     score_table <- c(score_table, paste0(
       setting, " & ", model_tex[[block$source_model_id[[jj]]]], " & ",
       mean_value, " & ", sprintf("%.4f", block$posterior_score_median[[jj]]),
-      " & ", interval, " & ", action_value, " & ",
-      block$canonical_raw_crossing_pairs[[jj]], "/",
-      block$canonical_contract_crossing_pairs[[jj]], " \\\\"
+      " & ", interval, " \\\\"
     ))
   }
   if (ss < length(scenario_order)) score_table <- c(score_table, "\\addlinespace[2pt]")
@@ -259,14 +253,11 @@ for (ss in seq_along(scenario_order)) {
 score_table <- c(
   score_table, "\\bottomrule", "\\end{tabular}", "}%",
   paste0("\\caption{Corrected posterior DGP-integrated \\(\\aCRPS\\) for the ",
-    "joint multi-quantile study. Each entry retains the posterior mean, ",
-    "median, equal-tailed 95\\% interval, and score of the canonical reported ",
-    "quantile grid. Crossings give raw/reported adjacent-level counts for that ",
-    "grid; the reported count is zero after the pre-specified monotone rule. ",
-    "Boldface marks the lowest posterior mean and underlining the lowest ",
-    "canonical-action score within a setting. The two markings differ for the ",
-    "Laplace setting. All winner/runner-up marginal intervals overlap, so the ",
-    "rankings are descriptive.}"),
+    "joint multi-quantile study. Entries are posterior means, medians, and ",
+    "equal-tailed 95\\% intervals. Boldface marks the lowest posterior mean ",
+    "within each simulation setting. All winner/runner-up marginal intervals ",
+    "overlap, so the rankings are descriptive. Crossing frequencies and the ",
+    "sizes of the monotone adjustments are reported separately.}"),
   "\\label{tab:joint-qdesn-corrected-v4-score}", "\\end{table}"
 )
 writeLines(score_table, file.path(table_dir,
@@ -304,19 +295,51 @@ contrast_table <- c(
 writeLines(contrast_table, file.path(table_dir,
   "joint_qdesn_corrected_v4_contrast_table.tex"), useBytes = TRUE)
 
-cross_agg <- aggregate(
-  cbind(raw_crossing_pairs, contract_crossing_pairs,
-        raw_crossing_opportunities) ~ source_model_id + window,
-  crossings, sum
-)
+summarize_crossings <- function(block) {
+  data.frame(
+    raw_crossing_pairs = sum(block$raw_crossing_pairs),
+    raw_crossing_opportunities = sum(block$raw_crossing_opportunities),
+    raw_crossing_rate = sum(block$raw_crossing_pairs) /
+      sum(block$raw_crossing_opportunities),
+    mean_abs_monotone_adjustment = stats::weighted.mean(
+      block$mean_abs_monotone_adjustment, w = block$rows
+    ),
+    max_abs_monotone_adjustment = max(block$max_abs_monotone_adjustment),
+    contract_crossing_pairs = sum(block$contract_crossing_pairs)
+  )
+}
+cross_agg <- do.call(rbind, lapply(model_order, function(mid) {
+  do.call(rbind, lapply(c("fit", "forecast"), function(win) {
+    block <- crossings[
+      crossings$source_model_id == mid & crossings$window == win,
+      , drop = FALSE
+    ]
+    cbind(data.frame(source_model_id = mid, window = win),
+          summarize_crossings(block))
+  }))
+}))
+fmt_crossing_rate <- function(block) {
+  sprintf(
+    "%.2f\\%% (%s/%s)",
+    100 * block$raw_crossing_rate,
+    format(block$raw_crossing_pairs, big.mark = ",", scientific = FALSE),
+    format(block$raw_crossing_opportunities, big.mark = ",", scientific = FALSE)
+  )
+}
+fmt_adjustment <- function(block) {
+  sprintf("%.4f/%.4f", block$mean_abs_monotone_adjustment,
+          block$max_abs_monotone_adjustment)
+}
 cross_table <- c(
-  "\\begin{table}[!htbp]", "\\centering", "\\small",
-  "\\begin{tabular}{@{}>{\\raggedright\\arraybackslash}p{0.42\\textwidth}rrrr@{}}",
+  "\\begin{table}[!htbp]", "\\centering", "\\scriptsize",
+  "\\setlength{\\tabcolsep}{3.5pt}",
+  "\\resizebox{\\textwidth}{!}{%",
+  "\\begin{tabular}{@{}>{\\raggedright\\arraybackslash}p{0.31\\textwidth}rrrr@{}}",
   "\\toprule",
-  paste0("Model & \\shortstack{Fit raw\\\\count (\\%)} & ",
-         "\\shortstack{Forecast raw\\\\count (\\%)} & ",
-         "\\shortstack{Fit\\\\reported} & ",
-         "\\shortstack{Forecast\\\\reported} \\\\"),
+  paste0("Model & \\shortstack{Fit raw crossings\\\\rate (count/\\(N\\))} & ",
+         "\\shortstack{Fit adjustment\\\\mean/max} & ",
+         "\\shortstack{Forecast raw crossings\\\\rate (count/\\(N\\))} & ",
+         "\\shortstack{Forecast adjustment\\\\mean/max} \\\\"),
   "\\midrule"
 )
 for (mid in model_order) {
@@ -324,21 +347,23 @@ for (mid in model_order) {
                      cross_agg$window == "fit", , drop = FALSE]
   fore <- cross_agg[cross_agg$source_model_id == mid &
                       cross_agg$window == "forecast", , drop = FALSE]
-  cross_table <- c(cross_table, sprintf(
-    "%s & %d (%.2f) & %d (%.2f) & %d & %d \\\\",
-    model_tex[[mid]], fit$raw_crossing_pairs,
-    100 * fit$raw_crossing_pairs / fit$raw_crossing_opportunities,
-    fore$raw_crossing_pairs,
-    100 * fore$raw_crossing_pairs / fore$raw_crossing_opportunities,
-    fit$contract_crossing_pairs, fore$contract_crossing_pairs
+  cross_table <- c(cross_table, paste0(
+    model_tex[[mid]], " & ", fmt_crossing_rate(fit), " & ",
+    fmt_adjustment(fit), " & ", fmt_crossing_rate(fore), " & ",
+    fmt_adjustment(fore), " \\\\"
   ))
 }
 cross_table <- c(
-  cross_table, "\\bottomrule", "\\end{tabular}",
-  paste0("\\caption{Adjacent-level crossings in the canonical posterior-mean ",
-    "quantile grids, summed over eight simulation settings. Percentages use ",
-    "the corresponding adjacent-level opportunities. Reported grids apply ",
-    "the pre-specified monotone rule.}"),
+  cross_table, "\\bottomrule", "\\end{tabular}", "}%",
+  paste0("\\caption{Frequency and magnitude of monotone correction for the ",
+    "posterior-mean quantile grids, aggregated over eight simulation settings. ",
+    "Crossing rates are the proportions of adjacent-level comparisons that ",
+    "cross before rearrangement; counts and total opportunities \\(N\\) are ",
+    "shown in parentheses. Adjustment entries give the mean and maximum absolute change ",
+    "on the simulation response scale ",
+    "induced by the pre-specified monotone rule. Thus the rates measure how ",
+    "often crossings occur, whereas the adjustment summaries describe their ",
+    "magnitude. All rearranged grids have zero crossings.}"),
   "\\label{tab:supp-joint-qdesn-corrected-v4-crossings}", "\\end{table}"
 )
 writeLines(cross_table, file.path(table_dir,
@@ -368,7 +393,7 @@ secondary_table <- c(
   secondary_table, "\\bottomrule", "\\end{tabular}", "}%",
   paste0("\\caption{Secondary scores against realized observations. Entries ",
     "are finite-grid realized \\(\\aCRPS\\) with unweighted average check ",
-    "loss in parentheses, evaluated on the canonical reported quantile grid. ",
+    "loss in parentheses, evaluated on the reported posterior-mean quantile grid. ",
     "These scores supplement, rather than replace, the known-DGP expected ",
     "score used for the primary comparison.}"),
   "\\label{tab:supp-joint-qdesn-corrected-v4-secondary}", "\\end{table}"
@@ -404,7 +429,7 @@ for (ss in seq_along(scenario_order)) {
 oracle_table <- c(
   oracle_table, "\\bottomrule", "\\end{tabular}", "}%",
   paste0("\\caption{Recovery of the known conditional quantile paths by the ",
-    "canonical posterior-mean grids. MAE and RMSE are oracle recovery ",
+    "reported posterior-mean grids. MAE and RMSE are oracle recovery ",
     "diagnostics, not proper scores against realized observations. All values ",
     "are computed after the pre-specified monotone reporting rule.}"),
   "\\label{tab:supp-joint-qdesn-corrected-v4-oracle}", "\\end{table}"
@@ -456,24 +481,8 @@ plot_data <- data.frame(
   mean = score$posterior_score_mean,
   lo = score$posterior_score_q025,
   hi = score$posterior_score_q975,
-  canonical = score$canonical_action_dgp_integrated_acrps,
-  raw_cross = score$canonical_raw_crossing_pairs,
-  report_cross = score$canonical_contract_crossing_pairs,
   stringsAsFactors = FALSE
 )
-plot_limits <- do.call(rbind, lapply(split(plot_data, plot_data$scenario_id),
-  function(block) {
-    right <- max(block$hi, block$canonical)
-    left <- min(block$lo, block$canonical)
-    span <- right - left
-    if (!is.finite(span) || span <= 0) span <- max(abs(right), 1) * 0.1
-    data.frame(scenario_id = block$scenario_id[[1L]],
-               label_x = right + 0.28 * span)
-  }))
-plot_data <- merge(plot_data, plot_limits, by = "scenario_id", sort = FALSE)
-plot_data$scenario_id <- factor(plot_data$scenario_id, levels = scenario_order)
-plot_data$source_model_id <- factor(plot_data$source_model_id,
-                                    levels = rev(model_order))
 
 forecast_plot <- ggplot2::ggplot(
   plot_data, ggplot2::aes(y = source_model_id)
@@ -486,15 +495,6 @@ forecast_plot <- ggplot2::ggplot(
     ggplot2::aes(x = mean, colour = likelihood_family,
                  shape = interaction(fit_structure, likelihood_family)),
     size = 2.0, stroke = 0.75
-  ) +
-  ggplot2::geom_point(
-    ggplot2::aes(x = canonical), shape = 124, size = 4.0,
-    stroke = 0.65, colour = "#202020"
-  ) +
-  ggplot2::geom_text(
-    ggplot2::aes(x = label_x,
-                 label = paste0(raw_cross, "/", report_cross)),
-    hjust = 1, size = 2.25, colour = "#404040"
   ) +
   ggplot2::facet_wrap(
     ~scenario_id, ncol = 2, scales = "free_x",
@@ -529,24 +529,6 @@ ggplot2::ggsave(forecast_figure_path, forecast_plot,
                 width = 7.0, height = 8.1, units = "in")
 
 fit_oracle <- oracle[oracle$window == "fit", , drop = FALSE]
-fit_cross <- crossings[crossings$window == "fit",
-  c("scenario_id", "source_model_id", "raw_crossing_pairs",
-    "contract_crossing_pairs"), drop = FALSE]
-fit_oracle <- merge(fit_oracle, fit_cross,
-                    by = c("scenario_id", "source_model_id"), sort = FALSE)
-fit_oracle$scenario_id <- factor(fit_oracle$scenario_id, levels = scenario_order)
-fit_oracle$source_model_id <- factor(fit_oracle$source_model_id,
-                                     levels = rev(model_order))
-fit_limits <- do.call(rbind, lapply(split(fit_oracle, fit_oracle$scenario_id),
-  function(block) {
-    span <- diff(range(block$oracle_quantile_rmse))
-    if (!is.finite(span) || span <= 0) {
-      span <- max(abs(block$oracle_quantile_rmse), 1) * 0.1
-    }
-    data.frame(scenario_id = block$scenario_id[[1L]],
-               label_x = max(block$oracle_quantile_rmse) + 0.26 * span)
-  }))
-fit_oracle <- merge(fit_oracle, fit_limits, by = "scenario_id", sort = FALSE)
 fit_oracle$scenario_id <- factor(fit_oracle$scenario_id, levels = scenario_order)
 fit_oracle$source_model_id <- factor(fit_oracle$source_model_id,
                                      levels = rev(model_order))
@@ -557,12 +539,6 @@ fit_plot <- ggplot2::ggplot(
     ggplot2::aes(x = oracle_quantile_rmse, colour = likelihood_family,
                  shape = interaction(fit_structure, likelihood_family)),
     size = 2.1, stroke = 0.75
-  ) +
-  ggplot2::geom_text(
-    ggplot2::aes(x = label_x,
-                 label = paste0(raw_crossing_pairs, "/",
-                                contract_crossing_pairs)),
-    hjust = 1, size = 2.25, colour = "#404040"
   ) +
   ggplot2::facet_wrap(
     ~scenario_id, ncol = 2, scales = "free_x",
@@ -601,13 +577,12 @@ forecast_wrapper <- c(
   "\\includegraphics[width=0.94\\textwidth]{figures/joint_qdesn_simulation/joint_qdesn_corrected_v4_forecast_dgp_acrps.pdf}",
   paste0("\\caption{Corrected posterior DGP-integrated \\(\\aCRPS\\) for the ",
     "joint multi-quantile study. Colored points are posterior means and ",
-    "horizontal segments are equal-tailed 95\\% intervals; black vertical ",
-    "marks give the canonical-action scores. Lower values are better. Filled ",
+    "horizontal segments are equal-tailed 95\\% intervals. Lower values are ",
+    "better. Filled ",
     "symbols denote joint fits, open symbols independent fits, blue \\(\\AL\\), ",
-    "and red \\(\\exAL\\). Labels give raw/reported crossing counts for the ",
-    "canonical grid. All reported counts are zero after the pre-specified ",
-    "monotone rule. Marginal intervals for the numerical winner and runner-up ",
-    "overlap in every setting.}"),
+    "and red \\(\\exAL\\). Marginal intervals for the numerical winner and ",
+    "runner-up overlap in every setting. Crossing frequencies and monotone-",
+    "adjustment magnitudes are reported in the supplement.}"),
   "\\label{fig:joint-qdesn-corrected-v4-forecast-acrps}", "\\end{figure}"
 )
 fit_wrapper <- c(
@@ -615,10 +590,10 @@ fit_wrapper <- c(
   "\\includegraphics[width=0.94\\textwidth]{figures/joint_qdesn_simulation/joint_qdesn_corrected_v4_fit_oracle_rmse.pdf}",
   paste0("\\caption{Fitting-sample recovery of the known conditional quantile ",
     "paths in the corrected joint study. Points are RMSE values for the ",
-    "canonical posterior-mean quantile grids, not posterior intervals. Filled ",
+    "reported posterior-mean quantile grids, not posterior intervals. Filled ",
     "symbols denote joint fits, open symbols independent fits, blue \\(\\AL\\), ",
-    "and red \\(\\exAL\\). Labels give raw/reported crossing counts; the ",
-    "reported grids are ordered after the pre-specified monotone rule.}"),
+    "and red \\(\\exAL\\). Crossing frequencies and monotone-adjustment ",
+    "magnitudes are reported separately.}"),
   "\\label{fig:joint-qdesn-corrected-v4-fit-rmse}", "\\end{figure}"
 )
 writeLines(forecast_wrapper, file.path(table_dir,

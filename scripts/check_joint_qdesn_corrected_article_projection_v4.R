@@ -96,7 +96,8 @@ expect(sum(score$score_functional_status == "pass") == 22L &&
        "The score or coherence diagnostic counts changed.")
 
 forecast_cross <- aggregate(
-  cbind(raw_crossing_pairs, contract_crossing_pairs) ~ source_model_id,
+  cbind(raw_crossing_pairs, contract_crossing_pairs,
+        raw_crossing_opportunities) ~ source_model_id,
   crossings[crossings$window == "forecast", , drop = FALSE], sum
 )
 expected_cross <- c(
@@ -108,9 +109,21 @@ expected_cross <- c(
 observed_cross <- forecast_cross$raw_crossing_pairs[
   match(names(expected_cross), forecast_cross$source_model_id)
 ]
+expected_rate <- c(
+  joint_qdesn_rhs_vb = 0.0251893939393939,
+  qdesn_rhs_independent_vb = 0.0741161616161616,
+  joint_exqdesn_rhs_vb = 0,
+  exqdesn_rhs_independent_vb = 0.00566077441077441
+)
+observed_rate <- with(
+  forecast_cross,
+  raw_crossing_pairs / raw_crossing_opportunities
+)[match(names(expected_rate), forecast_cross$source_model_id)]
 expect(identical(as.integer(observed_cross), unname(expected_cross)) &&
+         all(forecast_cross$raw_crossing_opportunities == 47520L) &&
+         max(abs(observed_rate - unname(expected_rate))) < 1e-12 &&
          all(forecast_cross$contract_crossing_pairs == 0L),
-       "The corrected canonical crossing totals changed.")
+       "The corrected crossing totals or rates changed.")
 expect(all(reconciliation$comparability_label == "descriptively_comparable") &&
          all(reconciliation$score_contract_version ==
                "joint_qdesn_corrected_article_score_packet_v4"),
@@ -145,9 +158,10 @@ expect(grepl(
   "The main article does not use the corrected v4 forecast figure.")
 expect(grepl("four intervals favor", main, fixed = TRUE) &&
          grepl("twelve include", main, fixed = TRUE) &&
-         grepl("1,197 crossings", main, fixed = TRUE) &&
-         grepl("3,522", main, fixed = TRUE) &&
-         grepl("269", main, fixed = TRUE) &&
+         grepl("47,520 adjacent-level", main, fixed = TRUE) &&
+         grepl("2.52\\%", main, fixed = TRUE) &&
+         grepl("7.41\\%", main, fixed = TRUE) &&
+         grepl("0.57\\%", main, fixed = TRUE) &&
          grepl("22 comparisons", main, fixed = TRUE),
        "The main-text corrected interpretation is incomplete.")
 expect(grepl("\\input{tables/joint_qdesn_corrected_v4_score_table.tex}",
@@ -161,6 +175,38 @@ expect(!grepl("joint_qdesn_shared_backbone_forecast_figure", main, fixed = TRUE)
          !grepl("joint_qdesn_shared_backbone_score_table", supp, fixed = TRUE) &&
          !grepl("provisional article authority", supp, fixed = TRUE),
        "A historical article input or provisional claim remains active.")
+
+reader_files <- c(
+  "tables/joint_qdesn_corrected_v4_score_table.tex",
+  "tables/joint_qdesn_corrected_v4_crossing_table.tex",
+  "tables/joint_qdesn_corrected_v4_secondary_score_table.tex",
+  "tables/joint_qdesn_corrected_v4_oracle_recovery_table.tex",
+  "tables/joint_qdesn_corrected_v4_forecast_figure.tex",
+  "tables/joint_qdesn_corrected_v4_fit_figure.tex"
+)
+reader_text <- paste(c(
+  main, supp,
+  unlist(lapply(reader_files, function(path) {
+    readLines(file.path(repo_root, path), warn = FALSE)
+  }))
+), collapse = "\n")
+expect(!grepl(
+  "canonical-action|Canonical action|black vertical|raw/reported",
+  reader_text, ignore.case = TRUE
+), "Reader-facing canonical-action or count-label terminology remains.")
+score_tex <- paste(readLines(
+  file.path(repo_root, "tables/joint_qdesn_corrected_v4_score_table.tex"),
+  warn = FALSE
+), collapse = "\n")
+crossing_tex <- paste(readLines(
+  file.path(repo_root, "tables/joint_qdesn_corrected_v4_crossing_table.tex"),
+  warn = FALSE
+), collapse = "\n")
+expect(!grepl("canonical", score_tex, ignore.case = TRUE) &&
+         grepl("rate (count/\\(N\\))", crossing_tex, fixed = TRUE) &&
+         grepl("mean/max", crossing_tex, fixed = TRUE) &&
+         grepl("magnitude", crossing_tex, fixed = TRUE),
+       "The simplified score or crossing table contract is incomplete.")
 
 required_overleaf <- c(
   "figures/joint_qdesn_simulation/joint_qdesn_corrected_v4_fit_oracle_rmse.pdf",
@@ -208,6 +254,8 @@ for (pdf in pdfs) {
   }
   expect(grepl(label, visible, fixed = TRUE),
          paste("The visible metric label is missing from:", pdf))
+  expect(!grepl("[0-9]+/[0-9]+", visible, perl = TRUE),
+         paste("A raw/reported crossing label remains in:", pdf))
 }
 
 cat(paste0(

@@ -1,16 +1,19 @@
 \begin{table}[!htbp]
 \centering
-\small
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.42\textwidth}rrrr@{}}
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.31\textwidth}rrrr@{}}
 \toprule
-Model & \shortstack{Fit raw\\count (\%)} & \shortstack{Forecast raw\\count (\%)} & \shortstack{Fit\\reported} & \shortstack{Forecast\\reported} \\
+Model & \shortstack{Fit raw crossings\\rate (count/\(N\))} & \shortstack{Fit adjustment\\mean/max} & \shortstack{Forecast raw crossings\\rate (count/\(N\))} & \shortstack{Forecast adjustment\\mean/max} \\
 \midrule
-Joint Q--DESN \(\AL\)--\(\RHS\) & 21 (0.09) & 1197 (2.52) & 0 & 0 \\
-Independent Q--DESN \(\AL\)--\(\RHS\) & 114 (0.47) & 3522 (7.41) & 0 & 0 \\
-Joint exQDESN \(\exAL\)--\(\RHS\) & 0 (0.00) & 0 (0.00) & 0 & 0 \\
-Independent exQDESN \(\exAL\)--\(\RHS\) & 0 (0.00) & 269 (0.57) & 0 & 0 \\
+Joint Q--DESN \(\AL\)--\(\RHS\) & 0.09\% (21/24,000) & 0.0000/0.0813 & 2.52\% (1,197/47,520) & 0.0118/0.6949 \\
+Independent Q--DESN \(\AL\)--\(\RHS\) & 0.47\% (114/24,000) & 0.0003/0.1845 & 7.41\% (3,522/47,520) & 0.0166/0.7034 \\
+Joint exQDESN \(\exAL\)--\(\RHS\) & 0.00\% (0/24,000) & 0.0000/0.0000 & 0.00\% (0/47,520) & 0.0000/0.0000 \\
+Independent exQDESN \(\exAL\)--\(\RHS\) & 0.00\% (0/24,000) & 0.0000/0.0000 & 0.57\% (269/47,520) & 0.0005/0.1887 \\
 \bottomrule
 \end{tabular}
-\caption{Adjacent-level crossings in the canonical posterior-mean quantile grids, summed over eight simulation settings. Percentages use the corresponding adjacent-level opportunities. Reported grids apply the pre-specified monotone rule.}
+}%
+\caption{Frequency and magnitude of monotone correction for the posterior-mean quantile grids, aggregated over eight simulation settings. Crossing rates are the proportions of adjacent-level comparisons that cross before rearrangement; counts and total opportunities \(N\) are shown in parentheses. Adjustment entries give the mean and maximum absolute change on the simulation response scale induced by the pre-specified monotone rule. Thus the rates measure how often crossings occur, whereas the adjustment summaries describe their magnitude. All rearranged grids have zero crossings.}
 \label{tab:supp-joint-qdesn-corrected-v4-crossings}
 \end{table}

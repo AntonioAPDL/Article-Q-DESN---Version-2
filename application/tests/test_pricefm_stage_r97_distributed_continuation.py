@@ -227,6 +227,117 @@ def test_host_contract_rejects_wrong_machine(tmp_path: Path, monkeypatch) -> Non
         HOST.load_contract(args)
 
 
+def test_closeout_only_uses_safety_floor_without_weakening_fit_floor() -> None:
+    base = {
+        "host": "jerez", "minimum_free_gib": 250.0,
+        "closeout_only_completed_surface": False,
+    }
+    assert HOST.required_start_free_gib(SimpleNamespace(**base)) == 300.0
+    base["closeout_only_completed_surface"] = True
+    assert HOST.required_start_free_gib(SimpleNamespace(**base)) == 250.0
+    base["minimum_free_gib"] = 310.0
+    assert HOST.required_start_free_gib(SimpleNamespace(**base)) == 310.0
+
+
+def test_closeout_only_requires_exact_complete_surface_and_empty_partial_output(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    campaign = tmp_path / "campaign"
+    region = campaign / "regions/AT"
+    grid = region / "surface_grid"
+    prep = region / "surface_prep"
+    closeout = campaign / "region_closeouts/AT"
+    for root in (grid, prep, closeout):
+        root.mkdir(parents=True)
+    pipeline = grid / "pipeline_contract.json"
+    pipeline.write_text("{}\n")
+    rows = [
+        {"task_id": f"task-{index}", "output_dir": str(region / f"task-{index}")}
+        for index in range(45)
+    ]
+    manifest = grid / "task_manifest.csv"
+    pd.DataFrame(rows).to_csv(manifest, index=False)
+    atomic_write_json(prep / "summary.json", {
+        "stage": "R97", "status": "completed_launch_grade_not_launched",
+        "region": "AT", "tasks": 45, "test_opened": False,
+        "launch_invoked": False, "manifest": str(manifest),
+        "pipeline_contract": str(pipeline),
+        "pipeline_contract_sha256": HOST.sha256_file(pipeline),
+    })
+    args = SimpleNamespace(campaign_root=campaign)
+    contract = {"regions": ["AT"]}
+    monkeypatch.setattr(HOST, "valid_surface_terminal", lambda _: True)
+    audit = HOST.validate_completed_surface_inputs(args, contract)
+    assert audit == {
+        "surface_terminals_verified": 45,
+        "regions_verified": 1,
+        "regions_already_closed": 0,
+    }
+    monkeypatch.setattr(
+        HOST, "valid_surface_terminal", lambda path: not path.parent.name.endswith("44"),
+    )
+    with pytest.raises(RuntimeError, match="1 invalid terminals"):
+        HOST.validate_completed_surface_inputs(args, contract)
+    monkeypatch.setattr(HOST, "valid_surface_terminal", lambda _: True)
+    (closeout / "partial.csv").write_text("partial\n")
+    with pytest.raises(RuntimeError, match="incomplete region closeout is nonempty"):
+        HOST.validate_completed_surface_inputs(args, contract)
+
+
+def test_closeout_only_invokes_closeout_reader_and_never_model_launcher(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    region_root = tmp_path / "AT"
+    prep = region_root / "surface_prep"
+    closeout = region_root / "closeout"
+    prep.mkdir(parents=True)
+    manifest = region_root / "manifest.csv"
+    pipeline = region_root / "pipeline.json"
+    manifest.write_text("task_id\n")
+    pipeline.write_text("{}\n")
+    atomic_write_json(prep / "summary.json", {
+        "manifest": str(manifest), "pipeline_contract": str(pipeline),
+    })
+
+    class FakeCampaign:
+        @staticmethod
+        def paths(region):
+            assert region == "AT"
+            return {
+                "root": region_root,
+                "surface_prep": prep,
+                "surface_closeout": closeout,
+            }
+
+    calls = []
+
+    def command(values, **_):
+        calls.append(values)
+        assert HOST.ORIGINAL.LAUNCH_SURFACE not in values
+        assert HOST.ORIGINAL.RUN_MODEL not in values
+        assert HOST.ORIGINAL.CLOSE_SURFACE in values
+        closeout.mkdir(parents=True)
+        atomic_write_json(closeout / "summary.json", {
+            "status": "completed_region_validation_surface_frozen",
+            "region": "AT", "selected_family": "exal", "test_opened": False,
+            "registry_mutated": False, "article_mutated": False,
+        })
+
+    monkeypatch.setattr(HOST.ORIGINAL, "command", command)
+    shard = HOST.HostShard.__new__(HOST.HostShard)
+    shard.args = SimpleNamespace(code_root=tmp_path)
+    shard.regions = ["AT"]
+    shard.root = tmp_path / "state"
+    shard.root.mkdir()
+    shard.campaign = FakeCampaign()
+    assert shard.close_completed_surfaces()
+    assert len(calls) == 1
+    status = json.loads((shard.root / "surface_status.json").read_text())
+    assert status["model_fitting_invoked"] is False
+    assert status["model_launcher_invoked"] is False
+    assert status["completed"][0]["selected_family"] == "exal"
+
+
 def recovery_contract(tmp_path: Path, host: str = "muscat") -> tuple[Path, Path]:
     parent = tmp_path / "parent.json"
     checkpoint = tmp_path / "checkpoint.json"

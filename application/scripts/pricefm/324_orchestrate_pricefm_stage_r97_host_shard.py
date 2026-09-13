@@ -29,6 +29,7 @@ from pricefm_r97_distributed_contract import (
     controller_lock_available,
     firewall,
     valid_compaction_marker,
+    valid_surface_terminal,
     validate_firewall,
     verify_seal,
     write_sealed,
@@ -43,6 +44,7 @@ from pricefm_region_frozen_contract import (
 
 
 APPROVAL_TOKEN = "RUN_PRICEFM_R97_DISTRIBUTED_VALIDATION_SHARD"
+CLOSEOUT_ONLY_APPROVAL_TOKEN = "CLOSE_PRICEFM_R97_COMPLETED_VALIDATION_SHARD"
 ARTIFACT_ROOT = Path("/data/jaguir26/local/src/Article-Q-DESN")
 DATA_ROOT = ARTIFACT_ROOT / "application/data_local/pricefm"
 DEFAULT_PREP = DATA_ROOT / "authoritative/pricefm_stage_r97_global_region_frozen_campaign_20260908_prep"
@@ -78,6 +80,11 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--poll-seconds", type=float, default=10.0)
     value.add_argument("--approval-token", default="")
     value.add_argument("--preflight-only", action="store_true")
+    value.add_argument(
+        "--closeout-only-completed-surface",
+        action="store_true",
+        help="Close an already complete validation surface without invoking any model launcher.",
+    )
     return value
 
 
@@ -91,6 +98,77 @@ def memory_gib() -> float:
         key, value = line.split(":", 1)
         values[key] = int(value.strip().split()[0])
     return values["MemAvailable"] / 1024**2
+
+
+def required_start_free_gib(args: argparse.Namespace) -> float:
+    if getattr(args, "closeout_only_completed_surface", False):
+        return float(args.minimum_free_gib)
+    fitting_floor = 300.0 if args.host == "jerez" else float(args.minimum_free_gib)
+    return max(float(args.minimum_free_gib), fitting_floor)
+
+
+def validate_completed_surface_inputs(
+    args: argparse.Namespace, contract: dict[str, Any],
+) -> dict[str, Any]:
+    """Require a complete immutable surface before relaxing the fitting start floor."""
+    accepted = 0
+    already_closed = 0
+    for region in contract["regions"]:
+        region_root = args.campaign_root / "regions" / region
+        manifest_path = region_root / "surface_grid/task_manifest.csv"
+        prep_path = region_root / "surface_prep/summary.json"
+        if not manifest_path.is_file() or not prep_path.is_file():
+            raise RuntimeError(f"R97 closeout-only surface metadata is missing: {region}")
+        manifest = pd.read_csv(manifest_path)
+        if len(manifest) != 45 or manifest.task_id.duplicated().any():
+            raise RuntimeError(f"R97 closeout-only surface is not the exact 45-task DAG: {region}")
+        prep = json.loads(prep_path.read_text())
+        pipeline = Path(prep.get("pipeline_contract", ""))
+        if (
+            prep.get("stage") != "R97"
+            or prep.get("status") != "completed_launch_grade_not_launched"
+            or prep.get("region") != region
+            or int(prep.get("tasks", -1)) != 45
+            or prep.get("test_opened") is not False
+            or prep.get("launch_invoked") is not False
+            or Path(prep.get("manifest", "")).resolve() != manifest_path.resolve()
+            or not pipeline.is_file()
+            or sha256_file(pipeline) != str(prep.get("pipeline_contract_sha256", ""))
+        ):
+            raise RuntimeError(f"R97 closeout-only preparation contract is invalid: {region}")
+        invalid = [
+            str(row.task_id)
+            for row in manifest.itertuples(index=False)
+            if not valid_surface_terminal(Path(row.output_dir) / "terminal.json")
+        ]
+        if invalid:
+            raise RuntimeError(
+                f"R97 closeout-only surface contains {len(invalid)} invalid terminals: {region}"
+            )
+        accepted += len(manifest)
+        closeout = args.campaign_root / "region_closeouts" / region
+        summary_path = closeout / "summary.json"
+        if summary_path.is_file():
+            summary = json.loads(summary_path.read_text())
+            if (
+                summary.get("status") != "completed_region_validation_surface_frozen"
+                or summary.get("region") != region
+                or summary.get("test_opened") is not False
+                or summary.get("registry_mutated") is not False
+                or summary.get("article_mutated") is not False
+            ):
+                raise RuntimeError(f"R97 existing region closeout is invalid: {region}")
+            already_closed += 1
+        elif closeout.exists() and any(closeout.iterdir()):
+            raise RuntimeError(f"R97 incomplete region closeout is nonempty: {region}")
+    expected = 45 * len(contract["regions"])
+    if accepted != expected:
+        raise RuntimeError(f"R97 closeout-only terminal count differs: {accepted} != {expected}")
+    return {
+        "surface_terminals_verified": accepted,
+        "regions_verified": len(contract["regions"]),
+        "regions_already_closed": already_closed,
+    }
 
 
 def load_contract(args: argparse.Namespace) -> dict[str, Any]:
@@ -133,9 +211,14 @@ def preflight(args: argparse.Namespace) -> tuple[dict[str, Any], list[int]]:
     if len(cpus) != args.workers:
         raise RuntimeError("host shard requires exactly one distinct CPU per worker")
     identity = validate_git_identity(args.code_root, contract["code_git_identity"], require_clean=True)
+    closeout_audit = (
+        validate_completed_surface_inputs(args, contract)
+        if getattr(args, "closeout_only_completed_surface", False)
+        else {}
+    )
     disk = free_gib(args.campaign_root)
     memory = memory_gib()
-    required_start_disk = max(args.minimum_free_gib, 300.0 if args.host == "jerez" else args.minimum_free_gib)
+    required_start_disk = required_start_free_gib(args)
     if disk < required_start_disk or memory < args.minimum_available_memory_gib:
         raise RuntimeError("host shard disk or memory floor failed")
     audit = {
@@ -151,6 +234,13 @@ def preflight(args: argparse.Namespace) -> tuple[dict[str, Any], list[int]]:
         "required_start_free_disk_gib": round(required_start_disk, 3),
         "available_memory_gib": round(memory, 3),
         "git_identity": identity.to_dict(),
+        "closeout_only_completed_surface": bool(
+            getattr(args, "closeout_only_completed_surface", False)
+        ),
+        "model_fitting_authorized": not bool(
+            getattr(args, "closeout_only_completed_surface", False)
+        ),
+        **closeout_audit,
         "launch_invoked": False,
         "global_test_scoring_invoked": False,
         **firewall(),
@@ -397,6 +487,64 @@ class HostShard:
         self.surface_failures = failed
         return not failed
 
+    def close_completed_surfaces(self) -> bool:
+        """Run only validation closeout for surfaces already verified as complete."""
+        completed: list[dict[str, Any]] = []
+        failed: list[dict[str, Any]] = []
+        for region in self.regions:
+            paths = self.campaign.paths(region)
+            try:
+                summary_path = paths["surface_closeout"] / "summary.json"
+                if not summary_path.is_file():
+                    surface = json.loads((paths["surface_prep"] / "summary.json").read_text())
+                    ORIGINAL.command([
+                        ORIGINAL.PYTHON, ORIGINAL.CLOSE_SURFACE,
+                        "--manifest", surface["manifest"],
+                        "--pipeline-contract", surface["pipeline_contract"],
+                        "--output-dir", paths["surface_closeout"],
+                    ], cwd=self.args.code_root.resolve(), log=paths["root"] / "logs/close_surface.log")
+                summary = json.loads(summary_path.read_text())
+                if (
+                    summary.get("status") != "completed_region_validation_surface_frozen"
+                    or summary.get("region") != region
+                    or summary.get("test_opened") is not False
+                    or summary.get("registry_mutated") is not False
+                    or summary.get("article_mutated") is not False
+                ):
+                    raise RuntimeError(f"R97 closeout-only output is invalid: {region}")
+                completed.append({
+                    "region": region,
+                    "status": "completed_validation_frozen",
+                    "selected_family": summary["selected_family"],
+                })
+            except Exception as error:
+                failed.append({"region": region, "status": "failed_closed", "error": repr(error)})
+                break
+            finally:
+                atomic_write_json(self.root / "surface_status.json", {
+                    "completed": completed,
+                    "failed": failed,
+                    "remaining": [
+                        item for item in self.regions
+                        if item not in {row["region"] for row in completed + failed}
+                    ],
+                    "closeout_only_completed_surface": True,
+                    "model_fitting_invoked": False,
+                    "model_launcher_invoked": False,
+                    **firewall(),
+                })
+        self.surface_failures = failed
+        return not failed
+
+    def run_closeout_only(self) -> dict[str, Any]:
+        self.update(
+            status="running", phase="completed_surface_validation_closeout_only",
+            model_fitting_invoked=False, model_launcher_invoked=False,
+        )
+        if not self.close_completed_surfaces():
+            return self.finish("failed_closed", error=f"closeout failures: {self.surface_failures!r}")
+        return self.finish("completed_validation_shard")
+
     def run(self) -> dict[str, Any]:
         self.update(status="running", phase="ridge_preparation")
         self.prepare_ridges()
@@ -442,6 +590,12 @@ class HostShard:
             "article_mutated": False,
             **firewall(),
         }
+        if getattr(self.args, "closeout_only_completed_surface", False):
+            payload.update({
+                "closeout_only_completed_surface": True,
+                "model_fitting_invoked": False,
+                "model_launcher_invoked": False,
+            })
         if error:
             payload["error"] = error
         return write_sealed(self.root / "shard_terminal.json", payload, "shard_terminal_sha256")
@@ -453,8 +607,13 @@ def main() -> int:
     if args.preflight_only:
         print(json.dumps(json.loads((args.campaign_root / "distributed" / args.host / "launch_preflight.json").read_text()), indent=2, sort_keys=True))
         return 0
-    if args.approval_token != APPROVAL_TOKEN:
-        raise RuntimeError(f"launch requires --approval-token {APPROVAL_TOKEN}")
+    expected_token = (
+        CLOSEOUT_ONLY_APPROVAL_TOKEN
+        if args.closeout_only_completed_surface
+        else APPROVAL_TOKEN
+    )
+    if args.approval_token != expected_token:
+        raise RuntimeError(f"operation requires --approval-token {expected_token}")
     lock_path = args.campaign_root / "distributed" / args.host / "controller.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a+")
@@ -466,7 +625,7 @@ def main() -> int:
     try:
         shard = HostShard(args, contract, cpus)
         try:
-            result = shard.run()
+            result = shard.run_closeout_only() if args.closeout_only_completed_surface else shard.run()
         except Exception as error:
             shard.finish("failed_closed", error=repr(error))
             raise

@@ -254,7 +254,7 @@ parameterization, and prior specification agree. MCMC then targets the
 posterior distribution of that same model. Convergence is assessed using the
 diagnostics stated for the empirical analysis.
 
-\begin{figure}[!htbp]
+\begin{figure}[p]
   \centering
   \input{figures/quantile_initialization/quantile_initialization_picture.tex}
   \caption[Sequential initialization centered at the median]{%
@@ -1811,50 +1811,45 @@ the ranking criterion in the main comparison.
 \subsection{Additional PriceFM Results}
 \label{subsec:supp_pricefm_diagnostics}
 
-The main article reports the aggregate, fold-specific, and forecast-lead-specific
-PriceFM comparisons. The tables below compare the selected and reference
-Q--DESN specifications and summarize results by predictor set. Both use the
-retrospective information set described in the main article.
+The main article reports the complete 114-case PriceFM comparison under the
+region-frozen protocol. For each region, the training- and validation-selected
+Q--DESN specification is held fixed across all three test folds. The complete
+registry contains no post-test changes and no case-level fallback to the
+earlier R92 surface.
 
-Within \PricefmSelectionComparedRows{} region--fold comparisons, AL and exAL
-specifications were chosen using validation AQL and then evaluated on held-out
-observations. The validation-selected specifications averaged test AQL
-\PricefmSelectionCandidateMeanAql{}, compared with
-\PricefmSelectionReferenceMeanAql{} for the reference Q--DESN specifications.
-The reported aggregate uses the validation-selected specification in the
-\PricefmSelectionUpdatedRows{} cases listed in
-Table~\ref{tab:supp-pricefm-selective-updates}, where its held-out AQL was lower
-than both the reference Q--DESN and matched PriceFM values.
-The retained alternatives use exAL except for ES fold~1, which uses AL. Only
-IT\_NORD fold~3 changes the working-likelihood family relative to the reference
-specification. The comparisons are descriptive because held-out performance
-determined which specification was included.
+R98 has mean AQL 7.217, compared with 7.039 for PriceFM. Q--DESN is lower in
+54 of 114 region--fold comparisons and in 16 of 38 region means. The fold-level
+contrast changes sign: Q--DESN is slightly lower in fold~2, while PriceFM is
+lower in folds~1 and 3. This variation is more informative than the aggregate
+alone, but it does not alter the primary conclusion that R98 has slightly
+higher overall AQL. The former 72-case forecast-lead summary is not reproduced
+because it is not a complete R98 horizon analysis.
 
 \begin{table}[!htbp]
 \centering
-\caption{Comparison of selected and reference Q--DESN specifications in the
-PriceFM retrospective analysis. Each row gives a validation-selected
-specification whose held-out AQL is lower than both the reference Q--DESN value
-and the matched PriceFM value. The final column is the reduction from the
-reference Q--DESN AQL. Values are reported on the original electricity-price
-scale.}
-\label{tab:supp-pricefm-selective-updates}
-\resizebox{\textwidth}{!}{%
-\input{tables/pricefm_r91_selective_promotions.tex}
-}
+\caption{Aggregate PriceFM AQL comparison and historical sensitivity. R98 is
+the primary region-frozen comparison. PriceFM is the matched released
+comparator. R92 is shown only to document the numerical consequence of the
+earlier case-specific selection rule; it is not part of the R98 estimate and
+no R92 case is used as a fallback. Lower values are better.}
+\label{tab:supp-pricefm-r98-global-comparison}
+\input{tables/pricefm_r98_global_aql_comparison.tex}
 \end{table}
 
-\begin{table}[!htbp]
+\begin{figure}[!htbp]
 \centering
-\caption{PriceFM retrospective comparison by predictor set. Own-region rows and rows with
-neighborhood summaries both use retrospectively observed own-region load,
-solar, and wind lead covariates in the retrospective comparison. Rows with
-neighborhood summaries additionally include chosen neighboring-region
-summaries or neighboring-region lead/lag features. The two PriceFM columns
-count relative AQL advantages of at most 5\% and greater than 5\%, respectively.}
-\label{tab:supp-pricefm-full-input-set-summary}
-\input{tables/pricefm_full_input_set_summary.tex}
-\end{table}
+\includegraphics[width=\textwidth]{\PricefmCurrentRegionFigure}
+\caption{Mean AQL across the three test folds for each PriceFM region. Blue
+squares show the prospectively frozen R98 Q--DESN specification, green circles
+show the matched PriceFM forecasts, and gray crosses show the deprecated R92
+surface as historical sensitivity only. Regions are ordered by increasing R98
+mean AQL; lower values are better.}
+\figalt{For each of 38 regions, the plot compares mean AQL across three folds
+for R98 Q--DESN, PriceFM, and historical R92 Q--DESN. The horizontal positions
+show substantial regional heterogeneity, with PriceFM lower in 22 region means
+and R98 Q--DESN lower in 16.}
+\label{fig:supp-pricefm-r98-region-comparison}
+\end{figure}
 
 \clearpage
 \section{GloFAS Latent-Path Ensemble-Likelihood Model with DESN Features}

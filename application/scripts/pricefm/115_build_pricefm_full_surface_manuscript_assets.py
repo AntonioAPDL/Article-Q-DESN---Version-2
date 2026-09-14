@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Export manuscript assets from the PriceFM full-surface closeout."""
+"""Export historical R92 manuscript assets from its full-surface closeout.
+
+Deprecated for article publication after the complete R98 authority transition.
+The implementation is retained to reproduce the historical sensitivity surface.
+"""
 
 from __future__ import annotations
 

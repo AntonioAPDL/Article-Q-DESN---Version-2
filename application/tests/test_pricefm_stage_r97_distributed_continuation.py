@@ -1,0 +1,736 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+import sys
+import threading
+import time
+from types import SimpleNamespace
+
+import pytest
+import pandas as pd
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT_DIR = ROOT / "application/scripts/pricefm"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from pricefm_r97_distributed_contract import (  # noqa: E402
+    assign_regions,
+    estimate_remaining,
+    sealed_payload,
+    valid_compaction_marker,
+    verify_seal,
+)
+from pricefm_region_frozen_contract import atomic_write_json, file_record  # noqa: E402
+
+
+def load_numbered(name: str, filename: str):
+    spec = importlib.util.spec_from_file_location(name, SCRIPT_DIR / filename)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+PREP = load_numbered(
+    "pricefm_stage_r97_distributed_prep",
+    "323_prepare_pricefm_stage_r97_distributed_continuation.py",
+)
+HOST = load_numbered(
+    "pricefm_stage_r97_host_shard",
+    "324_orchestrate_pricefm_stage_r97_host_shard.py",
+)
+TRANSFER = load_numbered(
+    "pricefm_stage_r97_transfer",
+    "325_transfer_pricefm_stage_r97_host_shard.py",
+)
+FINALIZE = load_numbered(
+    "pricefm_stage_r97_finalize",
+    "326_finalize_pricefm_stage_r97_distributed_campaign.py",
+)
+RECOVERY = load_numbered(
+    "pricefm_stage_r97_rhs_transition_recovery",
+    "327_prepare_pricefm_stage_r97_rhs_transition_recovery.py",
+)
+SURFACE_RECOVERY = load_numbered(
+    "pricefm_stage_r97_surface_runtime_recovery",
+    "328_prepare_pricefm_stage_r97_surface_runtime_recovery.py",
+)
+
+
+def test_seal_rejects_mutation() -> None:
+    payload = sealed_payload({"stage": "R97", "launch_authorized": False}, "sha256")
+    verify_seal(payload, "sha256", label="test")
+    payload["launch_authorized"] = True
+    with pytest.raises(RuntimeError, match="canonical hash changed"):
+        verify_seal(payload, "sha256", label="test")
+
+
+def test_compaction_marker_requires_hash_valid_retained_files(tmp_path: Path) -> None:
+    retained = tmp_path / "metric.csv"
+    retained.write_text("metric,value\nAQL,1.0\n")
+    marker = tmp_path / "r97_compaction_terminal.json"
+    atomic_write_json(marker, {
+        "status": "completed_compacted",
+        "retained": [file_record(retained, "selection_metric")],
+    })
+    assert valid_compaction_marker(marker)
+    retained.write_text("metric,value\nAQL,2.0\n")
+    assert not valid_compaction_marker(marker)
+
+
+def test_assignment_is_exclusive_deterministic_and_quota_bound() -> None:
+    rows = [
+        {"region": f"R{index:02d}", "estimated_remaining_cpu_seconds": index * 100.0}
+        for index in range(1, 38)
+    ]
+    first, loads = assign_regions(rows, jerez_region_count=25)
+    second, _ = assign_regions(reversed(rows), jerez_region_count=25)
+    assert [(row["region"], row["assigned_host"]) for row in first] == [
+        (row["region"], row["assigned_host"]) for row in second
+    ]
+    assert len({row["region"] for row in first}) == 37
+    assert sum(row["assigned_host"] == "jerez" for row in first) == 25
+    assert sum(row["assigned_host"] == "muscat" for row in first) == 12
+    assert all(row["max_concurrent_models_per_region"] == 2 for row in first)
+    assert set(loads) == {"muscat", "jerez"}
+
+
+def test_remaining_estimate_preserves_completed_work() -> None:
+    rows = [{
+        "region": "AT",
+        "ridge_total": 240,
+        "ridge_complete": 100,
+        "rhs_total": 90,
+        "rhs_complete": 0,
+        "refinement_total": 0,
+        "refinement_complete": 0,
+        "surface_total": 45,
+        "surface_complete": 0,
+        "region_closeout_complete": False,
+        "median_cell_seconds": 10.0,
+    }]
+    result = estimate_remaining(rows, 20.0)[0]
+    assert result["estimated_remaining_cells"] == (140 * 3 + 90 * 3 + 45)
+    assert result["estimated_remaining_cpu_seconds"] == 7350.0
+
+
+def test_preview_materializes_non_launchable_host_contracts(tmp_path: Path, monkeypatch) -> None:
+    campaign = tmp_path / "campaign"
+    campaign.mkdir()
+    sources = {}
+    for name in ("authority_registry", "resolved_controls", "se2_reuse", "source_data_config"):
+        path = tmp_path / f"{name}.txt"
+        path.write_text(name)
+        sources[name] = file_record(path, name)
+    parent = {
+        "schema_version": 1,
+        "campaign_root": str(campaign.resolve()),
+        "regions_to_fit": [f"R{index:02d}" for index in range(1, 38)],
+        **sources,
+    }
+    parent = sealed_payload(parent, "campaign_contract_sha256")
+    parent_path = tmp_path / "parent.json"
+    atomic_write_json(parent_path, parent)
+    monkeypatch.setattr(PREP, "controller_lock_available", lambda _: False)
+    monkeypatch.setattr(PREP, "git_identity", lambda _: SimpleNamespace(to_dict=lambda: {
+        "worktree": str(tmp_path), "branch": "work/pricefm-test", "head": "abc",
+        "upstream": "origin/work/pricefm-test", "upstream_head": "abc", "clean": True,
+    }))
+    output = tmp_path / "output"
+    args = SimpleNamespace(
+        campaign_contract=parent_path,
+        campaign_root=campaign,
+        code_root=tmp_path,
+        output_dir=output,
+        mode="preview",
+        muscat_workers=20,
+        jerez_workers=50,
+        jerez_regions=25,
+        fallback_cell_seconds=260.0,
+        write=True,
+        force=False,
+    )
+    summary = PREP.build(args)
+    assert summary["status"] == "preview_not_launchable"
+    assert summary["assignment_counts"] == {"muscat": 12, "jerez": 25}
+    for host in ("muscat", "jerez"):
+        path = output / f"pricefm_stage_r97_{host}_shard_contract.json"
+        payload = json.loads(path.read_text())
+        verify_seal(payload, "shard_contract_sha256", label=host)
+        assert payload["launch_authorized"] is False
+        assert payload["global_test_scoring_authorized"] is False
+        assert payload["test_opened"] is False
+
+
+def test_freeze_refuses_live_original_controller(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(PREP, "_contract", lambda *_: {"regions_to_fit": []})
+    monkeypatch.setattr(PREP, "controller_lock_available", lambda _: False)
+    args = SimpleNamespace(
+        campaign_contract=tmp_path / "parent.json", campaign_root=tmp_path,
+        code_root=tmp_path, output_dir=tmp_path / "out", mode="freeze",
+        muscat_workers=20, jerez_workers=50, jerez_regions=0,
+        fallback_cell_seconds=260.0, write=False, force=False,
+    )
+    with pytest.raises(RuntimeError, match="stopped and drained"):
+        PREP.build(args)
+
+
+def test_host_controller_cannot_open_global_scoring() -> None:
+    source = (SCRIPT_DIR / "324_orchestrate_pricefm_stage_r97_host_shard.py").read_text()
+    assert ".score(" not in source
+    assert "PREP_SCORING" not in source
+    assert "SCORE_CASE" not in source
+    assert "global_test_scoring_invoked\": False" in source
+    assert '"--resume-incomplete-closeout"' in source
+
+
+def test_host_contract_rejects_preview_mode(tmp_path: Path) -> None:
+    contract = sealed_payload({
+        "mode": "preview", "host": "muscat", "workers": 2,
+        "campaign_root": str(tmp_path), "regions": [],
+        "parent_campaign_contract": {}, "checkpoint": {}, "assignment": {},
+        "launch_authorized": False, "global_test_scoring_authorized": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutation_authorized": False, "article_mutation_authorized": False,
+        "joint_model_authorized": False, "mcmc_authorized": False,
+    }, "shard_contract_sha256")
+    path = tmp_path / "contract.json"
+    atomic_write_json(path, contract)
+    args = SimpleNamespace(
+        shard_contract=path, host="muscat", workers=2, campaign_root=tmp_path,
+    )
+    with pytest.raises(RuntimeError, match="only a frozen"):
+        HOST.load_contract(args)
+
+
+def test_host_contract_rejects_wrong_machine(tmp_path: Path, monkeypatch) -> None:
+    contract = sealed_payload({
+        "mode": "freeze", "host": "jerez", "workers": 2,
+        "campaign_root": str(tmp_path), "regions": [],
+        "parent_campaign_contract": {}, "checkpoint": {}, "assignment": {},
+        "launch_authorized": False, "global_test_scoring_authorized": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutation_authorized": False, "article_mutation_authorized": False,
+        "joint_model_authorized": False, "mcmc_authorized": False,
+    }, "shard_contract_sha256")
+    path = tmp_path / "contract.json"
+    atomic_write_json(path, contract)
+    monkeypatch.setattr(HOST.socket, "gethostname", lambda: "muscat.be.ucsc.edu")
+    args = SimpleNamespace(
+        shard_contract=path, host="jerez", workers=2, campaign_root=tmp_path,
+    )
+    with pytest.raises(RuntimeError, match="cannot run on muscat"):
+        HOST.load_contract(args)
+
+
+def test_closeout_only_uses_safety_floor_without_weakening_fit_floor() -> None:
+    base = {
+        "host": "jerez", "minimum_free_gib": 250.0,
+        "closeout_only_completed_surface": False,
+    }
+    assert HOST.required_start_free_gib(SimpleNamespace(**base)) == 300.0
+    base["closeout_only_completed_surface"] = True
+    assert HOST.required_start_free_gib(SimpleNamespace(**base)) == 250.0
+    base["minimum_free_gib"] = 310.0
+    assert HOST.required_start_free_gib(SimpleNamespace(**base)) == 310.0
+
+
+def test_closeout_only_requires_exact_complete_surface_and_empty_partial_output(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    campaign = tmp_path / "campaign"
+    region = campaign / "regions/AT"
+    grid = region / "surface_grid"
+    prep = region / "surface_prep"
+    closeout = campaign / "region_closeouts/AT"
+    for root in (grid, prep, closeout):
+        root.mkdir(parents=True)
+    pipeline = grid / "pipeline_contract.json"
+    pipeline_payload = {"stage": "R97", "region": "AT"}
+    pipeline_hash = HOST.canonical_sha256(pipeline_payload)
+    pipeline_payload["pipeline_contract_sha256"] = pipeline_hash
+    atomic_write_json(pipeline, pipeline_payload)
+    rows = [
+        {"task_id": f"task-{index}", "output_dir": str(region / f"task-{index}")}
+        for index in range(45)
+    ]
+    manifest = grid / "task_manifest.csv"
+    pd.DataFrame(rows).to_csv(manifest, index=False)
+    atomic_write_json(prep / "summary.json", {
+        "stage": "R97", "status": "completed_launch_grade_not_launched",
+        "region": "AT", "tasks": 45, "test_opened": False,
+        "launch_invoked": False, "manifest": str(manifest),
+        "pipeline_contract": str(pipeline),
+        "pipeline_contract_sha256": pipeline_hash,
+    })
+    args = SimpleNamespace(campaign_root=campaign)
+    contract = {"regions": ["AT"]}
+    monkeypatch.setattr(HOST, "valid_surface_terminal", lambda _: True)
+    audit = HOST.validate_completed_surface_inputs(args, contract)
+    assert audit == {
+        "surface_terminals_verified": 45,
+        "regions_verified": 1,
+        "regions_already_closed": 0,
+    }
+    monkeypatch.setattr(
+        HOST, "valid_surface_terminal", lambda path: not path.parent.name.endswith("44"),
+    )
+    with pytest.raises(RuntimeError, match="1 invalid terminals"):
+        HOST.validate_completed_surface_inputs(args, contract)
+    monkeypatch.setattr(HOST, "valid_surface_terminal", lambda _: True)
+    (closeout / "partial.csv").write_text("partial\n")
+    with pytest.raises(RuntimeError, match="incomplete region closeout is nonempty"):
+        HOST.validate_completed_surface_inputs(args, contract)
+
+
+def test_closeout_only_invokes_closeout_reader_and_never_model_launcher(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    region_root = tmp_path / "AT"
+    prep = region_root / "surface_prep"
+    closeout = region_root / "closeout"
+    prep.mkdir(parents=True)
+    manifest = region_root / "manifest.csv"
+    pipeline = region_root / "pipeline.json"
+    manifest.write_text("task_id\n")
+    pipeline.write_text("{}\n")
+    atomic_write_json(prep / "summary.json", {
+        "manifest": str(manifest), "pipeline_contract": str(pipeline),
+    })
+
+    class FakeCampaign:
+        @staticmethod
+        def paths(region):
+            assert region == "AT"
+            return {
+                "root": region_root,
+                "surface_prep": prep,
+                "surface_closeout": closeout,
+            }
+
+    calls = []
+
+    def command(values, **_):
+        calls.append(values)
+        assert HOST.ORIGINAL.LAUNCH_SURFACE not in values
+        assert HOST.ORIGINAL.RUN_MODEL not in values
+        assert HOST.ORIGINAL.CLOSE_SURFACE in values
+        closeout.mkdir(parents=True)
+        atomic_write_json(closeout / "summary.json", {
+            "status": "completed_region_validation_surface_frozen",
+            "region": "AT", "selected_family": "exal", "test_opened": False,
+            "registry_mutated": False, "article_mutated": False,
+        })
+
+    monkeypatch.setattr(HOST.ORIGINAL, "command", command)
+    shard = HOST.HostShard.__new__(HOST.HostShard)
+    shard.args = SimpleNamespace(code_root=tmp_path)
+    shard.regions = ["AT"]
+    shard.root = tmp_path / "state"
+    shard.root.mkdir()
+    shard.campaign = FakeCampaign()
+    assert shard.close_completed_surfaces()
+    assert len(calls) == 1
+    status = json.loads((shard.root / "surface_status.json").read_text())
+    assert status["model_fitting_invoked"] is False
+    assert status["model_launcher_invoked"] is False
+    assert status["completed"][0]["selected_family"] == "exal"
+
+
+def recovery_contract(tmp_path: Path, host: str = "muscat") -> tuple[Path, Path]:
+    parent = tmp_path / "parent.json"
+    checkpoint = tmp_path / "checkpoint.json"
+    assignment = tmp_path / "assignment.csv"
+    parent.write_text("{}\n")
+    checkpoint.write_text("{}\n")
+    assignment.write_text(f"region,assigned_host\nAT,{host}\n")
+    contract = sealed_payload({
+        "mode": "freeze", "host": host, "campaign_root": str(tmp_path / "campaign"),
+        "regions": ["AT"], "workers": 2,
+        "parent_campaign_contract": file_record(parent, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+        "code_git_identity": {
+            "worktree": "/old", "branch": "work/r97", "head": "old-head",
+            "upstream": "origin/work/r97", "upstream_head": "old-head", "clean": True,
+        },
+        "launch_authorized": False, "global_test_scoring_authorized": False,
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutation_authorized": False, "article_mutation_authorized": False,
+        "joint_model_authorized": False, "mcmc_authorized": False,
+    }, "shard_contract_sha256")
+    path = tmp_path / "source_contract.json"
+    atomic_write_json(path, contract)
+    return path, tmp_path / "campaign"
+
+
+def test_rhs_recovery_rebinds_only_code_identity_and_preserves_science(tmp_path, monkeypatch) -> None:
+    source_path, _ = recovery_contract(tmp_path)
+
+    class Identity:
+        clean = True
+        head = "recovery-head"
+        upstream_head = "recovery-head"
+
+        @staticmethod
+        def to_dict():
+            return {
+                "worktree": str(tmp_path), "branch": "work/r97", "head": "recovery-head",
+                "upstream": "origin/work/r97", "upstream_head": "recovery-head", "clean": True,
+            }
+
+    monkeypatch.setattr(RECOVERY, "git_identity", lambda _: Identity())
+    monkeypatch.setattr(
+        RECOVERY.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0),
+    )
+    output = tmp_path / "recovery_contract.json"
+    args = SimpleNamespace(
+        source_contract=source_path, code_root=tmp_path, output=output,
+        host="muscat", force=False, reason="normal-selection schema recovery",
+    )
+    result = RECOVERY.rebind_contract(args)
+    verify_seal(result, "shard_contract_sha256", label="recovery")
+    source = json.loads(source_path.read_text())
+    assert result["regions"] == source["regions"]
+    assert result["checkpoint"] == source["checkpoint"]
+    assert result["assignment"] == source["assignment"]
+    assert result["code_git_identity"]["head"] == "recovery-head"
+    assert result["transition_recovery"]["reason"] == "normal-selection schema recovery"
+    assert result["transition_recovery"]["scientific_contract_changed"] is False
+    assert result["transition_recovery"]["completed_rhs_refit_authorized"] is False
+    assert result["transition_recovery"]["completed_refinement_refit_authorized"] is False
+    assert result["transition_recovery"]["completed_normal_selection_mutation_authorized"] is False
+    assert result["transition_recovery"]["completed_surface_prep_replacement_authorized"] is False
+    assert result["transition_recovery"]["surface_launch_control_rebind_authorized"] is True
+    assert result["transition_recovery"]["normal_convergence_retry_authorized"] is True
+    assert result["transition_recovery"]["normal_convergence_retry_max_iter"] == 500
+    assert result["transition_recovery"]["normal_convergence_tolerance"] == pytest.approx(1e-5)
+
+
+def test_rhs_recovery_aliases_are_relative_hash_identical_and_idempotent(tmp_path, monkeypatch) -> None:
+    contract_path, campaign = recovery_contract(tmp_path, host="jerez")
+    prep = campaign / "regions/AT/ridge_prep"
+    prep.mkdir(parents=True)
+    grid = prep / "ridge_grid.yaml"
+    grid.write_text("pricefm_desn_experiment_grid: {}\n")
+    monkeypatch.setattr(RECOVERY.socket, "gethostname", lambda: "jerez.example")
+    args = SimpleNamespace(
+        shard_contract=contract_path, campaign_root=campaign, host="jerez",
+        output=None, write=False,
+    )
+    preview = RECOVERY.install_aliases(args)
+    alias = prep / RECOVERY.LEGACY_GRID_NAME
+    assert preview["status"] == "preview_only"
+    assert not alias.exists()
+    args.write = True
+    written = RECOVERY.install_aliases(args)
+    assert written["status"] == "aliases_installed_and_verified"
+    assert alias.is_symlink()
+    assert alias.readlink() == Path("ridge_grid.yaml")
+    assert alias.read_bytes() == grid.read_bytes()
+    repeated = RECOVERY.install_aliases(args)
+    assert repeated["aliases"][0]["previously_present"] is True
+
+
+def test_screening_scheduler_caps_each_region_at_two_models(tmp_path: Path, monkeypatch) -> None:
+    manifest_roots = {}
+    for region in ("A", "B"):
+        root = tmp_path / region / "generated"
+        root.mkdir(parents=True)
+        pd.DataFrame([
+            {"id": f"{region}{index}", "run_dir": str(tmp_path / region / f"run{index}")}
+            for index in range(4)
+        ]).to_csv(root / "manifest.csv", index=False)
+        manifest_roots[region] = root
+
+    class FakeCampaign:
+        def paths(self, region):
+            return {"generated": manifest_roots[region]}
+
+    shard = HOST.HostShard.__new__(HOST.HostShard)
+    shard.args = SimpleNamespace(campaign_root=tmp_path, throttle_admission_free_gib=0.0)
+    shard.regions = ["A", "B"]
+    shard.cpus = [0, 1, 2, 3]
+    shard.root = tmp_path / "state"
+    shard.root.mkdir()
+    shard.drain = shard.root / "DRAIN"
+    shard.campaign = FakeCampaign()
+    shard.state_lock = threading.Lock()
+    shard.admission_open = lambda: True
+    shard.per_region_limit = lambda: 2
+    shard.update = lambda **_: None
+    active = {"A": 0, "B": 0}
+    maxima = {"A": 0, "B": 0}
+    lock = threading.Lock()
+
+    def fake_task(region, row, cpu, phase):
+        with lock:
+            active[region] += 1
+            maxima[region] = max(maxima[region], active[region])
+        time.sleep(0.01)
+        with lock:
+            active[region] -= 1
+        return {"region": region, "id": row.id, "phase": phase, "status": "completed", "cpu": cpu}
+
+    shard.screening_task = fake_task
+    monkeypatch.setattr(HOST, "valid_compaction_marker", lambda _: False)
+    assert shard.run_screening_phase("generated", "ridge")
+    assert maxima == {"A": 2, "B": 2}
+    assert len(pd.read_csv(shard.root / "ridge_status.csv")) == 8
+
+
+def test_surface_scheduler_isolates_region_failure_and_finishes_other_regions(tmp_path: Path):
+    class FakeCampaign:
+        def paths(self, region):
+            root = tmp_path / region
+            return {"surface_closeout": root / "closeout"}
+
+    shard = HOST.HostShard.__new__(HOST.HostShard)
+    shard.regions = ["A", "B", "C"]
+    shard.cpus = [0, 1, 2, 3]
+    shard.root = tmp_path / "state"
+    shard.root.mkdir()
+    shard.campaign = FakeCampaign()
+    shard.admission_open = lambda: True
+
+    def launch(region, surface, cpus):
+        if region == "A":
+            raise RuntimeError("isolated fixture failure")
+        return {"region": region, "status": "completed_validation_frozen"}
+
+    shard.launch_surface = launch
+    assert shard.run_surfaces({region: {} for region in shard.regions}) is False
+    status = json.loads((shard.root / "surface_status.json").read_text())
+    assert {row["region"] for row in status["completed"]} == {"B", "C"}
+    assert status["failed"][0]["region"] == "A"
+    assert shard.surface_failures == status["failed"]
+
+
+def test_transfer_inventory_round_trip_and_hash_failure(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "base"
+    payload_root = base / "payload"
+    payload_root.mkdir(parents=True)
+    source = payload_root / "artifact.csv"
+    source.write_text("x\n1\n")
+    parent_path = base / "parent.json"
+    atomic_write_json(parent_path, {"source": "test"})
+    assignment = base / "assignment.csv"
+    assignment.write_text("region,assigned_host\nAT,jerez\n")
+    checkpoint = base / "checkpoint.json"
+    atomic_write_json(checkpoint, {"status": "frozen"})
+    contract = sealed_payload({
+        "host": "jerez", "regions": ["AT"],
+        "parent_campaign_contract": file_record(parent_path, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+    }, "shard_contract_sha256")
+    contract_path = base / "contract.json"
+    atomic_write_json(contract_path, contract)
+    monkeypatch.setattr(TRANSFER, "transfer_roots", lambda *_: [(payload_root, "test_payload")])
+    output = tmp_path / "inventory"
+    inventory_args = SimpleNamespace(
+        shard_contract=contract_path, base_root=base, campaign_root=base,
+        output_dir=output, scope="all", force=False,
+    )
+    summary = TRANSFER.inventory(inventory_args)
+    verify_args = SimpleNamespace(
+        inventory=Path(summary["manifest"]), target_base_root=base, output=None,
+    )
+    assert TRANSFER.verify(verify_args)["status"] == "verified"
+    source.write_text("x\n2\n")
+    failure = TRANSFER.verify(verify_args)
+    assert failure["status"] == "verification_failed"
+    assert failure["failures"][0]["reason"] == "sha256_mismatch"
+
+
+def test_transfer_inventory_excludes_its_own_output_subtree(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "base"
+    payload_root = base / "payload"
+    output = payload_root / "inventory"
+    output.mkdir(parents=True)
+    (payload_root / "source.txt").write_text("source")
+    (output / "stale.json").write_text("stale self inventory")
+    parent = base / "parent.json"
+    assignment = base / "assignment.csv"
+    checkpoint = base / "checkpoint.json"
+    parent.write_text("{}")
+    assignment.write_text("region,assigned_host\n")
+    checkpoint.write_text("{}")
+    contract = sealed_payload({
+        "host": "jerez", "regions": [],
+        "parent_campaign_contract": file_record(parent, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+    }, "shard_contract_sha256")
+    contract_path = base / "contract.json"
+    atomic_write_json(contract_path, contract)
+    monkeypatch.setattr(TRANSFER, "transfer_roots", lambda *_: [(payload_root, "payload")])
+    args = SimpleNamespace(
+        shard_contract=contract_path, base_root=base, campaign_root=base,
+        output_dir=output, scope="all", force=True,
+    )
+    summary = TRANSFER.inventory(args)
+    payload = json.loads(Path(summary["manifest"]).read_text())
+    assert [row["relative_path"] for row in payload["entries"]] == ["payload/source.txt"]
+
+
+def test_results_transfer_scope_contains_every_reconciliation_input(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    campaign = base / "campaign"
+    region_root = campaign / "regions/AT"
+    closeout_root = campaign / "region_closeouts/AT"
+    distributed = campaign / "distributed/jerez"
+    for root in (region_root, closeout_root, distributed):
+        root.mkdir(parents=True)
+    unused = region_root / "unselected-heavy.rds"
+    unused.write_text("must not transfer\n")
+    pipeline = region_root / "pipeline.json"
+    pipeline.write_text("{}\n")
+    evidence = {}
+    for name in (
+        "beta", "prediction", "terminal", "source_case_config",
+        "feature_manifest", "x_val", "rows_val", "scaler",
+    ):
+        path = region_root / f"selected_{name}.dat"
+        path.write_text(f"{name}\n")
+        evidence[f"{name}_path"] = str(path)
+        evidence[f"{name}_sha256"] = TRANSFER.sha256_file(path)
+    selected = closeout_root / "pricefm_stage_r97_selected_atom_manifest.csv"
+    pd.DataFrame([evidence] * 21).to_csv(selected, index=False)
+    metrics = closeout_root / "pricefm_stage_r97_family_fold_validation_metrics.csv"
+    metrics.write_text("family,AQL\nal,1\n")
+    frozen = {
+        "selected_atom_manifest": file_record(selected, "selected"),
+        "validation_metrics": file_record(metrics, "metrics"),
+        "pipeline_contract": file_record(pipeline, "pipeline"),
+    }
+    atomic_write_json(closeout_root / "pricefm_stage_r97_frozen_region_surface.json", frozen)
+    (closeout_root / "summary.json").write_text("{}\n")
+    (distributed / "shard_terminal.json").write_text("{}\n")
+    parent = base / "parent.json"
+    assignment = base / "assignment.csv"
+    checkpoint = base / "checkpoint.json"
+    parent.write_text("{}\n")
+    assignment.write_text("region,assigned_host\nAT,jerez\n")
+    checkpoint.write_text("{}\n")
+    contract = sealed_payload({
+        "host": "jerez", "regions": ["AT"],
+        "parent_campaign_contract": file_record(parent, "parent"),
+        "checkpoint": file_record(checkpoint, "checkpoint"),
+        "assignment": file_record(assignment, "assignment"),
+    }, "shard_contract_sha256")
+    contract_path = base / "contract.json"
+    atomic_write_json(contract_path, contract)
+    output = base / "inventory"
+    summary = TRANSFER.inventory(SimpleNamespace(
+        shard_contract=contract_path, base_root=base, campaign_root=campaign,
+        output_dir=output, scope="results", force=False,
+    ))
+    payload = json.loads(Path(summary["manifest"]).read_text())
+    paths = {row["relative_path"] for row in payload["entries"]}
+    roles = {row["role"] for row in payload["entries"]}
+    assert {
+        "owned_region_closeout_AT", "host_shard_terminal", "host_shard_contract",
+        "AT_pipeline_contract", "selected_beta_AT", "selected_prediction_AT",
+        "selected_terminal_AT", "selected_source_case_config_AT",
+        "selected_feature_manifest_AT", "selected_x_val_AT", "selected_rows_val_AT",
+        "selected_scaler_AT",
+    } <= roles
+    assert str(unused.relative_to(base)) not in paths
+    assert {
+        str(path.relative_to(base)) for path in (
+            pipeline, selected, metrics, distributed / "shard_terminal.json", contract_path,
+        )
+    } <= paths
+    assert {
+        str(Path(evidence[f"{name}_path"]).relative_to(base))
+        for name in (
+            "beta", "prediction", "terminal", "source_case_config",
+            "feature_manifest", "x_val", "rows_val", "scaler",
+        )
+    } <= paths
+    assert TRANSFER.verify(SimpleNamespace(
+        inventory=Path(summary["manifest"]), target_base_root=base, output=None,
+    ))["status"] == "verified"
+
+
+def test_transfer_rejects_symlink_escape(tmp_path: Path) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside")
+    link = base / "escape"
+    link.symlink_to(outside)
+    with pytest.raises(RuntimeError, match="escapes the declared root"):
+        TRANSFER.record(link, base, "bad")
+
+
+def test_transfer_accepts_only_hash_pinned_external_symlink(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    outside = tmp_path / "python3.11"
+    outside.write_text("pinned interpreter")
+    link = base / "python"
+    link.symlink_to(outside)
+    monkeypatch.setattr(TRANSFER, "APPROVED_EXTERNAL_SYMLINKS", {
+        str(outside.resolve()): TRANSFER.sha256_file(outside),
+    })
+    item = TRANSFER.record(link, base, "python")
+    assert item["type"] == "symlink"
+    assert item["relative_path"] == "python"
+    assert item["external_target_sha256"] == TRANSFER.sha256_file(outside)
+
+
+def test_reconciliation_rejects_overlapping_region_ownership(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    for host in ("muscat", "jerez"):
+        root = campaign / "distributed" / host
+        root.mkdir(parents=True)
+        terminal = sealed_payload({
+            "status": "completed_validation_shard", "host": host,
+            "regions_assigned": ["AT"], "regions_completed": ["AT"],
+            "test_opened": False, "test_access_authorized": False,
+            "registry_mutation_authorized": False, "article_mutation_authorized": False,
+            "joint_model_authorized": False, "mcmc_authorized": False,
+        }, "shard_terminal_sha256")
+        atomic_write_json(root / "shard_terminal.json", terminal)
+    contracts = []
+    for host in ("muscat", "jerez"):
+        payload = sealed_payload({
+            "mode": "freeze", "host": host, "campaign_root": str(campaign),
+            "regions": ["AT"],
+            "checkpoint": {"sha256": "same"}, "assignment": {"sha256": "same"},
+            "test_opened": False, "test_access_authorized": False,
+            "registry_mutation_authorized": False, "article_mutation_authorized": False,
+            "joint_model_authorized": False, "mcmc_authorized": False,
+        }, "shard_contract_sha256")
+        path = tmp_path / f"{host}.json"
+        atomic_write_json(path, payload)
+        contracts.append(path)
+    args = SimpleNamespace(
+        muscat_contract=contracts[0], jerez_contract=contracts[1],
+        campaign_root=campaign, output_dir=tmp_path / "out", force=False,
+    )
+    with pytest.raises(RuntimeError, match="disjoint"):
+        FINALIZE.reconcile(args)
+
+
+def test_scoring_requires_explicit_one_time_token(tmp_path: Path) -> None:
+    reconciliation = sealed_payload({
+        "status": "completed_37_region_validation_reconciliation_test_still_sealed",
+        "muscat_contract": {"path": str(tmp_path / "missing")},
+        "test_opened": False, "test_access_authorized": False,
+        "registry_mutation_authorized": False, "article_mutation_authorized": False,
+        "joint_model_authorized": False, "mcmc_authorized": False,
+    }, "reconciliation_sha256")
+    path = tmp_path / "reconciliation.json"
+    atomic_write_json(path, reconciliation)
+    args = SimpleNamespace(reconciliation_terminal=path, approval_token="", campaign_root=tmp_path)
+    with pytest.raises(RuntimeError, match="one-time test scoring requires"):
+        FINALIZE.score(args)

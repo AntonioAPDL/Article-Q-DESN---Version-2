@@ -60,8 +60,6 @@
 \input{tables/glofas_application_current_outputs.tex}
 % PriceFM application output aliases.
 \input{tables/pricefm_full_current_outputs.tex}
-% PriceFM matched-comparison aliases.
-\input{tables/pricefm_paper_aligned_current_outputs.tex}
 
 % Identity, zeros, and ones with consistent bold style
 \newcommand{\Id}[1]{\mat I_{#1}}
@@ -96,10 +94,9 @@ requiring repeated fitting. For quantile grids, we compare
 independent level-wise regressions followed by monotone rearrangement with a
 joint quantile-vector regression that shrinks adjacent quantile-specific
 coefficient differences. Synthetic studies, a single-origin retrospective
-Global Flood Awareness System (GloFAS) streamflow case, and a retrospective
-PriceFM comparison identify
-settings where this fixed-feature Bayesian regression improves finite-grid
-quantile scores.
+Global Flood Awareness System (GloFAS) streamflow case, and a region-frozen
+PriceFM comparison show how performance varies with the data-generating
+mechanism and evaluation design.
 \end{abstract}
 
 \bigskip
@@ -848,107 +845,79 @@ the forecast origin.}
 \label{fig:glofas-application-forecast-period}
 \end{figure}
 
-\section{Application: PriceFM Retrospective Electricity-Price Comparison}
+\section{Application: Region-Frozen PriceFM Comparison}
 \label{sec:pricefm-application}
 
-The second application compares retrospective Q--DESN day-ahead
-electricity-price forecasts with version~4 of PriceFM
-\citep{YuEtAl2026PriceFM}. The release covers European bidding regions at
-15-minute resolution from 1~January~2022 through 1~January~2026 and includes
-price, load, solar, and wind forecasts. Average quantile loss (AQL) is evaluated
-on the PriceFM probability grid at matched held-out timestamps for 114
-region--fold comparisons.
+The second application compares Q--DESN day-ahead electricity-price forecasts
+with version~4 of PriceFM \citep{YuEtAl2026PriceFM}. The release covers
+European bidding regions at 15-minute resolution from 1~January~2022 through
+1~January~2026 and includes price, load, solar, and wind forecasts. Average
+quantile loss (AQL) is evaluated on the PriceFM probability grid at matched
+held-out timestamps for 114 region--fold comparisons.
 
 \subsection{Comparison Design}
 
-The comparison contains \PricefmFullRegionFolds{} region--fold
-evaluations, spanning \PricefmFullRegions{} European bidding regions and
-\PricefmFullFolds{} rolling folds. Each evaluation is scored on the
-fold-aligned held-out timestamps and probability levels
-\PricefmFullPaperQuantiles. Throughout this section, \(\Delta\) AQL denotes
-Q--DESN AQL minus PriceFM AQL. Negative values indicate lower Q--DESN AQL;
-positive values indicate lower PriceFM AQL.
+The comparison contains \PricefmFullRegionFolds{} region--fold evaluations,
+spanning \PricefmFullRegions{} European bidding regions and
+\PricefmFullFolds{} rolling folds. For each region, one Q--DESN specification
+was selected using training and validation data, then frozen before the test
+scores were examined. The reservoir specification, RHS global scale, feature
+set, and working-likelihood family are therefore common to the three folds of
+that region. The selected specifications use AL in \PricefmCurrentAlRegions{}
+regions and exAL in \PricefmCurrentExalRegions{} regions. There were no post-test
+changes and no substitutions from the earlier case-specific comparison.
 
-\noindent\textbf{Retrospective covariates.}
-We compare Q--DESN forecasts with the released PriceFM forecasts at matched
-region--fold timestamps. Across the comparison, \PricefmFullTargetOnlyRows{}
-evaluations use own-region predictors and \PricefmFullGraphRows{} evaluations
-also include neighboring-region summaries. Both predictor sets use retrospectively
-observed own-region load, solar, and wind lead covariates in the comparison;
-evaluations with neighborhood summaries add retrospectively observed neighboring-region lead
-summaries. The score comparison is therefore retrospective. A PriceFM study of the
-joint quantile-vector RHS prior would require the same fold-aligned design with
-that joint regression fitted directly.
+Each evaluation is scored on the fold-aligned held-out timestamps and
+probability levels \PricefmFullPaperQuantiles. Throughout this section,
+\(\Delta\) AQL denotes Q--DESN AQL minus PriceFM AQL. Negative values indicate
+lower Q--DESN AQL; positive values indicate lower PriceFM AQL.
 
-\subsection{Results by Region, Fold, and Forecast Lead}
+\noindent\textbf{Information set.}
+The model-selection rule is prospective with respect to the held-out test
+scores, but the covariate comparison remains retrospective. The Q--DESN
+specifications use retrospectively observed own-region load, solar, and wind
+lead covariates; selected neighborhood feature sets additionally use
+retrospectively observed neighboring-region summaries. The results therefore
+assess a test-separated retrospective comparison rather than real-time
+electricity-price forecasting.
+
+\subsection{Results}
 
 Across the aligned benchmark, Q--DESN has lower AQL in
 \PricefmFullQdesnWins{} of \PricefmFullRegionFolds{} region--fold evaluations
-(\PricefmFullQdesnWinRate{}). Relative to its own AQL, PriceFM has lower AQL by
-at most 5\% in \PricefmFullQdesnClose{} comparisons and by more than 5\% in
-\PricefmFullPricefmWins{} comparisons. The mean Q--DESN AQL is
-\PricefmFullMeanQdesnAql{}, compared with mean PriceFM AQL
-\PricefmFullMeanPricefmAql{}, giving mean \(\Delta\) AQL
-\PricefmFullMeanDeltaAql{} and median \(\Delta\) AQL
-\PricefmFullMedianDeltaAql{}. The differences vary across region--fold
-comparisons. Within \PricefmSelectionComparedRows{} region--fold
-comparisons, AL and exAL specifications were chosen using validation AQL and
-then evaluated on held-out observations. The validation-selected
-specifications averaged test AQL \PricefmSelectionCandidateMeanAql{}, compared
-with \PricefmSelectionReferenceMeanAql{} for the reference Q--DESN
-specifications. The reported aggregate uses the selected specification in
-\PricefmSelectionUpdatedRows{} cases
-in which its held-out AQL was lower than both the reference Q--DESN and matched
-PriceFM values. Because held-out performance determined these 12
-substitutions, the resulting aggregate is descriptive; complete case-level
-results are reported in the supplement.
-
-Across the 114 region--fold comparisons, the unweighted mean AQCR is
-\PricefmAlignedQdesnAqcr{} for Q--DESN and
-\PricefmAlignedPricefmAqcr{} for PriceFM. Mean MAE is
-\PricefmAlignedQdesnMae{} for Q--DESN and \PricefmAlignedPricefmMae{} for
-PriceFM; mean RMSE is \PricefmAlignedQdesnRmse{} and
-\PricefmAlignedPricefmRmse{}, respectively. Relative to PriceFM, Q--DESN has
-\PricefmAlignedAqlReduction{}, \PricefmAlignedMaeReduction{}, and
-\PricefmAlignedRmseReduction{} lower mean AQL, MAE, and RMSE, respectively.
-Table~\ref{tab:pricefm-matched-aql-comparison} summarizes the AQL results
-overall, by fold, and by forecast-lead block.
+(\PricefmFullQdesnWinRate{}), while PriceFM has lower AQL in
+\PricefmFullPricefmWins{}. The mean Q--DESN AQL is
+\PricefmFullMeanQdesnAql{}, compared with \PricefmFullMeanPricefmAql{} for
+PriceFM, giving mean \(\Delta\) AQL \PricefmFullMeanDeltaAql{} and median
+\(\Delta\) AQL \PricefmFullMedianDeltaAql{}. Thus, under the prospectively
+frozen region-level specifications, Q--DESN has slightly higher aggregate AQL.
+When scores are first averaged within region, Q--DESN is lower in
+\PricefmCurrentRegionWins{} of \PricefmFullRegions{} regions and PriceFM is lower
+in \PricefmCurrentRegionLosses{}.
 
 \begin{table}[!htbp]
 \centering
-\caption{Matched retrospective comparison of Q--DESN and PriceFM. Panel~A
-reports unweighted summaries across region--fold comparisons, overall and by
-fold. The two PriceFM columns distinguish
-\(0<\Delta\mathrm{AQL}/\mathrm{AQL}_{\mathrm{PriceFM}}\leq 0.05\) from
-relative differences greater than 0.05.
-Panel~B reports paired AQL differences for the 72 region--fold comparisons with
-forecast-lead-specific results. Its means and medians are unweighted summaries
-of the 72 paired differences in each forecast-lead block. At 15-minute
-resolution, the four successive 24-step blocks each span six hours. Here
-\(\Delta\) AQL is Q--DESN minus PriceFM, so negative values favor Q--DESN.
-AQL is in EUR/MWh, and all scores use matched held-out timestamps and the same
+\caption{PriceFM-aligned test comparison under the region-frozen Q--DESN
+protocol. Entries are unweighted summaries across region--fold evaluations,
+overall and by fold. The Q--DESN specification for each region was selected
+using training and validation data and held fixed across its three test folds.
+Here \(\Delta\) AQL is Q--DESN minus PriceFM, so negative values favor Q--DESN.
+AQL is in EUR/MWh; all scores use matched held-out timestamps and the same
 seven probability levels.}
 \label{tab:pricefm-matched-aql-comparison}
-\noindent\textit{Panel A: Overall and fold-specific results}\par\smallskip
-\input{tables/pricefm_full_main_summary.tex}\par
-\medskip
-\noindent\textit{Panel B: Results by forecast-lead block}\par\smallskip
-\input{tables/pricefm_full_horizon_diagnostic_summary.tex}\par
+\input{tables/pricefm_r98_main_aql_summary.tex}
 \end{table}
 
-Mean Q--DESN AQL is lower in folds 1 and 2 and nearly equal in fold 3.
-Evaluations with neighborhood summaries have a more negative mean
-\(\Delta\) AQL than own-region-only evaluations. Forecast-lead-specific results
-are available for 72 of the 114 comparisons: PriceFM is favored in the first
-six-hour block, whereas the later blocks favor Q--DESN on average but remain
-heterogeneous across regions and folds. The differing predictor sets,
-case-specific specifications, and incomplete lead-specific panel make these
-comparisons descriptive.
-
-In this retrospective comparison, Q--DESN has lower aggregate AQL, MAE, and
-RMSE than the matched PriceFM forecasts, with substantial variation across
-folds, regions, and forecast horizons. Paired uncertainty analyses and direct
-evaluation of the joint quantile model remain topics for future study.
+The fold summaries show a small Q--DESN advantage in fold~2
+(mean \(\Delta=-0.027\)), a small PriceFM advantage in fold~1
+(\(0.056\)), and a larger PriceFM advantage in fold~3 (\(0.506\)). Region-level
+differences are also heterogeneous; the supplement displays all 38 region
+means. The earlier R92 surface has lower mean Q--DESN AQL
+(\PricefmCurrentHistoricalAql{}) but used a case-specific, held-out-informed
+selection rule. It is retained only as historical sensitivity evidence and is
+not combined with R98. A complete R98 forecast-lead table was not available,
+so the earlier 72-case horizon summary is not presented as part of this
+114-case comparison.
 
 % ============================================================
 \section{Discussion}
@@ -986,8 +955,10 @@ oracle-covariate origin with a joint AL--RHS VB latent-path model. Its
 issued-window grid required no crossing correction and achieved near-nominal
 empirical coverage, but the estimate reached its iteration cap before the
 strict outer tolerance and had poorer historical CRPS than FR09. The PriceFM
-comparison uses matched PriceFM forecasts with
-retrospectively observed lead covariates. Broader
+comparison uses one training- and validation-selected Q--DESN specification
+per region, frozen across three held-out folds. Its aggregate AQL is slightly
+higher than that of the matched PriceFM forecasts, with differences that vary
+by fold and region. The covariates include retrospectively observed leads, so broader
 rankings of Q--DESN against dynamic quantile or foundation-model alternatives
 require evaluations across additional data sets, forecast origins, and
 reservoir specifications.

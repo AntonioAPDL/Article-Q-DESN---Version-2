@@ -69,6 +69,15 @@ EXPERIMENT_METADATA_FIELDS = [
     "existing_test_role",
     "mechanism_qualification_only",
     "fresh_confirmation_required",
+    "stage_r93_candidate_role",
+    "stage_r93_source_fold",
+    "stage_r93_source_experiment_id",
+    "stage_r93_semantic_fingerprint",
+    "stage_r93_selection_contract",
+    "stage_r93_test_access_authorized",
+    "stage_r93_parent_ridge_candidate_id",
+    "stage_r93_ridge_rank",
+    "stage_r93_rhs_tau0_phase",
 ]
 
 

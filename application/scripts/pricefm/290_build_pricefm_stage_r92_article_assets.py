@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build the PriceFM article tables from the frozen R92 selective update."""
+"""Build historical PriceFM R92 tables from the frozen selective update.
+
+Deprecated for article publication after the complete R98 authority transition.
+The implementation is retained to reproduce the historical sensitivity surface.
+"""
 
 from __future__ import annotations
 

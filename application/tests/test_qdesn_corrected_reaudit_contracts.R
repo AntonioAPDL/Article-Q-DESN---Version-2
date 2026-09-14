@@ -119,70 +119,54 @@ assert_contains("main.tex", "No crossing correction is applied")
 assert_contains("main.tex", "cap-stabilized after RHS release")
 assert_not_contains("main.tex", "persistence-anchored discrepancy")
 
-# PriceFM is a retrospective comparison with retrospectively observed own-region
-# leads in every selected row and additional neighbor leads when neighborhood
-# summaries are included.
-assert_contains("main.tex", "Both predictor sets use retrospectively")
-assert_contains("main.tex", "own-region load, solar, and wind lead covariates")
-assert_contains("main.tex", "evaluations with neighborhood summaries add retrospectively observed neighboring-region lead")
-manifest <- jsonlite::fromJSON(app_path("tables/pricefm_paper_aligned_main_comparison_manifest.json"))
-stopifnot(identical(manifest$applicability$cross_panel_comparison, "context_only_not_head_to_head"))
-stopifnot(identical(manifest$published_comparison$external_table_rows, 0L))
+# PriceFM uses the complete R98 region-frozen surface. Selection is based on
+# training and validation data; R92 is retained only as historical sensitivity.
+assert_contains("main.tex", "was selected using training and validation data")
+assert_contains("main.tex", "common to the three folds")
+assert_contains("main.tex", "retrospectively observed own-region load, solar, and wind")
+assert_contains("main.tex", "slightly higher aggregate AQL")
+r98_manifest <- jsonlite::fromJSON(
+  app_path("tables/pricefm_r98_article_projection_manifest.json")
+)
+stopifnot(identical(r98_manifest$stage, "R98"))
+stopifnot(identical(r98_manifest$registry_rows, 114L))
+stopifnot(identical(r98_manifest$regions, 38L))
+stopifnot(identical(r98_manifest$folds, 3L))
 stopifnot(identical(
-  manifest$published_comparison$overall_and_fold_table,
-  "tables/pricefm_full_main_summary.tex"
+  r98_manifest$authority_rule,
+  "complete_114_case_replacement_without_R92_fallback"
 ))
-stopifnot(identical(
-  manifest$published_comparison$horizon_table,
-  "tables/pricefm_full_horizon_diagnostic_summary.tex"
-))
-aligned <- utils::read.csv(
-  app_path("tables/pricefm_paper_aligned_main_comparison.csv"),
+r98 <- utils::read.csv(
+  app_path("tables/pricefm_r98_authoritative_registry.csv"),
   stringsAsFactors = FALSE,
   check.names = FALSE
 )
-qdesn_aligned <- aligned[aligned$model_family == "qdesn_case_specific", , drop = FALSE]
-pricefm_aligned <- aligned[aligned$model_family == "pricefm_phase1_released_checkpoint", , drop = FALSE]
-stopifnot(nrow(qdesn_aligned) == 1L, nrow(pricefm_aligned) == 1L)
-stopifnot(abs(qdesn_aligned$AQL - 6.823677420470439) < 1.0e-12)
-stopifnot(abs(qdesn_aligned$AQCR_percent - 2.579293032015585) < 1.0e-12)
-stopifnot(abs(qdesn_aligned$MAE - 16.721997707630997) < 1.0e-12)
-stopifnot(abs(qdesn_aligned$RMSE - 25.449231419703835) < 1.0e-12)
-stopifnot(abs(pricefm_aligned$AQL - 7.038685346534470) < 1.0e-12)
-updates <- utils::read.csv(
-  app_path("tables/pricefm_r91_selective_promotions.csv"),
-  stringsAsFactors = FALSE,
-  check.names = FALSE
-)
-stopifnot(nrow(updates) == 12L)
-stopifnot(sum(updates$selected_family == "exal") == 11L)
-stopifnot(sum(updates$selected_family == "al") == 1L)
-stopifnot(all(updates$promoted_qdesn_AQL < updates$old_qdesn_AQL))
-stopifnot(all(updates$promoted_qdesn_AQL < updates$pricefm_AQL))
-assert_contains("main.tex", "AL and exAL specifications were chosen using validation AQL")
-assert_contains("main.tex", "The reported aggregate uses the selected specification")
-assert_contains("main.tex", "\\input{tables/pricefm_full_main_summary.tex}")
-assert_contains("main.tex", "\\input{tables/pricefm_full_horizon_diagnostic_summary.tex}")
-assert_contains("main.tex", "forecast-lead-specific results")
+stopifnot(nrow(r98) == 114L, length(unique(r98$region)) == 38L)
+stopifnot(identical(sort(unique(r98$fold)), 1:3))
+stopifnot(all(table(r98$region) == 3L))
+stopifnot(abs(mean(r98$qdesn_AQL) - 7.217007319836696) < 1.0e-12)
+stopifnot(abs(mean(r98$pricefm_AQL) - 7.038685346534470) < 1.0e-12)
+stopifnot(abs(mean(r98$deprecated_R92_AQL) - 6.823677420470439) < 1.0e-12)
+stopifnot(sum(r98$qdesn_AQL < r98$pricefm_AQL) == 54L)
+stopifnot(sum(r98$qdesn_AQL > r98$pricefm_AQL) == 60L)
+stopifnot(all(r98$selection_is_validation_only == "True"))
+stopifnot(all(r98$test_driven_case_mixing_used == "False"))
+stopifnot(all(r98$R92_case_fallback_used == "False"))
+assert_contains("main.tex", "\\input{tables/pricefm_r98_main_aql_summary.tex}")
 assert_contains(
-  "tables/pricefm_full_main_summary.tex",
-  "Overall & 114 & 66 & 12 & 36 & 6.824 & 7.039 & -0.215 & -0.083"
-)
-assert_contains("tables/pricefm_full_main_summary.tex", "PriceFM\\\\lower by $\\leq 5\\%$")
-assert_not_contains("tables/pricefm_full_main_summary.tex", "Near\\\\ties")
-assert_contains(
-  "tables/pricefm_full_main_summary.tex",
-  "Fold 3 & 38 & 14 & 4 & 20 & 6.998 & 6.993 & 0.005 & 0.281"
+  "tables/pricefm_r98_main_aql_summary.tex",
+  "Overall & 114 & 54 & 60 & 7.217 & 7.039 & 0.178 & 0.071"
 )
 assert_contains(
-  "tables/pricefm_full_horizon_diagnostic_summary.tex",
-  "1--24 & 72 & 22 & 0.415 & 0.351"
+  "tables/pricefm_r98_main_aql_summary.tex",
+  "Fold 3 & 38 & 12 & 26 & 7.499 & 6.993 & 0.506 & 0.247"
 )
-assert_contains(
-  "tables/pricefm_full_horizon_diagnostic_summary.tex",
-  "73--96 & 72 & 42 & -0.155 & -0.114"
-)
-assert_contains("tables/pricefm_full_horizon_diagnostic_summary.tex", "Forecast-lead block")
+assert_contains("qdesn-supplement.tex", "tab:supp-pricefm-r98-global-comparison")
+assert_contains("qdesn-supplement.tex", "fig:supp-pricefm-r98-region-comparison")
+assert_not_contains("main.tex", "PricefmSelection")
+assert_not_contains("qdesn-supplement.tex", "PricefmSelection")
+assert_not_contains("qdesn-supplement.tex", "pricefm_r91_selective_promotions")
+assert_not_contains("main.tex", "tables/pricefm_full_horizon_diagnostic_summary.tex")
 assert_not_contains("main.tex", "PriceFM v4 Table II")
 assert_not_contains("main.tex", "tab:pricefm-paper-aligned-main-comparison")
 for (external_model in c(
@@ -193,18 +177,13 @@ for (external_model in c(
   assert_not_contains("main.tex", external_model)
 }
 assert_not_contains(
-  "tables/pricefm_paper_aligned_current_outputs.tex",
-  "PricefmPaperAlignedMainComparisonTable"
-)
-assert_not_contains(
   "overleaf/article_files.txt",
   "tables/pricefm_paper_aligned_main_comparison.tex"
 )
-assert_contains("qdesn-supplement.tex", "tab:supp-pricefm-selective-updates")
-assert_contains("qdesn-supplement.tex", "Comparison of selected and reference Q--DESN specifications")
+assert_not_contains("overleaf/article_files.txt", "tables/pricefm_r91_selective_promotions.tex")
+assert_contains("overleaf/article_files.txt", "tables/pricefm_r98_authoritative_registry.csv")
 assert_not_contains("qdesn-supplement.tex", "tab:supp-pricefm-full-fold-summary")
 assert_not_contains("qdesn-supplement.tex", "tab:supp-pricefm-full-horizon-diagnostic-summary")
-assert_contains("overleaf/article_files.txt", "tables/pricefm_r91_selective_promotions.tex")
 
 # The visible score label is aCRPS. Legacy variable names remain as
 # compatibility aliases, while current-output labels identify the finite-grid

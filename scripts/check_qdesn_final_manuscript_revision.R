@@ -43,10 +43,16 @@ immutable_hashes <- c(
     "829d4467e4b734d4cd7a0dbab40ba72fe9b9c91c328908461f82f3093167d498",
   "tables/glofas_application_current_selection_manifest.csv" =
     "59792f78a055943cab6dd2e6e3eb829f08df9df6e2f98add05a4bec595b907de",
-  "tables/pricefm_paper_aligned_main_comparison.csv" =
-    "873e6cd28a26de916bbd4a0d096549057e443469aff084a9c12a4d03cd0c07ca",
-  "tables/pricefm_r91_selective_promotions.csv" =
-    "4d47aa52d44ff49187dd49a7921e590df39832a2927ce67ef9e68991f8023a1b"
+  "tables/pricefm_r98_authoritative_registry.csv" =
+    "4cf8ff653c6bd7fc64a2992fbfb6e1df48867d1b7d840cd8544fb30a5c538cb6",
+  "tables/pricefm_r98_authority_transition_ledger.csv" =
+    "35b0f3d55a1e5ac7e489b3cf171c0f9865e07a012e2fbb4a4674302fa5ef53cd",
+  "tables/pricefm_r98_global_comparison.csv" =
+    "e3831615ceefe497d68f72176c4a68437448634868aed4c2fada5029ec2768b4",
+  "tables/pricefm_r98_fold_comparison.csv" =
+    "b43bb3e933aa6507f00d740ca82884f626b67e9cf3f5c16c953cb489b5032db8",
+  "tables/pricefm_r98_region_comparison.csv" =
+    "b4ff02abf4cda266169acdba2c99708c4ff0b088891a2623256df00af99f21e1"
 )
 for (relative in names(immutable_hashes)) {
   expect(file.exists(repo_path(relative)), paste("Missing scientific input:", relative))
@@ -96,6 +102,7 @@ expect(identical(as.integer(observed_crossing), unname(expected_crossing)),
 main <- read_text("main.tex")
 supplement <- read_text("qdesn-supplement.tex")
 manuscript <- paste(main, supplement, sep = "\n")
+pricefm_aliases <- read_text("tables/pricefm_full_current_outputs.tex")
 internal_terms <- paste0(
   "\\b(lane|worker|queue|coordinator|handoff|launch lock|runtime artifact|",
   "promotion packet|score contract|frozen HEAD|frozen branch)\\b"
@@ -171,6 +178,18 @@ expect(grepl(
   read_text("tables/joint_qdesn_corrected_v4_crossing_table.tex"),
   fixed = TRUE
 ), "The supplement does not distinguish crossing frequency from adjustment magnitude.")
+
+expect(grepl("prospectively", main, fixed = TRUE) &&
+         grepl("slightly higher aggregate AQL", main, fixed = TRUE) &&
+         grepl("7.217", pricefm_aliases, fixed = TRUE) &&
+         grepl("7.039", pricefm_aliases, fixed = TRUE),
+       "The main article does not state the R98 PriceFM result accurately.")
+expect(!grepl("PricefmSelection|pricefm_r91_selective_promotions|PricefmAligned",
+              manuscript, perl = TRUE),
+       "A deprecated R91/R92 PriceFM reader-facing construct remains.")
+expect(grepl("pricefm_r98_authoritative_registry.csv",
+             read_text("overleaf/article_files.txt"), fixed = TRUE),
+       "The article-only snapshot does not carry the complete R98 registry.")
 
 article_files <- readLines(repo_path("overleaf/article_files.txt"), warn = FALSE)
 expect(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),

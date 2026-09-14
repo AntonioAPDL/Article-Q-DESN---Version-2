@@ -121,7 +121,8 @@ app_glofas_normal_part2_component_cfg <- function(base_cfg, candidate_row, compo
     alpha = app_glofas_normal_part2_row_value(candidate_row, "alpha", prefix = prefix),
     rho = app_glofas_normal_part2_row_value(candidate_row, "rho", prefix = prefix),
     seed = app_glofas_normal_part2_row_value(candidate_row, "seed", seed_default, prefix = prefix),
-    washout = app_glofas_normal_part2_row_value(candidate_row, "washout", defaults$washout, prefix = prefix)
+    washout = app_glofas_normal_part2_row_value(candidate_row, "washout", defaults$washout, prefix = prefix),
+    reservoir_controls = app_glofas_normal_part1_reservoir_controls(candidate_row, prefix = prefix)
   )
   if (identical(component, "discrepancy")) {
     cfg <- app_glofas_normal_part2_apply_discrepancy_input_contract(cfg, candidate_row)
@@ -879,11 +880,18 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
   min_tau_updates <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_min_tau_updates", 0L))
   freeze_beta <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_freeze_beta_warmup_iters", 0L))
   min_beta_updates <- as.integer(app_glofas_normal_part2_row_value(rhs_row, "rhs_min_beta_updates", 0L))
+  a_zeta <- as.numeric(app_glofas_normal_part2_row_value(rhs_row, "rhs_a_zeta", 2))
+  b_zeta <- as.numeric(app_glofas_normal_part2_row_value(rhs_row, "rhs_b_zeta", 4))
+  zeta2_value <- app_glofas_normal_part2_row_value(rhs_row, "rhs_zeta2_fixed", NULL)
+  zeta2_fixed <- if (is.null(zeta2_value) || !is.finite(as.numeric(zeta2_value))) NULL else as.numeric(zeta2_value)
   ref_fit <- app_glofas_normal_rhs_fit(
     X = design$reference$X[split$train_idx, , drop = FALSE],
     y = design$reference$y[split$train_idx],
     ridge_warm_start = warm_start$reference,
     tau0 = tau0_reference,
+    a_zeta = a_zeta,
+    b_zeta = b_zeta,
+    zeta2_fixed = zeta2_fixed,
     max_iter = max_iter,
     min_iter = min_iter,
     tol = tol,
@@ -898,6 +906,9 @@ app_glofas_normal_part2_score_rhs_candidate <- function(
     y = design$discrepancy$y[split$train_idx],
     ridge_warm_start = warm_start$discrepancy,
     tau0 = tau0_discrepancy,
+    a_zeta = a_zeta,
+    b_zeta = b_zeta,
+    zeta2_fixed = zeta2_fixed,
     max_iter = max_iter,
     min_iter = min_iter,
     tol = tol,

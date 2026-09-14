@@ -285,6 +285,13 @@ app_latent_rhs_state_init <- function(p, intercept_index, args, rhs_control = NU
   tau0 <- as.numeric(args$tau0 %||% 1)
   a_zeta <- as.numeric(args$a_zeta %||% 2)
   b_zeta <- as.numeric(args$b_zeta %||% 4)
+  zeta2_fixed <- args$zeta2_fixed %||% NULL
+  if (!is.null(zeta2_fixed)) {
+    zeta2_fixed <- as.numeric(zeta2_fixed)
+    if (length(zeta2_fixed) != 1L || !is.finite(zeta2_fixed) || zeta2_fixed <= 0) {
+      stop("Fixed RHS zeta2 must be finite and positive.", call. = FALSE)
+    }
+  }
   if (!is.finite(tau0) || tau0 <= 0) stop("RHS tau0 must be positive.", call. = FALSE)
   penalized <- setdiff(seq_len(p), as.integer(intercept_index %||% integer(0)))
   state <- list(
@@ -295,11 +302,13 @@ app_latent_rhs_state_init <- function(p, intercept_index, args, rhs_control = NU
     tau0 = tau0,
     a_zeta = a_zeta,
     b_zeta = b_zeta,
+    zeta2_fixed = zeta2_fixed,
+    update_zeta = is.null(zeta2_fixed),
     e_inv_lambda2 = rep(1, p),
     e_inv_nu = rep(1, p),
     e_inv_tau2 = 1 / tau0^2,
     e_inv_xi = 1,
-    e_inv_zeta2 = a_zeta / b_zeta,
+    e_inv_zeta2 = if (is.null(zeta2_fixed)) a_zeta / b_zeta else 1 / zeta2_fixed,
     rhs_control = app_latent_normalize_rhs_control(rhs_control),
     tau_update_count = 0L,
     first_tau_update_iter = NA_integer_,
@@ -369,9 +378,13 @@ app_latent_rhs_state_update <- function(state, theta_mean, theta_cov, iter = 1L,
     }
   }
 
-  zeta_shape <- state$a_zeta + length(idx) / 2
-  zeta_rate <- pmax(state$b_zeta + 0.5 * sum(e_theta2[idx]), 1.0e-12)
-  state$e_inv_zeta2 <- zeta_shape / zeta_rate
+  if (isTRUE(state$update_zeta %||% TRUE)) {
+    zeta_shape <- state$a_zeta + length(idx) / 2
+    zeta_rate <- pmax(state$b_zeta + 0.5 * sum(e_theta2[idx]), 1.0e-12)
+    state$e_inv_zeta2 <- zeta_shape / zeta_rate
+  } else {
+    state$e_inv_zeta2 <- 1 / as.numeric(state$zeta2_fixed)
+  }
 
   state$prior_precision <- app_latent_rhs_prior_precision(state, p)
   state

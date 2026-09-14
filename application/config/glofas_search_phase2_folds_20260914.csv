@@ -1,0 +1,7 @@
+fold_id,origin_date,primary_horizon,secondary_horizon,retrospective_product,primary
+fold_2018_12_25,2018-12-25,28,30,v3.1 LISFLOOD,true
+fold_2019_12_25,2019-12-25,28,30,v3.1 LISFLOOD,true
+fold_2020_12_25,2020-12-25,28,30,v3.1 LISFLOOD,true
+fold_2021_11_12,2021-11-12,28,30,v3.1 LISFLOOD,true
+fold_2021_12_21,2021-12-21,28,30,v3.1 LISFLOOD,true
+fold_2022_05_11,2022-05-11,28,30,v3.1 LISFLOOD,true

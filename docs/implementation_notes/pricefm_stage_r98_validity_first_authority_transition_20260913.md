@@ -132,3 +132,69 @@ joint models, or MCMC.
    integration coordinator.
 
 No direct merge to main or Overleaf publication is authorized in this lane.
+
+## Materialized result
+
+The one-time scoring pass completed on 2026-09-13 with 111/111 new scoring
+terminals and the three frozen SE_2 folds, giving the exact 114-case surface.
+No model was refit and no selection changed after test was opened.
+
+| Surface | Mean AQL | Role |
+|---|---:|---|
+| R98 region-frozen Q-DESN | 7.217007320 | protocol-valid authority candidate |
+| Cached PriceFM | 7.038685347 | external comparator |
+| R92 Q-DESN | 6.823677420 | deprecated historical sensitivity |
+
+The R97 preregistered performance gate did not pass: R98 is 0.393330 AQL
+higher than R92 and 0.178322 higher than cached PriceFM. This outcome does not
+change the R98 validity decision and does not authorize any case-level fallback.
+
+The result is heterogeneous rather than uniformly poor:
+
+- R98 beats cached PriceFM in 54/114 region-fold cases and 16/38 region means.
+- R98 beats historical R92 in 49/114 cases and 17/38 region means.
+- Fold-2 mean AQL is 6.798915 versus PriceFM 6.826320; Fold 1 is close
+  (7.353306 versus 7.296932), while Fold 3 is the main aggregate weakness
+  (7.498802 versus 6.992804).
+- The largest region-mean gains over PriceFM occur in EE, DK_1, IT_NORD, FR,
+  PT, and ES. The largest deficits occur in HR, SK, HU, BG, and LV.
+- Validation and test AQL remain strongly ordered across cases (Pearson 0.795;
+  Spearman 0.847), so validation remains informative even though the complete
+  surface does not beat the comparators on mean AQL.
+
+These comparisons are audit-only. They identify future prospective research
+questions but must not be used to alter the frozen R98 authority surface.
+
+## Materialized evidence
+
+- Scoring authorization file SHA-256:
+  `3b37f89a618ffd3fa7a71b2a5c7293903606dcf28457bd92cd5c55907913f3d0`
+- Global scoring terminal canonical seal:
+  `a7e0a6b5d20752042666a3752f1d4246870133da2f9d36da8a9324d147957056`
+- R98 registry SHA-256:
+  `4cf8ff653c6bd7fc64a2992fbfb6e1df48867d1b7d840cd8544fb30a5c538cb6`
+- R98 transition ledger SHA-256:
+  `35b0f3d55a1e5ac7e489b3cf171c0f9865e07a012e2fbb4a4674302fa5ef53cd`
+- R98 global comparison SHA-256:
+  `e3831615ceefe497d68f72176c4a68437448634868aed4c2fada5029ec2768b4`
+- R98 closeout source manifest SHA-256:
+  `98e5abd74b46988c1afa014455e8cf457929a6ecab3def39b3eeb74d89218dfa`
+
+The prep manifest contains 197 hash-valid records, the closeout manifest
+contains 308 hash-valid records, and the six article-safe candidate assets are
+hash-valid. Runtime evidence remains under ignored `application/data_local`.
+
+## Publication recommendation
+
+The integration coordinator should replace R92 with the complete R98 registry
+and report the observed R98 comparison without claiming a predictive
+improvement. The central result is that a prospective, leakage-resistant
+region-level calibration remains competitive in many cases but is modestly
+worse in aggregate than cached PriceFM and the retrospective R92 surface. R92
+may be retained only as a labelled historical sensitivity analysis.
+
+The existing R92 horizon comparison covers 72 of 114 cases and therefore must
+not be silently relabelled as an R98 full-surface horizon comparison. The R98
+scorer retains full horizon summaries for all 111 newly scored cases and R96
+retains SE_2 horizon-group summaries; any replacement horizon table must state
+its exact matched coverage and derivation.

@@ -96,9 +96,10 @@ history.
 These notes are descriptive. The authoritative manuscript sources are
 `../main.tex`, `../qdesn-supplement.tex`, and `../refs.bib`.
 
-For the corrected Aug. 15, 2026 reader-centered revision, current
-application-facing authorities are the FR09 GloFAS promotion note, the tracked
-GloFAS current-output aliases, the PriceFM paper-aligned comparison manifest,
+Current application-facing authorities are the tracked GloFAS current-output
+aliases, the complete PriceFM R98 region-frozen registry and article projection
+described in
+`implementation_notes/pricefm_r98_article_authority_projection_20260913.md`,
 and `implementation_notes/qdesn_inferential_object_and_terminology_contract_20260815.md`.
 Older GloFAS launch protocols and candidate notes remain historical
 implementation records even when their original titles use words such as

@@ -5,6 +5,9 @@ common reproducibility failures.
 
 Tracked tests:
 
+- `test_pricefm_r98_article_projection.py`: complete 114-case R98 registry,
+  validation-only region-frozen selection, absence of test-driven mixing and
+  R92 fallbacks, frozen mean AQL values, and the article-projection checker.
 - `test_rhs_global_scale_reference.R`: Gaussian, AL, and exAL reference-scale
   calculations, domain checks, and manuscript wording guards for the
   regularized-horseshoe hyperprior guidance.

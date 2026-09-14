@@ -83,7 +83,8 @@ with tempfile.TemporaryDirectory() as temp:
     shutil_target = destination
     staging.rename(shutil_target)
     result = run("verify", "--runtime-root", shutil_target, "--repo-root", repo,
-                 "--expected-head", head, "--expected-jobs", "1")
+                 "--expected-head", head, "--expected-jobs", "1",
+                 "--expected-rscript", "python3", "--expected-r-version", "Python 3")
     assert result.returncode == 0, result.stderr
     assert (shutil_target / "control" / "remote_shard_manager.py").is_file()
     relocated = remote.read_csv(shutil_target / "configs" / "job_manifest.csv")

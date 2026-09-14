@@ -252,6 +252,16 @@ def verify(args):
     if upstream != actual_head:
         raise RuntimeError(f"Execution branch is not synchronized with upstream: {actual_head} != {upstream}")
 
+    rscript = args.expected_rscript or "Rscript"
+    r_path = shutil.which(rscript)
+    if r_path is None:
+        raise RuntimeError(f"Required Rscript is unavailable: {rscript}")
+    r_result = subprocess.run([r_path, "--version"], universal_newlines=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    r_version = r_result.stdout.strip().splitlines()[0] if r_result.stdout.strip() else ""
+    if r_result.returncode or (args.expected_r_version and args.expected_r_version not in r_version):
+        raise RuntimeError(f"R version mismatch: {r_path} reported {r_version}")
+
     payload = read_csv(root / "control" / "payload_manifest.csv")
     bad = []
     for row in payload:
@@ -277,6 +287,7 @@ def verify(args):
         "verified_at_utc": now_utc(), "status": "REMOTE_SHARD_PREFLIGHT_PASSED",
         "repo_head": actual_head, "job_count": len(jobs), "payload_file_count": len(payload),
         "payload_manifest_sha256": sha256_file(root / "control" / "payload_manifest.csv"),
+        "rscript": r_path, "r_version": r_version,
     }
     (root / "control" / "preflight_report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps(report, indent=2))
@@ -381,6 +392,8 @@ def parser():
     p.add_argument("--repo-root", required=True)
     p.add_argument("--expected-head", default="")
     p.add_argument("--expected-jobs", type=int)
+    p.add_argument("--expected-rscript", default="")
+    p.add_argument("--expected-r-version", default="")
     p.set_defaults(function=verify)
     p = sub.add_parser("finalize")
     p.add_argument("--runtime-root", required=True)

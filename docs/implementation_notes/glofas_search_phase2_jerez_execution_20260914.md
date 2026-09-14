@@ -113,3 +113,40 @@ worktree is dirty/diverged, a packet hash differs, assignment cardinality is
 not exact, any assigned job already has a status marker, thread guards differ
 from one, memory pressure becomes material, or a real failure appears. A
 failed preflight must never be bypassed by editing a status marker.
+
+## Executed Launch Record
+
+The distributed Ridge launch passed its gates and started on Jerez on
+2026-09-14.
+
+| Item | Executed value |
+| --- | --- |
+| Control implementation baseline | `work/glofas-search-phase2-jerez-control-20260914` at `6d9d6e0d2882f3d424de14d4939d9c08493913a0` |
+| Execution branch / HEAD | `work/glofas-search-phase2-jerez-execution-20260914` / `56b8b59245a600555e700bfb7c6cba1459ab50aa` |
+| Engine branch / HEAD | `work/glofas-search-phase2-engine-jerez-20260914` / `741c06e9b71566b4880ee1f948b0e3553ced0339` |
+| Jerez runtime | `local_trackers/runtime_configs/glofas_search_phase2_ridge_jerez_shard_20260914_r1` |
+| tmux session | `glofas_search2_ridge_jerez_20260914_r1` |
+| Assigned jobs | 808 |
+| Workers / weighted capacity | 50 / 100 |
+| Payload manifest SHA256 | `86250f7bbf55ae31480dd31fd68182e5541ee4ce3a26e7fb1ab9eb143d1237d3` |
+| Assignment SHA256 | `8bfa8b116d3fec7c8f3511dacadda78ad4d4258f3f5fa754b2137ee9a7caaba1` |
+| Full 828-job manifest SHA256 | `4f9209d83fce8c1ec8c4427fe0662c61192e82f5083e5ef6f6eafa330e745195` |
+
+The real cross-host smoke was
+`ridge_screen__search2_ref_002__fold_2020_12_25`. It completed model fitting,
+recursive forecasting, sealed scoring, warm-start persistence, and terminal
+status in 405.1361 seconds. Its day-1:28 CRPS was 0.209601. The initial live
+production check was 1 complete, 50 running, 757 pending, and zero failed.
+
+The first preflight-only payload identified that Jerez's default `Rscript` was
+R 4.5.3 and that the current full application harness expected the newer
+shared-fitforecast engine path. No scientific job had started. That payload was
+renamed `*_superseded_r45_preflight`; R 4.6.0 and the exact Muscat engine
+source/binary were then pinned, the payload was regenerated, and all preflight
+checks were rerun. The final full Jerez harness exited zero. Two unrelated
+shared-validation integration tests reported their designed skip because that
+external validation authority is not installed on Jerez; the Search-II,
+GloFAS, engine-contract, scheduler, and remote-shard checks all ran and passed.
+
+The launched manifest contains Ridge jobs only. It cannot prepare or launch an
+RHS stage automatically.

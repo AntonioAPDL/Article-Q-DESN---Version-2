@@ -5,6 +5,7 @@ source(file.path(repo_root, "application/R/00_packages.R"))
 app_set_repo_root(repo_root)
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_search_phase2.R"))
+app_glofas_search2_assert_git_state()
 
 args <- app_parse_args(list(
   mode = "pilot", ridge_runtime_root = "", pilot_runtime_root = "", source_runtime_root = "",
@@ -24,7 +25,7 @@ if (!nrow(ridge_aggregate)) stop("RHS preparation requires completed Ridge aggre
 run_label <- as.character(args$run_label)
 if (!nzchar(run_label) || grepl("[^A-Za-z0-9_.-]", run_label)) stop("run_label must be path-safe.", call. = FALSE)
 root <- app_path("local_trackers", "runtime_configs", run_label)
-invisible(lapply(file.path(root, c("configs", "forecasts", "fits", "scores", "traces", "coefficients", "diagnostics", "status", "logs", "tables", "reports")), app_ensure_dir))
+invisible(lapply(file.path(root, c("configs", "forecasts", "fits", "scores", "traces", "coefficients", "warm_starts", "diagnostics", "status", "logs", "tables", "reports")), app_ensure_dir))
 model_registry <- app_read_csv(file.path(ridge_root, "configs", "model_packet_registry.csv"))
 score_registry <- app_read_csv(file.path(ridge_root, "configs", "scoring_packet_registry.csv"))
 app_write_csv(model_registry, file.path(root, "configs", "model_packet_registry.csv"))
@@ -43,9 +44,19 @@ if (identical(mode, "pilot")) {
   pilot_scores <- app_read_csv(file.path(pilot_root, "tables", "score_summaries_latest.csv"))
   if (!nrow(pilot_scores) || !"prior_id" %in% names(pilot_scores)) stop("RHS screen requires completed prior-pilot scores.", call. = FALSE)
   primary <- pilot_scores[pilot_scores$score_window == "primary_28", , drop = FALSE]
-  prior_rank <- aggregate(primary$mean_crps, list(target = primary$target, prior_id = primary$prior_id), mean)
-  names(prior_rank)[[3L]] <- "mean_primary_crps"
-  prior_rank <- prior_rank[order(prior_rank$target, prior_rank$mean_primary_crps), , drop = FALSE]
+  prior_rank <- aggregate(primary$mean_crps, list(target = primary$target, prior_id = primary$prior_id), function(x) {
+    c(n = length(x), mean = mean(x), worst = max(x), finite = all(is.finite(x)))
+  })
+  prior_rank <- data.frame(
+    target = prior_rank$target, prior_id = prior_rank$prior_id,
+    n_primary_cells = prior_rank$x[, "n"], mean_primary_crps = prior_rank$x[, "mean"],
+    worst_primary_crps = prior_rank$x[, "worst"], all_finite = as.logical(prior_rank$x[, "finite"]),
+    stringsAsFactors = FALSE
+  )
+  if (any(prior_rank$n_primary_cells != 24L) || any(!prior_rank$all_finite)) {
+    stop("RHS prior selection requires 24 finite primary cells for every target/prior.", call. = FALSE)
+  }
+  prior_rank <- prior_rank[order(prior_rank$target, prior_rank$mean_primary_crps, prior_rank$worst_primary_crps), , drop = FALSE]
   chosen <- prior_rank[!duplicated(prior_rank$target), , drop = FALSE]
   architectures <- app_bind_rows_fill(lapply(c("reference", "discrepancy"), function(target) {
     agg <- ridge_aggregate[ridge_aggregate$target == target, , drop = FALSE]
@@ -111,6 +122,24 @@ if (identical(mode, "pilot")) {
   jobs <- jobs[, c("job_id", "stage", "method", "memory_weight", setdiff(names(jobs), c("job_id", "stage", "method", "memory_weight"))), drop = FALSE]
 }
 
+jobs$design_group_id <- paste(jobs$target, jobs$candidate_id, jobs$fold_id, sep = "__")
+if (mode %in% c("pilot", "screen")) {
+  ridge_job_id <- paste("ridge_screen", jobs$candidate_id, jobs$fold_id, sep = "__")
+  jobs$ridge_warm_start_path <- file.path(ridge_root, "warm_starts", paste0(ridge_job_id, "_warm_start.rds"))
+  missing_warm <- !file.exists(jobs$ridge_warm_start_path)
+  if (any(missing_warm)) {
+    stop(sprintf(
+      "RHS %s preparation requires completed Ridge warm starts; %d are missing.",
+      mode, sum(missing_warm)
+    ), call. = FALSE)
+  }
+  jobs$ridge_warm_start_path <- vapply(jobs$ridge_warm_start_path, normalizePath, character(1L), mustWork = TRUE)
+  jobs$ridge_warm_start_sha256 <- vapply(jobs$ridge_warm_start_path, app_sha256_file, character(1L))
+} else {
+  jobs$ridge_warm_start_path <- NA_character_
+  jobs$ridge_warm_start_sha256 <- NA_character_
+}
+
 jobs <- merge(jobs, model_registry, by = c("target", "fold_id"), all.x = TRUE, sort = FALSE)
 if (anyDuplicated(jobs$job_id) || any(is.na(jobs$model_packet_path) | !nzchar(jobs$model_packet_path))) stop("RHS jobs are not uniquely packeted.", call. = FALSE)
 app_write_csv(jobs, file.path(root, "configs", "job_manifest.csv"))
@@ -121,7 +150,8 @@ app_write_yaml(list(
   ridge_runtime_root = ridge_root, pilot_runtime_root = as.character(args$pilot_runtime_root), source_runtime_root = source_root,
   new_job_count = nrow(jobs), reused_job_count = nrow(reused),
   scientific_contract = list(final_origin_excluded = "2022-12-25", primary_horizon = 28L, secondary_horizon = 30L,
-    ridge_warm_start_rebuilt_exactly_per_candidate_fold = TRUE, beta_freeze_iterations = 20L,
+    ridge_warm_start_required_and_hashed = mode %in% c("pilot", "screen"),
+    grouped_rhs_design_launch_required = identical(mode, "pilot"), beta_freeze_iterations = 20L,
     minimum_beta_updates = 30L, score_equivalence_precision = 4L)
 ), file.path(root, "configs", "run_manifest.yaml"))
 app_write_git_state(file.path(root, "configs", "git_state.txt"))

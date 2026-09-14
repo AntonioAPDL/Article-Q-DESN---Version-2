@@ -12,6 +12,7 @@ source(app_path("application/R/discrepancy_design.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_oracle_forecast.R"))
 source(app_path("application/R/glofas_search_phase2.R"))
+app_glofas_search2_assert_git_state()
 
 args <- app_parse_args(list(
   run_label = paste0("glofas_search_phase2_ridge_", format(Sys.time(), "%Y%m%d_%H%M%S")),
@@ -31,7 +32,7 @@ master <- app_glofas_search2_load_master(data_root)
 root <- app_path("local_trackers", "runtime_configs", run_label)
 dirs <- file.path(root, c(
   "configs", "model_inputs", "scoring_inputs", "forecasts", "fits", "scores", "traces",
-  "coefficients", "diagnostics", "status", "logs", "tables", "reports"
+  "coefficients", "warm_starts", "diagnostics", "status", "logs", "tables", "reports"
 ))
 invisible(lapply(dirs, app_ensure_dir))
 

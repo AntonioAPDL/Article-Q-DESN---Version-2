@@ -7,6 +7,8 @@ source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_search_phase2.R"))
 args <- app_parse_args(list(runtime_root = "", job_id = ""))
 root <- app_resolve_path(args$runtime_root, must_work = TRUE)
+run_manifest <- app_read_yaml(file.path(root, "configs", "run_manifest.yaml"))
+app_glofas_search2_assert_git_state(expected_head = run_manifest$git_head)
 job_id <- as.character(args$job_id)
 jobs <- app_read_csv(file.path(root, "configs", "job_manifest.csv"))
 row <- jobs[jobs$job_id == job_id, , drop = FALSE]

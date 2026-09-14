@@ -55,6 +55,53 @@ toy_timeline <- attr(packets$model$panel_bundle$panel, "model_covariate_timeline
 stopifnot(max(toy_timeline$date) == toy_fold$origin_date + 30L)
 stopifnot(all(toy_timeline$ppt_role[toy_timeline$date > toy_fold$origin_date] == "oracle_realized_future"))
 
+tiny_candidate <- candidate_manifest[1L, , drop = FALSE]
+tiny_candidate$candidate_id <- "toy_reusable_ridge"
+tiny_candidate$target <- "reference"
+tiny_candidate$method <- "ridge"
+tiny_candidate$D <- 1L
+tiny_candidate$n_vector <- "12"
+tiny_candidate$n_state_features <- 12L
+tiny_candidate$output_lag_max <- 3L
+tiny_candidate$covariate_lag_max <- 2L
+tiny_candidate$m <- 3L
+tiny_candidate$washout <- 5L
+tiny_candidate$seed <- 47L
+tiny_candidate$state_scaling <- "train_zscore"
+tiny_candidate$ridge_tau2 <- 10
+tiny_prepared <- app_glofas_search2_prepare_fit_inputs(packets$model, tiny_candidate)
+warm_path <- tempfile(fileext = ".rds")
+saveRDS(tiny_prepared$ridge_warm_start, warm_path, version = 2L)
+tiny_rhs <- tiny_candidate
+tiny_rhs$method <- "rhs"
+tiny_rhs$ridge_warm_start_path <- warm_path
+tiny_rhs$ridge_warm_start_sha256 <- app_sha256_file(warm_path)
+tiny_reused <- app_glofas_search2_prepare_fit_inputs(packets$model, tiny_rhs)
+stopifnot(isTRUE(tiny_reused$ridge_warm_start_reused))
+stopifnot(identical(tiny_reused$ridge_fit$beta_mean, tiny_prepared$ridge_fit$beta_mean))
+tiny_rhs$job_id <- "toy_rhs_reused"
+tiny_rhs$fold_id <- "toy_fold"
+tiny_rhs$prior_id <- "phase1_legacy_tau0"
+tiny_rhs$prior_mode <- "legacy_tau0"
+tiny_rhs$rhs_a_zeta <- 2
+tiny_rhs$rhs_b_zeta <- 4
+tiny_rhs$rhs_zeta2_fixed <- NA_real_
+tiny_rhs$rhs_max_iter <- 3L
+tiny_rhs$rhs_min_iter <- 3L
+tiny_rhs$rhs_tol <- 0
+tiny_rhs$rhs_update_every <- 1L
+tiny_rhs$rhs_freeze_tau_warmup_iters <- 0L
+tiny_rhs$rhs_min_tau_updates <- 1L
+tiny_rhs$rhs_freeze_beta_warmup_iters <- 0L
+tiny_rhs$rhs_min_beta_updates <- 3L
+tiny_result <- app_glofas_search2_fit_and_forecast(
+  packets$model, tiny_rhs, forecast_backend = "r", prepared = tiny_reused
+)
+stopifnot(nrow(tiny_result$path) == 30L, nrow(tiny_result$trace) == 3L)
+stopifnot(isTRUE(tiny_result$summary$ridge_warm_start_reused))
+stopifnot(nrow(tiny_result$coefficient_top) >= 1L, nrow(tiny_result$coefficient_activity) >= 1L)
+unlink(warm_path)
+
 set.seed(45)
 X_raw <- cbind(intercept = 1, x1 = rnorm(50, 10, 2), x2 = rnorm(50, -4, 0.5))
 scaler <- app_glofas_normal_readout_scaler_fit(X_raw, "train_zscore")

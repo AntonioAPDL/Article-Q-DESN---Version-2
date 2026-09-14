@@ -2,9 +2,9 @@
 
 Date: 2026-09-14
 Lane: `work/glofas-search-phase2-20260914`
-Status: implementation complete; the staged benchmark gate is prepared and
-pending. No Phase II candidate is authoritative until every declared selection
-gate passes.
+Status: implementation and benchmark gate complete; the broad Ridge stage is
+authorized but remains a separate launch. No Phase II candidate is
+authoritative until every declared selection gate passes.
 
 ## 1. Decision and scope
 
@@ -201,6 +201,16 @@ The Normal RHS implementation now:
 - retains exact train-only scaling transformations for R and C++ recursive
   forecast equivalence.
 
+Every completed Ridge job also writes a compact, hashed warm start. RHS pilot
+and architecture manifests refuse to prepare if the matching candidate/fold
+warm start is absent or later fails its hash/design-column check. During the
+six-prior pilot, jobs sharing an architecture and fold execute as one
+one-thread group: the reservoir design is built once, the retained Ridge
+initializer is loaded once, and the six RHS fits remain separate scored jobs.
+Retained warm starts remove all 288 repeated Ridge solves from the pilot, while
+grouping removes 240 redundant reservoir-design builds, without coupling
+priors or changing any posterior update.
+
 The scheduler pins every model to one numerical thread and uses weighted
 capacity slots: width at most 2,500 has weight 1, 2,501-4,000 has weight 2, and
 larger models have weight 3. A high core count therefore cannot accidentally
@@ -218,6 +228,7 @@ launch too many 5,000-state models at once.
 | Health/aggregation | `application/scripts/398_check_glofas_search_phase2.R` |
 | Capacity-aware launcher | `application/scripts/399_launch_glofas_search_phase2.py` |
 | RHS pilot/screen/confirmation preparation | `application/scripts/400_prepare_glofas_search_phase2_rhs.R` |
+| Grouped RHS prior-pilot worker | `application/scripts/401_run_glofas_search_phase2_rhs_group.R` |
 | Focused tests | `application/tests/test_glofas_search_phase2.R` |
 
 Runtime artifacts remain under ignored `local_trackers/runtime_configs/`.
@@ -229,6 +240,26 @@ Workers retain forecast paths, score details, ELBO traces, top-50 coefficients
 by posterior mean magnitude, and block-level coefficient activity. Full model
 objects and full coefficient tables are intentionally omitted because they are
 rebuildable and would multiply storage across more than one thousand fits.
+
+### Required launch order
+
+Each stage uses a new ignored runtime root and runs its checker before the next
+preparer is called:
+
+```text
+395 --mode benchmark -> 399 -> 398
+395 --mode ridge     -> 399 -> 398
+400 --mode pilot     -> 399 --group-rhs-design -> 398
+400 --mode screen    -> 399 -> 398
+400 --mode confirm   -> 399 -> 398
+```
+
+The Ridge runtime root is passed to both RHS preparation stages; the pilot
+runtime is additionally passed to the screen so completed matching cells can
+be reused. The completed screen runtime is passed to confirmation. A
+preparation or launch command must never be substituted for a failed checker,
+and no later stage is pre-scheduled before its predecessor's scientific gate
+has been reviewed.
 
 ## 10. What is and is not optimal
 
@@ -243,3 +274,24 @@ Do not expand the grid, alter thresholds, add folds, or inspect 2022-12-25 to
 rescue a disappointing result. A later expansion would be a separately named
 campaign with a new validation budget. A genuinely independent future cutoff,
 if acquired, is the strongest eventual confirmation evidence.
+
+## 11. Benchmark closeout
+
+The one-fold standardized-anchor benchmark completed 4/4 model fits and sealed
+scores with zero final failures. Observed one-thread results were:
+
+| Target | Method | Runtime (seconds) | Day-1:28 CRPS |
+| --- | --- | ---: | ---: |
+| Discrepancy | Ridge | 296.52 | 0.1978248 |
+| Discrepancy | RHS | 594.65 | 0.2067242 |
+| Reference | Ridge | 417.44 | 0.3711828 |
+| Reference | RHS | 898.20 | 0.3399309 |
+
+Observed resident memory stayed below approximately 3.3 GiB per job. These
+single-fold scores are not model-selection evidence; they only validate the
+execution envelope. Four initial scorer invocations overlapped an in-progress
+source edit and failed at parse time after their forecasts were already safely
+written. Their failure markers were preserved, and the sealed scorer was rerun
+successfully without refitting. No scientific value changed. Future production
+jobs must run only from a clean committed worktree, which the launcher handoff
+now requires.

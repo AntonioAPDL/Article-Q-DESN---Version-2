@@ -6,6 +6,29 @@
 
 app_glofas_search2_final_origin <- function() as.Date("2022-12-25")
 
+app_glofas_search2_assert_git_state <- function(expected_head = NULL, require_synced = TRUE) {
+  git <- function(args) {
+    out <- suppressWarnings(system2("git", c("-C", app_repo_root(), args), stdout = TRUE, stderr = TRUE))
+    if (!is.null(attr(out, "status")) && attr(out, "status") != 0L) {
+      stop(sprintf("Search-II Git check failed: git %s.", paste(args, collapse = " ")), call. = FALSE)
+    }
+    out
+  }
+  status <- git(c("status", "--porcelain", "--untracked-files=normal"))
+  if (length(status)) stop("Search-II execution requires a clean committed worktree.", call. = FALSE)
+  head <- git(c("rev-parse", "HEAD"))[[1L]]
+  if (!is.null(expected_head) && !identical(head, as.character(expected_head))) {
+    stop("Search-II execution HEAD differs from the frozen run manifest.", call. = FALSE)
+  }
+  upstream <- git(c("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"))[[1L]]
+  divergence <- strsplit(git(c("rev-list", "--left-right", "--count", paste0(upstream, "...HEAD")))[[1L]], "[[:space:]]+")[[1L]]
+  divergence <- as.integer(divergence[nzchar(divergence)])
+  if (isTRUE(require_synced) && (length(divergence) != 2L || any(divergence != 0L))) {
+    stop("Search-II execution branch must be exactly synchronized with its upstream.", call. = FALSE)
+  }
+  list(head = head, upstream = upstream, behind = divergence[[1L]], ahead = divergence[[2L]])
+}
+
 app_glofas_search2_fold_registry <- function() {
   out <- data.frame(
     fold_id = c(
@@ -433,6 +456,7 @@ app_glofas_search2_rhs_manifest <- function(architectures, folds, prior_specs = 
   out$rhs_min_tau_updates <- 10L
   out$rhs_freeze_beta_warmup_iters <- 20L
   out$rhs_min_beta_updates <- 30L
+  out$design_group_id <- paste(out$target, out$candidate_id, out$fold_id, sep = "__")
   out$job_id <- paste(stage, out$candidate_id, out$prior_id, out$fold_id, sep = "__")
   out$memory_weight <- ifelse(out$n_state_features <= 2500, 1L, ifelse(out$n_state_features <= 4000, 2L, 3L))
   rownames(out) <- NULL
@@ -523,22 +547,50 @@ app_glofas_search2_coefficient_diagnostics <- function(design, fit, top_n = 50L)
   list(top = table[keep, , drop = FALSE], activity = activity)
 }
 
-app_glofas_search2_fit_and_forecast <- function(model_packet, job_row, forecast_backend = "auto") {
+app_glofas_search2_prepare_fit_inputs <- function(model_packet, job_row) {
   job_row <- job_row[1L, , drop = FALSE]
-  started <- Sys.time()
-  base_cfg <- app_glofas_search2_base_cfg()
-  design <- app_glofas_oracle_build_part1_design(base_cfg, job_row, model_packet$panel_bundle)
-  ridge_fit <- app_glofas_normal_ridge_fit(
-    design$X, design$y,
-    ridge_tau2 = as.numeric(job_row$ridge_tau2[[1L]]),
-    intercept_var = as.numeric(job_row$intercept_var[[1L]]),
-    sigma_a = as.numeric(job_row$sigma_a[[1L]]), sigma_b = as.numeric(job_row$sigma_b[[1L]])
+  design <- app_glofas_oracle_build_part1_design(
+    app_glofas_search2_base_cfg(), job_row, model_packet$panel_bundle
   )
   method <- as.character(job_row$method[[1L]])
+  warm_path <- as.character(app_glofas_normal_part1_row_value(job_row, "ridge_warm_start_path", NA_character_))
+  warm_hash <- as.character(app_glofas_normal_part1_row_value(job_row, "ridge_warm_start_sha256", NA_character_))
+  reuse_warm <- identical(method, "rhs") && !is.na(warm_path) && nzchar(warm_path)
+  if (reuse_warm) {
+    warm_path <- normalizePath(warm_path, mustWork = TRUE)
+    if (is.na(warm_hash) || !nzchar(warm_hash) || !identical(app_sha256_file(warm_path), warm_hash)) {
+      stop("Search-II Ridge warm-start hash mismatch.", call. = FALSE)
+    }
+    warm <- readRDS(warm_path)
+    if (!inherits(warm, "glofas_normal_part1_ridge_warm_start") ||
+        !identical(as.character(warm$candidate_id), as.character(job_row$candidate_id[[1L]])) ||
+        !identical(as.character(warm$design$colnames), colnames(design$X))) {
+      stop("Search-II Ridge warm start does not match the rebuilt design.", call. = FALSE)
+    }
+    ridge_fit <- warm$fit
+  } else {
+    ridge_fit <- app_glofas_normal_ridge_fit(
+      design$X, design$y,
+      ridge_tau2 = as.numeric(job_row$ridge_tau2[[1L]]),
+      intercept_var = as.numeric(job_row$intercept_var[[1L]]),
+      sigma_a = as.numeric(job_row$sigma_a[[1L]]), sigma_b = as.numeric(job_row$sigma_b[[1L]])
+    )
+    warm <- app_glofas_search2_compact_warm_start(job_row, design, ridge_fit)
+  }
+  list(design = design, ridge_fit = ridge_fit, ridge_warm_start = warm, ridge_warm_start_reused = reuse_warm)
+}
+
+app_glofas_search2_fit_and_forecast <- function(model_packet, job_row, forecast_backend = "auto", prepared = NULL) {
+  job_row <- job_row[1L, , drop = FALSE]
+  started <- Sys.time()
+  method <- as.character(job_row$method[[1L]])
+  prepared <- prepared %||% app_glofas_search2_prepare_fit_inputs(model_packet, job_row)
+  design <- prepared$design
+  ridge_fit <- prepared$ridge_fit
+  warm <- prepared$ridge_warm_start
   rhs_tau0 <- NA_real_
   fit <- ridge_fit
   if (identical(method, "rhs")) {
-    warm <- app_glofas_search2_compact_warm_start(job_row, design, ridge_fit)
     rhs_tau0 <- app_glofas_search2_resolve_rhs_tau0(job_row, ridge_fit, ncol(design$X), nrow(design$X))
     zeta <- suppressWarnings(as.numeric(job_row$rhs_zeta2_fixed[[1L]] %||% NA_real_))
     fit <- app_glofas_normal_rhs_fit(
@@ -585,13 +637,15 @@ app_glofas_search2_fit_and_forecast <- function(model_packet, job_row, forecast_
     rhs_tau0_effective = rhs_tau0,
     fit_converged = if (identical(method, "ridge")) TRUE else isTRUE(fit$converged),
     fit_iterations = if (identical(method, "ridge")) 0L else as.integer(fit$iterations),
+    ridge_warm_start_reused = isTRUE(prepared$ridge_warm_start_reused),
     forecast_backend = as.character(forecast$forecast_backend),
     runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     stringsAsFactors = FALSE
   ), diagnostics, historical)
   list(
     summary = summary, path = path, trace = trace,
-    coefficient_top = coefficients$top, coefficient_activity = coefficients$activity
+    coefficient_top = coefficients$top, coefficient_activity = coefficients$activity,
+    ridge_warm_start = warm
   )
 }
 
@@ -707,19 +761,30 @@ app_glofas_search2_aggregate_scores <- function(score_summaries, require_folds =
   effective_rank <- if ("sampled_relative_effective_rank" %in% names(out)) out$sampled_relative_effective_rank else rep(-Inf, nrow(out))
   runtime <- if ("runtime_seconds" %in% names(out)) out$runtime_seconds else rep(Inf, nrow(out))
   dimension <- if ("n_state_features" %in% names(out)) out$n_state_features else rep(Inf, nrow(out))
+  selection_columns <- intersect(c("target", "method", "prior_id"), names(out))
+  selection_group <- if (length(selection_columns)) {
+    do.call(paste, c(lapply(out[selection_columns], function(x) ifelse(is.na(x), "<NA>", x)), sep = "|"))
+  } else rep("all", nrow(out))
   out <- out[order(
-    !out$promotion_eligible, rounded, out$worst_primary_crps,
+    selection_group, !out$promotion_eligible, rounded, out$worst_primary_crps,
     !ifelse(is.na(out$historical_guardrail_pass), TRUE, out$historical_guardrail_pass),
     saturation, -effective_rank, runtime, dimension
   ), , drop = FALSE]
-  out$rank <- seq_len(nrow(out))
+  selection_group <- if (length(selection_columns)) {
+    do.call(paste, c(lapply(out[selection_columns], function(x) ifelse(is.na(x), "<NA>", x)), sep = "|"))
+  } else rep("all", nrow(out))
+  out$rank <- ave(seq_len(nrow(out)), selection_group, FUN = seq_along)
   out$promotion_rank <- NA_integer_
-  out$promotion_rank[out$promotion_eligible] <- seq_len(sum(out$promotion_eligible))
-  eligible <- which(out$promotion_eligible)
-  out$equivalence_4dp <- if (length(eligible)) {
-    best <- eligible[[1L]]
-    round(out$mean_primary_crps, 4) == round(out$mean_primary_crps[[best]], 4)
-  } else rep(FALSE, nrow(out))
+  out$equivalence_4dp <- FALSE
+  for (group in unique(selection_group)) {
+    idx <- which(selection_group == group)
+    eligible <- idx[out$promotion_eligible[idx]]
+    if (!length(eligible)) next
+    out$promotion_rank[eligible] <- seq_along(eligible)
+    out$equivalence_4dp[idx] <- round(out$mean_primary_crps[idx], 4) ==
+      round(out$mean_primary_crps[eligible[[1L]]], 4)
+  }
+  rownames(out) <- NULL
   out
 }
 

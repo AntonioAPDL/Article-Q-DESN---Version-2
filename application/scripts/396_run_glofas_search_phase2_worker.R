@@ -12,6 +12,8 @@ for (file in c(
 
 args <- app_parse_args(list(runtime_root = "", job_id = "", forecast_backend = "auto"))
 root <- app_resolve_path(args$runtime_root, must_work = TRUE)
+run_manifest <- app_read_yaml(file.path(root, "configs", "run_manifest.yaml"))
+app_glofas_search2_assert_git_state(expected_head = run_manifest$git_head)
 job_id <- as.character(args$job_id)
 jobs <- app_read_csv(file.path(root, "configs", "job_manifest.csv"))
 row <- jobs[jobs$job_id == job_id, , drop = FALSE]
@@ -44,6 +46,9 @@ app_write_csv(result$path, file.path(root, "forecasts", paste0(job_id, "_forecas
 if (nrow(result$trace)) app_write_csv(result$trace, file.path(root, "traces", paste0(job_id, "_trace.csv")))
 app_write_csv(result$coefficient_top, file.path(root, "coefficients", paste0(job_id, "_top50.csv")))
 app_write_csv(result$coefficient_activity, file.path(root, "coefficients", paste0(job_id, "_activity.csv")))
+if (identical(as.character(row$method[[1L]]), "ridge")) {
+  saveRDS(result$ridge_warm_start, file.path(root, "warm_starts", paste0(job_id, "_warm_start.rds")), version = 2L)
+}
 writeLines(c(
   paste0("forecast_sha256=", app_sha256_file(file.path(root, "forecasts", paste0(job_id, "_forecast.csv")))),
   paste0("completed_at=", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"))

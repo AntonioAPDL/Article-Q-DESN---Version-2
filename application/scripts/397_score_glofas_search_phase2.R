@@ -30,7 +30,10 @@ if (inherits(result, "error")) {
   writeLines(paste0("scoring: ", conditionMessage(result)), file.path(root, "status", paste0(job_id, ".failed")))
   stop(conditionMessage(result), call. = FALSE)
 }
-for (nm in intersect(c("prior_id", "candidate_role", "rhs_selection_role", "D", "n_state_features"), names(row))) {
+for (nm in intersect(c(
+  "prior_id", "candidate_role", "rhs_selection_role", "D", "n_state_features",
+  "base_candidate_id", "seed"
+), names(row))) {
   result$summary[[nm]] <- row[[nm]][[1L]]
 }
 app_write_csv(result$summary, file.path(root, "scores", paste0(job_id, "_summary.csv")))

@@ -30,7 +30,15 @@ model_registry <- app_read_csv(file.path(ridge_root, "configs", "model_packet_re
 score_registry <- app_read_csv(file.path(ridge_root, "configs", "scoring_packet_registry.csv"))
 app_write_csv(model_registry, file.path(root, "configs", "model_packet_registry.csv"))
 app_write_csv(score_registry, file.path(root, "configs", "scoring_packet_registry.csv"))
-reused <- data.frame()
+reused <- data.frame(
+  target = character(), candidate_id = character(), base_candidate_id = character(),
+  seed = integer(), prior_id = character(), fold_id = character(),
+  source_job_id = character(), destination_job_id = character(),
+  score_summary_path = character(), score_detail_path = character(),
+  fit_summary_path = character(), source_runtime_root = character(),
+  score_summary_sha256 = character(), score_detail_sha256 = character(),
+  fit_summary_sha256 = character(), stringsAsFactors = FALSE
+)
 
 if (identical(mode, "pilot")) {
   architectures <- app_bind_rows_fill(lapply(c("reference", "discrepancy"), function(target) {
@@ -56,7 +64,10 @@ if (identical(mode, "pilot")) {
   if (any(prior_rank$n_primary_cells != 24L) || any(!prior_rank$all_finite)) {
     stop("RHS prior selection requires 24 finite primary cells for every target/prior.", call. = FALSE)
   }
-  prior_rank <- prior_rank[order(prior_rank$target, prior_rank$mean_primary_crps, prior_rank$worst_primary_crps), , drop = FALSE]
+  prior_rank <- prior_rank[order(
+    prior_rank$target, round(prior_rank$mean_primary_crps, 4),
+    prior_rank$worst_primary_crps
+  ), , drop = FALSE]
   chosen <- prior_rank[!duplicated(prior_rank$target), , drop = FALSE]
   architectures <- app_bind_rows_fill(lapply(c("reference", "discrepancy"), function(target) {
     agg <- ridge_aggregate[ridge_aggregate$target == target, , drop = FALSE]
@@ -83,10 +94,19 @@ if (identical(mode, "pilot")) {
       fit_summary_path = file.path(pilot_root, "fits", paste0(pilot_jobs$job_id[reuse_index[hit]], "_summary.csv")),
       source_runtime_root = pilot_root, stringsAsFactors = FALSE
     )
+    reused$score_summary_sha256 <- vapply(reused$score_summary_path, app_sha256_file, character(1L))
+    reused$score_detail_sha256 <- vapply(reused$score_detail_path, app_sha256_file, character(1L))
+    reused$fit_summary_sha256 <- vapply(reused$fit_summary_path, app_sha256_file, character(1L))
     jobs <- jobs[-hit, , drop = FALSE]
   }
 } else {
   source_aggregate <- app_read_csv(file.path(source_root, "tables", "aggregate_scores_latest.csv"))
+  source_guardrail_baselines <- source_aggregate[
+    as.character(source_aggregate$candidate_role) == "phase1_legacy_anchor",
+    , drop = FALSE
+  ]
+  if (!nrow(source_guardrail_baselines)) stop("Seed confirmation requires source Phase-I guardrail baselines.", call. = FALSE)
+  app_write_csv(source_guardrail_baselines, file.path(root, "configs", "confirmation_guardrail_baselines.csv"))
   if ("promotion_eligible" %in% names(source_aggregate)) {
     source_aggregate <- source_aggregate[
       !is.na(source_aggregate$promotion_eligible) & source_aggregate$promotion_eligible,
@@ -95,7 +115,12 @@ if (identical(mode, "pilot")) {
   }
   source_jobs <- app_read_csv(file.path(source_root, "configs", "job_manifest.csv"))
   finalists <- app_bind_rows_fill(lapply(c("reference", "discrepancy"), function(target) {
-    utils::head(source_aggregate[source_aggregate$target == target, , drop = FALSE], as.integer(args$finalists))
+    available <- source_aggregate[source_aggregate$target == target, , drop = FALSE]
+    available <- available[order(
+      round(available$mean_primary_crps, 4), available$worst_primary_crps,
+      available$mean_secondary_crps
+    ), , drop = FALSE]
+    utils::head(available, as.integer(args$finalists))
   }))
   templates <- app_bind_rows_fill(lapply(seq_len(nrow(finalists)), function(i) {
     hit <- source_jobs$target == finalists$target[[i]] & source_jobs$candidate_id == finalists$candidate_id[[i]]
@@ -120,6 +145,41 @@ if (identical(mode, "pilot")) {
   jobs$job_id <- paste(jobs$stage, jobs$candidate_id, jobs$prior_id, jobs$fold_id, sep = "__")
   jobs$memory_weight <- ifelse(jobs$n_state_features <= 2500, 1L, ifelse(jobs$n_state_features <= 4000, 2L, 3L))
   jobs <- jobs[, c("job_id", "stage", "method", "memory_weight", setdiff(names(jobs), c("job_id", "stage", "method", "memory_weight"))), drop = FALSE]
+
+  original_seed <- setNames(as.integer(templates$seed), as.character(templates$candidate_id))
+  reuse_hit <- which(as.integer(jobs$seed) == original_seed[as.character(jobs$base_candidate_id)])
+  if (length(reuse_hit)) {
+    source_keys <- paste(source_jobs$target, source_jobs$candidate_id, source_jobs$prior_id,
+      source_jobs$fold_id, source_jobs$seed, sep = "|")
+    reuse_keys <- paste(jobs$target[reuse_hit], jobs$base_candidate_id[reuse_hit], jobs$prior_id[reuse_hit],
+      jobs$fold_id[reuse_hit], jobs$seed[reuse_hit], sep = "|")
+    source_index <- match(reuse_keys, source_keys)
+    if (anyNA(source_index)) stop("Seed confirmation could not match every original-seed source cell.", call. = FALSE)
+    source_ids <- source_jobs$job_id[source_index]
+    required <- cbind(
+      score_summary_path = file.path(source_root, "scores", paste0(source_ids, "_summary.csv")),
+      score_detail_path = file.path(source_root, "scores", paste0(source_ids, "_detail.csv")),
+      fit_summary_path = file.path(source_root, "fits", paste0(source_ids, "_summary.csv")),
+      done_path = file.path(source_root, "status", paste0(source_ids, ".done"))
+    )
+    if (any(!file.exists(required))) stop("Seed confirmation requires complete original-seed source artifacts.", call. = FALSE)
+    reused <- data.frame(
+      target = jobs$target[reuse_hit], candidate_id = jobs$candidate_id[reuse_hit],
+      base_candidate_id = jobs$base_candidate_id[reuse_hit], seed = jobs$seed[reuse_hit],
+      prior_id = jobs$prior_id[reuse_hit], candidate_role = jobs$candidate_role[reuse_hit],
+      rhs_selection_role = jobs$rhs_selection_role[reuse_hit], D = jobs$D[reuse_hit],
+      n_state_features = jobs$n_state_features[reuse_hit], fold_id = jobs$fold_id[reuse_hit],
+      source_job_id = source_ids, destination_job_id = jobs$job_id[reuse_hit],
+      score_summary_path = required[, "score_summary_path"],
+      score_detail_path = required[, "score_detail_path"],
+      fit_summary_path = required[, "fit_summary_path"],
+      source_runtime_root = source_root, stringsAsFactors = FALSE
+    )
+    reused$score_summary_sha256 <- vapply(reused$score_summary_path, app_sha256_file, character(1L))
+    reused$score_detail_sha256 <- vapply(reused$score_detail_path, app_sha256_file, character(1L))
+    reused$fit_summary_sha256 <- vapply(reused$fit_summary_path, app_sha256_file, character(1L))
+    jobs <- jobs[-reuse_hit, , drop = FALSE]
+  }
 }
 
 jobs$design_group_id <- paste(jobs$target, jobs$candidate_id, jobs$fold_id, sep = "__")
@@ -143,12 +203,15 @@ if (mode %in% c("pilot", "screen")) {
 jobs <- merge(jobs, model_registry, by = c("target", "fold_id"), all.x = TRUE, sort = FALSE)
 if (anyDuplicated(jobs$job_id) || any(is.na(jobs$model_packet_path) | !nzchar(jobs$model_packet_path))) stop("RHS jobs are not uniquely packeted.", call. = FALSE)
 app_write_csv(jobs, file.path(root, "configs", "job_manifest.csv"))
+app_write_csv(architectures, file.path(root, "configs", "candidate_manifest.csv"))
 app_write_csv(reused, file.path(root, "configs", "reused_score_registry.csv"))
 app_write_yaml(list(
   version = "glofas_search_phase2_rhs_runtime_v1", mode = mode, run_label = run_label,
-  created_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), git_head = app_git_sha(short = FALSE),
+  created_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), repo_root = app_repo_root(),
+  git_head = app_git_sha(short = FALSE),
   ridge_runtime_root = ridge_root, pilot_runtime_root = as.character(args$pilot_runtime_root), source_runtime_root = source_root,
   new_job_count = nrow(jobs), reused_job_count = nrow(reused),
+  expected_evaluation_count = nrow(jobs) + nrow(reused),
   scientific_contract = list(final_origin_excluded = "2022-12-25", primary_horizon = 28L, secondary_horizon = 30L,
     ridge_warm_start_required_and_hashed = mode %in% c("pilot", "screen"),
     grouped_rhs_design_launch_required = identical(mode, "pilot"), beta_freeze_iterations = 20L,

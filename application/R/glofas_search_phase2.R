@@ -415,7 +415,10 @@ app_glofas_search2_select_rhs_architectures <- function(ridge_aggregate, candida
     score <- score[!is.na(score$promotion_eligible) & score$promotion_eligible, , drop = FALSE]
   }
   if (!nrow(score)) stop("No guardrail-eligible Ridge architecture is available for RHS screening.", call. = FALSE)
-  score <- score[order(score$mean_primary_crps, score$worst_primary_crps, score$mean_secondary_crps), , drop = FALSE]
+  score <- score[order(
+    round(score$mean_primary_crps, 4), score$worst_primary_crps,
+    score$mean_secondary_crps
+  ), , drop = FALSE]
   anchor_ids <- as.character(candidates$candidate_id[candidates$candidate_role == "phase1_legacy_anchor"])
   if (length(anchor_ids) != 1L) stop("RHS selection requires exactly one Phase I legacy anchor per target.", call. = FALSE)
   ranked_ids <- setdiff(as.character(score$candidate_id), anchor_ids)
@@ -677,9 +680,74 @@ app_glofas_search2_score_forecast <- function(path, scoring_packet) {
   list(summary = do.call(rbind, score_rows), detail = detail)
 }
 
+app_glofas_search2_rank_aggregate <- function(out) {
+  rounded <- round(out$mean_primary_crps, 4)
+  saturation <- if ("sampled_saturation_fraction" %in% names(out)) out$sampled_saturation_fraction else rep(Inf, nrow(out))
+  effective_rank <- if ("sampled_relative_effective_rank" %in% names(out)) out$sampled_relative_effective_rank else rep(-Inf, nrow(out))
+  runtime <- if ("runtime_seconds" %in% names(out)) out$runtime_seconds else rep(Inf, nrow(out))
+  dimension <- if ("n_state_features" %in% names(out)) out$n_state_features else rep(Inf, nrow(out))
+  selection_columns <- intersect(c("target", "method", "prior_id"), names(out))
+  selection_group <- if (length(selection_columns)) {
+    do.call(paste, c(lapply(out[selection_columns], function(x) ifelse(is.na(x), "<NA>", x)), sep = "|"))
+  } else rep("all", nrow(out))
+  out <- out[order(
+    selection_group, !out$promotion_eligible, rounded, out$worst_primary_crps,
+    !ifelse(is.na(out$historical_guardrail_pass), TRUE, out$historical_guardrail_pass),
+    saturation, -effective_rank, runtime, dimension
+  ), , drop = FALSE]
+  selection_group <- if (length(selection_columns)) {
+    do.call(paste, c(lapply(out[selection_columns], function(x) ifelse(is.na(x), "<NA>", x)), sep = "|"))
+  } else rep("all", nrow(out))
+  out$rank <- ave(seq_len(nrow(out)), selection_group, FUN = seq_along)
+  out$promotion_rank <- NA_integer_
+  out$equivalence_4dp <- FALSE
+  for (group in unique(selection_group)) {
+    idx <- which(selection_group == group)
+    eligible <- idx[out$promotion_eligible[idx]]
+    if (!length(eligible)) next
+    out$promotion_rank[eligible] <- seq_along(eligible)
+    out$equivalence_4dp[idx] <- round(out$mean_primary_crps[idx], 4) ==
+      round(out$mean_primary_crps[eligible[[1L]]], 4)
+  }
+  rownames(out) <- NULL
+  out
+}
+
+app_glofas_search2_apply_external_guardrails <- function(out, baselines) {
+  if (!nrow(out) || !nrow(baselines)) return(out)
+  grouping <- intersect(c("target", "method", "prior_id"), names(out))
+  for (i in seq_len(nrow(out))) {
+    hit <- rep(TRUE, nrow(baselines))
+    for (nm in grouping) {
+      left <- as.character(baselines[[nm]])
+      right <- as.character(out[[nm]][[i]])
+      hit <- hit & ((is.na(left) & is.na(right)) | (!is.na(left) & !is.na(right) & left == right))
+    }
+    baseline <- baselines[hit, , drop = FALSE]
+    if (nrow(baseline) != 1L) stop("Confirmation requires exactly one external historical baseline per target/prior.", call. = FALSE)
+    all_base <- as.numeric(baseline$historical_all_rmse[[1L]])
+    recent_base <- as.numeric(baseline$historical_last200_rmse[[1L]])
+    out$guardrail_baseline_available[[i]] <- TRUE
+    out$historical_all_rmse_ratio[[i]] <- out$historical_all_rmse[[i]] / all_base
+    out$historical_last200_rmse_ratio[[i]] <- out$historical_last200_rmse[[i]] / recent_base
+    out$historical_guardrail_pass[[i]] <- out$historical_all_rmse_ratio[[i]] <= 1.01 &
+      out$historical_last200_rmse_ratio[[i]] <= 1.03
+  }
+  out$promotion_eligible <- out$numerical_pass & out$historical_guardrail_pass
+  app_glofas_search2_rank_aggregate(out)
+}
+
 app_glofas_search2_aggregate_scores <- function(score_summaries, require_folds = NULL) {
   primary <- score_summaries[score_summaries$score_window == "primary_28", , drop = FALSE]
   secondary <- score_summaries[score_summaries$score_window == "secondary_30", , drop = FALSE]
+  if ("base_candidate_id" %in% names(primary)) {
+    use_base <- !is.na(primary$base_candidate_id) & nzchar(primary$base_candidate_id)
+    primary$candidate_id[use_base] <- primary$base_candidate_id[use_base]
+  }
+  if ("base_candidate_id" %in% names(secondary)) {
+    use_base <- !is.na(secondary$base_candidate_id) & nzchar(secondary$base_candidate_id)
+    secondary$candidate_id[use_base] <- secondary$base_candidate_id[use_base]
+  }
   keys <- unique(primary[, intersect(c(
     "candidate_id", "target", "method", "prior_id", "candidate_role", "rhs_selection_role",
     "D", "n_state_features"
@@ -712,6 +780,8 @@ app_glofas_search2_aggregate_scores <- function(score_summaries, require_folds =
     }
     cbind(data.frame(
       keys[i, , drop = FALSE], n_folds = nrow(p),
+      n_unique_folds = length(unique(p$fold_id)),
+      n_seeds = if ("seed" %in% names(p)) length(unique(p$seed)) else 1L,
       mean_primary_crps = mean(p$mean_crps), worst_primary_crps = max(p$mean_crps), sd_primary_crps = stats::sd(p$mean_crps),
       mean_secondary_crps = mean(s$mean_crps), mean_primary_mae = mean(p$mae), mean_primary_rmse = mean(p$rmse),
       fit_convergence_rate = logical_rate("fit_converged"),
@@ -756,36 +826,7 @@ app_glofas_search2_aggregate_scores <- function(score_summaries, require_folds =
   }
   out$promotion_eligible <- out$numerical_pass &
     (is.na(out$historical_guardrail_pass) | out$historical_guardrail_pass)
-  rounded <- round(out$mean_primary_crps, 4)
-  saturation <- if ("sampled_saturation_fraction" %in% names(out)) out$sampled_saturation_fraction else rep(Inf, nrow(out))
-  effective_rank <- if ("sampled_relative_effective_rank" %in% names(out)) out$sampled_relative_effective_rank else rep(-Inf, nrow(out))
-  runtime <- if ("runtime_seconds" %in% names(out)) out$runtime_seconds else rep(Inf, nrow(out))
-  dimension <- if ("n_state_features" %in% names(out)) out$n_state_features else rep(Inf, nrow(out))
-  selection_columns <- intersect(c("target", "method", "prior_id"), names(out))
-  selection_group <- if (length(selection_columns)) {
-    do.call(paste, c(lapply(out[selection_columns], function(x) ifelse(is.na(x), "<NA>", x)), sep = "|"))
-  } else rep("all", nrow(out))
-  out <- out[order(
-    selection_group, !out$promotion_eligible, rounded, out$worst_primary_crps,
-    !ifelse(is.na(out$historical_guardrail_pass), TRUE, out$historical_guardrail_pass),
-    saturation, -effective_rank, runtime, dimension
-  ), , drop = FALSE]
-  selection_group <- if (length(selection_columns)) {
-    do.call(paste, c(lapply(out[selection_columns], function(x) ifelse(is.na(x), "<NA>", x)), sep = "|"))
-  } else rep("all", nrow(out))
-  out$rank <- ave(seq_len(nrow(out)), selection_group, FUN = seq_along)
-  out$promotion_rank <- NA_integer_
-  out$equivalence_4dp <- FALSE
-  for (group in unique(selection_group)) {
-    idx <- which(selection_group == group)
-    eligible <- idx[out$promotion_eligible[idx]]
-    if (!length(eligible)) next
-    out$promotion_rank[eligible] <- seq_along(eligible)
-    out$equivalence_4dp[idx] <- round(out$mean_primary_crps[idx], 4) ==
-      round(out$mean_primary_crps[eligible[[1L]]], 4)
-  }
-  rownames(out) <- NULL
-  out
+  app_glofas_search2_rank_aggregate(out)
 }
 
 app_glofas_search2_validate_model_packet <- function(packet) {

@@ -30,11 +30,14 @@ with tempfile.TemporaryDirectory(prefix="glofas_search2_scheduler_") as tmp:
     assert len(units) == 2
     shared = next(unit for unit in units if unit["unit_id"] == "shared")
     assert shared["grouped"] and len(shared["jobs"]) == 2 and shared["memory_weight"] == 3
-    command = module.job_command(repo, root, "small")
+    command = module.job_command(repo, root, "small", "/opt/R/bin/Rscript")
     assert "396_run_glofas_search_phase2_worker.R" in command
     assert "397_score_glofas_search_phase2.R" in command
     assert command.index("396_run_glofas_search_phase2_worker.R") < command.index("397_score_glofas_search_phase2.R")
-    assert "401_run_glofas_search_phase2_rhs_group.R" in module.group_command(repo, root, "shared")
+    assert "/opt/R/bin/Rscript" in command
+    group_command = module.group_command(repo, root, "shared", "/opt/R/bin/Rscript")
+    assert "401_run_glofas_search_phase2_rhs_group.R" in group_command
+    assert "/opt/R/bin/Rscript" in group_command
     assert not module.job_complete(root, "small")
     module.status_path(root, "small", ".done").write_text("ok\n")
     assert module.job_complete(root, "small")

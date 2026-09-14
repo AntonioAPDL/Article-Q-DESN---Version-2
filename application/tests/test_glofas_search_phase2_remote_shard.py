@@ -47,13 +47,18 @@ with tempfile.TemporaryDirectory() as temp:
         (source / directory).mkdir(parents=True, exist_ok=True)
     model = source / "model_inputs" / "reference__fold_a.rds"
     score = source / "scoring_inputs" / "reference__fold_a.csv"
+    warm = source / "warm_starts" / "ridge_candidate_2_fold_a.rds"
     model.write_bytes(b"model")
     score.write_text("date,observed\n2020-01-01,1\n")
+    warm.write_bytes(b"warm")
     jobs = []
     for number in (1, 2):
         jobs.append({"job_id": f"job_{number}", "candidate_id": f"candidate_{number}",
                      "target": "reference", "fold_id": "fold_a", "memory_weight": "1",
-                     "model_packet_path": str(model), "model_packet_sha256": remote.sha256_file(model)})
+                     "model_packet_path": str(model), "model_packet_sha256": remote.sha256_file(model),
+                     "ridge_warm_start_path": str(warm) if number == 2 else "",
+                     "ridge_warm_start_sha256": remote.sha256_file(warm) if number == 2 else "",
+                     "design_group_id": "shared_group" if number == 2 else ""})
     write_csv(source / "configs" / "job_manifest.csv", jobs)
     write_csv(source / "configs" / "candidate_manifest.csv", [
         {"candidate_id": "candidate_1", "target": "reference"},
@@ -90,6 +95,8 @@ with tempfile.TemporaryDirectory() as temp:
     relocated = remote.read_csv(shutil_target / "configs" / "job_manifest.csv")
     assert len(relocated) == 1 and relocated[0]["job_id"] == "job_2"
     assert relocated[0]["model_packet_path"].startswith(str(destination))
+    assert relocated[0]["ridge_warm_start_path"].startswith(str(destination / "warm_inputs"))
+    assert remote.sha256_file(relocated[0]["ridge_warm_start_path"]) == remote.sha256_file(warm)
 
     job = "job_2"
     outputs = {
@@ -104,6 +111,8 @@ with tempfile.TemporaryDirectory() as temp:
         (shutil_target / "coefficients" / name).write_text("x\n")
     for suffix in (".model_done", ".done"):
         (shutil_target / "status" / f"{job}{suffix}").write_text("ok\n")
+    (shutil_target / "logs" / "shared_group.log").write_text("group\n")
+    (shutil_target / "logs" / "scheduler.log").write_text("scheduler\n")
     result = run("finalize", "--runtime-root", shutil_target)
     assert result.returncode == 0, result.stderr
 
@@ -116,5 +125,7 @@ with tempfile.TemporaryDirectory() as temp:
     assert result.returncode == 0, result.stderr
     assert (central / "status" / f"{job}.done").exists()
     assert not (central / "status" / f"{job}.failed").exists()
+    assert (central / "logs" / "shared_group.log").exists()
+    assert (central / "logs" / "scheduler.log").exists()
 
 print("Search-II remote shard tests passed")

@@ -13,7 +13,7 @@ import sys
 from datetime import datetime, timezone
 
 
-INPUT_DIRS = ("configs", "model_inputs", "scoring_inputs")
+INPUT_DIRS = ("configs", "model_inputs", "scoring_inputs", "warm_inputs")
 OUTPUT_DIRS = (
     "forecasts", "fits", "scores", "traces", "coefficients", "warm_starts",
     "diagnostics", "status", "logs", "tables", "reports",
@@ -193,6 +193,23 @@ def prepare(args):
         scoring_registry.append(row)
     write_csv(staging / "configs" / "scoring_packet_registry.csv", scoring_registry)
 
+    warm_relocations = {}
+    for row in selected:
+        warm = row.get("ridge_warm_start_path", "")
+        if not warm or warm == "NA":
+            continue
+        src = Path(warm)
+        expected = row.get("ridge_warm_start_sha256", "")
+        if not expected or expected == "NA" or sha256_file(src) != expected:
+            raise RuntimeError(f"Ridge warm-start hash mismatch: {src}")
+        key = (str(src.resolve()), expected)
+        if key not in warm_relocations:
+            destination_name = f"{expected[:16]}__{src.name}"
+            dst = staging / "warm_inputs" / destination_name
+            copy(src, dst)
+            warm_relocations[key] = str(destination / "warm_inputs" / destination_name)
+        row["ridge_warm_start_path"] = warm_relocations[key]
+
     packet_path = {(row["target"], row["fold_id"]): row["model_packet_path"] for row in model_registry}
     for row in selected:
         row["model_packet_path"] = packet_path[(row["target"], row["fold_id"])]
@@ -217,7 +234,8 @@ def prepare(args):
     metadata = {
         "created_at_utc": now_utc(), "source_host": args.source_host,
         "execution_host": args.execution_host, "source_runtime_root": str(source),
-        "execution_runtime_root": str(destination), "destination_repo_root": args.destination_repo_root,
+        "execution_runtime_root": str(destination),
+        "destination_repo_root": args.destination_repo_root,
         "numerical_source_head": args.expected_head, "full_job_count": len(full_jobs),
         "assigned_job_count": len(selected), "full_job_manifest_sha256": sha256_file(full_manifest_path),
         "assignment_sha256": sha256_file(staging / "control" / "execution_assignment.csv"),
@@ -280,6 +298,13 @@ def verify(args):
         packet = Path(row["model_packet_path"])
         if destination not in packet.parents or not packet.is_file() or sha256_file(packet) != row["model_packet_sha256"]:
             raise RuntimeError(f"Relocated model packet failed: {row['job_id']}")
+        warm = row.get("ridge_warm_start_path", "")
+        if warm and warm != "NA":
+            warm_path = Path(warm)
+            expected = row.get("ridge_warm_start_sha256", "")
+            if (destination not in warm_path.parents or not warm_path.is_file() or
+                    not expected or expected == "NA" or sha256_file(warm_path) != expected):
+                raise RuntimeError(f"Relocated Ridge warm start failed: {row['job_id']}")
     status_files = [path for path in (root / "status").iterdir() if path.is_file()]
     if status_files:
         raise RuntimeError("Remote shard must have no pre-existing status markers at preflight")
@@ -317,6 +342,13 @@ def finalize(args):
                 path = root / directory / pattern.format(job=job)
                 if path.is_file():
                     files.add(path)
+    scheduler_log = root / "logs" / "scheduler.log"
+    if scheduler_log.is_file():
+        files.add(scheduler_log)
+    for group_id in sorted({row.get("design_group_id", "") for row in jobs}):
+        group_log = root / "logs" / f"{group_id}.log"
+        if group_id and group_log.is_file():
+            files.add(group_log)
     rows = [{"relative_path": str(path.relative_to(root)), "bytes": path.stat().st_size,
              "sha256": sha256_file(path)} for path in sorted(files)]
     manifest = root / "control" / "result_manifest.csv"

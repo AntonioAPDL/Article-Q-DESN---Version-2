@@ -38,26 +38,26 @@ def unlink_if_exists(path):
         path.unlink()
 
 
-def job_command(repo, root, job_id):
+def job_command(repo, root, job_id, rscript="Rscript"):
     q = shlex.quote
     return (
         "set -euo pipefail; "
         f"cd {q(str(repo))}; "
         "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 "
         "VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1; "
-        f"Rscript application/scripts/396_run_glofas_search_phase2_worker.R --runtime_root {q(str(root))} --job_id {q(job_id)}; "
-        f"Rscript application/scripts/397_score_glofas_search_phase2.R --runtime_root {q(str(root))} --job_id {q(job_id)}"
+        f"{q(str(rscript))} application/scripts/396_run_glofas_search_phase2_worker.R --runtime_root {q(str(root))} --job_id {q(job_id)}; "
+        f"{q(str(rscript))} application/scripts/397_score_glofas_search_phase2.R --runtime_root {q(str(root))} --job_id {q(job_id)}"
     )
 
 
-def group_command(repo, root, design_group_id):
+def group_command(repo, root, design_group_id, rscript="Rscript"):
     q = shlex.quote
     return (
         "set -euo pipefail; "
         f"cd {q(str(repo))}; "
         "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 "
         "VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1; "
-        f"Rscript application/scripts/401_run_glofas_search_phase2_rhs_group.R "
+        f"{q(str(rscript))} application/scripts/401_run_glofas_search_phase2_rhs_group.R "
         f"--runtime_root {q(str(root))} --design_group_id {q(design_group_id)}"
     )
 
@@ -87,7 +87,7 @@ def shell_join(parts):
     return " ".join(shlex.quote(str(part)) for part in parts)
 
 
-def run_scheduler(repo, root, workers, capacity, poll, group_rhs_design=False):
+def run_scheduler(repo, root, workers, capacity, poll, group_rhs_design=False, rscript="Rscript"):
     jobs = read_jobs(root)
     units = build_units(jobs, group_rhs_design=group_rhs_design)
     active = {}
@@ -119,14 +119,20 @@ def run_scheduler(repo, root, workers, capacity, poll, group_rhs_design=False):
                 unit_id = unit["unit_id"]
                 log_path = root / "logs" / f"{unit_id}.log"
                 handle = log_path.open("a")
-                command = group_command(repo, root, unit_id) if unit["grouped"] else job_command(repo, root, unit_id)
+                command = (group_command(repo, root, unit_id, rscript) if unit["grouped"]
+                           else job_command(repo, root, unit_id, rscript))
                 proc = subprocess.Popen(["bash", "-lc", command], stdout=handle, stderr=subprocess.STDOUT, env=env)
                 active[unit_id] = (proc, handle, weight, unit)
                 used += weight
                 log.write(f"unit_start unit_id={unit_id} jobs={len(unit['jobs'])} pid={proc.pid} weight={weight}\n")
             done = sum(job_complete(root, row["job_id"]) for row in jobs)
             failed = sum(status_path(root, row["job_id"], ".failed").exists() for row in jobs)
-            log.write(f"health done={done} active={len(active)} failed={failed} pending={len(jobs)-done-len(active)-failed}\n")
+            active_jobs = sum(len(item[3]["jobs"]) for item in active.values())
+            pending_jobs = len(jobs) - done - failed - active_jobs
+            log.write(
+                f"health done={done} active_units={len(active)} active_jobs={active_jobs} "
+                f"failed={failed} pending_jobs={pending_jobs}\n"
+            )
             if not active and done + failed == len(jobs):
                 break
             time.sleep(poll)
@@ -140,6 +146,8 @@ def main():
     parser.add_argument("--capacity", type=int, default=20, help="Weighted memory slots")
     parser.add_argument("--poll-seconds", type=int, default=15)
     parser.add_argument("--session-label", default="")
+    parser.add_argument("--rscript", default="Rscript",
+                        help="Exact Rscript executable used by every worker")
     parser.add_argument("--group-rhs-design", action="store_true",
                         help="Run RHS jobs sharing an architecture/fold sequentially with one rebuilt design")
     parser.add_argument("--scheduler", action="store_true")
@@ -147,21 +155,27 @@ def main():
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     root = Path(args.runtime_root).resolve()
+    rscript = shutil_which(args.rscript)
+    if rscript is None:
+        raise RuntimeError(f"Rscript executable is unavailable: {args.rscript}")
     jobs = read_jobs(root)
     units = build_units(jobs, group_rhs_design=args.group_rhs_design)
     if args.dry_run:
         total_weight = sum(unit["memory_weight"] for unit in units)
-        print(f"jobs={len(jobs)} units={len(units)} total_weight={total_weight} workers={args.workers} capacity={args.capacity}")
+        print(
+            f"jobs={len(jobs)} units={len(units)} total_weight={total_weight} "
+            f"workers={args.workers} capacity={args.capacity} rscript={rscript}"
+        )
         return 0
     if args.scheduler:
         return run_scheduler(repo, root, args.workers, args.capacity, max(2, args.poll_seconds),
-                             group_rhs_design=args.group_rhs_design)
+                             group_rhs_design=args.group_rhs_design, rscript=rscript)
     if not shutil_which("tmux"):
         raise RuntimeError("tmux is required for detached Search-II launch")
     session = args.session_label or f"{root.name}_scheduler"
     command = [sys.executable, str(Path(__file__).resolve()), "--runtime-root", str(root),
                "--workers", str(args.workers), "--capacity", str(args.capacity),
-               "--poll-seconds", str(args.poll_seconds), "--scheduler"]
+               "--poll-seconds", str(args.poll_seconds), "--rscript", rscript, "--scheduler"]
     if args.group_rhs_design:
         command.append("--group-rhs-design")
     subprocess.run(["tmux", "new-session", "-d", "-s", session, shell_join(command)], check=True)

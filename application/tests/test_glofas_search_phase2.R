@@ -154,6 +154,36 @@ aggregate_score <- app_glofas_search2_aggregate_scores(agg_input)
 stopifnot(nrow(aggregate_score) == 2L)
 stopifnot(all(aggregate_score$equivalence_4dp))
 
+practical_tie <- data.frame(
+  candidate_id = c("lower_exact", "better_worst"), target = "reference", method = "rhs",
+  prior_id = "prior", promotion_eligible = TRUE,
+  mean_primary_crps = c(0.10561, 0.10564), worst_primary_crps = c(0.14, 0.12),
+  mean_secondary_crps = c(0.11, 0.11), historical_guardrail_pass = TRUE,
+  sampled_saturation_fraction = 0.1, sampled_relative_effective_rank = 0.5,
+  runtime_seconds = 1, n_state_features = 100L, stringsAsFactors = FALSE
+)
+practical_tie <- app_glofas_search2_rank_aggregate(practical_tie)
+stopifnot(practical_tie$candidate_id[[1L]] == "better_worst")
+stopifnot(all(practical_tie$equivalence_4dp))
+
+seed_cells <- do.call(rbind, lapply(c(101L, 102L), function(seed_value) {
+  do.call(rbind, lapply(c("fold_a", "fold_b"), function(fold_value) {
+    transform(
+      score$summary,
+      job_id = paste(seed_value, fold_value, score$summary$score_window, sep = "__"),
+      candidate_id = paste0("seeded__seed", seed_value), base_candidate_id = "seeded",
+      seed = seed_value, fold_id = fold_value, target = "reference", method = "rhs",
+      prior_id = "prior", candidate_role = "ridge_top", rhs_selection_role = "ridge_top",
+      fit_converged = TRUE, finite_pass = TRUE, diagnostic_decision = "pass"
+    )
+  }))
+}))
+seed_aggregate <- app_glofas_search2_aggregate_scores(seed_cells, require_folds = 4L)
+stopifnot(nrow(seed_aggregate) == 1L)
+stopifnot(seed_aggregate$candidate_id[[1L]] == "seeded")
+stopifnot(seed_aggregate$n_folds[[1L]] == 4L, seed_aggregate$n_unique_folds[[1L]] == 2L)
+stopifnot(seed_aggregate$n_seeds[[1L]] == 2L, seed_aggregate$complete_fold_pass[[1L]])
+
 guardrail_input <- do.call(rbind, lapply(c("anchor", "good", "bad"), function(id) {
   transform(
     score$summary,
@@ -176,6 +206,20 @@ guardrail_score <- app_glofas_search2_aggregate_scores(guardrail_input, require_
 stopifnot(guardrail_score$candidate_id[[1L]] == "good")
 stopifnot(!guardrail_score$promotion_eligible[guardrail_score$candidate_id == "bad"])
 stopifnot(all(guardrail_score$guardrail_baseline_available))
+
+external_candidate <- transform(
+  guardrail_score[guardrail_score$candidate_id == "good", , drop = FALSE],
+  candidate_id = "confirmed", candidate_role = "ridge_top",
+  historical_all_rmse = 1.02, historical_last200_rmse = 1.04,
+  numerical_pass = TRUE, promotion_eligible = TRUE
+)
+external_baseline <- transform(
+  guardrail_score[guardrail_score$candidate_id == "anchor", , drop = FALSE],
+  historical_all_rmse = 1, historical_last200_rmse = 1
+)
+external_guardrail <- app_glofas_search2_apply_external_guardrails(external_candidate, external_baseline)
+stopifnot(!external_guardrail$historical_guardrail_pass[[1L]])
+stopifnot(!external_guardrail$promotion_eligible[[1L]])
 
 rhs_candidates <- candidate_manifest[seq_len(3L), , drop = FALSE]
 rhs_candidates$candidate_id <- c("anchor", "good", "bad")

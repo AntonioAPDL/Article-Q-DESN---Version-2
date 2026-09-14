@@ -69,7 +69,7 @@ for (i in seq_len(nrow(pending))) {
     paste0("completed_at=", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"))
   ), file.path(root, "status", paste0(job_id, ".model_done")))
   unlink(running)
-  score_status <- system2("Rscript", c(
+  score_status <- system2(file.path(R.home("bin"), "Rscript"), c(
     app_path("application/scripts/397_score_glofas_search_phase2.R"),
     "--runtime_root", root, "--job_id", job_id
   ))

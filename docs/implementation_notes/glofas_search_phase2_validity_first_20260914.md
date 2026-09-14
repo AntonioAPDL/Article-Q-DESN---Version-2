@@ -151,10 +151,13 @@ degenerate inverse-gamma update.
 | 5. Seed confirmation | Top 3 per target across the fixed original seed plus 3 declared seeds x 6 folds | Select robust mean/worst-seed candidate; never select the best seed realization |
 | 6. Final refit decision | Freeze component specifications and refit through 2022-12-25 only after selection | No tuning after final refit; downstream Part 3/4 rerun requires separate approval |
 
-The frozen upper-bound workload is 828 Ridge candidate-fold fits, 288 RHS
+The frozen evaluation workload is 828 Ridge candidate-fold fits, 288 RHS
 prior-pilot fits, 240 RHS architecture evaluations, and 144 seed-confirmation
-fits. Up to 12 architecture-screen cells are reused from the completed prior
-pilot, so the architecture stage ordinarily requires at most 228 new fits.
+evaluations. The architecture screen reuses the 48 exact pilot cells shared by
+its eight pilot architectures and six folds, so it requires 192 new fits. Seed
+confirmation reuses the 36 exact original-seed cells for six finalists and six
+folds, so it requires 108 new fits. The three RHS stages therefore require 588
+new fits rather than 672, with every reused artifact verified by SHA256.
 Stages are prepared only after the preceding aggregate table passes its gate;
 they are not one monolithic launch.
 

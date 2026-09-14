@@ -15,7 +15,7 @@ from pathlib import Path
 
 import yaml
 
-from pricefm_common import parse_bool, repo_path, write_json
+from pricefm_common import configured_split_names, parse_bool, repo_path, write_json
 from pricefm_graph import graph_active_regions_for_policy, graph_policy_requires_neighbor_windows
 
 
@@ -72,6 +72,12 @@ def parser():
     p.add_argument("--experiment-jobs", type=int, default=2)
     p.add_argument("--cell-jobs", type=int, default=1)
     p.add_argument("--build-windows", type=parse_bool, default=False)
+    p.add_argument(
+        "--prepare-data",
+        type=parse_bool,
+        default=False,
+        help="Materialize missing configured splits and train-only scaled views before windows.",
+    )
     p.add_argument("--resume", type=parse_bool, default=True)
     p.add_argument("--force", type=parse_bool, default=False)
     p.add_argument("--dry-run", type=parse_bool, default=True)
@@ -141,6 +147,38 @@ def run_logged(cmd, log_path, dry_run=False):
     }
 
 
+def run_logged_sequence(commands, log_path, dry_run=False):
+    log_path = repo_path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    with open(log_path, "w") as log:
+        for cmd in commands:
+            log.write("$ {}\n\n".format(" ".join(map(str, cmd))))
+            if dry_run:
+                log.write("Dry run: command not executed.\n\n")
+                continue
+            log.flush()
+            proc = subprocess.run(
+                [str(x) for x in cmd],
+                cwd=str(repo_path(".")),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=False,
+            )
+            if proc.returncode != 0:
+                return {
+                    "status": "failed",
+                    "return_code": int(proc.returncode),
+                    "elapsed_seconds": round(time.time() - started, 3),
+                }
+            log.write("\n")
+    return {
+        "status": "planned" if dry_run else "completed",
+        "return_code": 0,
+        "elapsed_seconds": round(time.time() - started, 3),
+    }
+
+
 def read_yaml(path):
     with open(repo_path(path), "r") as f:
         return yaml.safe_load(f)
@@ -205,6 +243,113 @@ def data_window_scope(data_config):
         "lag_window": int(windows["lag_window"]),
         "lead_window": int(windows["lead_window"]),
     }
+
+
+def data_preparation_jobs(rows):
+    jobs = []
+    seen = set()
+    for row in rows:
+        payload = read_yaml(row["data_config"])
+        data = payload["pricefm"]
+        split_contract = []
+        for split_spec in data["splits"]:
+            names = configured_split_names(split_spec)
+            split_contract.append({
+                "fold": int(split_spec["fold"]),
+                "splits": {name: list(split_spec[name]) for name in names},
+            })
+        key = (
+            str(data["processed_dir"]),
+            str(data["interim_dir"]),
+            json.dumps(split_contract, sort_keys=True),
+            json.dumps(data["regions"]),
+            json.dumps(data["scaling"], sort_keys=True),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        jobs.append({
+            "data_config": row["data_config"],
+            "processed_dir": str(data["processed_dir"]),
+            "split_contract": split_contract,
+        })
+    return jobs
+
+
+def data_artifact_paths(job):
+    root = repo_path(job["processed_dir"])
+    raw = [root / "splits/split_registry.csv", root / "splits/split_manifest.json"]
+    scaled = []
+    for fold_spec in job["split_contract"]:
+        fold = int(fold_spec["fold"])
+        for name in fold_spec["splits"]:
+            raw.append(root / "splits/fold_{}/{}.parquet".format(fold, name))
+            scaled.append(root / "splits_scaled/fold_{}/{}_scaled.parquet".format(fold, name))
+        scaled.extend([
+            root / "scalers/fold_{}/per_region_separate_xy_scalers.joblib".format(fold),
+            root / "scalers/fold_{}/scaling_manifest.json".format(fold),
+        ])
+    return raw, scaled
+
+
+def prepare_data_for_rows(input_rows, log_dir, dry_run=False):
+    status_rows = []
+    for i, job in enumerate(data_preparation_jobs(input_rows)):
+        log_path = log_dir / "data_preparation_{:03d}.log".format(i + 1)
+        raw_paths, scaled_paths = data_artifact_paths(job)
+        raw_ready = all(path.is_file() for path in raw_paths)
+        scaled_ready = all(path.is_file() for path in scaled_paths)
+        partial_raw = any(path.exists() for path in raw_paths) and not raw_ready
+        partial_scaled = any(path.exists() for path in scaled_paths) and not scaled_ready
+        started = time.time()
+        if scaled_ready:
+            log_path = repo_path(log_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, "w") as log:
+                log.write("Reused complete configured split/scaler artifacts.\n")
+            result = {
+                "status": "completed",
+                "return_code": 0,
+                "elapsed_seconds": round(time.time() - started, 3),
+            }
+        elif partial_raw or partial_scaled:
+            log_path = repo_path(log_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, "w") as log:
+                log.write("Refusing ambiguous partial split/scaler state.\n")
+                for path in raw_paths + scaled_paths:
+                    log.write("{} {}\n".format("present" if path.exists() else "missing", path))
+            result = {
+                "status": "failed",
+                "return_code": 2,
+                "elapsed_seconds": round(time.time() - started, 3),
+            }
+        else:
+            commands = []
+            if not raw_ready:
+                commands.append([
+                    sys.executable,
+                    repo_path("application/scripts/pricefm/03_make_splits.py"),
+                    "--config", repo_path(job["data_config"]),
+                    "--force", "false",
+                ])
+            commands.append([
+                sys.executable,
+                repo_path("application/scripts/pricefm/04_fit_scalers.py"),
+                "--config", repo_path(job["data_config"]),
+                "--force", "false",
+            ])
+            result = run_logged_sequence(commands, log_path, dry_run=dry_run)
+        status_rows.append({
+            "id": "data_preparation_{:03d}".format(i + 1),
+            "kind": "data_preparation",
+            "config": job["data_config"],
+            "log": config_path_value(log_path),
+            **result,
+        })
+        if result["status"] == "failed":
+            break
+    return status_rows
 
 
 def build_window_jobs(rows):
@@ -331,6 +476,17 @@ def main():
     log_dir = generated_root / "launch_logs"
     status_rows = []
 
+    if args.prepare_data:
+        data_rows = prepare_data_for_rows(
+            selected,
+            log_dir,
+            dry_run=bool(args.dry_run),
+        )
+        status_rows.extend(data_rows)
+        write_status(generated_root / "launch_status.csv", status_rows)
+        if any(row["status"] == "failed" for row in data_rows):
+            raise SystemExit(1)
+
     if args.build_windows:
         window_rows = build_windows_for_rows(
             selected,
@@ -340,6 +496,7 @@ def main():
             force=bool(args.force),
         )
         status_rows.extend(window_rows)
+        write_status(generated_root / "launch_status.csv", status_rows)
         if any(row["status"] == "failed" for row in window_rows):
             write_status(generated_root / "launch_status.csv", status_rows)
             raise SystemExit(1)
@@ -353,6 +510,7 @@ def main():
                 folds=fold_override,
                 cpu_id=cpu_ids[index % len(cpu_ids)] if cpu_ids else None,
             ))
+            write_status(generated_root / "launch_status.csv", status_rows)
     else:
         with ThreadPoolExecutor(max_workers=int(args.experiment_jobs)) as ex:
             futs = [
@@ -366,6 +524,7 @@ def main():
             ]
             for fut in as_completed(futs):
                 status_rows.append(fut.result())
+                write_status(generated_root / "launch_status.csv", status_rows)
         status_rows.sort(key=lambda x: (str(x.get("kind", "")), int(x.get("priority", 999)), str(x["id"])))
 
     status_path = generated_root / "launch_status.csv"
@@ -376,6 +535,7 @@ def main():
         "experiment_jobs": int(args.experiment_jobs),
         "cell_jobs": int(args.cell_jobs),
         "build_windows": bool(args.build_windows),
+        "prepare_data": bool(args.prepare_data),
         "n_selected_experiments": len(selected),
         "region_override": region_override,
         "fold_override": fold_override,

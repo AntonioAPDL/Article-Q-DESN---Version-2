@@ -6,8 +6,9 @@ from __future__ import print_function
 from pathlib import Path
 
 from pricefm_common import (
-    interim_parquet_path, load_config, now_utc, parser, pricefm_block, processed_dir,
-    refuse_incompatible, require_modules, summarize, write_json,
+    configured_split_names, interim_parquet_path, load_config, now_utc, parser,
+    pricefm_block, processed_dir, refuse_incompatible, require_modules, summarize,
+    write_json,
 )
 
 
@@ -45,10 +46,10 @@ def main():
         fold = int(split_spec["fold"])
         out_dir = split_dir / "fold_{}".format(fold)
         out_dir.mkdir(parents=True, exist_ok=True)
+        split_names = configured_split_names(split_spec)
         parts = {
-            "train": subset_half_open(df, split_spec["train"][0], split_spec["train"][1]),
-            "val": subset_half_open(df, split_spec["val"][0], split_spec["val"][1]),
-            "test": subset_half_open(df, split_spec["test"][0], split_spec["test"][1]),
+            name: subset_half_open(df, split_spec[name][0], split_spec[name][1])
+            for name in split_names
         }
         for name, part in parts.items():
             out_file = out_dir / "{}.parquet".format(name)
@@ -77,6 +78,7 @@ def main():
         "time_index": spec["split_time_col"],
         "market_time_definition": spec["market_time_definition"],
         "mode": "half_open",
+        "configured_splits": sorted(registry["split"].unique().tolist()),
         "registry_file": str(split_dir / "split_registry.csv"),
         "n_rows": int(len(registry)),
     }

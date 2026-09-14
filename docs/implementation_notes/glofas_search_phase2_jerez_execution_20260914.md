@@ -28,6 +28,9 @@ preflight, and no active Article-Q-DESN computation.
 | Primary/secondary horizons | 28/30 days |
 | Covariates | oracle realized PRISM precipitation and ERA5 soil moisture |
 | Score precision | differences beyond four decimals treated as noise |
+| Required R | `/data/jaguir26/local/opt/R/4.6.0/bin/Rscript`, version 4.6.0 |
+| Full-harness engine source | `exdqlm` commit `741c06e9b71566b4880ee1f948b0e3553ced0339` |
+| Full-harness engine binary | `src/exdqlm.so`, SHA256 `fcdfdefb768c8c3ec006138dedd0683e512481164e70794cd098a618f128bf9f` |
 
 Muscat temporary `.failed` markers containing exactly
 `DISTRIBUTION_HOLD_JEREZ_20260914` are scheduler control records, not model
@@ -44,9 +47,12 @@ by the verified result importer.
    candidate manifests to the assigned jobs. Rewrite only runtime paths.
 3. Verify every copied packet against its original SHA256. Pin the Jerez source
    worktree to the numerical HEAD above on a dedicated pushed branch. Require
-   a clean worktree exactly synchronized with its upstream.
+   a clean worktree exactly synchronized with its upstream. Pin the executable
+   R path and version; the Jerez system default R 4.5.3 is not admissible.
 4. Run the focused R Search-II tests, Python scheduler tests, remote-shard
-   tests, parse checks, and a no-fit launcher dry run on Jerez.
+   tests, parse checks, and a no-fit launcher dry run on Jerez. The full
+   application harness must resolve the exact Muscat `exdqlm` source commit and
+   compiled shared-object hash listed above.
 5. Launch the 808-job shard with 50 one-thread workers and weighted capacity
    100. This leaves 14 hardware cores outside the campaign and limits wide
    states even though RAM would permit a more aggressive launch.

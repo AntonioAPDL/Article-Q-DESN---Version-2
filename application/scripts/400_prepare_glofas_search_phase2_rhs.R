@@ -113,7 +113,7 @@ if (identical(mode, "pilot")) {
       , drop = FALSE
     ]
   }
-  source_jobs <- app_read_csv(file.path(source_root, "configs", "job_manifest.csv"))
+  source_registry <- app_glofas_search2_confirmation_source_registry(source_root)
   finalists <- app_bind_rows_fill(lapply(c("reference", "discrepancy"), function(target) {
     available <- source_aggregate[source_aggregate$target == target, , drop = FALSE]
     available <- available[order(
@@ -122,20 +122,31 @@ if (identical(mode, "pilot")) {
     ), , drop = FALSE]
     utils::head(available, as.integer(args$finalists))
   }))
-  templates <- app_bind_rows_fill(lapply(seq_len(nrow(finalists)), function(i) {
-    hit <- source_jobs$target == finalists$target[[i]] & source_jobs$candidate_id == finalists$candidate_id[[i]]
-    if ("prior_id" %in% names(finalists)) hit <- hit & source_jobs$prior_id == finalists$prior_id[[i]]
-    source_jobs[which(hit)[[1L]], , drop = FALSE]
-  }))
+  resolved_sources <- app_glofas_search2_confirmation_templates(finalists, source_registry, folds)
+  templates <- resolved_sources$templates
+  source_cells <- resolved_sources$source_cells
+  app_write_csv(source_cells, file.path(root, "configs", "confirmation_source_cell_registry.csv"))
   extra_seeds <- as.integer(strsplit(as.character(args$confirm_seeds), ",", fixed = TRUE)[[1L]])
+  if (!length(extra_seeds) || anyNA(extra_seeds) || anyDuplicated(extra_seeds)) {
+    stop("Confirmation seeds must be unique finite integers.", call. = FALSE)
+  }
+  if (any(extra_seeds %in% as.integer(templates$seed))) {
+    stop("Confirmation seeds must not duplicate any finalist original seed.", call. = FALSE)
+  }
   seed_rows <- app_bind_rows_fill(lapply(seq_len(nrow(templates)), function(i) {
-    rows <- templates[rep(i, length(unique(c(templates$seed[[i]], extra_seeds)))), , drop = FALSE]
-    rows$seed <- unique(c(templates$seed[[i]], extra_seeds))
+    rows <- templates[rep(i, 1L + length(extra_seeds)), , drop = FALSE]
+    rows$seed <- c(templates$seed[[i]], extra_seeds)
     rows$base_candidate_id <- templates$candidate_id[[i]]
     rows$candidate_id <- paste0(templates$candidate_id[[i]], "__seed", rows$seed)
     rows
   }))
-  architectures <- seed_rows[, setdiff(names(seed_rows), c("job_id", "stage", "method", "fold_id", "origin_date", "primary_horizon", "secondary_horizon", "retrospective_product", "primary", "model_packet_path", "model_packet_sha256")), drop = FALSE]
+  architectures <- seed_rows[, setdiff(names(seed_rows), c(
+    "job_id", "stage", "method", "fold_id", "origin_date", "primary_horizon",
+    "secondary_horizon", "retrospective_product", "primary", "model_packet_path",
+    "model_packet_sha256", "source_runtime_root", "source_kind", "source_job_id",
+    "score_summary_path", "score_detail_path", "fit_summary_path", "done_path",
+    "score_summary_sha256", "score_detail_sha256", "fit_summary_sha256", "source_cell_key"
+  )), drop = FALSE]
   architectures <- architectures[!duplicated(architectures$candidate_id), , drop = FALSE]
   idx <- expand.grid(architecture_index = seq_len(nrow(architectures)), fold_index = seq_len(nrow(folds)),
     KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE)
@@ -149,19 +160,16 @@ if (identical(mode, "pilot")) {
   original_seed <- setNames(as.integer(templates$seed), as.character(templates$candidate_id))
   reuse_hit <- which(as.integer(jobs$seed) == original_seed[as.character(jobs$base_candidate_id)])
   if (length(reuse_hit)) {
-    source_keys <- paste(source_jobs$target, source_jobs$candidate_id, source_jobs$prior_id,
-      source_jobs$fold_id, source_jobs$seed, sep = "|")
+    source_keys <- paste(source_cells$target, source_cells$candidate_id, source_cells$prior_id,
+      source_cells$fold_id, source_cells$seed, sep = "|")
     reuse_keys <- paste(jobs$target[reuse_hit], jobs$base_candidate_id[reuse_hit], jobs$prior_id[reuse_hit],
       jobs$fold_id[reuse_hit], jobs$seed[reuse_hit], sep = "|")
     source_index <- match(reuse_keys, source_keys)
     if (anyNA(source_index)) stop("Seed confirmation could not match every original-seed source cell.", call. = FALSE)
-    source_ids <- source_jobs$job_id[source_index]
-    required <- cbind(
-      score_summary_path = file.path(source_root, "scores", paste0(source_ids, "_summary.csv")),
-      score_detail_path = file.path(source_root, "scores", paste0(source_ids, "_detail.csv")),
-      fit_summary_path = file.path(source_root, "fits", paste0(source_ids, "_summary.csv")),
-      done_path = file.path(source_root, "status", paste0(source_ids, ".done"))
-    )
+    source_ids <- source_cells$source_job_id[source_index]
+    required <- as.matrix(source_cells[source_index, c(
+      "score_summary_path", "score_detail_path", "fit_summary_path", "done_path"
+    ), drop = FALSE])
     if (any(!file.exists(required))) stop("Seed confirmation requires complete original-seed source artifacts.", call. = FALSE)
     reused <- data.frame(
       target = jobs$target[reuse_hit], candidate_id = jobs$candidate_id[reuse_hit],
@@ -173,12 +181,27 @@ if (identical(mode, "pilot")) {
       score_summary_path = required[, "score_summary_path"],
       score_detail_path = required[, "score_detail_path"],
       fit_summary_path = required[, "fit_summary_path"],
-      source_runtime_root = source_root, stringsAsFactors = FALSE
+      source_runtime_root = source_cells$source_runtime_root[source_index],
+      source_kind = source_cells$source_kind[source_index], stringsAsFactors = FALSE
     )
-    reused$score_summary_sha256 <- vapply(reused$score_summary_path, app_sha256_file, character(1L))
-    reused$score_detail_sha256 <- vapply(reused$score_detail_path, app_sha256_file, character(1L))
-    reused$fit_summary_sha256 <- vapply(reused$fit_summary_path, app_sha256_file, character(1L))
+    reused$score_summary_sha256 <- source_cells$score_summary_sha256[source_index]
+    reused$score_detail_sha256 <- source_cells$score_detail_sha256[source_index]
+    reused$fit_summary_sha256 <- source_cells$fit_summary_sha256[source_index]
     jobs <- jobs[-reuse_hit, , drop = FALSE]
+  }
+
+  expected_reused <- nrow(finalists) * nrow(folds)
+  expected_new <- nrow(finalists) * length(extra_seeds) * nrow(folds)
+  if (nrow(reused) != expected_reused || nrow(jobs) != expected_new) {
+    stop(sprintf(
+      "Confirmation preparation produced %d new/%d reused cells; expected %d/%d.",
+      nrow(jobs), nrow(reused), expected_new, expected_reused
+    ), call. = FALSE)
+  }
+  expected_per_finalist <- app_glofas_search2_confirmation_expected_cells(jobs, reused)
+  expected_finalist_cells <- (1L + length(extra_seeds)) * nrow(folds)
+  if (expected_per_finalist != expected_finalist_cells) {
+    stop("Confirmation preparation failed the target-specific fold-by-seed completeness gate.", call. = FALSE)
   }
 }
 

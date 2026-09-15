@@ -212,6 +212,100 @@ stopifnot(inherits(try(
   silent = TRUE
 ), "try-error"))
 
+confirmation_fixture <- tempfile("search2_confirmation_source_")
+pilot_fixture <- tempfile("search2_confirmation_pilot_")
+for (root in c(confirmation_fixture, pilot_fixture)) {
+  invisible(lapply(file.path(root, c("configs", "scores", "fits", "status")), dir.create,
+    recursive = TRUE, showWarnings = FALSE))
+}
+fixture_jobs <- function(candidate_id, root, source_seed = 700L) {
+  jobs <- data.frame(
+    job_id = paste0("job_", candidate_id, "_", c("fold_a", "fold_b")),
+    target = "reference", candidate_id = candidate_id, prior_id = "prior_a",
+    fold_id = c("fold_a", "fold_b"), seed = source_seed,
+    D = 1L, n_vector = "10", n_state_features = 10L,
+    output_lag_max = 2L, covariate_lag_max = 1L,
+    alpha = 0.5, rho = 0.9, stringsAsFactors = FALSE
+  )
+  app_write_csv(jobs, file.path(root, "configs", "job_manifest.csv"))
+  for (job_id in jobs$job_id) {
+    app_write_csv(data.frame(job_id = job_id, mean_crps = 0.1),
+      file.path(root, "scores", paste0(job_id, "_summary.csv")))
+    app_write_csv(data.frame(job_id = job_id, horizon = 1L, crps = 0.1),
+      file.path(root, "scores", paste0(job_id, "_detail.csv")))
+    app_write_csv(data.frame(job_id = job_id, fit_converged = TRUE),
+      file.path(root, "fits", paste0(job_id, "_summary.csv")))
+    writeLines("done", file.path(root, "status", paste0(job_id, ".done")))
+  }
+  jobs
+}
+new_fixture_jobs <- fixture_jobs("new_candidate", confirmation_fixture)
+reused_fixture_jobs <- fixture_jobs("reused_candidate", pilot_fixture)
+reuse_fixture <- data.frame(
+  target = reused_fixture_jobs$target, candidate_id = reused_fixture_jobs$candidate_id,
+  prior_id = reused_fixture_jobs$prior_id, fold_id = reused_fixture_jobs$fold_id,
+  score_summary_path = file.path(pilot_fixture, "scores", paste0(reused_fixture_jobs$job_id, "_summary.csv")),
+  score_detail_path = file.path(pilot_fixture, "scores", paste0(reused_fixture_jobs$job_id, "_detail.csv")),
+  fit_summary_path = file.path(pilot_fixture, "fits", paste0(reused_fixture_jobs$job_id, "_summary.csv")),
+  source_runtime_root = pilot_fixture, stringsAsFactors = FALSE
+)
+reuse_fixture$score_summary_sha256 <- vapply(reuse_fixture$score_summary_path, app_sha256_file, character(1L))
+reuse_fixture$score_detail_sha256 <- vapply(reuse_fixture$score_detail_path, app_sha256_file, character(1L))
+reuse_fixture$fit_summary_sha256 <- vapply(reuse_fixture$fit_summary_path, app_sha256_file, character(1L))
+app_write_csv(reuse_fixture, file.path(confirmation_fixture, "configs", "reused_score_registry.csv"))
+
+source_fixture <- app_glofas_search2_confirmation_source_registry(confirmation_fixture)
+stopifnot(nrow(source_fixture) == 4L)
+stopifnot(sum(source_fixture$source_kind == "source_runtime_job") == 2L)
+stopifnot(sum(source_fixture$source_kind == "reused_prior_runtime_job") == 2L)
+fixture_finalists <- data.frame(
+  target = "reference", candidate_id = c("new_candidate", "reused_candidate"),
+  prior_id = "prior_a", stringsAsFactors = FALSE
+)
+fixture_folds <- data.frame(fold_id = c("fold_a", "fold_b"), stringsAsFactors = FALSE)
+resolved_fixture <- app_glofas_search2_confirmation_templates(
+  fixture_finalists, source_fixture, fixture_folds
+)
+stopifnot(nrow(resolved_fixture$templates) == 2L, nrow(resolved_fixture$source_cells) == 4L)
+stopifnot(setequal(resolved_fixture$templates$candidate_id, fixture_finalists$candidate_id))
+
+missing_fold_error <- try(
+  app_glofas_search2_confirmation_templates(
+    fixture_finalists, source_fixture,
+    data.frame(fold_id = c("fold_a", "fold_b", "fold_c"), stringsAsFactors = FALSE)
+  ),
+  silent = TRUE
+)
+stopifnot(inherits(missing_fold_error, "try-error"))
+
+duplicate_reuse <- rbind(reuse_fixture, reuse_fixture[1L, , drop = FALSE])
+app_write_csv(duplicate_reuse, file.path(confirmation_fixture, "configs", "reused_score_registry.csv"))
+stopifnot(inherits(try(
+  app_glofas_search2_confirmation_source_registry(confirmation_fixture), silent = TRUE
+), "try-error"))
+
+bad_hash_reuse <- reuse_fixture
+bad_hash_reuse$score_summary_sha256[[1L]] <- paste(rep("0", 64L), collapse = "")
+app_write_csv(bad_hash_reuse, file.path(confirmation_fixture, "configs", "reused_score_registry.csv"))
+stopifnot(inherits(try(
+  app_glofas_search2_confirmation_source_registry(confirmation_fixture), silent = TRUE
+), "try-error"))
+app_write_csv(reuse_fixture, file.path(confirmation_fixture, "configs", "reused_score_registry.csv"))
+
+candidate_complete <- app_bind_rows_fill(lapply(c("candidate_a", "candidate_b"), function(candidate_id) {
+  transform(
+    expand.grid(fold_id = c("fold_a", "fold_b"), seed = c(1L, 2L),
+      KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE),
+    target = "reference", base_candidate_id = candidate_id
+  )
+}))
+stopifnot(app_glofas_search2_confirmation_expected_cells(candidate_complete) == 4L)
+candidate_incomplete <- candidate_complete[-1L, , drop = FALSE]
+stopifnot(inherits(try(
+  app_glofas_search2_confirmation_expected_cells(candidate_incomplete), silent = TRUE
+), "try-error"))
+unlink(c(confirmation_fixture, pilot_fixture), recursive = TRUE, force = TRUE)
+
 guardrail_input <- do.call(rbind, lapply(c("anchor", "good", "bad"), function(id) {
   transform(
     score$summary,

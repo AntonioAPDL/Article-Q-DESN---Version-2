@@ -747,7 +747,16 @@ app_glofas_search2_confirmation_expected_cells <- function(jobs, reuse_registry 
         paste(missing, collapse = ", ")
       ), call. = FALSE)
     }
-    x[, required, drop = FALSE]
+    candidate <- if ("base_candidate_id" %in% names(x)) {
+      value <- as.character(x$base_candidate_id)
+      fallback <- if ("candidate_id" %in% names(x)) as.character(x$candidate_id) else rep("all", nrow(x))
+      ifelse(is.na(value) | !nzchar(value), fallback, value)
+    } else if ("candidate_id" %in% names(x)) {
+      sub("__seed[0-9]+$", "", as.character(x$candidate_id))
+    } else {
+      rep("all", nrow(x))
+    }
+    data.frame(x[, required, drop = FALSE], confirmation_candidate = candidate, stringsAsFactors = FALSE)
   }
   evidence <- app_bind_rows_fill(c(
     if (nrow(jobs)) list(keep(jobs)) else list(),
@@ -761,18 +770,201 @@ app_glofas_search2_confirmation_expected_cells <- function(jobs, reuse_registry 
       any(!nzchar(evidence$target)) || any(!nzchar(evidence$fold_id)) || any(!nzchar(evidence$seed))) {
     stop("Confirmation target, fold, and seed values must be complete.", call. = FALSE)
   }
-  expected <- vapply(split(evidence, evidence$target), function(x) {
+  grouping <- paste(evidence$target, evidence$confirmation_candidate, sep = "|")
+  expected <- vapply(split(evidence, grouping), function(x) {
     n_expected <- length(unique(x$fold_id)) * length(unique(x$seed))
     cells <- unique(x[, c("fold_id", "seed"), drop = FALSE])
     if (nrow(cells) != n_expected) {
-      stop("Confirmation evidence is not a complete target-specific fold-by-seed design.", call. = FALSE)
+      stop("Confirmation evidence is not a complete finalist-specific fold-by-seed design.", call. = FALSE)
     }
     n_expected
   }, integer(1L))
   if (length(unique(expected)) != 1L) {
-    stop("Confirmation currently requires equal target-specific fold-by-seed cell counts.", call. = FALSE)
+    stop("Confirmation currently requires equal finalist-specific fold-by-seed cell counts.", call. = FALSE)
   }
   unname(expected[[1L]])
+}
+
+app_glofas_search2_confirmation_source_registry <- function(source_runtime_root) {
+  source_runtime_root <- normalizePath(source_runtime_root, mustWork = TRUE)
+  source_manifest_path <- file.path(source_runtime_root, "configs", "job_manifest.csv")
+  if (!file.exists(source_manifest_path)) {
+    stop("Confirmation source runtime is missing its job manifest.", call. = FALSE)
+  }
+  source_jobs <- app_read_csv(source_manifest_path)
+  required_metadata <- c("job_id", "target", "candidate_id", "prior_id", "fold_id", "seed")
+  missing_metadata <- setdiff(required_metadata, names(source_jobs))
+  if (length(missing_metadata)) {
+    stop(sprintf(
+      "Confirmation source job manifest is missing: %s.",
+      paste(missing_metadata, collapse = ", ")
+    ), call. = FALSE)
+  }
+
+  verify_artifact <- function(path, expected_hash = NA_character_, label) {
+    path <- normalizePath(path, mustWork = FALSE)
+    if (!file.exists(path)) {
+      stop(sprintf("Confirmation source artifact is missing (%s): %s.", label, path), call. = FALSE)
+    }
+    observed_hash <- app_sha256_file(path)
+    if (!is.na(expected_hash) && nzchar(expected_hash) &&
+        !identical(tolower(observed_hash), tolower(as.character(expected_hash)))) {
+      stop(sprintf("Confirmation source artifact hash mismatch (%s): %s.", label, path), call. = FALSE)
+    }
+    list(path = normalizePath(path, mustWork = TRUE), sha256 = observed_hash)
+  }
+
+  decorate <- function(metadata, runtime_root, source_kind, registered = NULL) {
+    runtime_root <- normalizePath(runtime_root, mustWork = TRUE)
+    source_ids <- as.character(metadata$job_id)
+    defaults <- data.frame(
+      score_summary_path = file.path(runtime_root, "scores", paste0(source_ids, "_summary.csv")),
+      score_detail_path = file.path(runtime_root, "scores", paste0(source_ids, "_detail.csv")),
+      fit_summary_path = file.path(runtime_root, "fits", paste0(source_ids, "_summary.csv")),
+      done_path = file.path(runtime_root, "status", paste0(source_ids, ".done")),
+      score_summary_sha256 = NA_character_, score_detail_sha256 = NA_character_,
+      fit_summary_sha256 = NA_character_, stringsAsFactors = FALSE
+    )
+    if (!is.null(registered)) {
+      for (nm in intersect(names(defaults), names(registered))) defaults[[nm]] <- registered[[nm]]
+    }
+    checked <- lapply(seq_len(nrow(metadata)), function(i) {
+      summary_file <- verify_artifact(
+        defaults$score_summary_path[[i]], defaults$score_summary_sha256[[i]], "score summary"
+      )
+      detail_file <- verify_artifact(
+        defaults$score_detail_path[[i]], defaults$score_detail_sha256[[i]], "score detail"
+      )
+      fit_file <- verify_artifact(
+        defaults$fit_summary_path[[i]], defaults$fit_summary_sha256[[i]], "fit summary"
+      )
+      done_file <- verify_artifact(defaults$done_path[[i]], NA_character_, "completion marker")
+      data.frame(
+        source_runtime_root = runtime_root,
+        source_kind = source_kind,
+        source_job_id = source_ids[[i]],
+        score_summary_path = summary_file$path,
+        score_detail_path = detail_file$path,
+        fit_summary_path = fit_file$path,
+        done_path = done_file$path,
+        score_summary_sha256 = summary_file$sha256,
+        score_detail_sha256 = detail_file$sha256,
+        fit_summary_sha256 = fit_file$sha256,
+        stringsAsFactors = FALSE
+      )
+    })
+    cbind(metadata, app_bind_rows_fill(checked))
+  }
+
+  rows <- list(decorate(source_jobs, source_runtime_root, "source_runtime_job"))
+  reuse_path <- file.path(source_runtime_root, "configs", "reused_score_registry.csv")
+  if (file.exists(reuse_path)) {
+    reuse <- app_read_csv(reuse_path)
+    if (nrow(reuse)) {
+      required_reuse <- c(
+        "target", "candidate_id", "prior_id", "fold_id", "source_runtime_root",
+        "score_summary_path", "score_detail_path", "fit_summary_path",
+        "score_summary_sha256", "score_detail_sha256", "fit_summary_sha256"
+      )
+      missing_reuse <- setdiff(required_reuse, names(reuse))
+      if (length(missing_reuse)) {
+        stop(sprintf(
+          "Confirmation reused-score registry is missing: %s.",
+          paste(missing_reuse, collapse = ", ")
+        ), call. = FALSE)
+      }
+      manifest_cache <- new.env(parent = emptyenv())
+      reused_rows <- lapply(seq_len(nrow(reuse)), function(i) {
+        prior_root <- normalizePath(as.character(reuse$source_runtime_root[[i]]), mustWork = TRUE)
+        cache_key <- prior_root
+        if (!exists(cache_key, envir = manifest_cache, inherits = FALSE)) {
+          manifest_path <- file.path(prior_root, "configs", "job_manifest.csv")
+          if (!file.exists(manifest_path)) {
+            stop(sprintf("Reused source runtime is missing its job manifest: %s.", prior_root), call. = FALSE)
+          }
+          assign(cache_key, app_read_csv(manifest_path), envir = manifest_cache)
+        }
+        prior_jobs <- get(cache_key, envir = manifest_cache, inherits = FALSE)
+        hit <- as.character(prior_jobs$target) == as.character(reuse$target[[i]]) &
+          as.character(prior_jobs$candidate_id) == as.character(reuse$candidate_id[[i]]) &
+          as.character(prior_jobs$prior_id) == as.character(reuse$prior_id[[i]]) &
+          as.character(prior_jobs$fold_id) == as.character(reuse$fold_id[[i]])
+        if (sum(hit) != 1L) {
+          stop("Every reused confirmation cell must resolve to exactly one prior source job.", call. = FALSE)
+        }
+        metadata <- prior_jobs[which(hit), , drop = FALSE]
+        registered <- reuse[i, c(
+          "score_summary_path", "score_detail_path", "fit_summary_path",
+          "score_summary_sha256", "score_detail_sha256", "fit_summary_sha256"
+        ), drop = FALSE]
+        registered$done_path <- file.path(prior_root, "status", paste0(metadata$job_id, ".done"))
+        decorate(metadata, prior_root, "reused_prior_runtime_job", registered)
+      })
+      rows <- c(rows, reused_rows)
+    }
+  }
+
+  registry <- app_bind_rows_fill(rows)
+  key <- paste(
+    registry$target, registry$candidate_id, registry$prior_id,
+    registry$fold_id, registry$seed, sep = "|"
+  )
+  if (anyDuplicated(key)) {
+    stop("Confirmation source registry contains duplicate target/candidate/prior/fold/seed cells.", call. = FALSE)
+  }
+  registry$source_cell_key <- key
+  rownames(registry) <- NULL
+  registry
+}
+
+app_glofas_search2_confirmation_templates <- function(finalists, source_registry, folds) {
+  required_finalists <- c("target", "candidate_id", "prior_id")
+  missing_finalists <- setdiff(required_finalists, names(finalists))
+  if (length(missing_finalists)) {
+    stop(sprintf("Confirmation finalists are missing: %s.", paste(missing_finalists, collapse = ", ")), call. = FALSE)
+  }
+  fold_ids <- as.character(folds$fold_id)
+  if (!length(fold_ids) || anyDuplicated(fold_ids)) {
+    stop("Confirmation folds require unique fold IDs.", call. = FALSE)
+  }
+  finalist_key <- paste(finalists$target, finalists$candidate_id, finalists$prior_id, sep = "|")
+  if (anyDuplicated(finalist_key)) stop("Confirmation finalists must be unique.", call. = FALSE)
+
+  constant_fields <- intersect(c(
+    "target", "candidate_id", "prior_id", "candidate_role", "rhs_selection_role",
+    "D", "n_vector", "n_state_features", "output_lag_max", "covariate_lag_max",
+    "alpha", "rho", "pi_w", "pi_in", "effective_input_gain", "input_dimension",
+    "win_scale_global", "win_scale_bias", "state_scaling", "ridge_tau2", "m", "washout",
+    "seed", "intercept_var", "sigma_a", "sigma_b", "input_bound", "act_f", "act_k",
+    "standardize_inputs", "dlm_extension_enabled", "geometry_label", "prior_mode", "m0",
+    "rhs_zeta2_fixed", "rhs_a_zeta", "rhs_b_zeta", "rhs_max_iter", "rhs_min_iter",
+    "rhs_tol", "rhs_update_every", "rhs_freeze_tau_warmup_iters", "rhs_min_tau_updates",
+    "rhs_freeze_beta_warmup_iters", "rhs_min_beta_updates"
+  ), names(source_registry))
+  resolved <- lapply(seq_len(nrow(finalists)), function(i) {
+    hit <- as.character(source_registry$target) == as.character(finalists$target[[i]]) &
+      as.character(source_registry$candidate_id) == as.character(finalists$candidate_id[[i]]) &
+      as.character(source_registry$prior_id) == as.character(finalists$prior_id[[i]])
+    cells <- source_registry[hit, , drop = FALSE]
+    if (nrow(cells) != length(fold_ids) || !setequal(as.character(cells$fold_id), fold_ids)) {
+      stop("Every confirmation finalist must resolve to one complete source fold set.", call. = FALSE)
+    }
+    cells <- cells[match(fold_ids, as.character(cells$fold_id)), , drop = FALSE]
+    inconsistent <- constant_fields[vapply(constant_fields, function(nm) {
+      value <- ifelse(is.na(cells[[nm]]), "<NA>", as.character(cells[[nm]]))
+      length(unique(value)) != 1L
+    }, logical(1L))]
+    if (length(inconsistent)) {
+      stop(sprintf(
+        "Confirmation source metadata differs across folds for %s: %s.",
+        finalists$candidate_id[[i]], paste(inconsistent, collapse = ", ")
+      ), call. = FALSE)
+    }
+    cells
+  })
+  source_cells <- app_bind_rows_fill(resolved)
+  templates <- app_bind_rows_fill(lapply(resolved, function(x) x[1L, , drop = FALSE]))
+  list(templates = templates, source_cells = source_cells)
 }
 
 app_glofas_search2_aggregate_scores <- function(score_summaries, require_folds = NULL) {

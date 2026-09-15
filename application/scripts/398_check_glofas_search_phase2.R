@@ -66,9 +66,7 @@ if (nrow(scores) && nrow(fits)) {
 fold_values <- unique(c(as.character(jobs$fold_id), as.character(reuse_registry$fold_id %||% character())))
 expected_cells <- length(fold_values)
 if (identical(as.character(run_manifest$mode), "confirm")) {
-  seed_values <- unique(c(as.character(jobs$seed), as.character(reuse_registry$seed %||% character())))
-  seed_values <- seed_values[!is.na(seed_values) & nzchar(seed_values)]
-  expected_cells <- expected_cells * length(seed_values)
+  expected_cells <- app_glofas_search2_confirmation_expected_cells(jobs, reuse_registry)
 }
 aggregate <- if (nrow(scores)) app_glofas_search2_aggregate_scores(scores, require_folds = expected_cells) else data.frame()
 baseline_path <- file.path(root, "configs", "confirmation_guardrail_baselines.csv")

@@ -737,6 +737,44 @@ app_glofas_search2_apply_external_guardrails <- function(out, baselines) {
   app_glofas_search2_rank_aggregate(out)
 }
 
+app_glofas_search2_confirmation_expected_cells <- function(jobs, reuse_registry = data.frame()) {
+  keep <- function(x) {
+    required <- c("target", "fold_id", "seed")
+    missing <- setdiff(required, names(x))
+    if (length(missing)) {
+      stop(sprintf(
+        "Confirmation evidence is missing: %s.",
+        paste(missing, collapse = ", ")
+      ), call. = FALSE)
+    }
+    x[, required, drop = FALSE]
+  }
+  evidence <- app_bind_rows_fill(c(
+    if (nrow(jobs)) list(keep(jobs)) else list(),
+    if (nrow(reuse_registry)) list(keep(reuse_registry)) else list()
+  ))
+  if (!nrow(evidence)) stop("Confirmation requires nonempty evidence.", call. = FALSE)
+  evidence$target <- as.character(evidence$target)
+  evidence$fold_id <- as.character(evidence$fold_id)
+  evidence$seed <- as.character(evidence$seed)
+  if (anyNA(evidence[, c("target", "fold_id", "seed")]) ||
+      any(!nzchar(evidence$target)) || any(!nzchar(evidence$fold_id)) || any(!nzchar(evidence$seed))) {
+    stop("Confirmation target, fold, and seed values must be complete.", call. = FALSE)
+  }
+  expected <- vapply(split(evidence, evidence$target), function(x) {
+    n_expected <- length(unique(x$fold_id)) * length(unique(x$seed))
+    cells <- unique(x[, c("fold_id", "seed"), drop = FALSE])
+    if (nrow(cells) != n_expected) {
+      stop("Confirmation evidence is not a complete target-specific fold-by-seed design.", call. = FALSE)
+    }
+    n_expected
+  }, integer(1L))
+  if (length(unique(expected)) != 1L) {
+    stop("Confirmation currently requires equal target-specific fold-by-seed cell counts.", call. = FALSE)
+  }
+  unname(expected[[1L]])
+}
+
 app_glofas_search2_aggregate_scores <- function(score_summaries, require_folds = NULL) {
   primary <- score_summaries[score_summaries$score_window == "primary_28", , drop = FALSE]
   secondary <- score_summaries[score_summaries$score_window == "secondary_30", , drop = FALSE]

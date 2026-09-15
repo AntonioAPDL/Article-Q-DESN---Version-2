@@ -184,6 +184,34 @@ stopifnot(seed_aggregate$candidate_id[[1L]] == "seeded")
 stopifnot(seed_aggregate$n_folds[[1L]] == 4L, seed_aggregate$n_unique_folds[[1L]] == 2L)
 stopifnot(seed_aggregate$n_seeds[[1L]] == 2L, seed_aggregate$complete_fold_pass[[1L]])
 
+confirmation_jobs <- do.call(rbind, lapply(c("reference", "discrepancy"), function(target_value) {
+  transform(
+    expand.grid(
+      fold_id = c("fold_a", "fold_b", "fold_c"),
+      seed = c(201L, 202L, 203L),
+      KEEP.OUT.ATTRS = FALSE,
+      stringsAsFactors = FALSE
+    ),
+    target = target_value
+  )[, c("target", "fold_id", "seed")]
+}))
+confirmation_reuse <- data.frame(
+  target = rep(c("reference", "discrepancy"), each = 3L),
+  fold_id = rep(c("fold_a", "fold_b", "fold_c"), 2L),
+  seed = rep(c(101L, 102L), each = 3L),
+  stringsAsFactors = FALSE
+)
+stopifnot(app_glofas_search2_confirmation_expected_cells(
+  confirmation_jobs, confirmation_reuse
+) == 12L)
+incomplete_confirmation_jobs <- confirmation_jobs[-1L, , drop = FALSE]
+stopifnot(inherits(try(
+  app_glofas_search2_confirmation_expected_cells(
+    incomplete_confirmation_jobs, confirmation_reuse
+  ),
+  silent = TRUE
+), "try-error"))
+
 guardrail_input <- do.call(rbind, lapply(c("anchor", "good", "bad"), function(id) {
   transform(
     score$summary,

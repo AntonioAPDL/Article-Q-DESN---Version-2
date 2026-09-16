@@ -57,7 +57,8 @@ app_glofas_dec25_assert_window <- function(
 app_glofas_dec25_final_split <- function(
   dates,
   expected_n = NULL,
-  label = "final design"
+  label = "final design",
+  expected_dates = NULL
 ) {
   c <- app_glofas_dec25_contract()
   dates <- as.Date(dates)
@@ -73,28 +74,47 @@ app_glofas_dec25_final_split <- function(
   if (!is.null(expected_n) && length(dates) != as.integer(expected_n)) {
     stop(sprintf("%s has %d rows; expected %d.", label, length(dates), as.integer(expected_n)), call. = FALSE)
   }
+  if (!is.null(expected_dates)) {
+    expected_dates <- as.Date(expected_dates)
+    if (length(dates) != length(expected_dates) || any(dates != expected_dates)) {
+      stop(sprintf("%s does not match its exact expected date sequence.", label), call. = FALSE)
+    }
+  }
   list(train_idx = seq_along(dates), valid_idx = integer(0), validation_n = 0L, final_refit = TRUE)
 }
 
-app_glofas_dec25_validate_part2_design <- function(design) {
+app_glofas_dec25_validate_part2_design <- function(design, expected_dates = NULL) {
   c <- app_glofas_dec25_contract()
-  split <- app_glofas_dec25_final_split(design$dates, c$part2_final_train_rows, "Part 2 final discrepancy design")
+  expected_n <- if (is.null(expected_dates)) c$part2_final_train_rows else length(expected_dates)
+  split <- app_glofas_dec25_final_split(
+    design$dates,
+    expected_n = expected_n,
+    expected_dates = expected_dates,
+    label = "Part 2 final discrepancy design"
+  )
   gap <- max(abs(as.numeric(design$g_retrospective) - as.numeric(design$y_reference) - as.numeric(design$d_g)))
   if (!is.finite(gap) || gap > 1.0e-10) {
     stop("Part 2 final design violates d_t = retrospective GloFAS_t - USGS_t.", call. = FALSE)
   }
-  if (nrow(design$discrepancy$X) != c$part2_final_train_rows ||
-      length(design$discrepancy$y) != c$part2_final_train_rows) {
-    stop("Part 2 discrepancy design does not have 12,495 final training rows.", call. = FALSE)
+  if (nrow(design$discrepancy$X) != expected_n ||
+      length(design$discrepancy$y) != expected_n) {
+    stop(sprintf("Part 2 discrepancy design does not have %d final training rows.", expected_n), call. = FALSE)
   }
   split
 }
 
-app_glofas_dec25_validate_part3_design <- function(design) {
+app_glofas_dec25_validate_part3_design <- function(design, expected_dates = NULL) {
   c <- app_glofas_dec25_contract()
-  split <- app_glofas_dec25_final_split(design$dates, c$part3_final_dates, "Part 3 final joint design")
-  if (nrow(design$H) != c$part3_final_stacked_rows || length(design$z) != c$part3_final_stacked_rows) {
-    stop("Part 3 final stacked design must contain 24,990 Normal observations.", call. = FALSE)
+  expected_n <- if (is.null(expected_dates)) c$part3_final_dates else length(expected_dates)
+  expected_stacked_n <- 2L * expected_n
+  split <- app_glofas_dec25_final_split(
+    design$dates,
+    expected_n = expected_n,
+    expected_dates = expected_dates,
+    label = "Part 3 final joint design"
+  )
+  if (nrow(design$H) != expected_stacked_n || length(design$z) != expected_stacked_n) {
+    stop(sprintf("Part 3 final stacked design must contain %d Normal observations.", expected_stacked_n), call. = FALSE)
   }
   gap <- max(abs(as.numeric(design$y_reference) + as.numeric(design$d_g) - as.numeric(design$g_retrospective)))
   if (!is.finite(gap) || gap > 1.0e-10) {
@@ -108,7 +128,8 @@ app_glofas_dec25_part2_design_cache <- function(
   rhs_row,
   panel_bundle = NULL,
   reference_cache = NULL,
-  root_candidates = NULL
+  root_candidates = NULL,
+  expected_dates = NULL
 ) {
   c <- app_glofas_dec25_contract()
   design <- app_glofas_normal_part2_build_design(
@@ -117,7 +138,7 @@ app_glofas_dec25_part2_design_cache <- function(
     panel_bundle = panel_bundle,
     reference_cache = reference_cache
   )
-  split <- app_glofas_dec25_validate_part2_design(design)
+  split <- app_glofas_dec25_validate_part2_design(design, expected_dates = expected_dates)
   candidate <- app_glofas_part2_bridge_candidate_from_rhs_row(rhs_row)
   bundle <- app_glofas_oracle_prepare_panel_bundle(
     cfg = base_cfg,
@@ -131,15 +152,20 @@ app_glofas_dec25_part2_design_cache <- function(
     candidate_row = candidate,
     panel_bundle = bundle
   )
-  if (nrow(forecast_design$X) != c$part2_final_train_rows ||
-      length(forecast_design$dates) != c$part2_final_train_rows ||
-      max(as.Date(forecast_design$dates)) != c$train_end) {
+  expected_n <- if (is.null(expected_dates)) c$part2_final_train_rows else length(expected_dates)
+  if (nrow(forecast_design$X) != expected_n ||
+      length(forecast_design$dates) != expected_n ||
+      max(as.Date(forecast_design$dates)) != c$train_end ||
+      (!is.null(expected_dates) && any(as.Date(forecast_design$dates) != as.Date(expected_dates)))) {
     stop("Part 2 forecastable discrepancy design does not match the Dec 25 final cache contract.", call. = FALSE)
   }
   list(
     schema_version = "glofas_part2_final_dec25_2022_design_cache_v1",
     generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
-    contract = app_glofas_dec25_contract(),
+    contract = utils::modifyList(
+      app_glofas_dec25_contract(),
+      list(part2_final_train_rows = expected_n)
+    ),
     base_cfg = base_cfg,
     rhs_row = rhs_row[1L, , drop = FALSE],
     candidate_row = candidate,
@@ -152,18 +178,28 @@ app_glofas_dec25_part2_design_cache <- function(
   )
 }
 
-app_glofas_dec25_part3_design_cache <- function(base_cfg, candidate_row, panel_bundle = NULL, reference_cache = NULL) {
+app_glofas_dec25_part3_design_cache <- function(
+  base_cfg,
+  candidate_row,
+  panel_bundle = NULL,
+  reference_cache = NULL,
+  expected_dates = NULL
+) {
   design <- app_glofas_normal_part3_build_design(
     base_cfg = base_cfg,
     candidate_row = candidate_row,
     panel_bundle = panel_bundle,
     reference_cache = reference_cache
   )
-  split <- app_glofas_dec25_validate_part3_design(design)
+  split <- app_glofas_dec25_validate_part3_design(design, expected_dates = expected_dates)
+  expected_n <- if (is.null(expected_dates)) app_glofas_dec25_contract()$part3_final_dates else length(expected_dates)
   list(
     schema_version = "glofas_part3_final_dec25_2022_design_cache_v1",
     generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
-    contract = app_glofas_dec25_contract(),
+    contract = utils::modifyList(
+      app_glofas_dec25_contract(),
+      list(part3_final_dates = expected_n, part3_final_stacked_rows = 2L * expected_n)
+    ),
     candidate_row = candidate_row[1L, , drop = FALSE],
     design = design,
     split = split,

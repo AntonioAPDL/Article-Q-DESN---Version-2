@@ -4,6 +4,52 @@ app_glofas_post_search2_required_components <- function() {
   c("reference", "discrepancy")
 }
 
+app_glofas_post_search2_final_design_contract <- function(selection) {
+  c_dec25 <- app_glofas_dec25_contract()
+  panel_start <- as.Date("1987-05-29")
+  panel_dates <- seq.Date(panel_start, c_dec25$train_end, by = "day")
+  components <- app_glofas_post_search2_required_components()
+  rows <- lapply(components, function(component) {
+    app_glofas_post_search2_component_row(selection, component)
+  })
+  component_drop <- vapply(rows, function(row) {
+    max(
+      as.integer(row$washout[[1L]]),
+      as.integer(row$output_lag_max[[1L]]),
+      as.integer(row$covariate_lag_max[[1L]])
+    )
+  }, integer(1L))
+  effective_drop <- max(component_drop)
+  expected_dates <- panel_dates[seq.int(effective_drop + 1L, length(panel_dates))]
+  if (effective_drop != 540L || length(expected_dates) != 12455L ||
+      min(expected_dates) != as.Date("1988-11-19") ||
+      max(expected_dates) != c_dec25$train_end) {
+    stop("The adopted Search-II design no longer matches its frozen Dec-25 date contract.", call. = FALSE)
+  }
+  list(
+    panel_start = panel_start,
+    panel_end = c_dec25$train_end,
+    panel_rows = length(panel_dates),
+    component_drop = stats::setNames(component_drop, components),
+    effective_drop = effective_drop,
+    expected_dates = expected_dates,
+    design_start = min(expected_dates),
+    design_end = max(expected_dates),
+    design_rows = length(expected_dates),
+    stacked_rows = 2L * length(expected_dates)
+  )
+}
+
+app_glofas_post_search2_validate_final_dates <- function(dates, selection, label) {
+  contract <- app_glofas_post_search2_final_design_contract(selection)
+  app_glofas_dec25_final_split(
+    dates,
+    expected_n = contract$design_rows,
+    expected_dates = contract$expected_dates,
+    label = label
+  )
+}
+
 app_glofas_post_search2_value <- function(row, name, default = NULL) {
   if (!name %in% names(row) || !length(row[[name]])) return(default)
   value <- row[[name]][[1L]]

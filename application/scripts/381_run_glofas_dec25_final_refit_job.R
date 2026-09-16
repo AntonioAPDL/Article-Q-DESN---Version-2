@@ -429,15 +429,25 @@ main <- function() {
     selection_path <- as.character(args$selected_components[[1L]] %||% "")
     if (nzchar(selection_path)) {
       selection <- app_glofas_post_search2_read_selection(selection_path)
+      post_contract <- app_glofas_post_search2_final_design_contract(selection)
       candidate <- app_glofas_post_search2_joint_candidate(
         selection,
         candidate_id = paste0("post_search2_", part, "_selected_components")
       )
       cache <- if (identical(part, "part2")) {
-        app_glofas_dec25_part2_design_cache(base_cfg = base_cfg, rhs_row = candidate)
+        app_glofas_dec25_part2_design_cache(
+          base_cfg = base_cfg,
+          rhs_row = candidate,
+          expected_dates = post_contract$expected_dates
+        )
       } else {
-        app_glofas_dec25_part3_design_cache(base_cfg = base_cfg, candidate_row = candidate)
+        app_glofas_dec25_part3_design_cache(
+          base_cfg = base_cfg,
+          candidate_row = candidate,
+          expected_dates = post_contract$expected_dates
+        )
       }
+      cache$post_search2_design_contract <- post_contract
       cache$selection_manifest_path <- normalizePath(app_resolve_path(selection_path, must_work = TRUE), mustWork = TRUE)
       cache$selection_manifest_sha256 <- app_sha256_file(cache$selection_manifest_path)
     } else if (identical(part, "part2")) {

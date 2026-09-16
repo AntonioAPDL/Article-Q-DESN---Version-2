@@ -126,11 +126,17 @@ run_job <- function() {
       base_cfg, contract$origin_date, contract$horizon_days, target = "usgs"
     )
     design <- app_glofas_oracle_build_part1_design(base_cfg, row, bundle)
-    app_glofas_dec25_final_split(design$dates, contract$part2_final_train_rows, "Part 1 post-Search-II design")
+    post_contract <- app_glofas_post_search2_final_design_contract(selection)
+    app_glofas_post_search2_validate_final_dates(
+      design$dates,
+      selection,
+      "Part 1 post-Search-II design"
+    )
     cache <- list(
       schema_version = "glofas_part1_post_search2_final_design_v1",
       contract = contract, base_cfg = base_cfg, candidate_row = row,
       bundle = bundle, design = design, Z = as.matrix(design$X[, -1L, drop = FALSE]),
+      post_search2_design_contract = post_contract,
       selection_manifest_path = normalizePath(app_resolve_path(args$selected_components, must_work = TRUE), mustWork = TRUE),
       selection_manifest_sha256 = attr(selection, "selection_sha256"),
       design_hash = app_glofas_normal_part1_design_fingerprint(

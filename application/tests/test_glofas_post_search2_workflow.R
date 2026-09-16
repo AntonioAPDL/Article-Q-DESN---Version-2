@@ -1,3 +1,6 @@
+if (!exists("app_glofas_dec25_contract", mode = "function")) {
+  source(app_path("application/R/glofas_dec25_final_refit_workflow.R"))
+}
 if (!exists("app_glofas_post_search2_read_selection", mode = "function")) {
   source(app_path("application/R/glofas_post_search2_workflow.R"))
 }
@@ -25,6 +28,19 @@ selected <- app_glofas_post_search2_read_selection(path)
 ref <- app_glofas_post_search2_component_row(selected, "reference")
 disc <- app_glofas_post_search2_component_row(selected, "discrepancy")
 joint <- app_glofas_post_search2_joint_candidate(selected)
+date_contract <- app_glofas_post_search2_final_design_contract(selected)
+stopifnot(date_contract$panel_rows == 12995L)
+stopifnot(date_contract$effective_drop == 540L)
+stopifnot(date_contract$design_rows == 12455L, date_contract$stacked_rows == 24910L)
+stopifnot(date_contract$design_start == as.Date("1988-11-19"))
+stopifnot(date_contract$design_end == as.Date("2022-12-25"))
+stopifnot(
+  length(app_glofas_post_search2_validate_final_dates(
+    date_contract$expected_dates,
+    selected,
+    "test Search-II final design"
+  )$train_idx) == 12455L
+)
 stopifnot(ref$seed == 20260512L, disc$seed == 20261521L)
 stopifnot(ref$state_scaling == "train_zscore", disc$state_scaling == "train_zscore")
 stopifnot(ref$act_f == "tanh", ref$act_k == "identity")

@@ -63,6 +63,58 @@ except SystemExit as exc:
 else:
     raise AssertionError("recovery accepted a job whose prerequisite was excluded")
 
+external_part2 = {
+    **row,
+    "job_id": "part2_forecast_independent_al_q0p50",
+    "part": "part2",
+    "stage": "forecast",
+    "role": "external_normal_driver_forecast",
+}
+try:
+    recovery.validate_transition_job_scope(
+        [external_part2], {external_part2["job_id"]},
+        {"application/R/glofas_external_driver_forecast.R"},
+    )
+except SystemExit as exc:
+    assert "requires recomputing" in str(exc)
+else:
+    raise AssertionError("affected Part 2 external forecast was accepted for recovery")
+recovery.validate_transition_job_scope(
+    [row], {"fit_a"}, {"application/R/glofas_external_driver_forecast.R"}
+)
+
+with tempfile.TemporaryDirectory(prefix="glofas_source_transition_") as tmp:
+    tmp = Path(tmp)
+    old_root = tmp / "old"
+    new_root = tmp / "new"
+    for root in (old_root, new_root):
+        (root / "configs").mkdir(parents=True)
+    transition = recovery.SCIENTIFIC_SOURCE_TRANSITIONS[
+        "application/R/glofas_external_driver_forecast.R"
+    ]
+    old_manifest = [{
+        "path": "application/R/glofas_external_driver_forecast.R",
+        "size_bytes": "1", "sha256": transition["source_sha256"],
+    }]
+    new_manifest = [{
+        "path": "application/R/glofas_external_driver_forecast.R",
+        "size_bytes": "1", "sha256": transition["destination_sha256"],
+    }]
+    recovery.write_csv(old_root / "configs/post_search2_source_manifest.csv", old_manifest)
+    recovery.write_csv(new_root / "configs/post_search2_source_manifest.csv", new_manifest)
+    accepted = recovery.validate_scientific_sources(
+        old_root, new_root, [row], {"fit_a"}
+    )
+    assert accepted[0]["source_sha256"] == transition["source_sha256"]
+    new_manifest[0]["sha256"] = "0" * 64
+    recovery.write_csv(new_root / "configs/post_search2_source_manifest.csv", new_manifest)
+    try:
+        recovery.validate_scientific_sources(old_root, new_root, [row], {"fit_a"})
+    except SystemExit as exc:
+        assert "scientific source mismatch" in str(exc)
+    else:
+        raise AssertionError("unrecognized scientific source transition was accepted")
+
 bad = {**row_new, "tau": "0.50"}
 try:
     recovery.validate_job_contracts([row], [bad], {"fit_a"})

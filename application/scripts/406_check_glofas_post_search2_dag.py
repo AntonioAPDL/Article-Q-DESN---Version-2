@@ -45,21 +45,49 @@ def session_name(prefix, job_id):
     return f"{prefix}_{job_id[:42]}_{digest}".replace(".", "p")
 
 
-def affinity_for_session(name):
+def descendant_pids(root_pid, parent_rows):
+    children = defaultdict(list)
+    for pid, parent in parent_rows:
+        children[int(parent)].append(int(pid))
+    found = []
+    frontier = [int(root_pid)]
+    while frontier:
+        pid = frontier.pop()
+        if pid in found:
+            continue
+        found.append(pid)
+        frontier.extend(children.get(pid, []))
+    return found
+
+
+def affinities_for_session(name):
     result = subprocess.run(
         ["tmux", "list-panes", "-t", name, "-F", "#{pane_pid}"],
         universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     if result.returncode != 0 or not result.stdout.strip():
-        return None
-    pid = result.stdout.splitlines()[0].strip()
-    affinity = subprocess.run(
-        ["taskset", "-pc", pid], universal_newlines=True,
+        return {}
+    pane_pid = int(result.stdout.splitlines()[0].strip())
+    processes = subprocess.run(
+        ["ps", "-eo", "pid=,ppid="], universal_newlines=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
-    if affinity.returncode != 0 or ":" not in affinity.stdout:
-        return None
-    return affinity.stdout.rsplit(":", 1)[1].strip()
+    if processes.returncode != 0:
+        return {}
+    parent_rows = []
+    for line in processes.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2:
+            parent_rows.append((int(fields[0]), int(fields[1])))
+    out = {}
+    for pid in descendant_pids(pane_pid, parent_rows):
+        affinity = subprocess.run(
+            ["taskset", "-pc", str(pid)], universal_newlines=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        if affinity.returncode == 0 and ":" in affinity.stdout:
+            out[pid] = affinity.stdout.rsplit(":", 1)[1].strip()
+    return out
 
 
 def contract_health(runtime, running_jobs, launch_payload):
@@ -139,9 +167,11 @@ def contract_health(runtime, running_jobs, launch_payload):
             if launch_hash and payload.get("launch_contract_sha256") != launch_hash:
                 assignment_errors.append(f"{job_id}:launch_hash")
             if prefix:
-                actual = affinity_for_session(session_name(prefix, job_id))
-                if actual != str(cpu):
-                    assignment_errors.append(f"{job_id}:affinity={actual},expected={cpu}")
+                actual = affinities_for_session(session_name(prefix, job_id))
+                if str(cpu) not in set(actual.values()):
+                    assignment_errors.append(
+                        f"{job_id}:affinities={sorted(set(actual.values()))},expected={cpu}"
+                    )
         checks.append({
             "contract": "active_cpu_assignments",
             "status": "pass" if not assignment_errors else "fail",

@@ -20,6 +20,14 @@ ALLOWED_SOURCE_DIFFERENCES = {
     "application/scripts/glofas_post_search2_resources.py",
 }
 
+SCIENTIFIC_SOURCE_TRANSITIONS = {
+    "application/R/glofas_external_driver_forecast.R": {
+        "source_sha256": "b351d06d897435a0c1784036682bd0ed40bec0c8caa66184f62821b435c90be1",
+        "destination_sha256": "6d99d03c03a145ee922ead360c95a54ddb2d51093c3877a8149d5e1328da8e13",
+        "scope": "part2_part3_external_quantile_forecasts_must_be_recomputed",
+    },
+}
+
 SPECIAL_MAIN_ARTIFACTS = {
     "part1_design": ("configs/part1_post_search2_design_cache.rds",),
     "part2_design": (
@@ -129,7 +137,23 @@ def validate_job_contracts(source_rows, destination_rows, job_ids):
             raise SystemExit(f"scientific command mismatch for recovery job: {job_id}")
 
 
-def validate_scientific_sources(source_runtime, destination_runtime):
+def validate_transition_job_scope(source_rows, job_ids, transitioned_paths):
+    if "application/R/glofas_external_driver_forecast.R" not in transitioned_paths:
+        return
+    source = {row["job_id"]: row for row in source_rows}
+    blocked = sorted(
+        job_id for job_id in job_ids
+        if source[job_id].get("part") in {"part2", "part3"}
+        and source[job_id].get("role") == "external_normal_driver_forecast"
+    )
+    if blocked:
+        raise SystemExit(
+            "forecast-adapter transition requires recomputing these jobs: "
+            + ", ".join(blocked)
+        )
+
+
+def validate_scientific_sources(source_runtime, destination_runtime, source_rows, job_ids):
     old_rows = read_csv(source_runtime / "configs" / "post_search2_source_manifest.csv")
     new_rows = read_csv(destination_runtime / "configs" / "post_search2_source_manifest.csv")
     old = {row["path"]: row["sha256"] for row in old_rows}
@@ -146,18 +170,36 @@ def validate_scientific_sources(source_runtime, destination_runtime):
     }
     missing = sorted(required - set(new))
     changed = sorted(path for path in required & set(new) if old[path] != new[path])
-    if missing or changed:
+    transitioned = []
+    unauthorized = []
+    for path in changed:
+        transition = SCIENTIFIC_SOURCE_TRANSITIONS.get(path)
+        if (
+            transition
+            and old[path] == transition["source_sha256"]
+            and new[path] == transition["destination_sha256"]
+        ):
+            transitioned.append(path)
+        else:
+            unauthorized.append(path)
+    if missing or unauthorized:
         raise SystemExit(
             "scientific source mismatch prevents recovery; "
-            f"missing={missing}; changed={changed}"
+            f"missing={missing}; changed={unauthorized}"
         )
+    validate_transition_job_scope(source_rows, job_ids, transitioned)
     unexpected_changed = sorted(
         path for path in set(old) & set(new)
         if old[path] != new[path] and path not in ALLOWED_SOURCE_DIFFERENCES
+        and path not in transitioned
         and not path.startswith("local_trackers/runtime_configs/")
     )
     if unexpected_changed:
         raise SystemExit(f"non-orchestration source changed: {unexpected_changed}")
+    return [
+        {"path": path, **SCIENTIFIC_SOURCE_TRANSITIONS[path]}
+        for path in transitioned
+    ]
 
 
 def required_artifacts(job, source_runtime, source_part4_runtime):
@@ -265,7 +307,9 @@ def main():
     source_by_id = {row["job_id"]: row for row in source_manifest}
     validate_excluded_dependencies(source_manifest, completed, excluded)
     validate_job_contracts(source_manifest, destination_manifest, completed)
-    validate_scientific_sources(source_runtime, destination_runtime)
+    scientific_transitions = validate_scientific_sources(
+        source_runtime, destination_runtime, source_manifest, completed
+    )
 
     artifact_rows = []
     planned = {}
@@ -342,6 +386,7 @@ def main():
             "completed_job_count": len(completed),
             "source_completed_job_count": len(source_completed),
             "excluded_completed_jobs": sorted(excluded),
+            "scientific_source_transitions": scientific_transitions,
             "artifact_count": len(artifact_rows),
             "artifact_manifest": str(manifest_path),
             "artifact_manifest_sha256": sha256(manifest_path),

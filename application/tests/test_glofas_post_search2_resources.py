@@ -25,6 +25,10 @@ launcher = load(
     "glofas_post_search2_launcher_resources_test",
     ROOT / "application/scripts/405_launch_glofas_post_search2_dag.py",
 )
+checker = load(
+    "glofas_post_search2_checker_resources_test",
+    ROOT / "application/scripts/406_check_glofas_post_search2_dag.py",
+)
 
 
 topology = {}
@@ -48,6 +52,9 @@ assert contract["active_physical_core_count"] == 25
 assert contract["pool_physical_core_count"] == 25
 assert contract["socket_distribution"] == {"0": 8, "1": 8, "2": 8, "3": 1}
 assert contract["smt_siblings_used"] is False
+assert checker.descendant_pids(
+    10, [(11, 10), (12, 11), (13, 99), (14, 12)]
+) == [10, 11, 12, 14]
 
 for workers, pool, phrase in (
     (3, "0-1", "exceeds"),

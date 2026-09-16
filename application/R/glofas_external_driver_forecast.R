@@ -230,6 +230,25 @@ app_glofas_part1_quantile_external_driver_forecast <- function(
   )
 }
 
+app_glofas_daily_horizons_equal <- function(x, y) {
+  x <- as.Date(x)
+  y <- as.Date(y)
+  length(x) == length(y) && !anyNA(x) && !anyNA(y) && all(x == y)
+}
+
+app_glofas_part2_quantile_reversal_index <- function(tau, require_complete = FALSE) {
+  tau <- as.numeric(tau)
+  reversed <- vapply(1 - tau, function(target) {
+    gap <- abs(tau - target)
+    if (!length(gap) || min(gap) > 1.0e-12) NA_integer_ else which.min(gap)
+  }, integer(1L))
+  complete <- !anyNA(reversed)
+  if (isTRUE(require_complete) && !complete) {
+    stop("Part 2 USGS quantiles require an exactly symmetric discrepancy grid.", call. = FALSE)
+  }
+  if (complete) reversed else rep(NA_integer_, length(tau))
+}
+
 app_glofas_part2_quantile_external_driver_forecast <- function(
   fitted,
   fit,
@@ -264,10 +283,9 @@ app_glofas_part2_quantile_external_driver_forecast <- function(
     )
   }
   names(paths) <- app_glofas_part1_quantile_slug(tau)
-  reversed <- match(1 - tau, tau)
-  if (anyNA(reversed) || any(abs(tau[reversed] - (1 - tau)) > 1.0e-12)) {
-    stop("Part 2 USGS quantiles require an exactly symmetric discrepancy grid.", call. = FALSE)
-  }
+  reversed <- app_glofas_part2_quantile_reversal_index(
+    tau, require_complete = !is.null(future_glofas)
+  )
   usgs_paths <- NULL
   usgs_rows <- list()
   corrected_status <- "unavailable_without_future_glofas_reference"
@@ -337,7 +355,9 @@ app_glofas_part3_quantile_external_driver_forecast <- function(
     design, horizon_days = length(dates), origin_date = origin_date,
     allow_missing_future_indices = TRUE
   )
-  if (!identical(origin$future_dates, dates)) stop("Part 3 driver dates do not match the requested origin.", call. = FALSE)
+  if (!app_glofas_daily_horizons_equal(origin$future_dates, dates)) {
+    stop("Part 3 driver dates do not match the requested origin.", call. = FALSE)
+  }
   reference <- app_glofas_part3_component_context(design, "reference", origin)
   discrepancy <- app_glofas_part3_component_context(design, "discrepancy", origin)
   ref_paths <- disc_paths <- glofas_paths <- vector("list", length(tau))

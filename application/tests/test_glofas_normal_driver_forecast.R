@@ -70,6 +70,19 @@ d1 <- app_glofas_quantile_beta_draws(fit, 1L, c(0.2, 0.8), 2L, 500L, 17L)
 d2 <- app_glofas_quantile_beta_draws(fit, 1L, c(0.2, 0.8), 2L, 500L, 17L)
 stopifnot(identical(d1, d2), nrow(d1) == 500L, ncol(d1) == 3L)
 
+stopifnot(
+  identical(app_glofas_part2_quantile_reversal_index(0.35), NA_integer_),
+  identical(app_glofas_part2_quantile_reversal_index(c(0.2, 0.5, 0.8)), c(3L, 2L, 1L)),
+  inherits(
+    try(app_glofas_part2_quantile_reversal_index(0.35, require_complete = TRUE), silent = TRUE),
+    "try-error"
+  )
+)
+integer_dates <- structure(19352:19381, class = "Date")
+double_dates <- as.Date(as.character(integer_dates))
+stopifnot(!identical(integer_dates, double_dates))
+stopifnot(app_glofas_daily_horizons_equal(integer_dates, double_dates))
+
 prior <- app_glofas_part4_normal_driver_prior(bank, expected_paths = 5L)
 stopifnot(app_validate_glofas_part4_normal_driver_prior(prior, dates, "log1p", 5L))
 stopifnot(isTRUE(prior$replace_future_y_working_likelihood))

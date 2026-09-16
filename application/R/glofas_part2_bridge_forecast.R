@@ -77,11 +77,18 @@ app_glofas_part2_bridge_validate_disc_covars_contract <- function(row, strict_wi
   if (!app_glofas_part2_bridge_bool(row$disc_include_covariates)) add("disc_include_covariates is not TRUE")
   if (app_glofas_part2_bridge_bool(row$disc_include_glofas_lags)) add("disc_include_glofas_lags is TRUE")
   if (app_glofas_part2_bridge_bool(row$disc_include_usgs_lags)) add("disc_include_usgs_lags is TRUE")
-  if (as.integer(row$disc_output_lag_max[[1L]]) != 360L) add("disc_output_lag_max is not 360")
-  if (as.integer(row$disc_covariate_lag_max[[1L]]) != 180L) add("disc_covariate_lag_max is not 180")
-  if (as.integer(row$disc_auxiliary_lag_max[[1L]] %||% 360L) != 360L) add("disc_auxiliary_lag_max is not 360")
+  output_lag_max <- as.integer(row$disc_output_lag_max[[1L]])
+  covariate_lag_max <- as.integer(row$disc_covariate_lag_max[[1L]])
+  auxiliary_lag_max <- as.integer(row$disc_auxiliary_lag_max[[1L]] %||% output_lag_max)
+  if (!is.finite(output_lag_max) || output_lag_max < 1L) add("disc_output_lag_max is not positive")
+  if (!is.finite(covariate_lag_max) || covariate_lag_max < 0L) add("disc_covariate_lag_max is negative")
+  if (!is.finite(auxiliary_lag_max) || auxiliary_lag_max != output_lag_max) {
+    add("disc_auxiliary_lag_max does not match disc_output_lag_max")
+  }
   if (as.integer(row$disc_D[[1L]] %||% 1L) != 1L) add("disc_D is not 1")
   if (isTRUE(strict_winner)) {
+    if (output_lag_max != 360L) add("disc_output_lag_max is not 360")
+    if (covariate_lag_max != 180L) add("disc_covariate_lag_max is not 180")
     if (!identical(as.character(row$disc_n_vector[[1L]]), "2500")) add("disc_n_vector is not 2500")
     if (abs(as.numeric(row$disc_alpha[[1L]]) - 0.8) > 1.0e-12) add("disc_alpha is not 0.8")
     if (abs(as.numeric(row$disc_rho[[1L]]) - 0.7) > 1.0e-12) add("disc_rho is not 0.7")
@@ -138,14 +145,30 @@ app_glofas_part2_bridge_validate_design_contract <- function(fitted) {
   out_lags <- sort(unique(as.integer(unlist(spec$output_lags %||% integer(), use.names = FALSE))))
   cov_lags <- sort(unique(as.integer(unlist(spec$covariate_lags %||% integer(), use.names = FALSE))))
   columns <- as.character(spec$columns %||% character())
-  if (!identical(out_lags, seq_len(360L))) stop("Discrepancy output lags must be exactly 1:360.", call. = FALSE)
-  if (!identical(cov_lags, 0:180)) stop("Discrepancy covariate lags must be exactly 0:180.", call. = FALSE)
+  output_lag_max <- as.integer(fitted$candidate_row$output_lag_max[[1L]])
+  covariate_lag_max <- as.integer(fitted$candidate_row$covariate_lag_max[[1L]])
+  expected_out_lags <- seq_len(output_lag_max)
+  expected_cov_lags <- 0:covariate_lag_max
+  if (!identical(out_lags, expected_out_lags)) {
+    stop(sprintf("Discrepancy output lags must be exactly 1:%d.", output_lag_max), call. = FALSE)
+  }
+  if (!identical(cov_lags, expected_cov_lags)) {
+    stop(sprintf("Discrepancy covariate lags must be exactly 0:%d.", covariate_lag_max), call. = FALSE)
+  }
   if (!isTRUE(spec$uses_covariates %||% FALSE)) stop("disc_covars forecast must use realized ppt/soil covariates.", call. = FALSE)
   if (isTRUE(spec$uses_auxiliary_lags %||% FALSE)) stop("disc_covars forecast must not use auxiliary USGS/GloFAS lags.", call. = FALSE)
   if (any(grepl("usgs|glofas", columns, ignore.case = TRUE))) {
     stop("disc_covars reservoir inputs contain direct USGS/GloFAS lag columns.", call. = FALSE)
   }
   invisible(TRUE)
+}
+
+app_glofas_part2_bridge_input_contract_label <- function(candidate_row) {
+  sprintf(
+    "disc_covars: discrepancy lags 1:%d plus realized ppt/soil lags 0:%d; no direct USGS/GloFAS lags",
+    as.integer(candidate_row$output_lag_max[[1L]]),
+    as.integer(candidate_row$covariate_lag_max[[1L]])
+  )
 }
 
 app_glofas_part2_bridge_object_path <- function(rhs_runtime_root, object_name) {
@@ -843,7 +866,7 @@ app_glofas_part2_bridge_write_normal_result <- function(result, root, run_label)
       diagnostic_type = result$diagnostic_type,
       target = "observed discrepancy = retrospective GloFAS - USGS",
       corrected_path = "retrospective GloFAS - predicted discrepancy",
-      input_contract = "disc_covars: discrepancy lags 1:360 plus realized ppt/soil lags 0:180; no direct USGS/GloFAS lags",
+      input_contract = app_glofas_part2_bridge_input_contract_label(result$fitted$candidate_row),
       origin_policy = "fixed-origin 30-day diagnostic forecast",
       forecast_ensembles = FALSE,
       synthesis = FALSE,
@@ -928,7 +951,7 @@ app_glofas_part2_bridge_write_quantile_result <- function(result, root, run_labe
       corrected_quantile_transform = "corrected_tau = 1 - discrepancy_tau; corrected_qhat = retrospective GloFAS - discrepancy_qhat",
       model_family = result$model_family,
       likelihood = result$likelihood,
-      input_contract = "disc_covars: discrepancy lags 1:360 plus realized ppt/soil lags 0:180; no direct USGS/GloFAS lags",
+      input_contract = app_glofas_part2_bridge_input_contract_label(result$candidate_row),
       max_iter = as.integer(result$controls$max_iter),
       min_iter = as.integer(result$controls$min_iter),
       tol = as.numeric(result$controls$tol),

@@ -69,11 +69,41 @@ winner_row <- data.frame(
   stringsAsFactors = FALSE
 )
 app_glofas_part2_bridge_validate_disc_covars_contract(winner_row, strict_winner = TRUE)
+search2_row <- winner_row
+search2_row$disc_n_vector <- "1500"
+search2_row$disc_m <- 540L
+search2_row$disc_output_lag_max <- 540L
+search2_row$disc_covariate_lag_max <- 360L
+search2_row$disc_auxiliary_lag_max <- 540L
+search2_row$disc_alpha <- 0.95
+search2_row$disc_rho <- 0.30
+app_glofas_part2_bridge_validate_disc_covars_contract(search2_row, strict_winner = FALSE)
 candidate <- app_glofas_part2_bridge_candidate_from_rhs_row(winner_row)
 stopifnot(identical(as.character(candidate$n_vector[[1L]]), "2500"))
 stopifnot(as.integer(candidate$output_lag_max[[1L]]) == 360L)
 stopifnot(as.integer(candidate$covariate_lag_max[[1L]]) == 180L)
 stopifnot(abs(as.numeric(candidate$rhs_tau0[[1L]]) - 0.001) < 1.0e-12)
+
+make_fitted_contract <- function(output_lag_max, covariate_lag_max) {
+  list(
+    candidate_row = data.frame(
+      output_lag_max = output_lag_max,
+      covariate_lag_max = covariate_lag_max
+    ),
+    design = list(design_meta = list(reservoir_input_spec = list(
+      output_lags = seq_len(output_lag_max),
+      covariate_lags = 0:covariate_lag_max,
+      columns = c("output_lag", "ppt_lag", "soil_lag"),
+      uses_covariates = TRUE,
+      uses_auxiliary_lags = FALSE
+    )))
+  )
+}
+app_glofas_part2_bridge_validate_design_contract(make_fitted_contract(360L, 180L))
+app_glofas_part2_bridge_validate_design_contract(make_fitted_contract(540L, 360L))
+stopifnot(grepl("1:540", app_glofas_part2_bridge_input_contract_label(
+  make_fitted_contract(540L, 360L)$candidate_row
+), fixed = TRUE))
 
 audit <- data.frame(
   input_block = c("output_lag", "output_lag", "covariate"),

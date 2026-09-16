@@ -166,8 +166,16 @@ def required_artifacts(job, source_runtime, source_part4_runtime):
     for path in source_runtime.rglob("*"):
         if not path.is_file() or path.parent.name in {"status", "scripts"}:
             continue
+        relative = path.relative_to(source_runtime)
+        if relative.parts[:2] == ("configs", "recovery_certificates"):
+            continue
+        if relative in {
+            Path("configs/recovery_contract.json"),
+            Path("configs/recovery_artifact_manifest.csv"),
+        }:
+            continue
         if job_id in path.name:
-            paths.add(("main", path.relative_to(source_runtime)))
+            paths.add(("main", relative))
     for relative in SPECIAL_MAIN_ARTIFACTS.get(job_id, ()):
         paths.add(("main", Path(relative)))
     for relative in SPECIAL_PART4_ARTIFACTS.get(job_id, ()):

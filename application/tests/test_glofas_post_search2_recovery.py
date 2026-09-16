@@ -75,14 +75,22 @@ with tempfile.TemporaryDirectory(prefix="glofas_post_search2_recovery_") as tmp:
     tmp = Path(tmp)
     source_runtime = tmp / "source"
     source_part4 = tmp / "source_part4"
-    for path in (source_runtime / "objects", source_runtime / "logs", source_part4 / "objects"):
+    for path in (
+        source_runtime / "objects", source_runtime / "logs",
+        source_runtime / "configs" / "recovery_certificates",
+        source_part4 / "objects",
+    ):
         path.mkdir(parents=True, exist_ok=True)
     (source_runtime / "objects" / "fit_a_fit.rds").write_bytes(b"not-read-in-unit-test")
     (source_runtime / "logs" / "fit_a.log").write_text("done\n", encoding="utf-8")
+    (source_runtime / "configs" / "recovery_certificates" / "fit_a.json").write_text(
+        "{}\n", encoding="utf-8"
+    )
     artifacts = recovery.required_artifacts(row, source_runtime, source_part4)
     names = {str(relative) for _, relative, _ in artifacts}
     assert "objects/fit_a_fit.rds" in names
     assert "logs/fit_a.log" in names
+    assert "configs/recovery_certificates/fit_a.json" not in names
 
     status = source_runtime / "status"
     status.mkdir()

@@ -102,7 +102,35 @@ def verify_launch_readiness(runtime):
     ).strip()
     if engine_head != engine.get("head") or engine_dirty:
         raise SystemExit("pinned engine state changed after preparation")
+    verify_recovery_artifacts(runtime)
     return path, payload
+
+
+def verify_recovery_artifacts(runtime):
+    contract_path = runtime / "configs" / "recovery_contract.json"
+    if not contract_path.is_file():
+        return
+    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    manifest = Path(contract.get("artifact_manifest", ""))
+    if not manifest.is_file():
+        raise SystemExit(f"recovery artifact manifest is unavailable: {manifest}")
+    if sha256(manifest) != contract.get("artifact_manifest_sha256"):
+        raise SystemExit("recovery artifact manifest hash changed")
+    roots = {
+        "main": Path(contract["destination_runtime"]),
+        "part4": Path(contract["destination_part4_runtime"]),
+    }
+    for row in rows(manifest):
+        root_kind = row["root_kind"]
+        if root_kind not in roots:
+            raise SystemExit(f"unsupported recovery artifact root: {root_kind}")
+        artifact = roots[root_kind] / row["relative_path"]
+        if not artifact.is_file():
+            raise SystemExit(f"recovered artifact is missing: {artifact}")
+        if artifact.stat().st_size != int(row["size_bytes"]):
+            raise SystemExit(f"recovered artifact size changed: {artifact}")
+        if sha256(artifact) != row["sha256"]:
+            raise SystemExit(f"recovered artifact hash changed: {artifact}")
 
 
 def marker_conflicts(runtime, jobs):
@@ -126,12 +154,12 @@ def dynamic_contract_artifacts(runtime):
         (runtime / "configs" / "post_search2_execution_contract.json").read_text(encoding="utf-8")
     )
     part4 = resolve_recorded(execution["part4_runtime_root"])
+    candidates.extend((part4 / "configs").rglob("*"))
     candidates.extend([
-        part4 / "configs" / "part4_model_manifest.csv",
-        part4 / "configs" / "part4_launch_metadata.json",
         part4 / "objects" / "part4_normal_driver_prior.rds",
+        runtime / "configs" / "post_search2_selected_anchor_manifest.csv",
     ])
-    return [path for path in candidates if path.is_file()]
+    return sorted(set(path for path in candidates if path.is_file()))
 
 
 def launch_contract_payload(runtime, readiness_path, readiness, manifest, workers, session_prefix):

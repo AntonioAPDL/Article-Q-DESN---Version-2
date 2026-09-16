@@ -21,6 +21,10 @@ recovery = load(
     "glofas_post_search2_recovery",
     ROOT / "application/scripts/408_recover_glofas_post_search2_runtime.py",
 )
+launcher = load(
+    "glofas_post_search2_launcher",
+    ROOT / "application/scripts/405_launch_glofas_post_search2_dag.py",
+)
 
 
 source_command = json.dumps([
@@ -66,5 +70,33 @@ with tempfile.TemporaryDirectory(prefix="glofas_post_search2_recovery_") as tmp:
     status.mkdir()
     (status / "fit_a.completed").write_text("done\n", encoding="utf-8")
     assert recovery.completed_job_ids(source_runtime, [row]) == {"fit_a"}
+
+    destination_runtime = tmp / "destination"
+    destination_part4 = tmp / "destination_part4"
+    artifact = destination_runtime / "objects" / "fit_a_fit.rds"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"certified")
+    recovery_manifest = destination_runtime / "configs" / "recovery_artifact_manifest.csv"
+    recovery.write_csv(recovery_manifest, [{
+        "job_id": "fit_a", "root_kind": "main", "relative_path": "objects/fit_a_fit.rds",
+        "size_bytes": artifact.stat().st_size, "sha256": recovery.sha256(artifact),
+        "source_path": str(source_runtime / "objects" / "fit_a_fit.rds"),
+    }])
+    contract = {
+        "destination_runtime": str(destination_runtime),
+        "destination_part4_runtime": str(destination_part4),
+        "artifact_manifest": str(recovery_manifest),
+        "artifact_manifest_sha256": recovery.sha256(recovery_manifest),
+    }
+    contract_path = destination_runtime / "configs" / "recovery_contract.json"
+    contract_path.write_text(json.dumps(contract), encoding="utf-8")
+    launcher.verify_recovery_artifacts(destination_runtime)
+    artifact.write_bytes(b"changed")
+    try:
+        launcher.verify_recovery_artifacts(destination_runtime)
+    except SystemExit as exc:
+        assert "changed" in str(exc)
+    else:
+        raise AssertionError("changed recovered artifact was accepted")
 
 print("GLOFAS_POST_SEARCH2_RECOVERY_TEST_PASS")

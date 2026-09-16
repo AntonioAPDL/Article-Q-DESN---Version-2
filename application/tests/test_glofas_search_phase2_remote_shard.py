@@ -4,6 +4,7 @@ import csv
 import hashlib
 import importlib.util
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -73,7 +74,7 @@ with tempfile.TemporaryDirectory() as temp:
         "scoring_packet_sha256": remote.sha256_file(score),
     }])
     (source / "configs" / "run_manifest.yaml").write_text(
-        f"version: test\nrepo_root: {repo}\ngit_head: {head}\n"
+        f"version: test\nmode: confirm\nrepo_root: {repo}\ngit_head: {head}\n"
     )
     (source / "status" / "job_2.failed").write_text(remote.HOLD_TEXT)
     selected = temp / "selected.txt"
@@ -81,6 +82,15 @@ with tempfile.TemporaryDirectory() as temp:
     staging = temp / "staging"
     destination = temp / "destination"
 
+    result = run("prepare", "--source-runtime-root", source, "--staging-root", staging,
+                 "--destination-runtime-root", destination, "--destination-repo-root", repo,
+                 "--job-id-file", selected, "--expected-head", head)
+    assert result.returncode != 0
+    assert "missing required portable config" in result.stderr
+    shutil.rmtree(staging)
+
+    baseline = source / "configs" / "confirmation_guardrail_baselines.csv"
+    baseline.write_text("target,historical_all_rmse,historical_last200_rmse\nreference,1,1\n")
     result = run("prepare", "--source-runtime-root", source, "--staging-root", staging,
                  "--destination-runtime-root", destination, "--destination-repo-root", repo,
                  "--job-id-file", selected, "--expected-head", head)
@@ -97,6 +107,13 @@ with tempfile.TemporaryDirectory() as temp:
     assert relocated[0]["model_packet_path"].startswith(str(destination))
     assert relocated[0]["ridge_warm_start_path"].startswith(str(destination / "warm_inputs"))
     assert remote.sha256_file(relocated[0]["ridge_warm_start_path"]) == remote.sha256_file(warm)
+    copied_baseline = shutil_target / "configs" / "confirmation_guardrail_baselines.csv"
+    assert copied_baseline.is_file()
+    assert remote.sha256_file(copied_baseline) == remote.sha256_file(baseline)
+    payload = remote.read_csv(shutil_target / "control" / "payload_manifest.csv")
+    assert "configs/confirmation_guardrail_baselines.csv" in {
+        row["relative_path"] for row in payload
+    }
 
     job = "job_2"
     outputs = {

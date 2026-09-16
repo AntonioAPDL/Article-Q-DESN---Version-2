@@ -29,6 +29,7 @@ JOB_OUTPUT_PATTERNS = {
     "logs": ("{job}.log",),
 }
 HOLD_TEXT = "DISTRIBUTION_HOLD_JEREZ_20260914\n"
+CONFIRMATION_PORTABLE_CONFIGS = ("confirmation_guardrail_baselines.csv",)
 
 
 def now_utc():
@@ -220,6 +221,12 @@ def prepare(args):
         args.source_host, args.execution_host,
     )
     (staging / "configs" / "run_manifest.yaml").write_text(text)
+    if yaml_scalar(run_manifest, "mode") == "confirm":
+        for name in CONFIRMATION_PORTABLE_CONFIGS:
+            src = source / "configs" / name
+            if not src.is_file():
+                raise RuntimeError(f"Confirmation shard is missing required portable config: {src}")
+            copy(src, staging / "configs" / name)
     for name in ("git_state.txt", "session_info.txt"):
         src = source / "configs" / name
         if src.exists():

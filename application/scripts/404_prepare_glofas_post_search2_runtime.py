@@ -10,10 +10,16 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from glofas_post_search2_resources import validate_worker_resources
 
 
 TAUS = ("0.05", "0.20", "0.35", "0.50", "0.65", "0.80", "0.95")
@@ -68,6 +74,7 @@ def source_files(args, runtime_configs=()):
         "406_check_glofas_post_search2_dag.py",
         "407_prepare_glofas_post_search2_inputs.R",
         "408_recover_glofas_post_search2_runtime.py",
+        "glofas_post_search2_resources.py",
     )]
     files += [
         repo_root() / "application" / "src" / "glofas_external_driver_forecast.cpp",
@@ -523,7 +530,9 @@ def main():
     parser.add_argument("--authoritative-input-root", required=True)
     parser.add_argument("--input-bundle-config", default="application/config/input_bundle_authoritative_dec25.yaml")
     parser.add_argument("--input-hash-contract", default="application/config/glofas_dec25_input_hash_contract.csv")
-    parser.add_argument("--session-prefix", default="glofas_post_search2_20260916_r6")
+    parser.add_argument("--session-prefix", default="glofas_post_search2_20260916_r7")
+    parser.add_argument("--workers", type=int, default=25)
+    parser.add_argument("--cpu-pool", default="0-24")
     parser.add_argument("--max-iter", type=int, default=100)
     parser.add_argument("--min-iter", type=int, default=30)
     parser.add_argument("--tol", type=float, default=0.01)
@@ -537,6 +546,10 @@ def main():
         raise SystemExit("The adopted recursive forecast contract requires exactly 500 paths.")
     if args.max_iter < args.min_iter or args.min_iter < 30 or args.freeze_beta_warmup_iters < 0:
         raise SystemExit("Invalid VB iteration controls.")
+    try:
+        resource_contract = validate_worker_resources(args.workers, args.cpu_pool)
+    except ValueError as exc:
+        raise SystemExit(f"invalid worker resource contract: {exc}")
     original_base_config = resolve(args.base_config)
     original_part4_config = resolve(args.part4_base_config)
     selected_components = resolve(args.selected_components)
@@ -634,7 +647,7 @@ def main():
         "path": relative(path), "size_bytes": path.stat().st_size, "sha256": sha256(path)
     } for path in frozen_sources])
     metadata = {
-        "schema_version": "glofas_post_search2_execution_dag_v2",
+        "schema_version": "glofas_post_search2_execution_dag_v3",
         "prepared_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_root": relative(runtime),
         "part4_runtime_root": relative(part4_runtime),
@@ -657,6 +670,7 @@ def main():
         "part123_config_contract": part123_config_contract,
         "part4_config_contract": part4_config_contract,
         "engine_contract": engine,
+        "resource_contract": resource_contract,
         "cutoff": "2022-12-25",
         "part123_forecast_window": ["2022-12-26", "2023-01-24"],
         "part4_issued_window_days": 28,
@@ -682,7 +696,7 @@ def main():
     launch.write_text(
         "#!/usr/bin/env bash\nset -euo pipefail\n"
         "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1\n"
-        f"python3 application/scripts/405_launch_glofas_post_search2_dag.py --runtime-root {shlex.quote(relative(runtime))} --workers 5 --session-prefix {shlex.quote(args.session_prefix)} --background\n"
+        f"python3 application/scripts/405_launch_glofas_post_search2_dag.py --runtime-root {shlex.quote(relative(runtime))} --workers {args.workers} --cpu-pool {shlex.quote(args.cpu_pool)} --session-prefix {shlex.quote(args.session_prefix)} --background\n"
     )
     launch.chmod(0o755)
     print(f"runtime_root={relative(runtime)}")

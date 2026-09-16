@@ -17,6 +17,7 @@ ALLOWED_SOURCE_DIFFERENCES = {
     "application/scripts/406_check_glofas_post_search2_dag.py",
     "application/scripts/407_prepare_glofas_post_search2_inputs.R",
     "application/scripts/408_recover_glofas_post_search2_runtime.py",
+    "application/scripts/glofas_post_search2_resources.py",
 }
 
 SPECIAL_MAIN_ARTIFACTS = {
@@ -91,6 +92,25 @@ def completed_job_ids(runtime, manifest_rows):
         row["job_id"] for row in manifest_rows
         if (status / f"{row['job_id']}.completed").is_file()
     }
+
+
+def recovery_job_ids(completed, excluded):
+    excluded = set(excluded)
+    unknown = excluded - set(completed)
+    if unknown:
+        raise SystemExit(f"excluded recovery jobs are not completed in source: {sorted(unknown)}")
+    return set(completed) - excluded
+
+
+def validate_excluded_dependencies(source_rows, recovery_jobs, excluded):
+    source = {row["job_id"]: row for row in source_rows}
+    excluded = set(excluded)
+    for job_id in recovery_jobs:
+        blocked = set(filter(None, source[job_id]["dependencies"].split("|"))) & excluded
+        if blocked:
+            raise SystemExit(
+                f"cannot recover {job_id}; excluded dependencies are completed: {sorted(blocked)}"
+            )
 
 
 def validate_job_contracts(source_rows, destination_rows, job_ids):
@@ -203,6 +223,7 @@ def main():
     parser.add_argument("--destination-runtime", required=True)
     parser.add_argument("--destination-part4-runtime", required=True)
     parser.add_argument("--expected-completed", type=int, default=21)
+    parser.add_argument("--exclude-job-ids", default="")
     args = parser.parse_args()
 
     source_runtime = Path(args.source_runtime).resolve()
@@ -220,17 +241,24 @@ def main():
 
     source_manifest = read_csv(source_runtime / "tables" / "post_search2_job_manifest.csv")
     destination_manifest = read_csv(destination_runtime / "tables" / "post_search2_job_manifest.csv")
-    completed = completed_job_ids(source_runtime, source_manifest)
-    if len(completed) != args.expected_completed:
+    source_completed = completed_job_ids(source_runtime, source_manifest)
+    if len(source_completed) != args.expected_completed:
         raise SystemExit(
-            f"expected {args.expected_completed} completed source jobs, found {len(completed)}"
+            f"expected {args.expected_completed} completed source jobs, found {len(source_completed)}"
         )
-    if "part4_prepare_runtime" in completed:
-        raise SystemExit("failed Part 4 preparation must not be imported")
+    excluded = {
+        value.strip() for value in args.exclude_job_ids.split(",") if value.strip()
+    }
+    completed = recovery_job_ids(source_completed, excluded)
+    if "part4_prepare_runtime" in source_completed and "part4_prepare_runtime" not in excluded:
+        raise SystemExit(
+            "Part 4 runtime preparation is operational and must be explicitly excluded"
+        )
+    source_by_id = {row["job_id"]: row for row in source_manifest}
+    validate_excluded_dependencies(source_manifest, completed, excluded)
     validate_job_contracts(source_manifest, destination_manifest, completed)
     validate_scientific_sources(source_runtime, destination_runtime)
 
-    source_by_id = {row["job_id"]: row for row in source_manifest}
     artifact_rows = []
     planned = {}
     for job_id in sorted(completed):
@@ -304,6 +332,8 @@ def main():
             "destination_part4_runtime": str(destination_part4_runtime),
             "completed_jobs": sorted(completed),
             "completed_job_count": len(completed),
+            "source_completed_job_count": len(source_completed),
+            "excluded_completed_jobs": sorted(excluded),
             "artifact_count": len(artifact_rows),
             "artifact_manifest": str(manifest_path),
             "artifact_manifest_sha256": sha256(manifest_path),
@@ -325,6 +355,8 @@ def main():
         if staging.exists():
             shutil.rmtree(staging)
 
+    print(f"source_completed_jobs={len(source_completed)}")
+    print(f"excluded_completed_jobs={len(excluded)}")
     print(f"recovered_jobs={len(completed)}")
     print(f"recovered_artifacts={len(artifact_rows)}")
     print(f"recovery_contract={contract_path}")

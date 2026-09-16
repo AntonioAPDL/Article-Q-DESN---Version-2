@@ -6,9 +6,15 @@ import csv
 import hashlib
 import json
 import subprocess
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from glofas_post_search2_resources import validate_worker_resources
 
 
 def repo_root(): return Path(__file__).resolve().parents[2]
@@ -34,7 +40,29 @@ def recorded_path(value):
     return path.resolve() if path.is_absolute() else (repo_root() / path).resolve()
 
 
-def contract_health(runtime):
+def session_name(prefix, job_id):
+    digest = hashlib.sha1(job_id.encode()).hexdigest()[:10]
+    return f"{prefix}_{job_id[:42]}_{digest}".replace(".", "p")
+
+
+def affinity_for_session(name):
+    result = subprocess.run(
+        ["tmux", "list-panes", "-t", name, "-F", "#{pane_pid}"],
+        universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    pid = result.stdout.splitlines()[0].strip()
+    affinity = subprocess.run(
+        ["taskset", "-pc", pid], universal_newlines=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if affinity.returncode != 0 or ":" not in affinity.stdout:
+        return None
+    return affinity.stdout.rsplit(":", 1)[1].strip()
+
+
+def contract_health(runtime, running_jobs, launch_payload):
     checks = []
     readiness_path = runtime / "configs" / "launch_readiness.json"
     if not readiness_path.is_file():
@@ -70,6 +98,64 @@ def contract_health(runtime):
         "status": "pass" if launch.is_file() else "not_launched",
         "detail": str(launch) if launch.is_file() else "no launch contract",
     })
+    execution_path = runtime / "configs" / "post_search2_execution_contract.json"
+    try:
+        execution = json.loads(execution_path.read_text(encoding="utf-8"))
+        expected = execution.get("resource_contract")
+        if not expected:
+            raise ValueError("execution contract lacks resource_contract")
+        live = validate_worker_resources(
+            expected["worker_capacity"], expected["cpu_pool_spec"]
+        )
+        resource_ok = live == expected
+        if launch_payload is not None:
+            resource_ok = resource_ok and launch_payload.get("resource_contract") == expected
+        checks.append({
+            "contract": "physical_core_resources",
+            "status": "pass" if resource_ok else "fail",
+            "detail": (
+                f"workers={expected['worker_capacity']};"
+                f"cpus={expected['cpu_pool_spec']};"
+                f"sockets={expected['socket_distribution']}"
+            ),
+        })
+        assigned = {}
+        assignment_errors = []
+        prefix = (launch_payload or {}).get("session_prefix", "")
+        launch_hash = sha256(launch) if launch.is_file() else None
+        for job_id in sorted(running_jobs):
+            path = runtime / "scripts" / f"{job_id}.resource.json"
+            if not path.is_file():
+                assignment_errors.append(f"{job_id}:missing")
+                continue
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            cpu = int(payload.get("cpu", -1))
+            if cpu not in expected["active_cpu_pool"]:
+                assignment_errors.append(f"{job_id}:cpu={cpu}")
+            elif cpu in assigned:
+                assignment_errors.append(f"{job_id}:shared_cpu={cpu}")
+            else:
+                assigned[cpu] = job_id
+            if launch_hash and payload.get("launch_contract_sha256") != launch_hash:
+                assignment_errors.append(f"{job_id}:launch_hash")
+            if prefix:
+                actual = affinity_for_session(session_name(prefix, job_id))
+                if actual != str(cpu):
+                    assignment_errors.append(f"{job_id}:affinity={actual},expected={cpu}")
+        checks.append({
+            "contract": "active_cpu_assignments",
+            "status": "pass" if not assignment_errors else "fail",
+            "detail": (
+                f"active={len(running_jobs)};unique={len(assigned)}"
+                if not assignment_errors else "|".join(assignment_errors)
+            ),
+        })
+    except Exception as exc:
+        checks.append({
+            "contract": "physical_core_resources",
+            "status": "fail",
+            "detail": str(exc),
+        })
     return checks
 
 
@@ -81,12 +167,22 @@ def main():
     runtime = resolve(args.runtime_root)
     jobs = read(runtime / "tables" / "post_search2_job_manifest.csv")
     active_sessions = sessions()
+    launch_path = runtime / "configs" / "post_search2_launch_contract.json"
+    launch_payload = (
+        json.loads(launch_path.read_text(encoding="utf-8"))
+        if launch_path.is_file() else None
+    )
+    session_prefix = (launch_payload or {}).get("session_prefix")
     completed = {row["job_id"] for row in jobs if (runtime / "status" / f"{row['job_id']}.completed").exists()}
     detail = []
     for row in jobs:
         job = row["job_id"]
         marker = runtime / "status"
-        matching = any(job[:42] in name for name in active_sessions if name.startswith("glofas_post_search2"))
+        matching = (
+            session_name(session_prefix, job) in active_sessions
+            if session_prefix else
+            any(job[:42] in name for name in active_sessions if name.startswith("glofas_post_search2"))
+        )
         marker_states = [suffix for suffix in ("completed", "failed", "running")
                          if (marker / f"{job}.{suffix}").exists()]
         if len(marker_states) > 1: state = "marker_conflict"
@@ -116,7 +212,8 @@ def main():
     fields = list(summary[0])
     print(" | ".join(fields))
     for row in summary: print(" | ".join(str(row[key]) for key in fields))
-    contracts = contract_health(runtime)
+    running_jobs = {row["job_id"] for row in detail if row["state"] == "running"}
+    contracts = contract_health(runtime, running_jobs, launch_payload)
     print("contract | status | detail")
     for row in contracts:
         print(f"{row['contract']} | {row['status']} | {row['detail']}")

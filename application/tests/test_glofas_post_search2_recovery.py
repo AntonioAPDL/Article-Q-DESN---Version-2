@@ -44,6 +44,24 @@ row = {
 }
 row_new = {**row, "command_json": destination_command}
 recovery.validate_job_contracts([row], [row_new], {"fit_a"})
+assert recovery.recovery_job_ids({"fit_a", "prepare"}, {"prepare"}) == {"fit_a"}
+try:
+    recovery.recovery_job_ids({"fit_a"}, {"unknown"})
+except SystemExit as exc:
+    assert "not completed" in str(exc)
+else:
+    raise AssertionError("unknown recovery exclusion was accepted")
+
+dependent = {**row, "job_id": "fit_b", "dependencies": "prepare"}
+try:
+    recovery.validate_excluded_dependencies(
+        [{**row, "job_id": "prepare", "dependencies": ""}, dependent],
+        {"fit_b"}, {"prepare"},
+    )
+except SystemExit as exc:
+    assert "excluded dependencies" in str(exc)
+else:
+    raise AssertionError("recovery accepted a job whose prerequisite was excluded")
 
 bad = {**row_new, "tau": "0.50"}
 try:

@@ -27,6 +27,10 @@ app_glofas_part2_bridge_bool <- function(x) {
   tolower(as.character(x[[1L]] %||% "")) %in% c("true", "t", "1", "yes", "y")
 }
 
+app_glofas_part2_bridge_scalar <- function(x, default = NA) {
+  if (is.null(x) || !length(x)) default else x[[1L]]
+}
+
 app_glofas_part2_bridge_resolve <- function(path, must_work = FALSE) {
   app_glofas_oracle_resolve_repo_path(path, must_work = must_work)
 }
@@ -837,26 +841,38 @@ app_glofas_part2_bridge_write_normal_result <- function(result, root, run_label)
   app_write_csv(result$part2_rhs_row, file.path(root, "tables", paste0(run_label, "_part2_rhs_winner_row.csv")))
   summary <- data.frame(
     run_label = run_label,
-    method = result$fitted$method,
-    target = result$target,
-    corrected_target = result$corrected_target,
-    rhs_candidate_id = as.character(result$part2_rhs_row$rhs_candidate_id[[1L]]),
-    candidate_id = as.character(result$part2_rhs_row$candidate_id[[1L]]),
-    origin_date = as.character(result$origin_date),
-    effective_horizon = as.integer(result$effective_horizon),
-    forecast_mode = result$forecast$forecast_mode,
-    forecast_backend = result$forecast$forecast_backend,
-    n_draws = as.integer(result$forecast$n_draws %||% 0L),
-    beta_draw_backend = as.character(result$forecast$beta_draw_backend %||% NA_character_),
-    sigma_draw_backend = as.character(result$forecast$sigma_draw_backend %||% NA_character_),
+    method = as.character(app_glofas_part2_bridge_scalar(result$fitted$method, NA_character_)),
+    target = as.character(app_glofas_part2_bridge_scalar(result$target, NA_character_)),
+    corrected_target = as.character(app_glofas_part2_bridge_scalar(result$corrected_target, NA_character_)),
+    rhs_candidate_id = as.character(app_glofas_part2_bridge_scalar(
+      result$part2_rhs_row$rhs_candidate_id, NA_character_
+    )),
+    candidate_id = as.character(app_glofas_part2_bridge_scalar(
+      result$part2_rhs_row$candidate_id, NA_character_
+    )),
+    origin_date = as.character(app_glofas_part2_bridge_scalar(result$origin_date, as.Date(NA))),
+    effective_horizon = as.integer(app_glofas_part2_bridge_scalar(result$effective_horizon, 0L)),
+    forecast_mode = as.character(app_glofas_part2_bridge_scalar(result$forecast$forecast_mode, NA_character_)),
+    forecast_backend = as.character(app_glofas_part2_bridge_scalar(result$forecast$forecast_backend, NA_character_)),
+    n_draws = as.integer(app_glofas_part2_bridge_scalar(result$forecast$n_draws, 0L)),
+    beta_draw_backend = as.character(app_glofas_part2_bridge_scalar(result$forecast$beta_draw_backend, NA_character_)),
+    sigma_draw_backend = as.character(app_glofas_part2_bridge_scalar(result$forecast$sigma_draw_backend, NA_character_)),
     fit_reused = TRUE,
-    fit_object_path = as.character(result$fitted$fit_object_path),
-    fit_reuse_contract = as.character(result$fitted$fit_reuse_contract),
-    future_corrected_mean_crps = as.numeric(result$scores$aggregate$future_corrected_mean_crps[[1L]] %||% NA_real_),
-    future_corrected_discrepancy_mean_crps = as.numeric(result$scores$aggregate$future_corrected_discrepancy_mean_crps[[1L]] %||% NA_real_),
-    future_corrected_mae = as.numeric(result$scores$aggregate$future_corrected_mae[[1L]] %||% NA_real_),
-    future_corrected_rmse = as.numeric(result$scores$aggregate$future_corrected_rmse[[1L]] %||% NA_real_),
-    runtime_seconds = as.numeric(result$forecast_runtime_seconds),
+    fit_object_path = as.character(app_glofas_part2_bridge_scalar(result$fitted$fit_object_path, NA_character_)),
+    fit_reuse_contract = as.character(app_glofas_part2_bridge_scalar(result$fitted$fit_reuse_contract, NA_character_)),
+    future_corrected_mean_crps = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_mean_crps, NA_real_
+    )),
+    future_corrected_discrepancy_mean_crps = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_discrepancy_mean_crps, NA_real_
+    )),
+    future_corrected_mae = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_mae, NA_real_
+    )),
+    future_corrected_rmse = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_rmse, NA_real_
+    )),
+    runtime_seconds = as.numeric(app_glofas_part2_bridge_scalar(result$forecast_runtime_seconds, NA_real_)),
     stringsAsFactors = FALSE
   )
   app_write_csv(summary, file.path(root, "tables", paste0(run_label, "_summary.csv")))
@@ -937,8 +953,8 @@ app_glofas_part2_bridge_write_quantile_result <- function(result, root, run_labe
     fit_runtime_seconds = as.numeric(result$fit$fit_runtime_seconds),
     forecast_runtime_seconds = as.numeric(result$forecast$forecast_runtime_seconds),
     forecast_backend = result$forecast$forecast_backend,
-    joint_backend_used = result$fit$joint_backend_used %||% NA_character_,
-    init_source_path = result$fit$init_source_path %||% NA_character_,
+    joint_backend_used = app_glofas_part2_bridge_scalar(result$fit$joint_backend_used, NA_character_),
+    init_source_path = app_glofas_part2_bridge_scalar(result$fit$init_source_path, NA_character_),
     synthesis = FALSE,
     stringsAsFactors = FALSE
   )

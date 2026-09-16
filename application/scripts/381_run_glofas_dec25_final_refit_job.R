@@ -668,6 +668,10 @@ main <- function() {
           forecast_backend = args$forecast_backend
         )
         written <- app_glofas_part2_bridge_write_normal_result(result, runtime_root, job_id)
+        output_paths <- c(
+          unname(written$figures),
+          file.path(written$root, "tables", paste0(job_id, "_summary.csv"))
+        )
         if (identical(model_family, "normal_rhs_vb")) {
           bank <- app_glofas_normal_driver_bank_from_part2(
             result$forecast, app_glofas_dec25_contract()$origin_date,
@@ -693,8 +697,8 @@ main <- function() {
           backend = args$forecast_backend
         )
         written <- write_external_quantile_result(result, job_id)
+        output_paths <- unname(unlist(written, recursive = TRUE, use.names = FALSE))
       }
-      output_paths <- unname(unlist(written, recursive = TRUE, use.names = FALSE))
     } else {
       if (model_family %in% c("normal_ridge", "normal_rhs_vb")) {
         forecast <- app_glofas_part3_normal_forecast(

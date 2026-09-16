@@ -69,6 +69,9 @@ winner_row <- data.frame(
   stringsAsFactors = FALSE
 )
 app_glofas_part2_bridge_validate_disc_covars_contract(winner_row, strict_winner = TRUE)
+stopifnot(identical(app_glofas_part2_bridge_scalar(integer(), 0L), 0L))
+stopifnot(identical(app_glofas_part2_bridge_scalar(NULL, NA_character_), NA_character_))
+stopifnot(identical(app_glofas_part2_bridge_scalar(c("first", "second")), "first"))
 search2_row <- winner_row
 search2_row$disc_n_vector <- "1500"
 search2_row$disc_m <- 540L

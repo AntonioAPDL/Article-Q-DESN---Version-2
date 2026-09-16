@@ -13,6 +13,8 @@ app_glofas_part3_quantile_default_controls <- function(
   slab_s2 = 1,
   a_zeta = 2,
   b_zeta = 4,
+  zeta2_fixed_reference = NULL,
+  zeta2_fixed_discrepancy = NULL,
   a_sigma = 2,
   b_sigma = 1,
   rhs_vb_inner = 5L,
@@ -33,6 +35,8 @@ app_glofas_part3_quantile_default_controls <- function(
     slab_s2 = as.numeric(slab_s2),
     a_zeta = as.numeric(a_zeta),
     b_zeta = as.numeric(b_zeta),
+    zeta2_fixed_reference = zeta2_fixed_reference,
+    zeta2_fixed_discrepancy = zeta2_fixed_discrepancy,
     a_sigma = as.numeric(a_sigma),
     b_sigma = as.numeric(b_sigma),
     rhs_vb_inner = as.integer(rhs_vb_inner),
@@ -59,6 +63,11 @@ app_glofas_part3_validate_quantile_controls <- function(controls) {
   )
   if (any(!is.finite(positive)) || any(positive <= 0) || controls$rhs_vb_inner < 1L) {
     stop("Part 3 quantile prior and scale controls must be finite and positive.", call. = FALSE)
+  }
+  for (value in list(controls$zeta2_fixed_reference, controls$zeta2_fixed_discrepancy)) {
+    if (!is.null(value) && (length(value) != 1L || !is.finite(value) || value <= 0)) {
+      stop("Part 3 fixed quantile slab scales must be NULL or finite positive scalars.", call. = FALSE)
+    }
   }
   if (!length(controls$quadrature_nodes) || any(controls$quadrature_nodes < 2L)) {
     stop("Part 3 exAL quadrature node counts must be at least two.", call. = FALSE)
@@ -309,6 +318,12 @@ app_glofas_part3_quantile_fit <- function(
   beta_discrepancy <- initialized$beta_discrepancy
   variance_reference <- initialized$var_reference
   variance_discrepancy <- initialized$var_discrepancy
+  covariance_reference <- lapply(seq_len(K), function(kk) {
+    diag(pmax(variance_reference[, kk], 0), ncol(R))
+  })
+  covariance_discrepancy <- lapply(seq_len(K), function(kk) {
+    diag(pmax(variance_discrepancy[, kk], 0), ncol(D))
+  })
   rhs_controls <- app_glofas_part3_rhs_default_controls(
     tau0_reference = controls$tau0_reference,
     tau0_discrepancy = controls$tau0_discrepancy,
@@ -324,12 +339,14 @@ app_glofas_part3_quantile_fit <- function(
   } else NULL
   rhs_reference <- app_glofas_part3_rhs_initialize(
     K, ncol(R), controls$tau0_reference, rhs_controls,
+    zeta2_fixed = controls$zeta2_fixed_reference,
     warm_anchor = warm_reference,
     coefficient_mean = beta_reference,
     coefficient_var_diag = variance_reference
   )
   rhs_discrepancy <- app_glofas_part3_rhs_initialize(
     K, ncol(D), controls$tau0_discrepancy, rhs_controls,
+    zeta2_fixed = controls$zeta2_fixed_discrepancy,
     warm_anchor = warm_discrepancy,
     coefficient_mean = beta_discrepancy,
     coefficient_var_diag = variance_discrepancy
@@ -415,6 +432,8 @@ app_glofas_part3_quantile_fit <- function(
         beta_discrepancy[, kk] <- solved$discrepancy$mean
         variance_reference[, kk] <- solved$reference$variance_diag
         variance_discrepancy[, kk] <- solved$discrepancy$variance_diag
+        covariance_reference[[kk]] <- solved$reference$covariance
+        covariance_discrepancy[[kk]] <- solved$discrepancy$covariance
         jitter_max <- max(jitter_max, solved$reference$jitter_attempt, solved$discrepancy$jitter_attempt)
       } else {
         jitter_max <- NA_integer_
@@ -600,6 +619,8 @@ app_glofas_part3_quantile_fit <- function(
     beta_discrepancy_mean = beta_discrepancy,
     beta_reference_var_diag = variance_reference,
     beta_discrepancy_var_diag = variance_discrepancy,
+    beta_reference_cov_blocks = covariance_reference,
+    beta_discrepancy_cov_blocks = covariance_discrepancy,
     reference_intercept_mean = beta_reference[1L, ],
     discrepancy_intercept_mean = beta_discrepancy[1L, ],
     sigma_mean = sigma_mean,
@@ -620,7 +641,7 @@ app_glofas_part3_quantile_fit <- function(
     converged = converged,
     stop_reason = stop_reason,
     iterations = nrow(trace),
-    covariance_approximation = "mean_field_by_component_and_quantile",
+    covariance_approximation = "full_within_component_quantile_blocks_mean_field_across_components_and_quantiles",
     monitor_label = if (identical(likelihood, "AL")) {
       "al_block_cavi_coordinate_monitor_not_full_elbo"
     } else {

@@ -11,7 +11,8 @@ for (path in c(
   "joint_exqdesn_exact_structured_inference.R", "latent_path_vb_exal.R",
   "glofas_normal_desn_part1_screening.R",
   "glofas_part3_partitioned_rhs.R", "latent_path_vb_joint.R", "fit_qdesn_latent_path.R",
-  "glofas_part4_ensemble_likelihood_contract.R", "glofas_part4_latent_family.R"
+  "glofas_part4_ensemble_likelihood_contract.R", "glofas_normal_driver_bank.R",
+  "glofas_part4_normal_driver_prior.R", "glofas_part4_latent_family.R"
 )) source(app_path("application/R", path))
 
 toy_future_builder <- local({
@@ -202,6 +203,18 @@ stopifnot(identical(prior_probe$prior_linear, addition_probe$linear))
 al_args <- modifyList(base_args, list(likelihood_family = "al"))
 al_fit <- app_fit_latent_path_al_vb_core(toy_design, 0.5, "ridge", al_args, seed = 13L)
 stopifnot(al_fit$vb_diagnostics$beta_update_count == 2L)
+toy_driver_prior <- list(
+  mean = c(0.8, 0.9), covariance = diag(c(0.2, 0.3)),
+  replace_future_y_working_likelihood = TRUE,
+  contract_hash = "toy_part4_driver_prior"
+)
+al_driver_fit <- app_fit_latent_path_al_vb_core(
+  toy_design, 0.5, "ridge",
+  modifyList(al_args, list(future_gaussian_prior = toy_driver_prior)),
+  seed = 130L
+)
+stopifnot(isTRUE(al_driver_fit$vb_diagnostics$future_gaussian_prior_used))
+stopifnot(!isTRUE(al_driver_fit$vb_diagnostics$future_y_working_likelihood_used))
 exal_args <- modifyList(base_args, list(
   tol = 1.0e-12,
   initial_state = app_glofas_part4_initializer(al_fit, toy_design),
@@ -213,6 +226,13 @@ stopifnot(all(is.finite(exal_fit$summary$theta_mean)))
 stopifnot(identical(names(exal_fit$summary$gamma_mean), c("Y", "G")))
 stopifnot(nrow(exal_fit$vb_diagnostics$iteration_timing) > 0L)
 stopifnot(nrow(exal_fit$vb_diagnostics$stage_timing) == 3L)
+exal_driver_fit <- app_fit_latent_path_exal_vb_core(
+  toy_design, 0.5, "ridge",
+  modifyList(exal_args, list(future_gaussian_prior = toy_driver_prior)),
+  seed = 140L
+)
+stopifnot(isTRUE(exal_driver_fit$vb_diagnostics$future_gaussian_prior_used))
+stopifnot(!isTRUE(exal_driver_fit$vb_diagnostics$future_y_working_likelihood_used))
 
 joint_args <- modifyList(base_args, list(
   tol = 1.0e-6, joint_outer_max_iter = 1L, joint_outer_min_iter = 1L,

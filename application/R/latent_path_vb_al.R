@@ -622,8 +622,11 @@ app_latent_prior_rhs_diagnostics <- function(state, iter) {
 app_latent_source_sigma_init <- function(source, prior_sigma, weight = NULL) {
   source <- factor(as.character(source), levels = c("Y", "G"))
   weight <- as.numeric(weight %||% rep(1, length(source)))
-  if (length(weight) != length(source) || any(!is.finite(weight)) || any(weight <= 0)) {
-    stop("Initial latent-path likelihood weights must be finite, positive, and row aligned.", call. = FALSE)
+  if (length(weight) != length(source) || any(!is.finite(weight)) || any(weight < 0)) {
+    stop("Initial latent-path likelihood weights must be finite, nonnegative, and row aligned.", call. = FALSE)
+  }
+  if (any(vapply(c("Y", "G"), function(src) sum(weight[source == src]), numeric(1L)) <= 0)) {
+    stop("Each latent-path source must retain positive total likelihood weight.", call. = FALSE)
   }
   a0 <- as.numeric(prior_sigma$a %||% 2)
   b0 <- as.numeric(prior_sigma$b %||% 1)
@@ -1675,6 +1678,17 @@ app_latent_all_weight <- function(row_moments) {
   c(fixed_weight, vapply(rows, function(x) as.numeric(x$weight %||% 1), numeric(1L)))
 }
 
+app_latent_apply_future_y_weight_policy <- function(row_moments, include = TRUE) {
+  if (isTRUE(include)) return(row_moments)
+  if (!identical(row_moments$strategy, "streamed_grouped")) {
+    stop("Future-Y likelihood replacement requires streamed grouped row moments.", call. = FALSE)
+  }
+  out <- row_moments
+  out$future$weight_y <- rep(0, out$future$n_y)
+  out$metadata$future_y_working_likelihood_used <- FALSE
+  out
+}
+
 app_latent_fixed_theta_stats_chunks <- function(row_moments, e_inv_v, sigma_state, constants, chunks = NULL) {
   fixed <- row_moments$fixed
   p <- ncol(fixed$H)
@@ -1995,16 +2009,20 @@ app_latent_update_v <- function(row_moments, sigma_state, constants) {
   R <- app_latent_all_R(row_moments)
   weight <- app_latent_all_weight(row_moments)
   n_total <- length(R)
-  chi <- numeric(n_total)
-  psi <- numeric(n_total)
+  chi <- rep(1, n_total)
+  psi <- rep(1, n_total)
+  mean <- inv_mean <- rep(1, n_total)
   for (src in c("Y", "G")) {
-    idx <- which(source == src)
+    idx <- which(source == src & weight > 0)
     if (!length(idx)) next
     sig_inv <- sigma_state$inv_mean[[src]]
     chi[idx] <- weight[idx] * sig_inv * R[idx] / constants$B
     psi[idx] <- weight[idx] * sig_inv * (constants$A^2 / constants$B + 2)
+    moments <- app_latent_gig_moments(1 - weight[idx] / 2, chi[idx], psi[idx])
+    mean[idx] <- moments$mean
+    inv_mean[idx] <- moments$inv_mean
   }
-  app_latent_gig_moments(1 - weight / 2, chi, psi)
+  list(mean = mean, inv_mean = inv_mean)
 }
 
 app_latent_update_sigma <- function(row_moments, e_v, e_inv_v, constants, prior_sigma, chunking = NULL) {
@@ -2140,6 +2158,53 @@ app_latent_update_future_gaussian <- function(y_start, design, theta_mean, theta
   )
 }
 
+app_latent_normalize_future_gaussian_prior <- function(prior, horizon) {
+  if (is.null(prior)) return(NULL)
+  if (!is.list(prior)) stop("The future Gaussian prior must be a list.", call. = FALSE)
+  horizon <- as.integer(horizon)
+  mean <- as.numeric(prior$mean)
+  precision <- prior$precision %||% NULL
+  covariance <- prior$covariance %||% prior$cov %||% NULL
+  if (length(mean) != horizon || any(!is.finite(mean))) {
+    stop("The future Gaussian prior mean is not horizon-aligned.", call. = FALSE)
+  }
+  if (is.null(precision)) {
+    covariance <- as.matrix(covariance)
+    if (!identical(dim(covariance), c(horizon, horizon)) || any(!is.finite(covariance))) {
+      stop("The future Gaussian prior covariance is malformed.", call. = FALSE)
+    }
+    precision <- app_latent_solve_spd((covariance + t(covariance)) / 2, diag(horizon))$mean
+  }
+  precision <- as.matrix(precision)
+  if (!identical(dim(precision), c(horizon, horizon)) || any(!is.finite(precision))) {
+    stop("The future Gaussian prior precision is malformed.", call. = FALSE)
+  }
+  precision <- (precision + t(precision)) / 2
+  if (min(eigen(precision, symmetric = TRUE, only.values = TRUE)$values) <= 0) {
+    stop("The future Gaussian prior precision must be positive definite.", call. = FALSE)
+  }
+  list(
+    mean = mean,
+    precision = precision,
+    covariance = if (is.null(covariance)) NULL else as.matrix(covariance),
+    replace_future_y_working_likelihood = isTRUE(prior$replace_future_y_working_likelihood),
+    contract_hash = as.character(prior$contract_hash %||% NA_character_),
+    source = as.character(prior$source %||% "external_normal_driver_bank")
+  )
+}
+
+app_latent_future_gaussian_prior_expected_log <- function(y_mean, y_cov, prior) {
+  if (is.null(prior)) return(0)
+  y_mean <- as.numeric(y_mean)
+  y_cov <- as.matrix(y_cov)
+  prior <- app_latent_normalize_future_gaussian_prior(prior, length(y_mean))
+  centered <- y_mean - prior$mean
+  quadratic <- as.numeric(crossprod(centered, prior$precision %*% centered)) +
+    sum(prior$precision * t(y_cov))
+  log_det_covariance <- as.numeric(determinant(prior$covariance, logarithm = TRUE)$modulus)
+  -0.5 * (length(y_mean) * log(2 * pi) + log_det_covariance + quadratic)
+}
+
 app_latent_update_future_gaussian_delta <- function(
   row_moments,
   y_start,
@@ -2150,7 +2215,9 @@ app_latent_update_future_gaussian_delta <- function(
   constants,
   jitter = 1.0e-8,
   response_offset_y = NULL,
-  response_offset_g = NULL
+  response_offset_g = NULL,
+  future_gaussian_prior = NULL,
+  include_future_y_working_likelihood = TRUE
 ) {
   if (!identical(row_moments$strategy, "streamed_grouped")) {
     stop("The linearized Delta future update requires streamed grouped row moments.", call. = FALSE)
@@ -2160,6 +2227,12 @@ app_latent_update_future_gaussian_delta <- function(
   if (!H) stop("The latent future update requires at least one future date.", call. = FALSE)
   precision <- diag(as.numeric(jitter), H)
   rhs <- numeric(H)
+  future_gaussian_prior <- app_latent_normalize_future_gaussian_prior(future_gaussian_prior, H)
+  if (!is.null(future_gaussian_prior)) {
+    precision <- precision + future_gaussian_prior$precision
+    rhs <- rhs + as.numeric(future_gaussian_prior$precision %*%
+      (future_gaussian_prior$mean - as.numeric(y_start)))
+  }
   theta_cov <- as.matrix(theta_cov)
   theta_mean <- as.numeric(theta_mean)
   offset <- row_moments$fixed$n
@@ -2219,25 +2292,27 @@ app_latent_update_future_gaussian_delta <- function(
     matrix(0, 0L, H)
   }
 
-  sig_y <- sigma_state$inv_mean[["Y"]]
-  for (h in seq_len(H)) {
-    a <- numeric(H)
-    a[[h]] <- 1
-    row <- add_linearized_row(
-      h_vec = future$H_y[h, ],
-      J_active = batch_y$J[[h]],
-      active_rows = batch_y$index,
-      sigma_J = batch_y$sigma_J[[h]],
-      sigma_h = sigma_H_y[, h, drop = TRUE],
-      z0 = y_start[[h]] - response_offset_y[[h]],
-      a = a,
-      sig_inv = sig_y,
-      einv = e_inv_v[[offset + h]],
-      source_count = 1,
-      weight = as.numeric((future$weight_y %||% rep(1, H))[[h]])
-    )
-    precision <- precision + row$precision
-    rhs <- rhs + row$rhs
+  if (isTRUE(include_future_y_working_likelihood)) {
+    sig_y <- sigma_state$inv_mean[["Y"]]
+    for (h in seq_len(H)) {
+      a <- numeric(H)
+      a[[h]] <- 1
+      row <- add_linearized_row(
+        h_vec = future$H_y[h, ],
+        J_active = batch_y$J[[h]],
+        active_rows = batch_y$index,
+        sigma_J = batch_y$sigma_J[[h]],
+        sigma_h = sigma_H_y[, h, drop = TRUE],
+        z0 = y_start[[h]] - response_offset_y[[h]],
+        a = a,
+        sig_inv = sig_y,
+        einv = e_inv_v[[offset + h]],
+        source_count = 1,
+        weight = as.numeric((future$weight_y %||% rep(1, H))[[h]])
+      )
+      precision <- precision + row$precision
+      rhs <- rhs + row$rhs
+    }
   }
 
   sig_g <- sigma_state$inv_mean[["G"]]
@@ -2280,7 +2355,9 @@ app_latent_update_future_gaussian_delta <- function(
     convergence = 0L,
     message = "linearized_delta_update",
     precision = update$precision,
-    repaired = isTRUE(update$repaired)
+    repaired = isTRUE(update$repaired),
+    future_gaussian_prior_used = !is.null(future_gaussian_prior),
+    future_y_working_likelihood_used = isTRUE(include_future_y_working_likelihood)
   )
 }
 
@@ -2307,12 +2384,29 @@ app_latent_extract_future_linearization <- function(row_moments, design) {
   )
 }
 
-app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, constants, theta_mean, theta_cov, prior_state) {
+app_latent_approx_objective <- function(
+  row_moments,
+  e_v,
+  e_inv_v,
+  sigma_state,
+  constants,
+  theta_mean,
+  theta_cov,
+  prior_state,
+  y_future_mean = NULL,
+  y_future_cov = NULL,
+  future_gaussian_prior = NULL,
+  include_future_y_working_likelihood = TRUE
+) {
   val <- 0
   source <- app_latent_all_source(row_moments)
   R <- app_latent_all_R(row_moments)
   e <- app_latent_all_e(row_moments)
   weight <- app_latent_all_weight(row_moments)
+  if (!isTRUE(include_future_y_working_likelihood)) {
+    future_y <- row_moments$fixed$n + seq_len(row_moments$future$n_y)
+    weight[future_y] <- 0
+  }
   for (src in c("Y", "G")) {
     idx <- which(source == src)
     if (!length(idx)) next
@@ -2325,8 +2419,21 @@ app_latent_approx_objective <- function(row_moments, e_v, e_inv_v, sigma_state, 
       ))
   }
   e_theta2 <- theta_mean^2 + diag(theta_cov)
-  val - 0.5 * sum(prior_state$prior_precision * e_theta2) +
+  val <- val - 0.5 * sum(prior_state$prior_precision * e_theta2) +
     sum(as.numeric(prior_state$prior_linear %||% numeric(length(theta_mean))) * theta_mean)
+  future_gaussian_prior <- app_latent_normalize_future_gaussian_prior(
+    future_gaussian_prior, row_moments$future$n_y
+  )
+  if (!is.null(future_gaussian_prior)) {
+    y_future_mean <- as.numeric(y_future_mean)
+    y_future_cov <- as.matrix(y_future_cov)
+    centered <- y_future_mean - future_gaussian_prior$mean
+    val <- val - 0.5 * (
+      as.numeric(crossprod(centered, future_gaussian_prior$precision %*% centered)) +
+        sum(future_gaussian_prior$precision * t(y_future_cov))
+    )
+  }
+  val
 }
 
 app_latent_path_warm_start_config <- function(vb_args = list()) {
@@ -2724,6 +2831,12 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   future_moment_strategy <- app_latent_future_moment_strategy(vb_args)
   future_objective_strategy <- app_latent_future_objective_strategy(vb_args)
   future_update_strategy <- app_latent_future_update_strategy(vb_args)
+  future_gaussian_prior <- app_latent_normalize_future_gaussian_prior(
+    vb_args$future_gaussian_prior %||% NULL, H_future
+  )
+  include_future_y_working_likelihood <- !isTRUE(
+    future_gaussian_prior$replace_future_y_working_likelihood %||% FALSE
+  )
   chunking <- app_latent_normalize_chunking_control(vb_args$chunking %||% NULL)
   profile_substeps <- isTRUE(diagnostics_args$profile_substeps %||% vb_args$profile_substeps %||% FALSE)
   draw_backend <- tolower(as.character(
@@ -2736,6 +2849,9 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
   if (identical(future_update_strategy, "linearized_delta") &&
       !identical(future_moment_strategy, "streamed_grouped")) {
     stop("The linearized Delta future update requires future_moment_strategy = 'streamed_grouped'.", call. = FALSE)
+  }
+  if (!is.null(future_gaussian_prior) && !identical(future_update_strategy, "linearized_delta")) {
+    stop("The external future Gaussian prior currently requires the linearized Delta update.", call. = FALSE)
   }
 
   iteration_timing <- list()
@@ -2872,11 +2988,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       assign(".Random.seed", checkpoint_payload$rng_state, envir = .GlobalEnv)
     }
     row_moments <- time_step(completed_iter, "resume_row_moments", {
-      app_latent_row_moments(
+      app_latent_apply_future_y_weight_policy(app_latent_row_moments(
         design, y_mean, y_cov, theta_mean, theta_cov,
         strategy = future_moment_strategy,
         profile_substeps = profile_substeps
-      )
+      ), include = include_future_y_working_likelihood)
     })
     append_substeps(
       completed_iter,
@@ -2959,11 +3075,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       })
     }
     row_moments <- time_step(NA_integer_, "initial_row_moments", {
-      app_latent_row_moments(
+      app_latent_apply_future_y_weight_policy(app_latent_row_moments(
         design, y_mean, y_cov, theta_mean, theta_cov,
         strategy = future_moment_strategy,
         profile_substeps = profile_substeps
-      )
+      ), include = include_future_y_working_likelihood)
     })
     append_substeps(NA_integer_, "initial_row_moments", attr(row_moments, "substep_timing", exact = TRUE))
     sigma_state <- if (!is.null(warm_start$sigma_state)) {
@@ -3092,7 +3208,9 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
           theta_cov = theta_cov,
           e_inv_v = v_state$inv_mean,
           sigma_state = sigma_state,
-          constants = constants
+          constants = constants,
+          future_gaussian_prior = future_gaussian_prior,
+          include_future_y_working_likelihood = include_future_y_working_likelihood
         )
       } else {
         app_latent_update_future_gaussian(
@@ -3111,11 +3229,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     y_cov <- future_update$cov
 
     row_moments <- time_step(iter, "row_moments", {
-      app_latent_row_moments(
+      app_latent_apply_future_y_weight_policy(app_latent_row_moments(
         design, y_mean, y_cov, theta_mean, theta_cov,
         strategy = future_moment_strategy,
         profile_substeps = profile_substeps
-      )
+      ), include = include_future_y_working_likelihood)
     })
     append_substeps(iter, "row_moments", attr(row_moments, "substep_timing", exact = TRUE))
     v_state <- time_step(iter, "v_update", {
@@ -3141,7 +3259,11 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     objective[[iter]] <- time_step(iter, "objective", {
       app_latent_approx_objective(
         row_moments, v_state$mean, v_state$inv_mean, sigma_state,
-        constants, theta_mean, theta_cov, prior_state
+        constants, theta_mean, theta_cov, prior_state,
+        y_future_mean = y_mean,
+        y_future_cov = y_cov,
+        future_gaussian_prior = future_gaussian_prior,
+        include_future_y_working_likelihood = include_future_y_working_likelihood
       )
     })
     new <- c(theta_mean, y_mean, sigma_state$inv_mean)
@@ -3253,6 +3375,9 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
       future_moment_strategy = future_moment_strategy,
       future_update_strategy = future_update_strategy,
       future_objective_strategy = future_objective_strategy,
+      future_gaussian_prior_used = !is.null(future_gaussian_prior),
+      future_gaussian_prior_contract_hash = future_gaussian_prior$contract_hash %||% NA_character_,
+      future_y_working_likelihood_used = include_future_y_working_likelihood,
       chunking = chunking,
       draw_backend_requested = draw_backend,
       theta_draw_backend = theta_draw_backend,

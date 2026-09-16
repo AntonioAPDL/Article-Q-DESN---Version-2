@@ -44,7 +44,7 @@ app_glofas_part3_rhs_validate_controls <- function(controls) {
   invisible(TRUE)
 }
 
-app_glofas_part3_rhs_validate_block_state <- function(state, p, tau0 = NULL) {
+app_glofas_part3_rhs_validate_block_state <- function(state, p, tau0 = NULL, zeta2_fixed = NULL) {
   p <- as.integer(p)
   if (!is.list(state) || p < 1L) stop("Invalid Part 3 RHS block state.", call. = FALSE)
   if (length(state$prior_precision %||% numeric()) != p ||
@@ -57,6 +57,12 @@ app_glofas_part3_rhs_validate_block_state <- function(state, p, tau0 = NULL) {
   }
   if (!is.null(tau0) && abs(as.numeric(state$tau0) - as.numeric(tau0)) > 1.0e-14) {
     stop("Part 3 RHS warm state has an incompatible tau0.", call. = FALSE)
+  }
+  if (!is.null(zeta2_fixed)) {
+    observed <- as.numeric(state$zeta2_fixed %||% NA_real_)
+    if (!is.finite(observed) || abs(observed - as.numeric(zeta2_fixed)) > 1.0e-14) {
+      stop("Part 3 RHS warm state has an incompatible fixed slab scale.", call. = FALSE)
+    }
   }
   if (any(!is.finite(as.numeric(state$prior_precision))) ||
       any(as.numeric(state$prior_precision) <= 0)) {
@@ -76,11 +82,16 @@ app_glofas_part3_rhs_new_block <- function(p, tau0, controls) {
       tau0 = as.numeric(tau0),
       a_zeta = as.numeric(controls$a_zeta),
       b_zeta = as.numeric(controls$b_zeta),
+      zeta2_fixed = controls$zeta2_fixed %||% NULL,
       intercept_prec = as.numeric(controls$intercept_prec)
     ),
     rhs_control = controls$rhs_control
   )
-  state$e_inv_zeta2 <- 1 / as.numeric(controls$slab_s2)
+  state$e_inv_zeta2 <- if (is.null(controls$zeta2_fixed)) {
+    1 / as.numeric(controls$slab_s2)
+  } else {
+    1 / as.numeric(controls$zeta2_fixed)
+  }
   state$prior_precision <- app_latent_rhs_prior_precision(state, as.integer(p))
   state$slab_s2_initial <- as.numeric(controls$slab_s2)
   app_glofas_part3_rhs_validate_block_state(state, p, tau0)
@@ -92,11 +103,16 @@ app_glofas_part3_rhs_initialize <- function(
   p,
   tau0,
   controls,
+  zeta2_fixed = NULL,
   warm_anchor = NULL,
   coefficient_mean = NULL,
   coefficient_var_diag = NULL
 ) {
   app_glofas_part3_rhs_validate_controls(controls)
+  controls$zeta2_fixed <- zeta2_fixed
+  if (!is.null(zeta2_fixed) && (length(zeta2_fixed) != 1L || !is.finite(zeta2_fixed) || zeta2_fixed <= 0)) {
+    stop("Part 3 fixed RHS slab scale must be NULL or a finite positive scalar.", call. = FALSE)
+  }
   K <- as.integer(K)
   p <- as.integer(p)
   tau0 <- as.numeric(tau0)
@@ -106,7 +122,7 @@ app_glofas_part3_rhs_initialize <- function(
   state <- vector("list", K)
   names(state) <- c("anchor", if (K > 1L) paste0("delta_", 2:K) else character())
   if (!is.null(warm_anchor)) {
-    app_glofas_part3_rhs_validate_block_state(warm_anchor, p, tau0)
+    app_glofas_part3_rhs_validate_block_state(warm_anchor, p, tau0, zeta2_fixed)
     state[[1L]] <- warm_anchor
     state[[1L]]$rhs_control <- app_latent_normalize_rhs_control(controls$rhs_control)
   } else {
@@ -176,8 +192,10 @@ app_glofas_part3_rhs_state_update_diag <- function(
         state$has_post_warmup_tau_update <- TRUE
       }
     }
-    state$e_inv_zeta2 <- (state$a_zeta + length(idx) / 2) /
-      pmax(state$b_zeta + 0.5 * sum(e_theta2[idx]), 1.0e-12)
+    if (isTRUE(state$update_zeta %||% TRUE)) {
+      state$e_inv_zeta2 <- (state$a_zeta + length(idx) / 2) /
+        pmax(state$b_zeta + 0.5 * sum(e_theta2[idx]), 1.0e-12)
+    }
   }
   state$prior_precision <- app_latent_rhs_prior_precision(state, p)
   state

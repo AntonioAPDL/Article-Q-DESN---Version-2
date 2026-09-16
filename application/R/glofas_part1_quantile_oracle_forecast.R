@@ -73,6 +73,7 @@ app_glofas_part1_quantile_default_controls <- function(
   min_iter = 1L,
   tau0 = NULL,
   zeta2 = Inf,
+  slab_fixed = FALSE,
   a_sigma = 2,
   b_sigma = 1,
   alpha_prior_sd = Inf,
@@ -95,6 +96,7 @@ app_glofas_part1_quantile_default_controls <- function(
     min_iter = as.integer(min_iter),
     tau0 = tau0,
     zeta2 = as.numeric(zeta2),
+    slab_fixed = isTRUE(slab_fixed),
     a_sigma = as.numeric(a_sigma),
     b_sigma = as.numeric(b_sigma),
     alpha_prior_sd = alpha_prior_sd,
@@ -343,6 +345,7 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   min_iter,
   tau0,
   zeta2,
+  slab_fixed,
   a_sigma,
   b_sigma,
   alpha_prior_sd,
@@ -380,9 +383,12 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   if (!is.null(init$sigma)) sigma_rate <- pmax(init$sigma * pmax(sigma_shape - 1, .Machine$double.eps), .Machine$double.eps)
   v_mean <- matrix(1, Tn, K)
   v_inv_mean <- matrix(1, Tn, K)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  rhs_state <- app_joint_qvp_initialize_rhs_state(
+    K, p, tau0 = tau0, zeta2 = zeta2, slab_fixed = slab_fixed
+  )
   beta_var_current <- replicate(K, rep(0, Tn), simplify = FALSE)
   cov_diag_current <- replicate(K, rep(0, p), simplify = FALSE)
+  cov_block_current <- replicate(K, matrix(0, p, p), simplify = FALSE)
   trace <- vector("list", max_iter)
   sigma_trace <- matrix(NA_real_, max_iter, K)
   colnames(sigma_trace) <- paste0("tau_", format(tau, trim = TRUE))
@@ -412,6 +418,7 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
         beta_mat[, kk] <- solved$beta
         beta_var[[kk]] <- rowSums((Z %*% solved$cov) * Z)
         cov_diag[[kk]] <- solved$cov_diag
+        cov_block_current[[kk]] <- solved$cov
         jitter_max <- max(jitter_max, solved$jitter)
       }
       beta_var_current <- beta_var
@@ -487,7 +494,8 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   out <- list(
     beta_mean = as.numeric(beta_mat),
     beta_cov = NULL,
-    beta_covariance_approximation = "block_mean_field_by_tau",
+    beta_cov_blocks = cov_block_current,
+    beta_covariance_approximation = "full_within_tau_blocks_mean_field_across_tau",
     alpha_mean = alpha,
     sigma_mean = sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps),
     sigma_shape = sigma_shape,
@@ -526,6 +534,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   min_iter,
   tau0,
   zeta2,
+  slab_fixed,
   a_sigma,
   b_sigma,
   alpha_prior_sd,
@@ -566,9 +575,12 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   v_inv_mean <- matrix(1, Tn, K)
   s_mean <- matrix(sqrt(2 / pi), Tn, K)
   s2_mean <- matrix(1, Tn, K)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(K, p, tau0 = tau0, zeta2 = zeta2)
+  rhs_state <- app_joint_qvp_initialize_rhs_state(
+    K, p, tau0 = tau0, zeta2 = zeta2, slab_fixed = slab_fixed
+  )
   beta_var_current <- replicate(K, rep(0, Tn), simplify = FALSE)
   cov_diag_current <- replicate(K, rep(0, p), simplify = FALSE)
+  cov_block_current <- replicate(K, matrix(0, p, p), simplify = FALSE)
   trace <- vector("list", max_iter)
   gamma_trace <- matrix(NA_real_, max_iter, K)
   sigma_trace <- matrix(NA_real_, max_iter, K)
@@ -601,6 +613,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
         beta_mat[, kk] <- solved$beta
         beta_var[[kk]] <- rowSums((Z %*% solved$cov) * Z)
         cov_diag[[kk]] <- solved$cov_diag
+        cov_block_current[[kk]] <- solved$cov
         jitter_max <- max(jitter_max, solved$jitter)
       }
       beta_var_current <- beta_var
@@ -718,7 +731,8 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   out <- list(
     beta_mean = as.numeric(beta_mat),
     beta_cov = NULL,
-    beta_covariance_approximation = "block_mean_field_by_tau",
+    beta_cov_blocks = cov_block_current,
+    beta_covariance_approximation = "full_within_tau_blocks_mean_field_across_tau",
     alpha_mean = alpha,
     sigma_mean = sigma_mean,
     sigma_inv_mean = sigma_inv_mean,
@@ -816,6 +830,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       kappa = 1,
       tau0 = tau0,
       zeta2 = as.numeric(controls$zeta2),
+      slab_fixed = isTRUE(controls$slab_fixed),
       a_sigma = as.numeric(controls$a_sigma),
       b_sigma = as.numeric(controls$b_sigma),
       alpha_prior_mean = "empirical_quantile",
@@ -840,6 +855,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       min_iter = min_iter,
       tau0 = tau0,
       zeta2 = as.numeric(controls$zeta2),
+      slab_fixed = isTRUE(controls$slab_fixed),
       a_sigma = as.numeric(controls$a_sigma),
       b_sigma = as.numeric(controls$b_sigma),
       alpha_prior_sd = controls$alpha_prior_sd,
@@ -866,6 +882,7 @@ app_glofas_part1_quantile_fit_readout <- function(
           kappa = 1,
           tau0 = tau0,
           zeta2 = as.numeric(controls$zeta2),
+          slab_fixed = isTRUE(controls$slab_fixed),
           a_sigma = as.numeric(controls$a_sigma),
           b_sigma = as.numeric(controls$b_sigma),
           alpha_prior_mean = "empirical_quantile",
@@ -892,6 +909,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       kappa = 1,
       tau0 = tau0,
       zeta2 = as.numeric(controls$zeta2),
+      slab_fixed = isTRUE(controls$slab_fixed),
       a_sigma = as.numeric(controls$a_sigma),
       b_sigma = as.numeric(controls$b_sigma),
       init = al_init,
@@ -916,6 +934,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       min_iter = min_iter,
       tau0 = tau0,
       zeta2 = as.numeric(controls$zeta2),
+      slab_fixed = isTRUE(controls$slab_fixed),
       a_sigma = as.numeric(controls$a_sigma),
       b_sigma = as.numeric(controls$b_sigma),
       alpha_prior_sd = controls$alpha_prior_sd,
@@ -1344,6 +1363,7 @@ app_glofas_part1_quantile_oracle_forecast <- function(
   tol = 0,
   tau0 = NULL,
   zeta2 = Inf,
+  slab_fixed = FALSE,
   a_sigma = 2,
   b_sigma = 1,
   alpha_prior_sd = Inf,
@@ -1384,6 +1404,7 @@ app_glofas_part1_quantile_oracle_forecast <- function(
     min_iter = min_iter,
     tau0 = tau0 %||% prepared$candidate_row$rhs_tau0[[1L]],
     zeta2 = zeta2,
+    slab_fixed = slab_fixed,
     a_sigma = a_sigma,
     b_sigma = b_sigma,
     alpha_prior_sd = alpha_prior_sd,

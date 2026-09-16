@@ -87,7 +87,8 @@ app_glofas_part3_component_context <- function(design, component, origin) {
     stop(sprintf("Part 3 %s winner uses unsupported future inputs.", component), call. = FALSE)
   }
   X <- as.matrix(block$X)
-  state0 <- as.numeric(X[origin$origin_index, -1L, drop = TRUE])
+  raw_state_X <- as.matrix(raw$raw_state_X %||% raw$state_X)
+  state0 <- as.numeric(raw_state_X[origin$origin_index, , drop = TRUE])
   W <- as.matrix(reservoir$W[[1L]])
   Win <- as.matrix(reservoir$Win[[1L]])
   if (length(state0) != nrow(W) || ncol(X) != length(state0) + 1L) {
@@ -125,6 +126,7 @@ app_glofas_part3_component_context <- function(design, component, origin) {
     compiled = compiled,
     history_dates = history_dates,
     history_response = history_response,
+    readout_scaler = raw$readout_scaler %||% NULL,
     audit = audit
   )
 }
@@ -324,6 +326,14 @@ app_glofas_part3_normal_forecast <- function(
   draws <- app_glofas_part3_normal_draws(fit, method, n_draws, seed)
   beta_reference <- draws$beta[, design$beta_index, drop = FALSE]
   beta_discrepancy <- draws$beta[, design$alpha_index, drop = FALSE]
+  beta_reference <- app_glofas_normal_readout_beta_draws_to_raw(
+    beta_reference,
+    design$reference$component_design$readout_scaler %||% NULL
+  )
+  beta_discrepancy <- app_glofas_normal_readout_beta_draws_to_raw(
+    beta_discrepancy,
+    design$discrepancy$component_design$readout_scaler %||% NULL
+  )
   random <- app_glofas_oracle_with_seed(as.integer(seed) + 1L, list(
     reference = matrix(stats::rnorm(origin$horizon_days * n_draws), origin$horizon_days, n_draws),
     glofas = matrix(stats::rnorm(origin$horizon_days * n_draws), origin$horizon_days, n_draws)

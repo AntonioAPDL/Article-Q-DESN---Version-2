@@ -470,6 +470,14 @@ app_glofas_dec25_fit_part3_normal_rhs <- function(cache, warm_start) {
     discrepancy_intercept_index = 1L,
     tau0_reference = as.numeric(app_glofas_normal_part2_row_value(row, "rhs_tau0_reference", 1)),
     tau0_discrepancy = as.numeric(app_glofas_normal_part2_row_value(row, "rhs_tau0_discrepancy", 0.001)),
+    zeta2_fixed_reference = {
+      value <- suppressWarnings(as.numeric(app_glofas_normal_part2_row_value(row, "rhs_zeta2_fixed_reference", NA_real_)))
+      if (is.finite(value)) value else NULL
+    },
+    zeta2_fixed_discrepancy = {
+      value <- suppressWarnings(as.numeric(app_glofas_normal_part2_row_value(row, "rhs_zeta2_fixed_discrepancy", NA_real_)))
+      if (is.finite(value)) value else NULL
+    },
     max_iter = as.integer(app_glofas_normal_part2_row_value(row, "rhs_max_iter", 100L)),
     min_iter = as.integer(app_glofas_normal_part2_row_value(row, "rhs_min_iter", 30L)),
     tol = as.numeric(app_glofas_normal_part2_row_value(row, "rhs_tol", 1.0e-4)),

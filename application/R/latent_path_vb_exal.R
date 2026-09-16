@@ -61,7 +61,8 @@ app_latent_exal_local_update <- function(row_moments, block_moments, latent_mean
   residual_second <- app_latent_all_R(row_moments)
   weight <- app_latent_all_weight(row_moments)
   for (src in c("Y", "G")) {
-    idx <- which(source == src)
+    idx <- which(source == src & weight > 0)
+    if (!length(idx)) next
     moments <- block_moments[[src]]
     chi <- as.numeric(moments[["inv_B_sigma_mean"]]) * residual_second[idx] -
       2 * as.numeric(moments[["lambda_over_B_mean"]]) * residual[idx] * s_mean[idx] +
@@ -110,7 +111,10 @@ app_latent_exal_scale_shape_update <- function(
   weight <- app_latent_all_weight(row_moments)
   out <- list()
   for (src in c("Y", "G")) {
-    idx <- which(source == src)
+    idx <- which(source == src & weight > 0)
+    if (!length(idx)) {
+      stop(sprintf("Part 4 exAL has no active '%s' likelihood rows.", src), call. = FALSE)
+    }
     out[[src]] <- app_joint_exqdesn_structured_scale_shape_update(
       tau = tau,
       augmentation = "v",
@@ -144,6 +148,12 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
   progress_every <- as.integer(vb_args$progress_every %||% 1L)
   progress_path <- as.character(vb_args$progress_path %||% "")[[1L]]
   profile_substeps <- isTRUE((vb_args$diagnostics %||% list())$profile_substeps %||% FALSE)
+  future_gaussian_prior <- app_latent_normalize_future_gaussian_prior(
+    vb_args$future_gaussian_prior %||% NULL, horizon
+  )
+  include_future_y_working_likelihood <- !isTRUE(
+    future_gaussian_prior$replace_future_y_working_likelihood %||% FALSE
+  )
   if (max_iter < 1L || min_iter < 1L || min_iter > max_iter || tol <= 0 ||
       freeze_beta < 0L || freeze_beta >= max_iter || freeze_beta + min_beta_updates > max_iter) {
     stop("Invalid exAL latent-path VB controls.", call. = FALSE)
@@ -158,10 +168,10 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     beta_index = design$beta_index, alpha_index = design$alpha_index
   )
   prior_state <- app_latent_prior_apply_addition(prior_state, vb_args$prior_addition %||% NULL)
-  row_moments <- app_latent_row_moments(
+  row_moments <- app_latent_apply_future_y_weight_policy(app_latent_row_moments(
     design, y_mean, y_cov, theta_mean, theta_cov,
     profile_substeps = profile_substeps
-  )
+  ), include = include_future_y_working_likelihood)
   source <- app_latent_all_source(row_moments)
   n_rows <- length(source)
   gamma_init <- as.numeric((vb_args$initial_state %||% list())$gamma %||% app_joint_qvp_default_gamma(p0))
@@ -231,14 +241,16 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       working$sigma_proxy,
       list(A = 0, B = 1),
       response_offset_y = working$response_offset[n_fixed + seq_len(n_y)],
-      response_offset_g = working$response_offset[n_fixed + n_y + seq_len(row_moments$future$n_g)]
+      response_offset_g = working$response_offset[n_fixed + n_y + seq_len(row_moments$future$n_g)],
+      future_gaussian_prior = future_gaussian_prior,
+      include_future_y_working_likelihood = include_future_y_working_likelihood
     ))
     y_mean <- future_update$mean
     y_cov <- future_update$cov
-    row_moments <- timed("row_moments", app_latent_row_moments(
+    row_moments <- timed("row_moments", app_latent_apply_future_y_weight_policy(app_latent_row_moments(
       design, y_mean, y_cov, theta_mean, theta_cov,
       profile_substeps = profile_substeps
-    ))
+    ), include = include_future_y_working_likelihood))
     local <- timed("local_update", app_latent_exal_local_update(
       row_moments, block_moments, latent_mean, latent_inv, s_mean, s2_mean
     ))
@@ -267,6 +279,9 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     now <- c(theta_mean, y_mean, unlist(lapply(block_moments, `[[`, "sigma_mean")), gamma)
     change <- max(abs(now - old) / pmax(1, abs(old)))
     eligible <- iter >= min_iter && beta_update_count >= min_beta_updates && isTRUE(gate$passed)
+    driver_prior_expected_log <- app_latent_future_gaussian_prior_expected_log(
+      y_mean, y_cov, future_gaussian_prior
+    )
     iteration_timing[[iter]] <- transform(do.call(rbind, timing), iteration = iter)
     trace[[iter]] <- data.frame(
       iteration = iter,
@@ -278,6 +293,7 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       sigma_Y = block_moments$Y[["sigma_mean"]],
       sigma_G = block_moments$G[["sigma_mean"]],
       convergence_eligible = eligible,
+      future_gaussian_prior_expected_log = driver_prior_expected_log,
       elapsed_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
       stringsAsFactors = FALSE
     )
@@ -351,7 +367,10 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       weighted_local_factor_contract = "fractional_likelihood_complete_data_power",
       ensemble_weight_contract = "each_horizon_sums_to_one",
       future_truth_policy = design$future_truth_policy,
-      objective_type = "structured_exal_coordinate_monitor",
+      objective_type = "structured_exal_coordinate_monitor_with_gaussian_driver_prior",
+      future_gaussian_prior_used = !is.null(future_gaussian_prior),
+      future_gaussian_prior_contract_hash = future_gaussian_prior$contract_hash %||% NA_character_,
+      future_y_working_likelihood_used = include_future_y_working_likelihood,
       initialization = initial$provenance
     ),
     variational_state = list(

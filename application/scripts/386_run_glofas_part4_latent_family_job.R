@@ -14,7 +14,8 @@ for (path in c(
   "joint_exqdesn_exact_structured_inference.R", "latent_path_vb_exal.R",
   "glofas_normal_desn_part1_screening.R",
   "glofas_part3_partitioned_rhs.R", "latent_path_vb_joint.R", "fit_qdesn_latent_path.R",
-  "glofas_part4_ensemble_likelihood_contract.R", "glofas_part4_latent_family.R"
+  "glofas_part4_ensemble_likelihood_contract.R", "glofas_normal_driver_bank.R",
+  "glofas_part4_normal_driver_prior.R", "glofas_part4_latent_family.R"
 )) source(app_path("application/R", path))
 
 args <- app_parse_args(list(runtime_root = "", job_id = ""))
@@ -110,6 +111,26 @@ run_job <- function() {
     list(profile_substeps = TRUE)
   )
   vb_args$progress_path <- file.path(runtime_root, "traces", paste0(job_id, "_live.csv"))
+  quantile_family <- family %in% c(
+    "independent_al_rhs_vb", "independent_exal_rhs_vb",
+    "joint_al_rhs_vb", "joint_exal_rhs_vb"
+  )
+  driver_prior_path <- file.path(runtime_root, "objects", "part4_normal_driver_prior.rds")
+  if (isTRUE(quantile_family)) {
+    if (!file.exists(driver_prior_path)) {
+      stop("Part 4 quantile jobs require part4_normal_driver_prior.rds.", call. = FALSE)
+    }
+    driver_prior <- readRDS(driver_prior_path)
+    app_validate_glofas_part4_normal_driver_prior(
+      driver_prior,
+      expected_dates = as.Date(design$future_key$target_date),
+      expected_scale = "log1p",
+      expected_paths = 500L
+    )
+    vb_args$future_gaussian_prior <- driver_prior
+  } else {
+    vb_args$future_gaussian_prior <- NULL
+  }
   dependency_paths <- app_glofas_part4_dependency_artifact_paths(runtime_root, dependencies)
   dependency_results <- lapply(dependency_paths, readRDS)
   started <- Sys.time()

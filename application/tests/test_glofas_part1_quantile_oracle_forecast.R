@@ -129,13 +129,18 @@ toy_fitted <- list(
   Z = as.matrix(toy_normal_fit$design$X[, -1L, drop = FALSE])
 )
 
-run_family <- function(model_family, tau, max_dense_dim = 50L, joint_backend = "auto", init_fit_path = NULL) {
+run_family <- function(
+  model_family, tau, max_dense_dim = 50L, joint_backend = "auto",
+  init_fit_path = NULL, zeta2 = Inf, slab_fixed = FALSE
+) {
   progress_path <- file.path(tempdir(), paste0("glofas_quantile_progress_", model_family, "_", Sys.getpid(), ".csv"))
   controls <- app_glofas_part1_quantile_default_controls(
     max_iter = 2L,
     tol = 0,
     min_iter = 1L,
     tau0 = 1,
+    zeta2 = zeta2,
+    slab_fixed = slab_fixed,
     max_dense_dim = max_dense_dim,
     rhs_vb_inner = 1L,
     exal_method_id = "VB1_structured_v",
@@ -177,6 +182,12 @@ run_family <- function(model_family, tau, max_dense_dim = 50L, joint_backend = "
 }
 
 one_al <- run_family("independent_al", 0.50)
+learned_slab <- run_family("independent_al", 0.50, zeta2 = 2, slab_fixed = FALSE)
+fixed_slab <- run_family("independent_al", 0.50, zeta2 = 16, slab_fixed = TRUE)
+stopifnot(!isTRUE(learned_slab$fit$rhs_state$anchor$slab_fixed))
+stopifnot(is.finite(learned_slab$fit$rhs_state$anchor$zeta2))
+stopifnot(isTRUE(fixed_slab$fit$rhs_state$anchor$slab_fixed))
+stopifnot(identical(as.numeric(fixed_slab$fit$rhs_state$anchor$zeta2), 16))
 init_path <- file.path(tempdir(), paste0("toy_al_init_", Sys.getpid(), ".rds"))
 saveRDS(one_al$fit, init_path, version = 2L)
 one_exal <- run_family("independent_exal", 0.50, init_fit_path = init_path)
@@ -186,6 +197,12 @@ joint_al_blockmf <- run_family("joint_al", c(0.20, 0.50, 0.80), max_dense_dim = 
 joint_exal_blockmf <- run_family("joint_exal", c(0.20, 0.50, 0.80), max_dense_dim = 2L)
 stopifnot(identical(joint_al_blockmf$fit$joint_backend_used, "blockmf"))
 stopifnot(identical(joint_exal_blockmf$fit$joint_backend_used, "blockmf"))
+stopifnot(length(joint_al_blockmf$fit$beta_cov_blocks) == 3L)
+stopifnot(length(joint_exal_blockmf$fit$beta_cov_blocks) == 3L)
+stopifnot(all(vapply(joint_al_blockmf$fit$beta_cov_blocks, function(x) {
+  identical(dim(x), c(ncol(toy_fitted$Z), ncol(toy_fitted$Z))) &&
+    isTRUE(all.equal(x, t(x), tolerance = 1.0e-10))
+}, logical(1L))))
 
 tmp <- file.path(tempdir(), paste0("glofas_part1_quantile_test_", Sys.getpid()))
 written <- app_glofas_part1_quantile_write_result(

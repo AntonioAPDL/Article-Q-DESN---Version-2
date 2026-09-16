@@ -46,6 +46,10 @@ stopifnot(identical(dim(fit_al$beta_discrepancy_mean), c(2L, 1L)))
 stopifnot(fit_al$iterations >= 2L)
 stopifnot(fit_al$rhs_partition_certificate$overlap_count == 0L)
 stopifnot(all(is.finite(fit_al$qhat_reference_train)))
+stopifnot(length(fit_al$beta_reference_cov_blocks) == 1L)
+stopifnot(length(fit_al$beta_discrepancy_cov_blocks) == 1L)
+stopifnot(identical(dim(fit_al$beta_reference_cov_blocks[[1L]]), c(3L, 3L)))
+stopifnot(identical(dim(fit_al$beta_discrepancy_cov_blocks[[1L]]), c(2L, 2L)))
 
 controls_exal <- controls
 controls_exal$max_iter <- 1L
@@ -66,6 +70,8 @@ fit_joint <- app_glofas_part3_quantile_fit(
 stopifnot(identical(dim(fit_joint$beta_reference_mean), c(3L, 3L)))
 stopifnot(identical(dim(fit_joint$beta_discrepancy_mean), c(2L, 3L)))
 stopifnot(length(fit_joint$rhs_state_reference) == 3L)
+stopifnot(length(fit_joint$beta_reference_cov_blocks) == 3L)
+stopifnot(length(fit_joint$beta_discrepancy_cov_blocks) == 3L)
 scores <- app_glofas_part3_score_quantile_fit(fit_joint, design, split)
 stopifnot(all(c("usgs_valid", "glofas_valid", "discrepancy_diagnostic_valid") %in% scores$summary$metric_block))
 progress_path <- tempfile(fileext = ".csv")

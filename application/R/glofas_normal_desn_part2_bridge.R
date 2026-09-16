@@ -124,6 +124,9 @@ app_glofas_normal_part2_component_cfg <- function(base_cfg, candidate_row, compo
     washout = app_glofas_normal_part2_row_value(candidate_row, "washout", defaults$washout, prefix = prefix),
     reservoir_controls = app_glofas_normal_part1_reservoir_controls(candidate_row, prefix = prefix)
   )
+  cfg$feature_contract$readout$state_scaling <- as.character(
+    app_glofas_normal_part2_row_value(candidate_row, "state_scaling", "none", prefix = prefix)
+  )[[1L]]
   if (identical(component, "discrepancy")) {
     cfg <- app_glofas_normal_part2_apply_discrepancy_input_contract(cfg, candidate_row)
   }
@@ -244,12 +247,17 @@ app_glofas_normal_part2_component_design <- function(
     drop = as.integer(drop)
   )
   readout <- app_glofas_normal_part1_readout_matrix(design)
-  X_full <- readout$X
+  X_raw <- readout$X
+  state_scaling <- as.character(cfg$feature_contract$readout$state_scaling %||% "none")[[1L]]
+  readout_scaler <- app_glofas_normal_readout_scaler_fit(X_raw, mode = state_scaling)
+  X_full <- app_glofas_normal_readout_scaler_apply(X_raw, readout_scaler)
   if (ncol(X_full) < 2L) {
     stop("Part 2 component design must include at least one reservoir state.", call. = FALSE)
   }
+  raw_state_X <- X_raw[, -1L, drop = FALSE]
   state_X <- X_full[, -1L, drop = FALSE]
   colnames(state_X) <- paste0(component, "__", colnames(state_X))
+  colnames(raw_state_X) <- colnames(state_X)
   feature_info <- readout$feature_info[-1L, , drop = FALSE]
   feature_info$column_name <- colnames(state_X)
   feature_info$block <- paste0(component, "_reservoir_state")
@@ -260,12 +268,15 @@ app_glofas_normal_part2_component_design <- function(
   list(
     cfg = cfg,
     state_X = state_X,
+    raw_state_X = raw_state_X,
     y = as.numeric(design$y_fit),
     dates = dates,
     keep_idx = as.integer(design$meta$keep_idx),
     feature_info = feature_info,
     design_meta = design$meta,
-    reservoir = design$reservoir
+    reservoir = design$reservoir,
+    readout_scaler = readout_scaler,
+    state_scaling = state_scaling
   )
 }
 

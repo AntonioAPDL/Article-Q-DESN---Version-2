@@ -52,7 +52,6 @@ def toy_window(n_origins: int = 3, lag: int = 4) -> dict:
         "anchors": np.asarray([f"origin-{i}" for i in range(n_origins)], dtype=object),
         "lag_cols": np.asarray(["AT-price", "AT-load", "AT-solar", "AT-wind"], dtype=object),
         "lead_cols": np.asarray(["AT-load", "AT-solar", "AT-wind"], dtype=object),
-        "label_col": np.asarray(["AT-price"], dtype=object),
     }
 
 
@@ -93,6 +92,19 @@ def test_teacher_forcing_uses_previous_response_after_horizon_one() -> None:
     stats_second = recursive.causal_teacher_forced_statistics({"AT": second}, toy_spec(), ["AT"])
     assert not np.allclose(stats_first["XtX"], stats_second["XtX"])
     assert stats_first["horizon_one_parity_max_abs"] == stats_second["horizon_one_parity_max_abs"] == 0.0
+
+
+def test_recursive_future_block_uses_canonical_region_price_column() -> None:
+    block = recursive._future_block(toy_window(), "AT")
+    assert block["lag_cols"][0] == "AT-price"
+    broken = toy_window()
+    broken["lag_cols"] = np.asarray(["AT-demand", "AT-load", "AT-solar", "AT-wind"], dtype=object)
+    try:
+        recursive._future_block(broken, "AT")
+    except ValueError as error:
+        assert "target-price column" in str(error)
+    else:
+        raise AssertionError("missing region-price column must fail closed")
 
 
 def test_statistics_binary_round_trip(tmp_path: Path) -> None:

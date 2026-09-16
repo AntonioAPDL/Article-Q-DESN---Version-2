@@ -65,7 +65,7 @@ under the ignored PriceFM runtime tree and are not article assets.
 
 ## Validation
 
-The focused Python suite passed with `19 passed`. Both focused R suites passed:
+The focused Python suite passed with `20 passed`. Both focused R suites passed:
 the recursive panel contract and the sufficient-statistic fit contract. Python
 byte compilation and `git diff --check` passed. A direct numerical smoke using
 the frozen PriceFM exdqlm runtime also completed an RHS_NS VB fit and verified
@@ -91,3 +91,15 @@ panel selection remain a distinct R102B gate after those fits finish.
 
 Quantile fits, test scoring, joint models, MCMC, registry mutation, and article
 mutation remain blocked.
+
+## First execution recovery
+
+The first production invocation completed and retained all 576 required
+train/validation windows, then stopped before writing any statistic or fit.
+The recursive helper expected a `label_col` key that is present in the NPZ
+packet but intentionally omitted by the established `load_window()` adapter.
+The helper now derives and validates the exact `<region>-price` column from the
+adapter's canonical `lag_cols` contract. The focused fixture was changed to
+match the real loader surface and a fail-closed missing-price-column test was
+added. No model result was created under the defective path; the retained
+windows can be reused after the corrected source is committed and rehashed.

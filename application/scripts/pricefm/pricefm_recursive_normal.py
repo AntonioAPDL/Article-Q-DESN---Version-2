@@ -33,12 +33,15 @@ def _block(window: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _future_block(window: Mapping[str, Any]) -> dict[str, Any]:
+def _future_block(window: Mapping[str, Any], region: str) -> dict[str, Any]:
     lead = np.asarray(window["X_lead"], dtype=float)
     response = np.asarray(window["Y"], dtype=float)
     if response.shape != lead.shape[:2]:
         raise ValueError("response and lead arrays must share origin/horizon dimensions")
-    label = str(np.asarray(window["label_col"]).reshape(-1)[0])
+    lag_cols = [str(x) for x in window["lag_cols"]]
+    label = "{}-price".format(region)
+    if label not in lag_cols:
+        raise ValueError("recursive target-price column is absent for {}".format(region))
     return {
         "X_lag": np.concatenate([response[..., None], lead], axis=-1),
         "lag_cols": [label] + [str(x) for x in window["lead_cols"]],
@@ -125,7 +128,7 @@ def causal_teacher_forced_statistics(
     _validate_windows(windows, target, active)
     future = build_policy_features(
         target,
-        {region: _future_block(window) for region, window in windows.items()},
+        {region: _future_block(window, region) for region, window in windows.items()},
         policy,
         spatial,
         input_regions=input_regions,

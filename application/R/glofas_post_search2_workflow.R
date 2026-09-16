@@ -82,7 +82,7 @@ app_glofas_post_search2_component_row <- function(selection, component) {
     state_scaling = as.character(selected$state_scaling[[1L]]),
     input_bound = as.character(selected$input_bound[[1L]]),
     act_f = as.character(selected$act_f[[1L]]),
-    act_k = 1,
+    act_k = "identity",
     ridge_tau2 = defaults$ridge_tau2,
     intercept_var = defaults$intercept_var,
     sigma_a = defaults$sigma_a,

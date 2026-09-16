@@ -50,6 +50,12 @@ app_glofas_post_search2_validate_final_dates <- function(dates, selection, label
   )
 }
 
+app_glofas_post_search2_needs_calibration <- function(job_type, model_family) {
+  is_normal_ridge_job <- as.character(model_family[[1L]]) %in% "normal_ridge" &&
+    as.character(job_type[[1L]]) %in% c("part1_fit", "part1_forecast")
+  !is_normal_ridge_job
+}
+
 app_glofas_post_search2_value <- function(row, name, default = NULL) {
   if (!name %in% names(row) || !length(row[[name]])) return(default)
   value <- row[[name]][[1L]]

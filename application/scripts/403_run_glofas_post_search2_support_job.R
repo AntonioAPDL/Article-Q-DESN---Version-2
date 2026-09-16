@@ -231,7 +231,7 @@ run_job <- function() {
   }
 
   cache <- readRDS(part1_cache_path)
-  needs_calibration <- !(identical(job_type, "part1_fit") && identical(args$model_family, "normal_ridge"))
+  needs_calibration <- app_glofas_post_search2_needs_calibration(job_type, args$model_family)
   calibration <- if (needs_calibration) load_calibration() else NULL
   tau0 <- if (needs_calibration) {
     as.numeric(calibration$rhs_tau0[calibration$component == "reference"])

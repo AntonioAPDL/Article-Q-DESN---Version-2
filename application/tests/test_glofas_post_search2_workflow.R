@@ -51,6 +51,10 @@ stopifnot(ref_slab$policy == "learned", !ref_slab$slab_fixed, ref_slab$zeta2 == 
 stopifnot(disc_slab$policy == "fixed", disc_slab$slab_fixed, disc_slab$zeta2 == 16)
 stopifnot(joint$ref_output_lag_max == 540L, joint$disc_covariate_lag_max == 360L)
 stopifnot(joint$ref_act_k == "identity", joint$disc_act_k == "identity")
+stopifnot(!app_glofas_post_search2_needs_calibration("part1_fit", "normal_ridge"))
+stopifnot(!app_glofas_post_search2_needs_calibration("part1_forecast", "normal_ridge"))
+stopifnot(app_glofas_post_search2_needs_calibration("part1_fit", "normal_rhs_vb"))
+stopifnot(app_glofas_post_search2_needs_calibration("part1_forecast", "normal_rhs_vb"))
 
 ref_ridge <- list(sigma2_mean = 0.64)
 disc_ridge <- list(sigma2_mean = 0.25)

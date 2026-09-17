@@ -60,6 +60,12 @@ atom for a region fails the frozen numerical gate, an exAL Fold-1 win falls
 back to the complete AL family. AL itself must be numerically eligible for all
 folds and quantiles.
 
+The initial campaign was paused after 330 atom fits when an exAL wrapper-only
+diagnostic export omission was detected. The model fits themselves were not
+changed. The correction, conservative proof for preserved atoms, and resumable
+execution protocol are documented in
+`pricefm_stage_r103_exal_gate_repair_20260917.md`.
+
 G4 requires 114 hash-valid cases, 1,596 completed atoms, 38 family decisions,
 and 798 selected atoms. Outer-test scoring remains blocked. The next allowed
 stage after G4 is a path-count stability check; joint models, MCMC, registry

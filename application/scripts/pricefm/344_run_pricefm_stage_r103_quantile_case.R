@@ -196,6 +196,19 @@ fit_atom <- function(atom) {
     as.numeric(fit$qsiggam$gamma_mean %||% fit$qgam$E_gamma %||% NA_real_)[1L]
   } else 0
   trace <- as.data.frame(fit$diagnostics$vb_trace %||% data.frame())
+  deltas <- fit$diagnostics$deltas %||% list()
+  if (identical(atom$family, "exal") && nrow(trace)) {
+    if (!"delta_state_relative" %in% names(trace)) {
+      value <- as.numeric(deltas$state_relative)
+      if (length(value) != nrow(trace)) stop("R103 relative-state trace length mismatch", call. = FALSE)
+      trace$delta_state_relative <- value
+    }
+    if (!"delta_prediction_scaled" %in% names(trace)) {
+      value <- as.numeric(deltas$prediction_scaled)
+      if (length(value) != nrow(trace)) stop("R103 prediction-scale trace length mismatch", call. = FALSE)
+      trace$delta_prediction_scaled <- value
+    }
+  }
   finite_core <- length(beta) == p && all(is.finite(beta)) &&
     all(dim(covariance) == c(p, p)) && all(is.finite(covariance)) &&
     all(diag(covariance) > 0) && is.finite(sigma) && sigma > 0
@@ -256,6 +269,11 @@ fit_atom <- function(atom) {
     posterior_target_sha256 = atom$posterior_target_sha256,
     numerical_gate_passed = numerical_passed,
     numerical_checks = checks,
+    diagnostic_gate_method = if (identical(atom$family, "exal")) {
+      "exact_runtime_diagnostics"
+    } else {
+      "not_applicable_al"
+    },
     formal_converged = isTRUE(fit$converged),
     train_seconds = as.numeric(elapsed), iterations = as.integer(fit$iter %||% nrow(trace)),
     n = n, p = p, init_source = parent$source,

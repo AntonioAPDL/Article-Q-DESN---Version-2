@@ -161,6 +161,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         Path(__file__).with_name("345_run_pricefm_stage_r103_quantile_case.py"),
         Path(__file__).with_name("346_closeout_pricefm_stage_r103_recursive_quantile.py"),
         Path(__file__).with_name("347_orchestrate_pricefm_stage_r103_recursive_quantile.py"),
+        Path(__file__).with_name("348_repair_pricefm_stage_r103_exal_gate.py"),
         Path(__file__).with_name("pricefm_stage_r67_cran111_adapter.R"),
         Path(__file__).with_name("pricefm_stage_r72_repair_adapter.R"),
         Path(__file__).with_name("pricefm_stage_r75_large_n_gig_adapter.R"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 
@@ -28,6 +29,7 @@ def load(name: str):
 
 CLOSEOUT = load("346_closeout_pricefm_stage_r103_recursive_quantile.py")
 ORCHESTRATOR = load("347_orchestrate_pricefm_stage_r103_recursive_quantile.py")
+REPAIR = load("348_repair_pricefm_stage_r103_exal_gate.py")
 
 
 def target_spec(region: str = "AT") -> dict:
@@ -158,12 +160,114 @@ def test_cpu_gate_rejects_idle_sibling_of_a_busy_physical_core(monkeypatch) -> N
     assert cpus == [33]
 
 
+def test_conservative_exal_gate_bound_dominates_exact_diagnostics() -> None:
+    rng = np.random.default_rng(802)
+    design = rng.normal(size=(37, 11))
+    delta = rng.normal(scale=1e-4, size=11)
+    scale = 1.7
+    state = float(np.max(np.abs(delta)))
+    previous = rng.normal(size=11)
+    relative_exact = state / max(1.0, float(np.max(np.abs(previous))))
+    prediction_exact = float(np.sqrt(np.mean((design @ delta) ** 2)) / scale)
+    row_l1_rms = float(np.sqrt(np.mean(np.sum(np.abs(design), axis=1) ** 2)))
+    prediction_bound = state * row_l1_rms / scale
+    assert relative_exact <= state
+    assert prediction_exact <= prediction_bound + 1e-15
+
+
+def test_exal_gate_repair_preserves_model_artifacts(tmp_path: Path) -> None:
+    atom = tmp_path / "atom"
+    atom.mkdir()
+    (atom / "beta_mean.bin").write_bytes(b"mean")
+    (atom / "beta_cov.bin").write_bytes(b"covariance")
+    (atom / "parameter_summary.json").write_text('{"sigma": 1.0}\n')
+    pd.DataFrame({
+        "sigma": [1.0, 1.0],
+        "gamma": [0.1, 0.1],
+        "delta_state": [0.002, 0.001],
+        "delta_sigma": [0.0, 0.0],
+        "delta_gamma": [0.0, 0.0],
+        "delta_s": [0.0, 0.0],
+    }).to_csv(atom / "vb_trace.csv", index=False)
+    REPAIR.write_json(atom / "numerical_gate.json", {"checks": {}, "passed": False})
+    records = []
+    for name, role in (
+        ("beta_mean.bin", "beta_mean"),
+        ("beta_cov.bin", "beta_cov"),
+        ("parameter_summary.json", "parameter_summary"),
+        ("vb_trace.csv", "vb_trace"),
+        ("numerical_gate.json", "numerical_gate"),
+    ):
+        path = atom / name
+        records.append({
+            "path": str(path),
+            "role": role,
+            "bytes": path.stat().st_size,
+            "sha256": REPAIR.sha256_file(path),
+        })
+    checks = {
+        "finite_core": True,
+        "formal_converged": True,
+        "trace_complete": False,
+        "trace_finite": False,
+        "coherent_warm_start_recorded": True,
+        "structured_updates_at_least_35": True,
+        "sigma_below_100": True,
+        "gamma_bounded": True,
+        "tail_relative_state_below_0p01": False,
+        "tail_prediction_scaled_below_0p01": False,
+    }
+    terminal_path = atom / "terminal.json"
+    REPAIR.write_json(terminal_path, {
+        "atom_id": "fixture_exal",
+        "family": "exal",
+        "formal_converged": True,
+        "numerical_gate_passed": False,
+        "numerical_checks": checks,
+        "artifacts": records,
+    })
+    before = {
+        record["role"]: record["sha256"]
+        for record in records if record["role"] in REPAIR.PROTECTED_ATOM_ROLES
+    }
+    result = REPAIR.repair_atom(
+        terminal_path,
+        {"n": 2, "p": 2, "rms_row_l1": 2.0, "response_scale": 1.0},
+        write=True,
+    )
+    terminal = json.loads(terminal_path.read_text())
+    after = {
+        record["role"]: REPAIR.sha256_file(record["path"])
+        for record in terminal["artifacts"] if record["role"] in REPAIR.PROTECTED_ATOM_ROLES
+    }
+    assert result["status"] == "repaired"
+    assert terminal["numerical_gate_passed"] is True
+    assert terminal["diagnostic_gate_method"] == "conservative_bound_repair_v1"
+    assert before == after
+    assert (atom / "diagnostic_gate_repair.json").is_file()
+
+
+def test_exal_gate_repair_rejects_a_genuine_failure() -> None:
+    terminal = {
+        "family": "exal",
+        "formal_converged": False,
+        "numerical_checks": {
+            "finite_core": True,
+            "formal_converged": False,
+            "trace_complete": False,
+        },
+    }
+    assert REPAIR.repairable(terminal) is False
+
+
 def test_launch_and_fit_firewalls_are_explicit() -> None:
     prep = (SCRIPTS / "343_prepare_pricefm_stage_r103_recursive_quantile.py").read_text()
     r_source = (SCRIPTS / "344_run_pricefm_stage_r103_quantile_case.R").read_text()
     orchestrator = (SCRIPTS / "347_orchestrate_pricefm_stage_r103_recursive_quantile.py").read_text()
     assert 'path = normalizePath(file.path(atom$output_dir, name), mustWork = FALSE)' in r_source
     assert 'prior_center_from_initializer = FALSE' in r_source
+    assert 'deltas <- fit$diagnostics$deltas %||% list()' in r_source
+    assert '"exact_runtime_diagnostics"' in r_source
     assert 'joint_model_fitted = FALSE' in r_source
     assert 'mcmc_fitted = FALSE' in r_source
     assert "RUN_PRICEFM_R103_RECURSIVE_QUANTILE" in orchestrator

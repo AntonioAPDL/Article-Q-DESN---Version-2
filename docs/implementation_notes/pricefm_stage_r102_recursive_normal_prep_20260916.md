@@ -92,6 +92,25 @@ panel selection remain a distinct R102B gate after those fits finish.
 Quantile fits, test scoring, joint models, MCMC, registry mutation, and article
 mutation remain blocked.
 
+## R102A completed status
+
+R102A completed after the bounded convergence repair. All 576 train/validation
+window packets, 144 causal sufficient-statistic cells, 144 exact scaled-Ridge
+fits, and 147 Normal RHS_NS VB fits are complete and hash-valid. The resumed
+controller computed only the 50 missing or previously rejected RHS fits; all
+50 converged with zero failures under the 300-iteration ceiling. No test split,
+quantile fit, registry, or article file was opened or changed.
+
+The final R102A terminal is:
+
+```text
+/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/
+campaigns/pricefm_stage_r102_recursive_normal_20260916/campaign_terminal.json
+```
+
+It authorizes only R102B synchronized validation paths and complete-panel
+selection. It does not authorize outer-test scoring or a quantile refit.
+
 ## First execution recovery
 
 The first production invocation completed and retained all 576 required

@@ -74,3 +74,17 @@ normal resumable reuse.
 
 R104, test evaluation, registry promotion, article changes, joint models, and
 MCMC remain blocked until the complete R103 validation-only closeout.
+
+## AL nonconvergence recovery
+
+The same frozen snapshot contained one distinct AL atom,
+`r103_dk_2_f2_al_0p45`, that was finite but did not formally converge at the
+configured 500-iteration ceiling. Its conservative prediction-change bound was
+`0.010073`, so it was not relabeled as eligible. R103 now reuses eligible AL
+atoms but retries an ineligible AL atom against the same data, likelihood,
+prior, initialization, seed, tolerance, and posterior target with a bounded
+750-iteration ceiling. New AL fits that first reach 500 without convergence
+receive the same single bounded retry. The terminal records both the configured
+and effective ceilings. exAL atoms remain valid fallback candidates even when
+ineligible, while a completed case is reusable only when its mandatory AL
+fallback family is eligible.

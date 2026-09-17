@@ -155,8 +155,12 @@ if (preflight_only) {
 }
 
 fit_atom <- function(atom) {
-  if (artifact_ok(atom$output_dir, atom$atom_id)) {
-    return(jsonlite::read_json(file.path(atom$output_dir, "terminal.json"), simplifyVector = FALSE))
+  cached <- artifact_ok(atom$output_dir, atom$atom_id)
+  cached_terminal <- if (cached) {
+    jsonlite::read_json(file.path(atom$output_dir, "terminal.json"), simplifyVector = FALSE)
+  } else NULL
+  if (cached && (identical(atom$family, "exal") || isTRUE(cached_terminal$numerical_gate_passed))) {
+    return(cached_terminal)
   }
   parent <- read_parent(atom)
   init <- list(beta = parent$beta, sigma = parent$sigma)
@@ -176,17 +180,32 @@ fit_atom <- function(atom) {
       init = init, seed = atom$seed
     )
   } else {
-    control <- r67_vb_control(NULL, qcfg, "al", NULL)
     prior_sigma <- qcfg$prior_sigma %||% list(a = 1, b = 1)
-    fit <- do.call(getExportedValue("exdqlm", "exalStaticLDVB"), list(
-      y = y, X = X, p0 = as.numeric(atom$tau),
-      beta_prior = "rhs_ns", beta_prior_controls = r72_rhs_controls(rhs),
-      a_sigma = as.numeric(prior_sigma$a %||% 1),
-      b_sigma = as.numeric(prior_sigma$b %||% 1),
-      init = init, dqlm.ind = TRUE,
-      n.samp = as.integer(qcfg$n_samp %||% 200L),
-      vb_control = control, verbose = FALSE
-    ))
+    configured_max_iter <- as.integer(qcfg$max_iter %||% 500L)
+    retry_max_iter <- max(configured_max_iter, 750L)
+    effective_max_iter <- if (cached && !isTRUE(cached_terminal$numerical_gate_passed)) {
+      retry_max_iter
+    } else configured_max_iter
+    fit_al <- function(max_iter) {
+      fit_qcfg <- qcfg
+      fit_qcfg$max_iter <- as.integer(max_iter)
+      control <- r67_vb_control(NULL, fit_qcfg, "al", NULL)
+      set.seed(as.integer(atom$seed))
+      do.call(getExportedValue("exdqlm", "exalStaticLDVB"), list(
+        y = y, X = X, p0 = as.numeric(atom$tau),
+        beta_prior = "rhs_ns", beta_prior_controls = r72_rhs_controls(rhs),
+        a_sigma = as.numeric(prior_sigma$a %||% 1),
+        b_sigma = as.numeric(prior_sigma$b %||% 1),
+        init = init, dqlm.ind = TRUE,
+        n.samp = as.integer(qcfg$n_samp %||% 200L),
+        vb_control = control, verbose = FALSE
+      ))
+    }
+    fit <- fit_al(effective_max_iter)
+    if (!isTRUE(fit$converged) && effective_max_iter < retry_max_iter) {
+      effective_max_iter <- retry_max_iter
+      fit <- fit_al(effective_max_iter)
+    }
   }
   elapsed <- proc.time()[["elapsed"]] - started
   beta <- as.numeric(fit$qbeta$m)
@@ -248,6 +267,9 @@ fit_atom <- function(atom) {
     family = atom$family, tau = as.numeric(atom$tau), sigma = sigma, gamma = gamma,
     train_seconds = as.numeric(elapsed), iterations = as.integer(fit$iter %||% nrow(trace)),
     formal_converged = isTRUE(fit$converged), structured_updates = updates,
+    configured_max_iter = as.integer(qcfg$max_iter %||% 500L),
+    effective_max_iter = if (identical(atom$family, "al")) effective_max_iter else as.integer(qcfg$max_iter %||% 500L),
+    extended_nonconvergence_retry = identical(atom$family, "al") && effective_max_iter > as.integer(qcfg$max_iter %||% 500L),
     init_source = parent$source, initialization_only = TRUE,
     prior_center_from_initializer = FALSE
   )
@@ -275,6 +297,9 @@ fit_atom <- function(atom) {
       "not_applicable_al"
     },
     formal_converged = isTRUE(fit$converged),
+    configured_max_iter = as.integer(qcfg$max_iter %||% 500L),
+    effective_max_iter = if (identical(atom$family, "al")) effective_max_iter else as.integer(qcfg$max_iter %||% 500L),
+    extended_nonconvergence_retry = identical(atom$family, "al") && effective_max_iter > as.integer(qcfg$max_iter %||% 500L),
     train_seconds = as.numeric(elapsed), iterations = as.integer(fit$iter %||% nrow(trace)),
     n = n, p = p, init_source = parent$source,
     initialization_only = TRUE, prior_center_from_initializer = FALSE,

@@ -145,11 +145,14 @@ def valid_case(path: Path, case_id: str, case_contract_sha256: str) -> bool:
             or int(terminal.get("atoms_complete", -1)) != 14
         ):
             return False
-        return all(
+        artifacts_valid = all(
             Path(record["path"]).is_file()
             and sha256_file(record["path"]) == record["sha256"]
             for record in terminal["artifacts"]
         )
+        metrics = pd.read_csv(path / "family_validation_metrics.csv")
+        al = metrics[metrics.family.eq("al")]
+        return artifacts_valid and len(al) == 1 and bool(al.iloc[0].numerically_eligible)
     except (OSError, KeyError, json.JSONDecodeError):
         return False
 

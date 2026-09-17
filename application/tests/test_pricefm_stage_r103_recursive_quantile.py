@@ -268,6 +268,8 @@ def test_launch_and_fit_firewalls_are_explicit() -> None:
     assert 'prior_center_from_initializer = FALSE' in r_source
     assert 'deltas <- fit$diagnostics$deltas %||% list()' in r_source
     assert '"exact_runtime_diagnostics"' in r_source
+    assert 'retry_max_iter <- max(configured_max_iter, 750L)' in r_source
+    assert 'extended_nonconvergence_retry' in r_source
     assert 'joint_model_fitted = FALSE' in r_source
     assert 'mcmc_fitted = FALSE' in r_source
     assert "RUN_PRICEFM_R103_RECURSIVE_QUANTILE" in orchestrator

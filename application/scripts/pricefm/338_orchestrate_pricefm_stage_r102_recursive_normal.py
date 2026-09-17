@@ -28,6 +28,9 @@ DATA = ARTIFACT_REPO / "application/data_local/pricefm"
 PREP = DATA / "launch_prep/pricefm_stage_r102_recursive_normal_20260916"
 CAMPAIGN = DATA / "campaigns/pricefm_stage_r102_recursive_normal_20260916"
 APPROVAL = "RUN_PRICEFM_R102_RECURSIVE_NORMAL"
+RHS_MAX_ITER = 300
+RHS_MIN_ITER = 50
+RHS_TOL = 1e-5
 
 
 def parser() -> argparse.ArgumentParser:
@@ -215,8 +218,15 @@ def prepare_processed(control: dict[str, Any], campaign: Path) -> None:
     })
 
 
+def window_packet_complete(value: str | Path) -> bool:
+    path = Path(value)
+    return path.is_file() and path.with_suffix(".manifest.json").is_file()
+
+
 def build_windows(args: argparse.Namespace, windows: pd.DataFrame, cpus: list[int]) -> None:
     for index, (lag, group) in enumerate(windows.groupby("lag_window", sort=True)):
+        if all(window_packet_complete(path) for path in group.runtime_path):
+            continue
         regions = sorted(group.region.astype(str).unique())
         config = args.campaign_root / "configs" / "data_L{}.yaml".format(int(lag))
         command([
@@ -226,7 +236,7 @@ def build_windows(args: argparse.Namespace, windows: pd.DataFrame, cpus: list[in
             "--regions", ",".join(regions), "--folds", "1,2,3",
             "--resume", "true", "--force", "false",
         ], args.code_root, args.campaign_root / "logs/windows_L{}.log".format(int(lag)), cpus[index % len(cpus)])
-    missing = [path for path in windows.runtime_path if not Path(path).is_file()]
+    missing = [path for path in windows.runtime_path if not window_packet_complete(path)]
     if missing:
         raise RuntimeError("R102 window build incomplete: {} missing".format(len(missing)))
 
@@ -294,9 +304,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "tau0": None if pd.isna(row.tau0) else float(row.tau0),
             "package_path": prep_control["normal_runtime"],
             "helper_path": str((args.code_root / "application/R/pricefm_recursive_normal_fit.R").resolve()),
-            "max_iter": 100,
-            "min_iter": 50,
-            "tol": 1e-5,
+            "max_iter": RHS_MAX_ITER,
+            "min_iter": RHS_MIN_ITER,
+            "tol": RHS_TOL,
             "posterior_target_sha256": target_hash,
             "selection_split": "train_validation_only",
             "test_access_authorized": False,

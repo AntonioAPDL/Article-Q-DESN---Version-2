@@ -65,7 +65,7 @@ under the ignored PriceFM runtime tree and are not article assets.
 
 ## Validation
 
-The focused Python suite passed with `20 passed`. Both focused R suites passed:
+The focused Python suite passed with `22 passed`. Both focused R suites passed:
 the recursive panel contract and the sufficient-statistic fit contract. Python
 byte compilation and `git diff --check` passed. A direct numerical smoke using
 the frozen PriceFM exdqlm runtime also completed an RHS_NS VB fit and verified
@@ -103,3 +103,18 @@ adapter's canonical `lag_cols` contract. The focused fixture was changed to
 match the real loader surface and a fail-closed missing-price-column test was
 added. No model result was created under the defective path; the retained
 windows can be reused after the corrected source is committed and rehashed.
+
+The resumed fit stage completed all 144 exact Ridge fits and 97 RHS fits. Eleven
+RHS contracts reached the original 100-iteration ceiling and were rejected;
+the fail-fast worker buckets left 39 later RHS contracts untouched. Isolated
+diagnostics with identical statistics, priors, tolerance, and initialization
+showed that all 11 rejected fits converge between iterations 102 and 219. This
+is an optimization-budget limitation, not divergence and not a changed
+posterior target. R102 therefore uses a 300-iteration RHS ceiling while keeping
+`min_iter = 50` and `tol = 1e-5`. Existing converged fits remain authoritative
+and are not repeated.
+
+The established window builder evaluates a window before applying its resume
+check. The R102 controller now bypasses the builder when every required NPZ and
+matching manifest for a lag group already exists. This keeps resumed execution
+bounded without weakening the complete-packet requirement.

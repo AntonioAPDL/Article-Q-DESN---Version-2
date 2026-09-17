@@ -165,6 +165,21 @@ def test_orchestrator_cpu_and_boolean_contracts() -> None:
     assert not ORCHESTRATOR.truthy("False")
 
 
+def test_orchestrator_window_resume_requires_data_and_manifest(tmp_path: Path) -> None:
+    packet = tmp_path / "train.npz"
+    assert not ORCHESTRATOR.window_packet_complete(packet)
+    packet.write_bytes(b"npz")
+    assert not ORCHESTRATOR.window_packet_complete(packet)
+    packet.with_suffix(".manifest.json").write_text("{}\n")
+    assert ORCHESTRATOR.window_packet_complete(packet)
+
+
+def test_rhs_convergence_budget_covers_observed_recovery_iterations() -> None:
+    assert ORCHESTRATOR.RHS_MAX_ITER == 300
+    assert ORCHESTRATOR.RHS_MIN_ITER == 50
+    assert ORCHESTRATOR.RHS_TOL == 1e-5
+
+
 def test_orchestrator_requires_frozen_source_and_explicit_approval() -> None:
     source = (SCRIPTS / "338_orchestrate_pricefm_stage_r102_recursive_normal.py").read_text()
     assert "RUN_PRICEFM_R102_RECURSIVE_NORMAL" in source

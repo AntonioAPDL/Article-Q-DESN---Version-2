@@ -68,3 +68,23 @@ independence from validation truth during recursion, complete-panel selection,
 source hashing, and the launch firewall. A real 38-region, 96-horizon smoke
 passed. At the production path count, one origin required approximately 22.6
 seconds and 462 MB peak RSS on the current host.
+
+## Completed result
+
+R102B completed all 12 validation surfaces, 1,460 origin path archives, and
+1,460 matching hash markers. Every surface used 500 paths and all 38 regions;
+the retained runtime footprint is 9.3 GiB. The closeout selected the complete
+`r98_control` Normal-RHS panel for R103:
+
+- aggregate validation AQL: `27.48702331308215`;
+- worst-fold validation AQL: `31.48219320366788`;
+- R100-primary aggregate validation AQL: `27.557336267743167`;
+- R100-primary worst-fold validation AQL: `29.85780420008504`.
+
+The Ridge diagnostic favored R98 as well (`22.122002036036328` versus
+`22.999104607111658`) but cannot replace the preregistered Normal-RHS driver.
+The selected driver manifest has 114 region-fold rows and SHA-256
+`b21afc7b3fdbc528b2e69d1921f6f6e509918645d8687e5b21da28ab49f8d851`.
+All closeout output hashes and the weighted AQL were independently reproduced.
+No test split, quantile fit, joint model, MCMC fit, registry mutation, or
+article mutation occurred in R102B.

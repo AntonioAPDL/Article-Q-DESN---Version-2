@@ -46,10 +46,14 @@ consume the corresponding Normal-RHS generated regional price panel plus the
 admissible exogenous values. Quantile output does not feed its own recursion,
 and AL/exAL likelihood noise does not generate the lag path.
 
-The 500 Normal paths are paired one-to-one with 500 beta-posterior draws. This
-integrates both sources of uncertainty without constructing a wasteful
-500-by-500 Cartesian product. The stored prediction is the posterior mean of
-the paired conditional quantile paths.
+The 500 Normal paths are paired one-to-one with 500 beta-posterior draws. The
+original R103 operator then stored the posterior mean of the paired conditional
+quantile paths. Stage R104 established that this quantity estimates the mean of
+a conditional quantile, not the marginal predictive quantile required by AQL
+and interval coverage. The completed R103 artifacts remain valid fitted
+readouts, but their original recursive validation summaries are not eligible
+for promotion. See
+`pricefm_stage_r104_forecast_operator_diagnosis_20260918.md`.
 
 ## Selection and gates
 
@@ -66,10 +70,11 @@ changed. The correction, conservative proof for preserved atoms, and resumable
 execution protocol are documented in
 `pricefm_stage_r103_exal_gate_repair_20260917.md`.
 
-G4 requires 114 hash-valid cases, 1,596 completed atoms, 38 family decisions,
-and 798 selected atoms. Outer-test scoring remains blocked. The next allowed
-stage after G4 is a path-count stability check; joint models, MCMC, registry
-mutation, and manuscript changes remain separate later decisions.
+R103 was frozen for diagnosis with 27 hash-valid complete cases and 401
+completed atoms. Outer-test scoring remains blocked. A broad continuation is
+not authorized until the R104 forecast-operator evidence passes explicit human
+review. Joint models, MCMC, registry mutation, and manuscript changes remain
+separate later decisions.
 
 ## Implementation
 

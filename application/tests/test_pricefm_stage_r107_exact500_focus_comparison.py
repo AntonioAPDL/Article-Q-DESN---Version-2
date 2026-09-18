@@ -93,3 +93,10 @@ def test_horizon_contract_has_seven_rows_times_96() -> None:
     assert len(CLOSEOUT.FOCUS_CASE_IDS) == 4
     expected = len(CLOSEOUT.FOCUS_CASES) * np.arange(1, 97).size
     assert expected == 672
+
+
+def test_cpu_snapshot_ignores_aggregate_cpu_row() -> None:
+    usage = ORCHESTRATOR.cpu_snapshot()
+    assert 0 in usage
+    assert all(isinstance(cpu, int) and cpu >= 0 for cpu in usage)
+    assert all(0.0 <= value <= 100.0 for value in usage.values())

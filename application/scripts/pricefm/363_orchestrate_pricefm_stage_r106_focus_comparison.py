@@ -76,16 +76,18 @@ def physical_core(cpu: int) -> str:
 def cpu_snapshot() -> dict[int, float]:
     first = {}
     for line in Path("/proc/stat").read_text().splitlines():
-        if line.startswith("cpu") and line[3:].split(maxsplit=1)[0].isdigit():
+        label = line.split(maxsplit=1)[0]
+        if label.startswith("cpu") and label[3:].isdigit():
             fields = [int(value) for value in line.split()[1:]]
-            first[int(line.split()[0][3:])] = (sum(fields), fields[3] + fields[4])
+            first[int(label[3:])] = (sum(fields), fields[3] + fields[4])
     import time
     time.sleep(0.25)
     usage = {}
     for line in Path("/proc/stat").read_text().splitlines():
-        if line.startswith("cpu") and line[3:].split(maxsplit=1)[0].isdigit():
+        label = line.split(maxsplit=1)[0]
+        if label.startswith("cpu") and label[3:].isdigit():
             fields = [int(value) for value in line.split()[1:]]
-            cpu = int(line.split()[0][3:])
+            cpu = int(label[3:])
             total, idle = sum(fields), fields[3] + fields[4]
             old_total, old_idle = first[cpu]
             usage[cpu] = 100.0 * (1.0 - (idle - old_idle) / max(total - old_total, 1))

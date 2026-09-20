@@ -9,7 +9,8 @@ for (file in c(
   "covariate_design.R", "build_application_panel.R", "latent_path_design.R",
   "discrepancy_design.R", "latent_path_vb_al.R", "score_forecasts.R",
   "joint_qvp_qdesn.R", "joint_exqdesn_exact_structured_inference.R",
-  "joint_exqdesn_inference_dispatch.R", "glofas_normal_desn_part1_screening.R",
+  "joint_exqdesn_inference_dispatch.R", "glofas_quantile_integrity.R",
+  "glofas_normal_desn_part1_screening.R",
   "glofas_normal_desn_part2_bridge.R", "glofas_normal_desn_part3_joint_bridge.R",
   "glofas_part3_partitioned_rhs.R", "glofas_part3_quantile_bridge.R",
   "glofas_normal_oracle_forecast.R", "glofas_part1_quantile_oracle_forecast.R",
@@ -46,7 +47,11 @@ args <- app_parse_args(list(
   seed = "20260916",
   forecast_backend = "cpp",
   freeze_beta_warmup_iters = "20",
-  min_beta_updates = "30"
+  min_beta_updates = "30",
+  fixed_iterations = "false",
+  full_state_convergence = "false",
+  convergence_tolerance = "1e-4",
+  terminal_consecutive_passes = "3"
 ))
 
 runtime_root <- app_resolve_path(args$runtime_root, must_work = FALSE)
@@ -267,6 +272,12 @@ run_job <- function() {
       )
       fit$type <- "normal_rhs_vb_part1_post_search2_final"
     } else {
+      if (app_as_bool(args$fixed_iterations)) {
+        app_glofas_quantile_validate_production_iteration_contract(
+          args$max_iter, args$min_iter, TRUE, args$freeze_beta_warmup_iters,
+          args$terminal_consecutive_passes
+        )
+      }
       init_paths <- resolve_fit_paths(args$init_fit_job_ids)
       slab <- app_glofas_post_search2_quantile_slab(cache$candidate_row)
       controls <- app_glofas_part1_quantile_default_controls(
@@ -276,7 +287,11 @@ run_job <- function() {
         init_fit_paths = paste(init_paths, collapse = "|"), progress_every = 1L,
         progress_path = file.path(runtime_root, "traces", paste0(job_id, "_progress.csv")),
         freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
-        min_beta_updates = as.integer(args$min_beta_updates)
+        min_beta_updates = as.integer(args$min_beta_updates),
+        fixed_iterations = app_as_bool(args$fixed_iterations),
+        full_state_convergence = app_as_bool(args$full_state_convergence),
+        convergence_tolerance = as.numeric(args$convergence_tolerance),
+        terminal_consecutive_passes = as.integer(args$terminal_consecutive_passes)
       )
       fit <- app_glofas_part1_quantile_fit_readout(
         cache$design$y, cache$Z, tau, as.character(args$model_family[[1L]]), controls
@@ -286,11 +301,18 @@ run_job <- function() {
     }
     saveRDS(fit, fit_path(job_id), version = 2L)
     if (nrow(fit$trace %||% data.frame())) app_write_csv(fit$trace, file.path(runtime_root, "traces", paste0(job_id, "_trace.csv")))
+    trace <- fit$trace %||% data.frame()
     write_contract(data.frame(fit_path = fit_path(job_id), fit_sha256 = app_sha256_file(fit_path(job_id)),
       model_family = args$model_family, tau = paste(tau, collapse = "|"),
       rhs_tau0 = tau0,
       rhs_slab_policy = if (exists("slab", inherits = FALSE)) slab$policy else NA_character_,
-      converged = isTRUE(fit$converged), stringsAsFactors = FALSE))
+      converged = isTRUE(fit$converged),
+      iterations = as.integer(fit$iterations %||% nrow(trace) %||% NA_integer_),
+      fixed_iterations_requested = app_as_bool(args$fixed_iterations),
+      full_state_convergence_requested = app_as_bool(args$full_state_convergence),
+      terminal_certificate_passed = isTRUE((fit$convergence_certificate %||% fit$terminal_certificate %||% list())$passed),
+      stopping_reason = as.character(fit$stopping_reason %||% NA_character_),
+      stringsAsFactors = FALSE))
     return(invisible(TRUE))
   }
 

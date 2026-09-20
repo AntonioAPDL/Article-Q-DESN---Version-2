@@ -12,6 +12,7 @@ for (path in c(
   "fit_qdesn_discrepancy.R", "latent_path_runtime_backend.R", "latent_path_checkpoint.R",
   "latent_path_vb_al.R", "latent_path_vb_normal.R", "joint_qvp_qdesn.R",
   "joint_exqdesn_exact_structured_inference.R", "latent_path_vb_exal.R",
+  "glofas_quantile_integrity.R",
   "glofas_normal_desn_part1_screening.R",
   "glofas_part3_partitioned_rhs.R", "latent_path_vb_joint.R", "fit_qdesn_latent_path.R",
   "glofas_part4_ensemble_likelihood_contract.R", "glofas_normal_driver_bank.R",

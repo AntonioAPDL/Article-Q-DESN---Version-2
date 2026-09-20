@@ -69,6 +69,7 @@ app_latent_joint_rhs_gate <- function(states, iter, component) {
       min_tau_updates = required,
       tau_update_count = update_count,
       first_tau_update_outer = first_update,
+      global_relative_change = as.numeric(state$last_global_relative_change %||% Inf),
       coefficient_response_after_release = coefficient_response,
       passed = enough_updates && coefficient_response,
       stringsAsFactors = FALSE
@@ -284,10 +285,13 @@ app_fit_latent_path_joint_vb_core <- function(
   outer_max <- as.integer(vb_args$joint_outer_max_iter %||% 5L)
   outer_min <- as.integer(vb_args$joint_outer_min_iter %||% 2L)
   outer_tol <- as.numeric(vb_args$joint_outer_tol %||% 1.0e-3)
+  rhs_tol <- as.numeric(vb_args$joint_rhs_tol %||% outer_tol)
+  terminal_consecutive <- as.integer(vb_args$joint_terminal_consecutive_passes %||% 3L)
   inner_max <- as.integer(vb_args$joint_inner_max_iter %||% 30L)
   inner_min <- as.integer(vb_args$joint_inner_min_iter %||% min(10L, inner_max))
   if (outer_max < 1L || outer_min < 1L || outer_min > outer_max || inner_max < 2L ||
-      inner_min < 1L || inner_min > inner_max || outer_tol <= 0) {
+      inner_min < 1L || inner_min > inner_max || outer_tol <= 0 || rhs_tol <= 0 ||
+      terminal_consecutive < 1L) {
     stop("Invalid joint Part 4 CAVI controls.", call. = FALSE)
   }
   seed <- as.integer(seed %||% vb_args$seed %||% 20260513L)
@@ -342,7 +346,9 @@ app_fit_latent_path_joint_vb_core <- function(
       passed = reference_rhs_gate$passed && discrepancy_rhs_gate$passed,
       blocks = rbind(reference_rhs_gate$blocks, discrepancy_rhs_gate$blocks)
     )
-    converged_rhs <- rhs_gate$passed
+    converged_rhs <- rhs_gate$passed &&
+      all(is.finite(rhs_gate$blocks$global_relative_change)) &&
+      max(rhs_gate$blocks$global_relative_change) <= rhs_tol
     new_theta <- do.call(cbind, lapply(fits, function(x) x$summary$theta_mean))
     change <- max(abs(new_theta - old_theta) / pmax(1, abs(old_theta)))
     converged_inner <- all(vapply(fits, function(x) isTRUE(x$vb_diagnostics$converged), logical(1L)))
@@ -353,6 +359,8 @@ app_fit_latent_path_joint_vb_core <- function(
       all_inner_converged = converged_inner,
       outer_tolerance_met = converged_outer,
       rhs_convergence_gate_passed = converged_rhs,
+      rhs_schedule_gate_passed = rhs_gate$passed,
+      max_rhs_global_relative_change = max(rhs_gate$blocks$global_relative_change),
       min_rhs_tau_updates = min(rhs_gate$blocks$tau_update_count),
       max_rhs_tau_updates = max(rhs_gate$blocks$tau_update_count),
       continuation_iteration = outer_local,
@@ -360,12 +368,26 @@ app_fit_latent_path_joint_vb_core <- function(
         as.numeric(difftime(Sys.time(), started, units = "secs")),
       stringsAsFactors = FALSE
     )
+    trace_new[[outer_local]]$full_state_pass <- with(
+      trace_new[[outer_local]],
+      all_inner_converged & outer_tolerance_met & rhs_convergence_gate_passed
+    )
+    trace_new[[outer_local]]$terminal_consecutive_passes <- 0L
+    completed_rows <- trace_new[vapply(trace_new, is.data.frame, logical(1L))]
+    completed_trace <- do.call(rbind, completed_rows)
+    previous_pass <- if ("full_state_pass" %in% names(previous_trace)) {
+      as.logical(previous_trace$full_state_pass)
+    } else logical()
+    pass_history <- c(previous_pass, as.logical(completed_trace$full_state_pass))
+    trailing_passes <- sum(cumprod(as.integer(rev(pass_history))))
+    terminal_pass <- trailing_passes >= terminal_consecutive
+    trace_new[[outer_local]]$terminal_consecutive_passes <- trailing_passes
     message(sprintf(
       "[Part4 joint %s] outer iteration %d (continuation %d/%d) change=%.6g inner=%s",
       likelihood, outer, outer_local, outer_max, change,
       paste0(converged_inner, ", rhs=", converged_rhs)
     ))
-    if (converged_outer && converged_inner && converged_rhs) {
+    if (terminal_pass) {
       converged <- TRUE
       trace_new <- trace_new[seq_len(outer_local)]
       break
@@ -413,6 +435,8 @@ app_fit_latent_path_joint_vb_core <- function(
     stopping_reason = stopping_reason,
     rhs_convergence_diagnostics = rhs_gate$blocks,
     rhs_schedule = rhs_schedule,
+    joint_rhs_tolerance = rhs_tol,
+    terminal_consecutive_passes_required = terminal_consecutive,
     rhs_schedule_rebase_audit = rhs_schedule_rebase_audit,
     trace = trace,
     runtime_seconds = previous_runtime_seconds +

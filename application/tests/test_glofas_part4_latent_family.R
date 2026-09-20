@@ -9,6 +9,7 @@ for (path in c(
   "fit_qdesn_discrepancy.R", "latent_path_runtime_backend.R", "latent_path_checkpoint.R",
   "latent_path_vb_al.R", "latent_path_vb_normal.R", "joint_qvp_qdesn.R",
   "joint_exqdesn_exact_structured_inference.R", "latent_path_vb_exal.R",
+  "glofas_quantile_integrity.R",
   "glofas_normal_desn_part1_screening.R",
   "glofas_part3_partitioned_rhs.R", "latent_path_vb_joint.R", "fit_qdesn_latent_path.R",
   "glofas_part4_ensemble_likelihood_contract.R", "glofas_normal_driver_bank.R",
@@ -293,10 +294,22 @@ stopifnot(joint_warmup_only$rhs_schedule$effective$freeze_tau_warmup_iters == 25
 stopifnot(!joint_warmup_only$converged_rhs)
 stopifnot(all(joint_warmup_only$rhs_summary_reference$tau_update_count == 0L))
 
-rebased_joint_args <- modifyList(warmup_joint_args, list(
+single_release_args <- modifyList(warmup_joint_args, list(
   joint_outer_max_iter = 2L,
   joint_rhs_freeze_outer_iters = 1L,
-  joint_rhs_allow_schedule_rebase = TRUE
+  joint_rhs_allow_schedule_rebase = TRUE,
+  joint_terminal_consecutive_passes = 3L
+))
+joint_after_single_rhs_release <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  vb_args = single_release_args, seed = 16L, initial_joint_fit = joint_warmup_only
+)
+stopifnot(joint_after_single_rhs_release$converged_rhs)
+stopifnot(!joint_after_single_rhs_release$converged)
+stopifnot(max(joint_after_single_rhs_release$trace$terminal_consecutive_passes) < 3L)
+
+rebased_joint_args <- modifyList(single_release_args, list(
+  joint_outer_max_iter = 4L
 ))
 joint_after_rhs_release <- app_fit_latent_path_joint_vb_core(
   designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
@@ -304,6 +317,7 @@ joint_after_rhs_release <- app_fit_latent_path_joint_vb_core(
 )
 stopifnot(joint_after_rhs_release$converged_rhs)
 stopifnot(joint_after_rhs_release$converged)
+stopifnot(tail(joint_after_rhs_release$trace$terminal_consecutive_passes, 1L) >= 3L)
 stopifnot(all(joint_after_rhs_release$rhs_schedule_rebase_audit$schedule_rebased))
 stopifnot(min(joint_after_rhs_release$rhs_summary_reference$tau_update_count) >= 2L)
 

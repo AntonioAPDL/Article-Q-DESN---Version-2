@@ -5,6 +5,7 @@ source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/joint_qvp_qdesn.R"))
 source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
+source(app_path("application/R/glofas_quantile_integrity.R"))
 source(app_path("application/R/glofas_normal_desn_part3_joint_bridge.R"))
 source(app_path("application/R/glofas_part3_partitioned_rhs.R"))
 source(app_path("application/R/glofas_part3_quantile_bridge.R"))
@@ -62,7 +63,11 @@ stopifnot(identical(fit_exal$inference_method_id, "VB1_structured_v"))
 stopifnot(length(fit_exal$gamma_mean) == 1L)
 stopifnot(all(is.finite(fit_exal$gamma_mean)))
 
-joint_init <- list(fits = rep(list(fit_al), 3L))
+joint_init <- list(fits = lapply(c(0.2, 0.5, 0.8), function(q) {
+  out <- fit_al
+  out$tau <- q
+  out
+}))
 fit_joint <- app_glofas_part3_quantile_fit(
   design, split, tau = c(0.2, 0.5, 0.8), likelihood = "AL", fit_structure = "joint",
   controls = controls_exal, init = joint_init, fit_id = "test_joint"

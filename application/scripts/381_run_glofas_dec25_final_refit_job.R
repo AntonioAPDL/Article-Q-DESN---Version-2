@@ -22,6 +22,7 @@ source(app_path("application/R/score_forecasts.R"))
 source(app_path("application/R/joint_qvp_qdesn.R"))
 source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
 source(app_path("application/R/joint_exqdesn_inference_dispatch.R"))
+source(app_path("application/R/glofas_quantile_integrity.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_desn_part2_bridge.R"))
 source(app_path("application/R/glofas_normal_desn_part3_joint_bridge.R"))
@@ -97,6 +98,10 @@ args <- app_parse_args(list(
   forecast_backend = "cpp",
   freeze_beta_warmup_iters = "20",
   min_beta_updates = "30",
+  fixed_iterations = "false",
+  full_state_convergence = "false",
+  convergence_tolerance = "1e-4",
+  terminal_consecutive_passes = "3",
   quantile_route = "same_tau_parallel",
   selected_components = "",
   calibration_path = "",
@@ -523,6 +528,12 @@ main <- function() {
   }
 
   if (identical(job_type, "fit")) {
+    if (!model_family %in% c("normal_ridge", "normal_rhs_vb") && truthy(args$fixed_iterations)) {
+      app_glofas_quantile_validate_production_iteration_contract(
+        args$max_iter, args$min_iter, TRUE, args$freeze_beta_warmup_iters,
+        args$terminal_consecutive_passes
+      )
+    }
     if (identical(part, "part2")) {
       if (identical(model_family, "normal_ridge")) {
         result <- app_glofas_dec25_fit_part2_normal_ridge(cache)
@@ -557,7 +568,11 @@ main <- function() {
           progress_path = file.path(runtime_root, "traces", paste0(job_id, "_progress.csv")),
           progress_every = 1L,
           freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
-          min_beta_updates = as.integer(args$min_beta_updates)
+          min_beta_updates = as.integer(args$min_beta_updates),
+          fixed_iterations = truthy(args$fixed_iterations),
+          full_state_convergence = truthy(args$full_state_convergence),
+          convergence_tolerance = as.numeric(args$convergence_tolerance),
+          terminal_consecutive_passes = as.integer(args$terminal_consecutive_passes)
         )
         fit <- app_glofas_dec25_fit_part2_quantile(
           cache,
@@ -603,7 +618,11 @@ main <- function() {
           progress_path = file.path(runtime_root, "traces", paste0(job_id, "_progress.csv")),
           progress_every = 1L,
           freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
-          min_beta_updates = as.integer(args$min_beta_updates)
+          min_beta_updates = as.integer(args$min_beta_updates),
+          fixed_iterations = truthy(args$fixed_iterations),
+          full_state_convergence = truthy(args$full_state_convergence),
+          convergence_tolerance = as.numeric(args$convergence_tolerance),
+          terminal_consecutive_passes = as.integer(args$terminal_consecutive_passes)
         )
         init <- if (!length(init_paths)) NULL else if (length(init_paths) == 1L) init_paths[[1L]] else list(fits = as.list(init_paths))
         fit <- app_glofas_part3_quantile_fit(
@@ -644,6 +663,10 @@ main <- function() {
       freeze_beta_warmup_iters = if (identical(model_family, "normal_ridge")) 0L else as.integer(args$freeze_beta_warmup_iters),
       min_beta_updates = if (identical(model_family, "normal_ridge")) 0L else as.integer(args$min_beta_updates),
       beta_freeze_verified = isTRUE(beta_freeze_verified),
+      fixed_iterations_requested = truthy(args$fixed_iterations),
+      full_state_convergence_requested = truthy(args$full_state_convergence),
+      terminal_certificate_passed = isTRUE((fit$convergence_certificate %||% fit$terminal_certificate %||% list())$passed),
+      stopping_reason = as.character(fit$stopping_reason %||% fit$stop_reason %||% NA_character_),
       stringsAsFactors = FALSE
     )
     write_contract(contract)

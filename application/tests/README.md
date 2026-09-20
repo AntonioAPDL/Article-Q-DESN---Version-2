@@ -99,6 +99,15 @@ Tracked tests:
   one-page vector-figure presentation contract.
 - `test_glofas_part4_latent_family_scheduler.py`: fail-closed production
   launch authorization and manifest-backed prepared-state health reporting.
+- `test_glofas_quantile_integrity.R`: exact tau-mapping and rejection rules,
+  corrected exAL local-quadratic algebra, relative full-state movement, and
+  three-row terminal certification.
+- `test_glofas_quantile_integrity_launchers.py`: synthetic 133/133 source
+  authority, exact 19-fit/19-forecast DAG construction, fixed-200 controls,
+  dependency gates, and bounded Part 4 continuation contracts.
+- `test_glofas_forecast_operator_diagnostics.R`: causal endogenous-lag policy
+  mutation, teacher-forcing firewall labels, and C++ recursive state-norm and
+  saturation diagnostics.
 
 The complete Part 4 statistical, execution, and artifact contract is recorded
 in `docs/implementation_notes/glofas_part4_latent_family_implementation_20260906.md`.

@@ -88,7 +88,11 @@ app_glofas_part1_quantile_default_controls <- function(
   progress_path = NULL,
   progress_every = 0L,
   freeze_beta_warmup_iters = 0L,
-  min_beta_updates = 0L
+  min_beta_updates = 0L,
+  full_state_convergence = FALSE,
+  fixed_iterations = FALSE,
+  convergence_tolerance = 1.0e-4,
+  terminal_consecutive_passes = 3L
 ) {
   list(
     max_iter = as.integer(max_iter),
@@ -111,7 +115,11 @@ app_glofas_part1_quantile_default_controls <- function(
     progress_path = progress_path,
     progress_every = as.integer(progress_every),
     freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
-    min_beta_updates = as.integer(min_beta_updates)
+    min_beta_updates = as.integer(min_beta_updates),
+    full_state_convergence = isTRUE(full_state_convergence),
+    fixed_iterations = isTRUE(fixed_iterations),
+    convergence_tolerance = as.numeric(convergence_tolerance),
+    terminal_consecutive_passes = as.integer(terminal_consecutive_passes)
   )
 }
 
@@ -209,24 +217,28 @@ app_glofas_part1_quantile_init_from_paths <- function(paths, y, Z, tau) {
   paths <- app_glofas_part1_quantile_split_paths(paths)
   if (!length(paths)) return(NULL)
   tau <- as.numeric(tau)
-  if (length(paths) == 1L) {
-    path <- app_glofas_oracle_resolve_repo_path(paths[[1L]], must_work = TRUE)
-    return(app_glofas_part1_quantile_init_from_fit(readRDS(path), y = y, Z = Z, tau = tau, source_path = path))
+  resolved <- vapply(paths, app_glofas_oracle_resolve_repo_path, character(1L), must_work = TRUE)
+  loaded <- lapply(resolved, readRDS)
+  source_tau <- lapply(loaded, app_glofas_quantile_source_tau)
+  if (length(paths) == 1L && !length(source_tau[[1L]])) {
+    return(app_glofas_part1_quantile_init_from_fit(loaded[[1L]], y = y, Z = Z, tau = tau, source_path = resolved[[1L]]))
   }
-  if (length(paths) != length(tau)) {
-    stop("Multiple warm-start paths must have length one or length(tau).", call. = FALSE)
-  }
-  pieces <- vector("list", length(tau))
-  for (ii in seq_along(paths)) {
-    path <- app_glofas_oracle_resolve_repo_path(paths[[ii]], must_work = TRUE)
-    pieces[[ii]] <- app_glofas_part1_quantile_init_from_fit(readRDS(path), y = y, Z = Z, tau = tau[[ii]], source_path = path)
-  }
+  mapping <- app_glofas_quantile_initializer_map(as.list(resolved), tau)
+  pieces <- lapply(seq_len(nrow(mapping)), function(ii) {
+    fit <- app_glofas_quantile_select_column(
+      mapping$fit[[ii]], mapping$source_column[[ii]], coefficient_block_size = ncol(Z)
+    )
+    app_glofas_part1_quantile_init_from_fit(
+      fit, y = y, Z = Z, tau = tau[[ii]], source_path = mapping$source_path[[ii]]
+    )
+  })
   out <- list(
     beta_mean = unlist(lapply(pieces, `[[`, "beta_mean"), use.names = FALSE),
     alpha_mean = vapply(pieces, function(x) x$alpha_mean[[1L]], numeric(1L)),
     sigma_mean = vapply(pieces, function(x) x$sigma_mean[[1L]], numeric(1L)),
-    init_source_path = paste(paths, collapse = "|"),
-    init_source_class = paste(vapply(pieces, function(x) x$init_source_class[[1L]], character(1L)), collapse = "|")
+    init_source_path = paste(mapping$source_path, collapse = "|"),
+    init_source_class = paste(vapply(pieces, function(x) x$init_source_class[[1L]], character(1L)), collapse = "|"),
+    init_tau_mapping = mapping[, setdiff(names(mapping), "fit"), drop = FALSE]
   )
   if (all(vapply(pieces, function(x) !is.null(x$gamma_mean), logical(1L)))) {
     out$gamma_mean <- vapply(pieces, function(x) x$gamma_mean[[1L]], numeric(1L))
@@ -355,7 +367,11 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   progress_every = 0L,
   progress_label = "joint_al_blockmf",
   freeze_beta_warmup_iters = 0L,
-  min_beta_updates = 0L
+  min_beta_updates = 0L,
+  fixed_iterations = FALSE,
+  full_state_convergence = FALSE,
+  convergence_tolerance = tol,
+  terminal_consecutive_passes = 3L
 ) {
   y <- as.numeric(y)
   Z <- as.matrix(Z)
@@ -394,9 +410,14 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   colnames(sigma_trace) <- paste0("tau_", format(tau, trim = TRUE))
   converged <- FALSE
   beta_update_count <- 0L
+  qhat_old <- Z %*% beta_mat + matrix(alpha, Tn, K, byrow = TRUE)
   for (iter in seq_len(max_iter)) {
     beta_old <- beta_mat
+    alpha_old <- alpha
     sigma_old <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
+    v_old <- v_mean
+    v_inv_old <- v_inv_mean
+    rhs_old <- app_glofas_quantile_numeric_state(rhs_state)
     prior_terms <- app_glofas_part1_quantile_prior_terms(rhs_state, beta_mat, K, p)
     beta_var <- vector("list", K)
     cov_diag <- vector("list", K)
@@ -458,10 +479,29 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     sigma_mean <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
     sigma_trace[iter, ] <- sigma_mean
     max_beta_change <- max(abs(beta_mat - beta_old))
+    max_beta_relative_change <- app_glofas_quantile_max_relative_change(beta_mat, beta_old)
+    max_alpha_change <- app_glofas_quantile_max_relative_change(alpha, alpha_old)
     max_sigma_change <- max(abs(sigma_mean - sigma_old))
-    convergence_eligible <- iter >= min_iter &&
+    max_sigma_relative_change <- app_glofas_quantile_max_relative_change(sigma_mean, sigma_old)
+    qhat_current <- fitted_no_alpha + matrix(alpha, Tn, K, byrow = TRUE)
+    max_path_change <- app_glofas_quantile_max_relative_change(qhat_current, qhat_old)
+    max_latent_change <- max(
+      app_glofas_quantile_max_relative_change(v_mean, v_old),
+      app_glofas_quantile_max_relative_change(v_inv_mean, v_inv_old)
+    )
+    max_rhs_change <- app_glofas_quantile_max_relative_change(
+      app_glofas_quantile_numeric_state(rhs_state), rhs_old
+    )
+    convergence_eligible <- (isTRUE(fixed_iterations) || iter >= min_iter) &&
       iter > freeze_beta_warmup_iters &&
       beta_update_count >= min_beta_updates
+    full_state_pass <- isTRUE(convergence_eligible) && all(is.finite(c(
+      max_beta_relative_change, max_alpha_change, max_sigma_relative_change, max_path_change,
+      max_latent_change, max_rhs_change
+    ))) && max(
+      max_beta_relative_change, max_alpha_change, max_sigma_relative_change, max_path_change,
+      max_latent_change, max_rhs_change
+    ) <= convergence_tolerance
     trace[[iter]] <- data.frame(
       iter = iter,
       beta_updated = isTRUE(beta_updated),
@@ -469,7 +509,14 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
       freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
       convergence_eligible = isTRUE(convergence_eligible),
       max_beta_change = max_beta_change,
+      max_beta_relative_change = max_beta_relative_change,
+      max_alpha_change = max_alpha_change,
       max_sigma_change = max_sigma_change,
+      max_sigma_relative_change = max_sigma_relative_change,
+      max_path_change = max_path_change,
+      max_latent_change = max_latent_change,
+      max_rhs_change = max_rhs_change,
+      full_state_pass = full_state_pass,
       max_jitter = jitter_max,
       rhs_mean_precision = mean(rhs_summary$mean_precision),
       rhs_max_precision = max(rhs_summary$max_precision),
@@ -480,7 +527,13 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
       app_joint_qvp_progress_append(progress_path, transform(trace[[iter]], label = progress_label, max_iter = max_iter, min_iter = min_iter, converged = FALSE, timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
     }
-    if (isTRUE(convergence_eligible) && max(max_beta_change, max_sigma_change) < tol) {
+    qhat_old <- qhat_current
+    legacy_pass <- isTRUE(convergence_eligible) && max(max_beta_change, max_sigma_change) < tol
+    consecutive_pass <- if (iter >= terminal_consecutive_passes) {
+      all(vapply(tail(trace[seq_len(iter)], terminal_consecutive_passes), function(x) isTRUE(x$full_state_pass[[1L]]), logical(1L)))
+    } else FALSE
+    if (!isTRUE(fixed_iterations) && ((isTRUE(full_state_convergence) && consecutive_pass) ||
+        (!isTRUE(full_state_convergence) && legacy_pass))) {
       converged <- TRUE
       trace <- trace[seq_len(iter)]
       sigma_trace <- sigma_trace[seq_len(iter), , drop = FALSE]
@@ -490,6 +543,19 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
       break
     }
   }
+  trace <- trace[vapply(trace, is.data.frame, logical(1L))]
+  trace_df <- do.call(rbind, trace)
+  certificate <- app_glofas_quantile_terminal_certificate(
+    trace_df,
+    required_change_columns = c(
+      "max_beta_relative_change", "max_alpha_change", "max_sigma_relative_change",
+      "max_path_change", "max_latent_change", "max_rhs_change"
+    ),
+    tolerance = convergence_tolerance,
+    consecutive = terminal_consecutive_passes,
+    required_gate_columns = "convergence_eligible"
+  )
+  if (isTRUE(full_state_convergence) || isTRUE(fixed_iterations)) converged <- isTRUE(certificate$passed)
   qhat_mean <- Z %*% beta_mat + matrix(alpha, Tn, K, byrow = TRUE)
   out <- list(
     beta_mean = as.numeric(beta_mat),
@@ -504,9 +570,11 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     rhs_prior_summary = app_joint_qvp_rhs_vb_summary(rhs_state, K, p),
     qhat_mean = qhat_mean,
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
-    trace = do.call(rbind, trace),
+    trace = trace_df,
     sigma_trace = sigma_trace,
     converged = converged,
+    convergence_certificate = certificate,
+    stopping_reason = if (converged) "terminal_full_state_certificate_passed" else if (isTRUE(fixed_iterations)) "completed_fixed_iterations_without_terminal_certificate" else "max_iter_without_full_state_convergence",
     tau = tau,
     kappa = 1,
     monitor_label = "al_vb_block_mean_field_coordinate_monitor",
@@ -544,7 +612,11 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   progress_every = 0L,
   progress_label = "joint_exal_blockmf",
   freeze_beta_warmup_iters = 0L,
-  min_beta_updates = 0L
+  min_beta_updates = 0L,
+  fixed_iterations = FALSE,
+  full_state_convergence = FALSE,
+  convergence_tolerance = tol,
+  terminal_consecutive_passes = 3L
 ) {
   y <- as.numeric(y)
   Z <- as.matrix(Z)
@@ -587,10 +659,17 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   colnames(gamma_trace) <- colnames(sigma_trace) <- paste0("tau_", format(tau, trim = TRUE))
   converged <- FALSE
   beta_update_count <- 0L
+  qhat_old <- Z %*% beta_mat + matrix(alpha, Tn, K, byrow = TRUE)
   for (iter in seq_len(max_iter)) {
     beta_old <- beta_mat
+    alpha_old <- alpha
     gamma_old <- gamma
     sigma_old <- sigma_mean
+    v_old <- v_mean
+    v_inv_old <- v_inv_mean
+    s_old <- s_mean
+    s2_old <- s2_mean
+    rhs_old <- app_glofas_quantile_numeric_state(rhs_state)
     constants <- app_joint_qvp_exal_constants(tau, gamma)
     prior_terms <- app_glofas_part1_quantile_prior_terms(rhs_state, beta_mat, K, p)
     beta_var <- vector("list", K)
@@ -641,9 +720,10 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     for (kk in seq_len(K)) {
       r_mean <- y - alpha[[kk]] - fitted_no_alpha[, kk]
       r2_mean <- r_mean^2 + beta_var[[kk]]
-      centered_s2 <- r2_mean -
-        2 * constants$lambda[[kk]] * sigma_mean[[kk]] * r_mean * s_mean[, kk] * v_inv_mean[, kk] +
-        constants$lambda[[kk]]^2 * sigma_mean[[kk]]^2 * s2_mean[, kk] * v_inv_mean[, kk]
+      centered_s2 <- app_glofas_exal_v_local_quadratic(
+        r_mean, r2_mean, constants$lambda[[kk]], sigma_mean[[kk]],
+        s_mean[, kk], s2_mean[, kk]
+      )
       chi_v <- pmax(sigma_inv_mean[[kk]] * centered_s2 / constants$B[[kk]], .Machine$double.eps)
       psi_v <- pmax(sigma_inv_mean[[kk]] * (constants$A[[kk]]^2 / constants$B[[kk]] + 2), .Machine$double.eps)
       v_mean[, kk] <- app_joint_qvp_gig_moment(0.5, chi_v, psi_v, 1)
@@ -689,11 +769,33 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     rhs_state <- app_glofas_part1_quantile_update_rhs_blockmf(rhs_state, beta_mat, cov_diag, K, p, rhs_vb_inner)
     rhs_summary <- app_joint_qvp_rhs_vb_summary(rhs_state, K, p)
     max_beta_change <- max(abs(beta_mat - beta_old))
+    max_beta_relative_change <- app_glofas_quantile_max_relative_change(beta_mat, beta_old)
+    max_alpha_change <- app_glofas_quantile_max_relative_change(alpha, alpha_old)
     max_gamma_change <- max(abs(gamma - gamma_old))
+    max_gamma_relative_change <- app_glofas_quantile_max_relative_change(gamma, gamma_old)
     max_sigma_change <- max(abs(sigma_mean - sigma_old))
-    convergence_eligible <- iter >= min_iter &&
+    max_sigma_relative_change <- app_glofas_quantile_max_relative_change(sigma_mean, sigma_old)
+    qhat_current <- fitted_no_alpha + matrix(alpha, Tn, K, byrow = TRUE)
+    max_path_change <- app_glofas_quantile_max_relative_change(qhat_current, qhat_old)
+    max_latent_change <- max(
+      app_glofas_quantile_max_relative_change(v_mean, v_old),
+      app_glofas_quantile_max_relative_change(v_inv_mean, v_inv_old),
+      app_glofas_quantile_max_relative_change(s_mean, s_old),
+      app_glofas_quantile_max_relative_change(s2_mean, s2_old)
+    )
+    max_rhs_change <- app_glofas_quantile_max_relative_change(
+      app_glofas_quantile_numeric_state(rhs_state), rhs_old
+    )
+    convergence_eligible <- (isTRUE(fixed_iterations) || iter >= min_iter) &&
       iter > freeze_beta_warmup_iters &&
       beta_update_count >= min_beta_updates
+    full_state_pass <- isTRUE(convergence_eligible) && all(is.finite(c(
+      max_beta_relative_change, max_alpha_change, max_gamma_relative_change, max_sigma_relative_change,
+      max_path_change, max_latent_change, max_rhs_change
+    ))) && max(
+      max_beta_relative_change, max_alpha_change, max_gamma_relative_change, max_sigma_relative_change,
+      max_path_change, max_latent_change, max_rhs_change
+    ) <= convergence_tolerance
     monitor <- -likelihood_quadratic - latent_linear - positive_shift_quadratic
     gamma_trace[iter, ] <- gamma
     sigma_trace[iter, ] <- sigma_mean
@@ -704,8 +806,16 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
       freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
       convergence_eligible = isTRUE(convergence_eligible),
       max_beta_change = max_beta_change,
+      max_beta_relative_change = max_beta_relative_change,
+      max_alpha_change = max_alpha_change,
       max_gamma_change = max_gamma_change,
+      max_gamma_relative_change = max_gamma_relative_change,
       max_sigma_change = max_sigma_change,
+      max_sigma_relative_change = max_sigma_relative_change,
+      max_path_change = max_path_change,
+      max_latent_change = max_latent_change,
+      max_rhs_change = max_rhs_change,
+      full_state_pass = full_state_pass,
       max_jitter = jitter_max,
       rhs_mean_precision = mean(rhs_summary$mean_precision),
       rhs_max_precision = max(rhs_summary$max_precision),
@@ -716,7 +826,13 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     if (progress_every > 0L && (iter == 1L || iter == max_iter || iter %% progress_every == 0L)) {
       app_joint_qvp_progress_append(progress_path, transform(trace[[iter]], label = progress_label, max_iter = max_iter, min_iter = min_iter, converged = FALSE, timestamp = format(Sys.time(), "%Y-%m-%d %H:%M:%S")))
     }
-    if (isTRUE(convergence_eligible) && max(max_beta_change, max_gamma_change, max_sigma_change) < tol) {
+    qhat_old <- qhat_current
+    legacy_pass <- isTRUE(convergence_eligible) && max(max_beta_change, max_gamma_change, max_sigma_change) < tol
+    consecutive_pass <- if (iter >= terminal_consecutive_passes) {
+      all(vapply(tail(trace[seq_len(iter)], terminal_consecutive_passes), function(x) isTRUE(x$full_state_pass[[1L]]), logical(1L)))
+    } else FALSE
+    if (!isTRUE(fixed_iterations) && ((isTRUE(full_state_convergence) && consecutive_pass) ||
+        (!isTRUE(full_state_convergence) && legacy_pass))) {
       converged <- TRUE
       trace <- trace[seq_len(iter)]
       gamma_trace <- gamma_trace[seq_len(iter), , drop = FALSE]
@@ -727,6 +843,19 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
       break
     }
   }
+  trace <- trace[vapply(trace, is.data.frame, logical(1L))]
+  trace_df <- do.call(rbind, trace)
+  certificate <- app_glofas_quantile_terminal_certificate(
+    trace_df,
+    required_change_columns = c(
+      "max_beta_relative_change", "max_alpha_change", "max_gamma_relative_change",
+      "max_sigma_relative_change", "max_path_change", "max_latent_change", "max_rhs_change"
+    ),
+    tolerance = convergence_tolerance,
+    consecutive = terminal_consecutive_passes,
+    required_gate_columns = "convergence_eligible"
+  )
+  if (isTRUE(full_state_convergence) || isTRUE(fixed_iterations)) converged <- isTRUE(certificate$passed)
   qhat_mean <- Z %*% beta_mat + matrix(alpha, Tn, K, byrow = TRUE)
   out <- list(
     beta_mean = as.numeric(beta_mat),
@@ -745,10 +874,12 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     rhs_prior_summary = app_joint_qvp_rhs_vb_summary(rhs_state, K, p),
     qhat_mean = qhat_mean,
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
-    trace = do.call(rbind, trace),
+    trace = trace_df,
     gamma_trace = gamma_trace,
     sigma_trace = sigma_trace,
     converged = converged,
+    convergence_certificate = certificate,
+    stopping_reason = if (converged) "terminal_full_state_certificate_passed" else if (isTRUE(fixed_iterations)) "completed_fixed_iterations_without_terminal_certificate" else "max_iter_without_full_state_convergence",
     tau = tau,
     kappa = 1,
     monitor_label = "exal_vb_block_mean_field_coordinate_monitor",
@@ -797,6 +928,8 @@ app_glofas_part1_quantile_fit_readout <- function(
   is_joint <- startsWith(model_family, "joint")
   dense_possible <- p * K <= max_dense_dim
   use_blockmf <- is_joint && (identical(joint_backend, "blockmf") || (identical(joint_backend, "auto") && !dense_possible))
+  use_integrity_al_blockmf <- identical(model_family, "independent_al") &&
+    isTRUE(controls$full_state_convergence)
   if (is_joint && identical(joint_backend, "dense") && !dense_possible) {
     stop(
       sprintf(
@@ -819,7 +952,8 @@ app_glofas_part1_quantile_fit_readout <- function(
   init <- app_glofas_part1_quantile_resolve_init(controls, y = y, Z = Z, tau = tau)
   started <- Sys.time()
 
-  if (identical(model_family, "independent_al") || (identical(model_family, "joint_al") && !use_blockmf)) {
+  if ((identical(model_family, "independent_al") && !use_integrity_al_blockmf) ||
+      (identical(model_family, "joint_al") && !use_blockmf)) {
     fit <- app_joint_qvp_fit_al_vb_tiny(
       y = y,
       Z = Z,
@@ -845,7 +979,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
       min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
     )
-  } else if (identical(model_family, "joint_al") && use_blockmf) {
+  } else if ((identical(model_family, "joint_al") && use_blockmf) || use_integrity_al_blockmf) {
     fit <- app_glofas_part1_quantile_fit_al_blockmf(
       y = y,
       Z = Z,
@@ -865,7 +999,11 @@ app_glofas_part1_quantile_fit_readout <- function(
       progress_every = progress_every,
       progress_label = "joint_al_blockmf",
       freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
-      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
+      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L),
+      fixed_iterations = isTRUE(controls$fixed_iterations),
+      full_state_convergence = isTRUE(controls$full_state_convergence),
+      convergence_tolerance = as.numeric(controls$convergence_tolerance %||% 1.0e-4),
+      terminal_consecutive_passes = as.integer(controls$terminal_consecutive_passes %||% 3L)
     )
   } else if (identical(model_family, "independent_exal") || (identical(model_family, "joint_exal") && !use_blockmf)) {
     al_init <- init
@@ -944,7 +1082,11 @@ app_glofas_part1_quantile_fit_readout <- function(
       progress_every = progress_every,
       progress_label = "joint_exal_blockmf",
       freeze_beta_warmup_iters = as.integer(controls$freeze_beta_warmup_iters %||% 0L),
-      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L)
+      min_beta_updates = as.integer(controls$min_beta_updates %||% 0L),
+      fixed_iterations = isTRUE(controls$fixed_iterations),
+      full_state_convergence = isTRUE(controls$full_state_convergence),
+      convergence_tolerance = as.numeric(controls$convergence_tolerance %||% 1.0e-4),
+      terminal_consecutive_passes = as.integer(controls$terminal_consecutive_passes %||% 3L)
     )
   } else {
     stop(sprintf("Unsupported Part 1 quantile model_family '%s'.", model_family), call. = FALSE)
@@ -954,9 +1096,17 @@ app_glofas_part1_quantile_fit_readout <- function(
   fit$part1_quantile_controls <- controls
   fit$part1_quantile_tau0 <- tau0
   fit$joint_backend_requested <- joint_backend
-  fit$joint_backend_used <- if (use_blockmf) "blockmf" else "dense"
+  fit$joint_backend_used <- if (use_blockmf || use_integrity_al_blockmf) "blockmf" else "dense"
   fit$init_source_path <- if (!is.null(init$init_source_path)) init$init_source_path else NA_character_
   fit$init_source_class <- if (!is.null(init$init_source_class)) init$init_source_class else NA_character_
+  fit$init_tau_mapping <- init$init_tau_mapping %||% NULL
+  fit$iteration_contract <- list(
+    fixed_iterations = isTRUE(controls$fixed_iterations),
+    requested_iterations = as.integer(controls$max_iter),
+    completed_iterations = nrow(fit$trace %||% data.frame()),
+    convergence_tolerance = as.numeric(controls$convergence_tolerance %||% NA_real_),
+    terminal_consecutive_passes = as.integer(controls$terminal_consecutive_passes %||% NA_integer_)
+  )
   fit
 }
 

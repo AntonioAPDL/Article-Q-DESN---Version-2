@@ -616,3 +616,15 @@ before MCMC, requires all 160 MCMC workers before score finalization, and keeps
 the runtime ignored. Its shared-capacity preflight proves the non-overlapping
 11/20/1 physical-core allocation and permits only the exact audited PriceFM and
 GloFAS process families.
+
+The post-Search-II GloFAS integrity correction is deliberately narrower than a
+new screen. `409_seal_glofas_post_search2_evidence.py` hashes the completed r8
+and Part 4 evidence without modifying it. `410_prepare_*`, `411_launch_*`, and
+`412_check_*` prepare, execute, and certify exactly 19 affected quantile fits
+and their 19 forecasts under fixed 200/200 iterations, a 20-iteration beta
+freeze, exact tau-keyed warm starts, and three terminal full-state checks.
+`413_launch_glofas_part4_joint_continuation.py` separately runs hash-chained
+five-sweep continuation batches for the two Part 4 joint fits, capped at 20
+cumulative outer sweeps. `414_run_glofas_forecast_operator_diagnostics.R` and
+`415_run_glofas_discrepancy_predictability_audit.R` are no-refit diagnostics;
+their outputs cannot be promoted as forecast authority.

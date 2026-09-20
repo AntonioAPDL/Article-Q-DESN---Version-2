@@ -21,6 +21,7 @@ args <- app_parse_args(list(
   source_runtime_root = "",
   output_runtime_root = "",
   source_job_id = "",
+  source_fit_path = "",
   output_job_id = "",
   likelihood = "",
   expected_source_fit_sha256 = "",
@@ -33,6 +34,8 @@ args <- app_parse_args(list(
   n_draws = 500L,
   joint_rhs_freeze_outer_iters = 5L,
   joint_rhs_min_tau_updates = 1L,
+  joint_rhs_tol = 1.0e-3,
+  terminal_consecutive_passes = 3L,
   allow_rhs_schedule_rebase = FALSE
 ))
 
@@ -81,7 +84,12 @@ run_continuation <- function() {
     stop("The source job family does not match the requested continuation likelihood.", call. = FALSE)
   }
 
-  source_fit_path <- file.path(source_root, "objects", paste0(source_job_id, "_fit_side.rds"))
+  source_fit_path <- trimws(as.character(args$source_fit_path)[[1L]])
+  if (!nzchar(source_fit_path)) {
+    source_fit_path <- file.path(source_root, "objects", paste0(source_job_id, "_fit_side.rds"))
+  } else {
+    source_fit_path <- app_resolve_path(source_fit_path, must_work = TRUE)
+  }
   design_path <- file.path(source_root, "objects", "part4_shared_design_truth_free.rds")
   sidecar_path <- file.path(source_root, "objects", "part4_scoring_panel_sidecar.rds")
   source_fit_sha <- verify_hash(source_fit_path, args$expected_source_fit_sha256, "source joint fit")
@@ -136,12 +144,16 @@ run_continuation <- function() {
   vb_args$joint_inner_min_iter <- as.integer(args$inner_min_iter)
   vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
   vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
+  vb_args$joint_rhs_tol <- as.numeric(args$joint_rhs_tol)
+  vb_args$joint_terminal_consecutive_passes <- as.integer(args$terminal_consecutive_passes)
   vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase)
   vb_args$n_draws <- as.integer(args$n_draws)
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||
       vb_args$joint_rhs_freeze_outer_iters < 0L || vb_args$joint_rhs_min_tau_updates < 0L ||
-      !is.finite(vb_args$joint_outer_tol) || vb_args$joint_outer_tol <= 0) {
+      !is.finite(vb_args$joint_outer_tol) || vb_args$joint_outer_tol <= 0 ||
+      !is.finite(vb_args$joint_rhs_tol) || vb_args$joint_rhs_tol <= 0 ||
+      vb_args$joint_terminal_consecutive_passes < 1L) {
     stop("Invalid continuation controls.", call. = FALSE)
   }
 
@@ -247,6 +259,8 @@ run_continuation <- function() {
     inherited_rhs_freeze_vb_iters = joint$rhs_schedule$inherited$freeze_tau_warmup_iters,
     joint_rhs_freeze_outer_iters = joint$rhs_schedule$effective$freeze_tau_warmup_iters,
     joint_rhs_min_tau_updates = joint$rhs_schedule$effective$min_tau_updates,
+    joint_rhs_tolerance = vb_args$joint_rhs_tol,
+    terminal_consecutive_passes_required = vb_args$joint_terminal_consecutive_passes,
     joint_rhs_schedule_conversion = joint$rhs_schedule$conversion,
     joint_rhs_schedule_rebased = any(joint$rhs_schedule_rebase_audit$schedule_rebased),
     outer_tol = vb_args$joint_outer_tol,

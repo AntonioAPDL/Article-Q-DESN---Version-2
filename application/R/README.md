@@ -230,3 +230,12 @@ Tracked helper files:
   objects as authoritative and does not refit the model.
 - `launch_readiness.R`: preflight checks for completed pilot or dry-run
   directories before any final application launch.
+- `glofas_quantile_integrity.R`: shared fail-closed contracts for exact
+  tau-keyed initializer transfer, multi-tau coefficient extraction, relative
+  full-state movement, corrected scalable-exAL local moments, terminal
+  convergence certificates, and the promotable fixed-200 iteration policy.
+- `glofas_forecast_operator_diagnostics.R`: retained-fit counterfactuals for
+  stochastic recursion, conditional-mean recursion, frozen endogenous lags,
+  and explicitly non-deployable teacher forcing. The helper reuses aligned
+  parameter and innovation draws and reports state saturation and path drift;
+  it never refits or selects a model.

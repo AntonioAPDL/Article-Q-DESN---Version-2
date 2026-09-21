@@ -25,6 +25,11 @@ The controller reserves at most 30 distinct physical cores and pins one
 single-thread process to each selected core. Because phases depend on prior
 selection, actual maximum concurrency is 18, then 18, then 9.
 
+An isolated prelaunch trace check showed that the most slowly converging
+24-hour RHS block crossed the frozen `1e-5` criterion at iteration 428. RHS
+tasks therefore use a 500-iteration ceiling while retaining the same tolerance
+and prior target. Ridge tasks are closed form and are unaffected.
+
 ## RHS target audit
 
 The pinned exdqlm runtime at commit

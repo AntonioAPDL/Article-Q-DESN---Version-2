@@ -334,14 +334,19 @@ def main() -> None:
         choice = selected[region]
         for fold in FOLDS:
             task_id = f"final__{region}__fold{fold}"
+            final_output = root / "runs/outer_validation" / region / f"fold={fold}"
             final_tasks.append(common | {
                 "task_id": task_id, "phase": "outer_validation", "region": region,
                 "outer_fold": fold, "inner_fold": None, "readout": choice["readout"],
                 "prior_type": choice["prior_type"],
                 "tau0": None if choice["prior_type"] == "scaled_ridge" else float(choice["tau0"]),
-                "max_iter": 750 if choice["prior_type"] == "rhs_ns" else 300,
+                "max_iter": (
+                    750 if choice["prior_type"] == "rhs_ns" and valid_terminal(final_output)
+                    else 1000 if choice["prior_type"] == "rhs_ns"
+                    else 300
+                ),
                 "adapter_dir": str(root / "adapters" / f"region={region}" / f"fold={fold}"),
-                "output_dir": str(root / "runs/outer_validation" / region / f"fold={fold}"),
+                "output_dir": str(final_output),
                 "selection_split": "frozen_policy_outer_validation_transfer",
                 "seed": 2026092300 + fold,
             })

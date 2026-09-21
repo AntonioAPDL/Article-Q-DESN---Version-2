@@ -32,6 +32,11 @@ the same tolerance and prior target. Twelve candidates that had already
 crossed the criterion under the earlier 500 ceiling are reused exactly. Ridge
 tasks are closed form and are unaffected.
 
+The first complete outer-validation pass required one additional bounded
+extension: BE fold 2 crossed the same tolerance at iteration 767 in its first
+24-hour block. Incomplete final RHS fits therefore have a 1,000-iteration
+ceiling; already converged 750-ceiling fits remain frozen.
+
 ## RHS target audit
 
 The pinned exdqlm runtime at commit

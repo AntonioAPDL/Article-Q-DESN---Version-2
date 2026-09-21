@@ -25,10 +25,12 @@ The controller reserves at most 30 distinct physical cores and pins one
 single-thread process to each selected core. Because phases depend on prior
 selection, actual maximum concurrency is 18, then 18, then 9.
 
-An isolated prelaunch trace check showed that the most slowly converging
-24-hour RHS block crossed the frozen `1e-5` criterion at iteration 428. RHS
-tasks therefore use a 500-iteration ceiling while retaining the same tolerance
-and prior target. Ridge tasks are closed form and are unaffected.
+Isolated trace checks showed that slowly converging 24-hour RHS blocks remained
+stable and monotone and crossed the frozen `1e-5` criterion by iteration 637.
+Incomplete RHS tasks therefore receive a 750-iteration ceiling while retaining
+the same tolerance and prior target. Twelve candidates that had already
+crossed the criterion under the earlier 500 ceiling are reused exactly. Ridge
+tasks are closed form and are unaffected.
 
 ## RHS target audit
 

@@ -310,13 +310,17 @@ def main() -> None:
         for label, tau0 in (("anchor", anchor), ("quarter", anchor / 4.0)):
             for inner in INNER_FOLDS:
                 task_id = f"rhs__{region}__{label}__inner{inner}"
+                rhs_output = root / "runs/rhs_selection" / region / label / f"inner={inner}"
                 rhs_tasks.append(common | {
                     "task_id": task_id, "phase": "rhs_selection", "region": region,
                     "outer_fold": 1, "inner_fold": inner, "readout": readout_by_region[region],
                     "prior_type": "rhs_ns", "tau0": tau0,
-                    "max_iter": 500,
+                    # A completed 500-iteration task already crossed the same
+                    # frozen tolerance and is scientifically reusable. Only
+                    # incomplete tasks receive the audited 750 ceiling.
+                    "max_iter": 500 if valid_terminal(rhs_output) else 750,
                     "adapter_dir": str(root / "adapters" / f"region={region}" / "fold=1"),
-                    "output_dir": str(root / "runs/rhs_selection" / region / label / f"inner={inner}"),
+                    "output_dir": str(rhs_output),
                     "seed": 2026092200 + inner,
                 })
     materialize_and_run(root, code_root, "rhs_selection", rhs_tasks, cpus, args.workers)
@@ -335,7 +339,7 @@ def main() -> None:
                 "outer_fold": fold, "inner_fold": None, "readout": choice["readout"],
                 "prior_type": choice["prior_type"],
                 "tau0": None if choice["prior_type"] == "scaled_ridge" else float(choice["tau0"]),
-                "max_iter": 500 if choice["prior_type"] == "rhs_ns" else 300,
+                "max_iter": 750 if choice["prior_type"] == "rhs_ns" else 300,
                 "adapter_dir": str(root / "adapters" / f"region={region}" / f"fold={fold}"),
                 "output_dir": str(root / "runs/outer_validation" / region / f"fold={fold}"),
                 "selection_split": "frozen_policy_outer_validation_transfer",

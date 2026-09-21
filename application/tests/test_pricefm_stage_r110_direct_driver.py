@@ -134,5 +134,6 @@ def test_launch_sources_contain_hard_guards():
     assert "OMP_NUM_THREADS" in controller
     assert "taskset" in controller
     assert "selected_physical_core_count" in controller
-    assert '"max_iter": 500' in controller
+    assert '"max_iter": 500 if valid_terminal(rhs_output) else 750' in controller
+    assert '"max_iter": 750 if choice["prior_type"] == "rhs_ns" else 300' in controller
     assert "registry_mutated" in worker and "article_mutated" in worker

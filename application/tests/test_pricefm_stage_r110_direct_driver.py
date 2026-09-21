@@ -127,6 +127,20 @@ def test_path_scoring_and_gate_algebra():
     assert gates.passed.all()
 
 
+def test_completed_budget_recovers_exact_terminal_contract(tmp_path):
+    output = tmp_path / "fit"
+    output.mkdir()
+    base = {"task_id": "x", "test_access_authorized": False}
+    old = orchestrator.task_contract(base | {"max_iter": 750}, output)
+    (output / "terminal.json").write_text(json.dumps({
+        "status": "completed_r110_case",
+        "test_opened": False,
+        "task_contract_sha256": old["task_contract_sha256"],
+    }))
+    assert orchestrator.completed_budget(base, output, (500, 750, 1000)) == 750
+    assert orchestrator.completed_budget(base | {"seed": 2}, output, (500, 750, 1000)) is None
+
+
 def test_launch_sources_contain_hard_guards():
     worker = (ROOT / "application/scripts/pricefm/367_run_pricefm_stage_r110_direct_case.R").read_text()
     controller = (ROOT / "application/scripts/pricefm/368_orchestrate_pricefm_stage_r110_direct_driver.py").read_text()
@@ -134,6 +148,6 @@ def test_launch_sources_contain_hard_guards():
     assert "OMP_NUM_THREADS" in controller
     assert "taskset" in controller
     assert "selected_physical_core_count" in controller
-    assert '"max_iter": 500 if valid_terminal(rhs_output) else 750' in controller
-    assert '1000 if choice["prior_type"] == "rhs_ns"' in controller
+    assert "completed_budget(rhs_base, rhs_output, (500, 750))" in controller
+    assert "completed_budget(final_base, final_output, allowed_budgets)" in controller
     assert "registry_mutated" in worker and "article_mutated" in worker

@@ -37,6 +37,11 @@ extension: BE fold 2 crossed the same tolerance at iteration 767 in its first
 24-hour block. Incomplete final RHS fits therefore have a 1,000-iteration
 ceiling; already converged 750-ceiling fits remain frozen.
 
+Resume reconstructs each permitted historical ceiling and requires the
+completed terminal hash to match that exact task contract. It therefore reuses
+converged 500/750-ceiling work without weakening provenance or rerunning it
+under a newly materialized ceiling.
+
 ## RHS target audit
 
 The pinned exdqlm runtime at commit

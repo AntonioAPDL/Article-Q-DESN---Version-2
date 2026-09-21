@@ -206,6 +206,24 @@ def task_contract(base: dict, output_dir: Path) -> dict:
     return value
 
 
+def completed_budget(base: dict, output_dir: Path, candidates: tuple[int, ...]) -> int | None:
+    """Recover the exact ceiling encoded by a valid completed terminal."""
+    terminal_path = output_dir / "terminal.json"
+    if not terminal_path.is_file():
+        return None
+    try:
+        terminal = json.loads(terminal_path.read_text())
+    except Exception:
+        return None
+    if terminal.get("status") != "completed_r110_case" or terminal.get("test_opened") is not False:
+        return None
+    for budget in candidates:
+        candidate = task_contract(base | {"max_iter": int(budget)}, output_dir)
+        if terminal.get("task_contract_sha256") == candidate["task_contract_sha256"]:
+            return int(budget)
+    return None
+
+
 def materialize_and_run(
     root: Path, code_root: Path, phase: str, task_specs: list[dict], cpus: list[int], max_workers: int
 ) -> list[dict]:
@@ -311,18 +329,16 @@ def main() -> None:
             for inner in INNER_FOLDS:
                 task_id = f"rhs__{region}__{label}__inner{inner}"
                 rhs_output = root / "runs/rhs_selection" / region / label / f"inner={inner}"
-                rhs_tasks.append(common | {
+                rhs_base = common | {
                     "task_id": task_id, "phase": "rhs_selection", "region": region,
                     "outer_fold": 1, "inner_fold": inner, "readout": readout_by_region[region],
                     "prior_type": "rhs_ns", "tau0": tau0,
-                    # A completed 500-iteration task already crossed the same
-                    # frozen tolerance and is scientifically reusable. Only
-                    # incomplete tasks receive the audited 750 ceiling.
-                    "max_iter": 500 if valid_terminal(rhs_output) else 750,
                     "adapter_dir": str(root / "adapters" / f"region={region}" / "fold=1"),
                     "output_dir": str(rhs_output),
                     "seed": 2026092200 + inner,
-                })
+                }
+                previous_budget = completed_budget(rhs_base, rhs_output, (500, 750))
+                rhs_tasks.append(rhs_base | {"max_iter": previous_budget or 750})
     materialize_and_run(root, code_root, "rhs_selection", rhs_tasks, cpus, args.workers)
     rhs = mean_metrics(root, "rhs_selection")
     final_selection = select_final(ridge, rhs, ridge_selection)
@@ -335,21 +351,20 @@ def main() -> None:
         for fold in FOLDS:
             task_id = f"final__{region}__fold{fold}"
             final_output = root / "runs/outer_validation" / region / f"fold={fold}"
-            final_tasks.append(common | {
+            final_base = common | {
                 "task_id": task_id, "phase": "outer_validation", "region": region,
                 "outer_fold": fold, "inner_fold": None, "readout": choice["readout"],
                 "prior_type": choice["prior_type"],
                 "tau0": None if choice["prior_type"] == "scaled_ridge" else float(choice["tau0"]),
-                "max_iter": (
-                    750 if choice["prior_type"] == "rhs_ns" and valid_terminal(final_output)
-                    else 1000 if choice["prior_type"] == "rhs_ns"
-                    else 300
-                ),
                 "adapter_dir": str(root / "adapters" / f"region={region}" / f"fold={fold}"),
                 "output_dir": str(final_output),
                 "selection_split": "frozen_policy_outer_validation_transfer",
                 "seed": 2026092300 + fold,
-            })
+            }
+            allowed_budgets = (750, 1000) if choice["prior_type"] == "rhs_ns" else (300,)
+            previous_budget = completed_budget(final_base, final_output, allowed_budgets)
+            default_budget = 1000 if choice["prior_type"] == "rhs_ns" else 300
+            final_tasks.append(final_base | {"max_iter": previous_budget or default_budget})
     materialize_and_run(root, code_root, "outer_validation", final_tasks, cpus, args.workers)
 
     closeout = subprocess.run([

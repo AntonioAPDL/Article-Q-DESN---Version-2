@@ -91,3 +91,15 @@ def test_valid_case_rejects_wrong_identity(monkeypatch, tmp_path):
     assert not diagnosis.valid_case(tmp_path, "analytic_quantile_curve", "BG", 1)
     assert not diagnosis.valid_case(tmp_path, "analytic_median", "EE", 1)
     assert not diagnosis.valid_case(tmp_path, "analytic_median", "BG", 2)
+
+
+def test_cpu_list_requires_distinct_nonnegative_identifiers():
+    assert diagnosis.parse_cpu_list("") == []
+    assert diagnosis.parse_cpu_list("0, 4,8") == [0, 4, 8]
+    for value in ("1,1", "-1,2"):
+        try:
+            diagnosis.parse_cpu_list(value)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid CPU list accepted: {value}")

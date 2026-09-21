@@ -53,7 +53,9 @@ fold, origin ordering, 96-step horizon geometry, response values, R103 anchors,
 and hashes of every source artifact. Case outputs are atomic and resumable.
 The closeout validates the complete 18-case surface and writes a top-level
 source manifest with hashes. At most 18 single-thread workers are useful even
-when `--workers 30` is supplied, because there are only 18 new cases.
+when `--workers 30` is supplied, because there are only 18 new cases. An
+optional explicit CPU list pins each worker to one distinct logical CPU and is
+recorded in the closeout summary.
 
 Focused tests cover fold separation, gate behavior, no-refit/test-closed
 contracts, parallel execution, source-manifest production, and rejection of a

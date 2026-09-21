@@ -8,6 +8,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
 import importlib.util
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import shutil
@@ -77,6 +78,11 @@ def parser() -> argparse.ArgumentParser:
         default=DEFAULT_DATA_ROOT / "authoritative" / OUTPUT_TAG,
     )
     value.add_argument("--workers", type=int, default=30)
+    value.add_argument(
+        "--cpu-list",
+        default="",
+        help="Optional comma-separated logical CPUs; one is assigned to each worker.",
+    )
     value.add_argument("--posterior-paths", type=int, default=500)
     value.add_argument("--force", action="store_true")
     return value
@@ -102,6 +108,26 @@ def artifact_record(role: str, path: Path, **extra: Any) -> dict[str, Any]:
 
 def case_dir(output: Path, mode: str, region: str, fold: int) -> Path:
     return output / "cases" / f"mode={mode}" / f"region={region}" / f"fold={fold}"
+
+
+def parse_cpu_list(value: str) -> list[int]:
+    if not value.strip():
+        return []
+    cpus = [int(item.strip()) for item in value.split(",") if item.strip()]
+    if len(cpus) != len(set(cpus)) or any(cpu < 0 for cpu in cpus):
+        raise ValueError("cpu-list must contain distinct nonnegative CPU identifiers")
+    return cpus
+
+
+def initialize_worker(cpu_queue: Any) -> None:
+    for name in (
+        "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+    ):
+        os.environ[name] = "1"
+    if cpu_queue is not None:
+        cpu = int(cpu_queue.get())
+        os.sched_setaffinity(0, {cpu})
 
 
 def valid_case(
@@ -381,7 +407,13 @@ def select_and_gate(metrics: pd.DataFrame, references: pd.DataFrame) -> tuple[st
 
 
 def finalize(
-    output: Path, raw_root: Path, r108_root: Path, driver_root: Path
+    output: Path,
+    raw_root: Path,
+    r108_root: Path,
+    driver_root: Path,
+    workers_requested: int,
+    workers_used: int,
+    worker_cpus: list[int],
 ) -> dict[str, Any]:
     REPLAY.validate_driver_campaign(driver_root)
     paths = [
@@ -514,6 +546,10 @@ def finalize(
         "confirmation_gates_passed": passed,
         "all_region_direct_driver_selection_authorized": passed,
         "next_stage": "R111_training_only_all_region_direct_driver_selection" if passed else "bounded_focus_driver_readout_diagnosis",
+        "workers_requested": workers_requested,
+        "workers_used": workers_used,
+        "worker_cpus": worker_cpus,
+        "one_logical_cpu_per_worker": bool(worker_cpus) and len(worker_cpus) == workers_used,
         "source_manifest": str(source_manifest_path.resolve()),
         "source_manifest_sha256": sha256_file(source_manifest_path),
         "model_fit_started": False,
@@ -533,28 +569,48 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         (mode, region, fold)
         for mode in MODES for region in REGIONS for fold in FOLDS
     ]
+    workers = min(int(args.workers), len(tasks))
+    if workers < 1:
+        raise ValueError("workers must be positive")
+    cpu_ids = parse_cpu_list(str(args.cpu_list))
+    if cpu_ids and len(cpu_ids) < workers:
+        raise ValueError("cpu-list must provide at least one CPU per worker")
+    worker_cpus = cpu_ids[:workers]
+    manager = multiprocessing.Manager() if worker_cpus else None
+    cpu_queue = manager.Queue() if manager is not None else None
+    if cpu_queue is not None:
+        for cpu in worker_cpus:
+            cpu_queue.put(cpu)
     failures = []
-    with ProcessPoolExecutor(max_workers=min(int(args.workers), len(tasks))) as executor:
-        futures = {
-            executor.submit(
-                run_case,
-                str(args.data_root.resolve()),
-                str(args.driver_root.resolve()),
-                str(args.output_dir.resolve()),
-                mode,
-                region,
-                fold,
-                int(args.posterior_paths),
-                bool(args.force),
-            ): (mode, region, fold)
-            for mode, region, fold in tasks
-        }
-        for future in as_completed(futures):
-            identity = futures[future]
-            try:
-                future.result()
-            except Exception as error:  # pragma: no cover - integration path
-                failures.append(f"{identity}: {error}")
+    try:
+        with ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=initialize_worker,
+            initargs=(cpu_queue,),
+        ) as executor:
+            futures = {
+                executor.submit(
+                    run_case,
+                    str(args.data_root.resolve()),
+                    str(args.driver_root.resolve()),
+                    str(args.output_dir.resolve()),
+                    mode,
+                    region,
+                    fold,
+                    int(args.posterior_paths),
+                    bool(args.force),
+                ): (mode, region, fold)
+                for mode, region, fold in tasks
+            }
+            for future in as_completed(futures):
+                identity = futures[future]
+                try:
+                    future.result()
+                except Exception as error:  # pragma: no cover - integration path
+                    failures.append(f"{identity}: {error}")
+    finally:
+        if manager is not None:
+            manager.shutdown()
     if failures:
         raise RuntimeError("R110 representation failures: " + "; ".join(failures))
     return finalize(
@@ -562,6 +618,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         args.raw_replay_root.resolve(),
         args.r108_root.resolve(),
         args.driver_root.resolve(),
+        int(args.workers),
+        workers,
+        worker_cpus,
     )
 
 

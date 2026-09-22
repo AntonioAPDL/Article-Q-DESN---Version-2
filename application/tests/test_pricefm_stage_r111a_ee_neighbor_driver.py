@@ -50,6 +50,8 @@ def test_prepare_is_bounded_authorized_and_test_closed(tmp_path):
     assert result["test_access_authorized"] is False
     assert result["broad_all_region_launch_authorized"] is False
     assert result["path_scale_contract"].startswith("each_active_region")
+    assert result["rhs_iteration_ceiling_ladder"] == [750, 1500]
+    assert result["final_rhs_iteration_ceiling"] == 1500
     with (tmp_path / "conceptual_task_manifest.csv").open() as handle:
         rows = list(csv.DictReader(handle))
     assert {row["region"] for row in rows if row["phase"] != "ee_all_active_replay"} == {
@@ -200,6 +202,8 @@ def test_launch_sources_enforce_scope_threads_and_no_mutation():
     assert 'contract$region %in% c("FI", "LV")' in worker
     assert "taskset" in controller and "OMP_NUM_THREADS" in controller
     assert "completed_r111a_direct_case" in controller
+    assert "completed_budget(rhs_base, rhs_output, (500, 750, 1500))" in controller
+    assert "default_budget = 1500" in controller
     assert '"model_fit_started": False' in replay_text
     assert '"broad_all_region_launch_authorized": False' in replay_text
     assert '"registry_mutated": False' in replay_text

@@ -360,8 +360,8 @@ def main() -> None:
                     "output_dir": str(rhs_output),
                     "seed": 2026092500 + inner,
                 }
-                previous_budget = completed_budget(rhs_base, rhs_output, (500, 750))
-                rhs_tasks.append(rhs_base | {"max_iter": previous_budget or 750})
+                previous_budget = completed_budget(rhs_base, rhs_output, (500, 750, 1500))
+                rhs_tasks.append(rhs_base | {"max_iter": previous_budget or 1500})
     materialize_and_run(root, code_root, "rhs_selection", rhs_tasks, cpus, args.workers)
     rhs = mean_metrics(root, "rhs_selection")
     final_selection = select_final(ridge, rhs, ridge_selection)
@@ -384,9 +384,9 @@ def main() -> None:
                 "selection_split": "frozen_policy_outer_validation_transfer",
                 "seed": 2026092600 + fold,
             }
-            allowed_budgets = (750, 1000) if choice["prior_type"] == "rhs_ns" else (300,)
+            allowed_budgets = (750, 1000, 1500) if choice["prior_type"] == "rhs_ns" else (300,)
             previous_budget = completed_budget(final_base, final_output, allowed_budgets)
-            default_budget = 1000 if choice["prior_type"] == "rhs_ns" else 300
+            default_budget = 1500 if choice["prior_type"] == "rhs_ns" else 300
             final_tasks.append(final_base | {"max_iter": previous_budget or default_budget})
     materialize_and_run(root, code_root, "outer_validation", final_tasks, cpus, args.workers)
 

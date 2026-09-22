@@ -314,6 +314,8 @@ def prepare(code_root: Path, output_root: Path) -> dict:
             "outer_validation": 6,
             "ee_all_active_replay": 3,
         },
+        "rhs_iteration_ceiling_ladder": [750, 1500],
+        "final_rhs_iteration_ceiling": 1500,
         "max_workers": 30,
         "scheduler_contract": "one_single_thread_task_per_distinct_idle_physical_core",
         "selection_contract": "fold1_training_inner_folds_only_one_policy_per_region",

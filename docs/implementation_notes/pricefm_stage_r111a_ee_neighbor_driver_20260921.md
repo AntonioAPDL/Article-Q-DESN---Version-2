@@ -38,6 +38,8 @@ The frozen FI and LV specifications come from the R98 region authority:
 
 No downstream phase can start before its dependency is complete. Every fit is single-threaded and pinned to one distinct idle physical core. The largest concurrent phase has 12 tasks; requesting 30 workers does not create more than 12 simultaneous fits.
 
+RHS fits use a convergence ceiling ladder of 750 then 1,500 iterations. A completed 750-iteration fit is retained by exact task-contract hash; only a task that reaches the first ceiling without convergence is repeated at 1,500. Final selected RHS fits use a 1,500-iteration ceiling. The tolerance, objective, data, and model are unchanged by this computational continuation rule.
+
 ## Promotion gate
 
 R111A is a mechanism experiment, not a registry promotion. The EE mechanism passes only if:

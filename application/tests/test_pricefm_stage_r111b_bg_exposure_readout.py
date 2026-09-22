@@ -207,4 +207,3 @@ def test_workers_keep_screen_neutral_final_warm_start_and_mutations_blocked() ->
     assert '"broad_all_region_launch_authorized": False' in closeout_text
     assert '"registry_mutated": False' in closeout_text
     assert '"article_mutated": False' in closeout_text
-

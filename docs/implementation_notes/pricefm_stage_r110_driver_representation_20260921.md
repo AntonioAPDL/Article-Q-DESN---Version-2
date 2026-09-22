@@ -67,3 +67,30 @@ This remains a validation-only, no-refit diagnosis. It does not authorize test,
 registry, article, joint-model, MCMC, or all-region work unless the frozen
 confirmation gate passes. A failed gate stops at bounded focus-region driver
 and readout diagnosis; it does not justify a broader DESN rescreen.
+
+## Materialized result
+
+The full 18-case run completed with one pinned logical CPU per worker. All 867
+records in the aggregated source manifest passed an independent hash audit.
+No test, registry, article, joint-model, MCMC, or model-fitting path was opened.
+
+| representation | fold-1 AQL | folds 2--3 AQL | all-fold AQL |
+|---|---:|---:|---:|
+| raw posterior paths | 12.32173 | 11.08728 | 11.49989 |
+| analytic quantile curve | 12.38062 | 11.15001 | 11.56134 |
+| analytic median | 13.20898 | 11.94215 | 12.36558 |
+
+Fold 1 selected `raw_posterior_paths`. On folds 2--3 it retained a 70.73
+percent gain over self recursion and harmed no focus region, but remained 16.24
+percent above the R97 direct reference. It therefore failed the unchanged 10
+percent proximity gate. The deterministic median was additionally
+underdispersed: case-level 10--90 coverage fell as low as 0.25. Rank-coupled
+quantile paths preserved dispersion but were slightly worse than the raw paths.
+
+The confirmation gap to R97 was 4.55 percent for BE, 19.65 percent for BG, and
+18.99 percent for EE. This localizes the remaining issue to target-driver and
+downstream-readout interaction in BG and EE rather than to a universal path
+representation problem. R111 is not authorized. The next admissible work is a
+bounded, validation-only BG/EE failure atlas that separates target-driver
+error by horizon from neighbor-panel and frozen-readout sensitivity before any
+additional fit is proposed.

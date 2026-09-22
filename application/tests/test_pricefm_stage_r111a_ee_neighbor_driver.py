@@ -176,7 +176,7 @@ def metric_rows(policy: str, value: float, paths: int | None = None) -> list[dic
     for fold in (1, 2, 3):
         row = {
             "region": "EE", "fold": fold, "policy": policy, "AQL": value,
-            "n_loss_atoms": 100, "coverage_10_90": 0.8,
+            "n_loss_atoms": 100, "n_origins": 10, "coverage_10_90": 0.8,
         }
         if paths is not None:
             row["posterior_paths"] = paths
@@ -187,7 +187,7 @@ def metric_rows(policy: str, value: float, paths: int | None = None) -> list[dic
 def horizon_rows(policy: str, value: float) -> list[dict]:
     return [
         {"region": "EE", "fold": fold, "policy": policy, "horizon": horizon,
-         "AQL": value, "n_origins": 10}
+         "AQL": value}
         for fold in (1, 2, 3) for horizon in range(1, 97)
     ]
 
@@ -225,6 +225,7 @@ def test_launch_sources_enforce_scope_threads_and_no_mutation():
     assert "fail_on_nonzero=False" in controller
     assert "rhs_convergence_gate_failed_at_1500" in controller
     assert '"model_fit_started": False' in replay_text
+    assert '"executed_source_sha256": sha256_file(Path(__file__))' in replay_text
     assert '"broad_all_region_launch_authorized": False' in replay_text
     assert '"registry_mutated": False' in replay_text
     assert '"article_mutated": False' in replay_text

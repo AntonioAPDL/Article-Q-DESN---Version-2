@@ -59,6 +59,8 @@ Even a pass does not authorize registry, article, test, joint-model, MCMC, or br
 
 The preparation script records the task surface, frozen configurations, git HEAD, campaign contract, and SHA-256 source ledger. The orchestrator refuses to run if HEAD or any frozen source hash changes. Each completed task records a contract hash and is reused only when that exact hash matches. Outputs are written through temporary directories and atomically installed.
 
+Replay cases additionally record the SHA-256 of their executed replay source. A case is reusable only when that hash still matches, preventing a closeout-only source correction from silently mixing old and new runtime provenance.
+
 Entrypoints:
 
 ```bash

@@ -198,6 +198,7 @@ def valid_case(path: Path) -> bool:
             terminal.get("model_fit_started") is False
             and terminal.get("posterior_paths") == 500
             and terminal.get("test_opened") is False
+            and terminal.get("executed_source_sha256") == sha256_file(Path(__file__))
         )
     except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError):
         return False
@@ -357,6 +358,7 @@ def run_case(
             "posterior_paths": n_paths,
             "n_origins": n_origins,
             "model_fit_started": False,
+            "executed_source_sha256": sha256_file(Path(__file__)),
             "test_opened": False,
             "registry_mutated": False,
             "article_mutated": False,
@@ -388,8 +390,14 @@ def evaluate_gates(candidate: pd.DataFrame, horizons: pd.DataFrame, references: 
         reference_horizons.policy.eq("r110_direct_target_rhs_neighbors")
         & reference_horizons.horizon.ge(73)
     ].copy()
-    late_aql = float(np.average(late.AQL, weights=late.n_origins))
-    target_late_aql = float(np.average(target_late.AQL, weights=target_late.n_origins))
+    candidate_origins = candidate.set_index("fold").n_origins.to_dict()
+    target_origins = target.set_index("fold").n_origins.to_dict()
+    late_weights = late.fold.map(candidate_origins).to_numpy(float)
+    target_late_weights = target_late.fold.map(target_origins).to_numpy(float)
+    if not np.isfinite(late_weights).all() or not np.isfinite(target_late_weights).all():
+        raise RuntimeError("R111A late-horizon fold weights are incomplete")
+    late_aql = float(np.average(late.AQL, weights=late_weights))
+    target_late_aql = float(np.average(target_late.AQL, weights=target_late_weights))
     values = [
         ("complete_3_of_3", len(candidate) == 3, len(candidate)),
         ("exactly_500_paths", bool(candidate.posterior_paths.eq(500).all()), int(candidate.posterior_paths.min())),

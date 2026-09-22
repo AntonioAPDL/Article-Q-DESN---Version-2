@@ -125,7 +125,10 @@ def run_command(task_id: str, command: list[str], cpu: int, log_path: Path, env:
     }
 
 
-def run_parallel(tasks: list[dict], cpus: list[int], max_workers: int, status_path: Path) -> list[dict]:
+def run_parallel(
+    tasks: list[dict], cpus: list[int], max_workers: int, status_path: Path,
+    fail_on_nonzero: bool = True,
+) -> list[dict]:
     env = os.environ.copy()
     env.update({
         "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
@@ -148,7 +151,7 @@ def run_parallel(tasks: list[dict], cpus: list[int], max_workers: int, status_pa
             results.append(result)
             write_csv(status_path, sorted(results, key=lambda row: row["task_id"]))
     failures = [row for row in results if row["returncode"] != 0]
-    if failures:
+    if failures and fail_on_nonzero:
         raise RuntimeError("R111A phase failed: " + ", ".join(row["task_id"] for row in failures))
     return results
 
@@ -198,9 +201,10 @@ def select_final(ridge: pd.DataFrame, rhs: pd.DataFrame, ridge_selection: list[d
                 "priority": 1,
             })
     table = pd.DataFrame(candidates)
-    if not (table.complete_inner_folds == 3).all():
-        raise RuntimeError("incomplete final inner-fold surface")
-    selected = table.sort_values(
+    eligible = table[table.complete_inner_folds.eq(3)].copy()
+    if set(eligible.region) != set(REGIONS):
+        raise RuntimeError("a region has no numerically complete inner-fold candidate")
+    selected = eligible.sort_values(
         ["region", "mean_inner_AQL_scaled", "worst_inner_AQL_scaled", "priority", "tau0"],
         na_position="first",
     ).drop_duplicates("region", keep="first")
@@ -233,7 +237,8 @@ def completed_budget(base: dict, output_dir: Path, candidates: tuple[int, ...]) 
 
 
 def materialize_and_run(
-    root: Path, code_root: Path, phase: str, task_specs: list[dict], cpus: list[int], max_workers: int
+    root: Path, code_root: Path, phase: str, task_specs: list[dict], cpus: list[int],
+    max_workers: int, fail_on_nonzero: bool = True,
 ) -> list[dict]:
     pending = []
     rows = []
@@ -254,7 +259,10 @@ def materialize_and_run(
             "log_path": root / "logs" / phase / f"{spec['task_id']}.log",
         })
     write_csv(root / "contracts" / f"{phase}_resolved_manifest.csv", rows)
-    return run_parallel(pending, cpus, max_workers, root / f"{phase}_launch_status.csv")
+    return run_parallel(
+        pending, cpus, max_workers, root / f"{phase}_launch_status.csv",
+        fail_on_nonzero=fail_on_nonzero,
+    )
 
 
 def main() -> None:
@@ -362,7 +370,28 @@ def main() -> None:
                 }
                 previous_budget = completed_budget(rhs_base, rhs_output, (500, 750, 1500))
                 rhs_tasks.append(rhs_base | {"max_iter": previous_budget or 1500})
-    materialize_and_run(root, code_root, "rhs_selection", rhs_tasks, cpus, args.workers)
+    rhs_results = materialize_and_run(
+        root, code_root, "rhs_selection", rhs_tasks, cpus, args.workers,
+        fail_on_nonzero=False,
+    )
+    exclusions = []
+    for result in rhs_results:
+        if result["returncode"] == 0:
+            continue
+        log_path = Path(result["log_path"])
+        if "R111A RHS fit did not satisfy the frozen convergence criterion" not in log_path.read_text():
+            raise RuntimeError(f"unexpected R111A RHS failure: {result['task_id']}")
+        exclusions.append({
+            "task_id": result["task_id"],
+            "returncode": result["returncode"],
+            "reason": "rhs_convergence_gate_failed_at_1500",
+            "log_path": str(log_path),
+            "selection_eligible": False,
+        })
+    pd.DataFrame(
+        exclusions,
+        columns=["task_id", "returncode", "reason", "log_path", "selection_eligible"],
+    ).to_csv(root / "rhs_numerical_exclusions.csv", index=False)
     rhs = mean_metrics(root, "rhs_selection")
     final_selection = select_final(ridge, rhs, ridge_selection)
     write_csv(root / "final_region_selection.csv", final_selection)

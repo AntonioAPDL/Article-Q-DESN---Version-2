@@ -40,6 +40,8 @@ No downstream phase can start before its dependency is complete. Every fit is si
 
 RHS fits use a convergence ceiling ladder of 750 then 1,500 iterations. A completed 750-iteration fit is retained by exact task-contract hash; only a task that reaches the first ceiling without convergence is repeated at 1,500. Final selected RHS fits use a 1,500-iteration ceiling. The tolerance, objective, data, and model are unchanged by this computational continuation rule.
 
+An RHS candidate is selection-eligible only when all three inner fits converge. A candidate that remains incomplete at 1,500 is recorded in `rhs_numerical_exclusions.csv` and cannot win, even if its available folds look favorable. A fully complete Ridge candidate therefore provides the safe fallback without relaxing convergence or changing the posterior target.
+
 ## Promotion gate
 
 R111A is a mechanism experiment, not a registry promotion. The EE mechanism passes only if:

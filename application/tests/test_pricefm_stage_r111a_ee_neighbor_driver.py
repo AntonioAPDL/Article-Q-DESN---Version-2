@@ -52,6 +52,7 @@ def test_prepare_is_bounded_authorized_and_test_closed(tmp_path):
     assert result["path_scale_contract"].startswith("each_active_region")
     assert result["rhs_iteration_ceiling_ladder"] == [750, 1500]
     assert result["final_rhs_iteration_ceiling"] == 1500
+    assert result["rhs_numerical_eligibility_contract"] == "candidate_requires_all_three_converged_inner_folds"
     with (tmp_path / "conceptual_task_manifest.csv").open() as handle:
         rows = list(csv.DictReader(handle))
     assert {row["region"] for row in rows if row["phase"] != "ee_all_active_replay"} == {
@@ -112,6 +113,23 @@ def test_selection_is_one_policy_per_region_from_inner_training_only():
     assert by_region["FI"]["tau0"] == 0.01
     assert by_region["LV"]["prior_type"] == "rhs_ns"
     assert by_region["LV"]["tau0"] == 0.0025
+
+
+def test_incomplete_rhs_candidate_is_ineligible_not_promoted():
+    ridge = pd.concat([
+        inner_rows("scaled_ridge", "shared", "FI", [1.0] * 3),
+        inner_rows("scaled_ridge", "block24", "FI", [0.9] * 3),
+        inner_rows("scaled_ridge", "shared", "LV", [0.8] * 3),
+        inner_rows("scaled_ridge", "block24", "LV", [0.7] * 3),
+    ], ignore_index=True)
+    ridge_choice = orchestrator.select_ridge(ridge)
+    rhs = pd.concat([
+        inner_rows("rhs_ns", "block24", "FI", [0.1] * 3, 0.01).iloc[:2],
+        inner_rows("rhs_ns", "block24", "LV", [0.6] * 3, 0.01),
+    ], ignore_index=True)
+    selected = {row["region"]: row for row in orchestrator.select_final(ridge, rhs, ridge_choice)}
+    assert selected["FI"]["prior_type"] == "scaled_ridge"
+    assert selected["LV"]["prior_type"] == "rhs_ns"
 
 
 def test_read_neighbor_paths_preserves_region_scale_and_path_identity(tmp_path):
@@ -204,6 +222,8 @@ def test_launch_sources_enforce_scope_threads_and_no_mutation():
     assert "completed_r111a_direct_case" in controller
     assert "completed_budget(rhs_base, rhs_output, (500, 750, 1500))" in controller
     assert "default_budget = 1500" in controller
+    assert "fail_on_nonzero=False" in controller
+    assert "rhs_convergence_gate_failed_at_1500" in controller
     assert '"model_fit_started": False' in replay_text
     assert '"broad_all_region_launch_authorized": False' in replay_text
     assert '"registry_mutated": False' in replay_text

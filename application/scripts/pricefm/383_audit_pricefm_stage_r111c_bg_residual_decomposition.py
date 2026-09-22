@@ -22,8 +22,14 @@ STAGE = "R111C"
 TAG = "pricefm_stage_r111c_bg_residual_decomposition_20260922"
 DATA = Path("/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm")
 OUTPUT = DATA / "authoritative" / TAG
+R98 = DATA / "authoritative/pricefm_stage_r98_validity_first_authority_closeout_20260913"
+R107 = DATA / "authoritative/pricefm_stage_r107_exact500_focus_comparison_20260918"
 R108 = DATA / "authoritative/pricefm_stage_r108_recursive_driver_decomposition_20260920"
+R109 = DATA / "authoritative/pricefm_stage_r109_saved_driver_quality_20260921"
 R110 = DATA / "authoritative/pricefm_stage_r110_frozen_qdesn_replay_20260921"
+R110C = DATA / "authoritative/pricefm_stage_r110_driver_representation_20260921"
+R110D = DATA / "authoritative/pricefm_stage_r110d_focus_failure_atlas_20260921"
+R111A = DATA / "campaigns/pricefm_stage_r111a_ee_neighbor_driver_20260921"
 R111B = DATA / "campaigns/pricefm_stage_r111b_bg_exposure_readout_20260922"
 FOLDS = (1, 2, 3)
 QUANTILES = np.asarray((0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90))
@@ -86,12 +92,43 @@ def verify_terminal(path: Path, status: str) -> dict[str, Any]:
 
 
 def validate_authority() -> list[dict[str, Any]]:
+    r98 = json.loads((R98 / "summary.json").read_text())
+    if (
+        r98.get("stage") != "R98"
+        or r98.get("status") != "completed_validity_first_authority_package_ready_for_coordinator"
+        or r98.get("R98_rows_selected_as_authority") != 114
+        or r98.get("selection_changes_after_test") != 0
+        or r98.get("test_driven_case_mixing_used") is not False
+        or r98.get("model_refits_during_scoring") != 0
+        or r98.get("registry_mutated") is not False
+        or r98.get("article_mutated") is not False
+    ):
+        raise RuntimeError("R111C R98 authority contract changed")
+    r107 = require_summary(
+        R107 / "summary.json", "R107", "completed_validation_only_exact500_focus_comparison"
+    )
     r108 = require_summary(R108 / "summary.json", "R108", "completed_recursive_driver_decomposition")
+    r109 = require_summary(R109 / "summary.json", "R109", "completed_saved_driver_quality_closeout")
     r110 = require_summary(R110 / "summary.json", "R110B", "completed_frozen_qdesn_replay_closeout")
+    r110c = require_summary(
+        R110C / "summary.json", "R110C", "completed_driver_representation_diagnosis"
+    )
+    r110d = require_summary(R110D / "summary.json", "R110D", "completed_focus_failure_atlas")
+    r111a = require_summary(R111A / "summary.json", "R111A", "completed_ee_neighbor_driver_closeout")
     r111b = require_summary(R111B / "summary.json", "R111B", "completed_bg_exposure_readout_closeout")
     orchestrator = json.loads((R111B / "orchestrator_terminal.json").read_text())
     if (
-        r108.get("model_fit_started") is not False
+        r107.get("recommended_action") != "stop_broad_exact500_no_practical_change"
+        or r107.get("broad_resume_supported") is not False
+        or r108.get("model_fit_started") is not False
+        or r109.get("full_downstream_replay_authorized") is not False
+        or r110c.get("confirmation_gates_passed") is not False
+        or r110c.get("all_region_direct_driver_selection_authorized") is not False
+        or r110d.get("ee_neighbor_driver_completion_authorized") is not True
+        or r110d.get("broad_all_region_launch_authorized") is not False
+        or r111a.get("all_gates_passed") is not True
+        or r111a.get("ee_neighbor_mechanism_resolved") is not True
+        or r111a.get("broad_all_region_launch_authorized") is not False
         or r110.get("model_fit_started") is not False
         or r111b.get("cases_complete") != 3
         or r111b.get("all_gates_passed") is not False
@@ -102,13 +139,111 @@ def validate_authority() -> list[dict[str, Any]]:
     ):
         raise RuntimeError("R111C frozen authority contract changed")
     return [
+        artifact("r98_summary", R98 / "summary.json"),
+        artifact("r107_summary", R107 / "summary.json"),
         artifact("r108_summary", R108 / "summary.json"),
+        artifact("r109_summary", R109 / "summary.json"),
         artifact("r110_summary", R110 / "summary.json"),
+        artifact("r110c_summary", R110C / "summary.json"),
+        artifact("r110d_summary", R110D / "summary.json"),
+        artifact("r111a_summary", R111A / "summary.json"),
         artifact("r111b_summary", R111B / "summary.json"),
         artifact("r111b_orchestrator_terminal", R111B / "orchestrator_terminal.json"),
         artifact("r111b_gate_ledger", R111B / "pricefm_stage_r111b_gates.csv"),
         artifact("r111b_selected_arm", R111B / "selected_exposure_arm.json"),
     ]
+
+
+def historical_mechanism_audit() -> pd.DataFrame:
+    rows = [
+        {
+            "stage": "R98",
+            "question": "Which complete surface is protocol-valid authority?",
+            "finding": "All 114 region-fold rows were selected without test-driven case mixing.",
+            "classification": "authority_retained",
+            "next_action": "retain_complete_R98_surface_built_from_R97",
+            "source_summary": str((R98 / "summary.json").resolve()),
+        },
+        {
+            "stage": "R107",
+            "question": "Would extending VB from 200 to 500 iterations repair forecasts?",
+            "finding": "All seven matched rows were practically equivalent and no row materially improved.",
+            "classification": "mechanism_rejected",
+            "next_action": "do_not_spend_more_iterations_on_same_objective",
+            "source_summary": str((R107 / "summary.json").resolve()),
+        },
+        {
+            "stage": "R108",
+            "question": "Is recursive endogenous-driver quality a material failure mechanism?",
+            "finding": "Saved fold-aligned counterfactuals isolated driver quality as a major source of loss.",
+            "classification": "mechanism_supported",
+            "next_action": "audit_and_redesign_normal_driver_only",
+            "source_summary": str((R108 / "summary.json").resolve()),
+        },
+        {
+            "stage": "R109",
+            "question": "Can either saved Normal driver support a full downstream replay?",
+            "finding": "All 81 cases completed, but neither saved driver passed the continuation gate.",
+            "classification": "reuse_rejected",
+            "next_action": "bounded_standalone_driver_redesign",
+            "source_summary": str((R109 / "summary.json").resolve()),
+        },
+        {
+            "stage": "R110C",
+            "question": "Is path representation alone the remaining driver problem?",
+            "finding": "Raw posterior paths were selected, but confirmation and all-region gates failed.",
+            "classification": "insufficient_explanation",
+            "next_action": "focus_region_mechanism_diagnosis",
+            "source_summary": str((R110C / "summary.json").resolve()),
+        },
+        {
+            "stage": "R110D",
+            "question": "Which bounded focus-region mechanisms remain scientifically admissible?",
+            "finding": "EE neighbor completion was authorized; BG and broad all-region launches were blocked.",
+            "classification": "bounded_actions_only",
+            "next_action": "complete_EE_neighbors_then_review_BG_readout",
+            "source_summary": str((R110D / "summary.json").resolve()),
+        },
+        {
+            "stage": "R111A",
+            "question": "Does completing the EE active-neighbor panel repair the EE mechanism?",
+            "finding": "Six direct-driver and three replay cases passed every mechanism gate.",
+            "classification": "mechanism_supported_not_authority_promotion",
+            "next_action": "preserve_EE_diagnostic_no_broad_launch",
+            "source_summary": str((R111A / "summary.json").resolve()),
+        },
+        {
+            "stage": "R111B",
+            "question": "Does BG exposure-aligned readout training close the recursive gap?",
+            "finding": "It beat PriceFM and repaired R110, but missed the fixed gain gate and remained above R97.",
+            "classification": "partial_repair_gate_failed",
+            "next_action": "decompose_residual_without_refitting",
+            "source_summary": str((R111B / "summary.json").resolve()),
+        },
+        {
+            "stage": "R111C",
+            "question": "Where does the remaining BG R111B-minus-R97 gap arise?",
+            "finding": "The advantage is confined to hours 1-24; every later block and every quantile loses pooled.",
+            "classification": "late_horizon_recursive_transfer",
+            "next_action": "stop_recursive_redesign_retain_R97",
+            "source_summary": str((OUTPUT / "summary.json").resolve()),
+        },
+    ]
+    return pd.DataFrame(rows)
+
+
+def implementation_ledger() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"work_item": "freeze_and_hash_sources", "status": "complete", "fit_required": False},
+        {"work_item": "recompute_four_aligned_surfaces", "status": "complete", "fit_required": False},
+        {"work_item": "decompose_fold_quantile_horizon_origin", "status": "complete", "fit_required": False},
+        {"work_item": "audit_coverage_width_crossing_median_error", "status": "complete", "fit_required": False},
+        {"work_item": "audit_prior_stage_mechanism_eliminations", "status": "complete", "fit_required": False},
+        {"work_item": "freeze_go_stop_decision", "status": "complete", "fit_required": False},
+        {"work_item": "prepare_reproducible_source_manifest", "status": "complete", "fit_required": False},
+        {"work_item": "broad_R112_recursive_launch", "status": "prohibited_by_evidence", "fit_required": True},
+        {"work_item": "registry_or_article_promotion", "status": "blocked_by_gate", "fit_required": False},
+    ])
 
 
 def validate_alignment(
@@ -398,7 +533,13 @@ def decision(frames: dict[str, pd.DataFrame]) -> dict[str, Any]:
     }
 
 
-def report(decision_value: dict[str, Any], frames: dict[str, pd.DataFrame], attribution: pd.DataFrame) -> str:
+def report(
+    decision_value: dict[str, Any],
+    frames: dict[str, pd.DataFrame],
+    attribution: pd.DataFrame,
+    historical: pd.DataFrame,
+    ledger: pd.DataFrame,
+) -> str:
     pooled = frames["policy_metrics"].query("fold == 0")[["policy", "AQL", "coverage_10_90", "mean_width_10_90", "median_MAE"]]
     blocks = frames["horizon_block_metrics"].query("fold == 0").pivot(index="horizon_block", columns="policy", values="AQL").reset_index()
     quantiles = frames["quantile_metrics"].query("fold == 0").pivot(index="tau", columns="policy", values="AQL").reset_index()
@@ -420,6 +561,17 @@ def report(decision_value: dict[str, Any], frames: dict[str, pd.DataFrame], attr
         "## Quantile AQL", "", quantiles.to_markdown(index=False), "",
         "## Largest fold/block/quantile residual cells", "", top_cells.to_markdown(index=False), "",
         "## Gap attribution", "", attribution.to_markdown(index=False), "",
+        "## Historical mechanism audit", "",
+        historical.drop(columns=["source_summary"]).to_markdown(index=False), "",
+        "This chain rules out a blind increase in iterations, reuse of the saved Normal",
+        "drivers, and path representation alone. It preserves the successful EE neighbor",
+        "diagnosis while preventing that region-specific finding from authorizing a broad",
+        "campaign. The only admissible BG question was exposure alignment; R111B answered",
+        "it and R111C localizes the remaining failure to late-horizon recursive transfer.", "",
+        "## Implementation ledger", "", ledger.to_markdown(index=False), "",
+        "There are no unfinished PriceFM fit tasks in this decision chain. A future model",
+        "campaign would require a new preregistered training-only question; it is not a",
+        "continuation or completion of R111B.", "",
         "## Reproducibility", "",
         "All four surfaces share identical fold anchors, truths, seven quantiles, and 96 horizons.",
         "Every input terminal and prediction artifact was hash-verified before decomposition.",
@@ -446,6 +598,8 @@ def run(code_root: Path, output: Path, force: bool = False) -> dict[str, Any]:
         evidence.extend(records)
     frames = decompose(cases)
     attribution = gap_attribution(frames)
+    historical = historical_mechanism_audit()
+    ledger = implementation_ledger()
     decision_value = decision(frames)
     if (
         decision_value["r111b_gain_vs_r110"] < 0.09
@@ -474,10 +628,12 @@ def run(code_root: Path, output: Path, force: bool = False) -> dict[str, Any]:
         for key, name in names.items():
             frames[key].to_csv(temporary / name, index=False, quoting=csv.QUOTE_MINIMAL)
         attribution.to_csv(temporary / "pricefm_stage_r111c_gap_attribution.csv", index=False)
+        historical.to_csv(temporary / "pricefm_stage_r111c_historical_mechanism_audit.csv", index=False)
+        ledger.to_csv(temporary / "pricefm_stage_r111c_implementation_ledger.csv", index=False)
         evidence_frame.to_csv(temporary / "source_manifest.csv", index=False, quoting=csv.QUOTE_MINIMAL)
         write_json(temporary / "decision.json", decision_value)
         (temporary / "pricefm_stage_r111c_bg_residual_decomposition.md").write_text(
-            report(decision_value, frames, attribution)
+            report(decision_value, frames, attribution, historical, ledger)
         )
         outputs = []
         for path in sorted(temporary.iterdir()):
@@ -497,6 +653,9 @@ def run(code_root: Path, output: Path, force: bool = False) -> dict[str, Any]:
             "policies": list(POLICIES),
             "quantiles": QUANTILES.tolist(),
             "horizons": 96,
+            "historical_stages_verified": historical.stage.tolist(),
+            "implementation_items_complete": int((ledger.status == "complete").sum()),
+            "unfinished_fit_tasks": 0,
             "head": head,
             **decision_value,
             "model_fit_started": False,

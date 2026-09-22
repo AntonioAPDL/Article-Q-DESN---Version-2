@@ -48,6 +48,11 @@ def test_real_frozen_decomposition_is_complete_and_read_only(tmp_path: Path) -> 
     assert summary["all_late_blocks_worse_than_r97"] is True
     assert summary["all_quantiles_worse_than_r97"] is True
     assert summary["recommended_action"] == "stop_recursive_redesign_retain_R97"
+    assert summary["historical_stages_verified"] == [
+        "R98", "R107", "R108", "R109", "R110C", "R110D", "R111A", "R111B", "R111C"
+    ]
+    assert summary["implementation_items_complete"] == 7
+    assert summary["unfinished_fit_tasks"] == 0
     assert summary["model_fit_started"] is False
     assert summary["launch_started"] is False
     assert summary["test_opened"] is False
@@ -59,6 +64,12 @@ def test_real_frozen_decomposition_is_complete_and_read_only(tmp_path: Path) -> 
         assert group.contribution_AQL_points.sum() == pytest.approx(summary["r111b_minus_r97"], abs=1e-10)
     assert len(pd.read_csv(tmp_path / "pricefm_stage_r111c_policy_metrics.csv")) == 16
     assert len(pd.read_csv(tmp_path / "pricefm_stage_r111c_fold_block_quantile_gap.csv")) == 84
+    historical = pd.read_csv(tmp_path / "pricefm_stage_r111c_historical_mechanism_audit.csv")
+    assert historical.stage.tolist() == summary["historical_stages_verified"]
+    assert historical.iloc[-1].next_action == "stop_recursive_redesign_retain_R97"
+    ledger = pd.read_csv(tmp_path / "pricefm_stage_r111c_implementation_ledger.csv")
+    assert set(ledger.status) == {"complete", "prohibited_by_evidence", "blocked_by_gate"}
+    assert ledger.loc[ledger.fit_required, "status"].tolist() == ["prohibited_by_evidence"]
     assert json.loads((tmp_path / "decision.json").read_text())["article_classification"] == "diagnostic_only_no_promotion"
 
 

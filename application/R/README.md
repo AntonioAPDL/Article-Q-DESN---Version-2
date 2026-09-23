@@ -234,6 +234,11 @@ Tracked helper files:
   tau-keyed initializer transfer, multi-tau coefficient extraction, relative
   full-state movement, corrected scalable-exAL local moments, terminal
   convergence certificates, and the promotable fixed-200 iteration policy.
+- `glofas_quantile_certification_restart.R`: same-target certification-restart
+  adapters for the small set of fixed-200 GloFAS fits that finish without a
+  terminal full-state certificate. It restores saved global/RHS/covariance
+  state, labels deterministic reconstruction of legacy local factors, verifies
+  prior invariance, and maintains separate segment and cumulative traces.
 - `glofas_forecast_operator_diagnostics.R`: retained-fit counterfactuals for
   stochastic recursion, conditional-mean recursion, frozen endogenous lags,
   and explicitly non-deployable teacher forcing. The helper reuses aligned

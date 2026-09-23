@@ -625,6 +625,31 @@ and their 19 forecasts under fixed 200/200 iterations, a 20-iteration beta
 freeze, exact tau-keyed warm starts, and three terminal full-state checks.
 `413_launch_glofas_part4_joint_continuation.py` separately runs hash-chained
 five-sweep continuation batches for the two Part 4 joint fits, capped at 20
-cumulative outer sweeps. `414_run_glofas_forecast_operator_diagnostics.R` and
+cumulative outer sweeps. It can create a new immutable controller contract from
+a completed external checkpoint through paired `--resume-fit-path` and
+`--resume-trace-path` arguments; specifying only one fails closed.
+`420_guard_glofas_part4_checkpoint_handoff.py` can retire an exact frozen
+controller process group only after its active worker writes a complete,
+hashable checkpoint, preventing an automatic superseded batch from starting.
+`414_run_glofas_forecast_operator_diagnostics.R` and
 `415_run_glofas_discrepancy_predictability_audit.R` are no-refit diagnostics;
 their outputs cannot be promoted as forecast authority.
+
+The follow-on certification restart is a separate, minimal campaign.
+`416_prepare_glofas_quantile_certification_restart.py` audits and hash-binds
+only the nine iteration-200 fits lacking a terminal certificate.
+`417_run_glofas_quantile_certification_restart.R` performs one same-target
+200-sweep restart segment, `418_launch_*` gates each replacement forecast on a
+fit-specific `.certified` marker, and `419_check_*` distinguishes completed,
+certified, blocked, pending, and failed states. Preparation does not launch the
+campaign; execution remains an explicit operator decision.
+
+Exact follow-on segments use `423_run_glofas_quantile_certification_continuation.R`
+with the manifest-driven `424_launch_*` scheduler and `425_check_*` artifact
+checker. The runner accepts only complete exact-state sources whose cumulative
+iteration count is a positive multiple of 200; each job freezes its own source
+and target counts. `426_prepare_glofas_quantile_selective_continuation.py`
+prepares the narrow mixed-source campaign: Part 2 independent AL tails continue
+from 600 to 800, while the contracting Part 1/2 joint exAL fits continue from
+400 to 600. It deliberately excludes joint AL fits and launches a forecast only
+after the corresponding fit writes a terminal `.certified` marker.

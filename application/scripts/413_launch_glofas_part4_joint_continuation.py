@@ -32,14 +32,18 @@ def completed_value(path: Path, key: str) -> str:
 
 
 def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job: str,
-            max_cumulative: int, batch_size: int) -> dict[str, object]:
+            max_cumulative: int, batch_size: int,
+            resume_fit_path: Path | None = None,
+            resume_trace_path: Path | None = None) -> dict[str, object]:
     expected_completed = source / "status" / f"{source_job}.completed"
     if not expected_completed.exists():
         raise RuntimeError(f"Source joint fit is not completed: {source_job}")
-    source_fit = source / "objects" / f"{source_job}_fit_side.rds"
+    if (resume_fit_path is None) != (resume_trace_path is None):
+        raise RuntimeError("A continuation resume requires both fit and trace paths")
+    source_fit = (resume_fit_path or source / "objects" / f"{source_job}_fit_side.rds").resolve()
     design = source / "objects/part4_shared_design_truth_free.rds"
     sidecar = source / "objects/part4_scoring_panel_sidecar.rds"
-    trace = source / "traces" / f"{source_job}_trace.csv"
+    trace = (resume_trace_path or source / "traces" / f"{source_job}_trace.csv").resolve()
     for path in (source_fit, design, sidecar, trace, source / "configs/part4_model_manifest.csv"):
         path.resolve(strict=True)
     with trace.open() as handle:
@@ -49,11 +53,13 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
     for sub in ("objects", "predictions", "scores", "traces", "coefficients", "logs", "status", "manifests"):
         (output / sub).mkdir(parents=True, exist_ok=True)
     contract = {
-        "schema_version": "glofas_part4_joint_bounded_continuation_v1",
+        "schema_version": "glofas_part4_joint_bounded_continuation_v2",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_runtime_root": str(source), "output_runtime_root": str(output),
         "likelihood": likelihood, "source_job_id": source_job,
         "source_fit_path": str(source_fit), "source_fit_sha256": sha256(source_fit),
+        "source_trace_path": str(trace), "source_trace_sha256": sha256(trace),
+        "resume_from_external_checkpoint": resume_fit_path is not None,
         "design_sha256": sha256(design), "scoring_sidecar_sha256": sha256(sidecar),
         "initial_outer_iterations": initial_outer,
         "batch_size": batch_size, "max_cumulative_outer_iterations": max_cumulative,
@@ -154,6 +160,8 @@ def main() -> None:
     parser.add_argument("--session-label", required=True)
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--max-cumulative-outer-iterations", type=int, default=20)
+    parser.add_argument("--resume-fit-path", default="")
+    parser.add_argument("--resume-trace-path", default="")
     parser.add_argument("--run-contract", default="")
     parser.add_argument("--expected-contract-sha256", default="")
     args = parser.parse_args()
@@ -162,8 +170,13 @@ def main() -> None:
         raise SystemExit(run(repo, Path(args.run_contract).resolve(), args.expected_contract_sha256))
     source = (repo / args.source_runtime_root).resolve() if not Path(args.source_runtime_root).is_absolute() else Path(args.source_runtime_root).resolve()
     output = (repo / args.output_runtime_root).resolve() if not Path(args.output_runtime_root).is_absolute() else Path(args.output_runtime_root).resolve()
-    contract = prepare(repo, source, output, args.likelihood, args.source_job_id,
-                       args.max_cumulative_outer_iterations, args.batch_size)
+    resume_fit = Path(args.resume_fit_path).resolve() if args.resume_fit_path else None
+    resume_trace = Path(args.resume_trace_path).resolve() if args.resume_trace_path else None
+    contract = prepare(
+        repo, source, output, args.likelihood, args.source_job_id,
+        args.max_cumulative_outer_iterations, args.batch_size,
+        resume_fit_path=resume_fit, resume_trace_path=resume_trace,
+    )
     if subprocess.run(["tmux", "has-session", "-t", args.session_label], capture_output=True).returncode == 0:
         raise SystemExit(f"tmux session already exists: {args.session_label}")
     command = [sys.executable, str(Path(__file__).resolve()),

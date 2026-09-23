@@ -117,16 +117,20 @@ def run_scheduler(repo: Path, root: Path, workers: int, poll_seconds: int) -> in
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime-root", required=True)
-    parser.add_argument("--workers", type=int, default=7)
+    parser.add_argument("--workers", type=int, default=30)
     parser.add_argument("--poll-seconds", type=int, default=20)
     parser.add_argument("--session-label", default="glofas_quantile_integrity_correction_20260920")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     root = (repo / args.runtime_root).resolve() if not Path(args.runtime_root).is_absolute() else Path(args.runtime_root).resolve()
-    if args.workers < 1 or args.workers > 7:
-        raise SystemExit("The correction contract permits 1-7 one-thread workers")
-    verify_contract(repo, root)
+    if args.workers < 1 or args.workers > 30:
+        raise SystemExit("The correction contract permits 1-30 one-thread workers")
+    _, contract = verify_contract(repo, root)
+    if args.workers != int(contract["workers"]):
+        raise SystemExit(
+            f"Worker count {args.workers} does not match frozen contract {contract['workers']}"
+        )
     if not args.run:
         existing = subprocess.run(["tmux", "has-session", "-t", args.session_label], capture_output=True).returncode == 0
         if existing:

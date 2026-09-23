@@ -105,6 +105,17 @@ Tracked tests:
 - `test_glofas_quantile_integrity_launchers.py`: synthetic 133/133 source
   authority, exact 19-fit/19-forecast DAG construction, fixed-200 controls,
   dependency gates, and bounded Part 4 continuation contracts.
+- `test_glofas_quantile_certification_restart.R`: exact versus reconstructed
+  local-state classification, same-target prior invariance, cumulative
+  iteration accounting, checkpoint completeness, and fail-closed tau mapping.
+- `test_glofas_quantile_certification_restart_launchers.py`: exact nine-fit
+  restart scope and separation of completion from scientific certification in
+  the dependent-forecast scheduler.
+- `test_glofas_quantile_certification_continuation.R`: exact-state continuation,
+  prior identity, cumulative-trace continuity, and repeated-segment accounting.
+- `test_glofas_quantile_certification_continuation.py`: legacy and mixed-source
+  iteration contracts, the explicit four-fit selective scope, certification
+  gates, dynamic scheduler health, and retained-fit forecast bindings.
 - `test_glofas_forecast_operator_diagnostics.R`: causal endogenous-lag policy
   mutation, teacher-forcing firewall labels, and C++ recursive state-norm and
   saturation diagnostics.

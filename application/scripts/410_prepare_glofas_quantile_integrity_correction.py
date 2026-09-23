@@ -62,9 +62,12 @@ def main() -> None:
     parser.add_argument("--source-root", required=True)
     parser.add_argument("--part4-root", required=True)
     parser.add_argument("--runtime-root", required=True)
-    parser.add_argument("--workers", type=int, default=7)
+    parser.add_argument("--workers", type=int, default=30)
     parser.add_argument("--seed", type=int, default=20260920)
     args = parser.parse_args()
+
+    if args.workers < 1 or args.workers > 30:
+        raise SystemExit("The correction contract permits 1-30 one-thread workers")
 
     repo = Path(__file__).resolve().parents[2]
     source = (repo / args.source_root).resolve() if not Path(args.source_root).is_absolute() else Path(args.source_root).resolve()
@@ -289,9 +292,11 @@ def main() -> None:
         repo / "application/R/glofas_part3_quantile_bridge.R",
         repo / "application/scripts/381_run_glofas_dec25_final_refit_job.R",
         repo / "application/scripts/403_run_glofas_post_search2_support_job.R",
+        repo / "application/scripts/410_prepare_glofas_quantile_integrity_correction.py",
+        repo / "application/scripts/411_launch_glofas_quantile_integrity_correction.py",
     ]
     contract = {
-        "schema_version": "glofas_quantile_integrity_correction_v1",
+        "schema_version": "glofas_quantile_integrity_correction_v2",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "git_head": git(repo, "rev-parse", "HEAD"),
         "git_status_at_prepare": git(repo, "status", "--short"),
@@ -299,6 +304,11 @@ def main() -> None:
         "source_r8_health": counts,
         "runtime_root": str(runtime),
         "workers": args.workers,
+        "execution_contract": {
+            "worker_ceiling": args.workers,
+            "threads_per_worker": 1,
+            "dependency_aware": True,
+        },
         "fit_jobs": 19,
         "forecast_jobs": 19,
         "iteration_contract": {"max_iter": 200, "min_iter": 200, "beta_freeze": 20, "terminal_passes": 3, "tolerance": 1e-4},

@@ -54,7 +54,7 @@ with tempfile.TemporaryDirectory(prefix="glofas_integrity_launcher_") as tempora
     subprocess.check_call([
         "/usr/bin/python3.11", str(REPO / "application/scripts/410_prepare_glofas_quantile_integrity_correction.py"),
         "--source-root", str(source), "--part4-root", str(part4),
-        "--runtime-root", str(output), "--workers", "7",
+        "--runtime-root", str(output), "--workers", "30",
     ], cwd=REPO)
     jobs = json.loads((output / "configs/correction_job_manifest.json").read_text())
     assert len(jobs) == 38
@@ -71,6 +71,7 @@ with tempfile.TemporaryDirectory(prefix="glofas_integrity_launcher_") as tempora
             assert command[command.index("--full_state_convergence") + 1] == "true"
     verified_jobs, _ = launch_module.verify_contract(REPO, output)
     assert len(verified_jobs) == 38
+    assert json.loads((output / "configs/correction_contract.json").read_text())["workers"] == 30
 
     p4_source = temporary / "p4_source"
     p4_output = temporary / "p4_output"
@@ -89,5 +90,25 @@ with tempfile.TemporaryDirectory(prefix="glofas_integrity_launcher_") as tempora
     assert contract["initial_outer_iterations"] == 5
     assert contract["max_cumulative_outer_iterations"] == 20
     assert contract["terminal_consecutive_passes"] == 3
+    assert contract["resume_from_external_checkpoint"] is False
+
+    resumed_output = temporary / "p4_resumed_output"
+    resumed_fit = temporary / "part4_joint_al_continuation_b01_fit_side.rds"
+    resumed_trace = temporary / "part4_joint_al_continuation_b01_trace.csv"
+    resumed_fit.write_text("resumed fit\n")
+    resumed_trace.write_text(
+        "outer_iteration\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
+    )
+    resumed_contract = continuation_module.prepare(
+        REPO, p4_source, resumed_output, "al", source_job, 20, 5,
+        resume_fit_path=resumed_fit,
+        resume_trace_path=resumed_trace,
+    )
+    assert resumed_contract["initial_outer_iterations"] == 10
+    assert resumed_contract["resume_from_external_checkpoint"] is True
+    assert Path(resumed_contract["source_fit_path"]) == resumed_fit.resolve()
+    assert Path(resumed_contract["source_trace_path"]) == resumed_trace.resolve()
+    assert resumed_contract["source_fit_sha256"] == continuation_module.sha256(resumed_fit)
+    assert resumed_contract["source_trace_sha256"] == continuation_module.sha256(resumed_trace)
 
 print("GLOFAS_QUANTILE_INTEGRITY_LAUNCHER_TEST_PASS")

@@ -85,6 +85,7 @@ app_glofas_part1_quantile_default_controls <- function(
   init = NULL,
   init_fit_path = NULL,
   init_fit_paths = NULL,
+  restart_state = NULL,
   progress_path = NULL,
   progress_every = 0L,
   freeze_beta_warmup_iters = 0L,
@@ -112,6 +113,7 @@ app_glofas_part1_quantile_default_controls <- function(
     init = init,
     init_fit_path = init_fit_path,
     init_fit_paths = init_fit_paths,
+    restart_state = restart_state,
     progress_path = progress_path,
     progress_every = as.integer(progress_every),
     freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
@@ -363,6 +365,7 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   alpha_prior_sd,
   rhs_vb_inner,
   init = NULL,
+  restart_state = NULL,
   progress_path = NULL,
   progress_every = 0L,
   progress_label = "joint_al_blockmf",
@@ -391,20 +394,56 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, as.integer(max_iter))
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, "empirical_quantile", alpha_prior_sd)
+  if (!is.null(restart_state)) init <- restart_state$init
   init <- app_joint_qvp_normalize_init(init, K, p)
   beta_mat <- if (!is.null(init$beta)) app_joint_qvp_beta_matrix(init$beta, K, p) else matrix(0, p, K)
   alpha <- init$alpha %||% sort(as.numeric(stats::quantile(y, probs = tau, names = FALSE, type = 8)))
-  sigma_shape <- rep(a_sigma + 1.5 * Tn, K)
-  sigma_rate <- rep(b_sigma + max(stats::var(y), 1.0e-3), K)
-  if (!is.null(init$sigma)) sigma_rate <- pmax(init$sigma * pmax(sigma_shape - 1, .Machine$double.eps), .Machine$double.eps)
-  v_mean <- matrix(1, Tn, K)
-  v_inv_mean <- matrix(1, Tn, K)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(
+  sigma_shape <- as.numeric(restart_state$sigma_shape %||% rep(a_sigma + 1.5 * Tn, K))
+  sigma_rate <- as.numeric(restart_state$sigma_rate %||% rep(b_sigma + max(stats::var(y), 1.0e-3), K))
+  if (length(sigma_shape) != K || length(sigma_rate) != K ||
+      any(!is.finite(c(sigma_shape, sigma_rate))) || any(sigma_shape <= 1) || any(sigma_rate <= 0)) {
+    stop("Restart AL sigma state is incompatible.", call. = FALSE)
+  }
+  if (is.null(restart_state) && !is.null(init$sigma)) {
+    sigma_rate <- pmax(init$sigma * pmax(sigma_shape - 1, .Machine$double.eps), .Machine$double.eps)
+  }
+  rhs_default <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2, slab_fixed = slab_fixed
   )
-  beta_var_current <- replicate(K, rep(0, Tn), simplify = FALSE)
-  cov_diag_current <- replicate(K, rep(0, p), simplify = FALSE)
-  cov_block_current <- replicate(K, matrix(0, p, p), simplify = FALSE)
+  rhs_state <- app_joint_qvp_restore_rhs_vb_state(restart_state$rhs_state %||% NULL, K, p, rhs_default)
+  cov_block_current <- if (is.null(restart_state)) {
+    replicate(K, matrix(0, p, p), simplify = FALSE)
+  } else {
+    app_glofas_restart_validate_covariance_blocks(
+      restart_state$beta_cov_blocks, K, p, "restart beta_cov_blocks"
+    )
+  }
+  cov_diag_current <- lapply(cov_block_current, function(x) pmax(diag(x), 0))
+  beta_var_current <- lapply(cov_block_current, function(x) rowSums((Z %*% x) * Z))
+  fitted_restart <- Z %*% beta_mat
+  sigma_inv_restart <- sigma_shape / sigma_rate
+  v_default <- matrix(1, Tn, K)
+  v_inv_default <- matrix(1, Tn, K)
+  if (!is.null(restart_state)) {
+    for (kk in seq_len(K)) {
+      r_mean <- y - alpha[[kk]] - fitted_restart[, kk]
+      r2_mean <- r_mean^2 + beta_var_current[[kk]]
+      chi <- sigma_inv_restart[[kk]] * pmax(r2_mean, .Machine$double.eps) / constants$B[[kk]]
+      psi <- sigma_inv_restart[[kk]] * (constants$A[[kk]]^2 / constants$B[[kk]] + 2)
+      v_default[, kk] <- app_joint_qvp_gig_moment(0.5, chi, psi, 1)
+      v_inv_default[, kk] <- app_joint_qvp_gig_moment(0.5, chi, psi, -1)
+    }
+  }
+  v_mean <- restart_state$v_mean %||% v_default
+  v_inv_mean <- restart_state$v_inv_mean %||% v_inv_default
+  if (!is.null(restart_state)) {
+    v_mean <- app_glofas_restart_validate_matrix(v_mean, Tn, K, "restart v_mean", positive = TRUE)
+    v_inv_mean <- app_glofas_restart_validate_matrix(v_inv_mean, Tn, K, "restart v_inv_mean", positive = TRUE)
+  }
+  iteration_offset <- as.integer(restart_state$iterations_completed %||% 0L)
+  if (length(iteration_offset) != 1L || is.na(iteration_offset) || iteration_offset < 0L) {
+    stop("Restart iteration offset is invalid.", call. = FALSE)
+  }
   trace <- vector("list", max_iter)
   sigma_trace <- matrix(NA_real_, max_iter, K)
   colnames(sigma_trace) <- paste0("tau_", format(tau, trim = TRUE))
@@ -412,6 +451,7 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
   beta_update_count <- 0L
   qhat_old <- Z %*% beta_mat + matrix(alpha, Tn, K, byrow = TRUE)
   for (iter in seq_len(max_iter)) {
+    global_iter <- iteration_offset + iter
     beta_old <- beta_mat
     alpha_old <- alpha
     sigma_old <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
@@ -504,6 +544,7 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     ) <= convergence_tolerance
     trace[[iter]] <- data.frame(
       iter = iter,
+      global_iter = global_iter,
       beta_updated = isTRUE(beta_updated),
       beta_update_count = as.integer(beta_update_count),
       freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
@@ -566,11 +607,14 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     sigma_mean = sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps),
     sigma_shape = sigma_shape,
     sigma_rate = sigma_rate,
+    v_mean = v_mean,
+    v_inv_mean = v_inv_mean,
     rhs_state = rhs_state,
     rhs_prior_summary = app_joint_qvp_rhs_vb_summary(rhs_state, K, p),
     qhat_mean = qhat_mean,
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
     trace = trace_df,
+    iterations_completed = iteration_offset + nrow(trace_df),
     sigma_trace = sigma_trace,
     converged = converged,
     convergence_certificate = certificate,
@@ -579,6 +623,22 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     kappa = 1,
     monitor_label = "al_vb_block_mean_field_coordinate_monitor",
     backend = "joint_al_block_mean_field_rhs_vb",
+    restart_provenance = restart_state[c(
+      "schema_version", "restart_kind", "source_path", "source_sha256",
+      "source_state_sha256", "iterations_completed"
+    )],
+    checkpoint_state = if (is.null(restart_state)) {
+      list(
+        schema_version = "glofas_quantile_checkpoint_v1",
+        complete_local_state = TRUE,
+        restart_kind = "fresh_fit",
+        source_path = NA_character_, source_sha256 = NA_character_,
+        source_state_sha256 = NA_character_,
+        iterations_completed = as.integer(nrow(trace_df))
+      )
+    } else {
+      app_glofas_restart_checkpoint_metadata(restart_state, iteration_offset + nrow(trace_df))
+    },
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("glofas_joint_al_blockmf_%s", format(Sys.time(), "%Y%m%d%H%M%S")),
       tau = tau,
@@ -608,6 +668,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   alpha_prior_sd,
   rhs_vb_inner,
   init = NULL,
+  restart_state = NULL,
   progress_path = NULL,
   progress_every = 0L,
   progress_label = "joint_exal_blockmf",
@@ -634,6 +695,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     stop("min_beta_updates must be nonnegative.", call. = FALSE)
   }
   freeze_beta_warmup_iters <- min(freeze_beta_warmup_iters, as.integer(max_iter))
+  if (!is.null(restart_state)) init <- restart_state$init
   init <- app_joint_qvp_normalize_init(init, K, p)
   gamma <- init$gamma %||% app_joint_qvp_default_gamma(tau)
   gamma <- app_joint_qvp_check_gamma(tau, gamma)
@@ -642,17 +704,68 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   beta_mat <- if (!is.null(init$beta)) app_joint_qvp_beta_matrix(init$beta, K, p) else matrix(0, p, K)
   alpha <- init$alpha %||% sort(as.numeric(stats::quantile(y, tau, names = FALSE, type = 8)))
   sigma_mean <- init$sigma %||% rep(max(stats::mad(y), 1.0e-3), K)
-  sigma_inv_mean <- 1 / sigma_mean
-  v_mean <- matrix(1, Tn, K)
-  v_inv_mean <- matrix(1, Tn, K)
-  s_mean <- matrix(sqrt(2 / pi), Tn, K)
-  s2_mean <- matrix(1, Tn, K)
-  rhs_state <- app_joint_qvp_initialize_rhs_state(
+  sigma_inv_mean <- as.numeric(restart_state$sigma_inv_mean %||% (1 / sigma_mean))
+  if (length(sigma_inv_mean) != K || any(!is.finite(sigma_inv_mean)) || any(sigma_inv_mean <= 0)) {
+    stop("Restart exAL inverse-scale state is incompatible.", call. = FALSE)
+  }
+  rhs_default <- app_joint_qvp_initialize_rhs_state(
     K, p, tau0 = tau0, zeta2 = zeta2, slab_fixed = slab_fixed
   )
-  beta_var_current <- replicate(K, rep(0, Tn), simplify = FALSE)
-  cov_diag_current <- replicate(K, rep(0, p), simplify = FALSE)
-  cov_block_current <- replicate(K, matrix(0, p, p), simplify = FALSE)
+  rhs_state <- app_joint_qvp_restore_rhs_vb_state(restart_state$rhs_state %||% NULL, K, p, rhs_default)
+  cov_block_current <- if (is.null(restart_state)) {
+    replicate(K, matrix(0, p, p), simplify = FALSE)
+  } else {
+    app_glofas_restart_validate_covariance_blocks(
+      restart_state$beta_cov_blocks, K, p, "restart beta_cov_blocks"
+    )
+  }
+  cov_diag_current <- lapply(cov_block_current, function(x) pmax(diag(x), 0))
+  beta_var_current <- lapply(cov_block_current, function(x) rowSums((Z %*% x) * Z))
+  fitted_restart <- Z %*% beta_mat
+  v_default <- matrix(1, Tn, K)
+  v_inv_default <- matrix(1, Tn, K)
+  s_default <- matrix(sqrt(2 / pi), Tn, K)
+  s2_default <- matrix(1, Tn, K)
+  constants_restart <- app_joint_qvp_exal_constants(tau, gamma)
+  if (!is.null(restart_state)) {
+    for (kk in seq_len(K)) {
+      r_mean <- y - alpha[[kk]] - fitted_restart[, kk]
+      r2_mean <- r_mean^2 + beta_var_current[[kk]]
+      centered <- app_glofas_exal_v_local_quadratic(
+        r_mean, r2_mean, constants_restart$lambda[[kk]], sigma_mean[[kk]],
+        s_default[, kk], s2_default[, kk]
+      )
+      chi <- pmax(sigma_inv_mean[[kk]] * centered / constants_restart$B[[kk]], .Machine$double.eps)
+      psi <- pmax(sigma_inv_mean[[kk]] *
+        (constants_restart$A[[kk]]^2 / constants_restart$B[[kk]] + 2), .Machine$double.eps)
+      v_default[, kk] <- app_joint_qvp_gig_moment(0.5, chi, psi, 1)
+      v_inv_default[, kk] <- app_joint_qvp_gig_moment(0.5, chi, psi, -1)
+      prec_s <- 1 + sigma_mean[[kk]] * constants_restart$lambda[[kk]]^2 *
+        v_inv_default[, kk] / constants_restart$B[[kk]]
+      linear_s <- constants_restart$lambda[[kk]] *
+        (r_mean * v_inv_default[, kk] - constants_restart$A[[kk]]) /
+        constants_restart$B[[kk]]
+      tn <- app_joint_qvp_truncnorm_positive_moments(
+        mean = linear_s / prec_s, sd = sqrt(1 / prec_s)
+      )
+      s_default[, kk] <- tn$mean
+      s2_default[, kk] <- tn$second
+    }
+  }
+  v_mean <- restart_state$v_mean %||% v_default
+  v_inv_mean <- restart_state$v_inv_mean %||% v_inv_default
+  s_mean <- restart_state$s_mean %||% s_default
+  s2_mean <- restart_state$s2_mean %||% s2_default
+  if (!is.null(restart_state)) {
+    v_mean <- app_glofas_restart_validate_matrix(v_mean, Tn, K, "restart v_mean", positive = TRUE)
+    v_inv_mean <- app_glofas_restart_validate_matrix(v_inv_mean, Tn, K, "restart v_inv_mean", positive = TRUE)
+    s_mean <- app_glofas_restart_validate_matrix(s_mean, Tn, K, "restart s_mean", positive = TRUE)
+    s2_mean <- app_glofas_restart_validate_matrix(s2_mean, Tn, K, "restart s2_mean", positive = TRUE)
+  }
+  iteration_offset <- as.integer(restart_state$iterations_completed %||% 0L)
+  if (length(iteration_offset) != 1L || is.na(iteration_offset) || iteration_offset < 0L) {
+    stop("Restart iteration offset is invalid.", call. = FALSE)
+  }
   trace <- vector("list", max_iter)
   gamma_trace <- matrix(NA_real_, max_iter, K)
   sigma_trace <- matrix(NA_real_, max_iter, K)
@@ -661,6 +774,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
   beta_update_count <- 0L
   qhat_old <- Z %*% beta_mat + matrix(alpha, Tn, K, byrow = TRUE)
   for (iter in seq_len(max_iter)) {
+    global_iter <- iteration_offset + iter
     beta_old <- beta_mat
     alpha_old <- alpha
     gamma_old <- gamma
@@ -801,6 +915,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     sigma_trace[iter, ] <- sigma_mean
     trace[[iter]] <- data.frame(
       iter = iter,
+      global_iter = global_iter,
       beta_updated = isTRUE(beta_updated),
       beta_update_count = as.integer(beta_update_count),
       freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
@@ -875,6 +990,7 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     qhat_mean = qhat_mean,
     crossing_diagnostics = app_joint_qvp_crossing_diagnostics(qhat_mean, tau),
     trace = trace_df,
+    iterations_completed = iteration_offset + nrow(trace_df),
     gamma_trace = gamma_trace,
     sigma_trace = sigma_trace,
     converged = converged,
@@ -884,6 +1000,22 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     kappa = 1,
     monitor_label = "exal_vb_block_mean_field_coordinate_monitor",
     backend = "joint_exal_block_mean_field_rhs_vb",
+    restart_provenance = restart_state[c(
+      "schema_version", "restart_kind", "source_path", "source_sha256",
+      "source_state_sha256", "iterations_completed"
+    )],
+    checkpoint_state = if (is.null(restart_state)) {
+      list(
+        schema_version = "glofas_quantile_checkpoint_v1",
+        complete_local_state = TRUE,
+        restart_kind = "fresh_fit",
+        source_path = NA_character_, source_sha256 = NA_character_,
+        source_state_sha256 = NA_character_,
+        iterations_completed = as.integer(nrow(trace_df))
+      )
+    } else {
+      app_glofas_restart_checkpoint_metadata(restart_state, iteration_offset + nrow(trace_df))
+    },
     manifest = app_joint_qvp_manifest_row(
       fit_id = sprintf("glofas_joint_exal_blockmf_%s", format(Sys.time(), "%Y%m%d%H%M%S")),
       tau = tau,
@@ -949,7 +1081,12 @@ app_glofas_part1_quantile_fit_readout <- function(
   progress_path <- controls$progress_path %||% NULL
   progress_every <- as.integer(controls$progress_every %||% 0L)
   if (!is.finite(progress_every) || progress_every < 0L) progress_every <- 0L
-  init <- app_glofas_part1_quantile_resolve_init(controls, y = y, Z = Z, tau = tau)
+  restart_state <- controls$restart_state %||% NULL
+  init <- if (!is.null(restart_state)) {
+    restart_state$init
+  } else {
+    app_glofas_part1_quantile_resolve_init(controls, y = y, Z = Z, tau = tau)
+  }
   started <- Sys.time()
 
   if ((identical(model_family, "independent_al") && !use_integrity_al_blockmf) ||
@@ -995,6 +1132,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       alpha_prior_sd = controls$alpha_prior_sd,
       rhs_vb_inner = as.integer(controls$rhs_vb_inner),
       init = init,
+      restart_state = restart_state,
       progress_path = progress_path,
       progress_every = progress_every,
       progress_label = "joint_al_blockmf",
@@ -1078,6 +1216,7 @@ app_glofas_part1_quantile_fit_readout <- function(
       alpha_prior_sd = controls$alpha_prior_sd,
       rhs_vb_inner = as.integer(controls$rhs_vb_inner),
       init = init,
+      restart_state = restart_state,
       progress_path = progress_path,
       progress_every = progress_every,
       progress_label = "joint_exal_blockmf",
@@ -1093,7 +1232,9 @@ app_glofas_part1_quantile_fit_readout <- function(
   }
   fit$model_family <- model_family
   fit$fit_runtime_seconds <- as.numeric(difftime(Sys.time(), started, units = "secs"))
-  fit$part1_quantile_controls <- controls
+  stored_controls <- controls
+  stored_controls$restart_state <- NULL
+  fit$part1_quantile_controls <- stored_controls
   fit$part1_quantile_tau0 <- tau0
   fit$joint_backend_requested <- joint_backend
   fit$joint_backend_used <- if (use_blockmf || use_integrity_al_blockmf) "blockmf" else "dense"
@@ -1105,7 +1246,13 @@ app_glofas_part1_quantile_fit_readout <- function(
     requested_iterations = as.integer(controls$max_iter),
     completed_iterations = nrow(fit$trace %||% data.frame()),
     convergence_tolerance = as.numeric(controls$convergence_tolerance %||% NA_real_),
-    terminal_consecutive_passes = as.integer(controls$terminal_consecutive_passes %||% NA_integer_)
+    terminal_consecutive_passes = as.integer(controls$terminal_consecutive_passes %||% NA_integer_),
+    segment_start_iteration = as.integer((restart_state$iterations_completed %||% 0L) + 1L),
+    cumulative_completed_iterations = as.integer(
+      restart_state$iterations_completed %||% 0L
+    ) + nrow(fit$trace %||% data.frame()),
+    execution_mode = if (is.null(restart_state)) "fresh_fit" else
+      as.character(restart_state$restart_kind)
   )
   fit
 }

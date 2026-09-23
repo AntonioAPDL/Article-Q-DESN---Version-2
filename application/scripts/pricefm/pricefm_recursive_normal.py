@@ -18,6 +18,11 @@ from pricefm_desn_adapter import (
     normalize_reservoir_config,
 )
 from pricefm_recursive_adapter import build_policy_features, normalize_spec
+from pricefm_recursive_readout import (
+    build_readout_rows,
+    readout_dimension,
+    readout_feature_names,
+)
 
 
 HORIZONS = tuple(range(1, 97))
@@ -319,6 +324,7 @@ def causal_teacher_forced_statistics(
     windows: Mapping[str, Mapping[str, Any]],
     spec: Mapping[str, Any],
     input_regions: Sequence[str],
+    readout_mode: str = "state_lead_horizon",
 ) -> dict[str, Any]:
     """Build exact sufficient statistics for the R102 one-step design.
 
@@ -379,7 +385,9 @@ def causal_teacher_forced_statistics(
 
     horizon_basis = horizon_features(np.asarray(HORIZONS), list(HORIZONS))
     state_dim = sum(reservoir_config["units"]) if reservoir_config["state_output"] == "concat_layers" else reservoir_config["units"][-1]
-    p = 1 + int(state_dim) + x_lead.shape[-1] + horizon_basis.shape[-1]
+    p = readout_dimension(
+        state_dim, x_lead.shape[-1], horizon_basis.shape[-1], readout_mode
+    )
     xtx = np.zeros((p, p), dtype=float)
     xty = np.zeros(p, dtype=float)
     yty = 0.0
@@ -389,12 +397,9 @@ def causal_teacher_forced_statistics(
         states = reservoir_step(states, transition, reservoir, reservoir_config)
         state_value = reservoir_output(states, reservoir_config)
         basis = np.repeat(horizon_basis[horizon_index : horizon_index + 1], n_origins, axis=0)
-        design = np.column_stack([
-            np.ones(n_origins, dtype=float),
-            state_value,
-            x_lead[:, horizon_index, :],
-            basis,
-        ])
+        design = build_readout_rows(
+            state_value, x_lead[:, horizon_index, :], basis, readout_mode
+        )
         response = y[:, horizon_index]
         xtx += design.T @ design
         xty += design.T @ response
@@ -407,21 +412,18 @@ def causal_teacher_forced_statistics(
     direct_states = [np.zeros((n_origins, int(units)), dtype=float) for units in reservoir_config["units"]]
     for lag_index in range(x_lag.shape[1]):
         direct_states = reservoir_step(direct_states, x_lag[:, lag_index, :], reservoir, reservoir_config)
-    direct_h1 = np.column_stack([
-        np.ones(n_origins, dtype=float),
+    direct_h1 = build_readout_rows(
         reservoir_output(direct_states, reservoir_config),
         x_lead[:, 0, :],
         np.repeat(horizon_basis[0:1], n_origins, axis=0),
-    ])
+        readout_mode,
+    )
     parity_error = float(np.max(np.abs(direct_h1 - horizon_one_design)))
     if parity_error > 1e-12:
         raise RuntimeError("causal horizon-one design does not match the frozen direct design")
 
-    feature_names = (
-        ["intercept"]
-        + ["state_{:04d}".format(i + 1) for i in range(int(state_dim))]
-        + ["lead::{}".format(name) for name in initial["lead_cols"]]
-        + ["horizon_{:03d}".format(i + 1) for i in range(horizon_basis.shape[-1])]
+    feature_names = readout_feature_names(
+        state_dim, initial["lead_cols"], horizon_basis.shape[-1], readout_mode
     )
     return {
         "n": int(n_origins * len(HORIZONS)),
@@ -437,6 +439,7 @@ def causal_teacher_forced_statistics(
         "feature_policy_manifest": initial["feature_policy_manifest"],
         "contract": normalized,
         "training_timing": "initialize_L_minus_1_then_predict_transition_observe_update",
+        "readout_mode": str(readout_mode),
         "test_opened": False,
     }
 
@@ -465,7 +468,8 @@ def write_statistics(output_dir: Path, result: Mapping[str, Any], force: bool = 
             for key in (
                 "n", "p", "yty", "feature_names", "anchors",
                 "horizon_one_parity_max_abs", "reservoir_config",
-                "feature_policy_manifest", "contract", "training_timing", "test_opened",
+                "feature_policy_manifest", "contract", "training_timing",
+                "readout_mode", "test_opened",
             )
         }
         write_json(temporary / "statistics.json", meta)

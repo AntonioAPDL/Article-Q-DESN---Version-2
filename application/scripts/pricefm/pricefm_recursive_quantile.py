@@ -25,6 +25,11 @@ from pricefm_recursive_normal import (
     reservoir_step,
     recursive_transition_features,
 )
+from pricefm_recursive_readout import (
+    build_readout_rows,
+    readout_dimension,
+    readout_feature_names,
+)
 
 
 QUANTILES = (0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90)
@@ -44,6 +49,7 @@ def causal_teacher_forced_design(
     windows: Mapping[str, Mapping[str, Any]],
     spec: Mapping[str, Any],
     input_regions: Sequence[str],
+    readout_mode: str = "state_lead_horizon",
 ) -> dict[str, Any]:
     """Materialize the exact R102 causal design for an AL/exAL refit."""
 
@@ -104,7 +110,7 @@ def causal_teacher_forced_design(
         if reservoir_config["state_output"] == "concat_layers"
         else reservoir_config["units"][-1]
     )
-    p = 1 + int(state_dim) + lead.shape[-1] + basis.shape[-1]
+    p = readout_dimension(state_dim, lead.shape[-1], basis.shape[-1], readout_mode)
     design = np.empty((n_origins * len(HORIZONS), p), dtype=float)
     y = np.empty(n_origins * len(HORIZONS), dtype=float)
     horizon_one = None
@@ -112,12 +118,12 @@ def causal_teacher_forced_design(
         transition = lag[:, -1, :] if horizon_index == 0 else future_lag[:, horizon_index - 1, :]
         states = reservoir_step(states, transition, reservoir, reservoir_config)
         state_value = reservoir_output(states, reservoir_config)
-        block = np.column_stack([
-            np.ones(n_origins, dtype=float),
+        block = build_readout_rows(
             state_value,
             lead[:, horizon_index, :],
             np.repeat(basis[horizon_index : horizon_index + 1], n_origins, axis=0),
-        ])
+            readout_mode,
+        )
         start = horizon_index * n_origins
         stop = start + n_origins
         design[start:stop] = block
@@ -131,23 +137,20 @@ def causal_teacher_forced_design(
     ]
     for lag_index in range(lag.shape[1]):
         direct_states = reservoir_step(direct_states, lag[:, lag_index, :], reservoir, reservoir_config)
-    direct_h1 = np.column_stack([
-        np.ones(n_origins, dtype=float),
+    direct_h1 = build_readout_rows(
         reservoir_output(direct_states, reservoir_config),
         lead[:, 0, :],
         np.repeat(basis[0:1], n_origins, axis=0),
-    ])
+        readout_mode,
+    )
     parity = float(np.max(np.abs(direct_h1 - horizon_one)))
     if parity > 1e-12:
         raise RuntimeError("causal quantile horizon-one parity failed")
     if not np.all(np.isfinite(design)) or not np.all(np.isfinite(y)):
         raise ValueError("causal quantile design must be finite")
 
-    feature_names = (
-        ["intercept"]
-        + ["state_{:04d}".format(i + 1) for i in range(int(state_dim))]
-        + ["lead::{}".format(name) for name in initial["lead_cols"]]
-        + ["horizon_{:03d}".format(i + 1) for i in range(basis.shape[-1])]
+    feature_names = readout_feature_names(
+        state_dim, initial["lead_cols"], basis.shape[-1], readout_mode
     )
     return {
         "X": design,
@@ -162,6 +165,7 @@ def causal_teacher_forced_design(
         "feature_policy_manifest": initial["feature_policy_manifest"],
         "contract": normalized,
         "training_timing": "initialize_L_minus_1_then_predict_transition_observe_update",
+        "readout_mode": str(readout_mode),
         "test_opened": False,
     }
 
@@ -182,7 +186,7 @@ def write_design(output_dir: Path, result: Mapping[str, Any], force: bool = Fals
             for key in (
                 "n", "p", "feature_names", "anchors", "horizon_one_parity_max_abs",
                 "reservoir_config", "feature_policy_manifest", "contract",
-                "training_timing", "test_opened",
+                "training_timing", "readout_mode", "test_opened",
             )
         }
         write_json(temporary / "design.json", meta)
@@ -248,6 +252,7 @@ def recursive_quantile_design(
     driver_draws: np.ndarray,
     origin_index: int,
     driver_regions: Sequence[str],
+    readout_mode: str = "state_lead_horizon",
 ) -> np.ndarray:
     """Build path-varying readout rows from a frozen Normal-RHS panel path."""
 
@@ -293,12 +298,12 @@ def recursive_quantile_design(
             states = reservoir_step(states, transition, context["reservoir"], context["reservoir_config"])
         state = reservoir_output(states, context["reservoir_config"])
         lead = np.asarray(context["lead_features"][origin_index, horizon_index], dtype=float)
-        rows.append(np.column_stack([
-            np.ones(n_paths, dtype=float),
+        rows.append(build_readout_rows(
             state,
             np.repeat(lead[None, :], n_paths, axis=0),
             np.repeat(basis[horizon_index : horizon_index + 1], n_paths, axis=0),
-        ]))
+            readout_mode,
+        ))
     result = np.stack(rows, axis=1)
     if not np.all(np.isfinite(result)):
         raise ValueError("recursive quantile design contains non-finite values")

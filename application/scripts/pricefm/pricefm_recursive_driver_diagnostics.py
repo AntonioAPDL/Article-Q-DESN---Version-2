@@ -20,6 +20,7 @@ from pricefm_recursive_quantile_marginal import (
     rearrange_quantile_curves,
     stratified_uniforms,
 )
+from pricefm_recursive_readout import build_readout_rows
 
 
 ORACLE_LAMBDAS = (0.0, 0.25, 0.50, 0.75, 1.0)
@@ -190,6 +191,7 @@ def recursive_quantile_driver_forecast(
     direct_design: np.ndarray | None = None,
     uniforms: np.ndarray | None = None,
     quantiles: Sequence[float] = QUANTILES,
+    readout_mode: str = "state_lead_horizon",
 ) -> dict[str, Any]:
     """Forecast Q-DESN quantiles while varying only future endogenous drivers."""
 
@@ -257,12 +259,12 @@ def recursive_quantile_driver_forecast(
     for horizon_index in range(len(HORIZONS)):
         state = reservoir_output(states, context["reservoir_config"])
         lead = np.asarray(context["lead_features"][origin_index, horizon_index], dtype=float)
-        rows = np.column_stack([
-            np.ones(n_paths, dtype=float),
+        rows = build_readout_rows(
             state,
             np.repeat(lead[None, :], n_paths, axis=0),
             np.repeat(basis[horizon_index : horizon_index + 1], n_paths, axis=0),
-        ])
+            readout_mode,
+        )
         conditional = conditional_quantile_paths(rows, beta_draws, quantiles)
         ordered, rearrangement = rearrange_quantile_curves(conditional)
         generated = interpolate_quantile_curves(

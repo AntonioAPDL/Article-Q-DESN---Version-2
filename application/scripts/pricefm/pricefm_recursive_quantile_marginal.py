@@ -15,6 +15,7 @@ from pricefm_recursive_normal import (
     recursive_transition_features,
 )
 from pricefm_recursive_quantile import QUANTILES
+from pricefm_recursive_readout import build_readout_rows
 
 
 def conditional_quantile_paths(
@@ -70,6 +71,71 @@ def stratified_uniforms(n_paths: int, n_horizons: int, seed: int) -> np.ndarray:
     return result
 
 
+def training_block_rank_uniforms(
+    training_ranks: np.ndarray,
+    n_paths: int,
+    n_horizons: int,
+    block_length: int,
+    seed: int,
+) -> np.ndarray:
+    """Bootstrap temporal rank blocks while preserving each horizon's strata.
+
+    ``training_ranks`` must contain only training-period rank trajectories.
+    The sampled values determine temporal ordering; every output horizon is
+    then mapped back to the exact stratified marginal grid.  This preserves
+    the fitted marginal quantile contract and changes only temporal coupling.
+    """
+
+    ranks = np.asarray(training_ranks, dtype=float)
+    n_paths, n_horizons, block_length = int(n_paths), int(n_horizons), int(block_length)
+    if ranks.ndim != 2 or ranks.shape[0] < 2 or ranks.shape[1] < block_length:
+        raise ValueError("training ranks must contain at least two sufficiently long trajectories")
+    if not np.isfinite(ranks).all() or np.any((ranks <= 0) | (ranks >= 1)):
+        raise ValueError("training ranks must be finite and lie strictly inside (0, 1)")
+    if n_paths < 2 or n_horizons < 1 or block_length not in {6, 12, 24}:
+        raise ValueError("invalid training-block rank controls")
+    rng = np.random.default_rng(deterministic_seed(seed, "training_block_rank_uniforms"))
+    raw = np.empty((n_paths, n_horizons), dtype=float)
+    max_start = ranks.shape[1] - block_length
+    for path_index in range(n_paths):
+        for output_start in range(0, n_horizons, block_length):
+            width = min(block_length, n_horizons - output_start)
+            source_row = int(rng.integers(0, ranks.shape[0]))
+            source_start = int(rng.integers(0, max_start + 1))
+            raw[path_index, output_start : output_start + width] = ranks[
+                source_row, source_start : source_start + width
+            ]
+    base = (np.arange(n_paths, dtype=float) + 0.5) / n_paths
+    result = np.empty_like(raw)
+    for horizon_index in range(n_horizons):
+        jitter = rng.uniform(0.0, np.finfo(float).eps, size=n_paths)
+        order = np.argsort(raw[:, horizon_index] + jitter, kind="mergesort")
+        result[order, horizon_index] = base
+    return result
+
+
+def forecast_uniforms(
+    policy: str,
+    n_paths: int,
+    n_horizons: int,
+    seed: int,
+    training_ranks: np.ndarray | None = None,
+    block_length: int | None = None,
+) -> np.ndarray:
+    """Dispatch the two preregistered recursive rank policies."""
+
+    policy = str(policy)
+    if policy == "independent_stratified":
+        return stratified_uniforms(n_paths, n_horizons, seed)
+    if policy == "training_block_rank":
+        if training_ranks is None or block_length is None:
+            raise ValueError("training-block ranks require training_ranks and block_length")
+        return training_block_rank_uniforms(
+            training_ranks, n_paths, n_horizons, block_length, seed
+        )
+    raise ValueError(f"unsupported recursive rank policy: {policy}")
+
+
 def interpolate_quantile_curves(
     curves: np.ndarray,
     quantiles: Sequence[float],
@@ -109,6 +175,8 @@ def recursive_quantile_curve_forecast(
     beta_draws: Mapping[float, np.ndarray],
     seed: int,
     quantiles: Sequence[float] = QUANTILES,
+    readout_mode: str = "state_lead_horizon",
+    uniforms: np.ndarray | None = None,
 ) -> dict[str, Any]:
     """Propagate the target price through an interpolated quantile curve.
 
@@ -144,7 +212,11 @@ def recursive_quantile_curve_forecast(
     )
     states = reservoir_step(states, transition, context["reservoir"], context["reservoir_config"])
     basis = horizon_features(np.asarray(HORIZONS), list(HORIZONS))
-    uniforms = stratified_uniforms(n_paths, len(HORIZONS), seed)
+    if uniforms is None:
+        uniforms = stratified_uniforms(n_paths, len(HORIZONS), seed)
+    uniforms = np.asarray(uniforms, dtype=float)
+    if uniforms.shape != (n_paths, len(HORIZONS)):
+        raise ValueError("recursive quantile uniforms have invalid dimensions")
     samples = np.empty((n_paths, len(HORIZONS)), dtype=float)
     crossing_count = 0.0
     crossing_cells = 0
@@ -155,12 +227,12 @@ def recursive_quantile_curve_forecast(
     for horizon_index in range(len(HORIZONS)):
         state = reservoir_output(states, context["reservoir_config"])
         lead = np.asarray(context["lead_features"][origin_index, horizon_index], dtype=float)
-        rows = np.column_stack([
-            np.ones(n_paths, dtype=float),
+        rows = build_readout_rows(
             state,
             np.repeat(lead[None, :], n_paths, axis=0),
             np.repeat(basis[horizon_index : horizon_index + 1], n_paths, axis=0),
-        ])
+            readout_mode,
+        )
         conditional = conditional_quantile_paths(rows, beta_draws, quantiles)
         ordered, diagnostics = rearrange_quantile_curves(conditional)
         samples[:, horizon_index] = interpolate_quantile_curves(
@@ -204,6 +276,7 @@ def recursive_quantile_curve_forecast(
         "rearrangement_mean_abs": float(rearrangement_sum / rearrangement_cells),
         "rearrangement_max_abs": float(rearrangement_max),
         "tail_rule": "winsorize_uniforms_to_fitted_0p10_0p90_grid",
+        "readout_mode": str(readout_mode),
         "seed": int(seed),
         "test_opened": False,
     }

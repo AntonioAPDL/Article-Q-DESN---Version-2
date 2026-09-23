@@ -244,3 +244,7 @@ Tracked helper files:
   and explicitly non-deployable teacher forcing. The helper reuses aligned
   parameter and innovation draws and reports state saturation and path drift;
   it never refits or selects a model.
+- `glofas_search3_rainy_season.R`: frozen October-March Search III contracts,
+  deterministic 40-candidate reference/discrepancy manifests, phase-balanced
+  selection, fixed-200 Normal RHS controls, and locked temporal confirmation.
+  Numerical fitting delegates to the audited Search II Normal engine.

@@ -635,6 +635,14 @@ hashable checkpoint, preventing an automatic superseded batch from starting.
 `415_run_glofas_discrepancy_predictability_audit.R` are no-refit diagnostics;
 their outputs cannot be promoted as forecast authority.
 
+Search III uses scripts `427`-`432`. The preparer freezes shared leakage-safe
+packets and creates one immutable runtime per stage; workers `428`/`429` fit
+and score one cell; `430` enforces one thread per worker; `431` withholds the
+confirmation aggregate until all 432 cells close; and `432` executes the full
+Ridge A/B/guardrail, RHS-prior, RHS-architecture, and confirmation DAG. The
+controller waits for the preceding GloFAS closeout and a live resource gate
+before starting at most 20 Muscat workers.
+
 The follow-on certification restart is a separate, minimal campaign.
 `416_prepare_glofas_quantile_certification_restart.py` audits and hash-binds
 only the nine iteration-200 fits lacking a terminal certificate.

@@ -144,6 +144,10 @@ joint comparison figures are generated and checked by
   and transformed-Jacobian identities; invalid-contract rejection; historical
   target decomposition; future component-space overlap; no-refit diagnostic
   labeling; and the launch-locked draft registry.
+- `test_glofas_search3_rainy_season.R` and
+  `test_glofas_search3_scheduler.py`: frozen seasonal-fold counts, candidate
+  uniqueness and bounds, phase-balanced advancement, exact-200 RHS controls,
+  stage ordering, closeout gates, and one-thread scheduler commands.
 - `test_glofas_fit_recovery_scheduler.py`: physical-core and NUMA-aware CPU
   allocation, disjoint multithread sets, checkpoint-aware restart with owned
   checkpoint paths, and owned reference-cache roots in addition to the

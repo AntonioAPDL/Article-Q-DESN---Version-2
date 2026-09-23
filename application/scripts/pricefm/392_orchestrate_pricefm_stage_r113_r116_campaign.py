@@ -166,6 +166,16 @@ def valid_terminal(path: Path, status: str) -> bool:
         return False
 
 
+def verify_source_manifest(campaign: Path, contract: dict[str, Any]) -> None:
+    manifest_path = campaign / "source_manifest.csv"
+    if sha256_file(manifest_path) != str(contract["source_manifest_sha256"]):
+        raise RuntimeError("frozen source manifest changed after campaign preparation")
+    for row in pd.read_csv(manifest_path).itertuples(index=False):
+        path = Path(row.path)
+        if not path.is_file() or sha256_file(path) != str(row.sha256):
+            raise RuntimeError(f"frozen source/evidence changed: {path}")
+
+
 def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, Any], list[int]]:
     contract = json.loads((campaign / "campaign_contract.json").read_text())
     if (
@@ -180,10 +190,7 @@ def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, 
     status = subprocess.check_output(["git", "-C", str(code_root), "status", "--porcelain"], text=True).strip()
     if head != contract["head"] or status:
         raise RuntimeError("Jerez launch worktree must be clean at the frozen campaign HEAD")
-    for row in pd.read_csv(campaign / "source_manifest.csv").itertuples(index=False):
-        path = Path(row.path)
-        if not path.is_file() or sha256_file(path) != str(row.sha256):
-            raise RuntimeError(f"frozen source/evidence changed: {path}")
+    verify_source_manifest(campaign, contract)
     memory_gib = available_memory_gib()
     disk_gib = shutil.disk_usage("/data").free / 2**30
     if memory_gib < 80 or disk_gib < 150:

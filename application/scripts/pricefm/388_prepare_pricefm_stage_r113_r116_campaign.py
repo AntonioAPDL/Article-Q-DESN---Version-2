@@ -29,6 +29,9 @@ R100_CANDIDATES = (
     / "launch_prep/pricefm_stage_r100_targeted_normal_recovery_20260913"
     / "regions/BG/ridge_prep/pricefm_stage_r100_ridge_candidate_manifest.csv"
 )
+R97 = DATA / "campaigns/pricefm_stage_r97_global_region_frozen_campaign_20260908"
+R102_CONFIGS = DATA / "campaigns/pricefm_stage_r102_recursive_normal_20260916/configs"
+R110_BG_ADAPTER = DATA / "campaigns/pricefm_stage_r110_direct_driver_20260921/adapters/region=BG/fold=1"
 CRAN_LIBRARY = DATA / "runtime_libraries/exdqlm_cran_1p1p1"
 CRAN_MANIFEST = CRAN_LIBRARY / "pricefm_r67_cran111_install_manifest.json"
 QUANTILES = (0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90)
@@ -153,8 +156,7 @@ def prepare(code_root: Path, output_root: Path, force: bool = False) -> dict[str
             or design_terminal.get("test_opened") is not False
         ):
             raise RuntimeError("frozen BG causal design is invalid")
-        adapter = DATA / "campaigns/pricefm_stage_r110_direct_driver_20260921/adapters/region=BG/fold=1"
-        rows = pd.read_csv(adapter / "rows_train.csv")
+        rows = pd.read_csv(R110_BG_ADAPTER / "rows_train.csv")
         splits, split_summary = nested_temporal_splits(rows)
         n_origins = int(rows.origin_id.max()) + 1
         design_y = np.fromfile(Path(case["design_dir"]) / "y.bin", dtype="<f8")
@@ -263,12 +265,11 @@ def prepare(code_root: Path, output_root: Path, force: bool = False) -> dict[str
         normal_rows = []
         normal_contracts = temporary / "contracts/r114_normal_driver"
         normal_contracts.mkdir(parents=True)
-        r97 = DATA / "campaigns/pricefm_stage_r97_global_region_frozen_campaign_20260908"
         for region in ("BG", "GR", "RO"):
             adapter_dir = (
-                DATA / "campaigns/pricefm_stage_r110_direct_driver_20260921/adapters/region=BG/fold=1"
+                R110_BG_ADAPTER
                 if region == "BG"
-                else r97 / f"regions/{region}/surface_runs/normal/cells/region={region}/fold=1/adapter"
+                else R97 / f"regions/{region}/surface_runs/normal/cells/region={region}/fold=1/adapter"
             )
             for inner_fold in INNER_FOLDS:
                 task_id = f"r114_normal__{region}__inner{inner_fold}"
@@ -316,10 +317,41 @@ def prepare(code_root: Path, output_root: Path, force: bool = False) -> dict[str
             code_root / "application/R/pricefm_recursive_normal_fit.R",
             CRAN_MANIFEST,
             case_path,
-            Path(case["design_dir"]) / "terminal.json",
             R111B / "summary.json",
             R100_CANDIDATES,
         ]
+        source_paths.extend(
+            Path(case["design_dir"]) / name
+            for name in ("X.bin", "y.bin", "design.json", "terminal.json")
+        )
+        source_paths.extend(R102_CONFIGS / f"data_L{lag}.yaml" for lag in (48, 96, 168, 240))
+        for region in ("BG", "GR", "RO"):
+            adapter_dir = (
+                R110_BG_ADAPTER
+                if region == "BG"
+                else R97 / f"regions/{region}/surface_runs/normal/cells/region={region}/fold=1/adapter"
+            )
+            source_paths.extend(
+                adapter_dir / name
+                for name in (
+                    "X_train.csv", "y_train.csv", "rows_train.csv",
+                    "adapter_manifest.json", "feature_manifest.json", "feature_map_matrix.npz",
+                )
+            )
+        processed = R97 / "processed_scoring"
+        for fold in (1, 2, 3):
+            source_paths.extend([
+                processed / f"scalers/fold_{fold}/per_region_separate_xy_scalers.joblib",
+                processed / f"scalers/fold_{fold}/scaling_manifest.json",
+            ])
+            for region in ("BG", "GR", "RO"):
+                window_dir = processed / f"windows/fold_{fold}/region={region}"
+                for lag in (48, 96, 168, 240):
+                    for stem in (
+                        f"train_L{lag}_H96_contained_half_open",
+                        f"val_L{lag}_H96_operational_half_open",
+                    ):
+                        source_paths.extend([window_dir / f"{stem}.npz", window_dir / f"{stem}.manifest.json"])
         source_paths.extend(sorted((normal_package / "R").glob("*.R")))
         source_paths.extend(normal_package / name for name in ("DESCRIPTION", "NAMESPACE"))
         source_paths.extend(R103 / f"cases/r103_bg_f{fold}.json" for fold in (1, 2, 3))

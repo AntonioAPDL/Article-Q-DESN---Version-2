@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import threading
 import time
 
@@ -12,6 +13,9 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS = ROOT / "application/scripts/pricefm"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
 
 
 def load(relative: str, name: str):
@@ -70,6 +74,21 @@ def test_campaign_prep_is_training_only_bounded_and_reproducible(tmp_path: Path)
         assert contract["selection_split"] == "BG_fold1_training_nested_temporal_only"
         assert contract["test_access_authorized"] is False
         assert contract["runtime_library"].endswith("exdqlm_cran_1p1p1")
+
+    sources = pd.read_csv(tmp_path / "campaign/source_manifest.csv")
+    names = {Path(path).name for path in sources.path}
+    assert {"X.bin", "y.bin", "X_train.csv", "rows_train.csv"}.issubset(names)
+    assert any("processed_scoring/windows/fold_3/region=RO" in path for path in sources.path)
+    CONTROLLER.verify_source_manifest(tmp_path / "campaign", result)
+
+
+def test_source_manifest_tampering_is_rejected(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    result = PREP.prepare(ROOT, campaign)
+    manifest = campaign / "source_manifest.csv"
+    manifest.write_text(manifest.read_text() + "\n")
+    with pytest.raises(RuntimeError, match="source manifest changed"):
+        CONTROLLER.verify_source_manifest(campaign, result)
 
 
 def test_nested_splits_have_strict_response_time_embargo() -> None:

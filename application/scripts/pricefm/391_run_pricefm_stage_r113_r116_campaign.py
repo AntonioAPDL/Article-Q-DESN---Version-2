@@ -54,27 +54,131 @@ def load_script(path: Path, name: str) -> Any:
     return module
 
 
+def terminal_axis_matches(
+    terminal: Mapping[str, Any], axis_name: str, axis_value: int,
+) -> bool:
+    """Validate current generic axis metadata and compatible legacy terminals."""
+
+    generic_present = "fit_axis" in terminal or "fit_axis_value" in terminal
+    direct_present = axis_name in terminal
+    matches: list[bool] = []
+    if generic_present:
+        try:
+            matches.append(
+                terminal.get("fit_axis") == axis_name
+                and int(terminal["fit_axis_value"]) == int(axis_value)
+            )
+        except (KeyError, TypeError, ValueError):
+            matches.append(False)
+    if direct_present:
+        try:
+            matches.append(int(terminal[axis_name]) == int(axis_value))
+        except (TypeError, ValueError):
+            matches.append(False)
+    return bool(matches) and all(matches)
+
+
+def quantile_family_eligibility(
+    root: Path,
+    family: str,
+    *,
+    family_status: str,
+    atom_status: str,
+    axis_name: str,
+    axis_value: int,
+) -> dict[str, Any]:
+    """Audit one seven-quantile family without opening prediction outcomes."""
+
+    reasons: list[str] = []
+    try:
+        terminal = json.loads((root / "terminal.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        terminal = {}
+        reasons.append("missing_or_invalid_family_terminal")
+    if terminal:
+        if terminal.get("status") != family_status:
+            reasons.append("wrong_family_status")
+        if terminal.get("family") != family:
+            reasons.append("wrong_family")
+        if terminal.get("test_opened") is not False:
+            reasons.append("test_firewall_not_closed")
+        if not terminal_axis_matches(terminal, axis_name, axis_value):
+            reasons.append("axis_contract_mismatch")
+
+    atoms_complete = 0
+    atoms_eligible = 0
+    atom_reasons: list[str] = []
+    for tau in QUANTILES:
+        atom = root / f"tau={str(tau).replace('.', 'p')}"
+        try:
+            value = json.loads((atom / "terminal.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            atom_reasons.append(f"tau={tau}:missing_or_invalid_terminal")
+            continue
+        try:
+            tau_matches = bool(np.isclose(
+                float(value.get("tau", np.nan)), float(tau), rtol=0, atol=1e-12
+            ))
+        except (TypeError, ValueError):
+            tau_matches = False
+        valid = (
+            value.get("status") == atom_status
+            and value.get("family") == family
+            and tau_matches
+            and value.get("test_opened") is False
+        )
+        if not valid:
+            atom_reasons.append(f"tau={tau}:invalid_contract")
+            continue
+        atoms_complete += 1
+        if value.get("numerically_eligible") is True:
+            atoms_eligible += 1
+        else:
+            atom_reasons.append(f"tau={tau}:numerically_ineligible")
+    if atoms_complete != len(QUANTILES):
+        reasons.append("incomplete_quantile_family")
+    if atoms_eligible != len(QUANTILES):
+        reasons.append("ineligible_quantile_atoms")
+    reasons.extend(atom_reasons)
+    return {
+        "family": family,
+        "axis_name": axis_name,
+        "axis_value": int(axis_value),
+        "atoms_expected": len(QUANTILES),
+        "atoms_complete": atoms_complete,
+        "atoms_eligible": atoms_eligible,
+        "eligible": not reasons,
+        "reason": "complete_seven_quantile_family" if not reasons else ";".join(reasons),
+        "test_opened": False,
+    }
+
+
 def read_fit(campaign: Path, family: str, inner_fold: int) -> tuple[dict[float, np.ndarray], dict[float, np.ndarray]]:
     root = campaign / f"runs/r114_fit/family={family}/inner={inner_fold}"
-    terminal = json.loads((root / "terminal.json").read_text())
-    if (
-        terminal.get("status") != "completed_r114_quantile_family_fit"
-        or terminal.get("family") != family
-        or int(terminal.get("inner_fold", -1)) != int(inner_fold)
-        or terminal.get("test_opened") is not False
-    ):
-        raise RuntimeError(f"invalid R114 {family} fit for inner fold {inner_fold}")
+    eligibility = quantile_family_eligibility(
+        root, family,
+        family_status="completed_r114_quantile_family_fit",
+        atom_status="completed_r114_quantile_atom",
+        axis_name="inner_fold", axis_value=inner_fold,
+    )
+    if not eligibility["eligible"]:
+        raise RuntimeError(
+            f"invalid R114 {family} fit for inner fold {inner_fold}: "
+            f"{eligibility['reason']}"
+        )
     means: dict[float, np.ndarray] = {}
     covariances: dict[float, np.ndarray] = {}
     for tau in QUANTILES:
         label = str(tau).replace(".", "p")
         atom = root / f"tau={label}"
         atom_terminal = json.loads((atom / "terminal.json").read_text())
-        if not atom_terminal.get("numerically_eligible"):
-            raise RuntimeError(f"ineligible R114 atom: {family} inner={inner_fold} tau={tau}")
         p = int(atom_terminal["p"])
-        means[float(tau)] = np.fromfile(atom / "beta_mean.bin", dtype="<f8")
-        covariances[float(tau)] = np.fromfile(atom / "beta_cov.bin", dtype="<f8").reshape(p, p)
+        mean = np.fromfile(atom / "beta_mean.bin", dtype="<f8")
+        covariance = np.fromfile(atom / "beta_cov.bin", dtype="<f8").reshape(p, p)
+        if mean.size != p or not np.isfinite(mean).all() or not np.isfinite(covariance).all():
+            raise RuntimeError(f"nonfinite R114 posterior: {family} inner={inner_fold} tau={tau}")
+        means[float(tau)] = mean
+        covariances[float(tau)] = covariance
     return means, covariances
 
 

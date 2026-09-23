@@ -176,11 +176,41 @@ def verify_source_manifest(campaign: Path, contract: dict[str, Any]) -> None:
             raise RuntimeError(f"frozen source/evidence changed: {path}")
 
 
+def verify_reuse_manifest(campaign: Path, contract: dict[str, Any]) -> None:
+    name = contract.get("r114_reuse_manifest")
+    expected = contract.get("r114_reuse_manifest_sha256")
+    if name is None and expected is None:
+        return
+    if not name or not expected:
+        raise RuntimeError("R114 recovery reuse manifest contract is incomplete")
+    path = campaign / str(name)
+    if not path.is_file() or sha256_file(path) != str(expected):
+        raise RuntimeError("R114 recovery reuse manifest changed")
+    rows = pd.read_csv(path)
+    required = {"path", "bytes", "sha256"}
+    if rows.empty or not required.issubset(rows):
+        raise RuntimeError("R114 recovery reuse manifest is invalid")
+    for row in rows.itertuples(index=False):
+        artifact = Path(row.path)
+        if (
+            not artifact.is_file()
+            or artifact.stat().st_size != int(row.bytes)
+            or sha256_file(artifact) != str(row.sha256)
+        ):
+            raise RuntimeError(f"reused R114 artifact changed: {artifact}")
+
+
 def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, Any], list[int]]:
     contract = json.loads((campaign / "campaign_contract.json").read_text())
+    expected_hash = str(contract.get("campaign_contract_sha256", ""))
+    unhashed = {key: value for key, value in contract.items() if key != "campaign_contract_sha256"}
     if (
         contract.get("stage") != "R113_R116"
-        or contract.get("status") != "prepared_training_only_not_launched"
+        or contract.get("status") not in {
+            "prepared_training_only_not_launched", "prepared_recovery_not_launched",
+        }
+        or not expected_hash
+        or canonical_hash(unhashed) != expected_hash
         or contract.get("test_access_authorized") is not False
         or contract.get("registry_mutation_authorized") is not False
         or contract.get("article_mutation_authorized") is not False
@@ -191,6 +221,7 @@ def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, 
     if head != contract["head"] or status:
         raise RuntimeError("Jerez launch worktree must be clean at the frozen campaign HEAD")
     verify_source_manifest(campaign, contract)
+    verify_reuse_manifest(campaign, contract)
     memory_gib = available_memory_gib()
     disk_gib = shutil.disk_usage("/data").free / 2**30
     if memory_gib < 80 or disk_gib < 150:
@@ -204,12 +235,53 @@ def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, 
     return contract, list(resources["selected_logical_cpus"])
 
 
-def select_r114(campaign: Path, worker_module: Any) -> dict[str, Any]:
+def r114_family_eligibility(
+    campaign: Path, worker_module: Any, families: list[str],
+) -> tuple[pd.DataFrame, list[str]]:
+    rows = []
+    for family in families:
+        for inner in (1, 2, 3):
+            root = campaign / f"runs/r114_fit/family={family}/inner={inner}"
+            rows.append(worker_module.quantile_family_eligibility(
+                root, family,
+                family_status="completed_r114_quantile_family_fit",
+                atom_status="completed_r114_quantile_atom",
+                axis_name="inner_fold", axis_value=inner,
+            ))
+    detail = pd.DataFrame(rows)
+    detail.to_csv(campaign / "r114_family_eligibility.csv", index=False)
+    summary = detail.groupby("family", as_index=False).agg(
+        complete_inner_folds=("axis_value", "nunique"),
+        all_inner_folds_eligible=("eligible", "all"),
+        atoms_complete=("atoms_complete", "sum"),
+        atoms_eligible=("atoms_eligible", "sum"),
+    )
+    summary["eligible"] = (
+        summary.complete_inner_folds.eq(3)
+        & summary.all_inner_folds_eligible
+        & summary.atoms_complete.eq(3 * 7)
+        & summary.atoms_eligible.eq(3 * 7)
+    )
+    summary["decision"] = np.where(
+        summary.eligible, "score_training_only", "exclude_before_validation_scoring"
+    )
+    summary.to_csv(campaign / "r114_family_eligibility_summary.csv", index=False)
+    eligible = summary.loc[summary.eligible, "family"].astype(str).tolist()
+    if not eligible:
+        raise RuntimeError("R114 has no complete eligible seven-quantile family")
+    return detail, eligible
+
+
+def select_r114(
+    campaign: Path, worker_module: Any, eligible_families: list[str],
+) -> dict[str, Any]:
     rows = []
     horizons = []
-    for family in ("al", "exal"):
+    for family in eligible_families:
         for inner in (1, 2, 3):
             root = campaign / f"runs/r114_score/family={family}/inner={inner}"
+            if not valid_terminal(root, "completed_r114_driver_score"):
+                raise RuntimeError(f"R114 eligible family score is incomplete: {family} inner={inner}")
             rows.append(pd.read_csv(root / "driver_metrics.csv"))
             horizons.append(pd.read_csv(root / "driver_horizon_metrics.csv"))
     for inner in (1, 2, 3):
@@ -238,6 +310,9 @@ def select_r114(campaign: Path, worker_module: Any) -> dict[str, Any]:
         complete_inner_folds=("inner_fold", "nunique"),
     )
     ranking["coverage_error"] = (ranking.mean_coverage_10_90 - 0.8).abs()
+    ranking = ranking[ranking.complete_inner_folds.eq(3)].copy()
+    if ranking.empty:
+        raise RuntimeError("R114 has no candidate with three complete training-only folds")
     ranking = ranking.sort_values(
         ["median_CRPS_scaled", "worst_late_CRPS_scaled", "coverage_error", "family", "rank_policy"],
         kind="mergesort",
@@ -252,6 +327,8 @@ def select_r114(campaign: Path, worker_module: Any) -> dict[str, Any]:
         "worst_late_CRPS_scaled": float(winner.worst_late_CRPS_scaled),
         "mean_coverage_10_90": float(winner.mean_coverage_10_90),
         "complete_inner_folds": int(winner.complete_inner_folds),
+        "eligible_quantile_families": eligible_families,
+        "excluded_quantile_families": sorted(set(("al", "exal")) - set(eligible_families)),
         "selection_split": "BG_fold1_training_nested_temporal_only",
         "test_opened": False,
     }
@@ -441,13 +518,20 @@ def quantile_contract(
     return value
 
 
-def materialize_r116_family(campaign: Path, code_root: Path) -> pd.DataFrame:
+def materialize_r116_family(
+    campaign: Path, code_root: Path, families: list[str] | None = None,
+) -> pd.DataFrame:
+    families = [str(value) for value in (families or ["al", "exal"])]
+    if not families or any(value not in {"al", "exal"} for value in families):
+        raise RuntimeError("R116 likelihood-family contract is invalid")
+    if "exal" in families and "al" not in families:
+        raise RuntimeError("R116 exAL requires the matching AL initializer family")
     design = campaign / "runs/r116_family_design/design"
     selected = json.loads((campaign / "r115_selected_no_bypass.json").read_text())
     contracts = campaign / "contracts/r116_family_fit"
     contracts.mkdir(parents=True, exist_ok=True)
     rows = []
-    for family in ("al", "exal"):
+    for family in families:
         for inner in (1, 2, 3):
             task_id = f"r116_family__{family}__inner{inner}"
             output = campaign / f"runs/r116_family_fit/family={family}/inner={inner}"
@@ -631,7 +715,7 @@ def main() -> int:
     parser.add_argument("--preflight-only", action="store_true")
     args = parser.parse_args()
     campaign = args.campaign_root.resolve(); code_root = args.code_root.resolve()
-    _, cpus = preflight(campaign, code_root, args.workers)
+    contract, cpus = preflight(campaign, code_root, args.workers)
     if args.preflight_only:
         write_json(campaign / "preflight_terminal.json", {
             "stage": "R113_R116", "status": "preflight_passed_not_launched",
@@ -646,38 +730,50 @@ def main() -> int:
     spec.loader.exec_module(worker_module)
     python = sys.executable
 
-    normal_tasks = []
-    for row in pd.read_csv(campaign / "r114_normal_driver_manifest.csv").itertuples(index=False):
-        output = Path(row.output_dir)
-        if not valid_terminal(output, "completed_r114_normal_driver"):
-            normal_tasks.append({
-                "task_id": row.task_id,
-                "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/390_run_pricefm_stage_r114_normal_driver.R"), "--contract", row.contract_path],
-                "log_path": campaign / f"logs/r114_normal/{row.task_id}.log",
-            })
-    al_tasks = []
-    fit_manifest = pd.read_csv(campaign / "r114_fit_manifest.csv")
-    for row in fit_manifest[fit_manifest.family.eq("al")].itertuples(index=False):
-        if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
-            al_tasks.append({
-                "task_id": row.task_id,
-                "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
-                "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
-            })
-    run_parallel(normal_tasks + al_tasks, cpus, campaign / "r114_batch1_status.csv")
+    recovery_mode = contract.get("resume_mode") == "reuse_completed_r114_fits"
+    if not recovery_mode:
+        normal_tasks = []
+        for row in pd.read_csv(campaign / "r114_normal_driver_manifest.csv").itertuples(index=False):
+            output = Path(row.output_dir)
+            if not valid_terminal(output, "completed_r114_normal_driver"):
+                normal_tasks.append({
+                    "task_id": row.task_id,
+                    "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/390_run_pricefm_stage_r114_normal_driver.R"), "--contract", row.contract_path],
+                    "log_path": campaign / f"logs/r114_normal/{row.task_id}.log",
+                })
+        al_tasks = []
+        fit_manifest = pd.read_csv(campaign / "r114_fit_manifest.csv")
+        for row in fit_manifest[fit_manifest.family.eq("al")].itertuples(index=False):
+            if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
+                al_tasks.append({
+                    "task_id": row.task_id,
+                    "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
+                    "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
+                })
+        run_parallel(normal_tasks + al_tasks, cpus, campaign / "r114_batch1_status.csv")
 
-    exal_tasks = []
-    for row in fit_manifest[fit_manifest.family.eq("exal")].itertuples(index=False):
-        if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
-            exal_tasks.append({
-                "task_id": row.task_id,
-                "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
-                "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
-            })
-    run_parallel(exal_tasks, cpus, campaign / "r114_batch2_status.csv")
+        exal_tasks = []
+        for row in fit_manifest[fit_manifest.family.eq("exal")].itertuples(index=False):
+            if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
+                exal_tasks.append({
+                    "task_id": row.task_id,
+                    "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
+                    "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
+                })
+        run_parallel(exal_tasks, cpus, campaign / "r114_batch2_status.csv")
+
+    _, eligible_families = r114_family_eligibility(
+        campaign, worker_module, [str(value) for value in contract.get("families", ["al", "exal"])],
+    )
+    contracted_score_families = contract.get("r114_score_families")
+    if contracted_score_families is not None and eligible_families != list(contracted_score_families):
+        raise RuntimeError(
+            f"R114 eligible families differ from recovery contract: "
+            f"observed={eligible_families} expected={contracted_score_families}"
+        )
 
     score_tasks = []
-    for family in ("al", "exal"):
+    for family in eligible_families:
         for inner in (1, 2, 3):
             output = campaign / f"runs/r114_score/family={family}/inner={inner}"
             if not valid_terminal(output, "completed_r114_driver_score"):
@@ -688,7 +784,7 @@ def main() -> int:
                     "log_path": campaign / f"logs/r114_score/{task_id}.log",
                 })
     run_parallel(score_tasks, cpus, campaign / "r114_score_status.csv")
-    selected_driver = select_r114(campaign, worker_module)
+    selected_driver = select_r114(campaign, worker_module, eligible_families)
 
     ridge_tasks = []
     for candidate_id in pd.read_csv(campaign / "r115_candidate_bank.csv").candidate_id.astype(str):
@@ -721,8 +817,9 @@ def main() -> int:
             "log_path": campaign / "logs/r116_family/r116_family_design.log",
         })
     run_parallel(family_design_tasks, cpus, campaign / "r116_family_design_status.csv")
-    family_manifest = materialize_r116_family(campaign, code_root)
-    for family in ("al", "exal"):
+    r116_families = [str(value) for value in contract.get("r116_families", ["al", "exal"])]
+    family_manifest = materialize_r116_family(campaign, code_root, r116_families)
+    for family in r116_families:
         tasks = []
         for row in family_manifest[family_manifest.family.eq(family)].itertuples(index=False):
             if not valid_terminal(Path(row.output_dir), "completed_r116_quantile_family_fit"):
@@ -733,7 +830,7 @@ def main() -> int:
                 })
         run_parallel(tasks, cpus, campaign / f"r116_family_{family}_status.csv")
     family_score_tasks = []
-    for family in ("al", "exal"):
+    for family in r116_families:
         for inner in (1, 2, 3):
             output = campaign / f"runs/r116_family_score/family={family}/inner={inner}"
             if not valid_terminal(output, "completed_r116_family_score"):
@@ -758,7 +855,7 @@ def main() -> int:
             })
     run_parallel(outer_design_tasks, cpus, campaign / "r116_outer_design_status.csv")
     outer_manifest = materialize_r116_outer(campaign, code_root)
-    for family in ("al", "exal"):
+    for family in outer_manifest.family.astype(str).drop_duplicates().tolist():
         tasks = []
         for row in outer_manifest[outer_manifest.family.eq(family)].itertuples(index=False):
             if not valid_terminal(Path(row.output_dir), "completed_r116_quantile_family_fit"):

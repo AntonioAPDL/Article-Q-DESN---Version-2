@@ -39,6 +39,34 @@ CONTROLLER = load(
     "application/scripts/pricefm/392_orchestrate_pricefm_stage_r113_r116_campaign.py",
     "pricefm_r113_controller",
 )
+RECOVERY = load(
+    "application/scripts/pricefm/394_prepare_pricefm_stage_r113_r116_recovery.py",
+    "pricefm_r113_recovery",
+)
+
+
+def write_quantile_family(
+    campaign: Path, family: str, inner: int, *, eligible_taus: set[float], p: int = 2,
+) -> Path:
+    root = campaign / f"runs/r114_fit/family={family}/inner={inner}"
+    root.mkdir(parents=True)
+    for tau in WORKER.QUANTILES:
+        atom = root / f"tau={str(tau).replace('.', 'p')}"
+        atom.mkdir()
+        np.arange(p, dtype="<f8").tofile(atom / "beta_mean.bin")
+        np.eye(p, dtype="<f8").tofile(atom / "beta_cov.bin")
+        (atom / "terminal.json").write_text(json.dumps({
+            "stage": "R114", "status": "completed_r114_quantile_atom",
+            "family": family, "tau": tau, "p": p,
+            "numerically_eligible": tau in eligible_taus, "test_opened": False,
+        }))
+    (root / "terminal.json").write_text(json.dumps({
+        "stage": "R114", "status": "completed_r114_quantile_family_fit",
+        "family": family, "fit_axis": "inner_fold", "fit_axis_value": inner,
+        "atoms_complete": 7, "atoms_eligible": len(eligible_taus),
+        "all_atoms_eligible": len(eligible_taus) == 7, "test_opened": False,
+    }))
+    return root
 
 
 def test_campaign_prep_is_training_only_bounded_and_reproducible(tmp_path: Path) -> None:
@@ -89,6 +117,113 @@ def test_source_manifest_tampering_is_rejected(tmp_path: Path) -> None:
     manifest.write_text(manifest.read_text() + "\n")
     with pytest.raises(RuntimeError, match="source manifest changed"):
         CONTROLLER.verify_source_manifest(campaign, result)
+
+
+def test_r114_reader_accepts_exact_R_terminal_axis_contract(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    write_quantile_family(
+        campaign, "al", 2, eligible_taus=set(WORKER.QUANTILES),
+    )
+    means, covariances = WORKER.read_fit(campaign, "al", 2)
+    assert set(means) == set(WORKER.QUANTILES)
+    assert all(value.shape == (2, 2) for value in covariances.values())
+
+
+def test_r114_reader_rejects_contradictory_axis_metadata(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    root = write_quantile_family(
+        campaign, "al", 2, eligible_taus=set(WORKER.QUANTILES),
+    )
+    terminal = json.loads((root / "terminal.json").read_text())
+    terminal["inner_fold"] = 3
+    (root / "terminal.json").write_text(json.dumps(terminal))
+    with pytest.raises(RuntimeError, match="axis_contract_mismatch"):
+        WORKER.read_fit(campaign, "al", 2)
+
+
+def test_r114_family_gate_excludes_incomplete_exal_without_blocking_al(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    for inner in (1, 2, 3):
+        write_quantile_family(
+            campaign, "al", inner, eligible_taus=set(WORKER.QUANTILES),
+        )
+        write_quantile_family(
+            campaign, "exal", inner, eligible_taus={0.5},
+        )
+    detail, eligible = CONTROLLER.r114_family_eligibility(
+        campaign, WORKER, ["al", "exal"],
+    )
+    assert eligible == ["al"]
+    assert detail.loc[detail.family.eq("al"), "eligible"].all()
+    assert not detail.loc[detail.family.eq("exal"), "eligible"].any()
+    summary = pd.read_csv(campaign / "r114_family_eligibility_summary.csv")
+    assert summary.set_index("family").loc["exal", "decision"] == "exclude_before_validation_scoring"
+
+
+def test_recovery_preserves_r114_files_and_freezes_new_lineage(tmp_path: Path) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    evidence = tmp_path / "evidence.txt"
+    evidence.write_text("frozen\n")
+    source_manifest = pd.DataFrame([{
+        "role": "source_or_frozen_evidence", "path": str(evidence),
+        "bytes": evidence.stat().st_size, "sha256": RECOVERY.sha256_file(evidence),
+    }])
+    source_manifest.to_csv(parent / "source_manifest.csv", index=False)
+    contract = {
+        "stage": "R113_R116", "status": "prepared_training_only_not_launched",
+        "region": "BG", "outer_selection_fold": 1, "inner_folds": [1, 2, 3],
+        "families": ["al", "exal"], "quantiles": list(WORKER.QUANTILES),
+        "posterior_paths": 500, "rank_policies": ["independent_stratified"],
+        "readout_modes": ["state_lead_horizon", "state_horizon", "state_only"],
+        "r115_ridge_candidates": 240, "r115_ridge_fit_cells": 1440,
+        "r115_rhs_maximum_fit_cells": 540, "max_workers": 30,
+        "selection_split": "BG_fold1_training_nested_temporal_only",
+        "outer_validation_role": "transfer_diagnostic_only",
+        "package_contract": "exact_CRAN_exdqlm_1.1.1_public_API_for_AL_exAL",
+        "normal_package_contract": "project_Normal_RHS_source_only",
+        "source_manifest_sha256": RECOVERY.sha256_file(parent / "source_manifest.csv"),
+    }
+    contract["campaign_contract_sha256"] = RECOVERY.canonical_hash(contract)
+    (parent / "campaign_contract.json").write_text(json.dumps(contract))
+    (parent / "splits").mkdir()
+    (parent / "splits/marker.txt").write_text("split\n")
+    pd.DataFrame({"candidate_id": [f"c{index:03d}" for index in range(240)]}).to_csv(
+        parent / "r115_candidate_bank.csv", index=False,
+    )
+    pd.DataFrame({"inner_fold": [1, 2, 3]}).to_csv(
+        parent / "nested_split_summary.csv", index=False,
+    )
+    for inner in (1, 2, 3):
+        write_quantile_family(parent, "al", inner, eligible_taus=set(WORKER.QUANTILES))
+        write_quantile_family(parent, "exal", inner, eligible_taus={0.5})
+    for region in ("BG", "GR", "RO"):
+        for inner in (1, 2, 3):
+            root = parent / f"runs/r114_normal_driver/region={region}/inner={inner}"
+            root.mkdir(parents=True)
+            (root / "terminal.json").write_text(json.dumps({
+                "status": "completed_r114_normal_driver", "test_opened": False,
+            }))
+
+    output = tmp_path / "recovery"
+    result = RECOVERY.prepare_recovery(
+        ROOT, parent, output, require_clean=False,
+    )
+    assert result["status"] == "prepared_recovery_not_launched"
+    assert result["resume_mode"] == "reuse_completed_r114_fits"
+    assert result["r114_score_families"] == ["al"]
+    assert result["r116_families"] == ["al"]
+    assert result["reused_r114_fit_cells"] == 51
+    CONTROLLER.verify_reuse_manifest(output, result)
+    source = parent / "runs/r114_fit/family=al/inner=1/tau=0p1/beta_mean.bin"
+    reused = output / "runs/r114_fit/family=al/inner=1/tau=0p1/beta_mean.bin"
+    assert source.stat().st_ino == reused.stat().st_ino
+    assert not (output / "runs/r114_score").exists()
+
+
+def test_r116_exal_cannot_be_materialized_without_al(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="requires the matching AL initializer"):
+        CONTROLLER.materialize_r116_family(tmp_path, ROOT, ["exal"])
 
 
 def test_nested_splits_have_strict_response_time_embargo() -> None:

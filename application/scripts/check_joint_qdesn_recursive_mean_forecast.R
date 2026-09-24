@@ -11,7 +11,8 @@ args <- app_parse_args(list(
 ))
 contract <- app_joint_recursive_read_contract(
   args[["contract-path"]] %||% args$contract_path)
-if (isTRUE(args[["aggregate-oracles"]] %||% args$aggregate_oracles)) {
+flag <- function(value) app_as_bool_vec(value)[[1L]]
+if (flag(args[["aggregate-oracles"]] %||% args$aggregate_oracles)) {
   result <- app_joint_recursive_aggregate_oracles(
     args$root, args[["source-root"]] %||% args$source_root, contract)
   cat(sprintf("Oracle aggregation status: %s\n", result$status))
@@ -25,13 +26,13 @@ print(oracle_health, row.names = FALSE)
 print(cell_health, row.names = FALSE)
 app_write_csv(oracle, file.path(args$root, "oracle_worker_health.csv"))
 app_write_csv(cells, file.path(args$root, "forecast_worker_health.csv"))
-if (isTRUE(args[["require-sentinels"]] %||% args$require_sentinels)) {
+if (flag(args[["require-sentinels"]] %||% args$require_sentinels)) {
   sentinels <- cells[app_as_bool_vec(cells$sentinel), , drop = FALSE]
   if (nrow(sentinels) != 3L || any(sentinels$status != "complete")) {
     stop("Recursive sentinel gate is incomplete.", call. = FALSE)
   }
 }
-if (isTRUE(args[["require-complete"]] %||% args$require_complete) &&
+if (flag(args[["require-complete"]] %||% args$require_complete) &&
     (nrow(cells) != 64L || any(cells$status != "complete"))) {
   stop("Recursive production cells are incomplete.", call. = FALSE)
 }

@@ -81,6 +81,9 @@ scientifically reviewed.
 - `test_joint_qdesn_corrected_article_comparison_muscat_contract.R`: pass.
 - `test_joint_qdesn_post_phase178_dgp_integrated_acrps.R`: pass.
 - Full corrected-v4 source-inventory and teacher-forced local preflight: pass.
+- Command-line oracle aggregation, sentinel, and completion flags: pass after
+  explicit logical parsing; the sentinel gate caught this issue before any
+  production cell ran.
 - `bash -n` and `git diff --check`: pass.
 
 ## Boundaries

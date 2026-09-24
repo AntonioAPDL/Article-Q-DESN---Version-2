@@ -55,6 +55,10 @@ INDEX_RECOVERY = load(
     "application/scripts/pricefm/397_prepare_pricefm_stage_r113_r116_calendar_index_recovery.py",
     "pricefm_r113_calendar_index_recovery",
 )
+AUDIT = load(
+    "application/scripts/pricefm/398_audit_pricefm_stage_r116_transfer_closeout.py",
+    "pricefm_r116_transfer_closeout",
+)
 
 
 def write_quantile_family(
@@ -537,3 +541,143 @@ def test_r116_runner_supports_family_and_outer_contracts() -> None:
     assert '"outer_transfer_readout_fit"' in runner
     assert "completed_r116_quantile_family_fit" in runner
     assert "completed_r116_factorial_closeout" in controller
+
+
+def synthetic_r116_metrics() -> tuple[pd.DataFrame, pd.DataFrame]:
+    metrics = []
+    horizons = []
+    for fold in (1, 2, 3):
+        for cell, aql, coverage, width in (
+            ("A", 10.0 + fold, 0.70, 10.0),
+            ("B", 10.0 + fold, 0.70, 10.0),
+            ("C", 9.8 + fold, 0.66, 7.0),
+            ("D", 9.8 + fold, 0.66, 7.0),
+        ):
+            metrics.append({
+                "fold": fold, "cell": cell,
+                "driver": "normal" if cell in {"A", "C"} else "selected",
+                "readout": "current_lead" if cell in {"A", "B"} else "selected_no_bypass",
+                "family": "al", "AQL": aql, "AQCR": 0.0,
+                "coverage_10_90": coverage, "width_10_90": width,
+                "n_loss_atoms": 100, "test_opened": False,
+            })
+            horizons.append({
+                "fold": fold, "cell": cell, "horizon_block": "73-96",
+                "driver": "normal" if cell in {"A", "C"} else "selected",
+                "readout": "current_lead" if cell in {"A", "B"} else "selected_no_bypass",
+                "family": "al", "AQL": aql, "AQCR": 0.0,
+                "coverage_10_90": coverage, "width_10_90": width,
+                "n_loss_atoms": 25, "test_opened": False,
+            })
+    return pd.DataFrame(metrics), pd.DataFrame(horizons)
+
+
+def test_r116_closeout_loads_context_and_blocks_failed_harm_gates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign = tmp_path / "campaign"
+    metrics, horizons = synthetic_r116_metrics()
+    for fold in (1, 2, 3):
+        root = campaign / f"runs/r116_outer_score/fold={fold}"
+        root.mkdir(parents=True)
+        metrics[metrics.fold.eq(fold)].to_csv(root / "metrics.csv", index=False)
+        horizons[horizons.fold.eq(fold)].to_csv(root / "horizon_metrics.csv", index=False)
+    (campaign / "r116_selected_family.json").write_text(json.dumps({"family": "al"}))
+    (campaign / "r114_selected_driver.json").write_text(json.dumps({"family": "normal_rhs"}))
+    references = tmp_path / "r111b"
+    references.mkdir()
+    pd.DataFrame([{
+        "region": "BG", "fold": 1, "policy": "r111b_exposure_aligned_readout",
+        "AQL": 5.0, "n_loss_atoms": 100,
+    }]).to_csv(references / "pricefm_stage_r111b_bg_case_metrics.csv", index=False)
+    pd.DataFrame([{
+        "region": "BG", "fold": 1, "policy": "r97_direct_reference",
+        "AQL": 4.0, "n_loss_atoms": 100,
+    }]).to_csv(references / "pricefm_stage_r111b_bg_references.csv", index=False)
+    monkeypatch.setattr(CONTROLLER, "R111B", references)
+
+    result = CONTROLLER.closeout_r116(campaign)
+
+    assert result["transfer_gates_passed"] == 3
+    assert result["transfer_gates_total"] == 5
+    assert result["all_transfer_gates_passed"] is False
+    assert result["r117_preparation_authorized"] is False
+    assert result["driver_contrast_identifiable"] is False
+    assert result["mechanism_interpretation"] == "readout_only_driver_axis_degenerate"
+    assert (campaign / "r116_contextual_references.csv").is_file()
+
+
+def test_driver_axis_audit_requires_exact_duplicate_cells_for_normal_rhs(
+    tmp_path: Path,
+) -> None:
+    campaign = tmp_path / "campaign"
+    metrics, _ = synthetic_r116_metrics()
+    (campaign / "r114_selected_driver.json").parent.mkdir(parents=True)
+    (campaign / "r114_selected_driver.json").write_text(json.dumps({"family": "normal_rhs"}))
+    for fold in (1, 2, 3):
+        root = campaign / f"runs/r116_outer_score/fold={fold}"
+        root.mkdir(parents=True)
+        for cell, offset in (("A", 0.0), ("B", 0.0), ("C", 1.0), ("D", 1.0)):
+            np.savez_compressed(
+                root / f"cell_{cell}_validation_predictions.npz",
+                prediction_scaled=np.arange(12, dtype=float).reshape(1, 3, 4) + offset,
+            )
+    frame, identifiable = AUDIT.driver_axis_audit(campaign, metrics, {})
+    assert identifiable is False
+    assert frame.exact_match.all()
+    assert frame.maximum_metric_difference.eq(0).all()
+
+
+def test_r103_equivalence_audit_distinguishes_fit_from_forecast_operator(
+    tmp_path: Path,
+) -> None:
+    campaign = tmp_path / "campaign"
+    r103 = tmp_path / "r103"
+    for fold in (1, 2, 3):
+        current_design = campaign / f"runs/r116_outer_design/fold={fold}/current_lead/design"
+        reference_design = r103 / f"cases/region=BG/fold={fold}/design"
+        current_design.mkdir(parents=True)
+        reference_design.mkdir(parents=True)
+        for name, values in (
+            ("X.bin", np.arange(12, dtype="<f8")),
+            ("y.bin", np.arange(4, dtype="<f8")),
+        ):
+            values.tofile(current_design / name)
+            values.tofile(reference_design / name)
+        for tau in AUDIT.QUANTILES:
+            label = AUDIT.tau_label(tau)
+            current_atom = campaign / (
+                f"runs/r116_outer_fit/readout=current_lead/family=al/fold={fold}/tau={label}"
+            )
+            reference_atom = r103 / (
+                f"cases/region=BG/fold={fold}/atoms/r103_bg_f{fold}_al_{label}"
+            )
+            current_atom.mkdir(parents=True)
+            reference_atom.mkdir(parents=True)
+            beta = np.asarray([1.0, 2.0, 3.0], dtype="<f8")
+            beta.tofile(current_atom / "beta_mean.bin")
+            (beta + 1e-8).tofile(reference_atom / "beta_mean.bin")
+        current_score = campaign / f"runs/r116_outer_score/fold={fold}"
+        reference_case = r103 / f"cases/region=BG/fold={fold}"
+        current_score.mkdir(parents=True)
+        prediction = np.arange(84, dtype=float).reshape(7, 3, 4)
+        np.savez_compressed(
+            current_score / "cell_A_validation_predictions.npz",
+            prediction_scaled=prediction, anchors=np.arange(3),
+            quantiles=np.asarray(AUDIT.QUANTILES),
+        )
+        np.savez_compressed(
+            reference_case / "al_validation_quantiles.npz",
+            prediction_scaled=prediction + 1e-4, anchors=np.arange(3),
+            quantiles=np.asarray(AUDIT.QUANTILES),
+        )
+        pd.DataFrame([{
+            "family": "al", "validation_AQL_original": 1.0,
+            "n_loss_atoms": 84,
+        }]).to_csv(reference_case / "family_validation_metrics.csv", index=False)
+
+    result = AUDIT.r103_equivalence_audit(campaign, r103, {})
+
+    assert result[result.component.str.startswith("design_")].exact_match.all()
+    assert result[result.component.eq("beta_mean")].max_abs_difference.le(1e-5).all()
+    assert result[result.component.eq("recursive_prediction_scaled")].max_abs_difference.le(2e-3).all()

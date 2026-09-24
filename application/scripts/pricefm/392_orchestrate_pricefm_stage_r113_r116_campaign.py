@@ -26,6 +26,7 @@ from pricefm_common import sha256_file, write_json
 ARTIFACT_REPO = Path("/data/jaguir26/local/src/Article-Q-DESN")
 DATA = ARTIFACT_REPO / "application/data_local/pricefm"
 DEFAULT_CAMPAIGN = DATA / "campaigns/pricefm_stage_r113_r116_rolled_state_driver_20260922"
+R111B = DATA / "campaigns/pricefm_stage_r111b_bg_exposure_readout_20260922"
 RSCRIPT = Path("/data/jaguir26/local/opt/R/4.6.0/bin/Rscript")
 THREAD_ENV = (
     "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
@@ -672,6 +673,23 @@ def materialize_r116_outer(campaign: Path, code_root: Path) -> pd.DataFrame:
     return result
 
 
+def load_r111b_contextual_references(root: Path | None = None) -> pd.DataFrame:
+    root = R111B if root is None else root
+    case_path = root / "pricefm_stage_r111b_bg_case_metrics.csv"
+    reference_path = root / "pricefm_stage_r111b_bg_references.csv"
+    missing = [str(path) for path in (case_path, reference_path) if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(f"missing frozen R111B contextual evidence: {missing}")
+    cases = pd.read_csv(case_path).assign(reference="R111B")
+    references = pd.read_csv(reference_path)
+    if "policy" not in references.columns:
+        raise RuntimeError(f"R111B reference table has no policy column: {reference_path}")
+    return pd.concat([
+        cases,
+        references.assign(reference=references["policy"]),
+    ], ignore_index=True, sort=False)
+
+
 def closeout_r116(campaign: Path) -> dict[str, Any]:
     metrics = pd.concat([
         pd.read_csv(campaign / f"runs/r116_outer_score/fold={fold}/metrics.csv")
@@ -715,18 +733,36 @@ def closeout_r116(campaign: Path) -> dict[str, Any]:
         {"gate": "interval_width_not_collapsed", "passed": width_d >= 0.8 * width_a, "value": width_d / width_a, "threshold": 0.8},
     ])
     gates.to_csv(campaign / "r116_transfer_gates.csv", index=False)
-    references = pd.concat([
-        pd.read_csv(R111B / "pricefm_stage_r111b_bg_case_metrics.csv").assign(reference="R111B"),
-        pd.read_csv(R111B / "pricefm_stage_r111b_bg_references.csv").assign(reference=lambda frame: frame.policy),
-    ], ignore_index=True, sort=False)
+    references = load_r111b_contextual_references()
     references.to_csv(campaign / "r116_contextual_references.csv", index=False)
     authorized = bool(gates.passed.all())
     selected = json.loads((campaign / "r116_selected_family.json").read_text())
+    selected_driver = json.loads((campaign / "r114_selected_driver.json").read_text())["family"]
+    driver_contrast_identifiable = selected_driver != "normal_rhs"
+    if not driver_contrast_identifiable:
+        metric_columns = ["AQL", "AQCR", "coverage_10_90", "width_10_90"]
+        indexed = metrics.set_index(["fold", "cell"])
+        for left, right in (("A", "B"), ("C", "D")):
+            left_values = indexed.xs(left, level="cell")[metric_columns].sort_index().to_numpy()
+            right_values = indexed.xs(right, level="cell")[metric_columns].sort_index().to_numpy()
+            if not np.allclose(left_values, right_values, rtol=0.0, atol=1e-12):
+                raise RuntimeError(
+                    f"selected Normal RHS driver requires {left}={right}, but metrics differ"
+                )
     summary = {
         "stage": "R116", "status": "completed_r116_factorial_closeout",
         "selected_family": selected["family"], "cell_A_pooled_AQL": a,
         "cell_D_pooled_AQL": d, "cell_D_minus_A": d - a,
-        "cell_D_fold_wins": fold_wins, "all_transfer_gates_passed": authorized,
+        "cell_D_fold_wins": fold_wins,
+        "transfer_gates_passed": int(gates.passed.sum()),
+        "transfer_gates_total": int(len(gates)),
+        "all_transfer_gates_passed": authorized,
+        "selected_driver_family": selected_driver,
+        "driver_contrast_identifiable": driver_contrast_identifiable,
+        "mechanism_interpretation": (
+            "driver_and_readout_factorial"
+            if driver_contrast_identifiable else "readout_only_driver_axis_degenerate"
+        ),
         "r117_preparation_authorized": authorized, "test_opened": False,
         "registry_mutated": False, "article_mutated": False,
         "mcmc_fitted": False, "joint_model_fitted": False,
@@ -739,7 +775,11 @@ def closeout_r116(campaign: Path) -> dict[str, Any]:
         f"- Prespecified bridge Cell D pooled AQL: `{d:.6f}`.",
         f"- Cell D minus Cell A: `{d - a:.6f}`.",
         f"- Fold wins for Cell D: `{fold_wins}/3`.",
+        f"- Transfer gates passed: `{int(gates.passed.sum())}/{len(gates)}`.",
         f"- All transfer gates passed: `{str(authorized).lower()}`.",
+        f"- Selected driver family: `{selected_driver}`.",
+        f"- Driver contrast identifiable: `{str(driver_contrast_identifiable).lower()}`.",
+        "- When the selected driver is Normal RHS, A=B and C=D; the realized contrast is readout-only.",
         "- Registry, article, MCMC, joint-model, and all-region work remained blocked.",
     ]
     (campaign / "r116_closeout.md").write_text("\n".join(report) + "\n")

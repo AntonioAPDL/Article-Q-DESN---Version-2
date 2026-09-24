@@ -45,6 +45,17 @@ app_joint_recursive_read_contract <- function(
     mcmc_state_rescue_draws_per_chain = as.integer(optional(
       "mcmc_state_rescue_draws_per_chain", get("mcmc_state_draws_per_chain")
     )),
+    mcmc_available_draws_per_chain_al = as.integer(optional(
+      "mcmc_available_draws_per_chain_al",
+      optional("mcmc_available_draws_per_chain", get("mcmc_score_draws_per_chain"))
+    )),
+    mcmc_available_draws_per_chain_exal = as.integer(optional(
+      "mcmc_available_draws_per_chain_exal",
+      optional("mcmc_available_draws_per_chain", get("mcmc_score_draws_per_chain"))
+    )),
+    mcmc_state_rescue_policy = optional(
+      "mcmc_state_rescue_policy", "fixed_per_chain"
+    ),
     vb_state_rescue_draws = as.integer(optional(
       "vb_state_rescue_draws", get("state_draws_extension")
     )),
@@ -65,7 +76,8 @@ app_joint_recursive_read_contract <- function(
   expected_weights <- c(0.025, 0.100, 0.200, 0.250, 0.200, 0.100, 0.025)
   supported <- c(
     "joint_qdesn_recursive_mean_forecast_v1",
-    "joint_qdesn_recursive_mean_forecast_v2"
+    "joint_qdesn_recursive_mean_forecast_v2",
+    "joint_qdesn_recursive_mean_forecast_v3"
   )
   if (!out$version %in% supported ||
       !identical(out$tau, expected_tau) ||
@@ -83,6 +95,19 @@ app_joint_recursive_read_contract <- function(
         out$vb_state_rescue_draws != out$vb_score_draws ||
         !grepl("^[0-9a-f]{64}$", out$parent_contract_sha256))) {
     stop("Recursive v2 rescue policy is malformed.", call. = FALSE)
+  }
+  if (identical(out$version, "joint_qdesn_recursive_mean_forecast_v3") &&
+      (!identical(out$state_half_split_method, "within_chain_alternating") ||
+        !identical(out$state_extension_trigger, "either_stability_gate") ||
+        out$mcmc_available_draws_per_chain_al != 750L ||
+        out$mcmc_available_draws_per_chain_exal != 1500L ||
+        !identical(out$mcmc_state_rescue_policy,
+          "all_available_by_likelihood") ||
+        out$mcmc_score_draws_per_chain >
+          out$mcmc_available_draws_per_chain_al ||
+        out$vb_state_rescue_draws != out$vb_score_draws ||
+        !grepl("^[0-9a-f]{64}$", out$parent_contract_sha256))) {
+    stop("Recursive v3 cardinality policy is malformed.", call. = FALSE)
   }
   out
 }
@@ -257,6 +282,9 @@ app_joint_recursive_mcmc_draws <- function(
     draws <- app_read_csv(path)
     beta <- app_joint_recursive_select_block(draws, "beta")
     alpha <- app_joint_recursive_select_block(draws, "alpha")
+    if (nrow(beta) != nrow(alpha) || nrow(beta) < as.integer(n_per_chain)) {
+      stop("Recursive MCMC source has fewer retained draws than declared.", call. = FALSE)
+    }
     selected <- if (isTRUE(use_all)) seq_len(nrow(beta)) else {
       app_joint_qdesn_postscore_even_indices(nrow(beta), n_per_chain)
     }
@@ -279,6 +307,49 @@ app_joint_recursive_mcmc_draws <- function(
     alpha = do.call(rbind, lapply(blocks, `[[`, "alpha")),
     chain_id = unlist(lapply(blocks, `[[`, "chain_id"), use.names = FALSE),
     source_draw_index = unlist(lapply(blocks, `[[`, "source_draw_index"), use.names = FALSE)
+  )
+}
+
+app_joint_recursive_mcmc_available_per_chain <- function(cell, contract) {
+  if (!identical(
+      contract$mcmc_state_rescue_policy, "all_available_by_likelihood"
+  )) return(contract$mcmc_state_rescue_draws_per_chain)
+  family <- tolower(cell$likelihood_family[[1L]])
+  if (identical(family, "al")) {
+    contract$mcmc_available_draws_per_chain_al
+  } else if (identical(family, "exal")) {
+    contract$mcmc_available_draws_per_chain_exal
+  } else {
+    stop("Unknown recursive MCMC likelihood family.", call. = FALSE)
+  }
+}
+
+app_joint_recursive_mcmc_cardinality_audit <- function(source_root, contract) {
+  plan <- app_read_csv(file.path(source_root, "mcmc_worker_plan.csv"))
+  required <- c("worker_id", "chain_id", "model_cell_id", "likelihood_family")
+  app_check_required_columns(plan, required, "recursive MCMC worker plan")
+  observed <- vapply(plan$worker_id, function(worker_id) {
+    path <- file.path(
+      source_root, "mcmc_workers", sprintf("worker_%04d", as.integer(worker_id)),
+      "posterior_draws.csv.gz"
+    )
+    if (!file.exists(path)) return(NA_integer_)
+    connection <- gzfile(path, open = "rt")
+    on.exit(close(connection), add = TRUE)
+    length(readLines(connection, warn = FALSE)) - 1L
+  }, integer(1L))
+  expected <- vapply(seq_len(nrow(plan)), function(index) {
+    app_joint_recursive_mcmc_available_per_chain(plan[index, , drop = FALSE], contract)
+  }, integer(1L))
+  data.frame(
+    worker_id = plan$worker_id,
+    chain_id = plan$chain_id,
+    model_cell_id = plan$model_cell_id,
+    likelihood_family = plan$likelihood_family,
+    expected_retained_draws = expected,
+    observed_retained_draws = observed,
+    pass = !is.na(observed) & observed == expected,
+    stringsAsFactors = FALSE
   )
 }
 
@@ -489,17 +560,20 @@ app_joint_recursive_half_assignment <- function(
 
 app_joint_recursive_state_tiers <- function(cell, contract) {
   if (identical(cell$inference_method[[1L]], "mcmc")) {
+    rescue_per_chain <- app_joint_recursive_mcmc_available_per_chain(
+      cell, contract
+    )
     tiers <- data.frame(
       tier = c("initial", "extension", "full_posterior_rescue"),
       draws = 5L * c(
         contract$mcmc_state_draws_per_chain,
         contract$state_draws_extension %/% 5L,
-        contract$mcmc_state_rescue_draws_per_chain
+        rescue_per_chain
       ),
       draws_per_chain = c(
         contract$mcmc_state_draws_per_chain,
         contract$state_draws_extension %/% 5L,
-        contract$mcmc_state_rescue_draws_per_chain
+        rescue_per_chain
       ),
       use_all = c(FALSE, FALSE, TRUE),
       stringsAsFactors = FALSE
@@ -606,6 +680,16 @@ app_joint_recursive_write_failure_diagnostics <- function(
   app_write_csv(diagnostics, file.path(directory, "failure_diagnostics.csv"))
 }
 
+app_joint_recursive_write_stability_progress <- function(
+  directory, diagnostics, contract
+) {
+  app_ensure_dir(directory)
+  progress <- diagnostics
+  progress$contract_version <- contract$version
+  progress$contract_sha256 <- app_sha256_file(contract$path)
+  app_write_csv(progress, file.path(directory, "stability_progress.csv"))
+}
+
 app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract) {
   dirs <- app_joint_recursive_dirs(root)
   plan <- app_read_csv(file.path(root, "cell_plan.csv"))
@@ -631,7 +715,9 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
   final_draws <- if (cell$inference_method[[1L]] == "mcmc") {
     app_joint_recursive_mcmc_draws(
       source_root, cell, contract$mcmc_score_draws_per_chain,
-      cell$score_seed[[1L]], use_all = TRUE
+      cell$score_seed[[1L]], use_all = !identical(
+        contract$version, "joint_qdesn_recursive_mean_forecast_v3"
+      )
     )
   } else app_joint_recursive_vb_draws(
     source_root, cell, contract$vb_score_draws, cell$score_seed[[1L]]
@@ -677,6 +763,13 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
       diagnostics, finite_pass & rms_pass & score_pass
     )
     tier_diagnostics[[tier_index]] <- diagnostics
+    app_joint_recursive_write_stability_progress(
+      final_dir,
+      app_joint_qdesn_bind_rows(
+        tier_diagnostics[!vapply(tier_diagnostics, is.null, logical(1L))]
+      ),
+      contract
+    )
     if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
       selected_tier <- tier_index
       break
@@ -858,10 +951,16 @@ app_joint_recursive_prepare <- function(
   root, source_root, contract_path = app_joint_recursive_contract_path()
 ) {
   contract <- app_joint_recursive_read_contract(contract_path)
-  if (identical(contract$version, "joint_qdesn_recursive_mean_forecast_v2")) {
-    parent_path <- app_joint_recursive_contract_path()
+  if (contract$version %in% c(
+      "joint_qdesn_recursive_mean_forecast_v2",
+      "joint_qdesn_recursive_mean_forecast_v3")) {
+    parent_path <- if (identical(
+      contract$version, "joint_qdesn_recursive_mean_forecast_v2"
+    )) app_joint_recursive_contract_path() else app_path(
+      "application/config/joint_qdesn_recursive_mean_forecast_contract_v2.csv"
+    )
     if (!identical(app_sha256_file(parent_path), contract$parent_contract_sha256)) {
-      stop("Recursive v2 parent-contract hash differs.", call. = FALSE)
+      stop("Recursive parent-contract hash differs.", call. = FALSE)
     }
   }
   source_root <- normalizePath(source_root, mustWork = TRUE)
@@ -891,6 +990,16 @@ app_joint_recursive_prepare <- function(
       sum(plans$cells$inference_method == "mcmc") != 32L ||
       nrow(plans$oracle) != 32L || sum(app_as_bool_vec(plans$oracle$is_primary)) != 16L) {
     stop("Recursive worker-plan cardinality differs from contract.", call. = FALSE)
+  }
+  mcmc_cardinality <- NULL
+  if (identical(contract$version, "joint_qdesn_recursive_mean_forecast_v3")) {
+    mcmc_cardinality <- app_joint_recursive_mcmc_cardinality_audit(
+      source_root, contract
+    )
+    if (nrow(mcmc_cardinality) != 160L ||
+        any(!app_as_bool_vec(mcmc_cardinality$pass))) {
+      stop("Recursive source MCMC cardinality differs from v3 contract.", call. = FALSE)
+    }
   }
 
   teacher <- lapply(unique(plans$cells$scenario_id), function(id) {
@@ -955,6 +1064,12 @@ app_joint_recursive_prepare <- function(
     origin_snapshot_manifest = app_write_csv(teacher,
       file.path(dirs$root, "origin_snapshot_manifest.csv"))
   )
+  if (!is.null(mcmc_cardinality)) {
+    paths <- c(paths, source_mcmc_cardinality = app_write_csv(
+      mcmc_cardinality,
+      file.path(dirs$root, "source_mcmc_cardinality_audit.csv")
+    ))
+  }
   app_joint_shared_write_manifest(dirs$root, paths, "preflight_artifact_manifest.csv")
   list(root = dirs$root, source_root = source_root, teacher = teacher,
     cells = plans$cells, oracle = plans$oracle)
@@ -1130,7 +1245,9 @@ app_joint_recursive_finalize <- function(root, contract) {
       any(mean_diagnostics$half_score_relative_difference > contract$mean_design_score_gate)) {
     stop("Recursive final scientific gates did not pass.", call. = FALSE)
   }
-  if (identical(contract$version, "joint_qdesn_recursive_mean_forecast_v2") &&
+  if (contract$version %in% c(
+      "joint_qdesn_recursive_mean_forecast_v2",
+      "joint_qdesn_recursive_mean_forecast_v3") &&
       any(mean_diagnostics$half_split_method != contract$state_half_split_method)) {
     stop("Recursive final packet mixes half-split contracts.", call. = FALSE)
   }

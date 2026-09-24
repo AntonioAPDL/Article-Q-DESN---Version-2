@@ -157,4 +157,6 @@ The focused recursive forecast tests are
 `test_joint_qdesn_recursive_mean_score_packet.R`. They cover finite-grid
 inverse-CDF synthesis, teacher-forced design equivalence, empirical
 expected-check algebra, posterior adapters, coupling, and the frozen
-eight-worker execution contract.
+eight-worker execution contract. The score-packet test also verifies v2
+within-chain half balancing, either-gate extension, and the full-draw rescue
+tiers.

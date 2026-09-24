@@ -188,6 +188,7 @@ case "$MODE" in
         JOINT_RECURSIVE_MEAN_WORKERS=8 \
         JOINT_RECURSIVE_MEAN_RUNTIME_ROOT=$(printf '%q' "$ROOT") \
         JOINT_RECURSIVE_MEAN_SOURCE_ROOT=$(printf '%q' "$SOURCE_ROOT") \
+        JOINT_RECURSIVE_MEAN_CONTRACT=$(printf '%q' "$CONTRACT") \
         bash $(printf '%q' "$0") --internal >$(printf '%q' "$ROOT/controller.log") 2>&1"
     echo "Launched $SESSION with eight physical-core workers."
     ;;

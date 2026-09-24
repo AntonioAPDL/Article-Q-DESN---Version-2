@@ -226,7 +226,8 @@ app_joint_recursive_teacher_forced_audit <- function(
 
 app_joint_recursive_mean_design <- function(
   design, fixture, selected, beta_draws, alpha_draws, uniforms,
-  tail_rule = "endpoint_clamp"
+  tail_rule = "endpoint_clamp", half_assignment = NULL,
+  diagnostic_group = NULL
 ) {
   beta_draws <- as.matrix(beta_draws)
   alpha_draws <- as.matrix(alpha_draws)
@@ -244,9 +245,32 @@ app_joint_recursive_mean_design <- function(
   total <- total_sq <- matrix(0, nrow = n_score, ncol = p)
   path_min <- matrix(Inf, nrow = n_score, ncol = p)
   path_max <- matrix(-Inf, nrow = n_score, ncol = p)
-  split_at <- floor(n_draw / 2L)
+  if (is.null(half_assignment)) {
+    half_assignment <- rep(c(1L, 2L), length.out = n_draw)
+  }
+  half_assignment <- as.integer(half_assignment)
+  if (length(half_assignment) != n_draw ||
+      !all(half_assignment %in% c(1L, 2L)) ||
+      length(unique(half_assignment)) != 2L) {
+    stop("Recursive mean-design half assignment is malformed.", call. = FALSE)
+  }
   half_sum <- list(matrix(0, n_score, p), matrix(0, n_score, p))
-  half_n <- c(split_at, n_draw - split_at)
+  half_n <- tabulate(half_assignment, nbins = 2L)
+  if (is.null(diagnostic_group) || all(is.na(diagnostic_group))) {
+    group_index <- rep(NA_integer_, n_draw)
+    group_labels <- character()
+  } else {
+    diagnostic_group <- as.character(diagnostic_group)
+    if (length(diagnostic_group) != n_draw || anyNA(diagnostic_group)) {
+      stop("Recursive mean-design diagnostic groups are malformed.", call. = FALSE)
+    }
+    group_labels <- unique(diagnostic_group)
+    group_index <- match(diagnostic_group, group_labels)
+  }
+  group_sum <- lapply(group_labels, function(x) matrix(0, n_score, p))
+  group_n <- if (length(group_labels)) {
+    tabulate(group_index, nbins = length(group_labels))
+  } else integer()
 
   for (draw_index in seq_len(n_draw)) {
     path <- matrix(NA_real_, nrow = n_score, ncol = p)
@@ -276,8 +300,12 @@ app_joint_recursive_mean_design <- function(
     total_sq <- total_sq + path^2
     path_min <- pmin(path_min, path)
     path_max <- pmax(path_max, path)
-    half <- if (draw_index <= split_at) 1L else 2L
+    half <- half_assignment[[draw_index]]
     half_sum[[half]] <- half_sum[[half]] + path
+    if (!is.na(group_index[[draw_index]])) {
+      group <- group_index[[draw_index]]
+      group_sum[[group]] <- group_sum[[group]] + path
+    }
   }
   mean_design <- total / n_draw
   variance <- pmax((total_sq - total^2 / n_draw) / (n_draw - 1L), 0)
@@ -289,12 +317,19 @@ app_joint_recursive_mean_design <- function(
   colnames(mean_design) <- colnames(variance) <- colnames(design$Z)
   colnames(path_min) <- colnames(path_max) <- colnames(design$Z)
   colnames(half_mean[[1L]]) <- colnames(half_mean[[2L]]) <- colnames(design$Z)
+  group_mean <- Map(`/`, group_sum, group_n)
+  names(group_mean) <- group_labels
+  group_mean <- lapply(group_mean, function(x) {
+    colnames(x) <- colnames(design$Z)
+    x
+  })
   list(
     mean_design = mean_design,
     variance = variance,
     minimum = path_min,
     maximum = path_max,
     half_mean = half_mean,
+    group_mean = group_mean,
     diagnostics = data.frame(
       scenario_id = design$scenario_id,
       inference_draws = n_draw,

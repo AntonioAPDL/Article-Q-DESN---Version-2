@@ -8,11 +8,64 @@ if (!exists("app_joint_recursive_read_contract", mode = "function")) {
 }
 
 contract <- app_joint_recursive_read_contract()
+contract_v2 <- app_joint_recursive_read_contract(app_path(
+  "application/config/joint_qdesn_recursive_mean_forecast_contract_v2.csv"
+))
 stopifnot(
   contract$workers == 8L,
   contract$score_rows == 990L,
   identical(contract$tau, c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)),
-  identical(contract$weights, c(0.025, 0.100, 0.200, 0.250, 0.200, 0.100, 0.025))
+  identical(contract$weights, c(0.025, 0.100, 0.200, 0.250, 0.200, 0.100, 0.025)),
+  identical(contract_v2$state_half_split_method, "within_chain_alternating"),
+  identical(contract_v2$state_extension_trigger, "either_stability_gate"),
+  contract_v2$mcmc_state_rescue_draws_per_chain == 750L,
+  contract_v2$vb_state_rescue_draws == 4000L
+)
+
+chain_id <- rep(1:5, each = 8L)
+balanced_half <- app_joint_recursive_half_assignment(
+  chain_id, "within_chain_alternating"
+)
+stopifnot(
+  all(table(chain_id, balanced_half) == 4L),
+  identical(
+    app_joint_recursive_half_assignment(rep(NA_integer_, 6L),
+      "within_chain_alternating"),
+    c(1L, 2L, 1L, 2L, 1L, 2L)
+  )
+)
+
+fake_mcmc_cell <- data.frame(inference_method = "mcmc")
+fake_vb_cell <- data.frame(inference_method = "vb")
+stopifnot(
+  identical(app_joint_recursive_state_tiers(fake_mcmc_cell, contract_v2)$draws,
+    c(1000L, 2000L, 3750L)),
+  identical(app_joint_recursive_state_tiers(fake_vb_cell, contract_v2)$draws,
+    c(1000L, 2000L, 4000L)),
+  app_joint_recursive_should_extend(data.frame(
+    finite_pass = TRUE, rms_pass = TRUE, score_pass = FALSE
+  ), contract_v2),
+  !app_joint_recursive_should_extend(data.frame(
+    finite_pass = TRUE, rms_pass = TRUE, score_pass = FALSE
+  ), contract)
+)
+
+failure_dir <- tempfile("joint_recursive_failure_")
+on.exit(unlink(failure_dir, recursive = TRUE, force = TRUE), add = TRUE)
+failure_diagnostics <- data.frame(
+  tier = c("initial", "extension"), rms_pass = c(TRUE, TRUE),
+  score_pass = c(FALSE, FALSE)
+)
+app_joint_recursive_write_failure_diagnostics(
+  failure_dir, failure_diagnostics, contract_v2, "test failure"
+)
+persisted_failure <- app_read_csv(file.path(
+  failure_dir, "failure_diagnostics.csv"
+))
+stopifnot(
+  nrow(persisted_failure) == 2L,
+  all(persisted_failure$contract_version == contract_v2$version),
+  all(persisted_failure$failure_message == "test failure")
 )
 
 mean <- c(-0.5, 0.3, 1.2)

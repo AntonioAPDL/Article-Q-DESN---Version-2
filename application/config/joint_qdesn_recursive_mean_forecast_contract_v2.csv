@@ -1,0 +1,33 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_recursive_mean_forecast_v2,string,Corrected forecast-only reconstruction contract with chain-balanced stability diagnostics.
+identity,parent_contract_sha256,1a1d0d37552b26edc0d5008677fc778a44f20a355d1b255a34b758600a3095bb,string,SHA-256 of the preserved failed v1 contract.
+identity,run_tag,joint_qdesn_recursive_mean_forecast_v2_jerez_20260924,string,Ignored corrected runtime tag.
+source,source_git_head,ca1cffa155cc5a3491f2492eeef83a31d30044bf,string,Corrected-v4 fitted-evidence source commit.
+source,source_inventory_sha256,e4b98fe89a8a0c2323f8205c1abef608ff733bc5ec323ea6372198caca02191d,string,Authoritative corrected-v4 transfer inventory hash.
+source,source_inventory_files,2970,integer,Expected source inventory rows.
+source,source_inventory_bytes,387506202,numeric,Expected source inventory bytes.
+geometry,tau_grid,0.05;0.10;0.25;0.50;0.75;0.90;0.95,numeric_vector,Frozen seven-level quantile grid.
+geometry,trapezoidal_weights,0.025;0.100;0.200;0.250;0.200;0.100;0.025,numeric_vector,Unnormalized finite-grid quadrature weights.
+geometry,origins,33,integer,Rolling forecast origins per scenario.
+geometry,horizons,30,integer,Open-loop horizons per origin.
+geometry,score_rows,990,integer,Origin-horizon score rows per scenario.
+oracle,oracle_paths_per_shard,2048,integer,Recursive DGP paths per oracle shard.
+oracle,oracle_primary_shards,16,integer,Two primary shards for each of eight scenarios.
+oracle,oracle_split_tolerance,0.0025,numeric,Relative split-half oracle score tolerance.
+oracle,oracle_horizon1_tolerance,0.01,numeric,Relative horizon-one analytic agreement tolerance.
+state,state_draws,1000,integer,Initial recursive mean-design paths per cell.
+state,state_draws_extension,2000,integer,First extended mean-design paths per cell.
+state,mcmc_state_draws_per_chain,200,integer,Initial chain-balanced state draws from each of five MCMC chains.
+state,mcmc_state_rescue_draws_per_chain,750,integer,Final rescue tier using every retained draw from each MCMC chain.
+state,vb_state_rescue_draws,4000,integer,Final rescue tier for variational state integration.
+state,state_half_split_method,within_chain_alternating,string,Alternate draws within each MCMC chain and across iid VB draws.
+score,mcmc_score_draws_per_chain,750,integer,Final score draws from each MCMC chain.
+score,vb_score_draws,4000,integer,Final partial-VB readout draws.
+score,score_chunk_size,100,integer,Final score evaluation chunk size.
+gates,mean_design_rms_gate,0.10,numeric,Stratified half-sample RMS difference in full-sample SD units.
+gates,mean_design_score_gate,0.005,numeric,Relative canonical score difference between stratified mean-design halves.
+gates,state_extension_trigger,either_stability_gate,string,Extend whenever RMS or canonical-score stability fails.
+gates,tail_sensitivity_gate,0.05,numeric,Relative sentinel score sensitivity requiring review above five percent.
+synthesis,inverse_cdf_tail_rule,endpoint_clamp,string,Primary finite-grid quantile-function completion.
+execution,workers,8,integer,Exactly eight one-thread physical-core workers on Jerez.
+execution,rscript,/data/jaguir26/local/opt/R/4.6.0/bin/Rscript,string,Pinned Jerez R executable.

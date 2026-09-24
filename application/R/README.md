@@ -237,3 +237,6 @@ Tracked helper files:
   generate recursive response-dependent designs, those designs are summarized
   before a separate readout draw is applied, and forecasts are scored against
   an origin-marginal recursive DGP oracle. These modules never refit a model.
+  The v2 stability audit alternates diagnostic halves within each MCMC chain,
+  reports between-chain state-score sensitivity separately, and extends the
+  numerical state integral when either stability criterion fails.

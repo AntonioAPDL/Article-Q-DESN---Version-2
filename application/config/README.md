@@ -452,3 +452,9 @@ recursive mean-design reconstruction of the corrected JOINT evidence. It uses
 the seven-level quantile grid, an origin-marginal DGP-integrated finite-grid
 aCRPS, 33 origins by 30 horizons, no refitting, and exactly eight one-thread
 physical-core workers on Jerez.
+
+`joint_qdesn_recursive_mean_forecast_contract_v2.csv` preserves the same
+forecast estimand and fitted sources while correcting the state-integration
+audit. It alternates diagnostic halves within each MCMC chain, extends state
+integration when either stability gate fails, and permits a final all-draw
+rescue tier without relaxing either threshold.

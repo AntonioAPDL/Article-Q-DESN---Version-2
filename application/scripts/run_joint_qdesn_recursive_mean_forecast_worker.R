@@ -24,6 +24,25 @@ tryCatch({
   worker_id <- as.integer(args[["worker-id"]] %||% args$worker_id)
   directory <- app_joint_recursive_cell_dir(args$root, worker_id)
   app_ensure_dir(directory)
+  failure_path <- file.path(directory, "failure_diagnostics.csv")
+  if (!file.exists(failure_path)) {
+    progress_path <- file.path(directory, "stability_progress.csv")
+    diagnostics <- if (file.exists(progress_path)) {
+      progress <- app_read_csv(progress_path)
+      progress[, setdiff(names(progress), c(
+        "contract_version", "contract_sha256", "failure_message"
+      )), drop = FALSE]
+    } else {
+      data.frame(
+        tier_index = NA_integer_, tier = NA_character_,
+        half_split_method = contract$state_half_split_method,
+        stringsAsFactors = FALSE
+      )
+    }
+    app_joint_recursive_write_failure_diagnostics(
+      directory, diagnostics, contract, conditionMessage(error)
+    )
+  }
   writeLines(conditionMessage(error), file.path(directory, "FAILED"))
   stop(error)
 })

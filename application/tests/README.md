@@ -159,4 +159,7 @@ inverse-CDF synthesis, teacher-forced design equivalence, empirical
 expected-check algebra, posterior adapters, coupling, and the frozen
 eight-worker execution contract. The score-packet test also verifies v2
 within-chain half balancing, either-gate extension, and the full-draw rescue
-tiers.
+tiers. It verifies the v3 separation between likelihood-specific all-draw
+state rescue (750 per AL chain and 1,500 per exAL chain) and the exact
+750-per-chain final score sample, including source cardinality when the
+corrected runtime is locally available.

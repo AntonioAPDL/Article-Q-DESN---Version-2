@@ -11,6 +11,9 @@ contract <- app_joint_recursive_read_contract()
 contract_v2 <- app_joint_recursive_read_contract(app_path(
   "application/config/joint_qdesn_recursive_mean_forecast_contract_v2.csv"
 ))
+contract_v3 <- app_joint_recursive_read_contract(app_path(
+  "application/config/joint_qdesn_recursive_mean_forecast_contract_v3.csv"
+))
 stopifnot(
   contract$workers == 8L,
   contract$score_rows == 990L,
@@ -19,7 +22,14 @@ stopifnot(
   identical(contract_v2$state_half_split_method, "within_chain_alternating"),
   identical(contract_v2$state_extension_trigger, "either_stability_gate"),
   contract_v2$mcmc_state_rescue_draws_per_chain == 750L,
-  contract_v2$vb_state_rescue_draws == 4000L
+  contract_v2$vb_state_rescue_draws == 4000L,
+  identical(contract_v3$state_half_split_method, "within_chain_alternating"),
+  identical(contract_v3$state_extension_trigger, "either_stability_gate"),
+  contract_v3$mcmc_available_draws_per_chain_al == 750L,
+  contract_v3$mcmc_available_draws_per_chain_exal == 1500L,
+  identical(contract_v3$mcmc_state_rescue_policy,
+    "all_available_by_likelihood"),
+  contract_v3$mcmc_score_draws_per_chain == 750L
 )
 
 chain_id <- rep(1:5, each = 8L)
@@ -37,10 +47,22 @@ stopifnot(
 
 fake_mcmc_cell <- data.frame(inference_method = "mcmc")
 fake_vb_cell <- data.frame(inference_method = "vb")
+fake_mcmc_al_cell <- data.frame(
+  inference_method = "mcmc", likelihood_family = "AL"
+)
+fake_mcmc_exal_cell <- data.frame(
+  inference_method = "mcmc", likelihood_family = "exAL"
+)
 stopifnot(
   identical(app_joint_recursive_state_tiers(fake_mcmc_cell, contract_v2)$draws,
     c(1000L, 2000L, 3750L)),
   identical(app_joint_recursive_state_tiers(fake_vb_cell, contract_v2)$draws,
+    c(1000L, 2000L, 4000L)),
+  identical(app_joint_recursive_state_tiers(fake_mcmc_al_cell, contract_v3)$draws,
+    c(1000L, 2000L, 3750L)),
+  identical(app_joint_recursive_state_tiers(fake_mcmc_exal_cell, contract_v3)$draws,
+    c(1000L, 2000L, 7500L)),
+  identical(app_joint_recursive_state_tiers(fake_vb_cell, contract_v3)$draws,
     c(1000L, 2000L, 4000L)),
   app_joint_recursive_should_extend(data.frame(
     finite_pass = TRUE, rms_pass = TRUE, score_pass = FALSE
@@ -66,6 +88,20 @@ stopifnot(
   nrow(persisted_failure) == 2L,
   all(persisted_failure$contract_version == contract_v2$version),
   all(persisted_failure$failure_message == "test failure")
+)
+
+progress_dir <- tempfile("joint_recursive_progress_")
+on.exit(unlink(progress_dir, recursive = TRUE, force = TRUE), add = TRUE)
+app_joint_recursive_write_stability_progress(
+  progress_dir, failure_diagnostics, contract_v3
+)
+persisted_progress <- app_read_csv(file.path(
+  progress_dir, "stability_progress.csv"
+))
+stopifnot(
+  nrow(persisted_progress) == 2L,
+  all(persisted_progress$contract_version == contract_v3$version),
+  all(persisted_progress$contract_sha256 == app_sha256_file(contract_v3$path))
 )
 
 mean <- c(-0.5, 0.3, 1.2)
@@ -134,6 +170,38 @@ if (length(source_root) && !is.na(source_root)) {
     nrow(vb$beta) == 100L,
     nrow(vb$covariance_repair) == length(contract$tau),
     !vb$alpha_uncertainty_included
+  )
+  for (family in c("AL", "exAL")) {
+    mcmc <- plans$cells[
+      plans$cells$inference_method == "mcmc" &
+        plans$cells$likelihood_family == family, , drop = FALSE
+    ][1L, ]
+    available <- if (family == "AL") {
+      contract_v3$mcmc_available_draws_per_chain_al
+    } else contract_v3$mcmc_available_draws_per_chain_exal
+    score_draws <- app_joint_recursive_mcmc_draws(
+      source_root, mcmc, contract_v3$mcmc_score_draws_per_chain, 992L,
+      use_all = FALSE
+    )
+    rescue_draws <- app_joint_recursive_mcmc_draws(
+      source_root, mcmc, available, 993L, use_all = TRUE
+    )
+    stopifnot(
+      nrow(score_draws$beta) == 5L * contract_v3$mcmc_score_draws_per_chain,
+      nrow(rescue_draws$beta) == 5L * available,
+      all(table(score_draws$chain_id) == contract_v3$mcmc_score_draws_per_chain),
+      all(table(rescue_draws$chain_id) == available)
+    )
+  }
+  cardinality <- app_joint_recursive_mcmc_cardinality_audit(
+    source_root, contract_v3
+  )
+  stopifnot(
+    nrow(cardinality) == 160L,
+    all(cardinality$pass),
+    identical(
+      sort(unique(cardinality$observed_retained_draws)), c(750L, 1500L)
+    )
   )
 }
 

@@ -458,3 +458,10 @@ forecast estimand and fitted sources while correcting the state-integration
 audit. It alternates diagnostic halves within each MCMC chain, extends state
 integration when either stability gate fails, and permits a final all-draw
 rescue tier without relaxing either threshold.
+
+`joint_qdesn_recursive_mean_forecast_contract_v3.csv` corrects the retained-
+draw cardinality discovered during the preserved failed v2 execution. Each AL
+source chain contains 750 retained draws and each exAL source chain contains
+1,500. The state-integration rescue uses all available draws by likelihood,
+while final posterior score summaries use exactly 750 draws per chain for
+both families. The forecast estimand and stability gates remain unchanged.

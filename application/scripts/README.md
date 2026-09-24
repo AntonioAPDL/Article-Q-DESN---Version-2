@@ -643,6 +643,14 @@ Ridge A/B/guardrail, RHS-prior, RHS-architecture, and confirmation DAG. The
 controller waits for the preceding GloFAS closeout and a live resource gate
 before starting at most 20 Muscat workers.
 
+Strict closeout remains the default. When an audited overlap is scientifically
+independent and resources have been verified, `432` accepts
+`--allow-compatible-closeout-overlap`. That mode admits only one exact Part 4
+joint-exAL continuation worker paired with its known tmux session; any AL or
+quantile worker, extra matching process, unpaired session, or unknown closeout
+activity still fails closed. `--max-total-workers` separately caps Search III
+plus the admitted worker against physical CPU cores, memory, disk, and load.
+
 The follow-on certification restart is a separate, minimal campaign.
 `416_prepare_glofas_quantile_certification_restart.py` audits and hash-binds
 only the nine iteration-200 fits lacking a terminal certificate.

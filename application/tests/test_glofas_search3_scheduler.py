@@ -43,6 +43,69 @@ class Search3SchedulerTest(unittest.TestCase):
         self.assertIn("389_continue_glofas_part4_joint_fit.R", controller.ACTIVE_PATTERNS)
         self.assertIn("423_run_glofas_quantile_certification_continuation.R", controller.ACTIVE_PATTERNS)
 
+    def test_strict_gate_blocks_active_exal(self):
+        process = " ".join(controller.COMPATIBLE_OVERLAP_PROCESS_TOKENS)
+        ok, state = controller.closeout_gate(
+            ROOT,
+            matched_processes=[process],
+            active_session_names={controller.COMPATIBLE_OVERLAP_SESSION},
+            cert_complete=True,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(state["policy"], "strict")
+        self.assertEqual(state["overlap_workers"], 0)
+
+    def test_explicit_gate_allows_exactly_one_compatible_exal(self):
+        process = " ".join(controller.COMPATIBLE_OVERLAP_PROCESS_TOKENS)
+        ok, state = controller.closeout_gate(
+            ROOT,
+            allow_compatible_closeout_overlap=True,
+            matched_processes=[process],
+            active_session_names={controller.COMPATIBLE_OVERLAP_SESSION},
+            cert_complete=True,
+        )
+        self.assertTrue(ok)
+        self.assertTrue(state["overlap_pair_valid"])
+        self.assertEqual(state["overlap_workers"], 1)
+
+    def test_overlap_gate_rejects_extra_or_unpaired_work(self):
+        process = " ".join(controller.COMPATIBLE_OVERLAP_PROCESS_TOKENS)
+        quantile = "Rscript 423_run_glofas_quantile_certification_continuation.R"
+        cases = (
+            ([process, process], {controller.COMPATIBLE_OVERLAP_SESSION}),
+            ([process, quantile], {controller.COMPATIBLE_OVERLAP_SESSION}),
+            ([process], set()),
+            ([], {controller.COMPATIBLE_OVERLAP_SESSION}),
+        )
+        for processes, session_names in cases:
+            with self.subTest(processes=processes, sessions=session_names):
+                ok, state = controller.closeout_gate(
+                    ROOT,
+                    allow_compatible_closeout_overlap=True,
+                    matched_processes=processes,
+                    active_session_names=session_names,
+                    cert_complete=True,
+                )
+                self.assertFalse(ok)
+                self.assertEqual(state["overlap_workers"], 0)
+
+    def test_combined_physical_worker_budget(self):
+        common = {
+            "logical_cpus": 64,
+            "physical_cpus": 32,
+            "available_memory_gib": 480,
+            "data_free_gib": 300,
+            "load1": 2.0,
+            "workers": 20,
+            "max_total_workers": 28,
+        }
+        ok, state = controller.evaluate_resource_state(overlap_workers=1, **common)
+        self.assertTrue(ok)
+        self.assertEqual(state["planned_total_workers"], 21)
+        ok, state = controller.evaluate_resource_state(overlap_workers=9, **common)
+        self.assertFalse(ok)
+        self.assertEqual(state["planned_total_workers"], 29)
+
 
 if __name__ == "__main__":
     unittest.main()

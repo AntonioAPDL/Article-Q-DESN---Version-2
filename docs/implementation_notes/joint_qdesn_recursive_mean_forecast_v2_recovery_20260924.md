@@ -4,7 +4,7 @@ Date: 2026-09-24
 
 Lane: `work/joint-qdesn-recursive-mean-forecast-jerez-20260924`
 
-Status: implementation and full Jerez relaunch checklist
+Status: closed failed; preserved for diagnosis and not promotable
 
 ## Decision
 
@@ -147,12 +147,26 @@ canonical-score difference at most `0.005`. No post hoc relaxation is allowed.
 - [x] Add full-posterior rescue tier.
 - [x] Persist successful and failed tier diagnostics.
 - [x] Propagate the selected contract through tmux.
-- [ ] Pass all focused tests on Muscat and Jerez.
-- [ ] Commit and push the dedicated branch.
-- [ ] Pass the clean Jerez preflight.
-- [ ] Launch and verify v2 oracle and sentinel gates.
+- [x] Pass all focused tests on Muscat and Jerez.
+- [x] Commit and push the dedicated branch.
+- [x] Pass the clean Jerez preflight.
+- [x] Launch and verify v2 oracle and sentinel gates.
 - [ ] Complete and finalize 64/64 cells.
 - [ ] Freeze hashes, compare estimands, and prepare an integration handoff.
+
+## Terminal execution outcome
+
+The v2 queue closed naturally on 2026-09-24 with 16/16 primary oracle shards,
+8/8 oracle banks, 63/64 completed forecast cells, one failed cell, and no
+remaining worker or tmux process. Worker 35, the asymmetric-Laplace-tail joint
+exAL MCMC cell, failed on `Recursive state tier produced an unexpected draw
+count.` The controller failed closed before finalization. The ignored v2
+runtime occupies approximately 629 MiB and is retained as diagnostic evidence.
+
+Subsequent source audit established that AL chains contain 750 retained draws
+while exAL chains contain 1,500. The v2 rescue contract incorrectly expected
+750 for both. The separate v3 cardinality-recovery document freezes the root
+correction; no v2 result is promotable.
 
 No article, Overleaf, PriceFM, GloFAS, Phase182, historical JOINT runtime, or
 fitted posterior object belongs to this lane.

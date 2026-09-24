@@ -97,7 +97,8 @@ design, and posterior readout uncertainty conditional on that mean design.
 - [x] Add durable per-tier failure progress.
 - [x] Pass focused Muscat tests, including all-source cardinality.
 - [ ] Commit and push v3 on the dedicated branch.
-- [ ] Observe a natural terminal v2 state and freeze its failure evidence.
+- [x] Observe a natural terminal v2 state: 63/64 complete, one cardinality
+  failure, zero active workers, and no finalization.
 - [ ] Pass focused Jerez tests at the exact v3 commit.
 - [ ] Pass Jerez capacity and source-inventory preflight.
 - [ ] Pass 16/16 oracle shards, 8/8 banks, and 3/3 sentinels.

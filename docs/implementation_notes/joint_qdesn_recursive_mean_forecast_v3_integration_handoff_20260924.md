@@ -138,12 +138,13 @@ have been resolved.
 
 ## Integration surface
 
-The branch changes 25 tracked files after this handoff commit: three recursive
-R modules, three versioned
-contracts, eight bootstrap/prepare/worker/check/finalize/launch scripts and
-READMEs, three focused test files plus test registration, and three planning/
-closeout notes plus this handoff. Use `git diff --name-status
-origin/main...HEAD` after the handoff commit for the authoritative list.
+The branch changes 25 tracked files after this handoff commit: four R-surface
+files (three modules and one README), four configuration files (three
+versioned contracts and one README), eight script-surface files (seven scripts
+and one README), five test-surface files (three focused tests, the test runner,
+and one README), and four planning/closeout documents including this handoff.
+Use `git diff --name-status origin/main...HEAD` after the handoff commit for
+the authoritative list.
 
 Article-safe files to publish now: none. The final CSV packet is candidate
 scientific evidence for review, not an article replacement.

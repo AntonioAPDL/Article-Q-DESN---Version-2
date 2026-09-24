@@ -629,3 +629,6 @@ JOINT_RECURSIVE_MEAN_CPU_LIST=<eight-audited-logical-cpus> \
 The launcher verifies the transferred corrected-v4 runtime, freezes recursive
 DGP oracle banks, runs three design-class sentinels, and then processes all 64
 VB/MCMC forecast reconstructions through an eight-slot affinity queue.
+Set `JOINT_RECURSIVE_MEAN_CONTRACT` and
+`JOINT_RECURSIVE_MEAN_RUNTIME_ROOT` explicitly for the v2 recovery campaign;
+the detached controller propagates and records the selected contract.

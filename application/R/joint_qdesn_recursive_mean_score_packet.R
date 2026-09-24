@@ -16,6 +16,12 @@ app_joint_recursive_read_contract <- function(
     if (nrow(row) != 1L) stop(sprintf("Missing recursive contract field '%s'.", name), call. = FALSE)
     as.character(row$value[[1L]])
   }
+  optional <- function(name, default = NA_character_) {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (!nrow(row)) return(default)
+    if (nrow(row) != 1L) stop(sprintf("Duplicate recursive contract field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
   nums <- function(name) as.numeric(strsplit(get(name), ";", fixed = TRUE)[[1L]])
   out <- list(
     table = tab,
@@ -36,6 +42,15 @@ app_joint_recursive_read_contract <- function(
     state_draws = as.integer(get("state_draws")),
     state_draws_extension = as.integer(get("state_draws_extension")),
     mcmc_state_draws_per_chain = as.integer(get("mcmc_state_draws_per_chain")),
+    mcmc_state_rescue_draws_per_chain = as.integer(optional(
+      "mcmc_state_rescue_draws_per_chain", get("mcmc_state_draws_per_chain")
+    )),
+    vb_state_rescue_draws = as.integer(optional(
+      "vb_state_rescue_draws", get("state_draws_extension")
+    )),
+    state_half_split_method = optional("state_half_split_method", "contiguous"),
+    state_extension_trigger = optional("state_extension_trigger", "rms_only"),
+    parent_contract_sha256 = optional("parent_contract_sha256", NA_character_),
     mcmc_score_draws_per_chain = as.integer(get("mcmc_score_draws_per_chain")),
     vb_score_draws = as.integer(get("vb_score_draws")),
     score_chunk_size = as.integer(get("score_chunk_size")),
@@ -48,7 +63,11 @@ app_joint_recursive_read_contract <- function(
   )
   expected_tau <- c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
   expected_weights <- c(0.025, 0.100, 0.200, 0.250, 0.200, 0.100, 0.025)
-  if (!identical(out$version, "joint_qdesn_recursive_mean_forecast_v1") ||
+  supported <- c(
+    "joint_qdesn_recursive_mean_forecast_v1",
+    "joint_qdesn_recursive_mean_forecast_v2"
+  )
+  if (!out$version %in% supported ||
       !identical(out$tau, expected_tau) ||
       !identical(out$weights, expected_weights) ||
       out$origins != 33L || out$horizons != 30L || out$score_rows != 990L ||
@@ -56,6 +75,14 @@ app_joint_recursive_read_contract <- function(
       out$mcmc_score_draws_per_chain != 750L || out$vb_score_draws != 4000L ||
       !identical(out$inverse_cdf_tail_rule, "endpoint_clamp")) {
     stop("Recursive mean-design forecast contract is malformed.", call. = FALSE)
+  }
+  if (identical(out$version, "joint_qdesn_recursive_mean_forecast_v2") &&
+      (!identical(out$state_half_split_method, "within_chain_alternating") ||
+        !identical(out$state_extension_trigger, "either_stability_gate") ||
+        out$mcmc_state_rescue_draws_per_chain != out$mcmc_score_draws_per_chain ||
+        out$vb_state_rescue_draws != out$vb_score_draws ||
+        !grepl("^[0-9a-f]{64}$", out$parent_contract_sha256))) {
+    stop("Recursive v2 rescue policy is malformed.", call. = FALSE)
   }
   out
 }
@@ -442,6 +469,143 @@ app_joint_recursive_atomic_manifest <- function(directory, paths) {
   invisible(manifest)
 }
 
+app_joint_recursive_half_assignment <- function(
+  chain_id, method = "within_chain_alternating"
+) {
+  chain_id <- as.integer(chain_id)
+  n <- length(chain_id)
+  if (n < 2L) stop("Recursive half assignment requires at least two draws.", call. = FALSE)
+  if (identical(method, "contiguous")) {
+    return(c(rep(1L, floor(n / 2L)), rep(2L, n - floor(n / 2L))))
+  }
+  if (!identical(method, "within_chain_alternating")) {
+    stop(sprintf("Unknown recursive half-split method '%s'.", method), call. = FALSE)
+  }
+  if (all(is.na(chain_id))) return(rep(c(1L, 2L), length.out = n))
+  if (anyNA(chain_id)) stop("MCMC state draws have partial chain identifiers.", call. = FALSE)
+  within_chain <- ave(seq_len(n), chain_id, FUN = seq_along)
+  ifelse(within_chain %% 2L == 1L, 1L, 2L)
+}
+
+app_joint_recursive_state_tiers <- function(cell, contract) {
+  if (identical(cell$inference_method[[1L]], "mcmc")) {
+    tiers <- data.frame(
+      tier = c("initial", "extension", "full_posterior_rescue"),
+      draws = 5L * c(
+        contract$mcmc_state_draws_per_chain,
+        contract$state_draws_extension %/% 5L,
+        contract$mcmc_state_rescue_draws_per_chain
+      ),
+      draws_per_chain = c(
+        contract$mcmc_state_draws_per_chain,
+        contract$state_draws_extension %/% 5L,
+        contract$mcmc_state_rescue_draws_per_chain
+      ),
+      use_all = c(FALSE, FALSE, TRUE),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    tiers <- data.frame(
+      tier = c("initial", "extension", "full_posterior_rescue"),
+      draws = c(
+        contract$state_draws,
+        contract$state_draws_extension,
+        contract$vb_state_rescue_draws
+      ),
+      draws_per_chain = NA_integer_, use_all = FALSE,
+      stringsAsFactors = FALSE
+    )
+  }
+  tiers <- tiers[!duplicated(tiers$draws), , drop = FALSE]
+  if (!identical(contract$state_extension_trigger, "either_stability_gate")) {
+    tiers <- tiers[tiers$tier != "full_posterior_rescue", , drop = FALSE]
+  }
+  rownames(tiers) <- NULL
+  tiers
+}
+
+app_joint_recursive_state_draws_for_tier <- function(
+  source_root, cell, tier, seed
+) {
+  out <- if (identical(cell$inference_method[[1L]], "mcmc")) {
+    app_joint_recursive_mcmc_draws(
+      source_root, cell, as.integer(tier$draws_per_chain[[1L]]), seed,
+      use_all = isTRUE(tier$use_all[[1L]])
+    )
+  } else {
+    app_joint_recursive_vb_draws(
+      source_root, cell, as.integer(tier$draws[[1L]]), seed
+    )
+  }
+  if (nrow(out$beta) != as.integer(tier$draws[[1L]])) {
+    stop("Recursive state tier produced an unexpected draw count.", call. = FALSE)
+  }
+  out
+}
+
+app_joint_recursive_add_score_stability <- function(
+  mean_result, beta_mean, alpha_mean, oracle, contract
+) {
+  half_scores <- vapply(mean_result$half_mean, function(z) {
+    app_joint_recursive_canonical_metrics(
+      z, beta_mean, alpha_mean, oracle, contract$tau, contract$weights
+    )$origin_marginal_dgp_integrated_acrps[[1L]]
+  }, numeric(1L))
+  half_relative <- abs(diff(half_scores)) / max(abs(mean(half_scores)), 1e-12)
+  pooled_score <- app_joint_recursive_canonical_metrics(
+    mean_result$mean_design, beta_mean, alpha_mean,
+    oracle, contract$tau, contract$weights
+  )$origin_marginal_dgp_integrated_acrps[[1L]]
+  group_scores <- if (length(mean_result$group_mean)) {
+    vapply(mean_result$group_mean, function(z) {
+      app_joint_recursive_canonical_metrics(
+        z, beta_mean, alpha_mean, oracle, contract$tau, contract$weights
+      )$origin_marginal_dgp_integrated_acrps[[1L]]
+    }, numeric(1L))
+  } else numeric()
+  group_relative <- if (length(group_scores)) {
+    max(abs(group_scores - pooled_score)) / max(abs(pooled_score), 1e-12)
+  } else NA_real_
+  mean_result$diagnostics$half_score_1 <- half_scores[[1L]]
+  mean_result$diagnostics$half_score_2 <- half_scores[[2L]]
+  mean_result$diagnostics$half_score_relative_difference <- half_relative
+  mean_result$diagnostics$pooled_canonical_score <- pooled_score
+  mean_result$diagnostics$chain_score_min <- if (length(group_scores)) min(group_scores) else NA_real_
+  mean_result$diagnostics$chain_score_max <- if (length(group_scores)) max(group_scores) else NA_real_
+  mean_result$diagnostics$chain_score_max_relative_deviation <- group_relative
+  mean_result
+}
+
+app_joint_recursive_stability_flags <- function(mean_result, contract) {
+  diagnostics <- mean_result$diagnostics
+  data.frame(
+    finite_pass = isTRUE(diagnostics$finite[[1L]]),
+    rms_pass = isTRUE(diagnostics$standardized_rms_half_difference[[1L]] <=
+      contract$mean_design_rms_gate),
+    score_pass = isTRUE(diagnostics$half_score_relative_difference[[1L]] <=
+      contract$mean_design_score_gate),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_recursive_should_extend <- function(flags, contract) {
+  if (!isTRUE(flags$finite_pass[[1L]]) || !isTRUE(flags$rms_pass[[1L]])) {
+    return(TRUE)
+  }
+  identical(contract$state_extension_trigger, "either_stability_gate") &&
+    !isTRUE(flags$score_pass[[1L]])
+}
+
+app_joint_recursive_write_failure_diagnostics <- function(
+  directory, diagnostics, contract, message
+) {
+  app_ensure_dir(directory)
+  diagnostics$contract_version <- contract$version
+  diagnostics$contract_sha256 <- app_sha256_file(contract$path)
+  diagnostics$failure_message <- message
+  app_write_csv(diagnostics, file.path(directory, "failure_diagnostics.csv"))
+}
+
 app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract) {
   dirs <- app_joint_recursive_dirs(root)
   plan <- app_read_csv(file.path(root, "cell_plan.csv"))
@@ -464,51 +628,6 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
   oracle <- readRDS(oracle_path)
   if (oracle$diagnostics$status[[1L]] != "pass") stop("Recursive DGP oracle is not frozen.", call. = FALSE)
 
-  state_draws <- if (cell$inference_method[[1L]] == "mcmc") {
-    app_joint_recursive_mcmc_draws(
-      source_root, cell, contract$mcmc_state_draws_per_chain,
-      cell$state_seed[[1L]], use_all = FALSE
-    )
-  } else app_joint_recursive_vb_draws(
-    source_root, cell, contract$state_draws, cell$state_seed[[1L]]
-  )
-  set.seed(as.integer(cell$uniform_seed[[1L]]))
-  uniforms <- matrix(stats::runif(nrow(state_draws$beta) * contract$score_rows),
-    nrow = nrow(state_draws$beta), ncol = contract$score_rows
-  )
-  mean_result <- app_joint_recursive_mean_design(
-    design, fixture, selected_row, state_draws$beta, state_draws$alpha,
-    uniforms, contract$inverse_cdf_tail_rule
-  )
-  extended <- FALSE
-  if (mean_result$diagnostics$standardized_rms_half_difference[[1L]] >
-      contract$mean_design_rms_gate) {
-    extended <- TRUE
-    state_draws <- if (cell$inference_method[[1L]] == "mcmc") {
-      app_joint_recursive_mcmc_draws(
-        source_root, cell,
-        contract$state_draws_extension %/% 5L,
-        cell$state_seed[[1L]], use_all = FALSE
-      )
-    } else app_joint_recursive_vb_draws(
-      source_root, cell, contract$state_draws_extension, cell$state_seed[[1L]]
-    )
-    set.seed(as.integer(cell$uniform_seed[[1L]]))
-    uniforms <- matrix(stats::runif(nrow(state_draws$beta) * contract$score_rows),
-      nrow = nrow(state_draws$beta), ncol = contract$score_rows
-    )
-    mean_result <- app_joint_recursive_mean_design(
-      design, fixture, selected_row, state_draws$beta, state_draws$alpha,
-      uniforms, contract$inverse_cdf_tail_rule
-    )
-  }
-  mean_result$diagnostics$extended <- extended
-  if (!mean_result$diagnostics$finite[[1L]] ||
-      mean_result$diagnostics$standardized_rms_half_difference[[1L]] >
-        contract$mean_design_rms_gate) {
-    stop("Recursive mean-design stability gate failed.", call. = FALSE)
-  }
-
   final_draws <- if (cell$inference_method[[1L]] == "mcmc") {
     app_joint_recursive_mcmc_draws(
       source_root, cell, contract$mcmc_score_draws_per_chain,
@@ -517,29 +636,83 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
   } else app_joint_recursive_vb_draws(
     source_root, cell, contract$vb_score_draws, cell$score_seed[[1L]]
   )
+  beta_mean <- colMeans(final_draws$beta)
+  alpha_mean <- colMeans(final_draws$alpha)
+
+  tiers <- app_joint_recursive_state_tiers(cell, contract)
+  tier_diagnostics <- vector("list", nrow(tiers))
+  mean_result <- state_draws <- uniforms <- NULL
+  selected_tier <- NA_integer_
+  for (tier_index in seq_len(nrow(tiers))) {
+    tier <- tiers[tier_index, , drop = FALSE]
+    state_draws <- app_joint_recursive_state_draws_for_tier(
+      source_root, cell, tier, cell$state_seed[[1L]]
+    )
+    set.seed(as.integer(cell$uniform_seed[[1L]]))
+    uniforms <- matrix(stats::runif(nrow(state_draws$beta) * contract$score_rows),
+      nrow = nrow(state_draws$beta), ncol = contract$score_rows
+    )
+    half_assignment <- app_joint_recursive_half_assignment(
+      state_draws$chain_id, contract$state_half_split_method
+    )
+    mean_result <- app_joint_recursive_mean_design(
+      design, fixture, selected_row, state_draws$beta, state_draws$alpha,
+      uniforms, contract$inverse_cdf_tail_rule,
+      half_assignment = half_assignment,
+      diagnostic_group = state_draws$chain_id
+    )
+    mean_result <- app_joint_recursive_add_score_stability(
+      mean_result, beta_mean, alpha_mean, oracle, contract
+    )
+    flags <- app_joint_recursive_stability_flags(mean_result, contract)
+    diagnostics <- cbind(
+      data.frame(
+        tier_index = tier_index, tier = tier$tier[[1L]],
+        half_split_method = contract$state_half_split_method,
+        stringsAsFactors = FALSE
+      ),
+      mean_result$diagnostics, flags
+    )
+    diagnostics$all_stability_pass <- with(
+      diagnostics, finite_pass & rms_pass & score_pass
+    )
+    tier_diagnostics[[tier_index]] <- diagnostics
+    if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
+      selected_tier <- tier_index
+      break
+    }
+    extend_for_failure <- app_joint_recursive_should_extend(flags, contract)
+    if (!extend_for_failure) break
+  }
+  tier_diagnostics <- app_joint_qdesn_bind_rows(
+    tier_diagnostics[!vapply(tier_diagnostics, is.null, logical(1L))]
+  )
+  if (is.na(selected_tier)) {
+    final_flags <- tail(tier_diagnostics, 1L)
+    message <- if (!isTRUE(final_flags$finite_pass[[1L]]) ||
+        !isTRUE(final_flags$rms_pass[[1L]])) {
+      "Recursive mean-design stability gate failed after all declared tiers."
+    } else {
+      "Recursive half-sample canonical-score stability gate failed after all declared tiers."
+    }
+    app_joint_recursive_write_failure_diagnostics(
+      final_dir, tier_diagnostics, contract, message
+    )
+    stop(message, call. = FALSE)
+  }
+  mean_result$diagnostics$extended <- selected_tier > 1L
+  mean_result$diagnostics$selected_tier <- tiers$tier[[selected_tier]]
+  mean_result$diagnostics$half_split_method <- contract$state_half_split_method
+
   draws <- app_joint_recursive_score_draws(
     mean_result$mean_design, final_draws$beta, final_draws$alpha,
     oracle, contract$tau, contract$weights, contract$score_chunk_size,
     final_draws$chain_id, final_draws$source_draw_index
   )
-  beta_mean <- colMeans(final_draws$beta); alpha_mean <- colMeans(final_draws$alpha)
   canonical <- app_joint_recursive_canonical_metrics(
     mean_result$mean_design, beta_mean, alpha_mean,
     oracle, contract$tau, contract$weights
   )
-  half_scores <- vapply(mean_result$half_mean, function(z) {
-    app_joint_recursive_canonical_metrics(
-      z, beta_mean, alpha_mean, oracle, contract$tau, contract$weights
-    )$origin_marginal_dgp_integrated_acrps[[1L]]
-  }, numeric(1L))
-  half_relative <- abs(diff(half_scores)) / max(abs(mean(half_scores)), 1e-12)
-  mean_result$diagnostics$half_score_1 <- half_scores[[1L]]
-  mean_result$diagnostics$half_score_2 <- half_scores[[2L]]
-  mean_result$diagnostics$half_score_relative_difference <- half_relative
-  if (half_relative > contract$mean_design_score_gate) {
-    stop("Recursive half-sample canonical-score stability gate failed.", call. = FALSE)
-  }
-
   tail <- data.frame(
     endpoint_clamp_score = NA_real_, truncated_grid_score = NA_real_,
     relative_difference = NA_real_, tolerance = contract$tail_sensitivity_gate,
@@ -601,6 +774,8 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
     summary = app_write_csv(summary, file.path(tmp, "summary.csv")),
     mean_design = { saveRDS(mean_result$mean_design, file.path(tmp, "mean_design.rds")); normalizePath(file.path(tmp, "mean_design.rds")) },
     mean_design_diagnostics = app_write_csv(mean_result$diagnostics, file.path(tmp, "mean_design_diagnostics.csv")),
+    stability_tier_diagnostics = app_write_csv(tier_diagnostics,
+      file.path(tmp, "stability_tier_diagnostics.csv")),
     posterior_score_draws = write_gz(draws, file.path(tmp, "posterior_score_draws.csv.gz")),
     quantile_action_summary = app_write_csv(canonical, file.path(tmp, "quantile_action_summary.csv")),
     crossing_summary = app_write_csv(crossing, file.path(tmp, "crossing_summary.csv")),
@@ -683,6 +858,12 @@ app_joint_recursive_prepare <- function(
   root, source_root, contract_path = app_joint_recursive_contract_path()
 ) {
   contract <- app_joint_recursive_read_contract(contract_path)
+  if (identical(contract$version, "joint_qdesn_recursive_mean_forecast_v2")) {
+    parent_path <- app_joint_recursive_contract_path()
+    if (!identical(app_sha256_file(parent_path), contract$parent_contract_sha256)) {
+      stop("Recursive v2 parent-contract hash differs.", call. = FALSE)
+    }
+  }
   source_root <- normalizePath(source_root, mustWork = TRUE)
   dirs <- app_joint_recursive_dirs(root)
   lapply(dirs, app_ensure_dir)
@@ -926,6 +1107,12 @@ app_joint_recursive_finalize <- function(root, contract) {
     x$worker_id <- worker_id
     x
   }))
+  tier_diagnostics <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
+    x <- app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id),
+      "stability_tier_diagnostics.csv"))
+    x$worker_id <- worker_id
+    x
+  }))
   crossing <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
     app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id), "crossing_summary.csv"))
   }))
@@ -937,8 +1124,15 @@ app_joint_recursive_finalize <- function(root, contract) {
   if (any(!is.finite(summaries$posterior_score_mean)) ||
       any(summaries$canonical_contract_crossing_pairs != 0) ||
       any(crossing$posterior_contract_crossing_pairs_max != 0) ||
+      any(!app_as_bool_vec(mean_diagnostics$finite)) ||
+      any(mean_diagnostics$standardized_rms_half_difference >
+        contract$mean_design_rms_gate) ||
       any(mean_diagnostics$half_score_relative_difference > contract$mean_design_score_gate)) {
     stop("Recursive final scientific gates did not pass.", call. = FALSE)
+  }
+  if (identical(contract$version, "joint_qdesn_recursive_mean_forecast_v2") &&
+      any(mean_diagnostics$half_split_method != contract$state_half_split_method)) {
+    stop("Recursive final packet mixes half-split contracts.", call. = FALSE)
   }
   contrasts <- app_joint_recursive_contrast_summary(root, summaries)
   winners <- app_joint_qdesn_bind_rows(lapply(split(summaries,
@@ -949,13 +1143,16 @@ app_joint_recursive_finalize <- function(root, contract) {
     }))
   health <- data.frame(
     gate = c("oracle_banks", "vb_cells", "mcmc_cells", "all_cells",
-      "finite_scores", "contract_crossings", "mean_design_stability"),
-    expected = c(8L, 32L, 32L, 64L, 64L, 0L, 64L),
+      "finite_scores", "contract_crossings", "mean_design_rms_stability",
+      "mean_design_score_stability"),
+    expected = c(8L, 32L, 32L, 64L, 64L, 0L, 64L, 64L),
     observed = c(nrow(oracle_manifest),
       sum(status$status == "complete" & status$inference_method == "vb"),
       sum(status$status == "complete" & status$inference_method == "mcmc"),
       sum(status$status == "complete"), sum(is.finite(summaries$posterior_score_mean)),
       sum(crossing$posterior_contract_crossing_pairs_max),
+      sum(mean_diagnostics$standardized_rms_half_difference <=
+        contract$mean_design_rms_gate),
       sum(mean_diagnostics$half_score_relative_difference <= contract$mean_design_score_gate)),
     status = "pass", stringsAsFactors = FALSE
   )
@@ -967,6 +1164,8 @@ app_joint_recursive_finalize <- function(root, contract) {
     "Recursive response paths are synthesized from monotone seven-level quantile grids,",
     "the complete response-dependent readout design is averaged by origin and horizon,",
     "and final score intervals vary readout coefficients conditional on that mean design.",
+    "Mean-design convergence uses alternating within-chain halves; chain-specific",
+    "score sensitivity is retained separately and is not conflated with integration error.",
     "VB intervals are partial because intercept covariance was not retained.",
     "The primary score is origin-marginal DGP-integrated finite-grid aCRPS."
   )
@@ -978,8 +1177,12 @@ app_joint_recursive_finalize <- function(root, contract) {
     winners = app_write_csv(winners, file.path(dirs$final, "scenario_winner_summary.csv")),
     crossings = app_write_csv(crossing, file.path(dirs$final, "crossing_summary.csv")),
     mean_design = app_write_csv(mean_diagnostics, file.path(dirs$final, "mean_design_diagnostics.csv")),
+    stability_tiers = app_write_csv(tier_diagnostics,
+      file.path(dirs$final, "stability_tier_diagnostics.csv")),
     tail_sensitivity = app_write_csv(tail, file.path(dirs$final, "tail_sensitivity_summary.csv")),
     health = app_write_csv(health, file.path(dirs$final, "final_health_summary.csv")),
+    effective_contract = app_write_csv(contract$table,
+      file.path(dirs$final, "effective_contract.csv")),
     readme = normalizePath(readme_path, mustWork = TRUE)
   )
   app_joint_shared_write_manifest(dirs$final, paths)

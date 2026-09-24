@@ -4,7 +4,9 @@ Date: 2026-09-24
 
 Lane: `work/joint-qdesn-recursive-mean-forecast-jerez-20260924`
 
-Status: implementation verified; Jerez forecast-only campaign launch pending
+Status: v1 campaign preserved incomplete; superseded for execution by the v2
+recovery contract documented in
+`joint_qdesn_recursive_mean_forecast_v2_recovery_20260924.md`
 
 ## Purpose
 

@@ -105,6 +105,8 @@ canonical-score difference at most `0.005`. No post hoc relaxation is allowed.
 - The launcher propagates the exact contract path into the detached tmux
   controller. This prevents a requested v2 run from silently reverting to the
   default v1 contract.
+- The comma-delimited CPU affinity is quoted in the preflight CSV, preserving
+  a valid eight-column provenance record.
 - Every successful cell retains selected-tier and all attempted-tier
   diagnostics.
 - A failed cell writes its complete tier diagnostics and effective contract

@@ -72,7 +72,7 @@ preflight_capacity() {
   } >"$ROOT/cpu_affinity_plan.csv"
   {
     echo "host,workers,cpu_list,free_disk_kib,available_memory_kib,git_head,checked_at,status"
-    printf '%s,%s,%s,%s,%s,%s,%s,pass\n' "$host" "$WORKERS" "$CPU_LIST" \
+    printf '%s,%s,"%s",%s,%s,%s,%s,pass\n' "$host" "$WORKERS" "$CPU_LIST" \
       "$free_kib" "$free_mem_kib" "$(git -C "$REPO_ROOT" rev-parse HEAD)" "$(date -Is)"
   } >"$ROOT/host_preflight.csv"
 }

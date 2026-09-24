@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 import threading
 import time
@@ -681,3 +682,44 @@ def test_r103_equivalence_audit_distinguishes_fit_from_forecast_operator(
     assert result[result.component.str.startswith("design_")].exact_match.all()
     assert result[result.component.eq("beta_mean")].max_abs_difference.le(1e-5).all()
     assert result[result.component.eq("recursive_prediction_scaled")].max_abs_difference.le(2e-3).all()
+
+
+def test_parent_provenance_resolves_updated_tracked_source_from_frozen_head(
+    tmp_path: Path,
+) -> None:
+    code_root = tmp_path / "code"
+    code_root.mkdir()
+    subprocess.run(["git", "init", "-q", str(code_root)], check=True)
+    subprocess.run(["git", "-C", str(code_root), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(code_root), "config", "user.email", "test@example.com"], check=True)
+    source = code_root / "tracked.py"
+    source.write_text("old source\n")
+    subprocess.run(["git", "-C", str(code_root), "add", "tracked.py"], check=True)
+    subprocess.run(["git", "-C", str(code_root), "commit", "-q", "-m", "old"], check=True)
+    head = subprocess.check_output(
+        ["git", "-C", str(code_root), "rev-parse", "HEAD"], text=True,
+    ).strip()
+    old_bytes = source.stat().st_size
+    old_sha = AUDIT.sha256_file(source)
+    source.write_text("new repaired source\n")
+
+    campaign = tmp_path / "campaign"
+    campaign.mkdir()
+    manifest = campaign / "source_manifest.csv"
+    pd.DataFrame([{
+        "role": "source", "path": str(source),
+        "bytes": old_bytes, "sha256": old_sha,
+    }]).to_csv(manifest, index=False)
+    contract = {
+        "code_root": str(code_root), "head": head,
+        "source_manifest_sha256": AUDIT.sha256_file(manifest),
+    }
+    contract["campaign_contract_sha256"] = AUDIT.canonical_hash(contract)
+    (campaign / "campaign_contract.json").write_text(json.dumps(contract))
+
+    records: dict[str, dict] = {}
+    AUDIT.verify_parent_provenance(campaign, records)
+
+    key = f"git:{head}:tracked.py"
+    assert records[key]["sha256"] == old_sha
+    assert records[key]["role"] == "parent_frozen_git_source"

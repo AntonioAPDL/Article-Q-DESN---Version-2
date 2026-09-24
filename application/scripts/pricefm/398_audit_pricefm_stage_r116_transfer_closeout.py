@@ -83,13 +83,44 @@ def verify_parent_provenance(
     required = {"path", "bytes", "sha256"}
     if not required.issubset(manifest.columns):
         raise RuntimeError(f"parent source manifest lacks {sorted(required - set(manifest.columns))}")
+    historical_code_root = Path(contract["code_root"]).resolve()
+    historical_head = str(contract["head"])
     for row in manifest.itertuples(index=False):
-        path = Path(row.path)
-        if not path.is_file():
-            raise FileNotFoundError(f"parent frozen source is missing: {path}")
-        if path.stat().st_size != int(row.bytes) or sha256_file(path) != str(row.sha256):
-            raise RuntimeError(f"parent frozen source changed: {path}")
-        add_source(records, path, "parent_frozen_source")
+        path = Path(row.path).resolve()
+        current_matches = (
+            path.is_file()
+            and path.stat().st_size == int(row.bytes)
+            and sha256_file(path) == str(row.sha256)
+        )
+        if current_matches:
+            add_source(records, path, "parent_frozen_source")
+            continue
+        try:
+            relative = path.relative_to(historical_code_root)
+        except ValueError as exc:
+            if not path.is_file():
+                raise FileNotFoundError(f"parent frozen source is missing: {path}") from exc
+            raise RuntimeError(f"parent frozen source changed: {path}") from exc
+        try:
+            payload = subprocess.check_output([
+                "git", "-C", str(historical_code_root), "show",
+                f"{historical_head}:{relative.as_posix()}",
+            ])
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                f"cannot resolve changed tracked source at frozen head: {path}"
+            ) from exc
+        observed_hash = hashlib.sha256(payload).hexdigest()
+        if len(payload) != int(row.bytes) or observed_hash != str(row.sha256):
+            raise RuntimeError(
+                f"frozen Git blob does not match parent source manifest: {path}"
+            )
+        records[f"git:{historical_head}:{relative.as_posix()}"] = {
+            "role": "parent_frozen_git_source",
+            "path": f"git:{historical_head}:{relative.as_posix()}",
+            "bytes": len(payload),
+            "sha256": observed_hash,
+        }
     return contract
 
 

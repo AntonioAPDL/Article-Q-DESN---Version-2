@@ -150,3 +150,11 @@ hash -r
 Rscript -e 'cat(R.version.string, "\n"); stopifnot(getRversion() >= "4.6.0")'
 Rscript application/tests/run_tests.R
 ```
+
+The focused recursive forecast tests are
+`test_joint_qdesn_recursive_mean_design.R`,
+`test_joint_qdesn_recursive_dgp_oracle.R`, and
+`test_joint_qdesn_recursive_mean_score_packet.R`. They cover finite-grid
+inverse-CDF synthesis, teacher-forced design equivalence, empirical
+expected-check algebra, posterior adapters, coupling, and the frozen
+eight-worker execution contract.

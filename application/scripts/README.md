@@ -616,3 +616,16 @@ before MCMC, requires all 160 MCMC workers before score finalization, and keeps
 the runtime ignored. Its shared-capacity preflight proves the non-overlapping
 11/20/1 physical-core allocation and permits only the exact audited PriceFM and
 GloFAS process families.
+
+The recursive mean-design JOINT forecast lane is launched only from its
+dedicated Jerez branch with:
+
+```sh
+JOINT_RECURSIVE_MEAN_ALLOW_PRODUCTION=JEREZ_8_PHYSICAL \
+JOINT_RECURSIVE_MEAN_CPU_LIST=<eight-audited-logical-cpus> \
+  application/scripts/launch_joint_qdesn_recursive_mean_forecast.sh --run-all
+```
+
+The launcher verifies the transferred corrected-v4 runtime, freezes recursive
+DGP oracle banks, runs three design-class sentinels, and then processes all 64
+VB/MCMC forecast reconstructions through an eight-slot affinity queue.

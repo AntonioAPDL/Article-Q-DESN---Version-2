@@ -446,3 +446,9 @@ scientific, posterior-target, score, and seed field while assigning JOINT to
 affinity, and physical core 0 (`0,32`) remains outside JOINT for the active
 GloFAS Part 4 continuation. Only those exact two campaigns are allowed to
 coexist; all other protected campaigns fail the preflight closed.
+
+`joint_qdesn_recursive_mean_forecast_contract_v1.csv` freezes the forecast-only
+recursive mean-design reconstruction of the corrected JOINT evidence. It uses
+the seven-level quantile grid, an origin-marginal DGP-integrated finite-grid
+aCRPS, 33 origins by 30 horizons, no refitting, and exactly eight one-thread
+physical-core workers on Jerez.

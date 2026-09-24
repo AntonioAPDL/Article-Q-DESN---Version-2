@@ -4,7 +4,7 @@ Date: 2026-09-24
 
 Lane: `work/joint-qdesn-recursive-mean-forecast-jerez-20260924`
 
-Status: implementation and clean full-rerun contract
+Status: complete; finalized v3 packet ready for integration review
 
 ## Decision
 
@@ -96,14 +96,41 @@ design, and posterior readout uncertainty conditional on that mean design.
 - [x] Keep all scientific gates and the forecast estimand unchanged.
 - [x] Add durable per-tier failure progress.
 - [x] Pass focused Muscat tests, including all-source cardinality.
-- [ ] Commit and push v3 on the dedicated branch.
+- [x] Commit and push v3 on the dedicated branch.
 - [x] Observe a natural terminal v2 state: 63/64 complete, one cardinality
   failure, zero active workers, and no finalization.
-- [ ] Pass focused Jerez tests at the exact v3 commit.
-- [ ] Pass Jerez capacity and source-inventory preflight.
-- [ ] Pass 16/16 oracle shards, 8/8 banks, and 3/3 sentinels.
-- [ ] Complete and finalize 64/64 cells with zero failures.
-- [ ] Freeze manifests, hashes, storage status, and integration handoff.
+- [x] Pass focused Jerez tests at the exact v3 commit.
+- [x] Pass Jerez capacity and source-inventory preflight.
+- [x] Pass 16/16 oracle shards, 8/8 banks, and 3/3 sentinels.
+- [x] Complete and finalize 64/64 cells with zero failures.
+- [x] Freeze manifests, hashes, storage status, and integration handoff.
+
+## Final execution result
+
+The v3 run completed and finalized on Jerez on 2026-09-24. All 16 primary
+oracle shards, eight oracle banks, 32 VB cells, and 32 MCMC cells completed;
+there were zero failures and zero contract crossings. All 160 source posterior
+files matched the frozen likelihood-specific cardinalities. Every MCMC score
+sample contains exactly 3,750 draws (750 from each of five chains), and every
+VB score sample contains 4,000 draws.
+
+Sixty-three cells passed the initial 1,000-state-path tier. Worker 39, the
+Gaussian-mixture-bridge joint exAL MCMC cell, failed only the initial
+half-score gate (`0.007340`), extended to 2,000 paths, and passed at
+`0.000611`. No cell needed full-posterior rescue. This directly validates the
+corrected either-gate extension logic without weakening the `0.005` gate.
+
+The completed packet is scientifically reviewable but should not be promoted
+automatically into the article. MCMC score-function diagnostics have maximum
+rank-normalized R-hat `1.1188` and minimum bulk ESS `33.6`, concentrated in a
+small number of joint cells. Moreover, relative to the earlier corrected-v4
+score packet, the median MCMC interval-width ratio is `1.207`; only 4 of 32
+cells narrowed. This is not evidence that recursive state uncertainty leaked
+into v3 scores: every posterior score draw uses the same stored posterior-mean
+recursive design. The older packet scores posterior readouts on the fixed
+validation design, while v3 scores on the newly reconstructed recursive mean
+design, so the interval-width comparison crosses forecast estimands. The
+remaining width is readout-posterior uncertainty under the recursive design.
 
 No article, Overleaf, PriceFM, GloFAS, Phase182, historical JOINT runtime, or
 fitted posterior object belongs to this lane.

@@ -47,6 +47,10 @@ CALENDAR_RECOVERY = load(
     "application/scripts/pricefm/395_prepare_pricefm_stage_r113_r116_calendar_recovery.py",
     "pricefm_r113_calendar_recovery",
 )
+CONVERGENCE_RECOVERY = load(
+    "application/scripts/pricefm/396_prepare_pricefm_stage_r113_r116_convergence_recovery.py",
+    "pricefm_r113_convergence_recovery",
+)
 
 
 def write_quantile_family(
@@ -322,6 +326,34 @@ def test_R_normal_driver_consumes_hashed_shared_calendar_with_embargo() -> None:
     assert "shared_calendar_sha256" in text
     assert "response_time < validation_start" in text
     assert "validate_origin_surface" in text
+
+
+def test_convergence_recovery_refits_only_failed_cell_and_accepts_reused_neighbors(
+    tmp_path: Path,
+) -> None:
+    assert CONVERGENCE_RECOVERY.FAILED_REGION == "GR"
+    assert CONVERGENCE_RECOVERY.FAILED_INNER_FOLD == 2
+    assert CONVERGENCE_RECOVERY.EXTENDED_MAX_ITER == 3000
+    times = [pd.Timestamp("2024-03-01", tz="UTC"), pd.Timestamp("2024-03-02", tz="UTC")]
+    calendars = tmp_path / "shared_calendars"
+    calendars.mkdir()
+    for inner in (1, 2, 3):
+        calendar = calendars / f"inner_fold_{inner}.csv"
+        pd.DataFrame({
+            "split": ["validation", "validation"],
+            "origin_market_time": times,
+            "calendar_order": [0, 1],
+        }).to_csv(calendar, index=False)
+        for region in ("GR", "RO"):
+            root = write_normal_paths(tmp_path, region, inner, times, aligned=True)
+            terminal = json.loads((root / "terminal.json").read_text())
+            terminal["shared_calendar_sha256"] = CONTROLLER.sha256_file(calendar)
+            (root / "terminal.json").write_text(json.dumps(terminal))
+    pd.DataFrame([{
+        "task_id": "only_failed_cell", "region": "GR", "inner_fold": 2,
+        "contract_path": "unused", "output_dir": "unused",
+    }]).to_csv(tmp_path / "r114_normal_driver_manifest.csv", index=False)
+    CONTROLLER.verify_aligned_neighbor_drivers(tmp_path)
 
 
 def test_r116_exal_cannot_be_materialized_without_al(tmp_path: Path) -> None:

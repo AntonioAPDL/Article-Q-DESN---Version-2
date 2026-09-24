@@ -202,22 +202,26 @@ def verify_reuse_manifest(campaign: Path, contract: dict[str, Any]) -> None:
 
 def verify_aligned_neighbor_drivers(campaign: Path) -> None:
     manifest = pd.read_csv(campaign / "r114_normal_driver_manifest.csv")
-    if len(manifest) != 6 or set(manifest.region.astype(str)) != {"GR", "RO"}:
-        raise RuntimeError("calendar recovery must contain exactly six GR/RO refit tasks")
-    for row in manifest.itertuples(index=False):
-        output = Path(row.output_dir)
-        contract = json.loads(Path(row.contract_path).read_text())
+    if manifest.empty or not set(manifest.region.astype(str)).issubset({"GR", "RO"}):
+        raise RuntimeError("calendar recovery refit manifest is empty or includes another region")
+    outputs = [
+        campaign / f"runs/r114_normal_driver/region={region}/inner={inner}"
+        for region in ("GR", "RO") for inner in (1, 2, 3)
+    ]
+    for output in outputs:
         terminal = json.loads((output / "terminal.json").read_text())
+        inner = int(output.name.split("=", 1)[1])
+        shared_path = campaign / f"shared_calendars/inner_fold_{inner}.csv"
         if (
             terminal.get("status") != "completed_r114_normal_driver"
             or terminal.get("calendar_alignment_mode") != "reference_region_shared_origin_times"
             or terminal.get("reference_region") != "BG"
             or terminal.get("calendar_key") != "origin_market_time_utc"
-            or terminal.get("shared_calendar_sha256") != contract.get("shared_calendar_sha256")
+            or terminal.get("shared_calendar_sha256") != sha256_file(shared_path)
             or terminal.get("test_opened") is not False
         ):
             raise RuntimeError(f"neighbor Normal driver lacks a valid calendar contract: {output}")
-        shared = pd.read_csv(contract["shared_calendar_path"])
+        shared = pd.read_csv(shared_path)
         expected = pd.DatetimeIndex(pd.to_datetime(
             shared.loc[shared.split.eq("validation"), "origin_market_time"], utc=True,
         )).asi8
@@ -244,6 +248,7 @@ def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, 
         or contract.get("status") not in {
             "prepared_training_only_not_launched", "prepared_recovery_not_launched",
             "prepared_calendar_recovery_not_launched",
+            "prepared_convergence_recovery_not_launched",
         }
         or not expected_hash
         or canonical_hash(unhashed) != expected_hash

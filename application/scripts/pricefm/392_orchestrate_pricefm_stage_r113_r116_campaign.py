@@ -200,6 +200,41 @@ def verify_reuse_manifest(campaign: Path, contract: dict[str, Any]) -> None:
             raise RuntimeError(f"reused R114 artifact changed: {artifact}")
 
 
+def verify_aligned_neighbor_drivers(campaign: Path) -> None:
+    manifest = pd.read_csv(campaign / "r114_normal_driver_manifest.csv")
+    if len(manifest) != 6 or set(manifest.region.astype(str)) != {"GR", "RO"}:
+        raise RuntimeError("calendar recovery must contain exactly six GR/RO refit tasks")
+    for row in manifest.itertuples(index=False):
+        output = Path(row.output_dir)
+        contract = json.loads(Path(row.contract_path).read_text())
+        terminal = json.loads((output / "terminal.json").read_text())
+        if (
+            terminal.get("status") != "completed_r114_normal_driver"
+            or terminal.get("calendar_alignment_mode") != "reference_region_shared_origin_times"
+            or terminal.get("reference_region") != "BG"
+            or terminal.get("calendar_key") != "origin_market_time_utc"
+            or terminal.get("shared_calendar_sha256") != contract.get("shared_calendar_sha256")
+            or terminal.get("test_opened") is not False
+        ):
+            raise RuntimeError(f"neighbor Normal driver lacks a valid calendar contract: {output}")
+        shared = pd.read_csv(contract["shared_calendar_path"])
+        expected = pd.DatetimeIndex(pd.to_datetime(
+            shared.loc[shared.split.eq("validation"), "origin_market_time"], utc=True,
+        )).asi8
+        observed_rows = pd.read_csv(output / "evaluation_rows.csv")
+        observed = pd.DatetimeIndex(pd.to_datetime(
+            observed_rows.origin_market_time.drop_duplicates(), utc=True,
+        )).asi8
+        alignment = pd.read_csv(output / "calendar_alignment_manifest.csv")
+        if (
+            not np.array_equal(observed, expected)
+            or len(observed_rows) != len(expected) * 96
+            or not alignment.exact_match.astype(bool).all()
+            or not alignment.requested_origins.eq(alignment.matched_origins).all()
+        ):
+            raise RuntimeError(f"neighbor Normal driver calendar verification failed: {output}")
+
+
 def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, Any], list[int]]:
     contract = json.loads((campaign / "campaign_contract.json").read_text())
     expected_hash = str(contract.get("campaign_contract_sha256", ""))
@@ -208,6 +243,7 @@ def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, 
         contract.get("stage") != "R113_R116"
         or contract.get("status") not in {
             "prepared_training_only_not_launched", "prepared_recovery_not_launched",
+            "prepared_calendar_recovery_not_launched",
         }
         or not expected_hash
         or canonical_hash(unhashed) != expected_hash
@@ -730,8 +766,10 @@ def main() -> int:
     spec.loader.exec_module(worker_module)
     python = sys.executable
 
-    recovery_mode = contract.get("resume_mode") == "reuse_completed_r114_fits"
-    if not recovery_mode:
+    resume_mode = contract.get("resume_mode")
+    reuse_completed_r114 = resume_mode == "reuse_completed_r114_fits"
+    calendar_recovery = resume_mode == "reuse_R114_then_refit_aligned_neighbors"
+    if not reuse_completed_r114:
         normal_tasks = []
         for row in pd.read_csv(campaign / "r114_normal_driver_manifest.csv").itertuples(index=False):
             output = Path(row.output_dir)
@@ -742,25 +780,29 @@ def main() -> int:
                     "log_path": campaign / f"logs/r114_normal/{row.task_id}.log",
                 })
         al_tasks = []
-        fit_manifest = pd.read_csv(campaign / "r114_fit_manifest.csv")
-        for row in fit_manifest[fit_manifest.family.eq("al")].itertuples(index=False):
-            if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
-                al_tasks.append({
-                    "task_id": row.task_id,
-                    "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
-                    "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
-                })
+        if not calendar_recovery:
+            fit_manifest = pd.read_csv(campaign / "r114_fit_manifest.csv")
+            for row in fit_manifest[fit_manifest.family.eq("al")].itertuples(index=False):
+                if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
+                    al_tasks.append({
+                        "task_id": row.task_id,
+                        "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
+                        "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
+                    })
         run_parallel(normal_tasks + al_tasks, cpus, campaign / "r114_batch1_status.csv")
 
-        exal_tasks = []
-        for row in fit_manifest[fit_manifest.family.eq("exal")].itertuples(index=False):
-            if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
-                exal_tasks.append({
-                    "task_id": row.task_id,
-                    "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
-                    "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
-                })
-        run_parallel(exal_tasks, cpus, campaign / "r114_batch2_status.csv")
+        if not calendar_recovery:
+            exal_tasks = []
+            for row in fit_manifest[fit_manifest.family.eq("exal")].itertuples(index=False):
+                if not valid_terminal(Path(row.output_dir), "completed_r114_quantile_family_fit"):
+                    exal_tasks.append({
+                        "task_id": row.task_id,
+                        "command": [str(RSCRIPT), str(code_root / "application/scripts/pricefm/389_run_pricefm_stage_r114_quantile_fit.R"), "--contract", row.contract_path],
+                        "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
+                    })
+            run_parallel(exal_tasks, cpus, campaign / "r114_batch2_status.csv")
+    if calendar_recovery:
+        verify_aligned_neighbor_drivers(campaign)
 
     _, eligible_families = r114_family_eligibility(
         campaign, worker_module, [str(value) for value in contract.get("families", ["al", "exal"])],

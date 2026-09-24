@@ -43,6 +43,10 @@ RECOVERY = load(
     "application/scripts/pricefm/394_prepare_pricefm_stage_r113_r116_recovery.py",
     "pricefm_r113_recovery",
 )
+CALENDAR_RECOVERY = load(
+    "application/scripts/pricefm/395_prepare_pricefm_stage_r113_r116_calendar_recovery.py",
+    "pricefm_r113_calendar_recovery",
+)
 
 
 def write_quantile_family(
@@ -219,6 +223,105 @@ def test_recovery_preserves_r114_files_and_freezes_new_lineage(tmp_path: Path) -
     reused = output / "runs/r114_fit/family=al/inner=1/tau=0p1/beta_mean.bin"
     assert source.stat().st_ino == reused.stat().st_ino
     assert not (output / "runs/r114_score").exists()
+
+
+def write_normal_paths(
+    campaign: Path, region: str, inner: int, origin_times: list[pd.Timestamp],
+    *, aligned: bool,
+) -> Path:
+    root = campaign / f"runs/r114_normal_driver/region={region}/inner={inner}"
+    root.mkdir(parents=True)
+    rows = pd.DataFrame({
+        "origin_id": np.repeat(np.arange(len(origin_times)), 96),
+        "origin_market_time": np.repeat(origin_times, 96),
+        "horizon": np.tile(np.arange(1, 97), len(origin_times)),
+    })
+    rows.to_csv(root / "evaluation_rows.csv", index=False)
+    values = np.repeat(np.arange(len(origin_times) * 96)[:, None], 500, axis=1)
+    values.astype("<f8").tofile(root / "prediction_paths_scaled.bin")
+    terminal = {
+        "status": "completed_r114_normal_driver", "test_opened": False,
+        "calendar_alignment_mode": (
+            "reference_region_shared_origin_times" if aligned else "region_local_nested_temporal"
+        ),
+        "reference_region": "BG" if aligned else region,
+        "calendar_key": "origin_market_time_utc" if aligned else "region_local_origin_id",
+    }
+    (root / "terminal.json").write_text(json.dumps(terminal))
+    if aligned:
+        pd.DataFrame([{
+            "split": "validation", "requested_origins": len(origin_times),
+            "matched_origins": len(origin_times), "exact_match": True,
+        }]).to_csv(root / "calendar_alignment_manifest.csv", index=False)
+    return root
+
+
+def test_normal_paths_align_by_UTC_calendar_not_local_origin_id(tmp_path: Path) -> None:
+    times = [pd.Timestamp("2024-01-01", tz="UTC"), pd.Timestamp("2024-01-02", tz="UTC")]
+    write_normal_paths(tmp_path, "GR", 1, times, aligned=True)
+    cube, keys = WORKER.load_normal_paths(
+        tmp_path, "GR", 1, require_reference_alignment=True,
+    )
+    aligned = WORKER.align_driver_paths(cube, keys, keys[::-1])
+    assert aligned.shape == (500, 2, 96)
+    assert aligned[0, 0, 0] == cube[0, 1, 0]
+    assert aligned[0, 1, 0] == cube[0, 0, 0]
+    with pytest.raises(RuntimeError, match="calendar differs from BG"):
+        WORKER.align_driver_paths(cube, keys, keys + pd.Timedelta(days=1).value)
+
+
+def test_normal_path_reader_rejects_incomplete_horizon_surface(tmp_path: Path) -> None:
+    root = write_normal_paths(
+        tmp_path, "RO", 2, [pd.Timestamp("2024-02-01", tz="UTC")], aligned=True,
+    )
+    rows = pd.read_csv(root / "evaluation_rows.csv")
+    rows.loc[95, "horizon"] = 95
+    rows.to_csv(root / "evaluation_rows.csv", index=False)
+    with pytest.raises(RuntimeError, match="horizons 1--96 exactly once"):
+        WORKER.load_normal_paths(tmp_path, "RO", 2, require_reference_alignment=True)
+
+
+def test_shared_calendar_is_derived_from_completed_BG_fit(tmp_path: Path) -> None:
+    parent = tmp_path / "parent"
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+    train_times = pd.date_range("2024-01-01", periods=4, freq="D", tz="UTC")
+    validation_times = pd.date_range("2024-01-05", periods=2, freq="D", tz="UTC")
+    all_times = train_times.append(validation_times)
+    rows = pd.DataFrame({
+        "origin_id": np.repeat(np.arange(len(all_times)), 96),
+        "origin_market_time": np.repeat(all_times, 96),
+        "response_market_time": np.repeat(all_times, 96),
+        "horizon": np.tile(np.arange(1, 97), len(all_times)),
+    })
+    rows.to_csv(adapter / "rows_train.csv", index=False)
+    old_contract = tmp_path / "old_contract.json"
+    old_contract.write_text(json.dumps({"adapter_dir": str(adapter)}))
+    (parent / "parent_metadata").mkdir(parents=True)
+    pd.DataFrame([{
+        "region": "BG", "inner_fold": 1, "contract_path": str(old_contract),
+    }]).to_csv(parent / "parent_metadata/r114_normal_driver_manifest.csv", index=False)
+    bg = parent / "runs/r114_normal_driver/region=BG/inner=1"
+    bg.mkdir(parents=True)
+    (bg / "terminal.json").write_text(json.dumps({
+        "status": "completed_r114_normal_driver",
+    }))
+    rows[rows.origin_id.ge(4)].to_csv(bg / "evaluation_rows.csv", index=False)
+    pd.DataFrame([{
+        "n_train_origins": 4, "n_validation_origins": 2,
+    }]).to_csv(bg / "embargo_summary.csv", index=False)
+    calendar, source = CALENDAR_RECOVERY.build_shared_calendar(parent, 1)
+    assert source == adapter / "rows_train.csv"
+    assert calendar.split.value_counts().to_dict() == {"train": 4, "validation": 2}
+    assert calendar.origin_market_time.iloc[4] == "2024-01-05T00:00:00Z"
+
+
+def test_R_normal_driver_consumes_hashed_shared_calendar_with_embargo() -> None:
+    text = (SCRIPTS / "390_run_pricefm_stage_r114_normal_driver.R").read_text()
+    assert "reference_region_shared_origin_times" in text
+    assert "shared_calendar_sha256" in text
+    assert "response_time < validation_start" in text
+    assert "validate_origin_surface" in text
 
 
 def test_r116_exal_cannot_be_materialized_without_al(tmp_path: Path) -> None:

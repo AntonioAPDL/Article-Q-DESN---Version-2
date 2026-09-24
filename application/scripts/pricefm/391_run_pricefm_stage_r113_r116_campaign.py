@@ -414,20 +414,75 @@ def parse_value(value: Any, default: Any = None) -> Any:
         return ast.literal_eval(value)
 
 
-def load_normal_paths(campaign: Path, region: str, inner_fold: int) -> tuple[np.ndarray, np.ndarray]:
+def canonical_origin_keys(values: Any) -> np.ndarray:
+    parsed = pd.DatetimeIndex(pd.to_datetime(values, utc=True, errors="coerce"))
+    if parsed.isna().any():
+        raise RuntimeError("Normal-driver origin timestamps do not parse as UTC")
+    return np.asarray(parsed.asi8, dtype=np.int64)
+
+
+def align_driver_paths(
+    cube: np.ndarray, source_origin_keys: np.ndarray, target_origin_keys: np.ndarray,
+) -> np.ndarray:
+    values = np.asarray(cube, dtype=float)
+    source = np.asarray(source_origin_keys, dtype=np.int64)
+    target = np.asarray(target_origin_keys, dtype=np.int64)
+    if values.ndim != 3 or values.shape[0] != 500 or values.shape[2] != 96:
+        raise RuntimeError("Normal-driver path cube has invalid dimensions")
+    if values.shape[1] != len(source) or len(np.unique(source)) != len(source):
+        raise RuntimeError("Normal-driver source calendar is duplicated or incomplete")
+    if len(np.unique(target)) != len(target):
+        raise RuntimeError("Normal-driver target calendar is duplicated")
+    if set(source.tolist()) != set(target.tolist()):
+        missing = len(set(target.tolist()) - set(source.tolist()))
+        extra = len(set(source.tolist()) - set(target.tolist()))
+        raise RuntimeError(
+            f"Normal-driver calendar differs from BG: missing={missing} extra={extra}"
+        )
+    positions = {int(key): index for index, key in enumerate(source)}
+    return values[:, [positions[int(key)] for key in target], :]
+
+
+def load_normal_paths(
+    campaign: Path, region: str, inner_fold: int, *, require_reference_alignment: bool = False,
+) -> tuple[np.ndarray, np.ndarray]:
     root = campaign / f"runs/r114_normal_driver/region={region}/inner={inner_fold}"
     terminal = json.loads((root / "terminal.json").read_text())
     if terminal.get("status") != "completed_r114_normal_driver" or terminal.get("test_opened") is not False:
         raise RuntimeError(f"invalid R114 Normal paths for {region} inner {inner_fold}")
+    if require_reference_alignment and (
+        terminal.get("calendar_alignment_mode") != "reference_region_shared_origin_times"
+        or terminal.get("reference_region") != "BG"
+        or terminal.get("calendar_key") != "origin_market_time_utc"
+        or not (root / "calendar_alignment_manifest.csv").is_file()
+    ):
+        raise RuntimeError(f"R114 Normal paths lack exact BG calendar alignment: {region} inner {inner_fold}")
     rows = pd.read_csv(root / "evaluation_rows.csv")
-    values = np.fromfile(root / "prediction_paths_scaled.bin", dtype="<f8").reshape(len(rows), 500)
-    origin_ids = np.sort(rows.origin_id.unique().astype(int))
-    ordered = rows.sort_values(["origin_id", "horizon"], kind="mergesort")
+    required = {"origin_market_time", "horizon"}
+    if not required.issubset(rows.columns):
+        raise RuntimeError(f"R114 Normal evaluation rows lack calendar fields: {region} inner {inner_fold}")
+    raw = np.fromfile(root / "prediction_paths_scaled.bin", dtype="<f8")
+    if raw.size != len(rows) * 500:
+        raise RuntimeError(f"R114 Normal path binary has invalid size: {region} inner {inner_fold}")
+    values = raw.reshape(len(rows), 500)
+    rows = rows.copy()
+    rows["_origin_key"] = canonical_origin_keys(rows.origin_market_time)
+    ordered = rows.sort_values(["_origin_key", "horizon"], kind="mergesort")
     if not np.array_equal(ordered.index.to_numpy(), np.arange(len(rows))):
         values = values[ordered.index.to_numpy()]
         rows = ordered.reset_index(drop=True)
-    cube = values.reshape(len(origin_ids), 96, 500).transpose(2, 0, 1)
-    return cube, origin_ids
+    origin_keys = np.sort(rows._origin_key.unique().astype(np.int64))
+    for origin_key in origin_keys:
+        horizons = np.sort(rows.loc[rows._origin_key.eq(origin_key), "horizon"].astype(int).to_numpy())
+        if not np.array_equal(horizons, np.arange(1, 97)):
+            raise RuntimeError(
+                f"R114 Normal paths do not contain horizons 1--96 exactly once: "
+                f"{region} inner {inner_fold}"
+            )
+    if len(rows) != len(origin_keys) * 96 or not np.isfinite(values).all():
+        raise RuntimeError(f"R114 Normal paths are incomplete or nonfinite: {region} inner {inner_fold}")
+    cube = values.reshape(len(origin_keys), 96, 500).transpose(2, 0, 1)
+    return cube, origin_keys
 
 
 def fit_scaled_ridge(x: np.ndarray, y: np.ndarray) -> dict[str, np.ndarray | float]:
@@ -501,10 +556,17 @@ def r115_ridge(campaign: Path, candidate_id: str) -> dict[str, Any]:
                 split = np.load(campaign / f"splits/inner_fold_{inner_fold}.npz")
                 train_index = np.asarray(split["train_index"], dtype=int)
                 validation_origins = np.asarray(split["validation_origin_id"], dtype=int)
+                target_origin_keys = canonical_origin_keys(
+                    np.asarray(context["anchors"])[validation_origins]
+                )
                 if selected["family"] == "normal_rhs":
-                    target_samples, target_origins = load_normal_paths(
+                    target_samples, target_keys = load_normal_paths(
                         campaign, "BG", inner_fold
                     )
+                    target_samples = align_driver_paths(
+                        target_samples, target_keys, target_origin_keys
+                    )
+                    target_origins = validation_origins
                 else:
                     selected_root = campaign / f"runs/r114_score/family={selected['family']}/inner={inner_fold}"
                     target_archive = np.load(selected_root / f"driver_paths__{selected['rank_policy']}.npz")
@@ -516,10 +578,12 @@ def r115_ridge(campaign: Path, candidate_id: str) -> dict[str, Any]:
                 for region in active:
                     if region == "BG":
                         continue
-                    cube, origin_ids = load_normal_paths(campaign, region, inner_fold)
-                    if not np.array_equal(origin_ids, validation_origins):
-                        raise RuntimeError("R115 neighbor-driver origins changed")
-                    cubes[region] = cube
+                    cube, source_keys = load_normal_paths(
+                        campaign, region, inner_fold, require_reference_alignment=True
+                    )
+                    cubes[region] = align_driver_paths(
+                        cube, source_keys, target_origin_keys
+                    )
                 driver = np.stack([cubes[region] for region in active], axis=-1)
                 n_val = len(validation_origins)
                 recursive = np.empty((n_val, 96, fitted["p"]), dtype=float)

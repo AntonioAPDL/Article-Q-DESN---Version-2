@@ -201,9 +201,6 @@ def verify_reuse_manifest(campaign: Path, contract: dict[str, Any]) -> None:
 
 
 def verify_aligned_neighbor_drivers(campaign: Path) -> None:
-    manifest = pd.read_csv(campaign / "r114_normal_driver_manifest.csv")
-    if manifest.empty or not set(manifest.region.astype(str)).issubset({"GR", "RO"}):
-        raise RuntimeError("calendar recovery refit manifest is empty or includes another region")
     outputs = [
         campaign / f"runs/r114_normal_driver/region={region}/inner={inner}"
         for region in ("GR", "RO") for inner in (1, 2, 3)
@@ -249,6 +246,7 @@ def preflight(campaign: Path, code_root: Path, workers: int) -> tuple[dict[str, 
             "prepared_training_only_not_launched", "prepared_recovery_not_launched",
             "prepared_calendar_recovery_not_launched",
             "prepared_convergence_recovery_not_launched",
+            "prepared_calendar_index_recovery_not_launched",
         }
         or not expected_hash
         or canonical_hash(unhashed) != expected_hash
@@ -580,7 +578,7 @@ def materialize_r116_family(
             contract = quantile_contract(
                 campaign, code_root, stage="R116", phase="training_only_likelihood_fit",
                 task_id=task_id, family=family, design_dir=design,
-                split_csv_path=campaign / f"splits/inner_fold_{inner}.csv",
+                split_csv_path=campaign / f"runs/r116_family_design/split_inner_{inner}.csv",
                 output_dir=output, tau0=float(selected["tau0"]),
                 seed=2026093000 + 100 * (family == "exal") + inner,
                 selection_split="BG_fold1_training_nested_temporal_only",
@@ -772,7 +770,9 @@ def main() -> int:
     python = sys.executable
 
     resume_mode = contract.get("resume_mode")
-    reuse_completed_r114 = resume_mode == "reuse_completed_r114_fits"
+    reuse_completed_r114 = resume_mode in {
+        "reuse_completed_r114_fits", "reuse_completed_calendar_aligned_R114",
+    }
     calendar_recovery = resume_mode == "reuse_R114_then_refit_aligned_neighbors"
     if not reuse_completed_r114:
         normal_tasks = []
@@ -806,7 +806,7 @@ def main() -> int:
                         "log_path": campaign / f"logs/r114_fit/{row.task_id}.log",
                     })
             run_parallel(exal_tasks, cpus, campaign / "r114_batch2_status.csv")
-    if calendar_recovery:
+    if calendar_recovery or resume_mode == "reuse_completed_calendar_aligned_R114":
         verify_aligned_neighbor_drivers(campaign)
 
     _, eligible_families = r114_family_eligibility(

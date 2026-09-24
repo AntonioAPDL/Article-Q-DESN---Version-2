@@ -443,6 +443,49 @@ def align_driver_paths(
     return values[:, [positions[int(key)] for key in target], :]
 
 
+def shared_origin_calendar(campaign: Path, inner_fold: int, split: str) -> np.ndarray:
+    if split not in {"train", "validation"}:
+        raise ValueError(f"unsupported shared-calendar split: {split}")
+    path = campaign / f"shared_calendars/inner_fold_{inner_fold}.csv"
+    calendar = pd.read_csv(path)
+    required = {"split", "origin_market_time", "calendar_order"}
+    if not required.issubset(calendar.columns):
+        raise RuntimeError(f"shared calendar schema is invalid: {path}")
+    rows = calendar[calendar.split.astype(str).eq(split)].sort_values(
+        "calendar_order", kind="mergesort"
+    )
+    keys = canonical_origin_keys(rows.origin_market_time)
+    if len(keys) == 0 or len(np.unique(keys)) != len(keys):
+        raise RuntimeError(f"shared calendar is empty or duplicated: {path} split={split}")
+    return keys
+
+
+def local_origin_positions(anchors: Any, requested_keys: np.ndarray, label: str) -> np.ndarray:
+    available = canonical_origin_keys(anchors)
+    if len(np.unique(available)) != len(available):
+        raise RuntimeError(f"{label} local origin calendar is duplicated")
+    positions = {int(key): index for index, key in enumerate(available)}
+    missing = [int(key) for key in requested_keys if int(key) not in positions]
+    if missing:
+        raise RuntimeError(f"{label} lacks {len(missing)} requested calendar origins")
+    return np.asarray([positions[int(key)] for key in requested_keys], dtype=int)
+
+
+def horizon_major_design_indices(origin_positions: np.ndarray, n_origins: int) -> np.ndarray:
+    positions = np.asarray(origin_positions, dtype=int)
+    if (
+        len(positions) == 0
+        or len(np.unique(positions)) != len(positions)
+        or positions.min() < 0
+        or positions.max() >= int(n_origins)
+    ):
+        raise RuntimeError("calendar origin positions are invalid for the design")
+    return (
+        np.arange(96, dtype=np.int64)[:, None] * int(n_origins)
+        + positions.astype(np.int64)[None, :]
+    ).reshape(-1)
+
+
 def load_normal_paths(
     campaign: Path, region: str, inner_fold: int, *, require_reference_alignment: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -552,12 +595,21 @@ def r115_ridge(campaign: Path, candidate_id: str) -> dict[str, Any]:
                 windows, spec, list(graph_adj_matrix()), readout_mode=readout_mode
             )
             context = training_context(case, spec)
+            if int(fitted["n"]) != 96 * len(context["anchors"]):
+                raise RuntimeError("R115 design and candidate calendar dimensions disagree")
             for inner_fold in (1, 2, 3):
-                split = np.load(campaign / f"splits/inner_fold_{inner_fold}.npz")
-                train_index = np.asarray(split["train_index"], dtype=int)
-                validation_origins = np.asarray(split["validation_origin_id"], dtype=int)
-                target_origin_keys = canonical_origin_keys(
-                    np.asarray(context["anchors"])[validation_origins]
+                train_origin_keys = shared_origin_calendar(campaign, inner_fold, "train")
+                target_origin_keys = shared_origin_calendar(campaign, inner_fold, "validation")
+                train_origins = local_origin_positions(
+                    context["anchors"], train_origin_keys,
+                    f"R115 candidate={candidate_id} inner={inner_fold} train",
+                )
+                validation_origins = local_origin_positions(
+                    context["anchors"], target_origin_keys,
+                    f"R115 candidate={candidate_id} inner={inner_fold} validation",
+                )
+                train_index = horizon_major_design_indices(
+                    train_origins, len(context["anchors"])
                 )
                 if selected["family"] == "normal_rhs":
                     target_samples, target_keys = load_normal_paths(
@@ -566,14 +618,18 @@ def r115_ridge(campaign: Path, candidate_id: str) -> dict[str, Any]:
                     target_samples = align_driver_paths(
                         target_samples, target_keys, target_origin_keys
                     )
-                    target_origins = validation_origins
                 else:
                     selected_root = campaign / f"runs/r114_score/family={selected['family']}/inner={inner_fold}"
                     target_archive = np.load(selected_root / f"driver_paths__{selected['rank_policy']}.npz")
                     target_samples = np.asarray(target_archive["samples"], dtype=float).transpose(1, 0, 2)
-                    target_origins = np.asarray(target_archive["origin_id"], dtype=int)
-                if not np.array_equal(target_origins, validation_origins):
-                    raise RuntimeError("R115 selected target-driver origins changed")
+                    archive_origins = np.asarray(target_archive["origin_id"], dtype=int)
+                    baseline_context = training_context(case)
+                    archive_keys = canonical_origin_keys(
+                        np.asarray(baseline_context["anchors"])[archive_origins]
+                    )
+                    target_samples = align_driver_paths(
+                        target_samples, archive_keys, target_origin_keys
+                    )
                 cubes = {"BG": target_samples}
                 for region in active:
                     if region == "BG":
@@ -609,6 +665,9 @@ def r115_ridge(campaign: Path, candidate_id: str) -> dict[str, Any]:
                     "late_AQL_scaled": aql(y_eval[late], prediction[late]),
                     "coverage_10_90": float(np.mean((y_eval >= prediction[:, 0]) & (y_eval <= prediction[:, -1]))),
                     "width_10_90_scaled": float(np.mean(prediction[:, -1] - prediction[:, 0])),
+                    "n_train_origins": len(train_origins),
+                    "n_validation_origins": len(validation_origins),
+                    "calendar_key": "origin_market_time_utc",
                     "selection_split": "BG_fold1_training_nested_temporal_only",
                     "test_opened": False,
                 })
@@ -624,6 +683,8 @@ def r115_ridge(campaign: Path, candidate_id: str) -> dict[str, Any]:
             "stage": "R115", "status": "completed_r115_ridge_candidate",
             "candidate_id": candidate_id, "metric_rows": len(metric_rows),
             "driver_family": selected["family"], "rank_policy": selected["rank_policy"],
+            "calendar_alignment_mode": "shared_BG_origin_times_to_local_candidate_indices",
+            "calendar_key": "origin_market_time_utc",
             "selection_split": "BG_fold1_training_nested_temporal_only",
             "test_opened": False, "registry_mutated": False, "article_mutated": False,
         }
@@ -709,12 +770,25 @@ def prepare_r116_family_design(campaign: Path) -> dict[str, Any]:
     fitted = causal_teacher_forced_design(
         windows, spec, list(graph_adj_matrix()), readout_mode=selected["readout_mode"]
     )
+    anchors = np.asarray(windows["BG"]["anchors"], dtype=str)
+    if int(fitted["n"]) != 96 * len(anchors):
+        raise RuntimeError("R116 family design and selected calendar dimensions disagree")
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=output.name + ".tmp.", dir=output.parent))
     try:
         write_design(temporary / "design", fitted)
         evaluations = []
         for inner in (1, 2, 3):
+            train_keys = shared_origin_calendar(campaign, inner, "train")
+            train_origins = local_origin_positions(
+                anchors, train_keys, f"R116 selected family inner={inner} train",
+            )
+            train_index = horizon_major_design_indices(train_origins, len(anchors))
+            split_path = temporary / f"split_inner_{inner}.csv"
+            pd.DataFrame({
+                "split": np.repeat("train", len(train_index)),
+                "design_index_zero_based": train_index,
+            }).to_csv(split_path, index=False)
             stats_root = (
                 campaign / "r115_rhs_stats" / f"candidate={selected['candidate_id']}"
                 / selected["readout_mode"] / f"inner={inner}"
@@ -730,6 +804,9 @@ def prepare_r116_family_design(campaign: Path) -> dict[str, Any]:
             evaluations.append({
                 "inner_fold": inner, "path": str((output / path.name).resolve()),
                 "sha256": sha256_file(path), "n_eval": n_eval, "p": p,
+                "split_path": str((output / split_path.name).resolve()),
+                "split_sha256": sha256_file(split_path),
+                "n_train_origins": len(train_origins),
             })
         write_json(temporary / "selected_spec.json", {
             "candidate_id": selected["candidate_id"], "readout_mode": selected["readout_mode"],
@@ -740,6 +817,8 @@ def prepare_r116_family_design(campaign: Path) -> dict[str, Any]:
             "candidate_id": selected["candidate_id"], "readout_mode": selected["readout_mode"],
             "tau0": selected["tau0"], "n": int(fitted["n"]), "p": int(fitted["p"]),
             "evaluations": evaluations, "selection_split": "BG_fold1_training_nested_temporal_only",
+            "calendar_alignment_mode": "shared_BG_origin_times_to_local_candidate_indices",
+            "calendar_key": "origin_market_time_utc",
             "test_opened": False, "registry_mutated": False, "article_mutated": False,
         }
         write_json(temporary / "terminal.json", terminal)
@@ -885,19 +964,32 @@ def load_normal_region_paths(region: str, fold: int, anchors: np.ndarray) -> np.
         or terminal.get("test_opened") is not False
     ):
         raise RuntimeError(f"invalid frozen Normal driver surface: {surface}")
+    requested_keys = canonical_origin_keys(anchors)
+    marker_by_key: dict[int, tuple[Path, dict[str, Any]]] = {}
+    for marker_path in sorted((surface / "origins").glob("origin_*.json")):
+        marker = json.loads(marker_path.read_text())
+        key = int(canonical_origin_keys([marker.get("anchor")])[0])
+        if key in marker_by_key:
+            raise RuntimeError(f"duplicate Normal driver calendar origin: {surface}")
+        marker_by_key[key] = (marker_path.with_suffix(".npz"), marker)
+    missing = [int(key) for key in requested_keys if int(key) not in marker_by_key]
+    if missing:
+        raise RuntimeError(f"Normal driver surface lacks {len(missing)} requested calendar origins: {surface}")
     values = np.empty((500, len(anchors), 96), dtype=float)
-    for origin_index, anchor in enumerate(anchors):
-        path = surface / "origins" / f"origin_{origin_index:04d}.npz"
-        marker = json.loads(path.with_suffix(".json").read_text())
+    for local_index, (anchor, key) in enumerate(zip(anchors, requested_keys)):
+        path, marker = marker_by_key[int(key)]
         if marker.get("status") != "completed_recursive_origin" or marker.get("sha256") != sha256_file(path):
             raise RuntimeError(f"invalid Normal driver origin: {path}")
         with np.load(path, allow_pickle=False) as archive:
             regions = [str(value) for value in archive["regions"].tolist()]
             stored_anchor = str(archive["anchor"].tolist()[0])
             draws = np.asarray(archive["response_draws"], dtype=float)
-        if stored_anchor != str(anchor) or region not in regions or draws.shape[0:2] != (500, 96):
+        if (
+            int(canonical_origin_keys([stored_anchor])[0]) != int(key)
+            or region not in regions or draws.shape[0:2] != (500, 96)
+        ):
             raise RuntimeError(f"Normal driver identity changed: {path}")
-        values[:, origin_index] = draws[:, :, regions.index(region)]
+        values[:, local_index] = draws[:, :, regions.index(region)]
     return values
 
 
@@ -907,10 +999,17 @@ def selected_driver_paths(
     current_context: Mapping[str, Any],
     current_means: Mapping[float, np.ndarray],
     current_covariances: Mapping[float, np.ndarray],
+    origin_positions: np.ndarray | None = None,
 ) -> np.ndarray:
+    positions = (
+        np.arange(len(current_context["anchors"]), dtype=int)
+        if origin_positions is None else np.asarray(origin_positions, dtype=int)
+    )
     selected = json.loads((campaign / "r114_selected_driver.json").read_text())
     if selected["family"] == "normal_rhs":
-        return load_normal_region_paths("BG", fold, np.asarray(current_context["anchors"]))
+        return load_normal_region_paths(
+            "BG", fold, np.asarray(current_context["anchors"])[positions]
+        )
     beta = {
         tau: draw_beta_posterior(
             current_means[tau], current_covariances[tau], 500,
@@ -934,8 +1033,8 @@ def selected_driver_paths(
     ranks = observed_ranks(response, curves)
     policy = str(selected["rank_policy"])
     block = None if policy == "independent_stratified" else int(policy.rsplit("_", 1)[1])
-    samples = np.empty((500, len(current_context["anchors"]), 96), dtype=float)
-    for origin_index in range(len(current_context["anchors"])):
+    samples = np.empty((500, len(positions), 96), dtype=float)
+    for local_index, origin_index in enumerate(positions):
         uniforms = forecast_uniforms(
             "independent_stratified" if block is None else "training_block_rank",
             500, 96, 2026092700 + 1000 * fold + origin_index,
@@ -946,7 +1045,7 @@ def selected_driver_paths(
             seed=2026092700 + origin_index, uniforms=uniforms,
             readout_mode="state_lead_horizon",
         )
-        samples[:, origin_index] = result["samples"]
+        samples[:, local_index] = result["samples"]
     return samples
 
 
@@ -986,8 +1085,23 @@ def score_r116_outer(campaign: Path, fold: int) -> dict[str, Any]:
     )
     current_context = forecast_context(case, current_spec, current_fitted)
     selected_context = forecast_context(case, selected_spec, selected_fitted)
-    if not np.array_equal(current_context["anchors"], selected_context["anchors"]):
-        raise RuntimeError("R116 outer contexts have different anchors")
+    current_keys = canonical_origin_keys(current_context["anchors"])
+    selected_keys = canonical_origin_keys(selected_context["anchors"])
+    common_keys = np.asarray(sorted(set(current_keys.tolist()) & set(selected_keys.tolist())), dtype=np.int64)
+    if len(common_keys) == 0:
+        raise RuntimeError("R116 outer contexts have no common calendar origins")
+    current_positions = local_origin_positions(
+        current_context["anchors"], common_keys, f"R116 fold={fold} current",
+    )
+    selected_positions = local_origin_positions(
+        selected_context["anchors"], common_keys, f"R116 fold={fold} selected",
+    )
+    anchors = np.asarray(current_context["anchors"])[current_positions]
+    if not np.allclose(
+        np.asarray(current_context["truth"])[current_positions],
+        np.asarray(selected_context["truth"])[selected_positions],
+    ):
+        raise RuntimeError("R116 outer truth differs on the common calendar")
     current_root = campaign / f"runs/r116_outer_fit/readout=current_lead/family={selected_family}/fold={fold}"
     selected_root = campaign / f"runs/r116_outer_fit/readout=selected_no_bypass/family={selected_family}/fold={fold}"
     current_means, current_covariances = read_quantile_fit(
@@ -1014,9 +1128,9 @@ def score_r116_outer(campaign: Path, fold: int) -> dict[str, Any]:
         "completed_r116_quantile_atom",
     )
     target_selected = selected_driver_paths(
-        campaign, fold, current_context, driver_means, driver_covariances
+        campaign, fold, current_context, driver_means, driver_covariances,
+        origin_positions=current_positions,
     )
-    anchors = np.asarray(current_context["anchors"])
     normal = {
         region: load_normal_region_paths(region, fold, anchors)
         for region in sorted(set(current_context["active_regions"]) | set(selected_context["active_regions"]))
@@ -1038,31 +1152,32 @@ def score_r116_outer(campaign: Path, fold: int) -> dict[str, Any]:
         },
     }
     cells = {
-        "A": (current_context, current_beta, "current_lead", "normal", "state_lead_horizon"),
-        "B": (current_context, current_beta, "current_lead", "selected", "state_lead_horizon"),
-        "C": (selected_context, selected_beta, "selected_no_bypass", "normal", selected["readout_mode"]),
-        "D": (selected_context, selected_beta, "selected_no_bypass", "selected", selected["readout_mode"]),
+        "A": (current_context, current_beta, "current_lead", "normal", "state_lead_horizon", current_positions),
+        "B": (current_context, current_beta, "current_lead", "selected", "state_lead_horizon", current_positions),
+        "C": (selected_context, selected_beta, "selected_no_bypass", "normal", selected["readout_mode"], selected_positions),
+        "D": (selected_context, selected_beta, "selected_no_bypass", "selected", selected["readout_mode"], selected_positions),
     }
     data_config = load_config(case["data_config_path"])
     scaler_path = Path(data_config["pricefm"]["processed_dir"]) / f"scalers/fold_{fold}/per_region_separate_xy_scalers.joblib"
     scaler = joblib.load(scaler_path)["BG"]["y_scaler"]
     center = float(np.asarray(scaler.center_).reshape(-1)[0])
     scale = float(np.asarray(scaler.scale_).reshape(-1)[0])
-    truth = np.asarray(current_context["truth"], dtype=float) * scale + center
+    truth_scaled = np.asarray(current_context["truth"], dtype=float)[current_positions]
+    truth = truth_scaled * scale + center
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=output.name + ".tmp.", dir=output.parent))
     try:
         metrics = []
         horizons = []
-        for cell, (context, beta, readout_id, driver_id, readout_mode) in cells.items():
+        for cell, (context, beta, readout_id, driver_id, readout_mode, origin_positions) in cells.items():
             prediction = np.empty((len(QUANTILES), len(anchors), 96), dtype=float)
-            for origin_index in range(len(anchors)):
+            for local_index, origin_index in enumerate(origin_positions):
                 design = recursive_quantile_design(
-                    context, drivers[readout_id][driver_id][:, origin_index], origin_index,
+                    context, drivers[readout_id][driver_id][:, local_index], int(origin_index),
                     context["active_regions"], readout_mode=readout_mode,
                 )
                 for q_index, tau in enumerate(QUANTILES):
-                    prediction[q_index, origin_index] = paired_quantile_prediction(design, beta[tau])
+                    prediction[q_index, local_index] = paired_quantile_prediction(design, beta[tau])
             prediction_original = prediction * scale + center
             metric = score_surface(truth, prediction_original)
             metrics.append({
@@ -1079,7 +1194,7 @@ def score_r116_outer(campaign: Path, fold: int) -> dict[str, Any]:
             np.savez_compressed(
                 temporary / f"cell_{cell}_validation_predictions.npz",
                 prediction_scaled=prediction.astype(np.float32),
-                truth_scaled=np.asarray(current_context["truth"], dtype=np.float32),
+                truth_scaled=truth_scaled.astype(np.float32),
                 quantiles=np.asarray(QUANTILES), anchors=anchors.astype(str),
             )
         pd.DataFrame(metrics).to_csv(temporary / "metrics.csv", index=False)
@@ -1089,6 +1204,8 @@ def score_r116_outer(campaign: Path, fold: int) -> dict[str, Any]:
             "cell_count": 4, "selected_family": selected_family,
             "selected_driver_family": selected_driver_family,
             "selected_readout": selected["readout_mode"], "posterior_paths": 500,
+            "calendar_alignment_mode": "common_UTC_origin_intersection",
+            "calendar_key": "origin_market_time_utc", "n_evaluation_origins": len(anchors),
             "evaluation_split": "outer_validation_only", "test_opened": False,
             "registry_mutated": False, "article_mutated": False,
         }

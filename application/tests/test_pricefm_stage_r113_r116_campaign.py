@@ -51,6 +51,10 @@ CONVERGENCE_RECOVERY = load(
     "application/scripts/pricefm/396_prepare_pricefm_stage_r113_r116_convergence_recovery.py",
     "pricefm_r113_convergence_recovery",
 )
+INDEX_RECOVERY = load(
+    "application/scripts/pricefm/397_prepare_pricefm_stage_r113_r116_calendar_index_recovery.py",
+    "pricefm_r113_calendar_index_recovery",
+)
 
 
 def write_quantile_family(
@@ -354,6 +358,39 @@ def test_convergence_recovery_refits_only_failed_cell_and_accepts_reused_neighbo
         "contract_path": "unused", "output_dir": "unused",
     }]).to_csv(tmp_path / "r114_normal_driver_manifest.csv", index=False)
     CONTROLLER.verify_aligned_neighbor_drivers(tmp_path)
+
+
+def test_candidate_calendar_maps_dates_to_local_positions_and_horizon_major_rows(
+    tmp_path: Path,
+) -> None:
+    anchors = pd.date_range("2024-01-01", periods=6, freq="D", tz="UTC").astype(str)
+    requested = WORKER.canonical_origin_keys([anchors[2], anchors[4]])
+    positions = WORKER.local_origin_positions(anchors, requested, "unit candidate")
+    assert positions.tolist() == [2, 4]
+    design = WORKER.horizon_major_design_indices(positions, len(anchors))
+    assert len(design) == 192
+    assert design[:4].tolist() == [2, 4, 8, 10]
+    assert design[-2:].tolist() == [95 * 6 + 2, 95 * 6 + 4]
+
+    calendars = tmp_path / "shared_calendars"
+    calendars.mkdir()
+    pd.DataFrame({
+        "split": ["validation", "train", "validation", "train"],
+        "origin_market_time": [anchors[4], anchors[1], anchors[2], anchors[0]],
+        "calendar_order": [1, 1, 0, 0],
+    }).to_csv(calendars / "inner_fold_1.csv", index=False)
+    observed = WORKER.shared_origin_calendar(tmp_path, 1, "validation")
+    assert observed.tolist() == requested.tolist()
+
+
+def test_calendar_index_recovery_invalidates_all_positional_R115_outputs() -> None:
+    text = Path(INDEX_RECOVERY.__file__).read_text()
+    assert '"reused_r115_ridge_candidates": 0' in text
+    assert '"invalidated_positional_r115_candidates": 12' in text
+    assert "runs/r115_ridge" not in INDEX_RECOVERY.REUSED_FLAT_FILES
+    worker_text = (SCRIPTS / "391_run_pricefm_stage_r113_r116_campaign.py").read_text()
+    assert "shared_BG_origin_times_to_local_candidate_indices" in worker_text
+    assert "common_UTC_origin_intersection" in worker_text
 
 
 def test_r116_exal_cannot_be_materialized_without_al(tmp_path: Path) -> None:

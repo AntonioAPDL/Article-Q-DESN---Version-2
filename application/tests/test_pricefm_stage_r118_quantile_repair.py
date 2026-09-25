@@ -42,6 +42,10 @@ CONTINUATION = load(
     "application/scripts/pricefm/407_continue_pricefm_stage_r118_quantile_repair.py",
     "pricefm_r118_continuation",
 )
+COMPARISON = load(
+    "application/scripts/pricefm/408_closeout_pricefm_stage_r118_comparison.py",
+    "pricefm_r118_comparison",
+)
 
 
 def terminal(output: Path, *, arm: dict, passed: bool, target: str) -> None:
@@ -171,3 +175,32 @@ def test_full_target_al_gate_requires_every_completed_atom_and_central_fold_cove
     failed = CONTINUATION.full_target_al_continuation_gate(pd.DataFrame(failed_rows))
     assert failed["authorized"] is False
     assert failed["exal_authorized"] is False
+
+
+def test_comparison_pools_with_loss_atom_weights_and_keeps_context_separate() -> None:
+    frame = pd.DataFrame([
+        {
+            "reference": "candidate", "fold": 1, "AQL": 1.0,
+            "n_loss_atoms": 1, "comparison_role": "aligned", "directly_comparable": True,
+        },
+        {
+            "reference": "candidate", "fold": 2, "AQL": 3.0,
+            "n_loss_atoms": 3, "comparison_role": "aligned", "directly_comparable": True,
+        },
+        {
+            "reference": "context", "fold": 1, "AQL": 0.5,
+            "n_loss_atoms": 4, "comparison_role": "final_test", "directly_comparable": False,
+        },
+    ])
+    result = COMPARISON.pooled(frame).set_index("reference")
+    assert result.loc["candidate", "mean_fold_AQL"] == 2.0
+    assert result.loc["candidate", "pooled_AQL"] == 2.5
+    assert bool(result.loc["candidate", "directly_comparable"]) is True
+    assert bool(result.loc["context", "directly_comparable"]) is False
+
+
+def test_comparison_source_blocks_promotion_and_labels_pricefm_as_context() -> None:
+    source = (SCRIPTS / "408_closeout_pricefm_stage_r118_comparison.py").read_text()
+    assert '"promotion_authorized": False' in source
+    assert '"authority_context_is_directly_comparable": False' in source
+    assert '"cached_PriceFM_final_test"' in source

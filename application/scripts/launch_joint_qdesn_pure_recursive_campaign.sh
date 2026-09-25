@@ -31,11 +31,6 @@ done
 free_gib="$(df -Pk /data | awk 'NR==2 {printf "%.0f", $4/1024/1024}')"
 (( free_gib >= 100 )) || { echo "Less than 100 GiB is free on /data." >&2; exit 2; }
 
-mkdir -p "$ROOT/logs"
-printf 'host,branch,head,cpu_affinity,physical_cores,data_free_gib,checked_at_utc\n%s,%s,%s,%s,%s,%s,%s\n' \
-  "$(hostname -f)" "$BRANCH" "$(git rev-parse HEAD)" "$CPU_LIST" "15" "$free_gib" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  >"$ROOT/logs/launch_preflight.csv"
-
 run_numbered_queue() {
   local stage="$1" count="$2" script="$3" id_flag="$4"
   local pids=()
@@ -77,6 +72,11 @@ run_score_queue() {
 if [[ ! -f "$ROOT/launch_readiness.csv" ]]; then
   "$R_BIN" application/scripts/prepare_joint_qdesn_pure_recursive_campaign.R --output-dir "$ROOT"
 fi
+
+mkdir -p "$ROOT/logs"
+printf 'host,branch,head,cpu_affinity,physical_cores,data_free_gib,checked_at_utc\n%s,%s,%s,%s,%s,%s,%s\n' \
+  "$(hostname -f)" "$BRANCH" "$(git rev-parse HEAD)" "$CPU_LIST" "15" "$free_gib" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  >"$ROOT/logs/launch_preflight.csv"
 
 ridge_count="$(awk -F, 'NR==2 {print $3}' "$ROOT/expected_work.csv")"
 if [[ ! -f "$ROOT/ridge_final_health.csv" ]]; then

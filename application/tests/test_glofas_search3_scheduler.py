@@ -106,6 +106,20 @@ class Search3SchedulerTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(state["planned_total_workers"], 29)
 
+    def test_closed_health_requires_real_complete_record(self):
+        invalid = (
+            {},
+            {"total": "0", "completed": "0", "failed": "0", "running": "0", "pending": "0", "left": "0"},
+            {"total": "10", "completed": "9", "failed": "0", "running": "0", "pending": "1", "left": "1"},
+        )
+        for health in invalid:
+            with self.subTest(health=health), self.assertRaises(RuntimeError):
+                controller.require_closed_health("fixture", health)
+        controller.require_closed_health("fixture", {
+            "total": "10", "completed": "10", "failed": "0",
+            "running": "0", "pending": "0", "left": "0",
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

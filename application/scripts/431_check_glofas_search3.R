@@ -6,6 +6,7 @@ app_set_repo_root(repo_root)
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_search_phase2.R"))
 source(app_path("application/R/glofas_search3_rainy_season.R"))
+source(app_path("application/R/glofas_search3_runtime_contract.R"))
 args <- app_parse_args(list(runtime_root = ""))
 root <- app_resolve_path(args$runtime_root, must_work = TRUE)
 run_manifest <- app_read_yaml(file.path(root, "configs", "run_manifest.yaml"))
@@ -31,7 +32,7 @@ read_csvs <- function(dir, suffix) {
 scores <- read_csvs("scores", "_summary[.]csv$")
 fits <- read_csvs("fits", "_summary[.]csv$")
 reuse_path <- file.path(root, "configs", "reused_score_registry.csv")
-reuse <- if (file.exists(reuse_path)) app_read_csv(reuse_path) else data.frame()
+reuse <- app_glofas_search3_read_reuse_registry(reuse_path, required = FALSE)
 if (nrow(reuse)) {
   read_reuse <- function(path_column, hash_column) {
     app_bind_rows_fill(lapply(seq_len(nrow(reuse)), function(i) {
@@ -60,6 +61,20 @@ if (nrow(scores) && nrow(fits)) {
 app_write_csv(health, file.path(root, "tables", "health_latest.csv"))
 app_write_csv(scores, file.path(root, "tables", "score_summaries_latest.csv"))
 app_write_csv(fits, file.path(root, "tables", "fit_summaries_latest.csv"))
+checker_path <- normalizePath(app_path("application/scripts/431_check_glofas_search3.R"), mustWork = TRUE)
+transition_path <- file.path(campaign_root, "configs", "source_transition_registry.csv")
+app_write_csv(data.frame(
+  stage = stage,
+  fit_source_head = as.character(run_manifest$git_head),
+  aggregation_source_head = app_git_sha(short = FALSE),
+  checker_path = checker_path,
+  checker_sha256 = app_sha256_file(checker_path),
+  reuse_registry_path = normalizePath(reuse_path, mustWork = TRUE),
+  reuse_registry_sha256 = app_sha256_file(reuse_path),
+  source_transition_path = if (file.exists(transition_path)) normalizePath(transition_path) else NA_character_,
+  source_transition_sha256 = if (file.exists(transition_path)) app_sha256_file(transition_path) else NA_character_,
+  stringsAsFactors = FALSE
+), file.path(root, "tables", "aggregation_provenance.csv"))
 print(health)
 
 complete <- health$completed[[1L]] == health$total[[1L]] && health$failed[[1L]] == 0L
@@ -73,6 +88,8 @@ if (!complete) {
 write_selection_hash <- function(paths) {
   paths <- normalizePath(paths, mustWork = TRUE)
   table <- data.frame(path = paths, sha256 = vapply(paths, app_sha256_file, character(1L)), stringsAsFactors = FALSE)
+  provenance_path <- normalizePath(file.path(root, "tables", "aggregation_provenance.csv"), mustWork = TRUE)
+  table <- rbind(table, data.frame(path = provenance_path, sha256 = app_sha256_file(provenance_path), stringsAsFactors = FALSE))
   app_write_csv(table, file.path(root, "tables", "selection_artifact_hashes.csv"))
 }
 

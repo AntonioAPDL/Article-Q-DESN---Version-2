@@ -6,7 +6,8 @@ app_set_repo_root(repo_root)
 for (file in c(
   "input_contract.R", "model_contract.R", "feature_contract.R", "covariate_design.R",
   "latent_path_design.R", "discrepancy_design.R", "glofas_normal_desn_part1_screening.R",
-  "glofas_normal_oracle_forecast.R", "glofas_search_phase2.R", "glofas_search3_rainy_season.R"
+  "glofas_normal_oracle_forecast.R", "glofas_search_phase2.R", "glofas_search3_rainy_season.R",
+  "glofas_search3_runtime_contract.R"
 )) source(app_path("application/R", file))
 
 args <- app_parse_args(list(
@@ -91,9 +92,7 @@ if (!file.exists(file.path(campaign_root, "configs", "campaign_manifest.yaml")))
   stop("Search III stage preparation requires a completed Stage 0 campaign root.", call. = FALSE)
 }
 campaign_manifest <- app_read_yaml(file.path(campaign_root, "configs", "campaign_manifest.yaml"))
-if (!identical(as.character(campaign_manifest$git_head), app_git_sha(short = FALSE))) {
-  stop("Search III campaign source HEAD drifted after Stage 0.", call. = FALSE)
-}
+source_contract <- app_glofas_search3_assert_campaign_source(campaign_manifest, campaign_root)
 folds <- app_read_csv(file.path(campaign_root, "configs", "fold_registry.csv")); folds$origin_date <- as.Date(folds$origin_date)
 candidates <- app_read_csv(file.path(campaign_root, "configs", "candidate_manifest.csv"))
 packets <- app_read_csv(file.path(campaign_root, "configs", "packet_registry.csv"))
@@ -111,7 +110,7 @@ read_table <- function(stage_name, file) {
 
 candidate_subset <- candidates
 stage_folds <- app_glofas_search3_folds(folds, stage)
-reused <- data.frame()
+reused <- app_glofas_search3_empty_reuse_registry()
 if (stage == "ridge_a") {
   jobs <- app_glofas_search2_expand_jobs(candidates, stage_folds, "ridge", "search3_ridge_a")
 } else if (stage == "ridge_b") {
@@ -230,4 +229,12 @@ app_write_yaml(list(
   exact_rhs_iterations = ifelse(grepl("rhs|confirmation", stage), 200L, NA_integer_),
   confirmation_aggregate_locked_until_complete = identical(stage, "confirmation")
 ), file.path(stage_root, "configs", "run_manifest.yaml"))
+app_write_csv(data.frame(
+  original_campaign_head = source_contract$original_head,
+  execution_head = source_contract$execution_head,
+  source_transition = source_contract$transition,
+  source_transition_path = source_contract$transition_path %||% NA_character_,
+  source_transition_sha256 = source_contract$transition_sha256 %||% NA_character_,
+  stringsAsFactors = FALSE
+), file.path(stage_root, "configs", "source_execution_contract.csv"))
 cat(stage_root, "\n")

@@ -210,6 +210,17 @@ def stage_health(stage_root: Path) -> dict:
         return next(csv.DictReader(handle))
 
 
+def require_closed_health(stage: str, health: dict) -> None:
+    required = {"total", "completed", "failed", "running", "pending", "left"}
+    if not health or not required.issubset(health):
+        raise RuntimeError(f"Search III stage {stage} checker produced no complete health record: {health}")
+    values = {name: int(health.get(name, 0) or 0) for name in required}
+    if values["total"] <= 0 or values["completed"] != values["total"] or any(
+        values[name] != 0 for name in ("failed", "running", "pending", "left")
+    ):
+        raise RuntimeError(f"Search III stage {stage} did not close cleanly: {health}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--campaign-root", required=True)
@@ -327,13 +338,16 @@ def main() -> int:
                             "--capacity", str(args.capacity), "--poll-seconds", "15",
                             "--rscript", rscript, "--scheduler"], repo, log=log, check=False).returncode
                 run([rscript, "application/scripts/431_check_glofas_search3.R",
-                     "--runtime_root", str(stage_root)], repo, log=log, check=False)
+                     "--runtime_root", str(stage_root)], repo, log=log)
                 health = stage_health(stage_root)
-                if code or int(health.get("failed", 0) or 0) or int(health.get("completed", 0) or 0) != int(health.get("total", 0) or 0):
-                    raise RuntimeError(f"Search III stage {stage} did not close cleanly: {health}")
+                if code:
+                    raise RuntimeError(f"Search III stage {stage} scheduler exited with status {code}")
+                require_closed_health(stage, health)
             else:
                 run([rscript, "application/scripts/431_check_glofas_search3.R",
                      "--runtime_root", str(stage_root)], repo, log=log)
+                health = stage_health(stage_root)
+                require_closed_health(stage, health)
             log.write(f"stage_complete stage={stage} health={json.dumps(health, sort_keys=True)}\n")
 
         completion = campaign / "stages/confirmation/status/CAMPAIGN_COMPLETE"

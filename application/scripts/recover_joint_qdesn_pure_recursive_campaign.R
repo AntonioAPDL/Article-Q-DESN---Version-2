@@ -54,7 +54,7 @@ app_write_csv(inventory, file.path(incident, "superseded_quantile_staging_invent
 repair <- app_joint_pure_repair_rhs_summaries(root)
 app_write_csv(repair, file.path(incident, "rhs_summary_schema_repair_audit.csv"))
 old_selected <- app_read_csv(file.path(archive, "selected_family_backbones.csv"))
-app_joint_pure_finalize_rhs(root)
+finalized_selection <- app_joint_pure_finalize_rhs(root)
 new_selected <- app_read_csv(file.path(root, "selected_family_backbones.csv"))
 comparison <- merge(
   old_selected[, c("scenario_id", "candidate_id", "rhs_tau0", "calibration_acrps_mean")],

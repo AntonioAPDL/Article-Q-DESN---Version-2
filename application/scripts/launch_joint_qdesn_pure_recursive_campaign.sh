@@ -6,7 +6,8 @@ CONFIRMATION_ROOT="${2:-application/cache/joint_qdesn_pure_recursive_article_con
 SCORE_ROOT="${3:-application/cache/joint_qdesn_pure_recursive_score_packet_jerez_15core_20260925}"
 R_BIN="/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
 BRANCH="work/joint-qdesn-pure-desn-recursive-selection-20260925"
-CPUS=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14)
+CPU_LIST="2-16"
+CPUS=(2 3 4 5 6 7 8 9 10 11 12 13 14 15 16)
 
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1
@@ -32,7 +33,7 @@ free_gib="$(df -Pk /data | awk 'NR==2 {printf "%.0f", $4/1024/1024}')"
 
 mkdir -p "$ROOT/logs"
 printf 'host,branch,head,cpu_affinity,physical_cores,data_free_gib,checked_at_utc\n%s,%s,%s,%s,%s,%s,%s\n' \
-  "$(hostname -f)" "$BRANCH" "$(git rev-parse HEAD)" "0-14" "15" "$free_gib" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  "$(hostname -f)" "$BRANCH" "$(git rev-parse HEAD)" "$CPU_LIST" "15" "$free_gib" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   >"$ROOT/logs/launch_preflight.csv"
 
 run_numbered_queue() {
@@ -122,22 +123,22 @@ if [[ ! -f "$ROOT/quantile_final_health.csv" ]]; then
 fi
 
 if [[ ! -f "$CONFIRMATION_ROOT/launch_readiness.csv" ]]; then
-  taskset -c 0-14 "$R_BIN" application/scripts/prepare_joint_qdesn_pure_recursive_confirmation.R \
+  taskset -c "$CPU_LIST" "$R_BIN" application/scripts/prepare_joint_qdesn_pure_recursive_confirmation.R \
     --campaign-root "$ROOT" --output-dir "$CONFIRMATION_ROOT"
 fi
 
 if [[ ! -f "$CONFIRMATION_ROOT/vb_final_artifact_manifest.csv" ]]; then
-  taskset -c 0-14 "$R_BIN" application/scripts/run_joint_qdesn_pure_recursive_article_vb.R \
+  taskset -c "$CPU_LIST" "$R_BIN" application/scripts/run_joint_qdesn_pure_recursive_article_vb.R \
     --root "$CONFIRMATION_ROOT" --workers 15
 fi
 
 if [[ ! -f "$CONFIRMATION_ROOT/mcmc_final_artifact_manifest.csv" ]]; then
-  taskset -c 0-14 "$R_BIN" application/scripts/run_joint_qdesn_pure_recursive_article_mcmc.R \
+  taskset -c "$CPU_LIST" "$R_BIN" application/scripts/run_joint_qdesn_pure_recursive_article_mcmc.R \
     --root "$CONFIRMATION_ROOT" --workers 15
 fi
 
 if [[ ! -f "$SCORE_ROOT/preflight_artifact_manifest.csv" ]]; then
-  taskset -c 0-14 "$R_BIN" application/scripts/prepare_joint_qdesn_pure_recursive_score_packet.R \
+  taskset -c "$CPU_LIST" "$R_BIN" application/scripts/prepare_joint_qdesn_pure_recursive_score_packet.R \
     --source-root "$CONFIRMATION_ROOT" --score-root "$SCORE_ROOT"
 fi
 

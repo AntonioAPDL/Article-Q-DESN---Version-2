@@ -38,7 +38,8 @@ The production controller is
 `application/scripts/launch_joint_qdesn_pure_recursive_campaign.sh`. It may
 run only on Jerez from the synchronized dedicated branch. Every numerical
 worker is single-threaded, and the controller is restricted to 15 distinct
-physical cores (`0-14`). Generated fixtures, fits, posterior draws, and score
+physical cores (`2-16`), preserving an unrelated long-running job on CPU 1.
+Generated fixtures, fits, posterior draws, and score
 packets remain under ignored `application/cache/` roots.
 
 The workflow is resumable only through verified stage outputs. It fails

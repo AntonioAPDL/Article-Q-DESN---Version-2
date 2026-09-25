@@ -301,7 +301,7 @@ app_joint_article_read_contract <- function(
           "jerez_pure_recursive_15core_20260925") ||
         out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
         out$initial_concurrency != 15L || out$maximum_concurrency != 15L ||
-        !identical(out$cpu_affinity_list, "0-14") ||
+        !identical(out$cpu_affinity_list, "2-16") ||
         out$required_physical_cores != 15L ||
         !identical(out$capacity_approval_token,
           "JEREZ_PURE_RECURSIVE_15_PHYSICAL")) {

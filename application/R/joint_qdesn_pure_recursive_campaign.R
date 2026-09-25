@@ -68,7 +68,7 @@ app_joint_pure_read_contract <- function(path = app_joint_pure_contract_path()) 
   if (!identical(out$version, "joint_qdesn_pure_recursive_campaign_v1") ||
       !identical(out$tau, expected_tau) || out$scenario_count != 8L ||
       out$models_per_scenario != 4L || out$max_workers != 15L ||
-      !identical(out$cpu_affinity_list, "0-14") || out$blas_threads != 1L ||
+      !identical(out$cpu_affinity_list, "2-16") || out$blas_threads != 1L ||
       out$inner_training_rows + out$inner_calibration_rows != out$fit_rows ||
       out$candidate_count != 256L || out$advance_count != 50L ||
       !out$protected_selection_forbidden || out$protected_scores_for_selection ||
@@ -890,7 +890,7 @@ app_joint_pure_confirmation_contract <- function(campaign_root) {
   set("initial_concurrency", 15L); set("maximum_concurrency", 15L)
   set("vb_component_seed_base", 202625000L); set("chain_seed_base", 302609250L)
   set("chain_start_jitter_seed_base", 402609250L)
-  tab <- app_joint_pure_append_contract_value(tab, "runtime", "cpu_affinity_list", "0-14", "character",
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "cpu_affinity_list", "2-16", "character",
     "Fifteen distinct physical cores on Jerez.")
   tab <- app_joint_pure_append_contract_value(tab, "runtime", "required_physical_cores", 15L, "integer",
     "Required distinct physical cores.")

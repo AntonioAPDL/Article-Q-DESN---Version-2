@@ -29,7 +29,7 @@ rhs,tolerance,0.0001,numeric,Gaussian RHS VB tolerance.
 quantile,evaluation_replicates,3,integer,Fresh non-article VB readiness replicates.
 quantile,vb_jobs_per_scenario,51,integer,Three Gaussian refits and forty-eight quantile VB jobs.
 runtime,max_workers,15,integer,Exactly fifteen one-thread workers on Jerez.
-runtime,cpu_affinity_list,"0-14",character,Fifteen distinct physical cores using one hardware thread each.
+runtime,cpu_affinity_list,"2-16",character,Fifteen distinct free physical cores using one hardware thread each while preserving unrelated CPU 1.
 runtime,blas_threads,1,integer,One numerical thread per worker.
 runtime,nice_level,10,integer,Reduced scheduling priority.
 runtime,min_data_free_gib,100,numeric,Minimum Jerez data-space gate.

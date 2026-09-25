@@ -12,7 +12,7 @@ registry <- app_joint_pure_read_registry()
 anchors <- app_joint_pure_read_anchors()
 stopifnot(
   contract$scenario_count == 8L, contract$max_workers == 15L,
-  identical(contract$cpu_affinity_list, "0-14"), nrow(registry) == 8L,
+  identical(contract$cpu_affinity_list, "2-16"), nrow(registry) == 8L,
   identical(axes$response_lags, c(1L, 2L, 3L, 5L, 10L)),
   identical(axes$input_scale, c(0.10, 0.25, 0.50)),
   identical(axes$pi_w, c(0.05, 0.10, 0.20)),

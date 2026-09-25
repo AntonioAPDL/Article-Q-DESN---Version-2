@@ -67,6 +67,14 @@ app_joint_recursive_reservoir_meta <- function(design, selected) {
   )
 }
 
+app_joint_recursive_feature_from_history <- function(tt, history, design) {
+  if (identical(design$feature_contract %||% "", "pure_recursive_v1")) {
+    return(app_joint_pure_known_feature_row(
+      tt, history, response_lags = design$response_lags, sc = design$dgp_row))
+  }
+  app_joint_recursive_feature_row(tt, history[[tt - 1L]], design$dgp_row)
+}
+
 app_joint_recursive_selected_row <- function(selected, scenario_id) {
   row <- selected[as.character(selected$scenario_id) == scenario_id, , drop = FALSE]
   if (nrow(row) != 1L) {
@@ -98,7 +106,10 @@ app_joint_recursive_origin_snapshots <- function(design, fixture, selected) {
   if (identical(design$design_class, "direct")) return(out)
 
   full <- design$row_meta$full_time_index
-  raw <- as.matrix(fixture$Z[full, , drop = FALSE])
+  raw <- if (identical(design$feature_contract %||% "", "pure_recursive_v1")) {
+    app_joint_pure_raw_matrix(full, fixture$y, data.frame(
+      response_lags = design$response_lags, stringsAsFactors = FALSE), design$dgp_row)
+  } else as.matrix(fixture$Z[full, , drop = FALSE])
   scaled <- app_qdesn_reservoir_scale_inputs(
     raw, scale_params = design$scale_params
   )$X
@@ -198,9 +209,7 @@ app_joint_recursive_teacher_forced_audit <- function(
     states <- snapshots$states[[origin_pos]]
     for (row_index in map_rows) {
       tt <- design$forecast_map$full_time_index[[row_index]]
-      raw <- app_joint_recursive_feature_row(
-        tt, fixture$y[[tt - 1L]], design$dgp_row
-      )
+      raw <- app_joint_recursive_feature_from_history(tt, fixture$y, design)
       step <- app_joint_recursive_readout_row(
         raw, states, design, snapshots$reservoir_meta
       )
@@ -278,10 +287,10 @@ app_joint_recursive_mean_design <- function(
       origin_id <- snapshots$origin_index[[origin_pos]]
       map_rows <- which(design$forecast_map$origin_index == origin_id)
       states <- snapshots$states[[origin_pos]]
-      y_previous <- fixture$y[[snapshots$origin_full_time_index[[origin_pos]]]]
+      history <- fixture$y[seq_len(snapshots$origin_full_time_index[[origin_pos]])]
       for (row_index in map_rows) {
         tt <- design$forecast_map$full_time_index[[row_index]]
-        raw <- app_joint_recursive_feature_row(tt, y_previous, design$dgp_row)
+        raw <- app_joint_recursive_feature_from_history(tt, history, design)
         step <- app_joint_recursive_readout_row(
           raw, states, design, snapshots$reservoir_meta
         )
@@ -290,7 +299,7 @@ app_joint_recursive_mean_design <- function(
         q <- app_joint_recursive_predict_vector(
           step$z, beta_draws[draw_index, ], alpha_draws[draw_index, ], design$tau
         )
-        y_previous <- app_joint_recursive_inverse_cdf(
+        history[[tt]] <- app_joint_recursive_inverse_cdf(
           q, design$tau, uniforms[draw_index, row_index], tail_rule
         )
       }

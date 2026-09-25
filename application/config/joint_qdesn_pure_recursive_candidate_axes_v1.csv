@@ -1,0 +1,14 @@
+axis,values,role
+depth,"1;2;3",screened
+state_budget,"24;48;96;192",screened
+width_shape,"flat;tapered",screened
+response_lags,"1;2;3;5;10",screened
+exogenous_lags,"0",not_applicable_current_synthetic_registry
+alpha,"0.20;0.50;0.80",screened_shared_across_layers
+rho,"0.75;0.90;0.98",screened_shared_across_layers
+input_scale,"0.10;0.25;0.50",screened
+pi_w,"0.05;0.10;0.20",screened_shared_across_layers
+pi_in,"0.25;0.50;1.00",screened_shared_across_layers
+reservoir_seed,"202609250",fixed
+design_class,"reservoir",fixed
+state_reduction,"false",fixed

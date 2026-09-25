@@ -65,7 +65,8 @@ app_joint_shared_quantile_read_contract <- function(
   if (!identical(tau, sort(unique(tau))) || any(!is.finite(tau)) || any(tau <= 0 | tau >= 1)) {
     stop("Quantile continuation grid must be strictly increasing in (0,1).", call. = FALSE)
   }
-  if (out$max_workers != 10L || out$evaluation_replicates < 1L || out$origin_stride != out$max_lead) {
+  allowed_workers <- if (startsWith(out$version, "joint_qdesn_pure_recursive_quantile_v1__")) 15L else 10L
+  if (out$max_workers != allowed_workers || out$evaluation_replicates < 1L || out$origin_stride != out$max_lead) {
     stop("Quantile continuation runtime or forecast geometry is malformed.", call. = FALSE)
   }
   out
@@ -119,6 +120,13 @@ app_joint_shared_quantile_verify_parent <- function(parent_dir, contract) {
 }
 
 app_joint_shared_quantile_full_design <- function(fixture, candidate, contract) {
+  if ("feature_contract" %in% names(candidate) &&
+      identical(as.character(candidate$feature_contract[[1L]]), "pure_recursive_v1")) {
+    if (!exists("app_joint_pure_full_design", mode = "function")) {
+      stop("Pure-recursive design support has not been sourced.", call. = FALSE)
+    }
+    return(app_joint_pure_full_design(fixture, candidate, contract))
+  }
   roles <- fixture$detailed_split$role
   keep <- roles %in% c("desn_washout", "fit", "validation")
   raw <- as.matrix(fixture$Z[keep, , drop = FALSE])

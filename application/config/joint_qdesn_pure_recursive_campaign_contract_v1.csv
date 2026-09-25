@@ -1,0 +1,47 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_pure_recursive_campaign_v1,character,Pure-DESN recursive multi-horizon selection contract.
+identity,run_tag,joint_qdesn_pure_recursive_campaign_jerez_15core_20260925,character,Ignored Jerez runtime tag.
+identity,execution_branch,work/joint-qdesn-pure-desn-recursive-selection-20260925,character,Dedicated synchronized execution branch.
+scope,quantile_grid,"0.05;0.10;0.25;0.50;0.75;0.90;0.95",numeric_vector,Frozen seven-level quantile grid.
+scope,scenario_count,8,integer,All article mechanisms receive case-specific selection.
+scope,models_per_scenario,4,integer,Independent and joint AL and exAL rows.
+observational,desn_washout_rows,500,integer,Reservoir state washout rows.
+observational,fit_rows,500,integer,Complete observational fit window.
+observational,inner_training_rows,350,integer,Internal fitting rows.
+observational,inner_calibration_rows,150,integer,Internal recursive calibration rows.
+observational,protected_validation_rows,1000,integer,Rows forbidden during selection.
+forecast,calibration_origin_stride,30,integer,Spacing between internal rolling origins.
+forecast,calibration_max_lead,30,integer,Recursive leads per internal origin.
+forecast,origin_update_policy,teacher_forced_between_origins,character,Assimilate observations only when the origin advances.
+forecast,within_origin_policy,recursive_mean_response,character,Feed Gaussian mean predictions into future outcome lags while screening.
+forecast,final_posterior_policies,path;mean_state,character,Paired recursive posterior forecast policies.
+ridge,candidate_count,256,integer,Deterministic space-filling reservoir architectures per family.
+ridge,advance_count,50,integer,Architectures advanced to Gaussian RHS VB.
+ridge,ridge_tau2,10000,numeric,Gaussian ridge coefficient prior variance.
+ridge,intercept_variance,1000000,numeric,Gaussian ridge intercept prior variance.
+ridge,sigma_shape,2,numeric,Inverse-gamma shape.
+ridge,sigma_rate,1,numeric,Inverse-gamma rate.
+ridge,calibration_replicates,3,integer,Independent observational selector replicates.
+rhs,tau0_grid,"1;0.1;0.01;0.001;0.0001",numeric_vector,Frozen RHS global-scale grid.
+rhs,max_iter,300,integer,Gaussian RHS VB maximum iterations.
+rhs,min_iter,50,integer,Gaussian RHS VB minimum iterations.
+rhs,tolerance,0.0001,numeric,Gaussian RHS VB tolerance.
+quantile,evaluation_replicates,3,integer,Fresh non-article VB readiness replicates.
+quantile,vb_jobs_per_scenario,51,integer,Three Gaussian refits and forty-eight quantile VB jobs.
+runtime,max_workers,15,integer,Exactly fifteen one-thread workers on Jerez.
+runtime,cpu_affinity_list,"0-14",character,Fifteen distinct physical cores using one hardware thread each.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.
+runtime,min_data_free_gib,100,numeric,Minimum Jerez data-space gate.
+gates,max_condition_number,1000000000000,numeric,Review ceiling for readout condition estimate.
+gates,max_state_saturation,0.25,numeric,Review ceiling for near-saturated states.
+gates,max_readout_dimension,192,integer,Maximum full all-layer state dimension.
+gates,protected_selection_forbidden,true,logical,Protected rows cannot enter selection.
+gates,require_finite_scores,true,logical,All selector scores must be finite.
+gates,require_zero_contract_crossings,true,logical,Reported contracted quantiles must not cross.
+policy,selection_unit,scenario_specific,character,No universal specification is selected.
+policy,shared_specification_within_scenario,true,logical,Four model rows share one DESN and tau0.
+policy,raw_inputs_in_readout,false,logical,Readout is intercept plus reservoir states only.
+policy,full_states_all_layers,true,logical,No lower-layer state reduction.
+policy,protected_scores_for_selection,false,logical,Forecast outcomes cannot tune controls.
+policy,dense_grid_launched,false,logical,Dense-grid crossing work is deferred.

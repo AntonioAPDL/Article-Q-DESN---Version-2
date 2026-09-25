@@ -27,6 +27,7 @@ for (path in c(
   "joint_qdesn_shared_backbone_family_campaign.R",
   "joint_qdesn_shared_backbone_article_confirmation.R",
   "joint_qdesn_shared_backbone_article_score_packet.R",
+  "joint_qdesn_pure_recursive_campaign.R",
   "joint_qdesn_recursive_mean_design.R", "joint_qdesn_recursive_dgp_oracle.R",
   "joint_qdesn_recursive_mean_score_packet.R"
 )) source(app_path("application/R", path))

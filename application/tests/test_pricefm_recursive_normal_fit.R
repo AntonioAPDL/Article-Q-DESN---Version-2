@@ -34,6 +34,21 @@ stopifnot(isTRUE(rhs$converged), nrow(rhs$trace) == 2L)
 stopifnot(identical(rhs$initialization_contract, "scaled_ridge_initialization_only_prior_unchanged"))
 stopifnot(rhs$beta_prior$hypers$tau0 == 0.5, rhs$beta_prior$state$calls == 2L)
 
+stable_trace <- data.frame(
+  iter = 1:10,
+  sigma2_mean = rep(1, 10),
+  beta_max_abs_delta = rep(2e-4, 10),
+  fitted_rmse_delta = rep(2e-10, 10),
+  beta_relative_l2_delta = rep(2e-7, 10),
+  sigma_relative_delta = rep(2e-12, 10),
+  prior_rms_log_precision_delta = rep(2e-7, 10)
+)
+stopifnot(!app_pricefm_rhs_convergence_status(stable_trace, mode = "legacy_max_abs"))
+stopifnot(app_pricefm_rhs_convergence_status(stable_trace, mode = "predictive_fixed_point"))
+unstable_prior <- stable_trace
+unstable_prior$prior_rms_log_precision_delta[[10L]] <- 2e-5
+stopifnot(!app_pricefm_rhs_convergence_status(unstable_prior, mode = "predictive_fixed_point"))
+
 bad <- stats
 bad$Xty <- bad$Xty[-1L]
 stopifnot(inherits(try(app_pricefm_fit_scaled_ridge_stats(bad), silent = TRUE), "try-error"))

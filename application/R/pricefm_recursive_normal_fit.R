@@ -76,6 +76,31 @@ app_pricefm_fit_scaled_ridge_stats <- function(
   ), class = c("app_pricefm_recursive_normal_fit", "list"))
 }
 
+app_pricefm_rhs_convergence_status <- function(
+    trace,
+    mode = c("legacy_max_abs", "predictive_fixed_point"),
+    tol = 1e-5,
+    stability_window = 10L,
+    predictive_tol = 1e-7,
+    relative_beta_tol = 1e-6,
+    sigma_relative_tol = 1e-8,
+    prior_rms_log_precision_tol = 1e-6) {
+  mode <- match.arg(mode)
+  stability_window <- as.integer(stability_window)
+  if (stability_window < 1L || nrow(trace) < 1L) return(FALSE)
+  strict <- utils::tail(trace$beta_max_abs_delta, 1L) <= as.numeric(tol)
+  if (identical(mode, "legacy_max_abs")) return(strict)
+  if (nrow(trace) < stability_window) return(FALSE)
+  recent <- utils::tail(trace, stability_window)
+  if (any(!is.finite(as.matrix(recent)))) return(FALSE)
+  strict || (
+    max(recent$fitted_rmse_delta) <= as.numeric(predictive_tol) &&
+    max(recent$beta_relative_l2_delta) <= as.numeric(relative_beta_tol) &&
+    max(recent$sigma_relative_delta) <= as.numeric(sigma_relative_tol) &&
+    max(recent$prior_rms_log_precision_delta) <= as.numeric(prior_rms_log_precision_tol)
+  )
+}
+
 app_pricefm_fit_rhs_stats <- function(
     stats,
     tau0,
@@ -84,7 +109,13 @@ app_pricefm_fit_rhs_stats <- function(
     omega_b = 1,
     max_iter = 100L,
     min_iter = 50L,
-    tol = 1e-5) {
+    tol = 1e-5,
+    convergence_mode = c("legacy_max_abs", "predictive_fixed_point"),
+    stability_window = 10L,
+    predictive_tol = 1e-7,
+    relative_beta_tol = 1e-6,
+    sigma_relative_tol = 1e-8,
+    prior_rms_log_precision_tol = 1e-6) {
   stats <- app_pricefm_validate_normal_stats(stats)
   tau0 <- as.numeric(tau0)
   if (!is.finite(tau0) || tau0 <= 0) stop("tau0 must be finite and positive", call. = FALSE)
@@ -101,7 +132,12 @@ app_pricefm_fit_rhs_stats <- function(
   covariance <- ridge$beta$cov
   sigma_shape <- as.numeric(omega_a) + stats$n / 2
   sigma_rate <- ridge$omega2$b
-  trace <- data.frame(iter = integer(), sigma2_mean = numeric(), beta_max_abs_delta = numeric())
+  convergence_mode <- match.arg(convergence_mode)
+  trace <- data.frame(
+    iter = integer(), sigma2_mean = numeric(), beta_max_abs_delta = numeric(),
+    fitted_rmse_delta = numeric(), beta_relative_l2_delta = numeric(),
+    sigma_relative_delta = numeric(), prior_rms_log_precision_delta = numeric()
+  )
   converged <- FALSE
   for (iteration in seq_len(as.integer(max_iter))) {
     old_mean <- mean
@@ -119,14 +155,42 @@ app_pricefm_fit_rhs_stats <- function(
     sse <- stats$yty - 2 * as.numeric(crossprod(mean, stats$Xty)) + sum(stats$XtX * second_moment)
     sigma_rate <- as.numeric(omega_b) + 0.5 * max(sse, .Machine$double.eps)
     state <- prior$update(state, list(m = mean, V = covariance))
+    updated_prior_precision <- as.numeric(prior$expected_prec(state, stats$p))
+    if (length(updated_prior_precision) != stats$p || any(!is.finite(updated_prior_precision)) ||
+        any(updated_prior_precision <= 0)) {
+      stop("updated RHS expected precision must be finite and positive", call. = FALSE)
+    }
     sigma_mean <- if (sigma_shape > 1) sigma_rate / (sigma_shape - 1) else sigma_rate / sigma_shape
-    delta <- max(abs(mean - old_mean), abs(sigma_mean - old_sigma) / max(1, abs(old_sigma)))
+    beta_delta <- mean - old_mean
+    beta_max_abs_delta <- max(abs(beta_delta))
+    fitted_rmse_delta <- sqrt(max(
+      0, as.numeric(crossprod(beta_delta, stats$XtX %*% beta_delta)) / stats$n
+    ))
+    beta_relative_l2_delta <- sqrt(sum(beta_delta^2)) / max(1, sqrt(sum(old_mean^2)))
+    sigma_relative_delta <- abs(sigma_mean - old_sigma) / max(1, abs(old_sigma))
+    prior_active <- if (stats$p >= 2L) seq.int(2L, stats$p) else seq_len(stats$p)
+    prior_rms_log_precision_delta <- sqrt(mean(
+      (log(updated_prior_precision[prior_active]) - log(prior_precision[prior_active]))^2
+    ))
     trace <- rbind(trace, data.frame(
       iter = as.integer(iteration),
       sigma2_mean = as.numeric(sigma_mean),
-      beta_max_abs_delta = as.numeric(delta)
+      beta_max_abs_delta = as.numeric(beta_max_abs_delta),
+      fitted_rmse_delta = as.numeric(fitted_rmse_delta),
+      beta_relative_l2_delta = as.numeric(beta_relative_l2_delta),
+      sigma_relative_delta = as.numeric(sigma_relative_delta),
+      prior_rms_log_precision_delta = as.numeric(prior_rms_log_precision_delta)
     ))
-    if (iteration >= as.integer(min_iter) && delta <= as.numeric(tol)) {
+    if (iteration >= as.integer(min_iter) && app_pricefm_rhs_convergence_status(
+      trace,
+      mode = convergence_mode,
+      tol = tol,
+      stability_window = stability_window,
+      predictive_tol = predictive_tol,
+      relative_beta_tol = relative_beta_tol,
+      sigma_relative_tol = sigma_relative_tol,
+      prior_rms_log_precision_tol = prior_rms_log_precision_tol
+    )) {
       converged <- TRUE
       break
     }
@@ -151,7 +215,13 @@ app_pricefm_fit_rhs_stats <- function(
     converged = converged,
     exact_closed_form = FALSE,
     uses_vb = TRUE,
-    controls = list(max_iter = max_iter, min_iter = min_iter, tol = tol),
+    controls = list(
+      max_iter = max_iter, min_iter = min_iter, tol = tol,
+      convergence_mode = convergence_mode, stability_window = stability_window,
+      predictive_tol = predictive_tol, relative_beta_tol = relative_beta_tol,
+      sigma_relative_tol = sigma_relative_tol,
+      prior_rms_log_precision_tol = prior_rms_log_precision_tol
+    ),
     initialization_contract = "scaled_ridge_initialization_only_prior_unchanged"
   ), class = c("app_pricefm_recursive_normal_fit", "list"))
 }

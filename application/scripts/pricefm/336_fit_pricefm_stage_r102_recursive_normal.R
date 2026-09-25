@@ -59,7 +59,13 @@ if (identical(prior_type, "scaled_ridge")) {
     beta_prior_factory = beta_prior_factory,
     max_iter = as.integer(contract$max_iter),
     min_iter = as.integer(contract$min_iter),
-    tol = as.numeric(contract$tol)
+    tol = as.numeric(contract$tol),
+    convergence_mode = as.character(contract$convergence_mode %||% "legacy_max_abs"),
+    stability_window = as.integer(contract$stability_window %||% 10L),
+    predictive_tol = as.numeric(contract$predictive_tol %||% 1e-7),
+    relative_beta_tol = as.numeric(contract$relative_beta_tol %||% 1e-6),
+    sigma_relative_tol = as.numeric(contract$sigma_relative_tol %||% 1e-8),
+    prior_rms_log_precision_tol = as.numeric(contract$prior_rms_log_precision_tol %||% 1e-6)
   )
 } else {
   stop(sprintf("unsupported prior_type: %s", prior_type), call. = FALSE)
@@ -104,6 +110,7 @@ summary <- list(
   omega_rate = fit$omega2$b,
   posterior_target_sha256 = contract$posterior_target_sha256,
   initialization_contract = fit$initialization_contract %||% "exact_closed_form_no_warm_start",
+  convergence_controls = fit$controls %||% list(),
   test_opened = FALSE,
   registry_mutated = FALSE,
   article_mutated = FALSE

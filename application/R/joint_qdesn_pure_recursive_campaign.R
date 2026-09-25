@@ -337,6 +337,69 @@ app_joint_pure_reservoir_meta <- function(candidate, m_input) {
     input_bound = "none", win_scale_global = scale, win_scale_bias = scale)
 }
 
+app_joint_pure_candidate_columns <- function() {
+  c("scenario_id", "candidate_id", "candidate_role", "feature_contract", "design_class", "D", "n", "n_tilde",
+    "retained_state_budget", "width_shape", "state_reduction", "response_lags", "exogenous_lags", "alpha", "rho",
+    "pi_w", "pi_in", "input_scale", "reservoir_seed", "raw_inputs_in_readout", "full_states_all_layers", "architecture_signature")
+}
+
+app_joint_pure_worker_identity_columns <- function(stage = c("ridge", "rhs")) {
+  stage <- match.arg(stage)
+  c(app_joint_pure_candidate_columns(), if (stage == "ridge") {
+    c("worker_id", "replicate_id", "dgp_seed", "fixture_path")
+  } else {
+    c("rhs_tau0", "replicate_id", "dgp_seed", "fixture_path", "rhs_worker_id",
+      "rhs_candidate_id", "advancement_rank")
+  })
+}
+
+app_joint_pure_result_columns <- function() {
+  c(
+    "n_analysis", "n_train", "n_calibration", "protected_rows_loaded", "n_features",
+    "raw_readout_columns", "reservoir_readout_columns", "effective_rank", "condition_number",
+    "state_saturation_fraction", "finite_design", "status", "method", "observational_selector",
+    "hard_gate_status", "condition_gate_status", "saturation_gate_status", "calibration_acrps_mean",
+    "calibration_acrps_sd", "calibration_exact_gaussian_crps", "calibration_mae", "calibration_rmse",
+    "calibration_oracle_quantile_mae", "calibration_oracle_quantile_rmse", "converged", "iterations",
+    "final_delta", "runtime_seconds"
+  )
+}
+
+app_joint_pure_summary_identity <- function(candidate, stage = c("ridge", "rhs")) {
+  stage <- match.arg(stage)
+  columns <- app_joint_pure_worker_identity_columns(stage)
+  missing <- setdiff(app_joint_pure_candidate_columns(), names(candidate))
+  if (length(missing)) {
+    stop(sprintf("Worker candidate is missing identity columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  candidate[, intersect(columns, names(candidate)), drop = FALSE]
+}
+
+app_joint_pure_assert_unique_summary <- function(summary, context = "worker summary") {
+  duplicates <- unique(names(summary)[duplicated(names(summary))])
+  if (length(duplicates)) {
+    stop(sprintf("%s has duplicate columns: %s", context, paste(duplicates, collapse = ", ")), call. = FALSE)
+  }
+  summary
+}
+
+app_joint_pure_normalize_worker_summary <- function(summary, stage = c("ridge", "rhs")) {
+  stage <- match.arg(stage)
+  desired <- c(app_joint_pure_worker_identity_columns(stage), app_joint_pure_result_columns())
+  missing <- desired[!desired %in% names(summary)]
+  if (length(missing)) {
+    stop(sprintf("Legacy %s summary is missing fields: %s", stage, paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  result_names <- app_joint_pure_result_columns()
+  indices <- vapply(desired, function(name) {
+    matches <- which(names(summary) == name)
+    if (name %in% result_names) tail(matches, 1L) else matches[[1L]]
+  }, integer(1L))
+  out <- summary[, indices, drop = FALSE]
+  names(out) <- desired
+  app_joint_pure_assert_unique_summary(out, sprintf("normalized %s summary", stage))
+}
+
 app_joint_pure_build_design <- function(fixture, candidate, contract, selector = TRUE) {
   roles <- fixture$detailed_split$role
   if (selector) {
@@ -451,7 +514,7 @@ app_joint_pure_score_fit <- function(fixture, candidate, contract, method = c("r
     design$diagnostic$condition_number[[1L]] <= contract$max_condition_number
   saturation_pass <- is.finite(design$diagnostic$state_saturation_fraction[[1L]]) &&
     design$diagnostic$state_saturation_fraction[[1L]] <= contract$max_state_saturation
-  summary <- cbind(candidate, design$diagnostic, data.frame(
+  summary <- cbind(app_joint_pure_summary_identity(candidate, method), design$diagnostic, data.frame(
     status = "completed", method = method,
     observational_selector = "rolling_origin_recursive_realized_finite_grid_acrps",
     hard_gate_status = if (isTRUE(design$diagnostic$finite_design[[1L]]) && all(is.finite(score))) "pass" else "fail",
@@ -466,6 +529,7 @@ app_joint_pure_score_fit <- function(fixture, candidate, contract, method = c("r
     final_delta = fit$final_delta %||% NA_real_, runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     stringsAsFactors = FALSE
   ))
+  summary <- app_joint_pure_assert_unique_summary(summary)
   detail <- data.frame(
     calibration_row = seq_along(cal), full_time_index = design$row_meta$full_time_index[cal],
     origin_index = rep(seq_along(split(cal, ceiling(seq_along(cal) / contract$calibration_max_lead))),
@@ -589,17 +653,65 @@ app_joint_pure_collect_summaries <- function(root, stage) {
     stop(sprintf("Pure-recursive %s stage is not complete and failure-free.", stage), call. = FALSE)
   }
   paths <- list.files(file.path(root, paste0(stage, "_workers")), pattern = "summary[.]csv$", recursive = TRUE, full.names = TRUE)
-  out <- app_bind_rows_fill(lapply(paths, app_read_csv))
+  rows <- lapply(paths, function(path) {
+    app_joint_pure_assert_unique_summary(app_read_csv(path), sprintf("%s summary %s", stage, path))
+  })
+  out <- app_bind_rows_fill(rows)
+  required <- c(app_joint_pure_candidate_columns(), if (stage == "ridge") "worker_id" else c("rhs_worker_id", "rhs_tau0"),
+    app_joint_pure_result_columns())
+  missing <- setdiff(required, names(out))
+  if (length(missing)) {
+    stop(sprintf("Pure-recursive %s summaries are missing fields: %s", stage, paste(missing, collapse = ", ")), call. = FALSE)
+  }
   if (nrow(out) != health$expected[[1L]] || any(out$status != "completed") || any(!is.finite(as.numeric(out$calibration_acrps_mean)))) {
     stop(sprintf("Pure-recursive %s summaries violate completion gates.", stage), call. = FALSE)
   }
   out
 }
 
-app_joint_pure_candidate_columns <- function() {
-  c("scenario_id", "candidate_id", "candidate_role", "feature_contract", "design_class", "D", "n", "n_tilde",
-    "retained_state_budget", "width_shape", "state_reduction", "response_lags", "exogenous_lags", "alpha", "rho",
-    "pi_w", "pi_in", "input_scale", "reservoir_seed", "raw_inputs_in_readout", "full_states_all_layers", "architecture_signature")
+app_joint_pure_repair_rhs_summaries <- function(root) {
+  root <- normalizePath(root, mustWork = TRUE)
+  health <- app_joint_pure_health(root, "rhs")
+  if (health$completed[[1L]] != health$expected[[1L]] || health$failed[[1L]] != 0L) {
+    stop("RHS summary repair requires a complete, failure-free worker stage.", call. = FALSE)
+  }
+  plan <- app_read_csv(file.path(root, "rhs_worker_plan.csv"))
+  audits <- vector("list", nrow(plan))
+  for (ii in seq_len(nrow(plan))) {
+    worker_id <- as.integer(plan$rhs_worker_id[[ii]])
+    worker_dir <- app_joint_pure_worker_dir(root, "rhs", worker_id)
+    summary_path <- file.path(worker_dir, "summary.csv")
+    legacy <- app_read_csv(summary_path)
+    duplicate_names <- unique(names(legacy)[duplicated(names(legacy))])
+    old_sha256 <- app_sha256_file(summary_path)
+    normalized <- app_joint_pure_normalize_worker_summary(legacy, "rhs")
+    if (as.integer(normalized$rhs_worker_id[[1L]]) != worker_id) {
+      stop(sprintf("Normalized RHS summary does not identify worker %d.", worker_id), call. = FALSE)
+    }
+    changed <- length(duplicate_names) > 0L || !identical(names(legacy), names(normalized))
+    if (changed) {
+      app_write_csv(normalized, summary_path)
+      paths <- c(summary = summary_path,
+        calibration_detail = file.path(worker_dir, "calibration_detail.csv"))
+      trace_path <- file.path(worker_dir, "vb_trace.csv")
+      if (file.exists(trace_path)) paths <- c(paths, vb_trace = trace_path)
+      if (any(!file.exists(paths))) {
+        stop(sprintf("RHS worker %d is missing an artifact required for manifest repair.", worker_id), call. = FALSE)
+      }
+      app_joint_shared_write_manifest(worker_dir, paths)
+    }
+    verification <- app_joint_shared_verify_manifest(worker_dir)
+    if (!all(verification$verified)) {
+      stop(sprintf("Repaired RHS worker %d failed manifest verification.", worker_id), call. = FALSE)
+    }
+    audits[[ii]] <- data.frame(
+      rhs_worker_id = worker_id, changed = changed,
+      duplicate_columns = paste(duplicate_names, collapse = ";"),
+      old_summary_sha256 = old_sha256, new_summary_sha256 = app_sha256_file(summary_path),
+      manifest_verified = TRUE, stringsAsFactors = FALSE
+    )
+  }
+  app_bind_rows_fill(audits)
 }
 
 app_joint_pure_finalize_ridge <- function(root) {
@@ -646,12 +758,23 @@ app_joint_pure_finalize_rhs <- function(root) {
   root <- normalizePath(root, mustWork = TRUE); scores <- app_joint_pure_collect_summaries(root, "rhs")
   plan <- app_read_csv(file.path(root, "rhs_worker_plan.csv")); idx <- match(scores$rhs_worker_id, plan$rhs_worker_id)
   if (anyNA(idx) || anyDuplicated(scores$rhs_worker_id)) stop("RHS results do not match the frozen plan.", call. = FALSE)
-  scores <- cbind(scores, plan[idx, setdiff(names(plan), names(scores)), drop = FALSE])
+  identity <- c("scenario_id", "candidate_id", "rhs_tau0", "replicate_id", "dgp_seed")
+  mismatch <- vapply(identity, function(name) {
+    lhs <- as.character(scores[[name]])
+    rhs <- as.character(plan[[name]][idx])
+    any(lhs != rhs)
+  }, logical(1L))
+  if (any(mismatch)) {
+    stop(sprintf("RHS summary identity differs from the frozen plan: %s", paste(identity[mismatch], collapse = ", ")), call. = FALSE)
+  }
   keys <- app_joint_pure_candidate_columns()
   groups <- split(scores, paste(scores$scenario_id, scores$candidate_id, format(scores$rhs_tau0, scientific = TRUE), sep = "__"))
   aggregate <- app_bind_rows_fill(lapply(groups, function(x) {
     row <- x[1L, keys, drop = FALSE]
     cbind(row, data.frame(rhs_tau0 = as.numeric(x$rhs_tau0[[1L]]), replicate_count = nrow(x),
+      hard_gate_status = if (all(x$hard_gate_status == "pass")) "pass" else "fail",
+      condition_gate_status = if (all(x$condition_gate_status == "pass")) "pass" else "review",
+      saturation_gate_status = if (all(x$saturation_gate_status == "pass")) "pass" else "review",
       calibration_acrps_mean = mean(as.numeric(x$calibration_acrps_mean)),
       calibration_acrps_between_rep_sd = stats::sd(as.numeric(x$calibration_acrps_mean)),
       calibration_exact_gaussian_crps_mean = mean(as.numeric(x$calibration_exact_gaussian_crps)),
@@ -659,15 +782,18 @@ app_joint_pure_finalize_rhs <- function(root) {
       stringsAsFactors = FALSE))
   }))
   selected <- app_bind_rows_fill(lapply(split(aggregate, aggregate$scenario_id), function(x) {
+    x <- x[x$hard_gate_status == "pass" & x$convergence_fraction == 1, , drop = FALSE]
+    if (!nrow(x)) stop("No fully converged, hard-gate-eligible RHS candidate remains for a family.", call. = FALSE)
     x <- x[order(x$calibration_acrps_mean, x$calibration_acrps_between_rep_sd,
       x$calibration_exact_gaussian_crps_mean, -x$convergence_fraction, x$retained_state_budget,
       x$response_lags, x$candidate_id, x$rhs_tau0), , drop = FALSE]
     x$selection_rank <- seq_len(nrow(x)); x[1L, , drop = FALSE]
   }))
   selected$selection_window <- "observational_350_train_150_recursive_calibration"
+  selected$selection_metric <- "rhs_recursive_calibration_acrps"
   selected$protected_rows_used_for_selection <- 0L; selected$shared_across_four_quantile_rows <- TRUE
   selected$next_stage <- "nested_quantile_vb_then_article_fixture_mcmc"
-  decision <- selected[, c("scenario_id", "candidate_id", "rhs_tau0", "calibration_acrps_mean",
+  decision <- selected[, c("scenario_id", "candidate_id", "rhs_tau0", "calibration_acrps_mean", "selection_metric",
     "protected_rows_used_for_selection", "shared_across_four_quantile_rows"), drop = FALSE]
   decision$status <- "PURE_RECURSIVE_BACKBONE_SELECTED_NOT_YET_QUANTILE_FIT"
   outputs <- c(
@@ -675,6 +801,7 @@ app_joint_pure_finalize_rhs <- function(root) {
     rhs_aggregate = app_write_csv(aggregate, file.path(root, "rhs_candidate_aggregate.csv")),
     selected = app_write_csv(selected, file.path(root, "selected_family_backbones.csv")),
     decision = app_write_csv(decision, file.path(root, "selection_decision.csv")),
+    source_git_state = app_write_csv(app_joint_shared_git_state(), file.path(root, "selection_source_git_state.csv")),
     rhs_health = app_write_csv(app_joint_pure_health(root, "rhs"), file.path(root, "rhs_final_health.csv")))
   app_joint_shared_write_manifest(root, outputs, filename = "selection_artifact_manifest.csv")
   verification <- app_joint_shared_verify_manifest(root, file.path(root, "selection_artifact_manifest.csv"))
@@ -733,6 +860,36 @@ app_joint_pure_quantile_roots <- function(root, registry = app_joint_pure_read_r
     quantile_root = file.path(root, "families", registry$scenario_id, "quantile_vb"),
     stringsAsFactors = FALSE
   )
+}
+
+app_joint_pure_quantile_stage_counts <- function() {
+  c(`1` = 24L, `2` = 24L, `3` = 48L, `4` = 48L, `5` = 48L, `6` = 168L, `7` = 24L, `8` = 24L)
+}
+
+app_joint_pure_quantile_job_queue <- function(root, stage_order) {
+  root <- normalizePath(root, mustWork = TRUE)
+  stage_order <- as.integer(stage_order)
+  counts <- app_joint_pure_quantile_stage_counts()
+  if (length(stage_order) != 1L || is.na(stage_order) || !as.character(stage_order) %in% names(counts)) {
+    stop("Quantile stage_order must be one of 1,...,8.", call. = FALSE)
+  }
+  families <- app_read_csv(file.path(root, "quantile_family_plan.csv"))
+  if (nrow(families) != 8L || anyDuplicated(families$scenario_id) || anyDuplicated(families$quantile_root)) {
+    stop("Quantile family plan must contain eight unique families and roots.", call. = FALSE)
+  }
+  rows <- lapply(seq_len(nrow(families)), function(ii) {
+    qroot <- normalizePath(families$quantile_root[[ii]], mustWork = TRUE)
+    plan <- app_read_csv(file.path(qroot, "worker_plan.csv"))
+    jobs <- plan[as.integer(plan$stage_order) == stage_order, c("job_id"), drop = FALSE]
+    data.frame(quantile_root = qroot, job_id = as.integer(jobs$job_id), stringsAsFactors = FALSE)
+  })
+  out <- app_bind_rows_fill(rows)
+  expected <- unname(counts[[as.character(stage_order)]])
+  if (nrow(out) != expected || anyNA(out$job_id) || any(!nzchar(out$quantile_root)) ||
+      anyDuplicated(paste(out$quantile_root, out$job_id, sep = "::"))) {
+    stop(sprintf("Quantile stage %d queue violates its %d-job contract.", stage_order, expected), call. = FALSE)
+  }
+  out
 }
 
 app_joint_pure_write_quantile_parent <- function(root, selected_row) {

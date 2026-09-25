@@ -81,6 +81,60 @@ stopifnot(
   length(unique(ridge$detail$origin_index)) == 5L
 )
 
+rhs_candidate <- cbind(candidate, data.frame(
+  calibration_acrps_mean = 999, calibration_acrps_between_rep_sd = 0,
+  hard_gate_status = "pass", condition_gate_status = "pass", saturation_gate_status = "pass",
+  rhs_tau0 = 0.1, replicate_id = 1L, dgp_seed = 9025L, fixture_path = "unit_fixture.rds",
+  rhs_worker_id = 1L, rhs_candidate_id = "normal_bridge__unit__tau0_1e-01__rep1",
+  advancement_rank = 1L, stringsAsFactors = FALSE
+))
+rhs <- app_joint_pure_score_fit(selector, rhs_candidate, contract, "rhs")
+stopifnot(
+  !anyDuplicated(names(rhs$summary)),
+  rhs$summary$calibration_acrps_mean != 999,
+  rhs$summary$rhs_worker_id == 1L,
+  rhs$summary$rhs_tau0 == 0.1
+)
+legacy_rhs <- cbind(
+  rhs$summary[, app_joint_pure_worker_identity_columns("rhs"), drop = FALSE],
+  data.frame(hard_gate_status = "pass", condition_gate_status = "review",
+    saturation_gate_status = "review", calibration_acrps_mean = 999, stringsAsFactors = FALSE),
+  rhs$summary[, app_joint_pure_result_columns(), drop = FALSE]
+)
+normalized_rhs <- app_joint_pure_normalize_worker_summary(legacy_rhs, "rhs")
+stopifnot(
+  !anyDuplicated(names(normalized_rhs)),
+  identical(names(normalized_rhs), c(app_joint_pure_worker_identity_columns("rhs"), app_joint_pure_result_columns())),
+  normalized_rhs$calibration_acrps_mean == rhs$summary$calibration_acrps_mean,
+  normalized_rhs$condition_gate_status == rhs$summary$condition_gate_status
+)
+
+queue_root <- file.path(tempdir(), paste0("pure_recursive_quantile_queue_", paste(rep("long_path", 12L), collapse = "_")))
+dir.create(queue_root, recursive = TRUE, showWarnings = FALSE)
+family_rows <- vector("list", 8L)
+stage_counts <- app_joint_pure_quantile_stage_counts()
+for (family_index in seq_len(8L)) {
+  quantile_root <- file.path(queue_root, sprintf("family_%02d", family_index), "quantile_vb")
+  dir.create(quantile_root, recursive = TRUE, showWarnings = FALSE)
+  worker_plan <- do.call(rbind, lapply(seq_along(stage_counts), function(stage_index) {
+    jobs_per_family <- as.integer(stage_counts[[stage_index]]) / 8L
+    data.frame(stage_order = stage_index, job_id = seq_len(jobs_per_family) + (stage_index * 100L), stringsAsFactors = FALSE)
+  }))
+  app_write_csv(worker_plan, file.path(quantile_root, "worker_plan.csv"))
+  family_rows[[family_index]] <- data.frame(
+    scenario_id = sprintf("family_%02d", family_index), quantile_root = quantile_root,
+    stringsAsFactors = FALSE
+  )
+}
+app_write_csv(app_bind_rows_fill(family_rows), file.path(queue_root, "quantile_family_plan.csv"))
+queues <- lapply(seq_len(8L), function(stage) app_joint_pure_quantile_job_queue(queue_root, stage))
+stopifnot(
+  identical(vapply(queues, nrow, integer(1L)), unname(stage_counts)),
+  sum(vapply(queues, nrow, integer(1L))) == 408L,
+  all(vapply(queues, function(x) all(nchar(x$quantile_root) > 80L), logical(1L))),
+  !any(vapply(queues, function(x) anyNA(x$job_id) || any(!nzchar(x$quantile_root)), logical(1L)))
+)
+
 full <- fixture
 full$registry_row <- sc
 full_design <- app_joint_pure_full_design(full, candidate, contract)

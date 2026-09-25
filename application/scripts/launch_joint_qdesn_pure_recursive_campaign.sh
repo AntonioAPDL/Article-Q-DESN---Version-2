@@ -95,19 +95,27 @@ if [[ ! -f "$ROOT/quantile_family_plan.csv" ]]; then
 fi
 
 for stage_order in 1 2 3 4 5 6 7 8; do
-  mapfile -t JOBS < <("$R_BIN" -e '
-    root <- commandArgs(TRUE)[1L]; stage <- as.integer(commandArgs(TRUE)[2L])
-    families <- read.csv(file.path(root, "quantile_family_plan.csv"), stringsAsFactors=FALSE)
-    for (qroot in families$quantile_root) {
-      plan <- read.csv(file.path(qroot, "worker_plan.csv"), stringsAsFactors=FALSE)
-      ids <- plan$job_id[plan$stage_order == stage]
-      for (id in ids) cat(qroot, id, sep="\t", fill=TRUE)
-    }' "$ROOT" "$stage_order")
+  case "$stage_order" in
+    1|2|7|8) expected_stage_jobs=24 ;;
+    3|4|5) expected_stage_jobs=48 ;;
+    6) expected_stage_jobs=168 ;;
+    *) echo "Unknown quantile stage $stage_order." >&2; exit 2 ;;
+  esac
+  mapfile -t JOBS < <("$R_BIN" application/scripts/emit_joint_qdesn_pure_recursive_quantile_jobs.R \
+    --root "$ROOT" --stage-order "$stage_order")
+  [[ "${#JOBS[@]}" -eq "$expected_stage_jobs" ]] || {
+    echo "Quantile stage $stage_order emitted ${#JOBS[@]} jobs; expected $expected_stage_jobs." >&2
+    exit 2
+  }
   pids=()
   for slot in "${!CPUS[@]}"; do
     (
       for ((index=slot; index<${#JOBS[@]}; index+=15)); do
         IFS=$'\t' read -r qroot job_id <<<"${JOBS[$index]}"
+        [[ -n "$qroot" && -n "$job_id" ]] || {
+          echo "Quantile stage $stage_order emitted an empty root or job ID at index $index." >&2
+          exit 2
+        }
         taskset -c "${CPUS[$slot]}" nice -n 10 "$R_BIN" application/scripts/run_joint_qdesn_pure_recursive_quantile_worker.R \
           --root "$qroot" --job-id "$job_id"
       done

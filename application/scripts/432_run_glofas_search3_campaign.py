@@ -52,6 +52,27 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def write_completion_manifest(campaign: Path, log) -> list[dict[str, object]]:
+    """Write the immutable terminal inventory after the last mutable log line."""
+    log.write("SEARCH3_RAINY_SEASON_COMPLETE_PENDING_SCIENTIFIC_ADOPTION\n")
+    log.flush()
+    inventory = []
+    for path in sorted(campaign.rglob("*")):
+        if path.is_file() and path.name != "artifact_manifest.csv":
+            inventory.append({
+                "relative_path": str(path.relative_to(campaign)),
+                "size": path.stat().st_size,
+                "sha256": sha256(path),
+            })
+    manifest = campaign / "tables/artifact_manifest.csv"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    with manifest.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=("relative_path", "size", "sha256"))
+        writer.writeheader()
+        writer.writerows(inventory)
+    return inventory
+
+
 def source_ready(repo: Path) -> tuple[bool, dict]:
     status = run(["git", "status", "--porcelain"], repo, check=False).stdout.strip()
     head = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
@@ -353,13 +374,7 @@ def main() -> int:
         completion = campaign / "stages/confirmation/status/CAMPAIGN_COMPLETE"
         if not completion.exists():
             raise RuntimeError("Search III confirmation closed without the scientific-adoption gate")
-        inventory = []
-        for path in sorted(campaign.rglob("*")):
-            if path.is_file() and path.name != "artifact_manifest.csv":
-                inventory.append({"relative_path": str(path.relative_to(campaign)), "size": path.stat().st_size, "sha256": sha256(path)})
-        with (campaign / "tables/artifact_manifest.csv").open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=("relative_path", "size", "sha256")); writer.writeheader(); writer.writerows(inventory)
-        log.write("SEARCH3_RAINY_SEASON_COMPLETE_PENDING_SCIENTIFIC_ADOPTION\n")
+        write_completion_manifest(campaign, log)
     return 0
 
 

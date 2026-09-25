@@ -329,9 +329,12 @@ app_glofas_search3_phase_aggregate <- function(score_rows, folds, fit_rows = dat
     names(cert)[names(cert) == "selection_candidate_id"] <- "candidate_id"
     out <- merge(out, cert, by = intersect(c("target", "candidate_id", "method", "prior_id"), names(cert)), all.x = TRUE)
   }
-  out$promotion_eligible <- out$complete_phase_panel &
+  out$computationally_eligible <- out$complete_phase_panel &
     ifelse(is.na(out$fit_completed), TRUE, out$fit_completed == 1) &
     ifelse(is.na(out$terminal_certificate_pass), TRUE, out$terminal_certificate_pass == 1)
+  # Backward-compatible alias. Scientific adoption additionally applies the
+  # frozen guardrail, historical-fit, breadth, and development-direction gates.
+  out$promotion_eligible <- out$computationally_eligible
   out <- out[order(out$target, !out$promotion_eligible, round(out$phase_balanced_crps, 4), out$worst_primary_crps, out$mean_secondary_crps), , drop = FALSE]
   out$rank <- ave(seq_len(nrow(out)), out$target, FUN = seq_along)
   rownames(out) <- NULL

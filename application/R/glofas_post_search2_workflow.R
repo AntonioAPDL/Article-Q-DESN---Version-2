@@ -1,4 +1,4 @@
-# Post-Search-II execution contract for the GloFAS application.
+# Post-screening execution contract for the GloFAS application.
 
 app_glofas_post_search2_required_components <- function() {
   c("reference", "discrepancy")
@@ -24,7 +24,7 @@ app_glofas_post_search2_final_design_contract <- function(selection) {
   if (effective_drop != 540L || length(expected_dates) != 12455L ||
       min(expected_dates) != as.Date("1988-11-19") ||
       max(expected_dates) != c_dec25$train_end) {
-    stop("The adopted Search-II design no longer matches its frozen Dec-25 date contract.", call. = FALSE)
+    stop("The adopted component design no longer matches its frozen Dec-25 date contract.", call. = FALSE)
   }
   list(
     panel_start = panel_start,
@@ -81,25 +81,53 @@ app_glofas_post_search2_read_selection <- function(path, require_adopted = TRUE)
   if (isTRUE(require_adopted) && any(tolower(trimws(as.character(manifest$adoption_status))) != "adopted")) {
     stop("Every selected component must have adoption_status=adopted.", call. = FALSE)
   }
-  expected <- list(
-    reference = list(candidate_id = "search2_ref_008", seed = 20260512L, zeta2 = NA_real_),
-    discrepancy = list(candidate_id = "search2_dis_009", seed = 20261521L, zeta2 = 16)
-  )
+  program <- if ("selection_program" %in% names(manifest)) {
+    unique(tolower(trimws(as.character(manifest$selection_program))))
+  } else {
+    "search2_frozen"
+  }
+  if (length(program) != 1L || !program %in% c("search2_frozen", "search3_rainy_season")) {
+    stop("Selection manifest has an unsupported or mixed selection_program.", call. = FALSE)
+  }
+  if (identical(program, "search3_rainy_season")) {
+    search3_required <- c(
+      "selection_schema_version", "scientific_gate_pass", "adoption_action",
+      "source_head", "candidate_manifest_sha256", "confirmation_aggregate_sha256",
+      "adoption_decision_sha256"
+    )
+    app_check_required_columns(manifest, search3_required, "Search III selected component manifest")
+    if (any(as.character(manifest$selection_schema_version) != "1") ||
+        any(!vapply(manifest$scientific_gate_pass, app_as_bool, logical(1L)))) {
+      stop("Search III selection requires schema version 1 and passing scientific gates.", call. = FALSE)
+    }
+  }
+  expected <- if (identical(program, "search3_rainy_season")) {
+    list(
+      reference = list(candidate_id = "search3_ref_001", seed = 20260512L, zeta2 = NA_real_),
+      discrepancy = list(candidate_id = "search3_dis_007", seed = 20261521L, zeta2 = 16)
+    )
+  } else {
+    list(
+      reference = list(candidate_id = "search2_ref_008", seed = 20260512L, zeta2 = NA_real_),
+      discrepancy = list(candidate_id = "search2_dis_009", seed = 20261521L, zeta2 = 16)
+    )
+  }
   for (component in names(expected)) {
     row <- manifest[manifest$component == component, , drop = FALSE]
     spec <- expected[[component]]
     if (!identical(as.character(row$candidate_id[[1L]]), spec$candidate_id) ||
         as.integer(row$canonical_seed[[1L]]) != spec$seed) {
-      stop(sprintf("%s selection does not match the frozen Search II adoption.", component), call. = FALSE)
+      stop(sprintf("%s selection does not match the frozen %s adoption.", component, program), call. = FALSE)
     }
     zeta <- suppressWarnings(as.numeric(row$rhs_zeta2_fixed[[1L]]))
     if ((is.na(spec$zeta2) && is.finite(zeta)) ||
         (is.finite(spec$zeta2) && (!is.finite(zeta) || abs(zeta - spec$zeta2) > 1.0e-12))) {
-      stop(sprintf("%s slab policy does not match the frozen Search II adoption.", component), call. = FALSE)
+      stop(sprintf("%s slab policy does not match the frozen %s adoption.", component, program), call. = FALSE)
     }
   }
   attr(manifest, "selection_path") <- path
   attr(manifest, "selection_sha256") <- app_sha256_file(path)
+  attr(manifest, "selection_program") <- program
   manifest
 }
 
@@ -147,14 +175,14 @@ app_glofas_post_search2_component_row <- function(selection, component) {
     rhs_zeta2_fixed = suppressWarnings(as.numeric(selected$rhs_zeta2_fixed[[1L]])),
     rhs_a_zeta = as.numeric(selected$rhs_a_zeta[[1L]]),
     rhs_b_zeta = as.numeric(selected$rhs_b_zeta[[1L]]),
-    rhs_max_iter = 100L,
-    rhs_min_iter = 30L,
+    rhs_max_iter = 200L,
+    rhs_min_iter = 200L,
     rhs_tol = 1.0e-4,
     rhs_update_every = 1L,
     rhs_freeze_tau_warmup_iters = 0L,
     rhs_min_tau_updates = 0L,
     rhs_freeze_beta_warmup_iters = 20L,
-    rhs_min_beta_updates = 30L,
+    rhs_min_beta_updates = 180L,
     source_selection_sha256 = as.character(attr(selection, "selection_sha256") %||% NA_character_),
     stringsAsFactors = FALSE
   )
@@ -199,14 +227,14 @@ app_glofas_post_search2_joint_candidate <- function(selection, candidate_id = "p
     rhs_zeta2_fixed_discrepancy = disc$rhs_zeta2_fixed,
     rhs_a_zeta = ref$rhs_a_zeta,
     rhs_b_zeta = ref$rhs_b_zeta,
-    rhs_max_iter = 100L,
-    rhs_min_iter = 30L,
+    rhs_max_iter = 200L,
+    rhs_min_iter = 200L,
     rhs_tol = 1.0e-4,
     rhs_update_every = 1L,
     rhs_freeze_tau_warmup_iters = 0L,
     rhs_min_tau_updates = 0L,
     rhs_freeze_beta_warmup_iters = 20L,
-    rhs_min_beta_updates = 30L,
+    rhs_min_beta_updates = 180L,
     ref_source_candidate_id = ref$candidate_id,
     disc_source_candidate_id = disc$candidate_id,
     ref_prior_id = ref$prior_id,

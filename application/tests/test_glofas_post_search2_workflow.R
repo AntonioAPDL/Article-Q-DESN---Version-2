@@ -42,6 +42,7 @@ stopifnot(
   )$train_idx) == 12455L
 )
 stopifnot(ref$seed == 20260512L, disc$seed == 20261521L)
+stopifnot(ref$rhs_max_iter == 200L, ref$rhs_min_iter == 200L, ref$rhs_min_beta_updates == 180L)
 stopifnot(ref$state_scaling == "train_zscore", disc$state_scaling == "train_zscore")
 stopifnot(ref$act_f == "tanh", ref$act_k == "identity")
 stopifnot(is.na(ref$rhs_zeta2_fixed), disc$rhs_zeta2_fixed == 16)
@@ -50,6 +51,7 @@ disc_slab <- app_glofas_post_search2_quantile_slab(disc)
 stopifnot(ref_slab$policy == "learned", !ref_slab$slab_fixed, ref_slab$zeta2 == 2)
 stopifnot(disc_slab$policy == "fixed", disc_slab$slab_fixed, disc_slab$zeta2 == 16)
 stopifnot(joint$ref_output_lag_max == 540L, joint$disc_covariate_lag_max == 360L)
+stopifnot(joint$rhs_max_iter == 200L, joint$rhs_min_iter == 200L, joint$rhs_min_beta_updates == 180L)
 stopifnot(joint$ref_act_k == "identity", joint$disc_act_k == "identity")
 stopifnot(!app_glofas_post_search2_needs_calibration("part1_fit", "normal_ridge"))
 stopifnot(!app_glofas_post_search2_needs_calibration("part1_forecast", "normal_ridge"))
@@ -75,6 +77,39 @@ bad$canonical_seed[bad$component == "reference"] <- 99L
 bad_path <- tempfile(fileext = ".csv")
 app_write_csv(bad, bad_path)
 stopifnot(inherits(try(app_glofas_post_search2_read_selection(bad_path), silent = TRUE), "try-error"))
-unlink(c(path, bad_path))
+
+search3 <- selection
+search3$candidate_id <- c("search3_ref_001", "search3_dis_007")
+search3$n_vector <- c("1500", "1000")
+search3$n_state_features <- c(1500L, 1000L)
+search3$m <- search3$output_lag_max <- c(540L, 180L)
+search3$covariate_lag_max <- c(90L, 180L)
+search3$alpha <- c(0.75, 0.85)
+search3$rho <- c(0.60, 0.20)
+search3$pi_w <- c(0.10, 0.003)
+search3$effective_input_gain <- c(0.50, 0.35)
+search3$prior_id <- c("search3_ref_m040_learned", "search3_dis_m060_fixed16")
+search3$m0 <- c(40, 60)
+search3$selection_program <- "search3_rainy_season"
+search3$selection_schema_version <- "1"
+search3$scientific_gate_pass <- TRUE
+search3$adoption_action <- c("retain_search2_incumbent", "adopt_search3_challenger")
+search3$source_head <- "fixture"
+search3$candidate_manifest_sha256 <- "fixture"
+search3$confirmation_aggregate_sha256 <- "fixture"
+search3$adoption_decision_sha256 <- "fixture"
+search3_path <- tempfile(fileext = ".csv")
+app_write_csv(search3, search3_path)
+selected3 <- app_glofas_post_search2_read_selection(search3_path)
+stopifnot(identical(attr(selected3, "selection_program"), "search3_rainy_season"))
+stopifnot(app_glofas_post_search2_component_row(selected3, "discrepancy")$n_state_features == 1000L)
+stopifnot(app_glofas_post_search2_final_design_contract(selected3)$effective_drop == 540L)
+
+bad3 <- search3
+bad3$scientific_gate_pass[bad3$component == "discrepancy"] <- FALSE
+bad3_path <- tempfile(fileext = ".csv")
+app_write_csv(bad3, bad3_path)
+stopifnot(inherits(try(app_glofas_post_search2_read_selection(bad3_path), silent = TRUE), "try-error"))
+unlink(c(path, bad_path, search3_path, bad3_path))
 
 message("GloFAS post-Search-II workflow tests passed.")

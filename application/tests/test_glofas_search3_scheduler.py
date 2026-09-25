@@ -5,6 +5,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import hashlib
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +23,19 @@ controller = load("search3_controller", "application/scripts/432_run_glofas_sear
 
 
 class Search3SchedulerTest(unittest.TestCase):
+    def test_completion_manifest_hashes_terminal_controller_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "logs").mkdir()
+            with (root / "logs/controller.log").open("a", buffering=1) as log:
+                rows = controller.write_completion_manifest(root, log)
+            controller_row = next(row for row in rows if row["relative_path"] == "logs/controller.log")
+            observed = hashlib.sha256((root / "logs/controller.log").read_bytes()).hexdigest()
+            self.assertEqual(controller_row["sha256"], observed)
+            self.assertTrue((root / "logs/controller.log").read_text().endswith(
+                "SEARCH3_RAINY_SEASON_COMPLETE_PENDING_SCIENTIFIC_ADOPTION\n"
+            ))
+
     def test_manifest_and_thread_guards(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

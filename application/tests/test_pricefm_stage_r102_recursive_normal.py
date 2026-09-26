@@ -157,6 +157,14 @@ def test_launch_prep_source_keeps_later_surfaces_blocked() -> None:
     assert "test_access_authorized" in runner
 
 
+def test_normal_runner_creates_output_parent_before_normalizing_it() -> None:
+    runner = (SCRIPTS / "336_fit_pricefm_stage_r102_recursive_normal.R").read_text()
+    create = "dir.create(output_parent, recursive = TRUE, showWarnings = FALSE)"
+    normalize = "output_parent <- normalizePath(output_parent, mustWork = TRUE)"
+    assert create in runner and normalize in runner
+    assert runner.index(create) < runner.index(normalize)
+
+
 def test_orchestrator_cpu_and_boolean_contracts() -> None:
     assert ORCHESTRATOR.parse_cpus("0-2,4") == [0, 1, 2, 4]
     assert ORCHESTRATOR.truthy(True)

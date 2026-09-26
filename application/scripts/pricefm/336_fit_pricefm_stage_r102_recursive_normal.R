@@ -18,8 +18,10 @@ if (!identical(contract$selection_split, "train_validation_only") || isTRUE(cont
 }
 
 stats_dir <- normalizePath(contract$stats_dir, mustWork = TRUE)
-output_dir <- normalizePath(dirname(contract$output_dir), mustWork = TRUE)
-output_dir <- file.path(output_dir, basename(contract$output_dir))
+output_parent <- dirname(contract$output_dir)
+dir.create(output_parent, recursive = TRUE, showWarnings = FALSE)
+output_parent <- normalizePath(output_parent, mustWork = TRUE)
+output_dir <- file.path(output_parent, basename(contract$output_dir))
 if (dir.exists(output_dir) && file.exists(file.path(output_dir, "terminal.json"))) {
   existing <- jsonlite::read_json(file.path(output_dir, "terminal.json"), simplifyVector = TRUE)
   if (identical(existing$status, "completed_recursive_normal_fit")) {

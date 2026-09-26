@@ -210,6 +210,7 @@ def test_controller_and_quantile_runner_keep_scientific_firewalls():
     assert '"mcmc_fitted": False' in source
     assert "exact CRAN exdqlm 1.1.1" in atom
     assert "prior_center_from_initializer = FALSE" in atom
+    assert 'fit_root.mkdir(parents=True, exist_ok=True)' in source
 
 
 def test_plan_records_explicit_lags_and_fixed_warmup():

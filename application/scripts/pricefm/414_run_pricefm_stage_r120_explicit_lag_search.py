@@ -482,6 +482,8 @@ def _complete_groups(cells: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
 
 def _rhs_stage(args: argparse.Namespace, prep: Path, campaign: Path, code: Path, cpus: list[int], top: pd.DataFrame, label: str = "stage_d") -> pd.DataFrame:
     control = _read_control(prep); records, tasks = [], []; contracts = campaign / label / "contracts"; rscript = str(control["rscript"])
+    fit_root = campaign / label / "fits"
+    fit_root.mkdir(parents=True, exist_ok=True)
     for row in top.itertuples(index=False):
         ridge = _ridge_root(campaign, str(row.stage), str(row.candidate_id))
         for split in (1, 2, 3):
@@ -489,7 +491,7 @@ def _rhs_stage(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
             if not (stats_dir / "terminal.json").is_file(): write_stats_packet(stats_dir, stats, {"candidate_id": row.candidate_id, "split": split})
             reference = float(control["rhs_tau_reference"]) * math.sqrt(float(control["rhs_tau_reference_dimension"]) / stats["p"])
             for multiplier in control["rhs_tau_multipliers"]:
-                tau0 = reference * float(multiplier); fit_id = f"{row.candidate_id}_s{split}_m{multiplier:g}"; output = campaign / label / f"fits/{fit_id}"
+                tau0 = reference * float(multiplier); fit_id = f"{row.candidate_id}_s{split}_m{multiplier:g}"; output = fit_root / fit_id
                 contract = _normal_contract(fit_id, stats_dir, output, tau0, control, code); contract_path = contracts / f"{fit_id}.json"
                 contract_path.parent.mkdir(parents=True, exist_ok=True); write_json(contract_path, contract)
                 if not _valid_normal(output): tasks.append((fit_id, [rscript, str(code / "application/scripts/pricefm/336_fit_pricefm_stage_r102_recursive_normal.R"), "--contract", str(contract_path)], campaign / f"logs/{label}_fit/{fit_id}.log"))

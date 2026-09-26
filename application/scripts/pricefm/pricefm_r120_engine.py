@@ -462,7 +462,14 @@ def teacher_forced_statistics(
     normalized = normalize_spec(spec)
     explicit_names = input_names(normalized, arrays.exog_names)
     reservoir, config, audit = make_reservoir(normalized, len(explicit_names))
-    indices = np.arange(len(arrays.response), dtype=int)
+    if not origin_groups:
+        raise ValueError("R120 statistics require at least one origin group")
+    indices = np.unique(np.concatenate([np.asarray(value, dtype=int) for value in origin_groups.values()]))
+    if not len(indices) or indices.min() < 0 or indices.max() >= len(arrays.response):
+        raise ValueError("R120 statistics origin group is invalid")
+    global_to_local = np.full(len(arrays.response), -1, dtype=int)
+    global_to_local[indices] = np.arange(len(indices))
+    local_groups = {name: global_to_local[np.asarray(value, dtype=int)] for name, value in origin_groups.items()}
     states = initialize_states(arrays, normalized, reservoir, config, indices)
     p = len(feature_names(normalized, explicit_names))
     stats = {name: _empty_stats(p) for name in origin_groups}
@@ -470,9 +477,8 @@ def teacher_forced_statistics(
         transition = explicit_input(arrays, normalized, indices, horizon)
         states = reservoir_step(states, transition, reservoir, config)
         design = readout_rows(states, transition, normalized["readout"])
-        response = arrays.response[:, horizon]
-        for name, group in origin_groups.items():
-            selected = np.asarray(group, dtype=int)
+        response = arrays.response[indices, horizon]
+        for name, selected in local_groups.items():
             block, y = design[selected], response[selected]
             stats[name]["n"] += len(y)
             stats[name]["XtX"] += block.T @ block

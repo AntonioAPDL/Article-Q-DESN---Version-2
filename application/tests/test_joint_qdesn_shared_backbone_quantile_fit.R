@@ -124,4 +124,18 @@ stopifnot(
   abs(sum(app_joint_shared_weights(contract$tau)) - diff(range(contract$tau))) < 1e-12
 )
 
+score_design <- list(
+  scenario_id = "normal_bridge", tau = contract$tau,
+  y = seq(-1, 1, length.out = nrow(qhat)), mu = rep(0, nrow(qhat)),
+  sigma = rep(1, nrow(qhat)), true_q = qhat,
+  dgp_row = data.frame(
+    scenario_id = "normal_bridge", distribution_family = "gaussian",
+    seed = 20260925L, stringsAsFactors = FALSE
+  )
+)
+score <- app_joint_shared_quantile_window_score(
+  score_design, qhat, seq_len(nrow(qhat)), "joint_qdesn_rhs", 1L, "forecast"
+)
+stopifnot(nrow(score) == 1L, score$dgp_seed == 20260925L)
+
 cat("joint shared-backbone quantile continuation tests passed\n")

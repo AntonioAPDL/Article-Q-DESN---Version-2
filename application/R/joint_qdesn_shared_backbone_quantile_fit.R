@@ -860,6 +860,11 @@ app_joint_shared_quantile_window_score <- function(design, qhat, idx, model_id, 
   contract_q <- app_joint_qdesn_apply_monotone_contract(qhat, design$tau)
   sc <- design$dgp_row
   if (is.null(sc) || nrow(sc) != 1L) stop("DGP registry row is missing from the frozen design.", call. = FALSE)
+  dgp_seed <- design$seed
+  if (is.null(dgp_seed) || length(dgp_seed) != 1L || !is.finite(dgp_seed)) dgp_seed <- sc$seed
+  if (is.null(dgp_seed) || length(dgp_seed) != 1L || !is.finite(dgp_seed)) {
+    stop("DGP seed is missing from the frozen design and registry row.", call. = FALSE)
+  }
   score <- app_joint_qdesn_postscore_score_matrix(
     contract_q$qhat_contract, design$y[idx], design$mu[idx], design$sigma[idx],
     sc, design$tau, app_joint_shared_weights(design$tau)
@@ -868,7 +873,7 @@ app_joint_shared_quantile_window_score <- function(design, qhat, idx, model_id, 
   check <- vapply(seq_along(design$tau), function(k) app_check_loss(
     design$y[idx], contract_q$qhat_contract[, k], design$tau[[k]]), numeric(length(idx)))
   data.frame(
-    scenario_id = design$scenario_id, replicate_id = replicate_id, dgp_seed = design$seed,
+    scenario_id = design$scenario_id, replicate_id = replicate_id, dgp_seed = as.integer(dgp_seed),
     model_id = model_id, window = window, n_scored_rows = length(idx),
     dgp_integrated_acrps = score$dgp_integrated_acrps, realized_acrps = score$realized_acrps,
     check_loss_mean = mean(check), oracle_quantile_mae = mean(abs(truth_error)),

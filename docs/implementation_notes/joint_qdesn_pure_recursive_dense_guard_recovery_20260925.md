@@ -111,3 +111,27 @@ PriceFM R120 controller and any high-load process last observed on those CPUs
 as blockers. This prevents the recovered pipeline from competing with an
 unrelated scientific lane while retaining the frozen 15-core execution
 contract.
+
+## Confirmation schema recovery
+
+After quantile closeout completed, confirmation preparation exposed a second
+metadata-only compatibility issue. Pure-recursive future rows already contain
+`scenario_order`, while the shared confirmation builder also imports that
+column from the design manifest. A base merge therefore produced
+`scenario_order.x` and `scenario_order.y`, leaving no canonical column for the
+subsequent ordering operation. The failure occurred before any of the 136 VB
+components or 160 MCMC workers launched.
+
+The model-cell builder now keeps design-manifest order as the canonical value,
+checks any source order for exact agreement, and rejects incomplete,
+duplicated, or conflicting scenario mappings. Tests cover both the legacy
+schema without source order and the pure-recursive schema with matching and
+conflicting order.
+
+`application/scripts/recover_joint_qdesn_pure_recursive_confirmation_schema.R`
+requires the verified 408/408 source state and the exact failed 17-file
+confirmation footprint. It hash-inventories and copies that partial root into
+a recovery archive, verifies every archived byte, and only then clears the
+non-authoritative partial root so confirmation preparation can restart. All
+screening, selected backbones, quantile fits, predictions, and quantile
+manifests remain immutable.

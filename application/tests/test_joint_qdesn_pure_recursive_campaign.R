@@ -230,4 +230,51 @@ stopifnot(
   ]) == 336L
 )
 
+cell_scenarios <- sprintf("scenario_%02d", seq_len(8L))
+cell_map <- app_joint_article_model_map()
+ordered_future <- merge(
+  data.frame(
+    scenario_id = cell_scenarios,
+    scenario_order = seq_along(cell_scenarios),
+    article_fixture_used_for_selection = FALSE,
+    stringsAsFactors = FALSE
+  ),
+  cell_map[, "model_id", drop = FALSE],
+  by = NULL
+)
+cell_designs <- data.frame(
+  scenario_order = seq_along(cell_scenarios), scenario_id = cell_scenarios,
+  design_path = paste0("design_", seq_along(cell_scenarios), ".rds"),
+  design_fingerprint = paste0("fingerprint_", seq_along(cell_scenarios)),
+  p = 6L, fit_rows = 500L, validation_rows = 1000L,
+  scored_forecast_rows = 990L, stringsAsFactors = FALSE
+)
+ordered_cells <- app_joint_article_build_model_cells(
+  ordered_future, cell_designs,
+  list(expected_top_level_initializers = 32L)
+)
+legacy_future <- ordered_future
+legacy_future$scenario_order <- NULL
+legacy_cells <- app_joint_article_build_model_cells(
+  legacy_future, cell_designs,
+  list(expected_top_level_initializers = 32L)
+)
+stopifnot(
+  nrow(ordered_cells) == 32L,
+  identical(sort(unique(ordered_cells$scenario_order)), seq_len(8L)),
+  !any(grepl("^scenario_order\\.", names(ordered_cells))),
+  nrow(legacy_cells) == 32L,
+  identical(sort(unique(legacy_cells$scenario_order)), seq_len(8L))
+)
+bad_ordered_future <- ordered_future
+bad_ordered_future$scenario_order[bad_ordered_future$scenario_id == cell_scenarios[[1L]]] <- 8L
+order_mismatch <- tryCatch({
+  app_joint_article_build_model_cells(
+    bad_ordered_future, cell_designs,
+    list(expected_top_level_initializers = 32L)
+  )
+  ""
+}, error = function(e) conditionMessage(e))
+stopifnot(grepl("scenario ordering disagree", order_mismatch, fixed = TRUE))
+
 cat("Pure-recursive JOINT campaign tests passed.\n")

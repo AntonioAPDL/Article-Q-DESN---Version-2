@@ -1223,10 +1223,29 @@ app_joint_article_build_model_cells <- function(future, design_manifest, contrac
     call. = FALSE)
   cells$cell_index <- seq_len(nrow(cells))
   cells$model_cell_id <- app_joint_article_cell_id(cells$scenario_id, cells$model_id)
+  if ("scenario_order" %in% names(cells)) {
+    cells$source_scenario_order <- as.integer(cells$scenario_order)
+    cells$scenario_order <- NULL
+  }
   dm <- design_manifest[, c("scenario_order", "scenario_id", "design_path",
     "design_fingerprint", "p", "fit_rows", "validation_rows", "scored_forecast_rows"),
     drop = FALSE]
+  if (anyDuplicated(dm$scenario_id) || anyNA(dm$scenario_order)) {
+    stop("Design manifest scenario ordering must be complete and unique.",
+      call. = FALSE)
+  }
   cells <- merge(cells, dm, by = "scenario_id", all.x = TRUE, sort = FALSE)
+  if (anyNA(cells$scenario_order)) {
+    stop("Design manifest does not cover every future scenario.", call. = FALSE)
+  }
+  if ("source_scenario_order" %in% names(cells)) {
+    if (anyNA(cells$source_scenario_order) ||
+        any(cells$source_scenario_order != as.integer(cells$scenario_order))) {
+      stop("Future and design-manifest scenario ordering disagree.",
+        call. = FALSE)
+    }
+    cells$source_scenario_order <- NULL
+  }
   cells <- cells[order(cells$scenario_order, match(cells$model_id, map$model_id)), ,
     drop = FALSE]
   cells$cell_index <- seq_len(nrow(cells))

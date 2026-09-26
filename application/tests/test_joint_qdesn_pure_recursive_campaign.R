@@ -60,6 +60,29 @@ candidate <- data.frame(
   input_scale = 0.25, reservoir_seed = axes$reservoir_seed[[1L]], raw_inputs_in_readout = FALSE,
   full_states_all_layers = TRUE, stringsAsFactors = FALSE)
 candidate$architecture_signature <- app_joint_pure_architecture_signature(candidate)
+dense_candidate <- candidate
+dense_candidate$scenario_id <- "asymmetric_laplace_tail"
+dense_candidate$D <- 1L
+dense_candidate$n <- "48"
+dense_candidate$n_tilde <- ""
+dense_candidate$retained_state_budget <- 48L
+dense_plan <- app_joint_pure_dense_dimension_audit(
+  dense_candidate, contract$tau, base_limit = 300L
+)
+stopifnot(
+  dense_plan$required_joint_beta_dimension == 336L,
+  dense_plan$resolved_max_dense_dim == 336L,
+  dense_plan$dense_covariance_bytes_estimate == 336^2 * 8
+)
+dense_contract <- app_joint_pure_apply_dense_dimension_contract(
+  app_read_csv(app_joint_shared_quantile_contract_path()), dense_candidate, contract$tau
+)
+stopifnot(
+  as.integer(dense_contract$value[dense_contract$name == "max_dense_dim"]) == 336L,
+  as.integer(dense_contract$value[dense_contract$name == "required_joint_beta_dimension"]) == 336L,
+  dense_contract$value[dense_contract$name == "dense_dimension_policy"] ==
+    "max(base_max_dense_dim,K_times_state_dimension)"
+)
 design <- app_joint_pure_build_design(selector, candidate, contract, selector = TRUE)
 stopifnot(
   ncol(design$X) == 7L, ncol(design$Z) == 6L,
@@ -192,6 +215,19 @@ stopifnot(
   profile$initial_concurrency == 15L,
   profile$maximum_concurrency == 15L,
   grepl("joint_pure_desn_recursive_selection_20260925", profile$source_worktree, fixed = TRUE)
+)
+
+confirmation_fixture <- file.path(tempdir(), "pure_recursive_dense_confirmation_contract")
+unlink(confirmation_fixture, recursive = TRUE, force = TRUE)
+dir.create(confirmation_fixture, recursive = TRUE)
+app_write_csv(dense_candidate, file.path(confirmation_fixture, "selected_family_backbones.csv"))
+writeLines("fixture", file.path(confirmation_fixture, "quantile_artifact_manifest.csv"))
+confirmation_contract <- app_joint_pure_confirmation_contract(confirmation_fixture)
+stopifnot(
+  as.integer(confirmation_contract$value[confirmation_contract$name == "max_dense_dim"]) == 336L,
+  as.integer(confirmation_contract$value[
+    confirmation_contract$name == "required_joint_beta_dimension"
+  ]) == 336L
 )
 
 cat("Pure-recursive JOINT campaign tests passed.\n")

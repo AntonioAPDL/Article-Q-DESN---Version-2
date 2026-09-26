@@ -21,6 +21,24 @@ stopifnot(
   sum(plan$model_id == "joint_exqdesn_rhs") == 3L,
   identical(sort(unique(plan$stage_order)), 1:8)
 )
+
+wide_manifest <- data.frame(replicate_id = 1:3, p = rep(48L, 3L))
+undersized <- contract
+undersized$max_dense_dim <- 300L
+blocked <- tryCatch({
+  app_joint_shared_quantile_dense_dimension_audit(wide_manifest, undersized)
+  ""
+}, error = function(e) conditionMessage(e))
+stopifnot(grepl("required joint beta dimension 336", blocked, fixed = TRUE))
+sufficient <- contract
+sufficient$max_dense_dim <- 336L
+dense_audit <- app_joint_shared_quantile_dense_dimension_audit(wide_manifest, sufficient)
+stopifnot(
+  nrow(dense_audit) == 3L,
+  all(dense_audit$joint_beta_dimension == 336L),
+  all(dense_audit$status == "pass"),
+  all(dense_audit$dense_covariance_bytes_estimate == 336^2 * 8)
+)
 for (ii in seq_len(nrow(plan))) {
   deps <- app_joint_shared_quantile_dependency_rows(plan, plan[ii, , drop = FALSE])
   stopifnot(!nrow(deps) || all(deps$stage_order < plan$stage_order[[ii]]))
@@ -82,9 +100,19 @@ joint_al <- app_joint_qvp_fit_al_vb_tiny(
   alpha_prior_mean = init$alpha_mean, alpha_prior_sd = init$alpha_prior_sd,
   max_dense_dim = 300L, init = init
 )
+joint_al_relaxed_guard <- app_joint_qvp_fit_al_vb_tiny(
+  y = y, Z = Z, tau = contract$tau, max_iter = 1L, tol = 1e-5,
+  tau0 = 1, a_sigma = 2, b_sigma = 1,
+  alpha_prior_mean = init$alpha_mean, alpha_prior_sd = init$alpha_prior_sd,
+  max_dense_dim = 336L, init = init
+)
 stopifnot(
   length(joint_al$alpha_mean) == length(contract$tau),
-  all(is.finite(c(joint_al$beta_mean, joint_al$alpha_mean, joint_al$sigma_mean)))
+  all(is.finite(c(joint_al$beta_mean, joint_al$alpha_mean, joint_al$sigma_mean))),
+  isTRUE(all.equal(joint_al$beta_mean, joint_al_relaxed_guard$beta_mean, tolerance = 0)),
+  isTRUE(all.equal(joint_al$beta_cov, joint_al_relaxed_guard$beta_cov, tolerance = 0)),
+  isTRUE(all.equal(joint_al$alpha_mean, joint_al_relaxed_guard$alpha_mean, tolerance = 0)),
+  isTRUE(all.equal(joint_al$sigma_mean, joint_al_relaxed_guard$sigma_mean, tolerance = 0))
 )
 
 qhat <- outer(seq(-1, 1, length.out = 12), contract$tau, function(x, tau) x + stats::qnorm(tau))

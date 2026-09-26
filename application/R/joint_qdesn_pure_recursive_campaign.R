@@ -851,6 +851,75 @@ app_joint_pure_set_contract <- function(tab, name, value) {
   tab
 }
 
+app_joint_pure_append_contract_value <- function(tab, section, name, value, type, description) {
+  if (name %in% tab$name) return(app_joint_pure_set_contract(tab, name, value))
+  rbind(tab, data.frame(section = section, name = name, value = as.character(value), type = type,
+    description = description, stringsAsFactors = FALSE))
+}
+
+app_joint_pure_contract_tau <- function(tab) {
+  row <- tab[tab$name == "quantile_grid", , drop = FALSE]
+  if (nrow(row) != 1L) stop("Contract requires one quantile_grid field.", call. = FALSE)
+  spec <- as.character(row$value[[1L]])
+  separator <- if (grepl(";", spec, fixed = TRUE)) ";" else ","
+  app_joint_qvp_validate_tau_grid(as.numeric(strsplit(spec, separator, fixed = TRUE)[[1L]]))
+}
+
+app_joint_pure_dense_dimension_audit <- function(selected, tau, base_limit = 300L) {
+  app_check_required_columns(selected, c("scenario_id", "D", "n", "retained_state_budget"),
+    "pure-recursive selected backbones")
+  tau <- app_joint_qvp_validate_tau_grid(tau)
+  base_limit <- as.integer(base_limit)
+  if (length(base_limit) != 1L || is.na(base_limit) || base_limit < 1L) {
+    stop("Pure-recursive base dense ceiling must be a positive integer.", call. = FALSE)
+  }
+  rows <- lapply(seq_len(nrow(selected)), function(ii) {
+    widths <- as.integer(app_joint_shared_parse_num_vec(selected$n[[ii]]))
+    depth <- as.integer(selected$D[[ii]])
+    retained <- as.integer(selected$retained_state_budget[[ii]])
+    if (length(widths) != depth || anyNA(widths) || any(widths < 1L) ||
+        sum(widths) != retained) {
+      stop(sprintf("Selected width contract is malformed for '%s'.",
+        selected$scenario_id[[ii]]), call. = FALSE)
+    }
+    required <- as.integer(length(tau) * retained)
+    data.frame(
+      scenario_id = as.character(selected$scenario_id[[ii]]),
+      reservoir_state_dimension = retained,
+      quantile_count = length(tau),
+      required_joint_beta_dimension = required,
+      base_max_dense_dim = base_limit,
+      resolved_max_dense_dim = max(base_limit, required),
+      dense_covariance_bytes_estimate = as.numeric(required)^2 * 8,
+      stringsAsFactors = FALSE
+    )
+  })
+  app_bind_rows_fill(rows)
+}
+
+app_joint_pure_apply_dense_dimension_contract <- function(tab, selected, tau) {
+  max_row <- tab[tab$name == "max_dense_dim", , drop = FALSE]
+  if (nrow(max_row) != 1L) {
+    stop("Dense-dimension contract requires one max_dense_dim field.", call. = FALSE)
+  }
+  audit <- app_joint_pure_dense_dimension_audit(
+    selected, tau, base_limit = as.integer(max_row$value[[1L]])
+  )
+  required <- max(audit$required_joint_beta_dimension)
+  resolved <- max(audit$resolved_max_dense_dim)
+  tab <- app_joint_pure_set_contract(tab, "max_dense_dim", resolved)
+  tab <- app_joint_pure_append_contract_value(tab, "vb", "required_joint_beta_dimension",
+    required, "integer", "Maximum K times reservoir-state coefficient dimension across selected cases.")
+  tab <- app_joint_pure_append_contract_value(tab, "vb", "dense_covariance_bytes_estimate",
+    format(as.numeric(required)^2 * 8, scientific = FALSE), "numeric",
+    "Eight-byte dense covariance footprint at the maximum joint beta dimension.")
+  tab <- app_joint_pure_append_contract_value(tab, "vb", "dense_dimension_policy",
+    "max(base_max_dense_dim,K_times_state_dimension)", "character",
+    "Resolve the computational safety ceiling from the frozen selected design without changing the posterior target.")
+  attr(tab, "dense_dimension_audit") <- audit
+  tab
+}
+
 app_joint_pure_quantile_roots <- function(root, registry = app_joint_pure_read_registry()) {
   data.frame(
     scenario_id = registry$scenario_id, scenario_order = registry$scenario_order,
@@ -912,7 +981,7 @@ app_joint_pure_write_quantile_parent <- function(root, selected_row) {
   parent
 }
 
-app_joint_pure_quantile_contract <- function(scenario_id, evaluation_seed_base, parent_dir) {
+app_joint_pure_quantile_contract <- function(scenario_id, evaluation_seed_base, parent_dir, selected) {
   files <- app_joint_shared_quantile_parent_files(parent_dir)
   tab <- app_read_csv(app_joint_shared_quantile_contract_path())
   git_state <- app_read_csv(files[["source_git_state"]])
@@ -929,7 +998,9 @@ app_joint_pure_quantile_contract <- function(scenario_id, evaluation_seed_base, 
   tab <- app_joint_pure_set_contract(tab, "pilot_scenario", scenario_id)
   tab <- app_joint_pure_set_contract(tab, "evaluation_seed_base", evaluation_seed_base)
   tab <- app_joint_pure_set_contract(tab, "max_workers", 15L)
-  tab
+  app_joint_pure_apply_dense_dimension_contract(
+    tab, selected, tau = app_joint_pure_contract_tau(tab)
+  )
 }
 
 app_joint_pure_prepare_quantiles <- function(root) {
@@ -949,7 +1020,9 @@ app_joint_pure_prepare_quantiles <- function(root) {
     winner <- selected[selected$scenario_id == scenario, , drop = FALSE]
     if (nrow(winner) != 1L) stop("Each family must have exactly one selected backbone.", call. = FALSE)
     parent <- app_joint_pure_write_quantile_parent(root, winner)
-    contract <- app_joint_pure_quantile_contract(scenario, roots$evaluation_seed_base[[ii]], parent)
+    contract <- app_joint_pure_quantile_contract(
+      scenario, roots$evaluation_seed_base[[ii]], parent, winner
+    )
     app_write_csv(contract, roots$contract_path[[ii]])
     app_joint_shared_quantile_prepare(
       out_dir = roots$quantile_root[[ii]], parent_dir = parent,
@@ -1019,12 +1092,6 @@ app_joint_pure_score_root <- function() {
   app_path("application/cache/joint_qdesn_pure_recursive_score_packet_jerez_15core_20260925")
 }
 
-app_joint_pure_append_contract_value <- function(tab, section, name, value, type, description) {
-  if (name %in% tab$name) return(app_joint_pure_set_contract(tab, name, value))
-  rbind(tab, data.frame(section = section, name = name, value = as.character(value), type = type,
-    description = description, stringsAsFactors = FALSE))
-}
-
 app_joint_pure_confirmation_contract <- function(campaign_root) {
   campaign_root <- normalizePath(campaign_root, mustWork = TRUE)
   tab <- app_read_csv(app_joint_article_corrected_contract_path())
@@ -1047,6 +1114,10 @@ app_joint_pure_confirmation_contract <- function(campaign_root) {
   set("initial_concurrency", 15L); set("maximum_concurrency", 15L)
   set("vb_component_seed_base", 202625000L); set("chain_seed_base", 302609250L)
   set("chain_start_jitter_seed_base", 402609250L)
+  selected <- app_read_csv(file.path(campaign_root, "selected_family_backbones.csv"))
+  tab <- app_joint_pure_apply_dense_dimension_contract(
+    tab, selected, tau = app_joint_pure_contract_tau(tab)
+  )
   tab <- app_joint_pure_append_contract_value(tab, "runtime", "cpu_affinity_list", "2-16", "character",
     "Fifteen distinct physical cores on Jerez.")
   tab <- app_joint_pure_append_contract_value(tab, "runtime", "required_physical_cores", 15L, "integer",

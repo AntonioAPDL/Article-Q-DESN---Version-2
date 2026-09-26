@@ -42,6 +42,7 @@ while (( clean_polls < REQUIRED_CLEAN_POLLS )); do
         pid = $1; cpu = $2; pcpu = $3
         $1 = $2 = $3 = ""; sub(/^ +/, ""); command = $0
         if (pid == self || pid == parent) next
+        if (command ~ /^awk -v self=/) next
         known_controller = command ~ /pricefm_stage_r120_bg_explicit_lag_all_layer_search_20260925/ ||
           command ~ /run_joint_qdesn_pure_recursive_(quantile_worker|article_vb|article_mcmc)/ ||
           command ~ /joint_qdesn_recursive_mean_forecast_worker/

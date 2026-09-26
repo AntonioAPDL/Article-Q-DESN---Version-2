@@ -89,3 +89,25 @@ finalization.
 
 No article files, Overleaf branches, historical JOINT authorities, PriceFM,
 GloFAS, independent-QDESN lanes, or inference kernels are part of this repair.
+
+## Quantile closeout compatibility recovery
+
+All 408 quantile-VB workers subsequently completed, but the score finalizer
+stopped before writing the quantile manifest because pure-recursive frozen
+designs retain the DGP seed in `dgp_row$seed`, whereas the shared finalizer
+expected the legacy top-level `seed` field. This affected only score-row
+metadata assembly; no fit, prediction, or frozen design failed.
+
+The shared score boundary now accepts the top-level seed when present and
+otherwise reads the exact frozen registry-row seed. A focused regression test
+covers the pure-recursive representation. The recovery does not rewrite any
+of the 408 completed worker directories.
+
+`application/scripts/resume_joint_qdesn_pure_recursive_after_capacity.sh`
+finalizes those existing outputs once, then waits for five consecutive clean
+capacity polls before resuming article VB, MCMC, oracle, and score-packet
+stages on the original `2-16` affinity. The capacity gate treats the active
+PriceFM R120 controller and any high-load process last observed on those CPUs
+as blockers. This prevents the recovered pipeline from competing with an
+unrelated scientific lane while retaining the frozen 15-core execution
+contract.

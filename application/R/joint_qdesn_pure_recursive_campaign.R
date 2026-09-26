@@ -65,12 +65,22 @@ app_joint_pure_read_contract <- function(path = app_joint_pure_contract_path()) 
     dense_grid_launched = identical(tolower(get("dense_grid_launched")), "true")
   )
   expected_tau <- c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
-  if (!identical(out$version, "joint_qdesn_pure_recursive_campaign_v1") ||
+  valid_versions <- c(
+    "joint_qdesn_pure_recursive_campaign_v1",
+    "joint_qdesn_pure_recursive_expanded_screen_v2"
+  )
+  version_shape <- if (identical(out$version, valid_versions[[1L]])) {
+    out$candidate_count == 256L && out$advance_count == 50L &&
+      out$max_readout_dimension == 192L
+  } else if (identical(out$version, valid_versions[[2L]])) {
+    out$candidate_count == 768L && out$advance_count == 64L &&
+      out$max_readout_dimension == 300L
+  } else FALSE
+  if (!out$version %in% valid_versions || !version_shape ||
       !identical(out$tau, expected_tau) || out$scenario_count != 8L ||
       out$models_per_scenario != 4L || out$max_workers != 15L ||
       !identical(out$cpu_affinity_list, "2-16") || out$blas_threads != 1L ||
       out$inner_training_rows + out$inner_calibration_rows != out$fit_rows ||
-      out$candidate_count != 256L || out$advance_count != 50L ||
       !out$protected_selection_forbidden || out$protected_scores_for_selection ||
       out$raw_inputs_in_readout || !out$full_states_all_layers || out$dense_grid_launched) {
     stop("Pure-recursive scientific or runtime contract is malformed.", call. = FALSE)
@@ -312,11 +322,14 @@ app_joint_pure_selector_fixture <- function(fixture, contract) {
   )
 }
 
-app_joint_pure_reservoir <- function(candidate, m_input) {
+app_joint_pure_reservoir <- function(candidate, m_input, max_readout_dimension = 192L) {
   D <- as.integer(candidate$D[[1L]])
   n <- as.integer(app_joint_shared_parse_num_vec(candidate$n[[1L]]))
   n_tilde <- as.integer(app_joint_shared_parse_num_vec(candidate$n_tilde[[1L]]))
-  if (length(n) != D || (D > 1L && !identical(n_tilde, n[seq_len(D - 1L)])) || sum(n) > 192L) {
+  retained <- as.integer(candidate$retained_state_budget[[1L]])
+  max_readout_dimension <- as.integer(max_readout_dimension)
+  if (length(n) != D || (D > 1L && !identical(n_tilde, n[seq_len(D - 1L)])) ||
+      sum(n) != retained || retained > max_readout_dimension) {
     stop("Pure-DESN full-state width contract is malformed.", call. = FALSE)
   }
   app_qdesn_generate_article_reservoir(
@@ -418,7 +431,8 @@ app_joint_pure_build_design <- function(fixture, candidate, contract, selector =
   raw <- app_joint_pure_raw_matrix(full, y_history, candidate, fixture$registry_row)
   scale_params <- app_joint_exqdesn_phase151_scale_params(raw, seq_len(nrow(raw)) %in% train_local)
   raw_scaled <- app_qdesn_reservoir_scale_inputs(raw, scale_params = scale_params)$X
-  reservoir <- app_joint_pure_reservoir(candidate, ncol(raw_scaled))
+  max_readout_dimension <- contract$max_readout_dimension %||% 192L
+  reservoir <- app_joint_pure_reservoir(candidate, ncol(raw_scaled), max_readout_dimension)
   reservoir_meta <- app_joint_pure_reservoir_meta(candidate, ncol(raw_scaled))
   rolled <- app_qdesn_roll_article_reservoir(raw_scaled, reservoir, reservoir_meta)
   state_raw <- rolled$X_all

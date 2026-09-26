@@ -252,7 +252,9 @@ def normal_contract(
             "stage": "R119_normal", "fold": fold, "tau0": winner["tau0"],
             "stats": sha256_file(stats / "terminal.json"),
         }),
-        "selection_split": "train_only_corrected_teacher_forced",
+        # Canonical firewall label required by the frozen R102 Normal runner.
+        # The underlying packet is still the corrected teacher-forced training design.
+        "selection_split": "train_validation_only",
         "test_access_authorized": False,
     }
     path = campaign / f"contracts/normal/fold={fold}.json"

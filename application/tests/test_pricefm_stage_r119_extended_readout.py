@@ -111,6 +111,26 @@ def test_cpu_parser_is_explicit_and_unique() -> None:
         raise AssertionError("duplicate CPU assignment was accepted")
 
 
+def test_normal_contract_uses_canonical_test_blind_split(tmp_path: Path) -> None:
+    campaign = tmp_path / "campaign"
+    stats = campaign / "extended/full_folds/fold=1/normal_stats"
+    stats.mkdir(parents=True)
+    (stats / "terminal.json").write_text(json.dumps({
+        "status": "completed_causal_sufficient_statistics",
+        "test_opened": False,
+    }))
+    path = RUN.normal_contract(
+        1,
+        {"tau0": 7.5e-5},
+        {"normal_runtime": "/tmp/exdqlm"},
+        campaign,
+        tmp_path,
+    )
+    contract = json.loads(path.read_text())
+    assert contract["selection_split"] == "train_validation_only"
+    assert contract["test_access_authorized"] is False
+
+
 def test_r119_quantile_runner_requires_extended_exact_cran_al_only() -> None:
     source = (SCRIPTS / "410_fit_pricefm_stage_r119_quantile_atom.R").read_text()
     assert '!identical(config$family, "al")' in source

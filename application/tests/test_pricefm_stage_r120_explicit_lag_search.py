@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -155,6 +156,51 @@ def test_stage_c_balanced_bank_has_640_unique_rows(tmp_path: Path):
     assert len(frame) == 640
     assert not frame.semantic_sha256.duplicated().any()
     assert frame.units.nunique() == len(RUN.GEOMETRIES)
+
+
+def test_seed_robustness_manifest_drops_inherited_ranking_results(tmp_path: Path):
+    rows = []
+    for position in range(10):
+        current = spec(seed=RUN.SEEDS[0])
+        current["m_y"] = 32 + position
+        rows.append({
+            "candidate_id": f"primary_{position}", "stage": "R120C",
+            "candidate_role": "balanced_geometry_dynamics",
+            "semantic_sha256": ENGINE.fingerprint(current),
+            "spec_json": json.dumps(current, sort_keys=True, separators=(",", ":")),
+            **{key: value for key, value in current.items() if key != "units"},
+            "units": json.dumps(current["units"], separators=(",", ":")),
+            "ridge_rank": position + 1, "mean_AQL": 1.0 + position,
+            "worst_AQL": 2.0 + position, "mean_late_AQL": 1.5 + position,
+            "mean_coverage": 0.8,
+        })
+    seed_manifest = RUN._stage_c_seed_robustness(tmp_path, pd.DataFrame(rows))
+    assert len(seed_manifest) == 20
+    assert not {"ridge_rank", "mean_AQL", "worst_AQL", "mean_late_AQL", "mean_coverage"} & set(seed_manifest.columns)
+
+
+def test_ridge_ranking_recomputes_inherited_result_columns(tmp_path: Path):
+    manifest = pd.DataFrame([{
+        "candidate_id": "seed_candidate", "stage": "R120CSEED",
+        "readout_dimension": 8,
+        "ridge_rank": 99, "mean_AQL": 99.0, "worst_AQL": 99.0,
+        "mean_late_AQL": 99.0, "mean_coverage": 0.0,
+    }])
+    output = RUN._ridge_root(tmp_path, "R120CSEED", "seed_candidate")
+    output.mkdir(parents=True)
+    (output / "terminal.json").write_text(json.dumps({
+        "status": "completed_r120_ridge_cell", "test_opened": False,
+    }))
+    pd.DataFrame([
+        {"AQL": 2.0, "late_AQL": 3.0, "interval_80_coverage": 0.7},
+        {"AQL": 4.0, "late_AQL": 5.0, "interval_80_coverage": 0.9},
+    ]).to_csv(output / "validation_metrics.csv", index=False)
+    ranking = RUN._ridge_ranking(tmp_path, manifest, "R120CSEED")
+    assert ranking.ridge_rank.tolist() == [1]
+    assert ranking.mean_AQL.tolist() == [3.0]
+    assert ranking.worst_AQL.tolist() == [4.0]
+    assert ranking.mean_late_AQL.tolist() == [4.0]
+    assert ranking.mean_coverage.tolist() == [0.8]
 
 
 def test_controller_and_quantile_runner_keep_scientific_firewalls():

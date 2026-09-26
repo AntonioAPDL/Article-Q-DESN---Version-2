@@ -322,8 +322,13 @@ def _ridge_ranking(campaign: Path, manifest: pd.DataFrame, stage: str) -> pd.Dat
         root = _ridge_root(campaign, stage, str(row.candidate_id))
         if not _ridge_terminal(root): continue
         metrics = pd.read_csv(root / "validation_metrics.csv")
+        candidate = row._asdict()
+        # Seed manifests may be reconstructed from a previous ranking. Ranking
+        # statistics are results, not candidate identity, so always recompute them.
+        for column in ("ridge_rank", "mean_AQL", "worst_AQL", "mean_late_AQL", "mean_coverage"):
+            candidate.pop(column, None)
         rows.append({
-            **row._asdict(), "mean_AQL": float(metrics.AQL.mean()), "worst_AQL": float(metrics.AQL.max()),
+            **candidate, "mean_AQL": float(metrics.AQL.mean()), "worst_AQL": float(metrics.AQL.max()),
             "mean_late_AQL": float(metrics.late_AQL.mean()),
             "mean_coverage": float(metrics.interval_80_coverage.mean()),
         })
@@ -422,7 +427,10 @@ def _stage_c_seed_robustness(campaign: Path, ranking: pd.DataFrame) -> pd.DataFr
         base = normalize_spec(json.loads(str(row.spec_json)))
         for seed in SEEDS[1:]:
             spec = normalize_spec({**base, "seed": seed}); identity = fingerprint(spec)
-            values = row._asdict(); values.update({"candidate_id": f"r120cseed_{identity[:16]}", "stage": "R120CSEED",
+            values = row._asdict()
+            for column in ("ridge_rank", "mean_AQL", "worst_AQL", "mean_late_AQL", "mean_coverage"):
+                values.pop(column, None)
+            values.update({"candidate_id": f"r120cseed_{identity[:16]}", "stage": "R120CSEED",
                 "candidate_role": "top10_seed_robustness", "semantic_sha256": identity,
                 "spec_json": json.dumps(spec, sort_keys=True, separators=(",", ":")), "seed": seed})
             rows.append(values)

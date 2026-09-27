@@ -76,7 +76,7 @@ if [[ ! -f "$CONFIRMATION_ROOT/launch_readiness.csv" ]]; then
 fi
 
 mkdir -p "$CONFIRMATION_ROOT/logs"
-printf 'host,branch,head,cpu_affinity,physical_cores,capacity_mode,data_free_gib,checked_at_utc\n%s,%s,%s,%s,%s,%s,%s,%s\n' \
+printf 'host,branch,head,cpu_affinity,physical_cores,capacity_mode,data_free_gib,checked_at_utc\n%s,%s,%s,"%s",%s,%s,%s,%s\n' \
   "$(hostname -f)" "$BRANCH" "$(git rev-parse HEAD)" "$CPU_LIST" "15" \
   "pricefm_r120_jerez_partition" "$free_gib" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   >"$CONFIRMATION_ROOT/logs/shared_launch_preflight.csv"

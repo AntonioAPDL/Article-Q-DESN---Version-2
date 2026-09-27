@@ -117,14 +117,14 @@ while (( clean_polls < REQUIRED_CLEAN_POLLS )); do
   printf '%s,%s,%s,%s,%s\n' "$now" "$blocker_count" "$clean_polls" \
     "$pricefm_partition_verified" "$pricefm_controller_verified" \
     >>"$CONTROL_ROOT/capacity_history.csv"
-  printf 'status,source_root,joint_cpu_list,pricefm_cpu_list,spare_cpu_list,blocker_count,clean_poll_count,required_clean_polls,pricefm_process_count,updated_at_utc\nWAITING_FOR_DISJOINT_CAPACITY,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+  printf 'status,source_root,joint_cpu_list,pricefm_cpu_list,spare_cpu_list,blocker_count,clean_poll_count,required_clean_polls,pricefm_process_count,updated_at_utc\nWAITING_FOR_DISJOINT_CAPACITY,%s,"%s","%s","%s",%s,%s,%s,%s,%s\n' \
     "$SOURCE_ROOT" "$TARGET_CPU_LIST" "$PRICEFM_CPU_LIST" "$SPARE_CPU_LIST" \
     "$blocker_count" "$clean_polls" "$REQUIRED_CLEAN_POLLS" \
     "$pricefm_process_count" "$now" >"$CONTROL_ROOT/resume_status.csv"
   (( clean_polls >= REQUIRED_CLEAN_POLLS )) || sleep "$POLL_SECONDS"
 done
 
-printf 'status,source_root,joint_cpu_list,pricefm_cpu_list,spare_cpu_list,released_at_utc\nDISJOINT_CAPACITY_RELEASED_RESUMING_CONFIRMATION,%s,%s,%s,%s,%s\n' \
+printf 'status,source_root,joint_cpu_list,pricefm_cpu_list,spare_cpu_list,released_at_utc\nDISJOINT_CAPACITY_RELEASED_RESUMING_CONFIRMATION,%s,"%s","%s","%s",%s\n' \
   "$SOURCE_ROOT" "$TARGET_CPU_LIST" "$PRICEFM_CPU_LIST" "$SPARE_CPU_LIST" \
   "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$CONTROL_ROOT/resume_status.csv"
 

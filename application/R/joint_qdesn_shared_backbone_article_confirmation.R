@@ -166,6 +166,7 @@ app_joint_article_read_contract <- function(
     shared_capacity_mode = get_optional("shared_capacity_mode", ""),
     pricefm_reserved_cpu_list = get_optional("pricefm_reserved_cpu_list", ""),
     glofas_spare_cpu_list = get_optional("glofas_spare_cpu_list", ""),
+    spare_cpu_list = get_optional("spare_cpu_list", ""),
     allowed_competing_process_patterns = Filter(nzchar, strsplit(get_optional(
       "allowed_competing_process_patterns", ""), ";", fixed = TRUE)[[1L]]),
     production_launched = bool("production_launched"),
@@ -306,6 +307,35 @@ app_joint_article_read_contract <- function(
         !identical(out$capacity_approval_token,
           "JEREZ_PURE_RECURSIVE_15_PHYSICAL")) {
       stop("Jerez pure-recursive confirmation contract violates the frozen posterior or affinity gate.",
+        call. = FALSE)
+    }
+  }
+  if (identical(out$version, "joint_qdesn_pure_recursive_article_confirmation_v2")) {
+    allocation <- app_joint_pure_confirmation_runtime_allocation()
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts || out$sigma_lower_bound != 0 ||
+        !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-pure-desn-recursive-selection-20260925") ||
+        !identical(out$host_profile_id,
+          "jerez_pure_recursive_15core_20260925") ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 15L || out$maximum_concurrency != 15L ||
+        !identical(out$cpu_affinity_list, allocation$joint_cpu_list) ||
+        out$required_physical_cores != allocation$required_physical_cores ||
+        !identical(out$capacity_approval_token,
+          allocation$capacity_approval_token) ||
+        !identical(out$shared_capacity_mode, allocation$mode) ||
+        !identical(out$pricefm_reserved_cpu_list,
+          allocation$pricefm_cpu_list) ||
+        !identical(out$spare_cpu_list, allocation$spare_cpu_list) ||
+        !identical(out$allowed_competing_process_patterns,
+          allocation$allowed_competing_process_patterns)) {
+      stop("Shared-capacity Jerez pure-recursive contract violates the frozen posterior or CPU-partition gate.",
         call. = FALSE)
     }
   }
@@ -569,11 +599,20 @@ app_joint_article_cpu_affinity_preflight <- function(
 
 app_joint_article_shared_capacity_preflight <- function(contract, affinity,
     sysfs_root = "/sys/devices/system/cpu") {
-  if (!identical(contract$shared_capacity_mode,
-      "pricefm_r97_glofas_part4")) return(NULL)
+  supported <- c(
+    "pricefm_r97_glofas_part4",
+    "pricefm_r120_jerez_partition"
+  )
+  if (!contract$shared_capacity_mode %in% supported) return(NULL)
   price_ids <- app_joint_article_parse_cpu_list(
     contract$pricefm_reserved_cpu_list)
-  spare_ids <- app_joint_article_parse_cpu_list(contract$glofas_spare_cpu_list)
+  spare_list <- if (identical(contract$shared_capacity_mode,
+      "pricefm_r120_jerez_partition")) {
+    contract$spare_cpu_list
+  } else {
+    contract$glofas_spare_cpu_list
+  }
+  spare_ids <- app_joint_article_parse_cpu_list(spare_list)
   price <- app_joint_article_cpu_topology(price_ids, sysfs_root)
   spare <- app_joint_article_cpu_topology(spare_ids, sysfs_root)
   key <- function(x) unique(paste(x$physical_package_id, x$core_id, sep = ":"))
@@ -584,8 +623,12 @@ app_joint_article_shared_capacity_preflight <- function(contract, affinity,
   all_topology <- app_joint_article_cpu_topology(
     seq.int(0L, logical_cores - 1L), sysfs_root)
   all_key <- key(all_topology)
-  verified <- length(joint_key) == 11L && length(price_key) == 20L &&
-    length(spare_key) == 1L && !length(intersect(joint_key, price_key)) &&
+  expected_counts <- if (identical(contract$shared_capacity_mode,
+      "pricefm_r120_jerez_partition")) c(15L, 15L, 2L) else c(11L, 20L, 1L)
+  verified <- length(joint_key) == expected_counts[[1L]] &&
+    length(price_key) == expected_counts[[2L]] &&
+    length(spare_key) == expected_counts[[3L]] &&
+    !length(intersect(joint_key, price_key)) &&
     !length(intersect(joint_key, spare_key)) &&
     !length(intersect(price_key, spare_key)) &&
     setequal(c(joint_key, price_key, spare_key), all_key)
@@ -595,8 +638,12 @@ app_joint_article_shared_capacity_preflight <- function(contract, affinity,
     joint_physical_cores = length(joint_key),
     pricefm_cpu_list = contract$pricefm_reserved_cpu_list,
     pricefm_physical_cores = length(price_key),
-    glofas_spare_cpu_list = contract$glofas_spare_cpu_list,
-    glofas_spare_physical_cores = length(spare_key),
+    glofas_spare_cpu_list = if (identical(contract$shared_capacity_mode,
+      "pricefm_r97_glofas_part4")) spare_list else "",
+    glofas_spare_physical_cores = if (identical(contract$shared_capacity_mode,
+      "pricefm_r97_glofas_part4")) length(spare_key) else 0L,
+    spare_cpu_list = spare_list,
+    spare_physical_cores = length(spare_key),
     total_physical_cores = length(all_key),
     joint_pricefm_overlap = length(intersect(joint_key, price_key)),
     joint_spare_overlap = length(intersect(joint_key, spare_key)),
@@ -728,7 +775,8 @@ app_joint_article_assert_capacity_authorized <- function(contract) {
   } else if (contract$version %in% c(
       "joint_shared_backbone_article_confirmation_v3",
       "joint_shared_backbone_article_confirmation_v4",
-      "joint_qdesn_pure_recursive_article_confirmation_v1")) {
+      "joint_qdesn_pure_recursive_article_confirmation_v1",
+      "joint_qdesn_pure_recursive_article_confirmation_v2")) {
     contract$capacity_approval_token
   } else {
     ""
@@ -798,7 +846,8 @@ app_joint_article_host_preflight <- function(
   affinity <- if (contract$version %in% c(
       "joint_shared_backbone_article_confirmation_v3",
       "joint_shared_backbone_article_confirmation_v4",
-      "joint_qdesn_pure_recursive_article_confirmation_v1")) {
+      "joint_qdesn_pure_recursive_article_confirmation_v1",
+      "joint_qdesn_pure_recursive_article_confirmation_v2")) {
     app_joint_article_cpu_affinity_preflight(contract)
   } else {
     NULL

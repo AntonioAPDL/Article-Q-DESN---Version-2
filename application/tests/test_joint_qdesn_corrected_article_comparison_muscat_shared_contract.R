@@ -176,9 +176,12 @@ stopifnot(inherits(try(app_joint_article_cpu_affinity_preflight(
 shared <- app_joint_article_shared_capacity_preflight(v4, affinity)
 stopifnot(
   nrow(shared) == 1L,
+  all(c("glofas_spare_cpu_list", "glofas_spare_physical_cores",
+    "spare_cpu_list", "spare_physical_cores") %in% names(shared)),
   shared$joint_physical_cores[[1L]] == 11L,
   shared$pricefm_physical_cores[[1L]] == 20L,
   shared$glofas_spare_physical_cores[[1L]] == 1L,
+  shared$spare_physical_cores[[1L]] == 1L,
   shared$total_physical_cores[[1L]] == 32L,
   shared$joint_pricefm_overlap[[1L]] == 0L,
   shared$joint_spare_overlap[[1L]] == 0L,

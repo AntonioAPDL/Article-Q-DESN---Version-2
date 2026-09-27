@@ -1092,11 +1092,26 @@ app_joint_pure_score_root <- function() {
   app_path("application/cache/joint_qdesn_pure_recursive_score_packet_jerez_15core_20260925")
 }
 
+app_joint_pure_confirmation_runtime_allocation <- function() {
+  list(
+    mode = "pricefm_r120_jerez_partition",
+    joint_cpu_list = "1,8,9,12,13,15,19,20,24,25,27,28,29,30,31",
+    pricefm_cpu_list = "2,3,4,5,6,7,10,11,14,17,18,21,22,23,26",
+    spare_cpu_list = "0,16",
+    allowed_competing_process_patterns = c(
+      "pricefm_stage_r120_bg_explicit_lag_all_layer_search_20260925"
+    ),
+    required_physical_cores = 15L,
+    capacity_approval_token = "JEREZ_PURE_RECURSIVE_15_PHYSICAL_SHARED"
+  )
+}
+
 app_joint_pure_confirmation_contract <- function(campaign_root) {
   campaign_root <- normalizePath(campaign_root, mustWork = TRUE)
   tab <- app_read_csv(app_joint_article_corrected_contract_path())
   set <- function(name, value) tab <<- app_joint_pure_set_contract(tab, name, value)
-  set("contract_version", "joint_qdesn_pure_recursive_article_confirmation_v1")
+  allocation <- app_joint_pure_confirmation_runtime_allocation()
+  set("contract_version", "joint_qdesn_pure_recursive_article_confirmation_v2")
   set("run_tag", "joint_qdesn_pure_recursive_article_confirmation_jerez_15core_20260925")
   set("execution_branch", "work/joint-qdesn-pure-desn-recursive-selection-20260925")
   set("host_profile_id", "jerez_pure_recursive_15core_20260925")
@@ -1118,12 +1133,23 @@ app_joint_pure_confirmation_contract <- function(campaign_root) {
   tab <- app_joint_pure_apply_dense_dimension_contract(
     tab, selected, tau = app_joint_pure_contract_tau(tab)
   )
-  tab <- app_joint_pure_append_contract_value(tab, "runtime", "cpu_affinity_list", "2-16", "character",
-    "Fifteen distinct physical cores on Jerez.")
-  tab <- app_joint_pure_append_contract_value(tab, "runtime", "required_physical_cores", 15L, "integer",
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "cpu_affinity_list",
+    allocation$joint_cpu_list, "character",
+    "Fifteen distinct Jerez physical cores disjoint from PriceFM R120.")
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "required_physical_cores",
+    allocation$required_physical_cores, "integer",
     "Required distinct physical cores.")
   tab <- app_joint_pure_append_contract_value(tab, "runtime", "capacity_approval_token",
-    "JEREZ_PURE_RECURSIVE_15_PHYSICAL", "character", "Explicit launch-capacity token.")
+    allocation$capacity_approval_token, "character", "Explicit shared-capacity token.")
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "shared_capacity_mode",
+    allocation$mode, "character", "Verified disjoint Jerez physical-core partition.")
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "pricefm_reserved_cpu_list",
+    allocation$pricefm_cpu_list, "character", "PriceFM R120 reserved physical cores.")
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "spare_cpu_list",
+    allocation$spare_cpu_list, "character", "Two physical cores outside both campaigns.")
+  tab <- app_joint_pure_append_contract_value(tab, "runtime", "allowed_competing_process_patterns",
+    paste(allocation$allowed_competing_process_patterns, collapse = ";"), "character",
+    "PriceFM R120 processes allowed only under the verified disjoint partition.")
   tab
 }
 

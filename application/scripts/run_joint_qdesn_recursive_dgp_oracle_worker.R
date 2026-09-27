@@ -10,7 +10,8 @@ args <- app_parse_args(list(
 ))
 authorization <- Sys.getenv("JOINT_RECURSIVE_MEAN_ALLOW_PRODUCTION")
 if (!authorization %in% c(
-    "JEREZ_8_PHYSICAL", "JEREZ_PURE_RECURSIVE_15_PHYSICAL")) {
+    "JEREZ_8_PHYSICAL", "JEREZ_PURE_RECURSIVE_15_PHYSICAL",
+    "JEREZ_PURE_RECURSIVE_15_PHYSICAL_SHARED")) {
   stop("Oracle worker lacks an approved Jerez physical-core authorization.", call. = FALSE)
 }
 contract <- app_joint_recursive_read_contract(

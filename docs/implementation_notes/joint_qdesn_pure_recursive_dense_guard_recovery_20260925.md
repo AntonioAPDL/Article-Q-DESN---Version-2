@@ -135,3 +135,32 @@ a recovery archive, verifies every archived byte, and only then clears the
 non-authoritative partial root so confirmation preparation can restart. All
 screening, selected backbones, quantile fits, predictions, and quantile
 manifests remain immutable.
+
+## Shared-capacity recovery
+
+The replacement controller then remained launch-free for more than 37 hours.
+The original `2-16` allocation overlapped PriceFM R120's declared 15-core
+allocation, while two unrelated long-running one-core processes could migrate
+through the same range. The exclusive-capacity gate was therefore functioning
+as written but could not make timely progress. PriceFM R120 had moved into a
+serial dependency-sensitive quantile stage, so waiting for its full controller
+to exit could defer JOINT confirmation for several additional days.
+
+The confirmation-only runtime contract is now version 2. It leaves every
+source model, candidate, seed, posterior target, VB/MCMC budget, score rule,
+and output root unchanged, but records a complete physical-core partition:
+
+- JOINT: `1,8,9,12,13,15,19,20,24,25,27,28,29,30,31`;
+- PriceFM R120: `2,3,4,5,6,7,10,11,14,17,18,21,22,23,26`;
+- spare: `0,16`.
+
+The partition uses each of Jerez's 32 physical cores exactly once and has zero
+physical overlap. Preparation verifies the topology and permits PriceFM R120
+as a competing process only under this recorded partition. A separate waiting
+controller requires five clean target-core polls and verifies that active
+PriceFM compute children remain within their declared reservation. Historical
+source artifacts retain their original `2-16` contract and hashes.
+
+The shared-capacity launcher begins at confirmation preparation; it cannot
+rerun or rewrite ridge, RHS, or nested quantile-VB screening. The expanded
+screen remains chained to a successful confirmation closeout.

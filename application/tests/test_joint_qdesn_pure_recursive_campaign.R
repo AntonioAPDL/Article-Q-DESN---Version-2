@@ -223,7 +223,38 @@ dir.create(confirmation_fixture, recursive = TRUE)
 app_write_csv(dense_candidate, file.path(confirmation_fixture, "selected_family_backbones.csv"))
 writeLines("fixture", file.path(confirmation_fixture, "quantile_artifact_manifest.csv"))
 confirmation_contract <- app_joint_pure_confirmation_contract(confirmation_fixture)
+confirmation_contract_path <- file.path(
+  confirmation_fixture, "shared_confirmation_contract.csv")
+app_write_csv(confirmation_contract, confirmation_contract_path)
+parsed_confirmation <- app_joint_article_read_contract(
+  confirmation_contract_path)
+allocation <- app_joint_pure_confirmation_runtime_allocation()
+affinity <- app_joint_article_cpu_affinity_preflight(
+  parsed_confirmation,
+  effective_cpu_ids = app_joint_article_parse_cpu_list(
+    allocation$joint_cpu_list)
+)
+shared_capacity <- app_joint_article_shared_capacity_preflight(
+  parsed_confirmation, affinity)
 stopifnot(
+  parsed_confirmation$version ==
+    "joint_qdesn_pure_recursive_article_confirmation_v2",
+  allocation$joint_cpu_list ==
+    "1,8,9,12,13,15,19,20,24,25,27,28,29,30,31",
+  allocation$pricefm_cpu_list ==
+    "2,3,4,5,6,7,10,11,14,17,18,21,22,23,26",
+  allocation$spare_cpu_list == "0,16",
+  parsed_confirmation$cpu_affinity_list == allocation$joint_cpu_list,
+  parsed_confirmation$pricefm_reserved_cpu_list ==
+    allocation$pricefm_cpu_list,
+  parsed_confirmation$spare_cpu_list == allocation$spare_cpu_list,
+  all(affinity$verified),
+  shared_capacity$joint_physical_cores == 15L,
+  shared_capacity$pricefm_physical_cores == 15L,
+  shared_capacity$spare_physical_cores == 2L,
+  shared_capacity$joint_pricefm_overlap == 0L,
+  shared_capacity$joint_spare_overlap == 0L,
+  shared_capacity$allocation_verified,
   as.integer(confirmation_contract$value[confirmation_contract$name == "max_dense_dim"]) == 336L,
   as.integer(confirmation_contract$value[
     confirmation_contract$name == "required_joint_beta_dimension"

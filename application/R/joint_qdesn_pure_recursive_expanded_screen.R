@@ -1,7 +1,7 @@
 # Additive, case-specific expansion of the pure-DESN screening domain.
 
 app_joint_pure_expanded_contract_path <- function() {
-  app_path("application/config/joint_qdesn_pure_recursive_expanded_screen_contract_v2.csv")
+  app_path("application/config/joint_qdesn_pure_recursive_expanded_screen_contract_v3.csv")
 }
 
 app_joint_pure_expanded_axes_path <- function() {
@@ -361,7 +361,8 @@ app_joint_pure_expanded_prepare <- function(
   readiness <- data.frame(
     status = "READY_TO_RUN_EXPANDED_RIDGE_PENDING_IMPORT", expected_workers = nrow(jobs),
     reusable_workers = 6144L, new_workers = 12288L, max_workers = 15L,
-    cpu_affinity_list = "2-16", protected_rows_used_for_selection = 0L,
+    cpu_affinity_list = contract$cpu_affinity_list,
+    protected_rows_used_for_selection = 0L,
     article_fixture_used_for_selection = FALSE, stringsAsFactors = FALSE)
   files <- c(files, launch_readiness = app_write_csv(readiness, file.path(root, "launch_readiness.csv")))
   app_joint_shared_write_manifest(root, files)

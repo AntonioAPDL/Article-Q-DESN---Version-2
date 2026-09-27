@@ -67,19 +67,26 @@ app_joint_pure_read_contract <- function(path = app_joint_pure_contract_path()) 
   expected_tau <- c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
   valid_versions <- c(
     "joint_qdesn_pure_recursive_campaign_v1",
-    "joint_qdesn_pure_recursive_expanded_screen_v2"
+    "joint_qdesn_pure_recursive_expanded_screen_v2",
+    "joint_qdesn_pure_recursive_expanded_screen_v3"
   )
   version_shape <- if (identical(out$version, valid_versions[[1L]])) {
     out$candidate_count == 256L && out$advance_count == 50L &&
       out$max_readout_dimension == 192L
-  } else if (identical(out$version, valid_versions[[2L]])) {
+  } else if (out$version %in% valid_versions[2:3]) {
     out$candidate_count == 768L && out$advance_count == 64L &&
       out$max_readout_dimension == 300L
   } else FALSE
+  expected_cpu_affinity <- if (identical(out$version, valid_versions[[3L]])) {
+    "1,8,9,12,13,15,19,20,24,25,27,28,29,30,31"
+  } else {
+    "2-16"
+  }
   if (!out$version %in% valid_versions || !version_shape ||
       !identical(out$tau, expected_tau) || out$scenario_count != 8L ||
       out$models_per_scenario != 4L || out$max_workers != 15L ||
-      !identical(out$cpu_affinity_list, "2-16") || out$blas_threads != 1L ||
+      !identical(out$cpu_affinity_list, expected_cpu_affinity) ||
+      out$blas_threads != 1L ||
       out$inner_training_rows + out$inner_calibration_rows != out$fit_rows ||
       !out$protected_selection_forbidden || out$protected_scores_for_selection ||
       out$raw_inputs_in_readout || !out$full_states_all_layers || out$dense_grid_launched) {

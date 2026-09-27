@@ -11,7 +11,9 @@ contract <- app_joint_pure_expanded_read_contract()
 axes <- app_joint_pure_expanded_read_axes()
 stopifnot(
   source_contract$candidate_count == 256L,
-  contract$version == "joint_qdesn_pure_recursive_expanded_screen_v2",
+  contract$version == "joint_qdesn_pure_recursive_expanded_screen_v3",
+  contract$cpu_affinity_list ==
+    "1,8,9,12,13,15,19,20,24,25,27,28,29,30,31",
   contract$candidate_count == 768L,
   contract$legacy_candidate_count == 256L,
   contract$expanded_candidate_count == 512L,

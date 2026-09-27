@@ -60,8 +60,10 @@ advances; leads within each 30-step block are recursive.
 The deferred scheduler waits for both the source controller exit code `0` and
 `COMPLETE_WITH_PATH_AND_MEAN_STATE_SCORE_PACKETS`. It does not modify, stop, or
 inspect partial source outputs for selection. Once the source workers release
-the lease, the new launcher uses the same 15 distinct physical CPUs `2-16`, one
-numerical thread per worker, and at least 100 GiB free under `/data`.
+the lease, the new launcher uses the audited 15-core JOINT partition
+`1,8,9,12,13,15,19,20,24,25,27,28,29,30,31`, one numerical thread per worker,
+and at least 100 GiB free under `/data`. This partition is disjoint from the
+active PriceFM R120 reservation and leaves physical cores `0,16` spare.
 
 This campaign stops after expanded RHS selection and writes a source-versus-
 expanded comparison plus winner-boundary audit. It does not automatically fit
@@ -70,7 +72,7 @@ require a separate reviewed freeze.
 
 ## Reproducibility surface
 
-- contract: `application/config/joint_qdesn_pure_recursive_expanded_screen_contract_v2.csv`;
+- contract: `application/config/joint_qdesn_pure_recursive_expanded_screen_contract_v3.csv`;
 - axes: `application/config/joint_qdesn_pure_recursive_expanded_candidate_axes_v2.csv`;
 - implementation: `application/R/joint_qdesn_pure_recursive_expanded_screen.R`;
 - execution: `application/scripts/launch_joint_qdesn_pure_recursive_expanded_screen.sh`;
@@ -79,3 +81,13 @@ require a separate reviewed freeze.
 
 No source campaign, historical JOINT authority, PriceFM, GloFAS, article, main,
 or Overleaf file is modified by this continuation.
+
+## 2026-09-27 runtime amendment
+
+The v2 screening contract used affinity `2-16`, which overlaps the frozen
+PriceFM R120 allocation. No expanded worker had started, so the scientific
+contract and candidate identities remain untouched. Contract v3 changes only
+the execution affinity to the disjoint partition documented above. The source
+campaign's historical contract is retained unchanged; its pending confirmation
+uses a separately versioned shared-capacity contract and reuses all completed
+ridge, RHS, and quantile-VB artifacts.

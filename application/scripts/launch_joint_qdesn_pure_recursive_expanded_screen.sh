@@ -5,8 +5,8 @@ ROOT="${1:-application/cache/joint_qdesn_pure_recursive_expanded_screen_jerez_15
 SOURCE_ROOT="${2:-/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_pure_desn_recursive_selection_20260925/application/cache/joint_qdesn_pure_recursive_campaign_jerez_15core_20260925}"
 R_BIN="/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
 BRANCH="work/joint-qdesn-pure-desn-expanded-screen-20260925"
-CPU_LIST="2-16"
-CPUS=(2 3 4 5 6 7 8 9 10 11 12 13 14 15 16)
+CPU_LIST="1,8,9,12,13,15,19,20,24,25,27,28,29,30,31"
+CPUS=(1 8 9 12 13 15 19 20 24 25 27 28 29 30 31)
 
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1

@@ -512,6 +512,37 @@ def _normal_contract(fit_id: str, stats: Path, output: Path, tau0: float, contro
         "selection_split": "train_validation_only", "test_access_authorized": False}
 
 
+def _frozen_rhs_closeout(campaign: Path, label: str, planned_cells: int) -> pd.DataFrame | None:
+    root = campaign / label / "closeout"
+    paths = {
+        "summary": root / "summary.json",
+        "ranking": root / "ranking.csv",
+        "completion": root / "completion_manifest.csv",
+        "metrics": root / "cell_metrics.csv",
+    }
+    present = {name: path.is_file() for name, path in paths.items()}
+    if not any(present.values()):
+        return None
+    if not all(present.values()):
+        raise RuntimeError(f"R120 {label} closeout is partial: {present}")
+    summary = json.loads(paths["summary"].read_text())
+    ranking = pd.read_csv(paths["ranking"])
+    completion = pd.read_csv(paths["completion"])
+    metrics = pd.read_csv(paths["metrics"])
+    checks = {
+        "status": summary.get("status") == "completed_r120_rhs_closeout",
+        "label": summary.get("label") == label,
+        "planned_cells": int(summary.get("planned_cells", -1)) == planned_cells == len(completion),
+        "scored_cells": int(summary.get("scored_cells", -1)) == len(metrics),
+        "eligible_groups": int(summary.get("eligible_groups", -1)) == len(ranking),
+        "test_closed": summary.get("test_opened") is False,
+        "ranking_nonempty": not ranking.empty,
+    }
+    if not all(checks.values()):
+        raise RuntimeError(f"R120 {label} frozen closeout failed validation: {checks}")
+    return ranking
+
+
 def _complete_groups(cells: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     if cells.empty: return cells.copy()
     keep = []
@@ -522,7 +553,12 @@ def _complete_groups(cells: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
 
 
 def _rhs_stage(args: argparse.Namespace, prep: Path, campaign: Path, code: Path, cpus: list[int], top: pd.DataFrame, label: str = "stage_d") -> pd.DataFrame:
-    control = _read_control(prep); records, tasks = [], []; contracts = campaign / label / "contracts"; rscript = str(control["rscript"])
+    control = _read_control(prep)
+    planned_cells = len(top) * 3 * len(control["rhs_tau_multipliers"])
+    frozen = _frozen_rhs_closeout(campaign, label, planned_cells)
+    if frozen is not None:
+        return frozen
+    records, tasks = [], []; contracts = campaign / label / "contracts"; rscript = str(control["rscript"])
     fit_root = campaign / label / "fits"
     fit_root.mkdir(parents=True, exist_ok=True)
     for row in top.itertuples(index=False):

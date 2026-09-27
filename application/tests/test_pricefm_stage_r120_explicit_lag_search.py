@@ -302,6 +302,26 @@ def test_gate_repair_manifest_preserves_original_source_identity(tmp_path: Path,
     assert RUN._source_hash_changes(prep, sources) == []
 
 
+def test_complete_rhs_closeout_is_an_immutable_resume_checkpoint(tmp_path: Path, monkeypatch):
+    campaign = tmp_path / "campaign"; root = campaign / "stage_d/closeout"; root.mkdir(parents=True)
+    ranking = pd.DataFrame([{
+        "rhs_rank": 1, "candidate_id": "winner", "tau0": 1e-4, "multiplier": 1,
+        "mean_AQL": 1.0, "worst_AQL": 1.1, "mean_late_AQL": 1.2, "mean_coverage": 0.8,
+    }])
+    ranking.to_csv(root / "ranking.csv", index=False)
+    pd.DataFrame([{"fit_id": f"fit_{index}", "fit_completed": index < 2, "score_completed": index < 2} for index in range(3)]).to_csv(root / "completion_manifest.csv", index=False)
+    pd.DataFrame([{"fit_id": "fit_0"}, {"fit_id": "fit_1"}]).to_csv(root / "cell_metrics.csv", index=False)
+    (root / "summary.json").write_text(json.dumps({
+        "status": "completed_r120_rhs_closeout", "label": "stage_d",
+        "planned_cells": 3, "scored_cells": 2, "eligible_groups": 1, "test_opened": False,
+    }))
+    prep = tmp_path / "prep"; prep.mkdir()
+    (prep / "launch_control.json").write_text(json.dumps({"rhs_tau_multipliers": [1]}))
+    monkeypatch.setattr(RUN, "_run_queue", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("frozen closeout reopened")))
+    value = RUN._rhs_stage(None, prep, campaign, tmp_path, [0], pd.DataFrame({"candidate_id": ["unused"]}), "stage_d")
+    pd.testing.assert_frame_equal(value, ranking)
+
+
 def test_plan_records_explicit_lags_and_fixed_warmup():
     plan = (ROOT / "local_trackers/pricefm_stage_r120_explicit_lag_search_master_plan_20260925.md").read_text()
     assert "m_y in {32, 48, 96, 192, 336, 480, 672, 730}" in plan

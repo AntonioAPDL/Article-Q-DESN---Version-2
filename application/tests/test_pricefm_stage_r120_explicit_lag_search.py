@@ -24,6 +24,7 @@ def load(relative: str, name: str):
 import pricefm_r120_engine as ENGINE  # noqa: E402
 PREP = load("application/scripts/pricefm/413_prepare_pricefm_stage_r120_explicit_lag_search.py", "r120_prep_test")
 RUN = load("application/scripts/pricefm/414_run_pricefm_stage_r120_explicit_lag_search.py", "r120_run_test")
+REPAIR = load("application/scripts/pricefm/416_prepare_pricefm_stage_r120_gate_repair.py", "r120_repair_test")
 
 
 def spec(**overrides):
@@ -211,6 +212,94 @@ def test_controller_and_quantile_runner_keep_scientific_firewalls():
     assert "exact CRAN exdqlm 1.1.1" in atom
     assert "prior_center_from_initializer = FALSE" in atom
     assert 'fit_root.mkdir(parents=True, exist_ok=True)' in source
+
+
+def write_quantile_terminal(path: Path, *, converged: bool, eligible: bool, finite: bool = True):
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "terminal.json").write_text(json.dumps({
+        "status": "completed_r120_quantile_atom",
+        "finite_core": finite,
+        "converged": converged,
+        "numerically_eligible": eligible,
+        "test_opened": False,
+    }))
+
+
+def test_quantile_state_rejects_finite_nonconverged_atoms(tmp_path: Path):
+    output = tmp_path / "atom"
+    assert RUN._quantile_state(output) == "absent"
+    write_quantile_terminal(output, converged=False, eligible=False)
+    assert RUN._quantile_state(output) == "completed_ineligible"
+    assert not RUN._valid_quantile(output)
+    write_quantile_terminal(output, converged=True, eligible=True)
+    assert RUN._quantile_state(output) == "eligible"
+    assert RUN._valid_quantile(output)
+
+
+def test_completed_ineligible_atom_is_not_rerun(tmp_path: Path, monkeypatch):
+    campaign = tmp_path / "campaign"
+    median = RUN._quantile_output(campaign, "pure", 1, "al", 0.50)
+    write_quantile_terminal(median, converged=False, eligible=False)
+    monkeypatch.setattr(RUN, "_read_control", lambda prep: {"rscript": "Rscript"})
+    commands = []
+    monkeypatch.setattr(RUN, "_command", lambda *args, **kwargs: commands.append(args))
+    result = RUN._fit_quantiles(tmp_path / "prep", campaign, tmp_path, [1], "pure", (1,), ("al",))
+    assert result == {1: []}
+    assert commands == []
+    gate = json.loads((campaign / "variant_pure/full_folds/fold=1/quantile_eligibility.json").read_text())
+    assert gate["family_gates"]["al"]["blocker"] == {"tau": 0.5, "state": "completed_ineligible"}
+
+
+def test_exal_requires_complete_matching_al_family(tmp_path: Path, monkeypatch):
+    campaign = tmp_path / "campaign"
+    monkeypatch.setattr(RUN, "_read_control", lambda prep: {"rscript": "Rscript"})
+    commands = []
+    monkeypatch.setattr(RUN, "_command", lambda *args, **kwargs: commands.append(args))
+    result = RUN._fit_quantiles(tmp_path / "prep", campaign, tmp_path, [1], "pure", (1,), ("exal",))
+    assert result == {1: []}
+    assert commands == []
+    gate = json.loads((campaign / "variant_pure/full_folds/fold=1/quantile_eligibility.json").read_text())
+    assert gate["family_gates"]["exal"]["reason"] == "matching_al_family_not_eligible"
+
+
+def test_forecast_rejects_incomplete_family_even_when_old_forecast_exists(tmp_path: Path):
+    output = tmp_path / "variant_pure/forecasts/fold=1/family=al"
+    output.mkdir(parents=True)
+    (output / "terminal.json").write_text(json.dumps({"status": "completed_r120_recursive_forecast"}))
+    try:
+        RUN._forecast_one(None, tmp_path, tmp_path, tmp_path, 0, "pure", 1, "al")
+    except RuntimeError as error:
+        assert "incomplete or ineligible" in str(error)
+    else:
+        raise AssertionError("ineligible family reused a stale forecast")
+
+
+def test_gate_repair_manifest_preserves_original_source_identity(tmp_path: Path, monkeypatch):
+    code = tmp_path / "code"
+    scripts = code / "application/scripts/pricefm"; scripts.mkdir(parents=True)
+    controller = scripts / REPAIR.CONTROLLER; controller.write_text("repaired controller\n")
+    atom = scripts / REPAIR.ATOM; atom.write_text("unchanged atom\n")
+    prep = tmp_path / "prep"; prep.mkdir()
+    pd.DataFrame([
+        {"path": str(controller), "sha256": "0" * 64},
+        {"path": str(atom), "sha256": RUN.sha256_file(atom)},
+    ]).to_csv(prep / "source_manifest.csv", index=False)
+    campaign = tmp_path / "campaign"
+    for tau in (0.10, 0.25, 0.45, 0.50, 0.55, 0.75, 0.90):
+        write_quantile_terminal(RUN._quantile_output(campaign, "pure", 1, "al", tau), converged=True, eligible=True)
+        write_quantile_terminal(RUN._quantile_output(campaign, "pure", 1, "exal", tau), converged=tau == 0.50, eligible=tau == 0.50)
+    write_quantile_terminal(RUN._quantile_output(campaign, "extended", 1, "al", 0.50), converged=False, eligible=False)
+    monkeypatch.setattr(REPAIR.subprocess, "check_output", lambda *args, **kwargs: "a" * 40 + "\n")
+    value = REPAIR.prepare(prep, campaign, code)
+    assert value["original_controller_sha256"] == "0" * 64
+    assert value["repaired_controller_sha256"] == RUN.sha256_file(controller)
+    # Repoint the repair-script identity to this tracked test module's actual helper.
+    manifest = json.loads((prep / RUN.GATE_REPAIR_MANIFEST).read_text())
+    manifest["repair_script_path"] = str(Path(REPAIR.__file__).resolve())
+    manifest["repair_script_sha256"] = RUN.sha256_file(Path(REPAIR.__file__).resolve())
+    (prep / RUN.GATE_REPAIR_MANIFEST).write_text(json.dumps(manifest))
+    sources = pd.read_csv(prep / "source_manifest.csv")
+    assert RUN._source_hash_changes(prep, sources) == []
 
 
 def test_plan_records_explicit_lags_and_fixed_warmup():

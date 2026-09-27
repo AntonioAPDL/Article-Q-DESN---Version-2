@@ -54,6 +54,8 @@ INPUT_SCALES = (0.05, 0.10, 0.15, 0.25, 0.35, 0.50)
 INPUT_FAN_INS = (16, 32, 64, 128, 256)
 SPARSITIES = (0.02, 0.05, 0.10, 0.20)
 SEEDS = (2026092501, 2026092602, 2026092703)
+QUANTILE_ORDER = (0.50, 0.45, 0.55, 0.25, 0.75, 0.10, 0.90)
+GATE_REPAIR_MANIFEST = "gate_repair_manifest.json"
 
 
 def parser() -> argparse.ArgumentParser:
@@ -282,9 +284,48 @@ def _prepare_processed(control: dict[str, Any], campaign: Path, code: Path, cpu:
              code, campaign / f"logs/windows_L{SOURCE_WINDOW}_folds_{folds.replace(',', '_')}.log", cpu)
 
 
+def _gate_repair_allows_source(prep: Path, frozen_sha256: str, path: Path, current_sha256: str) -> bool:
+    manifest_path = prep / GATE_REPAIR_MANIFEST
+    if not manifest_path.is_file():
+        return False
+    try:
+        value = json.loads(manifest_path.read_text())
+        repair_script = Path(value["repair_script_path"])
+        return (
+            value.get("status") == "prepared_r120_quantile_gate_repair"
+            and value.get("source_manifest_sha256") == sha256_file(prep / "source_manifest.csv")
+            and Path(value["controller_path"]).resolve() == path.resolve()
+            and value.get("original_controller_sha256") == frozen_sha256
+            and value.get("repaired_controller_sha256") == current_sha256
+            and repair_script.is_file()
+            and value.get("repair_script_sha256") == sha256_file(repair_script)
+            and value.get("test_opened") is False
+            and value.get("registry_mutated") is False
+            and value.get("article_mutated") is False
+        )
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _source_hash_changes(prep: Path, sources: pd.DataFrame) -> list[str]:
+    changed = []
+    for row in sources.itertuples(index=False):
+        path = Path(row.path)
+        if not path.is_file():
+            changed.append(str(path))
+            continue
+        current = sha256_file(path)
+        if current == str(row.sha256):
+            continue
+        if path.name == Path(__file__).name and _gate_repair_allows_source(prep, str(row.sha256), path, current):
+            continue
+        changed.append(str(path))
+    return changed
+
+
 def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[int]) -> dict[str, Any]:
     summary = json.loads((prep / "summary.json").read_text()); sources = pd.read_csv(prep / "source_manifest.csv")
-    changed = [row.path for row in sources.itertuples(index=False) if not Path(row.path).is_file() or sha256_file(row.path) != str(row.sha256)]
+    changed = _source_hash_changes(prep, sources)
     usage = _cpu_snapshot(); physical = {cpu: max(usage[sibling] for sibling in usage if _physical_core(sibling) == _physical_core(cpu)) for cpu in cpus}
     disk = shutil.disk_usage(campaign.parent); available_kib = next(int(line.split()[1]) for line in Path("/proc/meminfo").read_text().splitlines() if line.startswith("MemAvailable:"))
     checks = {
@@ -615,30 +656,126 @@ def _quantile_contract(prep: Path, campaign: Path, variant: str, fold: int, fami
     write_json(path, value); return path, output
 
 
-def _valid_quantile(path: Path) -> bool:
+def _quantile_output(campaign: Path, variant: str, fold: int, family: str, tau: float) -> Path:
+    return _variant_root(campaign, variant) / f"full_folds/fold={fold}/quantiles/{family}/tau={tau:.2f}"
+
+
+def _quantile_state(path: Path) -> str:
+    """Classify an atom without overwriting completed ineligible evidence."""
     terminal = path / "terminal.json"
-    if not terminal.is_file(): return False
-    try: value = json.loads(terminal.read_text())
-    except Exception: return False
-    return value.get("status") == "completed_r120_quantile_atom" and value.get("finite_core") is True and value.get("test_opened") is False
+    if not terminal.is_file():
+        return "absent"
+    try:
+        value = json.loads(terminal.read_text())
+    except (OSError, json.JSONDecodeError):
+        return "invalid_terminal"
+    if value.get("status") != "completed_r120_quantile_atom" or value.get("test_opened") is not False:
+        return "invalid_terminal"
+    if (
+        value.get("finite_core") is True
+        and value.get("converged") is True
+        and value.get("numerically_eligible") is True
+    ):
+        return "eligible"
+    return "completed_ineligible"
+
+
+def _valid_quantile(path: Path) -> bool:
+    return _quantile_state(path) == "eligible"
+
+
+def _family_quantile_states(campaign: Path, variant: str, fold: int, family: str) -> dict[str, str]:
+    return {
+        f"{tau:.2f}": _quantile_state(_quantile_output(campaign, variant, fold, family, tau))
+        for tau in QUANTILE_ORDER
+    }
+
+
+def _family_is_eligible(campaign: Path, variant: str, fold: int, family: str) -> bool:
+    return all(state == "eligible" for state in _family_quantile_states(campaign, variant, fold, family).values())
+
+
+def _fit_quantile_fold(
+    prep: Path,
+    campaign: Path,
+    code: Path,
+    cpus: list[int],
+    variant: str,
+    fold_position: int,
+    fold: int,
+    families: tuple[str, ...],
+) -> tuple[int, list[str]]:
+    control = _read_control(prep)
+    runner = code / "application/scripts/pricefm/415_fit_pricefm_stage_r120_quantile_atom.R"
+    eligible = []
+    family_gates: dict[str, Any] = {}
+    for family in families:
+        if family == "exal" and not _family_is_eligible(campaign, variant, fold, "al"):
+            family_gates[family] = {
+                "eligible": False,
+                "reason": "matching_al_family_not_eligible",
+                "quantile_states": _family_quantile_states(campaign, variant, fold, family),
+            }
+            continue
+        blocker = None
+        for quantile_position, tau in enumerate(QUANTILE_ORDER):
+            output = _quantile_output(campaign, variant, fold, family, tau)
+            state = _quantile_state(output)
+            if state == "absent":
+                contract, output = _quantile_contract(prep, campaign, variant, fold, family, tau)
+                cpu = cpus[(fold_position * len(QUANTILE_ORDER) + quantile_position) % len(cpus)]
+                try:
+                    _command(
+                        [control["rscript"], str(runner), "--config", str(contract)],
+                        code,
+                        campaign / f"logs/{variant}_quantiles/fold={fold}_{family}_{tau:.2f}.log",
+                        cpu,
+                    )
+                except Exception:
+                    blocker = {"tau": tau, "state": "command_failed"}
+                    break
+                state = _quantile_state(output)
+            if state != "eligible":
+                blocker = {"tau": tau, "state": state}
+                break
+        states = _family_quantile_states(campaign, variant, fold, family)
+        family_ok = blocker is None and all(state == "eligible" for state in states.values())
+        family_gates[family] = {
+            "eligible": family_ok,
+            "reason": "all_quantiles_eligible" if family_ok else "required_quantile_ineligible",
+            "blocker": blocker,
+            "quantile_states": states,
+        }
+        if family_ok:
+            eligible.append(family)
+    write_json(
+        _variant_root(campaign, variant) / f"full_folds/fold={fold}/quantile_eligibility.json",
+        {
+            "status": "completed_r120_quantile_family_gate",
+            "fold": fold,
+            "eligible_families": eligible,
+            "family_gates": family_gates,
+            "test_opened": False,
+        },
+    )
+    return fold, eligible
 
 
 def _fit_quantiles(prep: Path, campaign: Path, code: Path, cpus: list[int], variant: str, folds: tuple[int, ...], families: tuple[str, ...] = ("al", "exal")) -> dict[int, list[str]]:
-    control = _read_control(prep); order = (0.50, 0.45, 0.55, 0.25, 0.75, 0.10, 0.90); runner = code / "application/scripts/pricefm/415_fit_pricefm_stage_r120_quantile_atom.R"
-    eligible: dict[int, list[str]] = {}
-    for fold_position, fold in enumerate(folds):
-        eligible[fold] = []
-        for family in families:
-            failed = False
-            for tau in order:
-                contract, output = _quantile_contract(prep, campaign, variant, fold, family, tau)
-                if not _valid_quantile(output):
-                    try: _command([control["rscript"], str(runner), "--config", str(contract)], code, campaign / f"logs/{variant}_quantiles/fold={fold}_{family}_{tau:.2f}.log", cpus[(fold_position + int(tau * 100)) % len(cpus)])
-                    except Exception: failed = True; break
-                if not _valid_quantile(output): failed = True; break
-            if not failed: eligible[fold].append(family)
-        write_json(_variant_root(campaign, variant) / f"full_folds/fold={fold}/quantile_eligibility.json", {"status": "completed_r120_quantile_family_gate", "fold": fold, "eligible_families": eligible[fold], "test_opened": False})
-    return eligible
+    tasks = [(position, fold) for position, fold in enumerate(folds)]
+    if len(tasks) == 1:
+        fold, eligible = _fit_quantile_fold(prep, campaign, code, cpus, variant, tasks[0][0], tasks[0][1], families)
+        return {fold: eligible}
+    results: dict[int, list[str]] = {}
+    with ThreadPoolExecutor(max_workers=min(len(tasks), len(cpus))) as executor:
+        futures = {
+            executor.submit(_fit_quantile_fold, prep, campaign, code, cpus, variant, position, fold, families): fold
+            for position, fold in tasks
+        }
+        for future in as_completed(futures):
+            fold, eligible = future.result()
+            results[fold] = eligible
+    return {fold: results[fold] for _, fold in tasks}
 
 
 def _inverse_scale(values: np.ndarray, scaler: Any) -> np.ndarray:
@@ -648,6 +785,8 @@ def _inverse_scale(values: np.ndarray, scaler: Any) -> np.ndarray:
 def forecast(args: argparse.Namespace) -> dict[str, Any]:
     _, _, prep, campaign = _paths(args); winner = _winner(campaign, args.variant); spec = normalize_spec(winner["spec"]); fold = int(args.fold); family = str(args.family)
     root = _variant_root(campaign, args.variant); output = root / f"forecasts/fold={fold}/family={family}"; terminal = output / "terminal.json"
+    if not _family_is_eligible(campaign, args.variant, fold, family):
+        raise RuntimeError(f"R120 forecast blocked: incomplete or ineligible {args.variant}/fold={fold}/{family} family")
     if terminal.is_file(): return json.loads(terminal.read_text())
     control = _read_control(prep); arrays = explicit_arrays(load_windows(Path(control["runtime_processed"]), fold, "val", spec), spec)
     normal = load_normal_fit(root / f"full_folds/fold={fold}/normal_rhs"); qfits = {tau: load_quantile_fit(root / f"full_folds/fold={fold}/quantiles/{family}/tau={tau:.2f}") for tau in QUANTILES}
@@ -665,6 +804,8 @@ def forecast(args: argparse.Namespace) -> dict[str, Any]:
 
 def _forecast_one(args: argparse.Namespace, prep: Path, campaign: Path, code: Path, cpu: int, variant: str, fold: int, family: str) -> pd.DataFrame:
     output = _variant_root(campaign, variant) / f"forecasts/fold={fold}/family={family}"
+    if not _family_is_eligible(campaign, variant, fold, family):
+        raise RuntimeError(f"R120 forecast blocked: incomplete or ineligible {variant}/fold={fold}/{family} family")
     if not (output / "terminal.json").is_file(): _command([sys.executable, str(Path(__file__).resolve()), "--mode", "forecast", "--artifact-repo", str(args.artifact_repo), "--code-root", str(code), "--prep-dir", str(prep), "--campaign-root", str(campaign), "--cpu-list", args.cpu_list, "--variant", variant, "--fold", str(fold), "--family", family], code, campaign / f"logs/{variant}_forecast/fold={fold}_{family}.log", cpu)
     return pd.read_csv(output / "metrics.csv")
 
@@ -681,7 +822,9 @@ def _production_stage(args: argparse.Namespace, prep: Path, campaign: Path, code
     frozen = {"variant": str(selected.variant), "family": str(selected.family), "operator": str(selected.operator), "fold1_AQL": float(selected.AQL)}
     root = campaign / "stage_f"; root.mkdir(exist_ok=True); fold1.to_csv(root / "fold1_choice_metrics.csv", index=False); write_json(root / "frozen_choice.json", {"status": "frozen_r120_fold1_choice", **frozen, "test_opened": False})
     variant, family = frozen["variant"], frozen["family"]
-    _fit_full_normal(args, prep, campaign, code, cpus, variant, (2, 3)); eligibility = _fit_quantiles(prep, campaign, code, cpus, variant, (2, 3), (family,))
+    _fit_full_normal(args, prep, campaign, code, cpus, variant, (2, 3))
+    evaluation_families = ("al", "exal") if family == "exal" else ("al",)
+    eligibility = _fit_quantiles(prep, campaign, code, cpus, variant, (2, 3), evaluation_families)
     if any(family not in eligibility[fold] for fold in (2, 3)): raise RuntimeError("R120 frozen family failed on an evaluation fold")
     frames = [fold1[(fold1.variant == variant) & (fold1.family == family)]]
     for fold in (2, 3): frames.append(_forecast_one(args, prep, campaign, code, cpus[fold], variant, fold, family))

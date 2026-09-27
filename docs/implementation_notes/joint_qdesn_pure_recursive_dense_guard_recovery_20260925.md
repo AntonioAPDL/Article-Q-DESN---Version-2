@@ -161,6 +161,11 @@ controller requires five clean target-core polls and verifies that active
 PriceFM compute children remain within their declared reservation. Historical
 source artifacts retain their original `2-16` contract and hashes.
 
+The two spare cores accommodate two pre-existing broad-affinity syllabus
+finalization processes. The controller permits only two exact command matches,
+records their PIDs, load, and affinity on every poll, and continues to reject
+all other hot processes. Their affinity is not changed by this lane.
+
 The shared-capacity launcher begins at confirmation preparation; it cannot
 rerun or rewrite ridge, RHS, or nested quantile-VB screening. The expanded
 screen remains chained to a successful confirmation closeout.

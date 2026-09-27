@@ -41,6 +41,16 @@ hot-process threshold occupies a JOINT target physical core for five
 consecutive polls. Logical siblings are mapped to physical package/core IDs,
 so activity on CPUs 32--63 cannot evade the gate.
 
+Jerez also has exactly two long-running non-scientific
+`python3 /tmp/finalize_stat7l_syllabus_docx.py` processes with unrestricted
+kernel affinity. Their prelaunch logical CPU positions migrate, so treating
+their instantaneous positions as fixed reservations makes a five-poll gate
+impossible. The controller records both processes and permits at most two
+exact command matches; every other hot process remains a blocker. Two physical
+cores remain unassigned to JOINT and PriceFM so the Linux scheduler can place
+these background processes without systematic scientific-worker
+oversubscription. This lane does not alter their processes or affinity.
+
 ## Recovery sequence
 
 1. Commit, push, and synchronize the source branch.

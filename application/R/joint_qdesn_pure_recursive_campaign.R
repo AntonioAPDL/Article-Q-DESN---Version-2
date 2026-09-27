@@ -1184,6 +1184,8 @@ app_joint_pure_prepare_confirmation <- function(campaign_root, out_dir = app_joi
   contract <- app_joint_article_read_contract(contract_path)
   app_joint_article_assert_execution_branch(contract)
   host <- app_joint_article_host_preflight(contract)
+  affinity <- attr(host, "cpu_affinity_mapping")
+  shared_capacity <- attr(host, "shared_capacity_mapping")
   selected <- app_read_csv(file.path(campaign_root, "selected_family_backbones.csv"))
   registry <- app_joint_pure_read_registry(file.path(campaign_root, "frozen_family_registry.csv"))
   selected$scenario_order <- as.integer(registry$scenario_order[match(selected$scenario_id, registry$scenario_id)])
@@ -1222,6 +1224,14 @@ app_joint_pure_prepare_confirmation <- function(campaign_root, out_dir = app_joi
     mcmc_worker_plan = app_write_csv(mcmc_plan, file.path(out_dir, "mcmc_worker_plan.csv")),
     component_seed_plan = app_write_csv(component_seeds, file.path(out_dir, "component_seed_plan.csv")),
     scoring_contract = app_write_csv(scoring, file.path(out_dir, "scoring_contract.csv")))
+  if (!is.null(affinity)) {
+    files <- c(files, cpu_affinity_preflight = app_write_csv(
+      affinity, file.path(out_dir, "cpu_affinity_preflight.csv")))
+  }
+  if (!is.null(shared_capacity)) {
+    files <- c(files, shared_capacity_preflight = app_write_csv(
+      shared_capacity, file.path(out_dir, "shared_capacity_preflight.csv")))
+  }
   readiness <- data.frame(status = "READY_FOR_ARTICLE_FIXTURE_VB", expected_vb_components = nrow(vb_plan),
     expected_initializers = nrow(cells), expected_mcmc_workers = nrow(mcmc_plan), max_workers = 15L,
     protected_outcomes_used_for_selection = 0L, production_launched = FALSE, stringsAsFactors = FALSE)

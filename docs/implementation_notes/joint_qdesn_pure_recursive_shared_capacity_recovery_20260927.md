@@ -67,6 +67,11 @@ oversubscription. This lane does not alter their processes or affinity.
 10. Stop expanded screening after case-specific RHS selection for scientific
     review; do not auto-launch another quantile/MCMC campaign.
 
+The pure-recursive preparer persists both `cpu_affinity_preflight.csv` and
+`shared_capacity_preflight.csv` in its top-level artifact manifest. This keeps
+the verified topology and complete JOINT/PriceFM/spare partition auditable
+after the live process table changes.
+
 ## Failure policy
 
 - Any topology overlap, malformed PriceFM affinity, source-manifest failure,

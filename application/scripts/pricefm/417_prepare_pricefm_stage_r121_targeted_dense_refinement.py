@@ -164,7 +164,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "design_summary": design_summary,
     }
     write_json(output / "launch_control.json", control)
-    gates = {
+    gates = {key: bool(value) for key, value in {
         "r120_terminal": audit["status"] == "completed_r121_r120_terminal_audit",
         "bridge_six": len(bridge) == 6 and not bridge.candidate_id.duplicated().any(),
         "anchors_bounded": 1 <= len(anchors) <= 12,
@@ -173,7 +173,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "training_only": not candidates.test_access_authorized.astype(bool).any(),
         "pure_readout": candidates.readout.eq("pure_all_layers").all(),
         "workers": int(args.workers) in (5, 10, 15),
-    }
+    }.items()}
     write_json(output / "preparation_gates.json", {"status": "passed" if all(gates.values()) else "failed", "checks": gates})
     if not all(gates.values()):
         raise RuntimeError(f"R121 preparation gates failed: {gates}")

@@ -31,6 +31,7 @@ def _load(name: str, filename: str):
 
 RUNNER = _load("pricefm_r121_runner_test", "418_run_pricefm_stage_r121_targeted_dense_refinement.py")
 CLOSEOUT = _load("pricefm_r121_closeout_test", "419_closeout_pricefm_stage_r121_targeted_dense_refinement.py")
+PREPARE = _load("pricefm_r121_prepare_test", "417_prepare_pricefm_stage_r121_targeted_dense_refinement.py")
 
 
 def _spec(index: int, depth: int = 1, policy: str = "graph_summary_mean") -> dict:
@@ -171,3 +172,8 @@ def test_no_launch_yaml_registry_article_joint_or_mcmc_surface():
         assert "launch.yaml" not in text
         assert "joint_model_authorized\": true" not in text
         assert "mcmc_authorized\": true" not in text
+
+
+def test_preparation_coerces_numpy_gate_values_to_json_booleans():
+    source = (SCRIPTS / "417_prepare_pricefm_stage_r121_targeted_dense_refinement.py").read_text()
+    assert "gates = {key: bool(value)" in source

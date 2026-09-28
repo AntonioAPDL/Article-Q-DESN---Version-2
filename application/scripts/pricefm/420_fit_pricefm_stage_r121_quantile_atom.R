@@ -100,6 +100,21 @@ sigma <- r67_safe_sigma(fit)
 trace <- as.data.frame(fit$diagnostics$vb_trace %||% data.frame())
 finite <- length(beta) == p && all(is.finite(beta)) && all(is.finite(covariance)) &&
   all(diag(covariance) > 0) && is.finite(sigma) && sigma > 0
+tail_rows <- tail(trace, min(25L, nrow(trace)))
+beta_scale <- max(1, max(abs(beta)))
+relative_state <- if (nrow(tail_rows)) max(abs(tail_rows$delta_state), na.rm = TRUE) / beta_scale else Inf
+absolute_state <- if (nrow(tail_rows)) max(abs(tail_rows$delta_state), na.rm = TRUE) else Inf
+relative_sigma <- if (nrow(tail_rows)) {
+  max(abs(tail_rows$delta_sigma), na.rm = TRUE) / max(1e-12, abs(sigma))
+} else Inf
+relative_elbo <- if (nrow(tail_rows)) {
+  max(abs(tail_rows$delta_elbo), na.rm = TRUE) / max(1, max(abs(tail_rows$elbo), na.rm = TRUE))
+} else Inf
+bounded <- finite && sigma < 100
+# This is the score-blind R119 scale-aware gate. The absolute-state bound
+# prevents a large coefficient scale from masking material movement.
+external_gate <- bounded && nrow(trace) >= 35L && absolute_state <= 1e-2 &&
+  relative_state <= 1e-3 && relative_sigma <= 1e-3 && relative_elbo <= 1e-5
 
 output <- normalizePath(config$output_dir, mustWork = FALSE)
 dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
@@ -115,10 +130,24 @@ parameters <- list(family = "al", tau = as.numeric(config$tau), tau0 = as.numeri
                    prior_center_from_initializer = FALSE, package_version = package$version,
                    package_repository = package$repository)
 write_json(parameters, file.path(temporary, "parameter_summary.json"))
+diagnostics <- list(
+  eligibility_policy = "r119_scale_aware_external_gate_v1",
+  formal_converged = isTRUE(fit$converged), external_gate_passed = external_gate,
+  finite_core = finite, bounded = bounded, post_release_updates = nrow(trace),
+  beta_scale = beta_scale, absolute_state_tail_max = absolute_state,
+  relative_state_tail_max = relative_state, relative_sigma_tail_max = relative_sigma,
+  relative_elbo_tail_max = relative_elbo,
+  thresholds = list(absolute_state = 1e-2, relative_state = 1e-3,
+                    relative_sigma = 1e-3, relative_elbo = 1e-5)
+)
+write_json(diagnostics, file.path(temporary, "diagnostics.json"))
 result <- c(parameters, list(status = "completed_r121_quantile_atom", stage = config$stage,
   tag = config$tag, atom_id = config$atom_id, readout = config$readout,
   fold = as.integer(config$fold), split = as.integer(config$split), n = n, p = p,
-  finite_core = finite, numerically_eligible = finite && isTRUE(fit$converged),
+  finite_core = finite, numerically_eligible = external_gate,
+  eligibility_policy = diagnostics$eligibility_policy,
+  formal_converged = diagnostics$formal_converged,
+  external_gate_passed = diagnostics$external_gate_passed,
   posterior_target_sha256 = config$posterior_target_sha256,
   initializer_changes_prior = FALSE,
   package = package[c("library", "package_path", "version", "repository", "packaged")],

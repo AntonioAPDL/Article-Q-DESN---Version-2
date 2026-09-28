@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pandas as pd
@@ -177,3 +179,58 @@ def test_no_launch_yaml_registry_article_joint_or_mcmc_surface():
 def test_preparation_coerces_numpy_gate_values_to_json_booleans():
     source = (SCRIPTS / "417_prepare_pricefm_stage_r121_targeted_dense_refinement.py").read_text()
     assert "gates = {key: bool(value)" in source
+
+
+def test_normal_shortlist_deduplicates_tau_rows_and_retains_center_tau():
+    gates = pd.DataFrame([
+        {"candidate_id": "a", "tau0": 1e-2, "passed": True, "mean_AQL": .1},
+        {"candidate_id": "a", "tau0": 1e-4, "passed": True, "mean_AQL": .1},
+        {"candidate_id": "a", "tau0": 1e-6, "passed": True, "mean_AQL": .1},
+        {"candidate_id": "b", "tau0": 2e-4, "passed": True, "mean_AQL": .2},
+        {"candidate_id": "c", "tau0": 3e-4, "passed": True, "mean_AQL": .3},
+    ])
+    centers = pd.DataFrame([
+        {"candidate_id": candidate, "tau0": tau0, "split": split}
+        for candidate, tau0 in (("a", 1e-4), ("b", 2e-4), ("c", 3e-4))
+        for split in (1, 2, 3)
+    ])
+    result = RUNNER.select_unique_normal_shortlist(gates, centers, retain_center=True)
+    assert result.candidate_id.tolist() == ["a", "b", "c"]
+    assert result.tau0.tolist() == pytest.approx([1e-4, 2e-4, 3e-4])
+
+
+def test_atomic_install_is_thread_safe_for_a_shared_output(tmp_path):
+    output = tmp_path / "artifact"
+
+    def install(value: str) -> None:
+        def writer(temporary: Path) -> None:
+            time.sleep(.01)
+            (temporary / "value.txt").write_text(value)
+        RUNNER._atomic(output, writer)
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(install, ("one", "two", "three")))
+    assert (output / "value.txt").read_text() in {"one", "two", "three"}
+    assert not list(tmp_path.glob("artifact.tmp.*"))
+
+
+def test_quantile_eligibility_records_formal_and_scale_aware_gates():
+    source = (SCRIPTS / "420_fit_pricefm_stage_r121_quantile_atom.R").read_text()
+    assert 'eligibility_policy = "r119_scale_aware_external_gate_v1"' in source
+    assert "absolute_state <= 1e-2" in source
+    assert "relative_state <= 1e-3" in source
+    assert "relative_sigma <= 1e-3" in source
+    assert "relative_elbo <= 1e-5" in source
+    assert "numerically_eligible = external_gate" in source
+
+
+def test_continuation_requires_hash_verified_screening_imports():
+    prepare = (SCRIPTS / "417_prepare_pricefm_stage_r121_targeted_dense_refinement.py").read_text()
+    runner = (SCRIPTS / "418_run_pricefm_stage_r121_targeted_dense_refinement.py").read_text()
+    assert "screening_import_manifest.csv" in prepare
+    assert "candidate_surface_identical" in prepare
+    assert "source_commit_reconstructs_executable_manifest" in prepare
+    assert "historical_plan_hash_recorded" in prepare
+    assert "screening-source-commit" in prepare
+    assert "screening_imports_unchanged" in runner
+    assert "unique_normal_shortlist.csv" in runner

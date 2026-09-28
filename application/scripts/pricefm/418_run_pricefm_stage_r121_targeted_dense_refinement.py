@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from typing import Any, Callable, Mapping
@@ -40,6 +41,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_ARTIFACT_REPO = Path("/data/jaguir26/local/src/Article-Q-DESN")
 THREAD_ENV = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS",
               "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "R_DATATABLE_NUM_THREADS")
+_ATOMIC_LOCKS: dict[str, threading.Lock] = {}
+_ATOMIC_LOCKS_GUARD = threading.Lock()
 
 
 def _load_r120() -> Any:
@@ -124,15 +127,18 @@ def _command(command: list[str], cwd: Path, log: Path, cpu: int | None = None) -
 
 
 def _atomic(output: Path, writer: Callable[[Path], None]) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True); temporary = output.parent / f"{output.name}.tmp.{os.getpid()}"
-    if temporary.exists(): shutil.rmtree(temporary)
-    temporary.mkdir()
-    try:
-        writer(temporary)
-        if output.exists(): shutil.rmtree(output)
-        temporary.rename(output)
-    finally:
-        if temporary.exists(): shutil.rmtree(temporary)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    key = str(output.resolve())
+    with _ATOMIC_LOCKS_GUARD:
+        lock = _ATOMIC_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        temporary = Path(tempfile.mkdtemp(prefix=f"{output.name}.tmp.", dir=output.parent))
+        try:
+            writer(temporary)
+            if output.exists(): shutil.rmtree(output)
+            temporary.rename(output)
+        finally:
+            if temporary.exists(): shutil.rmtree(temporary)
 
 
 def _run_queue(tasks: list[tuple[str, list[str], Path]], cpus: list[int], cwd: Path, progress: Path,
@@ -162,12 +168,19 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
     summary = json.loads((prep / "summary.json").read_text()); sources = pd.read_csv(prep / "source_manifest.csv")
     changed = [str(row.path) for row in sources.itertuples(index=False)
                if not Path(row.path).is_file() or sha256_file(Path(row.path)) != str(row.sha256)]
+    imported = prep / "screening_import_manifest.csv"
+    changed_imports: list[str] = []
+    if imported.is_file():
+        imports = pd.read_csv(imported)
+        changed_imports = [str(row.path) for row in imports.itertuples(index=False)
+                           if not Path(row.path).is_file() or sha256_file(Path(row.path)) != str(row.sha256)]
     usage = _cpu_snapshot(); core_usage = {cpu: max(usage[sibling] for sibling in usage if _physical(sibling) == _physical(cpu)) for cpu in cpus}
     available_kib = next(int(line.split()[1]) for line in Path("/proc/meminfo").read_text().splitlines() if line.startswith("MemAvailable:"))
     free_gib = shutil.disk_usage(campaign.parent).free / 2**30
     checks = {
         "launch_authorized": summary.get("launch_authorized") is True,
         "sources_unchanged": not changed,
+        "screening_imports_unchanged": not changed_imports,
         "worker_count": len(cpus) == int(args.workers) == int(summary["workers"]),
         "distinct_physical": len({_physical(cpu) for cpu in cpus}) == len(cpus),
         "cpu_idle": all(value <= args.maximum_cpu_percent for value in core_usage.values()),
@@ -175,7 +188,8 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         "disk": free_gib >= float(summary["minimum_free_gib"]),
     }
     result = {"status": "preflight_passed" if all(checks.values()) else "preflight_blocked", "checks": checks,
-              "changed_sources": changed, "cpus": cpus, "physical_core_max_percent": core_usage,
+              "changed_sources": changed, "changed_screening_imports": changed_imports,
+              "cpus": cpus, "physical_core_max_percent": core_usage,
               "available_memory_gib": available_kib / 2**20, "free_disk_gib": free_gib, "test_opened": False}
     campaign.mkdir(parents=True, exist_ok=True); write_json(campaign / "launch_preflight.json", result)
     if not all(checks.values()): raise RuntimeError(f"R121 preflight blocked: {checks}")
@@ -304,7 +318,8 @@ def _quantile_contract(prep: Path, design: Path, output: Path, parent: Path, par
     control = _control(prep); sources = pd.read_csv(prep / "source_manifest.csv")
     adapter = Path(sources[sources.path.str.endswith("pricefm_stage_r67_cran111_adapter.R")].iloc[0].path)
     manifest = Path(control["cran_manifest"])
-    value = {"stage": stage, "tag": TAG, "atom_id": f"{candidate_id}_f{fold}_s{split}_al_{tau:.2f}",
+    value = {"stage": stage, "tag": str(control.get("tag", TAG)),
+        "atom_id": f"{candidate_id}_f{fold}_s{split}_al_{tau:.2f}",
         "candidate_id": candidate_id, "readout": "pure_all_layers", "fold": fold, "split": split,
         "family": "al", "tau": tau, "tau0": tau0, "design_dir": str(design), "output_dir": str(output),
         "parent_dir": str(parent), "parent_type": parent_type, "parent_label": parent.name,
@@ -521,13 +536,39 @@ def _normal_stage(args: argparse.Namespace, prep: Path, campaign: Path, code: Pa
     gates = []
     for row in pooled.itertuples(index=False): gates.append({"candidate_id": row.candidate_id, "tau0": row.tau0,
         **normal_gate(row._asdict(), control_metrics), **row._asdict()})
-    gate_frame = pd.DataFrame(gates); passed = gate_frame[gate_frame.passed.astype(bool)].head(3)
+    gate_frame = pd.DataFrame(gates)
+    passed = select_unique_normal_shortlist(gate_frame, center_cells, retain_center=not active, maximum=3)
     root = campaign / "rhs/closeout"; root.mkdir(parents=True, exist_ok=True); pooled.to_csv(root / "ranking.csv", index=False); gate_frame.to_csv(root / "normal_gates.csv", index=False)
     if passed.empty: return pooled, passed
     return pooled, passed
 
 
-def _prepare_internal(prep: Path, campaign: Path, candidate_id: str, tau0: float, split: int, code: Path) -> tuple[Path, Path, Any, dict[str, Any], dict[str, Any]]:
+def select_unique_normal_shortlist(gates: pd.DataFrame, center_cells: pd.DataFrame,
+                                   retain_center: bool, maximum: int = 3) -> pd.DataFrame:
+    """Select distinct candidates and, when tau is inactive, their center tau."""
+    passed = gates[gates.passed.astype(bool)].copy()
+    selected: list[pd.Series] = []
+    for candidate_id in passed.candidate_id.astype(str).drop_duplicates():
+        rows = passed[passed.candidate_id.astype(str).eq(candidate_id)]
+        if retain_center:
+            center = center_cells[center_cells.candidate_id.astype(str).eq(candidate_id)]
+            levels = np.unique(center.tau0.astype(float))
+            if len(levels) != 1:
+                continue
+            rows = rows[np.isclose(rows.tau0.astype(float), float(levels[0]), rtol=1e-10, atol=0)]
+        if rows.empty:
+            continue
+        selected.append(rows.iloc[0])
+        if len(selected) == maximum:
+            break
+    result = pd.DataFrame([row.to_dict() for row in selected])
+    if not result.empty and result.candidate_id.astype(str).duplicated().any():
+        raise RuntimeError("R121 shortlist must contain unique candidates")
+    return result
+
+
+def _prepare_internal(prep: Path, campaign: Path, candidate_id: str, tau0: float, split: int,
+                      code: Path, normal_campaign: Path | None = None) -> tuple[Path, Path, Any, dict[str, Any], dict[str, Any]]:
     row, spec = _candidate(prep, candidate_id, campaign); control = _control(prep)
     arrays = explicit_arrays(load_windows(Path(control["runtime_processed"]), 1, "train", spec), spec)
     item = internal_splits(len(arrays.response))[split - 1]; scaled, scaler = standardize_from_training_origins(arrays, item["train"])
@@ -536,15 +577,20 @@ def _prepare_internal(prep: Path, campaign: Path, candidate_id: str, tau0: float
     names = input_names(spec, arrays.exog_names); _write_design(design, values, response, {"candidate_id": candidate_id,
         "fold": 1, "split": split, "feature_names": feature_names(spec, names), "input_names": names,
         "depth": spec["depth"], "reservoir_audit": audit, "selection_boundary": "fold1_internal_training_only"})
-    normal_candidates = list((campaign / "rhs").glob(f"*/fits/{candidate_id}_s{split}_t{tau0:.8e}"))
+    normal_root = normal_campaign or campaign
+    normal_candidates = list((normal_root / "rhs").glob(f"*/fits/{candidate_id}_s{split}_t{tau0:.8e}"))
     if len(normal_candidates) != 1 or not _normal_valid(normal_candidates[0]): raise RuntimeError("R121 selected Normal parent missing")
     return root, normal_candidates[0], subset_arrays(scaled, item["validation"]), scaler, spec
 
 
-def _internal_al(args: argparse.Namespace, prep: Path, campaign: Path, code: Path, cpus: list[int], shortlist: pd.DataFrame) -> pd.DataFrame:
+def _internal_al(args: argparse.Namespace, prep: Path, campaign: Path, code: Path, cpus: list[int],
+                 shortlist: pd.DataFrame, normal_campaign: Path | None = None) -> pd.DataFrame:
+    if shortlist.empty or shortlist.candidate_id.astype(str).duplicated().any():
+        raise RuntimeError("R121 internal AL requires a nonempty unique-candidate shortlist")
     tasks = []
     def one(candidate_id: str, tau0: float, split: int, cpu: int) -> dict[str, Any]:
-        root, normal, validation, scaler, spec = _prepare_internal(prep, campaign, candidate_id, tau0, split, code)
+        root, normal, validation, scaler, spec = _prepare_internal(
+            prep, campaign, candidate_id, tau0, split, code, normal_campaign=normal_campaign)
         eligible, invalid = _fit_family(prep, code, root, candidate_id, root / "design", normal, tau0, 1, split, "R121_internal_selection", cpu)
         score = _score_family(validation, spec, normal, root, float(scaler["price_scale"]), float(scaler["price_mean"]), SEEDS[0] + split) if eligible else {}
         result = {"candidate_id": candidate_id, "tau0": tau0, "split": split, "eligible": eligible,
@@ -601,26 +647,41 @@ def controller(args: argparse.Namespace) -> dict[str, Any]:
     _, _, prep, campaign = _paths(args); code = args.code_root.resolve(); cpus = _parse_cpus(args.cpu_list)
     audit = _preflight(args, prep, campaign, cpus)
     if args.preflight_only: return audit
-    bridge = _bridge(args, prep, campaign, code, cpus)
-    if not bridge.get("passed"):
-        result = {"stage": "R121", "status": "NORMAL_PROXY_NOT_VALIDATED", "bridge": bridge,
-                  "test_opened": False, "registry_mutated": False, "article_mutated": False}
-        write_json(campaign / "campaign_terminal.json", result); return result
+    control = _control(prep)
+    screening_campaign = Path(control.get("screening_campaign", campaign)).resolve()
+    if screening_campaign != campaign:
+        bridge = json.loads((screening_campaign / "bridge/terminal.json").read_text())
+        tau = json.loads((screening_campaign / "rhs/tau_activation.json").read_text())
+        gates = pd.read_csv(screening_campaign / "rhs/closeout/normal_gates.csv")
+        centers = pd.read_csv(screening_campaign / "rhs/center/cell_metrics.csv")
+        shortlist = select_unique_normal_shortlist(gates, centers, retain_center=not bool(tau["active"]), maximum=3)
+        imported = campaign / "imported_screening"
+        imported.mkdir(parents=True, exist_ok=True)
+        shortlist.to_csv(imported / "unique_normal_shortlist.csv", index=False)
+        write_json(imported / "terminal.json", {"status": "completed_r121_screening_import",
+            "source_campaign": str(screening_campaign), "candidate_count": len(shortlist),
+            "test_opened": False})
+    else:
+        bridge = _bridge(args, prep, campaign, code, cpus)
+        if not bridge.get("passed"):
+            result = {"stage": "R121", "status": "NORMAL_PROXY_NOT_VALIDATED", "bridge": bridge,
+                      "test_opened": False, "registry_mutated": False, "article_mutated": False}
+            write_json(campaign / "campaign_terminal.json", result); return result
 
-    manifest = pd.read_csv(prep / "candidate_manifest.csv")
-    _run_queue(_ridge_tasks(args, prep, campaign, code, manifest, "primary"), cpus, code, campaign / "ridge/primary_progress.json")
-    primary = _ranking(campaign, manifest, "primary")
-    if len(primary) < 50: raise RuntimeError(f"R121 has fewer than 50 complete primary Ridge cells: {len(primary)}")
-    seed_manifest = _seed_manifest(primary); seed_root = campaign / "ridge"; seed_root.mkdir(parents=True, exist_ok=True); seed_manifest.to_csv(seed_root / "seed_manifest.csv", index=False)
-    _run_queue(_ridge_tasks(args, prep, campaign, code, seed_manifest, "seed"), cpus, code, campaign / "ridge/seed_progress.json")
-    seed_rank = _ranking(campaign, seed_manifest, "seed")
-    robust = _seed_closeout(primary, seed_rank); primary.to_csv(seed_root / "primary_ranking.csv", index=False); seed_rank.to_csv(seed_root / "seed_ranking.csv", index=False); robust.to_csv(seed_root / "robust_ranking.csv", index=False)
-    top50 = robust.head(50).copy(); top50.to_csv(seed_root / "top50.csv", index=False)
-    pooled, shortlist = _normal_stage(args, prep, campaign, code, cpus, top50)
+        manifest = pd.read_csv(prep / "candidate_manifest.csv")
+        _run_queue(_ridge_tasks(args, prep, campaign, code, manifest, "primary"), cpus, code, campaign / "ridge/primary_progress.json")
+        primary = _ranking(campaign, manifest, "primary")
+        if len(primary) < 50: raise RuntimeError(f"R121 has fewer than 50 complete primary Ridge cells: {len(primary)}")
+        seed_manifest = _seed_manifest(primary); seed_root = campaign / "ridge"; seed_root.mkdir(parents=True, exist_ok=True); seed_manifest.to_csv(seed_root / "seed_manifest.csv", index=False)
+        _run_queue(_ridge_tasks(args, prep, campaign, code, seed_manifest, "seed"), cpus, code, campaign / "ridge/seed_progress.json")
+        seed_rank = _ranking(campaign, seed_manifest, "seed")
+        robust = _seed_closeout(primary, seed_rank); primary.to_csv(seed_root / "primary_ranking.csv", index=False); seed_rank.to_csv(seed_root / "seed_ranking.csv", index=False); robust.to_csv(seed_root / "robust_ranking.csv", index=False)
+        top50 = robust.head(50).copy(); top50.to_csv(seed_root / "top50.csv", index=False)
+        _, shortlist = _normal_stage(args, prep, campaign, code, cpus, top50)
     if shortlist.empty:
         result = {"stage": "R121", "status": "NO_NORMAL_REFINEMENT_GAIN", "test_opened": False,
                   "registry_mutated": False, "article_mutated": False}; write_json(campaign / "campaign_terminal.json", result); return result
-    al = _internal_al(args, prep, campaign, code, cpus, shortlist)
+    al = _internal_al(args, prep, campaign, code, cpus, shortlist, normal_campaign=screening_campaign)
     if al.empty:
         result = {"stage": "R121", "status": "NO_COMPLETE_INTERNAL_AL_FAMILY", "test_opened": False,
                   "registry_mutated": False, "article_mutated": False}; write_json(campaign / "campaign_terminal.json", result); return result
@@ -657,7 +718,13 @@ def main() -> int:
         campaign.mkdir(parents=True, exist_ok=True); lock = (campaign / "controller.lock").open("a+")
         try: fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as error: raise RuntimeError("another R121 controller owns this campaign") from error
-        try: result = controller(args)
+        try:
+            result = controller(args)
+        except Exception as error:
+            write_json(campaign / "campaign_failure.json", {"stage": "R121", "status": "R121_CONTROLLER_FAILED",
+                "error_type": type(error).__name__, "error": str(error), "test_opened": False,
+                "registry_mutated": False, "article_mutated": False})
+            raise
         finally: lock.close()
     print(json.dumps(result, indent=2, sort_keys=True)); return 0
 

@@ -51,6 +51,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     artifact = args.artifact_repo.resolve(); data = artifact / "application/data_local/pricefm"
     prep = (args.prep_dir or data / "launch_prep" / TAG).resolve()
     campaign = (args.campaign_root or data / "campaigns" / TAG).resolve()
+    control = json.loads((prep / "launch_control.json").read_text())
     frozen = json.loads((campaign / "frozen_choice.json").read_text())
     metrics = pd.read_csv(campaign / "outer/all_metrics.csv")
     primary = metrics[metrics.operator.eq("mean_feature")].sort_values("fold", kind="mergesort")
@@ -85,7 +86,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "row_identity_verified": True})
     comparison = pd.DataFrame(comparisons); uncertainty = pd.DataFrame(intervals)
     prospective = primary[primary.fold.isin((2, 3))]
-    r120 = pd.read_csv(Path(json.loads((prep / "launch_control.json").read_text())["r120_campaign"]) / "stage_f/frozen_choice_metrics.csv")
+    r120 = pd.read_csv(Path(control["r120_campaign"]) / "stage_f/frozen_choice_metrics.csv")
     r120_prospective = float(r120[r120.fold.isin((2, 3))].AQL.mean())
     r121_value = float(prospective.AQL.mean())
     r97 = float(ledger[(ledger.method.eq("r97")) & (ledger.fold.isin((2, 3)))].AQL.mean())
@@ -102,7 +103,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                "free_disk_gib": shutil.disk_usage(campaign).free / 2**30}
     source_hashes = {path.name: sha256_file(path) for path in (prep / "summary.json", prep / "source_manifest.csv",
         campaign / "frozen_choice.json", campaign / "outer/all_metrics.csv")}
-    result = {"stage": "R121", "status": "completed_r121_not_promoted", "classification": classification,
+    result = {"stage": str(control.get("stage", "R121")), "tag": str(control.get("tag", TAG)),
+        "status": "completed_r121_not_promoted", "classification": classification,
         "frozen_choice": frozen, "fold23_mean_AQL": r121_value, "r120_fold23_mean_AQL": r120_prospective,
         "r97_fold23_mean_AQL": r97, "pricefm_fold23_mean_AQL": pricefm, "storage": storage,
         "source_hashes": source_hashes, "test_opened": False, "registry_mutated": False,

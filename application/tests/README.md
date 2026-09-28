@@ -102,6 +102,13 @@ Tracked tests:
 - `test_glofas_quantile_integrity.R`: exact tau-mapping and rejection rules,
   corrected exAL local-quadratic algebra, relative full-state movement, and
   three-row terminal certification.
+- `test_glofas_quantile_root_cause_diagnostics.R` and
+  `test_glofas_quantile_root_cause_launchers.py`: semantic RHS-state exclusion
+  of bookkeeping counters, fixed-point replay, exact 1:400 source-trace
+  validation, and immutable imports for the single Part 1 confirmation lane.
+- `test_glofas_part1_joint_al_final_confirmation.py`: exact 600-to-800 source
+  contract, terminal monotone-contraction authorization, projected tolerance
+  reachability, and fail-closed rejection of a noncontracting RHS endpoint.
 - `test_glofas_quantile_integrity_launchers.py`: synthetic 133/133 source
   authority, exact 19-fit/19-forecast DAG construction, fixed-200 controls,
   dependency gates, and bounded Part 4 continuation contracts.

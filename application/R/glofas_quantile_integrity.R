@@ -115,6 +115,143 @@ app_glofas_quantile_numeric_state <- function(x) {
   unlist(lapply(x, app_glofas_quantile_numeric_state), use.names = FALSE)
 }
 
+app_glofas_quantile_rhs_block_inferential_components <- function(block) {
+  if (!is.list(block)) stop("RHS block state must be a list.", call. = FALSE)
+  expected_inverse <- function(vb_name, latent_name, raw_name) {
+    if (!is.null(block[[vb_name]])) return(as.numeric(block[[vb_name]]))
+    if (!is.null(block[[latent_name]])) return(as.numeric(block[[latent_name]]))
+    raw <- as.numeric(block[[raw_name]] %||% numeric())
+    if (!length(raw)) return(numeric())
+    1 / pmax(raw, .Machine$double.eps)
+  }
+
+  lambda_inv <- expected_inverse("lambda2_inv_mean", "e_inv_lambda2", "lambda2")
+  nu_inv <- expected_inverse("nu_inv_mean", "e_inv_nu", "nu")
+  tau_inv <- expected_inverse("tau2_inv_mean", "e_inv_tau2", "tau2")
+  xi_inv <- expected_inverse("xi_inv_mean", "e_inv_xi", "xi")
+  zeta_inv <- expected_inverse("zeta2_inv_mean", "e_inv_zeta2", "zeta2")
+  precision <- as.numeric(block$prior_precision %||% numeric())
+  if (!length(precision) && length(lambda_inv) && length(tau_inv)) {
+    precision <- rep(as.numeric(block$intercept_prec %||% 1.0e-9), length(lambda_inv))
+    penalized <- as.integer(block$penalized %||% seq_along(lambda_inv))
+    penalized <- penalized[penalized >= 1L & penalized <= length(lambda_inv)]
+    if (length(penalized)) {
+      slab <- if (length(zeta_inv)) zeta_inv[[1L]] else 0
+      precision[penalized] <- tau_inv[[1L]] * lambda_inv[penalized] + slab
+    }
+  }
+  out <- list(
+    e_inv_lambda2 = lambda_inv,
+    e_inv_nu = nu_inv,
+    e_inv_tau2 = tau_inv,
+    e_inv_xi = xi_inv,
+    e_inv_zeta2 = zeta_inv,
+    prior_precision = precision
+  )
+  flat <- unlist(out, use.names = FALSE)
+  if (!length(flat) || any(!is.finite(flat))) {
+    stop("RHS inferential state is empty or non-finite.", call. = FALSE)
+  }
+  out
+}
+
+app_glofas_quantile_rhs_block_inferential_state <- function(
+  block,
+  block_name = "rhs",
+  include_names = FALSE
+) {
+  components <- app_glofas_quantile_rhs_block_inferential_components(block)
+  if (!isTRUE(include_names)) return(unlist(components, use.names = FALSE))
+  unlist(unname(Map(
+    function(value, suffix) {
+      value <- as.numeric(value)
+      names(value) <- paste0(block_name, ".", suffix, "[", seq_along(value), "]")
+      value
+    },
+    components,
+    names(components)
+  )), use.names = TRUE)
+}
+
+app_glofas_quantile_rhs_inferential_components <- function(state) {
+  if (!is.list(state) || !length(state)) {
+    stop("RHS state must be a non-empty list.", call. = FALSE)
+  }
+  is_block <- any(c(
+    "lambda2_inv_mean", "e_inv_lambda2", "lambda2", "tau2_inv_mean",
+    "e_inv_tau2", "tau2", "prior_precision"
+  ) %in% names(state))
+  blocks <- if (is_block) list(rhs = state) else state
+  block_names <- names(blocks)
+  if (is.null(block_names) || any(!nzchar(block_names))) {
+    block_names <- paste0("rhs_", seq_along(blocks))
+  }
+  component_blocks <- lapply(blocks, app_glofas_quantile_rhs_block_inferential_components)
+  component_names <- names(component_blocks[[1L]])
+  if (any(!vapply(component_blocks, function(x) identical(names(x), component_names), logical(1L)))) {
+    stop("RHS blocks expose incompatible inferential coordinates.", call. = FALSE)
+  }
+  list(
+    auxiliary = unlist(lapply(component_blocks, function(x) {
+      unlist(x[setdiff(component_names, "prior_precision")], use.names = FALSE)
+    }), use.names = FALSE),
+    prior_precision = unlist(lapply(component_blocks, `[[`, "prior_precision"), use.names = FALSE)
+  )
+}
+
+app_glofas_quantile_rhs_inferential_state <- function(state, include_names = FALSE) {
+  if (!isTRUE(include_names)) {
+    return(unlist(app_glofas_quantile_rhs_inferential_components(state), use.names = FALSE))
+  }
+  is_block <- any(c(
+    "lambda2_inv_mean", "e_inv_lambda2", "lambda2", "tau2_inv_mean",
+    "e_inv_tau2", "tau2", "prior_precision"
+  ) %in% names(state))
+  blocks <- if (is_block) list(rhs = state) else state
+  block_names <- names(blocks)
+  if (is.null(block_names) || any(!nzchar(block_names))) {
+    block_names <- paste0("rhs_", seq_along(blocks))
+  }
+  unlist(unname(Map(
+    function(block, block_name) {
+      app_glofas_quantile_rhs_block_inferential_state(
+        block, block_name, include_names = TRUE
+      )
+    },
+    blocks,
+    block_names
+  )), use.names = TRUE)
+}
+
+app_glofas_quantile_rhs_change_diagnostics <- function(current, previous, floor = 1) {
+  current <- app_glofas_quantile_rhs_inferential_state(current, include_names = TRUE)
+  previous <- app_glofas_quantile_rhs_inferential_state(previous, include_names = TRUE)
+  if (!identical(names(current), names(previous)) ||
+      length(current) != length(previous) ||
+      any(!is.finite(current)) || any(!is.finite(previous))) {
+    stop("RHS inferential coordinates changed between iterations.", call. = FALSE)
+  }
+  relative <- abs(current - previous) / pmax(as.numeric(floor), abs(previous))
+  controlling <- which.max(relative)
+  coordinate <- names(relative)[[controlling]]
+  matched <- regexec("^([^.]+)\\.([^[]+)\\[([0-9]+)\\]$", coordinate)
+  parsed <- regmatches(coordinate, matched)[[1L]]
+  if (length(parsed) != 4L) {
+    stop(sprintf("Unable to parse named RHS coordinate: %s", coordinate), call. = FALSE)
+  }
+  precision <- grepl("\\.prior_precision\\[", names(relative))
+  safe_max <- function(x) if (length(x)) max(x) else 0
+  list(
+    max_relative_change = unname(relative[[controlling]]),
+    max_auxiliary_change = safe_max(relative[!precision]),
+    max_precision_change = safe_max(relative[precision]),
+    controlling_coordinate = coordinate,
+    controlling_block = parsed[[2L]],
+    controlling_component = parsed[[3L]],
+    controlling_index = as.integer(parsed[[4L]])
+  )
+}
+
 app_glofas_exal_v_local_quadratic <- function(r_mean, r2_mean, lambda, sigma_mean, s_mean, s2_mean) {
   out <- as.numeric(r2_mean) -
     2 * as.numeric(lambda) * as.numeric(sigma_mean) * as.numeric(r_mean) * as.numeric(s_mean) +

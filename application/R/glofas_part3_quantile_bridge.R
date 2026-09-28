@@ -478,8 +478,10 @@ app_glofas_part3_quantile_fit <- function(
     old_discrepancy <- beta_discrepancy
     old_sigma <- sigma_mean
     old_gamma <- gamma
-    old_rhs_reference <- app_glofas_quantile_numeric_state(rhs_reference)
-    old_rhs_discrepancy <- app_glofas_quantile_numeric_state(rhs_discrepancy)
+    old_rhs_reference_raw <- app_glofas_quantile_numeric_state(rhs_reference)
+    old_rhs_discrepancy_raw <- app_glofas_quantile_numeric_state(rhs_discrepancy)
+    old_rhs_reference <- rhs_reference
+    old_rhs_discrepancy <- rhs_discrepancy
     prior_reference <- app_glofas_part3_rhs_prior_terms(rhs_reference, beta_reference)
     prior_discrepancy <- app_glofas_part3_rhs_prior_terms(rhs_discrepancy, beta_discrepancy)
     jitter_max <- 0L
@@ -642,9 +644,21 @@ app_glofas_part3_quantile_fit <- function(
       app_glofas_quantile_max_relative_change(q_reference, q_reference_old),
       app_glofas_quantile_max_relative_change(q_discrepancy, q_discrepancy_old)
     )
-    max_rhs_change <- max(
-      app_glofas_quantile_max_relative_change(app_glofas_quantile_numeric_state(rhs_reference), old_rhs_reference),
-      app_glofas_quantile_max_relative_change(app_glofas_quantile_numeric_state(rhs_discrepancy), old_rhs_discrepancy)
+    rhs_reference_change <- app_glofas_quantile_rhs_change_diagnostics(
+      rhs_reference, old_rhs_reference
+    )
+    rhs_discrepancy_change <- app_glofas_quantile_rhs_change_diagnostics(
+      rhs_discrepancy, old_rhs_discrepancy
+    )
+    rhs_partition <- if (rhs_reference_change$max_relative_change >=
+        rhs_discrepancy_change$max_relative_change) "reference" else "discrepancy"
+    rhs_change <- if (identical(rhs_partition, "reference")) {
+      rhs_reference_change
+    } else rhs_discrepancy_change
+    max_rhs_change <- rhs_change$max_relative_change
+    max_rhs_raw_change <- max(
+      app_glofas_quantile_max_relative_change(app_glofas_quantile_numeric_state(rhs_reference), old_rhs_reference_raw),
+      app_glofas_quantile_max_relative_change(app_glofas_quantile_numeric_state(rhs_discrepancy), old_rhs_discrepancy_raw)
     )
     rhs_reference_summary <- app_glofas_part3_rhs_summary(rhs_reference, "reference")
     rhs_discrepancy_summary <- app_glofas_part3_rhs_summary(rhs_discrepancy, "discrepancy")
@@ -686,6 +700,19 @@ app_glofas_part3_quantile_fit <- function(
       max_path_change = max_path_change,
       max_path_relative_change = max_path_relative_change,
       max_rhs_change = max_rhs_change,
+      max_rhs_raw_change = max_rhs_raw_change,
+      max_rhs_auxiliary_change = max(
+        rhs_reference_change$max_auxiliary_change,
+        rhs_discrepancy_change$max_auxiliary_change
+      ),
+      max_rhs_precision_change = max(
+        rhs_reference_change$max_precision_change,
+        rhs_discrepancy_change$max_precision_change
+      ),
+      max_rhs_partition = rhs_partition,
+      max_rhs_block = rhs_change$controlling_block,
+      max_rhs_component = rhs_change$controlling_component,
+      max_rhs_coordinate = rhs_change$controlling_coordinate,
       max_change = max_change,
       full_state_change = full_state_change,
       full_state_pass = full_state_pass,

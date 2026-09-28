@@ -238,6 +238,7 @@ stopifnot(!isTRUE(exal_driver_fit$vb_diagnostics$future_y_working_likelihood_use
 joint_args <- modifyList(base_args, list(
   tol = 1.0e-6, joint_outer_max_iter = 1L, joint_outer_min_iter = 1L,
   joint_inner_max_iter = 2L, joint_inner_min_iter = 1L, n_draws = 4L,
+  joint_rhs_tol = 1.0e-6,
   beta_rhs = list(tau0 = 1, slab_s2 = 1, a_zeta = 2, b_zeta = 4),
   alpha_rhs = list(tau0 = 0.001, slab_s2 = 1, a_zeta = 2, b_zeta = 4)
 ))
@@ -280,6 +281,7 @@ stopifnot(max(abs(
 warmup_joint_args <- modifyList(joint_args, list(
   tol = 1.0e6,
   joint_outer_tol = 1.0e6,
+  joint_rhs_tol = 1.0e6,
   joint_outer_max_iter = 1L,
   joint_outer_min_iter = 1L,
   joint_inner_max_iter = 2L,

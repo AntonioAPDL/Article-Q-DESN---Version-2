@@ -35,6 +35,9 @@ args <- app_parse_args(list(
   joint_rhs_freeze_outer_iters = 5L,
   joint_rhs_min_tau_updates = 1L,
   joint_rhs_tol = 1.0e-3,
+  joint_rhs_inner_min_iter = 2L,
+  joint_rhs_inner_max_iter = 50L,
+  joint_rhs_inner_consecutive_passes = 2L,
   terminal_consecutive_passes = 3L,
   allow_rhs_schedule_rebase = FALSE
 ))
@@ -145,12 +148,18 @@ run_continuation <- function() {
   vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
   vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
   vb_args$joint_rhs_tol <- as.numeric(args$joint_rhs_tol)
+  vb_args$joint_rhs_inner_min_iter <- as.integer(args$joint_rhs_inner_min_iter)
+  vb_args$joint_rhs_inner_max_iter <- as.integer(args$joint_rhs_inner_max_iter)
+  vb_args$joint_rhs_inner_consecutive_passes <- as.integer(args$joint_rhs_inner_consecutive_passes)
   vb_args$joint_terminal_consecutive_passes <- as.integer(args$terminal_consecutive_passes)
   vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase)
   vb_args$n_draws <- as.integer(args$n_draws)
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||
       vb_args$joint_rhs_freeze_outer_iters < 0L || vb_args$joint_rhs_min_tau_updates < 0L ||
+      vb_args$joint_rhs_inner_min_iter < 1L ||
+      vb_args$joint_rhs_inner_max_iter < vb_args$joint_rhs_inner_min_iter ||
+      vb_args$joint_rhs_inner_consecutive_passes < 1L ||
       !is.finite(vb_args$joint_outer_tol) || vb_args$joint_outer_tol <= 0 ||
       !is.finite(vb_args$joint_rhs_tol) || vb_args$joint_rhs_tol <= 0 ||
       vb_args$joint_terminal_consecutive_passes < 1L) {
@@ -247,6 +256,7 @@ run_continuation <- function() {
     model_grid_sha256 = app_sha256_file(model_grid_path),
     code_head = code_head,
     joint_core_sha256 = app_sha256_file(app_path("application/R/latent_path_vb_joint.R")),
+    partitioned_rhs_sha256 = app_sha256_file(app_path("application/R/glofas_part3_partitioned_rhs.R")),
     part4_family_sha256 = app_sha256_file(app_path("application/R/glofas_part4_latent_family.R")),
     continuation_worker_sha256 = app_sha256_file(app_path("application/scripts/389_continue_glofas_part4_joint_fit.R")),
     state_contract_hash = app_glofas_part4_state_contract_hash(design),
@@ -260,6 +270,9 @@ run_continuation <- function() {
     joint_rhs_freeze_outer_iters = joint$rhs_schedule$effective$freeze_tau_warmup_iters,
     joint_rhs_min_tau_updates = joint$rhs_schedule$effective$min_tau_updates,
     joint_rhs_tolerance = vb_args$joint_rhs_tol,
+    joint_rhs_inner_min_iter = vb_args$joint_rhs_inner_min_iter,
+    joint_rhs_inner_max_iter = vb_args$joint_rhs_inner_max_iter,
+    joint_rhs_inner_consecutive_passes = vb_args$joint_rhs_inner_consecutive_passes,
     terminal_consecutive_passes_required = vb_args$joint_terminal_consecutive_passes,
     joint_rhs_schedule_conversion = joint$rhs_schedule$conversion,
     joint_rhs_schedule_rebased = any(joint$rhs_schedule_rebase_audit$schedule_rebased),

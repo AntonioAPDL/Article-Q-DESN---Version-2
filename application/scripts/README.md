@@ -669,3 +669,23 @@ prepares the narrow mixed-source campaign: Part 2 independent AL tails continue
 from 600 to 800, while the contracting Part 1/2 joint exAL fits continue from
 400 to 600. It deliberately excludes joint AL fits and launches a forecast only
 after the corresponding fit writes a terminal `.certified` marker.
+
+The post-Search-III root-cause lane is narrower still.
+`435_audit_glofas_quantile_root_cause.R` hashes and diagnoses terminal Part 1-4
+joint fits without refitting them, separates bookkeeping movement from
+inferential RHS movement, and validates the bounded RHS solver on retained Part
+4 states. `437_check_glofas_quantile_root_cause_audit.py` independently verifies
+the manifests, adopted geometries, issue classifications, and real-state solver
+gate. `436_prepare_glofas_part1_joint_al_semantic_confirmation.py` prepares
+exactly one geometry-compatible Part 1 joint-AL continuation from 400 to 600
+iterations. It reuses the generic `423`-`425` runner, scheduler, and checker,
+creates no forecast job, and rejects incomplete checkpoints, prior drift,
+discontinuous traces, or hash mismatches.
+The 600-iteration confirmation completed with stable coefficients and paths but
+missed the semantic certificate because the coupled RHS state remained above
+tolerance. `438_prepare_glofas_part1_joint_al_final_confirmation.py` therefore
+authorizes at most one final exact-state continuation from 600 to 800. Its
+fail-closed trend gate requires monotone terminal contraction and records an
+explicit hard quarantine at 800 if the fit remains uncertified. The final lane
+also writes the RHS block, component, and coordinate controlling each update;
+it never creates a forecast job.

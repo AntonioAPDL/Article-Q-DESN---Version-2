@@ -1,5 +1,16 @@
 # Joint-quantile RHS coordination for GloFAS Part 4 latent-path fits.
 
+app_latent_joint_trailing_true_count <- function(values) {
+  values <- as.logical(values)
+  if (!length(values)) return(0L)
+  count <- 0L
+  for (value in rev(values)) {
+    if (!isTRUE(value)) break
+    count <- count + 1L
+  }
+  count
+}
+
 app_latent_joint_extract_core_fit <- function(x) {
   fit <- x$fit %||% x
   if (!is.list(fit) || is.null(fit$summary$theta_mean) || is.null(fit$summary$y_future_mean)) {
@@ -286,11 +297,15 @@ app_fit_latent_path_joint_vb_core <- function(
   outer_min <- as.integer(vb_args$joint_outer_min_iter %||% 2L)
   outer_tol <- as.numeric(vb_args$joint_outer_tol %||% 1.0e-3)
   rhs_tol <- as.numeric(vb_args$joint_rhs_tol %||% outer_tol)
+  rhs_inner_min <- as.integer(vb_args$joint_rhs_inner_min_iter %||% 2L)
+  rhs_inner_max <- as.integer(vb_args$joint_rhs_inner_max_iter %||% 50L)
+  rhs_inner_consecutive <- as.integer(vb_args$joint_rhs_inner_consecutive_passes %||% 2L)
   terminal_consecutive <- as.integer(vb_args$joint_terminal_consecutive_passes %||% 3L)
   inner_max <- as.integer(vb_args$joint_inner_max_iter %||% 30L)
   inner_min <- as.integer(vb_args$joint_inner_min_iter %||% min(10L, inner_max))
   if (outer_max < 1L || outer_min < 1L || outer_min > outer_max || inner_max < 2L ||
       inner_min < 1L || inner_min > inner_max || outer_tol <= 0 || rhs_tol <= 0 ||
+      rhs_inner_min < 1L || rhs_inner_max < rhs_inner_min || rhs_inner_consecutive < 1L ||
       terminal_consecutive < 1L) {
     stop("Invalid joint Part 4 CAVI controls.", call. = FALSE)
   }
@@ -334,21 +349,48 @@ app_fit_latent_path_joint_vb_core <- function(
       }
     }
     moments <- coefficient_moments(fits)
-    rhs_reference <- app_glofas_part3_rhs_update(
-      rhs_reference, moments$reference_mean, moments$reference_var, iter = outer
+    rhs_reference_solve <- app_glofas_part3_rhs_solve_fixed_moments(
+      rhs_reference,
+      moments$reference_mean,
+      moments$reference_var,
+      iter = outer,
+      min_iter = rhs_inner_min,
+      max_iter = rhs_inner_max,
+      tolerance = rhs_tol,
+      consecutive_passes = rhs_inner_consecutive
     )
-    rhs_discrepancy <- app_glofas_part3_rhs_update(
-      rhs_discrepancy, moments$discrepancy_mean, moments$discrepancy_var, iter = outer
+    rhs_reference <- rhs_reference_solve$state
+    rhs_discrepancy_solve <- app_glofas_part3_rhs_solve_fixed_moments(
+      rhs_discrepancy,
+      moments$discrepancy_mean,
+      moments$discrepancy_var,
+      iter = outer,
+      min_iter = rhs_inner_min,
+      max_iter = rhs_inner_max,
+      tolerance = rhs_tol,
+      consecutive_passes = rhs_inner_consecutive
     )
+    rhs_discrepancy <- rhs_discrepancy_solve$state
     reference_rhs_gate <- app_latent_joint_rhs_gate(rhs_reference, outer, "reference")
     discrepancy_rhs_gate <- app_latent_joint_rhs_gate(rhs_discrepancy, outer, "discrepancy")
     rhs_gate <- list(
-      passed = reference_rhs_gate$passed && discrepancy_rhs_gate$passed,
+      passed = isTRUE(reference_rhs_gate$passed) && isTRUE(discrepancy_rhs_gate$passed),
       blocks = rbind(reference_rhs_gate$blocks, discrepancy_rhs_gate$blocks)
     )
-    converged_rhs <- rhs_gate$passed &&
-      all(is.finite(rhs_gate$blocks$global_relative_change)) &&
-      max(rhs_gate$blocks$global_relative_change) <= rhs_tol
+    rhs_global_change <- as.numeric(rhs_gate$blocks$global_relative_change)
+    max_rhs_global_change <- if (length(rhs_global_change) && all(is.finite(rhs_global_change))) {
+      max(rhs_global_change)
+    } else {
+      Inf
+    }
+    max_rhs_semantic_change <- max(
+      rhs_reference_solve$relative_change,
+      rhs_discrepancy_solve$relative_change
+    )
+    rhs_inner_converged <- isTRUE(rhs_reference_solve$converged) &&
+      isTRUE(rhs_discrepancy_solve$converged)
+    converged_rhs <- isTRUE(rhs_gate$passed) && rhs_inner_converged &&
+      is.finite(max_rhs_semantic_change) && max_rhs_semantic_change <= rhs_tol
     new_theta <- do.call(cbind, lapply(fits, function(x) x$summary$theta_mean))
     change <- max(abs(new_theta - old_theta) / pmax(1, abs(old_theta)))
     converged_inner <- all(vapply(fits, function(x) isTRUE(x$vb_diagnostics$converged), logical(1L)))
@@ -360,7 +402,15 @@ app_fit_latent_path_joint_vb_core <- function(
       outer_tolerance_met = converged_outer,
       rhs_convergence_gate_passed = converged_rhs,
       rhs_schedule_gate_passed = rhs_gate$passed,
-      max_rhs_global_relative_change = max(rhs_gate$blocks$global_relative_change),
+      max_rhs_global_relative_change = max_rhs_global_change,
+      max_rhs_inferential_relative_change = max_rhs_semantic_change,
+      rhs_inner_converged = rhs_inner_converged,
+      reference_rhs_inner_iterations = rhs_reference_solve$iterations,
+      discrepancy_rhs_inner_iterations = rhs_discrepancy_solve$iterations,
+      reference_rhs_controlling_block = rhs_reference_solve$controlling_block,
+      reference_rhs_controlling_component = rhs_reference_solve$controlling_component,
+      discrepancy_rhs_controlling_block = rhs_discrepancy_solve$controlling_block,
+      discrepancy_rhs_controlling_component = rhs_discrepancy_solve$controlling_component,
       min_rhs_tau_updates = min(rhs_gate$blocks$tau_update_count),
       max_rhs_tau_updates = max(rhs_gate$blocks$tau_update_count),
       continuation_iteration = outer_local,
@@ -379,13 +429,16 @@ app_fit_latent_path_joint_vb_core <- function(
       as.logical(previous_trace$full_state_pass)
     } else logical()
     pass_history <- c(previous_pass, as.logical(completed_trace$full_state_pass))
-    trailing_passes <- sum(cumprod(as.integer(rev(pass_history))))
-    terminal_pass <- trailing_passes >= terminal_consecutive
+    trailing_passes <- app_latent_joint_trailing_true_count(pass_history)
+    terminal_pass <- isTRUE(trailing_passes >= terminal_consecutive)
     trace_new[[outer_local]]$terminal_consecutive_passes <- trailing_passes
     message(sprintf(
       "[Part4 joint %s] outer iteration %d (continuation %d/%d) change=%.6g inner=%s",
       likelihood, outer, outer_local, outer_max, change,
-      paste0(converged_inner, ", rhs=", converged_rhs)
+      paste0(
+        converged_inner, ", rhs=", converged_rhs,
+        " [", rhs_reference_solve$iterations, "/", rhs_discrepancy_solve$iterations, "]"
+      )
     ))
     if (terminal_pass) {
       converged <- TRUE
@@ -436,6 +489,11 @@ app_fit_latent_path_joint_vb_core <- function(
     rhs_convergence_diagnostics = rhs_gate$blocks,
     rhs_schedule = rhs_schedule,
     joint_rhs_tolerance = rhs_tol,
+    joint_rhs_inner_controls = list(
+      min_iter = rhs_inner_min,
+      max_iter = rhs_inner_max,
+      consecutive_passes = rhs_inner_consecutive
+    ),
     terminal_consecutive_passes_required = terminal_consecutive,
     rhs_schedule_rebase_audit = rhs_schedule_rebase_audit,
     trace = trace,

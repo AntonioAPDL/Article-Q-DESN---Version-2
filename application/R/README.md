@@ -234,6 +234,15 @@ Tracked helper files:
   tau-keyed initializer transfer, multi-tau coefficient extraction, relative
   full-state movement, corrected scalable-exAL local moments, terminal
   convergence certificates, and the promotable fixed-200 iteration policy.
+  RHS convergence uses expected inverse auxiliary/global scales and induced
+  prior precision; bookkeeping counters remain diagnostics only. Named RHS
+  change diagnostics identify the controlling block, component, coordinate,
+  and auxiliary-versus-prior-precision movement without changing an update.
+- `glofas_quantile_root_cause_diagnostics.R`: no-refit decomposition of raw
+  versus inferential RHS movement and held-moment fixed-point replay helpers.
+- `glofas_part3_partitioned_rhs.R`: partitioned reference/discrepancy RHS
+  updates and a bounded fixed-moment inner solver that deepens the same
+  coordinate map without changing priors or likelihood terms.
 - `glofas_quantile_certification_restart.R`: same-target certification-restart
   adapters for the small set of fixed-200 GloFAS fits that finish without a
   terminal full-state certificate. It restores saved global/RHS/covariance

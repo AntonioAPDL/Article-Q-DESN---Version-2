@@ -27,6 +27,17 @@ controls <- app_glofas_part1_quantile_default_controls(
 fresh <- app_glofas_part1_quantile_fit_readout(y, Z, tau, "independent_al", controls)
 stopifnot(identical(as.integer(fresh$trace$global_iter), 1:3))
 stopifnot(isTRUE(fresh$checkpoint_state$complete_local_state))
+stopifnot(
+  all(c(
+    "max_rhs_auxiliary_change", "max_rhs_precision_change", "max_rhs_block",
+    "max_rhs_component", "max_rhs_coordinate"
+  ) %in% names(fresh$trace)),
+  all(is.finite(fresh$trace$max_rhs_auxiliary_change)),
+  all(is.finite(fresh$trace$max_rhs_precision_change)),
+  all(nzchar(fresh$trace$max_rhs_block)),
+  all(nzchar(fresh$trace$max_rhs_component)),
+  all(grepl("\\[[0-9]+\\]$", fresh$trace$max_rhs_coordinate))
+)
 
 restart_one <- app_glofas_part12_build_restart_state(fresh, "independent_al", tau, p, n)
 stopifnot(identical(restart_one$restart_kind, "exact_local_state_available"))

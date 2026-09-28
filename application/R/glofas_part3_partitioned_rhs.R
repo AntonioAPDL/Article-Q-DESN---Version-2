@@ -233,6 +233,158 @@ app_glofas_part3_rhs_update <- function(
   state
 }
 
+app_glofas_part3_rhs_inferential_state <- function(state) {
+  if (!is.list(state) || !length(state)) {
+    stop("Part 3 RHS state must contain at least one block.", call. = FALSE)
+  }
+  out <- unlist(lapply(state, function(block) {
+    c(
+      as.numeric(block$e_inv_lambda2 %||% numeric()),
+      as.numeric(block$e_inv_nu %||% numeric()),
+      as.numeric(block$e_inv_tau2 %||% numeric()),
+      as.numeric(block$e_inv_xi %||% numeric()),
+      as.numeric(block$e_inv_zeta2 %||% numeric()),
+      as.numeric(block$prior_precision %||% numeric())
+    )
+  }), use.names = FALSE)
+  if (!length(out) || any(!is.finite(out))) {
+    stop("Part 3 RHS inferential state is empty or non-finite.", call. = FALSE)
+  }
+  out
+}
+
+app_glofas_part3_rhs_change_diagnostics <- function(current, previous, floor = 1) {
+  named_state <- function(state) {
+    unlist(unname(Map(function(block, block_name) {
+      fields <- c(
+        "e_inv_lambda2", "e_inv_nu", "e_inv_tau2", "e_inv_xi",
+        "e_inv_zeta2", "prior_precision"
+      )
+      unlist(unname(lapply(fields, function(field) {
+        value <- as.numeric(block[[field]] %||% numeric())
+        names(value) <- paste0(block_name, ".", field, "[", seq_along(value), "]")
+        value
+      })), use.names = TRUE)
+    }, state, names(state))), use.names = TRUE)
+  }
+  current <- named_state(current)
+  previous <- named_state(previous)
+  if (!identical(names(current), names(previous)) || !length(current) ||
+      any(!is.finite(current)) || any(!is.finite(previous))) {
+    stop("Part 3 RHS inferential coordinates changed between iterations.", call. = FALSE)
+  }
+  relative <- abs(current - previous) / pmax(as.numeric(floor), abs(previous))
+  controlling <- which.max(relative)
+  coordinate <- names(relative)[[controlling]]
+  parsed <- regmatches(
+    coordinate,
+    regexec("^([^.]+)\\.([^[]+)\\[([0-9]+)\\]$", coordinate)
+  )[[1L]]
+  if (length(parsed) != 4L) {
+    stop(sprintf("Unable to parse Part 3 RHS coordinate: %s", coordinate), call. = FALSE)
+  }
+  precision <- grepl("\\.prior_precision\\[", names(relative))
+  safe_max <- function(x) if (length(x)) max(x) else 0
+  list(
+    max_relative_change = unname(relative[[controlling]]),
+    max_auxiliary_change = safe_max(relative[!precision]),
+    max_precision_change = safe_max(relative[precision]),
+    controlling_block = parsed[[2L]],
+    controlling_component = parsed[[3L]],
+    controlling_coordinate = coordinate
+  )
+}
+
+app_glofas_part3_rhs_solve_fixed_moments <- function(
+  state,
+  coefficient_mean,
+  coefficient_var_diag,
+  iter,
+  min_iter = 2L,
+  max_iter = 50L,
+  tolerance = 1.0e-4,
+  consecutive_passes = 2L
+) {
+  min_iter <- as.integer(min_iter)
+  max_iter <- as.integer(max_iter)
+  consecutive_passes <- as.integer(consecutive_passes)
+  tolerance <- as.numeric(tolerance)
+  if (!is.finite(min_iter) || !is.finite(max_iter) || min_iter < 1L ||
+      max_iter < min_iter || !is.finite(consecutive_passes) || consecutive_passes < 1L ||
+      !is.finite(tolerance) || tolerance <= 0) {
+    stop("Invalid fixed-moment RHS solver controls.", call. = FALSE)
+  }
+  coefficient_mean <- as.matrix(coefficient_mean)
+  coefficient_var_diag <- as.matrix(coefficient_var_diag)
+  if (!identical(dim(coefficient_mean), dim(coefficient_var_diag)) ||
+      ncol(coefficient_mean) != length(state)) {
+    stop("Fixed-moment RHS solver dimensions are inconsistent.", call. = FALSE)
+  }
+
+  current <- state
+  trace <- vector("list", max_iter)
+  global_update_enabled <- NULL
+  trailing_passes <- 0L
+  converged <- FALSE
+  for (inner in seq_len(max_iter)) {
+    previous <- current
+    current <- app_glofas_part3_rhs_update(
+      current,
+      coefficient_mean,
+      coefficient_var_diag,
+      iter = iter,
+      update_global = if (inner == 1L) NULL else global_update_enabled
+    )
+    performed <- vapply(
+      current,
+      function(block) isTRUE(block$last_global_update_performed),
+      logical(1L)
+    )
+    if (inner == 1L) {
+      if (length(unique(performed)) != 1L) {
+        stop("RHS blocks disagree about the global-update schedule.", call. = FALSE)
+      }
+      global_update_enabled <- performed[[1L]]
+    }
+    change <- app_glofas_part3_rhs_change_diagnostics(current, previous)
+    relative_change <- change$max_relative_change
+    pass <- is.finite(relative_change) && relative_change <= tolerance
+    trailing_passes <- if (pass) trailing_passes + 1L else 0L
+    trace[[inner]] <- data.frame(
+      rhs_inner_iteration = inner,
+      inferential_relative_change = relative_change,
+      auxiliary_relative_change = change$max_auxiliary_change,
+      precision_relative_change = change$max_precision_change,
+      controlling_block = change$controlling_block,
+      controlling_component = change$controlling_component,
+      controlling_coordinate = change$controlling_coordinate,
+      global_update_enabled = isTRUE(global_update_enabled),
+      convergence_pass = pass,
+      trailing_consecutive_passes = trailing_passes,
+      stringsAsFactors = FALSE
+    )
+    if (inner >= min_iter && trailing_passes >= consecutive_passes) {
+      converged <- TRUE
+      trace <- trace[seq_len(inner)]
+      break
+    }
+  }
+  trace <- do.call(rbind, trace[vapply(trace, is.data.frame, logical(1L))])
+  list(
+    state = current,
+    converged = converged,
+    iterations = nrow(trace),
+    relative_change = tail(trace$inferential_relative_change, 1L),
+    auxiliary_relative_change = tail(trace$auxiliary_relative_change, 1L),
+    precision_relative_change = tail(trace$precision_relative_change, 1L),
+    controlling_block = tail(trace$controlling_block, 1L),
+    controlling_component = tail(trace$controlling_component, 1L),
+    controlling_coordinate = tail(trace$controlling_coordinate, 1L),
+    global_update_enabled = isTRUE(global_update_enabled),
+    trace = trace
+  )
+}
+
 app_glofas_part3_rhs_prior_terms <- function(state, coefficient_mean) {
   coefficient_mean <- as.matrix(coefficient_mean)
   K <- ncol(coefficient_mean)

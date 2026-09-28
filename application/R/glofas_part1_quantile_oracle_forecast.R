@@ -457,7 +457,8 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
     sigma_old <- sigma_rate / pmax(sigma_shape - 1, .Machine$double.eps)
     v_old <- v_mean
     v_inv_old <- v_inv_mean
-    rhs_old <- app_glofas_quantile_numeric_state(rhs_state)
+    rhs_old_raw <- app_glofas_quantile_numeric_state(rhs_state)
+    rhs_old_state <- rhs_state
     prior_terms <- app_glofas_part1_quantile_prior_terms(rhs_state, beta_mat, K, p)
     beta_var <- vector("list", K)
     cov_diag <- vector("list", K)
@@ -529,8 +530,10 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
       app_glofas_quantile_max_relative_change(v_mean, v_old),
       app_glofas_quantile_max_relative_change(v_inv_mean, v_inv_old)
     )
-    max_rhs_change <- app_glofas_quantile_max_relative_change(
-      app_glofas_quantile_numeric_state(rhs_state), rhs_old
+    rhs_change <- app_glofas_quantile_rhs_change_diagnostics(rhs_state, rhs_old_state)
+    max_rhs_change <- rhs_change$max_relative_change
+    max_rhs_raw_change <- app_glofas_quantile_max_relative_change(
+      app_glofas_quantile_numeric_state(rhs_state), rhs_old_raw
     )
     convergence_eligible <- (isTRUE(fixed_iterations) || iter >= min_iter) &&
       iter > freeze_beta_warmup_iters &&
@@ -557,6 +560,12 @@ app_glofas_part1_quantile_fit_al_blockmf <- function(
       max_path_change = max_path_change,
       max_latent_change = max_latent_change,
       max_rhs_change = max_rhs_change,
+      max_rhs_raw_change = max_rhs_raw_change,
+      max_rhs_auxiliary_change = rhs_change$max_auxiliary_change,
+      max_rhs_precision_change = rhs_change$max_precision_change,
+      max_rhs_block = rhs_change$controlling_block,
+      max_rhs_component = rhs_change$controlling_component,
+      max_rhs_coordinate = rhs_change$controlling_coordinate,
       full_state_pass = full_state_pass,
       max_jitter = jitter_max,
       rhs_mean_precision = mean(rhs_summary$mean_precision),
@@ -783,7 +792,8 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
     v_inv_old <- v_inv_mean
     s_old <- s_mean
     s2_old <- s2_mean
-    rhs_old <- app_glofas_quantile_numeric_state(rhs_state)
+    rhs_old_raw <- app_glofas_quantile_numeric_state(rhs_state)
+    rhs_old_state <- rhs_state
     constants <- app_joint_qvp_exal_constants(tau, gamma)
     prior_terms <- app_glofas_part1_quantile_prior_terms(rhs_state, beta_mat, K, p)
     beta_var <- vector("list", K)
@@ -897,8 +907,10 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
       app_glofas_quantile_max_relative_change(s_mean, s_old),
       app_glofas_quantile_max_relative_change(s2_mean, s2_old)
     )
-    max_rhs_change <- app_glofas_quantile_max_relative_change(
-      app_glofas_quantile_numeric_state(rhs_state), rhs_old
+    rhs_change <- app_glofas_quantile_rhs_change_diagnostics(rhs_state, rhs_old_state)
+    max_rhs_change <- rhs_change$max_relative_change
+    max_rhs_raw_change <- app_glofas_quantile_max_relative_change(
+      app_glofas_quantile_numeric_state(rhs_state), rhs_old_raw
     )
     convergence_eligible <- (isTRUE(fixed_iterations) || iter >= min_iter) &&
       iter > freeze_beta_warmup_iters &&
@@ -930,6 +942,12 @@ app_glofas_part1_quantile_fit_exal_blockmf <- function(
       max_path_change = max_path_change,
       max_latent_change = max_latent_change,
       max_rhs_change = max_rhs_change,
+      max_rhs_raw_change = max_rhs_raw_change,
+      max_rhs_auxiliary_change = rhs_change$max_auxiliary_change,
+      max_rhs_precision_change = rhs_change$max_precision_change,
+      max_rhs_block = rhs_change$controlling_block,
+      max_rhs_component = rhs_change$controlling_component,
+      max_rhs_coordinate = rhs_change$controlling_coordinate,
       full_state_pass = full_state_pass,
       max_jitter = jitter_max,
       rhs_mean_precision = mean(rhs_summary$mean_precision),

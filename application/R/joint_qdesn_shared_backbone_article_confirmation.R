@@ -918,13 +918,37 @@ app_joint_article_host_preflight <- function(
     production_launched = FALSE,
     stringsAsFactors = FALSE
   )
-  if (!out$host_ok[[1L]] || !out$profile_contract_ok[[1L]] ||
-      !out$rscript_ok[[1L]] || !out$library_root_ok[[1L]] ||
-      !out$data_free_ok[[1L]] || !out$logical_cores_ok[[1L]] ||
-      !out$physical_affinity_ok[[1L]] ||
-      !out$competing_processes_ok[[1L]] || !out$one_thread_policy[[1L]]) {
-    stop("Host preflight failed host/profile, R executable/library, compute/storage capacity, competing-process, or one-thread policy.",
-         call. = FALSE)
+  gates <- c(
+    host = out$host_ok[[1L]],
+    profile_contract = out$profile_contract_ok[[1L]],
+    rscript = out$rscript_ok[[1L]],
+    library_root = out$library_root_ok[[1L]],
+    data_free = out$data_free_ok[[1L]],
+    logical_cores = out$logical_cores_ok[[1L]],
+    physical_affinity = out$physical_affinity_ok[[1L]],
+    competing_processes = out$competing_processes_ok[[1L]],
+    one_thread_policy = out$one_thread_policy[[1L]]
+  )
+  if (any(!gates)) {
+    failed_gates <- names(gates)[!gates]
+    detail <- if ("competing_processes" %in% failed_gates &&
+        nzchar(out$competing_processes[[1L]])) {
+      paste0(" Competing processes: ", out$competing_processes[[1L]], ".")
+    } else {
+      ""
+    }
+    condition <- structure(list(
+      message = paste0(
+        "Host preflight failed gates: ", paste(failed_gates, collapse = ";"),
+        ".", detail
+      ),
+      call = NULL,
+      preflight = out,
+      processes = processes,
+      cpu_affinity_mapping = affinity,
+      shared_capacity_mapping = shared_capacity
+    ), class = c("joint_article_host_preflight_error", "error", "condition"))
+    stop(condition)
   }
   attr(out, "cpu_affinity_mapping") <- affinity
   attr(out, "shared_capacity_mapping") <- shared_capacity
@@ -2877,6 +2901,12 @@ app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message
   root <- normalizePath(root, mustWork = TRUE)
   out <- app_joint_article_mcmc_worker_dir(root, worker_id)
   app_ensure_dir(out)
+  condition <- if (inherits(error_message, "condition")) error_message else NULL
+  message <- if (is.null(condition)) {
+    as.character(error_message)
+  } else {
+    conditionMessage(condition)
+  }
   job <- tryCatch({
     plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
     plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
@@ -2886,15 +2916,196 @@ app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message
   }
   failure <- cbind(job, data.frame(
     status = "failed",
-    error_message = as.character(error_message),
+    error_message = message,
     runtime_seconds = if (is.null(started)) NA_real_ else
       as.numeric(difftime(Sys.time(), started, units = "secs")),
     recorded_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
     stringsAsFactors = FALSE
   ))
   app_write_csv(failure, file.path(out, "failure.csv"))
+  if (inherits(condition, "joint_article_host_preflight_error")) {
+    if (is.data.frame(condition$preflight)) {
+      app_write_csv(condition$preflight,
+        file.path(out, "host_preflight_snapshot.csv"))
+    }
+    if (is.data.frame(condition$processes)) {
+      app_write_csv(condition$processes,
+        file.path(out, "host_preflight_processes.csv"))
+    }
+    if (is.data.frame(condition$cpu_affinity_mapping)) {
+      app_write_csv(condition$cpu_affinity_mapping,
+        file.path(out, "host_preflight_cpu_affinity.csv"))
+    }
+    if (is.data.frame(condition$shared_capacity_mapping)) {
+      app_write_csv(condition$shared_capacity_mapping,
+        file.path(out, "host_preflight_shared_capacity.csv"))
+    }
+  }
   writeLines("failed", file.path(out, "FAILED"))
   invisible(out)
+}
+
+app_joint_article_archive_infrastructure_failures <- function(
+  root,
+  failure_audit_dir,
+  resume_compatibility_dir,
+  out_dir
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  failure_audit_dir <- normalizePath(failure_audit_dir, mustWork = TRUE)
+  resume_compatibility_dir <- normalizePath(resume_compatibility_dir,
+    mustWork = TRUE)
+  out_dir <- normalizePath(out_dir, mustWork = FALSE)
+  if (dir.exists(file.path(root, "mcmc_queue.lock"))) {
+    stop("Cannot prepare an infrastructure retry while the MCMC queue lock exists.",
+      call. = FALSE)
+  }
+  if (dir.exists(out_dir) || file.exists(out_dir)) {
+    stop("Infrastructure retry archive already exists.", call. = FALSE)
+  }
+  failure_assessment <- app_read_csv(file.path(failure_audit_dir,
+    "audit_assessment.csv"))
+  resume_assessment <- app_read_csv(file.path(resume_compatibility_dir,
+    "resume_compatibility_assessment.csv"))
+  if (nrow(failure_assessment) != 1L ||
+      failure_assessment$audit_status[[1L]] !=
+        "infrastructure_host_preflight_failure_localized") {
+    stop("Retry requires a localized infrastructure-host-preflight failure audit.",
+      call. = FALSE)
+  }
+  if (nrow(resume_assessment) != 1L ||
+      resume_assessment$status[[1L]] != "COMPLETED_WORKERS_SAFE_TO_RETAIN") {
+    stop("Retry requires a passing completed-worker compatibility audit.",
+      call. = FALSE)
+  }
+  plan <- app_read_csv(file.path(root, "mcmc_worker_plan.csv"))
+  state_before <- app_joint_article_mcmc_worker_state(root, plan)
+  failures <- app_joint_article_mcmc_failure_inventory(root)
+  failed_ids <- state_before$worker_id[state_before$failed]
+  if (!length(failed_ids) || nrow(failures) != length(failed_ids) ||
+      !setequal(failures$worker_id, failed_ids) ||
+      any(failures$failure_class != "infrastructure_host_preflight")) {
+    stop("Current failed workers do not match the audited infrastructure-only retry set.",
+      call. = FALSE)
+  }
+  if (any(state_before$done[state_before$worker_id %in% failed_ids])) {
+    stop("A retry-selected worker is already manifest-complete.", call. = FALSE)
+  }
+
+  app_ensure_dir(out_dir)
+  collect_tree <- function(source_dir, archive_prefix) {
+    files <- list.files(source_dir, recursive = TRUE, full.names = TRUE,
+      all.files = TRUE, no.. = TRUE, include.dirs = FALSE)
+    if (!length(files)) {
+      return(data.frame(source_path = character(), archive_relative_path = character(),
+        size_bytes = numeric(), sha256 = character(), stringsAsFactors = FALSE))
+    }
+    source_prefix <- paste0(normalizePath(source_dir, mustWork = TRUE),
+      .Platform$file.sep)
+    relative <- substring(normalizePath(files, mustWork = TRUE),
+      nchar(source_prefix) + 1L)
+    data.frame(
+      source_path = normalizePath(files, mustWork = TRUE),
+      archive_relative_path = file.path(archive_prefix, relative),
+      size_bytes = as.numeric(file.info(files)$size),
+      sha256 = vapply(files, app_sha256_file, character(1L)),
+      stringsAsFactors = FALSE
+    )
+  }
+  worker_rows <- lapply(failed_ids, function(worker_id) {
+    worker_dir <- app_joint_article_mcmc_worker_dir(root, worker_id)
+    collect_tree(worker_dir, file.path("failed_workers", basename(worker_dir)))
+  })
+  audit_rows <- list(
+    collect_tree(failure_audit_dir, file.path("audit_inputs", "failure_audit")),
+    collect_tree(resume_compatibility_dir,
+      file.path("audit_inputs", "resume_compatibility"))
+  )
+  queue_names <- list.files(root, full.names = TRUE)
+  queue_names <- queue_names[grepl(
+    "^(mcmc_queue_batch_[0-9]+(_result)?[.]csv|mcmc_(queue_)?health(_summary)?[.]csv|mcmc_queue_launch_receipt[.]csv|mcmc_execution_git_state[.]csv)$",
+    basename(queue_names)
+  )]
+  queue_rows <- if (length(queue_names)) {
+    data.frame(
+      source_path = normalizePath(queue_names, mustWork = TRUE),
+      archive_relative_path = file.path("root_snapshot", basename(queue_names)),
+      size_bytes = as.numeric(file.info(queue_names)$size),
+      sha256 = vapply(queue_names, app_sha256_file, character(1L)),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    data.frame(source_path = character(), archive_relative_path = character(),
+      size_bytes = numeric(), sha256 = character(), stringsAsFactors = FALSE)
+  }
+  inventory <- app_joint_qdesn_bind_rows(c(worker_rows, audit_rows,
+    list(queue_rows)))
+  if (!nrow(inventory) || anyDuplicated(inventory$archive_relative_path)) {
+    stop("Infrastructure retry archive inventory is empty or duplicated.",
+      call. = FALSE)
+  }
+  destinations <- file.path(out_dir, inventory$archive_relative_path)
+  invisible(lapply(unique(dirname(destinations)), app_ensure_dir))
+  copied <- file.copy(inventory$source_path, destinations, copy.date = TRUE)
+  if (!all(copied)) {
+    stop("Could not copy every infrastructure failure artifact.", call. = FALSE)
+  }
+  inventory$archive_exists <- file.exists(destinations)
+  inventory$archive_size_match <- as.numeric(file.info(destinations)$size) ==
+    inventory$size_bytes
+  inventory$archive_sha256_match <- vapply(destinations, app_sha256_file,
+    character(1L)) == inventory$sha256
+  inventory$verified <- with(inventory,
+    archive_exists & archive_size_match & archive_sha256_match)
+  if (any(!inventory$verified)) {
+    stop("Infrastructure retry archive verification failed.", call. = FALSE)
+  }
+
+  for (worker_id in failed_ids) {
+    unlink(app_joint_article_mcmc_worker_dir(root, worker_id), recursive = TRUE,
+      force = TRUE)
+  }
+  state_after <- app_joint_article_mcmc_worker_state(root, plan)
+  if (sum(state_after$done) != sum(state_before$done) ||
+      any(state_after$failed) ||
+      sum(!state_after$done & !state_after$failed) !=
+        sum(!state_before$done & !state_before$failed) + length(failed_ids)) {
+    stop("Post-archive MCMC state does not preserve completed workers exactly.",
+      call. = FALSE)
+  }
+  app_write_csv(inventory, file.path(out_dir, "archived_file_inventory.csv"))
+  app_write_csv(state_before, file.path(out_dir, "worker_state_before.csv"))
+  app_write_csv(state_after, file.path(out_dir, "worker_state_after.csv"))
+  status <- data.frame(
+    status = "INFRASTRUCTURE_FAILURES_ARCHIVED_READY_TO_RESUME",
+    completed_workers_retained = sum(state_after$done),
+    infrastructure_failures_archived = length(failed_ids),
+    pending_workers_after_recovery = sum(!state_after$done & !state_after$failed),
+    failed_workers_after_recovery = sum(state_after$failed),
+    archived_files = nrow(inventory),
+    archived_bytes = sum(inventory$size_bytes),
+    execution_code_commit = app_joint_article_git_value(c("rev-parse", "HEAD")),
+    created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  )
+  app_write_csv(status, file.path(out_dir, "recovery_status.csv"))
+  artifact_paths <- list.files(out_dir, recursive = TRUE, full.names = TRUE,
+    all.files = TRUE, no.. = TRUE, include.dirs = FALSE)
+  artifact_paths <- artifact_paths[!basename(artifact_paths) %in% c(
+    "artifact_manifest.csv", "artifact_manifest_verification.csv")]
+  names(artifact_paths) <- sprintf("recovery_artifact_%05d",
+    seq_along(artifact_paths))
+  manifest <- app_joint_shared_write_manifest(out_dir, artifact_paths)
+  verification <- app_joint_shared_verify_manifest(out_dir, manifest)
+  app_write_csv(verification, file.path(out_dir,
+    "artifact_manifest_verification.csv"))
+  if (any(!verification$verified)) {
+    stop("Infrastructure retry artifact manifest failed verification.",
+      call. = FALSE)
+  }
+  list(out_dir = out_dir, status = status, inventory = inventory,
+    state_before = state_before, state_after = state_after,
+    manifest_verification = verification)
 }
 
 app_joint_article_mcmc_precision_repair_controls <- function() {
@@ -3134,7 +3345,7 @@ app_joint_article_run_mcmc_queue <- function(
           error_message = "", stringsAsFactors = FALSE)
       }, error = function(e) {
         app_joint_article_record_mcmc_failure(root, worker_id,
-          conditionMessage(e), started = started)
+          e, started = started)
         data.frame(worker_id = worker_id, status = "failed",
           error_message = conditionMessage(e), stringsAsFactors = FALSE)
       })

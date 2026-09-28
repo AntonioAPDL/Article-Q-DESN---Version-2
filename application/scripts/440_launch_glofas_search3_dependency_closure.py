@@ -7,8 +7,10 @@ import argparse
 import csv
 import hashlib
 import json
+import shlex
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -115,13 +117,57 @@ def main() -> int:
     parser.add_argument("--session-prefix", required=True)
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument("--wait-for-gate", action="store_true")
+    parser.add_argument("--poll-seconds", type=int, default=300)
+    parser.add_argument("--watcher-child", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     runtime = resolve(args.runtime_root)
     closure, _ = verify_frozen_readiness(runtime)
     resources = closure["resource_contract"]
     if args.workers != int(resources["workers"]) or args.cpu_pool != resources["cpu_pool"]:
         raise RuntimeError("Launch resources differ from the frozen Search III closure contract")
-    classification = classify_final_gate(closure)
+    if args.poll_seconds < 10:
+        raise RuntimeError("Gate polling must be at least 10 seconds")
+    watcher_session = f"{args.session_prefix}_gate"
+    if args.wait_for_gate and not args.watcher_child:
+        exists = subprocess.run(
+            ["tmux", "has-session", "-t", watcher_session], capture_output=True
+        ).returncode == 0
+        if exists:
+            raise RuntimeError(f"Gate watcher already exists: {watcher_session}")
+        command = [
+            sys.executable, str(Path(__file__).resolve()),
+            "--runtime-root", str(runtime), "--workers", str(args.workers),
+            "--cpu-pool", args.cpu_pool, "--session-prefix", args.session_prefix,
+            "--poll-seconds", str(args.poll_seconds), "--wait-for-gate", "--watcher-child",
+        ]
+        if args.background:
+            command.append("--background")
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", watcher_session, shlex.join(command)],
+            check=True,
+        )
+        print(json.dumps({
+            "runtime_root": str(runtime), "watcher_session": watcher_session,
+            "state": "waiting_for_final_part1_gate",
+        }, indent=2, sort_keys=True))
+        return 0
+
+    while True:
+        try:
+            classification = classify_final_gate(closure)
+            break
+        except RuntimeError as error:
+            if not args.wait_for_gate or "not classified: RUNNING_OR_PENDING" not in str(error):
+                raise
+            heartbeat = {
+                "checked_utc": datetime.now(timezone.utc).isoformat(),
+                "state": "waiting_for_final_part1_gate", "detail": str(error),
+            }
+            (runtime / "status/search3_gate_watcher_health.json").write_text(
+                json.dumps(heartbeat, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            time.sleep(args.poll_seconds)
     audit_path = runtime / "configs/final_part1_diagnostic_admission.json"
     audit_path.write_text(json.dumps(classification, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if args.validate_only:
@@ -135,6 +181,9 @@ def main() -> int:
     if args.background:
         command.append("--background")
     subprocess.run(command, cwd=repo_root(), check=True)
+    (runtime / "status/search3_gate_watcher_launched").write_text(
+        datetime.now(timezone.utc).isoformat() + "\n", encoding="utf-8"
+    )
     print(json.dumps({
         "runtime_root": str(runtime), "gate_classification": classification["classification"],
         "launch_state": "submitted" if args.background else "completed",

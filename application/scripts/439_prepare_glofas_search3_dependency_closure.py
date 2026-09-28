@@ -265,7 +265,8 @@ def main() -> int:
     launch.write_text(
         "#!/usr/bin/env bash\nset -euo pipefail\n"
         f"python3.11 application/scripts/440_launch_glofas_search3_dependency_closure.py --runtime-root {shlex.quote(str(runtime))} "
-        f"--workers {args.workers} --cpu-pool {shlex.quote(args.cpu_pool)} --session-prefix {shlex.quote(args.session_prefix)} --background\n",
+        f"--workers {args.workers} --cpu-pool {shlex.quote(args.cpu_pool)} --session-prefix {shlex.quote(args.session_prefix)} "
+        "--wait-for-gate --poll-seconds 300 --background\n",
         encoding="utf-8",
     )
     launch.chmod(0o755)

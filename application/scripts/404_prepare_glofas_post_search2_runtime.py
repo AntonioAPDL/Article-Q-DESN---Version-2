@@ -74,6 +74,8 @@ def source_files(args, runtime_configs=()):
         "406_check_glofas_post_search2_dag.py",
         "407_prepare_glofas_post_search2_inputs.R",
         "408_recover_glofas_post_search2_runtime.py",
+        "439_prepare_glofas_search3_dependency_closure.py",
+        "440_launch_glofas_search3_dependency_closure.py",
         "glofas_post_search2_resources.py",
     )]
     files += [
@@ -533,14 +535,14 @@ def main():
     parser.add_argument("--session-prefix", default="glofas_post_search2_20260916_r7")
     parser.add_argument("--workers", type=int, default=25)
     parser.add_argument("--cpu-pool", default="0-24")
-    parser.add_argument("--max-iter", type=int, default=100)
-    parser.add_argument("--min-iter", type=int, default=30)
-    parser.add_argument("--tol", type=float, default=0.01)
+    parser.add_argument("--max-iter", type=int, default=200)
+    parser.add_argument("--min-iter", type=int, default=200)
+    parser.add_argument("--tol", type=float, default=1.0e-4)
     parser.add_argument("--n-draws", type=int, default=500)
     parser.add_argument("--seed", type=int, default=20260916)
     parser.add_argument("--forecast-backend", choices=("auto", "cpp", "r"), default="cpp")
     parser.add_argument("--freeze-beta-warmup-iters", type=int, default=20)
-    parser.add_argument("--min-beta-updates", type=int, default=30)
+    parser.add_argument("--min-beta-updates", type=int, default=180)
     args = parser.parse_args()
     if args.n_draws != 500:
         raise SystemExit("The adopted recursive forecast contract requires exactly 500 paths.")
@@ -572,6 +574,17 @@ def main():
     require_empty_destination(part4_runtime, "Part 4 runtime")
     for sub in ("configs", "objects", "forecasts", "scores", "traces", "coefficients", "tables", "logs", "status", "figures", "scripts", "docs"):
         (runtime / sub).mkdir(parents=True, exist_ok=True)
+
+    selection_source_contract = {
+        "source_path": str(selected_components),
+        "source_size_bytes": selected_components.stat().st_size,
+        "source_sha256": sha256(selected_components),
+    }
+    runtime_selected_components = runtime / "configs" / "post_search2_selected_components.csv"
+    shutil.copy2(selected_components, runtime_selected_components)
+    if sha256(runtime_selected_components) != selection_source_contract["source_sha256"]:
+        raise SystemExit("selected-component manifest changed while freezing the runtime")
+    args.selected_components = relative(runtime_selected_components)
 
     contract_rows = load_hash_contract(input_hash_contract)
     verified_inputs = validate_input_source(authoritative_input_root, contract_rows)
@@ -651,8 +664,9 @@ def main():
         "prepared_utc": datetime.now(timezone.utc).isoformat(),
         "runtime_root": relative(runtime),
         "part4_runtime_root": relative(part4_runtime),
-        "selection_path": relative(selected_components),
-        "selection_sha256": sha256(selected_components),
+        "selection_path": relative(runtime_selected_components),
+        "selection_sha256": sha256(runtime_selected_components),
+        "selection_source_contract": selection_source_contract,
         "git_head": git_output("rev-parse", "HEAD"),
         "git_branch": git_output("rev-parse", "--abbrev-ref", "HEAD"),
         "source_manifest": relative(source_manifest),
@@ -684,7 +698,7 @@ def main():
     launch_readiness = write_launch_readiness(
         runtime,
         [
-            execution_contract, manifest, source_manifest, selected_components,
+            execution_contract, manifest, source_manifest, runtime_selected_components,
             input_hash_contract, runtime_input_manifest, runtime_bundle_manifest,
             input_audit, input_readiness, part123_runtime_config,
             part4_runtime_config, runtime_bundle_config,

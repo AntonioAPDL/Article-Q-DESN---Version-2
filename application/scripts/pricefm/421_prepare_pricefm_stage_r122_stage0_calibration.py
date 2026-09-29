@@ -46,7 +46,6 @@ def calibration_sources(source: Path) -> pd.DataFrame:
     for diagnostics in sorted(source.glob("al_internal/**/quantiles/al/tau=*/diagnostics.json")):
         if not bool(_json(diagnostics).get("external_gate_passed")):
             atom_root = diagnostics.parent
-            candidate_root = next(parent for parent in atom_root.parents if parent.name.startswith("r121_"))
             split_root = next(parent for parent in atom_root.parents if parent.name.startswith("split="))
             contract = split_root / "quantiles/contracts" / f"{atom_root.name}.json"
             selected[str(contract.resolve())] = {

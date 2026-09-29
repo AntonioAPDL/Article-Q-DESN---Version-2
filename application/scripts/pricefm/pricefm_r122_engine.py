@@ -182,6 +182,9 @@ def _balanced_panel_indices(universe: pd.DataFrame, target: int) -> np.ndarray:
 
 def selected_panel(universe: pd.DataFrame | None = None, target: int = SEARCH_PANEL_SIZE) -> pd.DataFrame:
     values = candidate_universe() if universe is None else universe.copy()
+    # Solver variable order is part of the deterministic contract.  Normalize
+    # it before constructing constraints so a permuted manifest is identical.
+    values = values.sort_values("structural_sha256", kind="mergesort").reset_index(drop=True)
     indices = _balanced_panel_indices(values, target)
     panel = values.iloc[indices].copy()
     mandatory = mandatory_identities(values)

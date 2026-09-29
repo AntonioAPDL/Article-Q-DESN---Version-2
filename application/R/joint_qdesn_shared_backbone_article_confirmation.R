@@ -2821,7 +2821,7 @@ app_joint_article_mcmc_launch_guard <- function(root) {
 
 app_joint_article_assert_mcmc_production_allowed <- function(
   contract, require_synced = TRUE, runtime_root = NULL,
-  execution_root_pid = NULL
+  execution_root_pid = NULL, check_host = TRUE
 ) {
   if (!identical(Sys.getenv("JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION"), "MCMC")) {
     stop("Refusing MCMC launch without JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION=MCMC.",
@@ -2829,9 +2829,11 @@ app_joint_article_assert_mcmc_production_allowed <- function(
   }
   app_joint_article_assert_clean_execution(contract, require_synced = require_synced)
   app_joint_article_assert_capacity_authorized(contract)
-  app_joint_article_host_preflight(
-    contract, runtime_root = runtime_root,
-    execution_root_pid = execution_root_pid)
+  if (isTRUE(check_host)) {
+    app_joint_article_host_preflight(
+      contract, runtime_root = runtime_root,
+      execution_root_pid = execution_root_pid)
+  }
   invisible(TRUE)
 }
 
@@ -3263,6 +3265,194 @@ app_joint_article_refresh_mcmc_queue_health <- function(root) {
   check
 }
 
+app_joint_article_mcmc_capacity_wait_controls <- function() {
+  poll_seconds <- suppressWarnings(as.numeric(Sys.getenv(
+    "JOINT_MCMC_CAPACITY_POLL_SECONDS", unset = "120")))
+  clean_polls <- suppressWarnings(as.integer(Sys.getenv(
+    "JOINT_MCMC_CAPACITY_CLEAN_POLLS", unset = "2")))
+  if (length(poll_seconds) != 1L || !is.finite(poll_seconds) ||
+      poll_seconds < 0 || length(clean_polls) != 1L ||
+      !is.finite(clean_polls) || clean_polls < 1L) {
+    stop("MCMC capacity-wait controls are malformed.", call. = FALSE)
+  }
+  list(poll_seconds = poll_seconds, clean_polls = clean_polls)
+}
+
+app_joint_article_host_preflight_failed_gates <- function(condition) {
+  if (!inherits(condition, "joint_article_host_preflight_error") ||
+      !is.data.frame(condition$preflight) ||
+      nrow(condition$preflight) != 1L) {
+    return(character())
+  }
+  gate_columns <- c(
+    host = "host_ok",
+    profile_contract = "profile_contract_ok",
+    rscript = "rscript_ok",
+    library_root = "library_root_ok",
+    data_free = "data_free_ok",
+    logical_cores = "logical_cores_ok",
+    physical_affinity = "physical_affinity_ok",
+    competing_processes = "competing_processes_ok",
+    one_thread_policy = "one_thread_policy"
+  )
+  present <- gate_columns %in% names(condition$preflight)
+  values <- rep(FALSE, length(gate_columns))
+  values[present] <- vapply(gate_columns[present], function(column) {
+    isTRUE(app_as_bool_vec(condition$preflight[[column]])[[1L]])
+  }, logical(1L))
+  names(gate_columns)[!values]
+}
+
+app_joint_article_write_mcmc_capacity_attempt <- function(
+  root, attempt_id, status, failed_gates, error_message,
+  preflight = NULL, processes = NULL, affinity = NULL, shared_capacity = NULL
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  attempt_dir <- file.path(root, "mcmc_capacity_wait",
+    sprintf("attempt_%06d", as.integer(attempt_id)))
+  if (dir.exists(attempt_dir) || file.exists(attempt_dir)) {
+    stop("MCMC capacity-wait attempt path already exists.", call. = FALSE)
+  }
+  app_ensure_dir(attempt_dir)
+  metadata <- data.frame(
+    attempt_id = as.integer(attempt_id),
+    status = status,
+    failed_gates = paste(failed_gates, collapse = ";"),
+    error_message = error_message,
+    checked_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  )
+  paths <- c(metadata = app_write_csv(metadata,
+    file.path(attempt_dir, "attempt.csv")))
+  add_frame <- function(name, value, filename) {
+    if (is.data.frame(value)) {
+      paths[[name]] <<- app_write_csv(value, file.path(attempt_dir, filename))
+    }
+  }
+  add_frame("host_preflight", preflight, "host_preflight.csv")
+  add_frame("processes", processes, "processes.csv")
+  add_frame("cpu_affinity", affinity, "cpu_affinity.csv")
+  add_frame("shared_capacity", shared_capacity, "shared_capacity.csv")
+  manifest <- app_joint_shared_write_manifest(attempt_dir, paths)
+  verification <- app_joint_shared_verify_manifest(attempt_dir, manifest)
+  app_write_csv(verification,
+    file.path(attempt_dir, "artifact_manifest_verification.csv"))
+  if (any(!verification$verified)) {
+    stop("MCMC capacity-wait attempt manifest failed verification.",
+      call. = FALSE)
+  }
+  metadata$attempt_dir <- attempt_dir
+  metadata
+}
+
+app_joint_article_wait_for_mcmc_capacity <- function(
+  root, contract, queue_pid,
+  poll_seconds = app_joint_article_mcmc_capacity_wait_controls()$poll_seconds,
+  required_clean_polls = app_joint_article_mcmc_capacity_wait_controls()$clean_polls,
+  max_polls = Inf,
+  preflight_fn = NULL,
+  sleep_fn = Sys.sleep
+) {
+  root <- normalizePath(root, mustWork = TRUE)
+  poll_seconds <- as.numeric(poll_seconds)[[1L]]
+  required_clean_polls <- as.integer(required_clean_polls)[[1L]]
+  max_polls <- as.numeric(max_polls)[[1L]]
+  if (!is.finite(poll_seconds) || poll_seconds < 0 ||
+      is.na(required_clean_polls) || required_clean_polls < 1L ||
+      is.na(max_polls) || max_polls < 1L) {
+    stop("MCMC queue capacity-wait arguments are malformed.", call. = FALSE)
+  }
+  wait_root <- file.path(root, "mcmc_capacity_wait")
+  app_ensure_dir(wait_root)
+  history_path <- file.path(root, "mcmc_capacity_wait_history.csv")
+  history <- if (file.exists(history_path)) app_read_csv(history_path) else
+    data.frame()
+  existing_attempts <- list.files(wait_root,
+    pattern = "^attempt_[0-9]{6}$", full.names = FALSE)
+  existing_ids <- suppressWarnings(as.integer(sub("^attempt_", "",
+    existing_attempts)))
+  history_ids <- if (nrow(history)) as.integer(history$attempt_id) else integer()
+  prior_ids <- c(existing_ids[!is.na(existing_ids)],
+    history_ids[!is.na(history_ids)])
+  next_attempt <- if (length(prior_ids)) max(prior_ids) + 1L else 1L
+  clean_polls <- 0L
+  polls <- 0L
+  if (is.null(preflight_fn)) {
+    preflight_fn <- function() {
+      processes <- app_joint_article_process_table()
+      host <- app_joint_article_host_preflight(
+        contract, runtime_root = root, execution_root_pid = queue_pid,
+        processes = processes)
+      list(
+        preflight = host,
+        processes = processes,
+        affinity = attr(host, "cpu_affinity_mapping"),
+        shared_capacity = attr(host, "shared_capacity_mapping")
+      )
+    }
+  }
+  repeat {
+    polls <- polls + 1L
+    attempt_id <- next_attempt + polls - 1L
+    observed <- tryCatch(preflight_fn(), error = function(e) e)
+    passed <- !inherits(observed, "condition")
+    if (passed) {
+      clean_polls <- clean_polls + 1L
+      failed_gates <- character()
+      error_message <- ""
+      preflight <- observed$preflight
+      processes <- observed$processes
+      affinity <- observed$affinity
+      shared_capacity <- observed$shared_capacity
+      status <- if (clean_polls >= required_clean_polls) {
+        "CAPACITY_READY"
+      } else {
+        "CAPACITY_CLEAN_POLL_PENDING_CONFIRMATION"
+      }
+    } else {
+      clean_polls <- 0L
+      failed_gates <- app_joint_article_host_preflight_failed_gates(observed)
+      error_message <- conditionMessage(observed)
+      preflight <- observed$preflight
+      processes <- observed$processes
+      affinity <- observed$cpu_affinity_mapping
+      shared_capacity <- observed$shared_capacity_mapping
+      waitable <- inherits(observed, "joint_article_host_preflight_error") &&
+        identical(failed_gates, "competing_processes")
+      status <- if (waitable) "WAITING_FOR_DISJOINT_CAPACITY" else
+        "NONWAITABLE_PREFLIGHT_FAILURE"
+    }
+    attempt <- app_joint_article_write_mcmc_capacity_attempt(
+      root, attempt_id, status, failed_gates, error_message,
+      preflight = preflight, processes = processes, affinity = affinity,
+      shared_capacity = shared_capacity)
+    row <- cbind(attempt[, c("attempt_id", "status", "failed_gates",
+      "error_message", "checked_at"), drop = FALSE], data.frame(
+        clean_poll_count = clean_polls,
+        required_clean_polls = required_clean_polls,
+        poll_seconds = poll_seconds,
+        stringsAsFactors = FALSE
+      ))
+    history <- if (nrow(history)) {
+      app_joint_qdesn_bind_rows(list(history, row))
+    } else {
+      row
+    }
+    app_joint_article_atomic_write_csv(history, history_path)
+    app_joint_article_atomic_write_csv(row,
+      file.path(root, "mcmc_capacity_wait_status.csv"))
+    if (passed && clean_polls >= required_clean_polls) return(row)
+    if (!passed && !identical(status, "WAITING_FOR_DISJOINT_CAPACITY")) {
+      stop(observed)
+    }
+    if (polls >= max_polls) {
+      stop("MCMC capacity wait reached max_polls before release.",
+        call. = FALSE)
+    }
+    sleep_fn(poll_seconds)
+  }
+}
+
 app_joint_article_run_mcmc_queue <- function(
   root,
   max_workers = 40L,
@@ -3271,7 +3461,7 @@ app_joint_article_run_mcmc_queue <- function(
   root <- normalizePath(root, mustWork = TRUE)
   contract <- app_joint_article_read_contract(file.path(root, "frozen_contract.csv"))
   app_joint_article_assert_mcmc_production_allowed(
-    contract, require_synced = require_synced)
+    contract, require_synced = require_synced, check_host = FALSE)
   max_workers <- as.integer(max_workers)[[1L]]
   if (!is.finite(max_workers) || is.na(max_workers) || max_workers < 1L ||
       max_workers > contract$maximum_concurrency) {
@@ -3327,6 +3517,8 @@ app_joint_article_run_mcmc_queue <- function(
       stop("MCMC queue has remaining work but no runnable workers.",
            call. = FALSE)
     }
+    app_joint_article_wait_for_mcmc_capacity(
+      root, contract, queue_pid)
     batch <- head(pending, max_workers)
     batch_id <- length(list.files(root,
       pattern = "^mcmc_queue_batch_[0-9][0-9][0-9][.]csv$")) + 1L

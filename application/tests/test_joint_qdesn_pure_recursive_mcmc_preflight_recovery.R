@@ -67,7 +67,10 @@ preflight_condition <- structure(list(
   message = "Host preflight failed gates: competing_processes.",
   call = NULL,
   preflight = data.frame(
-    host_ok = TRUE, competing_processes_ok = FALSE,
+    host_ok = TRUE, profile_contract_ok = TRUE, rscript_ok = TRUE,
+    library_root_ok = TRUE, data_free_ok = TRUE, logical_cores_ok = TRUE,
+    physical_affinity_ok = TRUE, competing_processes_ok = FALSE,
+    one_thread_policy = TRUE,
     competing_processes = "99999 competing_test_process",
     stringsAsFactors = FALSE
   ),
@@ -95,6 +98,69 @@ stopifnot(
   "error_message" %in% names(retry_failure_row),
   app_joint_article_classify_mcmc_failure(
     retry_failure_row$error_message[[1L]]) == "infrastructure_host_preflight"
+)
+
+capacity_fixture <- tempfile("joint_article_capacity_wait_")
+app_ensure_dir(capacity_fixture)
+capacity_index <- 0L
+capacity_sequence <- function() {
+  capacity_index <<- capacity_index + 1L
+  if (capacity_index <= 2L) stop(preflight_condition)
+  list(
+    preflight = data.frame(
+      host_ok = TRUE, profile_contract_ok = TRUE, rscript_ok = TRUE,
+      library_root_ok = TRUE, data_free_ok = TRUE, logical_cores_ok = TRUE,
+      physical_affinity_ok = TRUE, competing_processes_ok = TRUE,
+      one_thread_policy = TRUE, stringsAsFactors = FALSE
+    ),
+    processes = empty_process_table,
+    affinity = data.frame(
+      logical_cpu = 1L, verified = TRUE, stringsAsFactors = FALSE),
+    shared_capacity = data.frame(
+      allocation_verified = TRUE, stringsAsFactors = FALSE)
+  )
+}
+capacity_ready <- app_joint_article_wait_for_mcmc_capacity(
+  capacity_fixture, test_contract, queue_pid = Sys.getpid(),
+  poll_seconds = 0, required_clean_polls = 2L, max_polls = 4L,
+  preflight_fn = capacity_sequence, sleep_fn = function(seconds) NULL
+)
+capacity_history <- app_read_csv(file.path(capacity_fixture,
+  "mcmc_capacity_wait_history.csv"))
+stopifnot(
+  capacity_ready$status[[1L]] == "CAPACITY_READY",
+  nrow(capacity_history) == 4L,
+  identical(capacity_history$status, c(
+    "WAITING_FOR_DISJOINT_CAPACITY",
+    "WAITING_FOR_DISJOINT_CAPACITY",
+    "CAPACITY_CLEAN_POLL_PENDING_CONFIRMATION",
+    "CAPACITY_READY"
+  )),
+  all(file.exists(file.path(capacity_fixture, "mcmc_capacity_wait",
+    sprintf("attempt_%06d", seq_len(4L)), "artifact_manifest.csv"))),
+  !dir.exists(file.path(capacity_fixture, "mcmc_workers"))
+)
+
+nonwaitable_fixture <- tempfile("joint_article_nonwaitable_preflight_")
+app_ensure_dir(nonwaitable_fixture)
+nonwaitable_condition <- preflight_condition
+nonwaitable_condition$message <- "Host preflight failed gates: data_free."
+nonwaitable_condition$preflight$competing_processes_ok <- TRUE
+nonwaitable_condition$preflight$data_free_ok <- FALSE
+nonwaitable_error <- tryCatch(
+  app_joint_article_wait_for_mcmc_capacity(
+    nonwaitable_fixture, test_contract, queue_pid = Sys.getpid(),
+    poll_seconds = 0, required_clean_polls = 1L, max_polls = 1L,
+    preflight_fn = function() stop(nonwaitable_condition),
+    sleep_fn = function(seconds) NULL
+  ),
+  error = function(e) e
+)
+stopifnot(
+  inherits(nonwaitable_error, "joint_article_host_preflight_error"),
+  app_read_csv(file.path(nonwaitable_fixture,
+    "mcmc_capacity_wait_status.csv"))$status[[1L]] ==
+      "NONWAITABLE_PREFLIGHT_FAILURE"
 )
 
 failure_audit_fixture <- file.path(retry_fixture, "failure_audit")

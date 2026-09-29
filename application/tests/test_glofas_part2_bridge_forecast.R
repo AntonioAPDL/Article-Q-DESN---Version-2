@@ -51,6 +51,21 @@ winner_row <- data.frame(
   disc_alpha = 0.8,
   disc_rho = 0.7,
   disc_seed = 20261521L,
+  disc_pi_w = 0.004,
+  disc_pi_in = 0.12,
+  disc_win_scale_global = 0.41,
+  disc_win_scale_bias = 0.93,
+  disc_standardize_inputs = FALSE,
+  disc_state_scaling = "train_zscore",
+  disc_input_bound = "tanh",
+  disc_act_f = "identity",
+  disc_act_k = "tanh",
+  disc_prior_id = "search3_dis_test_prior",
+  disc_prior_mode = "calibrated_m0",
+  disc_m0 = 60,
+  rhs_zeta2_fixed_discrepancy = 16,
+  rhs_a_zeta = 2.5,
+  rhs_b_zeta = 5,
   ridge_tau2 = 10000,
   intercept_var = 1e6,
   sigma_a = 2,
@@ -86,6 +101,21 @@ stopifnot(identical(as.character(candidate$n_vector[[1L]]), "2500"))
 stopifnot(as.integer(candidate$output_lag_max[[1L]]) == 360L)
 stopifnot(as.integer(candidate$covariate_lag_max[[1L]]) == 180L)
 stopifnot(abs(as.numeric(candidate$rhs_tau0[[1L]]) - 0.001) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$pi_w[[1L]]) - 0.004) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$pi_in[[1L]]) - 0.12) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$win_scale_global[[1L]]) - 0.41) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$win_scale_bias[[1L]]) - 0.93) < 1.0e-12)
+stopifnot(!isTRUE(candidate$standardize_inputs[[1L]]))
+stopifnot(identical(as.character(candidate$state_scaling[[1L]]), "train_zscore"))
+stopifnot(identical(as.character(candidate$input_bound[[1L]]), "tanh"))
+stopifnot(identical(as.character(candidate$act_f[[1L]]), "identity"))
+stopifnot(identical(as.character(candidate$act_k[[1L]]), "tanh"))
+stopifnot(identical(as.character(candidate$prior_id[[1L]]), "search3_dis_test_prior"))
+stopifnot(identical(as.character(candidate$prior_mode[[1L]]), "calibrated_m0"))
+stopifnot(abs(as.numeric(candidate$m0[[1L]]) - 60) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$rhs_zeta2_fixed[[1L]]) - 16) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$rhs_a_zeta[[1L]]) - 2.5) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$rhs_b_zeta[[1L]]) - 5) < 1.0e-12)
 
 make_fitted_contract <- function(output_lag_max, covariate_lag_max) {
   list(

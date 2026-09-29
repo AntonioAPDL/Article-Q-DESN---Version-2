@@ -123,6 +123,122 @@ app_glofas_dec25_validate_part3_design <- function(design, expected_dates = NULL
   split
 }
 
+app_glofas_dec25_align_forecast_design <- function(
+  forecast_design,
+  target_dates,
+  label = "Part 2 forecastable discrepancy design"
+) {
+  required <- c("X", "X_raw", "y", "dates", "reservoir", "states", "design_meta", "qfit")
+  missing_fields <- setdiff(required, names(forecast_design))
+  if (length(missing_fields)) {
+    stop(sprintf("%s lacks required fields: %s", label, paste(missing_fields, collapse = ", ")), call. = FALSE)
+  }
+  source_dates <- as.Date(forecast_design$dates)
+  target_dates <- as.Date(target_dates)
+  valid_dates <- function(x) {
+    length(x) && !anyNA(x) && !anyDuplicated(x) &&
+      (length(x) == 1L || all(diff(as.numeric(x)) > 0))
+  }
+  if (!valid_dates(source_dates)) {
+    stop(sprintf("%s source dates must be unique and strictly increasing.", label), call. = FALSE)
+  }
+  if (!valid_dates(target_dates)) {
+    stop(sprintf("%s target dates must be unique and strictly increasing.", label), call. = FALSE)
+  }
+  idx <- match(target_dates, source_dates)
+  if (anyNA(idx)) {
+    stop(sprintf("%s is missing one or more required target dates.", label), call. = FALSE)
+  }
+  extra_dates <- source_dates[is.na(match(source_dates, target_dates))]
+  if (length(extra_dates) && any(extra_dates >= min(target_dates))) {
+    stop(sprintf("%s contains non-prefix dates outside the target window.", label), call. = FALSE)
+  }
+  if (max(source_dates) != max(target_dates)) {
+    stop(sprintf("%s source and target terminal dates differ.", label), call. = FALSE)
+  }
+  n_source <- length(source_dates)
+  for (field in c("X", "X_raw")) {
+    if (nrow(forecast_design[[field]]) != n_source) {
+      stop(sprintf("%s field %s is not aligned with source dates.", label, field), call. = FALSE)
+    }
+  }
+  if (length(forecast_design$y) != n_source) {
+    stop(sprintf("%s response is not aligned with source dates.", label), call. = FALSE)
+  }
+  history_dates <- as.Date((forecast_design$design_meta %||% list())$history_dates %||% as.Date(character()))
+  if (!length(history_dates) || anyNA(history_dates) || max(history_dates) != max(target_dates)) {
+    stop(sprintf("%s recursive history must end on the target terminal date.", label), call. = FALSE)
+  }
+
+  out <- forecast_design
+  out$X <- forecast_design$X[idx, , drop = FALSE]
+  out$X_raw <- forecast_design$X_raw[idx, , drop = FALSE]
+  out$y <- as.numeric(forecast_design$y[idx])
+  out$dates <- target_dates
+  out$alignment <- list(
+    schema_version = "glofas_forecast_design_common_window_alignment_v1",
+    source_rows = n_source,
+    aligned_rows = length(target_dates),
+    removed_prefix_rows = length(extra_dates),
+    removed_prefix_start = if (length(extra_dates)) as.character(min(extra_dates)) else NA_character_,
+    removed_prefix_end = if (length(extra_dates)) as.character(max(extra_dates)) else NA_character_,
+    target_start = as.character(min(target_dates)),
+    target_end = as.character(max(target_dates)),
+    recursive_state_history_preserved = TRUE
+  )
+  out
+}
+
+app_glofas_dec25_assert_part2_forecast_design_equivalence <- function(
+  historical_design,
+  forecast_design,
+  tolerance = 1.0e-10
+) {
+  historical_X <- as.matrix(historical_design$discrepancy$X)
+  forecast_X <- as.matrix(forecast_design$X)
+  historical_y <- as.numeric(historical_design$discrepancy$y)
+  forecast_y <- as.numeric(forecast_design$y)
+  historical_dates <- as.Date(historical_design$dates)
+  forecast_dates <- as.Date(forecast_design$dates)
+  if (!identical(dim(historical_X), dim(forecast_X)) ||
+      length(historical_y) != length(forecast_y) ||
+      !identical(historical_dates, forecast_dates)) {
+    stop("Part 2 historical and forecastable discrepancy designs are not dimension/date compatible.", call. = FALSE)
+  }
+  if (any(!is.finite(historical_X)) || any(!is.finite(forecast_X)) ||
+      any(!is.finite(historical_y)) || any(!is.finite(forecast_y))) {
+    stop("Part 2 historical or forecastable discrepancy design contains non-finite values.", call. = FALSE)
+  }
+  if (ncol(historical_X) < 2L ||
+      max(abs(historical_X[, 1L] - 1)) > tolerance ||
+      max(abs(forecast_X[, 1L] - 1)) > tolerance) {
+    stop("Part 2 discrepancy designs must share an intercept-first readout contract.", call. = FALSE)
+  }
+  historical_features <- historical_design$discrepancy$feature_info %||% data.frame()
+  forecast_features <- forecast_design$feature_info %||% data.frame()
+  if (nrow(historical_features) != nrow(forecast_features)) {
+    stop("Part 2 historical and forecastable feature counts differ.", call. = FALSE)
+  }
+  design_gap <- max(abs(historical_X - forecast_X))
+  response_gap <- max(abs(historical_y - forecast_y))
+  if (!is.finite(design_gap) || design_gap > tolerance) {
+    stop(sprintf("Part 2 forecastable readout differs from the fitted readout (max gap %.6g).", design_gap), call. = FALSE)
+  }
+  if (!is.finite(response_gap) || response_gap > tolerance) {
+    stop(sprintf("Part 2 forecastable response differs from the fitted response (max gap %.6g).", response_gap), call. = FALSE)
+  }
+  list(
+    schema_version = "glofas_part2_historical_forecast_design_equivalence_v1",
+    rows = nrow(forecast_X),
+    columns = ncol(forecast_X),
+    design_max_abs_gap = design_gap,
+    response_max_abs_gap = response_gap,
+    tolerance = tolerance,
+    numerical_equivalence = TRUE,
+    canonical_forecast_column_names_retained = TRUE
+  )
+}
+
 app_glofas_dec25_part2_design_cache <- function(
   base_cfg,
   rhs_row,
@@ -147,10 +263,18 @@ app_glofas_dec25_part2_design_cache <- function(
     target = "discrepancy",
     root_candidates = root_candidates
   )
-  forecast_design <- app_glofas_oracle_build_part1_design(
+  forecast_design_raw <- app_glofas_oracle_build_part1_design(
     base_cfg = base_cfg,
     candidate_row = candidate,
     panel_bundle = bundle
+  )
+  forecast_design <- app_glofas_dec25_align_forecast_design(
+    forecast_design_raw,
+    target_dates = design$dates
+  )
+  forecast_design_equivalence <- app_glofas_dec25_assert_part2_forecast_design_equivalence(
+    design,
+    forecast_design
   )
   expected_n <- if (is.null(expected_dates)) c$part2_final_train_rows else length(expected_dates)
   if (nrow(forecast_design$X) != expected_n ||
@@ -160,7 +284,7 @@ app_glofas_dec25_part2_design_cache <- function(
     stop("Part 2 forecastable discrepancy design does not match the Dec 25 final cache contract.", call. = FALSE)
   }
   list(
-    schema_version = "glofas_part2_final_dec25_2022_design_cache_v1",
+    schema_version = "glofas_part2_final_dec25_2022_design_cache_v2",
     generated_at = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
     contract = utils::modifyList(
       app_glofas_dec25_contract(),
@@ -171,6 +295,8 @@ app_glofas_dec25_part2_design_cache <- function(
     candidate_row = candidate,
     design = design,
     forecast_design = forecast_design,
+    forecast_design_alignment = forecast_design$alignment,
+    forecast_design_equivalence = forecast_design_equivalence,
     bundle = bundle,
     split = split,
     design_hash = design$design_hash,

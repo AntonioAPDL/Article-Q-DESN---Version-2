@@ -83,6 +83,30 @@ recovery.validate_transition_job_scope(
     [row], {"fit_a"}, {"application/R/glofas_external_driver_forecast.R"}
 )
 
+part1_design = {
+    **row, "job_id": "part1_design", "part": "part1", "stage": "design",
+    "role": "selected_component_design",
+}
+part2_design = {
+    **row, "job_id": "part2_design", "part": "part2", "stage": "design",
+    "role": "selected_component_design",
+}
+repair_paths = {
+    "application/R/glofas_part2_bridge_forecast.R",
+    "application/R/glofas_dec25_final_refit_workflow.R",
+}
+recovery.validate_transition_job_scope(
+    [part1_design, part2_design], {"part1_design"}, repair_paths
+)
+try:
+    recovery.validate_transition_job_scope(
+        [part1_design, part2_design], {"part1_design", "part2_design"}, repair_paths
+    )
+except SystemExit as exc:
+    assert "part2_design" in str(exc) and "requires recomputing" in str(exc)
+else:
+    raise AssertionError("Part 2 design was accepted across its scientific source repair")
+
 with tempfile.TemporaryDirectory(prefix="glofas_source_transition_") as tmp:
     tmp = Path(tmp)
     old_root = tmp / "old"

@@ -26,6 +26,18 @@ SCIENTIFIC_SOURCE_TRANSITIONS = {
         "destination_sha256": "6d99d03c03a145ee922ead360c95a54ddb2d51093c3877a8149d5e1328da8e13",
         "scope": "part2_part3_external_quantile_forecasts_must_be_recomputed",
     },
+    "application/R/glofas_part2_bridge_forecast.R": {
+        "source_sha256": "bc1c672546e303a7b13844b728921057439a7eafcd7b562605081580d4c5798c",
+        "destination_sha256": "db972024e8b536883bfb6c6bc8e8d47facaecb6afb0ded63aca75a48d474c2d5",
+        "scope": "part2_design_and_all_descendants_must_be_recomputed",
+        "recoverable_job_ids": ["part1_design", "part3_design"],
+    },
+    "application/R/glofas_dec25_final_refit_workflow.R": {
+        "source_sha256": "59c33dbc1f41f02e88d1b827b2adb580c275ec39068564f90918b18d0414801e",
+        "destination_sha256": "9cc96a57b93dd4510e0ac4f8a97c46762b0081f3cc3d844ca5e40ca990225d2b",
+        "scope": "part2_design_alignment_and_equivalence_repair",
+        "recoverable_job_ids": ["part1_design", "part3_design"],
+    },
 }
 
 SPECIAL_MAIN_ARTIFACTS = {
@@ -138,19 +150,28 @@ def validate_job_contracts(source_rows, destination_rows, job_ids):
 
 
 def validate_transition_job_scope(source_rows, job_ids, transitioned_paths):
-    if "application/R/glofas_external_driver_forecast.R" not in transitioned_paths:
-        return
     source = {row["job_id"]: row for row in source_rows}
-    blocked = sorted(
-        job_id for job_id in job_ids
-        if source[job_id].get("part") in {"part2", "part3"}
-        and source[job_id].get("role") == "external_normal_driver_forecast"
-    )
-    if blocked:
-        raise SystemExit(
-            "forecast-adapter transition requires recomputing these jobs: "
-            + ", ".join(blocked)
-        )
+    for path in transitioned_paths:
+        transition = SCIENTIFIC_SOURCE_TRANSITIONS[path]
+        recoverable = transition.get("recoverable_job_ids")
+        if recoverable is not None:
+            blocked = sorted(set(job_ids) - set(recoverable))
+            if blocked:
+                raise SystemExit(
+                    f"scientific transition {path} requires recomputing these jobs: "
+                    + ", ".join(blocked)
+                )
+        elif path == "application/R/glofas_external_driver_forecast.R":
+            blocked = sorted(
+                job_id for job_id in job_ids
+                if source[job_id].get("part") in {"part2", "part3"}
+                and source[job_id].get("role") == "external_normal_driver_forecast"
+            )
+            if blocked:
+                raise SystemExit(
+                    "forecast-adapter transition requires recomputing these jobs: "
+                    + ", ".join(blocked)
+                )
 
 
 def validate_scientific_sources(source_runtime, destination_runtime, source_rows, job_ids):

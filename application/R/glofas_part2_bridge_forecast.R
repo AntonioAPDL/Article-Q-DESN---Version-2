@@ -108,6 +108,14 @@ app_glofas_part2_bridge_candidate_from_rhs_row <- function(row) {
   get <- function(name, default = NA) {
     if (name %in% names(row)) row[[name]][[1L]] else default
   }
+  get_disc <- function(name, default = NA) {
+    value <- get(paste0("disc_", name), NA)
+    if (length(value) == 1L && !is.na(value) &&
+        (!is.character(value) || nzchar(value))) {
+      return(value)
+    }
+    get(name, default)
+  }
   out <- data.frame(
     rhs_candidate_id = as.character(get("rhs_candidate_id", "")),
     candidate_id = as.character(get("candidate_id", "part2_discrepancy_candidate")),
@@ -122,6 +130,15 @@ app_glofas_part2_bridge_candidate_from_rhs_row <- function(row) {
     rho = as.numeric(get("disc_rho", get("rho", 0.7))),
     seed = as.integer(get("disc_seed", get("seed", 20261521L))),
     washout = as.integer(get("disc_washout", get("washout", 500L))),
+    pi_w = as.numeric(get_disc("pi_w", 0.03)),
+    pi_in = as.numeric(get_disc("pi_in", 1.0)),
+    win_scale_global = as.numeric(get_disc("win_scale_global", 0.18)),
+    win_scale_bias = as.numeric(get_disc("win_scale_bias", 0.18)),
+    standardize_inputs = app_glofas_part2_bridge_bool(get_disc("standardize_inputs", TRUE)),
+    state_scaling = as.character(get_disc("state_scaling", "none")),
+    input_bound = as.character(get_disc("input_bound", "none")),
+    act_f = as.character(get_disc("act_f", "tanh")),
+    act_k = as.character(get_disc("act_k", "identity")),
     ridge_tau2 = as.numeric(get("ridge_tau2", 10000)),
     intercept_var = as.numeric(get("intercept_var", 1.0e6)),
     sigma_a = as.numeric(get("sigma_a", 2)),
@@ -134,6 +151,17 @@ app_glofas_part2_bridge_candidate_from_rhs_row <- function(row) {
     rhs_update_every = as.integer(get("rhs_update_every", 1L)),
     rhs_freeze_tau_warmup_iters = as.integer(get("rhs_freeze_tau_warmup_iters", 0L)),
     rhs_min_tau_updates = as.integer(get("rhs_min_tau_updates", 0L)),
+    rhs_freeze_beta_warmup_iters = as.integer(get("rhs_freeze_beta_warmup_iters", 0L)),
+    rhs_min_beta_updates = as.integer(get("rhs_min_beta_updates", 0L)),
+    prior_id = as.character(get("disc_prior_id", get("prior_id", ""))),
+    prior_mode = as.character(get("disc_prior_mode", get("prior_mode", ""))),
+    m0 = as.numeric(get("disc_m0", get("m0", NA_real_))),
+    rhs_zeta2_fixed = as.numeric(get(
+      "rhs_zeta2_fixed_discrepancy",
+      get("disc_rhs_zeta2_fixed", get("rhs_zeta2_fixed", NA_real_))
+    )),
+    rhs_a_zeta = as.numeric(get("rhs_a_zeta", 2)),
+    rhs_b_zeta = as.numeric(get("rhs_b_zeta", 4)),
     part2_rhs_candidate_id = as.character(get("rhs_candidate_id", "")),
     part2_source_candidate_id = as.character(get("candidate_id", "")),
     part2_target_contract = "observed_discrepancy_retrospective_glofas_minus_usgs",

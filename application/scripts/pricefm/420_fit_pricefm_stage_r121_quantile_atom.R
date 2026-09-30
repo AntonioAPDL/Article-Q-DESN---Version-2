@@ -34,7 +34,7 @@ write_json <- function(value, path) {
 required_false <- c("test_access_authorized", "registry_mutation_authorized",
                     "article_mutation_authorized", "joint_model_authorized",
                     "mcmc_authorized", "exal_authorized")
-if (!config$stage %in% c("R121_bridge", "R121_internal_selection", "R121_outer") ||
+if (!config$stage %in% c("R121_bridge", "R121_internal_selection", "R121_outer", "R122_internal_selection") ||
     !identical(config$family, "al") ||
     !identical(config$readout, "pure_all_layers") ||
     !config$training_split %in% c("fold1_internal_training_only", "outer_fold_training_only") ||

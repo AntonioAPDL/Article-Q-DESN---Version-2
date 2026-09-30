@@ -13,6 +13,7 @@ import hashlib
 import itertools
 import json
 import math
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -37,6 +38,15 @@ MAX_EXPLICIT_LAG = 2880
 WARMUP_STEPS = 240
 SOURCE_WINDOW = MAX_EXPLICIT_LAG + WARMUP_STEPS
 SEARCH_PANEL_SIZE = 3199
+PAIRED_CAP_THRESHOLDS = {
+    "location_rms_response_scale": 1e-6,
+    "location_max_response_scale": 1e-5,
+    "readout_sd_rms_response_scale": 1e-6,
+    "readout_sd_max_response_scale": 1e-5,
+    "relative_sigma_tail": 1e-3,
+    "relative_elbo_tail": 1e-5,
+    "near_null_relative_eigenvalue": 1e-10,
+}
 
 BASINS: dict[str, dict[str, Any]] = {
     "A": {"units": [128, 96, 64], "alpha": .20, "rho": .55,
@@ -55,6 +65,119 @@ BASINS: dict[str, dict[str, Any]] = {
           "input_scale": .050, "recurrent_sparsity": .02,
           "native_m_x": 0, "native_policy": "target_only", "native_fan_in": 64},
 }
+
+
+def _json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text())
+
+
+def _response_scale(values: np.ndarray) -> float:
+    vector = np.asarray(values, dtype=float)
+    q25, q75 = np.quantile(vector, (0.25, 0.75))
+    robust = float((q75 - q25) / 1.349)
+    if not np.isfinite(robust) or robust <= np.finfo(float).eps:
+        robust = float(np.std(vector))
+    return max(robust, np.finfo(float).eps)
+
+
+def paired_cap_predictive_stability(
+    design_dir: Path,
+    lower_dir: Path,
+    upper_dir: Path,
+    thresholds: Mapping[str, float] | None = None,
+    chunk_size: int = 4096,
+) -> dict[str, Any]:
+    """Compare two VB caps through their fitted function, without opening scores.
+
+    Raw coefficient movement is not invariant to weakly identified directions.
+    This diagnostic therefore checks the location and readout-uncertainty maps on
+    the frozen training design while retaining the existing sigma/ELBO guards.
+    """
+    design_dir = Path(design_dir); lower_dir = Path(lower_dir); upper_dir = Path(upper_dir)
+    limits = {**PAIRED_CAP_THRESHOLDS, **dict(thresholds or {})}
+    design = _json(design_dir / "design.json")
+    n, p = int(design["n"]), int(design["p"])
+    lower_terminal, upper_terminal = _json(lower_dir / "terminal.json"), _json(upper_dir / "terminal.json")
+    lower_diag, upper_diag = _json(lower_dir / "diagnostics.json"), _json(upper_dir / "diagnostics.json")
+    lower_parameters = _json(lower_dir / "parameter_summary.json")
+    upper_parameters = _json(upper_dir / "parameter_summary.json")
+    target_equal = lower_terminal.get("posterior_target_sha256") == upper_terminal.get("posterior_target_sha256")
+    if not target_equal:
+        raise ValueError("paired-cap outputs do not share a posterior target")
+
+    x_path, y_path = design_dir / "X.bin", design_dir / "y.bin"
+    if x_path.stat().st_size != n * p * 8 or y_path.stat().st_size != n * 8:
+        raise ValueError("paired-cap design binary size does not match its manifest")
+    design_matrix = np.memmap(x_path, dtype="<f8", mode="r", shape=(n, p))
+    response = np.memmap(y_path, dtype="<f8", mode="r", shape=(n,))
+    response_scale = _response_scale(response)
+
+    lower_beta = np.fromfile(lower_dir / "beta_mean.bin", dtype="<f8")
+    upper_beta = np.fromfile(upper_dir / "beta_mean.bin", dtype="<f8")
+    lower_cov = np.fromfile(lower_dir / "beta_cov.bin", dtype="<f8")
+    upper_cov = np.fromfile(upper_dir / "beta_cov.bin", dtype="<f8")
+    if lower_beta.size != p or upper_beta.size != p or lower_cov.size != p * p or upper_cov.size != p * p:
+        raise ValueError("paired-cap parameter dimension does not match the design")
+    lower_cov = lower_cov.reshape(p, p); upper_cov = upper_cov.reshape(p, p)
+    delta_beta = upper_beta - lower_beta
+    lower_sigma = float(lower_parameters["sigma"]); upper_sigma = float(upper_parameters["sigma"])
+
+    location_blocks: list[np.ndarray] = []
+    sd_blocks: list[np.ndarray] = []
+    gram = np.zeros((p, p), dtype=float)
+    for start in range(0, n, int(chunk_size)):
+        block = np.asarray(design_matrix[start:start + int(chunk_size)], dtype=float)
+        location_blocks.append(block @ delta_beta)
+        lower_variance = np.einsum("ij,jk,ik->i", block, lower_cov, block, optimize=True) + lower_sigma ** 2
+        upper_variance = np.einsum("ij,jk,ik->i", block, upper_cov, block, optimize=True) + upper_sigma ** 2
+        sd_blocks.append(np.sqrt(np.maximum(upper_variance, 0)) - np.sqrt(np.maximum(lower_variance, 0)))
+        gram += block.T @ block
+    location_delta = np.concatenate(location_blocks)
+    readout_sd_delta = np.concatenate(sd_blocks)
+    gram /= n
+    eigenvalues, eigenvectors = np.linalg.eigh(0.5 * (gram + gram.T))
+    eigenvalues = np.maximum(eigenvalues, 0)
+    null_cutoff = float(eigenvalues[-1] * limits["near_null_relative_eigenvalue"])
+    near_null = eigenvalues <= max(null_cutoff, np.finfo(float).eps)
+    projected = eigenvectors.T @ delta_beta
+    coefficient_energy = projected ** 2
+
+    metrics = {
+        "n": n, "p": p, "response_scale": response_scale,
+        "posterior_target_sha256": str(upper_terminal["posterior_target_sha256"]),
+        "beta_delta_l2": float(np.linalg.norm(delta_beta)),
+        "beta_delta_max_abs": float(np.max(np.abs(delta_beta))),
+        "location_delta_rms_response_scale": float(np.sqrt(np.mean(location_delta ** 2)) / response_scale),
+        "location_delta_max_response_scale": float(np.max(np.abs(location_delta)) / response_scale),
+        "location_delta_p99_response_scale": float(np.quantile(np.abs(location_delta), 0.99) / response_scale),
+        "readout_sd_delta_rms_response_scale": float(np.sqrt(np.mean(readout_sd_delta ** 2)) / response_scale),
+        "readout_sd_delta_max_response_scale": float(np.max(np.abs(readout_sd_delta)) / response_scale),
+        "readout_sd_delta_p99_response_scale": float(np.quantile(np.abs(readout_sd_delta), 0.99) / response_scale),
+        "sigma_relative_change": float(abs(upper_sigma - lower_sigma) / max(abs(upper_sigma), np.finfo(float).eps)),
+        "effective_rank_relative_1e10": int(np.sum(~near_null)),
+        "near_null_beta_delta_fraction": float(coefficient_energy[near_null].sum() / max(coefficient_energy.sum(), np.finfo(float).eps)),
+        "minimum_design_eigenvalue": float(eigenvalues[0]),
+        "maximum_design_eigenvalue": float(eigenvalues[-1]),
+        "lower_external_gate_passed": bool(lower_diag["external_gate_passed"]),
+        "upper_external_gate_passed": bool(upper_diag["external_gate_passed"]),
+        "lower_relative_sigma_tail_max": float(lower_diag["relative_sigma_tail_max"]),
+        "upper_relative_sigma_tail_max": float(upper_diag["relative_sigma_tail_max"]),
+        "lower_relative_elbo_tail_max": float(lower_diag["relative_elbo_tail_max"]),
+        "upper_relative_elbo_tail_max": float(upper_diag["relative_elbo_tail_max"]),
+    }
+    checks = {
+        "same_posterior_target": target_equal,
+        "finite_core_both_caps": bool(lower_diag["finite_core"] and upper_diag["finite_core"]),
+        "sigma_tail_stable_both_caps": max(metrics["lower_relative_sigma_tail_max"], metrics["upper_relative_sigma_tail_max"]) <= limits["relative_sigma_tail"],
+        "elbo_tail_stable_both_caps": max(metrics["lower_relative_elbo_tail_max"], metrics["upper_relative_elbo_tail_max"]) <= limits["relative_elbo_tail"],
+        "location_rms_stable": metrics["location_delta_rms_response_scale"] <= limits["location_rms_response_scale"],
+        "location_max_stable": metrics["location_delta_max_response_scale"] <= limits["location_max_response_scale"],
+        "readout_sd_rms_stable": metrics["readout_sd_delta_rms_response_scale"] <= limits["readout_sd_rms_response_scale"],
+        "readout_sd_max_stable": metrics["readout_sd_delta_max_response_scale"] <= limits["readout_sd_max_response_scale"],
+    }
+    passed = all(checks.values())
+    return {**metrics, "checks": checks, "thresholds": limits, "passed": passed,
+            "classification": "PAIRED_CAP_PREDICTIVE_STABILITY_PASS" if passed else "PAIRED_CAP_PREDICTIVE_STABILITY_FAIL"}
 
 
 def canonical_json(value: Any) -> str:

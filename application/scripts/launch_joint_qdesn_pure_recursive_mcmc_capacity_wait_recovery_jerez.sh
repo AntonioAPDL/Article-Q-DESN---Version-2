@@ -41,11 +41,21 @@ fi
   stopifnot(
     nrow(x) == 1L,
     x$status[[1L]] == "INFRASTRUCTURE_FAILURES_ARCHIVED_READY_TO_RESUME",
-    x$completed_workers_retained[[1L]] == 90L,
-    x$pending_workers_ready[[1L]] == 70L,
     x$current_failures[[1L]] == 0L
   )
 ' "$RECOVERY_ROOT/recovery_summary.csv"
+
+"$R_BIN" -e '
+  source("application/scripts/_joint_qdesn_pure_recursive_bootstrap.R")
+  root <- commandArgs(TRUE)[[1L]]
+  state <- app_joint_article_mcmc_worker_state(root)
+  stopifnot(
+    nrow(state) == 160L,
+    sum(state$done) == 135L,
+    sum(state$failed) == 0L,
+    sum(!state$done & !state$failed) == 25L
+  )
+' "$CONFIRMATION_ROOT"
 
 exec bash application/scripts/launch_joint_qdesn_pure_recursive_confirmation_shared_jerez.sh \
   "$SOURCE_ROOT" "$CONFIRMATION_ROOT" "$SCORE_ROOT"

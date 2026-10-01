@@ -50,6 +50,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--fit-id"); value.add_argument("--candidate-id")
     value.add_argument("--split", type=int); value.add_argument("--fit-dir", type=Path)
     value.add_argument("--preflight-only", action="store_true")
+    value.add_argument("--prepare-only", action="store_true")
     value.add_argument("--maximum-cpu-percent", type=float, default=35.0)
     return value
 
@@ -1029,7 +1030,13 @@ def controller(args: argparse.Namespace) -> dict[str, Any]:
     preflight = _preflight(args, prep, campaign, cpus)
     if args.preflight_only:
         return preflight
-    control = _control(prep); _prepare_processed(control, campaign, code, cpus[0])
+    control = _control(prep)
+    processed = _prepare_processed(control, campaign, code, cpus[0])
+    if args.prepare_only:
+        return {
+            "status": "R122_LONG_MEMORY_PROCESSED_READY",
+            "preflight": preflight, "processed": processed, "test_opened": False,
+        }
     execution = _execution(prep)
     _run_queue(_ridge_tasks(args, prep, campaign, code, execution, "broad_ridge"), cpus, code,
                campaign / "broad/progress.json", int(control["total_fit_count"]))

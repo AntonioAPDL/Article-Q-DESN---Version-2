@@ -205,6 +205,7 @@ def _run_queue(tasks: list[tuple[str, list[str], Path]], cpus: list[int], code: 
 
 def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[int]) -> dict[str, Any]:
     summary = _json(prep / "summary.json"); sources = pd.read_csv(prep / "source_manifest.csv")
+    control = _control(prep)
     changed_sources = [
         str(row.path) for row in sources.itertuples(index=False)
         if not Path(row.path).is_file() or sha256_file(Path(row.path)) != str(row.sha256)
@@ -213,7 +214,8 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         name for name, expected in summary["output_sha256"].items()
         if not (prep / name).is_file() or sha256_file(prep / name) != expected
     ]
-    usage = _cpu_snapshot()
+    audit_seconds = float(control["cpu_audit_seconds"])
+    usage = _cpu_snapshot(audit_seconds)
     physical_usage = {
         cpu: max(value for sibling, value in usage.items() if _physical(sibling) == _physical(cpu))
         for cpu in cpus
@@ -223,7 +225,6 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         if line.startswith("MemAvailable:")
     )
     free_gib = shutil.disk_usage(campaign.parent).free / 2**30
-    control = _control(prep)
     config = yaml.safe_load(Path(control["data_config"]).read_text())
     configured_splits = config.get("pricefm", {}).get("splits", [])
     checks = {
@@ -244,6 +245,7 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         "status": "R122_LONG_MEMORY_PREFLIGHT_PASS" if all(checks.values()) else "R122_LONG_MEMORY_PREFLIGHT_BLOCKED",
         "checks": checks, "changed_sources": changed_sources, "changed_preparation_outputs": changed_outputs,
         "cpus": cpus, "physical_core_max_percent": physical_usage,
+        "cpu_audit_seconds": audit_seconds,
         "available_memory_gib": available_kib / 2**20, "free_disk_gib": free_gib,
         "test_opened": False,
     }

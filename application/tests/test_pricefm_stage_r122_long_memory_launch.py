@@ -153,6 +153,8 @@ def test_launch_prep_and_controller_keep_all_prohibited_surfaces_closed():
     assert '"exal_authorized": false' in prep_source
     assert '"mcmc_authorized": false' in prep_source
     assert "rhs_tau_pilot_multipliers" in prep_source
+    assert '"cpu_audit_seconds": 10' in prep_source
+    assert '_cpu_snapshot(audit_seconds)' in runner_source
     assert "checks = {key: bool(value) for key, value in checks.items()}" in prep_source
     assert "r122_internal_specification_frozen_test_blocked" in runner_source
     assert "_unique_al_shortlist" in runner_source

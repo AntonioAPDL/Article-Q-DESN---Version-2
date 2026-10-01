@@ -154,7 +154,10 @@ def test_launch_prep_and_controller_keep_all_prohibited_surfaces_closed():
     assert '"mcmc_authorized": false' in prep_source
     assert "rhs_tau_pilot_multipliers" in prep_source
     assert '"cpu_audit_seconds": 10' in prep_source
+    assert '"maximum_selected_core_peak_percent": 90' in prep_source
     assert '_cpu_snapshot(audit_seconds)' in runner_source
+    assert '"selected_capacity_available"' in runner_source
+    assert '"no_sustained_selected_core_saturation"' in runner_source
     assert "checks = {key: bool(value) for key, value in checks.items()}" in prep_source
     assert "r122_internal_specification_frozen_test_blocked" in runner_source
     assert "_unique_al_shortlist" in runner_source

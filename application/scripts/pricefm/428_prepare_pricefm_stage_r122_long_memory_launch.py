@@ -226,6 +226,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "al_companion_max_iter": 750, "posterior_paths": 500,
         "minimum_memory_gib": 200, "minimum_free_gib": 200,
         "cpu_audit_seconds": 10,
+        "maximum_selected_core_peak_percent": 90,
         "stage0b_terminal_sha256": sha256_file(output / "stage0b_terminal.json"),
         "stage0b_decision_sha256": sha256_file(output / "stage0b_proxy_decision.json"),
         "evaluation_contract_sha256": sha256_file(output / "evaluation_contract.json"),

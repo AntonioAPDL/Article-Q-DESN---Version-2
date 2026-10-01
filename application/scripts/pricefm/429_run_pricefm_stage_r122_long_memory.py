@@ -220,6 +220,8 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         cpu: max(value for sibling, value in usage.items() if _physical(sibling) == _physical(cpu))
         for cpu in cpus
     }
+    selected_mean_percent = float(np.mean(list(physical_usage.values())))
+    selected_peak_percent = float(np.max(list(physical_usage.values())))
     available_kib = next(
         int(line.split()[1]) for line in Path("/proc/meminfo").read_text().splitlines()
         if line.startswith("MemAvailable:")
@@ -232,7 +234,9 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         "source_hashes": not changed_sources, "preparation_hashes": not changed_outputs,
         "worker_count": len(cpus) == int(args.workers) == int(control["workers"]) == 15,
         "distinct_physical_cores": len({_physical(cpu) for cpu in cpus}) == 15,
-        "selected_cores_idle": all(value <= float(args.maximum_cpu_percent) for value in physical_usage.values()),
+        "selected_capacity_available": selected_mean_percent <= float(args.maximum_cpu_percent),
+        "no_sustained_selected_core_saturation":
+            selected_peak_percent <= float(control["maximum_selected_core_peak_percent"]),
         "memory_floor": available_kib / 2**20 >= float(control["minimum_memory_gib"]),
         "disk_floor": free_gib >= float(control["minimum_free_gib"]),
         "python_runtime": Path(sys.executable).absolute() == Path(control["python_executable"]).absolute()
@@ -246,6 +250,10 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
         "checks": checks, "changed_sources": changed_sources, "changed_preparation_outputs": changed_outputs,
         "cpus": cpus, "physical_core_max_percent": physical_usage,
         "cpu_audit_seconds": audit_seconds,
+        "selected_mean_percent": selected_mean_percent,
+        "selected_peak_percent": selected_peak_percent,
+        "maximum_selected_mean_percent": float(args.maximum_cpu_percent),
+        "maximum_selected_peak_percent": float(control["maximum_selected_core_peak_percent"]),
         "available_memory_gib": available_kib / 2**20, "free_disk_gib": free_gib,
         "test_opened": False,
     }

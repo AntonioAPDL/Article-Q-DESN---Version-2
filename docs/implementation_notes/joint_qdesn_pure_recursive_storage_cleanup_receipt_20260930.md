@@ -29,7 +29,9 @@ Scope: JOINT lane only
 | 35,029,381 | 1,204 redundant `mcmc_capacity_wait/attempt_*` directories | Full `mcmc_capacity_wait_history.csv`; attempts 000001 and 001206-001208 retained |
 | 21,942,884 | failed shared-v6 `confirmation_partial` payload | Parent `files.sha256`, archive metadata, process evidence, and source-control evidence retained |
 | 17,674,794 | failed schema-recovery preparation payload under `control_root_snapshot/archives` | `files.sha256`, partial inventory, verification, status, launch receipt, and capacity history retained |
-| **1,322,721,542** | **Total removed** | **Approximately 1.23 GiB** |
+| 391,499,700 | Muscat `joint_qdesn_recursive_mean_forecast_v3_jerez_20260924/oracle_banks` | Superseded mean-state experiment; verified final packet, oracle plan, manifest, score summaries, and cell outputs retained |
+| 241,110,463 | Muscat `joint_qdesn_recursive_mean_forecast_v3_jerez_20260924/oracle_shards` | Regenerable intermediate shards; verified final packet and compact provenance retained |
+| **1,955,331,705** | **Total removed** | **Approximately 1.82 GiB** |
 
 ## Preserved authoritative/current data
 
@@ -40,6 +42,8 @@ Scope: JOINT lane only
   `f18724ee7f222c6e1722e0f05108c840031231e353a12cf844a2eaa3addd576a`;
 - the pending score-packet path and corrected expanded-screen scheduler;
 - compact recovery metadata and the preliminary fit/forecast atlas;
+- compact final outputs from the superseded recursive mean-state experiment,
+  without its regenerable 603 MiB oracle-bank/shard payload;
 - authoritative historical comparison packets on Muscat.
 
 ## Recovery state after cleanup

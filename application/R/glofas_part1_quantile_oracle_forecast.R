@@ -85,6 +85,7 @@ app_glofas_part1_quantile_default_controls <- function(
   init = NULL,
   init_fit_path = NULL,
   init_fit_paths = NULL,
+  initializer_tau_policy = "exact_tau",
   restart_state = NULL,
   progress_path = NULL,
   progress_every = 0L,
@@ -113,6 +114,9 @@ app_glofas_part1_quantile_default_controls <- function(
     init = init,
     init_fit_path = init_fit_path,
     init_fit_paths = init_fit_paths,
+    initializer_tau_policy = match.arg(
+      as.character(initializer_tau_policy), c("exact_tau", "single_source")
+    ),
     restart_state = restart_state,
     progress_path = progress_path,
     progress_every = as.integer(progress_every),
@@ -212,10 +216,18 @@ app_glofas_part1_quantile_init_from_fit <- function(fit, y, Z, tau, source_path 
     gamma <- as.numeric(fit$gamma_mean %||% fit$gamma)
     if (length(gamma) == K) out$gamma_mean <- gamma
   }
+  if (K == 1L && !is.null(fit$rhs_state)) out$rhs_state <- fit$rhs_state
   out
 }
 
-app_glofas_part1_quantile_init_from_paths <- function(paths, y, Z, tau) {
+app_glofas_part1_quantile_init_from_paths <- function(
+  paths,
+  y,
+  Z,
+  tau,
+  initializer_tau_policy = c("exact_tau", "single_source")
+) {
+  initializer_tau_policy <- match.arg(initializer_tau_policy)
   paths <- app_glofas_part1_quantile_split_paths(paths)
   if (!length(paths)) return(NULL)
   tau <- as.numeric(tau)
@@ -225,7 +237,9 @@ app_glofas_part1_quantile_init_from_paths <- function(paths, y, Z, tau) {
   if (length(paths) == 1L && !length(source_tau[[1L]])) {
     return(app_glofas_part1_quantile_init_from_fit(loaded[[1L]], y = y, Z = Z, tau = tau, source_path = resolved[[1L]]))
   }
-  mapping <- app_glofas_quantile_initializer_map(as.list(resolved), tau)
+  mapping <- app_glofas_quantile_initializer_map(
+    as.list(resolved), tau, policy = initializer_tau_policy
+  )
   pieces <- lapply(seq_len(nrow(mapping)), function(ii) {
     fit <- app_glofas_quantile_select_column(
       mapping$fit[[ii]], mapping$source_column[[ii]], coefficient_block_size = ncol(Z)
@@ -245,6 +259,9 @@ app_glofas_part1_quantile_init_from_paths <- function(paths, y, Z, tau) {
   if (all(vapply(pieces, function(x) !is.null(x$gamma_mean), logical(1L)))) {
     out$gamma_mean <- vapply(pieces, function(x) x$gamma_mean[[1L]], numeric(1L))
   }
+  if (length(pieces) == 1L && !is.null(pieces[[1L]]$rhs_state)) {
+    out$rhs_state <- pieces[[1L]]$rhs_state
+  }
   out
 }
 
@@ -252,7 +269,10 @@ app_glofas_part1_quantile_resolve_init <- function(controls, y, Z, tau) {
   if (!is.null(controls$init)) return(controls$init)
   paths <- app_glofas_part1_quantile_split_paths(controls$init_fit_paths)
   if (!length(paths)) paths <- app_glofas_part1_quantile_split_paths(controls$init_fit_path)
-  app_glofas_part1_quantile_init_from_paths(paths, y = y, Z = Z, tau = tau)
+  app_glofas_part1_quantile_init_from_paths(
+    paths, y = y, Z = Z, tau = tau,
+    initializer_tau_policy = controls$initializer_tau_policy %||% "exact_tau"
+  )
 }
 
 app_glofas_part1_quantile_prior_precisions <- function(rhs_state, K, p) {

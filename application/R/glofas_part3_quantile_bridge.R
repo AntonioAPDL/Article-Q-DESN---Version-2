@@ -25,6 +25,7 @@ app_glofas_part3_quantile_default_controls <- function(
   diagnostic_stride = 10L,
   freeze_beta_warmup_iters = 0L,
   min_beta_updates = 0L,
+  initializer_tau_policy = "exact_tau",
   fixed_iterations = FALSE,
   full_state_convergence = FALSE,
   convergence_tolerance = tol,
@@ -51,6 +52,9 @@ app_glofas_part3_quantile_default_controls <- function(
     diagnostic_stride = as.integer(diagnostic_stride),
     freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
     min_beta_updates = as.integer(min_beta_updates),
+    initializer_tau_policy = match.arg(
+      as.character(initializer_tau_policy), c("exact_tau", "single_source")
+    ),
     fixed_iterations = isTRUE(fixed_iterations),
     full_state_convergence = isTRUE(full_state_convergence),
     convergence_tolerance = as.numeric(convergence_tolerance),
@@ -167,7 +171,13 @@ app_glofas_part3_quantile_normalize_fit_object <- function(x) {
   x
 }
 
-app_glofas_part3_quantile_init_one <- function(init, design, tau) {
+app_glofas_part3_quantile_init_one <- function(
+  init,
+  design,
+  tau,
+  initializer_tau_policy = c("exact_tau", "single_source")
+) {
+  initializer_tau_policy <- match.arg(initializer_tau_policy)
   init <- app_glofas_part3_quantile_normalize_fit_object(init)
   p_reference <- design$p_beta
   p_discrepancy <- design$p_alpha
@@ -182,11 +192,18 @@ app_glofas_part3_quantile_init_one <- function(init, design, tau) {
     if (length(source_tau) != ncol(ref) || any(!is.finite(source_tau))) {
       stop("Part 3 quantile initializer lacks complete tau metadata.", call. = FALSE)
     }
-    hit <- which(abs(source_tau - tau) <= app_glofas_quantile_tau_tolerance())
-    if (length(hit) != 1L) {
-      stop(sprintf("Part 3 initializer has no unique same-tau column for %.12g.", tau), call. = FALSE)
+    if (identical(initializer_tau_policy, "single_source")) {
+      if (length(source_tau) != 1L || ncol(ref) != 1L || ncol(disc) != 1L) {
+        stop("Part 3 single-source initialization requires one source tau column.", call. = FALSE)
+      }
+      idx <- 1L
+    } else {
+      hit <- which(abs(source_tau - tau) <= app_glofas_quantile_tau_tolerance())
+      if (length(hit) != 1L) {
+        stop(sprintf("Part 3 initializer has no unique same-tau column for %.12g.", tau), call. = FALSE)
+      }
+      idx <- hit[[1L]]
     }
-    idx <- hit[[1L]]
     ref_var <- as.matrix(init$beta_reference_var_diag %||% matrix(0, p_reference, ncol(ref)))[, idx]
     disc_var <- as.matrix(init$beta_discrepancy_var_diag %||% matrix(0, p_discrepancy, ncol(disc)))[, idx]
     return(list(
@@ -224,7 +241,13 @@ app_glofas_part3_quantile_init_one <- function(init, design, tau) {
   )
 }
 
-app_glofas_part3_quantile_initialize <- function(init, design, tau) {
+app_glofas_part3_quantile_initialize <- function(
+  init,
+  design,
+  tau,
+  initializer_tau_policy = c("exact_tau", "single_source")
+) {
+  initializer_tau_policy <- match.arg(initializer_tau_policy)
   tau <- as.numeric(tau)
   K <- length(tau)
   p_reference <- design$p_beta
@@ -264,12 +287,16 @@ app_glofas_part3_quantile_initialize <- function(init, design, tau) {
       ))
     }
   }
-  mapping <- app_glofas_quantile_initializer_map(init_list, tau)
+  mapping <- app_glofas_quantile_initializer_map(
+    init_list, tau, policy = initializer_tau_policy
+  )
   pieces <- lapply(seq_len(K), function(kk) {
     selected <- app_glofas_quantile_select_column(mapping$fit[[kk]], mapping$source_column[[kk]])
     attr(selected, "part3_source_path") <- mapping$source_path[[kk]]
     attr(selected, "part3_source_sha256") <- mapping$source_sha256[[kk]]
-    app_glofas_part3_quantile_init_one(selected, design, tau[[kk]])
+    app_glofas_part3_quantile_init_one(
+      selected, design, tau[[kk]], initializer_tau_policy = initializer_tau_policy
+    )
   })
   list(
     beta_reference = do.call(cbind, lapply(pieces, `[[`, "beta_reference")),
@@ -361,7 +388,10 @@ app_glofas_part3_quantile_fit <- function(
   initialized <- if (!is.null(restart_state)) {
     restart_state$initialized
   } else {
-    app_glofas_part3_quantile_initialize(init, design, tau)
+    app_glofas_part3_quantile_initialize(
+      init, design, tau,
+      initializer_tau_policy = controls$initializer_tau_policy %||% "exact_tau"
+    )
   }
   beta_reference <- initialized$beta_reference
   beta_discrepancy <- initialized$beta_discrepancy

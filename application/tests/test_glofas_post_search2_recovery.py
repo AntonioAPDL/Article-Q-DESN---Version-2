@@ -63,6 +63,28 @@ except SystemExit as exc:
 else:
     raise AssertionError("recovery accepted a job whose prerequisite was excluded")
 
+part1_rhs = {
+    **row, "job_id": "part1_fit_normal_rhs_vb", "dependencies": "part1_fit_normal_ridge",
+}
+part1_median = {
+    **row, "job_id": "part1_fit_independent_al_q0p50",
+    "model_family": "independent_al", "tau": "0.50",
+    "dependencies": "part1_fit_normal_rhs_vb",
+}
+waiver = recovery.parse_initializer_dependency_waivers(
+    "part1_fit_independent_al_q0p50:part1_fit_normal_rhs_vb"
+)
+recovery.validate_excluded_dependencies(
+    [part1_rhs, part1_median], {"part1_fit_independent_al_q0p50"},
+    {"part1_fit_normal_rhs_vb"}, waiver,
+)
+try:
+    recovery.parse_initializer_dependency_waivers("fit_b:prepare")
+except SystemExit as exc:
+    assert "not allowlisted" in str(exc)
+else:
+    raise AssertionError("unallowlisted initializer dependency waiver was accepted")
+
 external_part2 = {
     **row,
     "job_id": "part2_forecast_independent_al_q0p50",
@@ -81,6 +103,19 @@ else:
     raise AssertionError("affected Part 2 external forecast was accepted for recovery")
 recovery.validate_transition_job_scope(
     [row], {"fit_a"}, {"application/R/glofas_external_driver_forecast.R"}
+)
+
+part1_rhs_transition = "application/scripts/403_run_glofas_post_search2_support_job.R"
+try:
+    recovery.validate_transition_job_scope(
+        [part1_rhs], {"part1_fit_normal_rhs_vb"}, {part1_rhs_transition}
+    )
+except SystemExit as exc:
+    assert "part1_fit_normal_rhs_vb" in str(exc) and "requires recomputing" in str(exc)
+else:
+    raise AssertionError("old Part 1 Normal RHS fit was accepted across its iteration repair")
+recovery.validate_transition_job_scope(
+    [part1_median], {"part1_fit_independent_al_q0p50"}, {part1_rhs_transition}
 )
 
 part1_design = {

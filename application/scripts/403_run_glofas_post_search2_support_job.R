@@ -40,15 +40,15 @@ args <- app_parse_args(list(
   part4_runtime_root = "",
   part4_base_config = "application/config/glofas_latent_path_al_vb_dec25_main.yaml",
   part4_run_label = "glofas_part4_post_search2_normal_driver_20260916",
-  max_iter = "100",
-  min_iter = "30",
-  tol = "0.01",
+  max_iter = "200",
+  min_iter = "200",
+  tol = "1e-4",
   n_draws = "500",
   seed = "20260916",
   forecast_backend = "cpp",
   freeze_beta_warmup_iters = "20",
-  min_beta_updates = "30",
-  fixed_iterations = "false",
+  min_beta_updates = "180",
+  fixed_iterations = "true",
   full_state_convergence = "false",
   convergence_tolerance = "1e-4",
   terminal_consecutive_passes = "3"
@@ -261,14 +261,17 @@ run_job <- function() {
     } else if (identical(args$model_family, "normal_rhs_vb")) {
       warm <- readRDS(warm_path("part1_fit_normal_ridge"))
       zeta <- suppressWarnings(as.numeric(cache$candidate_row$rhs_zeta2_fixed[[1L]]))
+      rhs_iter <- app_glofas_post_search2_normal_rhs_iteration_controls(args)
       fit <- app_glofas_normal_rhs_fit(
         cache$design$X, cache$design$y, warm, tau0 = tau0,
         a_zeta = cache$candidate_row$rhs_a_zeta,
         b_zeta = cache$candidate_row$rhs_b_zeta,
         zeta2_fixed = if (is.finite(zeta)) zeta else NULL,
-        max_iter = 100L, min_iter = 30L, tol = 1.0e-4,
-        freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
-        min_beta_updates = as.integer(args$min_beta_updates)
+        max_iter = rhs_iter$max_iter,
+        min_iter = rhs_iter$min_iter,
+        tol = rhs_iter$tol,
+        freeze_beta_warmup_iters = rhs_iter$freeze_beta_warmup_iters,
+        min_beta_updates = rhs_iter$min_beta_updates
       )
       fit$type <- "normal_rhs_vb_part1_post_search2_final"
     } else {
@@ -284,7 +287,9 @@ run_job <- function() {
         max_iter = as.integer(args$max_iter), min_iter = as.integer(args$min_iter),
         tol = as.numeric(args$tol), tau0 = tau0,
         zeta2 = slab$zeta2, slab_fixed = slab$slab_fixed,
-        init_fit_paths = paste(init_paths, collapse = "|"), progress_every = 1L,
+        init_fit_paths = paste(init_paths, collapse = "|"),
+        initializer_tau_policy = app_glofas_quantile_initializer_policy(args$model_family),
+        progress_every = 1L,
         progress_path = file.path(runtime_root, "traces", paste0(job_id, "_progress.csv")),
         freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
         min_beta_updates = as.integer(args$min_beta_updates),

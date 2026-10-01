@@ -2,6 +2,14 @@
 
 app_glofas_quantile_tau_tolerance <- function() 1.0e-12
 
+app_glofas_quantile_initializer_policy <- function(model_family) {
+  model_family <- match.arg(
+    as.character(model_family),
+    c("independent_al", "independent_exal", "joint_al", "joint_exal")
+  )
+  if (identical(model_family, "independent_al")) "single_source" else "exact_tau"
+}
+
 app_glofas_quantile_unwrap_fit <- function(x) {
   if (is.list(x) && is.list(x$fit)) x$fit else x
 }
@@ -25,7 +33,13 @@ app_glofas_quantile_source_tau <- function(fit) {
   tau[is.finite(tau)]
 }
 
-app_glofas_quantile_initializer_map <- function(initializers, target_tau, tolerance = app_glofas_quantile_tau_tolerance()) {
+app_glofas_quantile_initializer_map <- function(
+  initializers,
+  target_tau,
+  tolerance = app_glofas_quantile_tau_tolerance(),
+  policy = c("exact_tau", "single_source")
+) {
+  policy <- match.arg(policy)
   target_tau <- as.numeric(target_tau)
   if (!length(target_tau) || any(!is.finite(target_tau)) || anyDuplicated(round(target_tau / tolerance))) {
     stop("Target quantile grid must be finite and unique.", call. = FALSE)
@@ -46,18 +60,35 @@ app_glofas_quantile_initializer_map <- function(initializers, target_tau, tolera
   if (any(!is.finite(candidates$source_tau))) {
     stop("Every quantile initializer must carry finite tau metadata.", call. = FALSE)
   }
-  mapped <- lapply(target_tau, function(tau) {
-    hit <- which(abs(candidates$source_tau - tau) <= tolerance)
-    if (length(hit) != 1L) {
-      stop(sprintf("Expected exactly one initializer match for tau %.12g; found %d.", tau, length(hit)), call. = FALSE)
+  if (identical(policy, "single_source")) {
+    if (length(target_tau) != 1L) {
+      stop("Single-source quantile initialization requires exactly one target tau.", call. = FALSE)
     }
-    candidates[hit, , drop = FALSE]
-  })
-  mapped <- do.call(rbind, mapped)
+    if (nrow(candidates) != 1L) {
+      stop(sprintf(
+        "Single-source quantile initialization requires exactly one source column; found %d.",
+        nrow(candidates)
+      ), call. = FALSE)
+    }
+    mapped <- candidates[1L, , drop = FALSE]
+  } else {
+    mapped <- lapply(target_tau, function(tau) {
+      hit <- which(abs(candidates$source_tau - tau) <= tolerance)
+      if (length(hit) != 1L) {
+        stop(sprintf("Expected exactly one initializer match for tau %.12g; found %d.", tau, length(hit)), call. = FALSE)
+      }
+      candidates[hit, , drop = FALSE]
+    })
+    mapped <- do.call(rbind, mapped)
+  }
   mapped$target_tau <- target_tau
   mapped$source_path <- vapply(mapped$initializer_index, function(i) loaded[[i]]$source_path, character(1L))
   mapped$source_sha256 <- vapply(mapped$initializer_index, function(i) loaded[[i]]$source_sha256, character(1L))
-  mapped$mapping_status <- "exact_tau_match"
+  mapped$mapping_status <- ifelse(
+    abs(mapped$source_tau - mapped$target_tau) <= tolerance,
+    "exact_tau_match",
+    "adjacent_tau_warm_start"
+  )
   mapped$fit <- I(lapply(seq_len(nrow(mapped)), function(i) loaded[[mapped$initializer_index[[i]]]]$fit))
   mapped
 }

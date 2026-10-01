@@ -191,6 +191,27 @@ stopifnot(isTRUE(fixed_slab$fit$rhs_state$anchor$slab_fixed))
 stopifnot(identical(as.numeric(fixed_slab$fit$rhs_state$anchor$zeta2), 16))
 init_path <- file.path(tempdir(), paste0("toy_al_init_", Sys.getpid(), ".rds"))
 saveRDS(one_al$fit, init_path, version = 2L)
+adjacent_init <- app_glofas_part1_quantile_init_from_paths(
+  init_path,
+  y = toy_fitted$design$y,
+  Z = toy_fitted$Z,
+  tau = 0.35,
+  initializer_tau_policy = "single_source"
+)
+stopifnot(
+  max(abs(adjacent_init$beta_mean - one_al$fit$beta_mean)) < 1e-12,
+  identical(adjacent_init$rhs_state, one_al$fit$rhs_state),
+  adjacent_init$init_tau_mapping$source_tau[[1L]] == 0.50,
+  adjacent_init$init_tau_mapping$target_tau[[1L]] == 0.35,
+  identical(adjacent_init$init_tau_mapping$mapping_status[[1L]], "adjacent_tau_warm_start")
+)
+strict_adjacent_error <- tryCatch({
+  app_glofas_part1_quantile_init_from_paths(
+    init_path, y = toy_fitted$design$y, Z = toy_fitted$Z, tau = 0.35
+  )
+  FALSE
+}, error = function(e) TRUE)
+stopifnot(strict_adjacent_error)
 one_exal <- run_family("independent_exal", 0.50, init_fit_path = init_path)
 stopifnot(grepl("toy_al_init", one_exal$fit$init_source_path, fixed = TRUE))
 joint_al <- run_family("joint_al", c(0.20, 0.50, 0.80), max_dense_dim = 100L)

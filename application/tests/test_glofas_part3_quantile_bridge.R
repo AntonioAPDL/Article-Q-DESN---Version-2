@@ -52,6 +52,22 @@ stopifnot(length(fit_al$beta_discrepancy_cov_blocks) == 1L)
 stopifnot(identical(dim(fit_al$beta_reference_cov_blocks[[1L]]), c(3L, 3L)))
 stopifnot(identical(dim(fit_al$beta_discrepancy_cov_blocks[[1L]]), c(2L, 2L)))
 
+adjacent_init <- app_glofas_part3_quantile_initialize(
+  fit_al, design, 0.35, initializer_tau_policy = "single_source"
+)
+stopifnot(
+  max(abs(adjacent_init$beta_reference[, 1L] - fit_al$beta_reference_mean[, 1L])) < 1e-12,
+  max(abs(adjacent_init$beta_discrepancy[, 1L] - fit_al$beta_discrepancy_mean[, 1L])) < 1e-12,
+  adjacent_init$provenance$source_tau[[1L]] == 0.50,
+  adjacent_init$provenance$target_tau[[1L]] == 0.35,
+  identical(adjacent_init$provenance$mapping_status[[1L]], "adjacent_tau_warm_start")
+)
+strict_adjacent_error <- tryCatch({
+  app_glofas_part3_quantile_initialize(fit_al, design, 0.35)
+  FALSE
+}, error = function(e) TRUE)
+stopifnot(strict_adjacent_error)
+
 controls_exal <- controls
 controls_exal$max_iter <- 1L
 controls_exal$min_iter <- 1L

@@ -1,3 +1,14 @@
+script_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)
+repo_root <- normalizePath(
+  file.path(dirname(sub("^--file=", "", script_arg[[1L]])), "..", ".."),
+  mustWork = TRUE
+)
+source(file.path(repo_root, "application/R/00_packages.R"))
+app_set_repo_root(repo_root)
+source(app_path("application/R/input_contract.R"))
+source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
+source(app_path("application/R/glofas_search_phase2.R"))
+
 if (!exists("app_glofas_dec25_contract", mode = "function")) {
   source(app_path("application/R/glofas_dec25_final_refit_workflow.R"))
 }
@@ -57,6 +68,26 @@ stopifnot(!app_glofas_post_search2_needs_calibration("part1_fit", "normal_ridge"
 stopifnot(!app_glofas_post_search2_needs_calibration("part1_forecast", "normal_ridge"))
 stopifnot(app_glofas_post_search2_needs_calibration("part1_fit", "normal_rhs_vb"))
 stopifnot(app_glofas_post_search2_needs_calibration("part1_forecast", "normal_rhs_vb"))
+
+rhs_controls <- app_glofas_post_search2_normal_rhs_iteration_controls(list(
+  max_iter = "200", min_iter = "200", tol = "1e-4",
+  freeze_beta_warmup_iters = "20", min_beta_updates = "180"
+))
+stopifnot(
+  rhs_controls$max_iter == 200L,
+  rhs_controls$min_iter == 200L,
+  rhs_controls$tol == 1.0e-4,
+  rhs_controls$freeze_beta_warmup_iters == 20L,
+  rhs_controls$min_beta_updates == 180L
+)
+bad_rhs_controls <- list(
+  max_iter = "100", min_iter = "100", tol = "1e-4",
+  freeze_beta_warmup_iters = "20", min_beta_updates = "180"
+)
+stopifnot(inherits(
+  try(app_glofas_post_search2_normal_rhs_iteration_controls(bad_rhs_controls), silent = TRUE),
+  "try-error"
+))
 
 ref_ridge <- list(sigma2_mean = 0.64)
 disc_ridge <- list(sigma2_mean = 0.25)

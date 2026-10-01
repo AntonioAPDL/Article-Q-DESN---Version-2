@@ -204,6 +204,49 @@ app_glofas_post_search2_quantile_slab <- function(component_row) {
   )
 }
 
+app_glofas_post_search2_normal_rhs_iteration_controls <- function(args) {
+  required <- c(
+    "max_iter", "min_iter", "tol", "freeze_beta_warmup_iters",
+    "min_beta_updates"
+  )
+  missing <- setdiff(required, names(args))
+  if (length(missing)) {
+    stop(
+      sprintf("Missing Normal RHS iteration controls: %s.", paste(missing, collapse = ", ")),
+      call. = FALSE
+    )
+  }
+
+  out <- list(
+    max_iter = as.integer(args$max_iter),
+    min_iter = as.integer(args$min_iter),
+    tol = as.numeric(args$tol),
+    freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
+    min_beta_updates = as.integer(args$min_beta_updates)
+  )
+  scalar_finite <- vapply(out, function(x) length(x) == 1L && is.finite(x), logical(1L))
+  if (!all(scalar_finite)) {
+    stop("Normal RHS iteration controls must be finite scalar values.", call. = FALSE)
+  }
+  if (out$max_iter < 1L || out$min_iter < 1L || out$min_iter > out$max_iter) {
+    stop("Normal RHS iterations require 1 <= min_iter <= max_iter.", call. = FALSE)
+  }
+  if (out$tol <= 0) {
+    stop("Normal RHS tolerance must be positive.", call. = FALSE)
+  }
+  if (out$freeze_beta_warmup_iters < 0L || out$min_beta_updates < 0L) {
+    stop("Normal RHS freeze and minimum-update controls cannot be negative.", call. = FALSE)
+  }
+  available_updates <- out$max_iter - out$freeze_beta_warmup_iters
+  if (available_updates < 1L || out$min_beta_updates > available_updates) {
+    stop(
+      "Normal RHS beta-update contract cannot be satisfied within max_iter.",
+      call. = FALSE
+    )
+  }
+  out
+}
+
 app_glofas_post_search2_joint_candidate <- function(selection, candidate_id = "post_search2_part3_joint") {
   ref <- app_glofas_post_search2_component_row(selection, "reference")
   disc <- app_glofas_post_search2_component_row(selection, "discrepancy")

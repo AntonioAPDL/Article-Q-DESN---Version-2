@@ -34,6 +34,32 @@ duplicate_error <- tryCatch({
 }, error = function(e) TRUE)
 stopifnot(duplicate_error)
 
+adjacent <- app_glofas_quantile_initializer_map(
+  list(paths[[3L]]), 0.35, policy = "single_source"
+)
+stopifnot(
+  identical(adjacent$source_tau, 0.50),
+  identical(adjacent$target_tau, 0.35),
+  identical(adjacent$mapping_status, "adjacent_tau_warm_start")
+)
+same_single <- app_glofas_quantile_initializer_map(
+  list(paths[[3L]]), 0.50, policy = "single_source"
+)
+stopifnot(identical(same_single$mapping_status, "exact_tau_match"))
+exact_rejects_adjacent <- tryCatch({
+  app_glofas_quantile_initializer_map(list(paths[[3L]]), 0.35)
+  FALSE
+}, error = function(e) TRUE)
+multiple_source_rejected <- tryCatch({
+  app_glofas_quantile_initializer_map(list(paths[[2L]], paths[[3L]]), 0.35, policy = "single_source")
+  FALSE
+}, error = function(e) TRUE)
+multiple_target_rejected <- tryCatch({
+  app_glofas_quantile_initializer_map(list(paths[[3L]]), c(0.35, 0.50), policy = "single_source")
+  FALSE
+}, error = function(e) TRUE)
+stopifnot(exact_rejects_adjacent, multiple_source_rejected, multiple_target_rejected)
+
 multi <- list(
   tau = tau,
   beta_mean = unlist(lapply(seq_along(tau), function(i) c(i, -i))),
@@ -91,4 +117,3 @@ stopifnot(!app_latent_joint_rhs_gate(list(anchor = state), 6L, "reference")$pass
 stopifnot(app_latent_joint_rhs_gate(list(anchor = state), 7L, "reference")$passed)
 
 cat("GLOFAS_QUANTILE_INTEGRITY_TEST_PASS\n")
-

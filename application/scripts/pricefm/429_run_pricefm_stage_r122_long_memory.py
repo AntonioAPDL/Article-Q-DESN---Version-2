@@ -289,9 +289,12 @@ def _prepare_processed(control: Mapping[str, Any], campaign: Path, code: Path, c
         "--config", str(control["data_config"]), "--pilot-only", "false", "--regions", regions,
         "--folds", "1", "--resume", "true", "--force", "false",
     ], code, campaign / "logs/build_windows_fold1.log", cpu)
-    arrays = RT.explicit_arrays(RT.load_windows(runtime, 1, "train", probe), probe)
-    splits = RT.internal_splits(len(arrays.response))
     target = _json(Path(control["data_config"]).parent.parent / "target_contract.json")
+    raw_arrays = RT.explicit_arrays(RT.load_windows(runtime, 1, "train", probe), probe)
+    arrays, support_audit = RT.contract_support(
+        raw_arrays, target["expected_first_origin_utc"], target["expected_origin_count"],
+    )
+    splits = RT.internal_splits(len(arrays.response))
     checks = {
         "origin_count_940": len(arrays.response) == 940,
         "first_origin": _same_utc_instant(arrays.anchors[0], target["expected_first_origin_utc"]),
@@ -307,7 +310,8 @@ def _prepare_processed(control: Mapping[str, Any], campaign: Path, code: Path, c
     }
     result = {"status": "R122_PROCESSED_PACKET_READY" if all(checks.values()) else "R122_PROCESSED_PACKET_INVALID",
               "checks": checks, "regions": regions.split(","), "origin_count": len(arrays.response),
-              "first_origin": str(arrays.anchors[0]), "test_opened": False}
+              "first_origin": str(arrays.anchors[0]), "support_audit": support_audit,
+              "test_opened": False}
     write_json(campaign / "processed_audit.json", result)
     if not all(checks.values()):
         raise RuntimeError(f"R122 processed packet failed: {checks}")
@@ -325,6 +329,17 @@ def _candidate_manifest(prep: Path) -> pd.DataFrame:
 def _spec_from_row(row: Any) -> dict[str, Any]:
     value = json.loads(str(row.spec_json)); value["seed"] = int(row.reservoir_seed)
     return RT.normalize_spec(value)
+
+
+def _selection_arrays(control: Mapping[str, Any], spec: Mapping[str, Any]) -> Any:
+    target = _json(Path(control["data_config"]).parent.parent / "target_contract.json")
+    raw = RT.explicit_arrays(
+        RT.load_windows(Path(control["runtime_processed"]), 1, "train", spec), spec,
+    )
+    arrays, _ = RT.contract_support(
+        raw, target["expected_first_origin_utc"], target["expected_origin_count"],
+    )
+    return arrays
 
 
 def _fit_root(campaign: Path, fit_id: str) -> Path:
@@ -349,7 +364,7 @@ def ridge_cell(args: argparse.Namespace) -> dict[str, Any]:
     if _ridge_valid(output, str(row.fit_sha256)):
         return _json(output / "terminal.json")
     spec = _spec_from_row(row); control = _control(prep)
-    arrays = RT.explicit_arrays(RT.load_windows(Path(control["runtime_processed"]), 1, "train", spec), spec)
+    arrays = _selection_arrays(control, spec)
     splits = RT.internal_splits(len(arrays.response)); metrics: list[dict[str, Any]] = []
     stats: dict[str, dict[str, Any]] = {}; preprocessing: dict[str, Any] = {}; audits: dict[str, Any] = {}
     for item in splits:
@@ -715,7 +730,7 @@ def rhs_score(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError(f"R122 RHS candidate missing: {candidate_id}")
     spec_value = json.loads(str(row.iloc[0].spec_json)); spec_value["seed"] = int(RESERVOIR_SEEDS[0])
     spec = RT.normalize_spec(spec_value); control = _control(prep)
-    arrays = RT.explicit_arrays(RT.load_windows(Path(control["runtime_processed"]), 1, "train", spec), spec)
+    arrays = _selection_arrays(control, spec)
     item = RT.internal_splits(len(arrays.response))[split - 1]
     scaled, scaler = RT.standardize_from_training_origins(arrays, item["train"])
     score = RT.recursive_normal_score(
@@ -891,7 +906,7 @@ def _al_ladder(prep: Path, campaign: Path, code: Path, control: Mapping[str, Any
         raise RuntimeError(f"R122 AL candidate missing: {candidate}")
     spec_value = json.loads(str(row.iloc[0].spec_json)); spec_value["seed"] = int(RESERVOIR_SEEDS[0])
     spec = RT.normalize_spec(spec_value)
-    arrays = RT.explicit_arrays(RT.load_windows(Path(control["runtime_processed"]), 1, "train", spec), spec)
+    arrays = _selection_arrays(control, spec)
     item = RT.internal_splits(len(arrays.response))[split - 1]
     scaled, scaler = RT.standardize_from_training_origins(arrays, item["train"])
     design_values, response, audit = RT.teacher_forced_design(RT.subset_arrays(scaled, item["train"]), spec)

@@ -63,6 +63,26 @@ def test_r122_internal_splits_are_exact_and_disjoint():
         RUNTIME.internal_splits(939)
 
 
+def test_r122_contract_support_drops_only_the_predeclared_leading_origin():
+    arrays = RUNTIME.ExplicitArrays(
+        np.zeros((3, 4)), np.zeros((3, 4, 1)), np.zeros((3, 2, 1)),
+        np.zeros((3, 2)),
+        np.asarray([
+            "2022-02-03T00:00:00+00:00",
+            "2022-02-04T00:00:00+00:00",
+            "2022-02-05T00:00:00+00:00",
+        ]),
+        ("x",), (),
+    )
+    contracted, audit = RUNTIME.contract_support(
+        arrays, "2022-02-04 00:00:00+00:00", 2,
+    )
+    assert contracted.anchors.tolist() == arrays.anchors[1:].tolist()
+    assert audit["raw_origin_count"] == 3
+    assert audit["contracted_origin_count"] == 2
+    assert audit["dropped_leading_origins"] == 1
+
+
 def test_test_split_firewall_distinguishes_role_from_harmless_key_names():
     assert RUN._split_is_test({"name": "test", "test_boundary_mode": "half_open"})
     assert RUN._split_is_test({"partition": "historical_test"})

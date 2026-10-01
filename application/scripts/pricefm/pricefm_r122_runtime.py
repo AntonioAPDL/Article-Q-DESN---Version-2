@@ -75,6 +75,35 @@ def subset_arrays(arrays: Any, indices: Any) -> Any:
     )
 
 
+def contract_support(arrays: Any, first_origin_utc: str,
+                     expected_count: int) -> tuple[Any, dict[str, Any]]:
+    """Restrict rebuilt windows to R122's predeclared common-origin support."""
+    import numpy as np
+    import pandas as pd
+
+    anchors = pd.to_datetime(np.asarray(arrays.anchors), utc=True)
+    first = pd.Timestamp(first_origin_utc)
+    first = first.tz_localize("UTC") if first.tzinfo is None else first.tz_convert("UTC")
+    matches = np.flatnonzero(anchors == first)
+    if len(matches) != 1:
+        raise ValueError(f"R122 expected one first-origin match, got {len(matches)}")
+    indices = np.arange(int(matches[0]), len(anchors), dtype=int)
+    if len(indices) != int(expected_count):
+        raise ValueError(
+            f"R122 contracted support requires {expected_count} origins, got {len(indices)}"
+        )
+    contracted = subset_arrays(arrays, indices)
+    audit = {
+        "raw_origin_count": int(len(anchors)),
+        "contracted_origin_count": int(len(indices)),
+        "dropped_leading_origins": int(indices[0]),
+        "raw_first_origin": str(anchors[0]),
+        "contracted_first_origin": str(anchors[indices[0]]),
+        "last_origin": str(anchors[indices[-1]]),
+    }
+    return contracted, audit
+
+
 def internal_splits(n_origins: int) -> list[dict[str, Any]]:
     """Exact inherited R121 boundaries on R122's common 940-origin support."""
     if int(n_origins) != 940:

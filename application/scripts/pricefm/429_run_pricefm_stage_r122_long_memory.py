@@ -81,7 +81,7 @@ def _split_is_test(value: Any) -> bool:
 
 def _same_utc_instant(left: Any, right: Any) -> bool:
     def normalize(value: Any) -> pd.Timestamp:
-        timestamp = pd.Timestamp(value)
+        timestamp = pd.Timestamp(str(value))
         return timestamp.tz_localize("UTC") if timestamp.tzinfo is None else timestamp.tz_convert("UTC")
     return normalize(left) == normalize(right)
 

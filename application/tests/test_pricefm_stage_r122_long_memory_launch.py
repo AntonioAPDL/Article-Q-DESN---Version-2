@@ -96,6 +96,10 @@ def test_test_split_firewall_distinguishes_role_from_harmless_key_names():
 
 def test_origin_comparison_is_timezone_and_format_stable():
     assert RUN._same_utc_instant(
+        np.str_("2022-02-04T00:00:00+00:00"),
+        "2022-02-04 00:00:00+00:00",
+    )
+    assert RUN._same_utc_instant(
         np.datetime64("2022-02-04T00:00:00"),
         "2022-02-04 00:00:00+00:00",
     )

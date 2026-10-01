@@ -24,6 +24,70 @@ test_contract <- list(
   glofas_spare_cpu_list = "",
   spare_cpu_list = ""
 )
+
+topology_root <- tempfile("joint_disjoint_process_topology_")
+for (cpu in 0:3) {
+  topology <- file.path(topology_root, sprintf("cpu%d", cpu), "topology")
+  dir.create(topology, recursive = TRUE)
+  writeLines(as.character(cpu %% 2L), file.path(topology,
+    "physical_package_id"))
+  writeLines(as.character(cpu %/% 2L), file.path(topology, "core_id"))
+}
+shared_contract <- test_contract
+shared_contract$shared_capacity_mode <- "pricefm_r120_jerez_partition"
+shared_contract$cpu_affinity_list <- "1,3"
+shared_contract$allowed_competing_process_patterns <- "pricefm_frozen_stage"
+shared_processes <- data.frame(
+  pid = c(10L, 11L, 12L),
+  ppid = c(1L, 10L, 1L),
+  command = c(
+    "python application/scripts/pricefm/427_run_pricefm_stage.py --cpu-list 0,2",
+    "R --file=application/scripts/pricefm/420_fit_pricefm_atom.R",
+    "R --file=application/scripts/pricefm/orphan_worker.R"
+  ),
+  stringsAsFactors = FALSE
+)
+shared_affinity <- data.frame(
+  pid = shared_processes$pid,
+  cpu_affinity_list = c("0-3", "2", "3"),
+  cpu_affinity_read_ok = TRUE,
+  stringsAsFactors = FALSE
+)
+shared_audit <- app_joint_article_disjoint_competing_process_audit(
+  shared_processes, shared_contract, process_affinity = shared_affinity,
+  sysfs_root = topology_root)
+stopifnot(
+  nrow(shared_audit) == 3L,
+  all(shared_audit$approved[shared_audit$pid %in% c(10L, 11L)]),
+  !shared_audit$approved[shared_audit$pid == 12L],
+  shared_audit$approval_reason[shared_audit$pid == 10L] ==
+    "disjoint_pricefm_controller_declared_cpu_list",
+  shared_audit$approval_reason[shared_audit$pid == 11L] ==
+    "disjoint_pricefm_worker_kernel_affinity",
+  shared_audit$joint_physical_overlap[shared_audit$pid == 11L] == 0L
+)
+shared_competing <- app_joint_article_competing_processes(
+  shared_processes, current_pid = 999L,
+  allowed_patterns = shared_contract$allowed_competing_process_patterns,
+  allowed_pids = shared_audit$pid[shared_audit$approved])
+stopifnot(
+  length(shared_competing) == 1L,
+  grepl("12 .*orphan", shared_competing[[1L]])
+)
+overlap_processes <- shared_processes[1:2, , drop = FALSE]
+overlap_processes$command[[1L]] <-
+  "python application/scripts/pricefm/427_run_pricefm_stage.py --cpu-list 1"
+overlap_affinity <- shared_affinity[1:2, , drop = FALSE]
+overlap_affinity$cpu_affinity_list <- c("0-3", "1")
+overlap_audit <- app_joint_article_disjoint_competing_process_audit(
+  overlap_processes, shared_contract, process_affinity = overlap_affinity,
+  sysfs_root = topology_root)
+stopifnot(
+  !any(overlap_audit$approved),
+  all(grepl("overlap", overlap_audit$approval_reason))
+)
+unlink(topology_root, recursive = TRUE, force = TRUE)
+
 test_profile <- data.frame(
   profile_id = "test_host_preflight",
   host = "impossible.invalid.test.host",

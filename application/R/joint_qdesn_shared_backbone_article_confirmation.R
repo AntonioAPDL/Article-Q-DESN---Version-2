@@ -677,6 +677,206 @@ app_joint_article_process_table <- function() {
   )
 }
 
+app_joint_article_process_affinity_table <- function(
+  processes,
+  proc_root = "/proc"
+) {
+  if (!nrow(processes)) {
+    return(data.frame(
+      pid = integer(), cpu_affinity_list = character(),
+      cpu_affinity_read_ok = logical(), stringsAsFactors = FALSE
+    ))
+  }
+  rows <- lapply(processes$pid, function(pid) {
+    status_path <- file.path(proc_root, as.character(pid), "status")
+    affinity <- ""
+    ok <- FALSE
+    if (file.exists(status_path)) {
+      status <- tryCatch(readLines(status_path, warn = FALSE),
+        error = function(e) character())
+      line <- grep("^Cpus_allowed_list:", status, value = TRUE)
+      if (length(line) == 1L) {
+        affinity <- trimws(sub("^[^:]+:", "", line))
+        ok <- nzchar(affinity)
+      }
+    }
+    data.frame(
+      pid = as.integer(pid), cpu_affinity_list = affinity,
+      cpu_affinity_read_ok = ok, stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+app_joint_article_pricefm_controller_cpu_list <- function(command) {
+  command <- as.character(command)[[1L]]
+  pattern <- "(^|[[:space:]])--cpu-list(=|[[:space:]]+)([0-9,-]+)($|[[:space:]])"
+  match <- regexec(pattern, command, perl = TRUE)
+  fields <- regmatches(command, match)[[1L]]
+  if (length(fields) != 5L) return("")
+  fields[[4L]]
+}
+
+app_joint_article_disjoint_competing_process_audit <- function(
+  processes,
+  contract,
+  process_affinity = NULL,
+  sysfs_root = "/sys/devices/system/cpu",
+  proc_root = "/proc"
+) {
+  empty <- data.frame(
+    pid = integer(), ppid = integer(), command = character(),
+    process_role = character(), controller_pid = integer(),
+    controller_cpu_list = character(), effective_cpu_affinity = character(),
+    affinity_read_ok = logical(), affinity_subset_of_controller = logical(),
+    declared_physical_cores = integer(), effective_physical_cores = integer(),
+    declared_joint_physical_overlap = integer(),
+    effective_joint_physical_overlap = integer(),
+    joint_physical_overlap = integer(), approved = logical(),
+    approval_reason = character(), stringsAsFactors = FALSE
+  )
+  if (!nrow(processes) ||
+      !contract$shared_capacity_mode %in% c(
+        "pricefm_r97_glofas_part4", "pricefm_r120_jerez_partition")) {
+    return(empty)
+  }
+  pricefm <- grepl("pricefm", processes$command, ignore.case = TRUE)
+  if (!any(pricefm)) return(empty)
+  if (is.null(process_affinity)) {
+    process_affinity <- app_joint_article_process_affinity_table(
+      processes, proc_root = proc_root)
+  }
+  required_affinity_columns <- c(
+    "pid", "cpu_affinity_list", "cpu_affinity_read_ok")
+  if (!all(required_affinity_columns %in% names(process_affinity))) {
+    stop("Process-affinity evidence is malformed.", call. = FALSE)
+  }
+  joint_ids <- app_joint_article_parse_cpu_list(contract$cpu_affinity_list)
+  joint_topology <- app_joint_article_cpu_topology(joint_ids, sysfs_root)
+  physical_key <- function(topology) {
+    unique(paste(topology$physical_package_id, topology$core_id, sep = ":"))
+  }
+  joint_key <- physical_key(joint_topology)
+  controller_cpu_list <- vapply(processes$command,
+    app_joint_article_pricefm_controller_cpu_list, character(1L))
+  controller <- pricefm & nzchar(controller_cpu_list) &
+    grepl("application/scripts/pricefm/[^[:space:]]+\\.py",
+      processes$command, perl = TRUE)
+  controller_rows <- which(controller)
+  controller_families <- lapply(controller_rows, function(index) {
+    app_joint_article_process_family_pids(processes, processes$pid[[index]])
+  })
+  pattern_allowed <- rep(FALSE, nrow(processes))
+  if (length(contract$allowed_competing_process_patterns)) {
+    pattern_allowed <- Reduce(`|`, lapply(
+      contract$allowed_competing_process_patterns,
+      grepl, x = processes$command, ignore.case = TRUE))
+  }
+  rows <- lapply(which(pricefm), function(index) {
+    pid <- processes$pid[[index]]
+    affinity_index <- match(pid, process_affinity$pid)
+    effective_list <- if (!is.na(affinity_index)) {
+      as.character(process_affinity$cpu_affinity_list[[affinity_index]])
+    } else {
+      ""
+    }
+    affinity_ok <- !is.na(affinity_index) &&
+      isTRUE(app_as_bool_vec(
+        process_affinity$cpu_affinity_read_ok[[affinity_index]])[[1L]])
+    family_matches <- which(vapply(controller_families,
+      function(family) pid %in% family, logical(1L)))
+    controller_index <- if (length(family_matches) == 1L) {
+      controller_rows[[family_matches[[1L]]]]
+    } else {
+      NA_integer_
+    }
+    role <- if (!is.na(controller_index) && index == controller_index) {
+      "controller"
+    } else if (!is.na(controller_index)) {
+      "worker"
+    } else {
+      "unattached"
+    }
+    declared_list <- if (!is.na(controller_index)) {
+      controller_cpu_list[[controller_index]]
+    } else {
+      ""
+    }
+    declared_ids <- tryCatch(app_joint_article_parse_cpu_list(declared_list),
+      error = function(e) integer())
+    declared_topology <- tryCatch(
+      app_joint_article_cpu_topology(declared_ids, sysfs_root),
+      error = function(e) NULL)
+    declared_key <- if (is.null(declared_topology)) character() else
+      physical_key(declared_topology)
+    declared_unique <- length(declared_ids) > 0L &&
+      length(declared_key) == length(declared_ids)
+    declared_overlap <- length(intersect(declared_key, joint_key))
+    declared_disjoint <- declared_unique && declared_overlap == 0L
+    effective_ids <- if (affinity_ok) {
+      tryCatch(app_joint_article_parse_cpu_list(effective_list),
+        error = function(e) integer())
+    } else {
+      integer()
+    }
+    effective_topology <- tryCatch(
+      app_joint_article_cpu_topology(effective_ids, sysfs_root),
+      error = function(e) NULL)
+    effective_key <- if (is.null(effective_topology)) character() else
+      physical_key(effective_topology)
+    overlap <- length(intersect(effective_key, joint_key))
+    subset_ok <- length(effective_ids) > 0L &&
+      length(declared_ids) > 0L && all(effective_ids %in% declared_ids)
+    approved <- FALSE
+    reason <- "pricefm_process_not_covered_by_frozen_pattern_or_disjoint_family"
+    if (pattern_allowed[[index]]) {
+      approved <- TRUE
+      reason <- "frozen_allowed_process_pattern"
+    } else if (!is.na(controller_index) && declared_disjoint &&
+        identical(role, "controller")) {
+      approved <- TRUE
+      reason <- "disjoint_pricefm_controller_declared_cpu_list"
+    } else if (!is.na(controller_index) && declared_disjoint &&
+        identical(role, "worker") && affinity_ok && subset_ok && overlap == 0L) {
+      approved <- TRUE
+      reason <- "disjoint_pricefm_worker_kernel_affinity"
+    } else if (!is.na(controller_index) && !declared_disjoint) {
+      reason <- "pricefm_controller_cpu_list_overlaps_joint_physical_cores"
+    } else if (!is.na(controller_index) && identical(role, "worker") &&
+        !affinity_ok) {
+      reason <- "pricefm_worker_kernel_affinity_unavailable"
+    } else if (!is.na(controller_index) && identical(role, "worker") &&
+        !subset_ok) {
+      reason <- "pricefm_worker_affinity_outside_controller_cpu_list"
+    } else if (!is.na(controller_index) && identical(role, "worker") &&
+        overlap > 0L) {
+      reason <- "pricefm_worker_overlaps_joint_physical_cores"
+    }
+    data.frame(
+      pid = pid,
+      ppid = processes$ppid[[index]],
+      command = processes$command[[index]],
+      process_role = role,
+      controller_pid = if (is.na(controller_index)) NA_integer_ else
+        processes$pid[[controller_index]],
+      controller_cpu_list = declared_list,
+      effective_cpu_affinity = effective_list,
+      affinity_read_ok = affinity_ok,
+      affinity_subset_of_controller = subset_ok,
+      declared_physical_cores = length(declared_key),
+      effective_physical_cores = length(effective_key),
+      declared_joint_physical_overlap = declared_overlap,
+      effective_joint_physical_overlap = overlap,
+      joint_physical_overlap = if (identical(role, "controller"))
+        declared_overlap else overlap,
+      approved = approved,
+      approval_reason = reason,
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
 app_joint_article_process_family_pids <- function(processes, root_pid) {
   root_pid <- suppressWarnings(as.integer(root_pid))
   if (length(root_pid) != 1L || !is.finite(root_pid) ||
@@ -736,7 +936,8 @@ app_joint_article_competing_processes <- function(
   processes = app_joint_article_process_table(),
   current_pid = Sys.getpid(),
   allowed_patterns = character(),
-  excluded_pids = integer()
+  excluded_pids = integer(),
+  allowed_pids = integer()
 ) {
   if (!nrow(processes)) return(character())
   excluded <- unique(as.integer(c(current_pid, excluded_pids)))
@@ -764,6 +965,11 @@ app_joint_article_competing_processes <- function(
     allowed <- Reduce(`|`, lapply(allowed_patterns, grepl, rows$command,
       ignore.case = TRUE))
     rows <- rows[!allowed, , drop = FALSE]
+  }
+  allowed_pids <- unique(as.integer(allowed_pids))
+  allowed_pids <- allowed_pids[!is.na(allowed_pids)]
+  if (nrow(rows) && length(allowed_pids)) {
+    rows <- rows[!rows$pid %in% allowed_pids, , drop = FALSE]
   }
   sprintf("%d %s", rows$pid, rows$command)
 }
@@ -836,13 +1042,6 @@ app_joint_article_host_preflight <- function(
       execution_root_pid = execution_root_pid)
     execution_context <- "verified_mcmc_queue_family"
   }
-  all_competing <- app_joint_article_competing_processes(
-    processes, current_pid = current_pid, excluded_pids = execution_family)
-  competing <- app_joint_article_competing_processes(
-    processes, current_pid = current_pid,
-    allowed_patterns = contract$allowed_competing_process_patterns,
-    excluded_pids = execution_family)
-  allowed_competing <- setdiff(all_competing, competing)
   affinity <- if (contract$version %in% c(
       "joint_shared_backbone_article_confirmation_v3",
       "joint_shared_backbone_article_confirmation_v4",
@@ -854,6 +1053,21 @@ app_joint_article_host_preflight <- function(
   }
   shared_capacity <- app_joint_article_shared_capacity_preflight(
     contract, affinity)
+  disjoint_process_audit <- app_joint_article_disjoint_competing_process_audit(
+    processes, contract)
+  disjoint_allowed_pids <- if (nrow(disjoint_process_audit)) {
+    disjoint_process_audit$pid[disjoint_process_audit$approved]
+  } else {
+    integer()
+  }
+  all_competing <- app_joint_article_competing_processes(
+    processes, current_pid = current_pid, excluded_pids = execution_family)
+  competing <- app_joint_article_competing_processes(
+    processes, current_pid = current_pid,
+    allowed_patterns = contract$allowed_competing_process_patterns,
+    excluded_pids = execution_family,
+    allowed_pids = disjoint_allowed_pids)
+  allowed_competing <- setdiff(all_competing, competing)
   affinity_ok <- is.null(affinity) || all(affinity$verified)
   effective_affinity <- if (is.null(affinity)) "not_required" else
     affinity$effective_affinity[[1L]]
@@ -909,6 +1123,11 @@ app_joint_article_host_preflight <- function(
     competing_processes_ok = !length(competing),
     allowed_competing_process_count = length(allowed_competing),
     allowed_competing_processes = paste(allowed_competing, collapse = " || "),
+    disjoint_process_audit_rows = nrow(disjoint_process_audit),
+    disjoint_process_approved = if (nrow(disjoint_process_audit))
+      sum(disjoint_process_audit$approved) else 0L,
+    disjoint_process_rejected = if (nrow(disjoint_process_audit))
+      sum(!disjoint_process_audit$approved) else 0L,
     execution_context = execution_context,
     execution_root_pid = if (length(execution_family))
       as.integer(execution_root_pid)[[1L]] else NA_integer_,
@@ -946,12 +1165,14 @@ app_joint_article_host_preflight <- function(
       preflight = out,
       processes = processes,
       cpu_affinity_mapping = affinity,
-      shared_capacity_mapping = shared_capacity
+      shared_capacity_mapping = shared_capacity,
+      disjoint_capacity_process_audit = disjoint_process_audit
     ), class = c("joint_article_host_preflight_error", "error", "condition"))
     stop(condition)
   }
   attr(out, "cpu_affinity_mapping") <- affinity
   attr(out, "shared_capacity_mapping") <- shared_capacity
+  attr(out, "disjoint_capacity_process_audit") <- disjoint_process_audit
   out
 }
 
@@ -1492,6 +1713,8 @@ app_joint_article_prepare <- function(
   if (is.null(host)) host <- app_joint_article_host_preflight(contract)
   affinity <- attr(host, "cpu_affinity_mapping")
   shared_capacity <- attr(host, "shared_capacity_mapping")
+  disjoint_process_audit <- attr(host,
+    "disjoint_capacity_process_audit")
   app_ensure_dir(out_dir); app_ensure_dir(file.path(out_dir, "workers"))
   app_ensure_dir(file.path(out_dir, "mcmc_workers")); app_ensure_dir(file.path(out_dir, "initializers"))
   designs <- app_joint_article_build_designs(out_dir, source, contract)
@@ -1583,6 +1806,11 @@ app_joint_article_prepare <- function(
   if (!is.null(shared_capacity)) {
     files <- c(files, shared_capacity_preflight = app_write_csv(
       shared_capacity, file.path(out_dir, "shared_capacity_preflight.csv")))
+  }
+  if (!is.null(disjoint_process_audit)) {
+    files <- c(files, disjoint_capacity_process_audit = app_write_csv(
+      disjoint_process_audit,
+      file.path(out_dir, "disjoint_capacity_process_audit.csv")))
   }
   writeLines(c(
     "# JOINT article-fixture confirmation preflight", "",
@@ -2942,6 +3170,10 @@ app_joint_article_record_mcmc_failure <- function(root, worker_id, error_message
       app_write_csv(condition$shared_capacity_mapping,
         file.path(out, "host_preflight_shared_capacity.csv"))
     }
+    if (is.data.frame(condition$disjoint_capacity_process_audit)) {
+      app_write_csv(condition$disjoint_capacity_process_audit,
+        file.path(out, "host_preflight_disjoint_process_audit.csv"))
+    }
   }
   writeLines("failed", file.path(out, "FAILED"))
   invisible(out)
@@ -3305,7 +3537,8 @@ app_joint_article_host_preflight_failed_gates <- function(condition) {
 
 app_joint_article_write_mcmc_capacity_attempt <- function(
   root, attempt_id, status, failed_gates, error_message,
-  preflight = NULL, processes = NULL, affinity = NULL, shared_capacity = NULL
+  preflight = NULL, processes = NULL, affinity = NULL, shared_capacity = NULL,
+  disjoint_process_audit = NULL
 ) {
   root <- normalizePath(root, mustWork = TRUE)
   attempt_dir <- file.path(root, "mcmc_capacity_wait",
@@ -3333,6 +3566,8 @@ app_joint_article_write_mcmc_capacity_attempt <- function(
   add_frame("processes", processes, "processes.csv")
   add_frame("cpu_affinity", affinity, "cpu_affinity.csv")
   add_frame("shared_capacity", shared_capacity, "shared_capacity.csv")
+  add_frame("disjoint_process_audit", disjoint_process_audit,
+    "disjoint_process_audit.csv")
   manifest <- app_joint_shared_write_manifest(attempt_dir, paths)
   verification <- app_joint_shared_verify_manifest(attempt_dir, manifest)
   app_write_csv(verification,
@@ -3387,7 +3622,9 @@ app_joint_article_wait_for_mcmc_capacity <- function(
         preflight = host,
         processes = processes,
         affinity = attr(host, "cpu_affinity_mapping"),
-        shared_capacity = attr(host, "shared_capacity_mapping")
+        shared_capacity = attr(host, "shared_capacity_mapping"),
+        disjoint_process_audit = attr(host,
+          "disjoint_capacity_process_audit")
       )
     }
   }
@@ -3404,6 +3641,7 @@ app_joint_article_wait_for_mcmc_capacity <- function(
       processes <- observed$processes
       affinity <- observed$affinity
       shared_capacity <- observed$shared_capacity
+      disjoint_process_audit <- observed$disjoint_process_audit
       status <- if (clean_polls >= required_clean_polls) {
         "CAPACITY_READY"
       } else {
@@ -3417,6 +3655,7 @@ app_joint_article_wait_for_mcmc_capacity <- function(
       processes <- observed$processes
       affinity <- observed$cpu_affinity_mapping
       shared_capacity <- observed$shared_capacity_mapping
+      disjoint_process_audit <- observed$disjoint_capacity_process_audit
       waitable <- inherits(observed, "joint_article_host_preflight_error") &&
         identical(failed_gates, "competing_processes")
       status <- if (waitable) "WAITING_FOR_DISJOINT_CAPACITY" else
@@ -3425,7 +3664,8 @@ app_joint_article_wait_for_mcmc_capacity <- function(
     attempt <- app_joint_article_write_mcmc_capacity_attempt(
       root, attempt_id, status, failed_gates, error_message,
       preflight = preflight, processes = processes, affinity = affinity,
-      shared_capacity = shared_capacity)
+      shared_capacity = shared_capacity,
+      disjoint_process_audit = disjoint_process_audit)
     row <- cbind(attempt[, c("attempt_id", "status", "failed_gates",
       "error_message", "checked_at"), drop = FALSE], data.frame(
         clean_poll_count = clean_polls,

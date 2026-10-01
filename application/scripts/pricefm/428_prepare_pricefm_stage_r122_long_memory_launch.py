@@ -251,6 +251,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "code_worktree_clean": not bool(git_status),
         "dedicated_task_branch": git_branch.startswith("work/pricefm-r122-"),
     }
+    checks = {key: bool(value) for key, value in checks.items()}
     write_json(output / "preparation_gates.json", {
         "status": "passed" if all(checks.values()) else "failed", "checks": checks,
     })

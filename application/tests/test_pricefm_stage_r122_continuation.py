@@ -300,3 +300,74 @@ def test_continuation_does_not_regenerate_processed_windows(tmp_path, monkeypatc
     monkeypatch.setattr(RUN.RT, "load_windows", data_boundary)
     with pytest.raises(RuntimeError, match="existing windows read"):
         RUN._prepare_processed(control, campaign, tmp_path, 0)
+
+
+def test_rhs_execution_namespace_preserves_legacy_contracts(tmp_path):
+    old = RUN._rhs_execution_root(tmp_path, {}, "center")
+    new = RUN._rhs_execution_root(tmp_path, {"rhs_contract_namespace": "rhs_resume_v2"}, "center")
+    assert old == tmp_path / "rhs/center"
+    assert new == tmp_path / "continuations/rhs_resume_v2/rhs/center"
+    assert old != new
+    with pytest.raises(ValueError, match="simple directory"):
+        RUN._rhs_execution_root(tmp_path, {"rhs_contract_namespace": "../escape"}, "center")
+
+
+def test_rhs_fail_fast_does_not_launch_the_rest_of_a_failed_bucket(tmp_path, monkeypatch):
+    seen = []
+    def fail(command, *args):
+        seen.append(command)
+        raise RuntimeError("startup contract rejected")
+    monkeypatch.setattr(RUN, "_command", fail)
+    tasks = [("a", ["a"], tmp_path / "a.log"), ("b", ["b"], tmp_path / "b.log")]
+    with pytest.raises(RuntimeError, match="task failed"):
+        RUN._run_queue(tasks, [0], tmp_path, tmp_path / "progress.json", 2, fail_fast=True)
+    assert seen == [["a"]]
+    state = json.loads((tmp_path / "progress.json").read_text())
+    assert state["failed_this_resume"] == 1
+    assert state["scheduled_this_resume"] == 2
+
+
+def test_empty_rhs_panel_has_a_scientific_incomplete_error(tmp_path, monkeypatch):
+    from argparse import Namespace
+    candidates = pd.DataFrame([{"candidate_id": "a", "readout_dimension": 257}])
+    monkeypatch.setattr(RUN, "_control", lambda prep: {"rhs_top_k": 1})
+    monkeypatch.setattr(RUN, "_ordered_candidates", lambda *args: candidates)
+    monkeypatch.setattr(RUN, "_canonical_fit", lambda *args: tmp_path)
+    monkeypatch.setattr(RUN, "_stats_from_ridge", lambda *args: {"n": 1000})
+    monkeypatch.setattr(RUN, "_rhs_cells", lambda *args: pd.DataFrame())
+    with pytest.raises(RuntimeError, match="center RHS incomplete: 0/1"):
+        RUN._run_rhs(Namespace(), tmp_path, tmp_path, tmp_path, [0], candidates)
+
+
+@pytest.mark.parametrize("label,test_access,success", [
+    ("train_validation_only", False, True),
+    ("fold1_training_internal_validation_only", False, False),
+    ("train_validation_only", True, False),
+])
+def test_normal_contract_uses_actual_r_entrypoint_firewall(tmp_path, label, test_access, success):
+    rscript = Path("/data/jaguir26/local/opt/R/4.6.0/bin/Rscript")
+    assert rscript.is_file(), "the frozen application R runtime is required for this integration check"
+    stats_dir = tmp_path / "stats"
+    stats = {"n": 30, "p": 2, "XtX": np.diag([30., 20.]),
+             "Xty": np.asarray([8., 14.]), "yty": 50.}
+    RUN.RT.write_stats_packet(stats_dir, stats, {"stage": "isolated_contract_test"})
+    code = SCRIPTS.parents[2]
+    control = {"normal_runtime": str(tmp_path), "rhs_max_iter": 500}
+    contract = RUN._normal_contract("isolated", stats_dir, tmp_path / "fit", 1e-4, control, code)
+    assert contract["selection_split"] == "train_validation_only"
+    assert contract["selection_scope"] == "fold1_training_internal_validation_only"
+    assert contract["prior_type"] == "rhs_ns"
+    contract.update(prior_type="scaled_ridge", selection_split=label, test_access_authorized=test_access)
+    config = tmp_path / "contract.json"; config.write_text(json.dumps(contract))
+    result = subprocess.run([str(rscript), str(SCRIPTS / "336_fit_pricefm_stage_r102_recursive_normal.R"),
+                             "--contract", str(config)], env={**os.environ, "OPENBLAS_NUM_THREADS": "1",
+                             "OMP_NUM_THREADS": "1"}, capture_output=True, text=True)
+    if success:
+        assert result.returncode == 0, result.stderr
+        terminal = json.loads((tmp_path / "fit/terminal.json").read_text())
+        assert terminal["status"] == "completed_recursive_normal_fit"
+        assert terminal["test_opened"] is False
+    else:
+        assert result.returncode != 0
+        assert "forbidden split" in result.stderr
+        assert not (tmp_path / "fit").exists()

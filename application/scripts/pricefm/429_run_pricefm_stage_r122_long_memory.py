@@ -179,12 +179,15 @@ def _run_queue(tasks: list[tuple[str, list[str], Path]], cpus: list[int], code: 
         "failed_task_ids": [], "updated_at_epoch": time.time(),
         "failures": [],
     }
-    lock = threading.Lock(); buckets = [[] for _ in cpus]
+    lock = threading.Lock(); stopped = threading.Event(); buckets = [[] for _ in cpus]
+    progress_path.parent.mkdir(parents=True, exist_ok=True); write_json(progress_path, state)
     for index, task in enumerate(tasks):
         buckets[index % len(cpus)].append(task)
 
     def worker(cpu: int, bucket: list[tuple[str, list[str], Path]]) -> None:
         for task_id, command, log in bucket:
+            if stopped.is_set():
+                return
             ok = True
             try:
                 _command(command, code, log, cpu)
@@ -199,6 +202,7 @@ def _run_queue(tasks: list[tuple[str, list[str], Path]], cpus: list[int], code: 
                 state["updated_at_epoch"] = time.time(); progress_path.parent.mkdir(parents=True, exist_ok=True)
                 write_json(progress_path, state)
             if fail_fast and not ok:
+                stopped.set()
                 raise RuntimeError(f"R122 task failed: {task_id}")
 
     with ThreadPoolExecutor(max_workers=len(cpus)) as pool:
@@ -678,7 +682,8 @@ def _normal_contract(fit_id: str, stats: Path, output: Path, tau0: float,
         "predictive_tol": 1e-7, "relative_beta_tol": 1e-6, "sigma_relative_tol": 1e-8,
         "prior_rms_log_precision_tol": 1e-6,
         "posterior_target_sha256": sha256_file(stats / "terminal.json") + f":tau0={tau0:.17g}",
-        "selection_split": "fold1_training_internal_validation_only", "test_access_authorized": False,
+        "selection_split": "train_validation_only",
+        "selection_scope": "fold1_training_internal_validation_only", "test_access_authorized": False,
     }
 
 
@@ -700,10 +705,20 @@ def _ordered_candidates(prep: Path, ranking: pd.DataFrame, count: int) -> pd.Dat
     return candidates.loc[identifiers].reset_index(drop=True)
 
 
+def _rhs_execution_root(campaign: Path, control: Mapping[str, Any], label: str) -> Path:
+    namespace = control.get("rhs_contract_namespace")
+    if namespace is None:
+        return campaign / "rhs" / label
+    if not str(namespace).replace("_", "").replace("-", "").isalnum():
+        raise ValueError("R122 RHS execution namespace must be a simple directory name")
+    return campaign / "continuations" / str(namespace) / "rhs" / label
+
+
 def _rhs_cells(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
                cpus: list[int], candidates: pd.DataFrame,
                levels: Mapping[str, list[float]], label: str) -> pd.DataFrame:
     control = _control(prep); records: list[dict[str, Any]] = []
+    execution = _rhs_execution_root(campaign, control, label)
     tasks: list[tuple[str, list[str], Path]] = []
     for row in candidates.itertuples(index=False):
         candidate_id = str(row.candidate_id)
@@ -719,7 +734,7 @@ def _rhs_cells(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
                 fit_id = f"r122rhs_{candidate_id}_s{split}_t{tau0:.8e}"
                 output = campaign / f"rhs/{label}/fits/{fit_id}"
                 contract = _normal_contract(fit_id, stats_dir, output, tau0, control, code)
-                contract_path = campaign / f"rhs/{label}/contracts/{fit_id}.json"
+                contract_path = execution / f"contracts/{fit_id}.json"
                 contract_path.parent.mkdir(parents=True, exist_ok=True)
                 if contract_path.is_file() and _json(contract_path) != contract:
                     raise RuntimeError(f"R122 immutable RHS contract changed: {contract_path}")
@@ -737,9 +752,9 @@ def _rhs_cells(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
                         "--contract", str(contract_path),
                     ], campaign / f"logs/rhs_{label}_fit/{fit_id}.log"))
     manifest = pd.DataFrame(records)
-    _write_immutable_csv(manifest, campaign / f"rhs/{label}/manifest.csv")
+    _write_immutable_csv(manifest, execution / "manifest.csv")
     _run_queue(
-        tasks, cpus, code, campaign / f"rhs/{label}/fit_progress.json", len(manifest),
+        tasks, cpus, code, campaign / f"rhs/{label}/fit_progress.json", len(manifest), fail_fast=True,
     )
     score_tasks: list[tuple[str, list[str], Path]] = []
     for record in records:
@@ -754,7 +769,7 @@ def _rhs_cells(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
                 "--fit-dir", record["output_dir"],
             ], campaign / f"logs/rhs_{label}_score/{record['fit_id']}.log"))
     _run_queue(
-        score_tasks, cpus, code, campaign / f"rhs/{label}/score_progress.json", len(manifest),
+        score_tasks, cpus, code, campaign / f"rhs/{label}/score_progress.json", len(manifest), fail_fast=True,
     )
     rows = []
     for record in records:
@@ -869,12 +884,13 @@ def _run_rhs(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
         args, prep, campaign, code, cpus, top96,
         {candidate: [value] for candidate, value in centers.items()}, "center",
     )
-    center = _complete_rhs(center_cells).sort_values(
+    center = _complete_rhs(center_cells)
+    if len(center) != int(control["rhs_top_k"]):
+        raise RuntimeError(f"R122 center RHS incomplete: {len(center)}/{control['rhs_top_k']}")
+    center = center.sort_values(
         ["mean_AQL", "mean_late_AQL", "worst_AQL", "candidate_id"],
         kind="mergesort",
     ).reset_index(drop=True)
-    if len(center) != int(control["rhs_top_k"]):
-        raise RuntimeError(f"R122 center RHS incomplete: {len(center)}/{control['rhs_top_k']}")
 
     pilot_count = int(control["rhs_tau_pilot_top_k"])
     pilot_ids = center.head(pilot_count).candidate_id.astype(str).tolist()
@@ -934,7 +950,8 @@ def _run_rhs(args: argparse.Namespace, prep: Path, campaign: Path, code: Path,
     shortlist = _unique_al_shortlist(ranking, int(control["al_shortlist_k"]))
     root = campaign / "rhs/closeout"; root.mkdir(parents=True, exist_ok=True)
     rhs_manifests = [
-        pd.read_csv(path) for path in sorted((campaign / "rhs").glob("*/manifest.csv"))
+        pd.read_csv(path) for label in ("center", "pilot", "expansion")
+        if (path := _rhs_execution_root(campaign, control, label) / "manifest.csv").is_file()
     ]
     consolidated_manifest = pd.concat(rhs_manifests, ignore_index=True).drop_duplicates(
         ["candidate_id", "split", "tau0"], keep="first",
@@ -1190,9 +1207,7 @@ def controller(args: argparse.Namespace) -> dict[str, Any]:
     rhs = _run_rhs(args, prep, campaign, code, cpus, robust)
     al = _run_al(prep, campaign, code, cpus, rhs)
     frozen = _json(campaign / "frozen_internal_choice.json")
-    rhs_fit_count = sum(
-        len(pd.read_csv(path)) for path in (campaign / "rhs").glob("*/manifest.csv")
-    )
+    rhs_fit_count = len(pd.read_csv(campaign / "rhs/manifest.csv"))
     terminal = {
         "stage": "R122", "tag": TAG,
         "status": "R122_INTERNAL_SPECIFICATION_FROZEN_TEST_BLOCKED",

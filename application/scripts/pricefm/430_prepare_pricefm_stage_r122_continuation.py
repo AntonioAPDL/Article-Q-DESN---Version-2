@@ -157,7 +157,10 @@ def prepare(args: argparse.Namespace) -> dict:
     for fit_id in seed3.fit_id.astype(str):
         run._ridge_row(original, campaign, fit_id, lookup, candidates)
     input_hashes: dict[str, str] = {}
-    inventory = audit_broad_reuse(campaign, manifest, input_hashes)
+    completed_seed3 = seed3[[run._ridge_valid(run._fit_root(campaign, str(row.fit_id)), str(row.fit_sha256))
+                           for row in seed3.itertuples(index=False)]]
+    reused = pd.concat([manifest, completed_seed3], ignore_index=True)
+    inventory = audit_broad_reuse(campaign, reused, input_hashes)
     inputs = []
     for name, expected in sorted(input_hashes.items()):
         path = Path(name).resolve()
@@ -179,6 +182,9 @@ def prepare(args: argparse.Namespace) -> dict:
                  "broad/progress.json", "seed3/progress.json", "seed3/manifest.csv"]
     preserved += [str(path.relative_to(campaign)) for path in (campaign / "broad/closeout").glob("*") if path.is_file()]
     preserved += [str(path.relative_to(campaign)) for path in (campaign / "logs/seed3_ridge").glob("*.log")]
+    preserved += [str(path.relative_to(campaign)) for path in (campaign / "seed3/closeout").glob("*") if path.is_file()]
+    preserved += [str(path.relative_to(campaign)) for path in (campaign / "rhs/center").rglob("*") if path.is_file()]
+    preserved += [str(path.relative_to(campaign)) for path in (campaign / "logs/rhs_center_fit").glob("*.log")]
     evidence = []
     for name in sorted(set(preserved)):
         path = campaign / name
@@ -190,6 +196,7 @@ def prepare(args: argparse.Namespace) -> dict:
         "status": "R122_DISPATCH_ONLY_CONTINUATION_AUDITED", "original_code_head": old["code_head"],
         "continuation_code_head": head, "changed_files": sorted(changed), "changed_sources": changed_sources,
         "reused_broad_cells": len(manifest), "reused_output_files": len(inventory),
+        "reused_third_seed_cells": len(completed_seed3),
         "reused_input_files": len(inputs),
         "third_seed_planned": len(seed3), "seed3_manifest_sha256": sha256_file(campaign / "seed3/manifest.csv"),
         "original_prep": str(original), "original_summary_sha256": sha256_file(original / "summary.json"),
@@ -198,9 +205,10 @@ def prepare(args: argparse.Namespace) -> dict:
     (output / "source_changes.patch").write_text(_git(code, "diff", old["code_head"], head) + "\n")
     control = dict(old)
     control.update({"code_head": head, "code_branch": branch,
+                    "rhs_contract_namespace": output.name,
                     "data_config": str(output / "data_configs/data_L3120.yaml"),
                     "continuation": {"original_prep": str(original), "original_code_head": old["code_head"],
-                        "reuse_stage": "broad_ridge", "reuse_inventory_sha256": sha256_file(output / "reused_output_inventory.csv"),
+                        "reuse_stage": "broad_and_completed_third_seed_ridge", "reuse_inventory_sha256": sha256_file(output / "reused_output_inventory.csv"),
                         "input_inventory_sha256": sha256_file(output / "reused_input_inventory.csv"),
                         "seed3_manifest_sha256": sha256_file(campaign / "seed3/manifest.csv")}})
     write_json(output / "launch_control.json", control)
@@ -226,7 +234,8 @@ def prepare(args: argparse.Namespace) -> dict:
               "output_sha256": {str(path.relative_to(output)): sha256_file(path) for path in files}}
     write_json(output / "summary.json", result)
     return {"status": result["status"], "output_dir": str(output), "code_head": head,
-            "reused_broad_cells": len(manifest), "third_seed_planned": len(seed3), "test_opened": False}
+            "reused_broad_cells": len(manifest), "reused_third_seed_cells": len(completed_seed3),
+            "third_seed_planned": len(seed3), "test_opened": False}
 
 
 def main() -> int:

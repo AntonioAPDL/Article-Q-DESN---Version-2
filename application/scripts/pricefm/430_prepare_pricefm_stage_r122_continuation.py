@@ -24,6 +24,7 @@ import pandas as pd
 import yaml
 
 from pricefm_common import sha256_file, write_json
+from pricefm_r122_runtime import normalize_spec
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -50,7 +51,8 @@ def _runner():
     return module
 
 
-def audit_broad_reuse(campaign: Path, manifest: pd.DataFrame) -> pd.DataFrame:
+def audit_broad_reuse(campaign: Path, manifest: pd.DataFrame,
+                      input_hashes: dict[str, str] | None = None) -> pd.DataFrame:
     if manifest.fit_id.duplicated().any():
         raise ValueError("R122 reuse contains duplicate fit IDs")
     inventory = []
@@ -58,8 +60,18 @@ def audit_broad_reuse(campaign: Path, manifest: pd.DataFrame) -> pd.DataFrame:
         root = campaign / "ridge/fits" / str(row.fit_id)
         terminal = _json(root / "terminal.json")
         contract = _json(root / "contract.json")
+        if input_hashes is not None:
+            if not contract.get("source_manifest"):
+                raise RuntimeError(f"R122 reused fit lacks input provenance: {row.fit_id}")
+            for source in contract["source_manifest"]:
+                for kind in ("window", "manifest"):
+                    path = str(source[f"{kind}_path"]); expected = str(source[f"{kind}_sha256"])
+                    if path in input_hashes and input_hashes[path] != expected:
+                        raise RuntimeError(f"R122 fits used different versions of an input: {path}")
+                    input_hashes[path] = expected
         expected_spec = json.loads(str(row.spec_json))
         expected_spec["seed"] = int(row.reservoir_seed)
+        expected_spec = normalize_spec(expected_spec)
         if (terminal.get("status") != "completed_r122_ridge_cell"
                 or terminal.get("test_opened") is not False
                 or contract.get("test_opened") is not False
@@ -144,7 +156,15 @@ def prepare(args: argparse.Namespace) -> dict:
     candidates = pd.concat([run._candidate_manifest(original), pd.read_csv(original / "control_manifest.csv")])
     for fit_id in seed3.fit_id.astype(str):
         run._ridge_row(original, campaign, fit_id, lookup, candidates)
-    inventory = audit_broad_reuse(campaign, manifest)
+    input_hashes: dict[str, str] = {}
+    inventory = audit_broad_reuse(campaign, manifest, input_hashes)
+    inputs = []
+    for name, expected in sorted(input_hashes.items()):
+        path = Path(name).resolve()
+        if (not path.is_relative_to((campaign / "processed/windows").resolve())
+                or "train_L3120_H96_contained_half_open" not in path.name or sha256_file(path) != expected):
+            raise RuntimeError(f"R122 executed training input changed: {path}")
+        inputs.append({"path": str(path.relative_to(campaign)), "bytes": path.stat().st_size, "sha256": expected})
     output.mkdir(parents=True)
     replaced = {"summary.json", "source_manifest.csv", "launch_control.json",
                 "runtime_environment.json", "preparation_gates.json"}
@@ -153,6 +173,7 @@ def prepare(args: argparse.Namespace) -> dict:
             destination = output / name; destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(original / name, destination)
     inventory.to_csv(output / "reused_output_inventory.csv", index=False)
+    pd.DataFrame(inputs).to_csv(output / "reused_input_inventory.csv", index=False)
     snapshot = output / "original_evidence"
     preserved = ["campaign_failure.json", "launch_preflight.json", "processed_audit.json",
                  "broad/progress.json", "seed3/progress.json", "seed3/manifest.csv"]
@@ -169,6 +190,7 @@ def prepare(args: argparse.Namespace) -> dict:
         "status": "R122_DISPATCH_ONLY_CONTINUATION_AUDITED", "original_code_head": old["code_head"],
         "continuation_code_head": head, "changed_files": sorted(changed), "changed_sources": changed_sources,
         "reused_broad_cells": len(manifest), "reused_output_files": len(inventory),
+        "reused_input_files": len(inputs),
         "third_seed_planned": len(seed3), "seed3_manifest_sha256": sha256_file(campaign / "seed3/manifest.csv"),
         "original_prep": str(original), "original_summary_sha256": sha256_file(original / "summary.json"),
         "scientific_design_changed": False, "test_opened": False, "original_evidence": evidence,
@@ -178,7 +200,9 @@ def prepare(args: argparse.Namespace) -> dict:
     control.update({"code_head": head, "code_branch": branch,
                     "data_config": str(output / "data_configs/data_L3120.yaml"),
                     "continuation": {"original_prep": str(original), "original_code_head": old["code_head"],
-                        "reuse_stage": "broad_ridge", "reuse_inventory_sha256": sha256_file(output / "reused_output_inventory.csv")}})
+                        "reuse_stage": "broad_ridge", "reuse_inventory_sha256": sha256_file(output / "reused_output_inventory.csv"),
+                        "input_inventory_sha256": sha256_file(output / "reused_input_inventory.csv"),
+                        "seed3_manifest_sha256": sha256_file(campaign / "seed3/manifest.csv")}})
     write_json(output / "launch_control.json", control)
     write_json(output / "runtime_environment.json", {
         **current_environment, "git_head": head, "git_branch": branch, "git_worktree_clean": True,

@@ -296,11 +296,16 @@ def _prepare_processed(control: Mapping[str, Any], campaign: Path, code: Path, c
         "recurrent_sparsity": .02, "seed": int(RESERVOIR_SEEDS[0]),
     })
     regions = ",".join(RT.active_regions(probe))
-    _command([
-        str(Path(control["python_executable"])), str(code / "application/scripts/pricefm/05_build_windows.py"),
-        "--config", str(control["data_config"]), "--pilot-only", "false", "--regions", regions,
-        "--folds", "1", "--resume", "true", "--force", "false",
-    ], code, campaign / "logs/build_windows_fold1.log", cpu)
+    if "continuation" in control:
+        audit = _json(campaign / "processed_audit.json")
+        if audit.get("status") != "R122_PROCESSED_PACKET_READY" or audit.get("test_opened") is not False:
+            raise RuntimeError("R122 continuation requires the previously audited processed packet")
+    else:
+        _command([
+            str(Path(control["python_executable"])), str(code / "application/scripts/pricefm/05_build_windows.py"),
+            "--config", str(control["data_config"]), "--pilot-only", "false", "--regions", regions,
+            "--folds", "1", "--resume", "true", "--force", "false",
+        ], code, campaign / "logs/build_windows_fold1.log", cpu)
     target = _json(Path(control["data_config"]).parent.parent / "target_contract.json")
     raw_arrays = RT.explicit_arrays(RT.load_windows(runtime, 1, "train", probe), probe)
     arrays, support_audit = RT.contract_support(
@@ -397,9 +402,26 @@ def _reuse_inventory_changes(prep: Path, campaign: Path) -> list[str]:
     if "continuation" not in control:
         return []
     changed = []
+    seed_hash = control["continuation"].get("seed3_manifest_sha256")
+    if seed_hash is not None and sha256_file(campaign / "seed3/manifest.csv") != seed_hash:
+        changed.append("seed3/manifest.csv")
     for row in pd.read_csv(prep / "reused_output_inventory.csv").itertuples(index=False):
         path = (campaign / str(row.path)).resolve()
         if (not path.is_relative_to((campaign / "ridge/fits").resolve())
+                or not path.is_file() or path.stat().st_size != int(row.bytes)
+                or sha256_file(path) != str(row.sha256)):
+            changed.append(str(row.path))
+    inputs = prep / "reused_input_inventory.csv"
+    if inputs.is_file():
+        changed.extend(_input_inventory_changes(inputs, campaign))
+    return changed
+
+
+def _input_inventory_changes(inventory: Path, campaign: Path) -> list[str]:
+    changed = []
+    for row in pd.read_csv(inventory).itertuples(index=False):
+        path = (campaign / str(row.path)).resolve()
+        if (not path.is_relative_to((campaign / "processed/windows").resolve())
                 or not path.is_file() or path.stat().st_size != int(row.bytes)
                 or sha256_file(path) != str(row.sha256)):
             changed.append(str(row.path))
@@ -1149,6 +1171,9 @@ def controller(args: argparse.Namespace) -> dict[str, Any]:
         write_json(campaign / "resume_plan.json", result)
         return result
     processed = _prepare_processed(control, campaign, code, cpus[0])
+    input_inventory = prep / "reused_input_inventory.csv"
+    if input_inventory.is_file() and _input_inventory_changes(input_inventory, campaign):
+        raise RuntimeError("R122 processed preparation changed the frozen training inputs")
     if args.prepare_only:
         return {
             "status": "R122_LONG_MEMORY_PROCESSED_READY",

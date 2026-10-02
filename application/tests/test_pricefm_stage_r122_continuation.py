@@ -34,7 +34,7 @@ def packet(tmp_path):
     controls, control_fits = BASE._control_rows()
     control = controls.iloc[0].to_dict()
     spec = json.loads(control["spec_json"])
-    spec.update(depth=2, units=[128, 128], m_y=1560, input_fan_in=8)
+    spec.update(depth=2, units=[128, 128], m_y=1560, input_fan_in=8, basin="D")
     structural = RUN.fingerprint(spec)
     candidate = {**control, "candidate_id": "search_a", "structural_sha256": structural,
                  "spec_json": json.dumps(spec, sort_keys=True, separators=(",", ":")),
@@ -157,6 +157,9 @@ def test_reuse_inventory_binds_all_completed_artifacts_and_detects_changes(packe
     terminal = json.loads((root / "terminal.json").read_text()); terminal["mean_AQL"] = 1.
     (root / "terminal.json").write_text(json.dumps(terminal))
     spec = json.loads(row.spec_json); spec["seed"] = int(row.reservoir_seed)
+    assert spec["basin"] == "D"
+    spec = RUN.RT.normalize_spec(spec)
+    assert "basin" not in spec
     (root / "contract.json").write_text(json.dumps({
         "fit_sha256": row.fit_sha256, "candidate_id": row.candidate_id, "spec": spec,
         "reservoir_seed": int(row.reservoir_seed), "role": row.role, "test_opened": False,
@@ -189,6 +192,22 @@ def test_queue_records_failure_evidence_and_empty_resume_counts(tmp_path, monkey
     empty = RUN._run_queue([], [0], tmp_path, tmp_path / "empty.json", 6400)
     assert empty["scheduled_this_resume"] == 0
     assert empty["expected_total"] == 6400
+
+
+def test_continuation_rejects_changed_training_inputs_and_seed_manifest(packet):
+    prep, campaign, _, _ = packet
+    window = campaign / "processed/windows/fold_1/train_L3120_H96_contained_half_open.npz"
+    window.parent.mkdir(parents=True); window.write_bytes(b"frozen training data")
+    pd.DataFrame([{"path": str(window.relative_to(campaign)), "bytes": window.stat().st_size,
+                   "sha256": RUN.sha256_file(window)}]).to_csv(prep / "reused_input_inventory.csv", index=False)
+    pd.DataFrame(columns=["path", "bytes", "sha256"]).to_csv(prep / "reused_output_inventory.csv", index=False)
+    (prep / "launch_control.json").write_text(json.dumps({"continuation": {
+        "seed3_manifest_sha256": RUN.sha256_file(campaign / "seed3/manifest.csv")}}))
+    assert RUN._reuse_inventory_changes(prep, campaign) == []
+    window.write_bytes(b"changed")
+    assert RUN._reuse_inventory_changes(prep, campaign) == [str(window.relative_to(campaign))]
+    (campaign / "seed3/manifest.csv").write_text("changed manifest")
+    assert "seed3/manifest.csv" in RUN._reuse_inventory_changes(prep, campaign)
 
 
 def test_numerical_threads_are_bounded_before_imports():
@@ -261,3 +280,23 @@ def test_resume_plan_only_never_loads_training_data(packet, monkeypatch):
     assert result["broad_tasks"] == 0
     assert result["third_seed_tasks"] == 1
     assert result["test_opened"] is False
+
+
+def test_continuation_does_not_regenerate_processed_windows(tmp_path, monkeypatch):
+    source = tmp_path / "source"; source.mkdir()
+    campaign = tmp_path / "campaign"; campaign.mkdir()
+    config = tmp_path / "prep/data_configs/data.yaml"; config.parent.mkdir(parents=True)
+    (config.parent.parent / "target_contract.json").write_text('{}')
+    (campaign / "processed_audit.json").write_text(json.dumps({
+        "status": "R122_PROCESSED_PACKET_READY", "test_opened": False}))
+    control = {"runtime_processed": str(campaign / "processed"), "source_processed": str(source),
+               "continuation": {}, "data_config": str(config)}
+    monkeypatch.setattr(RUN.RT, "active_regions", lambda spec: ["BG"])
+    def prohibited(*args):
+        raise AssertionError("continuation must not rebuild windows")
+    def data_boundary(*args):
+        raise RuntimeError("existing windows read")
+    monkeypatch.setattr(RUN, "_command", prohibited)
+    monkeypatch.setattr(RUN.RT, "load_windows", data_boundary)
+    with pytest.raises(RuntimeError, match="existing windows read"):
+        RUN._prepare_processed(control, campaign, tmp_path, 0)

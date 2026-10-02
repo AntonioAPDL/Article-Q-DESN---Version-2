@@ -15,6 +15,7 @@ contract_v3 <- app_joint_recursive_read_contract(app_path(
   "application/config/joint_qdesn_recursive_mean_forecast_contract_v3.csv"
 ))
 recovery_contract <- app_joint_recursive_read_recovery_contract()
+review_contract <- app_joint_recursive_read_review_contract()
 stopifnot(
   contract$workers == 8L,
   contract$score_rows == 990L,
@@ -34,7 +35,12 @@ stopifnot(
   recovery_contract$recovery_worker_id == 41L,
   recovery_contract$unchanged_worker_id == 56L,
   identical(recovery_contract$antithetic_pair_counts, c(1L, 2L)),
-  recovery_contract$pair_seed_stride == 104729L
+  recovery_contract$pair_seed_stride == 104729L,
+  review_contract$recovery_worker_id == 41L,
+  review_contract$antithetic_pair_count == 2L,
+  review_contract$score_gate_multiplier == 1.05,
+  review_contract$required_unique_posterior_draws == 3750L,
+  review_contract$required_state_trajectory_draws == 15000L
 )
 
 chain_id <- rep(1:5, each = 8L)
@@ -130,6 +136,83 @@ stopifnot(
     ""
   }, error = function(error) conditionMessage(error)), fixed = TRUE)
 )
+
+review_tiers <- data.frame(
+  tier_index = 1:4,
+  tier = c("initial", "extension", "full_posterior_rescue",
+    "antithetic_uniform_rescue_2pair"),
+  finite_pass = TRUE,
+  rms_pass = TRUE,
+  score_pass = FALSE,
+  half_score_relative_difference = c(0.011, 0.010, 0.005135, 0.005194),
+  pooled_canonical_score = c(0.5245, 0.5203, 0.5203745, 0.5201091),
+  standardized_rms_half_difference = c(0.056, 0.042, 0.030, 0.0106),
+  chain_score_max_relative_deviation = c(0.046, 0.027, 0.028, 0.0282),
+  antithetic_pair_count = c(NA, NA, NA, 2),
+  unique_posterior_draws = c(NA, NA, NA, 3750),
+  state_trajectory_draws = c(NA, NA, NA, 15000),
+  stringsAsFactors = FALSE
+)
+review_rescue <- list(
+  allow_score_stability_review = TRUE,
+  review_reference_diagnostics = review_tiers[1:3, ],
+  score_gate_multiplier = review_contract$score_gate_multiplier,
+  max_pooled_score_relative_drift =
+    review_contract$max_pooled_score_relative_drift,
+  max_rms_gate_fraction = review_contract$max_rms_gate_fraction,
+  max_chain_score_relative_deviation =
+    review_contract$max_chain_score_relative_deviation,
+  required_unique_posterior_draws =
+    review_contract$required_unique_posterior_draws,
+  required_state_trajectory_draws =
+    review_contract$required_state_trajectory_draws
+)
+review_decision <- app_joint_recursive_score_review_decision(
+  review_tiers, review_rescue, contract_v3
+)
+stopifnot(
+  app_as_bool_vec(review_decision$score_stability_review_eligible)[[1L]],
+  review_decision$score_stability_review_ceiling[[1L]] == 0.00525,
+  review_decision$score_stability_gate_excess[[1L]] > 0,
+  review_decision$pooled_score_relative_drift[[1L]] < 0.001
+)
+bad_review_tiers <- review_tiers
+bad_review_tiers$half_score_relative_difference[[4L]] <- 0.0053
+stopifnot(!app_as_bool_vec(app_joint_recursive_score_review_decision(
+  bad_review_tiers, review_rescue, contract_v3
+)$score_stability_review_eligible)[[1L]])
+
+final_review <- data.frame(
+  worker_id = 1:64,
+  half_score_relative_difference = rep(0.004, 64L),
+  score_stability_status = c(rep(NA_character_, 63L), "review"),
+  score_stability_review_eligible = c(rep(NA, 63L), TRUE),
+  score_stability_review_ceiling = c(rep(NA_real_, 63L), 0.00525),
+  pooled_score_relative_drift = c(rep(NA_real_, 63L), 0.00051),
+  recovery_contract_sha256 = c(rep(NA_character_, 63L),
+    app_sha256_file(app_joint_recursive_review_contract_path())),
+  selected_tier = c(rep(NA_character_, 63L),
+    "antithetic_uniform_rescue_2pair"),
+  chain_score_max_relative_deviation = c(rep(NA_real_, 63L), 0.0282),
+  stringsAsFactors = FALSE
+)
+final_review$worker_id[[64L]] <- 41L
+final_review$half_score_relative_difference[[64L]] <- 0.005194
+final_decision <- app_joint_recursive_final_score_stability(
+  final_review, contract_v3
+)
+stopifnot(
+  all(final_decision$accepted),
+  sum(final_decision$strict_pass) == 63L,
+  sum(final_decision$review_valid) == 1L,
+  identical(final_decision$packet_status,
+    "COMPLETE_WITH_ONE_SCORE_STABILITY_REVIEW")
+)
+bad_review_hash <- final_review
+bad_review_hash$recovery_contract_sha256[[64L]] <- paste(rep("a", 64L), collapse = "")
+stopifnot(!app_joint_recursive_final_score_stability(
+  bad_review_hash, contract_v3
+)$review_valid[[64L]])
 
 failure_dir <- tempfile("joint_recursive_failure_")
 on.exit(unlink(failure_dir, recursive = TRUE, force = TRUE), add = TRUE)

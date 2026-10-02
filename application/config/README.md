@@ -465,3 +465,11 @@ source chain contains 750 retained draws and each exAL source chain contains
 1,500. The state-integration rescue uses all available draws by likelihood,
 while final posterior score summaries use exactly 750 draws per chain for
 both families. The forecast estimand and stability gates remain unchanged.
+
+`joint_qdesn_pure_recursive_score_review_closeout_v2.csv` is a cell-scoped
+closeout addendum for the Laplace Bridge joint-AL MCMC score cell. It preserves
+the strict `0.005` score-stability gate as failed, hash-freezes both failed
+integration attempts, and permits one explicit review only under tighter RMS,
+pooled-score-drift, chain-spread, posterior-cardinality, and trajectory-count
+checks. It changes no fit, posterior draw, model specification, score, or
+article asset.

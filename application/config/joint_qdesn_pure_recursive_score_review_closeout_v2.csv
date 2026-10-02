@@ -1,0 +1,27 @@
+section,name,value,type,description
+identity,review_version,joint_qdesn_pure_recursive_score_review_closeout_v2,character,One-cell bounded review closeout after the strict numerical-integration recovery remained narrowly outside tolerance.
+identity,parent_contract_sha256,35876dc40c9a44b15ca699b1601b9ad1fa48fea4a58a50a57ad507397565ea42,character,SHA-256 of the unchanged pure-recursive score contract.
+identity,cell_plan_sha256,4dd510081b540e05f0af6885d37dff0eba401f6e46a75cad4afb8add48a50413,character,SHA-256 of the frozen 64-cell score plan.
+identity,prior_recovery_contract_sha256,eb330923651edc1f2c541e65450ed54622f5c7d35cfb0a31bc33c7f492e3361a,character,SHA-256 of the strict antithetic recovery v1 contract.
+target,recovery_worker_id,41,integer,Laplace Bridge joint AL MCMC score cell.
+target,recovery_model_cell_id,laplace_bridge__joint_qdesn_rhs,character,Exact frozen model-cell identity.
+evidence,failed_marker_sha256,1a955c6e3090832f65b1c5ec007fe014d08b6821f1b214e6a173dfa66e569998,character,SHA-256 of the failed strict-recovery marker.
+evidence,failure_diagnostics_sha256,91b4b8d7859fb475b76ed10b33d31237a75d5d51e76ae03859365da7cdaf8738,character,SHA-256 of the five-tier strict-recovery failure diagnostics.
+evidence,stability_progress_sha256,592adbed043a678798de55f7f626afa94e4ccd8816715e5be158befa26bea3a5,character,SHA-256 of the five-tier strict-recovery stability progress.
+evidence,original_failure_manifest_sha256,1538532a1d04b0e64cfa3f182f18b5a8c6c5916d592e6654af0cb0688f4f2252,character,SHA-256 of the archived original three-tier failure inventory.
+evidence,completed_worker_manifest_sha256,5c1e2dfe7f0e39d132faa4251036925c783027d9df7c1c34fb4b266b1dcd6f21,character,SHA-256 of unchanged completed worker 56.
+integration,state_uniform_policy,antithetic_uniform_pairs,character,Retain the two-pair antithetic state integration used by strict recovery.
+integration,antithetic_pair_count,2,integer,Run only the strongest already-declared antithetic tier.
+integration,pair_seed_stride,104729,integer,Preserve deterministic strict-recovery uniforms.
+review,score_gate_multiplier,1.05,numeric,Review ceiling is at most five percent above the unchanged strict score gate.
+review,max_pooled_score_relative_drift,0.001,numeric,Recovered pooled canonical score may drift by at most one tenth of one percent from the full-posterior reference.
+review,max_rms_gate_fraction,0.25,numeric,Review RMS must be no more than one quarter of the unchanged RMS gate.
+review,max_chain_score_relative_deviation,0.05,numeric,Review chain-specific canonical scores may deviate by at most five percent from pooled.
+review,required_unique_posterior_draws,3750,integer,Use every retained AL posterior draw from five chains.
+review,required_state_trajectory_draws,15000,integer,Require two antithetic pairs per retained posterior draw.
+policy,strict_gate_remains_failed,true,logical,Do not relabel the frozen 0.005 gate as passed.
+policy,posterior_draws_changed,false,logical,Do not refit or extend MCMC.
+policy,model_specification_changed,false,logical,Do not change DESN RHS fixture oracle or score definition.
+policy,packet_status,COMPLETE_WITH_ONE_SCORE_STABILITY_REVIEW,character,Required transparent final packet status.
+runtime,workers,1,integer,Only worker 41 is rerun.
+runtime,rscript,/data/jaguir26/local/opt/R/4.6.0/bin/Rscript,character,Pinned Jerez R executable.

@@ -91,14 +91,13 @@ preflight() {
     exit 64
   }
   "$RSCRIPT" -e '
-    source(commandArgs(TRUE)[1L]); app_set_repo_root(commandArgs(TRUE)[2L])
-    for (f in c("00_packages.R", "joint_qdesn_recursive_mean_score_packet.R"))
-      source(file.path(commandArgs(TRUE)[2L], "application/R", f))
-    recovery <- app_joint_recursive_read_recovery_contract(commandArgs(TRUE)[3L])
-    stopifnot(app_sha256_file(commandArgs(TRUE)[4L]) == recovery$parent_contract_sha256,
-      app_sha256_file(file.path(commandArgs(TRUE)[5L], "cell_plan.csv")) == recovery$cell_plan_sha256)
-  ' "$REPO_ROOT/application/R/00_packages.R" "$REPO_ROOT" "$RECOVERY_CONTRACT" \
-    "$CONTRACT_PATH" "$SCORE_ROOT"
+    args <- commandArgs(TRUE)
+    source(file.path(args[[1L]], "application/scripts",
+      "_joint_qdesn_recursive_mean_forecast_bootstrap.R"))
+    recovery <- app_joint_recursive_read_recovery_contract(args[[2L]])
+    stopifnot(app_sha256_file(args[[3L]]) == recovery$parent_contract_sha256,
+      app_sha256_file(file.path(args[[4L]], "cell_plan.csv")) == recovery$cell_plan_sha256)
+  ' "$REPO_ROOT" "$RECOVERY_CONTRACT" "$CONTRACT_PATH" "$SCORE_ROOT"
   {
     echo "host,cpu_list,sibling_cpus,entry_state,free_disk_kib,available_memory_kib,git_head,checked_at,status"
     printf '%s,"%s","%s","%s",%s,%s,%s,%s,pass\n' "$(hostname -s)" "$CPU_LIST" \

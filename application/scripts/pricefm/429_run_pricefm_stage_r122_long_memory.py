@@ -18,6 +18,14 @@ import threading
 import time
 from typing import Any, Callable, Mapping
 
+# The controller also evaluates forecasts in-process, before starting R children.
+THREAD_ENV = (
+    "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "R_DATATABLE_NUM_THREADS",
+)
+for _thread_variable in THREAD_ENV:
+    os.environ[_thread_variable] = "1"
+
 import numpy as np
 import pandas as pd
 import yaml
@@ -31,10 +39,6 @@ import pricefm_r122_runtime as RT
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_ARTIFACT_REPO = Path("/data/jaguir26/local/src/Article-Q-DESN")
 TAG = "pricefm_stage_r122_bg_long_memory_screen_20261001"
-THREAD_ENV = (
-    "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS_NUM_THREADS",
-    "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS", "R_DATATABLE_NUM_THREADS",
-)
 PARENT = {0.50: None, 0.45: 0.50, 0.55: 0.50, 0.25: 0.45, 0.75: 0.55, 0.10: 0.25, 0.90: 0.75}
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
@@ -51,6 +55,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--split", type=int); value.add_argument("--fit-dir", type=Path)
     value.add_argument("--preflight-only", action="store_true")
     value.add_argument("--prepare-only", action="store_true")
+    value.add_argument("--resume-plan-only", action="store_true")
     value.add_argument("--maximum-cpu-percent", type=float, default=35.0)
     return value
 
@@ -172,6 +177,7 @@ def _run_queue(tasks: list[tuple[str, list[str], Path]], cpus: list[int], code: 
         "expected_total": int(expected_total), "scheduled_this_resume": len(tasks),
         "complete_this_resume": 0, "failed_this_resume": 0,
         "failed_task_ids": [], "updated_at_epoch": time.time(),
+        "failures": [],
     }
     lock = threading.Lock(); buckets = [[] for _ in cpus]
     for index, task in enumerate(tasks):
@@ -182,12 +188,14 @@ def _run_queue(tasks: list[tuple[str, list[str], Path]], cpus: list[int], code: 
             ok = True
             try:
                 _command(command, code, log, cpu)
-            except Exception:
+            except Exception as error:
                 ok = False
+                failure = {"task_id": task_id, "error": str(error), "log": str(log)}
             with lock:
                 state["complete_this_resume" if ok else "failed_this_resume"] += 1
                 if not ok:
                     state["failed_task_ids"].append(task_id)
+                    state["failures"].append(failure)
                 state["updated_at_epoch"] = time.time(); progress_path.parent.mkdir(parents=True, exist_ok=True)
                 write_json(progress_path, state)
             if fail_fast and not ok:
@@ -230,9 +238,12 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
     free_gib = shutil.disk_usage(campaign.parent).free / 2**30
     config = yaml.safe_load(Path(control["data_config"]).read_text())
     configured_splits = config.get("pricefm", {}).get("splits", [])
+    reuse_changes = _reuse_inventory_changes(prep, campaign)
     checks = {
         "launch_authorized": summary.get("status") == "R122_LONG_MEMORY_LAUNCH_READY" and summary.get("launch_authorized") is True,
         "source_hashes": not changed_sources, "preparation_hashes": not changed_outputs,
+        "frozen_reused_outputs": not reuse_changes,
+        "controller_thread_bounds": all(os.environ.get(name) == "1" for name in THREAD_ENV),
         "worker_count": len(cpus) == int(args.workers) == int(control["workers"]) == 15,
         "distinct_physical_cores": len({_physical(cpu) for cpu in cpus}) == 15,
         "selected_capacity_available": selected_mean_percent <= float(args.maximum_cpu_percent),
@@ -249,6 +260,7 @@ def _preflight(args: argparse.Namespace, prep: Path, campaign: Path, cpus: list[
     result = {
         "status": "R122_LONG_MEMORY_PREFLIGHT_PASS" if all(checks.values()) else "R122_LONG_MEMORY_PREFLIGHT_BLOCKED",
         "checks": checks, "changed_sources": changed_sources, "changed_preparation_outputs": changed_outputs,
+        "changed_reused_outputs": reuse_changes,
         "cpus": cpus, "physical_core_max_percent": physical_usage,
         "cpu_audit_seconds": audit_seconds,
         "selected_mean_percent": selected_mean_percent,
@@ -326,6 +338,74 @@ def _candidate_manifest(prep: Path) -> pd.DataFrame:
     return pd.read_csv(prep / "candidate_manifest.csv")
 
 
+def _ridge_worker_manifest(prep: Path, campaign: Path) -> pd.DataFrame:
+    broad = _execution(prep)
+    if not broad.role.isin(["search", "external_control"]).all():
+        raise ValueError("R122 broad manifest has an invalid role")
+    seed_path = campaign / "seed3/manifest.csv"
+    if seed_path.is_file():
+        seed3 = pd.read_csv(seed_path)
+        if not seed3.role.eq("seed3").all():
+            raise ValueError("R122 third-seed manifest has an invalid role")
+        broad = pd.concat([broad, seed3], ignore_index=True, sort=False)
+    if broad.fit_id.astype(str).duplicated().any():
+        raise ValueError("R122 worker manifests contain duplicate fit IDs")
+    return broad
+
+
+def _ridge_row(prep: Path, campaign: Path, fit_id: str,
+               manifest: pd.DataFrame | None = None,
+               candidates: pd.DataFrame | None = None) -> pd.Series:
+    rows = _ridge_worker_manifest(prep, campaign) if manifest is None else manifest
+    selected = rows[rows.fit_id.astype(str).eq(fit_id)]
+    if len(selected) != 1:
+        raise ValueError(f"R122 worker fit ID has {len(selected)} matches: {fit_id}")
+    row = selected.iloc[0]
+    if str(row.test_access_authorized).lower() != "false":
+        raise ValueError(f"R122 worker test access is not false: {fit_id}")
+    seed = int(row.reservoir_seed)
+    allowed = RESERVOIR_SEEDS[2:] if row.role == "seed3" else RESERVOIR_SEEDS[:2]
+    if seed not in allowed:
+        raise ValueError(f"R122 worker reservoir seed is invalid: {fit_id}")
+    expected_hash = fingerprint({"structural_sha256": str(row.structural_sha256), "reservoir_seed": seed})
+    if str(row.fit_sha256) != expected_hash or fit_id != f"r122f_{expected_hash[:16]}":
+        raise ValueError(f"R122 worker fit fingerprint differs: {fit_id}")
+    if candidates is None:
+        candidates = pd.concat([
+            _candidate_manifest(prep), pd.read_csv(prep / "control_manifest.csv"),
+        ], ignore_index=True, sort=False)
+    candidate = candidates[candidates.candidate_id.astype(str).eq(str(row.candidate_id))]
+    if len(candidate) != 1:
+        raise ValueError(f"R122 worker candidate has {len(candidate)} matches: {fit_id}")
+    anchor = candidate.iloc[0]
+    spec = json.loads(str(row.spec_json))
+    if (spec != json.loads(str(anchor.spec_json)) or fingerprint(spec) != str(row.structural_sha256)
+            or str(anchor.structural_sha256) != str(row.structural_sha256)):
+        raise ValueError(f"R122 worker structural specification differs: {fit_id}")
+    for key in ("input_dimension", "readout_dimension"):
+        if int(row[key]) != int(anchor[key]):
+            raise ValueError(f"R122 worker {key} differs: {fit_id}")
+    is_control = str(row.candidate_id) in set(pd.read_csv(prep / "control_manifest.csv").candidate_id.astype(str))
+    if is_control != (row.role == "external_control"):
+        raise ValueError(f"R122 worker candidate role differs: {fit_id}")
+    _spec_from_row(row)
+    return row
+
+
+def _reuse_inventory_changes(prep: Path, campaign: Path) -> list[str]:
+    control = _control(prep)
+    if "continuation" not in control:
+        return []
+    changed = []
+    for row in pd.read_csv(prep / "reused_output_inventory.csv").itertuples(index=False):
+        path = (campaign / str(row.path)).resolve()
+        if (not path.is_relative_to((campaign / "ridge/fits").resolve())
+                or not path.is_file() or path.stat().st_size != int(row.bytes)
+                or sha256_file(path) != str(row.sha256)):
+            changed.append(str(row.path))
+    return changed
+
+
 def _spec_from_row(row: Any) -> dict[str, Any]:
     value = json.loads(str(row.spec_json)); value["seed"] = int(row.reservoir_seed)
     return RT.normalize_spec(value)
@@ -357,10 +437,7 @@ def _ridge_valid(path: Path, expected_hash: str | None = None) -> bool:
 
 def ridge_cell(args: argparse.Namespace) -> dict[str, Any]:
     _, _, prep, campaign = _paths(args); fit_id = str(args.fit_id)
-    rows = _execution(prep); selected = rows[rows.fit_id.astype(str).eq(fit_id)]
-    if len(selected) != 1:
-        raise ValueError(f"R122 fit_id is not unique: {fit_id}")
-    row = selected.iloc[0]; output = _fit_root(campaign, fit_id)
+    row = _ridge_row(prep, campaign, fit_id); output = _fit_root(campaign, fit_id)
     if _ridge_valid(output, str(row.fit_sha256)):
         return _json(output / "terminal.json")
     spec = _spec_from_row(row); control = _control(prep)
@@ -396,6 +473,8 @@ def ridge_cell(args: argparse.Namespace) -> dict[str, Any]:
             "feature_names": features, "input_names": names,
             "source_manifest": list(arrays.source_manifest), "split_preprocessing": preprocessing,
             "reservoir_audit": audits, "selection_scope": control["selection_scope"], "test_opened": False,
+            "execution_provenance": {"code_head": control["code_head"],
+                "source_manifest_sha256": sha256_file(prep / "source_manifest.csv")},
         })
         write_json(temp / "terminal.json", {
             "status": "completed_r122_ridge_cell", "stage": "R122_broad_normal",
@@ -418,8 +497,16 @@ def _ridge_tasks(args: argparse.Namespace, prep: Path, campaign: Path, code: Pat
         ascending=[False, False, True], kind="mergesort",
     ) if {"input_dimension", "readout_dimension"}.issubset(manifest.columns) else manifest.sort_values("fit_id")
     tasks = []
+    lookup = _ridge_worker_manifest(prep, campaign)
+    candidates = pd.concat([
+        _candidate_manifest(prep), pd.read_csv(prep / "control_manifest.csv"),
+    ], ignore_index=True, sort=False)
     for row in ordered.itertuples(index=False):
         if not _ridge_valid(_fit_root(campaign, str(row.fit_id)), str(row.fit_sha256)):
+            resolved = _ridge_row(prep, campaign, str(row.fit_id), lookup, candidates)
+            for key in ("fit_sha256", "spec_json", "candidate_id", "role", "reservoir_seed"):
+                if str(getattr(row, key)) != str(resolved[key]):
+                    raise ValueError(f"R122 queued {key} differs: {row.fit_id}")
             tasks.append((str(row.fit_id), [
                 sys.executable, str(Path(__file__).resolve()), "--mode", "ridge-cell",
                 "--artifact-repo", str(args.artifact_repo), "--code-root", str(code),
@@ -898,6 +985,7 @@ def _quantile_contract(prep: Path, control: Mapping[str, Any], candidate: str, s
 
 def _al_ladder(prep: Path, campaign: Path, code: Path, control: Mapping[str, Any],
                candidate: str, tau0: float, split: int, cpu: int) -> dict[str, Any]:
+    os.sched_setaffinity(0, {cpu})
     root = campaign / f"al_internal/{candidate}/split={split}"; metric = root / "metrics.json"
     if metric.is_file():
         return _json(metric)
@@ -1042,10 +1130,24 @@ def _run_al(prep: Path, campaign: Path, code: Path, cpus: list[int], rhs: pd.Dat
 
 def controller(args: argparse.Namespace) -> dict[str, Any]:
     _, code, prep, campaign = _paths(args); cpus = _cpus(args.cpu_list, int(args.workers))
+    os.sched_setaffinity(0, set(cpus))
     preflight = _preflight(args, prep, campaign, cpus)
     if args.preflight_only:
         return preflight
     control = _control(prep)
+    if args.resume_plan_only:
+        execution = _execution(prep)
+        seed_path = campaign / "seed3/manifest.csv"
+        if not seed_path.is_file():
+            raise RuntimeError("R122 resume planning requires a frozen third-seed manifest")
+        seed_manifest = pd.read_csv(seed_path)
+        result = {"status": "R122_RESUME_PLAN_READY", "test_opened": False,
+            "broad_tasks": len(_ridge_tasks(args, prep, campaign, code, execution, "broad_ridge")),
+            "third_seed_tasks": len(_ridge_tasks(args, prep, campaign, code, seed_manifest, "seed3_ridge")),
+            "broad_expected": len(execution), "third_seed_expected": len(seed_manifest),
+            "preparation_sha256": sha256_file(prep / "summary.json")}
+        write_json(campaign / "resume_plan.json", result)
+        return result
     processed = _prepare_processed(control, campaign, code, cpus[0])
     if args.prepare_only:
         return {
@@ -1094,13 +1196,32 @@ def main() -> int:
         except BlockingIOError as error:
             raise RuntimeError("another R122 long-memory controller owns this campaign") from error
         try:
+            running = not (args.preflight_only or args.prepare_only or args.resume_plan_only)
+            if running:
+                _, _, prep, _ = _paths(args)
+                control = _control(prep)
+                write_json(campaign / "continuation_status.json", {
+                    "status": "R122_CONTROLLER_RUNNING", "pid": os.getpid(), "code_head": control["code_head"],
+                    "preparation": str(prep), "started_at_epoch": time.time(),
+                    "cpu_list": args.cpu_list, "workers": args.workers, "test_opened": False,
+                })
             result = controller(args)
+            if running:
+                write_json(campaign / "continuation_status.json", {
+                    "status": result["status"], "pid": os.getpid(), "code_head": control["code_head"],
+                    "preparation": str(prep), "finished_at_epoch": time.time(), "test_opened": False,
+                })
         except Exception as error:
             write_json(campaign / "campaign_failure.json", {
                 "stage": "R122", "status": "R122_LONG_MEMORY_CONTROLLER_FAILED",
                 "error_type": type(error).__name__, "error": str(error),
                 "test_opened": False, "registry_mutated": False, "article_mutated": False,
             })
+            if running:
+                write_json(campaign / "continuation_status.json", {
+                    "status": "R122_CONTROLLER_FAILED", "pid": os.getpid(), "error": str(error),
+                    "failed_at_epoch": time.time(), "test_opened": False,
+                })
             raise
         finally:
             lock.close()

@@ -4,6 +4,59 @@ app_joint_recursive_contract_path <- function() {
   app_path("application/config/joint_qdesn_recursive_mean_forecast_contract_v1.csv")
 }
 
+app_joint_recursive_recovery_contract_path <- function() {
+  app_path("application/config/joint_qdesn_pure_recursive_score_recovery_v1.csv")
+}
+
+app_joint_recursive_read_recovery_contract <- function(
+  path = app_joint_recursive_recovery_contract_path()
+) {
+  tab <- app_read_csv(path)
+  app_check_required_columns(tab, c("section", "name", "value", "type", "description"),
+    "recursive score recovery contract")
+  if (anyDuplicated(tab$name)) stop("Recovery contract names must be unique.", call. = FALSE)
+  value <- function(name) {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (nrow(row) != 1L) stop(sprintf("Missing recovery field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
+  out <- list(
+    table = tab,
+    path = normalizePath(path, mustWork = TRUE),
+    version = value("recovery_version"),
+    parent_contract_sha256 = value("parent_contract_sha256"),
+    cell_plan_sha256 = value("cell_plan_sha256"),
+    recovery_worker_id = as.integer(value("recovery_worker_id")),
+    recovery_model_cell_id = value("recovery_model_cell_id"),
+    unchanged_worker_id = as.integer(value("unchanged_worker_id")),
+    failed_marker_sha256 = value("failed_marker_sha256"),
+    failure_diagnostics_sha256 = value("failure_diagnostics_sha256"),
+    stability_progress_sha256 = value("stability_progress_sha256"),
+    state_uniform_policy = value("state_uniform_policy"),
+    antithetic_pair_counts = as.integer(strsplit(
+      value("antithetic_pair_counts"), ";", fixed = TRUE
+    )[[1L]]),
+    pair_seed_stride = as.integer(value("pair_seed_stride")),
+    reuse_verified_failure = tolower(value("reuse_verified_failure")) == "true",
+    workers = as.integer(value("workers")),
+    rscript = value("rscript")
+  )
+  hashes <- c(
+    out$parent_contract_sha256, out$cell_plan_sha256,
+    out$failed_marker_sha256, out$failure_diagnostics_sha256,
+    out$stability_progress_sha256
+  )
+  if (!identical(out$version, "joint_qdesn_pure_recursive_score_recovery_v1") ||
+      !identical(out$state_uniform_policy, "antithetic_uniform_pairs") ||
+      !identical(out$antithetic_pair_counts, c(1L, 2L)) ||
+      out$pair_seed_stride != 104729L || out$workers != 2L ||
+      !isTRUE(out$reuse_verified_failure) ||
+      any(!grepl("^[0-9a-f]{64}$", hashes))) {
+    stop("Recursive score recovery contract is malformed.", call. = FALSE)
+  }
+  out
+}
+
 app_joint_recursive_read_contract <- function(
   path = app_joint_recursive_contract_path()
 ) {
@@ -623,6 +676,74 @@ app_joint_recursive_state_draws_for_tier <- function(
   out
 }
 
+app_joint_recursive_antithetic_state_expansion <- function(
+  state_draws, uniform_seed, score_rows, pair_count = 1L,
+  seed_stride = 104729L, half_split_method = "within_chain_alternating"
+) {
+  pair_count <- as.integer(pair_count)
+  score_rows <- as.integer(score_rows)
+  seed_stride <- as.integer(seed_stride)
+  n <- nrow(state_draws$beta)
+  if (pair_count < 1L || score_rows < 1L || n < 2L ||
+      nrow(state_draws$alpha) != n || length(state_draws$chain_id) != n) {
+    stop("Antithetic state-expansion inputs are malformed.", call. = FALSE)
+  }
+  replicates <- 2L * pair_count
+  source_index <- rep(seq_len(n), each = replicates)
+  uniforms <- matrix(NA_real_, nrow = n * replicates, ncol = score_rows)
+  for (pair_index in seq_len(pair_count)) {
+    seed <- as.integer((as.double(uniform_seed) +
+      as.double(pair_index - 1L) * seed_stride) %% .Machine$integer.max)
+    set.seed(seed)
+    base <- matrix(stats::runif(n * score_rows), nrow = n, ncol = score_rows)
+    first <- seq.int(2L * pair_index - 1L, by = replicates, length.out = n)
+    second <- first + 1L
+    uniforms[first, ] <- base
+    uniforms[second, ] <- 1 - base
+  }
+  original_half <- app_joint_recursive_half_assignment(
+    state_draws$chain_id, half_split_method
+  )
+  list(
+    beta = state_draws$beta[source_index, , drop = FALSE],
+    alpha = state_draws$alpha[source_index, , drop = FALSE],
+    chain_id = state_draws$chain_id[source_index],
+    source_draw_index = state_draws$source_draw_index[source_index],
+    uniforms = uniforms,
+    half_assignment = original_half[source_index],
+    unique_posterior_draws = n,
+    state_trajectory_draws = n * replicates,
+    antithetic_pair_count = pair_count,
+    uniform_seed = as.integer(uniform_seed),
+    seed_stride = seed_stride
+  )
+}
+
+app_joint_recursive_validate_prior_failure <- function(
+  diagnostics, tiers, contract
+) {
+  required <- c(
+    "tier_index", "tier", "finite_pass", "rms_pass", "score_pass",
+    "all_stability_pass", "contract_sha256"
+  )
+  app_check_required_columns(diagnostics, required,
+    "recursive score recovery failure diagnostics")
+  expected_tiers <- as.character(tiers$tier)
+  if (nrow(diagnostics) != nrow(tiers) ||
+      !identical(as.character(diagnostics$tier), expected_tiers) ||
+      any(app_as_bool_vec(diagnostics$all_stability_pass)) ||
+      !all(app_as_bool_vec(diagnostics$finite_pass)) ||
+      !all(app_as_bool_vec(diagnostics$rms_pass)) ||
+      app_as_bool_vec(tail(diagnostics$score_pass, 1L))[[1L]] ||
+      any(diagnostics$contract_sha256 != app_sha256_file(contract$path))) {
+    stop("Archived recursive failure does not match the declared rescue entry state.",
+      call. = FALSE)
+  }
+  diagnostics[, setdiff(names(diagnostics), c(
+    "contract_version", "contract_sha256", "failure_message"
+  )), drop = FALSE]
+}
+
 app_joint_recursive_add_score_stability <- function(
   mean_result, beta_mean, alpha_mean, oracle, contract
 ) {
@@ -696,7 +817,9 @@ app_joint_recursive_write_stability_progress <- function(
   app_write_csv(progress, file.path(directory, "stability_progress.csv"))
 }
 
-app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract) {
+app_joint_recursive_run_cell <- function(
+  root, source_root, worker_id, contract, state_rescue = NULL
+) {
   dirs <- app_joint_recursive_dirs(root)
   plan <- app_read_csv(file.path(root, "cell_plan.csv"))
   cell <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
@@ -733,56 +856,126 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
   alpha_mean <- colMeans(final_draws$alpha)
 
   tiers <- app_joint_recursive_state_tiers(cell, contract)
-  tier_diagnostics <- vector("list", nrow(tiers))
+  tier_diagnostics <- list()
   mean_result <- state_draws <- uniforms <- NULL
   selected_tier <- NA_integer_
-  for (tier_index in seq_len(nrow(tiers))) {
-    tier <- tiers[tier_index, , drop = FALSE]
+  selected_tier_name <- NA_character_
+  prior_failure <- state_rescue$prior_failure_diagnostics %||% NULL
+  if (!is.null(prior_failure)) {
+    prior_failure <- app_joint_recursive_validate_prior_failure(
+      prior_failure, tiers, contract
+    )
+    tier_diagnostics <- lapply(seq_len(nrow(prior_failure)), function(index) {
+      prior_failure[index, , drop = FALSE]
+    })
     state_draws <- app_joint_recursive_state_draws_for_tier(
-      source_root, cell, tier, cell$state_seed[[1L]]
+      source_root, cell, tiers[nrow(tiers), , drop = FALSE],
+      cell$state_seed[[1L]]
     )
-    set.seed(as.integer(cell$uniform_seed[[1L]]))
-    uniforms <- matrix(stats::runif(nrow(state_draws$beta) * contract$score_rows),
-      nrow = nrow(state_draws$beta), ncol = contract$score_rows
-    )
-    half_assignment <- app_joint_recursive_half_assignment(
-      state_draws$chain_id, contract$state_half_split_method
-    )
-    mean_result <- app_joint_recursive_mean_design(
-      design, fixture, selected_row, state_draws$beta, state_draws$alpha,
-      uniforms, contract$inverse_cdf_tail_rule,
-      half_assignment = half_assignment,
-      diagnostic_group = state_draws$chain_id
-    )
-    mean_result <- app_joint_recursive_add_score_stability(
-      mean_result, beta_mean, alpha_mean, oracle, contract
-    )
-    flags <- app_joint_recursive_stability_flags(mean_result, contract)
-    diagnostics <- cbind(
-      data.frame(
-        tier_index = tier_index, tier = tier$tier[[1L]],
-        half_split_method = contract$state_half_split_method,
-        stringsAsFactors = FALSE
-      ),
-      mean_result$diagnostics, flags
-    )
-    diagnostics$all_stability_pass <- with(
-      diagnostics, finite_pass & rms_pass & score_pass
-    )
-    tier_diagnostics[[tier_index]] <- diagnostics
-    app_joint_recursive_write_stability_progress(
-      final_dir,
-      app_joint_qdesn_bind_rows(
-        tier_diagnostics[!vapply(tier_diagnostics, is.null, logical(1L))]
-      ),
-      contract
-    )
-    if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
-      selected_tier <- tier_index
-      break
+  } else {
+    for (tier_index in seq_len(nrow(tiers))) {
+      tier <- tiers[tier_index, , drop = FALSE]
+      state_draws <- app_joint_recursive_state_draws_for_tier(
+        source_root, cell, tier, cell$state_seed[[1L]]
+      )
+      set.seed(as.integer(cell$uniform_seed[[1L]]))
+      uniforms <- matrix(stats::runif(nrow(state_draws$beta) * contract$score_rows),
+        nrow = nrow(state_draws$beta), ncol = contract$score_rows
+      )
+      half_assignment <- app_joint_recursive_half_assignment(
+        state_draws$chain_id, contract$state_half_split_method
+      )
+      mean_result <- app_joint_recursive_mean_design(
+        design, fixture, selected_row, state_draws$beta, state_draws$alpha,
+        uniforms, contract$inverse_cdf_tail_rule,
+        half_assignment = half_assignment,
+        diagnostic_group = state_draws$chain_id
+      )
+      mean_result <- app_joint_recursive_add_score_stability(
+        mean_result, beta_mean, alpha_mean, oracle, contract
+      )
+      flags <- app_joint_recursive_stability_flags(mean_result, contract)
+      diagnostics <- cbind(
+        data.frame(
+          tier_index = tier_index, tier = tier$tier[[1L]],
+          half_split_method = contract$state_half_split_method,
+          stringsAsFactors = FALSE
+        ),
+        mean_result$diagnostics, flags
+      )
+      diagnostics$all_stability_pass <- with(
+        diagnostics, finite_pass & rms_pass & score_pass
+      )
+      tier_diagnostics[[length(tier_diagnostics) + 1L]] <- diagnostics
+      app_joint_recursive_write_stability_progress(
+        final_dir, app_joint_qdesn_bind_rows(tier_diagnostics), contract
+      )
+      if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
+        selected_tier <- tier_index
+        selected_tier_name <- tier$tier[[1L]]
+        break
+      }
+      extend_for_failure <- app_joint_recursive_should_extend(flags, contract)
+      if (!extend_for_failure) break
     }
-    extend_for_failure <- app_joint_recursive_should_extend(flags, contract)
-    if (!extend_for_failure) break
+  }
+  if (is.na(selected_tier) && !is.null(state_rescue)) {
+    pair_counts <- as.integer(state_rescue$antithetic_pair_counts)
+    if (!identical(cell$inference_method[[1L]], "mcmc") ||
+        !length(pair_counts) || any(!is.finite(pair_counts)) ||
+        any(pair_counts < 1L) || anyDuplicated(pair_counts)) {
+      stop("Recursive antithetic rescue is restricted to declared MCMC pair tiers.",
+        call. = FALSE)
+    }
+    base_state_draws <- state_draws
+    for (rescue_index in seq_along(pair_counts)) {
+      expansion <- app_joint_recursive_antithetic_state_expansion(
+        base_state_draws, cell$uniform_seed[[1L]], contract$score_rows,
+        pair_count = pair_counts[[rescue_index]],
+        seed_stride = state_rescue$seed_stride,
+        half_split_method = contract$state_half_split_method
+      )
+      state_draws <- expansion[c(
+        "beta", "alpha", "chain_id", "source_draw_index"
+      )]
+      uniforms <- expansion$uniforms
+      mean_result <- app_joint_recursive_mean_design(
+        design, fixture, selected_row, state_draws$beta, state_draws$alpha,
+        uniforms, contract$inverse_cdf_tail_rule,
+        half_assignment = expansion$half_assignment,
+        diagnostic_group = state_draws$chain_id
+      )
+      mean_result <- app_joint_recursive_add_score_stability(
+        mean_result, beta_mean, alpha_mean, oracle, contract
+      )
+      flags <- app_joint_recursive_stability_flags(mean_result, contract)
+      tier_index <- nrow(tiers) + rescue_index
+      tier_name <- sprintf("antithetic_uniform_rescue_%dpair", pair_counts[[rescue_index]])
+      diagnostics <- cbind(
+        data.frame(
+          tier_index = tier_index, tier = tier_name,
+          half_split_method = contract$state_half_split_method,
+          state_uniform_policy = "antithetic_uniform_pairs",
+          antithetic_pair_count = pair_counts[[rescue_index]],
+          unique_posterior_draws = expansion$unique_posterior_draws,
+          state_trajectory_draws = expansion$state_trajectory_draws,
+          stringsAsFactors = FALSE
+        ),
+        mean_result$diagnostics, flags
+      )
+      diagnostics$all_stability_pass <- with(
+        diagnostics, finite_pass & rms_pass & score_pass
+      )
+      tier_diagnostics[[length(tier_diagnostics) + 1L]] <- diagnostics
+      app_joint_recursive_write_stability_progress(
+        final_dir, app_joint_qdesn_bind_rows(tier_diagnostics), contract
+      )
+      if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
+        selected_tier <- tier_index
+        selected_tier_name <- tier_name
+        break
+      }
+    }
   }
   tier_diagnostics <- app_joint_qdesn_bind_rows(
     tier_diagnostics[!vapply(tier_diagnostics, is.null, logical(1L))]
@@ -801,8 +994,14 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
     stop(message, call. = FALSE)
   }
   mean_result$diagnostics$extended <- selected_tier > 1L
-  mean_result$diagnostics$selected_tier <- tiers$tier[[selected_tier]]
+  mean_result$diagnostics$selected_tier <- selected_tier_name
   mean_result$diagnostics$half_split_method <- contract$state_half_split_method
+  if (!is.null(state_rescue)) {
+    mean_result$diagnostics$recovery_contract_sha256 <-
+      state_rescue$recovery_contract_sha256
+    mean_result$diagnostics$original_failure_manifest_sha256 <-
+      state_rescue$original_failure_manifest_sha256
+  }
 
   draws <- app_joint_recursive_score_draws(
     mean_result$mean_design, final_draws$beta, final_draws$alpha,
@@ -894,7 +1093,6 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
     crossing$path_posterior_contract_crossing_pairs_max <-
       max(path_draws$contract_crossing_pairs)
   }
-
   write_gz <- function(x, path) {
     con <- gzfile(path, "wt", compression = 9); on.exit(close(con), add = TRUE)
     utils::write.csv(x, con, row.names = FALSE, na = "")
@@ -926,6 +1124,20 @@ app_joint_recursive_run_cell <- function(root, source_root, worker_id, contract)
         file.path(tmp, "path_posterior_score_draws.csv.gz")),
       path_score_summary = app_write_csv(path_summary,
         file.path(tmp, "path_score_summary.csv")))
+  }
+  if (!is.null(state_rescue)) {
+    paths <- c(paths, recovery_provenance = app_write_csv(data.frame(
+      recovery_version = state_rescue$recovery_version,
+      recovery_contract_sha256 = state_rescue$recovery_contract_sha256,
+      parent_contract_sha256 = app_sha256_file(contract$path),
+      original_failure_manifest_sha256 =
+        state_rescue$original_failure_manifest_sha256,
+      state_uniform_policy = "antithetic_uniform_pairs",
+      selected_tier = selected_tier_name,
+      scientific_gate_changed = FALSE,
+      posterior_draws_changed = FALSE,
+      stringsAsFactors = FALSE
+    ), file.path(tmp, "recovery_provenance.csv")))
   }
   app_joint_recursive_atomic_manifest(tmp, paths)
   file.create(file.path(tmp, "DONE"))

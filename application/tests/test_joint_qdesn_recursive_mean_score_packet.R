@@ -14,6 +14,7 @@ contract_v2 <- app_joint_recursive_read_contract(app_path(
 contract_v3 <- app_joint_recursive_read_contract(app_path(
   "application/config/joint_qdesn_recursive_mean_forecast_contract_v3.csv"
 ))
+recovery_contract <- app_joint_recursive_read_recovery_contract()
 stopifnot(
   contract$workers == 8L,
   contract$score_rows == 990L,
@@ -29,7 +30,11 @@ stopifnot(
   contract_v3$mcmc_available_draws_per_chain_exal == 1500L,
   identical(contract_v3$mcmc_state_rescue_policy,
     "all_available_by_likelihood"),
-  contract_v3$mcmc_score_draws_per_chain == 750L
+  contract_v3$mcmc_score_draws_per_chain == 750L,
+  recovery_contract$recovery_worker_id == 41L,
+  recovery_contract$unchanged_worker_id == 56L,
+  identical(recovery_contract$antithetic_pair_counts, c(1L, 2L)),
+  recovery_contract$pair_seed_stride == 104729L
 )
 
 chain_id <- rep(1:5, each = 8L)
@@ -43,6 +48,35 @@ stopifnot(
       "within_chain_alternating"),
     c(1L, 2L, 1L, 2L, 1L, 2L)
   )
+)
+
+toy_state_draws <- list(
+  beta = matrix(seq_len(24L), nrow = 4L),
+  alpha = matrix(seq_len(12L), nrow = 4L),
+  chain_id = c(1L, 1L, 2L, 2L),
+  source_draw_index = c(11L, 12L, 21L, 22L)
+)
+antithetic_one <- app_joint_recursive_antithetic_state_expansion(
+  toy_state_draws, uniform_seed = 9025L, score_rows = 7L,
+  pair_count = 1L
+)
+antithetic_two <- app_joint_recursive_antithetic_state_expansion(
+  toy_state_draws, uniform_seed = 9025L, score_rows = 7L,
+  pair_count = 2L
+)
+stopifnot(
+  nrow(antithetic_one$beta) == 8L,
+  nrow(antithetic_two$beta) == 16L,
+  antithetic_one$unique_posterior_draws == 4L,
+  antithetic_one$state_trajectory_draws == 8L,
+  max(abs(antithetic_one$uniforms[seq(1L, 8L, 2L), ] +
+    antithetic_one$uniforms[seq(2L, 8L, 2L), ] - 1)) < 1e-15,
+  identical(antithetic_one$half_assignment,
+    rep(c(1L, 2L, 1L, 2L), each = 2L)),
+  identical(antithetic_one$source_draw_index,
+    rep(toy_state_draws$source_draw_index, each = 2L)),
+  identical(antithetic_two$beta[seq(1L, 16L, 4L), , drop = FALSE],
+    toy_state_draws$beta)
 )
 
 fake_mcmc_cell <- data.frame(inference_method = "mcmc")
@@ -70,6 +104,31 @@ stopifnot(
   !app_joint_recursive_should_extend(data.frame(
     finite_pass = TRUE, rms_pass = TRUE, score_pass = FALSE
   ), contract)
+)
+
+declared_tiers <- app_joint_recursive_state_tiers(
+  fake_mcmc_al_cell, contract_v3
+)
+prior_failure <- data.frame(
+  tier_index = seq_len(nrow(declared_tiers)), tier = declared_tiers$tier,
+  finite_pass = TRUE, rms_pass = TRUE, score_pass = FALSE,
+  all_stability_pass = FALSE,
+  contract_sha256 = app_sha256_file(contract_v3$path),
+  contract_version = contract_v3$version,
+  failure_message = "expected unit-test failure", stringsAsFactors = FALSE
+)
+validated_prior <- app_joint_recursive_validate_prior_failure(
+  prior_failure, declared_tiers, contract_v3
+)
+stopifnot(
+  nrow(validated_prior) == 3L,
+  !"contract_sha256" %in% names(validated_prior),
+  grepl("does not match", tryCatch({
+    bad <- prior_failure
+    bad$score_pass[[3L]] <- TRUE
+    app_joint_recursive_validate_prior_failure(bad, declared_tiers, contract_v3)
+    ""
+  }, error = function(error) conditionMessage(error)), fixed = TRUE)
 )
 
 failure_dir <- tempfile("joint_recursive_failure_")

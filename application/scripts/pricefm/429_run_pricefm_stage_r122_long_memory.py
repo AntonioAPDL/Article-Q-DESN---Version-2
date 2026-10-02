@@ -418,6 +418,14 @@ def _reuse_inventory_changes(prep: Path, campaign: Path) -> list[str]:
     inputs = prep / "reused_input_inventory.csv"
     if inputs.is_file():
         changed.extend(_input_inventory_changes(inputs, campaign))
+    rhs = prep / "reused_rhs_inventory.csv"
+    if rhs.is_file():
+        for row in pd.read_csv(rhs).itertuples(index=False):
+            path = (campaign / str(row.path)).resolve()
+            if (not path.is_relative_to((campaign / "rhs").resolve())
+                    or not path.is_file() or path.stat().st_size != int(row.bytes)
+                    or sha256_file(path) != str(row.sha256)):
+                changed.append(str(row.path))
     return changed
 
 

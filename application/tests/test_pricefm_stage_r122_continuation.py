@@ -371,3 +371,104 @@ def test_normal_contract_uses_actual_r_entrypoint_firewall(tmp_path, label, test
         assert result.returncode != 0
         assert "forbidden split" in result.stderr
         assert not (tmp_path / "fit").exists()
+
+
+def _cap_packet(tmp_path):
+    campaign = tmp_path / "campaign"; root = campaign / "continuations/probe"
+    root.mkdir(parents=True); (campaign / "rhs/center").mkdir(parents=True)
+    (campaign / "rhs/center/fit_progress.json").write_text(json.dumps({"failed_task_ids": ["a"]}))
+    stats = root / "stats"; stats.mkdir(); (stats / "terminal.json").write_text('{}')
+    contract = RUN._normal_contract("a", stats, root / "output", 1e-4,
+                                   {"normal_runtime": "unused", "rhs_max_iter": 500}, tmp_path)
+    path = root / "contract.json"; path.write_text(json.dumps(contract))
+    trace = pd.DataFrame({"iter": np.arange(1, 611), "beta_max_abs_delta": 1.,
+        "fitted_rmse_delta": 1e-10, "beta_relative_l2_delta": 1e-9,
+        "sigma_relative_delta": 1e-12,
+        "prior_rms_log_precision_delta": np.where(np.arange(1, 611) <= 600, 2e-6, 1e-8)})
+    trace_path = root / "trace.csv"; trace.to_csv(trace_path, index=False)
+    diagnostic = {"fit_id": "a", "posterior_target_sha256": contract["posterior_target_sha256"],
+        "tau0": contract["tau0"], "prior_hypers": {"tau0": contract["tau0"]},
+        "diagnostic_only": True, "finite": True, "diagnostic_converged": True,
+        "official_test_opened": False, "validation_scores_opened": False,
+        "campaign_iteration_budget_changed": False,
+        "starting_values": "unchanged_scaled_ridge_initialization_only", "diagnostic_iterations": 610}
+    diagnostic_path = root / "diagnostic.json"; diagnostic_path.write_text(json.dumps(diagnostic))
+    entry = {"fit_id": "a"}
+    for name, file in (("contract", path), ("trace", trace_path), ("diagnostic", diagnostic_path)):
+        entry[name] = str(file); entry[name + "_sha256"] = RUN.sha256_file(file)
+    packet = root / "packet.json"; packet.write_text(json.dumps({"diagnostics": [entry],
+        "official_test_opened": False, "validation_scores_opened": False}))
+    return campaign, packet, contract, diagnostic_path
+
+
+def test_rhs_budget_extension_requires_score_blind_complete_calibration(tmp_path):
+    campaign, packet, _, _ = _cap_packet(tmp_path)
+    assert PREP.audit_rhs_cap_calibration(campaign, 500, None) is None
+    with pytest.raises(ValueError, match="calibration evidence"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, None)
+    calibrated = PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+    assert calibrated["previous_max_iter"] == 500
+    assert calibrated["max_iter"] == 2000
+    assert calibrated["priors_and_tolerances_unchanged"] is True
+
+
+@pytest.mark.parametrize("field,value", [
+    ("validation_scores_opened", True), ("official_test_opened", True),
+    ("posterior_target_sha256", "changed"), ("starting_values", "different"),
+    ("finite", False), ("diagnostic_converged", False),
+])
+def test_rhs_calibration_rejects_target_score_or_initialization_changes(tmp_path, field, value):
+    campaign, packet, _, path = _cap_packet(tmp_path)
+    diagnostic = json.loads(path.read_text()); diagnostic[field] = value
+    path.write_text(json.dumps(diagnostic))
+    evidence = json.loads(packet.read_text()); evidence["diagnostics"][0]["diagnostic_sha256"] = RUN.sha256_file(path)
+    packet.write_text(json.dumps(evidence))
+    with pytest.raises(RuntimeError, match="cap calibration failed"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+
+
+def test_rhs_calibration_rejects_incomplete_or_tampered_evidence(tmp_path):
+    campaign, packet, _, path = _cap_packet(tmp_path)
+    path.write_text('{}')
+    with pytest.raises(RuntimeError, match="hash/path differs"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+    evidence = json.loads(packet.read_text()); evidence["diagnostics"] = []
+    packet.write_text(json.dumps(evidence))
+    with pytest.raises(RuntimeError, match="every current failure"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+
+
+def test_rhs_budget_cap_does_not_change_the_posterior_target_or_tolerances(tmp_path):
+    _, _, base, _ = _cap_packet(tmp_path)
+    extended = RUN._normal_contract("a", Path(base["stats_dir"]), Path(base["output_dir"]), 1e-4,
+        {"normal_runtime": "unused", "rhs_max_iter": 2000}, tmp_path)
+    assert base["posterior_target_sha256"] == extended["posterior_target_sha256"]
+    assert {k:v for k,v in base.items() if k != "max_iter"} == {k:v for k,v in extended.items() if k != "max_iter"}
+
+
+def test_rhs_completed_reuse_binds_fit_and_statistics_hashes(tmp_path):
+    campaign = tmp_path / "campaign"; root = campaign / "rhs/center/fits/a"; root.mkdir(parents=True)
+    stats = campaign / "rhs/stats/a"; stats.mkdir(parents=True)
+    for name in ("terminal.json", "statistics.json", "XtX.bin", "Xty.bin"):
+        (stats / name).write_bytes(b"frozen stats")
+    contract_path = campaign / "rhs/center/contracts/a.json"; contract_path.parent.mkdir()
+    contract_path.write_text(json.dumps({"max_iter": 500, "posterior_target_sha256": "fixed", "stats_dir": str(stats)}))
+    artifacts = []
+    for name in ("fit.rds", "beta_mean.bin", "beta_cov.bin", "convergence_trace.csv", "fit_summary.json"):
+        path = root / name; path.write_bytes(b"frozen posterior")
+        artifacts.append({"path": name, "bytes": path.stat().st_size, "sha256": RUN.sha256_file(path)})
+    (root / "terminal.json").write_text(json.dumps({"status": "completed_recursive_normal_fit",
+        "converged": True, "test_opened": False, "fit_id": "a", "prior_type": "rhs_ns",
+        "posterior_target_sha256": "fixed", "convergence_controls": {"max_iter": 500}, "artifacts": artifacts}))
+    pd.DataFrame([{"fit_id": "a", "output_dir": str(root), "contract_path": str(contract_path)}]).to_csv(
+        campaign / "rhs/center/manifest.csv", index=False)
+    inventory = PREP.audit_rhs_reuse(campaign)
+    assert len(inventory) == 11
+    prep = tmp_path / "prep"; prep.mkdir(); (prep / "launch_control.json").write_text('{"continuation":{}}')
+    pd.DataFrame(columns=["path","bytes","sha256"]).to_csv(prep / "reused_output_inventory.csv", index=False)
+    inventory.to_csv(prep / "reused_rhs_inventory.csv", index=False)
+    assert RUN._reuse_inventory_changes(prep, campaign) == []
+    (root / "fit.rds").write_bytes(b"altered posterior")
+    assert str((root / "fit.rds").relative_to(campaign)) in RUN._reuse_inventory_changes(prep, campaign)
+    with pytest.raises(RuntimeError, match="artifact changed"):
+        PREP.audit_rhs_reuse(campaign)

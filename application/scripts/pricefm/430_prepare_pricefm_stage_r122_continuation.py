@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Freeze an explicit R122 dispatch-only continuation without refitting broad cells."""
+"""Freeze a target-preserving R122 continuation with audited completed-fit reuse."""
 
 from __future__ import annotations
 
@@ -99,6 +99,114 @@ def audit_broad_reuse(campaign: Path, manifest: pd.DataFrame,
     return pd.DataFrame(inventory)
 
 
+def _trace_converged(trace: pd.DataFrame, contract: dict) -> bool:
+    if len(trace) < int(contract["min_iter"]) or not np.isfinite(trace.to_numpy(dtype=float)).all():
+        return False
+    if float(trace.beta_max_abs_delta.iloc[-1]) <= float(contract["tol"]):
+        return True
+    tail = trace.tail(int(contract["stability_window"]))
+    return len(tail) == int(contract["stability_window"]) and all(
+        float(tail[column].max()) <= float(contract[threshold])
+        for column, threshold in (
+            ("fitted_rmse_delta", "predictive_tol"),
+            ("beta_relative_l2_delta", "relative_beta_tol"),
+            ("sigma_relative_delta", "sigma_relative_tol"),
+            ("prior_rms_log_precision_delta", "prior_rms_log_precision_tol"),
+        )
+    )
+
+
+def audit_rhs_cap_calibration(campaign: Path, maximum: int, evidence: Path | None) -> dict | None:
+    if maximum == 500:
+        if evidence is not None:
+            raise ValueError("R122 cap evidence requires an explicit calibrated budget")
+        return None
+    if maximum != 2000 or evidence is None:
+        raise ValueError("R122 extended RHS cap requires bounded score-blind calibration evidence")
+    packet = _json(evidence)
+    failed = set(_json(campaign / "rhs/center/fit_progress.json")["failed_task_ids"])
+    entries = packet.get("diagnostics", [])
+    if (not failed or len(entries) != len(failed)
+            or {item["fit_id"] for item in entries} != failed
+            or packet.get("validation_scores_opened") is not False
+            or packet.get("official_test_opened") is not False):
+        raise RuntimeError("R122 RHS calibration must cover every current failure without scores")
+    checked = []
+    for entry in entries:
+        paths = {name: Path(entry[name]).resolve() for name in ("diagnostic", "trace", "contract")}
+        for name, path in paths.items():
+            if (not path.is_relative_to((campaign / "continuations").resolve())
+                    or sha256_file(path) != entry[f"{name}_sha256"]):
+                raise RuntimeError("R122 RHS calibration evidence hash/path differs")
+        diagnostic = _json(paths["diagnostic"]); contract = _json(paths["contract"])
+        trace = pd.read_csv(paths["trace"])
+        if (diagnostic.get("fit_id") != entry["fit_id"] or contract["fit_id"] != entry["fit_id"]
+                or contract["prior_type"] != "rhs_ns" or contract["max_iter"] != 500
+                or contract["selection_split"] != "train_validation_only"
+                or contract["test_access_authorized"] is not False
+                or diagnostic.get("posterior_target_sha256") != contract["posterior_target_sha256"]
+                or diagnostic.get("tau0") != contract["tau0"]
+                or diagnostic.get("prior_hypers", {}).get("tau0") != contract["tau0"]
+                or diagnostic.get("diagnostic_only") is not True
+                or diagnostic.get("finite") is not True
+                or diagnostic.get("diagnostic_converged") is not True
+                or diagnostic.get("official_test_opened") is not False
+                or diagnostic.get("validation_scores_opened") is not False
+                or diagnostic.get("campaign_iteration_budget_changed") is not False
+                or diagnostic.get("starting_values") != "unchanged_scaled_ridge_initialization_only"
+                or len(trace) != int(diagnostic["diagnostic_iterations"])
+                or not 500 < len(trace) <= maximum
+                or trace.iter.astype(int).tolist() != list(range(1, len(trace) + 1))
+                or _trace_converged(trace[trace.iter <= 500], contract)
+                or not _trace_converged(trace, contract)):
+            raise RuntimeError(f"R122 RHS score-blind cap calibration failed: {entry['fit_id']}")
+        checked.append({**entry, "converged_iteration": len(trace),
+                        "posterior_target_sha256": contract["posterior_target_sha256"]})
+    return {"status": "R122_RHS_SCORE_BLIND_CAP_CALIBRATED", "previous_max_iter": 500,
+            "max_iter": maximum, "early_stopping_unchanged": True,
+            "priors_and_tolerances_unchanged": True, "diagnostics": checked,
+            "validation_scores_opened": False, "official_test_opened": False}
+
+
+def audit_rhs_reuse(campaign: Path) -> pd.DataFrame:
+    inventory = []; columns = ["fit_id", "path", "bytes", "sha256"]
+    manifest = campaign / "rhs/center/manifest.csv"
+    if not manifest.is_file():
+        return pd.DataFrame(columns=columns)
+    for row in pd.read_csv(manifest).itertuples(index=False):
+        root = Path(row.output_dir).resolve()
+        if root != (campaign / "rhs/center/fits" / str(row.fit_id)).resolve():
+            raise RuntimeError("R122 reused RHS output path differs")
+        if not (root / "terminal.json").is_file():
+            continue
+        terminal = _json(root / "terminal.json"); contract = _json(Path(row.contract_path))
+        if (terminal.get("status") != "completed_recursive_normal_fit"
+                or terminal.get("converged") is not True or terminal.get("test_opened") is not False
+                or terminal.get("fit_id") != str(row.fit_id) or terminal.get("prior_type") != "rhs_ns"
+                or terminal.get("posterior_target_sha256") != contract["posterior_target_sha256"]
+                or terminal.get("convergence_controls", {}).get("max_iter") != contract["max_iter"]):
+            raise RuntimeError(f"R122 reused RHS target/convergence differs: {row.fit_id}")
+        names = {item["path"] for item in terminal["artifacts"]}
+        if not {"fit.rds", "beta_mean.bin", "beta_cov.bin", "convergence_trace.csv", "fit_summary.json"}.issubset(names):
+            raise RuntimeError(f"R122 reused RHS artifacts incomplete: {row.fit_id}")
+        for item in terminal["artifacts"]:
+            path = (root / item["path"]).resolve()
+            if (not path.is_relative_to(root) or path.stat().st_size != int(item["bytes"])
+                    or sha256_file(path) != item["sha256"]):
+                raise RuntimeError(f"R122 reused RHS artifact changed: {row.fit_id}")
+        paths = [root / name for name in names] + [root / "terminal.json", Path(row.contract_path)]
+        stats = Path(contract["stats_dir"])
+        paths += [stats / name for name in ("terminal.json", "statistics.json", "XtX.bin", "Xty.bin")]
+        if (root / "validation_score.json").is_file():
+            if _json(root / "validation_score.json").get("test_opened") is not False:
+                raise RuntimeError("R122 reused RHS score opened test data")
+            paths.append(root / "validation_score.json")
+        for path in paths:
+            inventory.append({"fit_id": str(row.fit_id), "path": str(path.relative_to(campaign)),
+                              "bytes": path.stat().st_size, "sha256": sha256_file(path)})
+    return pd.DataFrame(inventory, columns=columns)
+
+
 def prepare(args: argparse.Namespace) -> dict:
     original = args.original_prep.resolve(); output = args.output_dir.resolve()
     campaign = args.campaign_root.resolve(); code = args.code_root.resolve()
@@ -143,6 +251,10 @@ def prepare(args: argparse.Namespace) -> dict:
         changed_sources.append({"path": relative, "original_sha256": str(row.sha256),
                                 "current_sha256": sha256_file(path)})
     run = _runner()
+    calibration = audit_rhs_cap_calibration(
+        campaign, int(getattr(args, "rhs_max_iter", 500)), getattr(args, "rhs_cap_evidence", None),
+    )
+    rhs_inventory = audit_rhs_reuse(campaign)
     manifest = run._execution(original)
     if len(manifest) != 6400 or manifest.role.value_counts().to_dict() != {"search": 6398, "external_control": 2}:
         raise RuntimeError("R122 continuation requires the exact completed broad manifest")
@@ -176,15 +288,22 @@ def prepare(args: argparse.Namespace) -> dict:
             destination = output / name; destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(original / name, destination)
     inventory.to_csv(output / "reused_output_inventory.csv", index=False)
+    rhs_inventory.to_csv(output / "reused_rhs_inventory.csv", index=False)
     pd.DataFrame(inputs).to_csv(output / "reused_input_inventory.csv", index=False)
+    if calibration is not None:
+        write_json(output / "rhs_cap_calibration.json", calibration)
     snapshot = output / "original_evidence"
     preserved = ["campaign_failure.json", "launch_preflight.json", "processed_audit.json",
                  "broad/progress.json", "seed3/progress.json", "seed3/manifest.csv"]
     preserved += [str(path.relative_to(campaign)) for path in (campaign / "broad/closeout").glob("*") if path.is_file()]
     preserved += [str(path.relative_to(campaign)) for path in (campaign / "logs/seed3_ridge").glob("*.log")]
     preserved += [str(path.relative_to(campaign)) for path in (campaign / "seed3/closeout").glob("*") if path.is_file()]
-    preserved += [str(path.relative_to(campaign)) for path in (campaign / "rhs/center").rglob("*") if path.is_file()]
+    preserved += [str(path.relative_to(campaign)) for path in (campaign / "rhs/center").rglob("*")
+                  if path.is_file() and path.suffix.lower() not in (".rds", ".rda", ".rdata", ".bin")]
     preserved += [str(path.relative_to(campaign)) for path in (campaign / "logs/rhs_center_fit").glob("*.log")]
+    if calibration is not None:
+        preserved += [str(Path(entry[name]).relative_to(campaign))
+                      for entry in calibration["diagnostics"] for name in ("diagnostic", "trace", "contract")]
     evidence = []
     for name in sorted(set(preserved)):
         path = campaign / name
@@ -193,10 +312,12 @@ def prepare(args: argparse.Namespace) -> dict:
             shutil.copy2(path, destination)
             evidence.append({"path": name, "sha256": sha256_file(path)})
     write_json(output / "reuse_audit.json", {
-        "status": "R122_DISPATCH_ONLY_CONTINUATION_AUDITED", "original_code_head": old["code_head"],
+        "status": "R122_TARGET_PRESERVING_CONTINUATION_AUDITED", "original_code_head": old["code_head"],
         "continuation_code_head": head, "changed_files": sorted(changed), "changed_sources": changed_sources,
         "reused_broad_cells": len(manifest), "reused_output_files": len(inventory),
         "reused_third_seed_cells": len(completed_seed3),
+        "reused_rhs_fits": rhs_inventory.fit_id.nunique(),
+        "optimization_budget_changed": calibration is not None,
         "reused_input_files": len(inputs),
         "third_seed_planned": len(seed3), "seed3_manifest_sha256": sha256_file(campaign / "seed3/manifest.csv"),
         "original_prep": str(original), "original_summary_sha256": sha256_file(original / "summary.json"),
@@ -204,6 +325,9 @@ def prepare(args: argparse.Namespace) -> dict:
     })
     (output / "source_changes.patch").write_text(_git(code, "diff", old["code_head"], head) + "\n")
     control = dict(old)
+    if calibration is not None:
+        control.update({"rhs_max_iter": calibration["max_iter"],
+                        "rhs_cap_calibration_sha256": sha256_file(output / "rhs_cap_calibration.json")})
     control.update({"code_head": head, "code_branch": branch,
                     "rhs_contract_namespace": output.name,
                     "data_config": str(output / "data_configs/data_L3120.yaml"),
@@ -235,7 +359,8 @@ def prepare(args: argparse.Namespace) -> dict:
     write_json(output / "summary.json", result)
     return {"status": result["status"], "output_dir": str(output), "code_head": head,
             "reused_broad_cells": len(manifest), "reused_third_seed_cells": len(completed_seed3),
-            "third_seed_planned": len(seed3), "test_opened": False}
+            "third_seed_planned": len(seed3), "reused_rhs_fits": rhs_inventory.fit_id.nunique(),
+            "rhs_max_iter": control["rhs_max_iter"], "test_opened": False}
 
 
 def main() -> int:
@@ -244,6 +369,8 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--campaign-root", type=Path, required=True)
     parser.add_argument("--code-root", type=Path, default=SCRIPT_DIR.parents[2])
+    parser.add_argument("--rhs-max-iter", type=int, choices=(500, 2000), default=500)
+    parser.add_argument("--rhs-cap-evidence", type=Path)
     args = parser.parse_args()
     with (args.campaign_root / "controller.lock").open("a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)

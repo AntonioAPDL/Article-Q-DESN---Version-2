@@ -98,7 +98,7 @@ def preflight(cpus: list[int], output_parent: Path, protocol: dict[str, Any]) ->
 
 def score_operators(truth: np.ndarray, values: dict[str, np.ndarray]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     rows, horizons = [], []
-    for name in ("mean_feature", "path_specific", "normal_driver"):
+    for name in ("mean_feature", "path_specific", "normal_driver", "oracle_teacher_forced_history"):
         prediction = values[name]
         AUDIT.require(prediction.shape == (*truth.shape, 7) and np.isfinite(prediction).all(),
                       "invalid diagnostic prediction array")
@@ -145,6 +145,12 @@ def case_job(job: dict[str, Any]) -> dict[str, Any]:
     truth = forecasts["truth"] * scaler["price_scale"] + scaler["price_mean"]
     predictions = {name: forecasts[name] * scaler["price_scale"] + scaler["price_mean"]
                    for name in ("mean_feature", "path_specific", "normal_driver")}
+    # This control deliberately uses observed preceding target values within
+    # the internal validation path. It is never an operational forecast.
+    oracle_design, _, _ = RT.teacher_forced_design(RT.subset_arrays(scaled, selected), spec)
+    predictions["oracle_teacher_forced_history"] = np.stack(
+        [oracle_design @ quantile[tau]["beta_mean"] for tau in RT.QUANTILES], axis=-1,
+    ).reshape(len(selected), 96, 7) * scaler["price_scale"] + scaler["price_mean"]
     rows, horizon_rows = score_operators(truth, predictions)
     deterministic = RT.recursive_normal_score(scaled, spec, normal, selected, maximum_origins=None)
     for metric in ("AQL", "late_AQL", "median_MAE", "interval_80_width"):
@@ -167,6 +173,7 @@ def case_job(job: dict[str, Any]) -> dict[str, Any]:
                   "cpu_affinity": sorted(os.sched_getaffinity(0)), "model_fitted": False,
                   "test_opened": False, "article_mutated": False, "registry_mutated": False,
                   "statistical_interpretation": "averaged_conditional_quantile_readouts_not_marginal_predictive_quantiles",
+                  "oracle_history_control_is_not_deployable": True,
                   "scaler": scaler, "processed_source_manifest": list(arrays.source_manifest),
                   "output_sha256": {x.name: sha256_file(x) for x in path.iterdir()}}
         write_json(path / "terminal.json", result)
@@ -182,7 +189,8 @@ def render_pdf(path: Path, records: list[dict[str, Any]], metrics: pd.DataFrame,
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
 
-    colors = {"mean_feature": "#167d8d", "path_specific": "#98555f", "normal_driver": "#6c8b45"}
+    colors = {"mean_feature": "#167d8d", "path_specific": "#98555f", "normal_driver": "#6c8b45",
+              "oracle_teacher_forced_history": "#76659e"}
     plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False,
                          "axes.grid": True, "grid.alpha": .18, "pdf.fonttype": 42})
     with PdfPages(path) as pdf:
@@ -196,6 +204,7 @@ def render_pdf(path: Path, records: list[dict[str, Any]], metrics: pd.DataFrame,
         fig.suptitle("BG R122: Matched Recursive Operator Diagnostics", fontsize=14)
         fig.text(.06, .09, "Diagnostic subset only: 12 predeclared origins per internal split, 500 paths.\n"
                  "No refits, no new selection, no official validation or test scores.\n"
+                 "Oracle history uses future observed prices and is NOT deployable.\n"
                  "Averaged conditional quantiles are not generally marginal predictive quantiles.", fontsize=10)
         fig.tight_layout(rect=(.02, .24, .98, .92)); pdf.savefig(fig); plt.close(fig)
         subset = horizon[horizon.candidate_id.eq(winner)]
@@ -214,7 +223,7 @@ def render_pdf(path: Path, records: list[dict[str, Any]], metrics: pd.DataFrame,
         for record in sorted(records, key=lambda x: (x["candidate_id"], x["split"])):
             case = Path(record["contract"]["output"])
             with np.load(case / "matched_predictions.npz") as data:
-                fig, axes = plt.subplots(2, 3, figsize=(11.7, 8.3))
+                fig, axes = plt.subplots(2, 4, figsize=(13.7, 8.3))
                 hours = np.arange(1, 97) / 4
                 for row, origin in enumerate((0, len(data["anchors"]) - 1)):
                     for column, (name, color) in enumerate(colors.items()):
@@ -238,7 +247,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     audit = AUDIT.audit_campaign(campaign, prep, protocol)
     cpus = [int(x) for x in args.cpu_list.split(",")]
     origin_count = int(protocol["diagnostic_origins_per_split"])
-    AUDIT.require(protocol["posterior_paths"] == 500 and origin_count <= protocol["maximum_diagnostic_origins_per_split"],
+    AUDIT.require(protocol["posterior_paths"] == 500 and origin_count <= protocol["maximum_diagnostic_origins_per_split"]
+                  and protocol["include_oracle_history_negative_control"] is True,
                   "diagnostic simulation budget changed")
     identity = {"protocol_sha256": sha256_file(args.protocol), "preparation_sha256": sha256_file(prep / "summary.json"),
                 "campaign_terminal_sha256": sha256_file(campaign / "terminal.json"),
@@ -303,6 +313,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                   "source_preservation_verified": True, "model_fitted": False, "test_opened": False,
                   "official_validation_opened": False, "article_mutated": False, "registry_mutated": False,
                   "frozen_winner_changed": False, "ready_for_article_promotion": False,
+                  "oracle_history_control_is_not_deployable": True,
                   "integration_status": "NOT_READY_FOR_INTEGRATION",
                   "diagnostic_subset_cannot_select_or_reject_a_model": True,
                   "output_sha256": {x.name: sha256_file(x) for x in output.iterdir() if x.is_file() and x.name not in

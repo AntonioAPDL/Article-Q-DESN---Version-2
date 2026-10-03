@@ -220,9 +220,9 @@ def test_linear_path_mean_equals_mean_feature_for_fixed_coefficients():
 def test_operators_use_identical_truth_units_and_horizon_blocks():
     truth = np.zeros((2, 96))
     prediction = np.broadcast_to(np.array([-3., -2., -1., 0., 1., 2., 3.]), (2, 96, 7)).copy()
-    values = {key: prediction.copy() for key in ("mean_feature", "path_specific", "normal_driver")}
+    values = {key: prediction.copy() for key in ("mean_feature", "path_specific", "normal_driver", "oracle_teacher_forced_history")}
     metrics, horizons = PROBE.score_operators(truth, values)
-    assert len(metrics) == 3 and len(horizons) == 9
+    assert len(metrics) == 4 and len(horizons) == 12
     assert {row["interval_80_coverage"] for row in metrics} == {1.}
     assert {row["interval_80_width"] for row in metrics} == {6.}
     assert {row["horizon_block"] for row in horizons} == {"first_6_hours", "middle_12_hours", "last_6_hours"}
@@ -254,7 +254,8 @@ def test_no_refit_case_saves_matched_predictions_and_resumes_without_reforecasti
     monkeypatch.setattr(PROBE.RT, "standardize_from_training_origins", lambda *args: (arrays, {"price_scale": 2., "price_mean": 10.}))
     monkeypatch.setattr(PROBE.RT, "subset_arrays", lambda a, idx: SimpleNamespace(response=a.response[idx]))
     monkeypatch.setattr(PROBE.RT, "load_normal_fit", lambda *args: {})
-    monkeypatch.setattr(PROBE.RT, "load_quantile_fit", lambda *args: {})
+    monkeypatch.setattr(PROBE.RT, "load_quantile_fit", lambda *args: {"beta_mean": np.zeros(16)})
+    monkeypatch.setattr(PROBE.RT, "teacher_forced_design", lambda a, spec: (np.zeros((len(a.response) * 96, 16)), None, {}))
     calls = []
     def forecast(a, spec, normal, qfits, paths, seed):
         calls.append((paths, seed))
@@ -269,6 +270,7 @@ def test_no_refit_case_saves_matched_predictions_and_resumes_without_reforecasti
     result = PROBE.case_job(job)
     assert result == PROBE.case_job(job) and len(calls) == 1
     assert result["cpu_affinity"] == [2] and result["model_fitted"] is False
+    assert result["oracle_history_control_is_not_deployable"] is True
     assert result["origin_count"] == 12 and result["selected_origin_indices"][0] == 506
     with np.load(Path(job["output"]) / "matched_predictions.npz") as saved:
         assert saved["truth"].shape == (12, 96)

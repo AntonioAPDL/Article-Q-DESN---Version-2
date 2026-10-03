@@ -12,6 +12,7 @@
   "diagnostic_origins_per_split": 12,
   "maximum_diagnostic_origins_per_split": 16,
   "posterior_paths": 500,
+  "include_oracle_history_negative_control": true,
   "maximum_workers": 9,
   "minimum_memory_gib": 200,
   "minimum_free_gib": 200,

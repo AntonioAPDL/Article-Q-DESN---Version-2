@@ -1165,7 +1165,12 @@ app_joint_pure_confirmation_contract <- function(
   set("contract_version", contract_version)
   set("run_tag", run_tag)
   set("execution_branch", execution_branch)
-  set("host_profile_id", "jerez_pure_recursive_15core_20260925")
+  set("host_profile_id", if (identical(contract_version,
+      "joint_qdesn_pure_recursive_article_confirmation_v3")) {
+    "jerez_pure_recursive_expanded_continuation_15core_20261003"
+  } else {
+    "jerez_pure_recursive_15core_20260925"
+  })
   set("source_worktree", source_worktree)
   set("source_head", app_joint_article_git_value(c("rev-parse", "HEAD")))
   set("source_runtime_relative_path", file.path("application", "cache", basename(campaign_root)))

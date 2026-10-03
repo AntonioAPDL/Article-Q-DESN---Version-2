@@ -351,7 +351,7 @@ app_joint_article_read_contract <- function(
         !identical(out$execution_branch,
           "work/joint-qdesn-pure-desn-expanded-continuation-20261003") ||
         !identical(out$host_profile_id,
-          "jerez_pure_recursive_15core_20260925") ||
+          "jerez_pure_recursive_expanded_continuation_15core_20261003") ||
         out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
         out$initial_concurrency != 15L || out$maximum_concurrency != 15L ||
         !identical(out$cpu_affinity_list, allocation$joint_cpu_list) ||

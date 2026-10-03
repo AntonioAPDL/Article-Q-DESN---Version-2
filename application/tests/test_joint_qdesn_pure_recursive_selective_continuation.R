@@ -93,6 +93,8 @@ stopifnot(
     "joint_qdesn_pure_recursive_article_confirmation_v3",
   contract_value("execution_branch") ==
     "work/joint-qdesn-pure-desn-expanded-continuation-20261003",
+  contract_value("host_profile_id") ==
+    "jerez_pure_recursive_expanded_continuation_15core_20261003",
   contract_value("run_tag") == "test_expanded_continuation",
   contract_value("source_worktree") == repo_root,
   contract_value("exal_mcmc_method") == "M0_v_collapsed_support_logit",
@@ -104,6 +106,24 @@ contract_path <- app_write_csv(contract_table,
 parsed_contract <- app_joint_article_read_contract(contract_path)
 stopifnot(parsed_contract$version ==
   "joint_qdesn_pure_recursive_article_confirmation_v3")
+
+continuation_profile <- app_joint_article_read_host_profile(
+  "jerez_pure_recursive_expanded_continuation_15core_20261003"
+)
+stopifnot(
+  continuation_profile$runtime_root[[1L]] == paste0(
+    "application/cache/",
+    "joint_qdesn_pure_recursive_expanded_continuation_confirmation_",
+    "jerez_15core_20261003"
+  ),
+  continuation_profile$source_worktree[[1L]] == paste0(
+    "/data/jaguir26/local/src/",
+    "Article-Q-DESN---Version-2__wt__joint_pure_desn_",
+    "expanded_continuation_20261003"
+  ),
+  continuation_profile$initial_concurrency[[1L]] == 15L,
+  continuation_profile$maximum_concurrency[[1L]] == 15L
+)
 
 source_worker <- tempfile("source_worker_")
 target_worker <- tempfile("target_worker_")

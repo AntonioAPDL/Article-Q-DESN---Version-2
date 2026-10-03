@@ -101,7 +101,9 @@ silently overwritten.
 
 - Host: Jerez.
 - Parallelism: 15 distinct physical cores with affinity
-  `1,8,9,12,13,15,19,20,24,25,27,28,29,30,31`.
+  `0,1,8,9,12,13,19,20,24,25,27,28,29,30,31`. CPU 15 is deliberately
+  excluded because the prelaunch audit found an unrelated long-running process
+  there; CPUs 15 and 16 remain outside the continuation allocation.
 - BLAS and numerical libraries: one thread per worker.
 - Pinned runtime: R 4.6.0.
 - Historical expanded and source runtime roots remain immutable inputs. The new

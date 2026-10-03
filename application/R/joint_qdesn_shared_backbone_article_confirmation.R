@@ -339,6 +339,35 @@ app_joint_article_read_contract <- function(
         call. = FALSE)
     }
   }
+  if (identical(out$version, "joint_qdesn_pure_recursive_article_confirmation_v3")) {
+    allocation <- app_joint_pure_continuation_runtime_allocation()
+    if (!is.finite(out$rhs_slab_variance) || out$rhs_slab_variance != 1 ||
+        !out$rhs_slab_fixed ||
+        !identical(out$coefficient_hierarchy,
+          "first_quantile_anchor_adjacent_differences") ||
+        !out$ordered_intercepts || out$sigma_lower_bound != 0 ||
+        !is.infinite(out$sigma_upper_bound) ||
+        !out$posterior_target_hash_required ||
+        !identical(out$execution_branch,
+          "work/joint-qdesn-pure-desn-expanded-continuation-20261003") ||
+        !identical(out$host_profile_id,
+          "jerez_pure_recursive_15core_20260925") ||
+        out$al_chains_per_cell != 5L || out$exal_chains_per_cell != 5L ||
+        out$initial_concurrency != 15L || out$maximum_concurrency != 15L ||
+        !identical(out$cpu_affinity_list, allocation$joint_cpu_list) ||
+        out$required_physical_cores != allocation$required_physical_cores ||
+        !identical(out$capacity_approval_token,
+          allocation$capacity_approval_token) ||
+        !identical(out$shared_capacity_mode, allocation$mode) ||
+        !identical(out$pricefm_reserved_cpu_list,
+          allocation$pricefm_cpu_list) ||
+        !identical(out$spare_cpu_list, allocation$spare_cpu_list) ||
+        !identical(out$allowed_competing_process_patterns,
+          allocation$allowed_competing_process_patterns)) {
+      stop("Jerez expanded-continuation contract violates the frozen posterior or CPU-allocation gate.",
+        call. = FALSE)
+    }
+  }
   out
 }
 
@@ -982,7 +1011,8 @@ app_joint_article_assert_capacity_authorized <- function(contract) {
       "joint_shared_backbone_article_confirmation_v3",
       "joint_shared_backbone_article_confirmation_v4",
       "joint_qdesn_pure_recursive_article_confirmation_v1",
-      "joint_qdesn_pure_recursive_article_confirmation_v2")) {
+      "joint_qdesn_pure_recursive_article_confirmation_v2",
+      "joint_qdesn_pure_recursive_article_confirmation_v3")) {
     contract$capacity_approval_token
   } else {
     ""
@@ -1046,7 +1076,8 @@ app_joint_article_host_preflight <- function(
       "joint_shared_backbone_article_confirmation_v3",
       "joint_shared_backbone_article_confirmation_v4",
       "joint_qdesn_pure_recursive_article_confirmation_v1",
-      "joint_qdesn_pure_recursive_article_confirmation_v2")) {
+      "joint_qdesn_pure_recursive_article_confirmation_v2",
+      "joint_qdesn_pure_recursive_article_confirmation_v3")) {
     app_joint_article_cpu_affinity_preflight(contract)
   } else {
     NULL

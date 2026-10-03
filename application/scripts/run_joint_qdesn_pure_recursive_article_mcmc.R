@@ -2,7 +2,10 @@
 source(file.path(dirname(normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1L]))),
   "_joint_qdesn_pure_recursive_bootstrap.R"))
 args <- app_parse_args(list(root = app_joint_pure_confirmation_root(), workers = 15L))
+contract <- app_joint_article_read_contract(file.path(args$root,
+  "frozen_contract.csv"))
 Sys.setenv(JOINT_ARTICLE_CONFIRMATION_ALLOW_PRODUCTION = "MCMC",
-  JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED = "JEREZ_PURE_RECURSIVE_15_PHYSICAL_SHARED")
+  JOINT_ARTICLE_CONFIRMATION_CAPACITY_APPROVED =
+    contract$capacity_approval_token)
 app_joint_article_run_mcmc_queue(args$root, as.integer(args$workers))
 app_joint_article_finalize_confirmation(args$root)

@@ -17,8 +17,8 @@ SCORE_TAG="joint_qdesn_pure_recursive_expanded_continuation_score_jerez_15core_2
 CONFIRMATION_ROOT="$REPO_ROOT/application/cache/$CONFIRMATION_TAG"
 SCORE_ROOT="$REPO_ROOT/application/cache/$SCORE_TAG"
 CONTRACT_PATH="$CONFIRMATION_ROOT/score_packet/pure_recursive_score_contract.csv"
-CPU_LIST="1,8,9,12,13,15,19,20,24,25,27,28,29,30,31"
-CPUS=(1 8 9 12 13 15 19 20 24 25 27 28 29 30 31)
+CPU_LIST="0,1,8,9,12,13,19,20,24,25,27,28,29,30,31"
+CPUS=(0 1 8 9 12 13 19 20 24 25 27 28 29 30 31)
 SESSION="joint_pure_expanded_continuation_20261003"
 MODE="${1:---preflight}"
 CONTROL_ROOT="$REPO_ROOT/local_trackers/$SCORE_TAG"
@@ -65,7 +65,7 @@ preflight() {
   require_repository
   ensure_campaign_link
   declare -A physical=()
-  local cpu package core key free_gib
+  local cpu package core key free_gib busy_processes
   for cpu in "${CPUS[@]}"; do
     package="$(<"/sys/devices/system/cpu/cpu${cpu}/topology/physical_package_id")"
     core="$(<"/sys/devices/system/cpu/cpu${cpu}/topology/core_id")"
@@ -80,6 +80,15 @@ preflight() {
   }
   free_gib="$(df -Pk /data | awk 'NR==2 {printf "%.0f", $4/1024/1024}')"
   (( free_gib >= 50 )) || { echo "Less than 50 GiB is free on /data." >&2; exit 64; }
+  busy_processes="$(ps -eLo psr=,pcpu=,pid=,comm=,args= | awk \
+    -v list=",${CPU_LIST}," '
+      index(list, "," $1 ",") && $2 + 0 >= 20 {print}
+    ')"
+  [[ -z "$busy_processes" ]] || {
+    echo "A selected continuation core is already busy:" >&2
+    printf '%s\n' "$busy_processes" >&2
+    exit 64
+  }
   if pgrep -af 'run_joint_qdesn_pure_recursive_(quantile_worker|article_vb|article_mcmc)|run_joint_qdesn_recursive_(dgp_oracle_worker|mean_forecast_worker)' >/dev/null; then
     echo "Another JOINT continuation worker or controller is active." >&2; exit 64
   fi
@@ -177,7 +186,8 @@ run_internal() {
       "$SCRIPT_DIR/prepare_joint_qdesn_pure_recursive_confirmation.R" \
       --campaign-root "$CAMPAIGN_ROOT" --output-dir "$CONFIRMATION_ROOT" \
       --execution-branch "$BRANCH" --run-tag "$CONFIRMATION_TAG" \
-      --source-worktree "$REPO_ROOT"
+      --source-worktree "$REPO_ROOT" \
+      --contract-version joint_qdesn_pure_recursive_article_confirmation_v3
   fi
   if [[ ! -f "$CONFIRMATION_ROOT/vb_reuse_audit.csv" ]]; then
     "$R_BIN" "$SCRIPT_DIR/import_joint_qdesn_pure_recursive_selective_reuse.R" \

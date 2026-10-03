@@ -59,19 +59,31 @@ writeLines("label,relative_path,size_bytes,sha256",
   file.path(target_root, "quantile_artifact_manifest.csv"))
 contract_table <- app_joint_pure_confirmation_contract(
   target_root,
-  execution_branch = "work/test-expanded-continuation",
+  execution_branch =
+    "work/joint-qdesn-pure-desn-expanded-continuation-20261003",
   run_tag = "test_expanded_continuation",
-  source_worktree = repo_root
+  source_worktree = repo_root,
+  contract_version = "joint_qdesn_pure_recursive_article_confirmation_v3"
 )
 contract_value <- function(name) {
   contract_table$value[contract_table$name == name][[1L]]
 }
 stopifnot(
-  contract_value("execution_branch") == "work/test-expanded-continuation",
+  contract_value("contract_version") ==
+    "joint_qdesn_pure_recursive_article_confirmation_v3",
+  contract_value("execution_branch") ==
+    "work/joint-qdesn-pure-desn-expanded-continuation-20261003",
   contract_value("run_tag") == "test_expanded_continuation",
   contract_value("source_worktree") == repo_root,
-  contract_value("exal_mcmc_method") == "M0_v_collapsed_support_logit"
+  contract_value("exal_mcmc_method") == "M0_v_collapsed_support_logit",
+  contract_value("cpu_affinity_list") ==
+    "0,1,8,9,12,13,19,20,24,25,27,28,29,30,31"
 )
+contract_path <- app_write_csv(contract_table,
+  file.path(target_root, "confirmation_contract.csv"))
+parsed_contract <- app_joint_article_read_contract(contract_path)
+stopifnot(parsed_contract$version ==
+  "joint_qdesn_pure_recursive_article_confirmation_v3")
 
 source_worker <- tempfile("source_worker_")
 target_worker <- tempfile("target_worker_")

@@ -1131,17 +1131,38 @@ app_joint_pure_confirmation_runtime_allocation <- function() {
   )
 }
 
+app_joint_pure_continuation_runtime_allocation <- function() {
+  list(
+    mode = "pricefm_r120_jerez_partition",
+    joint_cpu_list = "0,1,8,9,12,13,19,20,24,25,27,28,29,30,31",
+    pricefm_cpu_list = "2,3,4,5,6,7,10,11,14,17,18,21,22,23,26",
+    spare_cpu_list = "15,16",
+    allowed_competing_process_patterns = c(
+      "pricefm_stage_r120_bg_explicit_lag_all_layer_search_20260925"
+    ),
+    required_physical_cores = 15L,
+    capacity_approval_token =
+      "JEREZ_PURE_EXPANDED_CONTINUATION_15_PHYSICAL"
+  )
+}
+
 app_joint_pure_confirmation_contract <- function(
   campaign_root,
   execution_branch = "work/joint-qdesn-pure-desn-recursive-selection-20260925",
   run_tag = "joint_qdesn_pure_recursive_article_confirmation_jerez_15core_20260925",
-  source_worktree = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_pure_desn_recursive_selection_20260925"
+  source_worktree = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_pure_desn_recursive_selection_20260925",
+  contract_version = "joint_qdesn_pure_recursive_article_confirmation_v2"
 ) {
   campaign_root <- normalizePath(campaign_root, mustWork = TRUE)
   tab <- app_read_csv(app_joint_article_corrected_contract_path())
   set <- function(name, value) tab <<- app_joint_pure_set_contract(tab, name, value)
-  allocation <- app_joint_pure_confirmation_runtime_allocation()
-  set("contract_version", "joint_qdesn_pure_recursive_article_confirmation_v2")
+  allocation <- if (identical(contract_version,
+      "joint_qdesn_pure_recursive_article_confirmation_v3")) {
+    app_joint_pure_continuation_runtime_allocation()
+  } else {
+    app_joint_pure_confirmation_runtime_allocation()
+  }
+  set("contract_version", contract_version)
   set("run_tag", run_tag)
   set("execution_branch", execution_branch)
   set("host_profile_id", "jerez_pure_recursive_15core_20260925")
@@ -1201,7 +1222,8 @@ app_joint_pure_prepare_confirmation <- function(
   out_dir = app_joint_pure_confirmation_root(),
   execution_branch = "work/joint-qdesn-pure-desn-recursive-selection-20260925",
   run_tag = basename(out_dir),
-  source_worktree = normalizePath(getwd(), mustWork = TRUE)
+  source_worktree = normalizePath(getwd(), mustWork = TRUE),
+  contract_version = "joint_qdesn_pure_recursive_article_confirmation_v2"
 ) {
   campaign_root <- normalizePath(campaign_root, mustWork = TRUE)
   if (!file.exists(file.path(campaign_root, "quantile_artifact_manifest.csv"))) {
@@ -1219,7 +1241,8 @@ app_joint_pure_prepare_confirmation <- function(
     campaign_root,
     execution_branch = execution_branch,
     run_tag = run_tag,
-    source_worktree = source_worktree
+    source_worktree = source_worktree,
+    contract_version = contract_version
   )
   contract_path <- app_write_csv(contract_table, file.path(out_dir, "frozen_contract.csv"))
   contract <- app_joint_article_read_contract(contract_path)

@@ -65,12 +65,29 @@ app_joint_pure_read_contract <- function(path = app_joint_pure_contract_path()) 
     dense_grid_launched = identical(tolower(get("dense_grid_launched")), "true")
   )
   expected_tau <- c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
-  if (!identical(out$version, "joint_qdesn_pure_recursive_campaign_v1") ||
+  valid_versions <- c(
+    "joint_qdesn_pure_recursive_campaign_v1",
+    "joint_qdesn_pure_recursive_expanded_screen_v2",
+    "joint_qdesn_pure_recursive_expanded_screen_v3"
+  )
+  version_shape <- if (identical(out$version, valid_versions[[1L]])) {
+    out$candidate_count == 256L && out$advance_count == 50L &&
+      out$max_readout_dimension == 192L
+  } else if (out$version %in% valid_versions[2:3]) {
+    out$candidate_count == 768L && out$advance_count == 64L &&
+      out$max_readout_dimension == 300L
+  } else FALSE
+  expected_cpu_affinity <- if (identical(out$version, valid_versions[[3L]])) {
+    "1,8,9,12,13,15,19,20,24,25,27,28,29,30,31"
+  } else {
+    "2-16"
+  }
+  if (!out$version %in% valid_versions || !version_shape ||
       !identical(out$tau, expected_tau) || out$scenario_count != 8L ||
       out$models_per_scenario != 4L || out$max_workers != 15L ||
-      !identical(out$cpu_affinity_list, "2-16") || out$blas_threads != 1L ||
+      !identical(out$cpu_affinity_list, expected_cpu_affinity) ||
+      out$blas_threads != 1L ||
       out$inner_training_rows + out$inner_calibration_rows != out$fit_rows ||
-      out$candidate_count != 256L || out$advance_count != 50L ||
       !out$protected_selection_forbidden || out$protected_scores_for_selection ||
       out$raw_inputs_in_readout || !out$full_states_all_layers || out$dense_grid_launched) {
     stop("Pure-recursive scientific or runtime contract is malformed.", call. = FALSE)
@@ -312,11 +329,16 @@ app_joint_pure_selector_fixture <- function(fixture, contract) {
   )
 }
 
-app_joint_pure_reservoir <- function(candidate, m_input) {
+app_joint_pure_reservoir <- function(candidate, m_input,
+  max_readout_dimension = 192L) {
   D <- as.integer(candidate$D[[1L]])
   n <- as.integer(app_joint_shared_parse_num_vec(candidate$n[[1L]]))
   n_tilde <- as.integer(app_joint_shared_parse_num_vec(candidate$n_tilde[[1L]]))
-  if (length(n) != D || (D > 1L && !identical(n_tilde, n[seq_len(D - 1L)])) || sum(n) > 192L) {
+  retained <- as.integer(candidate$retained_state_budget[[1L]])
+  max_readout_dimension <- as.integer(max_readout_dimension)
+  if (length(n) != D ||
+      (D > 1L && !identical(n_tilde, n[seq_len(D - 1L)])) ||
+      sum(n) != retained || retained > max_readout_dimension) {
     stop("Pure-DESN full-state width contract is malformed.", call. = FALSE)
   }
   app_qdesn_generate_article_reservoir(
@@ -418,7 +440,10 @@ app_joint_pure_build_design <- function(fixture, candidate, contract, selector =
   raw <- app_joint_pure_raw_matrix(full, y_history, candidate, fixture$registry_row)
   scale_params <- app_joint_exqdesn_phase151_scale_params(raw, seq_len(nrow(raw)) %in% train_local)
   raw_scaled <- app_qdesn_reservoir_scale_inputs(raw, scale_params = scale_params)$X
-  reservoir <- app_joint_pure_reservoir(candidate, ncol(raw_scaled))
+  max_readout_dimension <- contract$max_readout_dimension %||% 192L
+  reservoir <- app_joint_pure_reservoir(
+    candidate, ncol(raw_scaled), max_readout_dimension
+  )
   reservoir_meta <- app_joint_pure_reservoir_meta(candidate, ncol(raw_scaled))
   rolled <- app_qdesn_roll_article_reservoir(raw_scaled, reservoir, reservoir_meta)
   state_raw <- rolled$X_all
@@ -1106,16 +1131,21 @@ app_joint_pure_confirmation_runtime_allocation <- function() {
   )
 }
 
-app_joint_pure_confirmation_contract <- function(campaign_root) {
+app_joint_pure_confirmation_contract <- function(
+  campaign_root,
+  execution_branch = "work/joint-qdesn-pure-desn-recursive-selection-20260925",
+  run_tag = "joint_qdesn_pure_recursive_article_confirmation_jerez_15core_20260925",
+  source_worktree = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_pure_desn_recursive_selection_20260925"
+) {
   campaign_root <- normalizePath(campaign_root, mustWork = TRUE)
   tab <- app_read_csv(app_joint_article_corrected_contract_path())
   set <- function(name, value) tab <<- app_joint_pure_set_contract(tab, name, value)
   allocation <- app_joint_pure_confirmation_runtime_allocation()
   set("contract_version", "joint_qdesn_pure_recursive_article_confirmation_v2")
-  set("run_tag", "joint_qdesn_pure_recursive_article_confirmation_jerez_15core_20260925")
-  set("execution_branch", "work/joint-qdesn-pure-desn-recursive-selection-20260925")
+  set("run_tag", run_tag)
+  set("execution_branch", execution_branch)
   set("host_profile_id", "jerez_pure_recursive_15core_20260925")
-  set("source_worktree", "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_pure_desn_recursive_selection_20260925")
+  set("source_worktree", source_worktree)
   set("source_head", app_joint_article_git_value(c("rev-parse", "HEAD")))
   set("source_runtime_relative_path", file.path("application", "cache", basename(campaign_root)))
   source_hash <- app_sha256_file(file.path(campaign_root, "quantile_artifact_manifest.csv"))
@@ -1166,7 +1196,13 @@ app_joint_pure_future_cells <- function(selected, registry) {
   out
 }
 
-app_joint_pure_prepare_confirmation <- function(campaign_root, out_dir = app_joint_pure_confirmation_root()) {
+app_joint_pure_prepare_confirmation <- function(
+  campaign_root,
+  out_dir = app_joint_pure_confirmation_root(),
+  execution_branch = "work/joint-qdesn-pure-desn-recursive-selection-20260925",
+  run_tag = basename(out_dir),
+  source_worktree = normalizePath(getwd(), mustWork = TRUE)
+) {
   campaign_root <- normalizePath(campaign_root, mustWork = TRUE)
   if (!file.exists(file.path(campaign_root, "quantile_artifact_manifest.csv"))) {
     stop("Quantile VB closeout must precede article-fixture confirmation.", call. = FALSE)
@@ -1179,7 +1215,12 @@ app_joint_pure_prepare_confirmation <- function(campaign_root, out_dir = app_joi
   }
   app_ensure_dir(out_dir); app_ensure_dir(file.path(out_dir, "workers")); app_ensure_dir(file.path(out_dir, "mcmc_workers"))
   app_ensure_dir(file.path(out_dir, "initializers"))
-  contract_table <- app_joint_pure_confirmation_contract(campaign_root)
+  contract_table <- app_joint_pure_confirmation_contract(
+    campaign_root,
+    execution_branch = execution_branch,
+    run_tag = run_tag,
+    source_worktree = source_worktree
+  )
   contract_path <- app_write_csv(contract_table, file.path(out_dir, "frozen_contract.csv"))
   contract <- app_joint_article_read_contract(contract_path)
   app_joint_article_assert_execution_branch(contract)
@@ -1323,7 +1364,11 @@ app_joint_pure_transfer_inventory <- function(source_root) {
   inventory
 }
 
-app_joint_pure_score_contract <- function(source_root, inventory_path) {
+app_joint_pure_score_contract <- function(
+  source_root,
+  inventory_path,
+  run_tag = "joint_qdesn_pure_recursive_score_packet_jerez_15core_20260925"
+) {
   source_root <- normalizePath(source_root, mustWork = TRUE)
   inventory_path <- normalizePath(inventory_path, mustWork = TRUE)
   inventory <- app_read_csv(inventory_path)
@@ -1335,7 +1380,7 @@ app_joint_pure_score_contract <- function(source_root, inventory_path) {
   set("parent_contract_sha256", app_sha256_file(app_path(
     "application/config/joint_qdesn_recursive_mean_forecast_contract_v3.csv"
   )))
-  set("run_tag", "joint_qdesn_pure_recursive_score_packet_jerez_15core_20260925")
+  set("run_tag", run_tag)
   set("source_git_head", app_joint_article_git_value(c("rev-parse", "HEAD")))
   set("source_inventory_sha256", app_sha256_file(inventory_path))
   set("source_inventory_files", nrow(inventory))
@@ -1369,7 +1414,9 @@ app_joint_pure_prepare_score_packet <- function(
     inventory, file.path(packet_dir, "transfer_inventory.csv")
   )
   contract_path <- app_write_csv(
-    app_joint_pure_score_contract(source_root, inventory_path),
+    app_joint_pure_score_contract(
+      source_root, inventory_path, run_tag = basename(score_root)
+    ),
     file.path(packet_dir, "pure_recursive_score_contract.csv")
   )
   prepared <- app_joint_recursive_prepare(score_root, source_root, contract_path)

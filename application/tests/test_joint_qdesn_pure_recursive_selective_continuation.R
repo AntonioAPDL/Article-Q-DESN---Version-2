@@ -47,6 +47,26 @@ stopifnot(
     sort(app_joint_pure_continuation_changed_scenarios()))
 )
 
+stopifnot(
+  identical(app_joint_pure_quantile_reuse_plan_columns(), c(
+    "job_id", "stage_order", "stage_id", "replicate_id", "model_id",
+    "tau", "parent_tau", "dgp_seed", "design_fingerprint"
+  )),
+  identical(app_joint_pure_vb_reuse_plan_columns(), c(
+    "job_id", "scenario_id", "stage_order", "stage_id", "model_id", "tau",
+    "parent_tau", "component_seed", "selected_candidate_id",
+    "selected_architecture_signature", "selected_design_class",
+    "selected_rhs_tau0", "design_fingerprint"
+  )),
+  identical(app_joint_pure_mcmc_reuse_plan_columns(), c(
+    "worker_id", "scenario_id", "model_id", "likelihood_family",
+    "fit_structure", "chain_id", "chain_seed", "chain_start_seed",
+    "tau_seed_stride", "n_iter", "burn", "thin", "n_keep",
+    "inference_method_id", "candidate_id", "architecture_signature",
+    "design_class", "rhs_tau0", "design_fingerprint"
+  ))
+)
+
 bad <- target
 bad$candidate_id[bad$scenario_id == "normal_bridge"] <- "unexpected_change"
 app_write_csv(bad, file.path(target_root, "selected_family_backbones.csv"))

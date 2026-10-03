@@ -15,6 +15,32 @@ app_joint_pure_continuation_spec_columns <- function() {
   )
 }
 
+app_joint_pure_quantile_reuse_plan_columns <- function() {
+  c(
+    "job_id", "stage_order", "stage_id", "replicate_id", "model_id",
+    "tau", "parent_tau", "dgp_seed", "design_fingerprint"
+  )
+}
+
+app_joint_pure_vb_reuse_plan_columns <- function() {
+  c(
+    "job_id", "scenario_id", "stage_order", "stage_id", "model_id", "tau",
+    "parent_tau", "component_seed", "selected_candidate_id",
+    "selected_architecture_signature", "selected_design_class",
+    "selected_rhs_tau0", "design_fingerprint"
+  )
+}
+
+app_joint_pure_mcmc_reuse_plan_columns <- function() {
+  c(
+    "worker_id", "scenario_id", "model_id", "likelihood_family",
+    "fit_structure", "chain_id", "chain_seed", "chain_start_seed",
+    "tau_seed_stride", "n_iter", "burn", "thin", "n_keep",
+    "inference_method_id", "candidate_id", "architecture_signature",
+    "design_class", "rhs_tau0", "design_fingerprint"
+  )
+}
+
 app_joint_pure_values_equal <- function(x, y, tolerance = 1e-12) {
   if (length(x) != length(y)) return(FALSE)
   both_na <- is.na(x) & is.na(y)
@@ -240,12 +266,7 @@ app_joint_pure_import_quantile_reuse <- function(target_root, source_root) {
     "quantile_family_plan.csv"))
   source_families <- app_read_csv(file.path(source_root,
     "quantile_family_plan.csv"))
-  plan_columns <- c(
-    "job_id", "stage_order", "stage_id", "model_id", "tau", "parent_tau",
-    "component_seed", "selected_candidate_id",
-    "selected_architecture_signature", "selected_design_class",
-    "selected_rhs_tau0", "design_fingerprint"
-  )
+  plan_columns <- app_joint_pure_quantile_reuse_plan_columns()
   rows <- list(); manifests <- character()
   for (scenario in reusable) {
     target_qroot <- target_families$quantile_root[
@@ -298,12 +319,7 @@ app_joint_pure_import_vb_reuse <- function(target_root, source_root,
   reusable <- spec$scenario_id[spec$specification_identical]
   target_plan <- app_read_csv(file.path(target_root, "vb_worker_plan.csv"))
   source_plan <- app_read_csv(file.path(source_root, "vb_worker_plan.csv"))
-  plan_columns <- c(
-    "job_id", "scenario_id", "stage_order", "stage_id", "model_id", "tau",
-    "parent_tau", "component_seed", "selected_candidate_id",
-    "selected_architecture_signature", "selected_design_class",
-    "selected_rhs_tau0", "design_fingerprint"
-  )
+  plan_columns <- app_joint_pure_vb_reuse_plan_columns()
   target_plan <- target_plan[target_plan$scenario_id %in% reusable, , drop = FALSE]
   rows <- list(); manifests <- character()
   for (ii in seq_len(nrow(target_plan))) {
@@ -355,14 +371,7 @@ app_joint_pure_import_mcmc_reuse <- function(target_root, source_root,
     stop("Selective continuation requires exact M0 for every exAL MCMC cell.",
       call. = FALSE)
   }
-  plan_columns <- c(
-    "worker_id", "scenario_id", "model_id", "likelihood_family",
-    "fit_structure", "chain_id", "chain_seed", "chain_start_seed",
-    "tau_seed_stride", "n_iter", "burn", "thin", "n_keep",
-    "inference_method_id", "selected_candidate_id",
-    "selected_architecture_signature", "selected_design_class",
-    "selected_rhs_tau0", "design_fingerprint"
-  )
+  plan_columns <- app_joint_pure_mcmc_reuse_plan_columns()
   target_plan <- target_plan[target_plan$scenario_id %in% reusable, , drop = FALSE]
   rows <- list(); manifests <- character()
   for (ii in seq_len(nrow(target_plan))) {

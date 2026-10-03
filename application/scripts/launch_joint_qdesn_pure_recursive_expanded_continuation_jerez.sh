@@ -85,7 +85,7 @@ preflight() {
     -v list=",${CPU_LIST}," '
       index(list, "," $1 ",") && $2 + 0 >= 20 {print}
     ')"
-  broad_affinity="0-$(($(nproc) - 1))"
+  broad_affinity="0-$(lscpu -p=CPU | grep -v '^#' | sort -n | tail -1)"
   : >"$CONTROL_ROOT/high_cpu_background_affinity.csv"
   echo "pid,current_cpu,pcpu,affinity,classification,command" \
     >"$CONTROL_ROOT/high_cpu_background_affinity.csv"

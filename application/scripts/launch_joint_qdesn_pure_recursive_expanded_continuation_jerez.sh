@@ -187,16 +187,30 @@ run_internal() {
       --stage quantile --target-root "$CAMPAIGN_ROOT" \
       --source-root "$SOURCE_CAMPAIGN"
   fi
-  "$R_BIN" -e '
-    source(commandArgs(TRUE)[[1L]])
-    h <- app_joint_pure_quantile_health(commandArgs(TRUE)[[2L]])
-    stopifnot(h$expected == 408L, h$completed == 306L,
-      h$failed == 0L, h$remaining == 102L)
-  ' "$SCRIPT_DIR/_joint_qdesn_pure_recursive_bootstrap.R" "$CAMPAIGN_ROOT"
-  for stage_order in 1 2 3 4 5 6 7 8; do run_quantile_stage "$stage_order"; done
   if [[ ! -f "$CAMPAIGN_ROOT/quantile_final_health.csv" ]]; then
+    "$R_BIN" -e '
+      source(commandArgs(TRUE)[[1L]])
+      h <- app_joint_pure_quantile_health(commandArgs(TRUE)[[2L]])
+      stopifnot(h$expected == 408L, h$completed >= 306L,
+        h$completed <= 408L, h$failed == 0L,
+        h$remaining == 408L - h$completed)
+    ' "$SCRIPT_DIR/_joint_qdesn_pure_recursive_bootstrap.R" "$CAMPAIGN_ROOT"
+    for stage_order in 1 2 3 4 5 6 7 8; do
+      run_quantile_stage "$stage_order"
+    done
     "$R_BIN" "$SCRIPT_DIR/finalize_joint_qdesn_pure_recursive_stage.R" \
       --root "$CAMPAIGN_ROOT" --stage quantile
+  else
+    "$R_BIN" -e '
+      source(commandArgs(TRUE)[[1L]])
+      root <- commandArgs(TRUE)[[2L]]
+      h <- app_joint_pure_quantile_health(root)
+      manifest <- file.path(root, "quantile_artifact_manifest.csv")
+      verification <- app_joint_shared_verify_manifest(root, manifest)
+      stopifnot(h$expected == 408L, h$completed == 408L,
+        h$failed == 0L, h$remaining == 0L,
+        nrow(verification) > 0L, all(verification$verified))
+    ' "$SCRIPT_DIR/_joint_qdesn_pure_recursive_bootstrap.R" "$CAMPAIGN_ROOT"
   fi
 
   if [[ ! -f "$CONFIRMATION_ROOT/launch_readiness.csv" ]]; then

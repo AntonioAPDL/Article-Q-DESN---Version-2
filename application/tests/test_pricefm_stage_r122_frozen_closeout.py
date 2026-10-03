@@ -230,6 +230,26 @@ def test_operators_use_identical_truth_units_and_horizon_blocks():
     with pytest.raises(RuntimeError): PROBE.score_operators(truth, values)
 
 
+def test_oracle_readouts_convert_time_major_design_without_mixing_origins():
+    origins = 3
+    design = np.asarray([[100 * horizon + origin, 1.]
+                         for horizon in range(96) for origin in range(origins)])
+    fits = {tau: {"beta_mean": np.asarray([1., position / 10])}
+            for position, tau in enumerate(PROBE.RT.QUANTILES)}
+    result = PROBE.teacher_forced_quantile_readouts(design, fits, origins)
+    assert result.shape == (origins, 96, 7)
+    for origin in range(origins):
+        for horizon in (0, 1, 47, 95):
+            assert result[origin, horizon] == pytest.approx(100 * horizon + origin + np.arange(7) / 10)
+
+
+def test_oracle_readouts_reject_wrong_origin_or_design_dimensions():
+    fits = {tau: {"beta_mean": np.ones(1)} for tau in PROBE.RT.QUANTILES}
+    for design, origins in ((np.ones((96, 1)), 2), (np.ones(96), 1), (np.ones((0, 1)), 0)):
+        with pytest.raises(RuntimeError, match="time-major"):
+            PROBE.teacher_forced_quantile_readouts(design, fits, origins)
+
+
 def test_production_protocol_has_no_authorized_fitting_or_publication():
     protocol = json.loads(AUDIT.DEFAULT_PROTOCOL.read_text())
     assert protocol["posterior_paths"] == 500 and protocol["diagnostic_origins_per_split"] == 12

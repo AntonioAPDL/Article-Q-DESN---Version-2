@@ -117,6 +117,15 @@ def score_operators(truth: np.ndarray, values: dict[str, np.ndarray]) -> tuple[l
     return rows, horizons
 
 
+def teacher_forced_quantile_readouts(design: np.ndarray, fits: dict[float, Any], origins: int) -> np.ndarray:
+    AUDIT.require(design.ndim == 2 and origins > 0 and design.shape[0] == 96 * origins,
+                  "invalid time-major oracle design")
+    rows = np.stack([design @ fits[tau]["beta_mean"] for tau in RT.QUANTILES], axis=-1)
+    # teacher_forced_design stacks all origins within each horizon, whereas
+    # recursive_quantile_forecast returns all horizons within each origin.
+    return rows.reshape(96, origins, 7).transpose(1, 0, 2)
+
+
 def case_job(job: dict[str, Any]) -> dict[str, Any]:
     os.sched_setaffinity(0, {job["cpu"]})
     control = AUDIT.read_json(Path(job["prep"]) / "launch_control.json")
@@ -148,9 +157,9 @@ def case_job(job: dict[str, Any]) -> dict[str, Any]:
     # This control deliberately uses observed preceding target values within
     # the internal validation path. It is never an operational forecast.
     oracle_design, _, _ = RT.teacher_forced_design(RT.subset_arrays(scaled, selected), spec)
-    predictions["oracle_teacher_forced_history"] = np.stack(
-        [oracle_design @ quantile[tau]["beta_mean"] for tau in RT.QUANTILES], axis=-1,
-    ).reshape(len(selected), 96, 7) * scaler["price_scale"] + scaler["price_mean"]
+    predictions["oracle_teacher_forced_history"] = teacher_forced_quantile_readouts(
+        oracle_design, quantile, len(selected),
+    ) * scaler["price_scale"] + scaler["price_mean"]
     rows, horizon_rows = score_operators(truth, predictions)
     deterministic = RT.recursive_normal_score(scaled, spec, normal, selected, maximum_origins=None)
     for metric in ("AQL", "late_AQL", "median_MAE", "interval_80_width"):
@@ -174,6 +183,7 @@ def case_job(job: dict[str, Any]) -> dict[str, Any]:
                   "test_opened": False, "article_mutated": False, "registry_mutated": False,
                   "statistical_interpretation": "averaged_conditional_quantile_readouts_not_marginal_predictive_quantiles",
                   "oracle_history_control_is_not_deployable": True,
+                  "oracle_design_order": "horizon_origin_to_origin_horizon",
                   "scaler": scaler, "processed_source_manifest": list(arrays.source_manifest),
                   "output_sha256": {x.name: sha256_file(x) for x in path.iterdir()}}
         write_json(path / "terminal.json", result)

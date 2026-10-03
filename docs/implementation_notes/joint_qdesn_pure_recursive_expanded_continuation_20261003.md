@@ -103,7 +103,10 @@ silently overwritten.
 - Parallelism: 15 distinct physical cores with affinity
   `0,1,8,9,12,13,19,20,24,25,27,28,29,30,31`. CPU 15 is deliberately
   excluded because the prelaunch audit found an unrelated long-running process
-  there; CPUs 15 and 16 remain outside the continuation allocation.
+  there; CPUs 15 and 16 remain outside the continuation allocation. The gate
+  blocks pinned or restricted-affinity conflicts. Two unrelated high-CPU Python
+  processes with full `0-63` affinity are recorded but allowed because they are
+  scheduler-migratable and leave more than enough host capacity.
 - BLAS and numerical libraries: one thread per worker.
 - Pinned runtime: R 4.6.0.
 - Historical expanded and source runtime roots remain immutable inputs. The new

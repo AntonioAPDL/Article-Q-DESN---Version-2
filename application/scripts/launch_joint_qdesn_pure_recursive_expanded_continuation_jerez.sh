@@ -65,7 +65,8 @@ preflight() {
   require_repository
   ensure_campaign_link
   declare -A physical=()
-  local cpu package core key free_gib busy_processes
+  local cpu package core key free_gib busy_processes affinity broad_affinity
+  local psr pcpu pid command pinned_conflicts=""
   for cpu in "${CPUS[@]}"; do
     package="$(<"/sys/devices/system/cpu/cpu${cpu}/topology/physical_package_id")"
     core="$(<"/sys/devices/system/cpu/cpu${cpu}/topology/core_id")"
@@ -84,9 +85,26 @@ preflight() {
     -v list=",${CPU_LIST}," '
       index(list, "," $1 ",") && $2 + 0 >= 20 {print}
     ')"
-  [[ -z "$busy_processes" ]] || {
-    echo "A selected continuation core is already busy:" >&2
-    printf '%s\n' "$busy_processes" >&2
+  broad_affinity="0-$(($(nproc) - 1))"
+  : >"$CONTROL_ROOT/high_cpu_background_affinity.csv"
+  echo "pid,current_cpu,pcpu,affinity,classification,command" \
+    >"$CONTROL_ROOT/high_cpu_background_affinity.csv"
+  while read -r psr pcpu pid command; do
+    [[ -n "${pid:-}" ]] || continue
+    affinity="$(taskset -pc "$pid" 2>/dev/null | sed 's/^.*: //')"
+    if [[ "$affinity" == "$broad_affinity" ]]; then
+      classification="broad_affinity_background_allowed"
+    else
+      classification="pinned_or_restricted_conflict"
+      pinned_conflicts+="${pid}:${affinity}:${command}"$'\n'
+    fi
+    printf '%s,%s,%s,"%s",%s,"%s"\n' "$pid" "$psr" "$pcpu" \
+      "$affinity" "$classification" "${command//\"/\"\"}" \
+      >>"$CONTROL_ROOT/high_cpu_background_affinity.csv"
+  done <<<"$busy_processes"
+  [[ -z "$pinned_conflicts" ]] || {
+    echo "A selected continuation core has a pinned/restricted conflict:" >&2
+    printf '%s' "$pinned_conflicts" >&2
     exit 64
   }
   if pgrep -af 'run_joint_qdesn_pure_recursive_(quantile_worker|article_vb|article_mcmc)|run_joint_qdesn_recursive_(dgp_oracle_worker|mean_forecast_worker)' >/dev/null; then

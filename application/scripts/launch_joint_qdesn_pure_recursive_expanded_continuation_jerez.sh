@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+source "$SCRIPT_DIR/_joint_qdesn_score_queue.sh"
 R_BIN="/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
 BRANCH="work/joint-qdesn-pure-desn-expanded-continuation-20261003"
 SOURCE_WORKTREE="/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__joint_pure_desn_recursive_selection_20260925"
@@ -152,14 +153,22 @@ run_quantile_stage() {
 run_score_queue() {
   local label="$1" script="$2" id_flag="$3"; shift 3
   local jobs=("$@") pids=() failed=0
+  mkdir -p "$SCORE_ROOT/queue_receipts/$label"
   for slot in "${!CPUS[@]}"; do
     (
+      local slot_jobs=()
       for ((index=slot; index<${#jobs[@]}; index+=15)); do
+        slot_jobs+=("${jobs[$index]}")
+      done
+      run_score_job() {
+        local worker_id="$1"
         env JOINT_RECURSIVE_MEAN_ALLOW_PRODUCTION=JEREZ_PURE_RECURSIVE_15_PHYSICAL_SHARED \
           taskset -c "${CPUS[$slot]}" nice -n 10 "$R_BIN" "$script" \
           --root "$SCORE_ROOT" --source-root "$CONFIRMATION_ROOT" \
-          --contract-path "$CONTRACT_PATH" "$id_flag" "${jobs[$index]}"
-      done
+          --contract-path "$CONTRACT_PATH" "$id_flag" "$worker_id"
+      }
+      joint_qdesn_run_fail_isolated_jobs \
+        "$SCORE_ROOT/queue_receipts/$label" run_score_job "${slot_jobs[@]}"
     ) >"$SCORE_ROOT/logs/${label}_slot_$(printf '%02d' "$slot").log" 2>&1 &
     pids+=("$!")
   done

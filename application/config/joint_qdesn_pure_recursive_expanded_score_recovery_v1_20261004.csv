@@ -1,0 +1,19 @@
+section,name,value,type,description
+identity,recovery_version,joint_qdesn_pure_recursive_score_recovery_v1,character,Score-only numerical-integration recovery for the two incomplete expanded-continuation score cells.
+identity,parent_contract_sha256,bbf8b12dd05d352eb0cfa84ffc71b9510ff667a68cecc897a29991f85cd683c7,character,SHA-256 of the frozen expanded-continuation score contract; its scientific score and gates remain unchanged.
+identity,cell_plan_sha256,bdd9b9406d0d0dedc468795797e9f96ca9fdb15e035eb2e4ef837634caf7dc72,character,SHA-256 of the frozen expanded-continuation 64-cell score plan.
+target,recovery_worker_id,41,integer,Laplace Bridge joint AL MCMC cell requiring state-integration rescue.
+target,recovery_model_cell_id,laplace_bridge__joint_qdesn_rhs,character,Expected identity of recovery worker 41.
+target,unchanged_worker_id,56,integer,Persistent Heavy Tail independent exAL MCMC cell skipped after worker 41 stopped its queue slot and must run unchanged.
+evidence,failed_marker_sha256,1a955c6e3090832f65b1c5ec007fe014d08b6821f1b214e6a173dfa66e569998,character,SHA-256 of the preserved expanded-continuation worker-41 FAILED marker.
+evidence,failure_diagnostics_sha256,3e44a7ecf8c30501b0c24d736c6c94301506f91b27a231ad31e21a6559015040,character,SHA-256 of the original three-tier expanded-continuation worker-41 failure diagnostics.
+evidence,stability_progress_sha256,9628dbdb16336efcc2f7e9a3908f9af088a887052ca8eb48cb34c7b5db186bdc,character,SHA-256 of the original expanded-continuation worker-41 stability progress.
+integration,state_uniform_policy,antithetic_uniform_pairs,character,Pair every predictive uniform trajectory with its complement to reduce state-integral Monte Carlo error.
+integration,antithetic_pair_counts,1;2,integer_vector,Try one antithetic pair per retained posterior draw then two pairs only if needed.
+integration,pair_seed_stride,104729,integer,Deterministic prime offset between independent antithetic pairs.
+integration,reuse_verified_failure,true,logical,Reuse the hash-verified original tier diagnostics instead of recomputing failed tiers.
+gates,preserve_original_score_gate,true,logical,Keep the frozen relative half-score tolerance of 0.005 unchanged.
+gates,preserve_original_rms_gate,true,logical,Keep the frozen standardized RMS tolerance of 0.10 unchanged.
+gates,preserve_posterior_draws,true,logical,Do not refit or change VB/MCMC draws DESN controls RHS controls fixture oracle quantiles or scoring rule.
+runtime,workers,2,integer,Run the unchanged pending cell and numerical-integration recovery on two distinct idle physical cores.
+runtime,rscript,/data/jaguir26/local/opt/R/4.6.0/bin/Rscript,character,Pinned Jerez R executable.

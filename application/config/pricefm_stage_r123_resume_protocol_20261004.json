@@ -1,0 +1,14 @@
+{
+  "stage": "R123_resource_recovery",
+  "frozen_fit_head": "7ae8d6f578000ab17cd30567a23f7b806028cee0",
+  "maximum_workers": 15,
+  "minimum_workers": 9,
+  "resource_attempts": 3,
+  "resource_backoff_seconds": 30,
+  "expected_ridge_cells": 1298,
+  "minimum_robust_structures": 30,
+  "official_test_authorized": false,
+  "article_mutation_authorized": false,
+  "statistical_changes_authorized": false,
+  "notes": "Execution-only recovery; use the frozen fit worktree and retain every completed screening artifact. Original ten-second, distinct-physical-core, 20-percent-busy and 200-GiB resource gates remain unchanged."
+}

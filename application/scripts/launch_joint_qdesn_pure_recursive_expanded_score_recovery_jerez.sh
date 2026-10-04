@@ -12,7 +12,7 @@ CONTRACT_PATH="${JOINT_PURE_SCORE_CONTRACT:-${SOURCE_ROOT}/score_packet/pure_rec
 RECOVERY_CONTRACT="${JOINT_PURE_SCORE_RECOVERY_CONTRACT:-${REPO_ROOT}/application/config/joint_qdesn_pure_recursive_expanded_score_recovery_v1_20261004.csv}"
 CPU_LIST="${JOINT_PURE_SCORE_RECOVERY_CPUS:-}"
 SESSION="${JOINT_PURE_SCORE_RECOVERY_SESSION:-joint_pure_expanded_score_recovery_20261004}"
-RUNTIME="${SCORE_ROOT}/expanded_score_recovery_v1"
+RUNTIME="${SCORE_ROOT}/score_recovery_v1"
 EXPECTED_BRANCH="work/joint-qdesn-pure-desn-expanded-score-closeout-20261004"
 MODE="${1:---preflight}"
 

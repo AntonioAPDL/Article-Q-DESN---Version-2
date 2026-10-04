@@ -6,7 +6,8 @@ source(file.path(dirname(normalizePath(sub("^--file=", "", grep(
 
 args <- app_parse_args(list(
   root = NA_character_, source_root = NA_character_, contract_path = NA_character_,
-  review_contract_path = app_joint_recursive_review_contract_path()
+  review_contract_path = app_joint_recursive_review_contract_path(),
+  recovery_contract_path = app_joint_recursive_recovery_contract_path()
 ))
 authorization <- Sys.getenv("JOINT_RECURSIVE_MEAN_ALLOW_PRODUCTION")
 if (!identical(authorization, "JEREZ_PURE_RECURSIVE_SCORE_REVIEW_V2")) {
@@ -29,7 +30,8 @@ if (!identical(contract$version, "joint_qdesn_pure_recursive_score_packet_v1") |
     call. = FALSE)
 }
 
-prior_recovery_path <- app_joint_recursive_recovery_contract_path()
+prior_recovery_path <- args[["recovery-contract-path"]] %||%
+  args$recovery_contract_path
 if (app_sha256_file(prior_recovery_path) != review$prior_recovery_contract_sha256) {
   stop("Strict recovery contract differs from the review addendum.", call. = FALSE)
 }

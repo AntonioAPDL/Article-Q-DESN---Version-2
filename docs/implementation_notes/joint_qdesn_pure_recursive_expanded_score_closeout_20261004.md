@@ -106,6 +106,13 @@ chain-deviation, draw-count, trajectory-count, crossing, and manifest check
 passes. The packet must then state
 `COMPLETE_WITH_ONE_SCORE_STABILITY_REVIEW`, never 64 strict passes.
 
+The review-contract materializer is intentionally unavailable until strict
+recovery has produced exactly `63 complete / 1 failed / 0 pending`. It binds
+the expanded score contract, cell plan, strict-recovery contract, worker-41
+failure evidence, original failure inventory, and completed worker-56 manifest
+by SHA-256. The review launcher passes the expanded recovery contract
+explicitly and requires a clean, synchronized dedicated branch.
+
 ## Final analysis contract
 
 Only a complete 64-cell packet may be compared. Report, by scenario and model:
@@ -144,6 +151,17 @@ Cleanup is a separate manifest-driven closeout action. Before deletion:
 6. record bytes freed, paths removed, evidence retained, and post-cleanup hash
    verification.
 
+The audited deletion surface is limited to the prior narrow packet's eight
+oracle-bank RDS files and sixteen oracle-shard RDS files. All 24 payloads must
+have byte-identical copies in the current expanded packet before they are
+eligible. `cleanup_joint_qdesn_pure_recursive_legacy_oracles.R` first writes a
+hash inventory and, in apply mode, additionally requires the current 64-cell
+packet, no active JOINT worker/finalizer, and exact cleanup authorization. It
+preserves the prior final packet, score tables, shard summaries, artifact
+manifests, DGP manifest, and a compaction receipt. Current oracle payloads,
+posterior draws, selection caches, winner initializers, fixtures, and designs
+are protected.
+
 Ambiguous roots fail closed and remain in place. No cleanup runs while a JOINT
 worker or finalizer is active.
 
@@ -153,9 +171,9 @@ worker or finalizer is active.
 - [x] Reuse the validated strict-recovery and bounded-review design.
 - [x] Freeze the expanded-continuation strict-recovery hashes.
 - [x] Implement failure-isolated score queues and behavioral tests.
+- [x] Commit, push, and synchronize the dedicated closeout branch.
 - [ ] Wait for the active score controller to close.
 - [ ] Verify the exact `62 / 1 / 1` recovery entry state.
-- [ ] Commit, push, and synchronize the dedicated closeout branch.
 - [ ] Select two idle physical cores and pass strict-recovery preflight.
 - [ ] Complete ordinary worker 56 and strict worker-41 recovery.
 - [ ] If required, freeze and execute the bounded-review addendum.

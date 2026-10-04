@@ -29,6 +29,8 @@ review_launcher <- read_script(
   "launch_joint_qdesn_pure_recursive_expanded_score_review_jerez.sh")
 materializer <- read_script(
   "prepare_joint_qdesn_pure_recursive_expanded_score_review_contract.R")
+cleanup <- read_script(
+  "cleanup_joint_qdesn_pure_recursive_legacy_oracles.R")
 stopifnot(
   grepl("recovery_contract_path", closeout, fixed = TRUE),
   grepl("--recovery-contract-path", review_launcher, fixed = TRUE),
@@ -39,6 +41,10 @@ stopifnot(
     fixed = TRUE),
   grepl("63 complete and worker 41 failed", materializer, fixed = TRUE),
   grepl("score_gate_multiplier", materializer, fixed = TRUE),
-  grepl("required_state_trajectory_draws", materializer, fixed = TRUE)
+  grepl("required_state_trajectory_draws", materializer, fixed = TRUE),
+  grepl("JEREZ_JOINT_LEGACY_STORAGE_CLEANUP_V1", cleanup, fixed = TRUE),
+  grepl("current_duplicates_verified", cleanup, fixed = TRUE),
+  grepl("JOINT workers or finalizers are active", cleanup, fixed = TRUE),
+  grepl("current 64-cell final packet is not frozen", cleanup, fixed = TRUE)
 )
 cat("Expanded score closeout wiring tests passed.\n")

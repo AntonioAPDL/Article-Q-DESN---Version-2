@@ -90,6 +90,49 @@ app_latent_joint_rhs_gate <- function(states, iter, component) {
   list(passed = all(rows$passed), blocks = rows)
 }
 
+app_latent_joint_release_budget <- function(states, outer_offset, outer_max, component) {
+  state_names <- names(states)
+  final_outer <- as.integer(outer_offset) + as.integer(outer_max)
+  rows <- lapply(seq_along(states), function(k) {
+    state <- states[[k]]
+    control <- app_latent_normalize_rhs_control(state$rhs_control %||% list())
+    update_count <- as.integer(state$tau_update_count %||% 0L)
+    first_update <- as.integer(state$first_tau_update_iter %||% NA_integer_)
+    has_post_warmup <- isTRUE(state$has_post_warmup_tau_update)
+    if (final_outer > as.integer(outer_offset)) {
+      for (iter in seq.int(as.integer(outer_offset) + 1L, final_outer)) {
+        warmup_active <- iter <= control$freeze_tau_warmup_iters
+        scheduled <- !warmup_active && (iter %% control$update_every == 0L)
+        forced <- !warmup_active && control$freeze_tau_warmup_iters > 0L && !has_post_warmup
+        if (scheduled || forced) {
+          update_count <- update_count + 1L
+          if (!is.finite(first_update)) first_update <- iter
+          if (iter > control$freeze_tau_warmup_iters) has_post_warmup <- TRUE
+        }
+      }
+    }
+    enough_updates <- update_count >= control$min_tau_updates
+    response_possible <- is.finite(first_update) && final_outer > first_update
+    data.frame(
+      component = component,
+      rhs_block = if (!is.null(state_names) && nzchar(state_names[[k]])) state_names[[k]] else as.character(k),
+      outer_offset = as.integer(outer_offset),
+      maximum_outer_iteration = final_outer,
+      freeze_outer_iters = control$freeze_tau_warmup_iters,
+      update_every = control$update_every,
+      min_tau_updates = control$min_tau_updates,
+      current_tau_updates = as.integer(state$tau_update_count %||% 0L),
+      maximum_tau_updates = update_count,
+      first_tau_update_outer = first_update,
+      post_release_coefficient_response_possible = response_possible,
+      passed = enough_updates && response_possible,
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- do.call(rbind, rows)
+  list(passed = all(rows$passed), blocks = rows)
+}
+
 app_latent_joint_validate_continuation <- function(
   initial_joint_fit,
   designs,
@@ -303,11 +346,33 @@ app_fit_latent_path_joint_vb_core <- function(
   terminal_consecutive <- as.integer(vb_args$joint_terminal_consecutive_passes %||% 3L)
   inner_max <- as.integer(vb_args$joint_inner_max_iter %||% 30L)
   inner_min <- as.integer(vb_args$joint_inner_min_iter %||% min(10L, inner_max))
+  inner_workers <- as.integer(vb_args$joint_inner_workers %||% 1L)
+  require_post_release <- isTRUE(vb_args$joint_require_post_release %||% FALSE)
   if (outer_max < 1L || outer_min < 1L || outer_min > outer_max || inner_max < 2L ||
       inner_min < 1L || inner_min > inner_max || outer_tol <= 0 || rhs_tol <= 0 ||
       rhs_inner_min < 1L || rhs_inner_max < rhs_inner_min || rhs_inner_consecutive < 1L ||
-      terminal_consecutive < 1L) {
+      terminal_consecutive < 1L || inner_workers < 1L || inner_workers > K) {
     stop("Invalid joint Part 4 CAVI controls.", call. = FALSE)
+  }
+  if (inner_workers > 1L && !identical(.Platform$OS.type, "unix")) {
+    stop("Parallel joint quantile updates require a Unix-like platform.", call. = FALSE)
+  }
+  release_reference <- app_latent_joint_release_budget(
+    rhs_reference, outer_offset, outer_max, "reference"
+  )
+  release_discrepancy <- app_latent_joint_release_budget(
+    rhs_discrepancy, outer_offset, outer_max, "discrepancy"
+  )
+  release_budget <- list(
+    passed = isTRUE(release_reference$passed) && isTRUE(release_discrepancy$passed),
+    blocks = rbind(release_reference$blocks, release_discrepancy$blocks)
+  )
+  if (require_post_release && !isTRUE(release_budget$passed)) {
+    failed <- release_budget$blocks[!release_budget$blocks$passed, , drop = FALSE]
+    stop(sprintf(
+      "Joint Part 4 production budget cannot release and respond after RHS warmup for: %s.",
+      paste(paste(failed$component, failed$rhs_block, sep = "/"), collapse = ", ")
+    ), call. = FALSE)
   }
   seed <- as.integer(seed %||% vb_args$seed %||% 20260513L)
   trace_new <- vector("list", outer_max)
@@ -323,10 +388,11 @@ app_fit_latent_path_joint_vb_core <- function(
     old_theta <- do.call(cbind, lapply(fits, function(x) x$summary$theta_mean))
     ref_terms <- app_glofas_part3_rhs_prior_terms(rhs_reference, moments$reference_mean)
     disc_terms <- app_glofas_part3_rhs_prior_terms(rhs_discrepancy, moments$discrepancy_mean)
-    for (k in seq_len(K)) {
+    fit_quantile <- function(k) {
       design <- designs[[k]]
       design$p0 <- tau[[k]]
       inner_args <- vb_args
+      inner_args$joint_inner_workers <- NULL
       inner_args$max_iter <- inner_max
       inner_args$min_iter_elbo <- inner_min
       inner_args$n_draws <- as.integer(vb_args$n_draws %||% 500L)
@@ -335,7 +401,7 @@ app_fit_latent_path_joint_vb_core <- function(
       inner_args$beta_ridge <- list(precision = 1.0e-12)
       inner_args$initial_state <- app_latent_joint_initial_state(fits[[k]])
       inner_args$prior_addition <- app_latent_joint_prior_additions(ref_terms, disc_terms, design, k)
-      fits[[k]] <- if (identical(likelihood, "al")) {
+      if (identical(likelihood, "al")) {
         inner_args$likelihood_family <- "al"
         app_fit_latent_path_al_vb_core(
           design, tau[[k]], coefficient_prior = "ridge", vb_args = inner_args,
@@ -348,6 +414,22 @@ app_fit_latent_path_joint_vb_core <- function(
         )
       }
     }
+    fits_updated <- if (inner_workers > 1L) {
+      parallel::mclapply(
+        seq_len(K), fit_quantile, mc.cores = inner_workers,
+        mc.preschedule = TRUE, mc.set.seed = FALSE
+      )
+    } else {
+      lapply(seq_len(K), fit_quantile)
+    }
+    failed_inner <- vapply(fits_updated, inherits, logical(1L), what = "try-error")
+    if (any(failed_inner)) {
+      stop(sprintf(
+        "Joint Part 4 inner quantile updates failed for tau: %s.",
+        paste(format(tau[failed_inner], trim = TRUE), collapse = ", ")
+      ), call. = FALSE)
+    }
+    fits <- fits_updated
     moments <- coefficient_moments(fits)
     rhs_reference_solve <- app_glofas_part3_rhs_solve_fixed_moments(
       rhs_reference,
@@ -496,6 +578,9 @@ app_fit_latent_path_joint_vb_core <- function(
     ),
     terminal_consecutive_passes_required = terminal_consecutive,
     rhs_schedule_rebase_audit = rhs_schedule_rebase_audit,
+    rhs_release_budget_audit = release_budget$blocks,
+    joint_require_post_release = require_post_release,
+    joint_inner_workers = inner_workers,
     trace = trace,
     runtime_seconds = previous_runtime_seconds +
       as.numeric(difftime(Sys.time(), started, units = "secs")),

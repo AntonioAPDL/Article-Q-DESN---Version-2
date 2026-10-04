@@ -30,6 +30,7 @@ args <- app_parse_args(list(
   additional_outer_max_iter = 5L,
   inner_max_iter = 30L,
   inner_min_iter = 10L,
+  inner_workers = 1L,
   outer_tol = 1.0e-3,
   n_draws = 500L,
   joint_rhs_freeze_outer_iters = 5L,
@@ -39,7 +40,8 @@ args <- app_parse_args(list(
   joint_rhs_inner_max_iter = 50L,
   joint_rhs_inner_consecutive_passes = 2L,
   terminal_consecutive_passes = 3L,
-  allow_rhs_schedule_rebase = FALSE
+  allow_rhs_schedule_rebase = FALSE,
+  require_post_release = TRUE
 ))
 
 source_root <- app_resolve_path(args$source_runtime_root, must_work = TRUE)
@@ -145,6 +147,7 @@ run_continuation <- function() {
   vb_args$joint_outer_tol <- as.numeric(args$outer_tol)
   vb_args$joint_inner_max_iter <- as.integer(args$inner_max_iter)
   vb_args$joint_inner_min_iter <- as.integer(args$inner_min_iter)
+  vb_args$joint_inner_workers <- as.integer(args$inner_workers)
   vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
   vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
   vb_args$joint_rhs_tol <- as.numeric(args$joint_rhs_tol)
@@ -153,9 +156,11 @@ run_continuation <- function() {
   vb_args$joint_rhs_inner_consecutive_passes <- as.integer(args$joint_rhs_inner_consecutive_passes)
   vb_args$joint_terminal_consecutive_passes <- as.integer(args$terminal_consecutive_passes)
   vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase)
+  vb_args$joint_require_post_release <- app_as_bool(args$require_post_release)
   vb_args$n_draws <- as.integer(args$n_draws)
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||
+      vb_args$joint_inner_workers < 1L ||
       vb_args$joint_rhs_freeze_outer_iters < 0L || vb_args$joint_rhs_min_tau_updates < 0L ||
       vb_args$joint_rhs_inner_min_iter < 1L ||
       vb_args$joint_rhs_inner_max_iter < vb_args$joint_rhs_inner_min_iter ||
@@ -178,6 +183,12 @@ run_continuation <- function() {
     seed = as.integer(model_rows$reservoir_seed[[1L]]),
     initial_joint_fit = source_joint
   )
+  rhs_release_qualified <- nrow(joint$rhs_convergence_diagnostics) > 0L &&
+    all(joint$rhs_convergence_diagnostics$passed) &&
+    all(joint$rhs_convergence_diagnostics$coefficient_response_after_release)
+  if (isTRUE(vb_args$joint_require_post_release) && !isTRUE(rhs_release_qualified)) {
+    stop("The production continuation ended without a qualified post-release RHS response.", call. = FALSE)
+  }
   continuation_seconds <- as.numeric(difftime(Sys.time(), started, units = "secs"))
   fit_path <- file.path(output_root, "objects", paste0(output_job_id, "_fit_side.rds"))
   app_glofas_part4_atomic_save_rds(joint, fit_path)
@@ -266,6 +277,8 @@ run_continuation <- function() {
     additional_outer_max_iter = vb_args$joint_outer_max_iter,
     inner_max_iter = vb_args$joint_inner_max_iter,
     inner_min_iter = vb_args$joint_inner_min_iter,
+    inner_workers = vb_args$joint_inner_workers,
+    require_post_release = vb_args$joint_require_post_release,
     inherited_rhs_freeze_vb_iters = joint$rhs_schedule$inherited$freeze_tau_warmup_iters,
     joint_rhs_freeze_outer_iters = joint$rhs_schedule$effective$freeze_tau_warmup_iters,
     joint_rhs_min_tau_updates = joint$rhs_schedule$effective$min_tau_updates,
@@ -302,6 +315,7 @@ run_continuation <- function() {
     sprintf("fit_side_sha256=%s", app_sha256_file(fit_path)),
     sprintf("converged=%s", joint$converged),
     sprintf("converged_rhs=%s", joint$converged_rhs),
+    sprintf("rhs_release_qualified=%s", rhs_release_qualified),
     sprintf("stopping_reason=%s", joint$stopping_reason)
   ), completed)
   invisible(joint)

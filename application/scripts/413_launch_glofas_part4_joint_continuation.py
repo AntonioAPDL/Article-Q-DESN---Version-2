@@ -33,8 +33,11 @@ def completed_value(path: Path, key: str) -> str:
 
 def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job: str,
             max_cumulative: int, batch_size: int,
+            inner_workers: int = 7, min_rhs_tau_updates: int = 3,
             resume_fit_path: Path | None = None,
             resume_trace_path: Path | None = None) -> dict[str, object]:
+    if inner_workers < 1 or min_rhs_tau_updates < 1:
+        raise RuntimeError("Continuation workers and RHS update requirements must be positive")
     expected_completed = source / "status" / f"{source_job}.completed"
     if not expected_completed.exists():
         raise RuntimeError(f"Source joint fit is not completed: {source_job}")
@@ -50,6 +53,10 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
         initial_outer = max(0, sum(1 for _ in handle) - 1)
     if initial_outer >= max_cumulative:
         raise RuntimeError("Source already meets or exceeds the continuation safety ceiling")
+    minimum_cumulative = 5 + min_rhs_tau_updates + 1
+    if max_cumulative < minimum_cumulative:
+        raise RuntimeError(
+            f"Continuation ceiling must reach at least outer {minimum_cumulative} for RHS release and response")
     for sub in ("objects", "predictions", "scores", "traces", "coefficients", "logs", "status", "manifests"):
         (output / sub).mkdir(parents=True, exist_ok=True)
     contract = {
@@ -63,10 +70,14 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
         "design_sha256": sha256(design), "scoring_sidecar_sha256": sha256(sidecar),
         "initial_outer_iterations": initial_outer,
         "batch_size": batch_size, "max_cumulative_outer_iterations": max_cumulative,
+        "inner_workers": inner_workers,
         "outer_tolerance": 1e-3, "rhs_tolerance": 1e-3,
         "terminal_consecutive_passes": 3, "rhs_freeze_outer_iterations": 5,
+        "min_rhs_tau_updates": min_rhs_tau_updates,
+        "require_post_release": True, "allow_rhs_schedule_rebase": True,
         "source_hashes": {
             "application/R/latent_path_vb_joint.R": sha256(repo / "application/R/latent_path_vb_joint.R"),
+            "application/R/glofas_part3_partitioned_rhs.R": sha256(repo / "application/R/glofas_part3_partitioned_rhs.R"),
             "application/scripts/389_continue_glofas_part4_joint_fit.R": sha256(repo / "application/scripts/389_continue_glofas_part4_joint_fit.R"),
         },
     }
@@ -115,11 +126,13 @@ def run(repo: Path, contract_path: Path, expected_contract_hash: str) -> int:
             "--expected_design_sha256", str(contract["design_sha256"]),
             "--expected_scoring_sidecar_sha256", str(contract["scoring_sidecar_sha256"]),
             "--additional_outer_max_iter", str(additional), "--inner_max_iter", "30",
-            "--inner_min_iter", "10", "--outer_tol", str(contract["outer_tolerance"]),
+            "--inner_min_iter", "10", "--inner_workers", str(contract["inner_workers"]),
+            "--outer_tol", str(contract["outer_tolerance"]),
             "--n_draws", "500", "--joint_rhs_freeze_outer_iters", "5",
-            "--joint_rhs_min_tau_updates", "1", "--joint_rhs_tol", str(contract["rhs_tolerance"]),
+            "--joint_rhs_min_tau_updates", str(contract["min_rhs_tau_updates"]),
+            "--joint_rhs_tol", str(contract["rhs_tolerance"]),
             "--terminal_consecutive_passes", str(contract["terminal_consecutive_passes"]),
-            "--allow_rhs_schedule_rebase", "false",
+            "--allow_rhs_schedule_rebase", "true", "--require_post_release", "true",
         ]
         log_path = output / "logs" / f"{output_job}.log"
         with log_path.open("a") as log:
@@ -130,6 +143,11 @@ def run(repo: Path, contract_path: Path, expected_contract_hash: str) -> int:
         if rc != 0 or not completed.exists():
             (controller_status.with_suffix(".running")).unlink(missing_ok=True)
             (controller_status.with_suffix(".failed")).write_text(f"batch={batch}\nexit_code={rc}\n")
+            return 1
+        if completed_value(completed, "rhs_release_qualified").strip().lower() != "true":
+            (controller_status.with_suffix(".running")).unlink(missing_ok=True)
+            (controller_status.with_suffix(".failed")).write_text(
+                f"batch={batch}\nreason=rhs_release_not_qualified\n")
             return 1
         current_fit = output / "objects" / f"{output_job}_fit_side.rds"
         current_hash = sha256(current_fit)
@@ -160,6 +178,8 @@ def main() -> None:
     parser.add_argument("--session-label", required=True)
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--max-cumulative-outer-iterations", type=int, default=20)
+    parser.add_argument("--inner-workers", type=int, default=7)
+    parser.add_argument("--min-rhs-tau-updates", type=int, default=3)
     parser.add_argument("--resume-fit-path", default="")
     parser.add_argument("--resume-trace-path", default="")
     parser.add_argument("--run-contract", default="")
@@ -175,6 +195,7 @@ def main() -> None:
     contract = prepare(
         repo, source, output, args.likelihood, args.source_job_id,
         args.max_cumulative_outer_iterations, args.batch_size,
+        inner_workers=args.inner_workers, min_rhs_tau_updates=args.min_rhs_tau_updates,
         resume_fit_path=resume_fit, resume_trace_path=resume_trace,
     )
     if subprocess.run(["tmux", "has-session", "-t", args.session_label], capture_output=True).returncode == 0:

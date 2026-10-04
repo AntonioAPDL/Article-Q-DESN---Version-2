@@ -91,6 +91,10 @@ with tempfile.TemporaryDirectory(prefix="glofas_integrity_launcher_") as tempora
     assert contract["max_cumulative_outer_iterations"] == 20
     assert contract["terminal_consecutive_passes"] == 3
     assert contract["resume_from_external_checkpoint"] is False
+    assert contract["inner_workers"] == 7
+    assert contract["min_rhs_tau_updates"] == 3
+    assert contract["require_post_release"] is True
+    assert contract["allow_rhs_schedule_rebase"] is True
 
     resumed_output = temporary / "p4_resumed_output"
     resumed_fit = temporary / "part4_joint_al_continuation_b01_fit_side.rds"

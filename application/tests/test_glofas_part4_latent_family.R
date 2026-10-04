@@ -278,6 +278,18 @@ stopifnot(max(abs(
   joint_continued$beta_discrepancy_mean - joint_uninterrupted$beta_discrepancy_mean
 )) < 1.0e-10)
 
+joint_parallel_args <- modifyList(joint_two_outer_args, list(joint_inner_workers = 2L))
+joint_parallel <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  independent_fits = list(al_fit, al_fit), vb_args = joint_parallel_args, seed = 15L
+)
+stopifnot(
+  identical(joint_parallel$joint_inner_workers, 2L),
+  max(abs(joint_parallel$beta_reference_mean - joint_uninterrupted$beta_reference_mean)) < 1.0e-10,
+  max(abs(joint_parallel$beta_discrepancy_mean - joint_uninterrupted$beta_discrepancy_mean)) < 1.0e-10,
+  max(abs(joint_parallel$trace$parameter_change - joint_uninterrupted$trace$parameter_change)) < 1.0e-10
+)
+
 warmup_joint_args <- modifyList(joint_args, list(
   tol = 1.0e6,
   joint_outer_tol = 1.0e6,
@@ -295,6 +307,13 @@ joint_warmup_only <- app_fit_latent_path_joint_vb_core(
 stopifnot(joint_warmup_only$rhs_schedule$effective$freeze_tau_warmup_iters == 25L)
 stopifnot(!joint_warmup_only$converged_rhs)
 stopifnot(all(joint_warmup_only$rhs_summary_reference$tau_update_count == 0L))
+strict_warmup_args <- modifyList(warmup_joint_args, list(joint_require_post_release = TRUE))
+stopifnot(inherits(try(
+  app_fit_latent_path_joint_vb_core(
+    designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+    independent_fits = list(al_fit, al_fit), vb_args = strict_warmup_args, seed = 16L
+  ), silent = TRUE
+), "try-error"))
 
 single_release_args <- modifyList(warmup_joint_args, list(
   joint_outer_max_iter = 2L,
@@ -311,7 +330,9 @@ stopifnot(!joint_after_single_rhs_release$converged)
 stopifnot(max(joint_after_single_rhs_release$trace$terminal_consecutive_passes) < 3L)
 
 rebased_joint_args <- modifyList(single_release_args, list(
-  joint_outer_max_iter = 4L
+  joint_outer_max_iter = 4L,
+  joint_require_post_release = TRUE,
+  joint_inner_workers = 2L
 ))
 joint_after_rhs_release <- app_fit_latent_path_joint_vb_core(
   designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
@@ -322,6 +343,8 @@ stopifnot(joint_after_rhs_release$converged)
 stopifnot(tail(joint_after_rhs_release$trace$terminal_consecutive_passes, 1L) >= 3L)
 stopifnot(all(joint_after_rhs_release$rhs_schedule_rebase_audit$schedule_rebased))
 stopifnot(min(joint_after_rhs_release$rhs_summary_reference$tau_update_count) >= 2L)
+stopifnot(isTRUE(joint_after_rhs_release$joint_require_post_release))
+stopifnot(all(joint_after_rhs_release$rhs_release_budget_audit$passed))
 
 rebase_forbidden_args <- rebased_joint_args
 rebase_forbidden_args$joint_rhs_allow_schedule_rebase <- FALSE

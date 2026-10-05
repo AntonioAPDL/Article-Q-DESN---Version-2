@@ -1830,7 +1830,7 @@ app_joint_recursive_finalize <- function(
   readme <- c(
     "# Recursive mean-design JOINT forecast packet",
     "",
-    "This packet reuses the frozen corrected-v4 VB and MCMC fits. It does not refit models.",
+    "This packet uses frozen VB and MCMC posterior fits identified by its source manifests.",
     "Recursive response paths are synthesized from monotone seven-level quantile grids,",
     "the complete response-dependent readout design is averaged by origin and horizon,",
     "and final score intervals vary readout coefficients conditional on that mean design.",

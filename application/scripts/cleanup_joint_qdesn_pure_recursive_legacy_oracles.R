@@ -14,6 +14,12 @@ legacy_root <- normalizePath(
 current_root <- normalizePath(
   args[["current-root"]] %||% args$current_root, mustWork = TRUE
 )
+if (identical(legacy_root, current_root) ||
+    basename(legacy_root) != "joint_qdesn_pure_recursive_score_packet_jerez_15core_20260925" ||
+    basename(current_root) != "joint_qdesn_pure_recursive_expanded_continuation_score_jerez_15core_20261003") {
+  stop("Cleanup is restricted to distinct audited legacy and expanded JOINT roots.",
+    call. = FALSE)
+}
 audit_dir <- args[["audit-dir"]] %||% args$audit_dir
 mode <- tolower(args$mode)
 if (!mode %in% c("audit", "apply") || is.na(audit_dir) || !nzchar(audit_dir)) {
@@ -116,6 +122,8 @@ status <- app_read_csv(status_path)
 if (nrow(status) != 1L || status$completed_cells[[1L]] != 64L) {
   stop("The current packet does not certify 64 completed cells.", call. = FALSE)
 }
+verify_manifest(file.path(current_root, "final_packet"),
+  file.path(current_root, "final_packet", "artifact_manifest.csv"))
 
 disk_before <- as.numeric(system(sprintf("df -Pk %s | awk 'NR==2 {print $4}'",
   shQuote(legacy_root)), intern = TRUE))

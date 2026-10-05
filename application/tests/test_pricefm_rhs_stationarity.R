@@ -36,6 +36,14 @@ stopifnot(identical(left$beta_prior$hypers, right$beta_prior$hypers),
 stopifnot(app_pricefm_rhs_precision_accuracy(diag(3), diag(3))$accepted,
   !app_pricefm_rhs_precision_accuracy(diag(3), 1.01 * diag(3))$accepted,
   !app_pricefm_rhs_precision_accuracy(diag(3), diag(3), jitter = 1e-9)$accepted)
+rejected <- app_pricefm_fit_rhs_stats(stats, .05, factory, min_iter = 10, max_iter = 20,
+  convergence_mode = "full_variational", tol = 1e9, predictive_tol = 1e9,
+  relative_beta_tol = 1e9, sigma_relative_tol = 1e9, prior_rms_log_precision_tol = 1e9,
+  rhs_state_tol = 1e9, covariance_tol = 1e9, objective_per_observation_tol = 1e9,
+  precision_accuracy_tol = 1e-30)
+stopifnot(!rejected$converged, nrow(rejected$trace) == 10,
+  identical(rejected$termination_reason, "gaussian_conditional_accuracy_rejected"),
+  identical(rejected$beta_prior$hypers, full$beta_prior$hypers))
 
 trace <- full$trace[rep(1L, 10), ]; trace$iter <- seq_len(10)
 for (name in setdiff(names(trace), c("iter", "sigma2_mean", "total_objective", "tau_inverse_moment", "slab_inverse_moment"))) {

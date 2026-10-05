@@ -122,7 +122,10 @@ by at most 5.38e-6 relative, and noise mean by at most 5.10e-9 relative. D4
 changes were smaller. Objective gains were tiny and can include roundoff-scale
 negative differences; do not claim appreciable optimization or forecast gains.
 An old coefficient-only label needed qualification, but additional convergence
-is not a plausible explanation for the 9.6% internal AQL gap versus R122.
+made essentially no difference to the fitted means on training support. No
+new forecast scores were generated for these endpoints; recursion can amplify
+small changes, so an unchanged forecast AQL has not been demonstrated. There
+is no measured AQL gain from these continuations.
 
 For the representative failed D3 and D6 structures, reciprocal precision
 conditions were approximately 2.92e-16 and 1.01e-16 to 1.57e-16. The
@@ -161,3 +164,48 @@ the campaign's pinned-R execution. With PATH prefixed by
 `/data/jaguir26/local/opt/R/4.6.0/bin`, the regression suite passed on Jerez.
 Final test receipts and branch synchronization belong in the integration
 handoff; no main/Overleaf update is performed by this scientific lane.
+
+## Held-target precision result and limits of the correction
+
+The one-conditional probe fixes the expected likelihood precision and every
+RHS factor, so it removes the one-iteration variational lag from this check.
+For the leader, direct inverse residuals are 1.94e-9 to 2.98e-9. For the
+runner-up, they are 3.86e-8 to 4.60e-7. Both are below the successor 1e-5
+accuracy tolerance. For D3 the direct residual is 4.48e-5 to 7.46e-5; diagonal
+equilibration leaves it at 6.16e-5 to 6.31e-5. For D6 the direct residual is
+.00542 to .01413; equilibration leaves .00584 to .01051. All use zero jitter,
+and fixed prior hypers remain identical. Therefore simple rescaling is not
+an adequate numerical repair for the failed endpoints, and extra iterations
+alone do not establish reliability.
+
+The failed normalized training Grams have numerical ranks 511/577 (D3) and
+358/577 (D6) at the declared relative threshold 1e-10. This is evidence of
+redundant readout directions, not proof that every deeper reservoir is bad.
+No blanket conclusion is drawn for the other 22 original failures.
+
+Implemented fixes address premature certification, missing failed-state
+diagnostics, target-preserving continuation and an explicit complete-group
+selection rule. They do not make the two failed structures converge. Their
+scientifically defensible disposition is exclusion at the frozen cap, not
+hidden ridge jitter, altered priors, looser tolerances or fabricated scores.
+A later rescue experiment, if justified, should compare an augmented-design
+QR or higher-precision conditional with this exact target, retaining the
+original coefficient prior under any coordinate transformation. Such a solver
+is not implemented or claimed to be validated here.
+
+The selection helper is tested but NOT wired into the frozen 433 controller.
+This ten-case diagnostic supplies only two fully continued candidate groups,
+below the successor minimum of three, and no newly scored groups. The next
+production step remains: freeze a separate successor protocol, certify other
+saved centre fits without rebuilding reservoirs, score complete certified
+groups on the unchanged internal origins, then apply the explicit rule before
+any tau/AL launch. Reuse Ridge and its sufficient statistics; do not rerun
+screening or reuse old unqualified scores as corrected selection evidence.
+
+Tests: 244 Python regressions and the Normal plus full-state RHS R suites pass
+locally. The latter verifies an independent 50,000-draw objective estimate,
+bitwise fresh/resumed equality, unchanged priors across initializations,
+changed-target rejection and a forced Gaussian-accuracy rejection despite
+lax optimization tolerances. Cross-server final receipts are recorded in the
+ignored handoff. The revised ten-page PDF fixes clipped raw-objective labels
+and footer overlap without replacing the original diagnostic report.

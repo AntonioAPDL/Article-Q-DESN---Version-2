@@ -137,6 +137,12 @@ def test_complete_diagnostic_report_and_overwrite_guard(tmp_path):
     assert value["pages"] == 10 and value["certified"] == 6 and value["capped"] == 4
     assert Path(value["pdf"]).read_bytes().startswith(b"%PDF")
     with pytest.raises(RuntimeError, match="overwrite"): report.render(tmp_path)
+    original = M.REC.digest(value["pdf"])
+    revised = report.render(tmp_path, "stationarity_layout_v2")
+    assert Path(revised["pdf"]).exists() and M.REC.digest(value["pdf"]) == original
+    assert (closeout / "stationarity_layout_v2_identity.json").exists()
+    with pytest.raises(RuntimeError, match="overwrite"): report.render(tmp_path, "stationarity_layout_v2")
+    with pytest.raises(ValueError): report.render(tmp_path, "../outside")
 
 
 def test_certified_selection_does_not_require_every_screened_candidate():

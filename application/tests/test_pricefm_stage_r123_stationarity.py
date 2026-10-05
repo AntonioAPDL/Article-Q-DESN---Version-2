@@ -108,3 +108,32 @@ def test_real_r_entrypoint_persists_cap_and_refuses_overwrite(tmp_path):
     terminal = M.REC.read(Path(contract["output_dir"]) / "terminal.json")
     assert terminal["status"] == "R123_VARIATIONAL_CAP_DIAGNOSTIC" and terminal["iterations"] == 2
     assert subprocess.run(command, capture_output=True).returncode != 0
+
+
+def test_complete_diagnostic_report_and_overwrite_guard(tmp_path):
+    import pandas as pd
+    spec = importlib.util.spec_from_file_location("r123_report_test",
+        ROOT / "application/scripts/pricefm/439_report_pricefm_stage_r123_stationarity.py")
+    report = importlib.util.module_from_spec(spec); spec.loader.exec_module(report)
+    manifest, rows = [], []
+    for i in range(10):
+        folder = tmp_path / f"fit_{i}"; folder.mkdir()
+        trace = pd.DataFrame(dict(iter=range(1, 12), total_objective=range(1, 12),
+            objective_delta_per_observation=[1e-9] * 11, prior_rms_log_precision_delta=[1e-7] * 11,
+            rhs_max_log_rate_delta=[1e-7] * 11, beta_cov_relative_delta=[1e-7] * 11,
+            sigma2_mean=[.1] * 11))
+        trace.to_csv(folder / "convergence_trace.csv", index=False)
+        M.REC.write(folder / "geometry.json", dict(normalized_gram_numerical_rank=4, p=4))
+        M.REC.write(folder / "terminal.json", dict(artifact_sha256={p.name: M.REC.digest(p) for p in folder.iterdir()}))
+        manifest.append(dict(fit_id=f"fit_{i}", output_dir=str(folder), candidate_id="fixture", split=1))
+        rows.append(dict(fit_id=f"fit_{i}", initialization="resume", certified=i < 6, maximum_precision_jitter=0))
+    closeout = tmp_path / "closeout"; closeout.mkdir()
+    pd.DataFrame(rows).to_csv(closeout / "audit_table.csv", index=False)
+    M.REC.write(closeout / "objective_check.json", dict(status="R123_STATE_OBJECTIVE_CLOSEOUT_PASS",
+        audit_table_sha256=M.REC.digest(closeout / "audit_table.csv")))
+    M.REC.write(tmp_path / "terminal.json", dict(status="R123_STATIONARITY_DIAGNOSIS_COMPLETE"))
+    M.REC.write(tmp_path / "manifest.json", manifest)
+    value = report.render(tmp_path)
+    assert value["pages"] == 10 and value["certified"] == 6 and value["capped"] == 4
+    assert Path(value["pdf"]).read_bytes().startswith(b"%PDF")
+    with pytest.raises(RuntimeError, match="overwrite"): report.render(tmp_path)

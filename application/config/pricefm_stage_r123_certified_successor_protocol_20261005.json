@@ -1,0 +1,23 @@
+{
+  "stage": "R123_certified_successor", "region": "BG", "fold": 1,
+  "minimum_workers": 9, "maximum_workers": 15,
+  "expected_ridge_decisions": 1298, "expected_complete_parent_candidates": 21,
+  "center_checks": 63, "minimum_certified_candidates": 3, "tau_top_k": 10,
+  "tau_multipliers": [0.3, 3.0], "al_top_k": 3,
+  "normal_max_iter": 2000, "normal_min_iter": 100, "stability_window": 10,
+  "rhs_state_tol": 1e-6, "covariance_tol": 1e-6,
+  "objective_per_observation_tol": 1e-8, "precision_accuracy_tol": 1e-5,
+  "normal_origins_per_split": 64, "posterior_paths": 500,
+  "al_max_iter": 1000, "al_companion_max_iter": 750,
+  "quantiles": [0.1, 0.25, 0.45, 0.5, 0.55, 0.75, 0.9],
+  "forecast_operator": "averaged_conditional_quantile_mean_feature_with_normal_rhs_recursion",
+  "selection_scope": "fold1_training_internal_rolling_validation_only",
+  "maximum_physical_core_percent": 20, "cpu_audit_seconds": 10,
+  "minimum_memory_gib": 200, "minimum_free_gib": 200,
+  "resource_attempts": 6, "resource_backoff_seconds": 30,
+  "screening_refits_authorized": false, "independent_al_authorized": true,
+  "official_validation_authorized": false, "official_test_authorized": false,
+  "exal_authorized": false, "joint_authorized": false, "mcmc_authorized": false,
+  "registry_mutation_authorized": false, "article_mutation_authorized": false,
+  "notes": "Continue only complete saved parent groups. Exclude finite caps and numerical failures. Select only newly certified and scored groups. Keep the supported R122 shared AL atom stage with a distinct successor campaign tag; do not pass the incompatible historical R123 atom stage."
+}

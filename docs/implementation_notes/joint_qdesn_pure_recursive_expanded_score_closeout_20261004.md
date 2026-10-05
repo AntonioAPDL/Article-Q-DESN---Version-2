@@ -172,12 +172,115 @@ worker or finalizer is active.
 - [x] Freeze the expanded-continuation strict-recovery hashes.
 - [x] Implement failure-isolated score queues and behavioral tests.
 - [x] Commit, push, and synchronize the dedicated closeout branch.
-- [ ] Wait for the active score controller to close.
-- [ ] Verify the exact `62 / 1 / 1` recovery entry state.
-- [ ] Select two idle physical cores and pass strict-recovery preflight.
-- [ ] Complete ordinary worker 56 and strict worker-41 recovery.
-- [ ] If required, freeze and execute the bounded-review addendum.
-- [ ] Finalize and verify all 64 cells and the final packet.
-- [ ] Perform the complete-packet scientific comparison.
-- [ ] Execute manifest-driven legacy cleanup and write its receipt.
-- [ ] Commit and push closeout metadata; provide the frozen integration handoff.
+- [x] Wait for the active score controller to close.
+- [x] Verify the exact `62 / 1 / 1` recovery entry state.
+- [x] Select two idle physical cores and pass strict-recovery preflight.
+- [x] Complete ordinary worker 56 and strict worker-41 recovery.
+- [x] Freeze and execute the bounded-review addendum.
+- [x] Finalize and verify all 64 cells and the final packet.
+- [x] Perform the complete-packet scientific comparison.
+- [x] Execute manifest-driven legacy cleanup and write its receipt.
+- [x] Prepare closeout metadata and the frozen integration handoff.
+
+## Completed closeout: 2026-10-05
+
+All scientific computation is complete. The final packet contains 32 VB and
+32 MCMC cells, eight verified DGP-oracle banks, finite primary and path scores,
+and zero canonical or draw-level contract crossings. There are 63 strict
+score-stability passes and one bounded review. The 16 unused extension-oracle
+slots are optional and are not unfinished work.
+
+The bounded-review worker completed successfully. Its controller then failed
+because the finalizer used the prior narrow packet's default review-contract
+hash. The finalizer now accepts the explicit expanded review-contract hash,
+and the expanded launcher supplies that argument. The regression test rejects
+an unapproved hash and accepts the explicitly supplied hash. Finalization
+was repeated without rerunning a score cell, changing a posterior, or changing
+a numerical result. The original controller exit remains preserved, and
+`score_recovery_v2/finalization_recovery_receipt.csv` records the resolution.
+
+`audit_joint_qdesn_pure_recursive_expanded_closeout.R` verifies 232 manifests,
+all 160 source MCMC workers, all 32 five-chain posterior targets, the frozen
+AL/exAL budgets, the 64 score cells, zero contract crossings, and the explicit
+review contract. All 80 exAL workers use `M0_v_collapsed_support_logit`.
+AL uses 4,000 iterations, 1,000 burn-in, thinning 4, and 750 retained draws per
+chain; exAL uses 8,000 iterations, 2,000 burn-in, thinning 4, and 1,500 retained
+draws per chain. The audit records canonical fit MAE/RMSE, forecast oracle
+MAE/RMSE, primary posterior score summaries, crossing counts, policy
+comparisons, and descriptive paired contrasts.
+
+### Scientific results and promotion scope
+
+Only two scenario specifications changed; six reused scenarios match the
+prior narrow packet exactly. The comparison baseline is that frozen narrow
+pure-DESN packet, not automatic published-article authority.
+
+| Changed Scenario | Model | Mean Score Change |
+|---|---|---:|
+| Asymmetric Laplace Tail | Joint AL | -4.83% |
+| Asymmetric Laplace Tail | Joint exAL | -4.72% |
+| Asymmetric Laplace Tail | Independent AL | +3.54% |
+| Asymmetric Laplace Tail | Independent exAL | +7.78% |
+| Nonlinear Reservoir Friendly | Joint AL | +3.73% |
+| Nonlinear Reservoir Friendly | Joint exAL | +0.72% |
+| Nonlinear Reservoir Friendly | Independent AL | +0.36% |
+| Nonlinear Reservoir Friendly | Independent exAL | -2.50% |
+
+All eight old/new MCMC intervals overlap. Three lower-mean cells are explicitly
+flagged as descriptive integration-review candidates; scalar mixing is not a
+veto. Report all five regressions alongside those gains. The current MCMC
+numerical winners are joint in two scenarios and independent in six, and all
+eight winner/runner-up intervals overlap.
+
+Under the declared descriptive contrast coupling, joint AL and exAL beat
+their independent counterparts in Asymmetric Laplace Tail, independent AL
+and exAL beat joint in Laplace Bridge, and the other 12 MCMC joint/independent
+contrast intervals include zero. This does not establish a universal winner.
+
+Mean-state score intervals are narrower than path-propagation intervals in
+28/32 MCMC cells (median width ratio 0.7364) and 28/32 VB cells (0.7197).
+This is conditional uncertainty reduction, not a guarantee that every mean
+score improves or that calibration improves. VB intervals remain partial
+because intercept covariance was not retained. Joint exAL has zero raw
+canonical forecast crossings in all eight scenarios.
+
+The next action is integration review of the complete coherent packet.
+Retain one shared DESN/RHS backbone per scenario across the four compared
+models. Combining isolated old/new rows can violate that comparison contract;
+the three lower-mean flags do not authorize such a change. The protected final
+window must not become a new hyperparameter-selection window. Dense-grid
+refitting remains a later, separately frozen campaign after this review.
+
+### Completed storage audit
+
+The scoped inventory covers 4,059 heavy payloads (2,369,855,683 bytes) in five
+task-owned Jerez worktrees. It checks `.rds`, `.rda`, `.RData`, and compressed
+posterior/score CSV outputs. No `.rda` or `.RData` files were found there.
+The cleanup removed only 24 byte-identical prior oracle payloads:
+632,529,568 bytes (603.23 MiB). All 24 current copies were rehashed after
+deletion and matched. The prior final packet, posterior fits, oracle manifests,
+shard summaries, and a compaction receipt remain available. About 228 GiB
+was available on Jerez afterward.
+
+Old fit evidence is retained because five changed MCMC rows still have lower
+baseline means and six current scenarios depend on verified reuse. Selection
+caches, source fixtures, designs, initializers, current oracle banks, and
+current score draws remain reproducibility dependencies. Scheduler failures
+have compact receipts; the inventory found no further heavy failed-model
+payload with a proven safe deletion contract.
+
+### Verification and handoff
+
+Eleven relevant JOINT regression scripts passed under pinned R 4.6.0.
+`test_joint_qdesn_shared_backbone_article_confirmation.R` could not run its
+historical integration fixture because the immutable September-6 Muscat
+source directory is absent on both hosts. This is recorded as an unavailable
+historical fixture, not a passing test. The current pure-DESN tests and live
+232-manifest audit cover this campaign. Restore that historical fixture before
+claiming a complete repository-wide test pass. Shell syntax and
+`git diff --check` passed. Manuscript compilation is deferred to integration;
+this lane changes no article-facing TeX, table, figure, or Overleaf file.
+
+Detailed comparison tables, deletion inventory/receipt, test results, source
+hashes, full changed-file list, and the final frozen handoff remain ignored
+under `local_trackers/joint_qdesn_pure_recursive_expanded_score_closeout_20261004/`.

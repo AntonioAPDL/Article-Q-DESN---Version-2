@@ -328,6 +328,10 @@ joint_after_single_rhs_release <- app_fit_latent_path_joint_vb_core(
 stopifnot(joint_after_single_rhs_release$converged_rhs)
 stopifnot(!joint_after_single_rhs_release$converged)
 stopifnot(max(joint_after_single_rhs_release$trace$terminal_consecutive_passes) < 3L)
+stopifnot(identical(
+  joint_after_single_rhs_release$stopping_reason,
+  "max_outer_iterations_terminal_consecutive_passes_not_met"
+))
 
 rebased_joint_args <- modifyList(single_release_args, list(
   joint_outer_max_iter = 4L,

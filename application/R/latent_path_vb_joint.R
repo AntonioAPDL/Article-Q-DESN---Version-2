@@ -542,6 +542,8 @@ app_fit_latent_path_joint_vb_core <- function(
     "max_outer_iterations_outer_and_inner_not_converged"
   } else if (!converged_inner) {
     "max_outer_iterations_inner_not_converged"
+  } else if (converged_outer && converged_rhs) {
+    "max_outer_iterations_terminal_consecutive_passes_not_met"
   } else {
     "max_outer_iterations_outer_tolerance_not_met"
   }

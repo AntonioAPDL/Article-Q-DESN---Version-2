@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -31,6 +32,36 @@ def completed_value(path: Path, key: str) -> str:
     return values.get(key, "")
 
 
+def trace_terminal_outer(path: Path) -> int:
+    with path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows or "outer_iteration" not in rows[-1]:
+        raise RuntimeError(f"Continuation trace has no terminal outer iteration: {path}")
+    try:
+        iterations = [int(float(row["outer_iteration"])) for row in rows]
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f"Continuation trace has an invalid outer iteration: {path}") from error
+    if any(current <= previous for previous, current in zip(iterations, iterations[1:])):
+        raise RuntimeError(f"Continuation trace outer iterations are not strictly increasing: {path}")
+    return iterations[-1]
+
+
+def completed_outer_iteration(completed: Path, trace: Path, previous: int, requested: int) -> int:
+    raw = completed_value(completed, "outer_iterations")
+    try:
+        marker_outer = int(raw)
+    except ValueError as error:
+        raise RuntimeError("Completion marker is missing a valid outer_iterations value") from error
+    trace_outer = trace_terminal_outer(trace)
+    if marker_outer != trace_outer:
+        raise RuntimeError(
+            f"Completion marker/trace outer-iteration mismatch: {marker_outer} != {trace_outer}")
+    if marker_outer <= previous or marker_outer > previous + requested:
+        raise RuntimeError(
+            f"Completed outer iteration {marker_outer} is outside ({previous}, {previous + requested}]")
+    return marker_outer
+
+
 def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job: str,
             max_cumulative: int, batch_size: int,
             inner_workers: int = 7, min_rhs_tau_updates: int = 3,
@@ -49,8 +80,7 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
     trace = (resume_trace_path or source / "traces" / f"{source_job}_trace.csv").resolve()
     for path in (source_fit, design, sidecar, trace, source / "configs/part4_model_manifest.csv"):
         path.resolve(strict=True)
-    with trace.open() as handle:
-        initial_outer = max(0, sum(1 for _ in handle) - 1)
+    initial_outer = trace_terminal_outer(trace)
     if initial_outer >= max_cumulative:
         raise RuntimeError("Source already meets or exceeds the continuation safety ceiling")
     minimum_cumulative = 5 + min_rhs_tau_updates + 1
@@ -60,7 +90,7 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
     for sub in ("objects", "predictions", "scores", "traces", "coefficients", "logs", "status", "manifests"):
         (output / sub).mkdir(parents=True, exist_ok=True)
     contract = {
-        "schema_version": "glofas_part4_joint_bounded_continuation_v2",
+        "schema_version": "glofas_part4_joint_bounded_continuation_v3",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_runtime_root": str(source), "output_runtime_root": str(output),
         "likelihood": likelihood, "source_job_id": source_job,
@@ -79,6 +109,7 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
             "application/R/latent_path_vb_joint.R": sha256(repo / "application/R/latent_path_vb_joint.R"),
             "application/R/glofas_part3_partitioned_rhs.R": sha256(repo / "application/R/glofas_part3_partitioned_rhs.R"),
             "application/scripts/389_continue_glofas_part4_joint_fit.R": sha256(repo / "application/scripts/389_continue_glofas_part4_joint_fit.R"),
+            "application/scripts/413_launch_glofas_part4_joint_continuation.py": sha256(repo / "application/scripts/413_launch_glofas_part4_joint_continuation.py"),
         },
     }
     contract_path = output / "manifests" / f"part4_joint_{likelihood}_controller_contract.json"
@@ -151,11 +182,16 @@ def run(repo: Path, contract_path: Path, expected_contract_hash: str) -> int:
             return 1
         current_fit = output / "objects" / f"{output_job}_fit_side.rds"
         current_hash = sha256(current_fit)
-        cumulative += additional
+        output_trace = output / "traces" / f"{output_job}_trace.csv"
+        previous_cumulative = cumulative
+        cumulative = completed_outer_iteration(completed, output_trace, cumulative, additional)
+        executed = cumulative - previous_cumulative
         converged = completed_value(completed, "converged").strip().lower() == "true"
         health = {
             "checked_at_utc": datetime.now(timezone.utc).isoformat(), "likelihood": likelihood,
             "completed_batches": batch, "cumulative_outer_iterations": cumulative,
+            "requested_additional_outer_iterations": additional,
+            "executed_additional_outer_iterations": executed,
             "converged": converged, "latest_fit_path": str(current_fit),
             "latest_fit_sha256": current_hash, "safety_ceiling": ceiling,
         }

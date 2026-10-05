@@ -255,6 +255,9 @@ run_continuation <- function() {
 
   provenance_path <- file.path(output_root, "manifests", paste0(output_job_id, "_continuation_provenance.csv"))
   code_head <- trimws(system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE))
+  actual_outer_iterations <- max(as.integer(joint$trace$outer_iteration))
+  executed_additional_outer_iterations <- actual_outer_iterations -
+    as.integer(joint$previous_outer_iterations)
   app_write_csv(data.frame(
     output_job_id = output_job_id,
     source_job_id = source_job_id,
@@ -275,6 +278,8 @@ run_continuation <- function() {
     quantile_grid = paste(format(as.numeric(model_rows$quantile_level), trim = TRUE), collapse = ","),
     previous_outer_iterations = joint$previous_outer_iterations,
     additional_outer_max_iter = vb_args$joint_outer_max_iter,
+    actual_outer_iterations = actual_outer_iterations,
+    executed_additional_outer_iterations = executed_additional_outer_iterations,
     inner_max_iter = vb_args$joint_inner_max_iter,
     inner_min_iter = vb_args$joint_inner_min_iter,
     inner_workers = vb_args$joint_inner_workers,
@@ -316,7 +321,9 @@ run_continuation <- function() {
     sprintf("converged=%s", joint$converged),
     sprintf("converged_rhs=%s", joint$converged_rhs),
     sprintf("rhs_release_qualified=%s", rhs_release_qualified),
-    sprintf("stopping_reason=%s", joint$stopping_reason)
+    sprintf("stopping_reason=%s", joint$stopping_reason),
+    sprintf("outer_iterations=%d", actual_outer_iterations),
+    sprintf("executed_additional_outer_iterations=%d", executed_additional_outer_iterations)
   ), completed)
   invisible(joint)
 }

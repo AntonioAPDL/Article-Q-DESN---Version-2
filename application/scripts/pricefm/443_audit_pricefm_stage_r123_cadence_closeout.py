@@ -22,10 +22,11 @@ import pandas as pd
 import pricefm_r123_recovery as REC
 import pricefm_r123_runtime as RT
 from pricefm_internal_target_embargo import guarded_splits, regular_axis
+from pricefm_r123_closeout_evidence import active_fit_processes, audit_ladder, authorized_ladders, finish_receipt
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = Path("/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm")
-TAG = "pricefm_stage_r123_cadence_verified_closeout_20261005"
+TAG = "pricefm_stage_r123_closeout_hardening_20261005"
 PARENT = "pricefm_stage_r123_certified_successor_20261005"
 
 
@@ -52,7 +53,8 @@ def own_identity(args):
     REC.immutable(args.output / "source_identity.json", dict(head=head,
         branch=subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True).strip(),
         source=str(ROOT), scripts_sha256={str(p): REC.digest(p) for p in
-            (Path(__file__), Path(__file__).with_name("pricefm_internal_target_embargo.py"))}))
+            (Path(__file__), Path(__file__).with_name("pricefm_internal_target_embargo.py"),
+             Path(__file__).with_name("pricefm_r123_closeout_evidence.py"))}))
     return head
 
 
@@ -103,8 +105,21 @@ def snapshot(args):
     primary = list((root / "al_internal").glob("*/split=*/quantiles/al/tau=*/terminal.json"))
     companions = list((root / "al_internal").glob("*/split=*/companions/cap=*/tau=*/terminal.json"))
     progress = REC.read(root / "al_internal/progress.json") if (root / "al_internal/progress.json").exists() else {}
+    eligible = 0; converged = 0; capped = 0; malformed = 0
+    for path in primary:
+        try:
+            value = REC.read(path)
+            eligible += int(value["external_gate_passed"] is True)
+            converged += int(value["formal_converged"] is True)
+            capped += int(value["formal_converged"] is False)
+        except (OSError, ValueError, KeyError):
+            malformed += 1
+    if len(primary) > 63: raise RuntimeError("unexpected primary AL inventory")
     return dict(pid=os.getpid(), at_epoch=time.time(), primary_al_atoms_complete=len(primary),
         primary_al_atoms_maximum=63, primary_al_atoms_not_complete=63 - len(primary),
+        primary_al_atoms_raw_eligible=eligible, primary_al_atoms_formal_converged=converged,
+        primary_al_atoms_not_formal_converged=capped, primary_al_atoms_malformed=malformed,
+        live_counts_contract_certified=False,
         companion_al_atoms_complete=len(companions), ladder_progress=progress,
         parent_terminal_present=(root / "terminal.json").exists(),
         parent_block_present=(root / "blocked.json").exists(), scientific_models_launched_by_observer=0)
@@ -116,6 +131,8 @@ def freeze_parent(args, m, control):
     # for controller exit before collecting the final scientific evidence.
     with (root / "controller.lock").open("r") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if active_fit_processes(root, args.parent_prep):
+            raise BlockingIOError("parent numerical writers remain active after controller exit")
         own_identity(args)
         m.verify(parent_args(args))
         REC.verify_evidence(REC.read(args.output / "cadence_audit.json"))
@@ -127,51 +144,49 @@ def freeze_parent(args, m, control):
         for row in rows:
             valid = m.normal_valid(row["output_dir"])
             certified += int(valid)
-            groups.setdefault((row["candidate_id"], float(row["tau0"])), []).append(valid)
+            group = groups.setdefault((row["candidate_id"], float(row["tau0"])), {})
+            split = int(row["split"])
+            if split not in (1, 2, 3) or split in group:
+                raise RuntimeError("duplicated or invalid Normal split")
+            group[split] = valid
             score = Path(row["output_dir"]) / "validation_score.json"
             if valid and score.exists():
                 m.verified_score(score, row["contract_path"])
                 scored.add((row["candidate_id"], float(row["tau0"]), int(row["split"])))
-        complete_groups = sum(len(group) == 3 and all(group) for group in groups.values())
+        complete_groups = sum(set(group) == {1, 2, 3} and all(group.values()) for group in groups.values())
+        expected_ladders = authorized_ladders(root)
         ladder_metrics = []
+        ladder_keys = set()
         for path in sorted((root / "al_internal").glob("*/split=*/metrics.json")):
             REC.verify_evidence(REC.read(path.parent / "successor_ladder_hashes.json"))
-            value = REC.read(path)
-            if value["test_opened"] is not False: raise RuntimeError("parent score scope changed")
-            if value["eligible"]:
-                if len(value["accepted_quantiles"]) != 7 or not all(x["accepted"] for x in value["accepted_quantiles"]):
-                    raise RuntimeError("eligible AL ladder does not contain seven accepted levels")
-                for q in RT.QUANTILES:
-                    atom = path.parent / f"quantiles/al/tau={q:.2f}"
-                    terminal = REC.read(atom / "terminal.json")
-                    if not m.quantile_valid(atom, terminal["posterior_target_sha256"]):
-                        raise RuntimeError("AL fit identity/hash differs")
+            value = audit_ladder(args, m, control, path, expected_ladders, rows)
+            ladder_keys.add((value["candidate_id"], value["split"]))
             ladder_metrics.append(value)
         state = snapshot(args)
         done = REC.read(root / "terminal.json") if state["parent_terminal_present"] else None
         expected = "R123_CERTIFIED_INTERNAL_COMPLETE_TEST_BLOCKED"
         success = done is not None and done["status"] == expected and not state["parent_block_present"]
-        if success and (complete_groups != 37 or len(ladder_metrics) != 9
+        if success and (complete_groups != 37 or ladder_keys != set(expected_ladders)
+                or len(ladder_metrics) != 9 or state["primary_al_atoms_malformed"]
                 or not all(x["eligible"] for x in ladder_metrics) or state["primary_al_atoms_complete"] != 63
                 or state["ladder_progress"].get("complete") != 9
                 or state["ladder_progress"].get("failed") != 0
                 or any((cid, tau, split) not in scored for (cid, tau), group in groups.items()
-                    if len(group) == 3 and all(group) for split in (1, 2, 3))):
+                    if set(group) == {1, 2, 3} and all(group.values()) for split in (1, 2, 3))):
             raise RuntimeError("parent completion contradicts the independent evidence inventory")
         result = dict(status="R123_CADENCE_VERIFIED_PARENT_COMPLETE" if success else "R123_PARENT_INCOMPLETE_FROZEN",
             parent_source_head=control["code_head"], certified_normal_fits=certified,
             complete_normal_candidate_scale_groups=complete_groups, al_ladders=ladder_metrics,
             parent_terminal=done, parent_block=REC.read(root / "blocked.json") if state["parent_block_present"] else None,
             **state, no_fits_repeated=True, no_scores_regenerated=True, test_opened=False,
+            parent_completion_ledger_present=(root / "completed_evidence.json").exists(),
+            al_full_variational_stationarity_certified=False,
             registry_mutated=False, article_mutated=False, integration_status="NOT_READY_FOR_INTEGRATION")
         ledger = {str(p): REC.digest(p) for p in root.rglob("*") if p.is_file()
             and p.name not in ("controller.lock", "controller.log")}
         REC.immutable(args.output / "parent_evidence.json", dict(evidence_sha256=ledger))
         REC.immutable(args.output / "terminal.json", result)
-        REC.immutable(args.output / "completed_evidence.json", dict(evidence_sha256={str(p): REC.digest(p)
-            for p in args.output.rglob("*") if p.is_file()
-            and p.name not in ("completed_evidence.json", "observer.log", "observer.lock")}))
-        return result
+        return finish_receipt(args.output)
 
 
 def run(args):
@@ -180,9 +195,7 @@ def run(args):
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         own_identity(args)
         if (args.output / "terminal.json").exists():
-            REC.verify_evidence(REC.read(args.output / "completed_evidence.json"))
-            REC.verify_evidence(REC.read(args.output / "parent_evidence.json"))
-            return REC.read(args.output / "terminal.json")
+            return finish_receipt(args.output)
         m = parent_module(args); control = m.verify(parent_args(args))
         if args.mode == "monitor":
             cpus = m.preflight(SimpleNamespace(workers=1, campaign_root=args.output),

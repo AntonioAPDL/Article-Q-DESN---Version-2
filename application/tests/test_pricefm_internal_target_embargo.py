@@ -122,9 +122,11 @@ def test_progress_and_completed_evidence_resume_are_read_only(tmp_path, monkeypa
     args = SimpleNamespace(parent_campaign=parent, output=output)
     m.REC.write(parent / "al_internal/x/split=1/quantiles/al/tau=0.50/terminal.json", {})
     assert m.snapshot(args)["primary_al_atoms_complete"] == 1
-    for path in (output / "terminal.json", parent / "example.json"): m.REC.write(path, {})
-    m.REC.write(output / "completed_evidence.json", dict(evidence_sha256={str(output / "terminal.json"): m.REC.digest(output / "terminal.json")}))
+    for path in (output / "terminal.json", output / "source_identity.json", parent / "example.json"):
+        m.REC.write(path, {})
+    m.REC.write(output / "cadence_audit.json", dict(evidence_sha256={}))
     m.REC.write(output / "parent_evidence.json", dict(evidence_sha256={str(parent / "example.json"): m.REC.digest(parent / "example.json")}))
+    m.finish_receipt(output)
     monkeypatch.setattr(m, "own_identity", lambda args: "frozen")
     assert m.run(args) == {}
     m.REC.write(parent / "example.json", {"changed": True})
@@ -150,18 +152,26 @@ def test_final_freeze_independently_checks_completion_and_preserves_parent(tmp_p
             root = parent / f"al_internal/c{candidate}/split={split}"
             eligible = state != "false_complete" or (candidate, split) != (0, 1)
             m.REC.write(root / "metrics.json", dict(eligible=eligible, test_opened=False,
+                candidate_id=f"c{candidate}", split=split, tau0=.001,
                 accepted_quantiles=[dict(accepted=True) for _ in range(7)]))
             m.REC.write(root / "successor_ladder_hashes.json", dict(evidence_sha256={
                 str(root / "metrics.json"): m.REC.digest(root / "metrics.json")}))
             for q in m.RT.QUANTILES:
-                m.REC.write(root / f"quantiles/al/tau={q:.2f}/terminal.json", dict(posterior_target_sha256="target"))
+                m.REC.write(root / f"quantiles/al/tau={q:.2f}/terminal.json", dict(
+                    posterior_target_sha256="target", external_gate_passed=True, formal_converged=True))
     m.REC.write(parent / "al_internal/progress.json", dict(complete=9, failed=0))
     if state == "blocked": m.REC.write(parent / "blocked.json", dict(error="gated"))
     else: m.REC.write(parent / "terminal.json", dict(status="R123_CERTIFIED_INTERNAL_COMPLETE_TEST_BLOCKED"))
     m.REC.write(output / "cadence_audit.json", dict(evidence_sha256={}))
+    m.REC.write(output / "source_identity.json", {})
+    m.REC.write(parent / "al_launch_authorization.json", dict(independent_al_authorized=True,
+        test_opened=False, exal_authorized=False, joint_authorized=False, mcmc_authorized=False,
+        selected=[dict(candidate_id=f"c{i}", tau0=.001) for i in range(3)]))
     monkeypatch.setattr(m, "own_identity", lambda args: "frozen")
     owner = SimpleNamespace(verify=lambda args: None, normal_valid=lambda path: True,
         verified_score=lambda *args: None, quantile_valid=lambda *args: True)
+    # Exact atom/contract checks have their own fault-injection suite.
+    monkeypatch.setattr(m, "audit_ladder", lambda args, owner, control, path, expected, rows: m.REC.read(path))
     before = {str(p): m.REC.digest(p) for p in parent.rglob("*") if p.is_file()}
     if state == "false_complete":
         with pytest.raises(RuntimeError): m.freeze_parent(args, owner, dict(code_head="frozen"))

@@ -23,6 +23,8 @@ read_script <- function(name) paste(readLines(
   file.path(repo_root, "application", "scripts", name), warn = FALSE
 ), collapse = "\n")
 closeout <- read_script("closeout_joint_qdesn_pure_recursive_score_review.R")
+finalizer <- read_script(
+  "finalize_joint_qdesn_recursive_mean_forecast.R")
 recovery_launcher <- read_script(
   "launch_joint_qdesn_pure_recursive_expanded_score_recovery_jerez.sh")
 review_launcher <- read_script(
@@ -33,7 +35,10 @@ cleanup <- read_script(
   "cleanup_joint_qdesn_pure_recursive_legacy_oracles.R")
 stopifnot(
   grepl("recovery_contract_path", closeout, fixed = TRUE),
+  grepl("review_contract_path", finalizer, fixed = TRUE),
+  grepl("allowed_review_contract_sha256", finalizer, fixed = TRUE),
   grepl("--recovery-contract-path", review_launcher, fixed = TRUE),
+  grepl("--review-contract-path", review_launcher, fixed = TRUE),
   grepl("63,1,0,41", review_launcher, fixed = TRUE),
   grepl("COMPLETE_WITH_ONE_SCORE_STABILITY_REVIEW", review_launcher,
     fixed = TRUE),

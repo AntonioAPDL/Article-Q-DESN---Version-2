@@ -133,7 +133,8 @@ run_internal() {
     --root "$SCORE_ROOT" --source-root "$SOURCE_ROOT" \
     --contract-path "$CONTRACT_PATH" --require-complete true
   "$RSCRIPT" "$SCRIPT_DIR/finalize_joint_qdesn_recursive_mean_forecast.R" \
-    --root "$SCORE_ROOT" --contract-path "$CONTRACT_PATH"
+    --root "$SCORE_ROOT" --contract-path "$CONTRACT_PATH" \
+    --review-contract-path "$REVIEW_CONTRACT"
   "$RSCRIPT" -e '
     root <- commandArgs(TRUE)[1L]
     status <- read.csv(file.path(root, "final_packet", "packet_status.csv"),

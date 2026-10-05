@@ -213,6 +213,14 @@ bad_review_hash$recovery_contract_sha256[[64L]] <- paste(rep("a", 64L), collapse
 stopifnot(!app_joint_recursive_final_score_stability(
   bad_review_hash, contract_v3
 )$review_valid[[64L]])
+expanded_review_decision <- app_joint_recursive_final_score_stability(
+  bad_review_hash, contract_v3,
+  allowed_review_contract_sha256 = bad_review_hash$recovery_contract_sha256[[64L]]
+)
+stopifnot(
+  all(expanded_review_decision$accepted),
+  sum(expanded_review_decision$review_valid) == 1L
+)
 
 failure_dir <- tempfile("joint_recursive_failure_")
 on.exit(unlink(failure_dir, recursive = TRUE, force = TRUE), add = TRUE)

@@ -1717,7 +1717,10 @@ app_joint_recursive_contrast_summary <- function(
   app_joint_qdesn_bind_rows(out)
 }
 
-app_joint_recursive_finalize <- function(root, contract) {
+app_joint_recursive_finalize <- function(
+  root, contract, allowed_review_contract_sha256 = app_sha256_file(
+    app_joint_recursive_review_contract_path())
+) {
   dirs <- app_joint_recursive_dirs(root)
   status <- app_joint_recursive_cell_status(root)
   if (nrow(status) != 64L || any(status$status != "complete")) {
@@ -1749,7 +1752,8 @@ app_joint_recursive_finalize <- function(root, contract) {
     x
   }))
   score_stability <- app_joint_recursive_final_score_stability(
-    mean_diagnostics, contract
+    mean_diagnostics, contract,
+    allowed_review_contract_sha256 = allowed_review_contract_sha256
   )
   if (any(!is.finite(summaries$posterior_score_mean)) ||
       any(summaries$canonical_contract_crossing_pairs != 0) ||

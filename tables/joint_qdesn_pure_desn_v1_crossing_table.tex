@@ -1,0 +1,20 @@
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.04}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & \shortstack{Fit grid\\crossings (\%)} & \shortstack{Forecast grid\\crossings (\%)} & \shortstack{Posterior-draw forecast\\crossings (\%)} & \shortstack{Forecast adjustment\\mean / maximum} \\
+\midrule
+Joint AL & 0.10 & 0.02 & 1.43 & 0.0000 / 0.1352 \\
+Independent AL & 1.08 & 5.57 & 12.05 & 0.0107 / 0.6086 \\
+Joint exAL & 0.00 & 0.00 & 0.35 & 0.0000 / 0.0000 \\
+Independent exAL & 0.00 & 0.61 & 11.77 & 0.0007 / 0.2137 \\
+\bottomrule
+\end{tabular}
+}%
+\caption{Raw adjacent-level crossing rates and monotone adjustments. The first two columns use posterior-mean quantile grids; the third averages crossing rates over 3,750 posterior draws per model cell. Each model has 24,000 fitting comparisons and 47,520 forecast comparisons across eight settings; the posterior-draw denominator is 178,200,000. Adjustment magnitudes are on the response scale. Every projected grid has zero crossings.}
+\label{tab:joint-qdesn-pure-desn-v1-crossings}
+\end{table}

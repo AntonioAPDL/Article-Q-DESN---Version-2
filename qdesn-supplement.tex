@@ -888,13 +888,13 @@ or regularized horseshoe, and MCMC controls.
 \section{Variational Bayes and Laplace--Delta Approximation}
 \label{sec:cavi}
 
-The selected simulation and application analyses use VB--LD for
-computationally efficient approximate inference. The approximation is
+This section gives the generic fixed-design VB--LD approximation. It is
 mean-field over the conditionally conjugate blocks and uses the Laplace--Delta
 method of \citet{wang2013nonconjugatevb} for the nonconjugate exAL
-scale--asymmetry block \((\sigma,\gamma)\). This section
-gives the generic fixed-design updates; the application-specific GloFAS
-factorization is given in Section~\ref{subsec:glofas_likelihoods}.
+scale--asymmetry block \((\sigma,\gamma)\). The joint simulation uses the
+structured variational factor described with its evaluation details below;
+the application-specific GloFAS factorization is given in
+Section~\ref{subsec:glofas_likelihoods}.
 
 For a single target level \(p_0\), use the mean-field family
 \begin{equation}
@@ -1195,7 +1195,7 @@ working-likelihood contributions without tempering.
 \subsection{Quantile-Indexed Regularized-Horseshoe Prior}
 \label{subsec:supp_joint_qvp_prior}
 
-For a genuine multi-quantile grid, let
+For the general baseline extension, let
 \(\vect\beta_{\mathrm{base}}\in\R^r\) denote a baseline slope vector. Adjacent
 coefficient differences are
 \[
@@ -1292,9 +1292,12 @@ p(\vect\beta_{\mathrm{base}}\mid\Theta_0)p(\Theta_0)\,
 p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)p(\Theta_\Delta).
 \label{eq:supp_joint_complete_posterior}
 \end{align}
-The reported analysis uses the untempered complete-data posterior in
-\eqref{eq:supp_joint_complete_posterior}. Weighting the quantile-specific
-contributions would define a different generalized posterior.
+Equation~\eqref{eq:supp_joint_complete_posterior} gives the untempered
+complete-data posterior for the general baseline extension. The reported
+joint simulation fixes \(\vect\beta_{\mathrm{base}}=\zeros{r}\) and omits
+\(\Theta_0\) and the baseline-prior factor. Its first quantile slope is the
+RHS anchor, with separate RHS priors on adjacent differences. Weighting the
+quantile-specific contributions would define a different generalized posterior.
 For \(K=1\), remove
 \(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), and the baseline-prior factor
 from \eqref{eq:supp_joint_complete_posterior}, set
@@ -1553,14 +1556,13 @@ rearrangement is applied to the fitted conditional-quantile summaries and may
 use isotonic projection \eqref{eq:supp_monotone_projection} or monotone
 rearrangement \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. Linear
 interpolation defines a quantile function over \([p_1,p_K]\), and reported
-summaries are restricted to this fitted range. The reported joint study
-uses a sequential conditional evaluation. Coefficients and reservoir weights
-remain fixed throughout the held-out period, while a realized response becomes
-available before it enters the lag vector for subsequent evaluation times.
-Joint and independently estimated quantile grids are scored on the same 990
-origin--horizon rows for each simulation setting. A free-running response
-trajectory over \((0,1)\) would additionally require a tail extension and a
-rule for propagating one simulated history across quantile levels.
+summaries are restricted to this fitted range. In the reported joint study,
+observed history reconstructs the reservoir state at each forecast origin.
+Unknown responses are generated recursively within that origin, using linear
+interpolation of the ordered grid and endpoint clamping beyond the fitted
+probabilities. Reservoir weights and fitted parameter distributions remain
+fixed. All four regressions are scored on the same 990 origin--horizon pairs,
+but their recursively generated future feature vectors may differ.
 
 Forecast scores use \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), as the
 evaluation grid. The evaluation
@@ -1625,21 +1627,22 @@ For the seven-level grid, the weights are
 \]
 which sum to 0.90 and retain the scale of integrated check loss over
 \([0.05,0.95]\). The expectation in
-Eq.~\eqref{eq:supp-dgp-integrated-score} is evaluated analytically or by
-deterministic numerical integration under the known simulation mechanism.
-It averages over the conditional response distribution at the fixed held-out
-design points and conditions on the simulated fitting series and selected
-specification. Its posterior interval therefore excludes repeated-simulation
-and model-selection uncertainty.
+Eq.~\eqref{eq:supp-dgp-integrated-score} is evaluated from Monte Carlo paths
+under the known simulation mechanism, conditional on the observed history
+at each forecast origin. The same DGP paths and probability weights are used
+for all four regressions. This calculation integrates unknown future DGP
+responses rather than conditioning on their realized held-out values.
+The reported posterior intervals also condition on each model's averaged
+recursive feature matrix and exclude repeated-simulation and model-selection
+uncertainty.
 
 For a joint fit, each score draw uses the quantile vector from one joint
 posterior draw and therefore retains its cross-quantile dependence. For
 independently estimated levels, the marginal draws are combined with a
-pre-specified seeded product coupling that allocates each chain evenly across
-the paired draws. Joint-minus-independent contrasts use a separate
-pre-specified within-chain permutation to pair the resulting scalar score
-draws. The resulting posterior contrast intervals are conditional on this
-pairing, which defines the coupling between separately fitted models.
+pre-specified product coupling formed by within-chain permutations of
+quantile-specific draws. Joint-minus-independent contrasts match scalar
+score draws by a declared index coupling. Their intervals are descriptive
+and depend on this pairing between separately fitted models.
 Posterior means and equal-tailed 95\% intervals of
 \(S_{\mathrm{DGP}}^{(b)}\) form the primary comparison. The score evaluated
 at the posterior-mean quantile curve is reported separately as a sensitivity
@@ -1756,56 +1759,91 @@ limited sensitivity to MCMC initialization for the selected specifications.
 \clearpage
 \subsection{Joint Multi-Quantile MCMC Evaluation Details}
 
-The corrected shared-backbone evaluation uses the initialization sequence in
+The reservoir-only readout uses the initialization sequence in
 Figure~\ref{fig:supp-quantile-sequential-initialization}. One scenario-specific
 DESN/RHS specification is selected from source realizations and held common
-across the four model classes. The evaluation realization is used only for the final
-fit and evaluation. Table~\ref{tab:joint-qdesn-corrected-v4-protocol}
-records the 136 variational components, 160 MCMC chains, and retained-draw
-allocation. All five chains within a model cell share fixed prior
-hyperparameters and one posterior target; chain-specific dispersion affects
-initial states only.
+across the four model classes. The readout includes every reservoir layer
+and an intercept, while response lags enter only through reservoir inputs.
+The evaluation realization is used for the final fit and evaluation.
+Table~\ref{tab:joint-qdesn-pure-desn-v1-protocol} records the variational
+components, five-chain MCMC allocation, and scoring draws. All chains within
+a model cell share fixed prior hyperparameters and one posterior target;
+chain-specific dispersion affects initial states only. Every \(\exAL\)
+chain uses the exact scale-collapsed MCMC transition described above.
+Intercept prior centers and scales are calibrated once from the Gaussian
+reference fit and held common across the four regressions and all chains;
+joint intercepts are ordered. The first quantile slope is the RHS anchor,
+with no additional latent baseline.
+The \(\exAL\) variational initializers use the \(v\) augmentation and a
+structured factor \(q(\gamma_k)q(\sigma_k\mid\gamma_k)\), whose normalization
+and moments are evaluated by numerical quadrature.
 
-\input{tables/joint_qdesn_corrected_v4_score_table.tex}
+\input{tables/joint_qdesn_pure_desn_v1_protocol.tex}
+\input{tables/joint_qdesn_pure_desn_v1_score_table.tex}
 
-Figure~\ref{fig:joint-qdesn-corrected-v4-fit-rmse} compares
-fitting-sample recovery under the same shared feature design used for the
-forecast-score comparison in the main article.
+\input{tables/joint_qdesn_pure_desn_v1_secondary_score_table.tex}
 
-\input{tables/joint_qdesn_corrected_v4_fit_figure.tex}
+At each forecast origin, observed response lags reconstruct the reservoir
+state. Future responses are generated by inverse sampling from the projected
+quantile grid, with linear interpolation between fitted levels and endpoint
+clamping in the tails. The future feature vectors are averaged over these
+trajectories for each model. Coefficient and intercept draws evaluated at
+the averaged features give the primary score distribution. This is a
+conditional forecast-location summary; it is not generally the quantile
+function of the complete posterior predictive distribution.
 
-The posterior-score diagnostics satisfy the pre-specified rank-normalized
-\(\widehat R\), effective-sample-size, and Monte Carlo error criteria in 22 of
-32 comparisons; the other 10 are retained with review status. All 16
-\(\exAL\) scale--asymmetry assessments are also retained at review level.
-The least favorable joint nonlinear-reservoir assessment has gamma
-rank-normalized \(\widehat R=1.125\) and bulk effective sample size 41.7.
-Precision stabilization was invoked in 26 joint chains for 159 coefficient
-updates; the maximum relative diagonal perturbation was \(10^{-12}\), below
-the pre-specified \(10^{-8}\) failure threshold. All repaired chains satisfy
-the numerical checks and no result is excluded on this basis.
+Table~\ref{tab:joint-qdesn-pure-desn-v1-recursive-policy} compares this
+summary with evaluating each coefficient draw along its own recursive path.
+The conditional intervals are narrower in 28 of 32 comparisons, with median
+width ratio 0.7364. This difference reflects the uncertainty retained by
+each construction and does not establish better calibration. VB intervals
+additionally hold intercepts fixed and are therefore partial variational
+uncertainty summaries.
+\input{tables/joint_qdesn_pure_desn_v1_recursive_policy_table.tex}
+\input{tables/joint_qdesn_pure_desn_v1_vb_score_table.tex}
 
-Four paired joint-minus-independent score intervals lie entirely above zero,
-favoring independent estimation, and the other twelve include zero. Raw
-crossing rates and monotone-adjustment magnitudes are reported separately from
-the score after rearrangement. All posterior-mean grids are ordered after
-rearrangement.
+The averaged recursive design satisfies the original split-sample stability
+criteria in 31 MCMC comparisons. The joint \(\AL\) Laplace comparison is
+retained with a numerical integration qualification: its relative split-score
+difference is 0.5194\%, just above the 0.5\% threshold and below the recorded
+0.525\% review ceiling. All scores are finite. This assessment concerns
+recursive feature integration, rather than scalar posterior mixing.
+Imperfect scale--asymmetry mixing remains a limitation; effective sample
+sizes of independently permuted score sequences do not establish mixing
+of the original parameter chains.
 
-\input{tables/joint_qdesn_article_validation_provenance_tables.tex}
+The descriptive joint-minus-independent score intervals favor joint
+estimation under both likelihoods for asymmetric tails and independent
+estimation under both likelihoods for Laplace innovations. The other twelve
+include zero. Raw crossings are reported for both posterior-mean grids and
+posterior draws, alongside monotone-adjustment magnitudes. All scored grids
+are ordered after isotonic projection.
 
-This comparison replaces the earlier provisional packet in full. If
+\input{tables/joint_qdesn_pure_desn_v1_contrast_table.tex}
+\input{tables/joint_qdesn_pure_desn_v1_crossing_table.tex}
+
+Figure~\ref{fig:joint-qdesn-pure-desn-v1-fit-rmse} and the recovery table
+report posterior-mean quantile-path recovery in the fitting sample. These
+are point diagnostics; posterior intervals for fit RMSE are unavailable
+in the retained summary.
+\input{tables/joint_qdesn_pure_desn_v1_fit_figure.tex}
+\input{tables/joint_qdesn_pure_desn_v1_oracle_recovery_table.tex}
+
+This comparison uses one complete reservoir-only recursive evaluation. If
 \(d_\beta\) denotes the number of penalized coefficients in an RHS
 global-scale block, the corrected calculation uses shape
 \((d_\beta+1)/2\). Prior centers and hyperparameters are fixed within each
 model cell and do not depend on dispersed chain-specific starting values.
 Posterior-target hashes agree across all five chains in each of the 32 model
-cells. The replacement is based on the common posterior target; no cell was
-selected according to whether its corrected score improved.
+cells. All four models use the same selected reservoir specification within
+each scenario; their averaged future features may differ because their
+simulated response trajectories differ.
 
-The final table reports a separate 50-replicate variational sensitivity
-analysis. Its paired \(\AL\)-minus-\(\exAL\) forecast-MAE differences assess
-recovery of the known quantile paths; the MCMC DGP-integrated score remains
-the ranking criterion in the main comparison.
+The separate 50-replicate variational sensitivity analysis below uses the
+earlier feature design. Its paired \(\AL\)-minus-\(\exAL\) forecast-MAE
+differences assess quantile-path recovery and are not pooled with the present
+reservoir-only forecast comparison.
+\input{tables/joint_qdesn_article_validation_phase153_replication_summary.tex}
 
 \clearpage
 \subsection{Additional PriceFM Results}

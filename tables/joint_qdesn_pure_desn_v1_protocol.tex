@@ -1,0 +1,23 @@
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.04}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\textwidth}>{\raggedright\arraybackslash}p{0.67\textwidth}@{}}
+\toprule
+Item & Specification \\
+\midrule
+Feature design & One selected reservoir specification per setting, shared across all four regressions. The readout contains an intercept and all reservoir-layer states; raw inputs enter the reservoir recursion only. \\
+Quantile levels & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95. Trapezoidal weights sum to 0.90. \\
+Forecast design & 33 origins and 30 horizons, giving 990 rows per setting. Observed histories update the state between origins; future response lags are generated recursively within each origin. \\
+Posterior simulation & Five chains per cell, retaining 750 AL draws or 1,500 exAL draws per chain. The score uses 750 draws per chain for either likelihood. Every exAL chain uses the exact scale-collapsed asymmetry transition. \\
+Initialization & Gaussian, AL, exAL, and joint fits provide starting values in the stated sequence. Fixed prior hyperparameters define each target and are common across its five chains. \\
+Primary intervals & Posterior readout uncertainty conditional on each model's averaged recursive design. Trajectory-inclusive intervals are reported separately. \\
+Computation & All 64 method--model cells are finite. One Laplace joint-AL MCMC cell remains under a bounded score-stability review; scalar-parameter mixing and score precision qualify descriptive comparisons. \\
+\bottomrule
+\end{tabular}
+}%
+\caption{Design and computation for the expanded pure-DESN comparison.}
+\label{tab:joint-qdesn-pure-desn-v1-protocol}
+\end{table}

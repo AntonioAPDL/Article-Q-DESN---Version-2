@@ -152,29 +152,65 @@ supp <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"),
 article_files <- readLines(
   file.path(repo_root, "overleaf", "article_files.txt"), warn = FALSE
 )
-expect(grepl(
+pure_desn_active <- grepl(
+  "\\input{tables/joint_qdesn_pure_desn_v1_forecast_figure.tex}",
+  main, fixed = TRUE
+)
+old_reader_active <- grepl(
   "\\input{tables/joint_qdesn_corrected_v4_forecast_figure.tex}",
-  main, fixed = TRUE),
-  "The main article does not use the corrected v4 forecast figure.")
-expect(grepl("four intervals favor", main, fixed = TRUE) &&
-         grepl("twelve include", main, fixed = TRUE) &&
-         grepl("47,520 adjacent-level", main, fixed = TRUE) &&
-         grepl("2.52\\%", main, fixed = TRUE) &&
-         grepl("7.41\\%", main, fixed = TRUE) &&
-         grepl("0.57\\%", main, fixed = TRUE) &&
-         grepl("22 comparisons", main, fixed = TRUE),
-       "The main-text corrected interpretation is incomplete.")
-expect(grepl("\\input{tables/joint_qdesn_corrected_v4_score_table.tex}",
-             supp, fixed = TRUE) &&
-         grepl("\\input{tables/joint_qdesn_corrected_v4_fit_figure.tex}",
+  main, fixed = TRUE
+)
+expect(!pure_desn_active || !old_reader_active,
+       "Two JOINT article authorities are active simultaneously.")
+# The complete retained v4 evidence and assets have already passed every
+# scientific/hash gate above. These next assertions concern the CURRENT reader
+# projection: the historical projection remains checked independently below.
+if (pure_desn_active) {
+  active_checker <- file.path(
+    repo_root, "scripts/check_joint_qdesn_pure_desn_article_projection.R"
+  )
+  expect(file.exists(active_checker), "Missing current JOINT article checker.")
+  current_output <- system2(
+    "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript",
+    shQuote(active_checker), stdout = TRUE, stderr = TRUE
+  )
+  current_status <- attr(current_output, "status")
+  if (is.null(current_status)) current_status <- 0L
+  if (as.integer(current_status) != 0L) {
+    stop(paste(c("Current JOINT article checker failed:", current_output),
+               collapse = "\n"), call. = FALSE)
+  }
+  expect(any(grepl(
+    "^JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS ",
+    current_output
+  )), "Current JOINT article checker did not emit its validated success marker.")
+  cat(paste(current_output, collapse = "\n"), "\n", sep = "")
+} else {
+  expect(grepl(
+    "\\input{tables/joint_qdesn_corrected_v4_forecast_figure.tex}",
+    main, fixed = TRUE),
+    "The main article does not use the corrected v4 forecast figure.")
+  expect(grepl("four intervals favor", main, fixed = TRUE) &&
+           grepl("twelve include", main, fixed = TRUE) &&
+           grepl("47,520 adjacent-level", main, fixed = TRUE) &&
+           grepl("2.52\\%", main, fixed = TRUE) &&
+           grepl("7.41\\%", main, fixed = TRUE) &&
+           grepl("0.57\\%", main, fixed = TRUE) &&
+           grepl("22 comparisons", main, fixed = TRUE),
+         "The main-text corrected interpretation is incomplete.")
+  expect(grepl("\\input{tables/joint_qdesn_corrected_v4_score_table.tex}",
                supp, fixed = TRUE) &&
-         grepl("(d_\\beta+1)/2", supp, fixed = TRUE) &&
-         grepl("Posterior-target hashes agree", supp, fixed = TRUE),
-       "The supplement does not document the corrected v4 packet.")
-expect(!grepl("joint_qdesn_shared_backbone_forecast_figure", main, fixed = TRUE) &&
-         !grepl("joint_qdesn_shared_backbone_score_table", supp, fixed = TRUE) &&
-         !grepl("provisional article authority", supp, fixed = TRUE),
-       "A historical article input or provisional claim remains active.")
+           grepl("\\input{tables/joint_qdesn_corrected_v4_fit_figure.tex}",
+                 supp, fixed = TRUE) &&
+           grepl("(d_\\beta+1)/2", supp, fixed = TRUE) &&
+           grepl("Posterior-target hashes agree", supp, fixed = TRUE),
+         "The supplement does not document the corrected v4 packet.")
+  expect(!grepl("joint_qdesn_shared_backbone_forecast_figure", main, fixed = TRUE) &&
+           !grepl("joint_qdesn_shared_backbone_score_table", supp, fixed = TRUE) &&
+           !grepl("provisional article authority", supp, fixed = TRUE),
+         "A historical article input or provisional claim remains active.")
+
+}
 
 reader_files <- c(
   "tables/joint_qdesn_corrected_v4_score_table.tex",
@@ -185,7 +221,7 @@ reader_files <- c(
   "tables/joint_qdesn_corrected_v4_fit_figure.tex"
 )
 reader_text <- paste(c(
-  main, supp,
+  if (!pure_desn_active) c(main, supp) else character(),
   unlist(lapply(reader_files, function(path) {
     readLines(file.path(repo_root, path), warn = FALSE)
   }))
@@ -220,8 +256,10 @@ required_overleaf <- c(
   "tables/joint_qdesn_corrected_v4_score_table.tex",
   "tables/joint_qdesn_corrected_v4_secondary_score_table.tex"
 )
-expect(all(required_overleaf %in% article_files),
-       "The article-only file list is missing corrected v4 assets.")
+if (!pure_desn_active) {
+  expect(all(required_overleaf %in% article_files),
+         "The article-only file list is missing corrected v4 assets.")
+}
 expect(!any(grepl("joint_qdesn_shared_backbone", article_files, fixed = TRUE)),
        "The article-only file list still publishes historical assets.")
 listed_files <- article_files[!grepl("^[[:space:]]*(#|$)", article_files)]
@@ -260,7 +298,8 @@ for (pdf in pdfs) {
 
 cat(paste0(
   "JOINT_CORRECTED_ARTICLE_PROJECTION_V4_CHECK=PASS ",
-  "score_cells=32 contrasts=16 mean_winners_independent_exal=7 ",
-  "canonical_winners_independent_exal=8 directional_independent=4 ",
-  "overlapping=12 forecast_crossings=1197,3522,0,269\n"
+  "retained_historical_scientific_checks=PASS ",
+  "retained_historical_assets=17 active_reader=",
+  if (pure_desn_active) "pure_desn_v1" else "corrected_v4",
+  " historical_score_cells=32 historical_contrasts=16\n"
 ))

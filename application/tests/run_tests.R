@@ -166,8 +166,12 @@ source(app_path("application/tests/test_validation_interface_contract.R"))
 # with the estimator-separated posterior-interval projection.
 source(app_path("application/tests/test_independent_validation_exdqlm_mcmc_rolling_state_fix_article_v14.R"))
 source(app_path("application/tests/test_independent_validation_dgp_oracle_figures_v14.R"))
-# The corrected common-posterior v4 projection supersedes the Phase181 and
-# historical shared-backbone article-facing assets without mixing their cells.
+# Retain the complete historical v4 evidence checks, then verify the coherent
+# expanded reservoir-only recursive article projection and its source contracts.
 source(app_path("application/tests/test_joint_qdesn_corrected_article_projection_v4.R"))
+source(app_path("application/tests/test_joint_qdesn_pure_desn_article_projection.R"))
+source(app_path("application/tests/test_joint_qdesn_recursive_mean_design.R"))
+source(app_path("application/tests/test_joint_qdesn_recursive_dgp_oracle.R"))
+source(app_path("application/tests/test_joint_qdesn_recursive_mean_score_packet.R"))
 
 cat("Application tests completed.\n")

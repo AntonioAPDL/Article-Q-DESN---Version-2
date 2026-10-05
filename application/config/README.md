@@ -446,3 +446,30 @@ scientific, posterior-target, score, and seed field while assigning JOINT to
 affinity, and physical core 0 (`0,32`) remains outside JOINT for the active
 GloFAS Part 4 continuation. Only those exact two campaigns are allowed to
 coexist; all other protected campaigns fail the preflight closed.
+
+`joint_qdesn_recursive_mean_forecast_contract_v1.csv` freezes the forecast-only
+recursive mean-design reconstruction of the corrected JOINT evidence. It uses
+the seven-level quantile grid, an origin-marginal DGP-integrated finite-grid
+aCRPS, 33 origins by 30 horizons, no refitting, and exactly eight one-thread
+physical-core workers on Jerez.
+
+`joint_qdesn_recursive_mean_forecast_contract_v2.csv` preserves the same
+forecast estimand and fitted sources while correcting the state-integration
+audit. It alternates diagnostic halves within each MCMC chain, extends state
+integration when either stability gate fails, and permits a final all-draw
+rescue tier without relaxing either threshold.
+
+`joint_qdesn_recursive_mean_forecast_contract_v3.csv` corrects the retained-
+draw cardinality discovered during the preserved failed v2 execution. Each AL
+source chain contains 750 retained draws and each exAL source chain contains
+1,500. The state-integration rescue uses all available draws by likelihood,
+while final posterior score summaries use exactly 750 draws per chain for
+both families. The forecast estimand and stability gates remain unchanged.
+
+`joint_qdesn_pure_recursive_score_review_closeout_v2.csv` is a cell-scoped
+closeout addendum for the Laplace Bridge joint-AL MCMC score cell. It preserves
+the strict `0.005` score-stability gate as failed, hash-freezes both failed
+integration attempts, and permits one explicit review only under tighter RMS,
+pooled-score-drift, chain-spread, posterior-cardinality, and trajectory-count
+checks. It changes no fit, posterior draw, model specification, score, or
+article asset.

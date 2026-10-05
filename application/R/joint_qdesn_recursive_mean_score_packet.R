@@ -1,0 +1,1890 @@
+# Orchestration and score-packet helpers for recursive mean-design forecasts.
+
+app_joint_recursive_contract_path <- function() {
+  app_path("application/config/joint_qdesn_recursive_mean_forecast_contract_v1.csv")
+}
+
+app_joint_recursive_recovery_contract_path <- function() {
+  app_path("application/config/joint_qdesn_pure_recursive_score_recovery_v1.csv")
+}
+
+app_joint_recursive_review_contract_path <- function() {
+  app_path("application/config/joint_qdesn_pure_recursive_score_review_closeout_v2.csv")
+}
+
+app_joint_recursive_read_review_contract <- function(
+  path = app_joint_recursive_review_contract_path()
+) {
+  tab <- app_read_csv(path)
+  app_check_required_columns(tab, c("section", "name", "value", "type", "description"),
+    "recursive score review contract")
+  if (anyDuplicated(tab$name)) stop("Review contract names must be unique.", call. = FALSE)
+  value <- function(name) {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (nrow(row) != 1L) stop(sprintf("Missing review field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
+  out <- list(
+    table = tab,
+    path = normalizePath(path, mustWork = TRUE),
+    version = value("review_version"),
+    parent_contract_sha256 = value("parent_contract_sha256"),
+    cell_plan_sha256 = value("cell_plan_sha256"),
+    prior_recovery_contract_sha256 = value("prior_recovery_contract_sha256"),
+    recovery_worker_id = as.integer(value("recovery_worker_id")),
+    recovery_model_cell_id = value("recovery_model_cell_id"),
+    failed_marker_sha256 = value("failed_marker_sha256"),
+    failure_diagnostics_sha256 = value("failure_diagnostics_sha256"),
+    stability_progress_sha256 = value("stability_progress_sha256"),
+    original_failure_manifest_sha256 = value("original_failure_manifest_sha256"),
+    completed_worker_manifest_sha256 = value("completed_worker_manifest_sha256"),
+    state_uniform_policy = value("state_uniform_policy"),
+    antithetic_pair_count = as.integer(value("antithetic_pair_count")),
+    pair_seed_stride = as.integer(value("pair_seed_stride")),
+    score_gate_multiplier = as.numeric(value("score_gate_multiplier")),
+    max_pooled_score_relative_drift = as.numeric(value("max_pooled_score_relative_drift")),
+    max_rms_gate_fraction = as.numeric(value("max_rms_gate_fraction")),
+    max_chain_score_relative_deviation = as.numeric(value("max_chain_score_relative_deviation")),
+    required_unique_posterior_draws = as.integer(value("required_unique_posterior_draws")),
+    required_state_trajectory_draws = as.integer(value("required_state_trajectory_draws")),
+    workers = as.integer(value("workers")),
+    rscript = value("rscript")
+  )
+  hashes <- c(
+    out$parent_contract_sha256, out$cell_plan_sha256,
+    out$prior_recovery_contract_sha256, out$failed_marker_sha256,
+    out$failure_diagnostics_sha256, out$stability_progress_sha256,
+    out$original_failure_manifest_sha256, out$completed_worker_manifest_sha256
+  )
+  if (!identical(out$version,
+      "joint_qdesn_pure_recursive_score_review_closeout_v2") ||
+      out$recovery_worker_id != 41L ||
+      !identical(out$recovery_model_cell_id,
+        "laplace_bridge__joint_qdesn_rhs") ||
+      !identical(out$state_uniform_policy, "antithetic_uniform_pairs") ||
+      out$antithetic_pair_count != 2L || out$pair_seed_stride != 104729L ||
+      out$score_gate_multiplier != 1.05 ||
+      out$max_pooled_score_relative_drift != 0.001 ||
+      out$max_rms_gate_fraction != 0.25 ||
+      out$max_chain_score_relative_deviation != 0.05 ||
+      out$required_unique_posterior_draws != 3750L ||
+      out$required_state_trajectory_draws != 15000L || out$workers != 1L ||
+      any(!grepl("^[0-9a-f]{64}$", hashes))) {
+    stop("Recursive score review contract is malformed.", call. = FALSE)
+  }
+  out
+}
+
+app_joint_recursive_read_recovery_contract <- function(
+  path = app_joint_recursive_recovery_contract_path()
+) {
+  tab <- app_read_csv(path)
+  app_check_required_columns(tab, c("section", "name", "value", "type", "description"),
+    "recursive score recovery contract")
+  if (anyDuplicated(tab$name)) stop("Recovery contract names must be unique.", call. = FALSE)
+  value <- function(name) {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (nrow(row) != 1L) stop(sprintf("Missing recovery field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
+  out <- list(
+    table = tab,
+    path = normalizePath(path, mustWork = TRUE),
+    version = value("recovery_version"),
+    parent_contract_sha256 = value("parent_contract_sha256"),
+    cell_plan_sha256 = value("cell_plan_sha256"),
+    recovery_worker_id = as.integer(value("recovery_worker_id")),
+    recovery_model_cell_id = value("recovery_model_cell_id"),
+    unchanged_worker_id = as.integer(value("unchanged_worker_id")),
+    failed_marker_sha256 = value("failed_marker_sha256"),
+    failure_diagnostics_sha256 = value("failure_diagnostics_sha256"),
+    stability_progress_sha256 = value("stability_progress_sha256"),
+    state_uniform_policy = value("state_uniform_policy"),
+    antithetic_pair_counts = as.integer(strsplit(
+      value("antithetic_pair_counts"), ";", fixed = TRUE
+    )[[1L]]),
+    pair_seed_stride = as.integer(value("pair_seed_stride")),
+    reuse_verified_failure = tolower(value("reuse_verified_failure")) == "true",
+    workers = as.integer(value("workers")),
+    rscript = value("rscript")
+  )
+  hashes <- c(
+    out$parent_contract_sha256, out$cell_plan_sha256,
+    out$failed_marker_sha256, out$failure_diagnostics_sha256,
+    out$stability_progress_sha256
+  )
+  if (!identical(out$version, "joint_qdesn_pure_recursive_score_recovery_v1") ||
+      !identical(out$state_uniform_policy, "antithetic_uniform_pairs") ||
+      !identical(out$antithetic_pair_counts, c(1L, 2L)) ||
+      out$pair_seed_stride != 104729L || out$workers != 2L ||
+      !isTRUE(out$reuse_verified_failure) ||
+      any(!grepl("^[0-9a-f]{64}$", hashes))) {
+    stop("Recursive score recovery contract is malformed.", call. = FALSE)
+  }
+  out
+}
+
+app_joint_recursive_read_contract <- function(
+  path = app_joint_recursive_contract_path()
+) {
+  tab <- app_read_csv(path)
+  app_check_required_columns(tab, c("section", "name", "value", "type", "description"),
+    "recursive mean-design forecast contract")
+  if (anyDuplicated(tab$name)) stop("Recursive contract names must be unique.", call. = FALSE)
+  get <- function(name) {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (nrow(row) != 1L) stop(sprintf("Missing recursive contract field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
+  optional <- function(name, default = NA_character_) {
+    row <- tab[tab$name == name, , drop = FALSE]
+    if (!nrow(row)) return(default)
+    if (nrow(row) != 1L) stop(sprintf("Duplicate recursive contract field '%s'.", name), call. = FALSE)
+    as.character(row$value[[1L]])
+  }
+  nums <- function(name) as.numeric(strsplit(get(name), ";", fixed = TRUE)[[1L]])
+  out <- list(
+    table = tab,
+    path = normalizePath(path, mustWork = TRUE),
+    version = get("contract_version"),
+    source_inventory_sha256 = get("source_inventory_sha256"),
+    source_inventory_files = as.integer(get("source_inventory_files")),
+    source_inventory_bytes = as.numeric(get("source_inventory_bytes")),
+    tau = nums("tau_grid"),
+    weights = nums("trapezoidal_weights"),
+    origins = as.integer(get("origins")),
+    horizons = as.integer(get("horizons")),
+    score_rows = as.integer(get("score_rows")),
+    oracle_paths_per_shard = as.integer(get("oracle_paths_per_shard")),
+    oracle_primary_shards = as.integer(get("oracle_primary_shards")),
+    oracle_split_tolerance = as.numeric(get("oracle_split_tolerance")),
+    oracle_horizon1_tolerance = as.numeric(get("oracle_horizon1_tolerance")),
+    state_draws = as.integer(get("state_draws")),
+    state_draws_extension = as.integer(get("state_draws_extension")),
+    mcmc_state_draws_per_chain = as.integer(get("mcmc_state_draws_per_chain")),
+    mcmc_state_rescue_draws_per_chain = as.integer(optional(
+      "mcmc_state_rescue_draws_per_chain", get("mcmc_state_draws_per_chain")
+    )),
+    mcmc_available_draws_per_chain_al = as.integer(optional(
+      "mcmc_available_draws_per_chain_al",
+      optional("mcmc_available_draws_per_chain", get("mcmc_score_draws_per_chain"))
+    )),
+    mcmc_available_draws_per_chain_exal = as.integer(optional(
+      "mcmc_available_draws_per_chain_exal",
+      optional("mcmc_available_draws_per_chain", get("mcmc_score_draws_per_chain"))
+    )),
+    mcmc_state_rescue_policy = optional(
+      "mcmc_state_rescue_policy", "fixed_per_chain"
+    ),
+    vb_state_rescue_draws = as.integer(optional(
+      "vb_state_rescue_draws", get("state_draws_extension")
+    )),
+    state_half_split_method = optional("state_half_split_method", "contiguous"),
+    state_extension_trigger = optional("state_extension_trigger", "rms_only"),
+    parent_contract_sha256 = optional("parent_contract_sha256", NA_character_),
+    mcmc_score_draws_per_chain = as.integer(get("mcmc_score_draws_per_chain")),
+    vb_score_draws = as.integer(get("vb_score_draws")),
+    score_chunk_size = as.integer(get("score_chunk_size")),
+    mean_design_rms_gate = as.numeric(get("mean_design_rms_gate")),
+    mean_design_score_gate = as.numeric(get("mean_design_score_gate")),
+    tail_sensitivity_gate = as.numeric(get("tail_sensitivity_gate")),
+    inverse_cdf_tail_rule = get("inverse_cdf_tail_rule"),
+    workers = as.integer(get("workers")),
+    rscript = get("rscript")
+  )
+  expected_tau <- c(0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
+  expected_weights <- c(0.025, 0.100, 0.200, 0.250, 0.200, 0.100, 0.025)
+  supported <- c(
+    "joint_qdesn_recursive_mean_forecast_v1",
+    "joint_qdesn_recursive_mean_forecast_v2",
+    "joint_qdesn_recursive_mean_forecast_v3",
+    "joint_qdesn_pure_recursive_score_packet_v1"
+  )
+  expected_workers <- if (identical(
+      out$version, "joint_qdesn_pure_recursive_score_packet_v1"
+    )) 15L else 8L
+  if (!out$version %in% supported ||
+      !identical(out$tau, expected_tau) ||
+      !identical(out$weights, expected_weights) ||
+      out$origins != 33L || out$horizons != 30L || out$score_rows != 990L ||
+      out$oracle_primary_shards != 16L || out$workers != expected_workers ||
+      out$mcmc_score_draws_per_chain != 750L || out$vb_score_draws != 4000L ||
+      !identical(out$inverse_cdf_tail_rule, "endpoint_clamp")) {
+    stop("Recursive mean-design forecast contract is malformed.", call. = FALSE)
+  }
+  if (identical(out$version, "joint_qdesn_recursive_mean_forecast_v2") &&
+      (!identical(out$state_half_split_method, "within_chain_alternating") ||
+        !identical(out$state_extension_trigger, "either_stability_gate") ||
+        out$mcmc_state_rescue_draws_per_chain != out$mcmc_score_draws_per_chain ||
+        out$vb_state_rescue_draws != out$vb_score_draws ||
+        !grepl("^[0-9a-f]{64}$", out$parent_contract_sha256))) {
+    stop("Recursive v2 rescue policy is malformed.", call. = FALSE)
+  }
+  if (out$version %in% c(
+      "joint_qdesn_recursive_mean_forecast_v3",
+      "joint_qdesn_pure_recursive_score_packet_v1") &&
+      (!identical(out$state_half_split_method, "within_chain_alternating") ||
+        !identical(out$state_extension_trigger, "either_stability_gate") ||
+        out$mcmc_available_draws_per_chain_al != 750L ||
+        out$mcmc_available_draws_per_chain_exal != 1500L ||
+        !identical(out$mcmc_state_rescue_policy,
+          "all_available_by_likelihood") ||
+        out$mcmc_score_draws_per_chain >
+          out$mcmc_available_draws_per_chain_al ||
+        out$vb_state_rescue_draws != out$vb_score_draws ||
+        !grepl("^[0-9a-f]{64}$", out$parent_contract_sha256))) {
+    stop("Recursive v3 cardinality policy is malformed.", call. = FALSE)
+  }
+  out
+}
+
+app_joint_recursive_dirs <- function(root) {
+  root <- normalizePath(root, mustWork = FALSE)
+  list(
+    root = root,
+    oracle_shards = file.path(root, "oracle_shards"),
+    oracle_banks = file.path(root, "oracle_banks"),
+    cells = file.path(root, "cells"),
+    final = file.path(root, "final_packet"),
+    logs = file.path(root, "logs")
+  )
+}
+
+app_joint_recursive_source_files <- function(source_root) {
+  c(
+    transfer_inventory = file.path(source_root, "score_packet", "transfer_inventory.csv"),
+    model_cell_plan = file.path(source_root, "model_cell_plan.csv"),
+    mcmc_worker_plan = file.path(source_root, "mcmc_worker_plan.csv"),
+    selected_backbones = file.path(source_root, "imported_selected_backbones.csv"),
+    vb_initializer_manifest = file.path(source_root, "vb_initializer_manifest.csv"),
+    mcmc_health = file.path(source_root, "mcmc_health_summary.csv"),
+    vb_health = file.path(source_root, "vb_health_summary.csv")
+  )
+}
+
+app_joint_recursive_verify_source <- function(source_root, contract) {
+  source_root <- normalizePath(source_root, mustWork = TRUE)
+  files <- app_joint_recursive_source_files(source_root)
+  if (any(!file.exists(files))) stop("Recursive source runtime is incomplete.", call. = FALSE)
+  inventory_sha <- app_sha256_file(files[["transfer_inventory"]])
+  if (!identical(inventory_sha, contract$source_inventory_sha256)) {
+    stop("Recursive source transfer-inventory hash differs.", call. = FALSE)
+  }
+  inventory <- app_read_csv(files[["transfer_inventory"]])
+  app_check_required_columns(inventory, c("relative_path", "size_bytes", "sha256"),
+    "recursive source transfer inventory")
+  paths <- file.path(source_root, inventory$relative_path)
+  exists <- file.exists(paths)
+  sizes <- rep(NA_real_, length(paths))
+  hashes <- rep(NA_character_, length(paths))
+  sizes[exists] <- file.info(paths[exists])$size
+  hashes[exists] <- vapply(paths[exists], app_sha256_file, character(1L))
+  verified <- exists & sizes == inventory$size_bytes &
+    tolower(hashes) == tolower(inventory$sha256)
+  audit <- data.frame(
+    relative_path = inventory$relative_path,
+    expected_size_bytes = inventory$size_bytes,
+    observed_size_bytes = sizes,
+    expected_sha256 = inventory$sha256,
+    observed_sha256 = hashes,
+    verified = verified,
+    stringsAsFactors = FALSE
+  )
+  if (nrow(inventory) != contract$source_inventory_files ||
+      sum(inventory$size_bytes) != contract$source_inventory_bytes ||
+      any(!verified)) {
+    stop("Recursive source transfer inventory did not verify.", call. = FALSE)
+  }
+  audit
+}
+
+app_joint_recursive_find_scenario_file <- function(directory, scenario_id) {
+  paths <- list.files(directory, pattern = "[.]rds$", full.names = TRUE)
+  matches <- paths[grepl(paste0("_", scenario_id, "[.]rds$"), basename(paths))]
+  if (length(matches) != 1L) {
+    stop(sprintf("Expected one source RDS for scenario '%s' in %s.", scenario_id, directory), call. = FALSE)
+  }
+  normalizePath(matches, mustWork = TRUE)
+}
+
+app_joint_recursive_build_plans <- function(source_root, contract) {
+  cells <- app_read_csv(file.path(source_root, "model_cell_plan.csv"))
+  selected <- app_read_csv(file.path(source_root, "imported_selected_backbones.csv"))
+  if (nrow(cells) != 32L || length(unique(cells$scenario_id)) != 8L ||
+      nrow(selected) != 8L) stop("Recursive source cell cardinality differs.", call. = FALSE)
+  cells$design_relative_path <- vapply(cells$scenario_id, function(id) {
+    file.path("designs", basename(app_joint_recursive_find_scenario_file(
+      file.path(source_root, "designs"), id
+    )))
+  }, character(1L))
+  cells$fixture_relative_path <- vapply(cells$scenario_id, function(id) {
+    file.path("fixtures", basename(app_joint_recursive_find_scenario_file(
+      file.path(source_root, "fixtures"), id
+    )))
+  }, character(1L))
+  cells$initializer_relative_path <- file.path("initializers", paste0(cells$model_cell_id, ".rds"))
+  if (any(!file.exists(file.path(source_root, cells$initializer_relative_path)))) {
+    stop("Recursive source initializers are incomplete.", call. = FALSE)
+  }
+  method <- rep(c("vb", "mcmc"), each = nrow(cells))
+  cell_index <- rep(seq_len(nrow(cells)), times = 2L)
+  plan <- cells[cell_index, , drop = FALSE]
+  plan$inference_method <- method
+  plan$worker_id <- seq_len(nrow(plan))
+  plan$state_seed <- 202609240L + 1000L * plan$worker_id
+  plan$score_seed <- 202609241L + 1000L * plan$worker_id
+  scenario_order <- match(plan$scenario_id, unique(cells$scenario_id))
+  plan$uniform_seed <- 202609242L + 10000L * scenario_order
+  plan$sentinel <- FALSE
+  sentinel_keys <- c(
+    "asymmetric_laplace_tail__joint_qdesn_rhs__mcmc",
+    "nonlinear_reservoir_friendly__joint_exqdesn_rhs__vb",
+    "regime_shift__qdesn_rhs_independent__mcmc"
+  )
+  key <- paste(plan$model_cell_id, plan$inference_method, sep = "__")
+  plan$sentinel[key %in% sentinel_keys] <- TRUE
+  if (sum(plan$sentinel) != 3L) stop("Recursive sentinel plan is malformed.", call. = FALSE)
+
+  oracle_primary <- expand.grid(
+    scenario_id = unique(cells$scenario_id), shard_id = 1:2,
+    stringsAsFactors = FALSE
+  )
+  oracle_extension <- expand.grid(
+    scenario_id = unique(cells$scenario_id), shard_id = 3:4,
+    stringsAsFactors = FALSE
+  )
+  oracle_primary$is_primary <- TRUE
+  oracle_extension$is_primary <- FALSE
+  oracle <- rbind(oracle_primary, oracle_extension)
+  oracle <- oracle[order(!app_as_bool_vec(oracle$is_primary),
+    match(oracle$scenario_id, unique(cells$scenario_id)), oracle$shard_id), , drop = FALSE]
+  oracle$worker_id <- seq_len(nrow(oracle))
+  oracle$fixture_relative_path <- vapply(oracle$scenario_id, function(id) {
+    file.path("fixtures", basename(app_joint_recursive_find_scenario_file(
+      file.path(source_root, "fixtures"), id
+    )))
+  }, character(1L))
+  oracle$design_relative_path <- vapply(oracle$scenario_id, function(id) {
+    file.path("designs", basename(app_joint_recursive_find_scenario_file(
+      file.path(source_root, "designs"), id
+    )))
+  }, character(1L))
+  oracle$seed <- 202609243L + 10000L * match(oracle$scenario_id, unique(cells$scenario_id)) +
+    100L * oracle$shard_id
+  list(cells = plan, oracle = oracle, selected = selected)
+}
+
+app_joint_recursive_select_block <- function(draws, block) {
+  cols <- grep(paste0("^", block, "_[0-9]{4}$"), names(draws), value = TRUE)
+  cols <- cols[order(as.integer(sub(paste0("^", block, "_"), "", cols)))]
+  as.matrix(draws[, cols, drop = FALSE])
+}
+
+app_joint_recursive_couple_independent <- function(beta, alpha, p, seed) {
+  beta <- as.matrix(beta); alpha <- as.matrix(alpha)
+  K <- ncol(alpha); n <- nrow(alpha)
+  if (ncol(beta) != K * p) stop("Independent draw blocks are malformed.", call. = FALSE)
+  out_beta <- beta; out_alpha <- alpha
+  for (k in seq_len(K)) {
+    set.seed(as.integer((seed + 7919L * k) %% .Machine$integer.max))
+    index <- sample.int(n)
+    cols <- ((k - 1L) * p + 1L):(k * p)
+    out_beta[, cols] <- beta[index, cols, drop = FALSE]
+    out_alpha[, k] <- alpha[index, k]
+  }
+  list(beta = out_beta, alpha = out_alpha)
+}
+
+app_joint_recursive_mcmc_draws <- function(
+  source_root, cell, n_per_chain, seed, use_all = FALSE
+) {
+  plan <- app_read_csv(file.path(source_root, "mcmc_worker_plan.csv"))
+  jobs <- plan[plan$model_cell_id == cell$model_cell_id[[1L]], , drop = FALSE]
+  jobs <- jobs[order(jobs$chain_id), , drop = FALSE]
+  if (nrow(jobs) != 5L) stop("Recursive MCMC adapter requires five chains.", call. = FALSE)
+  blocks <- lapply(seq_len(nrow(jobs)), function(index) {
+    worker <- sprintf("worker_%04d", as.integer(jobs$worker_id[[index]]))
+    path <- file.path(source_root, "mcmc_workers", worker, "posterior_draws.csv.gz")
+    draws <- app_read_csv(path)
+    beta <- app_joint_recursive_select_block(draws, "beta")
+    alpha <- app_joint_recursive_select_block(draws, "alpha")
+    if (nrow(beta) != nrow(alpha) || nrow(beta) < as.integer(n_per_chain)) {
+      stop("Recursive MCMC source has fewer retained draws than declared.", call. = FALSE)
+    }
+    selected <- if (isTRUE(use_all)) seq_len(nrow(beta)) else {
+      app_joint_qdesn_postscore_even_indices(nrow(beta), n_per_chain)
+    }
+    beta <- beta[selected, , drop = FALSE]
+    alpha <- alpha[selected, , drop = FALSE]
+    if (identical(cell$fit_structure[[1L]], "independent")) {
+      coupled <- app_joint_recursive_couple_independent(
+        beta, alpha, as.integer(cell$p[[1L]]), seed + 1009L * index
+      )
+      beta <- coupled$beta; alpha <- coupled$alpha
+    }
+    list(
+      beta = beta, alpha = alpha,
+      chain_id = rep(as.integer(jobs$chain_id[[index]]), nrow(beta)),
+      source_draw_index = selected
+    )
+  })
+  list(
+    beta = do.call(rbind, lapply(blocks, `[[`, "beta")),
+    alpha = do.call(rbind, lapply(blocks, `[[`, "alpha")),
+    chain_id = unlist(lapply(blocks, `[[`, "chain_id"), use.names = FALSE),
+    source_draw_index = unlist(lapply(blocks, `[[`, "source_draw_index"), use.names = FALSE)
+  )
+}
+
+app_joint_recursive_mcmc_available_per_chain <- function(cell, contract) {
+  if (!identical(
+      contract$mcmc_state_rescue_policy, "all_available_by_likelihood"
+  )) return(contract$mcmc_state_rescue_draws_per_chain)
+  family <- tolower(cell$likelihood_family[[1L]])
+  if (identical(family, "al")) {
+    contract$mcmc_available_draws_per_chain_al
+  } else if (identical(family, "exal")) {
+    contract$mcmc_available_draws_per_chain_exal
+  } else {
+    stop("Unknown recursive MCMC likelihood family.", call. = FALSE)
+  }
+}
+
+app_joint_recursive_mcmc_cardinality_audit <- function(source_root, contract) {
+  plan <- app_read_csv(file.path(source_root, "mcmc_worker_plan.csv"))
+  required <- c("worker_id", "chain_id", "model_cell_id", "likelihood_family")
+  app_check_required_columns(plan, required, "recursive MCMC worker plan")
+  observed <- vapply(plan$worker_id, function(worker_id) {
+    path <- file.path(
+      source_root, "mcmc_workers", sprintf("worker_%04d", as.integer(worker_id)),
+      "posterior_draws.csv.gz"
+    )
+    if (!file.exists(path)) return(NA_integer_)
+    connection <- gzfile(path, open = "rt")
+    on.exit(close(connection), add = TRUE)
+    length(readLines(connection, warn = FALSE)) - 1L
+  }, integer(1L))
+  expected <- vapply(seq_len(nrow(plan)), function(index) {
+    app_joint_recursive_mcmc_available_per_chain(plan[index, , drop = FALSE], contract)
+  }, integer(1L))
+  data.frame(
+    worker_id = plan$worker_id,
+    chain_id = plan$chain_id,
+    model_cell_id = plan$model_cell_id,
+    likelihood_family = plan$likelihood_family,
+    expected_retained_draws = expected,
+    observed_retained_draws = observed,
+    pass = !is.na(observed) & observed == expected,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_recursive_mvn_draws <- function(mean, covariance, n, seed) {
+  covariance <- (as.matrix(covariance) + t(as.matrix(covariance))) / 2
+  eig <- eigen(covariance, symmetric = TRUE)
+  scale <- max(abs(eig$values), 1)
+  material_negative <- min(eig$values) < -1e-8 * scale
+  if (material_negative) stop("VB beta covariance is materially indefinite.", call. = FALSE)
+  repaired <- pmax(eig$values, 0)
+  set.seed(as.integer(seed))
+  z <- matrix(stats::rnorm(as.integer(n) * length(mean)), nrow = as.integer(n))
+  factor <- eig$vectors %*% diag(sqrt(repaired), nrow = length(repaired))
+  draws <- sweep(z %*% t(factor), 2L, as.numeric(mean), "+")
+  attr(draws, "covariance_repair") <- data.frame(
+    min_eigenvalue = min(eig$values),
+    clipped_eigenvalues = sum(eig$values < 0),
+    material_negative = material_negative,
+    stringsAsFactors = FALSE
+  )
+  draws
+}
+
+app_joint_recursive_vb_draws <- function(source_root, cell, n, seed) {
+  fit <- readRDS(file.path(source_root, cell$initializer_relative_path[[1L]]))
+  p <- as.integer(cell$p[[1L]]); K <- length(fit$tau)
+  if (identical(cell$fit_structure[[1L]], "independent")) {
+    beta <- matrix(NA_real_, nrow = n, ncol = p * K)
+    repair <- vector("list", K)
+    for (k in seq_len(K)) {
+      one <- fit$fits[[k]]
+      cols <- ((k - 1L) * p + 1L):(k * p)
+      one_draws <- app_joint_recursive_mvn_draws(
+        one$beta_mean, one$beta_cov, n, seed + 7919L * k
+      )
+      beta[, cols] <- one_draws
+      repair[[k]] <- cbind(
+        quantile_index = k,
+        attr(one_draws, "covariance_repair")
+      )
+    }
+  } else {
+    beta <- app_joint_recursive_mvn_draws(fit$beta_mean, fit$beta_cov, n, seed)
+    repair <- list(attr(beta, "covariance_repair"))
+  }
+  alpha <- matrix(rep(fit$alpha_mean, each = n), nrow = n, ncol = K)
+  list(
+    beta = beta, alpha = alpha,
+    chain_id = rep(NA_integer_, n), source_draw_index = seq_len(n),
+    covariance_repair = app_bind_rows_fill(repair),
+    alpha_uncertainty_included = FALSE
+  )
+}
+
+app_joint_recursive_contract_draw_rows <- function(q_raw, tau) {
+  app_joint_qdesn_postscore_contract_rows(q_raw, tau)
+}
+
+app_joint_recursive_score_draws <- function(
+  mean_design, beta, alpha, oracle, tau, weights, chunk_size,
+  chain_id = NULL, source_draw_index = NULL
+) {
+  beta <- as.matrix(beta); alpha <- as.matrix(alpha)
+  n_draw <- nrow(beta); n_time <- nrow(mean_design); p <- ncol(mean_design); K <- length(tau)
+  if (ncol(beta) != p * K || nrow(alpha) != n_draw || ncol(alpha) != K) {
+    stop("Final score draw dimensions differ.", call. = FALSE)
+  }
+  chain_id <- chain_id %||% rep(NA_integer_, n_draw)
+  source_draw_index <- source_draw_index %||% seq_len(n_draw)
+  chunks <- split(seq_len(n_draw), ceiling(seq_len(n_draw) / as.integer(chunk_size)))
+  output <- lapply(chunks, function(index) {
+    B <- length(index)
+    q_raw <- matrix(NA_real_, nrow = n_time * B, ncol = K)
+    for (k in seq_len(K)) {
+      cols <- ((k - 1L) * p + 1L):(k * p)
+      q <- mean_design %*% t(beta[index, cols, drop = FALSE])
+      q <- sweep(q, 2L, alpha[index, k], "+")
+      q_raw[, k] <- as.vector(q)
+    }
+    contracted <- app_joint_recursive_contract_draw_rows(q_raw, tau)
+    dgp <- realized <- numeric(B)
+    for (k in seq_len(K)) {
+      qk <- matrix(contracted$q_contract[, k], nrow = n_time, ncol = B)
+      dgp <- dgp + 2 * weights[[k]] * colMeans(
+        app_joint_recursive_oracle_expected_matrix(oracle, qk, tau[[k]])
+      )
+      realized <- realized + 2 * weights[[k]] * colMeans(matrix(
+        app_joint_qdesn_postscore_check_loss(
+          rep(oracle$observed_y, B), as.vector(qk), tau[[k]]
+        ), nrow = n_time, ncol = B
+      ))
+    }
+    raw_cross <- pmax(contracted$raw_crossing, 0)
+    contract_cross <- pmax(contracted$contract_crossing, 0)
+    adjustment <- abs(contracted$q_contract - q_raw)
+    data.frame(
+      draw_index = index,
+      chain_id = chain_id[index],
+      source_draw_index = source_draw_index[index],
+      origin_marginal_dgp_integrated_acrps = dgp,
+      realized_acrps = realized,
+      raw_crossing_pairs = colSums(matrix(
+        rowSums(raw_cross > 1e-12), nrow = n_time, ncol = B
+      )),
+      contract_crossing_pairs = colSums(matrix(
+        rowSums(contract_cross > 1e-12), nrow = n_time, ncol = B
+      )),
+      mean_abs_monotone_adjustment = colMeans(matrix(
+        rowMeans(adjustment), nrow = n_time, ncol = B
+      )),
+      max_abs_monotone_adjustment = apply(matrix(
+        apply(adjustment, 1L, max), nrow = n_time, ncol = B
+      ), 2L, max),
+      stringsAsFactors = FALSE
+    )
+  })
+  app_joint_qdesn_bind_rows(output)
+}
+
+app_joint_recursive_canonical_metrics <- function(
+  design_matrix, beta, alpha, oracle, tau, weights
+) {
+  p <- ncol(design_matrix); K <- length(tau)
+  q_raw <- matrix(NA_real_, nrow(design_matrix), K)
+  for (k in seq_len(K)) {
+    cols <- ((k - 1L) * p + 1L):(k * p)
+    q_raw[, k] <- alpha[[k]] + as.vector(design_matrix %*% beta[cols])
+  }
+  contract <- app_joint_qdesn_apply_monotone_contract(q_raw, tau)
+  score <- app_joint_recursive_oracle_point_score(
+    oracle, contract$qhat_contract, tau, weights
+  )
+  error <- contract$qhat_contract - oracle$true_q
+  data.frame(
+    origin_marginal_dgp_integrated_acrps = score$origin_marginal_dgp_integrated_acrps,
+    realized_acrps = score$realized_acrps,
+    origin_marginal_oracle_quantile_mae = mean(abs(error)),
+    origin_marginal_oracle_quantile_rmse = sqrt(mean(error^2)),
+    raw_crossing_pairs = sum(contract$raw_crossing$n_crossing_pairs),
+    contract_crossing_pairs = sum(contract$contract_crossing$n_crossing_pairs),
+    mean_abs_monotone_adjustment = contract$mean_abs_adjustment,
+    max_abs_monotone_adjustment = contract$max_abs_adjustment,
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_recursive_draw_summary <- function(draws, inference_method) {
+  score <- draws$origin_marginal_dgp_integrated_acrps
+  out <- data.frame(
+    posterior_score_mean = mean(score),
+    posterior_score_median = stats::median(score),
+    posterior_score_q025 = as.numeric(stats::quantile(score, 0.025, names = FALSE, type = 8)),
+    posterior_score_q975 = as.numeric(stats::quantile(score, 0.975, names = FALSE, type = 8)),
+    posterior_score_interval_width = as.numeric(diff(stats::quantile(
+      score, c(0.025, 0.975), names = FALSE, type = 8
+    ))),
+    posterior_realized_acrps_mean = mean(draws$realized_acrps),
+    raw_crossing_pairs = sum(draws$raw_crossing_pairs),
+    contract_crossing_pairs = sum(draws$contract_crossing_pairs),
+    score_mcse_mean = stats::sd(score) / sqrt(length(score)),
+    stringsAsFactors = FALSE
+  )
+  if (identical(inference_method, "mcmc")) {
+    split <- split(score, draws$chain_id)
+    if (length(split) == 5L && length(unique(lengths(split))) == 1L) {
+      diagnostic <- app_joint_exqdesn_modern_diagnostics(do.call(cbind, split))
+      out$score_rank_rhat <- diagnostic$rank_rhat
+      out$score_folded_rhat <- diagnostic$folded_rhat
+      out$score_bulk_ess <- diagnostic$bulk_ess
+      out$score_tail_ess <- diagnostic$tail_ess
+      out$score_mcse_mean <- diagnostic$mcse_mean
+    }
+  } else {
+    out$score_rank_rhat <- out$score_folded_rhat <- NA_real_
+    out$score_bulk_ess <- out$score_tail_ess <- NA_real_
+  }
+  out
+}
+
+app_joint_recursive_cell_dir <- function(root, worker_id) {
+  file.path(root, "cells", sprintf("worker_%04d", as.integer(worker_id)))
+}
+
+app_joint_recursive_atomic_manifest <- function(directory, paths) {
+  app_joint_shared_write_manifest(directory, paths)
+  manifest <- app_read_csv(file.path(directory, "artifact_manifest.csv"))
+  if (!nrow(manifest)) stop("Recursive worker manifest is empty.", call. = FALSE)
+  invisible(manifest)
+}
+
+app_joint_recursive_half_assignment <- function(
+  chain_id, method = "within_chain_alternating"
+) {
+  chain_id <- as.integer(chain_id)
+  n <- length(chain_id)
+  if (n < 2L) stop("Recursive half assignment requires at least two draws.", call. = FALSE)
+  if (identical(method, "contiguous")) {
+    return(c(rep(1L, floor(n / 2L)), rep(2L, n - floor(n / 2L))))
+  }
+  if (!identical(method, "within_chain_alternating")) {
+    stop(sprintf("Unknown recursive half-split method '%s'.", method), call. = FALSE)
+  }
+  if (all(is.na(chain_id))) return(rep(c(1L, 2L), length.out = n))
+  if (anyNA(chain_id)) stop("MCMC state draws have partial chain identifiers.", call. = FALSE)
+  within_chain <- ave(seq_len(n), chain_id, FUN = seq_along)
+  ifelse(within_chain %% 2L == 1L, 1L, 2L)
+}
+
+app_joint_recursive_state_tiers <- function(cell, contract) {
+  if (identical(cell$inference_method[[1L]], "mcmc")) {
+    rescue_per_chain <- app_joint_recursive_mcmc_available_per_chain(
+      cell, contract
+    )
+    tiers <- data.frame(
+      tier = c("initial", "extension", "full_posterior_rescue"),
+      draws = 5L * c(
+        contract$mcmc_state_draws_per_chain,
+        contract$state_draws_extension %/% 5L,
+        rescue_per_chain
+      ),
+      draws_per_chain = c(
+        contract$mcmc_state_draws_per_chain,
+        contract$state_draws_extension %/% 5L,
+        rescue_per_chain
+      ),
+      use_all = c(FALSE, FALSE, TRUE),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    tiers <- data.frame(
+      tier = c("initial", "extension", "full_posterior_rescue"),
+      draws = c(
+        contract$state_draws,
+        contract$state_draws_extension,
+        contract$vb_state_rescue_draws
+      ),
+      draws_per_chain = NA_integer_, use_all = FALSE,
+      stringsAsFactors = FALSE
+    )
+  }
+  tiers <- tiers[!duplicated(tiers$draws), , drop = FALSE]
+  if (!identical(contract$state_extension_trigger, "either_stability_gate")) {
+    tiers <- tiers[tiers$tier != "full_posterior_rescue", , drop = FALSE]
+  }
+  rownames(tiers) <- NULL
+  tiers
+}
+
+app_joint_recursive_state_draws_for_tier <- function(
+  source_root, cell, tier, seed
+) {
+  out <- if (identical(cell$inference_method[[1L]], "mcmc")) {
+    app_joint_recursive_mcmc_draws(
+      source_root, cell, as.integer(tier$draws_per_chain[[1L]]), seed,
+      use_all = isTRUE(tier$use_all[[1L]])
+    )
+  } else {
+    app_joint_recursive_vb_draws(
+      source_root, cell, as.integer(tier$draws[[1L]]), seed
+    )
+  }
+  if (nrow(out$beta) != as.integer(tier$draws[[1L]])) {
+    stop("Recursive state tier produced an unexpected draw count.", call. = FALSE)
+  }
+  out
+}
+
+app_joint_recursive_antithetic_state_expansion <- function(
+  state_draws, uniform_seed, score_rows, pair_count = 1L,
+  seed_stride = 104729L, half_split_method = "within_chain_alternating"
+) {
+  pair_count <- as.integer(pair_count)
+  score_rows <- as.integer(score_rows)
+  seed_stride <- as.integer(seed_stride)
+  n <- nrow(state_draws$beta)
+  if (pair_count < 1L || score_rows < 1L || n < 2L ||
+      nrow(state_draws$alpha) != n || length(state_draws$chain_id) != n) {
+    stop("Antithetic state-expansion inputs are malformed.", call. = FALSE)
+  }
+  replicates <- 2L * pair_count
+  source_index <- rep(seq_len(n), each = replicates)
+  uniforms <- matrix(NA_real_, nrow = n * replicates, ncol = score_rows)
+  for (pair_index in seq_len(pair_count)) {
+    seed <- as.integer((as.double(uniform_seed) +
+      as.double(pair_index - 1L) * seed_stride) %% .Machine$integer.max)
+    set.seed(seed)
+    base <- matrix(stats::runif(n * score_rows), nrow = n, ncol = score_rows)
+    first <- seq.int(2L * pair_index - 1L, by = replicates, length.out = n)
+    second <- first + 1L
+    uniforms[first, ] <- base
+    uniforms[second, ] <- 1 - base
+  }
+  original_half <- app_joint_recursive_half_assignment(
+    state_draws$chain_id, half_split_method
+  )
+  list(
+    beta = state_draws$beta[source_index, , drop = FALSE],
+    alpha = state_draws$alpha[source_index, , drop = FALSE],
+    chain_id = state_draws$chain_id[source_index],
+    source_draw_index = state_draws$source_draw_index[source_index],
+    uniforms = uniforms,
+    half_assignment = original_half[source_index],
+    unique_posterior_draws = n,
+    state_trajectory_draws = n * replicates,
+    antithetic_pair_count = pair_count,
+    uniform_seed = as.integer(uniform_seed),
+    seed_stride = seed_stride
+  )
+}
+
+app_joint_recursive_validate_prior_failure <- function(
+  diagnostics, tiers, contract
+) {
+  required <- c(
+    "tier_index", "tier", "finite_pass", "rms_pass", "score_pass",
+    "all_stability_pass", "contract_sha256"
+  )
+  app_check_required_columns(diagnostics, required,
+    "recursive score recovery failure diagnostics")
+  expected_tiers <- as.character(tiers$tier)
+  if (nrow(diagnostics) != nrow(tiers) ||
+      !identical(as.character(diagnostics$tier), expected_tiers) ||
+      any(app_as_bool_vec(diagnostics$all_stability_pass)) ||
+      !all(app_as_bool_vec(diagnostics$finite_pass)) ||
+      !all(app_as_bool_vec(diagnostics$rms_pass)) ||
+      app_as_bool_vec(tail(diagnostics$score_pass, 1L))[[1L]] ||
+      any(diagnostics$contract_sha256 != app_sha256_file(contract$path))) {
+    stop("Archived recursive failure does not match the declared rescue entry state.",
+      call. = FALSE)
+  }
+  diagnostics[, setdiff(names(diagnostics), c(
+    "contract_version", "contract_sha256", "failure_message"
+  )), drop = FALSE]
+}
+
+app_joint_recursive_add_score_stability <- function(
+  mean_result, beta_mean, alpha_mean, oracle, contract
+) {
+  half_scores <- vapply(mean_result$half_mean, function(z) {
+    app_joint_recursive_canonical_metrics(
+      z, beta_mean, alpha_mean, oracle, contract$tau, contract$weights
+    )$origin_marginal_dgp_integrated_acrps[[1L]]
+  }, numeric(1L))
+  half_relative <- abs(diff(half_scores)) / max(abs(mean(half_scores)), 1e-12)
+  pooled_score <- app_joint_recursive_canonical_metrics(
+    mean_result$mean_design, beta_mean, alpha_mean,
+    oracle, contract$tau, contract$weights
+  )$origin_marginal_dgp_integrated_acrps[[1L]]
+  group_scores <- if (length(mean_result$group_mean)) {
+    vapply(mean_result$group_mean, function(z) {
+      app_joint_recursive_canonical_metrics(
+        z, beta_mean, alpha_mean, oracle, contract$tau, contract$weights
+      )$origin_marginal_dgp_integrated_acrps[[1L]]
+    }, numeric(1L))
+  } else numeric()
+  group_relative <- if (length(group_scores)) {
+    max(abs(group_scores - pooled_score)) / max(abs(pooled_score), 1e-12)
+  } else NA_real_
+  mean_result$diagnostics$half_score_1 <- half_scores[[1L]]
+  mean_result$diagnostics$half_score_2 <- half_scores[[2L]]
+  mean_result$diagnostics$half_score_relative_difference <- half_relative
+  mean_result$diagnostics$pooled_canonical_score <- pooled_score
+  mean_result$diagnostics$chain_score_min <- if (length(group_scores)) min(group_scores) else NA_real_
+  mean_result$diagnostics$chain_score_max <- if (length(group_scores)) max(group_scores) else NA_real_
+  mean_result$diagnostics$chain_score_max_relative_deviation <- group_relative
+  mean_result
+}
+
+app_joint_recursive_stability_flags <- function(mean_result, contract) {
+  diagnostics <- mean_result$diagnostics
+  data.frame(
+    finite_pass = isTRUE(diagnostics$finite[[1L]]),
+    rms_pass = isTRUE(diagnostics$standardized_rms_half_difference[[1L]] <=
+      contract$mean_design_rms_gate),
+    score_pass = isTRUE(diagnostics$half_score_relative_difference[[1L]] <=
+      contract$mean_design_score_gate),
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_recursive_score_review_decision <- function(
+  tier_diagnostics, state_rescue, contract
+) {
+  disabled <- data.frame(
+    score_stability_review_eligible = FALSE,
+    score_stability_review_reason = "review_not_authorized",
+    score_stability_strict_gate = contract$mean_design_score_gate,
+    score_stability_review_ceiling = NA_real_,
+    score_stability_gate_excess = NA_real_,
+    pooled_score_relative_drift = NA_real_,
+    reference_pooled_canonical_score = NA_real_,
+    stringsAsFactors = FALSE
+  )
+  if (!isTRUE(state_rescue$allow_score_stability_review)) return(disabled)
+  required <- c(
+    "tier", "finite_pass", "rms_pass", "score_pass",
+    "half_score_relative_difference", "pooled_canonical_score",
+    "standardized_rms_half_difference", "chain_score_max_relative_deviation",
+    "antithetic_pair_count", "unique_posterior_draws", "state_trajectory_draws"
+  )
+  app_check_required_columns(tier_diagnostics, required,
+    "recursive score review diagnostics")
+  final <- tail(tier_diagnostics, 1L)
+  reference <- state_rescue$review_reference_diagnostics
+  app_check_required_columns(reference, c("tier", "pooled_canonical_score"),
+    "recursive score review reference")
+  reference <- reference[reference$tier == "full_posterior_rescue", , drop = FALSE]
+  if (nrow(reference) != 1L) {
+    stop("Score review requires one full-posterior reference tier.", call. = FALSE)
+  }
+  ceiling <- contract$mean_design_score_gate * state_rescue$score_gate_multiplier
+  drift <- abs(final$pooled_canonical_score[[1L]] -
+    reference$pooled_canonical_score[[1L]]) /
+    max(abs(reference$pooled_canonical_score[[1L]]), 1e-12)
+  checks <- c(
+    identical(as.character(final$tier[[1L]]),
+      "antithetic_uniform_rescue_2pair"),
+    app_as_bool_vec(final$finite_pass)[[1L]],
+    app_as_bool_vec(final$rms_pass)[[1L]],
+    !app_as_bool_vec(final$score_pass)[[1L]],
+    is.finite(final$half_score_relative_difference[[1L]]) &&
+      final$half_score_relative_difference[[1L]] >
+        contract$mean_design_score_gate &&
+      final$half_score_relative_difference[[1L]] <= ceiling,
+    is.finite(final$standardized_rms_half_difference[[1L]]) &&
+      final$standardized_rms_half_difference[[1L]] <=
+        contract$mean_design_rms_gate * state_rescue$max_rms_gate_fraction,
+    is.finite(final$chain_score_max_relative_deviation[[1L]]) &&
+      final$chain_score_max_relative_deviation[[1L]] <=
+        state_rescue$max_chain_score_relative_deviation,
+    is.finite(drift) && drift <= state_rescue$max_pooled_score_relative_drift,
+    as.integer(final$antithetic_pair_count[[1L]]) == 2L,
+    as.integer(final$unique_posterior_draws[[1L]]) ==
+      state_rescue$required_unique_posterior_draws,
+    as.integer(final$state_trajectory_draws[[1L]]) ==
+      state_rescue$required_state_trajectory_draws
+  )
+  eligible <- all(checks)
+  data.frame(
+    score_stability_review_eligible = eligible,
+    score_stability_review_reason = if (eligible) {
+      "strict_gate_narrowly_missed_but_bounded_review_contract_passed"
+    } else "review_contract_gate_failed",
+    score_stability_strict_gate = contract$mean_design_score_gate,
+    score_stability_review_ceiling = ceiling,
+    score_stability_gate_excess = final$half_score_relative_difference[[1L]] -
+      contract$mean_design_score_gate,
+    pooled_score_relative_drift = drift,
+    reference_pooled_canonical_score = reference$pooled_canonical_score[[1L]],
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_recursive_final_score_stability <- function(
+  mean_diagnostics, contract, allowed_review_worker_id = 41L,
+  allowed_review_contract_sha256 = app_sha256_file(
+    app_joint_recursive_review_contract_path()
+  )
+) {
+  status <- if ("score_stability_status" %in% names(mean_diagnostics)) {
+    as.character(mean_diagnostics$score_stability_status)
+  } else ifelse(
+    mean_diagnostics$half_score_relative_difference <=
+      contract$mean_design_score_gate, "pass", "fail"
+  )
+  missing_status <- is.na(status) | !nzchar(ifelse(is.na(status), "", status))
+  status[missing_status] <- ifelse(
+    mean_diagnostics$half_score_relative_difference[missing_status] <=
+      contract$mean_design_score_gate, "pass", "fail"
+  )
+  pass <- status == "pass" &
+    mean_diagnostics$half_score_relative_difference <=
+      contract$mean_design_score_gate
+  review <- status == "review"
+  review_valid <- rep(FALSE, nrow(mean_diagnostics))
+  if (any(review)) {
+    required <- c(
+      "worker_id", "score_stability_review_eligible",
+      "score_stability_review_ceiling", "pooled_score_relative_drift",
+      "recovery_contract_sha256", "selected_tier",
+      "chain_score_max_relative_deviation"
+    )
+    app_check_required_columns(mean_diagnostics, required,
+      "recursive final score review diagnostics")
+    review_valid[review] <-
+      mean_diagnostics$worker_id[review] == allowed_review_worker_id &
+      app_as_bool_vec(mean_diagnostics$score_stability_review_eligible[review]) &
+      mean_diagnostics$half_score_relative_difference[review] >
+        contract$mean_design_score_gate &
+      mean_diagnostics$half_score_relative_difference[review] <=
+        contract$mean_design_score_gate * 1.05 &
+      mean_diagnostics$score_stability_review_ceiling[review] <=
+        contract$mean_design_score_gate * 1.05 &
+      mean_diagnostics$pooled_score_relative_drift[review] <= 0.001 &
+      mean_diagnostics$chain_score_max_relative_deviation[review] <= 0.05 &
+      mean_diagnostics$selected_tier[review] ==
+        "antithetic_uniform_rescue_2pair" &
+      tolower(mean_diagnostics$recovery_contract_sha256[review]) ==
+        tolower(allowed_review_contract_sha256)
+  }
+  if (sum(review) > 1L) review_valid[review] <- FALSE
+  accepted <- pass | review_valid
+  list(
+    status = status,
+    strict_pass = pass,
+    review = review,
+    review_valid = review_valid,
+    accepted = accepted,
+    packet_status = if (sum(review_valid) == 1L && all(accepted)) {
+      "COMPLETE_WITH_ONE_SCORE_STABILITY_REVIEW"
+    } else if (!any(review) && all(accepted)) "COMPLETE_ALL_STRICT_GATES" else "INCOMPLETE"
+  )
+}
+
+app_joint_recursive_should_extend <- function(flags, contract) {
+  if (!isTRUE(flags$finite_pass[[1L]]) || !isTRUE(flags$rms_pass[[1L]])) {
+    return(TRUE)
+  }
+  identical(contract$state_extension_trigger, "either_stability_gate") &&
+    !isTRUE(flags$score_pass[[1L]])
+}
+
+app_joint_recursive_write_failure_diagnostics <- function(
+  directory, diagnostics, contract, message
+) {
+  app_ensure_dir(directory)
+  diagnostics$contract_version <- contract$version
+  diagnostics$contract_sha256 <- app_sha256_file(contract$path)
+  diagnostics$failure_message <- message
+  app_write_csv(diagnostics, file.path(directory, "failure_diagnostics.csv"))
+}
+
+app_joint_recursive_write_stability_progress <- function(
+  directory, diagnostics, contract
+) {
+  app_ensure_dir(directory)
+  progress <- diagnostics
+  progress$contract_version <- contract$version
+  progress$contract_sha256 <- app_sha256_file(contract$path)
+  app_write_csv(progress, file.path(directory, "stability_progress.csv"))
+}
+
+app_joint_recursive_run_cell <- function(
+  root, source_root, worker_id, contract, state_rescue = NULL
+) {
+  dirs <- app_joint_recursive_dirs(root)
+  plan <- app_read_csv(file.path(root, "cell_plan.csv"))
+  cell <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
+  if (nrow(cell) != 1L) stop("Recursive forecast worker id is not unique.", call. = FALSE)
+  final_dir <- app_joint_recursive_cell_dir(root, worker_id)
+  done <- file.path(final_dir, "DONE")
+  if (file.exists(done)) return(normalizePath(final_dir, mustWork = TRUE))
+  tmp <- paste0(final_dir, ".tmp.", Sys.getpid())
+  unlink(tmp, recursive = TRUE, force = TRUE); app_ensure_dir(tmp)
+  on.exit(if (dir.exists(tmp)) unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+
+  design <- readRDS(file.path(source_root, cell$design_relative_path[[1L]]))
+  fixture <- readRDS(file.path(source_root, cell$fixture_relative_path[[1L]]))
+  selected <- app_read_csv(file.path(root, "selected_backbones.csv"))
+  selected_row <- app_joint_recursive_selected_row(selected, cell$scenario_id[[1L]])
+  teacher <- app_joint_recursive_teacher_forced_audit(design, fixture, selected_row)
+  if (teacher$status[[1L]] != "pass") stop("Teacher-forced recursive design audit failed.", call. = FALSE)
+  oracle_path <- file.path(dirs$oracle_banks, paste0(cell$scenario_id[[1L]], ".rds"))
+  oracle <- readRDS(oracle_path)
+  if (oracle$diagnostics$status[[1L]] != "pass") stop("Recursive DGP oracle is not frozen.", call. = FALSE)
+
+  final_draws <- if (cell$inference_method[[1L]] == "mcmc") {
+    app_joint_recursive_mcmc_draws(
+      source_root, cell, contract$mcmc_score_draws_per_chain,
+      cell$score_seed[[1L]], use_all = !contract$version %in% c(
+        "joint_qdesn_recursive_mean_forecast_v3",
+        "joint_qdesn_pure_recursive_score_packet_v1"
+      )
+    )
+  } else app_joint_recursive_vb_draws(
+    source_root, cell, contract$vb_score_draws, cell$score_seed[[1L]]
+  )
+  beta_mean <- colMeans(final_draws$beta)
+  alpha_mean <- colMeans(final_draws$alpha)
+
+  tiers <- app_joint_recursive_state_tiers(cell, contract)
+  tier_diagnostics <- list()
+  mean_result <- state_draws <- uniforms <- NULL
+  selected_tier <- NA_integer_
+  selected_tier_name <- NA_character_
+  score_review <- NULL
+  prior_failure <- state_rescue$prior_failure_diagnostics %||% NULL
+  if (!is.null(prior_failure)) {
+    prior_failure <- app_joint_recursive_validate_prior_failure(
+      prior_failure, tiers, contract
+    )
+    tier_diagnostics <- lapply(seq_len(nrow(prior_failure)), function(index) {
+      prior_failure[index, , drop = FALSE]
+    })
+    state_draws <- app_joint_recursive_state_draws_for_tier(
+      source_root, cell, tiers[nrow(tiers), , drop = FALSE],
+      cell$state_seed[[1L]]
+    )
+  } else {
+    for (tier_index in seq_len(nrow(tiers))) {
+      tier <- tiers[tier_index, , drop = FALSE]
+      state_draws <- app_joint_recursive_state_draws_for_tier(
+        source_root, cell, tier, cell$state_seed[[1L]]
+      )
+      set.seed(as.integer(cell$uniform_seed[[1L]]))
+      uniforms <- matrix(stats::runif(nrow(state_draws$beta) * contract$score_rows),
+        nrow = nrow(state_draws$beta), ncol = contract$score_rows
+      )
+      half_assignment <- app_joint_recursive_half_assignment(
+        state_draws$chain_id, contract$state_half_split_method
+      )
+      mean_result <- app_joint_recursive_mean_design(
+        design, fixture, selected_row, state_draws$beta, state_draws$alpha,
+        uniforms, contract$inverse_cdf_tail_rule,
+        half_assignment = half_assignment,
+        diagnostic_group = state_draws$chain_id
+      )
+      mean_result <- app_joint_recursive_add_score_stability(
+        mean_result, beta_mean, alpha_mean, oracle, contract
+      )
+      flags <- app_joint_recursive_stability_flags(mean_result, contract)
+      diagnostics <- cbind(
+        data.frame(
+          tier_index = tier_index, tier = tier$tier[[1L]],
+          half_split_method = contract$state_half_split_method,
+          stringsAsFactors = FALSE
+        ),
+        mean_result$diagnostics, flags
+      )
+      diagnostics$all_stability_pass <- with(
+        diagnostics, finite_pass & rms_pass & score_pass
+      )
+      tier_diagnostics[[length(tier_diagnostics) + 1L]] <- diagnostics
+      app_joint_recursive_write_stability_progress(
+        final_dir, app_joint_qdesn_bind_rows(tier_diagnostics), contract
+      )
+      if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
+        selected_tier <- tier_index
+        selected_tier_name <- tier$tier[[1L]]
+        break
+      }
+      extend_for_failure <- app_joint_recursive_should_extend(flags, contract)
+      if (!extend_for_failure) break
+    }
+  }
+  if (is.na(selected_tier) && !is.null(state_rescue)) {
+    pair_counts <- as.integer(state_rescue$antithetic_pair_counts)
+    if (!identical(cell$inference_method[[1L]], "mcmc") ||
+        !length(pair_counts) || any(!is.finite(pair_counts)) ||
+        any(pair_counts < 1L) || anyDuplicated(pair_counts)) {
+      stop("Recursive antithetic rescue is restricted to declared MCMC pair tiers.",
+        call. = FALSE)
+    }
+    base_state_draws <- state_draws
+    for (rescue_index in seq_along(pair_counts)) {
+      expansion <- app_joint_recursive_antithetic_state_expansion(
+        base_state_draws, cell$uniform_seed[[1L]], contract$score_rows,
+        pair_count = pair_counts[[rescue_index]],
+        seed_stride = state_rescue$seed_stride,
+        half_split_method = contract$state_half_split_method
+      )
+      state_draws <- expansion[c(
+        "beta", "alpha", "chain_id", "source_draw_index"
+      )]
+      uniforms <- expansion$uniforms
+      mean_result <- app_joint_recursive_mean_design(
+        design, fixture, selected_row, state_draws$beta, state_draws$alpha,
+        uniforms, contract$inverse_cdf_tail_rule,
+        half_assignment = expansion$half_assignment,
+        diagnostic_group = state_draws$chain_id
+      )
+      mean_result <- app_joint_recursive_add_score_stability(
+        mean_result, beta_mean, alpha_mean, oracle, contract
+      )
+      flags <- app_joint_recursive_stability_flags(mean_result, contract)
+      tier_index <- nrow(tiers) + rescue_index
+      tier_name <- sprintf("antithetic_uniform_rescue_%dpair", pair_counts[[rescue_index]])
+      diagnostics <- cbind(
+        data.frame(
+          tier_index = tier_index, tier = tier_name,
+          half_split_method = contract$state_half_split_method,
+          state_uniform_policy = "antithetic_uniform_pairs",
+          antithetic_pair_count = pair_counts[[rescue_index]],
+          unique_posterior_draws = expansion$unique_posterior_draws,
+          state_trajectory_draws = expansion$state_trajectory_draws,
+          stringsAsFactors = FALSE
+        ),
+        mean_result$diagnostics, flags
+      )
+      diagnostics$all_stability_pass <- with(
+        diagnostics, finite_pass & rms_pass & score_pass
+      )
+      tier_diagnostics[[length(tier_diagnostics) + 1L]] <- diagnostics
+      app_joint_recursive_write_stability_progress(
+        final_dir, app_joint_qdesn_bind_rows(tier_diagnostics), contract
+      )
+      if (isTRUE(diagnostics$all_stability_pass[[1L]])) {
+        selected_tier <- tier_index
+        selected_tier_name <- tier_name
+        break
+      }
+    }
+  }
+  tier_diagnostics <- app_joint_qdesn_bind_rows(
+    tier_diagnostics[!vapply(tier_diagnostics, is.null, logical(1L))]
+  )
+  if (is.na(selected_tier) && !is.null(state_rescue)) {
+    score_review <- app_joint_recursive_score_review_decision(
+      tier_diagnostics, state_rescue, contract
+    )
+    if (isTRUE(score_review$score_stability_review_eligible[[1L]])) {
+      selected_tier <- tail(tier_diagnostics$tier_index, 1L)
+      selected_tier_name <- tail(tier_diagnostics$tier, 1L)
+    }
+  }
+  if (is.na(selected_tier)) {
+    final_flags <- tail(tier_diagnostics, 1L)
+    message <- if (!isTRUE(final_flags$finite_pass[[1L]]) ||
+        !isTRUE(final_flags$rms_pass[[1L]])) {
+      "Recursive mean-design stability gate failed after all declared tiers."
+    } else {
+      "Recursive half-sample canonical-score stability gate failed after all declared tiers."
+    }
+    app_joint_recursive_write_failure_diagnostics(
+      final_dir, tier_diagnostics, contract, message
+    )
+    stop(message, call. = FALSE)
+  }
+  mean_result$diagnostics$extended <- selected_tier > 1L
+  mean_result$diagnostics$selected_tier <- selected_tier_name
+  mean_result$diagnostics$half_split_method <- contract$state_half_split_method
+  mean_result$diagnostics$score_stability_status <- if (
+    !is.null(score_review) &&
+      isTRUE(score_review$score_stability_review_eligible[[1L]])
+  ) "review" else "pass"
+  if (!is.null(score_review)) {
+    for (name in names(score_review)) {
+      mean_result$diagnostics[[name]] <- score_review[[name]][[1L]]
+    }
+  }
+  if (!is.null(state_rescue)) {
+    mean_result$diagnostics$recovery_contract_sha256 <-
+      state_rescue$recovery_contract_sha256
+    mean_result$diagnostics$original_failure_manifest_sha256 <-
+      state_rescue$original_failure_manifest_sha256
+  }
+
+  draws <- app_joint_recursive_score_draws(
+    mean_result$mean_design, final_draws$beta, final_draws$alpha,
+    oracle, contract$tau, contract$weights, contract$score_chunk_size,
+    final_draws$chain_id, final_draws$source_draw_index
+  )
+  canonical <- app_joint_recursive_canonical_metrics(
+    mean_result$mean_design, beta_mean, alpha_mean,
+    oracle, contract$tau, contract$weights
+  )
+  path_draws <- path_summary <- NULL
+  if (identical(design$feature_contract %||% "", "pure_recursive_v1")) {
+    set.seed(as.integer(cell$uniform_seed[[1L]] + 313L))
+    path_uniforms <- matrix(stats::runif(nrow(final_draws$beta) * contract$score_rows),
+      nrow = nrow(final_draws$beta), ncol = contract$score_rows)
+    path_draws <- app_joint_pure_recursive_path_score_draws(
+      design, fixture, final_draws$beta, final_draws$alpha, path_uniforms,
+      oracle, contract$tau, contract$weights,
+      final_draws$chain_id, final_draws$source_draw_index,
+      contract$inverse_cdf_tail_rule)
+    path_summary <- app_joint_recursive_draw_summary(
+      path_draws, cell$inference_method[[1L]])
+    names(path_summary) <- paste0("path_", names(path_summary))
+  }
+  tail <- data.frame(
+    endpoint_clamp_score = NA_real_, truncated_grid_score = NA_real_,
+    relative_difference = NA_real_, tolerance = contract$tail_sensitivity_gate,
+    status = "not_applicable", stringsAsFactors = FALSE
+  )
+  if (app_as_bool_vec(cell$sentinel)[[1L]]) {
+    truncated <- app_joint_recursive_mean_design(
+      design, fixture, selected_row, state_draws$beta, state_draws$alpha,
+      uniforms, "truncated_grid"
+    )
+    truncated_score <- app_joint_recursive_canonical_metrics(
+      truncated$mean_design, beta_mean, alpha_mean,
+      oracle, contract$tau, contract$weights
+    )$origin_marginal_dgp_integrated_acrps[[1L]]
+    relative <- abs(truncated_score - canonical$origin_marginal_dgp_integrated_acrps[[1L]]) /
+      max(abs(canonical$origin_marginal_dgp_integrated_acrps[[1L]]), 1e-12)
+    tail <- data.frame(
+      endpoint_clamp_score = canonical$origin_marginal_dgp_integrated_acrps[[1L]],
+      truncated_grid_score = truncated_score,
+      relative_difference = relative,
+      tolerance = contract$tail_sensitivity_gate,
+      status = if (relative <= contract$tail_sensitivity_gate) "pass" else "review",
+      stringsAsFactors = FALSE
+    )
+    if (tail$status[[1L]] != "pass") stop("Recursive tail sensitivity gate requires review.", call. = FALSE)
+  }
+  summary <- cbind(
+    cell[, c("worker_id", "scenario_id", "model_cell_id", "model_id",
+      "fit_structure", "likelihood_family", "design_class", "inference_method"), drop = FALSE],
+    app_joint_recursive_draw_summary(draws, cell$inference_method[[1L]]),
+    setNames(canonical, paste0("canonical_", names(canonical))),
+    path_summary
+  )
+  summary$vb_alpha_uncertainty_included <- if (
+    cell$inference_method[[1L]] == "vb"
+  ) FALSE else NA
+  summary$interval_scope <- if (cell$inference_method[[1L]] == "vb") {
+    "partial_vb_readout_uncertainty_conditional_on_point_intercepts_and_mean_design"
+  } else "mcmc_readout_uncertainty_conditional_on_mean_design"
+  summary$path_interval_scope <- if (is.null(path_draws)) {
+    NA_character_
+  } else if (cell$inference_method[[1L]] == "vb") {
+    "partial_vb_readout_and_recursive_state_path_uncertainty_conditional_on_point_intercepts"
+  } else {
+    "mcmc_readout_and_recursive_state_path_uncertainty"
+  }
+  summary$score_stability_status <-
+    mean_result$diagnostics$score_stability_status[[1L]]
+
+  crossing <- data.frame(
+    worker_id = cell$worker_id[[1L]],
+    scenario_id = cell$scenario_id[[1L]],
+    model_cell_id = cell$model_cell_id[[1L]],
+    inference_method = cell$inference_method[[1L]],
+    posterior_raw_crossing_pairs_mean = mean(draws$raw_crossing_pairs),
+    posterior_raw_crossing_pairs_median = stats::median(draws$raw_crossing_pairs),
+    posterior_contract_crossing_pairs_max = max(draws$contract_crossing_pairs),
+    canonical_raw_crossing_pairs = canonical$raw_crossing_pairs[[1L]],
+    canonical_contract_crossing_pairs = canonical$contract_crossing_pairs[[1L]],
+    stringsAsFactors = FALSE
+  )
+  if (!is.null(path_draws)) {
+    crossing$path_posterior_raw_crossing_pairs_mean <-
+      mean(path_draws$raw_crossing_pairs)
+    crossing$path_posterior_raw_crossing_pairs_median <-
+      stats::median(path_draws$raw_crossing_pairs)
+    crossing$path_posterior_contract_crossing_pairs_max <-
+      max(path_draws$contract_crossing_pairs)
+  }
+  write_gz <- function(x, path) {
+    con <- gzfile(path, "wt", compression = 9); on.exit(close(con), add = TRUE)
+    utils::write.csv(x, con, row.names = FALSE, na = "")
+    normalizePath(path, mustWork = TRUE)
+  }
+  paths <- c(
+    summary = app_write_csv(summary, file.path(tmp, "summary.csv")),
+    mean_design = { saveRDS(mean_result$mean_design, file.path(tmp, "mean_design.rds")); normalizePath(file.path(tmp, "mean_design.rds")) },
+    mean_design_diagnostics = app_write_csv(mean_result$diagnostics, file.path(tmp, "mean_design_diagnostics.csv")),
+    stability_tier_diagnostics = app_write_csv(tier_diagnostics,
+      file.path(tmp, "stability_tier_diagnostics.csv")),
+    posterior_score_draws = write_gz(draws, file.path(tmp, "posterior_score_draws.csv.gz")),
+    quantile_action_summary = app_write_csv(canonical, file.path(tmp, "quantile_action_summary.csv")),
+    crossing_summary = app_write_csv(crossing, file.path(tmp, "crossing_summary.csv")),
+    teacher_forced_audit = app_write_csv(teacher, file.path(tmp, "teacher_forced_audit.csv")),
+    tail_sensitivity = app_write_csv(tail, file.path(tmp, "tail_sensitivity.csv")),
+    provenance = app_write_csv(data.frame(
+      source_root = normalizePath(source_root),
+      source_inventory_sha256 = contract$source_inventory_sha256,
+      contract_sha256 = app_sha256_file(contract$path),
+      git_head = system("git rev-parse HEAD", intern = TRUE),
+      created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+      stringsAsFactors = FALSE
+    ), file.path(tmp, "provenance.csv"))
+  )
+  if (!is.null(path_draws)) {
+    paths <- c(paths,
+      path_posterior_score_draws = write_gz(path_draws,
+        file.path(tmp, "path_posterior_score_draws.csv.gz")),
+      path_score_summary = app_write_csv(path_summary,
+        file.path(tmp, "path_score_summary.csv")))
+  }
+  if (!is.null(state_rescue)) {
+    paths <- c(paths, recovery_provenance = app_write_csv(data.frame(
+      recovery_version = state_rescue$recovery_version,
+      recovery_contract_sha256 = state_rescue$recovery_contract_sha256,
+      parent_contract_sha256 = app_sha256_file(contract$path),
+      original_failure_manifest_sha256 =
+        state_rescue$original_failure_manifest_sha256,
+      strict_recovery_failure_manifest_sha256 =
+        state_rescue$strict_recovery_failure_manifest_sha256 %||% NA_character_,
+      state_uniform_policy = "antithetic_uniform_pairs",
+      selected_tier = selected_tier_name,
+      score_stability_status = mean_result$diagnostics$score_stability_status[[1L]],
+      strict_score_gate_pass = isTRUE(
+        mean_result$diagnostics$half_score_relative_difference[[1L]] <=
+          contract$mean_design_score_gate
+      ),
+      score_review_eligible = !is.null(score_review) && isTRUE(
+        score_review$score_stability_review_eligible[[1L]]
+      ),
+      scientific_gate_changed = FALSE,
+      posterior_draws_changed = FALSE,
+      stringsAsFactors = FALSE
+    ), file.path(tmp, "recovery_provenance.csv")))
+  }
+  if (!is.null(score_review) &&
+      isTRUE(score_review$score_stability_review_eligible[[1L]])) {
+    paths <- c(paths, score_stability_review = app_write_csv(
+      cbind(data.frame(
+        worker_id = cell$worker_id[[1L]],
+        model_cell_id = cell$model_cell_id[[1L]],
+        selected_tier = selected_tier_name,
+        recovery_contract_sha256 = state_rescue$recovery_contract_sha256,
+        stringsAsFactors = FALSE
+      ), score_review),
+      file.path(tmp, "score_stability_review.csv")
+    ))
+  }
+  app_joint_recursive_atomic_manifest(tmp, paths)
+  file.create(file.path(tmp, "DONE"))
+  unlink(final_dir, recursive = TRUE, force = TRUE)
+  app_ensure_dir(dirname(final_dir))
+  if (!file.rename(tmp, final_dir)) stop("Could not publish recursive forecast worker.", call. = FALSE)
+  normalizePath(final_dir, mustWork = TRUE)
+}
+
+app_joint_recursive_oracle_dir <- function(root, worker_id) {
+  file.path(root, "oracle_shards", sprintf("worker_%04d", as.integer(worker_id)))
+}
+
+app_joint_recursive_manifest_ok <- function(directory) {
+  manifest <- file.path(directory, "artifact_manifest.csv")
+  file.exists(file.path(directory, "DONE")) && file.exists(manifest) &&
+    isTRUE(tryCatch({
+      audit <- app_joint_shared_verify_manifest(directory, manifest)
+      nrow(audit) > 0L && all(app_as_bool_vec(audit$verified))
+    }, error = function(e) FALSE))
+}
+
+app_joint_recursive_run_oracle_shard <- function(
+  root, source_root, worker_id, contract
+) {
+  plan <- app_read_csv(file.path(root, "oracle_plan.csv"))
+  row <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
+  if (nrow(row) != 1L) stop("Recursive oracle worker id is not unique.", call. = FALSE)
+  final_dir <- app_joint_recursive_oracle_dir(root, worker_id)
+  if (app_joint_recursive_manifest_ok(final_dir)) {
+    return(normalizePath(final_dir, mustWork = TRUE))
+  }
+  tmp <- paste0(final_dir, ".tmp.", Sys.getpid())
+  unlink(tmp, recursive = TRUE, force = TRUE)
+  app_ensure_dir(tmp)
+  on.exit(if (dir.exists(tmp)) unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+  fixture <- readRDS(file.path(source_root, row$fixture_relative_path[[1L]]))
+  design <- readRDS(file.path(source_root, row$design_relative_path[[1L]]))
+  shard <- app_joint_recursive_dgp_shard(
+    fixture, design$forecast_map, contract$oracle_paths_per_shard,
+    as.integer(row$seed[[1L]])
+  )
+  shard_path <- file.path(tmp, "oracle_shard.rds")
+  saveRDS(shard, shard_path, compress = "xz")
+  summary <- data.frame(
+    worker_id = as.integer(worker_id), scenario_id = row$scenario_id[[1L]],
+    shard_id = as.integer(row$shard_id[[1L]]),
+    is_primary = app_as_bool_vec(row$is_primary)[[1L]],
+    seed = as.integer(row$seed[[1L]]), n_paths = shard$n_paths,
+    rows = ncol(shard$response), finite = all(is.finite(shard$response)),
+    created_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  )
+  paths <- c(
+    oracle_shard = normalizePath(shard_path, mustWork = TRUE),
+    summary = app_write_csv(summary, file.path(tmp, "summary.csv"))
+  )
+  app_joint_recursive_atomic_manifest(tmp, paths)
+  file.create(file.path(tmp, "DONE"))
+  unlink(final_dir, recursive = TRUE, force = TRUE)
+  app_ensure_dir(dirname(final_dir))
+  if (!file.rename(tmp, final_dir)) stop("Could not publish oracle shard.", call. = FALSE)
+  normalizePath(final_dir, mustWork = TRUE)
+}
+
+app_joint_recursive_prepare <- function(
+  root, source_root, contract_path = app_joint_recursive_contract_path()
+) {
+  contract <- app_joint_recursive_read_contract(contract_path)
+  if (contract$version %in% c(
+      "joint_qdesn_recursive_mean_forecast_v2",
+      "joint_qdesn_recursive_mean_forecast_v3",
+      "joint_qdesn_pure_recursive_score_packet_v1")) {
+    parent_path <- if (identical(
+      contract$version, "joint_qdesn_recursive_mean_forecast_v2"
+    )) app_joint_recursive_contract_path() else if (identical(
+      contract$version, "joint_qdesn_recursive_mean_forecast_v3"
+    )) app_path(
+      "application/config/joint_qdesn_recursive_mean_forecast_contract_v2.csv"
+    ) else app_path(
+      "application/config/joint_qdesn_recursive_mean_forecast_contract_v3.csv"
+    )
+    if (!identical(app_sha256_file(parent_path), contract$parent_contract_sha256)) {
+      stop("Recursive parent-contract hash differs.", call. = FALSE)
+    }
+  }
+  source_root <- normalizePath(source_root, mustWork = TRUE)
+  dirs <- app_joint_recursive_dirs(root)
+  lapply(dirs, app_ensure_dir)
+  frozen_path <- file.path(dirs$root, "frozen_contract.csv")
+  if (file.exists(frozen_path) &&
+      !identical(app_sha256_file(frozen_path), app_sha256_file(contract$path))) {
+    stop("Existing runtime has a different frozen contract.", call. = FALSE)
+  }
+  if (!file.exists(frozen_path) && !file.copy(contract$path, frozen_path)) {
+    stop("Could not freeze recursive forecast contract.", call. = FALSE)
+  }
+
+  source_audit <- app_joint_recursive_verify_source(source_root, contract)
+  source_files <- app_joint_recursive_source_files(source_root)
+  vb_health <- app_read_csv(source_files[["vb_health"]])
+  mcmc_health <- app_read_csv(source_files[["mcmc_health"]])
+  if (vb_health$completed_vb_components[[1L]] != 136L ||
+      vb_health$failed_vb_components[[1L]] != 0L ||
+      mcmc_health$completed_workers[[1L]] != 160L ||
+      mcmc_health$failed_workers[[1L]] != 0L) {
+    stop("Corrected source VB/MCMC completion gates did not pass.", call. = FALSE)
+  }
+  plans <- app_joint_recursive_build_plans(source_root, contract)
+  if (nrow(plans$cells) != 64L || sum(plans$cells$inference_method == "vb") != 32L ||
+      sum(plans$cells$inference_method == "mcmc") != 32L ||
+      nrow(plans$oracle) != 32L || sum(app_as_bool_vec(plans$oracle$is_primary)) != 16L) {
+    stop("Recursive worker-plan cardinality differs from contract.", call. = FALSE)
+  }
+  mcmc_cardinality <- NULL
+  if (contract$version %in% c(
+      "joint_qdesn_recursive_mean_forecast_v3",
+      "joint_qdesn_pure_recursive_score_packet_v1")) {
+    mcmc_cardinality <- app_joint_recursive_mcmc_cardinality_audit(
+      source_root, contract
+    )
+    if (nrow(mcmc_cardinality) != 160L ||
+        any(!app_as_bool_vec(mcmc_cardinality$pass))) {
+      stop("Recursive source MCMC cardinality differs from v3 contract.", call. = FALSE)
+    }
+  }
+
+  teacher <- lapply(unique(plans$cells$scenario_id), function(id) {
+    design_path <- unique(plans$cells$design_relative_path[plans$cells$scenario_id == id])
+    fixture_path <- unique(plans$cells$fixture_relative_path[plans$cells$scenario_id == id])
+    design <- readRDS(file.path(source_root, design_path))
+    fixture <- readRDS(file.path(source_root, fixture_path))
+    selected <- app_joint_recursive_selected_row(plans$selected, id)
+    audit <- app_joint_recursive_teacher_forced_audit(design, fixture, selected)
+    if (nrow(design$forecast_map) != contract$score_rows ||
+        length(unique(design$forecast_map$origin_index)) != contract$origins ||
+        max(design$forecast_map$horizon) != contract$horizons) {
+      audit$status <- "fail_geometry"
+    }
+    audit
+  })
+  teacher <- app_joint_qdesn_bind_rows(teacher)
+  if (any(teacher$status != "pass")) {
+    print(teacher)
+    stop("Teacher-forced source-design equivalence failed.", call. = FALSE)
+  }
+
+  inventory <- app_read_csv(source_files[["transfer_inventory"]])
+  seed_registry <- rbind(
+    data.frame(stage = "oracle", worker_id = plans$oracle$worker_id,
+      scenario_id = plans$oracle$scenario_id, seed = plans$oracle$seed,
+      namespace = paste0("oracle_shard_", plans$oracle$shard_id),
+      stringsAsFactors = FALSE),
+    data.frame(stage = "state", worker_id = plans$cells$worker_id,
+      scenario_id = plans$cells$scenario_id, seed = plans$cells$state_seed,
+      namespace = paste0(plans$cells$inference_method, "_state"),
+      stringsAsFactors = FALSE),
+    data.frame(stage = "score", worker_id = plans$cells$worker_id,
+      scenario_id = plans$cells$scenario_id, seed = plans$cells$score_seed,
+      namespace = paste0(plans$cells$inference_method, "_score"),
+      stringsAsFactors = FALSE),
+    data.frame(stage = "uniform", worker_id = plans$cells$worker_id,
+      scenario_id = plans$cells$scenario_id, seed = plans$cells$uniform_seed,
+      namespace = "scenario_common_random_numbers",
+      stringsAsFactors = FALSE)
+  )
+  source_summary <- data.frame(
+    source_root = source_root,
+    transfer_inventory_sha256 = app_sha256_file(source_files[["transfer_inventory"]]),
+    files = nrow(inventory), bytes = sum(inventory$size_bytes),
+    vb_components = vb_health$completed_vb_components[[1L]],
+    mcmc_workers = mcmc_health$completed_workers[[1L]],
+    verified = TRUE, checked_at = format(Sys.time(), tz = "UTC", usetz = TRUE),
+    stringsAsFactors = FALSE
+  )
+  paths <- c(
+    frozen_contract = normalizePath(frozen_path, mustWork = TRUE),
+    source_inventory = app_write_csv(inventory, file.path(dirs$root, "source_inventory.csv")),
+    source_inventory_verification = app_write_csv(source_audit,
+      file.path(dirs$root, "source_inventory_verification.csv")),
+    source_summary = app_write_csv(source_summary, file.path(dirs$root, "source_summary.csv")),
+    cell_plan = app_write_csv(plans$cells, file.path(dirs$root, "cell_plan.csv")),
+    oracle_plan = app_write_csv(plans$oracle, file.path(dirs$root, "oracle_plan.csv")),
+    selected_backbones = app_write_csv(plans$selected,
+      file.path(dirs$root, "selected_backbones.csv")),
+    seed_registry = app_write_csv(seed_registry, file.path(dirs$root, "seed_registry.csv")),
+    origin_snapshot_manifest = app_write_csv(teacher,
+      file.path(dirs$root, "origin_snapshot_manifest.csv"))
+  )
+  if (!is.null(mcmc_cardinality)) {
+    paths <- c(paths, source_mcmc_cardinality = app_write_csv(
+      mcmc_cardinality,
+      file.path(dirs$root, "source_mcmc_cardinality_audit.csv")
+    ))
+  }
+  app_joint_shared_write_manifest(dirs$root, paths, "preflight_artifact_manifest.csv")
+  list(root = dirs$root, source_root = source_root, teacher = teacher,
+    cells = plans$cells, oracle = plans$oracle)
+}
+
+app_joint_recursive_oracle_status <- function(root) {
+  plan <- app_read_csv(file.path(root, "oracle_plan.csv"))
+  rows <- lapply(seq_len(nrow(plan)), function(index) {
+    directory <- app_joint_recursive_oracle_dir(root, plan$worker_id[[index]])
+    data.frame(plan[index, c("worker_id", "scenario_id", "shard_id", "is_primary")],
+      status = if (app_joint_recursive_manifest_ok(directory)) "complete" else if (
+        file.exists(file.path(directory, "FAILED"))) "failed" else "pending",
+      stringsAsFactors = FALSE)
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_recursive_aggregate_oracles <- function(root, source_root, contract) {
+  dirs <- app_joint_recursive_dirs(root)
+  plan <- app_read_csv(file.path(root, "oracle_plan.csv"))
+  scenarios <- unique(plan$scenario_id)
+  diagnostics <- list()
+  required_extensions <- list()
+  banks <- character()
+  for (id in scenarios) {
+    rows <- plan[plan$scenario_id == id, , drop = FALSE]
+    complete <- vapply(rows$worker_id, function(worker_id) {
+      app_joint_recursive_manifest_ok(app_joint_recursive_oracle_dir(root, worker_id))
+    }, logical(1L))
+    primary <- app_as_bool_vec(rows$is_primary)
+    if (!all(complete[primary])) {
+      stop(sprintf("Primary oracle shards are incomplete for '%s'.", id), call. = FALSE)
+    }
+    use <- primary
+    if (all(complete[!primary])) use <- rep(TRUE, nrow(rows))
+    fixture <- readRDS(file.path(source_root, rows$fixture_relative_path[[1L]]))
+    paths <- vapply(rows$worker_id[use], function(worker_id) {
+      file.path(app_joint_recursive_oracle_dir(root, worker_id), "oracle_shard.rds")
+    }, character(1L))
+    oracle <- app_joint_recursive_combine_oracle_shards(
+      paths, fixture, contract$tau, contract$weights,
+      contract$oracle_horizon1_tolerance, contract$oracle_split_tolerance
+    )
+    oracle$diagnostics$extension_used <- sum(use) > sum(primary)
+    diagnostics[[id]] <- oracle$diagnostics
+    if (oracle$diagnostics$status[[1L]] != "pass" && !all(complete[!primary])) {
+      required_extensions[[id]] <- rows[!primary, , drop = FALSE]
+      next
+    }
+    if (oracle$diagnostics$status[[1L]] != "pass") {
+      stop(sprintf("Extended oracle precision gate failed for '%s'.", id), call. = FALSE)
+    }
+    bank_path <- file.path(dirs$oracle_banks, paste0(id, ".rds"))
+    saveRDS(oracle, bank_path, compress = "xz")
+    banks[id] <- normalizePath(bank_path, mustWork = TRUE)
+  }
+  diagnostic_table <- app_joint_qdesn_bind_rows(diagnostics)
+  app_write_csv(diagnostic_table, file.path(root, "dgp_oracle_diagnostics.csv"))
+  extension <- if (length(required_extensions)) {
+    app_joint_qdesn_bind_rows(required_extensions)
+  } else plan[FALSE, , drop = FALSE]
+  app_write_csv(extension, file.path(root, "oracle_extension_plan.csv"))
+  if (nrow(extension)) return(list(status = "extension_required", plan = extension))
+  manifest_rows <- lapply(names(banks), function(id) data.frame(
+    scenario_id = id, relative_path = file.path("oracle_banks", basename(banks[[id]])),
+    size_bytes = as.numeric(file.info(banks[[id]])$size),
+    sha256 = app_sha256_file(banks[[id]]), stringsAsFactors = FALSE
+  ))
+  manifest <- app_joint_qdesn_bind_rows(manifest_rows)
+  app_write_csv(manifest, file.path(root, "dgp_oracle_manifest.csv"))
+  list(status = "complete", diagnostics = diagnostic_table, manifest = manifest)
+}
+
+app_joint_recursive_cell_status <- function(root) {
+  plan <- app_read_csv(file.path(root, "cell_plan.csv"))
+  rows <- lapply(seq_len(nrow(plan)), function(index) {
+    directory <- app_joint_recursive_cell_dir(root, plan$worker_id[[index]])
+    data.frame(plan[index, c("worker_id", "scenario_id", "model_cell_id",
+      "inference_method", "sentinel")],
+      status = if (app_joint_recursive_manifest_ok(directory)) "complete" else if (
+        file.exists(file.path(directory, "FAILED"))) "failed" else "pending",
+      stringsAsFactors = FALSE)
+  })
+  app_joint_qdesn_bind_rows(rows)
+}
+
+app_joint_recursive_contrast_summary <- function(
+  root, summaries, draw_filename = "posterior_score_draws.csv.gz",
+  recursive_policy = "mean_state"
+) {
+  read_draws <- function(row) {
+    app_read_csv(file.path(app_joint_recursive_cell_dir(root, row$worker_id[[1L]]),
+      draw_filename))
+  }
+  summarize_pair <- function(left, right, type, label) {
+    left_draw <- read_draws(left)
+    right_draw <- read_draws(right)
+    if (nrow(left_draw) != nrow(right_draw)) stop("Contrast draw counts differ.", call. = FALSE)
+    delta <- left_draw$origin_marginal_dgp_integrated_acrps -
+      right_draw$origin_marginal_dgp_integrated_acrps
+    data.frame(
+      scenario_id = left$scenario_id[[1L]],
+      inference_method = left$inference_method[[1L]],
+      recursive_policy = recursive_policy,
+      contrast_type = type, contrast_label = label,
+      left_model_cell_id = left$model_cell_id[[1L]],
+      right_model_cell_id = right$model_cell_id[[1L]],
+      mean_difference = mean(delta), median_difference = stats::median(delta),
+      q025_difference = as.numeric(stats::quantile(delta, 0.025, names = FALSE, type = 8)),
+      q975_difference = as.numeric(stats::quantile(delta, 0.975, names = FALSE, type = 8)),
+      probability_left_better = mean(delta < 0),
+      coupling = "deterministic_index_coupling_for_descriptive_contrast",
+      stringsAsFactors = FALSE
+    )
+  }
+  out <- list(); cursor <- 0L
+  for (method in unique(summaries$inference_method)) {
+    for (scenario in unique(summaries$scenario_id)) {
+      block <- summaries[summaries$inference_method == method &
+        summaries$scenario_id == scenario, , drop = FALSE]
+      for (family in c("AL", "exAL")) {
+        joint <- block[block$likelihood_family == family & block$fit_structure == "joint", , drop = FALSE]
+        independent <- block[block$likelihood_family == family & block$fit_structure == "independent", , drop = FALSE]
+        cursor <- cursor + 1L
+        out[[cursor]] <- summarize_pair(joint, independent,
+          "joint_minus_independent", paste(family, "joint minus independent"))
+      }
+      for (structure in c("joint", "independent")) {
+        exal <- block[block$likelihood_family == "exAL" & block$fit_structure == structure, , drop = FALSE]
+        al <- block[block$likelihood_family == "AL" & block$fit_structure == structure, , drop = FALSE]
+        cursor <- cursor + 1L
+        out[[cursor]] <- summarize_pair(exal, al,
+          "exAL_minus_AL", paste(structure, "exAL minus AL"))
+      }
+    }
+  }
+  app_joint_qdesn_bind_rows(out)
+}
+
+app_joint_recursive_finalize <- function(
+  root, contract, allowed_review_contract_sha256 = app_sha256_file(
+    app_joint_recursive_review_contract_path())
+) {
+  dirs <- app_joint_recursive_dirs(root)
+  status <- app_joint_recursive_cell_status(root)
+  if (nrow(status) != 64L || any(status$status != "complete")) {
+    stop("Recursive score packet requires 64 complete cells.", call. = FALSE)
+  }
+  oracle_manifest <- app_read_csv(file.path(root, "dgp_oracle_manifest.csv"))
+  if (nrow(oracle_manifest) != 8L) stop("Recursive oracle manifest is incomplete.", call. = FALSE)
+  summaries <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
+    app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id), "summary.csv"))
+  }))
+  mean_diagnostics <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
+    x <- app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id),
+      "mean_design_diagnostics.csv"))
+    x$worker_id <- worker_id
+    x
+  }))
+  tier_diagnostics <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
+    x <- app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id),
+      "stability_tier_diagnostics.csv"))
+    x$worker_id <- worker_id
+    x
+  }))
+  crossing <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
+    app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id), "crossing_summary.csv"))
+  }))
+  tail <- app_joint_qdesn_bind_rows(lapply(status$worker_id, function(worker_id) {
+    x <- app_read_csv(file.path(app_joint_recursive_cell_dir(root, worker_id), "tail_sensitivity.csv"))
+    x$worker_id <- worker_id
+    x
+  }))
+  score_stability <- app_joint_recursive_final_score_stability(
+    mean_diagnostics, contract,
+    allowed_review_contract_sha256 = allowed_review_contract_sha256
+  )
+  if (any(!is.finite(summaries$posterior_score_mean)) ||
+      any(summaries$canonical_contract_crossing_pairs != 0) ||
+      any(crossing$posterior_contract_crossing_pairs_max != 0) ||
+      any(!app_as_bool_vec(mean_diagnostics$finite)) ||
+      any(mean_diagnostics$standardized_rms_half_difference >
+        contract$mean_design_rms_gate) ||
+      any(!score_stability$accepted)) {
+    stop("Recursive final scientific gates did not pass.", call. = FALSE)
+  }
+  pure_policy <- identical(
+    contract$version, "joint_qdesn_pure_recursive_score_packet_v1"
+  )
+  if (pure_policy &&
+      (any(!is.finite(summaries$path_posterior_score_mean)) ||
+        any(crossing$path_posterior_contract_crossing_pairs_max != 0))) {
+    stop("Pure recursive path-policy score gates did not pass.", call. = FALSE)
+  }
+  if (contract$version %in% c(
+      "joint_qdesn_recursive_mean_forecast_v2",
+      "joint_qdesn_recursive_mean_forecast_v3",
+      "joint_qdesn_pure_recursive_score_packet_v1") &&
+      any(mean_diagnostics$half_split_method != contract$state_half_split_method)) {
+    stop("Recursive final packet mixes half-split contracts.", call. = FALSE)
+  }
+  contrasts <- app_joint_recursive_contrast_summary(root, summaries)
+  path_contrasts <- if (pure_policy) app_joint_recursive_contrast_summary(
+    root, summaries, "path_posterior_score_draws.csv.gz", "recursive_path"
+  ) else NULL
+  winners <- app_joint_qdesn_bind_rows(lapply(split(summaries,
+    interaction(summaries$scenario_id, summaries$inference_method, drop = TRUE)), function(x) {
+      x[which.min(x$posterior_score_mean), c("scenario_id", "inference_method",
+        "model_cell_id", "model_id", "fit_structure", "likelihood_family",
+        "posterior_score_mean", "posterior_score_q025", "posterior_score_q975"), drop = FALSE]
+    }))
+  path_winners <- if (pure_policy) app_joint_qdesn_bind_rows(lapply(
+    split(summaries, interaction(
+      summaries$scenario_id, summaries$inference_method, drop = TRUE
+    )), function(x) {
+      x[which.min(x$path_posterior_score_mean), c(
+        "scenario_id", "inference_method", "model_cell_id", "model_id",
+        "fit_structure", "likelihood_family", "path_posterior_score_mean",
+        "path_posterior_score_q025", "path_posterior_score_q975"
+      ), drop = FALSE]
+    })) else NULL
+  health <- data.frame(
+    gate = c("oracle_banks", "vb_cells", "mcmc_cells", "all_cells",
+      "finite_scores", "contract_crossings", "mean_design_rms_stability",
+      "mean_design_score_stability", "mean_design_score_strict_pass",
+      "mean_design_score_reviews", "path_finite_scores",
+      "path_contract_crossings"),
+    expected = c(8L, 32L, 32L, 64L, 64L, 0L, 64L, 64L, 64L, 0L,
+      if (pure_policy) 64L else NA_integer_,
+      if (pure_policy) 0L else NA_integer_),
+    observed = c(nrow(oracle_manifest),
+      sum(status$status == "complete" & status$inference_method == "vb"),
+      sum(status$status == "complete" & status$inference_method == "mcmc"),
+      sum(status$status == "complete"), sum(is.finite(summaries$posterior_score_mean)),
+      sum(crossing$posterior_contract_crossing_pairs_max),
+      sum(mean_diagnostics$standardized_rms_half_difference <=
+        contract$mean_design_rms_gate),
+      sum(score_stability$accepted), sum(score_stability$strict_pass),
+      sum(score_stability$review_valid),
+      if (pure_policy) sum(is.finite(summaries$path_posterior_score_mean)) else NA_integer_,
+      if (pure_policy) sum(crossing$path_posterior_contract_crossing_pairs_max) else NA_integer_),
+    status = "pass", stringsAsFactors = FALSE
+  )
+  if (any(score_stability$review_valid)) {
+    health$status[health$gate %in% c(
+      "mean_design_score_strict_pass", "mean_design_score_reviews"
+    )] <- "review"
+  }
+  app_ensure_dir(dirs$final)
+  readme <- c(
+    "# Recursive mean-design JOINT forecast packet",
+    "",
+    "This packet uses frozen VB and MCMC posterior fits identified by its source manifests.",
+    "Recursive response paths are synthesized from monotone seven-level quantile grids,",
+    "the complete response-dependent readout design is averaged by origin and horizon,",
+    "and final score intervals vary readout coefficients conditional on that mean design.",
+    "Mean-design convergence uses alternating within-chain halves; chain-specific",
+    "score sensitivity is retained separately and is not conflated with integration error.",
+    if (any(score_stability$review_valid)) paste(
+      "One cell narrowly missed the frozen strict score-stability gate and is retained",
+      "as an explicit bounded review under a versioned closeout addendum."
+    ) else "All cells passed the frozen strict score-stability gate.",
+    "Pure-recursive packets also retain paired draw-level path propagation as a",
+    "secondary policy comparator under the same posterior evidence and uniforms.",
+    "VB intervals are partial because intercept covariance was not retained.",
+    "The primary score is origin-marginal DGP-integrated finite-grid aCRPS."
+  )
+  readme_path <- file.path(dirs$final, "README.md")
+  writeLines(readme, readme_path)
+  packet_status <- data.frame(
+    status = score_stability$packet_status,
+    strict_score_pass_cells = sum(score_stability$strict_pass),
+    score_review_cells = sum(score_stability$review_valid),
+    completed_cells = sum(status$status == "complete"),
+    stringsAsFactors = FALSE
+  )
+  paths <- c(
+    summary = app_write_csv(summaries, file.path(dirs$final, "forecast_score_summary.csv")),
+    contrasts = app_write_csv(contrasts, file.path(dirs$final, "posterior_contrast_summary.csv")),
+    winners = app_write_csv(winners, file.path(dirs$final, "scenario_winner_summary.csv")),
+    crossings = app_write_csv(crossing, file.path(dirs$final, "crossing_summary.csv")),
+    mean_design = app_write_csv(mean_diagnostics, file.path(dirs$final, "mean_design_diagnostics.csv")),
+    stability_tiers = app_write_csv(tier_diagnostics,
+      file.path(dirs$final, "stability_tier_diagnostics.csv")),
+    tail_sensitivity = app_write_csv(tail, file.path(dirs$final, "tail_sensitivity_summary.csv")),
+    health = app_write_csv(health, file.path(dirs$final, "final_health_summary.csv")),
+    packet_status = app_write_csv(packet_status,
+      file.path(dirs$final, "packet_status.csv")),
+    effective_contract = app_write_csv(contract$table,
+      file.path(dirs$final, "effective_contract.csv")),
+    readme = normalizePath(readme_path, mustWork = TRUE)
+  )
+  if (pure_policy) {
+    paths <- c(paths,
+      path_contrasts = app_write_csv(path_contrasts,
+        file.path(dirs$final, "path_posterior_contrast_summary.csv")),
+      path_winners = app_write_csv(path_winners,
+        file.path(dirs$final, "path_scenario_winner_summary.csv")))
+  }
+  app_joint_shared_write_manifest(dirs$final, paths)
+  verification <- app_joint_shared_verify_manifest(dirs$final)
+  if (!all(app_as_bool_vec(verification$verified))) {
+    stop("Recursive final packet manifest did not verify.", call. = FALSE)
+  }
+  app_write_csv(verification, file.path(dirs$final, "artifact_manifest_verification.csv"))
+  file.create(file.path(dirs$final, "DONE"))
+  list(summary = summaries, contrasts = contrasts, winners = winners,
+    path_contrasts = path_contrasts, path_winners = path_winners,
+    health = health, packet_status = packet_status)
+}

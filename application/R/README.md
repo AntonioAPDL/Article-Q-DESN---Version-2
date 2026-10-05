@@ -230,3 +230,13 @@ Tracked helper files:
   objects as authoritative and does not refit the model.
 - `launch_readiness.R`: preflight checks for completed pilot or dry-run
   directories before any final application launch.
+- `joint_qdesn_recursive_mean_design.R`,
+  `joint_qdesn_recursive_dgp_oracle.R`, and
+  `joint_qdesn_recursive_mean_score_packet.R`: forecast-only reconstruction
+  of the completed corrected JOINT fits. Posterior quantile-function paths
+  generate recursive response-dependent designs, those designs are summarized
+  before a separate readout draw is applied, and forecasts are scored against
+  an origin-marginal recursive DGP oracle. These modules never refit a model.
+  The v2 stability audit alternates diagnostic halves within each MCMC chain,
+  reports between-chain state-score sensitivity separately, and extends the
+  numerical state integral when either stability criterion fails.

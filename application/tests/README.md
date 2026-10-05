@@ -150,3 +150,16 @@ hash -r
 Rscript -e 'cat(R.version.string, "\n"); stopifnot(getRversion() >= "4.6.0")'
 Rscript application/tests/run_tests.R
 ```
+
+The focused recursive forecast tests are
+`test_joint_qdesn_recursive_mean_design.R`,
+`test_joint_qdesn_recursive_dgp_oracle.R`, and
+`test_joint_qdesn_recursive_mean_score_packet.R`. They cover finite-grid
+inverse-CDF synthesis, teacher-forced design equivalence, empirical
+expected-check algebra, posterior adapters, coupling, and the frozen
+eight-worker execution contract. The score-packet test also verifies v2
+within-chain half balancing, either-gate extension, and the full-draw rescue
+tiers. It verifies the v3 separation between likelihood-specific all-draw
+state rescue (750 per AL chain and 1,500 per exAL chain) and the exact
+750-per-chain final score sample, including source cardinality when the
+corrected runtime is locally available.

@@ -65,7 +65,8 @@ app_joint_shared_quantile_read_contract <- function(
   if (!identical(tau, sort(unique(tau))) || any(!is.finite(tau)) || any(tau <= 0 | tau >= 1)) {
     stop("Quantile continuation grid must be strictly increasing in (0,1).", call. = FALSE)
   }
-  if (out$max_workers != 10L || out$evaluation_replicates < 1L || out$origin_stride != out$max_lead) {
+  allowed_workers <- if (startsWith(out$version, "joint_qdesn_pure_recursive_quantile_v1__")) 15L else 10L
+  if (out$max_workers != allowed_workers || out$evaluation_replicates < 1L || out$origin_stride != out$max_lead) {
     stop("Quantile continuation runtime or forecast geometry is malformed.", call. = FALSE)
   }
   out
@@ -119,6 +120,13 @@ app_joint_shared_quantile_verify_parent <- function(parent_dir, contract) {
 }
 
 app_joint_shared_quantile_full_design <- function(fixture, candidate, contract) {
+  if ("feature_contract" %in% names(candidate) &&
+      identical(as.character(candidate$feature_contract[[1L]]), "pure_recursive_v1")) {
+    if (!exists("app_joint_pure_full_design", mode = "function")) {
+      stop("Pure-recursive design support has not been sourced.", call. = FALSE)
+    }
+    return(app_joint_pure_full_design(fixture, candidate, contract))
+  }
   roles <- fixture$detailed_split$role
   keep <- roles %in% c("desn_washout", "fit", "validation")
   raw <- as.matrix(fixture$Z[keep, , drop = FALSE])
@@ -321,6 +329,39 @@ app_joint_shared_quantile_job_plan <- function(contract) {
   out
 }
 
+app_joint_shared_quantile_dense_dimension_audit <- function(design_manifest, contract) {
+  app_check_required_columns(
+    design_manifest, c("replicate_id", "p"), "quantile design manifest"
+  )
+  p <- as.integer(design_manifest$p)
+  K <- length(contract$tau)
+  limit <- as.integer(contract$max_dense_dim)
+  if (anyNA(p) || any(p < 1L) || length(limit) != 1L || is.na(limit) || limit < 1L) {
+    stop("Quantile dense-dimension inputs are malformed.", call. = FALSE)
+  }
+  out <- data.frame(
+    replicate_id = as.integer(design_manifest$replicate_id),
+    beta_state_dimension = p,
+    quantile_count = K,
+    joint_beta_dimension = K * p,
+    max_dense_dim = limit,
+    dense_covariance_bytes_estimate = as.numeric((K * p)^2) * 8,
+    stringsAsFactors = FALSE
+  )
+  out$status <- ifelse(out$joint_beta_dimension <= out$max_dense_dim, "pass", "fail")
+  if (any(out$status != "pass")) {
+    failed <- out[out$status != "pass", , drop = FALSE]
+    stop(sprintf(
+      paste0(
+        "Quantile dense-dimension preflight failed: required joint beta dimension %d ",
+        "exceeds max_dense_dim=%d for replicate %d."
+      ),
+      max(failed$joint_beta_dimension), limit, failed$replicate_id[[1L]]
+    ), call. = FALSE)
+  }
+  out
+}
+
 app_joint_shared_quantile_worker_dir <- function(root, job_id) {
   file.path(root, "workers", sprintf("worker_%04d", as.integer(job_id)))
 }
@@ -412,6 +453,9 @@ app_joint_shared_quantile_prepare <- function(
   plan <- app_joint_shared_quantile_job_plan(contract)
   fixture_manifest <- app_joint_qdesn_bind_rows(fixture_rows)
   design_manifest <- app_joint_qdesn_bind_rows(design_rows)
+  dense_dimension_audit <- app_joint_shared_quantile_dense_dimension_audit(
+    design_manifest, contract
+  )
   plan <- merge(plan, fixture_manifest[, c("replicate_id", "dgp_seed", "fixture_path")], by = "replicate_id", all.x = TRUE)
   plan <- merge(plan, design_manifest[, c("replicate_id", "design_path", "design_fingerprint")], by = "replicate_id", all.x = TRUE)
   plan <- plan[order(plan$stage_order, plan$job_id), , drop = FALSE]
@@ -429,6 +473,9 @@ app_joint_shared_quantile_prepare <- function(
     selected_backbone = selected_snapshot, parent_decision = decision_snapshot,
     fixture_manifest = app_write_csv(fixture_manifest, file.path(out_dir, "fixture_manifest.csv")),
     design_manifest = app_write_csv(design_manifest, file.path(out_dir, "design_manifest.csv")),
+    dense_dimension_audit = app_write_csv(
+      dense_dimension_audit, file.path(out_dir, "dense_dimension_audit.csv")
+    ),
     worker_plan = app_write_csv(plan, file.path(out_dir, "worker_plan.csv")),
     source_git_state = app_write_csv(app_joint_shared_git_state(), file.path(out_dir, "source_git_state.csv"))
   )
@@ -438,6 +485,8 @@ app_joint_shared_quantile_prepare <- function(
     selected_gaussian_rhs_tau0 = selected$rhs_tau0[[1L]], evaluation_replicates = contract$evaluation_replicates,
     expected_jobs = nrow(plan), gaussian_jobs = sum(plan$model_id == "gaussian_rhs_initializer"),
     quantile_vb_jobs = sum(plan$model_id != "gaussian_rhs_initializer"), max_concurrent_workers = contract$max_workers,
+    required_joint_beta_dimension = max(dense_dimension_audit$joint_beta_dimension),
+    max_dense_dim = contract$max_dense_dim,
     protected_rows_used_for_selection = 0L, article_fixture_used = FALSE, mcmc_launched = FALSE,
     stringsAsFactors = FALSE
   )
@@ -811,6 +860,11 @@ app_joint_shared_quantile_window_score <- function(design, qhat, idx, model_id, 
   contract_q <- app_joint_qdesn_apply_monotone_contract(qhat, design$tau)
   sc <- design$dgp_row
   if (is.null(sc) || nrow(sc) != 1L) stop("DGP registry row is missing from the frozen design.", call. = FALSE)
+  dgp_seed <- design$seed
+  if (is.null(dgp_seed) || length(dgp_seed) != 1L || !is.finite(dgp_seed)) dgp_seed <- sc$seed
+  if (is.null(dgp_seed) || length(dgp_seed) != 1L || !is.finite(dgp_seed)) {
+    stop("DGP seed is missing from the frozen design and registry row.", call. = FALSE)
+  }
   score <- app_joint_qdesn_postscore_score_matrix(
     contract_q$qhat_contract, design$y[idx], design$mu[idx], design$sigma[idx],
     sc, design$tau, app_joint_shared_weights(design$tau)
@@ -819,7 +873,7 @@ app_joint_shared_quantile_window_score <- function(design, qhat, idx, model_id, 
   check <- vapply(seq_along(design$tau), function(k) app_check_loss(
     design$y[idx], contract_q$qhat_contract[, k], design$tau[[k]]), numeric(length(idx)))
   data.frame(
-    scenario_id = design$scenario_id, replicate_id = replicate_id, dgp_seed = design$seed,
+    scenario_id = design$scenario_id, replicate_id = replicate_id, dgp_seed = as.integer(dgp_seed),
     model_id = model_id, window = window, n_scored_rows = length(idx),
     dgp_integrated_acrps = score$dgp_integrated_acrps, realized_acrps = score$realized_acrps,
     check_loss_mean = mean(check), oracle_quantile_mae = mean(abs(truth_error)),

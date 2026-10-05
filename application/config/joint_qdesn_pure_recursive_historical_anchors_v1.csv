@@ -1,0 +1,9 @@
+scenario_id,translatable,source_candidate_id,source_design_class,D,n,width_shape,alpha,rho,pi_w,pi_in,input_scale,source_rhs_tau0,translation_note
+asymmetric_laplace_tail,true,asymmetric_laplace_tail__ridge_076,reservoir,2,12;12,flat,0.5,0.9,0.1,1,0.1,0.0001,Layer-varying leakage translated to its median; raw inputs removed; fixed campaign seed used.
+gaussian_mixture_bridge,true,gaussian_mixture_bridge__ridge_028,hybrid,2,16;8,tapered,0.5,0.75,0.1,1,0.25,0.0001,Hybrid geometry translated to pure full-state readout; layer-varying leakage translated to its median.
+laplace_bridge,true,laplace_bridge__ridge_079,hybrid,2,12;12,flat,0.8,0.98,0.1,1,0.5,0.1,Hybrid geometry translated to pure full-state readout and fixed campaign seed.
+nonlinear_reservoir_friendly,true,nonlinear_reservoir_friendly__ridge_089,hybrid,3,16;16;8,flat,0.8,0.75,0.1,1,0.5,0.0001,Hybrid reduced-state geometry translated to pure full states from every layer.
+normal_bridge,true,normal_bridge__ridge_071,hybrid,3,16;16;8,flat,0.5,0.9,0.2,1,0.25,0.001,Hybrid reduced-state geometry translated to pure full states; leakage translated to its median.
+persistent_heavy_tail,true,persistent_heavy_tail__ridge_150,hybrid,3,8;8;8,flat,0.5,0.98,0.2,1,0.25,1,Hybrid geometry translated to pure full-state readout; leakage translated to its median.
+regime_shift,false,regime_shift__authority_frozen_base_fixture,direct,,,,,,,,,1,Prior winner was a direct model and has no honest pure-reservoir translation.
+student_t_location_scale,true,student_t_location_scale__ridge_128,reservoir,1,24,flat,0.8,0.98,0.1,1,0.1,1,Reservoir geometry translated by removing raw inputs and using the fixed campaign seed.

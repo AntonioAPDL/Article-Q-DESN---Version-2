@@ -78,13 +78,16 @@ app_pricefm_fit_scaled_ridge_stats <- function(
 
 app_pricefm_rhs_convergence_status <- function(
     trace,
-    mode = c("legacy_max_abs", "predictive_fixed_point"),
+    mode = c("legacy_max_abs", "predictive_fixed_point", "full_variational"),
     tol = 1e-5,
     stability_window = 10L,
     predictive_tol = 1e-7,
     relative_beta_tol = 1e-6,
     sigma_relative_tol = 1e-8,
-    prior_rms_log_precision_tol = 1e-6) {
+    prior_rms_log_precision_tol = 1e-6,
+    rhs_state_tol = 1e-6,
+    covariance_tol = 1e-6,
+    objective_per_observation_tol = 1e-8) {
   mode <- match.arg(mode)
   stability_window <- as.integer(stability_window)
   if (stability_window < 1L || nrow(trace) < 1L) return(FALSE)
@@ -93,12 +96,49 @@ app_pricefm_rhs_convergence_status <- function(
   if (nrow(trace) < stability_window) return(FALSE)
   recent <- utils::tail(trace, stability_window)
   if (any(!is.finite(as.matrix(recent)))) return(FALSE)
-  strict || (
+  stable <- (
     max(recent$fitted_rmse_delta) <= as.numeric(predictive_tol) &&
     max(recent$beta_relative_l2_delta) <= as.numeric(relative_beta_tol) &&
     max(recent$sigma_relative_delta) <= as.numeric(sigma_relative_tol) &&
     max(recent$prior_rms_log_precision_delta) <= as.numeric(prior_rms_log_precision_tol)
   )
+  if (identical(mode, "full_variational")) {
+    required <- c("rhs_max_log_rate_delta", "beta_cov_relative_delta", "objective_delta_per_observation")
+    if (!all(required %in% names(recent))) return(FALSE)
+    return(stable && max(recent$rhs_max_log_rate_delta) <= rhs_state_tol &&
+      max(recent$beta_cov_relative_delta) <= covariance_tol &&
+      max(abs(recent$objective_delta_per_observation)) <= objective_per_observation_tol)
+  }
+  strict || stable
+}
+
+app_pricefm_rhs_log_rates <- function(state) {
+  active <- if (isTRUE(state$shrink_intercept)) seq_len(state$p) else
+    if (state$p > 1L) seq.int(2L, state$p) else integer()
+  rates <- c(state$b_lambda[active], state$b_nu[active], state$b_tau, state$b_xi,
+    if (!isTRUE(state$zeta2_is_fixed)) state$b_zeta else numeric())
+  if (!length(rates) || any(!is.finite(rates)) || any(rates <= 0)) {
+    stop("invalid active RHS variational rates", call. = FALSE)
+  }
+  log(rates)
+}
+
+app_pricefm_rhs_objective <- function(stats, mean, covariance, sigma_shape, sigma_rate,
+    state, prior, omega_a = 2, omega_b = 1) {
+  second <- covariance + tcrossprod(mean)
+  sse <- stats$yty - 2 * as.numeric(crossprod(mean, stats$Xty)) + sum(stats$XtX * second)
+  elog <- log(sigma_rate) - digamma(sigma_shape)
+  einv <- sigma_shape / sigma_rate
+  likelihood <- -.5 * stats$n * (log(2 * pi) + elog) - .5 * einv * sse
+  sigma_prior <- omega_a * log(omega_b) - lgamma(omega_a) -
+    (omega_a + 1) * elog - omega_b * einv
+  sigma_entropy <- sigma_shape + log(sigma_rate) + lgamma(sigma_shape) -
+    (1 + sigma_shape) * digamma(sigma_shape)
+  beta_entropy <- .5 * (stats$p * (1 + log(2 * pi)) + app_pricefm_sym_solve(covariance)$logdet)
+  rhs <- prior$elbo(state, list(m = mean, V = covariance))$elbo
+  value <- likelihood + sigma_prior + sigma_entropy + beta_entropy + rhs
+  if (!is.finite(value)) stop("non-finite full RHS variational objective", call. = FALSE)
+  as.numeric(value)
 }
 
 app_pricefm_fit_rhs_stats <- function(
@@ -110,19 +150,25 @@ app_pricefm_fit_rhs_stats <- function(
     max_iter = 100L,
     min_iter = 50L,
     tol = 1e-5,
-    convergence_mode = c("legacy_max_abs", "predictive_fixed_point"),
+    convergence_mode = c("legacy_max_abs", "predictive_fixed_point", "full_variational"),
     stability_window = 10L,
     predictive_tol = 1e-7,
     relative_beta_tol = 1e-6,
     sigma_relative_tol = 1e-8,
-    prior_rms_log_precision_tol = 1e-6) {
+    prior_rms_log_precision_tol = 1e-6,
+    rhs_state_tol = 1e-6,
+    covariance_tol = 1e-6,
+    objective_per_observation_tol = 1e-8,
+    record_objective = FALSE,
+    initial_fit = NULL,
+    initial_tau = 1) {
   stats <- app_pricefm_validate_normal_stats(stats)
   tau0 <- as.numeric(tau0)
   if (!is.finite(tau0) || tau0 <= 0) stop("tau0 must be finite and positive", call. = FALSE)
   if (!is.function(beta_prior_factory)) stop("beta_prior_factory must be a function", call. = FALSE)
   prior <- beta_prior_factory("rhs_ns", rhs = list(
     tau0 = tau0,
-    init_tau = 1,
+    init_tau = initial_tau,
     shrink_intercept = FALSE,
     intercept_prec = 1e-16
   ))
@@ -133,14 +179,50 @@ app_pricefm_fit_rhs_stats <- function(
   sigma_shape <- as.numeric(omega_a) + stats$n / 2
   sigma_rate <- ridge$omega2$b
   convergence_mode <- match.arg(convergence_mode)
+  record_objective <- isTRUE(record_objective) || identical(convergence_mode, "full_variational")
+  if (record_objective && !is.function(prior$elbo)) stop("RHS prior lacks an objective", call. = FALSE)
   trace <- data.frame(
     iter = integer(), sigma2_mean = numeric(), beta_max_abs_delta = numeric(),
     fitted_rmse_delta = numeric(), beta_relative_l2_delta = numeric(),
     sigma_relative_delta = numeric(), prior_rms_log_precision_delta = numeric()
   )
+  offset <- 0L
+  if (!is.null(initial_fit)) {
+    if (!identical(initial_fit$type, "rhs_ns_vb_sufficient_statistics") ||
+        !isTRUE(all.equal(initial_fit$stats, stats, tolerance = 0)) ||
+        !identical(initial_fit$beta_prior$hypers, prior$hypers) ||
+        !isTRUE(all.equal(initial_fit$omega2$a, sigma_shape, tolerance = 0)) ||
+        (is.null(initial_fit$noise_prior) && !(omega_a == 2 && omega_b == 1)) ||
+        (!is.null(initial_fit$noise_prior) && !identical(initial_fit$noise_prior, list(a = omega_a, b = omega_b))) ||
+        isTRUE(initial_fit$beta_prior$state$freeze_tau)) {
+      stop("RHS continuation target or state differs", call. = FALSE)
+    }
+    state <- initial_fit$beta_prior$state
+    mean <- initial_fit$beta$mean
+    covariance <- initial_fit$beta$cov
+    sigma_rate <- initial_fit$omega2$b
+    trace <- initial_fit$trace
+    offset <- nrow(trace)
+    if (state$iter != offset || any(!is.finite(mean)) || any(!is.finite(covariance)) ||
+        !is.finite(sigma_rate) || sigma_rate <= 0) stop("invalid RHS continuation checkpoint", call. = FALSE)
+  }
+  if (as.integer(max_iter) <= offset || as.integer(min_iter) > as.integer(max_iter)) {
+    stop("RHS iteration bounds do not permit continuation", call. = FALSE)
+  }
+  objective <- if (record_objective) app_pricefm_rhs_objective(
+    stats, mean, covariance, sigma_shape, sigma_rate, state, prior, omega_a, omega_b) else NA_real_
+  diagnostic_names <- c("total_objective", "objective_delta_per_observation", "beta_cov_relative_delta",
+    "rhs_max_log_rate_delta", "tau_inverse_moment", "slab_inverse_moment", "precision_jitter")
+  if (record_objective) for (name in diagnostic_names) trace[[name]] <-
+    if (name %in% names(trace)) trace[[name]] else rep(NA_real_, nrow(trace))
   converged <- FALSE
-  for (iteration in seq_len(as.integer(max_iter))) {
+  for (iteration in seq.int(offset + 1L, as.integer(max_iter))) {
     old_mean <- mean
+    if (record_objective) {
+      old_covariance <- covariance
+      old_log_rates <- app_pricefm_rhs_log_rates(state)
+      old_objective <- objective
+    }
     old_sigma <- if (sigma_shape > 1) sigma_rate / (sigma_shape - 1) else sigma_rate / sigma_shape
     expected_inverse_sigma <- sigma_shape / sigma_rate
     prior_precision <- as.numeric(prior$expected_prec(state, stats$p))
@@ -172,7 +254,7 @@ app_pricefm_fit_rhs_stats <- function(
     prior_rms_log_precision_delta <- sqrt(mean(
       (log(updated_prior_precision[prior_active]) - log(prior_precision[prior_active]))^2
     ))
-    trace <- rbind(trace, data.frame(
+    row <- data.frame(
       iter = as.integer(iteration),
       sigma2_mean = as.numeric(sigma_mean),
       beta_max_abs_delta = as.numeric(beta_max_abs_delta),
@@ -180,7 +262,20 @@ app_pricefm_fit_rhs_stats <- function(
       beta_relative_l2_delta = as.numeric(beta_relative_l2_delta),
       sigma_relative_delta = as.numeric(sigma_relative_delta),
       prior_rms_log_precision_delta = as.numeric(prior_rms_log_precision_delta)
-    ))
+    )
+    if (record_objective) {
+      objective <- app_pricefm_rhs_objective(
+        stats, mean, covariance, sigma_shape, sigma_rate, state, prior, omega_a, omega_b)
+      row$total_objective <- objective
+      row$objective_delta_per_observation <- (objective - old_objective) / stats$n
+      row$beta_cov_relative_delta <- sqrt(sum((covariance - old_covariance)^2)) /
+        max(sqrt(sum(old_covariance^2)), .Machine$double.eps)
+      row$rhs_max_log_rate_delta <- max(abs(app_pricefm_rhs_log_rates(state) - old_log_rates))
+      row$tau_inverse_moment <- state$E_inv_tau2
+      row$slab_inverse_moment <- state$E_inv_zeta2
+      row$precision_jitter <- solution$jitter
+    }
+    trace <- rbind(trace, row)
     if (iteration >= as.integer(min_iter) && app_pricefm_rhs_convergence_status(
       trace,
       mode = convergence_mode,
@@ -189,7 +284,9 @@ app_pricefm_fit_rhs_stats <- function(
       predictive_tol = predictive_tol,
       relative_beta_tol = relative_beta_tol,
       sigma_relative_tol = sigma_relative_tol,
-      prior_rms_log_precision_tol = prior_rms_log_precision_tol
+      prior_rms_log_precision_tol = prior_rms_log_precision_tol,
+      rhs_state_tol = rhs_state_tol, covariance_tol = covariance_tol,
+      objective_per_observation_tol = objective_per_observation_tol
     )) {
       converged <- TRUE
       break
@@ -210,6 +307,7 @@ app_pricefm_fit_rhs_stats <- function(
       mode = sigma_rate / (sigma_shape + 1)
     ),
     beta_prior = list(type = "rhs_ns", hypers = prior$hypers, state = state),
+    noise_prior = list(a = omega_a, b = omega_b),
     stats = stats,
     trace = trace,
     converged = converged,
@@ -220,7 +318,10 @@ app_pricefm_fit_rhs_stats <- function(
       convergence_mode = convergence_mode, stability_window = stability_window,
       predictive_tol = predictive_tol, relative_beta_tol = relative_beta_tol,
       sigma_relative_tol = sigma_relative_tol,
-      prior_rms_log_precision_tol = prior_rms_log_precision_tol
+      prior_rms_log_precision_tol = prior_rms_log_precision_tol,
+      rhs_state_tol = rhs_state_tol, covariance_tol = covariance_tol,
+      objective_per_observation_tol = objective_per_observation_tol,
+      record_objective = record_objective, resumed_from_iteration = offset
     ),
     initialization_contract = "scaled_ridge_initialization_only_prior_unchanged"
   ), class = c("app_pricefm_recursive_normal_fit", "list"))

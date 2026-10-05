@@ -1,0 +1,55 @@
+\begin{table}[p]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.04}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}rr@{}}
+\toprule
+Simulation setting & Model & Posterior mean realized score & Score at posterior-mean grid \\
+\midrule
+Asymmetric-Laplace tail & Joint AL & 0.3825 & 0.3789 \\
+ & Independent AL & 0.4175 & 0.4152 \\
+ & Joint exAL & 0.3755 & 0.3723 \\
+ & Independent exAL & 0.4315 & 0.4259 \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & Joint AL & 0.4701 & 0.4656 \\
+ & Independent AL & 0.4613 & 0.4543 \\
+ & Joint exAL & 0.4772 & 0.4742 \\
+ & Independent exAL & 0.4651 & 0.4573 \\
+\addlinespace[2pt]
+Laplace innovations & Joint AL & 0.5100 & 0.4971 \\
+ & Independent AL & 0.3653 & 0.3558 \\
+ & Joint exAL & 0.5140 & 0.5041 \\
+ & Independent exAL & 0.3638 & 0.3538 \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & Joint AL & 0.5238 & 0.5172 \\
+ & Independent AL & 0.5140 & 0.5066 \\
+ & Joint exAL & 0.5237 & 0.5204 \\
+ & Independent exAL & 0.5225 & 0.5144 \\
+\addlinespace[2pt]
+Gaussian innovations & Joint AL & 0.3578 & 0.3555 \\
+ & Independent AL & 0.3725 & 0.3661 \\
+ & Joint exAL & 0.3665 & 0.3636 \\
+ & Independent exAL & 0.3651 & 0.3550 \\
+\addlinespace[2pt]
+Persistent heavy tails & Joint AL & 1.1220 & 1.1076 \\
+ & Independent AL & 1.0512 & 1.0446 \\
+ & Joint exAL & 1.0751 & 1.0662 \\
+ & Independent exAL & 1.0976 & 1.0966 \\
+\addlinespace[2pt]
+Regime shift & Joint AL & 1.1528 & 1.1459 \\
+ & Independent AL & 1.0500 & 1.0499 \\
+ & Joint exAL & 1.0355 & 1.0287 \\
+ & Independent exAL & 1.0284 & 1.0227 \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & Joint AL & 0.4233 & 0.4224 \\
+ & Independent AL & 0.4228 & 0.4217 \\
+ & Joint exAL & 0.4270 & 0.4260 \\
+ & Independent exAL & 0.4263 & 0.4249 \\
+\bottomrule
+\end{tabular}
+}%
+\caption{Secondary finite-grid \(\aCRPS\) against realized observations. The first column averages the score over posterior readout draws conditional on the averaged recursive design; the second evaluates the projected posterior-mean grid. These are distinct from the DGP-integrated primary criterion.}
+\label{tab:joint-qdesn-pure-desn-v1-secondary}
+\end{table}

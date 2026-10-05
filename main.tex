@@ -299,9 +299,10 @@ series. Let \(\vect\beta_{\mathrm{base}}\) be a baseline slope and define
 \]
 Separate RHS hierarchies are assigned to the baseline and to each
 \(\vect\Delta_k\). This distinguishes effects shared across levels from
-departures between neighboring levels. For \(K=1\), the baseline block is
-omitted and the RHS prior is placed directly on
-\(\vect\Delta_1=\vect\beta_1\).
+departures between neighboring levels. The simulation uses the anchored
+special case \(\vect\beta_{\mathrm{base}}=\zeros{r}\), with an RHS prior on
+\(\vect\Delta_1=\vect\beta_1\) and no additional latent baseline. This also
+gives the single-level RHS prior when \(K=1\).
 
 Adjacent-difference shrinkage favors similar neighboring slopes, but the gap
 \[
@@ -329,13 +330,14 @@ probability level. Convergence assessment includes rank-normalized
 \(\widehat R\), effective sample sizes, chain comparisons of reported
 functionals, and quantile-crossing diagnostics.
 
-For analyses requiring many repeated fits, we use a mean-field variational
-approximation to the same augmented posterior. Gaussian, GIG, truncated-Normal,
-and inverse-gamma factors retain closed-form coordinate updates. The
-nonconjugate exAL scale--asymmetry factor uses the Laplace--Delta approximation
-of \citet{wang2013nonconjugatevb}; we denote this model-specific procedure by
-VB--LD. The evidence lower bound, full conditional distributions, algorithms,
-and joint sparse Gaussian calculation are collected in the supplement.
+Repeated fits use model-specific variational approximations. Gaussian, GIG,
+truncated-Normal, and inverse-gamma factors retain closed-form coordinate
+updates. The generic fixed-design derivation uses the Laplace--Delta
+approximation of \citet{wang2013nonconjugatevb} for the nonconjugate exAL
+scale--asymmetry factor, denoted VB--LD. The joint simulation instead uses
+a structured scale--asymmetry factor under the \(v\) augmentation, evaluated
+by numerical quadrature. The supplement gives these computations, the
+evidence lower bound, full conditionals, and joint Gaussian calculations.
 Variational intervals are approximate and are identified separately from MCMC
 posterior intervals.
 
@@ -415,10 +417,12 @@ S_{\mathrm{DGP}}^{(b)}
 \left[\rho_{p_k}\{Y_\ell-q_{\ell,k}^{*,(b)}\}\right].
 \label{eq:dgp-integrated-score-main}
 \end{equation}
-This finite-grid score averages over the known conditional response
-distribution at the fixed held-out design points. Its interval excludes
-repeated-simulation and model-selection uncertainty; the supplement records
-the coupling used for independently fitted levels.
+This finite-grid score averages over the known response distribution
+conditional on the history at each forecast origin. The joint study evaluates
+posterior draws at averaged recursive features, so its intervals condition on
+that feature summary and exclude repeated-simulation and model-selection
+uncertainty. The supplement gives the recursive construction and the coupling
+used for independently fitted levels.
 
 For a statistical model \(M\), reservoir candidates
 \(R_1,\ldots,R_J\) are compared by a stated validation criterion,
@@ -650,10 +654,11 @@ under the \(\AL\) and \(\exAL\) working likelihoods. Eight mechanisms span
 Gaussian, Laplace, Gaussian-mixture, asymmetric-tail, persistent-heavy-tail,
 Student-\(t\), regime-shift, and nonlinear dynamics. For each mechanism, one
 DESN and RHS specification is selected using separate source realizations and
-then shared by all four model classes. The 500-observation evaluation
-realization is
-not used for this selection. Thus differences among the 32 comparisons are
-not confounded by model-specific feature maps or prior scales.
+then shared by all four model classes. The readout contains an intercept and
+the concatenated states from every reservoir layer; lagged responses drive
+the reservoirs but do not enter the regression separately. The
+500-observation fitting sample and its subsequent evaluation period are
+reserved for fitting and forecast assessment after this selection.
 
 The evaluation fits use sequential initialization centered at the median.
 A Gaussian ridge fit initializes Gaussian RHS--VB; the resulting compatible
@@ -661,44 +666,45 @@ estimates initialize the median \(\AL\) regression; and the remaining
 independent \(\AL\) fits proceed toward the two tails. Each \(\exAL\) fit is
 initialized from the \(\AL\) fit at the same level, the complete independent
 grids initialize the corresponding joint fits, and each completed VB fit
-initializes MCMC for the same model. These transfers determine starting values
-only. Within each model cell, all five MCMC chains share fixed prior
+initializes MCMC for the same model. Quantile-level transfers determine
+starting values only; fixed intercept priors are calibrated from the Gaussian
+reference fit. Within each model cell, all five MCMC chains share fixed prior
 hyperparameters and the same posterior target. The supplement gives the
 complete calculation and chain allocation.
 
-Held-out evaluation is sequentially conditional: regression coefficients and
-reservoir weights remain fixed, while newly observed response lags enter later
-forecast origins. Each comparison contains the same 990 origin--horizon rows.
-The primary criterion is \(S_{\mathrm{DGP}}\) in
-Eq.~\eqref{eq:dgp-integrated-score-main}, computed for each retained MCMC draw
-after monotone rearrangement. Independent quantile draws are combined by the
-pre-specified chain-balanced product coupling described in the supplement.
+The held-out comparison uses 33 forecast origins and 30 horizons per origin,
+giving 990 common origin--horizon pairs. Observed history initializes the
+reservoir at each origin. Future response lags are then generated recursively
+from the ordered quantile grid. Each model averages its future feature vectors
+over simulated trajectories and evaluates posterior coefficient and intercept
+draws at this averaged design. The primary criterion is
+\(S_{\mathrm{DGP}}\) in Eq.~\eqref{eq:dgp-integrated-score-main}, using the
+known DGP distribution conditional on origin history. Its 95\% intervals
+describe readout uncertainty conditional on the averaged features; they do
+not include uncertainty from the recursive feature trajectories. Draw-specific
+recursive forecasts are assessed separately in the supplement.
 
-Figure~\ref{fig:joint-qdesn-corrected-v4-forecast-acrps} shows the corrected
-posterior score comparison. Independent exQDESN has the smallest numerical
-posterior mean in seven mechanisms; joint exQDESN is smallest for the Laplace
-mechanism. The marginal intervals for the numerical winner and runner-up
-overlap in every mechanism.
-Of the 16 paired joint-minus-independent contrasts, four intervals favor
-independent estimation and twelve include zero; none favors joint estimation.
-The evidence therefore does not support a general forecast advantage from
-joint estimation under this shared design.
+Figure~\ref{fig:joint-qdesn-pure-desn-v1-forecast-acrps} shows the posterior
+score comparison. Joint exQDESN has the lowest mean for asymmetric tails and
+joint Q--DESN for Gaussian innovations. Independent Q--DESN is lowest for
+Gaussian-mixture, Laplace, nonlinear-reservoir, persistent-heavy-tail, and
+Student-\(t\) mechanisms; independent exQDESN is lowest for regime shifts.
+The marginal intervals of the numerical winner and runner-up overlap in
+every mechanism. These differences do not establish a general forecast
+advantage from joint estimation.
 
-\input{tables/joint_qdesn_corrected_v4_forecast_figure.tex}
+\input{tables/joint_qdesn_pure_desn_v1_forecast_figure.tex}
 
-Across the 47,520 adjacent-level forecast comparisons available to each model,
-the raw crossing rates are 2.52\% for joint Q--DESN, 7.41\% for independent
-Q--DESN, 0\% for joint exQDESN, and 0.57\% for independent exQDESN. These
-percentages describe crossing frequency; the supplement reports the
-corresponding mean and maximum absolute monotone adjustments to describe
-magnitude. Joint exQDESN is therefore the most coherent raw specification in
-this comparison, although its predictive score is not uniformly lowest.
-Rearrangement produces ordered grids in all 32 comparisons. Posterior-score
-diagnostics meet the pre-specified criteria in 22 comparisons and warrant
-review in 10; all 16 \(\exAL\) scale--asymmetry assessments remain at review
-level. Exact scores, fit recovery, crossing rates, and computational
-diagnostics are reported in the supplement. A separate 50-replicate
-variational analysis is retained as a sensitivity study.
+Across 47,520 adjacent-level comparisons per model, the raw crossing rates of
+the posterior-mean forecast grids are 0.023\% for joint Q--DESN, 5.566\% for
+independent Q--DESN, 0\% for joint exQDESN, and 0.606\% for independent
+exQDESN. Joint exQDESN has the strongest raw coherence in this comparison,
+although its score is not uniformly lowest. Crossing rates across posterior
+draws and monotone-adjustment magnitudes are reported in the supplement;
+zero crossings of a mean grid do not imply ordered grids for every draw.
+Isotonic projection orders all scored grids. The supplement also records the
+one recursive-design stability qualification, scalar-mixing limitations, and
+a separate historical variational sensitivity analysis.
 
 \section{Application: GloFAS Retrospective Streamflow Quantile Forecasting}
 \label{sec:data}

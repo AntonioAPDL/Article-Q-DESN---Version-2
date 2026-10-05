@@ -74,6 +74,7 @@ def diagnostic_contract(row, args, control, protocol, initialization):
         stability_window=protocol["full_state_stability_window"],
         rhs_state_tol=protocol["rhs_state_tol"], covariance_tol=protocol["covariance_tol"],
         objective_per_observation_tol=protocol["objective_per_observation_tol"],
+        precision_accuracy_tol=protocol["precision_accuracy_tol"],
         initial_fit_path=str(checkpoint) if checkpoint else None,
         initial_fit_sha256=REC.digest(checkpoint) if checkpoint else None,
         initial_tau=parent["tau0"] if initialization == "prior_scale" else 1,
@@ -86,7 +87,7 @@ def valid_diagnostic(output, contract_path):
     output = Path(output)
     if not output.exists(): return False
     value = REC.read(output / "terminal.json")
-    if (value["status"] not in ("R123_FULL_VARIATIONAL_CERTIFIED", "R123_VARIATIONAL_CAP_DIAGNOSTIC")
+    if (value["status"] not in ("R123_FULL_VARIATIONAL_CERTIFIED", "R123_VARIATIONAL_CAP_DIAGNOSTIC", "R123_NUMERICAL_ACCURACY_REJECTED")
             or value["contract_sha256"] != REC.digest(contract_path)
             or value["test_opened"] is not False or value["selection_authorized"] is not False):
         raise RuntimeError("diagnostic identity differs")

@@ -33,7 +33,8 @@ fit <- app_pricefm_fit_rhs_stats(stats, c$tau0, prior_factory, max_iter = c$max_
   relative_beta_tol = c$relative_beta_tol, sigma_relative_tol = c$sigma_relative_tol,
   prior_rms_log_precision_tol = c$prior_rms_log_precision_tol,
   rhs_state_tol = c$rhs_state_tol, covariance_tol = c$covariance_tol,
-  objective_per_observation_tol = c$objective_per_observation_tol)
+  objective_per_observation_tol = c$objective_per_observation_tol,
+  precision_accuracy_tol = c$precision_accuracy_tol)
 diagonal <- sqrt(pmax(diag(stats$XtX), .Machine$double.eps))
 correlation <- stats$XtX / outer(diagonal, diagonal)
 eigenvalues <- eigen(correlation, symmetric = TRUE, only.values = TRUE)$values
@@ -45,10 +46,13 @@ dir.create(c$output_dir, recursive = TRUE)
 saveRDS(fit, file.path(c$output_dir, "fit.rds"), compress = "xz")
 utils::write.csv(fit$trace, file.path(c$output_dir, "convergence_trace.csv"), row.names = FALSE)
 jsonlite::write_json(geometry, file.path(c$output_dir, "geometry.json"), auto_unbox = TRUE, pretty = TRUE)
-summary <- list(status = if (fit$converged) "R123_FULL_VARIATIONAL_CERTIFIED" else "R123_VARIATIONAL_CAP_DIAGNOSTIC",
+summary <- list(status = if (fit$converged) "R123_FULL_VARIATIONAL_CERTIFIED" else
+  if (identical(fit$termination_reason, "gaussian_conditional_accuracy_rejected")) "R123_NUMERICAL_ACCURACY_REJECTED" else
+    "R123_VARIATIONAL_CAP_DIAGNOSTIC",
   fit_id = c$fit_id, candidate_id = c$candidate_id, split = c$split,
   converged = fit$converged, iterations = nrow(fit$trace),
   resumed_from_iteration = fit$controls$resumed_from_iteration, tau0 = c$tau0,
+  termination_reason = fit$termination_reason, precision_accuracy = fit$precision_accuracy,
   last_trace = as.list(tail(fit$trace, 1)), target_contract_sha256 = c$target_contract_sha256,
   contract_sha256 = hash(contract_path), test_opened = FALSE, official_validation_opened = FALSE,
   selection_authorized = FALSE, registry_mutated = FALSE, article_mutated = FALSE)

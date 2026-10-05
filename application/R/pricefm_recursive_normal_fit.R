@@ -123,6 +123,12 @@ app_pricefm_rhs_log_rates <- function(state) {
   log(rates)
 }
 
+app_pricefm_rhs_precision_accuracy <- function(precision, covariance, tolerance = 1e-5, jitter = 0) {
+  residual <- max(abs(precision %*% covariance - diag(nrow(precision))))
+  list(accepted = is.finite(residual) && residual <= tolerance && jitter == 0,
+    maximum_inverse_residual = residual, jitter = jitter, tolerance = tolerance)
+}
+
 app_pricefm_rhs_objective <- function(stats, mean, covariance, sigma_shape, sigma_rate,
     state, prior, omega_a = 2, omega_b = 1) {
   second <- covariance + tcrossprod(mean)
@@ -159,6 +165,7 @@ app_pricefm_fit_rhs_stats <- function(
     rhs_state_tol = 1e-6,
     covariance_tol = 1e-6,
     objective_per_observation_tol = 1e-8,
+    precision_accuracy_tol = 1e-5,
     record_objective = FALSE,
     initial_fit = NULL,
     initial_tau = 1) {
@@ -216,6 +223,7 @@ app_pricefm_fit_rhs_stats <- function(
   if (record_objective) for (name in diagnostic_names) trace[[name]] <-
     if (name %in% names(trace)) trace[[name]] else rep(NA_real_, nrow(trace))
   converged <- FALSE
+  numerical_rejection <- FALSE
   for (iteration in seq.int(offset + 1L, as.integer(max_iter))) {
     old_mean <- mean
     if (record_objective) {
@@ -288,10 +296,20 @@ app_pricefm_fit_rhs_stats <- function(
       rhs_state_tol = rhs_state_tol, covariance_tol = covariance_tol,
       objective_per_observation_tol = objective_per_observation_tol
     )) {
+      if (identical(convergence_mode, "full_variational")) {
+        accuracy <- app_pricefm_rhs_precision_accuracy(posterior_precision, covariance,
+          precision_accuracy_tol, solution$jitter)
+        if (!accuracy$accepted) {
+          numerical_rejection <- TRUE
+          break
+        }
+      }
       converged <- TRUE
       break
     }
   }
+  accuracy <- if (identical(convergence_mode, "full_variational"))
+    app_pricefm_rhs_precision_accuracy(posterior_precision, covariance, precision_accuracy_tol, solution$jitter) else NULL
   structure(list(
     type = "rhs_ns_vb_sufficient_statistics",
     beta = list(
@@ -311,6 +329,9 @@ app_pricefm_fit_rhs_stats <- function(
     stats = stats,
     trace = trace,
     converged = converged,
+    precision_accuracy = accuracy,
+    termination_reason = if (converged) "converged" else if (numerical_rejection ||
+      (!is.null(accuracy) && !accuracy$accepted)) "gaussian_conditional_accuracy_rejected" else "iteration_cap",
     exact_closed_form = FALSE,
     uses_vb = TRUE,
     controls = list(
@@ -321,6 +342,7 @@ app_pricefm_fit_rhs_stats <- function(
       prior_rms_log_precision_tol = prior_rms_log_precision_tol,
       rhs_state_tol = rhs_state_tol, covariance_tol = covariance_tol,
       objective_per_observation_tol = objective_per_observation_tol,
+      precision_accuracy_tol = precision_accuracy_tol,
       record_objective = record_objective, resumed_from_iteration = offset
     ),
     initialization_contract = "scaled_ridge_initialization_only_prior_unchanged"

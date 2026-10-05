@@ -106,3 +106,58 @@ pricefm_stage_r123_stationarity_diagnosis_20261004`, already ignored. Keep the
 master tracker under ignored `local_trackers/`. Commit only source, protocol,
 tests and this methods note on the dedicated branch. No main or Overleaf push.
 No article-safe replacement is produced. NOT_READY_FOR_INTEGRATION.
+
+## Completed diagnosis and production decision
+
+Executed diagnostic source: f41ec727492244792f8c2d5f6381550a0239d690.
+Ten jobs completed on ten distinct physical Jerez cores in approximately eight
+minutes. Six saved-state continuations met the full-state criterion: D2 at
+175/164/175 iterations and D4 at 405/608/797. Four fresh-start diagnostics
+(two rejected structures, two starts each) remained capped at 2,000.
+No nonfinite failure or precision jitter occurred. Parent evidence stayed
+byte-identical and all 918 frozen source checks passed.
+
+The D2 continuation changed fitted means by at most 1.02e-8 RMS, covariance
+by at most 5.38e-6 relative, and noise mean by at most 5.10e-9 relative. D4
+changes were smaller. Objective gains were tiny and can include roundoff-scale
+negative differences; do not claim appreciable optimization or forecast gains.
+An old coefficient-only label needed qualification, but additional convergence
+is not a plausible explanation for the 9.6% internal AQL gap versus R122.
+
+For the representative failed D3 and D6 structures, reciprocal precision
+conditions were approximately 2.92e-16 and 1.01e-16 to 1.57e-16. The
+current-state covariance/precision consistency residual was 4.3e-5 for D3
+and .0053 to .0092 for D6. That residual includes a one-iteration variational
+lag as well as roundoff, so the separate held-target one-conditional probe
+is necessary before attributing all error to linear algebra. Warm-starting
+tau at tau0 did not rescue either structure. The evidence supports serious
+conditioning and coupled-scale difficulties, not a missing prior-shape term.
+Do not generalize this exact cause to all 24 rejections without their traces.
+
+The successor full-state path also checks P*V against identity using the actual
+precision used for that Gaussian update (not the subsequently updated prior),
+with maximum residual tolerance 1e-5. Any precision jitter or larger residual
+prevents certification and is reported as numerical-accuracy rejection, not
+convergence or an ordinary cap. This does not repair by adding a hidden prior.
+
+`pricefm_r123_certified_selection.py` implements an explicit NEW selection
+policy: each candidate/tau group must have all three certified, scored splits;
+require at least three distinct candidates, consider up to ten for tau and
+three for AL. Missing/capped/uncertified groups remain excluded; unknown or
+duplicate identities and test access fail closed. Readiness never authorizes
+launching by itself. The historical 30/30 controller is not patched or bypassed.
+The policy must be used by a separately frozen successor; do not mix old
+unqualified scores with new certified ones as final selection evidence.
+
+The raw-objective/RHS/covariance PDF has ten pages. Source and heavy runtime
+evidence remain excluded from article publication. Exact-state closeout verifies
+objective reconstruction from saved factors; the numerical probe holds prior
+and noise factors fixed and compares direct versus diagonally equilibrated
+conditional solves, without optimization or fit mutation.
+
+Reproduction uses the frozen R 4.6 executable, not Jerez's default Rscript.
+The default caused libRlapack.so loading failure during tests, never during
+the campaign's pinned-R execution. With PATH prefixed by
+`/data/jaguir26/local/opt/R/4.6.0/bin`, the regression suite passed on Jerez.
+Final test receipts and branch synchronization belong in the integration
+handoff; no main/Overleaf update is performed by this scientific lane.

@@ -33,6 +33,9 @@ right <- app_pricefm_fit_rhs_stats(stats, .05, factory, min_iter = 20, max_iter 
 stopifnot(identical(left$beta_prior$hypers, right$beta_prior$hypers),
   identical(left$noise_prior, right$noise_prior),
   all(diff(full$trace$total_objective) >= -1e-7))
+stopifnot(app_pricefm_rhs_precision_accuracy(diag(3), diag(3))$accepted,
+  !app_pricefm_rhs_precision_accuracy(diag(3), 1.01 * diag(3))$accepted,
+  !app_pricefm_rhs_precision_accuracy(diag(3), diag(3), jitter = 1e-9)$accepted)
 
 trace <- full$trace[rep(1L, 10), ]; trace$iter <- seq_len(10)
 for (name in setdiff(names(trace), c("iter", "sigma2_mean", "total_objective", "tau_inverse_moment", "slab_inverse_moment"))) {

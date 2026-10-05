@@ -13,6 +13,7 @@
   "rhs_state_tol": 1e-6,
   "covariance_tol": 1e-6,
   "objective_per_observation_tol": 1e-8,
+  "precision_accuracy_tol": 1e-5,
   "minimum_available_memory_gib": 200,
   "minimum_free_disk_gib": 200,
   "maximum_idle_physical_core_percent": 20,

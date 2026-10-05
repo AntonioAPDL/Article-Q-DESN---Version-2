@@ -61,7 +61,7 @@ def test_checkpoint_not_overwritten_and_target_is_explicit(tmp_path, monkeypatch
     args = SimpleNamespace(output_root=tmp_path / "diagnosis")
     p = {"resume_total_iteration_cap": 2000, "fresh_total_iteration_cap": 2000, "minimum_iteration": 100,
          "full_state_stability_window": 10, "rhs_state_tol": 1e-6, "covariance_tol": 1e-6,
-         "objective_per_observation_tol": 1e-8}
+         "objective_per_observation_tol": 1e-8, "precision_accuracy_tol": 1e-5}
     ctl = dict(normal_runtime=str(runtime.parent))
     resumed = M.diagnostic_contract(row, args, ctl, p, "resume")
     fresh = M.diagnostic_contract(row, args, ctl, p, "prior_scale")
@@ -99,7 +99,7 @@ def test_real_r_entrypoint_persists_cap_and_refuses_overwrite(tmp_path):
         tau0=.05, initial_tau=1, min_iter=1, max_iter=2, initial_fit_path=None, convergence_mode="full_variational",
         target_contract_sha256="isolated_test_target", tol=1e-5, stability_window=10, predictive_tol=1e-7,
         relative_beta_tol=1e-6, sigma_relative_tol=1e-8, prior_rms_log_precision_tol=1e-6,
-        rhs_state_tol=1e-6, covariance_tol=1e-6, objective_per_observation_tol=1e-8)
+        rhs_state_tol=1e-6, covariance_tol=1e-6, objective_per_observation_tol=1e-8, precision_accuracy_tol=1e-5)
     path = tmp_path / "contract.json"; M.REC.write(path, contract)
     command = ["Rscript", str(sources[1]), "--contract", str(path)]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -137,3 +137,33 @@ def test_complete_diagnostic_report_and_overwrite_guard(tmp_path):
     assert value["pages"] == 10 and value["certified"] == 6 and value["capped"] == 4
     assert Path(value["pdf"]).read_bytes().startswith(b"%PDF")
     with pytest.raises(RuntimeError, match="overwrite"): report.render(tmp_path)
+
+
+def test_certified_selection_does_not_require_every_screened_candidate():
+    from pricefm_r123_certified_selection import certified_groups
+    cells = [dict(candidate_id=identifier, split=split, tau0=.001, AQL=score,
+        late_AQL=score + .01, full_variational_certified=True, test_opened=False)
+        for identifier, score in [("a", .1), ("b", .2), ("c", .3)] for split in (1, 2, 3)]
+    cells.append(dict(candidate_id="d", split=1, tau0=.001, AQL=.01, late_AQL=.02,
+        full_variational_certified=False, test_opened=False))
+    value = certified_groups(cells, ["a", "b", "c", "d", "e"])
+    assert value["status"] == "CERTIFIED_SELECTION_READY"
+    assert value["tau_candidate_ids"] == value["al_candidate_ids"] == ["a", "b", "c"]
+    assert value["missing_candidate_ids"] == ["e"] and len(value["excluded"]) == 1
+    assert value["launch_authorized"] is False
+    blocked = certified_groups(cells[:6], ["a", "b", "c"])
+    assert blocked["status"] == "CERTIFIED_SELECTION_BLOCKED" and blocked["al_candidate_ids"] == []
+
+
+@pytest.mark.parametrize("change", ["duplicate", "unknown", "forbidden_test", "bad_scale", "bad_split"])
+def test_certified_selection_fails_closed_on_invalid_evidence(change):
+    from pricefm_r123_certified_selection import certified_groups
+    cell = dict(candidate_id="a", split=1, tau0=.001, AQL=.1, late_AQL=.2,
+                full_variational_certified=True, test_opened=False)
+    cells = [cell]
+    if change == "duplicate": cells.append(dict(cell))
+    elif change == "unknown": cell["candidate_id"] = "other"
+    elif change == "forbidden_test": cell["test_opened"] = True
+    elif change == "bad_scale": cell["tau0"] = -1
+    else: cell["split"] = 4
+    with pytest.raises(ValueError): certified_groups(cells, ["a"])

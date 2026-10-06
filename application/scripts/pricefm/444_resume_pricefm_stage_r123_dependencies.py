@@ -23,7 +23,8 @@ for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "BLIS
 import pandas as pd
 import pricefm_r123_recovery as REC
 from pricefm_r123_closeout_evidence import authorized_ladders, verified_atom
-from pricefm_r123_dependency_queue import process_identity, same_process, signal_exact, run_dependencies
+from pricefm_r123_dependency_queue import (process_identity, same_process, signal_exact,
+                                         run_dependencies, choose_cpu_pool, BoundedScorer)
 
 ROOT = Path(__file__).resolve().parents[3]
 TAG = "pricefm_stage_r123_dependency_resume_20261006"
@@ -177,10 +178,10 @@ def cpu_pool(args, m, active, old_cpus):
         try: affinity = os.sched_getaffinity(int(folder.name))
         except ProcessLookupError: continue
         if len(affinity) == 1: foreign.add(m.B._physical(next(iter(affinity))))
-    chosen = [cpu for cpu in old_cpus if cpu in occupied or (m.B._physical(cpu) not in foreign
-        and max(value for other, value in usage.items() if m.B._physical(other) == m.B._physical(cpu)) <= 20)]
-    if len(chosen) < max(9, len(active) + 2):
-        raise RuntimeError("nine-core pool and two healthy additional cores required")
+    allowed=os.sched_getaffinity(0)
+    physical={cpu:m.B._physical(cpu) for cpu in set(usage)|set(old_cpus)|set(allowed)}
+    busy={group:max(usage[cpu] for cpu in usage if physical[cpu]==group) for group in set(physical.values())}
+    chosen=choose_cpu_pool(old_cpus,occupied,allowed,physical,busy,foreign)
     return chosen, dict(reserve_check(args), cpus=chosen, worker_ceiling=15, at_epoch=time.time())
 
 
@@ -396,8 +397,10 @@ def controller(args):
         # The original frozen scoring code may reuse fits only, never start another fit.
         def forbid_fit(*args, **kwargs): raise RuntimeError("unexpected refit during frozen scoring")
         m.B._command = forbid_fit
+        m.B._al_ladder=BoundedScorer(m.guarded_ladder,cpus)
         chosen = pd.DataFrame(REC.read(args.campaign_root / "al_launch_authorization.json")["selected"])
-        al = m.B._run_al(args.prep_dir,args.campaign_root,args.owner_root,cpus,chosen)
+        score_slots=[cpus[index%len(cpus)] for index in range(9)]
+        al = m.B._run_al(args.prep_dir,args.campaign_root,args.owner_root,score_slots,chosen)
         m.verify(args); REC.verify_evidence(REC.read(args.prep_dir / "protected_parent.json"))
         REC.verify_evidence({"evidence_sha256":preparation["preserved_evidence_sha256"]})
         result = dict(status="R123_CERTIFIED_INTERNAL_COMPLETE_TEST_BLOCKED",tag=m.TAG,

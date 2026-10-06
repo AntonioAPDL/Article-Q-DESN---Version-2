@@ -31,9 +31,13 @@ and scoring execute the original certified-successor checkout at full HEAD
 
 Preparation verifies frozen sources, authorization, unique certified Normal
 initializers, designs, contracts, output hashes, process identities and resources.
-The existing 15 distinct physical cores remain the ceiling, with all numerical
+Fifteen distinct physical cores remain the ceiling, with all numerical
 thread environment variables fixed to one. Busy sibling cores and cores pinned
-by another numerical task are excluded. At least 200 GiB each of available RAM
+by another numerical task are excluded. The old CPU mask is not treated as a
+reservation: the live audit found another lane starting work on some of those
+cores. Running PriceFM fits retain their CPUs; new tasks can use different
+currently idle physical cores. Scoring also has a bounded distinct-core pool,
+including when fewer than nine cores are available. At least 200 GiB each of available RAM
 and free disk are retained. Fewer runnable models than cores is expected near
 completion; no redundant model is launched to fill an idle core.
 

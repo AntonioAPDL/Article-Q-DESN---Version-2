@@ -215,3 +215,43 @@ def test_saved_frozen_result_hashes_cannot_be_silently_replaced(tmp_path):
     ledger={"evidence_sha256":{str(path):REC.digest(path)}}
     path.write_bytes(b"changed")
     with pytest.raises(RuntimeError): REC.verify_evidence(ledger)
+
+
+def test_old_pool_is_not_a_reservation_and_new_idle_physical_cores_can_be_used():
+    old=list(range(15)); physical={cpu:cpu%32 for cpu in range(64)}
+    busy={cpu:0 for cpu in range(32)}; foreign=set(range(10))-{5,6}
+    cpus=Q.choose_cpu_pool(old,{5,6},set(range(64)),physical,busy,foreign)
+    assert {5,6}<=set(cpus) and len(cpus)==15
+    assert not {physical[cpu] for cpu in cpus}&foreign
+    assert len({physical[cpu] for cpu in cpus})==len(cpus)
+    assert any(cpu>=15 for cpu in cpus)
+
+
+def test_small_healthy_pool_is_sufficient_for_remaining_branches():
+    physical={cpu:cpu%32 for cpu in range(64)}
+    busy={cpu:100 for cpu in range(32)}
+    for cpu in (4,8): busy[cpu]=0
+    assert Q.choose_cpu_pool(list(range(15)),{5,6},set(range(64)),physical,busy,set())==[4,5,6,8]
+
+
+def test_busy_sibling_and_foreign_reservations_are_not_selected():
+    physical={cpu:cpu%32 for cpu in range(64)}; busy={cpu:0 for cpu in range(32)}
+    busy[4]=100
+    cpus=Q.choose_cpu_pool(list(range(15)),{5,6},set(range(64)),physical,busy,{8})
+    assert not {4,36,8,40}&set(cpus)
+    with pytest.raises(RuntimeError,match="conflicts"):
+        Q.choose_cpu_pool(list(range(15)),{5,6},set(range(64)),physical,busy,{6})
+
+
+def test_scoring_is_bounded_to_distinct_cores_even_with_nine_ladder_threads():
+    active=set(); peak=[0]; guard=threading.Lock()
+    def score(key,cpu):
+        with guard:
+            assert cpu not in active; active.add(cpu); peak[0]=max(peak[0],len(active))
+        time.sleep(.02)
+        with guard: active.remove(cpu)
+        return key
+    callback=Q.BoundedScorer(score,[4,8,22])
+    with ThreadPoolExecutor(max_workers=9) as pool:
+        values=list(pool.map(lambda key:callback(key,-1),range(9)))
+    assert values==list(range(9)) and peak[0]==3

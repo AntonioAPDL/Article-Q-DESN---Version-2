@@ -7,6 +7,7 @@ import ctypes
 import errno
 import os
 import platform
+from queue import Queue
 import signal
 import time
 
@@ -62,6 +63,35 @@ def linux_syscall(number,*args):
 
 def pidfd_open(pid):
     return os.pidfd_open(pid) if hasattr(os,"pidfd_open") else linux_syscall(434,pid,0)
+
+
+def choose_cpu_pool(old_cpus,occupied,allowed,physical,busy,foreign,ceiling=15):
+    if len(old_cpus)!=15 or len({physical[cpu] for cpu in old_cpus})!=15:
+        raise RuntimeError("original physical-core pool differs")
+    if not set(occupied)<=set(old_cpus) or not set(occupied)<=set(allowed):
+        raise RuntimeError("adopted core is outside its original permitted pool")
+    chosen=sorted(occupied); used={physical[cpu] for cpu in chosen}
+    if used & set(foreign): raise RuntimeError("adopted core now conflicts with another pinned task")
+    for cpu in list(old_cpus)+sorted(allowed):
+        group=physical[cpu]
+        if len(chosen)>=ceiling: break
+        if cpu not in allowed or group in used or group in foreign or busy[group]>20: continue
+        chosen.append(cpu); used.add(group)
+    if len(chosen)<max(3,len(occupied)+2):
+        raise RuntimeError("insufficient healthy cores for ready branches and scoring")
+    return sorted(chosen)
+
+
+class BoundedScorer:
+    """Assign a distinct available CPU to each frozen ladder-scoring call."""
+    def __init__(self,callback,cpus):
+        self.callback=callback; self.free=Queue()
+        for cpu in cpus: self.free.put(cpu)
+
+    def __call__(self,*args):
+        cpu=self.free.get()
+        try: return self.callback(*args[:-1],cpu)
+        finally: self.free.put(cpu)
 
 
 def validate_graph(parents):

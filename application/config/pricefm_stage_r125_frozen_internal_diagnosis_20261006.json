@@ -1,0 +1,456 @@
+{
+  "stage": "R125_frozen_training_internal_forecast_diagnosis",
+  "status": "COMPLETE_DIAGNOSTIC_NOT_ARTICLE_AUTHORITY",
+  "tag": "pricefm_stage_r125_forecast_estimand_diagnosis_20261006",
+  "executed_source": {
+    "head": "3c3bc986ea0c5d7b2bba39ceba7e0db048b208b3",
+    "branch": "work/pricefm-r125-forecast-estimand-20261006",
+    "muscat_worktree": "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r125_forecast_estimand_20261006",
+    "jerez_worktree": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r125_forecast_estimand_20261006"
+  },
+  "fit_owner_head": "40d42d15a477c2f9d50dbc69b4eb9885da91ec29",
+  "reservoir_head": "7ae8d6f578000ab17cd30567a23f7b806028cee0",
+  "predecessor_replay_head": "0924e857ba74a499a22712db0f99b6de711d7d01",
+  "main_at_audit": "e721bfddee81269864febea0eca0bbd0c5eba369",
+  "scope": {
+    "region": "BG",
+    "outer_fold": 1,
+    "internal_splits": [
+      1,
+      2,
+      3
+    ],
+    "origins_per_cell": 12,
+    "origin_rule": "predeclared_integer_linspace_original_R124_positions",
+    "paths": 500,
+    "horizon_steps": 96,
+    "step_minutes": 15,
+    "quantiles": [
+      0.1,
+      0.25,
+      0.45,
+      0.5,
+      0.55,
+      0.75,
+      0.9
+    ],
+    "units": "outer_fold1_training_scaled_price"
+  },
+  "completion": {
+    "panels_complete": 9,
+    "panels_failed": 0,
+    "active_workers": 0,
+    "pending_panels": 0,
+    "origin_candidate_combinations": 108,
+    "model_refits": 0,
+    "verified_metric_sets": 90,
+    "maximum_independent_metric_difference": 0
+  },
+  "evidence": {
+    "canonical_jerez_campaign": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r125_forecast_estimand_diagnosis_20261006",
+    "muscat_mirror": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_audits/pricefm_stage_r125_frozen_closeout_20261006/jerez_campaign",
+    "verified_campaign_files": 83,
+    "verified_unchanged_input_files": 432,
+    "storage_mib": 6.582225799560547,
+    "sha256": {
+      "completed_evidence.json": "8f38efd548668db7da5b37f99f9a6d6a5d168921676ca251492a95f7e754f3e9",
+      "terminal.json": "7d8a15fa8ecb3dc87e6965d3cbad3ab363af598a6e1e6005d2e59184e387219e",
+      "forecast_estimand_diagnostics.pdf": "626d730f6936e0afce5b7ebb72172d060280e897755959420987d5e4fdc3a06c",
+      "diagnosis_report.md": "5665d3a4e1e5c2bbb17281608150e9d3805b3330a73958686bba7b01fdca2b38"
+    },
+    "pdf_pages": 9
+  },
+  "tests": {
+    "source_head": "3c3bc986ea0c5d7b2bba39ceba7e0db048b208b3",
+    "focused_python": 55,
+    "muscat": {
+      "python": 456,
+      "r_suites": 4,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0
+    },
+    "jerez": {
+      "python": 456,
+      "r_suites": 4,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0
+    },
+    "receipt_relative_prefix": "launch_prep/pricefm_stage_r125_forecast_estimand_diagnosis_20261006/release",
+    "muscat_receipt_sha256": "f86fc74d8125aadb28a7dea9a43b4a323adcc9007303a7520de3afa03f593e2c",
+    "jerez_receipt_sha256": "c345d6c30d99f599a54c2e0b4ac04040c74e942c86309a266ffdd15ca6a9cee0",
+    "preparation_sha256": "c6cd646d86298f872c7ec0a4b172f40a67e48d451577e564924b0665cf9e901d",
+    "metadata_only_checks": "All 30 recorded operator means equal frozen CSV; terminal/source/scope match; zero executable changes relative to executed HEAD",
+    "smoke": {
+      "candidate": "B",
+      "split": 3,
+      "origins": 2,
+      "paths": 500,
+      "refits": 0,
+      "paired_R124_controls_reproduced": true,
+      "maximum_CDF_bracket": 6.816769371198461e-14
+    }
+  },
+  "internal_operator_means": [
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "cdf_pool_clipped",
+      "mean_AQL": 0.0652622292388318,
+      "mean_late_AQL": 0.0714995782589416,
+      "mean_coverage": 0.6901041666666666,
+      "mean_width": 0.3924051774283921,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "cdf_pool_linear",
+      "mean_AQL": 0.0651344622968163,
+      "mean_late_AQL": 0.0713177278106139,
+      "mean_coverage": 0.7092013888888888,
+      "mean_width": 0.407842558363259,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "mean_feature",
+      "mean_AQL": 0.0676283613077968,
+      "mean_late_AQL": 0.0754780948702573,
+      "mean_coverage": 0.5613425925925926,
+      "mean_width": 0.2979685742874099,
+      "mean_crossing": 0.029224537037037
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "normal_driver",
+      "mean_AQL": 0.0694313644599575,
+      "mean_late_AQL": 0.0756693525348159,
+      "mean_coverage": 0.8993055555555557,
+      "mean_width": 0.6959568320060482,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "oracle_cdf_clipped",
+      "mean_AQL": 0.0448038087794992,
+      "mean_late_AQL": 0.051909753838817,
+      "mean_coverage": 0.7407407407407408,
+      "mean_width": 0.2907514224448359,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "oracle_cdf_linear",
+      "mean_AQL": 0.0447711729611568,
+      "mean_late_AQL": 0.0518243425497876,
+      "mean_coverage": 0.7517361111111112,
+      "mean_width": 0.3002597795375161,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "oracle_mean_feature",
+      "mean_AQL": 0.044886703239938,
+      "mean_late_AQL": 0.0520419023672075,
+      "mean_coverage": 0.7511574074074074,
+      "mean_width": 0.2993171720871613,
+      "mean_crossing": 0.0295138888888888
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "oracle_rearranged_mean",
+      "mean_AQL": 0.0447885802296385,
+      "mean_late_AQL": 0.0518699269777324,
+      "mean_coverage": 0.7523148148148149,
+      "mean_width": 0.3009392759558439,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "path_specific",
+      "mean_AQL": 0.067628506452031,
+      "mean_late_AQL": 0.0754784103465169,
+      "mean_coverage": 0.5613425925925926,
+      "mean_width": 0.2979685023259577,
+      "mean_crossing": 0.029272762345679
+    },
+    {
+      "candidate_id": "r123_3e15bdc342f556c1",
+      "operator": "rearranged_path_mean",
+      "mean_AQL": 0.067527663814925,
+      "mean_late_AQL": 0.0752998814812529,
+      "mean_coverage": 0.5636574074074074,
+      "mean_width": 0.2997043856166386,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "cdf_pool_clipped",
+      "mean_AQL": 0.0633252668195442,
+      "mean_late_AQL": 0.0724238719528122,
+      "mean_coverage": 0.8159722222222222,
+      "mean_width": 0.5275225963436266,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "cdf_pool_linear",
+      "mean_AQL": 0.0633563574701298,
+      "mean_late_AQL": 0.0724065039050663,
+      "mean_coverage": 0.8197337962962963,
+      "mean_width": 0.5325064042898098,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "mean_feature",
+      "mean_AQL": 0.0689297777894752,
+      "mean_late_AQL": 0.0786228864799395,
+      "mean_coverage": 0.3799189814814814,
+      "mean_width": 0.1896113185735607,
+      "mean_crossing": 0.0157696759259259
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "normal_driver",
+      "mean_AQL": 0.0656473571003425,
+      "mean_late_AQL": 0.0739033381439528,
+      "mean_coverage": 0.8857060185185185,
+      "mean_width": 0.6415807903716347,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "oracle_cdf_clipped",
+      "mean_AQL": 0.0271716397354185,
+      "mean_late_AQL": 0.0331454147072669,
+      "mean_coverage": 0.7497106481481483,
+      "mean_width": 0.1825524776102497,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "oracle_cdf_linear",
+      "mean_AQL": 0.0271565171739918,
+      "mean_late_AQL": 0.0331058598823289,
+      "mean_coverage": 0.7633101851851851,
+      "mean_width": 0.1898087328487767,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "oracle_mean_feature",
+      "mean_AQL": 0.0272085177768346,
+      "mean_late_AQL": 0.0331803432667611,
+      "mean_coverage": 0.7633101851851851,
+      "mean_width": 0.1896679286895564,
+      "mean_crossing": 0.0163966049382716
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "oracle_rearranged_mean",
+      "mean_AQL": 0.0271549538846156,
+      "mean_late_AQL": 0.0331053583431816,
+      "mean_coverage": 0.7647569444444443,
+      "mean_width": 0.190492522543778,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "path_specific",
+      "mean_AQL": 0.0689295537080676,
+      "mean_late_AQL": 0.0786224908176502,
+      "mean_coverage": 0.3799189814814814,
+      "mean_width": 0.1896104546923383,
+      "mean_crossing": 0.0158179012345679
+    },
+    {
+      "candidate_id": "r123_6d32d129873c7930",
+      "operator": "rearranged_path_mean",
+      "mean_AQL": 0.0688685931744707,
+      "mean_late_AQL": 0.0785449413276261,
+      "mean_coverage": 0.3816550925925926,
+      "mean_width": 0.1906081275275579,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "cdf_pool_clipped",
+      "mean_AQL": 0.0750941915513606,
+      "mean_late_AQL": 0.0858409511884324,
+      "mean_coverage": 0.6756365740740741,
+      "mean_width": 0.4599483881945422,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "cdf_pool_linear",
+      "mean_AQL": 0.0750425175622419,
+      "mean_late_AQL": 0.085709267574994,
+      "mean_coverage": 0.6799768518518517,
+      "mean_width": 0.4670325112818125,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "mean_feature",
+      "mean_AQL": 0.0818649084862832,
+      "mean_late_AQL": 0.0935591852816495,
+      "mean_coverage": 0.3596643518518518,
+      "mean_width": 0.2137843983201114,
+      "mean_crossing": 0.019386574074074
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "normal_driver",
+      "mean_AQL": 0.0770472612959176,
+      "mean_late_AQL": 0.0872783913575289,
+      "mean_coverage": 0.8093171296296297,
+      "mean_width": 0.6252021958045058,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "oracle_cdf_clipped",
+      "mean_AQL": 0.033202829713827,
+      "mean_late_AQL": 0.0426954160014441,
+      "mean_coverage": 0.7216435185185185,
+      "mean_width": 0.2072216089039738,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "oracle_cdf_linear",
+      "mean_AQL": 0.0331806191489619,
+      "mean_late_AQL": 0.0426518954633625,
+      "mean_coverage": 0.7340856481481483,
+      "mean_width": 0.2152386546794472,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "oracle_mean_feature",
+      "mean_AQL": 0.0332702927617216,
+      "mean_late_AQL": 0.042802931466495,
+      "mean_coverage": 0.7317708333333334,
+      "mean_width": 0.2144687230982186,
+      "mean_crossing": 0.0201099537037037
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "oracle_rearranged_mean",
+      "mean_AQL": 0.0331838880739053,
+      "mean_late_AQL": 0.042668884838023,
+      "mean_coverage": 0.7361111111111112,
+      "mean_width": 0.2160221307933566,
+      "mean_crossing": 0
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "path_specific",
+      "mean_AQL": 0.081864845395334,
+      "mean_late_AQL": 0.093559778104578,
+      "mean_coverage": 0.359375,
+      "mean_width": 0.2137857826063995,
+      "mean_crossing": 0.019386574074074
+    },
+    {
+      "candidate_id": "r123_8680f8aaeaeae8ce",
+      "operator": "rearranged_path_mean",
+      "mean_AQL": 0.0817674363122944,
+      "mean_late_AQL": 0.0934035928382616,
+      "mean_coverage": 0.3628472222222222,
+      "mean_width": 0.2155003950560985,
+      "mean_crossing": 0
+    }
+  ],
+  "comparison_findings": {
+    "r123_3e15bdc342f556c1": {
+      "raw": 0.0676283613077968,
+      "clipped": 0.0652622292388318,
+      "linear": 0.0651344622968163,
+      "clipped_improvement_percent": 3.4987274912606887,
+      "raw_coverage": 0.5613425925925926,
+      "clipped_coverage": 0.6901041666666666,
+      "linear_coverage": 0.7092013888888888,
+      "normal": 0.0694313644599575,
+      "oracle_clipped": 0.0448038087794992,
+      "sorting_only": 0.067527663814925
+    },
+    "r123_6d32d129873c7930": {
+      "raw": 0.0689297777894752,
+      "clipped": 0.0633252668195442,
+      "linear": 0.0633563574701298,
+      "clipped_improvement_percent": 8.130754442656492,
+      "raw_coverage": 0.3799189814814814,
+      "clipped_coverage": 0.8159722222222222,
+      "linear_coverage": 0.8197337962962963,
+      "normal": 0.0656473571003425,
+      "oracle_clipped": 0.0271716397354185,
+      "sorting_only": 0.0688685931744707
+    },
+    "r123_8680f8aaeaeae8ce": {
+      "raw": 0.0818649084862832,
+      "clipped": 0.0750941915513606,
+      "linear": 0.0750425175622419,
+      "clipped_improvement_percent": 8.270597329327078,
+      "raw_coverage": 0.3596643518518518,
+      "clipped_coverage": 0.6756365740740741,
+      "linear_coverage": 0.6799768518518517,
+      "normal": 0.0770472612959176,
+      "oracle_clipped": 0.033202829713827,
+      "sorting_only": 0.0817674363122944
+    }
+  },
+  "convergence": {
+    "formal_AL_fits": 42,
+    "capped_B_AL_fits": 21,
+    "full_B_state_available": false,
+    "exact_B_optimizer_resumption_possible": false
+  },
+  "current_main_article_context": {
+    "region_fold_cases": 114,
+    "regions": 38,
+    "authority": "R98_region_frozen_prospective_QDESN",
+    "comparator": "cached_PriceFM_Phase_I",
+    "registry_sha256": "4cf8ff653c6bd7fc64a2992fbfb6e1df48867d1b7d840cd8544fb30a5c538cb6",
+    "BG_test_EUR_MWh": {
+      "qdesn": [
+        10.09762725980426,
+        8.397617846177125,
+        10.483208278194407
+      ],
+      "pricefm": [
+        8.581395563937951,
+        8.002690564021277,
+        9.035185672364738
+      ]
+    },
+    "matched_new_official_forecasts_available": false
+  },
+  "scientific_limitations": [
+    "Small fixed internal subset, not official-fold comparison",
+    "Seven knots do not identify conditional tails; two explicit reconstruction conventions",
+    "Independent-level posterior coupling and unweighted knot sorting are diagnostic conventions",
+    "Oracle future target inputs are never publishable",
+    "B capped compact fits cannot certify full-state stationarity",
+    "Historical test exposure prevents calling later scoring pristine prospective confirmation"
+  ],
+  "next_order": [
+    "Confirm the changed internal operator ranking on the complete existing validation supports without refitting or rescreening",
+    "Freeze the scientifically intended deployable operator and region-level spec using training-only evidence",
+    "Then separately prepare 3 full-window Normal RHS plus 21 independent AL BG fits, with full-state export if refitted",
+    "Compare identical official-fold origins, truth, units and quantile levels against actual cached references",
+    "Report prespecified complete-cohort mean AQL, never per-case test-selected winners",
+    "Only complete matched whole-cohort evidence supports coordinator promotion/all-region decisions"
+  ],
+  "official_test_opened": false,
+  "official_validation_opened": false,
+  "registry_mutated": false,
+  "article_mutated": false,
+  "main_pushed": false,
+  "overleaf_updated": false,
+  "all_region_launch_authorized": false,
+  "article_promotion_authorized": false,
+  "integration_status": "NOT_READY_FOR_INTEGRATION"
+}

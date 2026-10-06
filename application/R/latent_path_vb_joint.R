@@ -19,17 +19,32 @@ app_latent_joint_extract_core_fit <- function(x) {
   fit
 }
 
-app_latent_joint_initial_state <- function(fit) {
-  list(
+app_latent_joint_initial_state <- function(fit, include_local_factors = TRUE) {
+  state <- list(
     theta_mean = as.numeric(fit$summary$theta_mean),
     theta_cov = as.matrix(fit$summary$theta_cov),
     y_future_mean = as.numeric(fit$summary$y_future_mean),
     y_future_cov = as.matrix(fit$summary$y_future_cov),
     sigma_state = fit$variational_state$sigma %||% NULL,
     sigma_mean = fit$summary$sigma_mean %||% NULL,
-    gamma = fit$summary$gamma_mean %||% NULL,
-    provenance = list(type = "same_tau_independent_fit")
+    gamma = fit$summary$gamma_mean %||% NULL
   )
+  variational <- fit$variational_state %||% list()
+  local_names <- c(
+    "block_moments", "latent_mean", "latent_inv_mean", "s_mean", "s2_mean"
+  )
+  if (isTRUE(include_local_factors)) {
+    for (name in local_names) state[[name]] <- variational[[name]] %||% NULL
+  }
+  reused <- isTRUE(include_local_factors) && all(vapply(
+    local_names, function(name) !is.null(state[[name]]), logical(1L)
+  ))
+  state$provenance <- list(
+    type = "same_tau_joint_fit",
+    local_factor_state_requested = isTRUE(include_local_factors),
+    local_factor_state_complete = reused
+  )
+  state
 }
 
 app_latent_joint_prior_additions <- function(reference_terms, discrepancy_terms, design, k) {

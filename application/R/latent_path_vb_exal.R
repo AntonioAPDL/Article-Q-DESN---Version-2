@@ -134,6 +134,51 @@ app_latent_exal_scale_shape_update <- function(
   out
 }
 
+app_latent_exal_initial_local_state <- function(initial_state, block_moments, n_rows) {
+  initial_state <- initial_state %||% list()
+  use_vector <- function(name, default, positive = FALSE, nonnegative = FALSE) {
+    value <- initial_state[[name]] %||% NULL
+    if (is.null(value)) return(list(value = default, reused = FALSE))
+    value <- as.numeric(value)
+    valid <- length(value) == n_rows && all(is.finite(value))
+    if (positive) valid <- valid && all(value > 0)
+    if (nonnegative) valid <- valid && all(value >= 0)
+    if (!valid) stop(sprintf("Invalid exAL %s initializer.", name), call. = FALSE)
+    list(value = value, reused = TRUE)
+  }
+  supplied_moments <- initial_state$block_moments %||% NULL
+  moments_reused <- !is.null(supplied_moments)
+  if (moments_reused) {
+    if (!is.list(supplied_moments) || !all(c("Y", "G") %in% names(supplied_moments))) {
+      stop("Invalid exAL block-moment initializer.", call. = FALSE)
+    }
+    required <- names(block_moments$Y)
+    for (source in c("Y", "G")) {
+      values <- supplied_moments[[source]]
+      if (is.null(names(values)) || !all(required %in% names(values)) ||
+          any(!is.finite(as.numeric(values[required])))) {
+        stop(sprintf("Incomplete exAL block-moment initializer for %s.", source), call. = FALSE)
+      }
+      block_moments[[source]] <- values
+    }
+  }
+  latent_mean <- use_vector("latent_mean", rep(1, n_rows), positive = TRUE)
+  latent_inv <- use_vector("latent_inv_mean", rep(1, n_rows), positive = TRUE)
+  s_mean <- use_vector("s_mean", rep(sqrt(2 / pi), n_rows), nonnegative = TRUE)
+  s2_mean <- use_vector("s2_mean", rep(1, n_rows), positive = TRUE)
+  list(
+    block_moments = block_moments,
+    latent_mean = latent_mean$value,
+    latent_inv = latent_inv$value,
+    s_mean = s_mean$value,
+    s2_mean = s2_mean$value,
+    block_moments_reused = moments_reused,
+    local_factors_reused = all(c(
+      latent_mean$reused, latent_inv$reused, s_mean$reused, s2_mean$reused
+    ))
+  )
+}
+
 app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rhs_ns", vb_args = list(), seed = NULL) {
   app_latent_exal_require_kernels()
   p <- ncol(design$H_fixed)
@@ -189,9 +234,14 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     app_joint_exqdesn_point_scale_shape_moments(p0, gamma[[src]], sigma_init[[src]])
   })
   names(block_moments) <- c("Y", "G")
-  latent_mean <- latent_inv <- rep(1, n_rows)
-  s_mean <- rep(sqrt(2 / pi), n_rows)
-  s2_mean <- rep(1, n_rows)
+  local_initial <- app_latent_exal_initial_local_state(
+    vb_args$initial_state %||% list(), block_moments, n_rows
+  )
+  block_moments <- local_initial$block_moments
+  latent_mean <- local_initial$latent_mean
+  latent_inv <- local_initial$latent_inv
+  s_mean <- local_initial$s_mean
+  s2_mean <- local_initial$s2_mean
   trace <- vector("list", max_iter)
   iteration_timing <- vector("list", max_iter)
   quadrature_trace <- list()
@@ -264,13 +314,11 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     for (src in c("Y", "G")) {
       block_moments[[src]] <- scale_updates[[src]]$moments
       gamma[[src]] <- block_moments[[src]][["gamma_mean"]]
-      if (iter == 1L || iter %% 10L == 0L || iter == max_iter) {
-        quadrature_trace[[length(quadrature_trace) + 1L]] <- transform(
-          scale_updates[[src]]$diagnostics,
-          iteration = iter,
-          source = src
-        )
-      }
+      quadrature_trace[[length(quadrature_trace) + 1L]] <- transform(
+        scale_updates[[src]]$diagnostics,
+        iteration = iter,
+        source = src
+      )
     }
     prior_state <- timed("prior_update", app_latent_prior_state_update(
       prior_state, theta_mean, theta_cov, iter = iter
@@ -371,7 +419,13 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       future_gaussian_prior_used = !is.null(future_gaussian_prior),
       future_gaussian_prior_contract_hash = future_gaussian_prior$contract_hash %||% NA_character_,
       future_y_working_likelihood_used = include_future_y_working_likelihood,
-      initialization = initial$provenance
+      initialization = c(
+        initial$provenance,
+        list(
+          local_factors_reused = local_initial$local_factors_reused,
+          block_moments_reused = local_initial$block_moments_reused
+        )
+      )
     ),
     variational_state = list(
       theta_mean = theta_mean,

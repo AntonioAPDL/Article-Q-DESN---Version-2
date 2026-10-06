@@ -1,0 +1,474 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+
+import numpy as np
+import pandas as pd
+import pytest
+
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts/pricefm"
+sys.path.insert(0, str(SCRIPTS))
+
+
+def _load(name, filename):
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+RUN = _load("r122_resume_runner_test", "429_run_pricefm_stage_r122_long_memory.py")
+PREP = _load("r122_resume_prep_test", "430_prepare_pricefm_stage_r122_continuation.py")
+BASE = _load("r122_original_prep_test", "428_prepare_pricefm_stage_r122_long_memory_launch.py")
+
+
+@pytest.fixture
+def packet(tmp_path):
+    prep = tmp_path / "prep"; prep.mkdir()
+    campaign = tmp_path / "campaign"; (campaign / "seed3").mkdir(parents=True)
+    controls, control_fits = BASE._control_rows()
+    control = controls.iloc[0].to_dict()
+    spec = json.loads(control["spec_json"])
+    spec.update(depth=2, units=[128, 128], m_y=1560, input_fan_in=8, basin="D")
+    structural = RUN.fingerprint(spec)
+    candidate = {**control, "candidate_id": "search_a", "structural_sha256": structural,
+                 "spec_json": json.dumps(spec, sort_keys=True, separators=(",", ":")),
+                 "input_dimension": control["input_dimension"] + 830, "readout_dimension": 257,
+                 "role": "search"}
+    pd.DataFrame([candidate]).to_csv(prep / "candidate_manifest.csv", index=False)
+    controls.to_csv(prep / "control_manifest.csv", index=False)
+    rows = []
+    for seed in RUN.RESERVOIR_SEEDS:
+        fit_hash = RUN.fingerprint({"structural_sha256": structural, "reservoir_seed": int(seed)})
+        rows.append({**candidate, "fit_id": f"r122f_{fit_hash[:16]}", "fit_sha256": fit_hash,
+                     "reservoir_seed": seed, "role": "seed3" if seed == RUN.RESERVOIR_SEEDS[2] else "search"})
+    broad = pd.concat([pd.DataFrame(rows[:2]), control_fits.merge(controls.drop(columns="role"),
+                       on=["candidate_id", "structural_sha256"], suffixes=("", "_candidate"))],
+                      ignore_index=True)
+    broad.to_csv(prep / "execution_manifest.csv", index=False)
+    seed3 = pd.DataFrame(rows[2:]); seed3.to_csv(campaign / "seed3/manifest.csv", index=False)
+    return prep, campaign, broad, seed3
+
+
+@pytest.mark.parametrize("which", ["search", "external_control", "seed3"])
+def test_worker_resolves_each_known_manifest_without_expanding_broad(packet, which):
+    prep, campaign, broad, seed3 = packet
+    table = seed3 if which == "seed3" else broad[broad.role.eq(which)]
+    row = RUN._ridge_row(prep, campaign, str(table.iloc[0].fit_id))
+    assert row.role == which
+    assert len(RUN._execution(prep)) == 4
+    assert len(RUN._ridge_worker_manifest(prep, campaign)) == 5
+
+
+def test_unknown_worker_id_has_clear_zero_match_error(packet):
+    prep, campaign, _, _ = packet
+    with pytest.raises(ValueError, match="0 matches"):
+        RUN._ridge_row(prep, campaign, "unknown")
+
+
+def test_duplicate_or_conflicting_worker_id_is_rejected(packet):
+    prep, campaign, broad, _ = packet
+    pd.concat([broad, broad.iloc[:1]]).to_csv(prep / "execution_manifest.csv", index=False)
+    with pytest.raises(ValueError, match="duplicate fit IDs"):
+        RUN._ridge_row(prep, campaign, str(broad.iloc[0].fit_id))
+
+
+@pytest.mark.parametrize("field,value,message", [
+    ("reservoir_seed", 2026092501, "seed is invalid"),
+    ("fit_sha256", "bad", "fingerprint differs"),
+    ("spec_json", '{}', "specification differs"),
+    ("test_access_authorized", True, "test access"),
+    ("input_dimension", 1, "input_dimension differs"),
+    ("role", "search", "invalid role"),
+    ("candidate_id", "missing", "candidate has 0 matches"),
+])
+def test_seed3_contract_corruption_is_rejected_before_fitting(packet, field, value, message):
+    prep, campaign, _, seed3 = packet
+    original_id = str(seed3.iloc[0].fit_id)
+    seed3.loc[0, field] = value
+    seed3.to_csv(campaign / "seed3/manifest.csv", index=False)
+    with pytest.raises(ValueError, match=message):
+        RUN._ridge_row(prep, campaign, original_id)
+
+
+def _complete(campaign, row):
+    root = RUN._fit_root(campaign, str(row.fit_id)); root.mkdir(parents=True)
+    (root / "terminal.json").write_text(json.dumps({
+        "status": "completed_r122_ridge_cell", "fit_sha256": str(row.fit_sha256), "test_opened": False,
+        "fit_id": str(row.fit_id), "candidate_id": str(row.candidate_id),
+        "reservoir_seed": int(row.reservoir_seed), "role": str(row.role),
+    }))
+    return root
+
+
+def test_completed_broad_is_not_scheduled_and_seed3_dispatch_reaches_worker(packet, monkeypatch):
+    prep, campaign, broad, seed3 = packet
+    for row in broad.itertuples(index=False):
+        _complete(campaign, row)
+    args = RUN.parser().parse_args(["--cpu-list", "0"])
+    args.artifact_repo = campaign.parent
+    assert RUN._ridge_tasks(args, prep, campaign, SCRIPTS.parents[2], broad, "broad") == []
+    tasks = RUN._ridge_tasks(args, prep, campaign, SCRIPTS.parents[2], seed3, "seed3")
+    assert len(tasks) == 1
+    worker_args = RUN.parser().parse_args(tasks[0][1][2:])
+    (prep / "launch_control.json").write_text('{}')
+    seen = []
+    def data_probe(control, spec):
+        seen.append(spec)
+        raise RuntimeError("isolated data boundary reached")
+    monkeypatch.setattr(RUN, "_selection_arrays", data_probe)
+    with pytest.raises(RuntimeError, match="data boundary reached"):
+        RUN.ridge_cell(worker_args)
+    assert seen[0]["seed"] == RUN.RESERVOIR_SEEDS[2]
+    assert seen[0]["m_y"] == 1560
+    assert len(RUN._execution(prep)) == 4
+    _complete(campaign, seed3.iloc[0])
+    assert RUN.ridge_cell(worker_args)["test_opened"] is False
+    assert len(seen) == 1  # A valid completed worker must return without refitting.
+    assert RUN._ridge_tasks(args, prep, campaign, SCRIPTS.parents[2], seed3, "seed3") == []
+
+
+def test_dispatch_rejects_rows_that_differ_from_the_frozen_manifest(packet):
+    prep, campaign, _, seed3 = packet
+    args = RUN.parser().parse_args(["--cpu-list", "0"])
+    with pytest.raises(ValueError, match="queued fit_sha256 differs"):
+        RUN._ridge_tasks(args, prep, campaign, SCRIPTS.parents[2],
+                         seed3.assign(fit_sha256="different"), "seed3")
+
+
+def test_two_seed_and_three_seed_rankings_remain_distinct(packet):
+    _, _, broad, seed3 = packet
+    data = pd.concat([broad[broad.role.eq("search")], seed3]).reset_index(drop=True)
+    for name in ("mean_AQL", "mean_late_AQL", "worst_AQL", "mean_coverage", "mean_width"):
+        data[name] = [1., 2., 3.]
+    assert RUN._structural_ranking(data.iloc[:2], 2).iloc[0].seed_count == 2
+    assert RUN._structural_ranking(data.iloc[:2], 3).empty
+    assert RUN._structural_ranking(data, 3).iloc[0].seed_count == 3
+
+
+def test_reuse_inventory_binds_all_completed_artifacts_and_detects_changes(packet):
+    prep, campaign, broad, _ = packet
+    row = broad.iloc[0]; root = _complete(campaign, row)
+    terminal = json.loads((root / "terminal.json").read_text()); terminal["mean_AQL"] = 1.
+    (root / "terminal.json").write_text(json.dumps(terminal))
+    spec = json.loads(row.spec_json); spec["seed"] = int(row.reservoir_seed)
+    assert spec["basin"] == "D"
+    spec = RUN.RT.normalize_spec(spec)
+    assert "basin" not in spec
+    (root / "contract.json").write_text(json.dumps({
+        "fit_sha256": row.fit_sha256, "candidate_id": row.candidate_id, "spec": spec,
+        "reservoir_seed": int(row.reservoir_seed), "role": row.role, "test_opened": False,
+    }))
+    pd.DataFrame({"split": [1, 2, 3], "AQL": [1., 1., 1.], "late_AQL": [1., 1., 1.],
+        "median_MAE": [1., 1., 1.], "interval_80_width": [1., 1., 1.],
+        "interval_80_coverage": [.8, .8, .8]}).to_csv(root / "validation_metrics.csv", index=False)
+    np.savez_compressed(root / "training_statistics.npz", value=np.eye(2))
+    inventory = PREP.audit_broad_reuse(campaign, broad.iloc[:1])
+    assert len(inventory) == 4
+    inventory.to_csv(prep / "reused_output_inventory.csv", index=False)
+    (prep / "launch_control.json").write_text('{"continuation": {}}')
+    assert RUN._reuse_inventory_changes(prep, campaign) == []
+    (root / "training_statistics.npz").write_bytes(b"changed")
+    assert RUN._reuse_inventory_changes(prep, campaign) == [str((root / "training_statistics.npz").relative_to(campaign))]
+    contract = json.loads((root / "contract.json").read_text()); contract["spec"]["rho"] = .9
+    (root / "contract.json").write_text(json.dumps(contract))
+    with pytest.raises(RuntimeError, match="terminal/contract differs"):
+        PREP.audit_broad_reuse(campaign, broad.iloc[:1])
+
+
+def test_queue_records_failure_evidence_and_empty_resume_counts(tmp_path, monkeypatch):
+    def fail(*args):
+        raise RuntimeError("isolated failure")
+    monkeypatch.setattr(RUN, "_command", fail)
+    state = RUN._run_queue([("a", ["fake"], tmp_path / "a.log")], [0], tmp_path,
+                           tmp_path / "progress.json", 320)
+    assert state["failed_this_resume"] == 1
+    assert state["failures"][0]["error"] == "isolated failure"
+    empty = RUN._run_queue([], [0], tmp_path, tmp_path / "empty.json", 6400)
+    assert empty["scheduled_this_resume"] == 0
+    assert empty["expected_total"] == 6400
+
+
+def test_continuation_rejects_changed_training_inputs_and_seed_manifest(packet):
+    prep, campaign, _, _ = packet
+    window = campaign / "processed/windows/fold_1/train_L3120_H96_contained_half_open.npz"
+    window.parent.mkdir(parents=True); window.write_bytes(b"frozen training data")
+    pd.DataFrame([{"path": str(window.relative_to(campaign)), "bytes": window.stat().st_size,
+                   "sha256": RUN.sha256_file(window)}]).to_csv(prep / "reused_input_inventory.csv", index=False)
+    pd.DataFrame(columns=["path", "bytes", "sha256"]).to_csv(prep / "reused_output_inventory.csv", index=False)
+    (prep / "launch_control.json").write_text(json.dumps({"continuation": {
+        "seed3_manifest_sha256": RUN.sha256_file(campaign / "seed3/manifest.csv")}}))
+    assert RUN._reuse_inventory_changes(prep, campaign) == []
+    window.write_bytes(b"changed")
+    assert RUN._reuse_inventory_changes(prep, campaign) == [str(window.relative_to(campaign))]
+    (campaign / "seed3/manifest.csv").write_text("changed manifest")
+    assert "seed3/manifest.csv" in RUN._reuse_inventory_changes(prep, campaign)
+
+
+def test_numerical_threads_are_bounded_before_imports():
+    runner = SCRIPTS / "429_run_pricefm_stage_r122_long_memory.py"
+    script = f'import runpy, os; runpy.run_path({str(runner)!r}); print(os.environ["OPENBLAS_NUM_THREADS"])'
+    result = subprocess.run([sys.executable, "-c", script], env={**os.environ,
+                            "OPENBLAS_NUM_THREADS": "12", "PYTHONPATH": str(SCRIPTS)},
+                            text=True, capture_output=True, check=True)
+    assert result.stdout.strip() == "1"
+
+
+def test_continuation_requires_new_output_and_clean_task_branch(tmp_path, monkeypatch):
+    from argparse import Namespace
+    output = tmp_path / "new"; output.mkdir()
+    args = Namespace(original_prep=tmp_path / "old", output_dir=output,
+                     campaign_root=tmp_path / "campaign", code_root=tmp_path)
+    with pytest.raises(FileExistsError, match="never overwrite"):
+        PREP.prepare(args)
+    output.rmdir()
+    monkeypatch.setattr(PREP, "_git", lambda *args: " M unrelated.R")
+    with pytest.raises(RuntimeError, match="clean committed worktree"):
+        PREP.prepare(args)
+
+
+def test_closeouts_require_exact_broad_and_seed3_counts(tmp_path, monkeypatch):
+    records = []
+    for index in range(3200):
+        for seed in RUN.RESERVOIR_SEEDS[:2]:
+            records.append({"candidate_id": str(index), "structural_sha256": str(index),
+                "role": "search" if index < 3199 else "external_control", "reservoir_seed": seed,
+                "mean_AQL": 1., "mean_late_AQL": 1., "worst_AQL": 1.,
+                "mean_coverage": .8, "mean_width": 1.})
+    broad = pd.DataFrame(records)
+    monkeypatch.setattr(RUN, "_execution", lambda prep: broad)
+    monkeypatch.setattr(RUN, "_fit_metrics", lambda campaign, manifest: manifest.copy())
+    ranking, metrics = RUN._broad_closeout(tmp_path, tmp_path)
+    assert len(ranking) == 3199
+    assert len(metrics) == 6400
+    top = ranking.head(320).candidate_id.astype(str)
+    seed3 = broad[broad.candidate_id.isin(top)].drop_duplicates("candidate_id").copy()
+    seed3["reservoir_seed"] = RUN.RESERVOIR_SEEDS[2]
+    seed3["role"] = "seed3"
+    robust = RUN._third_seed_closeout(tmp_path, tmp_path, broad, seed3)
+    assert len(robust) == 320
+    assert set(robust.seed_count) == {3}
+    assert len(pd.read_csv(tmp_path / "seed3/closeout/top96.csv")) == 96
+    with pytest.raises(RuntimeError, match="319/320"):
+        RUN._third_seed_closeout(tmp_path, tmp_path, broad, seed3.iloc[1:])
+    monkeypatch.setattr(RUN, "_execution", lambda prep: broad.iloc[2:])
+    with pytest.raises(RuntimeError, match="search=3198"):
+        RUN._broad_closeout(tmp_path, tmp_path)
+
+
+def test_resume_plan_only_never_loads_training_data(packet, monkeypatch):
+    prep, campaign, broad, _ = packet
+    for row in broad.itertuples(index=False):
+        _complete(campaign, row)
+    args = RUN.parser().parse_args(["--cpu-list", "0", "--resume-plan-only",
+        "--prep-dir", str(prep), "--campaign-root", str(campaign)])
+    (prep / "launch_control.json").write_text('{}')
+    (prep / "summary.json").write_text('{}')
+    monkeypatch.setattr(RUN, "_cpus", lambda *args: [0])
+    monkeypatch.setattr(RUN.os, "sched_setaffinity", lambda *args: None)
+    monkeypatch.setattr(RUN, "_preflight", lambda *args: {})
+    def prohibited(*args):
+        raise AssertionError("planning must not fit or load data")
+    monkeypatch.setattr(RUN, "_prepare_processed", prohibited)
+    monkeypatch.setattr(RUN, "_run_queue", prohibited)
+    result = RUN.controller(args)
+    assert result["broad_tasks"] == 0
+    assert result["third_seed_tasks"] == 1
+    assert result["test_opened"] is False
+
+
+def test_continuation_does_not_regenerate_processed_windows(tmp_path, monkeypatch):
+    source = tmp_path / "source"; source.mkdir()
+    campaign = tmp_path / "campaign"; campaign.mkdir()
+    config = tmp_path / "prep/data_configs/data.yaml"; config.parent.mkdir(parents=True)
+    (config.parent.parent / "target_contract.json").write_text('{}')
+    (campaign / "processed_audit.json").write_text(json.dumps({
+        "status": "R122_PROCESSED_PACKET_READY", "test_opened": False}))
+    control = {"runtime_processed": str(campaign / "processed"), "source_processed": str(source),
+               "continuation": {}, "data_config": str(config)}
+    monkeypatch.setattr(RUN.RT, "active_regions", lambda spec: ["BG"])
+    def prohibited(*args):
+        raise AssertionError("continuation must not rebuild windows")
+    def data_boundary(*args):
+        raise RuntimeError("existing windows read")
+    monkeypatch.setattr(RUN, "_command", prohibited)
+    monkeypatch.setattr(RUN.RT, "load_windows", data_boundary)
+    with pytest.raises(RuntimeError, match="existing windows read"):
+        RUN._prepare_processed(control, campaign, tmp_path, 0)
+
+
+def test_rhs_execution_namespace_preserves_legacy_contracts(tmp_path):
+    old = RUN._rhs_execution_root(tmp_path, {}, "center")
+    new = RUN._rhs_execution_root(tmp_path, {"rhs_contract_namespace": "rhs_resume_v2"}, "center")
+    assert old == tmp_path / "rhs/center"
+    assert new == tmp_path / "continuations/rhs_resume_v2/rhs/center"
+    assert old != new
+    with pytest.raises(ValueError, match="simple directory"):
+        RUN._rhs_execution_root(tmp_path, {"rhs_contract_namespace": "../escape"}, "center")
+
+
+def test_rhs_fail_fast_does_not_launch_the_rest_of_a_failed_bucket(tmp_path, monkeypatch):
+    seen = []
+    def fail(command, *args):
+        seen.append(command)
+        raise RuntimeError("startup contract rejected")
+    monkeypatch.setattr(RUN, "_command", fail)
+    tasks = [("a", ["a"], tmp_path / "a.log"), ("b", ["b"], tmp_path / "b.log")]
+    with pytest.raises(RuntimeError, match="task failed"):
+        RUN._run_queue(tasks, [0], tmp_path, tmp_path / "progress.json", 2, fail_fast=True)
+    assert seen == [["a"]]
+    state = json.loads((tmp_path / "progress.json").read_text())
+    assert state["failed_this_resume"] == 1
+    assert state["scheduled_this_resume"] == 2
+
+
+def test_empty_rhs_panel_has_a_scientific_incomplete_error(tmp_path, monkeypatch):
+    from argparse import Namespace
+    candidates = pd.DataFrame([{"candidate_id": "a", "readout_dimension": 257}])
+    monkeypatch.setattr(RUN, "_control", lambda prep: {"rhs_top_k": 1})
+    monkeypatch.setattr(RUN, "_ordered_candidates", lambda *args: candidates)
+    monkeypatch.setattr(RUN, "_canonical_fit", lambda *args: tmp_path)
+    monkeypatch.setattr(RUN, "_stats_from_ridge", lambda *args: {"n": 1000})
+    monkeypatch.setattr(RUN, "_rhs_cells", lambda *args: pd.DataFrame())
+    with pytest.raises(RuntimeError, match="center RHS incomplete: 0/1"):
+        RUN._run_rhs(Namespace(), tmp_path, tmp_path, tmp_path, [0], candidates)
+
+
+@pytest.mark.parametrize("label,test_access,success", [
+    ("train_validation_only", False, True),
+    ("fold1_training_internal_validation_only", False, False),
+    ("train_validation_only", True, False),
+])
+def test_normal_contract_uses_actual_r_entrypoint_firewall(tmp_path, label, test_access, success):
+    rscript = Path("/data/jaguir26/local/opt/R/4.6.0/bin/Rscript")
+    assert rscript.is_file(), "the frozen application R runtime is required for this integration check"
+    stats_dir = tmp_path / "stats"
+    stats = {"n": 30, "p": 2, "XtX": np.diag([30., 20.]),
+             "Xty": np.asarray([8., 14.]), "yty": 50.}
+    RUN.RT.write_stats_packet(stats_dir, stats, {"stage": "isolated_contract_test"})
+    code = SCRIPTS.parents[2]
+    control = {"normal_runtime": str(tmp_path), "rhs_max_iter": 500}
+    contract = RUN._normal_contract("isolated", stats_dir, tmp_path / "fit", 1e-4, control, code)
+    assert contract["selection_split"] == "train_validation_only"
+    assert contract["selection_scope"] == "fold1_training_internal_validation_only"
+    assert contract["prior_type"] == "rhs_ns"
+    contract.update(prior_type="scaled_ridge", selection_split=label, test_access_authorized=test_access)
+    config = tmp_path / "contract.json"; config.write_text(json.dumps(contract))
+    result = subprocess.run([str(rscript), str(SCRIPTS / "336_fit_pricefm_stage_r102_recursive_normal.R"),
+                             "--contract", str(config)], env={**os.environ, "OPENBLAS_NUM_THREADS": "1",
+                             "OMP_NUM_THREADS": "1"}, capture_output=True, text=True)
+    if success:
+        assert result.returncode == 0, result.stderr
+        terminal = json.loads((tmp_path / "fit/terminal.json").read_text())
+        assert terminal["status"] == "completed_recursive_normal_fit"
+        assert terminal["test_opened"] is False
+    else:
+        assert result.returncode != 0
+        assert "forbidden split" in result.stderr
+        assert not (tmp_path / "fit").exists()
+
+
+def _cap_packet(tmp_path):
+    campaign = tmp_path / "campaign"; root = campaign / "continuations/probe"
+    root.mkdir(parents=True); (campaign / "rhs/center").mkdir(parents=True)
+    (campaign / "rhs/center/fit_progress.json").write_text(json.dumps({"failed_task_ids": ["a"]}))
+    stats = root / "stats"; stats.mkdir(); (stats / "terminal.json").write_text('{}')
+    contract = RUN._normal_contract("a", stats, root / "output", 1e-4,
+                                   {"normal_runtime": "unused", "rhs_max_iter": 500}, tmp_path)
+    path = root / "contract.json"; path.write_text(json.dumps(contract))
+    trace = pd.DataFrame({"iter": np.arange(1, 611), "beta_max_abs_delta": 1.,
+        "fitted_rmse_delta": 1e-10, "beta_relative_l2_delta": 1e-9,
+        "sigma_relative_delta": 1e-12,
+        "prior_rms_log_precision_delta": np.where(np.arange(1, 611) <= 600, 2e-6, 1e-8)})
+    trace_path = root / "trace.csv"; trace.to_csv(trace_path, index=False)
+    diagnostic = {"fit_id": "a", "posterior_target_sha256": contract["posterior_target_sha256"],
+        "tau0": contract["tau0"], "prior_hypers": {"tau0": contract["tau0"]},
+        "diagnostic_only": True, "finite": True, "diagnostic_converged": True,
+        "official_test_opened": False, "validation_scores_opened": False,
+        "campaign_iteration_budget_changed": False,
+        "starting_values": "unchanged_scaled_ridge_initialization_only", "diagnostic_iterations": 610}
+    diagnostic_path = root / "diagnostic.json"; diagnostic_path.write_text(json.dumps(diagnostic))
+    entry = {"fit_id": "a"}
+    for name, file in (("contract", path), ("trace", trace_path), ("diagnostic", diagnostic_path)):
+        entry[name] = str(file); entry[name + "_sha256"] = RUN.sha256_file(file)
+    packet = root / "packet.json"; packet.write_text(json.dumps({"diagnostics": [entry],
+        "official_test_opened": False, "validation_scores_opened": False}))
+    return campaign, packet, contract, diagnostic_path
+
+
+def test_rhs_budget_extension_requires_score_blind_complete_calibration(tmp_path):
+    campaign, packet, _, _ = _cap_packet(tmp_path)
+    assert PREP.audit_rhs_cap_calibration(campaign, 500, None) is None
+    with pytest.raises(ValueError, match="calibration evidence"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, None)
+    calibrated = PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+    assert calibrated["previous_max_iter"] == 500
+    assert calibrated["max_iter"] == 2000
+    assert calibrated["priors_and_tolerances_unchanged"] is True
+
+
+@pytest.mark.parametrize("field,value", [
+    ("validation_scores_opened", True), ("official_test_opened", True),
+    ("posterior_target_sha256", "changed"), ("starting_values", "different"),
+    ("finite", False), ("diagnostic_converged", False),
+])
+def test_rhs_calibration_rejects_target_score_or_initialization_changes(tmp_path, field, value):
+    campaign, packet, _, path = _cap_packet(tmp_path)
+    diagnostic = json.loads(path.read_text()); diagnostic[field] = value
+    path.write_text(json.dumps(diagnostic))
+    evidence = json.loads(packet.read_text()); evidence["diagnostics"][0]["diagnostic_sha256"] = RUN.sha256_file(path)
+    packet.write_text(json.dumps(evidence))
+    with pytest.raises(RuntimeError, match="cap calibration failed"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+
+
+def test_rhs_calibration_rejects_incomplete_or_tampered_evidence(tmp_path):
+    campaign, packet, _, path = _cap_packet(tmp_path)
+    path.write_text('{}')
+    with pytest.raises(RuntimeError, match="hash/path differs"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+    evidence = json.loads(packet.read_text()); evidence["diagnostics"] = []
+    packet.write_text(json.dumps(evidence))
+    with pytest.raises(RuntimeError, match="every current failure"):
+        PREP.audit_rhs_cap_calibration(campaign, 2000, packet)
+
+
+def test_rhs_budget_cap_does_not_change_the_posterior_target_or_tolerances(tmp_path):
+    _, _, base, _ = _cap_packet(tmp_path)
+    extended = RUN._normal_contract("a", Path(base["stats_dir"]), Path(base["output_dir"]), 1e-4,
+        {"normal_runtime": "unused", "rhs_max_iter": 2000}, tmp_path)
+    assert base["posterior_target_sha256"] == extended["posterior_target_sha256"]
+    assert {k:v for k,v in base.items() if k != "max_iter"} == {k:v for k,v in extended.items() if k != "max_iter"}
+
+
+def test_rhs_completed_reuse_binds_fit_and_statistics_hashes(tmp_path):
+    campaign = tmp_path / "campaign"; root = campaign / "rhs/center/fits/a"; root.mkdir(parents=True)
+    stats = campaign / "rhs/stats/a"; stats.mkdir(parents=True)
+    for name in ("terminal.json", "statistics.json", "XtX.bin", "Xty.bin"):
+        (stats / name).write_bytes(b"frozen stats")
+    contract_path = campaign / "rhs/center/contracts/a.json"; contract_path.parent.mkdir()
+    contract_path.write_text(json.dumps({"max_iter": 500, "posterior_target_sha256": "fixed", "stats_dir": str(stats)}))
+    artifacts = []
+    for name in ("fit.rds", "beta_mean.bin", "beta_cov.bin", "convergence_trace.csv", "fit_summary.json"):
+        path = root / name; path.write_bytes(b"frozen posterior")
+        artifacts.append({"path": name, "bytes": path.stat().st_size, "sha256": RUN.sha256_file(path)})
+    (root / "terminal.json").write_text(json.dumps({"status": "completed_recursive_normal_fit",
+        "converged": True, "test_opened": False, "fit_id": "a", "prior_type": "rhs_ns",
+        "posterior_target_sha256": "fixed", "convergence_controls": {"max_iter": 500}, "artifacts": artifacts}))
+    pd.DataFrame([{"fit_id": "a", "output_dir": str(root), "contract_path": str(contract_path)}]).to_csv(
+        campaign / "rhs/center/manifest.csv", index=False)
+    inventory = PREP.audit_rhs_reuse(campaign)
+    assert len(inventory) == 11
+    prep = tmp_path / "prep"; prep.mkdir(); (prep / "launch_control.json").write_text('{"continuation":{}}')
+    pd.DataFrame(columns=["path","bytes","sha256"]).to_csv(prep / "reused_output_inventory.csv", index=False)
+    inventory.to_csv(prep / "reused_rhs_inventory.csv", index=False)
+    assert RUN._reuse_inventory_changes(prep, campaign) == []
+    (root / "fit.rds").write_bytes(b"altered posterior")
+    assert str((root / "fit.rds").relative_to(campaign)) in RUN._reuse_inventory_changes(prep, campaign)
+    with pytest.raises(RuntimeError, match="artifact changed"):
+        PREP.audit_rhs_reuse(campaign)

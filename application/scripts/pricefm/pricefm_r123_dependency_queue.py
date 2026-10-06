@@ -68,16 +68,17 @@ def pidfd_open(pid):
 def choose_cpu_pool(old_cpus,occupied,allowed,physical,busy,foreign,ceiling=15):
     if len(old_cpus)!=15 or len({physical[cpu] for cpu in old_cpus})!=15:
         raise RuntimeError("original physical-core pool differs")
-    if not set(occupied)<=set(old_cpus) or not set(occupied)<=set(allowed):
-        raise RuntimeError("adopted core is outside its original permitted pool")
+    if not set(occupied)<=set(allowed) or len(occupied)>ceiling:
+        raise RuntimeError("adopted core is outside the permitted budget")
     chosen=sorted(occupied); used={physical[cpu] for cpu in chosen}
+    if len(used)!=len(chosen): raise RuntimeError("adopted workers share a physical core")
     if used & set(foreign): raise RuntimeError("adopted core now conflicts with another pinned task")
     for cpu in list(old_cpus)+sorted(allowed):
         group=physical[cpu]
         if len(chosen)>=ceiling: break
         if cpu not in allowed or group in used or group in foreign or busy[group]>20: continue
         chosen.append(cpu); used.add(group)
-    if len(chosen)<max(3,len(occupied)+2):
+    if len(chosen)<max(3,min(ceiling,len(occupied)+2)):
         raise RuntimeError("insufficient healthy cores for ready branches and scoring")
     return sorted(chosen)
 

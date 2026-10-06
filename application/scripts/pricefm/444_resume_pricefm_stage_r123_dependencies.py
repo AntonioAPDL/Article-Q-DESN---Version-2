@@ -166,7 +166,6 @@ def cpu_pool(args, m, active, old_cpus):
         raise RuntimeError("frozen 15-physical-core pool differs")
     usage = m.B._cpu_snapshot(10)
     occupied = {v["cpu"] for v in active.values()}
-    if not occupied <= set(old_cpus): raise RuntimeError("adopted fit outside old pool")
     foreign = set()
     ours = {v["pid"] for v in active.values()}
     for folder in Path("/proc").iterdir():

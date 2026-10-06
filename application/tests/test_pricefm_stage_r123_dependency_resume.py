@@ -255,3 +255,12 @@ def test_scoring_is_bounded_to_distinct_cores_even_with_nine_ladder_threads():
     with ThreadPoolExecutor(max_workers=9) as pool:
         values=list(pool.map(lambda key:callback(key,-1),range(9)))
     assert values==list(range(9)) and peak[0]==3
+
+
+def test_resume_keeps_workers_launched_on_new_cores_and_allows_a_full_live_pool():
+    physical={cpu:cpu%32 for cpu in range(64)}; busy={cpu:0 for cpu in range(32)}
+    assert {5,22}<=set(Q.choose_cpu_pool(list(range(15)),{5,22},set(range(64)),physical,busy,set()))
+    full=set(range(15,30))
+    assert set(Q.choose_cpu_pool(list(range(15)),full,set(range(64)),physical,busy,set()))==full
+    with pytest.raises(RuntimeError,match="share"):
+        Q.choose_cpu_pool(list(range(15)),{5,37},set(range(64)),physical,busy,set())

@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = Path("/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm")
-TAG = "pricefm_stage_r124_covariance_preserving_replay_20261006"
+TAG = "pricefm_stage_r124_covariance_preserving_replay_v2_20261006"
 PYTHON_TESTS = (
     "test_pricefm_internal_target_embargo.py",
     "test_pricefm_stage_r120_explicit_lag_search.py",

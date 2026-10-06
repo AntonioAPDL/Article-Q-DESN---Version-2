@@ -162,6 +162,30 @@ def test_smoke_cannot_substitute_for_full_panel(tmp_path):
     with pytest.raises(RuntimeError): RUN.verified_cell(tmp_path / "smoke", job, digest)
 
 
+@pytest.mark.parametrize("smoke", [False, True])
+def test_cell_writes_complete_metadata_once_and_reuses_it(tmp_path, monkeypatch, smoke):
+    job = dict(jobs()[0], input_sha256={}, fit_labels=[], output_dir=str(tmp_path / "cells" / "one"))
+    config = tmp_path / "job.json"; RUN.write(config, job)
+    args = SimpleNamespace(output=tmp_path, config=config)
+    m = SimpleNamespace(REC=SimpleNamespace(digest=digest, verify_evidence=lambda v: None))
+    prep = dict(configurations={str(config): digest(config)}, source={"head": "test"})
+    monkeypatch.setattr(RUN, "owner", lambda a: (m, {}))
+    monkeypatch.setattr(RUN, "verify_preparation", lambda a, b: (prep, [job]))
+    calls = []
+    def forecast(owner, control, value, maximum_origins, observe):
+        calls.append(maximum_origins); n = 2 if smoke else 125
+        predictions = dict(truth=np.zeros((n, 96)), origin_indices=np.arange(n),
+            origin_utc=np.array(["test"] * n), **{name: np.zeros((n, 96, 7)) for name in RUN.OPERATORS})
+        metadata = dict(posterior_paths=500, scored_origins=n, horizon_steps=96, step_minutes=15,
+            units="outer_fold1_training_scaled_price", fit_labels=[], sampler_audit=[{}] * 8)
+        return predictions, {name: {"AQL": 0.} for name in RUN.OPERATORS}, metadata
+    monkeypatch.setattr(RUN, "forecast", forecast)
+    first = RUN.cell(args, smoke=smoke); second = RUN.cell(args, smoke=smoke)
+    assert first == second and first["posterior_paths"] == 500
+    assert calls == ([2] if smoke else [None])
+    assert first["model_refits"] == 0 and first["source"] == prep["source"]
+
+
 def test_controller_requires_matching_smoke_source(tmp_path):
     current = jobs(); job = next(j for j in current if j["candidate_id"] == "r123_3e15bdc342f556c1" and j["split"] == 3)
     args = SimpleNamespace(output=tmp_path); m = SimpleNamespace(REC=SimpleNamespace(digest=digest))

@@ -66,6 +66,15 @@ All generated paths remain under ignored `application/data_local/pricefm/`;
 the evolving master plan remains under ignored `local_trackers/`. Commit and
 push only the dedicated task branch. No main, article or Overleaf changes.
 
+The first real two-origin smoke completed its numerical forecast but failed
+before terminal serialization because `posterior_paths` was supplied twice
+to `dict`. Preserve that first namespace, including its partial prediction
+files and failure receipt. The corrected execution uses
+`pricefm_stage_r124_covariance_preserving_replay_v2_20261006`, a new immutable
+preparation and freshly matched release evidence. End-to-end cell tests cover
+both smoke and full-output serialization and verified reuse. No full replay
+workers were launched before this failure, and no model fit was repeated.
+
 ## Next-stage gate
 
 After replay, compare matched-origin driver calibration, primary AQL, late AQL,

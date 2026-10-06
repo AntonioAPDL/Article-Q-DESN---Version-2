@@ -30,7 +30,7 @@ from pricefm_r124_covariance import GaussianSampler, POLICY, projected_audit
 
 ROOT = Path(__file__).resolve().parents[3]
 DATA = Path("/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm")
-TAG = "pricefm_stage_r124_covariance_preserving_replay_20261006"
+TAG = "pricefm_stage_r124_covariance_preserving_replay_v2_20261006"
 PARENT = "pricefm_stage_r123_certified_successor_20261005"
 OWNER_HEAD = "40d42d15a477c2f9d50dbc69b4eb9885da91ec29"
 PROTOCOL = ROOT / "application/config/pricefm_stage_r124_covariance_replay_protocol_20261006.json"
@@ -336,7 +336,7 @@ def cell(args, *, smoke=False):
         write(temporary / "forecast_contract.json", metadata)
         terminal = dict(status="R124_SMOKE_COMPLETE" if smoke else "R124_FORECAST_CELL_COMPLETE",
             job_id=job["job_id"], candidate_id=job["candidate_id"], split=job["split"], tau0=job["tau0"],
-            sampler=POLICY, posterior_paths=500, input_sha256=job["input_sha256"],
+            sampler=POLICY, input_sha256=job["input_sha256"],
             model_refits=0, official_test_opened=False, official_validation_opened=False,
             selection_authorized=not smoke, elapsed_seconds=time.time() - started,
             source=prep["source"], **metadata)

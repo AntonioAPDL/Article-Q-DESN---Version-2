@@ -262,3 +262,42 @@ def test_full_fold_design_packet_and_train_only_scalers(tmp_path, monkeypatch, t
         np.testing.assert_allclose(XtX, X.T @ X)
         assert verified(folder)['fold'] == fold
         assert full.full_design(RT, tmp_path, folder, choice, protocol, fold) == contract
+
+
+def test_historical_regression_input_is_pinned_and_not_overwritten(tmp_path, monkeypatch):
+    import pricefm_r126_release as release
+    source = tmp_path / 'source.md'; source.write_text('isolated fixture')
+    monkeypatch.setattr(release, 'ROOT', tmp_path / 'worktree')
+    monkeypatch.setattr(release, 'HISTORY_SHA256', digest(source))
+    target = release.historical_input(source)
+    assert target.read_bytes() == source.read_bytes()
+    assert release.historical_input(source) == target
+    target.write_text('external change')
+    with pytest.raises(ValueError): release.historical_input(source)
+
+
+def test_dependency_scheduler_waits_for_parent_and_drains_own_children(tmp_path, monkeypatch):
+    loader = importlib.util.spec_from_file_location('r126_scheduler_test',
+        SCRIPTS / '447_run_pricefm_stage_r126_matched_comparison.py')
+    runner = importlib.util.module_from_spec(loader); loader.loader.exec_module(runner)
+    monkeypatch.setattr(runner, 'OUT', tmp_path)
+    monkeypatch.setattr(runner, 'reserves', lambda p: None)
+    monkeypatch.setattr(runner.time, 'sleep', lambda t: None)
+    from pricefm_r126_contract import write
+    parent = tmp_path / 'parent.json'; child = tmp_path / 'child.json'
+    write(parent, dict(dependencies=[])); write(child, dict(dependencies=['parent']))
+    order = []
+    class Process:
+        returncode = 0
+        pid = 999
+        def __init__(self, command, **kwargs):
+            self.name = Path(command[command.index('--task') + 1]).stem
+            order.append(self.name)
+        def poll(self):
+            folder = tmp_path / 'tasks_done' / self.name
+            if not folder.exists():
+                folder.mkdir(parents=True); write(folder / 'result.json', dict(done=True)); seal(folder, dict(done=True))
+            return 0
+    monkeypatch.setattr(runner.subprocess, 'Popen', Process)
+    runner.batch([child, parent], [1, 2], {})
+    assert order == ['parent', 'child']

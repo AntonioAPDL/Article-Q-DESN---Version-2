@@ -70,7 +70,7 @@ The coordinator alone integrates article-safe results after a frozen handoff.
 On the clean dedicated R126 checkout, using the pinned PriceFM Python:
 
 ```bash
-python -B application/scripts/pricefm/pricefm_r126_release.py --output RELEASE --cpu CPU
+python -B application/scripts/pricefm/pricefm_r126_release.py --output RELEASE --cpu CPU --historical-plan FROZEN_R120_PLAN
 python -B application/scripts/pricefm/447_run_pricefm_stage_r126_matched_comparison.py prepare --receipt RELEASE/validation.json
 python -B application/scripts/pricefm/447_run_pricefm_stage_r126_matched_comparison.py controller
 python -B application/scripts/pricefm/449_closeout_pricefm_stage_r126_matched_comparison.py watch
@@ -79,3 +79,8 @@ python -B application/scripts/pricefm/449_closeout_pricefm_stage_r126_matched_co
 The controller runs on Jerez; the watcher runs on Muscat. Runtime, mirrors,
 models, release receipts and `local_trackers/` stay ignored. The audited private
 master plan retains the detailed background and implementation decision record.
+
+The inherited R120 regression reads an ignored historical plan. R126 requires
+that input explicitly, checks its frozen SHA-256, copies it into the new ignored
+tracker directory, and records it in the receipt. It never substitutes a
+synthetic plan or alters the old regression/source.

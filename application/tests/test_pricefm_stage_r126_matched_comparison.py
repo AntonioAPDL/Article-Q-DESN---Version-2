@@ -301,3 +301,26 @@ def test_dependency_scheduler_waits_for_parent_and_drains_own_children(tmp_path,
     monkeypatch.setattr(runner.subprocess, 'Popen', Process)
     runner.batch([child, parent], [1, 2], {})
     assert order == ['parent', 'child']
+
+
+def test_reference_replay_absolute_paths_use_supported_config_option(tmp_path, monkeypatch):
+    import pricefm_r126_compare as comparison
+    import yaml
+    from pricefm_common import validate_config
+    from pricefm_r126_contract import write
+    checkpoint = tmp_path / 'weights.keras'; checkpoint.write_bytes(b'isolated fixture')
+    data = tmp_path / 'data'
+    old = data / 'authoritative/pricefm_phase1_stage_b_apples_to_apples_20260616/region=BG/fold=1'
+    write(old / 'summary.json', dict(model_path=str(checkpoint), model_sha256=digest(checkpoint),
+        pricefm_repo=str(tmp_path), pricefm_repo_commit='fixture', window_mode='operational'))
+    monkeypatch.setattr(comparison.subprocess, 'check_output', lambda *a, **k: 'fixture\n')
+    def inspect(command, **kwargs):
+        path = command[command.index('--config') + 1]
+        config = yaml.safe_load(Path(path).read_text())
+        validate_config(config)
+        assert config['pricefm']['allow_absolute_local_paths'] is True
+        assert config['pricefm']['processed_dir'] == str(data / 'processed')
+        raise RuntimeError('validated isolated replay configuration')
+    monkeypatch.setattr(comparison.subprocess, 'run', inspect)
+    with pytest.raises(RuntimeError, match='validated isolated'):
+        comparison.cached_phase1(data, ROOT, tmp_path / 'outputs/fold=1', 1)

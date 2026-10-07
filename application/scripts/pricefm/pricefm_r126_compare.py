@@ -38,10 +38,15 @@ def cached_phase1(data, code, output, fold):
     if verified(output): return pd.read_csv(output / 'pricefm_phase1_predictions_original.csv')
     if output.exists(): raise RuntimeError('partial reference replay must be audited, not overwritten')
     config = yaml.safe_load((Path(code) / 'application/config/pricefm_data_pipeline.yaml').read_text())
+    config['pricefm']['allow_absolute_local_paths'] = True
     config['pricefm']['processed_dir'] = str(Path(data) / 'processed')
     for key in ('raw_dir', 'interim_dir', 'external_repo_dir', 'log_dir'):
         config['pricefm'][key] = str(Path(data) / ('external/PriceFM' if key == 'external_repo_dir' else key.removesuffix('_dir')))
-    config_path = output.parent / f'fold={fold}_phase1_config.yaml'
+    attempt = 1
+    while (output.parent / f'fold={fold}_phase1_attempt{attempt}.log').exists() or (
+            output.parent / f'fold={fold}_phase1_attempt{attempt}_config.yaml').exists():
+        attempt += 1
+    config_path = output.parent / f'fold={fold}_phase1_attempt{attempt}_config.yaml'
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(yaml.safe_dump(config))
     command = [str(Path(data) / 'venv_pricefm_tf/bin/python'), '-B',
@@ -51,7 +56,7 @@ def cached_phase1(data, code, output, fold):
         '--splits', 'test', '--window-mode', old['window_mode']]
     import os
     env = dict(os.environ, TF_NUM_INTRAOP_THREADS='1', TF_NUM_INTEROP_THREADS='1', CUDA_VISIBLE_DEVICES='-1')
-    with (output.parent / f'fold={fold}_phase1.log').open('x') as stream:
+    with (output.parent / f'fold={fold}_phase1_attempt{attempt}.log').open('x') as stream:
         subprocess.run(command, cwd=code, env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)
     metrics = pd.read_csv(output / 'pricefm_phase1_metrics.csv')
     archived = pd.read_csv(original / 'pricefm_phase1_metrics.csv')

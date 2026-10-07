@@ -7,6 +7,7 @@ import argparse
 import csv
 import hashlib
 import json
+import math
 import os
 import shlex
 import subprocess
@@ -30,6 +31,22 @@ def completed_value(path: Path, key: str) -> str:
             name, value = line.split("=", 1)
             values[name] = value
     return values.get(key, "")
+
+
+def verify_relative_manifest(root: Path, manifest_path: Path) -> int:
+    with manifest_path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows or not {"relative_path", "sha256"}.issubset(rows[0]):
+        raise RuntimeError(f"Artifact manifest is empty or malformed: {manifest_path}")
+    root = root.resolve(strict=True)
+    for row in rows:
+        relative = Path(row["relative_path"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise RuntimeError(f"Unsafe artifact-manifest path: {relative}")
+        target = (root / relative).resolve(strict=True)
+        if root not in target.parents or sha256(target) != row["sha256"].lower():
+            raise RuntimeError(f"Artifact-manifest verification failed: {relative}")
+    return len(rows)
 
 
 def trace_terminal_outer(path: Path) -> int:
@@ -66,9 +83,16 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
             max_cumulative: int, batch_size: int,
             inner_workers: int = 7, min_rhs_tau_updates: int = 3,
             resume_fit_path: Path | None = None,
-            resume_trace_path: Path | None = None) -> dict[str, object]:
+            resume_trace_path: Path | None = None,
+            quadrature_nodes: tuple[int, ...] = (4, 8, 12, 16, 24),
+            quadrature_tolerance: float = 1.0e-6,
+            quadrature_certificate_root: Path | None = None) -> dict[str, object]:
     if inner_workers < 1 or min_rhs_tau_updates < 1:
         raise RuntimeError("Continuation workers and RHS update requirements must be positive")
+    if (not quadrature_nodes or any(node < 2 for node in quadrature_nodes)
+            or any(current <= previous for previous, current in zip(quadrature_nodes, quadrature_nodes[1:]))
+            or quadrature_tolerance <= 0):
+        raise RuntimeError("Invalid quadrature continuation controls")
     expected_completed = source / "status" / f"{source_job}.completed"
     if not expected_completed.exists():
         raise RuntimeError(f"Source joint fit is not completed: {source_job}")
@@ -89,8 +113,44 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
             f"Continuation ceiling must reach at least outer {minimum_cumulative} for RHS release and response")
     for sub in ("objects", "predictions", "scores", "traces", "coefficients", "logs", "status", "manifests"):
         (output / sub).mkdir(parents=True, exist_ok=True)
+    certificate: dict[str, str] = {}
+    if likelihood == "exal":
+        if quadrature_certificate_root is None:
+            raise RuntimeError("Joint exAL continuation requires an explicit quadrature certificate root")
+        certificate_root = quadrature_certificate_root.resolve(strict=True)
+        certificate_paths = {
+            "decision": certificate_root / "status/certificate.completed",
+            "contract": certificate_root / "manifests/quadrature_contract.csv",
+            "table": certificate_root / "tables/quadrature_certificate.csv",
+            "manifest": certificate_root / "manifests/quadrature_output_manifest.csv",
+        }
+        for path in certificate_paths.values():
+            path.resolve(strict=True)
+        decision = certificate_paths["decision"].read_text().strip()
+        if decision != "READY_FOR_TARGETED_JOINT_EXAL_CORRECTION":
+            raise RuntimeError(f"Quadrature certificate does not authorize continuation: {decision}")
+        certificate_manifest_rows = verify_relative_manifest(
+            certificate_root, certificate_paths["manifest"]
+        )
+        with certificate_paths["contract"].open(newline="") as handle:
+            rows = list(csv.DictReader(handle))
+        if len(rows) != 1 or rows[0].get("candidate_nodes") != ",".join(map(str, quadrature_nodes)):
+            raise RuntimeError("Quadrature certificate node grid does not match the requested continuation")
+        certified_tolerance = float(rows[0].get("tolerance", "nan"))
+        if (not math.isfinite(certified_tolerance)
+                or abs(certified_tolerance - quadrature_tolerance) > 1.0e-15):
+            raise RuntimeError("Quadrature certificate tolerance does not match the requested continuation")
+        certificate = {
+            "quadrature_certificate_root": str(certificate_root),
+            "quadrature_certificate_manifest_rows": certificate_manifest_rows,
+            **{f"quadrature_certificate_{name}_sha256": sha256(path)
+               for name, path in certificate_paths.items()},
+        }
+    elif quadrature_certificate_root is not None:
+        raise RuntimeError("A quadrature certificate may only be attached to joint exAL continuation")
+
     contract = {
-        "schema_version": "glofas_part4_joint_bounded_continuation_v3",
+        "schema_version": "glofas_part4_joint_bounded_continuation_v4",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source_runtime_root": str(source), "output_runtime_root": str(output),
         "likelihood": likelihood, "source_job_id": source_job,
@@ -101,16 +161,22 @@ def prepare(repo: Path, source: Path, output: Path, likelihood: str, source_job:
         "initial_outer_iterations": initial_outer,
         "batch_size": batch_size, "max_cumulative_outer_iterations": max_cumulative,
         "inner_workers": inner_workers,
+        "quadrature_nodes": list(quadrature_nodes),
+        "quadrature_tolerance": quadrature_tolerance,
         "outer_tolerance": 1e-3, "rhs_tolerance": 1e-3,
         "terminal_consecutive_passes": 3, "rhs_freeze_outer_iterations": 5,
         "min_rhs_tau_updates": min_rhs_tau_updates,
         "require_post_release": True, "allow_rhs_schedule_rebase": True,
         "source_hashes": {
             "application/R/latent_path_vb_joint.R": sha256(repo / "application/R/latent_path_vb_joint.R"),
+            "application/R/latent_path_vb_exal.R": sha256(repo / "application/R/latent_path_vb_exal.R"),
+            "application/R/joint_exqdesn_exact_structured_inference.R": sha256(repo / "application/R/joint_exqdesn_exact_structured_inference.R"),
+            "application/R/glofas_part4_exal_inner_audit.R": sha256(repo / "application/R/glofas_part4_exal_inner_audit.R"),
             "application/R/glofas_part3_partitioned_rhs.R": sha256(repo / "application/R/glofas_part3_partitioned_rhs.R"),
             "application/scripts/389_continue_glofas_part4_joint_fit.R": sha256(repo / "application/scripts/389_continue_glofas_part4_joint_fit.R"),
             "application/scripts/413_launch_glofas_part4_joint_continuation.py": sha256(repo / "application/scripts/413_launch_glofas_part4_joint_continuation.py"),
         },
+        **certificate,
     }
     contract_path = output / "manifests" / f"part4_joint_{likelihood}_controller_contract.json"
     contract_path.write_text(json.dumps(contract, indent=2, sort_keys=True) + "\n")
@@ -126,6 +192,19 @@ def run(repo: Path, contract_path: Path, expected_contract_hash: str) -> int:
     for relative, expected in contract["source_hashes"].items():
         if sha256(repo / relative) != expected:
             raise RuntimeError(f"Source changed after continuation preparation: {relative}")
+    if contract["likelihood"] == "exal":
+        certificate_root = Path(contract["quadrature_certificate_root"])
+        certificate_paths = {
+            "decision": certificate_root / "status/certificate.completed",
+            "contract": certificate_root / "manifests/quadrature_contract.csv",
+            "table": certificate_root / "tables/quadrature_certificate.csv",
+            "manifest": certificate_root / "manifests/quadrature_output_manifest.csv",
+        }
+        for name, path in certificate_paths.items():
+            if sha256(path) != contract[f"quadrature_certificate_{name}_sha256"]:
+                raise RuntimeError(f"Quadrature certificate changed after preparation: {name}")
+        if certificate_paths["decision"].read_text().strip() != "READY_FOR_TARGETED_JOINT_EXAL_CORRECTION":
+            raise RuntimeError("Quadrature certificate no longer authorizes continuation")
     source = Path(contract["source_runtime_root"])
     output = Path(contract["output_runtime_root"])
     likelihood = str(contract["likelihood"])
@@ -158,6 +237,8 @@ def run(repo: Path, contract_path: Path, expected_contract_hash: str) -> int:
             "--expected_scoring_sidecar_sha256", str(contract["scoring_sidecar_sha256"]),
             "--additional_outer_max_iter", str(additional), "--inner_max_iter", "30",
             "--inner_min_iter", "10", "--inner_workers", str(contract["inner_workers"]),
+            "--quadrature_nodes", ",".join(map(str, contract["quadrature_nodes"])),
+            "--quadrature_tolerance", str(contract["quadrature_tolerance"]),
             "--outer_tol", str(contract["outer_tolerance"]),
             "--n_draws", "500", "--joint_rhs_freeze_outer_iters", "5",
             "--joint_rhs_min_tau_updates", str(contract["min_rhs_tau_updates"]),
@@ -216,6 +297,9 @@ def main() -> None:
     parser.add_argument("--max-cumulative-outer-iterations", type=int, default=20)
     parser.add_argument("--inner-workers", type=int, default=7)
     parser.add_argument("--min-rhs-tau-updates", type=int, default=3)
+    parser.add_argument("--quadrature-nodes", default="4,8,12,16,24")
+    parser.add_argument("--quadrature-tolerance", type=float, default=1.0e-6)
+    parser.add_argument("--quadrature-certificate-root", default="")
     parser.add_argument("--resume-fit-path", default="")
     parser.add_argument("--resume-trace-path", default="")
     parser.add_argument("--run-contract", default="")
@@ -228,11 +312,19 @@ def main() -> None:
     output = (repo / args.output_runtime_root).resolve() if not Path(args.output_runtime_root).is_absolute() else Path(args.output_runtime_root).resolve()
     resume_fit = Path(args.resume_fit_path).resolve() if args.resume_fit_path else None
     resume_trace = Path(args.resume_trace_path).resolve() if args.resume_trace_path else None
+    quadrature_nodes = tuple(int(value) for value in args.quadrature_nodes.split(","))
+    quadrature_certificate_root = (
+        Path(args.quadrature_certificate_root).resolve()
+        if args.quadrature_certificate_root else None
+    )
     contract = prepare(
         repo, source, output, args.likelihood, args.source_job_id,
         args.max_cumulative_outer_iterations, args.batch_size,
         inner_workers=args.inner_workers, min_rhs_tau_updates=args.min_rhs_tau_updates,
         resume_fit_path=resume_fit, resume_trace_path=resume_trace,
+        quadrature_nodes=quadrature_nodes,
+        quadrature_tolerance=args.quadrature_tolerance,
+        quadrature_certificate_root=quadrature_certificate_root,
     )
     if subprocess.run(["tmux", "has-session", "-t", args.session_label], capture_output=True).returncode == 0:
         raise SystemExit(f"tmux session already exists: {args.session_label}")

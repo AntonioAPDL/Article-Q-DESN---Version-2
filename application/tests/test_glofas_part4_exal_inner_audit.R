@@ -93,4 +93,40 @@ stopifnot(
   is.null(legacy$latent_mean)
 )
 
+make_quadrature <- function(nodes, change, offset = 0, converged = TRUE) {
+  list(
+    log_normalizer = 10 + offset,
+    branch_mass = c(negative = 0.4 + offset, positive = 0.6 - offset),
+    moments = c(sigma_mean = 1 + offset, gamma_mean = 0.2 + offset),
+    nodes_per_panel = nodes,
+    relative_change = change,
+    converged = converged
+  )
+}
+candidate_quadrature <- list(
+  Y = make_quadrature(16L, 5e-7, 2e-8),
+  G = make_quadrature(16L, 7e-7, 3e-8)
+)
+reference_quadrature <- list(
+  Y = make_quadrature(48L, 5e-9),
+  G = make_quadrature(48L, 7e-9)
+)
+certificate <- app_glofas_part4_exal_quadrature_certificate(
+  candidate_quadrature, reference_quadrature
+)
+stopifnot(nrow(certificate) == 2L, all(certificate$passed))
+component_table <- app_glofas_part4_exal_quadrature_component_table(
+  candidate_quadrature, reference_quadrature
+)
+stopifnot(
+  nrow(component_table) == 10L,
+  all(component_table$relative_difference >= 0),
+  max(component_table$relative_difference) < 1e-6
+)
+reference_quadrature$G$converged <- FALSE
+failed_certificate <- app_glofas_part4_exal_quadrature_certificate(
+  candidate_quadrature, reference_quadrature
+)
+stopifnot(!failed_certificate$passed[failed_certificate$source == "G"])
+
 cat("PASS: Part 4 exAL inner audit decomposition\n")

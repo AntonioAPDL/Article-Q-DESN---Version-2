@@ -573,12 +573,14 @@ app_joint_exqdesn_normalize_branch_quadrature <- function(
   log_density,
   moment_function = NULL,
   node_grid = c(4L, 8L, 12L),
-  tolerance = 1.0e-6
+  tolerance = 1.0e-6,
+  excluded_convergence_moments = character()
 ) {
   tau <- app_joint_exqdesn_assert_scalar_tau(tau)
   node_grid <- unique(as.integer(node_grid))
   if (!length(node_grid) || any(node_grid < 2L)) stop("Invalid quadrature node grid.", call. = FALSE)
   previous <- NULL
+  previous_all <- NULL
   converged <- FALSE
   diagnostics <- list()
   final <- NULL
@@ -631,8 +633,20 @@ app_joint_exqdesn_normalize_branch_quadrature <- function(
       colnames(moment_values) <- moment_names
       moments <- colSums(moment_values * normalized_weight)
     }
-    current <- c(log_normalizer = log_z, branch_mass, moments)
-    error <- if (is.null(previous)) Inf else max(abs(current - previous) / pmax(1, abs(current), abs(previous)))
+    current_all <- c(log_normalizer = log_z, branch_mass, moments)
+    excluded <- names(current_all) %in% as.character(excluded_convergence_moments)
+    if (all(excluded)) stop("Quadrature convergence cannot exclude every state component.", call. = FALSE)
+    current <- current_all[!excluded]
+    error <- if (is.null(previous)) {
+      Inf
+    } else {
+      max(abs(current - previous) / pmax(1, abs(current), abs(previous)))
+    }
+    all_moment_error <- if (is.null(previous_all)) {
+      Inf
+    } else {
+      max(abs(current_all - previous_all) / pmax(1, abs(current_all), abs(previous_all)))
+    }
     diagnostics[[ii]] <- data.frame(
       nodes_per_panel = n,
       total_nodes = nrow(grid),
@@ -640,6 +654,8 @@ app_joint_exqdesn_normalize_branch_quadrature <- function(
       negative_branch_mass = branch_mass[["negative"]],
       positive_branch_mass = branch_mass[["positive"]],
       relative_change = error,
+      all_moment_relative_change = all_moment_error,
+      excluded_convergence_moments = paste(as.character(excluded_convergence_moments), collapse = ","),
       stringsAsFactors = FALSE
     )
     final <- list(
@@ -653,6 +669,8 @@ app_joint_exqdesn_normalize_branch_quadrature <- function(
       nodes_per_panel = n,
       total_nodes = nrow(grid),
       relative_change = error,
+      all_moment_relative_change = all_moment_error,
+      excluded_convergence_moments = as.character(excluded_convergence_moments),
       converged = FALSE
     )
     if (!is.null(previous) && is.finite(error) && error <= tolerance) {
@@ -661,6 +679,7 @@ app_joint_exqdesn_normalize_branch_quadrature <- function(
       break
     }
     previous <- current
+    previous_all <- current_all
   }
   final$converged <- converged
   final
@@ -1096,7 +1115,8 @@ app_joint_exqdesn_structured_scale_shape_update <- function(
   gamma_prior_sd_eta = NA_real_,
   observation_weight = NULL,
   quadrature_nodes = c(4L, 8L, 12L),
-  quadrature_tolerance = 1.0e-6
+  quadrature_tolerance = 1.0e-6,
+  quadrature_excluded_convergence_moments = "inverse_gamma_limit"
 ) {
   augmentation <- match.arg(augmentation)
   terms_at <- function(gamma) app_joint_exqdesn_structured_terms_grid(
@@ -1121,7 +1141,8 @@ app_joint_exqdesn_structured_scale_shape_update <- function(
     log_density = function(gamma) terms_at(gamma)$log_collapsed,
     moment_function = function(gamma) app_joint_exqdesn_scale_shape_moments_grid(terms_at(gamma)),
     node_grid = quadrature_nodes,
-    tolerance = quadrature_tolerance
+    tolerance = quadrature_tolerance,
+    excluded_convergence_moments = quadrature_excluded_convergence_moments
   )
   quadrature$augmentation <- augmentation
   quadrature

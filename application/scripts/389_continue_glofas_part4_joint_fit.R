@@ -31,6 +31,8 @@ args <- app_parse_args(list(
   inner_max_iter = 30L,
   inner_min_iter = 10L,
   inner_workers = 1L,
+  quadrature_nodes = "4,8,12,16,24",
+  quadrature_tolerance = 1.0e-6,
   outer_tol = 1.0e-3,
   n_draws = 500L,
   joint_rhs_freeze_outer_iters = 5L,
@@ -148,6 +150,10 @@ run_continuation <- function() {
   vb_args$joint_inner_max_iter <- as.integer(args$inner_max_iter)
   vb_args$joint_inner_min_iter <- as.integer(args$inner_min_iter)
   vb_args$joint_inner_workers <- as.integer(args$inner_workers)
+  vb_args$quadrature_nodes <- as.integer(strsplit(
+    as.character(args$quadrature_nodes)[[1L]], ",", fixed = TRUE
+  )[[1L]])
+  vb_args$quadrature_tolerance <- as.numeric(args$quadrature_tolerance)
   vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
   vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
   vb_args$joint_rhs_tol <- as.numeric(args$joint_rhs_tol)
@@ -161,6 +167,9 @@ run_continuation <- function() {
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||
       vb_args$joint_inner_workers < 1L ||
+      !length(vb_args$quadrature_nodes) || anyNA(vb_args$quadrature_nodes) ||
+      any(vb_args$quadrature_nodes < 2L) || any(diff(vb_args$quadrature_nodes) <= 0L) ||
+      !is.finite(vb_args$quadrature_tolerance) || vb_args$quadrature_tolerance <= 0 ||
       vb_args$joint_rhs_freeze_outer_iters < 0L || vb_args$joint_rhs_min_tau_updates < 0L ||
       vb_args$joint_rhs_inner_min_iter < 1L ||
       vb_args$joint_rhs_inner_max_iter < vb_args$joint_rhs_inner_min_iter ||
@@ -283,6 +292,8 @@ run_continuation <- function() {
     inner_max_iter = vb_args$joint_inner_max_iter,
     inner_min_iter = vb_args$joint_inner_min_iter,
     inner_workers = vb_args$joint_inner_workers,
+    quadrature_nodes = paste(vb_args$quadrature_nodes, collapse = ","),
+    quadrature_tolerance = vb_args$quadrature_tolerance,
     require_post_release = vb_args$joint_require_post_release,
     inherited_rhs_freeze_vb_iters = joint$rhs_schedule$inherited$freeze_tau_warmup_iters,
     joint_rhs_freeze_outer_iters = joint$rhs_schedule$effective$freeze_tau_warmup_iters,

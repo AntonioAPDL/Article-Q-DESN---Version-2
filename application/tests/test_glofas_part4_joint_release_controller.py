@@ -41,8 +41,13 @@ with tempfile.TemporaryDirectory(prefix="glofas_part4_release_controller_") as t
     assert contract["require_post_release"] is True
     assert contract["allow_rhs_schedule_rebase"] is True
     assert contract["max_cumulative_outer_iterations"] == 20
+    assert contract["quadrature_nodes"] == [4, 8, 12, 16, 24]
+    assert contract["quadrature_tolerance"] == 1.0e-6
     assert set(contract["source_hashes"]) == {
         "application/R/latent_path_vb_joint.R",
+        "application/R/latent_path_vb_exal.R",
+        "application/R/joint_exqdesn_exact_structured_inference.R",
+        "application/R/glofas_part4_exal_inner_audit.R",
         "application/R/glofas_part3_partitioned_rhs.R",
         "application/scripts/389_continue_glofas_part4_joint_fit.R",
         "application/scripts/413_launch_glofas_part4_joint_continuation.py",
@@ -113,5 +118,42 @@ with tempfile.TemporaryDirectory(prefix="glofas_part4_release_controller_") as t
         assert "RHS release and response" in str(error)
     else:
         raise AssertionError("A warmup-only continuation ceiling was accepted")
+
+    certificate = root / "certificate"
+    for sub in ("status", "manifests", "tables"):
+        (certificate / sub).mkdir(parents=True, exist_ok=True)
+    (certificate / "status/certificate.completed").write_text(
+        "READY_FOR_TARGETED_JOINT_EXAL_CORRECTION\n"
+    )
+    (certificate / "manifests/quadrature_contract.csv").write_text(
+        "candidate_nodes,tolerance\n\"4,8,12,16,24\",0.000001\n"
+    )
+    (certificate / "tables/quadrature_certificate.csv").write_text(
+        "source,passed\nY,TRUE\nG,TRUE\n"
+    )
+    certificate_manifest = certificate / "manifests/quadrature_output_manifest.csv"
+    certificate_manifest.write_text(
+        "relative_path,sha256\n"
+        f"tables/quadrature_certificate.csv,{MODULE.sha256(certificate / 'tables/quadrature_certificate.csv')}\n"
+        f"manifests/quadrature_contract.csv,{MODULE.sha256(certificate / 'manifests/quadrature_contract.csv')}\n"
+    )
+    exal_contract = MODULE.prepare(
+        REPO, source, root / "exal_output", "exal", job,
+        max_cumulative=20, batch_size=5,
+        quadrature_certificate_root=certificate,
+    )
+    assert exal_contract["schema_version"] == "glofas_part4_joint_bounded_continuation_v4"
+    assert exal_contract["quadrature_certificate_root"] == str(certificate.resolve())
+    assert exal_contract["quadrature_certificate_manifest_rows"] == 2
+
+    try:
+        MODULE.prepare(
+            REPO, source, root / "exal_without_certificate", "exal", job,
+            max_cumulative=20, batch_size=5,
+        )
+    except RuntimeError as error:
+        assert "certificate" in str(error)
+    else:
+        raise AssertionError("An uncertified joint exAL continuation was accepted")
 
 print("GLOFAS_PART4_JOINT_RELEASE_CONTROLLER_TEST_PASS")

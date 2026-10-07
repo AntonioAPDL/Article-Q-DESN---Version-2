@@ -145,3 +145,87 @@ app_glofas_part4_exal_probe_decision <- function(table) {
   }
   "EXAL_INNER_CONVERGENCE_REMAINS_UNRESOLVED"
 }
+
+app_glofas_part4_exal_quadrature_state_vector <- function(update) {
+  required <- c("log_normalizer", "branch_mass", "moments", "nodes_per_panel", "converged")
+  if (!is.list(update) || !all(required %in% names(update))) {
+    stop("A complete structured exAL quadrature update is required.", call. = FALSE)
+  }
+  values <- c(
+    log_normalizer = as.numeric(update$log_normalizer),
+    setNames(as.numeric(update$branch_mass), paste0("branch_mass_", names(update$branch_mass))),
+    setNames(as.numeric(update$moments), paste0("moment_", names(update$moments)))
+  )
+  if (!length(values) || any(!is.finite(values))) {
+    stop("The structured exAL quadrature state contains non-finite values.", call. = FALSE)
+  }
+  values
+}
+
+app_glofas_part4_exal_quadrature_certificate <- function(
+  candidate,
+  reference,
+  tolerance = 1.0e-6,
+  reference_tolerance = 1.0e-8
+) {
+  sources <- c("Y", "G")
+  if (!all(sources %in% names(candidate)) || !all(sources %in% names(reference))) {
+    stop("Candidate and reference quadrature updates require Y and G blocks.", call. = FALSE)
+  }
+  rows <- lapply(sources, function(source) {
+    candidate_vector <- app_glofas_part4_exal_quadrature_state_vector(candidate[[source]])
+    reference_vector <- app_glofas_part4_exal_quadrature_state_vector(reference[[source]])
+    if (!identical(names(candidate_vector), names(reference_vector))) {
+      stop(sprintf("Quadrature state fields differ for source '%s'.", source), call. = FALSE)
+    }
+    relative_difference <- max(
+      abs(candidate_vector - reference_vector) /
+        pmax(1, abs(candidate_vector), abs(reference_vector))
+    )
+    reference_change <- as.numeric(reference[[source]]$relative_change)
+    candidate_pass <- isTRUE(candidate[[source]]$converged)
+    reference_pass <- isTRUE(reference[[source]]$converged) &&
+      is.finite(reference_change) && reference_change <= reference_tolerance
+    comparison_pass <- is.finite(relative_difference) && relative_difference <= tolerance
+    data.frame(
+      source = source,
+      candidate_nodes = as.integer(candidate[[source]]$nodes_per_panel),
+      candidate_converged = candidate_pass,
+      candidate_relative_change = as.numeric(candidate[[source]]$relative_change),
+      reference_nodes = as.integer(reference[[source]]$nodes_per_panel),
+      reference_converged = reference_pass,
+      reference_relative_change = reference_change,
+      candidate_reference_relative_difference = relative_difference,
+      tolerance = as.numeric(tolerance),
+      reference_tolerance = as.numeric(reference_tolerance),
+      passed = candidate_pass && reference_pass && comparison_pass,
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+app_glofas_part4_exal_quadrature_component_table <- function(candidate, reference) {
+  sources <- c("Y", "G")
+  if (!all(sources %in% names(candidate)) || !all(sources %in% names(reference))) {
+    stop("Candidate and reference quadrature updates require Y and G blocks.", call. = FALSE)
+  }
+  rows <- lapply(sources, function(source) {
+    candidate_vector <- app_glofas_part4_exal_quadrature_state_vector(candidate[[source]])
+    reference_vector <- app_glofas_part4_exal_quadrature_state_vector(reference[[source]])
+    if (!identical(names(candidate_vector), names(reference_vector))) {
+      stop(sprintf("Quadrature state fields differ for source '%s'.", source), call. = FALSE)
+    }
+    data.frame(
+      source = source,
+      component = names(candidate_vector),
+      candidate = as.numeric(candidate_vector),
+      reference = as.numeric(reference_vector),
+      absolute_difference = abs(candidate_vector - reference_vector),
+      relative_difference = abs(candidate_vector - reference_vector) /
+        pmax(1, abs(candidate_vector), abs(reference_vector)),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}

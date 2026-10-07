@@ -431,7 +431,7 @@ make_page <- function(part_label, subtitle, predictions, history, future_truth =
   future_all <- if (!is.null(future_truth)) do.call(rbind, lapply(clusters, function(cluster) transform(future_truth, cluster = cluster))) else NULL
   p <- ggplot() +
     geom_line(data = history_all, aes(target_date, observed), colour = "#262626", linewidth = 0.72) +
-    geom_vline(xintercept = as.numeric(as.Date("2022-12-25")), colour = "#666666", linetype = "22") +
+    geom_vline(xintercept = as.Date("2022-12-25"), colour = "#666666", linetype = "22") +
     geom_line(
       data = predictions,
       aes(target_date, value, colour = tau_label, linetype = model, group = interaction(model, tau_label)),
@@ -590,7 +590,10 @@ status <- list(
   descriptive_part4_leader = as.character(leader$family),
   descriptive_part4_leader_crps = as.numeric(leader$crps_grid_log1p)
 )
-writeLines(jsonlite::toJSON(status, auto_unbox = TRUE, pretty = TRUE), file.path(stage_root, "status/closeout.completed"))
+writeLines(
+  jsonlite::toJSON(status, auto_unbox = TRUE, pretty = TRUE, digits = NA),
+  file.path(stage_root, "status/closeout.completed")
+)
 
 app_ensure_dir(dirname(output_root))
 if (!file.rename(stage_root, output_root)) stop("Failed to atomically publish the final closeout runtime.", call. = FALSE)

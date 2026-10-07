@@ -2,8 +2,27 @@
 source("application/scripts/_joint_qdesn_laplace_coupling_recovery_bootstrap.R")
 rc <- app_joint_recovery_contract(); ct <- app_joint_prior_contract()
 stopifnot(rc$supplemental_chains_per_cell == 2, rc$max_workers == 15,
+  grepl("^[0-9a-f]{40}$", rc$predecessor_expected_head),
+  identical(app_joint_recovery_predecessor_worker_ids(),
+    c(3L, 4L, 7L, 8L, 11L, 12L)),
   ct$exal_mcmc_method == "M0_v_collapsed_support_logit",
   ct$exal_vb_method == "VB1_structured_v")
+
+historical <- data.frame(target_hash = "target", method = "AL", retained_draws = 10L,
+  iterations = 20L, burn = 10L, thin = 1L, chain_seed = 101L)
+supplemental <- historical
+supplemental$chain_seed <- 202L
+supplemental$source_cell_id <- 9L
+supplemental$source_worker_id <- NA_integer_
+metadata <- app_joint_recovery_bind_chain_metadata(list(historical, supplemental))
+stopifnot(nrow(metadata) == 2L, ncol(metadata) == 9L,
+  identical(metadata$chain_seed, c(101L, 202L)),
+  is.na(metadata$source_cell_id[[1L]]), metadata$source_cell_id[[2L]] == 9L)
+summaries <- app_joint_recovery_bind_rows(list(
+  data.frame(cell_id = 1L, score = 1),
+  data.frame(cell_id = 2L, score = .9, recovery_cell_id = 1L)))
+stopifnot(nrow(summaries) == 2L, is.na(summaries$recovery_cell_id[[1L]]),
+  summaries$recovery_cell_id[[2L]] == 1L)
 
 mock <- expand.grid(arm_id = app_joint_coupling_arms()$arm_id,
   replicate_id = 1:2, stringsAsFactors = FALSE)
@@ -50,4 +69,4 @@ writeLines("sealed", file.path(from, "nested", "value.txt"))
 app_joint_recovery_copy_tree(from, to)
 stopifnot(identical(readLines(file.path(to, "nested", "value.txt")), "sealed"))
 unlink(c(from, to), recursive = TRUE)
-cat("PASS: explicit baseline pathology, eligible fallback, partial/full confirmation plans, immutable copy helper, VB1/M0 contract.\n")
+cat("PASS: mixed-schema recovery, explicit baseline pathology, eligible fallback, partial/full confirmation plans, immutable copy helper, VB1/M0 contract.\n")

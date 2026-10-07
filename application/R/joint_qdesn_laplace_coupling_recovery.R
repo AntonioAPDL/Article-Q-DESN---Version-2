@@ -14,6 +14,10 @@ app_joint_recovery_contract <- function() {
   }
   stopifnot(out$version == "joint_laplace_coupling_recovery_v1",
     grepl("^[0-9a-f]{40}$", out$source_expected_head),
+    grepl("^[0-9a-f]{40}$", out$predecessor_expected_head),
+    identical(out$predecessor_run_tag, "joint_laplace_coupling_recovery_20261007"),
+    identical(out$continuation_run_tag,
+      "joint_laplace_coupling_recovery_continuation_20261007"),
     identical(out$scenario_id, "laplace_bridge"),
     identical(out$source_cell_ids, 9:11),
     identical(out$source_arm_ids,
@@ -22,6 +26,48 @@ app_joint_recovery_contract <- function() {
     out$max_workers == 15, out$partial_confirmation_allowed == "true",
     out$publication_allowed == "false")
   out
+}
+
+app_joint_recovery_bind_rows <- function(frames) {
+  if (!length(frames) || !all(vapply(frames, is.data.frame, logical(1L))))
+    stop("Schema-safe binding requires data frames.")
+  columns <- unique(unlist(lapply(frames, names), use.names = FALSE))
+  aligned <- lapply(frames, function(frame) {
+    missing <- setdiff(columns, names(frame))
+    for (column in missing) frame[[column]] <- NA
+    frame[, columns, drop = FALSE]
+  })
+  base::do.call(rbind, aligned)
+}
+
+app_joint_recovery_bind_chain_metadata <- function(frames) {
+  required <- c("target_hash", "method", "retained_draws", "iterations",
+    "burn", "thin", "chain_seed")
+  if (!length(frames) || !all(vapply(frames, function(frame)
+      is.data.frame(frame) && nrow(frame) == 1L &&
+        all(required %in% names(frame)), logical(1L))))
+    stop("Chain metadata is incomplete or malformed.")
+  app_joint_recovery_bind_rows(frames)
+}
+
+# The frozen source scorer is reused byte-for-byte. Only its metadata rbind is
+# intercepted so historical 26-column and recovery 28-column receipts align by
+# name. All model, forecast, diagnostic, and score calculations remain unchanged.
+app_joint_recovery_score <- function(root, stage, cell_id) {
+  scorer <- app_joint_prior_score
+  scorer_environment <- new.env(parent = environment(scorer))
+  scorer_environment$do.call <- function(what, args, ...) {
+    required <- c("target_hash", "method", "retained_draws", "iterations",
+      "burn", "thin", "chain_seed")
+    is_metadata_bind <- (identical(what, rbind) || identical(what, "rbind")) &&
+      length(args) && all(vapply(args, function(frame)
+        is.data.frame(frame) && nrow(frame) == 1L &&
+          all(required %in% names(frame)), logical(1L)))
+    if (is_metadata_bind) return(app_joint_recovery_bind_chain_metadata(args))
+    base::do.call(what, args, ...)
+  }
+  environment(scorer) <- scorer_environment
+  scorer(root, stage, cell_id)
 }
 
 app_joint_recovery_copy_tree <- function(from, to) {
@@ -40,6 +86,79 @@ app_joint_recovery_copy_tree <- function(from, to) {
     if (!all(copied)) stop("Failed to copy sealed recovery input.")
   }
   invisible(to)
+}
+
+app_joint_recovery_predecessor_worker_ids <- function() c(3L, 4L, 7L, 8L, 11L, 12L)
+
+app_joint_recovery_tree_inventory <- function(root, relative_directories) {
+  paths <- unlist(lapply(relative_directories, function(directory) {
+    absolute <- file.path(root, directory)
+    if (!dir.exists(absolute)) stop("Predecessor import directory is missing.")
+    files <- list.files(absolute, recursive = TRUE, all.files = TRUE,
+      full.names = TRUE, include.dirs = FALSE, no.. = TRUE)
+    substring(files, nchar(root) + 2L)
+  }), use.names = FALSE)
+  paths <- unique(paths)
+  absolute <- file.path(root, paths)
+  data.frame(relative_path = paths, size_bytes = file.info(absolute)$size,
+    sha256 = unname(vapply(absolute, app_sha256_file, character(1L))))
+}
+
+app_joint_recovery_verify_predecessor <- function(predecessor_root, source_root,
+    rc = app_joint_recovery_contract()) {
+  predecessor_root <- normalizePath(predecessor_root, mustWork = TRUE)
+  source_root <- normalizePath(source_root, mustWork = TRUE)
+  observed_head <- trimws(readLines(file.path(predecessor_root, "source_head.txt"),
+    warn = FALSE)[1L])
+  if (!identical(observed_head, rc$predecessor_expected_head))
+    stop("Unexpected predecessor execution HEAD.")
+  predecessor_source <- normalizePath(trimws(readLines(file.path(predecessor_root,
+    "source_runtime.txt"), warn = FALSE)[1L]), mustWork = TRUE)
+  if (!identical(predecessor_source, source_root))
+    stop("Predecessor does not reference the frozen source runtime.")
+  freeze <- app_joint_shared_verify_manifest(predecessor_root,
+    file.path(predecessor_root, "freeze_manifest.csv"))
+  plan <- app_joint_shared_verify_manifest(file.path(predecessor_root, "screen"),
+    file.path(predecessor_root, "screen/plan_manifest.csv"))
+  if (!nrow(freeze) || any(!freeze$verified) || !nrow(plan) || any(!plan$verified))
+    stop("Predecessor freeze or screen plan changed.")
+  if (!file.exists(file.path(predecessor_root, "CONTROLLER_FAILED")) ||
+      file.exists(file.path(predecessor_root, "COMPLETE")) ||
+      file.exists(file.path(predecessor_root, "screen", "SELECTION_FROZEN")))
+    stop("Predecessor is not the expected failed-closed preselection runtime.")
+  failed <- file.path(predecessor_root, "screen", "scores",
+    sprintf("cell_%04d", 1:3), "FAILED")
+  if (!all(file.exists(failed)) || !all(vapply(failed, function(path)
+      identical(trimws(readLines(path, warn = FALSE)[1L]),
+        "numbers of columns of arguments do not match"), logical(1L))))
+    stop("Predecessor score failure does not match the audited schema defect.")
+  directories <- file.path(predecessor_root, "screen", "chains",
+    sprintf("worker_%04d", 1:12))
+  if (!all(vapply(directories, app_joint_prior_done, logical(1L))))
+    stop("Predecessor chain evidence is incomplete or changed.")
+  ids <- app_joint_recovery_predecessor_worker_ids()
+  metadata <- lapply(file.path(predecessor_root, "screen", "chains",
+    sprintf("worker_%04d", ids), "metadata.csv"), app_read_csv)
+  if (!identical(vapply(metadata, function(x) as.integer(x$chain_id), integer(1L)),
+      rep(3:4, 3L)))
+    stop("Predecessor supplemental-chain map changed.")
+  relative <- file.path("screen", "chains", sprintf("worker_%04d", ids))
+  list(root = predecessor_root, worker_ids = ids,
+    inventory = app_joint_recovery_tree_inventory(predecessor_root, relative))
+}
+
+app_joint_recovery_verify_import <- function(root) {
+  manifest <- file.path(root, "predecessor_import_manifest.csv")
+  if (!file.exists(manifest)) return(invisible(TRUE))
+  tab <- app_read_csv(manifest)
+  absolute <- file.path(root, tab$relative_path)
+  if (!all(file.exists(absolute))) stop("Imported predecessor evidence is missing.")
+  size <- file.info(absolute)$size
+  hash <- unname(vapply(absolute, app_sha256_file, character(1L)))
+  if (!identical(as.numeric(size), as.numeric(tab$size_bytes)) ||
+      !identical(hash, as.character(tab$sha256)))
+    stop("Imported predecessor evidence changed.")
+  invisible(TRUE)
 }
 
 app_joint_recovery_source_manifest_paths <- function(source_root) {
@@ -134,11 +253,13 @@ app_joint_recovery_screen_plan <- function(source_root,
   list(datasets = datasets, cells = cells, chains = jobs, warmups = warmups)
 }
 
-app_joint_recovery_prepare <- function(root, source_root) {
+app_joint_recovery_prepare <- function(root, source_root, predecessor_root = NULL) {
   if (dir.exists(root)) stop("Recovery preparation will not overwrite an existing root.")
   rc <- app_joint_recovery_contract()
   source_root <- normalizePath(source_root, mustWork = TRUE)
   evidence <- app_joint_recovery_verify_source(source_root, rc)
+  predecessor <- if (is.null(predecessor_root)) NULL else
+    app_joint_recovery_verify_predecessor(predecessor_root, source_root, rc)
   source_ct <- readRDS(file.path(source_root, "contract.rds"))
   stopifnot(source_ct$screen_chains == 2, source_ct$confirmation_chains == 3,
     source_ct$exal_mcmc_method == "M0_v_collapsed_support_logit",
@@ -177,12 +298,32 @@ app_joint_recovery_prepare <- function(root, source_root) {
   for (i in seq_len(nrow(copied))) app_joint_recovery_copy_tree(
     file.path(source_root, "screen/chains", sprintf("worker_%04d", copied$source_worker_id[i])),
     file.path(screen, "chains", sprintf("worker_%04d", copied$worker_id[i])))
+  if (!is.null(predecessor)) {
+    for (id in predecessor$worker_ids) app_joint_recovery_copy_tree(
+      file.path(predecessor$root, "screen/chains", sprintf("worker_%04d", id)),
+      file.path(screen, "chains", sprintf("worker_%04d", id)))
+    app_write_csv(predecessor$inventory,
+      file.path(root, "predecessor_import_manifest.csv"))
+    writeLines(predecessor$root, file.path(root, "predecessor_runtime.txt"))
+    writeLines(rc$predecessor_expected_head, file.path(root, "predecessor_head.txt"))
+    app_write_csv(data.frame(
+      predecessor_status = "failed_closed_before_selection",
+      completed_source_chains = 6L,
+      completed_supplemental_chains = 6L,
+      failed_score_cells = 3L,
+      failure_message = "numbers of columns of arguments do not match",
+      action = "reuse_sealed_chains_and_rescore_under_schema_safe_continuation"),
+      file.path(root, "predecessor_failure_receipt.csv"))
+    app_joint_recovery_verify_import(root)
+  }
   stopifnot(app_joint_prior_done(file.path(screen, "datasets/dataset_02")),
     app_joint_prior_done(file.path(screen, "calibrations/dataset_02")),
     all(vapply(file.path(screen, "warmups", sprintf("worker_%03d", 1:3)),
       app_joint_prior_done, logical(1L))),
     all(vapply(file.path(screen, "chains", sprintf("worker_%04d", copied$worker_id)),
       app_joint_prior_done, logical(1L))))
+  if (!is.null(predecessor)) stopifnot(all(vapply(file.path(screen, "chains",
+    sprintf("worker_%04d", predecessor$worker_ids)), app_joint_prior_done, logical(1L))))
   plans <- file.path(screen, paste0(names(plan), ".csv"))
   app_joint_shared_write_manifest(screen, setNames(plans, basename(plans)),
     filename = "plan_manifest.csv")
@@ -201,6 +342,7 @@ app_joint_recovery_prepare <- function(root, source_root) {
   app_joint_shared_write_manifest(root, setNames(top, basename(top)),
     filename = "freeze_manifest.csv")
   app_joint_prior_verify_freeze(root)
+  app_joint_recovery_verify_import(root)
   invisible(root)
 }
 
@@ -289,6 +431,7 @@ app_joint_recovery_prepare_confirmation <- function(root, selection) {
 
 app_joint_recovery_adjudicate <- function(root) {
   app_joint_prior_verify_freeze(root)
+  app_joint_recovery_verify_import(root)
   if (file.exists(file.path(root, "screen/SELECTION_FROZEN")))
     stop("Recovery selection is already frozen.")
   checked <- app_joint_shared_verify_manifest(file.path(root, "screen"),
@@ -305,7 +448,8 @@ app_joint_recovery_adjudicate <- function(root) {
   }))
   original$recovery_cell_id <- NA_integer_
   combined <- original[!original$cell_id %in% recovered$cell_id, ]
-  combined <- rbind(combined, recovered); combined <- combined[order(combined$cell_id), ]
+  combined <- app_joint_recovery_bind_rows(list(combined, recovered))
+  combined <- combined[order(combined$cell_id), ]
   stopifnot(nrow(combined) == 16L, identical(combined$cell_id, 1:16))
   ct <- readRDS(file.path(root, "contract.rds"))
   joint <- combined[combined$structure == "joint", ]
@@ -331,7 +475,8 @@ app_joint_recovery_adjudicate <- function(root) {
 }
 
 app_joint_recovery_finalize <- function(root) {
-  app_joint_prior_verify_freeze(root); app_joint_prior_verify_selection(root)
+  app_joint_prior_verify_freeze(root); app_joint_recovery_verify_import(root)
+  app_joint_prior_verify_selection(root)
   tab <- app_joint_prior_collect(root, "confirmation")
   selection <- app_read_csv(file.path(root, "screen/selection.csv"))
   status <- app_read_csv(file.path(root, "screen/selection_status.csv"))

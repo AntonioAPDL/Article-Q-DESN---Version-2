@@ -3,7 +3,7 @@ script <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)
 source(file.path(dirname(script), "_joint_qdesn_laplace_coupling_recovery_bootstrap.R"))
 stopifnot(getRversion() == "4.6.0")
 args <- commandArgs(TRUE)
-if (length(args) < 2L) stop("Usage: SCRIPT ACTION ROOT [SOURCE|STAGE|KIND|ID]")
+if (length(args) < 2L) stop("Usage: SCRIPT ACTION ROOT [SOURCE|PREDECESSOR|STAGE|KIND|ID]")
 action <- args[[1L]]; root <- normalizePath(args[[2L]], mustWork = FALSE)
 folder_for <- function(stage, action, id) {
   kind <- switch(action, dataset = "datasets", calibrate = "calibrations",
@@ -15,6 +15,9 @@ folder_for <- function(stage, action, id) {
 if (action == "prepare") {
   stopifnot(length(args) == 3L)
   app_joint_recovery_prepare(root, args[[3L]])
+} else if (action == "prepare-continuation") {
+  stopifnot(length(args) == 4L)
+  app_joint_recovery_prepare(root, args[[3L]], args[[4L]])
 } else if (action == "validate-source") {
   stopifnot(length(args) == 3L)
   verified <- app_joint_recovery_verify_source(args[[3L]])
@@ -72,13 +75,14 @@ if (action == "prepare") {
     file.path(root, stage, "plan_manifest.csv"))
   stopifnot(all(checked$verified))
   if (stage == "confirmation") app_joint_prior_verify_selection(root)
+  app_joint_recovery_verify_import(root)
   app_ensure_dir(folder)
   writeLines(paste(Sys.getpid(), format(Sys.time(), tz = "UTC", usetz = TRUE)),
     file.path(folder, "RUNNING"))
   success <- tryCatch({
     fun <- switch(action, dataset = app_joint_prior_dataset,
       calibrate = app_joint_coupling_calibrate, warmup = app_joint_prior_warmup,
-      chain = app_joint_prior_chain, score = app_joint_prior_score)
+      chain = app_joint_prior_chain, score = app_joint_recovery_score)
     fun(root, stage, id); TRUE
   }, error = function(e) {
     writeLines(conditionMessage(e), file.path(folder, "FAILED"))

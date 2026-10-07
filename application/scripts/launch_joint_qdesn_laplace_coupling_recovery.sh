@@ -6,22 +6,28 @@ SOURCE_ROOT="${2:?completed source runtime root required}"
 CPUS="${3:?comma-separated physical CPU ids required}"
 RSCRIPT="${RSCRIPT:-/data/jaguir26/local/opt/R/4.6.0/bin/Rscript}"
 MODE="${4:-launch}"
+PREDECESSOR_ROOT="${5:-}"
 SCRIPT=application/scripts/joint_qdesn_laplace_coupling_recovery.R
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1
 source application/scripts/_joint_exqdesn_cpu_queue.sh
 IFS=',' read -r -a cpu_array <<< "$CPUS"
 (( ${#cpu_array[@]} > 0 && ${#cpu_array[@]} <= 15 )) || exit 2
-if [[ "$MODE" == launch || "$MODE" == resume ]]; then
+if [[ "$MODE" == launch || "$MODE" == continuation || "$MODE" == resume ]]; then
   [[ "$(git branch --show-current)" == work/joint-qdesn-laplace-coupling-recovery-20261007 ]]
   [[ -z "$(git status --porcelain)" ]]
   [[ "$(git rev-list --left-right --count HEAD...@{upstream})" == $'0\t0' ]]
   [[ "$(hostname -s)" == jerez ]] || { echo "This recovery is assigned to Jerez." >&2; exit 2; }
   receipt=$(mktemp /tmp/joint_coupling_recovery_capacity_XXXXXX.csv)
   "$RSCRIPT" --vanilla application/scripts/joint_qdesn_laplace_coupling_capacity.R "$CPUS" "$receipt"
-  if [[ "$MODE" == launch ]]; then
+  if [[ "$MODE" == launch || "$MODE" == continuation ]]; then
     [[ ! -e "$ROOT" ]] || { echo "Use resume for an existing recovery root." >&2; exit 2; }
     "$RSCRIPT" --vanilla "$SCRIPT" validate-source "$ROOT" "$SOURCE_ROOT"
-    "$RSCRIPT" --vanilla "$SCRIPT" prepare "$ROOT" "$SOURCE_ROOT"
+    if [[ "$MODE" == continuation ]]; then
+      [[ -n "$PREDECESSOR_ROOT" ]] || { echo "Continuation requires a predecessor runtime." >&2; exit 2; }
+      "$RSCRIPT" --vanilla "$SCRIPT" prepare-continuation "$ROOT" "$SOURCE_ROOT" "$PREDECESSOR_ROOT"
+    else
+      "$RSCRIPT" --vanilla "$SCRIPT" prepare "$ROOT" "$SOURCE_ROOT"
+    fi
     mv "$receipt" "$ROOT/capacity_preflight.csv"
     printf '%s\n' "$CPUS" > "$ROOT/cpu_list.txt"
     launch_receipt=$(mktemp /tmp/joint_coupling_recovery_launch_capacity_XXXXXX.csv)

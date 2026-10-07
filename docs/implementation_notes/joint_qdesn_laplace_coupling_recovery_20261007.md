@@ -65,3 +65,37 @@ bash application/tests/test_joint_exqdesn_cpu_queue.sh
 After closeout, the handoff must report both source and recovery branches/HEADs,
 exact counts, selection status by likelihood, manifests and hashes, tests,
 storage, article-safe files, exclusions, risks, and READY/NOT_READY status.
+
+## Schema-Safe Continuation
+
+The first recovery execution completed all six supplemental chains, then failed
+closed before selection when the frozen source-chain metadata (26 columns) and
+new recovery-chain metadata (28 columns) reached a positional `rbind`. The two
+additional columns, `source_cell_id` and `source_worker_id`, are provenance only.
+All 12 chains have 750 finite retained draws, matching within-cell target hashes,
+and verified manifests. No model fit failed and no MCMC rerun is warranted.
+
+The continuation does not edit or resume that frozen failed runtime under a new
+HEAD. It verifies the predecessor freeze, exact expected failure, source pointer,
+screen plan, and all 12 chain manifests; imports only workers 3, 4, 7, 8, 11 and
+12 into a fresh runtime; records every imported file by size and SHA-256; and
+freezes the new runtime under the corrected commit. Source workers 1, 2, 5, 6,
+9 and 10 continue to come directly from the original source campaign.
+
+Scoring reuses the frozen source scorer and intercepts only its metadata bind,
+aligning data-frame columns by name after validating the invariant metadata
+fields. The same schema-safe binder is used when recovered summaries replace
+source cells 9-11. Forecast construction, score computation, diagnostics,
+eligibility, selection, DESN controls, priors, seeds, M0 and VB1 are unchanged.
+
+The continuation launch form is:
+
+```bash
+bash application/scripts/launch_joint_qdesn_laplace_coupling_recovery.sh \
+  "$NEW_ROOT" "$SOURCE_ROOT" "$CPUS" continuation "$FAILED_RECOVERY_ROOT"
+```
+
+It first reruns only the three affected scores. Selection then determines an
+18-worker exAL-only confirmation, a 30-worker exAL-plus-AL-baseline confirmation,
+or a 36-worker two-challenger confirmation. Completed source and supplemental
+chains are never scheduled again.

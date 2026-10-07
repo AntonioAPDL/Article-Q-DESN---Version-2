@@ -420,15 +420,18 @@ names(part4_context)[[2L]] <- "observed"
 part4_future_truth <- data.frame(target_date = truth_sidecar$target_date, observed = truth_sidecar$y_transformed)
 
 palette_tau <- c(
-  "0.05" = "#005A32", "0.2" = "#238B45", "0.35" = "#78C679", "0.5" = "#1F1F1F",
-  "0.65" = "#FDB863", "0.8" = "#E66101", "0.95" = "#B2182B"
+  "0.05" = "#005A32", "0.20" = "#238B45", "0.35" = "#78C679", "0.50" = "#1F1F1F",
+  "0.65" = "#FDB863", "0.80" = "#E66101", "0.95" = "#B2182B"
 )
 make_page <- function(part_label, subtitle, predictions, history, future_truth = NULL) {
-  predictions$cluster <- factor(predictions$cluster, levels = c("Normal and raw", "Independent quantiles", "Joint quantiles"))
-  predictions$tau_label <- format(predictions$quantile_level, trim = TRUE)
+  cluster_levels <- c("Normal and raw", "Independent quantiles", "Joint quantiles")
+  predictions$cluster <- factor(predictions$cluster, levels = cluster_levels)
+  predictions$tau_label <- sprintf("%.2f", predictions$quantile_level)
   clusters <- levels(predictions$cluster)
   history_all <- do.call(rbind, lapply(clusters, function(cluster) transform(history, cluster = cluster)))
   future_all <- if (!is.null(future_truth)) do.call(rbind, lapply(clusters, function(cluster) transform(future_truth, cluster = cluster))) else NULL
+  history_all$cluster <- factor(history_all$cluster, levels = cluster_levels)
+  if (!is.null(future_all)) future_all$cluster <- factor(future_all$cluster, levels = cluster_levels)
   p <- ggplot() +
     geom_line(data = history_all, aes(target_date, observed), colour = "#262626", linewidth = 0.72) +
     geom_vline(xintercept = as.Date("2022-12-25"), colour = "#666666", linetype = "22") +

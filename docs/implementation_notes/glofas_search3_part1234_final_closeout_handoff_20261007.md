@@ -80,6 +80,21 @@ These are protected-window evaluation results. Describe Independent AL as the
 descriptive leader, not as a model selected on the final window. Joint exAL is
 numerically certified but remains scientifically weak in the upper tail.
 
+## Residual Scientific Limitations
+
+- Part 1 Independent AL has three adjacent-quantile crossing pairs and Part 1
+  Independent exAL has one across the 30-day output grid. Part 1 Joint AL,
+  Part 1 Joint exAL and every Part 3 family have zero. Preserve these raw
+  results; do not apply an unregistered crossing correction during promotion.
+- Part 2 post-cutoff discrepancy paths cannot be scored because retrospective
+  GloFAS ends at the cutoff. They remain forecast products, not validation
+  evidence.
+- Part 4 has material upper-tail undercoverage, most severely for corrected
+  Joint exAL (`q0.95` empirical coverage `0.286`). Numerical convergence does
+  not imply competitive predictive calibration.
+- Parts 1 and 3 use 30-day recursive paths; Part 4 is restricted to the 28
+  issued GloFAS ensemble horizons. These scopes must not be conflated.
+
 ## Integration Inputs
 
 Use these runtime files as the numerical and graphical source of truth:

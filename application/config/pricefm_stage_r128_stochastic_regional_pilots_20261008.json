@@ -2,6 +2,7 @@
   "tag": "pricefm_stage_r128_stochastic_regional_pilots_20261008",
   "dependency_head": "1e24342e1ecd2dd7a99d8df2445f29be7f7a03d2",
   "dependency_branch": "work/pricefm-r127-closeout-20261008",
+  "local_pricefm_reference_sha256": "51d95cae91d66c44f65ad2638f6eda62f79664b8ed732a8cb31c9d387701bfb3",
   "bg_parent_tag": "pricefm_stage_r123_certified_successor_20261005",
   "regions": ["HR", "DK_1"],
   "folds": [1, 2, 3],

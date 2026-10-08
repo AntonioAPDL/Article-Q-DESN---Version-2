@@ -208,6 +208,18 @@ def rank_groups(records, key):
     return sorted(valid, key=lambda r: (r['mean_AQL'], tuple(str(r[k]) for k in key))), excluded
 
 
+def benchmark_reference(path, expected_sha256):
+    from pricefm_r126_contract import digest
+    if digest(path) != expected_sha256: raise RuntimeError('frozen local PriceFM reference changed')
+    table = pd.read_csv(path)[['region', 'fold', 'operational_pricefm_AQL']]
+    if (len(table) != 114 or table.duplicated(['region', 'fold']).any()
+            or table.region.nunique() != 38 or table.isna().any().any()
+            or not np.isfinite(table.operational_pricefm_AQL).all()
+            or any(set(group.fold) != {1, 2, 3} for _, group in table.groupby('region'))):
+        raise ValueError('complete frozen 38-region three-fold PriceFM reference required')
+    return table
+
+
 def physical_cpus(count, sample_seconds=5):
     import time
     if not 1 <= count <= 15: raise ValueError('combined cap must be 1..15')

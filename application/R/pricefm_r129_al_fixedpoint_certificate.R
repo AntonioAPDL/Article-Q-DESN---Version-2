@@ -24,6 +24,26 @@ r129_rates <- function(s) {
   c(log(s$b_lambda[idx]), log(s$b_nu[idx]), log(s$b_tau), log(s$b_xi), log(s$b_zeta))
 }
 
+r129_rhs_block_residual <- function(prior, state, m, V) {
+  stopifnot(!state$shrink_intercept, !state$zeta2_is_fixed,
+    state$p == length(m), all(dim(V) == c(length(m), length(m))))
+  idx <- seq.int(2L, state$p)
+  beta2 <- m^2 + diag(V)
+  shapes <- c(state$a_lambda[idx] - 1, state$a_nu[idx] - 1,
+    state$a_tau - (length(idx) + 1) / 2, state$a_xi - 1,
+    state$a_zeta - prior$controls$a_zeta - length(idx) / 2)
+  # Simultaneous coordinate equations use one variational state, not a CAVI sweep.
+  expected <- c(.5 * beta2[idx] * state$a_tau / state$b_tau +
+      state$a_nu[idx] / state$b_nu[idx],
+    1 + state$a_lambda[idx] / state$b_lambda[idx],
+    .5 * sum(beta2[idx] * state$a_lambda[idx] / state$b_lambda[idx]) +
+      state$a_xi / state$b_xi,
+    1 / prior$controls$tau0^2 + state$a_tau / state$b_tau,
+    prior$controls$b_zeta + .5 * sum(beta2[idx]))
+  stopifnot(all(is.finite(expected)), all(expected > 0))
+  max(abs(shapes), abs(log(expected) - r129_rates(state)))
+}
+
 r129_reconstruct_rhs <- function(prior, m, V, max_iter = 20000L, tol = 1e-9) {
   state <- prior$init_vb(); residual <- Inf; stable <- 0L
   for (i in seq_len(max_iter)) {
@@ -86,7 +106,8 @@ r129_certificate <- function(ns, X, y, m, V, sigma, tau, tau0, limits,
     2 * current$A * current$residual + current$A^2 * current$nu) / (2 * current$B)
   sigma_residual <- abs(sigma_new_b / current$b - 1)
   rhs_next <- prior$update_vb(first$state, list(m = solved, V = new_V))
-  rhs_joint_residual <- max(abs(r129_rates(rhs_next) - r129_rates(first$state)))
+  rhs_lookahead_residual <- max(abs(r129_rates(rhs_next) - r129_rates(first$state)))
+  rhs_joint_residual <- r129_rhs_block_residual(prior, first$state, m, V)
   new_sigma <- sigma_new_b / (current$a - 1)
   next_objective <- r129_elbo(ns, prior, rhs_next, solved, new_V, new_sigma, y, X, tau)$elbo
   elbo_residual <- abs(next_objective - current$elbo) / max(1, abs(current$elbo))
@@ -97,7 +118,7 @@ r129_certificate <- function(ns, X, y, m, V, sigma, tau, tau0, limits,
   checks <- vapply(names(measures), function(k) is.finite(measures[[k]]) &&
     measures[[k]] <= limits[[k]], logical(1))
   list(certified = all(checks) && first$converged && other$converged,
-    certification = 'independent_full_AL_RHS_NS_fixedpoint_not_original_formal_flag',
+    certification = 'independent_same_state_AL_RHS_NS_block_stationarity_not_original_formal_flag',
     measures = measures, limits = limits, checks = as.list(checks),
     rhs_reconstruction = list(unit_converged = first$converged, dispersed_converged = other$converged,
       unit_iterations = first$iterations, dispersed_iterations = other$iterations,
@@ -107,6 +128,7 @@ r129_certificate <- function(ns, X, y, m, V, sigma, tau, tau0, limits,
     mean_solve_relative_residual = sqrt(sum((P %*% solved - b)^2)) / sqrt(sum(b^2)),
     inverse_mean_relative_residual = sqrt(sum((P %*% inverse_m - b)^2)) / sqrt(sum(b^2)),
     inverse_vs_solve_max_beta = max(abs(inverse_m - solved)),
+    rhs_lookahead_log_rates_not_stationarity_gate = rhs_lookahead_residual,
     diagnostic_rhs_shape = first$state$a_tau, shrunk_dimension = p - 1L,
     initialization_changes_prior = FALSE, prior_center = rep(0, p),
     reconstructed_rhs_state = first$state, beta_covariance = V,

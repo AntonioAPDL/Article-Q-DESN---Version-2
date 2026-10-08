@@ -6,7 +6,7 @@ c <- jsonlite::read_json(config, simplifyVector = TRUE)
 hash <- function(path) digest::digest(path, file = TRUE, algo = 'sha256')
 stopifnot(identical(c$stage, 'R129'), identical(c$action, 'public_AL_fit'),
   identical(c$test_opened, FALSE), !dir.exists(c$output_dir),
-  c$max_iter == 1000L, c$tol == .001)
+  c$max_iter == 1000L, is.finite(c$tol), c$tol > 0, c$tol <= 1e-5)
 for (name in names(c$input_sha256)) stopifnot(identical(hash(name), c$input_sha256[[name]]))
 source(c$cran_adapter); source(c$helper)
 ns <- r129_namespace(c$cran_library)
@@ -56,7 +56,7 @@ terminal <- list(status = 'completed_r129_public_AL_with_independent_certificate
   p = d$p, n = d$n, fold = c$fold, tau = c$tau, tau0 = c$tau0, sigma = sigma, gamma = 0,
   iterations = fit$iter, formal_converged = isTRUE(fit$converged), finite_core = finite,
   computational_stop_tol = c$tol, independent_fixedpoint_certified = certificate$certified,
-  convergence_policy = 'full_AL_RHS_fixedpoint_certificate_not_raw_beta_stop_alone',
+  convergence_policy = 'same_state_AL_RHS_block_stationarity_not_raw_beta_stop_alone',
   train_seconds = fit_seconds, total_seconds = proc.time()[['elapsed']] - start,
   posterior_target_sha256 = c$posterior_target_sha256,
   prior_center_from_initializer = FALSE, initialization_only = TRUE, test_opened = FALSE,

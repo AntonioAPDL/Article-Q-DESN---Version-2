@@ -40,8 +40,12 @@ immutable_hashes <- c(
   "tables/joint_qdesn_corrected_v4_phase181_reconciliation.csv" =
     "02deccb5d29df490b1031c52c9f3f1ffc817a37ffca4a14aaf3713c93d62274c",
   "tables/glofas_application_current_score_summary.csv" =
-    "829d4467e4b734d4cd7a0dbab40ba72fe9b9c91c328908461f82f3093167d498",
+    "c15d21cda11c8c8a89742b32b8a0c07b85851176dac29c30076941e32c52c998",
   "tables/glofas_application_current_selection_manifest.csv" =
+    "25691eddb333d85dbc00de8ec33389d23796499343e0b01500778754e94f2c1c",
+  "tables/glofas_application_part4_forecast_scores__glofas_part4_joint_al_sweep10_20260911.csv" =
+    "829d4467e4b734d4cd7a0dbab40ba72fe9b9c91c328908461f82f3093167d498",
+  "tables/glofas_application_part4_selection_decision__glofas_part4_joint_al_sweep10_20260911.csv" =
     "59792f78a055943cab6dd2e6e3eb829f08df9df6e2f98add05a4bec595b907de",
   "tables/pricefm_r98_authoritative_registry.csv" =
     "4cf8ff653c6bd7fc64a2992fbfb6e1df48867d1b7d840cd8544fb30a5c538cb6",
@@ -189,16 +193,86 @@ expect(grepl("prospectively", main, fixed = TRUE) &&
 expect(!grepl("PricefmSelection|pricefm_r91_selective_promotions|PricefmAligned",
               manuscript, perl = TRUE),
        "A deprecated R91/R92 PriceFM reader-facing construct remains.")
-expect(grepl("pricefm_r98_authoritative_registry.csv",
-             read_text("overleaf/article_files.txt"), fixed = TRUE),
-       "The article-only snapshot does not carry the complete R98 registry.")
+# The complete R98 registry remains immutable and hash-verified in Git above.
+# It and the transition ledger contain local source paths, not TeX inputs.
+# They must not enter the article-only upload.
+expect(!grepl("pricefm_r98_authoritative_registry.csv|pricefm_r98_authority_transition_ledger.csv",
+              read_text("overleaf/article_files.txt")),
+       "Machine-local PriceFM provenance entered the article-only snapshot.")
 
 article_files <- readLines(repo_path("overleaf/article_files.txt"), warn = FALSE)
+public_text_files <- article_files[grepl("\\.(tex|csv|json|bib)$", article_files)]
+public_text <- paste(vapply(public_text_files, read_text, character(1L)), collapse = "\n")
+expect(!grepl("/data/|/home/|/tmp/|local_trackers|application/cache|\\.(rds|rda|RData)([\"[:space:]]|$)",
+              public_text, ignore.case = TRUE),
+       "Private source paths or runtime-object references remain in the upload.")
 expect(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
        "Repeated VB forecast figures remain in the article-only snapshot.")
 expect(file.exists(repo_path(
   "docs/implementation_notes/joint_qvp_rhs_deferred_rerun_register_20260908.md"
 )), "The deferred RHS correction register is missing.")
+
+# Search III replaces the live GloFAS projection, not the retained historical
+# ledgers or any independent, JOINT, or PriceFM scientific input above.
+glofas_tag <- "glofas_search3_part1234_final_20261007"
+glofas_aliases <- read_text("tables/glofas_application_current_outputs.tex")
+glofas_read <- function(suffix) read.csv(repo_path(paste0(
+  "tables/", glofas_tag, "_", suffix, ".csv"
+)), check.names = FALSE)
+expect(grepl(glofas_tag, glofas_aliases, fixed = TRUE) &&
+         grepl("search3\\_ref\\_001", glofas_aliases, fixed = TRUE) &&
+         grepl("search3\\_dis\\_007", glofas_aliases, fixed = TRUE),
+       "The active GloFAS aliases do not identify Search III.")
+glofas_scores <- glofas_read("part4_scores")
+expect(nrow(glofas_scores) == 7L && !anyDuplicated(glofas_scores$family) &&
+         all(glofas_scores$n_scored_horizons == 28L) &&
+         glofas_scores$family[which.min(glofas_scores$crps_grid_log1p)] == "Independent AL",
+       "The complete descriptive seven-family issued-window comparison changed.")
+glofas_recursive <- glofas_read("part123_scores")
+glofas_no_score <- glofas_recursive[glofas_recursive$part == "Part 2", ]
+expect(nrow(glofas_recursive) == 18L && nrow(glofas_no_score) == 6L &&
+         all(glofas_no_score$n_scored_horizons == 0L) &&
+         all(is.na(glofas_no_score$crps_grid_log1p)) &&
+         all(glofas_recursive$n_scored_horizons[glofas_recursive$part != "Part 2"] == 30L),
+       "The Part 2 no-score or 30-versus-28-horizon boundary changed.")
+glofas_convergence <- glofas_read("convergence")
+expect(nrow(glofas_convergence) == 2L &&
+         all(glofas_convergence$converged_outer & glofas_convergence$converged_inner &
+             glofas_convergence$converged_rhs & glofas_convergence$full_state_pass) &&
+         all(glofas_convergence$terminal_consecutive_passes >= 3L) &&
+         nrow(glofas_read("calibration")) == 49L,
+       "Both corrected joint fits or the complete calibration surface failed.")
+expect(!any(glofas_read("selected_specifications")$protected_window_selection) &&
+         all(glofas_read("decision_ledger")$protected_window_selection == "No"),
+       "Protected-window results entered GloFAS model selection.")
+for (macro in c("CurrentPartOneFigure", "CurrentPartTwoFigure", "CurrentPartThreeFigure",
+                "CurrentConvergenceFigure", "CurrentCalibrationFigure")) {
+  expect(grepl(paste0("\\GlofasApplication", macro), supplement, fixed = TRUE),
+         paste("Supplement omits the GloFAS figure role:", macro))
+}
+expect(grepl("\\GlofasApplicationCurrentForecastWindowFigure", main, fixed = TRUE) &&
+         grepl("descriptive", main, fixed = TRUE) &&
+         grepl("three and one adjacent-quantile crossing pairs", main, fixed = TRUE),
+       "Main GloFAS results omit the issued-window figure, descriptive scope, or crossing disclosure.")
+active_glofas <- article_files[grepl("^tables/glofas_|^figures/glofas", article_files)]
+expect(length(active_glofas) > 10L &&
+         !any(grepl("sweep10|fr09|part4_joint_al_sweep", active_glofas, ignore.case = TRUE)) &&
+         paste0("tables/", glofas_tag, "_publication_manifest.csv") %in% article_files,
+       "Overleaf contains stale GloFAS authority or lacks its publication manifest.")
+glofas_reader_text <- paste(c(manuscript, vapply(
+  active_glofas[grepl("\\.(tex|csv)$", active_glofas)], read_text, character(1L)
+)), collapse = "\n")
+expect(!grepl("glofas_part4_joint_al_sweep10|0\\.8374|0\\.004153|cap-stabilized|not strictly outer-converged|selected Joint AL|near-nominal",
+              glofas_reader_text, ignore.case = TRUE) &&
+         !grepl("/data/|/home/|/tmp/|local_trackers|application/cache|\\.(rds|rda|RData|log)([\"[:space:]]|$)",
+                glofas_reader_text, ignore.case = TRUE),
+       "Stale authority or private/runtime information remains reader-facing.")
+glofas_check <- system2(file.path(R.home("bin"), "Rscript"),
+  shQuote(repo_path("application/scripts/448_check_glofas_search3_article_projection.R")),
+  stdout = TRUE, stderr = TRUE)
+expect(is.null(attr(glofas_check, "status")) &&
+         any(grepl("GLOFAS_SEARCH3_ARTICLE_PROJECTION_CHECK=PASS", glofas_check, fixed = TRUE)),
+       "The full GloFAS projection contract failed.")
 
 abstract <- sub(".*\\\\begin\\{abstract\\}", "", main)
 abstract <- sub("\\\\end\\{abstract\\}.*", "", abstract)

@@ -237,5 +237,6 @@ source(app_path("application/tests/test_joint_qdesn_pure_desn_article_projection
 source(app_path("application/tests/test_joint_qdesn_recursive_mean_design.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_dgp_oracle.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_mean_score_packet.R"))
+run_standalone_glofas_test("application/tests/test_glofas_search3_article_projection.R")
 
 cat("Application tests completed.\n")

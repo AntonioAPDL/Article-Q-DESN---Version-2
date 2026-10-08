@@ -97,6 +97,19 @@ the manually reconciled registry and README integration-blob hashes are
 refreshed. These changes repair only harness invocation and isolation, not
 scientific fitting, inference, or publication behavior.
 
+After the source-only merge was recorded, the coordinator added the new
+deterministic article-projection test as one further standalone registration.
+The manifest's registry blob records that final combined tree; every imported
+source and current-main registration remains present. This downstream
+test-registration change does not alter the six-manual/128-exact source-path
+classification or any scientific implementation.
+
+The active independent-study v14 manifest also binds the global manuscripts,
+final manuscript checker, and Overleaf dependency list. Its four publication
+hashes are refreshed for this GloFAS revision, while all independent-study
+data, figures, renderers, wrappers, numerical provenance, and evidence-date
+metadata remain unchanged. The historical v13 manifest is not refreshed.
+
 The focused imported-test batch also exposed a missing Python runtime
 dependency. The pinned executable is Python 3.11.13, while the host default
 Python is 3.6.8. An isolated temporary test environment supplies PyYAML 6.0.3,

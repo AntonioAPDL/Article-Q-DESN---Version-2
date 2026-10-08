@@ -1,14 +1,16 @@
-\begin{tabularx}{\textwidth}{@{}Yrrrrr@{}}
+% Generated deterministically from the reviewed Search III authority.
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}lrrrrl@{}}
 \toprule
-Model & \shortstack{Mean check\\loss} & \shortstack{Interval\\score} & \(\aCRPS\) & \shortstack{90\%\\coverage} & \shortstack{\(\aCRPS\) reduction\\vs raw GloFAS} \\
+Family & Mean check loss & Grid aCRPS & 90\% coverage & Reduction vs raw & Numerical status \\
 \midrule
-Joint AL Q--DESN (selected) & 0.4180 & 5.3889 & 0.8374 & 0.929 & 41.7\% \\
-Independent AL Q--DESN & 0.4292 & 5.4239 & 0.8606 & 0.929 & 40.1\% \\
-Independent exAL Q--DESN & 0.5227 & 6.6540 & 1.0478 & 0.750 & 27.0\% \\
-\addlinespace[2pt]
-Normal Ridge DESN & 0.4334 & 13.8539 & 0.8062 & 0.250 & 43.9\% \\
-Normal RHS/VB DESN & 0.5077 & 16.6741 & 0.9412 & 0.179 & 34.5\% \\
-\addlinespace[2pt]
-Raw GloFAS & 0.7713 & 24.5037 & 1.4360 & 0.000 & -- \\
+Independent AL & 0.3595 & 0.7156 & 0.750 & 50.17\% & Complete \\
+Independent exAL & 0.4227 & 0.8266 & 0.536 & 42.44\% & Complete \\
+Normal Ridge & 0.4531 & 0.8471 & 0.107 & 41.01\% & Complete \\
+Joint AL & 0.4718 & 0.9490 & 0.786 & 33.91\% & Strict convergence \\
+Joint exAL & 0.6037 & 1.1765 & 0.286 & 18.07\% & Strict convergence \\
+Raw GloFAS & 0.7713 & 1.4360 & 0.000 & 0.00\% & Issued ensemble \\
+Normal RHS/VB & 0.8038 & 1.4790 & 0.107 & -3.00\% & Complete \\
 \bottomrule
-\end{tabularx}
+\end{tabular}%
+}

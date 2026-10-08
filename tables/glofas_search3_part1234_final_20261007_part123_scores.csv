@@ -1,0 +1,19 @@
+"part","family","role","numerical_status","n_scored_horizons","mean_check_loss","crps_grid_log1p","coverage90","median_mae_log1p","median_rmse_log1p","crossing_pairs"
+"Part 1","Normal Ridge","part1_forecast","completed",30,"0.21689660314828499","0.41351950024958101","0.43333333333333302","0.54635443943792295","0.72004609632973204",0
+"Part 1","Normal RHS/VB","part1_forecast","completed",30,"0.21635332600340401","0.41244607017714802","0.5","0.54354170394199697","0.72731344117560404",0
+"Part 1","Independent AL","part1_forecast","completed",30,"0.25570855603803999","0.50280725882419397","0.59999999999999998","0.76016912876156395","0.98529211138571704",3
+"Part 1","Independent exAL","part1_forecast","completed",30,"0.30203548211051501","0.58876057786545","0.59999999999999998","0.83241566043235704","1.0562016298064001",1
+"Part 1","Joint AL","part1_forecast","completed",30,"0.25278606278200999","0.49758371354819902","0.69999999999999996","0.73986830777661805","0.96367390181219703",0
+"Part 1","Joint exAL","part1_forecast","completed",30,"0.29872047013492797","0.58086748912881703","0.59999999999999998","0.811028640170115","1.0313547289904399",0
+"Part 2","Normal Ridge","part2_discrepancy_forecast","unscored_future_retrospective_unavailable",0,NA,NA,NA,NA,NA,NA
+"Part 2","Normal RHS/VB","part2_discrepancy_forecast","unscored_future_retrospective_unavailable",0,NA,NA,NA,NA,NA,NA
+"Part 2","Independent AL","part2_discrepancy_forecast","unscored_future_retrospective_unavailable",0,NA,NA,NA,NA,NA,NA
+"Part 2","Independent exAL","part2_discrepancy_forecast","unscored_future_retrospective_unavailable",0,NA,NA,NA,NA,NA,NA
+"Part 2","Joint AL","part2_discrepancy_forecast","unscored_future_retrospective_unavailable",0,NA,NA,NA,NA,NA,NA
+"Part 2","Joint exAL","part2_discrepancy_forecast","unscored_future_retrospective_unavailable",0,NA,NA,NA,NA,NA,NA
+"Part 3","Normal Ridge","part3_forecast","completed",30,"0.28013763284825999","0.524238713802476","0.40000000000000002","0.65859379168809595","0.86496096658338595",0
+"Part 3","Normal RHS/VB","part3_forecast","completed",30,"0.28152950462064502","0.52688732585555498","0.43333333333333302","0.66169586774155298","0.87360477663139602",0
+"Part 3","Independent AL","part3_forecast","completed",30,"0.316625920483315","0.62518559852018896","0.63333333333333297","0.92221890036364096","1.1630470331101399",0
+"Part 3","Independent exAL","part3_forecast","completed",30,"0.36446381714702503","0.70693745790345996","0.5","0.97235672564349296","1.2113173882852499",0
+"Part 3","Joint AL","part3_forecast","completed",30,"0.326744082364539","0.64570687210465605","0.63333333333333297","0.94827377064378704","1.1839946249315001",0
+"Part 3","Joint exAL","part3_forecast","completed",30,"0.39126467361474998","0.75565688574707202","0.43333333333333302","1.01588833097855","1.2488024222563201",0

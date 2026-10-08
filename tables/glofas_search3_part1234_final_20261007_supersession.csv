@@ -1,0 +1,6 @@
+"artifact_scope","disposition","replacement","reason"
+"Part 4 source Joint AL fit","superseded","Corrected Joint AL","RHS scales were frozen through the original five-sweep budget."
+"Part 4 release Joint exAL outer-20 checkpoint","superseded","Corrected Joint exAL","Full exAL local state was not retained between outer sweeps."
+"exAL quadrature certificates r1-r3","diagnostic_only","Post-correction quadrature certificate","Only the post-commit r4 fixed-state certificate authorizes production."
+"Part 4 corrected Joint AL","canonical","Corrected Joint AL","Strict outer, inner, RHS and three-pass full-state convergence."
+"Part 4 corrected Joint exAL","canonical_sensitivity","Corrected Joint exAL","Strict full-state convergence after state-retention and quadrature-certificate correction."

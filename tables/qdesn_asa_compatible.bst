@@ -11,7 +11,7 @@
 %% Load natbib and url/hyperref. Recommended punctuation:
 %%   \bibpunct{(}{)}{;}{a}{}{,}
 %% Titles must be supplied in the required title case in the .bib database.
-%% A modification of `plain.bst' for use with natbib package 
+%% A modification of `plain.bst' for use with natbib package
 %%
 %% Copyright 1993-2007 Patrick W Daly
 %% Max-Planck-Institut f\"ur Sonnensystemforschung

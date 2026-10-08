@@ -1,12 +1,21 @@
  % !TeX program = pdflatex
-\documentclass[11pt]{article}
+\documentclass[12pt,letterpaper]{article}
 
 % ---- Aesthetics & layout ----
-\usepackage[margin=1in]{geometry}
+\usepackage{geometry}
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{setspace}
-\onehalfspacing
+\doublespacing
+% ASA review layout: 26 body-text lines on US Letter paper.
+\geometry{hmargin=1in,textheight=26\baselineskip,centering}
+% Define \QdesnReviewMode before inputting this file for anonymous review.
+\newif\ifQdesnAnonymous
+\ifdefined\QdesnReviewMode
+  \QdesnAnonymoustrue
+\else
+  \QdesnAnonymousfalse
+\fi
 
 % ---- Mathematics ----
 \usepackage{amsmath, amssymb, mathtools, bm}
@@ -21,6 +30,8 @@
 
 % ---- Citations & hyperlinks ----
 \usepackage[round,authoryear]{natbib}
+\setcitestyle{aysep={},citesep={;}}
+\renewcommand{\bibfont}{\normalfont\normalsize\raggedright}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
 
@@ -58,6 +69,8 @@
 
 % GloFAS application output aliases.
 \input{tables/glofas_application_current_outputs.tex}
+% Larger lettering; original scientific graphics and manifests are retained.
+\input{tables/glofas_review_figure_overrides.tex}
 % PriceFM application output aliases.
 \input{tables/pricefm_full_current_outputs.tex}
 
@@ -68,14 +81,33 @@
 
 % ---- Title & metadata ----
 \title{Bayesian Quantile Regression with\\Deep Echo State Network Features}
+\ifQdesnAnonymous
+\author{}
+\hypersetup{pdfauthor={}}
+\else
 \author{Antonio De Leon, Raquel Prado, and Bruno Sans\'o\\
-\small Department of Statistics, University of California, Santa Cruz}
+Department of Statistics, University of California, Santa Cruz}
+\fi
 \date{}
+\makeatletter
+\renewcommand{\maketitle}{%
+  \ifQdesnAnonymous
+    \begin{center}\bfseries\@title\end{center}%
+  \else
+    \hypersetup{pageanchor=false}%
+    \begin{titlepage}
+    \begin{center}\bfseries\@title\par\medskip\normalfont\@author\par\end{center}
+    \end{titlepage}%
+    \hypersetup{pageanchor=true}%
+  \fi
+}
+\makeatother
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
+\normalsize
 \noindent
 Nonlinear temporal predictors support conditional quantile forecasts, but
 estimating all recurrent-network weights complicates posterior inference.
@@ -99,6 +131,9 @@ PriceFM forecasts. These results identify the scope of fixed-feature Bayesian
 quantile regression without establishing general predictive superiority or
 nominal interval calibration.
 \end{abstract}
+
+\noindent\textit{Key words:} Asymmetric Laplace likelihood; Bayesian shrinkage;
+probabilistic forecasting; reservoir computing; variational inference.
 
 \bigskip
 
@@ -280,7 +315,7 @@ coefficients, ridge regularization uses
 \(\vect\beta_{\mathrm{slope}}\sim
 \Normal(\zeros{r},\kappa_\beta^2\Id{r})\). The adaptive alternative uses the
 Nishimura--Suchard product form of the regularized horseshoe
-\citep{NishimuraSuchard2023SSS,MakalicSchmidt2016SimpleSampler}. Conditional
+\citep{MakalicSchmidt2016SimpleSampler,NishimuraSuchard2023SSS}. Conditional
 on global, local, and slab scales \((\tau,\lambda_j,\zeta)\),
 \begin{equation}
 \begin{alignedat}{2}
@@ -458,8 +493,8 @@ covered range,
 &\aCRPS_{p_1:p_K}(y;\vect q^*)
 &&=2\sum_{k=1}^K\omega_k\rho_{p_k}(y-q_k^*),\\
 \text{Trapezoidal weights:}\quad
-&\omega_1&&=\frac{p_2-p_1}{2},\qquad
-\omega_k=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\leq k\leq K-1,\\
+&\omega_1&&=\frac{p_2-p_1}{2},\\
+&\omega_k&&=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\leq k\leq K-1,\\
 &\omega_K&&=\frac{p_K-p_{K-1}}{2}.
 \end{alignedat}
 \label{eq:acrps-main}
@@ -647,9 +682,10 @@ criteria are
 \end{align}
 where \(\rho_p\) is the check loss in Eq.~\eqref{eq:check-loss-main}, and
 \(\mu_\ell\) and \(y_\ell\) denote the oracle quantile and realized outcome
-for pair \(\ell\). Thus fit RMSE and forecast MAE measure recovery of the oracle quantile
-path, whereas forecast check loss is a proper score against realized
-observations.
+for pair \(\ell\). Fit RMSE and forecast MAE measure recovery of the
+state-conditional oracle path, which is not generally the predictive quantile
+after integrating over future states. Forecast check loss instead scores the
+reported quantile against realized observations.
 
 For each criterion \(M^{(b)}\), the tables report the posterior mean
 \(B^{-1}\sum_{b=1}^B M^{(b)}\) and the empirical 0.025 and 0.975 posterior
@@ -744,7 +780,7 @@ Isotonic projection orders all scored grids. The supplement also records the
 one recursive-design stability qualification, scalar-mixing limitations, and
 a separate historical variational sensitivity analysis.
 
-\section{Application: GloFAS Retrospective Streamflow Quantile Forecasting}
+\section{Application: GloFAS Streamflow Quantile Forecasting}
 \label{sec:data}
 
 Ensemble river-discharge forecasts need not reproduce the distribution
@@ -909,9 +945,10 @@ descriptive and was not used to select a family.}
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
 \caption{Part 4 issued-ensemble latent-path comparison over the last 30
-historical dates and 28 issued horizons. The left panel contains the Gaussian
-baselines and raw GloFAS quantiles; the middle and right panels contain the
-independent and joint AL/exAL families. Colors identify the seven probability
+historical dates and 28 issued horizons. The upper-left panel contains the
+Gaussian baselines and raw GloFAS quantiles; the upper-right and lower-left
+panels contain the independent and joint AL/exAL families, respectively.
+The lower-right legends identify probability levels and families. Colors identify the seven probability
 levels and line styles identify families. Black lines show historical USGS;
 magenta dashed lines show withheld USGS used only for scoring. Vertical lines
 mark 25~December~2022. Panels have separate vertical scales, with all values
@@ -955,6 +992,18 @@ Each evaluation is scored on the fold-aligned held-out timestamps and
 probability levels \PricefmFullPaperQuantiles. Throughout this section,
 \(\Delta\) AQL denotes Q--DESN AQL minus PriceFM AQL. Negative values indicate
 lower Q--DESN AQL; positive values indicate lower PriceFM AQL.
+For region \(r\) and fold \(f\), with \(N_{r,f}\) scored timestamps, the score is
+\begin{equation}
+\text{Average quantile loss:}\quad
+\operatorname{AQL}_{r,f}
+=\frac{1}{N_{r,f}K}\sum_{i=1}^{N_{r,f}}\sum_{k=1}^{K}
+\rho_{p_k}\!\left(y_{r,f,i}-\widehat q_{r,f,i,k}\right),
+\label{eq:pricefm-aql-main}
+\end{equation}
+where \(K=7\) and both outcomes and forecasts are in EUR/MWh.
+Unlike \(\aCRPS\), AQL equally weights the probability levels and has no
+factor of two. Aggregate scores give equal weight to the 114 region--fold
+evaluations, rather than pooling all timestamps.
 
 \noindent\textbf{Information set.}
 The predictors include the released load, solar, and wind forecast
@@ -1014,7 +1063,9 @@ while using fixed recurrent features to represent nonlinear temporal
 dependence. Its posterior concerns the regression, likelihood, and shrinkage
 parameters, conditional on the reservoir. This distinction makes the model
 accessible through Bayesian regression calculations without treating every
-network weight as an unknown parameter.
+network weight as an unknown parameter. In the GloFAS latent-path analysis,
+however, future features depend on unknown reference responses; its complete
+posterior is not an ordinary fixed-design regression problem.
 
 The simulations do not identify a uniformly preferable likelihood or
 regression class. Joint estimation reduces raw crossings, especially under
@@ -1045,20 +1096,27 @@ These questions are distinct from the conditional regression inference
 developed here.
 
 \section*{Computational materials}
+\ifQdesnAnonymous
+The reproducibility materials comprise manuscript sources, analysis scripts,
+configuration records, and the tabulated evidence used in the figures.
+Large fitted objects and third-party inputs are not included in the article
+source bundle.
+\else
 The accompanying repository provides manuscript sources, analysis scripts,
 configuration records, and the tabulated evidence used in the figures in the
 \href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2}{Q--DESN article repository}.
 Availability of large fitted objects and third-party inputs is described
 separately; the article source bundle does not contain those objects.
 
-\section*{Acknowledgment of writing assistance}
+\section*{Acknowledgments}
 OpenAI Codex was used to assist with manuscript organization, language
 revision, and checks of LaTeX source and references, to improve clarity
 and consistency. The authors are
 responsible for the final text, mathematical arguments, and reported results.
+\fi
 
 % ============================================================
-\bibliographystyle{apalike}
+\bibliographystyle{tables/qdesn_asa_compatible}
 \bibliography{refs}
 
 \end{document}

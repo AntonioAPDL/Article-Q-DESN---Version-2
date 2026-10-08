@@ -1,11 +1,18 @@
 % !TeX program = pdflatex
-\documentclass[11pt]{article}
+\documentclass[12pt,letterpaper]{article}
 
-\usepackage[margin=1in]{geometry}
+\usepackage{geometry}
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{setspace}
-\onehalfspacing
+\doublespacing
+\geometry{hmargin=1in,textheight=26\baselineskip,centering}
+\newif\ifQdesnAnonymous
+\ifdefined\QdesnReviewMode
+  \QdesnAnonymoustrue
+\else
+  \QdesnAnonymousfalse
+\fi
 
 \usepackage{amsmath,amssymb,amsfonts,mathtools,bm,booktabs,tabularx,array}
 \usepackage{graphicx}
@@ -14,6 +21,7 @@
 \usetikzlibrary{arrows.meta,calc,fit,positioning}
 \usepackage{enumitem}
 \usepackage[round,authoryear]{natbib}
+\setcitestyle{aysep={},citesep={;}}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
 
@@ -68,13 +76,32 @@
 \renewcommand{\thesubsubsection}{S\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
 
 \title{Supplementary Material for ``Bayesian Quantile Regression with Deep Echo State Network Features''}
+\ifQdesnAnonymous
+\author{}
+\hypersetup{pdfauthor={}}
+\else
 \author{Antonio De Leon, Raquel Prado, and Bruno Sans\'o}
+\fi
 \date{}
+\makeatletter
+\renewcommand{\maketitle}{%
+  \ifQdesnAnonymous
+    \begin{center}\bfseries\@title\end{center}%
+  \else
+    \hypersetup{pageanchor=false}%
+    \begin{titlepage}
+    \begin{center}\bfseries\@title\par\medskip\normalfont\@author\par\end{center}
+    \end{titlepage}%
+    \hypersetup{pageanchor=true}%
+  \fi
+}
+\makeatother
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
+\normalsize
 \noindent
 This supplement gives distributional conventions, fixed-feature model
 details, regularized-horseshoe prior calculations, MCMC full conditionals,
@@ -1056,18 +1083,20 @@ The adjacent-difference hierarchy then coincides with the single-quantile
 regularized-horseshoe prior.
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
-\begin{align}
-v_{k,t}\mid\sigma_k&\sim\Exp(\text{rate}=1/\sigma_k),&
-s_{k,t}&\sim\TN(0,1),\\
+\begin{gather}
+v_{k,t}\mid\sigma_k\sim\Exp(\text{rate}=1/\sigma_k),\qquad
+s_{k,t}\sim\TN(0,1),\\
+\begin{gathered}
 y_t\mid\beta_{0k},\vect\beta_k,\sigma_k,\gamma_k,v_{k,t},s_{k,t}
-&\sim
+\sim\\
 \Normal\left(
 \beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k
 +\sigma_kD_ks_{k,t}+A_kv_{k,t},\,
 \sigma_kB_kv_{k,t}
 \right),
+\end{gathered}
 \label{eq:supp_joint_exal_hierarchy}
-\end{align}
+\end{gather}
 where \(A_k=A_{p_k}(\gamma_k)\), \(B_k=B_{p_k}(\gamma_k)\), and
 \(D_k=D_{p_k}(\gamma_k)\). The AL special case fixes the AL constants and
 omits \(s_{k,t}\) and \(\gamma_k\) from
@@ -1330,11 +1359,12 @@ Jacobian.
 
 The baseline and adjacent-difference RHS updates likewise follow
 Eq.~\eqref{eq:supp_rhs_mcmc}. For the baseline, replace
-\((\beta_j,\lambda_j,\tau,\xi,\tau_0)\) by
-\((\beta_{\mathrm{base},j},\lambda_j^0,\tau^0,\xi_0,\tau_0^0)\); for block
-\(k\), replace them by
-\((\Delta_{k,j},\lambda_{k,j}^\Delta,\tau_k^\Delta,
-\xi_k^\Delta,\tau_{0,k}^\Delta)\). Each global-variance conditional has
+\(\beta_j\), \(\lambda_j\), \(\tau\), \(\xi\), and \(\tau_0\) by
+\(\beta_{\mathrm{base},j}\), \(\lambda_j^0\), \(\tau^0\), \(\xi_0\),
+and \(\tau_0^0\), respectively. For block \(k\), the corresponding
+quantities are \(\Delta_{k,j}\), \(\lambda_{k,j}^\Delta\),
+\(\tau_k^\Delta\), \(\xi_k^\Delta\), and \(\tau_{0,k}^\Delta\).
+Each global-variance conditional has
 shape \((r+1)/2\). If the slab scale is random and shared across
 adjacent-difference blocks, its distinct update is
 \[
@@ -1773,6 +1803,7 @@ different selected specifications. The intervals condition on the simulated
 data, evaluation grid, and reservoir realization and are not a controlled
 comparison of approximation error.
 
+\clearpage
 \input{tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex}
 
 \clearpage
@@ -1852,7 +1883,10 @@ point-path summary relative to their reference. They do not isolate
 initialization effects or establish stability of the current draw-wise
 posterior metric summaries.
 
+\begingroup
+\let\small\footnotesize
 \input{tables/qdesn_validation_mcmc_five_chain_sensitivity.tex}
+\endgroup
 
 \clearpage
 \subsection{Joint Multi-Quantile MCMC Evaluation Details}
@@ -1897,7 +1931,10 @@ width ratio 0.7364. This difference reflects the uncertainty retained by
 each construction and does not establish better calibration. VB intervals
 additionally hold intercepts fixed and are therefore partial variational
 uncertainty summaries.
+\begingroup
+\setlength{\abovecaptionskip}{0pt}
 \input{tables/joint_qdesn_pure_desn_v1_recursive_policy_table.tex}
+\endgroup
 \input{tables/joint_qdesn_pure_desn_v1_vb_score_table.tex}
 
 The averaged recursive design satisfies the original split-sample stability

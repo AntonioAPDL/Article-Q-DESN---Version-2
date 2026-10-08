@@ -1,12 +1,21 @@
  % !TeX program = pdflatex
-\documentclass[11pt]{article}
+\documentclass[12pt,letterpaper]{article}
 
 % ---- Aesthetics & layout ----
-\usepackage[margin=1in]{geometry}
+\usepackage{geometry}
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{setspace}
-\onehalfspacing
+\doublespacing
+% ASA review layout: 26 body-text lines on US Letter paper.
+\geometry{hmargin=1in,textheight=26\baselineskip,centering}
+% Define \QdesnReviewMode before inputting this file for anonymous review.
+\newif\ifQdesnAnonymous
+\ifdefined\QdesnReviewMode
+  \QdesnAnonymoustrue
+\else
+  \QdesnAnonymousfalse
+\fi
 
 % ---- Mathematics ----
 \usepackage{amsmath, amssymb, mathtools, bm}
@@ -21,6 +30,7 @@
 
 % ---- Citations & hyperlinks ----
 \usepackage[round,authoryear]{natbib}
+\setcitestyle{aysep={},citesep={;}}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
 
@@ -68,14 +78,33 @@
 
 % ---- Title & metadata ----
 \title{Bayesian Quantile Regression with\\Deep Echo State Network Features}
+\ifQdesnAnonymous
+\author{}
+\hypersetup{pdfauthor={}}
+\else
 \author{Antonio De Leon, Raquel Prado, and Bruno Sans\'o\\
-\small Department of Statistics, University of California, Santa Cruz}
+Department of Statistics, University of California, Santa Cruz}
+\fi
 \date{}
+\makeatletter
+\renewcommand{\maketitle}{%
+  \ifQdesnAnonymous
+    \begin{center}\bfseries\@title\end{center}%
+  \else
+    \hypersetup{pageanchor=false}%
+    \begin{titlepage}
+    \begin{center}\bfseries\@title\par\medskip\normalfont\@author\par\end{center}
+    \end{titlepage}%
+    \hypersetup{pageanchor=true}%
+  \fi
+}
+\makeatother
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
+\normalsize
 \noindent
 Nonlinear temporal predictors support conditional quantile forecasts, but
 estimating all recurrent-network weights complicates posterior inference.
@@ -99,6 +128,9 @@ PriceFM forecasts. These results identify the scope of fixed-feature Bayesian
 quantile regression without establishing general predictive superiority or
 nominal interval calibration.
 \end{abstract}
+
+\noindent\textit{Key words:} Asymmetric Laplace likelihood; Bayesian shrinkage;
+probabilistic forecasting; reservoir computing; variational inference.
 
 \bigskip
 
@@ -458,8 +490,8 @@ covered range,
 &\aCRPS_{p_1:p_K}(y;\vect q^*)
 &&=2\sum_{k=1}^K\omega_k\rho_{p_k}(y-q_k^*),\\
 \text{Trapezoidal weights:}\quad
-&\omega_1&&=\frac{p_2-p_1}{2},\qquad
-\omega_k=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\leq k\leq K-1,\\
+&\omega_1&&=\frac{p_2-p_1}{2},\\
+&\omega_k&&=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\leq k\leq K-1,\\
 &\omega_K&&=\frac{p_K-p_{K-1}}{2}.
 \end{alignedat}
 \label{eq:acrps-main}
@@ -744,7 +776,7 @@ Isotonic projection orders all scored grids. The supplement also records the
 one recursive-design stability qualification, scalar-mixing limitations, and
 a separate historical variational sensitivity analysis.
 
-\section{Application: GloFAS Retrospective Streamflow Quantile Forecasting}
+\section{Application: GloFAS Streamflow Quantile Forecasting}
 \label{sec:data}
 
 Ensemble river-discharge forecasts need not reproduce the distribution
@@ -1045,17 +1077,24 @@ These questions are distinct from the conditional regression inference
 developed here.
 
 \section*{Computational materials}
+\ifQdesnAnonymous
+The reproducibility materials comprise manuscript sources, analysis scripts,
+configuration records, and the tabulated evidence used in the figures.
+Large fitted objects and third-party inputs are not included in the article
+source bundle.
+\else
 The accompanying repository provides manuscript sources, analysis scripts,
 configuration records, and the tabulated evidence used in the figures in the
 \href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2}{Q--DESN article repository}.
 Availability of large fitted objects and third-party inputs is described
 separately; the article source bundle does not contain those objects.
 
-\section*{Acknowledgment of writing assistance}
+\section*{Acknowledgments}
 OpenAI Codex was used to assist with manuscript organization, language
 revision, and checks of LaTeX source and references, to improve clarity
 and consistency. The authors are
 responsible for the final text, mathematical arguments, and reported results.
+\fi
 
 % ============================================================
 \bibliographystyle{apalike}

@@ -279,8 +279,20 @@ abstract <- sub("\\\\end\\{abstract\\}.*", "", abstract)
 abstract_plain <- gsub("\\\\[A-Za-z]+|[{}$]", " ", abstract)
 abstract_words <- strsplit(trimws(gsub("[^[:alnum:]'-]+", " ", abstract_plain)),
                            "[[:space:]]+")[[1L]]
-expect(length(abstract_words) <= 250L,
-       "The abstract exceeds the 250-word editorial limit.")
+expect(length(abstract_words) <= 200L,
+       "The abstract exceeds the ASA 200-word limit.")
+for (document in list(main, supplement)) {
+  expect(grepl("\\documentclass[12pt,letterpaper]{article}", document, fixed = TRUE) &&
+           grepl("\\doublespacing", document, fixed = TRUE) &&
+           grepl("textheight=26\\baselineskip", document, fixed = TRUE),
+         "The verified ASA review layout is missing.")
+  expect(grepl("\\ifQdesnAnonymous", document, fixed = TRUE) &&
+           grepl("\\ifdefined\\QdesnReviewMode", document, fixed = TRUE),
+         "Identified and anonymous documents must use the same source.")
+}
+expect(grepl("\\textit{Key words:}", main, fixed = TRUE) &&
+         grepl("reservoir computing; variational inference.", main, fixed = TRUE),
+       "The five plain-language keyword phrases are missing.")
 
 # Advisor-revision checks supplement, rather than replace, the numerical,
 # provenance, privacy, and figure-placement assertions above.

@@ -31,7 +31,10 @@ the launch release rejects any skipped test or missing dependency.
 1. Commit the dedicated branch; run `pricefm_r128_release.py --dependency WT
    --output RELEASE_DIR` on both hosts.
 2. On Jerez run `456_run_pricefm_stage_r128_stochastic_pilots.py prepare
-   --dependency WT --release RELEASE_DIR/validation.json`.
+   --dependency WT --release RELEASE_DIR/validation.json --reference CSV`.
+   The small local PriceFM decision registry must match the protocol's pinned
+   SHA256 and cover114 region/fold cells. It is28,403 bytes, not a checkpoint
+   migration. Historical Q-DESN columns in this file are explicitly ignored.
 3. Run its `controller --workers 15` detached. It admits distinct idle physical
    cores, passes the reusable three-task smoke gate, then automatically schedules
    ridge, certified Normal RHS, nested AL, official forecasts and closeout.

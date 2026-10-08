@@ -116,6 +116,8 @@ Rcpp::List glofas_oracle_d1_draw_recursive_cpp(
   arma::mat y_draws(H, S, arma::fill::zeros);
   arma::mat mu_draws(H, S, arma::fill::zeros);
   arma::mat input_sum(H, m, arma::fill::zeros);
+  arma::vec state_norm_sum(H, arma::fill::zeros);
+  arma::vec state_saturation_sum(H, arma::fill::zeros);
 
   for (arma::uword s = 0; s < S; ++s) {
     arma::vec state = state0;
@@ -150,6 +152,8 @@ Rcpp::List glofas_oracle_d1_draw_recursive_cpp(
       arma::vec pre = W * state + Win * u;
       arma::vec omega = activate(pre, act_f);
       state = (1.0 - alpha) * state + alpha * omega;
+      state_norm_sum[h] += arma::norm(state, 2);
+      state_saturation_sum[h] += arma::accu(arma::abs(state) > 0.95) / static_cast<double>(n);
 
       double mu = beta_s[0];
       for (arma::uword j = 0; j < n; ++j) {
@@ -166,6 +170,8 @@ Rcpp::List glofas_oracle_d1_draw_recursive_cpp(
     Rcpp::_["forecast_draws"] = y_draws,
     Rcpp::_["conditional_mean_draws"] = mu_draws,
     Rcpp::_["input_mean"] = input_sum / static_cast<double>(S),
+    Rcpp::_["state_norm_mean"] = state_norm_sum / static_cast<double>(S),
+    Rcpp::_["state_saturation_mean"] = state_saturation_sum / static_cast<double>(S),
     Rcpp::_["backend"] = "cpp_d1_draw_recursive"
   );
 }

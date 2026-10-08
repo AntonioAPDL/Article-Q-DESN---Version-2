@@ -9,9 +9,11 @@ for (path in c(
   "fit_qdesn_discrepancy.R", "latent_path_runtime_backend.R", "latent_path_checkpoint.R",
   "latent_path_vb_al.R", "latent_path_vb_normal.R", "joint_qvp_qdesn.R",
   "joint_exqdesn_exact_structured_inference.R", "latent_path_vb_exal.R",
+  "glofas_quantile_integrity.R",
   "glofas_normal_desn_part1_screening.R",
   "glofas_part3_partitioned_rhs.R", "latent_path_vb_joint.R", "fit_qdesn_latent_path.R",
-  "glofas_part4_ensemble_likelihood_contract.R", "glofas_part4_latent_family.R"
+  "glofas_part4_ensemble_likelihood_contract.R", "glofas_normal_driver_bank.R",
+  "glofas_part4_normal_driver_prior.R", "glofas_part4_latent_family.R"
 )) source(app_path("application/R", path))
 
 toy_future_builder <- local({
@@ -202,6 +204,18 @@ stopifnot(identical(prior_probe$prior_linear, addition_probe$linear))
 al_args <- modifyList(base_args, list(likelihood_family = "al"))
 al_fit <- app_fit_latent_path_al_vb_core(toy_design, 0.5, "ridge", al_args, seed = 13L)
 stopifnot(al_fit$vb_diagnostics$beta_update_count == 2L)
+toy_driver_prior <- list(
+  mean = c(0.8, 0.9), covariance = diag(c(0.2, 0.3)),
+  replace_future_y_working_likelihood = TRUE,
+  contract_hash = "toy_part4_driver_prior"
+)
+al_driver_fit <- app_fit_latent_path_al_vb_core(
+  toy_design, 0.5, "ridge",
+  modifyList(al_args, list(future_gaussian_prior = toy_driver_prior)),
+  seed = 130L
+)
+stopifnot(isTRUE(al_driver_fit$vb_diagnostics$future_gaussian_prior_used))
+stopifnot(!isTRUE(al_driver_fit$vb_diagnostics$future_y_working_likelihood_used))
 exal_args <- modifyList(base_args, list(
   tol = 1.0e-12,
   initial_state = app_glofas_part4_initializer(al_fit, toy_design),
@@ -213,10 +227,18 @@ stopifnot(all(is.finite(exal_fit$summary$theta_mean)))
 stopifnot(identical(names(exal_fit$summary$gamma_mean), c("Y", "G")))
 stopifnot(nrow(exal_fit$vb_diagnostics$iteration_timing) > 0L)
 stopifnot(nrow(exal_fit$vb_diagnostics$stage_timing) == 3L)
+exal_driver_fit <- app_fit_latent_path_exal_vb_core(
+  toy_design, 0.5, "ridge",
+  modifyList(exal_args, list(future_gaussian_prior = toy_driver_prior)),
+  seed = 140L
+)
+stopifnot(isTRUE(exal_driver_fit$vb_diagnostics$future_gaussian_prior_used))
+stopifnot(!isTRUE(exal_driver_fit$vb_diagnostics$future_y_working_likelihood_used))
 
 joint_args <- modifyList(base_args, list(
   tol = 1.0e-6, joint_outer_max_iter = 1L, joint_outer_min_iter = 1L,
   joint_inner_max_iter = 2L, joint_inner_min_iter = 1L, n_draws = 4L,
+  joint_rhs_tol = 1.0e-6,
   beta_rhs = list(tau0 = 1, slab_s2 = 1, a_zeta = 2, b_zeta = 4),
   alpha_rhs = list(tau0 = 0.001, slab_s2 = 1, a_zeta = 2, b_zeta = 4)
 ))
@@ -256,9 +278,22 @@ stopifnot(max(abs(
   joint_continued$beta_discrepancy_mean - joint_uninterrupted$beta_discrepancy_mean
 )) < 1.0e-10)
 
+joint_parallel_args <- modifyList(joint_two_outer_args, list(joint_inner_workers = 2L))
+joint_parallel <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  independent_fits = list(al_fit, al_fit), vb_args = joint_parallel_args, seed = 15L
+)
+stopifnot(
+  identical(joint_parallel$joint_inner_workers, 2L),
+  max(abs(joint_parallel$beta_reference_mean - joint_uninterrupted$beta_reference_mean)) < 1.0e-10,
+  max(abs(joint_parallel$beta_discrepancy_mean - joint_uninterrupted$beta_discrepancy_mean)) < 1.0e-10,
+  max(abs(joint_parallel$trace$parameter_change - joint_uninterrupted$trace$parameter_change)) < 1.0e-10
+)
+
 warmup_joint_args <- modifyList(joint_args, list(
   tol = 1.0e6,
   joint_outer_tol = 1.0e6,
+  joint_rhs_tol = 1.0e6,
   joint_outer_max_iter = 1L,
   joint_outer_min_iter = 1L,
   joint_inner_max_iter = 2L,
@@ -272,11 +307,36 @@ joint_warmup_only <- app_fit_latent_path_joint_vb_core(
 stopifnot(joint_warmup_only$rhs_schedule$effective$freeze_tau_warmup_iters == 25L)
 stopifnot(!joint_warmup_only$converged_rhs)
 stopifnot(all(joint_warmup_only$rhs_summary_reference$tau_update_count == 0L))
+strict_warmup_args <- modifyList(warmup_joint_args, list(joint_require_post_release = TRUE))
+stopifnot(inherits(try(
+  app_fit_latent_path_joint_vb_core(
+    designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+    independent_fits = list(al_fit, al_fit), vb_args = strict_warmup_args, seed = 16L
+  ), silent = TRUE
+), "try-error"))
 
-rebased_joint_args <- modifyList(warmup_joint_args, list(
+single_release_args <- modifyList(warmup_joint_args, list(
   joint_outer_max_iter = 2L,
   joint_rhs_freeze_outer_iters = 1L,
-  joint_rhs_allow_schedule_rebase = TRUE
+  joint_rhs_allow_schedule_rebase = TRUE,
+  joint_terminal_consecutive_passes = 3L
+))
+joint_after_single_rhs_release <- app_fit_latent_path_joint_vb_core(
+  designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
+  vb_args = single_release_args, seed = 16L, initial_joint_fit = joint_warmup_only
+)
+stopifnot(joint_after_single_rhs_release$converged_rhs)
+stopifnot(!joint_after_single_rhs_release$converged)
+stopifnot(max(joint_after_single_rhs_release$trace$terminal_consecutive_passes) < 3L)
+stopifnot(identical(
+  joint_after_single_rhs_release$stopping_reason,
+  "max_outer_iterations_terminal_consecutive_passes_not_met"
+))
+
+rebased_joint_args <- modifyList(single_release_args, list(
+  joint_outer_max_iter = 4L,
+  joint_require_post_release = TRUE,
+  joint_inner_workers = 2L
 ))
 joint_after_rhs_release <- app_fit_latent_path_joint_vb_core(
   designs = list(toy_design, toy_design), tau = c(0.35, 0.65), likelihood = "al",
@@ -284,8 +344,11 @@ joint_after_rhs_release <- app_fit_latent_path_joint_vb_core(
 )
 stopifnot(joint_after_rhs_release$converged_rhs)
 stopifnot(joint_after_rhs_release$converged)
+stopifnot(tail(joint_after_rhs_release$trace$terminal_consecutive_passes, 1L) >= 3L)
 stopifnot(all(joint_after_rhs_release$rhs_schedule_rebase_audit$schedule_rebased))
 stopifnot(min(joint_after_rhs_release$rhs_summary_reference$tau_update_count) >= 2L)
+stopifnot(isTRUE(joint_after_rhs_release$joint_require_post_release))
+stopifnot(all(joint_after_rhs_release$rhs_release_budget_audit$passed))
 
 rebase_forbidden_args <- rebased_joint_args
 rebase_forbidden_args$joint_rhs_allow_schedule_rebase <- FALSE

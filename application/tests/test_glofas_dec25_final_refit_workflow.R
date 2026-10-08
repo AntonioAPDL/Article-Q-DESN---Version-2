@@ -5,6 +5,7 @@ source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/joint_qvp_qdesn.R"))
 source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
 source(app_path("application/R/joint_exqdesn_inference_dispatch.R"))
+source(app_path("application/R/glofas_quantile_integrity.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_desn_part2_bridge.R"))
 source(app_path("application/R/glofas_normal_desn_part3_joint_bridge.R"))
@@ -52,6 +53,72 @@ bad_sign2 <- tryCatch({
   FALSE
 }, error = function(e) grepl("GloFAS_t - USGS_t", conditionMessage(e), fixed = TRUE))
 stopifnot(isTRUE(bad_sign2))
+
+prefix_dates <- min(dates) - 2:1
+forecast_dates <- c(prefix_dates, dates)
+forecast_X <- rbind(
+  matrix(c(1, -1, -2, 1, -0.5, -1.5), nrow = 2L, byrow = TRUE,
+         dimnames = list(NULL, colnames(X))),
+  X
+)
+state_sentinel <- list(layer_1 = matrix(c(0.1, 0.2), nrow = 1L))
+qfit_sentinel <- list(
+  states = state_sentinel,
+  meta = list(history_dates = forecast_dates, y_history = c(-1, -0.5, d))
+)
+forecast_design_raw <- list(
+  X = forecast_X,
+  X_raw = forecast_X,
+  y = c(-1, -0.5, d),
+  dates = forecast_dates,
+  feature_info = data.frame(feature = colnames(X), stringsAsFactors = FALSE),
+  reservoir = list(D = 1L),
+  states = state_sentinel,
+  design_meta = qfit_sentinel$meta,
+  qfit = qfit_sentinel,
+  readout_scaler = list(mode = "none")
+)
+aligned <- app_glofas_dec25_align_forecast_design(forecast_design_raw, dates)
+stopifnot(nrow(aligned$X) == length(dates))
+stopifnot(identical(aligned$dates, dates))
+stopifnot(identical(aligned$states, forecast_design_raw$states))
+stopifnot(identical(aligned$qfit, forecast_design_raw$qfit))
+stopifnot(aligned$alignment$removed_prefix_rows == 2L)
+equivalence <- app_glofas_dec25_assert_part2_forecast_design_equivalence(design2, aligned)
+stopifnot(isTRUE(equivalence$numerical_equivalence))
+stopifnot(equivalence$design_max_abs_gap == 0)
+stopifnot(equivalence$response_max_abs_gap == 0)
+
+missing_target <- forecast_design_raw
+keep_missing <- missing_target$dates != dates[[20L]]
+missing_target$dates <- missing_target$dates[keep_missing]
+missing_target$X <- missing_target$X[keep_missing, , drop = FALSE]
+missing_target$X_raw <- missing_target$X_raw[keep_missing, , drop = FALSE]
+missing_target$y <- missing_target$y[keep_missing]
+bad_missing_target <- tryCatch({
+  app_glofas_dec25_align_forecast_design(missing_target, dates)
+  FALSE
+}, error = function(e) grepl("missing", conditionMessage(e), ignore.case = TRUE))
+stopifnot(isTRUE(bad_missing_target))
+
+suffix_target <- forecast_design_raw
+suffix_target$dates <- c(suffix_target$dates, max(dates) + 1L)
+suffix_target$X <- rbind(suffix_target$X, suffix_target$X[nrow(suffix_target$X), , drop = FALSE])
+suffix_target$X_raw <- rbind(suffix_target$X_raw, suffix_target$X_raw[nrow(suffix_target$X_raw), , drop = FALSE])
+suffix_target$y <- c(suffix_target$y, tail(suffix_target$y, 1L))
+bad_suffix_target <- tryCatch({
+  app_glofas_dec25_align_forecast_design(suffix_target, dates)
+  FALSE
+}, error = function(e) grepl("non-prefix|terminal", conditionMessage(e)))
+stopifnot(isTRUE(bad_suffix_target))
+
+bad_equivalence <- aligned
+bad_equivalence$X[10L, 2L] <- bad_equivalence$X[10L, 2L] + 0.01
+bad_design_gap <- tryCatch({
+  app_glofas_dec25_assert_part2_forecast_design_equivalence(design2, bad_equivalence)
+  FALSE
+}, error = function(e) grepl("readout differs", conditionMessage(e), fixed = TRUE))
+stopifnot(isTRUE(bad_design_gap))
 
 R <- cbind(readout_intercept = 1, reference_state = y / 5)
 D <- cbind(readout_intercept = 1, discrepancy_state = d / 5)

@@ -41,6 +41,9 @@ history.
   cross-lane staged DESN model-selection methodology for the GloFAS application,
   PriceFM application, and joint Q-DESN evaluation workflows, including the
   Normal ridge/RHS initialization ladder and promotion gates.
+- `implementation_notes/glofas_search_phase2_rhs_execution_20260914.md`:
+  audited execution plan and reproducibility contract for the Phase II RHS
+  prior pilot, architecture screen, and multi-seed confirmation.
 - `implementation_notes/qdesn_inferential_object_and_terminology_contract_20260815.md`:
   current terminology authority for readout summaries, reported actions,
   working-likelihood simulations, and aCRPS.

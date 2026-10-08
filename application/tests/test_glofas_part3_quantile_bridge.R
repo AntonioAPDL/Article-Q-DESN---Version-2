@@ -5,6 +5,7 @@ source(app_path("application/R/latent_path_vb_al.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/joint_qvp_qdesn.R"))
 source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
+source(app_path("application/R/glofas_quantile_integrity.R"))
 source(app_path("application/R/glofas_normal_desn_part3_joint_bridge.R"))
 source(app_path("application/R/glofas_part3_partitioned_rhs.R"))
 source(app_path("application/R/glofas_part3_quantile_bridge.R"))
@@ -46,6 +47,26 @@ stopifnot(identical(dim(fit_al$beta_discrepancy_mean), c(2L, 1L)))
 stopifnot(fit_al$iterations >= 2L)
 stopifnot(fit_al$rhs_partition_certificate$overlap_count == 0L)
 stopifnot(all(is.finite(fit_al$qhat_reference_train)))
+stopifnot(length(fit_al$beta_reference_cov_blocks) == 1L)
+stopifnot(length(fit_al$beta_discrepancy_cov_blocks) == 1L)
+stopifnot(identical(dim(fit_al$beta_reference_cov_blocks[[1L]]), c(3L, 3L)))
+stopifnot(identical(dim(fit_al$beta_discrepancy_cov_blocks[[1L]]), c(2L, 2L)))
+
+adjacent_init <- app_glofas_part3_quantile_initialize(
+  fit_al, design, 0.35, initializer_tau_policy = "single_source"
+)
+stopifnot(
+  max(abs(adjacent_init$beta_reference[, 1L] - fit_al$beta_reference_mean[, 1L])) < 1e-12,
+  max(abs(adjacent_init$beta_discrepancy[, 1L] - fit_al$beta_discrepancy_mean[, 1L])) < 1e-12,
+  adjacent_init$provenance$source_tau[[1L]] == 0.50,
+  adjacent_init$provenance$target_tau[[1L]] == 0.35,
+  identical(adjacent_init$provenance$mapping_status[[1L]], "adjacent_tau_warm_start")
+)
+strict_adjacent_error <- tryCatch({
+  app_glofas_part3_quantile_initialize(fit_al, design, 0.35)
+  FALSE
+}, error = function(e) TRUE)
+stopifnot(strict_adjacent_error)
 
 controls_exal <- controls
 controls_exal$max_iter <- 1L
@@ -58,7 +79,11 @@ stopifnot(identical(fit_exal$inference_method_id, "VB1_structured_v"))
 stopifnot(length(fit_exal$gamma_mean) == 1L)
 stopifnot(all(is.finite(fit_exal$gamma_mean)))
 
-joint_init <- list(fits = rep(list(fit_al), 3L))
+joint_init <- list(fits = lapply(c(0.2, 0.5, 0.8), function(q) {
+  out <- fit_al
+  out$tau <- q
+  out
+}))
 fit_joint <- app_glofas_part3_quantile_fit(
   design, split, tau = c(0.2, 0.5, 0.8), likelihood = "AL", fit_structure = "joint",
   controls = controls_exal, init = joint_init, fit_id = "test_joint"
@@ -66,6 +91,8 @@ fit_joint <- app_glofas_part3_quantile_fit(
 stopifnot(identical(dim(fit_joint$beta_reference_mean), c(3L, 3L)))
 stopifnot(identical(dim(fit_joint$beta_discrepancy_mean), c(2L, 3L)))
 stopifnot(length(fit_joint$rhs_state_reference) == 3L)
+stopifnot(length(fit_joint$beta_reference_cov_blocks) == 3L)
+stopifnot(length(fit_joint$beta_discrepancy_cov_blocks) == 3L)
 scores <- app_glofas_part3_score_quantile_fit(fit_joint, design, split)
 stopifnot(all(c("usgs_valid", "glofas_valid", "discrepancy_diagnostic_valid") %in% scores$summary$metric_block))
 progress_path <- tempfile(fileext = ".csv")

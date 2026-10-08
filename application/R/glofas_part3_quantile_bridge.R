@@ -13,6 +13,8 @@ app_glofas_part3_quantile_default_controls <- function(
   slab_s2 = 1,
   a_zeta = 2,
   b_zeta = 4,
+  zeta2_fixed_reference = NULL,
+  zeta2_fixed_discrepancy = NULL,
   a_sigma = 2,
   b_sigma = 1,
   rhs_vb_inner = 5L,
@@ -22,7 +24,12 @@ app_glofas_part3_quantile_default_controls <- function(
   quadrature_tolerance = 1.0e-6,
   diagnostic_stride = 10L,
   freeze_beta_warmup_iters = 0L,
-  min_beta_updates = 0L
+  min_beta_updates = 0L,
+  initializer_tau_policy = "exact_tau",
+  fixed_iterations = FALSE,
+  full_state_convergence = FALSE,
+  convergence_tolerance = tol,
+  terminal_consecutive_passes = 3L
 ) {
   list(
     max_iter = as.integer(max_iter),
@@ -33,6 +40,8 @@ app_glofas_part3_quantile_default_controls <- function(
     slab_s2 = as.numeric(slab_s2),
     a_zeta = as.numeric(a_zeta),
     b_zeta = as.numeric(b_zeta),
+    zeta2_fixed_reference = zeta2_fixed_reference,
+    zeta2_fixed_discrepancy = zeta2_fixed_discrepancy,
     a_sigma = as.numeric(a_sigma),
     b_sigma = as.numeric(b_sigma),
     rhs_vb_inner = as.integer(rhs_vb_inner),
@@ -42,7 +51,14 @@ app_glofas_part3_quantile_default_controls <- function(
     quadrature_tolerance = as.numeric(quadrature_tolerance),
     diagnostic_stride = as.integer(diagnostic_stride),
     freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
-    min_beta_updates = as.integer(min_beta_updates)
+    min_beta_updates = as.integer(min_beta_updates),
+    initializer_tau_policy = match.arg(
+      as.character(initializer_tau_policy), c("exact_tau", "single_source")
+    ),
+    fixed_iterations = isTRUE(fixed_iterations),
+    full_state_convergence = isTRUE(full_state_convergence),
+    convergence_tolerance = as.numeric(convergence_tolerance),
+    terminal_consecutive_passes = as.integer(terminal_consecutive_passes)
   )
 }
 
@@ -60,12 +76,23 @@ app_glofas_part3_validate_quantile_controls <- function(controls) {
   if (any(!is.finite(positive)) || any(positive <= 0) || controls$rhs_vb_inner < 1L) {
     stop("Part 3 quantile prior and scale controls must be finite and positive.", call. = FALSE)
   }
+  for (value in list(controls$zeta2_fixed_reference, controls$zeta2_fixed_discrepancy)) {
+    if (!is.null(value) && (length(value) != 1L || !is.finite(value) || value <= 0)) {
+      stop("Part 3 fixed quantile slab scales must be NULL or finite positive scalars.", call. = FALSE)
+    }
+  }
   if (!length(controls$quadrature_nodes) || any(controls$quadrature_nodes < 2L)) {
     stop("Part 3 exAL quadrature node counts must be at least two.", call. = FALSE)
   }
   if (!is.finite(controls$freeze_beta_warmup_iters) || controls$freeze_beta_warmup_iters < 0L ||
       !is.finite(controls$min_beta_updates) || controls$min_beta_updates < 0L) {
     stop("Part 3 quantile beta-freeze controls must be nonnegative.", call. = FALSE)
+  }
+  if (!is.finite(controls$terminal_consecutive_passes) || controls$terminal_consecutive_passes < 1L) {
+    stop("Part 3 terminal_consecutive_passes must be positive.", call. = FALSE)
+  }
+  if (!is.finite(controls$convergence_tolerance) || controls$convergence_tolerance <= 0) {
+    stop("Part 3 convergence_tolerance must be finite and positive.", call. = FALSE)
   }
   invisible(TRUE)
 }
@@ -144,7 +171,13 @@ app_glofas_part3_quantile_normalize_fit_object <- function(x) {
   x
 }
 
-app_glofas_part3_quantile_init_one <- function(init, design, tau) {
+app_glofas_part3_quantile_init_one <- function(
+  init,
+  design,
+  tau,
+  initializer_tau_policy = c("exact_tau", "single_source")
+) {
+  initializer_tau_policy <- match.arg(initializer_tau_policy)
   init <- app_glofas_part3_quantile_normalize_fit_object(init)
   p_reference <- design$p_beta
   p_discrepancy <- design$p_alpha
@@ -156,9 +189,21 @@ app_glofas_part3_quantile_init_one <- function(init, design, tau) {
     if (nrow(ref) != p_reference || nrow(disc) != p_discrepancy) {
       stop("Part 3 quantile initializer component dimensions do not match.", call. = FALSE)
     }
-    idx <- if (length(source_tau) == ncol(ref) && any(abs(source_tau - tau) < 1.0e-12)) {
-      which.min(abs(source_tau - tau))
-    } else 1L
+    if (length(source_tau) != ncol(ref) || any(!is.finite(source_tau))) {
+      stop("Part 3 quantile initializer lacks complete tau metadata.", call. = FALSE)
+    }
+    if (identical(initializer_tau_policy, "single_source")) {
+      if (length(source_tau) != 1L || ncol(ref) != 1L || ncol(disc) != 1L) {
+        stop("Part 3 single-source initialization requires one source tau column.", call. = FALSE)
+      }
+      idx <- 1L
+    } else {
+      hit <- which(abs(source_tau - tau) <= app_glofas_quantile_tau_tolerance())
+      if (length(hit) != 1L) {
+        stop(sprintf("Part 3 initializer has no unique same-tau column for %.12g.", tau), call. = FALSE)
+      }
+      idx <- hit[[1L]]
+    }
     ref_var <- as.matrix(init$beta_reference_var_diag %||% matrix(0, p_reference, ncol(ref)))[, idx]
     disc_var <- as.matrix(init$beta_discrepancy_var_diag %||% matrix(0, p_discrepancy, ncol(disc)))[, idx]
     return(list(
@@ -196,7 +241,13 @@ app_glofas_part3_quantile_init_one <- function(init, design, tau) {
   )
 }
 
-app_glofas_part3_quantile_initialize <- function(init, design, tau) {
+app_glofas_part3_quantile_initialize <- function(
+  init,
+  design,
+  tau,
+  initializer_tau_policy = c("exact_tau", "single_source")
+) {
+  initializer_tau_policy <- match.arg(initializer_tau_policy)
   tau <- as.numeric(tau)
   K <- length(tau)
   p_reference <- design$p_beta
@@ -215,9 +266,38 @@ app_glofas_part3_quantile_initialize <- function(init, design, tau) {
     ))
   }
   init_list <- if (is.list(init) && !is.null(init$fits)) init$fits else if (is.list(init) && length(init) == K && is.null(init$beta_mean) && is.null(init$beta_reference_mean)) init else list(init)
-  if (length(init_list) == 1L && K > 1L) init_list <- rep(init_list, K)
-  if (length(init_list) != K) stop("Part 3 joint initializer must contain one fit per quantile.", call. = FALSE)
-  pieces <- lapply(seq_len(K), function(kk) app_glofas_part3_quantile_init_one(init_list[[kk]], design, tau[[kk]]))
+  if (K == 1L && length(init_list) == 1L) {
+    loaded <- app_glofas_quantile_load_initializer(init_list[[1L]])
+    if (!length(app_glofas_quantile_source_tau(loaded$fit))) {
+      piece <- app_glofas_part3_quantile_init_one(loaded$fit, design, tau[[1L]])
+      return(list(
+        beta_reference = matrix(piece$beta_reference, ncol = 1L),
+        beta_discrepancy = matrix(piece$beta_discrepancy, ncol = 1L),
+        var_reference = matrix(piece$var_reference, ncol = 1L),
+        var_discrepancy = matrix(piece$var_discrepancy, ncol = 1L),
+        sigma = as.numeric(piece$sigma[[1L]]), gamma = piece$gamma,
+        rhs_state_reference = piece$rhs_state_reference,
+        rhs_state_discrepancy = piece$rhs_state_discrepancy,
+        provenance = data.frame(
+          source_path = loaded$source_path, source_sha256 = loaded$source_sha256,
+          source_class = piece$source_class, source_tau = NA_real_, target_tau = tau[[1L]],
+          source_column = NA_integer_, mapping_status = "nonquantile_single_initializer",
+          stringsAsFactors = FALSE
+        )
+      ))
+    }
+  }
+  mapping <- app_glofas_quantile_initializer_map(
+    init_list, tau, policy = initializer_tau_policy
+  )
+  pieces <- lapply(seq_len(K), function(kk) {
+    selected <- app_glofas_quantile_select_column(mapping$fit[[kk]], mapping$source_column[[kk]])
+    attr(selected, "part3_source_path") <- mapping$source_path[[kk]]
+    attr(selected, "part3_source_sha256") <- mapping$source_sha256[[kk]]
+    app_glofas_part3_quantile_init_one(
+      selected, design, tau[[kk]], initializer_tau_policy = initializer_tau_policy
+    )
+  })
   list(
     beta_reference = do.call(cbind, lapply(pieces, `[[`, "beta_reference")),
     beta_discrepancy = do.call(cbind, lapply(pieces, `[[`, "beta_discrepancy")),
@@ -227,12 +307,12 @@ app_glofas_part3_quantile_initialize <- function(init, design, tau) {
     gamma = if (all(vapply(pieces, function(x) !is.null(x$gamma), logical(1L)))) vapply(pieces, `[[`, numeric(1L), "gamma") else NULL,
     rhs_state_reference = if (K == 1L) pieces[[1L]]$rhs_state_reference else NULL,
     rhs_state_discrepancy = if (K == 1L) pieces[[1L]]$rhs_state_discrepancy else NULL,
-    provenance = app_bind_rows_fill(lapply(pieces, function(x) data.frame(
+    provenance = cbind(app_bind_rows_fill(lapply(pieces, function(x) data.frame(
       source_path = as.character(x$source_path),
       source_sha256 = as.character(x$source_sha256),
       source_class = as.character(x$source_class),
       stringsAsFactors = FALSE
-    )))
+    ))), mapping[, c("source_tau", "target_tau", "source_column", "mapping_status"), drop = FALSE])
   )
 }
 
@@ -286,6 +366,7 @@ app_glofas_part3_quantile_fit <- function(
   fit_structure = c("independent", "joint"),
   controls = app_glofas_part3_quantile_default_controls(),
   init = NULL,
+  restart_state = NULL,
   fit_id = NULL
 ) {
   likelihood <- match.arg(likelihood)
@@ -304,11 +385,22 @@ app_glofas_part3_quantile_fit <- function(
   z <- c(y, g)
   Tn <- length(y)
   K <- length(tau)
-  initialized <- app_glofas_part3_quantile_initialize(init, design, tau)
+  initialized <- if (!is.null(restart_state)) {
+    restart_state$initialized
+  } else {
+    app_glofas_part3_quantile_initialize(
+      init, design, tau,
+      initializer_tau_policy = controls$initializer_tau_policy %||% "exact_tau"
+    )
+  }
   beta_reference <- initialized$beta_reference
   beta_discrepancy <- initialized$beta_discrepancy
   variance_reference <- initialized$var_reference
   variance_discrepancy <- initialized$var_discrepancy
+  covariance_reference <- initialized$covariance_reference %||%
+    lapply(seq_len(K), function(kk) diag(pmax(variance_reference[, kk], 0), ncol(R)))
+  covariance_discrepancy <- initialized$covariance_discrepancy %||%
+    lapply(seq_len(K), function(kk) diag(pmax(variance_discrepancy[, kk], 0), ncol(D)))
   rhs_controls <- app_glofas_part3_rhs_default_controls(
     tau0_reference = controls$tau0_reference,
     tau0_discrepancy = controls$tau0_discrepancy,
@@ -322,27 +414,38 @@ app_glofas_part3_quantile_fit <- function(
   warm_discrepancy <- if (K == 1L && !is.null(initialized$rhs_state_discrepancy)) {
     initialized$rhs_state_discrepancy$anchor %||% initialized$rhs_state_discrepancy
   } else NULL
-  rhs_reference <- app_glofas_part3_rhs_initialize(
-    K, ncol(R), controls$tau0_reference, rhs_controls,
-    warm_anchor = warm_reference,
-    coefficient_mean = beta_reference,
-    coefficient_var_diag = variance_reference
-  )
-  rhs_discrepancy <- app_glofas_part3_rhs_initialize(
-    K, ncol(D), controls$tau0_discrepancy, rhs_controls,
-    warm_anchor = warm_discrepancy,
-    coefficient_mean = beta_discrepancy,
-    coefficient_var_diag = variance_discrepancy
-  )
+  rhs_reference <- if (!is.null(restart_state)) {
+    initialized$rhs_state_reference
+  } else {
+    app_glofas_part3_rhs_initialize(
+      K, ncol(R), controls$tau0_reference, rhs_controls,
+      zeta2_fixed = controls$zeta2_fixed_reference,
+      warm_anchor = warm_reference,
+      coefficient_mean = beta_reference,
+      coefficient_var_diag = variance_reference
+    )
+  }
+  rhs_discrepancy <- if (!is.null(restart_state)) {
+    initialized$rhs_state_discrepancy
+  } else {
+    app_glofas_part3_rhs_initialize(
+      K, ncol(D), controls$tau0_discrepancy, rhs_controls,
+      zeta2_fixed = controls$zeta2_fixed_discrepancy,
+      warm_anchor = warm_discrepancy,
+      coefficient_mean = beta_discrepancy,
+      coefficient_var_diag = variance_discrepancy
+    )
+  }
   partition_certificate <- app_glofas_part3_rhs_partition_certificate(
     ncol(R), ncol(D), rhs_reference, rhs_discrepancy
   )
   sigma_mean <- pmax(as.numeric(initialized$sigma), 1.0e-6)
   if (length(sigma_mean) != K) sigma_mean <- rep(sigma_mean[[1L]], K)
-  sigma_shape <- rep(controls$a_sigma + 1.5 * length(z), K)
-  sigma_rate <- sigma_mean * pmax(sigma_shape - 1, .Machine$double.eps)
-  latent_mean <- matrix(1, length(z), K)
-  latent_inv_mean <- matrix(1, length(z), K)
+  sigma_shape <- as.numeric(initialized$sigma_shape %||% rep(controls$a_sigma + 1.5 * length(z), K))
+  sigma_rate <- as.numeric(initialized$sigma_rate %||%
+    (sigma_mean * pmax(sigma_shape - 1, .Machine$double.eps)))
+  latent_mean <- initialized$latent_mean %||% matrix(1, length(z), K)
+  latent_inv_mean <- initialized$latent_inv_mean %||% matrix(1, length(z), K)
   gamma <- block_moments <- s_mean <- s2_mean <- NULL
   if (identical(likelihood, "exAL")) {
     gamma <- initialized$gamma %||% app_joint_qvp_default_gamma(tau)
@@ -362,15 +465,53 @@ app_glofas_part3_quantile_fit <- function(
   stop_reason <- "max_iter"
   started <- Sys.time()
   constants_al <- if (identical(likelihood, "AL")) app_joint_qvp_al_constants(tau) else NULL
+  if (!is.null(restart_state) && identical(likelihood, "AL") &&
+      (is.null(initialized$latent_mean) || is.null(initialized$latent_inv_mean))) {
+    for (kk in seq_len(K)) {
+      q_reference <- as.numeric(R %*% beta_reference[, kk])
+      q_discrepancy <- as.numeric(D %*% beta_discrepancy[, kk])
+      var_reference <- as.numeric(R^2 %*% pmax(variance_reference[, kk], 0))
+      var_discrepancy <- as.numeric(D^2 %*% pmax(variance_discrepancy[, kk], 0))
+      residual <- c(y - q_reference, g - q_reference - q_discrepancy)
+      residual_second <- c(
+        (y - q_reference)^2 + var_reference,
+        (g - q_reference - q_discrepancy)^2 + var_reference + var_discrepancy
+      )
+      sigma_inv <- sigma_shape[[kk]] / sigma_rate[[kk]]
+      A <- constants_al$A[[kk]]
+      B <- constants_al$B[[kk]]
+      chi <- pmax(sigma_inv * residual_second / B, .Machine$double.eps)
+      psi <- rep(pmax(sigma_inv * (A^2 / B + 2), .Machine$double.eps), length(z))
+      latent_mean[, kk] <- app_joint_qvp_gig_moment(0.5, chi, psi, 1)
+      latent_inv_mean[, kk] <- app_joint_qvp_gig_moment(0.5, chi, psi, -1)
+    }
+  }
+  if (!is.null(restart_state)) {
+    latent_mean <- app_glofas_restart_validate_matrix(
+      latent_mean, length(z), K, "part3 restart latent_mean", positive = TRUE
+    )
+    latent_inv_mean <- app_glofas_restart_validate_matrix(
+      latent_inv_mean, length(z), K, "part3 restart latent_inv_mean", positive = TRUE
+    )
+  }
+  iteration_offset <- as.integer(restart_state$iterations_completed %||% 0L)
+  if (length(iteration_offset) != 1L || is.na(iteration_offset) || iteration_offset < 0L) {
+    stop("Part 3 restart iteration offset is invalid.", call. = FALSE)
+  }
   beta_update_count <- 0L
   freeze_beta_warmup_iters <- min(as.integer(controls$freeze_beta_warmup_iters %||% 0L), controls$max_iter)
   min_beta_updates <- as.integer(controls$min_beta_updates %||% 0L)
 
   for (iter in seq_len(controls$max_iter)) {
+    global_iter <- iteration_offset + iter
     old_reference <- beta_reference
     old_discrepancy <- beta_discrepancy
     old_sigma <- sigma_mean
     old_gamma <- gamma
+    old_rhs_reference_raw <- app_glofas_quantile_numeric_state(rhs_reference)
+    old_rhs_discrepancy_raw <- app_glofas_quantile_numeric_state(rhs_discrepancy)
+    old_rhs_reference <- rhs_reference
+    old_rhs_discrepancy <- rhs_discrepancy
     prior_reference <- app_glofas_part3_rhs_prior_terms(rhs_reference, beta_reference)
     prior_discrepancy <- app_glofas_part3_rhs_prior_terms(rhs_discrepancy, beta_discrepancy)
     jitter_max <- 0L
@@ -415,6 +556,8 @@ app_glofas_part3_quantile_fit <- function(
         beta_discrepancy[, kk] <- solved$discrepancy$mean
         variance_reference[, kk] <- solved$reference$variance_diag
         variance_discrepancy[, kk] <- solved$discrepancy$variance_diag
+        covariance_reference[[kk]] <- solved$reference$covariance
+        covariance_discrepancy[[kk]] <- solved$discrepancy$covariance
         jitter_max <- max(jitter_max, solved$reference$jitter_attempt, solved$discrepancy$jitter_attempt)
       } else {
         jitter_max <- NA_integer_
@@ -505,11 +648,11 @@ app_glofas_part3_quantile_fit <- function(
 
     for (inner in seq_len(controls$rhs_vb_inner)) {
       rhs_reference <- app_glofas_part3_rhs_update(
-        rhs_reference, beta_reference, variance_reference, iter = iter,
+        rhs_reference, beta_reference, variance_reference, iter = global_iter,
         update_global = if (inner == controls$rhs_vb_inner) NULL else FALSE
       )
       rhs_discrepancy <- app_glofas_part3_rhs_update(
-        rhs_discrepancy, beta_discrepancy, variance_discrepancy, iter = iter,
+        rhs_discrepancy, beta_discrepancy, variance_discrepancy, iter = global_iter,
         update_global = if (inner == controls$rhs_vb_inner) NULL else FALSE
       )
     }
@@ -521,6 +664,32 @@ app_glofas_part3_quantile_fit <- function(
     max_sigma_change <- max(abs(sigma_mean - old_sigma))
     max_gamma_change <- if (identical(likelihood, "exAL")) max(abs(gamma - old_gamma)) else 0
     max_path_change <- max(abs(q_reference - q_reference_old), abs(q_discrepancy - q_discrepancy_old))
+    max_reference_relative_change <- app_glofas_quantile_max_relative_change(beta_reference, old_reference)
+    max_discrepancy_relative_change <- app_glofas_quantile_max_relative_change(beta_discrepancy, old_discrepancy)
+    max_sigma_relative_change <- app_glofas_quantile_max_relative_change(sigma_mean, old_sigma)
+    max_gamma_relative_change <- if (identical(likelihood, "exAL")) {
+      app_glofas_quantile_max_relative_change(gamma, old_gamma)
+    } else 0
+    max_path_relative_change <- max(
+      app_glofas_quantile_max_relative_change(q_reference, q_reference_old),
+      app_glofas_quantile_max_relative_change(q_discrepancy, q_discrepancy_old)
+    )
+    rhs_reference_change <- app_glofas_quantile_rhs_change_diagnostics(
+      rhs_reference, old_rhs_reference
+    )
+    rhs_discrepancy_change <- app_glofas_quantile_rhs_change_diagnostics(
+      rhs_discrepancy, old_rhs_discrepancy
+    )
+    rhs_partition <- if (rhs_reference_change$max_relative_change >=
+        rhs_discrepancy_change$max_relative_change) "reference" else "discrepancy"
+    rhs_change <- if (identical(rhs_partition, "reference")) {
+      rhs_reference_change
+    } else rhs_discrepancy_change
+    max_rhs_change <- rhs_change$max_relative_change
+    max_rhs_raw_change <- max(
+      app_glofas_quantile_max_relative_change(app_glofas_quantile_numeric_state(rhs_reference), old_rhs_reference_raw),
+      app_glofas_quantile_max_relative_change(app_glofas_quantile_numeric_state(rhs_discrepancy), old_rhs_discrepancy_raw)
+    )
     rhs_reference_summary <- app_glofas_part3_rhs_summary(rhs_reference, "reference")
     rhs_discrepancy_summary <- app_glofas_part3_rhs_summary(rhs_discrepancy, "discrepancy")
     monitor <- -sum((matrix(y, Tn, K) - q_reference)^2) - sum((matrix(g, Tn, K) - q_glofas)^2)
@@ -528,11 +697,20 @@ app_glofas_part3_quantile_fit <- function(
       max_reference_change, max_discrepancy_change, max_sigma_change,
       max_gamma_change, max_path_change
     )
-    convergence_eligible <- iter >= controls$min_iter &&
+    full_state_change <- max(
+      max_reference_relative_change, max_discrepancy_relative_change,
+      max_sigma_relative_change, max_gamma_relative_change,
+      max_path_relative_change, max_rhs_change
+    )
+    convergence_eligible <- (isTRUE(controls$fixed_iterations) || iter >= controls$min_iter) &&
       iter > freeze_beta_warmup_iters &&
       beta_update_count >= min_beta_updates
+    full_state_pass <- isTRUE(convergence_eligible) && is.finite(full_state_change) &&
+      full_state_change <= controls$convergence_tolerance &&
+      (!identical(likelihood, "exAL") || all_quadrature_converged)
     trace[[iter]] <- data.frame(
       iter = iter,
+      global_iter = global_iter,
       max_iter = controls$max_iter,
       min_iter = controls$min_iter,
       likelihood = likelihood,
@@ -542,11 +720,32 @@ app_glofas_part3_quantile_fit <- function(
       freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
       convergence_eligible = isTRUE(convergence_eligible),
       max_reference_change = max_reference_change,
+      max_reference_relative_change = max_reference_relative_change,
       max_discrepancy_change = max_discrepancy_change,
+      max_discrepancy_relative_change = max_discrepancy_relative_change,
       max_sigma_change = max_sigma_change,
+      max_sigma_relative_change = max_sigma_relative_change,
       max_gamma_change = max_gamma_change,
+      max_gamma_relative_change = max_gamma_relative_change,
       max_path_change = max_path_change,
+      max_path_relative_change = max_path_relative_change,
+      max_rhs_change = max_rhs_change,
+      max_rhs_raw_change = max_rhs_raw_change,
+      max_rhs_auxiliary_change = max(
+        rhs_reference_change$max_auxiliary_change,
+        rhs_discrepancy_change$max_auxiliary_change
+      ),
+      max_rhs_precision_change = max(
+        rhs_reference_change$max_precision_change,
+        rhs_discrepancy_change$max_precision_change
+      ),
+      max_rhs_partition = rhs_partition,
+      max_rhs_block = rhs_change$controlling_block,
+      max_rhs_component = rhs_change$controlling_component,
+      max_rhs_coordinate = rhs_change$controlling_coordinate,
       max_change = max_change,
+      full_state_change = full_state_change,
+      full_state_pass = full_state_pass,
       reference_effective_tau = mean(rhs_reference_summary$effective_tau),
       discrepancy_effective_tau = mean(rhs_discrepancy_summary$effective_tau),
       reference_tau_updates = sum(rhs_reference_summary$tau_update_count),
@@ -576,8 +775,14 @@ app_glofas_part3_quantile_fit <- function(
     }
     q_reference_old <- q_reference
     q_discrepancy_old <- q_discrepancy
-    if (isTRUE(convergence_eligible) && max_change <= controls$tol &&
-        (!identical(likelihood, "exAL") || all_quadrature_converged)) {
+    consecutive_pass <- if (iter >= controls$terminal_consecutive_passes) {
+      all(vapply(tail(trace[seq_len(iter)], controls$terminal_consecutive_passes), function(x) isTRUE(x$full_state_pass[[1L]]), logical(1L)))
+    } else FALSE
+    legacy_pass <- isTRUE(convergence_eligible) && max_change <= controls$tol &&
+      (!identical(likelihood, "exAL") || all_quadrature_converged)
+    if (!isTRUE(controls$fixed_iterations) &&
+        ((isTRUE(controls$full_state_convergence) && consecutive_pass) ||
+         (!isTRUE(controls$full_state_convergence) && legacy_pass))) {
       converged <- TRUE
       stop_reason <- "tolerance"
       trace <- trace[seq_len(iter)]
@@ -586,6 +791,22 @@ app_glofas_part3_quantile_fit <- function(
   }
 
   trace <- app_bind_rows_fill(trace)
+  certificate <- app_glofas_quantile_terminal_certificate(
+    trace,
+    required_change_columns = c(
+      "max_reference_relative_change", "max_discrepancy_relative_change",
+      "max_sigma_relative_change", "max_gamma_relative_change",
+      "max_path_relative_change", "max_rhs_change"
+    ),
+    tolerance = controls$convergence_tolerance,
+    consecutive = controls$terminal_consecutive_passes,
+    required_gate_columns = c("convergence_eligible", "full_state_pass")
+  )
+  if (isTRUE(controls$fixed_iterations) || isTRUE(controls$full_state_convergence)) {
+    converged <- isTRUE(certificate$passed)
+    stop_reason <- if (converged) "terminal_full_state_certificate_passed" else
+      "completed_fixed_iterations_without_terminal_certificate"
+  }
   q_reference <- R %*% beta_reference
   q_discrepancy <- D %*% beta_discrepancy
   q_glofas <- q_reference + q_discrepancy
@@ -600,6 +821,8 @@ app_glofas_part3_quantile_fit <- function(
     beta_discrepancy_mean = beta_discrepancy,
     beta_reference_var_diag = variance_reference,
     beta_discrepancy_var_diag = variance_discrepancy,
+    beta_reference_cov_blocks = covariance_reference,
+    beta_discrepancy_cov_blocks = covariance_discrepancy,
     reference_intercept_mean = beta_reference[1L, ],
     discrepancy_intercept_mean = beta_discrepancy[1L, ],
     sigma_mean = sigma_mean,
@@ -614,13 +837,17 @@ app_glofas_part3_quantile_fit <- function(
     qhat_reference_train = q_reference,
     qhat_discrepancy_train = q_discrepancy,
     qhat_glofas_train = q_glofas,
+    latent_mean = latent_mean,
+    latent_inv_mean = latent_inv_mean,
     trace = trace,
     quadrature_trace = app_bind_rows_fill(quadrature_trace),
     scale_shape_trace = app_bind_rows_fill(scale_shape_trace),
     converged = converged,
+    convergence_certificate = certificate,
     stop_reason = stop_reason,
     iterations = nrow(trace),
-    covariance_approximation = "mean_field_by_component_and_quantile",
+    iterations_completed = iteration_offset + nrow(trace),
+    covariance_approximation = "full_within_component_quantile_blocks_mean_field_across_components_and_quantiles",
     monitor_label = if (identical(likelihood, "AL")) {
       "al_block_cavi_coordinate_monitor_not_full_elbo"
     } else {
@@ -633,6 +860,22 @@ app_glofas_part3_quantile_fit <- function(
     p_reference = ncol(R),
     p_discrepancy = ncol(D),
     controls = controls,
+    restart_provenance = restart_state[c(
+      "schema_version", "restart_kind", "source_path", "source_sha256",
+      "source_state_sha256", "iterations_completed"
+    )],
+    checkpoint_state = if (is.null(restart_state)) {
+      list(
+        schema_version = "glofas_quantile_checkpoint_v1",
+        complete_local_state = TRUE,
+        restart_kind = "fresh_fit",
+        source_path = NA_character_, source_sha256 = NA_character_,
+        source_state_sha256 = NA_character_,
+        iterations_completed = as.integer(nrow(trace))
+      )
+    } else {
+      app_glofas_restart_checkpoint_metadata(restart_state, iteration_offset + nrow(trace))
+    },
     runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs"))
   )
   class(fit) <- c("glofas_part3_quantile_fit", "list")

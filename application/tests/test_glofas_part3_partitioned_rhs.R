@@ -37,4 +37,61 @@ stopifnot(certificate$n_quantiles == 3L)
 prior <- app_glofas_part3_rhs_prior_terms(reference, matrix(seq_len(15) / 100, 5, 3))
 stopifnot(length(prior$diagonal) == 3L)
 stopifnot(all(vapply(prior$diagonal, function(x) length(x) == 5L && all(is.finite(x)) && all(x > 0), logical(1L))))
+
+solver_mean <- matrix(seq_len(15) / 100, 5, 3)
+solver_var <- matrix(0.01, 5, 3)
+solver_start <- app_glofas_part3_rhs_initialize(3L, 5L, 1, controls)
+explicit <- solver_start
+for (inner in 1:4) {
+  explicit <- app_glofas_part3_rhs_update(
+    explicit,
+    solver_mean,
+    solver_var,
+    iter = 1L,
+    update_global = if (inner == 1L) NULL else TRUE
+  )
+}
+bounded_four <- app_glofas_part3_rhs_solve_fixed_moments(
+  solver_start,
+  solver_mean,
+  solver_var,
+  iter = 1L,
+  min_iter = 4L,
+  max_iter = 4L,
+  tolerance = 1.0e-30,
+  consecutive_passes = 5L
+)
+stopifnot(
+  bounded_four$iterations == 4L,
+  !bounded_four$converged,
+  max(abs(
+    app_glofas_part3_rhs_inferential_state(bounded_four$state) -
+      app_glofas_part3_rhs_inferential_state(explicit)
+  )) < 1.0e-14
+)
+
+bounded_converged <- app_glofas_part3_rhs_solve_fixed_moments(
+  solver_start,
+  solver_mean,
+  solver_var,
+  iter = 1L,
+  min_iter = 2L,
+  max_iter = 100L,
+  tolerance = 1.0e-6,
+  consecutive_passes = 2L
+)
+stopifnot(
+  bounded_converged$converged,
+  bounded_converged$iterations <= 100L,
+  bounded_converged$relative_change <= 1.0e-6,
+  all(c(
+    "rhs_inner_iteration", "inferential_relative_change",
+    "auxiliary_relative_change", "precision_relative_change",
+    "controlling_block", "controlling_component", "controlling_coordinate",
+    "global_update_enabled", "convergence_pass", "trailing_consecutive_passes"
+  ) %in% names(bounded_converged$trace)),
+  nzchar(bounded_converged$controlling_block),
+  nzchar(bounded_converged$controlling_component),
+  grepl("\\[[0-9]+\\]$", bounded_converged$controlling_coordinate)
+)
 cat("test_glofas_part3_partitioned_rhs: OK\n")

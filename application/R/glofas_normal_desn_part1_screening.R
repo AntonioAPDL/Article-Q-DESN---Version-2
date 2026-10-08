@@ -151,9 +151,11 @@ app_glofas_normal_part1_make_cfg <- function(
   rho,
   seed = NULL,
   washout = NULL,
-  dlm_extension = NULL
+  dlm_extension = NULL,
+  reservoir_controls = NULL
 ) {
   defaults <- app_glofas_normal_part1_default_values()
+  reservoir_controls <- utils::modifyList(defaults, reservoir_controls %||% list())
   n <- app_glofas_normal_part1_as_int_vec(n, "n")
   if (!length(n) || any(n < 1L)) stop("n must be a positive integer vector.", call. = FALSE)
   D <- length(n)
@@ -179,6 +181,26 @@ app_glofas_normal_part1_make_cfg <- function(
   }
   seed <- as.integer(seed %||% defaults$seed)
   if (!is.finite(seed)) stop("seed must be finite.", call. = FALSE)
+  expand_layer_control <- function(x, label) {
+    x <- as.numeric(unlist(x, use.names = FALSE))
+    if (length(x) == 1L) x <- rep(x, D)
+    if (length(x) != D || any(!is.finite(x))) {
+      stop(sprintf("%s must contain one value or one value per reservoir layer.", label), call. = FALSE)
+    }
+    x
+  }
+  pi_w <- expand_layer_control(reservoir_controls$pi_w, "pi_w")
+  pi_in <- expand_layer_control(reservoir_controls$pi_in, "pi_in")
+  if (any(pi_w <= 0 | pi_w > 1)) stop("pi_w must lie in (0, 1].", call. = FALSE)
+  if (any(pi_in <= 0 | pi_in > 1)) stop("pi_in must lie in (0, 1].", call. = FALSE)
+  win_scale_global <- as.numeric(reservoir_controls$win_scale_global)
+  win_scale_bias <- as.numeric(reservoir_controls$win_scale_bias)
+  if (length(win_scale_global) != 1L || !is.finite(win_scale_global) || win_scale_global <= 0) {
+    stop("win_scale_global must be finite and positive.", call. = FALSE)
+  }
+  if (length(win_scale_bias) != 1L || !is.finite(win_scale_bias) || win_scale_bias <= 0) {
+    stop("win_scale_bias must be finite and positive.", call. = FALSE)
+  }
 
   cfg <- base_cfg
   cfg$reservoir <- list(
@@ -189,14 +211,14 @@ app_glofas_normal_part1_make_cfg <- function(
     washout = washout,
     alpha = rep(alpha, D),
     rho = rep(rho, D),
-    pi_w = rep(defaults$pi_w, D),
-    pi_in = rep(defaults$pi_in, D),
-    win_scale_global = defaults$win_scale_global,
-    win_scale_bias = defaults$win_scale_bias,
-    input_bound = defaults$input_bound,
-    act_f = defaults$act_f,
-    act_k = defaults$act_k,
-    standardize_inputs = TRUE,
+    pi_w = pi_w,
+    pi_in = pi_in,
+    win_scale_global = win_scale_global,
+    win_scale_bias = win_scale_bias,
+    input_bound = as.character(reservoir_controls$input_bound),
+    act_f = as.character(reservoir_controls$act_f),
+    act_k = as.character(reservoir_controls$act_k),
+    standardize_inputs = isTRUE(reservoir_controls$standardize_inputs %||% TRUE),
     add_bias = TRUE,
     seed = seed
   )
@@ -252,6 +274,32 @@ app_glofas_normal_part1_make_cfg <- function(
     )
   )
   cfg
+}
+
+app_glofas_normal_part1_reservoir_controls <- function(candidate_row, prefix = NULL) {
+  defaults <- app_glofas_normal_part1_default_values()
+  value <- function(name, default) {
+    candidates <- if (!is.null(prefix) && nzchar(prefix)) c(paste0(prefix, "_", name), name) else name
+    for (nm in candidates) {
+      if (!nm %in% names(candidate_row)) next
+      out <- candidate_row[[nm]][[1L]]
+      if (length(out) && !(length(out) == 1L && is.na(out))) return(out)
+    }
+    default
+  }
+  list(
+    pi_w = value("pi_w", defaults$pi_w),
+    pi_in = value("pi_in", defaults$pi_in),
+    win_scale_global = value("win_scale_global", defaults$win_scale_global),
+    win_scale_bias = value("win_scale_bias", defaults$win_scale_bias),
+    input_bound = value("input_bound", defaults$input_bound),
+    act_f = value("act_f", defaults$act_f),
+    act_k = value("act_k", defaults$act_k),
+    standardize_inputs = app_glofas_normal_part1_as_bool_field(
+      value("standardize_inputs", TRUE),
+      default = TRUE
+    )
+  )
 }
 
 app_glofas_normal_part1_geometry_grid <- function() {
@@ -766,6 +814,65 @@ app_glofas_normal_part1_readout_matrix <- function(design) {
   list(X = X, feature_info = feature_info)
 }
 
+app_glofas_normal_readout_scaler_fit <- function(X, mode = c("none", "train_zscore"), scale_floor = 1.0e-8) {
+  mode <- match.arg(as.character(mode %||% "none")[[1L]], c("none", "train_zscore"))
+  X <- as.matrix(X)
+  p <- ncol(X)
+  if (!p || any(!is.finite(X))) stop("Readout scaling requires a finite design matrix.", call. = FALSE)
+  center <- rep(0, p)
+  scale <- rep(1, p)
+  if (identical(mode, "train_zscore") && p > 1L) {
+    center[-1L] <- colMeans(X[, -1L, drop = FALSE])
+    raw_scale <- apply(X[, -1L, drop = FALSE], 2L, stats::sd)
+    raw_scale[!is.finite(raw_scale) | raw_scale < scale_floor] <- 1
+    scale[-1L] <- raw_scale
+  }
+  out <- list(
+    version = "glofas_normal_readout_scaler_v1",
+    mode = mode,
+    center = center,
+    scale = scale,
+    scale_floor = as.numeric(scale_floor),
+    columns = colnames(X)
+  )
+  class(out) <- c("glofas_normal_readout_scaler", "list")
+  out
+}
+
+app_glofas_normal_readout_scaler_apply <- function(X, scaler) {
+  X <- as.matrix(X)
+  if (is.null(scaler) || identical(as.character(scaler$mode %||% "none"), "none")) return(X)
+  if (ncol(X) != length(scaler$center) || ncol(X) != length(scaler$scale)) {
+    stop("Readout scaler dimensions do not match the design.", call. = FALSE)
+  }
+  if (!is.null(scaler$columns) && !identical(colnames(X), as.character(scaler$columns))) {
+    stop("Readout scaler columns do not match the design.", call. = FALSE)
+  }
+  out <- sweep(X, 2L, as.numeric(scaler$center), "-")
+  out <- sweep(out, 2L, as.numeric(scaler$scale), "/")
+  storage.mode(out) <- "double"
+  out
+}
+
+app_glofas_normal_readout_beta_to_raw <- function(beta, scaler) {
+  beta <- as.numeric(beta)
+  if (is.null(scaler) || identical(as.character(scaler$mode %||% "none"), "none")) return(beta)
+  if (length(beta) != length(scaler$scale)) stop("Coefficient and scaler dimensions differ.", call. = FALSE)
+  out <- beta / as.numeric(scaler$scale)
+  out[[1L]] <- beta[[1L]] - sum(beta[-1L] * as.numeric(scaler$center[-1L]) / as.numeric(scaler$scale[-1L]))
+  out
+}
+
+app_glofas_normal_readout_beta_draws_to_raw <- function(beta, scaler) {
+  beta <- as.matrix(beta)
+  if (is.null(scaler) || identical(as.character(scaler$mode %||% "none"), "none")) return(beta)
+  if (ncol(beta) != length(scaler$scale)) stop("Coefficient draws and scaler dimensions differ.", call. = FALSE)
+  out <- sweep(beta, 2L, as.numeric(scaler$scale), "/")
+  out[, 1L] <- beta[, 1L] - as.numeric(beta[, -1L, drop = FALSE] %*%
+    (as.numeric(scaler$center[-1L]) / as.numeric(scaler$scale[-1L])))
+  out
+}
+
 app_glofas_normal_part1_build_design <- function(base_cfg, candidate_row, panel_bundle = NULL) {
   candidate_row <- candidate_row[1L, , drop = FALSE]
   dlm_extension <- app_glofas_normal_part1_parse_dlm_extension(
@@ -782,7 +889,8 @@ app_glofas_normal_part1_build_design <- function(base_cfg, candidate_row, panel_
     rho = candidate_row$rho[[1L]],
     seed = candidate_row$seed[[1L]],
     washout = candidate_row$washout[[1L]],
-    dlm_extension = dlm_extension
+    dlm_extension = dlm_extension,
+    reservoir_controls = app_glofas_normal_part1_reservoir_controls(candidate_row)
   )
   invisible(app_feature_contract(cfg))
   panel_bundle <- panel_bundle %||% app_glofas_normal_part1_prepare_panel(base_cfg)
@@ -799,6 +907,10 @@ app_glofas_normal_part1_build_design <- function(base_cfg, candidate_row, panel_
     drop = as.integer(candidate_row$washout[[1L]])
   )
   readout <- app_glofas_normal_part1_readout_matrix(design)
+  X_raw <- readout$X
+  state_scaling <- as.character(app_glofas_normal_part1_row_value(candidate_row, "state_scaling", "none"))[[1L]]
+  readout_scaler <- app_glofas_normal_readout_scaler_fit(X_raw, mode = state_scaling)
+  readout$X <- app_glofas_normal_readout_scaler_apply(X_raw, readout_scaler)
   y <- as.numeric(design$y_fit)
   dates <- as.Date(design_panel_bundle$panel$target_date[design$meta$keep_idx])
   if (nrow(readout$X) != length(y) || length(y) != length(dates)) {
@@ -807,11 +919,13 @@ app_glofas_normal_part1_build_design <- function(base_cfg, candidate_row, panel_
   list(
     cfg = cfg,
     X = readout$X,
+    X_raw = X_raw,
     y = y,
     dates = dates,
     feature_info = readout$feature_info,
     design_meta = design$meta,
     reservoir = design$reservoir,
+    readout_scaler = readout_scaler,
     dlm_extension = dlm_applied$meta
   )
 }
@@ -1333,6 +1447,8 @@ app_glofas_normal_rhs_state_diagnostics <- function(state, p) {
     e_inv_tau2 = as.numeric(state$e_inv_tau2),
     e_inv_xi = as.numeric(state$e_inv_xi),
     e_inv_zeta2 = as.numeric(state$e_inv_zeta2),
+    zeta2_fixed = as.numeric(state$zeta2_fixed %||% NA_real_),
+    zeta_update_enabled = isTRUE(state$update_zeta %||% TRUE),
     prior_precision_mean = mean(prec),
     prior_precision_median = stats::median(prec),
     prior_precision_max = max(prec),
@@ -1368,7 +1484,8 @@ app_glofas_normal_rhs_partial_elbo <- function(
   rhs_state,
   prior_prec,
   sse,
-  chol_precision = NULL
+  chol_precision = NULL,
+  logdet_cov_override = NULL
 ) {
   p <- length(theta_mean)
   n <- as.integer(stats$n)
@@ -1384,7 +1501,7 @@ app_glofas_normal_rhs_partial_elbo <- function(
     (sigma_a0 + 1) * sigma_log_mean - sigma_b0 * e_inv_sigma2
   q_sigma2_entropy <- app_glofas_normal_ig_entropy(sigma_a, sigma_b)
 
-  logdet_cov <- NA_real_
+  logdet_cov <- as.numeric(logdet_cov_override %||% NA_real_)
   if (!is.null(chol_precision)) {
     diag_chol <- diag(chol_precision)
     if (all(is.finite(diag_chol)) && all(diag_chol > 0)) {
@@ -1413,6 +1530,7 @@ app_glofas_normal_rhs_partial_elbo <- function(
     tau_rate <- tau_shape / pmax(as.numeric(rhs_state$e_inv_tau2), .Machine$double.eps)
     xi_shape <- 1
     xi_rate <- xi_shape / pmax(as.numeric(rhs_state$e_inv_xi), .Machine$double.eps)
+    zeta_is_fixed <- !isTRUE(rhs_state$update_zeta %||% TRUE)
     zeta_shape <- as.numeric(rhs_state$a_zeta) + length(idx) / 2
     zeta_rate <- zeta_shape / pmax(as.numeric(rhs_state$e_inv_zeta2), .Machine$double.eps)
 
@@ -1420,7 +1538,7 @@ app_glofas_normal_rhs_partial_elbo <- function(
     e_log_nu <- app_glofas_normal_ig_log_mean(nu_shape, nu_rate)
     e_log_tau2 <- app_glofas_normal_ig_log_mean(tau_shape, tau_rate)
     e_log_xi <- app_glofas_normal_ig_log_mean(xi_shape, xi_rate)
-    e_log_zeta2 <- app_glofas_normal_ig_log_mean(zeta_shape, zeta_rate)
+    e_log_zeta2 <- if (zeta_is_fixed) log(as.numeric(rhs_state$zeta2_fixed)) else app_glofas_normal_ig_log_mean(zeta_shape, zeta_rate)
 
     rhs_scale_prior_kernel <- rhs_scale_prior_kernel +
       sum(0.5 * (-e_log_nu) - lgamma(0.5) - 1.5 * e_log_lambda2 -
@@ -1433,17 +1551,19 @@ app_glofas_normal_rhs_partial_elbo <- function(
     rhs_scale_prior_kernel <- rhs_scale_prior_kernel +
       log(1 / rhs_state$tau0^2) - 2 * e_log_xi -
       (1 / rhs_state$tau0^2) * as.numeric(rhs_state$e_inv_xi)
-    rhs_scale_prior_kernel <- rhs_scale_prior_kernel +
-      as.numeric(rhs_state$a_zeta) * log(as.numeric(rhs_state$b_zeta)) -
-      lgamma(as.numeric(rhs_state$a_zeta)) -
-      (as.numeric(rhs_state$a_zeta) + 1) * e_log_zeta2 -
-      as.numeric(rhs_state$b_zeta) * as.numeric(rhs_state$e_inv_zeta2)
+    if (!zeta_is_fixed) {
+      rhs_scale_prior_kernel <- rhs_scale_prior_kernel +
+        as.numeric(rhs_state$a_zeta) * log(as.numeric(rhs_state$b_zeta)) -
+        lgamma(as.numeric(rhs_state$a_zeta)) -
+        (as.numeric(rhs_state$a_zeta) + 1) * e_log_zeta2 -
+        as.numeric(rhs_state$b_zeta) * as.numeric(rhs_state$e_inv_zeta2)
+    }
 
     q_rhs_scale_entropy <- sum(app_glofas_normal_ig_entropy(lambda_shape, lambda_rate)) +
       sum(app_glofas_normal_ig_entropy(nu_shape, nu_rate)) +
       app_glofas_normal_ig_entropy(tau_shape, tau_rate) +
       app_glofas_normal_ig_entropy(xi_shape, xi_rate) +
-      app_glofas_normal_ig_entropy(zeta_shape, zeta_rate)
+      if (zeta_is_fixed) 0 else app_glofas_normal_ig_entropy(zeta_shape, zeta_rate)
   }
 
   normal_rhs_partial_elbo <- sum(c(
@@ -1477,6 +1597,7 @@ app_glofas_normal_rhs_fit <- function(
   tau0 = 1,
   a_zeta = 2,
   b_zeta = 4,
+  zeta2_fixed = NULL,
   max_iter = 100L,
   min_iter = 30L,
   tol = 1.0e-4,
@@ -1543,6 +1664,7 @@ app_glofas_normal_rhs_fit <- function(
       tau0 = tau0,
       a_zeta = a_zeta,
       b_zeta = b_zeta,
+      zeta2_fixed = zeta2_fixed,
       intercept_prec = intercept_prec
     ),
     rhs_control = list(
@@ -1576,23 +1698,29 @@ app_glofas_normal_rhs_fit <- function(
     if (length(prior_prec) != p || any(!is.finite(prior_prec)) || any(prior_prec <= 0)) {
       stop("RHS prior precision must be finite and positive.", call. = FALSE)
     }
-    Pn <- e_inv_sigma2 * stats$XtX
-    diag(Pn) <- diag(Pn) + prior_prec
-    hn <- e_inv_sigma2 * stats$Xty
-    sol <- app_glofas_normal_spd_solve(Pn, hn, jitter = jitter)
     beta_updated <- iter > freeze_beta_warmup_iters
     if (isTRUE(beta_updated)) {
+      Pn <- e_inv_sigma2 * stats$XtX
+      diag(Pn) <- diag(Pn) + prior_prec
+      hn <- e_inv_sigma2 * stats$Xty
+      sol <- app_glofas_normal_spd_solve(Pn, hn, jitter = jitter)
       m <- sol$x
       V <- sol$inv
       chol_P <- sol$chol
       beta_update_count <- beta_update_count + 1L
+      jitter_attempt <- sol$jitter_attempt
+      logdet_cov_override <- NA_real_
     } else {
       m <- m_old
       V <- V_old
-      chol_P <- diag(1 / sqrt(pmax(diag(V), .Machine$double.eps)), p)
+      chol_P <- NULL
+      jitter_attempt <- 0L
+      logdet_cov_override <- sum(log(pmax(diag(V), .Machine$double.eps)))
     }
-    Emm <- V + tcrossprod(m)
-    sse <- stats$yty - 2 * as.numeric(crossprod(m, stats$Xty)) + sum(stats$XtX * Emm)
+    # E[beta' X'X beta] without materializing a second p-by-p outer-product matrix.
+    quadratic_mean <- as.numeric(crossprod(m, stats$XtX %*% m))
+    quadratic_cov <- sum(stats$XtX * V)
+    sse <- stats$yty - 2 * as.numeric(crossprod(m, stats$Xty)) + quadratic_mean + quadratic_cov
     sse <- max(as.numeric(sse), .Machine$double.eps)
     sigma_a <- sigma_a0 + n / 2
     sigma_b <- sigma_b0 + 0.5 * sse
@@ -1618,7 +1746,8 @@ app_glofas_normal_rhs_fit <- function(
       rhs_state = rhs_state,
       prior_prec = prior_prec_after,
       sse = sse,
-      chol_precision = chol_P
+      chol_precision = chol_P,
+      logdet_cov_override = logdet_cov_override
     )
     previous_elbo <- if (iter > 1L && length(trace[[iter - 1L]]) &&
                           "normal_rhs_partial_elbo" %in% names(trace[[iter - 1L]])) {
@@ -1645,6 +1774,7 @@ app_glofas_normal_rhs_fit <- function(
       data.frame(
         iter = iter,
         beta_updated = isTRUE(beta_updated),
+        beta_solve_performed = isTRUE(beta_updated),
         beta_update_count = as.integer(beta_update_count),
         freeze_remaining = as.integer(max(0L, freeze_beta_warmup_iters - iter)),
         convergence_eligible = isTRUE(convergence_eligible),
@@ -1652,7 +1782,7 @@ app_glofas_normal_rhs_fit <- function(
         beta_max_abs_delta = beta_delta,
         sigma2_relative_delta = sigma_delta,
         max_delta = final_delta,
-        jitter_attempt = sol$jitter_attempt,
+        jitter_attempt = jitter_attempt,
         elapsed_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
         stringsAsFactors = FALSE
       ),
@@ -1681,6 +1811,7 @@ app_glofas_normal_rhs_fit <- function(
     rhs_tau0 = tau0,
     a_zeta = a_zeta,
     b_zeta = b_zeta,
+    zeta2_fixed = zeta2_fixed,
     freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
     min_beta_updates = as.integer(min_beta_updates),
     trace = trace_df,
@@ -1784,12 +1915,24 @@ app_glofas_normal_part1_score_rhs_candidate <- function(
     y = design$y[train_idx],
     ridge_warm_start = warm_start,
     tau0 = as.numeric(rhs_row$rhs_tau0[[1L]]),
+    a_zeta = as.numeric(app_glofas_normal_part1_row_value(rhs_row, "rhs_a_zeta", 2)),
+    b_zeta = as.numeric(app_glofas_normal_part1_row_value(rhs_row, "rhs_b_zeta", 4)),
+    zeta2_fixed = {
+      value <- app_glofas_normal_part1_row_value(rhs_row, "rhs_zeta2_fixed", NULL)
+      if (is.null(value) || !is.finite(as.numeric(value))) NULL else as.numeric(value)
+    },
     max_iter = as.integer(rhs_row$rhs_max_iter[[1L]] %||% 100L),
     min_iter = as.integer(rhs_row$rhs_min_iter[[1L]] %||% 30L),
     tol = as.numeric(rhs_row$rhs_tol[[1L]] %||% 1.0e-4),
     rhs_update_every = as.integer(rhs_row$rhs_update_every[[1L]] %||% 1L),
     freeze_tau_warmup_iters = as.integer(rhs_row$rhs_freeze_tau_warmup_iters[[1L]] %||% 0L),
-    min_tau_updates = as.integer(rhs_row$rhs_min_tau_updates[[1L]] %||% 0L)
+    min_tau_updates = as.integer(rhs_row$rhs_min_tau_updates[[1L]] %||% 0L),
+    freeze_beta_warmup_iters = as.integer(app_glofas_normal_part1_row_value(
+      rhs_row, "rhs_freeze_beta_warmup_iters", 0L
+    )),
+    min_beta_updates = as.integer(app_glofas_normal_part1_row_value(
+      rhs_row, "rhs_min_beta_updates", 0L
+    ))
   )
   valid_pred <- app_glofas_normal_predict(fit, design$X[valid_idx, , drop = FALSE], chunk_size = 64L)
   valid_score <- app_glofas_normal_score_predictions(design$y[valid_idx], valid_pred, prefix = "valid_")

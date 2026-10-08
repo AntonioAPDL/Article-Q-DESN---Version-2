@@ -1,5 +1,16 @@
 # Joint-quantile RHS coordination for GloFAS Part 4 latent-path fits.
 
+app_latent_joint_trailing_true_count <- function(values) {
+  values <- as.logical(values)
+  if (!length(values)) return(0L)
+  count <- 0L
+  for (value in rev(values)) {
+    if (!isTRUE(value)) break
+    count <- count + 1L
+  }
+  count
+}
+
 app_latent_joint_extract_core_fit <- function(x) {
   fit <- x$fit %||% x
   if (!is.list(fit) || is.null(fit$summary$theta_mean) || is.null(fit$summary$y_future_mean)) {
@@ -8,17 +19,32 @@ app_latent_joint_extract_core_fit <- function(x) {
   fit
 }
 
-app_latent_joint_initial_state <- function(fit) {
-  list(
+app_latent_joint_initial_state <- function(fit, include_local_factors = TRUE) {
+  state <- list(
     theta_mean = as.numeric(fit$summary$theta_mean),
     theta_cov = as.matrix(fit$summary$theta_cov),
     y_future_mean = as.numeric(fit$summary$y_future_mean),
     y_future_cov = as.matrix(fit$summary$y_future_cov),
     sigma_state = fit$variational_state$sigma %||% NULL,
     sigma_mean = fit$summary$sigma_mean %||% NULL,
-    gamma = fit$summary$gamma_mean %||% NULL,
-    provenance = list(type = "same_tau_independent_fit")
+    gamma = fit$summary$gamma_mean %||% NULL
   )
+  variational <- fit$variational_state %||% list()
+  local_names <- c(
+    "block_moments", "latent_mean", "latent_inv_mean", "s_mean", "s2_mean"
+  )
+  if (isTRUE(include_local_factors)) {
+    for (name in local_names) state[[name]] <- variational[[name]] %||% NULL
+  }
+  reused <- isTRUE(include_local_factors) && all(vapply(
+    local_names, function(name) !is.null(state[[name]]), logical(1L)
+  ))
+  state$provenance <- list(
+    type = "same_tau_joint_fit",
+    local_factor_state_requested = isTRUE(include_local_factors),
+    local_factor_state_complete = reused
+  )
+  state
 }
 
 app_latent_joint_prior_additions <- function(reference_terms, discrepancy_terms, design, k) {
@@ -69,8 +95,52 @@ app_latent_joint_rhs_gate <- function(states, iter, component) {
       min_tau_updates = required,
       tau_update_count = update_count,
       first_tau_update_outer = first_update,
+      global_relative_change = as.numeric(state$last_global_relative_change %||% Inf),
       coefficient_response_after_release = coefficient_response,
       passed = enough_updates && coefficient_response,
+      stringsAsFactors = FALSE
+    )
+  })
+  rows <- do.call(rbind, rows)
+  list(passed = all(rows$passed), blocks = rows)
+}
+
+app_latent_joint_release_budget <- function(states, outer_offset, outer_max, component) {
+  state_names <- names(states)
+  final_outer <- as.integer(outer_offset) + as.integer(outer_max)
+  rows <- lapply(seq_along(states), function(k) {
+    state <- states[[k]]
+    control <- app_latent_normalize_rhs_control(state$rhs_control %||% list())
+    update_count <- as.integer(state$tau_update_count %||% 0L)
+    first_update <- as.integer(state$first_tau_update_iter %||% NA_integer_)
+    has_post_warmup <- isTRUE(state$has_post_warmup_tau_update)
+    if (final_outer > as.integer(outer_offset)) {
+      for (iter in seq.int(as.integer(outer_offset) + 1L, final_outer)) {
+        warmup_active <- iter <= control$freeze_tau_warmup_iters
+        scheduled <- !warmup_active && (iter %% control$update_every == 0L)
+        forced <- !warmup_active && control$freeze_tau_warmup_iters > 0L && !has_post_warmup
+        if (scheduled || forced) {
+          update_count <- update_count + 1L
+          if (!is.finite(first_update)) first_update <- iter
+          if (iter > control$freeze_tau_warmup_iters) has_post_warmup <- TRUE
+        }
+      }
+    }
+    enough_updates <- update_count >= control$min_tau_updates
+    response_possible <- is.finite(first_update) && final_outer > first_update
+    data.frame(
+      component = component,
+      rhs_block = if (!is.null(state_names) && nzchar(state_names[[k]])) state_names[[k]] else as.character(k),
+      outer_offset = as.integer(outer_offset),
+      maximum_outer_iteration = final_outer,
+      freeze_outer_iters = control$freeze_tau_warmup_iters,
+      update_every = control$update_every,
+      min_tau_updates = control$min_tau_updates,
+      current_tau_updates = as.integer(state$tau_update_count %||% 0L),
+      maximum_tau_updates = update_count,
+      first_tau_update_outer = first_update,
+      post_release_coefficient_response_possible = response_possible,
+      passed = enough_updates && response_possible,
       stringsAsFactors = FALSE
     )
   })
@@ -284,11 +354,40 @@ app_fit_latent_path_joint_vb_core <- function(
   outer_max <- as.integer(vb_args$joint_outer_max_iter %||% 5L)
   outer_min <- as.integer(vb_args$joint_outer_min_iter %||% 2L)
   outer_tol <- as.numeric(vb_args$joint_outer_tol %||% 1.0e-3)
+  rhs_tol <- as.numeric(vb_args$joint_rhs_tol %||% outer_tol)
+  rhs_inner_min <- as.integer(vb_args$joint_rhs_inner_min_iter %||% 2L)
+  rhs_inner_max <- as.integer(vb_args$joint_rhs_inner_max_iter %||% 50L)
+  rhs_inner_consecutive <- as.integer(vb_args$joint_rhs_inner_consecutive_passes %||% 2L)
+  terminal_consecutive <- as.integer(vb_args$joint_terminal_consecutive_passes %||% 3L)
   inner_max <- as.integer(vb_args$joint_inner_max_iter %||% 30L)
   inner_min <- as.integer(vb_args$joint_inner_min_iter %||% min(10L, inner_max))
+  inner_workers <- as.integer(vb_args$joint_inner_workers %||% 1L)
+  require_post_release <- isTRUE(vb_args$joint_require_post_release %||% FALSE)
   if (outer_max < 1L || outer_min < 1L || outer_min > outer_max || inner_max < 2L ||
-      inner_min < 1L || inner_min > inner_max || outer_tol <= 0) {
+      inner_min < 1L || inner_min > inner_max || outer_tol <= 0 || rhs_tol <= 0 ||
+      rhs_inner_min < 1L || rhs_inner_max < rhs_inner_min || rhs_inner_consecutive < 1L ||
+      terminal_consecutive < 1L || inner_workers < 1L || inner_workers > K) {
     stop("Invalid joint Part 4 CAVI controls.", call. = FALSE)
+  }
+  if (inner_workers > 1L && !identical(.Platform$OS.type, "unix")) {
+    stop("Parallel joint quantile updates require a Unix-like platform.", call. = FALSE)
+  }
+  release_reference <- app_latent_joint_release_budget(
+    rhs_reference, outer_offset, outer_max, "reference"
+  )
+  release_discrepancy <- app_latent_joint_release_budget(
+    rhs_discrepancy, outer_offset, outer_max, "discrepancy"
+  )
+  release_budget <- list(
+    passed = isTRUE(release_reference$passed) && isTRUE(release_discrepancy$passed),
+    blocks = rbind(release_reference$blocks, release_discrepancy$blocks)
+  )
+  if (require_post_release && !isTRUE(release_budget$passed)) {
+    failed <- release_budget$blocks[!release_budget$blocks$passed, , drop = FALSE]
+    stop(sprintf(
+      "Joint Part 4 production budget cannot release and respond after RHS warmup for: %s.",
+      paste(paste(failed$component, failed$rhs_block, sep = "/"), collapse = ", ")
+    ), call. = FALSE)
   }
   seed <- as.integer(seed %||% vb_args$seed %||% 20260513L)
   trace_new <- vector("list", outer_max)
@@ -304,10 +403,11 @@ app_fit_latent_path_joint_vb_core <- function(
     old_theta <- do.call(cbind, lapply(fits, function(x) x$summary$theta_mean))
     ref_terms <- app_glofas_part3_rhs_prior_terms(rhs_reference, moments$reference_mean)
     disc_terms <- app_glofas_part3_rhs_prior_terms(rhs_discrepancy, moments$discrepancy_mean)
-    for (k in seq_len(K)) {
+    fit_quantile <- function(k) {
       design <- designs[[k]]
       design$p0 <- tau[[k]]
       inner_args <- vb_args
+      inner_args$joint_inner_workers <- NULL
       inner_args$max_iter <- inner_max
       inner_args$min_iter_elbo <- inner_min
       inner_args$n_draws <- as.integer(vb_args$n_draws %||% 500L)
@@ -316,7 +416,7 @@ app_fit_latent_path_joint_vb_core <- function(
       inner_args$beta_ridge <- list(precision = 1.0e-12)
       inner_args$initial_state <- app_latent_joint_initial_state(fits[[k]])
       inner_args$prior_addition <- app_latent_joint_prior_additions(ref_terms, disc_terms, design, k)
-      fits[[k]] <- if (identical(likelihood, "al")) {
+      if (identical(likelihood, "al")) {
         inner_args$likelihood_family <- "al"
         app_fit_latent_path_al_vb_core(
           design, tau[[k]], coefficient_prior = "ridge", vb_args = inner_args,
@@ -329,20 +429,65 @@ app_fit_latent_path_joint_vb_core <- function(
         )
       }
     }
+    fits_updated <- if (inner_workers > 1L) {
+      parallel::mclapply(
+        seq_len(K), fit_quantile, mc.cores = inner_workers,
+        mc.preschedule = TRUE, mc.set.seed = FALSE
+      )
+    } else {
+      lapply(seq_len(K), fit_quantile)
+    }
+    failed_inner <- vapply(fits_updated, inherits, logical(1L), what = "try-error")
+    if (any(failed_inner)) {
+      stop(sprintf(
+        "Joint Part 4 inner quantile updates failed for tau: %s.",
+        paste(format(tau[failed_inner], trim = TRUE), collapse = ", ")
+      ), call. = FALSE)
+    }
+    fits <- fits_updated
     moments <- coefficient_moments(fits)
-    rhs_reference <- app_glofas_part3_rhs_update(
-      rhs_reference, moments$reference_mean, moments$reference_var, iter = outer
+    rhs_reference_solve <- app_glofas_part3_rhs_solve_fixed_moments(
+      rhs_reference,
+      moments$reference_mean,
+      moments$reference_var,
+      iter = outer,
+      min_iter = rhs_inner_min,
+      max_iter = rhs_inner_max,
+      tolerance = rhs_tol,
+      consecutive_passes = rhs_inner_consecutive
     )
-    rhs_discrepancy <- app_glofas_part3_rhs_update(
-      rhs_discrepancy, moments$discrepancy_mean, moments$discrepancy_var, iter = outer
+    rhs_reference <- rhs_reference_solve$state
+    rhs_discrepancy_solve <- app_glofas_part3_rhs_solve_fixed_moments(
+      rhs_discrepancy,
+      moments$discrepancy_mean,
+      moments$discrepancy_var,
+      iter = outer,
+      min_iter = rhs_inner_min,
+      max_iter = rhs_inner_max,
+      tolerance = rhs_tol,
+      consecutive_passes = rhs_inner_consecutive
     )
+    rhs_discrepancy <- rhs_discrepancy_solve$state
     reference_rhs_gate <- app_latent_joint_rhs_gate(rhs_reference, outer, "reference")
     discrepancy_rhs_gate <- app_latent_joint_rhs_gate(rhs_discrepancy, outer, "discrepancy")
     rhs_gate <- list(
-      passed = reference_rhs_gate$passed && discrepancy_rhs_gate$passed,
+      passed = isTRUE(reference_rhs_gate$passed) && isTRUE(discrepancy_rhs_gate$passed),
       blocks = rbind(reference_rhs_gate$blocks, discrepancy_rhs_gate$blocks)
     )
-    converged_rhs <- rhs_gate$passed
+    rhs_global_change <- as.numeric(rhs_gate$blocks$global_relative_change)
+    max_rhs_global_change <- if (length(rhs_global_change) && all(is.finite(rhs_global_change))) {
+      max(rhs_global_change)
+    } else {
+      Inf
+    }
+    max_rhs_semantic_change <- max(
+      rhs_reference_solve$relative_change,
+      rhs_discrepancy_solve$relative_change
+    )
+    rhs_inner_converged <- isTRUE(rhs_reference_solve$converged) &&
+      isTRUE(rhs_discrepancy_solve$converged)
+    converged_rhs <- isTRUE(rhs_gate$passed) && rhs_inner_converged &&
+      is.finite(max_rhs_semantic_change) && max_rhs_semantic_change <= rhs_tol
     new_theta <- do.call(cbind, lapply(fits, function(x) x$summary$theta_mean))
     change <- max(abs(new_theta - old_theta) / pmax(1, abs(old_theta)))
     converged_inner <- all(vapply(fits, function(x) isTRUE(x$vb_diagnostics$converged), logical(1L)))
@@ -353,6 +498,16 @@ app_fit_latent_path_joint_vb_core <- function(
       all_inner_converged = converged_inner,
       outer_tolerance_met = converged_outer,
       rhs_convergence_gate_passed = converged_rhs,
+      rhs_schedule_gate_passed = rhs_gate$passed,
+      max_rhs_global_relative_change = max_rhs_global_change,
+      max_rhs_inferential_relative_change = max_rhs_semantic_change,
+      rhs_inner_converged = rhs_inner_converged,
+      reference_rhs_inner_iterations = rhs_reference_solve$iterations,
+      discrepancy_rhs_inner_iterations = rhs_discrepancy_solve$iterations,
+      reference_rhs_controlling_block = rhs_reference_solve$controlling_block,
+      reference_rhs_controlling_component = rhs_reference_solve$controlling_component,
+      discrepancy_rhs_controlling_block = rhs_discrepancy_solve$controlling_block,
+      discrepancy_rhs_controlling_component = rhs_discrepancy_solve$controlling_component,
       min_rhs_tau_updates = min(rhs_gate$blocks$tau_update_count),
       max_rhs_tau_updates = max(rhs_gate$blocks$tau_update_count),
       continuation_iteration = outer_local,
@@ -360,12 +515,29 @@ app_fit_latent_path_joint_vb_core <- function(
         as.numeric(difftime(Sys.time(), started, units = "secs")),
       stringsAsFactors = FALSE
     )
+    trace_new[[outer_local]]$full_state_pass <- with(
+      trace_new[[outer_local]],
+      all_inner_converged & outer_tolerance_met & rhs_convergence_gate_passed
+    )
+    trace_new[[outer_local]]$terminal_consecutive_passes <- 0L
+    completed_rows <- trace_new[vapply(trace_new, is.data.frame, logical(1L))]
+    completed_trace <- do.call(rbind, completed_rows)
+    previous_pass <- if ("full_state_pass" %in% names(previous_trace)) {
+      as.logical(previous_trace$full_state_pass)
+    } else logical()
+    pass_history <- c(previous_pass, as.logical(completed_trace$full_state_pass))
+    trailing_passes <- app_latent_joint_trailing_true_count(pass_history)
+    terminal_pass <- isTRUE(trailing_passes >= terminal_consecutive)
+    trace_new[[outer_local]]$terminal_consecutive_passes <- trailing_passes
     message(sprintf(
       "[Part4 joint %s] outer iteration %d (continuation %d/%d) change=%.6g inner=%s",
       likelihood, outer, outer_local, outer_max, change,
-      paste0(converged_inner, ", rhs=", converged_rhs)
+      paste0(
+        converged_inner, ", rhs=", converged_rhs,
+        " [", rhs_reference_solve$iterations, "/", rhs_discrepancy_solve$iterations, "]"
+      )
     ))
-    if (converged_outer && converged_inner && converged_rhs) {
+    if (terminal_pass) {
       converged <- TRUE
       trace_new <- trace_new[seq_len(outer_local)]
       break
@@ -385,6 +557,8 @@ app_fit_latent_path_joint_vb_core <- function(
     "max_outer_iterations_outer_and_inner_not_converged"
   } else if (!converged_inner) {
     "max_outer_iterations_inner_not_converged"
+  } else if (converged_outer && converged_rhs) {
+    "max_outer_iterations_terminal_consecutive_passes_not_met"
   } else {
     "max_outer_iterations_outer_tolerance_not_met"
   }
@@ -413,7 +587,17 @@ app_fit_latent_path_joint_vb_core <- function(
     stopping_reason = stopping_reason,
     rhs_convergence_diagnostics = rhs_gate$blocks,
     rhs_schedule = rhs_schedule,
+    joint_rhs_tolerance = rhs_tol,
+    joint_rhs_inner_controls = list(
+      min_iter = rhs_inner_min,
+      max_iter = rhs_inner_max,
+      consecutive_passes = rhs_inner_consecutive
+    ),
+    terminal_consecutive_passes_required = terminal_consecutive,
     rhs_schedule_rebase_audit = rhs_schedule_rebase_audit,
+    rhs_release_budget_audit = release_budget$blocks,
+    joint_require_post_release = require_post_release,
+    joint_inner_workers = inner_workers,
     trace = trace,
     runtime_seconds = previous_runtime_seconds +
       as.numeric(difftime(Sys.time(), started, units = "secs")),

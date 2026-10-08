@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+import csv
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+import hashlib
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load(name, relative):
+    spec = importlib.util.spec_from_file_location(name, ROOT / relative)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+launcher = load("search3_launcher", "application/scripts/430_launch_glofas_search3.py")
+controller = load("search3_controller", "application/scripts/432_run_glofas_search3_campaign.py")
+
+
+class Search3SchedulerTest(unittest.TestCase):
+    def test_completion_manifest_hashes_terminal_controller_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "logs").mkdir()
+            with (root / "logs/controller.log").open("a", buffering=1) as log:
+                rows = controller.write_completion_manifest(root, log)
+            controller_row = next(row for row in rows if row["relative_path"] == "logs/controller.log")
+            observed = hashlib.sha256((root / "logs/controller.log").read_bytes()).hexdigest()
+            self.assertEqual(controller_row["sha256"], observed)
+            self.assertTrue((root / "logs/controller.log").read_text().endswith(
+                "SEARCH3_RAINY_SEASON_COMPLETE_PENDING_SCIENTIFIC_ADOPTION\n"
+            ))
+
+    def test_manifest_and_thread_guards(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "configs").mkdir(); (root / "status").mkdir()
+            with (root / "configs/job_manifest.csv").open("w", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=("job_id", "memory_weight"))
+                writer.writeheader(); writer.writerow({"job_id": "a", "memory_weight": 1})
+            jobs = launcher.read_jobs(root)
+            self.assertEqual(len(jobs), 1)
+            command = launcher.command(ROOT, root, "a", "Rscript")
+            self.assertIn("OMP_NUM_THREADS=1", command)
+            self.assertIn("428_run_glofas_search3_worker.R", command)
+            self.assertIn("429_score_glofas_search3.R", command)
+
+    def test_stage_order_and_closeout_patterns(self):
+        self.assertEqual(controller.STAGES[0], "ridge_a")
+        self.assertEqual(controller.STAGES[-1], "confirmation")
+        self.assertEqual(len(controller.STAGES), 6)
+        self.assertIn("389_continue_glofas_part4_joint_fit.R", controller.ACTIVE_PATTERNS)
+        self.assertIn("423_run_glofas_quantile_certification_continuation.R", controller.ACTIVE_PATTERNS)
+
+    def test_strict_gate_blocks_active_exal(self):
+        process = " ".join(controller.COMPATIBLE_OVERLAP_PROCESS_TOKENS)
+        ok, state = controller.closeout_gate(
+            ROOT,
+            matched_processes=[process],
+            active_session_names={controller.COMPATIBLE_OVERLAP_SESSION},
+            cert_complete=True,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(state["policy"], "strict")
+        self.assertEqual(state["overlap_workers"], 0)
+
+    def test_explicit_gate_allows_exactly_one_compatible_exal(self):
+        process = " ".join(controller.COMPATIBLE_OVERLAP_PROCESS_TOKENS)
+        ok, state = controller.closeout_gate(
+            ROOT,
+            allow_compatible_closeout_overlap=True,
+            matched_processes=[process],
+            active_session_names={controller.COMPATIBLE_OVERLAP_SESSION},
+            cert_complete=True,
+        )
+        self.assertTrue(ok)
+        self.assertTrue(state["overlap_pair_valid"])
+        self.assertEqual(state["overlap_workers"], 1)
+
+    def test_overlap_gate_rejects_extra_or_unpaired_work(self):
+        process = " ".join(controller.COMPATIBLE_OVERLAP_PROCESS_TOKENS)
+        quantile = "Rscript 423_run_glofas_quantile_certification_continuation.R"
+        cases = (
+            ([process, process], {controller.COMPATIBLE_OVERLAP_SESSION}),
+            ([process, quantile], {controller.COMPATIBLE_OVERLAP_SESSION}),
+            ([process], set()),
+            ([], {controller.COMPATIBLE_OVERLAP_SESSION}),
+        )
+        for processes, session_names in cases:
+            with self.subTest(processes=processes, sessions=session_names):
+                ok, state = controller.closeout_gate(
+                    ROOT,
+                    allow_compatible_closeout_overlap=True,
+                    matched_processes=processes,
+                    active_session_names=session_names,
+                    cert_complete=True,
+                )
+                self.assertFalse(ok)
+                self.assertEqual(state["overlap_workers"], 0)
+
+    def test_combined_physical_worker_budget(self):
+        common = {
+            "logical_cpus": 64,
+            "physical_cpus": 32,
+            "available_memory_gib": 480,
+            "data_free_gib": 300,
+            "load1": 2.0,
+            "workers": 20,
+            "max_total_workers": 28,
+        }
+        ok, state = controller.evaluate_resource_state(overlap_workers=1, **common)
+        self.assertTrue(ok)
+        self.assertEqual(state["planned_total_workers"], 21)
+        ok, state = controller.evaluate_resource_state(overlap_workers=9, **common)
+        self.assertFalse(ok)
+        self.assertEqual(state["planned_total_workers"], 29)
+
+    def test_closed_health_requires_real_complete_record(self):
+        invalid = (
+            {},
+            {"total": "0", "completed": "0", "failed": "0", "running": "0", "pending": "0", "left": "0"},
+            {"total": "10", "completed": "9", "failed": "0", "running": "0", "pending": "1", "left": "1"},
+        )
+        for health in invalid:
+            with self.subTest(health=health), self.assertRaises(RuntimeError):
+                controller.require_closed_health("fixture", health)
+        controller.require_closed_health("fixture", {
+            "total": "10", "completed": "10", "failed": "0",
+            "running": "0", "pending": "0", "left": "0",
+        })
+
+
+if __name__ == "__main__":
+    unittest.main()

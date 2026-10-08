@@ -27,6 +27,7 @@ source(app_path("application/R/score_forecasts.R"))
 source(app_path("application/R/joint_qvp_qdesn.R"))
 source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
 source(app_path("application/R/joint_exqdesn_inference_dispatch.R"))
+source(app_path("application/R/glofas_quantile_integrity.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_oracle_forecast.R"))
 source(app_path("application/R/glofas_part1_quantile_oracle_forecast.R"))
@@ -129,13 +130,18 @@ toy_fitted <- list(
   Z = as.matrix(toy_normal_fit$design$X[, -1L, drop = FALSE])
 )
 
-run_family <- function(model_family, tau, max_dense_dim = 50L, joint_backend = "auto", init_fit_path = NULL) {
+run_family <- function(
+  model_family, tau, max_dense_dim = 50L, joint_backend = "auto",
+  init_fit_path = NULL, zeta2 = Inf, slab_fixed = FALSE
+) {
   progress_path <- file.path(tempdir(), paste0("glofas_quantile_progress_", model_family, "_", Sys.getpid(), ".csv"))
   controls <- app_glofas_part1_quantile_default_controls(
     max_iter = 2L,
     tol = 0,
     min_iter = 1L,
     tau0 = 1,
+    zeta2 = zeta2,
+    slab_fixed = slab_fixed,
     max_dense_dim = max_dense_dim,
     rhs_vb_inner = 1L,
     exal_method_id = "VB1_structured_v",
@@ -177,8 +183,35 @@ run_family <- function(model_family, tau, max_dense_dim = 50L, joint_backend = "
 }
 
 one_al <- run_family("independent_al", 0.50)
+learned_slab <- run_family("independent_al", 0.50, zeta2 = 2, slab_fixed = FALSE)
+fixed_slab <- run_family("independent_al", 0.50, zeta2 = 16, slab_fixed = TRUE)
+stopifnot(!isTRUE(learned_slab$fit$rhs_state$anchor$slab_fixed))
+stopifnot(is.finite(learned_slab$fit$rhs_state$anchor$zeta2))
+stopifnot(isTRUE(fixed_slab$fit$rhs_state$anchor$slab_fixed))
+stopifnot(identical(as.numeric(fixed_slab$fit$rhs_state$anchor$zeta2), 16))
 init_path <- file.path(tempdir(), paste0("toy_al_init_", Sys.getpid(), ".rds"))
 saveRDS(one_al$fit, init_path, version = 2L)
+adjacent_init <- app_glofas_part1_quantile_init_from_paths(
+  init_path,
+  y = toy_fitted$design$y,
+  Z = toy_fitted$Z,
+  tau = 0.35,
+  initializer_tau_policy = "single_source"
+)
+stopifnot(
+  max(abs(adjacent_init$beta_mean - one_al$fit$beta_mean)) < 1e-12,
+  identical(adjacent_init$rhs_state, one_al$fit$rhs_state),
+  adjacent_init$init_tau_mapping$source_tau[[1L]] == 0.50,
+  adjacent_init$init_tau_mapping$target_tau[[1L]] == 0.35,
+  identical(adjacent_init$init_tau_mapping$mapping_status[[1L]], "adjacent_tau_warm_start")
+)
+strict_adjacent_error <- tryCatch({
+  app_glofas_part1_quantile_init_from_paths(
+    init_path, y = toy_fitted$design$y, Z = toy_fitted$Z, tau = 0.35
+  )
+  FALSE
+}, error = function(e) TRUE)
+stopifnot(strict_adjacent_error)
 one_exal <- run_family("independent_exal", 0.50, init_fit_path = init_path)
 stopifnot(grepl("toy_al_init", one_exal$fit$init_source_path, fixed = TRUE))
 joint_al <- run_family("joint_al", c(0.20, 0.50, 0.80), max_dense_dim = 100L)
@@ -186,6 +219,12 @@ joint_al_blockmf <- run_family("joint_al", c(0.20, 0.50, 0.80), max_dense_dim = 
 joint_exal_blockmf <- run_family("joint_exal", c(0.20, 0.50, 0.80), max_dense_dim = 2L)
 stopifnot(identical(joint_al_blockmf$fit$joint_backend_used, "blockmf"))
 stopifnot(identical(joint_exal_blockmf$fit$joint_backend_used, "blockmf"))
+stopifnot(length(joint_al_blockmf$fit$beta_cov_blocks) == 3L)
+stopifnot(length(joint_exal_blockmf$fit$beta_cov_blocks) == 3L)
+stopifnot(all(vapply(joint_al_blockmf$fit$beta_cov_blocks, function(x) {
+  identical(dim(x), c(ncol(toy_fitted$Z), ncol(toy_fitted$Z))) &&
+    isTRUE(all.equal(x, t(x), tolerance = 1.0e-10))
+}, logical(1L))))
 
 tmp <- file.path(tempdir(), paste0("glofas_part1_quantile_test_", Sys.getpid()))
 written <- app_glofas_part1_quantile_write_result(

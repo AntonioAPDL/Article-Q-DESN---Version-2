@@ -21,6 +21,7 @@ args <- app_parse_args(list(
   source_runtime_root = "",
   output_runtime_root = "",
   source_job_id = "",
+  source_fit_path = "",
   output_job_id = "",
   likelihood = "",
   expected_source_fit_sha256 = "",
@@ -29,11 +30,20 @@ args <- app_parse_args(list(
   additional_outer_max_iter = 5L,
   inner_max_iter = 30L,
   inner_min_iter = 10L,
+  inner_workers = 1L,
+  quadrature_nodes = "4,8,12,16,24",
+  quadrature_tolerance = 1.0e-6,
   outer_tol = 1.0e-3,
   n_draws = 500L,
   joint_rhs_freeze_outer_iters = 5L,
   joint_rhs_min_tau_updates = 1L,
-  allow_rhs_schedule_rebase = FALSE
+  joint_rhs_tol = 1.0e-3,
+  joint_rhs_inner_min_iter = 2L,
+  joint_rhs_inner_max_iter = 50L,
+  joint_rhs_inner_consecutive_passes = 2L,
+  terminal_consecutive_passes = 3L,
+  allow_rhs_schedule_rebase = FALSE,
+  require_post_release = TRUE
 ))
 
 source_root <- app_resolve_path(args$source_runtime_root, must_work = TRUE)
@@ -81,7 +91,12 @@ run_continuation <- function() {
     stop("The source job family does not match the requested continuation likelihood.", call. = FALSE)
   }
 
-  source_fit_path <- file.path(source_root, "objects", paste0(source_job_id, "_fit_side.rds"))
+  source_fit_path <- trimws(as.character(args$source_fit_path)[[1L]])
+  if (!nzchar(source_fit_path)) {
+    source_fit_path <- file.path(source_root, "objects", paste0(source_job_id, "_fit_side.rds"))
+  } else {
+    source_fit_path <- app_resolve_path(source_fit_path, must_work = TRUE)
+  }
   design_path <- file.path(source_root, "objects", "part4_shared_design_truth_free.rds")
   sidecar_path <- file.path(source_root, "objects", "part4_scoring_panel_sidecar.rds")
   source_fit_sha <- verify_hash(source_fit_path, args$expected_source_fit_sha256, "source joint fit")
@@ -134,14 +149,34 @@ run_continuation <- function() {
   vb_args$joint_outer_tol <- as.numeric(args$outer_tol)
   vb_args$joint_inner_max_iter <- as.integer(args$inner_max_iter)
   vb_args$joint_inner_min_iter <- as.integer(args$inner_min_iter)
+  vb_args$joint_inner_workers <- as.integer(args$inner_workers)
+  vb_args$quadrature_nodes <- as.integer(strsplit(
+    as.character(args$quadrature_nodes)[[1L]], ",", fixed = TRUE
+  )[[1L]])
+  vb_args$quadrature_tolerance <- as.numeric(args$quadrature_tolerance)
   vb_args$joint_rhs_freeze_outer_iters <- as.integer(args$joint_rhs_freeze_outer_iters)
   vb_args$joint_rhs_min_tau_updates <- as.integer(args$joint_rhs_min_tau_updates)
+  vb_args$joint_rhs_tol <- as.numeric(args$joint_rhs_tol)
+  vb_args$joint_rhs_inner_min_iter <- as.integer(args$joint_rhs_inner_min_iter)
+  vb_args$joint_rhs_inner_max_iter <- as.integer(args$joint_rhs_inner_max_iter)
+  vb_args$joint_rhs_inner_consecutive_passes <- as.integer(args$joint_rhs_inner_consecutive_passes)
+  vb_args$joint_terminal_consecutive_passes <- as.integer(args$terminal_consecutive_passes)
   vb_args$joint_rhs_allow_schedule_rebase <- app_as_bool(args$allow_rhs_schedule_rebase)
+  vb_args$joint_require_post_release <- app_as_bool(args$require_post_release)
   vb_args$n_draws <- as.integer(args$n_draws)
   if (vb_args$joint_outer_max_iter < 1L || vb_args$joint_inner_max_iter < 2L ||
       vb_args$joint_inner_min_iter < 1L || vb_args$joint_inner_min_iter > vb_args$joint_inner_max_iter ||
+      vb_args$joint_inner_workers < 1L ||
+      !length(vb_args$quadrature_nodes) || anyNA(vb_args$quadrature_nodes) ||
+      any(vb_args$quadrature_nodes < 2L) || any(diff(vb_args$quadrature_nodes) <= 0L) ||
+      !is.finite(vb_args$quadrature_tolerance) || vb_args$quadrature_tolerance <= 0 ||
       vb_args$joint_rhs_freeze_outer_iters < 0L || vb_args$joint_rhs_min_tau_updates < 0L ||
-      !is.finite(vb_args$joint_outer_tol) || vb_args$joint_outer_tol <= 0) {
+      vb_args$joint_rhs_inner_min_iter < 1L ||
+      vb_args$joint_rhs_inner_max_iter < vb_args$joint_rhs_inner_min_iter ||
+      vb_args$joint_rhs_inner_consecutive_passes < 1L ||
+      !is.finite(vb_args$joint_outer_tol) || vb_args$joint_outer_tol <= 0 ||
+      !is.finite(vb_args$joint_rhs_tol) || vb_args$joint_rhs_tol <= 0 ||
+      vb_args$joint_terminal_consecutive_passes < 1L) {
     stop("Invalid continuation controls.", call. = FALSE)
   }
 
@@ -157,6 +192,12 @@ run_continuation <- function() {
     seed = as.integer(model_rows$reservoir_seed[[1L]]),
     initial_joint_fit = source_joint
   )
+  rhs_release_qualified <- nrow(joint$rhs_convergence_diagnostics) > 0L &&
+    all(joint$rhs_convergence_diagnostics$passed) &&
+    all(joint$rhs_convergence_diagnostics$coefficient_response_after_release)
+  if (isTRUE(vb_args$joint_require_post_release) && !isTRUE(rhs_release_qualified)) {
+    stop("The production continuation ended without a qualified post-release RHS response.", call. = FALSE)
+  }
   continuation_seconds <- as.numeric(difftime(Sys.time(), started, units = "secs"))
   fit_path <- file.path(output_root, "objects", paste0(output_job_id, "_fit_side.rds"))
   app_glofas_part4_atomic_save_rds(joint, fit_path)
@@ -223,6 +264,9 @@ run_continuation <- function() {
 
   provenance_path <- file.path(output_root, "manifests", paste0(output_job_id, "_continuation_provenance.csv"))
   code_head <- trimws(system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE))
+  actual_outer_iterations <- max(as.integer(joint$trace$outer_iteration))
+  executed_additional_outer_iterations <- actual_outer_iterations -
+    as.integer(joint$previous_outer_iterations)
   app_write_csv(data.frame(
     output_job_id = output_job_id,
     source_job_id = source_job_id,
@@ -235,6 +279,7 @@ run_continuation <- function() {
     model_grid_sha256 = app_sha256_file(model_grid_path),
     code_head = code_head,
     joint_core_sha256 = app_sha256_file(app_path("application/R/latent_path_vb_joint.R")),
+    partitioned_rhs_sha256 = app_sha256_file(app_path("application/R/glofas_part3_partitioned_rhs.R")),
     part4_family_sha256 = app_sha256_file(app_path("application/R/glofas_part4_latent_family.R")),
     continuation_worker_sha256 = app_sha256_file(app_path("application/scripts/389_continue_glofas_part4_joint_fit.R")),
     state_contract_hash = app_glofas_part4_state_contract_hash(design),
@@ -242,11 +287,22 @@ run_continuation <- function() {
     quantile_grid = paste(format(as.numeric(model_rows$quantile_level), trim = TRUE), collapse = ","),
     previous_outer_iterations = joint$previous_outer_iterations,
     additional_outer_max_iter = vb_args$joint_outer_max_iter,
+    actual_outer_iterations = actual_outer_iterations,
+    executed_additional_outer_iterations = executed_additional_outer_iterations,
     inner_max_iter = vb_args$joint_inner_max_iter,
     inner_min_iter = vb_args$joint_inner_min_iter,
+    inner_workers = vb_args$joint_inner_workers,
+    quadrature_nodes = paste(vb_args$quadrature_nodes, collapse = ","),
+    quadrature_tolerance = vb_args$quadrature_tolerance,
+    require_post_release = vb_args$joint_require_post_release,
     inherited_rhs_freeze_vb_iters = joint$rhs_schedule$inherited$freeze_tau_warmup_iters,
     joint_rhs_freeze_outer_iters = joint$rhs_schedule$effective$freeze_tau_warmup_iters,
     joint_rhs_min_tau_updates = joint$rhs_schedule$effective$min_tau_updates,
+    joint_rhs_tolerance = vb_args$joint_rhs_tol,
+    joint_rhs_inner_min_iter = vb_args$joint_rhs_inner_min_iter,
+    joint_rhs_inner_max_iter = vb_args$joint_rhs_inner_max_iter,
+    joint_rhs_inner_consecutive_passes = vb_args$joint_rhs_inner_consecutive_passes,
+    terminal_consecutive_passes_required = vb_args$joint_terminal_consecutive_passes,
     joint_rhs_schedule_conversion = joint$rhs_schedule$conversion,
     joint_rhs_schedule_rebased = any(joint$rhs_schedule_rebase_audit$schedule_rebased),
     outer_tol = vb_args$joint_outer_tol,
@@ -275,7 +331,10 @@ run_continuation <- function() {
     sprintf("fit_side_sha256=%s", app_sha256_file(fit_path)),
     sprintf("converged=%s", joint$converged),
     sprintf("converged_rhs=%s", joint$converged_rhs),
-    sprintf("stopping_reason=%s", joint$stopping_reason)
+    sprintf("rhs_release_qualified=%s", rhs_release_qualified),
+    sprintf("stopping_reason=%s", joint$stopping_reason),
+    sprintf("outer_iterations=%d", actual_outer_iterations),
+    sprintf("executed_additional_outer_iterations=%d", executed_additional_outer_iterations)
   ), completed)
   invisible(joint)
 }

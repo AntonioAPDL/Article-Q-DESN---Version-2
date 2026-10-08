@@ -282,6 +282,57 @@ abstract_words <- strsplit(trimws(gsub("[^[:alnum:]'-]+", " ", abstract_plain)),
 expect(length(abstract_words) <= 250L,
        "The abstract exceeds the 250-word editorial limit.")
 
+# Advisor-revision checks supplement, rather than replace, the numerical,
+# provenance, privacy, and figure-placement assertions above.
+main_title_text <- gsub("\\\\", " ", main, fixed = TRUE)
+expect(grepl("Bayesian Quantile Regression with Deep Echo State Network Features",
+             main_title_text, fixed = TRUE) &&
+         grepl("Bayesian Quantile Regression with Deep Echo State Network Features",
+               supplement, fixed = TRUE),
+       "The main and supplementary titles disagree.")
+model_start <- regexpr("\\subsection{Single-level quantile regression}", main,
+                       fixed = TRUE)[1L]
+desn_start <- regexpr("\\subsection{Deep echo state network features}", main,
+                      fixed = TRUE)[1L]
+expect(model_start > 0L && desn_start > model_start,
+       "The quantile regression must precede the DESN construction.")
+expect(grepl("\\vect b_1^{\\mathrm{in}}", main, fixed = TRUE) &&
+         grepl("\\vect b_1^{\\mathrm{in}}", supplement, fixed = TRUE),
+       "The fixed first-layer input bias is not described consistently.")
+expect(grepl("\\label{eq:supp_ns_product_factor}", supplement, fixed = TRUE) &&
+         grepl("C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)", supplement, fixed = TRUE) &&
+         grepl("C_0(\\Theta_0)p(\\Theta_0)", supplement, fixed = TRUE),
+       "The complete product-RHS prior omits its scale-dependent factors.")
+expect(grepl("fitted anchor hierarchy at any", supplement, fixed = TRUE) &&
+         !grepl("if \\(K>1\\)", supplement, fixed = TRUE),
+       "The fitted anchor algorithm must not infer a random baseline from grid size.")
+expect(grepl("evaluat", main, fixed = TRUE) &&
+         grepl("over the evaluation range", main, fixed = TRUE) &&
+         grepl("\\label{eq:crps-integrated-check-main}", main, fixed = TRUE) &&
+         grepl("\\label{eq:supp-crps-integrated-check}", supplement, fixed = TRUE),
+       "The score definitions must retain integrated check loss and evaluation-range scope.")
+expect(grepl("DeLeonPradoSanso2026HydrologicProducts", main, fixed = TRUE) &&
+         grepl("@misc{DeLeonPradoSanso2026HydrologicProducts,", read_text("refs.bib"),
+               fixed = TRUE),
+       "The distinct hydrologic predecessor is not cited.")
+expect(grepl("released load, solar, and wind forecast", main, fixed = TRUE) &&
+         grepl("issue-time vintages were not separately verified", main, fixed = TRUE) &&
+         !grepl("retrospectively observed own-region", manuscript, fixed = TRUE) &&
+         grepl("\\label{tab:supp-pricefm-fold-design}", supplement, fixed = TRUE),
+       "PriceFM covariate availability or the executed fold design is misstated.")
+expect(grepl("do not isolate", supplement, fixed = TRUE) &&
+         grepl("historical comparisons", supplement, fixed = TRUE) &&
+         grepl("not been", supplement, fixed = TRUE) &&
+         grepl("corrected current posterior target", supplement, fixed = TRUE),
+       "Historical sensitivities must not certify the current posterior analysis.")
+expect(grepl("historical single-chain comparison",
+             read_text("tables/qdesn_validation_mcmc_five_chain_sensitivity.tex"),
+             fixed = TRUE) &&
+         !grepl("main article's Gaussian MCMC",
+                read_text("tables/qdesn_validation_mcmc_five_chain_sensitivity.tex"),
+                fixed = TRUE),
+       "The historical sensitivity caption falsely identifies its reference as current.")
+
 cat(sprintf(
   paste0("QDESN_FINAL_MANUSCRIPT_REVISION_CHECK=PASS scientific_files=%d ",
          "independent_roles=216 joint_oracle=32 joint_forecast=32 ",

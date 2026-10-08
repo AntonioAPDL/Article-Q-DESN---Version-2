@@ -74,3 +74,20 @@ confirmation and never recursively expands the search.
 Runtime roots, posterior draws, model objects, logs, and local tracker plans
 remain ignored. Main, article files, Overleaf, PriceFM, GloFAS, Phase182, and
 all historical JOINT runtimes are outside this lane.
+
+## Completed campaign
+
+The Jerez campaign closed with 180/180 tracked work units, 96/96 MCMC chains,
+zero failures, nine verified freeze entries, and five verified closeout
+artifacts. `arch_02` passed the predeclared shared-backbone gate. Relative mean
+scores versus `arch_00` were 0.6350 for joint AL, 0.7992 for joint exAL,
+0.9059 for independent AL, and 0.9662 for independent exAL. Average joint
+score-interval widths fell by 95.41% and 94.08%. One joint-AL quantile
+functional remained review-level, while score R-hat, ESS, chain ranges, and
+state-half score sensitivity were stable; this is not a hard rejection under
+the frozen policy.
+
+The scientific claim is case-specific fresh-seed evidence, not article
+supersession. The separately frozen matched article-fixture confirmation is
+documented in
+`docs/implementation_notes/joint_qdesn_laplace_architecture_article_confirmation_20261008.md`.

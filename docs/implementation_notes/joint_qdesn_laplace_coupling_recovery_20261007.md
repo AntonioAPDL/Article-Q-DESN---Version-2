@@ -99,3 +99,54 @@ It first reruns only the three affected scores. Selection then determines an
 18-worker exAL-only confirmation, a 30-worker exAL-plus-AL-baseline confirmation,
 or a 36-worker two-challenger confirmation. Completed source and supplemental
 chains are never scheduled again.
+
+## Final Closeout: 2026-10-08
+
+The schema-safe continuation completed without refitting any sealed source or
+supplemental chain. The final inventory is 32/32 source-screen chains, 6/6
+supplemental chains, and 18/18 fresh protected-confirmation chains, with 16/16,
+3/3, and 6/6 corresponding score cells. There were no worker failures. All 18
+confirmation chains used `M0_v_collapsed_support_logit`, retained 1,500 finite
+draws, and agreed on one target hash within each of the six model-replicate
+cells. All confirmation score rows are finite, all quantile-functional checks
+pass, and forecast contract crossings are zero.
+
+The recovered screen left AL blocked under the original frozen contract because
+the baseline maximum functional R-hat was 1.544426, just above the unchanged
+1.5 hard gate. Its conditional-variance candidate was eligible and improved
+the internal mean score by 0.003037, but it was not forced into confirmation.
+For exAL, the relaxed-innovation-slab candidate was selected for confirmation
+after an internal mean gain of 0.000329.
+
+Fresh protected confirmation reversed that small exAL screen gain:
+
+| Model | Mean DGP-integrated score | Mean 95% width | Canonical score | Fit oracle MAE |
+|---|---:|---:|---:|---:|
+| Independent exAL | 0.405934 | 0.065639 | 0.395803 | 0.125355 |
+| Joint exAL baseline | 0.486456 | 0.202751 | 0.476564 | 0.148016 |
+| Joint exAL relaxed slab | 0.489506 | 0.210895 | 0.479350 | 0.147360 |
+
+The relaxed arm was worse than the joint baseline by 0.627% in mean score and
+4.017% in interval width, and it improved neither protected replicate. Both
+candidate-minus-baseline posterior contrast intervals include zero. The joint
+baseline and relaxed arm remain much more coherent than independent exAL,
+reducing raw crossings by about 96.5%, but both have substantially worse scores
+and intervals about three times as wide. Because aggregate score and functional
+diagnostics pass, this overspread is not explained by unresolved scalar or
+functional MCMC mixing. It is a predictive score/coherence tradeoff under this
+readout-prior structure.
+
+The scientific decision is `retain_baseline_review`. Do not promote the relaxed
+slab, rerun it with more chains, change the article authority, or reuse the
+protected confirmation as a new tuning window. Integration should preserve the
+schema repair and the audited negative result. A future AL-only confirmation is
+scientifically distinct and may be considered on a new post-integration branch:
+the conditional-variance arm had a larger internal gain and passed its own
+functional gate, but any such experiment must freeze a new review-level baseline
+policy prospectively rather than rewrite this completed contract.
+
+The complete Jerez runtime remains ignored at 537 MiB. A 280 KiB compact packet
+containing the freeze, selection, confirmation, and closeout evidence was copied
+to the matching ignored Muscat cache path and independently hash-verified. The
+tracked coordinator handoff is
+`docs/implementation_notes/joint_qdesn_laplace_coupling_recovery_integration_handoff_20261008.md`.

@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
 HERE = ENTRY.parent
 DATA = Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm')
-TAG = 'pricefm_stage_r129_al_fixedpoint_recovery_20261008'
+TAG = 'pricefm_stage_r129b_blockstationarity_recovery_20261008'
 OUT = DATA / 'campaigns' / TAG
 PREP = DATA / 'launch_prep' / TAG
 HELPER = ROOT / 'application/R/pricefm_r129_al_fixedpoint_certificate.R'
@@ -76,7 +76,7 @@ def release(parent, dependency):
             '--junitxml=' + str(junit)], cwd=ROOT, env=env, stdout=stream, stderr=subprocess.STDOUT)
     suites = ET.parse(junit).getroot().findall('testsuite')
     totals = {k: sum(int(s.get(k, '0')) for s in suites) for k in ('tests', 'failures', 'errors', 'skipped')}
-    receipt = dict(source=identity, passed=result.returncode == 0 and totals['tests'] >= 19 and
+    receipt = dict(source=identity, passed=result.returncode == 0 and totals['tests'] >= 20 and
         sum(totals[k] for k in ('failures', 'errors', 'skipped')) == 0, **totals,
         public_cran_AL_numerical_smoke=True, posterior_target_separation_test=True)
     write(path / 'validation.json', receipt)
@@ -116,6 +116,18 @@ def prepare(parent, release):
     inputs = {str(parent_prep_path): digest(parent_prep_path),
         str(parent_out / 'frozen_choices.json'): digest(parent_out / 'frozen_choices.json'),
         str(parent_out / 'blocked.json'): digest(parent_out / 'blocked.json')}
+    diagnostic = DATA / 'campaigns' / p['superseded_diagnostic_tag']
+    blocked = read(diagnostic / 'blocked.json')
+    if blocked['source']['head'] != p['superseded_diagnostic_head']:
+        raise RuntimeError('superseded diagnostic source differs')
+    inputs[str(diagnostic / 'blocked.json')] = digest(diagnostic / 'blocked.json')
+    for task in median:
+        folder = diagnostic / 'tasks_done' / task['name']
+        metadata = verified(folder)
+        if metadata['source_head'] != p['superseded_diagnostic_head']:
+            raise RuntimeError('superseded diagnostic task source differs')
+        for file in folder.rglob('*'):
+            if file.is_file(): inputs[str(file)] = digest(file)
     for region in p['regions']:
         for fold in (1, 2, 3):
             for suffix in ('design', 'normal', 'al0.50'):
@@ -138,7 +150,7 @@ def prepare(parent, release):
         new_screening=False, new_Normal_fits=0, new_median_fits=0, reused_median_certificates=6,
         new_outward_AL_fits=36, official_origin_region_pairs=730)
     immutable(PREP / 'preparation.json', prep)
-    return dict(status='R129_PREPARED', median_certificates=6, new_AL_fits=36, forecasts=64)
+    return dict(status='R129B_PREPARED', median_certificates=6, new_AL_fits=36, forecasts=64)
 
 
 def valid():
@@ -262,7 +274,7 @@ def closeout(prep):
         convergence_policy='independent_full_fixedpoint_not_original_raw_beta_tolerance',
         test_seen_previously=True, confirmatory_claim=False))
     seal(path, dict(source=prep['source'], regions=2, folds=6))
-    write(OUT / 'terminal.json', dict(status='R129_COMPLETE_NOT_PROMOTED', source=prep['source'],
+    write(OUT / 'terminal.json', dict(status='R129B_COMPLETE_NOT_PROMOTED', source=prep['source'],
         reused_medians=6, new_AL_fits=36, official_origin_region_pairs=730))
 
 

@@ -14,7 +14,7 @@ DEPENDENCY = Path(os.environ['PRICEFM_R129_DEPENDENCY'])
 spec = importlib.util.spec_from_file_location('r129_test_controller', HERE / '459_run_pricefm_stage_r129_recovery.py')
 CTL = importlib.util.module_from_spec(spec); spec.loader.exec_module(CTL)
 RT = CTL.setup(PARENT, DEPENDENCY)
-P = json.loads((ROOT / 'application/config/pricefm_stage_r129_al_fixedpoint_recovery_20261008.json').read_text())
+P = json.loads(CTL.PROTOCOL.read_text())
 
 
 @pytest.mark.parametrize('field', ['package_mutation_authorized', 'screening_authorized',
@@ -132,7 +132,7 @@ def test_real_certified_public_fit_entrypoint(tmp_path):
     config = dict(stage='R129', action='public_AL_fit', test_opened=False, output_dir=str(tmp_path / 'fit'),
         input_sha256={str(f): CTL.digest(f) for f in files}, cran_adapter=str(adapter), helper=str(CTL.HELPER),
         cran_library=str(CTL.DATA / 'runtime_libraries/exdqlm_cran_1p1p1'), design_dir=str(design),
-        parent_dir=str(parent), tau=.45, tau0=.1, fold=1, max_iter=1000, tol=.001, n_samp=20,
+        parent_dir=str(parent), tau=.45, tau0=.1, fold=1, max_iter=1000, tol=1e-8, n_samp=20,
         seed=129, limits=P['certificate_limits'], max_rhs_iter=P['max_rhs_iter'], posterior_target_sha256='test-target')
     path = tmp_path / 'config.json'; CTL.write(path, config)
     run = subprocess.run(['/data/jaguir26/local/opt/R/4.6.0/bin/Rscript',
@@ -145,4 +145,13 @@ def test_real_certified_public_fit_entrypoint(tmp_path):
     assert terminal['public_cran_version'] == '1.1.1'
     assert terminal['finite_core'] and not terminal['prior_center_from_initializer']
     assert terminal['independent_fixedpoint_certified'] == certificate['certified']
+    assert certificate['certified']
     assert not (tmp_path / 'fit/fit.rds').exists()
+
+
+def test_same_state_certificate_not_lookahead():
+    text = CTL.HELPER.read_text()
+    assert 'rhs_joint_residual <- r129_rhs_block_residual(prior, first$state, m, V)' in text
+    assert 'rhs_lookahead_log_rates_not_stationarity_gate = rhs_lookahead_residual' in text
+    assert P['certificate_limits']['rhs_joint_log_rates'] == 1e-6
+    assert P['al_computational_stop_tol'] == 1e-5

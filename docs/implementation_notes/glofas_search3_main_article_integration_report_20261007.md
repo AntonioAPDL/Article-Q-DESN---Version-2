@@ -273,4 +273,3 @@ repeat projection/manuscript checkers, clean builds, and the source-bundle
 check before the Git-only Overleaf publisher. Verify origin/main,
 origin/overleaf/article-snapshot, and overleaf-direct/main by remote read-back.
 No force push, hosting extension, or unreviewed overwrite is permitted.
-

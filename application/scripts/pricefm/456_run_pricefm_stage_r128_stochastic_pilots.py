@@ -77,7 +77,7 @@ def new_task(name, kind, **values):
     return dict(name=name, kind=kind, **values)
 
 
-def prepare(dependency, release):
+def prepare(dependency, release, reference=None):
     runtime = setup(dependency); p = read(PROTOCOL); validate_protocol(p)
     identity = source_identity()
     if git(dependency, 'rev-parse', 'HEAD') != p['dependency_head'] or git(dependency, 'status', '--porcelain'):
@@ -129,7 +129,8 @@ def prepare(dependency, release):
     if len(accepted) != 111 or len(anchors) != 17: raise RuntimeError('frozen BG certified inventory differs')
     registry_path = dependency / 'tables/pricefm_r98_authoritative_registry.csv'
     registry = pd.read_csv(registry_path); ledger[str(registry_path)] = digest(registry_path)
-    local_path = DATA / 'benchmarks/pricefm_operational_public_architecture_fullshot_20260812/closeout/decision_registry.csv'
+    local_path = reference or DATA / 'benchmarks/pricefm_operational_public_architecture_fullshot_20260812/closeout/decision_registry.csv'
+    local = core.benchmark_reference(local_path, p['local_pricefm_reference_sha256'])
     ledger[str(local_path)] = digest(local_path)
     regional = {}; bank_ledger = {}
     baseline = sorted(anchors.values(), key=lambda s: core.fingerprint(s))
@@ -152,14 +153,14 @@ def prepare(dependency, release):
     runtime_path = Path(control['normal_runtime'])
     source_paths += list((runtime_path / 'R').glob('*.R'))
     source_paths += list((Path(control['cran_library']) / 'exdqlm/R').glob('*'))
-    bg_windows = set()
-    for spec in anchors.values():
+    bg_windows = set(); policies = {}
+    for spec in anchors.values(): policies.setdefault(spec['feature_policy'], spec)
+    for spec in policies.values():
         for window in runtime.load_windows(Path(control['runtime_processed']), 1, 'train', spec).values():
             bg_windows.update((window['path'], window['manifest_path']))
     ledger.update({path: digest(path) for path in sorted(bg_windows)})
     sources = {str(path): digest(path) for path in source_paths if path.is_file()}
     references = registry[registry.region.isin(['BG', *p['regions']])][['region', 'fold', 'qdesn_AQL', 'pricefm_AQL']]
-    local = pd.read_csv(local_path)[['region', 'fold', 'operational_pricefm_AQL']]
     references = references.merge(local, on=['region', 'fold'], validate='one_to_one')
     if len(references) != 9 or references.isna().any().any(): raise RuntimeError('complete matching references required')
     prep = dict(source=identity, dependency=str(dependency), dependency_head=p['dependency_head'],
@@ -548,9 +549,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('prepare', 'controller', 'worker'))
     parser.add_argument('--dependency', type=Path); parser.add_argument('--release', type=Path)
+    parser.add_argument('--reference', type=Path)
     parser.add_argument('--workers', type=int, default=15); parser.add_argument('--name'); parser.add_argument('--cpu', type=int)
     args = parser.parse_args()
-    if args.action == 'prepare': print(prepare(args.dependency, args.release), flush=True)
+    if args.action == 'prepare': print(prepare(args.dependency, args.release, args.reference), flush=True)
     else:
         prep = __import__('json').loads((PREP / 'preparation.json').read_text())
         setup(Path(prep['dependency']))

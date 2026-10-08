@@ -127,6 +127,18 @@ def test_rank_requires_three_certified_splits_and_no_duplicates():
     with pytest.raises(ValueError): core.rank_groups([*rows, rows[0]], ['candidate_id'])
 
 
+def test_portable_reference_checks_hash_complete_cohort_and_ignores_legacy_qdesn(tmp_path):
+    from pricefm_r126_contract import digest
+    table = pd.DataFrame([dict(region=f'region{r}', fold=f, operational_pricefm_AQL=6.,
+        current_qdesn_AQL=-999.) for r in range(38) for f in (1, 2, 3)])
+    path = tmp_path / 'reference.csv'; table.to_csv(path, index=False)
+    result = core.benchmark_reference(path, digest(path))
+    assert 'current_qdesn_AQL' not in result and len(result) == 114
+    with pytest.raises(RuntimeError): core.benchmark_reference(path, '0' * 64)
+    table.iloc[:-1].to_csv(path, index=False)
+    with pytest.raises(ValueError): core.benchmark_reference(path, digest(path))
+
+
 def test_tau_reference_scales_with_dimension_and_sample_size():
     assert core.tau_center(513, 4 * 48576) == pytest.approx(core.tau_center(513, 48576) / 2)
     with pytest.raises(ValueError): core.tau_center(5, 100)

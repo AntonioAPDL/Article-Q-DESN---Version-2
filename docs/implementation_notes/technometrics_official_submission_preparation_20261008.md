@@ -13,8 +13,8 @@ must not be confused with a new scientific authority or a results promotion.
 
 This branch prepares the authenticated general submission baseline. It does
 not submit the paper, modify any scientific fit, or certify the remaining
-requirements. Main and direct Overleaf remain unchanged until publication is
-separately validated.
+requirements. This record does not certify integration into main or publication
+to direct Overleaf; both require separate validation and remote read-back.
 
 ## Official evidence
 
@@ -46,7 +46,7 @@ a substitute for the required review layout.
 | `main.tex`, `qdesn-supplement.tex` | 12-point Letter; double spacing; body height based on 26 baselines | Scientific meaning and equation values unchanged |
 | Both sources | A single anonymous-review switch | Same body and evidence, no separately drifting manuscripts |
 | Main | Five keyword phrases | No unexplained acronyms |
-| Both sources | Explicit author-year citation punctuation | `apalike` is retained provisionally, not certified as ASA bibliography style |
+| Both sources | Explicit author-year citation punctuation; local ASA-compatible `tables/qdesn_asa_compatible.bst` | Adapted bibliography style, not an official Technometrics class or publisher-certified BST |
 | Main | Author-owned code link and writing acknowledgment only in identified mode | Neutral third-person self-citations retained |
 | Manuscript checker | Enforce the 200-word abstract ceiling | Existing numerical and scientific checks retained |
 | Review builder | Compile both documents in both modes in a new temporary directory | No submission, publication, fitting, or deletion |
@@ -80,24 +80,33 @@ reviewers as anonymous material.
    funding and competing interests with all authors. Do not invent a no-conflicts
    statement or grant acknowledgment. Prepare the requested identified title
    page once these facts and portal requirements are available.
-3. Replace or adapt `apalike` using an authenticated compatible reference style.
-   It does not print DOI fields and does not reproduce all ASA reference
-   conventions. Audit rendered entries, citation order and supplement-only
-   references without changing bibliographic facts.
-4. Repair final-size typography in all six GloFAS Search III vector figures.
+3. The provisional `apalike` gate has been addressed by the tested local
+   ASA-compatible BST. It retains author-year labels and all author names,
+   quotes titles and supports DOI/URL fields. Final bibliography inspection
+   remains part of the final proof review; no official-template certification
+   or bibliographic fact change is implied.
+4. Complete and review the final-size typography derivatives for all six
+   GloFAS Search III vector figures. Separate vector display derivatives are
+   being added; the original scientific PDFs and numerical payload remain
+   unchanged.
    The measured axes/legend sizes are around 3--3.2 points. Authenticate
    missing Part 2 display inputs or derive presentation from existing
    authenticated vector panels. Preserve all data/curves and original PDFs;
    record derivative provenance. Do not refit or relax frozen hash checks.
-5. Confirm the representative code/data submission requirement and furnish
-   a small verified reproduction of a prominent result, with no private paths
-   or model/runtime payloads accidentally bundled. A public repository link
-   alone is not proof of a self-contained reproduction package.
+5. The small self-contained summary-only representative reproduction passed
+   its isolated check. It reproduces a prominent presentation from a pinned
+   published summary, not the scientific fitting or scoring campaign. Confirm
+   the current journal's requested code/data scope; no private paths, fit
+   objects or runtime payloads belong in this example. A public repository
+   link alone is not the reproduction evidence.
 6. Obtain accurate author confirmation of the writing-assistance disclosure,
    including relevant tool/version information where required.
-7. Check equations, floats, captions and figure lettering at final printed
-   size; check identified and anonymous PDFs, their metadata and bibliography.
-   Build and inspect the isolated article projection before any publication.
+7. The anonymous PDF-only bundle has passed local validation; raw manuscript
+   sources remain identified. Check equations, floats, captions and derivative
+   figure lettering at final printed size, and finish the identified/anonymous
+   proof and bibliography inspection. Build and inspect the isolated article
+   projection before any publication. Local bundle validation does not certify
+   the journal's currently inaccessible portal categories.
 
 These are submission gates, not scientific rerun instructions. The model,
 priors, selection, uncertainty scope and all numerical evidence remain unchanged.
@@ -112,9 +121,10 @@ bash scripts/build_technometrics_review.sh
 
 Run the existing manuscript, independent figure, JOINT, GloFAS and PriceFM
 projection checks under the pinned environments, then `git diff --check`.
-Verify all scientific CSVs, figures and inference/configuration files remain
-byte-identical to the starting authority, except the explicitly dependent
-manuscript-hash manifest. Preserve logs in the ignored QA directory.
+Verify all scientific CSVs, original figures and inference/configuration files
+remain byte-identical to the starting authority. Separately inventory the
+new presentation-only vector derivatives and explicitly dependent
+manuscript-hash manifests. Preserve logs in the ignored QA directory.
 
 No merge or Overleaf publication is implied by this preparation branch.
 Any later publication uses the existing guarded command-line Git publishers,
@@ -123,6 +133,11 @@ a fresh main-based integration worktree and exact remote read-backs.
 Status: `VERIFIED_BASELINE_PREPARED_NOT_SUBMISSION_READY`.
 
 ## Verification at the preparation checkpoint
+
+The following is the preserved historical verification at checkpoint
+`2ced97b4aeaebc76f09caf773f42f770080dce11`, before the later bibliography,
+derivative-figure and representative-reproduction pass. It is not a receipt
+for pending integration or publication.
 
 The four proofs compiled with resolved citations and cross-references:
 
@@ -166,3 +181,31 @@ The only changed protected asset is the independent figure manifest: its
 three manuscript/checker hash entries are refreshed, with every scientific
 source/figure hash unchanged. No numerical CSV, table source, figure binary,
 configuration, inference routine or scientific test was modified.
+
+## Current local preparation update
+
+The later local pass has validated the adapted ASA-compatible BST, the
+self-contained summary-only representative reproduction and the anonymous
+PDF-only review bundle. All six separate GloFAS vector display derivatives
+now pass their deterministic rebuild, original-graphics/text preservation,
+clipping, raster-exclusion and printed-lettering checks. Minimum lettering
+at the narrower main-article insertion is 8.4284 bp. The original scientific
+PDFs and publication hashes remain unchanged.
+
+The current identified proofs are 35 main and 78 supplementary pages;
+anonymous proofs are 33 and 77 pages. All four use the verified Letter/
+12-point/double-spaced review baseline, not compressed production typography.
+Both final LaTeX and BibTeX logs are clean. These are local preparation
+receipts, not journal page-limit certification or remote-publication receipts.
+The complete-plan disposition is recorded in
+`technometrics_plan_completion_audit_20261008.md`.
+
+The submission blockers remain the current journal-specific instructions and
+portal rules; confirmed corresponding-author/email and full affiliation
+address; accurate funding and competing-interest declarations; and the
+author-confirmed writing-assistance disclosure, including applicable version
+information. Submission-account/portal facts must also come from the authors
+or authenticated portal, not be inferred. The official journal instructions
+endpoint remains inaccessible. Therefore the status remains
+`VERIFIED_BASELINE_PREPARED_NOT_SUBMISSION_READY`, and this update makes no
+integration, publication or submission-success claim.

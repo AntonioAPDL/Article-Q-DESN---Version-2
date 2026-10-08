@@ -22,6 +22,7 @@
 \usepackage{enumitem}
 \usepackage[round,authoryear]{natbib}
 \setcitestyle{aysep={},citesep={;}}
+\renewcommand{\bibfont}{\normalfont\normalsize\raggedright}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
 
@@ -57,6 +58,7 @@
 \newcommand{\TableStyle}{\footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.08}}
 
 \input{tables/glofas_application_current_outputs.tex}
+\input{tables/glofas_review_figure_overrides.tex}
 \input{tables/pricefm_full_current_outputs.tex}
 \input{figures/quantile_initialization/quantile_initialization_styles.tex}
 
@@ -1428,6 +1430,24 @@ only for the non-conjugate exAL scale-asymmetry factors
 ELBO decomposition are given in Sections~\ref{sec:cavi}--\ref{sec:elbo}; the
 joint computation applies those same factors to the stacked Gaussian block, with
 the required covariance blocks retained for the coordinate updates.
+In particular, let \(\vect m\) and \(\mat\Sigma\) be the mean and covariance
+of its joint Gaussian slope factor, and let \(\mat H\) be the first-difference
+matrix defined above. Under the fitted zero-baseline anchor, the stacked
+increment vector is \(\vect\Delta=\mat H\vect\beta_{\mathrm{st}}\), and
+the shrinkage updates use
+\begin{equation}
+\text{Increment second moments:}\quad
+\E_q(\vect\Delta\circ\vect\Delta)
+=(\mat H\vect m)\circ(\mat H\vect m)
++\operatorname{diag}(\mat H\mat\Sigma\mat H^\top),
+\label{eq:supp_joint_increment_moments}
+\end{equation}
+where \(\circ\) denotes elementwise multiplication and the diagonal is read
+as a vector. For adjacent slopes, the variance contribution is
+\(\operatorname{Var}_q(\beta_{k,j})+\operatorname{Var}_q(\beta_{k-1,j})
+-2\operatorname{Cov}_q(\beta_{k,j},\beta_{k-1,j})\).
+Thus factorization from the other parameter blocks does not discard
+dependence across levels within the Gaussian slope factor.
 
 \subsection{Crossing Diagnostics}
 
@@ -1712,17 +1732,17 @@ The selected \(\widehat R_M\) is held fixed for
 evaluation.
 
 Suppose that the probability grid satisfies
-\(p_1<\cdots<p_m=0.50<\cdots<p_K\).
+\(p_1<\cdots<p_{k_{\mathrm{med}}}=0.50<\cdots<p_K\).
 After the Gaussian ridge and Gaussian \(\RHS\)--VB fits, compatible estimates
 from the latter initialize the median AL regression. The lower side of the AL
 grid is fitted in the order
 \[
-0.50\ \longrightarrow\ p_{m-1}\ \longrightarrow\ \cdots\
+0.50\ \longrightarrow\ p_{k_{\mathrm{med}}-1}\ \longrightarrow\ \cdots\
 \longrightarrow\ p_1,
 \]
 and the upper side is fitted in the order
 \[
-0.50\ \longrightarrow\ p_{m+1}\ \longrightarrow\ \cdots\
+0.50\ \longrightarrow\ p_{k_{\mathrm{med}}+1}\ \longrightarrow\ \cdots\
 \longrightarrow\ p_K.
 \]
 Thus each AL regression is initialized from the nearest completed level on the
@@ -1804,7 +1824,13 @@ data, evaluation grid, and reservoir realization and are not a controlled
 comparison of approximation error.
 
 \clearpage
+\begingroup
+% Place these six complete tables on float pages without editing their
+% authenticated numerical sources or treating float-only pages as text pages.
+\let\QdesnOriginalTable\table
+\renewcommand{\table}[1][]{\QdesnOriginalTable[p]}
 \input{tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex}
+\endgroup
 
 \clearpage
 Figures~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals} and
@@ -2105,8 +2131,10 @@ matching the available issued ensemble. All 51 members are used at each
 horizon. The withheld USGS values are excluded from fitting and retained
 separately for scoring. Realized PRISM/ERA5 precipitation and soil-moisture
 covariates are used after \(T\), so the calculation is a retrospective
-oracle-covariate diagnostic. The retained Part~2 design contains 12,455
-historical dates; Part~3 combines reference and retrospective-product
+oracle-covariate diagnostic. Part~1 retains 12,455 historical dates from
+19~November~1988 through \(T\), after a 540-day initial-history exclusion.
+The retained Part~2 design also contains 12,455 historical dates;
+Part~3 combines reference and retrospective-product
 observations at those 12,455 dates, giving 24,910 stacked observations.
 
 For probability level \(p_k\), the reference and source-specific
@@ -2523,7 +2551,7 @@ exAL reaches only 0.286 and raw GloFAS remains at zero.}
 \end{figure}
 
 \clearpage
-\bibliographystyle{apalike}
+\bibliographystyle{tables/qdesn_asa_compatible}
 \bibliography{refs}
 
 \end{document}

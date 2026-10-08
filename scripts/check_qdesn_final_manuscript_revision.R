@@ -289,10 +289,40 @@ for (document in list(main, supplement)) {
   expect(grepl("\\ifQdesnAnonymous", document, fixed = TRUE) &&
            grepl("\\ifdefined\\QdesnReviewMode", document, fixed = TRUE),
          "Identified and anonymous documents must use the same source.")
+  expect(grepl("\\bibliographystyle{tables/qdesn_asa_compatible}", document, fixed = TRUE),
+         "The tested, local ASA-compatible bibliography style is missing.")
 }
 expect(grepl("\\textit{Key words:}", main, fixed = TRUE) &&
          grepl("reservoir computing; variational inference.", main, fixed = TRUE),
        "The five plain-language keyword phrases are missing.")
+expect(grepl("\\label{eq:pricefm-aql-main}", main, fixed = TRUE) &&
+         grepl("1}{N_{r,f}K}", main, fixed = TRUE) &&
+         grepl("equal weight to the 114", main, fixed = TRUE),
+       "PriceFM's equal-level AQL and case-level aggregation must be explicit.")
+expect(grepl("state-conditional oracle path", main, fixed = TRUE) &&
+         grepl("integrating over future states", main, fixed = TRUE),
+       "Oracle recovery must be distinguished from marginal predictive quantiles.")
+expect(grepl("\\label{eq:supp_joint_increment_moments}", supplement, fixed = TRUE) &&
+         grepl("\\mat H\\mat\\Sigma\\mat H^\\top", supplement, fixed = TRUE) &&
+         grepl("\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})", supplement, fixed = TRUE),
+       "Joint shrinkage second moments must retain cross-level covariance.")
+expect(all(vapply(list(main, supplement), function(document) {
+  grepl("\\input{tables/glofas_review_figure_overrides.tex}", document, fixed = TRUE)
+}, logical(1L))),
+"Both manuscripts must use the larger-lettering GloFAS presentation derivatives.")
+glofas_display <- jsonlite::fromJSON(repo_path("tables/glofas_review_figure_manifest.json"))
+expect(nrow(glofas_display$assets) == 6L &&
+         all(glofas_display$assets$minimum_effective_label_bp >= 8) &&
+         all(glofas_display$assets$raster_images == 0L) &&
+         all(glofas_display$assets$all_source_text_tokens_retained) &&
+         identical(sha256(glofas_display$generator), glofas_display$generator_sha256),
+       "The GloFAS display manifest fails its six-role, font, vector, or generator contract.")
+for (i in seq_len(nrow(glofas_display$assets))) {
+  asset <- glofas_display$assets[i, ]
+  expect(identical(sha256(asset$source), asset$source_sha256) &&
+           identical(sha256(asset$output), asset$output_sha256),
+         paste("GloFAS scientific/presentation figure hash mismatch:", asset$role))
+}
 
 # Advisor-revision checks supplement, rather than replace, the numerical,
 # provenance, privacy, and figure-placement assertions above.

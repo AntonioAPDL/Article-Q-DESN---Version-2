@@ -31,6 +31,7 @@
 % ---- Citations & hyperlinks ----
 \usepackage[round,authoryear]{natbib}
 \setcitestyle{aysep={},citesep={;}}
+\renewcommand{\bibfont}{\normalfont\normalsize\raggedright}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
 
@@ -68,6 +69,8 @@
 
 % GloFAS application output aliases.
 \input{tables/glofas_application_current_outputs.tex}
+% Larger lettering; original scientific graphics and manifests are retained.
+\input{tables/glofas_review_figure_overrides.tex}
 % PriceFM application output aliases.
 \input{tables/pricefm_full_current_outputs.tex}
 
@@ -312,7 +315,7 @@ coefficients, ridge regularization uses
 \(\vect\beta_{\mathrm{slope}}\sim
 \Normal(\zeros{r},\kappa_\beta^2\Id{r})\). The adaptive alternative uses the
 Nishimura--Suchard product form of the regularized horseshoe
-\citep{NishimuraSuchard2023SSS,MakalicSchmidt2016SimpleSampler}. Conditional
+\citep{MakalicSchmidt2016SimpleSampler,NishimuraSuchard2023SSS}. Conditional
 on global, local, and slab scales \((\tau,\lambda_j,\zeta)\),
 \begin{equation}
 \begin{alignedat}{2}
@@ -679,9 +682,10 @@ criteria are
 \end{align}
 where \(\rho_p\) is the check loss in Eq.~\eqref{eq:check-loss-main}, and
 \(\mu_\ell\) and \(y_\ell\) denote the oracle quantile and realized outcome
-for pair \(\ell\). Thus fit RMSE and forecast MAE measure recovery of the oracle quantile
-path, whereas forecast check loss is a proper score against realized
-observations.
+for pair \(\ell\). Fit RMSE and forecast MAE measure recovery of the
+state-conditional oracle path, which is not generally the predictive quantile
+after integrating over future states. Forecast check loss instead scores the
+reported quantile against realized observations.
 
 For each criterion \(M^{(b)}\), the tables report the posterior mean
 \(B^{-1}\sum_{b=1}^B M^{(b)}\) and the empirical 0.025 and 0.975 posterior
@@ -941,9 +945,10 @@ descriptive and was not used to select a family.}
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
 \caption{Part 4 issued-ensemble latent-path comparison over the last 30
-historical dates and 28 issued horizons. The left panel contains the Gaussian
-baselines and raw GloFAS quantiles; the middle and right panels contain the
-independent and joint AL/exAL families. Colors identify the seven probability
+historical dates and 28 issued horizons. The upper-left panel contains the
+Gaussian baselines and raw GloFAS quantiles; the upper-right and lower-left
+panels contain the independent and joint AL/exAL families, respectively.
+The lower-right legends identify probability levels and families. Colors identify the seven probability
 levels and line styles identify families. Black lines show historical USGS;
 magenta dashed lines show withheld USGS used only for scoring. Vertical lines
 mark 25~December~2022. Panels have separate vertical scales, with all values
@@ -987,6 +992,18 @@ Each evaluation is scored on the fold-aligned held-out timestamps and
 probability levels \PricefmFullPaperQuantiles. Throughout this section,
 \(\Delta\) AQL denotes Q--DESN AQL minus PriceFM AQL. Negative values indicate
 lower Q--DESN AQL; positive values indicate lower PriceFM AQL.
+For region \(r\) and fold \(f\), with \(N_{r,f}\) scored timestamps, the score is
+\begin{equation}
+\text{Average quantile loss:}\quad
+\operatorname{AQL}_{r,f}
+=\frac{1}{N_{r,f}K}\sum_{i=1}^{N_{r,f}}\sum_{k=1}^{K}
+\rho_{p_k}\!\left(y_{r,f,i}-\widehat q_{r,f,i,k}\right),
+\label{eq:pricefm-aql-main}
+\end{equation}
+where \(K=7\) and both outcomes and forecasts are in EUR/MWh.
+Unlike \(\aCRPS\), AQL equally weights the probability levels and has no
+factor of two. Aggregate scores give equal weight to the 114 region--fold
+evaluations, rather than pooling all timestamps.
 
 \noindent\textbf{Information set.}
 The predictors include the released load, solar, and wind forecast
@@ -1046,7 +1063,9 @@ while using fixed recurrent features to represent nonlinear temporal
 dependence. Its posterior concerns the regression, likelihood, and shrinkage
 parameters, conditional on the reservoir. This distinction makes the model
 accessible through Bayesian regression calculations without treating every
-network weight as an unknown parameter.
+network weight as an unknown parameter. In the GloFAS latent-path analysis,
+however, future features depend on unknown reference responses; its complete
+posterior is not an ordinary fixed-design regression problem.
 
 The simulations do not identify a uniformly preferable likelihood or
 regression class. Joint estimation reduces raw crossings, especially under
@@ -1097,7 +1116,7 @@ responsible for the final text, mathematical arguments, and reported results.
 \fi
 
 % ============================================================
-\bibliographystyle{apalike}
+\bibliographystyle{tables/qdesn_asa_compatible}
 \bibliography{refs}
 
 \end{document}

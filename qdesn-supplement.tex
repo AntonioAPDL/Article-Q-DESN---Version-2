@@ -1647,8 +1647,9 @@ Posterior means and equal-tailed 95\% intervals of
 \(S_{\mathrm{DGP}}^{(b)}\) form the primary comparison. The score evaluated
 at the posterior-mean quantile curve is reported separately as a sensitivity
 summary. The GloFAS analysis uses realized outcomes in
-Eq.~\eqref{eq:supp-acrps}; its selected issued-window grid was already ordered,
-so no monotone transformation was applied.
+Eq.~\eqref{eq:supp-acrps}; all Part 4 issued-window grids were already ordered,
+so no monotone transformation was applied. Part 1 raw crossings are disclosed
+separately without correction.
 
 Response-level posterior predictive draws determine an empirical predictive
 quantile function that can be evaluated on any prespecified grid; integrating
@@ -1898,10 +1899,14 @@ The streamflow application combines the historical and issued Global Flood
 Awareness System (GloFAS) products with a reference gauge record
 \citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. Separate DESN
 feature maps represent the reference process and the GloFAS-minus-reference
-discrepancy. The selected Part 4 analysis is a joint AL--RHS variational fit:
-post-cutoff reference values are latent during fitting, and the issued ensemble
-contributes directly to the same latent-path analysis. It is not a post-fit
-forecast adjustment.
+discrepancy. Part 1 is a univariate reference model; Part 2 is a discrepancy
+model; Part 3 combines the historical reference and discrepancy processes.
+These components produce 30-day recursive paths. Part 4 is a separate
+28-horizon issued-ensemble latent-path analysis: future reference values are
+latent during fitting, and the issued ensemble contributes directly to the
+working likelihood. It is not a post-fit forecast adjustment. The comparison
+includes independent and joint AL/exAL variational fits, two Gaussian
+predictive baselines, and the raw issued ensemble.
 
 \subsection{Observed Quantities and Latent Design}
 \label{subsec:glofas_aug_design}
@@ -1910,11 +1915,12 @@ Let \(T\) denote 25~December~2022 and let
 \(y_t=\log(y_t^{\mathrm{USGS}}+1)\) be transformed reference streamflow.
 Write \(g_t^{\mathrm{ret}}\) for transformed retrospective GloFAS and
 \(g_{T+h,e}^{\mathrm{ens}}\) for transformed issued member \(e\) at horizon
-\(h\). The requested future path
-\(\vect y_F=(y_{T+1},\ldots,y_{T+30})^\top\) is unobserved during fitting.
-Issued GloFAS values are available for the first 28 horizons, with 51 members
-at each horizon. The withheld USGS values are loaded only after fitting for
-forecast evaluation. Realized PRISM/ERA5 precipitation and soil-moisture
+\(h\). Parts 1--3 have a 30-day recursive horizon, ending on
+24~January~2023. In Part 4, the latent future path
+\(\vect y_F=(y_{T+1},\ldots,y_{T+28})^\top\) ends on 22~January~2023,
+matching the available issued ensemble. All 51 members are used at each
+horizon. The withheld USGS values are excluded from fitting and retained
+separately for scoring. Realized PRISM/ERA5 precipitation and soil-moisture
 covariates are used after \(T\), so the calculation is a retrospective
 oracle-covariate diagnostic.
 
@@ -1958,6 +1964,19 @@ Then \(\vect h_t^{\mathrm{ref}\top}\vect\theta_k=q_{k,t}\) and
 Conditional on \(\vect y_F\), these are ordinary fixed-design Q--DESN
 regressions.
 
+\subsection{Internal Selection and Executed Priors}
+
+Search III used 16 primary rainy-season development folds and 16 locked
+confirmation folds, with two additional guardrail folds in each group.
+Confirmation used four reservoir seeds to fix the reference and discrepancy
+specifications.
+The reference candidate
+\texttt{\GlofasApplicationCurrentReferenceCandidateId{}} retains the Search II
+incumbent, whereas
+\texttt{\GlofasApplicationCurrentDiscrepancyCandidateId{}} adopts the Search III
+discrepancy challenger. The protected December~2022--January~2023 window was
+not used to select reservoirs, priors, stopping rules, or model families.
+
 The selected reference reservoir has depth one, width
 \(\GlofasApplicationCurrentReferenceReservoirSize{}\), memory
 \(\GlofasApplicationCurrentReferenceReservoirMemory{}\), leak rate
@@ -1965,18 +1984,81 @@ The selected reference reservoir has depth one, width
 \(\GlofasApplicationCurrentReferenceReservoirRho{}\), washout
 \(\GlofasApplicationCurrentReferenceReservoirWashout{}\), and seed
 \(\GlofasApplicationCurrentReferenceReservoirSeed{}\). Its inputs are reference
-lags 1--360 and realized precipitation and soil-moisture lags 0--180. The
-discrepancy reservoir has width
+lags 1--540 and realized precipitation and soil-moisture lags 0--90. The
+depth-one discrepancy reservoir has width
 \(\GlofasApplicationCurrentDiscrepancyReservoirSize{}\), memory
 \(\GlofasApplicationCurrentDiscrepancyReservoirMemory{}\), leak rate
 \(\GlofasApplicationCurrentDiscrepancyReservoirAlpha{}\), spectral radius
 \(\GlofasApplicationCurrentDiscrepancyReservoirRho{}\), washout
 \(\GlofasApplicationCurrentDiscrepancyReservoirWashout{}\), and seed
-\(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\). It uses the
-corresponding discrepancy and weather lags. Neither feature map includes
-direct readout inputs. The reference and discrepancy RHS scales are
-\(\tau_{0,\mathrm{ref}}=\GlofasApplicationCurrentSharedRhsTau{}\) and
-\(\tau_{0,\mathrm{disc}}=\GlofasApplicationCurrentDiscrepancyRhsTau{}\).
+\(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\). Its inputs are
+discrepancy lags 1--180 and weather lags 0--180. Both maps standardize inputs
+using training information and use a 500-observation washout. The readouts
+contain reservoir features and intercepts, without direct response-lag or
+weather regressors. Table~\ref{tab:supp-glofas-search3-specifications}
+summarizes the selected geometry and prior specification.
+
+The training-based RHS calibration uses \(m_{0,\mathrm{ref}}=40\) and
+\(m_{0,\mathrm{disc}}=60\), giving fixed prior hyperparameters
+\(\tau_{0,\mathrm{ref}}=5.2043087445082\times10^{-5}\) and
+\(\tau_{0,\mathrm{disc}}=1.1594362487914\times10^{-4}\) for Parts 1--3.
+The reference slab is learned under \(\zeta^2\sim\IG(2,4)\). The discrepancy
+slab is fixed at \(\zeta^2=16\) for the Part 2 quantile families and all
+Part 3 discrepancy families; the Part 2 Normal RHS/VB baseline instead learns
+its discrepancy slab under \(\IG(2,4)\). The executed Part 4 RHS fits use
+\(\tau_{0,\mathrm{ref}}=5.2043087\times10^{-5}\) and
+\(\tau_{0,\mathrm{disc}}=1.159\times10^{-4}\), with learned
+\(\IG(2,4)\) slabs for both components in every RHS family.
+These \(\tau_0\) values are prior hyperparameters, not the learned global
+scales. Posterior global scales vary by family, level, and adjacent-quantile
+coefficient block. Table~\ref{tab:supp-glofas-part123-priors} distinguishes
+the fixed hyperparameters from these learned scales for Parts 1--3.
+Intercepts are exempt from RHS shrinkage.
+
+The executed Normal Ridge fits in Parts 1--3 use coefficient prior variance
+\(10^4\) and intercept variance \(10^6\); the selected-candidate setting
+of 100 is not their executed coefficient prior variance. The Part 4 Normal
+Ridge fit instead uses coefficient prior precision one and intercept
+precision \(10^{-9}\). Table~\ref{tab:supp-glofas-part4-priors} records the
+executed Part 4 settings. Raw GloFAS has no fitted coefficient prior.
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Internally selected Search III reference and discrepancy
+specifications. Here \(m\) and \(m_x\) are the maximum response and weather
+lags. The reference specification retains the Search II incumbent; the
+discrepancy specification adopts the rainy-season challenger. Selection used
+internal training evidence, not the protected final window. The search slab
+column describes the selected prior; executed family-specific exceptions are
+stated in the text.}
+\label{tab:supp-glofas-search3-specifications}
+\input{\GlofasApplicationCurrentSpecificationsTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Executed Parts 1--3 prior settings by family and component. Fixed
+RHS hyperparameters \(\tau_0\) are distinguished from the range of learned
+effective global scales \(\{\E_q(\tau^{-2})\}^{-1/2}\) across quantile and
+adjacent-quantile coefficient blocks. The Part 2 Normal RHS/VB discrepancy
+slab is learned, whereas the other Part 2 discrepancy slabs and all Part 3
+discrepancy slabs are fixed at 16. Normal Ridge has no RHS global scale.}
+\label{tab:supp-glofas-part123-priors}
+\input{\GlofasApplicationCurrentPartOneTwoThreePriorSettingsTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Executed Part 4 coefficient-prior settings. The two \(\tau_0\)
+columns are fixed RHS hyperparameters, not learned posterior global scales.
+All RHS families learn both slab scales under \(\IG(2,4)\); the Normal Ridge
+and raw-ensemble baselines do not have RHS hyperparameters.}
+\label{tab:supp-glofas-part4-priors}
+\input{\GlofasApplicationCurrentPriorSettingsTable}
+\end{table}
 
 \subsection{Weighted Augmented Working Likelihood}
 \label{subsec:glofas_likelihoods}
@@ -2027,8 +2109,8 @@ not asserted to be an exact fractional marginal AL posterior.
 The source-specific scales, coefficient priors, and latent variables are
 updated under this weighted augmentation. The exAL comparator additionally
 contains source-specific shape parameters and positive-shift latent variables,
-using the structured quadrature calculations described earlier. The selected
-application result uses AL, not exAL.
+using the structured quadrature calculations described earlier. Both AL and
+exAL families are included in the final comparison.
 
 \subsection{Joint Quantile and Latent-Path Approximation}
 \label{subsec:glofas_latent_path}
@@ -2037,21 +2119,40 @@ The fitted grid is
 \[
 (0.05,\ 0.20,\ 0.35,\ 0.50,\ 0.65,\ 0.80,\ 0.95).
 \]
-The seven reference coefficient blocks and seven discrepancy coefficient
-blocks are linked by separate adjacent-quantile RHS priors. Computation uses
-mean-field quantile-block coordinate updates initialized from the completed
-independent fits. The construction shares information through these priors; it
-is not a single exact Gaussian update over every coefficient and latent-path
-block.
+For the joint families, the seven reference coefficient blocks and seven
+discrepancy coefficient blocks are linked by separate adjacent-quantile RHS
+priors. Computation uses mean-field quantile-block coordinate updates
+initialized from the completed independent fits. The construction shares
+information through these priors; it is not a single exact Gaussian update
+over every coefficient and latent-path block. Independent families fit each
+level separately.
 
-Let \(\ell_F(\vect y_F)\) be the expected weighted augmented log likelihood,
-under the other current variational factors, for terms whose response or
-design depends on \(\vect y_F\). At its mode
-\(\widehat{\vect y}_F\), the latent-path factor is approximated by
+The Part 4 quantile families use a Gaussian future-path prior with mean and
+covariance estimated from 500 recursive USGS paths from the Part 3 Normal
+RHS/VB model, restricted to the 28 issued horizons. Neither issued ensemble
+values nor future USGS truth enter its construction. Writing these moments
+as \(\vect m_N\) and \(\mat V_N\), the prior is
+\[
+\text{Future-path prior:}\quad
+\vect y_F\sim\Normal(\vect m_N,\mat V_N).
+\]
+This prior replaces, rather than supplements, a future-reference working
+likelihood. Issued-member contributions remain in the weighted augmented
+likelihood. The Gaussian comparison families do not use this additional
+path prior.
+
+Each probability level has its own variational path factor; the following
+notation suppresses the level index. At each coordinate update, the reservoir
+design is linearized around the current path mean. Let
+\(\widetilde\ell_F(\vect y_F)\) denote the resulting locally linearized
+expected weighted augmented log likelihood plus the Gaussian log prior,
+with the remaining variational factors held fixed. Its Gaussian factor has
+mode \(\widehat{\vect y}_F\) and precision given by the negative Hessian of
+this surrogate:
 \begin{equation}
 \begin{aligned}
 \text{Latent-path factor:}\quad
-\mat K_F&=-\nabla^2\ell_F(\widehat{\vect y}_F),&
+\mat K_F&=-\nabla^2\widetilde\ell_F(\widehat{\vect y}_F),&
 q_F(\vect y_F)&\approx
 \Normal(\widehat{\vect y}_F,\mat K_F^{-1}).
 \end{aligned}
@@ -2073,113 +2174,175 @@ the remaining updates are
 \end{equation}
 where \(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). The corresponding
 Jacobian--covariance term is retained for cross-moments involving a component
-of \(\vect y_F\). This gives a Laplace--Delta approximation to the nonlinear
-latent-path objective. No separate forecast adapter, future-response
+of \(\vect y_F\). Repeated first-order updates give a local Gaussian--Delta
+approximation, not an exact Laplace approximation to the nonlinear posterior.
+No separate forecast adapter, future-response
 imputation from the withheld truth, or post-hoc crossing correction is used.
 
-\subsection{Numerical Qualification and Supplementary Results}
+\subsection{Convergence and Supplementary Results}
 \label{subsec:glofas_checks}
 
-The inherited 50-iteration RHS warmup corresponds to five joint outer sweeps
-because every sweep contains at least ten inner coefficient iterations. The
-retained source fit completed those five sweeps without a global-scale update.
-The continuation preserved that fitted state, released the global scales at
-sweep 6, and completed five post-release updates through sweep 10. All inner
-fits converged, the RHS gate passed, and every one of the 14 reference and
-discrepancy RHS blocks changed after release. The final maximum parameter
-change was \(0.004153866\), exceeding the strict outer tolerance \(0.001\).
-Accordingly, the selected Joint AL estimate is cap-stabilized after RHS
-release, not strictly outer-converged. The optional Joint exAL continuation was
-stopped; its source fit is retained only as a nonconverged sensitivity result.
-No MCMC fit was used for this application.
+Both corrected joint families satisfy strict convergence. The stopping rule
+requires convergence of every inner fit, outer parameter change below
+\(10^{-3}\), relative change of every RHS block below \(10^{-3}\), and three
+consecutive passes of the full variational state after global-scale updates
+have begun. Joint AL converged at outer sweep 11, with parameter change
+\(8.9279687\times10^{-4}\) and maximum RHS change
+\(7.7748371\times10^{-4}\). Joint exAL converged at sweep 28, with
+corresponding changes \(2.6080582\times10^{-4}\) and
+\(3.8253514\times10^{-4}\). Table~\ref{tab:supp-glofas-part4-convergence}
+and Figure~\ref{fig:supp-glofas-part4-convergence} report these results.
+The exAL calculation previously lost local variational factors between outer
+updates and included a discontinuous, diagnostic-only indicator in the
+quadrature stopping norm. Retaining the complete local state and removing
+that indicator from the operative norm resolved convergence without changing
+the likelihood, prior, ELBO, or posterior target. Application inference is
+variational; no GloFAS MCMC fit is reported.
+
+Table~\ref{tab:supp-glofas-part123-scores} separates the recursive evidence
+from the issued-window comparison in the main article. Parts 1 and 3 are
+scored over 30 dates on the same seven-level grid. The Part 1 Independent AL
+and Independent exAL paths contain three and one adjacent-quantile crossing
+pairs, respectively. Part 1 joint families and all Part 3 families have zero
+crossings. No correction was applied. All six Part 2 post-cutoff discrepancy
+paths are unscored because retrospective GloFAS ends at \(T\); their missing
+scores and crossing counts are not zero-valued measurements.
+
+The complete Part 4 comparison has Independent AL as its descriptive
+issued-window leader, not a protected-window-selected family. Corrected
+Joint AL is the joint comparator and corrected Joint exAL the sensitivity
+model. All seven Part 4 families have zero crossings. Independent AL's
+nominal 90\% interval covers \(0.750\) of the 28 outcomes; Joint AL has the
+greatest modeled coverage, \(0.786\), still below nominal. At \(p=0.95\),
+Joint exAL covers only \(0.286\), compared with Independent AL's \(0.750\).
+Table~\ref{tab:supp-glofas-part4-calibration} and
+Figure~\ref{fig:supp-glofas-part4-calibration} show the substantial
+undercoverage across the grid. Numerical convergence does not imply
+calibration.
+
+Without the GloFAS source and discrepancy coefficients, the historical
+reference likelihood is the ordinary Q--DESN likelihood. Holding the future
+path fixed recovers the fixed-design updates. Strict forecast lagging, the
+future-truth firewall, source indexing, horizon weights, strict convergence
+of the complete variational state, and agreement of the common-grid score
+summaries provide numerical and design checks. These checks do not establish
+calibration or operational forecast performance beyond this single
+oracle-covariate origin.
 
 \begin{table}[!htbp]
 \centering
 \TableStyle
+\caption{Parts 1--3 recursive-path results on the
+\(\log(1+\mathrm{flow})\) scale and the seven-level probability grid.
+Parts 1 and 3 score 30 USGS horizons; Part 2 supplies a 30-day discrepancy
+path but has no future retrospective-GloFAS truth and is unscored. Dashes
+denote missing measurements by design. Crossing counts are adjacent-quantile
+pairs over the raw paths, with no correction.}
+\label{tab:supp-glofas-part123-scores}
 \input{\GlofasApplicationCurrentSupplementScoreTable}
-\caption{Complementary Part 4 scores over the 28 issued horizons. Transformed
-scores use \(\log(\mathrm{USGS}+1)\); original-scale \(\aCRPS\), median MAE,
-and median RMSE use USGS streamflow units. All \(\aCRPS\) values use the same
-seven probability levels and trapezoidal weights. Joint AL is the selected
-quantile model and is cap-stabilized after RHS release. Joint exAL is separated
-as a sensitivity result because its source fit did not satisfy the numerical
-qualification rule.}
-\label{tab:supp-glofas-part4-family-scores}
 \end{table}
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentNormalComparisonFigure}
-\caption{Gaussian predictive baselines for the GloFAS application. Each panel
-shows the predictive median and central 90\% interval over the final 30
-historical dates and 28 issued horizons. The upper panel uses the recursively
-simulated latent future-response draws that enter the stored score calculation.
-Forest-green filled and open circles distinguish observed and withheld USGS
-values; dark orange denotes retrospective and issued GloFAS values.}
-\figalt{Two panels compare Normal Ridge and Normal regularized-horseshoe
-predictive medians and central 90 percent intervals with observed and withheld
-USGS values. A vertical line marks the forecast origin.}
-\label{fig:supp-glofas-part4-normal-comparison}
-\end{figure}
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentIndependentComparisonFigure}
-\caption{Independent AL and exAL quantile regressions for the GloFAS
-application. Panels use the same dates, probability-level palette, and data
-encoding as the main-text GloFAS figure. Historical
-quantile paths are dashed and issued paths are solid. Panel strips report the
-forecast-window \(\aCRPS\) and empirical coverage of the central 90\% interval.}
-\figalt{Paired panels compare independent AL and exAL quantile paths before and
-after the forecast origin. Observed USGS values use filled green circles,
-withheld values use open green circles, and GloFAS values are orange.}
-\label{fig:supp-glofas-part4-independent-comparison}
-\end{figure}
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentJointComparisonFigure}
-\caption{Joint AL and exAL quantile regressions for the GloFAS application.
-Joint AL is the selected fit. Joint exAL is shown only as a sensitivity result
-because its source fit did not satisfy the numerical qualification rule. The
-common encoding and forecast-window summaries permit a descriptive comparison
-without treating the Joint exAL result as an eligible selection candidate.}
-\figalt{Paired panels compare selected Joint AL quantile paths with unqualified
-Joint exAL sensitivity paths over common historical and forecast dates. A
-vertical line marks the forecast origin.}
-\label{fig:supp-glofas-part4-joint-comparison}
-\end{figure}
 
 \begin{table}[!htbp]
 \centering
-\input{\GlofasApplicationCurrentHistoricalGuardrailTable}
-\caption{Historical \(\aCRPS\) guardrail on the common six-level grid. Positive
-relative changes indicate larger \(\aCRPS\) for Part 4 Joint AL. FR09 remains the
-stronger historical-fit benchmark; Part 4 authority is confined to the
-single-origin issued-window experiment.}
-\label{tab:supp-glofas-part4-historical-guardrail}
+\TableStyle
+\caption{Strict convergence of the corrected Part 4 joint fits. Both
+parameter and maximum RHS relative changes are below \(10^{-3}\), all inner
+fits converge, and both families complete three consecutive full-state
+passes after RHS global-scale release.}
+\label{tab:supp-glofas-part4-convergence}
+\input{\GlofasApplicationCurrentConvergenceTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Part 4 empirical quantile coverage over the 28 issued horizons.
+Entries are the fractions of withheld USGS observations below each fitted
+quantile; nominal coverage equals the column's probability level. All
+families use the same dates and seven-level grid. This protected-window
+calibration assessment is descriptive, not a tuning criterion.}
+\label{tab:supp-glofas-part4-calibration}
+\input{\GlofasApplicationCurrentCalibrationTable}
 \end{table}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.94\textwidth]{figures/glofas_application/diagnostics/glofas_part4_joint_al_convergence_trace__glofas_part4_joint_al_sweep10_20260911.pdf}
-\caption{Outer-iteration parameter-change trace for the selected Joint AL fit.
-The vertical dotted line marks release of the RHS global scales after sweep 5,
-and the horizontal dashed line marks the strict \(0.001\) outer tolerance.
-The fit reached sweep 10 with all inner and RHS conditions satisfied, but the
-final change remained above the strict tolerance.}
-\figalt{The maximum parameter change decreases across ten outer sweeps but
-remains above the strict tolerance. RHS global-scale updates begin at sweep 6.}
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartOneFigure}
+\caption{Part 1 univariate USGS recursive forecasts over 30 days after
+25~December~2022. The three panels group Gaussian, independent quantile,
+and joint quantile families. Colors distinguish probability levels and line
+styles distinguish families. Black lines show the last 30 observed dates;
+magenta dashed lines show withheld USGS scoring truth. Vertical lines mark
+the origin and panels have separate vertical scales. Independent AL and exAL
+have three and one raw crossing pairs, respectively; no correction is applied.}
+\figalt{Three panels show 30-day Part 1 USGS forecasts from Gaussian,
+independent AL/exAL, and joint AL/exAL families, alongside black observed
+history and magenta dashed withheld truth.}
+\label{fig:supp-glofas-part1}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartTwoFigure}
+\caption{Part 2 retrospective-GloFAS-minus-USGS discrepancy paths over the
+last 30 observed dates and 30 recursive future dates. Discrepancies are
+differences on the \(\log(1+\mathrm{flow})\) scale. Panels group Gaussian,
+independent, and joint families, with color identifying probability levels
+and line style identifying families. Gaussian paths are mean summaries.
+Black lines show historical discrepancies and vertical lines mark the cutoff.
+No future truth is plotted or scored because retrospective GloFAS ends at
+the cutoff; panels have separate vertical scales.}
+\figalt{Three panels show historical black discrepancy lines and 30-day
+future discrepancy paths for Gaussian and AL/exAL families. There is no
+post-cutoff discrepancy truth or score.}
+\label{fig:supp-glofas-part2}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartThreeFigure}
+\caption{Part 3 USGS recursive forecasts from the joint historical
+reference--discrepancy model over 30 future dates. Gaussian, independent,
+and joint quantile families occupy separate panels. Colors identify
+probability levels, line styles identify families, and vertical lines mark
+the December-25 origin. Black historical USGS and magenta dashed withheld
+truth accompany the forecasts. Panels have separate vertical scales. All
+Part 3 paths have zero crossings without correction.}
+\figalt{Three family-group panels compare 30-day Part 3 USGS quantile
+forecasts with historical USGS and withheld truth; all paths are uncrossed.}
+\label{fig:supp-glofas-part3}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentConvergenceFigure}
+\caption{Corrected Part 4 joint-model convergence. Maximum relative
+parameter change is plotted against cumulative outer iteration on a
+logarithmic vertical scale. The horizontal dashed line is the \(10^{-3}\)
+outer tolerance. Triangles identify full-state passes; the last three
+consecutive passes give strict convergence for Joint AL and Joint exAL.}
+\figalt{Green Joint AL and brown Joint exAL parameter-change traces finish
+below the strict tolerance at outer sweeps 11 and 28, respectively, with
+three consecutive full-state passes each.}
 \label{fig:supp-glofas-part4-convergence}
 \end{figure}
 
-Removing the GloFAS source and discrepancy coefficients recovers the ordinary
-Q--DESN regression. Holding the future path fixed recovers the fixed-design
-updates. Strict forecast lagging, the future-truth firewall, source indexing,
-horizon weights, RHS release certificate, and agreement between the stored and
-reconstructed score summaries provide implementation checks. Posterior
-calibration beyond this single origin remains an empirical question.
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentCalibrationFigure}
+\caption{Part 4 issued-window quantile calibration. Colored lines give
+empirical coverage for the seven families at the seven probability levels;
+the diagonal gives nominal coverage. The comparison uses 28 withheld USGS
+outcomes and was not used for model selection. Independent AL has the lowest
+grid score but remains undercovered, and strictly converged Joint exAL has
+particularly weak upper-tail coverage.}
+\figalt{Seven empirical-coverage curves lie below the nominal diagonal.
+Joint AL and Independent AL have the highest q0.95 coverage, while Joint
+exAL reaches only 0.286 and raw GloFAS remains at zero.}
+\label{fig:supp-glofas-part4-calibration}
+\end{figure}
 
+\clearpage
 \bibliographystyle{apalike}
 \bibliography{refs}
 

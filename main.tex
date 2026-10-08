@@ -727,15 +727,38 @@ Let \(T\) be the forecast origin, \(y_t=\log(y_t^{\mathrm{USGS}}+1)\) the
 transformed gauge record through \(T\), \(g_t^{\mathrm{ret}}\) the transformed
 retrospective GloFAS series, and \(g_{T+h,e}^{\mathrm{ens}}\) transformed
 issued ensemble member \(e\) at horizon \(h\). The origin is
-\GlofasApplicationCurrentOriginDate{}. The requested window contains 30 days,
-from 26~December~2022 through 24~January~2023, but the issued GloFAS record
-contains \GlofasApplicationCurrentScoredHorizons{} evaluable horizons through
-22~January~2023. All 51 members are retained at each available horizon. Future
+\GlofasApplicationCurrentOriginDate{}. Parts 1--3 produce 30-day recursive
+paths, from 26~December~2022 through 24~January~2023. Part 4 uses the
+\GlofasApplicationCurrentScoredHorizons{} issued GloFAS horizons through
+22~January~2023, retaining all 51 members at each horizon. Future
 USGS values are excluded from fitting and used only for scoring. The
 forecast-period precipitation and soil-moisture covariates are realized
 PRISM/ERA5 values. The experiment is therefore a retrospective
 oracle-covariate diagnostic, not a real-time forecast based only on information
 available at \(T\).
+
+\subsection{Four-Part Design and Internal Selection}
+
+Part 1 estimates a univariate USGS reference process and its recursive
+forecast. Part 2 estimates the discrepancy
+\(g_t^{\mathrm{ret}}-y_t\) and its recursive path. The latter is unscored
+after \(T\), because retrospective GloFAS ends at the cutoff. Part 3 combines
+the reference and discrepancy processes in a joint historical model and
+produces a recursive USGS forecast. Part 4 instead treats future USGS values
+as latent during fitting and incorporates the issued GloFAS ensemble into
+their working likelihood. It is not an ordinary post-fit forecast stage.
+
+The reference and discrepancy DESN specifications used in these components
+were fixed by Search III using internal rainy-season development and locked
+confirmation folds, with four reservoir seeds. The reference specification
+\texttt{\GlofasApplicationCurrentReferenceCandidateId{}} retains the Search II
+incumbent; \texttt{\GlofasApplicationCurrentDiscrepancyCandidateId{}} adopts
+the Search III discrepancy challenger. These are depth-one reservoirs with
+1500 and 1000 units, respectively. The protected December~2022--January~2023
+window was not used to select reservoirs, priors, stopping rules, or model
+families. Parts 1 and 2 establish the separate reference and discrepancy
+components used downstream; the supplement reports their specifications and
+the family-specific prior settings.
 
 \subsection{Application Model}
 
@@ -758,64 +781,75 @@ g_{T+h,e}^{\mathrm{ens}}\mid\cdot&\sim
 \end{aligned}
 \label{eq:glofas-part4-main}
 \end{equation}
-The unavailable path \(y_{T+1:T+30}\) is represented as latent during fitting
+The unavailable Part 4 path \(y_{T+1:T+28}\) is represented as latent during fitting
 and recursively supplies future response lags to the reference reservoir. Each
 of the 51 issued members has weight \(1/51\), so every issued horizon has total
 weight one. This weighting is applied to the augmented complete-data working
 likelihood.
 
-The reported model estimates the seven levels \(0.05\), \(0.20\), \(0.35\),
-\(0.50\), \(0.65\), \(0.80\), and \(0.95\) jointly by VB, with AL working
-likelihoods and adjacent-quantile RHS shrinkage for the reference and
-discrepancy coefficient paths. No crossing correction is applied; the selected
-issued-window grid has no crossings. The supplement gives the source weighting,
-reservoir specifications, latent-path approximation, and convergence record.
+The comparison uses the seven levels \(0.05\), \(0.20\), \(0.35\), \(0.50\),
+\(0.65\), \(0.80\), and \(0.95\). Independent AL and exAL fit the levels
+separately; Joint AL and exAL link the reference and discrepancy coefficient
+paths through adjacent-quantile RHS shrinkage. The exAL families replace the
+AL working likelihood in Eq.~\eqref{eq:glofas-part4-main} by its shape-extended
+counterpart. Two Gaussian predictive baselines and the raw GloFAS ensemble
+complete the comparison. Application inference uses VB; no GloFAS MCMC fit
+is reported. No crossing correction is applied, and all Part 4 quantile grids
+have zero crossings. The supplement gives the weighted augmentation,
+latent-path approximation, and convergence criteria, including the Gaussian
+future-path prior derived from the Part 3 Normal RHS/VB recursive paths.
 
 \subsection{Retrospective Application Results}
 
-The selected Joint AL estimate completed ten outer sweeps. All inner fits and
-RHS release conditions were satisfied, and all 14 reference and discrepancy
-RHS blocks changed after release. Its final maximum parameter change was
-\(0.004154\), above the pre-specified \(0.001\) outer tolerance. We therefore
-describe it as cap-stabilized after RHS release, not as strictly
-outer-converged. No MCMC application fit is reported.
+Corrected Joint AL and Joint exAL satisfy strict convergence of the outer
+updates, inner fits, and RHS scales, with three consecutive passes of the
+full variational state. They converged at outer sweeps 11 and 28,
+respectively. Joint AL is the corrected joint comparator and Joint exAL the
+sensitivity model; convergence does not establish predictive calibration.
 
+\begin{samepage}
 \noindent\textbf{Forecast-period scores.}
-Table~\ref{tab:glofas-application-score} compares the selected Joint AL model
-with the completed independent quantile regressions, two Gaussian predictive
-baselines, and raw GloFAS. Joint AL reduces \(\aCRPS\) from
+Table~\ref{tab:glofas-application-score} gives the complete seven-family
+comparison on the same issued window. Independent AL is the descriptive
+issued-window leader: it reduces grid \(\aCRPS\) from
 \GlofasApplicationCurrentRawAcrps{} for raw GloFAS to
 \GlofasApplicationCurrentQdesnAcrps{}, a
-\GlofasApplicationCurrentAcrpsReduction{} reduction, and has the smallest mean
-check loss and interval score among the quantile-regression models. Independent
-AL gives similar scores and the same empirical 90\% coverage of \(0.929\).
-Independent exAL has larger scores and lower coverage in this forecast window.
+\GlofasApplicationCurrentAcrpsReduction{} reduction. Independent exAL and
+Normal Ridge have the next lowest grid scores. Corrected Joint AL and Joint
+exAL have grid \(\aCRPS\) values of
+\GlofasApplicationCurrentJointAlAcrps{} and
+\GlofasApplicationCurrentJointExalAcrps{}, respectively. Normal RHS/VB has a
+larger score than raw GloFAS. These rankings describe the protected window;
+they did not determine model selection, and no sampling-uncertainty
+calculation for score differences is available.
+\end{samepage}
 
-The Normal Ridge baseline has the smallest numerical \(\aCRPS\), \(0.8062\),
-but its empirical 90\% coverage is \(0.250\) and its interval score is
-\(13.8539\), compared with \(0.929\) and \(5.3889\) for Joint AL. This
-difference illustrates that the summaries answer distinct questions: mean
-check loss weights the seven levels equally, whereas \(\aCRPS\) uses the
-trapezoidal weights in Eq.~\eqref{eq:acrps-main}, and interval score and
-coverage assess the central forecast interval. The comparisons are descriptive
-for one forecast origin; no sampling-uncertainty calculation for score
-differences is available.
+Score and calibration give different assessments. Independent AL has
+empirical coverage \(0.750\) for the nominal 90\% interval. Joint AL has the
+greatest coverage among the modeled families,
+\(\GlofasApplicationCurrentJointAlCoverage{}\), but neither reaches the
+nominal level. Joint exAL remains weak in the upper tail: empirical coverage
+at \(p=0.95\) is only \(0.286\), compared with \(0.750\) for Independent AL.
+The supplement reports coverage at all seven levels.
 
-This issued-window improvement does not extend to the historical fit. On the
-common six-level grid, the Part 4 Joint AL \(\aCRPS\) is 68.6\% larger than FR09 over
-the full history and is 104.2\%, 51.4\%, and 8.6\% larger over the final 1000,
-200, and 50 dates, respectively. FR09 is therefore retained as the stronger
-historical benchmark, while Part 4 is interpreted only for this single-origin
-issued-window experiment.
+Parts 1 and 3 provide separate recursive-forecast evidence. Normal RHS/VB has
+the lowest Part 1 grid \(\aCRPS\), \(0.4124\), while Normal Ridge has the
+lowest Part 3 value, \(0.5242\). Part 1 Independent AL and Independent exAL
+have three and one adjacent-quantile crossing pairs, respectively; the joint
+Part 1 families and all Part 3 families have zero. These raw results are
+reported without correction. Part 2 supplies an unscored discrepancy path.
+Complete tables and figures are given in the supplement. One origin and
+realized future weather covariates do not establish operational forecasting
+performance.
 
 Figure~\ref{fig:glofas-application-forecast-period} places the reported
-quantile paths against the observed history, held-out gauge record, and issued
-GloFAS ensemble over the single forecast window.
+quantile paths against the observed history and withheld gauge record, with
+raw GloFAS summarized on the same probability grid.
 
 \begin{table}[!htbp]
 \centering
 \TableStyle
-\caption{Forecast scoring for the GloFAS retrospective analysis at origin
+\caption{Part 4 issued-window scoring for the GloFAS retrospective analysis at origin
 \GlofasApplicationCurrentOriginDate{}. Scores use the 28 issued horizons and
 are computed on the \(\log(\mathrm{USGS}+1)\) scale and the common probability
 grid \(0.05,0.20,0.35,0.50,0.65,0.80,0.95\). Mean check loss averages the
@@ -823,7 +857,9 @@ seven level-specific losses equally, whereas \(\aCRPS\) uses the trapezoidal
 weights in Eq.~\eqref{eq:acrps-main}. The Normal rows summarize Gaussian
 predictive distributions on the same dates and probability grid. Lower scores
 are better. Coverage is empirical coverage of the nominal 90\% interval; the
-final column gives the \(\aCRPS\) reduction relative to raw GloFAS.}
+reduction is relative to raw GloFAS. Numerical status distinguishes completed
+fits from the two strictly converged corrected joint fits. The comparison is
+descriptive and was not used to select a family.}
 \label{tab:glofas-application-score}
 \input{\GlofasApplicationCurrentScoreTable}
 \end{table}
@@ -831,23 +867,18 @@ final column gives the \(\aCRPS\) reduction relative to raw GloFAS.}
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
-\caption{Joint AL Q--DESN latent-path analysis over the final 30 historical
-dates and 28 issued GloFAS horizons. The seven probability levels share a
-single-blue scale that darkens toward both tails; historical quantile paths
-are dashed and issued paths are solid. Forest-green filled circles joined by a
-thin solid line denote USGS observations available through the origin.
-Forest-green open circles joined by a short-dashed line denote the withheld
-USGS values used only for scoring.
-Dark-orange lines show retrospective GloFAS and the 51 issued ensemble members.
-The lower panel gives the corresponding GloFAS-minus-USGS discrepancy paths.
-The vertical dotted line marks the forecast origin. No crossing correction is
-applied. All values are on the transformed scale.}
-\figalt{Two panels show the seven Joint AL Q--DESN quantile paths over 30
-historical dates and 28 forecast dates. The upper panel contrasts observed and
-withheld USGS values with retrospective and issued GloFAS values. The lower
-panel shows fitted and observed GloFAS-minus-USGS discrepancies. Historical
-quantile paths are dashed, forecast paths are solid, and a vertical line marks
-the forecast origin.}
+\caption{Part 4 issued-ensemble latent-path comparison over the last 30
+historical dates and 28 issued horizons. The left panel contains the Gaussian
+baselines and raw GloFAS quantiles; the middle and right panels contain the
+independent and joint AL/exAL families. Colors identify the seven probability
+levels and line styles identify families. Black lines show historical USGS;
+magenta dashed lines show withheld USGS used only for scoring. Vertical lines
+mark 25~December~2022. Panels have separate vertical scales, with all values
+on the \(\log(1+\mathrm{flow})\) scale. No crossing correction is applied.}
+\figalt{Three panels compare Gaussian and raw GloFAS, independent AL/exAL,
+and strictly converged joint AL/exAL quantile paths over 28 issued horizons.
+Black historical USGS and magenta dashed withheld USGS flank the December-25
+cutoff. Colors distinguish quantile levels; line styles distinguish families.}
 \label{fig:glofas-application-forecast-period}
 \end{figure}
 
@@ -956,11 +987,14 @@ monotone rearrangement can be used when monotonicity is required.
 The single-quantile dynamic simulations assess recovery and held-out
 forecasting under known data-generating mechanisms. The joint multi-quantile
 study assesses quantile-path recovery and crossings under known conditional
-quantile paths. The GloFAS application studies one retrospective
-oracle-covariate origin with a joint AL--RHS VB latent-path model. Its
-issued-window grid required no crossing correction and achieved near-nominal
-empirical coverage, but the estimate reached its iteration cap before the
-strict outer tolerance and had poorer historical CRPS than FR09. The PriceFM
+quantile paths. The GloFAS application separates 30-day recursive forecasts
+from a 28-horizon issued-ensemble latent-path comparison at one retrospective
+oracle-covariate origin. Independent AL has the lowest descriptive Part 4
+grid score, while corrected Joint AL has the greatest modeled 90\% coverage;
+both Joint AL and Joint exAL are strictly converged. None of these facts
+establishes nominal calibration, and Joint exAL has substantial upper-tail
+undercoverage. The Part 1 independent crossings and unscored Part 2 paths
+further delimit the evidence. The PriceFM
 comparison uses one training- and validation-selected Q--DESN specification
 per region, frozen across three held-out folds. Its aggregate AQL is slightly
 higher than that of the matched PriceFM forecasts, with differences that vary

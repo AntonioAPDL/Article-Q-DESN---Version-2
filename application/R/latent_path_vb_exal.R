@@ -61,7 +61,8 @@ app_latent_exal_local_update <- function(row_moments, block_moments, latent_mean
   residual_second <- app_latent_all_R(row_moments)
   weight <- app_latent_all_weight(row_moments)
   for (src in c("Y", "G")) {
-    idx <- which(source == src)
+    idx <- which(source == src & weight > 0)
+    if (!length(idx)) next
     moments <- block_moments[[src]]
     chi <- as.numeric(moments[["inv_B_sigma_mean"]]) * residual_second[idx] -
       2 * as.numeric(moments[["lambda_over_B_mean"]]) * residual[idx] * s_mean[idx] +
@@ -110,7 +111,10 @@ app_latent_exal_scale_shape_update <- function(
   weight <- app_latent_all_weight(row_moments)
   out <- list()
   for (src in c("Y", "G")) {
-    idx <- which(source == src)
+    idx <- which(source == src & weight > 0)
+    if (!length(idx)) {
+      stop(sprintf("Part 4 exAL has no active '%s' likelihood rows.", src), call. = FALSE)
+    }
     out[[src]] <- app_joint_exqdesn_structured_scale_shape_update(
       tau = tau,
       augmentation = "v",
@@ -130,6 +134,51 @@ app_latent_exal_scale_shape_update <- function(
   out
 }
 
+app_latent_exal_initial_local_state <- function(initial_state, block_moments, n_rows) {
+  initial_state <- initial_state %||% list()
+  use_vector <- function(name, default, positive = FALSE, nonnegative = FALSE) {
+    value <- initial_state[[name]] %||% NULL
+    if (is.null(value)) return(list(value = default, reused = FALSE))
+    value <- as.numeric(value)
+    valid <- length(value) == n_rows && all(is.finite(value))
+    if (positive) valid <- valid && all(value > 0)
+    if (nonnegative) valid <- valid && all(value >= 0)
+    if (!valid) stop(sprintf("Invalid exAL %s initializer.", name), call. = FALSE)
+    list(value = value, reused = TRUE)
+  }
+  supplied_moments <- initial_state$block_moments %||% NULL
+  moments_reused <- !is.null(supplied_moments)
+  if (moments_reused) {
+    if (!is.list(supplied_moments) || !all(c("Y", "G") %in% names(supplied_moments))) {
+      stop("Invalid exAL block-moment initializer.", call. = FALSE)
+    }
+    required <- names(block_moments$Y)
+    for (source in c("Y", "G")) {
+      values <- supplied_moments[[source]]
+      if (is.null(names(values)) || !all(required %in% names(values)) ||
+          any(!is.finite(as.numeric(values[required])))) {
+        stop(sprintf("Incomplete exAL block-moment initializer for %s.", source), call. = FALSE)
+      }
+      block_moments[[source]] <- values
+    }
+  }
+  latent_mean <- use_vector("latent_mean", rep(1, n_rows), positive = TRUE)
+  latent_inv <- use_vector("latent_inv_mean", rep(1, n_rows), positive = TRUE)
+  s_mean <- use_vector("s_mean", rep(sqrt(2 / pi), n_rows), nonnegative = TRUE)
+  s2_mean <- use_vector("s2_mean", rep(1, n_rows), positive = TRUE)
+  list(
+    block_moments = block_moments,
+    latent_mean = latent_mean$value,
+    latent_inv = latent_inv$value,
+    s_mean = s_mean$value,
+    s2_mean = s2_mean$value,
+    block_moments_reused = moments_reused,
+    local_factors_reused = all(c(
+      latent_mean$reused, latent_inv$reused, s_mean$reused, s2_mean$reused
+    ))
+  )
+}
+
 app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rhs_ns", vb_args = list(), seed = NULL) {
   app_latent_exal_require_kernels()
   p <- ncol(design$H_fixed)
@@ -144,6 +193,12 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
   progress_every <- as.integer(vb_args$progress_every %||% 1L)
   progress_path <- as.character(vb_args$progress_path %||% "")[[1L]]
   profile_substeps <- isTRUE((vb_args$diagnostics %||% list())$profile_substeps %||% FALSE)
+  future_gaussian_prior <- app_latent_normalize_future_gaussian_prior(
+    vb_args$future_gaussian_prior %||% NULL, horizon
+  )
+  include_future_y_working_likelihood <- !isTRUE(
+    future_gaussian_prior$replace_future_y_working_likelihood %||% FALSE
+  )
   if (max_iter < 1L || min_iter < 1L || min_iter > max_iter || tol <= 0 ||
       freeze_beta < 0L || freeze_beta >= max_iter || freeze_beta + min_beta_updates > max_iter) {
     stop("Invalid exAL latent-path VB controls.", call. = FALSE)
@@ -158,10 +213,10 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     beta_index = design$beta_index, alpha_index = design$alpha_index
   )
   prior_state <- app_latent_prior_apply_addition(prior_state, vb_args$prior_addition %||% NULL)
-  row_moments <- app_latent_row_moments(
+  row_moments <- app_latent_apply_future_y_weight_policy(app_latent_row_moments(
     design, y_mean, y_cov, theta_mean, theta_cov,
     profile_substeps = profile_substeps
-  )
+  ), include = include_future_y_working_likelihood)
   source <- app_latent_all_source(row_moments)
   n_rows <- length(source)
   gamma_init <- as.numeric((vb_args$initial_state %||% list())$gamma %||% app_joint_qvp_default_gamma(p0))
@@ -179,9 +234,14 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     app_joint_exqdesn_point_scale_shape_moments(p0, gamma[[src]], sigma_init[[src]])
   })
   names(block_moments) <- c("Y", "G")
-  latent_mean <- latent_inv <- rep(1, n_rows)
-  s_mean <- rep(sqrt(2 / pi), n_rows)
-  s2_mean <- rep(1, n_rows)
+  local_initial <- app_latent_exal_initial_local_state(
+    vb_args$initial_state %||% list(), block_moments, n_rows
+  )
+  block_moments <- local_initial$block_moments
+  latent_mean <- local_initial$latent_mean
+  latent_inv <- local_initial$latent_inv
+  s_mean <- local_initial$s_mean
+  s2_mean <- local_initial$s2_mean
   trace <- vector("list", max_iter)
   iteration_timing <- vector("list", max_iter)
   quadrature_trace <- list()
@@ -231,14 +291,16 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       working$sigma_proxy,
       list(A = 0, B = 1),
       response_offset_y = working$response_offset[n_fixed + seq_len(n_y)],
-      response_offset_g = working$response_offset[n_fixed + n_y + seq_len(row_moments$future$n_g)]
+      response_offset_g = working$response_offset[n_fixed + n_y + seq_len(row_moments$future$n_g)],
+      future_gaussian_prior = future_gaussian_prior,
+      include_future_y_working_likelihood = include_future_y_working_likelihood
     ))
     y_mean <- future_update$mean
     y_cov <- future_update$cov
-    row_moments <- timed("row_moments", app_latent_row_moments(
+    row_moments <- timed("row_moments", app_latent_apply_future_y_weight_policy(app_latent_row_moments(
       design, y_mean, y_cov, theta_mean, theta_cov,
       profile_substeps = profile_substeps
-    ))
+    ), include = include_future_y_working_likelihood))
     local <- timed("local_update", app_latent_exal_local_update(
       row_moments, block_moments, latent_mean, latent_inv, s_mean, s2_mean
     ))
@@ -252,13 +314,11 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     for (src in c("Y", "G")) {
       block_moments[[src]] <- scale_updates[[src]]$moments
       gamma[[src]] <- block_moments[[src]][["gamma_mean"]]
-      if (iter == 1L || iter %% 10L == 0L || iter == max_iter) {
-        quadrature_trace[[length(quadrature_trace) + 1L]] <- transform(
-          scale_updates[[src]]$diagnostics,
-          iteration = iter,
-          source = src
-        )
-      }
+      quadrature_trace[[length(quadrature_trace) + 1L]] <- transform(
+        scale_updates[[src]]$diagnostics,
+        iteration = iter,
+        source = src
+      )
     }
     prior_state <- timed("prior_update", app_latent_prior_state_update(
       prior_state, theta_mean, theta_cov, iter = iter
@@ -267,6 +327,9 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
     now <- c(theta_mean, y_mean, unlist(lapply(block_moments, `[[`, "sigma_mean")), gamma)
     change <- max(abs(now - old) / pmax(1, abs(old)))
     eligible <- iter >= min_iter && beta_update_count >= min_beta_updates && isTRUE(gate$passed)
+    driver_prior_expected_log <- app_latent_future_gaussian_prior_expected_log(
+      y_mean, y_cov, future_gaussian_prior
+    )
     iteration_timing[[iter]] <- transform(do.call(rbind, timing), iteration = iter)
     trace[[iter]] <- data.frame(
       iteration = iter,
@@ -278,6 +341,7 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       sigma_Y = block_moments$Y[["sigma_mean"]],
       sigma_G = block_moments$G[["sigma_mean"]],
       convergence_eligible = eligible,
+      future_gaussian_prior_expected_log = driver_prior_expected_log,
       elapsed_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
       stringsAsFactors = FALSE
     )
@@ -351,8 +415,17 @@ app_fit_latent_path_exal_vb_core <- function(design, p0, coefficient_prior = "rh
       weighted_local_factor_contract = "fractional_likelihood_complete_data_power",
       ensemble_weight_contract = "each_horizon_sums_to_one",
       future_truth_policy = design$future_truth_policy,
-      objective_type = "structured_exal_coordinate_monitor",
-      initialization = initial$provenance
+      objective_type = "structured_exal_coordinate_monitor_with_gaussian_driver_prior",
+      future_gaussian_prior_used = !is.null(future_gaussian_prior),
+      future_gaussian_prior_contract_hash = future_gaussian_prior$contract_hash %||% NA_character_,
+      future_y_working_likelihood_used = include_future_y_working_likelihood,
+      initialization = c(
+        initial$provenance,
+        list(
+          local_factors_reused = local_initial$local_factors_reused,
+          block_moments_reused = local_initial$block_moments_reused
+        )
+      )
     ),
     variational_state = list(
       theta_mean = theta_mean,

@@ -72,8 +72,6 @@ required_article_files = {
     "figures/pricefm_application/pricefm_r98_region_aql_comparison.pdf",
     "tables/pricefm_full_current_outputs.tex",
     "tables/pricefm_r98_article_projection_manifest.json",
-    "tables/pricefm_r98_authoritative_registry.csv",
-    "tables/pricefm_r98_authority_transition_ledger.csv",
     "tables/pricefm_r98_fold_comparison.csv",
     "tables/pricefm_r98_global_aql_comparison.tex",
     "tables/pricefm_r98_global_comparison.csv",
@@ -82,6 +80,14 @@ required_article_files = {
 }
 require(required_article_files.issubset(set(article_files)),
         "article-only manifest omits an R98 authority file")
+# The two complete provenance ledgers remain frozen and hash-verified above.
+# Their host-local paths are not manuscript inputs and must stay out of uploads.
+git_only_provenance = {
+    "tables/pricefm_r98_authoritative_registry.csv",
+    "tables/pricefm_r98_authority_transition_ledger.csv",
+}
+require(git_only_provenance.isdisjoint(article_files),
+        "article-only manifest exposes local-path PriceFM provenance")
 require(not any("pricefm_r91_selective" in row for row in article_files),
         "article-only manifest retains an R91 selective-promotion asset")
 require(not any("pricefm_full_horizon" in row for row in article_files),

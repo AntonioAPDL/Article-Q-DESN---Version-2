@@ -27,6 +27,10 @@ app_glofas_part2_bridge_bool <- function(x) {
   tolower(as.character(x[[1L]] %||% "")) %in% c("true", "t", "1", "yes", "y")
 }
 
+app_glofas_part2_bridge_scalar <- function(x, default = NA) {
+  if (is.null(x) || !length(x)) default else x[[1L]]
+}
+
 app_glofas_part2_bridge_resolve <- function(path, must_work = FALSE) {
   app_glofas_oracle_resolve_repo_path(path, must_work = must_work)
 }
@@ -77,11 +81,18 @@ app_glofas_part2_bridge_validate_disc_covars_contract <- function(row, strict_wi
   if (!app_glofas_part2_bridge_bool(row$disc_include_covariates)) add("disc_include_covariates is not TRUE")
   if (app_glofas_part2_bridge_bool(row$disc_include_glofas_lags)) add("disc_include_glofas_lags is TRUE")
   if (app_glofas_part2_bridge_bool(row$disc_include_usgs_lags)) add("disc_include_usgs_lags is TRUE")
-  if (as.integer(row$disc_output_lag_max[[1L]]) != 360L) add("disc_output_lag_max is not 360")
-  if (as.integer(row$disc_covariate_lag_max[[1L]]) != 180L) add("disc_covariate_lag_max is not 180")
-  if (as.integer(row$disc_auxiliary_lag_max[[1L]] %||% 360L) != 360L) add("disc_auxiliary_lag_max is not 360")
+  output_lag_max <- as.integer(row$disc_output_lag_max[[1L]])
+  covariate_lag_max <- as.integer(row$disc_covariate_lag_max[[1L]])
+  auxiliary_lag_max <- as.integer(row$disc_auxiliary_lag_max[[1L]] %||% output_lag_max)
+  if (!is.finite(output_lag_max) || output_lag_max < 1L) add("disc_output_lag_max is not positive")
+  if (!is.finite(covariate_lag_max) || covariate_lag_max < 0L) add("disc_covariate_lag_max is negative")
+  if (!is.finite(auxiliary_lag_max) || auxiliary_lag_max != output_lag_max) {
+    add("disc_auxiliary_lag_max does not match disc_output_lag_max")
+  }
   if (as.integer(row$disc_D[[1L]] %||% 1L) != 1L) add("disc_D is not 1")
   if (isTRUE(strict_winner)) {
+    if (output_lag_max != 360L) add("disc_output_lag_max is not 360")
+    if (covariate_lag_max != 180L) add("disc_covariate_lag_max is not 180")
     if (!identical(as.character(row$disc_n_vector[[1L]]), "2500")) add("disc_n_vector is not 2500")
     if (abs(as.numeric(row$disc_alpha[[1L]]) - 0.8) > 1.0e-12) add("disc_alpha is not 0.8")
     if (abs(as.numeric(row$disc_rho[[1L]]) - 0.7) > 1.0e-12) add("disc_rho is not 0.7")
@@ -97,6 +108,14 @@ app_glofas_part2_bridge_candidate_from_rhs_row <- function(row) {
   get <- function(name, default = NA) {
     if (name %in% names(row)) row[[name]][[1L]] else default
   }
+  get_disc <- function(name, default = NA) {
+    value <- get(paste0("disc_", name), NA)
+    if (length(value) == 1L && !is.na(value) &&
+        (!is.character(value) || nzchar(value))) {
+      return(value)
+    }
+    get(name, default)
+  }
   out <- data.frame(
     rhs_candidate_id = as.character(get("rhs_candidate_id", "")),
     candidate_id = as.character(get("candidate_id", "part2_discrepancy_candidate")),
@@ -111,6 +130,15 @@ app_glofas_part2_bridge_candidate_from_rhs_row <- function(row) {
     rho = as.numeric(get("disc_rho", get("rho", 0.7))),
     seed = as.integer(get("disc_seed", get("seed", 20261521L))),
     washout = as.integer(get("disc_washout", get("washout", 500L))),
+    pi_w = as.numeric(get_disc("pi_w", 0.03)),
+    pi_in = as.numeric(get_disc("pi_in", 1.0)),
+    win_scale_global = as.numeric(get_disc("win_scale_global", 0.18)),
+    win_scale_bias = as.numeric(get_disc("win_scale_bias", 0.18)),
+    standardize_inputs = app_glofas_part2_bridge_bool(get_disc("standardize_inputs", TRUE)),
+    state_scaling = as.character(get_disc("state_scaling", "none")),
+    input_bound = as.character(get_disc("input_bound", "none")),
+    act_f = as.character(get_disc("act_f", "tanh")),
+    act_k = as.character(get_disc("act_k", "identity")),
     ridge_tau2 = as.numeric(get("ridge_tau2", 10000)),
     intercept_var = as.numeric(get("intercept_var", 1.0e6)),
     sigma_a = as.numeric(get("sigma_a", 2)),
@@ -123,6 +151,17 @@ app_glofas_part2_bridge_candidate_from_rhs_row <- function(row) {
     rhs_update_every = as.integer(get("rhs_update_every", 1L)),
     rhs_freeze_tau_warmup_iters = as.integer(get("rhs_freeze_tau_warmup_iters", 0L)),
     rhs_min_tau_updates = as.integer(get("rhs_min_tau_updates", 0L)),
+    rhs_freeze_beta_warmup_iters = as.integer(get("rhs_freeze_beta_warmup_iters", 0L)),
+    rhs_min_beta_updates = as.integer(get("rhs_min_beta_updates", 0L)),
+    prior_id = as.character(get("disc_prior_id", get("prior_id", ""))),
+    prior_mode = as.character(get("disc_prior_mode", get("prior_mode", ""))),
+    m0 = as.numeric(get("disc_m0", get("m0", NA_real_))),
+    rhs_zeta2_fixed = as.numeric(get(
+      "rhs_zeta2_fixed_discrepancy",
+      get("disc_rhs_zeta2_fixed", get("rhs_zeta2_fixed", NA_real_))
+    )),
+    rhs_a_zeta = as.numeric(get("rhs_a_zeta", 2)),
+    rhs_b_zeta = as.numeric(get("rhs_b_zeta", 4)),
     part2_rhs_candidate_id = as.character(get("rhs_candidate_id", "")),
     part2_source_candidate_id = as.character(get("candidate_id", "")),
     part2_target_contract = "observed_discrepancy_retrospective_glofas_minus_usgs",
@@ -138,14 +177,30 @@ app_glofas_part2_bridge_validate_design_contract <- function(fitted) {
   out_lags <- sort(unique(as.integer(unlist(spec$output_lags %||% integer(), use.names = FALSE))))
   cov_lags <- sort(unique(as.integer(unlist(spec$covariate_lags %||% integer(), use.names = FALSE))))
   columns <- as.character(spec$columns %||% character())
-  if (!identical(out_lags, seq_len(360L))) stop("Discrepancy output lags must be exactly 1:360.", call. = FALSE)
-  if (!identical(cov_lags, 0:180)) stop("Discrepancy covariate lags must be exactly 0:180.", call. = FALSE)
+  output_lag_max <- as.integer(fitted$candidate_row$output_lag_max[[1L]])
+  covariate_lag_max <- as.integer(fitted$candidate_row$covariate_lag_max[[1L]])
+  expected_out_lags <- seq_len(output_lag_max)
+  expected_cov_lags <- 0:covariate_lag_max
+  if (!identical(out_lags, expected_out_lags)) {
+    stop(sprintf("Discrepancy output lags must be exactly 1:%d.", output_lag_max), call. = FALSE)
+  }
+  if (!identical(cov_lags, expected_cov_lags)) {
+    stop(sprintf("Discrepancy covariate lags must be exactly 0:%d.", covariate_lag_max), call. = FALSE)
+  }
   if (!isTRUE(spec$uses_covariates %||% FALSE)) stop("disc_covars forecast must use realized ppt/soil covariates.", call. = FALSE)
   if (isTRUE(spec$uses_auxiliary_lags %||% FALSE)) stop("disc_covars forecast must not use auxiliary USGS/GloFAS lags.", call. = FALSE)
   if (any(grepl("usgs|glofas", columns, ignore.case = TRUE))) {
     stop("disc_covars reservoir inputs contain direct USGS/GloFAS lag columns.", call. = FALSE)
   }
   invisible(TRUE)
+}
+
+app_glofas_part2_bridge_input_contract_label <- function(candidate_row) {
+  sprintf(
+    "disc_covars: discrepancy lags 1:%d plus realized ppt/soil lags 0:%d; no direct USGS/GloFAS lags",
+    as.integer(candidate_row$output_lag_max[[1L]]),
+    as.integer(candidate_row$covariate_lag_max[[1L]])
+  )
 }
 
 app_glofas_part2_bridge_object_path <- function(rhs_runtime_root, object_name) {
@@ -814,26 +869,38 @@ app_glofas_part2_bridge_write_normal_result <- function(result, root, run_label)
   app_write_csv(result$part2_rhs_row, file.path(root, "tables", paste0(run_label, "_part2_rhs_winner_row.csv")))
   summary <- data.frame(
     run_label = run_label,
-    method = result$fitted$method,
-    target = result$target,
-    corrected_target = result$corrected_target,
-    rhs_candidate_id = as.character(result$part2_rhs_row$rhs_candidate_id[[1L]]),
-    candidate_id = as.character(result$part2_rhs_row$candidate_id[[1L]]),
-    origin_date = as.character(result$origin_date),
-    effective_horizon = as.integer(result$effective_horizon),
-    forecast_mode = result$forecast$forecast_mode,
-    forecast_backend = result$forecast$forecast_backend,
-    n_draws = as.integer(result$forecast$n_draws %||% 0L),
-    beta_draw_backend = as.character(result$forecast$beta_draw_backend %||% NA_character_),
-    sigma_draw_backend = as.character(result$forecast$sigma_draw_backend %||% NA_character_),
+    method = as.character(app_glofas_part2_bridge_scalar(result$fitted$method, NA_character_)),
+    target = as.character(app_glofas_part2_bridge_scalar(result$target, NA_character_)),
+    corrected_target = as.character(app_glofas_part2_bridge_scalar(result$corrected_target, NA_character_)),
+    rhs_candidate_id = as.character(app_glofas_part2_bridge_scalar(
+      result$part2_rhs_row$rhs_candidate_id, NA_character_
+    )),
+    candidate_id = as.character(app_glofas_part2_bridge_scalar(
+      result$part2_rhs_row$candidate_id, NA_character_
+    )),
+    origin_date = as.character(app_glofas_part2_bridge_scalar(result$origin_date, as.Date(NA))),
+    effective_horizon = as.integer(app_glofas_part2_bridge_scalar(result$effective_horizon, 0L)),
+    forecast_mode = as.character(app_glofas_part2_bridge_scalar(result$forecast$forecast_mode, NA_character_)),
+    forecast_backend = as.character(app_glofas_part2_bridge_scalar(result$forecast$forecast_backend, NA_character_)),
+    n_draws = as.integer(app_glofas_part2_bridge_scalar(result$forecast$n_draws, 0L)),
+    beta_draw_backend = as.character(app_glofas_part2_bridge_scalar(result$forecast$beta_draw_backend, NA_character_)),
+    sigma_draw_backend = as.character(app_glofas_part2_bridge_scalar(result$forecast$sigma_draw_backend, NA_character_)),
     fit_reused = TRUE,
-    fit_object_path = as.character(result$fitted$fit_object_path),
-    fit_reuse_contract = as.character(result$fitted$fit_reuse_contract),
-    future_corrected_mean_crps = as.numeric(result$scores$aggregate$future_corrected_mean_crps[[1L]] %||% NA_real_),
-    future_corrected_discrepancy_mean_crps = as.numeric(result$scores$aggregate$future_corrected_discrepancy_mean_crps[[1L]] %||% NA_real_),
-    future_corrected_mae = as.numeric(result$scores$aggregate$future_corrected_mae[[1L]] %||% NA_real_),
-    future_corrected_rmse = as.numeric(result$scores$aggregate$future_corrected_rmse[[1L]] %||% NA_real_),
-    runtime_seconds = as.numeric(result$forecast_runtime_seconds),
+    fit_object_path = as.character(app_glofas_part2_bridge_scalar(result$fitted$fit_object_path, NA_character_)),
+    fit_reuse_contract = as.character(app_glofas_part2_bridge_scalar(result$fitted$fit_reuse_contract, NA_character_)),
+    future_corrected_mean_crps = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_mean_crps, NA_real_
+    )),
+    future_corrected_discrepancy_mean_crps = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_discrepancy_mean_crps, NA_real_
+    )),
+    future_corrected_mae = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_mae, NA_real_
+    )),
+    future_corrected_rmse = as.numeric(app_glofas_part2_bridge_scalar(
+      result$scores$aggregate$future_corrected_rmse, NA_real_
+    )),
+    runtime_seconds = as.numeric(app_glofas_part2_bridge_scalar(result$forecast_runtime_seconds, NA_real_)),
     stringsAsFactors = FALSE
   )
   app_write_csv(summary, file.path(root, "tables", paste0(run_label, "_summary.csv")))
@@ -843,7 +910,7 @@ app_glofas_part2_bridge_write_normal_result <- function(result, root, run_label)
       diagnostic_type = result$diagnostic_type,
       target = "observed discrepancy = retrospective GloFAS - USGS",
       corrected_path = "retrospective GloFAS - predicted discrepancy",
-      input_contract = "disc_covars: discrepancy lags 1:360 plus realized ppt/soil lags 0:180; no direct USGS/GloFAS lags",
+      input_contract = app_glofas_part2_bridge_input_contract_label(result$fitted$candidate_row),
       origin_policy = "fixed-origin 30-day diagnostic forecast",
       forecast_ensembles = FALSE,
       synthesis = FALSE,
@@ -914,8 +981,8 @@ app_glofas_part2_bridge_write_quantile_result <- function(result, root, run_labe
     fit_runtime_seconds = as.numeric(result$fit$fit_runtime_seconds),
     forecast_runtime_seconds = as.numeric(result$forecast$forecast_runtime_seconds),
     forecast_backend = result$forecast$forecast_backend,
-    joint_backend_used = result$fit$joint_backend_used %||% NA_character_,
-    init_source_path = result$fit$init_source_path %||% NA_character_,
+    joint_backend_used = app_glofas_part2_bridge_scalar(result$fit$joint_backend_used, NA_character_),
+    init_source_path = app_glofas_part2_bridge_scalar(result$fit$init_source_path, NA_character_),
     synthesis = FALSE,
     stringsAsFactors = FALSE
   )
@@ -928,7 +995,7 @@ app_glofas_part2_bridge_write_quantile_result <- function(result, root, run_labe
       corrected_quantile_transform = "corrected_tau = 1 - discrepancy_tau; corrected_qhat = retrospective GloFAS - discrepancy_qhat",
       model_family = result$model_family,
       likelihood = result$likelihood,
-      input_contract = "disc_covars: discrepancy lags 1:360 plus realized ppt/soil lags 0:180; no direct USGS/GloFAS lags",
+      input_contract = app_glofas_part2_bridge_input_contract_label(result$candidate_row),
       max_iter = as.integer(result$controls$max_iter),
       min_iter = as.integer(result$controls$min_iter),
       tol = as.numeric(result$controls$tol),

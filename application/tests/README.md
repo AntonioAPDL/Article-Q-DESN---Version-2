@@ -99,6 +99,33 @@ Tracked tests:
   one-page vector-figure presentation contract.
 - `test_glofas_part4_latent_family_scheduler.py`: fail-closed production
   launch authorization and manifest-backed prepared-state health reporting.
+- `test_glofas_quantile_integrity.R`: exact tau-mapping and rejection rules,
+  corrected exAL local-quadratic algebra, relative full-state movement, and
+  three-row terminal certification.
+- `test_glofas_quantile_root_cause_diagnostics.R` and
+  `test_glofas_quantile_root_cause_launchers.py`: semantic RHS-state exclusion
+  of bookkeeping counters, fixed-point replay, exact 1:400 source-trace
+  validation, and immutable imports for the single Part 1 confirmation lane.
+- `test_glofas_part1_joint_al_final_confirmation.py`: exact 600-to-800 source
+  contract, terminal monotone-contraction authorization, projected tolerance
+  reachability, and fail-closed rejection of a noncontracting RHS endpoint.
+- `test_glofas_quantile_integrity_launchers.py`: synthetic 133/133 source
+  authority, exact 19-fit/19-forecast DAG construction, fixed-200 controls,
+  dependency gates, and bounded Part 4 continuation contracts.
+- `test_glofas_quantile_certification_restart.R`: exact versus reconstructed
+  local-state classification, same-target prior invariance, cumulative
+  iteration accounting, checkpoint completeness, and fail-closed tau mapping.
+- `test_glofas_quantile_certification_restart_launchers.py`: exact nine-fit
+  restart scope and separation of completion from scientific certification in
+  the dependent-forecast scheduler.
+- `test_glofas_quantile_certification_continuation.R`: exact-state continuation,
+  prior identity, cumulative-trace continuity, and repeated-segment accounting.
+- `test_glofas_quantile_certification_continuation.py`: legacy and mixed-source
+  iteration contracts, the explicit four-fit selective scope, certification
+  gates, dynamic scheduler health, and retained-fit forecast bindings.
+- `test_glofas_forecast_operator_diagnostics.R`: causal endogenous-lag policy
+  mutation, teacher-forcing firewall labels, and C++ recursive state-norm and
+  saturation diagnostics.
 
 The complete Part 4 statistical, execution, and artifact contract is recorded
 in `docs/implementation_notes/glofas_part4_latent_family_implementation_20260906.md`.
@@ -124,6 +151,11 @@ joint comparison figures are generated and checked by
   and transformed-Jacobian identities; invalid-contract rejection; historical
   target decomposition; future component-space overlap; no-refit diagnostic
   labeling; and the launch-locked draft registry.
+- `test_glofas_search3_rainy_season.R` and
+  `test_glofas_search3_scheduler.py`: frozen seasonal-fold counts, candidate
+  uniqueness and bounds, phase-balanced advancement, exact-200 RHS controls,
+  stage ordering, strict and exact-compatible closeout gates, combined physical
+  worker budgets, and one-thread scheduler commands.
 - `test_glofas_fit_recovery_scheduler.py`: physical-core and NUMA-aware CPU
   allocation, disjoint multithread sets, checkpoint-aware restart with owned
   checkpoint paths, and owned reference-cache roots in addition to the
@@ -142,6 +174,24 @@ joint comparison figures are generated and checked by
   behavior, and coefficient forest plot generation.
 
 Tests should run before any output is promoted into the manuscript.
+The reconciled Search III registry preserves every current-main JOINT test and
+adds all imported synthetic GloFAS regression tests. Python launcher/controller
+fixtures run explicitly with `python3.11`; they do not launch scientific jobs.
+Additional registered contracts include the fixed Dec-25 workflow, Part 2
+forecast bridge, bounded partitioned-RHS solver, exact structured exAL kernel,
+Part 4 inner audit/release controller, Search II remote scheduler, and Search III
+stage seal, adoption, and dependency closure.
+New standalone R fixtures run sequentially in the pinned R runtime's `Rscript`
+subprocesses; this preserves their top-level cleanup lifetime and prevents
+fixture-name contamination. Imported suite-loaded fixtures use isolated child
+environments. Existing current-main test registrations remain unchanged.
+
+`test_glofas_dec25_real_data_smoke.R` is deliberately not registered in the
+integration harness. It fits models to real USGS/GloFAS observations; executing
+it would violate the frozen-authority no-refit boundary. Its tracked source is
+preserved exactly for a separately authorized development workflow. Synthetic
+fixtures remain permitted by the prescribed source-integration test gate.
+
 Run them under the same local R 4.6.0 runtime used for validation and
 application gates:
 

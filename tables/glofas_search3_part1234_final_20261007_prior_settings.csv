@@ -1,0 +1,8 @@
+"family","reference_tau0","discrepancy_tau0","a_zeta","b_zeta","slab_treatment","nonintercept_ridge_precision","intercept_precision"
+"Normal Ridge",NA,NA,NA,NA,"Ridge","1","1.0000000000000001e-09"
+"Normal RHS/VB","5.2043087000000001e-05","0.0001159","2","4","Learned in both components",NA,"1.0000000000000001e-09"
+"Independent AL","5.2043087000000001e-05","0.0001159","2","4","Learned in both components",NA,"1.0000000000000001e-09"
+"Independent exAL","5.2043087000000001e-05","0.0001159","2","4","Learned in both components",NA,"1.0000000000000001e-09"
+"Joint AL","5.2043087000000001e-05","0.0001159","2","4","Learned in both components",NA,"1.0000000000000001e-09"
+"Joint exAL","5.2043087000000001e-05","0.0001159","2","4","Learned in both components",NA,"1.0000000000000001e-09"
+"Raw GloFAS",NA,NA,NA,NA,"Not applicable",NA,NA

@@ -240,3 +240,44 @@ Tracked helper files:
   The v2 stability audit alternates diagnostic halves within each MCMC chain,
   reports between-chain state-score sensitivity separately, and extends the
   numerical state integral when either stability criterion fails.
+- `glofas_quantile_integrity.R`: shared fail-closed contracts for exact
+  tau-keyed initializer transfer, multi-tau coefficient extraction, relative
+  full-state movement, corrected scalable-exAL local moments, terminal
+  convergence certificates, and the promotable fixed-200 iteration policy.
+  RHS convergence uses expected inverse auxiliary/global scales and induced
+  prior precision; bookkeeping counters remain diagnostics only. Named RHS
+  change diagnostics identify the controlling block, component, coordinate,
+  and auxiliary-versus-prior-precision movement without changing an update.
+- `glofas_quantile_root_cause_diagnostics.R`: no-refit decomposition of raw
+  versus inferential RHS movement and held-moment fixed-point replay helpers.
+- `glofas_part3_partitioned_rhs.R`: partitioned reference/discrepancy RHS
+  updates and a bounded fixed-moment inner solver that deepens the same
+  coordinate map without changing priors or likelihood terms.
+- `glofas_quantile_certification_restart.R`: same-target certification-restart
+  adapters for the small set of fixed-200 GloFAS fits that finish without a
+  terminal full-state certificate. It restores saved global/RHS/covariance
+  state, labels deterministic reconstruction of legacy local factors, verifies
+  prior invariance, and maintains separate segment and cumulative traces.
+- `glofas_forecast_operator_diagnostics.R`: retained-fit counterfactuals for
+  stochastic recursion, conditional-mean recursion, frozen endogenous lags,
+  and explicitly non-deployable teacher forcing. The helper reuses aligned
+  parameter and innovation draws and reports state saturation and path drift;
+  it never refits or selects a model.
+- `glofas_search3_rainy_season.R`: frozen October-March Search III contracts,
+  deterministic 40-candidate reference/discrepancy manifests, phase-balanced
+  selection, fixed-200 Normal RHS controls, and locked temporal confirmation.
+  Numerical fitting delegates to the audited Search II Normal engine.
+- `glofas_search_phase2.R` and `glofas_post_search2_workflow.R`: the audited
+  Search II engine and manifest-driven downstream component contracts,
+  including fixed Dec-25 geometries and model-specific RHS calibration.
+- `glofas_normal_driver_bank.R`, `glofas_external_driver_forecast.R`, and
+  `glofas_part4_normal_driver_prior.R`: truth-free, date-aligned recursive
+  Normal driver paths and the Gaussian driver prior used by Part 4 quantile
+  models. Future USGS remains scoring-only.
+- `glofas_search3_runtime_contract.R` and `glofas_search3_final_closeout.R`:
+  frozen Search III dependency contracts and the complete Part 1-4 numerical,
+  provenance, calibration, and six-page vector-figure closeout gates.
+- `glofas_part4_exal_inner_audit.R`: retained-state quadrature and local-factor
+  diagnostics. The corrected exAL implementation preserves complete local
+  factors and excludes only a diagnostic discontinuous indicator from the
+  operative quadrature stopping norm, without changing the posterior target.

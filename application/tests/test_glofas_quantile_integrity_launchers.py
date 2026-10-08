@@ -1,0 +1,139 @@
+#!/usr/bin/env python3.11
+"""Synthetic contract tests for GloFAS correction and continuation launchers."""
+
+import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def load(name, relative):
+    spec = importlib.util.spec_from_file_location(name, REPO / relative)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+prepare_module = load("glofas_prepare_correction", "application/scripts/410_prepare_glofas_quantile_integrity_correction.py")
+launch_module = load("glofas_launch_correction", "application/scripts/411_launch_glofas_quantile_integrity_correction.py")
+continuation_module = load("glofas_part4_controller", "application/scripts/413_launch_glofas_part4_joint_continuation.py")
+
+assert prepare_module.qslug(0.05) == "q0p05"
+assert prepare_module.qslug(0.50) == "q0p50"
+
+with tempfile.TemporaryDirectory(prefix="glofas_integrity_launcher_") as temporary:
+    temporary = Path(temporary)
+    source = temporary / "source"
+    output = temporary / "output"
+    part4 = temporary / "part4"
+    for sub in ("status", "configs", "objects"):
+        (source / sub).mkdir(parents=True, exist_ok=True)
+    part4.mkdir()
+    for index in range(133):
+        (source / "status" / f"job_{index:03d}.completed").write_text("completed\n")
+    for name in (
+        "part1_post_search2_design_cache.rds", "part2_final_dec25_design_cache.rds",
+        "part3_final_dec25_design_cache.rds", "part123_base_config_frozen.yaml",
+        "full_data_rhs_calibration.csv",
+    ):
+        (source / "configs" / name).write_text(name + "\n")
+    for part in ("part1", "part2", "part3"):
+        (source / "objects" / f"{part}_normal_rhs_driver_bank.rds").write_text(part + "\n")
+    taus = ("q0p05", "q0p20", "q0p35", "q0p50", "q0p65", "q0p80", "q0p95")
+    for part in ("part1", "part2"):
+        for family in ("independent_al", "independent_exal"):
+            for tau in taus:
+                (source / "objects" / f"{part}_fit_{family}_{tau}_fit.rds").write_text(f"{part} {family} {tau}\n")
+    for tau in taus:
+        (source / "objects" / f"part3_fit_independent_al_{tau}_fit.rds").write_text(tau + "\n")
+
+    # The historical preparer imports a local-only selection CSV. Supply a
+    # synthetic dependency without populating ignored production evidence in
+    # a fresh integration worktree; retain its original strict link/hash guard.
+    selected_fixture = temporary / "selected_components.csv"
+    selected_fixture.write_text(
+        "component,candidate_id\nreference,synthetic_reference\n"
+        "discrepancy,synthetic_discrepancy\n"
+    )
+    original_link_verified = prepare_module.link_verified
+
+    def link_test_dependency(source_path, destination, imports, role):
+        if role == "selected_components":
+            assert source_path == REPO / "local_trackers/glofas_search_phase2_selected_components_20260916.csv"
+            source_path = selected_fixture
+        return original_link_verified(source_path, destination, imports, role)
+
+    with patch.object(prepare_module, "link_verified", side_effect=link_test_dependency):
+        with patch.object(sys, "argv", [
+            str(REPO / "application/scripts/410_prepare_glofas_quantile_integrity_correction.py"),
+            "--source-root", str(source), "--part4-root", str(part4),
+            "--runtime-root", str(output), "--workers", "30",
+        ]):
+            prepare_module.main()
+    assert prepare_module.sha256(output / "configs/post_search2_selected_components.csv") == prepare_module.sha256(selected_fixture)
+    jobs = json.loads((output / "configs/correction_job_manifest.json").read_text())
+    assert len(jobs) == 38
+    assert sum(job["action"] == "fit" for job in jobs) == 19
+    assert sum(job["action"] == "forecast" for job in jobs) == 19
+    assert sum(job["model_family"] == "joint_exal" and job["action"] == "fit" for job in jobs) == 2
+    assert sum(job["lane"] == "part3" and job["action"] == "fit" for job in jobs) == 1
+    for job in jobs:
+        if job["action"] == "fit":
+            command = job["command"]
+            assert command[command.index("--max_iter") + 1] == "200"
+            assert command[command.index("--min_iter") + 1] == "200"
+            assert command[command.index("--fixed_iterations") + 1] == "true"
+            assert command[command.index("--full_state_convergence") + 1] == "true"
+    verified_jobs, _ = launch_module.verify_contract(REPO, output)
+    assert len(verified_jobs) == 38
+    assert json.loads((output / "configs/correction_contract.json").read_text())["workers"] == 30
+
+    p4_source = temporary / "p4_source"
+    p4_output = temporary / "p4_output"
+    source_job = "toy_joint_al"
+    for sub in ("status", "objects", "traces", "configs"):
+        (p4_source / sub).mkdir(parents=True, exist_ok=True)
+    (p4_source / "status" / f"{source_job}.completed").write_text("completed\n")
+    (p4_source / "objects" / f"{source_job}_fit_side.rds").write_text("fit\n")
+    (p4_source / "objects/part4_shared_design_truth_free.rds").write_text("design\n")
+    (p4_source / "objects/part4_scoring_panel_sidecar.rds").write_text("sidecar\n")
+    (p4_source / "configs/part4_model_manifest.csv").write_text("run_id\n")
+    (p4_source / "traces" / f"{source_job}_trace.csv").write_text(
+        "outer_iteration\n1\n2\n3\n4\n5\n"
+    )
+    contract = continuation_module.prepare(REPO, p4_source, p4_output, "al", source_job, 20, 5)
+    assert contract["initial_outer_iterations"] == 5
+    assert contract["max_cumulative_outer_iterations"] == 20
+    assert contract["terminal_consecutive_passes"] == 3
+    assert contract["resume_from_external_checkpoint"] is False
+    assert contract["inner_workers"] == 7
+    assert contract["min_rhs_tau_updates"] == 3
+    assert contract["require_post_release"] is True
+    assert contract["allow_rhs_schedule_rebase"] is True
+
+    resumed_output = temporary / "p4_resumed_output"
+    resumed_fit = temporary / "part4_joint_al_continuation_b01_fit_side.rds"
+    resumed_trace = temporary / "part4_joint_al_continuation_b01_trace.csv"
+    resumed_fit.write_text("resumed fit\n")
+    resumed_trace.write_text(
+        "outer_iteration\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n"
+    )
+    resumed_contract = continuation_module.prepare(
+        REPO, p4_source, resumed_output, "al", source_job, 20, 5,
+        resume_fit_path=resumed_fit,
+        resume_trace_path=resumed_trace,
+    )
+    assert resumed_contract["initial_outer_iterations"] == 10
+    assert resumed_contract["resume_from_external_checkpoint"] is True
+    assert Path(resumed_contract["source_fit_path"]) == resumed_fit.resolve()
+    assert Path(resumed_contract["source_trace_path"]) == resumed_trace.resolve()
+    assert resumed_contract["source_fit_sha256"] == continuation_module.sha256(resumed_fit)
+    assert resumed_contract["source_trace_sha256"] == continuation_module.sha256(resumed_trace)
+
+print("GLOFAS_QUANTILE_INTEGRITY_LAUNCHER_TEST_PASS")

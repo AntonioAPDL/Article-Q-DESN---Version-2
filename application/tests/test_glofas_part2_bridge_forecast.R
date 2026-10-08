@@ -51,6 +51,21 @@ winner_row <- data.frame(
   disc_alpha = 0.8,
   disc_rho = 0.7,
   disc_seed = 20261521L,
+  disc_pi_w = 0.004,
+  disc_pi_in = 0.12,
+  disc_win_scale_global = 0.41,
+  disc_win_scale_bias = 0.93,
+  disc_standardize_inputs = FALSE,
+  disc_state_scaling = "train_zscore",
+  disc_input_bound = "tanh",
+  disc_act_f = "identity",
+  disc_act_k = "tanh",
+  disc_prior_id = "search3_dis_test_prior",
+  disc_prior_mode = "calibrated_m0",
+  disc_m0 = 60,
+  rhs_zeta2_fixed_discrepancy = 16,
+  rhs_a_zeta = 2.5,
+  rhs_b_zeta = 5,
   ridge_tau2 = 10000,
   intercept_var = 1e6,
   sigma_a = 2,
@@ -69,11 +84,59 @@ winner_row <- data.frame(
   stringsAsFactors = FALSE
 )
 app_glofas_part2_bridge_validate_disc_covars_contract(winner_row, strict_winner = TRUE)
+stopifnot(identical(app_glofas_part2_bridge_scalar(integer(), 0L), 0L))
+stopifnot(identical(app_glofas_part2_bridge_scalar(NULL, NA_character_), NA_character_))
+stopifnot(identical(app_glofas_part2_bridge_scalar(c("first", "second")), "first"))
+search2_row <- winner_row
+search2_row$disc_n_vector <- "1500"
+search2_row$disc_m <- 540L
+search2_row$disc_output_lag_max <- 540L
+search2_row$disc_covariate_lag_max <- 360L
+search2_row$disc_auxiliary_lag_max <- 540L
+search2_row$disc_alpha <- 0.95
+search2_row$disc_rho <- 0.30
+app_glofas_part2_bridge_validate_disc_covars_contract(search2_row, strict_winner = FALSE)
 candidate <- app_glofas_part2_bridge_candidate_from_rhs_row(winner_row)
 stopifnot(identical(as.character(candidate$n_vector[[1L]]), "2500"))
 stopifnot(as.integer(candidate$output_lag_max[[1L]]) == 360L)
 stopifnot(as.integer(candidate$covariate_lag_max[[1L]]) == 180L)
 stopifnot(abs(as.numeric(candidate$rhs_tau0[[1L]]) - 0.001) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$pi_w[[1L]]) - 0.004) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$pi_in[[1L]]) - 0.12) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$win_scale_global[[1L]]) - 0.41) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$win_scale_bias[[1L]]) - 0.93) < 1.0e-12)
+stopifnot(!isTRUE(candidate$standardize_inputs[[1L]]))
+stopifnot(identical(as.character(candidate$state_scaling[[1L]]), "train_zscore"))
+stopifnot(identical(as.character(candidate$input_bound[[1L]]), "tanh"))
+stopifnot(identical(as.character(candidate$act_f[[1L]]), "identity"))
+stopifnot(identical(as.character(candidate$act_k[[1L]]), "tanh"))
+stopifnot(identical(as.character(candidate$prior_id[[1L]]), "search3_dis_test_prior"))
+stopifnot(identical(as.character(candidate$prior_mode[[1L]]), "calibrated_m0"))
+stopifnot(abs(as.numeric(candidate$m0[[1L]]) - 60) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$rhs_zeta2_fixed[[1L]]) - 16) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$rhs_a_zeta[[1L]]) - 2.5) < 1.0e-12)
+stopifnot(abs(as.numeric(candidate$rhs_b_zeta[[1L]]) - 5) < 1.0e-12)
+
+make_fitted_contract <- function(output_lag_max, covariate_lag_max) {
+  list(
+    candidate_row = data.frame(
+      output_lag_max = output_lag_max,
+      covariate_lag_max = covariate_lag_max
+    ),
+    design = list(design_meta = list(reservoir_input_spec = list(
+      output_lags = seq_len(output_lag_max),
+      covariate_lags = 0:covariate_lag_max,
+      columns = c("output_lag", "ppt_lag", "soil_lag"),
+      uses_covariates = TRUE,
+      uses_auxiliary_lags = FALSE
+    )))
+  )
+}
+app_glofas_part2_bridge_validate_design_contract(make_fitted_contract(360L, 180L))
+app_glofas_part2_bridge_validate_design_contract(make_fitted_contract(540L, 360L))
+stopifnot(grepl("1:540", app_glofas_part2_bridge_input_contract_label(
+  make_fitted_contract(540L, 360L)$candidate_row
+), fixed = TRUE))
 
 audit <- data.frame(
   input_block = c("output_lag", "output_lag", "covariate"),

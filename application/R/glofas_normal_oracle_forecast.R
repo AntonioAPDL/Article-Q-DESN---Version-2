@@ -498,7 +498,8 @@ app_glofas_oracle_build_part1_design <- function(base_cfg, candidate_row, panel_
     rho = candidate_row$rho[[1L]],
     seed = candidate_row$seed[[1L]],
     washout = candidate_row$washout[[1L]],
-    dlm_extension = dlm_extension
+    dlm_extension = dlm_extension,
+    reservoir_controls = app_glofas_normal_part1_reservoir_controls(candidate_row)
   )
   invisible(app_feature_contract(cfg))
   dlm_applied <- app_glofas_normal_part1_apply_dlm_extension(
@@ -514,6 +515,10 @@ app_glofas_oracle_build_part1_design <- function(base_cfg, candidate_row, panel_
     drop = as.integer(candidate_row$washout[[1L]])
   )
   readout <- app_glofas_normal_part1_readout_matrix(qfit)
+  X_raw <- readout$X
+  state_scaling <- as.character(app_glofas_normal_part1_row_value(candidate_row, "state_scaling", "none"))[[1L]]
+  readout_scaler <- app_glofas_normal_readout_scaler_fit(X_raw, mode = state_scaling)
+  readout$X <- app_glofas_normal_readout_scaler_apply(X_raw, readout_scaler)
   y <- as.numeric(qfit$y_fit)
   dates <- as.Date(design_panel_bundle$panel$target_date[qfit$meta$keep_idx])
   if (nrow(readout$X) != length(y) || length(y) != length(dates)) {
@@ -522,6 +527,7 @@ app_glofas_oracle_build_part1_design <- function(base_cfg, candidate_row, panel_
   list(
     cfg = cfg,
     X = readout$X,
+    X_raw = X_raw,
     y = y,
     dates = dates,
     feature_info = readout$feature_info,
@@ -529,6 +535,7 @@ app_glofas_oracle_build_part1_design <- function(base_cfg, candidate_row, panel_
     reservoir = qfit$reservoir,
     states = qfit$states,
     qfit = qfit,
+    readout_scaler = readout_scaler,
     dlm_extension = dlm_applied$meta
   )
 }
@@ -571,12 +578,24 @@ app_glofas_oracle_fit_part1 <- function(
       y = design$y,
       ridge_warm_start = warm_start,
       tau0 = as.numeric(candidate_row$rhs_tau0[[1L]]),
+      a_zeta = as.numeric(app_glofas_normal_part1_row_value(candidate_row, "rhs_a_zeta", 2)),
+      b_zeta = as.numeric(app_glofas_normal_part1_row_value(candidate_row, "rhs_b_zeta", 4)),
+      zeta2_fixed = {
+        value <- app_glofas_normal_part1_row_value(candidate_row, "rhs_zeta2_fixed", NULL)
+        if (is.null(value) || !is.finite(as.numeric(value))) NULL else as.numeric(value)
+      },
       max_iter = as.integer(candidate_row$rhs_max_iter[[1L]]),
       min_iter = as.integer(candidate_row$rhs_min_iter[[1L]]),
       tol = as.numeric(candidate_row$rhs_tol[[1L]]),
       rhs_update_every = as.integer(candidate_row$rhs_update_every[[1L]]),
       freeze_tau_warmup_iters = as.integer(candidate_row$rhs_freeze_tau_warmup_iters[[1L]]),
-      min_tau_updates = as.integer(candidate_row$rhs_min_tau_updates[[1L]])
+      min_tau_updates = as.integer(candidate_row$rhs_min_tau_updates[[1L]]),
+      freeze_beta_warmup_iters = as.integer(app_glofas_normal_part1_row_value(
+        candidate_row, "rhs_freeze_beta_warmup_iters", 0L
+      )),
+      min_beta_updates = as.integer(app_glofas_normal_part1_row_value(
+        candidate_row, "rhs_min_beta_updates", 0L
+      ))
     )
   }
   list(
@@ -718,6 +737,10 @@ app_glofas_oracle_d1_cpp_supported <- function(fitted, component_prefix = "") {
   if (is.null(W) || is.null(Win) || is.null(state0)) return(FALSE)
   expected_names <- c("readout_intercept", paste0("reservoir_", sprintf("%04d", seq_along(state0))))
   identical(colnames(design$X), expected_names)
+}
+
+app_glofas_oracle_scale_readout_row <- function(X, fitted) {
+  app_glofas_normal_readout_scaler_apply(X, fitted$design$readout_scaler %||% NULL)
 }
 
 app_glofas_oracle_compiled_future_inputs <- function(qfit, future_dates, covariate_timeline = NULL) {
@@ -914,6 +937,10 @@ app_glofas_oracle_recursive_forecast <- function(
 
   if (isTRUE(use_cpp)) {
     states0 <- app_qdesn_last_states(qfit)[[1L]]
+    beta_raw <- app_glofas_normal_readout_beta_to_raw(
+      fit$beta_mean,
+      design$readout_scaler %||% NULL
+    )
     cpp_out <- glofas_oracle_d1_plugin_recursive_cpp(
       W = as.matrix(design$reservoir$W[[1L]]),
       Win = as.matrix(design$reservoir$Win[[1L]]),
@@ -927,11 +954,12 @@ app_glofas_oracle_recursive_forecast <- function(
       win_scale_global = as.numeric(qfit$meta$win_scale_global %||% 1),
       win_scale_bias = as.numeric(qfit$meta$win_scale_bias %||% 1),
       alpha = as.numeric(design$reservoir$alpha[[1L]]),
-      beta_mean = as.numeric(fit$beta_mean),
+      beta_mean = beta_raw,
       act_f = as.character(design$reservoir$act_f %||% "tanh")
     )
     X_future <- as.matrix(cpp_out$X_future)
     colnames(X_future) <- colnames(design$X)
+    X_future <- app_glofas_oracle_scale_readout_row(X_future, fitted)
     input_rows <- as.matrix(cpp_out$input_rows)
     colnames(input_rows) <- qfit$meta$reservoir_input_spec$columns
     pred <- app_glofas_normal_predict(fit, X_future, chunk_size = 64L)
@@ -971,6 +999,7 @@ app_glofas_oracle_recursive_forecast <- function(
     states <- app_qdesn_continue_one_step(states, row_value, design$reservoir, qfit$meta)
     core <- app_qdesn_readout_row_from_states(states, design$reservoir)
     Xrow <- app_glofas_oracle_make_readout_row(core, colnames(design$X), component_prefix = component_prefix)
+    Xrow <- app_glofas_oracle_scale_readout_row(Xrow, fitted)
     pred <- app_glofas_normal_predict(fit, Xrow, chunk_size = 1L)
     pred_mean[[h]] <- pred$mean[[1L]]
     pred_sd[[h]] <- pred$sd[[1L]]
@@ -1087,7 +1116,10 @@ app_glofas_oracle_draw_recursive_forecast <- function(
           win_scale_global = as.numeric(qfit$meta$win_scale_global %||% 1),
           win_scale_bias = as.numeric(qfit$meta$win_scale_bias %||% 1),
           alpha = as.numeric(design$reservoir$alpha[[1L]]),
-          beta_draws = as.matrix(draws$beta),
+          beta_draws = app_glofas_normal_readout_beta_draws_to_raw(
+            draws$beta,
+            design$readout_scaler %||% NULL
+          ),
           sigma_draws = as.numeric(draws$sigma),
           z_obs = z_obs,
           act_f = as.character(design$reservoir$act_f %||% "tanh")
@@ -1118,6 +1150,7 @@ app_glofas_oracle_draw_recursive_forecast <- function(
             states <- app_qdesn_continue_one_step(states, row_value, design$reservoir, qfit$meta)
             core <- app_qdesn_readout_row_from_states(states, design$reservoir)
             Xrow <- app_glofas_oracle_make_readout_row(core, colnames(design$X), component_prefix = component_prefix)
+            Xrow <- app_glofas_oracle_scale_readout_row(Xrow, fitted)
             mu_h <- sum(as.numeric(Xrow) * beta_s)
             y_h <- stats::rnorm(1L, mean = mu_h, sd = sigma_s)
             mu_draws[h, s] <- mu_h

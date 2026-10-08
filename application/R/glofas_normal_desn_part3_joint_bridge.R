@@ -752,6 +752,8 @@ app_glofas_normal_part3_rhs_fit_blocked <- function(
   tau0_discrepancy = 1,
   a_zeta = 2,
   b_zeta = 4,
+  zeta2_fixed_reference = NULL,
+  zeta2_fixed_discrepancy = NULL,
   max_iter = 100L,
   min_iter = 30L,
   tol = 1.0e-4,
@@ -797,6 +799,11 @@ app_glofas_normal_part3_rhs_fit_blocked <- function(
   if (!is.finite(tol) || tol < 0) stop("tol must be finite and nonnegative.", call. = FALSE)
   if (!is.finite(tau0_reference) || tau0_reference <= 0) stop("tau0_reference must be positive.", call. = FALSE)
   if (!is.finite(tau0_discrepancy) || tau0_discrepancy <= 0) stop("tau0_discrepancy must be positive.", call. = FALSE)
+  for (value in list(zeta2_fixed_reference, zeta2_fixed_discrepancy)) {
+    if (!is.null(value) && (length(value) != 1L || !is.finite(value) || value <= 0)) {
+      stop("Fixed Part 3 RHS slab scales must be NULL or finite positive scalars.", call. = FALSE)
+    }
+  }
   if (!is.finite(freeze_beta_warmup_iters) || freeze_beta_warmup_iters < 0L) {
     stop("freeze_beta_warmup_iters must be nonnegative.", call. = FALSE)
   }
@@ -840,6 +847,7 @@ app_glofas_normal_part3_rhs_fit_blocked <- function(
       tau0 = tau0_reference,
       a_zeta = a_zeta,
       b_zeta = b_zeta,
+      zeta2_fixed = zeta2_fixed_reference,
       intercept_prec = intercept_prec
     ),
     rhs_control = control
@@ -851,6 +859,7 @@ app_glofas_normal_part3_rhs_fit_blocked <- function(
       tau0 = tau0_discrepancy,
       a_zeta = a_zeta,
       b_zeta = b_zeta,
+      zeta2_fixed = zeta2_fixed_discrepancy,
       intercept_prec = intercept_prec
     ),
     rhs_control = control
@@ -1013,6 +1022,8 @@ app_glofas_normal_part3_rhs_fit_blocked <- function(
     rhs_tau0_discrepancy = tau0_discrepancy,
     a_zeta = a_zeta,
     b_zeta = b_zeta,
+    zeta2_fixed_reference = zeta2_fixed_reference,
+    zeta2_fixed_discrepancy = zeta2_fixed_discrepancy,
     freeze_beta_warmup_iters = as.integer(freeze_beta_warmup_iters),
     min_beta_updates = as.integer(min_beta_updates),
     trace = trace_df,

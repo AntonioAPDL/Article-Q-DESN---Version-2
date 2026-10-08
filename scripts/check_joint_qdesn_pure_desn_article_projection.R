@@ -316,14 +316,22 @@ expect(!grepl("canonical.action|black vertical|vertical marks|black marks",
   wrappers, ignore.case = TRUE), "Reader-facing figure captions contain no canonical-action markers")
 overleaf <- trimws(readLines(file.path(repo_root, "overleaf/article_files.txt"), warn = FALSE))
 overleaf <- overleaf[nzchar(overleaf) & !startsWith(overleaf, "#")]
-expect(all(manifest$relative_path %in% overleaf) &&
+# These frozen provenance ledgers remain hash-verified in Git above. Their
+# machine-local source paths are not manuscript dependencies or upload assets.
+git_only_provenance <- paste0("tables/", prefix, c(
+  "cell_plan.csv", "frozen_contract.csv", "manifest_audit.csv",
+  "review_closeout_receipt.csv", "source_hashes.csv"
+))
+expect(all(setdiff(manifest$relative_path, git_only_provenance) %in% overleaf) &&
+  !any(git_only_provenance %in% overleaf) &&
   paste0("tables/", prefix, "article_asset_manifest.csv") %in% overleaf,
-  "Overleaf includes all current reader outputs, source CSVs and manifest")
+  "Overleaf includes every reader output and safe CSV; local-path provenance stays in Git")
 expect(!any(grepl("(^|/)(cache|local_trackers|logs)(/|$)|\\.(rds|rda|RData|log|gz)$",
   overleaf)), "Overleaf includes no scientific runtime payload")
 
-# Compare protected application assets to the recorded main authority using Git
-# object content, independent of any mutable ignored runtime evidence.
+# Preserve PriceFM and historical GloFAS assets at the recorded JOINT authority.
+# A subsequent, independently checked GloFAS authority may replace only its
+# four stable aliases. The frozen JOINT packet remains unchanged.
 baseline <- "757522db0f85815244370ec92a194de132268883"
 git <- function(args) system2("git", c("-C", shQuote(repo_root), args),
   stdout = TRUE, stderr = TRUE)
@@ -332,9 +340,25 @@ expect(is.null(attr(baseline_files, "status")), "Recorded baseline Git tree exis
 protected <- baseline_files[grepl("^tables/(pricefm|glofas)_|^figures/(pricefm|glofas)",
   baseline_files)]
 expect(length(protected) > 20L, "Protected PriceFM/GloFAS article assets found")
+current_glofas <- paste0("tables/glofas_application_current_", c(
+  "outputs.tex", "score_summary.csv", "score_summary.tex", "selection_manifest.csv"
+))
+alias_changes <- git(c("diff", "--name-only", baseline, "--", shQuote(current_glofas)))
+expect(is.null(attr(alias_changes, "status")), "Current GloFAS alias audit completed")
+if (length(alias_changes)) {
+  glofas_checker <- file.path(repo_root,
+    "application/scripts/448_check_glofas_search3_article_projection.R")
+  expect(file.exists(glofas_checker), "Subsequent GloFAS authority checker exists")
+  checked <- system2(file.path(R.home("bin"), "Rscript"),
+    shQuote(glofas_checker), stdout = TRUE, stderr = TRUE)
+  expect(is.null(attr(checked, "status")) &&
+    any(grepl("GLOFAS_SEARCH3_ARTICLE_PROJECTION_CHECK=PASS", checked, fixed = TRUE)),
+    "Subsequent GloFAS aliases pass their complete independent publication contract")
+}
+protected <- setdiff(protected, current_glofas)
 changes <- git(c("diff", "--name-only", baseline, "--", shQuote(protected)))
 expect(is.null(attr(changes, "status")) && !length(changes),
-  "PriceFM and GloFAS article asset hashes remain unchanged")
+  "PriceFM and historical GloFAS article asset hashes remain unchanged")
 
 cat(sprintf(paste0("JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS checks=%d ",
   "mcmc_cells=32 strict_pass=31 review=1 frozen_sources=15 assets=%d ",

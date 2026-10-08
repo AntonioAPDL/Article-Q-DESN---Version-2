@@ -22,6 +22,7 @@ source(app_path("application/R/score_forecasts.R"))
 source(app_path("application/R/joint_qvp_qdesn.R"))
 source(app_path("application/R/joint_exqdesn_exact_structured_inference.R"))
 source(app_path("application/R/joint_exqdesn_inference_dispatch.R"))
+source(app_path("application/R/glofas_quantile_integrity.R"))
 source(app_path("application/R/glofas_normal_desn_part1_screening.R"))
 source(app_path("application/R/glofas_normal_desn_part2_bridge.R"))
 source(app_path("application/R/glofas_normal_desn_part3_joint_bridge.R"))
@@ -32,6 +33,11 @@ source(app_path("application/R/glofas_part1_quantile_oracle_forecast.R"))
 source(app_path("application/R/glofas_part2_bridge_forecast.R"))
 source(app_path("application/R/glofas_part3_historical_forecast.R"))
 source(app_path("application/R/glofas_dec25_final_refit_workflow.R"))
+source(app_path("application/R/glofas_search_phase2.R"))
+source(app_path("application/R/glofas_normal_driver_bank.R"))
+source(app_path("application/R/glofas_external_driver_forecast.R"))
+source(app_path("application/R/glofas_part4_ensemble_likelihood_contract.R"))
+source(app_path("application/R/glofas_post_search2_workflow.R"))
 
 default_source_root <- Sys.getenv(
   "APP_GLOFAS_JEREZ_SOURCE_ROOT",
@@ -92,7 +98,14 @@ args <- app_parse_args(list(
   forecast_backend = "cpp",
   freeze_beta_warmup_iters = "20",
   min_beta_updates = "30",
+  fixed_iterations = "false",
+  full_state_convergence = "false",
+  convergence_tolerance = "1e-4",
+  terminal_consecutive_passes = "3",
   quantile_route = "same_tau_parallel",
+  selected_components = "",
+  calibration_path = "",
+  normal_driver_bank_path = "",
   require_cpp = "false"
 ))
 
@@ -395,10 +408,54 @@ write_fit_artifacts <- function(fit, design, tau = numeric(), component = NULL) 
   invisible(fit_path(job_id))
 }
 
+write_external_quantile_result <- function(result, prefix) {
+  object_path <- file.path(runtime_root, "forecasts", paste0(prefix, "_forecast.rds"))
+  table_path <- file.path(runtime_root, "forecasts", paste0(prefix, "_forecast.csv"))
+  saveRDS(result, object_path, version = 2L)
+  table <- result$forecast %||% result$discrepancy_forecast %||% data.frame()
+  app_write_csv(table, table_path)
+  if (nrow(result$corrected_usgs_forecast %||% data.frame())) {
+    app_write_csv(
+      result$corrected_usgs_forecast,
+      file.path(runtime_root, "forecasts", paste0(prefix, "_corrected_usgs_forecast.csv"))
+    )
+  }
+  for (name in c("future_input_audit", "reference_input_audit", "discrepancy_input_audit")) {
+    if (nrow(result[[name]] %||% data.frame())) {
+      app_write_csv(result[[name]], file.path(runtime_root, "logs", paste0(prefix, "_", name, ".csv")))
+    }
+  }
+  c(object_path, table_path)
+}
+
 main <- function() {
   if (identical(job_type, "design_cache")) {
     base_cfg <- app_read_config(app_resolve_path(args$base_config, must_work = TRUE))
-    if (identical(part, "part2")) {
+    selection_path <- as.character(args$selected_components[[1L]] %||% "")
+    if (nzchar(selection_path)) {
+      selection <- app_glofas_post_search2_read_selection(selection_path)
+      post_contract <- app_glofas_post_search2_final_design_contract(selection)
+      candidate <- app_glofas_post_search2_joint_candidate(
+        selection,
+        candidate_id = paste0("post_search2_", part, "_selected_components")
+      )
+      cache <- if (identical(part, "part2")) {
+        app_glofas_dec25_part2_design_cache(
+          base_cfg = base_cfg,
+          rhs_row = candidate,
+          expected_dates = post_contract$expected_dates
+        )
+      } else {
+        app_glofas_dec25_part3_design_cache(
+          base_cfg = base_cfg,
+          candidate_row = candidate,
+          expected_dates = post_contract$expected_dates
+        )
+      }
+      cache$post_search2_design_contract <- post_contract
+      cache$selection_manifest_path <- normalizePath(app_resolve_path(selection_path, must_work = TRUE), mustWork = TRUE)
+      cache$selection_manifest_sha256 <- app_sha256_file(cache$selection_manifest_path)
+    } else if (identical(part, "part2")) {
       rhs_row <- app_glofas_part2_bridge_selected_rhs_row(
         rhs_runtime_root = args$rhs_runtime_root,
         rhs_candidate_id = args$rhs_candidate_id,
@@ -442,6 +499,20 @@ main <- function() {
   }
 
   cache <- readRDS(cache_path(part))
+  calibration_arg <- as.character(args$calibration_path[[1L]] %||% "")
+  calibration_abs <- if (nzchar(calibration_arg)) app_resolve_path(calibration_arg, must_work = FALSE) else ""
+  if (nzchar(calibration_abs) && file.exists(calibration_abs)) {
+    calibration <- app_read_csv(calibration_abs)
+    if (identical(part, "part2")) {
+      cache$rhs_row <- app_glofas_post_search2_apply_calibration(cache$rhs_row, calibration)
+      cache$candidate_row$rhs_tau0 <- as.numeric(
+        calibration$rhs_tau0[calibration$component == "discrepancy"]
+      )
+      cache$candidate_row$rhs_zeta2_fixed <- cache$rhs_row$rhs_zeta2_fixed_discrepancy
+    } else {
+      cache$candidate_row <- app_glofas_post_search2_apply_calibration(cache$candidate_row, calibration)
+    }
+  }
   design_sha <- app_sha256_file(cache_path(part))
   tau <- parse_tau(part, args$tau)
 
@@ -457,6 +528,12 @@ main <- function() {
   }
 
   if (identical(job_type, "fit")) {
+    if (!model_family %in% c("normal_ridge", "normal_rhs_vb") && truthy(args$fixed_iterations)) {
+      app_glofas_quantile_validate_production_iteration_contract(
+        args$max_iter, args$min_iter, TRUE, args$freeze_beta_warmup_iters,
+        args$terminal_consecutive_passes
+      )
+    }
     if (identical(part, "part2")) {
       if (identical(model_family, "normal_ridge")) {
         result <- app_glofas_dec25_fit_part2_normal_ridge(cache)
@@ -465,24 +542,38 @@ main <- function() {
         write_fit_artifacts(fit, cache)
       } else if (identical(model_family, "normal_rhs_vb")) {
         ridge_warm <- readRDS(warm_path("part2_fit_normal_ridge"))
+        if (nzchar(as.character(args$calibration_path[[1L]] %||% ""))) {
+          calibration <- app_read_csv(app_resolve_path(args$calibration_path, must_work = TRUE))
+          cache$rhs_row <- app_glofas_post_search2_apply_calibration(cache$rhs_row, calibration)
+        }
         result <- app_glofas_dec25_fit_part2_normal_rhs(cache, warm_start = ridge_warm)
         fit <- result$fit
         write_fit_artifacts(fit, cache)
       } else {
+        discrepancy_slab <- list(
+          zeta2 = as.numeric(cache$rhs_row$rhs_zeta2_fixed_discrepancy[[1L]]),
+          slab_fixed = TRUE
+        )
         controls <- app_glofas_part1_quantile_default_controls(
           max_iter = as.integer(args$max_iter),
           min_iter = as.integer(args$min_iter),
           tol = as.numeric(args$tol),
-          tau0 = cache$candidate_row$rhs_tau0[[1L]],
-          zeta2 = Inf,
+          tau0 = as.numeric(cache$rhs_row$rhs_tau0_discrepancy[[1L]]),
+          zeta2 = discrepancy_slab$zeta2,
+          slab_fixed = discrepancy_slab$slab_fixed,
           rhs_vb_inner = 5L,
           exal_method_id = "VB1_structured_v",
           joint_backend = "auto",
           init_fit_paths = paste(init_paths, collapse = "|"),
+          initializer_tau_policy = app_glofas_quantile_initializer_policy(model_family),
           progress_path = file.path(runtime_root, "traces", paste0(job_id, "_progress.csv")),
           progress_every = 1L,
           freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
-          min_beta_updates = as.integer(args$min_beta_updates)
+          min_beta_updates = as.integer(args$min_beta_updates),
+          fixed_iterations = truthy(args$fixed_iterations),
+          full_state_convergence = truthy(args$full_state_convergence),
+          convergence_tolerance = as.numeric(args$convergence_tolerance),
+          terminal_consecutive_passes = as.integer(args$terminal_consecutive_passes)
         )
         fit <- app_glofas_dec25_fit_part2_quantile(
           cache,
@@ -500,6 +591,10 @@ main <- function() {
         write_fit_artifacts(fit, cache$design)
       } else if (identical(model_family, "normal_rhs_vb")) {
         ridge_warm <- readRDS(warm_path("part3_fit_normal_ridge"))
+        if (nzchar(as.character(args$calibration_path[[1L]] %||% ""))) {
+          calibration <- app_read_csv(app_resolve_path(args$calibration_path, must_work = TRUE))
+          cache$candidate_row <- app_glofas_post_search2_apply_calibration(cache$candidate_row, calibration)
+        }
         result <- app_glofas_dec25_fit_part3_normal_rhs(cache, warm_start = ridge_warm)
         fit <- result$fit
         write_fit_artifacts(fit, cache$design)
@@ -508,13 +603,28 @@ main <- function() {
           max_iter = as.integer(args$max_iter),
           min_iter = as.integer(args$min_iter),
           tol = as.numeric(args$tol),
-          tau0_reference = 1,
-          tau0_discrepancy = 0.001,
+          tau0_reference = as.numeric(cache$candidate_row$rhs_tau0_reference[[1L]]),
+          tau0_discrepancy = as.numeric(cache$candidate_row$rhs_tau0_discrepancy[[1L]]),
+          a_zeta = as.numeric(cache$candidate_row$rhs_a_zeta[[1L]]),
+          b_zeta = as.numeric(cache$candidate_row$rhs_b_zeta[[1L]]),
+          zeta2_fixed_reference = {
+            value <- suppressWarnings(as.numeric(cache$candidate_row$rhs_zeta2_fixed_reference[[1L]]))
+            if (is.finite(value)) value else NULL
+          },
+          zeta2_fixed_discrepancy = {
+            value <- suppressWarnings(as.numeric(cache$candidate_row$rhs_zeta2_fixed_discrepancy[[1L]]))
+            if (is.finite(value)) value else NULL
+          },
           rhs_vb_inner = 5L,
           progress_path = file.path(runtime_root, "traces", paste0(job_id, "_progress.csv")),
           progress_every = 1L,
           freeze_beta_warmup_iters = as.integer(args$freeze_beta_warmup_iters),
-          min_beta_updates = as.integer(args$min_beta_updates)
+          min_beta_updates = as.integer(args$min_beta_updates),
+          initializer_tau_policy = app_glofas_quantile_initializer_policy(model_family),
+          fixed_iterations = truthy(args$fixed_iterations),
+          full_state_convergence = truthy(args$full_state_convergence),
+          convergence_tolerance = as.numeric(args$convergence_tolerance),
+          terminal_consecutive_passes = as.integer(args$terminal_consecutive_passes)
         )
         init <- if (!length(init_paths)) NULL else if (length(init_paths) == 1L) init_paths[[1L]] else list(fits = as.list(init_paths))
         fit <- app_glofas_part3_quantile_fit(
@@ -555,6 +665,10 @@ main <- function() {
       freeze_beta_warmup_iters = if (identical(model_family, "normal_ridge")) 0L else as.integer(args$freeze_beta_warmup_iters),
       min_beta_updates = if (identical(model_family, "normal_ridge")) 0L else as.integer(args$min_beta_updates),
       beta_freeze_verified = isTRUE(beta_freeze_verified),
+      fixed_iterations_requested = truthy(args$fixed_iterations),
+      full_state_convergence_requested = truthy(args$full_state_convergence),
+      terminal_certificate_passed = isTRUE((fit$convergence_certificate %||% fit$terminal_certificate %||% list())$passed),
+      stopping_reason = as.character(fit$stopping_reason %||% fit$stop_reason %||% NA_character_),
       stringsAsFactors = FALSE
     )
     write_contract(contract)
@@ -579,16 +693,37 @@ main <- function() {
           forecast_backend = args$forecast_backend
         )
         written <- app_glofas_part2_bridge_write_normal_result(result, runtime_root, job_id)
-      } else {
-        result <- app_glofas_dec25_forecast_part2_quantile(
-          cache,
-          fit = fit,
-          tau = tau,
-          forecast_backend = args$forecast_backend
+        output_paths <- c(
+          unname(written$figures),
+          file.path(written$root, "tables", paste0(job_id, "_summary.csv"))
         )
-        written <- app_glofas_part2_bridge_write_quantile_result(result, runtime_root, job_id)
+        if (identical(model_family, "normal_rhs_vb")) {
+          bank <- app_glofas_normal_driver_bank_from_part2(
+            result$forecast, app_glofas_dec25_contract()$origin_date,
+            seed = as.integer(args$seed), source_fit_path = source_fit
+          )
+          bank_path <- as.character(args$normal_driver_bank_path[[1L]] %||% "")
+          if (!nzchar(bank_path)) bank_path <- file.path(runtime_root, "objects", "part2_normal_rhs_driver_bank.rds")
+          saveRDS(bank, bank_path, version = 2L)
+        }
+      } else {
+        bank_path <- app_resolve_path(args$normal_driver_bank_path, must_work = TRUE)
+        bank <- readRDS(bank_path)
+        fitted <- list(
+          candidate_row = cache$candidate_row, bundle = cache$bundle,
+          design = cache$forecast_design,
+          Z = as.matrix(cache$forecast_design$X[, -1L, drop = FALSE])
+        )
+        result <- app_glofas_part2_quantile_external_driver_forecast(
+          fitted = fitted, fit = fit, tau = tau, driver_bank = bank,
+          future_glofas = NULL,
+          covariate_timeline = attr(cache$bundle$panel, "model_covariate_timeline", exact = TRUE),
+          n_draws = as.integer(args$normal_draws), seed = as.integer(args$seed),
+          backend = args$forecast_backend
+        )
+        written <- write_external_quantile_result(result, job_id)
+        output_paths <- unname(unlist(written, recursive = TRUE, use.names = FALSE))
       }
-      output_paths <- unname(unlist(written, recursive = TRUE, use.names = FALSE))
     } else {
       if (model_family %in% c("normal_ridge", "normal_rhs_vb")) {
         forecast <- app_glofas_part3_normal_forecast(
@@ -603,20 +738,30 @@ main <- function() {
           origin_date = origin_date,
           allow_missing_future_truth = TRUE
         )
+        if (identical(model_family, "normal_rhs_vb")) {
+          bank <- app_glofas_normal_driver_bank_from_part3(
+            forecast, app_glofas_dec25_contract()$origin_date,
+            seed = as.integer(args$seed), source_fit_path = source_fit
+          )
+          bank_path <- as.character(args$normal_driver_bank_path[[1L]] %||% "")
+          if (!nzchar(bank_path)) bank_path <- file.path(runtime_root, "objects", "part3_normal_rhs_driver_bank.rds")
+          saveRDS(bank, bank_path, version = 2L)
+        }
       } else {
-        forecast <- app_glofas_part3_quantile_forecast(
-          cache$design,
-          cache$split,
-          fit = fit,
-          horizon_days = horizon_days,
-          backend = args$forecast_backend,
-          origin_date = origin_date,
-          allow_missing_future_truth = TRUE
+        bank <- readRDS(app_resolve_path(args$normal_driver_bank_path, must_work = TRUE))
+        forecast <- app_glofas_part3_quantile_external_driver_forecast(
+          design = cache$design, fit = fit, driver_bank = bank,
+          origin_date = origin_date, n_draws = as.integer(args$normal_draws),
+          seed = as.integer(args$seed), backend = args$forecast_backend
         )
       }
-      app_glofas_dec25_assert_window(forecast$origin$origin_date, forecast$origin$horizon_days, forecast$origin$future_dates, label = job_id)
-      written <- app_glofas_part3_write_forecast(forecast, cache$design, runtime_root, job_id)
-      output_paths <- unname(written$paths)
+      if (model_family %in% c("normal_ridge", "normal_rhs_vb")) {
+        app_glofas_dec25_assert_window(forecast$origin$origin_date, forecast$origin$horizon_days, forecast$origin$future_dates, label = job_id)
+        written <- app_glofas_part3_write_forecast(forecast, cache$design, runtime_root, job_id)
+        output_paths <- unname(written$paths)
+      } else {
+        output_paths <- write_external_quantile_result(forecast, job_id)
+      }
     }
     output_paths <- output_paths[file.exists(output_paths)]
     contract <- data.frame(

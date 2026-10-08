@@ -1,0 +1,3 @@
+"family","converged","outer_iteration","parameter_change","max_rhs_global_relative_change","terminal_consecutive_passes","stopping_reason","fit_sha256","converged_outer","converged_inner","converged_rhs","full_state_pass"
+"Joint AL",TRUE,11,"0.00089279687185331497","0.00077748370757335498",3,"converged_outer_inner_and_rhs","0ac25ad186fa660d7958484db822c0e2c7ce60ae933928498dfd42180e439274",TRUE,TRUE,TRUE,TRUE
+"Joint exAL",TRUE,28,"0.000260805824630105","0.00038253513818212702",3,"converged_outer_inner_and_rhs","0784549437365dc239e123fe0fd660d4212fa0e7a72dc1034765b5ba73e6e823",TRUE,TRUE,TRUE,TRUE

@@ -157,6 +157,27 @@ stopifnot(reference_quad$converged)
 stopifnot(abs(reference_quad$moments[["gamma"]] - reference_gamma) < 1.0e-6)
 stopifnot(abs(reference_quad$moments[["gamma2"]] - reference_gamma2) < 1.0e-6)
 
+# The inverse-gamma-limit indicator is retained for diagnostics but is not an
+# operative CAVI moment and therefore cannot block quadrature convergence.
+structured_quadrature <- app_joint_exqdesn_structured_scale_shape_update(
+  tau = 0.5,
+  augmentation = "u",
+  r_mean = q,
+  r2_mean = q^2 + 0.02,
+  latent_mean = u,
+  latent_inv_mean = 1 / u,
+  s_mean = s,
+  s2_mean = s^2 + 0.03,
+  quadrature_nodes = c(4L, 8L, 12L),
+  quadrature_tolerance = 1.0e-6
+)
+stopifnot(
+  "inverse_gamma_limit" %in% names(structured_quadrature$moments),
+  identical(structured_quadrature$excluded_convergence_moments, "inverse_gamma_limit"),
+  all(c("relative_change", "all_moment_relative_change") %in%
+    names(structured_quadrature$diagnostics))
+)
+
 # One essential end-to-end API exercise for each new family.
 fixture <- app_joint_qvp_simulate_ts_toy_synthetic(
   Tn = 24L, tau = 0.5, seed = 2026080601L, innovation = "gaussian"

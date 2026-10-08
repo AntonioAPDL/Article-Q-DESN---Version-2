@@ -632,3 +632,92 @@ VB/MCMC forecast reconstructions through an eight-slot affinity queue.
 Set `JOINT_RECURSIVE_MEAN_CONTRACT` and
 `JOINT_RECURSIVE_MEAN_RUNTIME_ROOT` explicitly for the v2 recovery campaign;
 the detached controller propagates and records the selected contract.
+
+The post-Search-II GloFAS integrity correction is deliberately narrower than a
+new screen. `409_seal_glofas_post_search2_evidence.py` hashes the completed r8
+and Part 4 evidence without modifying it. `410_prepare_*`, `411_launch_*`, and
+`412_check_*` prepare, execute, and certify exactly 19 affected quantile fits
+and their 19 forecasts under fixed 200/200 iterations, a 20-iteration beta
+freeze, exact tau-keyed warm starts, and three terminal full-state checks.
+`413_launch_glofas_part4_joint_continuation.py` separately runs hash-chained
+five-sweep continuation batches for the two Part 4 joint fits, capped at 20
+cumulative outer sweeps. It can create a new immutable controller contract from
+a completed external checkpoint through paired `--resume-fit-path` and
+`--resume-trace-path` arguments; specifying only one fails closed.
+`420_guard_glofas_part4_checkpoint_handoff.py` can retire an exact frozen
+controller process group only after its active worker writes a complete,
+hashable checkpoint, preventing an automatic superseded batch from starting.
+`414_run_glofas_forecast_operator_diagnostics.R` and
+`415_run_glofas_discrepancy_predictability_audit.R` are no-refit diagnostics;
+their outputs cannot be promoted as forecast authority.
+
+Search III uses scripts `427`-`432`. The preparer freezes shared leakage-safe
+packets and creates one immutable runtime per stage; workers `428`/`429` fit
+and score one cell; `430` enforces one thread per worker; `431` withholds the
+confirmation aggregate until all 432 cells close; and `432` executes the full
+Ridge A/B/guardrail, RHS-prior, RHS-architecture, and confirmation DAG. The
+controller waits for the preceding GloFAS closeout and a live resource gate
+before starting at most 20 Muscat workers.
+
+Strict closeout remains the default. When an audited overlap is scientifically
+independent and resources have been verified, `432` accepts
+`--allow-compatible-closeout-overlap`. That mode admits only one exact Part 4
+joint-exAL continuation worker paired with its known tmux session; any AL or
+quantile worker, extra matching process, unpaired session, or unknown closeout
+activity still fails closed. `--max-total-workers` separately caps Search III
+plus the admitted worker against physical CPU cores, memory, disk, and load.
+
+The follow-on certification restart is a separate, minimal campaign.
+`416_prepare_glofas_quantile_certification_restart.py` audits and hash-binds
+only the nine iteration-200 fits lacking a terminal certificate.
+`417_run_glofas_quantile_certification_restart.R` performs one same-target
+200-sweep restart segment, `418_launch_*` gates each replacement forecast on a
+fit-specific `.certified` marker, and `419_check_*` distinguishes completed,
+certified, blocked, pending, and failed states. Preparation does not launch the
+campaign; execution remains an explicit operator decision.
+
+Exact follow-on segments use `423_run_glofas_quantile_certification_continuation.R`
+with the manifest-driven `424_launch_*` scheduler and `425_check_*` artifact
+checker. The runner accepts only complete exact-state sources whose cumulative
+iteration count is a positive multiple of 200; each job freezes its own source
+and target counts. `426_prepare_glofas_quantile_selective_continuation.py`
+prepares the narrow mixed-source campaign: Part 2 independent AL tails continue
+from 600 to 800, while the contracting Part 1/2 joint exAL fits continue from
+400 to 600. It deliberately excludes joint AL fits and launches a forecast only
+after the corresponding fit writes a terminal `.certified` marker.
+
+The post-Search-III root-cause lane is narrower still.
+`435_audit_glofas_quantile_root_cause.R` hashes and diagnoses terminal Part 1-4
+joint fits without refitting them, separates bookkeeping movement from
+inferential RHS movement, and validates the bounded RHS solver on retained Part
+4 states. `437_check_glofas_quantile_root_cause_audit.py` independently verifies
+the manifests, adopted geometries, issue classifications, and real-state solver
+gate. `436_prepare_glofas_part1_joint_al_semantic_confirmation.py` prepares
+exactly one geometry-compatible Part 1 joint-AL continuation from 400 to 600
+iterations. It reuses the generic `423`-`425` runner, scheduler, and checker,
+creates no forecast job, and rejects incomplete checkpoints, prior drift,
+discontinuous traces, or hash mismatches.
+The 600-iteration confirmation completed with stable coefficients and paths but
+missed the semantic certificate because the coupled RHS state remained above
+tolerance. `438_prepare_glofas_part1_joint_al_final_confirmation.py` therefore
+authorizes at most one final exact-state continuation from 600 to 800. Its
+fail-closed trend gate requires monotone terminal contraction and records an
+explicit hard quarantine at 800 if the fit remains uncertified. The final lane
+also writes the RHS block, component, and coordinate controlling each update;
+it never creates a forecast job.
+
+The historical controllers above are retained for reproducibility, not for a
+new production launch. The completed Search III dependency closure is prepared
+and checked by `439_prepare_glofas_search3_dependency_closure.py` and
+`440_launch_glofas_search3_dependency_closure.py`. The separate
+`440_audit_glofas_part4_exal_terminal.R` and scripts `441`-`444` audit the
+corrected exAL local-state and quadrature certificate. The two distinct `440`
+paths are intentional frozen source filenames; neither replaces the other.
+
+`445_build_glofas_search3_final_closeout.R` and
+`446_check_glofas_search3_final_closeout.R` assemble and independently verify
+the completed Part 1-4 evidence. Their authority has strictly converged Joint
+AL and Joint exAL comparators, a Part 2 no-score boundary, and a descriptive
+seven-family issued-window comparison. Article integration may check and
+project this frozen evidence, but must not execute a screen, fit, continuation,
+forecast, or calibration worker.

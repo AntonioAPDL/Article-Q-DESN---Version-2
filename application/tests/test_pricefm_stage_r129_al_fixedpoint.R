@@ -35,6 +35,18 @@ q <- list(m = fit$qbeta$m, V = fit$qbeta$V)
 stopifnot(abs(p1$elbo_vb(ok$reconstructed_rhs_state, q) -
   p2$elbo_vb(ok$reconstructed_rhs_state, q)) < 1e-12)
 stopifnot(abs(ok$raw_reconstructed_elbo - tail(fit$diagnostics$elbo, 1L)) < 1e-5)
+stopifnot(ok$measures$rhs_joint_log_rates <= 1e-6,
+  r129_rhs_block_residual(p1, ok$reconstructed_rhs_state, q$m, q$V) <= 1e-6)
+for (name in c('b_lambda', 'b_nu', 'b_tau', 'b_xi', 'b_zeta',
+               'a_lambda', 'a_nu', 'a_tau', 'a_xi', 'a_zeta')) {
+  altered <- ok$reconstructed_rhs_state
+  if (length(altered[[name]]) == 5L) altered[[name]][2L] <- altered[[name]][2L] * 1.01
+  else altered[[name]] <- altered[[name]] * 1.01
+  stopifnot(r129_rhs_block_residual(p1, altered, q$m, q$V) > 1e-6)
+}
+again <- p1$update_vb(ok$reconstructed_rhs_state, q)
+stopifnot(max(abs(r129_rates(again) - r129_rates(ok$reconstructed_rhs_state))) < 1e-8,
+  is.finite(ok$rhs_lookahead_log_rates_not_stationarity_gate))
 if (length(args) == 3L) {
   folder <- args[[3L]]; dir.create(folder, recursive = TRUE)
   write_bin <- function(name, x) {
@@ -51,4 +63,4 @@ if (length(args) == 3L) {
     iterations = fit$iter, posterior_target_sha256 = 'test-target'),
     file.path(folder, 'terminal.json'), auto_unbox = TRUE, digits = 17)
 }
-cat('PASS: known converged public AL fit; altered beta/covariance/sigma rejection; RHS shape; init/prior separation; ELBO identity\n')
+cat('PASS: known converged public AL fit; altered beta/covariance/sigma and all RHS block rejection; RHS shape; init/prior separation; ELBO identity\n')

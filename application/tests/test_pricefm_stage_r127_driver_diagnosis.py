@@ -184,7 +184,7 @@ def test_full_diagnostic_closeout_and_pdf(tmp_path):
     seals=[]; refs=[]
     def block(positions):
         n=len(positions); truth=np.ones((n,96)); pred=np.zeros((n,96,7))
-        return dict(positions=np.array(positions),anchors_ns=np.arange(n),truth=truth,oracle=pred+.5,
+        return dict(positions=np.array(positions),anchors_ns=np.arange(n),truth=truth+2e-5,oracle=pred+.5,
             stochastic=pred,parameter_only=pred+.1,mean_driver=pred+.2,
             driver_mean=np.zeros((n,96,3)),driver_sd=np.ones((n,96,3)),
             state_variance=np.zeros((n,96,3,2)),state_oracle_rmse=np.zeros((n,96,3,2)),
@@ -199,7 +199,7 @@ def test_full_diagnostic_closeout_and_pdf(tmp_path):
         p=parent/f'official/fold={fold}'; p.mkdir(parents=True)
         np.savez_compressed(p/'predictions.npz',truth=value['truth'],anchors_ns=value['anchors_ns'],cdf_pool_clipped=value['stochastic'])
         seal(p,{})
-        refs.append(dict(fold=fold,method='new_recursive_QDESN',AQL=common_metrics(value['truth'],value['stochastic'])['AQL']))
+        refs.append(dict(fold=fold,method='new_recursive_QDESN',AQL=common_metrics(np.ones_like(value['truth']),value['stochastic'])['AQL']))
     for job in jobs:
         for offset in (0,24,48,72):
             pos=job['origin_positions'] if not offset else list(map(int,np.linspace(0,job['complete_origin_count']-2,12)))
@@ -209,8 +209,31 @@ def test_full_diagnostic_closeout_and_pdf(tmp_path):
     ref=tmp_path/'reference.csv'; pd.DataFrame(refs).to_csv(ref,index=False)
     prep=dict(protocol=protocol,official_protocol=dict(test_origin_counts=[120,123,122]),jobs=jobs,
         parent=str(parent),reference=str(ref),source={'head':'test','branch':'work/pricefm-r127-test'})
-    decision=closeout(out,prep)
+    exact_truth=lambda fold,anchors,prep:np.ones((len(anchors),96))
+    corrected=tmp_path/'report_only';corrected.mkdir()
+    decision=closeout(out,prep,report=corrected/'report',terminal=corrected/'terminal.json',truth_reader=exact_truth)
     assert decision['new_fits']==0 and decision['authority_unchanged']
-    assert verified(out/'report')['official_origins']==365
-    assert (out/'report/pricefm_r127_driver_diagnosis.pdf').read_bytes().startswith(b'%PDF')
-    assert closeout(out,prep)==decision
+    assert verified(corrected/'report')['official_origins']==365
+    assert (corrected/'report/pricefm_r127_driver_diagnosis.pdf').read_bytes().startswith(b'%PDF')
+    assert decision['score_matches_frozen_reference']
+    assert decision['stored_truth_roundtrip_error_by_fold']['1']==pytest.approx(2e-5)
+    assert not (out/'terminal.json').exists()
+    assert closeout(out,prep,report=corrected/'report',terminal=corrected/'terminal.json',truth_reader=exact_truth)==decision
+
+
+def test_exact_raw_truth_clock_and_hash(tmp_path,monkeypatch):
+    from pricefm_r127_report import official_raw_truth
+    from pricefm_r126_contract import digest
+    import pricefm_r126_fullfold as full
+    data=tmp_path/'data';(data/'raw').mkdir(parents=True)
+    source=data/'raw/FINAL.csv';source.write_text('test-only source\n')
+    frame=pd.DataFrame({'BG-price':np.arange(192,dtype=float)+.123456789},
+        index=pd.date_range('2024-01-01',periods=192,freq='15min',tz='UTC'))
+    monkeypatch.setattr(full,'raw_frame',lambda path:frame)
+    prep=dict(parent=str(data/'campaigns/parent'),protocol={'parent_final_sha256':digest(source)})
+    anchors=market_ns(frame.index[[0,96]])
+    actual=official_raw_truth(1,anchors,prep)
+    np.testing.assert_array_equal(actual[0],frame['BG-price'].iloc[:96])
+    with pytest.raises(ValueError): official_raw_truth(1,anchors+1,prep)
+    prep['protocol']['parent_final_sha256']='wrong'
+    with pytest.raises(RuntimeError): official_raw_truth(1,anchors,prep)

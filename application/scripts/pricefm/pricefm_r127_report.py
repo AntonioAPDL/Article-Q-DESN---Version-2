@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from pricefm_r126_contract import read, write, immutable, digest, verified, seal, loss
+from pricefm_r126_contract import read, write, immutable, digest, verified, seal, loss, market_ns
 from pricefm_r127_contract import common_metrics
 from pricefm_r127_forecast import MODES
 
@@ -16,11 +16,28 @@ def complete_positions(blocks, expected):
     return order
 
 
-def closeout(out, prep):
-    out = Path(out); report = out / 'report'
+def official_raw_truth(fold, anchors_ns, prep):
+    from pricefm_r126_fullfold import raw_frame
+    data = Path(prep['parent']).parents[1]
+    if digest(data / 'raw/FINAL.csv') != prep['protocol']['parent_final_sha256']:
+        raise RuntimeError('raw scoring truth hash differs')
+    frame = raw_frame(data)
+    origins = pd.to_datetime(np.asarray(anchors_ns), utc=True)
+    positions = frame.index.get_indexer(origins)
+    if np.any(positions < 0) or np.any(positions + 96 > len(frame)):
+        raise ValueError('raw scoring response support missing')
+    expected = np.asarray(anchors_ns)[:, None] + np.arange(96)[None, :] * 15 * 60 * 10**9
+    actual = np.array([market_ns(frame.index[p:p + 96]) for p in positions])
+    if not np.array_equal(expected, actual): raise ValueError('raw response clock differs')
+    return np.array([frame['BG-price'].iloc[p:p + 96].to_numpy() for p in positions])
+
+
+def closeout(out, prep, *, report=None, terminal=None, truth_reader=official_raw_truth, report_source=None):
+    out = Path(out); report = out / 'report' if report is None else Path(report)
+    terminal = out / 'terminal.json' if terminal is None else Path(terminal)
     if verified(report): return read(report / 'decision.json')
     official = []; internal = []; leads = []; variances = []; repeats = []; groups = {}; sensitivity = []; mc_deltas = []
-    seals = {}
+    seals = {}; roundtrip_errors = {}
     for path in sorted((out / 'tasks').glob('*.json')):
         task = read(path); folder = out / 'tasks_done' / task['name']; verified(folder)
         seals[str(folder / 'completed_evidence.json')] = digest(folder / 'completed_evidence.json')
@@ -43,6 +60,14 @@ def closeout(out, prep):
         with np.load(parent / 'predictions.npz', allow_pickle=False) as old:
             np.testing.assert_array_equal(truth, old['truth'])
             np.testing.assert_array_equal(anchors, old['anchors_ns'])
+            raw_truth = truth_reader(fold, anchors, prep)
+            if raw_truth.shape != truth.shape or not np.isfinite(raw_truth).all():
+                raise ValueError('complete finite raw scoring truth required')
+            delta = float(np.max(abs(raw_truth-truth)))
+            # R126's comparison uses raw outcomes; rounded arrays only verify support.
+            if delta > 6e-5: raise ValueError('stored truth differs beyond inherited float32 bound')
+            roundtrip_errors[str(fold)] = delta
+            truth = raw_truth
             causal = old['cdf_pool_clipped']
             official.extend([dict(fold=fold, method='R126_recursive', origins=count,
                 **common_metrics(truth, causal)), dict(fold=fold, method='R127_oracle_DIAGNOSTIC_ONLY', origins=count,
@@ -134,7 +159,10 @@ def closeout(out, prep):
             'previously exposed official outcomes are development diagnostics, not a new untouched test',
             'cached PriceFM training exposure unresolved; local Phase-I/II is not the full authors search',
             'internal outer affine quantization retained; no new complete latent-factor stationarity certificate'],
-        deferred=prep['protocol']['deferred'], source=prep['source'], parent_head=prep['protocol']['parent_head'])
+        deferred=prep['protocol']['deferred'], source=prep['source'], parent_head=prep['protocol']['parent_head'],
+        report_source=report_source, official_scoring_truth='hash-pinned raw FINAL.csv, matching R126 comparison',
+        stored_truth_roundtrip_error_by_fold=roundtrip_errors, score_matches_frozen_reference=True,
+        report_only_correction=True, completed_forecasts_regenerated=False)
     report.mkdir()
     pd.DataFrame(official).to_csv(report/'official_fold_metrics.csv',index=False)
     frame.to_csv(report/'internal_control_metrics.csv',index=False)
@@ -146,10 +174,10 @@ def closeout(out, prep):
     write(report/'decision.json',decision)
     render(report,decision)
     seal(report,dict(source=prep['source'],task_seals=seals,reference_sha256=digest(prep['reference']),
-        official_origins=365,internal_origins=144,oracle_diagnostic_only=True))
-    immutable(out/'terminal.json',dict(status='R127_COMPLETE',new_fits=0,failed=0,tasks=len(seals),
+        official_origins=365,internal_origins=144,oracle_diagnostic_only=True,report_source=report_source))
+    immutable(terminal,dict(status='R127_COMPLETE',new_fits=0,failed=0,tasks=len(seals),
         source=prep['source'],task_seals=seals,report_seal_sha256=digest(report/'completed_evidence.json'),
-        authority_mutated=False,article_mutated=False))
+        authority_mutated=False,article_mutated=False,report_source=report_source))
     return decision
 
 

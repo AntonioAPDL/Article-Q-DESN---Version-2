@@ -1,0 +1,51 @@
+{
+  "schema": "glofas-frozen-plotting-extract-v1",
+  "purpose": "Presentation only; no fit, score, smoothing, or selection",
+  "origin_date": "2022-12-25",
+  "history_dates": ["2022-11-26", "2022-12-25"],
+  "forecast_dates": ["2022-12-26", "2023-01-22"],
+  "historical_rows": 30,
+  "issued_member_rows": 1428,
+  "issued_members": 51,
+  "scoring_truth_rows": 28,
+  "missing_dates": 0,
+  "transform": "Existing y_transformed and g_transformed ordinates: log(1 + flow), flow in cubic metres per second; no repeated transform",
+  "historical_product": "Frozen consolidated GloFAS v3.1/LISFLOOD historical product",
+  "issued_product_version": "Unavailable in authenticated date/member fields; no version inferred",
+  "issued_release_timestamp": "Unavailable; origin_date retained without invented time or timezone",
+  "native_ensemble_weight_present": true,
+  "native_fields": {
+    "history": ["target_date", "y_transformed", "g_transformed"],
+    "ensemble": ["origin_date", "target_date", "horizon", "member", "g_transformed", "ensemble_weight"],
+    "scoring_truth": ["target_date", "y_transformed"]
+  },
+  "source_authority": {
+    "truth_free_design": {
+      "role": "truth_free_design",
+      "filename": "part4_shared_design_truth_free.rds",
+      "size_bytes": 4014831357,
+      "sha256": "a2fbcec6523802f01c98ec272253e58a598a5adc5c7b0f9063b615b36c07bcf9"
+    },
+    "scoring_only_truth_sidecar": {
+      "role": "scoring_only_truth_sidecar",
+      "filename": "part4_scoring_panel_sidecar.rds",
+      "size_bytes": 862,
+      "sha256": "24be9fa631bca346a04a7a855bff5ef3ebc7bf5c748fbade7a213d88fdfe63e6"
+    }
+  },
+  "extraction_script_sha256": "472ed5f27241807f9450106727a09f1f851f08240afe9576c27a09e5d19029c7",
+  "outputs": {
+    "history": {
+      "file": "glofas_search3_review_history_plot_inputs.csv",
+      "sha256": "3ecfc03b9353328d1e0e056c2be74eb30934dc94ef9dfaa1a733f6fc836665fe"
+    },
+    "ensemble": {
+      "file": "glofas_search3_review_ensemble_plot_inputs.csv",
+      "sha256": "104a4cace25e6d5fd88283379b2852c6ef75c9b01905b25e58c3fc744160cdd5"
+    },
+    "scoring_truth": {
+      "file": "glofas_search3_review_truth_plot_inputs.csv",
+      "sha256": "9ad2840e4282970ac7d5be0ae8028573622705ec7407d65eff01df0f3031813e"
+    }
+  }
+}

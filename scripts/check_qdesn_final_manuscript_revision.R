@@ -129,18 +129,18 @@ expect(grepl("\\aCRPS_{p_1:p_K}", main, fixed = TRUE) &&
        "The finite-grid integrated check-loss notation is inconsistent.")
 
 expect(grepl(
-  "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
+  "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
   main, fixed = TRUE
 ), "The main article does not contain the independent forecast figures.")
-expect(grepl("tables/joint_qdesn_pure_desn_v1_forecast_figure.tex",
+expect(grepl("tables/joint_qdesn_pro_review_forecast_figure.tex",
              main, fixed = TRUE),
        "The main article does not contain the JOINT forecast figure.")
 expect(grepl(
-  "tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex",
+  "tables/qdesn_pro_review_mcmc_fit_figure.tex",
   supplement, fixed = TRUE
-) && grepl("tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex",
+) && grepl("tables/qdesn_pro_review_vb_fit_figure.tex",
            supplement, fixed = TRUE) &&
-  grepl("tables/joint_qdesn_pure_desn_v1_fit_figure.tex",
+  grepl("tables/joint_qdesn_pro_review_fit_figure.tex",
         supplement, fixed = TRUE),
 "The supplement does not contain all fitting-sample figures.")
 expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
@@ -150,7 +150,7 @@ reader_facing_independent <- paste(c(
   main,
   supplement,
   read_text("tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex"),
-  read_text("tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex"),
+  read_text("tables/qdesn_pro_review_mcmc_forecast_figures.tex"),
   read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_normal.tex"),
   read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_laplace.tex"),
   read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_gausmix.tex")
@@ -167,8 +167,8 @@ reader_facing_joint <- paste(c(
   read_text("tables/joint_qdesn_pure_desn_v1_crossing_table.tex"),
   read_text("tables/joint_qdesn_pure_desn_v1_recursive_policy_table.tex"),
   read_text("tables/joint_qdesn_pure_desn_v1_oracle_recovery_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v1_forecast_figure.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v1_fit_figure.tex")
+  read_text("tables/joint_qdesn_pro_review_forecast_figure.tex"),
+  read_text("tables/joint_qdesn_pro_review_fit_figure.tex")
 ), collapse = "\n")
 expect(!grepl(
   "canonical-action|Canonical action|black vertical|raw/reported",

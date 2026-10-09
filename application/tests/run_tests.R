@@ -239,4 +239,9 @@ source(app_path("application/tests/test_joint_qdesn_recursive_dgp_oracle.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_mean_score_packet.R"))
 run_standalone_glofas_test("application/tests/test_glofas_search3_article_projection.R")
 
+# Bounded editorial checks, isolated from scientific fixture state.
+run_standalone_glofas_test("application/tests/test_pro_review_supplement_math.R")
+run_standalone_glofas_test("application/tests/test_pro_review_bibliography_initialization.R")
+stopifnot(system2("python3.11", app_path("application/tests/test_pro_review_presentation.py")) == 0L)
+
 cat("Application tests completed.\n")

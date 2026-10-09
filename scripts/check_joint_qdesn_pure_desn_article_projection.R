@@ -277,20 +277,87 @@ expect(grepl("fit_plot_data$mean <- fit_mcmc$fit_oracle_rmse", plot_code, fixed 
 
 main <- read_text(file.path(repo_root, "main.tex"))
 supplement <- read_text(file.path(repo_root, "qdesn-supplement.tex"))
-expect(grepl(paste0("tables/", prefix, "forecast_figure.tex"), main, fixed = TRUE) &&
+active_forecast_wrapper <- paste0("tables/", prefix, "forecast_figure.tex")
+active_fit_wrapper <- paste0("tables/", prefix, "fit_figure.tex")
+active_figure_paths <- figures$relative_path
+presentation_path <- "tables/qdesn_pro_review_presentation_manifest.json"
+if (file.exists(file.path(repo_root, presentation_path))) {
+  # The derivative manifest supplements, never replaces, the frozen scientific
+  # asset manifest and immutable numerical checks above.
+  presentation <- jsonlite::fromJSON(file.path(repo_root, presentation_path),
+    simplifyVector = FALSE)
+  expect(identical(presentation$schema, "qdesn-pro-review-presentation-v1") &&
+    identical(presentation$source_script, "scripts/build_qdesn_pro_review_presentation.R"),
+    "Presentation derivatives have their own explicit reproducible schema")
+  expect(identical(sha256(file.path(repo_root, presentation$source_script)),
+    presentation$script_sha256) &&
+    identical(sha256(file.path(repo_root, "scripts/qdesn_evaluation_figure_style.R")),
+      presentation$shared_style_sha256), "Presentation builder and common style are authenticated")
+  output_paths <- vapply(presentation$outputs, `[[`, character(1L), "file")
+  expect(length(output_paths) == 13L && !anyDuplicated(output_paths) &&
+    all(grepl("^(tables|figures)/", c(names(presentation$sources), output_paths))) &&
+    !any(grepl("(^|/)(cache|local_trackers|logs|\\.\\.)(/|$)|\\.(rds|rda|RData|log|gz)$",
+      c(names(presentation$sources), output_paths))), "Derivative manifest has a safe complete surface")
+  for (relative in names(presentation$sources)) {
+    expect(file.exists(file.path(repo_root, relative)) &&
+      identical(sha256(file.path(repo_root, relative)), presentation$sources[[relative]]),
+      paste("Presentation source hash", relative))
+  }
+  for (entry in presentation$outputs) {
+    expect(file.exists(file.path(repo_root, entry$file)) &&
+      identical(sha256(file.path(repo_root, entry$file)), entry$sha256),
+      paste("Presentation derivative hash", entry$file))
+  }
+  expect(identical(presentation$sources[[paste0("tables/", prefix,
+    "forecast_score_summary.csv")]], unname(source_sha[["forecast_score_summary.csv"]])) &&
+    identical(presentation$sources[[paste0("tables/", prefix,
+      "fit_oracle_diagnostics.csv")]], unname(source_sha[["fit_oracle_diagnostics.csv"]])),
+    "Presentation derivatives use the identical frozen forecast and fit summaries")
+  old_wrappers <- c(active_forecast_wrapper, active_fit_wrapper)
+  active_forecast_wrapper <- "tables/joint_qdesn_pro_review_forecast_figure.tex"
+  active_fit_wrapper <- "tables/joint_qdesn_pro_review_fit_figure.tex"
+  new_wrappers <- c(active_forecast_wrapper, active_fit_wrapper)
+  active_figure_paths <- c(
+    "figures/joint_qdesn_simulation/joint_qdesn_pro_review_forecast_dgp_acrps.pdf",
+    "figures/joint_qdesn_simulation/joint_qdesn_pro_review_fit_oracle_rmse.pdf")
+  expect(all(c(new_wrappers, active_figure_paths) %in% output_paths),
+    "Both active JOINT wrappers and vector figures belong to the derivative manifest")
+  for (i in seq_along(new_wrappers)) {
+    old_text <- read_text(file.path(repo_root, old_wrappers[[i]]))
+    expected_text <- gsub(figures$relative_path[[match(
+      c("posterior_score_mean", "fit_oracle_rmse")[[i]], figures$metric)]],
+      active_figure_paths[[i]], old_text, fixed = TRUE)
+    expect(identical(read_text(file.path(repo_root, new_wrappers[[i]])), expected_text),
+      paste("Presentation wrapper preserves the exact scientific caption and label", new_wrappers[[i]]))
+  }
+  presentation_builder <- read_text(file.path(repo_root, presentation$source_script))
+  expect(grepl("mean = score$posterior_score_mean", presentation_builder, fixed = TRUE) &&
+    grepl("lo = score$posterior_score_q025, hi = score$posterior_score_q975",
+      presentation_builder, fixed = TRUE) &&
+    grepl("fit_data$mean <- fit_data$lo <- fit_data$hi <- fit$fit_oracle_rmse",
+      presentation_builder, fixed = TRUE) &&
+    grepl("if (point_only) p$layers <- p$layers[-1L]", presentation_builder, fixed = TRUE),
+    "Active figures preserve posterior score intervals and point-only fit diagnostics")
+}
+expect(grepl(active_forecast_wrapper, main, fixed = TRUE) &&
   !grepl(paste0("tables/", prefix, "fit_figure.tex"), main, fixed = TRUE) &&
-  grepl(paste0("tables/", prefix, "fit_figure.tex"), supplement, fixed = TRUE) &&
+  !grepl(active_fit_wrapper, main, fixed = TRUE) &&
+  grepl(active_fit_wrapper, supplement, fixed = TRUE) &&
   grepl(paste0("tables/", prefix, "score_table.tex"), supplement, fixed = TRUE),
   "Forecast figure in main; fitting figure and complete score table in supplement")
 expect(!grepl("\\\\input\\{tables/joint_qdesn_corrected_v4_", paste(main, supplement)),
   "Earlier corrected-v4 wrappers are no longer live article inputs")
-expect(grepl("numerical quadrature", main, fixed = TRUE) &&
+main_words <- gsub("[[:space:]]+", " ", main)
+supplement_words <- gsub("[[:space:]]+", " ", supplement)
+expect(grepl("one-dimensional quadrature over bounded shape", main_words, fixed = TRUE) &&
+  grepl("conditional scale normalizer is analytic", main_words, fixed = TRUE) &&
+  grepl("Thus the scale integral is analytic. One-dimensional quadrature", supplement_words, fixed = TRUE) &&
   grepl("q(\\gamma_k)q(\\sigma_k\\mid\\gamma_k)", supplement, fixed = TRUE) &&
   grepl("no additional latent baseline", main, fixed = TRUE) &&
   grepl("joint intercepts are ordered", supplement, fixed = TRUE) &&
   grepl("fixed intercept priors are calibrated", main, fixed = TRUE),
   "Executed structured-VB, anchored hierarchy and fixed intercept calibration are disclosed")
-for (pdf in figures$relative_path) {
+for (pdf in unique(c(figures$relative_path, active_figure_paths))) {
   path <- file.path(repo_root, pdf)
   info <- system2("pdfinfo", shQuote(path), stdout = TRUE, stderr = TRUE)
   expect(is.null(attr(info, "status")) &&
@@ -309,8 +376,9 @@ for (pdf in figures$relative_path) {
 }
 figure_wrapper_paths <- manifest$relative_path[
   grepl("_(forecast|fit)_figure\\.tex$", manifest$relative_path)]
-expect(length(figure_wrapper_paths) == 2L, "Exactly two current JOINT figure wrappers")
-wrappers <- paste(vapply(file.path(repo_root, figure_wrapper_paths), read_text,
+expect(length(figure_wrapper_paths) == 2L, "Exactly two frozen scientific JOINT figure wrappers")
+wrappers <- paste(vapply(file.path(repo_root,
+  unique(c(figure_wrapper_paths, active_forecast_wrapper, active_fit_wrapper))), read_text,
   character(1L)), collapse = "\n")
 expect(!grepl("canonical.action|black vertical|vertical marks|black marks",
   wrappers, ignore.case = TRUE), "Reader-facing figure captions contain no canonical-action markers")
@@ -326,6 +394,11 @@ expect(all(setdiff(manifest$relative_path, git_only_provenance) %in% overleaf) &
   !any(git_only_provenance %in% overleaf) &&
   paste0("tables/", prefix, "article_asset_manifest.csv") %in% overleaf,
   "Overleaf includes every reader output and safe CSV; local-path provenance stays in Git")
+if (exists("presentation", inherits = FALSE)) {
+  expect(all(c(presentation_path, active_forecast_wrapper, active_fit_wrapper,
+    active_figure_paths) %in% overleaf),
+    "Overleaf includes the authenticated active presentation and its derivative manifest")
+}
 expect(!any(grepl("(^|/)(cache|local_trackers|logs)(/|$)|\\.(rds|rda|RData|log|gz)$",
   overleaf)), "Overleaf includes no scientific runtime payload")
 

@@ -290,15 +290,74 @@ supplement_text <- paste(
   readLines(article_path("qdesn-supplement.tex"), warn = FALSE),
   collapse = "\n"
 )
-mcmc_fit_wrapper <- paste(readLines(article_path(
-  "tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex"
-), warn = FALSE), collapse = "\n")
-mcmc_forecast_wrapper <- paste(readLines(article_path(
-  "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex"
-), warn = FALSE), collapse = "\n")
-vb_fit_wrapper <- paste(readLines(article_path(
+active_wrapper_paths <- c(
+  "tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex",
+  "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
   "tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex"
-), warn = FALSE), collapse = "\n")
+)
+presentation_path <- "tables/qdesn_pro_review_presentation_manifest.json"
+if (file.exists(article_path(presentation_path))) {
+  # Original v14 sources, PDFs, wrappers and their five authority manifests
+  # remain checked below. This separate manifest authenticates typography-only
+  # derivatives; it is not a substitute for the historical numerical gates.
+  presentation <- jsonlite::fromJSON(article_path(presentation_path),
+    simplifyVector = FALSE)
+  check(identical(presentation$schema, "qdesn-pro-review-presentation-v1") &&
+    identical(presentation$source_script, "scripts/build_qdesn_pro_review_presentation.R"),
+    "presentation derivative schema and explicit builder")
+  check(identical(sha256(article_path(presentation$source_script)),
+    presentation$script_sha256) &&
+    identical(sha256(article_path("scripts/qdesn_evaluation_figure_style.R")),
+      presentation$shared_style_sha256), "presentation builder and shared style hashes")
+  output_paths <- vapply(presentation$outputs, `[[`, character(1L), "file")
+  check(length(output_paths) == 13L && !anyDuplicated(output_paths) &&
+    all(grepl("^(tables|figures)/", c(names(presentation$sources), output_paths))) &&
+    !any(grepl("(^|/)(cache|local_trackers|logs|\\.\\.)(/|$)|\\.(rds|rda|RData|log|gz)$",
+      c(names(presentation$sources), output_paths))), "complete safe derivative surface")
+  for (relative in names(presentation$sources)) {
+    check(file.exists(article_path(relative)) &&
+      identical(sha256(article_path(relative)), presentation$sources[[relative]]),
+      paste("presentation source hash", relative))
+  }
+  for (entry in presentation$outputs) {
+    check(file.exists(article_path(entry$file)) &&
+      identical(sha256(article_path(entry$file)), entry$sha256),
+      paste("presentation derivative hash", entry$file))
+  }
+  figure_source <- "tables/qdesn_validation_500obs_dgp_oracle_figure_data_v14.csv"
+  check(identical(presentation$sources[[figure_source]],
+    "fefad4ff09b221483a2c299a06b7142d41090e06cfa9ad37f396a2551e9f398a"),
+    "active interval figures use the identical frozen v14 figure data")
+  old_wrapper_paths <- active_wrapper_paths
+  active_wrapper_paths <- c("tables/qdesn_pro_review_mcmc_fit_figure.tex",
+    "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+    "tables/qdesn_pro_review_vb_fit_figure.tex")
+  active_pdf_paths <- paste0("figures/independent_simulation/qdesn_pro_review_",
+    c("mcmc_fit_rmse", "mcmc_forecast_mae", "mcmc_forecast_check_loss", "vb_fit_rmse"),
+    ".pdf")
+  check(all(c(active_wrapper_paths, active_pdf_paths) %in% output_paths),
+    "active independent wrappers and PDFs belong to the derivative manifest")
+  old_pdf_names <- paste0("qdesn_validation_500obs_v14_",
+    c("mcmc_fit_rmse", "mcmc_forecast_mae", "mcmc_forecast_check_loss", "vb_fit_rmse"),
+    "_intervals.pdf")
+  for (i in seq_along(active_wrapper_paths)) {
+    expected_wrapper <- paste(readLines(article_path(old_wrapper_paths[[i]]),
+      warn = FALSE), collapse = "\n")
+    for (j in seq_along(old_pdf_names)) {
+      expected_wrapper <- gsub(old_pdf_names[[j]], basename(active_pdf_paths[[j]]),
+        expected_wrapper, fixed = TRUE)
+    }
+    active_wrapper <- paste(readLines(article_path(active_wrapper_paths[[i]]),
+      warn = FALSE), collapse = "\n")
+    check(identical(active_wrapper, expected_wrapper),
+      paste("presentation caption, estimator and label unchanged", active_wrapper_paths[[i]]))
+  }
+}
+read_wrapper <- function(relative) paste(readLines(article_path(relative),
+  warn = FALSE), collapse = "\n")
+mcmc_fit_wrapper <- read_wrapper(active_wrapper_paths[[1L]])
+mcmc_forecast_wrapper <- read_wrapper(active_wrapper_paths[[2L]])
+vb_fit_wrapper <- read_wrapper(active_wrapper_paths[[3L]])
 check(grepl("fig:simulation-500obs-mcmc-fit-rmse-intervals",
             mcmc_fit_wrapper, fixed = TRUE), "active MCMC fitting wrapper")
 check(grepl("fig:simulation-500obs-mcmc-forecast-mae-intervals",
@@ -318,15 +377,23 @@ for (label in c(
 }
 check(
   grepl(
-    "\\input{tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex}",
+    paste0("\\input{", active_wrapper_paths[[1L]], "}"),
     supplement_text,
     fixed = TRUE
   ),
   "fit-recovery figure moved to supplement"
 )
+check(grepl(paste0("\\input{", active_wrapper_paths[[2L]], "}"), main_text, fixed = TRUE) &&
+  grepl(paste0("\\input{", active_wrapper_paths[[3L]], "}"), supplement_text, fixed = TRUE) &&
+  !grepl(paste0("\\input{", active_wrapper_paths[[1L]], "}"), main_text, fixed = TRUE),
+  "matching active forecast and VB-fit wrappers occur in their proper manuscripts")
 article_files <- readLines(article_path("overleaf/article_files.txt"), warn = FALSE)
 check(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
       "inactive VB forecast figures excluded from article snapshot")
+if (exists("presentation", inherits = FALSE)) {
+  check(all(c(presentation_path, active_wrapper_paths, active_pdf_paths) %in% article_files),
+    "Overleaf snapshot retains every authenticated active independent derivative")
+}
 
 reader_facing_sources <- c(
   main_text, supplement_text, mcmc_fit_wrapper, mcmc_forecast_wrapper,

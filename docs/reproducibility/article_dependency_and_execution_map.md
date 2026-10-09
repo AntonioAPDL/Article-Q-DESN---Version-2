@@ -4,7 +4,9 @@ Prepared 2026-10-08 for the Technometrics editorial/review pass. This record
 implements the v3 plan's T01 inventory and separates presentation reproduction
 from the fitting and scoring workflows. It does not certify journal submission
 readiness, complete scientific reproducibility, or historical-project closeout.
-No workflow below was launched to create this map.
+No fitting or scoring workflow below was launched to create this map. The
+bounded presentation and build checks were repeated during the subsequent
+editorial revision.
 
 ## Dependency inventory
 
@@ -41,10 +43,11 @@ compile inputs. Check them and the isolated article snapshot before publication.
 The inventory and audit script are repository/reproduction documentation, not
 new mandatory TeX dependencies; no change to the article allowlist is needed.
 
-Original GloFAS PDFs are approved companions and scientific sources of the new
-separately named review derivatives; only the latter are active after the
-review override. CSV/provenance companions are not mislabelled direct TeX
-inputs. This distinction also covers the PriceFM PNG companion and inactive
+Original scientific PDFs and wrappers remain approved companions. Separately
+named review derivatives are the active simulation graphics and the main
+GloFAS figure after the editorial revision; the full-family GloFAS graphic
+remains in the supplement. CSV/provenance companions are not mislabelled direct
+TeX inputs. This distinction also covers the PriceFM PNG companion and inactive
 independent wrapper files retained by the approved projection.
 
 ## Prominent-result presentation reproduction
@@ -61,7 +64,8 @@ It selects the complete 32 MCMC cells and reproduces:
 - `figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v1_forecast_dgp_acrps.pdf`,
   with equal extracted text and 150-dpi appearance under the tested renderer.
 
-The supplied summary also contains VB rows, but they are not substituted for
+This example reproduces the frozen scientific projection, not the later
+typographic derivative. The supplied summary also contains VB rows, but they are not substituted for
 the main MCMC comparison. `scripts/reproduce_qdesn_representative_result.sh`
 verifies input hashes and compares against the supplied expected outputs. PDF
 container timestamps are not a scientific difference. Dependency/font changes
@@ -75,6 +79,32 @@ article tables/figures without fitting or scoring. Its default mode instead
 requires the original authenticated 54-file handoff. Neither mode reconstructs
 posterior draws or integrated scores. The summary-only example does not claim
 to satisfy an inaccessible current journal-specific code/data requirement.
+
+### Active presentation derivatives
+
+`scripts/build_qdesn_pro_review_presentation.R` reads the pinned public
+simulation summaries, frozen GloFAS quantile table, and compact authenticated
+plotting inputs. It creates the six larger-label simulation PDFs, three-panel
+GloFAS PDF, five table/figure wrappers, and seven-family main score table listed
+in `tables/qdesn_pro_review_presentation_manifest.json`. Its thirteen outputs
+reproduce byte for byte in the recorded environment. It does not fit a model,
+reconstruct posterior draws, rescore a forecast, or change a scientific grid.
+
+The compact GloFAS history, member and truth CSVs and their provenance record
+are public repository inputs, not required TeX files. The extraction script
+`scripts/extract_glofas_pro_review_plot_inputs.R` requires the authentic frozen
+design object and verifies its hash before extracting 30 historical dates,
+51 members over 28 target dates, and 28 held-out truth values. The public
+extracts suffice to reproduce the new drawing without redistributing the
+runtime design object. Their derivation does not authenticate unavailable
+issued-product metadata or covariate vintages.
+
+The exact extraction checks, geometry, font-size checks and standalone commands
+are documented in
+`docs/implementation_notes/pro_review_presentation_revision_20261008.md`.
+The older `scripts/build_glofas_review_figures.py --check` still verifies its
+six frozen-vector display derivatives; its override now points to the new main
+figure and retains a separate full-family supplementary alias.
 
 ## Fit and score workflow map
 
@@ -104,7 +134,9 @@ are disclosed in the standalone example or added by this record.
 After all current edits, verify inventory equality, unchanged scientific
 sources, authentic manifest/finalizer receipts, the four review proofs and
 recorder closure, final-size graphics, and the committed isolated source
-projection. Keep author declarations, anonymous portal handling and current
-journal length/upload rules unresolved until confirmed. Record exact final
+projection. Author contact details have been checked against official UCSC
+sources; the authors confirmed no specific funding and no competing interests.
+Anonymous portal handling and current journal length/upload rules remain
+subject to the current official instructions. Record exact final
 source/publication commits elsewhere; a locally generated CSV cannot establish
 remote publication or close a historical scientific obligation.

@@ -64,7 +64,7 @@
   \node[qi/note,align=center] at (145,-73) {complete exAL grid};
 
   \draw[draw=qiGaussian,line width=0.35pt] (0,-80) -- (159,-80);
-  \node[qi/heading,anchor=west] at (0,-87) {Posterior simulation};
+  \node[qi/heading,anchor=west] at (0,-87) {MCMC (joint simulation)};
   \node[qi/heading,anchor=west] at (82,-87) {Model comparison};
   \node[qi/base,minimum width=29mm] (vb) at (14.5,-98)
     {VB fit\\of model $M$};
@@ -79,5 +79,7 @@
     {Prespecified\\validation criterion};
   \draw[qi/comparison] (candidates.east) -- (criterion.west);
   \node[qi/note,anchor=north,align=center] at (120,-106)
-    {comparison after fitting};
+    {development data only};
+  \node[qi/note,anchor=west] at (0,-116)
+    {Joint fits: joint simulation and GloFAS. PriceFM: independent VB only.};
 \end{tikzpicture}

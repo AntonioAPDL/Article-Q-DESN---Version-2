@@ -1,0 +1,14 @@
+% Presentation derivative; all seven frozen rows and rounding retained.
+\begin{tabular*}{\linewidth}{@{\extracolsep{\fill}}lrrrr@{}}
+\toprule
+Model & \shortstack{Mean check\\loss} & \shortstack{Grid\\aCRPS} & \shortstack{Central 90\%\\coverage} & \shortstack{Reduction\\vs raw} \\
+\midrule
+Independent AL & 0.3595 & 0.7156 & 0.750 & 50.17\% \\
+Independent exAL & 0.4227 & 0.8266 & 0.536 & 42.44\% \\
+Normal Ridge & 0.4531 & 0.8471 & 0.107 & 41.01\% \\
+Joint AL & 0.4718 & 0.9490 & 0.786 & 33.91\% \\
+Joint exAL & 0.6037 & 1.1765 & 0.286 & 18.07\% \\
+Raw GloFAS & 0.7713 & 1.4360 & 0.000 & 0.00\% \\
+Normal RHS/VB & 0.8038 & 1.4790 & 0.107 & -3.00\% \\
+\bottomrule
+\end{tabular*}

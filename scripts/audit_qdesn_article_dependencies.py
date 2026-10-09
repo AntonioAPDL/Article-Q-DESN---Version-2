@@ -40,6 +40,8 @@ def classification(path: str) -> tuple[str, str, str, str]:
         return "initialization diagram component", "declared initialization protocol", "qdesn-supplement.tex:sec:supp_selection_initialization", "initial states distinct from separately declared prior calibration; study-specific branches"
     if path == "tables/qdesn_pro_review_presentation_manifest.json":
         return "presentation provenance companion", "independent v14, expanded pure-DESN and GloFAS Search III presentation derivatives", path, "unchanged scientific summaries; display regeneration only"
+    if path == "tables/qdesn_article_presentation_manifest_v2.json":
+        return "presentation provenance companion", "versioned Laplace replacement; independent v14 and GloFAS Search III displays unchanged", path, "forecast posterior score intervals; fitting point diagnostics; no numerical application changes"
     if "phase153" in path:
         return "historical sensitivity table", "historical Phase153 replicated VB", "tables/joint_qdesn_article_validation_phase153_replication_summary.tex", "earlier feature/inference design; corrected-current-target equivalence unresolved"
     if "five_chain" in path:
@@ -50,22 +52,26 @@ def classification(path: str) -> tuple[str, str, str, str]:
         authority = "GloFAS Search III; presentation-only vector derivative" if review else "GloFAS Search III Parts 1--4"
         estimator = "VB AL/exAL (independent/joint), Normal predictive baselines and raw issued ensemble; Part 2 unscored"
         if "three_panel_review" in path or "main_scores_review" in path:
-            contract = "tables/qdesn_pro_review_presentation_manifest.json;tables/glofas_search3_review_plot_input_provenance.json"
+            contract = "tables/qdesn_article_presentation_manifest_v2.json;tables/glofas_search3_review_plot_input_provenance.json"
             authority = "GloFAS Search III; authenticated plotting-only derivative"
     elif "pricefm" in path:
         contract = "tables/pricefm_r98_article_projection_manifest.json"
         authority = "PriceFM R98 complete region-frozen authority; R92 historical only where labelled"
         estimator = "independent Q--DESN VB versus released PriceFM; equal-case AQL; no joint PriceFM fit"
+    elif "joint_qdesn_pure_desn_v2_" in path:
+        contract = "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv;tables/joint_qdesn_pure_desn_v2_projection_provenance.csv"
+        authority = "complete pure-DESN comparison; coherent four-model Laplace replacement; seven scenarios unchanged"
+        estimator = "DGP-integrated finite-grid score conditional on averaged recursive features; draw-path sensitivity separate; actual per-cell draw counts; VB intercepts fixed"
     elif "joint_qdesn_pure_desn" in path or "joint_qdesn_pro_review" in path or "joint_qdesn_simulation/" in path:
         contract = "tables/joint_qdesn_pure_desn_v1_article_asset_manifest.csv;tables/joint_qdesn_pure_desn_v1_projection_provenance.csv"
         if "pro_review" in path:
-            contract += ";tables/qdesn_pro_review_presentation_manifest.json"
+            contract += ";tables/qdesn_article_presentation_manifest_v2.json"
         authority = "expanded pure-DESN 32 MCMC + 32 VB cells"
         estimator = "DGP-integrated finite-grid score conditional on model-specific averaged recursive features; VB intercepts fixed; fit recovery points"
     elif "qdesn_validation" in path or "qdesn_pro_review" in path or "independent_simulation/" in path:
         contract = "tables/qdesn_validation_500obs_metric_intervals_v14_manifest.txt;tables/qdesn_validation_500obs_dgp_oracle_figures_v14_manifest.txt"
         if "pro_review" in path:
-            contract += ";tables/qdesn_pro_review_presentation_manifest.json"
+            contract += ";tables/qdesn_article_presentation_manifest_v2.json"
         authority = "independent rolling-state v14"
         estimator = "criterion-specific draw-wise posterior/variational metric means and equal-tailed intervals; point paths and inherited roles distinct"
     else:

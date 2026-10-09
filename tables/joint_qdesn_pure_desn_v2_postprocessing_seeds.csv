@@ -1,0 +1,9 @@
+"scenario_id","model_cell_id","inference_method","path_uniform_seed","native_path_max_difference"
+"laplace_bridge","laplace_bridge__qdesn_rhs_independent","mcmc",941082313,8.3266726846886741e-16
+"laplace_bridge","laplace_bridge__joint_qdesn_rhs","mcmc",941082313,2.3869795029440866e-15
+"laplace_bridge","laplace_bridge__exqdesn_rhs_independent","mcmc",941082313,1.2212453270876722e-15
+"laplace_bridge","laplace_bridge__joint_exqdesn_rhs","mcmc",941082313,1.2212453270876722e-15
+"laplace_bridge","laplace_bridge__qdesn_rhs_independent","vb",202639555,2.0539125955565396e-15
+"laplace_bridge","laplace_bridge__joint_qdesn_rhs","vb",202639555,1.27675647831893e-15
+"laplace_bridge","laplace_bridge__exqdesn_rhs_independent","vb",202639555,8.3266726846886741e-16
+"laplace_bridge","laplace_bridge__joint_exqdesn_rhs","vb",202639555,1.5543122344752192e-15

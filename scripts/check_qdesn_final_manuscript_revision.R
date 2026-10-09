@@ -69,15 +69,15 @@ independent <- read.csv(
   check.names = FALSE
 )
 joint_score <- read.csv(
-  repo_path("tables/joint_qdesn_pure_desn_v1_forecast_score_summary.csv"),
+  repo_path("tables/joint_qdesn_pure_desn_v2_forecast_score_summary.csv"),
   check.names = FALSE
 )
 joint_oracle <- read.csv(
-  repo_path("tables/joint_qdesn_pure_desn_v1_fit_oracle_diagnostics.csv"),
+  repo_path("tables/joint_qdesn_pure_desn_v2_fit_oracle_diagnostics.csv"),
   check.names = FALSE
 )
 crossing <- read.csv(
-  repo_path("tables/joint_qdesn_pure_desn_v1_forecast_score_summary.csv"),
+  repo_path("tables/joint_qdesn_pure_desn_v2_forecast_score_summary.csv"),
   check.names = FALSE
 )
 expect(nrow(independent) == 216L &&
@@ -94,8 +94,8 @@ forecast_crossing <- aggregate(
   canonical_raw_crossing_pairs ~ model_id, crossing, sum
 )
 expected_crossing <- c(
-  joint_qdesn_rhs_mcmc = 11L,
-  qdesn_rhs_independent_mcmc = 2645L,
+  joint_qdesn_rhs_mcmc = 10L,
+  qdesn_rhs_independent_mcmc = 2608L,
   joint_exqdesn_rhs_mcmc = 0L,
   exqdesn_rhs_independent_mcmc = 288L
 )
@@ -132,7 +132,7 @@ expect(grepl(
   "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
   main, fixed = TRUE
 ), "The main article does not contain the independent forecast figures.")
-expect(grepl("tables/joint_qdesn_pro_review_forecast_figure.tex",
+expect(grepl("tables/joint_qdesn_pure_desn_v2_forecast_figure.tex",
              main, fixed = TRUE),
        "The main article does not contain the JOINT forecast figure.")
 expect(grepl(
@@ -140,7 +140,7 @@ expect(grepl(
   supplement, fixed = TRUE
 ) && grepl("tables/qdesn_pro_review_vb_fit_figure.tex",
            supplement, fixed = TRUE) &&
-  grepl("tables/joint_qdesn_pro_review_fit_figure.tex",
+  grepl("tables/joint_qdesn_pure_desn_v2_fit_figure.tex",
         supplement, fixed = TRUE),
 "The supplement does not contain all fitting-sample figures.")
 expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
@@ -163,25 +163,25 @@ expect(!grepl(
 reader_facing_joint <- paste(c(
   main,
   supplement,
-  read_text("tables/joint_qdesn_pure_desn_v1_score_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v1_crossing_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v1_recursive_policy_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v1_oracle_recovery_table.tex"),
-  read_text("tables/joint_qdesn_pro_review_forecast_figure.tex"),
-  read_text("tables/joint_qdesn_pro_review_fit_figure.tex")
+  read_text("tables/joint_qdesn_pure_desn_v2_score_table.tex"),
+  read_text("tables/joint_qdesn_pure_desn_v2_crossing_table.tex"),
+  read_text("tables/joint_qdesn_pure_desn_v2_recursive_policy_table.tex"),
+  read_text("tables/joint_qdesn_pure_desn_v2_oracle_recovery_table.tex"),
+  read_text("tables/joint_qdesn_pure_desn_v2_forecast_figure.tex"),
+  read_text("tables/joint_qdesn_pure_desn_v2_fit_figure.tex")
 ), collapse = "\n")
 expect(!grepl(
   "canonical-action|Canonical action|black vertical|raw/reported",
   reader_facing_joint, ignore.case = TRUE
 ), "Reader-facing JOINT presentation still contains internal action or count labels.")
 expect(grepl("47,520 adjacent-level", main, fixed = TRUE) &&
-         grepl("0.023\\%", main, fixed = TRUE) &&
-         grepl("5.566\\%", main, fixed = TRUE) &&
+         grepl("0.021\\%", main, fixed = TRUE) &&
+         grepl("5.488\\%", main, fixed = TRUE) &&
          grepl("0.606\\%", main, fixed = TRUE),
        "The main article does not report normalized JOINT crossing rates.")
 expect(grepl(
   "posterior draws",
-  read_text("tables/joint_qdesn_pure_desn_v1_crossing_table.tex"),
+  read_text("tables/joint_qdesn_pure_desn_v2_crossing_table.tex"),
   fixed = TRUE
 ), "The supplement does not distinguish crossing frequency from adjustment magnitude.")
 

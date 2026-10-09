@@ -1,6 +1,6 @@
 local({
   checker <- file.path(getwd(), "scripts", "check_joint_qdesn_pure_desn_article_projection.R")
-  result <- system2(file.path(R.home("bin"), "Rscript"), checker,
+  result <- system2(file.path(R.home("bin"), "Rscript"), c(checker, "--historical-only"),
                     stdout = TRUE, stderr = TRUE)
   status <- attr(result, "status")
   if (!is.null(status) && status != 0L) stop(paste(result, collapse = "\n"))
@@ -12,9 +12,9 @@ local({
     env <- new.env(parent = globalenv())
     env$commandArgs <- function(...) paste0("--file=", historical)
     env$system2 <- function(command, args, ...) {
-      if (any(grepl("check_joint_qdesn_pure_desn_article_projection.R", args, fixed = TRUE))) {
+      if (any(grepl("check_joint_qdesn_pure_desn_article_projection", args, fixed = TRUE))) {
         if (failure == "nonzero_with_marker") {
-          return(structure("JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS mocked", status = 1L))
+          return(structure("JOINT_PURE_DESN_ARTICLE_PROJECTION_V2_CHECK=PASS mocked", status = 1L))
         }
         return("No current validation receipt")
       }

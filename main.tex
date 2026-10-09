@@ -806,7 +806,7 @@ describe readout uncertainty conditional on the averaged features; they do
 not include uncertainty from the recursive feature trajectories. Draw-specific
 recursive forecasts are assessed separately in the supplement.
 
-Figure~\ref{fig:joint-qdesn-pure-desn-v1-forecast-acrps} shows the posterior
+Figure~\ref{fig:joint-qdesn-pure-desn-v2-forecast-acrps} shows the posterior
 score comparison. Joint exQDESN has the lowest mean for asymmetric tails and
 joint Q--DESN for Gaussian innovations. Independent Q--DESN is lowest for
 Gaussian-mixture, Laplace, nonlinear-reservoir, persistent-heavy-tail, and
@@ -815,17 +815,23 @@ The marginal intervals of the numerical winner and runner-up overlap in
 every mechanism. These differences do not establish a general forecast
 advantage from joint estimation.
 
-\input{tables/joint_qdesn_pro_review_forecast_figure.tex}
+For Laplace innovations, the four posterior mean scores range from 0.3613
+to 0.3627, and all four 95\% intervals overlap. Independent Q--DESN under
+AL has the smallest descriptive mean; both joint fits have no raw crossings
+of their posterior-mean forecast grids. The scores are closely clustered,
+but this comparison does not establish predictive equivalence.
+
+\input{tables/joint_qdesn_pure_desn_v2_forecast_figure.tex}
 
 Across 47,520 adjacent-level comparisons per model, the raw crossing rates of
-the posterior-mean forecast grids are 0.023\% for joint Q--DESN, 5.566\% for
+the posterior-mean forecast grids are 0.021\% for joint Q--DESN, 5.488\% for
 independent Q--DESN, 0\% for joint exQDESN, and 0.606\% for independent
 exQDESN. Joint exQDESN has the strongest raw coherence in this comparison,
 although its score is not uniformly lowest. Crossing rates across posterior
 draws and monotone-adjustment magnitudes are reported in the supplement;
 zero crossings of a mean grid do not imply ordered grids for every draw.
-Isotonic projection orders all scored grids. The supplement also records the
-one recursive-design stability qualification, scalar-mixing limitations, and
+Isotonic projection orders all scored grids. The supplement also reports
+recursive-feature sensitivity, scalar-mixing limitations, and
 a separate historical variational sensitivity analysis.
 
 \section{Application: GloFAS Streamflow Quantile Forecasting}

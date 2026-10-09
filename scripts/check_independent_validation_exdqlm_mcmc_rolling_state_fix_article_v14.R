@@ -391,7 +391,23 @@ article_files <- readLines(article_path("overleaf/article_files.txt"), warn = FA
 check(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
       "inactive VB forecast figures excluded from article snapshot")
 if (exists("presentation", inherits = FALSE)) {
-  check(all(c(presentation_path, active_wrapper_paths, active_pdf_paths) %in% article_files),
+  public_presentation_path <- "tables/qdesn_article_presentation_manifest_v2.json"
+  if (public_presentation_path %in% article_files) {
+    public_presentation <- jsonlite::fromJSON(article_path(public_presentation_path),
+      simplifyVector = FALSE)
+    check(identical(public_presentation$schema, "qdesn-article-presentation-v2") &&
+      identical(public_presentation$historical_receipt_sha256, sha256(article_path(presentation_path))),
+      "versioned publication companion authenticates the unchanged historical receipt")
+    for (relative in c(active_wrapper_paths, active_pdf_paths)) {
+      entries <- Filter(function(entry) identical(entry$file, relative), public_presentation$outputs)
+      check(length(entries) == 1L &&
+        identical(entries[[1L]]$sha256, sha256(article_path(relative))),
+        paste("unchanged independent derivative retained in the live companion", relative))
+    }
+  } else {
+    public_presentation_path <- presentation_path
+  }
+  check(all(c(public_presentation_path, active_wrapper_paths, active_pdf_paths) %in% article_files),
     "Overleaf snapshot retains every authenticated active independent derivative")
 }
 

@@ -1,0 +1,94 @@
+{
+  "schema": "glofas-part4-historical-conditional-quantile-extract-v1",
+  "purpose": "Presentation only: same frozen Part 4 fits; no fitting, forecasting, simulation, scoring, selection, or quantile projection",
+  "origin_date": "2022-12-25",
+  "historical_dates": ["2022-11-26", "2022-12-25"],
+  "historical_rows": 420,
+  "families": ["Independent AL", "Normal Ridge"],
+  "quantile_grid": [0.050000000000000003, 0.20000000000000001, 0.34999999999999998, 0.5, 0.65000000000000002, 0.80000000000000004, 0.94999999999999996],
+  "scale": "Existing log(1 + flow) response scale; no repeated transformation",
+  "independent_al_summary": "Posterior mean conditional quantile: X_beta times posterior mean beta at each fitted level",
+  "normal_ridge_summary": "Posterior mean conditional response quantile: X_beta times posterior mean beta plus qnorm(tau) times E[sqrt(sigma_Y)]",
+  "normal_residual_parameterization": "sigma_Y is residual variance; q(sigma_Y) is inverse-gamma(shape,rate)",
+  "normal_residual_variance_shape": 6243.5,
+  "normal_residual_variance_rate": 394.95053928972897,
+  "normal_expected_residual_sd": 0.25152628925382664,
+  "normal_expected_residual_sd_formula": "sqrt(rate) * exp(lgamma(shape - 0.5) - lgamma(shape))",
+  "historical_uncertainty_scope": "Fitted conditional quantile posterior means, not coefficient credible limits or posterior-predictive mixture quantiles",
+  "forecast_ordinates": "Unchanged retained Part 4 future latent-path summaries; Normal future curves are empirical quantiles of retained latent_y_draw",
+  "future_truth": "Not accessed by this historical plotting extraction",
+  "crossing_correction": "None; raw fitted quantiles retained",
+  "source_authority": {
+    "authority_ledger_sha256": "b5ef0cc5a60db1bfebd670681d59b5e51d63394f20f8351caf0e48c4a0b54983",
+    "truth_free_design": {
+      "role": "fixed_historical_design",
+      "size_bytes": 4014831357,
+      "sha256": "a2fbcec6523802f01c98ec272253e58a598a5adc5c7b0f9063b615b36c07bcf9"
+    },
+    "model_fits": [
+      {
+        "role": "normal_ridge",
+        "fit_bytes": 136686065,
+        "fit_sha256": "4262a6030b0587df9be73b0708f5df1cdc49fbe1c240a4182c3e52b7e2db0582",
+        "artifact_manifest_sha256": "362b89a9202b308b03e208c53b277a64e648ad45e8aae68a7b28856c5d01bc0e",
+        "coefficient_summary_sha256": "217f18fce72d1e512c8c777ca9ac41cd0ad1643f56329bd32db8dd0d4cb1c59f"
+      },
+      {
+        "role": "independent_al_p05",
+        "fit_bytes": 137565881,
+        "fit_sha256": "4dab9567c280c2892f6f8b3df56a5623b54cb7fd1e108d74db2c20bbd97f1747",
+        "artifact_manifest_sha256": "9fbdfc38cf639cdc8eaa64c158def78c9eddc37f331d2fb3a3ee33a485d88e3c",
+        "coefficient_summary_sha256": "d7c18704b7ae741651de28c5bfaec6c3cf206fc74b4884c294fb78841f6df7e8"
+      },
+      {
+        "role": "independent_al_p20",
+        "fit_bytes": 137565881,
+        "fit_sha256": "9fe4292c2054de0160eda3800d2972f12a612bdf23b2229f66dc75c1f3d197aa",
+        "artifact_manifest_sha256": "2fc5460a89bd4910aab3c50fd6a3c3932c5a6217b8c7eb47ee6fc3b52784c585",
+        "coefficient_summary_sha256": "57767e31a0c2bd1af5c096a8774ba137d35cc520c8460d9ca93bcbf8fcfe4309"
+      },
+      {
+        "role": "independent_al_p35",
+        "fit_bytes": 137565881,
+        "fit_sha256": "0fff6fa0f609c2c9dafa055aed8bf257796c7414183b08c43472284f31e4fbd4",
+        "artifact_manifest_sha256": "b665b4a31be764721cb935853c1ebba17ba8d11f426a95b9d9057de7bb627bf0",
+        "coefficient_summary_sha256": "2a5f0dce28c8d3d70b9e02a71409bfdbadd12b0b2ba7ecf82b6182a46d4d5c0f"
+      },
+      {
+        "role": "independent_al_p50",
+        "fit_bytes": 137565880,
+        "fit_sha256": "a09c88cebe5a1878186264a57c5dc1c2966f9cbe8b49f6e17bedd3b08a5f4f41",
+        "artifact_manifest_sha256": "97913df12f9b4dd2281c74505de8297d7cf154137b1914ba1f1c53bdc067d26e",
+        "coefficient_summary_sha256": "4b850af0dc1972ca9141ed6bf6a875a288051d6bc4c9411b46cbe941a01e011b"
+      },
+      {
+        "role": "independent_al_p65",
+        "fit_bytes": 137565881,
+        "fit_sha256": "3c03ca2bf42999f99018617b0b773376041267a6759251aea34efa5fcab108d1",
+        "artifact_manifest_sha256": "78b10abec7ed9a2d3a87b5ac0d9897a3a4b158b3103e26cc468a5503613c293d",
+        "coefficient_summary_sha256": "19b83a7fd5241ac41e2b1a5ca8bf9dd4e3ef4374758ce0fba8fe983f6294859a"
+      },
+      {
+        "role": "independent_al_p80",
+        "fit_bytes": 137565881,
+        "fit_sha256": "1344f7ca616717d6504299633eb7ef4abfc039b2737436e883053d25a85eb1ba",
+        "artifact_manifest_sha256": "44b7a64033fc67d2df2a5710e01ee3e16dd1e8677876701a914479034c82416b",
+        "coefficient_summary_sha256": "ee9e99b4d9fc19e74830b547db10252e31ce4e37a5cf43b2534a02ce5885867f"
+      },
+      {
+        "role": "independent_al_p95",
+        "fit_bytes": 137565881,
+        "fit_sha256": "d297f72a37f3aac87def4a1421532e853430ef42554672117843d3f9bffbf276",
+        "artifact_manifest_sha256": "6cd1bf0b34ba718d568fd3f25355fb3b91a354613310c89a8ab11175cfaf8794",
+        "coefficient_summary_sha256": "4edfb067d0c776c63b1882324c8ccd093ca5936c7985ba1aad2174e62c44d97f"
+      }
+    ]
+  },
+  "extraction_script_sha256": "fd3f1de5141fcd8c97c004dc89c57c08fc425d439c93a354772329a3f1f188ba",
+  "outputs": {
+    "historical_quantiles": {
+      "file": "glofas_search3_part4_history_fitted_quantiles.csv",
+      "sha256": "a5acdb0b02f1dc5213b0a585839cd1dadae6344d6d64dbe71ec6d9c1d8fd30f4"
+    }
+  }
+}

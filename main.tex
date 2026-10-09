@@ -194,13 +194,29 @@ with fixed internal weights
 Stacking reservoirs extends this construction to a deep ESN
 \citep{GallicchioMicheliPedrelli2018DeepESNDesign}. Bayesian regression on
 these features already has precedent in the hierarchical DESN of
-\citet{McDermottWikle2018DeepESNUQ}. Quantile reservoir methods also have
-precedent: \citet{LvZhaoLiuWang2016QRESNE} estimate ESN output weights by
-quantile regression and use bootstrap ensembles for prediction intervals;
-\citet{BonasWikleCastruccio2024CalibratedDeepESN} use penalized quantile
-regression to calibrate the residual uncertainty of DESN forecasts.
-Q--DESN places an AL or exAL posterior regression directly on a specified
-recurrent feature map, with adjacent-quantile regularization for joint estimation.
+\citet{McDermottWikle2018DeepESNUQ}.
+
+Quantile reservoir methods also have precedent.
+\citet{LvZhaoLiuWang2016QRESNE} estimate ESN output weights by quantile
+regression and combine quantile fits in a bootstrap ensemble for confidence
+and prediction intervals. \citet{BonasWikleCastruccio2024CalibratedDeepESN}
+first fit DESN point forecasts by ridge regression, then jointly estimate
+lead-dependent residual quantiles with penalized quantile sheets and
+calibrate the resulting intervals.
+
+Q--DESN estimates response quantiles through Bayesian regression on specified
+DESN features. The AL or exAL working likelihood combines coefficient
+shrinkage with posterior inference for regression and likelihood parameters.
+Pairs of fitted quantiles define interval forecasts without a separate
+residual-calibration regression or bootstrap ensemble. The joint extension
+couples quantile-specific readout coefficients through adjacent-difference
+shrinkage priors.
+For fixed-design AL regressions with ridge or product RHS priors, Gaussian
+augmentation yields closed-form full-conditional distributions, supporting
+Gibbs-based posterior computation \citep{KozumiKobayashi2011Gibbs}.
+Model-specific variational approximations support repeated fitting without
+requiring MCMC for every fit. This posterior uncertainty conditions on the specified
+reservoir; direct estimation does not itself guarantee interval coverage.
 
 For several probability levels, independent regressions can be ordered after
 fitting by isotonic projection or rearrangement

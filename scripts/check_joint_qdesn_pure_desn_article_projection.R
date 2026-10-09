@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 
 options(stringsAsFactors = FALSE, digits = 17)
+historical_only <- "--historical-only" %in% commandArgs(trailingOnly = TRUE)
 file_arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[1L]
 script_path <- normalizePath(sub("^--file=", "", file_arg), mustWork = TRUE)
 candidate_root <- normalizePath(file.path(dirname(script_path), ".."), mustWork = FALSE)
@@ -339,7 +340,7 @@ if (file.exists(file.path(repo_root, presentation_path))) {
     grepl("if (point_only) p$layers <- p$layers[-1L]", presentation_builder, fixed = TRUE),
     "Active figures preserve posterior score intervals and point-only fit diagnostics")
 }
-expect(grepl(active_forecast_wrapper, main, fixed = TRUE) &&
+if (!historical_only) expect(grepl(active_forecast_wrapper, main, fixed = TRUE) &&
   !grepl(paste0("tables/", prefix, "fit_figure.tex"), main, fixed = TRUE) &&
   !grepl(active_fit_wrapper, main, fixed = TRUE) &&
   grepl(active_fit_wrapper, supplement, fixed = TRUE) &&
@@ -390,11 +391,11 @@ git_only_provenance <- paste0("tables/", prefix, c(
   "cell_plan.csv", "frozen_contract.csv", "manifest_audit.csv",
   "review_closeout_receipt.csv", "source_hashes.csv"
 ))
-expect(all(setdiff(manifest$relative_path, git_only_provenance) %in% overleaf) &&
+if (!historical_only) expect(all(setdiff(manifest$relative_path, git_only_provenance) %in% overleaf) &&
   !any(git_only_provenance %in% overleaf) &&
   paste0("tables/", prefix, "article_asset_manifest.csv") %in% overleaf,
   "Overleaf includes every reader output and safe CSV; local-path provenance stays in Git")
-if (exists("presentation", inherits = FALSE)) {
+if (!historical_only && exists("presentation", inherits = FALSE)) {
   expect(all(c(presentation_path, active_forecast_wrapper, active_fit_wrapper,
     active_figure_paths) %in% overleaf),
     "Overleaf includes the authenticated active presentation and its derivative manifest")
@@ -435,4 +436,5 @@ expect(is.null(attr(changes, "status")) && !length(changes),
 
 cat(sprintf(paste0("JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS checks=%d ",
   "mcmc_cells=32 strict_pass=31 review=1 frozen_sources=15 assets=%d ",
-  "protected_application_assets=%d\n"), checks, nrow(manifest), length(protected)))
+  "protected_application_assets=%d scope=%s\n"), checks, nrow(manifest), length(protected),
+  if (historical_only) "historical_v1" else "active_v1"))

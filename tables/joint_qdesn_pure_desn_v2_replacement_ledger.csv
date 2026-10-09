@@ -1,0 +1,9 @@
+"scenario_id","model_cell_id","inference_method","old_score_mean","new_score_mean","old_canonical_crossings","new_canonical_crossings","source_relative_path","context_sha256","preserved_other_scenarios"
+"laplace_bridge","laplace_bridge__qdesn_rhs_independent","mcmc",0.38003917623880201,0.36128594751919824,41,4,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__joint_qdesn_rhs","mcmc",0.53293428172435897,0.36270853159102362,1,0,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__exqdesn_rhs_independent","mcmc",0.38100948634279103,0.36267798746060675,0,0,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__joint_exqdesn_rhs","mcmc",0.52397616347876197,0.36262175020386572,0,0,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__qdesn_rhs_independent","vb",0.37375540872251001,0.36035588041671168,97,7,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__joint_qdesn_rhs","vb",0.52958558487252305,0.36263172051626269,35,3,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__exqdesn_rhs_independent","vb",0.37571669339215502,0.36362418383921491,5,1,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE
+"laplace_bridge","laplace_bridge__joint_exqdesn_rhs","vb",0.59224970701995505,0.36413501310822438,0,0,"article/datasets/dataset_02/context.rds","1700e08d0caaa9dabd71d5318c068cf5dc9925fc6933df80c3b98da3562e3960",TRUE

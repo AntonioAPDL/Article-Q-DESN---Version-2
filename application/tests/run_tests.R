@@ -234,6 +234,7 @@ source(app_path("application/tests/test_independent_validation_dgp_oracle_figure
 # expanded reservoir-only recursive article projection and its source contracts.
 source(app_path("application/tests/test_joint_qdesn_corrected_article_projection_v4.R"))
 source(app_path("application/tests/test_joint_qdesn_pure_desn_article_projection.R"))
+source(app_path("application/tests/test_joint_qdesn_pure_desn_article_projection_v2.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_mean_design.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_dgp_oracle.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_mean_score_packet.R"))

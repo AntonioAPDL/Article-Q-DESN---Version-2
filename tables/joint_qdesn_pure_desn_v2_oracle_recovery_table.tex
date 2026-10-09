@@ -1,0 +1,53 @@
+\begin{table}[p]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rrrr@{}}
+\toprule
+Simulation setting & Model & Fit MAE & Fit RMSE & Forecast MAE & Forecast RMSE \\
+\midrule
+Asymmetric-Laplace tail & Joint AL & 0.1155 & 0.1611 & 0.1894 & 0.2373 \\
+ & Independent AL & 0.1397 & 0.1974 & 0.2793 & 0.3473 \\
+ & Joint exAL & 0.1017 & 0.1412 & 0.1764 & 0.2376 \\
+ & Independent exAL & 0.1038 & 0.1489 & 0.3832 & 0.4911 \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & Joint AL & 0.2114 & 0.2655 & 0.3272 & 0.4198 \\
+ & Independent AL & 0.1933 & 0.2468 & 0.2991 & 0.3827 \\
+ & Joint exAL & 0.1722 & 0.2142 & 0.3245 & 0.4071 \\
+ & Independent exAL & 0.1513 & 0.1906 & 0.2646 & 0.3271 \\
+\addlinespace[2pt]
+Laplace innovations & Joint AL & 0.1188 & 0.1513 & 0.1500 & 0.1906 \\
+ & Independent AL & 0.1308 & 0.1679 & 0.1355 & 0.1690 \\
+ & Joint exAL & 0.1376 & 0.1741 & 0.1808 & 0.2263 \\
+ & Independent exAL & 0.1395 & 0.1757 & 0.1699 & 0.2100 \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & Joint AL & 0.3008 & 0.3849 & 0.2916 & 0.3683 \\
+ & Independent AL & 0.2895 & 0.3701 & 0.2447 & 0.3093 \\
+ & Joint exAL & 0.2858 & 0.3621 & 0.3314 & 0.4162 \\
+ & Independent exAL & 0.2613 & 0.3296 & 0.2818 & 0.3569 \\
+\addlinespace[2pt]
+Gaussian innovations & Joint AL & 0.0884 & 0.1097 & 0.1563 & 0.1929 \\
+ & Independent AL & 0.0887 & 0.1131 & 0.2116 & 0.2471 \\
+ & Joint exAL & 0.1062 & 0.1272 & 0.1881 & 0.2365 \\
+ & Independent exAL & 0.0939 & 0.1168 & 0.1959 & 0.2305 \\
+\addlinespace[2pt]
+Persistent heavy tails & Joint AL & 0.2428 & 0.3226 & 1.2793 & 1.6189 \\
+ & Independent AL & 0.2581 & 0.3408 & 1.1833 & 1.4584 \\
+ & Joint exAL & 0.2103 & 0.2815 & 1.2248 & 1.5487 \\
+ & Independent exAL & 0.2102 & 0.2790 & 1.2073 & 1.4825 \\
+\addlinespace[2pt]
+Regime shift & Joint AL & 0.1527 & 0.1963 & 1.3994 & 1.6487 \\
+ & Independent AL & 0.1739 & 0.2288 & 1.2713 & 1.4642 \\
+ & Joint exAL & 0.1376 & 0.1744 & 1.2539 & 1.4639 \\
+ & Independent exAL & 0.1269 & 0.1619 & 1.2135 & 1.3993 \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & Joint AL & 0.1246 & 0.1646 & 0.1773 & 0.2193 \\
+ & Independent AL & 0.1053 & 0.1449 & 0.1680 & 0.2122 \\
+ & Joint exAL & 0.1283 & 0.1617 & 0.2272 & 0.2719 \\
+ & Independent exAL & 0.1076 & 0.1365 & 0.2149 & 0.2567 \\
+\bottomrule
+\end{tabular}
+\caption{Recovery of known conditional quantile paths by projected posterior-mean grids. MAE and RMSE are oracle-path diagnostics, separate from scores against observations. Fitting entries are point diagnostics, without posterior intervals.}
+\label{tab:joint-qdesn-pure-desn-v2-oracle}
+\end{table}

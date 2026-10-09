@@ -1,0 +1,22 @@
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.30\textwidth}rr@{}}
+\toprule
+Simulation setting & AL & exAL \\
+\midrule
+Asymmetric-Laplace tail & -0.0355 [-0.0649, -0.0060] & -0.0586 [-0.0954, -0.0242] \\
+Gaussian-mixture innovations & 0.0090 [-0.0168, 0.0348] & 0.0136 [-0.0164, 0.0433] \\
+Laplace innovations & 0.0014 [-0.0021, 0.0049] & -0.0001 [-0.0044, 0.0041] \\
+Nonlinear reservoir dynamics & 0.0120 [-0.0098, 0.0392] & 0.0034 [-0.0212, 0.0280] \\
+Gaussian innovations & -0.0143 [-0.0368, 0.0062] & 0.0010 [-0.0237, 0.0254] \\
+Persistent heavy tails & 0.0695 [-0.2180, 0.3848] & -0.0233 [-0.2876, 0.2513] \\
+Regime shift & 0.1024 [-0.2039, 0.4033] & 0.0087 [-0.2867, 0.2706] \\
+Student-\(t\) location--scale & 0.0010 [-0.0020, 0.0040] & 0.0013 [-0.0035, 0.0060] \\
+\bottomrule
+\end{tabular}
+\caption{Joint-minus-independent differences in DGP-integrated \(\aCRPS\), with posterior means and equal-tailed 95\% intervals. Positive differences favor independent estimation. Deterministic index pairing defines descriptive contrasts between separately fitted models. The two asymmetric-tail intervals favor joint estimation; the other fourteen include zero.}
+\label{tab:joint-qdesn-pure-desn-v2-contrasts}
+\end{table}

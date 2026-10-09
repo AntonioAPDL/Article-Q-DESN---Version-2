@@ -1,0 +1,53 @@
+\begin{table}[p]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rrrrr@{}}
+\toprule
+Simulation setting & Model & Mean & Median & 2.5\% & 97.5\% & \shortstack{Mean-grid\\score} \\
+\midrule
+Asymmetric-Laplace tail & Joint AL & 0.3805 & 0.3790 & 0.3705 & 0.3985 & 0.3768 \\
+ & Independent AL & 0.4160 & 0.4153 & 0.3910 & 0.4435 & 0.4136 \\
+ & Joint exAL & \textbf{0.3737} & 0.3724 & 0.3676 & 0.3858 & 0.3705 \\
+ & Independent exAL & 0.4323 & 0.4319 & 0.3998 & 0.4683 & 0.4268 \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & Joint AL & 0.4609 & 0.4595 & 0.4463 & 0.4826 & 0.4563 \\
+ & Independent AL & \textbf{0.4518} & 0.4505 & 0.4385 & 0.4728 & 0.4449 \\
+ & Joint exAL & 0.4687 & 0.4679 & 0.4518 & 0.4906 & 0.4657 \\
+ & Independent exAL & 0.4551 & 0.4538 & 0.4383 & 0.4798 & 0.4471 \\
+\addlinespace[2pt]
+Laplace innovations & Joint AL & 0.3627 & 0.3626 & 0.3606 & 0.3651 & 0.3617 \\
+ & Independent AL & \textbf{0.3613} & 0.3612 & 0.3589 & 0.3641 & 0.3597 \\
+ & Joint exAL & 0.3626 & 0.3624 & 0.3600 & 0.3653 & 0.3611 \\
+ & Independent exAL & 0.3627 & 0.3626 & 0.3597 & 0.3660 & 0.3609 \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & Joint AL & 0.5001 & 0.4984 & 0.4843 & 0.5250 & 0.4933 \\
+ & Independent AL & \textbf{0.4881} & 0.4871 & 0.4787 & 0.5031 & 0.4807 \\
+ & Joint exAL & 0.5003 & 0.4995 & 0.4858 & 0.5201 & 0.4970 \\
+ & Independent exAL & 0.4969 & 0.4959 & 0.4823 & 0.5170 & 0.4888 \\
+\addlinespace[2pt]
+Gaussian innovations & Joint AL & \textbf{0.3495} & 0.3481 & 0.3431 & 0.3633 & 0.3471 \\
+ & Independent AL & 0.3638 & 0.3630 & 0.3481 & 0.3846 & 0.3573 \\
+ & Joint exAL & 0.3563 & 0.3547 & 0.3442 & 0.3768 & 0.3536 \\
+ & Independent exAL & 0.3553 & 0.3541 & 0.3429 & 0.3753 & 0.3452 \\
+\addlinespace[2pt]
+Persistent heavy tails & Joint AL & 1.1239 & 1.1113 & 0.9398 & 1.3707 & 1.1089 \\
+ & Independent AL & \textbf{1.0544} & 1.0489 & 0.8777 & 1.2635 & 1.0474 \\
+ & Joint exAL & 1.0789 & 1.0736 & 0.9017 & 1.2856 & 1.0693 \\
+ & Independent exAL & 1.1022 & 1.0979 & 0.9268 & 1.3064 & 1.1007 \\
+\addlinespace[2pt]
+Regime shift & Joint AL & 1.1555 & 1.1543 & 0.8992 & 1.4205 & 1.1488 \\
+ & Independent AL & 1.0531 & 1.0508 & 0.9106 & 1.2048 & 1.0532 \\
+ & Joint exAL & 1.0394 & 1.0412 & 0.8108 & 1.2538 & 1.0327 \\
+ & Independent exAL & \textbf{1.0307} & 1.0293 & 0.8774 & 1.1895 & 1.0251 \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & Joint AL & 0.3983 & 0.3982 & 0.3964 & 0.4005 & 0.3972 \\
+ & Independent AL & \textbf{0.3973} & 0.3972 & 0.3954 & 0.3995 & 0.3962 \\
+ & Joint exAL & 0.4014 & 0.4013 & 0.3981 & 0.4049 & 0.4003 \\
+ & Independent exAL & 0.4000 & 0.3999 & 0.3970 & 0.4034 & 0.3986 \\
+\bottomrule
+\end{tabular}
+\caption{DGP-integrated finite-grid \(\aCRPS\) for the multi-quantile study. Means, medians, and equal-tailed 95\% limits describe posterior readout uncertainty conditional on each model's averaged recursive design. The mean-grid score evaluates the projected posterior-mean quantile grid and differs from the posterior mean of the score. Boldface marks descriptive numerical minima; every winner and runner-up marginal interval overlaps.}
+\label{tab:joint-qdesn-pure-desn-v2-score}
+\end{table}

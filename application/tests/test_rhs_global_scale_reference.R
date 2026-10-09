@@ -64,8 +64,12 @@ supplement_text <- paste(
   readLines(app_path("qdesn-supplement.tex"), warn = FALSE),
   collapse = "\n"
 )
-stopifnot(grepl("Reference calibration of the global scale", main_text, fixed = TRUE))
-stopifnot(grepl("eq:rhs-global-reference-main", main_text, fixed = TRUE))
+# The current compressed article introduces this reference in prose and puts
+# its numbered derivation in the supplement. Check that semantic placement,
+# rather than requiring a removed main-text heading/equation label.
+stopifnot(grepl("reference for the global shrinkage prior", main_text, fixed = TRUE))
+stopifnot(grepl("The supplement\ngives the derivation", main_text, fixed = TRUE))
+stopifnot(grepl("eq:supp-rhs-tau0-gaussian-reference", supplement_text, fixed = TRUE))
 stopifnot(!grepl(
   "tau_{0,\\mathrm{ref}}=\\GlofasApplicationCurrentSharedRhsTau",
   main_text,

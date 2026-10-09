@@ -154,7 +154,8 @@ article_files <- readLines(
 )
 pure_desn_reader_inputs <- c(
   "\\input{tables/joint_qdesn_pure_desn_v1_forecast_figure.tex}",
-  "\\input{tables/joint_qdesn_pro_review_forecast_figure.tex}"
+  "\\input{tables/joint_qdesn_pro_review_forecast_figure.tex}",
+  "\\input{tables/joint_qdesn_pure_desn_v2_forecast_figure.tex}"
 )
 pure_desn_reader_present <- vapply(pure_desn_reader_inputs,
   function(path) grepl(path, main, fixed = TRUE), logical(1L))
@@ -171,8 +172,11 @@ expect(!pure_desn_active || !old_reader_active,
 # scientific/hash gate above. These next assertions concern the CURRENT reader
 # projection: the historical projection remains checked independently below.
 if (pure_desn_active) {
+  pure_desn_v2_active <- pure_desn_reader_present[[3L]]
   active_checker <- file.path(
-    repo_root, "scripts/check_joint_qdesn_pure_desn_article_projection.R"
+    repo_root, if (pure_desn_v2_active)
+      "scripts/check_joint_qdesn_pure_desn_article_projection_v2.R" else
+      "scripts/check_joint_qdesn_pure_desn_article_projection.R"
   )
   expect(file.exists(active_checker), "Missing current JOINT article checker.")
   current_output <- system2(
@@ -186,7 +190,8 @@ if (pure_desn_active) {
                collapse = "\n"), call. = FALSE)
   }
   expect(any(grepl(
-    "^JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS ",
+    if (pure_desn_v2_active) "^JOINT_PURE_DESN_ARTICLE_PROJECTION_V2_CHECK=PASS " else
+      "^JOINT_PURE_DESN_ARTICLE_PROJECTION_CHECK=PASS ",
     current_output
   )), "Current JOINT article checker did not emit its validated success marker.")
   cat(paste(current_output, collapse = "\n"), "\n", sep = "")
@@ -305,6 +310,6 @@ cat(paste0(
   "JOINT_CORRECTED_ARTICLE_PROJECTION_V4_CHECK=PASS ",
   "retained_historical_scientific_checks=PASS ",
   "retained_historical_assets=17 active_reader=",
-  if (pure_desn_active) "pure_desn_v1" else "corrected_v4",
+  if (pure_desn_active) if (pure_desn_v2_active) "pure_desn_v2" else "pure_desn_v1" else "corrected_v4",
   " historical_score_cells=32 historical_contrasts=16\n"
 ))

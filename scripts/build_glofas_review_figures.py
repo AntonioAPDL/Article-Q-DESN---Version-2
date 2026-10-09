@@ -304,13 +304,23 @@ def output_path(role):
     return FIGURE_DIR / f"glofas_search3_review_20261008_{role}.pdf"
 
 
-def override_text():
+def override_text(root=None):
     lines = [
         "% Presentation-only overrides; load after glofas_application_current_outputs.tex.",
         "% Frozen scientific outputs, scores, and original figure hashes remain unchanged.",
     ]
     for macro, role in MACRO_ROLES.items():
         lines.append("\\renewcommand{\\" + macro + "}{" + output_path(role).as_posix() + "}")
+    # The later PRO-review main figure has new authenticated plotting inputs.
+    # Keep the original full-family derivative separately available; do not
+    # replace scientific source files or the CorrectedPaths alias globally.
+    root = Path(root or Path(__file__).resolve().parents[1])
+    if (root / "tables/qdesn_pro_review_presentation_manifest.json").is_file():
+        lines.extend([
+            "\\renewcommand{\\GlofasApplicationCurrentForecastWindowFigure}{figures/glofas_application/glofas_search3_part4_three_panel_review.pdf}",
+            "\\providecommand{\\GlofasApplicationCurrentFullComparisonFigure}{figures/glofas_application/glofas_search3_review_20261008_part4.pdf}",
+            "\\renewcommand{\\GlofasApplicationCurrentScoreTable}{tables/glofas_search3_part4_main_scores_review.tex}",
+        ])
     return "\n".join(lines) + "\n"
 
 
@@ -403,7 +413,7 @@ def main():
             temporary_root = Path(temporary)
             manifest = render_figures(root, temporary_root)
             assert (root / MANIFEST).read_bytes() == manifest_bytes(manifest), "Presentation manifest differs from a fresh deterministic rebuild."
-            assert (root / OVERRIDES).read_text() == override_text(), "TeX presentation overrides differ from the generated contract."
+            assert (root / OVERRIDES).read_text() == override_text(root), "TeX presentation overrides differ from the generated contract."
             for asset in manifest["assets"]:
                 relative = Path(asset["output"])
                 assert sha(root / relative) == asset["output_sha256"], "Published derivative hash differs from manifest."
@@ -412,7 +422,7 @@ def main():
     else:
         manifest = render_figures(root, root)
         (root / MANIFEST).write_bytes(manifest_bytes(manifest))
-        (root / OVERRIDES).write_text(override_text())
+        (root / OVERRIDES).write_text(override_text(root))
         status = "BUILT"
     print(json.dumps({"status": status, "figures": len(manifest["assets"]), "minimum_effective_label_bp": min(asset["minimum_effective_label_bp"] for asset in manifest["assets"]), "runtime_or_model_inputs_read": 0}, sort_keys=True))
 

@@ -152,10 +152,15 @@ supp <- paste(readLines(file.path(repo_root, "qdesn-supplement.tex"),
 article_files <- readLines(
   file.path(repo_root, "overleaf", "article_files.txt"), warn = FALSE
 )
-pure_desn_active <- grepl(
+pure_desn_reader_inputs <- c(
   "\\input{tables/joint_qdesn_pure_desn_v1_forecast_figure.tex}",
-  main, fixed = TRUE
+  "\\input{tables/joint_qdesn_pro_review_forecast_figure.tex}"
 )
+pure_desn_reader_present <- vapply(pure_desn_reader_inputs,
+  function(path) grepl(path, main, fixed = TRUE), logical(1L))
+expect(sum(pure_desn_reader_present) <= 1L,
+       "Original and derivative JOINT forecast wrappers are simultaneously active.")
+pure_desn_active <- any(pure_desn_reader_present)
 old_reader_active <- grepl(
   "\\input{tables/joint_qdesn_corrected_v4_forecast_figure.tex}",
   main, fixed = TRUE

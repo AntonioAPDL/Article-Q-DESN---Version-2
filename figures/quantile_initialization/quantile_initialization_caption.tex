@@ -9,9 +9,13 @@ the extended asymmetric Laplace (exAL) regression at the matching probability
 level. The complete independent AL and exAL grids initialize their respective
 joint regressions. For a given statistical model, its VB fit supplies starting
 values for Markov chain Monte Carlo (MCMC). Solid arrows denote initialization;
-the dashed arrow denotes comparison using the prespecified validation
-criterion. The joint simulation and the GloFAS and PriceFM analyses use this
-initialization procedure; the independent validation study uses a separate
-procedure. Here
+the dashed arrow denotes comparison using the prespecified development
+criterion. Specification selection and any Gaussian-based prior calibration
+are separate from starting-value transfers. The joint simulation and both
+applications use the applicable independent-fit steps. Joint fitting applies
+to the joint simulation and GloFAS; PriceFM uses independent VB fits only.
+The MCMC branch applies to the joint simulation, whereas both applications
+use variational inference. The independent single-quantile validation uses
+a separate procedure. Here
 exAL refers to the quantile-fixed generalized asymmetric Laplace working
 likelihood.

@@ -1,0 +1,88 @@
+{
+  "schema": "qdesn-pro-review-presentation-v1",
+  "source_script": "scripts/build_qdesn_pro_review_presentation.R",
+  "script_sha256": "86f72a80acf33241ecfc2f043177e7d4c9b2dc1913356502988091b33f1defb9",
+  "shared_style_sha256": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
+  "purpose": "Presentation only; unchanged scientific estimators and summaries",
+  "sources": {
+    "tables/qdesn_validation_500obs_dgp_oracle_figure_data_v14.csv": "fefad4ff09b221483a2c299a06b7142d41090e06cfa9ad37f396a2551e9f398a",
+    "tables/joint_qdesn_pure_desn_v1_forecast_score_summary.csv": "a0be319e4486d5be122ad6dfe5ee9e2a470cd09ce5dfafc5d0af3925aecf2d1c",
+    "tables/joint_qdesn_pure_desn_v1_fit_oracle_diagnostics.csv": "8ddcfe7740f3f58274f2517b148daa8a149a85d660dcfc73745f64ac303a0280",
+    "tables/glofas_search3_part1234_final_20261007_source_quantiles.csv": "d4a6c18eac599c66e9e95edda01e98d9f14c8f6a8efc6dd2a54f16544ae7181a",
+    "tables/glofas_search3_review_history_plot_inputs.csv": "3ecfc03b9353328d1e0e056c2be74eb30934dc94ef9dfaa1a733f6fc836665fe",
+    "tables/glofas_search3_review_ensemble_plot_inputs.csv": "104a4cace25e6d5fd88283379b2852c6ef75c9b01905b25e58c3fc744160cdd5",
+    "tables/glofas_search3_review_truth_plot_inputs.csv": "9ad2840e4282970ac7d5be0ae8028573622705ec7407d65eff01df0f3031813e",
+    "tables/glofas_search3_review_plot_input_provenance.json": "d5e0ed84071353a41e20ea25bafda6cb4a31a13aee75a8ecf3049076417d6aa9",
+    "tables/glofas_search3_part1234_final_20261007_part4_scores.csv": "c15d21cda11c8c8a89742b32b8a0c07b85851176dac29c30076941e32c52c998",
+    "tables/glofas_search3_part1234_final_20261007_part4_scores.tex": "43604de723086dfa1e132715d8d14f624e400969dbe5b3b0ef6a949b8f74f183",
+    "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex": "7dfb5ee609026f3a6ddc94bca4d2cc389a3d434e37b86e1e7177a3dad9b3d8cd",
+    "tables/qdesn_validation_500obs_v14_mcmc_fit_metric_interval_figure.tex": "3370a7f07308af8431eed4619b58616072ae661558a1044ea68afd82e3a1b6d7",
+    "tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex": "cfc97c6450eb7bc29946d0040ace87f0ed6a586cbbde24449cf66c87845ddfe9",
+    "tables/joint_qdesn_pure_desn_v1_forecast_figure.tex": "33b73c22d2f8d6c5b091eea2c484420c14e5a2dedfd97b10a09ff04117f6a5fa",
+    "tables/joint_qdesn_pure_desn_v1_fit_figure.tex": "1b8d6b7daa1adb61801063f841616e1d21e8957ced04a689bf54128c59654911"
+  },
+  "simulation_minimum_native_ordinary_label_pt": 10.4,
+  "glofas_minimum_native_ordinary_label_pt": 9.8000000000000007,
+  "final_main_insertion_width": "0.94 textwidth",
+  "glofas_history_rows": 30,
+  "glofas_ensemble_rows": 1428,
+  "glofas_members": 51,
+  "glofas_model_quantile_rows": 392,
+  "glofas_shared_y_limits": [0, 6],
+  "credible_ribbons": false,
+  "authentic_raw_quantile_reconstruction": "R quantile(type=8), all 28 dates, maximum error < 1e-12",
+  "outputs": [
+    {
+      "file": "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf",
+      "sha256": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6"
+    },
+    {
+      "file": "figures/independent_simulation/qdesn_pro_review_mcmc_forecast_mae.pdf",
+      "sha256": "0778c84be656941d9b1fa71b0c13b4b6bfbcc194bd56daa32d3e5063bf1bce30"
+    },
+    {
+      "file": "figures/independent_simulation/qdesn_pro_review_mcmc_forecast_check_loss.pdf",
+      "sha256": "3dcc2cd7a7cfb1af54cb9e0e1f2edf31f27445dd72c237e553ea62ce6339f0f5"
+    },
+    {
+      "file": "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf",
+      "sha256": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9"
+    },
+    {
+      "file": "figures/joint_qdesn_simulation/joint_qdesn_pro_review_forecast_dgp_acrps.pdf",
+      "sha256": "60d315f223afac0d6957a4ee57237dd0f803090158684e979e6a1a376c8a7d7d"
+    },
+    {
+      "file": "figures/joint_qdesn_simulation/joint_qdesn_pro_review_fit_oracle_rmse.pdf",
+      "sha256": "c9f7acd254d52f780d125639d9ea6b1e570b9974931796c2b5a27b32911cd61e"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part4_three_panel_review.pdf",
+      "sha256": "4a0db5a5f74126f46aed1a96d9b87ff823a25f7c51460a13c0dff805663f81fe"
+    },
+    {
+      "file": "tables/glofas_search3_part4_main_scores_review.tex",
+      "sha256": "8ac73bdaee93bcc51246d139e9a430e72dbb834db1ae3ab292e1ebae5209753a"
+    },
+    {
+      "file": "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+      "sha256": "f72adec502255793e735224b4dae5c9ce5f64d821dadf7818cde80192604a4ce"
+    },
+    {
+      "file": "tables/qdesn_pro_review_mcmc_fit_figure.tex",
+      "sha256": "b97d6a39122ea1b8c8873b5bcc7b145dfdd5aeb096088dccfb0ecc9a4b70e45a"
+    },
+    {
+      "file": "tables/qdesn_pro_review_vb_fit_figure.tex",
+      "sha256": "1ae7b9a29f27135217587a57c4895b7cf3b7f5dad2032211e7567ede335dbf2f"
+    },
+    {
+      "file": "tables/joint_qdesn_pro_review_forecast_figure.tex",
+      "sha256": "548f553a5d9a35544232d44b074728f12714e490ceafa27f7634ebbc3fdf214e"
+    },
+    {
+      "file": "tables/joint_qdesn_pro_review_fit_figure.tex",
+      "sha256": "d987b8d1f32953d350da353a7144c651dbe8c74e2b6aa976d0b5e212ebdf51db"
+    }
+  ]
+}

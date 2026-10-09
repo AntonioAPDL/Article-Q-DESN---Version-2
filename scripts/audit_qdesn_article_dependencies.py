@@ -21,7 +21,7 @@ from pathlib import Path
 FIELDS = ("file", "role", "scientific_authority", "source_contract", "estimator_scope",
           "sha256", "source_inferred_consumers", "direct_or_alias_edges", "closure_status")
 TOKEN = re.compile(
-    r"\\(?:newcommand|renewcommand)\s*\{\\(?P<name>[A-Za-z]+)\}\s*\{(?P<value>[^{}\n]+)\}"
+    r"\\(?:newcommand|renewcommand|providecommand)\s*\{\\(?P<name>[A-Za-z]+)\}\s*\{(?P<value>[^{}\n]+)\}"
     r"|\\(?P<kind>input|includegraphics|bibliography|bibliographystyle)"
     r"(?:\[[^\]\n]*\])?\s*\{(?P<target>[^{}\n]+)\}")
 
@@ -37,7 +37,9 @@ def classification(path: str) -> tuple[str, str, str, str]:
     if suffix in (".bib", ".bst"):
         return "bibliography database/style", "bibliographic and local presentation authority", "refs.bib;tables/qdesn_asa_compatible.bst", "not a scientific estimator; BST is not official journal software"
     if "quantile_initialization/" in path:
-        return "initialization diagram component", "declared initialization protocol", "qdesn-supplement.tex:sec:supp_selection_initialization", "initial states only; not likelihood or prior transfer"
+        return "initialization diagram component", "declared initialization protocol", "qdesn-supplement.tex:sec:supp_selection_initialization", "initial states distinct from separately declared prior calibration; study-specific branches"
+    if path == "tables/qdesn_pro_review_presentation_manifest.json":
+        return "presentation provenance companion", "independent v14, expanded pure-DESN and GloFAS Search III presentation derivatives", path, "unchanged scientific summaries; display regeneration only"
     if "phase153" in path:
         return "historical sensitivity table", "historical Phase153 replicated VB", "tables/joint_qdesn_article_validation_phase153_replication_summary.tex", "earlier feature/inference design; corrected-current-target equivalence unresolved"
     if "five_chain" in path:
@@ -47,16 +49,23 @@ def classification(path: str) -> tuple[str, str, str, str]:
         contract = "tables/glofas_review_figure_manifest.json" if review else "tables/glofas_search3_part1234_final_20261007_publication_manifest.csv"
         authority = "GloFAS Search III; presentation-only vector derivative" if review else "GloFAS Search III Parts 1--4"
         estimator = "VB AL/exAL (independent/joint), Normal predictive baselines and raw issued ensemble; Part 2 unscored"
+        if "three_panel_review" in path or "main_scores_review" in path:
+            contract = "tables/qdesn_pro_review_presentation_manifest.json;tables/glofas_search3_review_plot_input_provenance.json"
+            authority = "GloFAS Search III; authenticated plotting-only derivative"
     elif "pricefm" in path:
         contract = "tables/pricefm_r98_article_projection_manifest.json"
         authority = "PriceFM R98 complete region-frozen authority; R92 historical only where labelled"
         estimator = "independent Q--DESN VB versus released PriceFM; equal-case AQL; no joint PriceFM fit"
-    elif "joint_qdesn_pure_desn" in path or "joint_qdesn_simulation/" in path:
+    elif "joint_qdesn_pure_desn" in path or "joint_qdesn_pro_review" in path or "joint_qdesn_simulation/" in path:
         contract = "tables/joint_qdesn_pure_desn_v1_article_asset_manifest.csv;tables/joint_qdesn_pure_desn_v1_projection_provenance.csv"
+        if "pro_review" in path:
+            contract += ";tables/qdesn_pro_review_presentation_manifest.json"
         authority = "expanded pure-DESN 32 MCMC + 32 VB cells"
         estimator = "DGP-integrated finite-grid score conditional on model-specific averaged recursive features; VB intercepts fixed; fit recovery points"
-    elif "qdesn_validation" in path or "independent_simulation/" in path:
+    elif "qdesn_validation" in path or "qdesn_pro_review" in path or "independent_simulation/" in path:
         contract = "tables/qdesn_validation_500obs_metric_intervals_v14_manifest.txt;tables/qdesn_validation_500obs_dgp_oracle_figures_v14_manifest.txt"
+        if "pro_review" in path:
+            contract += ";tables/qdesn_pro_review_presentation_manifest.json"
         authority = "independent rolling-state v14"
         estimator = "criterion-specific draw-wise posterior/variational metric means and equal-tailed intervals; point paths and inherited roles distinct"
     else:
@@ -64,7 +73,7 @@ def classification(path: str) -> tuple[str, str, str, str]:
     if suffix == ".tex":
         role = "alias/presentation override" if "outputs" in path or "overrides" in path else "generated numerical table/figure wrapper"
     elif suffix in (".pdf", ".png"):
-        role = "presentation-only display derivative" if "review_" in path else "frozen scientific display"
+        role = "presentation-only display derivative" if "review" in path else "frozen scientific display"
     elif "manifest" in path or "provenance" in path:
         role = "provenance companion"
     else:

@@ -1244,7 +1244,7 @@
     "NimbusSans-Regular.otf": "7c25be4d78155523080ab85b10277150657ff7dabbcad7037bdd536c9b6d0d08"
   },
   "generator": "scripts/build_glofas_review_figures.py",
-  "generator_sha256": "c0ff81c54ff71d6a5b1f70936f39df8afe1edeeb37d8a0e79b1adf32c93e4247",
+  "generator_sha256": "e55d0d93563e0f6f01fea9237be65b1c47fa046994be5a987e8b09877753df73",
   "omitted_graphics": "Redundant pure-white backgrounds only; all visible nonwhite source paths retained.",
   "purpose": "Readable manuscript presentation; no scientific authority or score changes.",
   "pymupdf_version": "1.26.5",

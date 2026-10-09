@@ -82,6 +82,24 @@ to satisfy an inaccessible current journal-specific code/data requirement.
 
 ### Active presentation derivatives
 
+The main GloFAS figure now uses
+`scripts/build_glofas_figure4_common_window.R`. All three panels share the
+30 historical dates and 28 issued forecast dates. The two model panels add
+posterior-mean fitted conditional quantiles from the same retained Part 4
+fits; their forecast ordinates are unchanged. A separate input provenance
+record and `tables/glofas_figure4_common_window_manifest.json` authenticate
+this presentation-only extension. No fit, score, model choice, or prior is
+changed. The model panels repeat the historical and held-out USGS values and
+share identical date limits, tick positions, and plotting-area widths.
+
+The compact historical-quantile CSV suffices for public reproduction. Its
+read-only extraction checks the retained fit and design hashes before using
+historical features. For AL it averages the conditional quantile readout;
+for Normal Ridge it averages the conditional Normal response quantile,
+including the posterior mean residual standard deviation. These are fitted
+conditional quantiles, not coefficient credible limits. The original 28-date
+forecast summaries are used directly and are not reconstructed or rescored.
+
 `scripts/build_qdesn_pro_review_presentation.R` reads the pinned public
 simulation summaries, frozen GloFAS quantile table, and compact authenticated
 plotting inputs. It creates the six larger-label simulation PDFs, three-panel
@@ -89,6 +107,8 @@ GloFAS PDF, five table/figure wrappers, and seven-family main score table listed
 in `tables/qdesn_pro_review_presentation_manifest.json`. Its thirteen outputs
 reproduce byte for byte in the recorded environment. It does not fit a model,
 reconstruct posterior draws, rescore a forecast, or change a scientific grid.
+This historical builder and its thirteen outputs remain unchanged; the new
+common-window main figure is generated separately.
 
 The compact GloFAS history, member and truth CSVs and their provenance record
 are public repository inputs, not required TeX files. The extraction script

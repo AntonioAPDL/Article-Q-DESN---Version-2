@@ -54,6 +54,10 @@ def classification(path: str) -> tuple[str, str, str, str]:
         if "three_panel_review" in path or "main_scores_review" in path:
             contract = "tables/qdesn_article_presentation_manifest_v2.json;tables/glofas_search3_review_plot_input_provenance.json"
             authority = "GloFAS Search III; authenticated plotting-only derivative"
+        if "common_window" in path:
+            contract = "tables/glofas_figure4_common_window_manifest.json;tables/glofas_search3_part4_history_fitted_quantile_provenance.json"
+            authority = "GloFAS Search III; common-window fitted/forecast display"
+            estimator = "historical posterior-mean conditional quantiles from the same Part 4 fits; unchanged 28-date forecasts; no refitting or rescoring"
     elif "pricefm" in path:
         contract = "tables/pricefm_r98_article_projection_manifest.json"
         authority = "PriceFM R98 complete region-frozen authority; R92 historical only where labelled"

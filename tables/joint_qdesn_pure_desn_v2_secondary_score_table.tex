@@ -1,12 +1,11 @@
 \begin{table}[p]
 \centering
-\scriptsize
-\setlength{\tabcolsep}{3.5pt}
-\renewcommand{\arraystretch}{1.04}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}rr@{}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rr@{}}
 \toprule
-Simulation setting & Model & Posterior mean realized score & Score at posterior-mean grid \\
+Simulation setting & Model & \shortstack{Posterior mean\\realized score} & \shortstack{Mean-grid\\realized score} \\
 \midrule
 Asymmetric-Laplace tail & Joint AL & 0.3825 & 0.3789 \\
  & Independent AL & 0.4175 & 0.4152 \\
@@ -18,10 +17,10 @@ Gaussian-mixture innovations & Joint AL & 0.4701 & 0.4656 \\
  & Joint exAL & 0.4772 & 0.4742 \\
  & Independent exAL & 0.4651 & 0.4573 \\
 \addlinespace[2pt]
-Laplace innovations & Joint AL & 0.5100 & 0.4971 \\
- & Independent AL & 0.3653 & 0.3558 \\
- & Joint exAL & 0.5140 & 0.5041 \\
- & Independent exAL & 0.3638 & 0.3538 \\
+Laplace innovations & Joint AL & 0.3467 & 0.3455 \\
+ & Independent AL & 0.3408 & 0.3391 \\
+ & Joint exAL & 0.3459 & 0.3443 \\
+ & Independent exAL & 0.3407 & 0.3389 \\
 \addlinespace[2pt]
 Nonlinear reservoir dynamics & Joint AL & 0.5238 & 0.5172 \\
  & Independent AL & 0.5140 & 0.5066 \\
@@ -49,7 +48,6 @@ Student-\(t\) location--scale & Joint AL & 0.4233 & 0.4224 \\
  & Independent exAL & 0.4263 & 0.4249 \\
 \bottomrule
 \end{tabular}
-}%
-\caption{Secondary finite-grid \(\aCRPS\) against realized observations. The first column averages the score over posterior readout draws conditional on the averaged recursive design; the second evaluates the projected posterior-mean grid. These are distinct from the DGP-integrated primary criterion.}
-\label{tab:joint-qdesn-pure-desn-v1-secondary}
+\caption{Secondary finite-grid \(\aCRPS\) against realized observations. The posterior mean averages scores at the averaged recursive design; the mean-grid score evaluates the projected posterior-mean quantile grid. These are distinct from the DGP-integrated primary criterion.}
+\label{tab:joint-qdesn-pure-desn-v2-secondary}
 \end{table}

@@ -1,12 +1,11 @@
 \begin{table}[p]
 \centering
-\scriptsize
-\setlength{\tabcolsep}{3.5pt}
-\renewcommand{\arraystretch}{1.04}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}rrrrr@{}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rrrrr@{}}
 \toprule
-Simulation setting & Model & Mean & Median & 2.5\% & 97.5\% & \shortstack{Score at\\posterior-mean grid} \\
+Simulation setting & Model & Mean & Median & 2.5\% & 97.5\% & \shortstack{Mean-grid\\score} \\
 \midrule
 Asymmetric-Laplace tail & Joint AL & 0.3805 & 0.3790 & 0.3705 & 0.3985 & 0.3768 \\
  & Independent AL & 0.4160 & 0.4153 & 0.3910 & 0.4435 & 0.4136 \\
@@ -18,10 +17,10 @@ Gaussian-mixture innovations & Joint AL & 0.4609 & 0.4595 & 0.4463 & 0.4826 & 0.
  & Joint exAL & 0.4687 & 0.4679 & 0.4518 & 0.4906 & 0.4657 \\
  & Independent exAL & 0.4551 & 0.4538 & 0.4383 & 0.4798 & 0.4471 \\
 \addlinespace[2pt]
-Laplace innovations & Joint AL & 0.5329 & 0.5301 & 0.4666 & 0.6170 & 0.5201 \\
- & Independent AL & \textbf{0.3800} & 0.3781 & 0.3669 & 0.4034 & 0.3709 \\
- & Joint exAL & 0.5240 & 0.5171 & 0.4332 & 0.6487 & 0.5138 \\
- & Independent exAL & 0.3810 & 0.3795 & 0.3681 & 0.4033 & 0.3715 \\
+Laplace innovations & Joint AL & 0.3627 & 0.3626 & 0.3606 & 0.3651 & 0.3617 \\
+ & Independent AL & \textbf{0.3613} & 0.3612 & 0.3589 & 0.3641 & 0.3597 \\
+ & Joint exAL & 0.3626 & 0.3624 & 0.3600 & 0.3653 & 0.3611 \\
+ & Independent exAL & 0.3627 & 0.3626 & 0.3597 & 0.3660 & 0.3609 \\
 \addlinespace[2pt]
 Nonlinear reservoir dynamics & Joint AL & 0.5001 & 0.4984 & 0.4843 & 0.5250 & 0.4933 \\
  & Independent AL & \textbf{0.4881} & 0.4871 & 0.4787 & 0.5031 & 0.4807 \\
@@ -49,7 +48,6 @@ Student-\(t\) location--scale & Joint AL & 0.3983 & 0.3982 & 0.3964 & 0.4005 & 0
  & Independent exAL & 0.4000 & 0.3999 & 0.3970 & 0.4034 & 0.3986 \\
 \bottomrule
 \end{tabular}
-}%
-\caption{DGP-integrated finite-grid \(\aCRPS\) in the pure-DESN multi-quantile study. The posterior means, medians, and equal-tailed 95\% limits condition on each model's averaged recursively generated forecast design. The final column evaluates the posterior-mean quantile grid after the specified monotone projection; it is a different summary from the posterior mean of the score. Boldface marks the lowest posterior mean within each setting. All winner/runner-up marginal intervals overlap.}
-\label{tab:joint-qdesn-pure-desn-v1-score}
+\caption{DGP-integrated finite-grid \(\aCRPS\) for the multi-quantile study. Means, medians, and equal-tailed 95\% limits describe posterior readout uncertainty conditional on each model's averaged recursive design. The mean-grid score evaluates the projected posterior-mean quantile grid and differs from the posterior mean of the score. Boldface marks descriptive numerical minima; every winner and runner-up marginal interval overlaps.}
+\label{tab:joint-qdesn-pure-desn-v2-score}
 \end{table}

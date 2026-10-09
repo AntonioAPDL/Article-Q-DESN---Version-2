@@ -1,10 +1,9 @@
 \begin{table}[p]
 \centering
 \footnotesize
-\setlength{\tabcolsep}{3.5pt}
-\renewcommand{\arraystretch}{1.04}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.20\textwidth}>{\raggedright\arraybackslash}p{0.21\textwidth}rr@{}}
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\textwidth}lrr@{}}
 \toprule
 Simulation setting & Model & Averaged design & Recursive trajectories \\
 \midrule
@@ -18,10 +17,10 @@ Gaussian-mixture innovations & Joint AL & 0.4609 [0.4463, 0.4826] & 0.4988 [0.47
  & Joint exAL & 0.4687 [0.4518, 0.4906] & 0.4907 [0.4682, 0.5196] \\
  & Independent exAL & 0.4551 [0.4383, 0.4798] & 0.4695 [0.4488, 0.4991] \\
 \addlinespace[2pt]
-Laplace innovations & Joint AL & 0.5329 [0.4666, 0.6170] & 0.7450 [0.4889, 1.1443] \\
- & Independent AL & 0.3800 [0.3669, 0.4034] & 0.4157 [0.3927, 0.4647] \\
- & Joint exAL & 0.5240 [0.4332, 0.6487] & 0.6706 [0.4247, 1.1193] \\
- & Independent exAL & 0.3810 [0.3681, 0.4033] & 0.4032 [0.3851, 0.4427] \\
+Laplace innovations & Joint AL & 0.3627 [0.3606, 0.3651] & 0.3820 [0.3760, 0.3891] \\
+ & Independent AL & 0.3613 [0.3589, 0.3641] & 0.3752 [0.3698, 0.3814] \\
+ & Joint exAL & 0.3626 [0.3600, 0.3653] & 0.3783 [0.3721, 0.3840] \\
+ & Independent exAL & 0.3627 [0.3597, 0.3660] & 0.3737 [0.3686, 0.3794] \\
 \addlinespace[2pt]
 Nonlinear reservoir dynamics & Joint AL & 0.5001 [0.4843, 0.5250] & 0.5197 [0.5000, 0.5520] \\
  & Independent AL & 0.4881 [0.4787, 0.5031] & 0.5030 [0.4908, 0.5239] \\
@@ -49,7 +48,6 @@ Student-\(t\) location--scale & Joint AL & 0.3983 [0.3964, 0.4005] & 0.4431 [0.4
  & Independent exAL & 0.4000 [0.3970, 0.4034] & 0.4393 [0.4309, 0.4490] \\
 \bottomrule
 \end{tabular}
-}%
-\caption{Sensitivity to integration over recursively generated future designs. Entries are posterior means with equal-tailed 95\% intervals. Averaged-design entries condition on each model's mean future feature matrix; trajectory entries retain draw-specific recursive states. The comparison shows the effect of retaining recursive trajectories rather than conditioning on averaged features.}
-\label{tab:joint-qdesn-pure-desn-v1-recursive-policy}
+\caption{Sensitivity to integration over recursively generated future features. Entries are posterior means and equal-tailed 95\% intervals. Averaged-design entries condition on each model's mean future feature matrix; trajectory entries retain each draw's recursive states. The comparison concerns retained uncertainty, not interval calibration.}
+\label{tab:joint-qdesn-pure-desn-v2-recursive-policy}
 \end{table}

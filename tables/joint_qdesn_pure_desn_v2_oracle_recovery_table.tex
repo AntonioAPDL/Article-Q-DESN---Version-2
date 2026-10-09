@@ -1,10 +1,9 @@
 \begin{table}[p]
 \centering
-\scriptsize
-\setlength{\tabcolsep}{3.5pt}
-\renewcommand{\arraystretch}{1.04}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}rrrr@{}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rrrr@{}}
 \toprule
 Simulation setting & Model & Fit MAE & Fit RMSE & Forecast MAE & Forecast RMSE \\
 \midrule
@@ -18,10 +17,10 @@ Gaussian-mixture innovations & Joint AL & 0.2114 & 0.2655 & 0.3272 & 0.4198 \\
  & Joint exAL & 0.1722 & 0.2142 & 0.3245 & 0.4071 \\
  & Independent exAL & 0.1513 & 0.1906 & 0.2646 & 0.3271 \\
 \addlinespace[2pt]
-Laplace innovations & Joint AL & 0.1711 & 0.2200 & 0.5138 & 0.7075 \\
- & Independent AL & 0.1528 & 0.1983 & 0.1806 & 0.2257 \\
- & Joint exAL & 0.1694 & 0.2118 & 0.4813 & 0.6705 \\
- & Independent exAL & 0.1416 & 0.1775 & 0.2066 & 0.2599 \\
+Laplace innovations & Joint AL & 0.1188 & 0.1513 & 0.1500 & 0.1906 \\
+ & Independent AL & 0.1308 & 0.1679 & 0.1355 & 0.1690 \\
+ & Joint exAL & 0.1376 & 0.1741 & 0.1808 & 0.2263 \\
+ & Independent exAL & 0.1395 & 0.1757 & 0.1699 & 0.2100 \\
 \addlinespace[2pt]
 Nonlinear reservoir dynamics & Joint AL & 0.3008 & 0.3849 & 0.2916 & 0.3683 \\
  & Independent AL & 0.2895 & 0.3701 & 0.2447 & 0.3093 \\
@@ -49,7 +48,6 @@ Student-\(t\) location--scale & Joint AL & 0.1246 & 0.1646 & 0.1773 & 0.2193 \\
  & Independent exAL & 0.1076 & 0.1365 & 0.2149 & 0.2567 \\
 \bottomrule
 \end{tabular}
-}%
-\caption{Recovery of the known conditional quantile paths by the monotone posterior-mean grids. MAE and RMSE diagnose oracle-path recovery and are separate from scores against observations. Fitting entries are point diagnostics; no posterior intervals are available in the compact evidence.}
-\label{tab:joint-qdesn-pure-desn-v1-oracle}
+\caption{Recovery of known conditional quantile paths by projected posterior-mean grids. MAE and RMSE are oracle-path diagnostics, separate from scores against observations. Fitting entries are point diagnostics, without posterior intervals.}
+\label{tab:joint-qdesn-pure-desn-v2-oracle}
 \end{table}

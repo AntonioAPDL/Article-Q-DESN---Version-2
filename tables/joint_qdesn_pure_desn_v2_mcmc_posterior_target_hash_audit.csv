@@ -7,10 +7,10 @@
 "gaussian_mixture_bridge__joint_exqdesn_rhs","exAL",5,"93bd32131b9b032f875b7b5ae9a3392d1ba3aadd25d762e371df8fc757065d96",TRUE
 "gaussian_mixture_bridge__joint_qdesn_rhs","AL",5,"14cddbc65023dc60a5afedc735e68805b8873d8b8dd10a26b5448a37f3e106f9",TRUE
 "gaussian_mixture_bridge__qdesn_rhs_independent","AL",5,"782a4c77ff5b8141ae26ef842889a67e90d6c537e66baff31a1d150fe2b769d8",TRUE
-"laplace_bridge__exqdesn_rhs_independent","exAL",5,"a01ae32c7bf2ebba8402864c6bfbbdd0d9761e3986bc53c5cbcdf8c3110fd997",TRUE
-"laplace_bridge__joint_exqdesn_rhs","exAL",5,"3cfb247cf04ced72d4aff0cfae5fdd00e6bb72ee6a289da1e96648f37d814090",TRUE
-"laplace_bridge__joint_qdesn_rhs","AL",5,"70bd5256d46e93efd6606e98b6fe9b34fae24ec83910c093ea6ecb08845862ff",TRUE
-"laplace_bridge__qdesn_rhs_independent","AL",5,"79dcb2fa8ab05872a82088064843a9c31ca2592e39678d418bfe1566d3118cf0",TRUE
+"laplace_bridge__exqdesn_rhs_independent","exAL",5,"07176a4f3c486c6530d8af68502564d4fccf6ad610733029dc40990649386ff3",TRUE
+"laplace_bridge__joint_exqdesn_rhs","exAL",5,"287bd1ee5d855bad757f3f8a7bced56a4f217a0ab1d8c5f4fb9be029dd916687",TRUE
+"laplace_bridge__joint_qdesn_rhs","AL",5,"5bccc7db6cd13fa20deac8b6f0bddab24a2ac207491d8d5e143f7b7a83af34cd",TRUE
+"laplace_bridge__qdesn_rhs_independent","AL",5,"8986184c9e444c895eaef5285f24fd06cad049a9084efafdee77358219f1075e",TRUE
 "nonlinear_reservoir_friendly__exqdesn_rhs_independent","exAL",5,"f0e927219e188d37c8c0640c29f676e25420ead1e3d1585abef646b13816dd6e",TRUE
 "nonlinear_reservoir_friendly__joint_exqdesn_rhs","exAL",5,"2a922351f8d897cbf6d12216c2aa4d9f816d38d59d65771effa1ac47dff816d6",TRUE
 "nonlinear_reservoir_friendly__joint_qdesn_rhs","AL",5,"93fe7cf8ac2d7bfbce2a3f9f9fbf758ea3b347d2d2789a39b5c46eec21443961",TRUE

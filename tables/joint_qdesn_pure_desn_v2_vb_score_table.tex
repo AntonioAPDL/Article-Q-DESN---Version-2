@@ -1,12 +1,11 @@
 \begin{table}[p]
 \centering
-\scriptsize
-\setlength{\tabcolsep}{3.5pt}
-\renewcommand{\arraystretch}{1.04}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.21\textwidth}>{\raggedright\arraybackslash}p{0.22\textwidth}rrrrr@{}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rrrrr@{}}
 \toprule
-Simulation setting & Model & Mean & Median & 2.5\% & 97.5\% & \shortstack{Score at\\posterior-mean grid} \\
+Simulation setting & Model & Mean & Median & 2.5\% & 97.5\% & \shortstack{Mean-grid\\score} \\
 \midrule
 Asymmetric-Laplace tail & Joint AL & 0.3829 & 0.3829 & 0.3786 & 0.3875 & 0.3826 \\
  & Independent AL & 0.4261 & 0.4260 & 0.4147 & 0.4383 & 0.4261 \\
@@ -18,10 +17,10 @@ Gaussian-mixture innovations & Joint AL & 0.4598 & 0.4595 & 0.4529 & 0.4681 & 0.
  & Joint exAL & 0.4671 & 0.4668 & 0.4577 & 0.4780 & 0.4664 \\
  & Independent exAL & 0.4531 & 0.4526 & 0.4428 & 0.4663 & 0.4507 \\
 \addlinespace[2pt]
-Laplace innovations & Joint AL & 0.5296 & 0.5294 & 0.5011 & 0.5599 & 0.5274 \\
- & Independent AL & 0.3738 & 0.3733 & 0.3666 & 0.3837 & 0.3715 \\
- & Joint exAL & 0.5922 & 0.5913 & 0.5256 & 0.6647 & 0.5898 \\
- & Independent exAL & 0.3757 & 0.3752 & 0.3686 & 0.3862 & 0.3727 \\
+Laplace innovations & Joint AL & 0.3626 & 0.3626 & 0.3620 & 0.3634 & 0.3625 \\
+ & Independent AL & 0.3604 & 0.3603 & 0.3596 & 0.3612 & 0.3601 \\
+ & Joint exAL & 0.3641 & 0.3641 & 0.3634 & 0.3649 & 0.3640 \\
+ & Independent exAL & 0.3636 & 0.3636 & 0.3627 & 0.3647 & 0.3632 \\
 \addlinespace[2pt]
 Nonlinear reservoir dynamics & Joint AL & 0.5041 & 0.5038 & 0.4939 & 0.5159 & 0.5031 \\
  & Independent AL & 0.4834 & 0.4831 & 0.4778 & 0.4909 & 0.4814 \\
@@ -49,7 +48,6 @@ Student-\(t\) location--scale & Joint AL & 0.3986 & 0.3986 & 0.3980 & 0.3993 & 0
  & Independent exAL & 0.4016 & 0.4016 & 0.4009 & 0.4025 & 0.4014 \\
 \bottomrule
 \end{tabular}
-}%
-\caption{Approximate variational DGP-integrated \(\aCRPS\) under the same seven-level comparison. Intervals condition on point intercepts and each model's averaged recursive design; intercept covariance is omitted. The final column is the score at the monotone posterior-mean quantile grid.}
-\label{tab:joint-qdesn-pure-desn-v1-vb-score}
+\caption{Approximate variational DGP-integrated \(\aCRPS\) under the same seven-level comparison. Intervals condition on point intercepts and each model's averaged recursive design, omitting intercept covariance. The mean-grid score evaluates the projected posterior-mean quantile grid.}
+\label{tab:joint-qdesn-pure-desn-v2-vb-score}
 \end{table}

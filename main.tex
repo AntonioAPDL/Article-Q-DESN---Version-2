@@ -123,14 +123,12 @@ quantile regressions and a joint extension that shrinks adjacent
 quantile-specific coefficient differences. Posterior computation uses Markov
 chain Monte Carlo and model-specific variational approximations. Two
 simulations examine quantile-path recovery, forecast scores, and ordering.
-Joint estimation reduces raw quantile crossings, while forecast rankings vary
-across data-generating mechanisms. A retrospective streamflow analysis uses
+\textit{[Simulation findings to be updated.]}
+A retrospective streamflow analysis uses
 gauge records and Global Flood Awareness System ensembles to correct forecast
-discrepancies; lower quantile scores remain accompanied by undercoverage.
-In electricity-price forecasting, region-specific regressions have slightly
-higher aggregate quantile loss than matched PriceFM forecasts. These results
-show how fixed recurrent features support regularized Bayesian quantile
-inference and identify predictive calibration as a remaining challenge.
+discrepancies. \textit{[GloFAS findings to be updated.]}
+The electricity-price application compares region-specific regressions with
+matched PriceFM forecasts. \textit{[PriceFM findings to be updated.]}
 \end{abstract}
 
 \noindent\textit{Key words:} Asymmetric Laplace likelihood; Bayesian shrinkage;
@@ -376,12 +374,13 @@ The composite update is
  f_{p_k}(y_t\mid\mu_{k,t},\sigma_k,\gamma_k),\\
 \text{Composite posterior:}\quad
 &\pi_c(\theta\mid\vect y,\mat X)
- =\frac{L_c(\theta;\vect y,\mat X)\pi(\theta)}
- {\int L_c(\vartheta;\vect y,\mat X)\pi(\vartheta)\,d\vartheta}.
+ \propto\exp\!\left\{-\ell_c(\theta;\vect y,\mat X)\right\}\pi(\theta).
 \end{aligned}
 \label{eq:joint-composite-posterior-main}
 \end{equation}
-The posterior is defined when the parameter-normalizing integral is finite.
+Here \(\ell_c(\theta;\vect y,\mat X)=-\log L_c(\theta;\vect y,\mat X)\)
+is the negative composite log-likelihood. The posterior is defined when its
+normalizing constant is finite.
 Each factor is a normalized density, but their product reuses the same
 response across levels and is not a normalized scalar-response sampling
 density. We use learning rate one. The prior regularizes the first slope

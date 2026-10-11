@@ -44,8 +44,9 @@ is still required for a strict confirmatory claim.
 
 ## Search domain
 
-- output lags: 32 through 2880 quarter-hours, including weekly and multi-week scales;
-- exogenous lags: 0 through 672 quarter-hours;
+- output lags: 32 through 2880 quarter-hours, including inherited 1152, 1560, 1728,
+  2304, and 2688 long-memory anchors;
+- exogenous lags: 0 through 672 quarter-hours, including inherited 12-step anchors;
 - depth: 2 through 6 layers;
 - readout dimension: at most 1537, with medium and large tapered widths;
 - alpha: 0.05 through 0.90; rho: 0.40 through 0.99;

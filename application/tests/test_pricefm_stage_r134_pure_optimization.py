@@ -212,6 +212,8 @@ def test_balanced_candidate_design_is_broad_deterministic_and_keeps_r98_control(
     assert all(v['spec']['readout'] == 'pure_all_layers' for v in first)
     assert {v['spec']['feature_policy'] for v in first} == set(core.FEATURE_POLICIES)
     assert max(v['spec']['m_y'] for v in first) == 2880
+    assert {1152, 1560, 1728, 2304, 2688}.issubset({v['spec']['m_y'] for v in first})
+    assert 12 in {v['spec']['m_x'] for v in first}
     assert max(v['spec']['depth'] for v in first) == 6
 
 

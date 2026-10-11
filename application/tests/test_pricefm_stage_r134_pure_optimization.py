@@ -146,6 +146,13 @@ def test_broad_ridge_stage_retains_scores_not_gram_matrices():
     assert 'write_stats_packet' in stats
 
 
+def test_preparation_loads_each_feature_bank_at_most_once_not_per_candidate():
+    source = inspect.getsource(CTL.prepare)
+    candidate_loop = source[source.index('admissible = []'):source.index('controls = [')]
+    assert 'load_arrays' not in candidate_loop
+    assert "input_dimensions[candidate['spec']['feature_policy']]" in candidate_loop
+
+
 def test_protocol_declares_comprehensive_bounded_search_and_no_promotion():
     assert PROTOCOL['regions'] == ['BG', 'HR', 'DK_1']
     assert PROTOCOL['maximum_workers'] == 30

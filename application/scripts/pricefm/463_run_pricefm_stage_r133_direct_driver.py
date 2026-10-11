@@ -258,10 +258,13 @@ def worker(name, cpu):
             for key in ('stochastic', 'truth', 'positions', 'bank_indices', 'anchors_ns'):
                 values[key] = cached[key]
         first = float(np.max(abs(values['direct'][:, 0] - values['stochastic'][:, 0])))
-        if first > 1e-8: raise RuntimeError('R133 first-step receiver identity failed')
+        tolerance = prep['protocol']['first_horizon_replay_tolerance_EUR_MWh']
+        if first > tolerance: raise RuntimeError(
+            f'R133 first-step receiver identity failed: {first} > {tolerance}')
         np.savez_compressed(tmp / 'predictions.npz', **values)
         result = dict(certified=True, region=task['region'], fold=task['fold'],
-            first_step_difference=first, direct_family=model['family'], fitting_performed=False,
+            first_step_difference=first, first_step_tolerance=tolerance,
+            direct_family=model['family'], fitting_performed=False,
             official_test_opened=False, audit=audit)
     else:
         raise ValueError('unknown R133 task kind')

@@ -25,6 +25,7 @@ def validate_protocol(p):
         step_minutes=15, origins_per_clock=12, origin_offsets_steps=[0, 24, 48, 72],
         maximum_workers=30, minimum_free_memory_GiB=200,
         minimum_free_disk_GiB=200, maximum_campaign_output_GiB=2.,
+        first_horizon_replay_tolerance_EUR_MWh=5e-8,
         scale_prior_count=192, scale_bounds=[.5, 2.5],
         minimum_internal_improvement_fraction=.01,
         maximum_split_regression_fraction=.005,

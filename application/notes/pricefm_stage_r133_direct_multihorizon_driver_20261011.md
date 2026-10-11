@@ -27,3 +27,7 @@ The release suite executes the R133, R132 and R131 regressions and separately
 pins the exact R127 closeout head and consumed source/artifact hashes. The
 optional R127 full-fold tests require scikit-learn, which this frozen Jerez
 environment does not provide and R133 does not execute.
+
+The horizon-one identity check permits at most `5e-8 EUR/MWh` absolute replay
+drift. This accommodates observed BLAS-level differences of about `1.3e-8`
+while remaining negligible relative to prices and forecast scores.

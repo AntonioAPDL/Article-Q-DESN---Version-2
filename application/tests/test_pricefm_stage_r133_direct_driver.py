@@ -37,6 +37,7 @@ def test_protocol_is_exact_and_bounded():
     assert value['regions'] == ['HR', 'DK_1']
     assert value['maximum_workers'] == 30
     assert value['paths'] == 500 and value['horizon_steps'] == 96
+    assert value['first_horizon_replay_tolerance_EUR_MWh'] == 5e-8
     assert not value['promotion_authorized'] and not value['all_region_launch_authorized']
 
 
@@ -148,7 +149,7 @@ def test_runner_orders_baseline_before_direct_receiver():
 
 def test_runner_enforces_first_horizon_identity_and_source_gate():
     text = RUNNER.read_text()
-    assert "first > 1e-8" in text
+    assert "first > tolerance" in text
     assert "work/pricefm-r133-" in text
     assert "official_test_reforecast=False" in text
     assert "normal_or_quantile_refits=0" in text

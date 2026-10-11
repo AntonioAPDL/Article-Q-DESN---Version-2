@@ -150,7 +150,8 @@ def test_preparation_loads_each_feature_bank_at_most_once_not_per_candidate():
     source = inspect.getsource(CTL.prepare)
     candidate_loop = source[source.index('admissible = []'):source.index('controls = [')]
     assert 'load_arrays' not in candidate_loop
-    assert "input_dimensions[candidate['spec']['feature_policy']]" in candidate_loop
+    assert "exogenous_dimensions[spec['feature_policy']]" in candidate_loop
+    assert "spec['m_y'] + (spec['m_x'] + 1) * channels" in candidate_loop
 
 
 def test_protocol_declares_comprehensive_bounded_search_and_no_promotion():

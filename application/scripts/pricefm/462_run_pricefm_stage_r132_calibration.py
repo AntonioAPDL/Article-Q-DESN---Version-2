@@ -313,11 +313,40 @@ def complete(task):
     return False
 
 
+def select_physical_cores(rows, count, busy_limit=.35):
+    if not 1 <= count <= 30:
+        raise ValueError('R132 worker count must be between 1 and 30')
+    selected, physical_used = [], set()
+    for busy, cpu, physical in sorted(rows, key=lambda row: (row[0], row[1])):
+        if busy < busy_limit and physical not in physical_used:
+            selected.append(cpu); physical_used.add(physical)
+        if len(selected) == count:
+            break
+    if not selected:
+        raise RuntimeError('no sufficiently idle physical core available')
+    return selected
+
+
 def cpu_pool(count):
-    scheduler = module('r132_frozen_scheduler',
-        Path(load_preparation()['dependency']) /
-        'application/scripts/pricefm/450_run_pricefm_stage_r127_driver_diagnosis.py')
-    return scheduler.cpu_pool(count)
+    """Choose up to 30 currently idle, distinct physical cores."""
+    def ticks():
+        result = {}
+        for line in Path('/proc/stat').read_text().splitlines():
+            words = line.split()
+            if words[0].startswith('cpu') and words[0][3:].isdigit():
+                values = list(map(int, words[1:9]))
+                result[int(words[0][3:])] = (sum(values), values[3] + values[4])
+        return result
+
+    before = ticks(); time.sleep(2); after = ticks(); rows = []
+    for cpu in os.sched_getaffinity(0):
+        total = after[cpu][0] - before[cpu][0]
+        idle = after[cpu][1] - before[cpu][1]
+        topology = Path(f'/sys/devices/system/cpu/cpu{cpu}/topology')
+        physical = ((topology / 'physical_package_id').read_text().strip(),
+                    (topology / 'core_id').read_text().strip())
+        rows.append((1 - idle / max(total, 1), cpu, physical))
+    return select_physical_cores(rows, count)
 
 
 def batch(tasks, cpus, prep, stage):

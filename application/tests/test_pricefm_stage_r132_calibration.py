@@ -179,3 +179,19 @@ def test_preparation_load_does_not_require_dependency_setup(tmp_path, monkeypatc
     (prep / 'preparation.json').write_text(json.dumps(frozen), encoding='utf-8')
     monkeypatch.setattr(entrypoint, 'PREP', prep)
     assert entrypoint.load_preparation() == frozen
+
+
+def test_r132_scheduler_supports_30_distinct_physical_cores():
+    path = HERE / '462_run_pricefm_stage_r132_calibration.py'
+    spec = importlib.util.spec_from_file_location('r132_scheduler_entrypoint', path)
+    entrypoint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(entrypoint)
+    rows = []
+    for core in range(32):
+        rows.extend([(core / 1000, core, (core // 8, core % 8)),
+                     (core / 1000 + .01, core + 32, (core // 8, core % 8))])
+    selected = entrypoint.select_physical_cores(rows, 30)
+    assert len(selected) == len(set(selected)) == 30
+    assert all(cpu < 32 for cpu in selected)
+    with pytest.raises(ValueError):
+        entrypoint.select_physical_cores(rows, 31)

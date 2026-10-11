@@ -135,6 +135,7 @@ def preparation(r131, r130, r128, dependency, release_path):
     r128_out = DATA / 'campaigns/pricefm_stage_r128_stochastic_regional_pilots_20261008'
     r130_out = DATA / 'campaigns/pricefm_stage_r130_forecast_error_attribution_20261010'
     r131_out = DATA / 'campaigns/pricefm_stage_r131_causal_seasonal_drivers_20261011'
+    r131_prep = DATA / 'launch_prep/pricefm_stage_r131_causal_seasonal_drivers_20261011/preparation.json'
     for folder in (r130_out / 'closeout', r131_out / 'closeout'):
         verified(folder)
     # R128's internal Normal selection completed and was frozen before its
@@ -148,10 +149,13 @@ def preparation(r131, r130, r128, dependency, release_path):
         raise RuntimeError('R130 is not frozen complete')
     if read(r131_out / 'terminal.json')['status'] != 'R131_COMPLETE_NOT_PROMOTED':
         raise RuntimeError('R131 is not frozen complete')
-    choices = read(r128_out / 'frozen_choices.json'); parent = read(r130_out / 'preparation.json')
+    choices = read(r128_out / 'frozen_choices.json'); parent = read(r131_prep)
+    if (Path(parent['parent_out']) != r130_out or parent['source']['head'] != protocol['r131_head']
+            or parent['protocol']['parent_head'] != protocol['r130_head']):
+        raise RuntimeError('R131 copied R130 lineage differs')
     inputs = {}; cells = []; tasks = []
     for path in (r128_out / 'frozen_choices.json', r128_out / 'blocked.json',
-                 r130_out / 'preparation.json', r130_out / 'terminal.json',
+                 r131_prep, r130_out / 'terminal.json',
                  r131_out / 'terminal.json'):
         inputs[str(path)] = digest(path)
     for region in protocol['regions']:

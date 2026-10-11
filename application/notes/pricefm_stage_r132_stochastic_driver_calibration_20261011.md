@@ -40,3 +40,6 @@ internal ridge/RHS selection, frozen choices, training banks and winning split
 fits completed and were sealed before its later nested quantile queue stopped.
 R132 verifies and uses only that completed internal Normal phase. Its frozen
 receiver lineage comes from the subsequently repaired R129/R130 artifacts.
+The exact R130 cell and task contract is read from R131's sealed preparation,
+which copied that lineage before R130's duplicate preparation file was removed;
+the predictions themselves remain the sealed R130 task packets.

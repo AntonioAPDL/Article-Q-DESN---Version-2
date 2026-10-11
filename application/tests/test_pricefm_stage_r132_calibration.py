@@ -163,5 +163,6 @@ def test_source_declares_no_fit_or_promotion(protocol):
     assert 'git push' not in script and 'git merge' not in script
     assert "r128_out / 'blocked.json'" in script
     assert "r128_out / 'terminal.json'" not in script
+    assert "r131_prep" in script and "r130_out / 'preparation.json'" not in script
     assert protocol['selection_uses_r130_or_r131'] is False
     assert protocol['oracle_used_for_calibration'] is False

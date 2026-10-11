@@ -90,8 +90,7 @@ def release(dependency, r128, r130, r131, r132):
         PRICEFM_R132_R131=str(r131), PRICEFM_R131_DEPENDENCY=str(dependency))
     tests = [ROOT / 'application/tests/test_pricefm_stage_r133_direct_driver.py',
         Path(r132) / 'application/tests/test_pricefm_stage_r132_calibration.py',
-        Path(r131) / 'application/tests/test_pricefm_stage_r131_seasonal.py',
-        Path(dependency) / 'application/tests/test_pricefm_stage_r127_driver_diagnosis.py']
+        Path(r131) / 'application/tests/test_pricefm_stage_r131_seasonal.py']
     with (target / 'pytest.log').open('w') as log:
         result = subprocess.run([sys.executable, '-B', '-m', 'pytest', '-q', *map(str, tests),
             '-p', 'no:cacheprovider', '--junitxml=' + str(junit)], cwd=ROOT, env=env,

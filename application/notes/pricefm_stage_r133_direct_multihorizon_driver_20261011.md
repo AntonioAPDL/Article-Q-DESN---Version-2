@@ -22,3 +22,8 @@ no DESN, Normal or quantile refitting, no MCMC, no registry or article update,
 and no all-region launch. Generated evidence remains under ignored
 `application/data_local/pricefm`; the detailed execution tracker is ignored at
 `local_trackers/pricefm_stage_r133_direct_multihorizon_driver_master_plan_20261011.md`.
+
+The release suite executes the R133, R132 and R131 regressions and separately
+pins the exact R127 closeout head and consumed source/artifact hashes. The
+optional R127 full-fold tests require scikit-learn, which this frozen Jerez
+environment does not provide and R133 does not execute.

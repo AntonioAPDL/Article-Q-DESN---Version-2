@@ -74,8 +74,14 @@ def load_preparation():
 
 
 def release(dependency, r128, r130, r131, r132):
-    source = identity(); target = DATA / 'runtime_audits' / TAG / (
+    source = identity(); base = DATA / 'runtime_audits' / TAG / (
         'release_' + socket.gethostname() + '_' + source['head'][:12])
+    target = base
+    for attempt in range(1, 100):
+        if not target.exists(): break
+        target = Path(str(base) + f'_retry{attempt:02d}')
+    else:
+        raise RuntimeError('R133 release retry namespace exhausted')
     target.mkdir(parents=True, exist_ok=False)
     junit = target / 'pytest.xml'; env = dict(os.environ)
     env.update(PRICEFM_R133_DEPENDENCY=str(dependency), PRICEFM_R133_R128=str(r128),

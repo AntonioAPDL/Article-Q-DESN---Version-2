@@ -145,6 +145,7 @@ def test_runner_enforces_first_horizon_identity_and_source_gate():
     assert "work/pricefm-r133-" in text
     assert "official_test_reforecast=False" in text
     assert "normal_or_quantile_refits=0" in text
+    assert "release retry namespace exhausted" in text
 
 
 def test_paths_are_runtime_excluded():

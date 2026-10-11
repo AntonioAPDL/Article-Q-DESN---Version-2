@@ -161,5 +161,7 @@ def test_source_declares_no_fit_or_promotion(protocol):
     assert 'new_fits=0' in script and 'official_test_reforecast=False' in script
     assert 'exalStaticLDVB(' not in script and 'run_r(' not in script
     assert 'git push' not in script and 'git merge' not in script
+    assert "r128_out / 'blocked.json'" in script
+    assert "r128_out / 'terminal.json'" not in script
     assert protocol['selection_uses_r130_or_r131'] is False
     assert protocol['oracle_used_for_calibration'] is False

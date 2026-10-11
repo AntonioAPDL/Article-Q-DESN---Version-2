@@ -135,17 +135,22 @@ def preparation(r131, r130, r128, dependency, release_path):
     r128_out = DATA / 'campaigns/pricefm_stage_r128_stochastic_regional_pilots_20261008'
     r130_out = DATA / 'campaigns/pricefm_stage_r130_forecast_error_attribution_20261010'
     r131_out = DATA / 'campaigns/pricefm_stage_r131_causal_seasonal_drivers_20261011'
-    for folder in (r128_out / 'closeout', r130_out / 'closeout', r131_out / 'closeout'):
+    for folder in (r130_out / 'closeout', r131_out / 'closeout'):
         verified(folder)
-    if read(r128_out / 'terminal.json')['status'] != 'R128_COMPLETE_NOT_PROMOTED':
-        raise RuntimeError('R128 is not frozen complete')
+    # R128's internal Normal selection completed and was frozen before its
+    # later quantile queue stopped. R132 uses only that sealed internal phase.
+    r128_interruption = read(r128_out / 'blocked.json')
+    if (not r128_interruption.get('existing_evidence_preserved')
+            or r128_interruption.get('source', {}).get('head') != protocol['r128_head']
+            or not (r128_out / 'frozen_choices.json').is_file()):
+        raise RuntimeError('R128 sealed internal phase is unavailable')
     if read(r130_out / 'terminal.json')['status'] != 'R130_COMPLETE_NOT_PROMOTED':
         raise RuntimeError('R130 is not frozen complete')
     if read(r131_out / 'terminal.json')['status'] != 'R131_COMPLETE_NOT_PROMOTED':
         raise RuntimeError('R131 is not frozen complete')
     choices = read(r128_out / 'frozen_choices.json'); parent = read(r130_out / 'preparation.json')
     inputs = {}; cells = []; tasks = []
-    for path in (r128_out / 'frozen_choices.json', r128_out / 'terminal.json',
+    for path in (r128_out / 'frozen_choices.json', r128_out / 'blocked.json',
                  r130_out / 'preparation.json', r130_out / 'terminal.json',
                  r131_out / 'terminal.json'):
         inputs[str(path)] = digest(path)
@@ -187,6 +192,7 @@ def preparation(r131, r130, r128, dependency, release_path):
         release_sha256=digest(release_path), source_sha256={str(p): digest(p) for p in source_paths},
         input_sha256=inputs, internal_cells=cells, heldout_cells=heldout,
         internal_tasks=tasks, heldout_parent_tasks=parent['tasks'],
+        r128_dependency_scope='sealed_internal_Normal_selection_before_later_quantile_queue_interruption',
         official_test_reforecast=False, new_fits=0, selection_uses_r130_or_r131=False)
     immutable(PREP / 'preparation.json', prep)
     for task in tasks:

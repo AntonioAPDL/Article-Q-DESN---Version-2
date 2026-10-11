@@ -34,3 +34,9 @@ The ignored execution plan is
 All banks, maps, predictions, logs, receipts and reports remain under ignored
 `application/data_local/pricefm`. No predecessor output is overwritten,
 deleted, moved or compacted by this stage.
+
+R128 is deliberately not represented as a completed end-to-end campaign. Its
+internal ridge/RHS selection, frozen choices, training banks and winning split
+fits completed and were sealed before its later nested quantile queue stopped.
+R132 verifies and uses only that completed internal Normal phase. Its frozen
+receiver lineage comes from the subsequently repaired R129/R130 artifacts.

@@ -136,7 +136,7 @@ def prepare(dependency, release, reference=None):
     for region in p['regions']:
         proposed, protected, old_tau = core.balanced_candidates(runtime, baseline, registry, region,
             p['broad_candidate_draws'], p['candidate_seed'] + p['regions'].index(region))
-        input_dimensions = {}
+        exogenous_dimensions = {}
         for feature in p['feature_policies']:
             spec = next(v['spec'] for v in proposed if v['spec']['feature_policy'] == feature)
             frame = core.read_frame(DATA / 'raw/FINAL.csv', runtime.active_regions(spec), '2024-09-01')
@@ -154,11 +154,13 @@ def prepare(dependency, release, reference=None):
             else:
                 core.save_arrays(path, arrays)
             bank_ledger[str(path)] = digest(path)
-            input_dimensions[feature] = len(runtime.input_names(spec, arrays.exog_names))
+            exogenous_dimensions[feature] = len(arrays.exog_names)
 
         admissible = []
         for candidate in proposed:
-            dimension = input_dimensions[candidate['spec']['feature_policy']]
+            spec = candidate['spec']
+            channels = exogenous_dimensions[spec['feature_policy']]
+            dimension = spec['m_y'] + (spec['m_x'] + 1) * channels
             mandatory = runtime.mandatory_rows(candidate['spec'], dimension)
             if candidate['spec']['input_fan_in'] > dimension or len(mandatory) > candidate['spec']['units'][0]:
                 continue

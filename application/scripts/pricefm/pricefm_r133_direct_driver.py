@@ -217,8 +217,12 @@ def select_candidate(rows, protocol):
         mean_AQL=('AQL', 'mean'), family=('family', 'first'),
         ridge_penalty=('ridge_penalty', 'first'), feature_dimension=('feature_dimension', 'first'),
         scale_enabled=('scale_enabled', 'first')).sort_values(['mean_AQL', 'candidate_id'])
+    records = ranking.to_dict('records')
+    for record in records:
+        if pd.isna(record['ridge_penalty']):
+            record['ridge_penalty'] = None
     return dict(selected=chosen, accepted=[value[4] for value in sorted(accepted)],
-        ranking=ranking.to_dict('records'), identity_mean_AQL=float(baseline.mean()),
+        ranking=records, identity_mean_AQL=float(baseline.mean()),
         selection_uses_only_forward_internal_splits=True)
 
 

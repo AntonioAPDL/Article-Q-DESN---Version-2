@@ -132,6 +132,13 @@ def test_selection_rejects_subthreshold_gain():
     assert decision['selected'] == 'identity'
 
 
+def test_selection_is_strict_json_serializable():
+    decision = M.select_candidate(_rows({'identity': (10., 10.), 'good': (9., 9.)}), protocol())
+    assert json.dumps(decision, allow_nan=False)
+    identity = next(row for row in decision['ranking'] if row['candidate_id'] == 'identity')
+    assert identity['ridge_penalty'] is None
+
+
 def test_runner_orders_baseline_before_direct_receiver():
     text = SCRIPT.read_text()
     assert text.index("baseline = np.empty") < text.index("corrected = direct_paths")

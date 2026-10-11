@@ -37,6 +37,11 @@ PREP = DATA / 'launch_prep' / TAG
 PROTOCOL = ROOT / 'application/config' / (TAG + '.json')
 
 
+def load_preparation():
+    """Load the frozen launch record before dependency helpers are imported."""
+    return json.loads((PREP / 'preparation.json').read_text(encoding='utf-8'))
+
+
 def git(path, *args):
     return subprocess.check_output(['git', '-C', str(path), *args], text=True).strip()
 
@@ -225,7 +230,7 @@ def _load_internal(prep, region, split):
 
 
 def worker(name, cpu):
-    prep = read(PREP / 'preparation.json'); setup(prep['dependency'], prep['r128_source']); valid(prep)
+    prep = load_preparation(); setup(prep['dependency'], prep['r128_source']); valid(prep)
     os.sched_setaffinity(0, {cpu}); task = read(OUT / 'tasks' / (name + '.json'))
     scheduled = list(prep['internal_tasks'])
     for schedule in ('forward_tasks.json', 'heldout_tasks.json'):
@@ -310,7 +315,7 @@ def complete(task):
 
 def cpu_pool(count):
     scheduler = module('r132_frozen_scheduler',
-        Path(read(PREP / 'preparation.json')['dependency']) /
+        Path(load_preparation()['dependency']) /
         'application/scripts/pricefm/450_run_pricefm_stage_r127_driver_diagnosis.py')
     return scheduler.cpu_pool(count)
 
@@ -457,7 +462,7 @@ def closeout(prep, rows, decisions, tasks):
 
 
 def controller(workers):
-    prep = read(PREP / 'preparation.json'); setup(prep['dependency'], prep['r128_source']); valid(prep, full=True)
+    prep = load_preparation(); setup(prep['dependency'], prep['r128_source']); valid(prep, full=True)
     if not 1 <= workers <= prep['protocol']['maximum_workers']:
         raise ValueError('R132 worker cap exceeded')
     with (OUT / 'controller.lock').open('a') as lock:

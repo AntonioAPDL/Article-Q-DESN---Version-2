@@ -1,4 +1,5 @@
 from dataclasses import replace
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -166,3 +167,15 @@ def test_source_declares_no_fit_or_promotion(protocol):
     assert "r131_prep" in script and "r130_out / 'preparation.json'" not in script
     assert protocol['selection_uses_r130_or_r131'] is False
     assert protocol['oracle_used_for_calibration'] is False
+
+
+def test_preparation_load_does_not_require_dependency_setup(tmp_path, monkeypatch):
+    path = HERE / '462_run_pricefm_stage_r132_calibration.py'
+    spec = importlib.util.spec_from_file_location('r132_controller_entrypoint', path)
+    entrypoint = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(entrypoint)
+    frozen = {'dependency': '/frozen/r127', 'r128_source': '/frozen/r128'}
+    prep = tmp_path / 'prep'; prep.mkdir()
+    (prep / 'preparation.json').write_text(json.dumps(frozen), encoding='utf-8')
+    monkeypatch.setattr(entrypoint, 'PREP', prep)
+    assert entrypoint.load_preparation() == frozen

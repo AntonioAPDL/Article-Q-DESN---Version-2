@@ -76,6 +76,16 @@ def test_identity_map_is_exact_and_prior_free(protocol):
     assert value['training_splits'] == [1]
 
 
+def test_calibration_normalizes_integer_valued_clock_coordinates(protocol):
+    values = packet(3.)
+    values['anchor_clock'] = values['anchor_clock'].astype(float)
+    fitted = fit_calibration([values], 'identity', protocol, [1])
+    assert fitted['mode'] == 'identity' and fitted['observations'] == 8 * 96
+    values['anchor_clock'][0] = .5
+    with pytest.raises(ValueError, match='integer quarter-hours'):
+        fit_calibration([values], 'identity', protocol, [1])
+
+
 def test_location_and_scale_are_shrunken_finite_and_bounded(protocol):
     location = fit_calibration([packet(4.)], 'location', protocol, [1])
     scale = fit_calibration([packet(4., .1)], 'location_scale', protocol, [1])

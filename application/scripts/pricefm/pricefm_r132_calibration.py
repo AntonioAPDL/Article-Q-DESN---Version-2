@@ -58,8 +58,16 @@ def flatten_packets(packets):
     truth = np.concatenate([p['truth'] for p in packets]).reshape(-1)
     mean = np.concatenate([p['driver_mean'] for p in packets]).reshape(-1)
     sd = np.concatenate([p['driver_sd'] for p in packets]).reshape(-1)
-    clocks = np.concatenate([np.asarray(p['anchor_clock'])[:, None] + np.arange(96)[None, :]
-                             for p in packets]).reshape(-1) % 96
+    anchor_clocks = np.concatenate([np.asarray(p['anchor_clock'], dtype=float)
+                                    for p in packets])
+    if (not np.isfinite(anchor_clocks).all()
+            or not np.equal(anchor_clocks, np.floor(anchor_clocks)).all()
+            or np.any((anchor_clocks < 0) | (anchor_clocks > 95))):
+        raise ValueError('anchor clocks must be integer quarter-hours in [0, 95]')
+    clocks = np.concatenate([clock[:, None] + np.arange(96, dtype=int)[None, :]
+                             for clock in np.split(anchor_clocks.astype(int),
+                                                   np.cumsum([len(p['truth']) for p in packets])[:-1])]
+                           ).reshape(-1) % 96
     leads = np.tile(np.arange(96), sum(len(p['truth']) for p in packets))
     if not all(np.isfinite(v).all() for v in (truth, mean, sd)):
         raise ValueError('nonfinite internal driver moments')

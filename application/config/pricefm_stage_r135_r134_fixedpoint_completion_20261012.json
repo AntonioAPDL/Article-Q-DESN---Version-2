@@ -1,0 +1,53 @@
+{
+  "tag": "pricefm_stage_r135_r134_fixedpoint_completion_20261012",
+  "parent_tag": "pricefm_stage_r134_pure_qdesn_optimization_20261011",
+  "parent_source_head": "5f8510c73236907aaf32ea3dd725e72bf24620b0",
+  "dependency_head": "1e24342e1ecd2dd7a99d8df2445f29be7f7a03d2",
+  "maximum_workers": 30,
+  "minimum_free_memory_GiB": 180,
+  "minimum_free_disk_GiB": 170,
+  "maximum_output_GiB": 28,
+  "worker_storage_allowance_GiB": 0.08,
+  "task_storage_allowance_GiB": {
+    "median_certificate": 0.08,
+    "internal_al": 0.06,
+    "internal_score": 0.02,
+    "design": 1.5,
+    "normal_full": 0.06,
+    "al": 0.06,
+    "forecast": 0.04
+  },
+  "max_rhs_iter": 20000,
+  "certificate_limits": {
+    "beta_posterior_sd_rms": 0.0001,
+    "predictor_rms": 0.000001,
+    "covariance_whitened_rms": 0.0001,
+    "sigma_relative": 0.000001,
+    "rhs_joint_log_rates": 0.000001,
+    "rhs_start_log_precision": 0.000001,
+    "elbo_relative": 0.00000001
+  },
+  "expected_parent_task_counts": {
+    "ridge": 1923,
+    "stats": 279,
+    "rhs": 846,
+    "internal_design": 18,
+    "internal_al": 42,
+    "internal_score": 4,
+    "uncertified_median": 14,
+    "pending_internal": 98
+  },
+  "launch_approval_environment": "PRICEFM_R135_LAUNCH_APPROVED",
+  "public_cran_version": "1.1.1",
+  "package_mutation_authorized": false,
+  "screening_authorized": false,
+  "mcmc_authorized": false,
+  "joint_authorized": false,
+  "exal_authorized": false,
+  "promotion_authorized": false,
+  "registry_mutation_authorized": false,
+  "article_mutation_authorized": false,
+  "priors_from_initializers": false,
+  "test_used_for_selection": false,
+  "all_region_launch_authorized": false
+}

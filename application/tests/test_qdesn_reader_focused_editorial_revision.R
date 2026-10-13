@@ -24,8 +24,16 @@ expect(has(prose(intro), "We introduce the quantile deep echo state network (Q--
 expect(has(intro, "joint multiquantile extension"),
        "Name the extension as a multiquantile model.")
 expect(has(prose(intro), "both single-level and joint multiquantile regressions") &&
-         has(intro, "full conditional distributions") && has(intro, "Gibbs-based"),
+         has(prose(intro), "full conditional distributions") && has(intro, "Gibbs-based"),
        "Describe AL conditional tractability without claiming a closed-form posterior.")
+expect(has(prose(intro), "Under misspecification") &&
+         has(prose(intro), "AL coefficient credible intervals need not have nominal frequentist coverage") &&
+         has(intro, "YangWangHe2016ALInference"),
+       "Scope the AL coverage concern to coefficient intervals under misspecification.")
+expect(has(prose(intro), "In their regression simulations") &&
+         has(intro, "yan2025new") &&
+         has(prose(intro), "coefficient credible-interval coverage was closer to nominal than under AL in lower-tail settings"),
+       "Attribute exAL coverage evidence to the tested simulation and interval target.")
 expect(has(intro, "spatiotemporal forecasting") &&
          has(intro, "McDermottWikle2018DeepESNUQ") &&
          has(intro, "bootstrap ensemble") && has(intro, "penalized quantile sheets"),

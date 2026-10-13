@@ -38,10 +38,29 @@ expect(has(intro, "spatiotemporal forecasting") &&
          has(intro, "McDermottWikle2018DeepESNUQ") &&
          has(intro, "bootstrap ensemble") && has(intro, "penalized quantile sheets"),
        "Retain the distinct Bayesian DESN and quantile-reservoir precedents.")
-expect(has(prose(intro), "simultaneous quantile estimation itself is already present"),
-       "Do not claim simultaneous quantile fitting is new by itself.")
-expect(has(intro, "quantile curves can cross") && has(intro, "does not impose noncrossing"),
+expect(has(prose(intro), "then jointly estimate lead-dependent residual quantiles") &&
+         has(intro, "penalized quantile sheets"),
+       "Credit simultaneous quantile-sheet estimation while distinguishing its residual target.")
+expect(has(intro, "quantile curves can cross") &&
+         has(prose(intro), "rather than imposing a hard constraint; crossings can remain"),
        "Explain why grids are ordered and distinguish shrinkage from a constraint.")
+expect(!has(intro, "That construction models the response distribution through") &&
+         has(intro, "McDermottWikle2018DeepESNUQ"),
+       "Remove the requested detailed contrast while retaining Bayesian DESN credit.")
+expect(has(prose(intro), "For interval forecasts, it uses pairs of fitted response quantiles") &&
+         has(prose(intro), "without a second-stage residual-calibration regression or bootstrap ensemble"),
+       "State the interval-forecast construction and its direct-estimation contrast.")
+expect(has(prose(intro), "within one Bayesian regression") &&
+         has(prose(intro), "we derive MCMC updates and model-specific VB approximations") &&
+         has(prose(intro), "rather than from estimating residual quantiles after point prediction"),
+       "Identify joint direct regression and its computation, not a literal one-step algorithm.")
+expect(has(prose(intro), "Both are used in the hydrologic predictive synthesis") &&
+         has(intro, "DeLeonPradoSanso2026HydrologicProducts"),
+       "Cite the authenticated hydrologic ordering procedure.")
+expect(has(intro, "continuous-shrinkage approach") &&
+         has(intro, "predictor-dependent variation") && has(intro, "ordered intercepts") &&
+         has(prose(intro), "isotonic projection is used when ordered output is required"),
+       "Explain the crossing mechanism without claiming exact monotonicity or no postprocessing.")
 for (text in list(main, supplement, caption)) {
   expect(!grepl("working[-[:space:]]+(likelihood|regression|model)", text,
                 ignore.case = TRUE, perl = TRUE), "Use ordinary statistical terminology.")

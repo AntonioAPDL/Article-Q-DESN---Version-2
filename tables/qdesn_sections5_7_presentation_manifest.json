@@ -1,0 +1,2695 @@
+{
+  "frozen_sources_modified": 0,
+  "generator": "scripts/build_qdesn_sections5_7_presentation.py",
+  "generator_sha256": "bc0d6840fa1f333b5fed096d2153db43bca9a0d40f171ed948a4c552b2987325",
+  "main_aliases": {
+    "GlofasApplicationCurrentScoreTable": "tables/glofas_forecast_correction_main_scores_display.tex"
+  },
+  "outputs": [
+    {
+      "file": "tables/glofas_forecast_correction_main_scores_display.tex",
+      "permitted_operation": "explicit table-label/administrative-column transformation",
+      "role": "glofas_main",
+      "rows": [
+        [
+          "Q--DESN (AL)",
+          "0.3595",
+          "0.7156",
+          "0.750"
+        ],
+        [
+          "Q--DESN (exAL)",
+          "0.4227",
+          "0.8266",
+          "0.536"
+        ],
+        [
+          "Normal Ridge",
+          "0.4531",
+          "0.8471",
+          "0.107"
+        ],
+        [
+          "MQ--DESN (AL)",
+          "0.4718",
+          "0.9490",
+          "0.786"
+        ],
+        [
+          "MQ--DESN (exAL)",
+          "0.6037",
+          "1.1765",
+          "0.286"
+        ],
+        [
+          "Raw GloFAS",
+          "0.7713",
+          "1.4360",
+          "0.000"
+        ],
+        [
+          "Normal RHS/VB",
+          "0.8038",
+          "1.4790",
+          "0.107"
+        ]
+      ],
+      "sha256": "9c06ad9fa49c152c48e65dac28b9e180eb310558c35afcd520c648234215396b",
+      "source": "tables/glofas_search3_mq_main_scores.tex",
+      "source_sha256": "70ca70cae606a95a94ee0ff57f67c68e7b10349447b867599ce9ca4318ea7d14"
+    },
+    {
+      "file": "tables/glofas_reference_discrepancy_scores_display.tex",
+      "permitted_operation": "explicit table-label/administrative-column transformation",
+      "role": "glofas_components",
+      "rows": [
+        [
+          "Reference only",
+          "Normal Ridge",
+          "0.4135",
+          "0.433",
+          "0"
+        ],
+        [
+          "Reference only",
+          "Normal RHS/VB",
+          "0.4124",
+          "0.500",
+          "0"
+        ],
+        [
+          "Reference only",
+          "Q--DESN (AL)",
+          "0.5028",
+          "0.600",
+          "3"
+        ],
+        [
+          "Reference only",
+          "Q--DESN (exAL)",
+          "0.5888",
+          "0.600",
+          "1"
+        ],
+        [
+          "Reference only",
+          "MQ--DESN (AL)",
+          "0.4976",
+          "0.700",
+          "0"
+        ],
+        [
+          "Reference only",
+          "MQ--DESN (exAL)",
+          "0.5809",
+          "0.600",
+          "0"
+        ],
+        [
+          "Discrepancy",
+          "Normal Ridge",
+          "---",
+          "---",
+          "---"
+        ],
+        [
+          "Discrepancy",
+          "Normal RHS/VB",
+          "---",
+          "---",
+          "---"
+        ],
+        [
+          "Discrepancy",
+          "Q--DESN (AL)",
+          "---",
+          "---",
+          "---"
+        ],
+        [
+          "Discrepancy",
+          "Q--DESN (exAL)",
+          "---",
+          "---",
+          "---"
+        ],
+        [
+          "Discrepancy",
+          "MQ--DESN (AL)",
+          "---",
+          "---",
+          "---"
+        ],
+        [
+          "Discrepancy",
+          "MQ--DESN (exAL)",
+          "---",
+          "---",
+          "---"
+        ],
+        [
+          "Combined historical",
+          "Normal Ridge",
+          "0.5242",
+          "0.400",
+          "0"
+        ],
+        [
+          "Combined historical",
+          "Normal RHS/VB",
+          "0.5269",
+          "0.433",
+          "0"
+        ],
+        [
+          "Combined historical",
+          "Q--DESN (AL)",
+          "0.6252",
+          "0.633",
+          "0"
+        ],
+        [
+          "Combined historical",
+          "Q--DESN (exAL)",
+          "0.7069",
+          "0.500",
+          "0"
+        ],
+        [
+          "Combined historical",
+          "MQ--DESN (AL)",
+          "0.6457",
+          "0.633",
+          "0"
+        ],
+        [
+          "Combined historical",
+          "MQ--DESN (exAL)",
+          "0.7557",
+          "0.433",
+          "0"
+        ]
+      ],
+      "sha256": "53c5b95f8a0dbc5b0c0b00a43813e5000f6556776eca96a1bbe1190492f471f5",
+      "source": "tables/glofas_search3_mq_part123_scores.tex",
+      "source_sha256": "18631881207c538ce2894159b73d028b98af2e5a10a57ab2e37e47ce10c4bd3b"
+    },
+    {
+      "file": "tables/glofas_reference_discrepancy_priors_display.tex",
+      "permitted_operation": "explicit table-label/administrative-column transformation",
+      "role": "glofas_component_priors",
+      "rows": [
+        [
+          "Reference only",
+          "Normal Ridge",
+          "reference",
+          "---",
+          "Ridge",
+          "Ridge: $\\tau^2=10^4$"
+        ],
+        [
+          "Reference only",
+          "Normal RHS/VB",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.006612--0.006612"
+        ],
+        [
+          "Reference only",
+          "Q--DESN (AL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.002288--0.005698"
+        ],
+        [
+          "Reference only",
+          "Q--DESN (exAL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.002511--0.004949"
+        ],
+        [
+          "Reference only",
+          "MQ--DESN (AL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.001095--0.003342"
+        ],
+        [
+          "Reference only",
+          "MQ--DESN (exAL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.0009098--0.003735"
+        ],
+        [
+          "Discrepancy",
+          "Normal Ridge",
+          "discrepancy",
+          "---",
+          "Ridge",
+          "Ridge: $\\tau^2=10^4$"
+        ],
+        [
+          "Discrepancy",
+          "Normal RHS/VB",
+          "discrepancy",
+          "0.00011594362",
+          "Learned",
+          "0.004994--0.004994"
+        ],
+        [
+          "Discrepancy",
+          "Q--DESN (AL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.002275--0.004507"
+        ],
+        [
+          "Discrepancy",
+          "Q--DESN (exAL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.002321--0.003503"
+        ],
+        [
+          "Discrepancy",
+          "MQ--DESN (AL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.0008554--0.003394"
+        ],
+        [
+          "Discrepancy",
+          "MQ--DESN (exAL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.0007063--0.003115"
+        ],
+        [
+          "Combined historical",
+          "Normal Ridge",
+          "reference",
+          "---",
+          "Ridge",
+          "Ridge: $\\tau^2=10^4$"
+        ],
+        [
+          "Combined historical",
+          "Normal RHS/VB",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.005487--0.005487"
+        ],
+        [
+          "Combined historical",
+          "Q--DESN (AL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.002168--0.004554"
+        ],
+        [
+          "Combined historical",
+          "Q--DESN (exAL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.002753--0.004332"
+        ],
+        [
+          "Combined historical",
+          "MQ--DESN (AL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.0008072--0.003047"
+        ],
+        [
+          "Combined historical",
+          "MQ--DESN (exAL)",
+          "reference",
+          "5.2043087e-05",
+          "Learned",
+          "0.0006021--0.003279"
+        ],
+        [
+          "Combined historical",
+          "Normal Ridge",
+          "discrepancy",
+          "---",
+          "Ridge",
+          "Ridge: $\\tau^2=10^4$"
+        ],
+        [
+          "Combined historical",
+          "Normal RHS/VB",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.003847--0.003847"
+        ],
+        [
+          "Combined historical",
+          "Q--DESN (AL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.001236--0.002374"
+        ],
+        [
+          "Combined historical",
+          "Q--DESN (exAL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.001816--0.002336"
+        ],
+        [
+          "Combined historical",
+          "MQ--DESN (AL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.0008166--0.002254"
+        ],
+        [
+          "Combined historical",
+          "MQ--DESN (exAL)",
+          "discrepancy",
+          "0.00011594362",
+          "Fixed 16",
+          "0.0006402--0.002474"
+        ]
+      ],
+      "sha256": "814476339a73ddc3c4d955cbbd4a36f34921f7675f3d24c481797859a1acbb5e",
+      "source": "tables/glofas_search3_mq_part123_prior_settings.tex",
+      "source_sha256": "ecd3fd7016953d4a0e4cae6e2282358b6fc09abdd63b454d9052e94d4f2a4196"
+    },
+    {
+      "file": "tables/glofas_selected_specifications_display.tex",
+      "permitted_operation": "explicit table-label/administrative-column transformation",
+      "role": "glofas_specifications",
+      "rows": [
+        [
+          "reference",
+          "1",
+          "1500",
+          "540",
+          "90",
+          "0.75",
+          "0.60",
+          "40",
+          "Learned"
+        ],
+        [
+          "discrepancy",
+          "1",
+          "1000",
+          "180",
+          "180",
+          "0.85",
+          "0.20",
+          "60",
+          "Fixed 16"
+        ]
+      ],
+      "sha256": "9ea2fcce2627af0d29a5a7bd7e809238132f950a3b87a393f95264523d5bf7c8",
+      "source": "tables/glofas_search3_part1234_final_20261007_selected_specifications.tex",
+      "source_sha256": "63626f0c8155544f910181567a77358626a4d7c59cf36ba075cb8e2546502906"
+    },
+    {
+      "file": "tables/pricefm_regional_comparison_display.tex",
+      "permitted_operation": "explicit table-label/administrative-column transformation",
+      "role": "pricefm_global",
+      "rows": [
+        [
+          "Q--DESN (fixed regional specification)",
+          "114",
+          "7.217007"
+        ],
+        [
+          "PriceFM",
+          "114",
+          "7.038685"
+        ],
+        [
+          "Q--DESN (historical case-specific selection)",
+          "114",
+          "6.823677"
+        ]
+      ],
+      "sha256": "7e49ac0c14ea5e4b7635c72cc59ca1d0788d96e48041ff231dc37842532454f1",
+      "source": "tables/pricefm_r98_global_aql_comparison.tex",
+      "source_sha256": "aed9fa10da6383d31f256c108d2530384ec57c275a54bc2d6f55754d287473a2"
+    },
+    {
+      "file": "tables/qdesn_multiquantile_design_display.tex",
+      "permitted_operation": "explicit table-label/administrative-column transformation",
+      "role": "mq_design",
+      "rows": [
+        [
+          "Feature design",
+          "One reservoir specification per setting, selected using separate source realizations and shared across all four regressions. The readout contains an intercept and all reservoir-layer states; response lags enter the reservoir only."
+        ],
+        [
+          "Quantile levels",
+          "0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95; trapezoidal weights sum to 0.90."
+        ],
+        [
+          "Forecast design",
+          "33 origins and 30 horizons, giving 990 origin--horizon pairs per setting. Observed histories update states between origins; future response lags are generated recursively within each origin."
+        ],
+        [
+          "Posterior simulation",
+          "Five chains per model and mechanism. Scores use 3,750 pooled AL draws and 3,750 exAL draws, except 7,500 exAL draws for Laplace. All exAL chains use the exact scale-collapsed asymmetry transition."
+        ],
+        [
+          "Initialization",
+          "Gaussian, AL, exAL, and MQ--DESN fits supply starting values in the stated sequence. Prior hyperparameters define each target and are common across its five chains."
+        ],
+        [
+          "Uncertainty",
+          "Primary intervals condition on each model's averaged recursive design; trajectory-inclusive intervals are reported separately. VB intervals additionally hold intercepts fixed."
+        ],
+        [
+          "Computation",
+          "All 64 method--model comparisons are finite, and all 32 MCMC comparisons satisfy the score-functional criteria. These checks do not establish complete scalar-parameter mixing."
+        ]
+      ],
+      "sha256": "a802f97244b8d86b62f71d23afe99a290efc2f354aac3864b796691ca5319099",
+      "source": "tables/joint_qdesn_pure_desn_v2_mq_protocol.tex",
+      "source_sha256": "6023f8595d255b3a7568a8e582c943efcaf16fa3f00fa31b3608b92a7110c77f"
+    },
+    {
+      "file": "tables/qdesn_single_quantile_forecast_figures_display.tex",
+      "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged",
+      "role": "independent_forecast",
+      "sha256": "d40993ebc4388770a8a7964dc40eee61a3ebff2366369cb455fd4f76a20b1cc6",
+      "source": "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+      "source_sha256": "f72adec502255793e735224b4dae5c9ce5f64d821dadf7818cde80192604a4ce"
+    },
+    {
+      "file": "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+      "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged",
+      "role": "independent_mcmc_fit",
+      "sha256": "4b669e4102f5ffc55f58c2e1931d43dbb90b213c29f1bbe041c6a4ab6b8465ac",
+      "source": "tables/qdesn_pro_review_mcmc_fit_figure.tex",
+      "source_sha256": "b97d6a39122ea1b8c8873b5bcc7b145dfdd5aeb096088dccfb0ecc9a4b70e45a"
+    },
+    {
+      "file": "tables/qdesn_single_quantile_vb_fit_figure_display.tex",
+      "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged",
+      "role": "independent_vb_fit",
+      "sha256": "7a441d6615c26a47e8f53da1c89b1979e43e0414e90d9fa174702888a764bc04",
+      "source": "tables/qdesn_pro_review_vb_fit_figure.tex",
+      "source_sha256": "1ae7b9a29f27135217587a57c4895b7cf3b7f5dad2032211e7567ede335dbf2f"
+    },
+    {
+      "file": "tables/qdesn_multiquantile_forecast_figure_display.tex",
+      "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged",
+      "role": "mq_forecast",
+      "sha256": "d4a8c2c74b9982ada5745c5e98022f8187bf2ce3b6c8b2a95c1ddf8173d05e41",
+      "source": "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+      "source_sha256": "696117474b4ed88e51f6baa90db9196dcd4dc80e48dc8fe23a2680f682329457"
+    },
+    {
+      "file": "tables/qdesn_multiquantile_fit_figure_display.tex",
+      "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged",
+      "role": "mq_fit",
+      "sha256": "b5f1d0af825da5810e2ee2aae19ed60ab8b9b991c8ef59828fc69a8cda0ebd05",
+      "source": "tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex",
+      "source_sha256": "251a4cf68d8fee34447bf1d2aabee699148ac701cba5ddebd487abca8ea34e50"
+    },
+    {
+      "affine_x_offset": 0,
+      "affine_x_scale": 1,
+      "exact_span_label_mapping": {
+        "Last 30 observed dates and the 30-day recursive forecast; magenta dashed is withheld USGS truth.": "Last 30 observed dates and the 30-day recursive forecast; magenta dashed marks withheld USGS observations.",
+        "Part 1: univariate USGS forecast": "Reference-process forecasts"
+      },
+      "expected_text_tokens": [
+        [
+          "(AL)",
+          2
+        ],
+        [
+          "(exAL)",
+          2
+        ],
+        [
+          "+",
+          1
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          3
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "2",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "3",
+          3
+        ],
+        [
+          "30",
+          1
+        ],
+        [
+          "30-day",
+          1
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          3
+        ],
+        [
+          "Dec",
+          9
+        ],
+        [
+          "Jan",
+          9
+        ],
+        [
+          "Last",
+          1
+        ],
+        [
+          "MQ-DESN",
+          3
+        ],
+        [
+          "Model",
+          1
+        ],
+        [
+          "Normal",
+          3
+        ],
+        [
+          "Q-DESN",
+          3
+        ],
+        [
+          "Quantile",
+          1
+        ],
+        [
+          "RHS/VB",
+          1
+        ],
+        [
+          "Reference-process",
+          1
+        ],
+        [
+          "Ridge",
+          1
+        ],
+        [
+          "USGS",
+          1
+        ],
+        [
+          "and",
+          2
+        ],
+        [
+          "dashed",
+          1
+        ],
+        [
+          "dates",
+          1
+        ],
+        [
+          "flow)",
+          1
+        ],
+        [
+          "forecast;",
+          1
+        ],
+        [
+          "forecasts",
+          1
+        ],
+        [
+          "log(1",
+          1
+        ],
+        [
+          "magenta",
+          1
+        ],
+        [
+          "marks",
+          1
+        ],
+        [
+          "observations.",
+          1
+        ],
+        [
+          "observed",
+          1
+        ],
+        [
+          "quantiles",
+          2
+        ],
+        [
+          "raw",
+          1
+        ],
+        [
+          "recursive",
+          1
+        ],
+        [
+          "the",
+          1
+        ],
+        [
+          "withheld",
+          1
+        ]
+      ],
+      "file": "figures/glofas_application/glofas_editorial_20261013_reference.pdf",
+      "minimum_effective_label_bp": 8.787048567870487,
+      "numeric_tokens": [
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          4
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "2",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "3",
+          3
+        ],
+        [
+          "30",
+          2
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          3
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 0,
+      "role": "glofas_reference",
+      "sha256": "93e24ebdefff1c788ee7306df195f8491d566f3e548faf7c630b593f41cefa33",
+      "source": "figures/glofas_application/glofas_search3_mq_review_20261013_part1.pdf",
+      "source_sha256": "ea7a0ea3084e924a0b2334a83983df8f842ceb0fabd92d518b1cca5a79213705",
+      "source_vector_sha256": "b10c95c23012740db415ea91ab079cf44dfe75adbcd654a35c9c8b4806994c03",
+      "vector_path_count": 2208,
+      "vector_sha256": "b10c95c23012740db415ea91ab079cf44dfe75adbcd654a35c9c8b4806994c03"
+    },
+    {
+      "affine_x_offset": 0,
+      "affine_x_scale": 1,
+      "exact_span_label_mapping": {
+        "Part 2: retrospective GloFAS discrepancy forecast": "Historical discrepancy extrapolation"
+      },
+      "expected_text_tokens": [
+        [
+          "(AL)",
+          2
+        ],
+        [
+          "(exAL)",
+          2
+        ],
+        [
+          "+",
+          1
+        ],
+        [
+          "-1",
+          3
+        ],
+        [
+          "-2",
+          3
+        ],
+        [
+          "-3",
+          2
+        ],
+        [
+          "0",
+          3
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "30",
+          1
+        ],
+        [
+          "30-day",
+          1
+        ],
+        [
+          "Dec",
+          9
+        ],
+        [
+          "GloFAS",
+          1
+        ],
+        [
+          "Historical",
+          1
+        ],
+        [
+          "Jan",
+          9
+        ],
+        [
+          "Last",
+          1
+        ],
+        [
+          "MQ-DESN",
+          3
+        ],
+        [
+          "Model",
+          1
+        ],
+        [
+          "Normal",
+          3
+        ],
+        [
+          "Q-DESN",
+          3
+        ],
+        [
+          "Quantile",
+          1
+        ],
+        [
+          "RHS/VB",
+          1
+        ],
+        [
+          "Ridge",
+          1
+        ],
+        [
+          "The",
+          1
+        ],
+        [
+          "and",
+          2
+        ],
+        [
+          "at",
+          1
+        ],
+        [
+          "because",
+          1
+        ],
+        [
+          "cutoff.",
+          1
+        ],
+        [
+          "discrepancies",
+          1
+        ],
+        [
+          "discrepancy",
+          1
+        ],
+        [
+          "ends",
+          1
+        ],
+        [
+          "extrapolation",
+          1
+        ],
+        [
+          "flow)",
+          1
+        ],
+        [
+          "future",
+          1
+        ],
+        [
+          "is",
+          1
+        ],
+        [
+          "log(1",
+          1
+        ],
+        [
+          "observed",
+          1
+        ],
+        [
+          "path",
+          1
+        ],
+        [
+          "path.",
+          1
+        ],
+        [
+          "quantiles",
+          2
+        ],
+        [
+          "raw",
+          1
+        ],
+        [
+          "recursive",
+          1
+        ],
+        [
+          "retrospective",
+          1
+        ],
+        [
+          "the",
+          2
+        ],
+        [
+          "unscored",
+          1
+        ]
+      ],
+      "file": "figures/glofas_application/glofas_editorial_20261013_discrepancy.pdf",
+      "minimum_effective_label_bp": 8.787048567870487,
+      "numeric_tokens": [
+        [
+          "-1",
+          3
+        ],
+        [
+          "-2",
+          3
+        ],
+        [
+          "-3",
+          2
+        ],
+        [
+          "0",
+          3
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          1
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "30",
+          2
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 0,
+      "role": "glofas_discrepancy",
+      "sha256": "20a31890e2984cd7c7d12a7142986a2be1015838f3c236cded2c239d1df8d75f",
+      "source": "figures/glofas_application/glofas_search3_mq_review_20261013_part2.pdf",
+      "source_sha256": "46f744affdec69fc62a49e34ffc8d8912f6f58a10d2dfbc0267b9f8911e0ab8f",
+      "source_vector_sha256": "045d341f166929375d72ad670bf04008f58e221b7442862c39b211ea68d32f06",
+      "vector_path_count": 1840,
+      "vector_sha256": "045d341f166929375d72ad670bf04008f58e221b7442862c39b211ea68d32f06"
+    },
+    {
+      "affine_x_offset": 0,
+      "affine_x_scale": 1,
+      "exact_span_label_mapping": {
+        "Last 30 observed dates and the 30-day recursive forecast; magenta dashed is withheld USGS truth.": "Last 30 observed dates and the 30-day recursive forecast; magenta dashed marks withheld USGS observations.",
+        "Part 3: joint historical USGS forecast": "Combined historical-model forecasts"
+      },
+      "expected_text_tokens": [
+        [
+          "(AL)",
+          2
+        ],
+        [
+          "(exAL)",
+          2
+        ],
+        [
+          "+",
+          1
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          3
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "2",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "3",
+          3
+        ],
+        [
+          "30",
+          1
+        ],
+        [
+          "30-day",
+          1
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          3
+        ],
+        [
+          "Combined",
+          1
+        ],
+        [
+          "Dec",
+          9
+        ],
+        [
+          "Jan",
+          9
+        ],
+        [
+          "Last",
+          1
+        ],
+        [
+          "MQ-DESN",
+          3
+        ],
+        [
+          "Model",
+          1
+        ],
+        [
+          "Normal",
+          3
+        ],
+        [
+          "Q-DESN",
+          3
+        ],
+        [
+          "Quantile",
+          1
+        ],
+        [
+          "RHS/VB",
+          1
+        ],
+        [
+          "Ridge",
+          1
+        ],
+        [
+          "USGS",
+          1
+        ],
+        [
+          "and",
+          2
+        ],
+        [
+          "dashed",
+          1
+        ],
+        [
+          "dates",
+          1
+        ],
+        [
+          "flow)",
+          1
+        ],
+        [
+          "forecast;",
+          1
+        ],
+        [
+          "forecasts",
+          1
+        ],
+        [
+          "historical-model",
+          1
+        ],
+        [
+          "log(1",
+          1
+        ],
+        [
+          "magenta",
+          1
+        ],
+        [
+          "marks",
+          1
+        ],
+        [
+          "observations.",
+          1
+        ],
+        [
+          "observed",
+          1
+        ],
+        [
+          "quantiles",
+          2
+        ],
+        [
+          "raw",
+          1
+        ],
+        [
+          "recursive",
+          1
+        ],
+        [
+          "the",
+          1
+        ],
+        [
+          "withheld",
+          1
+        ]
+      ],
+      "file": "figures/glofas_application/glofas_editorial_20261013_combined.pdf",
+      "minimum_effective_label_bp": 8.787048567870487,
+      "numeric_tokens": [
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          4
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "2",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "3",
+          3
+        ],
+        [
+          "30",
+          2
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          3
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 0,
+      "role": "glofas_combined",
+      "sha256": "0f9b5a0e91808b4e27249617aef6cc094a0ec9d945623f90e7a4387c879f7805",
+      "source": "figures/glofas_application/glofas_search3_mq_review_20261013_part3.pdf",
+      "source_sha256": "fd0fb8c0021d4892ea2881c232f83d5ef4fe1749b141dbd6aa6294be2373bb7a",
+      "source_vector_sha256": "d787fa787044dfbf4b1d4f838ae4a0c2a31f94968fc55d56a63c34e97eb6b9e3",
+      "vector_path_count": 2208,
+      "vector_sha256": "d787fa787044dfbf4b1d4f838ae4a0c2a31f94968fc55d56a63c34e97eb6b9e3"
+    },
+    {
+      "affine_x_offset": 0,
+      "affine_x_scale": 1,
+      "exact_span_label_mapping": {
+        "Last 30 observed dates and 28 issued horizons. MQ-DESN (AL) and MQ-DESN (exAL) use the strict corrected": "Last 30 observed dates and 28 issued horizons; all models use the common forecast window.",
+        "Part 4: issued-ensemble latent-path experiment": "Issued-ensemble forecast correction",
+        "terminal fits.": ""
+      },
+      "expected_text_tokens": [
+        [
+          "(AL)",
+          2
+        ],
+        [
+          "(exAL)",
+          2
+        ],
+        [
+          "+",
+          1
+        ],
+        [
+          "0",
+          1
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          2
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "2",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "28",
+          1
+        ],
+        [
+          "3",
+          2
+        ],
+        [
+          "30",
+          1
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          2
+        ],
+        [
+          "Dec",
+          9
+        ],
+        [
+          "GloFAS",
+          1
+        ],
+        [
+          "Issued-ensemble",
+          1
+        ],
+        [
+          "Jan",
+          9
+        ],
+        [
+          "Last",
+          1
+        ],
+        [
+          "MQ-DESN",
+          3
+        ],
+        [
+          "Model",
+          1
+        ],
+        [
+          "Normal",
+          3
+        ],
+        [
+          "Q-DESN",
+          3
+        ],
+        [
+          "Quantile",
+          1
+        ],
+        [
+          "RHS/VB",
+          1
+        ],
+        [
+          "Raw",
+          1
+        ],
+        [
+          "Ridge",
+          1
+        ],
+        [
+          "all",
+          1
+        ],
+        [
+          "and",
+          2
+        ],
+        [
+          "common",
+          1
+        ],
+        [
+          "correction",
+          1
+        ],
+        [
+          "dates",
+          1
+        ],
+        [
+          "flow)",
+          1
+        ],
+        [
+          "forecast",
+          2
+        ],
+        [
+          "horizons;",
+          1
+        ],
+        [
+          "issued",
+          1
+        ],
+        [
+          "log(1",
+          1
+        ],
+        [
+          "models",
+          1
+        ],
+        [
+          "observed",
+          1
+        ],
+        [
+          "quantiles",
+          2
+        ],
+        [
+          "raw",
+          1
+        ],
+        [
+          "the",
+          1
+        ],
+        [
+          "use",
+          1
+        ],
+        [
+          "window.",
+          1
+        ]
+      ],
+      "file": "figures/glofas_application/glofas_editorial_20261013_issued.pdf",
+      "minimum_effective_label_bp": 8.787048567870487,
+      "numeric_tokens": [
+        [
+          "0",
+          1
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "03",
+          3
+        ],
+        [
+          "04",
+          3
+        ],
+        [
+          "1",
+          3
+        ],
+        [
+          "13",
+          3
+        ],
+        [
+          "14",
+          3
+        ],
+        [
+          "2",
+          3
+        ],
+        [
+          "23",
+          3
+        ],
+        [
+          "24",
+          3
+        ],
+        [
+          "28",
+          1
+        ],
+        [
+          "3",
+          2
+        ],
+        [
+          "30",
+          1
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          2
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 0,
+      "role": "glofas_issued",
+      "sha256": "9509675151665e74361eef55bbac4d6c97cfe9a4c5fa9319ee3243b7d956a8c8",
+      "source": "figures/glofas_application/glofas_search3_mq_review_20261013_part4.pdf",
+      "source_sha256": "ef42ea26067b4cfe01061320487a38a68f95bb616d2a26a35f5efd3fee5ba20e",
+      "source_vector_sha256": "5986b654b3778a7b4e63632e49cd6d2939196fdd89572caf954a30412a7fa5ee",
+      "vector_path_count": 2431,
+      "vector_sha256": "5986b654b3778a7b4e63632e49cd6d2939196fdd89572caf954a30412a7fa5ee"
+    },
+    {
+      "affine_x_offset": 0,
+      "affine_x_scale": 1,
+      "exact_span_label_mapping": {
+        "FALSE": "Not met",
+        "Filled terminal points indicate the three consecutive full-state passes required for release.": "Filled points mark three consecutive passes of the stated convergence criterion.",
+        "Full-state pass": "Convergence criterion",
+        "Part 4 corrected MQ-DESN convergence": "MQ-DESN convergence",
+        "TRUE": "Met"
+      },
+      "expected_text_tokens": [
+        [
+          "(AL)",
+          1
+        ],
+        [
+          "(exAL)",
+          1
+        ],
+        [
+          "0",
+          1
+        ],
+        [
+          "10",
+          1
+        ],
+        [
+          "1e-02",
+          1
+        ],
+        [
+          "1e-03",
+          1
+        ],
+        [
+          "20",
+          1
+        ],
+        [
+          "3e-03",
+          1
+        ],
+        [
+          "3e-04",
+          1
+        ],
+        [
+          "Convergence",
+          1
+        ],
+        [
+          "Cumulative",
+          1
+        ],
+        [
+          "Filled",
+          1
+        ],
+        [
+          "MQ-DESN",
+          3
+        ],
+        [
+          "Maximum",
+          1
+        ],
+        [
+          "Met",
+          1
+        ],
+        [
+          "Not",
+          1
+        ],
+        [
+          "change",
+          1
+        ],
+        [
+          "consecutive",
+          1
+        ],
+        [
+          "convergence",
+          2
+        ],
+        [
+          "criterion",
+          1
+        ],
+        [
+          "criterion.",
+          1
+        ],
+        [
+          "iteration",
+          1
+        ],
+        [
+          "mark",
+          1
+        ],
+        [
+          "met",
+          1
+        ],
+        [
+          "of",
+          1
+        ],
+        [
+          "outer",
+          1
+        ],
+        [
+          "parameter",
+          1
+        ],
+        [
+          "passes",
+          1
+        ],
+        [
+          "points",
+          1
+        ],
+        [
+          "relative",
+          1
+        ],
+        [
+          "stated",
+          1
+        ],
+        [
+          "the",
+          1
+        ],
+        [
+          "three",
+          1
+        ]
+      ],
+      "file": "figures/glofas_application/glofas_editorial_20261013_convergence.pdf",
+      "minimum_effective_label_bp": 8.787048567870487,
+      "numeric_tokens": [
+        [
+          "0",
+          1
+        ],
+        [
+          "10",
+          1
+        ],
+        [
+          "1e-02",
+          1
+        ],
+        [
+          "1e-03",
+          1
+        ],
+        [
+          "20",
+          1
+        ],
+        [
+          "3e-03",
+          1
+        ],
+        [
+          "3e-04",
+          1
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        281.0
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 0,
+      "role": "glofas_convergence",
+      "sha256": "ac3ec663697d712d9dc14748ff22e4c32d9fe38bfd5abee3874bcc2b48991bf5",
+      "source": "figures/glofas_application/glofas_search3_mq_review_20261013_convergence.pdf",
+      "source_sha256": "c3e881e20588e6d67c85fcef1072a3b2885a2129f7c3039af0213e3e8eaac6e6",
+      "source_vector_sha256": "ace5be8f5a0ac12c5d5d1633b8ae88b85b15791d2f8d52a999326fa3b217cd57",
+      "vector_path_count": 360,
+      "vector_sha256": "ace5be8f5a0ac12c5d5d1633b8ae88b85b15791d2f8d52a999326fa3b217cd57"
+    },
+    {
+      "affine_x_offset": 0,
+      "affine_x_scale": 1,
+      "exact_span_label_mapping": {
+        "Calibration is descriptive on the protected 28-day scoring window and is not a tuning criterion.": "Empirical coverage over the 28-day issued forecast window.",
+        "Part 4 issued-window quantile calibration": "Issued-window quantile calibration"
+      },
+      "expected_text_tokens": [
+        [
+          "(AL)",
+          2
+        ],
+        [
+          "(exAL)",
+          2
+        ],
+        [
+          "0.0",
+          1
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.2",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.4",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.6",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.8",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "1.0",
+          1
+        ],
+        [
+          "28-day",
+          1
+        ],
+        [
+          "Empirical",
+          2
+        ],
+        [
+          "GloFAS",
+          1
+        ],
+        [
+          "Issued-window",
+          1
+        ],
+        [
+          "MQ-DESN",
+          2
+        ],
+        [
+          "Model",
+          1
+        ],
+        [
+          "Nominal",
+          1
+        ],
+        [
+          "Normal",
+          2
+        ],
+        [
+          "Q-DESN",
+          2
+        ],
+        [
+          "RHS/VB",
+          1
+        ],
+        [
+          "Raw",
+          1
+        ],
+        [
+          "Ridge",
+          1
+        ],
+        [
+          "calibration",
+          1
+        ],
+        [
+          "coverage",
+          2
+        ],
+        [
+          "forecast",
+          1
+        ],
+        [
+          "issued",
+          1
+        ],
+        [
+          "over",
+          1
+        ],
+        [
+          "quantile",
+          2
+        ],
+        [
+          "the",
+          1
+        ],
+        [
+          "window.",
+          1
+        ]
+      ],
+      "file": "figures/glofas_application/glofas_editorial_20261013_calibration.pdf",
+      "minimum_effective_label_bp": 8.787048567870487,
+      "numeric_tokens": [
+        [
+          "0.0",
+          1
+        ],
+        [
+          "0.05",
+          1
+        ],
+        [
+          "0.2",
+          1
+        ],
+        [
+          "0.20",
+          1
+        ],
+        [
+          "0.35",
+          1
+        ],
+        [
+          "0.4",
+          1
+        ],
+        [
+          "0.50",
+          1
+        ],
+        [
+          "0.6",
+          1
+        ],
+        [
+          "0.65",
+          1
+        ],
+        [
+          "0.8",
+          1
+        ],
+        [
+          "0.80",
+          1
+        ],
+        [
+          "0.95",
+          1
+        ],
+        [
+          "1.0",
+          1
+        ],
+        [
+          "28",
+          1
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        277.0
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 0,
+      "role": "glofas_calibration",
+      "sha256": "26c42c8219fcaabc79128da1e7b667e43a86fa0d545c2ee30b6ef934e06547cc",
+      "source": "figures/glofas_application/glofas_search3_mq_review_20261013_calibration.pdf",
+      "source_sha256": "77feecd217761727c803c22f93404ff5ff5cc855560de4a92f9d3ebbeb2fb0fb",
+      "source_vector_sha256": "80fa7cfaaf9c2447ba27acadeb0484402d5271acba3e18f0490e37999f91f0ff",
+      "vector_path_count": 872,
+      "vector_sha256": "80fa7cfaaf9c2447ba27acadeb0484402d5271acba3e18f0490e37999f91f0ff"
+    },
+    {
+      "affine_x_offset": 18,
+      "affine_x_scale": 0.5434782608695652,
+      "exact_span_label_mapping": {
+        "R92 historical": "Historical Q-DESN",
+        "R98 Q-DESN": "Q-DESN"
+      },
+      "expected_text_tokens": [
+        [
+          "(lower",
+          1
+        ],
+        [
+          "10",
+          1
+        ],
+        [
+          "12",
+          1
+        ],
+        [
+          "14",
+          1
+        ],
+        [
+          "16",
+          1
+        ],
+        [
+          "2",
+          1
+        ],
+        [
+          "4",
+          1
+        ],
+        [
+          "6",
+          1
+        ],
+        [
+          "8",
+          1
+        ],
+        [
+          "AQL",
+          1
+        ],
+        [
+          "AT",
+          1
+        ],
+        [
+          "BE",
+          1
+        ],
+        [
+          "BG",
+          1
+        ],
+        [
+          "CZ",
+          1
+        ],
+        [
+          "DE_LU",
+          1
+        ],
+        [
+          "DK_1",
+          1
+        ],
+        [
+          "DK_2",
+          1
+        ],
+        [
+          "EE",
+          1
+        ],
+        [
+          "ES",
+          1
+        ],
+        [
+          "FI",
+          1
+        ],
+        [
+          "FR",
+          1
+        ],
+        [
+          "GR",
+          1
+        ],
+        [
+          "HR",
+          1
+        ],
+        [
+          "HU",
+          1
+        ],
+        [
+          "Historical",
+          1
+        ],
+        [
+          "IT_CALA",
+          1
+        ],
+        [
+          "IT_CNOR",
+          1
+        ],
+        [
+          "IT_CSUD",
+          1
+        ],
+        [
+          "IT_NORD",
+          1
+        ],
+        [
+          "IT_SARD",
+          1
+        ],
+        [
+          "IT_SICI",
+          1
+        ],
+        [
+          "IT_SUD",
+          1
+        ],
+        [
+          "LT",
+          1
+        ],
+        [
+          "LV",
+          1
+        ],
+        [
+          "Mean",
+          1
+        ],
+        [
+          "NL",
+          1
+        ],
+        [
+          "NO_1",
+          1
+        ],
+        [
+          "NO_2",
+          1
+        ],
+        [
+          "NO_3",
+          1
+        ],
+        [
+          "NO_4",
+          1
+        ],
+        [
+          "NO_5",
+          1
+        ],
+        [
+          "PL",
+          1
+        ],
+        [
+          "PT",
+          1
+        ],
+        [
+          "PriceFM",
+          1
+        ],
+        [
+          "Q-DESN",
+          2
+        ],
+        [
+          "RO",
+          1
+        ],
+        [
+          "Region",
+          1
+        ],
+        [
+          "SE_1",
+          1
+        ],
+        [
+          "SE_2",
+          1
+        ],
+        [
+          "SE_3",
+          1
+        ],
+        [
+          "SE_4",
+          1
+        ],
+        [
+          "SI",
+          1
+        ],
+        [
+          "SK",
+          1
+        ],
+        [
+          "across",
+          1
+        ],
+        [
+          "better)",
+          1
+        ],
+        [
+          "folds",
+          1
+        ],
+        [
+          "is",
+          1
+        ],
+        [
+          "three",
+          1
+        ]
+      ],
+      "file": "figures/pricefm_application/pricefm_regional_aql_editorial_20261013.pdf",
+      "minimum_effective_label_bp": 9.0,
+      "numeric_tokens": [
+        [
+          "1",
+          3
+        ],
+        [
+          "10",
+          1
+        ],
+        [
+          "12",
+          1
+        ],
+        [
+          "14",
+          1
+        ],
+        [
+          "16",
+          1
+        ],
+        [
+          "2",
+          4
+        ],
+        [
+          "3",
+          2
+        ],
+        [
+          "4",
+          3
+        ],
+        [
+          "5",
+          1
+        ],
+        [
+          "6",
+          1
+        ],
+        [
+          "8",
+          1
+        ]
+      ],
+      "page_dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        518.4000244140625
+      ],
+      "permitted_operation": "exact label mapping and documented affine vector composition",
+      "raster_images": 0,
+      "removed_type3_text_glyph_paths": 220,
+      "role": "pricefm_region",
+      "sha256": "5a50a12fc7a3e209eb176569f18adb25535deb77141ab9be136943a729f821dd",
+      "source": "figures/pricefm_application/pricefm_r98_region_aql_comparison.pdf",
+      "source_sha256": "870f43f594b86e607a93479568deb4943016bb201a870d2a8be9a3388e720413",
+      "source_vector_sha256": "113697470f1a12f522a7838a10dac4adaecd3cc97a5fe2b2f42412e4a4f7eb1b",
+      "vector_path_count": 177,
+      "vector_sha256": "d0002d069fab5cfa9c0538db2eb74811d647d363298ebea2e61088b59600ba86"
+    },
+    {
+      "aliases": {
+        "GlofasApplicationCurrentScoreTable": "tables/glofas_forecast_correction_main_scores_display.tex"
+      },
+      "file": "tables/qdesn_sections5_7_main_display_overrides.tex",
+      "permitted_operation": "document-specific presentation aliases",
+      "role": "main_overrides",
+      "sha256": "2679d4563593792ef53b4f3d535a35edae42879ef4e6ae9d68389daf377d3878"
+    },
+    {
+      "aliases": {
+        "GlofasApplicationCurrentCalibrationFigure": "figures/glofas_application/glofas_editorial_20261013_calibration.pdf",
+        "GlofasApplicationCurrentConvergenceFigure": "figures/glofas_application/glofas_editorial_20261013_convergence.pdf",
+        "GlofasApplicationCurrentFullComparisonFigure": "figures/glofas_application/glofas_editorial_20261013_issued.pdf",
+        "GlofasApplicationCurrentPartOneFigure": "figures/glofas_application/glofas_editorial_20261013_reference.pdf",
+        "GlofasApplicationCurrentPartOneTwoThreePriorSettingsTable": "tables/glofas_reference_discrepancy_priors_display.tex",
+        "GlofasApplicationCurrentPartThreeFigure": "figures/glofas_application/glofas_editorial_20261013_combined.pdf",
+        "GlofasApplicationCurrentPartTwoFigure": "figures/glofas_application/glofas_editorial_20261013_discrepancy.pdf",
+        "GlofasApplicationCurrentSpecificationsTable": "tables/glofas_selected_specifications_display.tex",
+        "GlofasApplicationCurrentSupplementScoreTable": "tables/glofas_reference_discrepancy_scores_display.tex",
+        "PricefmCurrentGlobalComparisonTable": "tables/pricefm_regional_comparison_display.tex",
+        "PricefmCurrentRegionFigure": "figures/pricefm_application/pricefm_regional_aql_editorial_20261013.pdf"
+      },
+      "file": "tables/qdesn_sections5_7_supp_display_overrides.tex",
+      "permitted_operation": "document-specific presentation aliases",
+      "role": "supp_overrides",
+      "sha256": "570e15a57d71f316efd8060bbf8bb4ce7ab0c95611628927244cc9927e7683ed"
+    }
+  ],
+  "purpose": "Bounded reader-facing labels, captions and table columns; frozen scientific targets and evidence unchanged.",
+  "schema": "qdesn-sections5-7-presentation-v1",
+  "scientific_runs": 0,
+  "scores_recomputed": 0,
+  "sources": [
+    {
+      "file": "figures/glofas_application/glofas_search3_mq_review_20261013_calibration.pdf",
+      "sha256": "77feecd217761727c803c22f93404ff5ff5cc855560de4a92f9d3ebbeb2fb0fb"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_mq_review_20261013_convergence.pdf",
+      "sha256": "c3e881e20588e6d67c85fcef1072a3b2885a2129f7c3039af0213e3e8eaac6e6"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_mq_review_20261013_part1.pdf",
+      "sha256": "ea7a0ea3084e924a0b2334a83983df8f842ceb0fabd92d518b1cca5a79213705"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_mq_review_20261013_part2.pdf",
+      "sha256": "46f744affdec69fc62a49e34ffc8d8912f6f58a10d2dfbc0267b9f8911e0ab8f"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_mq_review_20261013_part3.pdf",
+      "sha256": "fd0fb8c0021d4892ea2881c232f83d5ef4fe1749b141dbd6aa6294be2373bb7a"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_mq_review_20261013_part4.pdf",
+      "sha256": "ef42ea26067b4cfe01061320487a38a68f95bb616d2a26a35f5efd3fee5ba20e"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part4_common_window_three_panel_review.pdf",
+      "sha256": "ff6e818e317a31b211be6ee247e45aa0826d42cbaee141cfae6902d8143f021f"
+    },
+    {
+      "file": "figures/pricefm_application/pricefm_r98_region_aql_comparison.pdf",
+      "sha256": "870f43f594b86e607a93479568deb4943016bb201a870d2a8be9a3388e720413"
+    },
+    {
+      "file": "scripts/build_glofas_review_figures.py",
+      "sha256": "e55d0d93563e0f6f01fea9237be65b1c47fa046994be5a987e8b09877753df73"
+    },
+    {
+      "file": "tables/glofas_figure4_common_window_manifest.json",
+      "sha256": "af9ef008903f5fc571803d75c322ada07ca3d691a2ff9cc83a3b5041012992f8"
+    },
+    {
+      "file": "tables/glofas_mq_presentation_manifest.json",
+      "sha256": "3ed5f035d6b6efe81d759b92903f62841f54bc448d6272aba193d80fbef26e48"
+    },
+    {
+      "file": "tables/glofas_search3_mq_main_scores.tex",
+      "sha256": "70ca70cae606a95a94ee0ff57f67c68e7b10349447b867599ce9ca4318ea7d14"
+    },
+    {
+      "file": "tables/glofas_search3_mq_part123_prior_settings.tex",
+      "sha256": "ecd3fd7016953d4a0e4cae6e2282358b6fc09abdd63b454d9052e94d4f2a4196"
+    },
+    {
+      "file": "tables/glofas_search3_mq_part123_scores.tex",
+      "sha256": "18631881207c538ce2894159b73d028b98af2e5a10a57ab2e37e47ce10c4bd3b"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part4_scores.csv",
+      "sha256": "c15d21cda11c8c8a89742b32b8a0c07b85851176dac29c30076941e32c52c998"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_selected_specifications.tex",
+      "sha256": "63626f0c8155544f910181567a77358626a4d7c59cf36ba075cb8e2546502906"
+    },
+    {
+      "file": "tables/joint_qdesn_mq_presentation_manifest.json",
+      "sha256": "4394aeac8e92f9ff50ed5697d552f021a1b59d5342a3807d1c5a20c4e05dcb52"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex",
+      "sha256": "251a4cf68d8fee34447bf1d2aabee699148ac701cba5ddebd487abca8ea34e50"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+      "sha256": "696117474b4ed88e51f6baa90db9196dcd4dc80e48dc8fe23a2680f682329457"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_protocol.tex",
+      "sha256": "6023f8595d255b3a7568a8e582c943efcaf16fa3f00fa31b3608b92a7110c77f"
+    },
+    {
+      "file": "tables/pricefm_r98_article_projection_manifest.json",
+      "sha256": "1d6ea4f4f5d73617f45e9ca02940114a95d140debdf4c884b1a261999fee89c5"
+    },
+    {
+      "file": "tables/pricefm_r98_global_aql_comparison.tex",
+      "sha256": "aed9fa10da6383d31f256c108d2530384ec57c275a54bc2d6f55754d287473a2"
+    },
+    {
+      "file": "tables/qdesn_pro_review_mcmc_fit_figure.tex",
+      "sha256": "b97d6a39122ea1b8c8873b5bcc7b145dfdd5aeb096088dccfb0ecc9a4b70e45a"
+    },
+    {
+      "file": "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+      "sha256": "f72adec502255793e735224b4dae5c9ce5f64d821dadf7818cde80192604a4ce"
+    },
+    {
+      "file": "tables/qdesn_pro_review_presentation_manifest.json",
+      "sha256": "648ef97d91adceaa17cf5958dcc515520ebe31ae65ca7fc1d58de5ca960a8e9e"
+    },
+    {
+      "file": "tables/qdesn_pro_review_vb_fit_figure.tex",
+      "sha256": "1ae7b9a29f27135217587a57c4895b7cf3b7f5dad2032211e7567ede335dbf2f"
+    }
+  ],
+  "supp_aliases": {
+    "GlofasApplicationCurrentCalibrationFigure": "figures/glofas_application/glofas_editorial_20261013_calibration.pdf",
+    "GlofasApplicationCurrentConvergenceFigure": "figures/glofas_application/glofas_editorial_20261013_convergence.pdf",
+    "GlofasApplicationCurrentFullComparisonFigure": "figures/glofas_application/glofas_editorial_20261013_issued.pdf",
+    "GlofasApplicationCurrentPartOneFigure": "figures/glofas_application/glofas_editorial_20261013_reference.pdf",
+    "GlofasApplicationCurrentPartOneTwoThreePriorSettingsTable": "tables/glofas_reference_discrepancy_priors_display.tex",
+    "GlofasApplicationCurrentPartThreeFigure": "figures/glofas_application/glofas_editorial_20261013_combined.pdf",
+    "GlofasApplicationCurrentPartTwoFigure": "figures/glofas_application/glofas_editorial_20261013_discrepancy.pdf",
+    "GlofasApplicationCurrentSpecificationsTable": "tables/glofas_selected_specifications_display.tex",
+    "GlofasApplicationCurrentSupplementScoreTable": "tables/glofas_reference_discrepancy_scores_display.tex",
+    "PricefmCurrentGlobalComparisonTable": "tables/pricefm_regional_comparison_display.tex",
+    "PricefmCurrentRegionFigure": "figures/pricefm_application/pricefm_regional_aql_editorial_20261013.pdf"
+  }
+}

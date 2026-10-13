@@ -1,0 +1,49 @@
+{
+  "assets": [
+    {
+      "all_non_replacement_bytes_unchanged": true,
+      "numeric_tokens_unchanged": true,
+      "output": "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex",
+      "output_sha256": "9a7226c0ef603d5b7c3e929b57e5afe1334e9e17ec306d5e09fb2138a8d54100",
+      "replacements": [
+        {
+          "new": "\\shortstack{Historical multiquantile\\\\AL--exAL}",
+          "occurrences": 1,
+          "old": "Joint: AL-exAL"
+        },
+        {
+          "new": "\\caption{Historical replicated VB comparison",
+          "occurrences": 1,
+          "old": "\\caption{Replicated VB comparison"
+        }
+      ],
+      "role": "historical_multiquantile_sensitivity",
+      "source": "tables/joint_qdesn_article_validation_phase153_replication_summary.tex",
+      "source_data_rows": 8,
+      "source_sha256": "f2768de0639f82bbdfdc805ef068e68621e44f01c3c24711a92f25e2e155a19d"
+    },
+    {
+      "all_non_replacement_bytes_unchanged": true,
+      "numeric_tokens_unchanged": true,
+      "output": "tables/qdesn_validation_500obs_metric_dependence_sensitivity_display.tex",
+      "output_sha256": "b79a6dbd8771b797d4561a57e5bf68466a6b0e639cd0d75a866ae41c2dcd3cec",
+      "replacements": [
+        {
+          "new": "For Q--DESN under AL and exAL",
+          "occurrences": 1,
+          "old": "For Q--DESN and exQ--DESN"
+        }
+      ],
+      "role": "independent_metric_uncertainty_description",
+      "source": "tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex",
+      "source_data_rows": 0,
+      "source_sha256": "74c165ad4b29f00808e058750d8f6a320b5454f97ae7133d1260ae9794d5ee2b"
+    }
+  ],
+  "generator": "scripts/build_qdesn_historical_display_overlays.py",
+  "generator_sha256": "67c67131c5bb9d8bf177569c1fbeb6d66e6ab39e97cf0e24a427154f877d34d8",
+  "new_model_runs": 0,
+  "purpose": "Historical qualifier and independent AL/exAL display names only; no current-target equivalence or new result.",
+  "schema": "qdesn-historical-display-overlay-v1",
+  "scores_recomputed": 0
+}

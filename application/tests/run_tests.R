@@ -246,5 +246,9 @@ run_standalone_glofas_test("application/tests/test_pro_review_supplement_math.R"
 run_standalone_glofas_test("application/tests/test_pro_review_bibliography_initialization.R")
 run_standalone_glofas_test("application/tests/test_qdesn_reader_focused_editorial_revision.R")
 stopifnot(system2("python3.11", app_path("application/tests/test_pro_review_presentation.py")) == 0L)
+stopifnot(system2("python3.11", app_path("application/tests/test_qdesn_mq_nomenclature.py")) == 0L)
+stopifnot(system2("python3.11", app_path("application/tests/test_qdesn_historical_display_overlays.py")) == 0L)
+# GloFAS vector overlays require the pinned PyMuPDF presentation environment;
+# their separate focused test is recorded in the editorial release receipt.
 
 cat("Application tests completed.\n")

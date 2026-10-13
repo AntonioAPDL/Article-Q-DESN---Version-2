@@ -38,12 +38,21 @@ def classification(path: str) -> tuple[str, str, str, str]:
         return "bibliography database/style", "bibliographic and local presentation authority", "refs.bib;tables/qdesn_asa_compatible.bst", "not a scientific estimator; BST is not official journal software"
     if "quantile_initialization/" in path:
         return "initialization diagram component", "declared initialization protocol", "qdesn-supplement.tex:sec:supp_selection_initialization", "initial states distinct from separately declared prior calibration; study-specific branches"
+    if path == "tables/qdesn_model_display_names.csv":
+        return "reader-facing model-name registry", "Q-DESN independent; MQ-DESN multiquantile", path, "display aliases only; internal IDs, priors and targets unchanged"
+    if path == "tables/qdesn_historical_display_manifest.json" or "metric_dependence_sensitivity_display" in path:
+        return "historical presentation companion", "unchanged independent sensitivity and historical Phase153 summaries", "tables/qdesn_historical_display_manifest.json", "label-only derivatives; historical sensitivity does not certify the current posterior"
+    if path == "tables/joint_qdesn_mq_presentation_manifest.json":
+        return "presentation provenance companion", "current pure-DESN v2 MQ nomenclature overlay", path, "same frozen 32 MCMC and 32 VB cells; display labels only"
     if path == "tables/qdesn_pro_review_presentation_manifest.json":
         return "presentation provenance companion", "independent v14, expanded pure-DESN and GloFAS Search III presentation derivatives", path, "unchanged scientific summaries; display regeneration only"
     if path == "tables/qdesn_article_presentation_manifest_v2.json":
         return "presentation provenance companion", "versioned Laplace replacement; independent v14 and GloFAS Search III displays unchanged", path, "forecast posterior score intervals; fitting point diagnostics; no numerical application changes"
     if "phase153" in path:
-        return "historical sensitivity table", "historical Phase153 replicated VB", "tables/joint_qdesn_article_validation_phase153_replication_summary.tex", "earlier feature/inference design; corrected-current-target equivalence unresolved"
+        contract = "tables/joint_qdesn_article_validation_phase153_replication_summary.tex"
+        if "_mq_display" in path:
+            contract += ";tables/qdesn_historical_display_manifest.json"
+        return "historical sensitivity table", "historical Phase153 replicated VB", contract, "earlier feature/inference design; corrected-current-target equivalence unresolved"
     if "five_chain" in path:
         return "historical sensitivity table", "historical independent five-chain point-path sensitivity", "tables/qdesn_validation_mcmc_five_chain_sensitivity_manifest.txt", "point-path sensitivity; not current draw-wise v14 interval estimator"
     if "glofas" in path:
@@ -58,6 +67,9 @@ def classification(path: str) -> tuple[str, str, str, str]:
             contract = "tables/glofas_figure4_common_window_manifest.json;tables/glofas_search3_part4_history_fitted_quantile_provenance.json"
             authority = "GloFAS Search III; common-window fitted/forecast display"
             estimator = "historical posterior-mean conditional quantiles from the same Part 4 fits; unchanged 28-date forecasts; no refitting or rescoring"
+        if "_mq_" in path:
+            contract = "tables/glofas_mq_presentation_manifest.json;tables/glofas_search3_part1234_final_20261007_publication_manifest.csv"
+            authority = "GloFAS Search III; label-only MQ presentation overlay"
     elif "pricefm" in path:
         contract = "tables/pricefm_r98_article_projection_manifest.json"
         authority = "PriceFM R98 complete region-frozen authority; R92 historical only where labelled"
@@ -66,6 +78,9 @@ def classification(path: str) -> tuple[str, str, str, str]:
         contract = "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv;tables/joint_qdesn_pure_desn_v2_projection_provenance.csv"
         authority = "complete pure-DESN comparison; coherent four-model Laplace replacement; seven scenarios unchanged"
         estimator = "DGP-integrated finite-grid score conditional on averaged recursive features; draw-path sensitivity separate; actual per-cell draw counts; VB intercepts fixed"
+        if "_mq_" in path:
+            contract += ";tables/joint_qdesn_mq_presentation_manifest.json"
+            authority += "; label-only MQ presentation overlay"
     elif "joint_qdesn_pure_desn" in path or "joint_qdesn_pro_review" in path or "joint_qdesn_simulation/" in path:
         contract = "tables/joint_qdesn_pure_desn_v1_article_asset_manifest.csv;tables/joint_qdesn_pure_desn_v1_projection_provenance.csv"
         if "pro_review" in path:
@@ -83,7 +98,7 @@ def classification(path: str) -> tuple[str, str, str, str]:
     if suffix == ".tex":
         role = "alias/presentation override" if "outputs" in path or "overrides" in path else "generated numerical table/figure wrapper"
     elif suffix in (".pdf", ".png"):
-        role = "presentation-only display derivative" if "review" in path else "frozen scientific display"
+        role = "presentation-only display derivative" if "review" in path or "_mq_" in path else "frozen scientific display"
     elif "manifest" in path or "provenance" in path:
         role = "provenance companion"
     else:

@@ -98,9 +98,20 @@ local({
   manifest <- read.csv(file.path(root, manifest_path), stringsAsFactors = FALSE)
   allowlist <- trimws(readLines(file.path(root, "overleaf/article_files.txt"), warn = FALSE))
   allowlist <- allowlist[nzchar(allowlist) & !startsWith(allowlist, "#")]
+  mq_manifest_path <- "tables/joint_qdesn_mq_presentation_manifest.json"
+  mq_active <- file.exists(file.path(root, mq_manifest_path))
+  mq_dependencies <- character()
+  if (mq_active) {
+    mq_receipt <- jsonlite::fromJSON(file.path(root, mq_manifest_path), simplifyVector = FALSE)
+    # Copy all source/generator dependencies, including helpers that must not
+    # be published to Overleaf, into the positive temporary fixture.
+    mq_dependencies <- c(mq_manifest_path, names(mq_receipt$sources),
+      mq_receipt$registry, mq_receipt$generator,
+      vapply(mq_receipt$outputs, `[[`, character(1L), "file"))
+  }
   additional_files <- unique(c("main.tex", "qdesn-supplement.tex", "overleaf/article_files.txt",
     "scripts/reconstruct_joint_qdesn_laplace_article_projection_v2.R",
-    manifest$relative_path, allowlist))
+    manifest$relative_path, allowlist, mq_dependencies))
   for (relative in additional_files) {
     target <- file.path(pristine, relative)
     if (!file.exists(target)) {
@@ -128,6 +139,60 @@ local({
   stopifnot(bad_projection$status != 0L, !any(startsWith(bad_projection$output, marker)),
             any(grepl("Historical JOINT article outputs are excluded", bad_projection$output, fixed = TRUE)))
   cat("V2_MUTATION_REJECTED=stale_overleaf_projection\n")
+  writeLines(original_allowlist_lines, copied_allowlist, useBytes = TRUE)
+  mq_mutations <- 0L
+  if (mq_active) {
+    mq_mutate <- function(label, relative, change, expected_failure) {
+      target <- file.path(pristine, relative)
+      backup <- readBin(target, "raw", n = file.info(target)$size)
+      on.exit(writeBin(backup, target), add = TRUE)
+      change(target)
+      result <- run(pristine)
+      stopifnot(result$status != 0L, !any(startsWith(result$output, marker)),
+        any(grepl("JOINT_PURE_DESN_V2_CHECK_FAILED:", result$output, fixed = TRUE)),
+        any(grepl(expected_failure, result$output, fixed = TRUE)))
+      mq_mutations <<- mq_mutations + 1L
+      cat(sprintf("V2_MUTATION_REJECTED=%s\n", label))
+    }
+    registry_change <- function(modify) function(target) {
+      registry <- read.csv(target, check.names = FALSE, stringsAsFactors = FALSE)
+      write.csv(modify(registry), target, row.names = FALSE)
+    }
+    mq_mutate("mq_swapped_likelihood_labels", mq_receipt$registry, registry_change(function(registry) {
+      at <- match(c("joint_qdesn_rhs_vb", "joint_exqdesn_rhs_vb"), registry$source_key)
+      registry[at, c("likelihood_family", "display_tex", "display_text")] <-
+        registry[rev(at), c("likelihood_family", "display_tex", "display_text")]
+      registry
+    }), "Display registry preserves independent/coupled and AL/exAL assignments")
+    mq_mutate("independent_mislabeled_mq", mq_receipt$registry, registry_change(function(registry) {
+      at <- registry$context == "simulation" & registry$source_key == "qdesn_rhs_independent_vb"
+      registry$model_family[at] <- "MQ-DESN"
+      registry$fit_structure[at] <- "joint"
+      registry$display_tex[at] <- "MQ--DESN (AL)"
+      registry$display_text[at] <- "MQ-DESN (AL)"
+      registry
+    }), "Display registry preserves independent/coupled and AL/exAL assignments")
+    mq_mutate("mq_unknown_registry_key", mq_receipt$registry, registry_change(function(registry) {
+      registry$source_key[[1L]] <- "unapproved_model"; registry
+    }), "Display registry has exactly the approved context/key pairs")
+    mq_mutate("mq_duplicate_registry_key", mq_receipt$registry, registry_change(function(registry) {
+      rbind(registry, registry[1L, ])
+    }), "Display registry has exactly the approved context/key pairs")
+    mq_mutate("stale_mq_derivative_receipt", mq_manifest_path, function(target) {
+      receipt <- jsonlite::fromJSON(target, simplifyVector = FALSE)
+      receipt$outputs[[1L]]$sha256 <- paste(rep("0", 64), collapse = "")
+      jsonlite::write_json(receipt, target, pretty = TRUE, auto_unbox = TRUE, digits = 17)
+    }, "MQ derivative hash and mapping")
+    mq_mutate("stale_selected_mq_wrapper", "main.tex", function(target) {
+      lines <- readLines(target, warn = FALSE)
+      lines <- gsub("tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+        "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex", lines, fixed = TRUE)
+      writeLines(lines, target, useBytes = TRUE)
+    }, "Forecast figure remains in main and fitting figure in supplement")
+    after_mq <- run(pristine)
+    stopifnot(after_mq$status == 0L, any(startsWith(after_mq$output, marker)))
+  }
   cat(paste(receipt, collapse = "\n"), "\n")
-  cat("test_joint_qdesn_pure_desn_article_projection_v2: PASS mutations=13 runtime_reads=0\n")
+  cat(sprintf("test_joint_qdesn_pure_desn_article_projection_v2: PASS mutations=%d runtime_reads=0\n",
+    13L + mq_mutations))
 })

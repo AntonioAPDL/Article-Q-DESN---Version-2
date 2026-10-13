@@ -98,7 +98,7 @@ class MQNomenclatureTest(unittest.TestCase):
         asset["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         asset["size_bytes"] = path.stat().st_size
         receipt_path.write_text(json.dumps(receipt))
-        with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts|Frozen source changed: tables/joint_qdesn_mq_presentation_manifest.json"):
             CHECKER.check(self.root)
 
     def test_stale_manifest_output_hash_fails(self):
@@ -112,19 +112,19 @@ class MQNomenclatureTest(unittest.TestCase):
     def test_late_stale_selected_alias_fails(self):
         path = self.root / "qdesn-supplement.tex"
         text = path.read_text()
-        needle = r"\input{tables/glofas_mq_display_overrides.tex}"
+        needle = r"\input{tables/qdesn_sections5_7_supp_display_overrides.tex}"
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, needle + "\n" + r"\input{tables/glofas_review_figure_overrides.tex}", 1))
-        with self.assertRaisesRegex(CHECKER.CheckError, "selected aliases|selected alias|MQ TeX"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "selected aliases|selected alias|A stale later alias overrides|effective|selected|MQ TeX"):
             CHECKER.check(self.root)
 
     def test_stale_joint_main_wrapper_fails(self):
         path = self.root / "main.tex"
         text = path.read_text()
-        needle = "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex"
+        needle = "tables/qdesn_multiquantile_forecast_figure_display.tex"
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex", 1))
-        with self.assertRaisesRegex(CHECKER.CheckError, "MQ TeX|selected aliases|Stale JOINT"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "MQ TeX|selected aliases|Stale JOINT|effective|selected"):
             CHECKER.check(self.root)
 
     def test_posterior_target_mutation_fails_even_with_updated_module_receipt(self):
@@ -142,7 +142,7 @@ class MQNomenclatureTest(unittest.TestCase):
     def test_pricefm_mq_assertion_fails(self):
         path = self.root / "main.tex"
         text = path.read_text()
-        needle = r"\section{Application: Region-Frozen PriceFM Comparison}"
+        needle = r"\label{sec:pricefm-application}"
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, needle + "\nThe fitted model is MQ--DESN.\n", 1))
         with self.assertRaisesRegex(CHECKER.CheckError, "PriceFM"):

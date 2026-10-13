@@ -17,6 +17,15 @@ expect <- function(value, message) {
 read_text <- function(relative) {
   paste(readLines(repo_path(relative), warn = FALSE), collapse = "\n")
 }
+prose <- function(text) gsub("[[:space:]]+", " ", text)
+section_text <- function(text, label) {
+  marker <- paste0("\\label{", label, "}")
+  position <- regexpr(marker, text, fixed = TRUE)[1L]
+  expect(position > 0L, paste("Missing manuscript section label:", label))
+  remaining <- substring(text, position + nchar(marker))
+  boundary <- regexpr("\\section{", remaining, fixed = TRUE)[1L]
+  if (boundary > 0L) substring(remaining, 1L, boundary - 1L) else remaining
+}
 
 immutable_hashes <- c(
   "tables/qdesn_validation_500obs_metric_intervals_v14_summary.csv" =
@@ -109,6 +118,9 @@ main <- read_text("main.tex")
 supplement <- read_text("qdesn-supplement.tex")
 manuscript <- paste(main, supplement, sep = "\n")
 pricefm_aliases <- read_text("tables/pricefm_full_current_outputs.tex")
+pricefm_main <- prose(section_text(main, "sec:pricefm-application"))
+simulation_main <- prose(section_text(main, "sec:simulation"))
+glofas_main <- prose(section_text(main, "sec:data"))
 internal_terms <- paste0(
   "\\b(lane|worker|queue|coordinator|handoff|launch lock|runtime artifact|",
   "promotion packet|score contract|frozen HEAD|frozen branch)\\b"
@@ -129,18 +141,18 @@ expect(grepl("\\aCRPS_{p_1:p_K}", main, fixed = TRUE) &&
        "The finite-grid integrated check-loss notation is inconsistent.")
 
 expect(grepl(
-  "tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+  "tables/qdesn_single_quantile_forecast_figures_display.tex",
   main, fixed = TRUE
 ), "The main article does not contain the independent forecast figures.")
-expect(grepl("tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+expect(grepl("tables/qdesn_multiquantile_forecast_figure_display.tex",
              main, fixed = TRUE),
        "The main article does not contain the JOINT forecast figure.")
 expect(grepl(
-  "tables/qdesn_pro_review_mcmc_fit_figure.tex",
+  "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
   supplement, fixed = TRUE
-) && grepl("tables/qdesn_pro_review_vb_fit_figure.tex",
+) && grepl("tables/qdesn_single_quantile_vb_fit_figure_display.tex",
            supplement, fixed = TRUE) &&
-  grepl("tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex",
+  grepl("tables/qdesn_multiquantile_fit_figure_display.tex",
         supplement, fixed = TRUE),
 "The supplement does not contain all fitting-sample figures.")
 expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
@@ -150,7 +162,7 @@ reader_facing_independent <- paste(c(
   main,
   supplement,
   read_text("tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex"),
-  read_text("tables/qdesn_pro_review_mcmc_forecast_figures.tex"),
+  read_text("tables/qdesn_single_quantile_forecast_figures_display.tex"),
   read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_normal.tex"),
   read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_laplace.tex"),
   read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_gausmix.tex")
@@ -167,8 +179,8 @@ reader_facing_joint <- paste(c(
   read_text("tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex"),
   read_text("tables/joint_qdesn_pure_desn_v2_mq_recursive_policy_table.tex"),
   read_text("tables/joint_qdesn_pure_desn_v2_mq_oracle_recovery_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex")
+  read_text("tables/qdesn_multiquantile_forecast_figure_display.tex"),
+  read_text("tables/qdesn_multiquantile_fit_figure_display.tex")
 ), collapse = "\n")
 expect(!grepl(
   "canonical-action|Canonical action|black vertical|raw/reported",
@@ -185,11 +197,16 @@ expect(grepl(
   fixed = TRUE
 ), "The supplement does not distinguish crossing frequency from adjustment magnitude.")
 
-expect(grepl("prospectively", main, fixed = TRUE) &&
-         grepl("slightly higher aggregate AQL", main, fixed = TRUE) &&
+expect(grepl("training and validation", pricefm_main, fixed = TRUE) &&
+         grepl("held fixed", pricefm_main, fixed = TRUE) &&
+         grepl("higher", pricefm_main, fixed = TRUE) &&
+         grepl("aggregate|mean AQL", pricefm_main) &&
+         grepl("\\PricefmFullMeanQdesnAql", pricefm_main, fixed = TRUE) &&
+         grepl("\\PricefmFullMeanPricefmAql", pricefm_main, fixed = TRUE) &&
          grepl("7.217", pricefm_aliases, fixed = TRUE) &&
-         grepl("7.039", pricefm_aliases, fixed = TRUE),
-       "The main article does not state the R98 PriceFM result accurately.")
+         grepl("7.039", pricefm_aliases, fixed = TRUE) &&
+         grepl("+0.178", pricefm_aliases, fixed = TRUE),
+       "The PriceFM comparison must retain pre-evaluation regional selection and higher Q--DESN aggregate AQL.")
 expect(!grepl("PricefmSelection|pricefm_r91_selective_promotions|PricefmAligned",
               manuscript, perl = TRUE),
        "A deprecated R91/R92 PriceFM reader-facing construct remains.")
@@ -251,9 +268,13 @@ for (macro in c("CurrentPartOneFigure", "CurrentPartTwoFigure", "CurrentPartThre
          paste("Supplement omits the GloFAS figure role:", macro))
 }
 expect(grepl("\\GlofasApplicationCurrentForecastWindowFigure", main, fixed = TRUE) &&
-         grepl("descriptive", main, fixed = TRUE) &&
-         grepl("three and one adjacent-quantile crossing pairs", main, fixed = TRUE),
-       "Main GloFAS results omit the issued-window figure, descriptive scope, or crossing disclosure.")
+         grepl("descriptive", glofas_main, fixed = TRUE),
+       "Main GloFAS results omit the issued-window figure or descriptive comparison scope.")
+expect(grepl("three and one", prose(supplement), fixed = TRUE) &&
+         grepl("crossing", supplement, fixed = TRUE) &&
+         grepl("unscored|not scored|no (post-origin|future|forecast) score", supplement) &&
+         grepl("retrospective GloFAS ends", prose(supplement), fixed = TRUE),
+       "The supplement must retain reference-process crossing counts and the discrepancy no-score boundary.")
 active_glofas <- article_files[grepl("^tables/glofas_|^figures/glofas", article_files)]
 expect(length(active_glofas) > 10L &&
          !any(grepl("sweep10|fr09|part4_joint_al_sweep", active_glofas, ignore.case = TRUE)) &&
@@ -273,6 +294,16 @@ glofas_check <- system2(file.path(R.home("bin"), "Rscript"),
 expect(is.null(attr(glofas_check, "status")) &&
          any(grepl("GLOFAS_SEARCH3_ARTICLE_PROJECTION_CHECK=PASS", glofas_check, fixed = TRUE)),
        "The full GloFAS projection contract failed.")
+presentation_check <- system2(
+  "/usr/bin/python3.11",
+  c(shQuote(repo_path("scripts/check_qdesn_sections5_7_presentation.py")),
+    "--repo-root", shQuote(repo_root)),
+  stdout = TRUE, stderr = TRUE
+)
+expect(is.null(attr(presentation_check, "status")) &&
+         any(grepl("QDESN_SECTIONS5_7_PRESENTATION_CHECK=PASS",
+                   presentation_check, fixed = TRUE)),
+       "The selected descriptive displays, caption scopes, and permitted table-column changes failed their bounded contract.")
 
 abstract <- sub(".*\\\\begin\\{abstract\\}", "", main)
 abstract <- sub("\\\\end\\{abstract\\}.*", "", abstract)
@@ -299,8 +330,9 @@ expect(grepl("\\label{eq:pricefm-aql-main}", main, fixed = TRUE) &&
          grepl("1}{N_{r,f}K}", main, fixed = TRUE) &&
          grepl("equal weight to the 114", main, fixed = TRUE),
        "PriceFM's equal-level AQL and case-level aggregation must be explicit.")
-expect(grepl("state-conditional oracle path", main, fixed = TRUE) &&
-         grepl("integrating over future states", main, fixed = TRUE),
+expect(grepl("state-conditional", simulation_main, fixed = TRUE) &&
+         grepl("quantile path", simulation_main, fixed = TRUE) &&
+         grepl("integrating over future states", prose(supplement), fixed = TRUE),
        "Oracle recovery must be distinguished from marginal predictive quantiles.")
 expect(grepl("\\label{eq:supp_joint_increment_moments}", supplement, fixed = TRUE) &&
          grepl("\\mat H\\mat\\Sigma\\mat H^\\top", supplement, fixed = TRUE) &&
@@ -357,11 +389,21 @@ expect(grepl("DeLeonPradoSanso2026HydrologicProducts", main, fixed = TRUE) &&
          grepl("@misc{DeLeonPradoSanso2026HydrologicProducts,", read_text("refs.bib"),
                fixed = TRUE),
        "The distinct hydrologic predecessor is not cited.")
-expect(grepl("released load, solar, and wind forecast", main, fixed = TRUE) &&
-         grepl("issue-time vintages were not separately verified", main, fixed = TRUE) &&
+expect(grepl("load, solar, and wind", pricefm_main, fixed = TRUE) &&
+         grepl("forecast", pricefm_main, fixed = TRUE) &&
+         grepl("issue-time vintages", pricefm_main, fixed = TRUE) &&
+         grepl("not (separately|independently) verified", pricefm_main) &&
          !grepl("retrospectively observed own-region", manuscript, fixed = TRUE) &&
          grepl("\\label{tab:supp-pricefm-fold-design}", supplement, fixed = TRUE),
        "PriceFM covariate availability or the executed fold design is misstated.")
+expect(grepl("criterion-specific", simulation_main, fixed = TRUE) &&
+         grepl("historical forecast-based refinement", simulation_main, fixed = TRUE) &&
+         grepl("historical forecast-based refinement", prose(supplement), fixed = TRUE),
+       "Criterion-specific independent specifications must retain their actual forecast-guided selection history.")
+expect(!grepl("1\\.1\\.[12]", simulation_main) &&
+         grepl("1.1.1", supplement, fixed = TRUE) &&
+         !grepl("(uses?|used|executed|fitted|fit).*version.?1\\.1\\.2", prose(supplement)),
+       "Keep authenticated historical software execution versions in the supplement, not an unexecuted 1.1.2 claim.")
 expect(grepl("do not isolate", supplement, fixed = TRUE) &&
          grepl("historical comparisons", supplement, fixed = TRUE) &&
          grepl("not been", supplement, fixed = TRUE) &&

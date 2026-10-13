@@ -36,6 +36,25 @@ def classification(path: str) -> tuple[str, str, str, str]:
         return "manuscript", "current editorial source", "main.tex;qdesn-supplement.tex", "not a scientific estimator"
     if suffix in (".bib", ".bst"):
         return "bibliography database/style", "bibliographic and local presentation authority", "refs.bib;tables/qdesn_asa_compatible.bst", "not a scientific estimator; BST is not official journal software"
+    if ("sections5_7" in path or "glofas_editorial_20261013_" in path
+            or "pricefm_regional_aql_editorial_20261013" in path
+            or path in {
+                "tables/glofas_forecast_correction_main_scores_display.tex",
+                "tables/glofas_reference_discrepancy_scores_display.tex",
+                "tables/glofas_reference_discrepancy_priors_display.tex",
+                "tables/glofas_selected_specifications_display.tex",
+                "tables/pricefm_regional_comparison_display.tex",
+                "tables/qdesn_single_quantile_forecast_figures_display.tex",
+                "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+                "tables/qdesn_single_quantile_vb_fit_figure_display.tex",
+                "tables/qdesn_multiquantile_forecast_figure_display.tex",
+                "tables/qdesn_multiquantile_fit_figure_display.tex",
+                "tables/qdesn_multiquantile_design_display.tex",
+            }):
+        return ("editorial presentation derivative/receipt",
+                "unchanged independent v14, multiquantile v2, GloFAS and PriceFM evidence",
+                "tables/qdesn_sections5_7_presentation_manifest.json",
+                "descriptive labels/captions and explicit display-column removal only; no fitting or rescoring")
     if "quantile_initialization/" in path:
         return "initialization diagram component", "declared initialization protocol", "qdesn-supplement.tex:sec:supp_selection_initialization", "initial states distinct from separately declared prior calibration; study-specific branches"
     if path == "tables/qdesn_model_display_names.csv":

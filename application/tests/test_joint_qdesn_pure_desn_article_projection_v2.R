@@ -101,6 +101,9 @@ local({
   mq_manifest_path <- "tables/joint_qdesn_mq_presentation_manifest.json"
   mq_active <- file.exists(file.path(root, mq_manifest_path))
   mq_dependencies <- character()
+  editorial_manifest_path <- "tables/qdesn_sections5_7_presentation_manifest.json"
+  editorial_active <- file.exists(file.path(root, editorial_manifest_path))
+  editorial_dependencies <- character()
   if (mq_active) {
     mq_receipt <- jsonlite::fromJSON(file.path(root, mq_manifest_path), simplifyVector = FALSE)
     # Copy all source/generator dependencies, including helpers that must not
@@ -109,9 +112,17 @@ local({
       mq_receipt$registry, mq_receipt$generator,
       vapply(mq_receipt$outputs, `[[`, character(1L), "file"))
   }
+  if (editorial_active) {
+    editorial_receipt <- jsonlite::fromJSON(file.path(root, editorial_manifest_path),
+                                          simplifyVector = FALSE)
+    editorial_dependencies <- c(editorial_manifest_path, editorial_receipt$generator,
+      "scripts/check_qdesn_sections5_7_presentation.py",
+      vapply(editorial_receipt$sources, `[[`, character(1L), "file"),
+      vapply(editorial_receipt$outputs, `[[`, character(1L), "file"))
+  }
   additional_files <- unique(c("main.tex", "qdesn-supplement.tex", "overleaf/article_files.txt",
     "scripts/reconstruct_joint_qdesn_laplace_article_projection_v2.R",
-    manifest$relative_path, allowlist, mq_dependencies))
+    manifest$relative_path, allowlist, mq_dependencies, editorial_dependencies))
   for (relative in additional_files) {
     target <- file.path(pristine, relative)
     if (!file.exists(target)) {
@@ -185,7 +196,11 @@ local({
     }, "MQ derivative hash and mapping")
     mq_mutate("stale_selected_mq_wrapper", "main.tex", function(target) {
       lines <- readLines(target, warn = FALSE)
-      lines <- gsub("tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+      selected_wrapper <- if (editorial_active)
+        "tables/qdesn_multiquantile_forecast_figure_display.tex" else
+        "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex"
+      stopifnot(any(grepl(selected_wrapper, lines, fixed = TRUE)))
+      lines <- gsub(selected_wrapper,
         "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex", lines, fixed = TRUE)
       writeLines(lines, target, useBytes = TRUE)
     }, "Forecast figure remains in main and fitting figure in supplement")

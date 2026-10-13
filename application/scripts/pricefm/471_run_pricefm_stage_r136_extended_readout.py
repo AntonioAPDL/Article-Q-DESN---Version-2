@@ -608,6 +608,7 @@ def closeout(prep, tasks):
 
 
 def controller(workers):
+    OUT.mkdir(parents=True, exist_ok=True)
     prep = read(PREP / 'preparation.json'); setup(Path(prep['dependency'])); prep = valid()
     if not 1 <= workers <= 30: raise ValueError('combined worker cap 30')
     if os.getenv(prep['protocol']['launch_approval_environment']) != 'true':

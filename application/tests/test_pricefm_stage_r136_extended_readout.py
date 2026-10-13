@@ -287,6 +287,12 @@ def test_active_unsealed_output_is_not_misclassified_as_completed(tmp_path, monk
     assert CTL.outcome('running') is None
 
 
+def test_controller_owns_runtime_root_creation():
+    source = inspect.getsource(CTL.controller)
+    assert "OUT.mkdir(parents=True, exist_ok=True)" in source
+    assert source.index("OUT.mkdir(parents=True, exist_ok=True)") < source.index("controller.lock")
+
+
 @pytest.mark.parametrize('workers', [0, 31, 99])
 def test_worker_cap(workers):
     with pytest.raises(ValueError): core.physical_cpus(workers, sample_seconds=0)

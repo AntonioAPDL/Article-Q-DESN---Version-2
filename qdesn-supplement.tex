@@ -129,8 +129,7 @@ the GloFAS latent-path model in Section~\ref{sec:glofas_discrepancy}.
 The generic regression calculations condition on the observed design.
 Unknown future GloFAS responses instead enter its future feature rows and
 require an additional approximation. Table~\ref{tab:supp-computation-map}
-distinguishes these calculations; a generic VB derivation is not evidence
-that every application used that same approximation.
+summarizes the approximations used in the different analyses.
 
 \begin{table}[!htbp]
 \centering
@@ -215,7 +214,7 @@ distinct from the regularized-horseshoe local scales \(\lambda_j\).
 
 \noindent\textbf{AL nesting and branchwise regularity.}
 When \(\gamma=0\) and the \(s_t\) latents are omitted, the exAL hierarchy
-reduces to the AL working likelihood with constants \(A_0,B_0\).
+reduces to the AL likelihood with constants \(A_0,B_0\).
 This nesting is exact. The surrounding \(p_\gamma\), \(A_\gamma\),
 \(B_\gamma\), and \(D_\gamma\) maps are branchwise smooth for
 \(\gamma<0\) and \(\gamma>0\), but the absolute value and indicator branches
@@ -237,9 +236,11 @@ random response \(Y_t\) from its observed value \(y_t\). Lowercase responses
 in posterior kernels denote the data at which the likelihood is evaluated.
 
 Let \(\vect u_t=(y_{t-1},\ldots,y_{t-m},\vect z_t^\top)^\top\) collect response
-lags and exogenous covariates. For layers \(d=1,\ldots,D\), Q--DESN draws sparse
-reservoir matrices \(\mat W_d\), input matrices \(\mat W^{\mathrm{in}}_d\), and
-optional reducers \(\mat Q_d\), \(d=1,\ldots,D-1\), once and keeps them fixed.
+lags and exogenous covariates. For layers \(d=1,\ldots,D\), sparse reservoir
+matrices \(\mat W_d\) and input matrices \(\mat W^{\mathrm{in}}_d\) are
+randomly drawn once before fitting and then held fixed. The reducers
+\(\mat Q_d\), \(d=1,\ldots,D-1\), and other feature-construction choices
+are also fixed before posterior inference.
 With layer-specific leak rates \(\alpha_d\), activation \(f\), and spectral
 radius targets \(\rho_d\),
 the layer states satisfy
@@ -259,8 +260,8 @@ the layer states satisfy
 where \(\bar{\mat W}_d=\rho_d\mat W_d/\rho(\mat W_d)\).
 For \(m\) lags and \(q\) covariates, the first input matrix is
 \(n_1\times(m+q)\), and \(\vect b_1^{\mathrm{in}}\in\R^{n_1}\) is
-a fixed input bias, equivalent to a constant input column. It is distinct
-from the regression intercept. For \(d\ge2\), the input matrix is
+a fixed input bias, equivalent to a constant input column. For \(d\ge2\),
+the input matrix is
 \(n_d\times\tilde n_{d-1}\), and
 \(\mat Q_{d-1}\in\R^{\tilde n_{d-1}\times n_{d-1}}\).
 Sparse weights are drawn as independent Bernoulli masks multiplied
@@ -292,17 +293,17 @@ in the empirical sections. All regression inference is conditional on the
 observed design. Future designs generated from unknown response paths
 require the separate forecasting construction.
 
-\section{Q--DESN Working Likelihoods, Priors, and Augmented Posterior}
+\section{Q--DESN Likelihoods, Priors, and Augmented Posterior}
 \label{sec:model_joint}
 
 The augmented posterior densities below are used by both computational
-schemes. The AL and exAL likelihoods are working likelihoods for a
-fixed target quantile, while the auxiliary variables provide equivalent
-mixture representations for computation.
+schemes. The AL and exAL likelihoods identify a fixed target quantile, while
+the auxiliary variables provide equivalent mixture representations for
+computation.
 
-\subsection{Marginal Working Model and Augmentation}
+\subsection{Quantile Regression and Augmentation}
 
-For a fixed probability level \(p_0\), the working model is
+For a fixed probability level \(p_0\), the regression model is
 \[
 \text{Quantile regression:}\quad
 Y_t\mid\vect x_t,\vect\beta,\sigma,\gamma
@@ -326,8 +327,7 @@ y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\mat X
 \end{align}
 After integrating out \((v_t,s_t)\), the likelihood conditional on
 \((\vect x_t,\vect\beta,\sigma,\gamma)\) has \(p_0\)-quantile
-\(\vect x_t^\top\vect\beta\). This is not a claim about the quantile after
-integrating over parameter uncertainty. The AL special case is
+\(\vect x_t^\top\vect\beta\). The AL special case is
 \begin{align}
 v_t\mid\sigma &\sim \Exp(\text{rate}=1/\sigma),\\
 y_t\mid\vect\beta,\sigma,v_t,\mat X
@@ -514,7 +514,7 @@ the posterior contains exactly \(m_0\) active coefficients.
 
 \noindent\textbf{Likelihood-information alternatives.}
 A likelihood-specific reference can be obtained by replacing the Gaussian
-location information with the information under the working likelihood. Let
+location information with the information under the AL or exAL likelihood. Let
 \(I_{\mu,\mathrm{ref}}\) be the one-observation Fisher information for the
 location parameter at a specified reference state. The corresponding local
 information match is
@@ -526,7 +526,7 @@ information match is
 \end{equation}
 For the AL density at probability level \(p_0\), the location score equals
 \(\{p_0-\ind(y<\mu)\}/\sigma\) except at \(y=\mu\), an event of probability
-zero under the continuous working likelihood. Hence
+zero under the continuous AL distribution. Hence
 \begin{equation}
 I_{\mu,\mathrm{AL}}
 =\frac{p_0(1-p_0)}{\sigma^2},
@@ -559,9 +559,8 @@ Equation~\eqref{eq:supp-exal-standardized-location-information} implies
 At the nested AL reference \(\gamma_{\mathrm{ref}}=0\),
 \(J_{p_0}(0)=p_0(1-p_0)\), so
 Eq.~\eqref{eq:supp-rhs-tau0-exal-reference} reduces to
-Eq.~\eqref{eq:supp-rhs-tau0-al-reference}. These information-based scales are
-local reference calculations under the working likelihoods. They do not
-correct likelihood misspecification or establish frequentist calibration.
+Eq.~\eqref{eq:supp-rhs-tau0-al-reference}. These information-based scales use
+the location information of the specified likelihood at the reference state.
 Equation~\eqref{eq:supp-rhs-tau0-information-reference} uses equally weighted
 likelihood contributions. For a weighted or composite likelihood, the
 corresponding reference should use the total expected location curvature of
@@ -1122,14 +1121,14 @@ approximation quality separately.
 \section{Joint Quantile-Vector Regression with Regularized-Horseshoe Shrinkage}
 \label{sec:joint_qdesn_supp}
 
-This section derives the joint multi-quantile regression introduced in the main
+This section derives the joint multiquantile regression introduced in the main
 article. The reservoir features remain unchanged, and the model adds a prior
 over the quantile-indexed regression-coefficient sequence,
 conditional on the fixed non-intercept DESN design
 \(\mat Z=[\tilde{\vect x}_1^\top;\ldots;\tilde{\vect x}_T^\top]\in\R^{T\times r}\).
 The intercepts are kept separate from the high-dimensional slope shrinkage.
 
-\subsection{Stacked exAL Working Likelihood}
+\subsection{Stacked exAL Composite Likelihood}
 
 Let \(0<p_1<\cdots<p_K<1\) be the quantile grid. At level \(p_k\),
 \[
@@ -1455,7 +1454,11 @@ with the analogous \(r/2\) update for a random baseline slab scale
 \subsection{MCMC and Joint Variational Updates}
 
 Algorithm~\ref{alg:joint_qdesn_mcmc} applies the preceding sparse Gaussian,
-level-indexed latent, and RHS blocks to the joint posterior.
+level-indexed latent, and RHS blocks to the joint posterior. Under AL, the
+full conditional distributions remain Gaussian or truncated Gaussian,
+GIG, and inverse-gamma. The reported joint implementation uses a log-scale
+slice transition within the GIG latent block, targeting its stated full
+conditional.
 
 \begin{suppalgorithm}{MCMC sampler for the joint quantile-vector Q--DESN posterior}
 \label{alg:joint_qdesn_mcmc}
@@ -1634,15 +1637,13 @@ g_{k,t}=
 (\beta_{0k}-\beta_{0,k-1})
 +\tilde{\vect x}_t^\top(\vect\beta_k-\vect\beta_{k-1}).
 \]
-The crossing count before rearrangement is
+The raw adjacent-level crossing count is
 \[
 C_{\mathrm{raw}}=\sum_{k=2}^K\sum_{t=1}^T\ind\{g_{k,t}<0\}.
 \]
-If fitted quantile curves are projected or rearranged, the corresponding
-post-rearrangement crossing count should be computed after that stated monotone
-rearrangement. A zero crossing count after rearrangement does not indicate how
-strongly the fitted curves departed from monotonicity before rearrangement. The
-maximum and mean absolute projection adjustments quantify this discrepancy. On a bounded feature domain
+When an ordering transformation is applied, crossings are counted separately
+before and after that transformation. Maximum and mean absolute projection
+adjustments measure how much the raw grid changes. On a bounded feature domain
 \(\tilde{\vect x}_t\in[-1,1]^r\), the sufficient condition
 \[
 \beta_{0k}-\beta_{0,k-1}\ge
@@ -1651,14 +1652,14 @@ maximum and mean absolute projection adjustments quantify this discrepancy. On a
 is a diagnostic reference for adjacent-level separation. Enforcing this
 inequality requires explicit constrained estimation.
 
-\section{Forecast Summaries and Monotone Projection}
+\section{Forecast Summaries and Scores}
 \label{sec:forecast_synthesis}
 
 Posterior or variational parameter draws are combined with recursively updated
-reservoir states to obtain multi-step quantile forecasts. The analyses use
-equal-weight isotonic projection unless a specific evaluation design states
-another choice. A
-joint multi-quantile posterior model is specified separately. For fitted ordinates
+reservoir states to obtain multi-step quantile forecasts. Estimated quantile
+curves may cross. Where ordered output is required, equal-weight isotonic
+projection orders the grid unless the analysis specifies another rule.
+For fitted ordinates
 \(\widehat{\vect q}_t=(\widehat q_{1,t},\ldots,\widehat q_{K,t})^\top\) at
 levels \(p_1<\cdots<p_K\), the projection is
 \begin{equation}
@@ -1669,6 +1670,8 @@ levels \(p_1<\cdots<p_K\), the projection is
 \qquad w_k>0.
 \label{eq:supp_monotone_projection}
 \end{equation}
+The equal projection weights \(w_k=1\) used in the joint simulation differ
+from the probability-integration weights \(\omega_k\) used for scoring below.
 The projection may be applied draw by draw when joint posterior or variational
 quantile-path draws are available, or to posterior summary ordinates for
 independently estimated quantiles. For a joint fit, draw-level projection
@@ -1686,7 +1689,7 @@ proceeds by propagating the deterministic reservoir state forward from the
 forecast origin. At horizon \(h\), the current lag vector is built from
 observed values for one-step forecasts and from previously simulated values for
 free-running multi-step forecasts. Conditional on the draw and the resulting
-\(p_0\)-indexed design row, the working-likelihood draw is
+\(p_0\)-indexed design row, the response draw is
 \[
 y_{T+h}^{(b,p_0)}
 \sim
@@ -1695,11 +1698,11 @@ y_{T+h}^{(b,p_0)}
 \sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)}\right),
 \]
 with the \(s\)-latent and \(\gamma\) block omitted for AL. Repetition over
-parameter draws yields response-level simulations when the working likelihood
+parameter draws yields response-level simulations when the likelihood
 is sampled and conditional-quantile summaries when the regression location is
 evaluated directly. The reported scoring criterion is defined for the
 corresponding forecast summary. Both summaries condition on the fixed reservoir
-realization and the stated working likelihood. To report several
+realization and the stated likelihood. To report several
 independently fitted levels, the same recursion is run separately for each
 fitted \(p_k\).
 
@@ -1776,13 +1779,13 @@ weights sum to 0.90. For fitted quantile regressions, the evaluation levels
 coincide with the fitted grid. Their interior levels differ between studies;
 comparisons of \(\aCRPS\) are therefore made within each study.
 
-The joint simulation also evaluates the quantile grid with respect to the
-known conditional response distribution. Let \(N_{\mathrm{eval}}\) be its
+The joint simulation also evaluates the quantile grid under the known
+conditional data-generating process (DGP). Let \(N_{\mathrm{eval}}\) be its
 number of origin--horizon pairs, let \(F_{0,\ell}\) be the true conditional
 distribution for pair \(\ell\), and let
 \(\vect q_\ell^{*,(b)}=(q_{\ell,1}^{*,(b)},\ldots,q_{\ell,K}^{*,(b)})^\top\) be the
-monotonically rearranged quantile vector from posterior draw \(b\). The
-data-generating-process (DGP)-integrated finite-grid quantile score is
+isotonically projected quantile vector from posterior draw \(b\). The
+oracle finite-grid \(\aCRPS\) is
 \begin{equation}
 S_{\mathrm{DGP}}^{(b)}
 =\frac{2}{N_{\mathrm{eval}}}
@@ -1815,8 +1818,8 @@ pre-specified product coupling formed by within-chain permutations of
 quantile-specific draws. Joint-minus-independent contrasts match scalar
 score draws by a declared index coupling. Their intervals are descriptive
 and depend on this pairing between separately fitted models.
-Posterior means and equal-tailed 95\% intervals of
-\(S_{\mathrm{DGP}}^{(b)}\) form the primary comparison. The score evaluated
+Posterior means and equal-tailed 95\% intervals of the oracle \(\aCRPS\),
+\(S_{\mathrm{DGP}}^{(b)}\), form the primary comparison. The score evaluated
 at the posterior-mean quantile curve is reported separately as a sensitivity
 summary. The GloFAS analysis uses realized outcomes in
 Eq.~\eqref{eq:supp-acrps}. \textit{[GloFAS ordering results to be updated.]}
@@ -1891,13 +1894,13 @@ Q--DESN feature map.}
 \subsection{Validation-Based Selection and Initialization}
 \label{sec:supp_selection_initialization}
 
-For a fixed statistical specification \(M\), reservoir candidates
-\(R_j\) are compared on the designated validation observations using
-the criterion stated for the analysis. The response convention, information
-set, design rows, transformations, feature ordering, scaling quantities, and
-forecast definition are held common across candidates. Reservoir states are
-also checked for finite values, concentration near the activation bounds,
-near-constant columns, and severe numerical dependence. The selected
+For a fixed regression specification \(M\), candidate DESNs \(R_j\) vary
+the depth, layer sizes, leak rates, input scaling, and reservoir realization
+over the choices stated for each analysis. They are fitted to the designated
+training observations and compared by the stated validation criterion
+\(S_{\mathrm{val}}\). The response convention, information available at each
+origin, and evaluation dates are common across candidates. Data-based
+scaling and reducers are estimated from the fitting observations. The selected
 specification satisfies
 \[
 \widehat R_M
@@ -1905,13 +1908,22 @@ specification satisfies
 \argmin_{R_j:\,j=1,\ldots,J}
 S_{\mathrm{val}}(R_j;M).
 \]
-The selected \(\widehat R_M\) is held fixed for
-evaluation. Gaussian ridge screening and Gaussian RHS--VB refinement support
-the exploration specified for each study; neither guarantees a global
-optimum. Prior parameters calibrated from a reference fit are fixed before
-the subsequent comparison. This calibration is separate from the transfers
-of starting values below. The independent single-quantile validation uses its
-own criterion-specific selection and initialization procedure.
+The selected \(\widehat R_M\) is held fixed for evaluation. Gaussian-DESN
+ridge fits provide an inexpensive first comparison of the candidate
+specifications. Gaussian RHS--VB fits and quantile regressions refine the
+comparison where specified. In the joint simulation, one selected DESN
+specification, reservoir realization, and feature construction are shared
+by independent AL, joint AL, independent exAL, and joint exAL Q--DESN.
+The independent single-quantile validation instead uses its own
+criterion-specific selection and initialization procedure.
+
+The generated reservoir states are checked for finite values and concentration
+near the activation bounds. Near-constant columns, effective rank, conditioning,
+and variation across reservoir realizations describe the resulting regression
+predictors. Leak rates and spectral
+scaling are assessed together with these driven-state checks, following
+the ESN stability literature
+\citep{JaegerLukoseviciusPopoviciSiewert2007LeakyESN,YildizJaegerKiebel2012ESP}.
 
 Suppose that the probability grid satisfies
 \(p_1<\cdots<p_{k_{\mathrm{med}}}=0.50<\cdots<p_K\).
@@ -2086,7 +2098,7 @@ the posterior point path is computed first; the reported sensitivity path is the
 coordinatewise median of those five paths. All criteria are then recomputed
 from that path. This construction summarizes chain-specific point estimates.
 
-One common specification is reported for each working likelihood. Relative to
+One common specification is reported for each likelihood. Relative to
 the corresponding criterion-specific summary, the \(\AL\)--\(\RHS\)
 specification reduced fit RMSE by 8.4\% and forecast MAE by 1.6\%, while its
 forecast check loss increased by 0.4\%. The \(\exAL\)--\(\RHS\) specification
@@ -2107,7 +2119,8 @@ posterior metric summaries.
 The reservoir-only readout uses the initialization sequence in
 Figure~\ref{fig:supp-quantile-sequential-initialization}. One scenario-specific
 DESN/RHS specification is selected from source realizations and held common
-across the four model classes. The readout includes every reservoir layer
+across independent AL, joint AL, independent exAL, and joint exAL Q--DESN.
+The readout includes every reservoir layer
 and an intercept, while response lags enter only through reservoir inputs.
 The evaluation realization is used for the final fit and evaluation.
 Table~\ref{tab:joint-qdesn-pure-desn-v2-protocol} records the variational
@@ -2157,10 +2170,9 @@ function of the complete posterior predictive distribution.
 Table~\ref{tab:joint-qdesn-pure-desn-v2-recursive-policy} compares this
 summary with evaluating each coefficient draw along its own recursive path.
 The conditional intervals are narrower in 28 of 32 comparisons, with median
-width ratio 0.7364. This difference reflects the uncertainty retained by
-each construction and does not establish better calibration. VB intervals
-additionally hold intercepts fixed and are therefore partial variational
-uncertainty summaries.
+width ratio 0.7364, reflecting the uncertainty retained by each construction.
+VB intervals additionally condition on fixed variational intercept estimates,
+while retaining the Gaussian slope-factor covariance.
 \begingroup
 \setlength{\abovecaptionskip}{0pt}
 \input{tables/joint_qdesn_pure_desn_v2_recursive_policy_table.tex}
@@ -2310,7 +2322,7 @@ model; Part 3 combines the historical reference and discrepancy processes.
 These components produce 30-day recursive paths. Part 4 is a separate
 28-horizon issued-ensemble latent-path analysis: future reference values are
 latent during fitting, and the issued ensemble contributes directly to the
-working likelihood. It is not a post-fit forecast adjustment. The comparison
+likelihood. The comparison
 includes independent and joint AL/exAL variational fits, two Gaussian
 predictive baselines, and the raw issued ensemble.
 
@@ -2339,7 +2351,7 @@ Part~3 combines reference and retrospective-product
 observations at those 12,455 dates, giving 24,910 stacked observations.
 
 For probability level \(p_k\), the reference and source-specific
-working-likelihood locations are
+likelihood locations are
 \begin{equation}
 \begin{aligned}
 \text{Reference quantile:}\quad
@@ -2481,7 +2493,7 @@ and raw-ensemble baselines do not have RHS hyperparameters.}
 \input{\GlofasApplicationCurrentPriorSettingsTable}
 \end{table}
 
-\subsection{Weighted Augmented Working Likelihood}
+\subsection{Weighted Augmented Likelihood}
 \label{subsec:glofas_likelihoods}
 
 At each level \(p_k\), reference observations have AL location \(q_{k,t}\),
@@ -2507,7 +2519,7 @@ z_i^c\mid\cdot
 Define an observation weight \(w_i=1\) for historical reference and
 retrospective GloFAS rows. For an issued member at a fixed horizon,
 \(w_i=1/51\). Hence the 51 issued members contribute total weight one at each
-horizon. The executed augmented working likelihood has the form
+horizon. The executed augmented likelihood has the form
 \begin{equation}
 \begin{aligned}
 \text{Weighted augmented likelihood:}\quad
@@ -2557,7 +2569,7 @@ as \(\vect m_N\) and \(\mat V_N\), the prior is
 \text{Future-path prior:}\quad
 \vect y_F\sim\Normal(\vect m_N,\mat V_N).
 \]
-This prior replaces, rather than supplements, a future-reference working
+This prior replaces, rather than supplements, a future-reference
 likelihood. Issued-member contributions remain in the weighted augmented
 likelihood. The Gaussian comparison families do not use this additional
 path prior.
@@ -2635,8 +2647,7 @@ greatest modeled coverage, \(0.786\), still below nominal. At \(p=0.95\),
 Joint exAL covers only \(0.286\), compared with Independent AL's \(0.750\).
 Table~\ref{tab:supp-glofas-part4-calibration} and
 Figure~\ref{fig:supp-glofas-part4-calibration} show the substantial
-undercoverage across the grid. Numerical convergence does not imply
-calibration.
+undercoverage across the grid.
 
 \begin{figure}[!htbp]
 \centering

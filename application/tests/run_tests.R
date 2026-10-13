@@ -244,6 +244,7 @@ run_standalone_glofas_test("application/tests/test_glofas_search3_article_projec
 # Bounded editorial checks, isolated from scientific fixture state.
 run_standalone_glofas_test("application/tests/test_pro_review_supplement_math.R")
 run_standalone_glofas_test("application/tests/test_pro_review_bibliography_initialization.R")
+run_standalone_glofas_test("application/tests/test_qdesn_reader_focused_editorial_revision.R")
 stopifnot(system2("python3.11", app_path("application/tests/test_pro_review_presentation.py")) == 0L)
 
 cat("Application tests completed.\n")

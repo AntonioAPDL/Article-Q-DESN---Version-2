@@ -5,7 +5,7 @@
   "preserved_generator": "scripts/build_qdesn_pro_review_presentation.R",
   "preserved_generator_sha256": "86f72a80acf33241ecfc2f043177e7d4c9b2dc1913356502988091b33f1defb9",
   "joint_generator": "scripts/build_joint_qdesn_laplace_article_figures_v2.R",
-  "joint_generator_sha256": "c1d1775c516d5540d57d2cab285b3fa0d9f8cb4fd4354be659285b9562b22a80",
+  "joint_generator_sha256": "ab656a54eafcc85e51338141d92cf1b1f232f3304c38f1175503035a0c4dd2ff",
   "shared_style_sha256": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
   "simulation_minimum_native_ordinary_label_pt": 10.4,
   "sources": {
@@ -66,11 +66,11 @@
     },
     {
       "file": "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_forecast_dgp_acrps.pdf",
-      "sha256": "365434ff899e8da47df213e42fd8d97b48e2a4f89b1edd004c9098c4b99303ac"
+      "sha256": "07b9e3fa0f4f238e8370fef4b156c308fcbfaddd4978d4f5a479b583f653bdd9"
     },
     {
       "file": "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex",
-      "sha256": "b4e774f58c1708d422b712871460ef92b2ffb4f987a11280f9ec3dce8232a584"
+      "sha256": "b647390a29a0e1696405e3c9f18ff53769aec21e95189ab003e621ec1dae4395"
     },
     {
       "file": "tables/joint_qdesn_pure_desn_v2_fit_figure.tex",

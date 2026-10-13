@@ -239,21 +239,21 @@ can remain, and isotonic projection is used when ordered output is required.
 
 Dynamic quantile linear models (DQLMs) and extended dynamic quantile linear
 models (exDQLMs) represent temporal dependence through evolving linear states
-\citep{GoncalvesMigonBastos2020DQLM,barata2021_flex_quantile}. The earlier
-hydrologic model of \citet{DeLeonPradoSanso2026HydrologicProducts} combines
-products through evolving linear quantile states and source-specific
-discrepancies, fitting levels separately before predictive synthesis. It
-supports both MCMC and variational inference. Q--DESN instead represents
-temporal dependence through recurrent nonlinear predictors, and its joint
-multiquantile regression couples coefficients across probability levels.
-The first simulation compares these representations under linear structural
-data-generating mechanisms.
+\citep{GoncalvesMigonBastos2020DQLM,barata2021_flex_quantile}.
+\citet{DeLeonPradoSanso2026HydrologicProducts} combine hydrologic products
+through evolving linear quantile states and source-specific discrepancies,
+fitting levels separately before predictive synthesis. Q--DESN instead
+represents temporal dependence through recurrent nonlinear predictors, while
+its joint multiquantile extension couples coefficients across probability
+levels. The first simulation examines whether Q--DESN can recover conditional
+quantile paths and achieve forecast accuracy comparable to DQLMs and exDQLMs
+under linear structural data-generating mechanisms.
 
-The first simulation compares quantile-path recovery and forecast performance
-with dynamic quantile linear models. The second examines forecast scores and
-ordering for independent and joint estimation on a common seven-level grid.
-The applications evaluate retrospective GloFAS streamflow correction and
-independent electricity-price regressions against PriceFM. Sections~%
+The second simulation examines forecast scores and quantile ordering for
+independent and joint estimation on a common seven-level grid. The
+applications consider retrospective correction of streamflow ensemble
+forecasts and electricity-price quantile forecasting against a pretrained
+neural model. Sections~%
 \ref{sec:model}--%
 \ref{sec:forecast} define the model, computation, and forecast evaluation;
 Sections~\ref{sec:simulation}--\ref{sec:pricefm-application} give the

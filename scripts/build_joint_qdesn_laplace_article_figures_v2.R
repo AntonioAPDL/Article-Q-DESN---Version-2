@@ -106,7 +106,7 @@ forecast_pdf <- file.path("figures", "joint_qdesn_simulation",
 fit_pdf <- file.path("figures", "joint_qdesn_simulation",
   paste0(prefix, "fit_oracle_rmse.pdf"))
 qdesn_save_vector_pdf(forecast_pdf,
-  joint_plot(joint_data, "DGP-integrated aCRPS"), 7.0, 8.1)
+  joint_plot(joint_data, "Oracle aCRPS"), 7.0, 8.1)
 normalize_pdf_date(forecast_pdf)
 fit_data <- joint_data
 fit_data$mean <- fit_data$lo <- fit_data$hi <- fit$fit_oracle_rmse

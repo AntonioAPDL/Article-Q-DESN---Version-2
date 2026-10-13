@@ -405,7 +405,7 @@ if (!data_only) {
              !any(grepl("^[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+image", images)),
            paste("No raster model panels", relative))
     visible <- system2("pdftotext", c("-layout", shQuote(path(relative)), "-"), stdout = TRUE, stderr = TRUE)
-    metric_label <- if (figures$metric[[i]] == "posterior_score_mean") "DGP-integrated aCRPS" else
+    metric_label <- if (figures$metric[[i]] == "posterior_score_mean") "Oracle aCRPS" else
       "Fitting-sample quantile-path RMSE"
     expect(is.null(attr(visible, "status")) && any(grepl(metric_label, visible, fixed = TRUE)) &&
              sum(lengths(regmatches(visible, gregexpr("c = ", visible, fixed = TRUE)))) == 32L &&

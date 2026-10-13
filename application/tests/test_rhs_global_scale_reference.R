@@ -67,8 +67,12 @@ supplement_text <- paste(
 # The current compressed article introduces this reference in prose and puts
 # its numbered derivation in the supplement. Check that semantic placement,
 # rather than requiring a removed main-text heading/equation label.
-stopifnot(grepl("reference for the global shrinkage prior", main_text, fixed = TRUE))
-stopifnot(grepl("The supplement\ngives the derivation", main_text, fixed = TRUE))
+main_prose <- gsub("[[:space:]]+", " ", main_text)
+stopifnot(grepl("fixed hyperprior scale", main_prose, fixed = TRUE))
+stopifnot(grepl("random global scale", main_prose, fixed = TRUE))
+stopifnot(grepl("residual standard deviation, fitting-sample size", main_prose, fixed = TRUE))
+stopifnot(grepl("prior reference number of coefficients", main_prose, fixed = TRUE))
+stopifnot(grepl("formula and its derivation are given in the supplement", main_prose, fixed = TRUE))
 stopifnot(grepl("eq:supp-rhs-tau0-gaussian-reference", supplement_text, fixed = TRUE))
 stopifnot(!grepl(
   "tau_{0,\\mathrm{ref}}=\\GlofasApplicationCurrentSharedRhsTau",

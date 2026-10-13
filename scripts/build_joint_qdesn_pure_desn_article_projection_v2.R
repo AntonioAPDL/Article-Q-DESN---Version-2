@@ -107,13 +107,13 @@ score_fields <- c("posterior_score_mean", "posterior_score_median", "posterior_s
                   "posterior_score_q975", "canonical_origin_marginal_dgp_integrated_acrps")
 score_header <- "Simulation setting & Model & Mean & Median & 2.5\\% & 97.5\\% & \\shortstack{Mean-grid\\\\score}"
 balanced_table(mcmc, "score_table.tex", "tab:joint-qdesn-pure-desn-v2-score",
-  paste0("DGP-integrated finite-grid \\(\\aCRPS\\) for the multi-quantile study. ",
+  paste0("Oracle finite-grid \\(\\aCRPS\\) for the multi-quantile study. ",
     "Means, medians, and equal-tailed 95\\% limits describe posterior readout uncertainty conditional on each model's averaged recursive design. ",
     "The mean-grid score evaluates the projected posterior-mean quantile grid and differs from the posterior mean of the score. ",
     "Boldface marks descriptive numerical minima; every winner and runner-up marginal interval overlaps."),
   score_fields, score_header, TRUE)
 balanced_table(vb, "vb_score_table.tex", "tab:joint-qdesn-pure-desn-v2-vb-score",
-  paste0("Approximate variational DGP-integrated \\(\\aCRPS\\) under the same seven-level comparison. ",
+  paste0("Approximate variational oracle finite-grid \\(\\aCRPS\\) under the same seven-level comparison. ",
     "Intervals condition on point intercepts and each model's averaged recursive design, omitting intercept covariance. ",
     "The mean-grid score evaluates the projected posterior-mean quantile grid."),
   score_fields, score_header)
@@ -126,7 +126,7 @@ for (sid in scenarios) {
   values <- mapply(fmt_interval, x$mean_difference, x$q025_difference, x$q975_difference, USE.NAMES = FALSE)
   lines <- c(lines, paste0(paste(c(scenario_label[[sid]], values), collapse = " & "), " \\\\"))
 }
-write_tex(c(lines, table_end(paste0("Joint-minus-independent differences in DGP-integrated \\(\\aCRPS\\), ",
+write_tex(c(lines, table_end(paste0("Joint-minus-independent differences in oracle finite-grid \\(\\aCRPS\\), ",
   "with posterior means and equal-tailed 95\\% intervals. Positive differences favor independent estimation. ",
   "Deterministic index pairing defines descriptive contrasts between separately fitted models. ",
   "The two asymmetric-tail intervals favor joint estimation; the other fourteen include zero."),
@@ -160,7 +160,7 @@ balanced_table(oracle, "oracle_recovery_table.tex", "tab:joint-qdesn-pure-desn-v
 balanced_table(mcmc, "secondary_score_table.tex", "tab:joint-qdesn-pure-desn-v2-secondary",
   paste0("Secondary finite-grid \\(\\aCRPS\\) against realized observations. ",
     "The posterior mean averages scores at the averaged recursive design; the mean-grid score evaluates the projected posterior-mean quantile grid. ",
-    "These are distinct from the DGP-integrated primary criterion."),
+    "These are distinct from the primary oracle \\(\\aCRPS\\)."),
   c("posterior_realized_acrps_mean", "canonical_realized_acrps"),
   "Simulation setting & Model & \\shortstack{Posterior mean\\\\realized score} & \\shortstack{Mean-grid\\\\realized score}")
 
@@ -178,7 +178,7 @@ for (si in seq_along(scenarios)) {
   }
   if (si < length(scenarios)) lines <- c(lines, "\\addlinespace[2pt]")
 }
-write_tex(c(lines, table_end(paste0("Sensitivity to integration over recursively generated future features. ",
+write_tex(c(lines, table_end(paste0("Sensitivity of oracle finite-grid \\(\\aCRPS\\) to integration over recursively generated future features. ",
   "Entries are posterior means and equal-tailed 95\\% intervals. Averaged-design entries condition on each model's mean future feature matrix; ",
   "trajectory entries retain each draw's recursive states. The comparison concerns retained uncertainty, not interval calibration."),
   "tab:joint-qdesn-pure-desn-v2-recursive-policy")), "recursive_policy_table.tex")

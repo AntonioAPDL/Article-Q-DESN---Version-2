@@ -61,6 +61,22 @@ expect(has(intro, "continuous-shrinkage approach") &&
          has(intro, "predictor-dependent variation") && has(intro, "ordered intercepts") &&
          has(prose(intro), "isotonic projection is used when ordered output is required"),
        "Explain the crossing mechanism without claiming exact monotonicity or no postprocessing.")
+expect(has(prose(intro), "\\citet{DeLeonPradoSanso2026HydrologicProducts} combine hydrologic products") &&
+         !has(prose(intro), "The earlier hydrologic model of") &&
+         !has(prose(intro), "It supports both MCMC and variational inference"),
+       "Credit the hydrologic study directly without the unnecessary computation aside.")
+expect(has(prose(intro), "examines whether Q--DESN can recover conditional quantile paths") &&
+         has(prose(intro), "forecast accuracy comparable to DQLMs and exDQLMs") &&
+         has(prose(intro), "under linear structural data-generating mechanisms"),
+       "State the linear-dynamics simulation purpose without claiming proven equivalence.")
+expect(sum(gregexpr("The first simulation", intro, fixed = TRUE)[[1L]] > 0L) == 1L,
+       "Introduce the first simulation once rather than repeat its purpose in the roadmap.")
+roadmap <- strsplit(intro, "The second simulation", fixed = TRUE)[[1L]][2L]
+expect(has(prose(roadmap), "retrospective correction of streamflow ensemble forecasts") &&
+         has(prose(roadmap), "electricity-price quantile forecasting against a pretrained neural model") &&
+         !has(roadmap, "GloFAS") && !has(roadmap, "PriceFM") &&
+         !has(roadmap, "climate model"),
+       "Use accurate generic application descriptions; introduce product names in their sections.")
 for (text in list(main, supplement, caption)) {
   expect(!grepl("working[-[:space:]]+(likelihood|regression|model)", text,
                 ignore.case = TRUE, perl = TRUE), "Use ordinary statistical terminology.")

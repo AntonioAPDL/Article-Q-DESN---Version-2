@@ -119,8 +119,9 @@ expect(has(prose(main), "Gaussian regressions on DESN features (Gaussian-DESN)")
          has(main, "generated reservoir states"),
        "Explain preliminary specification comparison and state diagnostics.")
 expect(!has(main, "initialize Gaussian RHS--VB, then the median AL regression") &&
-         has(prose(main), "initialization sequence given in the supplement"),
-       "Keep one supplementary initialization account and a valid pointer.")
+         has(prose(supplement), "initialization sequence") &&
+         has(supplement, "fig:supp-quantile-sequential-initialization"),
+       "Keep the complete initialization account in the supplement.")
 expect(has(prose(caption), "PriceFM uses independent VB fits only") &&
          has(caption, "prior calibration"),
        "Preserve study-specific fitting and prior-calibration distinctions.")
@@ -128,10 +129,25 @@ for (placeholder in c("Simulation", "GloFAS", "PriceFM")) {
   expect(has(main, paste0("[", placeholder, " findings to be updated.]")),
          "Do not replace the intentional abstract findings placeholders.")
 }
-expect(has(prose(main), "Future USGS values are excluded from fitting") &&
-         has(main, "latter is unscored") && has(main, "21 of 28") &&
-         has(main, "slightly higher aggregate AQL"),
+expect(has(prose(main), "future USGS measurements are reserved for scoring") &&
+         has(supplement, "unscored") &&
+         has(prose(supplement), "retrospective GloFAS ends") &&
+         has(prose(main), "21 of 28") &&
+         has(prose(main), "aggregate loss is slightly higher"),
        "Retain the material application information boundaries and adverse results.")
+for (heading in c("Single-quantile simulation design", "Single-quantile results",
+                  "Multiquantile simulation design", "Multiquantile results")) {
+  expect(has(main, paste0("\\subsection{", heading, "}")),
+         paste("Missing distinct simulation design/results subsection:", heading))
+}
+expect(has(main, "\\mat G_\\theta\\vect\\theta_{t-1,f}") &&
+         has(main, "H_f^{-1}(p)") && has(main, "WestHarrison1997") &&
+         has(prose(main), "Observation errors follow") &&
+         has(prose(main), "historical forecast-based refinement"),
+       "Explain quantile-centered linear dynamics without rewriting the actual selection history.")
+expect(has(main, "DeLeonEtAl2026Exdqlm") && !has(main, "version 1.1.2") &&
+         has(prose(supplement), "version 1.1.1"),
+       "Cite the package paper while preserving authenticated historical execution versions.")
 expect(has(prose(supplement), "log-scale slice transition") &&
          has(supplement, "eq:supp_joint_increment_moments"),
        "Keep executed AL transitions and joint covariance mathematics identifiable.")

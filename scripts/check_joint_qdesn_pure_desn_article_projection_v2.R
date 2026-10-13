@@ -374,6 +374,17 @@ if (!data_only) {
   expect(close(posterior_opportunities, c(178200000, 178200000, 200475000, 200475000)),
          "The complete exAL denominator includes all frozen Laplace draws")
   main <- read_text("main.tex"); supplement <- read_text("qdesn-supplement.tex")
+  editorial_manifest <- "tables/qdesn_sections5_7_presentation_manifest.json"
+  editorial_active <- file.exists(path(editorial_manifest))
+  forecast_wrapper <- if (editorial_active)
+    "tables/qdesn_multiquantile_forecast_figure_display.tex" else
+    paste0("tables/", active_prefix, "forecast_figure.tex")
+  fit_wrapper <- if (editorial_active)
+    "tables/qdesn_multiquantile_fit_figure_display.tex" else
+    paste0("tables/", active_prefix, "fit_figure.tex")
+  protocol_table <- if (editorial_active)
+    "tables/qdesn_multiquantile_design_display.tex" else
+    paste0("tables/", active_prefix, "protocol.tex")
   mcmc_policy <- policy[all_scores$inference_method == "mcmc", ]
   narrower_count <- sum(mcmc_policy$mean_state_to_path_width_ratio < 1)
   rounded_width_ratio <- sprintf("%.4f", median(mcmc_policy$mean_state_to_path_width_ratio))
@@ -381,9 +392,9 @@ if (!data_only) {
                supplement, fixed = TRUE) &&
            grepl(paste0("width ratio ", rounded_width_ratio), supplement, fixed = TRUE),
          "Supplementary interval-width count and median reproduce the complete recomposed packet")
-  expect(grepl(paste0("tables/", active_prefix, "forecast_figure.tex"), main, fixed = TRUE) &&
-           grepl(paste0("tables/", active_prefix, "fit_figure.tex"), supplement, fixed = TRUE) &&
-           !grepl(paste0("tables/", active_prefix, "fit_figure.tex"), main, fixed = TRUE),
+  expect(grepl(forecast_wrapper, main, fixed = TRUE) &&
+           grepl(fit_wrapper, supplement, fixed = TRUE) &&
+           !grepl(fit_wrapper, main, fixed = TRUE),
          "Forecast figure remains in main and fitting figure in supplement")
   if (mq_active) {
     original_inputs <- paste0("\\input{tables/", prefix,
@@ -395,10 +406,18 @@ if (!data_only) {
   expect(!grepl("\\\\input\\{tables/joint_qdesn_(pure_desn_v1|pro_review)_", paste(main, supplement)) &&
            !grepl("joint-qdesn-pure-desn-v1-", paste(main, supplement), fixed = TRUE),
          "No historical v1 wrappers or references remain live")
-  required_tables <- paste0("tables/", active_prefix, c("protocol", "score_table", "secondary_score_table",
-    "recursive_policy_table", "vb_score_table", "contrast_table", "crossing_table", "oracle_recovery_table"), ".tex")
+  required_tables <- c(protocol_table, paste0("tables/", active_prefix, c("score_table", "secondary_score_table",
+    "recursive_policy_table", "vb_score_table", "contrast_table", "crossing_table", "oracle_recovery_table"), ".tex"))
   expect(all(vapply(required_tables, function(relative) grepl(relative, supplement, fixed = TRUE),
                     logical(1L))), "All dependent supplementary tables use the new complete packet")
+  if (editorial_active) {
+    editorial_check <- suppressWarnings(system2("/usr/bin/python3.11", c(
+      shQuote(path("scripts/check_qdesn_sections5_7_presentation.py")),
+      "--repo-root", shQuote(repo_root)), stdout = TRUE, stderr = TRUE))
+    expect(is.null(attr(editorial_check, "status")) &&
+             any(grepl("QDESN_SECTIONS5_7_PRESENTATION_CHECK=PASS", editorial_check, fixed = TRUE)),
+           "The selected editorial wrappers and descriptive design table retain their bounded source identity")
+  }
   reader_assets <- manifest$relative_path[grepl("\\.tex$", manifest$relative_path)]
   reader_text <- paste(c(main, supplement, vapply(reader_assets, read_text, character(1L))), collapse = "\n")
   prohibited <- "arch_0[02]|\\b(Jerez|Muscat|branch|commit|runtime|candidate|tweak|screen|recovery launch|phase[0-9]+)\\b"
@@ -468,8 +487,9 @@ if (!data_only) {
          "Historical JOINT article outputs are excluded from the active Overleaf projection")
   active_figures <- if (mq_active) vapply(mq_figures, `[[`, character(1L), "file") else figures$relative_path
   active_receipts <- if (mq_active) c(mq_relative, mq_environment$mq_registry_path) else character()
-  expect(all(c(required_tables, active_figures, active_receipts, paste0("tables/", active_prefix,
-    c("forecast_figure.tex", "fit_figure.tex")), paste0("tables/", prefix, "article_asset_manifest.csv")) %in% allowlist),
+  expect(all(c(required_tables, active_figures, active_receipts, forecast_wrapper,
+    fit_wrapper, if (editorial_active) editorial_manifest,
+    paste0("tables/", prefix, "article_asset_manifest.csv")) %in% allowlist),
     "Overleaf contains every new active reader asset")
   expect(!any(grepl("(^|/)(cache|local_trackers|logs)(/|$)|\\.(rds|rda|RData|log|gz)$", allowlist)),
          "No scientific runtime payload enters Overleaf")

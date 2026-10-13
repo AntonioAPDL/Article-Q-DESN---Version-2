@@ -77,6 +77,36 @@ not mistaken for the display currently used by the manuscript. The isolated
 mutation tests include stale inputs, swapped likelihood labels, independent
 models renamed as MQ--DESN, and missing or modified presentation receipts.
 
+## Reader-centered simulation and application presentation
+
+The Sections 5--7 revision leaves numerical and execution authority unchanged.
+`tables/qdesn_sections5_7_presentation_manifest.json` authenticates the original
+assets and their descriptive-label derivatives. The bounded builder
+`scripts/build_qdesn_sections5_7_presentation.py` generates these copies; its
+companion checker verifies permitted changes and the effective TeX selections.
+Document-specific override files distinguish the four-column main GloFAS
+score table from the full supplementary component comparisons. Only the
+main reduction-versus-raw column is omitted; all seven families and retained
+values are unchanged. The common-window Figure 4 is byte-identical.
+
+Supplementary GloFAS graphics use reference, discrepancy, combined-history,
+and issued-ensemble descriptions instead of development-stage numbers.
+The PriceFM regional display distinguishes the fixed-regional comparison
+from historical case-specific selection without campaign codes. Its vector
+marks are preserved under the recorded page-placement transformation; no
+forecast, score, region ordering, or comparison identity is changed.
+
+The main article now pairs design and results subsections for each simulation.
+Exact single-quantile generating parameters and metric formulas are in the
+supplement. The independent comparison remains criterion-specific and retains
+historical forecast-guided selection; the multiquantile selection uses
+separate source series. The package-paper citation does not relabel execution
+versions. The supplemental execution account retains the scoped exDQLM
+1.1.1 refresh and earlier inherited Q--DESN source records. Primary
+multiquantile intervals still condition on averaged future features, with
+draw-recursive sensitivity separate. These distinctions are not changed by
+editing prose or figure captions.
+
 ## Prominent-result presentation reproduction
 
 The self-contained example assembled by

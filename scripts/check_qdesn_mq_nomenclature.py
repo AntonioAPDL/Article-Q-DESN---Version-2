@@ -12,6 +12,7 @@ import argparse
 from collections import Counter
 import csv
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -24,6 +25,13 @@ REGISTRY = "tables/qdesn_model_display_names.csv"
 JOINT_MANIFEST = "tables/joint_qdesn_mq_presentation_manifest.json"
 GLOFAS_MANIFEST = "tables/glofas_mq_presentation_manifest.json"
 HISTORICAL_MANIFEST = "tables/qdesn_historical_display_manifest.json"
+EDITORIAL_CHECKER = "scripts/check_qdesn_sections5_7_presentation.py"
+EDITORIAL_MANIFEST = "tables/qdesn_sections5_7_presentation_manifest.json"
+MAIN_EDITORIAL_OVERRIDE = "tables/qdesn_sections5_7_main_display_overrides.tex"
+SUPP_EDITORIAL_OVERRIDE = "tables/qdesn_sections5_7_supp_display_overrides.tex"
+FORECAST_WRAPPER = "tables/qdesn_multiquantile_forecast_figure_display.tex"
+FIT_WRAPPER = "tables/qdesn_multiquantile_fit_figure_display.tex"
+PROTOCOL_TABLE = "tables/qdesn_multiquantile_design_display.tex"
 HISTORICAL_ASSETS = {
     "tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex": (
         "74c165ad4b29f00808e058750d8f6a320b5454f97ae7133d1260ae9794d5ee2b",
@@ -60,6 +68,20 @@ GLOFAS_OVERRIDE = "tables/glofas_mq_display_overrides.tex"
 GLOFAS_ALIASES = {
     "FullComparisonFigure": "part4", "PartOneFigure": "part1", "PartTwoFigure": "part2",
     "PartThreeFigure": "part3", "ConvergenceFigure": "convergence", "CalibrationFigure": "calibration",
+}
+EDITORIAL_GLOFAS_ROLE_NAMES = {
+    "part1": "reference", "part2": "discrepancy", "part3": "combined", "part4": "issued",
+    "convergence": "convergence", "calibration": "calibration",
+}
+EDITORIAL_GLOFAS_PDFS = {
+    f"figures/glofas_application/glofas_editorial_20261013_{s}.pdf"
+    for s in EDITORIAL_GLOFAS_ROLE_NAMES.values()
+}
+EDITORIAL_GLOFAS_TABLES = {
+    "tables/glofas_reference_discrepancy_scores_display.tex",
+    "tables/glofas_reference_discrepancy_priors_display.tex",
+    "tables/glofas_selected_specifications_display.tex",
+    "tables/glofas_forecast_correction_main_scores_display.tex",
 }
 FROZEN_MANIFESTS = {
     "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv":
@@ -118,6 +140,17 @@ def load_json(root: Path, relative: str) -> dict:
     result = json.loads(read(root, relative))
     expect(isinstance(result, dict), f"Manifest is not an object: {relative}")
     return result
+
+
+def editorial_checker(root: Path):
+    """Load the bounded display checker, never a scientific fitting module."""
+    path = local_path(root, EDITORIAL_CHECKER)
+    spec = importlib.util.spec_from_file_location("qdesn_sections5_7_presentation_checker", path)
+    expect(spec is not None and spec.loader is not None, "Cannot load the editorial presentation checker")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def registry_rows(root: Path) -> list[dict[str, str]]:
@@ -409,16 +442,28 @@ def check_definitions(root: Path, visible: dict[str, str]) -> None:
         mq_definition = re.search(r"multi[ -]?quantile\s+deep\s+echo\s+state\s+networks?\s*\(\s*MQ-DESN\s*\)", text, re.I)
         expect(q_definition is not None and mq_definition is not None,
                f"Q-DESN and multiquantile MQ-DESN need standalone definitions in {name}")
-    for document in visible.values():
+    for source, document, section_label in (
+        (main, visible["main.tex"], "sec:pricefm-application"),
+        (supplement, visible["qdesn-supplement.tex"], "subsec:supp_pricefm_diagnostics"),
+    ):
+        # The applied heading need not contain the comparator's brand name.
+        # Locate its stable section label so an electricity-price heading does
+        # not accidentally disable the independent-only model-scope guard.
+        scope = re.search(r"\\(?:section|subsection)\{([^{}]*)\}\s*\\label\{" +
+                          re.escape(section_label) + r"\}", source)
+        expect(scope is not None, f"Missing PriceFM section identity: {section_label}")
         headings = list(re.finditer(r"\\(section|subsection)\{([^{}]*)\}", document))
+        matched_scope = False
         for index, heading in enumerate(headings):
-            if "PriceFM" not in heading[2]:
+            if heading[2] != scope[1]:
                 continue
+            matched_scope = True
             rank = 1 if heading[1] == "section" else 2
             end = next((h.start() for h in headings[index + 1:]
                         if (1 if h[1] == "section" else 2) <= rank), len(document))
             expect("MQ-DESN" not in normalized(document[heading.end():end]),
                    "PriceFM must not be presented as an MQ-DESN fit")
+        expect(matched_scope, f"Unresolved effective PriceFM section: {scope[1]}")
 
 
 def dependency_paths(root: Path) -> set[str]:
@@ -442,6 +487,9 @@ def dependency_paths(root: Path) -> set[str]:
     paths.add(historical["generator"])
     for asset in historical["assets"]:
         paths.update((asset["source"], asset["output"]))
+    paths.update(editorial_checker(root).dependency_paths(root))
+    paths.update((EDITORIAL_CHECKER, EDITORIAL_MANIFEST,
+                  MAIN_EDITORIAL_OVERRIDE, SUPP_EDITORIAL_OVERRIDE))
     graphs, _ = manuscript_consumers(root)
     for graph in graphs.values():
         paths.update(graph.files | graph.figures)
@@ -453,23 +501,45 @@ def check(root: Path) -> dict[str, int]:
     immutable_sources(root)
     joint, glofas, _ = module_manifests(root)
     historical_manifest(root)
+    # Authenticate descriptive-label and caption derivatives independently of
+    # the unchanged MQ scientific/presentation source manifests above.
+    try:
+        editorial_checker(root).check(root)
+    except (AssertionError, RuntimeError) as error:
+        raise CheckError(str(error)) from error
     graphs, visible = manuscript_consumers(root)
     files = set().union(*(g.files for g in graphs.values()))
     figures = set().union(*(g.figures for g in graphs.values()))
-    expect(JOINT_TABLES | GLOFAS_TABLES <= files, "Current manuscript omits an MQ TeX derivative")
+    current_joint_tables = (JOINT_TABLES - {
+        "tables/joint_qdesn_pure_desn_v2_mq_protocol.tex",
+        "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+        "tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex",
+    }) | {PROTOCOL_TABLE, FORECAST_WRAPPER, FIT_WRAPPER}
+    current_glofas_tables = (GLOFAS_TABLES - {
+        "tables/glofas_search3_mq_main_scores.tex",
+        "tables/glofas_search3_mq_part123_prior_settings.tex",
+        "tables/glofas_search3_mq_part123_scores.tex",
+    }) | EDITORIAL_GLOFAS_TABLES
+    expect(current_joint_tables | current_glofas_tables <= files,
+           "Current manuscript omits an authenticated MQ/editorial TeX derivative")
     expect({entry[1] for entry in HISTORICAL_ASSETS.values()} <= files,
            "Current manuscript omits an authenticated historical display derivative")
-    expect(JOINT_PDFS | GLOFAS_PDFS <= figures, "Effective selected aliases/wrappers do not select all eight MQ PDFs")
-    expect("tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex" in graphs["main.tex"].files and
-           "tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex" in graphs["qdesn-supplement.tex"].files,
+    expect(JOINT_PDFS | EDITORIAL_GLOFAS_PDFS <= figures,
+           "Effective selected aliases/wrappers do not select all eight MQ PDFs")
+    expect(FORECAST_WRAPPER in graphs["main.tex"].files and
+           FIT_WRAPPER in graphs["qdesn-supplement.tex"].files,
            "JOINT forecast belongs in main; JOINT fit belongs in supplement")
+    expect(MAIN_EDITORIAL_OVERRIDE in graphs["main.tex"].files and
+           SUPP_EDITORIAL_OVERRIDE in graphs["qdesn-supplement.tex"].files,
+           "Current document-specific editorial overrides are not selected")
     for document, graph in graphs.items():
         expect(GLOFAS_OVERRIDE in graph.files, f"MQ overrides missing from {document}")
         expect(not any(re.match(r"tables/joint_qdesn_pure_desn_v2_(?!mq_).*\.tex$", p) for p in graph.files),
                f"Stale JOINT TeX derivative remains selected in {document}")
         for suffix, role in GLOFAS_ALIASES.items():
             name = "GlofasApplicationCurrent" + suffix
-            expected_path = f"figures/glofas_application/glofas_search3_mq_review_20261013_{role}.pdf"
+            expected_path = ("figures/glofas_application/glofas_editorial_20261013_" +
+                             EDITORIAL_GLOFAS_ROLE_NAMES[role] + ".pdf")
             if name in graph.alias_uses:
                 expect(all(p == expected_path for p in graph.alias_uses[name]),
                        f"Stale effective selected alias: {name}")
@@ -487,7 +557,8 @@ def check(root: Path) -> dict[str, int]:
             extractor = pdf_text if field == "assets" else read
             verify_label_mapping(extractor(root, source), extractor(root, output), rows, output)
     return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": 8,
-            "selected_mq_tex": len(JOINT_TABLES | GLOFAS_TABLES), "historical_displays": 2}
+            "selected_mq_tex": len(current_joint_tables | current_glofas_tables),
+            "historical_displays": 2}
 
 
 def main() -> int:

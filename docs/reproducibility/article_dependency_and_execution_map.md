@@ -43,12 +43,39 @@ compile inputs. Check them and the isolated article snapshot before publication.
 The inventory and audit script are repository/reproduction documentation, not
 new mandatory TeX dependencies; no change to the article allowlist is needed.
 
-Original scientific PDFs and wrappers remain approved companions. Separately
-named review derivatives are the active simulation graphics and the main
-GloFAS figure after the editorial revision; the full-family GloFAS graphic
-remains in the supplement. CSV/provenance companions are not mislabelled direct
-TeX inputs. This distinction also covers the PriceFM PNG companion and inactive
+Original scientific PDFs and wrappers remain frozen in the research repository.
+The MQ--DESN nomenclature revision selects separately named, label-only display
+derivatives for the multiquantile simulation and full-family GloFAS figures and
+tables. Superseded display files are not uploaded merely because they remain
+in Git. The independent simulation graphics and the common-window main GloFAS
+figure are unchanged. CSV/provenance companions are not mislabelled direct TeX
+inputs. This distinction also covers the PriceFM PNG companion and inactive
 independent wrapper files retained by the approved projection.
+
+### Reader-facing model names
+
+`tables/qdesn_model_display_names.csv` maps the existing model identifiers to
+Q--DESN for independent quantile regressions and MQ--DESN for multiquantile
+regressions, with AL/exAL qualifiers. It is a display registry, not a new model
+definition. Original identifiers, statistical targets, numerical summaries,
+and source hashes are unchanged. Generic uses of “joint,” including a joint
+posterior or the GloFAS historical reference--discrepancy model, remain valid.
+
+The bounded renderers `scripts/build_joint_qdesn_mq_presentation.R` and
+`scripts/build_glofas_mq_review_figures.py` authenticate their frozen sources
+and generate only presentation copies. Their `--check` modes rebuild in
+temporary directories and compare against the published outputs. The GloFAS
+renderer requires the pinned PyMuPDF environment identified in its receipt.
+`scripts/build_qdesn_historical_display_overlays.py` separately preserves the
+historical scope of the replicated-VB comparison and updates the independent
+metric-dependence note without editing its frozen source.
+
+`scripts/check_qdesn_mq_nomenclature.py` verifies the registry semantics,
+original scientific manifests, derivative hashes, effective TeX inputs and
+aliases, and the selected PDF legends. Thus an unchanged old source asset is
+not mistaken for the display currently used by the manuscript. The isolated
+mutation tests include stale inputs, swapped likelihood labels, independent
+models renamed as MQ--DESN, and missing or modified presentation receipts.
 
 ## Prominent-result presentation reproduction
 

@@ -59,6 +59,7 @@
 
 \input{tables/glofas_application_current_outputs.tex}
 \input{tables/glofas_review_figure_overrides.tex}
+\input{tables/glofas_mq_display_overrides.tex}
 \input{tables/pricefm_full_current_outputs.tex}
 \input{figures/quantile_initialization/quantile_initialization_styles.tex}
 
@@ -106,9 +107,10 @@
 \normalsize
 \noindent
 This supplement gives distributional conventions, fixed-feature model
-details, regularized-horseshoe prior calculations, MCMC full conditionals,
+details, regularized-horseshoe prior calculations, Markov chain Monte Carlo
+(MCMC) full conditionals,
 and variational approximations. It distinguishes the generic fixed-design
-derivations from the approximations used in the joint simulation and GloFAS
+derivations from the approximations used in the multiquantile simulation and GloFAS
 application, and provides reservoir-selection details and additional
 simulation and application evidence.
 \end{abstract}
@@ -116,12 +118,15 @@ simulation and application evidence.
 \section{Purpose and Relation to the Main Article}
 \label{sec:supp_relation_main}
 
-The main article introduces the conditional quantile regression before its
-DESN feature construction. This supplement supplies the derivations and
+The main article introduces the quantile deep echo state network (Q--DESN)
+as Bayesian regression on fixed deep echo state network (DESN) features.
+The multiquantile deep echo state network (MQ--DESN) estimates quantile-specific
+readouts jointly through adjacent-slope-difference shrinkage. This supplement
+supplies the derivations and
 analysis-specific details. Sections~\ref{sec:dist_conventions}--\ref{sec:model_joint}
 define the distributions, design, and complete prior.
 Sections~\ref{sec:mcmc}--\ref{sec:joint_qdesn_supp} give the single-level and
-joint computations; Section~\ref{sec:forecast_synthesis} defines the forecast
+MQ--DESN computations; Section~\ref{sec:forecast_synthesis} defines the forecast
 summaries and scores. Reservoir selection and initialization appear in
 Section~\ref{sec:supp_reservoir_diagnostics}, followed by empirical tables and
 the GloFAS latent-path model in Section~\ref{sec:glofas_discrepancy}.
@@ -141,7 +146,7 @@ Setting & Posterior simulation & Variational computation \\
 Fixed-design derivation & Augmented Gaussian and scale updates;
 nonconjugate exAL block & Mean-field conjugate factors and generic
 Laplace--Delta exAL approximation \\
-Joint simulation & Scale-collapsed exAL transition; ordered intercept
+Multiquantile simulation & Scale-collapsed exAL transition; ordered intercept
 conditionals & Structured \(q(\gamma_k)q(\sigma_k\mid\gamma_k)\), numerical
 quadrature, and constrained point intercepts \\
 GloFAS & No MCMC results reported & Quantile-block updates with a local
@@ -287,7 +292,7 @@ After a fixed washout period, the reservoir quantities in
 \mu_t=\vect x_t^\top\vect\beta .
 \]
 Here \(r=n_D+\sum_{d=1}^{D-1}\tilde n_d+m+q\) for the displayed stack.
-Direct inputs may be omitted: the joint simulation and GloFAS use reservoir
+Direct inputs may be omitted: the multiquantile simulation and GloFAS use reservoir
 features and an intercept only, with their specific stacking rules stated
 in the empirical sections. All regression inference is conditional on the
 observed design. Future designs generated from unknown response paths
@@ -849,7 +854,7 @@ or regularized horseshoe, and MCMC controls.
 This section gives the generic fixed-design VB--LD approximation. It is
 mean-field over the conditionally conjugate blocks and uses the Laplace--Delta
 method of \citet{wang2013nonconjugatevb} for the nonconjugate exAL
-scale--asymmetry block \((\sigma,\gamma)\). The joint simulation uses the
+scale--asymmetry block \((\sigma,\gamma)\). The multiquantile simulation uses the
 structured variational factor described with its evaluation details below;
 the application-specific GloFAS factorization is given in
 Section~\ref{subsec:glofas_likelihoods}.
@@ -1111,17 +1116,17 @@ entropies, inverse-gamma scale entropies, and the transformed Gaussian entropy
 with the Jacobian correction above. Replacing expectations by delta
 approximations gives an approximate ELBO monitor; it need not remain a lower
 bound or increase monotonically. Its numerical stability does not establish
-posterior accuracy. The executed joint VB routines also optimize ordered
+posterior accuracy. The executed MQ--DESN VB routines also optimize ordered
 intercepts as point values and monitor only specified objective terms.
 They do not calculate the full continuous-factor ELBO above: a point mass
 does not have finite differential entropy. Comparisons with MCMC assess
 approximation quality separately.
 
 
-\section{Joint Quantile-Vector Regression with Regularized-Horseshoe Shrinkage}
+\section{MQ--DESN with Regularized-Horseshoe Shrinkage}
 \label{sec:joint_qdesn_supp}
 
-This section derives the joint multiquantile regression introduced in the main
+This section derives the MQ--DESN regression introduced in the main
 article. The reservoir features remain unchanged, and the model adds a prior
 over the quantile-indexed regression-coefficient sequence,
 conditional on the fixed non-intercept DESN design
@@ -1331,7 +1336,7 @@ Here \(p(\vect\beta_0)\) is the product of the stated Gaussian intercept
 priors, restricted to the ordered support when that option is specified.
 Equation~\eqref{eq:supp_joint_complete_posterior} gives the untempered
 complete-data posterior for the general baseline extension. The reported
-joint simulation fixes \(\vect\beta_{\mathrm{base}}=\zeros{r}\) and omits
+multiquantile simulation fixes \(\vect\beta_{\mathrm{base}}=\zeros{r}\) and omits
 \(\Theta_0\), \(C_0\), and the baseline-prior factor. Its first quantile slope is the
 RHS anchor, with separate RHS priors on adjacent differences. Weighting the
 quantile-specific contributions would define a different generalized posterior.
@@ -1402,7 +1407,7 @@ The executed ordered-intercept MCMC conditions this Gaussian on the interval
 between its neighboring intercepts, using unbounded endpoints at the extremes.
 This is the full conditional under the Gaussian priors restricted to
 \(\beta_{01}\le\cdots\le\beta_{0K}\); it does not impose noncrossing
-when slopes differ. The joint VB calculation instead holds intercepts at
+when slopes differ. The MQ--DESN VB calculation instead holds intercepts at
 constrained point estimates, so its intervals omit intercept uncertainty.
 An optional monotone-gap parameterization writes
 \(\beta_{0k}=\beta_{01}+\sum_{j=2}^k\exp(\eta_j)\) for
@@ -1415,7 +1420,7 @@ low-dimensional Metropolis--Hastings, slice, or Laplace step.
 
 \subsection{Quantile-Indexed Latent and Shrinkage Blocks}
 
-The remaining joint updates do not introduce new distributional forms. At
+The remaining MQ--DESN updates do not introduce new distributional forms. At
 level \(k\), the exAL latent-variable and scale--asymmetry updates are
 Eqs.~\eqref{eq:supp_v_mcmc}--\eqref{eq:supp_gamma_mcmc} with
 \(\vect x_t^\top\vect\beta\) replaced by
@@ -1451,16 +1456,16 @@ b_{\zeta_\Delta}
 with the analogous \(r/2\) update for a random baseline slab scale
 \(\zeta_0^2\). If slab scales are fixed, these updates are omitted.
 
-\subsection{MCMC and Joint Variational Updates}
+\subsection{MCMC and Variational Updates}
 
 Algorithm~\ref{alg:joint_qdesn_mcmc} applies the preceding sparse Gaussian,
 level-indexed latent, and RHS blocks to the joint posterior. Under AL, the
 full conditional distributions remain Gaussian or truncated Gaussian,
-GIG, and inverse-gamma. The reported joint implementation uses a log-scale
+GIG, and inverse-gamma. The reported MQ--DESN implementation uses a log-scale
 slice transition within the GIG latent block, targeting its stated full
 conditional.
 
-\begin{suppalgorithm}{MCMC sampler for the joint quantile-vector Q--DESN posterior}
+\begin{suppalgorithm}{MCMC sampler for the MQ--DESN posterior}
 \label{alg:joint_qdesn_mcmc}
 \emph{Input:} fixed non-intercept design \(\mat Z\), response \(\vect y\),
 quantile grid \(p_1<\cdots<p_K\), priors, and MCMC
@@ -1499,7 +1504,7 @@ estimated-baseline extension.
 
 The Gaussian slope and RHS coordinate updates extend to the stacked
 regression. A Laplace--Delta extension uses the scale--asymmetry
-approximation of Section~\ref{sec:cavi}. The reported joint study instead
+approximation of Section~\ref{sec:cavi}. The reported multiquantile study instead
 uses the structured factor in Section~\ref{subsec:supp_structured_exal_vb}
 and optimizes ordered intercepts as point values. Its Gaussian slope factor
 retains covariance across levels, while its uncertainty summaries omit
@@ -1527,7 +1532,7 @@ dependence across levels within the Gaussian slope factor.
 \subsection{Structured exAL Scale--Asymmetry Factor}
 \label{subsec:supp_structured_exal_vb}
 
-The joint study uses the unweighted \(v\) augmentation in
+The multiquantile study uses the unweighted \(v\) augmentation in
 Eq.~\eqref{eq:supp_exal_hierarchy} separately at each probability level.
 The scale--asymmetry factor is independent of the coefficient and latent
 factors, but retains dependence between \(\sigma\) and \(\gamma\).
@@ -1670,7 +1675,7 @@ levels \(p_1<\cdots<p_K\), the projection is
 \qquad w_k>0.
 \label{eq:supp_monotone_projection}
 \end{equation}
-The equal projection weights \(w_k=1\) used in the joint simulation differ
+The equal projection weights \(w_k=1\) used in the multiquantile simulation differ
 from the probability-integration weights \(\omega_k\) used for scoring below.
 The projection may be applied draw by draw when joint posterior or variational
 quantile-path draws are available, or to posterior summary ordinates for
@@ -1706,7 +1711,7 @@ realization and the stated likelihood. To report several
 independently fitted levels, the same recursion is run separately for each
 fitted \(p_k\).
 
-For a joint quantile-vector regression, a posterior or variational draw returns a
+For MQ--DESN, a posterior or variational draw returns a
 raw quantile vector over \(p_1,\ldots,p_K\). If recursive lag inputs require a
 future response path, that path is generated by a stated propagation rule.
 For draw \(b\) at horizon \(h\), write
@@ -1731,7 +1736,7 @@ rearrangement is applied to the fitted conditional-quantile summaries and may
 use isotonic projection \eqref{eq:supp_monotone_projection} or monotone
 rearrangement \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. Linear
 interpolation defines a quantile function over \([p_1,p_K]\), and reported
-summaries are restricted to this fitted range. In the reported joint study,
+summaries are restricted to this fitted range. In the reported multiquantile study,
 observed history reconstructs the reservoir state at each forecast origin.
 Unknown responses are generated recursively within that origin, using linear
 interpolation of the ordered grid and endpoint clamping beyond the fitted
@@ -1773,13 +1778,13 @@ where
 \label{eq:supp-acrps-weights}
 \end{equation}
 The weights in Eq.~\eqref{eq:supp-acrps-weights} satisfy
-\(\sum_k\omega_k=p_K-p_1\). The joint simulation and GloFAS analyses
+\(\sum_k\omega_k=p_K-p_1\). The multiquantile simulation and GloFAS analyses
 use seven common evaluation levels with endpoints 0.05 and 0.95, so their
 weights sum to 0.90. For fitted quantile regressions, the evaluation levels
 coincide with the fitted grid. Their interior levels differ between studies;
 comparisons of \(\aCRPS\) are therefore made within each study.
 
-The joint simulation also evaluates the quantile grid under the known
+The multiquantile simulation also evaluates the quantile grid under the known
 conditional data-generating process (DGP). Let \(N_{\mathrm{eval}}\) be its
 number of origin--horizon pairs, let \(F_{0,\ell}\) be the true conditional
 distribution for pair \(\ell\), and let
@@ -1911,9 +1916,9 @@ S_{\mathrm{val}}(R_j;M).
 The selected \(\widehat R_M\) is held fixed for evaluation. Gaussian-DESN
 ridge fits provide an inexpensive first comparison of the candidate
 specifications. Gaussian RHS--VB fits and quantile regressions refine the
-comparison where specified. In the joint simulation, one selected DESN
+comparison where specified. In the multiquantile simulation, one selected DESN
 specification, reservoir realization, and feature construction are shared
-by independent AL, joint AL, independent exAL, and joint exAL Q--DESN.
+by Q--DESN and MQ--DESN under the AL and exAL likelihoods.
 The independent single-quantile validation instead uses its own
 criterion-specific selection and initialization procedure.
 
@@ -1944,14 +1949,15 @@ same side of the median. For every \(k=1,\ldots,K\), the completed AL fit at
 \(p_k\) initializes the exAL fit at \(p_k\). The exAL regressions may
 therefore be fitted as soon as their matching AL fits are available.
 
-The joint simulation and GloFAS use the applicable joint branches; PriceFM
-uses independent AL/exAL VB only. The joint AL regression is initialized from the complete collection of
-independent AL fits, and the joint exAL regression is initialized from the
+The multiquantile simulation and GloFAS use the applicable MQ--DESN branches;
+PriceFM uses independent AL/exAL VB only. MQ--DESN under AL is initialized
+from the complete collection of independent AL fits, and MQ--DESN under exAL
+is initialized from the
 complete collection of independent exAL fits. Let
 \(\widehat\beta_{0k}^{\,\mathrm{ind}}\) and
 \(\widehat{\vect\beta}_k^{\,\mathrm{ind}}\) denote the independent
 intercept and slope estimates from the matching likelihood family. Initial
-values for the level-specific joint coefficients are
+values for the MQ--DESN level-specific coefficients are
 \[
 \beta_{0k}^{(0)}
 =\widehat\beta_{0k}^{\,\mathrm{ind}},
@@ -1971,8 +1977,9 @@ Section~\ref{sec:joint_qdesn_supp}, the corresponding initial differences are
 \qquad k=2,\ldots,K.
 \label{eq:supp-joint-initial-differences}
 \end{equation}
-Independent AL estimates are used for joint AL, and independent exAL estimates
-are used for joint exAL in Eq.~\eqref{eq:supp-joint-initial-differences}.
+Independent AL estimates initialize MQ--DESN under AL, and independent exAL
+estimates initialize MQ--DESN under exAL in
+Eq.~\eqref{eq:supp-joint-initial-differences}.
 
 When the source and destination models differ, only parameters with
 corresponding interpretations are used to construct starting values. Gaussian
@@ -1995,8 +2002,8 @@ diagnostics stated for the empirical analysis.
   \figalt{A Gaussian ridge regression initializes a Gaussian regularized-horseshoe
   variational fit, which initializes the median AL regression. Independent AL
   fits then proceed outward toward both tails; each initializes the exAL fit at
-  the same probability level. Complete independent grids initialize joint
-  models in the joint simulation and GloFAS, not PriceFM. The joint simulation
+  the same probability level. Complete independent grids initialize MQ--DESN
+  in the multiquantile simulation and GloFAS, not PriceFM. The multiquantile simulation
   uses VB starts for MCMC under the same model; GloFAS and PriceFM report VB.
   Prior calibration and development-data selection are separate operations.}
   \label{fig:supp-quantile-sequential-initialization}
@@ -2008,14 +2015,14 @@ diagnostics stated for the empirical analysis.
 
 This section provides numerical values corresponding to the single-quantile
 MCMC figures, analogous variational summaries, and additional comparisons of
-joint and independently estimated quantiles.
+MQ--DESN and independently estimated Q--DESN quantiles.
 
 \subsection{Single-Quantile Posterior Metric Summaries}
 
 The MCMC and VB tables are paired by data-generating family. They give posterior
 means and equal-tailed 95\% intervals for fitting-sample root-mean-square error
 (RMSE), forecast mean absolute error (MAE), and forecast check loss. Q--DESN
-and exQ--DESN entries use fitting-sample preprocessing, and ridge rows are
+entries under AL and exAL use fitting-sample preprocessing, and ridge rows are
 omitted. Each criterion was minimized separately within model and simulation
 setting, so entries within a row, and the MCMC and VB panels, can correspond to
 different selected specifications. The intervals condition on the simulated
@@ -2114,12 +2121,12 @@ posterior metric summaries.
 \endgroup
 
 \clearpage
-\subsection{Joint Multi-Quantile MCMC Evaluation Details}
+\subsection{Multiquantile MCMC Evaluation Details}
 
 The reservoir-only readout uses the initialization sequence in
 Figure~\ref{fig:supp-quantile-sequential-initialization}. One scenario-specific
 DESN/RHS specification is selected from source realizations and held common
-across independent AL, joint AL, independent exAL, and joint exAL Q--DESN.
+across Q--DESN and MQ--DESN under the AL and exAL likelihoods.
 The readout includes every reservoir layer
 and an intercept, while response lags enter only through reservoir inputs.
 The evaluation realization is used for the final fit and evaluation.
@@ -2130,7 +2137,7 @@ chain-specific dispersion affects initial states only. Every \(\exAL\)
 chain uses the exact scale-collapsed MCMC transition described above.
 Intercept prior centers and scales are calibrated once from the Gaussian
 reference fit and held common across the four regressions and all chains;
-joint intercepts are ordered. The first quantile slope is the RHS anchor,
+MQ--DESN intercepts are ordered. The first quantile slope is the RHS anchor,
 with no additional latent baseline.
 Writing \(q_G\) for the Gaussian RHS variational reference, the fixed
 calibration quantities are
@@ -2153,10 +2160,10 @@ Section~\ref{subsec:supp_structured_exal_vb}. Scale integration is analytic;
 quadrature over the bounded shape support supplies its normalization and
 mixed moments.
 
-\input{tables/joint_qdesn_pure_desn_v2_protocol.tex}
-\input{tables/joint_qdesn_pure_desn_v2_score_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_protocol.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_score_table.tex}
 
-\input{tables/joint_qdesn_pure_desn_v2_secondary_score_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_secondary_score_table.tex}
 
 At each forecast origin, observed response lags reconstruct the reservoir
 state. Future responses are generated by inverse sampling from the projected
@@ -2175,9 +2182,9 @@ VB intervals additionally condition on fixed variational intercept estimates,
 while retaining the Gaussian slope-factor covariance.
 \begingroup
 \setlength{\abovecaptionskip}{0pt}
-\input{tables/joint_qdesn_pure_desn_v2_recursive_policy_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_recursive_policy_table.tex}
 \endgroup
-\input{tables/joint_qdesn_pure_desn_v2_vb_score_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_vb_score_table.tex}
 
 All 32 MCMC comparisons satisfy the score-functional stability criteria,
 and all scores are finite. This assessment concerns recursive feature
@@ -2187,21 +2194,21 @@ Imperfect scale--asymmetry mixing remains a limitation; effective sample
 sizes of independently permuted score sequences do not establish mixing
 of the original parameter chains.
 
-The descriptive joint-minus-independent score intervals favor joint
+The descriptive MQ--DESN-minus-Q--DESN score intervals favor MQ--DESN
 estimation under both likelihoods for asymmetric tails. The other fourteen
 include zero. Raw crossings are reported for both posterior-mean grids and
 posterior draws, alongside monotone-adjustment magnitudes. All scored grids
 are ordered after isotonic projection.
 
-\input{tables/joint_qdesn_pure_desn_v2_contrast_table.tex}
-\input{tables/joint_qdesn_pure_desn_v2_crossing_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_contrast_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex}
 
 Figure~\ref{fig:joint-qdesn-pure-desn-v2-fit-rmse} and the recovery table
 report posterior-mean quantile-path recovery in the fitting sample. These
 are point diagnostics; posterior intervals for fit RMSE are unavailable
 in the retained summary.
-\input{tables/joint_qdesn_pure_desn_v2_fit_figure.tex}
-\input{tables/joint_qdesn_pure_desn_v2_oracle_recovery_table.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex}
+\input{tables/joint_qdesn_pure_desn_v2_mq_oracle_recovery_table.tex}
 
 This comparison uses one complete reservoir-only recursive evaluation. If
 \(d_\beta\) denotes the number of penalized coefficients in an RHS
@@ -2219,7 +2226,7 @@ verified under the corrected current posterior target. Its paired
 \(\AL\)-minus-\(\exAL\) forecast-MAE
 differences assess quantile-path recovery and are not pooled with the present
 reservoir-only forecast comparison.
-\input{tables/joint_qdesn_article_validation_phase153_replication_summary.tex}
+\input{tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex}
 
 \clearpage
 \subsection{PriceFM Design and Additional Results}
@@ -2323,7 +2330,7 @@ These components produce 30-day recursive paths. Part 4 is a separate
 28-horizon issued-ensemble latent-path analysis: future reference values are
 latent during fitting, and the issued ensemble contributes directly to the
 likelihood. The comparison
-includes independent and joint AL/exAL variational fits, two Gaussian
+includes Q--DESN and MQ--DESN AL/exAL variational fits, two Gaussian
 predictive baselines, and the raw issued ensemble.
 
 \subsection{Observed Quantities and Latent Design}
@@ -2545,14 +2552,14 @@ contains source-specific shape parameters and positive-shift latent variables,
 using the structured quadrature calculations described earlier. Both AL and
 exAL families are included in the final comparison.
 
-\subsection{Joint Quantile and Latent-Path Approximation}
+\subsection{MQ--DESN and Latent-Path Approximation}
 \label{subsec:glofas_latent_path}
 
 The fitted grid is
 \[
 (0.05,\ 0.20,\ 0.35,\ 0.50,\ 0.65,\ 0.80,\ 0.95).
 \]
-For the joint families, the seven reference coefficient blocks and seven
+For the MQ--DESN families, the seven reference coefficient blocks and seven
 discrepancy coefficient blocks are linked by separate adjacent-quantile RHS
 priors. Computation uses mean-field quantile-block coordinate updates
 initialized from the completed independent fits. The construction shares
@@ -2615,13 +2622,13 @@ imputation from the withheld truth, or post-hoc crossing correction is used.
 \subsection{Convergence and Supplementary Results}
 \label{subsec:glofas_checks}
 
-Both corrected joint families satisfy strict convergence. The stopping rule
+Both corrected MQ--DESN families satisfy strict convergence. The stopping rule
 requires convergence of every inner fit, outer parameter change below
 \(10^{-3}\), relative change of every RHS block below \(10^{-3}\), and three
 consecutive passes of the full variational state after global-scale updates
-have begun. Joint AL converged at outer sweep 11, with parameter change
+have begun. MQ--DESN (AL) converged at outer sweep 11, with parameter change
 \(8.9279687\times10^{-4}\) and maximum RHS change
-\(7.7748371\times10^{-4}\). Joint exAL converged at sweep 28, with
+\(7.7748371\times10^{-4}\). MQ--DESN (exAL) converged at sweep 28, with
 corresponding changes \(2.6080582\times10^{-4}\) and
 \(3.8253514\times10^{-4}\). Table~\ref{tab:supp-glofas-part4-convergence}
 and Figure~\ref{fig:supp-glofas-part4-convergence} report these results.
@@ -2633,18 +2640,18 @@ Table~\ref{tab:supp-glofas-part123-scores} separates the recursive evidence
 from the issued-window comparison in the main article. Parts 1 and 3 are
 scored over 30 dates on the same seven-level grid. The Part 1 Independent AL
 and Independent exAL paths contain three and one adjacent-quantile crossing
-pairs, respectively. Part 1 joint families and all Part 3 families have zero
+pairs, respectively. Part 1 MQ--DESN families and all Part 3 families have zero
 crossings. No correction was applied. All six Part 2 post-cutoff discrepancy
 paths are unscored because retrospective GloFAS ends at \(T\); their missing
 scores and crossing counts are not zero-valued measurements.
 
 The complete Part 4 comparison has Independent AL as its descriptive
 issued-window leader, not a protected-window-selected family. Corrected
-Joint AL is the joint comparator and corrected Joint exAL the sensitivity
+MQ--DESN (AL) is the multiquantile comparator and corrected MQ--DESN (exAL) the sensitivity
 model. The reported grids of all seven Part 4 families have zero crossings. Independent AL's
-nominal 90\% interval covers \(0.750\) of the 28 outcomes; Joint AL has the
+nominal 90\% interval covers \(0.750\) of the 28 outcomes; MQ--DESN (AL) has the
 greatest modeled coverage, \(0.786\), still below nominal. At \(p=0.95\),
-Joint exAL covers only \(0.286\), compared with Independent AL's \(0.750\).
+MQ--DESN (exAL) covers only \(0.286\), compared with Independent AL's \(0.750\).
 Table~\ref{tab:supp-glofas-part4-calibration} and
 Figure~\ref{fig:supp-glofas-part4-calibration} show the substantial
 undercoverage across the grid.
@@ -2653,14 +2660,14 @@ undercoverage across the grid.
 \centering
 \includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentFullComparisonFigure}
 \caption{Full Part 4 issued-window comparison. Panels group Gaussian and raw
-GloFAS, independent quantile, and joint quantile families; the separate
+GloFAS, Q--DESN, and MQ--DESN families; the separate
 legend identifies probabilities and line styles. Black shows historical
 USGS and magenta dashed lines show withheld scoring observations. The
 vertical line marks 25 December 2022. Panels retain their original separate
 vertical scales, unlike the common-scale illustration in the main article.
 All seven families and their unadjusted reported grids are retained.}
 \figalt{The full-family Part 4 comparison retains Gaussian and raw GloFAS,
-independent AL/exAL, and joint AL/exAL paths with their original panel scales,
+Q--DESN and MQ--DESN AL/exAL paths with their original panel scales,
 historical observations, and held-out scoring truth.}
 \label{fig:supp-glofas-part4-all-families}
 \end{figure}
@@ -2681,7 +2688,7 @@ pairs over the raw paths, with no correction.}
 \begin{table}[!htbp]
 \centering
 \TableStyle
-\caption{Strict convergence of the corrected Part 4 joint fits. Both
+\caption{Strict convergence of the corrected Part 4 MQ--DESN fits. Both
 parameter and maximum RHS relative changes are below \(10^{-3}\), all inner
 fits converge, and both families complete three consecutive full-state
 passes after RHS global-scale release.}
@@ -2706,13 +2713,13 @@ calibration assessment is descriptive, not a tuning criterion.}
 \includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartOneFigure}
 \caption{Part 1 univariate USGS recursive forecasts over 30 days after
 25~December~2022. The three panels group Gaussian, independent quantile,
-and joint quantile families. Colors distinguish probability levels and line
+and MQ--DESN families. Colors distinguish probability levels and line
 styles distinguish families. Black lines show the last 30 observed dates;
 magenta dashed lines show withheld USGS scoring truth. Vertical lines mark
 the origin and panels have separate vertical scales. Independent AL and exAL
 have three and one raw crossing pairs, respectively; no correction is applied.}
 \figalt{Three panels show 30-day Part 1 USGS forecasts from Gaussian,
-independent AL/exAL, and joint AL/exAL families, alongside black observed
+Q--DESN and MQ--DESN AL/exAL families, alongside black observed
 history and magenta dashed withheld truth.}
 \label{fig:supp-glofas-part1}
 \end{figure}
@@ -2723,7 +2730,7 @@ history and magenta dashed withheld truth.}
 \caption{Part 2 retrospective-GloFAS-minus-USGS discrepancy paths over the
 last 30 observed dates and 30 recursive future dates. Discrepancies are
 differences on the \(\log(1+\mathrm{flow})\) scale. Panels group Gaussian,
-independent, and joint families, with color identifying probability levels
+Q--DESN, and MQ--DESN families, with color identifying probability levels
 and line style identifying families. Gaussian paths are mean summaries.
 Black lines show historical discrepancies and vertical lines mark the cutoff.
 No future truth is plotted or scored because retrospective GloFAS ends at
@@ -2739,7 +2746,7 @@ post-cutoff discrepancy truth or score.}
 \includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartThreeFigure}
 \caption{Part 3 USGS recursive forecasts from the joint historical
 reference--discrepancy model over 30 future dates. Gaussian, independent,
-and joint quantile families occupy separate panels. Colors identify
+and MQ--DESN families occupy separate panels. Colors identify
 probability levels, line styles identify families, and vertical lines mark
 the December-25 origin. Black historical USGS and magenta dashed withheld
 truth accompany the forecasts. Panels have separate vertical scales. All
@@ -2752,12 +2759,12 @@ forecasts with historical USGS and withheld truth; all paths are uncrossed.}
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentConvergenceFigure}
-\caption{Corrected Part 4 joint-model convergence. Maximum relative
+\caption{Corrected Part 4 MQ--DESN convergence. Maximum relative
 parameter change is plotted against cumulative outer iteration on a
 logarithmic vertical scale. The horizontal dashed line is the \(10^{-3}\)
 outer tolerance. Triangles identify full-state passes; the last three
-consecutive passes give strict convergence for Joint AL and Joint exAL.}
-\figalt{Green Joint AL and brown Joint exAL parameter-change traces finish
+consecutive passes give strict convergence for MQ--DESN (AL) and MQ--DESN (exAL).}
+\figalt{Green MQ--DESN (AL) and brown MQ--DESN (exAL) parameter-change traces finish
 below the strict tolerance at outer sweeps 11 and 28, respectively, with
 three consecutive full-state passes each.}
 \label{fig:supp-glofas-part4-convergence}
@@ -2770,11 +2777,11 @@ three consecutive full-state passes each.}
 empirical coverage for the seven families at the seven probability levels;
 the diagonal gives nominal coverage. The comparison uses 28 withheld USGS
 outcomes and was not used for model selection. Independent AL has the lowest
-grid score but remains undercovered, and strictly converged Joint exAL has
+grid score but remains undercovered, and strictly converged MQ--DESN (exAL) has
 particularly weak upper-tail coverage.}
 \figalt{Seven empirical-coverage curves lie below the nominal diagonal.
-Joint AL and Independent AL have the highest q0.95 coverage, while Joint
-exAL reaches only 0.286 and raw GloFAS remains at zero.}
+MQ--DESN (AL) and Independent AL have the highest q0.95 coverage, while MQ--DESN
+(exAL) reaches only 0.286 and raw GloFAS remains at zero.}
 \label{fig:supp-glofas-part4-calibration}
 \end{figure}
 

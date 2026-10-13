@@ -1,0 +1,1559 @@
+{
+  "assets": [
+    {
+      "all_labels_inside_page": true,
+      "composition_fragments": [
+        {
+          "destination": [
+            12.0,
+            55.0,
+            220.88000000000002,
+            210.12
+          ],
+          "source_clip": [
+            0.0,
+            33.0,
+            373.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            55.0,
+            451.04,
+            210.12
+          ],
+          "source_clip": [
+            373.0,
+            33.0,
+            732.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            12.0,
+            245.0,
+            229.28000000000003,
+            400.12
+          ],
+          "source_clip": [
+            732.0,
+            33.0,
+            1120.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            267.0,
+            266.5,
+            281.0
+          ],
+          "source_clip": [
+            497.2890625,
+            378.1109313964844,
+            513.7890625,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            267.0,
+            316.5,
+            281.0
+          ],
+          "source_clip": [
+            497.2890625,
+            400.1226501464844,
+            513.7890625,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            267.0,
+            366.5,
+            281.0
+          ],
+          "source_clip": [
+            538.82421875,
+            378.1109313964844,
+            555.32421875,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            400.0,
+            267.0,
+            416.5,
+            281.0
+          ],
+          "source_clip": [
+            538.82421875,
+            400.1226501464844,
+            555.32421875,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            285.0,
+            266.5,
+            299.0
+          ],
+          "source_clip": [
+            580.35546875,
+            378.1109313964844,
+            596.85546875,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            285.0,
+            316.5,
+            299.0
+          ],
+          "source_clip": [
+            580.35546875,
+            400.1226501464844,
+            596.85546875,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            285.0,
+            366.5,
+            299.0
+          ],
+          "source_clip": [
+            621.890625,
+            378.1109313964844,
+            638.390625,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            332.0,
+            266.5,
+            346.0
+          ],
+          "source_clip": [
+            459.453125,
+            319.8921813964844,
+            475.953125,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            332.0,
+            369.5,
+            346.0
+          ],
+          "source_clip": [
+            459.453125,
+            341.9039001464844,
+            475.953125,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            351.0,
+            266.5,
+            365.0
+          ],
+          "source_clip": [
+            547.88671875,
+            319.8921813964844,
+            564.38671875,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            351.0,
+            369.5,
+            365.0
+          ],
+          "source_clip": [
+            547.88671875,
+            341.9039001464844,
+            564.38671875,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            370.0,
+            266.5,
+            384.0
+          ],
+          "source_clip": [
+            610.11328125,
+            319.8921813964844,
+            626.61328125,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            370.0,
+            369.5,
+            384.0
+          ],
+          "source_clip": [
+            610.11328125,
+            341.9039001464844,
+            626.61328125,
+            355.50390625
+          ]
+        }
+      ],
+      "dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "exact_mapped_text_tokens_retained": true,
+      "historical_review": "figures/glofas_application/glofas_search3_review_20261008_part1.pdf",
+      "historical_review_sha256": "6a9dc55a6c570c0f5bd4c3d3534c8c5337e62875c79be940a66ba5c74a809bf2",
+      "historical_review_vector_path_hash": "b10c95c23012740db415ea91ab079cf44dfe75adbcd654a35c9c8b4806994c03",
+      "mapped_text_token_multiset_sha256": "8abce7357efd5601c92e655fc33b21bccb9918dfbbdcf7841753db62a990f585",
+      "minimum_effective_label_bp": 8.428393524283935,
+      "minimum_native_label_bp": 9.0,
+      "numeric_token_multiset_unchanged": true,
+      "original_vector_path_hash": "1d73e3b2448bfca61ec57b6bf5078b8900dc54cec8134d839d6d6a797af9a845",
+      "output": "figures/glofas_application/glofas_search3_mq_review_20261013_part1.pdf",
+      "output_sha256": "ea7a0ea3084e924a0b2334a83983df8f842ceb0fabd92d518b1cca5a79213705",
+      "output_vector_path_hash": "b10c95c23012740db415ea91ab079cf44dfe75adbcd654a35c9c8b4806994c03",
+      "raster_images": 0,
+      "role": "part1",
+      "source": "figures/glofas_application/glofas_search3_part1234_final_20261007_part1.pdf",
+      "source_sha256": "6adbb89c9a6be85db3343028d5a9574d728e259c2238f7a659f09b39af7d9676",
+      "source_text_token_multiset_sha256": "4847d02e7ce25046d9fdff5696ec395c539cca17914a7a8deb734032cde4036e",
+      "vector_paths_identical_after_text_removal": true,
+      "visible_nonwhite_source_paths_covered": 118
+    },
+    {
+      "all_labels_inside_page": true,
+      "composition_fragments": [
+        {
+          "destination": [
+            12.0,
+            55.0,
+            220.88000000000002,
+            210.12
+          ],
+          "source_clip": [
+            0.0,
+            33.0,
+            373.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            55.0,
+            451.04,
+            210.12
+          ],
+          "source_clip": [
+            373.0,
+            33.0,
+            732.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            12.0,
+            245.0,
+            229.28000000000003,
+            400.12
+          ],
+          "source_clip": [
+            732.0,
+            33.0,
+            1120.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            267.0,
+            266.5,
+            281.0
+          ],
+          "source_clip": [
+            498.5546875,
+            378.1109313964844,
+            515.0546875,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            267.0,
+            316.5,
+            281.0
+          ],
+          "source_clip": [
+            498.5546875,
+            400.1226501464844,
+            515.0546875,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            267.0,
+            366.5,
+            281.0
+          ],
+          "source_clip": [
+            540.08984375,
+            378.1109313964844,
+            556.58984375,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            400.0,
+            267.0,
+            416.5,
+            281.0
+          ],
+          "source_clip": [
+            540.08984375,
+            400.1226501464844,
+            556.58984375,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            285.0,
+            266.5,
+            299.0
+          ],
+          "source_clip": [
+            581.62109375,
+            378.1109313964844,
+            598.12109375,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            285.0,
+            316.5,
+            299.0
+          ],
+          "source_clip": [
+            581.62109375,
+            400.1226501464844,
+            598.12109375,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            285.0,
+            366.5,
+            299.0
+          ],
+          "source_clip": [
+            623.15625,
+            378.1109313964844,
+            639.65625,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            332.0,
+            266.5,
+            346.0
+          ],
+          "source_clip": [
+            460.71875,
+            319.8921813964844,
+            477.21875,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            332.0,
+            369.5,
+            346.0
+          ],
+          "source_clip": [
+            460.71875,
+            341.9039001464844,
+            477.21875,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            351.0,
+            266.5,
+            365.0
+          ],
+          "source_clip": [
+            549.15234375,
+            319.8921813964844,
+            565.65234375,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            351.0,
+            369.5,
+            365.0
+          ],
+          "source_clip": [
+            549.15234375,
+            341.9039001464844,
+            565.65234375,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            370.0,
+            266.5,
+            384.0
+          ],
+          "source_clip": [
+            611.37890625,
+            319.8921813964844,
+            627.87890625,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            370.0,
+            369.5,
+            384.0
+          ],
+          "source_clip": [
+            611.37890625,
+            341.9039001464844,
+            627.87890625,
+            355.50390625
+          ]
+        }
+      ],
+      "dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "exact_mapped_text_tokens_retained": true,
+      "historical_review": "figures/glofas_application/glofas_search3_review_20261008_part2.pdf",
+      "historical_review_sha256": "e8f4ac5592baff7c2f321bc45a3796dcac9dcd60e7153d3d27ae31c97517fef5",
+      "historical_review_vector_path_hash": "045d341f166929375d72ad670bf04008f58e221b7442862c39b211ea68d32f06",
+      "mapped_text_token_multiset_sha256": "22e9903da5bd5ccb1fe36988646d41b53cf5adc1a7dce033dbbe6a9052d49ac7",
+      "minimum_effective_label_bp": 8.428393524283935,
+      "minimum_native_label_bp": 9.0,
+      "numeric_token_multiset_unchanged": true,
+      "original_vector_path_hash": "de9bcaf633272a894935a1d57f7285b1bea3a621c8caf11be68df4551c10ed0a",
+      "output": "figures/glofas_application/glofas_search3_mq_review_20261013_part2.pdf",
+      "output_sha256": "46f744affdec69fc62a49e34ffc8d8912f6f58a10d2dfbc0267b9f8911e0ab8f",
+      "output_vector_path_hash": "045d341f166929375d72ad670bf04008f58e221b7442862c39b211ea68d32f06",
+      "raster_images": 0,
+      "role": "part2",
+      "source": "figures/glofas_application/glofas_search3_part1234_final_20261007_part2.pdf",
+      "source_sha256": "2da731c935784a59d37778cbd654a937f0e80a248fe71570d0c3fa6cfc219ec9",
+      "source_text_token_multiset_sha256": "549e2f2781328e8c8208d0711504fce659a465312b480eff8372f501e4099eb5",
+      "vector_paths_identical_after_text_removal": true,
+      "visible_nonwhite_source_paths_covered": 95
+    },
+    {
+      "all_labels_inside_page": true,
+      "composition_fragments": [
+        {
+          "destination": [
+            12.0,
+            55.0,
+            220.88000000000002,
+            210.12
+          ],
+          "source_clip": [
+            0.0,
+            33.0,
+            373.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            55.0,
+            451.04,
+            210.12
+          ],
+          "source_clip": [
+            373.0,
+            33.0,
+            732.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            12.0,
+            245.0,
+            229.28000000000003,
+            400.12
+          ],
+          "source_clip": [
+            732.0,
+            33.0,
+            1120.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            267.0,
+            266.5,
+            281.0
+          ],
+          "source_clip": [
+            497.2890625,
+            378.1109313964844,
+            513.7890625,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            267.0,
+            316.5,
+            281.0
+          ],
+          "source_clip": [
+            497.2890625,
+            400.1226501464844,
+            513.7890625,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            267.0,
+            366.5,
+            281.0
+          ],
+          "source_clip": [
+            538.82421875,
+            378.1109313964844,
+            555.32421875,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            400.0,
+            267.0,
+            416.5,
+            281.0
+          ],
+          "source_clip": [
+            538.82421875,
+            400.1226501464844,
+            555.32421875,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            285.0,
+            266.5,
+            299.0
+          ],
+          "source_clip": [
+            580.35546875,
+            378.1109313964844,
+            596.85546875,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            285.0,
+            316.5,
+            299.0
+          ],
+          "source_clip": [
+            580.35546875,
+            400.1226501464844,
+            596.85546875,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            285.0,
+            366.5,
+            299.0
+          ],
+          "source_clip": [
+            621.890625,
+            378.1109313964844,
+            638.390625,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            332.0,
+            266.5,
+            346.0
+          ],
+          "source_clip": [
+            459.453125,
+            319.8921813964844,
+            475.953125,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            332.0,
+            369.5,
+            346.0
+          ],
+          "source_clip": [
+            459.453125,
+            341.9039001464844,
+            475.953125,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            351.0,
+            266.5,
+            365.0
+          ],
+          "source_clip": [
+            547.88671875,
+            319.8921813964844,
+            564.38671875,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            351.0,
+            369.5,
+            365.0
+          ],
+          "source_clip": [
+            547.88671875,
+            341.9039001464844,
+            564.38671875,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            370.0,
+            266.5,
+            384.0
+          ],
+          "source_clip": [
+            610.11328125,
+            319.8921813964844,
+            626.61328125,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            370.0,
+            369.5,
+            384.0
+          ],
+          "source_clip": [
+            610.11328125,
+            341.9039001464844,
+            626.61328125,
+            355.50390625
+          ]
+        }
+      ],
+      "dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "exact_mapped_text_tokens_retained": true,
+      "historical_review": "figures/glofas_application/glofas_search3_review_20261008_part3.pdf",
+      "historical_review_sha256": "9465eebeef886dc24187c88eb8258a4709db8f6243c45c7ab29ab362227cd61d",
+      "historical_review_vector_path_hash": "d787fa787044dfbf4b1d4f838ae4a0c2a31f94968fc55d56a63c34e97eb6b9e3",
+      "mapped_text_token_multiset_sha256": "566cf9affa1344894076ee5e3df38d2d56fd25557179ed08d6340d0283809b76",
+      "minimum_effective_label_bp": 8.428393524283935,
+      "minimum_native_label_bp": 9.0,
+      "numeric_token_multiset_unchanged": true,
+      "original_vector_path_hash": "b0cd8aaa498cdd0fcb0c08681c71ec769ad74be8aaa7155f88ce2a4ef5633b1d",
+      "output": "figures/glofas_application/glofas_search3_mq_review_20261013_part3.pdf",
+      "output_sha256": "fd0fb8c0021d4892ea2881c232f83d5ef4fe1749b141dbd6aa6294be2373bb7a",
+      "output_vector_path_hash": "d787fa787044dfbf4b1d4f838ae4a0c2a31f94968fc55d56a63c34e97eb6b9e3",
+      "raster_images": 0,
+      "role": "part3",
+      "source": "figures/glofas_application/glofas_search3_part1234_final_20261007_part3.pdf",
+      "source_sha256": "12d9ec7ee4fdbcf191ec18b942af525d723f37da9337fd85c6e9ba723a3646bb",
+      "source_text_token_multiset_sha256": "89ed486d4f84b3602e7006e6000d6b2624ef63f092603d94b2d00628477d2c63",
+      "vector_paths_identical_after_text_removal": true,
+      "visible_nonwhite_source_paths_covered": 118
+    },
+    {
+      "all_labels_inside_page": true,
+      "composition_fragments": [
+        {
+          "destination": [
+            12.0,
+            55.0,
+            220.88000000000002,
+            210.12
+          ],
+          "source_clip": [
+            0.0,
+            33.0,
+            373.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            55.0,
+            451.04,
+            210.12
+          ],
+          "source_clip": [
+            373.0,
+            33.0,
+            732.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            12.0,
+            245.0,
+            229.28000000000003,
+            400.12
+          ],
+          "source_clip": [
+            732.0,
+            33.0,
+            1120.0,
+            310.0
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            267.0,
+            266.5,
+            281.0
+          ],
+          "source_clip": [
+            497.2890625,
+            319.8921813964844,
+            513.7890625,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            267.0,
+            316.5,
+            281.0
+          ],
+          "source_clip": [
+            497.2890625,
+            341.9039001464844,
+            513.7890625,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            267.0,
+            366.5,
+            281.0
+          ],
+          "source_clip": [
+            538.82421875,
+            319.8921813964844,
+            555.32421875,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            400.0,
+            267.0,
+            416.5,
+            281.0
+          ],
+          "source_clip": [
+            538.82421875,
+            341.9039001464844,
+            555.32421875,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            285.0,
+            266.5,
+            299.0
+          ],
+          "source_clip": [
+            580.35546875,
+            319.8921813964844,
+            596.85546875,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            300.0,
+            285.0,
+            316.5,
+            299.0
+          ],
+          "source_clip": [
+            580.35546875,
+            341.9039001464844,
+            596.85546875,
+            355.50390625
+          ]
+        },
+        {
+          "destination": [
+            350.0,
+            285.0,
+            366.5,
+            299.0
+          ],
+          "source_clip": [
+            621.890625,
+            319.8921813964844,
+            638.390625,
+            333.4921875
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            332.0,
+            266.5,
+            346.0
+          ],
+          "source_clip": [
+            424.1171875,
+            378.1109313964844,
+            440.6171875,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            332.0,
+            369.5,
+            346.0
+          ],
+          "source_clip": [
+            424.1171875,
+            400.1226501464844,
+            440.6171875,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            351.0,
+            266.5,
+            365.0
+          ],
+          "source_clip": [
+            512.55078125,
+            378.1109313964844,
+            529.05078125,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            351.0,
+            369.5,
+            365.0
+          ],
+          "source_clip": [
+            512.55078125,
+            400.1226501464844,
+            529.05078125,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            370.0,
+            266.5,
+            384.0
+          ],
+          "source_clip": [
+            574.78125,
+            378.1109313964844,
+            591.28125,
+            391.7109375
+          ]
+        },
+        {
+          "destination": [
+            353.0,
+            370.0,
+            369.5,
+            384.0
+          ],
+          "source_clip": [
+            574.78125,
+            400.1226501464844,
+            591.28125,
+            413.72265625
+          ]
+        },
+        {
+          "destination": [
+            250.0,
+            389.0,
+            266.5,
+            403.0
+          ],
+          "source_clip": [
+            656.421875,
+            378.1109313964844,
+            672.921875,
+            391.7109375
+          ]
+        }
+      ],
+      "dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        423.0
+      ],
+      "exact_mapped_text_tokens_retained": true,
+      "historical_review": "figures/glofas_application/glofas_search3_review_20261008_part4.pdf",
+      "historical_review_sha256": "742a36d90db05aa619a3208ec07ac4bbeb91f9d9843198e016a04ea551daf858",
+      "historical_review_vector_path_hash": "5986b654b3778a7b4e63632e49cd6d2939196fdd89572caf954a30412a7fa5ee",
+      "mapped_text_token_multiset_sha256": "de7107e41eba59b208b592cba234fa0402869a545670a9a8967bd26a1d6b85a5",
+      "minimum_effective_label_bp": 8.428393524283935,
+      "minimum_native_label_bp": 9.0,
+      "numeric_token_multiset_unchanged": true,
+      "original_vector_path_hash": "892e27457546c9aa5d7fd0c64cc92e1e8b34b66a0b6c69e4fe4b6ca3a90a864d",
+      "output": "figures/glofas_application/glofas_search3_mq_review_20261013_part4.pdf",
+      "output_sha256": "ef42ea26067b4cfe01061320487a38a68f95bb616d2a26a35f5efd3fee5ba20e",
+      "output_vector_path_hash": "5986b654b3778a7b4e63632e49cd6d2939196fdd89572caf954a30412a7fa5ee",
+      "raster_images": 0,
+      "role": "part4",
+      "source": "figures/glofas_application/glofas_search3_part1234_final_20261007_part4.pdf",
+      "source_sha256": "1c6b2421ecb05b455a75d00852fc638f2325156e5aa440cb32ea1bf5d5f99de9",
+      "source_text_token_multiset_sha256": "515f6cb37d45cfd1fba8b54fc0db5634434a0c9817d5e4a1df18c08cc158507b",
+      "vector_paths_identical_after_text_removal": true,
+      "visible_nonwhite_source_paths_covered": 122
+    },
+    {
+      "all_labels_inside_page": true,
+      "composition_fragments": [
+        {
+          "destination": [
+            57.0,
+            60.0,
+            468.0,
+            184.78178368121442
+          ],
+          "source_clip": [
+            40.0,
+            37.0,
+            1094.0,
+            357.0
+          ]
+        },
+        {
+          "destination": [
+            120.0,
+            236.0,
+            137.0,
+            252.0
+          ],
+          "source_clip": [
+            403.23828125,
+            397.19317626953125,
+            423.23828125,
+            413.9931640625
+          ]
+        },
+        {
+          "destination": [
+            230.0,
+            236.0,
+            247.0,
+            252.0
+          ],
+          "source_clip": [
+            463.2718811035156,
+            397.19317626953125,
+            483.2718811035156,
+            413.9931640625
+          ]
+        },
+        {
+          "destination": [
+            200.0,
+            257.0,
+            217.0,
+            273.0
+          ],
+          "source_clip": [
+            626.0390625,
+            397.19317626953125,
+            646.0390625,
+            413.9931640625
+          ]
+        },
+        {
+          "destination": [
+            281.0,
+            257.0,
+            298.0,
+            273.0
+          ],
+          "source_clip": [
+            682.15673828125,
+            397.19317626953125,
+            702.15673828125,
+            413.9931640625
+          ]
+        }
+      ],
+      "dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        281.0
+      ],
+      "exact_mapped_text_tokens_retained": true,
+      "historical_review": "figures/glofas_application/glofas_search3_review_20261008_convergence.pdf",
+      "historical_review_sha256": "95560b8e4de36506f2c728a462a9e94f1361d0d7587a47930cbda04dd206696f",
+      "historical_review_vector_path_hash": "ace5be8f5a0ac12c5d5d1633b8ae88b85b15791d2f8d52a999326fa3b217cd57",
+      "mapped_text_token_multiset_sha256": "ba223b97634a5440b5b1a536d3146c20b96d907e6c55091eab479baa73787461",
+      "minimum_effective_label_bp": 8.428393524283935,
+      "minimum_native_label_bp": 9.0,
+      "numeric_token_multiset_unchanged": true,
+      "original_vector_path_hash": "825d77a1647e3fc4b54620fa3422ed0ca1d1ed2fba1a08bed2dbee5623218aaf",
+      "output": "figures/glofas_application/glofas_search3_mq_review_20261013_convergence.pdf",
+      "output_sha256": "c3e881e20588e6d67c85fcef1072a3b2885a2129f7c3039af0213e3e8eaac6e6",
+      "output_vector_path_hash": "ace5be8f5a0ac12c5d5d1633b8ae88b85b15791d2f8d52a999326fa3b217cd57",
+      "raster_images": 0,
+      "role": "convergence",
+      "source": "figures/glofas_application/glofas_search3_part1234_final_20261007_convergence.pdf",
+      "source_sha256": "9891d8917571b5ade6cf7b5069c2f56054b88e4c5024a3e551c2ce56b595b064",
+      "source_text_token_multiset_sha256": "14d82bf85c9a4f123915a649492d66f34a7dc969f08deedffb5e8b131996f323",
+      "vector_paths_identical_after_text_removal": true,
+      "visible_nonwhite_source_paths_covered": 63
+    },
+    {
+      "all_labels_inside_page": true,
+      "composition_fragments": [
+        {
+          "destination": [
+            57.0,
+            60.0,
+            468.0,
+            175.77464788732394
+          ],
+          "source_clip": [
+            29.0,
+            37.0,
+            1094.0,
+            337.0
+          ]
+        },
+        {
+          "destination": [
+            30.0,
+            236.0,
+            47.0,
+            252.0
+          ],
+          "source_clip": [
+            415.71484375,
+            375.3246154785156,
+            435.71484375,
+            391.724609375
+          ]
+        },
+        {
+          "destination": [
+            138.0,
+            236.0,
+            155.0,
+            252.0
+          ],
+          "source_clip": [
+            415.71484375,
+            397.8363342285156,
+            435.71484375,
+            414.236328125
+          ]
+        },
+        {
+          "destination": [
+            246.0,
+            236.0,
+            263.0,
+            252.0
+          ],
+          "source_clip": [
+            511.640625,
+            375.3246154785156,
+            531.640625,
+            391.724609375
+          ]
+        },
+        {
+          "destination": [
+            354.0,
+            236.0,
+            371.0,
+            252.0
+          ],
+          "source_clip": [
+            511.640625,
+            397.8363342285156,
+            531.640625,
+            414.236328125
+          ]
+        },
+        {
+          "destination": [
+            30.0,
+            255.0,
+            47.0,
+            271.0
+          ],
+          "source_clip": [
+            578.6015625,
+            375.3246154785156,
+            598.6015625,
+            391.724609375
+          ]
+        },
+        {
+          "destination": [
+            138.0,
+            255.0,
+            155.0,
+            271.0
+          ],
+          "source_clip": [
+            578.6015625,
+            397.8363342285156,
+            598.6015625,
+            414.236328125
+          ]
+        },
+        {
+          "destination": [
+            246.0,
+            255.0,
+            263.0,
+            271.0
+          ],
+          "source_clip": [
+            667.015625,
+            375.3246154785156,
+            687.015625,
+            391.724609375
+          ]
+        }
+      ],
+      "dimensions_bp": [
+        0.0,
+        0.0,
+        468.0,
+        277.0
+      ],
+      "exact_mapped_text_tokens_retained": true,
+      "historical_review": "figures/glofas_application/glofas_search3_review_20261008_calibration.pdf",
+      "historical_review_sha256": "2d491f5077be6fdf71bfb38015e8a95793a2baecc7850da222d19c828ebc8a8f",
+      "historical_review_vector_path_hash": "80fa7cfaaf9c2447ba27acadeb0484402d5271acba3e18f0490e37999f91f0ff",
+      "mapped_text_token_multiset_sha256": "5b0ac41eaf2ab479b5c997e80b5e68b0ff7bdacecb35d2f6543964f38beb98e8",
+      "minimum_effective_label_bp": 8.428393524283935,
+      "minimum_native_label_bp": 9.0,
+      "numeric_token_multiset_unchanged": true,
+      "original_vector_path_hash": "b1d503ee0180f2ac4905d649a48fc809b4bbdd8d92792db8ad63de15458ae3cf",
+      "output": "figures/glofas_application/glofas_search3_mq_review_20261013_calibration.pdf",
+      "output_sha256": "77feecd217761727c803c22f93404ff5ff5cc855560de4a92f9d3ebbeb2fb0fb",
+      "output_vector_path_hash": "80fa7cfaaf9c2447ba27acadeb0484402d5271acba3e18f0490e37999f91f0ff",
+      "raster_images": 0,
+      "role": "calibration",
+      "source": "figures/glofas_application/glofas_search3_part1234_final_20261007_calibration.pdf",
+      "source_sha256": "7474879101d262b8e10079e0f310dcda259f2316a66fc8ef006c061527b38b2f",
+      "source_text_token_multiset_sha256": "6cdf4468c70e4a521fd0c12d93cf9c3ea90beccbd64346c204e7e798b5408285",
+      "vector_paths_identical_after_text_removal": true,
+      "visible_nonwhite_source_paths_covered": 98
+    }
+  ],
+  "effective_width_bp": 438.27646326276465,
+  "effective_width_tex_pt": 439.91999999999996,
+  "exact_span_label_mapping": {
+    "Independent AL": "Q-DESN (AL)",
+    "Independent exAL": "Q-DESN (exAL)",
+    "Independent quantiles": "Q-DESN quantiles",
+    "Joint AL": "MQ-DESN (AL)",
+    "Joint exAL": "MQ-DESN (exAL)",
+    "Joint quantiles": "MQ-DESN quantiles",
+    "Last 30 observed dates and 28 issued horizons. Joint AL and exAL use the strict corrected terminal fits.": "Last 30 observed dates and 28 issued horizons. MQ-DESN (AL) and MQ-DESN (exAL) use the strict corrected terminal fits.",
+    "Part 4 corrected joint-model convergence": "Part 4 corrected MQ-DESN convergence"
+  },
+  "fonts": {
+    "NimbusSans-Bold.otf": "7f33328e6b4d4cd21b45fa625791928c9407dc702db6780e56b09ca9a3ecaa67",
+    "NimbusSans-Regular.otf": "7c25be4d78155523080ab85b10277150657ff7dabbcad7037bdd536c9b6d0d08"
+  },
+  "frozen_renderer": "scripts/build_glofas_review_figures.py",
+  "frozen_renderer_sha256": "e55d0d93563e0f6f01fea9237be65b1c47fa046994be5a987e8b09877753df73",
+  "generator": "scripts/build_glofas_mq_review_figures.py",
+  "generator_sha256": "e6bbe49e2296abc60b1e95bab4cf3bf06cae74f1f2bf5b48479b47fbf92cfa0f",
+  "overrides": {
+    "file": "tables/glofas_mq_display_overrides.tex",
+    "sha256": "84b2c2aa27cca97b9d1eb3c3515e8d46b98e485b1d023aa2e2e1abe84ec20dc2"
+  },
+  "protected_sources": [
+    {
+      "file": "figures/glofas_application/glofas_search3_part1234_final_20261007_calibration.pdf",
+      "sha256": "7474879101d262b8e10079e0f310dcda259f2316a66fc8ef006c061527b38b2f"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part1234_final_20261007_convergence.pdf",
+      "sha256": "9891d8917571b5ade6cf7b5069c2f56054b88e4c5024a3e551c2ce56b595b064"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part1234_final_20261007_part1.pdf",
+      "sha256": "6adbb89c9a6be85db3343028d5a9574d728e259c2238f7a659f09b39af7d9676"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part1234_final_20261007_part2.pdf",
+      "sha256": "2da731c935784a59d37778cbd654a937f0e80a248fe71570d0c3fa6cfc219ec9"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part1234_final_20261007_part3.pdf",
+      "sha256": "12d9ec7ee4fdbcf191ec18b942af525d723f37da9337fd85c6e9ba723a3646bb"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part1234_final_20261007_part4.pdf",
+      "sha256": "1c6b2421ecb05b455a75d00852fc638f2325156e5aa440cb32ea1bf5d5f99de9"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_part4_common_window_three_panel_review.pdf",
+      "sha256": "ff6e818e317a31b211be6ee247e45aa0826d42cbaee141cfae6902d8143f021f"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_review_20261008_calibration.pdf",
+      "sha256": "2d491f5077be6fdf71bfb38015e8a95793a2baecc7850da222d19c828ebc8a8f"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_review_20261008_convergence.pdf",
+      "sha256": "95560b8e4de36506f2c728a462a9e94f1361d0d7587a47930cbda04dd206696f"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_review_20261008_part1.pdf",
+      "sha256": "6a9dc55a6c570c0f5bd4c3d3534c8c5337e62875c79be940a66ba5c74a809bf2"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_review_20261008_part2.pdf",
+      "sha256": "e8f4ac5592baff7c2f321bc45a3796dcac9dcd60e7153d3d27ae31c97517fef5"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_review_20261008_part3.pdf",
+      "sha256": "9465eebeef886dc24187c88eb8258a4709db8f6243c45c7ab29ab362227cd61d"
+    },
+    {
+      "file": "figures/glofas_application/glofas_search3_review_20261008_part4.pdf",
+      "sha256": "742a36d90db05aa619a3208ec07ac4bbeb91f9d9843198e016a04ea551daf858"
+    },
+    {
+      "file": "scripts/build_glofas_review_figures.py",
+      "sha256": "e55d0d93563e0f6f01fea9237be65b1c47fa046994be5a987e8b09877753df73"
+    },
+    {
+      "file": "tables/glofas_application_current_outputs.tex",
+      "sha256": "57d8ac0430dd2174c700cc6657eb396b6460909f6b9f9055eb4d8f28a69da471"
+    },
+    {
+      "file": "tables/glofas_application_current_score_summary.csv",
+      "sha256": "c15d21cda11c8c8a89742b32b8a0c07b85851176dac29c30076941e32c52c998"
+    },
+    {
+      "file": "tables/glofas_application_current_score_summary.tex",
+      "sha256": "43604de723086dfa1e132715d8d14f624e400969dbe5b3b0ef6a949b8f74f183"
+    },
+    {
+      "file": "tables/glofas_application_current_selection_manifest.csv",
+      "sha256": "25691eddb333d85dbc00de8ec33389d23796499343e0b01500778754e94f2c1c"
+    },
+    {
+      "file": "tables/glofas_figure4_common_window_manifest.json",
+      "sha256": "af9ef008903f5fc571803d75c322ada07ca3d691a2ff9cc83a3b5041012992f8"
+    },
+    {
+      "file": "tables/glofas_figure4_common_window_outputs.tex",
+      "sha256": "9f6e8b3fe9b70daff6ee63ee355ca346c6cca5d714d2cd9f4b9eae30562bea38"
+    },
+    {
+      "file": "tables/glofas_review_figure_manifest.json",
+      "sha256": "d94628b473cf8481e61a62273b83b126c5e0a4017003cc05bb423d5ea55c25c5"
+    },
+    {
+      "file": "tables/glofas_review_figure_overrides.tex",
+      "sha256": "427386e5551fe52579846059886cc8fb5dd4064119777ca6f73627460e557f28"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_authority.csv",
+      "sha256": "53c716842e978290345d2c2d06ca88e611f78c99116f7bcee84fb1868815027b"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_authority.tex",
+      "sha256": "50396a69bd597d5b0a335044e513db457fb2c631cec5e512ed7d71072ec7acd0"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_calibration.csv",
+      "sha256": "998e4a6bf55810f971b3b9ebded12c0e8f06baab376ded41b40d58ff06eb1f44"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_calibration.tex",
+      "sha256": "5d9eb9d3a8387e473cbf21acaf4ba5fa0d05b5ce8583511246570c4caae2661f"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_convergence.csv",
+      "sha256": "a13f4c3c3f5a63db06b97969f0173136f9e0a1f52c0a8925f0cd3fc1d5328563"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_convergence.tex",
+      "sha256": "9efc7c0b8b8e24c594de840af4a01d240cf284a48cef97e107e047cd02fa663a"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_decision_ledger.csv",
+      "sha256": "8d35e8e70a0e744a5a063169ef4a44aae0715364501721914085b5a25ab56031"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_decision_ledger.tex",
+      "sha256": "907fcca02bf38709080a21737aae6de103c9050916f4b2722739c1a23e4c17c2"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_executed_prior_scalars.csv",
+      "sha256": "fc71014d3a39548e1c06d08fb6df116545745ae17f50abb8841a988267b6d8d5"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part123_prior_settings.csv",
+      "sha256": "36c765f38f6b2123cbad7c00738359ba603785914db08aa708dca56ac26b6912"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part123_prior_settings.tex",
+      "sha256": "5f917c750c1e89cb08df901f260ae36da73ac4361fb341254d831879dbc5d02a"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part123_scores.csv",
+      "sha256": "3660b6701d436db795dfcc03853b117c19aa073b69fa9c99936e12a57cbfd842"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part123_scores.tex",
+      "sha256": "23d7b8fd76c7f7b615bbec394d64407ba413d02ff22f992826669c1a0f657f3d"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part4_scores.csv",
+      "sha256": "c15d21cda11c8c8a89742b32b8a0c07b85851176dac29c30076941e32c52c998"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_part4_scores.tex",
+      "sha256": "43604de723086dfa1e132715d8d14f624e400969dbe5b3b0ef6a949b8f74f183"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_prior_settings.csv",
+      "sha256": "2549e305372ca46f8c4b242229c9a6f27cf9a7ea0b0ad655b4a479243acf0471"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_prior_settings.tex",
+      "sha256": "2adeed56dba7168e7175d0a511537187dced85ddd24dc2027c070397c919138f"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_publication_manifest.csv",
+      "sha256": "5a7ac4fc1b35f3e7b19c4535e5e5c1cc56c4dfe87927b42f6f66122d49a01335"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_selected_specifications.csv",
+      "sha256": "145f46473075f623f3f334c0144460c96c18a1523a3f555b75f3ac5ba9c3ecd7"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_selected_specifications.tex",
+      "sha256": "63626f0c8155544f910181567a77358626a4d7c59cf36ba075cb8e2546502906"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_source_hashes.csv",
+      "sha256": "2f92892e0173da6be63ddcc191ec7088fa0f3ee69f33930f3146fbfca504b6b2"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_source_quantiles.csv",
+      "sha256": "d4a6c18eac599c66e9e95edda01e98d9f14c8f6a8efc6dd2a54f16544ae7181a"
+    },
+    {
+      "file": "tables/glofas_search3_part1234_final_20261007_supersession.csv",
+      "sha256": "777a4d115041d227916c6520a19198225f5ea8ff5e6f2068fa5feb8dd196190f"
+    },
+    {
+      "file": "tables/glofas_search3_part4_main_scores_review.tex",
+      "sha256": "8ac73bdaee93bcc51246d139e9a430e72dbb834db1ae3ab292e1ebae5209753a"
+    }
+  ],
+  "purpose": "Model-name presentation derivatives only; scientific targets, fits, scores and source assets unchanged.",
+  "pymupdf_version": "1.26.5",
+  "registry": "tables/qdesn_model_display_names.csv",
+  "registry_sha256": "391044f5ab9d49c011176bbb3ce7a0e7002170b4ce08255519aac9795fb7738a",
+  "required_minimum_effective_label_bp": 8.0,
+  "schema": "glofas-mq-presentation-overlay-v1",
+  "scientific_computation": {
+    "new_model_runs": 0,
+    "runtime_payloads_read": 0,
+    "scores_recomputed": 0
+  },
+  "table_assets": [
+    {
+      "all_non_label_bytes_unchanged": true,
+      "numeric_cells_unchanged": true,
+      "output": "tables/glofas_search3_mq_calibration.tex",
+      "output_sha256": "933b2f0c7ba648165e9951e7767231eec655e70d86270fc5f9b7dd7130bf571b",
+      "role": "calibration",
+      "source": "tables/glofas_search3_part1234_final_20261007_calibration.tex",
+      "source_row_count": 7,
+      "source_sha256": "5d9eb9d3a8387e473cbf21acaf4ba5fa0d05b5ce8583511246570c4caae2661f"
+    },
+    {
+      "all_non_label_bytes_unchanged": true,
+      "numeric_cells_unchanged": true,
+      "output": "tables/glofas_search3_mq_convergence.tex",
+      "output_sha256": "9e07d56c1c2c8b250ce138a55029957edf88fb851c3cc35173e5289a445aef45",
+      "role": "convergence",
+      "source": "tables/glofas_search3_part1234_final_20261007_convergence.tex",
+      "source_row_count": 2,
+      "source_sha256": "9efc7c0b8b8e24c594de840af4a01d240cf284a48cef97e107e047cd02fa663a"
+    },
+    {
+      "all_non_label_bytes_unchanged": true,
+      "numeric_cells_unchanged": true,
+      "output": "tables/glofas_search3_mq_part123_prior_settings.tex",
+      "output_sha256": "ecd3fd7016953d4a0e4cae6e2282358b6fc09abdd63b454d9052e94d4f2a4196",
+      "role": "part123_prior_settings",
+      "source": "tables/glofas_search3_part1234_final_20261007_part123_prior_settings.tex",
+      "source_row_count": 24,
+      "source_sha256": "5f917c750c1e89cb08df901f260ae36da73ac4361fb341254d831879dbc5d02a"
+    },
+    {
+      "all_non_label_bytes_unchanged": true,
+      "numeric_cells_unchanged": true,
+      "output": "tables/glofas_search3_mq_part123_scores.tex",
+      "output_sha256": "18631881207c538ce2894159b73d028b98af2e5a10a57ab2e37e47ce10c4bd3b",
+      "role": "part123_scores",
+      "source": "tables/glofas_search3_part1234_final_20261007_part123_scores.tex",
+      "source_row_count": 18,
+      "source_sha256": "23d7b8fd76c7f7b615bbec394d64407ba413d02ff22f992826669c1a0f657f3d"
+    },
+    {
+      "all_non_label_bytes_unchanged": true,
+      "numeric_cells_unchanged": true,
+      "output": "tables/glofas_search3_mq_prior_settings.tex",
+      "output_sha256": "6a0ab95edfae4fb678822e40d023104eda4eb7e2dfccf9b0137ebba5316997a7",
+      "role": "prior_settings",
+      "source": "tables/glofas_search3_part1234_final_20261007_prior_settings.tex",
+      "source_row_count": 7,
+      "source_sha256": "2adeed56dba7168e7175d0a511537187dced85ddd24dc2027c070397c919138f"
+    },
+    {
+      "all_non_label_bytes_unchanged": true,
+      "numeric_cells_unchanged": true,
+      "output": "tables/glofas_search3_mq_main_scores.tex",
+      "output_sha256": "70ca70cae606a95a94ee0ff57f67c68e7b10349447b867599ce9ca4318ea7d14",
+      "role": "main_scores",
+      "source": "tables/glofas_search3_part4_main_scores_review.tex",
+      "source_row_count": 7,
+      "source_sha256": "8ac73bdaee93bcc51246d139e9a430e72dbb834db1ae3ab292e1ebae5209753a"
+    }
+  ]
+}

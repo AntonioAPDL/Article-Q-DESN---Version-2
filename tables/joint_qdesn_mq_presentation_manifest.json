@@ -1,0 +1,141 @@
+{
+  "schema": "joint-qdesn-mq-presentation-v1",
+  "purpose": "Reader-only MQ nomenclature; frozen scientific values, IDs, targets and original assets unchanged",
+  "generator": "scripts/build_joint_qdesn_mq_presentation.R",
+  "generator_sha256": "14827f6aa8959f10840b2e6656de884d23fddf40e467b1e716dce1978a62f4ed",
+  "registry": "tables/qdesn_model_display_names.csv",
+  "registry_sha256": "391044f5ab9d49c011176bbb3ce7a0e7002170b4ce08255519aac9795fb7738a",
+  "sources": {
+    "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_fit_oracle_rmse.pdf": "1f4df7355ece393b1ec9a84096cd83af2e1429c52a2e7538e67adef86f3ee6bd",
+    "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_forecast_dgp_acrps.pdf": "07b9e3fa0f4f238e8370fef4b156c308fcbfaddd4978d4f5a479b583f653bdd9",
+    "scripts/build_joint_qdesn_laplace_article_figures_v2.R": "ab656a54eafcc85e51338141d92cf1b1f232f3304c38f1175503035a0c4dd2ff",
+    "scripts/build_joint_qdesn_pure_desn_article_projection_v2.R": "8ed87f7574d911486ddb3b24605ad9fd9a90aa5f6543860bdc27e0799dd52b9e",
+    "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
+    "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv": "cc50ea11fed8bbb3bbe9b7f1d66c2c99c570423853f0d30dd3fe6ffa42c6f473",
+    "tables/joint_qdesn_pure_desn_v2_cell_plan.csv": "49c262faeb8cd709e918c8fe126a4dee2cec2fb1338798b2234185671f4f034b",
+    "tables/joint_qdesn_pure_desn_v2_contrast_table.tex": "50c55922a65e098698c37754a71211d7f1a09597db28ccb10e1c8c245459c6a5",
+    "tables/joint_qdesn_pure_desn_v2_crossing_rates.csv": "50df3e3750d9b0e85d212d0cb6157048b130fc9aa25e23559b21fa622726c7a3",
+    "tables/joint_qdesn_pure_desn_v2_crossing_summary.csv": "b5c65ad5d3a4892715c37b7ca4ce0b4ef1e3e5ade31c79cde492a9b641fadfab",
+    "tables/joint_qdesn_pure_desn_v2_crossing_table.tex": "26c384bcae5e5f8d37b76de96dda73f94cda9b09a4281c4a034363ec4d9e9bb1",
+    "tables/joint_qdesn_pure_desn_v2_draw_cardinality.csv": "a14f94470c8497caa11a94d6396d44a43bbfc38e7e9af5f0b69a54a8ee52c1c8",
+    "tables/joint_qdesn_pure_desn_v2_fit_figure.tex": "cbce6019b10f43335de7b2349f178cedec3d1dabfe840323a16ad044c2fb5773",
+    "tables/joint_qdesn_pure_desn_v2_fit_oracle_diagnostics.csv": "042f25708c638310115363ee9dccb09be445dd6df02fd1e4fbd2d7530d7c1bd0",
+    "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex": "b647390a29a0e1696405e3c9f18ff53769aec21e95189ab003e621ec1dae4395",
+    "tables/joint_qdesn_pure_desn_v2_forecast_score_summary.csv": "9dacd530801674de5baa32624b38225dbb35ef1f3424548b34519b8fa78c16f0",
+    "tables/joint_qdesn_pure_desn_v2_mcmc_posterior_target_hash_audit.csv": "5aea038e72834a16c93b81063d6db3d99e42bf8b335b2308aee440b90331ae6f",
+    "tables/joint_qdesn_pure_desn_v2_oracle_recovery_table.tex": "d74189b3f673954c5d079429601fe438879299a90ee74a3bbaab174633f92b6a",
+    "tables/joint_qdesn_pure_desn_v2_posterior_contrast_summary.csv": "66554105737562a82f094c21c418f39499df107f22a75cd155d838991cfa331d",
+    "tables/joint_qdesn_pure_desn_v2_postprocessing_provenance.csv": "fdc4fc3444d481d9612a27a6d734ef97e52ffb50ecf32d0050855bbada1c872c",
+    "tables/joint_qdesn_pure_desn_v2_postprocessing_seeds.csv": "29cce75f1609e5d87f5190606c30ecc72a17bee2314c26fe5fb83710e2b471cb",
+    "tables/joint_qdesn_pure_desn_v2_projection_provenance.csv": "1c015f3818fa69bfe2bcad6fbe2f1023995248bbca5ea46bee80bd6040789114",
+    "tables/joint_qdesn_pure_desn_v2_protocol.tex": "e7ee1b903c85da9c02cddbae40ab055cd0798a279889a5840b17450234221591",
+    "tables/joint_qdesn_pure_desn_v2_recursive_policy_comparison.csv": "ae77c933472f1d7f4fe792b878aa18f5c32b912c260449691f4fa5d65727335e",
+    "tables/joint_qdesn_pure_desn_v2_recursive_policy_table.tex": "6ff513182217a8a7e94e87bdabdb5a294d8c2ab0af10219fbcb08c43001cb4f1",
+    "tables/joint_qdesn_pure_desn_v2_replacement_ledger.csv": "e82cfa1ad34aca882a3a5d61d7246562a1c40babd257721f50afe682294bc411",
+    "tables/joint_qdesn_pure_desn_v2_runtime_manifest_audit.csv": "4e959e47f5855601dae4326148f6412eb1173a8b42bbb9ba3b59aa48871ebdc5",
+    "tables/joint_qdesn_pure_desn_v2_sampler_audit.csv": "2e85af249b753b5c745083d5460ddb9231f8755ab44dd4ed58816c6aa647d53b",
+    "tables/joint_qdesn_pure_desn_v2_scenario_winner_summary.csv": "657338fe76c2b325763c991019ce03dc9888b4b95680cf16a3a30f9a8b40565d",
+    "tables/joint_qdesn_pure_desn_v2_score_table.tex": "ddf27682624f5e660c2a886be9a65f8e38fe0aa5d035de534ea5b7d4e2157aa1",
+    "tables/joint_qdesn_pure_desn_v2_secondary_score_table.tex": "2daacd5e04bbc5fd63e16b053b4d912bfedacac2824feb73df4969439589b3de",
+    "tables/joint_qdesn_pure_desn_v2_selected_backbones.csv": "ce0e934f1297a6dce65e8f254d06aaa77d09620109c1b3af036e226cec2ae9c2",
+    "tables/joint_qdesn_pure_desn_v2_source_hashes.csv": "e59495c3874b0dd7829f5059fd4354f26f8e91d347d46c6253ca0b5e7c842a59",
+    "tables/joint_qdesn_pure_desn_v2_state_stability_audit.csv": "b30ff4d4f5e0f5e3238dc311f88f087dc6d2ea88b880fb33ebc8cbbb6457c9c1",
+    "tables/joint_qdesn_pure_desn_v2_vb_score_table.tex": "d72057e46498cbdec230d58b52b5bb0a073ed18602202f27aa2d7738c383d5c1",
+    "tables/qdesn_article_presentation_manifest_v2.json": "6d968c038130c62399df62b0add9be9ed817547d5068fc357c1b1e6bfb0d0277",
+    "tables/qdesn_pro_review_presentation_manifest.json": "648ef97d91adceaa17cf5958dcc515520ebe31ae65ca7fc1d58de5ca960a8e9e"
+  },
+  "native_ordinary_label_pt": 10.4,
+  "figure_width_inches": 7,
+  "figure_height_inches": 8.0999999999999996,
+  "main_insertion_width": "0.94 textwidth",
+  "fitting": false,
+  "rescoring": false,
+  "quantile_projection": false,
+  "model_order": ["joint_qdesn_rhs_mcmc", "qdesn_rhs_independent_mcmc", "joint_exqdesn_rhs_mcmc", "exqdesn_rhs_independent_mcmc"],
+  "outputs": [
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_protocol.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_protocol.tex",
+      "role": "table",
+      "size_bytes": 1760,
+      "sha256": "6023f8595d255b3a7568a8e582c943efcaf16fa3f00fa31b3608b92a7110c77f"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_score_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_score_table.tex",
+      "role": "table",
+      "size_bytes": 3426,
+      "sha256": "68cf44c1b0ec0a3592a41677f2a9e26f8856b9db58fea8d208a42481218b875a"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_secondary_score_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_secondary_score_table.tex",
+      "role": "table",
+      "size_bytes": 2353,
+      "sha256": "0191ce3255d350c85a9669018ad830f81f9d3c8b9291a95a40a32357423b35ce"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_vb_score_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_vb_score_table.tex",
+      "role": "table",
+      "size_bytes": 3217,
+      "sha256": "438062b3450bf0d1bb34c255604e3622038dfda6cc59708c7cbf60c6a50ba125"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_recursive_policy_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_recursive_policy_table.tex",
+      "role": "table",
+      "size_bytes": 3467,
+      "sha256": "60bc21ca99d14ed8289dc6397536d28bcfedcae94e1401934340c34113258c1f"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_contrast_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_contrast_table.tex",
+      "role": "table",
+      "size_bytes": 1350,
+      "sha256": "a021de30bdd610276984bb939ed3ac4e7fc5eb821ffc7d96c4802db6ba75e1f1"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_crossing_table.tex",
+      "role": "table",
+      "size_bytes": 1209,
+      "sha256": "c5aeb10a1f1c001daa4d1b182915729b8de7bc0d2835d9dc80492f5afabb3ede"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_oracle_recovery_table.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_oracle_recovery_table.tex",
+      "role": "table",
+      "size_bytes": 2864,
+      "sha256": "246bf4996871ed8116c36875dd6f92baab86005353a320ce61cafa69c1719c94"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex",
+      "role": "wrapper",
+      "size_bytes": 755,
+      "sha256": "696117474b4ed88e51f6baa90db9196dcd4dc80e48dc8fe23a2680f682329457"
+    },
+    {
+      "file": "tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex",
+      "source": "tables/joint_qdesn_pure_desn_v2_fit_figure.tex",
+      "role": "wrapper",
+      "size_bytes": 623,
+      "sha256": "251a4cf68d8fee34447bf1d2aabee699148ac701cba5ddebd487abca8ea34e50"
+    },
+    {
+      "file": "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_forecast_dgp_acrps.pdf",
+      "source": "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_forecast_dgp_acrps.pdf",
+      "role": "figure",
+      "size_bytes": 24757,
+      "sha256": "3ec8421a9442d349949f52d581923425290e841a7abb051a1c0670484acec95c"
+    },
+    {
+      "file": "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_fit_oracle_rmse.pdf",
+      "source": "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_fit_oracle_rmse.pdf",
+      "role": "figure",
+      "size_bytes": 24413,
+      "sha256": "420edb5a342f3bba560ba5df19c77927407f7998293d8aff64a91dee731cda5d"
+    }
+  ]
+}

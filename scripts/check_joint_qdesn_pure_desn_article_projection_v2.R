@@ -336,6 +336,21 @@ if (!data_only) {
              identical(sha256(asset), manifest$sha256[[i]]),
            paste("Registered asset hash", manifest$relative_path[[i]]))
   }
+  # Authenticate the selected MQ overlay separately; every original asset
+  # above remains required and hash-verified, rather than being relabeled.
+  mq_relative <- "tables/joint_qdesn_mq_presentation_manifest.json"
+  mq_active <- file.exists(path(mq_relative))
+  active_prefix <- prefix
+  if (mq_active) {
+    mq_environment <- new.env(parent = globalenv())
+    source(path("scripts/build_joint_qdesn_mq_presentation.R"), local = mq_environment)
+    mq_receipt <- tryCatch(mq_environment$mq_verify(repo_root), error = function(error) {
+      expect(FALSE, conditionMessage(error))
+    })
+    active_prefix <- mq_environment$mq_display_prefix
+    expect(identical(mq_receipt$model_order, as.list(models)),
+           "MQ overlay retains the four original model IDs and order")
+  }
   rates <- read_table("crossing_rates")
   rates <- rates[match(models, rates$model_id), ]
   posterior_opportunities <- vapply(models, function(model) sum(
@@ -366,14 +381,21 @@ if (!data_only) {
                supplement, fixed = TRUE) &&
            grepl(paste0("width ratio ", rounded_width_ratio), supplement, fixed = TRUE),
          "Supplementary interval-width count and median reproduce the complete recomposed packet")
-  expect(grepl(paste0("tables/", prefix, "forecast_figure.tex"), main, fixed = TRUE) &&
-           grepl(paste0("tables/", prefix, "fit_figure.tex"), supplement, fixed = TRUE) &&
-           !grepl(paste0("tables/", prefix, "fit_figure.tex"), main, fixed = TRUE),
+  expect(grepl(paste0("tables/", active_prefix, "forecast_figure.tex"), main, fixed = TRUE) &&
+           grepl(paste0("tables/", active_prefix, "fit_figure.tex"), supplement, fixed = TRUE) &&
+           !grepl(paste0("tables/", active_prefix, "fit_figure.tex"), main, fixed = TRUE),
          "Forecast figure remains in main and fitting figure in supplement")
+  if (mq_active) {
+    original_inputs <- paste0("\\input{tables/", prefix,
+      c(mq_environment$mq_table_suffixes, "forecast_figure", "fit_figure"), ".tex}")
+    expect(!any(vapply(original_inputs, function(input) grepl(input,
+      paste(main, supplement), fixed = TRUE), logical(1L))),
+      "No superseded original JOINT display is selected alongside MQ overlays")
+  }
   expect(!grepl("\\\\input\\{tables/joint_qdesn_(pure_desn_v1|pro_review)_", paste(main, supplement)) &&
            !grepl("joint-qdesn-pure-desn-v1-", paste(main, supplement), fixed = TRUE),
          "No historical v1 wrappers or references remain live")
-  required_tables <- paste0("tables/", prefix, c("protocol", "score_table", "secondary_score_table",
+  required_tables <- paste0("tables/", active_prefix, c("protocol", "score_table", "secondary_score_table",
     "recursive_policy_table", "vb_score_table", "contrast_table", "crossing_table", "oracle_recovery_table"), ".tex")
   expect(all(vapply(required_tables, function(relative) grepl(relative, supplement, fixed = TRUE),
                     logical(1L))), "All dependent supplementary tables use the new complete packet")
@@ -412,12 +434,42 @@ if (!data_only) {
              !grepl(prohibited, paste(visible, collapse = "\n"), ignore.case = TRUE, perl = TRUE),
            paste("Visible metric, all 32 crossing labels and public wording", relative))
   }
+  if (mq_active) {
+    mq_figures <- Filter(function(entry) entry$role == "figure", mq_receipt$outputs)
+    expect(length(mq_figures) == 2L, "Exactly two current MQ vector figures")
+    for (entry in mq_figures) {
+      visible <- system2("pdftotext", c("-layout", shQuote(path(entry$file)), "-"),
+                         stdout = TRUE, stderr = TRUE)
+      original_visible <- system2("pdftotext", c("-layout", shQuote(path(entry$source)), "-"),
+                                  stdout = TRUE, stderr = TRUE)
+      text <- paste(visible, collapse = "\n")
+      required_labels <- c("MQ-DESN (AL)", "Q-DESN (AL)", "MQ-DESN (exAL)", "Q-DESN (exAL)")
+      expect(is.null(attr(visible, "status")) &&
+        all(vapply(required_labels, function(label) any(trimws(visible) == label |
+          startsWith(trimws(visible), paste0(label, " "))), logical(1L))) &&
+        !grepl("Joint AL|Joint exAL|Independent AL|Independent exAL", text) &&
+        sum(lengths(regmatches(visible, gregexpr("c = ", visible, fixed = TRUE)))) == 32L,
+        paste("Current MQ labels and all 32 crossing annotations", entry$file))
+      numeric_tokens <- function(lines) sort(unlist(regmatches(lines,
+        gregexpr("-?[0-9]+(?:[.][0-9]+)?(?:e[+-]?[0-9]+)?%?", lines, perl = TRUE))))
+      expect(identical(numeric_tokens(visible), numeric_tokens(original_visible)),
+        paste("Every visible numeric figure token is preserved", entry$file))
+      info <- system2("pdfinfo", shQuote(path(entry$file)), stdout = TRUE, stderr = TRUE)
+      images <- system2("pdfimages", c("-list", shQuote(path(entry$file))), stdout = TRUE, stderr = TRUE)
+      expect(is.null(attr(info, "status")) && any(grepl("^Pages:[[:space:]]+1$", info)) &&
+        is.null(attr(images, "status")) &&
+        !any(grepl("^[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+image", images)),
+        paste("Current MQ one-page vector figure", entry$file))
+    }
+  }
   allowlist <- trimws(readLines(path("overleaf/article_files.txt"), warn = FALSE))
   allowlist <- allowlist[nzchar(allowlist) & !startsWith(allowlist, "#")]
   expect(!any(grepl("joint_qdesn_pure_desn_v1_|joint_qdesn_pro_review_", allowlist)),
          "Historical JOINT article outputs are excluded from the active Overleaf projection")
-  expect(all(c(required_tables, figures$relative_path, paste0("tables/", prefix,
-    c("forecast_figure.tex", "fit_figure.tex", "article_asset_manifest.csv"))) %in% allowlist),
+  active_figures <- if (mq_active) vapply(mq_figures, `[[`, character(1L), "file") else figures$relative_path
+  active_receipts <- if (mq_active) c(mq_relative, mq_environment$mq_registry_path) else character()
+  expect(all(c(required_tables, active_figures, active_receipts, paste0("tables/", active_prefix,
+    c("forecast_figure.tex", "fit_figure.tex")), paste0("tables/", prefix, "article_asset_manifest.csv")) %in% allowlist),
     "Overleaf contains every new active reader asset")
   expect(!any(grepl("(^|/)(cache|local_trackers|logs)(/|$)|\\.(rds|rda|RData|log|gz)$", allowlist)),
          "No scientific runtime payload enters Overleaf")

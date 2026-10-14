@@ -819,12 +819,15 @@ AL or exAL; MQ--DESN applies adjacent-quantile RHS shrinkage within the
 reference and discrepancy coefficient paths. The exAL families replace the
 AL likelihood in Eq.~\eqref{eq:glofas-part4-main} by its shape-extended
 counterpart. Gaussian DESN baselines with ridge or RHS regularization and the
-raw GloFAS ensemble complete the comparison. The reservoir and prior
-specifications were selected using historical development and confirmation
-periods, without using the protected issued window. We use VB to accommodate
-the high-dimensional regressions, historical record, and latent future path.
-Both MQ--DESN fits meet the specified convergence criteria, given in the
-supplement.
+raw GloFAS ensemble complete the comparison.
+
+The reservoir and prior specifications were selected using historical
+development and confirmation periods, without using the protected issued
+window. Posterior inference then accounts for the regression parameters
+and the latent future streamflow path. The long historical record and
+high-dimensional regressions make MCMC computationally demanding, so we
+use VB to approximate this posterior. The supplement describes the
+approximation and the convergence criteria satisfied by both MQ--DESN fits.
 
 \subsection{Forecast correction results}
 

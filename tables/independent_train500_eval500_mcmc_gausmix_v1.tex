@@ -1,0 +1,28 @@
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setstretch{1}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}clcc@{}}
+\toprule
+Target & Model & Forecast MAE & Forecast check loss \\
+\midrule
+$p=0.05$ & DQLM & \shortstack{\textbf{3.213}\\{\scriptsize [3.039, 3.388]}} & \shortstack{\textbf{1.559}\\{\scriptsize [1.519, 1.600]}} \\
+ & exDQLM & \shortstack{4.694\\{\scriptsize [4.427, 4.956]}} & \shortstack{1.711\\{\scriptsize [1.622, 1.803]}} \\
+ & Q--DESN AL--RHS & \shortstack{3.269\\{\scriptsize [1.891, 5.325]}} & \shortstack{1.623\\{\scriptsize [1.545, 1.758]}} \\
+ & Q--DESN exAL--RHS & \shortstack{3.346\\{\scriptsize [1.133, 7.027]}} & \shortstack{1.613\\{\scriptsize [1.513, 1.817]}} \\
+\addlinespace[2pt]
+$p=0.25$ & DQLM & \shortstack{3.726\\{\scriptsize [3.497, 3.961]}} & \shortstack{4.881\\{\scriptsize [4.752, 5.008]}} \\
+ & exDQLM & \shortstack{3.026\\{\scriptsize [2.775, 3.271]}} & \shortstack{4.843\\{\scriptsize [4.716, 4.968]}} \\
+ & Q--DESN AL--RHS & \shortstack{\textbf{2.365}\\{\scriptsize [0.9736, 5.169]}} & \shortstack{\textbf{4.752}\\{\scriptsize [4.662, 4.998]}} \\
+ & Q--DESN exAL--RHS & \shortstack{2.649\\{\scriptsize [1.104, 5.805]}} & \shortstack{4.752\\{\scriptsize [4.659, 5.001]}} \\
+\addlinespace[2pt]
+$p=0.50$ & DQLM & \shortstack{3.738\\{\scriptsize [3.503, 3.981]}} & \shortstack{6.084\\{\scriptsize [5.923, 6.250]}} \\
+ & exDQLM & \shortstack{3.742\\{\scriptsize [3.507, 3.984]}} & \shortstack{6.083\\{\scriptsize [5.920, 6.246]}} \\
+ & Q--DESN AL--RHS & \shortstack{\textbf{1.793}\\{\scriptsize [0.6319, 4.203]}} & \shortstack{\textbf{5.784}\\{\scriptsize [5.638, 6.172]}} \\
+ & Q--DESN exAL--RHS & \shortstack{2.161\\{\scriptsize [0.8021, 4.992]}} & \shortstack{5.834\\{\scriptsize [5.645, 6.335]}} \\
+\bottomrule
+\end{tabular}
+\caption{Sensitivity MCMC metric summaries for the Gaussian mixture family. Forecast criteria use the first 500 scored targets; entries are posterior means with equal-tailed 95\% intervals. The fitted sources are unchanged from the primary comparison. Lower is better; boldface marks the lowest unrounded mean within each target level and criterion. Intervals condition on the selected specification and data; diagnostic grades are retained in the reproducibility record.}
+\label{tab:independent-eval500-mcmc-gausmix}
+\end{table}

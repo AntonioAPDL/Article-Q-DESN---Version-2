@@ -2076,11 +2076,17 @@ entries give amplitude and phase for the two harmonic pairs.}
 
 The first 2,000 generated observations are discarded, leaving a series of
 10,000 observations. Retained observations 8501--9000 form the 500-observation
-fitting sample; observations 9001--10000 form the forecast evaluation period.
+fitting sample. The primary forecast evaluation uses observations 9001--9300;
+the sensitivity analysis uses observations 9001--9500.
 Earlier observations provide the reservoir history. Forecast origins are
 spaced 30 observations apart, with horizons up to 30 steps and truncation at
-the evaluation boundary. This gives 34 origins and 1,000 scored
-origin--horizon pairs, common to all methods. Regression parameters are not
+the evaluation boundary. The primary period has ten origins and 300 scored
+origin--horizon pairs. The sensitivity period has 17 origins and 500 pairs;
+the final origin contributes 20 leads. Pairs are common to all methods.
+This reporting scope was revised after inspecting the longer-period results,
+not specified before their assessment. The former reporting scope and its
+source evidence remain archived in the reproducibility record, but its
+numerical forecast panels are no longer included. Regression parameters are not
 refitted between origins; available observations update the state filter or
 reservoir history used to forecast.
 
@@ -2113,8 +2119,11 @@ the forecast against realized observations.
 
 For each criterion \(M^{(b)}\), the tables give the mean
 \(B^{-1}\sum_{b=1}^{B}M^{(b)}\) and empirical 0.025 and 0.975 quantiles
-over \(B\) retained draws. VB results use draws from the variational
-approximation. These nonlinear draw-wise means generally differ from
+over \(B\) retained draws. VB fitting results use draws from the variational
+approximation. The revised forecast tables report MCMC only: the retained
+historical VB aggregate score draws do not identify scores for the two
+prefixes, and no new VB fit was performed for this reporting revision.
+These nonlinear draw-wise means generally differ from
 scoring a single posterior point path. The MCMC and VB tables are grouped
 by generating family; Q--DESN uses fitting-sample preprocessing, and ridge
 fits are omitted.
@@ -2129,7 +2138,7 @@ simulated data, evaluation design, and reservoir realization, excluding
 repeated-simulation and selection uncertainty. Comparisons of MCMC and VB
 are therefore not controlled comparisons of approximation error.
 
-\input{tables/qdesn_validation_500obs_metric_dependence_sensitivity_display.tex}
+\input{tables/independent_forecast_dependence_v1.tex}
 
 \clearpage
 \begingroup
@@ -2137,18 +2146,36 @@ are therefore not controlled comparisons of approximation error.
 % authenticated numerical sources or treating float-only pages as text pages.
 \let\QdesnOriginalTable\table
 \renewcommand{\table}[1][]{\QdesnOriginalTable[p]}
-\input{tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex}
+\input{tables/independent_train500_eval300_mcmc_tables_v1.tex}
+\input{tables/independent_vb_fit_preserved_v1.tex}
 \endgroup
 
 \clearpage
 Figures~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals} and
 \ref{fig:simulation-500obs-vb-fit-rmse-intervals} isolate fitting-sample
 quantile-path recovery. They complement the MCMC forecast comparisons in the
-main article without repeating the supplementary forecast tables.
+main article without repeating the supplementary forecast tables. Fitting
+summaries and their plotted intervals are unchanged from the previous report.
 
 \input{tables/qdesn_single_quantile_mcmc_fit_figure_display.tex}
 
 \input{tables/qdesn_single_quantile_vb_fit_figure_display.tex}
+
+\clearpage
+\subsection{Single-Quantile Evaluation Period Sensitivity}
+\label{subsec:supp-independent-evaluation-sensitivity}
+
+The following analysis extends the scored target range from the first 300
+to the first 500 observations after fitting, without changing the model
+specification, fitted posterior, posterior-draw identities, or forecast
+construction. Means and equal-tailed intervals are recomputed from draw-wise
+aggregate scores over the relevant pairs; interval endpoints are not averaged.
+The final origin is weighted by its 20 scored pairs rather than treated as a
+complete 30-lead origin. The comparison is a sensitivity analysis of evaluation
+scope, not an improvement to the fitted model or a separate validation sample.
+
+\input{tables/independent_train500_eval500_mcmc_figures_v1.tex}
+\input{tables/independent_train500_eval500_mcmc_tables_v1.tex}
 
 \clearpage
 \subsection{Single-Quantile Computation and Diagnostics}
@@ -2196,33 +2223,11 @@ from three chains. Diagnostics assess between-chain agreement for each
 draw-wise criterion.
 
 \clearpage
-\subsection{Single-Quantile Five-Chain Point-Path Sensitivity}
-\label{subsec:supp-independent-five-chain-sensitivity}
-
-The primary single-quantile MCMC tables report draw-wise posterior summaries of
-the evaluation criteria. The analysis below instead evaluates each criterion
-on a posterior point estimate of the quantile path and provides a separate
-sensitivity analysis across independently initialized chains.
-For the Gaussian \(p=0.25\) comparison, a five-chain sensitivity analysis uses
-five independently seeded chains for each model specification. For each chain,
-the posterior point path is computed first; the reported sensitivity path is the
-coordinatewise median of those five paths. All criteria are then recomputed
-from that path. This construction summarizes chain-specific point estimates.
-
-One common specification is reported for each likelihood. Relative to
-the corresponding criterion-specific summary, the \(\AL\)--\(\RHS\)
-specification reduced fit RMSE by 8.4\% and forecast MAE by 1.6\%, while its
-forecast check loss increased by 0.4\%. The \(\exAL\)--\(\RHS\) specification
-reduced fit RMSE by 18.3\%, forecast MAE by 8.7\%, and forecast check loss by
-0.4\%. These historical comparisons changed both the specification and the
-point-path summary relative to their reference. They do not isolate
-initialization effects or establish stability of the current draw-wise
-posterior metric summaries.
-
-\begingroup
-\let\small\footnotesize
-\input{tables/qdesn_validation_mcmc_five_chain_sensitivity.tex}
-\endgroup
+Historical five-chain point-path and alternative-coupling numerical
+comparisons are not carried into the revised forecast tables because their
+retained summaries do not establish intervals on the current target ranges.
+They remain archived as historical analyses, not evidence of stability of the
+revised draw-wise criteria.
 
 \clearpage
 \subsection{Multiquantile MCMC Evaluation Details}

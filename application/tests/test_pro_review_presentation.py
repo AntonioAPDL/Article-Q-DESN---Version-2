@@ -30,7 +30,27 @@ class PresentationTests(unittest.TestCase):
     def test_sources_and_generated_assets(self):
         for filename, expected in self.manifest["sources"].items():
             self.assertEqual(sha(ROOT / filename), expected, filename)
-        self.assertEqual(sha(ROOT / self.manifest["source_script"]), self.manifest["script_sha256"])
+        if (ROOT / "application/config/independent_forecast_300_500_v1.json").exists():
+            # The historical presentation and its generator receipt stay frozen.
+            # The approved current renderer delegates IND to the new authority.
+            self.assertEqual(sha(ROOT / "tables/qdesn_pro_review_presentation_manifest.json"),
+                             "648ef97d91adceaa17cf5958dcc515520ebe31ae65ca7fc1d58de5ca960a8e9e")
+            self.assertEqual(self.manifest["script_sha256"],
+                             "86f72a80acf33241ecfc2f043177e7d4c9b2dc1913356502988091b33f1defb9")
+            self.assertEqual(sha(ROOT / self.manifest["source_script"]),
+                             "98cdbed43661b24a9b4d488efaabcf58b2cfac66bac5bf4202e7de2d2431613f")
+            renderer = (ROOT / self.manifest["source_script"]).read_text()
+            for statement in ("if (current_ind_policy)",
+                              "scripts/build_independent_forecast_300_500_v1.R",
+                              "if (current_ind_policy && i <= 3L) next"):
+                self.assertIn(statement, renderer)
+            current = json.loads((ROOT / "tables/independent_forecast_300_500_article_manifest_v1.json").read_text())
+            self.assertEqual((current["primary_cutoff"], current["sensitivity_cutoff"]), (300, 500))
+            for group in ("sources", "outputs"):
+                for filename, expected in current[group].items():
+                    self.assertEqual(sha(ROOT / filename), expected, filename)
+        else:
+            self.assertEqual(sha(ROOT / self.manifest["source_script"]), self.manifest["script_sha256"])
         self.assertEqual(len(self.manifest["outputs"]), 13)
         for output in self.manifest["outputs"]:
             self.assertEqual(sha(ROOT / output["file"]), output["sha256"], output["file"])

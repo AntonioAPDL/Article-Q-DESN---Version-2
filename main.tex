@@ -635,7 +635,8 @@ compares single-level Q--DESN with dynamic linear baselines. The second
 compares independent Q--DESN and MQ--DESN regressions on a shared reservoir
 design. We use \(p\) for a single level and \(p_k\), \(k=1,\ldots,K\),
 for a grid. Main-text figures report MCMC forecast summaries; the supplement
-contains fitting-sample recovery, numerical tables, and approximate VB results.
+contains fitting-sample recovery, numerical tables, a longer-window sensitivity
+analysis, and approximate VB fitting results.
 
 \subsection{Single-quantile simulation design}
 
@@ -665,10 +666,14 @@ family, the latent quantile path is shared across the three levels, with only
 the error-centering constant changing. The supplement gives the complete
 generating specification.
 
-Each model is fitted to 500 observations and evaluated over the following
-1,000. Forecasts are issued every 30 observations for horizons of up to
-30 steps, with the final forecast truncated at the evaluation boundary.
-All methods use the same 1,000 origin--horizon pairs. Parameters are not
+Each model is fitted to 500 observations. The primary evaluation uses the
+following 300 observations, giving ten origins and 300 scored origin--horizon
+pairs. Forecasts are issued every 30 observations for horizons of up to
+30 steps. A sensitivity analysis extends evaluation to the first 500
+observations, with the last forecast truncated at that boundary. This shorter
+primary evaluation period was adopted after exploratory assessment of the
+longer period; historical analyses remain documented in the reproducibility
+record. All methods use the same pairs within each evaluation. Parameters are not
 refitted between origins; newly available responses update the states or
 recurrent features used for forecasting.
 
@@ -699,13 +704,16 @@ three families. The preferred likelihood depends on the observation errors:
 exAL leads for Gaussian errors, while AL leads for Laplace and
 Gaussian-mixture errors. Away from the median, the rankings are less
 consistent, with dynamic linear models remaining competitive in the lower
-tail. The leading and runner-up posterior intervals overlap throughout the
-comparison.
+tail.
 
-The supplement reports the full MCMC and
-VB comparisons, fitting-sample recovery, and sensitivity analyses.
+\input{tables/independent_eval300_results_v1.tex}
 
-\input{tables/qdesn_single_quantile_forecast_figures_display.tex}
+The supplement reports the numerical MCMC comparison, fitting-sample recovery
+under MCMC and VB, and the 500-target forecast sensitivity analysis. VB forecast
+panels are not included because the retained aggregate summaries cannot
+recover intervals for the revised evaluation periods.
+
+\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}
 
 \subsection{Multiquantile simulation design}
 

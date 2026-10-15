@@ -7,6 +7,7 @@ root <- normalizePath(file.path(dirname(script), ".."))
 setwd(root)
 stopifnot(requireNamespace("ggplot2", quietly = TRUE), requireNamespace("jsonlite", quietly = TRUE))
 source("scripts/qdesn_evaluation_figure_style.R")
+current_ind_policy <- file.exists("application/config/independent_forecast_300_500_v1.json")
 sha <- function(path) strsplit(system2("sha256sum", shQuote(path), stdout = TRUE), " +")[[1L]][1L]
 read_table <- function(name) read.csv(file.path("tables", name), check.names = FALSE)
 sources <- c("tables/qdesn_validation_500obs_dgp_oracle_figure_data_v14.csv",
@@ -24,6 +25,11 @@ sources <- c("tables/qdesn_validation_500obs_dgp_oracle_figure_data_v14.csv",
              "tables/qdesn_validation_500obs_v14_vb_metric_interval_figures.tex",
              "tables/joint_qdesn_pure_desn_v1_forecast_figure.tex",
              "tables/joint_qdesn_pure_desn_v1_fit_figure.tex")
+if (current_ind_policy) sources <- c(sources,
+  "application/config/independent_forecast_300_500_v1.json",
+  "tables/independent_forecast_300_500_v1.csv",
+  "tables/independent_fit_preserved_300_500_v1.csv",
+  "scripts/build_independent_forecast_300_500_v1.R")
 source_hashes <- stats::setNames(vapply(sources, sha, character(1)), sources)
 stopifnot(source_hashes[[sources[[4L]]]] == "d4a6c18eac599c66e9e95edda01e98d9f14c8f6a8efc6dd2a54f16544ae7181a")
 output_paths <- character()
@@ -55,6 +61,13 @@ readable_theme <- ggplot2::theme(
   axis.text.y = ggplot2::element_text(size = 10.4, colour = "#242424"),
   axis.title.x = ggplot2::element_text(size = 10.4),
   plot.margin = ggplot2::margin(7, 16, 7, 7), panel.spacing = grid::unit(1.0, "lines"))
+if (current_ind_policy) {
+  # A numerical reporting revision must never fall back to the archived source.
+  status <- system2(file.path(R.home("bin"), "Rscript"), "scripts/build_independent_forecast_300_500_v1.R")
+  stopifnot(status == 0L)
+  ind <- jsonlite::read_json("tables/independent_forecast_300_500_article_manifest_v1.json", simplifyVector = TRUE)
+  output_paths <- c(output_paths, names(ind$outputs))
+} else {
 independent <- read_table("qdesn_validation_500obs_dgp_oracle_figure_data_v14.csv")
 stopifnot(nrow(independent) == 216L)
 jobs <- data.frame(inference = c("mcmc", "mcmc", "mcmc", "vb"),
@@ -65,6 +78,7 @@ for (i in seq_len(nrow(jobs))) {
   path <- paste0("figures/independent_simulation/qdesn_pro_review_", jobs$suffix[i], ".pdf")
   qdesn_save_vector_pdf(path, p, 7.2, 6.6)
   register(path)
+}
 }
 score <- read_table("joint_qdesn_pure_desn_v1_forecast_score_summary.csv")
 score <- score[score$inference_method == "mcmc", ]
@@ -220,6 +234,7 @@ new_pdf <- c("qdesn_pro_review_mcmc_fit_rmse.pdf", "qdesn_pro_review_mcmc_foreca
   "qdesn_pro_review_mcmc_forecast_check_loss.pdf", "qdesn_pro_review_vb_fit_rmse.pdf",
   "joint_qdesn_pro_review_forecast_dgp_acrps.pdf", "joint_qdesn_pro_review_fit_oracle_rmse.pdf")
 for (i in seq_along(wrapper_sources)) {
+  if (current_ind_policy && i <= 3L) next
   text <- readLines(wrapper_sources[[i]], warn = FALSE)
   for (j in seq_along(old_pdf)) text <- gsub(old_pdf[[j]], new_pdf[[j]], text, fixed = TRUE)
   writeLines(text, wrapper_outputs[[i]])
@@ -228,7 +243,8 @@ for (i in seq_along(wrapper_sources)) {
 stopifnot(identical(source_hashes, stats::setNames(vapply(sources, sha, character(1)), sources)))
 manifest <- list(schema = "qdesn-pro-review-presentation-v1", source_script = "scripts/build_qdesn_pro_review_presentation.R",
   script_sha256 = sha(script), shared_style_sha256 = sha("scripts/qdesn_evaluation_figure_style.R"),
-  purpose = "Presentation only; unchanged scientific estimators and summaries", sources = as.list(source_hashes),
+  purpose = if (current_ind_policy) "Presentation derivatives; IND uses its separate retrospective 300/500 reporting authority" else
+    "Presentation only; unchanged scientific estimators and summaries", sources = as.list(source_hashes),
   simulation_minimum_native_ordinary_label_pt = 10.4,
   glofas_minimum_native_ordinary_label_pt = 9.8, final_main_insertion_width = "0.94 textwidth",
   glofas_history_rows = 30L, glofas_ensemble_rows = 1428L, glofas_members = 51L,

@@ -1,0 +1,29 @@
+"check","pass"
+"sources hashes",TRUE
+"outputs hashes",TRUE
+"complete approved forecast surface",TRUE
+"policy forbids inference and retains provenance",TRUE
+"exact target and origin counts",TRUE
+"finite balanced posterior summaries",TRUE
+"same selected source across windows",TRUE
+"all MCMC and VB fit summaries unchanged",TRUE
+"VB forecast omission explicit and complete",TRUE
+"independent prefix numerical replay",TRUE
+"prefix DGP references",TRUE
+"validation packet and article numbers identical",TRUE
+"main selects primary forecast wrapper",TRUE
+"sensitivity figures are supplementary only",TRUE
+"retired forecast wrappers are inactive",TRUE
+"no old IND forecast graphics are selected",TRUE
+"legacy builder routes to current authority",TRUE
+"retrospective scope change disclosed",TRUE
+"obsolete point-path sensitivity not actively claimed",TRUE
+"main outside the independent simulation region unchanged",TRUE
+"supplement outside the independent simulation region unchanged",TRUE
+"projection excludes deprecated independent numerical panels",TRUE
+"main actual TeX recorder excludes deprecated IND forecast PDFs",TRUE
+"main no unresolved references or citations",TRUE
+"main no overfull boxes",TRUE
+"qdesn-supplement actual TeX recorder excludes deprecated IND forecast PDFs",TRUE
+"qdesn-supplement no unresolved references or citations",TRUE
+"qdesn-supplement no overfull boxes",TRUE

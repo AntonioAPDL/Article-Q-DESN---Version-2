@@ -36,6 +36,13 @@ def dependency_paths(root: Path) -> set[str]:
     for source, output in list(builder.TABLE_OUTPUTS.values()) + list(builder.WRAPPER_OUTPUTS.values()) + list(builder.PDF_OUTPUTS.values()):
         files.update((source, output))
     files.update((builder.MAIN_OVERRIDE, builder.SUPP_OVERRIDE))
+    policy = "application/config/independent_forecast_300_500_v1.json"
+    if (root / policy).exists():
+        receipt_path = "tables/independent_forecast_300_500_article_manifest_v1.json"
+        receipt = json.loads((root / receipt_path).read_text())
+        files.update((policy, receipt_path))
+        for group in ("sources", "outputs"):
+            files.update(receipt[group])
     return files
 
 
@@ -153,7 +160,19 @@ def check(root: Path, *, effective: bool = True) -> dict:
                 assert current.get(macro) == path, "A stale later alias overrides " + macro
         main = (root / "main.tex").read_text()
         supplement = (root / "qdesn-supplement.tex").read_text()
+        ind_revision = (root / "application/config/independent_forecast_300_500_v1.json").exists()
         for role in ("independent_forecast", "mq_forecast"):
+            if role == "independent_forecast" and ind_revision:
+                receipt = json.loads((root / "tables/independent_forecast_300_500_article_manifest_v1.json").read_text())
+                assert receipt["primary_cutoff"] == 300 and receipt["sensitivity_cutoff"] == 500
+                assert receipt["retrospective_scope_change"] is True
+                for group in ("sources", "outputs"):
+                    for path, expected_hash in receipt[group].items():
+                        assert digest(root / path) == expected_hash, "IND reporting receipt mismatch: " + path
+                assert r"\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}" in main
+                assert r"\input{tables/independent_train500_eval500_mcmc_figures_v1.tex}" in supplement
+                assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" not in main
+                continue
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" in main, "Stale effective forecast wrapper: " + role
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][0] + "}" not in main, "Original effective forecast wrapper remains: " + role
         for role in ("independent_mcmc_fit", "independent_vb_fit", "mq_fit"):
@@ -162,7 +181,8 @@ def check(root: Path, *, effective: bool = True) -> dict:
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][1] + "}" in supplement, "Stale effective multiquantile design table."
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][0] + "}" not in supplement, "Original multiquantile design remains selected."
         upload = set((root / "overleaf/article_files.txt").read_text().splitlines())
-        assert set(entry["file"] for entry in entries.values()) | {builder.MANIFEST} <= upload, "An active derivative is absent from the upload inventory."
+        active_entries = (entry for role, entry in entries.items() if not (ind_revision and role == "independent_forecast"))
+        assert set(entry["file"] for entry in active_entries) | {builder.MANIFEST} <= upload, "An active derivative is absent from the upload inventory."
     return {"status": "PASS", "source_files": len(source_rows), "outputs": len(entries),
             "pdf_outputs": len(builder.PDF_OUTPUTS), "table_outputs": len(builder.TABLE_OUTPUTS),
             "caption_wrappers": len(builder.WRAPPER_OUTPUTS), "scientific_runs": 0, "scores_recomputed": 0}

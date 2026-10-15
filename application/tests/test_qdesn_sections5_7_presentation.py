@@ -67,6 +67,19 @@ class EditorialPresentationTest(unittest.TestCase):
     def test_current_document_selections(self):
         self.assertEqual(CHECKER.check(ROOT)["status"], "PASS")
 
+    def test_isolated_current_document_selections(self):
+        self.assertEqual(CHECKER.check(self.fixture)["status"], "PASS")
+
+    def test_current_ind_forecast_mutation_rejected(self):
+        path = "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf"
+        target = self.fixture / path
+        target.write_bytes(target.read_bytes() + b"\n% mutation\n")
+        self.reject(effective=True)
+
+    def test_current_ind_policy_cannot_disappear(self):
+        (self.fixture / "application/config/independent_forecast_300_500_v1.json").unlink()
+        self.reject(effective=True)
+
     def test_score_mutation_rejected_even_with_rehashed_receipt(self):
         self.alter(self.builder.TABLE_OUTPUTS["glofas_main"][1], "0.7156", "0.7000", update_hash=True)
         self.reject()

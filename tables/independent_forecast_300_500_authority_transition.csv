@@ -1,0 +1,4 @@
+"cutoff","status","active_publication","evidence_retained","retrospective_scope_change","new_fit_calls","new_forecast_calls"
+300,"PRIMARY",TRUE,TRUE,TRUE,0,0
+500,"SENSITIVITY",TRUE,TRUE,TRUE,0,0
+1000,"DEPRECATED_FOR_REPORTING",FALSE,TRUE,TRUE,0,0

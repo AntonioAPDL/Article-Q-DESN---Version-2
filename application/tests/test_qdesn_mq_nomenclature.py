@@ -41,6 +41,16 @@ class MQNomenclatureTest(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def refresh_ind_manuscript_receipt(self, relative):
+        # Intentional non-IND manuscript mutations must reach their semantic
+        # guards rather than fail early on the whole-manuscript IND receipt.
+        receipt_path = self.root / "tables/independent_forecast_300_500_article_manifest_v1.json"
+        if receipt_path.exists():
+            receipt = json.loads(receipt_path.read_text())
+            self.assertIn(relative, receipt["sources"])
+            receipt["sources"][relative] = hashlib.sha256((self.root / relative).read_bytes()).hexdigest()
+            receipt_path.write_text(json.dumps(receipt))
+
     def mutate_registry(self, mutate):
         path = self.root / CHECKER.REGISTRY
         with path.open(newline="", encoding="utf-8") as stream:
@@ -124,6 +134,7 @@ class MQNomenclatureTest(unittest.TestCase):
         needle = "tables/qdesn_multiquantile_forecast_figure_display.tex"
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex", 1))
+        self.refresh_ind_manuscript_receipt("main.tex")
         with self.assertRaisesRegex(CHECKER.CheckError, "MQ TeX|selected aliases|Stale JOINT|effective|selected"):
             CHECKER.check(self.root)
 
@@ -145,6 +156,7 @@ class MQNomenclatureTest(unittest.TestCase):
         needle = r"\label{sec:pricefm-application}"
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, needle + "\nThe fitted model is MQ--DESN.\n", 1))
+        self.refresh_ind_manuscript_receipt("main.tex")
         with self.assertRaisesRegex(CHECKER.CheckError, "PriceFM"):
             CHECKER.check(self.root)
 

@@ -140,10 +140,30 @@ expect(grepl("\\aCRPS_{p_1:p_K}", main, fixed = TRUE) &&
          grepl("\\aCRPS_{p_1:p_K}", supplement, fixed = TRUE),
        "The finite-grid integrated check-loss notation is inconsistent.")
 
-expect(grepl(
-  "tables/qdesn_single_quantile_forecast_figures_display.tex",
-  main, fixed = TRUE
-), "The main article does not contain the independent forecast figures.")
+current_ind_reporting <- file.exists(repo_path(
+  "application/config/independent_forecast_300_500_v1.json"
+))
+independent_forecast_wrapper <- if (current_ind_reporting) {
+  "tables/independent_train500_eval300_mcmc_figures_v1.tex"
+} else {
+  "tables/qdesn_single_quantile_forecast_figures_display.tex"
+}
+expect(grepl(independent_forecast_wrapper, main, fixed = TRUE),
+       "The main article does not contain the current independent forecast figures.")
+if (current_ind_reporting) {
+  current_forecasts <- read.csv(repo_path("tables/independent_forecast_300_500_v1.csv"))
+  current_fits <- read.csv(repo_path("tables/independent_fit_preserved_300_500_v1.csv"))
+  expect(nrow(current_forecasts) == 144L && nrow(current_fits) == 72L &&
+           all(current_forecasts$inference == "mcmc") &&
+           all(current_forecasts$cutoff %in% c(300L, 500L)) &&
+           all(current_fits$metric_role == "fit_rmse"),
+         "The current IND forecast or preserved-fit surface is incomplete.")
+  expect(grepl("tables/independent_train500_eval500_mcmc_figures_v1.tex",
+               supplement, fixed = TRUE) &&
+           !grepl("tables/independent_train500_eval500_mcmc_figures_v1.tex",
+                  main, fixed = TRUE),
+         "The 500-target independent sensitivity belongs only in the supplement.")
+}
 expect(grepl("tables/qdesn_multiquantile_forecast_figure_display.tex",
              main, fixed = TRUE),
        "The main article does not contain the JOINT forecast figure.")
@@ -158,14 +178,25 @@ expect(grepl(
 expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
        "Repeated VB forecast figures remain active in the supplement.")
 
+independent_display_files <- if (current_ind_reporting) c(
+  "tables/independent_eval300_results_v1.tex",
+  "tables/independent_train500_eval300_mcmc_figures_v1.tex",
+  "tables/independent_train500_eval500_mcmc_figures_v1.tex",
+  "tables/independent_vb_fit_preserved_v1.tex",
+  "tables/independent_forecast_dependence_v1.tex",
+  unlist(lapply(c(300L, 500L), function(n) sprintf(
+    "tables/independent_train500_eval%d_mcmc_%s_v1.tex",
+    n, c("normal", "laplace", "gausmix")
+  )))
+) else c(
+  "tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex",
+  "tables/qdesn_single_quantile_forecast_figures_display.tex",
+  "tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_normal.tex",
+  "tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_laplace.tex",
+  "tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_gausmix.tex"
+)
 reader_facing_independent <- paste(c(
-  main,
-  supplement,
-  read_text("tables/qdesn_validation_500obs_metric_intervals_v14_prose.tex"),
-  read_text("tables/qdesn_single_quantile_forecast_figures_display.tex"),
-  read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_normal.tex"),
-  read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_laplace.tex"),
-  read_text("tables/qdesn_validation_500obs_v14_mcmc_metric_intervals_gausmix.tex")
+  main, supplement, vapply(independent_display_files, read_text, character(1))
 ), collapse = "\n")
 expect(!grepl(
   "dagger|diagnostic caution|diagnostic qualification|receive warnings|warning details",
@@ -404,8 +435,16 @@ expect(!grepl("1\\.1\\.[12]", simulation_main) &&
          grepl("1.1.1", supplement, fixed = TRUE) &&
          !grepl("(uses?|used|executed|fitted|fit).*version.?1\\.1\\.2", prose(supplement)),
        "Keep authenticated historical software execution versions in the supplement, not an unexecuted 1.1.2 claim.")
-expect(grepl("do not isolate", supplement, fixed = TRUE) &&
-         grepl("historical comparisons", supplement, fixed = TRUE) &&
+independent_history_qualified <- if (current_ind_reporting) {
+  grepl("remain archived as historical analyses", supplement, fixed = TRUE) &&
+    grepl("not evidence of stability", supplement, fixed = TRUE) &&
+    grepl("revised after inspecting", supplement, fixed = TRUE) &&
+    grepl("adopted after exploratory assessment", main, fixed = TRUE)
+} else {
+  grepl("do not isolate", supplement, fixed = TRUE) &&
+    grepl("historical comparisons", supplement, fixed = TRUE)
+}
+expect(independent_history_qualified &&
          grepl("not been", supplement, fixed = TRUE) &&
          grepl("corrected current posterior target", supplement, fixed = TRUE),
        "Historical sensitivities must not certify the current posterior analysis.")

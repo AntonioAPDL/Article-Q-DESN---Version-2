@@ -1,0 +1,21 @@
+{
+  "schema": "independent_forecast_calibration_v1",
+  "article_reference_commit": "c18d364d3e9f0cf44cda779e2a2c32fe0d684811",
+  "validation_reference_commit": "94bd95784f413f3edde88a35cb991f2a56b6afef",
+  "packet_manifest_sha256": "5f842dfcdd0e8314783c74d35e72a77641933c2a1e26d12a5dc557782cd96664",
+  "protected_locator_sha256": "e2c941b4d26104e70bd178390a979ea62b8e19d9f2cfb3bfd899532ea5ea9772",
+  "forecast_summary_sha256": "7ee08a577b47c9369c8cc8fd35677c6f884bbc1b7a886096fb2afd66838e4bcf",
+  "source_criterion": "forecast_check",
+  "source_selection_cutoff": 300,
+  "evaluation_cutoffs": [300, 500],
+  "point_summary": "posterior_median",
+  "chain_pooling": "all_draws_from_three_equal_budget_chains",
+  "event": "response_less_than_or_equal_to_point_quantile",
+  "uncertainty_bands": "none_sampling_calibration_uncertainty_not_estimated",
+  "interpretation": "descriptive_unconditional_quantile_frequency",
+  "allow_refit": false,
+  "allow_forecast_simulation": false,
+  "allow_source_reselection": false,
+  "allow_source_exclusion": false,
+  "allow_bootstrap": false
+}

@@ -2151,6 +2151,23 @@ are therefore not controlled comparisons of approximation error.
 \endgroup
 
 \clearpage
+\subsection{Single-Quantile Forecast-Path Recovery}
+\label{subsec:supp-independent-forecast-recovery}
+
+Figure~\ref{fig:simulation-500obs-mcmc-forecast-mae-intervals} assesses
+recovery of the known state-conditional quantile path, rather than error in
+predicting individual responses. Both Q--DESN likelihoods have lower mean
+recovery error than both dynamic comparators at the median across the three
+families. At the lower quartile, exAL Q--DESN has the lowest mean in the
+Gaussian and Laplace cases, whereas AL leads for Gaussian-mixture errors.
+The widest Q--DESN posterior intervals occur in several lower-tail cases.
+Their widths describe dispersion of the aggregate recovery criterion and
+depend on the model-specific cross-time draw construction described above;
+they are not widths of future-response prediction intervals.
+
+\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}
+
+\clearpage
 Figures~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals} and
 \ref{fig:simulation-500obs-vb-fit-rmse-intervals} isolate fitting-sample
 quantile-path recovery. They complement the MCMC forecast comparisons in the
@@ -2176,6 +2193,39 @@ scope, not an improvement to the fitted model or a separate validation sample.
 
 \input{tables/independent_train500_eval500_mcmc_figures_v1.tex}
 \input{tables/independent_train500_eval500_mcmc_tables_v1.tex}
+
+\clearpage
+\subsection{Single-Quantile Empirical Frequencies}
+\label{subsec:supp-independent-calibration}
+
+We also examine whether the nominal quantile levels agree with empirical
+response frequencies, complementing the check-loss comparisons
+\citep{GneitingResin2023Calibration}. For each model and case, we retain the
+specification used for check loss and summarize its pooled posterior
+quantile-location draws at each forecast target by their median:
+\begin{align}
+\text{Reported quantile:}\quad
+&\widehat q_{p,\ell}=\operatorname{median}_{b}\{q_{p,\ell}^{(b)}\},\\
+\text{Empirical frequency:}\quad
+&\widehat c_p=\frac{1}{N_{\mathrm{eval}}}
+\sum_{\ell=1}^{N_{\mathrm{eval}}}
+\ind\{y_\ell\leq\widehat q_{p,\ell}\}.
+\end{align}
+The nominal reference is \(p\). Both evaluation periods use the same
+target-specific forecasts; the 500-target analysis simply includes more
+observed forecast pairs. These frequencies describe agreement over the
+evaluation record rather than posterior uncertainty in a score or a test
+of conditional calibration.
+
+At the median, Q--DESN frequencies are close to 50\% under Laplace errors
+but around 41\% under Gaussian-mixture errors in both evaluation periods;
+the dynamic comparators remain near 50\% in the latter case. At the 5\%
+level under Gaussian errors, the exAL Q--DESN frequency increases from
+3.3\% over 300 targets to 4.8\% over 500 targets. Its frequencies remain
+above 5\% for the Laplace and Gaussian-mixture cases.
+
+\input{tables/independent_forecast_calibration_figure_v1.tex}
+\input{tables/independent_forecast_calibration_table_v1.tex}
 
 \clearpage
 \subsection{Single-Quantile Computation and Diagnostics}

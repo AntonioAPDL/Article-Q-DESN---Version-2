@@ -80,6 +80,50 @@ class EditorialPresentationTest(unittest.TestCase):
         (self.fixture / "application/config/independent_forecast_300_500_v1.json").unlink()
         self.reject(effective=True)
 
+    def refresh_ind_receipt(self, paths):
+        target = self.fixture / "tables/independent_forecast_300_500_article_manifest_v1.json"
+        receipt = json.loads(target.read_text())
+        for path in paths:
+            group = "outputs" if path in receipt["outputs"] else "sources"
+            self.assertIn(path, receipt[group])
+            receipt[group][path] = hashlib.sha256((self.fixture / path).read_bytes()).hexdigest()
+        target.write_text(json.dumps(receipt))
+
+    def test_primary_mae_cannot_return_to_main_even_with_refreshed_receipt(self):
+        path = "tables/independent_train500_eval300_mcmc_figures_v1.tex"
+        target = self.fixture / path
+        target.write_text(target.read_text() + "\nindependent_train500_eval300_mcmc_forecast_mae_v1.pdf\n")
+        self.refresh_ind_receipt([path])
+        self.reject(effective=True)
+
+    def test_calibration_cannot_claim_sampling_bands_even_with_refreshed_receipt(self):
+        path = "tables/independent_forecast_calibration_manifest_v1.json"
+        target = self.fixture / path
+        receipt = json.loads(target.read_text())
+        receipt["uncertainty_bands"] = "95_percent_sampling_confidence"
+        target.write_text(json.dumps(receipt))
+        self.refresh_ind_receipt([path])
+        self.reject(effective=True)
+
+    def test_calibration_arithmetic_mutation_fails_even_with_both_receipts_updated(self):
+        import csv
+        path = "tables/independent_forecast_calibration_v1.csv"
+        target = self.fixture / path
+        with target.open(newline="") as stream:
+            rows = list(csv.DictReader(stream))
+        rows[0]["empirical_frequency"] = "0.999"
+        with target.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=rows[0].keys())
+            writer.writeheader()
+            writer.writerows(rows)
+        manifest_path = "tables/independent_forecast_calibration_manifest_v1.json"
+        manifest_file = self.fixture / manifest_path
+        receipt = json.loads(manifest_file.read_text())
+        receipt["outputs"][Path(path).name] = hashlib.sha256(target.read_bytes()).hexdigest()
+        manifest_file.write_text(json.dumps(receipt))
+        self.refresh_ind_receipt([path, manifest_path])
+        self.reject(effective=True)
+
     def test_score_mutation_rejected_even_with_rehashed_receipt(self):
         self.alter(self.builder.TABLE_OUTPUTS["glofas_main"][1], "0.7156", "0.7000", update_hash=True)
         self.reject()

@@ -5,7 +5,26 @@ script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE),
 root <- normalizePath(file.path(dirname(script), ".."))
 setwd(root)
 source("scripts/qdesn_evaluation_figure_style.R")
+render_forecast_figures <- "--render-forecast-figures" %in% commandArgs(TRUE)
 sha <- function(path) unname(tools::sha256sum(path)[[1L]])
+pdf_creation_entry <- function(bytes) {
+  marker <- charToRaw("/CreationDate (D:")
+  positions <- which(bytes == marker[1L])
+  positions <- positions[vapply(positions, function(at) {
+    end <- at + length(marker) - 1L
+    end <= length(bytes) && identical(bytes[at:end], marker)
+  }, logical(1L))]
+  stopifnot(length(positions) == 1L)
+  closing <- which(seq_along(bytes) > positions[1L] & bytes == charToRaw(")")[1L])[1L]
+  seq.int(positions[1L], closing)
+}
+set_pdf_creation_date <- function(path, date_entry) {
+  bytes <- readBin(path, "raw", n = file.info(path)$size)
+  index <- pdf_creation_entry(bytes)
+  stopifnot(length(index) == length(date_entry))
+  bytes[index] <- date_entry
+  connection <- file(path, "wb"); writeBin(bytes, connection); close(connection)
+}
 write_csv <- function(x, path) write.csv(x, path, row.names = FALSE, na = "")
 policy <- jsonlite::read_json("application/config/independent_forecast_300_500_v1.json", simplifyVector = TRUE)
 stopifnot(policy$primary_cutoff == 300L, policy$sensitivity_cutoff == 500L,
@@ -36,6 +55,12 @@ theme <- ggplot2::theme(text = ggplot2::element_text(size = 10.4),
   axis.title.x = ggplot2::element_text(size = 10.4),
   panel.spacing = grid::unit(1, "lines"), plot.margin = ggplot2::margin(7, 16, 7, 7))
 plots <- list()
+frozen_forecast_pdfs <- c(
+  "independent_train500_eval300_mcmc_forecast_mae_v1.pdf" = "44f0e8ba6aea98a6ae47f1625eaebf0011d6e506a162064ef67fbd96afd41399",
+  "independent_train500_eval300_mcmc_forecast_check_v1.pdf" = "4b91d61a9ff0991c58d6714b8f89b2c39e68bd46c4643f4e5f421c5c48d157ba",
+  "independent_train500_eval500_mcmc_forecast_mae_v1.pdf" = "3519c01b61a6e2273a10dec7b92d0fe3fccc93bf01cd6d4bea9d39bcd2d921a8",
+  "independent_train500_eval500_mcmc_forecast_check_v1.pdf" = "a7b60666a23d8e992d79aa877852a8b10202ec991c0d3b20cd22ebb5527e97a5"
+)
 for (n in c(300L, 500L)) for (metric in c("forecast_mae", "forecast_check")) {
   d <- data[data$cutoff == n, ]
   p <- qdesn_independent_interval_plot(d, "mcmc", metric) + theme
@@ -48,7 +73,15 @@ for (n in c(300L, 500L)) for (metric in c("forecast_mae", "forecast_check")) {
     data.frame(panel_key = b$panel_key, x = b$plot_reference_value))
   p <- p + ggplot2::geom_blank(data = limits, ggplot2::aes(x = x), inherit.aes = FALSE)
   path <- sprintf("figures/independent_simulation/independent_train500_eval%d_mcmc_%s_v1.pdf", n, metric)
-  qdesn_save_vector_pdf(path, p, 7.2, 6.6)
+  stopifnot(file.exists(path), sha(path) == frozen_forecast_pdfs[[basename(path)]])
+  if (render_forecast_figures) {
+    original <- readBin(path, "raw", n = file.info(path)$size)
+    candidate <- tempfile("ind-reproduction-", tmpdir = "local_trackers", fileext = ".pdf")
+    qdesn_save_vector_pdf(candidate, p, 7.2, 6.6)
+    set_pdf_creation_date(candidate, original[pdf_creation_entry(original)])
+    stopifnot(sha(candidate) == frozen_forecast_pdfs[[basename(path)]])
+    unlink(candidate)
+  }
   outputs <- c(outputs, path); plots[[paste(n, metric)]] <- p
 }
 fmt <- function(x) formatC(x, format = "fg", digits = 4, flag = "#")
@@ -118,11 +151,16 @@ for (n in c(300L, 500L)) {
         "The dashed line marks population expected check loss at the true conditional quantile, not a finite-sample lower bound. ",
       if(n == 300L) "Panel scales match the 500-target sensitivity figures. " else "The last origin contributes 20 leads; earlier origins contribute 30. ",
       "The supplement documents criterion-specific selection and model-specific forecast-draw dependence.")
-    lines <- c(lines, "\\begin{figure}[!htbp]", "\\centering",
+    block <- c("\\begin{figure}[!htbp]", "\\centering",
       sprintf("\\includegraphics[width=0.98\\textwidth]{figures/independent_simulation/independent_train500_eval%d_mcmc_%s_v1.pdf}", n, metric),
       paste0("\\caption{", caption, "}"),
       sprintf("\\figalt{Nine panels compare four models using mean forecast %s and 95 percent intervals over %d scored targets.}", name, n),
       paste0("\\label{", label, "}"), "\\end{figure}", "")
+    if (n == 300L && metric == "forecast_mae") {
+      save_text(block, "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex")
+    } else {
+      lines <- c(lines, block)
+    }
   }
   save_text(lines, sprintf("tables/independent_train500_eval%d_mcmc_figures_v1.tex", n))
 }
@@ -132,14 +170,78 @@ comparisons <- do.call(rbind, lapply(split(data, interaction(data$family, data$t
 }))
 write_csv(comparisons, "tables/independent_forecast_300_500_comparisons_v1.csv")
 outputs <- c(outputs, "tables/independent_forecast_300_500_comparisons_v1.csv")
-primary <- comparisons[comparisons$cutoff == 300L, ]
-count <- function(model, metric) sum(primary$beats_best_dynamic[primary$model == model & primary$metric == metric])
-save_text(c(paste0("Over the primary 300-target evaluation, exAL Q--DESN has a lower posterior mean than both dynamic linear comparators in ",
-  count("qdesn_exal_rhs_ns", "forecast_mae"), " of nine cases for forecast MAE and ", count("qdesn_exal_rhs_ns", "forecast_check"),
-  " for check loss. The corresponding counts for AL Q--DESN are ", count("qdesn_al_rhs_ns", "forecast_mae"), " and ", count("qdesn_al_rhs_ns", "forecast_check"),
-  ". These descriptive rankings condition on criterion-specific specifications and do not measure selection uncertainty. ",
-  "The wider Q--DESN forecast-MAE intervals remain visible; a shorter evaluation period is not a change to the fitted model.")),
+primary_check <- data[data$cutoff == 300L & data$metric_role == "forecast_check", ]
+for (family in names(qdesn_family_labels)) for (tau in c(.25, .5)) {
+  block <- primary_check[primary_check$family == family & primary_check$tau == tau, ]
+  stopifnot(max(block$posterior_mean[grepl("^qdesn", block$model_variant)]) <
+    min(block$posterior_mean[!grepl("^qdesn", block$model_variant)]))
+}
+save_text(c("At the lower quartile and median, both Q--DESN likelihoods have lower posterior mean check loss than both dynamic linear comparators across all three observation-error families.",
+  "Differences are concentrated at the 5\\% level. AL Q--DESN has higher mean loss under Gaussian and Laplace errors, whereas exAL gives more consistent lower-tail performance. DQLM retains the lowest mean under Gaussian-mixture errors at this level."),
   "tables/independent_eval300_results_v1.tex")
+calibration <- read.csv("tables/independent_forecast_calibration_v1.csv")
+calibration_receipt <- jsonlite::read_json("tables/independent_forecast_calibration_manifest_v1.json", simplifyVector = TRUE)
+stopifnot(nrow(calibration) == 72L, all(calibration$point_summary == "posterior_median"),
+  all(calibration$n_chains == 3L), all(calibration$cutoff %in% c(300L, 500L)),
+  all(abs(calibration$empirical_frequency - calibration$n_hits / calibration$n_targets) < 1e-12),
+  calibration_receipt$point_summary == "posterior_median",
+  calibration_receipt$fits_launched == 0L, calibration_receipt$forecasts_launched == 0L)
+for (path in names(calibration_receipt$outputs))
+  stopifnot(sha(file.path("tables", path)) == calibration_receipt$outputs[[path]])
+calibration$family_label <- factor(calibration$family, levels = names(qdesn_family_labels), labels = qdesn_family_labels)
+calibration$window <- factor(calibration$cutoff, levels = c(300L, 500L),
+  labels = c("Primary: 300 targets", "Sensitivity: 500 targets"))
+calibration$model <- factor(calibration$model_variant, levels = qdesn_independent_model_order)
+colours <- setNames(unname(qdesn_figure_palette[qdesn_independent_model_family]), qdesn_independent_model_order)
+limit <- min(1, max(.55, ceiling((max(calibration$empirical_frequency) + .025) * 10) / 10))
+calibration_plot <- ggplot2::ggplot(calibration,
+    ggplot2::aes(x = tau, y = empirical_frequency, colour = model, shape = model)) +
+  ggplot2::geom_abline(intercept = 0, slope = 1, colour = "#62676B", linewidth = .4, linetype = "dashed") +
+  ggplot2::geom_point(size = 2.4, stroke = .65) +
+  ggplot2::facet_grid(window ~ family_label) +
+  ggplot2::scale_colour_manual(values = colours, labels = qdesn_independent_model_labels, name = NULL) +
+  ggplot2::scale_shape_manual(values = qdesn_independent_model_shape, labels = qdesn_independent_model_labels, name = NULL) +
+  ggplot2::scale_x_continuous(breaks = c(.05, .25, .5), labels = c("0.05", "0.25", "0.50"), limits = c(0, limit)) +
+  ggplot2::scale_y_continuous(limits = c(0, limit), labels = function(x) formatC(x, format = "f", digits = 2)) +
+  ggplot2::labs(x = "Nominal quantile level", y = "Empirical frequency") +
+  ggplot2::theme_bw(base_size = 10.4, base_family = "sans") +
+  ggplot2::theme(panel.grid.minor = ggplot2::element_blank(),
+    strip.background = ggplot2::element_rect(fill = "#F0F1F1", colour = "#8E9294", linewidth = .3),
+    strip.text = ggplot2::element_text(size = 10.4, face = "bold"),
+    axis.text = ggplot2::element_text(size = 10.4, colour = "#242424"),
+    axis.title = ggplot2::element_text(size = 10.4),
+    legend.position = "bottom", legend.text = ggplot2::element_text(size = 10.4),
+    panel.spacing = grid::unit(.8, "lines"), plot.margin = ggplot2::margin(7, 9, 7, 7)) +
+  ggplot2::guides(colour = ggplot2::guide_legend(nrow = 2), shape = ggplot2::guide_legend(nrow = 2))
+calibration_pdf <- "figures/independent_simulation/independent_forecast_calibration_v1.pdf"
+qdesn_save_vector_pdf(calibration_pdf, calibration_plot, 7.2, 5.5)
+# Preserve byte offsets while fixing only Cairo's creation-date metadata.
+set_pdf_creation_date(calibration_pdf, charToRaw("/CreationDate (D:20000101000000+00'00)"))
+outputs <- c(outputs, calibration_pdf)
+save_text(c("\\begin{figure}[!htbp]", "\\centering",
+  paste0("\\includegraphics[width=0.98\\textwidth]{", calibration_pdf, "}"),
+  "\\caption{Empirical quantile frequencies for the check-loss-selected specifications over the 300-target primary period and its 500-target extension. At each target, the reported quantile is the median of the pooled posterior location draws. Each point gives the fraction of observed responses at or below that forecast; the dashed diagonal marks the nominal probability. Colours and symbols follow the forecast-score figures. Each probability level uses its corresponding quantile-centred response series. Frequencies summarize the fixed evaluation record; no sampling confidence bands are shown.}",
+  "\\figalt{Six panels compare empirical response frequencies below posterior-median quantile forecasts with the nominal levels 0.05, 0.25 and 0.50, for four models, three error families and two evaluation periods.}",
+  "\\label{fig:supp-independent-quantile-calibration}", "\\end{figure}"),
+  "tables/independent_forecast_calibration_figure_v1.tex")
+lines <- c("\\begin{table}[!htbp]", "\\centering", "\\footnotesize", "\\setstretch{1}",
+  "\\setlength{\\tabcolsep}{3.5pt}", "\\begin{tabular}{@{}llcrrrr@{}}", "\\toprule",
+  "Targets & Error family & $p$ & DQLM & exDQLM & \\shortstack{Q--DESN\\\\AL} & \\shortstack{Q--DESN\\\\exAL} \\\\",
+  "\\midrule")
+for (n in c(300L, 500L)) for (family in names(qdesn_family_labels)) for (tau in c(.05, .25, .5)) {
+  block <- calibration[calibration$cutoff == n & calibration$family == family & calibration$tau == tau, ]
+  block <- block[match(names(model_label), block$model_variant), ]
+  stopifnot(nrow(block) == 4L, !anyNA(block$model_variant))
+  cells <- sprintf("%.1f (%d)", 100 * block$empirical_frequency, block$n_hits)
+  lines <- c(lines, paste0(if(family == "normal" && tau == .05) n else "", " & ",
+    if(tau == .05) qdesn_family_labels[[family]] else "", " & ", sprintf("%.2f", tau), " & ",
+    paste(cells, collapse = " & "), " \\\\"))
+  if(tau == .5 && !(n == 500L && family == "gausmix")) lines <- c(lines, "\\addlinespace[3pt]")
+}
+save_text(c(lines, "\\bottomrule", "\\end{tabular}",
+  "\\caption{Empirical quantile frequencies in percent, followed by the number of responses at or below the forecast in parentheses. The target count is the denominator. Forecasts are posterior-median quantile locations from the existing check-loss specifications; no model is selected using these frequencies.}",
+  "\\label{tab:supp-independent-quantile-calibration}", "\\end{table}"),
+  "tables/independent_forecast_calibration_table_v1.tex")
 review <- "local_trackers/independent_forecast_300_500_v1/independent_forecast_300_500_review.pdf"
 dir.create(dirname(review), recursive = TRUE, showWarnings = FALSE)
 grDevices::cairo_pdf(review, width = 8.4, height = 7.4, onefile = TRUE)
@@ -154,10 +256,15 @@ sources <- c("application/config/independent_forecast_300_500_v1.json", "tables/
   "main.tex", "qdesn-supplement.tex", "overleaf/article_files.txt",
   "tables/independent_forecast_dependence_v1.tex",
   "docs/implementation_notes/independent_forecast_300_500_reporting_20261015.md", fit_assets)
+sources <- c(sources, "application/config/independent_forecast_calibration_v1.json",
+  "docs/implementation_notes/independent_forecast_focus_and_calibration_20261015.md",
+  "tables/independent_forecast_calibration_v1.csv", "tables/independent_forecast_calibration_sources_v1.csv",
+  "tables/independent_forecast_calibration_manifest_v1.json")
 manifest <- list(schema = "independent-forecast-300-500-article-v1", authority_id = policy$authority_id,
   primary_cutoff = 300L, sensitivity_cutoff = 500L, deprecated_reporting_cutoff = 1000L,
   retrospective_scope_change = TRUE, fit_unchanged = TRUE, vb_forecasts = "OMITTED_NO_AUTHENTIC_PREFIX_DRAWS",
   fits_launched = 0L, forecasts_launched = 0L,
+  primary_plot_placement = list(forecast_check = "main", forecast_mae = "supplement"),
   sources = as.list(setNames(vapply(sources, sha, character(1)), sources)),
   outputs = as.list(setNames(vapply(outputs, sha, character(1)), outputs)))
 jsonlite::write_json(manifest, "tables/independent_forecast_300_500_article_manifest_v1.json", auto_unbox = TRUE, pretty = TRUE)

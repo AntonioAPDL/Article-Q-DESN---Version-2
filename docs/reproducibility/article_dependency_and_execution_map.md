@@ -26,6 +26,25 @@ v14 drivers are historical reconstruction entry points, not the current
 forecast publisher. The shared presentation builder delegates its IND work
 to the new renderer. No inference or other-lane rendering is needed.
 
+The subsequent forecast-focus revision keeps check loss in the main article
+and moves primary quantile-path MAE to the supplement. Existing 144 forecast
+and 72 fitting summaries and all four forecast PDFs are unchanged. A separate
+empirical-frequency diagnostic uses the existing 36 check-loss specifications,
+all three retained chains, and a target-wise pooled posterior median. It
+reports observed fractions below these point summaries for both target ranges,
+not posterior or sampling confidence bands. No fitting, forecast simulation or
+new source selection is involved.
+
+`application/config/independent_forecast_calibration_v1.json` fixes that rule
+before extraction. `scripts/extract_independent_forecast_calibration_v1.R`
+reads the protected forecast-path objects through their frozen validation
+registry and verifies source hashes. It emits compact summary/source receipts
+only; draws and individual target forecasts are not published. The
+read-only `scripts/check_independent_forecast_calibration_v1.R` validates the
+compact evidence without loading runtime objects. The usual IND renderer
+creates the supplementary figure/table from those summaries, reusing the
+frozen forecast figures unless explicit regeneration is requested.
+
 ## Dependency inventory
 
 [article_dependency_inventory.csv](article_dependency_inventory.csv) contains

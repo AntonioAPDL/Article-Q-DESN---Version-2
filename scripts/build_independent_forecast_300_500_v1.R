@@ -26,7 +26,10 @@ fit_assets <- c("figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.p
   "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf")
 fit_hashes <- vapply(fit_assets, sha, character(1))
 outputs <- character()
-save_text <- function(lines, path) { writeLines(lines, path, useBytes = TRUE); outputs <<- c(outputs, path) }
+save_text <- function(lines, path) {
+  while (length(lines) && identical(tail(lines, 1L), "")) lines <- head(lines, -1L)
+  writeLines(lines, path, useBytes = TRUE); outputs <<- c(outputs, path)
+}
 theme <- ggplot2::theme(text = ggplot2::element_text(size = 10.4),
   strip.text = ggplot2::element_text(size = 10.4, face = "bold", lineheight = .98),
   axis.text.x = ggplot2::element_text(size = 10.4), axis.text.y = ggplot2::element_text(size = 10.4),

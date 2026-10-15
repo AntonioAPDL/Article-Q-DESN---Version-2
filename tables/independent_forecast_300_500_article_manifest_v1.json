@@ -15,7 +15,7 @@
     "tables/independent_fit_preserved_300_500_v1.csv": "3396ee35261b34a4a788b0502fddeb4f4af5b71bbcedbf79408d751760a2a1fa",
     "tables/independent_forecast_300_500_vb_coverage.csv": "b4e81b0319f762d94954a5c6833872f379bf3c5ed81529759eb0da0f77663b55",
     "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
-    "scripts/build_independent_forecast_300_500_v1.R": "a14e8fee3e1c49322086c31a68c7dcd3c0693f5016c5c6c004ab1a97d1237d9a",
+    "scripts/build_independent_forecast_300_500_v1.R": "59244e1c0b742c880cb05c51184939a0f46db01bbd81511604ff447367387a32",
     "main.tex": "2bbcda6a204b463eca8794157517cfbdd8af2a57062feacd554e518f9d24e985",
     "qdesn-supplement.tex": "6330e65c462ed0d7ce7333583a748ccf85922253aa2a3bd5cb41046ae4b002d1",
     "overleaf/article_files.txt": "f7cd0a49ad601ceb92f1432176141a3cfd76f1b840ee1100557257d2cc99a8a6",
@@ -25,10 +25,10 @@
     "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9"
   },
   "outputs": {
-    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf": "ae4bbaaeaee8a272a793af66ee241348a372a8a519f0c158f2e31d979b7f4237",
-    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_check_v1.pdf": "816fc6a9551a465952a00fd176f4417c73569ad0528149d33bf826ef398651bf",
-    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_mae_v1.pdf": "a73df6ffbbe8b5cbaf7df4f89b704d3bbae542d979d25fea9d36890fcedcabe8",
-    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_check_v1.pdf": "05fd5f5079b1fc2630b2d8027d13d82a7d1c612ef8e5438f36f3b286cd0991e1",
+    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf": "44f0e8ba6aea98a6ae47f1625eaebf0011d6e506a162064ef67fbd96afd41399",
+    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_check_v1.pdf": "4b91d61a9ff0991c58d6714b8f89b2c39e68bd46c4643f4e5f421c5c48d157ba",
+    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_mae_v1.pdf": "3519c01b61a6e2273a10dec7b92d0fe3fccc93bf01cd6d4bea9d39bcd2d921a8",
+    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_check_v1.pdf": "a7b60666a23d8e992d79aa877852a8b10202ec991c0d3b20cd22ebb5527e97a5",
     "tables/independent_train500_eval300_mcmc_normal_v1.tex": "d0b06bdd4192b8bbdefafa07248cb28a8607573998a994656c4a859bc4613afa",
     "tables/independent_train500_eval300_mcmc_laplace_v1.tex": "445457bce5cc41bde031fcd89e9c0d7a535089ec326e1cb83a14bf0bcdfa7bd7",
     "tables/independent_train500_eval300_mcmc_gausmix_v1.tex": "d9ccbed4243292275ebf4ccc255d6a23bbd2eb79c83a8648bd5d2e5bb163ece3",
@@ -38,8 +38,8 @@
     "tables/independent_train500_eval300_mcmc_tables_v1.tex": "a1716059e0e191d27efdc0e7974f3f32a07ca7f006733a195c56f9bd269f3016",
     "tables/independent_train500_eval500_mcmc_tables_v1.tex": "4bd7dd15d7e615ceb5c61a2664cbac4e9d700f14567b8bc87466fba60b151b8f",
     "tables/independent_vb_fit_preserved_v1.tex": "a9d326a604856aa7ac249af5d9c6f5804177db4b73365599439adad243cb0734",
-    "tables/independent_train500_eval300_mcmc_figures_v1.tex": "11ef7360cbdfe79efaf9764a8fa7361d091fe771d558cb2be17475281ef97033",
-    "tables/independent_train500_eval500_mcmc_figures_v1.tex": "ec8b9ac0a937e1c6f4868a4c32a7a9a7ddc77800f8ebc2e24c4ec6ea1273f5b5",
+    "tables/independent_train500_eval300_mcmc_figures_v1.tex": "aea435c8506d45383f444471da13ab29dff31842e1e8c4734f65aa826e8f1a1d",
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex": "f67e41de24a6ef1e2ed7e25a280eead8970a44cbd50225f719dca0c06427683e",
     "tables/independent_forecast_300_500_comparisons_v1.csv": "043e7e27ece1a89fd3b88ed4f5a6fc023e4e40682b9496b6f96584d890ec2091",
     "tables/independent_eval300_results_v1.tex": "4c0f149c79bbe6cdcaf71449941aba59aa3ae0da32aac450205e51e219935708"
   }

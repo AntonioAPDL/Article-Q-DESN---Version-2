@@ -687,31 +687,25 @@ transition. The DESN specifications are criterion-specific; their selection,
 including historical forecast-based refinement, is documented in the
 supplement.
 
-Forecast mean absolute error (MAE) measures recovery of the known
-state-conditional quantile path,
-whereas check loss evaluates forecasts against realized responses. The
-figures summarize each draw-wise criterion averaged over the common forecast
-pairs. Metric definitions, computation, and fitting-sample recovery are given
-in the supplement.
+Check loss evaluates the quantile forecasts against realized responses over
+the common forecast pairs. The main comparison summarizes its posterior
+distribution. Supplementary results assess recovery of the known
+state-conditional quantile path using mean absolute error (MAE), together
+with empirical quantile frequencies and fitting-sample recovery.
 
 \subsection{Single-quantile results}
 
-Figures~\ref{fig:simulation-500obs-mcmc-forecast-mae-intervals} and
-\ref{fig:simulation-500obs-mcmc-forecast-check-loss-intervals} summarize the
-MCMC distributions of the two forecast criteria. Q--DESN is most competitive at
-the median, where it has the lowest posterior mean for both criteria in all
-three families. The preferred likelihood depends on the observation errors:
-exAL leads for Gaussian errors, while AL leads for Laplace and
-Gaussian-mixture errors. Away from the median, the rankings are less
-consistent, with dynamic linear models remaining competitive in the lower
-tail.
+Figure~\ref{fig:simulation-500obs-mcmc-forecast-check-loss-intervals}
+summarizes posterior distributions of average forecast check loss.
 
 \input{tables/independent_eval300_results_v1.tex}
 
-The supplement reports the numerical MCMC comparison, fitting-sample recovery
-under MCMC and VB, and the 500-target forecast sensitivity analysis. VB forecast
-panels are not included because the retained aggregate summaries cannot
-recover intervals for the revised evaluation periods.
+These results support the ability of recurrent features to achieve
+competitive check-loss performance under linear state dynamics, without
+specifying the generating trend and seasonal transition explicitly.
+The 500-target sensitivity preserves the overall pattern. The supplement
+reports the numerical comparisons, quantile-path recovery, and empirical
+quantile frequencies, retaining MCMC and VB fitting results.
 
 \input{tables/independent_train500_eval300_mcmc_figures_v1.tex}
 

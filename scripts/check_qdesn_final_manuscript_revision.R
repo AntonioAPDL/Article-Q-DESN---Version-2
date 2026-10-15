@@ -163,6 +163,13 @@ if (current_ind_reporting) {
            !grepl("tables/independent_train500_eval500_mcmc_figures_v1.tex",
                   main, fixed = TRUE),
          "The 500-target independent sensitivity belongs only in the supplement.")
+  expect(grepl("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+               supplement, fixed = TRUE) &&
+           !grepl("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+                  main, fixed = TRUE) &&
+           grepl("tables/independent_forecast_calibration_figure_v1.tex",
+                 supplement, fixed = TRUE),
+         "Independent recovery and empirical frequencies belong in the supplement.")
 }
 expect(grepl("tables/qdesn_multiquantile_forecast_figure_display.tex",
              main, fixed = TRUE),
@@ -181,9 +188,12 @@ expect(!grepl("v14_vb_forecast_", supplement, fixed = TRUE),
 independent_display_files <- if (current_ind_reporting) c(
   "tables/independent_eval300_results_v1.tex",
   "tables/independent_train500_eval300_mcmc_figures_v1.tex",
+  "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
   "tables/independent_train500_eval500_mcmc_figures_v1.tex",
   "tables/independent_vb_fit_preserved_v1.tex",
   "tables/independent_forecast_dependence_v1.tex",
+  "tables/independent_forecast_calibration_figure_v1.tex",
+  "tables/independent_forecast_calibration_table_v1.tex",
   unlist(lapply(c(300L, 500L), function(n) sprintf(
     "tables/independent_train500_eval%d_mcmc_%s_v1.tex",
     n, c("normal", "laplace", "gausmix")

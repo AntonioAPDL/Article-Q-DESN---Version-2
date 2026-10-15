@@ -65,6 +65,16 @@ effective <- function(path, seen=character()) {
 }
 main_files <- effective("main.tex"); supp_files <- effective("qdesn-supplement.tex")
 check("main selects primary forecast wrapper", "tables/independent_train500_eval300_mcmc_figures_v1.tex" %in% main_files)
+primary_wrapper <- paste(readLines("tables/independent_train500_eval300_mcmc_figures_v1.tex"), collapse = "\n")
+check("main retains check loss only", grepl("eval300_mcmc_forecast_check_v1.pdf", primary_wrapper, fixed = TRUE) &&
+  !grepl("eval300_mcmc_forecast_mae_v1.pdf", primary_wrapper, fixed = TRUE) &&
+  !"tables/independent_train500_eval300_mcmc_mae_figure_v1.tex" %in% main_files)
+check("primary recovery and calibration are supplementary only",
+  all(c("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    "tables/independent_forecast_calibration_figure_v1.tex",
+    "tables/independent_forecast_calibration_table_v1.tex") %in% supp_files) &&
+  !any(c("tables/independent_forecast_calibration_figure_v1.tex",
+    "tables/independent_forecast_calibration_table_v1.tex") %in% main_files))
 check("sensitivity figures are supplementary only", !"tables/independent_train500_eval500_mcmc_figures_v1.tex" %in% main_files &&
   "tables/independent_train500_eval500_mcmc_figures_v1.tex" %in% supp_files)
 retired <- c("tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex",
@@ -78,6 +88,12 @@ check("legacy builder routes to current authority",grepl("if (current_ind_policy
 main <- paste(readLines("main.tex"),collapse="\n"); supplement <- paste(readLines("qdesn-supplement.tex"),collapse="\n")
 check("retrospective scope change disclosed",grepl("adopted after exploratory assessment",main,fixed=TRUE) &&
   grepl("revised after inspecting",supplement,fixed=TRUE))
+check("MAE and empirical frequencies retain distinct targets",
+  grepl("rather than error in", supplement, fixed = TRUE) &&
+  grepl("predicting individual responses", supplement, fixed = TRUE) &&
+  grepl("model-specific cross-time draw construction", supplement, fixed = TRUE) &&
+  grepl("specification used for check loss", supplement, fixed = TRUE) &&
+  grepl("not widths of future-response prediction intervals", supplement, fixed = TRUE))
 check("obsolete point-path sensitivity not actively claimed", !grepl("subsec:supp-independent-five-chain-sensitivity",supplement,fixed=TRUE))
 base_main <- paste(system2("git",c("show","53e4912387b152a2c78b8f242beff77e42eeac52:main.tex"),stdout=TRUE),collapse="\n")
 base_supp <- paste(system2("git",c("show","53e4912387b152a2c78b8f242beff77e42eeac52:qdesn-supplement.tex"),stdout=TRUE),collapse="\n")
@@ -97,6 +113,19 @@ if (!is.null(build_root)) for (doc in c("main","qdesn-supplement")) {
   actual <- unique(sub("^INPUT ","",fls[startsWith(fls,"INPUT ")]))
   check(paste(doc,"actual TeX recorder excludes deprecated IND forecast PDFs"),
     !any(grepl("/independent_simulation/(qdesn_pro_review_mcmc_forecast|qdesn_validation_500obs_v14_mcmc_forecast)",actual)))
+  asset_names <- basename(actual)
+  if (doc == "main") {
+    check("main recorder selects primary check loss without recovery/calibration",
+      "independent_train500_eval300_mcmc_forecast_check_v1.pdf" %in% asset_names &&
+      !any(c("independent_train500_eval300_mcmc_forecast_mae_v1.pdf",
+        "independent_forecast_calibration_v1.pdf") %in% asset_names))
+  } else {
+    check("supplement recorder selects recovery sensitivity and calibration",
+      all(c("independent_train500_eval300_mcmc_forecast_mae_v1.pdf",
+        "independent_train500_eval500_mcmc_forecast_mae_v1.pdf",
+        "independent_train500_eval500_mcmc_forecast_check_v1.pdf",
+        "independent_forecast_calibration_v1.pdf") %in% asset_names))
+  }
   log <- readLines(file.path(build_root,doc,paste0(doc,".log")),warn=FALSE)
   check(paste(doc,"no unresolved references or citations"),!any(grepl("undefined|multiply defined|There were undefined|Rerun to get",log)))
   check(paste(doc,"no overfull boxes"),!any(grepl("Overfull",log)))

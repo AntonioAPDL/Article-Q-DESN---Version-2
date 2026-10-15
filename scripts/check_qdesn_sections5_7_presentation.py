@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import csv
 import hashlib
 import importlib.util
 import json
@@ -43,6 +44,12 @@ def dependency_paths(root: Path) -> set[str]:
         files.update((policy, receipt_path))
         for group in ("sources", "outputs"):
             files.update(receipt[group])
+        calibration_path = "tables/independent_forecast_calibration_manifest_v1.json"
+        if (root / calibration_path).exists():
+            calibration = json.loads((root / calibration_path).read_text())
+            files.add(calibration_path)
+            files.update(calibration["sources"])
+            files.update("tables/" + path for path in calibration["outputs"])
     return files
 
 
@@ -171,6 +178,37 @@ def check(root: Path, *, effective: bool = True) -> dict:
                         assert digest(root / path) == expected_hash, "IND reporting receipt mismatch: " + path
                 assert r"\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}" in main
                 assert r"\input{tables/independent_train500_eval500_mcmc_figures_v1.tex}" in supplement
+                main_wrapper = (root / "tables/independent_train500_eval300_mcmc_figures_v1.tex").read_text()
+                assert "eval300_mcmc_forecast_check_v1.pdf" in main_wrapper
+                assert "eval300_mcmc_forecast_mae_v1.pdf" not in main_wrapper, "Primary MAE must not remain in main."
+                assert r"\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}" in supplement
+                assert r"\input{tables/independent_forecast_calibration_figure_v1.tex}" in supplement
+                assert r"\input{tables/independent_forecast_calibration_figure_v1.tex}" not in main
+                calibration = json.loads((root / "tables/independent_forecast_calibration_manifest_v1.json").read_text())
+                assert calibration["point_summary"] == "posterior_median"
+                assert calibration["specifications"] == 36 and calibration["chains"] == 108
+                assert calibration["calibration_rows"] == 72
+                assert calibration["fits_launched"] == calibration["forecasts_launched"] == 0
+                assert calibration["refinements_launched"] == 0
+                assert calibration["uncertainty_bands"] == "none_sampling_calibration_uncertainty_not_estimated"
+                for path, expected_hash in calibration["sources"].items():
+                    assert digest(root / path) == expected_hash, "Calibration source mismatch: " + path
+                for path, expected_hash in calibration["outputs"].items():
+                    assert digest(root / "tables" / path) == expected_hash, "Calibration summary mismatch: " + path
+                with (root / "tables/independent_forecast_calibration_v1.csv").open(newline="") as stream:
+                    frequencies = list(csv.DictReader(stream))
+                assert len(frequencies) == 72
+                keys = {(r["family"], float(r["tau"]), r["model_variant"], int(r["cutoff"])) for r in frequencies}
+                assert len(keys) == 72
+                for row in frequencies:
+                    n, hits = int(row["n_targets"]), int(row["n_hits"])
+                    p, frequency = float(row["tau"]), float(row["empirical_frequency"])
+                    assert n == int(row["cutoff"]) and n in (300, 500)
+                    assert 0 <= hits <= n and abs(frequency - hits / n) < 1e-12, "Calibration counts/frequency disagree."
+                    assert row["point_summary"] == "posterior_median" and int(row["n_chains"]) == 3
+                    assert row["source_criterion"] == "forecast_check"
+                    assert abs(float(row["nominal_frequency"]) - p) < 1e-12
+                    assert abs(float(row["calibration_error_pp"]) - 100 * (frequency - p)) < 1e-10
                 assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" not in main
                 continue
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" in main, "Stale effective forecast wrapper: " + role

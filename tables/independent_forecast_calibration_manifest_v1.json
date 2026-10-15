@@ -1,0 +1,39 @@
+{
+  "schema": "independent_forecast_calibration_v1",
+  "status": "PASS",
+  "packet_manifest_sha256": "5f842dfcdd0e8314783c74d35e72a77641933c2a1e26d12a5dc557782cd96664",
+  "protected_locator_sha256": "e2c941b4d26104e70bd178390a979ea62b8e19d9f2cfb3bfd899532ea5ea9772",
+  "source_manifest_sha256": "baedb83f6d95d96c1b0169dd5d5a1cad60f5fed252d43d53d20d33cd05c0204c",
+  "recovery_artifact_manifest_sha256": "6805bc50d8f545de101933a44c45ce52981874ed85493c4ec7186b498eb7892a",
+  "frozen_payload_audit_sha256": "f05c19da9f6ce90289223556381a3332ab4bf30332e3828b8e98f782a601c3fd",
+  "article_reference_commit": "c18d364d3e9f0cf44cda779e2a2c32fe0d684811",
+  "validation_reference_commit": "94bd95784f413f3edde88a35cb991f2a56b6afef",
+  "sources": {
+    "application/config/independent_forecast_calibration_v1.json": "11f2f1226bbb05e3acb6fbdeba9f2668f5bc9d0314746251b626f893ccd47976",
+    "application/R/independent_forecast_calibration_v1.R": "0fb357262a5abda21c86d1156bb00e66be6c4a4dbc258d38eafcaa70aa5e5e8b",
+    "scripts/extract_independent_forecast_calibration_v1.R": "fb6059ba259ac6fe3f55b00e32a6c9c870478f31067bd1a903a517996a8e33f9",
+    "tables/independent_forecast_300_500_v1.csv": "7ee08a577b47c9369c8cc8fd35677c6f884bbc1b7a886096fb2afd66838e4bcf"
+  },
+  "outputs": {
+    "independent_forecast_calibration_v1.csv": "5720dfae26aebe095db188e74ba44939bfbc3b8e72f38e3eab01ad4f30d32eed",
+    "independent_forecast_calibration_sources_v1.csv": "689ad521a79388f64d3dd1e888c480f85715a4cf47d09737dac9d1f5c4ae0ad4"
+  },
+  "specifications": 36,
+  "chains": 108,
+  "calibration_rows": 72,
+  "point_summary": "posterior_median",
+  "chain_pooling": "all_draws_from_three_equal_budget_chains",
+  "uncertainty_bands": "none_sampling_calibration_uncertainty_not_estimated",
+  "event": "response_less_than_or_equal_to_point_quantile",
+  "fits_launched": 0,
+  "forecasts_launched": 0,
+  "refinements_launched": 0,
+  "posterior_objects_copied": 0,
+  "per_target_forecasts_published": 0,
+  "all_source_hashes_verified": true,
+  "all_chain_and_model_truth_aligned": true,
+  "immutable_payload_pins_verified": 108,
+  "individually_frozen_task_statuses": 24,
+  "individually_frozen_retention_manifests": 24,
+  "r_version": "4.6.0"
+}

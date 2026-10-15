@@ -36,6 +36,10 @@ def classification(path: str) -> tuple[str, str, str, str]:
         return "manuscript", "current editorial source", "main.tex;qdesn-supplement.tex", "not a scientific estimator"
     if suffix in (".bib", ".bst"):
         return "bibliography database/style", "bibliographic and local presentation authority", "refs.bib;tables/qdesn_asa_compatible.bst", "not a scientific estimator; BST is not official journal software"
+    if "independent_forecast_calibration" in path:
+        return ("empirical quantile-frequency diagnostic", "fixed check-loss specifications; pooled posterior-median quantile locations",
+                "tables/independent_forecast_calibration_manifest_v1.json",
+                "observed response frequencies over 300/500 targets; no posterior or sampling confidence bands; no refitting or reselection")
     if "independent_train500_eval" in path or path.startswith("tables/independent_"):
         return ("independent reporting asset", "300 primary and 500 sensitivity; retrospective scope revision",
                 "tables/independent_forecast_300_500_article_manifest_v1.json",

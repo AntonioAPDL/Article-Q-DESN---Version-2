@@ -245,6 +245,7 @@ run_standalone_glofas_test("application/tests/test_glofas_search3_article_projec
 run_standalone_glofas_test("application/tests/test_pro_review_supplement_math.R")
 run_standalone_glofas_test("application/tests/test_pro_review_bibliography_initialization.R")
 run_standalone_glofas_test("application/tests/test_qdesn_reader_focused_editorial_revision.R")
+run_standalone_glofas_test("application/tests/test_independent_forecast_calibration_v1.R")
 stopifnot(system2("python3.11", app_path("application/tests/test_pro_review_presentation.py")) == 0L)
 stopifnot(system2("python3.11", app_path("application/tests/test_qdesn_mq_nomenclature.py")) == 0L)
 stopifnot(system2("python3.11", app_path("application/tests/test_qdesn_historical_display_overlays.py")) == 0L)

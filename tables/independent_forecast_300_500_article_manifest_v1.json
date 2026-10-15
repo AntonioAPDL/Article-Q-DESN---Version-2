@@ -9,20 +9,29 @@
   "vb_forecasts": "OMITTED_NO_AUTHENTIC_PREFIX_DRAWS",
   "fits_launched": 0,
   "forecasts_launched": 0,
+  "primary_plot_placement": {
+    "forecast_check": "main",
+    "forecast_mae": "supplement"
+  },
   "sources": {
     "application/config/independent_forecast_300_500_v1.json": "944f32e1d06b050a8c7beb72170257b8e37db35ef4ab7416f38019d6c0dcf307",
     "tables/independent_forecast_300_500_v1.csv": "7ee08a577b47c9369c8cc8fd35677c6f884bbc1b7a886096fb2afd66838e4bcf",
     "tables/independent_fit_preserved_300_500_v1.csv": "3396ee35261b34a4a788b0502fddeb4f4af5b71bbcedbf79408d751760a2a1fa",
     "tables/independent_forecast_300_500_vb_coverage.csv": "b4e81b0319f762d94954a5c6833872f379bf3c5ed81529759eb0da0f77663b55",
     "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
-    "scripts/build_independent_forecast_300_500_v1.R": "59244e1c0b742c880cb05c51184939a0f46db01bbd81511604ff447367387a32",
-    "main.tex": "2bbcda6a204b463eca8794157517cfbdd8af2a57062feacd554e518f9d24e985",
-    "qdesn-supplement.tex": "6330e65c462ed0d7ce7333583a748ccf85922253aa2a3bd5cb41046ae4b002d1",
-    "overleaf/article_files.txt": "f7cd0a49ad601ceb92f1432176141a3cfd76f1b840ee1100557257d2cc99a8a6",
+    "scripts/build_independent_forecast_300_500_v1.R": "41dec71626d004f2da066f01d696efcb3dc3b5e269c24f0f07ed96fce2d37393",
+    "main.tex": "7b36df2596d9b086caffe47b2ab664a08d57ef811f37991446c606880cdb7b28",
+    "qdesn-supplement.tex": "0a7713d227c53ca1ecbc2c2accd69f9d1682ef8b04dc7497bd636b0cfa5776a6",
+    "overleaf/article_files.txt": "636c1ab9e3dfc5f9dc2a7789ba4d9cab03c91204cc8b0ac33a29c80f597d3b00",
     "tables/independent_forecast_dependence_v1.tex": "96336e05800e228eea71877493b25c0e5302052b818a08f561f6fc1f4b49b32c",
     "docs/implementation_notes/independent_forecast_300_500_reporting_20261015.md": "a7ed1622b4cd73895a5f4d54e1e2664cf72884ad767fd030ce9c44750deef998",
     "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6",
-    "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9"
+    "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9",
+    "application/config/independent_forecast_calibration_v1.json": "11f2f1226bbb05e3acb6fbdeba9f2668f5bc9d0314746251b626f893ccd47976",
+    "docs/implementation_notes/independent_forecast_focus_and_calibration_20261015.md": "9e84f436070de4164f104769ef045526fec62246833d88f74a75aa148ac86162",
+    "tables/independent_forecast_calibration_v1.csv": "5720dfae26aebe095db188e74ba44939bfbc3b8e72f38e3eab01ad4f30d32eed",
+    "tables/independent_forecast_calibration_sources_v1.csv": "689ad521a79388f64d3dd1e888c480f85715a4cf47d09737dac9d1f5c4ae0ad4",
+    "tables/independent_forecast_calibration_manifest_v1.json": "77931b8e5c7950eb2e4454a54d5eaa579abbbd4d0c884aed550327594222a2e2"
   },
   "outputs": {
     "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf": "44f0e8ba6aea98a6ae47f1625eaebf0011d6e506a162064ef67fbd96afd41399",
@@ -38,9 +47,13 @@
     "tables/independent_train500_eval300_mcmc_tables_v1.tex": "a1716059e0e191d27efdc0e7974f3f32a07ca7f006733a195c56f9bd269f3016",
     "tables/independent_train500_eval500_mcmc_tables_v1.tex": "4bd7dd15d7e615ceb5c61a2664cbac4e9d700f14567b8bc87466fba60b151b8f",
     "tables/independent_vb_fit_preserved_v1.tex": "a9d326a604856aa7ac249af5d9c6f5804177db4b73365599439adad243cb0734",
-    "tables/independent_train500_eval300_mcmc_figures_v1.tex": "aea435c8506d45383f444471da13ab29dff31842e1e8c4734f65aa826e8f1a1d",
+    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex": "cfadc50c14773fe848ca1fa68be01cc886f1c393f5ebc94f1d51772ac13f4283",
+    "tables/independent_train500_eval300_mcmc_figures_v1.tex": "e403244303d0dc3c10a2913d9380e7ef42a18a197f6e4512087394c95476deda",
     "tables/independent_train500_eval500_mcmc_figures_v1.tex": "f67e41de24a6ef1e2ed7e25a280eead8970a44cbd50225f719dca0c06427683e",
     "tables/independent_forecast_300_500_comparisons_v1.csv": "043e7e27ece1a89fd3b88ed4f5a6fc023e4e40682b9496b6f96584d890ec2091",
-    "tables/independent_eval300_results_v1.tex": "4c0f149c79bbe6cdcaf71449941aba59aa3ae0da32aac450205e51e219935708"
+    "tables/independent_eval300_results_v1.tex": "bfb24a276f6c9e1dc75fee14864441356dbb4d5a7882f9610dc30af95bad47b8",
+    "figures/independent_simulation/independent_forecast_calibration_v1.pdf": "f99cd11381cff1b1592918877e876edca092b64140f5dcac1b985fda1580fbdf",
+    "tables/independent_forecast_calibration_figure_v1.tex": "9aab6bf621a344caccfc9f4621dbaa3b3a17956287622d0a04870b62952c7313",
+    "tables/independent_forecast_calibration_table_v1.tex": "ac06603b4617bd4ddcf76fb2a59988ad61d65bd60f0ae90e9941e4e8fd08b2f7"
   }
 }

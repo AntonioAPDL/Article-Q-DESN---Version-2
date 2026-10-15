@@ -522,7 +522,12 @@ def check(root: Path) -> dict[str, int]:
     }) | EDITORIAL_GLOFAS_TABLES
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
-    expect({entry[1] for entry in HISTORICAL_ASSETS.values()} <= files,
+    current_historical = {entry[1] for entry in HISTORICAL_ASSETS.values()}
+    if (root / "application/config/independent_forecast_300_500_v1.json").exists():
+        current_historical.discard("tables/qdesn_validation_500obs_metric_dependence_sensitivity_display.tex")
+        expect("tables/independent_forecast_dependence_v1.tex" in files,
+               "Current IND dependence account is missing")
+    expect(current_historical <= files,
            "Current manuscript omits an authenticated historical display derivative")
     expect(JOINT_PDFS | EDITORIAL_GLOFAS_PDFS <= figures,
            "Effective selected aliases/wrappers do not select all eight MQ PDFs")
@@ -558,7 +563,7 @@ def check(root: Path) -> dict[str, int]:
             verify_label_mapping(extractor(root, source), extractor(root, output), rows, output)
     return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": 8,
             "selected_mq_tex": len(current_joint_tables | current_glofas_tables),
-            "historical_displays": 2}
+            "historical_displays": len(current_historical)}
 
 
 def main() -> int:

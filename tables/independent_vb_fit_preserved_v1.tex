@@ -1,0 +1,27 @@
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setstretch{1}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+Family & Model & $p=0.05$ & $p=0.25$ & $p=0.50$ \\
+\midrule
+Gaussian & DQLM & \shortstack{\textbf{2.468}\\{\scriptsize [2.404, 2.533]}} & \shortstack{\textbf{1.899}\\{\scriptsize [1.813, 1.986]}} & \shortstack{1.555\\{\scriptsize [1.465, 1.645]}} \\
+ & exDQLM & \shortstack{2.580\\{\scriptsize [2.491, 2.668]}} & \shortstack{2.008\\{\scriptsize [1.916, 2.102]}} & \shortstack{\textbf{1.554}\\{\scriptsize [1.467, 1.639]}} \\
+ & Q--DESN AL--RHS & \shortstack{3.689\\{\scriptsize [3.339, 4.043]}} & \shortstack{3.080\\{\scriptsize [2.638, 3.510]}} & \shortstack{2.656\\{\scriptsize [2.226, 3.093]}} \\
+ & Q--DESN exAL--RHS & \shortstack{3.397\\{\scriptsize [3.014, 3.778]}} & \shortstack{3.055\\{\scriptsize [2.587, 3.527]}} & \shortstack{2.646\\{\scriptsize [2.223, 3.091]}} \\
+\addlinespace[2pt]
+Laplace & DQLM & \shortstack{\textbf{4.559}\\{\scriptsize [4.458, 4.661]}} & \shortstack{\textbf{2.303}\\{\scriptsize [2.215, 2.392]}} & \shortstack{1.538\\{\scriptsize [1.450, 1.629]}} \\
+ & exDQLM & \shortstack{8.667\\{\scriptsize [8.564, 8.772]}} & \shortstack{2.335\\{\scriptsize [2.241, 2.431]}} & \shortstack{\textbf{1.534}\\{\scriptsize [1.449, 1.620]}} \\
+ & Q--DESN AL--RHS & \shortstack{7.321\\{\scriptsize [6.806, 7.847]}} & \shortstack{3.074\\{\scriptsize [2.606, 3.552]}} & \shortstack{2.068\\{\scriptsize [1.624, 2.525]}} \\
+ & Q--DESN exAL--RHS & \shortstack{8.189\\{\scriptsize [7.634, 8.750]}} & \shortstack{2.495\\{\scriptsize [1.965, 3.054]}} & \shortstack{2.046\\{\scriptsize [1.614, 2.501]}} \\
+\addlinespace[2pt]
+Gaussian mixture & DQLM & \shortstack{\textbf{2.680}\\{\scriptsize [2.597, 2.764]}} & \shortstack{1.866\\{\scriptsize [1.765, 1.963]}} & \shortstack{1.485\\{\scriptsize [1.402, 1.567]}} \\
+ & exDQLM & \shortstack{4.648\\{\scriptsize [4.541, 4.758]}} & \shortstack{\textbf{1.793}\\{\scriptsize [1.693, 1.898]}} & \shortstack{\textbf{1.480}\\{\scriptsize [1.396, 1.564]}} \\
+ & Q--DESN AL--RHS & \shortstack{7.058\\{\scriptsize [6.608, 7.507]}} & \shortstack{3.732\\{\scriptsize [3.169, 4.306]}} & \shortstack{2.517\\{\scriptsize [1.962, 3.081]}} \\
+ & Q--DESN exAL--RHS & \shortstack{5.853\\{\scriptsize [5.288, 6.412]}} & \shortstack{3.140\\{\scriptsize [2.467, 3.824]}} & \shortstack{2.560\\{\scriptsize [2.006, 3.135]}} \\
+\bottomrule
+\end{tabular}
+\caption{Unchanged VB fitting-sample quantile-path RMSE. Entries are variational means and equal-tailed 95\% intervals on the original 500 fitted observations. Forecast results are not inferred from these fit summaries.}
+\label{tab:independent-vb-fit-preserved}
+\end{table}

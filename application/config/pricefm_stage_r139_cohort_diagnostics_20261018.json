@@ -32,7 +32,8 @@
     "source_branch": "work/pricefm-r138-dk1-diverse-driver-20261016",
     "source_head": "5607d2e2e3ee26380cec98bb3b1351c3a0bb8cc6",
     "terminal_status": "R138_DK1_COMPLETE_NOT_PROMOTED",
-    "expected_completed_tasks": 263,
+    "expected_completed_tasks": 65,
+    "expected_task_directories": 263,
     "expected_origins_by_fold": {"1": 120, "2": 123, "3": 122}
   },
   "decision_contract": {

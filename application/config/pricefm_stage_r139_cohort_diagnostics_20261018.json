@@ -1,0 +1,53 @@
+{
+  "schema_version": "pricefm_stage_r139_cohort_diagnostics_v1",
+  "run_tag": "pricefm_stage_r139_cohort_diagnostics_20261018",
+  "purpose": "Frozen, scoring-only diagnosis of the completed R137 four-region pilot, with R138 DK_1 retained as separate negative-control context.",
+  "quantiles": [0.1, 0.25, 0.45, 0.5, 0.55, 0.75, 0.9],
+  "forecast_horizon": 96,
+  "horizon_blocks": [
+    {"label": "h01_24", "start": 1, "end": 24},
+    {"label": "h25_48", "start": 25, "end": 48},
+    {"label": "h49_72", "start": 49, "end": 72},
+    {"label": "h73_96", "start": 73, "end": 96}
+  ],
+  "operators": [
+    "cdf_pool_clipped",
+    "cdf_pool_linear",
+    "mean_feature",
+    "normal_driver",
+    "path_specific",
+    "rearranged_path_mean"
+  ],
+  "primary_operator": "cdf_pool_clipped",
+  "r137": {
+    "regions": ["EE", "HU", "SK", "IT_NORD"],
+    "source_branch": "work/pricefm-r137-four-region-pilot-20261015",
+    "source_head": "d83b62d77a11fd4df4640bf33efbd9c10faef570",
+    "terminal_status": "R137_REGION_COMPLETE_NOT_PROMOTED",
+    "expected_completed_tasks": 59,
+    "expected_origins_by_fold": {"1": 120, "2": 123, "3": 122}
+  },
+  "r138_negative_control": {
+    "region": "DK_1",
+    "source_branch": "work/pricefm-r138-dk1-diverse-driver-20261016",
+    "source_head": "5607d2e2e3ee26380cec98bb3b1351c3a0bb8cc6",
+    "terminal_status": "R138_DK1_COMPLETE_NOT_PROMOTED",
+    "expected_completed_tasks": 263,
+    "expected_origins_by_fold": {"1": 120, "2": 123, "3": 122}
+  },
+  "decision_contract": {
+    "primary_goal": "improve_equal_region_AQL_over_current_authoritative_QDESN",
+    "comparators": [
+      "current_authoritative_QDESN",
+      "local_PriceFM_reproduction",
+      "operational_PriceFM_reference"
+    ],
+    "r138_excluded_from_r137_aggregate": true,
+    "article_or_registry_mutation_allowed": false,
+    "model_refit_allowed": false,
+    "mcmc_allowed": false,
+    "promotion_allowed": false,
+    "confirmatory_claim_allowed": false,
+    "reason": "The development folds have been inspected repeatedly; R139 is diagnostic and can justify a frozen prospective rollout, not an article-authoritative performance claim."
+  }
+}

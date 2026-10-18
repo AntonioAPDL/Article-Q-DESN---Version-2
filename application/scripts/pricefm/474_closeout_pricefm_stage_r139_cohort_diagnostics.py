@@ -237,8 +237,14 @@ def assert_frozen_metric_match(
             )
 
 
-def load_training_response(campaign_root: Path, region: str, fold: int, expected_head: str) -> np.ndarray:
-    task_dir = campaign_root / "tasks_done" / f"{region}_fold{fold}_design"
+def load_training_response(
+    campaign_root: Path,
+    region: str,
+    fold: int,
+    expected_head: str,
+    design_task_suffix: str = "design",
+) -> np.ndarray:
+    task_dir = campaign_root / "tasks_done" / f"{region}_fold{fold}_{design_task_suffix}"
     evidence = verify_artifact_manifest(task_dir, task_dir / "completed_evidence.json")
     metadata = evidence.get("metadata", {})
     if metadata.get("source_head") != expected_head or metadata.get("certified") is not True:
@@ -357,7 +363,13 @@ def run_region(config_path: Path, stage: str, region: str, campaign_root: Path, 
                     **block_metrics,
                 }))
 
-        train = load_training_response(campaign_root, region, fold, expected["source_head"])
+        train = load_training_response(
+            campaign_root,
+            region,
+            fold,
+            expected["source_head"],
+            expected.get("design_task_suffix", "design"),
+        )
         test = truth.reshape(-1)
         row = {"stage": stage, "role": role, "region": region, "fold": fold}
         row.update(numeric_summary(train, "train"))

@@ -140,6 +140,13 @@ def require_source_state(
         raise EvidenceError(f"source identity mismatch for {expected_region}: {source}")
     if int(progress.get("completed", -1)) != int(expected["expected_completed_tasks"]):
         raise EvidenceError(f"completed-task count mismatch for {expected_region}")
+    if "expected_task_directories" in expected:
+        task_count = sum(1 for path in (campaign_root / "tasks_done").iterdir() if path.is_dir())
+        if task_count != int(expected["expected_task_directories"]):
+            raise EvidenceError(
+                f"task-directory count mismatch for {expected_region}: "
+                f"got {task_count}, expected {expected['expected_task_directories']}"
+            )
     if int(progress.get("active", -1)) != 0 or int(progress.get("pending", -1)) != 0:
         raise EvidenceError(f"campaign is not quiescent for {expected_region}")
     if progress.get("failures"):

@@ -1,0 +1,148 @@
+{
+  "tag": "pricefm_stage_r141_recovery_rollout_20261019",
+  "scientific_engine": "R137_exact_frozen_protocol",
+  "recovery_only_change": "repair_R140_design_certificate_handoff_and_resume_sealed_prerequisites",
+  "design_contract_status": "completed_r137_quantile_design",
+  "recovery_source": {
+    "tag": "pricefm_stage_r140_frozen_all_region_rollout_20261018",
+    "head": "5ae4b6698b1182edbe33e0b42bed1035a06480ca",
+    "protocol_sha256": "9e12b6d3f99bb62dc3b0eb0feda8be61568fae3ec8728eab01eac35ee44874d7",
+    "controller_sha256": "848f2b0448c878f3c317b81d260a89a7606ffaaaf62558fb3de2f888f644d029",
+    "regions": {
+      "AT": {"host": "muscat"},
+      "BG": {"host": "muscat"},
+      "BE": {"host": "jerez"},
+      "CZ": {"host": "jerez"}
+    },
+    "allowed_task_kinds": ["ridge", "stats", "rhs"],
+    "regenerate_task_kinds": ["internal_design", "internal_al", "internal_score", "design", "normal_full", "al", "forecast"]
+  },
+  "r137_protocol_sha256": "1b6ba477d2e0edc69dc3f0abe2b89339c7ed3a4681d9bd9c1584f806458bdc7c",
+  "r137_controller_sha256": "456915f453f20d9573baf2677b85004d771ba5ea4e86a7a4ccfc9dc015dfb025",
+  "r137_al_fitter_sha256": "58fae6e703d917362f9110ae0d29d9408f204d1e4b65007bb8555db0b236ae21",
+  "dependency_head": "1e24342e1ecd2dd7a99d8df2445f29be7f7a03d2",
+  "dependency_branch": "work/pricefm-r127-closeout-20261008",
+  "local_pricefm_reference_sha256": "51d95cae91d66c44f65ad2638f6eda62f79664b8ed732a8cb31c9d387701bfb3",
+  "bg_parent_tag": "pricefm_stage_r123_certified_successor_20261005",
+  "regions": [
+    "AT", "BE", "BG", "CZ", "DE_LU", "DK_1", "DK_2", "EE", "ES", "FI", "FR", "GR", "HR", "HU",
+    "IT_CALA", "IT_CNOR", "IT_CSUD", "IT_NORD", "IT_SARD", "IT_SICI", "IT_SUD", "LT", "LV", "NL",
+    "NO_1", "NO_2", "NO_3", "NO_4", "NO_5", "PL", "PT", "RO", "SE_1", "SE_2", "SE_3", "SE_4", "SI", "SK"
+  ],
+  "reuse_regions": ["EE", "HU", "IT_NORD", "SK"],
+  "reuse_source": {
+    "tag": "pricefm_stage_r137_four_region_pilot_20261015",
+    "head": "d83b62d77a11fd4df4640bf33efbd9c10faef570",
+    "regions": {
+      "EE": {"host": "muscat", "completed_evidence_sha256": "f5741915e2c291bfb1d7eccb02df426da057b57366a7c1e4b6f6b06b866b0243"},
+      "HU": {"host": "muscat", "completed_evidence_sha256": "625444cca64a4e7dbf3587b3fb25ef4045053cc27f44cb9e5ec0d70bed8a868e"},
+      "IT_NORD": {"host": "jerez", "completed_evidence_sha256": "22a8f3d9b85c72dc3161a2053a6802bc2cba86588703cc0733f9bd4496d865e7"},
+      "SK": {"host": "jerez", "completed_evidence_sha256": "39967ce55b1afdae9515444857ffde5af03bb419a3641c8c4d45c57068ef3f5a"}
+    }
+  },
+  "host_queues": {
+    "muscat": {
+      "slot_a": ["AT", "DE_LU", "FI", "IT_CALA", "IT_SICI", "NL", "NO_4", "RO", "SE_4"],
+      "slot_b": ["BG", "DK_2", "GR", "IT_CSUD", "LT", "NO_2", "PL", "SE_2"]
+    },
+    "jerez": {
+      "slot_a": ["BE", "DK_1", "FR", "IT_CNOR", "IT_SUD", "NO_1", "NO_5", "SE_1", "SI"],
+      "slot_b": ["CZ", "ES", "HR", "IT_SARD", "LV", "NO_3", "PT", "SE_3"]
+    }
+  },
+  "host_cpu_sets": {
+    "slot_a": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    "slot_b": [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+  },
+  "host_minimum_free_disk_GiB": {"muscat": 80, "jerez": 50},
+  "host_minimum_free_memory_GiB": 180,
+  "region_seed_offsets": {
+    "SK": 0, "HU": 1, "IT_NORD": 2, "EE": 3,
+    "AT": 4, "BE": 5, "BG": 6, "CZ": 7, "DE_LU": 8, "DK_1": 9, "DK_2": 10, "ES": 11,
+    "FI": 12, "FR": 13, "GR": 14, "HR": 15, "IT_CALA": 16, "IT_CNOR": 17, "IT_CSUD": 18,
+    "IT_SARD": 19, "IT_SICI": 20, "IT_SUD": 21, "LT": 22, "LV": 23, "NL": 24, "NO_1": 25,
+    "NO_2": 26, "NO_3": 27, "NO_4": 28, "NO_5": 29, "PL": 30, "PT": 31, "RO": 32,
+    "SE_1": 33, "SE_2": 34, "SE_3": 35, "SE_4": 36, "SI": 37
+  },
+  "folds": [1, 2, 3],
+  "quantiles": [0.1, 0.25, 0.45, 0.5, 0.55, 0.75, 0.9],
+  "paths": 500,
+  "maximum_workers_per_region": 15,
+  "maximum_workers_per_host": 30,
+  "minimum_free_memory_GiB": 180,
+  "minimum_free_disk_GiB": 20,
+  "worker_storage_allowance_GiB": 0.05,
+  "task_storage_allowance_GiB": {
+    "ridge": 0.005,
+    "stats": 0.05,
+    "rhs": 0.05,
+    "internal_design": 0.8,
+    "internal_al": 0.05,
+    "internal_score": 0.01,
+    "design": 1.5,
+    "normal_full": 0.05,
+    "al": 0.05,
+    "forecast": 0.03
+  },
+  "broad_candidate_draws": 960,
+  "broad_candidates_per_region": 640,
+  "rhs_shortlist_structures": 30,
+  "quantile_finalists": 2,
+  "candidate_seed": 2026101501,
+  "reservoir_seed": 2026092501,
+  "forecast_seed": 2026101502,
+  "normal_max_iter": 2000,
+  "normal_min_iter": 100,
+  "al_max_iter": 300,
+  "al_tol": 0.00001,
+  "al_n_samp": 20,
+  "ridge_origins_per_clock": 4,
+  "rhs_origins_per_clock": 12,
+  "rhs_screen_paths": 100,
+  "quantile_origins_per_clock": 12,
+  "clock_offsets_steps": [0, 24, 48, 72],
+  "tau_multipliers": [0.1, 1.0, 10.0],
+  "official_chunk_origins": 12,
+  "max_rhs_iter": 20000,
+  "certificate_limits": {
+    "beta_posterior_sd_rms": 0.0001,
+    "predictor_rms": 0.000001,
+    "covariance_whitened_rms": 0.0001,
+    "sigma_relative": 0.000001,
+    "rhs_joint_log_rates": 0.000001,
+    "rhs_start_log_precision": 0.000001,
+    "elbo_relative": 0.00000001
+  },
+  "r135_common_basin": {
+    "m_y": 2016,
+    "m_x": 4,
+    "units": [192, 192],
+    "alpha": 0.15,
+    "rho": 0.55,
+    "input_scale": 0.01,
+    "input_fan_in": 8,
+    "recurrent_sparsity": 0.05,
+    "interlayer_gain": 1.0
+  },
+  "selection_aggregation": "equal_three_inner_split_mean_seven_quantile_AL_AQL",
+  "selection_window": "fold1_training_only_940_daily_origins",
+  "normal_driver": "same_beta_and_omega_draw_per_path_with_independent_innovations",
+  "primary_quantile_operator": "cdf_pool_clipped",
+  "readout": "intercept_plus_all_layers_no_input_bypass_no_calendar",
+  "feature_policies": ["target_only", "graph_summary_mean", "graph_summary_mean_std", "graph_neighbor_exogenous"],
+  "input_policies": ["coverage", "balanced"],
+  "test_metrics_role": "retrospective_development_comparison_only_never_selection",
+  "future_exogenous_policy": "released_realized_values_retrospective_conditional",
+  "normal_prior": "fixed_zero_RHS_NS_unshrunk_intercept_precision_1e-16_omega_IG_2_1",
+  "al_prior": "exact_CRAN_1.1.1_RHS_NS_defaults_unshrunk_intercept_sigma_IG_1_1",
+  "al_iteration_policy": "exactly_300_then_independent_same_state_fixedpoint_certificate_if_needed",
+  "campaign_size_cap_GiB": null,
+  "priors_from_initializers": false,
+  "mcmc_authorized": false,
+  "joint_authorized": false,
+  "exal_authorized": false,
+  "registry_mutation_authorized": false,
+  "article_mutation_authorized": false,
+  "promotion_authorized": false,
+  "all_region_launch_authorized": true
+}

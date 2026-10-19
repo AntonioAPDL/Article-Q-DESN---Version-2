@@ -175,7 +175,7 @@ def test_recovery_imports_only_sealed_prerequisites_as_hardlinks(tmp_path, monke
     rhs = dict(name='rhs_AT_candidate_s1_t1', kind='rhs', region='AT', split=1, tau0=.001)
     excluded = dict(name='iq_AT_candidate_design', kind='internal_design', region='AT', split=1)
     CTL.write(old_prep, dict(source=dict(head=recovery['head']),
-        protocol=dict(tag='old_r140', regions=['AT']), source_sha256={}))
+        protocol=dict(tag='old_r140__AT', regions=['AT']), source_sha256={}))
     for task in (ridge, stats, rhs, excluded):
         task_path = old / 'tasks' / (task['name'] + '.json')
         CTL.write(task_path, task)

@@ -197,7 +197,7 @@ def import_r140_prerequisites(prep):
     source_prep = DATA / 'launch_prep' / (recovery['tag'] + '__' + REGION) / 'preparation.json'
     prior = read(source_prep)
     if (prior['source']['head'] != recovery['head']
-            or prior['protocol']['tag'] != recovery['tag']
+            or prior['protocol']['tag'] != recovery['tag'] + '__' + REGION
             or prior['protocol']['regions'] != [REGION]):
         raise RuntimeError('R140 prerequisite preparation identity differs')
     verify_hashes(prior['source_sha256'])

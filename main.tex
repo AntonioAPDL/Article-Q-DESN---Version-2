@@ -124,16 +124,18 @@ dependence. We develop quantile deep echo state networks (Q--DESN) as Bayesian
 quantile regressions on specified nonlinear temporal features. Conditional on
 a reservoir realization, the quantile location is linear in regression
 coefficients, with ridge or regularized-horseshoe regularization. Asymmetric
-Laplace and extended asymmetric Laplace likelihoods support independent
+Laplace (AL) and extended asymmetric Laplace likelihoods support independent
 quantile regressions and the multiquantile deep echo state network
-(MQ--DESN), which estimates quantile-specific readouts jointly by shrinking
-adjacent slope differences. Posterior computation uses Markov
+(MQ--DESN), which estimates quantile-specific regression coefficients jointly
+by shrinking adjacent slope differences. Posterior computation uses Markov
 chain Monte Carlo and model-specific variational approximations. Two
 simulations examine quantile-path recovery, forecast scores, and ordering.
-\textit{[Simulation findings to be updated.]}
+Q--DESN achieves competitive forecast loss under linear dynamics; multiquantile
+shrinkage reduces crossings without uniform score gains.
 A retrospective streamflow analysis uses
 gauge records and Global Flood Awareness System ensembles to correct forecast
-discrepancies. \textit{[GloFAS findings to be updated.]}
+discrepancies. AL Q--DESN has the lowest issued-window score, although its
+nominal 90\% interval covers 75\% of the observations.
 The electricity-price application compares region-specific regressions with
 matched forecasts from the pretrained neural model PriceFM.
 \textit{[PriceFM findings to be updated.]}
@@ -303,11 +305,11 @@ contain these variables with \(m\) response lags. In a network with \(D\)
 layers, the reservoir state
 \(\vect h_{t,d}\in\R^{n_d}\) is a recurrent nonlinear transformation of
 these inputs. For layer \(d\), \(\bar{\mat W}_d\) is a fixed sparse recurrent
-matrix scaled to target spectral radius \(\rho_d\),
+matrix scaled to spectral radius \(\rho_d\), its largest absolute eigenvalue;
 \(\mat W_d^{\mathrm{in}}\) is a fixed input matrix, and \(\alpha_d\) is the
-leak rate. Between layers, the reducer \(\mat Q_{d-1}\) gives
+leak rate. Between layers, the dimension-reduction matrix \(\mat Q_{d-1}\) gives
 \(\tilde{\vect h}_{t,d-1}=\mat Q_{d-1}\vect h_{t,d-1}\).
-The activation \(f\) acts componentwise, and \(k\) is a chosen feature
+The nonlinear activation function \(f\) acts componentwise, and \(k\) is a chosen feature
 transformation.
 With a fixed first-layer input bias \(\vect b_1^{\mathrm{in}}\), the
 recursion and general feature vector are
@@ -327,7 +329,7 @@ k(\tilde{\vect h}_{t,D-1})^\top,\vect u_t^\top\big]^\top.
 \end{alignedat}
 \label{eq:desn-hierarchy}
 \end{equation}
-The fixed reducer \(\mat Q_d\) maps \(\R^{n_d}\) to \(\R^{\tilde n_d}\).
+The fixed matrix \(\mat Q_d\) maps \(\R^{n_d}\) to \(\R^{\tilde n_d}\).
 Here \(\bar{\mat W}_d\) is \(n_d\times n_d\),
 \(\mat W_1^{\mathrm{in}}\) is \(n_1\times(m+q)\), and
 \(\mat W_d^{\mathrm{in}}\) is \(n_d\times\tilde n_{d-1}\) for \(d>1\).
@@ -336,7 +338,7 @@ dimension, the displayed feature vector
 has dimension \(r=n_D+\sum_{d<D}\tilde n_d+m+q\); a dimension-expanding
 transformation changes this count. Appending the intercept gives \(\vect x_t\).
 Reservoir and input weights are randomly drawn before fitting and then held
-fixed. Scaling, reducers, and the washout period used to discard initial
+fixed. Scaling, dimension reduction, and the washout period used to discard initial
 transients are determined from fitting information and held fixed.
 
 The predictors used in each simulation or application are chosen reservoir
@@ -437,7 +439,8 @@ ensure noncrossing: the adjacent location gap
 +\tilde{\vect x}_t^\top(\vect\beta_k-\vect\beta_{k-1})
 \]
 can be negative. The supplement gives
-the full target, block precision, and executed intercept restrictions.
+the complete hierarchy, its precision matrix, and the intercept-order
+restrictions used in each analysis.
 
 % ============================================================
 \section{Posterior Computation}
@@ -445,7 +448,7 @@ the full target, block precision, and executed intercept restrictions.
 
 Conditional on the design, the posterior combines the likelihood in
 Eq.~\eqref{eq:qdesn-marginal-main} with the coefficient, scale, and shape
-priors. MQ--DESN uses the untempered composite likelihood in
+priors. MQ--DESN uses the composite posterior in
 Eq.~\eqref{eq:joint-composite-posterior-main} and the adjacent-difference
 hierarchy. For computation, exAL admits the equivalent
 augmentation
@@ -467,8 +470,8 @@ probability-specific functions \(A_{p_0}\), \(B_{p_0}\), and \(D_{p_0}\);
 \(D_{p_0}\) is the latent-shift coefficient. Here \(\TN(0,1)\) denotes a
 standard Normal distribution truncated to \((0,\infty)\), and the second
 Gaussian argument is a variance.
-Integrating out \((s_t,v_t)\) recovers the marginal exAL model. AL omits the
-\(s_t\) and \(\gamma\) blocks.
+Integrating out \((s_t,v_t)\) recovers the marginal exAL model. For AL,
+shape is fixed at zero and the latent shift term is absent.
 
 Conditional on latent variables and prior scales, unconstrained coefficient
 blocks have Gaussian updates; ordered intercepts use Gaussian conditionals
@@ -484,7 +487,7 @@ the joint scale--shape block remains nonconjugate. The exAL simulation MCMC
 transitions integrate scale out of the shape update and then redraw it from
 its conditional law. Convergence assessment includes rank-normalized
 \(\widehat R\), effective sample sizes, chain comparisons of reported
-functionals, and quantile-crossing diagnostics.
+scores and forecast summaries, and quantile-crossing diagnostics.
 
 Variational Bayes approximates the posterior through model-specific factors
 and supports fast repeated fitting. Completed variational fits can supply
@@ -578,10 +581,11 @@ finite-grid \(\aCRPS\) is
 \end{equation}
 Here ``oracle'' refers to evaluating expected check loss under the known DGP.
 Common simulated DGP paths approximate the expectations over future
-responses. For these scores, posterior readout draws are evaluated at each
-model's averaged recursive features; score intervals condition on that summary.
-The supplement
-reports sensitivity to draw-specific features and numerical integration checks.
+responses. For the primary calculation, each model's future predictors are
+averaged over simulated response paths before posterior coefficient draws
+are evaluated. Score intervals condition on these averaged predictors.
+The supplement reports draw-specific recursive forecasts and numerical
+integration checks.
 
 \subsection{DESN specification and selection}
 \label{sec:selection}
@@ -594,12 +598,12 @@ conditional mean and provide an inexpensive first comparison through ridge
 regularization; where used, Gaussian RHS--VB and quantile
 regressions refine the comparison among promising specifications. For a
 reference regression \(M\), candidate specifications \(R_1,\ldots,R_J\),
-and a separate validation score \(S_{\mathrm{val}}(R_j;M)\), selection takes
+and a selection criterion \(S_{\mathrm{sel}}(R_j;M)\), selection takes
 the form
 \begin{equation}
 \text{Selected reservoir:}\quad \widehat R_M
 \in\argmin_{R_j:\,j=1,\ldots,J}
-S_{\mathrm{val}}(R_j;M).
+S_{\mathrm{sel}}(R_j;M).
 \label{eq:reservoir-selection-main}
 \end{equation}
 The selected DESN specification is held fixed for the reported posterior
@@ -612,11 +616,11 @@ use the same selected temporal representation while differing in likelihood
 and sharing across quantile levels. The single-quantile study uses a separate,
 criterion-specific selection procedure.
 
-Checks of the generated reservoir states assess finite values and activation
-saturation. Checks of the resulting
+Checks of the reservoir states assess finite values and saturation near the
+limits of bounded activation functions. Checks of the resulting
 predictors assess near-constant or highly dependent columns, effective rank,
 conditioning, and variation across reservoir realizations. Together these
-assess driven-state behavior and the regression design, complementing the
+assess reservoir behavior under the observed inputs and the regression design, complementing the
 study of leaky dynamics and the echo state property: the decay of initial-state
 effects under a common input history
 \citep{JaegerLukoseviciusPopoviciSiewert2007LeakyESN,
@@ -628,12 +632,12 @@ YildizJaegerKiebel2012ESP}.
 \label{sec:simulation}
 
 \noindent
-Two studies separate recovery of known conditional quantile paths from
-forecast scoring. The first follows the error-family comparisons of
+Two studies examine forecast accuracy and recovery of known conditional
+quantile paths. The first follows the error-family comparisons of
 \citet{yan2025new}, with a dynamic rather than static quantile path, and
 compares single-level Q--DESN with dynamic linear baselines. The second
-compares independent Q--DESN and MQ--DESN regressions on a shared reservoir
-design. We use \(p\) for a single level and \(p_k\), \(k=1,\ldots,K\),
+compares independent Q--DESN and MQ--DESN regressions using the same selected
+DESN specification and reservoir realization. We use \(p\) for a single level and \(p_k\), \(k=1,\ldots,K\),
 for a grid. Main-text figures report MCMC forecast summaries; the supplement
 contains fitting-sample recovery, numerical tables, a longer-window sensitivity
 analysis, and approximate VB fitting results.
@@ -683,9 +687,9 @@ regularization, with DQLM and exDQLM fitted using \pkg{exdqlm}
 trend and seasonal structure. This provides a favorable structural benchmark
 for assessing whether Q--DESN can represent linear temporal dependence
 through recurrent features rather than an explicitly specified state
-transition. The DESN specifications are criterion-specific; their selection,
-including historical forecast-based refinement, is documented in the
-supplement.
+transition. Separate DESN specifications were selected for the reported
+criteria; historical refinement also used forecast performance on the
+evaluation series. The supplement describes this selection.
 
 Check loss evaluates the quantile forecasts against realized responses over
 the common forecast pairs. The main comparison summarizes its posterior
@@ -726,7 +730,8 @@ reservoir, and future responses are generated recursively. Oracle
 \(\aCRPS\), defined in Eq.~\eqref{eq:dgp-integrated-score-main}, evaluates
 the quantile forecasts against the known conditional response distribution.
 The reported intervals summarize posterior uncertainty in the score averaged
-over these pairs, conditional on the averaged future features. The supplement
+over these pairs, conditional on the averaged future predictors defined in
+Section~\ref{sec:forecast}. The supplement
 gives the generating mechanisms, computational details, and sensitivity to
 draw-specific recursive forecasting.
 
@@ -824,7 +829,7 @@ counterpart. Gaussian DESN baselines with ridge or RHS regularization and the
 raw GloFAS ensemble complete the comparison.
 
 The reservoir and prior specifications were selected using historical
-development and confirmation periods, without using the protected issued
+development and confirmation periods, without using the held-out issued
 window. Posterior inference then accounts for the regression parameters
 and the latent future streamflow path. The long historical record and
 high-dimensional regressions make MCMC computationally demanding, so we
@@ -837,20 +842,21 @@ Table~\ref{tab:glofas-application-score} gives the complete seven-family
 comparison on the same issued window. Q--DESN under AL is the descriptive
 leader, with grid \(\aCRPS\) of \GlofasApplicationCurrentQdesnAcrps{},
 compared with \GlofasApplicationCurrentRawAcrps{} for raw GloFAS.
-Q--DESN under exAL and Normal Ridge have the next lowest scores; Normal
-RHS/VB scores worse than raw GloFAS.
+Q--DESN under exAL and Gaussian DESN with ridge regularization have the next
+lowest scores; Gaussian DESN with RHS regularization scores worse than raw GloFAS.
 
 Score and calibration give different assessments. Q--DESN under AL has
 coverage of 21 of 28 observations for the nominal 90\% interval. MQ--DESN under AL
 covers 22, the largest count among fitted families, but both fall below the
-nominal proportion. Normal Ridge covers only 3 of 28, despite its relatively
-low score. MQ--DESN under exAL has particularly low upper-tail coverage.
+nominal proportion. Gaussian DESN with ridge regularization covers only
+3 of 28, despite its relatively low score. Only 8 of 28 observations fall
+below the MQ--DESN exAL forecast at level 0.95.
 All seven reported issued-window quantile grids are ordered without a
 crossing correction. The supplement reports level-specific coverage and
 additional forecasts from the reference and discrepancy components.
 
 Figure~\ref{fig:glofas-application-forecast-period} shows the observations and
-issued ensemble, followed by Q--DESN under AL and the illustrative Normal Ridge
+issued ensemble, followed by Q--DESN under AL and the illustrative Gaussian ridge
 baseline over the same historical and forecast window and on a common vertical
 scale. The supplement retains the full-family figure.
 
@@ -875,7 +881,7 @@ are better.}
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
 \caption{Streamflow data and two quantile forecasts at the
 25 December 2022 origin. (a) USGS observations, retrospective GloFAS, and all
-51 issued ensemble paths. (b) Independent AL and (c) Normal Ridge show seven
+51 issued ensemble paths. (b) Q--DESN (AL) and (c) Gaussian DESN (ridge) show seven
 quantile levels over the same 30 historical days and 28 issued horizons.
 Before the origin, curves are posterior-mean fitted conditional quantiles;
 afterward, they show forecasts informed by the issued ensemble. Axes are common, and
@@ -889,7 +895,7 @@ future weather.}
 \figalt{Three stacked panels share a vertical scale. The first shows green
 filled historical USGS points, orange retrospective GloFAS and 51 issued
 ensemble paths, and dark-red open held-out USGS points. The second and third
-show seven blue quantile curves for Independent AL and Normal Ridge over
+show seven blue quantile curves for Q--DESN (AL) and Gaussian DESN (ridge) over
 the same 30 historical and 28 forecast dates. Historical and held-out points
 are repeated, and all three panels share the date range and forecast-origin
 line.}
@@ -994,8 +1000,9 @@ lower mean oracle scores in most mechanisms. These results distinguish the
 benefit of adjacent-coefficient regularization for quantile ordering from its
 less consistent gains in forecast scores.
 
-The applications illustrate different uses of the regression. GloFAS combines
-reference and product information at one retrospective origin. Q--DESN under AL
+The applications illustrate different uses of the regression. For streamflow
+correction, the reference--discrepancy regression combines gauge measurements
+with GloFAS products at one retrospective forecast origin. Q--DESN under AL
 has the lowest descriptive issued-window
 score, but its nominal 90\% interval covers 75\% of the issued-window
 observations. The electricity-price comparison holds each regional
@@ -1005,11 +1012,10 @@ applications retain their stated information sets: realized weather for
 streamflow correction and supplied covariates with unverified issue-time
 vintages for electricity prices.
 
-Further work should evaluate repeated-realization stability and broader
-forecast uncertainty, including feature selection, recursive inputs, and
-covariate vintages. Multi-origin GloFAS evaluation with issuance-time
-covariates and paired PriceFM uncertainty analyses would extend the present
-conditional analysis and require separate empirical assessment.
+Further work should assess variation across repeated simulated series and
+uncertainty from reservoir selection and recursively generated predictors.
+Multi-origin GloFAS evaluation with covariates available at issuance and
+paired PriceFM uncertainty analyses would extend the present comparisons.
 
 \section*{Computational materials}
 \ifQdesnAnonymous
@@ -1020,7 +1026,8 @@ source bundle.
 \else
 The public
 \href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2}{article repository}
-provides manuscript sources, model and projection code, and compact numerical
+provides manuscript sources, model-fitting, forecast-processing and
+figure-generation scripts, and compact numerical
 summaries. Its
 \href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2/blob/main/docs/reproducibility/article_dependency_and_execution_map.md}{dependency and execution map}
 identifies versioned inputs for both simulations, GloFAS, and PriceFM.

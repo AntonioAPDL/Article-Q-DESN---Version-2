@@ -58,9 +58,9 @@ class EditorialPresentationTest(unittest.TestCase):
 
     def test_authentic_assets(self):
         receipt = CHECKER.check(ROOT, effective=False)
-        self.assertEqual(receipt["outputs"], 20)
-        self.assertEqual(receipt["pdf_outputs"], 7)
-        self.assertEqual(receipt["table_outputs"], 6)
+        self.assertEqual(receipt["outputs"], 31)
+        self.assertEqual(receipt["pdf_outputs"], 8)
+        self.assertEqual(receipt["table_outputs"], 16)
         self.assertEqual(receipt["caption_wrappers"], 5)
         self.assertEqual(receipt["scientific_runs"], 0)
 
@@ -137,11 +137,11 @@ class EditorialPresentationTest(unittest.TestCase):
         self.reject()
 
     def test_seventh_family_deletion_rejected(self):
-        self.alter(self.builder.TABLE_OUTPUTS["glofas_main"][1], "Normal RHS/VB & 0.8038 & 1.4790 & 0.107", "", update_hash=True)
+        self.alter(self.builder.TABLE_OUTPUTS["glofas_main"][1], "Gaussian DESN (RHS) & 0.8038 & 1.4790 & 0.107", "", update_hash=True)
         self.reject()
 
     def test_unscored_discrepancy_cannot_be_zero(self):
-        self.alter(self.builder.TABLE_OUTPUTS["glofas_components"][1], "Discrepancy & Normal Ridge & ---", "Discrepancy & Normal Ridge & 0.0000", update_hash=True)
+        self.alter(self.builder.TABLE_OUTPUTS["glofas_components"][1], "Discrepancy & Gaussian DESN (ridge) & ---", "Discrepancy & Gaussian DESN (ridge) & 0.0000", update_hash=True)
         self.reject()
 
     def test_component_crossing_mutation_rejected(self):
@@ -186,8 +186,60 @@ class EditorialPresentationTest(unittest.TestCase):
         self.reject()
 
     def test_score_interval_scope_cannot_be_rewritten(self):
-        self.alter(self.builder.WRAPPER_OUTPUTS["mq_forecast"][1], "conditional on each model's averaged recursive future features", "measuring variation across forecast origins", update_hash=True)
+        self.alter(self.builder.WRAPPER_OUTPUTS["mq_forecast"][1], "conditional on each model's averaged future predictors", "measuring variation across forecast origins", update_hash=True)
         self.reject()
+
+    def test_empirical_frequency_headers_cannot_be_quantile_values(self):
+        self.alter(self.builder.TABLE_OUTPUTS["glofas_frequencies"][1], "$p=0.05$", "$q_{0.05}$", update_hash=True)
+        self.reject()
+
+    def test_ridge_fixed_variance_cannot_be_relabelled_as_tau(self):
+        self.alter(self.builder.TABLE_OUTPUTS["glofas_component_priors"][1], r"$\kappa_\beta^2=10^4$", r"$\tau^2=10^4$", update_hash=True)
+        self.reject()
+
+    def test_mq_numeric_table_body_is_immutable(self):
+        self.alter(self.builder.TABLE_OUTPUTS["mq_score"][1], "0.3805", "0.3000", update_hash=True)
+        self.reject()
+
+    def test_pricefm_exclusion_authenticates_exact_role_receipts(self):
+        entries = self.builder.retained_pricefm(ROOT)
+        self.assertEqual(set(entries), {"pricefm_global", "pricefm_region"})
+        path = self.fixture / self.builder.MANIFEST
+        manifest = json.loads(path.read_text())
+        for entry in manifest["outputs"]:
+            if entry["role"] == "pricefm_region":
+                entry["permitted_operation"] = "regenerated without review"
+        path.write_text(json.dumps(manifest))
+        with self.assertRaises(AssertionError):
+            self.builder.retained_pricefm(self.fixture)
+
+    def test_pricefm_exclusion_does_not_call_pricefm_renderers(self):
+        # The scoped build must neither enter the PriceFM PDF renderer nor
+        # transform its table; retained entries and bytes are copied verbatim.
+        from unittest.mock import patch
+        original_pdf = self.builder.pdf_display
+        original_table = self.builder.display_table
+        def pdf(*args, **kwargs):
+            self.assertNotEqual(args[2], "pricefm_region")
+            return original_pdf(*args, **kwargs)
+        def table(role, source):
+            self.assertNotEqual(role, "pricefm_global")
+            return original_table(role, source)
+        try:
+            import fitz
+            available = getattr(fitz, "VersionBind", None) == "1.26.5"
+        except ImportError:
+            available = False
+        if not available:
+            self.skipTest("Pinned PDF-capable environment required for generation.")
+        with tempfile.TemporaryDirectory(prefix="qdesn-pricefm-exclusion-") as output:
+            with patch.object(self.builder, "pdf_display", side_effect=pdf), patch.object(self.builder, "display_table", side_effect=table):
+                manifest = self.builder.build(ROOT, Path(output), exclude_pricefm=True)
+            retained = self.builder.retained_pricefm(ROOT)
+            for entry in manifest["outputs"]:
+                if entry["role"] in retained:
+                    self.assertEqual(entry, retained[entry["role"]])
+                    self.assertEqual((Path(output) / entry["file"]).read_bytes(), (ROOT / entry["file"]).read_bytes())
 
     def test_main_stale_alias_rejected(self):
         main = self.fixture / "main.tex"

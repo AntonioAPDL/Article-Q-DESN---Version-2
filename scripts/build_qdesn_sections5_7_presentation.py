@@ -15,12 +15,23 @@ import importlib.util
 import json
 from pathlib import Path
 import re
+import shutil
 import tempfile
 
 MANIFEST = "tables/qdesn_sections5_7_presentation_manifest.json"
 BUILDER = "scripts/build_qdesn_sections5_7_presentation.py"
 CHECKER = "scripts/check_qdesn_sections5_7_presentation.py"
 SOURCE_PINS = {
+    "tables/glofas_search3_mq_prior_settings.tex": "6a0ab95edfae4fb678822e40d023104eda4eb7e2dfccf9b0137ebba5316997a7",
+    "tables/glofas_search3_mq_calibration.tex": "933b2f0c7ba648165e9951e7767231eec655e70d86270fc5f9b7dd7130bf571b",
+    "tables/glofas_search3_mq_convergence.tex": "9e07d56c1c2c8b250ce138a55029957edf88fb851c3cc35173e5289a445aef45",
+    "tables/joint_qdesn_pure_desn_v2_mq_score_table.tex": "68cf44c1b0ec0a3592a41677f2a9e26f8856b9db58fea8d208a42481218b875a",
+    "tables/joint_qdesn_pure_desn_v2_mq_secondary_score_table.tex": "0191ce3255d350c85a9669018ad830f81f9d3c8b9291a95a40a32357423b35ce",
+    "tables/joint_qdesn_pure_desn_v2_mq_recursive_policy_table.tex": "60bc21ca99d14ed8289dc6397536d28bcfedcae94e1401934340c34113258c1f",
+    "tables/joint_qdesn_pure_desn_v2_mq_vb_score_table.tex": "438062b3450bf0d1bb34c255604e3622038dfda6cc59708c7cbf60c6a50ba125",
+    "tables/joint_qdesn_pure_desn_v2_mq_contrast_table.tex": "a021de30bdd610276984bb939ed3ac4e7fc5eb821ffc7d96c4802db6ba75e1f1",
+    "tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex": "c5aeb10a1f1c001daa4d1b182915729b8de7bc0d2835d9dc80492f5afabb3ede",
+    "tables/joint_qdesn_pure_desn_v2_mq_oracle_recovery_table.tex": "246bf4996871ed8116c36875dd6f92baab86005353a320ce61cafa69c1719c94",
     "tables/glofas_search3_mq_main_scores.tex": "70ca70cae606a95a94ee0ff57f67c68e7b10349447b867599ce9ca4318ea7d14",
     "tables/glofas_search3_mq_part123_scores.tex": "18631881207c538ce2894159b73d028b98af2e5a10a57ab2e37e47ce10c4bd3b",
     "tables/glofas_search3_mq_part123_prior_settings.tex": "ecd3fd7016953d4a0e4cae6e2282358b6fc09abdd63b454d9052e94d4f2a4196",
@@ -49,6 +60,9 @@ SOURCE_PINS = {
     "scripts/build_glofas_review_figures.py": "e55d0d93563e0f6f01fea9237be65b1c47fa046994be5a987e8b09877753df73",
 }
 TABLE_OUTPUTS = {
+    "glofas_issued_priors": ("tables/glofas_search3_mq_prior_settings.tex", "tables/glofas_issued_prior_settings_display.tex"),
+    "glofas_frequencies": ("tables/glofas_search3_mq_calibration.tex", "tables/glofas_empirical_quantile_frequencies_display.tex"),
+    "glofas_stopping": ("tables/glofas_search3_mq_convergence.tex", "tables/glofas_variational_stopping_display.tex"),
     "glofas_main": ("tables/glofas_search3_mq_main_scores.tex", "tables/glofas_forecast_correction_main_scores_display.tex"),
     "glofas_components": ("tables/glofas_search3_mq_part123_scores.tex", "tables/glofas_reference_discrepancy_scores_display.tex"),
     "glofas_component_priors": ("tables/glofas_search3_mq_part123_prior_settings.tex", "tables/glofas_reference_discrepancy_priors_display.tex"),
@@ -56,6 +70,18 @@ TABLE_OUTPUTS = {
     "pricefm_global": ("tables/pricefm_r98_global_aql_comparison.tex", "tables/pricefm_regional_comparison_display.tex"),
     "mq_design": ("tables/joint_qdesn_pure_desn_v2_mq_protocol.tex", "tables/qdesn_multiquantile_design_display.tex"),
 }
+MQ_TABLE_CAPTIONS = {
+    "score": r"Oracle finite-grid \(\aCRPS\) in the multiquantile study. Means, medians, and equal-tailed 95\% limits summarize posterior coefficient and intercept uncertainty conditional on each model's averaged future predictor matrix. The mean-grid score evaluates the projected posterior-mean quantile grid and differs from the posterior mean of the score. Boldface identifies numerical minima; all winner and runner-up marginal intervals overlap. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.",
+    "secondary_score": r"Finite-grid \(\aCRPS\) against realized observations. Posterior mean scores condition on each model's averaged future predictors; the mean-grid score evaluates its projected posterior-mean quantile grid. These scores are secondary to oracle \(\aCRPS\). Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.",
+    "recursive_policy": r"Oracle finite-grid \(\aCRPS\) under two treatments of future predictors. Entries are posterior means and equal-tailed 95\% intervals. Averaged-predictor scores condition on each model's mean future predictor matrix; trajectory-specific scores use each draw's recursively generated predictors. The intervals summarize different propagated uncertainties, not future-response interval coverage. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.",
+    "vb_score": r"Variational oracle finite-grid \(\aCRPS\). Means, medians, and approximate equal-tailed 95\% limits condition on fixed intercept estimates and each model's averaged future predictor matrix; intercept uncertainty is not included. The mean-grid score evaluates the projected variational-mean quantile grid. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.",
+    "contrast": r"MQ--DESN minus Q--DESN differences in oracle finite-grid \(\aCRPS\), summarized by posterior means and equal-tailed 95\% intervals. Positive differences favor independent estimation. Score draws from separately fitted models are paired by a fixed index rule, and these descriptive intervals depend on that pairing. The two asymmetric-tail intervals favor MQ--DESN; the other fourteen include zero.",
+    "crossing": r"Raw adjacent-level crossing percentages and monotone adjustments. The first two columns describe posterior-mean grids; the third averages the eight mechanism-specific crossing percentages across posterior draws with equal weight. Each model has 24,000 fitting and 47,520 forecast comparisons. AL models use 3,750 draws; exAL models use 7,500 for Laplace and 3,750 otherwise. Adjustment magnitudes are on the response scale. Every projected grid is ordered. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.",
+    "oracle_recovery": r"Recovery of known conditional quantile paths by projected posterior-mean grids. MAE and RMSE measure quantile-path recovery, separately from scores against observations. Fitting-sample entries are point summaries without posterior intervals. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.",
+}
+for _suffix in MQ_TABLE_CAPTIONS:
+    TABLE_OUTPUTS["mq_" + _suffix] = ("tables/joint_qdesn_pure_desn_v2_mq_" + _suffix + "_table.tex",
+                                      "tables/qdesn_multiquantile_" + _suffix + "_display.tex")
 WRAPPER_OUTPUTS = {
     "independent_forecast": ("tables/qdesn_pro_review_mcmc_forecast_figures.tex", "tables/qdesn_single_quantile_forecast_figures_display.tex"),
     "independent_mcmc_fit": ("tables/qdesn_pro_review_mcmc_fit_figure.tex", "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex"),
@@ -70,32 +96,47 @@ PDF_OUTPUTS = {
     for stage, role in PDF_ROLES.items()
 }
 PDF_OUTPUTS["pricefm_region"] = ("figures/pricefm_application/pricefm_r98_region_aql_comparison.pdf", "figures/pricefm_application/pricefm_regional_aql_editorial_20261013.pdf")
+PDF_OUTPUTS["glofas_common_window"] = ("figures/glofas_application/glofas_search3_part4_common_window_three_panel_review.pdf", "figures/glofas_application/glofas_common_window_statistical_labels_20261019.pdf")
+PRICEFM_FROZEN_ROLE_PINS = {
+    "pricefm_global": "2572a3f1aafe544175caec759f706de19d997a22084b92f742bc227c5a048193",
+    "pricefm_region": "cd39567f25b9eaba53ed1540ced6d3f6352bfd7c8f8c3cba7f8a79e55f31e1fd",
+}
 PDF_LABELS = {
     "Part 1: univariate USGS forecast": "Reference-process forecasts",
     "Part 2: retrospective GloFAS discrepancy forecast": "Historical discrepancy extrapolation",
     "Part 3: joint historical USGS forecast": "Combined historical-model forecasts",
     "Part 4: issued-ensemble latent-path experiment": "Issued-ensemble forecast correction",
-    "Part 4 corrected MQ-DESN convergence": "MQ-DESN convergence",
-    "Part 4 issued-window quantile calibration": "Issued-window quantile calibration",
+    "Part 4 corrected MQ-DESN convergence": "MQ-DESN variational stopping criteria",
+    "Part 4 issued-window quantile calibration": "Issued-window empirical quantile frequencies",
     "R98 Q-DESN": "Q-DESN",
     "R92 historical": "Historical Q-DESN",
     "Last 30 observed dates and 28 issued horizons. MQ-DESN (AL) and MQ-DESN (exAL) use the strict corrected":
         "Last 30 observed dates and 28 issued horizons; all models use the common forecast window.",
     "terminal fits.": "",
     "Filled terminal points indicate the three consecutive full-state passes required for release.":
-        "Filled points mark three consecutive passes of the stated convergence criterion.",
-    "Full-state pass": "Convergence criterion",
+        "Filled points mark three consecutive complete iterations meeting the stopping criteria.",
+    "Full-state pass": "Stopping criteria",
     "FALSE": "Not met",
     "TRUE": "Met",
     "Calibration is descriptive on the protected 28-day scoring window and is not a tuning criterion.":
-        "Empirical coverage over the 28-day issued forecast window.",
+        "Empirical quantile frequencies over the 28-day issued forecast window.",
     "Last 30 observed dates and the 30-day recursive forecast; magenta dashed is withheld USGS truth.":
         "Last 30 observed dates and the 30-day recursive forecast; magenta dashed marks withheld USGS observations.",
+}
+GAUSSIAN_LABELS = {"Normal Ridge": "Gaussian DESN (ridge)", "Normal RHS/VB": "Gaussian DESN (RHS)"}
+ROLE_PDF_LABELS = {
+    "glofas_calibration": {"Empirical coverage": "Empirical frequency", "Nominal quantile": "Probability level"},
+    "glofas_discrepancy": {"log(1 + flow)": "GloFAS-USGS discrepancy", "Normal and raw": "Gaussian DESN"},
+    "glofas_reference": {"Normal and raw": "Gaussian DESN"},
+    "glofas_combined": {"Normal and raw": "Gaussian DESN"},
+    "glofas_issued": {"Normal and raw": "Gaussian DESN and raw GloFAS"},
+    "glofas_common_window": {"(b) Independent AL": "(b) Q-DESN (AL)", "(c) Normal Ridge": "(c) Gaussian DESN (ridge)"},
 }
 ROLE_LABELS = {"Part 1": "Reference only", "Part 2": "Discrepancy", "Part 3": "Combined historical"}
 MAIN_OVERRIDE = "tables/qdesn_sections5_7_main_display_overrides.tex"
 SUPP_OVERRIDE = "tables/qdesn_sections5_7_supp_display_overrides.tex"
-MAIN_ALIASES = {"GlofasApplicationCurrentScoreTable": TABLE_OUTPUTS["glofas_main"][1]}
+MAIN_ALIASES = {"GlofasApplicationCurrentScoreTable": TABLE_OUTPUTS["glofas_main"][1],
+                "GlofasApplicationCurrentForecastWindowFigure": PDF_OUTPUTS["glofas_common_window"][1]}
 SUPP_ALIASES = {
     "GlofasApplicationCurrentPartOneFigure": PDF_OUTPUTS["glofas_reference"][1],
     "GlofasApplicationCurrentPartTwoFigure": PDF_OUTPUTS["glofas_discrepancy"][1],
@@ -106,6 +147,9 @@ SUPP_ALIASES = {
     "GlofasApplicationCurrentSupplementScoreTable": TABLE_OUTPUTS["glofas_components"][1],
     "GlofasApplicationCurrentPartOneTwoThreePriorSettingsTable": TABLE_OUTPUTS["glofas_component_priors"][1],
     "GlofasApplicationCurrentSpecificationsTable": TABLE_OUTPUTS["glofas_specifications"][1],
+    "GlofasApplicationCurrentCalibrationTable": TABLE_OUTPUTS["glofas_frequencies"][1],
+    "GlofasApplicationCurrentConvergenceTable": TABLE_OUTPUTS["glofas_stopping"][1],
+    "GlofasApplicationCurrentPriorSettingsTable": TABLE_OUTPUTS["glofas_issued_priors"][1],
     "PricefmCurrentGlobalComparisonTable": TABLE_OUTPUTS["pricefm_global"][1],
     "PricefmCurrentRegionFigure": PDF_OUTPUTS["pricefm_region"][1],
 }
@@ -125,6 +169,12 @@ def table_rows(text: str) -> list[list[str]]:
             for line in body.splitlines() if " & " in line]
 
 
+def gaussian_names(text: str) -> str:
+    for old, new in GAUSSIAN_LABELS.items():
+        text = text.replace(old, new)
+    return text
+
+
 def display_table(role: str, source: str) -> str:
     # These exact operations are independently checked in the companion script.
     if role == "glofas_main":
@@ -137,13 +187,24 @@ def display_table(role: str, source: str) -> str:
                 line = " & ".join(cells[:4]) + r" \\"
             line = line.replace("lrrrr@{}", "lrrr@{}")
             result.append(line)
-        return "\n".join(result) + "\n"
+        return gaussian_names("\n".join(result) + "\n")
     text = "\n".join(line for line in source.splitlines() if not line.startswith("%")) + "\n"
     if role in {"glofas_components", "glofas_component_priors"}:
         text = text.replace("Part & Family", "Component & Model")
         for old, new in ROLE_LABELS.items():
             text = text.replace(old, new)
-        return text
+        if role == "glofas_component_priors":
+            text = text.replace("Component & Model & Component", "Historical model & Model & Process")
+            text = text.replace(r"Slab & $\tau$ posterior range", r"Slab or ridge variance & Effective global scale")
+            text = text.replace(r"Ridge & Ridge: $\tau^2=10^4$", r"$\kappa_\beta^2=10^4$ & ---")
+        return gaussian_names(text)
+    if role == "glofas_frequencies":
+        text = re.sub(r"\$q_\{([^}]+)\}\$", r"$p=\1$", text)
+        return gaussian_names(text.replace("Family &", "Model &"))
+    if role == "glofas_stopping":
+        return text.replace("Outer sweep", "Outer iteration").replace("Full-state passes", "Consecutive complete iterations").replace("Strict convergence", "Stopping criteria met").replace("Family &", "Model &")
+    if role == "glofas_issued_priors":
+        return gaussian_names(text.replace("Family &", "Model &"))
     if role == "glofas_specifications":
         result = []
         for line in text.splitlines():
@@ -158,10 +219,19 @@ def display_table(role: str, source: str) -> str:
         for old, new in {
             "990 rows per setting": "990 origin--horizon pairs per setting",
             "Five chains per model cell": "Five chains per model and mechanism",
+            "Feature design &": "Reservoir specification &",
+            "separate source realizations": "separately simulated series",
+            "The readout contains an intercept and all reservoir-layer states; response lags enter the reservoir only.": "The regression uses an intercept and the states from all reservoir layers.",
+            "each model's averaged recursive design": "each model's averaged future predictor matrix",
+            "VB intervals additionally hold intercepts fixed.": "VB intervals additionally condition on fixed intercept estimates.",
+            "All 64 method--model comparisons are finite, and all 32 MCMC comparisons satisfy the score-functional criteria.": "Score calculations are finite for all 64 method--model comparisons; the 32 MCMC comparisons meet the stated score-stability criteria.",
+            "Design and computation for the reservoir-only multi-quantile comparison.": "Design and computation for the multiquantile study.",
         }.items():
             assert old in text
             text = text.replace(old, new)
         return text
+    if role.startswith("mq_"):
+        return replace_commands(text, "caption", [MQ_TABLE_CAPTIONS[role.removeprefix("mq_")]])
     assert role == "pricefm_global"
     for old, new in {
         "Surface &": "Comparison &",
@@ -181,7 +251,7 @@ CAPTIONS = {
     ],
     "independent_mcmc_fit": [r"MCMC fitting-sample recovery in the single-quantile study. Points and equal-tailed 95\% intervals summarize draw-wise quantile-path root mean squared error (RMSE); lower values are better. Navy circles identify \(\AL\) models and muted-brick triangles \(\exAL\) models; filled symbols denote Q--DESN and open symbols their dynamic linear comparators. Panels A--I identify the observation-error family and probability level, with separate horizontal scales. The dashed line marks exact recovery. The summaries condition on the simulated series and the criterion-specific specification."],
     "independent_vb_fit": [r"Variational fitting-sample recovery in the single-quantile study. Points and approximate equal-tailed 95\% intervals summarize quantile-path RMSE under the variational fit; lower values are better. Model encodings follow Figure~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals}. Panels A--I identify the observation-error family and probability level, with separate horizontal scales. The dashed line marks exact recovery. The summaries condition on the simulated series and the criterion-specific specification."],
-    "mq_forecast": [r"Oracle finite-grid \(\aCRPS\) in the multiquantile study. Points are posterior means and segments are equal-tailed 95\% intervals for the score averaged over the common forecast pairs, conditional on each model's averaged recursive future features. Lower scores are better. Annotations \(c\) give raw adjacent-level crossing percentages for posterior-mean forecast grids. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly. The scored grids use the monotone transformation specified in the supplement."],
+    "mq_forecast": [r"Oracle finite-grid \(\aCRPS\) in the multiquantile study. Points are posterior means and segments are equal-tailed 95\% intervals for the score averaged over the common forecast pairs, conditional on each model's averaged future predictors. Lower scores are better. Annotations \(c\) give raw adjacent-level crossing percentages for posterior-mean forecast grids. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly. The scored grids use the monotone transformation specified in the supplement."],
     "mq_fit": [r"Fitting-sample recovery of known conditional quantile paths in the multiquantile study. Points give the RMSE of monotone posterior-mean grids, not posterior interval summaries. Annotations \(c\) give raw adjacent-level crossing percentages before projection. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly."],
 }
 
@@ -221,6 +291,14 @@ def text_tokens(value: str) -> Counter:
 
 def numerical_tokens(value: str) -> Counter:
     return Counter(re.findall(r"(?<![A-Za-z])[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", value))
+
+
+def labels_for_role(role: str) -> dict[str, str]:
+    labels = dict(PDF_LABELS)
+    if role.startswith("glofas_"):
+        labels.update(GAUSSIAN_LABELS)
+        labels.update(ROLE_PDF_LABELS.get(role, {}))
+    return labels
 
 
 def pdf_display(root: Path, output_root: Path, role: str, source: str, destination: str) -> dict:
@@ -276,7 +354,7 @@ def pdf_display(root: Path, output_root: Path, role: str, source: str, destinati
     expected_words, exact_mapping = Counter(), {}
     for span in spans:
         old = span["text"]
-        new = PDF_LABELS.get(old, old)
+        new = labels_for_role(role).get(old, old)
         if new != old:
             exact_mapping[old] = new
         expected_words.update(new.split())
@@ -294,6 +372,13 @@ def pdf_display(root: Path, output_root: Path, role: str, source: str, destinati
             page.insert_text((x, y), new, fontname=fontname, fontsize=size, rotate=90)
             continue
         assert span["dir"] == (1.0, 0.0)
+        if role.startswith("glofas_") and old in GAUSSIAN_LABELS:
+            # Preserve the scientific legend strokes and readable type size.
+            # The expanded statistical model name needs two text lines to
+            # avoid intruding into the neighboring legend column.
+            page.insert_text((x, y - 3), "Gaussian DESN", fontname=fontname, fontsize=size)
+            page.insert_text((x, y + 7), new.removeprefix("Gaussian DESN "), fontname=fontname, fontsize=size)
+            continue
         if role == "pricefm_region":
             if old == "Region":
                 raise AssertionError("Expected a rotated Region label.")
@@ -329,7 +414,7 @@ def pdf_display(root: Path, output_root: Path, role: str, source: str, destinati
     with fitz.open(target) as saved:
         text = saved[0].get_text()
         assert text_tokens(text) == expected_words, "Mapped PDF wording changed."
-        mapped_source = "\n".join(PDF_LABELS.get(s["text"], s["text"]) for s in spans)
+        mapped_source = "\n".join(labels_for_role(role).get(s["text"], s["text"]) for s in spans)
         assert numerical_tokens(text) == numerical_tokens(mapped_source), "Numerical PDF content changed beyond explicit label mappings."
         assert not re.search(r"\b(?:Part [1-4]|R9[28]|Search III)\b", text)
         final_spans = renderer.texts(saved[0])
@@ -350,11 +435,29 @@ def pdf_display(root: Path, output_root: Path, role: str, source: str, destinati
         }
 
 
-def build(root: Path, output_root: Path) -> dict:
+def retained_pricefm(root: Path) -> dict[str, dict]:
+    previous = json.loads((root / MANIFEST).read_text())
+    retained = {entry["role"]: entry for entry in previous["outputs"] if entry["role"] in PRICEFM_FROZEN_ROLE_PINS}
+    assert set(retained) == set(PRICEFM_FROZEN_ROLE_PINS), "Excluded PriceFM receipt roles are missing."
+    for role, entry in retained.items():
+        assert hashlib.sha256(canonical(entry)).hexdigest() == PRICEFM_FROZEN_ROLE_PINS[role], "Excluded PriceFM receipt changed: " + role
+        assert sha(root / entry["file"]) == entry["sha256"], "Excluded PriceFM output changed: " + role
+        assert entry["source_sha256"] == SOURCE_PINS[entry["source"]] == sha(root / entry["source"])
+    return retained
+
+
+def build(root: Path, output_root: Path, *, exclude_pricefm: bool = False) -> dict:
     for path, expected in SOURCE_PINS.items():
         assert sha(root / path) == expected, "Frozen source changed: " + path
     outputs = []
+    retained = retained_pricefm(root) if exclude_pricefm else {}
     for role, (source, destination) in TABLE_OUTPUTS.items():
+        if role in retained:
+            if output_root != root:
+                (output_root / destination).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(root / destination, output_root / destination)
+            outputs.append(retained[role])
+            continue
         text = display_table(role, (root / source).read_text())
         target = output_root / destination
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -369,6 +472,12 @@ def build(root: Path, output_root: Path) -> dict:
         outputs.append({"role": role, "file": destination, "sha256": sha(target), "source": source,
                         "source_sha256": sha(root / source), "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged"})
     for role, (source, destination) in PDF_OUTPUTS.items():
+        if role in retained:
+            if output_root != root:
+                (output_root / destination).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(root / destination, output_root / destination)
+            outputs.append(retained[role])
+            continue
         outputs.append(pdf_display(root, output_root, role, source, destination))
     for role, path, aliases in (("main_overrides", MAIN_OVERRIDE, MAIN_ALIASES), ("supp_overrides", SUPP_OVERRIDE, SUPP_ALIASES)):
         target = output_root / path
@@ -387,17 +496,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--exclude-pricefm", action="store_true", help="Authenticate and retain frozen PriceFM outputs and per-role receipts without regeneration.")
     args = parser.parse_args()
     root = args.root.resolve()
     if args.check:
         with tempfile.TemporaryDirectory(prefix="qdesn-sections5-7-display-") as temporary:
-            manifest = build(root, Path(temporary))
+            manifest = build(root, Path(temporary), exclude_pricefm=args.exclude_pricefm)
             assert (root / MANIFEST).read_bytes() == canonical(manifest), "Presentation manifest does not reproduce."
             for entry in manifest["outputs"]:
                 assert (root / entry["file"]).read_bytes() == (Path(temporary) / entry["file"]).read_bytes(), entry["file"]
         print("QDESN_SECTIONS5_7_PRESENTATION_REPRODUCIBILITY=PASS")
     else:
-        manifest = build(root, root)
+        manifest = build(root, root, exclude_pricefm=args.exclude_pricefm)
         (root / MANIFEST).write_bytes(canonical(manifest))
         print("QDESN_SECTIONS5_7_PRESENTATION=BUILT")
     print(json.dumps({"outputs": len(manifest["outputs"]), "scientific_runs": 0, "scores_recomputed": 0}, sort_keys=True))

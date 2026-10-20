@@ -1,0 +1,53 @@
+\begin{table}[p]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.26\textwidth}>{\raggedright\arraybackslash}p{0.18\textwidth}rr@{}}
+\toprule
+Simulation setting & Model & \shortstack{Posterior mean\\realized score} & \shortstack{Mean-grid\\realized score} \\
+\midrule
+Asymmetric-Laplace tail & MQ--DESN (AL) & 0.3825 & 0.3789 \\
+ & Q--DESN (AL) & 0.4175 & 0.4152 \\
+ & MQ--DESN (exAL) & 0.3755 & 0.3723 \\
+ & Q--DESN (exAL) & 0.4315 & 0.4259 \\
+\addlinespace[2pt]
+Gaussian-mixture innovations & MQ--DESN (AL) & 0.4701 & 0.4656 \\
+ & Q--DESN (AL) & 0.4613 & 0.4543 \\
+ & MQ--DESN (exAL) & 0.4772 & 0.4742 \\
+ & Q--DESN (exAL) & 0.4651 & 0.4573 \\
+\addlinespace[2pt]
+Laplace innovations & MQ--DESN (AL) & 0.3467 & 0.3455 \\
+ & Q--DESN (AL) & 0.3408 & 0.3391 \\
+ & MQ--DESN (exAL) & 0.3459 & 0.3443 \\
+ & Q--DESN (exAL) & 0.3407 & 0.3389 \\
+\addlinespace[2pt]
+Nonlinear reservoir dynamics & MQ--DESN (AL) & 0.5238 & 0.5172 \\
+ & Q--DESN (AL) & 0.5140 & 0.5066 \\
+ & MQ--DESN (exAL) & 0.5237 & 0.5204 \\
+ & Q--DESN (exAL) & 0.5225 & 0.5144 \\
+\addlinespace[2pt]
+Gaussian innovations & MQ--DESN (AL) & 0.3578 & 0.3555 \\
+ & Q--DESN (AL) & 0.3725 & 0.3661 \\
+ & MQ--DESN (exAL) & 0.3665 & 0.3636 \\
+ & Q--DESN (exAL) & 0.3651 & 0.3550 \\
+\addlinespace[2pt]
+Persistent heavy tails & MQ--DESN (AL) & 1.1220 & 1.1076 \\
+ & Q--DESN (AL) & 1.0512 & 1.0446 \\
+ & MQ--DESN (exAL) & 1.0751 & 1.0662 \\
+ & Q--DESN (exAL) & 1.0976 & 1.0966 \\
+\addlinespace[2pt]
+Regime shift & MQ--DESN (AL) & 1.1528 & 1.1459 \\
+ & Q--DESN (AL) & 1.0500 & 1.0499 \\
+ & MQ--DESN (exAL) & 1.0355 & 1.0287 \\
+ & Q--DESN (exAL) & 1.0284 & 1.0227 \\
+\addlinespace[2pt]
+Student-\(t\) location--scale & MQ--DESN (AL) & 0.4233 & 0.4224 \\
+ & Q--DESN (AL) & 0.4228 & 0.4217 \\
+ & MQ--DESN (exAL) & 0.4270 & 0.4260 \\
+ & Q--DESN (exAL) & 0.4263 & 0.4249 \\
+\bottomrule
+\end{tabular}
+\caption{Finite-grid \(\aCRPS\) against realized observations. Posterior mean scores condition on each model's averaged future predictors; the mean-grid score evaluates its projected posterior-mean quantile grid. These scores are secondary to oracle \(\aCRPS\). Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.}
+\label{tab:joint-qdesn-pure-desn-v2-secondary}
+\end{table}

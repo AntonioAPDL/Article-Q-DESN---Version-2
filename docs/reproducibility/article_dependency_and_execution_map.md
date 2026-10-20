@@ -55,7 +55,8 @@ input edges. The `source_contract` is a provenance entry point, not a claim that
 each row independently authenticates its underlying fits. Estimator scopes are
 family-level descriptions; the named numerical source determines a particular
 row's exact estimator. Historical Phase153 and five-chain point-path assets are
-explicitly distinguished from current headline authorities.
+retained in the research repository and distinguished from current headline
+authorities; the Phase153 table is no longer an active manuscript input.
 
 The read-only standard-library script
 `scripts/audit_qdesn_article_dependencies.py` resolves the current literal
@@ -84,8 +85,8 @@ Original scientific PDFs and wrappers remain frozen in the research repository.
 The MQ--DESN nomenclature revision selects separately named, label-only display
 derivatives for the multiquantile simulation and full-family GloFAS figures and
 tables. Superseded display files are not uploaded merely because they remain
-in Git. Independent fitting graphics and the common-window main GloFAS figure
-are unchanged; current independent forecast graphics follow the scope revision
+in Git. Independent fitting graphics remain unchanged. The common-window
+main GloFAS figure now uses a label-only derivative; current independent forecast graphics follow the scope revision
 above. CSV/provenance companions are not mislabelled direct TeX
 inputs. This distinction also covers the PriceFM PNG companion and inactive
 independent wrapper files retained by the approved projection.
@@ -127,7 +128,8 @@ companion checker verifies permitted changes and the effective TeX selections.
 Document-specific override files distinguish the four-column main GloFAS
 score table from the full supplementary component comparisons. Only the
 main reduction-versus-raw column is omitted; all seven families and retained
-values are unchanged. The common-window Figure 4 is byte-identical.
+values are unchanged. The common-window figure's scientific paths and
+geometry are unchanged; its current display derivative corrects model names.
 
 Supplementary GloFAS graphics use reference, discrepancy, combined-history,
 and issued-ensemble descriptions instead of development-stage numbers.
@@ -146,6 +148,26 @@ versions. The supplemental execution account retains the scoped exDQLM
 multiquantile intervals still condition on averaged future features, with
 draw-recursive sensitivity separate. These distinctions are not changed by
 editing prose or figure captions.
+
+### Statistical-language revision
+
+The subsequent reader-focused revision changes no fit, forecast, score or
+scientific authority. It clarifies definitions and uncertainty statements,
+corrects semantic display labels, and relocates archival reconstruction and
+historical-target details to
+`docs/implementation_notes/statistical_language_reader_revision_20261019.md`.
+The supplement retains the consequences for interpreting current results.
+Frozen source tables and figures remain in Git; current caption/label
+derivatives authenticate their numerical contents and scientific vector paths.
+
+Run the bounded presentation builder with `--exclude-pricefm` for this
+revision. That mode preserves and authenticates all PriceFM output bytes,
+aliases, source pins and role-specific receipts rather than regenerating them.
+`scripts/check_qdesn_statistical_language_revision.R` checks the approved
+editorial scope, unchanged scientific CSVs and independent PDFs, and unchanged
+PriceFM sections and assets. Its companion mutation test verifies rejection
+of altered scientific values, stale displays and crossed scope boundaries.
+No scientific scheduler or historical fitting workflow is part of this pass.
 
 ## Prominent-result presentation reproduction
 

@@ -82,6 +82,15 @@ EDITORIAL_GLOFAS_TABLES = {
     "tables/glofas_reference_discrepancy_priors_display.tex",
     "tables/glofas_selected_specifications_display.tex",
     "tables/glofas_forecast_correction_main_scores_display.tex",
+    "tables/glofas_empirical_quantile_frequencies_display.tex",
+    "tables/glofas_variational_stopping_display.tex",
+    "tables/glofas_issued_prior_settings_display.tex",
+}
+EDITORIAL_JOINT_TABLES = {
+    "tables/joint_qdesn_pure_desn_v2_mq_" + suffix + "_table.tex":
+    "tables/qdesn_multiquantile_" + suffix + "_display.tex"
+    for suffix in ("score", "secondary_score", "recursive_policy", "vb_score",
+                   "contrast", "crossing", "oracle_recovery")
 }
 FROZEN_MANIFESTS = {
     "tables/joint_qdesn_pure_desn_v2_article_asset_manifest.csv":
@@ -510,19 +519,23 @@ def check(root: Path) -> dict[str, int]:
     graphs, visible = manuscript_consumers(root)
     files = set().union(*(g.files for g in graphs.values()))
     figures = set().union(*(g.figures for g in graphs.values()))
-    current_joint_tables = (JOINT_TABLES - {
-        "tables/joint_qdesn_pure_desn_v2_mq_protocol.tex",
-        "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
-        "tables/joint_qdesn_pure_desn_v2_mq_fit_figure.tex",
-    }) | {PROTOCOL_TABLE, FORECAST_WRAPPER, FIT_WRAPPER}
-    current_glofas_tables = (GLOFAS_TABLES - {
-        "tables/glofas_search3_mq_main_scores.tex",
-        "tables/glofas_search3_mq_part123_prior_settings.tex",
-        "tables/glofas_search3_mq_part123_scores.tex",
-    }) | EDITORIAL_GLOFAS_TABLES
+    current_joint_tables = set(EDITORIAL_JOINT_TABLES.values()) | {
+        PROTOCOL_TABLE, FORECAST_WRAPPER, FIT_WRAPPER}
+    current_glofas_tables = EDITORIAL_GLOFAS_TABLES
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
+    expect(not (JOINT_TABLES | GLOFAS_TABLES) & files,
+           "A superseded MQ table or caption remains an active manuscript input")
+    display_builder = editorial_checker(root).load_builder(root)
+    for source, output in EDITORIAL_JOINT_TABLES.items():
+        expect(display_builder.table_rows(read(root, source)) ==
+               display_builder.table_rows(read(root, output)),
+               f"MQ caption derivative changed scientific table rows: {output}")
     current_historical = {entry[1] for entry in HISTORICAL_ASSETS.values()}
+    unverified_replication = "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex"
+    current_historical.discard(unverified_replication)
+    expect(unverified_replication not in files,
+           "Historical unverified-target replication must remain outside current manuscript evidence")
     if (root / "application/config/independent_forecast_300_500_v1.json").exists():
         current_historical.discard("tables/qdesn_validation_500obs_metric_dependence_sensitivity_display.tex")
         expect("tables/independent_forecast_dependence_v1.tex" in files,

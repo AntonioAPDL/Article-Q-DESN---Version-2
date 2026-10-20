@@ -113,9 +113,9 @@ for (n in c(300L, 500L)) for (family in names(qdesn_family_labels)) {
   caption <- paste0(if (n == 300L) "Primary" else "Sensitivity", " MCMC metric summaries for the ",
     qdesn_family_labels[[family]], " family. Forecast criteria use the first ", n,
     " scored targets; entries are posterior means with equal-tailed 95\\% intervals. ",
-    if(n == 300L) "Fit RMSE retains the original 500-observation fitting sample. " else "The fitted sources are unchanged from the primary comparison. ",
+    if(n == 300L) "Fit RMSE uses the 500-observation fitting sample. " else "The models and posterior draws are the same as in the primary comparison. ",
     "Lower is better; boldface marks the lowest unrounded mean within each target level and criterion. ",
-    "Intervals condition on the selected specification and data; diagnostic grades are retained in the reproducibility record.")
+    "Intervals condition on the selected specification and data.")
   lines <- c(lines, "\\bottomrule", "\\end{tabular}", paste0("\\caption{", caption, "}"),
     sprintf("\\label{tab:independent-eval%d-mcmc-%s}", n, family), "\\end{table}")
   save_text(lines, sprintf("tables/independent_train500_eval%d_mcmc_%s_v1.tex", n, family))
@@ -134,7 +134,7 @@ for (f in names(qdesn_family_labels)) for (j in seq_along(model_label)) {
   if(j == 4L && f != "gausmix") lines <- c(lines, "\\addlinespace[2pt]")
 }
 save_text(c(lines, "\\bottomrule", "\\end{tabular}",
-  "\\caption{Unchanged VB fitting-sample quantile-path RMSE. Entries are variational means and equal-tailed 95\\% intervals on the original 500 fitted observations. Forecast results are not inferred from these fit summaries.}",
+  "\\caption{VB fitting-sample quantile-path RMSE for 500 observations. Entries are variational means and equal-tailed 95\\% intervals.}",
   "\\label{tab:independent-vb-fit-preserved}", "\\end{table}"), "tables/independent_vb_fit_preserved_v1.tex")
 for (n in c(300L, 500L)) {
   lines <- character()
@@ -220,7 +220,7 @@ set_pdf_creation_date(calibration_pdf, charToRaw("/CreationDate (D:2000010100000
 outputs <- c(outputs, calibration_pdf)
 save_text(c("\\begin{figure}[!htbp]", "\\centering",
   paste0("\\includegraphics[width=0.98\\textwidth]{", calibration_pdf, "}"),
-  "\\caption{Empirical quantile frequencies for the check-loss-selected specifications over the 300-target primary period and its 500-target extension. At each target, the reported quantile is the median of the pooled posterior location draws. Each point gives the fraction of observed responses at or below that forecast; the dashed diagonal marks the nominal probability. Colours and symbols follow the forecast-score figures. Each probability level uses its corresponding quantile-centred response series. Frequencies summarize the fixed evaluation record; no sampling confidence bands are shown.}",
+  "\\caption{Empirical quantile frequencies over the 300-target primary period and its 500-target extension. Each model uses the same specification as in the check-loss comparison. At each target, the quantile forecast is the posterior median, pooling the three chains. Points give the fractions of responses at or below these forecasts; the dashed diagonal marks the nominal probability. Colours and symbols follow the forecast-score figures. Each probability level uses its corresponding quantile-centred response series. No sampling confidence bands are shown.}",
   "\\figalt{Six panels compare empirical response frequencies below posterior-median quantile forecasts with the nominal levels 0.05, 0.25 and 0.50, for four models, three error families and two evaluation periods.}",
   "\\label{fig:supp-independent-quantile-calibration}", "\\end{figure}"),
   "tables/independent_forecast_calibration_figure_v1.tex")
@@ -257,6 +257,7 @@ sources <- c("application/config/independent_forecast_300_500_v1.json", "tables/
   "tables/independent_forecast_dependence_v1.tex",
   "docs/implementation_notes/independent_forecast_300_500_reporting_20261015.md", fit_assets)
 sources <- c(sources, "application/config/independent_forecast_calibration_v1.json",
+  "docs/implementation_notes/statistical_language_reader_revision_20261019.md",
   "docs/implementation_notes/independent_forecast_focus_and_calibration_20261015.md",
   "tables/independent_forecast_calibration_v1.csv", "tables/independent_forecast_calibration_sources_v1.csv",
   "tables/independent_forecast_calibration_manifest_v1.json")

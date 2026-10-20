@@ -97,6 +97,7 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     "Use all seven MQ table derivatives, not their historical caption sources.")
   require_check(!has(main, "[Simulation findings to be updated.]") &&
     !has(main, "[GloFAS findings to be updated.]") &&
+    has(plain(abstract), "Laplace (AL)") &&
     has(abstract, "[PriceFM findings to be updated.]") &&
     has(plain(abstract), "crossing") && has(plain(abstract), "75\\%"),
     "Complete accepted findings while leaving the PriceFM finding provisional.")

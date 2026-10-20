@@ -78,6 +78,8 @@ local({
     history, "not verified under the corrected current posterior target", "verified"))
   reject("accepted simulation finding made provisional again", changed_main = paste(
     main, "[Simulation findings to be updated.]"))
+  reject("abstract acronym introduced without expansion", changed_main = mutate_text(
+    main, "Asymmetric Laplace (AL)", "Asymmetric Laplace"))
   reject("pending PriceFM finding silently finalized", changed_main = mutate_text(
     main, "[PriceFM findings to be updated.]", "PriceFM is final."))
   reject("post-inspection selection history concealed", changed_main = mutate_text(

@@ -78,6 +78,16 @@ local({
     history, "not verified under the corrected current posterior target", "verified"))
   reject("accepted simulation finding made provisional again", changed_main = paste(
     main, "[Simulation findings to be updated.]"))
+  reject("streamflow finding broadened to undefined superiority", changed_main = mutate_text(
+    main, "reduces quantile forecast loss relative to the uncorrected ensemble",
+    "provides the best forecast correction"))
+  reject("streamflow score improvement loses its comparator", changed_main = mutate_text(
+    main, "relative to the uncorrected ensemble", "overall"))
+  reject("streamflow interval-coverage result removed from the application", changed_main = mutate_text(
+    main, "coverage of 21 of 28 observations for the nominal 90\\% interval",
+    "favorable interval coverage"))
+  reject("streamflow undercoverage concealed in the discussion", changed_main = mutate_text(
+    main, "nominal 90\\% interval covers 75\\%", "interval has favorable coverage for"))
   reject("abstract acronym introduced without expansion", changed_main = mutate_text(
     main, "Asymmetric Laplace (AL)", "Asymmetric Laplace"))
   reject("pending PriceFM finding silently finalized", changed_main = mutate_text(

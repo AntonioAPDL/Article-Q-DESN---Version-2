@@ -27,6 +27,8 @@ app_statistical_language_semantics <- function(main, supplement, history) {
   stopping <- section(supplement, "subsec:glofas_checks")
   abstract <- sub(".*\\\\begin\\{abstract\\}", "", main)
   abstract <- sub("\\\\end\\{abstract\\}.*", "", abstract)
+  abstract_plain <- plain(abstract)
+  main_body <- plain(sub(".*\\\\end\\{abstract\\}", "", main))
 
   require_check(!has(supplement_plain, "Unknown future GloFAS responses") &&
     has(supplement_plain, "Unknown future reference-streamflow values"),
@@ -97,10 +99,17 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     "Use all seven MQ table derivatives, not their historical caption sources.")
   require_check(!has(main, "[Simulation findings to be updated.]") &&
     !has(main, "[GloFAS findings to be updated.]") &&
-    has(plain(abstract), "Laplace (AL)") &&
+    has(abstract_plain, "Laplace (AL)") &&
     has(abstract, "[PriceFM findings to be updated.]") &&
-    has(plain(abstract), "crossing") && has(plain(abstract), "75\\%"),
+    has(abstract_plain, "crossing") &&
+    has(abstract_plain, "retrospective streamflow application") &&
+    has(abstract_plain, "Global Flood Awareness System ensembles") &&
+    has(abstract_plain, "reduces quantile forecast loss relative to the uncorrected ensemble") &&
+    !has(tolower(abstract_plain), "best forecast correction"),
     "Complete accepted findings while leaving the PriceFM finding provisional.")
+  require_check(has(main_body, "coverage of 21 of 28 observations for the nominal 90\\% interval") &&
+    has(main_body, "nominal 90\\% interval covers 75\\%"),
+    "Keep the substantive streamflow interval-coverage result outside the abstract.")
   historical_selection <- has(main_plain, "historical forecast-based refinement") ||
     (has(main_plain, "historical refinement") &&
       has(main_plain, "forecast performance on the evaluation series"))

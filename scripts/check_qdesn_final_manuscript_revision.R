@@ -216,10 +216,10 @@ expect(!grepl(
 reader_facing_joint <- paste(c(
   main,
   supplement,
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_score_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_recursive_policy_table.tex"),
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_oracle_recovery_table.tex"),
+  read_text("tables/qdesn_multiquantile_score_display.tex"),
+  read_text("tables/qdesn_multiquantile_crossing_display.tex"),
+  read_text("tables/qdesn_multiquantile_recursive_policy_display.tex"),
+  read_text("tables/qdesn_multiquantile_oracle_recovery_display.tex"),
   read_text("tables/qdesn_multiquantile_forecast_figure_display.tex"),
   read_text("tables/qdesn_multiquantile_fit_figure_display.tex")
 ), collapse = "\n")
@@ -234,7 +234,7 @@ expect(grepl("47,520 adjacent-level", main, fixed = TRUE) &&
        "The main article does not report normalized JOINT crossing rates.")
 expect(grepl(
   "posterior draws",
-  read_text("tables/joint_qdesn_pure_desn_v2_mq_crossing_table.tex"),
+  read_text("tables/qdesn_multiquantile_crossing_display.tex"),
   fixed = TRUE
 ), "The supplement does not distinguish crossing frequency from adjustment magnitude.")
 
@@ -418,7 +418,9 @@ expect(grepl("\\label{eq:supp_ns_product_factor}", supplement, fixed = TRUE) &&
          grepl("C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)", supplement, fixed = TRUE) &&
          grepl("C_0(\\Theta_0)p(\\Theta_0)", supplement, fixed = TRUE),
        "The complete product-RHS prior omits its scale-dependent factors.")
-expect(grepl("fitted anchor hierarchy at any", supplement, fixed = TRUE) &&
+expect(grepl("fitted first-slope hierarchy at any", supplement, fixed = TRUE) &&
+         grepl("for every \\(K\\), so \\(\\Delta_1=\\vect\\beta_1\\)",
+               prose(supplement), fixed = TRUE) &&
          !grepl("if \\(K>1\\)", supplement, fixed = TRUE),
        "The fitted anchor algorithm must not infer a random baseline from grid size.")
 expect(grepl("evaluat", main, fixed = TRUE) &&
@@ -437,17 +439,22 @@ expect(grepl("load, solar, and wind", pricefm_main, fixed = TRUE) &&
          !grepl("retrospectively observed own-region", manuscript, fixed = TRUE) &&
          grepl("\\label{tab:supp-pricefm-fold-design}", supplement, fixed = TRUE),
        "PriceFM covariate availability or the executed fold design is misstated.")
-expect(grepl("criterion-specific", simulation_main, fixed = TRUE) &&
-         grepl("historical forecast-based refinement", simulation_main, fixed = TRUE) &&
+expect(grepl("Separate DESN specifications were selected for the reported criteria",
+             simulation_main, fixed = TRUE) &&
+         grepl("historical refinement also used forecast performance on the evaluation series",
+               simulation_main, fixed = TRUE) &&
          grepl("historical forecast-based refinement", prose(supplement), fixed = TRUE),
        "Criterion-specific independent specifications must retain their actual forecast-guided selection history.")
 expect(!grepl("1\\.1\\.[12]", simulation_main) &&
          grepl("1.1.1", supplement, fixed = TRUE) &&
          !grepl("(uses?|used|executed|fitted|fit).*version.?1\\.1\\.2", prose(supplement)),
        "Keep authenticated historical software execution versions in the supplement, not an unexecuted 1.1.2 claim.")
+history_note <- read_text(
+  "docs/implementation_notes/statistical_language_reader_revision_20261019.md"
+)
 independent_history_qualified <- if (current_ind_reporting) {
-  grepl("remain archived as historical analyses", supplement, fixed = TRUE) &&
-    grepl("not evidence of stability", supplement, fixed = TRUE) &&
+  grepl("remain archived as historical analyses", prose(history_note), fixed = TRUE) &&
+    grepl("not evidence of stability", prose(history_note), fixed = TRUE) &&
     grepl("revised after inspecting", supplement, fixed = TRUE) &&
     grepl("adopted after exploratory assessment", main, fixed = TRUE)
 } else {
@@ -455,8 +462,13 @@ independent_history_qualified <- if (current_ind_reporting) {
     grepl("historical comparisons", supplement, fixed = TRUE)
 }
 expect(independent_history_qualified &&
-         grepl("not been", supplement, fixed = TRUE) &&
-         grepl("corrected current posterior target", supplement, fixed = TRUE),
+         grepl("not verified under the corrected current posterior target",
+               prose(history_note), fixed = TRUE) &&
+         !grepl(paste0("\\input{tables/",
+           "joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex}"),
+           supplement, fixed = TRUE) &&
+         file.exists(repo_path(
+           "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex")),
        "Historical sensitivities must not certify the current posterior analysis.")
 expect(grepl("historical single-chain comparison",
              read_text("tables/qdesn_validation_mcmc_five_chain_sensitivity.tex"),

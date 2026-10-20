@@ -66,11 +66,11 @@ def pdf_text(path: Path) -> str:
     return subprocess.run(["pdftotext", "-layout", str(path), "-"], text=True, check=True, capture_output=True).stdout
 
 
-def mapped_source_words(builder, source: str) -> Counter:
+def mapped_source_words(builder, source: str, role: str) -> Counter:
     # Apply only complete, authenticated source-label phrases. Whitespace
     # normalization permits line wraps, but not any numerical/value exemption.
     text = " ".join(source.split())
-    for old, new in sorted(builder.PDF_LABELS.items(), key=lambda pair: -len(pair[0])):
+    for old, new in sorted(builder.labels_for_role(role).items(), key=lambda pair: -len(pair[0])):
         text = re.sub(r"(?<!\S)" + re.escape(old) + r"(?!\S)", lambda match: new, text)
     return Counter(text.split())
 
@@ -136,7 +136,7 @@ def check(root: Path, *, effective: bool = True) -> dict:
                     assert re.findall(command, original) == re.findall(command, actual), "Caption edit changed graphics or label."
         elif role in builder.PDF_OUTPUTS:
             text = pdf_text(root / path)
-            expected_words = mapped_source_words(builder, pdf_text(root / source))
+            expected_words = mapped_source_words(builder, pdf_text(root / source), role)
             assert Counter(dict(entry["expected_text_tokens"])) == expected_words, "Receipt disagrees with frozen PDF labels: " + role
             assert Counter(text.split()) == expected_words, "PDF labels or numerical tokens changed: " + role
             assert builder.numerical_tokens(text) == Counter(dict(entry["numeric_tokens"])), "Numerical PDF token changed."
@@ -149,14 +149,34 @@ def check(root: Path, *, effective: bool = True) -> dict:
             assert entry["aliases"] == aliases
     main_rows = entries["glofas_main"]["rows"]
     assert len(main_rows) == 7 and all(len(row) == 4 for row in main_rows)
-    expected_names = ["Q--DESN (AL)", "Q--DESN (exAL)", "Normal Ridge", "MQ--DESN (AL)",
-                      "MQ--DESN (exAL)", "Raw GloFAS", "Normal RHS/VB"]
+    expected_names = ["Q--DESN (AL)", "Q--DESN (exAL)", "Gaussian DESN (ridge)", "MQ--DESN (AL)",
+                      "MQ--DESN (exAL)", "Raw GloFAS", "Gaussian DESN (RHS)"]
     assert [row[0] for row in main_rows] == expected_names
     assert len(entries["glofas_components"]["rows"]) == 18
     assert all(row[2:] == ["---", "---", "---"] for row in entries["glofas_components"]["rows"] if row[0] == "Discrepancy")
     assert len(entries["glofas_component_priors"]["rows"]) == 24
     assert len(entries["glofas_specifications"]["rows"]) == 2
     assert len(entries["pricefm_global"]["rows"]) == 3
+    builder.retained_pricefm(root)
+    frequencies = (root / builder.TABLE_OUTPUTS["glofas_frequencies"][1]).read_text()
+    assert "$p=0.05$" in frequencies and "$p=0.95$" in frequencies and "$q_{" not in frequencies
+    priors = (root / builder.TABLE_OUTPUTS["glofas_component_priors"][1]).read_text()
+    assert "Historical model & Model & Process" in priors
+    assert r"$\kappa_\beta^2=10^4$ & ---" in priors and r"$\tau^2=10^4$" not in priors
+    assert "Normal Ridge" not in priors and "Normal RHS/VB" not in priors
+    discrepancy = pdf_text(root / builder.PDF_OUTPUTS["glofas_discrepancy"][1])
+    assert "GloFAS-USGS discrepancy" in discrepancy and "log(1 + flow)" not in discrepancy
+    for role in ("glofas_reference", "glofas_discrepancy", "glofas_combined"):
+        assert "Normal and raw" not in pdf_text(root / builder.PDF_OUTPUTS[role][1])
+    common_window = pdf_text(root / builder.PDF_OUTPUTS["glofas_common_window"][1])
+    assert "(b) Q-DESN (AL)" in common_window and "(c) Gaussian DESN (ridge)" in common_window
+    for role in builder.TABLE_OUTPUTS:
+        if role.startswith("mq_"):
+            source, output = builder.TABLE_OUTPUTS[role]
+            # Captions may clarify interpretation; the full scientific table
+            # body, including every numeric cell and model label, is fixed.
+            if role != "mq_design":
+                assert builder.table_rows((root / source).read_text()) == builder.table_rows((root / output).read_text())
     if effective:
         for document, override, aliases in (("main.tex", builder.MAIN_OVERRIDE, builder.MAIN_ALIASES),
                                              ("qdesn-supplement.tex", builder.SUPP_OVERRIDE, builder.SUPP_ALIASES)):

@@ -95,15 +95,18 @@ check("MAE and empirical frequencies retain distinct targets",
   grepl("specification used for check loss", supplement, fixed = TRUE) &&
   grepl("not widths of future-response prediction intervals", supplement, fixed = TRUE))
 check("obsolete point-path sensitivity not actively claimed", !grepl("subsec:supp-independent-five-chain-sensitivity",supplement,fixed=TRUE))
-base_main <- paste(system2("git",c("show","53e4912387b152a2c78b8f242beff77e42eeac52:main.tex"),stdout=TRUE),collapse="\n")
-base_supp <- paste(system2("git",c("show","53e4912387b152a2c78b8f242beff77e42eeac52:qdesn-supplement.tex"),stdout=TRUE),collapse="\n")
-part <- function(x,marker,index) strsplit(x,marker,fixed=TRUE)[[1L]][index]
-check("main outside the independent simulation region unchanged",
-  identical(part(main,"\\section{Simulation Studies}",1L),part(base_main,"\\section{Simulation Studies}",1L)) &&
-  identical(part(main,"\\subsection{Multiquantile simulation design}",2L),part(base_main,"\\subsection{Multiquantile simulation design}",2L)))
-check("supplement outside the independent simulation region unchanged",
-  identical(part(supplement,"\\subsection{Single-Quantile Generating Design}",1L),part(base_supp,"\\subsection{Single-Quantile Generating Design}",1L)) &&
-  identical(part(supplement,"\\subsection{Multiquantile MCMC Evaluation Details}",2L),part(base_supp,"\\subsection{Multiquantile MCMC Evaluation Details}",2L)))
+# The a96e6616 statistical-language revision deliberately edits prose outside
+# the independent study. Its bounded replacement for the old 53e4912 blanket
+# text-equality guard freezes every scientific table CSV, all PriceFM sections
+# and files, source model code, and the excluded PriceFM presentation receipts.
+# Keep the independent numbers, source identities, and scope checks above;
+# an editorial change must not become an unreviewed scientific replacement.
+language_check <- system2(file.path(R.home("bin"), "Rscript"),
+  shQuote("scripts/check_qdesn_statistical_language_revision.R"),
+  stdout = TRUE, stderr = TRUE)
+check("bounded editorial scope preserves scientific inputs and PriceFM authority",
+  is.null(attr(language_check, "status")) && any(grepl(
+    "QDESN_STATISTICAL_LANGUAGE_REVISION_CHECK=PASS", language_check, fixed = TRUE)))
 upload <- readLines("overleaf/article_files.txt"); upload <- upload[nzchar(upload)&!startsWith(upload,"#")]
 check("projection excludes deprecated independent numerical panels",
   !any(grepl("qdesn_validation_500obs_v14|qdesn_validation_mcmc_five_chain|qdesn_pro_review_mcmc_forecast",upload)))

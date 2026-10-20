@@ -109,14 +109,16 @@ expect(!has(main, "eq:monotone-reporting-main") &&
 expect(has(prose(main), "oracle finite-grid") && has(prose(supplement), "oracle finite-grid") &&
          has(main, "S_{\\mathrm{DGP}}^{(b)}") && has(main, "p_K-p_1"),
        "Rename only the display name, retaining the finite-grid score and range.")
-expect(has(main, "score intervals condition on that summary"),
+expect(has(prose(main), "Score intervals condition on these averaged predictors") &&
+         has(prose(main), "averaged over simulated response paths"),
        "Define the uncertainty displayed in the primary joint comparison.")
 expect(has(prose(main), "shared by independent Q--DESN under AL and exAL and MQ--DESN under AL and exAL") &&
          has(prose(main), "These four regressions use the same selected temporal representation"),
        "Name both likelihoods and both fitting structures in the common-feature comparison.")
 expect(has(prose(main), "Gaussian regressions on DESN features (Gaussian-DESN)") &&
          has(prose(main), "estimate the conditional mean") &&
-         has(main, "generated reservoir states"),
+         has(prose(main), "Checks of the reservoir states assess finite values") &&
+         has(prose(main), "echo state property"),
        "Explain preliminary specification comparison and state diagnostics.")
 expect(!has(main, "initialize Gaussian RHS--VB, then the median AL regression") &&
          has(prose(supplement), "initialization sequence") &&
@@ -125,10 +127,10 @@ expect(!has(main, "initialize Gaussian RHS--VB, then the median AL regression") 
 expect(has(prose(caption), "PriceFM uses independent VB fits only") &&
          has(caption, "prior calibration"),
        "Preserve study-specific fitting and prior-calibration distinctions.")
-for (placeholder in c("Simulation", "GloFAS", "PriceFM")) {
-  expect(has(main, paste0("[", placeholder, " findings to be updated.]")),
-         "Do not replace the intentional abstract findings placeholders.")
-}
+expect(!has(main, "[Simulation findings to be updated.]") &&
+         !has(main, "[GloFAS findings to be updated.]") &&
+         has(main, "[PriceFM findings to be updated.]"),
+       "Complete accepted simulation and GloFAS findings; retain pending PriceFM.")
 expect(has(prose(main), "future USGS measurements are reserved for scoring") &&
          has(supplement, "unscored") &&
          has(prose(supplement), "retrospective GloFAS ends") &&
@@ -143,12 +145,12 @@ for (heading in c("Single-quantile simulation design", "Single-quantile results"
 expect(has(main, "\\mat G_\\theta\\vect\\theta_{t-1,f}") &&
          has(main, "H_f^{-1}(p)") && has(main, "WestHarrison1997") &&
          has(prose(main), "Observation errors follow") &&
-         has(prose(main), "historical forecast-based refinement"),
+         has(prose(main), "historical refinement also used forecast performance on the evaluation series"),
        "Explain quantile-centered linear dynamics without rewriting the actual selection history.")
 expect(has(main, "DeLeonEtAl2026Exdqlm") && !has(main, "version 1.1.2") &&
          has(prose(supplement), "version 1.1.1"),
        "Cite the package paper while preserving authenticated historical execution versions.")
-expect(has(prose(supplement), "log-scale slice transition") &&
+expect(has(prose(supplement), "slice sampling on the logarithmic scale") &&
          has(supplement, "eq:supp_joint_increment_moments"),
        "Keep executed AL transitions and joint covariance mathematics identifiable.")
 expect(has(prose(intro), "final regression layer (the readout)"),

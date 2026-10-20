@@ -72,6 +72,33 @@ local({
   })
   record("Equivalent-coordinate ELBOs agree", abs(original_elbo - transformed_elbo))
 
+  # The defined inverse logit and the two-dimensional transformation have
+  # the same Jacobian used in the written scale--shape calculation.
+  expit <- function(a) 1 / (1 + exp(-a))
+  record("Inverse-logit definition", max(abs(expit(c(-8, 0, 8)) -
+    plogis(c(-8, 0, 8)))))
+  eta <- c(0.4, -0.7)
+  lower <- -1.2
+  upper <- 1.8
+  transform <- function(x) c(exp(x[1L]), lower + (upper - lower) * expit(x[2L]))
+  step <- 1e-6
+  numeric_jacobian <- vapply(seq_along(eta), function(j) {
+    delta <- numeric(length(eta))
+    delta[j] <- step
+    (transform(eta + delta) - transform(eta - delta)) / (2 * step)
+  }, numeric(length(eta)))
+  exact_jacobian <- exp(eta[1L]) * (upper - lower) *
+    expit(eta[2L]) * (1 - expit(eta[2L]))
+  record("Scale--shape transformation Jacobian",
+    abs(det(numeric_jacobian) - exact_jacobian), 1e-8)
+
+  # Isotonic projection minimizes squared adjustment; it is not sorting.
+  raw_grid <- c(3, 1, 2)
+  projected_grid <- stats::isoreg(seq_along(raw_grid), raw_grid)$yf
+  record("Isotonic projection differs from sorting",
+    if (!isTRUE(all.equal(projected_grid, sort(raw_grid))) &&
+      isTRUE(all.equal(projected_grid, c(2, 2, 2)))) 0 else Inf)
+
   # Repeated observations are Gaussian density-evaluation arguments.
   y <- rep(c(-0.5, 0.4, 1.2), 2)
   mu <- seq(-0.3, 0.8, length.out = 6)

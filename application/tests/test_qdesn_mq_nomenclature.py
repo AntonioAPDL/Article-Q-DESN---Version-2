@@ -70,6 +70,44 @@ class MQNomenclatureTest(unittest.TestCase):
     def test_complete_isolated_dependency_closure_passes(self):
         self.assertEqual(CHECKER.check(self.root)["selected_mq_pdfs"], 8)
 
+    def test_all_active_mq_caption_derivatives_preserve_table_rows(self):
+        builder = CHECKER.editorial_checker(self.root).load_builder(self.root)
+        for source, output in CHECKER.EDITORIAL_JOINT_TABLES.items():
+            self.assertEqual(builder.table_rows(CHECKER.read(self.root, source)),
+                             builder.table_rows(CHECKER.read(self.root, output)))
+
+    def test_superseded_mq_table_cannot_replace_caption_derivative(self):
+        source, output = next(iter(CHECKER.EDITORIAL_JOINT_TABLES.items()))
+        path = self.root / "qdesn-supplement.tex"
+        text = path.read_text()
+        self.assertIn(output, text)
+        path.write_text(text.replace(output, source, 1))
+        self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+        with self.assertRaisesRegex(CHECKER.CheckError, "omits an authenticated|superseded"):
+            CHECKER.check(self.root)
+
+    def test_current_mq_table_numeric_edit_fails_with_rehashed_editorial_receipt(self):
+        relative = "tables/qdesn_multiquantile_score_display.tex"
+        path = self.root / relative
+        text = path.read_text()
+        self.assertIn("0.3805", text)
+        path.write_text(text.replace("0.3805", "0.3000", 1))
+        manifest_path = self.root / CHECKER.EDITORIAL_MANIFEST
+        receipt = json.loads(manifest_path.read_text())
+        entry = next(r for r in receipt["outputs"] if r["file"] == relative)
+        entry["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        manifest_path.write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(CHECKER.CheckError, "Unpermitted table/caption transformation|scientific table rows"):
+            CHECKER.check(self.root)
+
+    def test_historical_unverified_target_table_cannot_return_as_current_evidence(self):
+        path = self.root / "qdesn-supplement.tex"
+        relative = "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex"
+        path.write_text(path.read_text() + "\n\\input{" + relative + "}\n")
+        self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+        with self.assertRaisesRegex(CHECKER.CheckError, "Historical unverified-target replication"):
+            CHECKER.check(self.root)
+
     def test_registry_al_exal_label_swap_fails_with_updated_receipts(self):
         def swap(rows):
             joint_al = next(r for r in rows if r["source_key"] == "joint_qdesn_rhs_mcmc")
@@ -108,7 +146,7 @@ class MQNomenclatureTest(unittest.TestCase):
         asset["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         asset["size_bytes"] = path.stat().st_size
         receipt_path.write_text(json.dumps(receipt))
-        with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts|Frozen source changed: tables/joint_qdesn_mq_presentation_manifest.json"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts|Frozen source changed: tables/joint_qdesn_(?:mq_presentation_manifest.json|pure_desn_v2_mq_score_table.tex)"):
             CHECKER.check(self.root)
 
     def test_stale_manifest_output_hash_fails(self):

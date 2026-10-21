@@ -1,0 +1,69 @@
+{
+  "tag": "pricefm_stage_r145_at_recovery_muscat_utilization_20261021",
+  "purpose": "bounded_same_target_AT_rescue_and_failure_isolated_Muscat_slot_A_continuation",
+  "host": "muscat",
+  "source_tag": "pricefm_stage_r141_recovery_rollout_20261019",
+  "source_branch": "work/pricefm-r141-recovery-rollout-20261019",
+  "source_head": "4cd92ac3654f16a84a67c8db6cfc7f381113aeb9",
+  "source_worktree": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019",
+  "python_runtime": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python",
+  "dependency_worktree": "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008",
+  "release_receipt": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019/release/muscat/validation.json",
+  "source_preparation": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019__AT/preparation.json",
+  "source_preparation_sha256": "8bc66507ecba6c21ef120a79d989432cb8494eae7f7cd1c385b3c7a1c42c2eb5",
+  "source_blocked_sha256": "f196dbd0178faa69f33cd13c2c1573110dd4184a1888fa081d5bd4f73f1d082e",
+  "frozen_source_sha256": {
+    "application/config/pricefm_stage_r141_recovery_rollout_20261019.json": "aeda15b1590c10bba2f99d952372dc725a1099285266875e48b11122e33b6277",
+    "application/scripts/pricefm/480_run_pricefm_stage_r141_region.py": "7ba3473858ac724eecccb8cdf7ee8e4dad5fae478123aab679a38cc801c845a0",
+    "application/scripts/pricefm/470_fit_pricefm_stage_r137_certified_al_300.R": "58fae6e703d917362f9110ae0d29d9408f204d1e4b65007bb8555db0b236ae21",
+    "application/R/pricefm_r129_al_fixedpoint_certificate.R": "c573066109eef78cd19e8c60f2630ecad29d433ae9d95150d0a0fe4f7ee21571",
+    "application/scripts/pricefm/pricefm_stage_r67_cran111_adapter.R": "679e6c929b09b710d412962b7ccaf965885065dfce08eacb5279834b3db9a554",
+    "application/tests/test_pricefm_stage_r141_recovery_rollout.py": "4d6e059535b9339519a297eb93ff1cd52bfdaa9e6e2920e00690d002364fcbae"
+  },
+  "frozen_recovery_sha256": {
+    "application/scripts/pricefm/483_fit_pricefm_stage_r142_same_target_al_rescue.R": "101579811fb817e2d82b6c80d57561b120d4625750b0d048cdb9848f5cc8a9b8",
+    "application/scripts/pricefm/484_run_pricefm_stage_r142_certified_al_rescue.py": "00d79c135ded9137e5ba923d7315440c4309bd72c27677d531d49b6656de7bfb",
+    "application/tests/test_pricefm_stage_r142_certified_al_rescue.py": "b56cf187af03d369acc196e06ffa3431c747f63249750625261d5def966d3c74"
+  },
+  "blocked_region": "AT",
+  "expected_initial_uncertified_tasks": {
+    "iq_AT_r134_56b647165f21d09f_t9.653643731923e-06_s3_al0.25": {
+      "task_sha256": "496343160280ef37cbb4f16719b11aeb0fd28c872ec5a83e0801f0560d891f62",
+      "completed_evidence_sha256": "1c8b6695c754bda8bd8e129b4ca7036bdd0434fb74b6bdc875bf30efa30df12f",
+      "terminal_sha256": "d345be9b06db07ce3631f5d3094bdd0100776d51beea1d12e99cdfe4f1ad6207",
+      "fixedpoint_certificate_sha256": "762134fe06759e0c3ec438e4f0c8927e7154b799100f54bb825cbcf3cde0b968"
+    },
+    "iq_AT_r134_56b647165f21d09f_t9.653643731923e-05_s3_al0.25": {
+      "task_sha256": "1aa9d60dbc54583e6e8709f2257c6a7e463757fb09a18a3d4afedef008698caa",
+      "completed_evidence_sha256": "ad5bbb352612e9481c834e5b3a76c8c7729c7a209f78f100585249c615ddeb12",
+      "terminal_sha256": "1637f30d576f718778bf13f856748b86da8f0d85aa787661495a08bc538b519c",
+      "fixedpoint_certificate_sha256": "6b8230a3c44ba604eb8c70de3c0c8d5672dfa1884013a9d0bbf9fae3a9ece648"
+    }
+  },
+  "at_cpus": [0, 1],
+  "continuation_cpus": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+  "continuation_regions": ["DE_LU", "FI", "IT_CALA", "IT_SICI", "NL", "NO_4", "RO", "SE_4"],
+  "fit_max_iter_per_attempt": 300,
+  "maximum_rescue_attempts": 2,
+  "maximum_controller_cycles": 8,
+  "source_iteration_cap": 300,
+  "minimum_free_disk_GiB": 80,
+  "minimum_available_memory_GiB": 180,
+  "expected_package": {"name": "exdqlm", "version": "1.1.1", "repository": "CRAN"},
+  "eligible_task_kinds": ["internal_al", "al"],
+  "required_source_state": {
+    "finite_core": true,
+    "computationally_certified": false,
+    "test_opened": false,
+    "prior_center_from_initializer": false,
+    "exact_optimizer_resumption_supported": false
+  },
+  "warm_start_components": ["beta_mean", "likelihood_scale"],
+  "posterior_target_changes_authorized": false,
+  "certificate_limit_changes_authorized": false,
+  "test_based_rescue_authorized": false,
+  "test_data_access_authorized": false,
+  "registry_mutation_authorized": false,
+  "article_mutation_authorized": false,
+  "promotion_authorized": false
+}

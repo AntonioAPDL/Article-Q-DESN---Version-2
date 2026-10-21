@@ -55,6 +55,14 @@ changed. R145 preserves any unsealed partial rescue attempt under an explicit
 `interrupted_attempts/` receipt before restarting it; partial evidence is never
 accepted as a completed fit.
 
+The same interruption exposed a partially written DE_LU compressed training
+bank. R145 now validates every pre-preparation bank as a complete ZIP archive,
+moves only an invalid partial bank into `interrupted_preparation_banks/` with a
+hash receipt, and lets the frozen R141 preparer regenerate that missing bank.
+Valid completed banks are retained. A quarantine caused solely by such an
+interrupted write is archived and reopened; other preparation or model
+failures remain quarantined.
+
 All R145 orchestration and inherited R141 controllers use the campaign's pinned
 Python 3.11 environment. BLAS, OpenMP, data.table, and numerical-expression
 thread counts remain fixed at one per worker.

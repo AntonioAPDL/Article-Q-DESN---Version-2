@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,3 +112,28 @@ def test_queue_lane_quarantines_one_region_and_continues(tmp_path):
         R145.region_complete = old_complete
         R145.run_region = old_run
         R145.health = old_health
+
+
+def test_corrupt_interrupted_preparation_bank_is_preserved_and_reopened(tmp_path):
+    old_data = R145.DATA
+    R145.DATA = tmp_path
+    try:
+        config = dict(CONFIG, source_tag='r141', continuation_regions=['DE_LU'])
+        bank_root = tmp_path / 'campaigns/r141__DE_LU/training_banks/DE_LU'
+        bank_root.mkdir(parents=True)
+        (bank_root / 'target_only.npz').write_bytes(b'not-a-zip')
+        with zipfile.ZipFile(bank_root / 'valid.npz', 'w') as archive:
+            archive.writestr('array.npy', b'valid-placeholder')
+        runtime = tmp_path / 'runtime'; (runtime / 'quarantine').mkdir(parents=True)
+        R145.atomic_json(runtime / 'quarantine/DE_LU.json', {
+            'region': 'DE_LU', 'error_type': 'CalledProcessError'})
+        reopened = R145.reopen_interrupted_preparation_failures(config, runtime)
+        assert [item['region'] for item in reopened] == ['DE_LU']
+        assert not (bank_root / 'target_only.npz').exists()
+        assert (bank_root / 'valid.npz').is_file()
+        assert not (runtime / 'quarantine/DE_LU.json').exists()
+        preserved = reopened[0]['preserved_banks'][0]
+        assert Path(preserved['destination']).read_bytes() == b'not-a-zip'
+        assert Path(preserved['destination'] + '.receipt.json').is_file()
+    finally:
+        R145.DATA = old_data

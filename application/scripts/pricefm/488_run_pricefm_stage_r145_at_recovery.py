@@ -13,6 +13,7 @@ from pathlib import Path
 import socket
 import subprocess
 import time
+import zipfile
 
 for variable in ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
                  'BLIS_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'R_DATATABLE_NUM_THREADS'):
@@ -309,7 +310,59 @@ def assert_scheduler_unchanged(config, pid):
     scheduler_failure(config)
 
 
+def preserve_corrupt_preparation_banks(config, region):
+    preparation = DATA / 'launch_prep' / f"{config['source_tag']}__{region}" / 'preparation.json'
+    if preparation.is_file():
+        return []
+    campaign = source_campaign(config, region)
+    bank_root = campaign / 'training_banks' / region
+    preserved = []
+    for bank in sorted(bank_root.glob('*.npz')):
+        error = None
+        try:
+            with zipfile.ZipFile(bank) as archive:
+                bad_member = archive.testzip()
+            if bad_member is not None:
+                error = 'bad_zip_member:' + bad_member
+        except (OSError, zipfile.BadZipFile) as caught:
+            error = type(caught).__name__ + ':' + str(caught)
+        if error is None:
+            continue
+        destination_root = campaign / 'interrupted_preparation_banks' / region
+        destination_root.mkdir(parents=True, exist_ok=True)
+        destination = destination_root / f'{bank.name}.{time.time_ns()}'
+        record = {'status': 'R145_INTERRUPTED_PREPARATION_BANK_PRESERVED',
+                  'region': region, 'source_path': str(bank), 'destination': str(destination),
+                  'bytes': bank.stat().st_size, 'sha256': sha256(bank), 'validation_error': error,
+                  'test_opened': False, 'posterior_target_changed': False, 'epoch': time.time()}
+        os.replace(bank, destination)
+        atomic_json(destination.with_name(destination.name + '.receipt.json'), record)
+        preserved.append(record)
+    return preserved
+
+
+def reopen_interrupted_preparation_failures(config, runtime):
+    reopened = []
+    for region in config['continuation_regions']:
+        quarantine = runtime / 'quarantine' / f'{region}.json'
+        if not quarantine.is_file():
+            continue
+        preparation = DATA / 'launch_prep' / f"{config['source_tag']}__{region}" / 'preparation.json'
+        if preparation.is_file():
+            continue
+        preserved = preserve_corrupt_preparation_banks(config, region)
+        if not preserved:
+            continue
+        destination = runtime / 'interrupted_preparation_failures' / f'{region}.{time.time_ns()}.json'
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(quarantine, destination)
+        reopened.append({'region': region, 'prior_quarantine': str(destination),
+                         'preserved_banks': preserved})
+    return reopened
+
+
 def prepare_region(config, region, runtime):
+    preserve_corrupt_preparation_banks(config, region)
     environment = dict(os.environ, PRICEFM_R141_REGION=region)
     command = [config['python_runtime'], '-B', str(source_controller(config)), 'prepare',
                '--dependency', config['dependency_worktree'], '--release', config['release_receipt']]
@@ -480,6 +533,15 @@ def run(config, poll_seconds=15):
     with (runtime / 'supervisor.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         atomic_json(runtime / 'audit.json', audit)
+        reopened = reopen_interrupted_preparation_failures(config, runtime)
+        if reopened:
+            atomic_json(runtime / 'reopened_interrupted_preparations.json', {
+                'status': 'R145_INTERRUPTED_PREPARATIONS_REOPENED',
+                'regions': reopened,
+                'test_opened': False,
+                'posterior_target_changes': 0,
+                'epoch': time.time(),
+            })
         jobs = {
             'at': ([config['blocked_region']], config['at_cpus']),
             'continuation': (config['continuation_regions'], config['continuation_cpus']),

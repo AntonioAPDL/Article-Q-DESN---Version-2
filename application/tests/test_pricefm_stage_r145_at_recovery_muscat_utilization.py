@@ -18,8 +18,8 @@ CONFIG = json.loads((
 def test_contract_partitions_only_failed_muscat_slot_a_and_preserves_target():
     assert R145.validate_static(CONFIG)
     assert CONFIG['blocked_region'] == 'AT'
-    assert CONFIG['at_cpus'] == [0, 1]
-    assert CONFIG['continuation_cpus'] == list(range(2, 15))
+    assert CONFIG['at_cpus'] == list(range(8))
+    assert CONFIG['continuation_cpus'] == list(range(8, 15))
     assert set(CONFIG['at_cpus']).isdisjoint(CONFIG['continuation_cpus'])
     assert CONFIG['fit_max_iter_per_attempt'] == 300
     assert CONFIG['maximum_rescue_attempts'] == 2
@@ -60,6 +60,24 @@ def test_rescue_cycle_is_resumable_and_never_reuses_a_closed_bridge(tmp_path):
         cycle_two = tmp_path / 'campaigns' / (CONFIG['tag'] + '__AT__cycle_02') / 'AT'
         (cycle_two / 'tasks/task_b').mkdir(parents=True)
         assert R145.next_rescue_cycle(CONFIG, 'AT', [{'name': 'task_b'}]) == 2
+    finally:
+        R145.DATA = old_data
+
+
+def test_interrupted_rescue_attempt_is_preserved_before_restart(tmp_path):
+    old_data = R145.DATA
+    R145.DATA = tmp_path
+    try:
+        config = dict(CONFIG, tag='r145__AT__cycle_01', cpus=list(range(8)))
+        attempt = tmp_path / 'campaigns/r145__AT__cycle_01/AT/tasks/task_a/attempt_01'
+        (attempt / 'fit').mkdir(parents=True)
+        (attempt / 'fit/partial.bin').write_bytes(b'partial')
+        preserved = R145.preserve_interrupted_attempts(config, 'AT', [{'name': 'task_a'}])
+        assert len(preserved) == 1
+        destination = Path(preserved[0])
+        assert (destination / 'fit/partial.bin').read_bytes() == b'partial'
+        assert (destination / 'r145_interruption.json').is_file()
+        assert not attempt.exists()
     finally:
         R145.DATA = old_data
 

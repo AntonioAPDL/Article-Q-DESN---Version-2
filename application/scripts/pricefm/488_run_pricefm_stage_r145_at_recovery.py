@@ -173,11 +173,11 @@ def validate_static(config):
     if any(config[key] is not False for key in forbidden):
         raise ValueError('R145 may not change targets, use tests, or mutate authority')
     at_cpus = config['at_cpus']; queue_cpus = config['continuation_cpus']
-    if (len(at_cpus) != 2 or len(queue_cpus) != 13
+    if (len(at_cpus) != 8 or len(queue_cpus) != 7
             or len(set(at_cpus + queue_cpus)) != 15
             or set(at_cpus).intersection(queue_cpus)
             or set(at_cpus + queue_cpus) != set(range(15))):
-        raise ValueError('R145 must partition Muscat cores 0-14 as 2 + 13')
+        raise ValueError('R145 must partition Muscat cores 0-14 as 8 + 7')
     regions = config['continuation_regions']
     if (len(regions) != len(set(regions)) or config['blocked_region'] in regions
             or regions != ['DE_LU', 'FI', 'IT_CALA', 'IT_SICI', 'NL', 'NO_4', 'RO', 'SE_4']):
@@ -280,13 +280,21 @@ def validate(config, require_idle=True):
     state = health(config)
     if not state['healthy']:
         raise RuntimeError('Muscat resource reserve is crossed: ' + str(state))
+    at_evidence = initial_at_evidence(config)
+    observed_eligible = {item['name'] for item in R142.eligible_tasks(config, config['blocked_region'])}
+    expected_eligible = {name for name, state in at_evidence.items()
+                         if state == 'original_uncertified_evidence'}
+    if observed_eligible != expected_eligible:
+        raise RuntimeError('AT eligible rescue set differs from the frozen evidence contract: '
+                           f'expected={sorted(expected_eligible)}, observed={sorted(observed_eligible)}')
     return {
         'status': 'R145_PREFLIGHT_PASS',
         'source': source_identity(),
         'source_r141': {'branch': config['source_branch'], 'head': config['source_head']},
         'scheduler_pid': original_scheduler[0],
         'scheduler_failure': failures,
-        'at_evidence': initial_at_evidence(config),
+        'at_evidence': at_evidence,
+        'eligible_at_tasks': sorted(observed_eligible),
         'active_adoptable_controllers': active,
         'resource_partition': {'at': config['at_cpus'], 'continuation': config['continuation_cpus']},
         'health': state,
@@ -344,6 +352,30 @@ def next_rescue_cycle(config, region, pending):
     return maximum + 1
 
 
+def preserve_interrupted_attempts(rescue_config, region, pending):
+    root = DATA / 'campaigns' / rescue_config['tag'] / region / 'tasks'
+    preserved = []
+    for item in pending:
+        task_root = root / item['name']
+        for attempt in sorted(task_root.glob('attempt_*')):
+            if not attempt.is_dir() or (attempt / 'completed_evidence.json').is_file():
+                continue
+            destination_root = task_root / 'interrupted_attempts'
+            destination_root.mkdir(parents=True, exist_ok=True)
+            destination = destination_root / f'{attempt.name}.{time.time_ns()}'
+            os.replace(attempt, destination)
+            atomic_json(destination / 'r145_interruption.json', {
+                'status': 'R145_INTERRUPTED_ATTEMPT_PRESERVED',
+                'reason': 'supervisor stopped before the attempt evidence was sealed',
+                'task': item['name'],
+                'posterior_target_changed': False,
+                'test_opened': False,
+                'epoch': time.time(),
+            })
+            preserved.append(str(destination))
+    return preserved
+
+
 def lane_progress(config, lane, region, completed, failures, scheduler_pid, cycles=0):
     queue = ([config['blocked_region']] if lane == 'at' else config['continuation_regions'])
     return {
@@ -384,6 +416,7 @@ def run_region(config, identity, audit, region, cpus, runtime, lane, poll_second
                 if cycle > config['maximum_controller_cycles']:
                     raise RuntimeError('bounded recovery cycles exhausted: ' + region)
                 rescue = rescue_cycle_config(config, region, cpus, cycle)
+                preserve_interrupted_attempts(rescue, region, pending)
                 R142.rescue_region(rescue, identity, region, pending)
             process, stream = launch_controller(config, region, cpus, runtime)
             adopted = process.pid

@@ -350,6 +350,29 @@ def worker_gate(args):
     return 4
 
 
+def refresh_exit_snapshot(current, saved):
+    """Resolve a stat/cgroup exit interleaving without accepting live drift.
+
+    /proc stat and cgroup reads are separate. A task can release its cgroups
+    after the state read; only a fresh same-lifetime zombie, disappearance, or
+    freshly proven original ownership resolves that mismatch. Persistent live
+    mismatches remain errors after at most two 2 ms exit-transition pauses.
+    """
+    for attempt in range(3):
+        fresh = process(current['pid'])
+        if fresh is None:
+            return None
+        if not same_lifetime(fresh, current):
+            raise RuntimeError('refusing signal: worker PID or lifetime was reused')
+        if fresh['state'] == 'Z':
+            return None
+        if fresh['cgroups'] == saved['cgroups']:
+            return fresh
+        if attempt < 2:
+            time.sleep(0.002)
+    return fresh
+
+
 def group_members(saved):
     members = []
     for path in Path('/proc').iterdir():
@@ -362,14 +385,22 @@ def group_members(saved):
             # work and must never receive resource/signal ownership treatment.
             if current['state'] == 'Z':
                 continue
+            if current['cgroups'] != saved['cgroups']:
+                current = refresh_exit_snapshot(current, saved)
+                if current is None:
+                    continue
             if (current['cgroups'] != saved['cgroups'] or current['boot_id'] != saved['boot_id']
                     or current['start_ticks'] < saved['start_ticks'] or current['pid'] == os.getpid()):
                 raise RuntimeError('refusing signal: worker process group ownership is not proven')
             members.append(current)
     leader = process(saved['pid'])
     if leader and not same_process(leader, saved):
-        if leader['state'] != 'Z' or not same_lifetime(leader, saved):
+        if not same_lifetime(leader, saved):
             raise RuntimeError('refusing signal: worker PID was reused')
+        if leader['state'] != 'Z':
+            leader = refresh_exit_snapshot(leader, saved)
+            if leader is not None and not same_process(leader, saved):
+                raise RuntimeError('refusing signal: live worker ownership changed')
     return members
 
 
@@ -394,6 +425,9 @@ def verify_job(job):
     """A process completing between poll and /proc inspection is not a violation."""
     try:
         current = process(job['identity']['pid'])
+        if (current is not None and not same_process(current, job['identity'])
+                and same_lifetime(current, job['identity'])):
+            current = refresh_exit_snapshot(current, job['identity'])
         if not same_process(current, job['identity']):
             if job['process'].poll() is not None:
                 return

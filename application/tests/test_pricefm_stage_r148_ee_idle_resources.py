@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import signal
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -340,6 +342,108 @@ def test_only_private_service_membership_can_prove_ownership():
     assert M.private_service_membership({'cgroups': ['0::' + cgroup]}, cgroup, unit)
     assert not M.private_service_membership({'cgroups': ['11:memory:' + cgroup]}, cgroup, unit)
     assert not M.private_service_membership({'cgroups': ['1:name=systemd:/user.slice/shared']}, '/user.slice/shared', unit)
+
+
+def test_real_unreaped_zombie_cgroup_release_is_safe(monkeypatch):
+    """Reproduce the Muscat failure without fitting or signalling any baseline."""
+    before = M.cpu_times(); M.time.sleep(.1)
+    config = M.read(M.CONFIG)
+    config['allowed_cpus'] = sorted(set(range(30)) & os.sched_getaffinity(0))
+    cpu = M.choose_cpu(config, before, M.cpu_times(), [])
+    child = subprocess.Popen([sys.executable, '-B', '-c', 'import time;time.sleep(.1)'],
+        start_new_session=True, preexec_fn=lambda: M.apply_idle(cpu), env=M.numerical_env())
+    try:
+        saved = M.process(child.pid)
+        assert saved['state'] != 'Z'
+        deadline = M.time.monotonic() + 2
+        while M.time.monotonic() < deadline:
+            zombie = M.process(child.pid)
+            if zombie['state'] == 'Z':
+                break
+            M.time.sleep(.01)
+        assert zombie['state'] == 'Z'
+        assert M.same_lifetime(zombie, saved)
+        assert zombie['cgroups'] != saved['cgroups']
+        assert M.group_members(saved) == []
+        assert child.wait(timeout=1) == 0
+    finally:
+        if child.poll() is None:
+            child.kill(); child.wait(timeout=1)
+
+
+def test_reused_zombie_leader_still_rejected(monkeypatch):
+    saved = {'pid': 111, 'start_ticks': 100, 'boot_id': 'boot', 'pgrp': 111, 'cgroups': ['private']}
+    zombie = dict(saved, state='Z', start_ticks=200, cgroups=['root'])
+    class EmptyProc:
+        def iterdir(self):
+            return []
+    monkeypatch.setattr(M, 'Path', lambda path: EmptyProc())
+    monkeypatch.setattr(M, 'process', lambda pid: zombie)
+    with pytest.raises(RuntimeError, match='PID was reused'):
+        M.group_members(saved)
+
+
+def test_preparation_finish_releases_scoring_workers_and_closes_out(config, monkeypatch):
+    runtime = Path(config['runtime']); runtime.mkdir()
+    source = {'head': 'frozen'}
+    M.atomic(runtime / 'release.json', {'source': source})
+    M.atomic(runtime / 'policy_probe.json', {'status': 'R148_IDLE_POLICY_PROBE_PASSED', 'source': source})
+    for name in ('verify_release', 'verify_own_service', 'physical_cpu_check', 'guard'):
+        monkeypatch.setattr(M, name, lambda *a, **kw: None)
+    monkeypatch.setattr(M, 'new_lease', lambda *a: {'initial_output_bytes': 0})
+    monkeypatch.setattr(M, 'cpu_times', lambda: {})
+    monkeypatch.setattr(M, 'choose_cpu', lambda config, before, after, occupied: len(occupied))
+    monkeypatch.setattr(M, 'group_members', lambda saved: [])
+    monkeypatch.setattr(M.time, 'sleep', lambda seconds: None)
+    ready = {'prepared': False}; complete = set(); names = ['score1', 'score2', 'score3']
+    def sealed(name):
+        complete.add(name); return True
+    module = SimpleNamespace(preparation_complete=lambda: ready['prepared'],
+        pending_task_names=lambda: [name for name in names if name not in complete],
+        task_complete=sealed, write_closeout=lambda *a, **kw: {'status': 'complete'})
+    monkeypatch.setattr(M, 'load_science', lambda: module)
+    launched = []
+    class Finished:
+        returncode = 0
+        pid = 111
+        def poll(self):
+            ready['prepared'] = True
+            return 0
+    def spawn(config, runtime, lease, name, cpu, payload='worker'):
+        launched.append((name, payload))
+        return {'name': name, 'payload': payload, 'cpu': cpu, 'identity': {},
+                'process': Finished(), 'log': SimpleNamespace(close=lambda: None), 'log_path': 'own.log'}
+    monkeypatch.setattr(M, 'launch', spawn)
+    monkeypatch.setattr(M, 'stop_owned', lambda jobs: None)
+    result = M.run(config, runtime)
+    assert launched == [('preparation', 'prepare'), *[(name, 'worker') for name in names]]
+    assert complete == set(names)
+    assert result['status'] == 'R148_IDLE_TASKS_COMPLETE_NOT_PROMOTED'
+    assert result['cleanup_verified'] is True
+
+
+def test_cleanup_error_cannot_suppress_terminal_receipt(config, monkeypatch):
+    runtime = Path(config['runtime']); runtime.mkdir()
+    source = {'head': 'frozen'}
+    M.atomic(runtime / 'release.json', {'source': source})
+    M.atomic(runtime / 'policy_probe.json', {'status': 'R148_IDLE_POLICY_PROBE_PASSED', 'source': source})
+    for name in ('verify_release', 'verify_own_service', 'physical_cpu_check'):
+        monkeypatch.setattr(M, name, lambda *a: None)
+    monkeypatch.setattr(M, 'new_lease', lambda *a: {'initial_output_bytes': 0})
+    monkeypatch.setattr(M, 'load_science', lambda: SimpleNamespace())
+    monkeypatch.setattr(M, 'guard', lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('guard stopped')))
+    monkeypatch.setattr(M, 'stop_owned', lambda jobs: (_ for _ in ()).throw(RuntimeError('ownership unproven')))
+    result = M.run(config, runtime)
+    assert result['status'] == 'R148_IDLE_LEASE_STOPPED'
+    assert result['cleanup_verified'] is False
+    assert result['cleanup_error'] == 'ownership unproven'
+    assert M.read(runtime / 'terminal.json') == result
+
+
+def test_main_cleanup_failure_returns_nonzero(monkeypatch):
+    monkeypatch.setattr(M.sys, 'argv', [str(M.ENTRY), 'run'])
+    monkeypatch.setattr(M, 'run', lambda *a: {'cleanup_verified': False})
+    assert M.main() == 1
 
 
 def test_released_source_paths_exist():

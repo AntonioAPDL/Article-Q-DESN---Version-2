@@ -141,6 +141,11 @@ def same_process(current, saved):
         for key in ('pid', 'start_ticks', 'boot_id', 'pgrp', 'cgroups'))
 
 
+def same_lifetime(current, saved):
+    return current is not None and all(current[key] == saved[key]
+        for key in ('pid', 'start_ticks', 'boot_id', 'pgrp'))
+
+
 def unit_properties(name):
     value = subprocess.check_output(['systemctl', '--user', 'show', name,
         '--property=MainPID,ControlGroup,KillMode,Restart,ActiveState,WorkingDirectory,ExecStart,MemoryMax,MemoryLimit,CPUQuotaPerSecUSec'], text=True)
@@ -344,13 +349,19 @@ def group_members(saved):
             continue
         current = process(int(path.name))
         if current and current['pgrp'] == saved['pgrp']:
+            # Linux releases a zombie's cgroup memberships to controller roots
+            # before its parent reaps it. It has no address space or runnable
+            # work and must never receive resource/signal ownership treatment.
+            if current['state'] == 'Z':
+                continue
             if (current['cgroups'] != saved['cgroups'] or current['boot_id'] != saved['boot_id']
                     or current['start_ticks'] < saved['start_ticks'] or current['pid'] == os.getpid()):
                 raise RuntimeError('refusing signal: worker process group ownership is not proven')
             members.append(current)
     leader = process(saved['pid'])
     if leader and not same_process(leader, saved):
-        raise RuntimeError('refusing signal: worker PID was reused')
+        if leader['state'] != 'Z' or not same_lifetime(leader, saved):
+            raise RuntimeError('refusing signal: worker PID was reused')
     return members
 
 
@@ -543,8 +554,13 @@ def run(config, runtime):
         except Exception as exc:
             reason = str(exc)
         finally:
+            cleanup_error = None
             try:
                 stop_owned(jobs)
+            except Exception as exc:
+                cleanup_error = str(exc)
+                status = 'R148_IDLE_LEASE_STOPPED'
+                reason = 'own development cleanup was not proven: ' + cleanup_error
             finally:
                 for sig, handler in previous.items():
                     signal.signal(sig, handler)
@@ -561,6 +577,7 @@ def run(config, runtime):
         terminal = {'status': status, 'reason': reason, 'epoch': time.time(), 'lease': lease,
                     'source': read(runtime / 'release.json')['source'], 'baseline_worker_signals': 0,
                     'exclusive_cpu_ownership': False, 'stopped_only_owned_development_groups': True,
+                    'cleanup_verified': cleanup_error is None, 'cleanup_error': cleanup_error,
                     'scientific_closeout': closeout, 'scientific_closeout_error': closeout_error}
         terminal['kernel_limit_capability'] = config.get('_kernel_limit_capability')
         terminal['owned_rss_bytes_at_stop'] = config.get('_owned_rss_bytes')
@@ -606,6 +623,8 @@ def main():
         value = {name: read(runtime / (name + '.json')) if (runtime / (name + '.json')).exists() else None
                  for name in ('release', 'lease', 'progress', 'terminal')}
     print(json.dumps(value, sort_keys=True, indent=2))
+    if args.action == 'run' and value.get('cleanup_verified') is False:
+        return 1  # systemd tears down this private own cgroup; never baseline.
     return 0
 
 

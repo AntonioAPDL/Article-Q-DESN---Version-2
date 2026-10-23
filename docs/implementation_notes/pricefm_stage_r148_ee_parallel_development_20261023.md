@@ -119,6 +119,32 @@ only development groups. Source changes, failed seals, missing policy evidence,
 resource crossings, handoff, errors or lease expiry stop admission and preserve
 partial attempts without promoting them.
 
+### First-launch correction: Linux zombie cgroup release
+
+The initial clean source `faca5d82c4bb40c8b369acffb33191493dde8e60`
+launched at 04:43:51 UTC. Preparation validated all 18 tasks, but the supervisor
+exited before any scoring worker began. A 0.590-second independent reproduction
+proved that this host resets an unreaped zombie's controller memberships to `/`.
+The original live-process ownership check therefore rejected a normally exited
+child, and a second cleanup exception prevented the terminal receipt.
+
+The successor keeps full cgroup identity checks for live processes. Zombies are
+excluded from RSS and signaling; a zombie leader must still match its recorded
+PID, start ticks, boot and process group before its expected cgroup release is
+accepted. A reused PID remains a rejection. Reap only the supervisor's own child.
+Cleanup errors must produce an explicit unsuccessful terminal receipt and service
+exit, with private-unit teardown as the remaining cleanup boundary. Never claim
+successful drainage when ownership or cleanup is uncertain.
+
+Before the corrected launch, verify the failed own unit is empty and there are
+zero completed scoring packets, archive the first release/preparation/probe
+receipts and their hashes under a named revision, and regenerate them from the
+clean pushed successor. Preserve the same 18 task descriptors and the original
+`lease.json` unchanged, including its 06:43:49 UTC expiry. This is a documented
+empty-release supersession, not a new two-hour lease or a rewrite of numerical
+evidence. Capture supervisor stdout and stderr in the R148 runtime because this
+account cannot read the host journal. The baseline was not signaled or modified.
+
 ## Reproduction and acceptance
 
 The pinned Python is

@@ -12,18 +12,18 @@ spec=importlib.util.spec_from_file_location('r150_workflow_test',ENTRY)
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 
-def test_only_four_prospectively_approved_admissions():
+def test_only_three_remaining_prospectively_approved_admissions():
     done=[]
     while True:
         nxt=m.next_step(done,False)
         if nxt is None:break
         done.append(nxt)
-    assert done==['benchmark','1','2','3']
+    assert done==['1','2','3']
     assert m.next_step(done,False) is None
     assert m.next_step([],True) is None
 
 
-@pytest.mark.parametrize('done',[['1'],['benchmark','1','1'],['benchmark','3'],['benchmark','1','2','3','4']])
+@pytest.mark.parametrize('done',[['benchmark'],['1','1'],['3'],['1','2','3','4']])
 def test_reordering_duplicate_or_added_admission_refused(done):
     with pytest.raises(RuntimeError):m.next_step(done,False)
 
@@ -43,7 +43,8 @@ def test_failures_and_starvation_end_automatic_progression(values):
 def test_zero_progress_wave_cannot_consume_next_lease():
     with pytest.raises(RuntimeError):m.acceptable_terminal(terminal(status='R150_WAVE_DEFERRED'),numerical_progress=False)
     m.acceptable_terminal(terminal(status='R150_WAVE_DEFERRED'),numerical_progress=True)
-    m.acceptable_terminal(terminal(wave='benchmark'),numerical_progress=False)
+    with pytest.raises(RuntimeError,match='benchmark'):
+        m.acceptable_terminal(terminal(wave='benchmark'),numerical_progress=False)
 
 
 class FakeResources:
@@ -79,6 +80,9 @@ class FakeResources:
 
     def source_release(self):
         return self.source
+
+    def verify_benchmark_import(self,c,system):
+        return {'original_science_source':{'head':'original-benchmark-producer'},'original_available_cpu_seconds':21786.141934839827}
 
     def System(self):
         return self
@@ -149,14 +153,14 @@ def run_fake(tmp_path, monkeypatch, states, **kwargs):
                                   source=resources.source))
     monkeypatch.setattr(m,'module',lambda *args:resources)
     monkeypatch.setattr(m.time,'sleep',lambda _:None)
-    result=m.execute(resources,dict(runtime=str(resources.runtime)),release)
+    result=m.execute(resources,dict(runtime=str(resources.runtime),benchmark_import={'path':str(release)}),release)
     assert resources.read(resources.runtime/'workflow_terminal.json')==result
     return resources,result
 
 
 def test_execute_real_coordinator_waits_for_owned_drain_before_final_assessment(tmp_path,monkeypatch):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark']),state(['benchmark','D1'],(),True)])
-    assert r.launched==['benchmark','1']
+    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['D1'],(),True)])
+    assert r.launched==['1']
     assert r.finalized
     assert result['status']=='R150_FINITE_WORKFLOW_SCIENTIFICALLY_COMPLETE'
     assert result['error'] is None
@@ -164,16 +168,16 @@ def test_execute_real_coordinator_waits_for_owned_drain_before_final_assessment(
 
 
 def test_execute_never_admits_fourth_wave_when_science_remains_incomplete(tmp_path,monkeypatch):
-    states=[state([str(i) for i in range(n)]) for n in range(5)]
+    states=[state([str(i) for i in range(n)]) for n in range(4)]
     r,result=run_fake(tmp_path,monkeypatch,states)
-    assert r.launched==['benchmark','1','2','3']
+    assert r.launched==['1','2','3']
     assert result['status']=='R150_FINITE_WORKFLOW_BUDGET_EXHAUSTED'
     assert not r.finalized
 
 
 def test_execute_benchmark_budget_deferral_opens_no_numerical_lease(tmp_path,monkeypatch):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark'],())])
-    assert r.launched==['benchmark']
+    r,result=run_fake(tmp_path,monkeypatch,[state((),())])
+    assert r.launched==[]
     assert result['status']=='R150_FINITE_WORKFLOW_BUDGET_DEFERRED_BEFORE_NEXT_ADMISSION'
     assert not r.finalized
 
@@ -181,24 +185,24 @@ def test_execute_benchmark_budget_deferral_opens_no_numerical_lease(tmp_path,mon
 @pytest.mark.parametrize('changes',[dict(status='R150_GUARD_STOPPED'),dict(cleanup_verified=False),
     dict(original_stop_reason='idle CPU share below.10 for300s'),dict(original_stop_reason='cooperative controller stop requested')])
 def test_execute_guard_failure_stop_and_starvation_preserve_terminal_without_next_admission(tmp_path,monkeypatch,changes):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark']),state(['benchmark','D1'])],
+    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['D1'])],
                        overrides={'1':changes})
-    assert r.launched==['benchmark','1']
+    assert r.launched==['1']
     assert result['status']=='R150_FINITE_WORKFLOW_STOPPED_REVIEW_REQUIRED'
     assert result['error']
     assert not r.finalized
 
 
 def test_execute_zero_progress_ends_after_one_numerical_wave(tmp_path,monkeypatch):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark']),state(['benchmark'])])
-    assert r.launched==['benchmark','1']
+    r,result=run_fake(tmp_path,monkeypatch,[state(),state()])
+    assert r.launched==['1']
     assert result['status']=='R150_FINITE_WORKFLOW_STOPPED_REVIEW_REQUIRED'
     assert 'zero-progress' in result['error']
 
 
 def test_execute_missing_terminal_is_failure_and_still_independently_drains_owned_units(tmp_path,monkeypatch):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark']),state(['benchmark','D1'])],missing_terminal='1')
-    assert r.launched==['benchmark','1']
+    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['D1'])],missing_terminal='1')
+    assert r.launched==['1']
     assert result['status']=='R150_FINITE_WORKFLOW_STOPPED_REVIEW_REQUIRED'
     assert 'durable terminal' in result['error']
     assert 'controller-1' in r.drained
@@ -212,14 +216,14 @@ def test_execute_rejects_source_release_mismatch_before_any_admission(tmp_path,m
     r.atomic(release,dict(status='PASS_PROTECTED_SOURCES_MANIFESTS_AND_R150_RELEASE',
                          source=dict(head='other',remote_head='other')))
     with pytest.raises(RuntimeError,match='HEAD differs'):
-        m.execute(r,dict(runtime=str(r.runtime)),release)
+        m.execute(r,dict(runtime=str(r.runtime),benchmark_import={'path':str(release)}),release)
     assert r.launched==[]
 
 
 def test_execute_preserves_original_missing_terminal_error_separately_from_cleanup_failure(tmp_path,monkeypatch):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark']),state(['benchmark','D1'])],
+    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['D1'])],
         missing_terminal='1',stop_failures=['worker-wave_1'])
-    assert r.launched==['benchmark','1']
+    assert r.launched==['1']
     assert 'durable terminal' in result['error']
     assert result['cleanup_failures'][0]['unit']=='worker-wave_1'
     assert 'owned cleanup refused' in result['cleanup_failures'][0]['error']
@@ -230,9 +234,9 @@ def test_execute_preserves_original_missing_terminal_error_separately_from_clean
 
 
 def test_execute_rejects_wrong_wave_terminal_source_after_drain(tmp_path,monkeypatch):
-    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['benchmark']),state(['benchmark','D1'])],
+    r,result=run_fake(tmp_path,monkeypatch,[state(),state(['D1'])],
         overrides={'1':dict(source=dict(head='foreign-source'))})
-    assert r.launched==['benchmark','1']
+    assert r.launched==['1']
     assert 'terminal source/lease differs' in result['error']
     assert 'controller-1' in r.drained and 'worker-wave_1' in r.drained
     assert not r.finalized
@@ -259,12 +263,12 @@ def test_same_name_replacement_controller_never_receives_original_lifetime_stop(
             self.verify_owned(saved,self.unit(saved['unit']))
             return super().stop_and_drain(system,saved)
 
-    r=ReplacedController(tmp_path,[state(),state(['benchmark']),state(['benchmark','D1'])])
+    r=ReplacedController(tmp_path,[state(),state(['D1'])])
     release=tmp_path/'release.json'
     r.atomic(release,dict(status='PASS_PROTECTED_SOURCES_MANIFESTS_AND_R150_RELEASE',source=r.source))
     monkeypatch.setattr(m,'module',lambda *args:r)
     monkeypatch.setattr(m.time,'sleep',lambda _:None)
-    result=m.execute(r,dict(runtime=str(r.runtime)),release)
+    result=m.execute(r,dict(runtime=str(r.runtime),benchmark_import={'path':str(release)}),release)
     assert result['status']=='R150_FINITE_WORKFLOW_STOPPED_REVIEW_REQUIRED'
     assert 'replacement controller InvocationID' in result['error']
     assert result['cleanup_failures'][0]['unit']=='controller-1'
@@ -273,7 +277,7 @@ def test_same_name_replacement_controller_never_receives_original_lifetime_stop(
     assert 'worker-wave_1' in r.drained
     original=r.read(r.runtime/'wave_1/workflow_controller_attestation.json')
     assert original['attested']['InvocationID']=='original-controller-1'
-    assert r.launched==['benchmark','1']
+    assert r.launched==['1']
     assert not r.finalized
 
 
@@ -294,17 +298,17 @@ def test_rapid_fatal_startup_checks_expected_cgroup_even_without_active_attestat
                 raise RuntimeError('owned expected cgroup still contains descendant')
             return super().stop_and_drain(system,saved)
 
-    r=RapidFatalController(tmp_path,[state(),state(['benchmark']),state(['benchmark','D1'])])
+    r=RapidFatalController(tmp_path,[state(),state(['D1'])])
     release=tmp_path/'release.json'
     r.atomic(release,dict(status='PASS_PROTECTED_SOURCES_MANIFESTS_AND_R150_RELEASE',source=r.source))
     monkeypatch.setattr(m,'module',lambda *args:r)
     monkeypatch.setattr(m.time,'sleep',lambda _:None)
-    result=m.execute(r,dict(runtime=str(r.runtime)),release)
+    result=m.execute(r,dict(runtime=str(r.runtime),benchmark_import={'path':str(release)}),release)
     assert result['status']=='R150_FINITE_WORKFLOW_STOPPED_REVIEW_REQUIRED'
     assert 'independent owned cleanup failed' in result['error']
     assert 'owned expected cgroup still contains descendant' in result['cleanup_failures'][0]['error']
     assert 'controller-1' not in r.drained
     assert 'worker-wave_1' in r.drained
     assert not (r.runtime/'wave_1/workflow_controller_attestation.json').exists()
-    assert r.launched==['benchmark','1']
+    assert r.launched==['1']
     assert not r.finalized

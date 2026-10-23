@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute only the four explicitly approved, finite R150 admissions.
+"""Execute only the three remaining explicitly approved R150 numerical waves.
 
 This standard-library coordinator never renews a lease, raises priority, fits
 models, launches AL, or starts a fourth numerical wave. Each wave gets its own
@@ -21,8 +21,8 @@ import uuid
 ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
 RESOURCE_ENTRY = ENTRY.with_name('498_supervise_pricefm_stage_r150_resources.py')
-SCIENCE_ENTRY = ENTRY.with_name('497_run_pricefm_stage_r150_cached_continuation.py')
-ADMISSIONS = ('benchmark', '1', '2', '3')
+SCIENCE_ENTRY = ENTRY.with_name('500_run_pricefm_stage_r150_bounded_admission.py')
+ADMISSIONS = ('1', '2', '3')
 
 
 def module(name, path):
@@ -43,6 +43,8 @@ def next_step(completed, scientific_terminal):
 
 
 def acceptable_terminal(terminal, *, numerical_progress):
+    if terminal.get('wave') not in ADMISSIONS:
+        raise RuntimeError('bounded successor cannot admit or report a new benchmark wave')
     if terminal.get('cleanup_verified') is not True:
         raise RuntimeError('prior wave lacks verified owned cleanup')
     if terminal.get('status') not in ('R150_WAVE_COMPLETE', 'R150_WAVE_DEFERRED'):
@@ -50,7 +52,7 @@ def acceptable_terminal(terminal, *, numerical_progress):
     reason = terminal.get('original_stop_reason', '')
     if 'starvation' in reason or 'below.10' in reason or 'stop requested' in reason:
         raise RuntimeError('resource starvation or user/controller stop requires deferral')
-    if terminal['wave'] != 'benchmark' and not numerical_progress:
+    if not numerical_progress:
         raise RuntimeError('a zero-progress wave cannot consume further automatic admissions')
 
 
@@ -122,6 +124,7 @@ def execute(r, c, release_path):
         raise RuntimeError('workflow HEAD differs from reviewed remote release')
     science = module('r150_workflow_science', SCIENCE_ENTRY)
     science.read_preparation()
+    imported_benchmark = r.verify_benchmark_import(c, r.System())
     runtime = Path(c['runtime']); runtime.mkdir(parents=True, exist_ok=True)
     lock_path = runtime / 'workflow.lock'
     with lock_path.open('a') as lock:
@@ -131,7 +134,10 @@ def execute(r, c, release_path):
         if any((runtime / ('wave_' + wave) / 'lease.json').exists() for wave in ADMISSIONS):
             raise RuntimeError('preexisting admissions require explicit audit; no implicit restart')
         plan = dict(stage='R150', source_head=current['head'], release_sha256=r.digest(release_path),
-            admitted_order=list(ADMISSIONS), max_numerical_waves=3, benchmark_seconds=1200,
+            admitted_order=list(ADMISSIONS), max_numerical_waves=3, benchmark_seconds=0,
+            original_benchmark_import_sha256=r.digest(c['benchmark_import']['path']),
+            original_benchmark_producer=imported_benchmark['original_science_source'],
+            original_available_cpu_seconds=imported_benchmark['original_available_cpu_seconds'],
             wave_seconds=7200, no_renewals=True, new_fits=0, AL_admitted=False,
             source_entry_sha256=r.digest(ENTRY), started_epoch=time.time())
         r.atomic(runtime / 'workflow_plan.json', plan)
@@ -216,25 +222,25 @@ def launch(r, c, release_path):
     Path(c['runtime']).mkdir(parents=True, exist_ok=True)
     unit = 'pricefm-r150-workflow-' + uuid.uuid4().hex + '.service'
     command = [c['python_runtime'], '-B', str(ENTRY), 'run', '--release', str(release_path)]
-    description = 'R150 approved finite benchmark and three-wave workflow'
+    description = r.WORKFLOW_DESCRIPTION
     system = r.System()
     baseline = system.unit(c['baseline_units'][0])
     parent_cgroup = str(Path(baseline['ControlGroup']).parent)
     if not parent_cgroup.startswith('/user.slice/'):
         raise RuntimeError('unknown user-service cgroup hierarchy')
-    # Four finite admissions total380min; another5min is metadata/drain overhead,
+    # Three remaining numerical admissions total360min; another5min is metadata/drain overhead,
     # never an extra numerical lease or an extension of any worker RuntimeMaxSec.
     record = dict(unit=unit, argv=command, command=command, description=description,
         expected_cgroup=parent_cgroup + '/' + unit, source_head=current['head'],
         source_entry_sha256=r.digest(ENTRY), release_sha256=r.digest(release_path),
-        admitted_order=list(ADMISSIONS), runtime_seconds=385*60, epoch=time.time())
+        admitted_order=list(ADMISSIONS), runtime_seconds=365*60, epoch=time.time())
     ledger = Path(c['runtime']) / 'workflow_launch.json'
     if ledger.exists():
         raise RuntimeError('existing workflow launch requires explicit audit; no duplicate launch')
     r.atomic(ledger, record)
     try:
         system.start(unit, description, command, cpus=c['cpus'], idle=False,
-            runtime_seconds=385*60, stdout=Path(c['runtime']) / 'workflow.stdout')
+            runtime_seconds=365*60, stdout=Path(c['runtime']) / 'workflow.stdout')
         props = system.unit(unit); r.verify_owned(record, props)
         if props.get('ActiveState') != 'active' or not props.get('InvocationID'):
             raise RuntimeError('workflow failed before active unit attestation')

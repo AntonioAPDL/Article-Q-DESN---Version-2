@@ -27,8 +27,10 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
-CONFIG = ROOT / 'application/config/pricefm_stage_r150_resources_20261023.json'
-SCIENCE = ROOT / 'application/scripts/pricefm/497_run_pricefm_stage_r150_cached_continuation.py'
+CONFIG = ROOT / 'application/config/pricefm_stage_r150_bounded_resources_20261023.json'
+SCIENCE = ROOT / 'application/scripts/pricefm/500_run_pricefm_stage_r150_bounded_admission.py'
+PRIOR_HEAD = 'add35d3ea5df7397122bedf6509799cce634538c'
+WORKFLOW_DESCRIPTION = 'R150 approved bounded successor three-wave workflow'
 THREAD_VARS = ('OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS', 'MKL_NUM_THREADS',
                'BLIS_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS')
 UNIT_PROPERTIES = ('Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID',
@@ -256,6 +258,8 @@ def validate_config(c):
             or c['max_owned_rss_gib'] > 24 or c['handoff_fresh_seconds'] != 30
             or c['starvation_observation_seconds'] != 300
             or c['starvation_min_cpu_share'] != .10 or c['starvation_requeue_limit'] != 0
+            or c['admitted_order'] != ['1','2','3'] or c['workflow_runtime_seconds'] != 365*60
+            or c['benchmark_import_required'] is not True or c['new_benchmark_lease_authorized'] is not False
             or c['baseline_signals_authorized'] is not False
             or c['shared_quota_writes_authorized'] is not False
             or c['new_fits_authorized'] is not False
@@ -308,6 +312,56 @@ def verify_baseline_sources(c):
         for name, expected in release['sha256'].items():
             if digest(root/name) != expected:
                 raise RuntimeError('baseline source bytes changed: ' + str(root/name))
+
+
+def verify_benchmark_import(c, system=None):
+    """Read-only proof that the sole benchmark is sealed, original and drained."""
+    pin = c['benchmark_import']
+    if digest(pin['path']) != pin['sha256']:
+        raise RuntimeError('immutable original benchmark import receipt changed')
+    receipt = read(pin['path'])
+    if (receipt.get('status') != 'PASS_IMMUTABLE_ORIGINAL_BENCHMARK_IMPORT'
+            or receipt['original_science_source']['head'] != PRIOR_HEAD
+            or receipt.get('new_benchmark_lease_authorized') is not False
+            or receipt.get('old_numerical_leases_absent') != ['1','2','3']
+            or receipt.get('original_benchmark_calls') != 18):
+        raise RuntimeError('original benchmark import identity/budget differs')
+    root = Path(receipt['original_science_source']['root'])
+    if subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip() != PRIOR_HEAD:
+        raise RuntimeError('original benchmark source HEAD changed')
+    for path, expected in receipt['immutable_file_sha256'].items():
+        if digest(path) != expected:
+            raise RuntimeError('original benchmark/source/runtime changed: ' + path)
+    runtime = Path(receipt['original_runtime'])
+    if any((runtime/('wave_'+wave)/'lease.json').exists() for wave in ('1','2','3')):
+        raise RuntimeError('old runtime consumed a numerical wave; no duplicate admissions')
+    wave = receipt['original_wave']; lease = read(wave['lease_path'])
+    terminal = read(wave['terminal_path']); drain = read(wave['independent_drain_path'])
+    timings = read(Path(receipt['original_benchmark']['folder'])/'timings.json')
+    workflow = read(runtime/'workflow_terminal.json')
+    if (lease['source_head'] != PRIOR_HEAD or lease['wave'] != 'benchmark' or lease['seconds'] != 1200
+            or lease['nonrenewing'] is not True or terminal['lease'] != lease
+            or terminal['status'] != 'R150_WAVE_COMPLETE' or terminal['cleanup_verified'] is not True
+            or terminal['source']['head'] != PRIOR_HEAD or terminal['baseline_worker_signals'] != 0
+            or drain['cleanup_verified'] is not True or drain.get('errors')
+            or drain['controller']['drained'] is not True or not all(item['drained'] for item in drain['workers'])
+            or workflow['completed_admissions'] != ['benchmark'] or workflow.get('cleanup_failures')
+            or len(timings['rows']) != 18 or timings['source']['head'] != PRIOR_HEAD
+            or timings['new_model_fits'] != 0 or timings['no_new_candidate_AQL_computed'] is not True
+            or not 0 < receipt['original_available_cpu_seconds'] <= 32400):
+        raise RuntimeError('original benchmark/lease/cleanup semantics differ')
+    if system is not None:
+        ledgers = [read(runtime/'workflow_launch.json'), read(runtime/'wave_benchmark/controller_launch.json')]
+        ledgers += discover_workers(runtime/'wave_benchmark')
+        for saved in ledgers:
+            if 'argv' not in saved:
+                saved['argv'] = saved['command']
+            props = system.unit(saved['unit']); verify_owned(saved, props)
+            cgroup = saved.get('expected_cgroup') or saved.get('attested',{}).get('ControlGroup')
+            if (props.get('ActiveState') not in ('inactive','failed') or props.get('MainPID','0') != '0'
+                    or not cgroup or system.members(cgroup)):
+                raise RuntimeError('original benchmark/controller/workflow is not fully drained')
+    return receipt
 
 
 def memory_available_gib():
@@ -433,8 +487,8 @@ def workflow_members(c, system, source_head, controller):
             or record.get('source_entry_sha256') != digest(workflow_entry)
             or len(command) != 6 or command[:5] != expected_prefix
             or not Path(command[5]).is_absolute()
-            or record.get('admitted_order') != ['benchmark','1','2','3']
-            or record.get('runtime_seconds') != 385*60
+            or record.get('admitted_order') != ['1','2','3']
+            or record.get('runtime_seconds') != 365*60
             or record.get('release_sha256') != digest(command[5])):
         raise RuntimeError('owned workflow launch record source/unit/command differs')
     release = read(command[5])
@@ -443,7 +497,7 @@ def workflow_members(c, system, source_head, controller):
             or release.get('source',{}).get('remote_head') != source_head):
         raise RuntimeError('owned workflow release differs from admitted source')
     expected_cgroup = str(Path(controller['ControlGroup']).parent / record['unit'])
-    description = 'R150 approved finite benchmark and three-wave workflow'
+    description = WORKFLOW_DESCRIPTION
     if record.get('description', description) != description or record.get('expected_cgroup',expected_cgroup) != expected_cgroup:
         raise RuntimeError('owned workflow intent/cgroup differs')
     saved = dict(unit=record['unit'], argv=command, description=description,
@@ -465,6 +519,7 @@ def guard(c, system, admission, lease, workers, controller, previous_handoff=Non
         raise RuntimeError('lease cannot cross host boots')
     verify_source(admission['source'])
     verify_baseline_sources(c)
+    verify_benchmark_import(c, system)
     assert_parent_policy(c)
     handoff = handoff_snapshot(c, system, previous_handoff or admission['handoff'])
     for name, saved in admission['baseline']['units'].items():
@@ -494,6 +549,7 @@ def guard(c, system, admission, lease, workers, controller, previous_handoff=Non
 
 def admit(c, runtime, system):
     assert_parent_policy(c); release = source_release(); verify_baseline_sources(c)
+    verify_benchmark_import(c, system)
     probe = read(c['capability_probe'])
     if (probe.get('status') != 'PASS_OWNED_UNIT_POLICY_AND_BINDS_TO_DRAIN'
             or probe.get('resource_entry_sha256') != digest(ENTRY)
@@ -536,8 +592,8 @@ def admit(c, runtime, system):
 
 
 def lease_once(c, root_runtime, wave, admission):
-    if wave not in ('benchmark', '1', '2', '3'):
-        raise RuntimeError('only benchmark and three finite waves admitted')
+    if wave not in ('1', '2', '3'):
+        raise RuntimeError('only three remaining finite waves admitted; no new benchmark lease')
     root_runtime = Path(root_runtime)
     path = root_runtime / ('wave_' + wave) / 'lease.json'
     with locked(root_runtime / 'lease.lock'):
@@ -550,18 +606,24 @@ def lease_once(c, root_runtime, wave, admission):
             if lease['admission_sha256'] != digest(root_runtime / 'admission.json'):
                 raise RuntimeError('immutable admission changed under existing lease')
             return lease
-        if wave != 'benchmark':
-            previous = 'benchmark' if wave == '1' else str(int(wave) - 1)
+        if wave == '1':
+            imported = verify_benchmark_import(c)
+        else:
+            previous = str(int(wave) - 1)
             prior = root_runtime / ('wave_' + previous) / 'terminal.json'
             if not prior.is_file() or read(prior).get('cleanup_verified') is not True:
                 raise RuntimeError('preceding wave must be terminal and fully drained')
             if read(prior)['status'] not in ('R150_WAVE_COMPLETE', 'R150_WAVE_DEFERRED'):
                 raise RuntimeError('guard-stopped predecessor requires a new explicit review')
-        now = time.time(); duration = c['benchmark_seconds'] if wave == 'benchmark' else c['wave_seconds']
+        now = time.time(); duration = c['wave_seconds']
         lease = dict(schema_version=1, stage='R150', wave=wave, lease_id=uuid.uuid4().hex,
             started_epoch=now, expires_epoch=now + duration, seconds=duration,
             source_head=admission['source']['head'], admission_sha256=digest(root_runtime / 'admission.json'),
             boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(), nonrenewing=True)
+        if wave == '1':
+            lease['original_benchmark_producer_head'] = imported['original_science_source']['head']
+            lease['original_benchmark_lease_id'] = read(imported['original_wave']['lease_path'])['lease_id']
+            lease['original_benchmark_import_sha256'] = c['benchmark_import']['sha256']
         atomic(path, lease)
         return lease
 
@@ -671,7 +733,9 @@ def discover_workers(runtime):
 
 def projection_fits(task, c, lease, active_count):
     if lease['wave'] == 'benchmark':
-        return task['name'] == '__benchmark__'
+        raise RuntimeError('new benchmark lease/task is forbidden in bounded successor')
+    if task.get('name') == '__benchmark__':
+        raise RuntimeError('original benchmark must be imported; no numerical benchmark rerun')
     estimate = task.get('estimated_cpu_seconds')
     if estimate is None or not math.isfinite(estimate) or estimate < 0:
         raise RuntimeError('nonbenchmark task lacks frozen conservative timing estimate')
@@ -720,8 +784,13 @@ def run(c, wave, controller_unit):
                         if not science.task_complete(name):
                             raise RuntimeError('worker exited without strict task seal: ' + name)
                         event(runtime, 'task_complete', task=name, unit=saved['unit'])
-                science.advance(); queue = science.queue_state()
-                if queue['terminal']:
+                # Strict numerical seals can precede worker CPU-accounting tails.
+                # Transition only after every current worker has exited/drained;
+                # pending work within the current phase remains dispatchable.
+                if not active:
+                    science.advance()
+                queue = science.queue_state()
+                if queue['terminal'] and not active:
                     status = 'R150_WAVE_COMPLETE'; original_reason = 'all scientific tasks strictly complete'; break
                 if wave == 'benchmark' and science.task_complete('__benchmark__'):
                     status = 'R150_WAVE_COMPLETE'; original_reason = 'benchmark sealed; branch frozen; no numerical pool launched in benchmark lease'; break
@@ -988,7 +1057,7 @@ def capability_probe(output, python):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['preflight', 'launch', 'run', 'bootstrap', 'probe', 'test-hold', 'test-tree', 'test-rapid', 'status'])
-    parser.add_argument('--wave', choices=['benchmark', '1', '2', '3'])
+    parser.add_argument('--wave', choices=['1', '2', '3'])
     parser.add_argument('--controller-unit'); parser.add_argument('--spec'); parser.add_argument('--output')
     args = parser.parse_args(argv)
     if args.action == 'test-hold':
@@ -1014,7 +1083,7 @@ def main(argv=None):
     if args.action == 'status':
         runtime = Path(c['runtime'])
         print(json.dumps({wave: read(runtime / ('wave_' + wave) / 'terminal.json')
-                         for wave in ('benchmark', '1', '2', '3')
+                         for wave in ('1', '2', '3')
                          if (runtime / ('wave_' + wave) / 'terminal.json').is_file()}, sort_keys=True)); return 0
     assert_parent_policy(c)
     if args.action == 'preflight':

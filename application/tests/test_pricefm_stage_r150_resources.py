@@ -124,15 +124,81 @@ class OwnershipFaultTests(unittest.TestCase):
 
 
 class LeaseAndAdmissionTests(unittest.TestCase):
+    def test_active_sealed_worker_accounting_tail_blocks_phase_transition_until_drain(self):
+        saved,props=fixture();system=FakeSystem(props)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);runtime=root/'wave_1'
+            saved.update(ledger_path=str(runtime/'workers/token/ownership.json'),policy_receipt=str(runtime/'workers/token/policy_receipt.json'),task='science_task',estimated_cpu_seconds=10,cpu=15)
+            M.atomic(root/'admission.json',{'source':{'head':'frozen'},'handoff':{}})
+            lease={'wave':'1','lease_id':'lease','expires_epoch':M.time.time()+7200,'started_epoch':M.time.time(),'seconds':7200}
+            science=mock.Mock();science.task_complete.return_value=True
+            task={'name':'science_task','kind':'S','estimated_cpu_seconds':10,'estimated_wall_seconds':10}
+            science.queue_state.side_effect=[{'terminal':False,'ready':[task]},
+                {'terminal':True,'ready':[]},{'terminal':True,'ready':[]}]
+            launched=[False];advance_states=[];sleeps=[0]
+            def advance():
+                if launched[0]:
+                    self.assertEqual(system.props['ActiveState'],'inactive','CPU tail must exit before irreversible decision')
+                advance_states.append(system.props['ActiveState'])
+            science.advance.side_effect=advance
+            def launch(*args,**kwargs):
+                launched[0]=True;M.atomic(saved['ledger_path'],saved);return saved
+            def sleep(_seconds):
+                sleeps[0]+=1
+                if sleeps[0]==2:
+                    system.props.update(ActiveState='inactive',MainPID='0',ControlGroup='');system.member_list=[]
+            c={'runtime':str(root),'max_workers':2,'cpus':list(range(15,30)),'benchmark_seconds':1200,
+               'poll_seconds':0,'cooperative_grace_seconds':0,'wave_cleanup_buffer_seconds':1800,
+               'projection_cpu_seconds':5400,'starvation_observation_seconds':300,'starvation_min_cpu_share':.1}
+            controller={'ControlGroup':'/user.slice/controller','RuntimeMaxUSec':'2h'}
+            with mock.patch.object(M,'System',return_value=system),mock.patch.object(M,'controller_proof',return_value=controller),mock.patch.object(M,'verify_source'),mock.patch.object(M,'lease_once',return_value=lease),mock.patch.object(M,'load_science',return_value=science),mock.patch.object(M,'guard',return_value={'handoff':{}}),mock.patch.object(M,'least_busy_cpus',return_value=c['cpus']),mock.patch.object(M,'start_worker',side_effect=launch),mock.patch.object(M.signal,'signal'),mock.patch.object(M.time,'sleep',side_effect=sleep):
+                self.assertEqual(M.run(c,'1','pricefm-r150-controller-test.service'),0)
+            self.assertEqual(advance_states,['active','inactive'])
+            self.assertEqual(science.queue_state.call_count,3)
+            result=M.read(runtime/'terminal.json')
+            self.assertEqual(result['status'],'R150_WAVE_COMPLETE');self.assertTrue(result['cleanup_verified'])
+
+    def test_imported_original_benchmark_is_read_only_and_old_wave_duplication_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);runtime=root/'old_runtime';bench=root/'old_benchmark'
+            lease_path=runtime/'wave_benchmark/lease.json';terminal_path=runtime/'wave_benchmark/terminal.json'
+            drain_path=runtime/'wave_benchmark/workflow_independent_drain.json'
+            lease={'source_head':M.PRIOR_HEAD,'wave':'benchmark','seconds':1200,'nonrenewing':True,'lease_id':'sole-old-benchmark'}
+            M.atomic(lease_path,lease)
+            M.atomic(terminal_path,{'lease':lease,'status':'R150_WAVE_COMPLETE','cleanup_verified':True,'source':{'head':M.PRIOR_HEAD},'baseline_worker_signals':0})
+            M.atomic(drain_path,{'cleanup_verified':True,'errors':[],'controller':{'drained':True},'workers':[{'drained':True}]})
+            M.atomic(runtime/'workflow_terminal.json',{'completed_admissions':['benchmark'],'cleanup_failures':[]})
+            M.atomic(bench/'timings.json',{'rows':[{} for _ in range(18)],'source':{'head':M.PRIOR_HEAD},'new_model_fits':0,'no_new_candidate_AQL_computed':True})
+            files={str(p):M.digest(p) for p in root.rglob('*.json')}
+            receipt={'status':'PASS_IMMUTABLE_ORIGINAL_BENCHMARK_IMPORT','original_science_source':{'head':M.PRIOR_HEAD,'root':'/immutable-old-root'},
+                'new_benchmark_lease_authorized':False,'old_numerical_leases_absent':['1','2','3'],'original_benchmark_calls':18,
+                'immutable_file_sha256':files,'original_runtime':str(runtime),'original_wave':{'lease_path':str(lease_path),'terminal_path':str(terminal_path),'independent_drain_path':str(drain_path)},
+                'original_benchmark':{'folder':str(bench)},'original_available_cpu_seconds':21786.141934839827}
+            receipt_path=root/'benchmark_import.json';M.atomic(receipt_path,receipt)
+            c={'benchmark_import':{'path':str(receipt_path),'sha256':M.digest(receipt_path)}}
+            original_lease_bytes=lease_path.read_bytes()
+            with mock.patch.object(M.subprocess,'check_output',return_value=M.PRIOR_HEAD+'\n'):
+                self.assertEqual(M.verify_benchmark_import(c),receipt)
+                M.atomic(runtime/'wave_1/lease.json',{'unexpected_duplicate_wave':True})
+                with self.assertRaisesRegex(RuntimeError,'duplicate admissions'):
+                    M.verify_benchmark_import(c)
+            self.assertEqual(lease_path.read_bytes(),original_lease_bytes)
+
+    def test_import_receipt_tamper_stops_before_old_runtime_is_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/'import.json';M.atomic(path,{'tampered':True})
+            with self.assertRaisesRegex(RuntimeError,'import receipt changed'):
+                M.verify_benchmark_import({'benchmark_import':{'path':str(path),'sha256':'wrong-pinned-digest'}})
+
     def test_controller_launch_intent_precedes_start_and_failed_start_drains(self):
         with tempfile.TemporaryDirectory() as directory:
             runtime=Path(directory);system=FakeSystem({})
             admission={'source':{'head':'frozen'},'baseline':{'units':{
                 'baseline':{'properties':{'ControlGroup':'/user.slice/user-1.slice/user@1.service/baseline.service'}}}}}
-            lease={'wave':'benchmark','lease_id':'lease','source_head':'frozen','expires_epoch':M.time.time()+1200}
+            lease={'wave':'1','lease_id':'lease','source_head':'frozen','expires_epoch':M.time.time()+1200}
             c={'runtime':directory,'cpus':list(range(15,30)),'python_runtime':'/python'}
             def fault(name,description,argv,**kwargs):
-                record=M.read(runtime/'wave_benchmark/controller_launch.json')
+                record=M.read(runtime/'wave_1/controller_launch.json')
                 self.assertEqual(record['unit'],name)
                 self.assertEqual(record['expected_cgroup'],'/user.slice/user-1.slice/user@1.service/'+name)
                 system.props=dict(Id=name,Description=description,ExecStart='{ argv[]='+' '.join(argv)+' ; ignore_errors=no ; }',
@@ -142,9 +208,9 @@ class LeaseAndAdmissionTests(unittest.TestCase):
             system.start=mock.Mock(side_effect=fault)
             with mock.patch.object(M,'assert_parent_policy'),mock.patch.object(M,'System',return_value=system),mock.patch.object(M,'admit',return_value=admission),mock.patch.object(M,'lease_once',return_value=lease):
                 with self.assertRaisesRegex(RuntimeError,'injected failure after manager start'):
-                    M.launch(c,'benchmark')
+                    M.launch(c,'1')
             self.assertEqual(len(system.stops),1)
-            receipt=M.read(next((runtime/'wave_benchmark').glob('controller_launch_failure_*.json')))
+            receipt=M.read(next((runtime/'wave_1').glob('controller_launch_failure_*.json')))
             self.assertTrue(receipt['cleanup_verified'])
 
     def test_wave_guard_counts_workflow_coordinator_and_descendants_in_owned_rss(self):
@@ -155,11 +221,11 @@ class LeaseAndAdmissionTests(unittest.TestCase):
             name='pricefm-r150-workflow-'+'a'*32+'.service'
             command=['/python','-B',str(workflow_entry),'run','--release',str(release_path)]
             record={'unit':name,'command':command,'source_head':'frozen','source_entry_sha256':M.digest(workflow_entry),
-                'release_sha256':M.digest(release_path),'admitted_order':['benchmark','1','2','3'],'runtime_seconds':385*60}
+                'release_sha256':M.digest(release_path),'admitted_order':['1','2','3'],'runtime_seconds':365*60}
             M.atomic(runtime/'workflow_launch.json',record)
             controller={'ControlGroup':'/user.slice/user-1.slice/user@1.service/controller.service'}
             workflow_cg='/user.slice/user-1.slice/user@1.service/'+name
-            props=dict(Id=name,Description='R150 approved finite benchmark and three-wave workflow',
+            props=dict(Id=name,Description=M.WORKFLOW_DESCRIPTION,
                 ExecStart='{ argv[]='+' '.join(command)+' ; ignore_errors=no ; }',WorkingDirectory=str(M.ROOT),
                 KillMode='control-group',Restart='no',LoadState='loaded',ActiveState='active',MainPID='201',
                 InvocationID='workflow-invocation',ControlGroup=workflow_cg,CPUSchedulingPolicy='0')
@@ -169,7 +235,7 @@ class LeaseAndAdmissionTests(unittest.TestCase):
                'min_available_memory_gib':192,'min_disk_gib':80,'max_owned_rss_gib':24}
             admission={'source':{'head':'frozen'},'handoff':{},'baseline':{'units':{},'AT_terminal_sha256':'AT-hash'}}
             lease={'expires_epoch':M.time.time()+1200,'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
-            with mock.patch.object(M,'verify_source'),mock.patch.object(M,'verify_baseline_sources'),mock.patch.object(M,'assert_parent_policy'),mock.patch.object(M,'handoff_snapshot',return_value={}),mock.patch.object(M,'memory_available_gib',return_value=400),mock.patch.object(M.shutil,'disk_usage',return_value=mock.Mock(free=200*1024**3)),mock.patch.object(M,'rss_gib',return_value=.01) as rss,mock.patch.object(M,'digest',side_effect=lambda p:'AT-hash' if str(p)=='unused' else __import__('hashlib').sha256(Path(p).read_bytes()).hexdigest()):
+            with mock.patch.object(M,'verify_source'),mock.patch.object(M,'verify_baseline_sources'),mock.patch.object(M,'verify_benchmark_import'),mock.patch.object(M,'assert_parent_policy'),mock.patch.object(M,'handoff_snapshot',return_value={}),mock.patch.object(M,'memory_available_gib',return_value=400),mock.patch.object(M.shutil,'disk_usage',return_value=mock.Mock(free=200*1024**3)),mock.patch.object(M,'rss_gib',return_value=.01) as rss,mock.patch.object(M,'digest',side_effect=lambda p:'AT-hash' if str(p)=='unused' else __import__('hashlib').sha256(Path(p).read_bytes()).hexdigest()):
                 result=M.guard(c,system,admission,lease,[],controller)
             rss.assert_called_once_with([101,201,202]);self.assertEqual(result['owned_rss_gib'],.01)
             for key,value in [('source_head','tampered'),('unit','foreign.service'),('command',command+['--extra'])]:
@@ -179,33 +245,35 @@ class LeaseAndAdmissionTests(unittest.TestCase):
 
     def test_lease_never_renews_and_expired_lease_refused(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory); M.atomic(root / 'admission.json', {'source': 'frozen'})
-            c = {'benchmark_seconds':1200, 'wave_seconds':7200}
-            admission = {'source': {'head':'frozen'}}
-            with mock.patch.object(M.time, 'time', return_value=1000):
-                first = M.lease_once(c, root, 'benchmark', admission)
-            with mock.patch.object(M.time, 'time', return_value=1500):
-                second = M.lease_once(c, root, 'benchmark', admission)
-            self.assertEqual(first, second)
-            with mock.patch.object(M.time, 'time', return_value=2201):
-                with self.assertRaisesRegex(RuntimeError, 'expired lease'):
-                    M.lease_once(c, root, 'benchmark', admission)
-            self.assertEqual(M.read(root/'wave_benchmark/lease.json'), first)
+            root=Path(directory);M.atomic(root/'admission.json',{'source':'frozen'})
+            M.atomic(root/'old_benchmark_lease.json',{'lease_id':'original-sole-benchmark'})
+            imported={'original_science_source':{'head':M.PRIOR_HEAD},'original_wave':{'lease_path':str(root/'old_benchmark_lease.json')}}
+            c={'wave_seconds':7200,'benchmark_import':{'sha256':'immutable-import'}}
+            admission={'source':{'head':'frozen'}}
+            with mock.patch.object(M,'verify_benchmark_import',return_value=imported):
+                with mock.patch.object(M.time,'time',return_value=1000):first=M.lease_once(c,root,'1',admission)
+                with mock.patch.object(M.time,'time',return_value=1500):second=M.lease_once(c,root,'1',admission)
+                self.assertEqual(first,second)
+                self.assertEqual(first['original_benchmark_lease_id'],'original-sole-benchmark')
+                with mock.patch.object(M.time,'time',return_value=8201):
+                    with self.assertRaisesRegex(RuntimeError,'expired lease'):M.lease_once(c,root,'1',admission)
+                self.assertEqual(M.read(root/'wave_1/lease.json'),first)
+                self.assertFalse((root/'wave_benchmark/lease.json').exists())
 
     def test_unknown_or_fourth_wave_refused(self):
-        for value in ('0', '4', 'unlimited'):
-            with self.assertRaisesRegex(RuntimeError, 'three finite'):
+        for value in ('benchmark', '0', '4', 'unlimited'):
+            with self.assertRaisesRegex(RuntimeError, 'three.*finite'):
                 M.lease_once({}, '/unused', value, {})
 
     def test_guard_stopped_previous_wave_never_auto_restarts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); M.atomic(root/'admission.json', {'source':'frozen'})
-            M.atomic(root/'wave_benchmark/terminal.json', {'cleanup_verified':True,'status':'R150_GUARD_STOPPED'})
+            M.atomic(root/'wave_1/terminal.json', {'cleanup_verified':True,'status':'R150_GUARD_STOPPED'})
             with self.assertRaisesRegex(RuntimeError, 'explicit review'):
-                M.lease_once({'wave_seconds':7200}, root, '1', {'source':{'head':'frozen'}})
+                M.lease_once({'wave_seconds':7200}, root, '2', {'source':{'head':'frozen'}})
 
     def test_budget_rejects_unknown_timing_or_oversize(self):
-        c={'projection_cpu_seconds':5400,'wave_cleanup_buffer_seconds':1800}
+        c={'projection_cpu_seconds':5400,'wave_cleanup_buffer_seconds':1800,'projection_cpu_seconds':5400}
         lease={'wave':'1','expires_epoch':10000}
         with mock.patch.object(M.time,'time',return_value=1000):
             self.assertTrue(M.projection_fits({'estimated_cpu_seconds':5000,'estimated_wall_seconds':6000},c,lease,0))
@@ -238,27 +306,29 @@ class LeaseAndAdmissionTests(unittest.TestCase):
     def test_started_unit_fault_before_active_insert_is_discovered_and_drained(self):
         saved,props=fixture();system=FakeSystem(props)
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);runtime=root/'wave_benchmark'
-            saved.update(ledger_path=str(runtime/'workers/token/ownership.json'),policy_receipt=str(runtime/'workers/token/policy_receipt.json'),task='__benchmark__')
+            root=Path(directory);runtime=root/'wave_1'
+            saved.update(ledger_path=str(runtime/'workers/token/ownership.json'),policy_receipt=str(runtime/'workers/token/policy_receipt.json'),task='science_task')
             admission={'source':{'head':'frozen'},'handoff':{}}
             M.atomic(root/'admission.json',admission)
-            lease={'wave':'benchmark','lease_id':'lease','expires_epoch':M.time.time()+1200,'started_epoch':M.time.time(),'seconds':1200}
-            science=mock.Mock();science.queue_state.return_value={'terminal':False,'ready':[{'name':'__benchmark__','kind':'benchmark'}]}
+            lease={'wave':'1','lease_id':'lease','expires_epoch':M.time.time()+7200,'started_epoch':M.time.time(),'seconds':7200}
+            science=mock.Mock();science.queue_state.return_value={'terminal':False,'ready':[{'name':'science_task','kind':'D','estimated_cpu_seconds':10,'estimated_wall_seconds':10}]}
             science.task_complete.return_value=False
             def fault(*args,**kwargs):
                 M.atomic(saved['ledger_path'],saved)
                 raise RuntimeError('injected fault after unit start before active insertion')
-            c={'runtime':str(root),'max_workers':2,'cpus':list(range(15,30)),'benchmark_seconds':1200,'poll_seconds':0,'cooperative_grace_seconds':0,'wave_cleanup_buffer_seconds':1800}
-            controller={'ControlGroup':'/user.slice/controller','RuntimeMaxUSec':'20min'}
+            c={'runtime':str(root),'max_workers':2,'cpus':list(range(15,30)),'benchmark_seconds':1200,'poll_seconds':0,'cooperative_grace_seconds':0,'wave_cleanup_buffer_seconds':1800,'projection_cpu_seconds':5400}
+            controller={'ControlGroup':'/user.slice/controller','RuntimeMaxUSec':'2h'}
             with mock.patch.object(M,'System',return_value=system),mock.patch.object(M,'controller_proof',return_value=controller),mock.patch.object(M,'verify_source'),mock.patch.object(M,'lease_once',return_value=lease),mock.patch.object(M,'load_science',return_value=science),mock.patch.object(M,'guard',return_value={'handoff':{}}),mock.patch.object(M,'least_busy_cpus',return_value=c['cpus']),mock.patch.object(M,'start_worker',side_effect=fault),mock.patch.object(M.signal,'signal'):
-                self.assertEqual(M.run(c,'benchmark','pricefm-r150-controller-test.service'),2)
+                self.assertEqual(M.run(c,'1','pricefm-r150-controller-test.service'),2)
             terminal=M.read(runtime/'terminal.json')
             self.assertIn('injected fault',terminal['original_stop_reason'])
             self.assertTrue(terminal['cleanup_verified']);self.assertEqual(system.stops,[saved['unit']])
 
-    def test_benchmark_cannot_dispatch_scientific_pool(self):
-        self.assertTrue(M.projection_fits({'name':'__benchmark__'}, {}, {'wave':'benchmark'},0))
-        self.assertFalse(M.projection_fits({'name':'new_science'}, {}, {'wave':'benchmark'},0))
+    def test_no_new_benchmark_task_or_lease_allowed(self):
+        with self.assertRaisesRegex(RuntimeError,'benchmark'):
+            M.projection_fits({'name':'__benchmark__'}, {}, {'wave':'benchmark'},0)
+        with self.assertRaisesRegex(RuntimeError,'benchmark'):
+            M.projection_fits({'name':'__benchmark__'}, {}, {'wave':'1'},0)
 
     def test_handoff_normal_advancement_allowed_regression_stops(self):
         owner={'pid':1,'start_ticks':2,'boot_id':'boot','cmdline_sha256':'owner'}

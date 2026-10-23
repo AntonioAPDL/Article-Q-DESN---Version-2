@@ -1,0 +1,24 @@
+{
+  "AL_authorized": false,
+  "absolute_compute_CPU_ceiling": 32400,
+  "benchmark_import": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r150_cached_continuation_20261023/bounded_admission/benchmark_import.json",
+  "benchmark_import_pins": {
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r150_cached_continuation_20261023/bounded_admission/benchmark_import.json": "13eed2d7bce169cc6aedeaca9850b7c2a926fb80bbb8e092f3c6d9dcc66177c2"
+  },
+  "branch": "B1",
+  "extra_seed_admission": "atomic_qualified_set_with_shared_control_if_cumulative_projection_fits_original_budget",
+  "new_benchmark_authorized": false,
+  "new_geometries": 0,
+  "new_model_fits": 0,
+  "numerical_waves": [
+    "1",
+    "2",
+    "3"
+  ],
+  "official_evaluation_authorized": false,
+  "producer_entry": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r150_cached_continuation_20261023/application/scripts/pricefm/497_run_pricefm_stage_r150_cached_continuation.py",
+  "producer_entry_sha256": "0809eeea65ddb2cab6525974630d031dc6fffbf4ce132184d19693b887bbce21",
+  "producer_head": "add35d3ea5df7397122bedf6509799cce634538c",
+  "required_branch": "work/pricefm-r150-bounded-admission-20261023",
+  "tag": "pricefm_stage_r150_bounded_admission_20261023"
+}

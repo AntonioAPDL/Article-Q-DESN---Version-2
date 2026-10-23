@@ -1,0 +1,75 @@
+{
+  "al_authorized": false,
+  "allowed_task_kinds": [
+    "full_origin_replay",
+    "mc_panel_replay"
+  ],
+  "article_mutation_authorized": false,
+  "automatic_future_stage_authorized": false,
+  "choices": {
+    "C0": "r134_0cab1abbe8ace168",
+    "C5": "r134_19b9f530c3d2246e"
+  },
+  "chunk_origins": 8,
+  "clock_offsets_steps": [
+    0,
+    24,
+    48,
+    72
+  ],
+  "deterministic_R148_replay": "canonical_frozen12_reference_hash_then_full_subset_tolerance",
+  "eligible_support": "validation_positions_except_last_for_all_four_clock_offsets",
+  "exal_authorized": false,
+  "extra_MC_master_seeds": [
+    2026102301,
+    2026102302
+  ],
+  "full_daily_counts": {
+    "1": 124,
+    "2": 134,
+    "3": 173
+  },
+  "horizon_steps": 96,
+  "joint_authorized": false,
+  "mcmc_authorized": false,
+  "new_geometry_count": 0,
+  "new_model_fits": 0,
+  "official_evaluation_authorized": false,
+  "official_test_seen_previously": true,
+  "original_seed_policy": "exact_R148_forecast_seed_and_absolute_origin_clock_keys",
+  "parent_head": "adce9120de82f2d3c60703957ce7e0823cd9cc7f",
+  "parent_kernel_sha256": "d29e09ab63d9663b52e33420cf7294efbda0ba1e783ed0de540ffbfd886184ee",
+  "parent_pins": {
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r148_ee_parallel_development_20261023/preparation.json": "2013bbde82d723c15e6e0c87eb4304f1e1810fd25bd8f3db0f6abe4a0beb6746",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r148_ee_parallel_development_20261023/prepared.json": "9d83fad6de702743397fde2885b583671fc289916b38fcaf069b30b0eb5fb3b3"
+  },
+  "parent_preparation": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r148_ee_parallel_development_20261023/preparation.json",
+  "parent_root": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r148_ee_parallel_20261023",
+  "paths": 100,
+  "primary_aggregation": "equal_three_inner_split_macro",
+  "promotion_authorized": false,
+  "quantiles": [
+    0.1,
+    0.25,
+    0.45,
+    0.5,
+    0.55,
+    0.75,
+    0.9
+  ],
+  "region": "EE",
+  "registry_mutation_authorized": false,
+  "replay_atol": 1e-12,
+  "replay_rtol": 1e-10,
+  "required_branch": "work/pricefm-r149-ee-origin-coverage-20261023",
+  "secondary_aggregation": "pooled_431_daily_by_four_clocks_explicit_origin_weights",
+  "splits": [
+    1,
+    2,
+    3
+  ],
+  "stochastic_R148_replay": "exact_standardized_prediction_byte_hash",
+  "tag": "pricefm_stage_r149_ee_origin_coverage_20261023",
+  "task_count": 18,
+  "test_used_for_selection": false
+}

@@ -33,6 +33,12 @@ SCIENCE = ROOT / 'application/scripts/pricefm/492_run_pricefm_stage_r148_ee_para
 THREADS = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
            'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS')
 GIB = 1024 ** 3
+STAGE = 'R148'
+REQUIRED_BRANCH = 'work/pricefm-r148-ee-parallel-screening-20261023'
+REQUIRED_UNIT = 'pricefm-r148-muscat-ee-idle-development.service'
+ALLOWED_TASK_KINDS = ['cached_rhs_rescore']
+SOURCE_PATHS = None
+REQUIRE_ALL_TASKS_COMPLETE = False
 
 
 def read(path):
@@ -50,8 +56,8 @@ def atomic(path, value):
     os.replace(temporary, path)
 
 
-def git(*args, root=ROOT):
-    return subprocess.check_output(['git', *args], cwd=root, text=True).strip()
+def git(*args, root=None):
+    return subprocess.check_output(['git', *args], cwd=ROOT if root is None else root, text=True).strip()
 
 
 def validate_config(config):
@@ -61,11 +67,11 @@ def validate_config(config):
             or config['io_class'] != 'idle' or config['numerical_threads'] != 1
             or config['baseline_signals_authorized'] is not False
             or config['exclusive_cpu_ownership'] is not False
-            or config['allowed_task_kinds'] != ['cached_rhs_rescore']
+            or config['allowed_task_kinds'] != ALLOWED_TASK_KINDS
             or config['own_rss_guard_gib'] != 24
             or config['resource_limit_mode'] != 'idle_policy_affinity_and_soft_owned_RSS_guard'
             or config['service_properties'] != {'KillMode': 'control-group', 'Restart': 'no'}
-            or config['unit'] != 'pricefm-r148-muscat-ee-idle-development.service'):
+            or config['unit'] != REQUIRED_UNIT):
         raise RuntimeError('configuration exceeds the authorized idle development lease')
     if config['min_available_memory_gib'] < 180 or config['min_free_disk_gib'] < 80:
         raise RuntimeError('baseline resource floors may not be lowered')
@@ -73,12 +79,14 @@ def validate_config(config):
 
 def source_identity():
     result = {'head': git('rev-parse', 'HEAD'), 'branch': git('branch', '--show-current')}
-    if result['branch'] != 'work/pricefm-r148-ee-parallel-screening-20261023' or git('status', '--porcelain'):
-        raise RuntimeError('clean committed R148 development worktree required')
+    if result['branch'] != REQUIRED_BRANCH or git('status', '--porcelain'):
+        raise RuntimeError('clean committed ' + STAGE + ' development worktree required')
     return result
 
 
 def source_paths():
+    if SOURCE_PATHS is not None:
+        return list(SOURCE_PATHS)
     return [ENTRY, CONFIG, SCIENCE,
         ROOT / 'application/config/pricefm_stage_r148_ee_parallel_development_20261023.json',
         ROOT / 'application/config/pricefm_stage_r148_ee_cached_controls_20261023.json',
@@ -100,7 +108,7 @@ def freeze_baseline(config):
 
 def release(config, runtime):
     validate_config(config); freeze_baseline(config)
-    value = {'status': 'R148_IDLE_RELEASE_FROZEN', 'source': source_identity(),
+    value = {'status': STAGE + '_IDLE_RELEASE_FROZEN', 'source': source_identity(),
              'sha256': {str(path.relative_to(ROOT)): digest(path) for path in source_paths()},
              'config_sha256': digest(CONFIG), 'epoch': time.time()}
     target = Path(runtime) / 'release.json'
@@ -116,10 +124,10 @@ def release(config, runtime):
 def verify_release(config, runtime):
     frozen = read(Path(runtime) / 'release.json')
     if frozen['source'] != source_identity() or frozen['config_sha256'] != digest(CONFIG):
-        raise RuntimeError('R148 resource release source changed')
+        raise RuntimeError(STAGE + ' resource release source changed')
     for relative, expected in frozen['sha256'].items():
         if digest(ROOT / relative) != expected:
-            raise RuntimeError('R148 released source file changed: ' + relative)
+            raise RuntimeError(STAGE + ' released source file changed: ' + relative)
     freeze_baseline(config)
     return frozen
 
@@ -464,7 +472,7 @@ def launch(config, runtime, lease, name, cpu, *, payload='worker'):
 
 
 def load_science():
-    spec = importlib.util.spec_from_file_location('pricefm_r148_science_resource_api', SCIENCE)
+    spec = importlib.util.spec_from_file_location('pricefm_' + STAGE.lower() + '_science_resource_api', SCIENCE)
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     return module
 
@@ -486,7 +494,7 @@ def run(config, runtime):
     validate_config(config); verify_release(config, runtime); verify_own_service(config); physical_cpu_check(config)
     runtime = Path(runtime); runtime.mkdir(parents=True, exist_ok=True)
     probe = read(runtime / 'policy_probe.json')
-    if (probe.get('status') != 'R148_IDLE_POLICY_PROBE_PASSED'
+    if (probe.get('status') != STAGE + '_IDLE_POLICY_PROBE_PASSED'
             or probe.get('source') != read(runtime / 'release.json')['source']):
         raise RuntimeError('successful actual policy probe of the frozen source required before payloads')
     with (runtime / 'supervisor.lock').open('a') as lock:
@@ -501,7 +509,7 @@ def run(config, runtime):
         def requested(signum, frame):
             stopping['signal'] = signum
         previous = {sig: signal.signal(sig, requested) for sig in (signal.SIGTERM, signal.SIGINT)}
-        status = 'R148_IDLE_LEASE_STOPPED'; reason = None
+        status = STAGE + '_IDLE_LEASE_STOPPED'; reason = None
         try:
             while True:
                 if stopping['signal'] is not None:
@@ -541,8 +549,13 @@ def run(config, runtime):
                         verify_release(config, runtime)
                         if not module.preparation_complete():
                             raise RuntimeError('immutable scientific preparation missing at final closeout')
-                        status = 'R148_IDLE_TASKS_COMPLETE_NOT_PROMOTED'; reason = 'all allowed development task seals verified'; break
-                atomic(runtime / 'progress.json', {'status': 'R148_IDLE_RUNNING', 'epoch': time.time(),
+                        complete = getattr(module, 'all_tasks_complete', None)
+                        if REQUIRE_ALL_TASKS_COMPLETE and not callable(complete):
+                            raise RuntimeError('scientific all-task completion verifier is required')
+                        if callable(complete) and not complete():
+                            raise RuntimeError('ready queue empty while required scientific tasks remain incomplete')
+                        status = STAGE + '_IDLE_TASKS_COMPLETE_NOT_PROMOTED'; reason = 'all allowed development task seals verified'; break
+                atomic(runtime / 'progress.json', {'status': STAGE + '_IDLE_RUNNING', 'epoch': time.time(),
                     'lease': lease, 'active': [{'name': j['name'], 'cpu': j['cpu'], 'pid': j['process'].pid,
                     'policy': 'SCHED_IDLE', 'log_path': j['log_path']} for j in jobs],
                     'pending': pending, 'output_bytes': output_bytes,
@@ -559,7 +572,7 @@ def run(config, runtime):
                 stop_owned(jobs)
             except Exception as exc:
                 cleanup_error = str(exc)
-                status = 'R148_IDLE_LEASE_STOPPED'
+                status = STAGE + '_IDLE_LEASE_STOPPED'
                 reason = 'own development cleanup was not proven: ' + cleanup_error
             finally:
                 for sig, handler in previous.items():
@@ -567,12 +580,12 @@ def run(config, runtime):
         closeout = None; closeout_error = None
         if prepared:
             try:
-                closeout = module.write_closeout('tasks_complete' if status == 'R148_IDLE_TASKS_COMPLETE_NOT_PROMOTED'
+                closeout = module.write_closeout('tasks_complete' if status == STAGE + '_IDLE_TASKS_COMPLETE_NOT_PROMOTED'
                     else 'lease_end' if reason and 'lease expired' in reason else 'resource_guard_stop',
                     details={'reason': reason, 'baseline_worker_signals': 0, 'exclusive_cpu_ownership': False})
             except Exception as exc:
                 closeout_error = str(exc)
-                status = 'R148_IDLE_LEASE_STOPPED'
+                status = STAGE + '_IDLE_LEASE_STOPPED'
                 reason = 'scientific closeout failed: ' + closeout_error
         terminal = {'status': status, 'reason': reason, 'epoch': time.time(), 'lease': lease,
                     'source': read(runtime / 'release.json')['source'], 'baseline_worker_signals': 0,
@@ -599,7 +612,7 @@ def main():
     config = read(args.config); validate_config(config)
     runtime = args.runtime or Path(config['runtime'])
     if args.config.resolve() != CONFIG.resolve() or runtime.resolve() != Path(config['runtime']).resolve():
-        raise RuntimeError('only the frozen R148 config and separate runtime are authorized')
+        raise RuntimeError('only the frozen ' + STAGE + ' config and separate runtime are authorized')
     if args.action == 'release':
         value = release(config, runtime)
     elif args.action == 'run':
@@ -614,7 +627,7 @@ def main():
         try:
             if job['process'].wait(timeout=10) != 0:
                 raise RuntimeError('actual SCHED_IDLE/idle-I/O/affinity probe failed')
-            value = {'status': 'R148_IDLE_POLICY_PROBE_PASSED', 'epoch': time.time(),
+            value = {'status': STAGE + '_IDLE_POLICY_PROBE_PASSED', 'epoch': time.time(),
                      'pid_identity': job['identity'], 'source': read(runtime / 'release.json')['source']}
             atomic(runtime / 'policy_probe.json', value)
         finally:

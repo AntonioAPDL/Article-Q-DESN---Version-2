@@ -1,0 +1,72 @@
+{
+  "al_authorized": false,
+  "allowed_worker_kinds": [
+    "cached_rhs_rescore"
+  ],
+  "article_mutation_authorized": false,
+  "cache_pins": {
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r137_four_region_pilot_20261015__EE/frozen_choices.json": "2cb95955c07bd132732f5d3588e6b4ef8b9ececac97f63ee370584e29d491915",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r137_four_region_pilot_20261015__EE/rhs_closeout.json": "c6971562c70d8a97669cc0188d0b0538696ce670922e6f8af9142f964a96493e",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r137_four_region_pilot_20261015__EE/ridge_closeout.json": "05b0a71f6065f8fefc79996a947c33fec22d0802104a2f7b27f4a3f9116d946b",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r137_four_region_pilot_20261015__EE/preparation.json": "8cb554514313dc381f1ebdbb9e42623b51346f17c75bf80eee5da0234e20cbd9"
+  },
+  "cache_preparation": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r137_four_region_pilot_20261015__EE/preparation.json",
+  "cache_root": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r137_four_region_pilot_20261015__EE",
+  "cache_source_head": "d83b62d77a11fd4df4640bf33efbd9c10faef570",
+  "candidate_decision": "cached_proxy_mismatch_diagnostic_before_any_new_geometry",
+  "clock_offsets_steps": [
+    0,
+    24,
+    48,
+    72
+  ],
+  "controls_file": "pricefm_stage_r148_ee_cached_controls_20261023.json",
+  "controls_sha256": "e9aeda31148bb1d6395c6b97fc40f171882d904a727655540e3b1af08719b7cc",
+  "dependency_head": "1e24342e1ecd2dd7a99d8df2445f29be7f7a03d2",
+  "distinct_cached_rhs_geometries": 6,
+  "engine_core_sha256": "f4dca632c7f4c3a8d1b4d8a396607fd39c28876a197a9cc869f5f22810ff5453",
+  "engine_head": "4cd92ac3654f16a84a67c8db6cfc7f381113aeb9",
+  "engine_root": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019",
+  "exal_authorized": false,
+  "expected_cached_geometries": 645,
+  "expected_cached_ridge_split_records": 1935,
+  "expected_selected_ids": [
+    "r134_0cab1abbe8ace168",
+    "r134_5c42f007409acfb3",
+    "r134_25ce70b353fa8986",
+    "r134_2295c52cfd0eead4",
+    "r134_5f893ffb82864bad",
+    "r134_19b9f530c3d2246e"
+  ],
+  "horizon_steps": 96,
+  "joint_authorized": false,
+  "mcmc_authorized": false,
+  "minimum_anchor": "2022-02-04",
+  "new_rhs_fits_authorized": false,
+  "new_ridge_geometries": 0,
+  "new_ridge_split_fits": 0,
+  "official_evaluation_authorized": false,
+  "official_test_seen_previously": true,
+  "panel_origin_counts": [
+    4,
+    12
+  ],
+  "panel_policy": "historical_Ridge4_plus8_farthest_spaced_historical_RHS12_candidates",
+  "promotion_authorized": false,
+  "quantiles": [
+    0.1,
+    0.25,
+    0.45,
+    0.5,
+    0.55,
+    0.75,
+    0.9
+  ],
+  "region": "EE",
+  "registry_mutation_authorized": false,
+  "required_branch": "work/pricefm-r148-ee-parallel-screening-20261023",
+  "stochastic_paths": 100,
+  "tag": "pricefm_stage_r148_ee_parallel_development_20261023",
+  "test_used_for_selection": false,
+  "training_end_exclusive": "2024-09-01"
+}

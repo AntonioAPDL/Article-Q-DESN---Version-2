@@ -1,0 +1,54 @@
+{
+  "EE_baseline_closeout_pin": {
+    "artifact_sha256": {
+      "fold_comparison.csv": "005fb46ff5c6c58662629b3f35fa44a0a3763f0fb1dbdfcf68113599e3c66da9",
+      "interpretation.json": "958aa4f506ef2028e77c5a53ed26ae345a81e04d72bf3818ca879e2072b8e39f",
+      "region_comparison.csv": "5b7dcca1854fdf61df89574ad45831605b48b75076e80e568157f1e267f8e6b6"
+    },
+    "campaign": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r137_four_region_pilot_20261015__EE",
+    "completed_evidence_sha256": "f5741915e2c291bfb1d7eccb02df426da057b57366a7c1e4b6f6b06b866b0243",
+    "host": "muscat",
+    "region": "EE",
+    "source": {
+      "branch": "work/pricefm-r137-four-region-pilot-20261015",
+      "head": "d83b62d77a11fd4df4640bf33efbd9c10faef570"
+    },
+    "source_class": "R137_reused_exactly",
+    "terminal_sha256": "80587aef6111b793e6c7881ffd4bbb50a162ebd49aea6e125821a413031f87be"
+  },
+  "HR_positive_baseline_closeout_pin": {
+    "artifact_sha256": {
+      "fold_comparison.csv": "3c13cd1769cc171b683cfddfb900a51656901dc9215727888e29dd37d22decfc",
+      "interpretation.json": "a7083be1ed30547241f06c8f43251b6221307f9f853af98b73bf7c7572f054cf",
+      "region_comparison.csv": "6d86241cb625ee2120a33e8cc10d79fa397fa17966564a77af500f6fb853544c"
+    },
+    "campaign": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__HR",
+    "completed_evidence_sha256": "2a31563e0e25f7dd025c70a35ba71ebe0113400e933c8578e8a1a69fa7f4eb5d",
+    "host": "jerez",
+    "region": "HR",
+    "source": {
+      "branch": "work/pricefm-r141-recovery-rollout-20261019",
+      "head": "4cd92ac3654f16a84a67c8db6cfc7f381113aeb9"
+    },
+    "source_class": "R141_recovered_or_new_region",
+    "terminal_sha256": "8c7574e252410de61514ef68c8da83ba663725ba3ea061efad08a6d80bee3d38"
+  },
+  "R138_interpretation": "completed_negative_do_not_repeat_six_receivers_by_three_drivers",
+  "R138_negative_control_pin": {
+    "campaign": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r138_dk1_diverse_driver_20261016",
+    "closeout_artifacts": {
+      "fold_comparison.csv": "15d08122c3c34850103639be7479132d298d5a7c0db6a1e244ca5c177396971f",
+      "interpretation.json": "d8551a72fe5412baf5a72d07fb3ac147bc67d547c36b45c2ca990c04afeff16c",
+      "region_comparison.csv": "99acdacde3d632e824e898a4c43c4f8ba02df3c6c62f3f35eee548d3de866176"
+    },
+    "completed_evidence_sha256": "8e6f19d2699b4e96b531df207c7375c114239f920235e1d2099a7ff25a694190",
+    "frozen_choice_sha256": "4e0026529d3787a2553c1eeeed213a71d5c4a721f224bf1c0fb3b312e3ca26eb",
+    "source": {
+      "branch": "work/pricefm-r138-dk1-diverse-driver-20261016",
+      "head": "5607d2e2e3ee26380cec98bb3b1351c3a0bb8cc6"
+    },
+    "wave1_gate_sha256": "1f325274841506fd62df9f4a46d404609023802d8e74eb28404d6ec8d7887679"
+  },
+  "role": "historical_context_only_not_candidate_selection",
+  "source": "read_only_verified_prior_campaign_evidence_20261023"
+}

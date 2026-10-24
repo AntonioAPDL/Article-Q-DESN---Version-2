@@ -25,12 +25,14 @@ class ReleaseRecovery(unittest.TestCase):
         self.groups={};self.proc=None
         self.system=types.SimpleNamespace(unit=lambda unit:dict(self.props),members=lambda group:self.groups.get(group,[]))
         self.legacy=types.SimpleNamespace(verify_owned=lambda saved,props:'owned',process=lambda pid:self.proc,
-            parse_duration=lambda value:float(value.rstrip('s')))
+            parse_duration=lambda value:float(value.rstrip('s')),idle_command=lambda argv:['/usr/bin/chrt','--idle','0']+list(argv))
         self.pool=types.SimpleNamespace(validate_master=lambda *args,**kwargs:None,verify_source=lambda source:None,
             boot=lambda:'boot',legacy=lambda:self.legacy,hardening=lambda:types.SimpleNamespace(same_process_identity=lambda a,b:a==b),
             baseline=lambda:types.SimpleNamespace(baseline_ownership=lambda *args:dict(healthy=True)),System=lambda:self.system)
         api_patch=patch.object(m,'api',return_value=self.pool);api_patch.start();self.addCleanup(api_patch.stop)
         verify_patch=patch.object(m,'verify_source',return_value=None);verify_patch.start();self.addCleanup(verify_patch.stop)
+        adapter_patch=patch.object(m,'adapter',return_value=types.SimpleNamespace(verify_baseline=lambda *args:dict(healthy=True)))
+        adapter_patch.start();self.addCleanup(adapter_patch.stop)
         now=time.time();self.now=now
         self.source=dict(root=str(m.ROOT),head='recovery-head',branch=m.BRANCH,runtime_sha256={})
         oldsource=dict(root=str(m.OLD_ROOT),head='old-head',branch='old-branch',runtime_sha256={})
@@ -49,8 +51,11 @@ class ReleaseRecovery(unittest.TestCase):
         self.probe=self.home/'probe.json';self.probe_value=dict(status='PASS_R152_PARENT_RECOVERY_DISPOSABLE_PROBE',
             original_master_sha256=m.digest(m.MASTER),scope_id=self.master['scope_id'],boot_id='boot',started_epoch=now-10,
             cleanup_verified=True,cleanup_errors=[],probe_driver_CPU_seconds=5.,unit_CPU_charges=[dict(CPU_seconds=20.)],
-            charged_control_CPU_seconds=25.,execution_source=self.source,scientific_runs=0,production_admissions=0,
+            charged_control_CPU_seconds=30.,execution_source=self.source,scientific_runs=0,production_admissions=0,
             parent_death_binding_verified=True)
+        self.probe_value.update(private_adoption_CPU_bound_seconds=5.,private_baseline_adoption_probe=dict(
+            status='PASS_R152_PRIVATE_BASELINE_ADOPTION_PROBE',execution_source=self.source,original_master_sha256=m.digest(m.MASTER),
+            generation=2,exact_cleanup=True,scientific_runs=0,orphan_CPU_bound_seconds=5.))
         self.write(self.probe,self.probe_value)
         self.release=self.home/'release.json';self.write(self.release,dict(schema_version=1,status='R152_PARENT_RECOVERY_RELEASE',
             execution_source=self.source,original_master=self.original,failed_parent={key:self.failed[key] for key in
@@ -63,7 +68,7 @@ class ReleaseRecovery(unittest.TestCase):
         self.authority=dict(schema_version=1,stage='R152',kind='ORIGINAL_SCOPE_PARENT_RECOVERY',attempt_id=attempt,
             original_master=self.original,execution_source=self.source,failed_parent=self.failed,zero_admission_inventory=m.inventory(),
             effective_parent_expires_epoch=self.master['expires_epoch']-5,release_path=str(self.release),release_sha256=m.digest(self.release),
-            prior_control_debit=dict(CPU_seconds=prior['CPU_seconds']+25,failed_parent=prior,probe_receipts=probes,original_limit_CPU_seconds=1800),
+            prior_control_debit=dict(CPU_seconds=prior['CPU_seconds']+30,failed_parent=prior,probe_receipts=probes,original_limit_CPU_seconds=1800),
             control_intent=intent,attestation_path=str(self.path.parent/'controller_attestation.json'))
         self.write(self.path,self.authority)
     def write(self,path,value):
@@ -121,7 +126,7 @@ class ReleaseRecovery(unittest.TestCase):
         earlier=self.home/'earlier.json';value=dict(self.probe_value,status='FAIL_R152_PARENT_RECOVERY_DISPOSABLE_PROBE')
         self.write(earlier,value)
         rows=m.validate_probe_receipts([earlier,self.probe],self.source,self.master)
-        self.assertEqual(sum(row['charged_CPU_seconds'] for row in rows),50)
+        self.assertEqual(sum(row['charged_CPU_seconds'] for row in rows),60)
     def test_incomplete_probe_cleanup_cannot_release_recovery(self):
         self.probe_value['cleanup_verified']=False;self.write(self.probe,self.probe_value)
         with self.assertRaisesRegex(RuntimeError,'cleanup identity'):m.validate_probe_receipts([self.probe],self.source,self.master)
@@ -186,6 +191,12 @@ class ReleaseRecovery(unittest.TestCase):
             return dict(intent,attested=dict(InvocationID='inv'),process=dict(pid=len(started),affinity=intent['cpus']),
                 expected_cgroup='/user.slice/'+intent['unit'],actual_kernel_expires_epoch=self.master['expires_epoch']-10)
         def kill(argv,**kwargs):
+            if argv[0]==m.PYTHON:
+                self.assertEqual(argv[2],str(m.ADAPTER));self.assertEqual(argv[3],'probe')
+                report=Path(argv[argv.index('--output')+1]);self.write(report,dict(status='PASS_R152_PRIVATE_BASELINE_ADOPTION_PROBE',
+                    execution_source=self.source,original_master_sha256=m.digest(m.MASTER),scope_id=self.master['scope_id'],
+                    generation=2,exact_cleanup=True,scientific_runs=0,orphan_CPU_bound_seconds=10.))
+                return types.SimpleNamespace(returncode=0,stdout='',stderr='')
             self.assertEqual(argv[:5],['systemctl','--user','kill','--kill-who=main','--signal=KILL'])
             self.assertIn('-probe-parent-',argv[-1])
             for value in props.values():value['ActiveState']='failed';value['MainPID']='0'
@@ -198,7 +209,7 @@ class ReleaseRecovery(unittest.TestCase):
                 patch.object(m,'wait_file',return_value=observation),patch.object(m,'probe_charge',side_effect=lambda saved,system:dict(CPU_seconds=20.)),\
                 patch.object(m.subprocess,'run',side_effect=kill) as signal:
             with self.assertRaisesRegex(RuntimeError,'receipt preserved'):m.capability_probe(output)
-            signal.assert_not_called()
+            self.assertEqual(signal.call_count,1);self.assertEqual(signal.call_args.args[0][0],m.PYTHON)
         receipt=m.read(output);self.assertTrue(receipt['cleanup_verified']);self.assertEqual(len(cleaned),2)
         self.assertIn('policy proof was not live',receipt['error'])
         self.assertGreaterEqual(receipt['charged_control_CPU_seconds'],45.)
@@ -213,5 +224,39 @@ class ReleaseRecovery(unittest.TestCase):
         self.assertEqual(result['status'],'PASS_R152_PARENT_RECOVERY_DISPOSABLE_PROBE')
         self.assertTrue(result['parent_death_binding_verified']);self.assertTrue(result['cleanup_verified'])
         self.assertEqual(len(cleaned),2);self.assertEqual(result['original_master_sha256'],m.digest(m.MASTER))
+        self.assertEqual(started[1][1][:3],['/usr/bin/chrt','--idle','0'])
+        self.assertEqual(started[1][1][3:6],[m.PYTHON,'-B',str(m.ENTRY)])
+    def _idle_attestation(self):
+        self.props.update(ActiveState='active',MainPID='12',InvocationID='idle-invocation',RuntimeMaxUSec='55s',
+            IOSchedulingClass='3',CPUAccounting='yes',ControlGroup='/user.slice/idle.service')
+        intent=dict(unit='unit',runtime_seconds=55,expected_cgroup='/user.slice/idle.service')
+        process=dict(pid=12,start_ticks=100,boot_id='boot',affinity=[24],scheduler=0)
+        return intent,process
+    def test_idle_first_exec_wait_is_bounded_and_keeps_exact_lifetime(self):
+        intent,initial=self._idle_attestation();ready=dict(initial,scheduler=5)
+        with patch.object(m,'describe_process',side_effect=[initial,ready]),patch.object(m.time,'sleep'),\
+                patch.object(m,'kernel_deadline',return_value=self.master['expires_epoch']-10):
+            result=m.attest_control(self.system,intent,self.master['expires_epoch'],idle=True,cpu=24)
+        self.assertEqual(result['process'],ready)
+    def test_idle_first_exec_wait_rejects_process_reuse(self):
+        intent,initial=self._idle_attestation();reused=dict(initial,start_ticks=101,scheduler=5)
+        with patch.object(m,'describe_process',side_effect=[initial,reused]),patch.object(m.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'changed process lifetime'):
+                m.attest_control(self.system,intent,self.master['expires_epoch'],idle=True,cpu=24)
+    def test_idle_first_exec_wait_rejects_unit_invocation_change(self):
+        intent,initial=self._idle_attestation();changed=dict(self.props,InvocationID='other')
+        with patch.object(self.system,'unit',side_effect=[dict(self.props),changed]),\
+                patch.object(m,'describe_process',return_value=initial),patch.object(m.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'changed unit invocation'):
+                m.attest_control(self.system,intent,self.master['expires_epoch'],idle=True,cpu=24)
+    def test_idle_first_exec_timeout_retains_actual_policy_diagnostics(self):
+        intent,initial=self._idle_attestation()
+        with patch.object(m,'describe_process',return_value=initial),patch.object(m.time,'sleep'),\
+                patch.object(m.time,'monotonic',side_effect=[0.,0.,4.]):
+            with self.assertRaisesRegex(RuntimeError,'live recovery control policy differs') as failure:
+                m.attest_control(self.system,intent,self.master['expires_epoch'],idle=True,cpu=24)
+        self.assertIn('"expected_scheduler": 5',str(failure.exception))
+        self.assertIn('"scheduler": 0',str(failure.exception))
+        self.assertIn('idle-invocation',str(failure.exception))
 
 if __name__=='__main__':unittest.main()

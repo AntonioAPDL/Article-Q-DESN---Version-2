@@ -41,6 +41,9 @@ class ParentResumeTests(unittest.TestCase):
         self.authority_path=self.runtime/'recovery/attempt/authority.json'
         self.api.immutable(self.authority_path,self.authority)
         self.authority.update(_authority_path=str(self.authority_path),_authority_sha256=self.api.digest(self.authority_path))
+        self.baseline_adapter=types.SimpleNamespace(verify_baseline=Mock(return_value=dict(healthy=True)))
+        adapter_patch=patch.object(m,'baseline_adapter',return_value=self.baseline_adapter)
+        adapter_patch.start();self.addCleanup(adapter_patch.stop)
 
     def test_import_and_actual_CLI_help_are_metadata_only(self):
         result=subprocess.run([sys.executable,'-B',str(ENTRY),'--help'],text=True,capture_output=True)
@@ -98,7 +101,7 @@ class ParentResumeTests(unittest.TestCase):
 
     def test_first_master_heartbeat_publication_race_is_bounded_and_retried(self):
         self._armed_baseline();owner=Mock(side_effect=[RuntimeError('baseline ownership epoch/master/heartbeat differs'),dict(healthy=True)])
-        self.api.baseline=lambda:types.SimpleNamespace(baseline_ownership=owner)
+        self.baseline_adapter.verify_baseline=owner
         with patch.object(m.time,'time',return_value=self.now),patch.object(m.time,'sleep'):
             self.assertEqual(m.await_baseline_ownership(self.api,self.shared,self.master),dict(healthy=True))
         self.assertEqual(owner.call_count,2)
@@ -106,10 +109,26 @@ class ParentResumeTests(unittest.TestCase):
     def test_running_owner_mismatch_is_not_retried_as_publication(self):
         self._armed_baseline(phase='running',expiry=44200.)
         owner=Mock(side_effect=RuntimeError('baseline ownership epoch/master/heartbeat differs'))
-        self.api.baseline=lambda:types.SimpleNamespace(baseline_ownership=owner)
+        self.baseline_adapter.verify_baseline=owner
         with patch.object(m.time,'time',return_value=self.now),self.assertRaises(RuntimeError):
             m.await_baseline_ownership(self.api,self.shared,self.master)
         self.assertEqual(owner.call_count,1)
+
+    def test_startup_health_uses_explicit_adapter_and_optional_baseline_system(self):
+        self.api.baseline=Mock(side_effect=AssertionError('immutable old helper bypassed adapter'))
+        system=object()
+        result=m.await_baseline_ownership(self.api,self.shared,self.master,system=system)
+        self.assertEqual(result,dict(healthy=True))
+        self.baseline_adapter.verify_baseline.assert_called_once_with(self.shared/'baseline',self.master,system=system)
+        self.api.baseline.assert_not_called()
+
+    def test_adapter_bridge_failure_is_not_retried_as_publication(self):
+        self.baseline_adapter.verify_baseline.side_effect=RuntimeError('baseline core/adapter/owner bridge differs')
+        self.api.baseline=Mock(side_effect=AssertionError('immutable old helper bypassed adapter'))
+        with self.assertRaisesRegex(RuntimeError,'adapter/owner bridge'):
+            m.await_baseline_ownership(self.api,self.shared,self.master)
+        self.baseline_adapter.verify_baseline.assert_called_once()
+        self.api.baseline.assert_not_called()
 
     def test_full_validation_once_per_poll_but_authority_hash_every_guard(self):
         original={key:value for key,value in self.authority.items() if not key.startswith('_')}
@@ -154,7 +173,8 @@ class ParentResumeTests(unittest.TestCase):
         self.api.boot=lambda:'boot'
         self.api.git=lambda root,*argv:self.api.EE_HEAD if argv==('rev-parse','HEAD') else ''
         self.owner=Mock(return_value=dict(healthy=True))
-        self.api.baseline=lambda:types.SimpleNamespace(baseline_ownership=self.owner)
+        self.baseline_adapter.verify_baseline=self.owner
+        self.api.baseline=Mock(side_effect=AssertionError('immutable old helper bypassed adapter'))
         self.api.unit_observation=Mock(return_value=dict(active=False,members=[]))
         self.api.old_lifetime_absent=lambda saved:True
         self.api.verify_control_capsule=Mock()
@@ -171,6 +191,8 @@ class ParentResumeTests(unittest.TestCase):
                 value=m.live_guard(self.api,None,self.c,self.shared,self.master,self.capsule,studies,{'EE'},self.authority,self.validator,cache)
         self.assertEqual(self.validator.call_count,1)
         self.assertEqual(self.owner.call_count,3)
+        self.owner.assert_called_with(self.shared/'baseline',self.master)
+        self.api.baseline.assert_not_called()
         self.assertEqual(self.api.verify_control_capsule.call_count,3)
         self.assertEqual(self.api.unit_observation.call_count,3)
         self.assertEqual(value['control_CPU_seconds'],75.)

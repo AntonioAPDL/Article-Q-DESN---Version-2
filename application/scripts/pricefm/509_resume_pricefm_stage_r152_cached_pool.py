@@ -23,6 +23,7 @@ OLD_ROOT=ROOT.parent/'pricefm_r152_parallel_20261024'
 OLD_HEAD='cba0b6c861f20ebdffcd970d59b0fa38afd80a42'
 _API=None
 _AUTHORITY_API=None
+_BASELINE_ADAPTER=None
 
 
 def load_module(name,path):
@@ -38,6 +39,15 @@ def original_api():
     if _API is None:
         _API=load_module('r152_recovery_original_pool',OLD_ROOT/'application/scripts/pricefm/505_run_pricefm_stage_r152_shared_pool.py')
     return _API
+
+
+def baseline_adapter():
+    """Verify the recovered owner's explicit bridge without rebinding cba504."""
+    global _BASELINE_ADAPTER
+    if _BASELINE_ADAPTER is None:
+        _BASELINE_ADAPTER=load_module('r152_recovered_baseline_health',
+            ENTRY.with_name('511_recover_pricefm_stage_r152_baseline_owner.py'))
+    return _BASELINE_ADAPTER
 
 
 def validate_authority(path, *, system=None,require_empty=False,allow_expired=False):
@@ -99,7 +109,7 @@ def await_baseline_ownership(api,shared,master, *, timeout=20,system=None):
     """Retry only the proved armed→first-master-heartbeat publication interval."""
     until=time.monotonic()+timeout
     while True:
-        try:return api.baseline().baseline_ownership(Path(shared)/'baseline',master,system=system)
+        try:return baseline_adapter().verify_baseline(Path(shared)/'baseline',master,system=system)
         except RuntimeError as error:
             if str(error)!='baseline ownership epoch/master/heartbeat differs':raise
             runtime=Path(shared)/'baseline'
@@ -200,7 +210,9 @@ def live_guard(api,system,c,shared,master,controller,studies,enabled,authority,v
     failed=authority['failed_parent']['capsule'];failed_state=api.unit_observation(system,failed)
     if failed_state['active'] or failed_state['members'] or not api.old_lifetime_absent(failed):
         raise RuntimeError('superseded original parent lifetime is not drained')
-    api.baseline().baseline_ownership(shared/'baseline',master)
+    # The pool's System exposes a different process shape. Let the explicit
+    # baseline adapter construct its own bounded-read System for this check.
+    baseline_adapter().verify_baseline(shared/'baseline',master)
     controls=[controller]
     guardian=runtime/'guardian.json'
     if guardian.is_file():controls.append(api.read(guardian))

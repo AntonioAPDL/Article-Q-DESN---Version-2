@@ -29,6 +29,24 @@ independently checks that controller's actual exit before returning the loan at
 a natural boundary. Baseline scientific sources, targets, iteration limits,
 quarantines, live affinities and Jerez remain unchanged.
 
+The original baseline owner also stopped on a protected worker-metadata read.
+The worker was later absent; its exact past transition is not claimed proven.
+`511_recover_pricefm_stage_r152_baseline_owner.py` delegates the unchanged cba
+504 resource core through its explicit System interface. Bounded fresh reads
+accept confirmed exit or stable readable metadata for the same PID lifetime;
+a persistently unreadable live unknown process still blocks. All new cached
+health readers explicitly use this adapter without rebinding old globals.
+
+`512_release_pricefm_stage_r152_baseline_owner.py` archives exact old baseline
+state, blocked status, epoch and config before adopting existing sessions as
+generation two. The config changes only the service name. It preserves known
+fits in the old unit's cgroup and never stops that unit. Canonical baseline
+state/status are mutable current pointers; the original scope-level failed
+receipts remain byte-identical. This recovery authorizes generation two only;
+a further owner failure stops progression rather than silently spending another
+generation. New-owner failure cleanup uses process-only stop and keeps model
+sessions intact.
+
 All scheduling calendars and whole claims fit the attested kernel lifetime
 and its reserved cleanup cutoff as well as the original master. The shorter
 planning horizon is an in-memory calendar bound, never a replacement master.
@@ -52,6 +70,8 @@ environment controls equal to one. The release actions are:
 ```text
 510... freeze --output RELEASE.json
 510... probe --output PROBE.json
+512... prepare --release RELEASE.json --probe PROBE.json
+512... launch --authority BASELINE_AUTHORITY.json
 510... launch --release RELEASE.json --probe PROBE.json
 ```
 
@@ -59,7 +79,10 @@ Pass every post-T0 recovery probe receipt in chronological order with repeated
 `--probe` arguments, including failed probes, so their costs remain charged.
 Launch accepts one recovery only and requires complete cleanup and a successful
 same-source lifecycle probe. A failed probe is never overwritten. Disposable
-units perform no forecast or fit.
+units perform no forecast or fit. The composite probe also exercises private
+orphan adoption and the original-clock generation-two ownership seal. Cached
+launch follows successful canonical baseline owner, guardian and session
+verification.
 
 Focused tests cover authority and source binding, clock preservation, empty
 inventory, old-parent drainage, control accounting, whole-window containment,

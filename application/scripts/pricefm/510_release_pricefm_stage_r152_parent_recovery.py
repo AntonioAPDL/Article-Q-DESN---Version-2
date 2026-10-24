@@ -22,6 +22,8 @@ import uuid
 ROOT=Path(__file__).resolve().parents[3]
 ENTRY=Path(__file__).resolve()
 BROKER=ENTRY.with_name('509_resume_pricefm_stage_r152_cached_pool.py')
+ADAPTER=ENTRY.with_name('511_recover_pricefm_stage_r152_baseline_owner.py')
+BASELINE_RELEASE=ENTRY.with_name('512_release_pricefm_stage_r152_baseline_owner.py')
 OLD_ROOT=Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r152_parallel_20261024')
 SHARED=Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r152_parallel_20261024')
 MASTER=SHARED/'master.json'
@@ -30,6 +32,7 @@ PYTHON='/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/r
 BRANCH='work/pricefm-r152-parent-recovery-20261024'
 THREADS=('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','BLIS_NUM_THREADS','NUMEXPR_NUM_THREADS','VECLIB_MAXIMUM_THREADS')
 _API=None
+_ADAPTER=None
 
 def read(path):return json.loads(Path(path).read_text())
 def digest(path):
@@ -63,17 +66,23 @@ def api():
         spec=importlib.util.spec_from_file_location('r152_recovery_frozen_resource_api',path)
         _API=importlib.util.module_from_spec(spec);spec.loader.exec_module(_API)
     return _API
+def adapter():
+    global _ADAPTER
+    if _ADAPTER is None:
+        spec=importlib.util.spec_from_file_location('r152_explicit_baseline_adapter',ADAPTER)
+        _ADAPTER=importlib.util.module_from_spec(spec);spec.loader.exec_module(_ADAPTER)
+    return _ADAPTER
 def finite(value,positive=False):return not isinstance(value,bool) and isinstance(value,(int,float)) and math.isfinite(value) and (value>0 if positive else value>=0)
 def git(*args):return subprocess.check_output(['git','-C',str(ROOT),*args],text=True,timeout=60).strip()
 def source_identity():
     source=dict(root=str(ROOT),head=git('rev-parse','HEAD'),branch=git('branch','--show-current'),
-        runtime_sha256={str(path.relative_to(ROOT)):digest(path) for path in (ENTRY,BROKER)})
+        runtime_sha256={str(path.relative_to(ROOT)):digest(path) for path in (ENTRY,BROKER,ADAPTER,BASELINE_RELEASE)})
     verify_source(source);return source
 def verify_source(source,remote=False):
     if (source.get('root')!=str(ROOT) or source.get('branch')!=BRANCH
             or git('branch','--show-current')!=BRANCH or git('rev-parse','HEAD')!=source.get('head')
             or git('status','--porcelain')):raise RuntimeError('recovery execution source is not the released clean branch/head')
-    required={str(path.relative_to(ROOT)) for path in (ENTRY,BROKER)}
+    required={str(path.relative_to(ROOT)) for path in (ENTRY,BROKER,ADAPTER,BASELINE_RELEASE)}
     if set(source.get('runtime_sha256',{}))!=required:raise RuntimeError('recovery source pin coverage differs')
     for path,wanted in source['runtime_sha256'].items():
         if digest(ROOT/path)!=wanted:raise RuntimeError('recovery executable bytes changed')
@@ -145,8 +154,9 @@ def validate_probe_receipts(paths,source,master):
     for path in paths:
         path=Path(path).resolve();value=read(path)
         driver=value.get('probe_driver_CPU_seconds');charges=value.get('unit_CPU_charges',[])
-        if (not finite(driver,positive=True) or any(not finite(row.get('CPU_seconds'),positive=True) for row in charges)
-                or not math.isclose(value.get('charged_control_CPU_seconds',-1),driver+sum(row['CPU_seconds'] for row in charges),abs_tol=1e-9)
+        orphan=value.get('private_adoption_CPU_bound_seconds',0.)
+        if (not finite(driver,positive=True) or not finite(orphan) or any(not finite(row.get('CPU_seconds'),positive=True) for row in charges)
+                or not math.isclose(value.get('charged_control_CPU_seconds',-1),driver+orphan+sum(row['CPU_seconds'] for row in charges),abs_tol=1e-9)
                 or value.get('original_master_sha256')!=digest(MASTER) or value.get('scope_id')!=master['scope_id']
                 or value.get('boot_id')!=api().boot() or value.get('started_epoch',0)<master['start_epoch']
                 or not value.get('cleanup_verified') or value.get('cleanup_errors')
@@ -157,6 +167,12 @@ def validate_probe_receipts(paths,source,master):
     if (latest.get('status')!='PASS_R152_PARENT_RECOVERY_DISPOSABLE_PROBE' or latest.get('execution_source')!=source
             or latest.get('scientific_runs')!=0 or latest.get('production_admissions')!=0
             or latest.get('parent_death_binding_verified') is not True):raise RuntimeError('successful same-source lifecycle probe required')
+    adoption=latest.get('private_baseline_adoption_probe',{})
+    if (adoption.get('status')!='PASS_R152_PRIVATE_BASELINE_ADOPTION_PROBE' or adoption.get('execution_source')!=source
+            or adoption.get('original_master_sha256')!=digest(MASTER) or adoption.get('generation')!=2
+            or adoption.get('exact_cleanup') is not True or adoption.get('scientific_runs')!=0
+            or latest.get('private_adoption_CPU_bound_seconds')!=adoption.get('orphan_CPU_bound_seconds')):
+        raise RuntimeError('successful same-source private baseline adoption probe required')
     if len({row['path'] for row in rows})!=len(rows):raise RuntimeError('probe debit receipt duplicated')
     return rows
 
@@ -203,7 +219,7 @@ def validate_authority(path,system=None,require_empty=True,allow_expired=False):
             or intent['runtime_seconds']>math.floor(authority['effective_parent_expires_epoch']-intent['created_epoch'])
             or authority.get('attestation_path')!=str(path.parent/'controller_attestation.json')):
         raise RuntimeError('recovery control intent/source/kernel duration differs')
-    pool.baseline().baseline_ownership(SHARED/'baseline',master)
+    adapter().verify_baseline(SHARED/'baseline',master)
     return authority
 
 def describe_process(pool,pid):
@@ -220,10 +236,21 @@ def attest_control(system,intent,original_expiry, *, idle=False,cpu=None):
     pool=api();props=system.unit(intent['unit']);pool.legacy().verify_owned(intent,props)
     process=describe_process(pool,int(props.get('MainPID',0)))
     expected=[cpu] if idle else list(range(15,30))
+    invocation=props.get('InvocationID');anchor=process
+    until=time.monotonic()+3
+    while idle and process and process['scheduler']!=5 and props.get('ActiveState') in ('active','activating') and time.monotonic()<until:
+        time.sleep(.02);props=system.unit(intent['unit']);pool.legacy().verify_owned(intent,props)
+        if props.get('InvocationID')!=invocation:raise RuntimeError('first-exec policy wait changed unit invocation')
+        process=describe_process(pool,int(props.get('MainPID',0)))
+        if process and any(process.get(key)!=anchor.get(key) for key in ('pid','start_ticks','boot_id')):
+            raise RuntimeError('first-exec policy wait changed process lifetime')
     actual_seconds=pool.legacy().parse_duration(props.get('RuntimeMaxUSec',''))
     if (not process or process['affinity']!=expected or process['scheduler']!=(5 if idle else 0)
             or props.get('IOSchedulingClass')!='3' or props.get('CPUAccounting')!='yes'
-            or not props.get('InvocationID') or not 0<actual_seconds<=intent['runtime_seconds']):raise RuntimeError('live recovery control policy differs')
+            or not props.get('InvocationID') or not 0<actual_seconds<=intent['runtime_seconds']
+            or intent.get('expected_cgroup',props.get('ControlGroup'))!=props.get('ControlGroup')):
+        raise RuntimeError('live recovery control policy differs: '+json.dumps(dict(properties=props,process=process,
+            expected_affinity=expected,expected_scheduler=5 if idle else 0),sort_keys=True))
     deadline=kernel_deadline(system,intent['unit'],actual_seconds)
     if deadline>original_expiry:raise RuntimeError('kernel lifetime would exceed original absolute expiry')
     saved=dict(intent,attested=props,process=process,expected_cgroup=props['ControlGroup'],actual_kernel_expires_epoch=deadline)
@@ -305,13 +332,28 @@ def capability_probe(output):
         parent_death_binding_verified=False,cleanup_verified=False,probe_runtime=str(folder))
     saved_rows=[];charges=[]
     try:
+        adoption_path=folder/'private_baseline_adoption.json'
+        observed=subprocess.run([PYTHON,'-B',str(ADAPTER),'probe','--output',str(adoption_path)],
+            cwd=str(OLD_ROOT),text=True,capture_output=True,timeout=30)
+        (folder/'private_baseline_adoption.stdout').write_text(observed.stdout)
+        (folder/'private_baseline_adoption.stderr').write_text(observed.stderr)
+        if not adoption_path.is_file():raise RuntimeError('private baseline adoption probe failed without a cleanup/debit receipt')
+        adoption=read(adoption_path)
+        result.update(private_baseline_adoption_probe=adoption,private_baseline_adoption_probe_sha256=digest(adoption_path),
+            private_adoption_CPU_bound_seconds=adoption.get('orphan_CPU_bound_seconds',0.))
+        if (observed.returncode or adoption.get('status')!='PASS_R152_PRIVATE_BASELINE_ADOPTION_PROBE' or adoption.get('execution_source')!=source
+                or adoption.get('exact_cleanup') is not True or adoption.get('scientific_runs')!=0
+                or adoption.get('generation')!=2 or not finite(adoption.get('orphan_CPU_bound_seconds'),positive=True)):
+            raise RuntimeError('private baseline adoption proof differs')
         for role in ('parent','child'):
             unit='pricefm-r150-r152-recovery-probe-'+role+'-'+uuid.uuid4().hex+'.service'
             report=folder/(role+'.json');argv=[PYTHON,'-B',str(ENTRY),'hold','--output',str(report),'--seconds','45','--unit',unit]
+            if role=='child':argv=pool.legacy().idle_command(argv)
             intent=dict(unit=unit,argv=argv,description='R152 disposable recovery '+role,runtime_seconds=55,
                 working_directory=str(EE_ROOT),created_epoch=time.time(),source_head=source['head'],
                 source_entry_path=str(ENTRY),source_entry_sha256=digest(ENTRY),parent=saved_rows[0]['unit'] if saved_rows else None,
-                cpus=[24] if role=='child' else list(range(15,30)))
+                cpus=[24] if role=='child' else list(range(15,30)),
+                expected_cgroup=str(Path(master['orchestrator']['capsule']['attested']['ControlGroup']).parent/unit))
             immutable(folder/(role+'_intent.json'),intent);strongest=intent
             try:
                 system.start(unit,intent['description'],argv,cpus=[24] if role=='child' else list(range(15,30)),
@@ -342,8 +384,9 @@ def capability_probe(output):
             except BaseException as error:result['cleanup_errors'].append(dict(unit=saved['unit'],error=repr(error)))
         result['unit_CPU_charges']=charges
         result['probe_driver_CPU_seconds']=time.process_time()+os.times().children_user+os.times().children_system+5.
-        result['charged_control_CPU_seconds']=sum(row['CPU_seconds'] for row in charges)+result['probe_driver_CPU_seconds']
-        result['cleanup_verified']=not result['cleanup_errors'] and len(result['cleanup'])==len(saved_rows)
+        result['charged_control_CPU_seconds']=sum(row['CPU_seconds'] for row in charges)+result['probe_driver_CPU_seconds']+result.get('private_adoption_CPU_bound_seconds',0.)
+        result['cleanup_verified']=(not result['cleanup_errors'] and len(result['cleanup'])==len(saved_rows)
+            and result.get('private_baseline_adoption_probe',{}).get('exact_cleanup') is True)
         if not result['cleanup_verified']:result['status']='FAIL_R152_PARENT_RECOVERY_DISPOSABLE_PROBE'
         result['finished_epoch']=time.time();immutable(output,result)
     if result['status']!='PASS_R152_PARENT_RECOVERY_DISPOSABLE_PROBE':raise RuntimeError('disposable recovery probe failed; immutable receipt preserved')

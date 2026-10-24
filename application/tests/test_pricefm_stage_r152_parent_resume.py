@@ -320,5 +320,75 @@ class ParentResumeTests(unittest.TestCase):
         self.assertEqual(len(self.api.admission_files(self.runtime,'EE','numerical')),1)
         self.assertEqual(len(self.api.admission_files(self.runtime,'EE','assessment')),1)
 
+    def _full_slot_fixture(self):
+        lease_path=self.runtime/'admissions/EE/EE-C1/lease.json'
+        lease=dict(compute_expires_epoch=self.now+1000,expires_epoch=self.now+2800)
+        self.api.atomic(lease_path,lease)
+        rows=[]
+        for index,cpu in enumerate(self.c['base_cpus']):
+            path=self.runtime/'attempts/EE'/str(index)/'ownership.json';path.parent.mkdir(parents=True,exist_ok=True)
+            rows.append((path,dict(unit='unit-'+str(index),cpu=cpu,study='EE',task='task-'+str(index),kind='numerical',
+                admission_path=str(lease_path),estimated_cpu_seconds=1200.)))
+        observation=dict(active=[row for _,row in rows],observations={row['unit']:dict(active=True,cpu_seconds=10.) for _,row in rows})
+        self.api.all_attempts=lambda runtime:rows
+        self.api.current_admission=lambda runtime,name:(lease_path,self.api.read(lease_path))
+        return rows,observation,lease_path,lease
+
+    def test_steady_full_slots_accepts_only_owned_active_base_capacity(self):
+        rows,observation,_,_=self._full_slot_fixture()
+        self.assertTrue(m.steady_full_slots(self.api,self.c,self.runtime,observation,{'EE'},self.now))
+        self.assertEqual(len(rows),6)
+
+    def test_steady_full_slots_falls_back_for_lifecycle_capacity_and_cutoff_events(self):
+        original,original_observation,lease_path,lease=self._full_slot_fixture()
+        for fault in ('free_slot','duplicate_cpu','unreaped_exit','finished_active','missing_owned','extra_unfinished',
+                      'numeric_cutoff','compute_closed','admin_CPU_cutoff','admin_time_cutoff','unfunded_worker'):
+            rows=copy.deepcopy(original);observation=copy.deepcopy(original_observation)
+            self.api.atomic(lease_path,lease)
+            marker=None
+            if fault=='free_slot':observation['active'].pop()
+            elif fault=='duplicate_cpu':observation['active'][0]['cpu']=observation['active'][1]['cpu']
+            elif fault=='unreaped_exit':observation['observations'][rows[0][1]['unit']]['active']=False
+            elif fault=='finished_active':marker=rows[0][0].parent/'finished.json';self.api.atomic(marker,{})
+            elif fault=='missing_owned':rows.pop()
+            elif fault=='extra_unfinished':rows.append((self.runtime/'attempts/EE/extra/ownership.json',dict(rows[0][1],unit='exited-extra')))
+            elif fault=='numeric_cutoff':self.api.atomic(lease_path,dict(lease,compute_expires_epoch=self.now+30))
+            elif fault=='compute_closed':marker=lease_path.parent/'compute_closed.json';self.api.atomic(marker,{})
+            elif fault=='admin_CPU_cutoff':
+                rows[0][1]['kind']='benchmark';observation['observations'][rows[0][1]['unit']]['cpu_seconds']=1170.
+            elif fault=='admin_time_cutoff':rows[0][1]['kind']='assessment';self.api.atomic(lease_path,dict(lease,expires_epoch=self.now+30))
+            elif fault=='unfunded_worker':rows[0][1]['study']='FI'
+            self.api.all_attempts=lambda runtime:rows
+            try:
+                with self.subTest(fault=fault):self.assertFalse(m.steady_full_slots(self.api,self.c,self.runtime,observation,{'EE'},self.now))
+            finally:
+                if marker is not None:marker.unlink()
+
+    def test_steady_full_slots_checks_a_funded_idle_study_compute_cutoff(self):
+        _,observation,lease_path,lease=self._full_slot_fixture()
+        self.api.current_admission=lambda runtime,name:(lease_path,dict(lease,compute_expires_epoch=self.now+30) if name=='FI' else lease)
+        self.assertFalse(m.steady_full_slots(self.api,self.c,self.runtime,observation,{'EE','FI'},self.now))
+
+    def test_full_slot_dispatch_keeps_fresh_guard_projection_and_normal_poll(self):
+        _,observation,_,_=self._full_slot_fixture()
+        studies={name:types.SimpleNamespace(queue_state=Mock(return_value=dict(phase='DETERMINISTIC_POOL',complete=[])),advance=Mock())
+            for name in ('EE','FI','DK2')}
+        self.api.study_prepared=lambda study:True
+        self.api.require_delivered_calendar=Mock();self.api.start_study_task=Mock();self.api.finish_worker=Mock()
+        clock=[self.now]
+        def sleep(seconds):
+            self.assertEqual(seconds,self.c['poll_seconds'])
+            clock[0]=m.control_deadline(self.authority,self.capsule)-89
+        with patch.object(m,'live_guard',return_value=observation) as guard,patch.object(m,'projection',return_value=dict(fits=True)) as project,\
+                patch.object(m,'finalize',return_value=dict(status='DONE')) as final,patch.object(m.time,'time',side_effect=lambda:clock[0]),\
+                patch.object(m.time,'sleep',side_effect=sleep):
+            result=m.dispatch(self.api,None,self.c,self.shared,self.master,self.capsule,studies,None,self.authority,Mock())
+        self.assertEqual(result,dict(status='DONE'));guard.assert_called_once();project.assert_called_once()
+        self.api.require_delivered_calendar.assert_called_once();self.api.start_study_task.assert_not_called();self.api.finish_worker.assert_not_called()
+        for study in studies.values():study.advance.assert_not_called()
+        self.assertEqual(self.api.read(self.runtime/'progress.json')['active'],[
+            {key:row[key] for key in ('study','task','cpu','unit')} for row in observation['active']])
+        self.assertEqual(final.call_args.args[-2],'R152_MASTER_EXPIRED')
+
 
 if __name__=='__main__':unittest.main()

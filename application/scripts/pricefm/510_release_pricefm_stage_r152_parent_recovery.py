@@ -148,10 +148,155 @@ def failed_parent_charge(failed):
     if not finite(elapsed):raise RuntimeError('failed predecessor lifetime bound invalid')
     return dict(CPU_seconds=elapsed*15+5.,basis='FAILED_PARENT_WALL_TIMES_FIFTEEN_PLUS_FIVE',elapsed_seconds=elapsed)
 
+def process_lifetime_snapshot(pid):
+    """Read only the stable lifetime fields; unrelated argv/cwd is unnecessary."""
+    try:fields=(Path('/proc')/str(pid)/'stat').read_text().rsplit(')',1)[1].split()
+    except (FileNotFoundError,ProcessLookupError):return None
+    if len(fields)<20:raise RuntimeError('incomplete recorded private process stat')
+    return dict(pid=int(pid),start_ticks=int(fields[19]),boot_id=api().boot(),state=fields[0])
+
+
+def probe_cleanup_inventory(probe_path,value):
+    """Recover the complete recorded disposable inventory, never a host census."""
+    probe_path=Path(probe_path).resolve();folder=Path(value['probe_runtime']).resolve()
+    if (folder.parent!=probe_path.parent or not re.fullmatch(re.escape(probe_path.stem)+r'\.[a-f0-9]{32}\.runtime',folder.name)
+        or folder.is_relative_to(SHARED)):
+        raise RuntimeError('failed probe disposable namespace differs')
+    adoption=value.get('private_baseline_adoption_probe',{});namespace=Path(adoption.get('probe_namespace','')).resolve()
+    if namespace.parent!=Path('/tmp') or not namespace.name.startswith('pricefm-r152-baseline-probe-') or namespace.stat().st_uid!=os.getuid():
+        raise RuntimeError('failed probe private namespace identity unavailable')
+    inputs={};lifetimes={};units={}
+    def receipt(path):
+        path=Path(path);result=read(path);inputs[str(path)]=digest(path);return result
+    def lifetime(process):
+        if not isinstance(process,dict):raise RuntimeError('recorded private process identity missing')
+        pid=process.get('pid');ticks=process.get('start_ticks');boot_id=process.get('boot_id')
+        if (isinstance(pid,bool) or not isinstance(pid,int) or pid<=0 or isinstance(ticks,bool) or not isinstance(ticks,int) or ticks<=0
+            or boot_id!=value['boot_id']):raise RuntimeError('recorded private process lifetime invalid')
+        lifetimes[(pid,ticks,boot_id)]=dict(pid=pid,start_ticks=ticks,boot_id=boot_id)
+    observed=receipt(folder/'private_baseline_adoption.json')
+    if observed!=adoption or inputs[str(folder/'private_baseline_adoption.json')]!=value.get('private_baseline_adoption_probe_sha256'):
+        raise RuntimeError('failed private adoption receipt bytes differ')
+    if (adoption.get('execution_source')!=value['execution_source'] or adoption.get('original_master_sha256')!=value['original_master_sha256']
+        or adoption.get('scope_id')!=value['scope_id'] or adoption.get('scientific_runs')!=0 or adoption.get('production_units')!=0):
+        raise RuntimeError('failed private adoption source/scope differs')
+    authority=receipt(namespace/'authority.json');job=receipt(namespace/'orphan_job.json');cleanup=receipt(namespace/'cleanup.json')
+    if authority.get('disposable') is not True or job.get('disposable') is not True or not isinstance(cleanup.get('original_lifetimes'),list):
+        raise RuntimeError('private cleanup has no complete disposable ownership inventory')
+    argv=authority.get('owner',{}).get('argv',[])
+    output_index=argv.index('--output') if '--output' in argv else -1
+    publisher=job.get('process',{}).get('argv',[])
+    namespace_index=publisher.index('--probe-runtime') if '--probe-runtime' in publisher else -1
+    core_entry=OLD_ROOT/'application/scripts/pricefm/504_supervise_pricefm_stage_r152_baseline.py'
+    if (output_index<0 or output_index+1>=len(argv) or argv[output_index+1]!=str(folder/'private_baseline_adoption.json')
+        or str(ADAPTER) not in argv or namespace_index<0 or namespace_index+1>=len(publisher)
+        or publisher[namespace_index+1]!=str(namespace) or str(core_entry) not in publisher or 'probe-orphan' not in publisher
+        or adoption.get('delegated_core_path')!=str(core_entry) or adoption.get('delegated_core_sha256')!=digest(core_entry)):
+        raise RuntimeError('private process ownership does not bind this failed probe')
+    lifetime(authority.get('owner'));lifetime(job.get('process'));lifetime(job.get('child'))
+    if job.get('session_id')!=job['process']['pid'] or job['child'].get('session_id')!=job['session_id']:
+        raise RuntimeError('private orphan session identity differs')
+    for process in job.get('observed_children',[]):lifetime(process)
+    for process in cleanup['original_lifetimes']:lifetime(process)
+    cleanup_ids={(row.get('pid'),row.get('start_ticks'),row.get('boot_id')) for row in cleanup['original_lifetimes']}
+    required={(job[key]['pid'],job[key]['start_ticks'],job[key]['boot_id']) for key in ('process','child')}
+    if not required.issubset(cleanup_ids):raise RuntimeError('private cleanup omitted a recorded root or child')
+    owned=cleanup.get('owned_pids')
+    if not isinstance(owned,list) or any(isinstance(pid,bool) or not isinstance(pid,int) or pid not in {key[0] for key in lifetimes} for pid in owned):
+        raise RuntimeError('private cleanup records an owned PID without a complete lifetime identity')
+    for path in [namespace/'resource_ownership_epoch.json',*sorted((namespace/'owner_epochs').glob('*.json'))]:
+        if path.is_file():lifetime(receipt(path).get('owner'))
+    intents=sorted(folder.glob('*_intent.json'));attestations=sorted(folder.glob('*_attestation.json'))
+    for path in intents+attestations:
+        saved=receipt(path);unit=saved.get('unit','')
+        if not re.fullmatch(r'pricefm-r150-r152-recovery-probe-(parent|child)-[a-f0-9]{32}\.service',unit):
+            raise RuntimeError('unreviewed disposable probe unit in cleanup inventory')
+        if unit in units and units[unit].get('argv')!=saved.get('argv'):raise RuntimeError('probe unit intent/attestation differs')
+        units[unit]=saved
+        if saved.get('process') is not None:lifetime(saved['process'])
+    for role in ('parent','child'):
+        path=folder/(role+'.json')
+        if path.is_file():lifetime(receipt(path)['process'])
+    charged_units={row.get('unit') for row in value.get('unit_CPU_charges',[])}
+    cleanup_units={row.get('unit') for row in value.get('cleanup',[])}
+    if not (charged_units|cleanup_units).issubset(units):raise RuntimeError('failed probe unit ownership records are incomplete')
+    return dict(input_sha256=inputs,processes=[lifetimes[key] for key in sorted(lifetimes)],units=[units[key] for key in sorted(units)])
+
+
+def verify_probe_cleanup_inventory(inventory,value,master, *, system=None,process_snapshot=None):
+    system=system or api().System();process_snapshot=process_snapshot or process_lifetime_snapshot
+    processes=[];units=[]
+    for prior in inventory['processes']:
+        current=process_snapshot(prior['pid'])
+        same=current is not None and all(current.get(key)==prior[key] for key in ('pid','start_ticks','boot_id'))
+        if same and current.get('state') not in ('Z','X','x'):raise RuntimeError('recorded private probe process lifetime is still live')
+        processes.append(dict(prior,original_lifetime_absent=True,current=current,
+            disposition='ABSENT' if current is None else 'TERMINAL' if same else 'PID_REUSED_NO_SIGNAL'))
+    parent_group=Path(master['orchestrator']['capsule']['attested']['ControlGroup']).parent
+    for saved in inventory['units']:
+        props=system.unit(saved['unit']);api().legacy().verify_owned(saved,props)
+        expected=saved.get('expected_cgroup') or saved.get('attested',{}).get('ControlGroup') or str(parent_group/saved['unit'])
+        if expected!=str(parent_group/saved['unit']):raise RuntimeError('disposable unit cgroup differs from its original namespace')
+        if props.get('ControlGroup') and props['ControlGroup']!=expected:raise RuntimeError('recorded disposable unit actual cgroup identity differs')
+        groups={expected};groups.update([props['ControlGroup']] if props.get('ControlGroup') else [])
+        if (props.get('ActiveState') in ('active','activating') or int(props.get('MainPID',0))
+            or any(system.members(group) for group in groups)):
+            raise RuntimeError('recorded disposable unit or cgroup is not drained')
+        units.append(dict(unit=saved['unit'],drained=True,expected_cgroup=expected,pids=[],properties=props))
+    return dict(processes=processes,units=units,cleanup_verified=True,signals_sent=0,
+        inherited_private_SSH_session_cgroups_not_owned=True)
+
+
+def cleanup_resolution_path(path):return Path(str(Path(path).resolve())+'.cleanup.json')
+
+
+def resolve_probe_cleanup(probe_path,system=None,process_snapshot=None):
+    """Append an independent read-only proof; preserve failure status and debit."""
+    probe_path=Path(probe_path).resolve();value=read(probe_path);source=source_identity();master,_=original_master()
+    if (value.get('status')!='FAIL_R152_PARENT_RECOVERY_DISPOSABLE_PROBE' or value.get('cleanup_verified') is not False
+        or value.get('original_master_sha256')!=digest(MASTER) or value.get('scope_id')!=master['scope_id']
+        or value.get('boot_id')!=api().boot() or value.get('scientific_runs')!=0 or value.get('production_admissions')!=0):
+        raise RuntimeError('only a same-scope failed incomplete cleanup can be resolved')
+    inventory=probe_cleanup_inventory(probe_path,value)
+    proof=verify_probe_cleanup_inventory(inventory,value,master,system=system,process_snapshot=process_snapshot)
+    raw=time.process_time()+os.times().children_user+os.times().children_system
+    return immutable(cleanup_resolution_path(probe_path),dict(schema_version=1,kind='R152_PRIOR_FAILED_PROBE_CLEANUP_RESOLUTION',
+        failed_probe_path=str(probe_path),failed_probe_sha256=digest(probe_path),failed_execution_source=value['execution_source'],
+        resolution_execution_source=source,original_master_sha256=digest(MASTER),scope_id=master['scope_id'],boot_id=api().boot(),
+        inventory=inventory,proof=proof,cleanup_verified=True,signals_sent=0,failed_status_preserved=True,
+        original_probe_charged_CPU_seconds=value['charged_control_CPU_seconds'],observed_resolution_CPU_seconds=raw,
+        post_observation_exit_allowance_CPU_seconds=5.,charged_control_CPU_seconds=raw+5.,epoch=time.time()))
+
+
+def validate_probe_cleanup_resolution(probe_path,value,master):
+    path=cleanup_resolution_path(probe_path);resolution=read(path)
+    source=resolution.get('resolution_execution_source',{})
+    pins=source.get('runtime_sha256',{})
+    required={str(program.relative_to(ROOT)) for program in (ENTRY,BROKER,ADAPTER,BASELINE_RELEASE)}
+    if (resolution.get('schema_version')!=1 or resolution.get('kind')!='R152_PRIOR_FAILED_PROBE_CLEANUP_RESOLUTION'
+        or resolution.get('failed_probe_path')!=str(Path(probe_path).resolve()) or resolution.get('failed_probe_sha256')!=digest(probe_path)
+        or resolution.get('failed_execution_source')!=value.get('execution_source')
+        or source.get('root')!=str(ROOT) or source.get('branch')!=BRANCH or not source.get('head')
+        or set(pins)!=required or any(not re.fullmatch('[a-f0-9]{64}',pin) for pin in pins.values())
+        or resolution.get('original_master_sha256')!=digest(MASTER) or resolution.get('scope_id')!=master['scope_id']
+        or resolution.get('boot_id')!=api().boot() or resolution.get('cleanup_verified') is not True
+        or resolution.get('proof',{}).get('cleanup_verified') is not True or resolution.get('signals_sent')!=0
+        or resolution.get('proof',{}).get('signals_sent')!=0 or resolution.get('failed_status_preserved') is not True
+        or resolution.get('original_probe_charged_CPU_seconds')!=value['charged_control_CPU_seconds']
+        or resolution.get('post_observation_exit_allowance_CPU_seconds')!=5.
+        or not finite(resolution.get('observed_resolution_CPU_seconds'))
+        or not math.isclose(resolution.get('charged_control_CPU_seconds',-1),resolution['observed_resolution_CPU_seconds']+5.,abs_tol=1e-9)):
+        raise RuntimeError('failed probe cleanup resolution identity/debit differs')
+    inventory=probe_cleanup_inventory(probe_path,value)
+    if inventory!=resolution.get('inventory'):raise RuntimeError('failed probe cleanup resolution inventory differs')
+    verify_probe_cleanup_inventory(inventory,value,master)
+    return dict(resolution_path=str(path),resolution_sha256=digest(path),resolution_charged_CPU_seconds=resolution['charged_control_CPU_seconds'])
+
+
 def validate_probe_receipts(paths,source,master):
     if not paths:raise RuntimeError('committed-source recovery probe is required')
     rows=[]
-    for path in paths:
+    for index,path in enumerate(paths):
         path=Path(path).resolve();value=read(path)
         driver=value.get('probe_driver_CPU_seconds');charges=value.get('unit_CPU_charges',[])
         orphan=value.get('private_adoption_CPU_bound_seconds',0.)
@@ -159,10 +304,16 @@ def validate_probe_receipts(paths,source,master):
                 or not math.isclose(value.get('charged_control_CPU_seconds',-1),driver+orphan+sum(row['CPU_seconds'] for row in charges),abs_tol=1e-9)
                 or value.get('original_master_sha256')!=digest(MASTER) or value.get('scope_id')!=master['scope_id']
                 or value.get('boot_id')!=api().boot() or value.get('started_epoch',0)<master['start_epoch']
-                or not value.get('cleanup_verified') or value.get('cleanup_errors')
                 or not finite(value.get('charged_control_CPU_seconds'),positive=True)):
             raise RuntimeError('post-T0 recovery probe debit/cleanup identity differs')
-        rows.append(dict(path=str(path),sha256=digest(path),charged_CPU_seconds=value['charged_control_CPU_seconds'],status=value['status']))
+        resolution={}
+        if value.get('cleanup_verified') is not True or value.get('cleanup_errors'):
+            if (index==len(paths)-1 or value.get('status')!='FAIL_R152_PARENT_RECOVERY_DISPOSABLE_PROBE'
+                or value.get('cleanup_verified') is not False or not cleanup_resolution_path(path).is_file()):
+                raise RuntimeError('post-T0 recovery probe debit/cleanup identity differs')
+            resolution=validate_probe_cleanup_resolution(path,value,master)
+        rows.append(dict(path=str(path),sha256=digest(path),charged_CPU_seconds=value['charged_control_CPU_seconds']+resolution.get('resolution_charged_CPU_seconds',0.),
+            status=value['status'],**resolution))
     latest=read(rows[-1]['path'])
     if (latest.get('status')!='PASS_R152_PARENT_RECOVERY_DISPOSABLE_PROBE' or latest.get('execution_source')!=source
             or latest.get('scientific_runs')!=0 or latest.get('production_admissions')!=0
@@ -393,7 +544,7 @@ def capability_probe(output):
     return result
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('action',choices=('freeze','probe','launch','hold','validate'))
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('action',choices=('freeze','probe','launch','hold','validate','resolve-probe-cleanup'))
     parser.add_argument('--output',type=Path);parser.add_argument('--release',type=Path);parser.add_argument('--probe',action='append',type=Path)
     parser.add_argument('--authority',type=Path);parser.add_argument('--unit');parser.add_argument('--seconds',type=float)
     args=parser.parse_args()
@@ -401,6 +552,9 @@ def main():
     elif args.action=='probe':value=capability_probe(args.output)
     elif args.action=='launch':value=launch(args.release,args.probe)
     elif args.action=='hold':return hold(args.output,args.seconds,args.unit)
+    elif args.action=='resolve-probe-cleanup':
+        if not args.probe or len(args.probe)!=1:parser.error('resolve-probe-cleanup requires exactly one --probe')
+        value=resolve_probe_cleanup(args.probe[0])
     else:value=validate_authority(args.authority)
     print(json.dumps(value,sort_keys=True))
 if __name__=='__main__':main()

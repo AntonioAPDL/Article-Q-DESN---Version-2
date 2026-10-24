@@ -73,6 +73,58 @@ class BoundedProcReads(unittest.TestCase):
         with patch.object(Path,'stat',new=ownership),patch.object(Path,'read_text',return_value='python\n'),\
                 patch.object(self.system,'stat_sample',return_value=stat()),patch.object(self.system,'process',return_value=value),patch.object(m.time,'sleep'):
             self.assertEqual(self.system.census_process(Path('/proc/123')),value)
+    def ssh_rows(self):
+        group='/user.slice/user-'+str(os.getuid())+'.slice/session-88.scope'
+        child=dict(stat=dict(pid=123,start_ticks=100,ppid=500,process_group=500,session_id=500,comm='sshd'),
+            uid=(os.getuid(),)*4,status_pid=123,status_ppid=500,status_name='sshd',command='sshd: researcher@notty',comm='sshd',
+            groups=[group],owners={key:0 for key in ('stat','status','comm','cmdline','cgroup','cwd')},directory_uid=os.getuid())
+        parent=dict(stat=dict(pid=500,start_ticks=50,ppid=1,process_group=500,session_id=500,comm='sshd'),
+            uid=(0,)*4,status_pid=500,status_ppid=1,status_name='sshd',command='sshd: researcher [priv]',comm='sshd',
+            groups=[group],owners={key:0 for key in ('stat','status','comm','cmdline','cgroup','cwd')},directory_uid=0)
+        return child,parent
+    def test_verified_ssh_administration_requires_stable_privileged_parent_chain(self):
+        child,parent=self.ssh_rows()
+        with patch.object(m.pwd,'getpwuid',return_value=types.SimpleNamespace(pw_name='researcher')),\
+                patch.object(self.system,'administrative_snapshot',side_effect=[child,parent,copy.deepcopy(child),copy.deepcopy(parent)]):
+            self.assertTrue(self.system.verified_administrative_ssh(Path('/proc/123'),stat()))
+    def test_ssh_names_alone_cannot_exempt_a_model_or_unprivileged_parent(self):
+        for fault in ('username','parent_uid','metadata_uid','cgroup','session','parent_command'):
+            child,parent=self.ssh_rows()
+            if fault=='username':child['command']='sshd: somebody_else@notty'
+            elif fault=='parent_uid':parent['uid']=(os.getuid(),)*4
+            elif fault=='metadata_uid':child['owners']['cmdline']=os.getuid()
+            elif fault=='cgroup':child['groups']=['/user.slice/user-'+str(os.getuid())+'.slice/user@service']
+            elif fault=='session':parent['stat']['session_id']=501
+            else:parent['command']='python fit.py'
+            with self.subTest(fault=fault),patch.object(m.pwd,'getpwuid',return_value=types.SimpleNamespace(pw_name='researcher')),\
+                    patch.object(self.system,'administrative_snapshot',side_effect=[child,parent]):
+                self.assertFalse(self.system.verified_administrative_ssh(Path('/proc/123'),stat()))
+    def test_ssh_lifetime_change_between_role_snapshots_is_not_exempt(self):
+        child,parent=self.ssh_rows();changed=copy.deepcopy(child);changed['stat']['start_ticks']=101
+        with patch.object(m.pwd,'getpwuid',return_value=types.SimpleNamespace(pw_name='researcher')),\
+                patch.object(self.system,'administrative_snapshot',side_effect=[child,parent,changed]):
+            self.assertFalse(self.system.verified_administrative_ssh(Path('/proc/123'),stat()))
+    def test_recorded_ssh_PID_is_not_exempt_from_direct_permission_checks(self):
+        with patch.object(self.system,'stat_sample',return_value=stat()),patch.object(c.System,'process',side_effect=PermissionError('protected ssh cwd')),\
+                patch.object(self.system,'verified_administrative_ssh') as classify,patch.object(m.time,'sleep'):
+            with self.assertRaisesRegex(PermissionError,'protected ssh cwd'):self.system.process(123)
+            classify.assert_not_called()
+    def test_census_uses_ssh_role_proof_only_for_sshd_comm(self):
+        with patch.object(Path,'stat',new=lambda path,*a,**kw:self.ownership(path,*a,**kw)),patch.object(Path,'read_text',return_value='sshd\n'),\
+                patch.object(self.system,'stat_sample',return_value=stat()),patch.object(self.system,'verified_administrative_ssh',return_value=True) as classify:
+            self.assertIsNone(self.system.census_process(Path('/proc/123')));classify.assert_called_once()
+    def test_ssh_metadata_snapshot_reads_no_protected_cwd_target(self):
+        uid=os.getuid();group='/user.slice/user-'+str(uid)+'.slice/session-88.scope'
+        snapshot=dict(stat(),ppid=500,process_group=500,session_id=500,comm='sshd')
+        def text(path,*a,**kw):
+            return {'status':'Name:\tsshd\nPid:\t123\nPPid:\t500\nUid:\t'+'\t'.join([str(uid)]*4)+'\n',
+                'comm':'sshd\n','cgroup':'1:name=systemd:'+group+'\n'}[path.name]
+        def ownership(path,*a,**kw):return types.SimpleNamespace(st_uid=uid if path.name=='123' else 0)
+        with patch.object(self.system,'stat_sample',side_effect=[snapshot,dict(snapshot,state='S')]),patch.object(Path,'read_text',new=text),\
+                patch.object(Path,'read_bytes',return_value=b'sshd: researcher@notty    \0'),patch.object(Path,'stat',new=ownership),\
+                patch.object(m.os,'readlink',side_effect=PermissionError('protected cwd')) as cwd:
+            row=self.system.administrative_snapshot(Path('/proc/123'))
+        self.assertEqual(row['command'],'sshd: researcher@notty');self.assertEqual(row['groups'],[group]);cwd.assert_not_called()
 
 class DelegationBridge(unittest.TestCase):
     def setUp(self):
@@ -150,5 +202,29 @@ class DelegationBridge(unittest.TestCase):
         failed=c.read(self.runtime/'state.json');self.assertEqual(failed['phase'],'blocked')
         self.assertEqual(failed['active'],state['active'])
         self.assertEqual((self.path.parent/('wrapper_before_failure.'+str(os.getpid())+'.json')).read_bytes(),prior_state)
+
+class PrivateProbeCleanup(unittest.TestCase):
+    def test_adoption_census_failure_does_not_invalidate_exact_owned_cleanup(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm-r152-baseline-probe-',dir='/tmp') as temporary:
+            folder=Path(temporary);master_path=folder/'original_master.json';output=folder/'result.json'
+            c.atomic(master_path,dict(scope_id='scope',start_epoch=1000.,expires_epoch=44200.))
+            source=dict(head='recovery-source');oldsource=dict(head='cba')
+            owner=process(os.getpid());publisher=process(501);child=process(502,session=501)
+            job=dict(disposable=True,process=publisher,child=child,observed_children=[child],session_id=501,cpus=[24])
+            class Publisher:
+                returncode=0
+                def communicate(self,timeout):c.immutable(folder/'orphan_job.json',job);return '',''
+            def cleanup(*args):
+                value=dict(cleanup_verified=True,signals=[],owned_pids=[]);c.immutable(folder/'cleanup.json',value);return value
+            release=types.SimpleNamespace(source_identity=lambda:source,MASTER=master_path)
+            with patch.object(m,'module',return_value=release),patch.object(m,'RecoverySystem',return_value=types.SimpleNamespace(process=lambda pid:owner)),\
+                    patch.object(m.tempfile,'mkdtemp',return_value=temporary),patch.object(c,'source_identity',return_value=oldsource),\
+                    patch.object(m.subprocess,'Popen',return_value=Publisher()),patch.object(c,'session_members',side_effect=PermissionError('unrelated protected sshd')) as census,\
+                    patch.object(c,'cleanup_disposable_probe',side_effect=cleanup):
+                with self.assertRaisesRegex(RuntimeError,'cleanup/debit receipt preserved'):m.capability_probe(output)
+            result=c.read(output);self.assertEqual(result['status'],'FAIL_R152_PRIVATE_BASELINE_ADOPTION_PROBE')
+            self.assertTrue(result['exact_cleanup']);self.assertEqual(result['cleanup_errors'],[])
+            self.assertEqual(census.call_count,1)
+            self.assertEqual(result['owned_cleanup_receipt_sha256'],c.sha(folder/'cleanup.json'))
 
 if __name__=='__main__':unittest.main()

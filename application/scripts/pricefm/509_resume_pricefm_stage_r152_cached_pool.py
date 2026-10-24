@@ -364,6 +364,31 @@ def main(argv=None):
     return 0
 
 
+def steady_full_slots(api,c,runtime,observation,funded,now=None):
+    """Skip duplicate guards only while every physical slot remains occupied."""
+    now=time.time() if now is None else now
+    active=observation.get('active',[])
+    if len(active)!=c['base_workers'] or {row['cpu'] for row in active}!=set(c['base_cpus']):return False
+    unfinished=[(path,row) for path,row in api.all_attempts(runtime) if not (path.parent/'finished.json').exists()]
+    if len(unfinished)!=len(active) or {row['unit'] for _,row in unfinished}!={row['unit'] for row in active}:return False
+    for path,row in unfinished:
+        value=observation.get('observations',{}).get(row['unit'],{})
+        if value.get('active') is not True:return False
+        lease_path=Path(row['admission_path']);lease=api.read(lease_path)
+        if row['kind']=='numerical':
+            if (row['study'] not in funded or (lease_path.parent/'compute_closed.json').exists()
+                or now>=lease['compute_expires_epoch']-c['cooperative_grace_seconds']-c['stop_seconds']-c['poll_seconds']):return False
+        elif row['kind'] in ('benchmark','assessment'):
+            if (value.get('cpu_seconds',float('inf'))>=row['estimated_cpu_seconds']-30
+                or now>=lease['expires_epoch']-30):return False
+        else:return False
+    for name in funded:
+        path,lease=api.current_admission(runtime,name)
+        if (lease is not None and not (path.parent/'compute_closed.json').exists()
+            and now>=lease['compute_expires_epoch']-c['cooperative_grace_seconds']-c['stop_seconds']-c['poll_seconds']):return False
+    return True
+
+
 def dispatch(api,system,c,shared,master,capsule,studies,guardian,authority,validator):
     runtime=Path(shared)/"development";unit=capsule["unit"]
     validation_cache={}
@@ -381,6 +406,17 @@ def dispatch(api,system,c,shared,master,capsule,studies,guardian,authority,valid
             if time.time()>=control_deadline(authority,capsule)-90:
                 terminal_status='R152_MASTER_EXPIRED';break
             observation=live_guard(api,system,c,shared,master,capsule,studies,funded,authority,validator,validation_cache)
+            if steady_full_slots(api,c,runtime,observation,funded):
+                projected=projection(api,runtime,master,c,studies,funded,observation,authority,capsule)
+                api.require_delivered_calendar(projected,observation,studies,c)
+                if projected['fits']:
+                    api.atomic(runtime/'progress.json',dict(status='R152_RUNNING',epoch=time.time(),scope_id=master['scope_id'],
+                        phases={name:(studies[name].queue_state().get('phase') if api.study_prepared(studies[name]) else 'UNPREPARED') for name in studies},
+                        active=[dict(study=row['study'],task=row['task'],cpu=row['cpu'],unit=row['unit']) for row in observation['active']],
+                        observation={k:v for k,v in observation.items() if k not in ('observations','active')},
+                        funded_studies=sorted(funded),delivery_verified=delivery_verified,dispatched=False))
+                    time.sleep(c['poll_seconds'])
+                    continue
             # Reap only our exact units and finish their nonoverlapping CPU
             # accounts before any new scientific decision or slot release.
             for path,saved in api.all_attempts(runtime):

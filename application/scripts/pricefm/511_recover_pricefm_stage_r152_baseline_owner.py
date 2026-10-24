@@ -12,6 +12,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import pwd
+import re
 import subprocess
 import tempfile
 import time
@@ -36,9 +38,55 @@ class RecoverySystem(core().System):
         except (FileNotFoundError,ProcessLookupError):return None
         fields=raw[raw.rfind(')')+2:].split()
         if len(fields)<20:raise RuntimeError('incomplete proc stat snapshot')
-        return dict(pid=int(pid),state=fields[0],start_ticks=int(fields[19]))
+        return dict(pid=int(pid),state=fields[0],start_ticks=int(fields[19]),ppid=int(fields[1]),
+            process_group=int(fields[2]),session_id=int(fields[3]),comm=raw[raw.find('(')+1:raw.rfind(')')])
     def terminal_or_gone(self,sample):return sample is None or sample['state'] in ('Z','X','x')
     def same_stat(self,before,after):return before['pid']==after['pid'] and before['start_ticks']==after['start_ticks']
+    def administrative_snapshot(self,path):
+        """Readable root-owned metadata only; never inspect protected cwd target."""
+        before=self.stat_sample(int(path.name))
+        if self.terminal_or_gone(before):return None
+        status=dict(line.split(':',1) for line in (path/'status').read_text().splitlines() if ':' in line)
+        command=(path/'cmdline').read_bytes().replace(b'\0',b' ').decode().strip()
+        groups=[]
+        for line in (path/'cgroup').read_text().splitlines():
+            hierarchy,controllers,group=line.split(':',2)
+            if controllers=='name=systemd' or (hierarchy=='0' and controllers==''):groups.append(group)
+        owners={name:(path/name).stat().st_uid for name in ('stat','status','comm','cmdline','cgroup')}
+        owners['cwd']=(path/'cwd').lstat().st_uid
+        comm=(path/'comm').read_text().strip();after=self.stat_sample(int(path.name))
+        stable=('pid','start_ticks','ppid','process_group','session_id','comm')
+        if self.terminal_or_gone(after) or any(before.get(key)!=after.get(key) for key in stable):return None
+        return dict(stat={key:before[key] for key in stable},uid=tuple(int(value) for value in status['Uid'].split()),
+            status_pid=int(status['Pid']),status_ppid=int(status['PPid']),status_name=status['Name'].strip(),
+            command=command,comm=comm,groups=groups,owners=owners,directory_uid=path.stat().st_uid)
+    def verified_administrative_ssh(self,path,anchor):
+        """Exclude an SSH session only with a stable privileged-parent proof."""
+        try:
+            username=pwd.getpwuid(os.getuid()).pw_name
+            child=self.administrative_snapshot(path)
+            if child is None or not self.same_stat(anchor,child['stat']):return False
+            parent_path=Path('/proc')/str(child['stat']['ppid']);parent=self.administrative_snapshot(parent_path)
+            if parent is None:return False
+            if (child['comm']!='sshd' or child['status_name']!='sshd' or child['stat']['comm']!='sshd'
+                    or parent['comm']!='sshd' or parent['status_name']!='sshd' or parent['stat']['comm']!='sshd'
+                    or child['uid']!=(os.getuid(),)*4 or parent['uid']!=(0,)*4
+                    or child['directory_uid']!=os.getuid() or parent['directory_uid']!=0
+                    or any(owner!=0 for row in (child,parent) for owner in row['owners'].values())
+                    or not re.fullmatch('sshd: '+re.escape(username)+r'@(notty|pts/[0-9]+)',child['command'])
+                    or parent['command']!='sshd: '+username+' [priv]'
+                    or child['status_pid']!=child['stat']['pid'] or child['status_ppid']!=parent['stat']['pid']
+                    or parent['status_pid']!=parent['stat']['pid'] or parent['status_ppid']!=parent['stat']['ppid']
+                    or child['stat']['ppid']!=parent['stat']['pid']
+                    or child['stat']['session_id']!=parent['stat']['session_id'] or parent['stat']['session_id']!=parent['stat']['pid']
+                    or child['stat']['process_group']!=parent['stat']['pid'] or parent['stat']['process_group']!=parent['stat']['pid']
+                    or len(child['groups'])!=1 or child['groups']!=parent['groups']
+                    or not re.fullmatch(re.escape('/user.slice/user-'+str(os.getuid())+'.slice/')+r'session-[0-9]+\.scope',child['groups'][0])):
+                return False
+            # Re-read both complete identities. A role/name match alone never
+            # exempts a changing PID, session, command, UID or cgroup.
+            return child==self.administrative_snapshot(path) and parent==self.administrative_snapshot(parent_path)
+        except (OSError,KeyError,ValueError,TypeError):return False
     def process(self,pid):
         if not int(pid):return None
         anchor=self.stat_sample(pid)
@@ -75,7 +123,9 @@ class RecoverySystem(core().System):
                 try:
                     protected=(path/'cmdline').stat().st_uid!=os.getuid() or (path/'cwd').lstat().st_uid!=os.getuid()
                     if not protected:return self.process(int(path.name))
-                    if (path/'comm').read_text().strip()=='(sd-pam)':return None
+                    comm=(path/'comm').read_text().strip()
+                    if comm=='(sd-pam)':return None
+                    if comm=='sshd' and self.verified_administrative_ssh(path,anchor):return None
                     error=PermissionError('stable live protected own-UID process '+path.name)
                 except (PermissionError,FileNotFoundError,ProcessLookupError) as exc:error=exc
                 after=self.stat_sample(int(path.name))
@@ -223,7 +273,9 @@ def capability_probe(output):
         try:
             cleanup=c.cleanup_disposable_probe(temporary,system,job)
             result['exact_cleanup']=cleanup['cleanup_verified']
-            if job is not None and c.session_members(job,system):raise RuntimeError('private adopted session remains after cleanup')
+            cleanup_path=temporary/'cleanup.json'
+            if cleanup_path.is_file():
+                result.update(owned_cleanup_receipt_path=str(cleanup_path),owned_cleanup_receipt_sha256=c.sha(cleanup_path))
         except BaseException as error:result['exact_cleanup']=False;result['cleanup_errors'].append(repr(error))
         result.update(orphan_CPU_bound_seconds=time.monotonic()-began+5.,epoch=time.time())
         if result['exact_orphan_adoption'] and result['exact_cleanup'] and not result['cleanup_errors']:

@@ -94,3 +94,17 @@ Code validation is separate from scientific completion. EE delivery must still
 be demonstrated before FI's own benchmark; FI and DK₂ may defer at their
 unchanged price, full-prefix, calendar or scientific gates. The original expiry
 is a resource horizon, not a prediction of completion or improvement.
+
+Verified administrative SSH processes are excluded from the generic census
+only after their username, privileged root parent, stable PID lifetimes,
+session leader and user session cgroup agree. Direct reads of recorded model
+PIDs never use that exclusion. A failed probe with uncertain cleanup requires
+an append-only `resolve-probe-cleanup --probe FAILED.json` seal; its failed
+result and full cost remain, and the seal adds its own control cost.
+
+When all six base slots are occupied and every unfinished attempt is active,
+the steady loop performs one fresh full health guard and funding projection
+per five-second poll. An exit, free slot or numerical/admin cutoff returns to
+the full transition path. This avoids redundant same-poll checks without a
+cross-call ownership or PID cache. Scientific nomination and dispatch rules
+remain the original implementation.

@@ -130,6 +130,108 @@ class ReleaseRecovery(unittest.TestCase):
     def test_incomplete_probe_cleanup_cannot_release_recovery(self):
         self.probe_value['cleanup_verified']=False;self.write(self.probe,self.probe_value)
         with self.assertRaisesRegex(RuntimeError,'cleanup identity'):m.validate_probe_receipts([self.probe],self.source,self.master)
+    def _incomplete_private_cleanup(self,unit=False):
+        broker_patch=patch.object(m,'BROKER',m.ENTRY.with_name('509_resume_pricefm_stage_r152_cached_pool.py'))
+        broker_patch.start();self.addCleanup(broker_patch.stop)
+        earlier=self.home/'incomplete.json';folder=self.home/('incomplete.'+'d'*32+'.runtime');folder.mkdir()
+        private=tempfile.TemporaryDirectory(prefix='pricefm-r152-baseline-probe-');self.addCleanup(private.cleanup);namespace=Path(private.name)
+        core=m.OLD_ROOT/'application/scripts/pricefm/504_supervise_pricefm_stage_r152_baseline.py'
+        driver=dict(pid=101,start_ticks=1010,boot_id='boot',argv=[m.PYTHON,'-B',str(m.ADAPTER),'probe','--output',str(folder/'private_baseline_adoption.json')])
+        publisher=dict(pid=102,start_ticks=1020,boot_id='boot',session_id=102,
+            argv=[m.PYTHON,'-B',str(core),'probe-orphan','--probe-runtime',str(namespace)])
+        child=dict(pid=103,start_ticks=1030,boot_id='boot',session_id=102,argv=[m.PYTHON,'-B','-c','import time; time.sleep(20)'])
+        self.write(namespace/'authority.json',dict(disposable=True,owner=driver,source=self.master['source']))
+        self.write(namespace/'orphan_job.json',dict(disposable=True,process=publisher,child=child,observed_children=[child],session_id=102))
+        self.write(namespace/'cleanup.json',dict(cleanup_verified=True,owned_pids=[],original_lifetimes=[publisher,child],signals=[],unrelated_process_signals=0))
+        adoption=dict(self.probe_value['private_baseline_adoption_probe'],status='FAIL_R152_PRIVATE_BASELINE_ADOPTION_PROBE',exact_cleanup=False,
+            exact_orphan_adoption=False,probe_namespace=str(namespace),scope_id=self.master['scope_id'],production_units=0,
+            delegated_core_path=str(core),delegated_core_sha256=m.digest(core))
+        self.write(folder/'private_baseline_adoption.json',adoption)
+        value=dict(self.probe_value,status='FAIL_R152_PARENT_RECOVERY_DISPOSABLE_PROBE',cleanup_verified=False,
+            cleanup_errors=[],cleanup=[],unit_CPU_charges=[],charged_control_CPU_seconds=10.,probe_runtime=str(folder),
+            private_baseline_adoption_probe=adoption,private_baseline_adoption_probe_sha256=m.digest(folder/'private_baseline_adoption.json'))
+        if unit:
+            name='pricefm-r150-r152-recovery-probe-parent-'+'e'*32+'.service';group='/user.slice/'+name
+            intent=dict(unit=name,argv=['python','hold'],expected_cgroup=group)
+            proc=dict(pid=104,start_ticks=1040,boot_id='boot')
+            self.write(folder/'parent_intent.json',intent)
+            self.write(folder/'parent_attestation.json',dict(intent,process=proc,attested=dict(InvocationID='old-probe',ControlGroup=group)))
+            self.write(folder/'parent.json',dict(process=proc))
+            value['unit_CPU_charges']=[dict(unit=name,CPU_seconds=5.)];value['charged_control_CPU_seconds']=15.
+        self.write(earlier,value)
+        resolution_source=dict(root=str(m.ROOT),head='c'*40,branch=m.BRANCH,
+            runtime_sha256={str(path.relative_to(m.ROOT)):m.digest(path) for path in (m.ENTRY,m.BROKER,m.ADAPTER,m.BASELINE_RELEASE)})
+        return earlier,value,folder,namespace,resolution_source
+    def _resolve_private(self,earlier,resolution_source,process_snapshot=None):
+        with patch.object(m,'source_identity',return_value=resolution_source),patch.object(m.time,'process_time',return_value=2.),\
+                patch.object(m.os,'times',return_value=types.SimpleNamespace(children_user=1.,children_system=.5)):
+            return m.resolve_probe_cleanup(earlier,system=self.system,process_snapshot=process_snapshot or (lambda pid:None))
+    def test_failed_cleanup_resolution_preserves_failed_bytes_and_adds_actual_CPU_plus_five(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();before=earlier.read_bytes()
+        resolution=self._resolve_private(earlier,source)
+        self.assertEqual(earlier.read_bytes(),before);self.assertEqual(resolution['charged_control_CPU_seconds'],8.5)
+        self.assertEqual(resolution['signals_sent'],0);self.assertEqual(len(resolution['inventory']['processes']),3)
+        with patch.object(m,'process_lifetime_snapshot',return_value=None):rows=m.validate_probe_receipts([earlier,self.probe],self.source,self.master)
+        self.assertEqual(rows[0]['status'],'FAIL_R152_PARENT_RECOVERY_DISPOSABLE_PROBE')
+        self.assertEqual(rows[0]['charged_CPU_seconds'],18.5);self.assertEqual(sum(row['charged_CPU_seconds'] for row in rows),48.5)
+        self.assertEqual(rows[0]['resolution_sha256'],m.digest(m.cleanup_resolution_path(earlier)))
+    def test_cleanup_resolution_never_qualifies_latest_failed_probe(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();self._resolve_private(earlier,source)
+        with self.assertRaisesRegex(RuntimeError,'cleanup identity'):m.validate_probe_receipts([earlier],self.source,self.master)
+    def test_live_recorded_private_child_blocks_resolution_without_signals(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup()
+        live=lambda pid:dict(pid=103,start_ticks=1030,boot_id='boot',state='S') if pid==103 else None
+        with self.assertRaisesRegex(RuntimeError,'still live'):self._resolve_private(earlier,source,live)
+        self.assertFalse(m.cleanup_resolution_path(earlier).exists())
+    def test_readonly_resolution_never_signals_reused_PID(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup()
+        reused=lambda pid:dict(pid=103,start_ticks=9999,boot_id='boot',state='S') if pid==103 else None
+        result=self._resolve_private(earlier,source,reused)
+        proof=next(row for row in result['proof']['processes'] if row['pid']==103)
+        self.assertEqual(proof['disposition'],'PID_REUSED_NO_SIGNAL');self.assertEqual(result['signals_sent'],0)
+    def test_resolution_rechecks_lifetimes_instead_of_only_trusting_seal(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();self._resolve_private(earlier,source)
+        with patch.object(m,'process_lifetime_snapshot',return_value=dict(pid=103,start_ticks=1030,boot_id='boot',state='S')):
+            with self.assertRaisesRegex(RuntimeError,'still live'):m.validate_probe_receipts([earlier,self.probe],self.source,self.master)
+    def test_live_disposable_unit_or_cgroup_blocks_resolution(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup(unit=True)
+        name=value['unit_CPU_charges'][0]['unit'];self.groups['/user.slice/'+name]=[104]
+        with self.assertRaisesRegex(RuntimeError,'not drained'):self._resolve_private(earlier,source)
+        self.groups.clear();self.props.update(ActiveState='active',MainPID='104')
+        with self.assertRaisesRegex(RuntimeError,'not drained'):self._resolve_private(earlier,source)
+    def test_unrecorded_charged_unit_cannot_get_cleanup_resolution(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup()
+        value['unit_CPU_charges']=[dict(unit='unknown-unit',CPU_seconds=1.)];value['charged_control_CPU_seconds']+=1.;self.write(earlier,value)
+        with self.assertRaisesRegex(RuntimeError,'ownership records are incomplete'):self._resolve_private(earlier,source)
+    def test_private_cleanup_missing_root_or_child_cannot_be_reconciled(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();cleanup=m.read(namespace/'cleanup.json')
+        cleanup['original_lifetimes']=cleanup['original_lifetimes'][:1];self.write(namespace/'cleanup.json',cleanup)
+        with self.assertRaisesRegex(RuntimeError,'omitted a recorded root or child'):self._resolve_private(earlier,source)
+    def test_unknown_recorded_owned_PID_cannot_get_cleanup_resolution(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();cleanup=m.read(namespace/'cleanup.json')
+        cleanup['owned_pids']=[999];self.write(namespace/'cleanup.json',cleanup)
+        with self.assertRaisesRegex(RuntimeError,'without a complete lifetime'):self._resolve_private(earlier,source)
+    def test_wrong_private_probe_output_binding_is_rejected(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();authority=m.read(namespace/'authority.json')
+        authority['owner']['argv'][-1]='other-probe.json';self.write(namespace/'authority.json',authority)
+        with self.assertRaisesRegex(RuntimeError,'does not bind this failed probe'):self._resolve_private(earlier,source)
+    def test_resolution_is_create_once_and_keeps_prior_failure_unchanged(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();self._resolve_private(earlier,source)
+        before=m.cleanup_resolution_path(earlier).read_bytes()
+        with self.assertRaises(FileExistsError):self._resolve_private(earlier,source)
+        self.assertEqual(m.cleanup_resolution_path(earlier).read_bytes(),before);self.assertFalse(m.read(earlier)['cleanup_verified'])
+    def test_changed_original_probe_or_copied_resolution_fails_identity(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();self._resolve_private(earlier,source)
+        value['error']='changed bytes';self.write(earlier,value)
+        with self.assertRaisesRegex(RuntimeError,'resolution identity'):m.validate_probe_receipts([earlier,self.probe],self.source,self.master)
+    def test_resolution_cannot_refund_exit_allowance_or_omit_execution_pin(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();resolution=self._resolve_private(earlier,source)
+        resolution['charged_control_CPU_seconds']=resolution['observed_resolution_CPU_seconds'];self.write(m.cleanup_resolution_path(earlier),resolution)
+        with self.assertRaisesRegex(RuntimeError,'resolution identity'):m.validate_probe_receipts([earlier,self.probe],self.source,self.master)
+    def test_private_inputs_changed_after_resolution_fail_closed(self):
+        earlier,value,folder,namespace,source=self._incomplete_private_cleanup();self._resolve_private(earlier,source)
+        cleanup=m.read(namespace/'cleanup.json');cleanup['epoch']=123.;self.write(namespace/'cleanup.json',cleanup)
+        with self.assertRaisesRegex(RuntimeError,'resolution inventory differs'):m.validate_probe_receipts([earlier,self.probe],self.source,self.master)
     def test_probe_success_requires_actual_parent_death_binding(self):
         self.probe_value['parent_death_binding_verified']=False;self.write(self.probe,self.probe_value)
         with self.assertRaisesRegex(RuntimeError,'lifecycle probe'):m.validate_probe_receipts([self.probe],self.source,self.master)

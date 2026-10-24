@@ -142,6 +142,8 @@ class System:
                 # own-UID protected processes still block the full census.
                 uid=os.getuid()
                 if path.stat().st_uid!=uid: continue
+                stat=(path/'stat').read_text()
+                if stat[stat.rfind(')')+2:].split()[0] in {'Z','X','x'}: continue
                 if (path/'cmdline').stat().st_uid!=uid or (path/'cwd').lstat().st_uid!=uid:
                     comm=(path/'comm').read_text().strip()
                     if comm=='(sd-pam)': continue
@@ -163,9 +165,20 @@ class System:
         return [line.split()[0] for line in output.splitlines() if line.split()]
     def members(self,cgroup):
         if not cgroup: return []
-        root=Path('/sys/fs/cgroup')/cgroup.lstrip('/')
-        if not root.exists(): return []
-        return sorted({int(pid) for path in root.rglob('cgroup.procs') for pid in path.read_text().split()})
+        if not cgroup.startswith('/user.slice/') or '..' in Path(cgroup).parts:
+            raise RuntimeError('untrusted service cgroup path')
+        candidates=[Path('/sys/fs/cgroup')/cgroup.lstrip('/'),
+            Path('/sys/fs/cgroup/systemd')/cgroup.lstrip('/')]
+        existing=[path for path in candidates if path.exists()]
+        if not existing: return []
+        roots=[path for path in existing if (path/'cgroup.procs').is_file()]
+        if len(roots)!=1: raise RuntimeError('cgroup membership unavailable or ambiguous')
+        for _ in range(3):
+            try:
+                return sorted({int(pid) for path in roots[0].rglob('cgroup.procs') for pid in path.read_text().split()})
+            except FileNotFoundError:
+                if not roots[0].exists(): return []
+        raise RuntimeError('cgroup remained partially unreadable after3 snapshots: '+str(roots[0]))
     def stop(self,name): subprocess.run(['systemctl','--user','stop',name],check=True,timeout=45)
     def start(self,name): subprocess.run(['systemctl','--user','start',name],check=True,timeout=30)
     def guardian(self,config_path,runtime,shared_runtime,attempt,owner_unit=None):

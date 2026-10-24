@@ -399,6 +399,13 @@ def capability_probe(output,config_path=CONFIG):
         parent=start_control(pool,probe_root/'control',parent_argv,c,runtime_seconds=90,role='probe-parent')
         parents.append(parent)
         wait_file(probe_root/'parent_observation.json',time.time()+15)
+        group=parent['attested']['ControlGroup']
+        baseline_members=baseline.System().members(group)
+        pool_members=system.members(group)
+        if (baseline_members!=pool_members
+                or int(parent['attested']['MainPID']) not in baseline_members):
+            raise RuntimeError('baseline and pool actual cgroup membership readers disagree')
+        result['actual_cgroup_reader_agreement']=dict(cgroup=group,members=baseline_members)
         pc=pool.read_config(ROOT/c['pool_config'])
         for index,case in enumerate(('immutable_guard','numerical_libraries','admin_accounting','positive_thread_violation','parent_death')):
             name='__r152_disposable_'+case+'__';report=probe_root/(case+'.json')

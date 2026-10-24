@@ -132,19 +132,86 @@ class BaselineBoundary(unittest.TestCase):
         system=object.__new__(m.System);system.boot_id='test-boot'
         def ownership(path,*args,**kwargs):
             return types.SimpleNamespace(st_uid=0 if path.name=='cmdline' else os.getuid())
+        def metadata(path,*args,**kwargs):
+            return '123 ((sd-pam)) S 1 1 1\n' if path.name=='stat' else '(sd-pam)\n'
         with patch.object(m.Path,'iterdir',return_value=iter([Path('/proc/123')])),\
                 patch.object(m.Path,'stat',new=ownership),\
-                patch.object(m.Path,'read_text',return_value='(sd-pam)\n'),\
+                patch.object(m.Path,'read_text',new=metadata),\
                 patch.object(m.Path,'read_bytes',side_effect=PermissionError('protected cmdline')) as read:
             self.assertEqual(system.processes(),[]);read.assert_not_called()
+
+    def test_protected_terminal_process_is_skipped_before_metadata_access(self):
+        system=object.__new__(m.System);system.boot_id='test-boot'
+        def ownership(path,*args,**kwargs):
+            if path.name!='2096340':raise AssertionError('terminal protected metadata was accessed')
+            return types.SimpleNamespace(st_uid=os.getuid())
+        for state in ('Z','X','x'):
+            with self.subTest(state=state),\
+                    patch.object(m.Path,'iterdir',return_value=iter([Path('/proc/2096340')])),\
+                    patch.object(m.Path,'stat',new=ownership),\
+                    patch.object(m.Path,'read_text',return_value='2096340 (xargs) '+state+' 1 1 1\n'),\
+                    patch.object(system,'process',side_effect=PermissionError('terminal protected cwd')) as inspect:
+                self.assertEqual(system.processes(),[]);inspect.assert_not_called()
+
+    def test_members_observes_exact_v1_and_v2_cgroups_with_descendants(self):
+        system=object.__new__(m.System)
+        for hierarchy in ('v1','v2'):
+            with self.subTest(hierarchy=hierarchy):
+                base=self.path/hierarchy
+                group=(base/'systemd' if hierarchy=='v1' else base)/'user.slice/owned.service'
+                (group/'child').mkdir(parents=True)
+                (group/'cgroup.procs').write_text('17\n19\n17\n');(group/'child/cgroup.procs').write_text('23\n')
+                def mapped(path):
+                    if str(path)=='/sys/fs/cgroup':return base
+                    if str(path)=='/sys/fs/cgroup/systemd':return base/'systemd'
+                    return Path(path)
+                with patch.object(m,'Path',side_effect=mapped):
+                    self.assertEqual(system.members('/user.slice/owned.service'),[17,19,23])
+
+    def test_ambiguous_v1_v2_membership_blocks_drain_proof(self):
+        system=object.__new__(m.System);base=self.path/'cgroup'
+        for group in (base/'user.slice/owned.service',base/'systemd/user.slice/owned.service'):
+            group.mkdir(parents=True);(group/'cgroup.procs').write_text('17\n')
+        def mapped(path):
+            if str(path)=='/sys/fs/cgroup':return base
+            if str(path)=='/sys/fs/cgroup/systemd':return base/'systemd'
+            return Path(path)
+        with patch.object(m,'Path',side_effect=mapped):
+            with self.assertRaisesRegex(RuntimeError,'ambiguous'):system.members('/user.slice/owned.service')
+
+    def test_persistent_partial_cgroup_visibility_cannot_prove_empty(self):
+        system=object.__new__(m.System);base=self.path/'cgroup';group=base/'systemd/user.slice/owned.service'
+        group.mkdir(parents=True);(group/'cgroup.procs').write_text('17\n')
+        def mapped(path):
+            if str(path)=='/sys/fs/cgroup':return base
+            if str(path)=='/sys/fs/cgroup/systemd':return base/'systemd'
+            return Path(path)
+        with patch.object(m,'Path',side_effect=mapped),\
+                patch.object(Path,'read_text',side_effect=FileNotFoundError('draining descendant')) as read:
+            with self.assertRaisesRegex(RuntimeError,'after3 snapshots'):system.members('/user.slice/owned.service')
+            self.assertEqual(read.call_count,3)
+
+    def test_disappeared_cgroup_is_empty_after_bounded_read_race(self):
+        system=object.__new__(m.System);base=self.path/'cgroup';group=base/'systemd/user.slice/owned.service'
+        group.mkdir(parents=True);(group/'cgroup.procs').write_text('17\n')
+        def mapped(path):
+            if str(path)=='/sys/fs/cgroup':return base
+            if str(path)=='/sys/fs/cgroup/systemd':return base/'systemd'
+            return Path(path)
+        def vanished(path,*args,**kwargs):
+            path.unlink();group.rmdir();raise FileNotFoundError('whole cgroup drained')
+        with patch.object(m,'Path',side_effect=mapped),patch.object(Path,'read_text',new=vanished):
+            self.assertEqual(system.members('/user.slice/owned.service'),[])
 
     def test_unknown_protected_own_UID_process_blocks_census(self):
         system=object.__new__(m.System);system.boot_id='test-boot'
         def ownership(path,*args,**kwargs):
             return types.SimpleNamespace(st_uid=0 if path.name=='cmdline' else os.getuid())
+        def metadata(path,*args,**kwargs):
+            return '123 (python) S 1 1 1\n' if path.name=='stat' else 'python\n'
         with patch.object(m.Path,'iterdir',return_value=iter([Path('/proc/123')])),\
                 patch.object(m.Path,'stat',new=ownership),\
-                patch.object(m.Path,'read_text',return_value='python\n'),\
+                patch.object(m.Path,'read_text',new=metadata),\
                 patch.object(m.Path,'read_bytes') as read:
             with self.assertRaisesRegex(PermissionError,'unrecognized protected own-UID process'):
                 system.processes()

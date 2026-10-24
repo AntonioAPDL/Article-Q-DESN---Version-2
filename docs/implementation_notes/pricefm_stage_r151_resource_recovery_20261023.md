@@ -9,6 +9,44 @@ rebinding their globals, copying numerical code, changing seeds, or relabeling
 scientific producer fields. The scientific worktree stays immutable at
 `c03613cd1a85cce5d02120760b954cdc15160410`.
 
+## Manual retirement-aware successor
+
+The first released R151 source is immutable at
+`90ff802d09ca9b6712ccaae052d327fb23beaede`. Its outer workflow stopped before
+claiming EE wave2 because the original R141 scheduler had reached its expected
+LT/AT certificate boundary and exited after draining healthy work. That terminal
+and its immutable launch gate remain intact. The user-authorized fresh resource
+contract is a separately reviewed manual successor, not an automatic restart.
+
+The committed `pricefm_stage_r151_retirement_contract_20261023.json` is a
+byte-identical copy of the independent 38-pin boundary dossier. Only the exact
+original R141 lifetime may remain retired: every guard requires the same unit
+remain unloaded, inactive, MainPID0 with no InvocationID/cgroup, both old
+supervisor/LT controller PIDs absent, and the original cgroup empty. Any
+reappearance, replacement, source/evidence change or lingering descendant stops.
+The other three protected baseline lifetimes, AT terminal and advancing same
+`waiting_boundary` handoff remain unchanged. This does not repair LT/AT or relax
+any fit certificate.
+
+The successor release pins the entire old90ff runtime source, failed outer
+context/terminal and all prior EE recovery identities. Prior controllers and
+workers must independently be drained before launch and remain drained at every
+poll. Old regional prepared metadata and task descriptors are pinned; any old
+regional lease, runtime, benchmark, checkpoint, score, decision or CPU accounting
+rejects the successor so a new namespace cannot duplicate the old numerical
+budget. Canonical EE admissions2/3 remain the only two unused admissions.
+
+The new outer coordinator carries the original global expiry
+`1792858323.6072176`; it cannot reset630minutes. Standalone EE launches also
+cap their coordinator by that same original expiry, and all guards reject the
+global cutoff both before and after a numerical lease exists. A newly attested EE coordinator
+has at most245minutes and is additionally capped by its actual outer parent's
+original epoch/runtime minus a five-second transition margin. Every individual
+wave still must fit its parent's unchanged finite lifetime before claim. New
+preouter guards accept no parent only when there is no lease, child controller
+or active payload, while retaining source, retirement, baseline, handoff and
+memory/disk predicates.
+
 ## Finite execution and provenance
 
 The original canonical runtime, admission and locks remain authoritative. Wave 1

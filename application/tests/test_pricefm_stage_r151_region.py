@@ -1,5 +1,6 @@
 """Regional lineage, complete-pool decisions, RNG and finite admission hazards."""
 import copy
+import ast
 import datetime as dt
 import importlib.util
 import json
@@ -384,3 +385,52 @@ def test_parent_moments_must_match_external_frozen_audit_not_only_new_self_consi
         m.verify_evidence_lineage(record, directory, dict(ledger, **{str(directory/"fit/beta_cov.bin"): "new-self-consistent-cov"}), summary, contract)
     with pytest.raises(RuntimeError, match="prospectively pinned"):
         m.verify_evidence_lineage(record, directory, ledger, dict(summary, posterior_target_sha256="new-target"), contract)
+
+
+ORIGINAL_ROOT = Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r151_continuation_recovery_20261023')
+
+
+def normalized_successor_AST(source):
+    class Metadata(ast.NodeTransformer):
+        def visit_Constant(self, node):
+            if node.value == 'pricefm_stage_r151_retirement_aware_region_20261023':
+                return ast.copy_location(ast.Constant('pricefm_stage_r151_region_20261023'), node)
+            if node.value == 'work/pricefm-r151-retirement-aware-continuation-20261023':
+                return ast.copy_location(ast.Constant('work/pricefm-r151-continuation-recovery-20261023'), node)
+            return node
+    return ast.dump(Metadata().visit(ast.parse(source)), include_attributes=False)
+
+
+def test_retirement_successor_has_only_prospective_TAG_and_branch_metadata_changes(m):
+    previous = ORIGINAL_ROOT/'application/scripts/pricefm'/ENTRY.name
+    old, new = previous.read_text(), ENTRY.read_text()
+    assert normalized_successor_AST(old) == normalized_successor_AST(new)
+    old_nodes = {n.name: n for n in ast.parse(old).body if isinstance(n, ast.FunctionDef)}
+    new_nodes = {n.name: n for n in ast.parse(new).body if isinstance(n, ast.FunctionDef)}
+    assert old_nodes.keys() == new_nodes.keys()
+    # Every numerical, cohort, seed, certificate, lease and validation function
+    # is byte-identical; only the required source branch literal invalidates.
+    for name in old_nodes:
+        a, b = old_nodes[name], new_nodes[name]
+        if name != 'validate_config':
+            assert old.splitlines()[a.lineno-1:a.end_lineno] == new.splitlines()[b.lineno-1:b.end_lineno]
+    old_config = m.read(ORIGINAL_ROOT/'application/config/pricefm_stage_r151_region_20261023.json')
+    new_config = m.read(m.CONFIG)
+    assert {k for k in old_config if old_config[k] != new_config[k]} == {'tag', 'required_branch'}
+    assert {k: v for k, v in old_config.items() if k not in ('tag', 'required_branch')} == {
+        k: v for k, v in new_config.items() if k not in ('tag', 'required_branch')}
+    assert m.read(m.ROOT/'application/config/pricefm_stage_r151_region_20261023.json') == old_config
+
+
+def test_successor_preparation_reuses_exact_original_997_inputs_and_scientific_tasks(m):
+    previous = m.read(m.DATA/'launch_prep/pricefm_stage_r151_region_20261023/preparation.json')
+    current = m.build_preparation(dict(head='METADATA_AUDIT_NO_RELEASE', branch=m.read(m.CONFIG)['required_branch']))
+    assert current['input_sha256'] == previous['input_sha256']
+    assert len(current['input_sha256']) == 997
+    assert current['packages'] == previous['packages']
+    assert current['tasks'] == previous['tasks']
+    assert m.fingerprint(current['cohort_audit']) == m.fingerprint(previous['cohort_audit'])
+    assert current['frozen_audit_permutation'] == previous['frozen_audit_permutation']
+    original_prep = m.DATA/'launch_prep/pricefm_stage_r151_region_20261023'
+    assert not list((original_prep/'muscat_resources').glob('wave_*/lease.json'))
+    assert not (m.DATA/'campaigns/pricefm_stage_r151_region_20261023/benchmark').exists()

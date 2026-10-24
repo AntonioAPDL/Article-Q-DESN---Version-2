@@ -333,7 +333,7 @@ def test_regional_lease_contract_backlinks_enforced(m,tmp_path,monkeypatch,chang
 def test_regional_admission_not_consumed_when_fresh_preflight_fails(m,tmp_path,monkeypatch,failure):
     science=Science(tmp_path);base=science.PREP/'muscat_resources';folder=tmp_path/'outerrun'
     write(base/'outer_context.json',dict(run_id='run',EE_recovery_id='EE'))
-    write(folder/'context.json',dict(expires_epoch=9999999999))
+    write(folder/'context.json',dict(expires_epoch=m.ORIGINAL_EXPIRES))
     resource=SimpleNamespace(CANONICAL=tmp_path/'canonical',load_legacy=lambda:SimpleNamespace(System=lambda:object()),
         immutable=write,canonical_lock=lambda *_args,**_kwargs:nullcontext())
     if failure=='controller_conflict':
@@ -346,3 +346,50 @@ def test_regional_admission_not_consumed_when_fresh_preflight_fails(m,tmp_path,m
     monkeypatch.setattr(m,'guard',guard)
     with pytest.raises(RuntimeError):m.claim_regional_lease(science,'benchmark',{}, {})
     assert not (base/'wave_benchmark/lease.json').exists()
+
+
+def test_successor_carries_original_parent_deadline_without_reset(m):
+    c=m.config();deadline=1792858323.6072176
+    assert c['original_global_expires_epoch']==deadline
+    assert m.remaining_outer_seconds(c,now=deadline-12000)==12000
+    assert m.remaining_outer_seconds(c,now=deadline-12000)<c['outer_seconds']
+    with pytest.raises(RuntimeError):m.remaining_outer_seconds(c,now=deadline)
+    with pytest.raises(RuntimeError):m.remaining_outer_seconds(c,now=deadline-c['outer_seconds']-1)
+    assert 'retirement_aware_orchestration' in str(m.RUNTIME)
+
+
+def test_whole_future_waves_must_fit_after_active_lease(m):
+    leases={'1':dict(expires_epoch=7200)}
+    assert m.funded_unused_windows(leases,{},21605,now=0)==['2','3']
+    assert m.funded_unused_windows(leases,{},21604,now=0)==['2']
+    assert m.funded_unused_windows(leases,{},14404,now=0)==[]
+    assert m.regional_remaining_capacity(leases,.5,{},now=0,outer_expires=14404)==5400
+
+
+def test_benchmark_and_terminal_tails_do_not_create_parent_capacity(m):
+    leases={'benchmark':dict(expires_epoch=1200)}
+    assert m.funded_unused_windows(leases,{},22805,now=0)==['1','2','3']
+    assert m.funded_unused_windows(leases,{},22804,now=0)==['1','2']
+    # Once drained early, only unused numerical admissions remain; benchmark
+    # time has no compute credit and a terminal numerical tail is discarded.
+    leases['1']=dict(expires_epoch=8400)
+    assert m.regional_remaining_capacity(leases,.5,{'benchmark':{},'1':{}},now=2000,outer_expires=16404)==5400
+
+
+def test_existing_lease_cannot_cross_carried_parent_deadline(m):
+    with pytest.raises(RuntimeError,match='exceeds original'):
+        m.regional_remaining_capacity({'1':dict(expires_epoch=7200)},.5,now=0,outer_expires=7199)
+
+
+def test_failed_predecessor_identity_and_global_deadline_are_pinned(m,tmp_path,monkeypatch):
+    c=m.config();pred=tmp_path/'run';pred.mkdir();monkeypatch.setattr(m,'PREDECESSOR',pred)
+    context=dict(run_id='run',expires_epoch=c['original_global_expires_epoch'],
+        started_epoch=c['original_global_expires_epoch']-c['outer_seconds'])
+    term=dict(status='R151_FINITE_WORKFLOW_GUARD_STOPPED',cleanup_verified=True,cleanup_errors=[],
+        source_head='90ff802d09ca9b6712ccaae052d327fb23beaede',new_model_fits=0,baseline_worker_signals=0,AL_launched=False)
+    write(pred/'context.json',context);write(pred/'terminal.json',term)
+    c.update(failed_predecessor_context_sha256=m.digest(pred/'context.json'),
+        failed_predecessor_terminal_sha256=m.digest(pred/'terminal.json'))
+    assert m.verify_predecessor(c)==context
+    context['expires_epoch']+=60;write(pred/'context.json',context)
+    with pytest.raises(RuntimeError,match='predecessor'):m.verify_predecessor(c)

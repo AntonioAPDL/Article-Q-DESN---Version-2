@@ -1,0 +1,705 @@
+{
+  "AL_authorized": false,
+  "audit_key": "pricefm_continuation_plan_20261023_2149PDT|regional|DK_2|v1",
+  "benchmark_D_packages": [
+    "C0",
+    "r134_63c759406920cd63",
+    "r134_6a0e5dfa466ab98c",
+    "r134_5240ecffd2394d15"
+  ],
+  "benchmark_D_repeats": 3,
+  "benchmark_S_packages": [
+    "C0",
+    "r134_63c759406920cd63",
+    "r134_6a0e5dfa466ab98c",
+    "r134_5240ecffd2394d15"
+  ],
+  "benchmark_S_repeats": 1,
+  "benchmark_max_seconds": 1200,
+  "chunk_origins": 8,
+  "clock_offsets_steps": [
+    0,
+    24,
+    48,
+    72
+  ],
+  "control": "C0",
+  "cost_headroom": 1.5,
+  "extra_seeds": [
+    2026102301,
+    2026102302
+  ],
+  "horizon_steps": 96,
+  "hypothesis": "Original sparse RHS origin panels may misrank already certified geometry-scale packages over complete eligible inner training validation support",
+  "max_new_D_components": 63,
+  "max_new_S_components": 27,
+  "max_numerical_waves": 3,
+  "max_projected_cpu_seconds": 32400,
+  "maximum_replacement_reserve": 1,
+  "new_geometries": 0,
+  "new_model_fits": 0,
+  "official_evaluation_authorized": false,
+  "official_outcomes_exposed_development_only": true,
+  "packages": [
+    {
+      "candidate_id": "r134_c05562984f2b74bc",
+      "p": 385,
+      "package_id": "C0",
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0024929739307713865
+    },
+    {
+      "candidate_id": "r134_5b6573a4f629248c",
+      "p": 385,
+      "package_id": "r134_5b6573a4f629248c",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "target_only",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 24,
+        "m_y": 2304,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.65,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          96,
+          96,
+          96,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0024929739307713865
+    },
+    {
+      "candidate_id": "r134_cc0accf71880ccda",
+      "p": 385,
+      "package_id": "r134_cc0accf71880ccda",
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0024929739307713865
+    },
+    {
+      "candidate_id": "r134_7f6c02a1668c7940",
+      "p": 513,
+      "package_id": "r134_7f6c02a1668c7940",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.2,
+        "m_x": 4,
+        "m_y": 2880,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          256,
+          256
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0018443953471560665
+    },
+    {
+      "candidate_id": "r134_5240ecffd2394d15",
+      "p": 577,
+      "package_id": "r134_5240ecffd2394d15",
+      "spec": {
+        "alpha": 0.35,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 256,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.1,
+        "m_x": 4,
+        "m_y": 1728,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.01,
+        "region": "DK_2",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          384,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 1.6320908467640012e-05
+    },
+    {
+      "candidate_id": "r134_07583897f74b5dec",
+      "p": 417,
+      "package_id": "r134_07583897f74b5dec",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 3,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.2,
+        "m_x": 0,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.4,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          128,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00022915214919211734
+    },
+    {
+      "candidate_id": "r134_4267f407d61edf1b",
+      "p": 257,
+      "package_id": "r134_4267f407d61edf1b",
+      "spec": {
+        "alpha": 0.1,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.05,
+        "m_x": 24,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.003024808369335949
+    },
+    {
+      "candidate_id": "r134_63c759406920cd63",
+      "p": 289,
+      "package_id": "r134_63c759406920cd63",
+      "spec": {
+        "alpha": 0.35,
+        "calendar": "none",
+        "depth": 3,
+        "feature_policy": "graph_summary_mean",
+        "input_fan_in": 128,
+        "input_policy": "coverage",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.2,
+        "m_x": 0,
+        "m_y": 2304,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.4,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          96,
+          64
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.8462218973456348e-05
+    },
+    {
+      "candidate_id": "r134_04c245cd93bf5586",
+      "p": 513,
+      "package_id": "r134_04c245cd93bf5586",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.2,
+        "m_x": 12,
+        "m_y": 1560,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          256,
+          256
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 1.8443953471560667e-05
+    },
+    {
+      "candidate_id": "r134_6b9e3e72a872e43f",
+      "p": 385,
+      "package_id": "r134_6b9e3e72a872e43f",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 24,
+        "m_y": 2304,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.65,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          96,
+          96,
+          96,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0024929739307713865
+    },
+    {
+      "candidate_id": "r134_49021bca52cbb51e",
+      "p": 337,
+      "package_id": "r134_49021bca52cbb51e",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.05,
+        "m_x": 24,
+        "m_y": 2304,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.1,
+        "region": "DK_2",
+        "rho": 0.65,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          96,
+          64,
+          48
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.002568233521134297
+    },
+    {
+      "candidate_id": "r134_750d80133687293f",
+      "p": 385,
+      "package_id": "r134_750d80133687293f",
+      "spec": {
+        "alpha": 0.3,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 32,
+        "input_policy": "coverage",
+        "input_scale": 0.1,
+        "interlayer_gain": 0.05,
+        "m_x": 0,
+        "m_y": 2880,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.65,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.4929739307713866e-05
+    },
+    {
+      "candidate_id": "r134_1d4d9092d2ace92f",
+      "p": 257,
+      "package_id": "r134_1d4d9092d2ace92f",
+      "spec": {
+        "alpha": 0.1,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.05,
+        "m_x": 0,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0003024808369335949
+    },
+    {
+      "candidate_id": "r134_0688091a8ff6b2ec",
+      "p": 385,
+      "package_id": "r134_0688091a8ff6b2ec",
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.4929739307713866e-05
+    },
+    {
+      "candidate_id": "r134_6a0e5dfa466ab98c",
+      "p": 577,
+      "package_id": "r134_6a0e5dfa466ab98c",
+      "spec": {
+        "alpha": 0.7,
+        "calendar": "none",
+        "depth": 3,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 128,
+        "input_policy": "balanced",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.2,
+        "m_x": 0,
+        "m_y": 2880,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.02,
+        "region": "DK_2",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          256,
+          192,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 1.6320908467640012e-05
+    },
+    {
+      "candidate_id": "r134_9edc68caaf46f6ae",
+      "p": 513,
+      "package_id": "r134_9edc68caaf46f6ae",
+      "spec": {
+        "alpha": 0.9,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 128,
+        "input_policy": "coverage",
+        "input_scale": 0.2,
+        "interlayer_gain": 0.35,
+        "m_x": 48,
+        "m_y": 2688,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.1,
+        "region": "DK_2",
+        "rho": 0.95,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          128,
+          128,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 1.8443953471560667e-05
+    },
+    {
+      "candidate_id": "r134_a06f7f807c2b15a7",
+      "p": 385,
+      "package_id": "r134_a06f7f807c2b15a7",
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.4929739307713866e-05
+    },
+    {
+      "candidate_id": "r134_1dc9454f374e0f4a",
+      "p": 481,
+      "package_id": "r134_1dc9454f374e0f4a",
+      "spec": {
+        "alpha": 0.35,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.1,
+        "interlayer_gain": 0.35,
+        "m_x": 192,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.1,
+        "region": "DK_2",
+        "rho": 0.4,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          128,
+          96,
+          64
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0019727011104364884
+    },
+    {
+      "candidate_id": "r134_834d5d4c6da32ed4",
+      "p": 385,
+      "package_id": "r134_834d5d4c6da32ed4",
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "target_only",
+        "input_fan_in": 64,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 24,
+        "m_y": 2304,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.65,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          96,
+          96,
+          96,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00024929739307713865
+    },
+    {
+      "candidate_id": "r134_83e1aedc1f991db7",
+      "p": 145,
+      "package_id": "r134_83e1aedc1f991db7",
+      "spec": {
+        "alpha": 0.35,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.15,
+        "interlayer_gain": 0.2,
+        "m_x": 4,
+        "m_y": 168,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.9,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          96,
+          48
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00041247386854581123
+    },
+    {
+      "candidate_id": "r134_c05562984f2b74bc",
+      "p": 385,
+      "package_id": "C0_alt",
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "DK_2",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.4929739307713866e-05
+    }
+  ],
+  "parent_preparation": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019__DK_2/preparation.json",
+  "parent_preparation_sha256": "479fd052260f614c2aa3d5a8609cbaa8df21aa02e97096251629e9f9cbbacc4a",
+  "parent_source": {
+    "branch": "work/pricefm-r141-recovery-rollout-20261019",
+    "head": "4cd92ac3654f16a84a67c8db6cfc7f381113aeb9"
+  },
+  "paths": 100,
+  "practical_margin": {
+    "absolute": 0.1,
+    "relative": 0.01
+  },
+  "primary_aggregation": "equal_three_inner_split_macro",
+  "producer_entry": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r150_cached_continuation_20261023/application/scripts/pricefm/497_run_pricefm_stage_r150_cached_continuation.py",
+  "producer_sha256": "0809eeea65ddb2cab6525974630d031dc6fffbf4ce132184d19693b887bbce21",
+  "promotion_authorized": false,
+  "prospective_region_selection": "DK_2_default_local_metadata_verified_no_DK_1_remote_release",
+  "quantiles": [
+    0.1,
+    0.25,
+    0.45,
+    0.5,
+    0.55,
+    0.75,
+    0.9
+  ],
+  "region": "DK_2",
+  "regional_evidence": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/continuation_plan_20261023_2149PDT/regional/regional_metadata_evidence.json",
+  "regional_evidence_sha256": "0aea332bd5390d1fc2ba726d1e45949136c3fec9ebef585fd7bc37af97b343f9",
+  "required_branch": "work/pricefm-r151-retirement-aware-continuation-20261023",
+  "seed0_trigger_fraction": 0.5,
+  "split_helper": "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008/application/scripts/pricefm/pricefm_r122_runtime.py",
+  "split_helper_sha256": "caba79edf8e6665cb9f801ce9cb494c4932e1175ef002cc774c80935d1416598",
+  "tag": "pricefm_stage_r151_retirement_aware_region_20261023",
+  "test_used_for_selection": false,
+  "wave_dispatch_seconds": 5400,
+  "wave_lease_seconds": 7200
+}

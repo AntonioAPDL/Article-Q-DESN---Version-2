@@ -22,7 +22,11 @@ ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
 CONFIG = ROOT/'application/config/pricefm_stage_r151_orchestration_20261023.json'
 DATA = Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm')
-RUNTIME = DATA/'launch_prep/pricefm_stage_r151_orchestration_20261023'
+RUNTIME = DATA/'launch_prep/pricefm_stage_r151_retirement_aware_orchestration_20261023'
+ORIGINAL_EXPIRES = 1792858323.6072176
+PREDECESSOR = DATA/'launch_prep/pricefm_stage_r151_orchestration_20261023/runs/991defc791c14310a3d61680dad67afb'
+PREDECESSOR_CONTEXT_SHA = 'ff6c1840ac7948f702edead2a077f984c9ec54da271ae5c76ce98ddbd8e85a5d'
+PREDECESSOR_TERMINAL_SHA = 'eaef4eca5cceab01b9fd50a5bad2b370ca0fdeaf7a4e7dc9ef72bc3eceafe29f'
 RESOURCE_ENTRY = ENTRY.with_name('501_recover_pricefm_stage_r150.py')
 REGIONAL_ENTRY = ENTRY.with_name('502_screen_pricefm_stage_r151_region.py')
 _APIS = None
@@ -47,13 +51,16 @@ def apis():
 
 def config():
     c=read(CONFIG)
-    expected=dict(stage='R151',tag='pricefm_stage_r151_orchestration_20261023',outer_seconds=37800,
+    expected=dict(stage='R151',tag='pricefm_stage_r151_retirement_aware_orchestration_20261023',outer_seconds=37800,
         EE_coordinator_seconds=14700,regional_benchmark_seconds=1200,regional_wave_seconds=7200,
         regional_compute_seconds=5400,regional_cleanup_seconds=1800,
         regional_admissions=['benchmark','1','2','3'],max_regional_numerical_waves=3,
         regional_region='DK_2',regional_replacements=1,cpus=list(range(15,30)),max_workers=2,
         numerical_threads=1,new_model_fits=0,AL_authorized=False,promotion_authorized=False,
-        baseline_mutations_authorized=False,renewals_authorized=False)
+        baseline_mutations_authorized=False,renewals_authorized=False,
+        original_global_expires_epoch=ORIGINAL_EXPIRES,failed_predecessor_folder=str(PREDECESSOR),
+        failed_predecessor_context_sha256=PREDECESSOR_CONTEXT_SHA,
+        failed_predecessor_terminal_sha256=PREDECESSOR_TERMINAL_SHA)
     if c!=expected:raise RuntimeError('frozen finite orchestration contract differs')
     return c
 
@@ -114,14 +121,28 @@ def ee_gate(science,terminal):
     return EE_disposition(terminal,q,v,science.task_complete,assessment)
 
 
-def regional_remaining_capacity(leases,share,terminal_waves=(),*,now=None):
+def funded_unused_windows(leases,terminal_waves,outer_expires,*,now=None):
+    """Only complete future two-hour leases may fit inside the carried parent."""
+    now=time.time() if now is None else now
+    if not math.isfinite(outer_expires):raise ValueError('finite outer deadline required')
+    active=[lease for wave,lease in leases.items() if wave not in terminal_waves]
+    if any(lease['expires_epoch']>outer_expires for lease in active):
+        raise RuntimeError('existing regional lease exceeds original parent deadline')
+    next_start=max([now]+[lease['expires_epoch'] for lease in active])
+    unused=[wave for wave in ('1','2','3') if wave not in leases]
+    count=min(len(unused),max(0,int((outer_expires-next_start-5.)//7200.)))
+    return unused[:count]
+
+
+def regional_remaining_capacity(leases,share,terminal_waves=(),*,now=None,outer_expires=ORIGINAL_EXPIRES):
     """Unused windows plus active compute only; spent/drained tails earn no time."""
     if not math.isfinite(share) or not 0<share<=1:raise ValueError('invalid idle share')
     now=time.time() if now is None else now;seconds=0.
+    funded=set(funded_unused_windows(leases,terminal_waves,outer_expires,now=now))
     for wave in ('1','2','3'):
         lease=leases.get(wave)
-        if lease is None:seconds+=10800.
-        elif wave not in terminal_waves:
+        if lease is None and wave in funded:seconds+=10800.
+        elif lease is not None and wave not in terminal_waves:
             seconds+=2*max(0.,min(5400.,lease['expires_epoch']-1800.-now))
     return share*seconds
 
@@ -277,10 +298,12 @@ def regional_projection(science,queue,leases,terms,active=(),*,now=None,extra_na
     outstanding=sum(price['task_estimates'][n]['estimated_cpu_seconds'] for n in pending)
     active_cpu=sum(price['task_estimates'][n]['estimated_cpu_seconds'] for n in active_names)
     share=price['resource_projection']['conservative_idle_share']
-    cap=regional_remaining_capacity(leases,share,terms,now=now)
+    deadline=config()['original_global_expires_epoch']
+    funded=funded_unused_windows(leases,terms,deadline,now=now)
+    cap=regional_remaining_capacity(leases,share,terms,now=now,outer_expires=deadline)
     numerical=[w for w in ('1','2','3') if w in leases and w not in terms]
-    current=max(0.,leases[numerical[-1]]['expires_epoch']-1800.-now) if numerical else 5400.
-    future=sum(w not in leases for w in ('1','2','3'))-(0 if numerical else 1)
+    current=max(0.,leases[numerical[-1]]['expires_epoch']-1800.-now) if numerical else (5400. if funded else 0.)
+    future=len(funded)-(0 if numerical else 1)
     slots={v['task']:v['resource_slot'] for v in active}
     def pack(component_names):
         tasks=[dict(name=n,phase=(1 if science.task_by_name(n,prep)['mode']=='S' else 0),
@@ -306,6 +329,7 @@ def regional_projection(science,queue,leases,terms,active=(),*,now=None,extra_na
         cumulative_projected_CPU_seconds=cumulative,cumulative_limit_CPU_seconds=limit,
         remaining_projected_CPU_seconds=remaining,remaining_capacity_CPU_seconds=cap,
         replacement_reserve_CPU_seconds=reserve,packing=packing,all_prospective_seed0_packing=scenario_packing,
+        original_outer_expires_epoch=deadline,funded_unused_numerical_windows=funded,
         all_prospective_seed0_scenarios_fit=all_scenarios_fit,
         fits=cumulative<=limit and remaining<=cap and packing['fits'] and all_scenarios_fit,
         fresh_extra_allowance_CPU_seconds=max(0.,min(limit-charges-reserve,cap-reserve)),
@@ -319,6 +343,8 @@ def claim_regional_lease(science,wave,release,outer):
         if wave!=allowed_next_admission(list(leases),terms):raise RuntimeError('regional finite admission unavailable or out of order')
         seconds=c['regional_benchmark_seconds'] if wave=='benchmark' else c['regional_wave_seconds']
         outer_context=read(base/'outer_context.json');launch=read(run_folder(outer_context['run_id'])/'context.json')
+        if launch['expires_epoch']!=c['original_global_expires_epoch']:
+            raise RuntimeError('regional parent may not reset the original global deadline')
         # The lease is consumed only after a fresh entire-tree/baseline/floor
         # predicate and a nonblocking conflict check of the shared dispatch lock.
         system=resource.load_legacy().System()
@@ -391,6 +417,30 @@ def wait_owned(system,capsule,deadline,poll,callback=None):
     return resource.drain_exact(system,capsule)
 
 
+def remaining_outer_seconds(c,*,now=None):
+    now=time.time() if now is None else now
+    remaining=c['original_global_expires_epoch']-now
+    if not math.isfinite(remaining) or not 0<remaining<=c['outer_seconds']:
+        raise RuntimeError('original global deadline expired or clock regressed; no renewal')
+    return remaining
+
+
+def verify_predecessor(c):
+    if (digest(PREDECESSOR/'context.json')!=c['failed_predecessor_context_sha256']
+        or digest(PREDECESSOR/'terminal.json')!=c['failed_predecessor_terminal_sha256']):
+        raise RuntimeError('failed predecessor context/terminal identity changed')
+    context=read(PREDECESSOR/'context.json');terminal=read(PREDECESSOR/'terminal.json')
+    if (context['run_id']!=PREDECESSOR.name or context['expires_epoch']!=c['original_global_expires_epoch']
+        or not math.isclose(context['expires_epoch']-context['started_epoch'],c['outer_seconds'],abs_tol=1e-6)
+        or terminal.get('status')!='R151_FINITE_WORKFLOW_GUARD_STOPPED'
+        or terminal.get('cleanup_verified') is not True or terminal.get('cleanup_errors')
+        or terminal.get('source_head')!='90ff802d09ca9b6712ccaae052d327fb23beaede'
+        or terminal.get('new_model_fits')!=0 or terminal.get('baseline_worker_signals')!=0
+        or terminal.get('AL_launched') is not False):
+        raise RuntimeError('failed predecessor does not permit this explicitly reviewed resource successor')
+    return context
+
+
 def launch(release_path,probe_path):
     resource,science=apis();c=config();release=read(release_path)
     _,oldc=resource.verify_release(release,full=True);resource.load_legacy().assert_parent_policy(oldc)
@@ -403,14 +453,26 @@ def launch(release_path,probe_path):
         if any((resource.CANONICAL/('wave_'+w)/'lease.json').exists() for w in ('2','3')):
             raise RuntimeError('EE unused admission consumed before finite orchestrator launch')
         if (science.PREP/'muscat_resources/outer_context.json').exists():raise RuntimeError('regional lane already assigned')
+        predecessor=verify_predecessor(c)
+        remaining=remaining_outer_seconds(c)
+        if remaining<c['EE_coordinator_seconds']+10:
+            raise RuntimeError('original global parent deadline cannot contain a full EE recovery coordinator')
+        # Fresh retirement-aware protection and shared-lock predicates precede
+        # this new explicit coordinator; the old stopped run remains immutable.
+        with resource.canonical_lock(resource.CANONICAL/'controller.lock'):
+            resource.baseline_guard(oldc,system,read(resource.CANONICAL/'admission.json'),
+                None,None,None,[],release)
         run_id=uuid.uuid4().hex;folder=run_folder(run_id);folder.mkdir(parents=True)
         resource.immutable(folder/'release.json',release);resource.immutable(folder/'probe.json',probe)
         now=time.time();resource.immutable(folder/'context.json',dict(run_id=run_id,started_epoch=now,
-            expires_epoch=now+c['outer_seconds'],boot_id=resource.boot(),config_sha256=digest(CONFIG),
+            expires_epoch=c['original_global_expires_epoch'],original_started_epoch=predecessor['started_epoch'],
+            failed_predecessor_folder=str(PREDECESSOR),failed_predecessor_context_sha256=PREDECESSOR_CONTEXT_SHA,
+            failed_predecessor_terminal_sha256=PREDECESSOR_TERMINAL_SHA,
+            boot_id=resource.boot(),config_sha256=digest(CONFIG),
             release_sha256=digest(release_path),probe_sha256=digest(probe_path)))
         unit='pricefm-r150-r151-finite-'+uuid.uuid4().hex+'.service'
         argv=[oldc['python_runtime'],'-B',str(ENTRY),'coordinate','--run-id',run_id,'--controller-unit',unit]
-        capsule=resource.start_control(system,oldc,folder/'coordinator','finite-orchestrator',argv,c['outer_seconds'])
+        capsule=resource.start_control(system,oldc,folder/'coordinator','finite-orchestrator',argv,remaining_outer_seconds(c)-5.)
         result=dict(status='R151_FINITE_ORCHESTRATOR_LAUNCHED',run_id=run_id,folder=str(folder),coordinator=capsule)
         resource.immutable(RUNTIME/'launch.json',result);resource.immutable(folder/'launch.json',result)
         return result
@@ -420,7 +482,10 @@ def coordinate(run_id,unit):
     resource,science=apis();c=config();folder=run_folder(run_id);release=read(folder/'release.json')
     _,oldc=resource.verify_release(release);system=resource.load_legacy().System()
     outer=resource.await_capsule(folder/'coordinator');context=read(folder/'context.json')
-    if outer['unit']!=unit or context['boot_id']!=resource.boot() or context['config_sha256']!=digest(CONFIG):
+    if (outer['unit']!=unit or context['boot_id']!=resource.boot() or context['config_sha256']!=digest(CONFIG)
+        or context['expires_epoch']!=c['original_global_expires_epoch']
+        or context.get('failed_predecessor_context_sha256')!=PREDECESSOR_CONTEXT_SHA
+        or context.get('failed_predecessor_terminal_sha256')!=PREDECESSOR_TERMINAL_SHA):
         raise RuntimeError('outer immutable capsule/context differs')
     stopped=[False]
     for sig in (signal.SIGTERM,signal.SIGINT):signal.signal(sig,lambda *_:stopped.__setitem__(0,True))

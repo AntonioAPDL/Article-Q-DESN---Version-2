@@ -271,7 +271,9 @@ def guard_fixture(tmp_path):
     proc=dict(pid=200,start_ticks=5,boot_id='boot',cmdline_sha256='baseline')
     admission={'handoff':{'heartbeat':1},'baseline':{'units':{base['unit']:{'properties':bp,'process':proc}},'AT_terminal_sha256':M.digest(c['AT_terminal'])}}
     stack=__import__('contextlib').ExitStack();r=M.load_legacy()
-    stack.enter_context(mock.patch.object(M,'verify_release',return_value=(None,None)))
+    stack.enter_context(mock.patch.object(M,'verify_release',side_effect=lambda release:release.setdefault('original_global_expires_epoch',100000000000.)))
+    stack.enter_context(mock.patch.object(M,'retirement_contract',return_value={'retired_unit':'outside-fixture'}))
+    stack.enter_context(mock.patch.object(M,'assert_capsules_drained',return_value=True))
     stack.enter_context(mock.patch.object(M,'verify_control',return_value=cp))
     stack.enter_context(mock.patch.object(r,'assert_parent_policy'))
     stack.enter_context(mock.patch.object(r,'verify_baseline_sources'))
@@ -562,3 +564,97 @@ def test_parent_runtime_readback_can_tighten_but_never_extend_deadline():
         M.parent_admission_deadline(coordinator,14000.,7200.,now=6895.01)
     with pytest.raises(RuntimeError,match='invalid'):
         M.parent_admission_deadline(coordinator,float('inf'),7200.,now=100.)
+
+
+def retirement_fixture():
+    r=M.load_legacy();proof=M.read(M.ROOT/'application/config/pricefm_stage_r151_retirement_contract_20261023.json')
+    saved={'properties':proof['original_saved_properties'],'process':proof['original_saved_process']}
+    system=FakeSystem([]);system.props[proof['retired_unit']]=dict(proof['observed_retired_properties'])
+    system.groups[proof['expected_cgroup']]=[]
+    return r,proof,saved,system
+
+
+def test_exact_retired_r141_absence_is_guarded_without_replacement():
+    r,proof,saved,system=retirement_fixture()
+    with mock.patch.object(r,'process',return_value=None):
+        assert M.verify_retired_baseline(system,proof,saved)['retired_absent']
+    assert not system.stops
+
+
+@pytest.mark.parametrize('change',[{'LoadState':'loaded'},{'ActiveState':'active','MainPID':'999'},
+    {'InvocationID':'new-lifetime'},{'ControlGroup':'/user.slice/replacement'}])
+def test_retired_baseline_reappearance_is_not_an_accepted_new_owner(change):
+    r,proof,saved,system=retirement_fixture();system.props[proof['retired_unit']].update(change)
+    with mock.patch.object(r,'process',return_value=None),pytest.raises(RuntimeError,match='reappeared'):
+        M.verify_retired_baseline(system,proof,saved)
+    assert not system.stops
+
+
+@pytest.mark.parametrize('pid_kind',['supervisor','LT_controller','descendant'])
+def test_retired_process_or_cgroup_membership_defers(pid_kind):
+    r,proof,saved,system=retirement_fixture()
+    if pid_kind=='descendant':system.groups[proof['expected_cgroup']]=[999]
+    target=saved['process']['pid'] if pid_kind=='supervisor' else proof['old_LT_controller_pid']
+    with mock.patch.object(r,'process',side_effect=lambda pid:{'pid':pid} if pid_kind!='descendant' and pid==target else None),pytest.raises(RuntimeError,match='not fully drained'):
+        M.verify_retired_baseline(system,proof,saved)
+    assert not system.stops
+
+
+def test_retirement_contract_cannot_substitute_a_different_saved_baseline():
+    r,proof,saved,system=retirement_fixture();saved=copy.deepcopy(saved);saved['process']['start_ticks']+=1
+    with mock.patch.object(r,'process',return_value=None),pytest.raises(RuntimeError,match='changed'):
+        M.verify_retired_baseline(system,proof,saved)
+
+
+def test_prior_retirement_capsule_must_be_drained():
+    saved,props=capsule();system=FakeSystem([(saved,props)])
+    with pytest.raises(RuntimeError,match='prior failed'):M.assert_capsules_drained(system,[saved])
+    system.props[saved['unit']].update(ActiveState='inactive',MainPID='0',ControlGroup='')
+    system.groups[saved['expected_cgroup']]=[]
+    assert M.assert_capsules_drained(system,[saved])
+
+
+@pytest.mark.parametrize('directory',['muscat_resources','benchmark','tasks_done','checkpoints','cpu_accounting','decisions'])
+def test_original_prepared_region_may_not_acquire_new_budget_or_outputs(tmp_path,directory):
+    prep=tmp_path/'prep';out=tmp_path/'out';write(prep/'prepared.json',{})
+    (out/directory).mkdir(parents=True)
+    with mock.patch.object(M,'PARENT_REGION_PREP',prep),mock.patch.object(M,'PARENT_REGION_OUT',out),pytest.raises(RuntimeError,match='original regional namespace'):
+        M.assert_parent_region_unused()
+
+
+def test_preouter_guard_none_lifecycle_checks_resource_floors(tmp_path):
+    stack,r,c,system,admission,_=guard_fixture(tmp_path)
+    with stack:
+        result=M.baseline_guard(c,system,admission,None,None,None,[],{})
+    assert result['active_workers']==0 and result['owned_pids']==[os.getpid()]
+
+
+def test_preouter_guard_does_not_accept_a_numerical_lease(tmp_path):
+    stack,r,c,system,admission,_=guard_fixture(tmp_path)
+    with stack,mock.patch.object(M,'boot',return_value='boot'),mock.patch.object(M.time,'time',return_value=1),pytest.raises(RuntimeError,match='preouter'):
+        M.baseline_guard(c,system,admission,None,None,{'boot_id':'boot','expires_epoch':100},[],{})
+
+
+def test_fresh_ee_coordinator_is_bounded_by_carried_outer_deadline():
+    outer={'epoch':100.,'runtime_seconds':10000.}
+    assert M.bounded_child_runtime(14700.,outer,10000.,now=100.)==9995.
+    assert M.bounded_child_runtime(14700.,outer,999999.,now=100.)==9995.
+    assert M.bounded_child_runtime(14700.,outer,9000.,now=100.)==8995.
+    with pytest.raises(RuntimeError,match='outer finite'):
+        M.bounded_child_runtime(14700.,outer,10000.,now=10095.)
+
+
+def test_standalone_recovery_cannot_reset_original_global_deadline():
+    assert M.bounded_recovery_runtime(14700.,10100.,now=100.)==9995.
+    assert M.bounded_recovery_runtime(14700.,20100.,now=100.)==14700.
+    with pytest.raises(RuntimeError,match='global continuation deadline'):
+        M.bounded_recovery_runtime(14700.,10100.,now=10095.)
+
+
+@pytest.mark.parametrize('with_lease',[False,True])
+def test_original_global_deadline_stops_before_and_after_admission(tmp_path,with_lease):
+    stack,r,c,system,admission,coordinator=guard_fixture(tmp_path)
+    release={'original_global_expires_epoch':100.}
+    lease={'boot_id':'boot','expires_epoch':10000.} if with_lease else None
+    with stack,mock.patch.object(M.time,'time',return_value=100.),pytest.raises(RuntimeError,match='global continuation deadline expired'):
+        M.baseline_guard(c,system,admission,coordinator,None,lease,[],release)

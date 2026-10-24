@@ -1,4 +1,18 @@
-# R151 finite continuation orchestration
+# R151 retirement-aware finite continuation orchestration
+
+This manually reviewed successor preserves the first R151 run's permanent
+terminal record. The original protected R141 parent reached its documented LT
+certificate boundary at 10:40 PM PDT and retired before the 10:42 PM screening
+attempt. That attempt released no numerical payload and consumed neither EE
+admission. The new resource contract recognizes only this exact, hash-bound
+retirement while protecting every surviving baseline lifetime unchanged.
+
+The new outer namespace is
+`pricefm_stage_r151_retirement_aware_orchestration_20261023`; the regional lane
+also has a new explicit namespace. The orchestration configuration filename
+remains unchanged so the regional worker's original lease-binding code remains
+identical. The predecessor source, context, terminal, preparation and zero-work
+receipts are preserved and source-pinned by the new release.
 
 `503_orchestrate_pricefm_stage_r151.py` is the outer standard-library coordinator
 for the approved sequence: recover the two unused EE admissions through 501,
@@ -8,11 +22,23 @@ scientific source, targets, original preparation or completed forecast packets.
 No AL fit, new geometry, official evaluation, promotion or baseline repair is
 admitted by this workflow.
 
-The outer service has one fixed **630-minute maximum**: 245 minutes for EE
+The original outer service had one fixed **630-minute maximum**: 245 minutes for EE
 recovery, 20 for the separate regional benchmark, 360 for three two-hour regional
 waves and five for transitions. Every numerical admission is separately created
 once and never renewed. Numerical waves retain 90 minutes for projected compute
 and 30 for validation/drain. Unused time in a terminal window is discarded.
+The successor **does not reset that clock**: it retains original expiry
+`1792858323.6072176` and gives its actual service only the remaining time, with
+five seconds of startup headroom. Its context carries the original start,
+deadline and exact failed predecessor hashes. Expiry or a backwards clock
+outside the original bound fails closed.
+
+Regional capacity and nonpreemptive packing count only whole future 7200-second
+admissions that fit after the active lease and before that carried parent
+deadline. A nominal unused third admission is not capacity if its entire lease
+cannot fit. Benchmark time and spent validation tails add no numerical credit.
+The complete D/S0 prefix still needs original cumulative and current-window
+funding before the first numerical lease; no partial lease is admitted.
 
 Before launch, commit and verify the dedicated source, then produce the 501 dual
 source release and successful same-source/boot capability probe. Under the fixed

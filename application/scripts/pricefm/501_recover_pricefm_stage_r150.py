@@ -28,6 +28,13 @@ SCIENCE_ROOT = Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_t
 SCIENCE_HEAD = 'c03613cd1a85cce5d02120760b954cdc15160410'
 CANONICAL = Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r150_bounded_admission_20261023/muscat_resources')
 THREAD_VARS = ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS','BLIS_NUM_THREADS','NUMEXPR_NUM_THREADS','VECLIB_MAXIMUM_THREADS')
+PARENT_ROOT = Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r151_continuation_recovery_20261023')
+PARENT_HEAD = '90ff802d09ca9b6712ccaae052d327fb23beaede'
+PARENT_BUNDLE = Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r151_continuation_implementation_20261023')
+PARENT_RUNTIME = CANONICAL.parents[1]/'pricefm_stage_r151_orchestration_20261023'
+PARENT_RUN = PARENT_RUNTIME/'runs/991defc791c14310a3d61680dad67afb'
+PARENT_REGION_PREP = CANONICAL.parents[1]/'pricefm_stage_r151_region_20261023'
+PARENT_REGION_OUT = CANONICAL.parents[2]/'campaigns/pricefm_stage_r151_region_20261023'
 _LEGACY = None
 
 
@@ -79,6 +86,9 @@ def config():
         or c['max_workers']!=2 or c['global_replacements']!=1 or c['replacement_reserve_CPU_seconds']!=1178.430003
         or c['idle_share']!=0.6724117881123404 or c['historical_charge_CPU_seconds']!=605.174710151
         or c['original_adjusted_CPU_seconds']!=21786.141934839827
+        or c.get('manual_successor_parent_head')!=PARENT_HEAD
+        or c.get('retirement_contract')!={'path':str(ROOT/'application/config/pricefm_stage_r151_retirement_contract_20261023.json'),
+            'sha256':'6e7823c7a3f659ea6b4513e75a9822c3b0812ac5a7c86ae32752c087e3b1dfe5'}
         or c['new_benchmark_authorized'] or c['new_fits_authorized'] or c['baseline_signals_authorized']):
         raise RuntimeError('frozen R151 resource contract differs')
     return c
@@ -101,6 +111,105 @@ def verify_new_source(source, *, full=False):
         if digest(ROOT/path)!=want:raise RuntimeError('new resource source bytes changed: '+path)
 
 
+def retirement_contract():
+    pin=config()['retirement_contract']
+    if digest(pin['path'])!=pin['sha256']:raise RuntimeError('retirement contract source bytes changed')
+    proof=read(pin['path']);admission=read(CANONICAL/'admission.json')
+    unit='pricefm-r141-muscat.service';saved=admission['baseline']['units'][unit]
+    if (proof.get('status')!='REVIEWED_EXPECTED_LT_CERTIFICATE_BOUNDARY_RETIREMENT_NOT_BASELINE_RECOVERY'
+        or proof.get('retired_unit')!=unit or proof.get('original_admission_path')!=str(CANONICAL/'admission.json')
+        or proof.get('original_admission_sha256')!=digest(CANONICAL/'admission.json')
+        or proof.get('original_saved_process')!=saved['process'] or proof.get('original_saved_properties')!=saved['properties']
+        or proof.get('expected_cgroup')!=saved['properties']['ControlGroup']
+        or proof.get('old_pid_gone') is not True or proof.get('old_LT_controller_pid_gone') is not True
+        or proof.get('live_LT_processes')!=[] or proof.get('worker_signals')!=0 or proof.get('baseline_mutations')!=0
+        or proof.get('LT_AT_repair_admitted') is not False or proof.get('new_model_fits')!=0
+        or proof.get('remaining_original_units_require_unchanged_lifetimes') is not True
+        or proof.get('handoff_must_remain_waiting_boundary_same_attempt') is not True
+        or proof['LT_progress']['active']!=0 or proof['LT_progress']['completed']!=49 or proof['LT_progress']['pending']!=10
+        or proof['host_blocked']['active']!={} or proof['host_blocked']['status']!='blocked'
+        or proof['host_blocked']['health']['healthy'] is not True):
+        raise RuntimeError('specific retired baseline boundary contract differs')
+    for path,want in proof['pinned_evidence_sha256'].items():
+        if digest(path)!=want:raise RuntimeError('retirement boundary source/evidence changed: '+path)
+    head=subprocess.check_output(['git','-C',proof['baseline_source_root'],'rev-parse','HEAD'],text=True).strip()
+    if head!=proof['baseline_source_head']:raise RuntimeError('retired baseline source HEAD changed')
+    return proof
+
+
+def verify_retired_baseline(system,proof,saved):
+    """Exactly the attested absent R141 lifetime; never accept another owner."""
+    r=load_legacy();props=system.unit(proof['retired_unit'])
+    expected=proof['observed_retired_properties']
+    keys=('Id','LoadState','ActiveState','MainPID','InvocationID','ControlGroup')
+    if (any(props.get(k)!=expected.get(k) for k in keys)
+        or props.get('LoadState')!='not-found' or props.get('ActiveState')!='inactive'
+        or props.get('MainPID')!='0' or props.get('InvocationID') or props.get('ControlGroup')
+        or saved['process']!=proof['original_saved_process'] or saved['properties']!=proof['original_saved_properties']
+        or r.process(saved['process']['pid']) is not None or r.process(proof['old_LT_controller_pid']) is not None
+        or system.members(proof['expected_cgroup'])):
+        raise RuntimeError('retired R141 baseline reappeared, changed or is not fully drained')
+    return dict(unit=proof['retired_unit'],retired_absent=True,old_cgroup_empty=True)
+
+
+def assert_parent_region_unused():
+    # The old namespace is prepared metadata, not an unused budget allocation
+    # that can coexist with the one successor namespace.
+    for parent in (PARENT_REGION_PREP,PARENT_REGION_OUT):
+        for name in ('muscat_resources','benchmark','tasks_done','checkpoints','cpu_accounting','decisions','assessment.json','assessment_seal.json'):
+            path=parent/name
+            if path.exists():raise RuntimeError('original regional namespace acquired numerical/runtime work: '+str(path))
+    if not (PARENT_REGION_PREP/'prepared.json').is_file():raise RuntimeError('original region preparation identity absent')
+
+
+def parent_history_paths():
+    paths=[PARENT_BUNDLE/'source_release_immutable.json',PARENT_RUNTIME/'launch.json']
+    paths+=list(PARENT_RUN.rglob('*.json'))
+    paths+=list((CANONICAL/'recoveries').rglob('*.json'))
+    paths+=list(PARENT_REGION_PREP.glob('*.json'))+list((PARENT_REGION_OUT/'tasks').glob('*.json'))
+    return sorted(set(paths))
+
+
+def parent_control_capsules():
+    paths=list(PARENT_RUN.glob('coordinator/intent.json'))
+    paths+=list((CANONICAL/'recoveries').glob('*/coordinator/intent.json'))
+    paths+=list((CANONICAL/'recoveries').glob('*/wave_*/intent.json'))
+    return [control_capsule(p.parent) for p in sorted(paths)]
+
+
+def parent_worker_capsules():
+    r=load_legacy();folders=[CANONICAL/'wave_2',CANONICAL/'wave_3']
+    folders+=list((CANONICAL/'recoveries').glob('*/assessment'))
+    folders+=list((CANONICAL/'recoveries').glob('*/wave_*'))
+    return [saved for folder in folders for saved in r.discover_workers(folder)]
+
+
+def assert_capsules_drained(system,capsules):
+    r=load_legacy()
+    for saved in capsules:
+        props=system.unit(saved['unit']);r.verify_owned(saved,props)
+        cg=saved.get('attested',{}).get('ControlGroup') or saved.get('expected_cgroup')
+        if (not cg or props.get('ActiveState') not in ('inactive','failed') or props.get('MainPID','0')!='0' or system.members(cg)):
+            raise RuntimeError('prior failed R151 control has not fully drained')
+    return True
+
+
+def verify_parent_source(*,full=False):
+    release=read(PARENT_BUNDLE/'source_release_immutable.json');source=release['source']
+    head=subprocess.check_output(['git','-C',str(PARENT_ROOT),'rev-parse','HEAD'],text=True).strip()
+    dirty=subprocess.check_output(['git','-C',str(PARENT_ROOT),'status','--porcelain'],text=True)
+    if head!=PARENT_HEAD or source['head']!=PARENT_HEAD or dirty:raise RuntimeError('immutable prior R151 source changed')
+    for path,want in (source['sha256'] if full else source['runtime_sha256']).items():
+        if digest(PARENT_ROOT/path)!=want:raise RuntimeError('immutable prior R151 source bytes changed')
+    terminal=read(PARENT_RUN/'terminal.json')
+    if (terminal.get('status')!='R151_FINITE_WORKFLOW_GUARD_STOPPED' or terminal.get('cleanup_verified') is not True
+        or terminal.get('cleanup_errors') or terminal.get('source_head')!=PARENT_HEAD
+        or terminal.get('original_stop_reason')!="RuntimeError('protected baseline lifecycle changed: pricefm-r141-muscat.service')"):
+        raise RuntimeError('prior failed R151 disposition changed')
+    assert_parent_region_unused()
+    return source
+
+
 def history_paths():
     names=['admission.json','workflow_launch.json','workflow_plan.json','workflow_terminal.json',
            'wave_1/lease.json','wave_1/terminal.json','wave_1/events.jsonl','wave_1/controller_launch.json']
@@ -108,6 +217,7 @@ def history_paths():
     # lifetime evidence, including policy receipts. Never rewrite it on recovery.
     paths=[CANONICAL/name for name in names]
     paths += list((CANONICAL/'wave_1/workers').glob('*/*.json'))
+    paths += parent_history_paths()
     return sorted(set(paths))
 
 
@@ -118,11 +228,16 @@ def freeze_release(output):
     science.verify_hashes(prep['source_sha256']);science.verify_hashes(prep['input_sha256'])
     r.verify_baseline_sources(oldc);r.verify_benchmark_import(oldc,r.System())
     old=read(CANONICAL/'admission.json')
+    retirement=retirement_contract();verify_parent_source(full=True)
+    prior_capsules=parent_control_capsules();prior_workers=parent_worker_capsules()
+    assert_capsules_drained(r.System(),prior_capsules+prior_workers)
     result=dict(status='PASS_R151_DUAL_SOURCE_RELEASE',created_epoch=time.time(),source=capture_new_source(),
         science_root=str(SCIENCE_ROOT),science_head=SCIENCE_HEAD,science_source=old['source'],
         historical_sha256={str(p):digest(p) for p in history_paths()},original_admission_sha256=digest(CANONICAL/'admission.json'),
         benchmark_import_sha256=oldc['benchmark_import']['sha256'],config_sha256=digest(CONFIG),
-        allowed_admissions=['2','3'],no_new_benchmark=True,new_fits=0,baseline_worker_signals=0)
+        allowed_admissions=['2','3'],no_new_benchmark=True,new_fits=0,baseline_worker_signals=0,
+        manual_successor_parent_head=PARENT_HEAD,retirement_contract_sha256=c['retirement_contract']['sha256'],
+        prior_R151_control_capsules=prior_capsules,prior_R151_worker_capsules=prior_workers,original_global_expires_epoch=read(PARENT_RUN/'context.json')['expires_epoch'])
     result['new_source']=result['source'];result['old_science']=result['science_source']
     immutable(output,result);return result
 
@@ -132,9 +247,16 @@ def verify_release(release, *, full=False):
     if (release['status']!='PASS_R151_DUAL_SOURCE_RELEASE' or release['science_root']!=str(SCIENCE_ROOT)
         or release['science_head']!=SCIENCE_HEAD or release['config_sha256']!=digest(CONFIG)
         or release['original_admission_sha256']!=digest(CANONICAL/'admission.json')
-        or release['benchmark_import_sha256']!=oldc['benchmark_import']['sha256']):
+        or release['benchmark_import_sha256']!=oldc['benchmark_import']['sha256']
+        or not isinstance(release.get('prior_R151_worker_capsules'),list)
+        or not isinstance(release.get('prior_R151_control_capsules'),list)
+        or len(release['prior_R151_control_capsules'])<2
+        or release.get('original_global_expires_epoch')!=read(PARENT_RUN/'context.json')['expires_epoch']):
         raise RuntimeError('dual-source release identity differs')
     if release.get('new_source')!=release['source'] or release.get('old_science')!=release['science_source']:raise RuntimeError('source aliases differ')
+    if release.get('manual_successor_parent_head')!=PARENT_HEAD or release.get('retirement_contract_sha256')!=c['retirement_contract']['sha256']:
+        raise RuntimeError('manual successor source/retirement identity differs')
+    verify_parent_source(full=full);retirement_contract()
     verify_new_source(release['source'],full=full);r.verify_source(release['science_source'],full=full)
     for path,want in release['historical_sha256'].items():
         if digest(path)!=want:raise RuntimeError('immutable original R150 history changed: '+path)
@@ -289,14 +411,21 @@ def cooperative_drain(system,workers,reason, *, grace=10,deadline=None):
 
 def baseline_guard(c,system,admission,coordinator,controller,lease,workers,release,previous_handoff=None,*,extra_capsules=(),extra_workers=()):
     """Replacement for old guard; never depends on the dead 499 workflow."""
-    r=load_legacy();verify_release(release);r.assert_parent_policy(c);r.verify_baseline_sources(c)
+    r=load_legacy();verify_release(release)
+    if time.time()>=release['original_global_expires_epoch']:raise RuntimeError('original global continuation deadline expired')
+    r.assert_parent_policy(c);r.verify_baseline_sources(c)
     if lease is not None and (boot()!=lease['boot_id'] or time.time()>=lease['expires_epoch']):raise RuntimeError('lease expired or boot changed')
     if lease is not None and lease.get('source_head')==SCIENCE_HEAD and lease.get('wave') in ('2','3'):
         if read(CANONICAL/('wave_'+lease['wave'])/'lease.json')!=lease:raise RuntimeError('immutable numerical lease changed')
-    verify_control(system,coordinator,c,required_parent=coordinator.get('parent'))
+    if coordinator is None and (controller is not None or lease is not None):raise RuntimeError('preouter guard cannot carry a lease or child controller')
+    if coordinator is not None:verify_control(system,coordinator,c,required_parent=coordinator.get('parent'))
     if controller:verify_control(system,controller,c,required_parent=coordinator['unit'])
     handoff=r.handoff_snapshot(c,system,previous_handoff or admission['handoff'])
+    retirement=retirement_contract()
+    assert_capsules_drained(system,release.get('prior_R151_control_capsules',[])+release.get('prior_R151_worker_capsules',[]))
     for name,saved in admission['baseline']['units'].items():
+        if name==retirement['retired_unit']:
+            verify_retired_baseline(system,retirement,saved);continue
         props=system.unit(name)
         if (props.get('ActiveState')!='active' or any(props.get(k)!=saved['properties'].get(k) for k in r.BASELINE_STABLE)
             or r.exec_arguments(props)!=r.exec_arguments(saved['properties'])
@@ -306,14 +435,16 @@ def baseline_guard(c,system,admission,coordinator,controller,lease,workers,relea
     active=[saved for saved in list(workers)+list(extra_workers) if strict_worker_policy(system,saved)]
     if lease is None and active:raise RuntimeError('numerical workers cannot exist before admission')
     if len(active)>2 or len({saved['cpu'] for saved in active})!=len(active):raise RuntimeError('global worker/physical CPU ceiling violated')
-    if coordinator.get('parent') and coordinator['parent'] not in {v['unit'] for v in extra_capsules}:
+    if coordinator is not None and coordinator.get('parent') and coordinator['parent'] not in {v['unit'] for v in extra_capsules}:
         raise RuntimeError('required outer controller capsule missing')
     for capsule in extra_capsules:
         props=system.unit(capsule['unit']);r.verify_owned(capsule,props)
-        if capsule['unit']==coordinator.get('parent') or props.get('ActiveState') in ('active','activating'):
+        if (coordinator is not None and capsule['unit']==coordinator.get('parent')) or props.get('ActiveState') in ('active','activating'):
             verify_control(system,capsule,c,required_parent=capsule.get('parent'))
-    caps=[coordinator]+([controller] if controller else [])+list(extra_capsules)
-    pids=owned_groups(system,caps,list(workers)+list(extra_workers));rss=r.rss_gib(pids)
+    caps=([coordinator] if coordinator is not None else [])+([controller] if controller else [])+list(extra_capsules)
+    pids=owned_groups(system,caps,list(workers)+list(extra_workers))
+    if coordinator is None:pids=sorted(set(pids+[os.getpid()]))
+    rss=r.rss_gib(pids)
     available=r.memory_available_gib();disk=__import__('shutil').disk_usage(c['disk_path']).free/1024**3
     predicate=dict(epoch=time.time(),handoff=handoff,available_memory_gib=available,disk_free_gib=disk,owned_rss_gib=rss,owned_pids=pids,active_workers=len(active))
     if available<c['min_available_memory_gib'] or disk<c['min_disk_gib'] or rss>c['max_owned_rss_gib']:
@@ -665,14 +796,33 @@ def reserve_replacement(c,recovery,saved,lease,projection):
         immutable(token,value);return value
 
 
+def bounded_recovery_runtime(requested,global_expires,*,now=None):
+    now=time.time() if now is None else now
+    runtime=min(requested,global_expires-now-5.)
+    if not math.isfinite(runtime) or runtime<=0:raise RuntimeError('original global continuation deadline cannot contain coordinator')
+    return runtime
+
+
+def bounded_child_runtime(requested,parent,actual_parent_runtime,*,now=None):
+    now=time.time() if now is None else now
+    bound=parent['epoch']+min(parent['runtime_seconds'],actual_parent_runtime)
+    runtime=min(requested,bound-now-5.)
+    if not math.isfinite(runtime) or runtime<=0:raise RuntimeError('outer finite lifetime cannot contain a new coordinator')
+    return runtime
+
+
 def launch(release_path,probe_path,outer_capsule=None):
     release=read(release_path);c,oldc=verify_release(release,full=True);r=load_legacy();r.assert_parent_policy(oldc)
     system=r.System();probe=read(probe_path)
+    bounded_recovery_runtime(c['coordinator_seconds'],release['original_global_expires_epoch'])
     if probe.get('status')!='PASS_R151_OWNED_TREE_POLICY_AND_DRAIN' or probe.get('resource_entry_sha256')!=digest(ENTRY) or probe.get('boot_id')!=boot():raise RuntimeError('same-source/boot R151 capability probe required')
     with canonical_lock(CANONICAL/'recovery_launch.lock'):
         # Read-only conflict checks must precede new coordinator intent.
         with canonical_lock(CANONICAL/'workflow.lock'):pass
         assert_drained_history(system,release)
+        assert_capsules_drained(system,release['prior_R151_control_capsules']+release['prior_R151_worker_capsules'])
+        retirement=retirement_contract()
+        verify_retired_baseline(system,retirement,read(CANONICAL/'admission.json')['baseline']['units'][retirement['retired_unit']])
         if (CANONICAL/'wave_2/lease.json').exists() or (CANONICAL/'wave_3/lease.json').exists():raise RuntimeError('remaining numerical admission already consumed')
         first=r.handoff_snapshot(oldc,system,read(CANONICAL/'admission.json')['handoff']);second=first;until=time.monotonic()+20
         while second['heartbeat']==first['heartbeat'] and time.monotonic()<until:
@@ -681,13 +831,15 @@ def launch(release_path,probe_path,outer_capsule=None):
         recovery=uuid.uuid4().hex;folder=recovery_folder(recovery);folder.mkdir(parents=True)
         immutable(folder/'release.json',release);immutable(folder/'probe.json',probe)
         if outer_capsule:
-            outer=read(outer_capsule);verify_control(system,outer,oldc);verify_new_source(release['source'])
+            outer=read(outer_capsule);outer_props=verify_control(system,outer,oldc);verify_new_source(release['source'])
             immutable(folder/'outer_capsule.json',outer)
         else:outer=None
         immutable(folder/'launch_context.json',dict(release_path=str(Path(release_path).resolve()),release_sha256=digest(release_path),probe_sha256=digest(probe_path),handoff=second))
         unit='pricefm-r150-recovery-coordinator-'+uuid.uuid4().hex+'.service'
         argv=[oldc['python_runtime'],'-B',str(ENTRY),'coordinate','--recovery',recovery,'--controller-unit',unit]
-        capsule=start_control(system,oldc,folder/'coordinator','recovery-coordinator',argv,c['coordinator_seconds'],parent=outer)
+        runtime_seconds=bounded_recovery_runtime(c['coordinator_seconds'],release['original_global_expires_epoch'])
+        if outer:runtime_seconds=bounded_child_runtime(runtime_seconds,outer,r.parse_duration(outer_props['RuntimeMaxUSec']))
+        capsule=start_control(system,oldc,folder/'coordinator','recovery-coordinator',argv,runtime_seconds,parent=outer)
         result=dict(recovery_id=recovery,folder=str(folder),coordinator=capsule)
         immutable(folder/'launch.json',result);return result
 

@@ -1,5 +1,19 @@
 # R151: one cached DK_2 continuation after EE disposition
 
+The retirement-aware successor uses tag
+`pricefm_stage_r151_retirement_aware_region_20261023` and branch
+`work/pricefm-r151-retirement-aware-continuation-20261023`. Its new regional
+config is an exact copy of the original config except for those two metadata
+fields; the original config remains untouched and unused. All producer
+functions are byte-identical to source `90ff802d09ca9b6712ccaae052d327fb23beaede`
+except `validate_config`'s required-branch literal. Normalizing only the tag
+and branch literals makes the complete producer AST identical. Tests verify
+all 997 input pins, 252 scientific descriptors, packages, cohorts and audit
+permutation against the already prepared original namespace. The old
+namespace owns no regional admission, benchmark or numerical component and
+is preserved. The successor grants no additional region, fit, scientific
+choice or wave budget; its outer workflow retains the original global expiry.
+
 This implements the authorized October 23 continuation plan in a separate
 scientific namespace. It prepares one prospective DK_2 pool and exposes a
 finite DAG to the R151 outer resource workflow. It does not fit a posterior,

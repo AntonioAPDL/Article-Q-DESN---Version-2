@@ -26,7 +26,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
-TAG = "pricefm_stage_r151_region_20261023"
+TAG = "pricefm_stage_r151_retirement_aware_region_20261023"
 DATA = Path("/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm")
 CONFIG = ROOT/"application/config"/(TAG+".json")
 PREP = DATA/"launch_prep"/TAG
@@ -89,7 +89,7 @@ def producer():
 
 def validate_config(c):
     if (c.get("tag") != TAG or c.get("region") != "DK_2"
-            or c.get("required_branch") != "work/pricefm-r151-continuation-recovery-20261023"
+            or c.get("required_branch") != "work/pricefm-r151-retirement-aware-continuation-20261023"
             or c.get("new_model_fits") != 0 or c.get("new_geometries") != 0
             or any(c.get(k) is not False for k in ("official_evaluation_authorized", "AL_authorized", "promotion_authorized", "test_used_for_selection"))
             or c.get("paths") != 100 or c.get("horizon_steps") != 96

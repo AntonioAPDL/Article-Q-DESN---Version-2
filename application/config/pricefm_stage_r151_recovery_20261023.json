@@ -28,11 +28,16 @@
   "global_replacements": 1,
   "historical_charge_CPU_seconds": 605.174710151,
   "idle_share": 0.6724117881123404,
+  "manual_successor_parent_head": "90ff802d09ca9b6712ccaae052d327fb23beaede",
   "max_workers": 2,
   "new_benchmark_authorized": false,
   "new_fits_authorized": false,
   "original_adjusted_CPU_seconds": 21786.141934839827,
   "replacement_reserve_CPU_seconds": 1178.430003,
+  "retirement_contract": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r151_retirement_aware_20261023/application/config/pricefm_stage_r151_retirement_contract_20261023.json",
+    "sha256": "6e7823c7a3f659ea6b4513e75a9822c3b0812ac5a7c86ae32752c087e3b1dfe5"
+  },
   "science_head": "c03613cd1a85cce5d02120760b954cdc15160410",
   "science_root": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r150_bounded_admission_20261023",
   "stage": "R151",

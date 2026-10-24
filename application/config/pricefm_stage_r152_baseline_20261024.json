@@ -1,0 +1,177 @@
+{
+  "AT_terminal": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r146_at_training_fallback_20261022/muscat/terminal.json",
+  "closed_imports": [
+    "DE_LU",
+    "FI"
+  ],
+  "cutover_reserve_seconds": 45,
+  "data": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm",
+  "dependency_worktree": "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008",
+  "evidence_sha256": {
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/R/pricefm_r129_al_fixedpoint_certificate.R": "c573066109eef78cd19e8c60f2630ecad29d433ae9d95150d0a0fe4f7ee21571",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/scripts/pricefm/470_fit_pricefm_stage_r137_certified_al_300.R": "58fae6e703d917362f9110ae0d29d9408f204d1e4b65007bb8555db0b236ae21",
+    "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008/application/scripts/pricefm/pricefm_stage_r67_cran111_adapter.R": "679e6c929b09b710d412962b7ccaf965885065dfce08eacb5279834b3db9a554",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/contracts/LT_fold1_al0.90.json": "b1f7abc859b2ca24ebac681ea747c7301a2e53dd014646cb894c207e51dc03d4",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/tasks/LT_fold1_al0.90.json": "65be713d5b5348e0dd146371eadc9e7baf1d0e03981e0601d62bba6a75e1d404",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/tasks_done/LT_fold1_al0.75/fit/terminal.json": "7a07989fa168395edc56c6cafda1b96e0502e621bb9c9c56c1f11ea9e183f3b6",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/tasks_done/LT_fold1_al0.90/completed_evidence.json": "d6add5eb55b2ca4ecbaaa9208a79f9ad3a671475281c6802f6964096f4d86c68",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/tasks_done/LT_fold1_al0.90/fit/fixedpoint_certificate.json": "ca95ef4c1fbfad26b896aa64896632534f76a3f7387c3c109f524be8bc4b0a6d",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/tasks_done/LT_fold1_al0.90/fit/terminal.json": "7ac0b1f22a6f2e9dd4ca4a3a3b28fab53dd25cedc688b3104e4ee9fbfb687468",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__LT/tasks_done/LT_fold1_design/design/terminal.json": "cc038b2aadc9b0e201f456b813c395a44eb022a1d7e40c5d9ce1b259d655433b",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/contracts/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50.json": "ec7cfb64367afedaac7120d70fec865d2caf2d6460cbf85bc83601ed9b615115",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/contracts/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.45.json": "01c37c9ebff2614c7bc61f03eb47df62708953191b0757117f31e68431de6f0b",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/contracts/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.55.json": "89a3ca6680faee3a787f136ca9a145b75ea3b60759a7c61c13ac1be5c5a7c6fa",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/contracts/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_al0.55.json": "958183c004f1aaf1fe18200bdb2bed866c1ffd733b614d6952dafd4cebd6b1b1",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50.json": "6e66574055f49c9ce826fe9fbdc3a3feb37b5be37bd2c3b931f59f0cb687e2c1",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.45.json": "c831cd7e2c143067077b34d799342478f3f4e700af4ec4bfa9978c1e889fc159",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.55.json": "f7d922dc93f6cc0caf9a0438e35fd99741b7c02604e5b65e579a37a3f712f533",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_al0.55.json": "3b5728553179be32d40d0e69440bef11b226a69813318ab8c3da04ba5cab7577",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50/completed_evidence.json": "6496833414bde4109b5858c315d95e623b97b1a0d35ddff4ad6bbed9b3c46ce9",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50/fit/fixedpoint_certificate.json": "0246d12e1137de33c08433d15f0169554c53f241ada1fdb76dcdab2b99551eba",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50/fit/terminal.json": "1b09dbd4c0d9e21d29ccc00d9be8479c0d55af6e3d67c27fb0763754a4a1e2dd",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_design/design/terminal.json": "d1c472ba88700bebe30796209eacdf5be79dae1116e88919bf69db185a079dd7",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.45/completed_evidence.json": "02fb3477b9f9e3409bc98cc8c8d9844e554b7e1bf706fcf55430d25337bf1e32",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.45/fit/fixedpoint_certificate.json": "ba341bb08a0edee38e9d7f9c31c56e94a6a61354313884ffa5c1d1b697a2f8e1",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.45/fit/terminal.json": "285904bc7cea501b8971f9b99fc801a0efcf4b1a897b64bb85f80497582b4281",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.50/fit/terminal.json": "32dda2c60b462a33381bda7b923ed5d784739572b8e507709fc11a66f0f682a2",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.55/completed_evidence.json": "fcec3afd0bfc19dcf342400a63249cf5f0ff10fde1477032d979941d0e9738f2",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.55/fit/fixedpoint_certificate.json": "d3ae9c5d767ca84cac3f2ee0f11d2fe15ed92f609b22a266ad523a241c29f82e",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_al0.55/fit/terminal.json": "010f3965ed4b9ed3b260f3639a01b8a5cf0990c28a1a483f8a49044bcd36d2e1",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s2_design/design/terminal.json": "2fa9c977d12e37bdae36983525af8e5a68f660d07088ae2e6f78b2ec94b11771",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_al0.50/fit/terminal.json": "190196e5e7c18b13c4db9bfcae4df440f854a7bb72f9bd3f30fc144d4e9b9b7f",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_al0.55/completed_evidence.json": "a0bdaea27705215437109f50364b6c69afca81730761b038bbfe71fb3c62c660",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_al0.55/fit/fixedpoint_certificate.json": "c6400bd8d0abbc36ab700392bfc465fec8f5806972edeba47a527f0a7f5e3d94",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_al0.55/fit/terminal.json": "9acd27b6fbb14e8216d4c0fd0a270683da266b5ca19f5b22c57ad99f63d36858",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s3_design/design/terminal.json": "067a651381e0a2564f1e4e56cb79d9ee429395f8682c5beb1074450c86a746a8",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r146_at_training_fallback_20261022/tasks_done/rhs_AT_r134_7a422c0c3473f81f_s1_t1.632090846764e-03/fit/terminal.json": "c1c5984beb8f2a58af51f259d9aa07942c081cdded3d85fc8b874475a54d9b83",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019/host_scheduler/muscat/blocked.json": "1050b7c07bc8917cf646af6539a80ae7d97f0e9d5a54c526df5bc9a7a60ea2e1",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_libraries/exdqlm_cran_1p1p1/pricefm_r67_cran111_install_manifest.json": "30cd4a7eac5a59e32aa788427347962b2312aca744977e5a186e341a1a6ef4c8"
+  },
+  "fence_wait_seconds": 60,
+  "fit_max_iter": 300,
+  "guardian_lease_seconds": 180,
+  "legacy_config": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r146_at_fallback_20261022/application/config/pricefm_stage_r146_resource_handoff_20261022.json",
+  "legacy_entry": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r146_at_fallback_20261022/application/scripts/pricefm/491_supervise_pricefm_stage_r146_resource_handoff.py",
+  "legacy_guardian_prefix": "pricefm-r146-resource-guardian-",
+  "legacy_handoff_unit": "pricefm-r146-muscat-resource-handoff.service",
+  "legacy_locks": [
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019/host_scheduler/muscat/scheduler.lock",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r145_at_recovery_muscat_utilization_20261021/muscat/supervisor.lock",
+    "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r146_resource_handoff_20261022/muscat/supervisor.lock"
+  ],
+  "legacy_units": [
+    "pricefm-r141-muscat.service",
+    "pricefm-r145-muscat-at-recovery.service",
+    "pricefm-r146-muscat-resource-handoff.service"
+  ],
+  "legacy_worktree": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r146_at_fallback_20261022",
+  "max_owner_generations": 3,
+  "new_unit": "pricefm-r152-muscat-baseline.service",
+  "numerical_entries": [
+    "480_run_pricefm_stage_r141_region.py",
+    "470_fit_pricefm_stage_r137_certified_al_300.R",
+    "442_fit_pricefm_stage_r123_certified_normal.R",
+    "483_fit_pricefm_stage_r142_same_target_al_rescue.R",
+    "484_run_pricefm_stage_r142_certified_al_rescue.py",
+    "489_run_pricefm_stage_r146_at_training_fallback.py"
+  ],
+  "old_attempt": "e6226e1ddefd4c36ae17324684d40d22",
+  "old_runtime": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r146_resource_handoff_20261022/muscat",
+  "partition": {
+    "baseline_A": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14
+    ],
+    "baseline_B": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "development_base": [
+      24,
+      25,
+      26,
+      27,
+      28,
+      29
+    ],
+    "optional": [
+      22,
+      23
+    ]
+  },
+  "poll_seconds": 3,
+  "python_runtime": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python",
+  "quarantined_regions": [
+    "AT",
+    "LT"
+  ],
+  "queues": {
+    "A": [
+      "IT_CALA",
+      "IT_SICI",
+      "NL",
+      "NO_4",
+      "RO",
+      "SE_4"
+    ],
+    "B": [
+      "NO_2",
+      "PL",
+      "SE_2"
+    ]
+  },
+  "release_receipt": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019/release/muscat/validation.json",
+  "repair_fits_authorized": false,
+  "required_branch": "work/pricefm-r152-parallel-recovery-20261024",
+  "resume_old_R145": false,
+  "retired_units": [
+    "pricefm-r141-muscat.service",
+    "pricefm-r145-muscat-at-recovery.service"
+  ],
+  "scheduler_blocked": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019/host_scheduler/muscat/blocked.json",
+  "schema_version": 1,
+  "scope_seconds": 43200,
+  "signal_numerical_workers": false,
+  "source_branch": "work/pricefm-r141-recovery-rollout-20261019",
+  "source_controller": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/scripts/pricefm/480_run_pricefm_stage_r141_region.py",
+  "source_head": "4cd92ac3654f16a84a67c8db6cfc7f381113aeb9",
+  "source_sha256": {
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r146_at_fallback_20261022/application/config/pricefm_stage_r146_resource_handoff_20261022.json": "d8a1ec4fd19f060ec674c38d969ab18e3d52946b381180ef82ffae14abf79b08",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r146_at_fallback_20261022/application/scripts/pricefm/490_closeout_pricefm_stage_r146_all_region.py": "e42bec2e79085b5b143241997a5ae15249ee6edb2d13044a978ea74e41174c7f",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r146_at_fallback_20261022/application/scripts/pricefm/491_supervise_pricefm_stage_r146_resource_handoff.py": "359d776b2c3244385334f84b724555b5f152e71f5a3c70e9c7ea15f5bf455176",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/R/pricefm_r129_al_fixedpoint_certificate.R": "c573066109eef78cd19e8c60f2630ecad29d433ae9d95150d0a0fe4f7ee21571",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/config/pricefm_stage_r141_recovery_rollout_20261019.json": "aeda15b1590c10bba2f99d952372dc725a1099285266875e48b11122e33b6277",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/scripts/pricefm/470_fit_pricefm_stage_r137_certified_al_300.R": "58fae6e703d917362f9110ae0d29d9408f204d1e4b65007bb8555db0b236ae21",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/scripts/pricefm/480_run_pricefm_stage_r141_region.py": "7ba3473858ac724eecccb8cdf7ee8e4dad5fae478123aab679a38cc801c845a0",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/scripts/pricefm/482_schedule_pricefm_stage_r141_host.py": "c87b09b64350524c18c1aa30913b42b814b9979326752f6276a1551b8525c4fd",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/scripts/pricefm/pricefm_stage_r67_cran111_adapter.R": "679e6c929b09b710d412962b7ccaf965885065dfce08eacb5279834b3db9a554",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/tests/test_pricefm_stage_r141_recovery_rollout.py": "4d6e059535b9339519a297eb93ff1cd52bfdaa9e6e2920e00690d002364fcbae",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r145_at_recovery_20261021/application/config/pricefm_stage_r145_at_recovery_muscat_utilization_20261021.json": "9eceacabf4545717f682d4c05cbdc25db5accac26068f1d3e0c2faef398528bb",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r145_at_recovery_20261021/application/scripts/pricefm/484_run_pricefm_stage_r142_certified_al_rescue.py": "00d79c135ded9137e5ba923d7315440c4309bd72c27677d531d49b6656de7bfb",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r145_at_recovery_20261021/application/scripts/pricefm/488_run_pricefm_stage_r145_at_recovery.py": "5bd5f8bc4789e98d3ca3b12a0a5a886e6b1b2bef81a43a241a531b81e616b74f",
+    "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008/application/scripts/pricefm/442_fit_pricefm_stage_r123_certified_normal.R": "9fc99087f66400736d35667f932fbed9a9f960eec7e2dd9c63aa12987f358239"
+  },
+  "source_tag": "pricefm_stage_r141_recovery_rollout_20261019",
+  "source_worktree": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019",
+  "tag": "pricefm_stage_r152_parallel_20261024"
+}

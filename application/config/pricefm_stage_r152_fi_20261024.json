@@ -1,0 +1,745 @@
+{
+  "AL_authorized": false,
+  "assessment_CPU_seconds": 1800,
+  "audit_key": "pricefm_parallel_continuation_20261024|regional|FI|v1",
+  "benchmark_CPU_seconds": 1200,
+  "benchmark_D_packages": [
+    "C0",
+    "r134_75c4492b5ef11634",
+    "r134_819baf69f92b36e7",
+    "r134_8f8f3beb4b5a3c42"
+  ],
+  "benchmark_D_repeats": 3,
+  "benchmark_S_packages": [
+    "C0",
+    "r134_75c4492b5ef11634",
+    "r134_819baf69f92b36e7",
+    "r134_8f8f3beb4b5a3c42"
+  ],
+  "benchmark_S_repeats": 1,
+  "benchmark_max_seconds": 1200,
+  "benchmark_preflight_included": true,
+  "chunk_origins": 8,
+  "clock_offsets_steps": [
+    0,
+    24,
+    48,
+    72
+  ],
+  "control": "C0",
+  "cost_headroom": 1.5,
+  "expected_bank_origins": 940,
+  "expected_daily_counts": [
+    124,
+    134,
+    173
+  ],
+  "extra_seeds": [
+    2026102301,
+    2026102302
+  ],
+  "forecast_seed": 2026101502,
+  "horizon_steps": 96,
+  "hypothesis": "Original sparse RHS origin panels may misrank already certified geometry-scale packages over complete eligible inner training validation support",
+  "legacy_DK2_config": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r151_retirement_aware_20261023/application/config/pricefm_stage_r151_retirement_aware_region_20261023.json",
+  "legacy_reference_entry": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r151_retirement_aware_20261023/application/scripts/pricefm/502_screen_pricefm_stage_r151_region.py",
+  "legacy_reference_sha256": "2e0e9dfd8da608d2443c6ac776211e9a8cd10abe6d5d20b48150e4fa7f3084eb",
+  "max_new_D_components": 60,
+  "max_new_S_components": 27,
+  "max_numerical_waves": 3,
+  "max_projected_cpu_seconds": 32400,
+  "maximum_replacement_reserve": 1,
+  "new_geometries": 0,
+  "new_model_fits": 0,
+  "official_evaluation_authorized": false,
+  "official_outcomes_exposed_development_only": true,
+  "packages": [
+    {
+      "candidate_id": "r134_d9293ed1d2540e6d",
+      "p": 385,
+      "package_id": "C0",
+      "roles": [
+        "original_AL_control_scale"
+      ],
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.4929739307713866e-05
+    },
+    {
+      "candidate_id": "r134_d9293ed1d2540e6d",
+      "p": 385,
+      "package_id": "C0_alt",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry",
+        "original_AL_control_scale"
+      ],
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00024929739307713865
+    },
+    {
+      "candidate_id": "r134_1af9fef702fa968a",
+      "p": 257,
+      "package_id": "r134_1af9fef702fa968a",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.1,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.05,
+        "m_x": 24,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 3.0248083693359493e-05
+    },
+    {
+      "candidate_id": "r134_1c00633e11ee8e62",
+      "p": 385,
+      "package_id": "r134_1c00633e11ee8e62",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.1,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.5,
+        "m_x": 4,
+        "m_y": 1728,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.1,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00024929739307713865
+    },
+    {
+      "candidate_id": "r134_1fa30b267aea7aeb",
+      "p": 257,
+      "package_id": "r134_1fa30b267aea7aeb",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 32,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.35,
+        "m_x": 48,
+        "m_y": 730,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.01,
+        "region": "FI",
+        "rho": 0.4,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.003024808369335949
+    },
+    {
+      "candidate_id": "r134_2131d6d75d5b69af",
+      "p": 337,
+      "package_id": "r134_2131d6d75d5b69af",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.5,
+        "m_x": 24,
+        "m_y": 1560,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.02,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          96,
+          64,
+          48
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00025682335211342966
+    },
+    {
+      "candidate_id": "r134_47e215a4fe08ebc1",
+      "p": 257,
+      "package_id": "r134_47e215a4fe08ebc1",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.1,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.05,
+        "m_x": 24,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          128
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 3.0248083693359493e-05
+    },
+    {
+      "candidate_id": "r134_50749b158220b4eb",
+      "p": 417,
+      "package_id": "r134_50749b158220b4eb",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 3,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.05,
+        "interlayer_gain": 0.2,
+        "m_x": 4,
+        "m_y": 1344,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.1,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          128,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.2915214919211734e-05
+    },
+    {
+      "candidate_id": "r134_50cda50a4d692519",
+      "p": 385,
+      "package_id": "r134_50cda50a4d692519",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 32,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 96,
+        "m_y": 2688,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.02,
+        "region": "FI",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0024929739307713865
+    },
+    {
+      "candidate_id": "r134_7362e39b53a243b2",
+      "p": 385,
+      "package_id": "r134_7362e39b53a243b2",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0024929739307713865
+    },
+    {
+      "candidate_id": "r134_75c4492b5ef11634",
+      "p": 961,
+      "package_id": "r134_75c4492b5ef11634",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.9,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.35,
+        "m_x": 0,
+        "m_y": 336,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.95,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          512,
+          256,
+          128,
+          64
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0009653643731923241
+    },
+    {
+      "candidate_id": "r134_7c29a8a7afd5fb3d",
+      "p": 337,
+      "package_id": "r134_7c29a8a7afd5fb3d",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 4,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 16,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.5,
+        "m_x": 24,
+        "m_y": 1560,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.02,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          128,
+          96,
+          64,
+          48
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.002568233521134297
+    },
+    {
+      "candidate_id": "r134_819baf69f92b36e7",
+      "p": 513,
+      "package_id": "r134_819baf69f92b36e7",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.2,
+        "m_x": 12,
+        "m_y": 1560,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          256,
+          256
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0018443953471560665
+    },
+    {
+      "candidate_id": "r134_8f8f3beb4b5a3c42",
+      "p": 513,
+      "package_id": "r134_8f8f3beb4b5a3c42",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "balanced",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.2,
+        "m_x": 4,
+        "m_y": 2880,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          256,
+          256
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0018443953471560665
+    },
+    {
+      "candidate_id": "r134_a2ecc21a0065284a",
+      "p": 193,
+      "package_id": "r134_a2ecc21a0065284a",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.1,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 64,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 0.2,
+        "m_x": 0,
+        "m_y": 480,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.1,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          96,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00035685941435985915
+    },
+    {
+      "candidate_id": "r134_a4097d177196013a",
+      "p": 385,
+      "package_id": "r134_a4097d177196013a",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "graph_summary_mean_std",
+        "input_fan_in": 8,
+        "input_policy": "balanced",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00024929739307713865
+    },
+    {
+      "candidate_id": "r134_a4d3ab3ea4d6e09f",
+      "p": 513,
+      "package_id": "r134_a4d3ab3ea4d6e09f",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 64,
+        "input_policy": "balanced",
+        "input_scale": 0.025,
+        "interlayer_gain": 0.2,
+        "m_x": 12,
+        "m_y": 1560,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          256,
+          256
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.0018443953471560665
+    },
+    {
+      "candidate_id": "r134_a6edc452b328c1cd",
+      "p": 417,
+      "package_id": "r134_a6edc452b328c1cd",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.2,
+        "calendar": "none",
+        "depth": 3,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.1,
+        "interlayer_gain": 0.1,
+        "m_x": 0,
+        "m_y": 1152,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.02,
+        "region": "FI",
+        "rho": 0.7,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          128,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 2.2915214919211734e-05
+    },
+    {
+      "candidate_id": "r134_b29f34ebe7788215",
+      "p": 385,
+      "package_id": "r134_b29f34ebe7788215",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.15,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 8,
+        "input_policy": "coverage",
+        "input_scale": 0.01,
+        "interlayer_gain": 1.0,
+        "m_x": 4,
+        "m_y": 2016,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.55,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          192,
+          192
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00024929739307713865
+    },
+    {
+      "candidate_id": "r134_f088322999691d52",
+      "p": 193,
+      "package_id": "r134_f088322999691d52",
+      "roles": [
+        "best_archived_RHS_scale_for_geometry"
+      ],
+      "spec": {
+        "alpha": 0.5,
+        "calendar": "none",
+        "depth": 2,
+        "feature_policy": "target_only",
+        "input_fan_in": 16,
+        "input_policy": "coverage",
+        "input_scale": 0.15,
+        "interlayer_gain": 0.2,
+        "m_x": 4,
+        "m_y": 240,
+        "readout": "pure_all_layers",
+        "recurrent_sparsity": 0.05,
+        "region": "FI",
+        "rho": 0.82,
+        "seed": 2026092501,
+        "source_window": 3120,
+        "units": [
+          96,
+          96
+        ],
+        "warmup_steps": 240
+      },
+      "tau0": 0.00035685941435985915
+    }
+  ],
+  "parent_preparation": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r141_recovery_rollout_20261019__FI/preparation.json",
+  "parent_preparation_sha256": "730c7820b88828faa36e8436118b063781a2632f843dc5761599333475247f33",
+  "parent_source": {
+    "branch": "work/pricefm-r141-recovery-rollout-20261019",
+    "head": "4cd92ac3654f16a84a67c8db6cfc7f381113aeb9"
+  },
+  "paths": 100,
+  "practical_margin": {
+    "absolute": 0.1,
+    "relative": 0.01
+  },
+  "primary_aggregation": "equal_three_inner_split_macro",
+  "producer_entry": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r150_cached_continuation_20261023/application/scripts/pricefm/497_run_pricefm_stage_r150_cached_continuation.py",
+  "producer_sha256": "0809eeea65ddb2cab6525974630d031dc6fffbf4ce132184d19693b887bbce21",
+  "promotion_authorized": false,
+  "proposal": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/parallel_plan_20261024_1222PDT/science/FI_PACKAGE_AND_COHORT_PROPOSAL.json",
+  "proposal_sha256": "4cf7b32ec725a74c6a35e8c7694ceb240824aa3da452b6a0108b722905df2acb",
+  "prospective_region_selection": "DK_2_default_local_metadata_verified_no_DK_1_remote_release",
+  "quantiles": [
+    0.1,
+    0.25,
+    0.45,
+    0.5,
+    0.55,
+    0.75,
+    0.9
+  ],
+  "region": "FI",
+  "regional_evidence": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/parallel_reassessment_20261024_1210PDT/science/FI_cached_readiness.json",
+  "regional_evidence_sha256": "75f8b8c49ce189424089ee15a05ecf5aba88c223fcb08dccec015a3b2b086002",
+  "required_branch": "work/pricefm-r152-parallel-recovery-20261024",
+  "seed0_trigger_fraction": 0.5,
+  "split_helper": "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008/application/scripts/pricefm/pricefm_r122_runtime.py",
+  "split_helper_sha256": "caba79edf8e6665cb9f801ce9cb494c4932e1175ef002cc774c80935d1416598",
+  "tag": "pricefm_stage_r152_fi_20261024",
+  "test_used_for_selection": false,
+  "wave_dispatch_seconds": 5400,
+  "wave_lease_seconds": 7200
+}

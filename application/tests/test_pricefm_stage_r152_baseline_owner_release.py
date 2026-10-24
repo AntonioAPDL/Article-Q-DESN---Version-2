@@ -229,4 +229,149 @@ class BaselineReleaseTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):m.launch(result['authority_path'],system=self.system)
 
 
+class GenerationThreeReleaseTests(unittest.TestCase):
+    _write=BaselineReleaseTests._write
+    identity=BaselineReleaseTests.identity
+    original_master=BaselineReleaseTests.original_master
+    def setUp(self):
+        BaselineReleaseTests.setUp(self)
+        second=m.prepare(self.release_path,['failed-old-probe','new-probe'],system=self.system)
+        self.second_path=Path(second['authority_path']);second_authority=self.read(self.second_path)
+        previous_owner=process(400,second_authority['control_intent']['argv'],list(range(30)))
+        previous_group='/user.slice/test/'+second_authority['new_unit'];previous_owner['cgroups']=[previous_group]
+        state=copy.deepcopy(self.state);state.update(new_unit=second_authority['new_unit'],config_path=second_authority['config_path'],
+            config_sha256=second_authority['config_sha256'],owner_recovery_authority_path=str(self.second_path),
+            owner_recovery_authority_sha256=self.sha(self.second_path),execution_control_source=second_authority['execution_source'],
+            guardian_unit='generation-two-guardian',error='original recorded child exit race')
+        epoch=dict(self.epoch,generation=2,owner=previous_owner,guardian_unit=state['guardian_unit'])
+        self.write(self.runtime/'state.json',state);self.write(self.runtime/'blocked.json',dict(state,error='original recorded child exit race'))
+        self.write(self.runtime/'resource_ownership_epoch.json',epoch);self.write(self.runtime/'owner_epochs/002.json',dict(epoch,phase='running'))
+        self.write(second_authority['execution_bridge_path'],dict(authority_sha256=self.sha(self.second_path),master_sha256=self.sha(self.shared/'master.json'),
+            new_unit=state['new_unit'],execution_control_source=state['execution_control_source'],actual_process=previous_owner))
+        self.second_bridge=Path(second_authority['execution_bridge_path'])
+        self.system.props[state['new_unit']]=dict(Id=state['new_unit'],MainPID='0',ActiveState='failed',KillMode='process',
+            WorkingDirectory=str(m.OLD_ROOT),ExecStart=' '.join(second_authority['control_intent']['argv']),ControlGroup=previous_group)
+        self.system.groups[previous_group]=[]
+        self._closed_cached_scope()
+        self.pool.verify_all_drained=Mock(return_value=dict(cleanup_verified=True,owned_pids=[],cleanup=[]))
+        self.execution=dict(self.execution,head='generation-three-source')
+        self.release.source_identity=lambda:copy.deepcopy(self.execution)
+        self.release.finite=lambda value,positive=False:isinstance(value,(int,float)) and not isinstance(value,bool) and (value>0 if positive else value>=0)
+        external=tempfile.TemporaryDirectory();self.addCleanup(external.cleanup);self.external=Path(external.name)
+        self.third_release=self.external/'baseline_generation_three_release.json'
+        self.third_probe=self.external/'baseline_generation_three_probe.json'
+        self.write(self.third_probe,dict(status='PASS_R152_PRIVATE_BASELINE_GENERATION_THREE_PROBE',generation=3,execution_source=self.execution,
+            original_master_sha256=self.sha(self.shared/'master.json'),scope_id='scope',original_start_epoch=1000.,original_expires_epoch=44200.,
+            generation_two_predecessor_absent=True,generation_three_predecessor_sha256_matches=True,exact_orphan_adoption=True,exact_cleanup=True,
+            cleanup_errors=[],scientific_runs=0,production_units=0,orphan_CPU_bound_seconds=5.,probe_driver_CPU_seconds=3.,baseline_control_charged_CPU_seconds=8.,
+            exit_stress=dict(status='PASS_PRIVATE_EXIT_STRESS',iterations=[dict(index=index,ready_snapshot=True,strict_session_checks=1,exit_confirmed=True) for index in range(12)],
+                strict_session_checks=12,scientific_runs=0,production_units=0)))
+    def _closed_cached_scope(self):
+        development=self.shared/'development'
+        self.write(development/'admissions/EE/EE-C1/lease.json',dict(admission_id='EE-C1',master_scope_id='scope',master_sha256=self.sha(self.shared/'master.json')))
+        self.write(development/'attempts/EE/paid_attempt/charge.json',dict(charged_CPU_seconds=126.923399553))
+        self.write(development/'controller.json',dict(unit='closed-cached-controller'))
+        self.write(development/'guardian.json',dict(unit='closed-cached-guardian'))
+        self.write(development/'terminal.json',dict(status='R152_GUARD_STOPPED',cleanup_verified=True,cleanup_errors=[],scope_id='scope',
+            master_sha256=self.sha(self.shared/'master.json'),control_charged_CPU_seconds=428.62592073485877))
+        self.write(development/'final_drained.json',dict(cleanup_verified=True,owned_pids=[],scope_id='scope',master_sha256=self.sha(self.shared/'master.json')))
+        self.write(self.shared/'development_closed.json',dict(scope_id='scope',master_sha256=self.sha(self.shared/'master.json'),future_admissions_closed=True,
+            cleanup_verified=True,terminal_sha256=self.sha(development/'terminal.json'),final_drained_sha256=self.sha(development/'final_drained.json')))
+    def prepare_three(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        return m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_baseline_only_freeze_and_prepare_keep_closed_cache_and_gen2_authority_unchanged(self):
+        before={path:path.read_bytes() for path in (self.shared/'development').rglob('*.json')}
+        previous=self.second_path.read_bytes();bridge=self.second_bridge.read_bytes();master=(self.shared/'master.json').read_bytes()
+        result=self.prepare_three();authority=self.read(result['authority_path'])
+        self.assertIn('/baseline/recovery_generation3/',result['authority_path'])
+        self.assertEqual(authority['expected_generation'],3);self.assertTrue(authority['baseline_only']);self.assertFalse(authority['cached_restart_authorized'])
+        self.assertEqual(authority['baseline_recovery_probe_CPU_seconds'],8.)
+        self.assertEqual(before,{path:path.read_bytes() for path in before})
+        self.assertEqual(self.second_path.read_bytes(),previous);self.assertEqual(self.second_bridge.read_bytes(),bridge)
+        self.assertEqual((self.shared/'master.json').read_bytes(),master)
+        self.assertTrue({'owner_epoch_001','owner_epoch_002','predecessor_authority','predecessor_execution_bridge'}.issubset(authority['snapshots']))
+    def test_generation_three_rejects_cached_reopening_or_new_C2_claim(self):
+        closed=self.read(self.shared/'development_closed.json');closed['future_admissions_closed']=False;self.write(self.shared/'development_closed.json',closed)
+        with self.assertRaisesRegex(RuntimeError,'sealed, closed'):m.freeze_generation_three(self.third_release,system=self.system)
+    def test_generation_three_rejects_actual_cached_survivor(self):
+        self.pool.verify_all_drained.side_effect=RuntimeError('cached worker remains live')
+        with self.assertRaisesRegex(RuntimeError,'remains live'):m.freeze_generation_three(self.third_release,system=self.system)
+    def test_generation_three_classifies_original_gen1_fit_group_too(self):
+        self.system.procs[999]=process(999,['unclassified'],list(range(15)))
+        self.system.groups[self.group].append(999)
+        with self.assertRaisesRegex(RuntimeError,'unclassified live member'):m.freeze_generation_three(self.third_release,system=self.system)
+    def test_generation_three_rejects_any_new_C2_cached_admission(self):
+        self.write(self.shared/'development/admissions/EE/EE-C2/lease.json',dict(admission_id='EE-C2'))
+        with self.assertRaisesRegex(RuntimeError,'spent EE-C1'):m.freeze_generation_three(self.third_release,system=self.system)
+    def test_changed_closed_cached_charge_cannot_be_ignored_after_freeze(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        self.write(self.shared/'development/attempts/EE/paid_attempt/charge.json',dict(charged_CPU_seconds=0))
+        with self.assertRaisesRegex(RuntimeError,'closed cached scope differs'):m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_generation_two_cached_source_release_cannot_authorize_generation_three(self):
+        with self.assertRaisesRegex(RuntimeError,'baseline-only generation-three release'):
+            m.prepare(self.release_path,[self.third_probe],system=self.system,generation=3)
+    def test_generation_three_requires_dead_gen2_private_predecessor_and_exact_cleanup(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        probe=self.read(self.third_probe);probe['generation_two_predecessor_absent']=False;self.write(self.third_probe,probe)
+        with self.assertRaisesRegex(RuntimeError,'complete generation-three'):m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_generation_three_preserves_inherited_max_three(self):
+        config_path=Path(self.read(self.runtime/'state.json')['config_path']);config=self.read(config_path);config['max_owner_generations']=2;self.write(config_path,config)
+        state=self.read(self.runtime/'state.json');state['config_sha256']=self.sha(config_path);self.write(self.runtime/'state.json',state)
+        m.freeze_generation_three(self.third_release,system=self.system)
+        with self.assertRaisesRegex(RuntimeError,'generation allowance exhausted'):m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_generation_three_rejects_vacuous_exit_stress(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        probe=self.read(self.third_probe);probe['exit_stress']['strict_session_checks']=0
+        for row in probe['exit_stress']['iterations']:row.update(ready_snapshot=False,strict_session_checks=0)
+        self.write(self.third_probe,probe)
+        with self.assertRaisesRegex(RuntimeError,'non-vacuous'):m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_generation_three_rejects_unconfirmed_stress_exit(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        probe=self.read(self.third_probe);probe['exit_stress']['iterations'][0]['exit_confirmed']=False;self.write(self.third_probe,probe)
+        with self.assertRaisesRegex(RuntimeError,'all exits confirmed'):m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_generation_three_rejects_checks_claimed_without_ready_child(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        probe=self.read(self.third_probe)
+        for row in probe['exit_stress']['iterations']:row['ready_snapshot']=False
+        probe['exit_stress']['iterations'][0].update(ready_snapshot=True,strict_session_checks=0)
+        probe['exit_stress']['strict_session_checks']=11;self.write(self.third_probe,probe)
+        with self.assertRaisesRegex(RuntimeError,'non-vacuous'):m.prepare(self.third_release,[self.third_probe],system=self.system,generation=3)
+    def test_baseline_probe_history_keeps_clean_failed_older_source_cost(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        prior=self.external/'failed_generation_three_probe.json';value=self.read(self.third_probe)
+        value.update(status='FAIL_R152_PRIVATE_BASELINE_ADOPTION_PROBE',execution_source=dict(self.execution,head='earlier-source'))
+        self.write(prior,value)
+        result=m.prepare(self.third_release,[prior,self.third_probe],system=self.system,generation=3)
+        authority=self.read(result['authority_path'])
+        self.assertEqual(authority['baseline_recovery_probe_CPU_seconds'],16.)
+        self.assertEqual(authority['probe_receipts'][0]['status'],'FAIL_R152_PRIVATE_BASELINE_ADOPTION_PROBE')
+    def test_unresolved_prior_baseline_probe_cleanup_cannot_be_hidden(self):
+        m.freeze_generation_three(self.third_release,system=self.system)
+        prior=self.external/'unclean_generation_three_probe.json';value=self.read(self.third_probe)
+        value.update(status='FAIL_R152_PRIVATE_BASELINE_ADOPTION_PROBE',exact_cleanup=False);self.write(prior,value)
+        with self.assertRaisesRegex(RuntimeError,'separate control charge differs'):
+            m.prepare(self.third_release,[prior,self.third_probe],system=self.system,generation=3)
+    def test_gen3_launch_health_allows_closed_loan_but_keeps_all_cached_bytes(self):
+        result=self.prepare_three();before={path:path.read_bytes() for path in (self.shared/'development').rglob('*.json')}
+        def publish(path,value):
+            answer=self.release.immutable(path,value)
+            if Path(path).name=='controller_attestation.json':
+                state=self.read(self.runtime/'state.json');state['guardian_unit']='generation-three-guardian';self.write(self.runtime/'state.json',state)
+                epoch=self.read(self.runtime/'resource_ownership_epoch.json')
+                epoch.update(generation=3,phase='running',owner=self.system.procs[500],guardian_unit=state['guardian_unit'],
+                    predecessor_sha256=self.sha(self.runtime/'owner_epochs/002.json'))
+                self.write(self.runtime/'resource_ownership_epoch.json',epoch);self.write(self.runtime/'owner_epochs/003.json',epoch)
+            return answer
+        with patch.object(m,'immutable',side_effect=publish):receipt=m.launch(result['authority_path'],system=self.system)
+        self.assertEqual(receipt['status'],'R152_BASELINE_OWNER_ADOPTED_GENERATION_THREE');self.assertEqual(receipt['owner_generation'],3)
+        self.assertTrue(self.adapter.verify_baseline.call_args.kwargs['allow_expired'])
+        self.assertEqual(before,{path:path.read_bytes() for path in before});self.assertFalse(receipt['cached_restart_authorized'])
+        self.assertEqual(self.read(self.runtime/'owner_epochs/003.json')['predecessor_sha256'],self.sha(self.runtime/'owner_epochs/002.json'))
+    def test_old_gen2_seal_change_is_rejected(self):
+        result=self.prepare_three();self.write(self.runtime/'owner_epochs/002.json',dict(changed=True))
+        with self.assertRaisesRegex(RuntimeError,'sealed predecessor lineage changed'):
+            m.validate_authority(result['authority_path'],system=self.system,require_staged=False)
+
+
 if __name__=='__main__':unittest.main()

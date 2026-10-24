@@ -47,6 +47,39 @@ class BoundedProcReads(unittest.TestCase):
                 patch.object(Path,'read_bytes',side_effect=[b'R\0fit.R\0',b'R\0fit.R\0']),\
                 patch.object(m.os,'readlink',return_value='/source'),patch.object(m.time,'sleep'):
             self.assertEqual(self.system.process(123),new)
+    def test_original_session_check_retires_empty_exiting_observed_worker(self):
+        parent=process(999,raw=b'python\0parent\0',session=999);parent['start_ticks']=200
+        worker=process(123,session=999);empty=dict(worker,argv=[],cmdline_sha256=hashlib.sha256(b'').hexdigest())
+        for mode in ('empty_value','missing_cwd','denied_cwd'):
+            child_samples=iter([stat(),stat(),stat('S'),stat('Z')])
+            def sample(pid):return dict(pid=999,start_ticks=200,state='R') if pid==999 else next(child_samples)
+            def read(pid):
+                if pid==999:return parent
+                if mode=='denied_cwd':raise PermissionError('cwd released while state still R')
+                return empty if mode=='empty_value' else None
+            def raw(path,*args,**kwargs):return b'python\0parent\0' if path.parent.name=='999' else b''
+            system=object.__new__(m.RecoverySystem);system.boot_id='boot'
+            job=dict(process=parent,session_id=999,cpus=[24],observed_children=[worker]);system.seed_expected(dict(active=dict(A=job)))
+            with self.subTest(mode=mode),patch.object(system,'stat_sample',side_effect=sample),patch.object(c.System,'process',side_effect=read),\
+                    patch.object(Path,'read_bytes',new=raw),patch.object(m.os,'readlink',return_value='/source'),\
+                    patch.object(system,'processes',return_value=[parent]),patch.object(m.time,'sleep'):
+                self.assertEqual(c.session_members(job,system),[parent])
+            events=[row for row in system.metadata_events if row['pid']==123]
+            self.assertTrue(any(row['kind']=='EMPTY_EXIT_OR_EXEC' for row in events))
+            self.assertTrue(any(row['kind']=='EMPTY_THEN_TERMINAL_OR_GONE' for row in events))
+    def test_stable_live_empty_command_never_returns_a_process(self):
+        value=process(raw=b'');value['argv']=[]
+        self.system.seed_expected(dict(active=dict(A=dict(process=process(),observed_children=[]))))
+        with patch.object(self.system,'stat_sample',return_value=stat()),patch.object(c.System,'process',return_value=value) as read,\
+                patch.object(Path,'read_bytes',return_value=b''),patch.object(m.os,'readlink',return_value='/source'),patch.object(m.time,'sleep'):
+            with self.assertRaisesRegex(RuntimeError,'stable live empty command metadata') as error:self.system.process(123)
+        self.assertEqual(read.call_count,21);self.assertIn('"pid": 123',str(error.exception))
+        self.assertIn('old_cmdline_sha256',str(error.exception));self.assertIn('new_cmdline_sha256',str(error.exception))
+    def test_empty_command_can_restore_same_lifetime_nonempty_snapshot(self):
+        empty=process(raw=b'');empty['argv']=[];ready=process()
+        with patch.object(self.system,'stat_sample',return_value=stat()),patch.object(c.System,'process',side_effect=[empty,ready]),\
+                patch.object(Path,'read_bytes',side_effect=[b'',b'python\0worker\0']),patch.object(m.os,'readlink',return_value='/source'),patch.object(m.time,'sleep'):
+            self.assertEqual(self.system.process(123),ready)
     def ownership(self,path,*args,**kwargs):return types.SimpleNamespace(st_uid=0 if path.name=='cmdline' else os.getuid())
     def test_census_live_to_protected_terminal_race_is_bounded(self):
         with patch.object(Path,'stat',new=lambda path,*a,**kw:self.ownership(path,*a,**kw)),patch.object(Path,'read_text',return_value='python\n'),\
@@ -136,14 +169,14 @@ class DelegationBridge(unittest.TestCase):
         self.master=dict(scope_id='scope',start_epoch=1000.,expires_epoch=44200.)
         self.write(self.shared/'master.json',self.master)
         self.path=self.home/'authority/authority.json';self.bridge=self.path.parent/'execution_bridge.json'
-        self.authority=dict(execution_source=self.source,execution_bridge_path=str(self.bridge))
+        self.authority=dict(execution_source=self.source,execution_bridge_path=str(self.bridge),expected_generation=2)
         self.write(self.path,self.authority)
         self.state=dict(owner_recovery_authority_path=str(self.path),owner_recovery_authority_sha256=c.sha(self.path),
             execution_control_source=self.source,new_unit='unit',config_sha256='cfg')
         self.write(self.runtime/'state.json',self.state)
-        self.proof=dict(owner=self.owner,master_sha256=c.sha(self.shared/'master.json'))
+        self.proof=dict(owner=self.owner,master_sha256=c.sha(self.shared/'master.json'),generation=2)
         self.bridge_value=dict(execution_control_source=self.source,authority_sha256=c.sha(self.path),master_sha256=self.proof['master_sha256'],
-            new_unit='unit',config_sha256='cfg',delegated_core_path=str(m.CORE_ENTRY),delegated_core_sha256=c.sha(m.CORE_ENTRY),actual_process=self.owner)
+            new_unit='unit',config_sha256='cfg',delegated_core_path=str(m.CORE_ENTRY),delegated_core_sha256=c.sha(m.CORE_ENTRY),actual_process=self.owner,expected_generation=2)
         self.write(self.bridge,self.bridge_value);m._SOURCE_CACHE.clear()
     def write(self,path,value):c.atomic(path,value)
     def test_health_reader_injects_recovery_system_and_checks_truthful_bridge(self):
@@ -171,6 +204,15 @@ class DelegationBridge(unittest.TestCase):
         self.proof['owner']['argv']=[str(m.ENTRY)]
         with patch.object(c,'baseline_ownership',return_value=self.proof):
             with self.assertRaisesRegex(RuntimeError,'owner bridge differs'):m.verify_baseline(self.runtime,self.master,object())
+    def test_generation_three_health_uses_explicit_baseline_only_loan_mode(self):
+        self.authority['expected_generation']=3;self.write(self.path,self.authority)
+        self.state['owner_recovery_authority_sha256']=c.sha(self.path);self.write(self.runtime/'state.json',self.state)
+        self.bridge_value.update(expected_generation=3,authority_sha256=c.sha(self.path));self.write(self.bridge,self.bridge_value)
+        self.proof['generation']=3
+        with patch.object(c,'baseline_ownership',return_value=self.proof) as health,\
+                patch.object(m,'module',return_value=types.SimpleNamespace(verify_source=lambda source:None)):
+            self.assertEqual(m.verify_baseline(self.runtime,self.master,object(),allow_expired=True)['generation'],3)
+            self.assertTrue(health.call_args.kwargs['allow_expired'])
     def test_run_executes_old_core_with_explicit_adapter_and_same_clock(self):
         unit='pricefm-r152-muscat-baseline-'+'a'*32+'.service';config=c.read_config();config['new_unit']=unit
         config_path=self.home/'append_only_config.json';self.write(config_path,config)
@@ -226,5 +268,63 @@ class PrivateProbeCleanup(unittest.TestCase):
             self.assertTrue(result['exact_cleanup']);self.assertEqual(result['cleanup_errors'],[])
             self.assertEqual(census.call_count,1)
             self.assertEqual(result['owned_cleanup_receipt_sha256'],c.sha(folder/'cleanup.json'))
+    def generation_three_case(self,folder,timeout=False):
+        master_path=folder/'original_master.json';c.atomic(master_path,dict(scope_id='scope',start_epoch=1000.,expires_epoch=44200.))
+        source=dict(head='new-generation-three');oldsource=dict(head='cba')
+        outer=process(os.getpid(),cwd=str(m.OLD_ROOT));old=process(501,cwd=str(m.OLD_ROOT));orphan=process(502,session=501,cwd=str(m.OLD_ROOT))
+        class System:
+            boot_id='boot'
+            def __init__(self):self.current=os.getpid();self.procs={os.getpid():outer,502:orphan}
+            def process(self,pid):return copy.deepcopy(self.procs.get(self.current if pid==os.getpid() else pid))
+            def stat_sample(self,pid):
+                row=self.procs.get(pid)
+                return dict(pid=pid,start_ticks=row['start_ticks'],state='R') if row else None
+            def terminal_or_gone(self,row):return row is None or row['state'] in ('Z','X','x')
+        system=System();job=dict(disposable=True,process=old,child=orphan,observed_children=[orphan],session_id=501,cpus=[24])
+        def popen(argv,**kwargs):
+            role='old' if str(m.CORE_ENTRY) in argv else 'publish' if 'publish-two' in argv else 'stress';pid={'old':501,'publish':503,'stress':504}[role]
+            if role!='old':
+                system.procs[pid]=process(pid,cwd=str(m.OLD_ROOT));system.procs[pid]['argv']=list(argv)
+            class Child:
+                returncode=0
+                def communicate(self,timeout):
+                    if role=='old':c.immutable(folder/'orphan_job.json',job)
+                    elif role=='publish':
+                        if fail_timeout:raise m.subprocess.TimeoutExpired(argv,timeout)
+                        system.current=503;second=c.publish_owner(folder,c.read(folder/'private_state.json'),system,c.read(master_path));system.current=os.getpid()
+                        c.immutable(folder/'generation_two_receipt.json',second);system.procs.pop(503)
+                    else:
+                        c.immutable(folder/'exit_stress.json',dict(status='PASS_PRIVATE_EXIT_STRESS',iterations=[dict(ready_snapshot=True,exit_confirmed=True)],strict_session_checks=1))
+                        system.procs.pop(504)
+                    return '',''
+            fail_timeout=timeout;child=Child();child.pid=pid;return child
+        def cleanup(*args):
+            system.procs.pop(502,None);value=dict(cleanup_verified=True,signals=[],owned_pids=[]);c.immutable(folder/'cleanup.json',value);return value
+        return system,source,oldsource,types.SimpleNamespace(source_identity=lambda:source,MASTER=master_path),popen,cleanup
+    def test_private_child_publishes_two_then_dead_predecessor_allows_three_same_clock(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm-r152-baseline-probe-',dir='/tmp') as temporary:
+            folder=Path(temporary);system,source,oldsource,release,popen,cleanup=self.generation_three_case(folder);output=folder/'result.json'
+            with patch.object(m,'module',return_value=release),patch.object(m,'RecoverySystem',return_value=system),\
+                    patch.object(m.tempfile,'mkdtemp',return_value=temporary),patch.object(c,'source_identity',return_value=oldsource),\
+                    patch.object(m.subprocess,'Popen',side_effect=popen),patch.object(c,'session_members',return_value=[system.procs[502]]),\
+                    patch.object(c,'cleanup_disposable_probe',side_effect=cleanup):
+                result=m.capability_probe(output,generation=3)
+            self.assertEqual(result['status'],'PASS_R152_PRIVATE_BASELINE_GENERATION_THREE_PROBE')
+            self.assertTrue(result['generation_two_predecessor_absent']);self.assertTrue(result['generation_three_predecessor_sha256_matches'])
+            self.assertEqual(c.read(folder/'owner_epochs/003.json')['predecessor_sha256'],c.sha(folder/'owner_epochs/002.json'))
+            self.assertEqual(result['original_start_epoch'],1000.);self.assertEqual(result['original_expires_epoch'],44200.)
+            self.assertEqual(result['baseline_control_charged_CPU_seconds'],result['probe_driver_CPU_seconds']+result['orphan_CPU_bound_seconds'])
+    def test_private_publisher_timeout_cannot_claim_whole_probe_cleanup(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm-r152-baseline-probe-',dir='/tmp') as temporary:
+            folder=Path(temporary);system,source,oldsource,release,popen,cleanup=self.generation_three_case(folder,timeout=True);output=folder/'result.json'
+            signals=[]
+            def kill(pid,number):signals.append(pid);system.procs.pop(pid,None)
+            with patch.object(m,'module',return_value=release),patch.object(m,'RecoverySystem',return_value=system),\
+                    patch.object(m.tempfile,'mkdtemp',return_value=temporary),patch.object(c,'source_identity',return_value=oldsource),\
+                    patch.object(m.subprocess,'Popen',side_effect=popen),patch.object(c,'session_members',return_value=[system.procs[502]]),\
+                    patch.object(c,'cleanup_disposable_probe',side_effect=cleanup),patch.object(m.os,'kill',side_effect=kill):
+                with self.assertRaisesRegex(RuntimeError,'receipt preserved'):m.capability_probe(output,generation=3)
+            result=c.read(output);self.assertFalse(result['exact_cleanup']);self.assertIn(503,signals)
+            self.assertTrue(any('coverage not inferred' in error for error in result['cleanup_errors']))
 
 if __name__=='__main__':unittest.main()

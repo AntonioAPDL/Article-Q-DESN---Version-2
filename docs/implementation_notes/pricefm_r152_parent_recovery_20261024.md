@@ -108,3 +108,26 @@ per five-second poll. An exit, free slot or numerical/admin cutoff returns to
 the full transition path. This avoids redundant same-poll checks without a
 cross-call ownership or PID cache. Scientific nomination and dispatch rules
 remain the original implementation.
+
+After the generation-two owner stopped, EE-C1 drained and the cached tranche
+closed with no new complete component. Its verified checkpoint packets and
+all failed attempt charges remain reusable evidence; the unclaimed C2 is not
+automatically reopened. The final baseline-only repair handles empty command
+lines during exit with bounded fresh reads and records exact PID diagnostics.
+It preserves strict child identity checks and uses only the third generation
+already permitted by the original limit.
+
+The baseline-only sequence is:
+
+```text
+512... freeze --generation 3 --output BASELINE_RELEASE.json
+511... probe --generation 3 --output BASELINE_PROBE.json
+512... prepare --generation 3 --release BASELINE_RELEASE.json --probe BASELINE_PROBE.json
+512... launch --authority BASELINE_AUTHORITY.json
+```
+
+That authority requires the cached terminal, closure and real unit drainage;
+it preserves their bytes and does not create a new cached grant. Baseline
+health after cached closure uses the explicit baseline-only verification mode.
+A future screening must follow the separately documented proposal, retaining
+all spent admissions, partial seals and cumulative costs.

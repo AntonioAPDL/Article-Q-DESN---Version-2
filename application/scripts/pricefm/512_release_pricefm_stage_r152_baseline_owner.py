@@ -62,7 +62,10 @@ class System:
         self.process_api=adapter().RecoverySystem();self.unit_api=pool().System();self.boot_id=self.process_api.boot_id
     def __getattr__(self,name):return getattr(self.process_api,name)
     def unit(self,name):return self.unit_api.unit(name)
-    def members(self,cgroup):return self.unit_api.members(cgroup)
+    def members(self,cgroup):
+        # Inactive/unloaded control units legitimately expose no current path.
+        if not cgroup:return []
+        return self.unit_api.members(cgroup)
     def uid(self,pid):return (Path('/proc')/str(pid)).stat().st_uid
     def control_process(self,pid):
         value=pool().legacy().process(pid)

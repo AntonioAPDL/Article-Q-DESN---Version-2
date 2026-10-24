@@ -23,6 +23,19 @@ def process(pid,argv,cpus,session=None):
         argv=argv,cwd=str(m.OLD_ROOT),cpus=cpus,affinity=cpus,scheduler=0,session_id=session or pid,state='S',cgroups=[])
 
 
+class MembersContract(unittest.TestCase):
+    def test_inactive_unit_empty_cgroup_is_absence(self):
+        system=object.__new__(m.System);system.unit_api=Mock()
+        self.assertEqual(system.members(''),[])
+        system.unit_api.members.assert_not_called()
+
+    def test_nonempty_cgroup_retains_strict_ownership_reader(self):
+        system=object.__new__(m.System);system.unit_api=Mock()
+        system.unit_api.members.return_value=[123]
+        self.assertEqual(system.members('/user.slice/owned.service'),[123])
+        system.unit_api.members.assert_called_once_with('/user.slice/owned.service')
+
+
 class FakeSystem:
     def __init__(self,test):
         self.test=test;self.procs={};self.props={};self.groups={};self.started=[];self.stopped=[]

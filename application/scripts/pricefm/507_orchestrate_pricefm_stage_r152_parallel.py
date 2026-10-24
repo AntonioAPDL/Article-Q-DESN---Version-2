@@ -423,11 +423,15 @@ def capability_probe(output,config_path=CONFIG):
             record=dict(case=case,unit=saved['unit'],observation=read(report))
             if case=='positive_thread_violation':
                 try:pool.hardening().strict_worker_policy(system,saved)
-                except RuntimeError as expected:record['expected_rejection']=str(expected)
+                except RuntimeError as expected:
+                    record['expected_rejection']=str(expected)
+                    if 'active process OS thread count changed' not in str(expected):
+                        raise RuntimeError('thread probe failed at a different policy boundary') from expected
                 else:raise RuntimeError('stable two-thread policy violation was not rejected')
                 if record['observation']['process']['threads']!=2:raise RuntimeError('thread fault did not reach its intended boundary')
             else:
-                pool.hardening().strict_worker_policy(system,saved)
+                if not pool.hardening().strict_worker_policy(system,saved):
+                    raise RuntimeError('compliant payload exited before live policy proof')
                 if record['observation']['process']['threads']!=1:raise RuntimeError('compliant payload owns additional threads')
             if case=='parent_death':
                 props=system.unit(parent_unit);pool.legacy().verify_owned(parent,props)

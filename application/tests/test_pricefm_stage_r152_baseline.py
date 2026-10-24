@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 import time
+import types
 import unittest
 from unittest.mock import patch
 
@@ -119,6 +120,96 @@ class BaselineBoundary(unittest.TestCase):
         start=time.time()
         value=dict(pending,**partition_release_fields,started_epoch=start,start_epoch=start,expires_epoch=start+43200)
         self.write(Path(shared_runtime)/'master.json',value);return value
+
+    def test_census_skips_foreign_UID_before_process_read(self):
+        system=object.__new__(m.System);system.boot_id='test-boot'
+        with patch.object(m.Path,'iterdir',return_value=iter([Path('/proc/123')])),\
+                patch.object(m.Path,'stat',return_value=types.SimpleNamespace(st_uid=os.getuid()+1)),\
+                patch.object(system,'process',side_effect=PermissionError('foreign metadata')) as inspect:
+            self.assertEqual(system.processes(),[]);inspect.assert_not_called()
+
+    def test_census_skips_protected_foreign_metadata_with_own_directory_UID(self):
+        system=object.__new__(m.System);system.boot_id='test-boot'
+        def ownership(path,*args,**kwargs):
+            return types.SimpleNamespace(st_uid=0 if path.name=='cmdline' else os.getuid())
+        with patch.object(m.Path,'iterdir',return_value=iter([Path('/proc/123')])),\
+                patch.object(m.Path,'stat',new=ownership),\
+                patch.object(m.Path,'read_text',return_value='(sd-pam)\n'),\
+                patch.object(m.Path,'read_bytes',side_effect=PermissionError('protected cmdline')) as read:
+            self.assertEqual(system.processes(),[]);read.assert_not_called()
+
+    def test_unknown_protected_own_UID_process_blocks_census(self):
+        system=object.__new__(m.System);system.boot_id='test-boot'
+        def ownership(path,*args,**kwargs):
+            return types.SimpleNamespace(st_uid=0 if path.name=='cmdline' else os.getuid())
+        with patch.object(m.Path,'iterdir',return_value=iter([Path('/proc/123')])),\
+                patch.object(m.Path,'stat',new=ownership),\
+                patch.object(m.Path,'read_text',return_value='python\n'),\
+                patch.object(m.Path,'read_bytes') as read:
+            with self.assertRaisesRegex(PermissionError,'unrecognized protected own-UID process'):
+                system.processes()
+            read.assert_not_called()
+
+    def test_own_unreadable_process_metadata_fails_closed(self):
+        system=object.__new__(m.System);system.boot_id='test-boot'
+        with patch.object(m.Path,'stat',return_value=types.SimpleNamespace(st_uid=os.getuid())),\
+                patch.object(m.Path,'read_bytes',side_effect=PermissionError('own cmdline')):
+            with self.assertRaisesRegex(PermissionError,'own cmdline'):system.process(123)
+
+    def test_recorded_protected_child_fails_closed_even_if_census_filters_it(self):
+        child=proc(301,session=300);parent=proc(300)
+        job=dict(process=parent,session_id=300,cpus=list(range(30)),observed_children=[child])
+        def inspect(pid):
+            if pid==301:raise PermissionError('recorded protected cwd')
+            return None
+        with patch.object(self.system,'process',side_effect=inspect),\
+                patch.object(self.system,'processes',return_value=[]) as census:
+            with self.assertRaisesRegex(PermissionError,'recorded protected cwd'):
+                m.session_members(job,self.system)
+            census.assert_not_called()
+
+    def test_recorded_live_child_cannot_disappear_in_filtered_census(self):
+        child=proc(301,session=300);parent=proc(300)
+        job=dict(process=parent,session_id=300,cpus=list(range(30)),observed_children=[child])
+        self.system.procs[301]=child
+        with patch.object(self.system,'processes',return_value=[]):
+            self.assertEqual(m.session_members(job,self.system),[child])
+
+    def test_probe_census_failure_finally_drains_exact_disposable_child(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm-r152-baseline-probe-',dir='/tmp') as temporary:
+            folder=Path(temporary);child=proc(300);publisher=proc(200)
+            job=dict(disposable=True,process=publisher,child=child,observed_children=[child],
+                session_id=200,cpus=list(range(30)))
+            self.system.procs[300]=child;signals=[]
+            class Publisher:
+                returncode=0
+                def communicate(inner,timeout):
+                    m.immutable(folder/'orphan_job.json',job);return '',''
+            def kill(pid,number):signals.append((pid,number));self.system.procs.pop(pid,None)
+            with patch.object(m,'source_identity',return_value=self.source),\
+                    patch.object(m,'System',return_value=self.system),\
+                    patch.object(m.tempfile,'mkdtemp',return_value=temporary),\
+                    patch.object(m.subprocess,'run',return_value=types.SimpleNamespace(returncode=0)),\
+                    patch.object(m.subprocess,'Popen',return_value=Publisher()),\
+                    patch.object(m,'guard_once',return_value='wait'),\
+                    patch.object(m,'session_members',side_effect=PermissionError('own census denied')),\
+                    patch.object(m.os,'kill',side_effect=kill):
+                self.system.host=lambda:'muscat'
+                with self.assertRaisesRegex(PermissionError,'own census denied'):
+                    m.capability_probe(self.path/'failed_probe.json')
+            self.assertEqual(signals,[(300,m.signal.SIGTERM)])
+            self.assertTrue(m.read(folder/'cleanup.json')['cleanup_verified'])
+            self.assertFalse((self.path/'failed_probe.json').exists())
+
+    def test_disposable_cleanup_never_signals_reused_PID(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm-r152-baseline-probe-',dir='/tmp') as temporary:
+            folder=Path(temporary);child=proc(300);publisher=proc(200)
+            m.immutable(folder/'authority.json',dict(owner=self.owner))
+            current=copy.deepcopy(child);current['start_ticks']+=1;self.system.procs[300]=current
+            job=dict(disposable=True,process=publisher,child=child)
+            with patch.object(m.os,'kill') as kill:
+                result=m.cleanup_disposable_probe(folder,self.system,job)
+            kill.assert_not_called();self.assertTrue(result['cleanup_verified'])
 
     def test_partition_valid_and_exactly_thirty(self):
         m.validate_config(self.config)

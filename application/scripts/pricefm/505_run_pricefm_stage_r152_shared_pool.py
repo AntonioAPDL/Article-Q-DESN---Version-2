@@ -405,17 +405,20 @@ def required_scenarios(study,q):
     return [dict(names=[n for n in names if n not in q.get('unfunded_pending',[])])]
 
 
-def projected_study_jobs(study,q,scenario,c, *, reserve=True):
+def projected_study_jobs(study,q,scenario,c, *, reserve=True,delivered_share=None):
     prices=study.pricing()['task_estimates'];jobs=[]
     for name in scenario['names']:
         estimate=prices[name]
+        frozen=c['EE_conservative_share'] if study.study_id=='EE' else study.pricing()['resource_projection']['conservative_idle_share']
+        factor=max(1.,frozen/delivered_share) if delivered_share else 1.
         jobs.append(dict(study=study.study_id,name=name,phase=task_phase(name),
-            estimated_cpu_seconds=estimate['estimated_cpu_seconds'],estimated_wall_seconds=estimate['estimated_wall_seconds']))
+            estimated_cpu_seconds=estimate['estimated_cpu_seconds'],estimated_wall_seconds=estimate['estimated_wall_seconds']*factor))
     if reserve:
         if study.study_id=='EE':cpu=c['EE_replacement_CPU_seconds'];share=c['EE_conservative_share']
         else:
             cpu=max(row['estimated_cpu_seconds'] for row in prices.values())
             share=study.pricing()['resource_projection']['conservative_idle_share']
+        if delivered_share:share=min(share,delivered_share)
         jobs.append(dict(study=study.study_id,name='__replacement_reserve__',phase=1,
             estimated_cpu_seconds=cpu,estimated_wall_seconds=cpu/share))
     return jobs
@@ -624,7 +627,7 @@ def start_payload(system,c,folder,task,cpu,lease,controller,target_argv,source,p
         source_head=source['head'],study_source_head=scientific_head,master_scope_id=master['scope_id'],
         estimated_cpu_seconds=estimate,estimated_wall_seconds=task.get('estimated_wall_seconds',estimate),
         global_slot_path=str(slot_path),global_slot_sha256=digest(slot_path),
-        accounting_path=str(attempt/'admin_accounting'),started_epoch=time.time())
+        accounting_path=str(attempt/'admin_accounting'),started_epoch=time.time(),started_monotonic=time.monotonic())
     immutable(attempt/'intent.json',saved);atomic(attempt/'ownership.json',saved)
     try:
         system.start(unit,saved['description'],argv,cpus=[cpu],idle=True,
@@ -641,7 +644,7 @@ def start_payload(system,c,folder,task,cpu,lease,controller,target_argv,source,p
         if proc is None or not hardening().strict_worker_policy(system,saved):raise RuntimeError('payload first-exec policy failed')
         if controller['unit'] not in props.get('BindsTo','').split() or controller['unit'] not in props.get('After','').split():
             raise RuntimeError('payload parent-death binding missing')
-        saved['cpu_sample']=dict(epoch=time.monotonic(),cpu_seconds=r.cpu_seconds(proc['pid']) or 0.,pid=proc['pid'],
+        saved['cpu_sample']=dict(epoch=time.monotonic(),monotonic=True,cpu_seconds=r.cpu_seconds(proc['pid']) or 0.,pid=proc['pid'],
             start_ticks=proc['start_ticks'],boot_id=proc['boot_id'])
         atomic(attempt/'ownership.json',saved)
         receipt=dict(schema_version=1,stage=stage,task=name,cpu=cpu,expected_affinity=[cpu],expected_scheduler=5,
@@ -753,10 +756,56 @@ def drain_scope(system,c,runtime,reason, *, deadline=None):
         cleanup_scope='REGISTERED_NUMERICAL_BENCHMARK_ASSESSMENT_UNITS_ONLY')
 
 
+def EE_final_CPU_observation(saved,study):
+    """Validate only this immutable producer invocation, never packet completion alone."""
+    try:
+        prep=study.read_preparation();invocation=saved['attested']['InvocationID']
+        folder=study.OUT/'cpu_accounting'/saved['task']/invocation
+        started=read(folder/'started.json');value=read(folder/'observed.json')
+        task=study.api.task_by_name(saved['task'],prep)
+        policy_path=Path(saved['policy_receipt']);policy=read(policy_path)
+        expected_policy=dict(task=saved['task'],source_head=prep['source']['head'],worker_invocation_id=invocation,
+            unit=saved['unit'],lease_id=saved['lease_id'],resource_source_head=saved['source_head'],master_scope_id=saved['master_scope_id'])
+        if (read(folder/'observed.seal.json')!={'sha256':digest(folder/'observed.json'),'source':prep['source']}
+            or started.get('source')!=prep['source'] or started.get('task')!=saved['task']
+            or started.get('policy_invocation_id')!=invocation
+            or started.get('scientific_identity_sha256')!=task['scientific_identity_sha256']
+            or any(value.get(k)!=v for k,v in started.items())
+            or started.get('policy_receipt_path')!=str(policy_path)
+            or started.get('policy_receipt_sha256')!=digest(policy_path)
+            or any(policy.get(k)!=v for k,v in expected_policy.items())
+            or value.get('completed_component') is not True
+            or value.get('post_observation_exit_allowance_CPU_seconds')!=5.
+            or value.get('hard_CPU_quota') is not False or value.get('exact_exit_CPU_measurement') is not False
+            or not study.task_complete(saved['task'])
+            or value.get('task_final_seal_sha256')!=digest(study.OUT/'tasks_done'/saved['task']/'completed_evidence.json')):
+            raise RuntimeError('EE completed CPU observation identity differs')
+        numbers=[value[k] for k in ('observed_process_CPU_seconds','observed_terminated_children_CPU_seconds','observed_total_CPU_seconds')]
+        if any(not finite(number) for number in numbers) or not math.isclose(numbers[0]+numbers[1],numbers[2],abs_tol=1e-9):
+            raise RuntimeError('EE completed CPU observation amount differs')
+        return numbers[2]
+    except (OSError,KeyError,TypeError,ValueError,RuntimeError):return None
+
+
+def completed_delivery_share(saved,charge, *, now=None,monotonic_now=None):
+    """Actual CPU excludes price reservations and the five-second exit allowance."""
+    actual=charge.get('live_or_unit_CPU_lower_bound',0.)
+    if charge.get('verified_final_observation') and finite(charge.get('verified_observed_CPU_seconds')):
+        actual=max(actual,charge['verified_observed_CPU_seconds'])
+    if not finite(actual):raise RuntimeError('completed delivery CPU invalid')
+    if 'started_monotonic' in saved:
+        elapsed=(time.monotonic() if monotonic_now is None else monotonic_now)-saved['started_monotonic']
+    else:elapsed=(time.time() if now is None else now)-saved['started_epoch']
+    if not finite(elapsed,positive=True):raise RuntimeError('completed delivery clock invalid')
+    share=actual/elapsed
+    if share>1.05:raise RuntimeError('completed one-core delivery observation exceeds physical capacity')
+    return min(1.,share)
+
+
 def freeze_attempt_charge(path,saved,observation,study=None):
     path=Path(path);target=path.parent/'charge.json'
     if target.exists():return read(target)
-    amount=max(saved['estimated_cpu_seconds'],observation['cpu_seconds']+5);verified=False;basis='CONSERVATIVE_FULL_RESERVATION'
+    amount=max(saved['estimated_cpu_seconds'],observation['cpu_seconds']+5);verified=False;verified_observed=None;basis='CONSERVATIVE_FULL_RESERVATION'
     admin=Path(saved['accounting_path'])/'observed.json'
     seal=Path(saved['accounting_path'])/'observed.seal.json'
     if admin.is_file() and seal.is_file():
@@ -783,13 +832,15 @@ def freeze_attempt_charge(path,saved,observation,study=None):
             if any(not finite(number) for number in numbers) or not math.isclose(numbers[0]+numbers[1],numbers[2],abs_tol=1e-9):
                 raise RuntimeError('admin CPU amount invalid')
             amount=max(numbers[2]+5.,observation['cpu_seconds']+5.)
-            verified=True;basis='SEALED_FULL_PROCESS_ADMIN_OBSERVATION_PLUS_FIVE_SECOND_TAIL'
+            verified=True;verified_observed=numbers[2];basis='SEALED_FULL_PROCESS_ADMIN_OBSERVATION_PLUS_FIVE_SECOND_TAIL'
         except (OSError,KeyError,TypeError,ValueError,RuntimeError):pass
     if saved['kind']=='numerical' and isinstance(study,EEStudy):
         # This helper verifies exact original source, invocation, scientific
         # identity and final packet seal; absent/partial receipts keep prices.
         amount=max(hardening().attempt_charge(saved,study.api,study.read_preparation()),observation['cpu_seconds']+5)
-        verified=study.task_complete(saved['task']);basis='IMMUTABLE_EE_ATTEMPT_ACCOUNTING'
+        verified_observed=EE_final_CPU_observation(saved,study);verified=verified_observed is not None
+        amount=max(amount,verified_observed+5 if verified else saved['estimated_cpu_seconds'])
+        basis='IMMUTABLE_EE_ATTEMPT_ACCOUNTING'
     elif saved['kind']=='numerical' and study is not None:
         if hasattr(study,'attempt_charge'):
             value=study.attempt_charge(saved)
@@ -801,11 +852,12 @@ def freeze_attempt_charge(path,saved,observation,study=None):
                     raise RuntimeError('scientific attempts are not completely represented in the canonical owned ledger')
             if finite(candidate):
                 verified=bool(isinstance(value,dict) and value.get('verified_final_observation'))
+                if verified and finite(value.get('observed_CPU_seconds')):verified_observed=value['observed_CPU_seconds']
                 amount=max(candidate,observation['cpu_seconds']+5,0 if verified else saved['estimated_cpu_seconds'])
                 basis='REGIONAL_VERIFIED_ATTEMPT' if verified else 'REGIONAL_CONSERVATIVE_FULL_RESERVATION'
     value=dict(schema_version=1,ownership_sha256=digest(path),unit=saved['unit'],study=saved['study'],kind=saved['kind'],
         task=saved['task'],charged_CPU_seconds=amount,verified_final_observation=verified,basis=basis,
-        live_or_unit_CPU_lower_bound=observation['cpu_seconds'],epoch=time.time())
+        live_or_unit_CPU_lower_bound=observation['cpu_seconds'],verified_observed_CPU_seconds=verified_observed,epoch=time.time())
     immutable(target,value);return value
 
 
@@ -901,7 +953,8 @@ def projection(runtime,master,c,studies,enabled, *, observation=None,now=None,ex
             continue
         if saved['study'] not in enabled:raise RuntimeError('unfunded study has a live numerical worker')
         estimate=studies[saved['study']].estimate_task(saved['task'])
-        remaining=verified_remaining_wall(studies[saved['study']],saved['task'],c)
+        delivered=(observation or {}).get('delivered_share_floor',{}).get(saved['study'])
+        remaining=verified_remaining_wall(studies[saved['study']],saved['task'],c,delivered_share=delivered)
         end=now+remaining['estimated_remaining_wall_seconds']
         lease=read(saved['admission_path'])
         if end>lease['compute_expires_epoch']:return dict(fits=False,reason='active task cannot fit current finite compute interval',unit=saved['unit'])
@@ -919,7 +972,8 @@ def projection(runtime,master,c,studies,enabled, *, observation=None,now=None,ex
         for name,scenario in zip(enabled,selected):
             study=studies[name];q=queues[name]
             reserve=replacement_available(runtime,name,c) and bool(scenario['names'])
-            current_jobs=projected_study_jobs(study,q,scenario,c,reserve=reserve)
+            current_jobs=projected_study_jobs(study,q,scenario,c,reserve=reserve,
+                delivered_share=(observation or {}).get('delivered_share_floor',{}).get(name))
             active_names={row['task'] for row in active if row['study']==name and row['kind']=='numerical'}
             pending_cpu=sum(row['estimated_cpu_seconds'] for row in current_jobs if row['name'] not in active_names)
             cumulative[name]=charges[name]+pending_cpu
@@ -944,20 +998,23 @@ def projection(runtime,master,c,studies,enabled, *, observation=None,now=None,ex
         scenario_proofs=proofs,failures=failures,worst=worst,base_only=True,optional_credit=0.)
 
 
-def verified_remaining_wall(study,name,c):
+def verified_remaining_wall(study,name,c,delivered_share=None):
     """No elapsed-time credit; only strict sealed checkpoints can reduce wall.
 
     The full task CPU price remains reserved independently in the charge ledger.
     This function never treats an elapsed timer as proof of numerical progress.
     """
     estimate=study.estimate_task(name)
-    result=dict(estimated_remaining_wall_seconds=estimate['estimated_wall_seconds'],
+    frozen=c['EE_conservative_share'] if getattr(study,'study_id','EE')=='EE' else study.pricing()['resource_projection']['conservative_idle_share']
+    factor=max(1.,frozen/delivered_share) if delivered_share else 1.
+    result=dict(estimated_remaining_wall_seconds=estimate['estimated_wall_seconds']*factor,
         checkpoint_windows_verified=0,CPU_reservation_unchanged=True,elapsed_wall_credit=0.)
     if not isinstance(study,EEStudy):
         if hasattr(study,'verified_remaining_wall'):
             value=study.verified_remaining_wall(name)
             if not finite(value.get('estimated_remaining_wall_seconds'),positive=True):raise RuntimeError('regional remaining wall proof invalid')
-            return dict(value,CPU_reservation_unchanged=True,elapsed_wall_credit=0.)
+            return dict(value,estimated_remaining_wall_seconds=value['estimated_remaining_wall_seconds']*factor,
+                CPU_reservation_unchanged=True,elapsed_wall_credit=0.)
         return result
     prep=study.read_preparation();task=study.api.task_by_name(name,prep);producer=study.api.producer()
     required=('cpu_seconds_per_window','setup_cpu_seconds_once','origin_clock_windows')
@@ -973,7 +1030,7 @@ def verified_remaining_wall(study,name,c):
         done+=len(descriptor['origin_positions'])
     if done<0 or done>estimate['origin_clock_windows']:raise RuntimeError('checkpoint window count exceeds component support')
     if done:
-        share=c['EE_conservative_share']
+        share=min(c['EE_conservative_share'],delivered_share) if delivered_share else c['EE_conservative_share']
         cpu=estimate['setup_cpu_seconds_once']+estimate['cpu_seconds_per_window']*(estimate['origin_clock_windows']-done)
         result.update(checkpoint_windows_verified=done,estimated_remaining_wall_seconds=max(.001,cpu/share))
     return result
@@ -1082,6 +1139,63 @@ def prepare(shared_runtime=SHARED,config_path=None):
     return value
 
 
+def delivery_window(runtime,saved,c, *, now=None):
+    """Identity-bound rolling monotonic windows; never mix UTC and uptime."""
+    runtime=Path(runtime);path=runtime/'delivery_samples'/(saved['token']+'.json')
+    identity=dict(unit=saved['unit'],invocation_id=saved['attested']['InvocationID'],task=saved['task'],
+        master_scope_id=saved['master_scope_id'])
+    sample=dict(saved.get('cpu_sample') or {})
+    if path.is_file():
+        record=read(path)
+        if any(record.get(k)!=v for k,v in identity.items()):raise RuntimeError('delivery sample lifetime binding differs')
+        sample=record['cpu_sample']
+    if sample.get('monotonic') is not True:raise RuntimeError('CPU delivery sample must explicitly use monotonic time')
+    if any(sample.get(k)!=saved['process'].get(k) for k in ('pid','start_ticks','boot_id')):
+        raise RuntimeError('delivery sample process lifetime differs')
+    local=dict(saved,cpu_sample=sample)
+    now=time.monotonic() if now is None else now
+    if not finite(sample.get('epoch')) or sample['epoch']>now:raise RuntimeError('delivery sample monotonic clock invalid')
+    result=legacy().starvation_predicate(local,dict(starvation_observation_seconds=300,starvation_min_cpu_share=.10),now=now)
+    if result is not None:
+        share=result.get('delivered_cpu_share')
+        if not finite(share) or share>1.05:raise RuntimeError('one-core delivered CPU observation invalid')
+        if not result['starved']:
+            atomic(path,dict(identity,cpu_sample=local['cpu_sample']))
+    return result
+
+
+def read_delivery_floors(runtime,master):
+    path=Path(runtime)/'delivery_floors.json'
+    if not path.is_file():return {}
+    stored=read(path)
+    if stored.get('scope_id')!=master['scope_id'] or stored.get('source_head')!=master['source']['head']:
+        raise RuntimeError('delivered-share floor belongs to another source/scope')
+    floors=dict(stored['shares'])
+    if any(name not in ('EE','FI','DK2') or not finite(value,positive=True) or value>1 for name,value in floors.items()):
+        raise RuntimeError('delivered-share floor invalid')
+    return floors
+
+
+def record_delivered_share(runtime,master,name,share):
+    if name not in ('EE','FI','DK2') or not finite(share,positive=True) or share>1.05:
+        raise RuntimeError('delivered-share evidence invalid')
+    floors=read_delivery_floors(runtime,master)
+    floors[name]=min(floors.get(name,1.),share,1.)
+    atomic(Path(runtime)/'delivery_floors.json',dict(scope_id=master['scope_id'],source_head=master['source']['head'],shares=floors,epoch=time.time()))
+    return floors
+
+
+def require_delivered_calendar(projected,observation,studies,c):
+    """A measured shortfall may keep running only with a new full-prefix proof."""
+    if projected['fits']:return
+    for saved in observation.get('active',[]):
+        if saved['kind']!='numerical':continue
+        name=saved['study'];share=observation.get('delivered_share_floor',{}).get(name)
+        frozen=c['EE_conservative_share'] if name=='EE' else studies[name].pricing()['resource_projection']['conservative_idle_share']
+        if share is not None and share<frozen:
+            raise RuntimeError('actual delivered share no longer funds the complete joint prefix; bounded drain required')
+
+
 def live_guard(system,c,shared,master,controller,studies,enabled):
     shared=Path(shared);runtime=shared/'development'
     validate_master(master,c)
@@ -1107,15 +1221,22 @@ def live_guard(system,c,shared,master,controller,studies,enabled):
     global_limit=nominal_global_limit(c,{name:limit for name,limit in limits.items() if name!='EE'})
     tail=stop_tail_reserve(c,len(observation['active']))
     if global_used+tail>global_limit:raise RuntimeError('global cumulative CPU stop-tail headroom exhausted')
+    floor_path=runtime/'delivery_floors.json';floors=read_delivery_floors(runtime,master)
+    updated=False
     for saved in observation['active']:
         lease=read(saved['admission_path'])
         if (lease['master_scope_id']!=master['scope_id'] or lease['source_head']!=master['source']['head']
             or lease['boot_id']!=master['boot_id'] or time.time()>=lease['expires_epoch']):
             raise RuntimeError('active task escaped its immutable admission/master')
-        starvation=legacy().starvation_predicate(saved,dict(starvation_observation_seconds=300,starvation_min_cpu_share=.10))
+        starvation=delivery_window(runtime,saved,c)
         if starvation and starvation.get('starved'):raise RuntimeError('live task starvation requires bounded replacement or defer: '+saved['unit'])
+        if starvation:
+            measured=min(1.,starvation['delivered_cpu_share'])
+            old=floors.get(saved['study'],1.)
+            floors[saved['study']]=min(old,measured);updated=True
+    if updated:atomic(floor_path,dict(scope_id=master['scope_id'],source_head=master['source']['head'],shares=floors,epoch=time.time()))
     observation.update(global_charged_CPU_seconds=global_used,global_limit_CPU_seconds=global_limit,
-        stop_tail_reserve_CPU_seconds=tail,study_limits_CPU_seconds=limits)
+        stop_tail_reserve_CPU_seconds=tail,study_limits_CPU_seconds=limits,delivered_share_floor=floors)
     return observation
 
 
@@ -1277,9 +1398,13 @@ def run(shared_runtime=SHARED,config_path=None,unit=None):
                     if kind=='numerical':
                         if not study.task_complete(saved['task']) and not (path.parent/'planned_stop.json').exists():
                             raise RuntimeError('numerical worker exited without strict component seal: '+saved['task'])
-                        if study.task_complete(saved['task']) and name=='EE':
-                            share=result['charge'].get('live_or_unit_CPU_lower_bound',0.)/max(.001,time.time()-saved['started_epoch'])
-                            if share>=c['EE_conservative_share']:delivery_verified=True
+                        if study.task_complete(saved['task']):
+                            share=completed_delivery_share(saved,result['charge'])
+                            # Zero with no receipt is absent CPU evidence, not
+                            # an observed starvation result. Preserve the full
+                            # charge and keep the FI delivery gate closed.
+                            if share>0:record_delivered_share(runtime,master,name,share)
+                            if name=='EE' and share>=c['EE_conservative_share']:delivery_verified=True
                     elif kind=='benchmark':
                         try:
                             price=study_price(study)
@@ -1332,6 +1457,7 @@ def run(shared_runtime=SHARED,config_path=None,unit=None):
                         defer_current_wave(system,c,runtime,name,lease_path,'finite numerical allocation elapsed')
                 observation=live_guard(system,c,shared,master,capsule,studies,funded)
                 projected=_projection_or_defer(runtime,master,c,studies,funded,observation) if funded else dict(fits=True,enabled=[],worst=None)
+                require_delivered_calendar(projected,observation,studies,c)
                 # A complete matched-extra set is an atomic, independent
                 # resource decision; it cannot silently claim a partial seed.
                 for name in list(funded):
@@ -1382,6 +1508,7 @@ def run(shared_runtime=SHARED,config_path=None,unit=None):
                     start_study_task(system,c,shared,runtime,master,capsule,study,'__benchmark__',cpu,path,lease,'benchmark',probe_sha)
                 observation=live_guard(system,c,shared,master,capsule,studies,funded)
                 projected=_projection_or_defer(runtime,master,c,studies,funded,observation) if funded else dict(fits=True,worst=None)
+                require_delivered_calendar(projected,observation,studies,c)
                 dispatched=False
                 if projected['fits']:
                     assignments=(projected.get('worst') or {}).get('packing',{}).get('allocation',[])

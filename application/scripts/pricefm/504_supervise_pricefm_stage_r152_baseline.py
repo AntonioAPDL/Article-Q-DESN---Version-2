@@ -120,6 +120,8 @@ class System:
         if not int(pid): return None
         path=Path('/proc')/str(pid)
         try:
+            # Direct recorded-lifetime checks must fail closed on permission
+            # loss; protected metadata does not prove that an owner exited.
             raw=(path/'cmdline').read_bytes(); stat=(path/'stat').read_text()
             fields=stat[stat.rfind(')')+2:].split()
             if fields[0]=='Z': return None
@@ -135,7 +137,15 @@ class System:
         for path in Path('/proc').iterdir():
             if not path.name.isdigit(): continue
             try:
-                if path.stat().st_uid!=os.getuid(): continue
+                # The diagnosed (sd-pam) administrative process has our UID
+                # on its directory but root-owned protected entries. Unknown
+                # own-UID protected processes still block the full census.
+                uid=os.getuid()
+                if path.stat().st_uid!=uid: continue
+                if (path/'cmdline').stat().st_uid!=uid or (path/'cwd').lstat().st_uid!=uid:
+                    comm=(path/'comm').read_text().strip()
+                    if comm=='(sd-pam)': continue
+                    raise PermissionError('unrecognized protected own-UID process '+path.name+': '+comm)
                 process=self.process(int(path.name))
                 if process: result.append(process)
             except (FileNotFoundError,ProcessLookupError): continue
@@ -556,9 +566,17 @@ def session_members(job,system):
     if expected:
         current=system.process(expected['pid'])
         if current and not same_process(current,expected): raise RuntimeError('baseline child PID reused')
-    members=[row for row in system.processes() if row.get('session_id')==job['session_id']]
-    if members and not expected: raise RuntimeError('unrecorded session root; cannot adopt unknown children')
     observed={row['pid']:row for row in job.get('observed_children',[])}
+    known_live={}
+    for prior in observed.values():
+        child=system.process(prior['pid'])
+        if child and all(child.get(key)==prior.get(key) for key in ('pid','start_ticks','boot_id')):
+            if not same_owned_child(child,prior) or child.get('session_id')!=job['session_id']:
+                raise RuntimeError('recorded owned child identity or session changed')
+            known_live[child['pid']]=child
+    members={row['pid']:row for row in system.processes() if row.get('session_id')==job['session_id']}
+    members.update(known_live);members=list(members.values())
+    if members and not expected: raise RuntimeError('unrecorded session root; cannot adopt unknown children')
     for row in members:
         if not set(row['cpus']).issubset(job['cpus']): raise RuntimeError('owned baseline session escaped CPU partition')
         if expected and row['start_ticks']<expected['start_ticks']:
@@ -945,6 +963,37 @@ def probe_orphan(path):
         cpus=owner['cpus'],child=expected,observed_children=[expected],disposable=True))
 
 
+def cleanup_disposable_probe(path,system,job=None):
+    """Drain only the exact recorded private-probe lifetimes, without a census."""
+    path=Path(path).resolve()
+    if (path.parent!=Path('/tmp') or not path.name.startswith('pricefm-r152-baseline-probe-')
+            or path.stat().st_uid!=os.getuid() or path.stat().st_mode & 0o077):
+        raise RuntimeError('refusing cleanup outside private disposable probe namespace')
+    authority=read(path/'authority.json')
+    if not same_process(system.process(authority['owner']['pid']),authority['owner']):
+        raise RuntimeError('disposable cleanup authority lifetime changed')
+    if job is None:
+        if not (path/'orphan_job.json').is_file(): return dict(cleanup_verified=True,signals=[],owned_pids=[])
+        job=read(path/'orphan_job.json')
+    if job.get('disposable') is not True: raise RuntimeError('cleanup job is not explicitly disposable')
+    signals=[]
+    for expected in (job['process'],job['child']):
+        current=system.process(expected['pid'])
+        if not same_process(current,expected): continue
+        os.kill(current['pid'],signal.SIGTERM); signals.append(dict(pid=current['pid'],signal='SIGTERM'))
+        deadline=time.monotonic()+5
+        while same_process(system.process(expected['pid']),expected) and time.monotonic()<deadline: time.sleep(.05)
+        if same_process(system.process(expected['pid']),expected):
+            os.kill(expected['pid'],signal.SIGKILL);signals.append(dict(pid=expected['pid'],signal='SIGKILL'))
+            deadline=time.monotonic()+5
+            while same_process(system.process(expected['pid']),expected) and time.monotonic()<deadline: time.sleep(.05)
+        if same_process(system.process(expected['pid']),expected):
+            raise RuntimeError('exact disposable probe lifetime did not drain')
+    value=dict(cleanup_verified=True,signals=signals,owned_pids=[],epoch=time.time(),
+        original_lifetimes=[job['process'],job['child']],unrelated_process_signals=0)
+    immutable(path/'cleanup.json',value);return value
+
+
 def capability_probe(output):
     """Actual source primitives on private locks/lifetimes; no real unit controls."""
     config=read_config(); source=source_identity(config); system=System()
@@ -964,24 +1013,22 @@ def capability_probe(output):
     atomic(live/'resource_ownership_epoch.json',dict(owner=owner,generation=1,heartbeat=time.time()))
     if guard_once(config,live,temporary,scope,system)!='wait':
         raise RuntimeError('actual healthy-owner guardian observation failed')
-    process=subprocess.Popen(command_base+['probe-orphan','--probe-runtime',str(temporary)],
-        start_new_session=True,preexec_fn=lambda:os.sched_setaffinity(0,{29}),
-        stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
-    stdout,stderr=process.communicate(timeout=10)
-    if process.returncode: raise RuntimeError('actual orphan publisher failed: '+stderr)
-    job=read(temporary/'orphan_job.json')
-    adopted=session_members(job,system)
-    if (system.process(job['process']['pid']) is not None
-            or not any(same_process(row,job['child']) for row in adopted)):
-        raise RuntimeError('exact orphan-session adoption failed')
-    target=system.process(job['child']['pid'])
-    if not same_process(target,job['child']): raise RuntimeError('disposable child identity changed before cleanup')
-    os.kill(target['pid'],signal.SIGTERM)
-    deadline=time.time()+5
-    while system.process(target['pid']) is not None and time.time()<deadline: time.sleep(.05)
-    if system.process(target['pid']) is not None:
-        if not same_process(system.process(target['pid']),target): raise RuntimeError('probe PID reused during cleanup')
-        os.kill(target['pid'],signal.SIGKILL)
+    job=None
+    try:
+        process=subprocess.Popen(command_base+['probe-orphan','--probe-runtime',str(temporary)],
+            start_new_session=True,preexec_fn=lambda:os.sched_setaffinity(0,{29}),
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        stdout,stderr=process.communicate(timeout=10)
+        if process.returncode: raise RuntimeError('actual orphan publisher failed: '+stderr)
+        job=read(temporary/'orphan_job.json')
+        adopted=session_members(job,system)
+        if (system.process(job['process']['pid']) is not None
+                or not any(same_process(row,job['child']) for row in adopted)):
+            raise RuntimeError('exact orphan-session adoption failed')
+        if not same_process(system.process(job['child']['pid']),job['child']):
+            raise RuntimeError('disposable child identity changed before cleanup')
+    finally:
+        cleanup=cleanup_disposable_probe(temporary,system,job)
     if session_members(job,system): raise RuntimeError('disposable adopted session did not drain')
     result=dict(schema_version=1,status='PASS_ACTUAL_SOURCE_BASELINE_PRIMITIVE_PROBE',
         source=source,entry_sha256=sha(ENTRY),probe_namespace=str(temporary),epoch=time.time(),
@@ -989,7 +1036,7 @@ def capability_probe(output):
         exact_orphan_session_adoption=True,exact_disposable_cleanup=True,
         production_guardian_restart_proved=False,real_legacy_controls_changed=False,
         baseline_workers_launched=0,scientific_workers_signalled=0,
-        disposable_child_signals=['SIGTERM'],source_bound=True)
+        disposable_child_signals=[row['signal'] for row in cleanup['signals']],source_bound=True)
     immutable(output,result); return result
 
 

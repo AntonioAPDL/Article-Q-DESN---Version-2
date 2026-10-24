@@ -142,6 +142,44 @@ class PoolTests(unittest.TestCase):
         value=m.verified_remaining_wall(Study(),'unsealed',self.c)
         self.assertEqual(value['estimated_remaining_wall_seconds'],100)
         self.assertEqual(value['elapsed_wall_credit'],0)
+    def test_actual_delivery_shortfall_reprices_full_unsealed_wall(self):
+        class Study:
+            study_id='EE'
+            def estimate_task(self,name):return dict(estimated_wall_seconds=100,estimated_cpu_seconds=50)
+        value=m.verified_remaining_wall(Study(),'unsealed',self.c,delivered_share=self.c['EE_conservative_share']/2)
+        self.assertEqual(value['estimated_remaining_wall_seconds'],200)
+        self.assertTrue(value['CPU_reservation_unchanged'])
+    def test_delivery_uses_monotonic_windows_and_detects_later_starvation(self):
+        r=m.legacy();proc=dict(pid=123,start_ticks=456,boot_id='boot')
+        saved=dict(token='token',unit='unit',task='task',master_scope_id='scope',attested=dict(InvocationID='inv'),process=proc,
+            cpu_sample=dict(proc,epoch=1000.,cpu_seconds=0.,monotonic=True))
+        with patch.object(r,'process',return_value=proc),patch.object(r,'cpu_seconds',side_effect=[150.,151.]):
+            self.assertIsNone(m.delivery_window(self.runtime,saved,self.c,now=1299.))
+            first=m.delivery_window(self.runtime,saved,self.c,now=1300.)
+            self.assertFalse(first['starved']);self.assertEqual(first['delivered_cpu_share'],.5)
+            self.assertIsNone(m.delivery_window(self.runtime,saved,self.c,now=1599.))
+            later=m.delivery_window(self.runtime,saved,self.c,now=1600.)
+            self.assertTrue(later['starved']);self.assertAlmostEqual(later['delivered_cpu_share'],1/300)
+        self.assertEqual(m.read(self.runtime/'delivery_samples/token.json')['cpu_sample']['epoch'],1300.)
+    def test_ambiguous_clock_or_reused_delivery_lifetime_fails_closed(self):
+        proc=dict(pid=123,start_ticks=456,boot_id='boot')
+        saved=dict(token='token',unit='unit',task='task',master_scope_id='scope',attested=dict(InvocationID='inv'),process=proc,
+            cpu_sample=dict(proc,epoch=1000.,cpu_seconds=0.))
+        with self.assertRaisesRegex(RuntimeError,'monotonic'):m.delivery_window(self.runtime,saved,self.c,now=1300.)
+        saved['cpu_sample']['monotonic']=True
+        m.immutable(self.runtime/'delivery_samples/token.json',dict(unit='unit',invocation_id='other',task='task',master_scope_id='scope',cpu_sample=saved['cpu_sample']))
+        with self.assertRaisesRegex(RuntimeError,'lifetime binding'):m.delivery_window(self.runtime,saved,self.c,now=1300.)
+    def test_delivered_share_floor_cannot_gain_credit_or_cross_scope(self):
+        m.record_delivered_share(self.runtime,self.master,'EE',.5)
+        m.record_delivered_share(self.runtime,self.master,'EE',.8)
+        self.assertEqual(m.read_delivery_floors(self.runtime,self.master),dict(EE=.5))
+        other=dict(self.master,scope_id='other')
+        with self.assertRaisesRegex(RuntimeError,'another source/scope'):m.read_delivery_floors(self.runtime,other)
+    def test_unfunded_measured_delivery_requires_drain_of_live_science(self):
+        observation=dict(active=[dict(kind='numerical',study='EE')],delivered_share_floor=dict(EE=.5))
+        with self.assertRaisesRegex(RuntimeError,'bounded drain'):m.require_delivered_calendar(dict(fits=False),observation,{},self.c)
+        m.require_delivered_calendar(dict(fits=True),observation,{},self.c)
+        m.require_delivered_calendar(dict(fits=False),dict(active=[]),{},self.c)
     def test_unknown_prefix_price_rejected(self):
         with self.assertRaises(RuntimeError):m.regional_prefix_priced({})
         self.assertFalse(m.regional_prefix_priced(dict(prefix_admitted=False)))
@@ -197,6 +235,40 @@ class PoolTests(unittest.TestCase):
         result=m.freeze_attempt_charge(directory/'ownership.json',saved,dict(cpu_seconds=0),Study())
         self.assertEqual(result['charged_CPU_seconds'],1200)
         self.assertFalse(result['verified_final_observation'])
+    def _EE_CPU_case(self):
+        directory=self.runtime/'attempts/EE/attempt';directory.mkdir(parents=True)
+        saved=dict(estimated_cpu_seconds=1200,kind='numerical',unit='unit',task='task',study='EE',lease_id='lease',
+            attested=dict(InvocationID='inv'),source_head='resource',study_source_head='science',master_scope_id='scope',
+            policy_receipt=str(directory/'policy.json'),accounting_path=str(directory/'admin_accounting'),started_epoch=1000,started_monotonic=20.)
+        m.immutable(directory/'ownership.json',saved)
+        m.immutable(Path(saved['policy_receipt']),dict(task='task',source_head='science',worker_invocation_id='inv',unit='unit',lease_id='lease',resource_source_head='resource',master_scope_id='scope'))
+        out=self.shared/'science';m.immutable(out/'tasks_done/task/completed_evidence.json',dict(complete=True))
+        prep=dict(source=dict(head='science'));study=m.EEStudy.__new__(m.EEStudy);study.OUT=out
+        study.read_preparation=lambda:prep;study.task_complete=lambda name:True
+        study.api=types.SimpleNamespace(task_by_name=lambda name,prep:dict(scientific_identity_sha256='scientific'))
+        folder=out/'cpu_accounting/task/inv'
+        started=dict(source=prep['source'],task='task',scientific_identity_sha256='scientific',policy_invocation_id='inv',
+            policy_receipt_path=saved['policy_receipt'],policy_receipt_sha256=m.digest(saved['policy_receipt']))
+        m.immutable(folder/'started.json',started)
+        observed=dict(started,completed_component=True,post_observation_exit_allowance_CPU_seconds=5.,hard_CPU_quota=False,
+            exact_exit_CPU_measurement=False,task_final_seal_sha256=m.digest(out/'tasks_done/task/completed_evidence.json'),
+            observed_process_CPU_seconds=7.,observed_terminated_children_CPU_seconds=3.,observed_total_CPU_seconds=10.)
+        return directory,saved,study,folder,observed
+    def _publish_EE_CPU(self,folder,value):
+        m.immutable(folder/'observed.json',value)
+        m.immutable(folder/'observed.seal.json',dict(sha256=m.digest(folder/'observed.json'),source=value['source']))
+    def test_EE_unloaded_unit_keeps_exact_observed_delivery_without_exit_allowance(self):
+        directory,saved,study,folder,value=self._EE_CPU_case();self._publish_EE_CPU(folder,value)
+        with patch.object(m,'hardening',return_value=types.SimpleNamespace(attempt_charge=lambda *args:15.)):
+            charge=m.freeze_attempt_charge(directory/'ownership.json',saved,dict(cpu_seconds=0),study)
+        self.assertTrue(charge['verified_final_observation']);self.assertEqual(charge['charged_CPU_seconds'],15.)
+        self.assertEqual(m.completed_delivery_share(saved,charge,monotonic_now=40.),.5)
+    def test_EE_packet_completion_cannot_credit_wrong_invocation_receipt(self):
+        directory,saved,study,folder,value=self._EE_CPU_case();value['policy_invocation_id']='other';self._publish_EE_CPU(folder,value)
+        with patch.object(m,'hardening',return_value=types.SimpleNamespace(attempt_charge=lambda *args:15.)):
+            charge=m.freeze_attempt_charge(directory/'ownership.json',saved,dict(cpu_seconds=0),study)
+        self.assertFalse(charge['verified_final_observation']);self.assertEqual(charge['charged_CPU_seconds'],1200.)
+        self.assertEqual(m.completed_delivery_share(saved,charge,monotonic_now=40.),0.)
     def test_control_duration_uses_stable_launch_bound_after_fractional_crossing(self):
         path=self.runtime/'control/intent.json'
         m.immutable(path,dict(unit='pricefm-r150-r152-test.service',source_head='new',runtime_seconds=10.9))

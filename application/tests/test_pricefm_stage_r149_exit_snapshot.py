@@ -90,21 +90,36 @@ def test_real_child_exit_between_stat_and_cgroup_reads(monkeypatch):
     config = M.read(M.CONFIG); before = M.cpu_times(); M.time.sleep(.1)
     config['allowed_cpus'] = sorted(set(range(30)) & os.sched_getaffinity(0))
     cpu = M.choose_cpu(config, before, M.cpu_times(), [])
-    child = subprocess.Popen([sys.executable, '-B', '-c', 'import time;time.sleep(.1)'],
-        start_new_session=True, preexec_fn=lambda: M.apply_idle(cpu), env=M.numerical_env())
+    # Hold the child until this test reaches the intended stat/cgroup boundary.
+    # A fixed sleep can expire while group_members scans unrelated host PIDs,
+    # producing a valid already-zombie snapshot instead of the forced race.
+    read_fd, write_fd = os.pipe()
+    try:
+        child = subprocess.Popen([sys.executable, '-B', '-c',
+            'import os,sys;os.read(int(sys.argv[1]),1)', str(read_fd)],
+            pass_fds=(read_fd,), start_new_session=True,
+            preexec_fn=lambda: M.apply_idle(cpu), env=M.numerical_env())
+    except BaseException:
+        os.close(read_fd); os.close(write_fd)
+        raise
+    os.close(read_fd)
     original_read = Path.read_text; original_process = M.process; captured = []; forced = {'done': False}
     try:
         saved = M.process(child.pid)
         assert saved['state'] != 'Z'
         def delayed_cgroup(path, *args, **kwargs):
+            nonlocal write_fd
             if path == Path('/proc') / str(child.pid) / 'cgroup' and not forced['done']:
+                os.write(write_fd, b'x'); os.close(write_fd); write_fd = None
                 deadline = M.time.monotonic() + 2
+                state = None
                 while M.time.monotonic() < deadline:
                     state = original_read(Path('/proc') / str(child.pid) / 'stat').rsplit(')', 1)[1].split()[0]
                     if state == 'Z':
                         break
                     M.time.sleep(.002)
                 forced['done'] = True
+                assert state == 'Z', 'child did not reach the forced exit boundary'
             return original_read(path, *args, **kwargs)
         def capture(pid):
             current = original_process(pid)
@@ -120,5 +135,7 @@ def test_real_child_exit_between_stat_and_cgroup_reads(monkeypatch):
         assert child.wait(timeout=1) == 0
     finally:
         monkeypatch.setattr(Path, 'read_text', original_read)
+        if write_fd is not None:
+            os.close(write_fd)
         if child.poll() is None:
             child.kill(); child.wait(timeout=1)

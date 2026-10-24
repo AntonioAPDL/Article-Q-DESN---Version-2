@@ -365,25 +365,161 @@ def owned_groups(system,capsules,workers):
     return sorted(pids)
 
 
+def safe_process(value):
+    if value is None:return None
+    keys=('pid','start_ticks','boot_id','state','cmdline_sha256','affinity','scheduler')
+    return {key:value.get(key) for key in keys}
+
+
+def process_read(pid):
+    try:return safe_process(load_legacy().process(pid)),None
+    except (OSError,ValueError) as error:
+        return None,dict(operation='process',pid=pid,type=type(error).__name__,errno=getattr(error,'errno',None))
+
+
+def policy_snapshot(pid):
+    """Read only six thread variables; retain no unrelated environment contents."""
+    r=load_legacy();before,error=process_read(pid)
+    result=dict(pid=pid,before=before,threads=None,
+        six_thread_variables={name:None for name in THREAD_VARS},read_errors=[],io_class=None)
+    if error:result['read_errors'].append(error)
+    if result['before'] is not None and result['before'].get('state') not in ('Z','X','x'):
+        try:
+            status=(Path('/proc')/str(pid)/'status').read_text()
+            result['threads']=next(int(line.split()[1]) for line in status.splitlines() if line.startswith('Threads:'))
+            result['status_state']=next(line.split()[1] for line in status.splitlines() if line.startswith('State:'))
+        except (OSError,ValueError,StopIteration) as error:
+            result['read_errors'].append(dict(operation='status',type=type(error).__name__,errno=getattr(error,'errno',None)))
+        try:
+            raw=(Path('/proc')/str(pid)/'environ').read_bytes()
+            env=dict(part.split(b'=',1) for part in raw.split(b'\0') if b'=' in part)
+            result['environ_bytes']=len(raw)
+            result['six_thread_variables']={name:env.get(name.encode(),b'').decode(errors='replace') if name.encode() in env else None for name in THREAD_VARS}
+        except OSError as error:
+            result['read_errors'].append(dict(operation='environ',type=type(error).__name__,errno=getattr(error,'errno',None)))
+        try:result['io_class']=subprocess.check_output(['ionice','-p',str(pid)],text=True,stderr=subprocess.DEVNULL).strip()
+        except (OSError,subprocess.CalledProcessError) as error:
+            result['read_errors'].append(dict(operation='ionice',type=type(error).__name__,errno=getattr(error,'errno',None)))
+    result['after'],error=process_read(pid)
+    if error:result['read_errors'].append(error)
+    return result
+
+
+def same_process_identity(first,second):
+    return first is not None and second is not None and all(first.get(k)==second.get(k) for k in ('pid','start_ticks','boot_id'))
+
+
+def policy_failure(saved,reason,snapshots,properties=None):
+    details=dict(unit=saved['unit'],task=saved.get('task'),cpu=saved.get('cpu'),reason=reason,
+        controller_entry_sha256=digest(ENTRY),controller_source_root=str(ROOT),
+        expected_six_thread_variables={name:'1' for name in THREAD_VARS},expected_threads=1,
+        expected_scheduler=os.SCHED_IDLE,expected_affinity=[saved.get('cpu')],snapshots=snapshots)
+    if properties:details['unit_observation']={k:properties.get(k) for k in ('Id','LoadState','ActiveState','MainPID','InvocationID','ControlGroup')}
+    raise RuntimeError('worker policy attestation failed: '+json.dumps(details,sort_keys=True))
+
+
+def check_live_cpu_policy(saved,process,snapshots,properties):
+    if process is not None and process.get('state') not in ('Z','X','x'):
+        if process.get('scheduler')!=os.SCHED_IDLE or process.get('affinity')!=[saved['cpu']]:
+            policy_failure(saved,'active process scheduler/affinity changed',snapshots+[dict(cpu_policy_observation=process)],properties)
+
+
+def confirmed_terminal_member(system,saved,pid,anchor,snapshots):
+    """Confirm terminal state and owner identity again; never adopt a reused PID."""
+    r=load_legacy();props=system.unit(saved['unit']);r.verify_owned(saved,props)
+    now,error=process_read(pid)
+    if error:policy_failure(saved,'terminal state unreadable; no exit exemption',snapshots+[dict(process_read_error=error)],props)
+    if now is not None and anchor is not None and not same_process_identity(anchor,now):
+        policy_failure(saved,'PID lifetime changed during terminal re-attestation',snapshots+[dict(terminal_check=now)],props)
+    check_live_cpu_policy(saved,now,snapshots,props)
+    if now is not None and now.get('state') not in ('Z','X','x'):return False
+    again,error=process_read(pid)
+    if error:policy_failure(saved,'terminal confirmation unreadable; no exit exemption',snapshots+[dict(process_read_error=error)],props)
+    if again is not None:
+        if anchor is not None and not same_process_identity(anchor,again):
+            policy_failure(saved,'PID reused during terminal confirmation',snapshots+[dict(terminal_check=again)],props)
+        check_live_cpu_policy(saved,again,snapshots,props)
+        if again.get('state') not in ('Z','X','x'):return False
+    # Check authoritative ownership once more after the process reads. A new
+    # service InvocationID/cgroup can never turn an unavailable read into success.
+    r.verify_owned(saved,system.unit(saved['unit']))
+    return True
+
+
 def strict_worker_policy(system,saved):
     r=load_legacy();props=system.unit(saved['unit']);r.verify_owned(saved,props)
-    if props.get('ActiveState')!='active':return False
-    pid=int(props.get('MainPID','0'));proc=r.process(pid);cpu=saved['cpu']
-    if (cpu not in range(15,30) or not proc or proc['affinity']!=[cpu] or proc['scheduler']!=os.SCHED_IDLE
-        or props.get('IOSchedulingClass')!='3' or props.get('CPUSchedulingPolicy') not in ('0','5')
+    cg=saved.get('attested',{}).get('ControlGroup') or saved.get('expected_cgroup')
+    if not cg:policy_failure(saved,'owned cgroup unavailable',[],props)
+    members=system.members(cg)
+    if props.get('ActiveState')!='active':
+        observations=[process_read(pid) for pid in members]
+        if any(error for _,error in observations):policy_failure(saved,'inactive cgroup process state unreadable',[dict(observations=observations)],props)
+        live=[p for p,_ in observations]
+        live=[p for p in live if p is not None and p.get('state') not in ('Z','X','x')]
+        if live:policy_failure(saved,'inactive worker still has live descendants',[dict(live_members=live)],props)
+        return False
+    pid=int(props.get('MainPID','0'));cpu=saved['cpu'];main,error=process_read(pid)
+    if error:policy_failure(saved,'main process state unreadable',[dict(process_read_error=error)],props)
+    if (cpu not in range(15,30) or props.get('IOSchedulingClass')!='3' or props.get('CPUSchedulingPolicy') not in ('0','5')
         or not props.get('InvocationID') or props.get('InvocationID')!=saved['attested']['InvocationID']
         or props.get('ControlGroup')!=saved.get('expected_cgroup')):
-        raise RuntimeError('active worker actual lifecycle/CPU/I/O policy changed')
-    for member in system.members(props['ControlGroup']):
-        memberproc=r.process(member)
-        if memberproc is None:continue # exits have no RSS or runnable payload
-        if memberproc['scheduler']!=os.SCHED_IDLE or memberproc['affinity']!=[cpu]:raise RuntimeError('worker descendant policy changed')
-        status=Path('/proc/%d/status'%member).read_text()
-        threads=next(int(line.split()[1]) for line in status.splitlines() if line.startswith('Threads:'))
-        env=dict(part.split(b'=',1) for part in Path('/proc/%d/environ'%member).read_bytes().split(b'\0') if b'=' in part)
-        if threads!=1 or any(env.get(name.encode())!=b'1' for name in THREAD_VARS):raise RuntimeError('worker thread policy changed')
-        if not subprocess.check_output(['ionice','-p',str(member)],text=True).startswith('idle'):raise RuntimeError('worker actual I/O priority changed')
-    return True
+        policy_failure(saved,'active worker unit CPU/I/O/lifetime policy changed',[dict(main=main)],props)
+    original=saved.get('process')
+    if main is not None and original is not None and not same_process_identity(original,main):
+        policy_failure(saved,'main PID lifetime differs from attested worker',[dict(main=main,attested_process=safe_process(original))],props)
+    check_live_cpu_policy(saved,main,[dict(main=main)],props)
+    if main is None or main.get('state') in ('Z','X','x'):
+        if not confirmed_terminal_member(system,saved,pid,main or safe_process(original),[dict(main=main)]):
+            policy_failure(saved,'main process became live without stable attestation',[dict(main=main)],props)
+    elif pid not in members:
+        policy_failure(saved,'live main PID absent from owned cgroup snapshot',[dict(main=main,members=members)],props)
+    any_live=False
+    for member in members:
+        snapshots=[];previous=None;accepted=False
+        for attempt in range(2):
+            # Every reread is tied to the original immutable unit lifetime.
+            current=system.unit(saved['unit']);r.verify_owned(saved,current)
+            snapshot=policy_snapshot(member);snapshots.append(snapshot)
+            before=snapshot['before'];after=snapshot['after'];anchor=before or previous
+            if member==pid and original is not None and before is not None and not same_process_identity(original,before):
+                policy_failure(saved,'main PID reused after initial exit observation',snapshots,current)
+            if previous is not None and before is not None and not same_process_identity(previous,before):
+                policy_failure(saved,'PID reused between bounded policy reads',snapshots,current)
+            if before is not None and after is not None and not same_process_identity(before,after):
+                policy_failure(saved,'PID lifetime changed within policy snapshot',snapshots,current)
+            check_live_cpu_policy(saved,before,snapshots,current)
+            check_live_cpu_policy(saved,after,snapshots,current)
+            # Positive evidence of an active violation is never hidden by later
+            # disappearance. Missing/unreadable values are treated separately.
+            if before is not None and before.get('state') not in ('Z','X','x'):
+                if snapshot['threads'] is not None and snapshot['threads']>1:
+                    policy_failure(saved,'active process OS thread count changed',snapshots,current)
+                wrong={k:v for k,v in snapshot['six_thread_variables'].items() if v is not None and v!='1'}
+                if wrong:policy_failure(saved,'active process vendor thread setting changed',snapshots,current)
+                if snapshot['io_class'] is not None and not snapshot['io_class'].startswith('idle'):
+                    policy_failure(saved,'active process actual I/O priority changed',snapshots,current)
+            if before is None or after is None or before.get('state') in ('Z','X','x') or after.get('state') in ('Z','X','x'):
+                if confirmed_terminal_member(system,saved,member,anchor,snapshots):accepted=True;break
+            stable=(before is not None and after is not None and before.get('cmdline_sha256')==after.get('cmdline_sha256'))
+            if previous is not None and before is not None and previous.get('cmdline_sha256')!=before.get('cmdline_sha256'):stable=False
+            complete=(not snapshot['read_errors'] and snapshot['threads']==1 and all(v=='1' for v in snapshot['six_thread_variables'].values())
+                and snapshot['io_class'] is not None and snapshot['io_class'].startswith('idle'))
+            if stable and complete:
+                latest=system.unit(saved['unit']);r.verify_owned(saved,latest)
+                latest_members=system.members(cg)
+                final,error=process_read(member)
+                if error:policy_failure(saved,'process state unreadable after policy read',snapshots+[dict(process_read_error=error)],latest)
+                if final is not None and after is not None and not same_process_identity(after,final):
+                    policy_failure(saved,'PID lifetime changed after policy read',snapshots+[dict(final_process=final)],latest)
+                check_live_cpu_policy(saved,final,snapshots,latest)
+                if final is None or final.get('state') in ('Z','X','x'):
+                    if confirmed_terminal_member(system,saved,member,after,snapshots):accepted=True;break
+                elif member in latest_members and final.get('cmdline_sha256')==after.get('cmdline_sha256'):
+                    any_live=True;accepted=True;break
+            previous=after or before
+            if attempt==0:time.sleep(.005)
+        if not accepted:policy_failure(saved,'live process policy unavailable or exec did not stabilize after2 reads',snapshots,system.unit(saved['unit']))
+    return any_live
 
 
 def drain_exact(system,saved,timeout=25):

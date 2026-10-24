@@ -9,6 +9,43 @@ rebinding their globals, copying numerical code, changing seeds, or relabeling
 scientific producer fields. The scientific worktree stays immutable at
 `c03613cd1a85cce5d02120760b954cdc15160410`.
 
+## Policy snapshot diagnostics after the stopped wave2
+
+The retired-aware source57f9 completed five more deterministic components, then
+stopped wave2 with the generic `worker thread policy changed` exception. The
+message combined OS Threads!=1 with missing/non-one thread environment settings
+and retained no failing PID/value snapshot. The scientific outputs and owned
+cleanup passed independent replay; **the production cause remains unproven**.
+A normal completed packet's BLAS threadpool count1 is not proof that every
+intermediate OS-thread/environment observation was valid.
+
+This diagnostics-only branch adds redacted two-read process-policy attestation.
+Each read remains bound to the immutable unit InvocationID/cgroup and process
+PID/start_ticks/boot identity. Exec/temporarily unavailable reads need a fresh
+complete stable snapshot; unverified live processes fail closed after two reads.
+Only independently confirmed terminal processes are ignored. A dead main cannot
+hide a live unvalidated descendant. Positive active Threads>1, any present vendor
+setting different from1, scheduler/affinity or actual I/O violations still stop,
+including positive observations followed by exit. Every live CPU-policy
+observation is checked, including snapshot tails and terminal-confirmation
+rereads, so a later exit cannot hide an observed scheduler/affinity violation.
+PID reuse or unit
+replacement fails instead of adopting another owner.
+
+Failures retain PID/lifetime/state/cmdline hash, observed OS Threads, expected and
+actual **six thread variables only**, read error types/errnos and controller
+source hash in the exception, which is carried into the existing terminal. No
+whole environment or unrelated environment value is retained. Actual zombie and
+repeated-exec fixtures reproduced transient PermissionError13 on this host;
+they did not reproduce the production's exact generic thread-policy message.
+Those observations demonstrate a read-race failure mode without establishing
+the original cause.
+
+The immutable57f9 producer and wave2 terminal/lease are preserved. This branch
+claims no scientific admission, wave reuse, lease extension or new regional
+screen. The full remaining D+S0 prefix does not fit the sole unused wave3; fixing
+this resource observer does not authorize a numerical continuation.
+
 ## Manual retirement-aware successor
 
 The first released R151 source is immutable at
@@ -132,10 +169,12 @@ pending sets, zero progress and missing terminals remain explicit.
 
 ## Reproduction and validation
 
-Run all commands with the pinned Python, CPUs15–29 and six thread variables one:
+Run the focused pytest check with the pinned Python, CPU29, idle scheduler/I/O
+priority and six thread variables one. Capability probes retain their required
+ordinary-priority parent on CPUs15–29:
 
 ```bash
-taskset -c 15-29 env PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 /data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python -B -m pytest -q application/tests/test_pricefm_stage_r151_recovery.py
+taskset -c 29 chrt --idle 0 ionice -c 3 env PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 /data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python -B -m pytest -q application/tests/test_pricefm_stage_r151_recovery.py
 ```
 
 The focused tests exercise competing real subprocess claims and postclaim crash,

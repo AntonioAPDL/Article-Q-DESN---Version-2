@@ -658,3 +658,165 @@ def test_original_global_deadline_stops_before_and_after_admission(tmp_path,with
     lease={'boot_id':'boot','expires_epoch':10000.} if with_lease else None
     with stack,mock.patch.object(M.time,'time',return_value=100.),pytest.raises(RuntimeError,match='global continuation deadline expired'):
         M.baseline_guard(c,system,admission,coordinator,None,lease,[],release)
+
+
+def strict_fixture():
+    saved,props=capsule('strict-worker',101);saved.update(task='diagnostic',cpu=28)
+    props['CPUSchedulingPolicy']='5';saved['attested']=copy.deepcopy(props)
+    proc=dict(pid=101,start_ticks=1,boot_id='boot',state='R',cmdline_sha256='stable',affinity=[28],scheduler=5)
+    saved['process']=copy.deepcopy(proc);system=FakeSystem([(saved,props)]);return saved,system,proc
+
+
+def snapshot(proc,**changes):
+    result=dict(pid=proc['pid'],before=copy.deepcopy(proc),after=copy.deepcopy(proc),threads=1,
+        six_thread_variables={k:'1' for k in M.THREAD_VARS},read_errors=[],io_class='idle')
+    result.update(changes);return result
+
+
+def test_stable_live_policy_is_re_attested_before_acceptance():
+    saved,system,proc=strict_fixture();r=M.load_legacy()
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(M,'policy_snapshot',return_value=snapshot(proc)):
+        assert M.strict_worker_policy(system,saved)
+
+
+@pytest.mark.parametrize('kind',['threads2','vendor2','bad_scheduler','bad_affinity','bad_io'])
+def test_positive_live_policy_violation_is_never_softened(kind):
+    saved,system,proc=strict_fixture();r=M.load_legacy();value=snapshot(proc)
+    if kind=='threads2':value['threads']=2
+    if kind=='vendor2':value['six_thread_variables']['OMP_NUM_THREADS']='2'
+    if kind=='bad_scheduler':value['before']['scheduler']=0
+    if kind=='bad_affinity':value['before']['affinity']=[27,28]
+    if kind=='bad_io':value['io_class']='none: prio0'
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(M,'policy_snapshot',return_value=value) as reads,pytest.raises(RuntimeError,match='worker policy attestation failed') as caught:
+        M.strict_worker_policy(system,saved)
+    assert reads.call_count==1
+    details=json.loads(str(caught.value).split(': ',1)[1]);assert details['unit']==saved['unit']
+    assert set(details['expected_six_thread_variables'])==set(M.THREAD_VARS)
+    assert details['snapshots'][0]['before']['start_ticks']==1
+
+
+def test_missing_vendor_variable_in_stable_live_process_fails_after_two_reads():
+    saved,system,proc=strict_fixture();r=M.load_legacy();value=snapshot(proc)
+    value['six_thread_variables']['MKL_NUM_THREADS']=None
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(M,'policy_snapshot',return_value=value) as reads,mock.patch.object(M.time,'sleep'),pytest.raises(RuntimeError,match='after2 reads'):
+        M.strict_worker_policy(system,saved)
+    assert reads.call_count==2
+
+
+def test_live_unreadable_environment_fails_closed_with_pid_and_errno():
+    saved,system,proc=strict_fixture();r=M.load_legacy();value=snapshot(proc,read_errors=[{'operation':'environ','type':'PermissionError','errno':13}])
+    value['six_thread_variables']={k:None for k in M.THREAD_VARS}
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(M,'policy_snapshot',return_value=value),mock.patch.object(M.time,'sleep'),pytest.raises(RuntimeError) as caught:
+        M.strict_worker_policy(system,saved)
+    text=str(caught.value);assert 'PermissionError' in text and '101' in text and '13' in text
+
+
+def test_real_dead_proc_with_stale_service_membership_is_not_a_live_thread_violation():
+    saved,system,_=strict_fixture();r=M.load_legacy()
+    child=subprocess.Popen(['/usr/bin/chrt','--idle','0','/usr/bin/taskset','-c','28','/usr/bin/ionice','-c','3',sys.executable,'-B','-c','pass'])
+    try:
+        os.waitid(os.P_PID,child.pid,os.WEXITED|os.WNOWAIT)
+        dead=r.process(child.pid);assert dead['state']=='Z'
+        saved['process']=dead;system.props[saved['unit']]['MainPID']=str(child.pid)
+        system.groups[saved['expected_cgroup']]=[child.pid]
+        assert M.strict_worker_policy(system,saved) is False
+    finally:child.wait()
+
+
+def test_main_exit_does_not_hide_live_unvalidated_descendant():
+    saved,system,proc=strict_fixture();r=M.load_legacy();dead=dict(proc,state='Z');desc=dict(proc,pid=202,start_ticks=2)
+    system.groups[saved['expected_cgroup']]=[101,202]
+    bad=snapshot(desc);bad['six_thread_variables']['OMP_NUM_THREADS']=None
+    def observations(pid):return snapshot(dead) if pid==101 else bad
+    with mock.patch.object(r,'process',side_effect=lambda pid:dead if pid==101 else desc),mock.patch.object(M,'policy_snapshot',side_effect=observations),mock.patch.object(M.time,'sleep'),pytest.raises(RuntimeError,match='after2 reads'):
+        M.strict_worker_policy(system,saved)
+
+
+def test_exec_transition_requires_fresh_complete_stable_snapshot():
+    saved,system,proc=strict_fixture();r=M.load_legacy();new=dict(proc,cmdline_sha256='new-target');box={'now':proc}
+    values=[snapshot(proc,after=new),snapshot(new)]
+    def read(_):value=values.pop(0);box['now']=value['after'];return value
+    with mock.patch.object(r,'process',side_effect=lambda _:box['now']),mock.patch.object(M,'policy_snapshot',side_effect=read) as reads,mock.patch.object(M.time,'sleep'):
+        assert M.strict_worker_policy(system,saved)
+    assert reads.call_count==2
+
+
+def test_exec_that_never_stabilizes_is_bounded_and_fails():
+    saved,system,proc=strict_fixture();r=M.load_legacy();one=dict(proc,cmdline_sha256='one');two=dict(proc,cmdline_sha256='two');box={'now':proc}
+    values=[snapshot(proc,after=one),snapshot(one,after=two)]
+    def read(_):value=values.pop(0);box['now']=value['after'];return value
+    with mock.patch.object(r,'process',side_effect=lambda _:box['now']),mock.patch.object(M,'policy_snapshot',side_effect=read) as reads,mock.patch.object(M.time,'sleep'),pytest.raises(RuntimeError,match='after2 reads'):
+        M.strict_worker_policy(system,saved)
+    assert reads.call_count==2
+
+
+def test_pid_reuse_during_snapshot_refuses_instead_of_adopting_new_process():
+    saved,system,proc=strict_fixture();r=M.load_legacy();reused=dict(proc,start_ticks=999)
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(M,'policy_snapshot',return_value=snapshot(proc,after=reused)),pytest.raises(RuntimeError,match='PID lifetime changed'):
+        M.strict_worker_policy(system,saved)
+
+
+def test_invocation_replacement_during_policy_read_refuses_acceptance():
+    saved,system,proc=strict_fixture();r=M.load_legacy()
+    def read(_):system.props[saved['unit']]['InvocationID']='replacement';return snapshot(proc)
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(M,'policy_snapshot',side_effect=read),pytest.raises(RuntimeError,match='identity mismatch'):
+        M.strict_worker_policy(system,saved)
+    assert not system.stops
+
+
+def test_bare_process_permission_failure_has_structured_pid_evidence():
+    saved,system,_=strict_fixture();r=M.load_legacy()
+    with mock.patch.object(r,'process',side_effect=PermissionError(13,'process read unavailable')),pytest.raises(RuntimeError,match='main process state unreadable') as caught:
+        M.strict_worker_policy(system,saved)
+    assert '101' in str(caught.value) and 'PermissionError' in str(caught.value)
+
+
+def test_policy_snapshot_never_retains_unrelated_environment_values():
+    saved,_,proc=strict_fixture();r=M.load_legacy()
+    raw=b'API_TOKEN=do-not-retain\0'+b'\0'.join(k.encode()+b'=1' for k in M.THREAD_VARS)
+    status='State:\tR\nThreads:\t1\n'
+    with mock.patch.object(r,'process',return_value=proc),mock.patch.object(Path,'read_text',return_value=status),mock.patch.object(Path,'read_bytes',return_value=raw),mock.patch.object(M.subprocess,'check_output',return_value='idle'):
+        value=M.policy_snapshot(proc['pid'])
+    assert value['threads']==1 and set(value['six_thread_variables'])==set(M.THREAD_VARS)
+    assert 'API_TOKEN' not in json.dumps(value) and 'do-not-retain' not in json.dumps(value)
+
+
+@pytest.mark.parametrize('kind',['threads2','vendor2'])
+def test_positive_live_violation_is_preserved_even_if_process_exits_later(kind):
+    saved,system,proc=strict_fixture();r=M.load_legacy();dead=dict(proc,state='Z');value=snapshot(proc,after=dead)
+    if kind=='threads2':value['threads']=2
+    else:value['six_thread_variables']['OMP_NUM_THREADS']='2'
+    box={'now':proc}
+    def read(_):box['now']=dead;return value
+    with mock.patch.object(r,'process',side_effect=lambda _:box['now']),mock.patch.object(M,'policy_snapshot',side_effect=read),pytest.raises(RuntimeError,match='worker policy attestation failed'):
+        M.strict_worker_policy(system,saved)
+
+
+def test_permission_error_cannot_be_misreported_as_confirmed_terminal():
+    saved,system,proc=strict_fixture();r=M.load_legacy()
+    with mock.patch.object(r,'process',side_effect=PermissionError(13,'unreadable')),pytest.raises(RuntimeError,match='no exit exemption'):
+        M.confirmed_terminal_member(system,saved,101,proc,[])
+
+
+@pytest.mark.parametrize('kind',['scheduler','affinity'])
+@pytest.mark.parametrize('observation',['main','after','final','terminal_first','terminal_second'])
+def test_positive_cpu_policy_observation_cannot_be_hidden_by_later_exit(kind,observation):
+    saved,system,proc=strict_fixture();r=M.load_legacy();bad=copy.deepcopy(proc);dead=dict(proc,state='Z')
+    bad[kind]=0 if kind=='scheduler' else [27,28]
+    if observation=='main':
+        values=[bad,dead,dead]
+        with mock.patch.object(r,'process',side_effect=lambda _:values.pop(0) if values else dead),pytest.raises(RuntimeError,match='scheduler/affinity changed'):
+            M.strict_worker_policy(system,saved)
+    elif observation=='after':
+        box={'now':proc}
+        def read(_):box['now']=dead;return snapshot(proc,after=bad)
+        with mock.patch.object(r,'process',side_effect=lambda _:box['now']),mock.patch.object(M,'policy_snapshot',side_effect=read),pytest.raises(RuntimeError,match='scheduler/affinity changed'):
+            M.strict_worker_policy(system,saved)
+    elif observation=='final':
+        values=[proc,bad,dead,dead]
+        with mock.patch.object(r,'process',side_effect=lambda _:values.pop(0) if values else dead),mock.patch.object(M,'policy_snapshot',return_value=snapshot(proc)),pytest.raises(RuntimeError,match='scheduler/affinity changed'):
+            M.strict_worker_policy(system,saved)
+    else:
+        values=[bad,dead] if observation=='terminal_first' else [dead,bad,dead]
+        with mock.patch.object(r,'process',side_effect=lambda _:values.pop(0) if values else dead),pytest.raises(RuntimeError,match='scheduler/affinity changed'):
+            M.confirmed_terminal_member(system,saved,101,proc,[])

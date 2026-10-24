@@ -1,0 +1,22 @@
+{
+  "stage": "R151",
+  "tag": "pricefm_stage_r151_orchestration_20261023",
+  "outer_seconds": 37800,
+  "EE_coordinator_seconds": 14700,
+  "regional_benchmark_seconds": 1200,
+  "regional_wave_seconds": 7200,
+  "regional_compute_seconds": 5400,
+  "regional_cleanup_seconds": 1800,
+  "regional_admissions": ["benchmark", "1", "2", "3"],
+  "max_regional_numerical_waves": 3,
+  "regional_region": "DK_2",
+  "regional_replacements": 1,
+  "cpus": [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
+  "max_workers": 2,
+  "numerical_threads": 1,
+  "new_model_fits": 0,
+  "AL_authorized": false,
+  "promotion_authorized": false,
+  "baseline_mutations_authorized": false,
+  "renewals_authorized": false
+}

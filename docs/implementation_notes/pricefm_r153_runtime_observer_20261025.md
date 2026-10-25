@@ -47,6 +47,19 @@ observation still verifies source and exact authority identity. A blocked marker
 takes precedence over progress or a partially published terminal. An inactive
 unit alone is insufficient proof of scientific drainage.
 
+Some Jerez services expose `CPUAccounting=yes` while their kernel unit counter
+is unset. Waiting observations therefore use the source-pinned
+`515.observe_waiter_cpu` read-only verifier. It binds a fresh (at most 90-second)
+owner budget heartbeat to the authority hash, source, PID/start/boot identity,
+unit and InvocationID, then checks fresh owner kernel CPU and reaped child CPU.
+The waiter and its administrative helpers run on CPU 29; elapsed time gives a
+conservative bound on additional child work. Native cgroup CPU, when available,
+is an additional bound. Missing, stale, unbound, rolled-back or nonfinite
+measurements fail verification. The unchanged prior carry and allowance apply,
+and the final 90 CPU-second publication reserve remains unavailable for waiting.
+The observer never measures its own process CPU as though it belonged to the
+registered owner; the returned budget explicitly records that distinction.
+
 Focused hermetic tests are in
 `application/tests/test_pricefm_stage_r153_runtime_observer.py`. These mock only
 host inspection APIs and never contact real user services. Entry 517 and its

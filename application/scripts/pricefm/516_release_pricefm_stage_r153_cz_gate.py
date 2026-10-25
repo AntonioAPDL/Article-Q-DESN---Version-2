@@ -189,6 +189,7 @@ def prepare(*, probe_receipts, system=None, wait_seconds=7*86400, control_CPU_se
         control_CPU_allowance_seconds=control_CPU_seconds, activation_limit=1, scientific_dispatch_limit=1,
         waiter_unit='pricefm-r153-cz-gate-'+identity+'.service',
         science_unit='pricefm-r153-cz-science-'+identity+'.service',
+        waiter_control_cpu=29,budget_heartbeat_max_age_seconds=90,final_publication_CPU_reserve_seconds=90,
         resource_only=True, cached_restart_authorized=False, fit_cap_changes=0,
         certificate_limit_changes=0, scientific_source_changes=0,
         approved_quarantined_regions=['NO_3'], predecessor_queue=m.QUEUE,
@@ -268,13 +269,14 @@ def launch(path, *, system=None):
     command=['systemd-run','--user','--quiet','--unit='+unit,'--property=Restart=no',
              '--property=KillMode=process','--property=CPUAccounting=yes',
              '--property=RuntimeMaxSec='+str(remaining),'--property=WorkingDirectory='+str(ROOT),
+             '--property=CPUAffinity='+str(authority['waiter_control_cpu']),'--property=Nice=10',
              *['--setenv='+key+'=1' for key in m.THREADS],*argv]
     m.immutable(m.RUNTIME/'single_activation_claim.json',dict(claim=1,id=authority['id'],
         authority_path=str(path),authority_sha256=m.sha(path),epoch=system.now()))
     m.immutable(root/'launch_claim.json',dict(claim=1,authority_sha256=m.sha(path),unit=unit,
         expected_argv=argv,expected_RuntimeMaxSec=remaining,expected_control_source=authority['execution_source'],epoch=system.now()))
     subprocess.run(command,check=True,timeout=30)
-    deadline=time.monotonic()+20
+    deadline=time.monotonic()+60
     while not (root/'activation.json').is_file():
         if (root/'waiter_blocked.json').exists():raise RuntimeError('new CZ waiter blocked; activation remains spent')
         if time.monotonic()>=deadline:raise RuntimeError('CZ waiter did not publish bounded activation proof')
@@ -306,7 +308,8 @@ def private_owner(root,unit):
             or m.systemd_seconds(props.get('RuntimeMaxUSec',''))!=15
             or unit!='pricefm-r153-cz-probe-'+root.name.rsplit('-',1)[-1]+'.service'):
         raise RuntimeError('private CZ unit identity differs')
-    m.immutable(root/'ready.json',dict(unit=unit,properties=props,process=process,entry_sha256=m.sha(ENTRY),
+    own=system.own_admin_cpu()
+    m.immutable(root/'ready.json',dict(unit=unit,properties=props,process=process,own_control_CPU=own,entry_sha256=m.sha(ENTRY),
                                     production_units=0,model_dispatches=0))
     until=time.monotonic()+5
     while not (root/'ack.json').exists():
@@ -338,10 +341,15 @@ def probe(*,output_path,system=None):
         capsule=m.read(root/'ready.json');props=system.unit(unit)
         if (props.get('InvocationID')!=capsule['properties']['InvocationID']
                 or not m.exact_process(system.process(capsule['process']['pid']),capsule['process'])
-                or capsule['entry_sha256']!=m.sha(ENTRY) or capsule['process']['cpus']!=[cpu]
-                or props.get('CPUUsageNSec') in (None,'','[not set]','18446744073709551615')):
+                or capsule['entry_sha256']!=m.sha(ENTRY) or capsule['process']['cpus']!=[cpu]):
             raise RuntimeError('private owner identity/source proof differs')
-        m.immutable(root/'ack.json',dict(exact_owner_verified=True))
+        own=capsule.get('own_control_CPU',{})
+        if (not m.exact_process(own.get('process'),capsule['process'])
+                or m.finite_cpu(own.get('self_CPU_seconds'),'private self CPU')<=0
+                or m.finite_cpu(own.get('self_CPU_seconds'),'private self CPU')+2*own['proc_CPU']['tick_seconds']<own['proc_CPU']['self_CPU_seconds']
+                or m.finite_cpu(own.get('reaped_admin_CPU_seconds'),'private admin CPU')+2*own['proc_CPU']['tick_seconds']<own['proc_CPU']['reaped_child_CPU_seconds']):
+            raise RuntimeError('private measured self/admin CPU witness differs')
+        m.immutable(root/'ack.json',dict(exact_owner_verified=True,measured_CPU_verified=True))
         until=time.monotonic()+10
         while True:
             final=system.unit(unit);current=system.process(capsule['process']['pid'])
@@ -355,7 +363,10 @@ def probe(*,output_path,system=None):
         if not (root/'exiting.json').is_file():raise RuntimeError('private owner did not record cooperative exit')
         result.update(status='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE',private_capsule=capsule,
             exact_owner_verified=True,independent_systemd_expiry=True,create_once_claim=True,
-            real_cgroup_drain=True,numerical_dispatches=0)
+            real_cgroup_drain=True,numerical_dispatches=0,
+            control_CPU_accounting_basis='measured_self_plus_reaped_admin_children',
+            native_unit_CPU_available=m.native_cpu_seconds(props) is not None,
+            private_owner_measured_CPU=own)
     except BaseException as error:
         errors.append(repr(error));result['status']='FAILED_R153_CZ_PRIVATE_CONTROL_LIFECYCLE'
     finally:
@@ -374,10 +385,11 @@ def probe(*,output_path,system=None):
             cleanup=(not int(final.get('MainPID',0)) and final.get('ActiveState') not in {'active','activating','deactivating'}
                      and (not capsule or not system.members(capsule['properties']['ControlGroup']))
                      and (not capsule or not m.same_lifetime(system.process(capsule['process']['pid']),capsule['process'])))
-        # A private owner was confined to one CPU for <=15s. Its full elapsed
-        # lifetime is a conservative debit, including failed probes; no refund.
+        # The private owner is confined to one CPU with a 15-second independent
+        # timer. Reserve that entire lifetime, including failed probes; no refund.
         result.update(errors=errors,exact_cleanup=cleanup,
-            control_CPU_charged_seconds=process_CPU()-started+min(max(time.monotonic()-wall,0),30)+5.,
+            private_unit_CPU_reservation_seconds=15.,
+            control_CPU_charged_seconds=process_CPU()-started+15.+5.,
             captured_epoch=system.now())
         output(result,output_path)
     if result['status']!='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE' or not cleanup:

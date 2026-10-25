@@ -19,6 +19,7 @@ import math
 import os
 from pathlib import Path
 import re
+import resource
 import socket
 import subprocess
 import sys
@@ -96,7 +97,7 @@ def locked(path):
 
 def source_identity(root=ROOT):
     root = Path(root)
-    def git(*args): return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
+    def git(*args): return subprocess.check_output(['git', '-C', str(root), *args], text=True,timeout=30).strip()
     if git('status', '--porcelain'): raise RuntimeError('source worktree is not clean: ' + str(root))
     return dict(root=str(root), branch=git('branch', '--show-current'), head=git('rev-parse', 'HEAD'))
 
@@ -144,7 +145,10 @@ def validate_authority(path, *, system=None, require_host=True, allow_expired=Fa
             or authority.get('predecessor_queue') != QUEUE
             or authority.get('resource_only') is not True or authority.get('cached_restart_authorized') is not False
             or authority.get('fit_cap_changes') != 0 or authority.get('certificate_limit_changes') != 0
-            or authority.get('scientific_source_changes') != 0):
+            or authority.get('scientific_source_changes') != 0
+            or authority.get('waiter_control_cpu')!=29
+            or authority.get('budget_heartbeat_max_age_seconds')!=90
+            or authority.get('final_publication_CPU_reserve_seconds')!=90):
         raise RuntimeError('CZ resource authority scope differs')
     if require_host and system.host() != 'jerez': raise RuntimeError('CZ dispatch is restricted to Jerez')
     if not 0 < authority['expires_epoch'] - authority['created_epoch'] <= 7 * 86400:
@@ -201,10 +205,13 @@ def validate_authority(path, *, system=None, require_host=True, allow_expired=Fa
 class System:
     """Actual-host process/cgroup reads; lifecycle helpers are explicit."""
     def __init__(self):
+        self.admin_invocations=0
         self.adapter = module('r153_cz_frozen_process_adapter', ADAPTER).RecoverySystem()
     def now(self): return time.time()
     def host(self): return socket.gethostname().split('.')[0].lower()
-    def source(self, root): return source_identity(root)
+    def source(self, root):
+        self.admin_invocations+=3
+        return source_identity(root)
     def process(self, pid): return self.adapter.process(pid)
     def recorded(self, expected):
         sample=self.adapter.stat_sample(expected['pid'])
@@ -215,6 +222,7 @@ class System:
     def processes(self): return self.adapter.processes()
     def members(self, cgroup): return self.adapter.members(cgroup)
     def unit(self, name):
+        self.admin_invocations+=1
         names = ['Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID', 'ControlGroup', 'InvocationID',
                  'CPUUsageNSec', 'CPUAccounting', 'KillMode', 'Restart', 'WorkingDirectory', 'NRestarts',
                  'RuntimeMaxUSec', 'ExecStart', 'Result']
@@ -225,6 +233,7 @@ class System:
             raise RuntimeError('unit inspection failed: ' + name + ': ' + result.stderr.strip())
         return props
     def start_science(self, authority, authority_path):
+        self.admin_invocations+=1
         command = [str(PYTHON), '-B', str(ENTRY), 'delegate', '--authority', str(authority_path),
                    '--delegated-entry', str(R144_ENTRY), '--unit', authority['science_unit']]
         subprocess.run(['systemd-run', '--user', '--quiet', '--unit=' + authority['science_unit'],
@@ -233,6 +242,28 @@ class System:
                         *['--setenv=' + name + '=1' for name in THREADS], *command],
                        check=True, timeout=30)
         return command
+    def proc_cpu_snapshot(self,expected):
+        raw=(Path('/proc')/str(expected['pid'])/'stat').read_text()
+        fields=raw[raw.rfind(')')+2:].split();ticks=os.sysconf('SC_CLK_TCK')
+        if (int(fields[19])!=expected['start_ticks'] or self.adapter.boot_id!=expected['boot_id']
+                or fields[0] in {'Z','X','x'}):
+            raise RuntimeError('recorded control CPU lifetime is not live')
+        return dict(self_CPU_seconds=(int(fields[11])+int(fields[12]))/ticks,
+                    reaped_child_CPU_seconds=(int(fields[13])+int(fields[14]))/ticks,
+                    tick_seconds=1./ticks)
+    def own_admin_cpu(self):
+        process=self.process(os.getpid())
+        if process is None:raise RuntimeError('current control CPU process is unreadable')
+        usage=resource.getrusage(resource.RUSAGE_CHILDREN)
+        own=resource.getrusage(resource.RUSAGE_SELF)
+        child_cpu=usage.ru_utime+usage.ru_stime
+        measured=max(time.process_time(),own.ru_utime+own.ru_stime)
+        proc=self.proc_cpu_snapshot(process)
+        if measured+2*proc['tick_seconds']<proc['self_CPU_seconds'] or child_cpu+2*proc['tick_seconds']<proc['reaped_child_CPU_seconds']:
+            raise RuntimeError('process/resource control CPU measurements disagree')
+        return dict(process=process,self_CPU_seconds=measured,reaped_admin_CPU_seconds=child_cpu,
+                    admin_measurement_reserve_seconds=.002+.001*self.admin_invocations,
+                    administrative_invocations=self.admin_invocations,proc_CPU=proc)
     def sleep(self, seconds): time.sleep(seconds)
 
 
@@ -385,6 +416,8 @@ def self_attestation(authority, path, system, *, role):
             or not props.get('ControlGroup') or props['ControlGroup'] not in process.get('cgroups', [])):
         raise RuntimeError('truthful CZ resource/science unit self-attestation differs')
     if role == 'waiter':
+        if process.get('cpus')!=[authority['waiter_control_cpu']]:
+            raise RuntimeError('CZ waiter/admin CPU mask differs from its finite control grant')
         seconds=systemd_seconds(props.get('RuntimeMaxUSec',''))
         launch_claim=read(Path(authority['runtime'])/'launch_claim.json')
         if (seconds<=0 or seconds>7*86400 or seconds!=launch_claim.get('expected_RuntimeMaxSec')
@@ -396,17 +429,147 @@ def self_attestation(authority, path, system, *, role):
                 execution_source=authority['execution_source'], scientific_source=authority['science_source'])
 
 
-def cpu_guard(authority, system):
-    props = system.unit(authority['waiter_unit'])
-    raw = props.get('CPUUsageNSec')
-    if raw in (None, '', '[not set]', '18446744073709551615'):
-        raise RuntimeError('CZ waiter CPU accounting unavailable')
-    used = int(raw) / 1e9 + authority.get('prior_control_CPU_charged_seconds', 0.0)
-    if used + 30 >= authority['control_CPU_allowance_seconds']:
-        raise RuntimeError('CZ waiter exhausted its finite control CPU allowance')
-    if system.now() >= authority['expires_epoch']:
-        raise RuntimeError('CZ waiter expired before its scientific claim')
-    return used
+def native_cpu_seconds(props):
+    raw=props.get('CPUUsageNSec')
+    if raw in (None,'','[not set]','18446744073709551615'):return None
+    try:value=int(raw)/1e9
+    except (ValueError,TypeError):raise RuntimeError('native control CPU counter is malformed')
+    if not math.isfinite(value) or value<0:raise RuntimeError('native control CPU counter is invalid')
+    return value
+
+
+def finite_cpu(value,label):
+    if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or value<0:
+        raise RuntimeError('invalid measured control CPU field: '+label)
+    return float(value)
+
+
+def waiter_cpu_snapshot(authority,system):
+    """Only the actual waiter may publish its own+reaped-admin measurements.
+
+    Its trusted children are synchronous Git/systemctl/systemd-run helpers.
+    The numerical R144 unit is launched by systemd and is not its child. All
+    waiter/admin work is confined to one CPU; it cannot fund a model slot.
+    """
+    props=system.unit(authority['waiter_unit'])
+    if int(props.get('MainPID',0))!=os.getpid() or props.get('ActiveState')!='active':
+        raise RuntimeError('only the actual attested waiter may publish its measured CPU')
+    if not hasattr(system,'own_admin_cpu'):raise RuntimeError('measured waiter/admin CPU is unavailable')
+    own=system.own_admin_cpu();process=own['process']
+    if process.get('pid')!=os.getpid() or process.get('cpus')!=[authority['waiter_control_cpu']]:
+        raise RuntimeError('measured waiter CPU identity or single-CPU bound differs')
+    self_cpu=finite_cpu(own['self_CPU_seconds'],'self')
+    child_cpu=finite_cpu(own['reaped_admin_CPU_seconds'],'reaped administrative children')
+    reserve=finite_cpu(own['admin_measurement_reserve_seconds'],'measurement reserve')
+    native=native_cpu_seconds(props)
+    waiter=max(self_cpu+child_cpu+reserve,native or 0.)
+    prior=finite_cpu(authority['prior_control_CPU_charged_seconds'],'prior carry')
+    path=Path(authority['runtime'])/'authority.json'
+    result=dict(schema_version=1,authority_sha256=sha(path),execution_source=authority['execution_source'],
+        unit=authority['waiter_unit'],InvocationID=props['InvocationID'],
+        process={key:process[key] for key in ('pid','start_ticks','boot_id','cmdline_sha256','cwd')},
+        heartbeat_epoch=system.now(),mode='self_plus_reaped_administrative_children',
+        control_cpu=authority['waiter_control_cpu'],self_CPU_seconds=self_cpu,
+        reaped_admin_CPU_seconds=child_cpu,admin_measurement_reserve_seconds=reserve,
+        administrative_invocations=own.get('administrative_invocations',0),
+        native_cgroup_CPU_seconds=native,waiter_CPU_seconds=waiter,
+        prior_control_CPU_seconds=prior,charged_CPU_seconds=prior+waiter,
+        allowance_CPU_seconds=authority['control_CPU_allowance_seconds'],expires_epoch=authority['expires_epoch'],
+        numerical_CPU_included=False,in_flight_publication_CPU_reserve_seconds=authority['final_publication_CPU_reserve_seconds'])
+    previous=Path(authority['runtime'])/'control_budget_heartbeat.json'
+    if previous.is_file():
+        old=read(previous)
+        if (old.get('authority_sha256')!=result['authority_sha256'] or old.get('process')!=result['process']
+                or old.get('InvocationID')!=result['InvocationID']
+                or self_cpu+.001<old.get('self_CPU_seconds',0)
+                or child_cpu+.001<old.get('reaped_admin_CPU_seconds',0)
+                or result['charged_CPU_seconds']+.001<old.get('charged_CPU_seconds',0)):
+            raise RuntimeError('measured control CPU heartbeat was reset or refunded')
+    return result
+
+
+def publish_waiter_budget(authority,system):
+    value=waiter_cpu_snapshot(authority,system)
+    value['within_CPU']=value['charged_CPU_seconds']+authority['final_publication_CPU_reserve_seconds']<value['allowance_CPU_seconds']
+    value['within_wall']=value['heartbeat_epoch']<value['expires_epoch']
+    atomic(Path(authority['runtime'])/'control_budget_heartbeat.json',value)
+    return value
+
+
+def cpu_guard(authority,system):
+    value=publish_waiter_budget(authority,system)
+    if not value['within_CPU']:raise RuntimeError('CZ waiter exhausted its finite measured control CPU allowance')
+    if not value['within_wall']:raise RuntimeError('CZ waiter expired before its scientific claim')
+    return value['charged_CPU_seconds']
+
+
+def observe_waiter_cpu(authority,authority_path,system,capsule):
+    """Pure external verifier: never charges the observer's CPU as the owner.
+
+    Read fresh owner stat plus its last measured reaped-child heartbeat. Since
+    the complete trusted waiter/admin unit is confined to one CPU, elapsed wall
+    time is a conservative upper bound for any child CPU since that sample.
+    """
+    path=Path(authority_path).resolve();unit=authority['waiter_unit'];props=system.unit(unit)
+    recorded=capsule['process'];current=recorded_process(system,recorded)
+    expected_argv=[str(PYTHON),'-B',str(ENTRY),'run','--authority',str(path),'--unit',unit]
+    if (not exact_process(current,recorded) or current.get('argv')!=expected_argv
+            or current.get('cpus')!=[authority['waiter_control_cpu']]
+            or props.get('ActiveState')!='active' or int(props.get('MainPID',0))!=recorded['pid']
+            or props.get('InvocationID')!=capsule['properties']['InvocationID']
+            or props.get('Restart')!='no' or props.get('KillMode')!='process'
+            or props.get('CPUAccounting')!='yes' or props.get('ControlGroup')!=capsule['properties']['ControlGroup']
+            or capsule.get('execution_source')!=authority['execution_source']):
+        raise RuntimeError('external waiter CPU proof lacks its exact live owner/unit/source')
+    value=read(Path(authority['runtime'])/'control_budget_heartbeat.json')
+    identity={key:recorded[key] for key in ('pid','start_ticks','boot_id','cmdline_sha256','cwd')}
+    epoch=finite_cpu(value.get('heartbeat_epoch'),'heartbeat epoch');age=system.now()-epoch
+    if (value.get('schema_version')!=1 or value.get('authority_sha256')!=sha(path)
+            or value.get('execution_source')!=authority['execution_source'] or value.get('unit')!=unit
+            or value.get('InvocationID')!=props['InvocationID'] or value.get('process')!=identity
+            or value.get('mode')!='self_plus_reaped_administrative_children'
+            or value.get('control_cpu')!=authority['waiter_control_cpu']
+            or value.get('numerical_CPU_included') is not False
+            or age<0 or age>authority['budget_heartbeat_max_age_seconds']):
+        raise RuntimeError('measured waiter CPU heartbeat is missing, stale, unbound or reset')
+    fields={key:finite_cpu(value.get(key),key) for key in ('self_CPU_seconds','reaped_admin_CPU_seconds',
+        'admin_measurement_reserve_seconds','waiter_CPU_seconds','prior_control_CPU_seconds',
+        'charged_CPU_seconds','allowance_CPU_seconds','expires_epoch')}
+    if (fields['prior_control_CPU_seconds']!=authority['prior_control_CPU_charged_seconds']
+            or fields['allowance_CPU_seconds']!=authority['control_CPU_allowance_seconds']
+            or fields['expires_epoch']!=authority['expires_epoch']
+            or abs(fields['charged_CPU_seconds']-fields['prior_control_CPU_seconds']-fields['waiter_CPU_seconds'])>1e-6
+            or fields['waiter_CPU_seconds']+1e-6<fields['self_CPU_seconds']+fields['reaped_admin_CPU_seconds']+fields['admin_measurement_reserve_seconds']):
+        raise RuntimeError('reported measured control CPU contains a refund or changed finite allowance')
+    # Do not infer containment from the dispatcher's original mask: inspect
+    # every currently visible member of this specific new administrative unit.
+    for pid in system.members(props['ControlGroup']):
+        process=system.process(pid)
+        if process is not None and process.get('cpus')!=[authority['waiter_control_cpu']]:
+            raise RuntimeError('waiter administrative child escaped its single-CPU accounting bound')
+    proc=system.proc_cpu_snapshot(recorded)
+    fresh_self=finite_cpu(proc['self_CPU_seconds'],'fresh owner proc CPU')
+    fresh_children=finite_cpu(proc['reaped_child_CPU_seconds'],'fresh owner proc reaped CPU')
+    tick=finite_cpu(proc['tick_seconds'],'kernel accounting tick')
+    if tick<=0 or fresh_self+2*tick<fields['self_CPU_seconds'] or fresh_children+2*tick<fields['reaped_admin_CPU_seconds']:
+        raise RuntimeError('fresh owner CPU contradicts its measured heartbeat; possible rollback')
+    native=native_cpu_seconds(props)
+    old_native=value.get('native_cgroup_CPU_seconds')
+    if old_native is not None:
+        old_native=finite_cpu(old_native,'last native CPU')
+        if native is not None and native+2*tick<old_native:
+            raise RuntimeError('native control counter rolled back within its exact invocation')
+    upper=max(fields['waiter_CPU_seconds'],native or 0.,
+        fresh_self+max(fresh_children,fields['reaped_admin_CPU_seconds'])+age+2*tick+fields['admin_measurement_reserve_seconds'])
+    charged=fields['prior_control_CPU_seconds']+upper
+    return dict(status='VERIFIED_EXTERNAL_MEASURED_WAITER_CPU',basis='fresh_owner_proc_plus_measured_reaped_admin_children_and_single_CPU_elapsed_bound',
+        heartbeat_age_seconds=age,control_cpu=authority['waiter_control_cpu'],
+        measured_charged_CPU_seconds=fields['charged_CPU_seconds'],charged_CPU_upper_bound_seconds=charged,
+        allowance_CPU_seconds=fields['allowance_CPU_seconds'],expires_epoch=fields['expires_epoch'],
+        final_publication_CPU_reserve_seconds=authority['final_publication_CPU_reserve_seconds'],
+        within_CPU=charged+authority['final_publication_CPU_reserve_seconds']<fields['allowance_CPU_seconds'],
+        within_wall=system.now()<fields['expires_epoch'],
+        numerical_CPU_included=False,observer_CPU_used=False)
 
 
 def mirror_progress(authority, value):
@@ -454,10 +617,10 @@ def run(path, unit, *, system=None, poll_seconds=30):
                     immutable(root / 'science_launch.json', dict(argv=argv, unit=authority['science_unit'],
                         started_epoch=system.now(), scientific_source=authority['science_source'],
                         effective_config_sha256=authority['effective_config_sha256']))
+                    final_budget=publish_waiter_budget(authority,system)
                     result = dict(status='R153_CZ_FROZEN_SCIENCE_DISPATCHED_WAITER_EXITING',
                                   epoch=system.now(), scientific_dispatches=1, unit=authority['science_unit'],
-                                  control_CPU_seconds=(int(system.unit(authority['waiter_unit'])['CPUUsageNSec'])/1e9
-                                      +authority.get('prior_control_CPU_charged_seconds',0.)), authority_sha256=sha(path))
+                                  control_CPU_seconds=final_budget['charged_CPU_seconds'],authority_sha256=sha(path))
                     mirror_progress(authority, result); immutable(root / 'waiter_terminal.json', result)
                     return result
                 system.sleep(min(max(1, poll_seconds), 30))

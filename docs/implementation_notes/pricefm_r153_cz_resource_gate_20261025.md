@@ -68,8 +68,8 @@ renewable activation per UUID. Its waiter has `Restart=no`, `KillMode=process`,
 CPU accounting, a maximum seven-day independent systemd wall timer and a
 1,800 CPU-second control allowance. Failed private proofs retain their complete
 conservative debit. A 120 CPU-second preparation/fence/launch reserve and
-30-second final-publication reserve remain inside that allowance. The script
-checks actual waiter-unit CPU, remaining original deadline and immutable
+90-second final-publication reserve remain inside that allowance. The script
+checks measured waiter/admin CPU, remaining original deadline and immutable
 source/evidence again immediately before its create-once scientific claim.
 
 The numerical graph runs in a separate unit so its existing R144 scientific CPU
@@ -143,6 +143,31 @@ live and orphan cgroups, source/terminal races, strict numerical conflict
 classification, broad administrative dispatcher masks, independent timeout and
 CPU guards, one-shot activation/dispatch, launch failures, old-waiter fencing
 and immutable claims. Tests create no models or production services.
+
+The actual Jerez host reports `CPUUsageNSec=[not set]` despite
+`CPUAccounting=yes`. The first private proof correctly failed on that field,
+with exact cleanup and its 5.637701107138455 CPU-second debit retained. The
+corrected source measures the waiter's own CPU plus reaped synchronous
+administrative children using process time and `getrusage`; it cross-checks
+fresh `/proc` CPU and never counts the separately launched scientific unit.
+A native unit counter, when available, supplies an additional conservative
+maximum rather than replacing the measured evidence.
+
+Only the new administrative waiter and its inherited helper children are
+confined to CPU29, with Nice10. Existing scientific affinities and the separate
+R144 unit are unchanged. Each measured budget heartbeat binds exact authority,
+execution source, unit/InvocationID and PID/boot/start lifetime. The pure-read-only
+`observe_waiter_cpu` API uses fresh owner `/proc` CPU, last reported reaped
+children and an elapsed-wall upper bound under that one-CPU constraint. It
+rejects stale/unbound/reset/nonfinite evidence and escaped administrative CPU
+masks; it never charges the observer's process CPU. Both owner and observer
+retain the same 90-second publication reserve inside the 1,800-second allowance.
+
+The corrected private proof records a positive actual own/admin CPU witness,
+checks it against kernel process accounting and reserves the entire private
+one-CPU 15-second systemd lifetime, including failures. It retains all prior
+failed receipts and verifies their exact runtime bytes against committed Git
+ancestors; only the final successful proof may match the active release head.
 
 The private transient-unit receipt supplies actual-host source/accounting/drain
 proof. It does not claim to have observed future R143 queue drainage or to have

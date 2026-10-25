@@ -246,14 +246,28 @@ def inspect_cz(system=None):
         and 0<api.systemd_seconds(live['properties'].get('RuntimeMaxUSec',''))<=7*86400
         and api.systemd_seconds(live['properties'].get('RuntimeMaxUSec',''))==launch.get('expected_RuntimeMaxSec'),
         'CZ live waiter expiry/launch identity differs')
-    api.cpu_guard(authority,system)
+    # This is an external observation of the registered owner. In particular,
+    # never substitute this observer's process CPU for a missing unit counter.
+    # The source-pinned API binds fresh owner/proc evidence and its bounded
+    # administrative-child accounting to the authority and exact live capsule.
+    budget=api.observe_waiter_cpu(authority,path,system,value['capsule'])
+    require(isinstance(budget,dict) and budget.get('status')=='VERIFIED_EXTERNAL_MEASURED_WAITER_CPU'
+        and budget.get('observer_CPU_used') is False and budget.get('numerical_CPU_included') is False
+        and budget.get('within_CPU') is True and budget.get('within_wall') is True
+        and isinstance(budget.get('charged_CPU_upper_bound_seconds'),(int,float))
+        and not isinstance(budget['charged_CPU_upper_bound_seconds'],bool)
+        and math.isfinite(budget['charged_CPU_upper_bound_seconds'])
+        and 0<=budget['charged_CPU_upper_bound_seconds']
+        and budget['charged_CPU_upper_bound_seconds']+authority['final_publication_CPU_reserve_seconds']
+            <authority['control_CPU_allowance_seconds'],
+        'CZ external owner CPU/wall allowance is unproven or exhausted')
     progress=read(root/'progress.json')
     require(progress.get('authority_sha256')==digest(path)
         and 0<=system.now()-progress.get('epoch',0)<=180,'CZ waiting progress is stale or mismatched')
     boundary=api.boundary_state(authority,system)
     return dict(common,status='R153_CZ_WAITING_FOR_PREDECESSOR_BOUNDARY',healthy=True,
         phase='boundary_ready' if boundary.get('ready') else 'waiting',scientific_dispatches=0,
-        boundary=boundary,live=live,progress=progress)
+        boundary=boundary,live=live,progress=progress,budget=budget)
 
 
 def observe(lane,system=None):

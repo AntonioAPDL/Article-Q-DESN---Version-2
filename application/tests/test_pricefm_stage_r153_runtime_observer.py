@@ -62,6 +62,8 @@ class Fixture(unittest.TestCase):
             science_source=dict(root='/frozen/r144',branch='work/pricefm-r144-cz-training-fallback-20261020',
                 head='f96fcb0e3dc47da236d656cda2f0e58fb537ee1f'),created_epoch=900.,expires_epoch=2000.,
             waiter_unit='wait.service',science_unit='science.service',effective_config_sha256='c'*64,
+            waiter_control_cpu=29,budget_heartbeat_max_age_seconds=90,final_publication_CPU_reserve_seconds=90.,
+            control_CPU_allowance_seconds=1800.,prior_control_CPU_charged_seconds=125.,
             effective_config=dict(tag='frozen_cz',fallback_candidate=dict(candidate_id='original')))
         write(self.cp,self.authority)
         self.global_claim=dict(claim=1,id=identity,authority_path=str(self.cp),authority_sha256=m.digest(self.cp),epoch=950.)
@@ -73,13 +75,17 @@ class Fixture(unittest.TestCase):
             exact_process=lambda a,b:bool(a) and all(a.get(k)==b.get(k) for k in ('pid','start_ticks','boot_id','cmdline_sha256','cwd')),
             same_lifetime=lambda a,b:bool(a) and all(a.get(k)==b.get(k) for k in ('pid','start_ticks','boot_id')),
             systemd_seconds=lambda value:int(value)/1e6,
-            cpu_guard=Mock(return_value=5.),boundary_state=Mock(return_value=dict(ready=False,status='waiting')))
+            cpu_guard=Mock(side_effect=AssertionError('observer must not measure its own CPU')),
+            observe_waiter_cpu=Mock(return_value=dict(status='VERIFIED_EXTERNAL_MEASURED_WAITER_CPU',
+                observer_CPU_used=False,numerical_CPU_included=False,within_CPU=True,within_wall=True,
+                charged_CPU_upper_bound_seconds=130.,basis='verified_owner_budget')),
+            boundary_state=Mock(return_value=dict(ready=False,status='waiting')))
         self.load.return_value=SimpleNamespace(api=lambda:self.api)
     def capsule(self,role):
         unit=self.authority['waiter_unit' if role=='waiter' else 'science_unit'];pid=11 if role=='waiter' else 22
         group='/system.slice/'+unit
         process=dict(pid=pid,start_ticks=7,boot_id='boot',cmdline_sha256='d'*64,cwd=str(self.source),
-            argv=m.cz_argv(self.api,self.authority,self.cp,role),cgroups=[group])
+            argv=m.cz_argv(self.api,self.authority,self.cp,role),cgroups=[group],cpus=[29])
         props=dict(Id=unit,MainPID=str(pid),ActiveState='active',InvocationID='invocation-'+role,
             ControlGroup=group,Restart='no',KillMode='process',CPUAccounting='yes',WorkingDirectory=str(self.source),
             RuntimeMaxUSec='1000000000')
@@ -179,7 +185,11 @@ class WaitingTests(Fixture):
         self.waiting();result=m.observe('cz',self.system)
         self.assertTrue(result['healthy']);self.assertEqual(result['phase'],'waiting')
         self.assertFalse(result['scientific_complete']);self.assertEqual(result['scientific_dispatches'],0)
-        self.assertEqual(result['service_actions'],0);self.api.cpu_guard.assert_called_once()
+        self.assertEqual(result['service_actions'],0)
+        self.api.observe_waiter_cpu.assert_called_once_with(self.authority,self.cp,self.system,
+            json.loads((self.runtime/'activation.json').read_text())['capsule'])
+        self.api.cpu_guard.assert_not_called()
+        self.assertEqual(result['budget']['basis'],'verified_owner_budget')
     def test_boundary_ready_still_does_not_claim_dispatch(self):
         self.waiting();self.api.boundary_state.return_value=dict(ready=True);result=m.observe('cz',self.system)
         self.assertTrue(result['healthy']);self.assertEqual(result['phase'],'boundary_ready');self.assertEqual(result['scientific_dispatches'],0)
@@ -202,7 +212,18 @@ class WaitingTests(Fixture):
     def test_old_waiter_not_drained_rejects_health(self):
         self.waiting();self.api.old_waiter_drained.return_value=dict(drained=False);self.assert_failed('cz')
     def test_cpu_guard_failure_rejects_health(self):
-        self.waiting();self.api.cpu_guard.side_effect=RuntimeError('finite allowance spent');self.assert_failed('cz')
+        self.waiting();self.api.observe_waiter_cpu.side_effect=RuntimeError('finite allowance spent');self.assert_failed('cz')
+        self.api.cpu_guard.assert_not_called()
+    def test_missing_or_exhausted_budget_proof_rejects_health(self):
+        self.waiting()
+        good=deepcopy(self.api.observe_waiter_cpu.return_value)
+        for proof in (None,[],{},dict(good,within_CPU=False),dict(good,within_wall=False),
+                dict(good,observer_CPU_used=True),dict(good,numerical_CPU_included=True),
+                dict(good,charged_CPU_upper_bound_seconds=float('nan')),
+                dict(good,charged_CPU_upper_bound_seconds=1711.),
+                dict(good,charged_CPU_upper_bound_seconds=1800.)):
+            self.api.observe_waiter_cpu.return_value=proof
+            with self.subTest(proof=proof):self.assert_failed('cz')
     def test_expired_waiter_is_not_healthy_or_renewed(self):
         self.waiting();self.system.clock=2000.;result=self.assert_failed('cz')
         self.assertEqual(result['phase'],'expired');self.api.boundary_state.assert_not_called()
@@ -271,6 +292,84 @@ class DelegationAndTerminalTests(Fixture):
     def test_blocked_after_terminal_does_not_claim_success(self):
         self.terminal();write(self.runtime/'science_blocked.json',dict(error='publication failed'))
         result=self.assert_failed('cz');self.assertEqual(result['phase'],'blocked')
+
+
+class ExternalOwnerBudgetIntegrationTests(Fixture):
+    """Exercise the real 515 read-only proof through the 518 waiting path."""
+    def setUp(self):
+        super().setUp();self.cap=self.waiting()
+        self.authority.update(waiter_control_cpu=29,budget_heartbeat_max_age_seconds=90,
+            final_publication_CPU_reserve_seconds=90.)
+        # The authority is immutable before this prospective activation; bind
+        # every synthetic registration/activation to its final exact bytes.
+        write(self.cp,self.authority);self.global_claim['authority_sha256']=m.digest(self.cp);write(self.cc,self.global_claim)
+        for name in ('activation.json','launch_claim.json','progress.json'):
+            self.edit(self.runtime/name,'authority_sha256',m.digest(self.cp))
+        entry=ENTRY.with_name('515_resolve_pricefm_stage_r153_cz_gate.py')
+        spec=importlib.util.spec_from_file_location('r153_observer_real_cpu_api',entry)
+        self.real=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.real)
+        self.real.PYTHON=self.api.PYTHON;self.real.ENTRY=self.api.ENTRY
+        self.api.observe_waiter_cpu=self.real.observe_waiter_cpu
+        self.system.proc_cpu_snapshot=Mock(return_value=dict(self_CPU_seconds=2.5,reaped_child_CPU_seconds=.4,tick_seconds=.01))
+        self.system.units['wait.service']['CPUUsageNSec']='[not set]'
+        self.system.groups[self.cap['properties']['ControlGroup']]=[11]
+        self.heartbeat=dict(schema_version=1,authority_sha256=m.digest(self.cp),execution_source=self.src,
+            unit='wait.service',InvocationID='invocation-waiter',
+            process={key:self.cap['process'][key] for key in ('pid','start_ticks','boot_id','cmdline_sha256','cwd')},
+            heartbeat_epoch=990.,mode='self_plus_reaped_administrative_children',control_cpu=29,
+            self_CPU_seconds=2.,reaped_admin_CPU_seconds=.3,admin_measurement_reserve_seconds=.5,
+            waiter_CPU_seconds=2.8,prior_control_CPU_seconds=125.,charged_CPU_seconds=127.8,
+            allowance_CPU_seconds=1800.,expires_epoch=2000.,native_cgroup_CPU_seconds=None,numerical_CPU_included=False)
+        self.hb=self.runtime/'control_budget_heartbeat.json';write(self.hb,self.heartbeat)
+    def test_missing_native_counter_accepts_bound_measured_owner_fallback(self):
+        with (patch.object(self.real.time,'process_time',side_effect=AssertionError('observer CPU forbidden')),
+                patch.object(self.real.os,'times',side_effect=AssertionError('observer child CPU forbidden'))):
+            result=m.observe('cz',self.system)
+        self.assertTrue(result['healthy']);self.assertFalse(result['budget']['observer_CPU_used'])
+        self.assertFalse(result['budget']['numerical_CPU_included'])
+        self.assertGreaterEqual(result['budget']['charged_CPU_upper_bound_seconds'],138.)
+        self.system.proc_cpu_snapshot.assert_called_once_with(self.cap['process'])
+        self.api.cpu_guard.assert_not_called()
+    def test_missing_stale_or_future_heartbeat_fails(self):
+        self.hb.unlink();self.assert_failed('cz')
+        for epoch in (909.,1001.):
+            write(self.hb,dict(self.heartbeat,heartbeat_epoch=epoch));self.assert_failed('cz')
+    def test_wrong_authority_source_pid_unit_or_invocation_fails(self):
+        cases=[('authority_sha256','0'*64),('execution_source',dict(self.src,head='f'*40)),
+            ('unit','other.service'),('InvocationID','wrong'),('process',dict(self.heartbeat['process'],pid=999)),
+            ('process',dict(self.heartbeat['process'],start_ticks=8)),('process',dict(self.heartbeat['process'],boot_id='other')),
+            ('mode','observer_process_cpu'),('control_cpu',28),('numerical_CPU_included',True)]
+        for field,value in cases:
+            write(self.hb,dict(self.heartbeat,**{field:value}))
+            with self.subTest(field=field,value=value):self.assert_failed('cz')
+    def test_refund_changed_allowance_nonfinite_and_scope_fields_fail(self):
+        for field,value in [('prior_control_CPU_seconds',0.),('charged_CPU_seconds',120.),
+                ('allowance_CPU_seconds',1900.),('expires_epoch',3000.),('self_CPU_seconds',float('nan')),
+                ('reaped_admin_CPU_seconds',-.1),('waiter_CPU_seconds',0.)]:
+            write(self.hb,dict(self.heartbeat,**{field:value}))
+            with self.subTest(field=field):self.assert_failed('cz')
+    def test_fresh_proc_contradiction_or_admin_cpu_escape_fails(self):
+        self.system.proc_cpu_snapshot.return_value['self_CPU_seconds']=0.;self.assert_failed('cz')
+        self.system.proc_cpu_snapshot.return_value['self_CPU_seconds']=2.5
+        self.system.processes[44]=dict(pid=44,cpus=[28,29])
+        self.system.groups[self.cap['properties']['ControlGroup']]=[11,44];self.assert_failed('cz')
+    def test_native_counter_is_an_additional_bound_not_a_waiver(self):
+        self.system.units['wait.service']['CPUUsageNSec']='30000000000'
+        result=m.observe('cz',self.system);self.assertTrue(result['healthy'])
+        self.assertGreaterEqual(result['budget']['charged_CPU_upper_bound_seconds'],155.)
+        self.edit(self.hb,'InvocationID','wrong');self.assert_failed('cz')
+    def test_native_counter_rollback_and_exhausted_upper_bound_fail(self):
+        self.system.units['wait.service']['CPUUsageNSec']='1000000000';self.edit(self.hb,'native_cgroup_CPU_seconds',3.)
+        self.assert_failed('cz');write(self.hb,self.heartbeat)
+        self.system.units['wait.service']['CPUUsageNSec']='1700000000000';self.assert_failed('cz')
+    def test_remaining_final_publication_reserve_is_not_spendable_wait_cpu(self):
+        self.system.units['wait.service']['CPUUsageNSec']='1600000000000'
+        result=self.assert_failed('cz')
+        self.assertEqual(result['phase'],'verification_failed')
+    def test_real_fallback_is_read_only(self):
+        before={str(path):path.read_bytes() for path in self.runtime.rglob('*') if path.is_file()}
+        result=m.observe('cz',self.system);self.assertTrue(result['healthy'])
+        self.assertEqual(before,{str(path):path.read_bytes() for path in self.runtime.rglob('*') if path.is_file()})
 
 
 class ReadOnlyOutputTests(Fixture):

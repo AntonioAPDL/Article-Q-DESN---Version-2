@@ -33,6 +33,7 @@ def process(pid=100,cpus=None,argv=None):
 class FakeSystem:
     def __init__(self):
         self.time=200.;self.procs={};self.units={};self.groups={};self.sources={};self.dispatches=[]
+        self.self_cpu=.1;self.child_cpu=.2;self.measurement_reserve=.002
     def host(self):return 'jerez'
     def now(self):return self.time
     def source(self,root):return self.sources[str(root)]
@@ -40,6 +41,12 @@ class FakeSystem:
     def process(self,pid):return self.procs.get(pid)
     def processes(self):return list(self.procs.values())
     def members(self,group):return self.groups.get(group,[])
+    def own_admin_cpu(self):
+        return dict(process=self.procs[os.getpid()],self_CPU_seconds=self.self_cpu,
+            reaped_admin_CPU_seconds=self.child_cpu,admin_measurement_reserve_seconds=self.measurement_reserve,
+            administrative_invocations=2)
+    def proc_cpu_snapshot(self,expected):
+        return dict(self_CPU_seconds=self.self_cpu,reaped_child_CPU_seconds=self.child_cpu,tick_seconds=.01)
     def sleep(self,seconds):self.time+=seconds
     def start_science(self,authority,path):
         self.dispatches.append(authority['science_unit']);return ['truthful','new-wrapper','--delegated-entry',str(GATE.R144_ENTRY)]
@@ -58,6 +65,7 @@ class CZGateTests(unittest.TestCase):
             runtime=str(self.runtime),created_epoch=100.,expires_epoch=604900.,
             control_CPU_allowance_seconds=1800.,activation_limit=1,scientific_dispatch_limit=1,
             approved_quarantined_regions=['NO_3'],predecessor_queue=GATE.QUEUE,
+            waiter_control_cpu=29,budget_heartbeat_max_age_seconds=90,final_publication_CPU_reserve_seconds=90,
             resource_only=True,cached_restart_authorized=False,fit_cap_changes=0,
             certificate_limit_changes=0,scientific_source_changes=0,
             waiter_unit='pricefm-r153-cz-gate-'+self.identifier+'.service',
@@ -100,7 +108,7 @@ class CZGateTests(unittest.TestCase):
     def waiter_capsule(self):
         unit=self.authority['waiter_unit'];pid=os.getpid();group='/user.slice/'+unit
         argv=[str(GATE.PYTHON),'-B',str(GATE.ENTRY),'run','--authority',str(self.path),'--unit',unit]
-        p=process(pid,argv=argv);p['cwd']=str(GATE.ROOT);p['cgroups']=[group];self.system.procs[pid]=p
+        p=process(pid,cpus=[29],argv=argv);p['cwd']=str(GATE.ROOT);p['cgroups']=[group];self.system.procs[pid]=p
         self.system.units[unit]=dict(Id=unit,MainPID=str(pid),ActiveState='active',ControlGroup=group,
             InvocationID='invocation',Restart='no',KillMode='process',CPUAccounting='yes',CPUUsageNSec='100000000',
             WorkingDirectory=str(GATE.ROOT),RuntimeMaxUSec='7d')
@@ -210,11 +218,65 @@ class CZGateTests(unittest.TestCase):
         self.waiter_capsule();self.assertEqual(GATE.self_attestation(self.authority,self.path,self.system,role='waiter')['actual_entry'],str(GATE.ENTRY))
         self.system.units[self.authority['waiter_unit']]['RuntimeMaxUSec']='8d'
         with self.assertRaisesRegex(RuntimeError,'expiry'):GATE.self_attestation(self.authority,self.path,self.system,role='waiter')
-    def test_cpu_accounting_unavailable_or_exhausted_fails_closed(self):
-        unit=self.authority['waiter_unit'];self.system.units[unit]=dict(CPUUsageNSec='[not set]')
-        with self.assertRaisesRegex(RuntimeError,'unavailable'):GATE.cpu_guard(self.authority,self.system)
-        self.system.units[unit]=dict(CPUUsageNSec=str(1800*10**9))
+    def test_unset_native_counter_uses_attested_measured_admin_cpu(self):
+        self.waiter_capsule();unit=self.authority['waiter_unit'];self.system.units[unit]['CPUUsageNSec']='[not set]'
+        self.assertAlmostEqual(GATE.cpu_guard(self.authority,self.system),125.302)
+        heartbeat=GATE.read(self.runtime/'control_budget_heartbeat.json')
+        self.assertIsNone(heartbeat['native_cgroup_CPU_seconds'])
+        self.assertEqual(heartbeat['mode'],'self_plus_reaped_administrative_children')
+        self.assertFalse(heartbeat['numerical_CPU_included'])
+    def test_missing_measured_counter_is_not_waived(self):
+        self.waiter_capsule();self.system.units[self.authority['waiter_unit']]['CPUUsageNSec']='[not set]'
+        with mock.patch.object(self.system,'own_admin_cpu',side_effect=RuntimeError('measured counter unavailable')):
+            with self.assertRaisesRegex(RuntimeError,'unavailable'):GATE.cpu_guard(self.authority,self.system)
+    def test_measured_or_native_budget_exhaustion_fails_closed(self):
+        self.waiter_capsule();unit=self.authority['waiter_unit'];self.system.units[unit]['CPUUsageNSec']=str(1800*10**9)
         with self.assertRaisesRegex(RuntimeError,'exhausted'):GATE.cpu_guard(self.authority,self.system)
+    def test_external_observer_uses_owner_proc_and_bound_heartbeat_not_observer_cpu(self):
+        self.waiter_capsule();unit=self.authority['waiter_unit'];self.system.units[unit]['CPUUsageNSec']='[not set]'
+        GATE.cpu_guard(self.authority,self.system);capsule=GATE.self_attestation(self.authority,self.path,self.system,role='waiter')
+        self.system.time+=10;self.system.self_cpu=.4;self.system.child_cpu=.3
+        with mock.patch.object(GATE.time,'process_time',side_effect=AssertionError('observer CPU used')),mock.patch.object(GATE.resource,'getrusage',side_effect=AssertionError('observer rusage used')):
+            proof=GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+        self.assertTrue(proof['within_CPU']);self.assertFalse(proof['observer_CPU_used'])
+        self.assertGreaterEqual(proof['charged_CPU_upper_bound_seconds'],135.7)
+    def external_fixture(self):
+        self.waiter_capsule();self.system.units[self.authority['waiter_unit']]['CPUUsageNSec']='[not set]'
+        GATE.cpu_guard(self.authority,self.system)
+        return copy.deepcopy(GATE.self_attestation(self.authority,self.path,self.system,role='waiter'))
+    def test_external_cpu_preserves_same_publication_reserve_as_owner_guard(self):
+        capsule=self.external_fixture();self.system.units[self.authority['waiter_unit']]['CPUUsageNSec']=str(1600*10**9)
+        measured=GATE.publish_waiter_budget(self.authority,self.system)
+        self.assertFalse(measured['within_CPU'])
+        proof=GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+        self.assertLess(proof['charged_CPU_upper_bound_seconds'],1800.)
+        self.assertFalse(proof['within_CPU'])
+        self.assertEqual(proof['final_publication_CPU_reserve_seconds'],90)
+    def test_external_cpu_heartbeat_missing_or_stale_rejected(self):
+        capsule=self.external_fixture();self.system.time+=91
+        with self.assertRaisesRegex(RuntimeError,'stale'):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+        self.system.time=200.;(self.runtime/'control_budget_heartbeat.json').unlink()
+        with self.assertRaises(FileNotFoundError):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+    def test_external_cpu_heartbeat_wrong_pid_or_refund_rejected(self):
+        capsule=self.external_fixture();path=self.runtime/'control_budget_heartbeat.json';value=GATE.read(path)
+        value['process']['pid']+=1;put(path,value)
+        with self.assertRaisesRegex(RuntimeError,'unbound'):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+        value['process']['pid']-=1;value['charged_CPU_seconds']=0.;put(path,value)
+        with self.assertRaisesRegex(RuntimeError,'refund'):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+    def test_external_cpu_source_or_invocation_change_rejected(self):
+        capsule=self.external_fixture();self.system.units[self.authority['waiter_unit']]['InvocationID']='changed'
+        with self.assertRaisesRegex(RuntimeError,'exact live owner'):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+    def test_external_cpu_bound_rejects_unconfined_admin_child(self):
+        capsule=self.external_fixture();group=capsule['properties']['ControlGroup'];self.system.groups[group]=[99]
+        self.system.procs[99]=process(99,list(range(30)),['git','status','--porcelain'])
+        with self.assertRaisesRegex(RuntimeError,'escaped'):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+    def test_external_cpu_rollback_and_internal_refund_rejected(self):
+        capsule=self.external_fixture();self.system.self_cpu=0.
+        with self.assertRaisesRegex(RuntimeError,'rollback'):GATE.observe_waiter_cpu(self.authority,self.path,self.system,capsule)
+        with self.assertRaisesRegex(RuntimeError,'reset or refunded'):GATE.cpu_guard(self.authority,self.system)
+    def test_external_cpu_different_process_cannot_publish_waiter_measurement(self):
+        self.waiter_capsule();self.system.units[self.authority['waiter_unit']]['MainPID']=str(os.getpid()+1)
+        with self.assertRaisesRegex(RuntimeError,'actual attested waiter'):GATE.cpu_guard(self.authority,self.system)
     def test_expiry_guard_does_not_depend_only_on_systemd(self):
         self.waiter_capsule();self.system.time=self.authority['expires_epoch']
         with self.assertRaisesRegex(RuntimeError,'expired'):GATE.cpu_guard(self.authority,self.system)

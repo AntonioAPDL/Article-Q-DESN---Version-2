@@ -1,0 +1,149 @@
+# R153: explicit CZ resource-boundary resolution
+
+R143's known NO₃ numerical failure must remain visible. Its eventual terminal
+`R143_QUEUE_DRAINED_WITH_QUARANTINED_FAILURES` is incompatible with R144's old
+clean-predecessor requirement. This resource release preserves that failed
+terminal and all NO₃ certificates instead of relabelling the queue as clean.
+The user explicitly requested implementation of the October 25 reviewed plan.
+
+## Scientific independence and exact scope
+
+The original `486_run_pricefm_stage_r144_cz_training_fallback.py` consumes the
+frozen CZ preparation, rank-three CZ RHS choice and six certified CZ
+statistics/RHS prerequisites. It does not consume NO₃ fits or any other R143
+region's newly generated forecast/model output. CZ's original feature bank can
+contain its already frozen cross-region input data; this is different from a
+scientific dependency on a newly completed R143 model.
+
+The new effective config differs from the original JSON in exactly one field:
+`predecessor_terminal_status` is the truthful degraded status above. No source
+file or failed terminal is modified. Candidate, prior, quantiles, seeds, cohorts,
+cap 300, 15 physical CPUs 15–29, source/target hashes and all scientific inputs
+remain the original R144 contract. The authority records both config hashes
+and the effective JSON explicitly.
+
+The only permitted R143 quarantine is the two precisely reviewed NO₃ q0.75
+failed targets. Their original task, packet seal and certificate SHA256 values
+are embedded in the new control source. An additional PT/SE₃ failure, a changed
+NO₃ certificate, an incomplete region, a new process or an ambiguous boundary
+blocks the release. It does not relax a certificate or admit a repair fit.
+
+## Ownership and source layers
+
+`515_resolve_pricefm_stage_r153_cz_gate.py` is the actual new control entry.
+`516_release_pricefm_stage_r153_cz_gate.py` owns private proof, authority
+preparation, the exact old-waiter fence and one waiter launch. The original
+scientific entry and worker code are unchanged R144. The delegated numerical
+unit truthfully runs the new 515 entry with `delegate` and an explicit
+`--delegated-entry` pointing at old 486. It calls the unchanged public
+`controller(effective_config)` function, rather than patching imports or
+pretending that its actual entry is old 486. The scientific function continues
+to create original R144 preparation/worker argv/closeout provenance. A separate
+execution bridge pins the actual new source, unit, InvocationID and lifetime.
+
+Jerez must have clean, exact Git checkouts of:
+
+- R153 `work/pricefm-r153-control-lifecycle-20261025`, at the released commit.
+- Existing R144 `f96fcb0e3dc47da236d656cda2f0e58fb537ee1f` and R143
+  `28d190306ae505c4784984d238c89cd225fab9b4`, plus their existing frozen R141
+  numerical dependencies.
+- Cold process-reader dependencies: R152 parent recovery
+  `cbf11c6e41d6be49ebdf9c3648fb79d2e641e234` and its sibling resource core
+  `cba0b6c861f20ebdffcd970d59b0fa38afd80a42` at their established absolute
+  worktree paths. Only `511.RecoverySystem` metadata methods and pure resource
+  core are used; no Muscat runtime, cached controller, 512 release or EE tree is
+  activated or imported.
+
+The private reader is reused because its bounded empty-exit and administrative
+SSH handling was independently tested and exercised on the actual hosts.
+Sources must be deployed through normal Git at exact published heads. Dirty
+source copying or changing the original worktrees is not part of deployment.
+
+## Bounded authority and accounting
+
+The new namespace is
+`DATA/launch_prep/pricefm_stage_r153_control_lifecycle_20261025/cz/<uuid>/`.
+The entire CZ gate has one create-once global activation registry, not one
+renewable activation per UUID. Its waiter has `Restart=no`, `KillMode=process`,
+CPU accounting, a maximum seven-day independent systemd wall timer and a
+1,800 CPU-second control allowance. Failed private proofs retain their complete
+conservative debit. A 120 CPU-second preparation/fence/launch reserve and
+30-second final-publication reserve remain inside that allowance. The script
+checks actual waiter-unit CPU, remaining original deadline and immutable
+source/evidence again immediately before its create-once scientific claim.
+
+The numerical graph runs in a separate unit so its existing R144 scientific CPU
+is not disguised as new waiter-control CPU. The seven-day deadline is a
+pre-dispatch waiter limit, not a renewed cached allocation or a new cap on the
+already authorized R144 mathematical worker. There is one numerical dispatch
+claim and no automatic model retry. Old cached admissions, master, expired
+clock and every cached ledger record remain unchanged.
+
+## Deployment sequence
+
+Use the pinned Python 3.11 environment and invoke 516 on actual Jerez, with
+unique output paths outside the committed source. No production service is
+operated before the committed-source private proof succeeds.
+
+1. `probe --output UNIQUE_PROBE.json` starts only an owned private transient
+   unit. It verifies actual source/lifetime/unit/cgroup/accounting/expiry and
+   its cooperative exact drain. It launches no model or production service.
+   Preserve all failed receipts and any cleanup reconciliation; no cost refund.
+2. `prepare --probe-receipt RECEIPT ... --output PREPARE.json` creates an
+   immutable authority only after source pins, original sole-process waiting
+   service, R143 owner and exact NO₃ failure hashes match. Include all earlier
+   private receipts. The final successful proof must match the final released
+   control commit. The source-bound original waiter progress is archived.
+3. `inspect --authority AUTHORITY` is read-only and normally reports that the
+   entire R143 queue has not yet drained. A partial boundary is not dispatch
+   permission.
+4. `fence --authority AUTHORITY --output FENCE.json` is the explicit production
+   control operation. It stops only the exact old R144 waiting lifetime, after
+   proving its InvocationID/cmdline/cwd, sole cgroup PID and original known
+   quarantine make numerical launch impossible. It archives current progress
+   and verifies actual PID/unit/cgroup drain. No scientific process is signalled.
+5. `launch --authority AUTHORITY --output LAUNCH.json` consumes the single
+   global claim and starts the new finite waiter. No automatic retry is allowed
+   if launch/activation fails. Fresh source/old-control proof and independent
+   systemd timeout attestation are mandatory.
+
+The waiter holds both its owner lock and the original R144 supervisor lock. It
+publishes new progress plus a truthful execution-source bridge in the mutable
+current R144 resource pointer. Original pointer bytes remain archived.
+
+## Boundary and handoff proof
+
+A terminal alone is insufficient. The guard requires the full fixed R143 queue
+disposition, exactly the approved NO₃ failure, valid source-bound regional
+closeouts for every other assigned region, an inactive R143 unit, absence of
+its original process lifetime, empty recorded/current cgroups, and a fresh
+strict census without predecessor/known numerical work on slot B. It repeats
+unit/cgroup/lifetime and exact terminal-byte checks to reject a restarting or
+changing predecessor. A reused PID is compared by fresh kernel lifetime before
+reading unrelated protected metadata; an unknown live protected process still
+fails closed in the generic census.
+
+Only then is the one scientific claim created and the new explicit delegate
+unit launched. The waiter exits and releases the old supervisor lock. The
+delegate independently reacquires that lock, revalidates source/deadline and
+boundary, attests its actual invocation, and invokes old 486. Original R144
+controller certificate, fit, forecast and closeout guards continue unchanged.
+A failure retains its exact claim and stops future dispatch; it never signals a
+model, changes its cap or rewrites a quarantine as success.
+
+The current long-running PT/SE₃ jobs are not drained or accelerated by this
+release. Waiting is a correct deployed state. CZ scientific completion is a
+future measured result, not something inferred from a successful gate launch.
+
+## Verification
+
+`application/tests/test_pricefm_stage_r153_cz_gate.py` covers truthful degraded
+status, exact approved failure/source/config scope, full queue/closeout guards,
+live and orphan cgroups, source/terminal races, strict numerical conflict
+classification, broad administrative dispatcher masks, independent timeout and
+CPU guards, one-shot activation/dispatch, launch failures, old-waiter fencing
+and immutable claims. Tests create no models or production services.
+
+The private transient-unit receipt supplies actual-host source/accounting/drain
+proof. It does not claim to have observed future R143 queue drainage or to have
+run CZ. Publication and final health records must separate these states.

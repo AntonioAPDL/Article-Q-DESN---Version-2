@@ -172,3 +172,34 @@ ancestors; only the final successful proof may match the active release head.
 The private transient-unit receipt supplies actual-host source/accounting/drain
 proof. It does not claim to have observed future R143 queue drainage or to have
 run CZ. Publication and final health records must separate these states.
+
+## Isolated CZ-only release correction
+
+The original R153 baseline source at `bfe540920998eeeef398cfa1aad93f8d408ed6ca`
+is active and remains unchanged. CZ's first preparation stopped before any
+authority or activation because the original services execute canonical
+relative script tokens under their frozen working directories. Actual R144
+argv uses `application/scripts/pricefm/486_run_pricefm_stage_r144_cz_training_fallback.py`
+with `run --poll-seconds 30`; R143 uses its corresponding 485 entry and poll15.
+
+The isolated `pricefm_r153_cz_release_20261025` checkout validates exactly
+PY/-B/script/run/poll at their original positions, accepting only the literal
+absolute entry or that exact canonical relative spelling under the exact
+frozen cwd. It records raw argv unchanged plus a separate resolved-script
+witness. Wrong cwd, symlinks, script position/path, interpreter, flags and
+suffix arguments remain rejected. The actual private proof now runs both
+original live `control_snapshot` preparation predicates read-only before any
+private-unit start; failures stay inside its receipt/cleanup/charge handler.
+
+Old CZ private receipts from the canonical original control root and branch
+are accepted only as paid history at the explicitly recorded 37799978 and
+bfe54092 commits, with Git ancestry and exact runtime-blob verification. They
+can never satisfy the new checkout's final successful proof. The original
+failed preparation, diagnostics and new release administration remain covered
+by the existing 120 CPU-second administrative reserve, without refunding
+previous probes or replenishing the one activation.
+
+Run baseline observations from the original active source and CZ observations
+from this isolated CZ source. Their actual entry/root/source chains differ; do
+not execute the baseline release from the CZ checkout. No frozen baseline or
+scientific worktree is edited by this compatibility correction.

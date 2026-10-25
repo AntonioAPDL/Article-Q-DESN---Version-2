@@ -23,6 +23,12 @@ import uuid
 ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
 GATE = ENTRY.with_name('515_resolve_pricefm_stage_r153_cz_gate.py')
+ORIGINAL_CONTROL_ROOT = ROOT.parent/'pricefm_r153_control_lifecycle_20261025'
+ORIGINAL_CONTROL_BRANCH = 'work/pricefm-r153-control-lifecycle-20261025'
+APPROVED_HISTORICAL_CONTROL_HEADS = {
+    '37799978e6b399f287a9851c8b7cf3242b6b2c82',
+    'bfe540920998eeeef398cfa1aad93f8d408ed6ca',
+}
 _API = None
 
 
@@ -86,15 +92,61 @@ def source_records(system):
     return records, pins
 
 
+def control_launch_role(process,entry):
+    """Recognize only the two observed original argv spellings, truthfully."""
+    m=api();entry=Path(entry)
+    polls={m.R144_ENTRY:'30',m.R143_ENTRY:'15'}
+    if entry not in polls or not entry.is_file() or entry.is_symlink() or entry.resolve()!=entry:
+        raise RuntimeError('unapproved or substituted original control script')
+    cwd=Path(process.get('cwd',''))
+    if cwd!=entry.parents[3] or cwd.is_symlink() or cwd.resolve()!=cwd:
+        raise RuntimeError('original control cwd differs from its frozen source')
+    argv=process.get('argv',[]);relative=str(entry.relative_to(cwd))
+    if (len(argv)!=6 or argv[0]!=str(m.PYTHON) or argv[1]!='-B'
+            or argv[2] not in {str(entry),relative} or argv[3]!='run'
+            or argv[4]!='--poll-seconds' or argv[5]!=polls[entry]):
+        raise RuntimeError('original control argv/action/poll contract differs')
+    resolved=(cwd/argv[2]).resolve() if not Path(argv[2]).is_absolute() else Path(argv[2]).resolve()
+    if resolved!=entry:raise RuntimeError('original control script resolves outside its frozen source')
+    return dict(resolved_entry=str(entry),entry_sha256=m.sha(entry),poll_seconds=int(polls[entry]),
+                launch_spelling='absolute' if Path(argv[2]).is_absolute() else 'canonical_relative',
+                actual_argv=list(argv),actual_cwd=process['cwd'])
+
+
 def control_snapshot(system, unit, entry):
-    props = system.unit(unit); pid = int(props.get('MainPID', 0)); process = system.process(pid) if pid else None
-    if (not process or props.get('Id') != unit or props.get('ActiveState') != 'active'
-            or not props.get('InvocationID') or not props.get('ControlGroup')
-            or str(entry) not in process['argv'] or 'run' not in process['argv']
-            or props['ControlGroup'] not in process['cgroups']):
+    props=system.unit(unit);pid=int(props.get('MainPID',0));process=system.process(pid) if pid else None
+    if (not process or process.get('pid')!=pid or props.get('Id')!=unit
+            or props.get('ActiveState')!='active' or not props.get('InvocationID')
+            or not props.get('ControlGroup') or props['ControlGroup'] not in process.get('cgroups',[])):
         raise RuntimeError('expected original control owner is not live/attestable: '+unit)
-    return dict(unit=unit, properties=props, invocation_id=props['InvocationID'], process=process,
-                cgroup=props['ControlGroup'])
+    role=control_launch_role(process,entry)
+    return dict(unit=unit,properties=props,invocation_id=props['InvocationID'],process=process,
+                cgroup=props['ControlGroup'],launch_role=role)
+
+
+def legacy_control_preflight(system):
+    """Actual read-only execution of both preparation snapshot predicates."""
+    m=api()
+    if system.host()!='jerez':raise RuntimeError('original CZ control preflight requires Jerez')
+    sources,pins=source_records(system)
+    waiter=control_snapshot(system,m.OLD_WAITER_UNIT,m.R144_ENTRY)
+    predecessor=control_snapshot(system,m.R143_UNIT,m.R143_ENTRY)
+    members=system.members(waiter['cgroup'])
+    if members!=[waiter['process']['pid']]:
+        raise RuntimeError('original R144 control preflight found non-waiter children')
+    return dict(status='PASS_R153_CZ_LEGACY_CONTROL_PREFLIGHT',sources=sources,
+                frozen_source_sha256=pins,old_waiter=waiter,predecessor=predecessor,
+                production_service_actions=0,model_dispatches=0,runtime_writes=0)
+
+
+def latest_private_proof(receipt,current):
+    preflight=receipt.get('legacy_control_preflight',{})
+    if (receipt.get('status')!='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE'
+            or receipt.get('execution_source')!=current
+            or preflight.get('status')!='PASS_R153_CZ_LEGACY_CONTROL_PREFLIGHT'
+            or preflight.get('sources',{}).get('execution_source')!=current):
+        raise RuntimeError('last private proof/preflight does not match current control source')
+    return receipt
 
 
 def no3_failure_pins(config):
@@ -123,12 +175,17 @@ def verify_probe_history(receipt,current,root=None):
     """Charge all safe ancestor proofs, but never refund a changed source."""
     root=Path(root or ROOT);prior=receipt.get('execution_source',{})
     charge=receipt.get('control_CPU_charged_seconds')
+    same_root=(prior.get('root')==current.get('root') and prior.get('branch')==current.get('branch'))
+    bridged_history=(prior.get('root')==str(ORIGINAL_CONTROL_ROOT)
+        and prior.get('branch')==ORIGINAL_CONTROL_BRANCH
+        and prior.get('head') in APPROVED_HISTORICAL_CONTROL_HEADS)
+
     if (receipt.get('status') not in {'PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE','FAILED_R153_CZ_PRIVATE_CONTROL_LIFECYCLE'}
             or receipt.get('exact_cleanup') is not True or not isinstance(charge,(int,float))
             or not math.isfinite(charge) or charge<5
             or receipt.get('production_unit_actions')!=0 or receipt.get('model_dispatches')!=0
             or receipt.get('source_or_runtime_changes')!=0
-            or prior.get('root')!=current.get('root')
+            or not (same_root or bridged_history)
             or not re.fullmatch('[a-f0-9]{40}',str(prior.get('head','')))):
         raise RuntimeError('private probe history/cleanup/cost scope differs')
     ancestor=subprocess.run(['git','-C',str(root),'merge-base','--is-ancestor',prior['head'],current['head']],
@@ -160,9 +217,7 @@ def prepare(*, probe_receipts, system=None, wait_seconds=7*86400, control_CPU_se
                                charged_CPU_seconds=receipt['control_CPU_charged_seconds']))
         pins[str(path)] = m.sha(path)
     last = m.read(probe_receipts[-1])
-    if (last.get('status') != 'PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE'
-            or last.get('execution_source') != records['execution_source']):
-        raise RuntimeError('last private proof does not match committed control source')
+    latest_private_proof(last,records['execution_source'])
     config = m.read(m.R144_CONFIG); effective = m.effective_config(config)
     original = m.DATA/'launch_prep'/config['tag']/'jerez'
     if (m.DATA/'launch_prep'/config['tag']/'preparation.json').exists() or any((m.DATA/'campaigns'/config['tag']/'tasks').glob('*.json')):
@@ -322,12 +377,13 @@ def private_owner(root,unit):
 def probe(*,output_path,system=None):
     m=api();system=system or m.System();source=m.source_identity();started=process_CPU();wall=time.monotonic()
     identity=uuid.uuid4().hex;root=Path('/tmp')/('pricefm-r153-cz-probe-'+identity);root.mkdir(mode=0o700)
-    unit='pricefm-r153-cz-probe-'+identity+'.service';props=None;capsule=None;errors=[];cleanup=False
+    unit='pricefm-r153-cz-probe-'+identity+'.service';props=None;capsule=None;errors=[];cleanup=False;argv=None
     result=dict(schema_version=1,execution_source=source,
                 runtime_source_sha256={str(path.relative_to(ROOT)):m.sha(path) for path in [GATE,ENTRY]},
                 private_root=str(root),private_unit=unit,
                 production_unit_actions=0,model_dispatches=0,source_or_runtime_changes=0)
     try:
+        result['legacy_control_preflight']=legacy_control_preflight(system)
         cpu=min(os.sched_getaffinity(0));argv=[str(m.PYTHON),'-B',str(ENTRY),'private-owner',
                     '--private-root',str(root),'--unit',unit]
         subprocess.run(['systemd-run','--user','--quiet','--unit='+unit,'--property=Restart=no',
@@ -374,7 +430,7 @@ def probe(*,output_path,system=None):
             current_props=system.unit(unit)
             if capsule is None and int(current_props.get('MainPID',0)):
                 candidate=system.process(int(current_props['MainPID']))
-                if (candidate and candidate.get('argv')==argv
+                if (argv is not None and candidate and candidate.get('argv')==argv
                         and current_props.get('Id')==unit and current_props.get('InvocationID')
                         and current_props.get('ControlGroup') in candidate.get('cgroups',[])):
                     capsule=dict(properties=current_props,process=candidate)

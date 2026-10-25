@@ -316,7 +316,8 @@ class CZGateTests(unittest.TestCase):
         original_runtime=self.data/'launch_prep'/self.config['tag']/'jerez'
         put(original_runtime/'progress.json',dict(status='R144_WAITING_FOR_R143_SLOT_B'))
         probe=self.root/'private_proof.json';put(probe,dict(exact_cleanup=True,control_CPU_charged_seconds=5.,
-            status='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE',execution_source=self.authority['execution_source']))
+            status='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE',execution_source=self.authority['execution_source'],
+            legacy_control_preflight=dict(status='PASS_R153_CZ_LEGACY_CONTROL_PREFLIGHT',sources=dict(execution_source=self.authority['execution_source']))))
         records={key:self.authority[key] for key in ['execution_source','science_source','predecessor_source','process_adapter_source','resource_core_source']}
         with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.object(RELEASE,'source_records',return_value=(records,{})),mock.patch.object(RELEASE,'verify_probe_history',return_value=5.),mock.patch.object(RELEASE,'control_snapshot',side_effect=[old,prior]),mock.patch.object(RELEASE,'no3_failure_pins',return_value=self.authority['approved_NO3_evidence_sha256']):
             result=RELEASE.prepare(probe_receipts=[probe],system=system)
@@ -354,6 +355,96 @@ class CZGateTests(unittest.TestCase):
         repo,git,receipt,current=self.git_probe_fixture()
         receipt['execution_source']['head']=git('commit-tree','HEAD^{tree}','-m','unrelated history')
         with self.assertRaisesRegex(RuntimeError,'not a committed ancestor'):RELEASE.verify_probe_history(receipt,current,root=repo)
+    def legacy_launch_fixture(self):
+        paths=[]
+        for label,filename in [('r144','486_run_pricefm_stage_r144_cz_training_fallback.py'),('r143','485_run_pricefm_stage_r143_cz_quarantine_queue.py')]:
+            path=self.root/label/'application/scripts/pricefm'/filename;path.parent.mkdir(parents=True);path.write_text('frozen '+label)
+            paths.append(path)
+        return paths
+    def legacy_process(self,entry,poll,pid=11,absolute=False):
+        argv=[str(GATE.PYTHON),'-B',str(entry) if absolute else str(entry.relative_to(entry.parents[3])),'run','--poll-seconds',str(poll)]
+        p=process(pid,argv=argv);p['cwd']=str(entry.parents[3]);return p
+    def test_legacy_absolute_and_actual_relative_launches_preserve_raw_capsules(self):
+        r144,r143=self.legacy_launch_fixture()
+        with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.multiple(GATE,R144_ENTRY=r144,R143_ENTRY=r143):
+            for entry,poll in [(r144,30),(r143,15)]:
+                for absolute in [False,True]:
+                    original=self.legacy_process(entry,poll,absolute=absolute);before=copy.deepcopy(original)
+                    self.system.procs[11]=original;self.system.units['legacy']=dict(Id='legacy',MainPID='11',ActiveState='active',InvocationID='x',ControlGroup=original['cgroups'][0])
+                    snapshot=RELEASE.control_snapshot(self.system,'legacy',entry)
+                    self.assertEqual(snapshot['process'],before);self.assertEqual(snapshot['launch_role']['actual_argv'],before['argv'])
+                    self.assertEqual(snapshot['launch_role']['resolved_entry'],str(entry))
+    def test_legacy_launch_rejects_wrong_cwd_spelling_script_position_and_flags(self):
+        r144,r143=self.legacy_launch_fixture()
+        with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.multiple(GATE,R144_ENTRY=r144,R143_ENTRY=r143):
+            good=self.legacy_process(r144,30)
+            mutations=[]
+            wrong=copy.deepcopy(good);wrong['cwd']=str(r143.parents[3]);mutations.append(wrong)
+            for argv in [
+                [str(GATE.PYTHON),'-B','other/'+r144.name,'run','--poll-seconds','30'],
+                [str(GATE.PYTHON),'-B','run',good['argv'][2],'--poll-seconds','30'],
+                ['/other/python','-B',good['argv'][2],'run','--poll-seconds','30'],
+                [str(GATE.PYTHON),good['argv'][2],'run','--poll-seconds','30'],
+                [str(GATE.PYTHON),'-B','-B',good['argv'][2],'run','--poll-seconds','30'],
+                [str(GATE.PYTHON),'-B',good['argv'][2],'inspect','--poll-seconds','30'],
+                [str(GATE.PYTHON),'-B',good['argv'][2],'run','--poll-seconds','15'],
+                [str(GATE.PYTHON),'-B','./'+good['argv'][2],'run','--poll-seconds','30'],
+                good['argv']+['--eval','code'],good['argv']+['--poll-seconds','30']]:
+                wrong=copy.deepcopy(good);wrong['argv']=argv;mutations.append(wrong)
+            for wrong in mutations:
+                with self.subTest(wrong=wrong):
+                    with self.assertRaises(RuntimeError):RELEASE.control_launch_role(wrong,r144)
+    def test_legacy_snapshot_rejects_wrong_pid_or_process_cgroup(self):
+        r144,r143=self.legacy_launch_fixture();p=self.legacy_process(r144,30)
+        self.system.procs[11]=p;self.system.units['legacy']=dict(Id='legacy',MainPID='11',ActiveState='active',InvocationID='x',ControlGroup='/other')
+        with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.multiple(GATE,R144_ENTRY=r144,R143_ENTRY=r143):
+            with self.assertRaisesRegex(RuntimeError,'not live/attestable'):RELEASE.control_snapshot(self.system,'legacy',r144)
+            self.system.units['legacy']['ControlGroup']=p['cgroups'][0];p['pid']=12
+            with self.assertRaisesRegex(RuntimeError,'not live/attestable'):RELEASE.control_snapshot(self.system,'legacy',r144)
+    def test_legacy_script_symlink_is_never_accepted(self):
+        r144,r143=self.legacy_launch_fixture();real=r144.with_name('real.py');r144.rename(real);r144.symlink_to(real)
+        with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.multiple(GATE,R144_ENTRY=r144,R143_ENTRY=r143):
+            with self.assertRaisesRegex(RuntimeError,'substituted'):RELEASE.control_launch_role(self.legacy_process(r144,30),r144)
+    def test_both_actual_preparation_predicates_are_run_read_only_in_preflight(self):
+        r144,r143=self.legacy_launch_fixture()
+        for unit,entry,poll,pid in [(GATE.OLD_WAITER_UNIT,r144,30,11),(GATE.R143_UNIT,r143,15,12)]:
+            p=self.legacy_process(entry,poll,pid);p['cgroups']=['/user.slice/'+unit]
+            self.system.procs[pid]=p;self.system.units[unit]=dict(Id=unit,MainPID=str(pid),ActiveState='active',InvocationID=str(pid),ControlGroup=p['cgroups'][0]);self.system.groups[p['cgroups'][0]]=[pid]
+        with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.multiple(GATE,R144_ENTRY=r144,R143_ENTRY=r143),mock.patch.object(RELEASE,'source_records',return_value=({'execution_source':self.authority['execution_source']},{})):
+            proof=RELEASE.legacy_control_preflight(self.system)
+        self.assertEqual(proof['status'],'PASS_R153_CZ_LEGACY_CONTROL_PREFLIGHT')
+        self.assertEqual(proof['old_waiter']['launch_role']['poll_seconds'],30)
+        self.assertEqual(proof['predecessor']['launch_role']['poll_seconds'],15)
+        self.assertEqual(proof['production_service_actions'],0)
+    def test_failed_real_predicate_preflight_keeps_charged_receipt_without_private_unit_start(self):
+        output=self.root/'preflight_failed.json'
+        with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.object(GATE,'source_identity',return_value=self.authority['execution_source']),mock.patch.object(RELEASE,'legacy_control_preflight',side_effect=RuntimeError('actual predicate failed')),mock.patch.object(RELEASE.subprocess,'run') as start:
+            with self.assertRaisesRegex(RuntimeError,'private CZ proof failed'):RELEASE.probe(output_path=output,system=self.system)
+            start.assert_not_called()
+        receipt=GATE.read(output);self.assertTrue(receipt['exact_cleanup']);self.assertGreaterEqual(receipt['control_CPU_charged_seconds'],20.)
+        self.assertIn('actual predicate failed',receipt['errors'][0]);Path(receipt['private_root']).rmdir()
+    def test_exact_reviewed_old_root_probe_is_only_charged_history(self):
+        repo,git,receipt,current=self.git_probe_fixture();head=receipt['execution_source']['head']
+        receipt['execution_source'].update(root=str(RELEASE.ORIGINAL_CONTROL_ROOT),branch=RELEASE.ORIGINAL_CONTROL_BRANCH)
+        with mock.patch.object(RELEASE,'APPROVED_HISTORICAL_CONTROL_HEADS',{head}):
+            self.assertEqual(RELEASE.verify_probe_history(receipt,current,root=repo),17.)
+            receipt['status']='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE'
+            receipt['legacy_control_preflight']=dict(status='PASS_R153_CZ_LEGACY_CONTROL_PREFLIGHT',sources=dict(execution_source=receipt['execution_source']))
+            with self.assertRaisesRegex(RuntimeError,'last private proof'):RELEASE.latest_private_proof(receipt,current)
+    def test_historical_bridge_rejects_unknown_root_branch_head_or_wrong_blob(self):
+        repo,git,base,current=self.git_probe_fixture();head=base['execution_source']['head']
+        base['execution_source'].update(root=str(RELEASE.ORIGINAL_CONTROL_ROOT),branch=RELEASE.ORIGINAL_CONTROL_BRANCH)
+        with mock.patch.object(RELEASE,'APPROVED_HISTORICAL_CONTROL_HEADS',{head}):
+            for key,value in [('root',str(RELEASE.ORIGINAL_CONTROL_ROOT/'unknown')),('branch','work/other'),('head',current['head'])]:
+                receipt=copy.deepcopy(base);receipt['execution_source'][key]=value
+                with self.assertRaisesRegex(RuntimeError,'cost scope'):RELEASE.verify_probe_history(receipt,current,root=repo)
+            receipt=copy.deepcopy(base);receipt['runtime_source_sha256'][next(iter(receipt['runtime_source_sha256']))]='0'*64
+            with self.assertRaisesRegex(RuntimeError,'runtime bytes'):RELEASE.verify_probe_history(receipt,current,root=repo)
+    def test_latest_proof_requires_current_source_and_legacy_predicate_preflight(self):
+        current=self.authority['execution_source'];receipt=dict(status='PASS_R153_CZ_PRIVATE_CONTROL_LIFECYCLE',execution_source=current)
+        with self.assertRaisesRegex(RuntimeError,'preflight'):RELEASE.latest_private_proof(receipt,current)
+        receipt['legacy_control_preflight']=dict(status='PASS_R153_CZ_LEGACY_CONTROL_PREFLIGHT',sources=dict(execution_source=current))
+        self.assertIs(RELEASE.latest_private_proof(receipt,current),receipt)
     def test_release_claim_requires_existing_exact_fence(self):
         with mock.patch.object(RELEASE,'api',return_value=GATE),mock.patch.object(GATE,'validate_authority',return_value=self.authority):
             with self.assertRaisesRegex(RuntimeError,'fence proof'):RELEASE.launch(self.path,system=self.system)

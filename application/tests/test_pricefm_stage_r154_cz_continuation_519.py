@@ -168,6 +168,23 @@ class ContinuationTests(unittest.TestCase):
             # A missing or noncallable pidfd API must fail before any signal.
             with self.assertRaises((RuntimeError,TypeError)):R.exact_pidfd_term(self.system,B.process(66))
             kill.assert_not_called()
+    def test_unresolved_private_attempt_blocks_authority_without_reset(self):
+        B.put(G.RUNTIME/'private_attempts/attempt/started.json',dict(output_path=str(self.root/'receipt.json')))
+        with mock.patch.object(R,'source_records',return_value=({'execution_source':self.a['execution_source']},{})):
+            with self.assertRaisesRegex(RuntimeError,'unresolved private attempt'):
+                R.prepare([self.root/'receipt.json'],system=self.system)
+    def test_omitting_any_registered_private_attempt_denied(self):
+        receipt=self.root/'receipt.json';B.put(receipt,dict(status='FAILED',control_CPU_charged_seconds=90.))
+        folder=G.RUNTIME/'private_attempts/attempt'
+        B.put(folder/'started.json',dict(output_path=str(receipt)))
+        B.put(folder/'finished.json',dict(receipt_path=str(receipt),receipt_sha256=G.sha(receipt),exact_cleanup=True))
+        with mock.patch.object(R,'source_records',return_value=({'execution_source':self.a['execution_source']},{})):
+            with self.assertRaisesRegex(RuntimeError,'all registered private attempts'):
+                R.prepare([self.root/'different.json'],system=self.system)
+    def test_duplicate_private_receipt_denied(self):
+        with mock.patch.object(R,'source_records',return_value=({'execution_source':self.a['execution_source']},{})):
+            with self.assertRaisesRegex(RuntimeError,'duplicate private receipt'):
+                R.prepare([self.root/'receipt.json',self.root/'receipt.json'],system=self.system)
 
 
 if __name__=='__main__':unittest.main()

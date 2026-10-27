@@ -200,7 +200,7 @@
     },
     {
       "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_reference_20261026/application/docs/522_certificate_reference.md",
-      "sha256": "0362cfe3c098881657b77ace140fa31d832d16a3ad00f498a567ae362f19abe9"
+      "sha256": "6519da9452eb621d4590703e5532d6500203feabe44130b9d25eedabcb3ca5bd"
     },
     {
       "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_reference_20261026/application/scripts/pricefm/522_certificate_reference.py",
@@ -212,7 +212,7 @@
     },
     {
       "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_reference_20261026/application/scripts/pricefm/522_fixed_state_control.py",
-      "sha256": "012c3cafc763806a1cdc6547e0424a8bc9d8839ba58bc003df425d3b0fcb4f83"
+      "sha256": "48afc5d1aa23c77a22c6de9af8e57dd21865afe661b6f60b77f7b96e528a7a9b"
     },
     {
       "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_reference_20261026/application/scripts/pricefm/522_fixed_state_diagnosis.R",
@@ -228,7 +228,7 @@
     },
     {
       "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_reference_20261026/application/tests/522_certificate_reference_test.py",
-      "sha256": "823d09fe51ecb7ca8e38eaa86c00d58dffdae81bc96350d05c411e9fa03ecc40"
+      "sha256": "dec3c00df8b2e8afbc27fd163a92d2289508019ba6e0f0fec0fcaec3f69b897e"
     }
   ],
   "runtime": {

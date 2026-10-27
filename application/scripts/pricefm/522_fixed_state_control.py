@@ -230,14 +230,11 @@ def main():
     p.add_argument('--root-grant',required=True);p.add_argument('--root-grant-sha256',required=True)
     p.add_argument('--target',default='LT_fold1_al0.90');p.add_argument('--output-dir')
     p.add_argument('--check-authority',action='store_true');args=p.parse_args()
-    # Even read-only source/runtime hashing by this controller uses the admitted
-    # administrative CPU and priority. This changes only this new process.
-    os.sched_setaffinity(0,[30])
-    os.sched_setscheduler(0,os.SCHED_OTHER,os.sched_param(0))
-    os.setpriority(os.PRIO_PROCESS,0,10)
-    subprocess.run(['ionice','-c','3','-p',str(os.getpid())],check=True,capture_output=True)
-    if not subprocess.check_output(['ionice','-p',str(os.getpid())],text=True).startswith('idle'):
-        raise ValueError('actual I/O class differs from resource policy')
+    # All administrative hashing/authority checks stay on caller CPU31. CPU30
+    # belongs to its currently locked borrower; even rejected requests must not
+    # move there before successfully taking the shared permit.
+    if os.sched_getaffinity(0)!={31}:
+        raise ValueError('launch administrative controller on caller CPU31')
     manifest,grant=authority(args.manifest,args.root_grant,args.root_grant_sha256,args.target)
     if args.check_authority:
         print('PASS authority only; target inputs not opened and numerical diagnosis not run');return
@@ -252,6 +249,9 @@ def main():
         os.sched_setaffinity(0,[30])
         os.sched_setscheduler(0,os.SCHED_OTHER,os.sched_param(0))
         os.setpriority(os.PRIO_PROCESS,0,10)
+        subprocess.run(['ionice','-c','3','-p',str(os.getpid())],check=True,capture_output=True)
+        if not subprocess.check_output(['ionice','-p',str(os.getpid())],text=True).startswith('idle'):
+            raise ValueError('actual I/O class differs from resource policy')
         # Administrative work is charged to the reserved source300 bucket. The
         # child may raise its soft limit within the inherited 1800 hard ceiling.
         resource.setrlimit(resource.RLIMIT_CPU,(300,1800))

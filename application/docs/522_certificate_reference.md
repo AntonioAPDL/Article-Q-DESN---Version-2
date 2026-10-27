@@ -107,6 +107,12 @@ required to observe the runtime or run these synthetic checks.
 
 Root may first invoke the coordinator with `--check-authority`; this verifies
 authority and runtime/code bytes without opening target data or running R.
+Launch the administrative controller on CPU31 (`taskset -c 31`). Administrative
+validation, source/runtime hashing and `--check-authority` remain on that caller
+CPU. Only after successfully acquiring the shared numerical flock does the
+controller move itself to CPU30 and apply the numerical scheduler, nice and I/O
+settings. A busy-pool request cannot move to CPU30, read target data or consume
+its one-shot grant. A real busy flock negative test exercises this boundary.
 Actual execution also requires `--output-dir` to be a new child of the owned
 R154 `certificates/` audit directory. The controller has no admitted default
 grant and cannot infer permission from the implementation request.

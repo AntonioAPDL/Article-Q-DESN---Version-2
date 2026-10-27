@@ -10,6 +10,9 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
+from contextlib import ExitStack, redirect_stdout
+import io
 import datetime
 import fcntl
 
@@ -132,6 +135,43 @@ class References(unittest.TestCase):
                 with self.assertRaises(BlockingIOError):fcntl.flock(second,fcntl.LOCK_EX|fcntl.LOCK_NB)
                 first.close()
                 fcntl.flock(second,fcntl.LOCK_EX|fcntl.LOCK_NB)
+
+    def test_busy_shared_pool_cannot_move_or_open_target_or_claim(self):
+        # Exercise main() and a real busy flock inode. Authority hashing is
+        # stubbed because it is administrative; every scientific/claim/move
+        # boundary is observed and must remain untouched.
+        with tempfile.TemporaryDirectory(prefix='r522_busy_pool_negative_') as d:
+            path=Path(d)/'muscat_cpu30.lock'
+            grant=dict(permit_id='muscat_cpu30',global_contract={'path':'unused','sha256':'0'*64})
+            with open(path,'a+') as holder,ExitStack() as stack:
+                fcntl.flock(holder,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                stack.enter_context(mock.patch.object(sys,'argv',['control','--manifest','unused',
+                    '--root-grant','unused','--root-grant-sha256','0'*64,'--output-dir',str(Path(d)/'must_not_exist')]))
+                stack.enter_context(mock.patch.object(control,'authority',return_value=({},grant)))
+                stack.enter_context(mock.patch.object(control,'global_permit',return_value={'lock_dir':d}))
+                stack.enter_context(mock.patch.object(control.os,'sched_getaffinity',return_value={31}))
+                observed=[stack.enter_context(mock.patch.object(owner,name)) for owner,name in [
+                    (control.os,'sched_setaffinity'),(control.os,'sched_setscheduler'),
+                    (control.os,'setpriority'),(control.subprocess,'run'),
+                    (control,'run_under_lock'),(control.ref,'verify_target'),
+                    (control.ref,'immutable_json'),(control.ref,'verify_files')]]
+                with self.assertRaises(BlockingIOError):control.main()
+                for boundary in observed:boundary.assert_not_called()
+                self.assertFalse((Path(d)/'must_not_exist').exists())
+
+    def test_check_authority_stays_on_caller_CPU31_without_pool_claim(self):
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(sys,'argv',['control','--manifest','unused',
+                '--root-grant','unused','--root-grant-sha256','0'*64,'--check-authority']))
+            stack.enter_context(mock.patch.object(control,'authority',return_value=({},{})))
+            stack.enter_context(mock.patch.object(control.os,'sched_getaffinity',return_value={31}))
+            observed=[stack.enter_context(mock.patch.object(owner,name)) for owner,name in [
+                (control.os,'sched_setaffinity'),(control.os,'sched_setscheduler'),
+                (control.os,'setpriority'),(control.subprocess,'run'),
+                (control,'global_permit'),(control,'run_under_lock'),
+                (control.ref,'verify_target'),(control.ref,'immutable_json')]]
+            with redirect_stdout(io.StringIO()):control.main()
+            for boundary in observed:boundary.assert_not_called()
 
 
 if __name__=='__main__':

@@ -176,7 +176,7 @@ def make_authority(root,identity,system,preflight,records,pins,*,private=False,
         waiter_unit=('pricefm-r154-cz-probe-' if private else 'pricefm-r154-cz-gate-')+identity+'.service',
         science_unit='pricefm-r154-cz-science-'+identity+'.service',
         control_CPU_allowance_seconds=float(control_CPU_seconds),poll_seconds=60,
-        additional_control_activations=1,historical_debits_credited=False,historical_claims_or_clocks_reset=False,
+        additional_control_activations=1,handoff_mode='WAIT_PREDECESSOR_NATURAL_DRAIN',old_process_signals_authorized=False,historical_debits_credited=False,historical_claims_or_clocks_reset=False,
         previous_authority_path=preflight['authority_path'],previous_authority_sha256=preflight['authority_sha256'],
         previous_waiter=preflight['previous_waiter'],previous_immutable_sha256=previous_immutable_pins(preflight),
         historical_old_authority_CPU_allowance_seconds=old['control_CPU_allowance_seconds'],
@@ -201,7 +201,9 @@ def profile_check(authority,path,system,*,deep=False):
     """Run the actual new waiting checks, with extra ready-boundary probes."""
     m=api();begin=time.monotonic()
     m.validate_authority(path,system=system,_private_profile=True)
-    previous=m.previous_waiter_drained(authority,system)  # observed, not required in private proof
+    m.cpu_guard(authority,system)
+    previous=m.previous_waiter_drained(authority,system)
+    if not previous['drained']:m.verify_previous_live(authority,system)
     m.assert_no_prior_science(authority)
     state=m.boundary_state(authority,system)
     # These additional read-only probes price the existing full closeout and
@@ -281,26 +283,31 @@ def exact_pidfd_term(system,expected):
         exact_pidfd=True,signal='SIGTERM',models_signalled=False)
 
 
-def private_fence_owner(root,unit):
-    m=api();root=Path(root).resolve();identity=root.name.removeprefix('pricefm-r154-cz-fence-')
-    if root!=Path('/tmp')/('pricefm-r154-cz-fence-'+identity) or not re.fullmatch('[a-f0-9]{32}',identity):
+def private_cooperative_owner(root,unit):
+    m=api();root=Path(root).resolve();identity=root.name.removeprefix('pricefm-r154-cz-cooperative-')
+    if root!=Path('/tmp')/('pricefm-r154-cz-cooperative-'+identity) or not re.fullmatch('[a-f0-9]{32}',identity):
         raise RuntimeError('private fence namespace differs')
     system=m.System();props=system.unit(unit);process=system.process(os.getpid())
-    argv=[str(m.PYTHON),'-B',str(ENTRY),'private-fence-owner','--private-root',str(root),'--unit',unit]
+    argv=[str(m.PYTHON),'-B',str(ENTRY),'private-cooperative-owner','--private-root',str(root),'--unit',unit]
     if (not process or process.get('argv')!=argv or process.get('cpus')!=[29]
             or props.get('MainPID')!=str(os.getpid()) or props.get('Restart')!='no'
             or props.get('KillMode')!='process' or m.systemd_seconds(props.get('RuntimeMaxUSec',''))!=15
             or props.get('ControlGroup') not in process.get('cgroups',[])):
         raise RuntimeError('private fence exact lifetime differs')
-    m.immutable(root/'ready.json',dict(process=process,properties=props,own=system.own_admin_cpu()))
-    time.sleep(12)
-    raise RuntimeError('private fence parent did not exercise exact stop')
+    with m.locked(root/'original_supervisor.lock'):
+        m.immutable(root/'ready.json',dict(process=process,properties=props,own=system.own_admin_cpu()))
+        until=time.monotonic()+10
+        while not (root/'release.json').exists():
+            if time.monotonic()>=until:raise RuntimeError('cooperative predecessor was not released')
+            time.sleep(.025)
+        m.immutable(root/'exiting.json',dict(epoch=system.now(),own=system.own_admin_cpu(),signals_sent=0))
+    return dict(status='PRIVATE_COOPERATIVE_PREDECESSOR_EXITED',model_dispatches=0)
 
 
-def prove_pidfd_fence(system):
-    m=api();identity=uuid.uuid4().hex;root=Path('/tmp')/('pricefm-r154-cz-fence-'+identity);root.mkdir(mode=0o700)
-    unit='pricefm-r154-cz-fence-'+identity+'.service';capsule=None;signal_receipt=None;errors=[];drained=False
-    argv=[str(m.PYTHON),'-B',str(ENTRY),'private-fence-owner','--private-root',str(root),'--unit',unit]
+def prove_cooperative_drain(system):
+    m=api();identity=uuid.uuid4().hex;root=Path('/tmp')/('pricefm-r154-cz-cooperative-'+identity);root.mkdir(mode=0o700)
+    unit='pricefm-r154-cz-cooperative-'+identity+'.service';capsule=None;signal_receipt=None;errors=[];drained=False
+    argv=[str(m.PYTHON),'-B',str(ENTRY),'private-cooperative-owner','--private-root',str(root),'--unit',unit]
     try:
         subprocess.run(['systemd-run','--user','--quiet','--unit='+unit,'--property=Restart=no',
             '--property=KillMode=process','--property=CPUAccounting=yes','--property=RuntimeMaxSec=15',
@@ -313,7 +320,12 @@ def prove_pidfd_fence(system):
         if (capsule['process'].get('argv')!=argv or props.get('InvocationID')!=capsule['properties'].get('InvocationID')
                 or system.members(props['ControlGroup'])!=[capsule['process']['pid']]):
             raise RuntimeError('private pidfd lifetime/cgroup changed')
-        signal_receipt=exact_pidfd_term(system,capsule['process'])
+        try:
+            with m.locked(root/'original_supervisor.lock'):
+                raise RuntimeError('private predecessor did not hold original supervisor')
+        except BlockingIOError:pass
+        m.immutable(root/'release.json',dict(cooperative_exit_requested=True,signals_sent=0))
+        signal_receipt=dict(signals_sent=0,cooperative_release=True)
     except BaseException as error:errors.append(repr(error))
     finally:
         until=time.monotonic()+25
@@ -328,7 +340,10 @@ def prove_pidfd_fence(system):
                 drained=True;break
             if time.monotonic()>=until:break
             time.sleep(.05)
-    result=dict(status='PASS_PRIVATE_EXACT_PIDFD_FENCE_AND_DRAIN' if not errors and drained else 'FAILED_PRIVATE_EXACT_PIDFD_FENCE_AND_DRAIN',
+    if not errors and drained:
+        with m.locked(root/'original_supervisor.lock'),m.locked(root/'cross_lineage.lock'):
+            m.immutable(root/'adopted.json',dict(physical_predecessor_drain_verified=True,original_supervisor_acquired_after_drain=True,signals_sent=0))
+    result=dict(status='PASS_PRIVATE_COOPERATIVE_DRAIN_AND_SUPERVISOR_ADOPTION' if not errors and drained else 'FAILED_PRIVATE_COOPERATIVE_DRAIN_AND_SUPERVISOR_ADOPTION',
         capsule=capsule,signal=signal_receipt,errors=errors,independent_expiry_seconds=15,
         charged_CPU_reservation_seconds=15.,exact_cleanup=drained,unit=unit,root=str(root),
         model_dispatches=0,production_unit_actions=0)
@@ -430,10 +445,10 @@ def probe(output_path):
             exact_owner_verified=True,real_cgroup_drain=True,independent_expiry_seconds=420,
             numerical_dispatches=0,observer_CPU_used_for_owner=False)
         fence_debit=15.  # retained even if this private subproof fails
-        result['exact_pidfd_fence_proof']=prove_pidfd_fence(system)
-        cleanup=cleanup and result['exact_pidfd_fence_proof']['exact_cleanup']
-        if result['exact_pidfd_fence_proof']['status']!='PASS_PRIVATE_EXACT_PIDFD_FENCE_AND_DRAIN':
-            raise RuntimeError('actual private pidfd fence failed; full15-second debit retained')
+        result['cooperative_drain_proof']=prove_cooperative_drain(system)
+        cleanup=cleanup and result['cooperative_drain_proof']['exact_cleanup']
+        if result['cooperative_drain_proof']['status']!='PASS_PRIVATE_COOPERATIVE_DRAIN_AND_SUPERVISOR_ADOPTION':
+            raise RuntimeError('actual private cooperative drain failed; full15-second debit retained')
     except BaseException as error:
         errors.append(repr(error));result['status']='FAILED_R154_PRIVATE_CONTROL_PROFILE'
     finally:
@@ -441,8 +456,8 @@ def probe(output_path):
             props=system.unit(unit)
             if capsule and props.get('InvocationID')==capsule['properties']['InvocationID']:
                 current=m.recorded_process(system,capsule['process'])
-                if current:result['private_cleanup_signal']=exact_pidfd_term(system,capsule['process'])
-            until=time.monotonic()+30
+                if current:result['private_cleanup_waits_for_independent_expiry']=True
+            until=time.monotonic()+max(30,430-(time.monotonic()-wall))
             while True:
                 props=system.unit(unit)
                 members=system.members(capsule['properties']['ControlGroup']) if capsule else []
@@ -451,10 +466,10 @@ def probe(output_path):
                 if time.monotonic()>=until:break
                 time.sleep(.05)
         if not launched:cleanup=True
-        cleanup=cleanup and result.get('exact_pidfd_fence_proof',{}).get('exact_cleanup',True)
+        cleanup=cleanup and result.get('cooperative_drain_proof',{}).get('exact_cleanup',True)
         owner_debit=result.get('private_owner_CPU_charged_upper_seconds',min(420.,max(0.,time.monotonic()-wall)) if launched else 0.)
         result.update(errors=errors,exact_cleanup=cleanup,control_CPU_charged_seconds=process_CPU()-start+owner_debit+fence_debit+5.,
-            private_pidfd_proof_CPU_reservation_seconds=fence_debit,
+            private_cooperative_proof_CPU_reservation_seconds=fence_debit,
             parent_actual_self_plus_reaped_admin_CPU_seconds=process_CPU()-start,
             failed_attempts_refunded=False,captured_epoch=system.now())
         output(result,output_path)
@@ -506,6 +521,8 @@ def prepare(probe_receipts,*,system=None,control_CPU_seconds=None):
 
 def fence_previous(authority,path,system):
     m=api();root=Path(authority['runtime']);record=authority['previous_waiter']
+    if authority.get('old_process_signals_authorized') is not True:
+        raise RuntimeError('old process signals are not authorized')
     m.assert_no_prior_science(authority)
     props=system.unit(record['unit']);current=m.recorded_process(system,record['process'])
     if (not m.exact_process(current,record['process']) or props.get('InvocationID')!=record['invocation_id']
@@ -556,7 +573,7 @@ def start_waiter(authority,path,system):
         '--property=WorkingDirectory='+str(ROOT),'--property=CPUAffinity=29','--property=Nice=10',
         *['--setenv='+key+'=1' for key in m.THREADS],*argv],check=True,timeout=30)
     until=time.monotonic()+60
-    while not (root/'activation.json').exists():
+    while not all((root/name).exists() for name in ['activation.json','control_budget_heartbeat.json','progress.json']):
         if (root/'waiter_blocked.json').exists():raise RuntimeError('new waiter blocked; activation remains spent')
         if time.monotonic()>=until:raise RuntimeError('new waiter activation timed out; no automatic retry')
         time.sleep(.05)
@@ -568,53 +585,46 @@ def start_waiter(authority,path,system):
     if not budget['within_CPU'] or not budget['within_wall']:
         raise RuntimeError('new waiter readiness budget does not fit')
     receipt=dict(status='R154_CZ_SUCCESSOR_READY_WAITING',authority_path=str(path),authority_sha256=m.sha(path),
-        capsule=capsule,budget=budget,epoch=system.now(),models_signalled=False)
+        capsule=capsule,budget=budget,epoch=system.now(),models_signalled=False,
+        continuation_progress=m.read(root/'progress.json'),handoff_mode=authority['handoff_mode'],
+        predecessor_drained=m.previous_waiter_drained(authority,system)['drained'],old_process_signals=0,
+        original_supervisor_owned=m.read(root/'progress.json').get('original_supervisor_owned') is True)
     m.immutable(root/'launch_receipt.json',receipt)
     m.immutable(m.RUNTIME/'successor.json',receipt)
     return receipt
 
 
 def handoff_and_launch(path,*,system=None):
-    """One reviewed transaction; never hold original supervisor at launch."""
+    """Activate one finite standby; predecessor exits only by its old policy."""
     m=api();system=system or m.System();path=Path(path).resolve()
-    authority=m.validate_authority(path,system=system);root=Path(authority['runtime'])
-    original=m.DATA/'launch_prep'/authority['effective_config']['tag']/'jerez'
+    authority=m.validate_authority(path,system=system)
     with m.locked(m.RUNTIME/'handoff.lock'):
         if (m.RUNTIME/'single_activation_claim.json').exists():
             raise RuntimeError('one additional R154 control activation is already spent')
         m.assert_no_prior_science(authority)
-        fence_previous(authority,path,system)
-        # Old source never consults the new lock: the physical fence MUST
-        # precede the original supervisor and cross-lineage final recheck.
-        with m.locked(original/'supervisor.lock'),m.locked(m.RUNTIME/'science_dispatch.lock'):
-            m.assert_previous_drained(authority,system)
-            m.assert_no_prior_science(authority)
-            if (m.RUNTIME/'science_dispatch_claim.json').exists():
-                raise RuntimeError('global CZ science already claimed; preserve it')
-            m.validate_authority(path,system=system)
-            state=m.boundary_state(authority,system)
-            m.immutable(root/'handoff_receipt.json',dict(status='R154_HANDOFF_FINAL_LOCKED_RECHECK_PASS',
-                authority_sha256=m.sha(path),boundary=state,epoch=system.now(),models_signalled=False))
-            m.immutable(m.RUNTIME/'single_activation_claim.json',dict(claim=1,id=authority['id'],
-                authority_path=str(path),authority_sha256=m.sha(path),epoch=system.now()))
-        # Crucial: original supervisor lock is released before the new waiter
-        # acquires it to publish its own activation capsule.
+        drained=m.previous_waiter_drained(authority,system)
+        if not drained['drained']:m.verify_previous_live(authority,system)
+        # Do not touch the original supervisor or old process. The new source
+        # publishes its own attested standby before later natural-drain adoption.
+        m.immutable(m.RUNTIME/'single_activation_claim.json',dict(claim=1,id=authority['id'],
+            authority_path=str(path),authority_sha256=m.sha(path),epoch=system.now(),
+            handoff_mode=authority['handoff_mode'],old_process_signals=0))
         return start_waiter(authority,path,system)
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('preflight','attest-protected','probe','prepare','handoff','private-owner','private-fence-owner'))
+    parser.add_argument('action',choices=('preflight','attest-protected','probe','prepare','handoff','private-owner','private-cooperative-owner'))
     parser.add_argument('--output',type=Path);parser.add_argument('--authority',type=Path)
     parser.add_argument('--probe-receipt',type=Path,action='append',default=[])
     parser.add_argument('--control-CPU-seconds',type=float);parser.add_argument('--private-root',type=Path)
     parser.add_argument('--unit');args=parser.parse_args()
-    if args.action in {'private-owner','private-fence-owner'}:
+    if args.action in {'private-owner','private-cooperative-owner'}:
         try:
-            value=private_owner(args.private_root,args.unit) if args.action=='private-owner' else private_fence_owner(args.private_root,args.unit)
+            value=private_owner(args.private_root,args.unit) if args.action=='private-owner' else private_cooperative_owner(args.private_root,args.unit)
         except BaseException as error:
             root=Path(args.private_root).resolve()
-            if root.parent==Path('/tmp') and root.name.startswith(('pricefm-r154-cz-probe-','pricefm-r154-cz-fence-')):
+            if root.parent==Path('/tmp') and root.name.startswith(('pricefm-r154-cz-probe-','pricefm-r154-cz-cooperative-')):
                 api().immutable(root/'private_failure.json',dict(error=repr(error),traceback=traceback.format_exc(),
                     measured_self_plus_reaped_admin_CPU_seconds=process_CPU(),epoch=time.time(),
                     model_dispatches=0,production_unit_actions=0))
@@ -622,7 +632,14 @@ def main():
     elif args.action=='attest-protected':
         system=api().System();source=system.source(ROOT);value=system.protected.make_attestation(source)
         target=system.protected.expected_path(api().RUNTIME);api().immutable(target,value)
-        value=dict(status='R154_INCLUDED_PROTECTED_ROLE_ATTESTED',path=str(target),sha256=api().sha(target),attestation=value)
+        row=system.protected.included_record(target,Path('/proc')/str(system.protected.EXPECTED_PID))
+        old_api=api().module('r154_attestation_frozen_classifier',PREVIOUS_ENTRY)
+        old=api().read(api().read(PREVIOUS_REGISTRY)['authority_path'])
+        original=old_api.numerical_conflicts(old,[row]);new=api().numerical_conflicts(old,[row])
+        if original or new:raise RuntimeError('protected role failed original/new numerical predicate equivalence')
+        value=dict(status='R154_INCLUDED_PROTECTED_ROLE_ATTESTED',path=str(target),sha256=api().sha(target),attestation=value,
+            included_record=row,original515_conflicts=original,new519_conflicts=new,
+            proc_cwd_executable_proved=False,process_omitted=False,production_actions=0)
     elif args.action=='probe':
         if not args.output:raise RuntimeError('private probe requires create-once output')
         value=probe(args.output)

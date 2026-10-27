@@ -32,6 +32,7 @@ class ContinuationTests(unittest.TestCase):
         self.extra=mock.patch.multiple(G,PREVIOUS_RUNTIME=self.previous,PREVIOUS_CONTROL_ROOT=self.previous_source)
         self.extra.start();self.release_patch=mock.patch.object(R,'api',return_value=G);self.release_patch.start()
         self.a.update(kind='R154_CZ_CONTROL_CONTINUATION',poll_seconds=60,additional_control_activations=1,
+            handoff_mode='WAIT_PREDECESSOR_NATURAL_DRAIN',old_process_signals_authorized=False,
             historical_debits_credited=False,historical_claims_or_clocks_reset=False,
             proof_CPU_charged_seconds=240.,proof_CPU_actual_charged_seconds=20.,
             administrative_release_CPU_reservation_seconds=120.,prior_control_CPU_charged_seconds=360.,
@@ -49,6 +50,10 @@ class ContinuationTests(unittest.TestCase):
         B.put(self.previous/'single_activation_claim.json',dict(id=old['id'],authority_path=str(oldpath),authority_sha256=G.sha(oldpath)))
         names=['activation.json','launch_claim.json','launch_receipt.json','old_waiter_fence.json','effective_config.json','original_waiter_progress.json']
         for name in names:B.put(oldroot/name,{})
+        record=self.a['previous_waiter']
+        B.put(oldroot/'control_budget_heartbeat.json',dict(authority_sha256=G.sha(oldpath),unit=record['unit'],
+            InvocationID=record['invocation_id'],process={k:record['process'][k] for k in ['pid','start_ticks','boot_id','cmdline_sha256','cwd']},
+            numerical_CPU_included=False,control_cpu=29,charged_CPU_seconds=125.,heartbeat_epoch=199.))
         self.a['previous_immutable_sha256']={str(p):G.sha(p) for p in [oldpath,self.previous/'single_activation_claim.json']+[oldroot/n for n in names]}
         attestation=P.expected_path(G.RUNTIME);B.put(attestation,{})
         self.a.update(protected_role_attestation_path=str(attestation),protected_role_attestation_sha256=G.sha(attestation))
@@ -107,11 +112,20 @@ class ContinuationTests(unittest.TestCase):
     def test_owned_preparation_exception_never_waives_old_science_claim(self):
         path=Path(self.a['previous_authority_path']).parent/'science_claim.json';B.put(path,{})
         with self.assertRaisesRegex(RuntimeError,'prior CZ science'):G.assert_no_prior_science(self.a,allow_own_preparation=True)
-    def test_previous_live_waiter_blocks_new_run(self):
+    def test_previous_live_waiter_keeps_new_standby_outside_original_supervisor(self):
         self.launch_fixture();old=self.a['previous_waiter'];self.system.procs[66]=old['process']
-        with mock.patch.object(G,'self_attestation',return_value={}):
-            with self.assertRaisesRegex(RuntimeError,'physically drained'):G.run(self.path,self.a['waiter_unit'],system=self.system)
-        self.assertFalse((self.runtime/'science_claim.json').exists())
+        original=self.data/'launch_prep'/self.a['effective_config']['tag']/'jerez/progress.json'
+        B.put(original,dict(old_original_progress=True));before=original.read_bytes()
+        def stop(seconds):
+            progress=G.read(self.runtime/'progress.json')
+            self.assertEqual(progress['phase'],'WAIT_PREDECESSOR_NATURAL_DRAIN')
+            self.assertFalse(progress['original_supervisor_owned'])
+            self.assertEqual(original.read_bytes(),before)
+            raise RuntimeError('end private standby test')
+        self.system.sleep=stop
+        with mock.patch.object(G,'self_attestation',return_value={}),mock.patch.object(G,'cpu_guard',return_value=360.),mock.patch.object(G,'verify_previous_live',return_value=dict(exact_live=True)):
+            with self.assertRaisesRegex(RuntimeError,'end private standby'):G.run(self.path,self.a['waiter_unit'],system=self.system)
+        self.assertFalse((self.runtime/'science_claim.json').exists());self.assertEqual(original.read_bytes(),before)
     def test_ready_science_claim_is_global_create_once_and_freshly_rechecked(self):
         self.launch_fixture();before=Path(self.a['previous_authority_path']).read_bytes()
         with mock.patch.object(G,'self_attestation',return_value={}),mock.patch.object(G,'cpu_guard',return_value=360.),mock.patch.object(G,'publish_waiter_budget',return_value=dict(charged_CPU_seconds=361.)),mock.patch.object(G,'boundary_state',return_value=dict(ready=True)) as boundary:
@@ -130,27 +144,26 @@ class ContinuationTests(unittest.TestCase):
         with mock.patch.object(G,'self_attestation',return_value={}),mock.patch.object(G,'cpu_guard',return_value=360.),mock.patch.object(G,'boundary_state',side_effect=state):
             with self.assertRaisesRegex(RuntimeError,'prior CZ science'):G.run(self.path,self.a['waiter_unit'],system=self.system)
         self.assertFalse(self.system.dispatches)
-    def test_fence_precedes_original_supervisor_and_supervisor_released_at_launch(self):
-        events=[];original=self.data/'launch_prep'/self.a['effective_config']['tag']/'jerez/supervisor.lock'
-        def fenced(*args):
-            events.append('fence');self.assertFalse(original.exists())
+    def test_standby_activation_never_fences_or_acquires_old_supervisor(self):
+        original=self.data/'launch_prep'/self.a['effective_config']['tag']/'jerez/supervisor.lock'
+        original.parent.mkdir(parents=True,exist_ok=True)
         def started(*args):
-            events.append('launch')
-            with original.open('a') as stream:
-                fcntl.flock(stream,fcntl.LOCK_EX|fcntl.LOCK_NB)
-                fcntl.flock(stream,fcntl.LOCK_UN)
+            with original.open('a') as other:
+                with self.assertRaises(BlockingIOError):fcntl.flock(other,fcntl.LOCK_EX|fcntl.LOCK_NB)
             return dict(started=True)
-        with mock.patch.object(R,'fence_previous',side_effect=fenced),mock.patch.object(R,'start_waiter',side_effect=started):
-            R.handoff_and_launch(self.path,system=self.system)
-        self.assertEqual(events,['fence','launch'])
+        with original.open('a') as held:
+            fcntl.flock(held,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            with mock.patch.object(R,'fence_previous') as fence,mock.patch.object(R,'start_waiter',side_effect=started):
+                R.handoff_and_launch(self.path,system=self.system)
+                fence.assert_not_called()
         self.assertTrue((G.RUNTIME/'single_activation_claim.json').exists())
-    def test_inflight_old_science_after_fence_aborts_and_preserves_claim(self):
+    def test_old_science_during_standby_activation_wins_and_preserves_claim(self):
         claim=Path(self.a['previous_authority_path']).parent/'science_claim.json'
-        def fenced(*args):B.put(claim,dict(claim=1))
-        with mock.patch.object(R,'fence_previous',side_effect=fenced),mock.patch.object(R,'start_waiter') as start:
+        def started(*args):
+            B.put(claim,dict(claim=1));G.assert_no_prior_science(self.a)
+        with mock.patch.object(R,'start_waiter',side_effect=started):
             with self.assertRaisesRegex(RuntimeError,'prior CZ science'):R.handoff_and_launch(self.path,system=self.system)
-            start.assert_not_called()
-        self.assertEqual(G.read(claim),dict(claim=1));self.assertFalse((G.RUNTIME/'single_activation_claim.json').exists())
+        self.assertEqual(G.read(claim),dict(claim=1));self.assertTrue((G.RUNTIME/'single_activation_claim.json').exists())
     def test_spent_activation_does_not_signal_old_again(self):
         self.launch_fixture()
         with mock.patch.object(R,'fence_previous') as fence:
@@ -161,7 +174,7 @@ class ContinuationTests(unittest.TestCase):
         self.system.units[old['unit']]=dict(MainPID='66',InvocationID='old',ControlGroup=old['cgroup'],Restart='no',KillMode='process')
         self.system.groups[old['cgroup']]=[66,999]
         with mock.patch.object(R,'exact_pidfd_term') as term:
-            with self.assertRaisesRegex(RuntimeError,'sole administrative'):R.fence_previous(self.a,self.path,self.system)
+            with self.assertRaisesRegex(RuntimeError,'signals are not authorized'):R.fence_previous(self.a,self.path,self.system)
             term.assert_not_called()
     def test_pid_reuse_never_falls_back_to_pid_signal(self):
         expected=B.process(66);self.system.procs[66]=dict(expected,start_ticks=9999)

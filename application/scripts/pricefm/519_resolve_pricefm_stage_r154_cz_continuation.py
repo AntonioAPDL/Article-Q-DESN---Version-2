@@ -601,68 +601,126 @@ def mirror_progress(authority, value):
                           execution_control_source=authority['execution_source'], authority_path=str(root / 'authority.json')))
 
 
+def verify_previous_live(authority,system):
+    record=authority['previous_waiter'];props=system.unit(record['unit'])
+    current=recorded_process(system,record['process'])
+    if (not exact_process(current,record['process']) or props.get('InvocationID')!=record['invocation_id']
+            or props.get('ControlGroup')!=record['cgroup'] or props.get('Restart')!='no'
+            or int(props.get('MainPID',0))!=record['process']['pid'] or props.get('ActiveState')!='active'
+            or current.get('cpus')!=[29]):
+        raise RuntimeError('previous control is neither its exact live owner nor physically drained')
+    return dict(unit=props,process=current)
+
+
+def previous_natural_drain_evidence(authority,system):
+    previous=Path(authority['previous_authority_path']).parent
+    records={name:dict(sha256=sha(previous/name),value=read(previous/name)) for name in
+        ['progress.json','control_budget_heartbeat.json','waiter_blocked.json','waiter_terminal.json']
+        if (previous/name).exists()}
+    heartbeat=records.get('control_budget_heartbeat.json',{}).get('value',{})
+    recorded=authority['previous_waiter'];identity={k:recorded['process'][k] for k in
+        ['pid','start_ticks','boot_id','cmdline_sha256','cwd']}
+    if (heartbeat.get('authority_sha256')!=authority['previous_authority_sha256']
+            or heartbeat.get('unit')!=recorded['unit'] or heartbeat.get('InvocationID')!=recorded['invocation_id']
+            or heartbeat.get('process')!=identity or heartbeat.get('numerical_CPU_included') is not False
+            or heartbeat.get('control_cpu')!=29):
+        raise RuntimeError('last predecessor CPU heartbeat is not bound to its exact ended lifetime')
+    charged=finite_cpu(heartbeat.get('charged_CPU_seconds'),'last predecessor charged CPU')
+    age=system.now()-finite_cpu(heartbeat.get('heartbeat_epoch'),'last predecessor heartbeat epoch')
+    if age<0:raise RuntimeError('last predecessor heartbeat is from the future')
+    return dict(previous_records=records,last_measured_predecessor_CPU_seconds=charged,
+        predecessor_final_CPU_upper_bound_seconds=charged+age,
+        predecessor_tail_single_CPU_wall_bound_seconds=age,historical_ledger_rewritten=False,
+        observer_CPU_used=False,old_process_signals=0)
+
+
+def continuation_progress(authority,value,supervisor_owned):
+    if supervisor_owned:mirror_progress(authority,value)
+    else:atomic(Path(authority['runtime'])/'progress.json',value)
+
+
 def run(path, unit, *, system=None, poll_seconds=60):
-    system = system or System(); path = Path(path).resolve()
-    authority = validate_authority(path, system=system); root = Path(authority['runtime'])
-    if unit != authority['waiter_unit']: raise RuntimeError('CZ waiter unit differs')
-    old_runtime = DATA / 'launch_prep' / authority['effective_config']['tag'] / 'jerez'
-    with locked(root / 'owner.lock'), locked(old_runtime / 'supervisor.lock'):
+    system=system or System();path=Path(path).resolve()
+    authority=validate_authority(path,system=system);root=Path(authority['runtime'])
+    if unit!=authority['waiter_unit']:raise RuntimeError('CZ waiter unit differs')
+    original=DATA/'launch_prep'/authority['effective_config']['tag']/'jerez'
+    supervisor_owned=False
+    with locked(root/'owner.lock'),contextlib.ExitStack() as held:
         grant=read(RUNTIME/'single_activation_claim.json')
         if grant.get('id')!=authority['id'] or grant.get('authority_sha256')!=sha(path):
             raise RuntimeError('CZ waiter lacks its sole global activation grant')
-        if (not (root/'old_waiter_fence.json').is_file()
-                or read(root/'old_waiter_fence.json').get('authority_sha256')!=sha(path)):
-            raise RuntimeError('CZ waiter lacks an exact prior control-fence receipt')
-        capsule = self_attestation(authority, path, system, role='waiter')
-        assert_previous_drained(authority, system)
-        if not old_waiter_drained(authority, system)['drained']:
-            raise RuntimeError('old R144 waiter is not exactly drained')
-        immutable(root / 'activation.json', dict(activation=1, authority_sha256=sha(path), capsule=capsule))
+        # The supported kernel has no pidfd. This one finite activation waits
+        # outside the original supervisor without signalling its predecessor.
+        capsule=self_attestation(authority,path,system,role='waiter')
+        immutable(root/'activation.json',dict(activation=1,authority_sha256=sha(path),capsule=capsule,
+            handoff_mode=authority['handoff_mode']))
         try:
             while True:
-                check_started = time.monotonic()
-                validate_authority(path, system=system)
-                assert_previous_drained(authority, system)
-                charged = cpu_guard(authority, system)
-                state = boundary_state(authority, system)
-                if time.monotonic() - check_started > authority['pricing']['worst_check_wall_seconds']:
-                    raise RuntimeError('actual control check exceeds admitted freshness wall bound')
-                mirror_progress(authority, dict(state, epoch=system.now(), control_CPU_seconds=charged,
-                                                scientific_dispatches=0, authority_sha256=sha(path)))
-                if state['ready']:
-                    # The old unmodified waiter cannot share this new lock;
-                    # exact old physical drain is independently required first.
-                    with locked(RUNTIME / 'science_dispatch.lock'):
-                        validate_authority(path, system=system)
-                        assert_previous_drained(authority, system)
+                started=time.monotonic();validate_authority(path,system=system)
+                charged=cpu_guard(authority,system);assert_no_prior_science(authority)
+                drained=previous_waiter_drained(authority,system)
+                if not drained['drained']:
+                    if supervisor_owned:raise RuntimeError('previous waiter reappeared after natural drain')
+                    previous=verify_previous_live(authority,system)
+                    if time.monotonic()-started>authority['pricing']['worst_check_wall_seconds']:
+                        raise RuntimeError('predecessor-wait check exceeds admitted freshness bound')
+                    continuation_progress(authority,dict(status='R154_CZ_WAIT_PREDECESSOR_NATURAL_DRAIN',
+                        phase='WAIT_PREDECESSOR_NATURAL_DRAIN',epoch=system.now(),authority_sha256=sha(path),
+                        control_CPU_seconds=charged,scientific_dispatches=0,previous=previous,
+                        original_supervisor_owned=False,old_process_signals=0),False)
+                    system.sleep(authority['poll_seconds']);continue
+                if not supervisor_owned:
+                    # Physical drain FIRST. Only then original supervisor and
+                    # cross-lineage locks; an in-flight old scientific claim
+                    # wins and remains permanently preserved.
+                    held.enter_context(locked(original/'supervisor.lock'))
+                    with locked(RUNTIME/'science_dispatch.lock'):
+                        validate_authority(path,system=system);assert_previous_drained(authority,system)
                         assert_no_prior_science(authority)
-                        if not old_waiter_drained(authority, system)['drained']:
+                        if (RUNTIME/'science_dispatch_claim.json').exists():
+                            raise RuntimeError('global CZ science already claimed')
+                        if not old_waiter_drained(authority,system)['drained']:
+                            raise RuntimeError('original R144 waiter reappeared')
+                        evidence=previous_natural_drain_evidence(authority,system)
+                        immutable(root/'natural_drain_handoff.json',dict(
+                            status='R154_OLD_CONTROL_NATURALLY_DRAINED_FINAL_LOCKED_RECHECK_PASS',
+                            authority_sha256=sha(path),epoch=system.now(),drain=drained,**evidence))
+                    supervisor_owned=True
+                state=boundary_state(authority,system)
+                if time.monotonic()-started>authority['pricing']['worst_check_wall_seconds']:
+                    raise RuntimeError('actual control check exceeds admitted freshness wall bound')
+                continuation_progress(authority,dict(state,phase='WAIT_FULL_R143_BOUNDARY',epoch=system.now(),
+                    control_CPU_seconds=charged,scientific_dispatches=0,authority_sha256=sha(path),
+                    original_supervisor_owned=True),True)
+                if state['ready']:
+                    with locked(RUNTIME/'science_dispatch.lock'):
+                        validate_authority(path,system=system);assert_previous_drained(authority,system)
+                        assert_no_prior_science(authority)
+                        if not old_waiter_drained(authority,system)['drained']:
                             raise RuntimeError('old R144 waiter reappeared')
-                        state = boundary_state(authority, system)
-                        if not state['ready']: continue
-                        cpu_guard(authority, system)
-                        claim = dict(claim=1, authority_sha256=sha(path),
-                            authority_path=str(path), claimed_epoch=system.now(),
-                            boundary=state, unit=authority['science_unit'],
+                        state=boundary_state(authority,system)
+                        if not state['ready']:continue
+                        cpu_guard(authority,system)
+                        claim=dict(claim=1,authority_sha256=sha(path),authority_path=str(path),
+                            claimed_epoch=system.now(),boundary=state,unit=authority['science_unit'],
                             previous_authority_sha256=authority['previous_authority_sha256'])
-                        immutable(RUNTIME / 'science_dispatch_claim.json', claim)
-                        immutable(root / 'science_claim.json', claim)
-                        argv = system.start_science(authority, path)
-                    immutable(root / 'science_launch.json', dict(argv=argv, unit=authority['science_unit'],
-                        started_epoch=system.now(), scientific_source=authority['science_source'],
+                        immutable(RUNTIME/'science_dispatch_claim.json',claim)
+                        immutable(root/'science_claim.json',claim)
+                        argv=system.start_science(authority,path)
+                    immutable(root/'science_launch.json',dict(argv=argv,unit=authority['science_unit'],
+                        started_epoch=system.now(),scientific_source=authority['science_source'],
                         effective_config_sha256=authority['effective_config_sha256']))
-                    final_budget=publish_waiter_budget(authority,system)
-                    result = dict(status='R154_CZ_FROZEN_SCIENCE_DISPATCHED_WAITER_EXITING',
-                                  epoch=system.now(), scientific_dispatches=1, unit=authority['science_unit'],
-                                  control_CPU_seconds=final_budget['charged_CPU_seconds'],authority_sha256=sha(path))
-                    mirror_progress(authority, result); immutable(root / 'waiter_terminal.json', result)
-                    return result
+                    budget=publish_waiter_budget(authority,system)
+                    result=dict(status='R154_CZ_FROZEN_SCIENCE_DISPATCHED_WAITER_EXITING',epoch=system.now(),
+                        scientific_dispatches=1,unit=authority['science_unit'],control_CPU_seconds=budget['charged_CPU_seconds'],
+                        authority_sha256=sha(path))
+                    continuation_progress(authority,result,True);immutable(root/'waiter_terminal.json',result);return result
                 system.sleep(authority['poll_seconds'])
         except BaseException as error:
-            record = dict(status='R154_CZ_GATE_BLOCKED_NO_AUTOMATIC_RETRY', error=repr(error),
-                          epoch=system.now(), scientific_dispatches=int((root / 'science_claim.json').exists()),
-                          source=authority['execution_source'], models_signalled=False)
-            immutable(root / 'waiter_blocked.json', record); mirror_progress(authority, record)
+            record=dict(status='R154_CZ_GATE_BLOCKED_NO_AUTOMATIC_RETRY',error=repr(error),epoch=system.now(),
+                scientific_dispatches=int((root/'science_claim.json').exists()),source=authority['execution_source'],
+                models_signalled=False,old_process_signals=0,original_supervisor_owned=supervisor_owned)
+            immutable(root/'waiter_blocked.json',record);continuation_progress(authority,record,supervisor_owned)
             raise
 
 
@@ -755,7 +813,9 @@ def assert_previous_drained(authority, system):
 
 
 def validate_continuation_scope(authority, system):
-    if (authority.get('poll_seconds') != 60
+    if (authority.get('handoff_mode') != 'WAIT_PREDECESSOR_NATURAL_DRAIN'
+            or authority.get('old_process_signals_authorized') is not False
+            or authority.get('poll_seconds') != 60
             or authority.get('additional_control_activations') != 1
             or authority.get('historical_debits_credited') is not False
             or authority.get('historical_claims_or_clocks_reset') is not False):

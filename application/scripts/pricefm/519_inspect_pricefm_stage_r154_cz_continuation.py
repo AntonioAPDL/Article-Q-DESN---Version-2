@@ -121,9 +121,9 @@ def observe(system=None):
     require(grant.get('id')==authority['id'],'registered identity differs')
     common.update(authority_path=str(path),authority_sha256=m.sha(path),current_runtime=str(root),
         execution_source=authority['execution_source'],previous_authority_path=authority['previous_authority_path'])
-    m.assert_previous_drained(authority,system)
     claim=m.read(root/'science_claim.json') if (root/'science_claim.json').exists() else None
     if claim:
+        m.assert_previous_drained(authority,system)
         require(m.read(m.RUNTIME/'science_dispatch_claim.json')==claim,'global/root scientific claims differ')
         require(claim.get('authority_sha256')==m.sha(path) and claim.get('unit')==authority['science_unit']
             and claim.get('boundary',{}).get('ready') is True,'scientific claim differs')
@@ -148,6 +148,16 @@ def observe(system=None):
     require(budget['within_CPU'] and budget['within_wall'],'new control CPU/wall reserve exhausted')
     progress=m.read(root/'progress.json')
     require(progress.get('authority_sha256')==m.sha(path),'actual progress authority differs')
+    if progress.get('phase')=='WAIT_PREDECESSOR_NATURAL_DRAIN':
+        drained=m.previous_waiter_drained(authority,system)
+        previous=None if drained['drained'] else m.verify_previous_live(authority,system)
+        return dict(common,status='R154_CZ_HEALTHY_FINITE_STANDBY_PREDECESSOR_NATURAL_DRAIN',healthy=True,
+            scientific_dispatches=0,budget=budget,live=capsule,progress=progress,
+            predecessor_drained=drained['drained'],previous_live=previous,
+            original_supervisor_owned=False,original_progress_mirrored=False,old_process_signals=0,
+            note='R153 remains the original supervisor owner until its unchanged natural terminal; R154 is a separately funded finite standby')
+    m.assert_previous_drained(authority,system)
+    require((root/'natural_drain_handoff.json').exists(),'new owner lacks final natural-drain/supervisor handoff proof')
     return dict(common,status='R154_CZ_HEALTHY_WAITING_FOR_FULL_R143_BOUNDARY',healthy=True,
         scientific_dispatches=0,budget=budget,live=capsule,boundary=m.boundary_state(authority,system),progress=progress)
 

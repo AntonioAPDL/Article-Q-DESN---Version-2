@@ -53,9 +53,11 @@ def profile(census,admin_rules,role):
     floor=prior['three_scan_max_CPU_seconds']
     c.require(floor>=.321704-1e-12 and min(r['processes'] for r in rows)>100,
             'actual full-host view and frozen prior scan price required')
+    try:proc1_namespace=os.readlink('/proc/1/ns/pid')
+    except OSError as exc:proc1_namespace=dict(unavailable=type(exc).__name__,reason='kernel denies optional proc1 namespace read')
     return dict(schema='r155_seed_actual_host_classifier_price_v1',rows=rows,
         host=socket.gethostname(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-        observer_pid_namespace=os.readlink('/proc/self/ns/pid'),proc1_pid_namespace=os.readlink('/proc/1/ns/pid'),
+        observer_pid_namespace=os.readlink('/proc/self/ns/pid'),proc1_pid_namespace=proc1_namespace,
         prior_actual_scan_CPU_floor=floor,floor_evidence=c.pin(prior_path),
         upper_scan_CPU=max(floor,max(r['CPU'] for r in rows))*1.5,actual_affinity=sorted(os.sched_getaffinity(0)),
         base_numerical_detection_unchanged=True,reviewed_admin_role_added=True,

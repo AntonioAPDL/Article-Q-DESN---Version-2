@@ -50,15 +50,31 @@ def profile(census,admin_rules,role):
             conflicts=conflicts,reviewed_metadata_role_observations=accepted,
             active_initial_study_conflicts_are_observations_not_exemptions=True))
     prior_path=c.R155/'lv_handoff/ADMIN_SCAN_PROFILE_01.json';prior=c.read(prior_path)
-    floor=prior['three_scan_max_CPU_seconds']
-    c.require(floor>=.321704-1e-12 and min(r['processes'] for r in rows)>100,
+    historical_floor=prior['three_scan_max_CPU_seconds']
+    cold_pin=dict(path=str(c.R155/'final_component_recovery/CLASSIFIER_PROFILE_02.json'),
+        sha256='d634761d7c0031805f04ba309f80ba031bbc1ae645d0977c6827ab7a14dba9a3')
+    cold=c.verify_pin(cold_pin)
+    c.require(cold['status']=='PASS_EXACT_FINAL_SOURCE_ACTUAL_HOST_ADAPTER'
+        and cold['source']==dict(branch='work/pricefm-r155-ee-final-component-20261027',
+            head='e35584833719bb35969cfbd5ea5047aeca8f8838')
+        and cold['helper']['sha256']==c.digest(Path(__file__).with_name('pricefm_r155_metadata_waiter.py'))
+        and cold['CPU_affinity']==[31] and cold['numpy_imported'] is False
+        and cold['claims_created']==cold['global_permits_claimed']==0,
+        'exact metadata-only canonical-helper cold scan evidence differs')
+    cold_floor=max(row['CPU_seconds'] for row in cold['rows'])
+    c.require(math.isfinite(cold_floor) and cold_floor>=.418455-1e-12,
+        'later actual cold scan floor must not be replaced by faster warm observations')
+    floor=max(historical_floor,cold_floor)
+    c.require(historical_floor>=.321704-1e-12 and min(r['processes'] for r in rows)>100,
             'actual full-host view and frozen prior scan price required')
     try:proc1_namespace=os.readlink('/proc/1/ns/pid')
     except OSError as exc:proc1_namespace=dict(unavailable=type(exc).__name__,reason='kernel denies optional proc1 namespace read')
     return dict(schema='r155_seed_actual_host_classifier_price_v1',rows=rows,
         host=socket.gethostname(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
         observer_pid_namespace=os.readlink('/proc/self/ns/pid'),proc1_pid_namespace=proc1_namespace,
-        prior_actual_scan_CPU_floor=floor,floor_evidence=c.pin(prior_path),
+        prior_actual_scan_CPU_floor=floor,floor_evidence=cold_pin,
+        historical_LV_scan_CPU_floor=historical_floor,historical_LV_floor_evidence=c.pin(prior_path),
+        known_cold_scan_CPU_floor=cold_floor,
         upper_scan_CPU=max(floor,max(r['CPU'] for r in rows))*1.5,actual_affinity=sorted(os.sched_getaffinity(0)),
         base_numerical_detection_unchanged=True,reviewed_admin_role_added=True,
         scientific_claims=0,new_forecasts=0)

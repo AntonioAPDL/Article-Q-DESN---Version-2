@@ -56,23 +56,20 @@ def fresh_peer_guard(grant):
     """Fresh actual process/thread affinity check against the sealed peer census.
 
     Unknown Python/R/script numerical roles intersecting CPU30 reject admission.
-    Current controller ancestors are administrative launch ownership, not peers.
+    Only this observer's current PID is excluded at pre-admission; no ancestor
+    or generic administrative name exemption is applied.
     A vanished process is accepted only after a fresh /proc absence check.
     PermissionError is never converted to a disappearance or ignored omission.
     """
     contract=global_permit(grant)
     census=json.loads(Path(contract['evidence']['peer_census']['path']).read_text())
     known={p['pid']:p for p in census['allowed_intersecting_processes']}
-    ancestors=set();pid=os.getpid()
-    while pid>1:
-        ancestors.add(pid)
-        raw=Path(f'/proc/{pid}/stat').read_text();f=raw[raw.rfind(')')+2:].split();pid=int(f[1])
     observed=[];gone=[]
     for process in Path('/proc').iterdir():
         if not process.name.isdigit():continue
         pid=int(process.name)
         try:
-            if process.stat().st_uid!=os.getuid() or pid in ancestors:continue
+            if process.stat().st_uid!=os.getuid() or pid==os.getpid():continue
             raw=(process/'stat').read_text();f=raw[raw.rfind(')')+2:].split()
             if f[0] in ('Z','X','x'):continue
             command=(process/'cmdline').read_bytes()

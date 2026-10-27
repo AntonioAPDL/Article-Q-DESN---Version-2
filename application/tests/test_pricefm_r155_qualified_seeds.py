@@ -74,6 +74,22 @@ class MetadataWaiterRole(unittest.TestCase):
    receipt=json.loads(next((Path(d)/'peer_rejections').glob('*.json')).read_text())
    self.assertTrue(receipt['base_numerical_detection_unchanged']);self.assertTrue(receipt['reviewed_admin_role_added'])
    self.assertNotIn('classifier_unchanged',receipt);self.assertFalse(receipt['retry_authorized'])
+ def test_cached_lifetime_still_rechecks_environment_and_new_pid_needs_unit(self):
+  process,rule,obs=self.fixture();prior=copy.deepcopy(obs);prior['positive_match']=True
+  current=copy.deepcopy(obs['current']);current['_environment']=rule['expected_thread_environment'].copy()
+  static=dict(hashes=obs['hashes'],source=obs['source'])
+  with patch.object(waiter,'_static',return_value=static),patch.object(waiter,'_identity',side_effect=[current,obs['parent'],obs['closing_identity']]),patch.object(waiter,'_command',side_effect=AssertionError('cached DBus must not run')):
+   observed=waiter.observe_legacy_490(process,rule,prior)
+  self.assertTrue(observed['cache_used']);self.assertTrue(waiter.match_legacy_490(process,rule,observed))
+  current=copy.deepcopy(obs['current']);current['_environment']=dict(rule['expected_thread_environment'],OMP_NUM_THREADS='2')
+  with patch.object(waiter,'_static',return_value=static),patch.object(waiter,'_identity',side_effect=[current,obs['parent'],obs['closing_identity']]):
+   changed=waiter.observe_legacy_490(process,rule,prior)
+  self.assertFalse(waiter.match_legacy_490(process,rule,changed))
+  current=copy.deepcopy(obs['current']);current['_environment']=rule['expected_thread_environment'].copy()
+  newer=dict(process,pid=124);current['pid']=124
+  with patch.object(waiter,'_static',return_value=static),patch.object(waiter,'_identity',side_effect=[current,obs['parent']]),patch.object(waiter,'_command',side_effect=RuntimeError('new PID needs new unit attribution')):
+   unverified=waiter.observe_legacy_490(newer,rule,prior)
+  self.assertFalse(unverified['observed']);self.assertFalse(waiter.match_legacy_490(newer,rule,unverified))
 
 class ScientificBoundary(unittest.TestCase):
  def test_metadata_imports_do_not_load_numerical_models(self):
@@ -133,6 +149,16 @@ class ScientificBoundary(unittest.TestCase):
   with self.assertRaises(RuntimeError):r.replay_original_branch(canonical,old)
 
 class PriceAndLifecycle(unittest.TestCase):
+ def test_optional_proc1_namespace_denial_is_reported_not_invented(self):
+  rows=[dict(threads=[dict(tid=i,cpus=[31])]) for i in range(200)]
+  def namespace(path):
+   if path=='/proc/1/ns/pid':raise PermissionError('private fixture')
+   return 'pid:[private-fixture]'
+  with patch.object(c,'all_processes',return_value=rows),patch.object(c,'reviewed_peer_conflicts',return_value=([],[])),patch.object(p.os,'readlink',side_effect=namespace):
+   result=p.profile({}, {}, {})
+  self.assertEqual(result['proc1_pid_namespace']['unavailable'],'PermissionError')
+  self.assertEqual(result['observer_pid_namespace'],'pid:[private-fixture]')
+  self.assertGreaterEqual(result['upper_scan_CPU']+1e-12,.321704*1.5)
  def test_readonly_prepared_health_has_no_claim_or_model_call(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);source=dict(branch='work/private',head='1'*40)

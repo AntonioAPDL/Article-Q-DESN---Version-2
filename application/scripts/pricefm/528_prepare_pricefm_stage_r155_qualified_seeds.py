@@ -190,6 +190,7 @@ def prepare(destination,final_manifest_path=None,legacy_role_path=LEGACY_ROLE,le
     timings=timing_inventory(initial,inventory,original,final_manifest)
     historical=c.verify_pin(initial['R154_preparation'])['task_estimates']
     price=prices(tasks,historical,timings,scan)
+    c.require(c.source_identity()==identity,'actual seed source changed during metadata preparation')
     destination.mkdir(parents=True)
     c.immutable(destination/'pricing.json',price)
     sources=[Path(__file__),Path(__file__).with_name('529_run_pricefm_stage_r155_qualified_seeds.py'),

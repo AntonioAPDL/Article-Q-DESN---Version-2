@@ -460,7 +460,7 @@ def main():
     parser.add_argument('--cpu',type=int)
     args=parser.parse_args()
     if args.check_peers:
-        from pricefm_r154_prediction_contract import all_processes,peer_conflicts
+        from pricefm_r154_prediction_contract import all_processes,peer_conflicts,physical_siblings
         require(args.peer_census and args.admin_rules and args.cpu in range(32),'explicit census/rules/physical CPU required')
         identity=source_identity(ROOT)
         processes=all_processes()
@@ -468,6 +468,7 @@ def main():
         value=dict(status='PASS' if not conflicts else 'RESOURCE_DEFERRED',source=identity,
             entry=pin(__file__),contract=pin(Path(__file__).with_name('pricefm_r154_prediction_contract.py')),
             peer_census=pin(args.peer_census),admin_rules=pin(args.admin_rules),cpu=args.cpu,
+            physical_sibling_cpus=sorted(physical_siblings(args.cpu)),
             processes_read=len(processes),threads_read=sum(len(p.get('threads',[])) for p in processes),
             unreadable_processes_ignored=0,unknown_numerical_conflicts=conflicts,
             unrelated_raw_arguments_retained=False,claims_created=0,new_fits=0,new_forecasts=0)

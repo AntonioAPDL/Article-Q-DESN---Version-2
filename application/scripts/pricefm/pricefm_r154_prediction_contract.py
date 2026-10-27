@@ -120,6 +120,21 @@ def finite_positive(value, name):
             and math.isfinite(value) and value > 0, 'positive finite '+name+' required')
 
 
+def physical_siblings(cpu):
+    text=(Path('/sys/devices/system/cpu')/('cpu'+str(cpu))/'topology/thread_siblings_list').read_text().strip()
+    result=set()
+    for token in text.split(','):
+        if '-' in token:
+            a,b=map(int,token.split('-'));result.update(range(a,b+1))
+        else:result.add(int(token))
+    require(cpu in result and result,'kernel physical sibling identity unavailable')
+    return result
+
+
+def singleton_affinity(mask,cpu):
+    require(set(mask)=={cpu},'owned logical affinity differs; SMT sibling is not another permit')
+
+
 def validate_resource_bounds(a,global_contract,policy,now):
     require(global_contract.get('nonrenewing') is True and policy.get('nonrenewing') is True,
             'resource and pool authority must be nonrenewing')
@@ -161,6 +176,8 @@ def validate_authority(a, prep, prep_path, identity, now, hostname):
     require(a['max_execution_wall_seconds']<=a['max_wall_seconds'],'active execution exceeds original absolute clock')
     require(0 < a['min_delivered_share'] <= 1, 'invalid delivered share')
     require(a.get('cpu') in range(32), 'physical core allocation required; SMT forbidden')
+    require(a.get('physical_sibling_cpus')==sorted(physical_siblings(a['cpu'])),
+            'authority must pin actual kernel physical siblings')
     require(a['full_prefix_CPU'] >= prep['historical_prefix_floor_CPU'],
             'entire scientific prefix is not priced')
     require(a['replacement_CPU'] >= prep['historical_replacement_floor_CPU'],
@@ -266,7 +283,7 @@ def signal_unreaped_direct_child(pid,identity):
         os.kill(pid,signal.SIGKILL)
 
 
-def admin_match(p,cpu,rules):
+def admin_match(p,cpu,rules,siblings=None):
     """Only frozen source + exact controller verb + explicit disjoint mask."""
     if not p['comm'].lower().startswith('python'):
         return False
@@ -294,17 +311,18 @@ def admin_match(p,cpu,rules):
         try:
             mask=set(map(int,value.split(',')))
         except (ValueError,AttributeError):continue
-        if mask and cpu not in mask and mask.issubset(set(rule['allowed_declared_cpus'])):
+        if mask and mask.isdisjoint(siblings or physical_siblings(cpu)) and mask.issubset(set(rule['allowed_declared_cpus'])):
             return True
     return False
 
 
-def peer_conflicts(cpu, census, own_pids, processes,admin_rules=None):
+def peer_conflicts(cpu, census, own_pids, processes,admin_rules=None,siblings=None):
+    physical=set(siblings) if siblings is not None else physical_siblings(cpu)
     allowed = {(p['boot_id'], p['pid'], p['start_ticks'], p['cmdline_sha256']):p
                for p in census['allowed_intersecting_processes']}
     conflicts=[]
     for p in processes:
-        if p is None or p['pid'] in own_pids or cpu not in p['cpus']:
+        if p is None or p['pid'] in own_pids or physical.isdisjoint(p['cpus']):
             continue
         # Stopped processes are retained in evidence; any later activation is
         # rejected unless its exact lifetime was explicitly accepted in census.
@@ -314,7 +332,7 @@ def peer_conflicts(cpu, census, own_pids, processes,admin_rules=None):
         key=(p['boot_id'],p['pid'],p['start_ticks'],p['cmdline_sha256'])
         known=allowed.get(key)
         bad_state=known is not None and 'allowed_states' in known and p['state'] not in known['allowed_states']
-        unknown=numerical and known is None and not admin_match(p,cpu,admin_rules or {})
+        unknown=numerical and known is None and not admin_match(p,cpu,admin_rules or {},physical)
         if bad_state or unknown:
             # Never retain foreign raw argv in a conflict output.
             conflicts.append({k:p[k] for k in ('pid','start_ticks','boot_id','state','comm','cmdline_sha256','cpus')})
@@ -408,7 +426,7 @@ class Lease:
         lock_dir.mkdir(parents=True,exist_ok=True)
         self.permit_lock=(lock_dir/(a['permit_id']+'.lock')).open('a+')
         fcntl.flock(self.permit_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        peers=peer_conflicts(a['cpu'],self.census,{os.getpid()},all_processes(),self.admin_rules)
+        peers=peer_conflicts(a['cpu'],self.census,{os.getpid()},all_processes(),self.admin_rules,a['physical_sibling_cpus'])
         require(not peers,'new numerical peer before claim: '+str([p['pid'] for p in peers]))
         self._peer_at=time.monotonic()
         # Never attach to an old claim, including one whose process vanished.
@@ -417,7 +435,7 @@ class Lease:
             permit_id=a['permit_id'],scope_id=a['scope_id'],study=prep['study'],process=self.own,
             output_dir=str(self.out),started_epoch=time.time(),new_fits=0,official_origins=0))
         os.sched_setaffinity(0,{a['cpu']})
-        require(os.sched_getaffinity(0)=={a['cpu']}, 'actual CPU pin differs')
+        singleton_affinity(os.sched_getaffinity(0),a['cpu'])
         policy={'SCHED_OTHER':os.SCHED_OTHER,'SCHED_IDLE':os.SCHED_IDLE}
         require(a.get('scheduler_policy') in policy,'explicit actual scheduler policy required')
         os.sched_setscheduler(0,policy[a['scheduler_policy']],os.sched_param(0))
@@ -550,12 +568,12 @@ class Lease:
         require(guardian is not None and guardian['state']!='Z', 'local wall guardian missing')
         require(not (self.out/'stop_request.json').exists(), 'explicit cooperative stop request')
         for task in (Path('/proc/self/task')).iterdir():
-            require(os.sched_getaffinity(int(task.name))=={self.a['cpu']}, 'thread affinity differs')
+            singleton_affinity(os.sched_getaffinity(int(task.name)),self.a['cpu'])
         children=Path('/proc/self/task')/str(os.getpid())/'children'
         require(set(map(int,children.read_text().split())) <= {self.guardian}, 'unreviewed owned child appeared')
         clock=time.monotonic()
         if fresh_peer or (peer_cadence and clock-self._peer_at>=self.a['peer_census_cadence_seconds']):
-            peers=peer_conflicts(self.a['cpu'],self.census,{os.getpid(),self.guardian},all_processes(),self.admin_rules)
+            peers=peer_conflicts(self.a['cpu'],self.census,{os.getpid(),self.guardian},all_processes(),self.admin_rules,self.a['physical_sibling_cpus'])
             require(not peers, 'new unreviewed numerical peer intersects allocation: '+str([p['pid'] for p in peers]))
             self._peer_at=time.monotonic()
         if refresh_output:

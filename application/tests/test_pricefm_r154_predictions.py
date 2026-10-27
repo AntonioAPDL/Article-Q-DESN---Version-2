@@ -74,7 +74,7 @@ class TestAuthority(unittest.TestCase):
             'created_epoch':900,'expires_epoch':2100,'nonrenewing':True,
             'lock_dir':str(self.root/'locks'),'permits':[{'id':'single','host':'muscat','cpu':30,'science':['EE','LV','CERTIFICATE_REFERENCE'],'sequential':True}]})
         self.a={'schema':'r154_prediction_authority_v1','status':'ADMITTED','study':'EE','scope_id':'fresh',
-            'host':'muscat','cpu':30,'source':self.identity,'preparation':c.pin(self.pp),
+            'host':'muscat','cpu':30,'physical_sibling_cpus':[30,62],'source':self.identity,'preparation':c.pin(self.pp),
             'start_epoch':1000,'expires_epoch':2000,'max_wall_seconds':1000,'max_execution_wall_seconds':1000,'nonrenewing':True,
             'full_prefix_CPU':100,'replacement_CPU':10,'admin_drain_CPU':20,'guardian_CPU_reserve':2,
             'total_CPU_cap':130,'min_delivered_share':.5,'own_RSS_soft_GiB':24,
@@ -150,6 +150,13 @@ class TestPeerAndLifetime(unittest.TestCase):
         self.assertEqual(len(c.peer_conflicts(30,census,set(),[self.row()])),1)
         self.assertEqual(c.peer_conflicts(30,census,set(),[self.row(cpus=[29])]),[])
         self.assertEqual(c.peer_conflicts(30,census,set(),[self.row(comm='rsync',command='rsync archive')]),[])
+    def test_unknown_SMT_sibling_is_physical_conflict(self):
+        census={'allowed_intersecting_processes':[]}
+        self.assertTrue(c.peer_conflicts(30,census,set(),[self.row(cpus=[62])]))
+        self.assertFalse(c.peer_conflicts(30,census,set(),[self.row(cpus=[29])]))
+        with self.assertRaises(RuntimeError):c.singleton_affinity({62},30)
+        with self.assertRaises(RuntimeError):c.singleton_affinity({30,62},30)
+        c.singleton_affinity({30},30)
     def test_pid_reuse_or_argv_change_does_not_inherit_acceptance(self):
         row=self.row();census={'allowed_intersecting_processes':[row]}
         self.assertFalse(c.peer_conflicts(30,census,set(),[row]))
@@ -178,6 +185,7 @@ class TestPeerAndLifetime(unittest.TestCase):
                          [str(interpreter),'-m','module',str(path),'controller','--cpus','0,1'],
                          [str(interpreter),'-',str(path),'controller','--cpus','0,1'],
                          prefix+['controller','--cpus','0,1','--cpus','30'],
+                         prefix+['controller','--cpus','62'],
                          prefix+['controller','--cpus=0,1','--cpus=30'],
                          prefix+['controller','--cpus','0-29']):
                 self.assertTrue(c.peer_conflicts(30,census,set(),[dict(row,argv=args)],rule))

@@ -5,6 +5,7 @@
   "scope_id": null,
   "host": null,
   "cpu": null,
+  "physical_sibling_cpus": [30,62],
   "scheduler_policy": "SCHED_OTHER",
   "nice": 10,
   "io_class": 3,

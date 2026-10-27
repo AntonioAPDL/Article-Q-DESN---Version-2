@@ -106,6 +106,15 @@ class PriceAndLifecycle(unittest.TestCase):
  def test_unfundable_guard_rate_rejected(self):
   tasks,hist,timing,scan=self.fixture();scan['upper_scan_CPU']=3.
   with self.assertRaisesRegex(RuntimeError,'guard cost'):p.prices(tasks,hist,timing,scan)
+ def test_partial_cpu_uses_new_plus_included_proof_not_full_cohort(self):
+  descriptors=[dict(name='clock00_part000',origin_positions=list(range(8))),
+   dict(name='clock00_part001',origin_positions=list(range(8,16))),
+   dict(name='clock00_part002',origin_positions=list(range(16,20)))]
+  with patch.object(c,'chunks',return_value=descriptors):
+   self.assertEqual(p.partial_public_windows({},set(['clock00_part000'])),20)
+   self.assertEqual(p.partial_public_windows({},set(['clock00_part000','clock00_part001'])),12)
+   for retained in (set(),{'unknown'},{'clock00_part001'},set(d['name'] for d in descriptors)):
+    with self.assertRaises(RuntimeError):p.partial_public_windows({},retained)
  def test_original_flock_busy_and_inode_replacement(self):
   import fcntl
   with tempfile.TemporaryDirectory() as d:
@@ -131,73 +140,81 @@ class PriceAndLifecycle(unittest.TestCase):
 
 class CompleteInitialPrivateProof(unittest.TestCase):
  def fixture(self,root,qualifies=True):
-  out=root/'science';out.mkdir();control=root/'old525';control.mkdir();source={'branch':'work/old','head':'b'*40}
   def save(path,value):
-   path=Path(path);path.write_text(json.dumps(value));return c.pin(path)
-  empty=save(root/'empty.json',{});entry=root/'524.py';entry.write_text('frozen scientific source')
-  originalprep=save(root/'prep.json',{});nominees=dict(A=c.A,B=c.B,full_D_complete=78)
-  template=dict(source=source,max_new_tasks=2,output_dir=str(out),scope_id='original',LV_completed_drain_proof=None)
-  templatepin=save(root/'template.json',template);endowment=dict(source=source,child_authority_template=templatepin,output_dir=str(control))
-  endowmentpin=save(root/'endowment.json',endowment);actual=dict(template,LV_completed_drain_proof=empty)
-  grantpin=save(root/'root_actual_authority.json',actual);runtimepin=save(out/'authority.json',actual)
-  argv=['python','-B',str(entry),'--preparation',originalprep['path'],'--authority',grantpin['path'],'--authority-sha256',grantpin['sha256']]
-  life=dict(pid=10,start_ticks=100,boot_id='boot',argv=argv)
-  save(out/'claim.json',dict(authority=grantpin,process=life));save(out/'exit_receipt.json',dict(status='COMPLETE_INITIAL_PREFIX'))
-  save(out/'supervisor_exit_receipt.json',dict(child_exit_code=0,parent=life,payload=dict(life,pid=11)))
-  execution=dict(source=source,scope_id='original',authority=runtimepin,composite_inventory=empty)
+   path=Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps(value));return c.pin(path)
+  source=dict(branch='work/final',head='b'*40);source_root=root/'final_source'
+  helper=source_root/'application/scripts/pricefm/pricefm_r155_final_contract.py';helper.parent.mkdir(parents=True)
+  helper.write_text('def verify_final_initial_closure(manifest_pin):\n raise RuntimeError("private fixture must supply explicit closure helper")\n')
+  empty=save(root/'empty.json',{});out=root/'final_science'
   losses={'C0':10.,c.A:9.9 if qualifies else 10.,c.B:10.};decision=c.qualified_from_s0(losses)
-  assessment=dict(execution=execution,full_D_components=78,new_D=0,new_S0=2,new_component_names=c.MISSING,new_chunks=108,
-   extra_seed_admitted=False,new_fits=0,official_origins=0,nominees={'A':c.A,'B':c.B},
-   matched_S0_AQL=losses,extra_seed_qualified=decision['qualified'],conditional_extra_components=decision['components'],
-   practical_margin=decision['practical_margin'],matched_S0_gains=decision['gains'],status='COMPLETE_INITIAL_PREFIX_SEED_STABILITY_DEFERRED' if qualifies else 'COMPLETE_INITIAL_PREFIX_NO_S0_QUALIFIER')
-  apin=save(out/'assessment.json',assessment);save(out/'assessment_seal.json',dict(assessment=apin,execution=execution))
-  save(control/'claim.json',dict(authority=endowmentpin,process=dict(life,pid=12)))
-  epin=save(control/'exit_receipt.json',dict(status='STOPPED_NO_RETRY',scientific_reaped_CPU_seconds=0,claims_and_failed_charges_retained=True,source=source,inclusive_own_and_reaped_CPU_seconds=.275))
-  unit='direct.service';launch=dict(unit=dict(Id=unit,InvocationID='exact',MainPID='10'))
-  launchpin=save(root/'launch.json',launch)
-  direct=dict(schema='r155_root_direct_EE_execution_v1',status='ROOT_ADMITTED_ONCE',source=source,source_root=str(root),entry=c.pin(entry),
-   preparation=originalprep,child_template=templatepin,authority=grantpin,automatic_retry=False,required_RemainAfterExit=True,
-   explicit_manual_amendment=empty,prior_conditional_endowment=endowmentpin,prior_conditional_exit=epin,prior_conditional_CPU_retained=.275,
-   root_launch_receipt_path=launchpin['path'],python='python',direct_unit=unit)
-  directpin=save(root/'direct.json',direct)
-  closing=dict(schema='r155_root_direct_EE_closeout_v1',status='PASS',evidence=[directpin,launchpin,grantpin,apin,c.pin(out/'assessment_seal.json'),c.pin(out/'exit_receipt.json'),c.pin(out/'supervisor_exit_receipt.json')])
-  closingpin=save(root/'closing.json',closing)
-  analysis=dict(status='PASS_COMPLETE_EE_SAVED_ARRAY_ANALYSIS',independent_all78D_and9S0_array_arithmetic=True,equal_three_split_macro=True,completed_assessment=apin,
-   unchanged_rule_qualified=decision['qualified'],prospective_extra_seed_components=decision['components'],algorithmic_three_seed_stability_established=False,
-   input_pins=[],analysis_source=c.pin(entry),matched_macro={'S':{p:{'AQL':v} for p,v in assessment['matched_S0_AQL'].items()}})
+  assessment=dict(full_D_components=78,full_S0_components=9,new_D=0,new_S0=1,new_component_names=[c.MISSING[1]],new_chunks=73,
+   extra_seed_admitted=False,new_fits=0,official_origins=0,nominees={'A':c.A,'B':c.B},matched_S0_AQL=losses,
+   extra_seed_qualified=decision['qualified'],conditional_extra_components=decision['components'],
+   practical_margin=decision['practical_margin'],matched_S0_gains=decision['gains'],
+   status='COMPLETE_INITIAL_PREFIX_SEED_STABILITY_DEFERRED' if qualifies else 'COMPLETE_INITIAL_PREFIX_NO_S0_QUALIFIER')
+  apin=save(out/'assessment.json',assessment);sealp=save(out/'assessment_seal.json',dict(assessment=apin))
+  closing=save(root/'closing.json',dict(assessment_seal=sealp,supervisor_exit=empty,launch_receipt=empty))
+  finalprep=save(root/'finalprep.json',{})
+  manifest=dict(schema='r155_root_final_EE_execution_v1',status='ROOT_ADMITTED_ONCE',source=source,source_root=str(source_root),
+   preparation=finalprep,root_closing_proof_path=closing['path'],authority=empty)
+  manifestpin=save(root/'final_manifest.json',manifest)
+  closure=dict(status='PASS_COMPLETE_INITIAL_METADATA_CLOSURE',source=source,execution_manifest=manifestpin,closing=closing,
+   assessment_pin=apin,assessment=assessment,execution={'source':source},paid_scope_chain={'scopes':['R154_INCOMPLETE','ce9_INCOMPLETE']},
+   physical_drain=dict(exact_lifetimes_gone=True,same_global_flock_free=True))
+  analysis=dict(status='PASS_COMPLETE_EE_SAVED_ARRAY_ANALYSIS',independent_all78D_and9S0_array_arithmetic=True,
+   equal_three_split_macro=True,completed_assessment=apin,unchanged_rule_qualified=decision['qualified'],
+   prospective_extra_seed_components=decision['components'],algorithmic_three_seed_stability_established=False,
+   input_pins=[],analysis_source=c.pin(helper),matched_macro={'S':{p:{'AQL':v} for p,v in losses.items()}})
   analysispin=save(root/'analysis.json',analysis);aseal=save(root/'analysis_seal.json',dict(status='PASS',analysis=analysispin))
-  lock=root/'muscat_cpu30.lock';lock.touch();glob=save(root/'global.json',dict(lock_dir=str(root)))
-  prep=dict(initial_child_template=templatepin,initial_endowment=endowmentpin,initial_source=source,composite_inventory=empty,
-   nominees=save(root/'nominees.json',nominees),initial_direct_execution_manifest=directpin,initial_source_root=str(root),
-   initial_scientific_entry=str(entry),initial_preparation=originalprep,global_contract=glob,
-   original_global_lock_identity=dict(device=lock.stat().st_dev,inode=lock.stat().st_ino))
-  properties='\n'.join(k+'='+v for k,v in dict(Id=unit,MainPID='0',InvocationID='exact',ActiveState='active',SubState='exited',RemainAfterExit='yes',Restart='no',NRestarts='0',KillMode='process',Result='success',ExecMainStatus='0').items())
-  return prep,aseal,closingpin,properties,out,root/'launch.json'
- def test_complete_manual_initial_retained_unit_and_external_authority_path(self):
+  prep=dict(initial_final_execution_manifest=manifestpin,initial_final_contract=c.pin(helper),initial_final_source=source,
+   initial_final_source_root=str(source_root),initial_final_preparation=finalprep,
+   nominees=save(root/'nominees.json',dict(A=c.A,B=c.B,full_D_complete=78)))
+  return prep,aseal,closing,closure,out
+ def test_complete_final_route_preserves_both_incomplete_predecessors(self):
   with tempfile.TemporaryDirectory() as d:
-   prep,analysis,closing,properties,out,launch=self.fixture(Path(d))
-   with patch.object(c,'process_identity',return_value=None),patch.object(c.subprocess,'check_output',return_value=properties):
+   prep,analysis,closing,closure,out=self.fixture(Path(d))
+   helper=types.SimpleNamespace(verify_final_initial_closure=lambda pin:closure)
+   with patch.object(c,'load_module',return_value=helper) as loaded:
     gate=c.complete_initial(prep,analysis,closing)
+   loaded.assert_called_once_with('r155_pinned_final_initial_closure',prep['initial_final_contract']['path'],prep['initial_final_contract']['sha256'])
    self.assertEqual(gate['decision']['qualified'],[c.A]);self.assertTrue(gate['physical_drain'])
- def test_unloaded_wrong_invocation_live_lifetime_or_missing_closing_pins_denied(self):
-  for kind in ('unloaded','wrong_invocation','live','missing_pin','wrong_initial_loss'):
+   self.assertEqual(gate['all_prior_paid_scopes_retained']['scopes'],['R154_INCOMPLETE','ce9_INCOMPLETE'])
+ def test_old_failed_direct_route_missing_analysis_or_final_pin_denied(self):
+  for prep,analysis,closing in [({},None,None),({'initial_direct_execution_manifest':{}},{},{}),({'initial_final_execution_manifest':None},{},{})]:
+   with self.assertRaises(RuntimeError):c.complete_initial(prep,analysis,closing)
+ def test_pinned_final_helper_real_loader_signature_and_source_bytes(self):
+  with tempfile.TemporaryDirectory() as d:
+   prep,analysis,closing,closure,out=self.fixture(Path(d));helper=Path(prep['initial_final_contract']['path'])
+   helper.write_text('import json\ndef verify_final_initial_closure(manifest_pin):\n return json.loads('+repr(json.dumps(closure))+')\n')
+   prep['initial_final_contract']=c.pin(helper)
+   seal=c.verify_pin(analysis);data=c.verify_pin(seal['analysis']);data['analysis_source']=c.pin(helper)
+   Path(seal['analysis']['path']).write_text(json.dumps(data));seal['analysis']=c.pin(seal['analysis']['path'])
+   Path(analysis['path']).write_text(json.dumps(seal));analysis=c.pin(analysis['path'])
+   gate=c.complete_initial(prep,analysis,closing);self.assertEqual(gate['decision']['components'],12)
+ def test_wrong_drain_closing_full_count_qualification_or_analysis_denied(self):
+  for kind in ('live_lifetime','busy_lock','wrong_closing','only8S0','wrong_rule','wrong_analysis','replaced_helper'):
    with self.subTest(kind=kind),tempfile.TemporaryDirectory() as d:
-    prep,analysis,closing,properties,out,launch=self.fixture(Path(d));live=None
-    if kind=='unloaded':properties='Id=direct.service\nMainPID=0\nInvocationID=\nActiveState=inactive'
-    if kind=='wrong_invocation':properties=properties.replace('InvocationID=exact','InvocationID=other')
-    if kind=='live':live=json.loads((out/'claim.json').read_text())['process']
-    if kind=='missing_pin':
-     x=json.loads(Path(closing['path']).read_text());x['evidence'].pop();Path(closing['path']).write_text(json.dumps(x));closing=c.pin(closing['path'])
-    if kind=='wrong_initial_loss':
-     seal=json.loads(Path(analysis['path']).read_text());data=json.loads(Path(seal['analysis']['path']).read_text());data['matched_macro']['S']['C0']['AQL']+=1
-     Path(seal['analysis']['path']).write_text(json.dumps(data));seal['analysis']=c.pin(seal['analysis']['path']);Path(analysis['path']).write_text(json.dumps(seal));analysis=c.pin(analysis['path'])
-    with patch.object(c,'process_identity',return_value=live),patch.object(c.subprocess,'check_output',return_value=properties):
+    prep,analysis,closing,closure,out=self.fixture(Path(d))
+    if kind=='live_lifetime':closure['physical_drain']['exact_lifetimes_gone']=False
+    if kind=='busy_lock':closure['physical_drain']['same_global_flock_free']=False
+    if kind=='wrong_closing':closure['closing']=dict(path='other',sha256='0'*64)
+    if kind in ('only8S0','wrong_rule'):
+     data=closure['assessment'];data['full_S0_components']=8 if kind=='only8S0' else 9
+     if kind=='wrong_rule':data['conditional_extra_components']=18
+     (out/'assessment.json').write_text(json.dumps(data));closure['assessment_pin']=c.pin(out/'assessment.json')
+    if kind=='wrong_analysis':
+     seal=c.verify_pin(analysis);data=c.verify_pin(seal['analysis']);data['matched_macro']['S']['C0']['AQL']+=1
+     Path(seal['analysis']['path']).write_text(json.dumps(data));seal['analysis']=c.pin(seal['analysis']['path'])
+     Path(analysis['path']).write_text(json.dumps(seal));analysis=c.pin(analysis['path'])
+    if kind=='replaced_helper':Path(prep['initial_final_contract']['path']).write_text('replacement')
+    helper=types.SimpleNamespace(verify_final_initial_closure=lambda pin:closure)
+    with patch.object(c,'load_module',return_value=helper):
      with self.assertRaises(RuntimeError):c.complete_initial(prep,analysis,closing)
  def test_no_qualifier_creates_only_audit_disposition_no_science_claim(self):
   with tempfile.TemporaryDirectory() as d:
-   root=Path(d);prep,analysis,closing,properties,out,launch=self.fixture(root,False)
+   root=Path(d);prep,analysis,closing,closure,out=self.fixture(root,False)
    pp=root/'seedprep.json';pp.write_text(json.dumps(prep));destination=root/'NO_SCIENCE.json'
-   with patch.object(c,'process_identity',return_value=None),patch.object(c.subprocess,'check_output',return_value=properties):
+   with patch.object(c,'load_module',return_value=types.SimpleNamespace(verify_final_initial_closure=lambda pin:closure)):
     result=p.no_science_disposition(pp,analysis['path'],closing['path'],destination)
    self.assertEqual(result['status'],'NO_SCIENCE_NEEDED_NO_CLAIM_NO_DISPATCH');self.assertEqual(result['claims_created'],0)
    self.assertFalse((root/'seed_science_namespace').exists())

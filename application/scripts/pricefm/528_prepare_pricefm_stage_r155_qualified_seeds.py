@@ -58,7 +58,18 @@ def profile(census,admin_rules):
         classifier_changed=False,scientific_claims=0,new_forecasts=0)
 
 
-def timing_inventory(initial,inventory,original):
+def partial_public_windows(task,retained_names):
+    descriptors=c.chunks(task);by_name={d['name']:d for d in descriptors}
+    c.require(retained_names and retained_names.issubset(by_name)
+            and descriptors[0]['name'] in retained_names,
+            'partial timing must pin valid retained chunks and the included retained proof')
+    newly_predicted=sum(len(d['origin_positions']) for d in descriptors if d['name'] not in retained_names)
+    proof=len(descriptors[0]['origin_positions'])
+    c.require(newly_predicted>0,'partial timing has no remaining public windows')
+    return newly_predicted+proof
+
+
+def timing_inventory(initial,inventory,original,final_manifest=None):
     tasks={t['name']:t for t in original['tasks']};oldrows={r['task']:r for r in inventory['rows'] if r['kind'].endswith('component')}
     reused={r['task']:r for r in inventory['reuses']};new_out=Path(c.read(TEMPLATE)['output_dir'])
     records=[]
@@ -67,6 +78,9 @@ def timing_inventory(initial,inventory,original):
             name=f'EE_{p}_s{s}_S_seed0';task=tasks[name]
             if name in oldrows:folder=Path(oldrows[name]['folder']);source='R154'
             elif name in reused:folder=Path(reused[name]['packet']);source='R149'
+            elif name==c.MISSING[1] and final_manifest is not None:
+                final_authority=c.verify_pin(final_manifest['authority'])
+                folder=Path(final_authority['output_dir'])/'tasks_done'/name;source='R155_FINAL'
             else:folder=new_out/'tasks_done'/name;source='R155'
             if not (folder/'completed_evidence.json').exists():
                 records.append(dict(task=name,source=source,complete=False));continue
@@ -76,8 +90,18 @@ def timing_inventory(initial,inventory,original):
             windows=len(task['daily_origin_positions'])*4;normalization=windows;partial=False
             if source=='R155' and name==c.MISSING[0]:
                 retained={Path(r['folder']).name for r in inventory['rows'] if r['kind']=='R154_checkpoint' and r['task']==name}
-                normalization=sum(len(d['origin_positions']) for d in c.chunks(task) if d['name'] not in retained)
-                normalization+=len(c.chunks(task)[0]['origin_positions']) # included paid proof, not free replay
+                normalization=partial_public_windows(task,retained)
+                partial=True
+            if source=='R155_FINAL':
+                final_preparation=c.verify_pin(final_manifest['preparation'])
+                retained={Path(r['folder']).name for r in c.verify_pin(final_preparation['composite_inventory'])['rows']
+                    if r['kind'].endswith('checkpoint') and r['task']==name}
+                normalization=partial_public_windows(task,retained)
+                c.require(result['full_component_origin_clock_windows']==windows==692
+                    and result['predicted_origin_clock_windows']==normalization==580
+                    and result['included_equivalence_origin_clock_windows']==8
+                    and result['public_chunk_calls']==74 and result['new_chunk_seals']==73,
+                    'final Bsplit3 partial public timing boundary differs')
                 partial=True
             observed=result.get('measured_CPU_seconds') if source!='R149' else None
             if observed is not None:c.require(math.isfinite(observed) and observed>0,'complete S0 timing malformed')
@@ -138,22 +162,25 @@ def prices(tasks,historical,timings,scan):
     return dict(schema='r155_seed_undiscounted_price_v1',status='COMPLETE_INITIAL_S0_TIMING_PRICE_NOT_ADMISSION' if complete else 'PROVISIONAL_INITIAL_S0_INCOMPLETE_NOT_ADMISSIBLE',
         all_S0_complete=complete,completed_initial_S0_timings=timings,scan_profile=scan,
         full_component_model_policy='max(original full task price,1.5max completedS0 CPU/publicwindow ×fullwindows+coldonce); global fallback for allcontrols',
-        partial_component_timing_policy='R155 Bsplit2 CPU normalized only by newly predicted+includedproofwindows; never divide its partial charge by fullcohort to discount future components',
+        partial_component_timing_policy='R155 Bsplit2 and final Bsplit3 CPU normalized only by newly predicted+includedproofwindows; never divide partial charges by fullcohort to discount future components',
         guard_price_policy='upper1.5actualhostscanCPU ×(allforcedchunkchecks +wholeactivecalendar/5s), fixedpoint funds guardCPU and guardianwall before admission',
         scenarios=scenarios,new_fits=0,new_forecasts=0,admission=False)
 
 
-def prepare(destination):
+def prepare(destination,final_manifest_path=None):
     c.require(os.sched_getaffinity(0)=={31},'all metadata preparation must enter CPU31')
     destination=Path(destination);c.require(not destination.exists(),'new immutable conditional preparation directory required')
     identity=c.source_identity();initial=c.read(INITIAL_PREP);original=c.verify_pin(initial['original_preparation'])
+    final_manifest=None if final_manifest_path is None else c.read(final_manifest_path)
+    final_source_root=None if final_manifest is None else Path(final_manifest['source_root'])
+    final_contract=None if final_source_root is None else final_source_root/'application/scripts/pricefm/pricefm_r155_final_contract.py'
     inventory=c.verify_pin(initial['composite_inventory']);root_template=c.read(TEMPLATE)
     c.require(root_template['source']==initial['source'] and initial['source']['head']=='b6a8525bf83c187908e499e0a75424354bb7ed1e','exact b6 initial scope required')
     c.verify_hashes(original['source_sha256']);c.verify_hashes(original['input_sha256'])
     tasks=full_task_audit(original);nominees=c.verify_pin(inventory['nominees'])
     c.require((nominees['A'],nominees['B'],nominees['full_D_complete'])==(c.A,c.B,78),'frozen original A/B changed')
     scan=profile(c.read(root_template['peer_census']['path']),c.read(root_template['admin_rules']['path']))
-    timings=timing_inventory(initial,inventory,original)
+    timings=timing_inventory(initial,inventory,original,final_manifest)
     historical=c.verify_pin(initial['R154_preparation'])['task_estimates']
     price=prices(tasks,historical,timings,scan)
     destination.mkdir(parents=True)
@@ -169,6 +196,12 @@ def prepare(destination):
         initial_scientific_entry=str(Path(next(iter(initial['execution_source_sha256']))).with_name('524_run_pricefm_stage_r155_ee_completion.py')),
         initial_endowment=c.pin(ENDOWMENT),composite_inventory=initial['composite_inventory'],
         initial_direct_execution_manifest=c.pin(DIRECT),
+        initial_final_execution_manifest=None if final_manifest is None else c.pin(final_manifest_path),
+        initial_final_contract=None if final_contract is None else c.pin(final_contract),
+        initial_final_source=None if final_manifest is None else final_manifest['source'],
+        initial_final_source_root=None if final_source_root is None else str(final_source_root),
+        initial_final_preparation=None if final_manifest is None else final_manifest['preparation'],
+        initial_final_route_required_before_any_claim=True,failed_direct_route_is_never_success=True,
         nominees=inventory['nominees'],public_helper=initial['public_helper'],tasks=tasks,packages=initial['packages'],
         possible_scenarios=[dict(qualified=q,required_task_names=c.names_for(q),components=len(c.names_for(q))) for q in ([c.A],[c.B],[c.A,c.B])],
         pricing=c.pin(destination/'pricing.json'),global_contract=initial['global_contract'],
@@ -220,9 +253,10 @@ def no_science_disposition(preparation,analysis_seal,closing_proof,destination):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--destination',required=True)
     parser.add_argument('--no-science-disposition',action='store_true');parser.add_argument('--preparation')
-    parser.add_argument('--analysis-seal');parser.add_argument('--root-closing-proof');args=parser.parse_args()
+    parser.add_argument('--analysis-seal');parser.add_argument('--root-closing-proof')
+    parser.add_argument('--initial-final-manifest');args=parser.parse_args()
     if args.no_science_disposition:
         c.require(args.preparation and args.analysis_seal and args.root_closing_proof,'complete initial/independent/root proof paths required')
         value=no_science_disposition(args.preparation,args.analysis_seal,args.root_closing_proof,args.destination)
-    else:value=prepare(args.destination)
+    else:value=prepare(args.destination,args.initial_final_manifest)
     print(json.dumps(value,sort_keys=True,indent=2))

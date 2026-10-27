@@ -26,7 +26,8 @@ or checkpoint credit. Every control is computed in the new matched set. There is
 no extra seed0, independent pricing forecast, replacement replay, early loss
 selection or automatic retry. A failed component stops the whole required set.
 
-`528_prepare_pricefm_stage_r155_qualified_seeds.py --destination NEW_DIR` performs
+`528_prepare_pricefm_stage_r155_qualified_seeds.py --destination NEW_DIR
+--initial-final-manifest ROOT_FINAL_MANIFEST` performs
 JSON/byte checks, rehashes parent/source/input pins and measures three actual host
 process/thread classifier scans on administrative31. It emits all three conditional
 cases and prices without forecasts. Incomplete initial S0 timing leaves the price
@@ -36,8 +37,10 @@ edits a prior preparation, claim, source or clock.
 
 The price is the maximum of each original full-component price and a1.5× completed
 S0 global CPU-per-public-window fallback, plus cold setup once. The partially
-computed R155 B/split2 timing is normalized by only newly predicted plus its one
-paid equivalence-proof windows; its partial charge is never divided by the full
+computed R155 B/split2 and final B/split3 timings are normalized by only newly
+predicted plus their one paid equivalence-proof windows. Final B/split3 preserves
+15 earlier chunks and predicts73 new chunks plus its included proof,580 public
+origin-clock windows within the692-window full component. Partial charges are never divided by the full
 cohort to discount future full components. Full strict peer censuses are priced at
 1.5× measured actual-host cost, including every forced chunk check and the whole
 five-second callback calendar. A fixed-point calculation funds that overhead,
@@ -50,30 +53,41 @@ that200CPU prior debit and report the separately metered view without double add
 The numerical caller529 stays unavailable until root independently admits exact
 source, preparation and complete price bytes for one entire12/18case. The grant
 must pin the passed independent78D+9S0 saved-array analysis, exact complete initial
-assessment, and an explicit root-reviewed actual524 initial execution/closing
-proof using the actual root `r155_root_direct_EE_execution_v1` manifest and
-`r155_root_direct_EE_closeout_v1/PASS` record. The earlier525 administrative controller stopped before scientific claim;
-its stopped claim and costs remain paid. It is never reclassified as a successful
-controller or restarted. The root closing proof binds actual new unit/invocation,
-source/cwd/argv/lifetime, original child template and actual authority, full
-assessment/supervisor receipts and prior525stop. It preserves the explicit manual
-LV handoff amendment: missing historical LV systemd exit evidence remains unknown,
-never invented from an unloaded unit's default result. The new direct524 unit is
-retained with `RemainAfterExit=yes`; completion requires its actual same InvocationID,
-MainPID0, active/exited state, successful exit0 and fresh kernel/flock drain.
-There is no fallback if that new direct unit or its recorded identity is missing.
+assessment, and an explicit root-reviewed final one-component execution/closing
+proof using `r155_root_final_EE_execution_v1` and
+`r155_root_final_EE_closeout_v1/PASS`. The root final manifest pins actual new528
+source, preparation, authority, unit and closing graph. A pinned stdlib-only
+`verify_final_initial_closure` from that clean published source validates complete
+78D+9S0 and fresh lifetimes/flock/unit drain before this caller independently
+checks the unchanged qualifiers and full87 saved-array analysis. The earlier525
+controller stopped before scientific claim; the later direct524 ce9 scope stopped
+after B/split2 and15 B/split3 chunks. R15410961.213 and ce92692.275 conservative
+paid charges remain retained, with measured views reported separately. Neither
+failed scope is relabelled success, restarted or refunded. Missing historical LV
+systemd exit evidence remains unknown. Only the new final unit may close successfully;
+its exact InvocationID/MainPID0/active-exited/exit0 state is retained with
+`RemainAfterExit=yes`. There is no fallback if the final proof or identity is absent.
+Without the final manifest, metadata preparation emits provisional source/price
+templates that cannot pass a numerical claim; a separately funded later metadata
+readout must materialize new pinned complete timings/proofs into a new directory.
 
 Every initial guardian/payload/launcher lifetime must be freshly gone and the same
 original physical flock device2304/inode59124844 free. Future source shares only
 Muscat30; sibling62 is fenced, baseline0–29 untouched, and the original global
-expiry2026-10-29 01:22:13.594849UTC is never renewed. Strict peer classification,
+expiry2026-10-29 01:22:13.594849UTC is never renewed. The strict numerical predicates,
 resource floors192GiB RAM/80GiB disk, SCHED_OTHER/Nice10/idleIO and one-thread
 controls remain unchanged. Any source/price/calendar/ownership failure rejects
 before claim. Every selected task exactly equals its original312-task descriptor.
 
 The new `SeedLease` writes its own truthful seed-scope claim. It inherits the
-unchanged b6 guardian, peer guard, CPU accounting and held-direct-child methods;
-no old globals are rebound. Kernel PDEATHSIG/post-arm parent verification and the
+unchanged b6 guardian, CPU accounting and held-direct-child methods. Its explicit
+peer-scan adapter adds only the reviewed, fixed-unit R146490 saved-output waiter
+role through a pinned matcher; no old globals are rebound. This role binds source,
+script, interpreter, exact wait arguments, configurations, single-thread environment,
+manager parent and current systemd ownership. Its existing broad affinity is
+acknowledged, without moving it or accepting arbitrary PIDs/Python programs.
+All other strict conflicts and incomplete observations still stop before a new
+chunk. Full-host pricing includes this matcher. Kernel PDEATHSIG/post-arm parent verification and the
 sole unreaped direct child protect lifecycle termination. The caller's inherited
 hard CPU limit must fund the whole numerical child, not a tiny administrative cap.
 No foreign PID, process group, cgroup or unsupported-pidfd signal fallback exists.

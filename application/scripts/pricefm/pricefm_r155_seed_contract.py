@@ -73,6 +73,36 @@ def exact_unit_gone(unit,claim):
     return actual
 
 
+def own_unit(unit):
+    fields=('Id','MainPID','InvocationID','ActiveState','SubState','Restart','NRestarts','KillMode','RemainAfterExit')
+    raw=subprocess.check_output(['systemctl','--user','show',unit,*['--property='+k for k in fields]],text=True)
+    value=dict(line.split('=',1) for line in raw.splitlines() if '=' in line)
+    require(value.get('Id')==unit and value.get('MainPID')==str(os.getpid())
+            and value.get('InvocationID')==os.environ.get('INVOCATION_ID') and bool(value.get('InvocationID'))
+            and value.get('Restart')=='no' and value.get('NRestarts')=='0' and value.get('KillMode')=='process'
+            and value.get('RemainAfterExit')=='yes','new unique retained once-only seed unit differs')
+    return value
+
+
+def mappings(value):
+    """Inspect structured root evidence without depending on presentation keys."""
+    if isinstance(value,dict):
+        yield value
+        for child in value.values():yield from mappings(child)
+    elif isinstance(value,list):
+        for child in value:yield from mappings(child)
+
+
+def verify_embedded_pins(value):
+    pins={(item['path'],item['sha256']) for item in mappings(value)
+          if isinstance(item.get('path'),str) and isinstance(item.get('sha256'),str) and len(item['sha256'])==64}
+    by_path={}
+    for path,sha in pins:
+        require(path not in by_path or by_path[path]==sha,'contradictory root evidence pins for same path')
+        by_path[path]=sha
+    verify_hashes(by_path);return pins
+
+
 def complete_initial(prep,analysis_seal=None,root_closing_proof=None):
     """Read the actual complete R155 output; no new array/model computation."""
     template=verify_pin(prep['initial_child_template']);endowment=verify_pin(prep['initial_endowment'])
@@ -117,47 +147,45 @@ def complete_initial(prep,analysis_seal=None,root_closing_proof=None):
             and control_exit['source']==prep['initial_source']
             and control_claim['authority']==prep['initial_endowment'],'spent original525 administrative lineage differs')
     require(root_closing_proof is not None,'distinct root-reviewed actual initial524 closing proof required')
-    closing=verify_pin(root_closing_proof)
-    require(closing['schema']=='r155_root_initial_ee_closing_proof_v1' and closing['status']=='ROOT_REVIEWED_COMPLETE_AND_DRAINED'
-            and closing['initial_child_template']==prep['initial_child_template']
-            and closing['actual_child_authority']==claim['authority'] and closing['assessment']==pin(out/'assessment.json')
-            and closing['supervisor_exit']==pin(out/'supervisor_exit_receipt.json')
-            and closing['source']==prep['initial_source'] and closing['automatic_retry'] is False,
-            'actual manually reviewed initial execution/closing lineage differs')
-    actual_launch=verify_pin(closing['actual_launch_receipt'])
-    require(actual_launch['source']==prep['initial_source'] and actual_launch['scientific_entry']==prep['initial_scientific_entry']
-            and actual_launch['cwd']==prep['initial_source_root']
-            and same_lifetime(actual_launch['process'],claim['process'])
-            and actual_launch['process']['argv']==claim['process']['argv']
-            and actual_launch['authority']==claim['authority'] and actual_launch['automatic_retry'] is False,
-            'actual524 manual launch source/cwd/argv/lifetime differs')
-    require(closing['previous_failed_525_claim']==pin(control_out/'claim.json')
-            and closing['previous_failed_525_exit']==pin(control_out/'exit_receipt.json')
-            and closing['previous_failed_525_charge_retained'] is True,
+    closing=verify_pin(root_closing_proof);direct=verify_pin(prep['initial_direct_execution_manifest'])
+    require(closing['schema']=='r155_root_direct_EE_closeout_v1' and closing['status']=='PASS',
+            'root direct524 complete closing proof absent')
+    require(direct['schema']=='r155_root_direct_EE_execution_v1' and direct['status']=='ROOT_ADMITTED_ONCE'
+            and direct['source']==prep['initial_source'] and direct['source_root']==prep['initial_source_root']
+            and direct['entry']['path']==prep['initial_scientific_entry']
+            and direct['preparation']==prep['initial_preparation']
+            and direct['child_template']==prep['initial_child_template']
+            and direct['authority']==claim['authority'] and direct['automatic_retry'] is False
+            and direct['required_RemainAfterExit'] is True,'distinct direct initial source/scope binding differs')
+    verify_pin(direct['explicit_manual_amendment']);verify_hashes({direct['entry']['path']:direct['entry']['sha256']})
+    require(direct['prior_conditional_endowment']==prep['initial_endowment']
+            and direct['prior_conditional_exit']==pin(control_out/'exit_receipt.json')
+            and math.isclose(direct['prior_conditional_CPU_retained'],control_exit['inclusive_own_and_reaped_CPU_seconds'],rel_tol=0,abs_tol=1e-12),
             'failed525 claim/charge cannot be erased/refunded')
-    require(closing['reviewed_unit_and_drain_evidence'],'root-reviewed actual unit/drain evidence absent')
-    for evidence in closing['reviewed_unit_and_drain_evidence']:verify_pin(evidence)
-    # Missing transient unit identity is never an automatic fallback. A root
-    # proof must explicitly name its accepted evidence/limitation. Fresh kernel
-    # lifetimes and the same physical flock are mandatory in either case.
-    require(closing['unit_evidence_mode'] in ('EXACT_LIVE_UNIT_TERMINAL_RECORD','ROOT_EXPLICIT_TRANSIENT_UNIT_AMENDMENT')
-            and actual_launch['unit'] and actual_launch['invocation_id']
-            and closing['unit']==actual_launch['unit'] and closing['invocation_id']==actual_launch['invocation_id'],
-            'root-selected actual unit/evidence mode absent')
-    if closing['unit_evidence_mode']=='ROOT_EXPLICIT_TRANSIENT_UNIT_AMENDMENT':
-        amendment=verify_pin(closing['explicit_unit_amendment'])
-        require(amendment['status']=='ROOT_ADMITTED' and amendment['historical_systemd_exit_code_proven'] is False
-                and amendment['actual_initial_launch_receipt']==closing['actual_launch_receipt']
-                and amendment['no_automatic_retry'] is True,'explicit truthful transient-unit limitation amendment absent')
-    else:
-        properties=subprocess.check_output(['systemctl','--user','show',closing['unit'],
-            '--property=Id,MainPID,InvocationID,ActiveState,Restart,NRestarts,KillMode,Result,ExecMainStatus'],text=True)
-        unit=dict(line.split('=',1) for line in properties.splitlines() if '=' in line)
-        require(unit.get('Id')==closing['unit'] and unit.get('InvocationID')==closing['invocation_id']
-                and unit.get('MainPID')=='0' and unit.get('ActiveState') in ('inactive','failed')
-                and unit.get('Restart')=='no' and unit.get('NRestarts')=='0' and unit.get('KillMode')=='process'
-                and unit.get('Result')=='success' and unit.get('ExecMainStatus')=='0',
-                'exact actual initial numerical unit has not closed successfully')
+    launch_pin=pin(direct['root_launch_receipt_path']);actual_launch=verify_pin(launch_pin)
+    evidence=verify_embedded_pins(closing)
+    required=[prep['initial_direct_execution_manifest'],launch_pin,direct['authority'],
+        pin(out/'assessment.json'),pin(out/'assessment_seal.json'),pin(out/'exit_receipt.json'),pin(out/'supervisor_exit_receipt.json')]
+    require(all((v['path'],v['sha256']) in evidence for v in required),
+            'root closing proof must pin exact direct manifest/launch/authority/scientific closing records')
+    argv=[direct['python'],'-B',direct['entry']['path'],'--preparation',direct['preparation']['path'],
+        '--authority',direct['authority']['path'],'--authority-sha256',direct['authority']['sha256']]
+    require(claim['process']['argv']==argv,'actual initial scientific argv differs')
+    if 'source' in claim:require(claim['source']==prep['initial_source'],'actual initial claim source differs')
+    unit_name=direct['direct_unit']
+    recorded=[v for v in mappings(actual_launch) if v.get('Id')==unit_name and v.get('InvocationID')
+        and v.get('MainPID')==str(claim['process']['pid'])]
+    identities={(v['Id'],v['InvocationID'],v['MainPID']) for v in recorded}
+    require(len(identities)==1,'actual initial unit/InvocationID must bind the recorded scientific guardian PID')
+    initial_invocation=next(iter(identities))[1]
+    properties=subprocess.check_output(['systemctl','--user','show',unit_name,
+        '--property=Id,MainPID,InvocationID,ActiveState,SubState,Restart,NRestarts,KillMode,RemainAfterExit,Result,ExecMainStatus'],text=True)
+    unit=dict(line.split('=',1) for line in properties.splitlines() if '=' in line)
+    require(unit.get('Id')==unit_name and unit.get('InvocationID')==initial_invocation
+        and unit.get('MainPID')=='0' and unit.get('ActiveState')=='active' and unit.get('SubState')=='exited'
+        and unit.get('RemainAfterExit')=='yes' and unit.get('Restart')=='no' and unit.get('NRestarts')=='0'
+        and unit.get('KillMode')=='process' and unit.get('Result')=='success' and unit.get('ExecMainStatus')=='0',
+        'retained exact initial direct unit has not closed successfully')
     for life in (claim['process'],supervisor['parent'],supervisor['payload'],control_claim['process']):
         require(not same_lifetime(process_identity(life['pid']),life),'initial exact controller/guardian/payload still lives')
     glob=verify_pin(prep['global_contract'])
@@ -174,12 +202,16 @@ def complete_initial(prep,analysis_seal=None,root_closing_proof=None):
                 and analysis['prospective_extra_seed_components']==decision['components']
                 and analysis['algorithmic_three_seed_stability_established'] is False,
                 'independent complete87-component saved-array qualification differs')
+        require(analysis.get('equal_three_split_macro') is True
+                and all(math.isclose(analysis['matched_macro']['S'][p]['AQL'],assessment['matched_S0_AQL'][p],
+                    rel_tol=1e-11,abs_tol=1e-10) for p in ('C0',A,B)),
+                'independent equal-three-split S0 losses differ from complete initial assessment')
         verify_hashes({v['path']:v['sha256'] for v in analysis['input_pins']})
         verify_hashes({analysis['analysis_source']['path']:analysis['analysis_source']['sha256']})
     return dict(assessment=pin(out/'assessment.json'),assessment_seal=pin(out/'assessment_seal.json'),
         authority=pin(out/'authority.json'),supervisor=pin(out/'supervisor_exit_receipt.json'),
         previous_failed_conditional_exit=pin(control_out/'exit_receipt.json'),physical_drain=True,
-        root_actual_initial_closing_proof=root_closing_proof,actual_launch=closing['actual_launch_receipt'],
+        root_actual_initial_closing_proof=root_closing_proof,actual_launch=launch_pin,
         source_preserving_composite_execution=execution,decision=decision,
         independent_analysis_seal=analysis_seal,analysis=analysis)
 
@@ -189,6 +221,7 @@ def validate_authority(a,prep,prep_path,identity,now,hostname):
             'distinct root numerical seed admission absent')
     require(isinstance(a.get('scope_id'),str) and len(a['scope_id'])==32
             and all(ch in '0123456789abcdef' for ch in a['scope_id']),'new exact UUID seed scope required')
+    require(a.get('unit')=='pricefm-r155-ee-qualified-seeds-'+a['scope_id']+'.service','scope-specific seed unit required')
     require(isinstance(a.get('independent_analysis_seal'),dict)
             and set(a['independent_analysis_seal'])>={'path','sha256'}
             and isinstance(a.get('initial_root_closing_proof'),dict)
@@ -223,6 +256,7 @@ def validate_authority(a,prep,prep_path,identity,now,hostname):
     price=verify_pin(a['pricing_evidence'])
     require(price==verify_pin(prep['pricing']) and price['status']=='COMPLETE_INITIAL_S0_TIMING_PRICE_NOT_ADMISSION',
             'whole-prefix price must include complete initial S0 timings')
+    verify_pin(price['scan_profile']['floor_evidence'])
     gate=complete_initial(prep,a['independent_analysis_seal'],a['initial_root_closing_proof'])
     qualified=gate['decision']['qualified'];names=names_for(qualified)
     require(qualified and qualified==a['qualified_packages'] and names==a['required_task_names']
@@ -259,7 +293,7 @@ def validate_authority(a,prep,prep_path,identity,now,hostname):
 
 class SeedLease(BaseLease):
     """New truthful claim, unchanged b6 held-child/peer/accounting machinery."""
-    def __init__(self,a,prep,authority_path):
+    def __init__(self,a,prep,authority_path,unit):
         self.a,self.prep=a,prep;self.out=Path(a['output_dir']);self.out.mkdir(parents=True,exist_ok=True)
         self.started=time.monotonic();self.cpu0=cpu_seconds();self.own=process_identity(os.getpid())
         require(self.own is not None,'own seed lifetime unavailable')
@@ -277,7 +311,7 @@ class SeedLease(BaseLease):
         require(not (self.out/'claim.json').exists(),'seed claim spent; no retry')
         immutable(self.out/'claim.json',dict(schema='r155_ee_qualified_seed_claim_v1',authority=pin(authority_path),
             permit_id=a['permit_id'],scope_id=a['scope_id'],study='EE_MATCHED_SEED1_2',process=self.own,
-            required_tasks=a['required_task_names'],output_dir=str(self.out),started_epoch=time.time(),new_fits=0,official_origins=0))
+            unit=unit,required_tasks=a['required_task_names'],output_dir=str(self.out),started_epoch=time.time(),new_fits=0,official_origins=0))
         os.sched_setaffinity(0,{a['cpu']});singleton_affinity(os.sched_getaffinity(0),a['cpu'])
         policy={'SCHED_OTHER':os.SCHED_OTHER,'SCHED_IDLE':os.SCHED_IDLE}
         os.sched_setscheduler(0,policy[a['scheduler_policy']],os.sched_param(0));os.setpriority(os.PRIO_PROCESS,0,a['nice'])

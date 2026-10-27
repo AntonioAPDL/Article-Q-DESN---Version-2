@@ -4,6 +4,7 @@ import argparse
 import json
 import math
 import os
+import socket
 from pathlib import Path
 import sys
 import time
@@ -15,6 +16,7 @@ EE=c.R155/'ee_completion'
 INITIAL_PREP=EE/'prepared_v2/preparation.json'
 TEMPLATE=EE/'ROOT_EE_CHILD_TEMPLATE_ADMITTED_01.json'
 ENDOWMENT=EE/'ROOT_EE_CONDITIONAL_ENDOWMENT_ADMITTED_01.json'
+DIRECT=c.R155/'ee_direct_recovery/ROOT_DIRECT_EXECUTION_MANIFEST_01.json'
 
 
 def full_task_audit(original):
@@ -44,8 +46,15 @@ def profile(census,admin_rules):
         rows.append(dict(CPU=c.cpu_seconds()-cpu0,wall=time.monotonic()-started,
             processes=len(processes),threads=sum(len(p.get('threads') or []) for p in processes),
             conflicts=conflicts,active_initial_study_conflicts_are_observations_not_exemptions=True))
+    prior_path=c.R155/'lv_handoff/ADMIN_SCAN_PROFILE_01.json';prior=c.read(prior_path)
+    floor=prior['three_scan_max_CPU_seconds']
+    c.require(floor>=.321704-1e-12 and min(r['processes'] for r in rows)>100,
+            'actual full-host view and frozen prior scan price required')
     return dict(schema='r155_seed_actual_host_classifier_price_v1',rows=rows,
-        upper_scan_CPU=max(r['CPU'] for r in rows)*1.5,actual_affinity=sorted(os.sched_getaffinity(0)),
+        host=socket.gethostname(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+        observer_pid_namespace=os.readlink('/proc/self/ns/pid'),proc1_pid_namespace=os.readlink('/proc/1/ns/pid'),
+        prior_actual_scan_CPU_floor=floor,floor_evidence=c.pin(prior_path),
+        upper_scan_CPU=max(floor,max(r['CPU'] for r in rows))*1.5,actual_affinity=sorted(os.sched_getaffinity(0)),
         classifier_changed=False,scientific_claims=0,new_forecasts=0)
 
 
@@ -159,6 +168,7 @@ def prepare(destination):
         initial_source_root=str(Path(next(iter(initial['execution_source_sha256']))).parents[3]),
         initial_scientific_entry=str(Path(next(iter(initial['execution_source_sha256']))).with_name('524_run_pricefm_stage_r155_ee_completion.py')),
         initial_endowment=c.pin(ENDOWMENT),composite_inventory=initial['composite_inventory'],
+        initial_direct_execution_manifest=c.pin(DIRECT),
         nominees=inventory['nominees'],public_helper=initial['public_helper'],tasks=tasks,packages=initial['packages'],
         possible_scenarios=[dict(qualified=q,required_task_names=c.names_for(q),components=len(c.names_for(q))) for q in ([c.A],[c.B],[c.A,c.B])],
         pricing=c.pin(destination/'pricing.json'),global_contract=initial['global_contract'],
@@ -174,6 +184,7 @@ def prepare(destination):
     for key,scenario in price['scenarios'].items():
         label=('A' if key==c.A else 'B' if key==c.B else 'AB')+'_'+str(scenario['max_new_tasks'])
         a=dict(schema='r155_ee_qualified_seed_authority_v1',status='PROPOSED',scope_id='ROOT_NEW_UUID',study='EE',
+            unit='pricefm-r155-ee-qualified-seeds-ROOT_NEW_UUID.service',
             source=identity,preparation=c.pin(destination/'preparation.json'),
             output_dir=str(c.DATA/'campaigns'/('pricefm_stage_r155_ee_qualified_seeds_ROOT_NEW_UUID')),
             host='muscat',cpu=30,physical_sibling_cpus=[30,62],permit_id='muscat_cpu30',

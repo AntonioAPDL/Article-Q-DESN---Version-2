@@ -51,13 +51,17 @@ The numerical caller529 stays unavailable until root independently admits exact
 source, preparation and complete price bytes for one entire12/18case. The grant
 must pin the passed independent78D+9S0 saved-array analysis, exact complete initial
 assessment, and an explicit root-reviewed actual524 initial execution/closing
-proof. The earlier525 administrative controller stopped before scientific claim;
+proof using the actual root `r155_root_direct_EE_execution_v1` manifest and
+`r155_root_direct_EE_closeout_v1/PASS` record. The earlier525 administrative controller stopped before scientific claim;
 its stopped claim and costs remain paid. It is never reclassified as a successful
 controller or restarted. The root closing proof binds actual new unit/invocation,
 source/cwd/argv/lifetime, original child template and actual authority, full
-assessment/supervisor receipts, prior525stop and any explicit transient-unit
-limitation amendment. Missing historical systemd exit evidence must remain unknown;
-it cannot be invented from a default `Result=success` of an unloaded unit.
+assessment/supervisor receipts and prior525stop. It preserves the explicit manual
+LV handoff amendment: missing historical LV systemd exit evidence remains unknown,
+never invented from an unloaded unit's default result. The new direct524 unit is
+retained with `RemainAfterExit=yes`; completion requires its actual same InvocationID,
+MainPID0, active/exited state, successful exit0 and fresh kernel/flock drain.
+There is no fallback if that new direct unit or its recorded identity is missing.
 
 Every initial guardian/payload/launcher lifetime must be freshly gone and the same
 original physical flock device2304/inode59124844 free. Future source shares only
@@ -74,21 +78,32 @@ sole unreaped direct child protect lifecycle termination. The caller's inherited
 hard CPU limit must fund the whole numerical child, not a tiny administrative cap.
 No foreign PID, process group, cgroup or unsupported-pidfd signal fallback exists.
 
-Finalization rehashes/reloads all new packets and repeats the frozen light-array
+Finalization replays the original `select_branch` inputs and records the frozen
+B1 decision and its historical budget disposition; it does not choose B2 or open
+new seed0 tasks. It rehashes/reloads all new packets and repeats the frozen light-array
 API's source/units/support/metrics checks. It combines unchanged S0 with full
 seed1/2 equal-three-split means and calls original `confirm_gains`: three-seed mean
 gain must meet the full practical margin and maximum absolute seed-gain deviation
 must be strictly below mean gain. These are development/stability rules, not an
-inferential confidence interval or independent confirmation. Per-package AL
-proposal eligibility is reported; no AL proposal, official operator, fit,
-forecast or promotion is selected or launched automatically.
+inferential confidence interval or independent confirmation. Full per-split,
+per-seed metrics are retained. The original strongest eligible mean-gain rule and
+1e-10 stable-ID tie choose at most one conditional AL proposal, with the original
+separate-fit/cache/500-path budget gates. No practical lead stops; a practical but
+unstable lead holds. Completing all12/18components alone does not imply a stable
+winner. No AL proposal is admitted or launched, and no official operator, fit,
+forecast or promotion is selected automatically.
 
 Before any numerical service, root must fill the separate12A/12B/18templates with
 fresh UUID/T0, exact complete preparation/price/proofs/source and adequate absolute
 and active calendar inside the original global expiry. Source preparation alone
-does not permit an extra scientific run. Start once from the new actual checkout:
-`taskset -c31 PINNED_PY -B .../529_run_pricefm_stage_r155_qualified_seeds.py --preparation PREP --authority ROOT_ADMITTED --authority-sha256 SHA`.
+does not permit an extra scientific run. The caller requires its own scope-specific
+unit with `Restart=no`, `KillMode=process`, `RemainAfterExit=yes` and an inherited
+CPU hard limit that funds the scientific child. Start that unit once from the new
+actual checkout using `taskset -c31 PINNED_PY -B .../529_run_pricefm_stage_r155_qualified_seeds.py --preparation PREP --authority ROOT_ADMITTED --authority-sha256 SHA`.
 Retain the actual unit/invocation and fresh read-only completion/drain evidence.
+Use529 with `--inspect` and the exact preparation/authority pin for a read-only
+source/lifetime/claim/complete-component-seal/pool/CPU health observation. It runs
+no model or launch action and never calls the scientific execute path.
 
 If no nominee qualifies, use528's `--no-science-disposition --preparation PREP
 --analysis-seal COMPLETE_SEAL --root-closing-proof ROOT_PROOF --destination NEW_JSON`

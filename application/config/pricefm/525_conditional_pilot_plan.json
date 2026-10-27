@@ -1,0 +1,149 @@
+{
+  "Rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript",
+  "acceptance_logic": "finite AND (formal OR independent)",
+  "actual_R_runtime_binding": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/MUSCAT_RUNTIME_BINDING_04.json",
+    "sha256": "b365a26fe3c0ec89126193f75e66904f97907bcbf0e89a330cd837ea818fbb14"
+  },
+  "alias_source_manifest": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_expansion_20261026/application/config/pricefm/523_fixed_state_expansion.json",
+    "sha256": "0e68d796f7e0fce74fea84b9e285db6e6109b952df5198a5ae6e8b88d740b077"
+  },
+  "automatic_dispatch_or_waiting_daemon": false,
+  "caps": {
+    "AL": 300,
+    "Normal": 2000
+  },
+  "execution": {
+    "iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50": {
+      "aliases": {},
+      "bridge_child_ceiling_CPU_seconds": 400,
+      "execution_host": "muscat",
+      "source_host": "muscat.be.ucsc.edu"
+    },
+    "iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75": {
+      "alias_manifest": {
+        "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/alias_manifest.json",
+        "sha256": "9ffd07e99e1796134da7e6a1b7150c32cba0fa58aff81d7348749fad91effd44"
+      },
+      "aliases": {
+        "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r127_closeout_20261008/application/scripts/pricefm/pricefm_stage_r67_cran111_adapter.R": "/data/jaguir26/local/src/Article-Q-DESN/.codex_work/pricefm_r127_closeout_20261008/application/scripts/pricefm/pricefm_stage_r67_cran111_adapter.R",
+        "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/R/pricefm_r129_al_fixedpoint_certificate.R": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/R/pricefm_r129_al_fixedpoint_certificate.R",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/contracts/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/contracts/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.55/fit": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.55/fit",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.55/fit/terminal.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.55/fit/terminal.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/beta_cov.bin": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/beta_cov.bin",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/beta_mean.bin": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/beta_mean.bin",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/fixedpoint_certificate.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/fixedpoint_certificate.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/terminal.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/terminal.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/vb_trace.csv": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75/fit/vb_trace.csv",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/X.bin": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/X.bin",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/design.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/design.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/scaler.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/scaler.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/terminal.json": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/terminal.json",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/campaigns/pricefm_stage_r141_recovery_rollout_20261019__NO_3/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/y.bin": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/NO3_LARGER_TAU_STAGING/campaign/tasks_done/iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_design/design/y.bin",
+        "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_libraries/exdqlm_cran_1p1p1/pricefm_r67_cran111_install_manifest.json": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_libraries/exdqlm_cran_1p1p1/pricefm_r67_cran111_install_manifest.json"
+      },
+      "bridge_child_ceiling_CPU_seconds": 300,
+      "execution_host": "muscat",
+      "source_host": "jerez.be.ucsc.edu"
+    }
+  },
+  "expected_stock_body_sha256": "3637a96c29305a0e3f7df19ecf96f85b77f98f0dbb0e783773d217ba2be6dde6",
+  "fixedpoint_helper_source": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r141_recovery_20261019/application/R/pricefm_r129_al_fixedpoint_certificate.R",
+    "sha256": "c573066109eef78cd19e8c60f2630ecad29d433ae9d95150d0a0fe4f7ee21571"
+  },
+  "future_mutable_prefixes": [
+    "NO3_LARGER_TAU/",
+    "AT_MEDIAN/",
+    "claims/",
+    "candidate_registry/",
+    "PROJECT_NUMERIC_VALIDATION/",
+    "authorities/"
+  ],
+  "global_contract": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/resources/GLOBAL_PERMIT_CONTRACT_V2.json",
+    "sha256": "3ff288be9f645c44360b52f5aca04e49d9667d4b41c8974595ed42f101fbf5b4"
+  },
+  "guard_policy": {
+    "finalization_tail_CPU_seconds": 30,
+    "full_peer_resource_interval_seconds": 10,
+    "mandatory_no_subprocess_kernel_boundary": true,
+    "measured_source_context_price_required": true,
+    "minimum_parent_and_finalize_CPU_seconds": 300,
+    "owned_lifetime_CPU_wall_interval_seconds": 1,
+    "parent_reserve_dynamic_and_funded": true,
+    "periodic_peer_reclaim_latency_claim_seconds": 10
+  },
+  "native_R_launch_policy": {
+    "LD_LIBRARY_PATH": "R_home/lib",
+    "R_HOME": "from_actual_R_runtime_binding.R_home",
+    "Rscript_wrapper_compatible_under_filter": false,
+    "argv_flags": [
+      "--no-echo",
+      "--no-restore",
+      "--file=SCRIPT",
+      "--args"
+    ],
+    "launcher": "pinned_native_ELF_no_Rscript_shell_wrapper",
+    "native_startup_compatibility": "PENDING_FAILED_METADATA_PROBE_02",
+    "no_installed_runtime_mutation": true
+  },
+  "new_clock_funding_priority_drain_and_bridge_required": true,
+  "next_zero_optimizer_compatibility_study": {
+    "alternatives": [
+      "source_bound_child_subreaper_startup_helper_ownership_adoption_drain_and_CPU_accounting",
+      "in_process_filter_after_verified_metadata_bootstrap_before_any_target_bytes"
+    ],
+    "blanket_fork_allowance": false,
+    "installed_base_runtime_mutation": false,
+    "new_global_clock_or_core": false,
+    "required_before_bridge_and_pilot": true,
+    "status": "PROPOSED_UNADMITTED_NOT_IMPLEMENTED"
+  },
+  "old_diagnostic_clock_inherited": false,
+  "original_manifest": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_certificate_reference_20261026/application/config/pricefm/522_fixed_state_targets.json",
+    "sha256": "aecbee983a05bb4bebbc86b345a8678d1879116c9a273a618ff05dcaaff99af8"
+  },
+  "other_five_targets_authorized": false,
+  "pending_gates": [
+    "exact_native_ELF_startup_under_mandatory_filter",
+    "new_source_bounded_synthetic_numerical_parity_and_checkpoint_IO",
+    "measured_source_context_supervision_price",
+    "EE_LV_exact_success_and_fresh_physical_drain",
+    "new_explicit_production_resource_scope_and_stage_clock_without_global_reset",
+    "whole_attempt_paid_source_parent_bridge_funding",
+    "real_zero_optimizer_conditional_bridge",
+    "separate_one_new_attempt_root_pilot_grant"
+  ],
+  "pricing": {
+    "iq_AT_r134_7a422c0c3473f81f_t1.632090846764e-03_s1_al0.50": {
+      "core_hours": 4.744305555555556,
+      "historical_fit_elapsed_seconds_not_measured_CPU": 8389.75,
+      "original_failed_lineage_remains_paid": true,
+      "provisional_whole_attempt_reservation_CPU_seconds": 17079.5,
+      "rule": "2x historical elapsed plus300; includes bridge+admin+fit+always-certificate+checkpointing/sampling; provisional reservation not a runtime/certification guarantee",
+      "single_new_attempt_max_sweeps": 300,
+      "source_context_repricing_required_before_admission": true
+    },
+    "iq_NO_3_r134_283a8c333135aae3_t2.291521491921e-03_s1_al0.75": {
+      "core_hours": 3.144927222222222,
+      "historical_fit_elapsed_seconds_not_measured_CPU": 5510.869000000001,
+      "original_failed_lineage_remains_paid": true,
+      "provisional_whole_attempt_reservation_CPU_seconds": 11321.738,
+      "rule": "2x historical elapsed plus300; includes bridge+admin+fit+always-certificate+checkpointing/sampling; provisional reservation not a runtime/certification guarantee",
+      "single_new_attempt_max_sweeps": 300,
+      "source_context_repricing_required_before_admission": true
+    }
+  },
+  "production_new_fits": 0,
+  "production_pilot_admitted": false,
+  "production_runtime_compatibility_status": "HARD_BLOCKER_FILTERED_RSCRIPT_AND_NATIVE_UTILS_STARTUP_FAILED",
+  "production_runtime_compatible": false,
+  "schema": "r154_conditional_pilot_plan_v1",
+  "status": "PREPARED_PRODUCTION_UNADMITTED"
+}

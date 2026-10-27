@@ -1,0 +1,34 @@
+{
+  "schema": "r154_projection_preparation_metadata_tests_v1",
+  "recorded_UTC": "2026-10-27T04:59:15Z",
+  "status": "PASS_METADATA_ONLY_NUMERICAL_VALIDATION_UNEXECUTED",
+  "working_directory": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_pilot_adapter_20261026",
+  "test_results": [
+    {
+      "command": "taskset -c 31 /data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python -B application/tests/525_projection_validation_finalize_test.py",
+      "tests_passed": 2,
+      "test_body_wall_seconds": 0.265,
+      "measured_process_tree_user_CPU_seconds": 0.15,
+      "measured_process_tree_system_CPU_seconds": 0.05,
+      "test_file_sha256": "92e2e9bdbb3a04a5279bc9711e4fe54e60bb5c96ed588b9d8c0d25c9db7167b3",
+      "tested_source_sha256": "23df67a58541d7516058804ac4dcf296cd956becbafcb700219be054975496fc"
+    },
+    {
+      "command": "taskset -c 31 /data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python -B application/tests/525_candidate_registry_test.py",
+      "tests_passed": 14,
+      "test_body_wall_seconds": 1.109,
+      "measured_process_tree_user_CPU_seconds": 0.73,
+      "measured_process_tree_system_CPU_seconds": 0.27,
+      "test_file_sha256": "ec9d3fd5046165f67f96b13a74e29f3ebef6834d7589b9881b03d12cc00faf9d",
+      "tested_source_sha256": "fb277ad3993e3074ab2526326f901af9969f483eb3373888182eb17f7a21fae3"
+    }
+  ],
+  "numerical_driver_sha256": "5d17bae51d5633893c107c39ee3c71fd3fc509c8884e77b3aad16a47783d3473",
+  "numerical_driver_executed": false,
+  "optimizer_invocations_in_these_tests": 0,
+  "R_invocations_in_these_tests": 0,
+  "real_target_data_opened": false,
+  "actual_R_runtime_compatibility_proved_by_this_record": false,
+  "production_or_candidate_acceptance_authority": false,
+  "cost_note": "These are the measured final metadata test runs only; all earlier preparation/test costs remain charged to the preparation allowance. No refund or new numerical grant is implied."
+}

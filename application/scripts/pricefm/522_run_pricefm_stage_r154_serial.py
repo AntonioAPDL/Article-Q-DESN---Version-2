@@ -10,6 +10,7 @@ import argparse
 import ctypes
 import fcntl
 import json
+import math
 import os
 from pathlib import Path
 import resource
@@ -87,11 +88,33 @@ def complete_and_drained(study,authority,identity):
                 supervisor_receipt=pin(out/'supervisor_exit_receipt.json'),physical_drain=True)
 
 
-def parent_death_arm(expected_parent):
+def child_live_CPU_limit(authority):
+    return math.ceil(authority['total_CPU_cap']-authority['prior_CPU_charged_seconds'])
+
+
+def apply_queue_CPU_limits(admin_CPU,grants):
+    """Bound own SOFT CPU while preserving funded child HARD inheritance."""
+    required=max(child_live_CPU_limit(authority) for _,authority,_ in grants)
+    usage=resource.getrusage(resource.RUSAGE_SELF)
+    soft=math.floor(usage.ru_utime+usage.ru_stime+admin_CPU)
+    hard=max(required,soft)
+    inherited=resource.getrlimit(resource.RLIMIT_CPU)[1]
+    require(inherited==resource.RLIM_INFINITY or inherited>=hard,'inherited hard CPU limit cannot fund stage children')
+    signal.signal(signal.SIGXCPU,signal.SIG_DFL)
+    resource.setrlimit(resource.RLIMIT_CORE,(0,0))
+    resource.setrlimit(resource.RLIMIT_CPU,(soft,hard))
+    return dict(administrative_soft_CPU_limit=soft,inherited_child_hard_CPU_ceiling=hard)
+
+
+def parent_death_arm(expected_parent,CPU_hard):
     """Popen direct child only; kernel kills the worker if queue parent dies."""
     libc=ctypes.CDLL(None,use_errno=True)
     if libc.prctl(1,signal.SIGKILL,0,0,0)!=0 or os.getppid()!=expected_parent:
         os._exit(125)
+    # The new child may raise its own SOFT limit only within the separately
+    # funded inherited HARD ceiling. Never inherit the queue's tiny admin cap.
+    signal.signal(signal.SIGXCPU,signal.SIG_DFL)
+    resource.setrlimit(resource.RLIMIT_CPU,(CPU_hard,CPU_hard))
 
 
 def run_stage(stage,authority,prep,identity,out,queue_expiry,queue_local_deadline,python):
@@ -108,7 +131,8 @@ def run_stage(stage,authority,prep,identity,out,queue_expiry,queue_local_deadlin
     parent=os.getpid()
     worker=subprocess.Popen([python,'-B',str(PREDICTION_ENTRY),'--preparation',stage['preparation']['path'],
         '--authority',stage['authority']['path'],'--authority-sha256',stage['authority']['sha256']],
-        cwd=ROOT,stdout=stdout,stderr=stderr,start_new_session=True,preexec_fn=lambda:parent_death_arm(parent))
+        cwd=ROOT,stdout=stdout,stderr=stderr,start_new_session=True,
+        preexec_fn=lambda:parent_death_arm(parent,child_live_CPU_limit(authority)))
     immutable(out/(name+'_process.json'),dict(process=process_identity(worker.pid),authority=stage['authority'],
         parent=process_identity(parent),kernel_parent_death_signal='SIGKILL'))
     try:
@@ -147,13 +171,12 @@ def execute(authority_path,authority_sha):
     require(os.sched_getaffinity(0)=={31},'administrative queue CPU differs')
     require(len(list(Path('/proc/self/task').iterdir()))==1 and signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,
             'queue must have one thread/default sole child waiter')
-    usage=resource.getrusage(resource.RUSAGE_SELF)
-    cap=int(usage.ru_utime+usage.ru_stime+a['max_CPU_seconds'])
-    resource.setrlimit(resource.RLIMIT_CPU,(cap,cap))
+    limits=apply_queue_CPU_limits(a['max_CPU_seconds'],grants)
     out=Path(a['output_dir']);out.mkdir(parents=True,exist_ok=True)
     require(not (out/'claim.json').exists(),'queue claim already consumed')
     immutable(out/'claim.json',dict(authority=pin(authority_path),source=identity,process=process_identity(os.getpid()),
         stages=a['stages'],created_epoch=time.time(),automatic_retry=False,new_fits=0,new_forecasts=0))
+    immutable(out/'administrative_CPU_limits.json',limits)
     started=time.monotonic();cpu0=cpu_seconds()
     usage0=resource.getrusage(resource.RUSAGE_SELF)
     local_deadline=started+a['max_wall_seconds']

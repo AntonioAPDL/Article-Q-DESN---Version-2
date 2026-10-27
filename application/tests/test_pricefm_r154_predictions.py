@@ -114,6 +114,9 @@ class TestAuthority(unittest.TestCase):
         with self.assertRaises(RuntimeError):self.validate(a)
         a['total_CPU_cap']=131
         self.validate(a)
+    def test_direct_payload_rejects_tiny_inherited_hard_cap(self):
+        with self.assertRaises(RuntimeError):c.funded_payload_CPU_limit(.1,19500,600,360,360)
+        self.assertEqual(c.funded_payload_CPU_limit(.1,19500,600,360,18900),18539)
     def test_queued_absolute_and_active_clocks_are_both_finite(self):
         a=copy.deepcopy(self.a);a['max_execution_wall_seconds']=100
         with self.assertRaises(RuntimeError):self.validate(a)
@@ -161,14 +164,24 @@ class TestPeerAndLifetime(unittest.TestCase):
     def test_exact_source_hashed_controller_rule(self):
         with tempfile.TemporaryDirectory() as d:
             path=Path(d)/'480.py';path.write_text('frozen controller source')
-            rule={'rules':[{'script':c.pin(path),'verb':'controller','cpu_flag':'--cpus','allowed_declared_cpus':list(range(30))}]}
-            row=self.row(command=f'python {path} controller --cpus 15,16,17',argv=['python',str(path),'controller','--cpus','15,16,17'])
+            interpreter=Path(d)/'python';interpreter.write_text('pinned interpreter fixture')
+            prefix=[str(interpreter),'-B',str(path)]
+            rule={'rules':[{'script':c.pin(path),'interpreter':c.pin(interpreter),'interpreter_flags':['-B'],
+                'verb':'controller','cpu_flag':'--cpus','allowed_declared_cpus':list(range(30))}]}
+            row=self.row(command=f'python -B {path} controller --cpus 15,16,17',
+                executable=str(interpreter.resolve()),argv=prefix+['controller','--cpus','15,16,17'])
             census={'allowed_intersecting_processes':[]}
             self.assertFalse(c.peer_conflicts(30,census,set(),[row],rule))
-            for args in (['python',str(path),'worker','--cpus','15,16'],
-                         ['python',str(path),'controller','--cpus','30'],
-                         ['python',str(path),'controller']):
+            for args in (prefix+['worker','--cpus','15,16'],
+                         prefix+['controller','--cpus','30'],prefix+['controller'],
+                         [str(interpreter),'-c','CODE',str(path),'controller','--cpus','0,1'],
+                         [str(interpreter),'-m','module',str(path),'controller','--cpus','0,1'],
+                         [str(interpreter),'-',str(path),'controller','--cpus','0,1'],
+                         prefix+['controller','--cpus','0,1','--cpus','30'],
+                         prefix+['controller','--cpus=0,1','--cpus=30'],
+                         prefix+['controller','--cpus','0-29']):
                 self.assertTrue(c.peer_conflicts(30,census,set(),[dict(row,argv=args)],rule))
+            self.assertTrue(c.peer_conflicts(30,census,set(),[dict(row,executable=None)],rule))
             path.write_text('changed source')
             self.assertTrue(c.peer_conflicts(30,census,set(),[row],rule))
     def test_foreign_argv_not_retained_in_conflict(self):
@@ -419,7 +432,7 @@ class TestSerialOnceOnly(unittest.TestCase):
         self.assertIn('validate_authority(authority,prep',source)
         self.assertIn('complete_and_drained(name,authority,identity)',source)
         self.assertIn("not (out/'claim.json').exists()",source)
-        self.assertIn('parent_death_arm(parent)',source)
+        self.assertIn('parent_death_arm(parent,child_live_CPU_limit(authority))',source)
         self.assertNotIn("authority['start_epoch']=",source)
     def test_exact_drain_and_assessment_seals_are_required(self):
         with tempfile.TemporaryDirectory() as d:
@@ -441,6 +454,28 @@ class TestSerialOnceOnly(unittest.TestCase):
         a={'schema':'r154_serial_queue_authority_v1','status':'ADMITTED','source':{},'host':'muscat','administrative_cpu':31,
             'new_fits':0,'new_forecasts':0,'automatic_retry':False,'nonrenewing':True,'start_epoch':1,'expires_epoch':2,'max_wall_seconds':1}
         with self.assertRaises(RuntimeError):serial.validate_queue(a,{},3,'muscat')
+    def test_actual_nested_child_CPU_limit_exceeds_admin_soft(self):
+        script="""
+import sys,os,json,resource,subprocess
+sys.path.insert(0,sys.argv[1])
+import importlib.util
+from pathlib import Path
+p=Path(sys.argv[1])/'522_run_pricefm_stage_r154_serial.py'
+s=importlib.util.spec_from_file_location('private_serial',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+g=[({}, {'total_CPU_cap':500,'prior_CPU_charged_seconds':0}, {})]
+limits=m.apply_queue_CPU_limits(1,g)
+parent=os.getpid()
+worker=subprocess.Popen([sys.executable,'-B','-c','import resource,json;print(json.dumps(resource.getrlimit(resource.RLIMIT_CPU)))'],stdout=subprocess.PIPE,text=True,preexec_fn=lambda:m.parent_death_arm(parent,500))
+child=json.loads(worker.communicate(timeout=3)[0]);assert worker.returncode==0
+print(json.dumps({'parent_limits':resource.getrlimit(resource.RLIMIT_CPU),'child_limits':child}))
+"""
+        result=subprocess.run([sys.executable,'-B','-c',script,str(HERE)],capture_output=True,text=True,timeout=5)
+        self.assertEqual(result.returncode,0,result.stderr)
+        limits=json.loads(result.stdout)
+        self.assertLessEqual(limits['parent_limits'][0],360)
+        self.assertGreater(limits['parent_limits'][1],360)
+        self.assertGreater(limits['child_limits'][0],360)
+        self.assertEqual(limits['child_limits'],[500,500])
 
 
 if __name__=='__main__':unittest.main()

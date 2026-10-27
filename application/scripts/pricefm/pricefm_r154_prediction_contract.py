@@ -213,11 +213,14 @@ def process_identity(pid):
         raw = (root/'stat').read_text()
         fields = raw[raw.rfind(')')+2:].split()
         cmd = (root/'cmdline').read_bytes()
+        try:executable=os.readlink(root/'exe')
+        except (PermissionError,FileNotFoundError,ProcessLookupError):executable=None
         return dict(pid=pid, start_ticks=int(fields[19]), state=fields[0],
                     ppid=int(fields[1]), comm=(root/'comm').read_text().strip(),
                     cmdline_sha256=hashlib.sha256(cmd).hexdigest(),
                     command=cmd.replace(b'\0', b' ').decode(errors='replace').strip(),
                     argv=[v.decode(errors='replace') for v in cmd.split(b'\0') if v],
+                    executable=executable,
                     cpu_seconds=(int(fields[11])+int(fields[12]))/os.sysconf('SC_CLK_TCK'),
                     cpus=sorted(os.sched_getaffinity(pid)),
                     boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip())
@@ -270,23 +273,26 @@ def admin_match(p,cpu,rules):
     argv=p.get('argv',[])
     for rule in rules.get('rules',[]):
         path=rule['script']['path']
-        if path not in argv:continue
-        index=argv.index(path)
+        interpreter=rule['interpreter']
+        flags=rule['interpreter_flags']
+        if flags!=['-B']:continue
+        index=1+len(flags)
+        if len(argv)<=index+1 or argv[:index]!=[interpreter['path'],*flags] or argv[index]!=path:
+            continue
+        if p.get('executable')!=str(Path(interpreter['path']).resolve()):continue
+        if digest(interpreter['path'])!=interpreter['sha256']:continue
         if index+1>=len(argv) or argv[index+1]!=rule['verb']:continue
         if digest(path)!=rule['script']['sha256']:continue
         flag=rule['cpu_flag']
         value=None
-        if flag in argv:
-            i=argv.index(flag)
+        declarations=[i for i,arg in enumerate(argv) if arg==flag or arg.startswith(flag+'=')]
+        if len(declarations)!=1:continue
+        i=declarations[0]
+        if argv[i]==flag:
             if i+1<len(argv):value=argv[i+1]
-        for arg in argv:
-            if arg.startswith(flag+'='):value=arg[len(flag)+1:]
+        else:value=argv[i][len(flag)+1:]
         try:
-            mask=set()
-            for item in value.split(','):
-                if '-' in item:
-                    a,b=map(int,item.split('-'));mask.update(range(a,b+1))
-                else:mask.add(int(item))
+            mask=set(map(int,value.split(',')))
         except (ValueError,AttributeError):continue
         if mask and cpu not in mask and mask.issubset(set(rule['allowed_declared_cpus'])):
             return True
@@ -343,6 +349,13 @@ def cpu_seconds():
     own=resource.getrusage(resource.RUSAGE_SELF)
     child=resource.getrusage(resource.RUSAGE_CHILDREN)
     return own.ru_utime+own.ru_stime+child.ru_utime+child.ru_stime
+
+
+def funded_payload_CPU_limit(current,total,prior,guardian,inherited_hard):
+    limit=math.floor(current+total-prior-guardian-1)
+    require(limit>=1 and (inherited_hard==resource.RLIM_INFINITY or inherited_hard>=limit),
+            'inherited hard CPU limit cannot fund the admitted payload')
+    return limit
 
 
 def pressure(a, out, owned_children=(),growth_GiB=None):
@@ -418,9 +431,9 @@ class Lease:
             require(os.environ.get(name)=='1', 'single-thread environment differs: '+name)
         # Hard kernel limit applies only to this disposable process, no cgroup.
         current=resource.getrusage(resource.RUSAGE_SELF)
-        limit=math.floor(current.ru_utime+current.ru_stime+a['total_CPU_cap']-a['prior_CPU_charged_seconds']-a['guardian_CPU_reserve']-1)
         old=resource.getrlimit(resource.RLIMIT_CPU)
-        hard=limit if old[1]==resource.RLIM_INFINITY else min(limit,old[1])
+        hard=funded_payload_CPU_limit(current.ru_utime+current.ru_stime,a['total_CPU_cap'],
+            a['prior_CPU_charged_seconds'],a['guardian_CPU_reserve'],old[1])
         resource.setrlimit(resource.RLIMIT_CPU,(hard,hard))
         self._start_guardian()
         try:self.check(refresh_output=True)
@@ -432,6 +445,9 @@ class Lease:
         import ctypes
         parent=self.own
         parent_cpu0=self.cpu0
+        own_usage=resource.getrusage(resource.RUSAGE_SELF)
+        parent_own_cpu0=own_usage.ru_utime+own_usage.ru_stime
+        monitor_started=time.monotonic()
         active=self.a.get('max_execution_wall_seconds',self.a['max_wall_seconds'])
         deadline=min(self.a['expires_epoch'],time.time()+active)
         local_deadline=self.started+active
@@ -492,8 +508,11 @@ class Lease:
             reserved=sum(read(p)['CPU_seconds'] for p in (self.out/'reservations').glob('*.json'))
             actual=cpu_seconds()-parent_cpu0
             prior=self.a.get('prior_CPU_charged_seconds',0)
+            own_usage=resource.getrusage(resource.RUSAGE_SELF)
             immutable(self.out/'supervisor_exit_receipt.json',dict(status=reason,parent=parent,payload=child,
                 child_exit_code=code,exact_combined_reaped_CPU_seconds=actual,
+                supervisor_own_CPU_since_fork_seconds=own_usage.ru_utime+own_usage.ru_stime-parent_own_cpu0,
+                supervisor_monitor_wall_seconds=time.monotonic()-monitor_started,
                 prior_CPU_charged_seconds=prior,all_inclusive_observed_CPU_seconds=actual+prior,
                 conservatively_reserved_component_CPU_seconds=reserved,
                 all_inclusive_charged_CPU_seconds=max(actual+prior,reserved+prior),

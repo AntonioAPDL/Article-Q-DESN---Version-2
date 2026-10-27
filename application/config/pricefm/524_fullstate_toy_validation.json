@@ -1,0 +1,125 @@
+{
+  "Rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript",
+  "actual_R_runtime_binding": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/MUSCAT_RUNTIME_BINDING_04.json",
+    "sha256": "b365a26fe3c0ec89126193f75e66904f97907bcbf0e89a330cd837ea818fbb14"
+  },
+  "cran_library": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_libraries/exdqlm_cran_1p1p1",
+  "earliest_LT_grant": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/ROOT_LT_DIAGNOSTIC_GRANT_01.json",
+    "sha256": "f96304d8b1bbe02ac0cd805038cdfe379abae1167c710409d51f015879645339"
+  },
+  "expected_stock_body_sha256": "3637a96c29305a0e3f7df19ecf96f85b77f98f0dbb0e783773d217ba2be6dde6",
+  "fixed_toy_inputs": {
+    "case1": {
+      "n": 32,
+      "p": 4,
+      "seed": 52401,
+      "tau": 0.5
+    },
+    "case2": {
+      "n": 64,
+      "p": 8,
+      "seed": 52402,
+      "tau": 0.9
+    },
+    "case8": {
+      "n": 128,
+      "p": 32,
+      "seed": 52403,
+      "tau": 0.1
+    }
+  },
+  "global_contract": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/resources/GLOBAL_PERMIT_CONTRACT_V2.json",
+    "sha256": "3ff288be9f645c44360b52f5aca04e49d9667d4b41c8974595ed42f101fbf5b4"
+  },
+  "implementation_source_bindings": [
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/R/524_toy_fullstate_consumer.R",
+      "sha256": "0d17bb507281ca96f17a8ea2f8a60cebcba11ccee846ed666d3127321ad2df9a"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/docs/524_future_registry_collector_wiring.md",
+      "sha256": "9730f40b767dd162365df6b1ca78bc7fa0455122ec9b96d67335158cb4e951f4"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/docs/524_toy_fullstate_validation.md",
+      "sha256": "dce669af4061b795966164b9a184390349421eecd01420394027d18e511f526f"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/scripts/pricefm/524_run_toy_validation.py",
+      "sha256": "289f81b43c98e1b92529f0c19e300baafa4b0e9fccda607bc49649d0bce8daae"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/tests/524_fullstate_toy_validation.R",
+      "sha256": "534945184a911eb678282e08c2045bb6be4b4414497a72f2d0569e3a96f76c89"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/tests/524_toy_metadata_test.py",
+      "sha256": "de3cb5b10e8f3cccf0ffcf341eb006764c3e9c6a72898c144bc0dccf2a64f87c"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/scripts/pricefm/522_fixed_state_control.py",
+      "sha256": "e2284a695413dd7c42039cc117714c933df11ba5a69b0dcbeb6459a1cb4d5c6d"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/scripts/pricefm/522_certificate_reference.py",
+      "sha256": "a80d718068f056be722c374a626f4ce8f7be7b2f1791776531aa0400426ef60b"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_fullstate_consumer_20261026/application/R/pricefm_r129_al_fixedpoint_certificate.R",
+      "sha256": "c573066109eef78cd19e8c60f2630ecad29d433ae9d95150d0a0fe4f7ee21571"
+    }
+  ],
+  "master_CPU_seconds": 2700,
+  "maximum_actual_optimizer_invocations": 8,
+  "maximum_child_CPU_seconds": 300,
+  "maximum_n": 128,
+  "maximum_p": 32,
+  "maximum_per_invocation_sweeps": 5,
+  "maximum_semantic_cases": 8,
+  "maximum_total_sweeps": 30,
+  "minimum_unallocated_after_full_toy_cap_CPU_seconds": 694.495592,
+  "new_source_charge_CPU_seconds": 100,
+  "own_science_affinity": [
+    30
+  ],
+  "physical_guard_cpus": [
+    30,
+    62
+  ],
+  "prior_charged_CPU_seconds": 1605.504408,
+  "prior_receipts": [
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/expansion/AT_MEDIAN_DIAG_01/resource_receipt.json",
+      "sha256": "acc78a5d77dc0dcf2ed9f97ca8ff1d61a338d177e9149890b05aa1e4925e8fec"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/resources/AT_DIAG_01_DRAIN_PROOF.json",
+      "sha256": "1e07a2eba6c9040598cc1a06230003e2feb607c8e9425ecf5c71ed1196311923"
+    }
+  ],
+  "production_acceptance_authority": false,
+  "production_fit_invocations": 0,
+  "proof_cases": [
+    "stock default original/private clone exact equality",
+    "stock beta/sigma warm-start original/private clone equality",
+    "zero-update full-factor import and explicit ELBO",
+    "checkpoint four + consumer one equals stock uninterrupted five; independent one-block map",
+    "sigma mean versus stock initialization semantics",
+    "malformed/missing/changed-target/inherited-flag/production-dimension rejection",
+    "stored-latent own-GIG parameters preserved without reconditioning sigma",
+    "n128 p32 stress default-path equality"
+  ],
+  "root_must_admit_actual_optimizer_before_running": true,
+  "schema": "r154_toy_fullstate_validation_v1",
+  "source_only_factory_audit": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/fullstate_consumer/SOURCE_ONLY_FACTORY_AUDIT.json",
+    "sha256": "0a62dfa757997cf361825acb31144614398bab91d921a3cf2ee43026a2d82b15"
+  },
+  "stage_deadline_UTC": "2026-10-27T03:35:09.515675+00:00",
+  "stage_deadline_epoch": 1793072109.515675,
+  "starting_master_charge_CPU_seconds": 1705.504408,
+  "status": "STAGED_NOT_ADMITTED_NO_OPTIMIZER_RUN"
+}

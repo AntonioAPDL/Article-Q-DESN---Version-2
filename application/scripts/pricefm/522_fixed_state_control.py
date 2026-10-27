@@ -24,6 +24,17 @@ spec=importlib.util.spec_from_file_location('r522',HERE/'522_certificate_referen
 ref=importlib.util.module_from_spec(spec); spec.loader.exec_module(ref)
 
 
+def online_cpus():
+    """Host topology is independent of this administrative process's mask."""
+    result=set()
+    for group in Path('/sys/devices/system/cpu/online').read_text().strip().split(','):
+        bounds=group.split('-')
+        if len(bounds)==1:result.add(int(bounds[0]))
+        elif len(bounds)==2:result.update(range(int(bounds[0]),int(bounds[1])+1))
+        else:raise ValueError('invalid online CPU topology')
+    return result
+
+
 def global_permit(grant):
     ref.verify_files([grant['global_contract']])
     contract=json.loads(Path(grant['global_contract']['path']).read_text())
@@ -128,7 +139,11 @@ def authority(manifest_path, grant_path, expected_grant_sha, target_name):
        grant.get('reserved_fixed_reference_CPU_seconds')!=600:
         raise ValueError('diagnostic shared budget/reservations differ')
     if not 0<grant['memory_GiB']<=8 or not 0<grant['disk_GiB']<=2:raise ValueError('memory/disk ceiling exceeded')
-    if not set(grant['affinity'])<=os.sched_getaffinity(0):raise ValueError('unavailable affinity')
+    # The caller is intentionally CPU31. Its present mask is not the set of
+    # CPUs this new admitted process may later use. Exact CPU30 authority is
+    # checked in global_permit(); the kernel move is attempted only under flock
+    # and before a grant is consumed or any target bytes are opened.
+    if not set(grant['affinity'])<=online_cpus():raise ValueError('granted CPU is offline')
     if not grant['source_bindings']:raise ValueError('missing source bindings')
     ref.verify_files(grant['source_bindings'])
     required={str(p) for p in [Path(__file__).resolve(),HERE/'522_certificate_reference.py',

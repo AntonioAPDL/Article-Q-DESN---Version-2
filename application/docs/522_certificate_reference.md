@@ -113,6 +113,11 @@ CPU. Only after successfully acquiring the shared numerical flock does the
 controller move itself to CPU30 and apply the numerical scheduler, nice and I/O
 settings. A busy-pool request cannot move to CPU30, read target data or consume
 its one-shot grant. A real busy flock negative test exercises this boundary.
+Authority checks compare the granted CPU with actual online host topology and
+the exact shared permit, not with the administrative caller's CPU31 mask. The
+actual kernel affinity move occurs under flock before grant consumption; failure
+leaves the grant unconsumed. A real authority-only readiness test validates the
+installed hashes/runtime/global permit on CPU31 with a CPU30 grant.
 Actual execution also requires `--output-dir` to be a new child of the owned
 R154 `certificates/` audit directory. The controller has no admitted default
 grant and cannot infer permission from the implementation request.

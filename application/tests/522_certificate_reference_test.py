@@ -173,6 +173,43 @@ class References(unittest.TestCase):
             with redirect_stdout(io.StringIO()):control.main()
             for boundary in observed:boundary.assert_not_called()
 
+    def test_real_valid_authority_with_metadata_CPU31_and_granted_CPU30(self):
+        # Actual hashes, installed runtime, topology and global permit are
+        # validated. authority() is not mocked. The temporary fixture grants
+        # nothing outside this authority-only test and is removed on exit.
+        self.assertEqual(os.sched_getaffinity(0),{31},'run readiness suite with taskset -c 31')
+        self.assertIn(30,control.online_cpus())
+        manifest_path=ROOT/'config/pricefm/522_fixed_state_targets.json'
+        manifest=json.loads(manifest_path.read_text())
+        target=next(x for x in manifest['targets'] if x['name']=='LT_fold1_al0.90')
+        base=Path(target['actual_R_runtime_binding']['path']).parent.parent
+        global_path=base/'resources/GLOBAL_PERMIT_CONTRACT.json'
+        contract=json.loads(global_path.read_text())
+        expires=min(time.time()+300,contract['expires_epoch']-1)
+        self.assertGreater(expires,time.time())
+        code=[control.HERE/'522_fixed_state_control.py',control.HERE/'522_certificate_reference.py',
+              control.HERE/'522_fixed_state_diagnosis.R',control.ROOT/'application/R/522_certificate_reference.R']
+        grant=dict(status='ROOT_ADMITTED_FIXED_STATE_DIAGNOSTIC_ONLY',
+            test_fixture_only_no_numeric_execution=True,manifest_sha256=ref.sha256(manifest_path),
+            authorizes_posterior_fits=False,authorizes_production_acceptance=False,
+            authorizes_fixed_state_reconstruction=True,target='LT_fold1_al0.90',
+            expires_UTC=datetime.datetime.fromtimestamp(expires,datetime.timezone.utc).isoformat(),
+            host=os.uname().nodename,maximum_CPU_seconds=1800,maximum_wall_seconds=7200,
+            maximum_total_diagnostic_CPU_seconds=2700,reserved_source_preparation_CPU_seconds=300,
+            reserved_fixed_reference_CPU_seconds=600,cores=1,affinity=[30],memory_GiB=8,disk_GiB=2,
+            source_bindings=[dict(path=str(p),sha256=ref.sha256(p)) for p in code],
+            actual_R_runtime_binding=target['actual_R_runtime_binding'],permit_id='muscat_cpu30',
+            global_contract=dict(path=str(global_path),sha256=ref.sha256(global_path)))
+        with tempfile.TemporaryDirectory(prefix='r522_valid_authority_only_') as d:
+            gp=Path(d)/'grant.json';gp.write_text(json.dumps(grant))
+            argv=['control','--manifest',str(manifest_path),'--root-grant',str(gp),
+                  '--root-grant-sha256',ref.sha256(gp),'--check-authority']
+            with mock.patch.object(sys,'argv',argv),redirect_stdout(io.StringIO()) as output:
+                control.main()
+            self.assertIn('PASS authority only',output.getvalue())
+            self.assertEqual(os.sched_getaffinity(0),{31})
+            self.assertEqual(list(Path(d).iterdir()),[gp])
+
 
 if __name__=='__main__':
     started=time.monotonic(); cpu=time.process_time()

@@ -73,11 +73,16 @@ def immutable(path, value):
 
 
 def update_owned(path, value):
-    """Replace only a new scope's explicitly mutable observation file."""
+    """Atomic mutable telemetry; no fsync on every progress observation.
+
+    A crash may lose the last heartbeat. Claims, reservations and scientific
+    packets use immutable durable records and are never inferred from telemetry.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
-    immutable(tmp, value)
+    payload=(json.dumps(value,sort_keys=True,indent=2,allow_nan=False)+'\n').encode()
+    with tmp.open('xb') as stream:stream.write(payload)
     os.replace(tmp, path)
 
 
@@ -145,7 +150,7 @@ def validate_authority(a, prep, prep_path, identity, now, hostname):
     require(a.get('source') == identity, 'execution source differs')
     require(a.get('preparation') == pin(prep_path), 'preparation admission differs')
     require(a.get('nonrenewing') is True, 'authority must be nonrenewing')
-    for key in ('start_epoch', 'expires_epoch', 'max_wall_seconds', 'full_prefix_CPU',
+    for key in ('start_epoch', 'expires_epoch', 'max_wall_seconds', 'max_execution_wall_seconds', 'full_prefix_CPU',
                 'replacement_CPU', 'admin_drain_CPU', 'total_CPU_cap',
                 'min_delivered_share', 'own_RSS_soft_GiB', 'minimum_free_disk_GiB',
                 'minimum_available_RAM_GiB', 'new_output_soft_GiB',
@@ -153,22 +158,29 @@ def validate_authority(a, prep, prep_path, identity, now, hostname):
         finite_positive(a.get(key), key)
     require(a['start_epoch'] <= now < a['expires_epoch'], 'authority expired/not started')
     require(a['expires_epoch']-a['start_epoch'] <= a['max_wall_seconds'], 'wall clock was reset')
+    require(a['max_execution_wall_seconds']<=a['max_wall_seconds'],'active execution exceeds original absolute clock')
     require(0 < a['min_delivered_share'] <= 1, 'invalid delivered share')
     require(a.get('cpu') in range(32), 'physical core allocation required; SMT forbidden')
     require(a['full_prefix_CPU'] >= prep['historical_prefix_floor_CPU'],
             'entire scientific prefix is not priced')
     require(a['replacement_CPU'] >= prep['historical_replacement_floor_CPU'],
             'replacement reserve below declared floor')
-    require(a['full_prefix_CPU']+a['replacement_CPU']+a['admin_drain_CPU'] <= a['total_CPU_cap'],
+    prior=a.get('prior_CPU_charged_seconds')
+    require(isinstance(prior,(int,float)) and not isinstance(prior,bool) and math.isfinite(prior) and prior>=0,
+            'explicit finite nonnegative prior charge required')
+    require(prior+a['full_prefix_CPU']+a['replacement_CPU']+a['admin_drain_CPU'] <= a['total_CPU_cap'],
             'full prefix and reserves exceed cap')
     available = a['expires_epoch']-now-a['drain_seconds']
     required = (a['full_prefix_CPU']+a['replacement_CPU'])/a['min_delivered_share']
     require(available >= required+a['maximum_atomic_wall_seconds'],
             'finite whole-prefix calendar does not fit')
+    require(a['max_execution_wall_seconds']-a['drain_seconds']>=required+a['maximum_atomic_wall_seconds'],
+            'full prefix does not fit bounded active execution window')
     require(a.get('allow_extra_seeds') is False and a.get('new_fits') == 0
             and a.get('official_origins') == 0, 'scope expansion forbidden')
     require(a.get('max_new_tasks') == (64 if prep['study'] == 'EE' else 12), 'task ceiling differs')
     require(a.get('hard_cgroup_isolation_claimed') is False, 'false cgroup isolation claim')
+    require(0<a.get('peer_census_cadence_seconds',0)<=5,'bounded peer census cadence must be <=5 seconds')
     require(isinstance(a.get('guardian_CPU_reserve'),int) and a['guardian_CPU_reserve']>=1
             and a['guardian_CPU_reserve']<a['admin_drain_CPU'],'guardian CPU must be priced inside admin reserve')
     require(a.get('scheduler_policy') in ('SCHED_OTHER','SCHED_IDLE')
@@ -333,7 +345,7 @@ def cpu_seconds():
     return own.ru_utime+own.ru_stime+child.ru_utime+child.ru_stime
 
 
-def pressure(a, out, owned_children=()):
+def pressure(a, out, owned_children=(),growth_GiB=None):
     info={k:int(v.split()[0])*1024 for k,v in
           (line.split(':',1) for line in Path('/proc/meminfo').read_text().splitlines())}
     rss=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2
@@ -341,7 +353,8 @@ def pressure(a, out, owned_children=()):
         try:rss+=int((Path('/proc')/str(pid)/'statm').read_text().split()[1])*os.sysconf('SC_PAGE_SIZE')/1024**3
         except (FileNotFoundError,ProcessLookupError):pass
     disk=shutil.disk_usage(out).free/1024**3
-    growth=sum(p.stat().st_size for p in Path(out).rglob('*') if p.is_file())/1024**3
+    growth=(sum(p.stat().st_size for p in Path(out).rglob('*') if p.is_file())/1024**3
+            if growth_GiB is None else growth_GiB)
     require(info['MemAvailable']/1024**3 >= a['minimum_available_RAM_GiB'], 'host RAM floor')
     require(disk >= a['minimum_free_disk_GiB'], 'host disk floor')
     require(rss <= a['own_RSS_soft_GiB'], 'owned RSS soft guard')
@@ -367,6 +380,12 @@ class Lease:
         require(self.own is not None, 'own lifetime unavailable')
         self.guardian=None
         self.reserve_total=0.0
+        self._peer_at=0.0
+        self._pressure_at=0.0
+        self._heartbeat_at=0.0
+        self._pressure={}
+        self._written={}
+        self._written_total=0
         self.census=read(a['peer_census']['path'])
         self.admin_rules=read(a['admin_rules']['path'])
         self.lock=(self.out/'scope.lock').open('a+')
@@ -376,6 +395,9 @@ class Lease:
         lock_dir.mkdir(parents=True,exist_ok=True)
         self.permit_lock=(lock_dir/(a['permit_id']+'.lock')).open('a+')
         fcntl.flock(self.permit_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        peers=peer_conflicts(a['cpu'],self.census,{os.getpid()},all_processes(),self.admin_rules)
+        require(not peers,'new numerical peer before claim: '+str([p['pid'] for p in peers]))
+        self._peer_at=time.monotonic()
         # Never attach to an old claim, including one whose process vanished.
         require(not (self.out/'claim.json').exists(), 'claim already consumed; no automatic replacement')
         immutable(self.out/'claim.json',dict(schema='r154_prediction_claim_v1',authority=pin(authority_path),
@@ -396,12 +418,12 @@ class Lease:
             require(os.environ.get(name)=='1', 'single-thread environment differs: '+name)
         # Hard kernel limit applies only to this disposable process, no cgroup.
         current=resource.getrusage(resource.RUSAGE_SELF)
-        limit=math.floor(current.ru_utime+current.ru_stime+a['total_CPU_cap']-a['guardian_CPU_reserve']-1)
+        limit=math.floor(current.ru_utime+current.ru_stime+a['total_CPU_cap']-a['prior_CPU_charged_seconds']-a['guardian_CPU_reserve']-1)
         old=resource.getrlimit(resource.RLIMIT_CPU)
         hard=limit if old[1]==resource.RLIM_INFINITY else min(limit,old[1])
         resource.setrlimit(resource.RLIMIT_CPU,(hard,hard))
         self._start_guardian()
-        try:self.check()
+        try:self.check(refresh_output=True)
         except BaseException as exc:
             self.close('INCOMPLETE',dict(stage='bootstrap',type=type(exc).__name__,message=str(exc)))
             raise
@@ -410,8 +432,9 @@ class Lease:
         import ctypes
         parent=self.own
         parent_cpu0=self.cpu0
-        deadline=min(self.a['expires_epoch'],time.time()+self.a['max_wall_seconds'])
-        local_deadline=self.started+self.a['max_wall_seconds']
+        active=self.a.get('max_execution_wall_seconds',self.a['max_wall_seconds'])
+        deadline=min(self.a['expires_epoch'],time.time()+active)
+        local_deadline=self.started+active
         require(len(list(Path('/proc/self/task').iterdir()))==1,'supervisor must have no competing thread/reaper')
         require(signal.getsignal(signal.SIGCHLD)==signal.SIG_DFL,'custom SIGCHLD reaper forbidden')
         readfd,writefd=os.pipe()
@@ -456,7 +479,7 @@ class Lease:
                 if state is not None:break
                 live=process_identity(pid)
                 require(same_lifetime(live,child),'held child identity changed')
-                elapsed_CPU=cpu_seconds()-parent_cpu0+live['cpu_seconds']
+                elapsed_CPU=cpu_seconds()-parent_cpu0+live['cpu_seconds']+self.a.get('prior_CPU_charged_seconds',0)
                 if time.time()>=deadline or time.monotonic()>=local_deadline or elapsed_CPU>=self.a['total_CPU_cap']:
                     reason='WALL_DEADLINE' if time.time()>=deadline or time.monotonic()>=local_deadline else 'ALL_INCLUSIVE_CPU_CAP'
                     immutable(self.out/'guardian_timeout.json',dict(parent=parent,payload=child,
@@ -466,8 +489,14 @@ class Lease:
                 time.sleep(.25)
             _,status=os.waitpid(pid,0)
             code=os.waitstatus_to_exitcode(status)
+            reserved=sum(read(p)['CPU_seconds'] for p in (self.out/'reservations').glob('*.json'))
+            actual=cpu_seconds()-parent_cpu0
+            prior=self.a.get('prior_CPU_charged_seconds',0)
             immutable(self.out/'supervisor_exit_receipt.json',dict(status=reason,parent=parent,payload=child,
-                child_exit_code=code,exact_combined_reaped_CPU_seconds=cpu_seconds()-parent_cpu0,
+                child_exit_code=code,exact_combined_reaped_CPU_seconds=actual,
+                prior_CPU_charged_seconds=prior,all_inclusive_observed_CPU_seconds=actual+prior,
+                conservatively_reserved_component_CPU_seconds=reserved,
+                all_inclusive_charged_CPU_seconds=max(actual+prior,reserved+prior),
                 epoch=time.time(),guardian_reservation_CPU=self.a['guardian_CPU_reserve'],
                 no_optimistic_permit_replacement=True))
             os._exit(code if code>=0 else 128-code)
@@ -483,12 +512,20 @@ class Lease:
     def observed_CPU(self):
         guardian=process_identity(self.guardian) if self.guardian else None
         living=max(0.0,guardian['cpu_seconds']-self.guardian_cpu0) if guardian else 0.0
-        return cpu_seconds()-self.cpu0+living
+        return cpu_seconds()-self.cpu0+living+getattr(self,'a',{}).get('prior_CPU_charged_seconds',0)
 
-    def check(self, atomic_CPU=0.0, atomic_wall=0.0):
+    def note_written(self,path):
+        path=Path(path)
+        files=[path] if path.is_file() else [p for p in path.rglob('*') if p.is_file()]
+        for p in files:
+            size=p.stat().st_size
+            self._written_total+=size-self._written.get(str(p),0)
+            self._written[str(p)]=size
+
+    def check(self, atomic_CPU=0.0, atomic_wall=0.0,fresh_peer=True,peer_cadence=True,refresh_output=False):
         now=time.time()
         require(now+atomic_wall+self.a['drain_seconds']<self.a['expires_epoch'], 'wall/drain admission exhausted')
-        require(time.monotonic()-self.started+atomic_wall+self.a['drain_seconds']<self.a['max_wall_seconds'], 'local finite timer exhausted')
+        require(time.monotonic()-self.started+atomic_wall+self.a['drain_seconds']<self.a['max_execution_wall_seconds'], 'local finite active timer exhausted')
         require(self.observed_CPU()+atomic_CPU+self.a['admin_drain_CPU']<self.a['total_CPU_cap'], 'actual all-inclusive CPU/drain exhausted')
         guardian=process_identity(self.guardian) if self.guardian else None
         require(guardian is not None and guardian['state']!='Z', 'local wall guardian missing')
@@ -497,9 +534,23 @@ class Lease:
             require(os.sched_getaffinity(int(task.name))=={self.a['cpu']}, 'thread affinity differs')
         children=Path('/proc/self/task')/str(os.getpid())/'children'
         require(set(map(int,children.read_text().split())) <= {self.guardian}, 'unreviewed owned child appeared')
-        peers=peer_conflicts(self.a['cpu'],self.census,{os.getpid(),self.guardian},all_processes(),self.admin_rules)
-        require(not peers, 'new unreviewed numerical peer intersects allocation: '+str([p['pid'] for p in peers]))
-        return pressure(self.a,self.out,(self.guardian,))
+        clock=time.monotonic()
+        if fresh_peer or (peer_cadence and clock-self._peer_at>=self.a['peer_census_cadence_seconds']):
+            peers=peer_conflicts(self.a['cpu'],self.census,{os.getpid(),self.guardian},all_processes(),self.admin_rules)
+            require(not peers, 'new unreviewed numerical peer intersects allocation: '+str([p['pid'] for p in peers]))
+            self._peer_at=time.monotonic()
+        if refresh_output:
+            self._written={str(p):p.stat().st_size for p in self.out.rglob('*') if p.is_file()}
+            self._written_total=sum(self._written.values())
+        # All immutable packet writes are accounted immediately. A one-MiB
+        # metadata tail and sixteen-MiB atomic packet reserve cover temporary
+        # headers/receipts between the <=64 component reconciliation walks.
+        growth=(self._written_total+17*1024**2)/1024**3
+        require(growth<=self.a['new_output_soft_GiB'],'tracked output/atomic reserve exhausted')
+        if fresh_peer or refresh_output or clock-self._pressure_at>=1:
+            self._pressure=pressure(self.a,self.out,(self.guardian,),growth)
+            self._pressure_at=time.monotonic()
+        return self._pressure
 
     def reserve(self,name,cpu):
         finite_positive(cpu,'task reservation')
@@ -509,14 +560,24 @@ class Lease:
         self.reserve_total+=cpu
 
     def observe(self,event):
-        state=self.check()
-        update_owned(self.out/'heartbeat.json',dict(event,epoch=time.time(),process=self.own,
-            actual_CPU_seconds=self.observed_CPU(),reserved_CPU_seconds=self.reserve_total,**state))
+        quiescent=event.get('status') in ('context_loading','chunk_sealed','LV_call_complete')
+        state=self.check(fresh_peer=False,peer_cadence=not quiescent)
+        clock=time.monotonic()
+        if quiescent or clock-self._heartbeat_at>=1:
+            update_owned(self.out/'heartbeat.json',dict(event,epoch=time.time(),process=self.own,
+                charged_inclusive_CPU_seconds=self.observed_CPU(),
+                observed_live_CPU_seconds=self.observed_CPU()-self.a['prior_CPU_charged_seconds'],
+                prior_CPU_charged_seconds=self.a['prior_CPU_charged_seconds'],
+                reserved_CPU_seconds=self.reserve_total,**state))
+            self.note_written(self.out/'heartbeat.json')
+            self._heartbeat_at=clock
 
     def close(self,status,detail=None):
         immutable(self.out/'exit_receipt.json',dict(status=status,detail=detail,process=self.own,
-            supervisor=self.guardian_identity,epoch=time.time(),sampled_combined_CPU_seconds=self.observed_CPU(),
+            supervisor=self.guardian_identity,epoch=time.time(),sampled_live_CPU_seconds=self.observed_CPU()-self.a['prior_CPU_charged_seconds'],
+            sampled_all_inclusive_charged_CPU_seconds=self.observed_CPU(),prior_CPU_charged_seconds=self.a['prior_CPU_charged_seconds'],
             conservatively_reserved_CPU_seconds=self.reserve_total,
+            conservative_inclusive_CPU_charge=max(self.observed_CPU(),self.a['prior_CPU_charged_seconds']+self.reserve_total),
             permit_replacement_authorized=False,physical_drain_review_required=True))
         # The child exits normally after its result publication; the supervisor
         # reaps it and emits exact combined CPU before releasing its own lock.

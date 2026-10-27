@@ -114,6 +114,25 @@ def run_ee(prep,lease):
     calls=[]
     proof=prep['paired_cache_equivalence']
     proof_done=False
+    # Revalidate the ENTIRE carried inventory before any public prediction,
+    # not only the chunk/component that happens to be needed first.
+    for row in prep['retained_checkpoint_packets']:
+        folder=Path(row['path']).parent
+        require(digest(folder/'completed_evidence.json')==row['seal_sha256'],'carried checkpoint seal changed')
+        seal=sealed_packet(folder)
+        task=tasks[row['task']]
+        descriptor=next(d for d in ee_chunks(task) if d['name']==row['chunk'])
+        require(seal['identity']==dict(context=original_ee_context(task,old),descriptor=descriptor),
+                'carried checkpoint mathematical identity differs')
+    for row in prep['old_produced_D']:
+        folder=old_out/'tasks_done'/row['name']
+        require(digest(folder/'completed_evidence.json')==row['seal_sha256'],'carried full D seal changed')
+        sealed_packet(folder,original_ee_context(tasks[row['name']],old))
+    for row in prep['old_reused_D']:public.validate_reuse(tasks[row['name']])
+    immutable(lease.out/'carried_inventory_preflight.json',dict(status='PASS',strict_full_D=20,
+        produced_D=14,exact_control_reuses=6,partial_checkpoint_payloads=225,
+        before_first_prediction=True,old_ledgers_untouched=True,source=prep['source']))
+    lease.note_written(lease.out/'carried_inventory_preflight.json')
 
     def component(task):
         nonlocal proof_done
@@ -140,7 +159,7 @@ def run_ee(prep,lease):
         require(len(calls)<64,'new component count exceeded')
         if task['mode']=='D':require(name in prep['remaining_D_names'],'unexpected new D task')
         estimate=prep['task_estimates'][name]
-        lease.check(estimate['estimated_cpu_seconds'],estimate['estimated_wall_seconds'])
+        lease.check(estimate['estimated_cpu_seconds'],estimate['estimated_wall_seconds'],refresh_output=True)
         lease.reserve(name,estimate['estimated_cpu_seconds'])
         started,cpu0=time.monotonic(),cpu_seconds()
         lease.observe(dict(status='context_loading',task=name))
@@ -180,6 +199,7 @@ def run_ee(prep,lease):
             result=dict(status='COMPLETE_CHUNK',task=name,descriptor=descriptor,sampler_audit=audit,
                 new_fits=0,official_origins=0,numerical_threadpools=pools)
             seal_new(folder,arrays,result,identity,execution)
+            lease.note_written(folder)
             new_packet(folder,identity,execution)
             parts.append(arrays)
             lease.observe(dict(status='chunk_sealed',task=name,chunk=descriptor['name']))
@@ -197,6 +217,7 @@ def run_ee(prep,lease):
             numerical_threadpools=numerical_pools())
         folder=lease.out/'tasks_done'/name
         seal_new(folder,arrays,result,science,execution)
+        lease.note_written(folder)
         new_packet(folder,science,execution)
         calls.append(name)
         completed[name]=value
@@ -320,7 +341,7 @@ def run_lv(prep,lease):
             and 12*call_CPU<=lease.a['full_prefix_CPU'],'all12 LV calls need a current CPU price')
     records=[]
     for call in prep['call_manifest']:
-        lease.check(call_CPU,lease.a['maximum_atomic_wall_seconds'])
+        lease.check(call_CPU,lease.a['maximum_atomic_wall_seconds'],refresh_output=True)
         lease.reserve(call['id'],call_CPU)
         start,cpu0=time.monotonic(),cpu_seconds()
         group=groups[call['split']]
@@ -378,9 +399,12 @@ def run_lv(prep,lease):
             anchors=np.asarray(shifted.anchors,dtype='U40'))
         folder=lease.out/'tasks_done'/call['id']
         seal_new(folder,arrays,result,call,execution)
+        lease.note_written(folder)
         new_packet(folder,call,execution)
         records.append(result)
         lease.observe(dict(status='LV_call_complete',id=call['id'],completed_calls=len(records)))
+        require(result['measured_CPU_seconds']<=call_CPU,
+                'included LV call exceeded its frozen whole-prefix price; stop incomplete without another forecast')
     require(len(records)==12 and sum(r['origin_clock_pairs'] for r in records)==144,'incomplete LV full diagnostic')
     folded={}
     for operator in OPS:

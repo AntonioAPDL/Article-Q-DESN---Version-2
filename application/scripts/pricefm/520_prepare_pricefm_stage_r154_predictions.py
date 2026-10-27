@@ -23,6 +23,7 @@ R153=BASE/'r153_control_and_diagnostics_20261025/science'
 
 def execution_sources():
     files=[Path(__file__),Path(__file__).with_name('521_run_pricefm_stage_r154_predictions.py'),
+           Path(__file__).with_name('522_run_pricefm_stage_r154_serial.py'),
            Path(__file__).with_name('pricefm_r154_prediction_contract.py')]
     return {str(p):digest(p) for p in files}
 

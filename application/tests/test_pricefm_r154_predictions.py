@@ -28,6 +28,7 @@ def module(name,filename):
 
 prepmod=module('r154_test_preparation','520_prepare_pricefm_stage_r154_predictions.py')
 runner=module('r154_test_execution','521_run_pricefm_stage_r154_predictions.py')
+serial=module('r154_test_serial','522_run_pricefm_stage_r154_serial.py')
 
 
 class TestImmutableAndStaging(unittest.TestCase):
@@ -74,9 +75,11 @@ class TestAuthority(unittest.TestCase):
             'lock_dir':str(self.root/'locks'),'permits':[{'id':'single','host':'muscat','cpu':30,'science':['EE','LV','CERTIFICATE_REFERENCE'],'sequential':True}]})
         self.a={'schema':'r154_prediction_authority_v1','status':'ADMITTED','study':'EE','scope_id':'fresh',
             'host':'muscat','cpu':30,'source':self.identity,'preparation':c.pin(self.pp),
-            'start_epoch':1000,'expires_epoch':2000,'max_wall_seconds':1000,'nonrenewing':True,
+            'start_epoch':1000,'expires_epoch':2000,'max_wall_seconds':1000,'max_execution_wall_seconds':1000,'nonrenewing':True,
             'full_prefix_CPU':100,'replacement_CPU':10,'admin_drain_CPU':20,'guardian_CPU_reserve':2,
             'total_CPU_cap':130,'min_delivered_share':.5,'own_RSS_soft_GiB':24,
+            'prior_CPU_charged_seconds':0,
+            'peer_census_cadence_seconds':5,
             'minimum_free_disk_GiB':80,'minimum_available_RAM_GiB':192,'new_output_soft_GiB':2,
             'drain_seconds':60,'maximum_atomic_wall_seconds':20,'max_new_tasks':64,
             'allow_extra_seeds':False,'new_fits':0,'official_origins':0,'hard_cgroup_isolation_claimed':False,
@@ -105,6 +108,16 @@ class TestAuthority(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(RuntimeError):self.validate(a)
     def test_calendar_not_funded_by_CPU_alone(self):
         a=copy.deepcopy(self.a);a['min_delivered_share']=.1
+        with self.assertRaises(RuntimeError):self.validate(a)
+    def test_prior_charge_consumes_total_budget(self):
+        a=copy.deepcopy(self.a);a['prior_CPU_charged_seconds']=1
+        with self.assertRaises(RuntimeError):self.validate(a)
+        a['total_CPU_cap']=131
+        self.validate(a)
+    def test_queued_absolute_and_active_clocks_are_both_finite(self):
+        a=copy.deepcopy(self.a);a['max_execution_wall_seconds']=100
+        with self.assertRaises(RuntimeError):self.validate(a)
+        a['max_execution_wall_seconds']=1001
         with self.assertRaises(RuntimeError):self.validate(a)
     def test_global_pool_does_not_create_second_permit(self):
         g=self.root/'bad_global.json';glob=c.read(self.a['global_contract']['path'])
@@ -161,6 +174,19 @@ class TestPeerAndLifetime(unittest.TestCase):
     def test_foreign_argv_not_retained_in_conflict(self):
         conflict=c.peer_conflicts(30,{'allowed_intersecting_processes':[]},set(),[self.row()])[0]
         self.assertNotIn('command',conflict);self.assertNotIn('argv',conflict)
+    def test_horizon_callbacks_keep_checks_but_throttle_heartbeat(self):
+        lease=c.Lease.__new__(c.Lease);lease.out=Path('/synthetic');lease.own={'pid':1}
+        lease._heartbeat_at=0;lease.reserve_total=1
+        lease.check=unittest.mock.Mock(return_value={});lease.note_written=unittest.mock.Mock()
+        lease.a={'prior_CPU_charged_seconds':0}
+        lease.observed_CPU=lambda:0
+        with patch.object(c.time,'monotonic',return_value=100),patch.object(c,'update_owned') as write:
+            for i in range(1000):lease.observe({'horizon_finished':i})
+            self.assertEqual(lease.check.call_count,1000)
+            self.assertEqual(write.call_count,1)
+            lease.observe({'status':'chunk_sealed'})
+            self.assertEqual(write.call_count,2)
+        for call in lease.check.call_args_list:self.assertFalse(call.kwargs['fresh_peer'])
     def test_live_plus_reaped_guardian_CPU_no_double_count(self):
         lease=c.Lease.__new__(c.Lease);lease.guardian=456;lease.cpu0=10;lease.guardian_cpu0=0
         with patch.object(c,'cpu_seconds',return_value=15),patch.object(c,'process_identity',return_value={'state':'S','cpu_seconds':2}):
@@ -351,9 +377,10 @@ class TestLVFakeBackendEndToEnd(unittest.TestCase):
                 def __init__(self):
                     self.out=out;self.a={'scope_id':'fixture','permit_id':'fixture','LV_call_CPU':10,
                         'full_prefix_CPU':120,'maximum_atomic_wall_seconds':60,'read_aliases':None};self.reservations=[]
-                def check(self,*args):pass
+                def check(self,*args,**kwargs):pass
                 def observe(self,event):pass
                 def reserve(self,name,cpu):self.reservations.append((name,cpu))
+                def note_written(self,path):pass
             lease=FakeLease()
             with patch.object(runner,'load_module',return_value=core),patch.object(runner,'numerical_pools',return_value=[{'num_threads':1}]),patch.dict(sys.modules,{'pricefm_r126_replay':replay,'pricefm_r127_contract':contract}):
                 result=runner.run_lv(prep,lease)
@@ -366,6 +393,54 @@ class TestLVFakeBackendEndToEnd(unittest.TestCase):
             self.assertFalse(result['promotion_authorized'])
             for (positions,seed),call in zip(calls,prep['call_manifest']):
                 self.assertEqual(positions,call['original_origin_clock_positions']);self.assertEqual(seed,call['call_seed'])
+
+
+class TestSerialOnceOnly(unittest.TestCase):
+    def test_success_dispatches_EE_then_LV_once(self):
+        grants=[({'study':'EE'},{},{}),({'study':'LV'},{},{})];seen=[]
+        results=serial.run_chain(grants,lambda stage,a,p:seen.append(stage['study']) or stage['study'])
+        self.assertEqual(seen,['EE','LV']);self.assertEqual(results,['EE','LV'])
+    def test_failure_or_defer_never_dispatches_LV(self):
+        for reason in ('INCOMPLETE','RESOURCE_DEFERRED','CERTIFICATE_FAILED'):
+            seen=[]
+            def fail(stage,a,p):seen.append(stage['study']);raise RuntimeError(reason)
+            with self.assertRaises(RuntimeError):serial.run_chain([({'study':'EE'},{},{}),({'study':'LV'},{},{})],fail)
+            self.assertEqual(seen,['EE'])
+    def test_busy_shared_permit_not_reassigned(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as d:
+            glob={'lock_dir':d}
+            with (Path(d)/'same.lock').open('a+') as lock:
+                fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                self.assertFalse(serial.permit_free(glob,'same'))
+            self.assertTrue(serial.permit_free(glob,'same'))
+    def test_old_authority_clocks_and_physical_drain_are_enforced(self):
+        source=Path(serial.__file__).read_text()
+        self.assertIn('validate_authority(authority,prep',source)
+        self.assertIn('complete_and_drained(name,authority,identity)',source)
+        self.assertIn("not (out/'claim.json').exists()",source)
+        self.assertIn('parent_death_arm(parent)',source)
+        self.assertNotIn("authority['start_epoch']=",source)
+    def test_exact_drain_and_assessment_seals_are_required(self):
+        with tempfile.TemporaryDirectory() as d:
+            out=Path(d);identity={'head':'frozen','branch':'work/pricefm-r154-test'}
+            authority={'output_dir':str(out),'scope_id':'scope'}
+            c.immutable(out/'authority.json',authority)
+            c.immutable(out/'assessment.json',{'status':'COMPLETE_INITIAL_PREFIX_SEED_STABILITY_DEFERRED'})
+            execution={'source':identity,'scope_id':'scope','authority':c.pin(out/'authority.json')}
+            c.immutable(out/'assessment_seal.json',{'assessment':c.pin(out/'assessment.json'),'execution':execution})
+            child={'pid':123,'boot_id':'old','start_ticks':5}
+            c.immutable(out/'supervisor_exit_receipt.json',{'child_exit_code':0,'parent':child,'payload':dict(child,pid=124)})
+            with patch.object(serial,'process_identity',return_value=None):self.assertTrue(serial.complete_and_drained('EE',authority,identity)['physical_drain'])
+            with patch.object(serial,'process_identity',return_value=child):
+                with self.assertRaises(RuntimeError):serial.complete_and_drained('EE',authority,identity)
+            (out/'assessment.json').write_text('{"status":"COMPLETE_INITIAL_PREFIX_TAMPERED"}')
+            with patch.object(serial,'process_identity',return_value=None):
+                with self.assertRaises(RuntimeError):serial.complete_and_drained('EE',authority,identity)
+    def test_expired_queue_denies_before_any_child_or_claim(self):
+        a={'schema':'r154_serial_queue_authority_v1','status':'ADMITTED','source':{},'host':'muscat','administrative_cpu':31,
+            'new_fits':0,'new_forecasts':0,'automatic_retry':False,'nonrenewing':True,'start_epoch':1,'expires_epoch':2,'max_wall_seconds':1}
+        with self.assertRaises(RuntimeError):serial.validate_queue(a,{},3,'muscat')
 
 
 if __name__=='__main__':unittest.main()

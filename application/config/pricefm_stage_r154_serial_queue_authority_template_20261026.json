@@ -1,0 +1,27 @@
+{
+  "schema": "r154_serial_queue_authority_v1",
+  "status": "NOT_ADMITTED",
+  "scope_id": null,
+  "source": null,
+  "source_sha256": null,
+  "host": "muscat",
+  "administrative_cpu": 31,
+  "global_contract": null,
+  "python": "/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/runtime_envs/r137_py311/bin/python",
+  "python_sha256": null,
+  "start_epoch": null,
+  "expires_epoch": null,
+  "max_wall_seconds": 86400,
+  "max_CPU_seconds": 120,
+  "nonrenewing": true,
+  "automatic_retry": false,
+  "new_fits": 0,
+  "new_forecasts": 0,
+  "zero_forecasts_applies_to_administrative_driver_itself": true,
+  "children_require_their_own_exact_fully_admitted_authorities": true,
+  "output_dir": null,
+  "stages": [
+    {"study": "EE", "authority": null, "preparation": null},
+    {"study": "LV", "authority": null, "preparation": null}
+  ]
+}

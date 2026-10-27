@@ -121,6 +121,14 @@ class ScientificBoundary(unittest.TestCase):
    with self.assertRaises(RuntimeError):c.validate_authority(authority,{},'unused',{},1,'muscat')
   authority={'schema':'r155_ee_qualified_seed_authority_v1','status':'ADMITTED','scope_id':'1'*32,'unit':'pricefm-r155-ee-qualified-seeds-'+('1'*32)+'.service','independent_analysis_seal':None,'initial_root_closing_proof':None}
   with self.assertRaisesRegex(RuntimeError,'explicit full87'):c.validate_authority(authority,{},'unused',{},1,'muscat')
+ def test_conditional_preparation_review_cannot_admit_runtime(self):
+  source=dict(branch='work/private',head='1'*40)
+  conditional=dict(source=source,status='PASS_CONDITIONAL_PREPARATION_ONLY',numerical_admission=False)
+  with self.assertRaisesRegex(RuntimeError,'conditional preparation review is insufficient'):
+   c.validate_runtime_source_review(conditional,source)
+  runtime=dict(conditional,status='PASS_RUNTIME_SOURCE',numerical_runtime_review=True)
+  c.validate_runtime_source_review(runtime,source)
+  with self.assertRaises(RuntimeError):c.validate_runtime_source_review(runtime,dict(source,head='2'*40))
  def test_final_metrics_use_frozen_light_api(self):
   arrays=object();light=object();seen=[]
   def metrics(value):

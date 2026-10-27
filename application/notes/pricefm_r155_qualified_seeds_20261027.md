@@ -58,6 +58,8 @@ that200CPU prior debit and report the separately metered view without double add
 
 The numerical caller529 stays unavailable until root independently admits exact
 source, preparation and complete price bytes for one entire12/18case. The grant
+must pin a distinct passed actual-source review with `numerical_runtime_review:true`;
+the current `PASS_CONDITIONAL_PREPARATION_ONLY` review cannot satisfy this gate. It
 must pin the passed independent78D+9S0 saved-array analysis, exact complete initial
 assessment, and an explicit root-reviewed final one-component execution/closing
 proof using `r155_root_final_EE_execution_v1` and

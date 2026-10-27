@@ -190,6 +190,12 @@ def complete_initial(prep,analysis_seal=None,root_closing_proof=None):
 
 
 
+def validate_runtime_source_review(review,identity):
+    require(review.get('source')==identity and str(review.get('status','')).startswith('PASS')
+            and review.get('numerical_runtime_review') is True,
+            'new actual seed runtime needs an explicit completed runtime source review; conditional preparation review is insufficient')
+
+
 def validate_authority(a,prep,prep_path,identity,now,hostname):
     require(a.get('schema')=='r155_ee_qualified_seed_authority_v1' and a.get('status')=='ADMITTED',
             'distinct root numerical seed admission absent')
@@ -240,8 +246,7 @@ def validate_authority(a,prep,prep_path,identity,now,hostname):
     for key in ('peer_census','admin_rules','process_classifier_proof','source_review','pricing_evidence'):
         verify_pin(a[key])
     review=verify_pin(a['source_review'])
-    require(review.get('source')==identity and str(review.get('status','')).startswith('PASS'),
-            'new actual seed source needs its own passed source review')
+    validate_runtime_source_review(review,identity)
     price=verify_pin(a['pricing_evidence'])
     require(price==verify_pin(prep['pricing']) and price['status']=='COMPLETE_INITIAL_S0_TIMING_PRICE_NOT_ADMISSION',
             'whole-prefix price must include complete initial S0 timings')

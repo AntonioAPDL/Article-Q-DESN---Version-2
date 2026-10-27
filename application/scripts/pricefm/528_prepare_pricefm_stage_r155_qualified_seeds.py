@@ -17,6 +17,8 @@ INITIAL_PREP=EE/'prepared_v2/preparation.json'
 TEMPLATE=EE/'ROOT_EE_CHILD_TEMPLATE_ADMITTED_01.json'
 ENDOWMENT=EE/'ROOT_EE_CONDITIONAL_ENDOWMENT_ADMITTED_01.json'
 DIRECT=c.R155/'ee_direct_recovery/ROOT_DIRECT_EXECUTION_MANIFEST_01.json'
+LEGACY_ROLE=c.R155/'review/legacy_490_waiter_audit_03/LEGACY_490_ROLE_PROPOSAL_01.json'
+LEGACY_ROLE_REVIEW=c.R155/'review/legacy_490_waiter_audit_03/LEGACY_490_MATCHER_CASE_SPEC_01.json'
 
 
 def full_task_audit(original):
@@ -38,14 +40,15 @@ def full_task_audit(original):
     return selected
 
 
-def profile(census,admin_rules):
+def profile(census,admin_rules,role):
     rows=[]
     for _ in range(3):
         cpu0=c.cpu_seconds();started=time.monotonic();processes=c.all_processes()
-        conflicts=c.peer_conflicts(30,census,{os.getpid()},processes,admin_rules,[30,62])
+        conflicts,accepted=c.reviewed_peer_conflicts(30,census,{os.getpid()},processes,admin_rules,[30,62],role,{})
         rows.append(dict(CPU=c.cpu_seconds()-cpu0,wall=time.monotonic()-started,
             processes=len(processes),threads=sum(len(p.get('threads') or []) for p in processes),
-            conflicts=conflicts,active_initial_study_conflicts_are_observations_not_exemptions=True))
+            conflicts=conflicts,reviewed_metadata_role_observations=accepted,
+            active_initial_study_conflicts_are_observations_not_exemptions=True))
     prior_path=c.R155/'lv_handoff/ADMIN_SCAN_PROFILE_01.json';prior=c.read(prior_path)
     floor=prior['three_scan_max_CPU_seconds']
     c.require(floor>=.321704-1e-12 and min(r['processes'] for r in rows)>100,
@@ -55,7 +58,8 @@ def profile(census,admin_rules):
         observer_pid_namespace=os.readlink('/proc/self/ns/pid'),proc1_pid_namespace=os.readlink('/proc/1/ns/pid'),
         prior_actual_scan_CPU_floor=floor,floor_evidence=c.pin(prior_path),
         upper_scan_CPU=max(floor,max(r['CPU'] for r in rows))*1.5,actual_affinity=sorted(os.sched_getaffinity(0)),
-        classifier_changed=False,scientific_claims=0,new_forecasts=0)
+        base_numerical_detection_unchanged=True,reviewed_admin_role_added=True,
+        scientific_claims=0,new_forecasts=0)
 
 
 def partial_public_windows(task,retained_names):
@@ -167,7 +171,7 @@ def prices(tasks,historical,timings,scan):
         scenarios=scenarios,new_fits=0,new_forecasts=0,admission=False)
 
 
-def prepare(destination,final_manifest_path=None):
+def prepare(destination,final_manifest_path=None,legacy_role_path=LEGACY_ROLE,legacy_role_review_path=LEGACY_ROLE_REVIEW):
     c.require(os.sched_getaffinity(0)=={31},'all metadata preparation must enter CPU31')
     destination=Path(destination);c.require(not destination.exists(),'new immutable conditional preparation directory required')
     identity=c.source_identity();initial=c.read(INITIAL_PREP);original=c.verify_pin(initial['original_preparation'])
@@ -179,7 +183,8 @@ def prepare(destination,final_manifest_path=None):
     c.verify_hashes(original['source_sha256']);c.verify_hashes(original['input_sha256'])
     tasks=full_task_audit(original);nominees=c.verify_pin(inventory['nominees'])
     c.require((nominees['A'],nominees['B'],nominees['full_D_complete'])==(c.A,c.B,78),'frozen original A/B changed')
-    scan=profile(c.read(root_template['peer_census']['path']),c.read(root_template['admin_rules']['path']))
+    role=c.read(legacy_role_path)
+    scan=profile(c.read(root_template['peer_census']['path']),c.read(root_template['admin_rules']['path']),role)
     timings=timing_inventory(initial,inventory,original,final_manifest)
     historical=c.verify_pin(initial['R154_preparation'])['task_estimates']
     price=prices(tasks,historical,timings,scan)
@@ -187,7 +192,7 @@ def prepare(destination,final_manifest_path=None):
     c.immutable(destination/'pricing.json',price)
     sources=[Path(__file__),Path(__file__).with_name('529_run_pricefm_stage_r155_qualified_seeds.py'),
         Path(__file__).with_name('pricefm_r155_seed_contract.py'),Path(__file__).with_name('pricefm_r155_completion_contract.py'),
-        Path(__file__).with_name('pricefm_r155_completion_inventory.py')]
+        Path(__file__).with_name('pricefm_r155_completion_inventory.py'),Path(__file__).with_name('pricefm_r155_metadata_waiter.py')]
     value=dict(schema='r155_ee_qualified_seed_preparation_v1',status='CONDITIONAL_METADATA_PREPARED_NOT_ADMITTED',
         study='EE',source=identity,execution_source_sha256={str(p):c.digest(p) for p in sources},
         original_preparation=initial['original_preparation'],original_scientific_source=original['source'],
@@ -202,6 +207,9 @@ def prepare(destination,final_manifest_path=None):
         initial_final_source_root=None if final_source_root is None else str(final_source_root),
         initial_final_preparation=None if final_manifest is None else final_manifest['preparation'],
         initial_final_route_required_before_any_claim=True,failed_direct_route_is_never_success=True,
+        legacy_metadata_role=c.pin(legacy_role_path),
+        legacy_metadata_role_helper=c.pin(Path(__file__).with_name('pricefm_r155_metadata_waiter.py')),
+        legacy_metadata_role_review=c.pin(legacy_role_review_path),
         nominees=inventory['nominees'],public_helper=initial['public_helper'],tasks=tasks,packages=initial['packages'],
         possible_scenarios=[dict(qualified=q,required_task_names=c.names_for(q),components=len(c.names_for(q))) for q in ([c.A],[c.B],[c.A,c.B])],
         pricing=c.pin(destination/'pricing.json'),global_contract=initial['global_contract'],
@@ -235,6 +243,9 @@ def prepare(destination,final_manifest_path=None):
             hard_cgroup_isolation_claimed=False,independent_analysis_seal=None,initial_root_closing_proof=None,
             pricing_evidence=c.pin(destination/'pricing.json'),source_review=dict(path='ROOT_NEW_PASSED_SOURCE_REVIEW',sha256='ROOT_SHA256'),
             global_contract=value['global_contract'],original_global_lock_identity=value['original_global_lock_identity'])
+        a['legacy_metadata_role']=value['legacy_metadata_role']
+        a['legacy_metadata_role_helper']=value['legacy_metadata_role_helper']
+        a['legacy_metadata_role_review']=value['legacy_metadata_role_review']
         for field in ('peer_census','admin_rules','resource_policy','process_classifier_proof'):a[field]=root_template[field]
         c.immutable(destination/('authority_proposal_'+label+'.json'),a)
     return c.read(destination/'prepared.json')
@@ -254,9 +265,10 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--destination',required=True)
     parser.add_argument('--no-science-disposition',action='store_true');parser.add_argument('--preparation')
     parser.add_argument('--analysis-seal');parser.add_argument('--root-closing-proof')
-    parser.add_argument('--initial-final-manifest');args=parser.parse_args()
+    parser.add_argument('--initial-final-manifest');parser.add_argument('--legacy-role',default=str(LEGACY_ROLE))
+    parser.add_argument('--legacy-role-review',default=str(LEGACY_ROLE_REVIEW));args=parser.parse_args()
     if args.no_science_disposition:
         c.require(args.preparation and args.analysis_seal and args.root_closing_proof,'complete initial/independent/root proof paths required')
         value=no_science_disposition(args.preparation,args.analysis_seal,args.root_closing_proof,args.destination)
-    else:value=prepare(args.destination,args.initial_final_manifest)
+    else:value=prepare(args.destination,args.initial_final_manifest,args.legacy_role,args.legacy_role_review)
     print(json.dumps(value,sort_keys=True,indent=2))

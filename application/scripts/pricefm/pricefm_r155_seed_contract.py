@@ -13,12 +13,14 @@ import signal
 import socket
 import subprocess
 import time
+import uuid
 from pricefm_r155_completion_contract import (Lease as BaseLease,THREAD_ENV,all_processes,
     cpu_seconds,digest,finite_positive,fingerprint,immutable,load_module,peer_conflicts,
     physical_siblings,pin,pressure,process_identity,read,require,same_lifetime,
     sealed_packet,singleton_affinity,validate_resource_bounds,verify_hashes,verify_pin,
-    funded_payload_CPU_limit)
+    funded_payload_CPU_limit,PeerObservationError)
 from pricefm_r155_completion_inventory import A,B,MISSING,chunks,science,validate_row
+from pricefm_r155_metadata_waiter import observe_legacy_490,match_legacy_490,lifetime
 
 ROOT=Path(__file__).resolve().parents[3]
 BASE=Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021')
@@ -48,6 +50,20 @@ def names_for(qualified):
     require(qualified in ([],[A],[B],[A,B]),'only unchanged frozen A/B qualifier sets allowed')
     return [f'EE_{p}_s{s}_S_seed{k}' for p in (['C0']+qualified if qualified else [])
             for k in (1,2) for s in (1,2,3)]
+
+
+def reviewed_peer_conflicts(cpu,census,own_pids,processes,admin_rules,siblings,role,cache):
+    """Filter only the new positively proven role from unchanged old conflicts."""
+    conflicts=peer_conflicts(cpu,census,own_pids,processes,admin_rules,siblings)
+    rows={lifetime(p):p for p in processes if p is not None};remaining=[];accepted=[]
+    for row in conflicts:
+        current=rows.get(lifetime(row))
+        if row.get('classifier_reason')=='unreviewed_numerical_process_intersects_physical_permit' and current is not None:
+            observation=observe_legacy_490(current,role,cache.get(lifetime(current)))
+            if match_legacy_490(current,role,observation):
+                observation['positive_match']=True;cache[lifetime(current)]=observation;accepted.append(observation);continue
+        remaining.append(row)
+    return remaining,accepted
 
 
 def same_lock_free(global_contract,identity):
@@ -203,6 +219,21 @@ def validate_authority(a,prep,prep_path,identity,now,hostname):
             ==dict(device=2304,inode=59124844),'original global contract/inode differs')
     glob=verify_pin(a['global_contract']);policy=verify_pin(a['resource_policy'])
     validate_resource_bounds(a,glob,policy,now)
+    require(a['legacy_metadata_role']==prep['legacy_metadata_role'],
+            'new explicit reviewed metadata-role pin differs')
+    metadata_role=verify_pin(a['legacy_metadata_role'])
+    require(metadata_role['schema']=='r155_legacy_490_metadata_role_v1'
+            and metadata_role['status']=='ADMITTED_EXACT_EXISTING_METADATA_ROLE'
+            and metadata_role['expires_epoch']==glob['expires_epoch']>=a['expires_epoch']
+            and metadata_role['no_model_fit_forecast_dispatch'] is True,
+            'narrow metadata role cannot renew global clock or dispatch science')
+    helper=pin(Path(__file__).with_name('pricefm_r155_metadata_waiter.py'))
+    require(a['legacy_metadata_role_helper']==prep['legacy_metadata_role_helper']==helper,
+            'actual canonical metadata matcher helper differs')
+    require(a['legacy_metadata_role_review']==prep['legacy_metadata_role_review'],'metadata role review pin differs')
+    role_review=verify_pin(a['legacy_metadata_role_review'])
+    require(str(role_review.get('status','')).startswith('PASS') and role_review['helper']==helper
+            and role_review['role']==a['legacy_metadata_role'],'new exact role/helper needs independent passed review')
     require(a['cpu']==30 and a['physical_sibling_cpus']==sorted(physical_siblings(30))==[30,62]
             and a['permit_id']=='muscat_cpu30' and glob['max_new_numerical']==1,
             'same sole physical permit required')
@@ -250,7 +281,33 @@ def validate_authority(a,prep,prep_path,identity,now,hostname):
 
 
 class SeedLease(BaseLease):
-    """New truthful claim, unchanged b6 held-child/peer/accounting machinery."""
+    """Truthful new claim and reviewed role scan; inherited held-child guards."""
+    def reject_peers(self,peers,stage):
+        if peers:
+            immutable(self.out/'peer_rejections'/(uuid.uuid4().hex+'.json'),dict(
+                schema='r155_qualified_seed_peer_rejection_v1',stage=stage,epoch=time.time(),
+                physical_sibling_cpus=self.a['physical_sibling_cpus'],conflicts=peers,
+                base_numerical_detection_unchanged=True,reviewed_admin_role_added=True,
+                legacy_metadata_role=self.a['legacy_metadata_role'],
+                legacy_metadata_role_helper=self.a['legacy_metadata_role_helper'],retry_authorized=False))
+            raise RuntimeError('new unreviewed numerical peer intersects allocation: '+str([p['pid'] for p in peers]))
+
+    def scan_peers(self,stage,own_pids):
+        try:processes=all_processes()
+        except PeerObservationError as exc:
+            self.reject_peers([exc.evidence],stage);raise
+        peers,accepted=reviewed_peer_conflicts(self.a['cpu'],self.census,own_pids,processes,
+            self.admin_rules,self.a['physical_sibling_cpus'],self.legacy_role,self._legacy_cache)
+        for observation in accepted:
+            key=tuple(observation['candidate_lifetime'])
+            if key not in self._legacy_recorded:
+                immutable(self.out/'reviewed_metadata_roles'/(fingerprint(key)+'.json'),dict(
+                    schema='r155_reviewed_metadata_role_positive_v1',stage=stage,observation=observation,
+                    legacy_metadata_role=self.a['legacy_metadata_role'],legacy_metadata_role_helper=self.a['legacy_metadata_role_helper'],
+                    base_numerical_detection_unchanged=True,reviewed_admin_role_added=True,automatic_retry=False))
+                self._legacy_recorded.add(key)
+        self.reject_peers(peers,stage)
+
     def __init__(self,a,prep,authority_path,unit):
         self.a,self.prep=a,prep;self.out=Path(a['output_dir']);self.out.mkdir(parents=True,exist_ok=True)
         self.started=time.monotonic();self.cpu0=cpu_seconds();self.own=process_identity(os.getpid())
@@ -258,6 +315,7 @@ class SeedLease(BaseLease):
         self.guardian=None;self.reserve_total=0.0;self._peer_at=0.;self._pressure_at=0.;self._heartbeat_at=0.
         self._pressure={};self._written={};self._written_total=0
         self.census=read(a['peer_census']['path']);self.admin_rules=read(a['admin_rules']['path'])
+        self.legacy_role=verify_pin(a['legacy_metadata_role']);self._legacy_cache={};self._legacy_recorded=set()
         self.lock=(self.out/'scope.lock').open('a+');fcntl.flock(self.lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         glob=read(a['global_contract']['path']);path=Path(glob['lock_dir'])/(a['permit_id']+'.lock');self.global_lock_path=path
         identity=lambda st:dict(device=st.st_dev,inode=st.st_ino)

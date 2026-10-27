@@ -1,5 +1,5 @@
 """Private metadata/lifecycle proofs; no numerical/model library or forecast."""
-import importlib.util,json,os,signal,subprocess,sys,tempfile,types,unittest
+import copy,importlib.util,json,os,signal,subprocess,sys,tempfile,types,unittest
 from unittest.mock import patch
 from pathlib import Path
 HERE=Path(__file__).resolve().parents[1]/'scripts/pricefm'
@@ -10,6 +10,70 @@ def module(name,path):
 p=module('private_seed_prepare','528_prepare_pricefm_stage_r155_qualified_seeds.py')
 r=module('private_seed_runner','529_run_pricefm_stage_r155_qualified_seeds.py')
 canonical=module('private_scalar_acceptance_contract','pricefm_r150_contract.py')
+import pricefm_r155_metadata_waiter as waiter
+
+class MetadataWaiterRole(unittest.TestCase):
+ def fixture(self):
+  rule=json.loads((c.R155/'review/legacy_490_waiter_audit_03/LEGACY_490_ROLE_PROPOSAL_01.json').read_text())
+  process=dict(boot_id='boot',pid=123,start_ticks=456,cmdline_sha256='command',argv=rule['argv_exact'])
+  current=dict(process,state='S',ppid=rule['parent']['pid'],uid=[rule['owner_uid']]*4,cwd=rule['cwd_exact'],
+   executable=rule['resolved_executable'],threads=[dict(tid=123,cpus=rule['thread_mask_exact'])])
+  parent={k:rule['parent'][k] for k in ('pid','start_ticks','boot_id','cmdline_sha256','executable')};parent['uid']=[rule['parent']['uid']]*4
+  contract=rule['unit'];unit=dict(Id=contract['Id'],LoadState='loaded',ActiveState='active',SubState='running',
+   MainPID='123',ExecMainPID='123',WorkingDirectory=contract['WorkingDirectory'],FragmentPath=contract['FragmentPath'],
+   Restart=contract['Restart'],KillMode=contract['KillMode'],InvocationID='exact',
+   ExecStart='{ path='+rule['interpreter']['path']+' ; argv[]='+' '.join(rule['argv_exact'])+' ; ignore_errors=no ; pid=123 ; status=0/0 }')
+  pins=[rule['script'],rule['interpreter'],rule['parent']['executable_pin'],contract['fragment_pin'],*rule['configuration_pins']]
+  observation=dict(observed=True,candidate_lifetime=list(waiter.lifetime(process)),current=current,closing_identity=dict(current),
+   parent=parent,environment=rule['expected_thread_environment'].copy(),environment_absent={k:True for k in rule['environment_must_be_absent']},
+   hashes={p['path']:p['sha256'] for p in pins},source=rule['source'].copy(),unit=unit,unit_by_PID=contract['Id'],unit_proof_epoch=1.)
+  return process,rule,observation
+ def test_exact_role_and_new_verified_lifetime_positive(self):
+  process,rule,obs=self.fixture();self.assertTrue(waiter.match_legacy_490(process,rule,obs))
+  process['pid']=124;obs['candidate_lifetime']=list(waiter.lifetime(process))
+  for key in ('current','closing_identity'):obs[key]['pid']=124
+  obs['current']['threads']=[dict(tid=124,cpus=rule['thread_mask_exact'])]
+  obs['unit']['MainPID']=obs['unit']['ExecMainPID']='124'
+  self.assertTrue(waiter.match_legacy_490(process,rule,obs))
+ def test_all_narrow_role_negative_boundaries(self):
+  mutations=[lambda p,r,o:o.update(observed=False),lambda p,r,o:o['source'].update(clean=False),
+   lambda p,r,o:o['source'].update(head='other'),lambda p,r,o:o['hashes'].update({r['script']['path']:'other'}),
+   lambda p,r,o:o['hashes'].update({r['configuration_pins'][0]['path']:'other'}),
+   lambda p,r,o:o['hashes'].update({r['interpreter']['path']:'other'}),lambda p,r,o:o['current'].update(cwd='other'),
+   lambda p,r,o:p.update(argv=[*p['argv'],'--extra']),lambda p,r,o:o['current'].update(argv=[*r['argv_exact'][:3],'controller']),
+   lambda p,r,o:o['unit'].update(Id='other'),lambda p,r,o:o['unit'].update(MainPID='other'),
+   lambda p,r,o:o['unit'].update(ExecMainPID='other'),lambda p,r,o:o['unit'].update(ExecStart=o['unit']['ExecStart'].replace(' 300',' 301')),
+   lambda p,r,o:o['parent'].update(start_ticks=0),lambda p,r,o:o['parent'].update(boot_id='other'),
+   lambda p,r,o:o['parent'].update(uid=[0]*4),lambda p,r,o:o['parent'].update(executable='other'),
+   lambda p,r,o:o['current']['threads'].append(dict(tid=125,cpus=r['thread_mask_exact'])),
+   lambda p,r,o:o['current']['threads'][0].update(cpus=[31]),lambda p,r,o:o['environment'].update(OMP_NUM_THREADS='2'),
+   lambda p,r,o:o['environment_absent'].update(PYTHONPATH=False),lambda p,r,o:o.update(unit_by_PID='other'),
+   lambda p,r,o:o['unit'].update(InvocationID=''),lambda p,r,o:r.update(expires_epoch=1),
+   lambda p,r,o:o['closing_identity'].update(start_ticks=0)]
+  for i,mutate in enumerate(mutations):
+   with self.subTest(case=i):
+    process,rule,obs=self.fixture();mutate(process,rule,obs);self.assertFalse(waiter.match_legacy_490(process,rule,obs))
+ def test_missing_observation_fails_closed_and_irrelevant_peers_do_not_probe(self):
+  process,rule,obs=self.fixture()
+  with patch.object(waiter,'_static',side_effect=AssertionError('unrelated peer must not probe')):
+   other=dict(process,argv=['python','unrelated.py']);self.assertFalse(waiter.observe_legacy_490(other,rule)['observed'])
+  with patch.object(waiter,'_static',return_value={}),patch.object(waiter,'_identity',side_effect=FileNotFoundError()):
+   failed=waiter.observe_legacy_490(process,rule);self.assertFalse(waiter.match_legacy_490(process,rule,failed))
+ def test_adapter_preserves_known_state_conflicts_and_unrelated_unknowns(self):
+  process,rule,obs=self.fixture();known=dict(process,classifier_reason='known_lifetime_state_changed')
+  other=dict(process,pid=999,classifier_reason='unreviewed_numerical_process_intersects_physical_permit')
+  unknown=dict(process,classifier_reason='unreviewed_numerical_process_intersects_physical_permit')
+  with patch.object(c,'peer_conflicts',return_value=[known,other,unknown]),patch.object(c,'observe_legacy_490',return_value=obs):
+   remaining,accepted=c.reviewed_peer_conflicts(30,{},set(),[process],{},[30,62],rule,{})
+  self.assertEqual(remaining,[known,other]);self.assertEqual(len(accepted),1);self.assertTrue(accepted[0]['positive_match'])
+ def test_new_rejection_receipt_declares_policy_addition_truthfully(self):
+  with tempfile.TemporaryDirectory() as d:
+   lease=c.SeedLease.__new__(c.SeedLease);lease.out=Path(d)
+   lease.a=dict(physical_sibling_cpus=[30,62],legacy_metadata_role={'path':'role','sha256':'1'*64},legacy_metadata_role_helper={'path':'helper','sha256':'2'*64})
+   with self.assertRaises(RuntimeError):lease.reject_peers([dict(pid=999)],'private')
+   receipt=json.loads(next((Path(d)/'peer_rejections').glob('*.json')).read_text())
+   self.assertTrue(receipt['base_numerical_detection_unchanged']);self.assertTrue(receipt['reviewed_admin_role_added'])
+   self.assertNotIn('classifier_unchanged',receipt);self.assertFalse(receipt['retry_authorized'])
 
 class ScientificBoundary(unittest.TestCase):
  def test_metadata_imports_do_not_load_numerical_models(self):
@@ -126,7 +190,9 @@ class PriceAndLifecycle(unittest.TestCase):
     path.unlink();path.touch()
     with self.assertRaisesRegex(RuntimeError,'replaced'):c.same_lock_free(glob,identity)
  def test_inherited_guard_unchanged_and_hard_limit_funded(self):
-  for name in ('_start_guardian','scan_peers','check','close'):self.assertIs(getattr(c.SeedLease,name),getattr(c.BaseLease,name))
+  for name in ('_start_guardian','check','close'):self.assertIs(getattr(c.SeedLease,name),getattr(c.BaseLease,name))
+  self.assertIsNot(c.SeedLease.scan_peers,c.BaseLease.scan_peers)
+  self.assertIsNot(c.SeedLease.reject_peers,c.BaseLease.reject_peers)
   with self.assertRaises(RuntimeError):c.funded_payload_CPU_limit(.1,20000,200,600,120)
   self.assertGreater(c.funded_payload_CPU_limit(.1,20000,200,600,30000),18000)
  def test_private_held_child_identity_and_only_direct_signal(self):

@@ -34,6 +34,12 @@ cases and prices without forecasts. Incomplete initial S0 timing leaves the pric
 `PROVISIONAL_INITIAL_S0_INCOMPLETE_NOT_ADMISSIBLE`; rerun metadata preparation into
 a new directory after complete output and retain the earlier packet/cost. Nothing
 edits a prior preparation, claim, source or clock.
+The default legacy-role proposal and case specification are metadata preparation
+inputs only. A numerical preparation must instead pass `--legacy-role
+ROOT_ADMITTED_ROLE --legacy-role-review PASSED_MATCHER_REVIEW`; the caller requires
+`ADMITTED_EXACT_EXISTING_METADATA_ROLE`, the exact canonical helper pin and an
+independent `PASS` review binding both role and helper. A proposal cannot pass
+that gate even if all timing data later becomes complete.
 
 The price is the maximum of each original full-component price and a1.5× completed
 S0 global CPU-per-public-window fallback, plus cold setup once. The partially
@@ -87,7 +93,11 @@ script, interpreter, exact wait arguments, configurations, single-thread environ
 manager parent and current systemd ownership. Its existing broad affinity is
 acknowledged, without moving it or accepting arbitrary PIDs/Python programs.
 All other strict conflicts and incomplete observations still stop before a new
-chunk. Full-host pricing includes this matcher. Kernel PDEATHSIG/post-arm parent verification and the
+chunk. Only a previously positive exact boot/PID/start/command lifetime may reuse
+its first unit/DBus ownership proof; actual argv, static bytes/source, manager,
+environment and thread masks remain freshly checked. A new PID requires fresh
+unit attribution. Missing process evidence fails closed. Full-host pricing uses
+fresh unit proof on all three scans and includes this matcher. Kernel PDEATHSIG/post-arm parent verification and the
 sole unreaped direct child protect lifecycle termination. The caller's inherited
 hard CPU limit must fund the whole numerical child, not a tiny administrative cap.
 No foreign PID, process group, cgroup or unsupported-pidfd signal fallback exists.

@@ -36,3 +36,13 @@ Use the pinned runtime Python and absolute scripts in the verified new worktree.
 - `519_inspect_pricefm_stage_r154_cz_continuation.py`: source-specific read-only current health.
 
 Tests cover scope/price/freshness, immutable lineage, private-role rejection, old/new claim races, exact PID lifetime protection, additional children, duplicate activations and actual supervisor lock release. Real private proof remains mandatory before preparing authority. Publishing or preparing this source is not scientific completion.
+
+## Exact included protected OS role
+
+The first real deep profile exposed a stable protected GNOME keyring process (Jerez PID3567285, started July22) that the frozen511 full census could not read completely. Healthy waiting had not yet exercised that eventual final-census path. The original failure and full391.146329758CPU conservative private charge remain immutable; no refund follows from diagnosis.
+
+Only the new R154 census adapter includes this exact known lifetime through an immutable, byte-pinned protected-role attestation. It is an included row, never an omitted process or a name whitelist. Two complete public-metadata snapshots bind boot/UID/PID/start/parent/session/group/state, exact readable nonempty argv/hash, every thread's lifetime/state/affinity, cgroups and inaccessible cwd/exe labels. Unknown protected processes, changing identities/argv/threads/affinity/state and unexpected metadata access still block. The declared /usr/bin root-owned executable's bytes are hashed as declared argv0 provenance; inaccessible /proc/exe is never claimed verified.
+
+Both unchanged frozen515 and new519 numerical predicates consume argv/cpus only and must independently return no conflict for this truthful included row. No numerical role, worker, script, R/Rscript or controller may use this exception. All frozen511/515 sources and original science remain unchanged. Run `attest-protected` once from clean published source before private proof. Its immutable record is pinned in every new authority and private proof. A source-byte change gets a new attestation filename; old attestations stay immutable.
+
+Administrative SSH/Python CLI preparation uses CPU31; actual disposable and production waiter units remain CPU29/Nice10. Private failures now create their own error packet and the driver checks early unit exit, so a startup/census failure need not consume a full timeout. Every attempted private scope remains mandatory in the create-once registry.

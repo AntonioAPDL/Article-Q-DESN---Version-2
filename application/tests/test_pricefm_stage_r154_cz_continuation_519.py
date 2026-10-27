@@ -17,6 +17,8 @@ def load(name,path):
 G=load('r154_test_gate',HERE/'519_resolve_pricefm_stage_r154_cz_continuation.py')
 R=load('r154_test_release',HERE/'519_release_pricefm_stage_r154_cz_continuation.py')
 B=load('r154_frozen_fixture_helpers',ROOT/'application/tests/test_pricefm_stage_r153_cz_gate.py')
+P=load('r154_test_protected',HERE/'519_attest_pricefm_stage_r154_protected_role.py')
+OLD=load('r154_test_unchanged_frozen_predicate',HERE/'515_resolve_pricefm_stage_r153_cz_gate.py')
 B.GATE=G
 
 
@@ -48,6 +50,9 @@ class ContinuationTests(unittest.TestCase):
         names=['activation.json','launch_claim.json','launch_receipt.json','old_waiter_fence.json','effective_config.json','original_waiter_progress.json']
         for name in names:B.put(oldroot/name,{})
         self.a['previous_immutable_sha256']={str(p):G.sha(p) for p in [oldpath,self.previous/'single_activation_claim.json']+[oldroot/n for n in names]}
+        attestation=P.expected_path(G.RUNTIME);B.put(attestation,{})
+        self.a.update(protected_role_attestation_path=str(attestation),protected_role_attestation_sha256=G.sha(attestation))
+        self.a['frozen_sha256'].update({str(attestation):G.sha(attestation),str(G.PROTECTED_ENTRY):G.sha(G.PROTECTED_ENTRY)})
         self.save()
     def tearDown(self):
         self.release_patch.stop();self.extra.stop();self.base.tearDown()
@@ -185,6 +190,45 @@ class ContinuationTests(unittest.TestCase):
         with mock.patch.object(R,'source_records',return_value=({'execution_source':self.a['execution_source']},{})):
             with self.assertRaisesRegex(RuntimeError,'duplicate private receipt'):
                 R.prepare([self.root/'receipt.json',self.root/'receipt.json'],system=self.system)
+    def partial_fixture(self):
+        expected=dict(stat=dict(pid=P.EXPECTED_PID,start_ticks=300,ppid=2,session_id=2,state='S'),
+            boot_id='boot',uid=1000,argv=list(P.EXPECTED_ARGV),cmdline_sha256='hash',
+            threads=[dict(stat=dict(pid=P.EXPECTED_PID),cpus=list(range(64)))],cgroups=['/dbus'],
+            missing_metadata=dict(cwd='UNAVAILABLE_PERMISSION_DENIED',exe='UNAVAILABLE_PERMISSION_DENIED'),
+            declared_executable_file=dict(evidence='DECLARED_ARGV0_FILE_ONLY_PROC_EXE_UNAVAILABLE'))
+        record=dict(kind='R154_EXACT_INCLUDED_PROTECTED_NONNUMERICAL_ROLE',adapter_entry=str(P.ENTRY),
+            adapter_sha256=P.sha(P.ENTRY),included_not_omitted=True,proc_executable_or_cwd_proved=False,expected=expected)
+        path=self.root/'attested.json';B.put(path,record);return expected,path
+    def test_partial_protected_row_is_included_truthfully_and_predicate_equivalent(self):
+        expected,path=self.partial_fixture()
+        with mock.patch.object(P,'collect',return_value=expected):row=P.included_record(path,Path('/proc')/str(P.EXPECTED_PID))
+        self.assertTrue(row['partial_protected_metadata']);self.assertIsNone(row['cwd']);self.assertIsNone(row['executable'])
+        self.assertEqual(row['cpus'],list(range(64)))
+        self.assertEqual(OLD.numerical_conflicts(self.a,[row]),[])
+        self.assertEqual(G.numerical_conflicts(self.a,[row]),[])
+    def test_partial_protected_identity_argv_affinity_or_state_drift_blocks(self):
+        expected,path=self.partial_fixture()
+        variants=[]
+        for key,value in [('boot_id','other'),('uid',2000),('argv',['Rscript']),('cmdline_sha256','new')]:
+            v=copy.deepcopy(expected);v[key]=value;variants.append(v)
+        for key,value in [('pid',123),('start_ticks',301),('ppid',3),('session_id',3),('state','R')]:
+            v=copy.deepcopy(expected);v['stat'][key]=value;variants.append(v)
+        v=copy.deepcopy(expected);v['threads'][0]['cpus']=[30];variants.append(v)
+        for value in variants:
+            with self.subTest(value=value),mock.patch.object(P,'collect',return_value=value):
+                with self.assertRaisesRegex(RuntimeError,'drifted'):P.included_record(path,Path('/proc')/str(P.EXPECTED_PID))
+    def test_unknown_protected_pid_stays_blocking(self):
+        system=G.System.__new__(G.System);system.adapter=mock.Mock();system.protected=mock.Mock(EXPECTED_PID=P.EXPECTED_PID)
+        system.adapter.census_process.side_effect=PermissionError('protected unknown')
+        with self.assertRaises(PermissionError):system.census_record(Path('/proc/999'))
+        system.protected.included_record.assert_not_called()
+    def test_known_protected_process_returns_a_row_instead_of_being_skipped(self):
+        expected,path=self.partial_fixture()
+        with mock.patch.object(P,'collect',return_value=expected):row=P.included_record(path,Path('/proc')/str(P.EXPECTED_PID))
+        system=G.System.__new__(G.System);system.adapter=mock.Mock();system.protected=mock.Mock(EXPECTED_PID=P.EXPECTED_PID)
+        system.adapter.census_process.side_effect=PermissionError('protected exact')
+        system.protected.included_record.return_value=row
+        self.assertEqual(system.census_record(Path('/proc')/str(P.EXPECTED_PID)),row)
 
 
 if __name__=='__main__':unittest.main()

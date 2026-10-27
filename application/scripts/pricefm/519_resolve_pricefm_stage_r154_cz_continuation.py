@@ -33,6 +33,7 @@ DATA = Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pric
 RUNTIME = DATA / 'launch_prep/pricefm_stage_r154_control_continuation_20261026/cz'
 PREVIOUS_RUNTIME = DATA / 'launch_prep/pricefm_stage_r153_control_lifecycle_20261025/cz'
 PREVIOUS_CONTROL_ROOT = ROOT.parent/'pricefm_r153_cz_release_20261025'
+PROTECTED_ENTRY = ENTRY.with_name('519_attest_pricefm_stage_r154_protected_role.py')
 R144_ROOT = Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__pricefm_r144_cz_fallback_20261020')
 R144_ENTRY = R144_ROOT / 'application/scripts/pricefm/486_run_pricefm_stage_r144_cz_training_fallback.py'
 R144_CONFIG = R144_ROOT / 'application/config/pricefm_stage_r144_cz_training_fallback_20261020.json'
@@ -211,6 +212,7 @@ class System:
     def __init__(self):
         self.admin_invocations=0
         self.adapter = module('r154_cz_frozen_process_adapter', ADAPTER).RecoverySystem()
+        self.protected = module('r154_exact_included_protected_role', ENTRY.with_name('519_attest_pricefm_stage_r154_protected_role.py'))
     def now(self): return time.time()
     def host(self): return socket.gethostname().split('.')[0].lower()
     def source(self, root):
@@ -223,7 +225,21 @@ class System:
         if (sample['start_ticks']!=expected['start_ticks']
                 or self.adapter.boot_id!=expected['boot_id']):return None
         return self.process(expected['pid'])
-    def processes(self): return self.adapter.processes()
+    def processes(self):
+        result=[]
+        for path in Path('/proc').iterdir():
+            if not path.name.isdigit():continue
+            record=self.census_record(path)
+            if record is not None:result.append(record)
+        return result
+    def census_record(self,path):
+        try:return self.adapter.census_process(path)
+        except PermissionError:
+            if int(path.name)!=self.protected.EXPECTED_PID:raise
+            record=self.protected.included_record(self.protected.expected_path(RUNTIME),path)
+            if numerical_conflicts(dict(effective_config=effective_config(read(R144_CONFIG))),[record]):
+                raise RuntimeError('protected partial metadata conflicts with unchanged CZ numerical predicate')
+            return record
     def members(self, cgroup): return self.adapter.members(cgroup)
     def unit(self, name):
         self.admin_invocations+=1
@@ -758,6 +774,12 @@ def validate_continuation_scope(authority, system):
         raise RuntimeError('actual whole-window control price exceeds selected finite allowance')
     if authority['control_CPU_allowance_seconds'] <= 3600 and rate > 15:
         raise RuntimeError('3600 control target requires measured rate at most15CPU/hour')
+    protected_path=RUNTIME/'protected_nonnum'/(sha(PROTECTED_ENTRY)+'.json')
+    if (authority.get('protected_role_attestation_path')!=str(protected_path)
+            or authority.get('protected_role_attestation_sha256')!=sha(protected_path)
+            or authority['frozen_sha256'].get(str(protected_path))!=sha(protected_path)
+            or authority['frozen_sha256'].get(str(PROTECTED_ENTRY))!=sha(PROTECTED_ENTRY)):
+        raise RuntimeError('exact protected included-role authority/source pin differs')
     previous = Path(authority['previous_authority_path'])
     if sha(previous) != authority['previous_authority_sha256']:
         raise RuntimeError('previous immutable R153 authority changed')

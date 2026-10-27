@@ -18,6 +18,7 @@ import select
 import resource
 import ctypes
 import platform
+import traceback
 from pathlib import Path
 import subprocess
 import sys
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[3]
 ENTRY = Path(__file__).resolve()
 GATE = ENTRY.with_name('519_resolve_pricefm_stage_r154_cz_continuation.py')
 OBSERVER = ENTRY.with_name('519_inspect_pricefm_stage_r154_cz_continuation.py')
+PROTECTED = ENTRY.with_name('519_attest_pricefm_stage_r154_protected_role.py')
 PREVIOUS_ROOT = ROOT.parent/'pricefm_r153_cz_release_20261025'
 PREVIOUS_ENTRY = PREVIOUS_ROOT/'application/scripts/pricefm/515_resolve_pricefm_stage_r153_cz_gate.py'
 PREVIOUS_REGISTRY = Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/launch_prep/pricefm_stage_r153_control_lifecycle_20261025/cz/single_activation_claim.json')
@@ -75,7 +77,7 @@ def source_records(system):
     records['previous_control_source']=system.source(PREVIOUS_ROOT)
     if records['previous_control_source']['head']!='17bd756aacb0f4ce458978f10af45c75200b9a65':
         raise RuntimeError('previous R153 control source differs')
-    pins = {str(path): m.sha(path) for path in [GATE, ENTRY, OBSERVER, PREVIOUS_ENTRY, PREVIOUS_ENTRY.with_name('516_release_pricefm_stage_r153_cz_gate.py'), m.R144_ENTRY, m.R144_CONFIG,
+    pins = {str(path): m.sha(path) for path in [GATE, ENTRY, OBSERVER, PROTECTED, system.protected.expected_path(m.RUNTIME), PREVIOUS_ENTRY, PREVIOUS_ENTRY.with_name('516_release_pricefm_stage_r153_cz_gate.py'), m.R144_ENTRY, m.R144_CONFIG,
             m.R143_ENTRY, m.R143_CONFIG, m.ADAPTER,
             Path(records['resource_core_source']['root'])/'application/scripts/pricefm/504_supervise_pricefm_stage_r152_baseline.py']}
     for relative, expected in config['frozen_source_sha256'].items():
@@ -187,6 +189,8 @@ def make_authority(root,identity,system,preflight,records,pins,*,private=False,
         archived_original_waiter_progress=dict(source=str(original),archive=str(archived),sha256=m.sha(archived)),
         authority_basis='Explicit user authorization to implement the reviewed finite Oct26 control continuation; one additional control activation, unchanged original CZ science.',
         private_probe_receipts=list(proof_rows or []),
+        protected_role_attestation_path=str(system.protected.expected_path(m.RUNTIME)),
+        protected_role_attestation_sha256=m.sha(system.protected.expected_path(m.RUNTIME)),
         current_release_observed_CPU_seconds=0.,private_profile_cannot_dispatch=bool(private))
     m.immutable(root/'authority.json',value)
     m.validate_authority(root/'authority.json',system=system,_private_profile=private)
@@ -204,10 +208,16 @@ def profile_check(authority,path,system,*,deep=False):
     # process census rather than claiming the future PT/SE3 closeouts exist.
     closeouts={r:m.complete_region(authority['effective_config'],r) for r in m.QUEUE if r!='NO_3'} if deep else {}
     census=system.processes() if deep else [];conflicts=m.numerical_conflicts(authority,census)
+    protected=[p for p in census if p.get('partial_protected_metadata')]
+    old_api=m.module('r154_original_classifier_equivalence',PREVIOUS_ENTRY)
+    original=old_api.numerical_conflicts(authority,protected)
+    current=m.numerical_conflicts(authority,protected)
+    if original or current:raise RuntimeError('protected partial row is not equivalent nonnumerical under frozen predicate')
     own=system.own_admin_cpu()
     return dict(check_wall_seconds=time.monotonic()-begin,own=own,boundary=state,
         previous_waiter_drained=previous['drained'],completed_region_probes=closeouts,
-        numerical_census_size=len(census),numerical_conflicts=len(conflicts))
+        numerical_census_size=len(census),numerical_conflicts=len(conflicts),
+        included_protected_records=protected,original_classifier_conflicts=original,new_classifier_conflicts=current)
 
 
 def private_owner(root,unit):
@@ -337,7 +347,9 @@ def verify_probe_history(receipt,current):
     for name,digest in receipt['runtime_source_sha256'].items():
         payload=subprocess.check_output(['git','-C',str(ROOT),'show',old['head']+':'+name],timeout=30)
         if hashlib.sha256(payload).hexdigest()!=digest:raise RuntimeError('private proof source blob differs')
-    if set(receipt['runtime_source_sha256'])!={str(p.relative_to(ROOT)) for p in [GATE,ENTRY,OBSERVER]}:
+    expected={str(p.relative_to(ROOT)) for p in [GATE,ENTRY,OBSERVER,PROTECTED]}
+    previous_expected={str(p.relative_to(ROOT)) for p in [GATE,ENTRY,OBSERVER]}
+    if set(receipt['runtime_source_sha256']) not in (expected,previous_expected):
         raise RuntimeError('private proof source inventory differs')
     return float(charge)
 
@@ -352,7 +364,7 @@ def probe(output_path):
         output_path=str(output_path),started_epoch=system.now(),automatic_retry=False))
     unit='pricefm-r154-cz-probe-'+identity+'.service';capsule=None;cleanup=False;launched=False;errors=[];fence_debit=0.
     result=dict(schema_version=1,execution_source=source,private_root=str(root),private_unit=unit,
-        runtime_source_sha256={str(p.relative_to(ROOT)):m.sha(p) for p in [GATE,ENTRY,OBSERVER]},
+        runtime_source_sha256={str(p.relative_to(ROOT)):m.sha(p) for p in [GATE,ENTRY,OBSERVER,PROTECTED]},
         production_unit_actions=0,model_dispatches=0,source_or_runtime_changes=0)
     try:
         records,pins=source_records(system);preflight=previous_preflight(system)
@@ -376,8 +388,12 @@ def probe(output_path):
         m.immutable(root/'ack.json',dict(exact_owner_verified=True))
         until=time.monotonic()+380
         while not (root/'exiting.json').exists():
+            if (root/'private_failure.json').exists():
+                raise RuntimeError('private owner failed: '+m.read(root/'private_failure.json')['error'])
+            if system.unit(unit).get('ActiveState') not in {'active','activating'}:
+                raise RuntimeError('private unit exited before complete profile; preserve failed debit')
             if time.monotonic()>=until:raise RuntimeError('private profiling exceeded finite calendar')
-            time.sleep(.1)
+            time.sleep(1)
         exiting=m.read(root/'exiting.json');last_epoch=exiting['epoch'];until=time.monotonic()+15
         while True:
             final=system.unit(unit);current=m.recorded_process(system,capsule['process'])
@@ -498,6 +514,11 @@ def fence_previous(authority,path,system):
             or system.members(record['cgroup'])!=[record['process']['pid']]):
         raise RuntimeError('old waiter is not the exact sole administrative lifetime; no signal')
     oldroot=Path(authority['previous_authority_path']).parent
+    old_api=m.module('r154_fence_previous_accounting',PREVIOUS_ENTRY)
+    old_authority=m.read(authority['previous_authority_path'])
+    old_capsule=m.read(oldroot/'activation.json')['capsule']
+    before_budget_epoch=system.now()
+    before_budget=old_api.observe_waiter_cpu(old_authority,Path(authority['previous_authority_path']),system,old_capsule)
     archive={name:dict(sha256=m.sha(oldroot/name),value=m.read(oldroot/name)) for name in
              ['progress.json','control_budget_heartbeat.json']}
     m.immutable(root/'previous_state_before_fence.json',dict(files=archive,unit=props,epoch=system.now()))
@@ -512,7 +533,11 @@ def fence_previous(authority,path,system):
     # Old code could have claimed science after the last absence check. Never
     # erase/retry that claim. The caller now checks again under original locks.
     receipt=dict(status='R154_EXACT_OLD_CONTROL_PHYSICALLY_DRAINED',authority_sha256=m.sha(path),
-        signal=signal_receipt,drain=drained,epoch=system.now(),models_signalled=False)
+        signal=signal_receipt,drain=drained,epoch=system.now(),models_signalled=False,
+        previous_external_CPU_bound=before_budget,
+        previous_single_CPU_tail_wall_upper_seconds=max(0.,system.now()-before_budget_epoch),
+        previous_final_control_CPU_upper_bound_seconds=before_budget['charged_CPU_upper_bound_seconds']+max(0.,system.now()-before_budget_epoch),
+        historical_ledger_rewritten=False,observer_CPU_charged_as_previous_owner=False)
     m.immutable(root/'old_waiter_fence.json',receipt)
     return receipt
 
@@ -579,13 +604,25 @@ def handoff_and_launch(path,*,system=None):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=('preflight','probe','prepare','handoff','private-owner','private-fence-owner'))
+    parser.add_argument('action',choices=('preflight','attest-protected','probe','prepare','handoff','private-owner','private-fence-owner'))
     parser.add_argument('--output',type=Path);parser.add_argument('--authority',type=Path)
     parser.add_argument('--probe-receipt',type=Path,action='append',default=[])
     parser.add_argument('--control-CPU-seconds',type=float);parser.add_argument('--private-root',type=Path)
     parser.add_argument('--unit');args=parser.parse_args()
-    if args.action=='private-owner':value=private_owner(args.private_root,args.unit)
-    elif args.action=='private-fence-owner':value=private_fence_owner(args.private_root,args.unit)
+    if args.action in {'private-owner','private-fence-owner'}:
+        try:
+            value=private_owner(args.private_root,args.unit) if args.action=='private-owner' else private_fence_owner(args.private_root,args.unit)
+        except BaseException as error:
+            root=Path(args.private_root).resolve()
+            if root.parent==Path('/tmp') and root.name.startswith(('pricefm-r154-cz-probe-','pricefm-r154-cz-fence-')):
+                api().immutable(root/'private_failure.json',dict(error=repr(error),traceback=traceback.format_exc(),
+                    measured_self_plus_reaped_admin_CPU_seconds=process_CPU(),epoch=time.time(),
+                    model_dispatches=0,production_unit_actions=0))
+            raise
+    elif args.action=='attest-protected':
+        system=api().System();source=system.source(ROOT);value=system.protected.make_attestation(source)
+        target=system.protected.expected_path(api().RUNTIME);api().immutable(target,value)
+        value=dict(status='R154_INCLUDED_PROTECTED_ROLE_ATTESTED',path=str(target),sha256=api().sha(target),attestation=value)
     elif args.action=='probe':
         if not args.output:raise RuntimeError('private probe requires create-once output')
         value=probe(args.output)

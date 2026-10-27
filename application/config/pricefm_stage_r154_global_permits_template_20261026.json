@@ -1,0 +1,23 @@
+{
+  "schema": "r154_global_permits_v1",
+  "max_new_numerical": 1,
+  "lock_dir": null,
+  "permits": [
+    {
+      "id": null,
+      "host": null,
+      "cpu": 30,
+      "science": ["EE", "LV", "CERTIFICATE_REFERENCE"],
+      "sequential": true
+    }
+  ],
+  "evidence": {
+    "peer_census": null,
+    "resource_policy": null
+  },
+  "jerez_numerical_allocation": null,
+  "new_numerical_concurrency_above_one_authorized": false,
+  "physical31_and_SMT63_reserved_as_headroom": true,
+  "SMT62_science_authorized": false,
+  "hard_kernel_isolation_claimed": false
+}

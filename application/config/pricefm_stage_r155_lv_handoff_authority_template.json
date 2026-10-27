@@ -22,6 +22,7 @@
   "new_fits": 0,
   "new_forecasts": 0,
   "incident_observation_seconds": 60,
+  "max_incident_observations": 60,
   "incident_observer_CPU_stop_fraction": 0.7,
   "scientific_source_root": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_prediction_adapters_20261026",
   "scientific_entry": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r154_prediction_adapters_20261026/application/scripts/pricefm/521_run_pricefm_stage_r154_predictions.py",

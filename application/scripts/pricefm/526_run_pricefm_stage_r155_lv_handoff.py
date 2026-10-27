@@ -130,6 +130,8 @@ def validate(a,identity,now,host,admitted=True):
     require(not (out/'claim.json').exists(),'administrative claim already consumed')
     require(5<=a['incident_observation_seconds']<=60 and a['incident_observer_CPU_stop_fraction']==0.7,
             'bounded read-only observation policy differs')
+    require(isinstance(a['max_incident_observations'],int) and 1<=a['max_incident_observations']<=60,
+            'optional census needs a finite separately priced observation count')
     require(a['pricing_evidence']['path'] and verify_pin(a['pricing_evidence'])['prior_administrative_CPU_charged_seconds']
             ==a['prior_administrative_CPU_charged_seconds'],'explicit source-preparation pricing pin required')
     return glob,grant,prep
@@ -287,6 +289,10 @@ def execute(path,expected,audit_only=False):
                 require(time.time()<a['expires_epoch'] and time.monotonic()-started<a['max_wall_seconds'],
                         'fixed administrative absolute/active clock exhausted')
                 require(own_CPU<a['max_CPU_seconds']*.9,'finite own administrative CPU approaching cap')
+                if observer_enabled and observation_count>=a['max_incident_observations']:
+                    immutable(out/'incident_observation_stopped.json',dict(reason='finite priced observation count reached',
+                        observations=observation_count,epoch=time.time(),continuous_coverage=False))
+                    observer_enabled=False
                 if observer_enabled and own_CPU>=a['max_CPU_seconds']*a['incident_observer_CPU_stop_fraction']:
                     immutable(out/'incident_observation_stopped.json',dict(reason='retain administrative drain CPU',own_CPU=own_CPU,epoch=time.time()))
                     observer_enabled=False

@@ -59,8 +59,9 @@ Administrative CPU includes metadata subprocess costs and excludes the separatel
 reported scientific reaped child CPU; these views must not be added twice.
 Old EE's 10961.212634375985 conservative CPU charge remains retained, with no refund.
 
-The CPU31 parent optionally takes a current process/thread census every 60 seconds
-after the prior scan finishes. It uses the unchanged R154 classifier, excluding
+The CPU31 parent optionally takes **at most 60** current process/thread censuses,
+every 60 seconds after the prior scan finishes: approximately the first hour,
+with no continuous coverage promise for the remaining execution. It uses the unchanged R154 classifier, excluding
 only its exact held LV child and that child's direct payload for observation.
 Only classified conflicts retain relevant lifetime, argv, executable, cwd, masks
 and reason when readable; departed facts remain unknown. It does not signal,

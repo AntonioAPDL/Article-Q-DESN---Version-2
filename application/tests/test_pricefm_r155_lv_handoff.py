@@ -194,6 +194,7 @@ class TestAuthorityGates(unittest.TestCase):
     def test_reject_scope_clock_source_budget_and_order_changes(self):
         for key,value in [('source',{}),('max_CPU_seconds',121),('expires_epoch',50001),('original_LV_start_epoch',11),
                           ('max_wall_seconds',10000),('automatic_retry',True),('max_dispatches',2),('new_forecasts',1),
+                          ('max_incident_observations',61),
                           ('prior_administrative_CPU_charged_seconds',21),('administrative_total_CPU_cap',139)]:
             a,amendment,grant,verify=self.fixture();a[key]=value
             with self.subTest(key=key),self.assertRaises(RuntimeError):self.checked(a,verify)

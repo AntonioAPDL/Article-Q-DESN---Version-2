@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Source-specific read-only owner5 health; no launch, registration or retry action."""
+"""Source-specific read-only owner6 health; no launch, registration or retry action."""
 import argparse
 import copy
 import importlib.util
@@ -73,7 +73,7 @@ def _inspect(path,sha,system=None):
     c.require(os.sched_getaffinity(0)=={31},'read-only baseline health must use administrative31')
     path=Path(path).resolve();c.require(c.digest(path)==sha,'read-only actual authority pin differs');a=c.read(path)
     context=host_context(a)
-    base=dict(schema='r155_baseline_owner5_readonly_health_v1',authority=c.pin(path),execution_source=a['execution_source'],
+    base=dict(schema='r155_baseline_owner6_readonly_health_v1',authority=c.pin(path),execution_source=a['execution_source'],
         activation=a['activation'],host_context=context,models=0,forecasts=0,services=0,runtime_writes=0,
         numerical_worker_signals=0,automatic_retry=False,global_campaign_complete=False,epoch=time.time())
     if not context['full_host_view_verified']:
@@ -88,7 +88,7 @@ def _inspect(path,sha,system=None):
         return dict(base,status='ADMITTED_UNCLAIMED',healthy_control=None,activation_spent=False,dispatch_currently_permitted=False)
     claim=c.read(runtime/'activation_claim.json')
     c.require(claim['authority']==c.pin(path) and claim['activation']==c.ACTIVATION and claim['execution_source']==a['execution_source'],
-        'actual one-use owner5 claim differs')
+        'actual one-use owner6 claim differs')
     base['activation_spent']=True
     if not (runtime/'state.json').is_file() or not (runtime/'launch_attestation.json').is_file():
         recent=time.time()-claim['claimed_epoch']<=120
@@ -98,7 +98,7 @@ def _inspect(path,sha,system=None):
     state=c.read(runtime/'state.json');attestation=c.read(runtime/'launch_attestation.json')
     c.require(state['authority']==c.pin(path) and state['activation']==c.ACTIVATION and state['source']==a['execution_source']
         and attestation['authority']==c.pin(path) and attestation['execution_source']==a['execution_source'],
-        'actual owner5 state/attestation source differs')
+        'actual owner6 state/attestation source differs')
     if state.get('phase')=='complete' and (runtime/'terminal.json').is_file():
         proof=terminal_proof(a,path,state,attestation,system)
         return dict(base,**proof,dispatch_currently_permitted=False,
@@ -106,16 +106,22 @@ def _inspect(path,sha,system=None):
     api=runner()
     try:
         owner,unit=api.control_capsule(a,attestation,'run',system);guardian=api.guardian_live(a,attestation,system)
+        bootstrap=c.read(runtime/'guardian_priority_bootstrap.json')
+        c.require(bootstrap['authority']==c.pin(path) and bootstrap['execution_source']==a['execution_source']
+            and bootstrap['compatibility_proof']==a['guardian_priority_compatibility_proof']
+            and bootstrap['pid']==guardian['pid'] and bootstrap['after_kernel_nice']==10
+            and bootstrap['foreign_process_changes']==0,'guardian own-process priority bootstrap differs')
         epoch=c.read(runtime/'resource_ownership_epoch.json')
         c.require(epoch['authority']==c.pin(path) and epoch['activation']==c.ACTIVATION
             and epoch['execution_source']==a['execution_source'] and c.core().same_process(epoch['owner'],owner)
-            and time.time()-epoch['heartbeat']<=a['guardian_lease_seconds'],'actual owner5 heartbeat/lease differs')
+            and time.time()-epoch['heartbeat']<=a['guardian_lease_seconds'],'actual owner6 heartbeat/lease differs')
         charge=api.budget(a,state,system)
         healthy=charge['within_wall'] and charge['within_CPU'] and charge['within_guardian_CPU'] and state['phase'] not in api.TERMINAL
     except c.PublicationPending:raise
     except (RuntimeError,OSError,KeyError) as error:
         return dict(base,status='CONTROL_BLOCKED_OR_UNVERIFIED',healthy_control=False,dispatch_currently_permitted=False,
-            state_phase=state.get('phase'),reason=repr(error),owner_unit=system.unit(a['new_unit']),guardian_unit=system.unit(a['guardian_unit']))
+            state_phase=state.get('phase'),reason=repr(error),control_observation=getattr(error,'observation',None),
+            owner_unit=system.unit(a['new_unit']),guardian_unit=system.unit(a['guardian_unit']))
     rows,census=c.collect_census(system);sessions={};current_gate=census['complete']
     if current_gate:
         prior=c.verify_pin(a['predecessor_authority']);config=c.core().read_config(prior['legacy_config_path']);policy=c.old.ContractPolicy(config,system)
@@ -129,13 +135,15 @@ def _inspect(path,sha,system=None):
         healthy_control=healthy,dispatch_currently_permitted=permitted,recorded_phase=state['phase'],
         owner=owner,guardian=guardian,owner_unit=unit,heartbeat=epoch['heartbeat'],heartbeat_age=time.time()-epoch['heartbeat'],
         census=census,sessions=sessions,control_budget=charge,completed=state['completed'],quarantined=state['quarantined'],
+        guardian_priority_bootstrap=c.pin(runtime/'guardian_priority_bootstrap.json'),
+        scheduling_policy=dict(owner=a['control_intent'],guardian=a['guardian_intent'],actual_kernel_IO_independently_verified=False),
         scientific_complete=False,original_controllers_and_fit_masks_unchanged=True)
 
 
 def inspect(path,sha,system=None):
     try:return _inspect(path,sha,system)
     except c.PublicationPending as pending:
-        return dict(schema='r155_baseline_owner5_readonly_health_v1',status='METADATA_PUBLICATION_PENDING',
+        return dict(schema='r155_baseline_owner6_readonly_health_v1',status='METADATA_PUBLICATION_PENDING',
             authority=dict(path=str(path),sha256=sha),healthy_control=None,dispatch_currently_permitted=False,
             publication=pending.observation,metadata_publication_observations=c.PUBLICATION_OBSERVATIONS[-64:],
             models=0,forecasts=0,services=0,runtime_writes=0,numerical_worker_signals=0,automatic_retry=False,epoch=time.time())

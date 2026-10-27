@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Activate exactly one independently admitted fifth baseline controller.
+"""Activate exactly one independently admitted sixth baseline controller.
 
 This entry is deliberately separate from health inspection. It preserves every
 old runtime/registration and never signals a controller or numerical process.
@@ -18,6 +18,8 @@ import sys
 import time
 sys.dont_write_bytecode=True;sys.path.insert(0,str(Path(__file__).resolve().parent))
 import pricefm_r155_baseline_contract as c
+ATTESTATION_OBSERVATIONS=[]
+COMPLETED_ATTESTATIONS={}
 
 
 def module(name,path):
@@ -44,9 +46,9 @@ def wrapper_budget(a):
 
 
 def activation_disposition(proof):
-    if proof.get('healthy_control') is True:return 'ONE_FIFTH_CONTROL_ACTIVATION_HEALTHY_NO_RETRY'
-    if proof.get('healthy_control') is None:return 'ONE_FIFTH_CONTROL_ACTIVATION_METADATA_PENDING_NO_RETRY'
-    return 'ONE_FIFTH_CONTROL_ACTIVATION_BLOCKED_AFTER_REGISTRATION_NO_RETRY'
+    if proof.get('healthy_control') is True:return 'ONE_SIXTH_CONTROL_ACTIVATION_HEALTHY_NO_RETRY'
+    if proof.get('healthy_control') is None:return 'ONE_SIXTH_CONTROL_ACTIVATION_METADATA_PENDING_NO_RETRY'
+    return 'ONE_SIXTH_CONTROL_ACTIVATION_BLOCKED_AFTER_REGISTRATION_NO_RETRY'
 
 
 def start_control(record,a,log):
@@ -54,11 +56,11 @@ def start_control(record,a,log):
         'fixed new unit runtime no longer fits the original expiry plus bounded launch margin')
     wrapper_budget(a)
     argv=['systemd-run','--user','--quiet','--unit='+record['unit'],
-        '--description=R155 explicit fifth baseline control '+record['mode'],
+        '--description=R155 explicit sixth baseline control '+record['mode'],
         '--property=Restart=no','--property=KillMode=process','--property=RemainAfterExit=yes',
         '--property=TimeoutStopSec=20s','--property=RuntimeMaxSec='+str(a['unit_runtime_max_seconds'])+'s',
         '--property=WorkingDirectory='+str(c.ROOT),'--property=CPUAffinity=31',
-        '--property=CPUSchedulingPolicy=other','--property=Nice='+str(record['nice']),
+        '--property=CPUSchedulingPolicy=other','--property=Nice='+str(record['unit_nice']),
         '--property=IOSchedulingClass=idle','--property=CPUAccounting=yes','--property=MemoryAccounting=yes',
         '--property=LimitCPU='+str(record['CPU_hard_limit']),
         '--property=StandardOutput=file:'+str(log),'--property=StandardError=file:'+str(log)+'.stderr']
@@ -68,19 +70,46 @@ def start_control(record,a,log):
     return argv
 
 
-def attest(record,a,system,api):
-    deadline=time.monotonic()+20;label='owner' if record['mode']=='run' else 'guardian';last=None
+def attest(record,a,system,api,deadline=None):
+    own_deadline=time.monotonic()+20;deadline=min(own_deadline,deadline) if deadline is not None else own_deadline
+    label='owner' if record['mode']=='run' else 'guardian';last=None;anchor=None;invocation=None;main_pid=None
     while time.monotonic()<deadline:
         wrapper_budget(a)
-        props=system.unit(record['unit']);pid=int(props.get('MainPID',0));current=system.process(pid) if pid else None
+        props=system.unit(record['unit']);pid=int(props.get('MainPID',0));unavailable=None
+        if pid:
+            if main_pid is None:main_pid=pid
+            c.require(pid==main_pid,'new unit MainPID changed during readiness; no restart/retry')
+        try:current=system.process(pid) if pid else None
+        except c.CensusDeferred as deferred:current=None;unavailable=deferred.observation
+        if current:
+            identity=(current['pid'],current['start_ticks'],current['boot_id'])
+            if anchor is None:anchor=identity
+            c.require(identity==anchor,'one new administrative lifetime changed during bounded readiness; no restart/retry')
+        if props.get('InvocationID'):
+            if invocation is None:invocation=props['InvocationID']
+            c.require(props['InvocationID']==invocation,'one new unit InvocationID changed during readiness; no restart/retry')
         if current and props.get('ActiveState')=='active':
             c.require(time.time()+a['unit_runtime_max_seconds']<=c.ORIGINAL_EXPIRY,
                 'actual attested new unit runtime cannot be proved inside the original expiry')
             capsule=dict(intent=record,process=current,unit_properties=props,attested_epoch=time.time())
-            api.control_capsule(a,{label:capsule},record['mode'],system)
-            return capsule
-        last=dict(unit=props,process=current);time.sleep(.1)
-    raise RuntimeError('bounded new administrative unit attestation expired: '+repr(last))
+            try:last=api.observe_control_capsule(a,{label:capsule},record['mode'],system)
+            except c.CensusDeferred as unavailable:last=dict(label=label,all_pass=False,unavailable=unavailable.observation)
+            if last.get('all_pass'):
+                # Capture the exact fully observed final capsule, never a prior
+                # exec-transition argv/cwd snapshot of the same process.
+                capsule.update(process=last['process'],unit_properties=last['unit_properties'],complete_readiness=last)
+                COMPLETED_ATTESTATIONS[label]=capsule
+                ATTESTATION_OBSERVATIONS.append(last);del ATTESTATION_OBSERVATIONS[:-64]
+                c.core().atomic(Path(a['runtime'])/'attestation_observations.json',dict(observations=ATTESTATION_OBSERVATIONS,
+                    completed_capsules=COMPLETED_ATTESTATIONS,epoch=time.time()))
+                return capsule
+        else:last=dict(label=label,all_pass=False,unit_properties=props,process=current,
+            unavailable=unavailable,failed_fields=['active_running_final_process_not_ready'])
+        ATTESTATION_OBSERVATIONS.append(last);del ATTESTATION_OBSERVATIONS[:-64]
+        c.core().atomic(Path(a['runtime'])/'attestation_observations.json',dict(observations=ATTESTATION_OBSERVATIONS,
+            completed_capsules=COMPLETED_ATTESTATIONS,epoch=time.time()))
+        time.sleep(.1)
+    error=RuntimeError('bounded full administrative capsule readiness expired: '+repr(last));error.observation=last;raise error
 
 
 def activate(path,sha):
@@ -118,7 +147,7 @@ def activate(path,sha):
         c.require(time.time()+a['unit_runtime_max_seconds']+30<=c.ORIGINAL_EXPIRY,
             'activation preflight consumed the original unit-deadline margin; no claim consumed')
         c.core().immutable(runtime/'authority.json',a)
-        c.core().immutable(runtime/'activation_claim.json',dict(schema='r155_baseline_owner5_activation_claim_v1',
+        c.core().immutable(runtime/'activation_claim.json',dict(schema='r155_baseline_owner6_activation_claim_v1',
             authority=c.pin(path),activation=c.ACTIVATION,execution_source=a['execution_source'],
             original_absolute_expiry=c.ORIGINAL_EXPIRY,original_cumulative_CPU=c.ORIGINAL_CPU,
             new_unit=a['new_unit'],guardian_unit=a['guardian_unit'],claimed_epoch=time.time(),claimant_pid=os.getpid(),
@@ -129,8 +158,12 @@ def activate(path,sha):
         try:
             for label,key in (('owner','control_intent'),('guardian','guardian_intent')):
                 launches.append(dict(label=label,argv=start_control(a[key],a,runtime/(label+'.log'))))
-            owner=attest(a['control_intent'],a,system,api);guardian=attest(a['guardian_intent'],a,system,api)
-            c.core().immutable(runtime/'launch_attestation.json',dict(schema='r155_baseline_owner5_launch_attestation_v1',
+            # One shared readiness window fits within both30s bootstrap waits;
+            # sequential20s windows could outlive the first process's lease.
+            readiness_deadline=time.monotonic()+20
+            owner=attest(a['control_intent'],a,system,api,readiness_deadline)
+            guardian=attest(a['guardian_intent'],a,system,api,readiness_deadline)
+            c.core().immutable(runtime/'launch_attestation.json',dict(schema='r155_baseline_owner6_launch_attestation_v1',
                 authority=c.pin(path),execution_source=a['execution_source'],owner=owner,guardian=guardian,
                 exact_launch_commands=launches,epoch=time.time()))
             deadline=time.monotonic()+75;last=None
@@ -145,8 +178,8 @@ def activate(path,sha):
                     last=observer.inspect(path,sha,system)
                     if last.get('healthy_control') is True:
                         wrapper_budget(a)
-                        c.core().immutable(runtime/'registration.json',dict(schema='r155_baseline_owner5_registration_v1',
-                            kind='EXPLICIT_FIFTH_BASELINE_CONTROL_ONLY',authority=c.pin(path),activation=c.ACTIVATION,
+                        c.core().immutable(runtime/'registration.json',dict(schema='r155_baseline_owner6_registration_v1',
+                            kind='EXPLICIT_SIXTH_BASELINE_CONTROL_ONLY',authority=c.pin(path),activation=c.ACTIVATION,
                             execution_source=a['execution_source'],runtime=str(runtime),cached_restart_authorized=False,
                             original_registration_unchanged=c.verify_pin(a['preparation'])['original_pointer_preserved'],
                             registered_epoch=time.time()))
@@ -165,7 +198,7 @@ def activate(path,sha):
                             elapsed_seconds=time.monotonic()-started,numerical_worker_signals=0,automatic_retry=False,epoch=time.time())
                         c.core().immutable(runtime/'activation_verified.json',receipt);return receipt
                 time.sleep(.2)
-            raise RuntimeError('new fifth control did not reach bounded readiness: '+repr(last))
+            raise RuntimeError('new sixth control did not reach bounded readiness: '+repr(last))
         except BaseException as error:
             # No controller, fit or service is signalled. A missing publication
             # keeps every new dispatch held; bounded bootstrap/lease/unit expiry
@@ -173,6 +206,8 @@ def activate(path,sha):
             c.core().immutable(runtime/'activation_failed.json',dict(authority=c.pin(path),error=repr(error),
                 activation_spent=True,launches=launches,numerical_worker_signals=0,control_signals=0,
                 whole_invocation_usage=wrapper_usage(),startup_and_prevalidation_CPU_included=True,
+                attestation_observations=ATTESTATION_OBSERVATIONS[-64:],
+                completed_attestations=COMPLETED_ATTESTATIONS,
                 measured_through_before_failure_receipt_write=True,final_publication_and_exit_CPU_reserved_seconds=2,
                 metadata_publication_observations=c.PUBLICATION_OBSERVATIONS[-64:],
                 automatic_retry=False,epoch=time.time()))

@@ -20,12 +20,16 @@ OLD_ENTRY=OLD_ROOT/'application/scripts/pricefm/513_supervise_pricefm_stage_r153
 OLD_ENTRY_SHA='467f69bc2c7cd6334e5fd9eecc8eecda60ac85efa9af6cedcbb02bba7b317444'
 DATA=Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm')
 OLD_AUTHORITY=DATA/'launch_prep/pricefm_stage_r153_control_lifecycle_20261025/baseline/authority.json'
-BRANCH='work/pricefm-r155-baseline-continuation-20261027'
+BRANCH='work/pricefm-r155-baseline-owner6-20261027'
 ORIGINAL_START=1792970252.3571737
 ORIGINAL_EXPIRY=1793575052.3571737
 ORIGINAL_CPU=28800.
 PRIOR_CONTROL_CPU=3911.9249712769997
-ACTIVATION=dict(legacy_generations_spent=4,explicit_additional_activation=1,activation_limit=1,cumulative_owner_count=5)
+ACTIVATION=dict(legacy_generations_spent=5,explicit_additional_activation=1,activation_limit=1,cumulative_owner_count=6)
+OWNER5_FIXED_PAID_CPU=5381.924971277
+OWNER6_PRIOR_CPU=5621.924971277
+OWNER5_AUTHORITY_SHA='3fb27b48c10f69c1e3e1a6ac6605572432296819cd505bb5cef94dcb4b189be4'
+OWNER5_FAILURE_KERNEL_REVIEW_SHA='d17b738aad47b81b9bbd0ec16e7b2cb98957c5b89ee7a2dccd3591b6d23ac1e2'
 
 
 def require(value,message):
@@ -270,7 +274,8 @@ def failed_certificates(config,region,diagnostics=None):
 def runtime_files():
     return [Path(__file__).with_name(name) for name in ('pricefm_r155_baseline_contract.py',
         '530_supervise_pricefm_stage_r155_baseline_continuation.py','531_prepare_pricefm_stage_r155_baseline_continuation.py',
-        '532_activate_pricefm_stage_r155_baseline_continuation.py','533_inspect_pricefm_stage_r155_baseline_continuation.py')]
+        '532_activate_pricefm_stage_r155_baseline_continuation.py','533_inspect_pricefm_stage_r155_baseline_continuation.py',
+        '534_materialize_pricefm_stage_r155_baseline_owner6.py')]
 
 
 def source_identity(remote=False):
@@ -294,11 +299,43 @@ def verify_source(source,remote=False):
 
 
 def intent(unit,mode,authority_path):
-    return dict(unit=unit,mode=mode,administrative_cpu=31,nice=0 if mode=='run' else 10,
+    return dict(unit=unit,mode=mode,administrative_cpu=31,unit_nice=0,kernel_nice=0 if mode=='run' else 10,
         scheduler_policy='SCHED_OTHER',io_class=3,CPU_hard_limit='infinity' if mode=='run' else 600,
         argv=[str(DATA/'runtime_envs/r137_py311/bin/python'),'-B',
         str(Path(__file__).with_name('530_supervise_pricefm_stage_r155_baseline_continuation.py')),
         mode,'--authority',str(authority_path),'--unit',unit])
+
+
+def verify_guardian_priority_proof(value):
+    proof=verify_pin(value)
+    require(proof['schema']=='r155_two_strategy_private_nice_proof_v1'
+        and proof['status']=='PASS_TWO_FINITE_METADATA_UNITS_NO_NUMERICAL_CALLS'
+        and proof['source']['sha256']=='cf9c58654f3150e269c09fd45c2b6ca787acebf1209dcba9cdd05177adb064a1'
+        and pin(proof['source']['path'])==proof['source'] and proof['actual_host_pid_namespace']=='pid:[4026531836]'
+        and proof['requested10_kernel_nice']==0 and proof['explicit_unit0_self10_kernel_nice']==10
+        and proof['all_exact_fixture_processes_exited_naturally'] is True and proof['foreign_process_signals']==0
+        and proof['baseline_activations']==0 and proof['numerical_calls']==0,'exact installed-host two-strategy priority proof required')
+    for strategy,unit_nice,kernel_nice in (('requested10',10,0),('explicit10',0,10)):
+        row=proof['outcomes'][strategy];before=row['before']['process'];ready=row['ready']['process'];unit=row['retained_unit']
+        require(before['pid']==ready['pid']==int(unit['ExecMainPID']) and before['start_ticks']==ready['start_ticks']
+            and ready['boot_id']=='37b80e3b-9596-4c75-85e1-aca85af8fa7f' and ready['nice']==kernel_nice
+            and ready['cpus']==[31] and ready['scheduler']==os.SCHED_OTHER
+            and ('\nNice='+str(unit_nice)+'\n') in row['literal_fragment'] and unit['Nice']=='0'
+            and unit['MainPID']=='0' and unit['SubState']=='exited' and unit['ExecMainStatus']=='0'
+            and unit['Restart']=='no' and unit['NRestarts']=='0','two-strategy source/kernel/unit priority facts differ')
+    return proof
+
+
+def establish_guardian_priority():
+    """Only this new administrative guardian changes its own kernel priority."""
+    before=os.getpriority(os.PRIO_PROCESS,0)
+    require(before in (0,10) and os.sched_getaffinity(0)=={31} and os.sched_getscheduler(0)==os.SCHED_OTHER,
+        'guardian own-process startup scheduling differs')
+    os.setpriority(os.PRIO_PROCESS,0,10)
+    after=os.getpriority(os.PRIO_PROCESS,0)
+    require(after==10,'guardian own-process kernelNice10 setup failed')
+    return dict(pid=os.getpid(),before_kernel_nice=before,after_kernel_nice=after,unit_requested_nice=0,
+        target='this guardian process only',foreign_process_changes=0,affinity=[31],scheduler='SCHED_OTHER',epoch=time.time())
 
 
 def verify_predecessor(authority,system,require_full_census=False):
@@ -332,8 +369,62 @@ def verify_predecessor(authority,system,require_full_census=False):
     # cgroup deliberately retains original scientific sessions and is not drained.
     old.frozen_context(prior,authority['predecessor_authority']['path'])
     census=system.processes() if require_full_census else None
+    spent_owner5=verify_spent_owner5(authority,system)
     return dict(authority=prior,state=state,attestation=attestation,old_owner_unit=owner,
-        old_guardian_unit=guardian,guardian_historical_exit='UNKNOWN_NOT_INFERRED_FROM_UNLOADED_DEFAULTS',census=census)
+        old_guardian_unit=guardian,guardian_historical_exit='UNKNOWN_NOT_INFERRED_FROM_UNLOADED_DEFAULTS',
+        spent_owner5=spent_owner5,census=census)
+
+
+def verify_spent_owner5(authority,system):
+    """Retain failed5 separately; scientific state is still the original owner4."""
+    binding=authority['spent_owner5'];old5=verify_pin(binding['authority']);failure=verify_pin(binding['activation_failure'])
+    claim=verify_pin(binding['activation_claim']);execution=verify_pin(binding['materializer_receipt'])
+    review=verify_pin(binding['actual_failure_kernel_review']);ledger=verify_pin(authority['paid_scope_ledger'])
+    require(binding['authority']['sha256']==OWNER5_AUTHORITY_SHA
+        and binding['actual_failure_kernel_review']['sha256']==OWNER5_FAILURE_KERNEL_REVIEW_SHA,
+        'the exact admitted owner5 authority and actual failure review are required')
+    require(authority['historical_owner5_start_ticks_unavailable_acknowledged'] is True,
+        'root acknowledgement of unavailable historical owner5 kernel anchors required')
+    require(old5['activation']==dict(legacy_generations_spent=4,explicit_additional_activation=1,activation_limit=1,cumulative_owner_count=5)
+        and old5['authority_id']=='7a16315cdb234785970c9d608a34d501' and old5['status']=='ADMITTED'
+        and old5['execution_source']['head']=='7fb9d80874f61caced6ba8e888cb2b271f413c75',
+        'exact spent owner5 authority/source differs')
+    require(failure['activation_spent'] is True and failure['automatic_retry'] is False
+        and failure['authority']==binding['authority'] and claim['authority']==binding['authority']
+        and execution['status']=='FAILED_ONCE_NO_RETRY' and execution['actual_authority']==binding['authority']
+        and failure['error']=="RuntimeError('actual new control lifetime/unit/cwd/argv/scheduling differs: guardian')",
+        'owner5 once-only failure/claim graph differs')
+    require(old5['grant']['prior_control_CPU_seconds']+old5['guardian_CPU_reserve']+100==OWNER5_FIXED_PAID_CPU
+        and ledger['retained_owner5_fixed_paid_CPU']==OWNER5_FIXED_PAID_CPU
+        and ledger['new_failure_inspection_CPU_debit']==10 and ledger['new_preparation_CPU_debit']==200
+        and ledger['new_activation_wrapper_CPU_reserve']==30 and ledger['new_prior_control_CPU']==OWNER6_PRIOR_CPU,
+        'owner5 retained fixed price or new paid ledger differs')
+    require(ledger['no_unused_old_reserve_credit'] is True and ledger['owner5_terminal_wall_upper_bound_CPU']<100,
+        'spent owner5 tail is not conservatively funded')
+    for relative,sha in old5['execution_source']['runtime_sha256'].items():
+        require(digest(Path(old5['execution_source']['root'])/relative)==sha,'frozen failed owner5 source changed')
+    observed=[]
+    for item in review['units']:
+        expected=item['properties'];name=item['unit'];props=system.unit(name);pid=int(expected['ExecMainPID'])
+        require(name in (old5['new_unit'],old5['guardian_unit']) and props.get('Id')==name
+            and props.get('LoadState')=='loaded' and props.get('ActiveState')=='failed' and props.get('SubState')=='failed'
+            and props.get('MainPID')=='0' and props.get('ExecMainPID')==str(pid) and props.get('ExecMainStatus')=='1'
+            and props.get('Result')=='exit-code' and props.get('InvocationID')==expected['InvocationID']
+            and props.get('Restart')=='no' and props.get('NRestarts')=='0' and props.get('KillMode')=='process'
+            and props.get('RemainAfterExit')=='yes' and props.get('ExecStart')==expected['ExecStart'],
+            'spent owner5 retained failed unit/invocation differs')
+        # No failure-time /proc start anchor was saved. Require the recorded
+        # ExecMainPID entirely absent; never infer a reused PID's old lifetime.
+        require(system.process(pid) is None,'spent owner5 PID present; unknown/reused lifetime cannot be waived')
+        observed.append(dict(unit=name,properties=props,ExecMainPID=pid,current_process_absent=True,
+            historical_process_start_ticks='UNKNOWN_NOT_FABRICATED'))
+    require(len(observed)==2 and len({row['unit'] for row in observed})==2,'both exact failed owner5 units required')
+    runtime=Path(old5['runtime'])
+    require(all(not (runtime/name).exists() for name in ('launch_attestation.json','ready.json','state.json',
+        'resource_ownership_epoch.json','registration.json','activation_verified.json','guardian_heartbeat.json')),
+        'owner5 bootstrap/adoption history changed')
+    return dict(authority=binding['authority'],failure=binding['activation_failure'],units=observed,
+        paid_CPU_retained=OWNER5_FIXED_PAID_CPU,scientific_predecessor='unchanged owner4 state',no_retry=True)
 
 
 def verify_original_locks(authority,require_free=False):
@@ -352,10 +443,12 @@ def validate_authority(path,expected_sha=None,unclaimed=False,allow_proposed=Fal
     if expected_sha is not None:require(digest(path)==expected_sha,'root admitted authority hash differs')
     require(a.get('schema')=='r155_baseline_control_authority_v1'
         and a.get('status') in (('ADMITTED','PROPOSED') if allow_proposed else ('ADMITTED',)),
-        'distinct explicit fifth-owner admission absent')
+        'distinct explicit sixth-owner admission absent')
     require(a.get('activation')==ACTIVATION and a.get('automatic_retry') is False
         and a.get('cached_restart_authorized') is False and a.get('numerical_parameters_changed') is False,
-        'one explicit fifth control activation required; no retry or numerical change')
+        'one explicit sixth control activation required; no retry or numerical change')
+    require(a.get('historical_owner5_start_ticks_unavailable_acknowledged') is True,
+        'unavailable historical owner5 kernel anchors need explicit root acknowledgement')
     require(isinstance(a.get('authority_id'),str) and len(a['authority_id'])==32
         and all(ch in '0123456789abcdef' for ch in a['authority_id']),'new exact authority UUID required')
     runtime=Path(a['runtime']);require(runtime.parent==DATA/'launch_prep'
@@ -367,12 +460,14 @@ def validate_authority(path,expected_sha=None,unclaimed=False,allow_proposed=Fal
         and grant['wall_seconds']==604800 and grant['control_CPU_seconds']==ORIGINAL_CPU,
         'original seven-day absolute clock and cumulative28800CPU must be preserved')
     require(a['predecessor_control_CPU_retained']==PRIOR_CONTROL_CPU
-        and a['predecessor_unobserved_tail_CPU_reserve']>=60 and a['preparation_CPU_debit']==600
-        and a['activation_wrapper_CPU_reserve']==30 and grant['prior_control_CPU_seconds']==
-        sum(a[k] for k in ('predecessor_control_CPU_retained','predecessor_unobserved_tail_CPU_reserve','preparation_CPU_debit','activation_wrapper_CPU_reserve')),
-        'old charges/unobserved tail/new preparation and activation debit must all remain funded')
+        and a['predecessor_unobserved_tail_CPU_reserve']==60 and a['preparation_CPU_debit']==200
+        and a['retained_owner5_fixed_control_CPU']==OWNER5_FIXED_PAID_CPU and a['failure_inspection_CPU_debit']==10
+        and a['activation_wrapper_CPU_reserve']==30 and grant['prior_control_CPU_seconds']==OWNER6_PRIOR_CPU
+        and grant['prior_control_CPU_seconds']==sum(a[k] for k in ('retained_owner5_fixed_control_CPU',
+            'failure_inspection_CPU_debit','preparation_CPU_debit','activation_wrapper_CPU_reserve')),
+        'all owner5 fixed reserves plus failure audit/new preparation/activation must remain paid without credit')
     require(grant['prior_control_CPU_seconds']+a['guardian_CPU_reserve']+10<ORIGINAL_CPU
-        and a['guardian_CPU_reserve']>=600 and grant['administrative_source_check_CPU_reservation']>=.5,
+        and a['guardian_CPU_reserve']==600 and grant['administrative_source_check_CPU_reservation']>=.5,
         'finite cumulative control budget/reserves are insufficient')
     require(grant.get('administrative_poll_CPU_reservation',0)>=.1,
         'per-poll administrative subprocess costs must remain conservatively funded')
@@ -389,12 +484,19 @@ def validate_authority(path,expected_sha=None,unclaimed=False,allow_proposed=Fal
     require(prep['execution_source']==a['execution_source'] and a['predecessor_authority']==prep['predecessor_authority']
         and a['predecessor_state']==prep['predecessor_state'] and a['predecessor_attestation']==prep['predecessor_attestation']
         and a['predecessor_state_original']==prep['predecessor_state_original']
-        and a['original_dispatch_locks']==prep['original_dispatch_locks'],'exact prepared predecessor/locks/source differ')
+        and a['original_dispatch_locks']==prep['original_dispatch_locks']
+        and a['spent_owner5']==prep['spent_owner5'] and a['paid_scope_ledger']==prep['paid_scope_ledger'],
+        'exact prepared predecessor/failed5/paidledger/locks/source differ')
     check_pins(prep['dependency_sha256'])
     check_pins(prep['predecessor_runtime_sha256'])
+    check_pins(prep['spent_owner5_runtime_sha256'])
+    require(a['guardian_priority_policy']=='unit0_kernel10_self_only_before_attestation'
+        and a['guardian_priority_compatibility_proof']==prep['guardian_priority_compatibility_proof'],
+        'explicit guardian unit/kernel compatibility policy differs')
+    verify_guardian_priority_proof(a['guardian_priority_compatibility_proof'])
     if not allow_proposed:
         review=verify_pin(a['source_review'])
         require(str(review.get('status','')).startswith('PASS') and review.get('administrative_runtime_review') is True
             and review.get('execution_source')==a['execution_source'],'distinct complete actual-source runtime review required')
-    if unclaimed:require(not (runtime/'activation_claim.json').exists(),'fifth-owner activation spent; no retry')
+    if unclaimed:require(not (runtime/'activation_claim.json').exists(),'sixth-owner activation spent; no retry')
     return a

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One explicitly admitted fifth baseline control owner; original science stays frozen."""
+"""One explicitly admitted sixth baseline control owner; original science stays frozen."""
 from __future__ import annotations
 import argparse
 import copy
@@ -24,26 +24,45 @@ def cpu_limits(pid):
     return match.group(1),match.group(2)
 
 
-def control_capsule(a,attestation,mode,system):
+def observe_control_capsule(a,attestation,mode,system):
+    """All final readiness predicates with explicit unavailable kernel facts."""
     label='owner' if mode=='run' else 'guardian';expected=a['control_intent' if mode=='run' else 'guardian_intent']
     capsule=attestation[label];current=system.process(capsule['process']['pid']);props=system.unit(expected['unit'])
-    c.require(current is not None and capsule['intent']==expected and c.core().same_process(current,capsule['process'])
-        and current['argv']==expected['argv'] and current['cwd']==str(ROOT) and current['uids']==[os.getuid()]*4
-        and current['cpus']==[31] and props.get('MainPID')==str(current['pid'])
-        and props.get('ActiveState')=='active' and props.get('SubState')=='running'
-        and props.get('InvocationID')==capsule['unit_properties'].get('InvocationID') and bool(props.get('InvocationID'))
-        and props.get('Restart')=='no' and props.get('NRestarts')=='0' and props.get('KillMode')=='process'
-        and props.get('RemainAfterExit')=='yes' and props.get('WorkingDirectory')==str(ROOT)
-        and str(ENTRY) in props.get('ExecStart','') and props.get('Nice')==str(expected['nice'])
-        and c.old.runtime_seconds(props.get('RuntimeMaxUSec',''))==a['unit_runtime_max_seconds'],
-        'actual new control lifetime/unit/cwd/argv/scheduling differs: '+label)
-    c.require(os.getpriority(os.PRIO_PROCESS,current['pid'])==expected['nice']
-        and os.sched_getscheduler(current['pid'])==os.SCHED_OTHER,'actual control kernel scheduler differs')
-    for thread in (Path('/proc')/str(current['pid'])/'task').iterdir():
-        c.require(os.sched_getaffinity(int(thread.name))=={31},'administrative thread escaped CPU31')
+    checks=dict(process_present=current is not None,intent=capsule['intent']==expected)
+    checks.update(same_process=c.core().same_process(current,capsule['process']),
+        active=props.get('ActiveState')=='active',running=props.get('SubState')=='running',
+        invocation=bool(props.get('InvocationID')) and props.get('InvocationID')==capsule['unit_properties'].get('InvocationID'),
+        restart=props.get('Restart')=='no',restart_count=props.get('NRestarts')=='0',kill_mode=props.get('KillMode')=='process',
+        retained=props.get('RemainAfterExit')=='yes',unit_cwd=props.get('WorkingDirectory')==str(ROOT),
+        unit_IO_class=props.get('IOSchedulingClass')=='3',
+        unit_entry=str(ENTRY) in props.get('ExecStart',''),unit_nice=props.get('Nice')==str(expected['unit_nice']),
+        original_deadline=c.old.runtime_seconds(props.get('RuntimeMaxUSec',''))==a['unit_runtime_max_seconds'])
+    kernel={};errors=[]
+    if current is not None:
+        checks.update(argv=current['argv']==expected['argv'],cwd=current['cwd']==str(ROOT),uids=current['uids']==[os.getuid()]*4,
+            affinity=current['cpus']==[31],main_pid=props.get('MainPID')==str(current['pid']))
+        try:
+            kernel=dict(nice=os.getpriority(os.PRIO_PROCESS,current['pid']),scheduler=os.sched_getscheduler(current['pid']),
+                cpu_limits=cpu_limits(current['pid']),executable=os.readlink(Path('/proc')/str(current['pid'])/'exe'),
+                threads=[dict(tid=int(thread.name),cpus=sorted(os.sched_getaffinity(int(thread.name))))
+                    for thread in (Path('/proc')/str(current['pid'])/'task').iterdir()])
+        except OSError as error:errors.append(dict(error=type(error).__name__,detail=str(error)))
     required=('unlimited','unlimited') if mode=='run' else ('600','600')
-    c.require(cpu_limits(current['pid'])==required,'control CPU inheritance differs; numerical limits must stay unchanged')
-    return current,props
+    checks.update(kernel_available=bool(kernel) and not errors,kernel_nice=kernel.get('nice')==expected['kernel_nice'],
+        kernel_scheduler=kernel.get('scheduler')==os.SCHED_OTHER,kernel_cpu_limits=kernel.get('cpu_limits')==required,
+        kernel_executable=bool(kernel.get('executable')) and Path(kernel['executable']).resolve()==Path(expected['argv'][0]).resolve(),
+        every_thread_affinity=bool(kernel.get('threads')) and all(thread['cpus']==[31] for thread in kernel['threads']))
+    return dict(label=label,epoch=time.time(),checks=checks,all_pass=all(checks.values()),
+        failed_fields=[key for key,value in checks.items() if not value],process=current,unit_properties=props,
+        kernel=kernel,actual_kernel_IO_class_independently_verified=False,unavailable=errors,expected_intent=expected)
+
+
+def control_capsule(a,attestation,mode,system):
+    observation=observe_control_capsule(a,attestation,mode,system)
+    if not observation['all_pass']:
+        error=RuntimeError('actual new control capsule failed: '+repr(observation['failed_fields']))
+        error.observation=observation;raise error
+    return observation['process'],observation['unit_properties']
 
 
 def wait_attestation(a,path,mode,unit,system):
@@ -268,6 +287,10 @@ def guard_once(path,unit,system,a,attestation,now=None):
 
 def guard(path,unit,system=None):
     path=Path(path).resolve();a=c.validate_authority(path);system=system or c.System(a['expected_host_pid_namespace'])
+    c.require(unit==a['guardian_unit'],'guardian bootstrap unit differs')
+    bootstrap=c.establish_guardian_priority()
+    c.core().immutable(Path(a['runtime'])/'guardian_priority_bootstrap.json',dict(authority=c.pin(path),
+        execution_source=a['execution_source'],compatibility_proof=a['guardian_priority_compatibility_proof'],**bootstrap))
     attestation,_=wait_attestation(a,path,'guard',unit,system)
     while guard_once(path,unit,system,a,attestation)=='wait':system.sleep(a['poll_seconds'])
 

@@ -1,4 +1,8 @@
-# Explicit fifth baseline control owner
+# Historical fifth-owner design
+
+Owner5 is spent and failed. Do not execute its activation instructions. The
+current source is the distinct owner6 continuation described in
+[the owner6 runbook](pricefm_r155_baseline_owner6_20261027.md).
 
 This feature prepares one baseline administrative continuation from frozen
 `bfe540920998eeeef398cfa1aad93f8d408ed6ca`. Preparation does not start a service,

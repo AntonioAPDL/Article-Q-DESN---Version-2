@@ -162,6 +162,22 @@ class TestLifecycle(unittest.TestCase):
 
 
 class TestAuthorityGates(unittest.TestCase):
+    def test_dependency_source_uses_staged_alias_and_rejects_missing_stale_or_replaced_bytes(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);entry=root/'entry.py';entry.write_text('unchanged entry')
+            staged=root/'mirrored.py';staged.write_text('Jerez source bytes')
+            original='/unavailable/Jerez/source.py';aliases=root/'aliases.json';prep_pin={'path':'prep','sha256':'a'*64}
+            aliases.write_text(json.dumps(dict(preparation=prep_pin,read_aliases={original:str(staged)})))
+            prep=dict(execution_source_sha256={str(entry):h.digest(entry)},source_sha256={original:h.digest(staged)},input_files_sha256={original:h.digest(staged)})
+            grant=dict(preparation=prep_pin,read_aliases=h.pin(aliases))
+            self.assertEqual(h.verify_staged_inputs(prep,grant)['verified_staged_dependency_source_files'],1)
+            staged.write_text('replaced source')
+            with self.assertRaisesRegex(RuntimeError,'read-alias bytes differ'):h.verify_staged_inputs(prep,grant)
+            staged.unlink()
+            with self.assertRaises(FileNotFoundError):h.verify_staged_inputs(prep,grant)
+            staged.write_text('Jerez source bytes');entry.write_text('replaced entry')
+            with self.assertRaisesRegex(RuntimeError,'pinned bytes changed'):h.verify_staged_inputs(prep,grant)
+
     def fixture(self):
         a=json.loads((HERE.parents[1]/'config/pricefm_stage_r155_lv_handoff_authority_template.json').read_text())
         a.update(source={'branch':'work/pricefm-r155-lv-handoff-test','head':'1'*40},scope_id='new',

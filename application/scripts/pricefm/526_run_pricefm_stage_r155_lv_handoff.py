@@ -171,13 +171,28 @@ def observe(grant,owned_child=None):
         classifier_changed=False,foreign_processes_signalled=False)
 
 
-def preflight(a,identity,admitted=True):
-    glob,grant,prep=validate(a,identity,time.time(),socket.gethostname().split('.')[0],admitted)
+def verify_staged_inputs(prep,grant):
     verify_hashes(prep['execution_source_sha256'])
     aliases=verify_pin(grant['read_aliases'])
     require(aliases['preparation']==grant['preparation'] and set(aliases['read_aliases'])==set(prep['input_files_sha256']),
             'entire original staged input member set differs')
+    require(set(prep['source_sha256']).issubset(aliases['read_aliases'])
+            and all(prep['input_files_sha256'][p]==sha for p,sha in prep['source_sha256'].items()),
+            'complete dependency-source ledger must match actual staged input identities')
+    # These Jerez-origin dependency paths must resolve through the exact byte
+    # mirrors. They are also members of the 770 staged inputs, not 610 extra
+    # unaccounted files. Verify the distinct declared ledger explicitly.
+    for name,expected in prep['source_sha256'].items():resolve_pin(name,expected,aliases['read_aliases'])
     for name,expected in prep['input_files_sha256'].items():resolve_pin(name,expected,aliases['read_aliases'])
+    return dict(verified_execution_source_files=len(prep['execution_source_sha256']),
+                verified_staged_dependency_source_files=len(prep['source_sha256']),
+                verified_staged_input_files=len(prep['input_files_sha256']),
+                dependency_sources_are_subset_of_staged_inputs=True)
+
+
+def preflight(a,identity,admitted=True):
+    glob,grant,prep=validate(a,identity,time.time(),socket.gethostname().split('.')[0],admitted)
+    inputs=verify_staged_inputs(prep,grant)
     drain=predecessor_drain(a)
     permit=permit_free(glob,grant['permit_id'],a['permit_identity'])
     require(permit is not None,'same original physical permit busy; no wait or retry')
@@ -187,7 +202,7 @@ def preflight(a,identity,admitted=True):
     # Pressure reader writes nothing into the old scientific namespace.
     resources=pressure(grant,Path(a['output_dir']).parent.parent,growth_GiB=0)
     return glob,grant,prep,dict(epoch=time.time(),drain=drain,permit=permit,peers=peers,resources=resources,
-        verified_execution_source_files=len(prep['execution_source_sha256']),verified_staged_input_files=len(prep['input_files_sha256']),
+        **inputs,
         LV_calendar_revalidated=True,original_LV_first_T0=grant['start_epoch'],original_LV_expiry=grant['expires_epoch'])
 
 

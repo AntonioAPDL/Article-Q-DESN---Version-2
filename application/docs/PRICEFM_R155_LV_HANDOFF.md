@@ -29,7 +29,9 @@ The original LV T0 is 2026-10-27 03:37:12.528510 UTC and its absolute expiry is
    and exact `unchanged_LV_authority` and `predecessor_queue_authority` pins.
 3. A PROPOSED authority and PROPOSED amendment support a metadata-only rehearsal:
    `taskset -c 31 PINNED_PY -B NEW_SOURCE/application/scripts/pricefm/526_run_pricefm_stage_r155_lv_handoff.py --authority PROPOSAL --authority-sha256 SHA --audit-proposal`.
-   This verifies all 610 original source and 770 staged input pins, full-prefix
+   This verifies all four execution entry/helper pins and all 610 dependency
+   source pins through their actual staged aliases (these 610 are a subset of
+   the 770 staged input pins), full-prefix
    calendar, exact old process lifetimes/unit drain, current unchanged peer
    classifier, resource floors and the **same existing** flock. It never claims
    LV or dispatches a numerical child. Retain its actual measured CPU receipt.

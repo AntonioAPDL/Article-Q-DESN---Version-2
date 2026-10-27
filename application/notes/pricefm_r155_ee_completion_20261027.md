@@ -42,12 +42,19 @@ authority. The original global T0/expiry remain unchanged. Both absolute and
 active execution clocks are finite; a stop remains incomplete without retry.
 
 The suggested new envelope prices both whole S0 components without a partial
-discount:4500 CPU prefix,1200 replacement,1200 admin/drain including420 guardian,
-600 prior preparation,7500 total,4h absolute/active maximum,0.5 minimum delivered
+discount:5500 CPU prefix,1200 replacement,1200 admin/drain including420 guardian,
+600 separate new prior preparation,8500 child total,5h active maximum and16h
+fixed absolute window including the LV wait,0.5 minimum delivered
 share,900s drain and120s atomic allowance. This must be backed by the concrete
 pricing record and root review. The old10961.212634 conservative paid CPU and
 8360.870062 observed inclusive CPU are distinct frozen views, never added or
 refunded. New600 prior is engineering/preparation funding, not that old charge.
+An explicitly root-admitted conditional endowment funds a further120 CPU for
+the admin31 once-only controller, so the combined new bound is8620 CPU. It pins
+the entire child authority template before waiting, including its first T0
+and expiry. The controller may fill only the future completed-LV-drain proof
+pin, then dispatch once. Any other field change, unsuccessful LV, calendar or
+peer/resource failure stops without retry. It never resets a clock at LV drain.
 
 Reproduce metadata preparation from the clean committed feature worktree:
 

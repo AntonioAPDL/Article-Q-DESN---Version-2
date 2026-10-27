@@ -21,7 +21,8 @@ def prepare(destination):
     immutable(destination/'carry_inventory.json',inventory)
     sources=[Path(__file__),Path(__file__).with_name('524_run_pricefm_stage_r155_ee_completion.py'),
         Path(__file__).with_name('pricefm_r155_completion_contract.py'),
-        Path(__file__).with_name('pricefm_r155_completion_inventory.py')]
+        Path(__file__).with_name('pricefm_r155_completion_inventory.py'),
+        Path(__file__).with_name('525_run_pricefm_stage_r155_ee_conditional.py')]
     value=dict(schema='r155_ee_completion_preparation_v1',status='PREPARED_NOT_ADMITTED',
         study='EE',source=identity,execution_source_sha256={str(p):digest(p) for p in sources},
         composite_inventory=pin(destination/'carry_inventory.json'),
@@ -30,7 +31,7 @@ def prepare(destination):
         audit_key=old['audit_key'],control='C0',negative_control='C5',
         previous_paid_scope=inventory['previous_paid_scope'],remaining_component_names=MISSING,
         task_estimates=estimates,historical_model_only_two_full_components_CPU=floor,
-        historical_prefix_floor_CPU=4500,historical_replacement_floor_CPU=1200,
+        historical_prefix_floor_CPU=5500,historical_replacement_floor_CPU=1200,
         new_campaign_parent=str(DATA/'campaigns'),max_new_tasks=2,max_new_D=0,max_new_S0=2,
         paired_cache_equivalence=dict(task=MISSING[0],chunk='clock00_part000',
             deterministic_rtol=1e-11,deterministic_atol=1e-10,

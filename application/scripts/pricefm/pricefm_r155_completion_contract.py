@@ -188,7 +188,7 @@ def validate_authority(a, prep, prep_path, identity, now, hostname):
     require(prior+a['full_prefix_CPU']+a['replacement_CPU']+a['admin_drain_CPU'] <= a['total_CPU_cap'],
             'full prefix and reserves exceed cap')
     available = a['expires_epoch']-now-a['drain_seconds']
-    required = (a['full_prefix_CPU']+a['replacement_CPU'])/a['min_delivered_share']
+    required = (a['full_prefix_CPU']+a['replacement_CPU']+a['admin_drain_CPU'])/a['min_delivered_share']
     require(available >= required+a['maximum_atomic_wall_seconds'],
             'finite whole-prefix calendar does not fit')
     require(a['max_execution_wall_seconds']-a['drain_seconds']>=required+a['maximum_atomic_wall_seconds'],
@@ -206,6 +206,16 @@ def validate_authority(a, prep, prep_path, identity, now, hostname):
     require(drain.get('status')=='PASS' and drain.get('LV_complete') is True
             and drain.get('exact_lifetimes_gone') is True and drain.get('same_global_flock_free') is True,
             'completed LV physical drain proof absent')
+    if 'root_conditional_endowment' in drain:
+        endowment=verify_pin(drain['root_conditional_endowment'])
+        template=verify_pin(endowment['child_authority_template'])
+        require(endowment.get('status')=='ROOT_CONDITIONALLY_ADMITTED'
+                and endowment.get('schema')=='r155_ee_conditional_endowment_v1'
+                and endowment.get('source')==identity and endowment.get('max_dispatches')==1,
+                'root conditional endowment differs')
+        require(template.get('LV_completed_drain_proof') is None
+                and dict(template,LV_completed_drain_proof=a['LV_completed_drain_proof'])==a,
+                'conditional derived authority changed frozen scientific/budget/clock fields')
     validate_LV_completion(prep['LV_completed_gate'])
     require(a.get('hard_cgroup_isolation_claimed') is False, 'false cgroup isolation claim')
     require(0<a.get('peer_census_cadence_seconds',0)<=5,'bounded peer census cadence must be <=5 seconds')

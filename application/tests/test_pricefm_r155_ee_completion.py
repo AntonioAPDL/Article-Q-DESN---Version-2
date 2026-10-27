@@ -22,6 +22,7 @@ def module(name,path):
 base=module('r155_inherited_test_contract',Path(__file__).with_name('test_pricefm_r154_predictions.py'))
 base.c=c
 runner=module('r155_runner_test',HERE/'524_run_pricefm_stage_r155_ee_completion.py')
+conditional=module('r155_conditional_test',HERE/'525_run_pricefm_stage_r155_ee_conditional.py')
 
 
 class TestCompletionAuthority(base.TestAuthority):
@@ -52,7 +53,10 @@ class TestCompletionAuthority(base.TestAuthority):
 
 
 class TestPeers(base.TestPeerAndLifetime):
-    def test_foreign_argv_not_retained_in_conflict(self):
+    # Replace the inherited old privacy assertion with the specifically
+    # authorized contemporaneous observable-context receipt contract.
+    test_foreign_argv_not_retained_in_conflict=None
+    def test_observable_argv_cwd_and_all_thread_masks_are_retained(self):
         row=self.row(executable='/python',cwd='/work',threads=[{'tid':123,'cpus':[62]}])
         conflict=c.peer_conflicts(30,{'allowed_intersecting_processes':[]},set(),[row])[0]
         for key in ('argv','executable','cwd','threads','pid','start_ticks','boot_id'):
@@ -130,6 +134,106 @@ class TestInventoryBoundaries(unittest.TestCase):
         import subprocess
         script="import sys;sys.path.insert(0,sys.argv[1]);import pricefm_r155_completion_contract,pricefm_r155_completion_inventory;assert 'numpy' not in sys.modules"
         subprocess.run([sys.executable,'-B','-c',script,str(HERE)],check=True)
+
+
+class TestLVCompletionAndConditional(unittest.TestCase):
+    def fixture(self,root):
+        source={'branch':'frozenLV','head':'cd113800'}
+        authority={'source':source,'scope_id':'LVscope','output_dir':str(root)}
+        original=root/'original_authority.json';c.immutable(original,authority)
+        c.immutable(root/'authority.json',authority)
+        execution={'source':source,'scope_id':'LVscope','authority':c.pin(root/'authority.json')}
+        c.immutable(root/'assessment.json',{'status':'COMPLETE_TRAINING_DIAGNOSTIC_EXPOSED_NOT_PROMOTED','calls':12,'execution':execution})
+        c.immutable(root/'assessment_seal.json',{'assessment':c.pin(root/'assessment.json')})
+        c.immutable(root/'exit_receipt.json',{'status':'COMPLETE_DIAGNOSTIC'})
+        dead={'pid':987654,'start_ticks':1,'boot_id':'synthetic'}
+        c.immutable(root/'claim.json',{'authority':c.pin(original),'process':dead})
+        c.immutable(root/'supervisor_exit_receipt.json',{'child_exit_code':0,'parent':dead,'payload':dead})
+        return {'authority':c.pin(original),'output_dir':str(root)},dead
+
+    def test_actual_complete_packet_and_negative_status_source_seal_lifetime_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);gate,dead=self.fixture(root)
+            with patch.object(c,'process_identity',return_value=None):c.validate_LV_completion(gate)
+            for filename,key,value in [('assessment.json','calls',11),('assessment.json','status','INCOMPLETE'),
+                    ('exit_receipt.json','status','INCOMPLETE'),('supervisor_exit_receipt.json','child_exit_code',1)]:
+                path=root/filename;before=path.read_text();record=json.loads(before);record[key]=value;path.write_text(json.dumps(record))
+                with self.subTest(filename=filename,key=key),self.assertRaises(RuntimeError):c.validate_LV_completion(gate)
+                path.write_text(before)
+            assessment=root/'assessment.json';before=assessment.read_text();record=json.loads(before)
+            record['execution']['source']={'head':'forged'};assessment.write_text(json.dumps(record))
+            c.read(root/'assessment_seal.json')
+            (root/'assessment_seal.json').write_text(json.dumps({'assessment':c.pin(assessment)}))
+            with self.assertRaises(RuntimeError):c.validate_LV_completion(gate)
+            assessment.write_text(before)
+            (root/'assessment_seal.json').write_text(json.dumps({'assessment':c.pin(assessment)}))
+            with patch.object(c,'process_identity',return_value=dead),self.assertRaises(RuntimeError):c.validate_LV_completion(gate)
+
+    def test_conditional_derivation_changes_only_future_proof_pin(self):
+        template={'LV_completed_drain_proof':None,'source':'actual','start_epoch':10,'expires_epoch':20,'max_new_tasks':2,'full_prefix_CPU':5500}
+        proof={'path':'future','sha256':'a'*64}
+        value=conditional.derive_child(template,proof)
+        self.assertEqual(value,dict(template,LV_completed_drain_proof=proof))
+        self.assertIsNone(template['LV_completed_drain_proof'])
+        with self.assertRaises(RuntimeError):conditional.derive_child(value,proof)
+
+    def test_entire_control_budget_and_fixed_expiry_must_fit(self):
+        template={'full_prefix_CPU':5500,'replacement_CPU':1200,'admin_drain_CPU':1200,
+            'min_delivered_share':.5,'drain_seconds':900,'maximum_atomic_wall_seconds':120,
+            'expires_epoch':20000,'max_execution_wall_seconds':18000}
+        self.assertEqual(conditional.whole_calendar(template,1000),16820)
+        with self.assertRaises(RuntimeError):conditional.whole_calendar(template,4000)
+        with self.assertRaises(RuntimeError):conditional.whole_calendar(dict(template,max_execution_wall_seconds=14400),1000)
+
+    def test_conditional_live_failed_and_wrong_unit_LV_cannot_dispatch(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);dead={'pid':987654,'start_ticks':1,'boot_id':'fixture'}
+            authority={'path':'lvadminauthority','sha256':'a'*64};original={'path':'originalLV','sha256':'b'*64}
+            admin={'output_dir':str(root),'source':{'head':'LVadmin'},'unit':'lvunit'}
+            prep={'LV_completed_gate':{'authority':original}}
+            claim={'authority':authority,'source':admin['source'],'original_LV_authority':original,
+                'process':dead,'unit':{'InvocationID':'invocation'}}
+            c.immutable(root/'claim.json',claim)
+            with patch.object(c,'process_identity',return_value=dead):
+                self.assertIsNone(conditional.LV_ready(admin,prep,authority))
+            with patch.object(c,'process_identity',return_value=None),self.assertRaises(RuntimeError):
+                conditional.LV_ready(admin,prep,authority)
+            receipt={'status':'COMPLETE_LV_TRAINING_DIAGNOSTIC_NOT_PROMOTED','source':admin['source'],
+                'original_LV_authority':original,'LV':{'physical_drain':True}}
+            c.immutable(root/'exit_receipt.json',receipt)
+            with patch.object(c,'process_identity',return_value=dead),patch.object(conditional,'systemd') as unit:
+                self.assertIsNone(conditional.LV_ready(admin,prep,authority));unit.assert_not_called()
+            unit={'InvocationID':'invocation','Id':'lvunit','MainPID':'0','ActiveState':'inactive',
+                'Restart':'no','NRestarts':'0','KillMode':'process','Result':'success','ExecMainStatus':'0'}
+            with patch.object(c,'process_identity',return_value=None),patch.object(conditional,'systemd',return_value=unit),patch.object(c,'validate_LV_completion') as validate:
+                self.assertIsNotNone(conditional.LV_ready(admin,prep,authority));validate.assert_called_once()
+            for change in ({'InvocationID':'restarted'},{'MainPID':'1'},{'Result':'exit-code'},{'ExecMainStatus':'1'}):
+                with patch.object(c,'process_identity',return_value=None),patch.object(conditional,'systemd',return_value=dict(unit,**change)),self.assertRaises(RuntimeError):
+                    conditional.LV_ready(admin,prep,authority)
+            (root/'exit_receipt.json').write_text(json.dumps(dict(receipt,status='STOPPED_NO_RETRY')))
+            with self.assertRaises(RuntimeError):conditional.LV_ready(admin,prep,authority)
+
+    def test_private_controller_soft_cap_preserves_child_hard_ceiling_and_held_cleanup(self):
+        import subprocess
+        script=r'''
+import sys,os,subprocess,resource,time,signal
+sys.path.insert(0,sys.argv[1])
+import importlib.util
+spec=importlib.util.spec_from_file_location('conditional',sys.argv[1]+'/525_run_pricefm_stage_r155_ee_conditional.py')
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+cpu0=m.c.cpu_seconds()
+limit=m.apply_limits({'administrative_live_CPU_cap':5},{'total_CPU_cap':10,'prior_CPU_charged_seconds':0},cpu0)
+assert resource.getrlimit(resource.RLIMIT_CPU)[0]<=5 and resource.getrlimit(resource.RLIMIT_CPU)[1]>=10
+parent=m.c.process_identity(os.getpid())
+p=subprocess.Popen([sys.executable,'-B','-c','import resource,time;assert resource.getrlimit(resource.RLIMIT_CPU)==(10,10);time.sleep(30)'],preexec_fn=lambda:m.arm(parent,limit))
+identity=m.c.process_identity(p.pid)
+time.sleep(.1)
+m.stop_held(p,identity)
+_,status,usage=os.wait4(p.pid,0);p.returncode=os.waitstatus_to_exitcode(status)
+assert p.returncode==-signal.SIGKILL
+assert usage.ru_utime+usage.ru_stime>=0
+'''
+        subprocess.run([sys.executable,'-B','-c',script,str(HERE)],check=True,timeout=5)
 
 
 if __name__=='__main__':unittest.main()

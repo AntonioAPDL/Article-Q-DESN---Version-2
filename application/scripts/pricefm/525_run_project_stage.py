@@ -20,8 +20,9 @@ def module(name):
     result=importlib.util.module_from_spec(spec);spec.loader.exec_module(result);return result
 registry=module('525_candidate_registry');physical=module('524_run_toy_validation')
 owned_guard=module('525_owned_stage_guard')
+native=module('527_native_runtime')
 base=physical.base;ref=base.ref
-AUDIT=Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_chat_continuation_20261021/r154_parallel_repair_20261026/certificates/conditional_pilot')
+AUDIT=Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r157_parallel_implementation_20261028/local/production')
 RESERVATIONS={registry.NO3:11321.738,registry.AT:17079.5}
 FINALIZATION_TAIL_CPU_SECONDS=30.0
 
@@ -72,7 +73,7 @@ def load_config(path):
 def authority(config_path,grant_path,grant_sha):
     if os.path.realpath('/proc/self/exe')!=os.path.realpath(ref.PINNED_PYTHON):raise ValueError('pinned Python required')
     g=pinned(dict(path=grant_path,sha256=grant_sha));cfg,original=load_config(config_path)
-    if cfg.get('production_runtime_compatible') is not True:
+    if cfg.get('production_runtime_compatible') is not True and not native.new_source(g.get('source',{})):
         raise ValueError('known filtered-R startup incompatibility: production stages closed')
     mode=g['mode'];target=g['target_name'];registry.target_record(original,target)
     expected='ROOT_ADMITTED_REAL_ZERO_OPTIMIZER_BRIDGE_ONLY' if mode=='bridge' else 'ROOT_ADMITTED_NEW_INITIALIZATION_PILOT_ONLY'
@@ -122,10 +123,16 @@ def authority(config_path,grant_path,grant_sha):
         raise ValueError('whole pilot wall reservation does not fit stage/global expiry')
     required={str(ROOT/'application/R/525_project_fullstate_consumer.R'),str(HERE/'525_project_bridge_or_pilot.R'),str(Path(__file__).resolve()),str(HERE/'525_candidate_registry.py'),str(HERE/'525_owned_stage_guard.py'),str(HERE/'524_run_toy_validation.py'),str(HERE/'522_fixed_state_control.py'),str(HERE/'522_certificate_reference.py')}
     required.add(cfg['fixedpoint_helper_source']['path'])
+    if native.new_source(g['source']):
+        required|={str(HERE/n) for n in ('527_native_runtime.py','527_project_bootstrap.R','526_traced_bootstrap_guard.py')}
+        required.add(str(ROOT/'application/R/526_scientific_boundary.c'))
+        native.grant_compatibility(g)
+        native.resolve_owner_admission(g,dict(path=str(Path(grant_path).resolve()),sha256=grant_sha))
     if not required<={v['path'] for v in g['source_bindings']}:raise ValueError('missing source pins')
     ref.verify_files(g['source_bindings'])
     if g['actual_R_runtime_binding']!=cfg['actual_R_runtime_binding']:raise ValueError('runtime pin differs')
     runtime=pinned(g['actual_R_runtime_binding'])
+    if native.new_source(g['source']) and g['bootstrap_exec_allowlist']!=native.exec_allowlist(runtime):raise ValueError('new source bootstrap exec list differs')
     ref.verify_files([dict(path=runtime['actual_executable'],sha256=runtime['actual_executable_sha256']),dict(path=runtime['Rscript'],sha256=runtime['Rscript_sha256'])])
     ref.verify_files([dict(path=str(Path(runtime['package_path'])/k),sha256=v) for k,v in runtime['package_files_sha256'].items()])
     ref.verify_files([dict(path=k,sha256=v) for k,v in runtime['loaded_shared_object_sha256'].items()])
@@ -135,10 +142,16 @@ def authority(config_path,grant_path,grant_sha):
             raise ValueError('AT blocked until accepted exact NO3 candidate')
     elif g.get('NO3_candidate_registration_pin') is not None:raise ValueError('NO3 is first, not a replay')
     proof=pinned(g['project_validation_pin'])
-    if proof.get('schema')!='r154_project_adapter_validation_v1' or proof.get('source')!=g['source'] or proof.get('toy_default_and_import_parity_pass') is not True or proof.get('checkpoint_all_factors_schedules_RNG_IO_verified') is not True or proof.get('stock_AST_exactly_preserved') is not True or proof.get('no_production_data_used') is not True:
+    new=native.new_source(g['source'])
+    if proof.get('schema')!=('r157_project_adapter_validation_v1' if new else 'r154_project_adapter_validation_v1') or proof.get('source')!=g['source'] or proof.get('toy_default_and_import_parity_pass') is not True or proof.get('checkpoint_all_factors_schedules_RNG_IO_verified') is not True or proof.get('stock_AST_exactly_preserved') is not True or proof.get('no_production_data_used') is not True:
         raise ValueError('new project adapter numerical/checkpoint proof absent')
     launch=pinned(proof['owned_guard_receipt_pin'])
-    if proof.get('actual_R_runtime_binding')!=cfg['actual_R_runtime_binding'] or proof.get('native_R_ELF_seccomp_startup_pass') is not True or launch.get('actual_R_runtime_binding')!=cfg['actual_R_runtime_binding'] or launch.get('source')!=g['source'] or launch.get('status')!='EXITED' or launch.get('returncode')!=0 or launch.get('launcher')!='pinned_native_ELF_no_Rscript_shell_wrapper' or not all(launch.get(k) is True for k in ['reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied']):
+    if new:
+        accounting=pinned(g['project_validation_accounting_pin'])
+        toy_grant=pinned(proof['root_grant_pin'])
+        if accounting.get('status')!='COMPLETE' or accounting.get('source')!=g['source'] or accounting.get('validation_pin')!=g['project_validation_pin'] or accounting.get('root_grant_pin')!=proof['root_grant_pin'] or not 0<accounting['whole_process_CPU_seconds']<=toy_grant['maximum_combined_CPU_seconds']<=300 or not 0<accounting['whole_wall_seconds']<=toy_grant['maximum_wall_seconds'] or proof.get('resource_accounting_required_before_production') is not True:raise ValueError('synthetic whole-stage payment/clock proof missing')
+    startup_ok=(proof.get('native_R_ELF_traced_bootstrap_scientific_filter_pass') is True and proof.get('native_R_ELF_seccomp_startup_pass') is False and native.completed(launch)) if new else (proof.get('native_R_ELF_seccomp_startup_pass') is True and all(launch.get(k) is True for k in ['reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied']))
+    if proof.get('actual_R_runtime_binding')!=cfg['actual_R_runtime_binding'] or not startup_ok or launch.get('actual_R_runtime_binding')!=cfg['actual_R_runtime_binding'] or launch.get('source')!=g['source'] or launch.get('status')!='EXITED' or launch.get('returncode')!=0 or launch.get('launcher')!='pinned_native_ELF_no_Rscript_shell_wrapper':
         raise ValueError('exact runtime native-ELF owned-guard startup proof absent')
     price=pinned(g['production_price_proof_pin'])
     if price.get('status')!='ROOT_REVIEWED_MEASURED_SOURCE_CONTEXT_PRICE' or price.get('source')!=g['source'] or price.get('target_name')!=target or price.get('mode')!=mode or price.get('project_validation_pin')!=g['project_validation_pin'] or price.get('full_peer_resource_interval_seconds')!=10 or price.get('owned_lifetime_CPU_wall_interval_seconds')!=1:
@@ -159,24 +172,25 @@ def authority(config_path,grant_path,grant_sha):
 
 def locked_run(args,cfg,original,g,runtime,funding,lock_fd):
     target=g['target_name'];mode=g['mode'];label='NO3_LARGER_TAU' if target==registry.NO3 else 'AT_MEDIAN'
+    new=native.new_source(g['source']);flags=native.FLAGS if new else ('reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied')
     output=AUDIT/label/(mode+'_01')
     if output.exists():raise ValueError('completed/failed stage already exists; no automatic retry')
     if mode=='pilot':
         bridge_ledger=AUDIT/label/'bridge_01/resource_ledger.json'
         paid=pinned(g['bridge_resource_ledger_pin'])
         paid_guard=pinned(paid['owned_guard_receipt_pin'])
-        flags=['reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied']
         paid_funding=pinned(paid['funding_pin'])
         if g['bridge_resource_ledger_pin']['path']!=str(bridge_ledger) or paid['status']!='BRIDGE_REAPED' or paid['returncode']!=0 or paid['target_name']!=target or paid['source']!=g['source'] or not all(paid.get(k) is True and paid_guard.get(k) is True for k in flags) or paid_guard['status']!='EXITED' or paid_guard['returncode']!=0 or paid_guard['source']!=g['source'] or paid_guard['target_name']!=target or paid_guard['child_CPU_seconds']!=paid['child_CPU_seconds'] or paid_guard['root_grant_sha256']!=paid['root_grant_sha256']:
             raise ValueError('bridge not successfully reaped and paid')
+        if new:native.require_completed(paid_guard)
         if paid['all_parent_lineage_costs_paid'] is not True or paid['whole_stage_debit_CPU_seconds']!=max(paid['actual_whole_stage_CPU_seconds_at_ledger'],paid['child_CPU_seconds']+paid_funding['reserved_parent_and_finalize_CPU_seconds']):
             raise ValueError('whole bridge administrative/finalization debit understated')
         if funding['charged_before_child_CPU_seconds']<paid['whole_stage_debit_CPU_seconds']+funding['reserved_parent_and_finalize_CPU_seconds']:
             raise ValueError('whole bridge debit plus current parent/finalization not carried')
     pool=base.global_permit(g)
     census=pinned(pool['evidence']['peer_census'])
-    peer_callback=lambda identity:owned_guard.physical_peer_guard(census,AUDIT,identity)
-    observation=peer_callback(None)
+    peer_callback=(lambda identities:native.physical_peer_guard(census,AUDIT,identities)) if new else (lambda identity:owned_guard.physical_peer_guard(census,AUDIT,identity))
+    observation=peer_callback([] if new else None)
     registry.branch_predecessor(target,g.get('NO3_candidate_registration_pin'),original,g['source'])
     # Hash scientific bytes only with the shared numerical permit held.
     target_record=registry.target_record(original,target);aliases=cfg['execution'][target]['aliases']
@@ -191,6 +205,7 @@ def locked_run(args,cfg,original,g,runtime,funding,lock_fd):
     ref.immutable_json(output/'admission.json',admission)
     ref.immutable_json(output/'runtime_context.json',dict(status='VERIFIED_EXECUTION_RUNTIME',source=g['source'],host='muscat',package_repository='CRAN',package_version='1.1.1',actual_R_runtime_binding=g['actual_R_runtime_binding']))
     env=native_R_environment(dict(os.environ,TZ='UTC',R154_PROJECT_ROOT_ADMITTED='1',R154_PROJECT_MODE=mode,R154_GLOBAL_PERMIT_LOCK_FD=str(lock_fd),R154_PROJECT_ADMISSION_PATH=str(output/'admission.json'),R154_PROJECT_ADMISSION_SHA256=ref.sha256(output/'admission.json'),R154_PROJECT_RUNTIME_PATH=str(output/'runtime_context.json'),R154_PROJECT_RUNTIME_SHA256=ref.sha256(output/'runtime_context.json')),runtime)
+    if new:env=native.native_environment(dict(env,R157_PROJECT_ROOT=str(ROOT),R157_PROJECT_KIND='production'),runtime,g['boundary_library_pin'])
     for k in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','BLIS_NUM_THREADS','VECLIB_MAXIMUM_THREADS','NUMEXPR_NUM_THREADS'):env[k]='1'
     parent=os.getpid()
     def child_limits():
@@ -204,18 +219,24 @@ def locked_run(args,cfg,original,g,runtime,funding,lock_fd):
         wall=min(g['maximum_wall_seconds'],datetime.datetime.fromisoformat(g['expires_UTC']).timestamp()-time.time())
         if wall<=0:raise ValueError('stage clock expired')
         with open(output/'stdout.log','x') as stdout,open(output/'stderr.log','x') as stderr:
-            guard_receipt=owned_guard.run_owned(native_R_command(runtime,HERE/'525_project_bridge_or_pilot.R',[mode,ROOT,Path(args.config).resolve(),Path(args.root_grant).resolve(),args.root_grant_sha256,output]),env=env,stdout=stdout,stderr=stderr,preexec_fn=child_limits,pass_fds=(lock_fd,),lock_fd=lock_fd,wall_seconds=wall,maximum_combined_CPU_seconds=g['maximum_CPU_seconds']+funding['reserved_parent_and_finalize_CPU_seconds'],maximum_administrative_CPU_seconds=funding['reserved_parent_and_finalize_CPU_seconds']-FINALIZATION_TAIL_CPU_SECONDS,absolute_deadline_UTC=g['expires_UTC'],peer_check_callback=peer_callback,expected_child_affinity={30},interval_seconds=1,peer_interval_seconds=10)
+            arguments=[mode,ROOT,Path(args.config).resolve(),Path(args.root_grant).resolve(),args.root_grant_sha256,output]
+            if new:
+                guard_receipt=native.traced.run_traced(native.native_command(runtime,ROOT,'production',arguments),env=env,stdout=stdout,stderr=stderr,preexec_fn=child_limits,lock_fd=lock_fd,affinity={30},wall_seconds=wall,maximum_combined_CPU_seconds=g['maximum_CPU_seconds']+funding['reserved_parent_and_finalize_CPU_seconds']-FINALIZATION_TAIL_CPU_SECONDS,absolute_deadline_UTC=g['expires_UTC'],peer_callback=peer_callback,bootstrap_exec_allowlist=g['bootstrap_exec_allowlist'],owner_path=output/'owner.json',scope=g['scope_id'],source=g['source'],authority_pin=pin(args.root_grant),interval_seconds=1,peer_interval_seconds=10,owner_capture_callback=native.owner_callback(g,output,pin(args.root_grant)))
+                guard_receipt.update(child_CPU_seconds=guard_receipt['child_tree_CPU_seconds'],wrapper_entrypoint_pin=pin(HERE/'527_project_bootstrap.R'),actual_R_runtime_binding=g['actual_R_runtime_binding'])
+            else:
+                guard_receipt=owned_guard.run_owned(native_R_command(runtime,HERE/'525_project_bridge_or_pilot.R',arguments),env=env,stdout=stdout,stderr=stderr,preexec_fn=child_limits,pass_fds=(lock_fd,),lock_fd=lock_fd,wall_seconds=wall,maximum_combined_CPU_seconds=g['maximum_CPU_seconds']+funding['reserved_parent_and_finalize_CPU_seconds'],maximum_administrative_CPU_seconds=funding['reserved_parent_and_finalize_CPU_seconds']-FINALIZATION_TAIL_CPU_SECONDS,absolute_deadline_UTC=g['expires_UTC'],peer_check_callback=peer_callback,expected_child_affinity={30},interval_seconds=1,peer_interval_seconds=10)
         guard_receipt.update(source=g['source'],target_name=target,root_grant_sha256=args.root_grant_sha256)
         ref.immutable_json(output/'owned_guard_receipt.json',guard_receipt)
-        successful=guard_receipt['status']=='EXITED' and guard_receipt['returncode']==0 and all(guard_receipt.get(k) is True for k in ['reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied'])
+        successful=native.completed(guard_receipt) if new else guard_receipt['status']=='EXITED' and guard_receipt['returncode']==0 and all(guard_receipt.get(k) is True for k in flags)
         code=0 if successful else (guard_receipt['returncode'] if guard_receipt['returncode'] else -1)
     finally:
         after=resource.getrusage(resource.RUSAGE_CHILDREN);cpu=None if guard_receipt is None else guard_receipt['child_CPU_seconds']
-        proved=guard_receipt is not None and all(guard_receipt.get(k) is True for k in ['reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied'])
+        proved=guard_receipt is not None and (native.completed(guard_receipt) if new else all(guard_receipt.get(k) is True for k in flags))
         actual=cumulative_CPU();admin=None if cpu is None else actual-cpu;reserve=funding['reserved_parent_and_finalize_CPU_seconds']
         paid=admin is not None and admin+FINALIZATION_TAIL_CPU_SECONDS<=reserve
         ledger=dict(status=('PILOT_REAPED' if mode=='pilot' else 'BRIDGE_REAPED') if proved and paid and code==0 else 'STAGE_ACCOUNTING_OR_DRAIN_FAILED',target_name=target,source=g['source'],mode=mode,returncode=code,child_CPU_seconds=cpu,parent_CPU_seconds=time.process_time(),administrative_CPU_seconds_including_startup_and_reaped_helpers=admin,actual_whole_stage_CPU_seconds_at_ledger=actual,reserved_finalization_tail_CPU_seconds=FINALIZATION_TAIL_CPU_SECONDS,wall_seconds=time.monotonic()-started,max_child_RSS_KiB=after.ru_maxrss,whole_stage_debit_CPU_seconds=actual if cpu is None else max(actual,cpu+reserve),all_parent_lineage_costs_paid=paid,original_failed_costs_refunded=False,funding_pin=g['funding_pin'],previous_charged_CPU_seconds=funding['charged_before_child_CPU_seconds'],charged_with_this_child_CPU_seconds=actual if cpu is None else max(funding['charged_before_child_CPU_seconds']+cpu,actual),root_grant_sha256=args.root_grant_sha256,owned_guard_receipt_pin=None if guard_receipt is None else pin(output/'owned_guard_receipt.json'))
-        for key in ['reaped','drained','CPU_accounting_complete','preexec_kernel_boundary_proved','subprocess_creation_kernel_denied']:ledger[key]=False if guard_receipt is None else guard_receipt.get(key) is True
+        for key in flags:ledger[key]=False if guard_receipt is None else guard_receipt.get(key) is True
+        if new:ledger['whole_startup_subprocess_creation_kernel_denied']=False
         ref.immutable_json(output/'resource_ledger.json',ledger)
     if code!=0 or not paid:raise SystemExit(1)
     if mode=='pilot':
@@ -241,7 +262,7 @@ def main():
         subprocess.run(['ionice','-c','3','-p',str(os.getpid())],check=True,capture_output=True)
         if not subprocess.check_output(['ionice','-p',str(os.getpid())],text=True).startswith('idle'):raise ValueError('I/O class differs')
         parent_limit=int(math.ceil(funding['reserved_parent_and_finalize_CPU_seconds']))
-        resource.setrlimit(resource.RLIMIT_CPU,(parent_limit,max(parent_limit,int(math.ceil(g['maximum_CPU_seconds'])))))
+        resource.setrlimit(resource.RLIMIT_CPU,(parent_limit,max(parent_limit,int(math.ceil(g['maximum_CPU_seconds']+funding['reserved_parent_and_finalize_CPU_seconds'])))))
         locked_run(args,cfg,original,g,runtime,funding,lock.fileno())
 
 

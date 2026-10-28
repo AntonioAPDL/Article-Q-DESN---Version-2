@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import importlib.util
 import json
 import math
 from pathlib import Path, PurePosixPath
@@ -30,6 +31,9 @@ UNITS = 'original_design_and_response'
 ACCEPTANCE = 'finite AND (formal OR independent)'
 OPERATORS = frozenset(('cdf_pool_clipped', 'mean_feature', 'path_specific', 'normal_driver'))
 SCORES = ('AQL', 'qdesn_AQL', 'pricefm_AQL', 'operational_pricefm_AQL')
+
+_spec=importlib.util.spec_from_file_location('r157_native_runtime',Path(__file__).with_name('527_native_runtime.py'))
+native=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(native)
 
 
 def require(value, message):
@@ -95,7 +99,8 @@ def target_record(manifest, name, selected_only=True):
 
 def source_identity(source):
     require(isinstance(source, dict) and source.get('kind') == SOURCE_KIND, 'untruthful pilot source class')
-    require(source.get('branch', '').startswith('work/pricefm-r154-fullstate-pilot-adapter-'), 'wrong project branch')
+    require(source.get('branch', '').startswith(('work/pricefm-r154-fullstate-pilot-adapter-',
+            'work/pricefm-r157-native-bootstrap-')), 'wrong project branch')
     require(re.fullmatch('[0-9a-f]{40}', source.get('head', '')) is not None, 'source commit is not exact')
     return source
 
@@ -179,14 +184,16 @@ def _validate_reaped_ledger(value, target_name, expected_source):
             ledger.get('target_name') == target_name, 'unreaped/foreign pilot ledger')
     require(type(ledger.get('returncode')) is int and ledger['returncode'] == 0,
             'pilot ledger did not exit successfully')
-    flags = ('reaped', 'drained', 'CPU_accounting_complete',
+    new=native.new_source(expected_source)
+    flags = native.FLAGS if new else ('reaped', 'drained', 'CPU_accounting_complete',
              'preexec_kernel_boundary_proved', 'subprocess_creation_kernel_denied')
     require(all(ledger.get(key) is True for key in flags), 'pilot ledger guard/drain proof incomplete')
     guard = pinned_json(ledger['owned_guard_receipt_pin'])
-    require(guard.get('schema') == 'r154_owned_stage_guard_receipt_v1' and
+    require(guard.get('schema') == ('r157_traced_bootstrap_guard_receipt_v1' if new else 'r154_owned_stage_guard_receipt_v1') and
             guard.get('status') == 'EXITED' and type(guard.get('returncode')) is int and
             guard['returncode'] == 0 and all(guard.get(key) is True for key in flags),
             'owned child was aborted, unaccounted, unproved or undrained')
+    if new:native.require_completed(guard)
     require(guard.get('source') == expected_source and guard.get('target_name') == target_name,
             'owned guard receipt belongs to another source/target')
     if 'root_grant_sha256' in ledger:

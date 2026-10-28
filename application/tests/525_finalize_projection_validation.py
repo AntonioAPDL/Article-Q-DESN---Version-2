@@ -2,9 +2,14 @@
 """Metadata-only finalizer, after the admitted synthetic R child is reaped."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
+
+_path=Path(__file__).resolve().parents[1]/'scripts/pricefm/527_native_runtime.py'
+_spec=importlib.util.spec_from_file_location('r157_native_runtime',_path)
+native=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(native)
 
 
 def require(ok, message):
@@ -46,7 +51,8 @@ def finalize(core_pin, grant_pin, guard_pin, output):
     require(core.get('actual_R_runtime_binding') == grant['actual_R_runtime_binding'] ==
             guard.get('actual_R_runtime_binding'), 'actual execution runtime differs')
     read(grant['actual_R_runtime_binding'])
-    require(guard.get('schema') == 'r154_owned_stage_guard_receipt_v1' and
+    new=native.new_source(grant['source'])
+    require(guard.get('schema') == ('r157_traced_bootstrap_guard_receipt_v1' if new else 'r154_owned_stage_guard_receipt_v1') and
             guard.get('status') == 'EXITED' and type(guard.get('returncode')) is int and
             guard['returncode'] == 0 and guard.get('source') == grant['source'] and
             guard.get('root_grant_sha256') == grant_pin['sha256'] and
@@ -54,9 +60,16 @@ def finalize(core_pin, grant_pin, guard_pin, output):
             guard.get('validation_kind') == 'synthetic_project_projection_only' and
             guard.get('validation_core_pin') == core_pin,
             'exact completed numerical owned-guard run is unproved')
-    flags = ('reaped', 'drained', 'CPU_accounting_complete',
+    flags = native.FLAGS if new else ('reaped', 'drained', 'CPU_accounting_complete',
              'preexec_kernel_boundary_proved', 'subprocess_creation_kernel_denied')
     require(all(guard.get(key) is True for key in flags), 'owned guard aborted or incomplete')
+    if new:
+        native.require_completed(guard)
+        require(grant.get('schema')=='r157_projection_toy_grant_v1','new source requires new grant')
+        require(guard.get('wrapper_entrypoint_pin') in grant['source_bindings'] and
+                Path(guard['wrapper_entrypoint_pin']['path']).name=='527_project_bootstrap.R',
+                'actual traced native wrapper unbound')
+        native.grant_compatibility(grant)
     for binding in grant['source_bindings']:
         require(digest(binding['path']) == binding['sha256'], 'frozen validation source changed')
     entry = guard.get('entrypoint_pin')
@@ -86,10 +99,13 @@ def finalize(core_pin, grant_pin, guard_pin, output):
             value = item['state_pin']
             require(Path(core_pin['path']).parent in Path(value['path']).resolve().parents and
                     digest(value['path']) == value['sha256'], 'synthetic checkpoint bytes/hash differ')
-    result = dict(core, schema='r154_project_adapter_validation_v1',
+    result = dict(core, schema='r157_project_adapter_validation_v1' if new else 'r154_project_adapter_validation_v1',
                   status='PASS_SYNTHETIC_PROJECT_ADAPTER_VALIDATION_ONLY',
                   validation_core_pin=core_pin, owned_guard_receipt_pin=guard_pin,
-                  native_R_ELF_seccomp_startup_pass=True,
+                  native_R_ELF_seccomp_startup_pass=not new,
+                  native_R_ELF_traced_bootstrap_scientific_filter_pass=new,
+                  whole_startup_subprocess_creation_kernel_denied=not new,
+                  resource_accounting_required_before_production=new,
                   actual_owned_guard_Rscript_launch_pass=False,
                   Rscript_shell_wrapper_used=False)
     destination = Path(output)

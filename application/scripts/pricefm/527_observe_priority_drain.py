@@ -60,6 +60,29 @@ def unit(value):
  require(value.get('ActiveState') in ('active','inactive') and value.get('SubState') in ('exited','dead') and
          value.get('Result')=='success' and value.get('ExecMainStatus')=='0','unit is not retained successful completion')
 
+def lv_unit_after_sealed_completion(lv,expected_id):
+ """LV's unchanged eight-field observer never emitted exit-status fields.
+
+ Called only after exact LV exit/supervisor/seal success and dead lifetimes
+ are verified below. An unloaded unit contributes drain evidence only; its
+ defaults are never treated as a successful scientific exit.
+ """
+ value=lv.get('unit')
+ require(isinstance(value,dict),'LV current unit evidence missing')
+ if 'Result' in value or 'ExecMainStatus' in value:
+  unit(value)
+  return 'RETAINED_UNIT_EXIT_STATUS_OBSERVED'
+ fields={'Id','MainPID','InvocationID','ActiveState','SubState','Restart','NRestarts','KillMode'}
+ require(set(value)==fields and isinstance(expected_id,str) and value['Id']==expected_id and
+         value['ActiveState']=='inactive' and value['SubState']=='dead' and value['MainPID']=='0' and
+         value['Restart']=='no' and value['NRestarts']=='0' and value['InvocationID']=='' and
+         value['KillMode']=='control-group','LV missing exit-status fields are not exact known unloaded unit')
+ rows=lv.get('actual_processes')
+ require(isinstance(rows,list) and len(rows)==3 and {x.get('role') for x in rows}=={'administrative','guardian','payload'},
+         'unloaded LV requires exact three-role lifetime inventory')
+ dead(rows,'live_exact_lifetime',3)
+ return 'UNLOADED_UNIT_DRAIN_ONLY_SCIENTIFIC_SUCCESS_FROM_SEALED_EXIT'
+
 def validate_observations(rows,plan,now):
  require(set(rows)==set(NAMES),'exact EE/LV/successor observer set required')
  for name,raw in rows.items():
@@ -78,7 +101,7 @@ def validate_observations(rows,plan,now):
  require(lv.get('status')=='READ_ONLY_EXACT_R155_ADMIN_AND_ORIGINAL_R154_LV_HEALTH' and
          lv.get('complete_calls')==12 and lv.get('calls_remaining')==0 and lv.get('same_original_permit_free') is True and
          all(lv.get(k)==0 for k in ('runtime_mutations','scientific_dispatches','signals')),'LV incomplete or not read-only/drained')
- dead(lv.get('actual_processes'),'live_exact_lifetime',3);unit(lv.get('unit'))
+ dead(lv.get('actual_processes'),'live_exact_lifetime',3)
  admin,_=capture(lv,'exit_receipt.json','administrative_records')
  require(admin.get('status')=='COMPLETE_LV_TRAINING_DIAGNOSTIC_NOT_PROMOTED','LV administrative completion absent')
  lv_authority=read(plan['observers']['LV']['authority_pin']);scientific=read(lv_authority['stage']['authority'])
@@ -87,6 +110,7 @@ def validate_observations(rows,plan,now):
  lv_assessment,lv_ap=capture(lv,'assessment.json','LV_records');lv_seal,_=capture(lv,'assessment_seal.json','LV_records')
  require(lv_exit.get('status')=='COMPLETE_DIAGNOSTIC' and lv_super.get('status')=='PAYLOAD_EXITED' and
          lv_super.get('child_exit_code')==0 and lv_seal.get('assessment')==lv_ap,'LV exact historical completion/seal differs')
+ lv_unit_kind=lv_unit_after_sealed_completion(lv,lv_authority.get('unit'))
  require(successor.get('status')=='READ_ONLY_SOURCE_BOUND_MATCHED_SEED_OBSERVATION' and
          successor.get('complete_components')==successor.get('required_components')==12 and successor.get('remaining_components')==0 and
          successor.get('scientifically_complete_and_physically_drained') is True and successor.get('same_original_flock_free') is True and
@@ -107,6 +131,7 @@ def validate_observations(rows,plan,now):
          end.get('status')=='COMPLETE_MATCHED_THREE_SEED_DEVELOPMENT' and supervisor.get('status')=='PAYLOAD_EXITED' and supervisor.get('child_exit_code')==0,
          'successor seal/completion or no-refill decision differs')
  return {'EE_exit':ee_pin,'LV_exit':lv_pin,'no_live_owned_numerical_lifetimes':True,'no_pending_refill':True,
+         'LV_unit_evidence_class':lv_unit_kind,'LV_scientific_success_basis':'exact_COMPLETE_DIAGNOSTIC_exit_PAYLOAD_EXITED_zero_child_and_assessment_seal',
          'no_pending_refill_basis':'exact completed fixed matched set; no automatic followon or AL admission; retained successful no-restart units; final original flock probe'}
 
 def metadata_import_closure(entry):

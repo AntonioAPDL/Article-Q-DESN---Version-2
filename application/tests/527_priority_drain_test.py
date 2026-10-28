@@ -138,4 +138,41 @@ class PriorityDrain(unittest.TestCase):
     p=Path(d)/'plan.json';p.write_text(json.dumps(plan))
     with patch.object(m,'run_observer',side_effect=AssertionError('no observer')),patch.object(m,'probe_original_lock',side_effect=AssertionError('no probe')),self.assertRaises(ValueError):m.validate_plan(m.pin(p))
 
+class ActualLVSchema(unittest.TestCase):
+ def fixture(self):
+  root=Path('/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r157_parallel_implementation_20261028/local/ROOT_SYNTHETIC_EXECUTION_01')
+  plan=m.read(m.pin(root/'priority_capture_plan.json'))
+  rows={k:m.read(m.pin(root/'priority_capture'/(k+'.stdout.json'))) for k in m.NAMES}
+  # Re-evaluate immutable historical metadata at its recorded capture clock.
+  # This does not make it a fresh current drain proof or call an observer.
+  return rows,plan,max(v['epoch'] for v in rows.values())+.01
+ def test_actual_capture_unloaded_LV_uses_sealed_exit_not_systemd_defaults(self):
+  rows,plan,now=self.fixture();self.assertNotIn('Result',rows['LV']['unit']);self.assertNotIn('ExecMainStatus',rows['LV']['unit'])
+  result=m.validate_observations(rows,plan,now)
+  self.assertEqual(result['LV_unit_evidence_class'],'UNLOADED_UNIT_DRAIN_ONLY_SCIENTIFIC_SUCCESS_FROM_SEALED_EXIT')
+  self.assertEqual(m.read(result['LV_exit'])['status'],'COMPLETE_DIAGNOSTIC')
+ def test_actual_LV_active_restarting_live_or_foreign_unit_rejected(self):
+  for key,value in [('ActiveState','active'),('SubState','running'),('MainPID','123'),('Restart','always'),('NRestarts','1'),('Id','foreign.service'),('InvocationID','new-invocation'),('KillMode','process')]:
+   with self.subTest(key=key):
+    rows,plan,now=self.fixture();rows['LV']['unit'][key]=value
+    with self.assertRaises(ValueError):m.validate_observations(rows,plan,now)
+  rows,plan,now=self.fixture();rows['LV']['actual_processes'][0]['live_exact_lifetime']=True
+  with self.assertRaises(ValueError):m.validate_observations(rows,plan,now)
+ def test_LV_fallback_never_reached_without_sealed_zero_exit(self):
+  for missing in ('supervisor_exit_receipt.json','assessment_seal.json'):
+   with self.subTest(missing=missing):
+    rows,plan,now=self.fixture();del rows['LV']['LV_records'][missing]
+    with patch.object(m,'lv_unit_after_sealed_completion',side_effect=AssertionError('cannot accept before sealed completion')),self.assertRaises(ValueError):m.validate_observations(rows,plan,now)
+  rows,plan,now=self.fixture();del rows['LV']['administrative_records']['exit_receipt.json']
+  with self.assertRaises(ValueError):m.validate_observations(rows,plan,now)
+ def test_missing_unit_exit_status_is_LV_only_and_never_overrides_failure(self):
+  for role,key in [('EE','unit_show'),('successor','actual_unit')]:
+   with self.subTest(role=role):
+    rows,plan,now=self.fixture();rows[role][key].pop('Result');rows[role][key].pop('ExecMainStatus')
+    with self.assertRaises(ValueError):m.validate_observations(rows,plan,now)
+  for key,value in [('Result','failed'),('ExecMainStatus','1')]:
+   with self.subTest(LV_status=key):
+    rows,plan,now=self.fixture();rows['LV']['unit'].update(Result='success',ExecMainStatus='0');rows['LV']['unit'][key]=value
+    with self.assertRaises(ValueError):m.validate_observations(rows,plan,now)
+
 if __name__=='__main__':unittest.main(verbosity=2)

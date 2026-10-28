@@ -64,8 +64,9 @@ def recovery_claims(authorization):
                    or not isinstance(v['purpose'],str) or not isinstance(v['study'],str)
                    or not safe_key(v['scope_id']) for v in claims.values())
             or {(v['purpose'],v['study']) for v in claims.values()}!=roles
-            or next(v['scope_id'] for v in claims.values() if v['purpose']=='CONTROL_TEST')!='r157_control_placement_02'):
-        raise BudgetError('new recovery INITIAL requires exact TESTscope02/FI/DK2 claim restrictions')
+            or next(v['scope_id'] for v in claims.values() if v['purpose']=='CONTROL_TEST') not in {
+                'r157_control_placement_02','r157_control_placement_03'}):
+        raise BudgetError('new recovery INITIAL requires exact TESTscope02-or03/FI/DK2 claim restrictions')
     return claims
 
 

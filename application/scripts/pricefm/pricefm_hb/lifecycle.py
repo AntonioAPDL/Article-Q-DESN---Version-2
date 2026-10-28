@@ -37,9 +37,9 @@ def validate_failed_test(reference, state):
     """Read the original failed publication without reinterpreting its old code."""
     key=reference.get('prior_failed_claim_key');claim=state.get('claims',{}).get(key,{})
     if (claim.get('task',{}).get('purpose')!='CONTROL_TEST' or claim.get('state')!='FAILED_RECONCILED'
-            or claim.get('application_accepted') is not False or claim.get('job_id')!='868958'
+            or claim.get('application_accepted') is not False or not re.fullmatch(r'[1-9][0-9]*',str(claim.get('job_id','')))
             or reference.get('prior_failed_job_id')!=claim['job_id']):
-        raise a.ActivationError('exact original failed drained TEST868958 required')
+        raise a.ActivationError('exact canonical failed drained TEST reference required')
     publication=r.no_links(claim['publication'])
     expected={'prior_publication':publication/'collection.json'}
     evidence=reference.get('prior_evidence',{})
@@ -82,6 +82,7 @@ def validate_control_test_requalification(value,release,state,*,now=None,allow_s
             or value.get('controller')!=a.OWNER or type(value.get('max_new_attempts')) is not int or value.get('max_new_attempts')!=1
             or value.get('old_charges_refunded') is not False or value.get('all_prior_failed_terminal') is not True
             or not re.fullmatch(r'[A-Za-z0-9_-]{8,160}',str(value.get('scope_id','')))
+            or value.get('scope_id') not in {'r157_control_placement_02','r157_control_placement_03'}
             or value.get('scope_id')!=release.get('scope_id')
             or value.get('new_executed_sources')!=release.get('source_hashes')
             or value.get('new_executed_sources')!=a.executed_sources('CONTROL_TEST')
@@ -89,14 +90,31 @@ def validate_control_test_requalification(value,release,state,*,now=None,allow_s
             or not math.isfinite(value['created_epoch']) or not math.isfinite(value['expires_epoch'])
             or not value['created_epoch']<=now<value['expires_epoch']):
         raise a.ActivationError('exact finite new-source replacement TEST authorization required')
-    prior,old=validate_failed_test(value,state)
+    if value['scope_id']=='r157_control_placement_03':
+        references=value.get('prior_failed_tests')
+        fields=('prior_failed_claim_key','prior_failed_job_id','prior_publication','prior_evidence')
+        if (not isinstance(references,list) or len(references)!=2
+                or any(not isinstance(v,dict) for v in references)
+                or any(value.get(k)!=references[-1].get(k) for k in fields)
+                or value.get('control_recovery') is None):
+            raise a.ActivationError('third TEST requires both ordered failures and the latest failed reference')
+        predecessors=[validate_failed_test(reference,state) for reference in references]
+        if [claim['scope_id'] for claim,_ in predecessors]!=['r157_control_placement_01','r157_control_placement_02']:
+            raise a.ActivationError('third TEST requires exactly the original and second failed TEST scopes')
+    else:
+        if value.get('prior_failed_tests') is not None:
+            raise a.ActivationError('scope02 retains its single original failed TEST lineage')
+        predecessors=[validate_failed_test(value,state)]
+        if predecessors[0][0]['job_id']!='868958' or predecessors[0][0]['scope_id']!='r157_control_placement_01':
+            raise a.ActivationError('scope02 requires the original failed TEST868958')
+    prior,old=predecessors[-1]
     if release['scope_id']==prior['scope_id']:raise a.ActivationError('replacement TEST requires its own distinct scope')
     spent=state.get('spent_tests',[])
-    expected=[prior['task_key']]+([release['task_key']] if allow_spent else [])
+    expected=[claim['task_key'] for claim,_ in predecessors]+([release['task_key']] if allow_spent else [])
     if spent!=expected:raise a.ActivationError('only one explicitly authorized replacement TEST is permitted')
     from .operation_budget import OperationBudget
     if value.get('control_recovery') is not None:
-        recovered=validate_control_recovery(a.read_pin(value['control_recovery']),old,release,now=now,packet=packet)
+        recovered=validate_control_recovery(a.read_pin(value['control_recovery']),old,release,now=now,packet=packet,state=state)
         if value['expires_epoch']>recovered['expires_epoch']:
             raise a.ActivationError('replacement cannot exceed its new finite recovery scope')
     else:
@@ -109,12 +127,13 @@ def validate_control_test_requalification(value,release,state,*,now=None,allow_s
     return value
 
 
-def validate_control_recovery(value,old,release,*,now,packet):
+def validate_control_recovery(value,old,release,*,now,packet,state=None):
     """A distinct prospective budget preserves, rather than renews, old history."""
     from .operation_budget import OperationBudget, recovery_claims
     old_spec=old['control_cpu_scope'];new_spec=release.get('control_cpu_scope')
-    if (value.get('schema')!=CONTROL_RECOVERY_SCHEMA
-            or value.get('status')!='ROOT_ADMITTED_NEW_FINITE_CONTROL_RECOVERY_PRESERVING_EXPIRED_HISTORY'
+    statuses={'ROOT_ADMITTED_NEW_FINITE_CONTROL_RECOVERY_PRESERVING_EXPIRED_HISTORY',
+              'ROOT_ADMITTED_NEW_FINITE_CONTROL_RECOVERY_PRESERVING_PAID_HISTORY'}
+    if (value.get('schema')!=CONTROL_RECOVERY_SCHEMA or value.get('status') not in statuses
             or value.get('controller')!=a.OWNER or value.get('old_control_cpu_scope')!=old_spec
             or value.get('new_control_cpu_scope')!=new_spec or new_spec==old_spec
             or value.get('old_charges_refunded') is not False or value.get('old_clocks_mutated') is not False
@@ -127,9 +146,19 @@ def validate_control_recovery(value,old,release,*,now,packet):
             or packet is None or value['expires_epoch']>packet['expires_epoch']):
         raise a.ActivationError('explicit prospective source-bound control recovery required')
     historical=OperationBudget(old_spec['path']).historical_snapshot(value.get('old_snapshot'),old_spec['authorization_pin'])
+    if value['status']=='ROOT_ADMITTED_NEW_FINITE_CONTROL_RECOVERY_PRESERVING_EXPIRED_HISTORY':
+        if historical['expires_epoch']>value['created_epoch']:
+            raise a.ActivationError('expired-history recovery cannot renew an unexpired control scope')
+    else:
+        claims=(state or {}).get('claims',{})
+        if (not historical['claims'] or any(key not in claims or claims[key].get('state')!='FAILED_RECONCILED'
+                or claims[key].get('application_accepted') is not False
+                or r.read(Path(claims[key]['release_path'])/'release.json').get('control_cpu_scope')!=old_spec
+                for key in historical['claims'])):
+            raise a.ActivationError('paid-history recovery requires every admitted old control claim failed and reconciled')
     budget,active=control_scope(release,now=now)
     authorization=a.read_pin(new_spec['authorization_pin']);restrictions=recovery_claims(authorization)
-    if (historical['scope_id']!=old_spec['scope_id'] or historical['expires_epoch']>value['created_epoch']
+    if (historical['scope_id']!=old_spec['scope_id']
             or active['kind']!='INITIAL' or active['CPU_ceiling']!=720 or restrictions is None
             or active.get('recovery_claims')!=restrictions
             or not value['created_epoch']<=active['created_epoch']<=now
@@ -153,6 +182,44 @@ def validate_compute_limits(resources,*,getter=None):
         CPU_soft_seconds=observed_cpu[0],CPU_hard_seconds=observed_cpu[1],AS_soft_bytes=observed_as[0],
         AS_hard_bytes=observed_as[1],declared_CPU_seconds=cpu,allocated_memory_MiB=resources['memory_MiB'],
         sbatch_propagate='NONE',scheduler_resources_unchanged=True)
+
+
+def establish_compute_limits(resources,authority,*,evidence_path,getter=None,setter=None):
+    """Record raw limits, then clamp only within the sealed allocated bounds."""
+    getter=resource.getrlimit if getter is None else getter
+    setter=resource.setrlimit if setter is None else setter
+    def observed():
+        return dict(CPU=list(getter(resource.RLIMIT_CPU)),AS=list(getter(resource.RLIMIT_AS)))
+    before=observed();path=Path(evidence_path)
+    evidence=dict(schema='r158_compute_process_limits_v1',before=before,
+        declared_resources=resources,authority_resources=authority.get('resources'),
+        sbatch_propagate='NONE',scheduler_resources_unchanged=True)
+    write_new(path.with_name(path.stem+'-before'+path.suffix),dict(evidence,status='RAW_OBSERVED_BEFORE_NUMERICAL_IMPORTS'))
+    try:
+        purpose=authority.get('purpose');cpu=resources.get('cpu_seconds');memory=resources.get('memory_MiB')
+        if (authority.get('resources')!=resources or purpose not in a.PURPOSES
+                or resources.get('cpus')!=1 or type(cpu) not in (int,float) or not math.isfinite(cpu)
+                or type(resources.get('wall_seconds')) is not int
+                or not 0<cpu<=resources['wall_seconds']<=a.PURPOSES[purpose]
+                or type(memory) is not int or not 1024<=memory<=8192):
+            raise a.ActivationError('declared process limits must match exact sealed purpose/allocation resources')
+        desired=dict(CPU=math.ceil(cpu),AS=memory*1024**2)
+        if any(before[name][1]!=resource.RLIM_INFINITY and before[name][1]<limit for name,limit in desired.items()):
+            raise a.ActivationError('existing hard limit cannot cover the declared allocation')
+        setter(resource.RLIMIT_CPU,(desired['CPU'],desired['CPU']))
+        setter(resource.RLIMIT_AS,(desired['AS'],desired['AS']))
+        after=observed()
+        if after!={name:[limit,limit] for name,limit in desired.items()}:
+            raise a.ActivationError('kernel did not establish exact declared process limits')
+        evidence.update(status='VERIFIED_BEFORE_NUMERICAL_IMPORTS',after=after)
+    except BaseException as exc:
+        evidence.update(status='REJECTED_BEFORE_NUMERICAL_IMPORTS',after=observed(),
+            error=dict(type=type(exc).__name__,message=str(exc)))
+        write_new(path,evidence)
+        raise a.ActivationError('compute limit establishment failed; before='+repr(before)+
+            '; after='+repr(evidence['after'])+'; '+str(exc)) from exc
+    write_new(path,evidence)
+    return evidence
 
 
 def job_script(resources):
@@ -692,11 +759,12 @@ def release_job(key,config_path):
 
 
 def watch_ready(key,config_path,destination):
-    """One finite one-file readiness stream, no repeated scheduler queries.
+    """One finite READY-or-failure stream, no repeated scheduler queries.
 
     BeeGFS updates originate on a different kernel, so Linux inotify cannot be
     assumed to notify the login host. A declared bounded one-second stat of one
-    exact file provides the stream, with a10CPU hard cap and original queue end.
+    READY path and worker-seal path provide the stream, with the same10CPU cap
+    and original queue end. A failed seal is never interpreted as READY.
     """
     ledger,claim,release,config=_bound_claim(key,config_path)
     if claim['state']!='SUBMITTED' or claim.get('startup_event_claimed'):
@@ -707,18 +775,34 @@ def watch_ready(key,config_path,destination):
     ledger.update(key,startup_event_claimed=True)
     script='''import json,os,pathlib,resource,signal,time
 resource.setrlimit(resource.RLIMIT_CPU,(10,10))
-path=pathlib.Path(__PATH__);deadline=__END__
+path=pathlib.Path(__PATH__);failure=pathlib.Path(__FAILURE__);deadline=__END__
 signal.alarm(max(1,int(deadline-time.time())+2))
 while time.time()<deadline:
+ if failure.is_file():
+  if failure.is_symlink() or failure.stat().st_size>1048576:raise ValueError('invalid worker seal')
+  print(json.dumps(dict(event='FAILED',evidence=json.loads(failure.read_text()))),flush=True);break
  if path.is_file():
   if path.is_symlink() or path.stat().st_size>1048576:raise ValueError('invalid READY file')
-  print(path.read_text(),flush=True);break
+  print(json.dumps(dict(event='READY',evidence=json.loads(path.read_text()))),flush=True);break
  time.sleep(min(1,max(.01,deadline-time.time())))
 else:raise TimeoutError('finite startup subscription expired')
-'''.replace('__PATH__',repr(claim['remote_root']+'/outputs/ready.json')).replace('__END__',repr(end))
+'''.replace('__PATH__',repr(claim['remote_root']+'/outputs/ready.json')).replace(
+        '__FAILURE__',repr(claim['remote_root']+'/outputs/worker_evidence.json')).replace('__END__',repr(end))
     from . import metered_io
     observed=metered_io.watch(config,script,config['_r157_control_budget'],key,timeout=max(1,end-time.time()+5))
-    ready=json.loads(observed)
+    event=json.loads(observed)
+    if event.get('event')=='FAILED':
+        failure=event.get('evidence',{})
+        if (failure.get('schema')!=SCHEMA or failure.get('task_key')!=key
+                or failure.get('job_id')!=claim['job_id'] or failure.get('release_sha256')!=claim['release_sha256']
+                or failure.get('source_hashes')!=release['source_hashes']
+                or failure.get('authority_sha256')!=claim['authority_sha256']
+                or failure.get('application_passed') is not False or not failure.get('error')):
+            raise a.ActivationError('observed failed worker identity/source differs')
+        write_new(Path(destination).with_name('worker-failure-event.json'),event)
+        raise a.ActivationError('exact worker failed before activation; retained claim requires terminal collection')
+    if event.get('event')!='READY':raise a.ActivationError('unrecognized startup stream event')
+    ready=event.get('evidence',{})
     if ready.get('job_id')!=claim['job_id'] or ready.get('release_sha256')!=claim['release_sha256']:
         raise a.ActivationError('observed READY identity differs')
     ready_pin=write_new(destination,ready);ledger.update(key,ready_pin=ready_pin)
@@ -805,12 +889,12 @@ def worker(root,expected_sha):
     try:
         if r.digest(root/'release.json')!=expected_sha:raise a.ActivationError('bound release SHA differs')
         release=verify_release(root);allocation=require_compute()
-        write_new(outputs/'allocation-process-limits.json',validate_compute_limits(release['resources']))
         packet=r.read(root/'authorization/packet.json');authority=r.read(root/'authorization/authority.json')
         if (packet.get('release_sha256')!=expected_sha or packet.get('authority_sha256')!=r.digest(root/'authorization/authority.json')
                 or authority.get('release_sha256')!=expected_sha or authority.get('slurm_job_id')!=allocation['job_id']
                 or authority.get('node')!=allocation['node']):raise a.ActivationError('immutable job authority differs')
         a.validate_authority(authority,release['purpose'],release['plan_sha256'],release['source_hashes'])
+        establish_compute_limits(release['resources'],authority,evidence_path=outputs/'allocation-process-limits.json')
         start=a.allocation_start(allocation)
         if start-authority['issued_epoch']>authority['max_queue_seconds']:raise a.ActivationError('queue ceiling exhausted')
         end=min(start+release['resources']['wall_seconds'],authority['calendar_expires_epoch'])
@@ -841,6 +925,7 @@ def worker(root,expected_sha):
     files={str(p.relative_to(outputs)):r.digest(p) for p in sorted(outputs.rglob('*')) if p.is_file()}
     write_new(outputs/'worker_evidence.json',dict(schema=SCHEMA,task_key=release['task_key'] if release else None,
         release_sha256=expected_sha,job_id=allocation['job_id'] if allocation else None,allocation=allocation,
+        source_hashes=release['source_hashes'] if release else None,
         application_passed=passed,error=error,files=files,new_model_fits=0,official_origins=0,
         full_prefix_admitted=bool(release and release['purpose'] in {'CACHED_NORMAL_COMPONENT','PREFIX_ASSESSMENT'}),
         authority_sha256=r.digest(root/'authorization/authority.json') if (root/'authorization/authority.json').exists() else None,
@@ -857,8 +942,8 @@ def payload(root,expected_sha):
     if r.digest(root/'release.json')!=expected_sha:raise a.ActivationError('payload release differs')
     authority=r.read(root/'authorization/authority.json');activation=r.read(root/'authorization/activation/packet.json')
     allocation=require_compute()
-    write_new(root/'outputs/payload-process-limits.json',validate_compute_limits(release['resources']))
     gate=a.validate_worker(authority,activation,allocation,release['purpose'],release['plan_sha256'],release['source_hashes'])
+    establish_compute_limits(release['resources'],authority,evidence_path=root/'outputs/payload-process-limits.json')
     remaining=gate['expires_epoch']-time.time()-2
     if remaining<=0:raise a.ActivationError('allocated deadline exhausted')
     def stop(*args):raise TimeoutError('allocated payload deadline')

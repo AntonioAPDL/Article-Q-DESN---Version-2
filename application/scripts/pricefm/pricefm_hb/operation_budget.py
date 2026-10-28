@@ -25,6 +25,7 @@ UNITS = {"metadata": {"local_CPU_cap": 1, "remote_CPU_cap": 2},
          "ready_watch": {"local_CPU_cap": 1, "remote_CPU_cap": 10},
          "admission_refresh": {"local_CPU_cap": 10, "remote_CPU_cap": 10}}
 INITIAL_LIMITS = {"metadata": 20, "transfer": 6, "ready_watch": 1, "admission_refresh": 1}
+KINDS = {'INITIAL':720,'PREFIX':1800,'INITIAL_SUPPLEMENT':230}
 
 
 class BudgetError(ValueError):
@@ -51,6 +52,23 @@ def priced_maximum(limits, parent_cap):
     return parent_cap + sum(limits[k] * sum(UNITS[k].values()) for k in UNITS)
 
 
+def recovery_claims(authorization):
+    """An optional new INITIAL is restricted to three exact reviewed roles."""
+    claims=authorization.get('recovery_claims')
+    if claims is None:return None
+    roles={('CONTROL_TEST','TEST'),('COST_ONLY','FI'),('COST_ONLY','DK2')}
+    if (authorization.get('kind')!='INITIAL' or authorization.get('max_new_claims')!=3
+            or type(authorization.get('max_new_claims')) is not int or not isinstance(claims,dict)
+            or len(claims)!=3 or any(not safe_key(key) for key in claims)
+            or any(not isinstance(v,dict) or set(v)!={'purpose','study','scope_id'}
+                   or not isinstance(v['purpose'],str) or not isinstance(v['study'],str)
+                   or not safe_key(v['scope_id']) for v in claims.values())
+            or {(v['purpose'],v['study']) for v in claims.values()}!=roles
+            or next(v['scope_id'] for v in claims.values() if v['purpose']=='CONTROL_TEST')!='r157_control_placement_02'):
+        raise BudgetError('new recovery INITIAL requires exact TESTscope02/FI/DK2 claim restrictions')
+    return claims
+
+
 class OperationBudget:
     def __init__(self, path):
         owner()
@@ -63,47 +81,108 @@ class OperationBudget:
                kind="INITIAL", now=None):
         store = cls(path)
         now = time.time() if now is None else now
-        if (not safe_key(scope_id) or kind not in {"INITIAL", "PREFIX"}
+        if (not safe_key(scope_id) or kind not in KINDS
                 or not number(now) or not number(expires_epoch) or not now < expires_epoch <= now + 86400):
             raise BudgetError("explicit finite prospective control scope required")
         from . import policy
         authorization = policy.pinned(authorization_pin)
-        ceiling = INITIAL_CEILING if kind == "INITIAL" else 1800
+        ceiling = KINDS[kind]
         if (authorization.get("status") != "ROOT_ADMITTED_R157_CONTROL_CPU_SCOPE"
                 or authorization.get("controller") != OWNER or authorization.get("scope_id") != scope_id
                 or authorization.get("kind") != kind or authorization.get("CPU_ceiling") != ceiling
                 or authorization.get("nonrenewing") is not True
                 or authorization.get("expires_epoch") != expires_epoch):
             raise BudgetError("exact prospective root control CPU authorization required")
+        restrictions=recovery_claims(authorization)
+        supplement=None
+        if kind=='INITIAL_SUPPLEMENT':
+            from . import lifecycle
+            original=policy.pinned(authorization.get('old_initial_authorization_pin'))
+            state=lifecycle.Ledger().snapshot()
+            prior,release=lifecycle.validate_failed_test(authorization,state)
+            old=cls(release['control_cpu_scope']['path']).snapshot(now)
+            if (original.get('status')!='ROOT_ADMITTED_R157_CONTROL_CPU_SCOPE' or original.get('controller')!=OWNER
+                    or original.get('kind')!='INITIAL' or original.get('CPU_ceiling')!=720
+                    or original.get('nonrenewing') is not True or old['kind']!='INITIAL'
+                    or authorization['old_initial_authorization_pin']!=old['authorization']
+                    or old['authorization']!=release['control_cpu_scope']['authorization_pin']
+                    or expires_epoch!=original.get('expires_epoch') or expires_epoch!=old['expires_epoch']
+                    or authorization.get('permitted_claim_purpose')!='COST_ONLY'
+                    or authorization.get('permitted_claim_study')!='DK2'
+                    or not safe_key(authorization.get('permitted_claim_key'))
+                    or type(authorization.get('max_new_claims')) is not int or authorization.get('max_new_claims')!=1
+                    or authorization.get('old_charges_refunded') is not False):
+                raise BudgetError('one explicit DK2 supplement must preserve the original paid720CPU scope and clock')
+            supplement=dict(old_initial_authorization_pin=authorization['old_initial_authorization_pin'],
+                prior_failed_claim_key=prior['task_key'],permitted_claim_key=authorization['permitted_claim_key'])
         store.path.parent.mkdir(parents=True, exist_ok=True)
         with r.lock(store.lock):
             if store.path.exists(): raise FileExistsError("control scope already exists")
             r.write(store.path, dict(schema=SCHEMA, owner=OWNER, scope_id=scope_id, kind=kind,
                 created_epoch=now, expires_epoch=expires_epoch, authorization=authorization_pin,
                 CPU_ceiling=ceiling, claim_reserved_CPU=0, publication_reserved_CPU=0,
-                no_refund=True, claims={}, publication=None))
+                no_refund=True, claims={}, publication=None,supplement=supplement,recovery_claims=restrictions))
         return store
 
     def _read(self, now=None):
         state = r.read(self.path)
         now = time.time() if now is None else now
         if (state.get("schema") != SCHEMA or state.get("owner") != OWNER or state.get("no_refund") is not True
-                or state.get("kind") not in {"INITIAL", "PREFIX"}
-                or state.get("CPU_ceiling") != (INITIAL_CEILING if state["kind"] == "INITIAL" else 1800)
+                or state.get("kind") not in KINDS
+                or state.get("CPU_ceiling") != KINDS[state['kind']]
                 or not state["created_epoch"] <= now < state["expires_epoch"]):
             raise BudgetError("active exact control CPU scope required")
+        from . import policy
+        if state.get('recovery_claims')!=recovery_claims(policy.pinned(state['authorization'])):
+            raise BudgetError('immutable control authorization claim restrictions differ')
         return state
 
     def snapshot(self, now=None):
         with r.lock(self.lock): return self._read(now)
 
-    def reserve_claim(self, key, *, reservation=None, limits=None, parent_CPU_cap=None, price_pin=None, now=None):
+    def historical_snapshot(self, snapshot_pin, authorization_pin):
+        """Validate retained immutable bytes without admitting expired operations.
+
+        No lock file or journal is written. This helper cannot reserve or spend.
+        """
+        from . import policy
+        state=policy.pinned(snapshot_pin);authorization=policy.pinned(authorization_pin)
+        if (r.digest(self.path)!=snapshot_pin['sha256'] or state.get('schema')!=SCHEMA
+                or state.get('owner')!=OWNER or state.get('no_refund') is not True
+                or state.get('kind')!='INITIAL' or state.get('CPU_ceiling')!=720
+                or state.get('authorization')!=authorization_pin
+                or authorization.get('status')!='ROOT_ADMITTED_R157_CONTROL_CPU_SCOPE'
+                or authorization.get('controller')!=OWNER or authorization.get('kind')!='INITIAL'
+                or authorization.get('CPU_ceiling')!=720 or authorization.get('nonrenewing') is not True
+                or state.get('scope_id')!=authorization.get('scope_id')
+                or state.get('expires_epoch')!=authorization.get('expires_epoch')
+                or not number(state.get('created_epoch')) or not number(state.get('expires_epoch'))
+                or state['created_epoch']>=state['expires_epoch']
+                or not isinstance(state.get('claims'),dict)
+                or any(v.get('no_refund') is not True or not number(v.get('reserved_CPU')) for v in state['claims'].values())
+                or state.get('claim_reserved_CPU')!=sum(v['reserved_CPU'] for v in state['claims'].values())
+                or state.get('publication_reserved_CPU') not in (0,30)
+                or state['claim_reserved_CPU']+state['publication_reserved_CPU']>720):
+            raise BudgetError('exact immutable historical INITIAL authorization and retained charges required')
+        return state
+
+    def reserve_claim(self, key, *, reservation=None, limits=None, parent_CPU_cap=None, price_pin=None,
+                      purpose=None, study=None, scope_id=None, now=None):
         if not safe_key(key): raise BudgetError("canonical claim key required")
         with r.lock(self.lock):
             state = self._read(now)
             if key in state["claims"]: raise BudgetError("control claim already reserved/spent")
-            if state["kind"] == "INITIAL":
-                if len(state["claims"]) >= 3: raise BudgetError("three initial control claims are spent")
+            restrictions=state.get('recovery_claims')
+            if restrictions is not None:
+                from . import policy
+                if (restrictions!=recovery_claims(policy.pinned(state['authorization']))
+                        or restrictions.get(key)!={'purpose':purpose,'study':study,'scope_id':scope_id}):
+                    raise BudgetError('recovery scope permits only its exact root-bound claim role and scope')
+            if state["kind"] in {"INITIAL",'INITIAL_SUPPLEMENT'}:
+                maximum_claims=3 if state['kind']=='INITIAL' else 1
+                if len(state["claims"]) >= maximum_claims: raise BudgetError("initial control claim allowance is spent")
+                if state['kind']=='INITIAL_SUPPLEMENT' and key!=state['supplement']['permitted_claim_key']:
+                    raise BudgetError('supplement is restricted to its one exact root-bound DK2 claim')
                 if (reservation not in (None,230) or limits not in (None,INITIAL_LIMITS)
                         or parent_CPU_cap not in (None,60)):
                     raise BudgetError("initial 230CPU command/parent price cannot change")
@@ -235,6 +314,7 @@ class OperationBudget:
     def reserve_publication(self,*,now=None):
         with r.lock(self.lock):
             state=self._read(now)
+            if state['kind']=='INITIAL_SUPPLEMENT':raise BudgetError('supplement230 funds exactly one claim; publication30 remains in original pool')
             if state["publication"] is not None:raise BudgetError("publication reservation already spent")
             if state["claim_reserved_CPU"]+30>state["CPU_ceiling"]:raise BudgetError("publication30 does not fit scope")
             state["publication_reserved_CPU"]=30

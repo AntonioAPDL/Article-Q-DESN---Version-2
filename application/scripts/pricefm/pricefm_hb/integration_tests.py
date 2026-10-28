@@ -26,7 +26,7 @@ class FinalIntegrationTests(unittest.TestCase):
         self.spec=dict(path=str(self.budget.path),authorization_pin=self.auth_pin,scope_id=self.scope)
         self.release_dir=self.root/'release';self.release_dir.mkdir()
         self.plan_pin=self.write('release/plan.json',{'metadata_fixture':True})
-        self.release=dict(task_key=self.key,purpose='CACHED_NORMAL_COMPONENT',study='FI',
+        self.release=dict(task_key=self.key,purpose='CACHED_NORMAL_COMPONENT',study='FI',scope_id='fixture-component-01',
             scientific_exclusion_key='FI|fixed-original-component',plan_sha256=self.plan_pin['sha256'],
             policy_pin=dict(path='/pinned/policy.json',sha256='f'*64),control_cpu_scope=self.spec)
         self.claim=dict(task_key=self.key,state='SUBMITTED',release_path=str(self.release_dir),job_id='868999',

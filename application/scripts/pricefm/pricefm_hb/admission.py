@@ -328,6 +328,8 @@ def refresh_request(plan_path, config_path, policy_pin, output, *, self_claim=No
                    "full_prefix_admitted": False, "automatic_retry": False}
         if 'control_cpu_scope' in config:
             request['control_cpu_scope']=config['control_cpu_scope']
+        if purpose=='CONTROL_TEST' and 'control_test_requalification' in config:
+            request['control_test_requalification']=config['control_test_requalification']
         request.update(rd.qualification(config["runtime_publication"], "runtime"))
         request.update(rd.qualification(config["parity_publication"], "parity"))
         parity_root = r.no_links(config["parity_publication"]) / "outputs"

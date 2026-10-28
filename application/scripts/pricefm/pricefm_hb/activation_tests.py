@@ -20,11 +20,12 @@ class ActivationTests(unittest.TestCase):
         self.start = self.now - 10
         self.sources = a.executed_sources("COST_ONLY")
         self.allocation = {"job_id": "868900", "node": "node-13"}
-        self.authority = dict(schema=a.AUTHORITY_SCHEMA, purpose="COST_ONLY", issuer=a.OWNER,
+        self.authority = dict(schema=a.AUTHORITY_SCHEMA, purpose="COST_ONLY", study="FI",
+            role="FI_COST_ONLY_BENCHMARK", issuer=a.OWNER,
             controller=a.OWNER, plan_sha256="a" * 64, executed_sources=self.sources,
             reference_numerical_environment=a.REFERENCE_NUMERICAL_ENV, automatic_retry=False,
-            new_model_fits=0, official_origins=0, promotion=False, issued_epoch=self.now - 610,
-            calendar_expires_epoch=self.now + 1800, max_queue_seconds=1800,
+            new_model_fits=0, official_origins=0, promotion=False, issued_epoch=self.now - 110,
+            calendar_expires_epoch=self.now + 1800, max_queue_seconds=180,
             resources=dict(cpus=1, memory_MiB=4096, wall_seconds=1200, cpu_seconds=1200),
             slurm_job_id=self.allocation["job_id"], node="node-13", release_sha256="b" * 64,
             scientific_exclusion_key="FI|fixed-cost", proof_manifest={})
@@ -37,7 +38,14 @@ class ActivationTests(unittest.TestCase):
             sha256=pin["sha256"], bytes=path.stat().st_size)
         return pin
 
-    def worker_fixture(self):
+    def worker_fixture(self, purpose="COST_ONLY"):
+        if purpose == "CONTROL_TEST":
+            self.sources = a.executed_sources(purpose)
+            self.authority.update(purpose=purpose, study="TEST", executed_sources=self.sources,
+                issued_epoch=self.now - 610, max_queue_seconds=1800,
+                scientific_exclusion_key="TEST|fixed-fixture",
+                resources=dict(cpus=1, memory_MiB=4096, wall_seconds=120, cpu_seconds=120))
+            self.authority.pop("role", None)
         self.authority["policy_pin"] = self.stage("policy.json", {"fixture_matrix": True,
             "execution_sources": [{"path": "/frozen/code/" + name, "sha256": sha} for name,sha in self.sources.items()]})
         identity = r.identity(self.authority)
@@ -51,19 +59,20 @@ class ActivationTests(unittest.TestCase):
         closed_pin = self.stage("handoff.json", {"observed_epoch": self.now - 1, "owner": "UNKNOWN"})
         hosts_pin = self.stage("hosts.json", dict(status="NO_OVERLAP", controller=a.OWNER,
             observed_epoch=self.now - 1, hosts=[a.OWNER,"jerez.be.ucsc.edu","hb.ucsc.edu"],
-            scientific_exclusion_key="FI|fixed-cost", overlapping_scientific_claims=[]))
+            scientific_exclusion_key=self.authority["scientific_exclusion_key"], overlapping_scientific_claims=[]))
         extra = {k: v for k, v in self.authority["proof_manifest"].items() if k not in manifest}
         self.authority["proof_manifest"] = manifest
         self.activation = dict(schema=a.ACTIVATION_SCHEMA, status="ACTIVATED_ONCE", controller=a.OWNER,
             authority_identity_sha256=r.identity(self.authority), job_id=self.allocation["job_id"],
             node="node-13", plan_sha256="a" * 64, observed_epoch=self.now - 1,
             ready=ready_pin, handoff_receipt=closed_pin, all_hosts_observation=hosts_pin,
-            started_epoch=self.start, expires_epoch=self.start + 1200, proof_manifest=extra)
+            started_epoch=self.start,
+            expires_epoch=self.start + self.authority["resources"]["wall_seconds"], proof_manifest=extra)
         self.assertEqual(identity, r.identity(self.authority))
 
     def validate(self):
         return a.validate_worker(self.authority, self.activation, self.allocation,
-                                 "COST_ONLY", "a" * 64, self.sources)
+                                 self.authority["purpose"], "a" * 64, self.sources)
 
     def worker_patches(self):
         stack = __import__("contextlib").ExitStack()
@@ -78,7 +87,7 @@ class ActivationTests(unittest.TestCase):
             PRICEFM_RELEASE_ROOT=str(self.root))))
 
     def test_delayed_queue_uses_fresh_READY_without_refreshing_authority_clock(self):
-        self.worker_fixture(); self.worker_patches()
+        self.worker_fixture("CONTROL_TEST"); self.worker_patches()
         result = self.validate()
         self.assertEqual(result["started_epoch"], self.start)
         self.assertGreater(self.now - self.authority["issued_epoch"], 300)
@@ -89,7 +98,8 @@ class ActivationTests(unittest.TestCase):
         self.activation["observed_epoch"] = self.now - 301
         with self.assertRaises(a.ActivationError): self.validate()
         self.activation["observed_epoch"] = self.now - 1
-        self.authority["max_queue_seconds"] = 300
+        self.authority["max_queue_seconds"] = 60
+        self.worker_fixture()  # Rebuild identity/proofs so the valid queue cap is the failing condition.
         with self.assertRaises(a.ActivationError): self.validate()
 
     def test_live_EE_unknown_owner_decision_is_delegated_and_not_ignored(self):

@@ -26,6 +26,7 @@ UNITS = {"metadata": {"local_CPU_cap": 1, "remote_CPU_cap": 2},
          "admission_refresh": {"local_CPU_cap": 10, "remote_CPU_cap": 10}}
 INITIAL_LIMITS = {"metadata": 20, "transfer": 6, "ready_watch": 1, "admission_refresh": 1}
 KINDS = {'INITIAL':720,'PREFIX':1800,'INITIAL_SUPPLEMENT':230}
+REPLACEMENT_PROTOCOL = 'r161_cost_replacement_v1'
 
 
 class BudgetError(ValueError):
@@ -52,21 +53,168 @@ def priced_maximum(limits, parent_cap):
     return parent_cap + sum(limits[k] * sum(UNITS[k].values()) for k in UNITS)
 
 
+def replacement_metadata(value):
+    """Read one explicitly named bounded JSON proof, never an opaque asset."""
+    if (not isinstance(value,dict) or set(value)!={'path','sha256'}
+            or not isinstance(value['path'],str) or not re.fullmatch(r'[a-f0-9]{64}',str(value['sha256']))):
+        raise BudgetError('exact replacement metadata pin required')
+    path=r.no_links(value['path'])
+    if (not Path(value['path']).is_absolute() or path.suffix!='.json' or not path.is_file()
+            or path.stat().st_size>16*1024**2 or r.digest(path)!=value['sha256']):
+        raise BudgetError('bounded immutable replacement JSON proof required')
+    return r.read(path)
+
+
+def _terminal_time(claim,target):
+    epochs=[claim.get(key) for key in ('completed_epoch','completed','terminal_epoch')]
+    epochs += [value.get('epoch') for value in claim.get('events',[]) if value.get('to',value.get('to_state'))==target]
+    epochs=[value for value in epochs if number(value)]
+    if not epochs:raise BudgetError('retained terminal history clock required')
+    return max(epochs)
+
+
+def validate_replacement_lineage(authorization):
+    """Bind new04 funding to both terminal paid03 COST predecessors."""
+    if authorization.get('protocol_version')!=REPLACEMENT_PROTOCOL:return None
+    from . import policy
+    mapping=authorization.get('cost_replacement_lineage')
+    if (authorization.get('kind')!='INITIAL' or authorization.get('CPU_ceiling')!=720
+            or authorization.get('old_scope_renewed') is not False
+            or authorization.get('old_charges_refunded') is not False
+            or not isinstance(mapping,dict) or set(mapping)!={'FI','DK2'}):
+        raise BudgetError('new04 funding requires both exact conserved COST lineages')
+    qualification=replacement_metadata(authorization.get('qualification_lineage'))
+    if (qualification.get('protocol_version')!=REPLACEMENT_PROTOCOL
+            or qualification.get('schema')!='r161_control_qualification_lineage_v1'
+            or qualification.get('status')!='ROOT_ADMITTED_TEST04_PRESERVING_OLD_ACCEPTED_TEST'
+            or qualification.get('controller')!=OWNER
+            or type(qualification.get('max_new_attempts')) is not int or qualification.get('max_new_attempts')!=1
+            or qualification.get('old_charges_refunded') is not False or qualification.get('old_clocks_mutated') is not False
+            or not number(qualification.get('created_epoch')) or not number(qualification.get('expires_epoch'))):
+        raise BudgetError('new04 qualification lineage protocol differs')
+    created=authorization.get('created_epoch');expires=authorization.get('expires_epoch')
+    if not number(created) or not number(expires):raise BudgetError('finite new04 authorization clock required')
+    packet=replacement_metadata(authorization.get('resource_policy'))
+    # Structural history is evaluated at admission, while create/_read and
+    # COST validation independently require a currently active scope.
+    policy.validate_policy(packet,now=created,check_files=False)
+    if (not number(created) or not number(expires) or not packet['created_epoch']<=created<expires<=packet['expires_epoch']
+            or not 0<expires-created<=7200
+            or not qualification['created_epoch']<=created<qualification['expires_epoch']):
+        raise BudgetError('new04 control clock must be separately prospective within its resource policy')
+    results={};paid_pin=None;old_keys=set()
+    for study,reference in mapping.items():
+        if (not isinstance(reference,dict) or reference.get('old_charges_retained') is not True
+                or not safe_key(reference.get('prior_legacy_claim_key'))
+                or not safe_key(reference.get('prior_operational_claim_key'))):
+            raise BudgetError('exact old paid COST identities required')
+        legacy_state=replacement_metadata(reference.get('prior_legacy_snapshot'))
+        operational_state=replacement_metadata(reference.get('prior_operational_snapshot'))
+        release=replacement_metadata(reference.get('prior_release'))
+        paid=replacement_metadata(reference.get('paid_control_snapshot'))
+        old_authority=replacement_metadata(reference.get('paid_control_authorization'))
+        legacy_key=reference['prior_legacy_claim_key'];operational_key=reference['prior_operational_claim_key']
+        legacy=legacy_state.get('claims',{}).get(legacy_key,{})
+        operational=operational_state.get('claims',{}).get(operational_key,{})
+        control_claim=paid.get('claims',{}).get(operational_key,{})
+        old_spec=release.get('control_cpu_scope',{})
+        old_roles=old_authority.get('recovery_claims',{})
+        if (legacy_state.get('schema')!='r156_hb_cost_control_v1' or legacy_state.get('owner')!=OWNER
+                or operational_state.get('schema')!='r157_hb_lifecycle_v1' or operational_state.get('owner')!=OWNER
+                or legacy_state.get('spent_regions',{}).get(study)!=legacy_key
+                or legacy.get('task_key')!=legacy_key or operational.get('task_key')!=operational_key
+                or legacy.get('state')!='FAILED_RECONCILED' or operational.get('state')!='FAILED_RECONCILED'
+                or legacy.get('application_accepted') is not False or operational.get('application_accepted') is not False
+                or legacy.get('task',{}).get('study')!=study or operational.get('task',{}).get('study')!=study
+                or operational.get('task',{}).get('purpose')!='COST_ONLY'
+                or legacy.get('reserved_CPU_seconds')!=1200 or legacy.get('wall_seconds')!=1200
+                or release.get('task_key')!=operational_key or release.get('purpose')!='COST_ONLY' or release.get('study')!=study
+                or reference['prior_release']['sha256']!=legacy.get('release_sha256')
+                or reference['prior_release']['sha256']!=operational.get('release_sha256')
+                or legacy.get('release_path')!=operational.get('release_path')
+                or reference['prior_release']['path']!=str(Path(operational.get('release_path',''))/'release.json')
+                or release.get('plan_sha256')!=legacy.get('task',{}).get('plan_sha256')
+                or release.get('plan_sha256')!=operational.get('task',{}).get('plan_sha256')
+                or old_spec.get('authorization_pin')!=reference['paid_control_authorization']
+                or paid.get('schema')!=SCHEMA or paid.get('owner')!=OWNER or paid.get('kind')!='INITIAL'
+                or paid.get('CPU_ceiling')!=720 or paid.get('no_refund') is not True
+                or paid.get('authorization')!=reference['paid_control_authorization']
+                or paid.get('scope_id')!=old_spec.get('scope_id') or paid.get('scope_id')==authorization.get('scope_id')
+                or old_authority.get('status')!='ROOT_ADMITTED_R157_CONTROL_CPU_SCOPE'
+                or old_authority.get('controller')!=OWNER or old_authority.get('kind')!='INITIAL'
+                or old_authority.get('CPU_ceiling')!=720 or old_authority.get('nonrenewing') is not True
+                or paid.get('expires_epoch')!=old_authority.get('expires_epoch')
+                or not any(v.get('purpose')=='CONTROL_TEST' and v.get('scope_id')=='r157_control_placement_03' for v in old_roles.values())
+                or old_roles.get(operational_key)!={'purpose':'COST_ONLY','study':study,'scope_id':release.get('scope_id')}
+                or control_claim.get('reserved_CPU')!=230 or control_claim.get('no_refund') is not True
+                or not number(paid.get('claim_reserved_CPU'))
+                or paid['claim_reserved_CPU']!=sum(v['reserved_CPU'] for v in paid['claims'].values())):
+            raise BudgetError('old03 paid terminal COST history or exact authorization differs')
+        # Verify the retained snapshot against its original journal bytes; no
+        # clock admission, lock creation, recursive pin traversal or mutation.
+        if replacement_metadata(dict(path=old_spec.get('path'),sha256=reference['paid_control_snapshot']['sha256']))!=paid:
+            raise BudgetError('old03 control bytes changed')
+        if paid_pin is not None and paid_pin!=reference['paid_control_snapshot']:
+            raise BudgetError('both replacement roles must retain the same paid03 snapshot')
+        paid_pin=reference['paid_control_snapshot']
+        accepted_reference=qualification.get('prior_accepted_test',{})
+        accepted=operational_state.get('claims',{}).get(accepted_reference.get('claim_key'),{})
+        accepted_release=replacement_metadata(accepted_reference.get('release'))
+        accepted_collection=replacement_metadata(accepted_reference.get('publication'))
+        failures=qualification.get('prior_failed_tests')
+        if (qualification.get('paid_control_snapshot')!=reference['paid_control_snapshot']
+                or qualification.get('paid_control_authorization')!=reference['paid_control_authorization']
+                or accepted.get('state')!='COLLECTED' or accepted.get('application_accepted') is not True
+                or accepted.get('scope_id')!='r157_control_placement_03'
+                or accepted.get('job_id')!=accepted_reference.get('job_id')
+                or accepted.get('release_sha256')!=accepted_reference['release']['sha256']
+                or accepted_release.get('task_key')!=accepted_reference.get('claim_key')
+                or accepted_release.get('purpose')!='CONTROL_TEST'
+                or accepted_release.get('scope_id')!='r157_control_placement_03'
+                or accepted_release.get('source_hashes')!=accepted_reference.get('source_hashes')
+                or accepted_release.get('control_cpu_scope')!=old_spec
+                or accepted_collection.get('task_key')!=accepted_reference.get('claim_key')
+                or accepted_collection.get('application_accepted') is not True or accepted_collection.get('no_refund') is not True
+                or accepted_reference['publication']['path']!=str(Path(accepted.get('publication',''))/'collection.json')
+                or not isinstance(failures,list) or len(failures)!=2
+                or [operational_state.get('claims',{}).get(item.get('prior_failed_claim_key'),{}).get('scope_id')
+                    for item in failures]!=['r157_control_placement_01','r157_control_placement_02']
+                or any(operational_state['claims'][item['prior_failed_claim_key']].get('state')!='FAILED_RECONCILED'
+                    for item in failures)
+                or created<max(_terminal_time(legacy,'FAILED_RECONCILED'),_terminal_time(operational,'FAILED_RECONCILED'),
+                               _terminal_time(accepted,'COLLECTED'))):
+            raise BudgetError('new04 funding requires exact admitted prior TEST03/failed01-02 and nonbackdated terminal history')
+        if study=='FI' and not any(v.get('reason')=='PARENT_CPU_CAP_EXCEEDED' for v in control_claim.get('violations',[])):
+            raise BudgetError('real FI parent CPU overrun must remain retained')
+        old_keys.update((legacy_key,operational_key))
+        results[study]=dict(reference=reference,legacy_state=legacy_state,operational_state=operational_state,
+            legacy=legacy,operational=operational,release=release,paid=paid,control_claim=control_claim)
+    restrictions=authorization.get('recovery_claims',{})
+    if old_keys & set(restrictions):raise BudgetError('new04 funding cannot reuse any old COST key')
+    return results
+
+
 def recovery_claims(authorization):
     """An optional new INITIAL is restricted to three exact reviewed roles."""
+    protocol=authorization.get('protocol_version')
+    if protocol not in (None,REPLACEMENT_PROTOCOL):raise BudgetError('unknown control recovery protocol')
     claims=authorization.get('recovery_claims')
-    if claims is None:return None
+    if claims is None:
+        if protocol==REPLACEMENT_PROTOCOL:raise BudgetError('new04 funding cannot omit its exact reviewed role restrictions')
+        return None
     roles={('CONTROL_TEST','TEST'),('COST_ONLY','FI'),('COST_ONLY','DK2')}
-    if (authorization.get('kind')!='INITIAL' or authorization.get('max_new_claims')!=3
+    permitted_scopes={'r161_control_placement_04'} if protocol==REPLACEMENT_PROTOCOL else {
+        'r157_control_placement_02','r157_control_placement_03'}
+    if (protocol not in (None,REPLACEMENT_PROTOCOL) or authorization.get('kind')!='INITIAL' or authorization.get('max_new_claims')!=3
             or type(authorization.get('max_new_claims')) is not int or not isinstance(claims,dict)
             or len(claims)!=3 or any(not safe_key(key) for key in claims)
             or any(not isinstance(v,dict) or set(v)!={'purpose','study','scope_id'}
                    or not isinstance(v['purpose'],str) or not isinstance(v['study'],str)
                    or not safe_key(v['scope_id']) for v in claims.values())
             or {(v['purpose'],v['study']) for v in claims.values()}!=roles
-            or next(v['scope_id'] for v in claims.values() if v['purpose']=='CONTROL_TEST') not in {
-                'r157_control_placement_02','r157_control_placement_03'}):
-        raise BudgetError('new recovery INITIAL requires exact TESTscope02-or03/FI/DK2 claim restrictions')
+            or next(v['scope_id'] for v in claims.values() if v['purpose']=='CONTROL_TEST') not in permitted_scopes):
+        raise BudgetError('new recovery INITIAL requires its exact separately reviewed TEST/FI/DK2 roles')
+    if protocol==REPLACEMENT_PROTOCOL:validate_replacement_lineage(authorization)
     return claims
 
 

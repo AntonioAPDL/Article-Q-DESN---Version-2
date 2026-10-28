@@ -162,6 +162,18 @@ def validate_authority(authority, purpose, plan_sha256, sources, now=None):
         raise ActivationError("exact new purpose/source-bound authority required")
     if sources != executed_sources(purpose):
         raise ActivationError("actual execution source closure differs")
+    if purpose == 'COST_ONLY' and (authority.get('study') not in {'FI','DK2'}
+            or authority.get('role') != authority['study'] + '_COST_ONLY_BENCHMARK'):
+        raise ActivationError('exact study-specific COST_ONLY benchmark role required')
+    replacement=authority.get('cost_replacement')
+    if replacement is not None:
+        if (purpose!='COST_ONLY' or authority.get('protocol_version')!='r161_cost_replacement_v1'
+                or not isinstance(replacement,dict) or set(replacement)!={'path','sha256'}
+                or not isinstance(replacement.get('path'),str) or not Path(replacement['path']).is_absolute()
+                or not re.fullmatch(r'[a-f0-9]{64}',str(replacement.get('sha256')))):
+            raise ActivationError('explicit cost-only replacement protocol/pin required')
+    elif authority.get('protocol_version') is not None:
+        raise ActivationError('replacement protocol cannot omit its exact permit')
     issued, expires = authority.get("issued_epoch"), authority.get("calendar_expires_epoch")
     resources = authority.get("resources", {})
     wall = resources.get("wall_seconds")
@@ -177,7 +189,28 @@ def validate_authority(authority, purpose, plan_sha256, sources, now=None):
             or not re.fullmatch(r"[1-9][0-9]*", str(authority.get("slurm_job_id", "")))
             or not re.fullmatch(r"node-[0-9]+", str(authority.get("node", "")))):
         raise ActivationError("finite nonrenewing calendar/queue/allocated resources required")
+    if purpose == 'COST_ONLY' and (queue > 180 or wall != 1200 or cpu != 1200
+            or resources['memory_MiB'] != 4096):
+        raise ActivationError('COST_ONLY requires original1200/4GiB resources and at most180second queue')
     return resources
+
+
+def validate_replacement_worker(authority,proof_view,now=None):
+    """Compute-side scalar binding only; never read controller journals/history."""
+    pointer=authority.get('cost_replacement')
+    if pointer is None:return None
+    from . import cost_control
+    document=read_pin(pointer,proof_view)
+    value=cost_control.validate_replacement_document_binding(document,authority['plan_sha256'],
+        authority['study'],authority['scope_id'],authority['executed_sources'],now=now)
+    if (value['new_operational_task_key']!=authority.get('task_key')
+            or value['new_control_cpu_scope']!=authority.get('control_cpu_scope')
+            or value['resource_policy']!=authority.get('policy_pin')
+            or value['resources']!=authority.get('resources')
+            or authority['calendar_expires_epoch']>value['expires_epoch']
+            or authority['issued_epoch']<value['created_epoch']):
+        raise ActivationError('staged replacement permit differs from exact authority scope/source/resources/calendar')
+    return value
 
 
 def allocation_start(allocation, runner=subprocess.run, environ=None, now=None):
@@ -217,6 +250,7 @@ def validate_worker(authority, activation, allocation, purpose, plan_sha256, exe
         raise ActivationError("fresh one-time activation of the exact allocated job required")
     view = merge_proofs(authority, activation)
     verify_proof_manifest(view)
+    validate_replacement_worker(authority,view,now)
     ready = read_pin(activation["ready"], view)
     if (ready.get("schema") != READY_SCHEMA or ready.get("job_id") != actual["job_id"]
             or ready.get("node") != actual["node"] or ready.get("authority_identity_sha256") != r.identity(authority)
@@ -243,6 +277,9 @@ def validate_worker(authority, activation, allocation, purpose, plan_sha256, exe
             or not fresh(hosts, now) or hosts.get("scientific_exclusion_key") != authority.get("scientific_exclusion_key")
             or hosts.get("overlapping_scientific_claims") != []):
         raise ActivationError("fresh task-specific cross-host exclusive observation required")
+    if purpose=='COST_ONLY' and (closed['observed_epoch']<authority['issued_epoch']
+            or hosts['observed_epoch']<authority['issued_epoch']):
+        raise ActivationError('COST worker requires post-authority handoff and host observations')
     if any(os.environ.get(k) != v for k, v in dict(THREAD_ENV,**REFERENCE_NUMERICAL_ENV).items()):
         raise ActivationError("historical numerical profile must precede imports")
     return dict(gate, started_epoch=start, expires_epoch=end, handoff=closed,

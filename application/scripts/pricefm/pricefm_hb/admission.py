@@ -22,7 +22,7 @@ RESULT_SCHEMA = "r157_readonly_admission_refresh_v1"
 LIFECYCLE_SCHEMA = "r157_hb_lifecycle_v1"
 CENTRAL = cost.CENTRAL
 FINAL = {"COLLECTED", "FAILED_RECONCILED"}
-SELF_STATES = {"SUBMITTED", "ACTIVATION_INTENT", "ACTIVATED"}
+SELF_STATES = {"AUTHORIZED", "SUBMITTED", "ACTIVATION_INTENT", "ACTIVATED"}
 PREFIX_PURPOSES = {"CACHED_NORMAL_COMPONENT", "PREFIX_ASSESSMENT"}
 
 
@@ -73,6 +73,51 @@ def _release(claim):
     return value
 
 
+def _cost_state_snapshot():
+    path=CENTRAL/'cost_only_registry.json';lock=CENTRAL/'cost_only_registry.lock'
+    if not path.is_file() or not lock.is_file():
+        raise AdmissionError('existing paid canonical cost ledger and lock required')
+    with r.lock(lock):state=rd.metadata(path)
+    if (state.get('schema')!=cost.SCHEMA or state.get('owner')!=policy.OWNER
+            or not isinstance(state.get('claims'),dict) or not isinstance(state.get('spent_regions'),dict)):
+        raise AdmissionError('canonical paid cost ledger identity differs')
+    return state
+
+
+def authorized_cost_pair(claim,release,legacy):
+    """Exact paid AUTHORIZED pair only; no new claim or allocation addback."""
+    task=claim.get('task',{});study=release.get('study');resources=release.get('resources',{})
+    if (claim.get('state')!='AUTHORIZED' or legacy.get('state')!='AUTHORIZED'
+            or study not in {'FI','DK2'} or task.get('study')!=study or task.get('purpose')!='COST_ONLY'
+            or release.get('purpose')!='COST_ONLY' or release.get('task_key')!=claim.get('task_key')
+            or release.get('plan_sha256')!=task.get('plan_sha256')
+            or release.get('scientific_exclusion_key')!=task.get('scientific_exclusion_key')
+            or release.get('scope_id')!=claim.get('scope_id')
+            or release.get('remote_root')!=claim.get('remote_root')
+            or release.get('policy_pin')!=claim.get('policy_pin') or resources!=claim.get('resources')
+            or resources!={'cpus':1,'memory_MiB':4096,'cpu_seconds':1200,'wall_seconds':1200}
+            or legacy.get('task_key')!=claim.get('legacy_cost_key')
+            or legacy.get('job_id')!=claim.get('job_id')
+            or not re.fullmatch(r'[1-9][0-9]*',str(claim.get('job_id','')))
+            or not re.fullmatch(r'[a-f0-9]{64}',str(claim.get('authority_sha256','')))
+            or legacy.get('authority_sha256')!=claim['authority_sha256']
+            or legacy.get('scope_id')!=claim.get('scope_id')
+            or legacy.get('config_sha256')!=claim.get('config_sha256')
+            or legacy.get('release_path')!=claim.get('release_path')
+            or legacy.get('release_sha256')!=claim.get('release_sha256')
+            or legacy.get('remote_root')!=claim.get('remote_root')
+            or legacy.get('reserved_CPU_seconds')!=1200 or legacy.get('wall_seconds')!=1200
+            or legacy.get('task',{}).get('study')!=study
+            or legacy['task'].get('plan_sha256')!=task.get('plan_sha256')
+            or legacy['task'].get('scientific_exclusion_key')!=task.get('scientific_exclusion_key')
+            or legacy.get('cost_replacement')!=claim.get('cost_replacement')
+            or release.get('cost_replacement')!=claim.get('cost_replacement')):
+        raise AdmissionError('exact paid AUTHORIZED COST pair/source/job/resources required')
+    if release.get('source_hashes')!=a.executed_sources('COST_ONLY'):
+        raise AdmissionError('authorized COST pair must bind the current execution closure')
+    return legacy
+
+
 def canonical_claims(packet, expected_plan_sha, exclusion_key, self_claim=None):
     """Return a fresh durable snapshot; supplied claim values are never authority."""
     state = _state_snapshot()
@@ -88,7 +133,12 @@ def canonical_claims(packet, expected_plan_sha, exclusion_key, self_claim=None):
                 or own["task"].get("scientific_exclusion_key") != exclusion_key
                 or not re.fullmatch(r"[1-9][0-9]*", str(own.get("job_id", "")))):
             raise AdmissionError("self exclusion requires exact current canonical submitted claim")
-        _release(own)
+        release=_release(own)
+        if own.get('state')=='AUTHORIZED':
+            legacy_state=_cost_state_snapshot()
+            authorized_cost_pair(own,release,legacy_state['claims'].get(own.get('legacy_cost_key'),{}))
+            if any(v.get('state') not in FINAL and k!=key for k,v in state['claims'].items()):
+                raise AdmissionError('authorized COST observer requires all other HB claims drained')
     peers = []
     for claim in active:
         if own is not None and claim["task_key"] == own["task_key"]:
@@ -145,10 +195,20 @@ def select_node(snapshot, memory_mib, wall_seconds, self_claim=None, candidates=
     if partition.get("State") != "UP" or rd.duration(partition["MaxTime"]) < wall_seconds + 60:
         raise AdmissionError("partition cannot fit the complete allocation and reserve")
     bound = _release(self_claim) if self_claim is not None else None
+    pending = bool(bound and self_claim.get('state')=='AUTHORIZED')
     if bound:
         job = rd.fields(snapshot["slurm"].get("self_job", ""))
-        allocated = dict(v.split("=", 1) for v in job.get("AllocTRES", "").split(",") if "=" in v)
-        if (job.get("JobId") != self_claim["job_id"] or job.get("JobState") != "RUNNING"
+        allocated = dict(v.split("=", 1) for v in job.get("ReqTRES" if pending else "AllocTRES", "").split(",") if "=" in v)
+        if pending:
+            if (bound.get('purpose')!='COST_ONLY' or bound.get('study') not in {'FI','DK2'}
+                    or job.get('JobId')!=self_claim['job_id'] or job.get('JobState')!='PENDING'
+                    or job.get('Reason')!='JobHeldUser' or job.get('ReqNodeList')!=bound.get('node')
+                    or job.get('NumCPUs')!='1' or allocated.get('cpu')!='1'
+                    or memory_mib!=4096 or _memory_mib(allocated.get('mem',''))!=memory_mib
+                    or 'MinMemoryNode' in job and _memory_mib(job['MinMemoryNode'])!=memory_mib
+                    or self_claim['resources']!=dict(cpus=1,memory_MiB=4096,cpu_seconds=1200,wall_seconds=1200)):
+                raise AdmissionError('exact AUTHORIZED/PENDING held job/resources required')
+        elif (job.get("JobId") != self_claim["job_id"] or job.get("JobState") != "RUNNING"
                 or job.get("NodeList") != bound.get("node") or job.get("NumCPUs") != "1"
                 or _memory_mib(allocated.get("mem", job.get("MinMemoryNode", ""))) != memory_mib
                 or self_claim["resources"].get("memory_MiB") != memory_mib
@@ -164,13 +224,13 @@ def select_node(snapshot, memory_mib, wall_seconds, self_claim=None, candidates=
         name = node["NodeName"]
         if bound and name != bound["node"] or candidates is not None and name not in candidates:
             continue
-        add_cpu = 1 if bound else 0
-        add_mem = memory_mib if bound else 0
+        add_cpu = 1 if bound and not pending else 0
+        add_mem = memory_mib if bound and not pending else 0
         cpus = int(node.get("CPUEfctv", node["CPUTot"])) - int(node["CPUAlloc"]) + add_cpu
         memory = min(int(node["FreeMem"]), int(node["RealMemory"]) - int(node["AllocMem"]) + add_mem)
         if cpus >= 1 and memory >= memory_mib:
             eligible.append({"node": name, "available_cpus": cpus, "available_memory_mib": memory,
-                             "self_allocation_added_back": bool(bound), "node_fields": node})
+                             "self_allocation_added_back": bool(bound and not pending), "node_fields": node})
     if not eligible:
         raise AdmissionError("no measured eligible node fits the exact request")
     # Stable compact placement; no attempt to turn raw idle CPUs into authority.
@@ -196,7 +256,8 @@ def _closure(config):
     return value, hashes
 
 
-def _overlap(plan, study, snapshots, closure, hashes, own, peers, packet, purpose="COST_ONLY"):
+def _overlap(plan, study, snapshots, closure, hashes, own, peers, packet, purpose="COST_ONLY",*,
+             cost_replacement=None,plan_sha=None,operational_state=None):
     unknown = []
     absences = []
     legacy_self = own.get("legacy_cost_key") if own else None
@@ -219,12 +280,24 @@ def _overlap(plan, study, snapshots, closure, hashes, own, peers, packet, purpos
                 state = item.get("value", {})
                 if state.get("schema") != cost.SCHEMA or state.get("owner") != policy.OWNER:
                     raise AdmissionError("legacy cost ledger identity differs")
+                replacement=None
+                if cost_replacement is not None:
+                    if purpose!='COST_ONLY' or plan_sha is None:
+                        raise AdmissionError('replacement overlap requires exact cost plan identity')
+                    replacement=cost.validate_replacement(cost_replacement,plan,plan_sha,state=state,
+                        operational_state=operational_state,phase='own' if own else 'preclaim')
+                    if own and (legacy_self!=replacement['new_legacy_task_key']
+                            or own.get('task_key')!=replacement['new_operational_task_key']
+                            or own.get('cost_replacement')!=cost_replacement):
+                        raise AdmissionError('replacement self claim is not the exact newly paid intent')
                 if study in state.get("spent_regions", {}) and state["spent_regions"][study] != legacy_self:
                     # A collected cost panel is a prerequisite for a prefix, not
                     # a reason to reject the later prefix's distinct scope.
                     key = state["spent_regions"][study]
                     old = state.get("claims", {}).get(key, {})
-                    if purpose == "COST_ONLY" or old.get("state") not in cost.FINAL:
+                    exact_prior=bool(replacement and key==replacement['prior_legacy_claim_key']
+                        and old.get('state')=='FAILED_RECONCILED' and old.get('application_accepted') is False)
+                    if not exact_prior and (purpose == "COST_ONLY" or old.get("state") not in cost.FINAL):
                         unknown.append("spent_or_unresolved_regional_cost:" + study)
                 for key, claim in state.get("claims", {}).items():
                     if key == legacy_self:
@@ -330,6 +403,10 @@ def refresh_request(plan_path, config_path, policy_pin, output, *, self_claim=No
             request['control_cpu_scope']=config['control_cpu_scope']
         if purpose=='CONTROL_TEST' and 'control_test_requalification' in config:
             request['control_test_requalification']=config['control_test_requalification']
+        replacement_pin=config.get('cost_replacements',{}).get(study) if purpose=='COST_ONLY' else None
+        if replacement_pin is not None:request['cost_replacement']=replacement_pin
+        if purpose=='COST_ONLY' and config.get('accepted_control_test') is not None:
+            request['accepted_control_test']=config['accepted_control_test']
         request.update(rd.qualification(config["runtime_publication"], "runtime"))
         request.update(rd.qualification(config["parity_publication"], "parity"))
         parity_root = r.no_links(config["parity_publication"]) / "outputs"
@@ -366,6 +443,11 @@ def refresh_request(plan_path, config_path, policy_pin, output, *, self_claim=No
         if key in config.get('control_operation_prices',{}):
             request['control_operation_price']=config['control_operation_prices'][key]
         state, own, peers = canonical_claims(packet, actual_plan_sha, key, self_claim)
+        if purpose=='COST_ONLY' and own and own.get('cost_replacement')!=replacement_pin:
+            raise AdmissionError('own COST replacement pointer differs from current readiness configuration')
+        if replacement_pin is not None:
+            cost.validate_replacement(replacement_pin,plan,plan_pin['sha256'],operational_state=state,
+                phase='own' if own else 'preclaim')
         if purpose not in PREFIX_PURPOSES and peers:
             raise AdmissionError("test and cost stages require all other own HB work drained")
         if own and own["policy_pin"] != policy_pin:
@@ -397,7 +479,8 @@ def refresh_request(plan_path, config_path, policy_pin, output, *, self_claim=No
                 snapshot = rd.observe(host, spec, site, budget)
             snapshots[host] = snapshot
             rd.save(output, host.split(".")[0] + "_observation.json", snapshot)
-        absences = _overlap(plan, study, snapshots, closure, hashes, own, peers, packet, purpose)
+        absences = _overlap(plan, study, snapshots, closure, hashes, own, peers, packet, purpose,
+            cost_replacement=replacement_pin,plan_sha=plan_pin['sha256'],operational_state=state)
         request["all_hosts_observation"] = rd.save(output, "all_hosts_observation.json", {
             "schema": "r157_all_hosts_task_observation_v1", "status": "NO_OVERLAP", "controller": policy.OWNER,
             "hosts": sorted(cost.HOSTS), "observed_epoch": min(v["observed_epoch"] for v in snapshots.values()),

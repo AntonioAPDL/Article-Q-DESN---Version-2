@@ -73,6 +73,7 @@ def validate_authority(authority, plan, plan_sha, allocation, now=None):
         if not path or digest(path) != expected:
             raise BenchmarkError("exact compute-ready activation packet required")
         if (authority.get("purpose") != "COST_ONLY" or authority.get("study") != plan["study"]
+                or authority.get('role') != plan['study'] + '_COST_ONLY_BENCHMARK'
                 or authority.get("scope_id") != plan["claim"]["planned_attempt_id"]
                 or authority.get("scientific_exclusion_key") != plan["claim"]["scientific_exclusion_key"]
                 or authority.get("resources", {}).get("cpu_seconds") != 1200

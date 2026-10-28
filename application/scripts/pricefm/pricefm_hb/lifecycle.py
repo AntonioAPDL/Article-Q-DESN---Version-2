@@ -31,6 +31,167 @@ FINAL = {"COLLECTED", "FAILED_RECONCILED"}
 PARENT_SLICES = {}
 REQUALIFICATION_SCHEMA = 'r157_control_test_requalification_v1'
 CONTROL_RECOVERY_SCHEMA = 'r157_control_recovery_v1'
+REPLACEMENT_PROTOCOL = 'r161_cost_replacement_v1'
+QUALIFICATION_LINEAGE_SCHEMA = 'r161_control_qualification_lineage_v1'
+COST_READY_OBSERVATION_GRACE = 30
+
+
+def validate_historical_accepted_test(reference,state,*,current_sources=None):
+    """Verify historical TEST03 JSON seals against its OLD closure, never NUM."""
+    key=reference.get('claim_key');claim=state.get('claims',{}).get(key,{})
+    if (claim.get('state')!='COLLECTED' or claim.get('application_accepted') is not True
+            or claim.get('task',{}).get('purpose')!='CONTROL_TEST'
+            or claim.get('scope_id')!='r157_control_placement_03'
+            or str(claim.get('job_id'))!=str(reference.get('job_id'))):
+        raise a.ActivationError('exact retained accepted TEST03 required')
+    root=Path(claim['release_path']);publication=Path(claim['publication'])
+    locations={'release':root/'release.json','publication':publication/'collection.json',
+        'accounting':publication/'accounting.json','worker_evidence':publication/'outputs/worker_evidence.json',
+        'parity_result':publication/'outputs/TEST/parity/parity.json',
+        'parity_seal':publication/'outputs/TEST/parity/completed_evidence.json',
+        'runtime_result':publication/'outputs/environment-runtime.json'}
+    records={}
+    for name,path in locations.items():
+        if reference.get(name)!=pin(path):raise a.ActivationError('historical TEST03 metadata pin differs: '+name)
+        records[name]=a.read_pin(reference[name])
+    old=records['release'];worker=records['worker_evidence'];parity=records['parity_result'];runtime=records['runtime_result']
+    if (reference['release']['sha256']!=claim['release_sha256']
+            or r.digest(publication/'release.json')!=claim['release_sha256']
+            or old.get('task_key')!=key or old.get('purpose')!='CONTROL_TEST'
+            or old.get('scope_id')!=claim['scope_id'] or old.get('source_hashes')!=reference.get('source_hashes')
+            or set(old.get('source_hashes',{}))!=set(a.BASE_SOURCES)
+            or worker.get('schema')!=SCHEMA or worker.get('task_key')!=key
+            or worker.get('job_id')!=claim['job_id'] or worker.get('release_sha256')!=claim['release_sha256']
+            or worker.get('authority_sha256')!=claim['authority_sha256']
+            or worker.get('source_hashes')!=old['source_hashes'] or worker.get('application_passed') is not True
+            or worker.get('new_model_fits')!=0 or worker.get('official_origins')!=0
+            or records['publication'].get('application_accepted') is not True
+            or records['publication'].get('no_refund') is not True
+            or records['publication'].get('task_key')!=key
+            or records['publication'].get('reserved_CPU_seconds')!=old['resources']['cpu_seconds']):
+        raise a.ActivationError('retained TEST03 original source/worker/paid publication differs')
+    mutable={'lifecycle.py','activation.py','admission.py','benchmark.py','cost_control.py','operation_budget.py'}
+    current=a.executed_sources('CONTROL_TEST') if current_sources is None else current_sources
+    if any(old['source_hashes'][name]!=current.get(name) for name in set(a.BASE_SOURCES)-mutable):
+        raise a.ActivationError('historical TEST03 numerical/fixture/runtime source changed')
+    request_path=root/'launch-request.json'
+    if r.digest(request_path)!=old['request_sha256']:raise a.ActivationError('old TEST03 launch request changed')
+    request=r.read(request_path);gate=a.validate_qualification(request,reader=a.read_pin)
+    from .fixture import ARRAY_SHAPES
+    comparisons=parity.get('array_comparison',{})
+    if (parity.get('status')!='PASS_TEST_FORECAST_PARITY' or parity.get('accepted') is not True
+            or set(comparisons)!=set(ARRAY_SHAPES)
+            or any(v.get('accepted') is not True or v.get('shape')!=ARRAY_SHAPES[name]
+                   for name,v in comparisons.items())
+            or parity.get('execution',{}).get('namespace')!='TEST'
+            or parity['execution'].get('slurm_job_id')!=claim['job_id']
+            or parity['execution'].get('fixture_manifest_sha256')!=request['accepted_parity_fixture_manifest_sha256']
+            or records['parity_seal'].get('status')!='COMPLETE_TEST_ONLY'
+            or records['parity_seal'].get('artifacts',{}).get('parity.json')!=reference['parity_result']['sha256']
+            or worker.get('files',{}).get('TEST/parity/parity.json')!=reference['parity_result']['sha256']
+            or worker['files'].get('TEST/parity/completed_evidence.json')!=reference['parity_seal']['sha256']
+            or worker['files'].get('environment-runtime.json')!=reference['runtime_result']['sha256']
+            or runtime.get('status')!='verified' or runtime.get('allocation',{}).get('job_id')!=claim['job_id']
+            or any(runtime.get(name)!=gate['parity_runtime'].get(name)
+                   for name in ('executable','python_version','versions','native_library_sha256'))):
+        raise a.ActivationError('retained TEST03 complete15-array/runtime metadata differs')
+    accounting=records['accounting'];parsed=parse_accounting(accounting['sacct_with_times'],claim['job_id'],old['resources'])
+    if (accounting.get('task_key')!=key or accounting.get('job_id')!=claim['job_id']
+            or accounting.get('release_sha256')!=claim['release_sha256']
+            or accounting.get('squeue','').strip() or accounting.get('complete') is not True
+            or accounting.get('terminal') is not True or not parsed['terminal'] or not parsed['complete']
+            or parsed['scope_violations']):
+        raise a.ActivationError('retained TEST03 terminal paid accounting differs')
+    return claim,old
+
+
+def validate_r161_control_test(value,release,state,*,now,allow_spent=False,packet=None):
+    """Exactly TEST04 preserves two failures and accepted03; no fifth default."""
+    from .operation_budget import OperationBudget,recovery_claims
+    lineage=a.read_pin(value.get('qualification_lineage'))
+    if (value.get('protocol_version')!=REPLACEMENT_PROTOCOL
+            or value.get('schema')!=REQUALIFICATION_SCHEMA
+            or value.get('status')!='ROOT_ADMITTED_ONE_SOURCE_BOUND_REPLACEMENT_TEST'
+            or value.get('controller')!=a.OWNER or value.get('scope_id')!='r161_control_placement_04'
+            or release.get('scope_id')!=value['scope_id'] or type(value.get('max_new_attempts')) is not int or value.get('max_new_attempts')!=1
+            or value.get('old_charges_refunded') is not False
+            or value.get('new_executed_sources')!=release.get('source_hashes')
+            or value.get('new_executed_sources')!=a.executed_sources('CONTROL_TEST')
+            or lineage.get('schema')!=QUALIFICATION_LINEAGE_SCHEMA
+            or lineage.get('status')!='ROOT_ADMITTED_TEST04_PRESERVING_OLD_ACCEPTED_TEST'
+            or lineage.get('protocol_version')!=REPLACEMENT_PROTOCOL or lineage.get('controller')!=a.OWNER
+            or type(lineage.get('max_new_attempts')) is not int or lineage.get('max_new_attempts')!=1 or lineage.get('old_charges_refunded') is not False
+            or lineage.get('old_clocks_mutated') is not False):
+        raise a.ActivationError('explicit source-bound TEST04 lineage required')
+    for document in (value,lineage):
+        if (type(document.get('created_epoch')) not in (int,float) or type(document.get('expires_epoch')) not in (int,float)
+                or not math.isfinite(document['created_epoch']) or not math.isfinite(document['expires_epoch'])
+                or not document['created_epoch']<=now<document['expires_epoch']):
+            raise a.ActivationError('finite current TEST04 decision required')
+    references=lineage.get('prior_failed_tests',[])
+    if not isinstance(references,list) or len(references)!=2:
+        raise a.ActivationError('TEST04 retains exactly both original failed tests')
+    failed=[validate_failed_test(ref,state) for ref in references]
+    if [c['scope_id'] for c,_ in failed]!=['r157_control_placement_01','r157_control_placement_02']:
+        raise a.ActivationError('TEST04 failed lineage order differs')
+    accepted,old=validate_historical_accepted_test(lineage.get('prior_accepted_test',{}),state,
+        current_sources=release['source_hashes'])
+    expected=[c['task_key'] for c,_ in failed]+[accepted['task_key']]
+    if allow_spent:expected.append(release['task_key'])
+    if state.get('spent_tests')!=expected:
+        raise a.ActivationError('TEST04 is the only explicitly admitted next qualification; no fifth')
+    old_spec=old['control_cpu_scope'];new_spec=release.get('control_cpu_scope')
+    if lineage.get('paid_control_authorization')!=old_spec['authorization_pin'] or new_spec==old_spec:
+        raise a.ActivationError('TEST04 must preserve, not renew, paid03 control')
+    paid=OperationBudget(old_spec['path']).historical_snapshot(lineage.get('paid_control_snapshot'),old_spec['authorization_pin'])
+    if paid['claims'].get(accepted['task_key'],{}).get('reserved_CPU')!=230:
+        raise a.ActivationError('accepted03 paid control reservation missing')
+    budget,active=control_scope(release,now=now);authorization=a.read_pin(new_spec['authorization_pin'])
+    roles=recovery_claims(authorization)
+    if (authorization.get('protocol_version')!=REPLACEMENT_PROTOCOL
+            or authorization.get('qualification_lineage')!=value['qualification_lineage']
+            or active.get('kind')!='INITIAL' or active.get('CPU_ceiling')!=720
+            or new_spec['scope_id']==old_spec['scope_id']
+            or not roles or release.get('task_key') is not None and roles.get(release['task_key'])!={
+                'purpose':'CONTROL_TEST','study':'TEST','scope_id':'r161_control_placement_04'}
+            or value['expires_epoch']>active['expires_epoch'] or lineage['expires_epoch']>active['expires_epoch']
+            or packet is None or active['expires_epoch']>packet['expires_epoch']):
+        raise a.ActivationError('TEST04 requires exact new protocol funding/lineage without old-clock mutation')
+    return value
+
+
+def select_cost_qualification(release,state,packet):
+    """Select one explicitly identified accepted TEST with the same current17."""
+    tests=[state['claims'][key] for key in state.get('spent_tests',[])]
+    accepted=[v for v in tests if v.get('state')=='COLLECTED' and v.get('application_accepted') is True]
+    if any(v not in accepted and (v.get('state')!='FAILED_RECONCILED' or v.get('application_accepted') is not False) for v in tests):
+        raise a.ActivationError('all other qualification attempts must retain terminal failures')
+    matching=[]
+    for claim in accepted:
+        root=Path(claim['release_path'])
+        if r.digest(root/'release.json')!=claim['release_sha256']:raise a.ActivationError('accepted TEST release changed')
+        qualified=r.read(root/'release.json')
+        if qualified.get('source_hashes')==release['source_hashes']:matching.append((claim,qualified))
+    if len(matching)!=1:raise a.ActivationError('exactly one accepted TEST for this current17 closure required')
+    selected,qualified=matching[0]
+    if len(accepted)>1:
+        selector=release.get('accepted_control_test')
+        if (selector!={'claim_key':selected['task_key'],'release':pin(Path(selected['release_path'])/'release.json')}
+                or selected.get('scope_id')!='r161_control_placement_04'):
+            raise a.ActivationError('multiple accepted TESTs require explicit current TEST04 lineage selection')
+    verified=verify_release(selected['release_path']) # Only CURRENT closure, never historical03.
+    if verified!=qualified or verified.get('source_hashes')!=release['source_hashes']:
+        raise a.ActivationError('selected current TEST metadata/source changed during verification')
+    if len(tests)>1:
+        value=a.read_pin(qualified.get('control_test_requalification'))
+        validate_control_test_requalification(value,qualified,state,now=selected['created'],allow_spent=True,packet=packet)
+        if value.get('control_recovery') is not None or value.get('scope_id')=='r161_control_placement_04':
+            from .operation_budget import recovery_claims
+            spec=qualified['control_cpu_scope'];roles=recovery_claims(a.read_pin(spec['authorization_pin']))
+            if (release.get('control_cpu_scope')!=spec or roles.get(release['task_key'])!={
+                    'purpose':'COST_ONLY','study':release['study'],'scope_id':release['scope_id']}):
+                raise a.ActivationError('COST requires its exact current TEST funding and root-bound role')
+    return selected,qualified
 
 
 def validate_failed_test(reference, state):
@@ -77,6 +238,8 @@ def validate_failed_test(reference, state):
 def validate_control_test_requalification(value,release,state,*,now=None,allow_spent=False,packet=None):
     """One prospective source-bound replacement; old paid attempts stay spent."""
     now=time.time() if now is None else now
+    if value.get('scope_id')=='r161_control_placement_04':
+        return validate_r161_control_test(value,release,state,now=now,allow_spent=allow_spent,packet=packet)
     if (value.get('schema')!=REQUALIFICATION_SCHEMA
             or value.get('status')!='ROOT_ADMITTED_ONE_SOURCE_BOUND_REPLACEMENT_TEST'
             or value.get('controller')!=a.OWNER or type(value.get('max_new_attempts')) is not int or value.get('max_new_attempts')!=1
@@ -289,6 +452,10 @@ class Ledger:
     def reserve(self, release, release_path, config):
         packet = policy_document(release['policy_pin'])
         key = release['task_key']
+        if release.get('cost_replacement') is not None:
+            from . import cost_control
+            plan=r.read(Path(release_path)/'plan.json')
+            cost_control.validate_replacement(release['cost_replacement'],plan,release['plan_sha256'],phase='preclaim')
         with r.lock(CENTRAL/'activation_registry.lock'):
             state = r.read(self.path) if self.path.exists() else dict(schema=SCHEMA, owner=a.OWNER, claims={}, spent_tests=[])
             if state.get('schema') != SCHEMA or state.get('owner') != a.OWNER:
@@ -299,25 +466,9 @@ class Ledger:
             if release['purpose'] in {'CONTROL_TEST','COST_ONLY'} and active:
                 raise a.ActivationError('test and cost stages require complete previous claim drain')
             if release['purpose']=='COST_ONLY':
-                tests=[state['claims'][k] for k in state['spent_tests']]
-                accepted=[v for v in tests if v['state']=='COLLECTED' and v.get('application_accepted') is True]
-                if len(accepted)!=1 or any(v!=accepted[0] and (v['state']!='FAILED_RECONCILED'
-                        or v.get('application_accepted') is not False) for v in tests):
-                    raise a.ActivationError('accepted same-source R157 TEST required before cost claim')
-                qualified=verify_release(accepted[0]['release_path'])
-                if qualified['source_hashes']!=release['source_hashes']:
-                    raise a.ActivationError('accepted TEST uses a different execution source closure')
-                if len(tests)>1:
-                    value=a.read_pin(qualified.get('control_test_requalification'))
-                    validate_control_test_requalification(value,qualified,state,
-                        now=accepted[0]['created'],allow_spent=True,packet=packet)
-                    if value.get('control_recovery') is not None:
-                        from .operation_budget import recovery_claims
-                        spec=qualified['control_cpu_scope']
-                        roles=recovery_claims(a.read_pin(spec['authorization_pin']))
-                        if (release.get('control_cpu_scope')!=spec or roles.get(key)!={
-                                'purpose':'COST_ONLY','study':release['study'],'scope_id':release['scope_id']}):
-                            raise a.ActivationError('recovered COST must use its TEST grant and exact root-bound FI/DK2 role')
+                selected,_ = select_cost_qualification(release,state,packet)
+                if selected.get('scope_id')=='r161_control_placement_04' and release.get('cost_replacement') is None:
+                    raise a.ActivationError('TEST04 COST requires its explicit replacement permit before reservation')
             if release['purpose'] == 'CONTROL_TEST' and state['spent_tests']:
                 value=a.read_pin(release.get('control_test_requalification'))
                 validate_control_test_requalification(value,release,state,packet=packet)
@@ -329,7 +480,8 @@ class Ledger:
                 release_path=str(Path(release_path).absolute()), release_sha256=r.digest(Path(release_path)/'release.json'),
                 remote_root=release['remote_root'], config_sha256=r.identity(config),
                 resources=release['resources'], policy_pin=release['policy_pin'], backend=release.get('backend'),
-                control_test_requalification=release.get('control_test_requalification'))
+                control_test_requalification=release.get('control_test_requalification'),
+                cost_replacement=release.get('cost_replacement'),accepted_control_test=release.get('accepted_control_test'))
             state['claims'][key] = claim
             if release['purpose'] == 'CONTROL_TEST': state['spent_tests'].append(key)
             r.write(self.path, state)
@@ -342,7 +494,7 @@ class Ledger:
             'RELEASE_INTENT':{'SUBMITTED','AMBIGUOUS'},'SUBMITTED':{'ACTIVATION_INTENT','AMBIGUOUS',*FINAL},
             'ACTIVATION_INTENT':{'ACTIVATED','AMBIGUOUS'},'ACTIVATED':{'AMBIGUOUS',*FINAL},'AMBIGUOUS':FINAL}
         if target not in allowed.get(expected,set()): raise a.ActivationError('unreviewed lifecycle transition')
-        protected={'task_key','task','scope_id','created','events','state','release_path','release_sha256','remote_root','config_sha256','resources','policy_pin','backend','control_test_requalification'}
+        protected={'task_key','task','scope_id','created','events','state','release_path','release_sha256','remote_root','config_sha256','resources','policy_pin','backend','control_test_requalification','cost_replacement','accepted_control_test'}
         if protected & fields.keys():raise a.ActivationError('immutable operational claim fields')
         with r.lock(CENTRAL/'activation_registry.lock'):
             state=r.read(self.path);claim=state['claims'][key]
@@ -351,12 +503,14 @@ class Ledger:
             claim.update(fields,state=target);r.write(self.path,state);return claim
 
     def update(self, key, **fields):
-        if set(fields)-{'last_poll','startup_event_claimed','ready_pin','scientific_reservation','legacy_cost_key','authority_sha256','authority_identity_sha256','activation_sha256'}:
+        if set(fields)-{'last_poll','startup_event_claimed','startup_failure_pin','ready_pin','scientific_reservation','legacy_cost_key','authority_sha256','authority_identity_sha256','activation_sha256'}:
             raise a.ActivationError('unreviewed journal annotation')
         with r.lock(CENTRAL/'activation_registry.lock'):
             state=r.read(self.path);claim=state['claims'][key]
             if 'startup_event_claimed' in fields and (fields['startup_event_claimed'] is not True or claim.get('startup_event_claimed')):
                 raise a.ActivationError('startup observation cannot be reset/repeated')
+            if 'startup_failure_pin' in fields and claim.get('startup_failure_pin') is not None:
+                raise a.ActivationError('startup failure evidence cannot be replaced')
             if 'last_poll' in fields and fields['last_poll']<claim.get('last_poll',0):raise a.ActivationError('poll clock cannot move backward')
             claim.update(fields);r.write(self.path,state)
             return state['claims'][key]
@@ -431,6 +585,10 @@ def seal_release(destination, *, purpose, study, task_key, scientific_exclusion_
         request_sha256=request_sha256 or r.digest(root/'launch-request.json'),
         control_cpu_scope=r.read(root/'launch-request.json').get('control_cpu_scope'),
         control_test_requalification=r.read(root/'launch-request.json').get('control_test_requalification'),files=files)
+    request=r.read(root/'launch-request.json')
+    m['cost_replacement']=request.get('cost_replacement')
+    m['accepted_control_test']=request.get('accepted_control_test')
+    if m['cost_replacement'] is not None:m['protocol_version']=REPLACEMENT_PROTOCOL
     write_new(root/'release.json',m);return m
 
 
@@ -560,7 +718,7 @@ def submit_component(release_path,config_path):
             raise a.ActivationError('own HB queue not empty; control attempt retained without submission')
         if release['purpose']=='COST_ONLY':
             from . import cost_control
-            cost=cost_control.Ledger().reserve(r.read(Path(release_path)/'plan.json'),release['plan_sha256'],claim['release_sha256'],claim['config_sha256'],Path(release_path).absolute(),release['remote_root'])
+            cost=cost_control.Ledger().reserve(r.read(Path(release_path)/'plan.json'),release['plan_sha256'],claim['release_sha256'],claim['config_sha256'],Path(release_path).absolute(),release['remote_root'],replacement_pin=release.get('cost_replacement'))
             ledger.update(key,legacy_cost_key=cost['task_key'])
         elif release['purpose'] in {'CACHED_NORMAL_COMPONENT','PREFIX_ASSESSMENT'}:
             from . import prefix_control
@@ -630,6 +788,9 @@ def validate_request(request,release=None):
             or site.get('account')!='128x24' or site.get('partition')!='128x24' or site.get('qos')!='normal'):
         raise a.ActivationError('fresh measured eligible node/account/memory proof required')
     if release:
+        if (request.get('cost_replacement')!=release.get('cost_replacement')
+                or request.get('accepted_control_test')!=release.get('accepted_control_test')):
+            raise a.ActivationError('immutable cost replacement/qualification pointer differs')
         if any(request.get(field)!=release[field] for field in ('purpose','study','scientific_exclusion_key')):
             raise a.ActivationError('request task purpose/study/scientific identity differs')
         if request.get('execution_plan_sha256',request.get('plan',{}).get('sha256'))!=release['plan_sha256']:
@@ -643,6 +804,16 @@ def validate_request(request,release=None):
             raise a.ActivationError('site admission is for a different task')
         a.validate_policy_sources(packet,release['source_hashes'])
         end=min(site['calendar_expires_epoch'],(release.get('backend') or {}).get('calendar_expires_epoch',float('inf')))
+        if release.get('cost_replacement') is not None:
+            from . import cost_control
+            replacement=a.read_pin(release['cost_replacement'])
+            cost_control.validate_replacement_document_binding(replacement,release['plan_sha256'],release['study'],
+                release['scope_id'],release['source_hashes'])
+            if (replacement['new_operational_task_key']!=release['task_key']
+                    or replacement['new_control_cpu_scope']!=release['control_cpu_scope']
+                    or replacement['resource_policy']!=release['policy_pin'] or replacement['resources']!=release['resources']):
+                raise a.ActivationError('replacement request/release grant binding differs')
+            end=min(end,replacement['expires_epoch'])
         if end-time.time()<release['resources']['wall_seconds']+61:
             raise a.ActivationError('whole allocated work and cleanup no longer fit calendar')
     return dict(qualified,site=site,hosts=hosts,policy=packet,handoff=closed)
@@ -653,6 +824,9 @@ def prepare(plan_path,request_path,config_path,destination,purpose='COST_ONLY',f
     if purpose not in {'COST_ONLY','CONTROL_TEST'}:raise a.ActivationError('prefix preparation belongs to its reviewed scientific controller')
     from . import cost_control,benchmark_plan
     plan=cost_control.load_plan(plan_path);request=r.read(request_path);gate=validate_request(request)
+    if request.get('cost_replacement') is not None:
+        if purpose!='COST_ONLY':raise a.ActivationError('replacement permit is cost-only')
+        cost_control.validate_replacement(request['cost_replacement'],plan,r.digest(plan_path),phase='preclaim')
     if purpose!=request['purpose']:
         raise a.ActivationError('preparation purpose differs from reviewed request')
     if request.get('execution_plan_sha256')!=r.digest(plan_path):
@@ -691,7 +865,7 @@ def prepare(plan_path,request_path,config_path,destination,purpose='COST_ONLY',f
         environment_bundle=request['environment_bundle'],purpose=purpose,fixture_sha256=r.digest(fixture) if fixture else None))
     roots={k:request[k] for k in ('runtime_result','runtime_qualification_seal','runtime_accounting','parity_result','parity_seal','parity_runtime_result',
         'parity_qualification_seal','parity_accounting','policy_pin','handoff_receipt','all_hosts_observation','site_admission','adapter_review',
-        'control_test_requalification') if k in request}
+        'control_test_requalification','cost_replacement') if k in request}
     manifest=pack_proofs(destination,roots)
     task_key=r.identity(dict(purpose=purpose,scope_id=scope,study=study,scientific_exclusion_key=exclusion,plan_sha256=r.digest(plan_path)))
     return seal_release(destination,purpose=purpose,study=study,task_key=task_key,
@@ -705,7 +879,10 @@ def issue_authority(key,config_path):
     request=r.read(Path(claim['release_path'])/'launch-request.json');gate=validate_request(request,release)
     now=time.time();backend=release.get('backend') or {}
     end=min(gate['site']['calendar_expires_epoch'],backend.get('calendar_expires_epoch',float('inf')))
+    if release.get('cost_replacement') is not None:
+        end=min(end,a.read_pin(release['cost_replacement'])['expires_epoch'])
     queue=min(1800,int(end-now-release['resources']['wall_seconds']-60),int(backend.get('dispatch_expires_epoch',now+1800)-now))
+    if release['purpose']=='COST_ONLY':queue=min(180,queue)
     if queue<1:raise a.ActivationError('whole allocated work and finite queue do not fit')
     authority=dict(schema=a.AUTHORITY_SCHEMA,status='ADMITTED_QUEUED_EXECUTION',issuer=a.OWNER,controller=a.OWNER,
         purpose=release['purpose'],study=release['study'],scope_id=release['scope_id'],task_key=key,
@@ -715,6 +892,11 @@ def issue_authority(key,config_path):
         executed_sources=release['source_hashes'],reference_numerical_environment=REFERENCE_NUMERICAL_ENV,
         proof_manifest=release['proof_manifest'],policy_pin=release['policy_pin'],automatic_retry=False,new_model_fits=0,
         official_origins=0,promotion=False,full_prefix_admitted=release['purpose'] in {'CACHED_NORMAL_COMPONENT','PREFIX_ASSESSMENT'})
+    if release['purpose']=='COST_ONLY':
+        authority['role']=release['study']+'_COST_ONLY_BENCHMARK'
+        if release.get('cost_replacement') is not None:
+            authority.update(cost_replacement=release['cost_replacement'],protocol_version='r161_cost_replacement_v1',
+                control_cpu_scope=release['control_cpu_scope'])
     for field in ('runtime_result','runtime_qualification_seal','runtime_accounting','parity_result','parity_seal','parity_runtime_result','parity_qualification_seal','parity_accounting','adapter_review','accepted_parity_fixture_manifest_sha256'):
         if field in request:authority[field]=request[field]
     if release['purpose'] in {'CACHED_NORMAL_COMPONENT','PREFIX_ASSESSMENT'}:
@@ -746,6 +928,13 @@ def release_job(key,config_path):
     directory=Path(claim['release_path'])/'authorization';authority=r.read(directory/'authority.json')
     if r.digest(directory/'authority.json')!=claim['authority_sha256']:
         raise a.ActivationError('original authority changed')
+    if release['purpose']=='COST_ONLY':
+        a.validate_authority(authority,'COST_ONLY',release['plan_sha256'],release['source_hashes'])
+        if (authority.get('task_key')!=key or authority.get('slurm_job_id')!=claim['job_id']
+                or authority.get('release_sha256')!=claim['release_sha256']
+                or authority.get('scope_id')!=release['scope_id']
+                or time.time()>=authority['issued_epoch']+authority['max_queue_seconds']):
+            raise a.ActivationError('original cost authority/job/queue must remain valid before release')
     if authority['calendar_expires_epoch']-time.time()<release['resources']['wall_seconds']+60:
         raise a.ActivationError('remaining original calendar insufficient')
     ledger.transition(key,'AUTHORIZED','RELEASE_INTENT')
@@ -770,8 +959,9 @@ def watch_ready(key,config_path,destination):
     if claim['state']!='SUBMITTED' or claim.get('startup_event_claimed'):
         raise a.ActivationError('startup subscription is one-use')
     authority=r.read(Path(claim['release_path'])/'authorization/authority.json')
-    end=min(authority['issued_epoch']+authority['max_queue_seconds'],authority['calendar_expires_epoch'])
-    if end<=time.time():raise a.ActivationError('original queue calendar exhausted')
+    grace=COST_READY_OBSERVATION_GRACE if release['purpose']=='COST_ONLY' else 0
+    end=min(authority['issued_epoch']+authority['max_queue_seconds']+grace,authority['calendar_expires_epoch'])
+    if end<=time.time():raise a.ActivationError('original bounded startup observation window exhausted')
     ledger.update(key,startup_event_claimed=True)
     script='''import json,os,pathlib,resource,signal,time
 resource.setrlimit(resource.RLIMIT_CPU,(10,10))
@@ -799,7 +989,8 @@ else:raise TimeoutError('finite startup subscription expired')
                 or failure.get('authority_sha256')!=claim['authority_sha256']
                 or failure.get('application_passed') is not False or not failure.get('error')):
             raise a.ActivationError('observed failed worker identity/source differs')
-        write_new(Path(destination).with_name('worker-failure-event.json'),event)
+        failure_pin=write_new(Path(destination).with_name('worker-failure-event.json'),event)
+        ledger.update(key,startup_failure_pin=failure_pin)
         raise a.ActivationError('exact worker failed before activation; retained claim requires terminal collection')
     if event.get('event')!='READY':raise a.ActivationError('unrecognized startup stream event')
     ready=event.get('evidence',{})
@@ -815,6 +1006,15 @@ def activate(key,config_path,request_path):
         raise a.ActivationError('one observed READY required')
     ready=a.read_pin(claim['ready_pin']);request=r.read(request_path);gate=validate_request(request,release)
     now=time.time();authority=r.read(Path(claim['release_path'])/'authorization/authority.json')
+    if release['purpose']=='COST_ONLY':
+        if (r.digest(Path(claim['release_path'])/'authorization/authority.json')!=claim['authority_sha256']
+                or r.identity(authority)!=claim['authority_identity_sha256']):
+            raise a.ActivationError('immutable COST authority changed before activation')
+        for role in ('handoff','hosts','site'):
+            evidence=gate.get(role,{})
+            if (not isinstance(evidence,dict) or not a.fresh(evidence,now)
+                    or evidence['observed_epoch']<authority['issued_epoch']):
+                raise a.ActivationError('COST activation requires the fresh post-authority observation')
     if (ready.get('schema')!=a.READY_SCHEMA or ready.get('authority_sha256')!=claim['authority_sha256']
             or ready.get('authority_identity_sha256')!=claim['authority_identity_sha256']
             or ready.get('node')!=release['node'] or ready.get('plan_sha256')!=release['plan_sha256']
@@ -855,6 +1055,9 @@ def activate(key,config_path,request_path):
 def release_and_activate(key,config_path,operator_config,resource_plan,destination,owner_receipt_pin=None):
     """One parent slice owns release, READY, fresh observation and activation."""
     from . import admission
+    current=Ledger().snapshot()['claims'][key]
+    if current.get('task',{}).get('purpose')=='COST_ONLY':
+        raise a.ActivationError('COST_ONLY uses authority-and-observe, release-job, then watch-and-activate; no combined cold observer path')
     ledger,claim,release,config=_bound_claim(key,config_path)
     destination=r.no_links(destination)
     if destination.exists():raise FileExistsError('fresh activation audit required')
@@ -881,6 +1084,87 @@ def release_and_activate(key,config_path,operator_config,resource_plan,destinati
     if result.get('status')!='READY_FOR_PREPARE_ONLY_NOT_ADMITTED':
         raise a.ActivationError('fresh compute-ready observation blocked; attempt retained')
     return activate(key,config_path,result['request']['path'])
+
+
+def _cost_proof_fresh(request,authority,release,*,now=None,startup_observation=False):
+    """Keep the single post-authority proof inside the original queue/TTL."""
+    now=time.time() if now is None else now
+    a.validate_authority(authority,'COST_ONLY',release['plan_sha256'],release['source_hashes'],now)
+    if (authority.get('scope_id')!=release['scope_id'] or authority.get('release_sha256') is None
+            or not 0<authority['max_queue_seconds']<=180):
+        raise a.ActivationError('exact original short-queue cost authority required')
+    epochs=[]
+    for name in ('handoff_receipt','all_hosts_observation','site_admission'):
+        value=a.read_pin(request[name]);epoch=value.get('observed_epoch')
+        if not a.fresh(value,now) or epoch<authority['issued_epoch']:
+            raise a.ActivationError('one fresh post-authority held observation required')
+        epochs.append(epoch)
+    if type(startup_observation) is not bool:
+        raise a.ActivationError('explicit bounded startup observation mode required')
+    grace=COST_READY_OBSERVATION_GRACE if startup_observation else 0
+    if (now>=authority['issued_epoch']+authority['max_queue_seconds']+grace
+            or authority['issued_epoch']+authority['max_queue_seconds']-min(epochs)>=300):
+        raise a.ActivationError('original queue no longer fits the existing proof freshness')
+    validate_request(request,release)
+    return min(epochs)
+
+
+def authority_and_observe(key,config_path,operator_config,resource_plan,destination,owner_receipt_pin=None):
+    """One8CPU parent: one authority bound/hash plus one charged held observer."""
+    from . import admission,cost_control
+    destination=r.no_links(destination)
+    if destination.exists():raise FileExistsError('new authorized-observer audit required')
+    current=Ledger().snapshot()['claims'][key]
+    if current.get('task',{}).get('purpose')!='COST_ONLY' or current.get('state')!='HELD':
+        raise a.ActivationError('one held cost-only job required')
+    destination.mkdir(parents=True)
+    try:
+        authorized=issue_authority(key,config_path) # Sole full release hash before observer.
+        release=r.read(Path(authorized['release_path'])/'release.json')
+        if r.digest(Path(authorized['release_path'])/'release.json')!=authorized['release_sha256']:
+            raise a.ActivationError('immutable authorized release metadata changed')
+        legacy=cost_control.Ledger().snapshot()['claims'][authorized['legacy_cost_key']]
+        admission.authorized_cost_pair(authorized,release,legacy)
+        config=ctl.config(config_path);budget=bind_control(config,release) # Reuses PARENT_SLICES.
+        token=budget.start_operation(key,'admission_refresh')
+        start_self=resource.getrusage(resource.RUSAGE_SELF);start_child=resource.getrusage(resource.RUSAGE_CHILDREN);result=None
+        try:
+            result=admission.refresh_request(resource_plan,operator_config,release['policy_pin'],destination/'fresh',
+                self_claim=authorized,purpose='COST_ONLY',owner_receipt_pin=owner_receipt_pin,
+                execution_plan_sha256=release['plan_sha256'])
+        finally:
+            value=resource.getrusage(resource.RUSAGE_SELF);child=resource.getrusage(resource.RUSAGE_CHILDREN)
+            used=value.ru_utime+value.ru_stime+child.ru_utime+child.ru_stime-start_self.ru_utime-start_self.ru_stime-start_child.ru_utime-start_child.ru_stime
+            budget.finish_operation(key,token,local_CPU=used,
+                remote_CPU=(result or {}).get('observer_budget',{}).get('remote_CPU_seconds'),
+                outcome='AUTHORIZED_HELD_REFRESH_COMPLETE' if result and result.get('request') else 'AUTHORIZED_HELD_REFRESH_FAILED')
+        if not result or result.get('status')!='READY_FOR_PREPARE_ONLY_NOT_ADMITTED':
+            raise a.ActivationError('fresh authorized cost observer blocked; no second refresh')
+        request=a.read_pin(result['request']);authority=r.read(Path(authorized['release_path'])/'authorization/authority.json')
+        _cost_proof_fresh(request,authority,release)
+        proof=dict(schema=SCHEMA,status='AUTHORIZED_WITH_ONE_FRESH_HELD_PROOF',task_key=key,
+            job_id=authorized['job_id'],authority_sha256=authorized['authority_sha256'],request=result['request'],
+            no_second_refresh=True,original_calendar_expires_epoch=authority['calendar_expires_epoch'])
+        return write_new(destination/'authorized-fresh.json',proof)
+    finally:finish_parent_contexts()
+
+
+def watch_and_activate(key,config_path,request_path,destination):
+    """One8CPU parent, two stock bounds/hashes, no observer or outer bound."""
+    claim=Ledger().snapshot()['claims'][key]
+    if claim.get('task',{}).get('purpose')!='COST_ONLY' or claim.get('state')!='SUBMITTED':
+        raise a.ActivationError('one released COST_ONLY job required')
+    root=Path(claim['release_path']);release=r.read(root/'release.json');authority=r.read(root/'authorization/authority.json')
+    if r.digest(root/'release.json')!=claim['release_sha256'] or r.digest(root/'authorization/authority.json')!=claim['authority_sha256']:
+        raise a.ActivationError('original cost metadata changed')
+    _cost_proof_fresh(r.read(request_path),authority,release,startup_observation=True)
+    destination=r.no_links(destination)
+    if destination.exists():raise FileExistsError('new READY/activation audit required')
+    destination.mkdir(parents=True)
+    try:
+        watch_ready(key,config_path,destination/'ready.json')
+        return activate(key,config_path,request_path)
+    finally:finish_parent_contexts()
 
 
 def worker(root,expected_sha):
@@ -1011,6 +1295,55 @@ def status(key,config_path,receipt_path):
         squeue=queue,own_queue=own,sacct=parsed.pop('sacct'),sacct_with_times=raw,
         complete=not queue.strip() and parsed['complete'],terminal=not queue.strip() and parsed['terminal'],accounting=parsed)
     write_new(receipt_path,result);return result
+
+
+def _wait_cost_status_epoch(target,deadline):
+    if target>=deadline:raise a.ActivationError('terminal status wait cannot extend original control expiry')
+    while time.time()<target:
+        now=time.time()
+        if now>=deadline:raise a.ActivationError('original terminal status control clock expired')
+        time.sleep(min(1,target-now,deadline-now))
+
+
+def terminal_status_cost(key,config_path,destination):
+    """At most two ordinary status calls in one8CPU lifetime; never collect."""
+    ledger=Ledger();claim=ledger.snapshot()['claims'][key]
+    if (claim.get('task',{}).get('purpose')!='COST_ONLY' or claim.get('state') not in {'ACTIVATED','SUBMITTED'}
+            or not re.fullmatch(r'[1-9][0-9]*',str(claim.get('job_id','')))):
+        raise a.ActivationError('known submitted/activated COST job required')
+    root=Path(claim['release_path']);release=r.read(root/'release.json');config=ctl.config(config_path)
+    if (r.digest(root/'release.json')!=claim['release_sha256'] or r.identity(config)!=claim['config_sha256']
+            or release.get('task_key')!=key or release.get('source_hashes')!=a.executed_sources('COST_ONLY')):
+        raise a.ActivationError('immutable terminal status metadata identity differs')
+    allocation=claim.get('allocation_start_epoch')
+    if allocation is None:
+        event=a.read_pin(claim.get('startup_failure_pin'))
+        failure=event.get('evidence',{})
+        if (event.get('event')!='FAILED' or failure.get('task_key')!=key
+                or failure.get('job_id')!=claim['job_id'] or failure.get('release_sha256')!=claim['release_sha256']):
+            raise a.ActivationError('unactivated status requires the exact observed worker-failure seal')
+    destination=r.no_links(destination)
+    if destination.exists():raise FileExistsError('new finite status audit required')
+    destination.mkdir(parents=True)
+    try:
+        budget=bind_control(config,release) # Metadata-only prewait, no outer full bound/hash.
+        _,clock=control_scope(release);deadline=clock['expires_epoch']
+        first=max(time.time(),allocation+305) if allocation is not None else time.time()
+        _wait_cost_status_epoch(first,deadline)
+        if time.time()>=deadline:raise a.ActivationError('original status clock expired before I/O')
+        receipt=status(key,config_path,destination/'status-1.json')
+        result=pin(destination/'status-1.json')
+        if not receipt.get('terminal'):
+            second=max(receipt['checked']+301,allocation+1265) if allocation is not None else receipt['checked']+301
+            _wait_cost_status_epoch(second,deadline)
+            if time.time()>=deadline:raise a.ActivationError('original status clock expired before I/O')
+            receipt=status(key,config_path,destination/'status-2.json');result=pin(destination/'status-2.json')
+        summary=dict(schema=SCHEMA,task_key=key,job_id=claim['job_id'],receipt=result,
+            status='COST_TERMINAL_ACCOUNTING_READY' if receipt.get('terminal') else 'COST_STATUS_LIMIT_REACHED_NOT_TERMINAL',
+            terminal=bool(receipt.get('terminal')),ordinary_status_calls=2 if (destination/'status-2.json').exists() else 1,
+            maximum_status_calls=2,automatic_collect=False,implicit_third_call=False)
+        write_new(destination/'status-closeout.json',summary);return summary
+    finally:finish_parent_contexts()
 
 
 def validate_outputs(outputs,claim,release):
@@ -1173,27 +1506,46 @@ def main(argv=None):
     for name in ('plan','request','config','destination'):q.add_argument('--'+name,required=True)
     q.add_argument('--purpose',choices=('CONTROL_TEST','COST_ONLY'),default='COST_ONLY');q.add_argument('--fixture')
     q=sub.add_parser('submit-held');q.add_argument('--release',required=True);q.add_argument('--config',required=True)
-    for action in ('issue-authority','release-job','watch-ready','activate','release-and-activate','status','collect','cancel-held'):
+    q=sub.add_parser('submit-replacement-part1')
+    for name in ('release','config','destination'):q.add_argument('--'+name,required=True)
+    q=sub.add_parser('submit-replacement-part2')
+    for name in ('phase1','config','destination'):q.add_argument('--'+name,required=True)
+    for action in ('issue-authority','authority-and-observe','release-job','watch-ready','activate','watch-and-activate','release-and-activate','status','terminal-status-cost','collect','cancel-held'):
         q=sub.add_parser(action);q.add_argument('--key',required=True);q.add_argument('--config',required=True)
         if action=='watch-ready':q.add_argument('--destination',required=True)
         if action=='activate':q.add_argument('--request',required=True)
-        if action=='release-and-activate':
+        if action=='watch-and-activate':q.add_argument('--request',required=True);q.add_argument('--destination',required=True)
+        if action in ('release-and-activate','authority-and-observe'):
             for name in ('operator-config','resource-plan','destination'):q.add_argument('--'+name,required=True)
             q.add_argument('--owner-receipt')
         if action in ('status','collect'):q.add_argument('--receipt',required=True)
+        if action=='terminal-status-cost':q.add_argument('--destination',required=True)
         if action=='collect':q.add_argument('--incoming',required=True);q.add_argument('--destination',required=True)
     for action in ('worker','payload'):
         q=sub.add_parser(action);q.add_argument('--release',required=True);q.add_argument('--release-sha256',required=True)
     args=parser.parse_args(argv)
     if args.action=='prepare':result=prepare(args.plan,args.request,args.config,args.destination,args.purpose,args.fixture)
-    elif args.action=='submit-held':result=submit_component(args.release,args.config)
+    elif args.action=='submit-held':
+        if r.read(Path(args.release)/'release.json').get('cost_replacement') is not None:
+            raise a.ActivationError('replacement uses submit-replacement-part1/part2; no stock full transfer')
+        result=submit_component(args.release,args.config)
+    elif args.action=='submit-replacement-part1':
+        from . import cost_control
+        result=cost_control.submit_replacement_part1(args.release,args.config,args.destination)
+    elif args.action=='submit-replacement-part2':
+        from . import cost_control
+        result=cost_control.submit_replacement_part2(args.phase1,args.config,args.destination)
     elif args.action=='issue-authority':result=issue_authority(args.key,args.config)
+    elif args.action=='authority-and-observe':result=authority_and_observe(args.key,args.config,args.operator_config,
+        args.resource_plan,args.destination,pin(args.owner_receipt) if args.owner_receipt else None)
     elif args.action=='release-job':result=release_job(args.key,args.config)
     elif args.action=='watch-ready':result=watch_ready(args.key,args.config,args.destination)
     elif args.action=='activate':result=activate(args.key,args.config,args.request)
+    elif args.action=='watch-and-activate':result=watch_and_activate(args.key,args.config,args.request,args.destination)
     elif args.action=='release-and-activate':result=release_and_activate(args.key,args.config,args.operator_config,
         args.resource_plan,args.destination,pin(args.owner_receipt) if args.owner_receipt else None)
     elif args.action=='status':result=status(args.key,args.config,args.receipt)
+    elif args.action=='terminal-status-cost':result=terminal_status_cost(args.key,args.config,args.destination)
     elif args.action=='collect':result=collect(args.key,args.config,args.receipt,args.incoming,args.destination)
     elif args.action=='cancel-held':result=cancel_held(args.key,args.config)
     elif args.action=='worker':result=worker(args.release,args.release_sha256)

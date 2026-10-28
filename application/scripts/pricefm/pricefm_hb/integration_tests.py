@@ -84,6 +84,7 @@ class FinalIntegrationTests(unittest.TestCase):
         config=dict(self.config,_r157_control_budget=self.budget)
         ledger=mock.Mock();ledger.snapshot.return_value={'claims':{self.key:self.claim}}
         stack=__import__('contextlib').ExitStack();self.addCleanup(stack.close)
+        stack.enter_context(mock.patch.object(l,'Ledger',return_value=ledger))
         stack.enter_context(mock.patch.object(l,'_bound_claim',return_value=(ledger,self.claim,self.release,config)))
         self.release_job=stack.enter_context(mock.patch.object(l,'release_job'))
         self.watch=stack.enter_context(mock.patch.object(l,'watch_ready'))

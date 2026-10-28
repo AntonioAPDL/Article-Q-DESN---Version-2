@@ -29,8 +29,13 @@ class StartupStreamTests(unittest.TestCase):
         authority_path = release_path / 'authorization/authority.json'
         r.write(authority_path, self.authority)
         self.claim = dict(state='SUBMITTED', task_key=self.key, job_id='869999',
+            task={'purpose':'CONTROL_TEST','study':'TEST'},
             release_sha256='b' * 64, authority_sha256=r.digest(authority_path),
             release_path=str(release_path), remote_root=str(self.root / 'remote'))
+        self.ledger.snapshot.return_value = {'claims': {self.key: self.claim}}
+        ledger = mock.patch.object(l, 'Ledger', return_value=self.ledger)
+        ledger.start()
+        self.addCleanup(ledger.stop)
         self.config = {'_r157_control_budget': self.budget}
         self.failure = dict(schema=l.SCHEMA, task_key=self.key, job_id=self.claim['job_id'],
             release_sha256=self.claim['release_sha256'], source_hashes=self.release['source_hashes'],
@@ -54,7 +59,9 @@ class StartupStreamTests(unittest.TestCase):
         refresh.assert_not_called()
         activate.assert_not_called()
         self.budget.start_operation.assert_not_called()
-        self.ledger.update.assert_called_once_with(self.key, startup_event_claimed=True)
+        self.assertEqual(self.ledger.update.call_args_list, [
+            mock.call(self.key, startup_event_claimed=True),
+            mock.call(self.key, startup_failure_pin=l.pin(destination / 'worker-failure-event.json'))])
         self.assertFalse((destination / 'ready.json').exists())
         self.assertEqual(r.read(destination / 'worker-failure-event.json'), event)
 

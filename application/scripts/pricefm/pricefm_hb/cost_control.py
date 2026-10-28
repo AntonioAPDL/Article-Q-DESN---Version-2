@@ -418,7 +418,11 @@ def pinned_claim_release(claim):
     path = r.no_links(Path(claim["release_path"]) / "release.json")
     if r.digest(path) != claim["release_sha256"]:
         raise GateError("canonical claim release SHA256 differs")
-    release = verify_release(claim["release_path"])
+    if r.read(path).get("schema") == "r157_hb_release_v1":
+        from . import lifecycle
+        release = lifecycle.verify_release(claim["release_path"])
+    else:
+        release = verify_release(claim["release_path"])
     if release["plan_sha256"] != claim["task"]["plan_sha256"] or release["remote_root"] != claim["remote_root"]:
         raise GateError("canonical claim plan/location differs")
     return release
@@ -584,6 +588,9 @@ def status(key, config_path, receipt_path):
 
 
 def validate_results(outputs, claim, release):
+    if release.get("schema") == "r157_hb_release_v1":
+        from . import lifecycle
+        return lifecycle.validate_cost_outputs(outputs, claim, release)
     outputs = ctl.safe_tree(outputs)
     seal = r.read(outputs / "worker_evidence.json")
     if (seal.get("schema") != SCHEMA or seal.get("task_key") != claim["task_key"]

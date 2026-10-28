@@ -62,7 +62,10 @@ class Budget:
 def run(argv, budget, *, stdin=None, maximum=12):
     budget.check()
     remaining=max(1,int(9-budget.used_cpu()))
-    def limits(): resource.setrlimit(resource.RLIMIT_CPU,(remaining,remaining))
+    def limits():
+        hard=resource.getrlimit(resource.RLIMIT_CPU)[1]
+        cap=remaining if hard==resource.RLIM_INFINITY else min(remaining,hard)
+        resource.setrlimit(resource.RLIMIT_CPU,(cap,cap))
     result=subprocess.run(argv,input=stdin,text=True,capture_output=True,timeout=budget.timeout(maximum),preexec_fn=limits)
     budget.check()
     if result.returncode: raise Blocked('read-only observer failed: '+result.stderr[-1200:])
@@ -72,6 +75,17 @@ def run(argv, budget, *, stdin=None, maximum=12):
 def metadata_snapshot(spec):
     """Stdlib-only read observer, also serialized verbatim to approved SSH hosts."""
     import hashlib, json, os, pathlib, re, resource, socket, subprocess, time
+    def control_only(module,direct):
+        if module=='pricefm_hb.admission':return True
+        actions={
+            'pricefm_hb.lifecycle':{'prepare','submit-held','issue-authority','release-job','watch-ready',
+                'activate','status','collect','cancel-held','release-and-activate'},
+            'pricefm_hb.prefix_control':{'create-plan','draft-master','adopt-master','admit-study','open-wave',
+                'calendar-observation','queue','advance','set-policy','prepare-release','stage-cache',
+                'prepare-assessment','submit-held','issue-authority','release-job','activate','status','collect'}}
+        if module not in actions:return False
+        index=direct.index('-m')+2
+        return index<len(direct) and direct[index] in actions[module]
     if spec.get('remote_observer'): resource.setrlimit(resource.RLIMIT_CPU,(3,3))
     start=time.monotonic(); now=time.time(); rows=[]; unreadable=[]; registry=[]; uid=os.getuid()
     for proc in pathlib.Path('/proc').iterdir():
@@ -87,6 +101,7 @@ def metadata_snapshot(spec):
             direct=[a for a in argv if not any(ch.isspace() for ch in a) and len(a)<4096]
             module=direct[direct.index('-m')+1] if '-m' in direct and direct.index('-m')+1<len(direct) else ''
             readonly=module in {'pricefm_hb.readiness','pricefm_hb.benchmark_plan'}
+            readonly=readonly or control_only(module,direct)
             if module=='pricefm_hb.cost_control':
                 readonly='cost-worker' not in direct
             if '--inspect' in direct and any('529_run_pricefm_stage_r155_qualified_seeds.py' in a for a in direct): readonly=True
@@ -95,6 +110,8 @@ def metadata_snapshot(spec):
             region_re=re.compile(r'(?:^|[/_:=-])(?:FI|DK_2|DK2)(?:$|[/_:=-])')
             relevant=relevant or any(region_re.search(a) for a in direct)
             scientific=module in {'pricefm_hb.benchmark'} or (module=='pricefm_hb.cost_control' and 'cost-worker' in direct)
+            scientific=scientific or module=='pricefm_hb.prefix' or (
+                module=='pricefm_hb.lifecycle' and any(a in direct for a in ('worker','payload')))
             scientific=scientific or any(re.match(r'(?:50[25679]|49[457])_.*\.py$',pathlib.Path(a).name) for a in direct)
             if relevant or scientific:
                 rows.append({'pid':int(proc.name),'start_ticks':int(fields[19]),'argv':argv,'matching_region_or_key':relevant,

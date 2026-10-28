@@ -66,6 +66,30 @@ def _pin_json(pin):
 
 def validate_authority(authority, plan, plan_sha, allocation, now=None):
     """Prospective receipt schema deliberately absent from current grants."""
+    if authority.get("schema") == "r157_hb_execution_authority_v1":
+        from . import activation
+        path = os.environ.get("PRICEFM_ACTIVATION_PATH")
+        expected = os.environ.get("PRICEFM_ACTIVATION_SHA256")
+        if not path or digest(path) != expected:
+            raise BenchmarkError("exact compute-ready activation packet required")
+        if (authority.get("purpose") != "COST_ONLY" or authority.get("study") != plan["study"]
+                or authority.get("scope_id") != plan["claim"]["planned_attempt_id"]
+                or authority.get("scientific_exclusion_key") != plan["claim"]["scientific_exclusion_key"]
+                or authority.get("resources", {}).get("cpu_seconds") != 1200
+                or authority.get("resources", {}).get("wall_seconds") != 1200
+                or authority.get("full_prefix_admitted") is not False):
+            raise BenchmarkError("exact independent regional cost scope required")
+        gate = activation.validate_worker(authority, planning.read_metadata(path), allocation,
+            "COST_ONLY", plan_sha, activation.executed_sources("COST_ONLY"))
+        review = activation.read_pin(authority["adapter_review"], gate["proof_view"])
+        if (review.get("schema") != "r157_hb_adapter_review_v1" or review.get("status") != "REVIEWED_TESTED_COST_ONLY"
+                or review.get("controller_sources") != authority["executed_sources"]
+                or review.get("plan_sha256") != plan_sha or review.get("issuer") != EXPECTED_CONTROLLER
+                or review.get("adapter_sources") != plan["adapter_feasibility"]["adapter_sources"]
+                or review.get("no_AQL") is not True or review.get("no_selection") is not True
+                or review.get("tests_passed") is not True or review.get("full_prefix_admitted") is not False):
+            raise BenchmarkError("exact reviewed v2 source/plan cost-only closure required")
+        return gate
     now = time.time() if now is None else now
     if (authority.get("schema") != AUTHORITY_SCHEMA or authority.get("status") != "ADMITTED_COST_ONLY"
             or authority.get("issuer") != EXPECTED_CONTROLLER or authority.get("controller") != EXPECTED_CONTROLLER
@@ -403,7 +427,7 @@ def run_benchmark(plan_path, authority_path, authority_sha256, stage_root, outpu
     authority = planning.read_metadata(authority_path)
     gate = validate_authority(authority, plan, digest(plan_path), allocation)
     validate_actual_runtime(gate["parity_runtime"])
-    budget = Budget(authority)
+    budget = Budget(dict(authority, expires_epoch=gate.get("expires_epoch", authority.get("expires_epoch"))))
     budget.check()
     output = Path(output_dir).resolve()
     if "BENCHMARK_TEST" not in output.parts or any(p in ("tasks_done", "checkpoints", "training_banks") for p in output.parts):
@@ -422,10 +446,13 @@ def run_benchmark(plan_path, authority_path, authority_sha256, stage_root, outpu
         budget.check()
         adapter = frozen_adapter(plan, prep, config, resolver, budget, gate["parity_runtime"]["native_library_sha256"])
         import numpy as np
+        startup_cpu_seconds = time.process_time()
         result = timing_panel(plan, prep, adapter, budget, output,
             lambda path, arrays: np.savez_compressed(path, **arrays), np.array_equal)
         _assert_frozen_imports(resolver)
         result.update(execution=identity, process_CPU_seconds=time.process_time(),
+            startup_cpu_seconds=startup_cpu_seconds,
+            startup_CPU_definition="absolute worker process CPU through staged-input verification, imports and adapter construction; before all-parent panel preflight and timed contexts",
             aggregate_CPU_seconds=aggregate_cpu_seconds(),
             elapsed_seconds=time.monotonic() - WORKER_IMPORT_MONOTONIC,
             peak_RSS_KiB=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,

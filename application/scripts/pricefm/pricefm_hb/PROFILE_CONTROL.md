@@ -27,6 +27,12 @@ Accepted runtime evidence is reused as provenance, never as permission to run.
 Controller/transport funding is separate. A practical complete specification
 uses400 combined local-plus-remote CPU and1800seconds of command reservations:
 
+The actual phase allocation divides that400 into **350 CPU for the core
+controller** (`controller_limits.aggregate_reserved_CPU_seconds`) and a
+**separate enforced50 CPU caller envelope**. Two phases still require800 CPU.
+The nominal327 CPU core calendar, including its5 CPU local metadata reserve,
+is not a cumulative SELF ledger for the persistent caller or CLI clients.
+
 - Metadata command2CPU /20wall; small proof publication5CPU /30wall.
 - Bulk staging and complete raw return40CPU /120wall each.
 - Full local opaque raw verification40CPU /180wall in an isolated child.
@@ -38,7 +44,7 @@ uses400 combined local-plus-remote CPU and1800seconds of command reservations:
   preparation. A second5+5CPU bounded metadata operation verifies every remote
   staged byte before startup. Metadata/proof/bulk commands reserve and cap both
   local and remote execution, including the framed-stream helper. Local validation is
-  charged once. The complete command calendar reserves327 combined CPU;
+  charged once. The core command calendar reserves327 combined CPU;
   unused reservations are not assumed refunded.
 
 These limits are data in the reviewed specification; the implementation checks
@@ -47,8 +53,22 @@ validation fit them before launch. Each command consumes a durable operation
 reservation before it starts. Failed/ambiguous fees stay charged. Controller
 administration needs its own current finite authorization, separately from
 the code engineering budget and2300 compute pool. Two phases require a new800CPU
-combined controller grant. Earlier200/196 local-focused drafts did not bound
+combined controller-plus-caller grant. Earlier200/196 local-focused drafts did not bound
 every remote process and are superseded without refunding earlier charges.
+
+Before actual prelaunch, a separate current independent review and funding
+proof must bind the exact outer caller source, specification, feature
+publication and invocation. Its separately enforced envelope admits at most16
+exact source-bound CLI clients plus one persistent tracker driver. The reviewed
+kernel/limit premise requires each client to retain default, unblocked SIGXCPU
+with SELF soft2 and hard40, and the driver default, unblocked SIGXCPU with SELF
+soft1. The caller's conservative funding calculation is2 +16×3 =50 CPU; it
+does not substitute waited-descendant CPU for SELF or double-charge the
+separately reserved helpers. Explicitly admitted helper limits remain inside
+the core350. Source tests alone do not establish the actual caller's signal
+state, limits, current authority or eligibility to execute. The inner API/CLI
+examples below require that separately reviewed caller for an actual grant;
+they do not admit an unmetered interactive caller.
 
 Current transport is a standard-library manifest/file stream over direct SSH,
 without generic archive extraction or an external compressor. Both sides use
@@ -62,6 +82,31 @@ drain/publication. Invalid or partial receipts still trigger owned cleanup.
 Unsupported kernel guards fail closed before admission. Legacy rsync was
 rejected after its private cleanup SIGUSR2 conflicted with ownership guards;
 its failure evidence is retained and no signal exception was introduced.
+
+BeeGFS publication uses its tested create-only hardlink operation, followed by
+validated removal of the private pending name. The original `renameat2` flag
+smoke failure (`EINVAL`) and unsupported `O_TMPFILE` probe remain retained;
+ordinary overwriting rename is never a fallback. The receiver reopens and holds
+the original pending inode, verifies the saved precommit fingerprint, then
+links without replacing any existing destination. Before unlinking the pending
+name it requires both held descriptors and both names to bind the same owned
+regular inode, mode, byte length and mtime with exactly two links. Current
+ctime must agree within that linked phase; link/unlink legitimately change
+ctime and it is not compared across phases. Only a same-inode final single-link
+state plus successful parent-directory fsync permits a transfer ACK. Failed or
+interrupted publication retains its evidence and reservation.
+
+Normal staged code/metadata and proof bundles are consumed only after the
+complete transfer ACK and independent expected-hash checks. The one concurrent
+consumer, the compute launcher's `worker_authority.json` wait, treats link2 as
+publication in progress and waits within its unchanged READY/wrapper budget.
+Link2 after a crash times out without reading authority or spawning a worker.
+Unexpected link counts, types, owners and physical-path substitutions fail
+closed. Link1 is eligibility to run the original strict hash/source/job/runtime/
+review/funding gates, not admission itself; its identity is rechecked after
+hashing and immediately before spawn. No scientific/certificate gate is relaxed,
+and complete returned raw bytes still receive independent original-universe
+and SHA verification before acceptance.
 
 ## Durable workflow
 

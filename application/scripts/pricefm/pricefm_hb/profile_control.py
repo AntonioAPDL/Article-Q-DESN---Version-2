@@ -19,6 +19,7 @@ import shlex
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -980,6 +981,44 @@ def collect_run(scope_id, runner=bounded):
         j.close()
 
 
+def require_authority_marker_snapshot(path,expected):
+    """Keep marker link1/physical identity checks separate from full admission."""
+    from .profile_stream import directory_fd
+    path=e.planning.physical(path);parent=directory_fd(path.parent)
+    try:
+        descriptor=os.open(path.name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=parent)
+        try:
+            held=os.fstat(descriptor);named=os.stat(path.name,dir_fd=parent,follow_symlinks=False)
+            require(all(stat.S_ISREG(v.st_mode) and v.st_uid==os.getuid() and v.st_nlink==1
+                        and 0<=v.st_size<=e.MAX_METADATA and e.fingerprint(v)==expected for v in (held,named)),
+                    'owned single-link authority marker identity changed')
+            e.planning.physical(path)
+            current=path.lstat()
+            require(e.fingerprint(current)==expected and current.st_nlink==1,
+                    'authority marker physical path changed')
+        finally:os.close(descriptor)
+    finally:os.close(parent)
+
+
+def wait_for_authority_marker(path,wait_end,wrapper_cpu):
+    """Link2 is publication-in-progress, never permission to hash or spawn."""
+    path=Path(path)
+    while True:
+        require(time.monotonic()<wait_end and e.b.aggregate_cpu_seconds()<wrapper_cpu,
+                'bounded READY wait exhausted; no numerical authority; reservation retained')
+        e.planning.physical(path)
+        try:observed=path.lstat()
+        except FileNotFoundError:observed=None
+        if observed is not None:
+            require(stat.S_ISREG(observed.st_mode) and observed.st_uid==os.getuid()
+                    and 0<=observed.st_size<=e.MAX_METADATA and observed.st_nlink in (1,2),
+                    'owned bounded regular authority marker with one or two links required')
+            if observed.st_nlink==1:
+                expected=e.fingerprint(observed);require_authority_marker_snapshot(path,expected)
+                return expected
+        time.sleep(min(.25,max(.001,wait_end-time.monotonic())))
+
+
 def compute_session(spec_path):
     """Admitted compute-only startup; waits finitely for separately reviewed worker authority."""
     allocation = require_compute()
@@ -1012,11 +1051,9 @@ def compute_session(spec_path):
     wait_end = min(deadline - spec['worker_limits']['wall_seconds'] - whole['exit_reserve_seconds'],
                    start + whole['ready_reserve_seconds'])
     authority_path = root / 'worker_authority.json'
-    while not authority_path.exists():
-        require(time.monotonic() < wait_end and e.b.aggregate_cpu_seconds() < whole['wrapper_cpu_seconds'],
-                'bounded READY wait exhausted; no numerical authority; reservation retained')
-        time.sleep(min(.25, max(.001, wait_end - time.monotonic())))
+    authority_fingerprint=wait_for_authority_marker(authority_path,wait_end,whole['wrapper_cpu_seconds'])
     authority = read(pin(authority_path))
+    require_authority_marker_snapshot(authority_path,authority_fingerprint)
     require(authority.get('scope_id') == spec['scope_id'] and authority.get('output_root') == spec['output_root']
             and authority.get('limits') == spec['worker_limits'] and authority.get('allocation_limits') == whole,
             'exact newly published paired worker envelope required')
@@ -1032,6 +1069,7 @@ def compute_session(spec_path):
     def child_limits():
         resource.setrlimit(resource.RLIMIT_CPU, (worker_cpu, worker_cpu))
     with (root / 'worker.stdout').open('xb') as stdout, (root / 'worker.stderr').open('xb') as stderr:
+        require_authority_marker_snapshot(authority_path,authority_fingerprint)
         child = subprocess.Popen(command, stdout=stdout, stderr=stderr, preexec_fn=child_limits)
         initial_child_CPU = waited_before.ru_utime + waited_before.ru_stime
         self_limit = math.floor(whole['wrapper_cpu_seconds'] - initial_child_CPU)

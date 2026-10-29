@@ -5,11 +5,9 @@ The local transfer helper owns one SSH child in its supervised session.
 """
 from __future__ import annotations
 import argparse
-import ctypes
 import hashlib
 import json
 import os
-import platform
 from pathlib import Path, PurePosixPath
 import re
 import select
@@ -49,15 +47,45 @@ def safe_name(name):
 def fingerprint(s):return (s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
 
 
-def publish_noreplace(fd,part,final):
-    require(sys.platform=='linux' and platform.machine()=='x86_64','atomic Linux x86_64 publication required')
-    libc=ctypes.CDLL(None,use_errno=True)
-    result=libc.syscall(ctypes.c_long(316),ctypes.c_int(fd),ctypes.c_char_p(part.encode()),
-                        ctypes.c_int(fd),ctypes.c_char_p(final.encode()),ctypes.c_uint(1))
-    error=ctypes.get_errno()
-    if result!=0:
-        if error==17:raise ValueError('create-only atomic destination already exists')
-        raise OSError(error,'atomic renameat2(RENAME_NOREPLACE) unavailable; no publication')
+def publication_identity(value):
+    # Link/unlink legitimately change ctime and nlink, but none of these fields.
+    return (value.st_dev,value.st_ino,value.st_uid,value.st_mode,value.st_size,value.st_mtime_ns)
+
+
+def publish_noreplace(fd,part,final,expected_part):
+    """BeeGFS-supported create-only link, validated cleanup, then durable ACK.
+
+    A concurrent marker consumer must wait for nlink1. A crash before unlink
+    deliberately leaves nlink2 and cannot become numerical authority.
+    """
+    source=os.open(part,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=fd)
+    target=None
+    try:
+        before=os.fstat(source);named=os.stat(part,dir_fd=fd,follow_symlinks=False)
+        require(stat.S_ISREG(before.st_mode) and before.st_uid==os.getuid() and before.st_nlink==1
+                and fingerprint(before)==expected_part and fingerprint(named)==fingerprint(before)
+                and publication_identity(named)==publication_identity(before) and named.st_nlink==1,
+                'pending publication file identity changed')
+        try:os.link(part,final,src_dir_fd=fd,dst_dir_fd=fd,follow_symlinks=False)
+        except FileExistsError:raise ValueError('create-only atomic destination already exists') from None
+        target=os.open(final,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=fd)
+        def linked_state(links):
+            held=os.fstat(source);published=os.fstat(target)
+            current=os.stat(final,dir_fd=fd,follow_symlinks=False)
+            require(all(stat.S_ISREG(v.st_mode) and v.st_nlink==links and
+                        publication_identity(v)==publication_identity(before) and
+                        fingerprint(v)==fingerprint(held) for v in (held,published,current)),
+                    'linked publication identity or link count changed')
+            return held
+        linked=linked_state(2)
+        named=os.stat(part,dir_fd=fd,follow_symlinks=False)
+        require(named.st_nlink==2 and publication_identity(named)==publication_identity(before)
+                and fingerprint(named)==fingerprint(linked),'pending publication path changed before unlink')
+        os.unlink(part,dir_fd=fd)
+        linked_state(1);os.fsync(fd);linked_state(1)
+    finally:
+        if target is not None:os.close(target)
+        os.close(source)
 
 
 def directory_fd(path):
@@ -228,10 +256,7 @@ def receive(target,read,max_bytes=BYTE_MAX,directory=False):
         for name,part,expected_part in pending:
             fd=parent_fd(name);final=PurePosixPath(name).name
             try:
-                part_state=os.stat(part,dir_fd=fd,follow_symlinks=False)
-                require(stat.S_ISREG(part_state.st_mode) and part_state.st_uid==os.getuid() and part_state.st_nlink==1
-                        and fingerprint(part_state)==expected_part,'pending publication file identity changed')
-                absent(fd,final);publish_noreplace(fd,part,final);os.fsync(fd)
+                absent(fd,final);publish_noreplace(fd,part,final,expected_part)
             finally:os.close(fd)
     finally:os.close(root_fd)
     return dict(manifest_sha256=expected.hex(),files=len(value['files']),bytes=value['total_bytes'])

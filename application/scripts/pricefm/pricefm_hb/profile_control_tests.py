@@ -407,6 +407,99 @@ class OriginalMetadataTests(unittest.TestCase):
             self.assertFalse({'numpy', 'scipy', 'pandas'} & set(sys.modules))
 
 
+class AuthorityMarkerTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(prefix='pricefm_marker_test_',dir='/dev/shm')
+        self.root=Path(self.tmp.name);self.part=self.root/'private-part'
+        self.marker=self.root/'worker_authority.json';self.part.write_text('{"dummy":"not authority"}\n')
+        self.cpu=patch.object(c.e.b,'aggregate_cpu_seconds',return_value=0);self.cpu.start()
+    def tearDown(self):
+        self.cpu.stop();self.tmp.cleanup()
+    def test_two_link_marker_waits_until_cleanup_without_hash_or_spawn(self):
+        os.link(self.part,self.marker);sleeps=[]
+        def clean(_):
+            sleeps.append(self.marker.stat().st_nlink);self.assertEqual(sleeps[-1],2);self.part.unlink()
+        with patch.object(c.time,'sleep',side_effect=clean),patch.object(c,'pin',side_effect=AssertionError('no hash in wait')),patch.object(c.subprocess,'Popen') as spawn:
+            expected=c.wait_for_authority_marker(self.marker,time.monotonic()+1,1)
+        self.assertEqual(sleeps,[2]);self.assertEqual(self.marker.stat().st_nlink,1);spawn.assert_not_called()
+        c.require_authority_marker_snapshot(self.marker,expected)
+    def test_crashed_two_link_publication_exhausts_original_wait_and_never_spawns(self):
+        os.link(self.part,self.marker)
+        with patch.object(c.subprocess,'Popen') as spawn,self.assertRaisesRegex(ValueError,'bounded READY wait exhausted'):
+            c.wait_for_authority_marker(self.marker,time.monotonic()+.02,1)
+        spawn.assert_not_called();self.assertEqual(self.marker.stat().st_nlink,2)
+    def test_complete_single_link_is_only_eligibility_not_worker_admission(self):
+        os.link(self.part,self.marker);self.part.unlink()
+        with patch.object(c.subprocess,'Popen') as spawn,patch.object(c,'read') as reader:
+            expected=c.wait_for_authority_marker(self.marker,time.monotonic()+1,1)
+        self.assertEqual(expected,c.e.fingerprint(self.marker.stat()));reader.assert_not_called();spawn.assert_not_called()
+    def test_unexpected_third_link_is_rejected_without_wait_or_spawn(self):
+        os.link(self.part,self.marker);os.link(self.part,self.root/'unexpected')
+        with patch.object(c.time,'sleep') as sleep,patch.object(c.subprocess,'Popen') as spawn,self.assertRaisesRegex(ValueError,'one or two links'):
+            c.wait_for_authority_marker(self.marker,time.monotonic()+1,1)
+        sleep.assert_not_called();spawn.assert_not_called()
+    def test_symlink_and_fifo_markers_are_rejected_before_open(self):
+        self.marker.symlink_to(self.part)
+        with self.assertRaisesRegex(ValueError,'symlink'):
+            c.wait_for_authority_marker(self.marker,time.monotonic()+1,1)
+        self.marker.unlink();os.mkfifo(self.marker,0o600)
+        with self.assertRaisesRegex(ValueError,'owned bounded regular'):
+            c.wait_for_authority_marker(self.marker,time.monotonic()+1,1)
+    def test_marker_replacement_or_new_hardlink_after_wait_is_rejected(self):
+        os.link(self.part,self.marker);self.part.unlink()
+        expected=c.wait_for_authority_marker(self.marker,time.monotonic()+1,1)
+        os.link(self.marker,self.part)
+        with self.assertRaisesRegex(ValueError,'single-link'):
+            c.require_authority_marker_snapshot(self.marker,expected)
+        self.part.unlink();self.marker.unlink();self.marker.write_text('{"replacement":true}\n')
+        with self.assertRaisesRegex(ValueError,'identity changed'):
+            c.require_authority_marker_snapshot(self.marker,expected)
+    def test_expired_wait_does_not_admit_an_existing_single_link_marker(self):
+        os.link(self.part,self.marker);self.part.unlink()
+        with self.assertRaisesRegex(ValueError,'bounded READY wait exhausted'):
+            c.wait_for_authority_marker(self.marker,time.monotonic()-.01,1)
+    def compute_fixture(self):
+        from . import environment
+        (self.root/'release_manifest.json').write_text('{"files":{}}\n')
+        spec=dict(remote_root=str(self.root),node='dummy-node',expires_epoch=time.time()+2,
+            allocation_limits=dict(wall_seconds=.1,wrapper_cpu_seconds=100,aggregate_cpu_seconds=600,
+                                   exit_reserve_seconds=.01,ready_reserve_seconds=.015),
+            worker_limits=dict(wall_seconds=.01),environment_bundle='/dummy/not-loaded',scope_id='dummy-only',
+            request=dict(sha256='0'*64),worker_sources={},controller_sources={})
+        def read(value):
+            name=Path(value['path']).name
+            if name=='spec.json':return spec
+            if name=='release_manifest.json':return {'files':{}}
+            if name=='worker_authority.json':return {'dummy':'not authority'}
+            raise AssertionError('unexpected fixture metadata '+name)
+        return [patch.object(c,'require_compute',return_value={'node':'dummy-node','job_id':'dummy-only'}),
+                patch.object(c,'pin',side_effect=lambda p:{'path':str(p),'sha256':'0'*64}),patch.object(c,'read',side_effect=read),
+                patch.object(c,'validate_spec'),patch.object(c.Path,'cwd',return_value=self.root),
+                patch.object(c.signal,'signal'),patch.object(c.signal,'setitimer'),patch.object(c.resource,'setrlimit'),
+                patch.object(environment,'verify_runtime',return_value={'status':'dummy-not-executed'}),
+                patch.object(c.a,'scheduler_evidence',return_value={'end_epoch':time.time()+2}),patch.object(c.e,'write_new')]
+    def test_actual_compute_flow_two_link_crash_never_reads_authority_or_spawns(self):
+        os.link(self.part,self.marker);patches=self.compute_fixture()
+        for item in patches:item.start()
+        try:
+            with patch.object(c.subprocess,'Popen') as spawn,self.assertRaisesRegex(ValueError,'bounded READY wait exhausted'):
+                c.compute_session(self.root/'spec.json')
+            spawn.assert_not_called()
+            self.assertEqual([Path(row.args[0]['path']).name for row in c.read.call_args_list],['spec.json','release_manifest.json'])
+        finally:
+            for item in reversed(patches):item.stop()
+    def test_actual_compute_flow_single_link_still_requires_original_authority_gate(self):
+        os.link(self.part,self.marker);self.part.unlink();patches=self.compute_fixture()
+        for item in patches:item.start()
+        try:
+            with patch.object(c.subprocess,'Popen') as spawn,self.assertRaisesRegex(ValueError,'exact newly published paired worker envelope'):
+                c.compute_session(self.root/'spec.json')
+            spawn.assert_not_called()
+            self.assertEqual(Path(c.read.call_args_list[-1].args[0]['path']).name,'worker_authority.json')
+        finally:
+            for item in reversed(patches):item.stop()
+
+
 class AccountingTests(unittest.TestCase):
     def spec(self):
         return dict(allocation_limits=dict(aggregate_cpu_seconds=600, wall_seconds=1200, memory_MiB=2048), node='node-13')

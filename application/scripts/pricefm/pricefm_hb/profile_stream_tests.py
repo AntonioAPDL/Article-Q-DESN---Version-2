@@ -40,9 +40,97 @@ class StreamTests(unittest.TestCase):
         part=self.target/'pending';final=self.target/'authority.json';part.write_bytes(b'new');final.write_bytes(b'keep')
         fd=s.directory_fd(self.target)
         try:
-            with self.assertRaisesRegex(ValueError,'create-only'):s.publish_noreplace(fd,part.name,final.name)
+            with self.assertRaisesRegex(ValueError,'create-only'):
+                s.publish_noreplace(fd,part.name,final.name,s.fingerprint(part.stat()))
         finally:os.close(fd)
         self.assertEqual(final.read_bytes(),b'keep');self.assertEqual(part.read_bytes(),b'new')
+
+    def test_hardlink_commit_exposes_two_links_until_cleanup_then_single_link_ack(self):
+        out=io.BytesIO();sent=s.send(self.source/'binary.bin',out.write,1024**2)
+        final=self.target/'worker_authority.json';original=s.os.unlink;observed=[]
+        def unlink(path,*args,**kwargs):
+            if isinstance(path,str) and '.profile-part-' in path:
+                part=os.stat(path,dir_fd=kwargs['dir_fd'],follow_symlinks=False)
+                current=final.lstat();observed.append((part.st_ino,current.st_ino,current.st_nlink))
+                self.assertEqual(part.st_ino,current.st_ino);self.assertEqual(current.st_nlink,2)
+            return original(path,*args,**kwargs)
+        with patch.object(s.os,'unlink',side_effect=unlink):
+            got=s.receive(final,io.BytesIO(out.getvalue()).read,1024**2)
+        self.assertEqual(got,sent);self.assertEqual(len(observed),1)
+        self.assertEqual(final.stat().st_nlink,1)
+
+    def test_crash_before_unlink_retains_two_links_and_no_ack(self):
+        out=io.BytesIO();s.send(self.source/'binary.bin',out.write,1024**2)
+        final=self.target/'worker_authority.json';original=s.os.unlink
+        def fail(path,*args,**kwargs):
+            if isinstance(path,str) and '.profile-part-' in path:raise OSError('fixture interrupted before cleanup')
+            return original(path,*args,**kwargs)
+        with patch.object(s.os,'unlink',side_effect=fail),self.assertRaisesRegex(OSError,'interrupted'):
+            s.receive(final,io.BytesIO(out.getvalue()).read,1024**2)
+        self.assertEqual(final.stat().st_nlink,2);self.assertEqual(final.read_bytes(),self.binary)
+        self.assertEqual(len(list(self.target.glob('*.profile-part-*'))),1)
+
+    def test_replaced_part_after_open_is_detected_before_unlink(self):
+        raw,_=self.stream();original=s.os.link;changed=False
+        def link(part,final,*args,**kwargs):
+            nonlocal changed
+            if not changed:
+                changed=True;fd=kwargs['src_dir_fd'];os.unlink(part,dir_fd=fd)
+                other=os.open(part,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600,dir_fd=fd)
+                os.write(other,b'wrong inode');os.close(other)
+            return original(part,final,*args,**kwargs)
+        with patch.object(s.os,'link',side_effect=link),self.assertRaisesRegex(ValueError,'linked publication identity'):
+            s.receive(self.target,io.BytesIO(raw).read,1024**2,True)
+        self.assertEqual((self.target/'binary.bin').stat().st_nlink,2)
+
+    def test_unexpected_third_link_is_not_cleaned_or_acknowledged(self):
+        raw,_=self.stream();original=s.os.link;extra=self.target/'unexpected_alias'
+        def link(part,final,*args,**kwargs):
+            result=original(part,final,*args,**kwargs)
+            original(part,extra,src_dir_fd=kwargs['src_dir_fd'],follow_symlinks=False)
+            return result
+        with patch.object(s.os,'link',side_effect=link),self.assertRaisesRegex(ValueError,'link count changed'):
+            s.receive(self.target,io.BytesIO(raw).read,1024**2,True)
+        self.assertEqual(extra.stat().st_nlink,3)
+
+    def test_changed_mode_during_link_fails_before_cleanup(self):
+        raw,_=self.stream();original=s.os.link
+        def link(part,final,*args,**kwargs):
+            result=original(part,final,*args,**kwargs)
+            os.chmod(final,0o400,dir_fd=kwargs['dst_dir_fd']);return result
+        with patch.object(s.os,'link',side_effect=link),self.assertRaisesRegex(ValueError,'linked publication identity'):
+            s.receive(self.target,io.BytesIO(raw).read,1024**2,True)
+        self.assertEqual((self.target/'binary.bin').stat().st_nlink,2)
+
+    def test_destination_symlink_never_overwritten(self):
+        part=self.target/'pending';part.write_bytes(b'new')
+        untouched=self.target/'untouched';untouched.write_bytes(b'keep')
+        final=self.target/'authority.json';final.symlink_to(untouched)
+        fd=s.directory_fd(self.target)
+        try:
+            with self.assertRaisesRegex(ValueError,'create-only'):
+                s.publish_noreplace(fd,part.name,final.name,s.fingerprint(part.stat()))
+        finally:os.close(fd)
+        self.assertTrue(final.is_symlink());self.assertEqual(untouched.read_bytes(),b'keep')
+
+    def test_directory_fsync_failure_never_returns_ack(self):
+        raw,_=self.stream();original=s.os.fsync
+        def sync(fd):
+            if stat.S_ISDIR(os.fstat(fd).st_mode):raise OSError('fixture directory fsync failure')
+            return original(fd)
+        with patch.object(s.os,'fsync',side_effect=sync),self.assertRaisesRegex(OSError,'directory fsync'):
+            s.receive(self.target,io.BytesIO(raw).read,1024**2,True)
+
+    def test_replaced_final_after_unlink_cannot_be_acknowledged(self):
+        raw,_=self.stream();original=s.os.unlink;changed=False
+        def unlink(part,*args,**kwargs):
+            nonlocal changed
+            result=original(part,*args,**kwargs)
+            if isinstance(part,str) and '.profile-part-' in part and not changed:
+                changed=True;final=self.target/'binary.bin';original(final);final.write_bytes(b'substituted')
+            return result
+        with patch.object(s.os,'unlink',side_effect=unlink),self.assertRaisesRegex(ValueError,'linked publication identity'):
+            s.receive(self.target,io.BytesIO(raw).read,1024**2,True)
 
     def test_replaced_pending_inode_cannot_be_published(self):
         raw,_=self.stream();original=s.os.stat;changed=False

@@ -28,6 +28,15 @@ import time
 GUARD_SHARED = None
 
 
+class OwnedStopError(RuntimeError):
+    """Keep exact proved-owned state visible through unchanged caller errors."""
+    def __init__(self,witness):
+        self.witness=witness
+        raw=json.dumps(witness,sort_keys=True,separators=(',',':'),allow_nan=False)
+        if len(raw.encode())>65536:raise RuntimeError('owned stop witness exceeds bounded diagnostic size')
+        super().__init__('owned command group failed to stop for accounting; owned_stop_witness='+raw)
+
+
 def require(value, message):
     if not value:
         raise RuntimeError(message)
@@ -87,7 +96,7 @@ def process_record(pid):
     return dict(pid=pid, uid=uid, state=fields[0], ppid=int(fields[1]),
         pgid=int(fields[2]), sid=int(fields[3]), start_ticks=int(fields[19]),
         own_ticks=int(fields[11]) + int(fields[12]),
-        waited_ticks=int(fields[13]) + int(fields[14]))
+        waited_ticks=int(fields[13]) + int(fields[14]), last_processor=int(fields[36]))
 
 
 def children_of(pid):
@@ -121,10 +130,57 @@ def session_records(sid, leader_start, uid, core, enforce_count=True):
             try: affinity = os.sched_getaffinity(item['pid'])
             except ProcessLookupError: continue
             require(affinity == {core}, 'command affinity escaped the proved single CPU')
+            item.update(affinity=sorted(affinity),affinity_proved=True)
+        else:item.update(affinity=None,affinity_proved=False)
         result.append(item)
         pending.extend(children_of(pid))
         if enforce_count: require(len(result) <= 64, 'owned helper-count bound exceeded')
     return result
+
+
+def guardian_self_upper(core,ticks):
+    """Fresh exact-owned guardian SELF; no unpaired shared CPU/time sample."""
+    if GUARD_SHARED is None:return 0.,0.
+    pid=struct.unpack('Q',GUARD_SHARED[40:48])[0]
+    birth=struct.unpack('Q',GUARD_SHARED[72:80])[0]
+    item=process_record(pid)
+    require(birth>0 and item['pid']==pid==os.getppid() and item['uid']==os.getuid()
+            and item['start_ticks']==birth,'owned guardian CPU sample identity changed')
+    require(os.sched_getaffinity(pid)=={core},'owned guardian CPU sample affinity changed')
+    rounding=2/ticks  # Separate proc utime/stime conversions can each round down.
+    return item['own_ticks']/ticks+rounding,rounding
+
+
+def one_core_stop_upper(last_cpu,last_anchor,birth_ticks,ticks,now):
+    if last_cpu is None:
+        # Birth tick is floored. This bounds startup before the first complete
+        # snapshot, including the one-thread guardian before fork/pinning.
+        return time.clock_gettime(time.CLOCK_BOOTTIME)-birth_ticks/ticks
+    require(last_anchor is not None and now>=last_anchor,'proved CPU anchor clock changed')
+    return last_cpu+now-last_anchor
+
+
+def await_owned_stop(records,*,stop_start,inner_deadline,active_ceiling,cpu_upper,heartbeat,context,killed):
+    """Wait finitely; unknown running/kernel work is charged as one-core wall."""
+    stop_end=min(inner_deadline,stop_start+5.)
+    while True:
+        heartbeat(time.monotonic());items=records();now=time.monotonic();heartbeat(now)
+        stopped=all(item['state'] in ('T','t','Z') for item in items)
+        if stopped and (killed() or now<stop_end):return items,now-stop_start
+        upper=cpu_upper(now)
+        failure=('STOP_WAIT_INNER_WALL' if now>=inner_deadline else
+                 'STOP_WAIT_WINDOW_EXHAUSTED' if now>=stop_end else
+                 'STOP_WAIT_CPU_UPPER_BOUNDARY' if upper>=active_ceiling else None)
+        if failure:
+            witness=dict(context,schema='r164_owned_stop_failure_witness_v1',failure=failure,
+                monitor_pid=os.getpid(),monitor_host=os.uname().nodename,observed_monotonic=now,
+                stop_requested_monotonic=stop_start,stop_deadline_monotonic=stop_end,
+                original_inner_deadline_monotonic=inner_deadline,stop_wait_limit_seconds=5.,
+                elapsed_stop_wait_seconds=now-stop_start,one_core_CPU_upper=upper,
+                CPU_active_ceiling=active_ceiling,permitted_stopped_states=['T','t','Z'],
+                exact_proved_owned_items=items,states_are_not_accepted_for_accounting=True)
+            raise OwnedStopError(witness)
+        time.sleep(min(.001,max(0,stop_end-now)))
 
 
 def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
@@ -164,6 +220,11 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
         for name, fd in (('stdout', 1), ('stderr', 2)):
             old_blocking[name] = os.get_blocking(fd); os.set_blocking(fd, False)
     reason = None; max_cpu = 0.; max_rounding = 0.; killed = False; completed = False
+    max_stop_wait = 0.; proved_snapshots = 0
+    last_snapshot_cpu=None;last_snapshot_anchor=None
+    birth_ticks=(struct.unpack('Q',GUARD_SHARED[72:80])[0] if GUARD_SHARED is not None
+                 else process_record(os.getpid())['start_ticks'])
+    require(birth_ticks>0,'owned process birth required before stop CPU proof')
 
     def group_signal(value):
         # seccomp prevents descendants changing SID/PGID or joining an older
@@ -193,24 +254,35 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
                 status = os.waitstatus_to_exitcode(code); child.returncode = status
 
     def snapshot_group():
-        nonlocal max_rounding
+        nonlocal max_rounding,max_stop_wait,proved_snapshots,last_snapshot_cpu,last_snapshot_anchor
+        stop_start=time.monotonic()
         group_signal(signal.SIGSTOP)
-        stop_end = time.monotonic() + .2
-        while True:
-            items = session_records(sid, leader['start_ticks'], uid, core)
-            if all(item['state'] in ('T', 't', 'Z') for item in items): break
-            require(time.monotonic() < stop_end, 'owned command group failed to stop for accounting')
-            time.sleep(.001)
+        def heartbeat(now):
+            if GUARD_SHARED is not None:GUARD_SHARED[64:72]=struct.pack('d',now)
+        _,waited=await_owned_stop(lambda:session_records(sid,leader['start_ticks'],uid,core),
+            stop_start=stop_start,inner_deadline=deadline,active_ceiling=active_ceiling,
+            cpu_upper=lambda now:one_core_stop_upper(last_snapshot_cpu,last_snapshot_anchor,birth_ticks,ticks,now),
+            heartbeat=heartbeat,killed=lambda:killed,context=dict(monitor_affinity=[core],session_id=sid,
+                leader_start_ticks=leader['start_ticks'],uid=uid,proved_prior_snapshots=proved_snapshots,
+                last_proved_CPU_upper=last_snapshot_cpu,last_proved_monotonic_anchor=last_snapshot_anchor,
+                initial_guardian_or_monitor_birth_ticks=birth_ticks,monitor_lifetime_wall_at_entry=lifetime))
+        max_stop_wait=max(max_stop_wait,waited)
+        accounting_anchor=time.monotonic()  # BEFORE every counter/accounting read.
         reap()
         items = session_records(sid, leader['start_ticks'], uid, core)
+        require(all(item['state'] in ('T','t','Z') for item in items),'owned accounting state changed after stop proof')
         own = resource.getrusage(resource.RUSAGE_SELF)
         # Group is stopped. Each live process's waited_ticks describes only
         # already-reaped, absent descendants. Orphans reaped by this supervisor
         # are absent from that set and counted exactly once via wait4 usage.
-        rounding = 4 * len(items) / ticks; max_rounding = max(max_rounding, rounding)
-        guardian_cpu = 0 if GUARD_SHARED is None else struct.unpack('d', GUARD_SHARED[32:40])[0]
+        guardian_cpu,guardian_rounding=guardian_self_upper(core,ticks)
+        rounding = 4 * len(items) / ticks+guardian_rounding; max_rounding = max(max_rounding, rounding)
         cpu = own.ru_utime + own.ru_stime + guardian_cpu + reaped_cpu + rounding + sum(
             item['own_ticks'] + item['waited_ticks'] for item in items) / ticks
+        # guardian_cpu already includes its two-tick rounding above.
+        cpu-=guardian_rounding
+        last_snapshot_cpu=cpu;last_snapshot_anchor=accounting_anchor
+        proved_snapshots+=1
         return items, cpu
 
     def expired(*_):
@@ -266,6 +338,8 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
             cap_reason=reason, aggregate_CPU_seconds=actual, conservative_max_snapshot_CPU=max_cpu,
             CPU_limit=cpu_seconds, CPU_active_ceiling=active_ceiling, wall_seconds=time.monotonic() - start,
             maximum_live_tick_rounding_seconds=max_rounding,
+            maximum_stop_wait_seconds=max_stop_wait,proved_stopped_snapshots=proved_snapshots,
+            guardian_CPU_snapshot_source='OWNED_PROC_SELF_TICKS_PLUS_TWO_ROUNDING_TICKS',
             session_id=sid, leader_start_ticks=leader['start_ticks'], uid=uid, affinity=[core],
             reaped=reaped, all_owned_descendants_reaped=True, kernel_escape_filter=True,
             orphan_subreaper=True, counters_are_attribution_not_another_charge=True)
@@ -294,6 +368,7 @@ def guarded_run(command, args):
     prctl(36, 1); prctl(4, 0)
     GUARD_SHARED = mmap.mmap(-1, 128)
     GUARD_SHARED[40:48] = struct.pack('Q', os.getpid())
+    GUARD_SHARED[72:80] = struct.pack('Q',process_record(os.getpid())['start_ticks'])
     GUARD_SHARED[64:72] = struct.pack('d', time.monotonic())
     os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
     old = resource.getrlimit(resource.RLIMIT_CPU)
@@ -313,7 +388,9 @@ def guarded_run(command, args):
                 receipt.write(json.dumps(value, sort_keys=True).encode()); receipt.flush()
                 os._exit(value['returncode'])
             except BaseException as exc:
-                receipt.write(json.dumps({'returncode': 125, 'cap_reason': type(exc).__name__ + ': ' + str(exc)}).encode())
+                failure={'returncode':125,'cap_reason':type(exc).__name__+': '+str(exc)}
+                if isinstance(exc,OwnedStopError):failure['owned_stop_witness']=exc.witness
+                receipt.write(json.dumps(failure,allow_nan=False).encode())
                 receipt.flush(); os._exit(125)
         monitor = process_record(pid)
         while True:
@@ -384,6 +461,7 @@ def guarded_run(command, args):
         require(aggregate < args.cpu, 'complete guardian/monitor/command CPU grant exhausted')
         value.update(aggregate_CPU_seconds=aggregate, guardian_included_in_CPU=True,
                      independent_guardian=True, guardian_forced_monitor_stop=forced,
+                     guardian_nondumpable=True,
                      complete_lifecycle_wall_seconds=time.monotonic() - start)
         if not args.passthrough: print(json.dumps(value, sort_keys=True))
         return value['returncode']

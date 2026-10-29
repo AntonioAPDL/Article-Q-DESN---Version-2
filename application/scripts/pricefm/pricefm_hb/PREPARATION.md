@@ -1,5 +1,7 @@
 # PriceFM preparation tools
 
+R164 execution and repair additions are documented in [EXECUTION_READINESS.md](EXECUTION_READINESS.md). The preparation tools below retain their original non-admitting role; use the dated implementation audit to distinguish source readiness from actual numerical evidence.
+
 These administrative tools turn fixed metadata into reproducible preparation evidence. They do not stage, submit, release, cancel or retry jobs. They do not import numerical executors, change a live owner, revise scientific prices, grant numerical work, or renew an expired scope. Existing scientific modules are unchanged.
 
 ## Workflow

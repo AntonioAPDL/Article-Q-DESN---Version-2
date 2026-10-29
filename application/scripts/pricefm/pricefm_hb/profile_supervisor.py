@@ -27,7 +27,7 @@ import tempfile
 import time
 
 GUARD_SHARED = None
-BOOTSTRAP_ANCHOR_TAG = 'OWNED_PRE_FIRST_FORK_CPU_MONOTONIC_V1'
+BOOTSTRAP_ANCHOR_TAG = 'OWNED_PRE_FIRST_FORK_CPU_AND_WAITED_MONOTONIC_V2'
 
 
 class OwnedStopError(RuntimeError):
@@ -140,9 +140,11 @@ def session_records(sid, leader_start, uid, core, enforce_count=True):
     return result
 
 
-def guardian_self_upper(core,ticks):
+def guardian_self_upper(core,ticks,bootstrap_anchor=None):
     """Fresh exact-owned guardian SELF; no unpaired shared CPU/time sample."""
-    if GUARD_SHARED is None:return 0.,0.
+    if GUARD_SHARED is None:
+        require(bootstrap_anchor is None, 'inherited history requires owned guardian context')
+        return 0.,0.
     pid=struct.unpack('Q',GUARD_SHARED[40:48])[0]
     birth=struct.unpack('Q',GUARD_SHARED[72:80])[0]
     item=process_record(pid)
@@ -150,57 +152,85 @@ def guardian_self_upper(core,ticks):
             and item['start_ticks']==birth,'owned guardian CPU sample identity changed')
     require(os.sched_getaffinity(pid)=={core},'owned guardian CPU sample affinity changed')
     rounding=2/ticks  # Separate proc utime/stime conversions can each round down.
-    return item['own_ticks']/ticks+rounding,rounding
+    own_upper = item['own_ticks']/ticks+rounding
+    if bootstrap_anchor is not None:
+        bootstrap_anchor_fields(bootstrap_anchor, core, ticks, time.monotonic())
+        require(bootstrap_anchor[1:4] == (pid,birth,os.getuid())
+                and item['waited_ticks']/ticks <= bootstrap_anchor[9],
+                'guardian inherited waited history identity or bound changed')
+        return (own_upper+bootstrap_anchor[9],
+                rounding+bootstrap_anchor[9]-bootstrap_anchor[8])
+    return own_upper,rounding
 
 
 def bootstrap_anchor_digest(values):
-    return hashlib.sha256(struct.pack('QQQQQdd', *values)).hexdigest()
+    return hashlib.sha256(struct.pack('QQQQQdddd', *values)).hexdigest()
 
 
 def bootstrap_anchor_fields(anchor, core, ticks, now):
     """Validate one immutable, typed pre-fork sample, never a mutable pair."""
-    require(type(anchor) is tuple and len(anchor) == 9 and anchor[0] == BOOTSTRAP_ANCHOR_TAG,
+    require(type(anchor) is tuple and len(anchor) == 11 and anchor[0] == BOOTSTRAP_ANCHOR_TAG,
             'immutable bootstrap anchor tuple required')
     require(all(type(value) is int and value >= 0 for value in anchor[1:6])
             and anchor[1] > 0 and anchor[2] > 0 and anchor[5] > 0,
             'bootstrap anchor identity fields invalid')
     require(anchor[4] == core and anchor[5] == ticks,
             'bootstrap anchor CPU or clock identity changed')
-    require(type(anchor[6]) is float and type(anchor[7]) is float
-            and math.isfinite(anchor[6]) and math.isfinite(anchor[7])
-            and 0 <= anchor[6] <= now and anchor[7] >= 2 / ticks,
+    require(all(type(v) is float and math.isfinite(v) for v in anchor[6:10])
+            and 0 <= anchor[6] <= now and anchor[8] >= 0
+            and anchor[9] >= anchor[8] + 2/ticks
+            and anchor[7] >= anchor[9] + 2/ticks,
             'bootstrap anchor CPU or monotonic ordering invalid')
-    require(type(anchor[8]) is str and anchor[8] == bootstrap_anchor_digest(anchor[1:8]),
+    require(type(anchor[10]) is str and anchor[10] == bootstrap_anchor_digest(anchor[1:10]),
             'bootstrap anchor immutable sample fingerprint changed')
     return anchor
 
 
 def pre_fork_cpu_anchor(core, ticks):
-    """Include every startup CPU tick, before the first possible child exists.
+    """Include startup SELF and inherited waited CPU before any new child.
 
     The timestamp precedes both counter reads, so their interval is counted
     twice conservatively. Later owned work shares this one CPU. A tuple is
     inherited by fork/COW; no writer publishes another CPU/time sample.
+    Exec preserves a login shell's earlier waited CPU even with no live
+    children. That coherent kernel history is charged, not assumed absent:
+    its exact C0 is used in final totals and its upper H0 in live bounds.
     """
     pid = os.getpid(); before = process_record(pid)
-    def no_earlier_children_or_threads():
+    def child_history():
         usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+        values = (usage.ru_utime, usage.ru_stime)
+        require(all(type(v) in (int,float) and math.isfinite(v) and v >= 0 for v in values),
+                'bootstrap inherited waited CPU counter invalid')
+        return values
+    before_history = child_history()
+    def no_live_children_or_threads():
         require(os.sched_getaffinity(0) == {core}
                 and len(list((Path('/proc') / str(pid) / 'task').iterdir())) == 1
-                and not children_of(pid) and usage.ru_utime == usage.ru_stime == 0,
-                'bootstrap anchor requires one CPU/thread and no earlier child CPU')
-    no_earlier_children_or_threads()
-    require(before['uid'] == os.getuid() and before['waited_ticks'] == 0,
+                and not children_of(pid),
+                'bootstrap anchor requires one CPU/thread and no live children')
+    no_live_children_or_threads()
+    require(before['uid'] == os.getuid() and before['waited_ticks'] >= 0,
             'bootstrap anchor initial identity or waited CPU invalid')
     anchor_time = time.monotonic()  # BEFORE either SELF counter read.
     usage = resource.getrusage(resource.RUSAGE_SELF)
+    sampled_history = child_history()
     sample = process_record(pid)
     require((sample['pid'], sample['start_ticks'], sample['uid'])
             == (before['pid'], before['start_ticks'], before['uid'])
-            and sample['waited_ticks'] == 0, 'bootstrap anchor identity changed during sample')
-    no_earlier_children_or_threads()
-    upper = max(usage.ru_utime + usage.ru_stime, sample['own_ticks'] / ticks) + 2 / ticks
-    values = (pid, sample['start_ticks'], sample['uid'], core, ticks, anchor_time, upper)
+            and sample['waited_ticks'] == before['waited_ticks'],
+            'bootstrap anchor identity or inherited waited CPU changed during sample')
+    no_live_children_or_threads()
+    after_history = child_history(); after = process_record(pid)
+    require(before_history == sampled_history == after_history
+            and (after['pid'],after['start_ticks'],after['uid'],after['waited_ticks'])
+                == (before['pid'],before['start_ticks'],before['uid'],before['waited_ticks']),
+            'bootstrap inherited waited CPU history changed during sample')
+    history_cpu = sum(sampled_history)
+    history_upper = max(history_cpu, sample['waited_ticks']/ticks) + 2/ticks
+    upper = max(usage.ru_utime + usage.ru_stime, sample['own_ticks'] / ticks) + 2/ticks + history_upper
+    values = (pid, sample['start_ticks'], sample['uid'], core, ticks, anchor_time, upper,
+              history_cpu, history_upper)
     anchor = (BOOTSTRAP_ANCHOR_TAG, *values, bootstrap_anchor_digest(values))
     return bootstrap_anchor_fields(anchor, core, ticks, time.monotonic())
 
@@ -212,7 +242,8 @@ def validate_bootstrap_anchor(anchor, core, ticks, now):
     birth = struct.unpack('Q', GUARD_SHARED[72:80])[0]
     item = process_record(pid)
     require(anchor[1:4] == (pid, birth, os.getuid()) and pid == os.getppid()
-            and (item['pid'], item['start_ticks'], item['uid']) == anchor[1:4],
+            and (item['pid'], item['start_ticks'], item['uid']) == anchor[1:4]
+            and item['waited_ticks']/ticks <= anchor[9],
             'bootstrap anchor guardian identity changed')
     require(os.sched_getaffinity(pid) == {core}
             and len(list((Path('/proc') / str(pid) / 'task').iterdir())) == 1,
@@ -233,6 +264,17 @@ def one_core_stop_upper(last_cpu,last_anchor,birth_ticks,ticks,now,bootstrap_anc
         return time.clock_gettime(time.CLOCK_BOOTTIME)-birth_ticks/ticks
     require(last_anchor is not None and now>=last_anchor,'proved CPU anchor clock changed')
     return last_cpu+now-last_anchor
+
+
+def inherited_monitor_SELF_cap(cpu_seconds, reaped_cpu, bootstrap_anchor):
+    """Prior waited work cannot become new monitor SELF allowance."""
+    history_upper = 0. if bootstrap_anchor is None else bootstrap_anchor[9]
+    return math.floor(cpu_seconds-reaped_cpu-history_upper)
+
+
+def guardian_SELF_boundary(cpu_seconds, own_cpu, bootstrap_anchor):
+    """Keep inherited work in the independent guardian emergency boundary."""
+    return bootstrap_anchor[9]+own_cpu >= cpu_seconds-1
 
 
 def await_owned_stop(records,*,stop_start,inner_deadline,active_ceiling,cpu_upper,heartbeat,context,killed):
@@ -351,6 +393,8 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False,
                 initial_guardian_or_monitor_birth_ticks=birth_ticks,monitor_lifetime_wall_at_entry=lifetime,
                 bootstrap_anchor_CPU_upper=None if bootstrap_anchor is None else bootstrap_anchor[7],
                 bootstrap_anchor_monotonic=None if bootstrap_anchor is None else bootstrap_anchor[6],
+                inherited_waited_CPU_seconds=0. if bootstrap_anchor is None else bootstrap_anchor[8],
+                inherited_waited_CPU_upper=0. if bootstrap_anchor is None else bootstrap_anchor[9],
                 initial_bound_source='PRE_FIRST_FORK_CPU_COUNTER_PLUS_ONE_CORE_WALL' if bootstrap_anchor is not None else 'LEGACY_BIRTH_WALL'))
         max_stop_wait=max(max_stop_wait,waited)
         accounting_anchor=time.monotonic()  # BEFORE every counter/accounting read.
@@ -361,7 +405,7 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False,
         # Group is stopped. Each live process's waited_ticks describes only
         # already-reaped, absent descendants. Orphans reaped by this supervisor
         # are absent from that set and counted exactly once via wait4 usage.
-        guardian_cpu,guardian_rounding=guardian_self_upper(core,ticks)
+        guardian_cpu,guardian_rounding=guardian_self_upper(core,ticks,bootstrap_anchor=bootstrap_anchor)
         rounding = 4 * len(items) / ticks+guardian_rounding; max_rounding = max(max_rounding, rounding)
         cpu = own.ru_utime + own.ru_stime + guardian_cpu + reaped_cpu + rounding + sum(
             item['own_ticks'] + item['waited_ticks'] for item in items) / ticks
@@ -410,10 +454,11 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False,
         reap(); remaining = session_records(sid, leader['start_ticks'], uid, core)
         require(not remaining and status is not None, 'owned descendants remain; no completed command')
         own = resource.getrusage(resource.RUSAGE_SELF)
-        actual = own.ru_utime + own.ru_stime + reaped_cpu
+        inherited_history = 0. if bootstrap_anchor is None else bootstrap_anchor[8]
+        actual = own.ru_utime + own.ru_stime + reaped_cpu + inherited_history
         # Kernel SELF hard limit is reduced by every reaped descendant before
         # final receipt publication; a fork cannot multiply the remaining cap.
-        self_cap = math.floor(cpu_seconds - reaped_cpu)
+        self_cap = inherited_monitor_SELF_cap(cpu_seconds,reaped_cpu,bootstrap_anchor)
         require(self_cap >= 1 and own.ru_utime + own.ru_stime < self_cap,
                 'no conservative aggregate CPU left for final receipt')
         resource.setrlimit(resource.RLIMIT_CPU, (min(hard, self_cap), min(hard, self_cap)))
@@ -431,7 +476,11 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False,
                 tag=bootstrap_anchor[0],guardian_pid=bootstrap_anchor[1],guardian_birth_ticks=bootstrap_anchor[2],
                 uid=bootstrap_anchor[3],affinity=[bootstrap_anchor[4]],clock_ticks=bootstrap_anchor[5],
                 monotonic_before_counter=bootstrap_anchor[6],startup_CPU_upper=bootstrap_anchor[7],
-                sample_fingerprint=bootstrap_anchor[8],counter_rounding_seconds=2/ticks),
+                sample_fingerprint=bootstrap_anchor[10],counter_rounding_seconds=2/ticks,
+                inherited_waited_CPU_seconds=bootstrap_anchor[8],inherited_waited_CPU_upper=bootstrap_anchor[9]),
+            inherited_waited_CPU_seconds=inherited_history,
+            inherited_waited_CPU_upper=0. if bootstrap_anchor is None else bootstrap_anchor[9],
+            guardian_inherited_history_source='IMMUTABLE_PRE_FIRST_FORK_RUSAGE_CHILDREN',
             session_id=sid, leader_start_ticks=leader['start_ticks'], uid=uid, affinity=[core],
             reaped=reaped, all_owned_descendants_reaped=True, kernel_escape_filter=True,
             orphan_subreaper=True, counters_are_attribution_not_another_charge=True)
@@ -511,7 +560,7 @@ def guarded_run(command, args):
             stale = (struct.unpack('Q', GUARD_SHARED[56:64])[0] == 1
                      and time.monotonic() - struct.unpack('d', GUARD_SHARED[64:72])[0] > 1)
             if not forced and (time.monotonic() >= deadline - 2 or stale
-                               or own.ru_utime + own.ru_stime >= args.cpu - 1):
+                               or guardian_SELF_boundary(args.cpu, own.ru_utime+own.ru_stime, bootstrap_anchor)):
                 current = process_record(pid)
                 require(current['uid'] == os.getuid() and current['start_ticks'] == monitor['start_ticks']
                         and current['ppid'] == os.getpid(), 'guardian monitor identity changed')
@@ -560,9 +609,15 @@ def guarded_run(command, args):
             value.update(returncode=125, cap_reason=value.get('cap_reason') or 'MONITOR_ABNORMAL_EXIT',
                          all_owned_descendants_reaped=True, guardian_adopted=adopted)
         own = resource.getrusage(resource.RUSAGE_SELF)
-        aggregate = (own.ru_utime + own.ru_stime + monitor_usage.ru_utime + monitor_usage.ru_stime + adopted_cpu)
+        # Fork resets the monitor's waited history. Its wait4 usage contains
+        # new descendants, not guardian C0; add that prior history exactly once.
+        aggregate = (bootstrap_anchor[8] + own.ru_utime + own.ru_stime
+                     + monitor_usage.ru_utime + monitor_usage.ru_stime + adopted_cpu)
         require(aggregate < args.cpu, 'complete guardian/monitor/command CPU grant exhausted')
         value.update(aggregate_CPU_seconds=aggregate, guardian_included_in_CPU=True,
+                     inherited_waited_CPU_seconds=bootstrap_anchor[8],
+                     inherited_waited_CPU_upper=bootstrap_anchor[9],
+                     inherited_waited_history_included_once=True,
                      independent_guardian=True, guardian_forced_monitor_stop=forced,
                      guardian_nondumpable=True,
                      guarded_run_wall_seconds=time.monotonic() - start,

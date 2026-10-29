@@ -315,9 +315,10 @@ class StopWaitProofTests(unittest.TestCase):
 
 
 class BootstrapAnchorUnitTests(unittest.TestCase):
-    def anchor(self, *, pid=123, birth=45, uid=None, core=31, ticks=100, when=10., cpu=.3):
+    def anchor(self, *, pid=123, birth=45, uid=None, core=31, ticks=100, when=10., cpu=.3,
+               history=0., history_upper=.02):
         if uid is None: uid = os.getuid()
-        values = (pid, birth, uid, core, ticks, when, cpu)
+        values = (pid, birth, uid, core, ticks, when, cpu, history, history_upper)
         return (s.BOOTSTRAP_ANCHOR_TAG, *values, s.bootstrap_anchor_digest(values))
 
     def test_tuple_sample_clock_rounding_and_mutations_fail_closed(self):
@@ -326,7 +327,9 @@ class BootstrapAnchorUnitTests(unittest.TestCase):
         bad = [list(anchor), anchor[:-1], ('wrong', *anchor[1:]),
                self.anchor(when=float('nan')), self.anchor(cpu=float('inf')),
                self.anchor(when=12.), self.anchor(cpu=.019), self.anchor(uid=True),
-               (anchor[0], *anchor[1:7], .31, anchor[8])]
+               self.anchor(history=-.1), self.anchor(history=.2,history_upper=.21),
+               self.anchor(cpu=.3,history=.2,history_upper=.5),
+               (*anchor[:7], .31, *anchor[8:])]
         for value in bad:
             with self.subTest(value=repr(value)):
                 with self.assertRaises(RuntimeError): s.bootstrap_anchor_fields(value, 31, 100, 11.)
@@ -349,14 +352,13 @@ class BootstrapAnchorUnitTests(unittest.TestCase):
              patch.object(s.resource, 'getrusage', side_effect=usage), \
              patch.object(s.time, 'monotonic', side_effect=clock):
             anchor = s.pre_fork_cpu_anchor(31, 100)
-        self.assertEqual(anchor[6], 10.); self.assertAlmostEqual(anchor[7], .32)
+        self.assertEqual(anchor[6], 10.); self.assertAlmostEqual(anchor[7], .34)
         self.assertLess(events.index('clock'), events.index('counter'))
 
-    def test_capture_rejects_threads_children_and_earlier_waited_CPU(self):
+    def test_capture_rejects_threads_children_and_changing_waited_CPU(self):
         pid = os.getpid()
         item = dict(pid=pid, start_ticks=45, uid=os.getuid(), own_ticks=0, waited_ticks=0)
-        for thread_count, children, child_cpu, waited in [(2, set(), 0., 0), (1, {999}, 0., 0),
-                                                         (1, set(), .01, 0), (1, set(), 0., 1)]:
+        for thread_count, children, child_cpu, waited in [(2, set(), 0., 0), (1, {999}, 0., 0)]:
             with self.subTest(thread_count=thread_count, children=children, child_cpu=child_cpu, waited=waited):
                 with patch.object(s, 'process_record', return_value=dict(item, waited_ticks=waited)), \
                      patch.object(s, 'children_of', return_value=children), \
@@ -364,11 +366,45 @@ class BootstrapAnchorUnitTests(unittest.TestCase):
                      patch.object(s.Path, 'iterdir', side_effect=lambda: iter([Path('one')] * thread_count)), \
                      patch.object(s.resource, 'getrusage', return_value=SimpleNamespace(ru_utime=child_cpu, ru_stime=0.)):
                     with self.assertRaises(RuntimeError): s.pre_fork_cpu_anchor(31, 100)
+        child_reads = iter([0., .01, .01])
+        def changed_history(kind):
+            return SimpleNamespace(ru_utime=next(child_reads) if kind == resource.RUSAGE_CHILDREN else 0., ru_stime=0.)
+        with patch.object(s, 'process_record', return_value=item), \
+             patch.object(s, 'children_of', return_value=set()), \
+             patch.object(s.os, 'sched_getaffinity', return_value={31}), \
+             patch.object(s.Path, 'iterdir', side_effect=lambda: iter([Path('one')])), \
+             patch.object(s.resource, 'getrusage', side_effect=changed_history):
+            with self.assertRaisesRegex(RuntimeError, 'history changed'):
+                s.pre_fork_cpu_anchor(31, 100)
+        changed_record = iter([item,dict(item,waited_ticks=1)])
+        with patch.object(s, 'process_record', side_effect=lambda _:next(changed_record)), \
+             patch.object(s, 'children_of', return_value=set()), \
+             patch.object(s.os, 'sched_getaffinity', return_value={31}), \
+             patch.object(s.Path, 'iterdir', side_effect=lambda: iter([Path('one')])), \
+             patch.object(s.resource, 'getrusage', return_value=SimpleNamespace(ru_utime=0.,ru_stime=0.)):
+            with self.assertRaisesRegex(RuntimeError, 'waited CPU changed'):
+                s.pre_fork_cpu_anchor(31, 100)
+
+    def test_stable_inherited_history_is_included_in_initial_upper(self):
+        pid = os.getpid()
+        item = dict(pid=pid, start_ticks=45, uid=os.getuid(), own_ticks=5, waited_ticks=16)
+        def usage(kind):
+            if kind == resource.RUSAGE_SELF: return SimpleNamespace(ru_utime=.03, ru_stime=.021583)
+            return SimpleNamespace(ru_utime=.077214, ru_stime=.091021)
+        with patch.object(s, 'process_record', return_value=item), \
+             patch.object(s, 'children_of', return_value=set()), \
+             patch.object(s.os, 'sched_getaffinity', return_value={31}), \
+             patch.object(s.Path, 'iterdir', side_effect=lambda: iter([Path('one')])), \
+             patch.object(s.resource, 'getrusage', side_effect=usage):
+            anchor = s.pre_fork_cpu_anchor(31, 100)
+        self.assertAlmostEqual(anchor[8], .168235)
+        self.assertAlmostEqual(anchor[9], .188235)
+        self.assertAlmostEqual(anchor[7], .051583+.02+.188235)
 
     def test_actual_guardian_identity_affinity_and_thread_count_are_bound(self):
         pid = os.getppid(); shared = bytearray(128)
         shared[40:48] = struct.pack('Q', pid); shared[72:80] = struct.pack('Q', 45)
-        item = dict(pid=pid, start_ticks=45, uid=os.getuid())
+        item = dict(pid=pid, start_ticks=45, uid=os.getuid(), waited_ticks=0)
         anchor = self.anchor(pid=pid)
         with patch.object(s, 'GUARD_SHARED', shared), patch.object(s, 'process_record', return_value=item), \
              patch.object(s.os, 'sched_getaffinity', return_value={31}), \
@@ -393,6 +429,21 @@ class BootstrapAnchorUnitTests(unittest.TestCase):
              patch.object(s.time, 'monotonic', return_value=10.4):
             with self.assertRaisesRegex(RuntimeError, 'monotonic clock'):
                 s.one_core_stop_upper(None, None, 45, 100, 10.5, bootstrap_anchor=anchor, core=31)
+
+    def test_later_guardian_samples_and_emergency_SELF_floor_keep_history_once(self):
+        pid = os.getppid(); shared = bytearray(128)
+        shared[40:48] = struct.pack('Q', pid); shared[72:80] = struct.pack('Q', 45)
+        anchor = self.anchor(pid=pid, cpu=.5, history=.168235, history_upper=.188235)
+        item = dict(pid=pid, start_ticks=45, uid=os.getuid(), own_ticks=10, waited_ticks=16)
+        with patch.object(s, 'GUARD_SHARED', shared), patch.object(s, 'process_record', return_value=item), \
+             patch.object(s.os, 'sched_getaffinity', return_value={31}):
+            upper, rounding = s.guardian_self_upper(31, 100, bootstrap_anchor=anchor)
+        self.assertAlmostEqual(upper, .12+.188235)
+        self.assertAlmostEqual(rounding, .04)
+        high = self.anchor(pid=pid, cpu=1.1, history=.95, history_upper=.97)
+        self.assertEqual(s.inherited_monitor_SELF_cap(4, 1.1, high), 1)
+        self.assertTrue(s.guardian_SELF_boundary(4, 2.1, high))
+        self.assertFalse(s.guardian_SELF_boundary(4, 1.9, high))
 
 
 class BootstrapAnchorKernelTests(unittest.TestCase):
@@ -478,6 +529,83 @@ class BootstrapAnchorKernelTests(unittest.TestCase):
         self.assertEqual(result.returncode, 125, proof); self.assertFalse(proof['command_started'], proof)
         self.assertTrue(receipt['all_owned_descendants_reaped'], proof)
         self.assertIn('bootstrap anchor', receipt['cap_reason'], proof)
+
+
+class InheritedExecHistoryTests(unittest.TestCase):
+    def launch_with_history(self, *, cpu=4, wall=8, history_cpu=.12, kill_monitor=False):
+        with tempfile.TemporaryDirectory(prefix='pricefm_exec_history_', dir='/dev/shm') as temporary:
+            root = Path(temporary); history_path = root/'history.json'; ids_path = root/'ids.json'
+            if kill_monitor:
+                payload = ('import json,os,time\nfrom pathlib import Path\n'
+                    'kid=os.fork()\nif kid==0: time.sleep(30);os._exit(0)\n'
+                    'Path('+repr(str(ids_path))+').write_text(json.dumps({"monitor":os.getppid(),"command":os.getpid(),"child":kid}))\n'
+                    'time.sleep(30)\n')
+            else:
+                payload = ('import os,time\nchild=os.fork()\n'
+                    'if child==0:\n start=time.process_time()\n while time.process_time()-start<.04: pass\n os._exit(0)\n'
+                    'os.waitpid(child,0)\nprint("new command ran")\n')
+            guard = command(payload, cpu=cpu, wall=wall)
+            launcher = ('import json,os,resource,sys,time\nfrom pathlib import Path\n'
+                'resource.setrlimit(resource.RLIMIT_CPU,('+str(cpu)+','+str(cpu)+'))\n'
+                'kid=os.fork()\n'
+                'if kid==0:\n start=time.process_time()\n while time.process_time()-start<'+repr(history_cpu)+': pass\n os._exit(0)\n'
+                'os.waitpid(kid,0)\nh=resource.getrusage(resource.RUSAGE_CHILDREN)\n'
+                'Path('+repr(str(history_path))+').write_text(json.dumps({"pid":os.getpid(),"user":h.ru_utime,"system":h.ru_stime,"CPU_seconds":h.ru_utime+h.ru_stime}))\n'
+                'os.execv(sys.executable,'+repr(guard)+')\n')
+            before = resource.getrusage(resource.RUSAGE_CHILDREN); started = time.monotonic()
+            process = subprocess.Popen([sys.executable,'-I','-B','-c',launcher],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            if kill_monitor:
+                end = time.monotonic()+3
+                while not ids_path.exists() and process.poll() is None and time.monotonic()<end: time.sleep(.01)
+                if ids_path.exists():
+                    ids = json.loads(ids_path.read_text()); item = s.process_record(ids['monitor'])
+                    self.assertEqual(item['ppid'],process.pid);self.assertEqual(item['uid'],os.getuid())
+                    os.kill(ids['monitor'],signal.SIGKILL)
+            stdout,stderr = process.communicate(timeout=wall+5)
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            try: receipt=json.loads(stdout)
+            except Exception: receipt=None
+            history=json.loads(history_path.read_text()) if history_path.exists() else None
+            proof={'returncode':process.returncode,'stdout':stdout.decode(errors='replace'),'stderr':stderr.decode(errors='replace'),
+                'receipt':receipt,'inherited_history_before_exec':history,'monitor_fixture_started':ids_path.exists(),
+                'new_command_ran':b'new command ran' in stdout,'whole_wall_seconds':time.monotonic()-started,
+                'outer_kernel_waited_CPU_seconds':after.ru_utime+after.ru_stime-before.ru_utime-before.ru_stime,
+                'CPU_cap':cpu,'wall_cap':wall,'launcher_source':launcher,'supervisor_source':str(Path(s.__file__))}
+            output=os.environ.get('PRICEFM_EXEC_HISTORY_PROOF_DIR')
+            if output:
+                directory=Path(output);directory.mkdir(parents=True,exist_ok=True)
+                with (directory/(self._testMethodName+'.json')).open('x') as handle:json.dump(proof,handle,indent=2,sort_keys=True)
+            return proof
+
+    def assert_history_accounted_once(self,proof):
+        receipt=proof['receipt'];history=proof['inherited_history_before_exec']
+        self.assertIsInstance(receipt,dict,proof);self.assertIsInstance(history,dict,proof)
+        self.assertGreaterEqual(history['CPU_seconds'],.12,proof)
+        self.assertAlmostEqual(receipt['inherited_waited_CPU_seconds'],history['CPU_seconds'],places=6,msg=proof)
+        self.assertTrue(receipt['inherited_waited_history_included_once'],proof)
+        self.assertLess(abs(receipt['aggregate_CPU_seconds']-proof['outer_kernel_waited_CPU_seconds']),.03,proof)
+        self.assertLess(receipt['aggregate_CPU_seconds'],proof['CPU_cap'],proof)
+        self.assertTrue(receipt['all_owned_descendants_reaped'],proof)
+
+    def test_exec_inherited_history_and_new_descendants_are_charged_once(self):
+        proof=self.launch_with_history();self.assertEqual(proof['returncode'],0,proof)
+        self.assert_history_accounted_once(proof);receipt=proof['receipt']
+        self.assertTrue(proof['new_command_ran'],proof)
+        self.assertGreaterEqual(receipt['bootstrap_anchor']['startup_CPU_upper'],receipt['inherited_waited_CPU_upper'],proof)
+        self.assertGreaterEqual(receipt['conservative_max_snapshot_CPU'],receipt['inherited_waited_CPU_upper'],proof)
+
+    def test_inherited_history_exhaustion_rejects_before_new_command(self):
+        proof=self.launch_with_history(cpu=2,history_cpu=.8)
+        self.assertNotEqual(proof['returncode'],0,proof);self.assertFalse(proof['new_command_ran'],proof)
+        self.assertGreaterEqual(proof['inherited_history_before_exec']['CPU_seconds'],.8,proof)
+        self.assertIn('startup CPU exhausts original active command allowance',proof['stderr'],proof)
+        self.assertLess(proof['outer_kernel_waited_CPU_seconds'],2,proof)
+
+    def test_emergency_guardian_drain_keeps_inherited_history_once(self):
+        proof=self.launch_with_history(kill_monitor=True)
+        self.assertEqual(proof['returncode'],125,proof);self.assertTrue(proof['monitor_fixture_started'],proof)
+        self.assert_history_accounted_once(proof)
+        self.assertGreaterEqual(len(proof['receipt']['guardian_adopted']),2,proof)
 
 
 if __name__ == '__main__': unittest.main()

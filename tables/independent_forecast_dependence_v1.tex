@@ -1,0 +1,13 @@
+The displayed bands describe posterior distributions of draw-wise aggregate
+criteria, conditional on the data, selected specification, evaluation
+period, and reservoir realization. Q--DESN uses a common posterior coefficient
+draw across forecast origins and horizons. For the dynamic linear comparators,
+draws from the origin- and horizon-specific quantile distributions are combined
+using the prescribed latent-Gaussian construction. Both evaluation periods use
+the same construction within each model. Aggregate interval widths therefore
+depend on this cross-target dependence as well as pointwise quantile uncertainty.
+
+Forecast draws were reconstructed using the previously selected model
+specifications because the original target-level draws were unavailable.
+Both evaluation periods use the same reconstructed draws. The reproducibility
+documentation gives the reconstruction and selection history.

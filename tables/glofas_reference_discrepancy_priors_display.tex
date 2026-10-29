@@ -1,0 +1,32 @@
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{@{}lllrlr@{}}
+\toprule
+Historical model & Model & Process & $\tau_0$ & Slab or ridge variance & Effective global scale \\
+\midrule
+Reference only & Gaussian DESN (ridge) & reference & --- & $\kappa_\beta^2=10^4$ & --- \\
+Reference only & Gaussian DESN (RHS) & reference & 5.2043087e-05 & Learned & 0.006612--0.006612 \\
+Reference only & Q--DESN (AL) & reference & 5.2043087e-05 & Learned & 0.002288--0.005698 \\
+Reference only & Q--DESN (exAL) & reference & 5.2043087e-05 & Learned & 0.002511--0.004949 \\
+Reference only & MQ--DESN (AL) & reference & 5.2043087e-05 & Learned & 0.001095--0.003342 \\
+Reference only & MQ--DESN (exAL) & reference & 5.2043087e-05 & Learned & 0.0009098--0.003735 \\
+Discrepancy & Gaussian DESN (ridge) & discrepancy & --- & $\kappa_\beta^2=10^4$ & --- \\
+Discrepancy & Gaussian DESN (RHS) & discrepancy & 0.00011594362 & Learned & 0.004994--0.004994 \\
+Discrepancy & Q--DESN (AL) & discrepancy & 0.00011594362 & Fixed 16 & 0.002275--0.004507 \\
+Discrepancy & Q--DESN (exAL) & discrepancy & 0.00011594362 & Fixed 16 & 0.002321--0.003503 \\
+Discrepancy & MQ--DESN (AL) & discrepancy & 0.00011594362 & Fixed 16 & 0.0008554--0.003394 \\
+Discrepancy & MQ--DESN (exAL) & discrepancy & 0.00011594362 & Fixed 16 & 0.0007063--0.003115 \\
+Combined historical & Gaussian DESN (ridge) & reference & --- & $\kappa_\beta^2=10^4$ & --- \\
+Combined historical & Gaussian DESN (RHS) & reference & 5.2043087e-05 & Learned & 0.005487--0.005487 \\
+Combined historical & Q--DESN (AL) & reference & 5.2043087e-05 & Learned & 0.002168--0.004554 \\
+Combined historical & Q--DESN (exAL) & reference & 5.2043087e-05 & Learned & 0.002753--0.004332 \\
+Combined historical & MQ--DESN (AL) & reference & 5.2043087e-05 & Learned & 0.0008072--0.003047 \\
+Combined historical & MQ--DESN (exAL) & reference & 5.2043087e-05 & Learned & 0.0006021--0.003279 \\
+Combined historical & Gaussian DESN (ridge) & discrepancy & --- & $\kappa_\beta^2=10^4$ & --- \\
+Combined historical & Gaussian DESN (RHS) & discrepancy & 0.00011594362 & Fixed 16 & 0.003847--0.003847 \\
+Combined historical & Q--DESN (AL) & discrepancy & 0.00011594362 & Fixed 16 & 0.001236--0.002374 \\
+Combined historical & Q--DESN (exAL) & discrepancy & 0.00011594362 & Fixed 16 & 0.001816--0.002336 \\
+Combined historical & MQ--DESN (AL) & discrepancy & 0.00011594362 & Fixed 16 & 0.0008166--0.002254 \\
+Combined historical & MQ--DESN (exAL) & discrepancy & 0.00011594362 & Fixed 16 & 0.0006402--0.002474 \\
+\bottomrule
+\end{tabular}%
+}

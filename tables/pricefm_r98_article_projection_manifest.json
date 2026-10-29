@@ -1,0 +1,89 @@
+{
+  "authority_rule": "complete_114_case_replacement_without_R92_fallback",
+  "folds": 3,
+  "frozen_article_assets": {
+    "pricefm_stage_r98_fold_comparison.csv": "b43bb3e933aa6507f00d740ca82884f626b67e9cf3f5c16c953cb489b5032db8",
+    "pricefm_stage_r98_global_aql_comparison.tex": "aed9fa10da6383d31f256c108d2530384ec57c275a54bc2d6f55754d287473a2",
+    "pricefm_stage_r98_global_comparison.csv": "e3831615ceefe497d68f72176c4a68437448634868aed4c2fada5029ec2768b4",
+    "pricefm_stage_r98_region_aql_comparison.pdf": "870f43f594b86e607a93479568deb4943016bb201a870d2a8be9a3388e720413",
+    "pricefm_stage_r98_region_aql_comparison.png": "155ea1c9cd8efc834615e88cabad5fe5ba2ce9616b3536c8a8c24a63cc6a4181",
+    "pricefm_stage_r98_region_comparison.csv": "b4ff02abf4cda266169acdba2c99708c4ff0b088891a2623256df00af99f21e1"
+  },
+  "frozen_inputs": {
+    "pricefm_stage_r98_article_asset_manifest.json": "707162b84816734a787408e244489e59fa17a27d7cdaab07ae7466994754d476",
+    "pricefm_stage_r98_authoritative_registry.csv": "4cf8ff653c6bd7fc64a2992fbfb6e1df48867d1b7d840cd8544fb30a5c538cb6",
+    "pricefm_stage_r98_authority_transition_ledger.csv": "35b0f3d55a1e5ac7e489b3cf171c0f9865e07a012e2fbb4a4674302fa5ef53cd",
+    "pricefm_stage_r98_global_comparison.csv": "e3831615ceefe497d68f72176c4a68437448634868aed4c2fada5029ec2768b4",
+    "source_manifest.csv": "98e5abd74b46988c1afa014455e8cf457929a6ecab3def39b3eeb74d89218dfa"
+  },
+  "mean_AQL": {
+    "R98_QDESN": 7.217007319836696,
+    "cached_PriceFM": 7.03868534653447,
+    "deprecated_R92_QDESN": 6.823677420470439
+  },
+  "outputs": [
+    {
+      "bytes": 164363,
+      "path": "tables/pricefm_r98_authoritative_registry.csv",
+      "sha256": "4cf8ff653c6bd7fc64a2992fbfb6e1df48867d1b7d840cd8544fb30a5c538cb6"
+    },
+    {
+      "bytes": 52029,
+      "path": "tables/pricefm_r98_authority_transition_ledger.csv",
+      "sha256": "35b0f3d55a1e5ac7e489b3cf171c0f9865e07a012e2fbb4a4674302fa5ef53cd"
+    },
+    {
+      "bytes": 245,
+      "path": "tables/pricefm_r98_global_comparison.csv",
+      "sha256": "e3831615ceefe497d68f72176c4a68437448634868aed4c2fada5029ec2768b4"
+    },
+    {
+      "bytes": 236,
+      "path": "tables/pricefm_r98_fold_comparison.csv",
+      "sha256": "b43bb3e933aa6507f00d740ca82884f626b67e9cf3f5c16c953cb489b5032db8"
+    },
+    {
+      "bytes": 3843,
+      "path": "tables/pricefm_r98_region_comparison.csv",
+      "sha256": "b4ff02abf4cda266169acdba2c99708c4ff0b088891a2623256df00af99f21e1"
+    },
+    {
+      "bytes": 292,
+      "path": "tables/pricefm_r98_global_aql_comparison.tex",
+      "sha256": "aed9fa10da6383d31f256c108d2530384ec57c275a54bc2d6f55754d287473a2"
+    },
+    {
+      "bytes": 21789,
+      "path": "figures/pricefm_application/pricefm_r98_region_aql_comparison.pdf",
+      "sha256": "870f43f594b86e607a93479568deb4943016bb201a870d2a8be9a3388e720413"
+    },
+    {
+      "bytes": 111374,
+      "path": "figures/pricefm_application/pricefm_r98_region_aql_comparison.png",
+      "sha256": "155ea1c9cd8efc834615e88cabad5fe5ba2ce9616b3536c8a8c24a63cc6a4181"
+    },
+    {
+      "bytes": 594,
+      "path": "tables/pricefm_r98_main_aql_summary.tex",
+      "sha256": "2443dce90b1e6453e6ec38092092b39bbc379927944ef45419233e9ece124e0e"
+    },
+    {
+      "bytes": 1020,
+      "path": "tables/pricefm_full_current_outputs.tex",
+      "sha256": "b0b485a3668c2b915b16bc01f0baf0485837ed932241ba93eb81ff5f323bd701"
+    }
+  ],
+  "pricefm_lower_cases": 60,
+  "qdesn_lower_cases": 54,
+  "qdesn_lower_region_means": 16,
+  "regions": 38,
+  "registry_rows": 114,
+  "schema_version": 1,
+  "scientific_role": {
+    "R92": "deprecated_historical_sensitivity_only",
+    "R98": "prospective_region_frozen_primary_comparison"
+  },
+  "source_manifest_entries_verified": 308,
+  "stage": "R98",
+  "status": "authoritative_article_projection"
+}

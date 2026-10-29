@@ -1,0 +1,17 @@
+"scenario_id","inference_method","model_cell_id","model_id","fit_structure","likelihood_family","posterior_score_mean","posterior_score_q025","posterior_score_q975"
+"asymmetric_laplace_tail","mcmc","asymmetric_laplace_tail__joint_exqdesn_rhs","joint_exqdesn_rhs_mcmc","joint","exAL",0.373683593972807,0.367576587583845,0.385804340023463
+"gaussian_mixture_bridge","mcmc","gaussian_mixture_bridge__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.451836288236719,0.43846248469129,0.472840160048433
+"laplace_bridge","mcmc","laplace_bridge__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.36128594751919824,0.35893405550824209,0.36414713410890842
+"nonlinear_reservoir_friendly","mcmc","nonlinear_reservoir_friendly__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.488091651334493,0.478744400215065,0.503091787472143
+"normal_bridge","mcmc","normal_bridge__joint_qdesn_rhs","joint_qdesn_rhs_mcmc","joint","AL",0.349482517261893,0.343111192271101,0.36333377682438
+"persistent_heavy_tail","mcmc","persistent_heavy_tail__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",1.05441020641803,0.877681747363215,1.26345506625822
+"regime_shift","mcmc","regime_shift__exqdesn_rhs_independent","exqdesn_rhs_independent_mcmc","independent","exAL",1.03069109162071,0.87738251656493,1.18948764835318
+"student_t_location_scale","mcmc","student_t_location_scale__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.397269951320488,0.395404443250536,0.399475988973448
+"asymmetric_laplace_tail","vb","asymmetric_laplace_tail__joint_exqdesn_rhs","joint_exqdesn_rhs_mcmc","joint","exAL",0.371480015684339,0.369859579268418,0.374782017273889
+"gaussian_mixture_bridge","vb","gaussian_mixture_bridge__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.449388876356374,0.441384423915282,0.459513977212578
+"laplace_bridge","vb","laplace_bridge__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.36035588041671168,0.35956034487387778,0.36122181095887601
+"nonlinear_reservoir_friendly","vb","nonlinear_reservoir_friendly__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.483397668791132,0.4777816129908,0.490856829723865
+"normal_bridge","vb","normal_bridge__joint_qdesn_rhs","joint_qdesn_rhs_mcmc","joint","AL",0.34512229393257,0.343253789414757,0.347796827609737
+"persistent_heavy_tail","vb","persistent_heavy_tail__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",1.03130499401573,0.92822767902559,1.14548294209986
+"regime_shift","vb","regime_shift__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",1.05113016248671,0.982261640425164,1.12140405875792
+"student_t_location_scale","vb","student_t_location_scale__qdesn_rhs_independent","qdesn_rhs_independent_mcmc","independent","AL",0.395989172599053,0.395510453691521,0.396559351157888

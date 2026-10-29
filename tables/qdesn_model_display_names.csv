@@ -1,0 +1,13 @@
+context,source_key,model_family,fit_structure,likelihood_family,display_tex,display_text
+simulation,joint_qdesn_rhs_vb,MQ-DESN,joint,AL,MQ--DESN (AL),MQ-DESN (AL)
+simulation,joint_qdesn_rhs_mcmc,MQ-DESN,joint,AL,MQ--DESN (AL),MQ-DESN (AL)
+simulation,qdesn_rhs_independent_vb,Q-DESN,independent,AL,Q--DESN (AL),Q-DESN (AL)
+simulation,qdesn_rhs_independent_mcmc,Q-DESN,independent,AL,Q--DESN (AL),Q-DESN (AL)
+simulation,joint_exqdesn_rhs_vb,MQ-DESN,joint,exAL,MQ--DESN (exAL),MQ-DESN (exAL)
+simulation,joint_exqdesn_rhs_mcmc,MQ-DESN,joint,exAL,MQ--DESN (exAL),MQ-DESN (exAL)
+simulation,exqdesn_rhs_independent_vb,Q-DESN,independent,exAL,Q--DESN (exAL),Q-DESN (exAL)
+simulation,exqdesn_rhs_independent_mcmc,Q-DESN,independent,exAL,Q--DESN (exAL),Q-DESN (exAL)
+glofas,Joint AL,MQ-DESN,joint,AL,MQ--DESN (AL),MQ-DESN (AL)
+glofas,Joint exAL,MQ-DESN,joint,exAL,MQ--DESN (exAL),MQ-DESN (exAL)
+glofas,Independent AL,Q-DESN,independent,AL,Q--DESN (AL),Q-DESN (AL)
+glofas,Independent exAL,Q-DESN,independent,exAL,Q--DESN (exAL),Q-DESN (exAL)

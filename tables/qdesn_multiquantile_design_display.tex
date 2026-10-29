@@ -1,0 +1,21 @@
+\begin{table}[!htbp]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.23\textwidth}>{\raggedright\arraybackslash}p{0.68\textwidth}@{}}
+\toprule
+Item & Specification \\
+\midrule
+Reservoir specification & One reservoir specification per setting, selected using separately simulated series and shared across all four regressions. The regression uses an intercept and the states from all reservoir layers. \\
+Quantile levels & 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, and 0.95; trapezoidal weights sum to 0.90. \\
+Forecast design & 33 origins and 30 horizons, giving 990 origin--horizon pairs per setting. Observed histories update states between origins; future response lags are generated recursively within each origin. \\
+Posterior simulation & Five chains per model and mechanism. Scores use 3,750 pooled AL draws and 3,750 exAL draws, except 7,500 exAL draws for Laplace. All exAL chains use the exact scale-collapsed asymmetry transition. \\
+Initialization & Gaussian, AL, exAL, and MQ--DESN fits supply starting values in the stated sequence. Prior hyperparameters define each target and are common across its five chains. \\
+Uncertainty & Primary intervals condition on each model's averaged future predictor matrix; trajectory-inclusive intervals are reported separately. VB intervals additionally condition on fixed intercept estimates. \\
+Computation & Score calculations are finite for all 64 method--model comparisons; the 32 MCMC comparisons meet the stated score-stability criteria. These checks do not establish complete scalar-parameter mixing. \\
+\bottomrule
+\end{tabular}
+\caption{Design and computation for the multiquantile study.}
+\label{tab:joint-qdesn-pure-desn-v2-protocol}
+\end{table}

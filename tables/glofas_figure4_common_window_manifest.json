@@ -1,0 +1,80 @@
+{
+  "schema": "glofas-figure4-common-window-v1",
+  "source_script": "scripts/build_glofas_figure4_common_window.R",
+  "script_sha256": "808c19a0debeee42b8be7e8bf26842223b39f15051e2f36a24be0bee6610670b",
+  "purpose": "Presentation only; authentic historical fitted quantiles and unchanged retained forecasts",
+  "sources": {
+    "tables/glofas_search3_part1234_final_20261007_source_quantiles.csv": "d4a6c18eac599c66e9e95edda01e98d9f14c8f6a8efc6dd2a54f16544ae7181a",
+    "tables/glofas_search3_review_history_plot_inputs.csv": "3ecfc03b9353328d1e0e056c2be74eb30934dc94ef9dfaa1a733f6fc836665fe",
+    "tables/glofas_search3_review_ensemble_plot_inputs.csv": "104a4cace25e6d5fd88283379b2852c6ef75c9b01905b25e58c3fc744160cdd5",
+    "tables/glofas_search3_review_truth_plot_inputs.csv": "9ad2840e4282970ac7d5be0ae8028573622705ec7407d65eff01df0f3031813e",
+    "tables/glofas_search3_review_plot_input_provenance.json": "d5e0ed84071353a41e20ea25bafda6cb4a31a13aee75a8ecf3049076417d6aa9",
+    "tables/glofas_search3_part4_history_fitted_quantiles.csv": "a5acdb0b02f1dc5213b0a585839cd1dadae6344d6d64dbe71ec6d9c1d8fd30f4",
+    "tables/glofas_search3_part4_history_fitted_quantile_provenance.json": "ab7c06bb1efa24ebeb2c7f9ef41a5dc3231a7a39ff67f1ba3c33ce302f7f8ea3"
+  },
+  "families": ["Independent AL", "Normal Ridge"],
+  "quantile_levels": [0.050000000000000003, 0.20000000000000001, 0.34999999999999998, 0.5, 0.65000000000000002, 0.80000000000000004, 0.94999999999999996],
+  "origin_date": "2022-12-25",
+  "history_dates": ["2022-11-26", "2022-12-25"],
+  "forecast_dates": ["2022-12-26", "2023-01-22"],
+  "common_x_limits": ["2022-11-26", "2023-01-22"],
+  "common_x_tick_dates": ["2022-11-26", "2022-12-10", "2022-12-25", "2023-01-08", "2023-01-22"],
+  "common_y_limits": [-1, 6],
+  "historical_days": 30,
+  "forecast_days": 28,
+  "historical_fitted_quantile_rows": 420,
+  "unchanged_forecast_quantile_rows": 392,
+  "total_model_quantile_rows": 812,
+  "historical_usgs_rows": 30,
+  "heldout_usgs_rows": 28,
+  "issued_members": 51,
+  "issued_member_rows": 1428,
+  "historical_usgs_repeated_panels": 3,
+  "heldout_usgs_repeated_panels": 3,
+  "plot_panel_geometry": [
+    {
+      "panel": 1,
+      "x_left_mm": 9.8302663871592735,
+      "x_right_mm": 157.36788432267883
+    },
+    {
+      "panel": 2,
+      "x_left_mm": 9.8302663871592735,
+      "x_right_mm": 157.36788432267883
+    },
+    {
+      "panel": 3,
+      "x_left_mm": 9.8302663871592735,
+      "x_right_mm": 157.36788432267883
+    }
+  ],
+  "width_alignment": "gtable widths aligned with grid::unit.pmax; panel edges measured on PDF device",
+  "figure_width_inches": 6.5,
+  "figure_height_inches": 6.625,
+  "minimum_native_ordinary_label_pt": 9.8000000000000007,
+  "main_insertion_width": "0.94 textwidth",
+  "effective_ordinary_label_pt_at_6p5in_textwidth": 9.2119999999999997,
+  "quantile_linewidth_mm": 0.17000000000000001,
+  "median_linewidth_mm": 0.34999999999999998,
+  "credible_ribbons": false,
+  "smoothing": false,
+  "quantile_projection": false,
+  "rescoring": false,
+  "fitting": false,
+  "historical_quantile_interpretation": "Fitted conditional quantile estimates from the frozen Part 4 fits; not coefficient credible intervals",
+  "forecast_quantile_interpretation": "Retained Part 4 forecast quantile summaries; ordinates unchanged from the frozen public source",
+  "forecast_summary_by_family": {
+    "independent_al": "Retained posterior means of q_y_draw at each fitted level",
+    "normal_ridge": "Retained empirical quantiles of latent_y_draw, quantile type 8"
+  },
+  "outputs": [
+    {
+      "file": "figures/glofas_application/glofas_search3_part4_common_window_three_panel_review.pdf",
+      "sha256": "ff6e818e317a31b211be6ee247e45aa0826d42cbaee141cfae6902d8143f021f"
+    },
+    {
+      "file": "tables/glofas_figure4_common_window_outputs.tex",
+      "sha256": "9f6e8b3fe9b70daff6ee63ee355ca346c6cca5d714d2cd9f4b9eae30562bea38"
+    }
+  ]
+}

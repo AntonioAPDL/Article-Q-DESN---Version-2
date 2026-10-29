@@ -1,16 +1,28 @@
 % !TeX program = pdflatex
-\documentclass[11pt]{article}
+\documentclass[12pt,letterpaper]{article}
 
-\usepackage[margin=1in]{geometry}
+\usepackage{geometry}
 \usepackage{lmodern}
 \usepackage{microtype}
 \usepackage{setspace}
-\onehalfspacing
+\doublespacing
+\geometry{hmargin=1in,textheight=26\baselineskip,centering}
+\newif\ifQdesnAnonymous
+\ifdefined\QdesnReviewMode
+  \QdesnAnonymoustrue
+\else
+  \QdesnAnonymousfalse
+\fi
 
 \usepackage{amsmath,amssymb,amsfonts,mathtools,bm,booktabs,tabularx,array}
 \usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,fit,positioning}
 \usepackage{enumitem}
 \usepackage[round,authoryear]{natbib}
+\setcitestyle{aysep={},citesep={;}}
+\renewcommand{\bibfont}{\normalfont\normalsize\raggedright}
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=black}
 
@@ -34,14 +46,23 @@
 \newcommand{\Unif}{\operatorname{Unif}}
 \newcommand{\AL}{\operatorname{AL}}
 \newcommand{\exAL}{\operatorname{exAL}}
-\newcommand{\RHS}{\operatorname{RHS}}
+\newcommand{\RHS}{\ensuremath{\operatorname{RHS}}}
 \newcommand{\aCRPS}{\operatorname{aCRPS}}
 \newcommand{\elbo}{\mathcal{L}}
 \newcommand{\logit}{\operatorname{logit}}
 \newcommand{\expit}{\operatorname{expit}}
 \DeclareMathOperator{\argmin}{arg\,min}
 \newcommand{\pkg}[1]{\textsf{#1}}
+\newcommand{\figalt}[1]{}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 \newcommand{\TableStyle}{\footnotesize\setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.08}}
+
+\input{tables/glofas_application_current_outputs.tex}
+\input{tables/glofas_review_figure_overrides.tex}
+\input{tables/glofas_mq_display_overrides.tex}
+\input{tables/pricefm_full_current_outputs.tex}
+\input{tables/qdesn_sections5_7_supp_display_overrides.tex}
+\input{figures/quantile_initialization/quantile_initialization_styles.tex}
 
 \newcounter{suppalgorithm}
 \renewcommand{\thesuppalgorithm}{S\arabic{suppalgorithm}}
@@ -53,133 +74,109 @@
 
 \renewcommand{\theequation}{S\arabic{equation}}
 \renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\thefigure}{S\arabic{figure}}
 \renewcommand{\thesection}{S\arabic{section}}
 \renewcommand{\thesubsection}{S\arabic{section}.\arabic{subsection}}
 \renewcommand{\thesubsubsection}{S\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
 
 \title{Supplementary Material for ``Bayesian Quantile Regression with Deep Echo State Network Features''}
-\author{Antonio De Leon \and Raquel Prado \and Bruno Sans\'o}
-\date{August 15, 2026}
+\ifQdesnAnonymous
+\author{}
+\hypersetup{pdfauthor={}}
+\else
+\author{Antonio De Leon, Raquel Prado, and Bruno Sans\'o}
+\fi
+\date{}
+\makeatletter
+\renewcommand{\maketitle}{%
+  \ifQdesnAnonymous
+    \begin{center}\bfseries\@title\end{center}%
+  \else
+    \hypersetup{pageanchor=false}%
+    \begin{titlepage}
+    \begin{center}\bfseries\@title\par\medskip\normalfont\@author\par\end{center}
+    \end{titlepage}%
+    \hypersetup{pageanchor=true}%
+  \fi
+}
+\makeatother
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
+\normalsize
 \noindent
-Conditional on fixed reservoir features, Q--DESN is a high-dimensional
-Bayesian quantile regression model under the asymmetric Laplace (AL) or
-extended asymmetric Laplace (\(\exAL\)) working likelihood. The \(\exAL\)
-notation follows the main article's convention for the quantile-fixed
-generalized asymmetric Laplace construction of \citet{yan2025new}, keeping
-exQDESN and exDQLM labels aligned with the same likelihood choice. The
-augmented posterior distribution
-includes the regression coefficients, likelihood scale and asymmetry, auxiliary
-mixture variables, and shrinkage parameters. The derivations cover complete-data
-augmented posterior densities for the default ridge prior and the Nishimura--Suchard
-regularized horseshoe (\texttt{rhs\_ns}) shrinkage alternative, posterior
-kernels, Markov chain Monte Carlo (MCMC) full conditionals, the role of the
-VB--LD computational approximation and coordinate updates, and the joint
-quantile-vector extension with regularized-horseshoe shrinkage over adjacent
-coefficient increments.
-The notation is aligned with the main article.
+This supplement gives distributional conventions, fixed-feature model
+details, regularized-horseshoe prior calculations, Markov chain Monte Carlo
+(MCMC) full conditionals,
+and variational approximations. It distinguishes the generic fixed-design
+derivations from the approximations used in the multiquantile simulation and GloFAS
+application, and provides reservoir-selection details and additional
+simulation and application evidence.
 \end{abstract}
 
 \section{Purpose and Relation to the Main Article}
 \label{sec:supp_relation_main}
 
-The main article introduces Q--DESN, describes the fixed deep reservoir feature
-map in the notation and model-specification sections, and records the simulation
-design in the simulation section. Once
-the reservoir weights, input weights, reducers, leak rates, and washout
-convention are fixed, the likelihood depends on the data only through a
-deterministic design matrix
-\(\mat X=[\vect x_1^\top;\ldots;\vect x_T^\top]\). Thus the
-Q--DESN regression is a static Bayesian quantile regression problem with a
-high-dimensional nonlinear design. Consequently, the static AL and exAL
-regression derivations used by \pkg{exdqlm}
-\citep{barata2021_flex_quantile,exdqlmRPackage} can be adapted to the
-Q--DESN regression by replacing ordinary covariate rows with rows of the fixed
-DESN design matrix.
+The main article introduces the quantile deep echo state network (Q--DESN)
+as Bayesian regression on fixed deep echo state network (DESN) features.
+The multiquantile deep echo state network (MQ--DESN) estimates quantile-specific
+regression coefficients jointly through adjacent-slope-difference shrinkage.
+We use asymmetric Laplace (AL) and extended asymmetric Laplace (exAL)
+likelihoods, the latter denoting the quantile-fixed generalized AL family.
+Regularized-horseshoe (RHS) priors regularize coefficients and adjacent
+coefficient differences. This supplement
+supplies the derivations and
+analysis-specific details. Sections~\ref{sec:dist_conventions}--\ref{sec:model_joint}
+define the distributions, design, and complete prior.
+Sections~\ref{sec:mcmc}--\ref{sec:joint_qdesn_supp} give the single-level and
+MQ--DESN computations; Section~\ref{sec:forecast_synthesis} defines the forecast
+summaries and scores. Reservoir selection and initialization appear in
+Section~\ref{sec:supp_reservoir_diagnostics}, followed by empirical tables and
+the GloFAS latent-path model in Section~\ref{sec:glofas_discrepancy}.
 
-The augmented posterior distribution, MCMC sampler, model-specific mean-field
-update structure, and ELBO monitor are stated as mathematical objects. Ridge
-is the default coefficient prior. The main article uses \(\RHS\) for the
-regularized horseshoe coefficient prior, while \texttt{rhs\_ns} denotes the
-Nishimura--Suchard product representation used for closed-form scale updates.
-The main article states the posterior distribution and algorithms; this supplement
-contains the full conditionals, variational factors, and objective terms that
-support those algorithms. When the exAL block is active, smooth
-Taylor/Laplace statements are branchwise away from \(\gamma=0\); the AL point
-is an exact nested special case, so generic two-sided Hessian arguments at zero
-require separate one-sided analysis.
-The supplement first gives the reservoir-design checklist, then gives the
-fixed-design likelihood, prior, MCMC, variational, and ELBO details for the
-single-level regression. It next derives the joint quantile-vector extension,
-states the monotone rearrangement details, presents supplementary simulation
-tables, and closes with the GloFAS forecast-discrepancy model.
-
-\section{Reservoir Design Diagnostics}
-\label{sec:supp_reservoir_diagnostics}
-
-The main article treats the reservoir as a fixed feature map specified before
-posterior inference. Table~\ref{tab:supp-reservoir-selection} summarizes the
-component-level checklist behind that fixed-feature design decision.
-These checks are feature-construction diagnostics for the deterministic feature
-construction. Posterior uncertainty is placed on the regression, likelihood,
-and shrinkage quantities conditional on that construction.
+The generic regression calculations condition on the observed design.
+Unknown future reference-streamflow values enter the future predictor vectors
+in the GloFAS application and require an additional approximation. Variational
+Bayes (VB) calculations include a generic Laplace--Delta approximation
+(VB--LD) and the study-specific approximations distinguished below.
+The dynamic linear comparisons use the dynamic quantile linear model (DQLM)
+and extended dynamic quantile linear model (exDQLM).
+Table~\ref{tab:supp-computation-map}
+summarizes the approximations used in the different analyses.
 
 \begin{table}[!htbp]
 \centering
-\begingroup
 \TableStyle
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.16\textwidth}
->{\raggedright\arraybackslash}p{0.25\textwidth}
->{\raggedright\arraybackslash}p{0.28\textwidth}
->{\raggedright\arraybackslash}X@{}}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.22\textwidth}YY@{}}
 \toprule
-Component & Role in the fixed feature map & Design rule & Main diagnostic risk \\
+Setting & Posterior simulation & Variational computation \\
 \midrule
-\(D\) & Number of reservoir layers and hierarchy of time scales &
-Search over a small set and retain additional depth only when predictive scores
-improve after seed checks. &
-Unnecessary depth can add unstable or redundant features. \\
-\(\{n_d\},\{\tilde n_d\}\) & Reservoir capacity and lower-layer feature
-dimension & Treat as the main complexity control, with reduction sizes chosen
-as part of the same feature map. &
-Large designs can overfit or produce poorly conditioned regressions; redundant
-states can reduce the effective rank of \(\mat X\). \\
-\(m\) & Explicit lag memory entering the reservoir input & Choose a
-domain-informed grid and require all lags to be available at the forecast
-origin. & Excessive lags increase dimension and can leak future information if
-alignment is not checked. \\
-\(\{\alpha_d\},\{\rho_d\}\) & Reservoir time scale, persistence, and stability &
-Co-tune because both affect memory. Near-one radii require empirical stability
-checks. & Saturation, state collapse, or sensitivity to initial conditions. \\
-\(\{\pi^{(W)}_d\},\{\pi^{(\mathrm{in})}_d\}\) and input scaling & Recurrent
-connectivity and input excitation & Fix from a small set of literature-guided
-defaults; broaden the search when diagnostics show weak state variation or
-saturation. & Too sparse can reduce richness; too dense or strongly driven can
-saturate nonlinear states. \\
-\(f,k,T_0\) & Nonlinearity, bridge transformation, and initial-condition
-washout & Fix before feature-map comparison, with \(T_0\) chosen relative to the
-memory scale. & Short washout can leave initial-condition artifacts. \\
-Seed & Realization of the random feature map & Treat as a robustness variable
-and compare leading specifications over multiple seeds. &
-A single seed can overstate predictive performance. \\
+Fixed-design derivation & Augmented Gaussian and scale updates;
+nonconjugate exAL block & Mean-field conjugate factors and generic
+Laplace--Delta exAL approximation \\
+Multiquantile simulation & Scale-collapsed exAL transition; ordered intercept
+conditionals & Structured \(q(\gamma_k)q(\sigma_k\mid\gamma_k)\), numerical
+quadrature, and constrained point intercepts \\
+GloFAS & No MCMC results reported & Quantile-block updates with a local
+Gaussian--Delta approximation for the latent future path \\
+Dynamic linear comparators & Package partially collapsed exDQLM updates &
+Package structured scale--asymmetry approximation \\
 \bottomrule
 \end{tabularx}
-\endgroup
-\caption{Component-level reservoir specification checklist for the fixed
-Q--DESN feature map.}
-\label{tab:supp-reservoir-selection}
+\caption{Computational distinctions relevant to the reported analyses.}
+\label{tab:supp-computation-map}
 \end{table}
+
 
 \section{Distributional Conventions}
 \label{sec:dist_conventions}
 
 \noindent\textbf{Shared parameterizations.}
 The posterior kernels below use the following distributional
-parameterizations. These conventions are inherited by the MCMC, CAVI, and ELBO
+parameterizations. These conventions are used in the MCMC,
+coordinate-ascent variational inference (CAVI), and evidence lower bound (ELBO)
 derivations below; in particular, all inverse-gamma distributions use a rate in
 the reciprocal scale.
 
@@ -216,49 +213,58 @@ g(\gamma)=2\Phi(-|\gamma|)\exp(\gamma^2/2),\qquad
 p_\gamma=\ind\{\gamma<0\}
 +\frac{p_0-\ind\{\gamma<0\}}{g(\gamma)}.
 \]
-Then
+Then, with the fixed probability level shown explicitly when needed,
 \[
-A_\gamma=\frac{1-2p_\gamma}{p_\gamma(1-p_\gamma)},\quad
-B_\gamma=\frac{2}{p_\gamma(1-p_\gamma)},\quad
-C_\gamma=\{\ind\{\gamma>0\}-p_\gamma\}^{-1},\quad
-D_\gamma=C_\gamma|\gamma|.
+\begin{alignedat}{2}
+A_{p_0}(\gamma)\equiv A_\gamma
+&=\frac{1-2p_\gamma}{p_\gamma(1-p_\gamma)},
+&\qquad B_{p_0}(\gamma)\equiv B_\gamma
+&=\frac{2}{p_\gamma(1-p_\gamma)},\\
+C_\gamma&=\{\ind\{\gamma>0\}-p_\gamma\}^{-1},
+& D_\gamma\equiv D_{p_0}(\gamma)&=C_\gamma|\gamma|.
+\end{alignedat}
 \]
-The main article denotes the same exAL shift coefficient by
-\(\lambda(\gamma)=C(\gamma)|\gamma|\); the supplement uses \(D_\gamma\)
-to reduce visual clutter in posterior kernels.
+The shorthand \(D_\gamma\) reduces visual clutter in posterior kernels and is
+distinct from the regularized-horseshoe local scales \(\lambda_j\).
 
 \noindent\textbf{AL nesting and branchwise regularity.}
 When \(\gamma=0\) and the \(s_t\) latents are omitted, the exAL hierarchy
-reduces to the AL working likelihood with constants \(A_0,B_0\).
+reduces to the AL likelihood with constants \(A_0,B_0\).
 This nesting is exact. The surrounding \(p_\gamma\), \(A_\gamma\),
 \(B_\gamma\), and \(D_\gamma\) maps are branchwise smooth for
 \(\gamma<0\) and \(\gamma>0\), but the absolute value and indicator branches
 make generic two-sided derivative statements at \(\gamma=0\) invalid except in
 special symmetric cases. In particular, the one-sided derivatives of
 \(p_\gamma\) at zero are proportional to \(1-p_0\) from the left and to
-\(p_0\) from the right. The implementation therefore treats \(\gamma=0\) as
-the AL special case and uses branchwise numerical derivatives away from zero.
+\(p_0\) from the right. At \(\gamma=0\), calculations use the nested AL model;
+for \(\gamma\ne0\), numerical derivatives are evaluated within the
+corresponding sign region.
 
 \section{DESN Feature Map and Fixed-Design Quantile Regression}
 \label{sec:desn_features}
 
 The Q--DESN regression inherits the feature map defined in the main article. The
-reservoir weights, input weights, reducers, leak rates, and washout convention
-are fixed before posterior inference, so the only object carried into the static
-regression model is the design matrix \(\mat X\). Scalar responses are denoted by
-lowercase \(y_t\), both in likelihood statements and posterior kernels.
+reservoir weights, input weights, dimension-reduction matrices, leak rates, and washout convention
+are fixed before posterior inference. Posterior inference conditions on the
+design matrix \(\mat X\) constructed from these features. We distinguish a
+random response \(Y_t\) from its observed value \(y_t\). Lowercase responses
+in posterior kernels denote the data at which the likelihood is evaluated.
 
 Let \(\vect u_t=(y_{t-1},\ldots,y_{t-m},\vect z_t^\top)^\top\) collect response
-lags and exogenous covariates. For layers \(d=1,\ldots,D\), Q--DESN draws sparse
-reservoir matrices \(\mat W_d\), input matrices \(\mat W^{\mathrm{in}}_d\), and
-optional reducers \(\mat Q_d\), \(d=1,\ldots,D-1\), once and keeps them fixed.
-With layer-specific leak rates \(\alpha_d\), activation \(f\), and spectral
+lags and exogenous covariates. For layers \(d=1,\ldots,D\), sparse reservoir
+matrices \(\mat W_d\) and input matrices \(\mat W^{\mathrm{in}}_d\) are
+randomly drawn once before fitting and then held fixed. The dimension-reduction matrices
+\(\mat Q_d\), \(d=1,\ldots,D-1\), and other feature-construction choices
+are also fixed before posterior inference.
+With layer-specific leak rates \(\alpha_d\), componentwise nonlinear
+activation function \(f\), and spectral
 radius targets \(\rho_d\),
 the layer states satisfy
 \begin{align}
 \vect h_{t,1}
 &=(1-\alpha_1)\vect h_{t-1,1}
-+\alpha_1 f\{\bar{\mat W}_1\vect h_{t-1,1}+\mat W^{\mathrm{in}}_1\vect u_t\},
++\alpha_1 f\{\bar{\mat W}_1\vect h_{t-1,1}
++\mat W^{\mathrm{in}}_1\vect u_t+\vect b_1^{\mathrm{in}}\},
 \label{eq:supp_desn_layer1}\\
 \vect h_{t,d}
 &=(1-\alpha_d)\vect h_{t-1,d}
@@ -267,8 +273,20 @@ the layer states satisfy
 \label{eq:supp_desn_layerd}\\
 \tilde{\vect h}_{t,d-1}&=\mat Q_{d-1}\vect h_{t,d-1},
 \end{align}
-where \(\bar{\mat W}_d=\rho_d\mat W_d/\rho(\mat W_d)\). The fixed feature
-vector is
+where \(\bar{\mat W}_d=\rho_d\mat W_d/\rho(\mat W_d)\).
+For \(m\) lags and \(q\) covariates, the first input matrix is
+\(n_1\times(m+q)\), and \(\vect b_1^{\mathrm{in}}\in\R^{n_1}\) is
+a fixed input bias, equivalent to a constant input column. For \(d\ge2\),
+the input matrix is
+\(n_d\times\tilde n_{d-1}\), and
+\(\mat Q_{d-1}\in\R^{\tilde n_{d-1}\times n_{d-1}}\).
+Sparse weights are drawn as independent Bernoulli masks multiplied
+elementwise by zero-mean finite-variance entries; input biases are fixed
+under the stated construction. A recurrent matrix with zero spectral
+radius is resampled before scaling. States start from the specified initial
+values, and a fixed washout discards their initial transients. The layer
+recursions in Eqs.~\eqref{eq:supp_desn_layer1} and
+\eqref{eq:supp_desn_layerd} define the fixed feature vector
 \begin{equation}
 \tilde{\vect x}_t
 =\{ \vect h_{t,D}^\top,\ k(\tilde{\vect h}_{t,1})^\top,\ldots,
@@ -284,17 +302,32 @@ After a fixed washout period, the reservoir quantities in
 \mat X=[\vect x_1^\top;\ldots;\vect x_T^\top]\in\R^{T\times(r+1)},\qquad
 \mu_t=\vect x_t^\top\vect\beta .
 \]
-All posterior inference is conditional on \(\mat X\).
+Here \(r=n_D+\sum_{d=1}^{D-1}\tilde n_d+m+q\) for the displayed stack.
+Direct inputs may be omitted: the multiquantile simulation and GloFAS use reservoir
+features and an intercept only, with their specific stacking rules stated
+in the empirical sections. All regression inference is conditional on the
+observed design. Future designs generated from unknown response paths
+require the separate forecasting construction.
 
-\section{Q--DESN Working Likelihoods, Priors, and Augmented Posterior}
+\section{Q--DESN Likelihoods, Priors, and Augmented Posterior}
 \label{sec:model_joint}
 
 The augmented posterior densities below are used by both computational
-schemes. The AL and exAL likelihoods are working likelihoods for a
-fixed target quantile, while the auxiliary variables provide equivalent
-mixture representations for computation.
+schemes. The AL and exAL likelihoods identify a fixed target quantile, while
+the auxiliary variables provide equivalent mixture representations for
+computation.
 
-\subsection{AL and exAL Augmented Likelihoods}
+\subsection{Quantile Regression and Augmentation}
+
+For a fixed probability level \(p_0\), the regression model is
+\[
+\text{Quantile regression:}\quad
+Y_t\mid\vect x_t,\vect\beta,\sigma,\gamma
+\sim\exAL_{p_0}(\vect x_t^\top\vect\beta,\sigma,\gamma).
+\]
+AL is the nested case \(\gamma=0\). This likelihood, together with the
+priors, defines the inferential target; augmentation changes its
+computational representation, not its conditional quantile.
 
 The exAL Q--DESN observation hierarchy is
 \begin{align}
@@ -308,7 +341,8 @@ y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\mat X
 \right).
 \label{eq:supp_exal_hierarchy}
 \end{align}
-The marginal \(p_0\)-quantile of \(y_t\mid\vect x_t\) is
+After integrating out \((v_t,s_t)\), the likelihood conditional on
+\((\vect x_t,\vect\beta,\sigma,\gamma)\) has \(p_0\)-quantile
 \(\vect x_t^\top\vect\beta\). The AL special case is
 \begin{align}
 v_t\mid\sigma &\sim \Exp(\text{rate}=1/\sigma),\\
@@ -326,7 +360,7 @@ y_t\mid\vect\beta,\sigma,v_t,\mat X
 
 The coefficient prior regularizes the high-dimensional regression after the
 reservoir features have been fixed. The ridge prior is the default Gaussian
-baseline. The \texttt{rhs\_ns} prior is the adaptive global-local shrinkage
+baseline. The regularized-horseshoe prior is the adaptive global-local shrinkage
 alternative; its product representation keeps the local, global, and slab scale
 updates in closed form.
 
@@ -341,7 +375,7 @@ Applications usually keep the intercept weakly regularized and use a
 diagonal slope penalty, while \eqref{eq:supp_ridge_prior} allows a general
 positive definite prior covariance.
 
-For the \texttt{rhs\_ns} prior, the intercept is independent,
+For the regularized-horseshoe prior, the intercept is independent,
 \(\beta_0\sim\Normal(b_0,V_0)\), and the non-intercept coefficients are
 represented through the
 Nishimura--Suchard-style regularized horseshoe construction
@@ -355,17 +389,20 @@ p_{\mathrm{ns}}(\beta_j,\lambda_j\mid\tau,\zeta)
 \lambda_j^{-1}(1+\lambda_j^2)^{-1}.
 \label{eq:supp_ns_joint}
 \end{equation}
-Equation~\eqref{eq:supp_ns_joint} is the marginal joint description after the
+Proportionality in Eq.~\eqref{eq:supp_ns_joint} is with respect to
+\((\beta_j,\lambda_j)\) at fixed \((\tau,\zeta)\). It is the
+joint kernel after the
 half-Cauchy auxiliary variable for the local scale has been integrated out. The
-MCMC and VB derivations use the equivalent augmented product
+MCMC and VB derivations use the corresponding augmented product
 \[
 \Normal(\beta_j\mid0,\tau^2\lambda_j^2)\,
 \Normal(0\mid\beta_j,\zeta^2)
 \]
 together with inverse-gamma auxiliaries for \(\lambda_j^2\), \(\nu_j\),
-\(\tau^2\), and \(\xi\). This augmented product representation is the one used
-in the augmented posterior densities below.
-Equivalently, the conditional coefficient law is Gaussian with effective
+\(\tau^2\), and \(\xi\). Normalizing factors that depend on the scale
+parameters are retained. This augmented product representation is the one used
+in the posterior densities below.
+The conditional coefficient law is Gaussian with effective
 variance
 \begin{equation}
 \beta_j\mid\lambda_j,\tau,\zeta
@@ -375,6 +412,7 @@ V_j=\left(\zeta^{-2}+\tau^{-2}\lambda_j^{-2}\right)^{-1}
 =\frac{\zeta^2\tau^2\lambda_j^2}{\zeta^2+\tau^2\lambda_j^2}.
 \label{eq:supp_rhs_cond_beta}
 \end{equation}
+Equation~\eqref{eq:supp_rhs_cond_beta} makes the finite-slab bound explicit.
 For inverse-gamma scale updates, use the half-Cauchy augmentation
 \citep{MakalicSchmidt2016SimpleSampler}:
 \begin{align}
@@ -386,94 +424,234 @@ For inverse-gamma scale updates, use the half-Cauchy augmentation
 \zeta^2&\sim\IG(a_\zeta,b_\zeta),
 \label{eq:supp_zeta_prior}
 \end{align}
-where the last line is omitted when \(\zeta^2\) is fixed.
+The slab update in Eq.~\eqref{eq:supp_zeta_prior} is omitted when
+\(\zeta^2\) is fixed.
+
+These inverse-gamma factors form the auxiliary hierarchy inside the product
+prior; the regularizing factor changes its marginal scale law. In particular,
+writing \(a=\tau^2\lambda_j^2\) and \(b=\zeta^2\),
+\begin{equation}
+\begin{aligned}
+\text{Gaussian product:}\quad
+\Normal(\beta_j\mid0,a)\Normal(0\mid\beta_j,b)
+&=\Normal(0\mid0,a+b)\Normal(\beta_j\mid0,ab/(a+b)).
+\end{aligned}
+\label{eq:supp_ns_product_factor}
+\end{equation}
+The first factor on the right depends on the scales and cannot be discarded
+from their posterior updates. Thus the product prior and the direct
+normalized RHS coefficient density paired with independent half-Cauchy
+scales have the same conditional coefficient variance, but not the same
+joint prior. The closed-form updates below refer to the product prior.
+
+Let \(\phi_1(\cdot;m,V)\) denote the Gaussian density with mean \(m\)
+and variance \(V\), and let
+\(\Theta_\beta=(\vect\lambda^2,\vect\nu,\tau^2,\xi,\zeta^2)\).
+The full augmented product prior is
+\begin{equation}
+\begin{aligned}
+\pi_{\mathrm{NS}}(\vect\beta,\Theta_\beta)
+&\propto \phi_1(\beta_0;b_0,V_0)
+  p(\tau^2\mid\xi)p(\xi)p(\zeta^2)\\
+&\quad\times\prod_{j=1}^r
+ \left\{\phi_1(\beta_j;0,\tau^2\lambda_j^2)
+ \phi_1(0;\beta_j,\zeta^2)
+ p(\lambda_j^2\mid\nu_j)p(\nu_j)\right\}.
+\end{aligned}
+\label{eq:supp_ns_full_prior}
+\end{equation}
+Each density includes its normalizing factors, including those depending on
+unknown scales. The proportionality constant depends only on fixed
+hyperparameters. If the slab is fixed, omit \(p(\zeta^2)\), remove
+\(\zeta^2\) from \(\Theta_\beta\), and retain its Gaussian regularizing
+factor. Unlike Eq.~\eqref{eq:supp_ns_joint},
+Eq.~\eqref{eq:supp_ns_full_prior} includes every auxiliary variable.
+
+\subsection{Reference Calibration of the Global Shrinkage Scale}
+\label{subsec:supp-rhs-global-scale}
+
+The hierarchy in Eq.~\eqref{eq:supp_hs_aux} distinguishes the posterior random
+global scale \(\tau\) from the fixed hyperprior scale \(\tau_0\). The latter
+should reflect the response scale, the amount of information in the fitting
+sample, the number of penalized coefficients, and prior information about
+coefficient activity. We first state the Gaussian reference calculation of
+\citet{PiironenVehtari2017RHS} and then describe its use for Q--DESN.
+
+Let \(N_{\mathrm{fit}}\) be the number of fitting observations, let \(r\) be
+the number of standardized non-intercept columns, and let
+\(\sigma_{\mathrm{ref}}>0\) be a residual-scale reference. Under an orthogonal
+Gaussian design, the ordinary-horseshoe shrinkage factor for coefficient \(j\)
+is
+\begin{equation}
+\kappa_j
+=\left(1+
+\frac{N_{\mathrm{fit}}\tau^2\lambda_j^2}
+{\sigma_{\mathrm{ref}}^2}
+\right)^{-1}.
+\label{eq:supp-rhs-kappa-reference}
+\end{equation}
+If
+\(m_{\mathrm{eff}}=\sum_{j=1}^r(1-\kappa_j)\), integration over the
+half-Cauchy local scales gives
+\begin{equation}
+\E(m_{\mathrm{eff}}\mid\tau,\sigma_{\mathrm{ref}})
+=r\frac{a}{1+a},
+\qquad
+a=\frac{\tau\sqrt{N_{\mathrm{fit}}}}{\sigma_{\mathrm{ref}}}.
+\label{eq:supp-rhs-effective-size-reference}
+\end{equation}
+Equating Eq.~\eqref{eq:supp-rhs-effective-size-reference} to an elicited prior
+reference \(m_0\in(0,r)\) and using the resulting scale for the half-Cauchy
+hyperprior gives
+\begin{equation}
+\tau_{0,\mathrm{ref}}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref}}}{\sqrt{N_{\mathrm{fit}}}}.
+\label{eq:supp-rhs-tau0-gaussian-reference}
+\end{equation}
+Here \(m_0\) represents prior information about the number of coefficients
+expected to escape strong global shrinkage; it is not a model size selected by
+validation. When both the response and the penalized columns are standardized
+using the fitting observations, setting \(\sigma_{\mathrm{ref}}=1\) gives the
+unit-scale version of Eq.~\eqref{eq:supp-rhs-tau0-gaussian-reference}. If only
+the design columns are standardized, \(\sigma_{\mathrm{ref}}\) should remain
+on the response scale and may be obtained from the preliminary Gaussian fit.
+
+Equations~\eqref{eq:supp-rhs-kappa-reference}--%
+\eqref{eq:supp-rhs-tau0-gaussian-reference} give an exact effective-size
+relationship for the ordinary horseshoe under the stated orthogonal Gaussian
+reference. They are not an exact effective-size identity for the prior in
+Eq.~\eqref{eq:supp_ns_joint}. In particular, the finite slab changes the
+coefficient variance when a local scale is large, and the DESN design can be
+strongly correlated. We therefore use
+Eq.~\eqref{eq:supp-rhs-tau0-gaussian-reference} as an interpretable reference
+calibration for the Nishimura--Suchard construction, not as a guarantee that
+the posterior contains exactly \(m_0\) active coefficients.
+
+\noindent\textbf{Likelihood-information alternatives.}
+A likelihood-specific reference can be obtained by replacing the Gaussian
+location information with the information under the AL or exAL likelihood. Let
+\(I_{\mu,\mathrm{ref}}\) be the one-observation Fisher information for the
+location parameter at specified reference values of scale and shape. The corresponding local
+information match is
+\begin{equation}
+\tau_{0,f}
+=\frac{m_0}{r-m_0}
+ \{N_{\mathrm{fit}}I_{\mu,\mathrm{ref}}\}^{-1/2}.
+\label{eq:supp-rhs-tau0-information-reference}
+\end{equation}
+For the AL density at probability level \(p_0\), the location score equals
+\(\{p_0-\ind(y<\mu)\}/\sigma\) except at \(y=\mu\), an event of probability
+zero under the continuous AL distribution. Hence
+\begin{equation}
+I_{\mu,\mathrm{AL}}
+=\frac{p_0(1-p_0)}{\sigma^2},
+\qquad
+\tau_{0,\mathrm{AL},p_0}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref},p_0}}
+ {\sqrt{N_{\mathrm{fit}}p_0(1-p_0)}}.
+\label{eq:supp-rhs-tau0-al-reference}
+\end{equation}
+For the exAL likelihood, write the standardized density as
+\(g_{p_0}(z;\gamma)\), where \(z=(y-\mu)/\sigma\), and define
+\begin{equation}
+J_{p_0}(\gamma)
+=\E\left[
+\left\{\frac{\partial}{\partial z}
+\log g_{p_0}(Z;\gamma)\right\}^{2}
+\right].
+\label{eq:supp-exal-standardized-location-information}
+\end{equation}
+Equation~\eqref{eq:supp-exal-standardized-location-information} implies
+\(I_{\mu,\mathrm{exAL}}=J_{p_0}(\gamma)/\sigma^2\), which gives
+\begin{equation}
+\tau_{0,\mathrm{exAL},p_0}
+=\frac{m_0}{r-m_0}
+ \frac{\sigma_{\mathrm{ref},p_0}}
+ {\sqrt{N_{\mathrm{fit}}J_{p_0}(\gamma_{\mathrm{ref}})}}.
+\label{eq:supp-rhs-tau0-exal-reference}
+\end{equation}
+At the nested AL reference \(\gamma_{\mathrm{ref}}=0\),
+\(J_{p_0}(0)=p_0(1-p_0)\), so
+Eq.~\eqref{eq:supp-rhs-tau0-exal-reference} reduces to
+Eq.~\eqref{eq:supp-rhs-tau0-al-reference}. These information-based scales use
+the location information of the specified likelihood at those reference values.
+Equation~\eqref{eq:supp-rhs-tau0-information-reference} uses equally weighted
+likelihood contributions. For a weighted or composite likelihood, the
+corresponding reference should use the total expected location curvature of
+the stated likelihood rather than substituting its raw number of rows for
+\(N_{\mathrm{fit}}\).
+
+\noindent\textbf{Recommendation for the model sequence.}
+When the preliminary Gaussian, AL, and exAL regressions use the same
+standardized design, the common value in
+Eq.~\eqref{eq:supp-rhs-tau0-gaussian-reference} is the preferred default for
+comparing the likelihood families. It holds the coefficient-prior scale fixed
+while each model retains its own likelihood and posterior. The AL and exAL
+information references are useful sensitivity specifications when
+likelihood-specific curvature matching is the scientific objective.
+
+For MQ--DESN, the first slope vector and adjacent-difference blocks may be
+calibrated separately. A prior activity reference applies to the first
+slope vector, while values \(m_{0,k}^{\Delta}\) apply to the adjacent
+differences. The optional random-baseline extension introduced below also
+permits a separate reference \(m_0^0\) for its additional coefficients.
+Choosing smaller \(m_{0,k}^{\Delta}\) expresses a
+stronger prior belief that neighboring quantile levels have similar slopes.
+Likewise, application models with distinct reference-process and discrepancy
+designs should calibrate those blocks separately when their dimensions,
+standardizations, or prior activity beliefs differ.
+
+A reproducible specification therefore records
+\(N_{\mathrm{fit}}\), \(r\), \(m_0\), \(\sigma_{\mathrm{ref}}\), the
+observations used for standardization, and whether the Gaussian or a
+likelihood-information reference was used. Sequential initialization changes
+only numerical starting values and does not change this prior specification.
 
 \subsection{Augmented Posterior Densities}
 
 \noindent\textbf{Augmented-posterior convention.}
-The augmented posterior distributions below include each AL or exAL mixture variable
-once. The inverse-gamma variables in the \texttt{rhs\_ns} prior augment only
-the shrinkage scales; the likelihood augmentation is provided by the AL or exAL
-mixture variables.
-
-Let \(\vect v=(v_1,\ldots,v_T)^\top\) and
-\(\vect s=(s_1,\ldots,s_T)^\top\). Under exAL and ridge,
-\begin{align}
-p(\vect y,\vect v,\vect s,\vect\beta,\sigma,\gamma\mid\mat X)
-&=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\vect x_t)
-p(v_t\mid\sigma)p(s_t)\right\}
-p(\vect\beta)p(\sigma)\pi_\gamma(\gamma)\ind\{L<\gamma<U\}.
-\label{eq:supp_joint_exal_ridge}
-\end{align}
-\noindent\textbf{RHS target.}
-Under exAL and \texttt{rhs\_ns}, with
-\(\Theta_{\mathrm{rhs}}=(\vect\lambda^2,\vect\nu,\tau^2,\xi,\zeta^2)\),
-\begin{align}
-&p(\vect y,\vect v,\vect s,\vect\beta,\sigma,\gamma,\Theta_{\mathrm{rhs}}\mid\mat X)
-\nonumber\\
-&\quad=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,\gamma,v_t,s_t,\vect x_t)
-p(v_t\mid\sigma)p(s_t)\right\}
-p(\beta_0)
-\prod_{j=1}^r
-\left\{\Normal(\beta_j\mid0,\tau^2\lambda_j^2)
-\Normal(0\mid\beta_j,\zeta^2)\right\}
-\nonumber\\
-&\qquad\times
-\prod_{j=1}^r p(\lambda_j^2\mid\nu_j)p(\nu_j)
-p(\tau^2\mid\xi)p(\xi)p(\zeta^2)
-p(\sigma)\pi_\gamma(\gamma)\ind\{L<\gamma<U\}.
-\label{eq:supp_joint_exal_rhs}
-\end{align}
-\noindent\textbf{AL reductions.}
-The AL joint distributions are obtained by dropping \(\vect s\) and \(\gamma\),
-replacing \(A_\gamma,B_\gamma\) by \(A_0,B_0\), and using
-\eqref{eq:supp_al_hierarchy}. Thus, for example, the AL target with a ridge
-prior is
-\begin{align}
-p(\vect y,\vect v,\vect\beta,\sigma\mid\mat X)
-&=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,v_t,\vect x_t)p(v_t\mid\sigma)\right\}
-p(\vect\beta)p(\sigma).
-\label{eq:supp_joint_al_ridge}
-\end{align}
-The AL target with \texttt{rhs\_ns} is, analogously,
-\begin{align}
-&p(\vect y,\vect v,\vect\beta,\sigma,\Theta_{\mathrm{rhs}}\mid\mat X)
-\nonumber\\
-&\quad=
-\left\{\prod_{t=1}^T
-p(y_t\mid\vect\beta,\sigma,v_t,\vect x_t)p(v_t\mid\sigma)\right\}
-p(\beta_0)
-\prod_{j=1}^r
-\left\{\Normal(\beta_j\mid0,\tau^2\lambda_j^2)
-\Normal(0\mid\beta_j,\zeta^2)\right\}
-\nonumber\\
-&\qquad\times
-\prod_{j=1}^r p(\lambda_j^2\mid\nu_j)p(\nu_j)
-p(\tau^2\mid\xi)p(\xi)p(\zeta^2)p(\sigma).
-\label{eq:supp_joint_al_rhs}
-\end{align}
-The posterior distribution is proportional to the corresponding joint density,
-viewed as a function of unknown parameters and latent variables conditional on
-\((\vect y,\mat X)\).
+Each AL or exAL mixture variable appears once. Inverse-gamma variables augment
+only the shrinkage scales. Let \(f\in\{\mathrm{AL},\mathrm{exAL}\}\), let
+\(\vect a_f=\vect v\) for AL and
+\(\vect a_f=(\vect v^\top,\vect s^\top)^\top\) for exAL, and let
+\(\eta_f\) be empty for AL and equal to \(\gamma\) for exAL. The common
+augmented target is
+\begin{equation}
+\begin{aligned}
+&p(\vect y,\vect a_f,\vect\beta,\sigma,\eta_f,
+\Theta_h\mid\mat X)\\
+&\quad\propto
+\prod_{t=1}^T
+\left\{p_f(y_t\mid\vect\beta,\sigma,\eta_f,\vect a_{f,t},\vect x_t)
+p_f(\vect a_{f,t}\mid\sigma)\right\}\,
+p_h(\vect\beta,\Theta_h)\,p(\sigma)\,p_f(\eta_f),
+\end{aligned}
+\label{eq:supp-generic-augmented-target}
+\end{equation}
+where \(h\in\{\mathrm{ridge},\mathrm{RHS}\}\). For ridge,
+\(\Theta_h\) is empty and \(p_h(\vect\beta,\Theta_h)\) is
+Eq.~\eqref{eq:supp_ridge_prior}. For RHS,
+\(\Theta_h=(\vect\lambda^2,\vect\nu,\tau^2,\xi,\zeta^2)\), and
+\(p_h=\pi_{\mathrm{NS}}\) in Eq.~\eqref{eq:supp_ns_full_prior}.
+The entire prior enters once, outside the observation product. The AL factor uses
+Eq.~\eqref{eq:supp_al_hierarchy}; its \(p_f(\eta_f)\) factor is one. The exAL
+factor uses Eq.~\eqref{eq:supp_exal_hierarchy}, includes \(p(s_t)\), and has
+\(p_f(\eta_f)=\pi_\gamma(\gamma)\ind\{L<\gamma<U\}\). Viewed as a function
+of the unknown quantities conditional on \((\vect y,\mat X)\),
+Eq.~\eqref{eq:supp-generic-augmented-target} defines the four posterior
+targets without repeating blocks that differ only by omission.
 
 \section{MCMC Full Conditionals}
 \label{sec:mcmc}
 
-The full conditionals below apply to the Q--DESN regression after the
-reservoir features are fixed. The ridge and \texttt{rhs\_ns} samplers
-differ only through the coefficient prior precision and the presence of
-the \texttt{rhs\_ns} scale updates. Conditional on the complete-data joint
-in Section~\ref{sec:model_joint}, the Gaussian, GIG, truncated-normal,
-inverse-gamma, and partially Gibbs updates below are exact; only the joint
-exAL \((\sigma,\gamma)\) block needs a non-conjugate sampling step if it is
-not split conditionally. The \texttt{rhs\_ns} shrinkage hierarchy is
-therefore conditionally conjugate under this augmentation.
+Conditional on the reservoir features, the ridge and Nishimura--Suchard
+regularized-horseshoe samplers share the same likelihood updates; they differ
+in the coefficient-prior precision and shrinkage-scale updates. The Gaussian,
+GIG, truncated-normal, inverse-gamma, and conditional Gibbs steps follow from
+the augmented posterior. The joint exAL \((\sigma,\gamma)\) block requires a
+nonconjugate update.
 
 \subsection{Coefficient Block}
 
@@ -481,11 +659,11 @@ For exAL, define
 \begin{equation}
 y_t^\star=y_t-\sigma D_\gamma s_t-A_\gamma v_t,\qquad
 w_t=(\sigma B_\gamma v_t)^{-1},\qquad
-\mat\Omega=\diag(w_1,\ldots,w_T).
+\mat W_y=\diag(w_1,\ldots,w_T).
 \end{equation}
 Let \(\vect y^\star=(y_1^\star,\ldots,y_T^\star)^\top\). For a ridge prior,
 set \(\mat P=\mat P_\beta\) and \(\vect b=\vect b_\beta\). For
-\texttt{rhs\_ns}, set
+the regularized-horseshoe prior, set
 \begin{equation}
 \mat P=\diag\left(V_0^{-1},
 \tau^{-2}\lambda_1^{-2}+\zeta^{-2},\ldots,
@@ -494,13 +672,13 @@ set \(\mat P=\mat P_\beta\) and \(\vect b=\vect b_\beta\). For
 \vect b=(b_0,0,\ldots,0)^\top.
 \label{eq:supp_prior_precision_mcmc}
 \end{equation}
-Then
+Using the prior precision in Eq.~\eqref{eq:supp_prior_precision_mcmc},
 \begin{align}
 \mat\Sigma_{\beta\mid\cdot}
-&=(\mat X^\top\mat\Omega\mat X+\mat P)^{-1},\\
+&=(\mat X^\top\mat W_y\mat X+\mat P)^{-1},\\
 \vect m_{\beta\mid\cdot}
 &=\mat\Sigma_{\beta\mid\cdot}
-(\mat X^\top\mat\Omega\vect y^\star+\mat P\vect b),\\
+(\mat X^\top\mat W_y\vect y^\star+\mat P\vect b),\\
 \vect\beta\mid\cdot
 &\sim
 \Normal(\vect m_{\beta\mid\cdot},\mat\Sigma_{\beta\mid\cdot}).
@@ -510,7 +688,7 @@ For AL, use the same update with
 \[
 y_t^\star=y_t-A_0v_t,\qquad
 w_t=(\sigma B_0v_t)^{-1},\qquad
-\mat\Omega=\diag(w_1,\ldots,w_T).
+\mat W_y=\diag(w_1,\ldots,w_T).
 \]
 
 \subsection{exAL Latent-Variable Blocks}
@@ -565,10 +743,9 @@ b_\sigma+\sum_{t=1}^T v_t
 
 The pair \((\sigma,\gamma)\) is non-conjugate when updated jointly. The exAL
 coefficient map is smooth within each sign branch for \(\gamma\), and the AL
-model is exactly nested at \(\gamma=0\); however, generic two-sided
-differentiability at \(\gamma=0\) for nonmedian quantile levels requires
-separate one-sided analysis because the implementation uses branch-specific
-constants on the two sides of zero.
+model is exactly nested at \(\gamma=0\). Because \(p_\gamma\) and the associated
+coefficients are defined separately for \(\gamma<0\) and \(\gamma>0\), generic
+two-sided differentiability at zero need not hold for nonmedian quantiles.
 The joint log-kernel is
 \begin{align}
 \ell_{\sigma,\gamma}
@@ -586,8 +763,8 @@ The joint log-kernel is
 \end{align}
 for \(L<\gamma<U\), with value \(-\infty\) outside this interval.
 This kernel can be sampled by random-walk Metropolis, slice, or a
-Laplace-informed proposal on transformed coordinates. If \(\gamma\) is held
-fixed while updating \(\sigma\), a partially Gibbs implementation has
+Laplace-informed proposal on transformed coordinates. Conditional on
+\(\gamma\), the Gibbs update for \(\sigma\) is
 \begin{align}
 \sigma\mid\gamma,\cdot
 &\sim
@@ -624,7 +801,7 @@ B_\gamma^{-T/2}
 \subsection{Regularized-Horseshoe Shrinkage Blocks}
 \label{sec:rhs_ns}
 
-Conditioning on \(\vect\beta\), the \texttt{rhs\_ns} scale block has
+Conditioning on \(\vect\beta\), the regularized-horseshoe scale block has
 inverse-gamma full conditionals:
 \begin{align}
 \lambda_j^2\mid\cdot
@@ -651,14 +828,17 @@ distinction is that the Nishimura--Suchard joint construction preserves the
 ordinary global-local full conditional block given \(\vect\beta\), while the
 direct Piironen--Vehtari joint prior changes these inverse-gamma updates.
 
+Algorithm~\ref{alg:qdesn_mcmc} collects these blocks into the single-level
+sampler and makes the AL and ridge omissions explicit.
+
 \begin{suppalgorithm}{Single-level Q--DESN MCMC sampler}
 \label{alg:qdesn_mcmc}
 \emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
 target quantile \(p_0\), likelihood choice AL or exAL, coefficient prior ridge
-or \texttt{rhs\_ns}, and MCMC controls.
+or regularized horseshoe, iteration counts, and transition tuning parameters.
 \begin{enumerate}[label=(\arabic*)]
 \item Initialize \(\vect\beta,\sigma,\vect v\), and, for exAL,
-\(\gamma,\vect s\). Initialize \texttt{rhs\_ns} scales when used.
+\(\gamma,\vect s\). Initialize regularized-horseshoe scales when used.
 \item For each MCMC iteration:
   \begin{enumerate}[label=(\alph*)]
   \item draw each \(v_t\mid\cdot\) from the GIG full conditional in
@@ -667,14 +847,14 @@ or \texttt{rhs\_ns}, and MCMC controls.
   Normal full conditional in \eqref{eq:supp_s_mcmc};
   \item draw \(\vect\beta\mid\cdot\) from the Gaussian full conditional in
   \eqref{eq:supp_beta_mcmc};
-  \item for \texttt{rhs\_ns}, draw
+  \item for the regularized-horseshoe prior, draw
   \((\lambda_j^2,\nu_j)_{j=1}^r,\tau^2,\xi,\zeta^2\) by
   \eqref{eq:supp_rhs_mcmc};
   \item for AL, draw \(\sigma\mid\cdot\) from
   \eqref{eq:supp_al_sigma_mcmc};
   \item for exAL, update \((\sigma,\gamma)\) on transformed coordinates
-  targeting \eqref{eq:supp_sigmagam_joint_kernel}, or use the partially Gibbs
-  route \eqref{eq:supp_exal_sigma_mcmc}--\eqref{eq:supp_gamma_mcmc};
+  targeting \eqref{eq:supp_sigmagam_joint_kernel}, or use the conditional
+  updates in \eqref{eq:supp_exal_sigma_mcmc}--\eqref{eq:supp_gamma_mcmc};
   \item store retained draws and diagnostics after burn-in, with thinning only
   if used.
   \end{enumerate}
@@ -684,13 +864,13 @@ or \texttt{rhs\_ns}, and MCMC controls.
 \section{Variational Bayes and Laplace--Delta Approximation}
 \label{sec:cavi}
 
-The article uses VB--LD as a model-specific computational approximation for
-screening, warm starts, and specific application fits. The approximation is
-mean-field for the conditionally conjugate augmented blocks and uses the
-Laplace--Delta method of \citet{wang2013nonconjugatevb} only for the
-non-conjugate exAL scale-asymmetry block \((\sigma,\gamma)\). This section
-gives the generic fixed-design updates; application-specific GloFAS factors
-are given separately in Section~\ref{subsec:glofas_vb}.
+This section gives the generic fixed-design VB--LD approximation. It is
+mean-field over the conditionally conjugate blocks and uses the Laplace--Delta
+method of \citet{wang2013nonconjugatevb} for the nonconjugate exAL
+scale--asymmetry block \((\sigma,\gamma)\). The multiquantile simulation uses the
+structured variational factor described with its evaluation details below;
+the application-specific GloFAS factorization is given in
+Section~\ref{subsec:glofas_likelihoods}.
 
 For a single target level \(p_0\), use the mean-field family
 \begin{equation}
@@ -700,8 +880,20 @@ q_{\sigma,\gamma}(\sigma,\gamma)
 \prod_{t=1}^T q_v(v_t)q_s(s_t),
 \label{eq:supp_generic_vb_family}
 \end{equation}
-where \(q_s\) and the \(\gamma\) component are omitted for AL, and
-\(q_\Theta\) is omitted under a fixed ridge prior. The coefficient factor is
+where \(\Theta_\beta\) collects the local, global, auxiliary, and random slab
+scales. Its mean-field factorization is
+\begin{equation}
+q_\Theta(\Theta_\beta)
+=q_{\tau^2}(\tau^2)q_\xi(\xi)q_{\zeta^2}(\zeta^2)
+ \prod_{j=1}^r q_{\lambda_j^2}(\lambda_j^2)q_{\nu_j}(\nu_j),
+\label{eq:supp_generic_vb_scale_family}
+\end{equation}
+with factors for fixed scales omitted. Thus local and global inverse-scale
+moments factorize, while \(q_\beta\) retains a full coefficient covariance.
+The scale--asymmetry factor is not factorized into independent scale and
+shape densities. The \(q_s\) and \(\gamma\) components are omitted for AL, and
+\(q_\Theta\) is omitted under a fixed ridge prior. Under the family in
+Eq.~\eqref{eq:supp_generic_vb_family}, the coefficient factor is
 Gaussian. Conditional on the latent variables, both AL and exAL have the form
 \[
 y_t=\vect x_t^\top\vect\beta+d_t+\epsilon_t,\qquad
@@ -709,8 +901,8 @@ y_t=\vect x_t^\top\vect\beta+d_t+\epsilon_t,\qquad
 \]
 with \(d_t=A_0v_t\) and \(\omega_t=B_0\sigma v_t\) for AL, and
 \[
-d_t=\lambda(\gamma)\sigma s_t+A(\gamma)v_t,\qquad
-\omega_t=B(\gamma)\sigma v_t
+d_t=D_{p_0}(\gamma)\sigma s_t+A_{p_0}(\gamma)v_t,\qquad
+\omega_t=B_{p_0}(\gamma)\sigma v_t
 \]
 for exAL. Define the variational canonical moments
 \[
@@ -732,7 +924,7 @@ where \(\bar{\mat W}=\diag(\bar w_1,\ldots,\bar w_T)\) and
 \(\bar{\vect r}=(\bar r_1,\ldots,\bar r_T)^\top\). For a fixed ridge prior,
 \(\bar{\mat P}_\beta=\diag(V_0^{-1},\kappa_\beta^{-2}\ones{r})\) and
 \(\bar{\vect h}_\beta=(V_0^{-1}b_0,0,\ldots,0)^\top\). Under
-\texttt{rhs\_ns}, the intercept block is unchanged and the slope precision
+the regularized-horseshoe prior, the intercept block is unchanged and the slope precision
 uses
 \[
 \bar P_{\beta,j}
@@ -778,7 +970,7 @@ depend on \((\sigma,\gamma)\), such as
 \(\E\{A_\gamma^2/(\sigma B_\gamma)+2/\sigma\}\), are evaluated by the
 Laplace--Delta approximation below.
 
-The \texttt{rhs\_ns} CAVI updates are the MCMC inverse-gamma scale updates with
+The regularized-horseshoe CAVI updates are the MCMC inverse-gamma scale updates with
 coefficient squares replaced by second moments
 \(\overline{\beta_j^2}=m_{\beta,j}^2+(\mat\Sigma_\beta)_{jj}\):
 \begin{align}
@@ -802,22 +994,31 @@ The slab update is omitted when \(\zeta\) is fixed.
 
 For the exAL scale-asymmetry factor, map unconstrained coordinates
 \(\vect\eta\) to \((\sigma,\gamma)\), for example by
-\(\sigma=\exp(\eta_1)\) and a smooth transformation from \(\eta_2\) to
-\((L,U)\). Let
+\(\sigma=\exp(\eta_1)\) and
+\(\gamma=L+(U-L)\expit(\eta_2)\), where
+\(\expit(a)=\{1+\exp(-a)\}^{-1}\). Writing
+\((\sigma,\gamma)=T(\vect\eta)\), the absolute Jacobian determinant is
+\[
+J(\vect\eta)=\sigma(U-L)\expit(\eta_2)
+\{1-\expit(\eta_2)\}.
+\]
+The transformed expected log density is
 \[
 \ell_{\mathrm{LD}}(\vect\eta)
 =
 \E_{q_{-(\sigma,\gamma)}}\{\log p(\vect y,\vect v,\vect s
 \mid\vect\beta,\sigma,\gamma,\mat X)\}
-+\log p(\sigma)+\log\pi_\gamma(\gamma)+\log|J(\vect\eta)|.
++\log p(\sigma)+\log\pi_\gamma(\gamma)+\log J(\vect\eta).
 \]
 At the mode \(\hat{\vect\eta}\), with negative Hessian
 \(\mat K_\eta=-\nabla^2\ell_{\mathrm{LD}}(\hat{\vect\eta})\), set
 \[
-q_{\sigma,\gamma}(\vect\eta)
-\approx
-\Normal(\hat{\vect\eta},\mat K_\eta^{-1}).
+q_\eta(\vect\eta)
+=\Normal(\hat{\vect\eta},\mat K_\eta^{-1}).
 \]
+The induced density on the constrained parameters is
+\(q_{\sigma,\gamma}(\sigma,\gamma)=q_\eta\{T^{-1}(\sigma,\gamma)\}/
+J\{T^{-1}(\sigma,\gamma)\}\); it is not Gaussian on the original scale.
 For any branchwise smooth function \(h(\sigma,\gamma)\), expectations used by
 the coordinate updates are evaluated by
 \begin{equation}
@@ -832,15 +1033,20 @@ h\{T(\hat{\vect\eta})\}
 with the first term alone giving the Laplace-mode approximation when the delta
 term is omitted.
 
+Algorithm~\ref{alg:qdesn_vb_ld} summarizes the corresponding coordinate
+updates and distinguishes the exact conjugate factors from the Laplace--Delta
+approximation.
+
 \begin{suppalgorithm}{Single-level Q--DESN VB--LD coordinate updates}
 \label{alg:qdesn_vb_ld}
 \emph{Input:} response vector \(\vect y\), fixed DESN design matrix \(\mat X\),
 target quantile \(p_0\), likelihood choice AL or exAL, coefficient prior ridge
-or \texttt{rhs\_ns}, and convergence controls.
+or regularized horseshoe, iteration limits, and stopping tolerances.
 \begin{enumerate}[label=(\arabic*)]
 \item Initialize \(q_\beta\), latent-variable factors, likelihood scale
 factors, and, when used, RHS and exAL scale-asymmetry factors.
-\item Repeat until the ELBO or chosen parameter-change criterion has converged:
+\item Repeat until the chosen objective-change or parameter-change stopping
+criterion is met:
   \begin{enumerate}[label=(\alph*)]
   \item set \(q_\beta(\vect\beta)\) to the Gaussian factor in
   \eqref{eq:supp_generic_vb_beta};
@@ -849,31 +1055,34 @@ factors, and, when used, RHS and exAL scale-asymmetry factors.
   \item for exAL, set \(q_v(v_t)\) and \(q_s(s_t)\) to the GIG and
   positive-truncated Normal factors implied by the corresponding MCMC blocks,
   replacing products by expectations under the other factors;
-  \item for \texttt{rhs\_ns}, set the inverse-gamma RHS factors by
+  \item for the regularized-horseshoe prior, set the inverse-gamma scale factors by
   \eqref{eq:supp_generic_vb_rhs};
-  \item for exAL, set \(q_{\sigma,\gamma}\) by the Laplace--Delta Gaussian
+  \item for exAL, set \(q_\eta\) by the Laplace--Delta Gaussian
   approximation on transformed coordinates and recompute branchwise smooth expectations
   using \eqref{eq:supp_generic_delta};
-  \item monitor the ELBO in \eqref{eq:supp_generic_elbo}--\eqref{eq:supp_generic_elbo_decomp},
-  interpreted as a Laplace--Delta approximation when the exAL block is active.
+  \item evaluate the coordinate-consistent objective in
+  \eqref{eq:supp_generic_elbo}--\eqref{eq:supp_generic_elbo_decomp},
+  using the entropy correction in \eqref{eq:supp_elbo_transformed_coordinates};
+  approximated expectations give a numerical objective, not a guaranteed bound.
   \end{enumerate}
-\item Return variational factors, fitted quantile summaries, ELBO history, and
-convergence diagnostics.
+\item Return variational factors, fitted quantile summaries, objective values,
+and stopping diagnostics.
 \end{enumerate}
 \end{suppalgorithm}
 
-\section{ELBO Monitoring}
+\section{Variational Objectives and Numerical Stopping}
 \label{sec:elbo}
 
-\noindent\textbf{Monitored objective.}
-The fixed-design VB implementation monitors the evidence lower bound
-\[
+\noindent\textbf{Evidence lower bound.}
+For a continuous variational family in the original parameter coordinates,
+the evidence lower bound is
+\begin{equation}
 \elbo(q)
 =
 \E_q\{\log p(\vect y,\vect v,\vect s,\vect\beta,\Theta_\beta,\sigma,\gamma
 \mid\mat X)\}+H(q),
 \label{eq:supp_generic_elbo}
-\]
+\end{equation}
 with the \(s\)-latent and \(\gamma\) terms omitted for AL. Expanding the exAL
 case gives
 \begin{align}
@@ -890,6 +1099,22 @@ case gives
 +H(q).
 \label{eq:supp_generic_elbo_decomp}
 \end{align}
+Let \(\vect u=(\vect v,\vect s,\vect\beta,\Theta_\beta)\) collect the
+remaining random blocks. If \(q=q_uq_{\sigma,\gamma}\), a change of
+variables gives the equivalent expression
+\begin{equation}
+\begin{aligned}
+\elbo(q)
+&=\E_{q_uq_\eta}\log p\{\vect y,\vect u,T(\vect\eta)\mid\mat X\}
+  +H(q_u)+H(q_\eta)+\E_{q_\eta}\log J(\vect\eta)\\
+&=\E_{q_uq_\eta}\log\left[p\{\vect y,\vect u,T(\vect\eta)\mid\mat X\}
+  J(\vect\eta)\right]+H(q_u)+H(q_\eta).
+\end{aligned}
+\label{eq:supp_elbo_transformed_coordinates}
+\end{equation}
+The two lines include the Jacobian exactly once: as the original-coordinate
+entropy correction or as part of the transformed joint density. In
+particular, \(H(q_{\sigma,\gamma})=H(q_\eta)+\E_{q_\eta}\log J\).
 \noindent\textbf{Approximation status.}
 For AL, replace the exAL likelihood term by the AL likelihood term and omit
 \(\E_q\{\log p(\vect s)\}\) and
@@ -898,102 +1123,123 @@ the conditional Gaussian density using the same expectations
 \(\bar w_t\), \(\bar r_t\), \(\E_q(\log\sigma)\),
 \(\E_q(\log B_\gamma)\), \(\E_q(\log v_t)\), and latent second moments that
 enter the coordinate updates. The prior component includes the Gaussian
-coefficient prior and, when \texttt{rhs\_ns} is active, the inverse-gamma
+coefficient prior and, when the regularized-horseshoe prior is active, the inverse-gamma
 local, global, auxiliary, and slab terms. The entropy component sums the
 Gaussian coefficient entropy, GIG latent entropies, truncated-normal latent
-entropies, inverse-gamma scale entropies, and the Gaussian entropy of the
-Laplace--Delta factor for \((\sigma,\gamma)\). When the Laplace--Delta block is
-active, \eqref{eq:supp_generic_elbo_decomp} is monitored as an approximation to
-the exact mean-field ELBO; convergence claims are therefore numerical
-diagnostics for the stated approximation, not evidence of exact posterior
-sampling.
+entropies, inverse-gamma scale entropies, and the transformed Gaussian entropy
+with the Jacobian correction above. Replacing expectations by delta
+approximations gives an approximate objective; it need not remain a lower
+bound or increase monotonically. Its numerical stability does not establish
+posterior accuracy. The MQ--DESN variational approximation used in the simulation
+also optimizes ordered intercepts as point values and evaluates only specified
+objective terms during iteration.
+This calculation does not evaluate the full continuous-factor ELBO above: a point mass
+does not have finite differential entropy. Comparisons with MCMC assess
+approximation quality separately.
 
 
-\section{Joint Quantile-Vector Regression with Regularized-Horseshoe Shrinkage}
+\section{MQ--DESN with Regularized-Horseshoe Shrinkage}
 \label{sec:joint_qdesn_supp}
 
-This section gives the derivation layer for the joint quantile-vector regression
-introduced in the main article. The reservoir construction is unchanged. The
-only new object is a prior over the quantile-indexed slope path,
+This section derives the MQ--DESN regression introduced in the main
+article. The reservoir features remain unchanged, and the model adds a prior
+over the quantile-indexed regression-coefficient sequence,
 conditional on the fixed non-intercept DESN design
 \(\mat Z=[\tilde{\vect x}_1^\top;\ldots;\tilde{\vect x}_T^\top]\in\R^{T\times r}\).
 The intercepts are kept separate from the high-dimensional slope shrinkage.
 
-\subsection{Stacked exAL Working Likelihood}
+\subsection{Stacked exAL Composite Likelihood}
 
-Let \(0<p_1<\cdots<p_Q<1\) be the quantile grid. At level \(p_q\),
+Let \(0<p_1<\cdots<p_K<1\) be the quantile grid. At level \(p_k\),
 \[
-Q_{p_q}(y_t\mid\mathcal F_t)=
-\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q,
+\text{Quantile location:}\quad \mu_{k,t}=
+\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k,
 \qquad
-\alpha_q\in\R,\quad \vect\beta_q\in\R^r .
+\beta_{0k}\in\R,\quad \vect\beta_k\in\R^r .
 \]
-This notation contains the single-level RHS Q--DESN as the \(Q=1\) convention
-\(\alpha_1=\alpha\), \(\vect\beta_1=\vect\beta\), with no learned slope
-baseline. Equivalently, for the single-quantile limit set
-\(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and assign the RHS prior
-directly to \(\Delta_1=\vect\beta_1\). The baseline in the multi-quantile
-derivation below is therefore a slope-path device, not an intercept term. In
-this limit, the baseline RHS hierarchy and its variational factors are simply
-absent; the adjacent-difference RHS hierarchy is the ordinary single-level RHS prior.
+The fitted hierarchy fixes \(\vect\beta_{\mathrm{base}}=\zeros{r}\)
+for every \(K\), so \(\Delta_1=\vect\beta_1\). For \(K=1\), set
+\(\beta_{01}=\beta_0\), identify \(\vect\beta_1\) with the single-level
+non-intercept slope vector, and
+\(\vect\beta_{\mathrm{base}}=\zeros{r}\); assign the regularized-horseshoe
+prior directly to \(\Delta_1=\vect\beta_1\), and omit the baseline hierarchy.
+The adjacent-difference hierarchy then coincides with the single-quantile
+regularized-horseshoe prior.
 The exAL augmented likelihood is a quantile-indexed copy of
 \eqref{eq:supp_exal_hierarchy}:
-\begin{align}
-v_{q,t}\mid\sigma_q&\sim\Exp(\text{rate}=1/\sigma_q),&
-s_{q,t}&\sim\TN(0,1),\\
-y_t\mid\alpha_q,\vect\beta_q,\sigma_q,\gamma_q,v_{q,t},s_{q,t}
-&\sim
+\begin{gather}
+v_{k,t}\mid\sigma_k\sim\Exp(\text{rate}=1/\sigma_k),\qquad
+s_{k,t}\sim\TN(0,1),\\
+\begin{gathered}
+y_t\mid\beta_{0k},\vect\beta_k,\sigma_k,\gamma_k,v_{k,t},s_{k,t}
+\sim\\
 \Normal\left(
-\alpha_q+\tilde{\vect x}_t^\top\vect\beta_q
-+\sigma_qD_qs_{q,t}+A_qv_{q,t},\,
-\sigma_qB_qv_{q,t}
+\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k
++\sigma_kD_ks_{k,t}+A_kv_{k,t},\,
+\sigma_kB_kv_{k,t}
 \right),
+\end{gathered}
 \label{eq:supp_joint_exal_hierarchy}
-\end{align}
-where \(A_q=A_{p_q}(\gamma_q)\), \(B_q=B_{p_q}(\gamma_q)\), and
-\(D_q=\lambda_{p_q}(\gamma_q)\). The AL special case fixes the AL constants
-and omits \(s_{q,t}\) and \(\gamma_q\).
+\end{gather}
+where \(A_k=A_{p_k}(\gamma_k)\), \(B_k=B_{p_k}(\gamma_k)\), and
+\(D_k=D_{p_k}(\gamma_k)\). The AL special case fixes the AL constants and
+omits \(s_{k,t}\) and \(\gamma_k\) from
+Eq.~\eqref{eq:supp_joint_exal_hierarchy}.
 
 Define
 \[
-\vect y_{\mathrm{st}}=\ones{Q}\otimes\vect y,\qquad
-\mat Z_{\mathrm{st}}=\Id{Q}\otimes\mat Z,\qquad
-\vect\beta_{\mathrm{st}}=(\vect\beta_1^\top,\ldots,\vect\beta_Q^\top)^\top,
+\vect y_{\mathrm{st}}=\ones{K}\otimes\vect y,\qquad
+\mat Z_{\mathrm{st}}=\Id{K}\otimes\mat Z,\qquad
+\vect\beta_{\mathrm{st}}=(\vect\beta_1^\top,\ldots,\vect\beta_K^\top)^\top,
 \]
 and
 \[
-\vect\alpha_{\mathrm{st}}
+\vect\beta_{0,\mathrm{st}}
 =
-(\alpha_1\ones{T}^\top,\ldots,\alpha_Q\ones{T}^\top)^\top .
+(\beta_{01}\ones{T}^\top,\ldots,\beta_{0K}\ones{T}^\top)^\top .
 \]
 Let
 \[
-d_{q,t}=\sigma_qD_qs_{q,t}+A_qv_{q,t},\qquad
-\omega_{q,t}=\sigma_qB_qv_{q,t},
+d_{k,t}=\sigma_kD_ks_{k,t}+A_kv_{k,t},\qquad
+\omega_{k,t}=\sigma_kB_kv_{k,t},
 \]
 and stack these into \(\vect d\) and
-\(\mat\Omega=\diag(\omega_{q,t})\). Conditional on the latent variables and
-likelihood parameters,
+\(\mat\Omega=\diag(\omega_{k,t})\), a covariance matrix. The augmented
+composite likelihood can be evaluated as a Gaussian density:
 \begin{equation}
-\vect y_{\mathrm{st}}\mid\vect\beta_{\mathrm{st}},\vect\alpha,\vect d,\mat\Omega
-\sim
-\Normal(
-\vect\alpha_{\mathrm{st}}+\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}+\vect d,\,
-\mat\Omega).
+\begin{aligned}
+L_{\mathrm{aug}}(
+\vect\beta_{\mathrm{st}},\vect\beta_0;
+\vect y_{\mathrm{st}},\vect d,\mat\Omega)
+&=\phi_{KT}\!\left(
+\vect y_{\mathrm{st}};
+\vect\beta_{0,\mathrm{st}}+\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}+\vect d,
+\mat\Omega\right).
+\end{aligned}
 \label{eq:supp_joint_stacked_likelihood}
 \end{equation}
-The reported joint analyses use the untempered product of these
-quantile-specific working-likelihood factors.
+Here \(\phi_{KT}(\cdot;\vect m,\mat V)\) is the \(KT\)-dimensional
+Gaussian density, including its determinant. Since \(\mat\Omega\) is
+diagonal, this evaluation equals the product of the \(KT\) univariate
+Gaussian factors in Eq.~\eqref{eq:supp_joint_exal_hierarchy}; the latent
+densities are multiplied separately. The repeated response vector is an
+evaluation argument, not a random vector with this nonsingular sampling
+distribution. The joint update uses the quantile-specific contributions
+without tempering and is not a normalized scalar-response sampling density.
 
 \subsection{Quantile-Indexed Regularized-Horseshoe Prior}
 \label{subsec:supp_joint_qvp_prior}
 
-For a genuine multi-quantile grid, let
+The fitted hierarchy regularizes the first slope vector toward zero and
+adjacent slope differences toward zero. We now derive an optional extension
+with an additional random baseline; it was not fitted in the reported
+multiquantile simulation. Fixing that baseline to zero recovers the fitted
+hierarchy. Let
 \(\vect\beta_{\mathrm{base}}\in\R^r\) denote a baseline slope vector. Adjacent
 coefficient differences are
 \[
 \Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}},\qquad
-\Delta_q=\vect\beta_q-\vect\beta_{q-1},\quad q=2,\ldots,Q.
+\Delta_k=\vect\beta_k-\vect\beta_{k-1},\quad k=2,\ldots,K.
 \]
 The baseline slope and adjacent differences use separate RHS hierarchies:
 \begin{align}
@@ -1004,32 +1250,34 @@ V^0_j
 \frac{\zeta_0^2(\tau^0)^2(\lambda^0_j)^2}
 {\zeta_0^2+(\tau^0)^2(\lambda^0_j)^2},
 \label{eq:supp_joint_baseline_var}\\
-\Delta_{q,j}\mid\lambda^\Delta_{q,j},\tau^\Delta_q,\zeta_\Delta
-&\sim\Normal(0,V^\Delta_{q,j}),&
-V^\Delta_{q,j}
+\Delta_{k,j}\mid\lambda^\Delta_{k,j},\tau^\Delta_k,\zeta_\Delta
+&\sim\Normal(0,V^\Delta_{k,j}),&
+V^\Delta_{k,j}
 &=
-\frac{\zeta_\Delta^2(\tau^\Delta_q)^2(\lambda^\Delta_{q,j})^2}
-{\zeta_\Delta^2+(\tau^\Delta_q)^2(\lambda^\Delta_{q,j})^2}.
+\frac{\zeta_\Delta^2(\tau^\Delta_k)^2(\lambda^\Delta_{k,j})^2}
+{\zeta_\Delta^2+(\tau^\Delta_k)^2(\lambda^\Delta_{k,j})^2}.
 \label{eq:supp_joint_innovation_var}
 \end{align}
-The local and global half-Cauchy scales use the inverse-gamma augmentation in
+The priors in Eqs.~\eqref{eq:supp_joint_baseline_var} and
+\eqref{eq:supp_joint_innovation_var} use the inverse-gamma half-Cauchy
+augmentation in
 \eqref{eq:supp_hs_aux}; it is applied once to the baseline coefficients and
 separately to each adjacent-difference block.
 
-Let \(\mat H\in\R^{Qr\times Qr}\) be the block first-difference matrix
+Let \(\mat H\in\R^{Kr\times Kr}\) be the block first-difference matrix
 satisfying
 \[
 \mat H\vect\beta_{\mathrm{st}}=
 (\vect\beta_1^\top,
 (\vect\beta_2-\vect\beta_1)^\top,\ldots,
-(\vect\beta_Q-\vect\beta_{Q-1})^\top)^\top .
+(\vect\beta_K-\vect\beta_{K-1})^\top)^\top .
 \]
 Set
 \[
 \tilde{\vect\beta}_{\mathrm{base}}=
 (\vect\beta_{\mathrm{base}}^\top,\zeros{r}^\top,\ldots,\zeros{r}^\top)^\top,
 \qquad
-\mat D_\Delta=\diag(V^\Delta_{q,j}:q=1,\ldots,Q,\ j=1,\ldots,r).
+\mat D_\Delta=\diag(V^\Delta_{k,j}:k=1,\ldots,K,\ j=1,\ldots,r).
 \]
 Then the conditional prior over the quantile-indexed slope path can be written as
 \begin{equation}
@@ -1044,50 +1292,73 @@ p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)
 \right].
 \label{eq:supp_joint_qvp_prior}
 \end{equation}
-This representation is sparse and block banded. It is the computational form
-used by both the MCMC and VB updates.
+This representation is sparse and block banded. It is the conditional
+Gaussian form used by the MCMC and VB coefficient updates. In the complete
+prior, each block also retains the scale-dependent factor in
+Eq.~\eqref{eq:supp_ns_product_factor}.
 
 \subsection{Complete-Data Posterior}
+
+Define the scale-dependent factors
+\[
+\begin{aligned}
+C_\Delta(\Theta_\Delta)
+&=\prod_{k=1}^K\prod_{j=1}^r
+\Normal\!\left(0\mid0,
+(\tau_k^\Delta)^2(\lambda_{k,j}^\Delta)^2+\zeta_\Delta^2\right),\\
+C_0(\Theta_0)
+&=\prod_{j=1}^r\Normal\!\left(0\mid0,
+(\tau^0)^2(\lambda_j^0)^2+\zeta_0^2\right).
+\end{aligned}
+\]
+They multiply the normalized conditional Gaussian densities, restoring
+the product prior rather than substituting the direct RHS hierarchy.
 
 Let \(\Theta_{\Delta}\) collect all local, global, auxiliary, and slab scales
 for the adjacent-difference RHS hierarchy, and let \(\Theta_0\) collect the
 corresponding baseline RHS scales. Up to constants not depending on unknowns,
 the complete-data posterior for the multi-quantile case is
 \begin{align}
-&p(\vect\beta_{\mathrm{st}},\vect\beta_{\mathrm{base}},\vect\alpha,
-\{\sigma_q,\gamma_q\}_{q=1}^Q,
-\{v_{q,t},s_{q,t}\}_{q,t},
+&p(\vect\beta_{\mathrm{st}},\vect\beta_{\mathrm{base}},\vect\beta_0,
+\{\sigma_k,\gamma_k\}_{k=1}^K,
+\{v_{k,t},s_{k,t}\}_{k,t},
 \Theta_0,\Theta_\Delta\mid\vect y,\mat Z)
 \nonumber\\
 &\quad\propto
 \exp\left[
 -\frac{1}{2}
-(\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
+(\vect y_{\mathrm{st}}-\vect\beta_{0,\mathrm{st}}
 -\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)^\top
 \mat\Omega^{-1}
-(\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}
+(\vect y_{\mathrm{st}}-\vect\beta_{0,\mathrm{st}}
 -\mat Z_{\mathrm{st}}\vect\beta_{\mathrm{st}}-\vect d)
 \right]
 \nonumber\\
 &\qquad\times
-\prod_{q=1}^Q\prod_{t=1}^T
+\prod_{k=1}^K\prod_{t=1}^T
 \left\{
-(\omega_{q,t})^{-1/2}
-p(v_{q,t}\mid\sigma_q)p(s_{q,t})
+(\omega_{k,t})^{-1/2}
+p(v_{k,t}\mid\sigma_k)p(s_{k,t})
 \right\}
-\prod_{q=1}^Q p(\sigma_q)\pi_{\gamma_q}(\gamma_q)\ind\{L_q<\gamma_q<U_q\}
+\prod_{k=1}^K p(\sigma_k)\pi_{\gamma_k}(\gamma_k)\ind\{L_k<\gamma_k<U_k\}
 \nonumber\\
 &\qquad\times
-p(\vect\alpha)\,
-p(\vect\beta_{\mathrm{base}}\mid\Theta_0)p(\Theta_0)\,
-p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)p(\Theta_\Delta).
+p(\vect\beta_0)\,
+p(\vect\beta_{\mathrm{base}}\mid\Theta_0)C_0(\Theta_0)p(\Theta_0)\,
+p(\vect\beta_{\mathrm{st}}\mid\vect\beta_{\mathrm{base}},\mat D_\Delta)
+C_\Delta(\Theta_\Delta)p(\Theta_\Delta).
 \label{eq:supp_joint_complete_posterior}
 \end{align}
-This is the untempered complete-data posterior used for the reported joint
-model. Alternative complete-data observation tempering would define a separate
-generalized posterior and is not part of the article evidence path.
-For \(Q=1\), remove
-\(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), and the baseline-prior factor
+Here \(p(\vect\beta_0)\) is the product of the stated Gaussian intercept
+priors, restricted to the ordered support when that option is specified.
+Equation~\eqref{eq:supp_joint_complete_posterior} gives the untempered
+complete-data posterior for the general baseline extension. The reported
+multiquantile simulation fixes \(\vect\beta_{\mathrm{base}}=\zeros{r}\) and omits
+\(\Theta_0\), \(C_0\), and the baseline-prior factor. Its first quantile slope is the
+RHS anchor, with separate RHS priors on adjacent differences. Weighting the
+quantile-specific contributions would define a different generalized posterior.
+For \(K=1\), remove
+\(\vect\beta_{\mathrm{base}}\), \(\Theta_0\), \(C_0\), and the baseline-prior factor
 from \eqref{eq:supp_joint_complete_posterior}, set
 \(\Delta_1=\vect\beta_1\), and use the adjacent-difference RHS hierarchy as the
 ordinary single-level RHS hierarchy.
@@ -1095,7 +1366,7 @@ ordinary single-level RHS hierarchy.
 \subsection{Gaussian Blocks}
 
 Let
-\(\vect r_\beta=\vect y_{\mathrm{st}}-\vect\alpha_{\mathrm{st}}-\vect d\).
+\(\vect r_\beta=\vect y_{\mathrm{st}}-\vect\beta_{0,\mathrm{st}}-\vect d\).
 Combining \eqref{eq:supp_joint_stacked_likelihood} and
 \eqref{eq:supp_joint_qvp_prior} gives
 \begin{align}
@@ -1116,8 +1387,8 @@ Thus
 \[
 \vect\beta_{\mathrm{st}}\mid\cdots\sim\Normal(\vect m_\beta,\mat K_\beta^{-1}).
 \]
-In implementation, \(\mat K_\beta\) should be treated as a sparse precision
-matrix; the dense inverse is not needed for MCMC sampling.
+Numerical computation uses a sparse factorization of \(\mat K_\beta\); forming
+its dense inverse is unnecessary.
 
 The baseline coefficients are conditionally independent by feature under the
 diagonal RHS representation. For \(j=1,\ldots,r\),
@@ -1129,236 +1400,291 @@ so
 \[
 \beta_{\mathrm{base},j}\mid\cdots\sim\Normal(m_{0,j},K_{0,j}^{-1}).
 \]
-This update uses the fact that only the first innovation
+This update uses the fact that only the first coefficient difference
 \(\Delta_1=\vect\beta_1-\vect\beta_{\mathrm{base}}\) contains \(\vect\beta_{\mathrm{base}}\).
 
 For unconstrained intercepts with independent priors
-\(\alpha_q\sim\Normal(a_{\alpha,q},V_{\alpha,q})\), define
+\(\beta_{0k}\sim\Normal(b_{0k},V_{0k})\), define
 \[
-e_{q,t}^{\alpha}=y_t-d_{q,t}-\tilde{\vect x}_t^\top\vect\beta_q .
+e_{k,t}^{0}=y_t-d_{k,t}-\tilde{\vect x}_t^\top\vect\beta_k .
 \]
 Then
 \begin{align}
-K_{\alpha,q}
-&=V_{\alpha,q}^{-1}+\sum_{t=1}^T\omega_{q,t}^{-1},\\
-m_{\alpha,q}
-&=K_{\alpha,q}^{-1}
+K_{0k}
+&=V_{0k}^{-1}+\sum_{t=1}^T\omega_{k,t}^{-1},\\
+m_{0k}
+&=K_{0k}^{-1}
 \left\{
-V_{\alpha,q}^{-1}a_{\alpha,q}
-+\sum_{t=1}^T\omega_{q,t}^{-1}e_{q,t}^{\alpha}
+V_{0k}^{-1}b_{0k}
++\sum_{t=1}^T\omega_{k,t}^{-1}e_{k,t}^{0}
 \right\},
 \end{align}
-and \(\alpha_q\mid\cdots\sim\Normal(m_{\alpha,q},K_{\alpha,q}^{-1})\). For a
-monotone-gap version, write
-\(\alpha_q=\alpha_1+\sum_{\ell=2}^q\exp(\eta_\ell)\) for
-\(q\ge2\). The conditional log density for
-\((\alpha_1,\eta_2,\ldots,\eta_Q)\) is the Gaussian likelihood term above plus
+and \(\beta_{0k}\mid\cdots\sim\Normal(m_{0k},K_{0k}^{-1})\).
+For the ordered-intercept prior, each intercept is sampled from this Gaussian
+conditional truncated between its neighbors, using unbounded endpoints at the extremes.
+This is the full conditional under the Gaussian priors restricted to
+\(\beta_{01}\le\cdots\le\beta_{0K}\); it does not impose noncrossing
+when slopes differ. The MQ--DESN VB calculation instead holds intercepts at
+constrained point estimates, so its intervals omit intercept uncertainty.
+An optional monotone-gap parameterization writes
+\(\beta_{0k}=\beta_{01}+\sum_{j=2}^k\exp(\eta_j)\) for
+\(k\ge2\). The conditional log density for
+\((\beta_{01},\eta_2,\ldots,\eta_K)\) is the Gaussian likelihood term above plus
 the chosen priors on the transformed coordinates and, if the prior is placed on
 the positive gaps rather than on \(\eta\), the Jacobian
-\(\sum_{\ell=2}^Q\eta_\ell\). This block is then updated by a
+\(\sum_{j=2}^K\eta_j\). This block is then updated by a
 low-dimensional Metropolis--Hastings, slice, or Laplace step.
 
-\subsection{exAL Latent-Variable and Scale Blocks}
+\subsection{Quantile-Indexed Latent and Shrinkage Blocks}
 
-Conditional on the joint quantile-vector regression, each exAL latent update is a
-quantile-indexed copy of the single-level update. Define
-\[
-e_{q,t}^{v}
-=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-\sigma_qD_qs_{q,t}.
-\]
-Then
-\[
-p(v_{q,t}\mid\cdots)
-\propto
-v_{q,t}^{-1/2}
-\exp\left[
--\frac12\left\{
-\chi_{q,t}^{v}v_{q,t}^{-1}
-+\psi_{q,t}^{v}v_{q,t}
-\right\}
-\right],
-\]
-which is a GIG density with
-\[
-\chi_{q,t}^{v}=\frac{(e_{q,t}^{v})^2}{\sigma_qB_q},
-\qquad
-\psi_{q,t}^{v}=\frac{A_q^2}{\sigma_qB_q}+\frac{2}{\sigma_q}.
-\]
-The GIG index is \(1/2\). Terms independent of \(v_{q,t}\) have
-been omitted from the kernel.
+The remaining MQ--DESN updates do not introduce new distributional forms. At
+level \(k\), the exAL latent-variable and scale--asymmetry updates are
+Eqs.~\eqref{eq:supp_v_mcmc}--\eqref{eq:supp_gamma_mcmc} with
+\(\vect x_t^\top\vect\beta\) replaced by
+\(\beta_{0k}+\tilde{\vect x}_t^\top\vect\beta_k\) and
+\((\sigma,\gamma,A_\gamma,B_\gamma,D_\gamma,v_t,s_t)\) replaced by their
+level-\(k\) counterparts. The AL case uses
+Eqs.~\eqref{eq:supp_al_v_mcmc}--\eqref{eq:supp_al_sigma_mcmc} and omits
+\((s_{k,t},\gamma_k)\). Each exAL block is evaluated on the transformed
+coordinates
+\(\log\sigma_k\) and
+\(\log\{(\gamma_k-L_k)/(U_k-\gamma_k)\}\), including the transformation
+Jacobian.
 
-For the positive-shift latent variable, define
-\[
-e_{q,t}^{s}
-=y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q-A_qv_{q,t}.
-\]
-The conditional distribution is positive-truncated Normal with precision and
-mean
-\[
-K_{s,q,t}=1+\frac{\sigma_qD_q^2}{B_qv_{q,t}},
-\qquad
-m_{s,q,t}=K_{s,q,t}^{-1}
-\frac{D_qe_{q,t}^{s}}{B_qv_{q,t}},
-\]
-that is,
-\[
-s_{q,t}\mid\cdots\sim\TN(m_{s,q,t},K_{s,q,t}^{-1}).
-\]
-The AL case omits this update and uses the AL constants in the \(v_{q,t}\)
-kernel.
-
-For each quantile level, the non-conjugate scale-asymmetry block has log
-kernel
-\begin{align}
-\ell_q(\sigma_q,\gamma_q)
-&=
--\frac{1}{2}\sum_{t=1}^T
-\left[
-\log\{\sigma_qB_qv_{q,t}\}
-+
-\frac{
-\{y_t-\alpha_q-\tilde{\vect x}_t^\top\vect\beta_q
--\sigma_qD_qs_{q,t}-A_qv_{q,t}\}^2}
-{\sigma_qB_qv_{q,t}}
-\right]
-\nonumber\\
-&\quad
--T\log\sigma_q-\sigma_q^{-1}\sum_{t=1}^Tv_{q,t}
-+\log p(\sigma_q)+\log\pi_{\gamma_q}(\gamma_q).
-\label{eq:supp_joint_sigma_gamma_kernel}
-\end{align}
-This kernel is evaluated on transformed coordinates
-\(\eta_{q,1}=\log\sigma_q\) and
-\(\eta_{q,2}=\log\{(\gamma_q-L_q)/(U_q-\gamma_q)\}\), adding the
-transformation Jacobian for MCMC proposals or the Laplace--Delta approximation.
-
-\subsection{RHS Scale Updates}
-
-The RHS scale updates are copies of the single-level
-Nishimura--Suchard product updates. For a baseline coefficient,
-\[
-\lambda_{0,j}^2\mid\cdots
-\sim
-\IG\left(
-1,\,
-\frac{1}{\nu_{0,j}}+\frac{\beta_{\mathrm{base},j}^2}{2(\tau^0)^2}
-\right),
-\qquad
-\nu_{0,j}\mid\cdots
-\sim
-\IG\left(1,\ 1+\frac{1}{\lambda_{0,j}^2}\right),
-\]
-and
-\[
-(\tau^0)^2\mid\cdots
-\sim
-\IG\left(
-\frac{r+1}{2},\,
-\frac{1}{\xi_0}
-+\frac12\sum_{j=1}^r\frac{\beta_{\mathrm{base},j}^2}{(\lambda^0_j)^2}
-\right),
-\qquad
-\xi_0\mid\cdots
-\sim
-\IG\left(1,\frac{1}{(\tau^0)^2}+\frac{1}{(\tau_0^0)^2}\right).
-\]
-For each adjacent-difference block \(q\), replace \(\beta_{\mathrm{base},j}\),
-\(\lambda^0_j\), and \(\tau^0\) by \(\Delta_{q,j}\),
-\(\lambda^\Delta_{q,j}\), and \(\tau^\Delta_q\). If the slab scale is random
-and shared across adjacent-difference blocks, then
+The baseline and adjacent-difference RHS updates likewise follow
+Eq.~\eqref{eq:supp_rhs_mcmc}. For the baseline, replace
+\(\beta_j\), \(\lambda_j\), \(\tau\), \(\xi\), and \(\tau_0\) by
+\(\beta_{\mathrm{base},j}\), \(\lambda_j^0\), \(\tau^0\), \(\xi_0\),
+and \(\tau_0^0\), respectively. For block \(k\), the corresponding
+quantities are \(\Delta_{k,j}\), \(\lambda_{k,j}^\Delta\),
+\(\tau_k^\Delta\), \(\xi_k^\Delta\), and \(\tau_{0,k}^\Delta\).
+Each global-variance conditional has
+shape \((r+1)/2\). If the slab scale is random and shared across
+adjacent-difference blocks, its distinct update is
 \[
 \zeta_\Delta^2\mid\cdots
 \sim
 \IG\left(
-a_{\zeta_\Delta}+\frac{Qr}{2},\,
+a_{\zeta_\Delta}+\frac{Kr}{2},\,
 b_{\zeta_\Delta}
-+\frac12\sum_{q=1}^Q\sum_{j=1}^r\Delta_{q,j}^2
++\frac12\sum_{k=1}^K\sum_{j=1}^r\Delta_{k,j}^2
 \right),
 \]
 with the analogous \(r/2\) update for a random baseline slab scale
 \(\zeta_0^2\). If slab scales are fixed, these updates are omitted.
 
-\subsection{MCMC Algorithm and VB--LD Pointer}
+\subsection{MCMC and Variational Updates}
 
-\begin{suppalgorithm}{MCMC sampler for the joint quantile-vector Q--DESN posterior}
+Algorithm~\ref{alg:joint_qdesn_mcmc} applies the preceding sparse Gaussian,
+level-indexed latent, and RHS blocks to the joint posterior. Under AL, the
+full conditional distributions remain Gaussian or truncated Gaussian,
+GIG, and inverse-gamma. The GIG latent conditional in the reported MQ--DESN
+analysis is sampled by slice sampling on the logarithmic scale.
+
+\begin{suppalgorithm}{MCMC sampler for the MQ--DESN posterior}
 \label{alg:joint_qdesn_mcmc}
 \emph{Input:} fixed non-intercept design \(\mat Z\), response \(\vect y\),
-quantile grid \(p_1<\cdots<p_Q\), priors, and MCMC
-controls. For \(Q=1\), use the collapsed convention
+quantile grid \(p_1<\cdots<p_K\), priors, iteration counts, and transition
+tuning parameters. For the fitted first-slope hierarchy at any \(K\), use
 \(\vect\beta_{\mathrm{base}}\equiv\zeros{r}\) and
 \(\Delta_1=\vect\beta_1\), and skip every baseline update below.
 \begin{enumerate}[label=(\arabic*)]
-\item Initialize \(\vect\alpha\), \(\vect\beta_{\mathrm{st}}\), likelihood
-parameters, exAL latent variables, and adjacent-difference RHS scales. If \(Q>1\),
-also initialize \(\vect\beta_{\mathrm{base}}\) and baseline RHS scales.
+\item Initialize \(\vect\beta_0\), \(\vect\beta_{\mathrm{st}}\), likelihood
+parameters, exAL latent variables, and adjacent-difference RHS scales.
+Initialize baseline coefficients and scales only for the optional
+estimated-baseline extension.
 \item Repeat:
   \begin{enumerate}[label=(\alph*)]
-  \item draw each \(v_{q,t}\mid\cdot\) from its quantile-indexed GIG full
+  \item draw each \(v_{k,t}\mid\cdot\) from its quantile-indexed GIG full
   conditional; for AL use the AL constants and omit the \(s\)-latent block;
-  \item for exAL, draw each \(s_{q,t}\mid\cdot\) from its
+  \item for exAL, draw each \(s_{k,t}\mid\cdot\) from its
   positive-truncated Normal full conditional;
   \item compute the sparse precision and mean in
   \eqref{eq:supp_joint_beta_conditional}, then draw
   \(\vect\beta_{\mathrm{st}}\mid\cdot\sim
   \Normal(\vect m_\beta,\mat K_\beta^{-1})\);
-  \item if \(Q>1\), draw \(\vect\beta_{\mathrm{base}}\) featurewise from the
+  \item for the optional estimated-baseline extension, draw \(\vect\beta_{\mathrm{base}}\) featurewise from the
   Gaussian baseline conditionals;
-  \item draw unconstrained intercepts from their Gaussian conditionals, or
-  update the monotone-gap transformed block when exact intercept ordering is
-  imposed;
-  \item draw adjacent-difference RHS scales, and if \(Q>1\) draw baseline RHS scales,
+  \item draw intercepts from their Gaussian conditionals, truncated between
+  neighbors when ordered intercepts are specified;
+  \item draw adjacent-difference RHS scales, and, only for the optional extension, baseline RHS scales,
   from their inverse-gamma full conditionals;
-  \item update each exAL \((\sigma_q,\gamma_q)\) block on transformed
-  coordinates targeting \eqref{eq:supp_joint_sigma_gamma_kernel}; for AL,
-  use the corresponding \(\sigma_q\) full conditional and omit \(\gamma_q\);
+  \item update each exAL \((\sigma_k,\gamma_k)\) block on transformed
+  coordinates using the level-indexed form of
+  \eqref{eq:supp_sigmagam_joint_kernel}; for AL,
+  use the corresponding \(\sigma_k\) full conditional and omit \(\gamma_k\);
   \item store retained draws and crossing diagnostics after burn-in.
   \end{enumerate}
 \end{enumerate}
 \end{suppalgorithm}
 
-For the joint VB--LD approximation, the same block structure is used as a
-mean-field computational approximation, with Wang--Blei Laplace--Delta updates
-only for the non-conjugate exAL scale-asymmetry factors
-\citep{wang2013nonconjugatevb}. The generic fixed-design factorization and
-ELBO decomposition are given in Sections~\ref{sec:cavi}--\ref{sec:elbo}; the
-joint computation applies those same factors to the stacked Gaussian block, with
-the required covariance blocks retained for the coordinate updates.
+The Gaussian slope and RHS coordinate updates extend to the stacked
+regression. A Laplace--Delta extension uses the scale--asymmetry
+approximation of Section~\ref{sec:cavi}. The reported multiquantile study instead
+uses the structured factor in Section~\ref{subsec:supp_structured_exal_vb}
+and optimizes ordered intercepts as point values. Its Gaussian slope factor
+retains covariance across levels, while its uncertainty summaries omit
+intercept uncertainty. The continuous-factor ELBO in
+Section~\ref{sec:elbo} therefore differs from the objective evaluated during
+these variational iterations.
+In particular, let \(\vect m\) and \(\mat\Sigma\) be the mean and covariance
+of its joint Gaussian slope factor, and let \(\mat H\) be the first-difference
+matrix defined above. Under the fitted hierarchy, whose first block is
+\(\vect\beta_1\), the stacked coefficient-difference vector is
+\(\vect\Delta=\mat H\vect\beta_{\mathrm{st}}\), and
+the shrinkage updates use
+\begin{equation}
+\text{Difference second moments:}\quad
+\E_q(\vect\Delta\circ\vect\Delta)
+=(\mat H\vect m)\circ(\mat H\vect m)
++\operatorname{diag}(\mat H\mat\Sigma\mat H^\top),
+\label{eq:supp_joint_increment_moments}
+\end{equation}
+where \(\circ\) denotes elementwise multiplication and the diagonal is read
+as a vector. For adjacent slopes, the variance contribution is
+\(\operatorname{Var}_q(\beta_{k,j})+\operatorname{Var}_q(\beta_{k-1,j})
+-2\operatorname{Cov}_q(\beta_{k,j},\beta_{k-1,j})\).
+Thus factorization from the other parameter blocks does not discard
+dependence across levels within the Gaussian slope factor.
+
+\subsection{Structured exAL Scale--Asymmetry Factor}
+\label{subsec:supp_structured_exal_vb}
+
+The multiquantile study uses the unweighted \(v\) augmentation in
+Eq.~\eqref{eq:supp_exal_hierarchy} separately at each probability level.
+The scale--asymmetry factor is independent of the coefficient and latent
+factors, but retains dependence between \(\sigma\) and \(\gamma\).
+The weighted GloFAS target in
+Eq.~\eqref{eq:supp_glofas_weighted_augmented_likelihood} has its own
+weighted terms and is not replaced by the unweighted calculation below.
+
+Fix \(p_0\). The constants \(A_\gamma,B_\gamma,D_\gamma\) are defined in
+Section~\ref{sec:dist_conventions}, with support \(L<\gamma<U\), where
+\(L<0<U\), \(g(L)=1-p_0\), and \(g(U)=p_0\). At zero use the AL limit
+\(D_0=0\). With intercepts held at their current point values, let
+\(e_t=y_t-\mu_t\), and write moments under the remaining factors as
+\[
+\begin{aligned}
+\bar e_t&=\E_q(e_t),& e_t^{(2)}&=\E_q(e_t^2),&
+\bar v_t&=\E_q(v_t),\\
+v_t^-&=\E_q(v_t^{-1}),& \bar s_t&=\E_q(s_t),&
+s_t^{(2)}&=\E_q(s_t^2).
+\end{aligned}
+\]
+The coefficient, \(v\), and \(s\) factors are mutually independent.
+For \(\sigma\sim\IG(a_\sigma,b_\sigma)\) and supported shape-prior density
+\(\pi_\gamma\), expansion of the expected augmented log density gives
+\begin{align}
+\nu&=-a_\sigma-\frac{3T}{2},\nonumber\\
+\chi_\gamma&=2b_\sigma+2\sum_t\bar v_t+
+ \frac{1}{B_\gamma}\sum_t
+ \left(e_t^{(2)}v_t^- -2A_\gamma\bar e_t+A_\gamma^2\bar v_t\right),
+ \nonumber\\
+\psi_\gamma&=\frac{D_\gamma^2}{B_\gamma}\sum_t s_t^{(2)}v_t^-,
+ \nonumber\\
+c_\gamma&=\log\pi_\gamma(\gamma)-\frac{T}{2}\log B_\gamma+
+ \frac{D_\gamma}{B_\gamma}\sum_t\bar s_t
+ \left(\bar e_tv_t^- -A_\gamma\right).
+\label{eq:supp_structured_scale_shape_terms}
+\end{align}
+Here \(T\) counts fitting rows for one level, and the unindexed \(\nu\) is
+the GIG order, not a horseshoe auxiliary \(\nu_j\). Up to a constant
+independent of \((\sigma,\gamma)\), the coordinate factor is
+\begin{equation}
+q^*(\sigma,\gamma)\propto
+ \exp(c_\gamma)\sigma^{\nu-1}
+ \exp\!\left[-\frac12\left(\frac{\chi_\gamma}{\sigma}
+ +\psi_\gamma\sigma\right)\right]
+ \ind\{\sigma>0,\ L<\gamma<U\}.
+\label{eq:supp_structured_scale_shape_kernel}
+\end{equation}
+Consequently \(q(\sigma\mid\gamma)=\GIG(\nu,\chi_\gamma,\psi_\gamma)\).
+The integral of its unnormalized scale kernel is
+\begin{equation}
+Z_\sigma(\gamma)=
+\begin{cases}
+2(\chi_\gamma/\psi_\gamma)^{\nu/2}
+ K_\nu(\sqrt{\chi_\gamma\psi_\gamma}),&\psi_\gamma>0,\\
+\Gamma(-\nu)(\chi_\gamma/2)^\nu,&\psi_\gamma=0,\quad\nu<0,
+\end{cases}
+\label{eq:supp_structured_scale_integral}
+\end{equation}
+where \(K_\nu\) is the modified Bessel function of the second kind.
+Retaining this shape-dependent mass yields
+\begin{equation}
+\begin{aligned}
+Z_\gamma&=\left(\int_L^0+\int_0^U\right)
+ \exp(c_\gamma)Z_\sigma(\gamma)\,d\gamma,\\
+q(\gamma)&=\exp(c_\gamma)Z_\sigma(\gamma)/Z_\gamma.
+\end{aligned}
+\label{eq:supp_structured_shape_factor}
+\end{equation}
+Thus the scale integral is analytic. One-dimensional quadrature over the
+bounded shape support, split at zero, supplies the normalization and mixed
+moments. For an integrable function \(h\),
+\begin{equation}
+\E_q\{h(\sigma,\gamma)\}
+=\frac{1}{Z_\gamma}\left(\int_L^0+\int_0^U\right)
+ \exp(c_\gamma)Z_\sigma(\gamma)
+ \E\{h(\sigma,\gamma)\mid\gamma\}\,d\gamma.
+\label{eq:supp_structured_mixed_moments}
+\end{equation}
+The conditional scale moments are
+\begin{equation}
+\E(\sigma^a\mid\gamma)=
+\begin{cases}
+(\chi_\gamma/\psi_\gamma)^{a/2}
+ \dfrac{K_{\nu+a}(\sqrt{\chi_\gamma\psi_\gamma})}
+ {K_\nu(\sqrt{\chi_\gamma\psi_\gamma})},&\psi_\gamma>0,\\[5pt]
+(\chi_\gamma/2)^a\dfrac{\Gamma(-\nu-a)}{\Gamma(-\nu)},
+ &\psi_\gamma=0,\quad -\nu>a.
+\end{cases}
+\label{eq:supp_structured_scale_moments}
+\end{equation}
+Also \(\E(\log\sigma\mid\gamma)=\partial_\nu\log Z_\sigma(\gamma)\),
+holding \(\chi_\gamma\) and \(\psi_\gamma\) fixed. Coordinate updates use
+mixed moments such as \(\E_q\{(B_\gamma\sigma)^{-1}\}\),
+\(\E_q\{A_\gamma/(B_\gamma\sigma)\}\),
+\(\E_q(D_\gamma/B_\gamma)\), and
+\(\E_q(\sigma D_\gamma^2/B_\gamma)\). Replacing these by products of
+separate scale and shape expectations would define a different approximation.
+The numerical branch transformation includes its integration Jacobian;
+its tolerance and tail treatment are checked independently of the scalar
+MCMC mixing diagnostics.
 
 \subsection{Crossing Diagnostics}
 
-For adjacent levels \(q-1\) and \(q\), define the fitted gap at time \(t\) by
+For adjacent levels \(k-1\) and \(k\), define the fitted gap at time \(t\) by
 \[
-g_{q,t}=
-(\alpha_q-\alpha_{q-1})
-+\tilde{\vect x}_t^\top(\vect\beta_q-\vect\beta_{q-1}).
+g_{k,t}=
+(\beta_{0k}-\beta_{0,k-1})
++\tilde{\vect x}_t^\top(\vect\beta_k-\vect\beta_{k-1}).
 \]
-The raw crossing count is
+The raw adjacent-level crossing count is
 \[
-C_{\mathrm{raw}}=\sum_{q=2}^Q\sum_{t=1}^T\ind\{g_{q,t}<0\}.
+C_{\mathrm{raw}}=\sum_{k=2}^K\sum_{t=1}^T\ind\{g_{k,t}<0\}.
 \]
-If fitted quantile curves are projected or rearranged, the corresponding
-post-rearrangement crossing count should be computed after that stated monotone
-rearrangement. The maximum and mean absolute projection adjustments are useful
-diagnostics because a zero post-rearrangement crossing count leaves open
-whether the joint prior produced coherent raw paths or the monotone
-rearrangement made large repairs. On a bounded feature domain
+When an ordering transformation is applied, crossings are counted separately
+before and after that transformation. Maximum and mean absolute projection
+adjustments measure how much the raw grid changes. On a bounded feature domain
 \(\tilde{\vect x}_t\in[-1,1]^r\), the sufficient condition
 \[
-\alpha_q-\alpha_{q-1}\ge
-\|\vect\beta_q-\vect\beta_{q-1}\|_1
+\beta_{0k}-\beta_{0,k-1}\ge
+\|\vect\beta_k-\vect\beta_{k-1}\|_1
 \]
-is a diagnostic reference for soft non-crossing behavior. Enforcing this
-inequality requires a separate hard-constraint step.
+is a diagnostic reference for adjacent-level separation. Enforcing this
+inequality requires explicit constrained estimation.
 
-\section{Quantile Forecast Propagation and Monotone Rearrangement}
+\section{Forecast Summaries and Scores}
 \label{sec:forecast_synthesis}
 
-Quantile forecast propagation carries posterior or variational draws through the fixed
-reservoir, whereas monotone rearrangement is a post-processing step for
-independently fitted quantile levels. A joint multi-quantile posterior model
-must be specified separately. For fitted ordinates
+Posterior or variational parameter draws are combined with recursively updated
+reservoir states to obtain multi-step quantile forecasts. Estimated quantile
+curves may cross. Where ordered output is required, equal-weight isotonic
+projection orders the grid unless the analysis specifies another rule.
+For fitted ordinates
 \(\widehat{\vect q}_t=(\widehat q_{1,t},\ldots,\widehat q_{K,t})^\top\) at
-levels \(p_1<\cdots<p_K\), the default rule is
+levels \(p_1<\cdots<p_K\), the projection is
 \begin{equation}
 \vect q_t^*
 =
@@ -1367,1130 +1693,1273 @@ levels \(p_1<\cdots<p_K\), the default rule is
 \qquad w_k>0.
 \label{eq:supp_monotone_projection}
 \end{equation}
-The article uses equal weights unless a validation or application design
-specifies otherwise in advance. The rule may be applied draw by draw when joint posterior
-or variational quantile-path draws are available, or to posterior summary
-ordinates when only summary grids are retained. Draw-level projection preserves
-more posterior dependence information; summary-level projection is a reporting
-adjustment for a displayed grid.
+The equal projection weights \(w_k=1\) used in the multiquantile simulation differ
+from the probability-integration weights \(\omega_k\) used for scoring below.
+The projection may be applied draw by draw when joint posterior or variational
+quantile-path draws are available, or to posterior summary ordinates for
+independently estimated quantiles. For a joint fit, draw-level projection
+acts on its joint posterior draws; for independent fits it requires an
+explicit coupling of marginal draws. Projection is not sorting, and neither
+operation is guaranteed to improve the particular weighted score.
+Summary-level projection orders the displayed grid but is not equivalent
+to projecting and then averaging draws.
 
 For a single-level fit at level \(p_0\), write a posterior draw or a draw from
 the variational approximation as
-\(\theta_{p_0}^{(m)}
-=(\vect\beta_{p_0}^{(m)},\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)})\). Forecasting
+\(\theta_{p_0}^{(b)}
+=(\vect\beta_{p_0}^{(b)},\sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)})\). Forecasting
 proceeds by propagating the deterministic reservoir state forward from the
-forecast origin. At horizon \(h\), the current lag vector is built from
+forecast origin \(o\), which may follow the fitting endpoint \(T\).
+At horizon \(h\), the current lag vector is built from
 observed values for one-step forecasts and from previously simulated values for
-free-running multi-step forecasts. Conditional on the draw and the resulting
-\(p_0\)-indexed design row, the working-likelihood draw is
+recursive multistep forecasts. Conditional on the draw and the resulting
+\(p_0\)-indexed design row, the response draw is
 \[
-y_{T+h}^{(m,p_0)}
+y_{o+h}^{(b,p_0)}
 \sim
 \exAL_{p_0}
-\left(\vect x_{T+h}^{(m,p_0)\top}\vect\beta_{p_0}^{(m)},
-\sigma_{p_0}^{(m)},\gamma_{p_0}^{(m)}\right),
+\left(\vect x_{o+h}^{(b,p_0)\top}\vect\beta_{p_0}^{(b)},
+\sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)}\right),
 \]
-with the \(s\)-latent and \(\gamma\) block omitted for AL. Repeating this over
-posterior or variational draws produces working-likelihood response draws when
-such draws are explicitly emitted, and produces \(p_0\)-level quantile summaries
-conditional on the fixed reservoir and working likelihood. The analysis must
-state which forecast summary is being scored. To report several
+with the \(s\)-latent and \(\gamma\) block omitted for AL. Repetition over
+parameter draws yields response-level simulations when the likelihood
+is sampled and conditional-quantile summaries when the regression location is
+evaluated directly. The reported scoring criterion is defined for the
+corresponding forecast summary. Both summaries condition on the fixed reservoir
+realization and the stated likelihood. To report several
 independently fitted levels, the same recursion is run separately for each
 fitted \(p_k\).
 
-For a joint quantile-vector regression, a posterior or variational draw returns a
-raw quantile vector over \(p_1,\ldots,p_Q\). If recursive lag inputs require a
+For MQ--DESN, a posterior or variational draw returns a
+raw quantile vector over \(p_1,\ldots,p_K\). If recursive lag inputs require a
 future response path, that path is generated by a stated propagation rule.
-For draw \(m\) at horizon \(h\), write
+For draw \(b\) at horizon \(h\), write
 \[
-\mu_{q,T+h}^{(m)}
-=\alpha_q^{(m)}
-+\tilde{\vect x}_{T+h}^{(m)\top}\vect\beta_q^{(m)},
-\qquad q=1,\ldots,Q,
+\mu_{k,o+h}^{(b)}
+=\beta_{0k}^{(b)}
++\tilde{\vect x}_{o+h}^{(b)\top}\vect\beta_k^{(b)},
+\qquad k=1,\ldots,K,
 \]
 and let
-\(\vect q_{T+h}^{(m)}
-=(\mu_{1,T+h}^{(m)},\ldots,\mu_{Q,T+h}^{(m)})^\top\). If exact monotone output
-is required, apply the stated monotone rearrangement, such as isotonic projection
-or rearrangement
+\(\vect q_{o+h}^{(b)}
+=(\mu_{1,o+h}^{(b)},\ldots,\mu_{K,o+h}^{(b)})^\top\). When ordered output
+is required, apply the specified monotone transformation---equal-weight
+isotonic projection or rearrangement by sorting
 \citep{BarlowBrunk1972IsotonicDual,chernozhukov2010},
-and set \(\vect q_{T+h}^{*,(m)}=\mathcal M(\vect q_{T+h}^{(m)})\). The ordered
-grid defines \(Q_{T+h}^{*,(m)}(u)\) under the stated interpolation and
-endpoint convention. A scalar synthesized response draw is then
-\[
-u_{T+h}^{(m,r)}\sim\Unif(0,1),
-\qquad
-y_{T+h}^{(m,r)}
-=Q_{T+h}^{*,(m)}\!\left(u_{T+h}^{(m,r)}\right).
-\]
-This is inverse-CDF sampling from the stated draw-specific quantile curve.
+and denote the result by \(\vect q_{o+h}^{*,(b)}\). The ordered
+values define a draw-specific quantile curve on the fitted interval
+\([p_1,p_K]\) by linear interpolation.
 
-When separate models are fit at ordered quantile levels \(p_1<\cdots<p_K\),
-the article uses monotone rearrangement only after fitting. It
-operates on fitted quantile summaries, not on off-target quantiles from
-the working likelihoods, and may use isotonic projection
-\eqref{eq:supp_monotone_projection} or monotone rearrangement
-\citep{BarlowBrunk1972IsotonicDual,chernozhukov2010}. The ordered grid defines
-a quantile curve by linear interpolation on \([p_1,p_K]\). Outside the
-fitted grid, the article reports grid-level summaries and avoids tail
-extrapolation unless an application explicitly states an endpoint convention.
-For recursive distributional simulation from an independently fitted grid, a
-common-history propagation rule is preferred: at each horizon, form all fitted
-quantile ordinates from the same current lag history, apply the monotone
-rearrangement, sample
-one \(u\sim\Unif(0,1)\), set \(y=Q^*(u)\), and feed that same synthesized
-response into all level-specific reservoir recursions for the next horizon.
-This avoids combining quantiles produced under different future response
-histories.
+For independently estimated quantile levels \(p_1<\cdots<p_K\), the specified
+transformation is applied to the conditional-quantile summaries or coupled
+draws. In the reported multiquantile study, both independent and MQ--DESN
+draws use equal-weight isotonic projection.
+Linear interpolation defines a quantile curve over \([p_1,p_K]\).
+For recursive response simulation,
+observed history reconstructs the reservoir state at each forecast origin.
+Unknown responses are generated recursively within that origin, using linear
+interpolation of the ordered grid. A simulated probability below \(p_1\)
+or above \(p_K\) uses the corresponding outermost fitted quantile value;
+this is endpoint clamping, not extrapolation. Reservoir weights and fitted
+parameter distributions remain fixed. All four regressions are scored on the
+same 990 origin--horizon pairs,
+but their recursively generated future feature vectors may differ.
+
+Forecast scores use \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), as the
+evaluation grid. The evaluation
+levels may differ from the fitted levels when an estimated quantile function
+is available at other probabilities. Let
+\(q_{o,h,k}^*\) denote the reported conditional \(p_k\)-quantile at origin
+\(o\) and horizon \(h\), after the specified monotone transformation when applied.
+Here \(K\) counts evaluation levels, while \(b\) indexes posterior or
+variational draws. With check loss
+\(\rho_p(e)=e\{p-\ind(e<0)\}\), the CRPS of a predictive distribution \(F\)
+with finite first moment has the integrated representation
+\citep{GneitingRaftery2007}:
+\begin{equation}
+\operatorname{CRPS}(F,y)
+=2\int_0^1\rho_p\!\left\{y-F^{-1}(p)\right\}\,dp.
+\label{eq:supp-crps-integrated-check}
+\end{equation}
+For quantiles evaluated on this grid, the reported finite-grid approximation
+to Eq.~\eqref{eq:supp-crps-integrated-check} over \([p_1,p_K]\) is
+\begin{equation}
+\aCRPS_{p_1:p_K}(y;\vect q_{o,h}^*)
+=2\sum_{k=1}^K\omega_k
+\rho_{p_k}\!\left(y-q_{o,h,k}^*\right),
+\label{eq:supp-acrps}
+\end{equation}
+where
+\begin{equation}
+\begin{aligned}
+\omega_1&=\frac{p_2-p_1}{2},
+&\omega_k&=\frac{p_{k+1}-p_{k-1}}{2},\quad 2\le k\le K-1,
+&\omega_K&=\frac{p_K-p_{K-1}}{2}.
+\end{aligned}
+\label{eq:supp-acrps-weights}
+\end{equation}
+The weights in Eq.~\eqref{eq:supp-acrps-weights} satisfy
+\(\sum_k\omega_k=p_K-p_1\). The multiquantile simulation and GloFAS analyses
+use seven common evaluation levels with endpoints 0.05 and 0.95, so their
+weights sum to 0.90. For fitted quantile regressions, the evaluation levels
+coincide with the fitted grid. Their interior levels differ between studies;
+comparisons of \(\aCRPS\) are therefore made within each study.
+
+The multiquantile simulation also evaluates the quantile grid under the known
+conditional data-generating process (DGP). Let \(N_{\mathrm{eval}}\) be its
+number of origin--horizon pairs, let \(F_{0,\ell}\) be the true conditional
+distribution for pair \(\ell\), and let
+\(\vect q_\ell^{*,(b)}=(q_{\ell,1}^{*,(b)},\ldots,q_{\ell,K}^{*,(b)})^\top\) be the
+isotonically projected quantile vector from posterior draw \(b\). The
+oracle finite-grid \(\aCRPS\) is
+\begin{equation}
+S_{\mathrm{DGP}}^{(b)}
+=\frac{2}{N_{\mathrm{eval}}}
+\sum_{\ell=1}^{N_{\mathrm{eval}}}\sum_{k=1}^K\omega_k
+\E_{Y_\ell\sim F_{0,\ell}}
+\left[
+\rho_{p_k}\!\left\{Y_\ell-q_{\ell,k}^{*,(b)}\right\}
+\right].
+\label{eq:supp-dgp-integrated-score}
+\end{equation}
+For the seven-level grid, the weights are
+\[
+(0.025,\ 0.10,\ 0.20,\ 0.25,\ 0.20,\ 0.10,\ 0.025),
+\]
+which sum to 0.90 and retain the scale of integrated check loss over
+\([0.05,0.95]\). The expectation in
+Eq.~\eqref{eq:supp-dgp-integrated-score} is evaluated from Monte Carlo paths
+under the known simulation mechanism, conditional on the observed history
+at each forecast origin. The same DGP paths and probability weights are used
+for all four regressions. This calculation integrates unknown future DGP
+responses rather than conditioning on their realized held-out values.
+The reported posterior intervals also condition on each model's averaged
+recursive feature matrix and exclude repeated-simulation and model-selection
+uncertainty.
+
+For a joint fit, each score draw uses the quantile vector from one joint
+posterior draw and therefore retains its cross-quantile dependence. For
+independently estimated levels, the marginal draws are combined with a
+pre-specified product coupling formed by within-chain permutations of
+quantile-specific draws. Joint-minus-independent contrasts match scalar
+score draws by a declared index coupling. Their intervals are descriptive
+and depend on this pairing between separately fitted models.
+Posterior means and equal-tailed 95\% intervals of the oracle \(\aCRPS\),
+\(S_{\mathrm{DGP}}^{(b)}\), form the primary comparison. The score evaluated
+at the posterior-mean quantile curve is reported separately as a sensitivity
+summary. The GloFAS analysis uses realized outcomes in
+Eq.~\eqref{eq:supp-acrps}. Its reported issued-window grids are ordered
+without crossing correction; Section~\ref{subsec:glofas_checks} gives
+the separate crossing results for historical reference and discrepancy models.
+
+Response-level posterior predictive draws determine an empirical predictive
+quantile function that can be evaluated on any prespecified grid; integrating
+its check loss over \((0,1)\) gives the empirical predictive CRPS. Posterior
+draws of a fitted \(p\)-level quantile provide credible summaries for that
+conditional quantile. The single-level interval analysis below computes its
+criteria for each retained quantile draw.
+
+\clearpage
+\section{Reservoir Specification, Selection, and Diagnostics}
+\label{sec:supp_reservoir_diagnostics}
+
+Table~\ref{tab:supp-reservoir-selection} summarizes the reservoir-design
+quantities and their associated diagnostics. Posterior inference conditions on
+the resulting feature map and quantifies uncertainty in the regression,
+likelihood, and shrinkage parameters.
+
+\begin{table}[!htbp]
+\centering
+\begingroup
+\TableStyle
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{0.16\textwidth}
+>{\raggedright\arraybackslash}p{0.25\textwidth}
+>{\raggedright\arraybackslash}p{0.28\textwidth}
+>{\raggedright\arraybackslash}X@{}}
+\toprule
+Component & Role in the fixed feature map & Design consideration & Potential concern \\
+\midrule
+\(D\) & Number of reservoir layers and hierarchy of time scales &
+Evaluate a small prespecified set and retain additional depth only when
+validation forecast criteria improve consistently across reservoir realizations. &
+Unnecessary depth can add numerically unstable or redundant design columns. \\
+\(\{n_d\},\{\tilde n_d\}\) & Number of reservoir states and lower-layer feature
+dimension & Treat as the main complexity control, with reduction sizes chosen
+as part of the same feature map. &
+A large design relative to the sample size can yield weakly identified
+coefficients or a poorly conditioned regression; redundant states can reduce
+the effective rank of \(\mat X\). \\
+\(m\) & Maximum response lag entering the reservoir input & Choose a
+domain-informed grid and require all lags to be available at the forecast
+origin. & Excessive lags increase dimension and can incorporate observations
+unavailable at the forecast origin if alignment is incorrect. \\
+\(\{\alpha_d\},\{\rho_d\}\) & Reservoir time scale, persistence, and stability &
+Compare jointly because both affect memory. Near-one radii require empirical
+stability checks. & States concentrated near the activation bounds,
+near-constant states, or sensitivity to initial conditions. \\
+\(\{\pi^{(W)}_d\},\{\pi^{(\mathrm{in})}_d\}\) and input scaling & Recurrent
+connectivity and input-induced variation & Fix from a small set of literature-guided
+defaults; broaden the comparison when diagnostics show weak state variation or
+concentration near the activation bounds. & Low connectivity can produce weakly
+varying states; high connectivity or input scaling can concentrate states near
+the activation bounds. \\
+\(f,k,T_0\) & Nonlinearity, transformation of reduced lower-layer states, and initial-condition
+washout & Fix before feature-map comparison, with \(T_0\) chosen relative to the
+memory scale. & Short washout can leave initial-condition artifacts. \\
+Random reservoir realization & Realization of the random feature map & Assess
+variation across repeated reservoir realizations. &
+Held-out scores can vary materially across realizations. \\
+\bottomrule
+\end{tabularx}
+\endgroup
+\caption{Reservoir specification and diagnostics for the fixed
+Q--DESN feature map.}
+\label{tab:supp-reservoir-selection}
+\end{table}
+
+\subsection{Model Selection and Initialization}
+\label{sec:supp_selection_initialization}
+
+For a fixed regression specification \(M\), candidate DESNs \(R_j\) vary
+the depth, layer sizes, leak rates, input scaling, and reservoir realization
+over the choices stated for each analysis. They are fitted to the designated
+training observations and compared by the selection criterion
+\(S_{\mathrm{sel}}\), using
+the data stated for each analysis. The response convention, information available at each
+origin, and evaluation dates are common across candidates. Data-based
+scaling and dimension-reduction matrices are estimated from the fitting observations. The selected
+specification satisfies
+\[
+\widehat R_M
+\in
+\argmin_{R_j:\,j=1,\ldots,J}
+S_{\mathrm{sel}}(R_j;M).
+\]
+The selected \(\widehat R_M\) is held fixed for evaluation. Gaussian-DESN
+ridge fits provide an inexpensive first comparison of the candidate
+specifications. Gaussian RHS--VB fits and quantile regressions refine the
+comparison where specified. In the multiquantile simulation, one selected DESN
+specification, reservoir realization, and feature construction are shared
+by Q--DESN and MQ--DESN under the AL and exAL likelihoods.
+The independent single-quantile validation instead uses its own
+criterion-specific specifications, including historical forecast-based
+refinement, as described in
+Section~\ref{subsec:supp-independent-metrics}. Its selection and
+initialization are separate from the median-outward sequence below.
+
+The generated reservoir states are checked for finite values and concentration
+near the activation bounds. Near-constant columns, effective rank, conditioning,
+and variation across reservoir realizations describe the resulting regression
+predictors. Leak rates and spectral
+scaling are assessed together with reservoir behavior under the observed inputs, following
+the ESN stability literature
+\citep{JaegerLukoseviciusPopoviciSiewert2007LeakyESN,YildizJaegerKiebel2012ESP}.
+
+Suppose that the probability grid satisfies
+\(p_1<\cdots<p_{k_{\mathrm{med}}}=0.50<\cdots<p_K\).
+After the Gaussian ridge and Gaussian \(\RHS\)--VB fits, compatible estimates
+from the latter initialize the median AL regression. The lower side of the AL
+grid is fitted in the order
+\[
+0.50\ \longrightarrow\ p_{k_{\mathrm{med}}-1}\ \longrightarrow\ \cdots\
+\longrightarrow\ p_1,
+\]
+and the upper side is fitted in the order
+\[
+0.50\ \longrightarrow\ p_{k_{\mathrm{med}}+1}\ \longrightarrow\ \cdots\
+\longrightarrow\ p_K.
+\]
+Thus each AL regression is initialized from the nearest completed level on the
+same side of the median. For every \(k=1,\ldots,K\), the completed AL fit at
+\(p_k\) initializes the exAL fit at \(p_k\). The exAL regressions may
+therefore be fitted as soon as their matching AL fits are available.
+
+The multiquantile simulation and GloFAS use the applicable MQ--DESN branches;
+PriceFM uses independent AL/exAL VB only. MQ--DESN under AL is initialized
+from the complete collection of independent AL fits, and MQ--DESN under exAL
+is initialized from the
+complete collection of independent exAL fits. Let
+\(\widehat\beta_{0k}^{\,\mathrm{ind}}\) and
+\(\widehat{\vect\beta}_k^{\,\mathrm{ind}}\) denote the independent
+intercept and slope estimates from the matching likelihood family. Initial
+values for the MQ--DESN level-specific coefficients are
+\[
+\beta_{0k}^{(0)}
+=\widehat\beta_{0k}^{\,\mathrm{ind}},
+\qquad
+\vect\beta_k^{(0)}
+=\widehat{\vect\beta}_k^{\,\mathrm{ind}},
+\qquad k=1,\ldots,K.
+\]
+For the fitted first-slope hierarchy,
+\(\vect\Delta_1^{(0)}=\widehat{\vect\beta}_1^{\,\mathrm{ind}}\).
+Under the adjacent-difference parameterization in
+Section~\ref{sec:joint_qdesn_supp}, the corresponding initial differences are
+\begin{equation}
+\vect\Delta_k^{(0)}
+=\widehat{\vect\beta}_k^{\,\mathrm{ind}}
+-\widehat{\vect\beta}_{k-1}^{\,\mathrm{ind}},
+\qquad k=2,\ldots,K.
+\label{eq:supp-joint-initial-differences}
+\end{equation}
+Independent AL estimates initialize MQ--DESN under AL, and independent exAL
+estimates initialize MQ--DESN under exAL in
+Eq.~\eqref{eq:supp-joint-initial-differences}.
+
+When the initializing fit and the model being fitted differ, only parameters with
+corresponding interpretations are used to construct starting values. Gaussian
+residual scale and AL or exAL scale have different parameterizations, so the
+initial scale for the model being fitted is obtained under its own
+parameterization. Parameters specific to the exAL likelihood or coefficient
+prior are initialized within their respective supports. For a VB-to-MCMC
+initialization, the response, data period, design matrix, feature ordering,
+transformations, reservoir realization, likelihood, probability level or grid,
+parameterization, and prior specification agree. MCMC then targets the
+posterior distribution of that same model. Convergence is assessed using the
+diagnostics stated for the empirical analysis.
+
+\begin{figure}[p]
+  \centering
+  \input{figures/quantile_initialization/quantile_initialization_picture.tex}
+  \caption[Sequential initialization centered at the median]{%
+    \input{figures/quantile_initialization/quantile_initialization_caption.tex}%
+  }
+  \figalt{A Gaussian ridge regression initializes a Gaussian regularized-horseshoe
+  variational fit, which initializes the median AL regression. Independent AL
+  fits then proceed outward toward both tails; each initializes the exAL fit at
+  the same probability level. Complete independent grids initialize MQ--DESN
+  in the multiquantile simulation and GloFAS, not PriceFM. The multiquantile simulation
+  uses VB starts for MCMC under the same model; GloFAS and PriceFM report VB.
+  Prior calibration and development-data selection are separate operations.}
+  \label{fig:supp-quantile-sequential-initialization}
+\end{figure}
 
 \clearpage
 \section{Supplementary Simulation and Application Tables}
 \label{sec:supp_validation_tables}
 
-The main article summarizes the single-quantile MCMC posterior metric
-distributions graphically. This section gives the corresponding numerical MCMC
-tables, the approximate VB companion panels, balanced joint-evaluation
-diagnostics, and additional table captions for the same simulation settings.
+The single-quantile comparison uses a linear trend and seasonal generating
+process. The multiquantile comparison varies the response distribution and
+temporal dynamics while sharing one DESN specification across the four
+regressions in each mechanism.
 
-\subsection{Single-Quantile MCMC Posterior Metric Tables}
+\subsection{Single-Quantile Generating Design}
+\label{subsec:supp-independent-generating-design}
 
-The following tables give the numerical posterior means and equal-tailed 95\%
-intervals corresponding to the MCMC interval figures in the main article.
-Q--DESN and exQ--DESN entries use fitting-sample preprocessing, and ridge rows
-are omitted. Each criterion retains the case-specific source selected before
-interval evaluation; consequently, criteria within a model row can come from
-different specifications. The intervals condition on the fixed simulated data,
-evaluation grid, and reservoir realization.
+For observation-error family \(f\), the six-dimensional state
+\(\vect\theta_{t,f}\) contains a local level, slope, and two sine--cosine
+harmonic pairs. The evolution matrix \(\mat G_\theta\) combines a local
+linear trend with seasonal period 90 and harmonics 1 and 2, following the
+dynamic linear model construction of \citet{WestHarrison1997}. The
+observation vector is \(\vect F=(1,0,1,0,1,0)^\top\), so
+\(\mu_{t,f}=\vect F^\top\vect\theta_{t,f}\). Independent Gaussian state
+disturbances have covariance \(\mat W_\theta\), with
+\[
+\text{State disturbance scales:}\quad
+\sqrt{\diag(\mat W_\theta)}
+=(0.005,0.00002,0.004,0.004,0.003,0.003).
+\]
+Each state trajectory starts deterministically at its family-specific level,
+slope, and harmonic coordinates. For amplitude \(a_j\) and phase
+\(\phi_j\), those coordinates are
+\((a_j\cos\phi_j,a_j\sin\phi_j)\). The stored initial covariance
+\(\mat C_0=0.01\Id{6}\) belongs to the model construction; it is not used
+to sample the generating initial state.
 
-\input{tables/qdesn_validation_500obs_mcmc_metric_interval_tables.tex}
+The unshifted observation error \(e_{t,f}\) has distribution function
+\(H_f\). At each level \(p\in\{0.05,0.25,0.50\}\), the response is
+\(y_{t,p,f}=\mu_{t,f}+e_{t,f}-H_f^{-1}(p)\). Thus the shifted error has
+\(p\)-quantile zero and the state location is the conditional quantile.
+Within a family, both the latent trajectory and the unshifted errors are
+shared across levels; only the centering constant changes.
+
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.15\textwidth}>{\raggedright\arraybackslash}p{0.29\textwidth}>{\centering\arraybackslash}p{0.09\textwidth}>{\centering\arraybackslash}p{0.09\textwidth}>{\raggedright\arraybackslash}p{0.25\textwidth}@{}}
+\toprule
+Family & Unshifted error distribution \(H_f\) & Initial level & Initial slope & Seasonal settings \\
+\midrule
+Gaussian & \(\Normal(0,10^2)\) & 40 & 0.012 &
+harmonics \((24,0.35)\), \((8,-0.80)\) \\
+Laplace & Laplace with scale \(10\) & 35 & 0.011 &
+harmonics \((28,-0.15)\), \((10,0.75)\) \\
+Gaussian mixture &
+\(0.1\Normal(0,0.5^2)+0.9\Normal(1,15^2)\) & 45 & 0.014 &
+harmonics \((32,0.85)\), \((12,-1.25)\) \\
+\bottomrule
+\end{tabular}
+\caption{Single-quantile generating distributions and deterministic initial
+states. Observation errors are shifted by \(H_f^{-1}(p)\). Seasonal
+entries give amplitude and phase for the two harmonic pairs.}
+\label{tab:simulation-dgp}
+\end{table}
+
+The first 2,000 generated observations are discarded, leaving a series of
+10,000 observations. Retained observations 8501--9000 form the 500-observation
+fitting sample. The primary forecast evaluation uses observations 9001--9300;
+the sensitivity analysis uses observations 9001--9500.
+Earlier observations provide the reservoir history. Forecast origins are
+spaced 30 observations apart, with horizons up to 30 steps and truncation at
+the evaluation boundary. The primary period has ten origins and 300 scored
+origin--horizon pairs. The sensitivity period has 17 origins and 500 pairs;
+the final origin contributes 20 leads. Pairs are common to all methods.
+This reporting scope was revised after inspecting the longer-period results,
+not specified before their assessment. Regression parameters are not
+refitted between origins; available observations update the state filter or
+reservoir history used to forecast.
+
+\subsection{Single-Quantile Posterior Metric Summaries}
+\label{subsec:supp-independent-metrics}
+
+Let \(q_{p,t}^{(b)}\) be retained draw \(b\) of the conditional
+\(p\)-quantile at fitting index \(t\), and
+\(q_{p,\ell}^{(b)}\) its forecast counterpart for origin--horizon pair
+\(\ell\). With \(N_{\mathrm{fit}}\) fitting observations and
+\(N_{\mathrm{eval}}\) forecast pairs, root mean squared error (RMSE), mean
+absolute error (MAE), and check loss are calculated draw-wise as
+\begin{align}
+\text{Fit RMSE:}\quad R_{\mathrm{fit}}^{(b)}
+  &=\left\{\frac{1}{N_{\mathrm{fit}}}\sum_{t=1}^{N_{\mathrm{fit}}}
+    \bigl(q_{p,t}^{(b)}-\mu_t\bigr)^2\right\}^{1/2}, \\
+\text{Forecast MAE:}\quad A_{\mathrm{fore}}^{(b)}
+  &=\frac{1}{N_{\mathrm{eval}}}\sum_{\ell=1}^{N_{\mathrm{eval}}}
+    \left|q_{p,\ell}^{(b)}-\mu_\ell\right|, \\
+\text{Forecast check loss:}\quad C_{\mathrm{fore}}^{(b)}
+  &=\frac{1}{N_{\mathrm{eval}}}\sum_{\ell=1}^{N_{\mathrm{eval}}}
+    \rho_p\!\left(y_\ell-q_{p,\ell}^{(b)}\right).
+\end{align}
+Here \(\mu_\ell\) and \(y_\ell\) are the state-conditional quantile and
+realized response for pair \(\ell\), and \(\rho_p\) is the check loss
+defined in Section~\ref{sec:forecast_synthesis}. Fit RMSE and forecast MAE
+measure recovery of the state-conditional path, which need not equal the
+predictive quantile after integrating over future states. Check loss scores
+the forecast against realized observations.
+
+For each criterion \(M^{(b)}\), the tables give the mean
+\(B^{-1}\sum_{b=1}^{B}M^{(b)}\) and empirical 0.025 and 0.975 quantiles
+over \(B\) retained draws. VB fitting results use draws from the variational
+approximation. Forecast comparisons report MCMC results only. The available
+VB summaries do not support intervals for the 300- and 500-observation
+evaluation periods.
+These nonlinear draw-wise means generally differ from
+scoring a single posterior point path. The MCMC and VB tables are grouped
+by generating family; Q--DESN uses fitting-sample preprocessing, and ridge
+fits are omitted.
+
+The Q--DESN specifications are criterion-specific and may differ between
+metrics and inference methods. Historical refinements retained configurations
+with lower forecast MAE or check loss on the evaluation series. The
+subsequent posterior metric calculations reuse those selected configurations;
+they do not constitute a new, untouched-test evaluation of the selection
+procedure. The displayed intervals condition on the selected specification,
+simulated data, evaluation design, and reservoir realization, excluding
+repeated-simulation and selection uncertainty. Comparisons of MCMC and VB
+are therefore not controlled comparisons of approximation error.
+
+\input{tables/independent_forecast_dependence_v1.tex}
 
 \clearpage
-\subsection{Single-Quantile VB Posterior Metric Intervals}
-
-The following supplementary figures and tables report approximate posterior
-means and equal-tailed 95\% variational intervals for the same draw-wise fit RMSE,
-forecast MAE, and forecast check-loss criteria. They provide a companion view
-of the VB calculations used during the single-quantile comparison.
-
-\input{tables/qdesn_validation_500obs_vb_metric_interval_figures.tex}
-
-\input{tables/qdesn_validation_500obs_vb_metric_interval_tables.tex}
+\begingroup
+% Place these six complete tables on float pages without editing their
+% authenticated numerical sources or treating float-only pages as text pages.
+\let\QdesnOriginalTable\table
+\renewcommand{\table}[1][]{\QdesnOriginalTable[p]}
+\input{tables/independent_train500_eval300_mcmc_tables_v1.tex}
+\input{tables/independent_vb_fit_preserved_v1.tex}
+\endgroup
 
 \clearpage
-\subsection{Independent exAL MCMC Sampler Details}
+\subsection{Single-Quantile Forecast-Path Recovery}
+\label{subsec:supp-independent-forecast-recovery}
+
+Figure~\ref{fig:simulation-500obs-mcmc-forecast-mae-intervals} assesses
+recovery of the known state-conditional quantile path, rather than error in
+predicting individual responses. Both Q--DESN likelihoods have lower mean
+recovery error than both dynamic comparators at the median across the three
+families. At the lower quartile, exAL Q--DESN has the lowest mean in the
+Gaussian and Laplace cases, whereas AL leads for Gaussian-mixture errors.
+The widest Q--DESN posterior intervals occur in several lower-tail cases.
+Their widths describe dispersion of the aggregate recovery criterion and
+depend on the model-specific cross-time draw construction described above;
+they are not widths of future-response prediction intervals.
+
+\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}
+
+\clearpage
+Figures~\ref{fig:simulation-500obs-mcmc-fit-rmse-intervals} and
+\ref{fig:simulation-500obs-vb-fit-rmse-intervals} isolate fitting-sample
+quantile-path recovery. They complement the MCMC forecast comparisons in the
+main article by evaluating the estimated quantile path over the fitting sample.
+
+\input{tables/qdesn_single_quantile_mcmc_fit_figure_display.tex}
+
+\input{tables/qdesn_single_quantile_vb_fit_figure_display.tex}
+
+\clearpage
+\subsection{Single-Quantile Evaluation Period Sensitivity}
+\label{subsec:supp-independent-evaluation-sensitivity}
+
+The following analysis extends the scored target range from the first 300
+to the first 500 observations after fitting, without changing the model
+specification, fitted posterior, posterior-draw identities, or forecast
+construction. Means and equal-tailed intervals are recomputed from draw-wise
+aggregate scores over the relevant pairs; interval endpoints are not averaged.
+The final origin is weighted by its 20 scored pairs rather than treated as a
+complete 30-lead origin. The comparison is a sensitivity analysis of evaluation
+scope, not an improvement to the fitted model or a separate validation sample.
+
+\input{tables/independent_train500_eval500_mcmc_figures_v1.tex}
+\input{tables/independent_train500_eval500_mcmc_tables_v1.tex}
+
+\clearpage
+\subsection{Single-Quantile Empirical Frequencies}
+\label{subsec:supp-independent-calibration}
+
+We also examine whether the nominal quantile levels agree with empirical
+response frequencies, complementing the check-loss comparisons
+\citep{GneitingResin2023Calibration}. For each model and case, we retain the
+specification used for check loss and summarize its pooled posterior
+quantile-location draws at each forecast target by their median:
+\begin{align}
+\text{Reported quantile:}\quad
+&\widehat q_{p,\ell}=\operatorname{median}_{b}\{q_{p,\ell}^{(b)}\},\\
+\text{Empirical frequency:}\quad
+&\widehat c_p=\frac{1}{N_{\mathrm{eval}}}
+\sum_{\ell=1}^{N_{\mathrm{eval}}}
+\ind\{y_\ell\leq\widehat q_{p,\ell}\}.
+\end{align}
+The nominal reference is \(p\). Both evaluation periods use the same
+target-specific forecasts; the 500-target analysis simply includes more
+observed forecast pairs. These frequencies describe agreement over the
+evaluation record rather than posterior uncertainty in a score or a test
+of conditional calibration.
+
+At the median, Q--DESN frequencies are close to 50\% under Laplace errors
+but around 41\% under Gaussian-mixture errors in both evaluation periods;
+the dynamic comparators remain near 50\% in the latter case. At the 5\%
+level under Gaussian errors, the exAL Q--DESN frequency increases from
+3.3\% over 300 targets to 4.8\% over 500 targets. Its frequencies remain
+above 5\% for the Laplace and Gaussian-mixture cases.
+
+\input{tables/independent_forecast_calibration_figure_v1.tex}
+\input{tables/independent_forecast_calibration_table_v1.tex}
+
+\clearpage
+\subsection{Single-Quantile Computation and Diagnostics}
 \label{subsec:supp-independent-exal-mcmc-details}
 
-The independent exAL--RHS MCMC summaries use the \(v\)-augmented,
-scale-collapsed, support-logit transition described earlier in the supplement.
-The sampler updates the exAL shape on a
-logit transform of its bounded support, draws the scale conditionally, and then
-computes the fitted and forecast quantile paths used by the scoring tables.
+The independent Q--DESN exAL--RHS MCMC analysis uses the mixture representation
+for \(v\) described earlier in the supplement and an analysis-specific
+scale-collapsed transition. Conditional on the remaining unknowns, the scale is
+integrated from the conditional density used to update the asymmetry parameter
+on a logit transformation of its bounded support, and the scale is then drawn
+from its full conditional distribution. This transition is used for the
+independent simulation analysis; Algorithm~\ref{alg:qdesn_mcmc} gives the generic joint or
+conditionally split update. The resulting draws determine the fitted and
+forecast quantile paths used in the reported criteria.
 
-For each family--quantile--criterion source, the interval replay pools 12,000
-metric draws from three independently seeded chains. Diagnostic summaries
-track between-chain agreement for each draw-wise criterion. Of 162 pooled
-source--metric diagnostics, 159 pass and 3 are warnings; 2 warning-marked
-sources contribute to displayed table cells. Warnings are retained as
-disclosures rather than used as metric-exclusion rules. The compact validation
-record preserves source identifiers, metric roles, draw counts, chain counts,
-diagnostic grades, and artifact hashes without retaining fitted-model binary
-payloads.
+The exDQLM baseline was refreshed under version 1.1.1 of the CRAN package
+\pkg{exdqlm} \citep{DeLeonEtAl2026Exdqlm}. The inherited Q--DESN execution
+records identify version 1.0.0; those fits were not part of the scoped
+exDQLM refresh. For unrestricted exAL fits, the exDQLM MCMC sampler updates
+the asymmetry parameter from its conditional
+distribution with the scale analytically integrated out, then draws the scale
+from its full conditional distribution. Its variational calculation uses the
+structured factorization \(q(\gamma)q(\sigma\mid\gamma)\). These model-specific
+computations produce the
+quantile-path draws evaluated by the common criteria above.
+For retained pairs \((\sigma_b,\gamma_b)\),
+\(b=1,\ldots,B_{\mathrm{post}}\), let
+\[
+m_{\varepsilon,b}=\sigma_b\{A_p(\gamma_b)+D_p(\gamma_b)\sqrt{2/\pi}\},\qquad
+V_{\varepsilon,b}=\sigma_b^2\{B_p(\gamma_b)+A_p(\gamma_b)^2
+  +D_p(\gamma_b)^2(1-2/\pi)\}.
+\]
+The rolling-origin filter uses
+\(\bar m_\varepsilon=B_{\mathrm{post}}^{-1}\sum_b m_{\varepsilon,b}\) and
+\(\bar V_\varepsilon=B_{\mathrm{post}}^{-1}
+\sum_b(V_{\varepsilon,b}+m_{\varepsilon,b}^2)-\bar m_\varepsilon^2\).
+The parameter posterior from the initial fit is retained, while observations
+available at successive origins update the state filter before forecasts are
+propagated over the requested horizons.
 
-\clearpage
-\subsection{Single-Quantile Five-Chain Point-Path Sensitivity}
-\label{subsec:supp-independent-five-chain-sensitivity}
-
-The primary single-quantile MCMC tables report draw-wise posterior metric
-summaries. The earlier analysis below instead evaluates criteria once on a
-posterior point-path summary and is retained only as a separate chain-sensitivity
-check; it is not pooled with, or used to rank, the posterior metric intervals.
-For the Gaussian \(p=0.25\) comparison, a five-chain sensitivity analysis uses
-five independently seeded chains for each model specification. For each chain,
-the posterior point path is computed first; the reported sensitivity path is the
-coordinatewise median of those five paths. All criteria are then recomputed
-from that path. This construction summarizes chain-specific point estimates.
-
-Among the complete five-chain designs, one coherent design is reported per
-working likelihood. Relative to the corresponding primary envelope, the
-coherent \(\AL\)--\(\RHS\) design reduced fit RMSE by 8.4\% and forecast MAE by
-1.6\%, while its forecast check loss increased by 0.4\%. The coherent
-\(\exAL\)--\(\RHS\) design reduced fit RMSE by 18.3\%, forecast MAE by 8.7\%, and
-forecast check loss by 0.4\%. These results support robustness of the reported
-Q--DESN summaries under independent MCMC seeds.
-
-\input{tables/qdesn_validation_mcmc_five_chain_sensitivity.tex}
-
-\clearpage
-\subsection{Joint Multi-Quantile MCMC Evaluation Details}
-
-The following tables give the MCMC settings, crossing diagnostics,
-metric-specific lowest displayed scores, and replicated likelihood contrasts
-for the joint and independent multi-quantile regressions. VB and
-VB-LD provide scenario-specific screening, diagnostics, and MCMC
-initialization. The main article reports the balanced MCMC evaluation;
-the final supplementary table summarizes paired AL-minus-exAL forecast-MAE
-differences over 50 independent data-generating realizations per scenario.
-
-\input{tables/joint_qdesn_article_validation_provenance_tables.tex}
+The MCMC metric distributions generally pool 12,000 retained evaluations from
+three independently initialized chains. The Q--DESN AL--RHS Gaussian
+\(p=0.05\) forecast MAE and check-loss summaries use 3,000 retained evaluations
+from three chains. Diagnostics assess between-chain agreement for each
+draw-wise criterion.
 
 \clearpage
-\subsection{PriceFM Application Diagnostic Breakdowns}
+\subsection{Multiquantile MCMC Evaluation Details}
+
+Eight mechanisms cover Gaussian, Laplace, Gaussian-mixture, asymmetric-tail,
+persistent-heavy-tail, Student-\(t\), regime-shift, and nonlinear dynamics.
+The seven levels are \(0.05\), \(0.10\), \(0.25\), \(0.50\),
+\(0.75\), \(0.90\), and \(0.95\). Each regression uses 500 fitting
+observations and 990 forecast pairs, from 33 origins and 30 horizons per
+origin. The regressions use the initialization sequence in
+Figure~\ref{fig:supp-quantile-sequential-initialization}. One scenario-specific
+DESN/RHS specification is selected using separately simulated series and held common
+across Q--DESN and MQ--DESN under the AL and exAL likelihoods.
+The readout includes every reservoir layer
+and an intercept, while response lags enter only through reservoir inputs.
+The evaluation realization is used for the final fit and evaluation.
+Table~\ref{tab:joint-qdesn-pure-desn-v2-protocol} records the variational
+components, five-chain MCMC allocation, and scoring draws. All chains within
+a model and mechanism use the same data, likelihood, and prior
+hyperparameters; only their starting values differ. Every \(\exAL\)
+chain uses the exact scale-collapsed MCMC transition described above.
+Intercept prior centers and scales are calibrated once from the Gaussian
+reference fit and held common across the four regressions and all chains;
+MQ--DESN intercepts are ordered. The first quantile slope anchors the RHS hierarchy,
+with no additional latent baseline.
+Writing \(q_G\) for the Gaussian RHS variational reference, the fixed
+calibration quantities are
+\begin{equation}
+\begin{aligned}
+\text{Reference residual scale:}\quad
+&s_G=\sqrt{\E_{q_G}(\sigma_G^2)},\\
+\text{Intercept prior center:}\quad
+&b_{0k}=\E_{q_G}(\beta_{0G})+s_G\Phi^{-1}(p_k),\\
+\text{Intercept prior variance:}\quad
+&V_{0k}=(2s_G)^2.
+\end{aligned}
+\label{eq:supp-joint-intercept-calibration}
+\end{equation}
+These data-calibrated priors are not the Gaussian initializer's separate
+intercept variance \(10^6\), nor are they chain-specific starting values.
+The \(\exAL\) variational initializers use the \(v\) augmentation and the
+structured factor \(q(\gamma_k)q(\sigma_k\mid\gamma_k)\) in
+Section~\ref{subsec:supp_structured_exal_vb}. Scale integration is analytic;
+quadrature over the bounded shape support supplies its normalization and
+mixed moments.
+
+\input{tables/qdesn_multiquantile_design_display.tex}
+\input{tables/qdesn_multiquantile_score_display.tex}
+
+\input{tables/qdesn_multiquantile_secondary_score_display.tex}
+
+At each forecast origin, observed response lags reconstruct the reservoir
+state. Future responses are generated by inverse sampling from the projected
+quantile grid, with linear interpolation between fitted levels and the outermost
+fitted quantiles used beyond the fitted probability range. The future feature
+vectors are averaged over these
+trajectories for each model. Coefficient and intercept draws evaluated at
+the averaged features give the primary score distribution. This is a
+conditional forecast-location summary; it is not generally the quantile
+function of the complete posterior predictive distribution.
+
+Table~\ref{tab:joint-qdesn-pure-desn-v2-recursive-policy} compares this
+summary with evaluating each coefficient draw along its own recursive path.
+The conditional intervals are narrower in 28 of 32 comparisons, with median
+width ratio 0.7364, reflecting the uncertainty retained by each construction.
+VB intervals additionally condition on fixed variational intercept estimates,
+while retaining the Gaussian slope-factor covariance.
+\begingroup
+\setlength{\abovecaptionskip}{0pt}
+\input{tables/qdesn_multiquantile_recursive_policy_display.tex}
+\endgroup
+\input{tables/qdesn_multiquantile_vb_score_display.tex}
+
+All 32 MCMC comparisons give finite scores and satisfy the stated checks
+on the stability of the resulting score distributions. These checks assess
+recursive feature integration and forecast scores, rather than complete
+scalar posterior mixing.
+Imperfect scale--asymmetry mixing remains a limitation; effective sample
+sizes of independently permuted score sequences do not establish mixing
+of the original parameter chains.
+
+The descriptive MQ--DESN-minus-Q--DESN score intervals favor MQ--DESN
+estimation under both likelihoods for asymmetric tails. The other fourteen
+include zero. Raw crossings are reported for both posterior-mean grids and
+posterior draws, alongside monotone-adjustment magnitudes. All scored grids
+are ordered after isotonic projection.
+
+\input{tables/qdesn_multiquantile_contrast_display.tex}
+\input{tables/qdesn_multiquantile_crossing_display.tex}
+
+Figure~\ref{fig:joint-qdesn-pure-desn-v2-fit-rmse} and the recovery table
+report posterior-mean quantile-path recovery in the fitting sample. These
+are point diagnostics; posterior intervals for fit RMSE are unavailable
+in the retained summary.
+\input{tables/qdesn_multiquantile_fit_figure_display.tex}
+\input{tables/qdesn_multiquantile_oracle_recovery_display.tex}
+
+The comparison uses one recursive evaluation per mechanism. If
+\(d_\beta\) denotes the number of penalized coefficients in an RHS
+global-scale block, its conditional shape is \((d_\beta+1)/2\).
+All four models use the same selected reservoir specification within
+each scenario; their averaged future features may differ because their
+simulated response trajectories differ.
+
+\clearpage
+\subsection{PriceFM Design and Additional Results}
 \label{subsec:supp_pricefm_diagnostics}
 
-The main article reports the aggregate fold-aligned PriceFM comparison. The
-tables below give three secondary diagnostic views from the same assembled
-retrospective comparison: the fold-level comparison summary, the input-set breakdown,
-and the available horizon-block breakdown. They are descriptive summaries of
-the reported retrospective comparison rather than separate comparison criteria or
-origin-available operational evidence.
+The PriceFM comparison evaluates average quantile loss (AQL) from independently
+fitted quantile regressions and VB for 38 regions and three folds. Within each
+region, reservoir and RHS-scale
+selection uses three expanding temporal validation periods lying entirely
+within the original Fold~1 training period. These validation periods are
+September--December~2023, January--April~2024, and May--August~2024.
+The outer Fold~1 validation period, September--December~2024, determines
+the AL or exAL family. One specification is then held fixed across the three
+test folds before scoring. There are no subsequent test-driven changes
+or substitutions from the earlier case-specific comparison. The same periods
+had been examined in that historical comparison; prospective selection here
+refers to the present selection rule, not to previously unseen calendar
+periods.
+
+Table~\ref{tab:supp-pricefm-fold-design} gives the outer validation and test
+periods. Training begins on 1~January~2022 and ends at the start of each
+validation period. All intervals are half-open. Dates use the released UTC
+timestamps shifted by a fixed one hour, rather than a daylight-saving-aware
+calendar. Each daily test origin has 96 quarter-hourly targets.
 
 \begin{table}[!htbp]
 \centering
-\caption{Fold-level PriceFM retrospective comparison summary. AQL is computed on the original
-electricity-price scale using the PriceFM paper quantile grid. The last two
-columns report Q--DESN AQL minus PriceFM AQL; negative values indicate lower
-Q--DESN AQL. Near ties retain the pre-specified classification used in the
-full-panel comparison. No paired uncertainty interval is reported for
-these fold-level contrasts.}
-\label{tab:supp-pricefm-full-fold-summary}
-\input{tables/pricefm_full_main_summary.tex}
+\TableStyle
+\caption{PriceFM outer validation and test periods. Training starts on
+1~January~2022 and ends at the corresponding validation boundary. End dates
+are excluded; target counts are per region.}
+\label{tab:supp-pricefm-fold-design}
+\begin{tabular}{@{}cllr@{}}
+\toprule
+Fold & Validation period & Test period & Test targets \\
+\midrule
+1 & 2024-09-01 to 2025-01-01 & 2025-01-01 to 2025-05-01 & 11,520 \\
+2 & 2025-01-01 to 2025-05-01 & 2025-05-01 to 2025-09-01 & 11,808 \\
+3 & 2025-05-01 to 2025-09-01 & 2025-09-01 to 2026-01-01 & 11,712 \\
+\bottomrule
+\end{tabular}
 \end{table}
+
+The predictors use the released load, solar, and wind columns, identified
+as day-ahead forecasts by \citet{YuEtAl2026PriceFM}. Their availability at
+each forecast origin was not separately verified, so the comparison does
+not establish operational information parity. Selected spatial specifications either
+concatenate neighboring-region predictors or add their means, with or
+without standard deviations; other specifications use the target region
+alone. Predictor and response scales are estimated separately using
+training-only median and interquartile-range scaling. Selected lag windows
+contain 48, 96, 168, or 240 quarter-hourly observations. All readouts use the
+final reservoir layer and an intercept. The 38 selected specifications use
+AL in 11 regions and exAL in 27.
+
+The fixed-regional Q--DESN comparison has mean AQL 7.217, compared with
+7.039 for PriceFM. Q--DESN is lower in
+54 of 114 region--fold comparisons and in 16 of 38 region means. The fold-level
+contrast changes sign: Q--DESN is slightly lower in fold~2, while PriceFM is
+lower in folds~1 and 3. The largest mean loss difference occurs in fold~3,
+while the aggregate remains slightly higher for Q--DESN. The former 72-case
+forecast-lead summary is not reproduced because it does not cover all
+114 comparisons under the fixed-regional specification.
 
 \begin{table}[!htbp]
 \centering
-\caption{PriceFM retrospective comparison by input set. Own-region rows and rows with
-neighborhood summaries both use retrospectively observed own-region load,
-solar, and wind lead covariates in the assembled comparison. Rows with
-neighborhood summaries additionally include chosen neighboring-region
-summaries or neighboring-region lead/lag features.}
-\label{tab:supp-pricefm-full-input-set-summary}
-\input{tables/pricefm_full_input_set_summary.tex}
+\caption{Aggregate AQL for the fixed-regional Q--DESN comparison, matched
+PriceFM forecasts, and historical sensitivity. The historical Q--DESN result
+uses earlier case-specific selection; it is not included in the primary
+comparison and supplies no replacement cases. Lower values are better.}
+\label{tab:supp-pricefm-r98-global-comparison}
+\input{tables/pricefm_regional_comparison_display.tex}
 \end{table}
 
-\begin{table}[!htbp]
+\begin{figure}[!htbp]
 \centering
-\caption{Available horizon-block diagnostics for the PriceFM retrospective comparison.
-Entries denote scored region/fold and horizon-block combinations for the
-subset with retained horizon diagnostics. Negative \(\Delta\) values indicate
-lower Q--DESN AQL; positive values indicate lower PriceFM AQL.}
-\label{tab:supp-pricefm-full-horizon-diagnostic-summary}
-\input{tables/pricefm_full_horizon_diagnostic_summary.tex}
-\end{table}
+\includegraphics[width=\textwidth]{\PricefmCurrentRegionFigure}
+\caption{Mean AQL across the three test folds for each PriceFM region. Blue
+squares show Q--DESN with its fixed regional specification, green circles
+show the matched PriceFM forecasts, and gray crosses show historical
+case-specific Q--DESN results. Regions are ordered by increasing mean AQL
+of the fixed-regional Q--DESN forecasts; lower values are better.}
+\figalt{For each of 38 regions, the plot compares mean AQL across three folds
+for fixed-regional Q--DESN, PriceFM, and historical case-specific Q--DESN.
+The horizontal positions
+show substantial regional heterogeneity, with PriceFM lower in 22 region means
+and fixed-regional Q--DESN lower in 16.}
+\label{fig:supp-pricefm-r98-region-comparison}
+\end{figure}
 
 \clearpage
-\section{GloFAS Forecast-Discrepancy Model with DESN Features}
+\section{GloFAS Reference--Discrepancy Forecast Correction}
 \label{sec:glofas_discrepancy}
 
-\noindent\textbf{Application object.}
-The streamflow application model uses one forecast system, the Global Flood
-Awareness System (GloFAS), together with a reference gauge record
-\citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. The reference
-quantile and the GloFAS discrepancy receive separate coefficient vectors. The
-historical reservoir states are fixed after preprocessing and washout. At
-issued forecast horizons, however, the reference path is unobserved at the
-forecast origin, so future reservoir states may depend on latent future
-reference values. This section gives the fixed-design conditional
-calculations used by the bridge model and by any latent-path sampler
-conditional on a proposed future path. The full latent-path posterior also
-contains the missing future reference values and the induced future reservoir
-states.
+The streamflow application combines the historical and issued Global Flood
+Awareness System (GloFAS) products with a reference gauge record
+\citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. Separate DESN
+feature maps represent the reference process and the GloFAS-minus-reference
+discrepancy. Reference-only, discrepancy-only, and combined historical
+regressions produce 30-day recursive paths. The issued-ensemble correction
+instead uses 28 forecast horizons: future reference values are latent during
+fitting, and the issued members contribute directly to the likelihood.
+Each comparison includes Q--DESN and MQ--DESN under AL/exAL and two Gaussian
+predictive baselines; the issued-window comparison also includes raw GloFAS.
 
-\subsection{Data Blocks and Augmented Design}
+\subsection{Observed Quantities and Latent Design}
 \label{subsec:glofas_aug_design}
 
-\noindent\textbf{Data blocks.}
-Fix a quantile level \(p_0\). Let \(y_t\) denote transformed reference
-streamflow, \(g_t^{\mathrm{ret}}\) the retrospective GloFAS product, and
-\(g_{T+h,m}^{\mathrm{ens}}\) GloFAS ensemble member \(m\) at forecast origin
-\(T\) and horizon \(h\). Write
-\(\vect y_F=(y_{T+1},\ldots,y_{T+H})^\top\) for the future reference path. Let
-\(\mathcal I_{\mathrm{ref}}\) index reference
-observations and let \(\mathcal I_{\mathrm{glo}}\) index both retrospective
-and issued-ensemble GloFAS values. For \(i\in\mathcal I_c\),
-\(c\in\mathcal C=\{\mathrm{ref},\mathrm{glo}\}\), write the observed value as
-\(z_i^c\). The reference feature vector
-\(\vect x_i^{\mathrm{ref}}\) is generated from the reference-process history.
-The discrepancy feature vector \(\vect x_i^{\mathrm{disc}}\) is generated from
-the GloFAS-minus-reference discrepancy path. Both vectors are fixed after
-conditioning on the relevant historical or latent future path.
+The reference is daily streamflow measured by the United States Geological
+Survey (USGS) at gauge 11160500 on the San Lorenzo
+River at Big Trees, California. The historical GloFAS series is the v3.1
+LISFLOOD consolidated product. Discharge values are expressed in
+\(\mathrm{m}^3/\mathrm{s}\) before transformation. Let \(T\) denote
+25~December~2022 and let \(y_t=\log(y_t^{\mathrm{USGS}}+1)\) be transformed
+reference streamflow.
+Write \(g_t^{\mathrm{ret}}\) for transformed retrospective GloFAS and
+\(g_{T+h,e}^{\mathrm{ens}}\) for transformed issued member \(e\) at horizon
+\(h\). The three historical models have a 30-day recursive horizon, ending
+on 24~January~2023. For issued-ensemble correction, the latent future path
+\(\vect y_F=(y_{T+1},\ldots,y_{T+28})^\top\) ends on 22~January~2023,
+matching the available issued ensemble. All 51 members are used at each
+horizon. The withheld USGS values are excluded from fitting and retained
+separately for scoring. Forecast-period precipitation and soil-moisture
+covariates use realized values from the Parameter-elevation Regressions on
+Independent Slopes Model (PRISM) and the fifth-generation reanalysis (ERA5)
+of the European Centre for Medium-Range Weather Forecasts (ECMWF). The
+reference-only model retains 12,455 historical dates from
+19~November~1988 through \(T\), after a 540-day initial-history exclusion.
+The discrepancy-only design also contains 12,455 historical dates;
+the combined historical model uses reference and retrospective-product
+observations at those 12,455 dates, giving 24,910 stacked observations.
 
-\noindent\textbf{Augmented design.}
-Define
+For probability level \(p_k\), the reference and source-specific
+likelihood locations are
+\begin{equation}
+\begin{aligned}
+\text{Reference quantile:}\quad
+q_{k,t}
+&=\vect x_t^{\mathrm{ref}\top}\vect\beta_k,\\
+\text{Location adjustment:}\quad
+d_{k,t}
+&=\vect x_t^{\mathrm{disc}\top}\vect\delta_k,\\
+\text{GloFAS quantile:}\quad
+q_{k,t}^{\mathrm{glo}}
+&=q_{k,t}+d_{k,t}.
+\end{aligned}
+\label{eq:supp_glofas_quantile_decomposition}
+\end{equation}
+The additive relation specifies a quantile-indexed location adjustment;
+it is not a general identity between the quantiles of a difference and
+those of its two components. MQ--DESN links adjacent quantile-specific
+coefficients separately within the reference and discrepancy components.
+Historical reference features are generated from the observed reference
+history, and historical discrepancy features are generated from
+\(g_t^{\mathrm{ret}}-y_t\). After \(T\), the reference and discrepancy
+reservoir states are recomputed as functions of the latent path
+\(\vect y_F\). Strict lagging is imposed: the design row for \(T+h\) may
+depend on earlier latent values but not on \(y_{T+h}\).
+
+For one probability level, stack the reference and discrepancy coefficients as
 \[
-\vect\theta_{p_0}
-=
-\begin{bmatrix}
-\vect\beta_{p_0}\\
-\vect\alpha_{p_0}
-\end{bmatrix},
+\vect\theta_k=
+\begin{bmatrix}\vect\beta_k\\ \vect\delta_k\end{bmatrix},
 \qquad
 \vect h_t^{\mathrm{ref}}=
-\begin{bmatrix}
-\vect x_t^{\mathrm{ref}}\\
-\vect 0
-\end{bmatrix},
+\begin{bmatrix}\vect x_t^{\mathrm{ref}}\\ \vect 0\end{bmatrix},
 \qquad
 \vect h_t^{\mathrm{glo}}=
-\begin{bmatrix}
-\vect x_t^{\mathrm{ref}}\\
-\vect x_t^{\mathrm{disc}}
-\end{bmatrix}.
+\begin{bmatrix}\vect x_t^{\mathrm{ref}}\\
+\vect x_t^{\mathrm{disc}}\end{bmatrix}.
 \]
-The same definition applies to any indexed contribution \(i\). The
-source-specific quantile locations are
-\[
-q^{\mathrm{ref}}_{p_0,i}
-=\vect h_i^{\mathrm{ref}\,\top}\vect\theta_{p_0}
-=\vect x_i^{\mathrm{ref}\,\top}\vect\beta_{p_0},
-\qquad
-q^{\mathrm{glo}}_{p_0,i}
-=\vect h_i^{\mathrm{glo}\,\top}\vect\theta_{p_0}
-=\vect x_i^{\mathrm{ref}\,\top}\vect\beta_{p_0}
-+\vect x_i^{\mathrm{disc}\,\top}\vect\alpha_{p_0}.
-\]
-Thus \(\vect\beta_{p_0}\) represents the reference-process quantile regression and
-\(\vect\alpha_{p_0}\) represents the GloFAS discrepancy innovation at the same
-level. In the historical rows, \(\vect x_i^{\mathrm{disc}}\) is driven by
-\(g_i^{\mathrm{ret}}-y_i\). In the reported retrospective forecast-period
-specification, the
-future discrepancy feature is \emph{persistence anchored}: it repeats the last
-available historical retrospective discrepancy on the transformed scale and
-then applies the learned discrepancy regression. The recursive path
-\(\hat q^{\mathrm{ens}}_{p_0,T+h}-y_{T+h}\), where
-\(\hat q^{\mathrm{ens}}_{p_0,T+h}\) is the empirical GloFAS ensemble quantile
-at the fitted level, is an alternative specification for future sensitivity
-analysis.
+Then \(\vect h_t^{\mathrm{ref}\top}\vect\theta_k=q_{k,t}\) and
+\(\vect h_t^{\mathrm{glo}\top}\vect\theta_k=q_{k,t}+d_{k,t}\).
+Conditional on \(\vect y_F\), these are ordinary fixed-design Q--DESN
+regressions.
 
-\noindent\textbf{Reported summary rule.}
-Stacking source contributions conditional on the specified state construction
-gives a vector \(\vect z\), a design matrix \(\mat H\), and source labels
-\(c_i\). With observed historical data only, \(\mat H\) is fixed. Under the
-reported summary rule, the forecast-period summaries are
-variational quantile summaries passed through the monotone rearrangement.
+\subsection{Historical Selection and Coefficient Priors}
 
-\noindent\textbf{Forecast-time decomposition.}
-The forecast-time decomposition is additive around the
-persistence baseline. For horizons covered by an issued GloFAS ensemble at
-origin \(T\), the ensemble informs the forecast-system evidence and the raw
-GloFAS comparator. The Q--DESN reported reference quantile is
-\[
-q^{\mathrm{ref},(s)}_{p_0,T+h}
-=\vect x_{T+h}^{\mathrm{ref},(s)\top}\vect\beta_{p_0}^{(s)},
-\]
-and the associated forecast-system quantile is
-\[
-q^{\mathrm{glo},(s)}_{p_0,T+h}
-=q^{\mathrm{ref},(s)}_{p_0,T+h}
-+d_T^{\mathrm{ret}}
-+\vect x_{T+h}^{\mathrm{disc},(s)\top}\vect\alpha_{p_0}^{(s)}.
-\]
-Here \(d_T^{\mathrm{ret}}\) is the last historical retrospective discrepancy.
-Point summaries are taken after this quantile construction. Using future
-observed reference flows to construct validation-window response features would
-leak validation information; the specified analysis uses held-out response
-values only for scoring. Its covariate policy is nevertheless retrospective rather than
-deployable because precipitation and soil-moisture covariates include blended
-realized-future weather contributions.
+Historical selection used 16 primary rainy-season development periods and
+16 prespecified confirmation periods. Two additional periods in each group
+were used to exclude candidates with excessive forecast deterioration.
+Confirmation used four reservoir realizations to fix the reference and discrepancy
+specifications.
+The held-out December~2022--January~2023 forecast period was
+not used to select reservoirs, priors, stopping rules, or model families.
 
-\subsection{AL and exAL Working Likelihoods}
+The selected reference reservoir has depth one, width
+\(\GlofasApplicationCurrentReferenceReservoirSize{}\), maximum response lag
+\(\GlofasApplicationCurrentReferenceReservoirMemory{}\), leak rate
+\(\GlofasApplicationCurrentReferenceReservoirAlpha{}\), spectral radius
+\(\GlofasApplicationCurrentReferenceReservoirRho{}\), washout
+\(\GlofasApplicationCurrentReferenceReservoirWashout{}\), and seed
+\(\GlofasApplicationCurrentReferenceReservoirSeed{}\). Its inputs are reference
+lags 1--540 and realized precipitation and soil-moisture lags 0--90. The
+depth-one discrepancy reservoir has width
+\(\GlofasApplicationCurrentDiscrepancyReservoirSize{}\), maximum response lag
+\(\GlofasApplicationCurrentDiscrepancyReservoirMemory{}\), leak rate
+\(\GlofasApplicationCurrentDiscrepancyReservoirAlpha{}\), spectral radius
+\(\GlofasApplicationCurrentDiscrepancyReservoirRho{}\), washout
+\(\GlofasApplicationCurrentDiscrepancyReservoirWashout{}\), and seed
+\(\GlofasApplicationCurrentDiscrepancyReservoirSeed{}\). Its inputs are
+discrepancy lags 1--180 and weather lags 0--180. Both maps standardize inputs
+using training information and use a 500-observation washout. The readouts
+contain reservoir features and intercepts, without direct response-lag or
+weather regressors. Table~\ref{tab:supp-glofas-search3-specifications}
+summarizes the selected reservoir and prior specifications.
+
+The training-based RHS calibration uses \(m_{0,\mathrm{ref}}=40\) and
+\(m_{0,\mathrm{disc}}=60\), giving fixed prior hyperparameters
+\(\tau_{0,\mathrm{ref}}=5.2043087445082\times10^{-5}\) and
+\(\tau_{0,\mathrm{disc}}=1.1594362487914\times10^{-4}\) for the three
+historical models.
+The reference slab is learned under \(\zeta^2\sim\IG(2,4)\). The discrepancy
+slab is fixed at \(\zeta^2=16\) for the discrepancy-only quantile regressions
+and every discrepancy component of the combined historical model. The
+discrepancy-only Gaussian DESN (RHS) baseline instead learns its slab under
+\(\IG(2,4)\). The issued-ensemble RHS fits use
+\(\tau_{0,\mathrm{ref}}=5.2043087\times10^{-5}\) and
+\(\tau_{0,\mathrm{disc}}=1.159\times10^{-4}\), with learned
+\(\IG(2,4)\) slabs for both components in every RHS family.
+These \(\tau_0\) values are prior hyperparameters, not the learned global
+scales. Posterior global scales vary by family, level, and adjacent-quantile
+coefficient block. Table~\ref{tab:supp-glofas-part123-priors} distinguishes
+the fixed hyperparameters from these learned scales for the three
+historical models.
+Intercepts are exempt from RHS shrinkage.
+
+The three historical Gaussian DESN (ridge) fits use coefficient prior variance
+\(10^4\) and intercept variance \(10^6\). The issued-ensemble
+Gaussian DESN (ridge) fit instead uses coefficient prior precision one and intercept
+precision \(10^{-9}\). Table~\ref{tab:supp-glofas-part4-priors} records the
+issued-ensemble settings. Raw GloFAS has no fitted coefficient prior.
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Reference and discrepancy specifications selected using historical
+development and confirmation periods. Here \(m\) and \(m_x\) are the maximum
+response and weather lags. Selection excludes the held-out final forecast
+period. The slab column describes the selected prior; family-specific exceptions are
+stated in the text.}
+\label{tab:supp-glofas-search3-specifications}
+\input{\GlofasApplicationCurrentSpecificationsTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Prior settings for the reference-only, discrepancy-only, and combined
+historical regressions, labeled Reference, Discrepancy, and Combined historical.
+Fixed
+RHS hyperparameters \(\tau_0\) are distinguished from the range of learned
+effective global scales \(\{\E_q(\tau^{-2})\}^{-1/2}\) across quantile and
+adjacent-quantile coefficient blocks. The discrepancy-only Gaussian DESN (RHS)
+slab is learned; the other discrepancy-only slabs and all discrepancy slabs
+in the combined historical model are fixed at 16. Gaussian DESN (ridge) has no RHS
+global scale.}
+\label{tab:supp-glofas-part123-priors}
+\input{\GlofasApplicationCurrentPartOneTwoThreePriorSettingsTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Issued-ensemble coefficient-prior settings. The two \(\tau_0\)
+columns are fixed RHS hyperparameters, not learned posterior global scales.
+All RHS families learn both slab scales under \(\IG(2,4)\); the Gaussian DESN (ridge)
+and raw-ensemble baselines do not have RHS hyperparameters.}
+\label{tab:supp-glofas-part4-priors}
+\input{\GlofasApplicationCurrentPriorSettingsTable}
+\end{table}
+
+\subsection{Weighted Augmented Likelihood}
 \label{subsec:glofas_likelihoods}
 
-For exAL, each source \(c\in\mathcal C\) has scale and asymmetry parameters
-\((\sigma_c,\gamma_c)\). Conditional on latent variables
-\(\{v_i^c,s_i^c:i\in\mathcal I_c\}\),
-\begin{align}
-v_i^c\mid\sigma_c&\sim\Exp(\text{rate}=1/\sigma_c),&
-s_i^c&\sim\TN(0,1),\\
-z_i^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,v_i^c,s_i^c
-&\sim
-\Normal\left(
-\vect h_i^{c\top}\vect\theta_{p_0}
-+\sigma_cD_{\gamma_c}s_i^c+A_{\gamma_c}v_i^c,
-\sigma_cB_{\gamma_c}v_i^c
-\right).
-\label{eq:supp_glofas_exal_hierarchy}
-\end{align}
-The marginal \(p_0\)-quantile of \(z_i^c\mid\vect h_i^c\) is
-\(\vect h_i^{c\top}\vect\theta_{p_0}\). The AL working likelihood is obtained
-by omitting \(s_i^c\) and \(\gamma_c\), replacing \(A_{\gamma_c}\) and
-\(B_{\gamma_c}\) with \(A_0\) and \(B_0\), and using
+At each level \(p_k\), reference observations have AL location \(q_{k,t}\),
+whereas retrospective and issued GloFAS observations have location
+\(q_{k,t}+d_{k,t}\). Let \(z_i^c\) and \(\vect h_i^c\) denote an observation
+and design row from source \(c\in\{\mathrm{ref},\mathrm{glo}\}\). The AL
+normal--exponential augmentation is
 \begin{equation}
-z_i^c\mid\vect\theta_{p_0},\sigma_c,v_i^c
-\sim
-\Normal\left(
-\vect h_i^{c\top}\vect\theta_{p_0}+A_0v_i^c,
-\sigma_cB_0v_i^c
+\begin{aligned}
+\text{Latent scale:}\quad
+v_{i,k}^c\mid\sigma_{c,k}
+&\sim\Exp(\mathrm{rate}=1/\sigma_{c,k}),\\
+\text{Conditional observation:}\quad
+z_i^c\mid\cdot
+&\sim\Normal\!\left(
+\vect h_i^{c\top}\vect\theta_k+A_{0,k}v_{i,k}^c,\,
+\sigma_{c,k}B_{0,k}v_{i,k}^c
 \right).
+\end{aligned}
 \label{eq:supp_glofas_al_hierarchy}
 \end{equation}
 
-The GloFAS block \(\mathcal I_{\mathrm{glo}}\) may contain both retrospective values and
-issued ensemble members. Ensemble members at a common origin and horizon enter
-through a working-likelihood factorization that treats them as conditionally
-independent and exchangeable given the forecast-system quantile path and the
-GloFAS likelihood parameters. This factorization is motivated by the
-operational ensemble construction, in which perturbed initial states and model
-perturbations generate distinct forecast alternatives
-\citep{ECMWF2026ENSGeneration}; it is a working-likelihood approximation for
-the regression analysis. If diagnostics show that
-retrospective and issued-ensemble residual behavior differs materially,
-\(\mathcal I_{\mathrm{glo}}\) can be split into two GloFAS source labels with separate
-scale and asymmetry blocks.
-
-\subsection{Default Regularized-Horseshoe Coefficient Prior}
-\label{subsec:glofas_rhs_prior}
-
-For the application derivation, the regularized horseshoe is the default
-coefficient prior. Let \(\mathcal J_\beta\) and \(\mathcal J_\alpha\) denote the
-non-intercept entries of \(\vect\beta_{p_0}\) and \(\vect\alpha_{p_0}\). The
-reference and discrepancy intercepts are assigned weak Gaussian priors. For
-block \(b\in\{\beta,\alpha\}\) and \(j\in\mathcal J_b\), write the corresponding
-coefficient as \(\theta_{b,j}\). The product representation uses
+Define an observation weight \(w_i=1\) for historical reference and
+retrospective GloFAS rows. For an issued member at a fixed horizon,
+\(w_i=1/51\). Hence the 51 issued members contribute total weight one at each
+horizon. The weighted augmented likelihood used for inference is
 \begin{equation}
-\Normal(\theta_{b,j}\mid0,\tau_b^2\lambda_{b,j}^2)
-\Normal(0\mid\theta_{b,j},\zeta_b^2).
-\label{eq:supp_glofas_rhs_product}
+\begin{aligned}
+\text{Weighted augmented likelihood:}\quad
+L_{\mathrm{aug}}(\Theta)
+\ \propto\
+\prod_{k=1}^{K}\prod_{c}\prod_{i\in\mathcal I_c}
+\left[
+p(z_i^c\mid v_{i,k}^c,\Theta_k)\,
+p(v_{i,k}^c\mid\sigma_{c,k})
+\right]^{w_i}.
+\end{aligned}
+\label{eq:supp_glofas_weighted_augmented_likelihood}
 \end{equation}
-Conditional on the scales, this factor is proportional in \(\theta_{b,j}\) to a
-Gaussian density with variance
+This is a complete-data fractional or power-likelihood construction. It
+prevents the issued ensemble from receiving 51 times the weight of one
+historical time point. Because the power is applied before integrating out the
+latent variables, Eq.~\eqref{eq:supp_glofas_weighted_augmented_likelihood} is
+not asserted to be an exact fractional marginal AL posterior.
+
+The source-specific scales, coefficient priors, and latent variables are
+updated under this weighted augmentation. The exAL comparator additionally
+contains source-specific shape parameters and positive-shift latent variables,
+using the structured quadrature calculations described earlier. Both AL and
+exAL families are included in the final comparison.
+
+\subsection{MQ--DESN and Latent-Path Approximation}
+\label{subsec:glofas_latent_path}
+
+The fitted grid is
+\[
+(0.05,\ 0.20,\ 0.35,\ 0.50,\ 0.65,\ 0.80,\ 0.95).
+\]
+For the MQ--DESN families, the seven reference coefficient blocks and seven
+discrepancy coefficient blocks are linked by separate adjacent-quantile RHS
+priors. Computation uses mean-field quantile-block coordinate updates
+initialized from the completed independent fits. The construction shares
+information through these priors; it is not a single exact Gaussian update
+over every coefficient and latent-path block. Independent families fit each
+level separately.
+
+The issued-ensemble quantile regressions use a Gaussian future-path prior
+with mean and a numerically regularized covariance estimated from 500
+recursive USGS paths from the combined historical Gaussian DESN (RHS) model,
+restricted to the 28 issued horizons. Neither issued ensemble
+values nor held-out USGS measurements enter its construction. Writing these moments
+as \(\vect m_N\) and \(\mat V_N\), the prior is
+\[
+\text{Future-path prior:}\quad
+\vect y_F\sim\Normal(\vect m_N,\mat V_N).
+\]
+This prior replaces, rather than supplements, a future-reference
+likelihood. Issued-member contributions remain in the weighted augmented
+likelihood. The Gaussian comparison families do not use this additional
+path prior.
+
+Each probability level has its own variational path factor; the following
+notation suppresses the level index. At each coordinate update, the reservoir
+design is linearized around the current path mean. Let
+\(\widetilde\ell_F(\vect y_F)\) denote the resulting locally linearized
+expected weighted augmented log likelihood plus the Gaussian log prior,
+with the remaining variational factors held fixed. Its Gaussian factor has
+mode \(\widehat{\vect y}_F\) and precision given by the negative Hessian of
+this surrogate:
 \begin{equation}
-V_{b,j}=\left(\zeta_b^{-2}+\tau_b^{-2}\lambda_{b,j}^{-2}\right)^{-1}.
-\label{eq:supp_glofas_rhs_cond}
+\begin{aligned}
+\text{Latent-path factor:}\quad
+\mat K_F&=-\nabla^2\widetilde\ell_F(\widehat{\vect y}_F),&
+q_F(\vect y_F)&\approx
+\Normal(\widehat{\vect y}_F,\mat K_F^{-1}).
+\end{aligned}
+\label{eq:supp_glofas_future_path_factor}
 \end{equation}
-The auxiliary representation for
-\((\lambda_{b,j}^2,\nu_{b,j},\tau_b^2,\xi_b,\zeta_b^2)\) is the same as
-\eqref{eq:supp_hs_aux}--\eqref{eq:supp_zeta_prior}, with
-\(\beta_j\) replaced by \(\theta_{b,j}\) and \(r\) replaced by
-\(|\mathcal J_b|\). The two RHS hierarchies are independent a priori, although
-the Gaussian coefficient update couples \(\vect\beta_{p_0}\) and
-\(\vect\alpha_{p_0}\) through the augmented likelihood. The source-specific
-exAL scale and asymmetry blocks are the only non-conjugate blocks introduced by
-the working likelihood.
-
-\subsection{Complete-Data Posterior}
-\label{subsec:glofas_posterior}
-
-Let
-\[
-\Theta_b
-=\{(\lambda_{b,j}^2,\nu_{b,j}):j\in\mathcal J_b\},\tau_b^2,\xi_b,\zeta_b^2,
-\qquad b\in\{\beta,\alpha\},
-\]
-and let \(\vect v^c=(v_i^c:i\in\mathcal I_c)\) and
-\(\vect s^c=(s_i^c:i\in\mathcal I_c)\). Under exAL,
-\begin{align}
-&p(\vect z,\{\vect v^c,\vect s^c,\sigma_c,\gamma_c\}_{c\in\mathcal C},
-\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha\mid\mat H)
-\nonumber\\
-&\quad\propto
-\prod_{c\in\mathcal C}
-\left[
-\left\{
-\prod_{i\in\mathcal I_c}
-p(z_i^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,v_i^c,s_i^c,\vect h_i^c)
-p(v_i^c\mid\sigma_c)p(s_i^c)
-\right\}
-p(\sigma_c)\pi_{\gamma_c}(\gamma_c)\ind\{L<\gamma_c<U\}
-\right]
-\nonumber\\
-&\qquad\times
-p(\vect\theta_{\mathrm{int}})
-\prod_{b\in\{\beta,\alpha\}}
-\Biggl[
-\prod_{j\in\mathcal J_b}
-\left\{
-\Normal(\theta_{b,j}\mid0,\tau_b^2\lambda_{b,j}^2)
-\Normal(0\mid\theta_{b,j},\zeta_b^2)
-p(\lambda_{b,j}^2\mid\nu_{b,j})p(\nu_{b,j})
-\right\}
-\nonumber\\
-&\qquad\qquad\times
-p(\tau_b^2\mid\xi_b)p(\xi_b)p(\zeta_b^2)
-\Biggr].
-\label{eq:supp_glofas_joint_exal_rhs}
-\end{align}
-Here \(p(\vect\theta_{\mathrm{int}})\) denotes the weak Gaussian prior for the
-two intercepts. Under AL,
-\begin{align}
-&p(\vect z,\{\vect v^c,\sigma_c\}_{c\in\mathcal C},
-\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha\mid\mat H)
-\nonumber\\
-&\quad\propto
-\prod_{c\in\mathcal C}
-\left[
-\left\{
-\prod_{i\in\mathcal I_c}
-p(z_i^c\mid\vect\theta_{p_0},\sigma_c,v_i^c,\vect h_i^c)
-p(v_i^c\mid\sigma_c)
-\right\}
-p(\sigma_c)
-\right]
-\nonumber\\
-&\qquad\times
-p(\vect\theta_{\mathrm{int}})
-\prod_{b\in\{\beta,\alpha\}}
-\Biggl[
-\prod_{j\in\mathcal J_b}
-\left\{
-\Normal(\theta_{b,j}\mid0,\tau_b^2\lambda_{b,j}^2)
-\Normal(0\mid\theta_{b,j},\zeta_b^2)
-p(\lambda_{b,j}^2\mid\nu_{b,j})p(\nu_{b,j})
-\right\}
-\nonumber\\
-&\qquad\qquad\times
-p(\tau_b^2\mid\xi_b)p(\xi_b)p(\zeta_b^2)
-\Biggr].
-\label{eq:supp_glofas_joint_al_rhs}
-\end{align}
-The fixed-design posterior is the corresponding joint density viewed as a
-function of unknown quantities conditional on \((\vect z,\mat H)\). In the
-latent-path ensemble-likelihood model, \(\mat H\) should be read as
-\(\mat H(\vect y_F)\) for forecast-period rows, and the posterior is
-augmented by the missing future reference path.
-Forecast-period output inputs are strictly lagged: the design row for
-\(T+h\) may depend on \(y_{T+h-1},y_{T+h-2},\ldots\), but not on
-\(y_{T+h}\) itself.
-
-\subsection{Full Conditional Posteriors}
-\label{subsec:glofas_conditionals}
-
-The full conditionals follow from the augmented Gaussian representation.
-Define, for exAL,
-\[
-z_i^{c\star}
-=z_i^c-\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c,\qquad
-w_i^c=(\sigma_cB_{\gamma_c}v_i^c)^{-1}.
-\]
-For AL, use
-\[
-z_i^{c\star}=z_i^c-A_0v_i^c,\qquad
-w_i^c=(\sigma_cB_0v_i^c)^{-1}.
-\]
-Stacking \(z_i^{c\star}\) and \(w_i^c\) over sources gives
-\(\vect z^\star\) and \(\mat\Omega=\diag(w_i^c)\). Let
-\(\mat P_\theta\) denote the conditional prior precision implied by the
-weak Gaussian intercept priors and the RHS scales, with diagonal entries
-\(\tau^{-2}\lambda_j^{-2}+\zeta^{-2}\) for \(j\in\mathcal J\). Let
-\(\vect b_\theta\) collect the prior means, with zero entries for RHS-shrunk
-coefficients. Then
-\begin{align}
-\mat\Sigma_{\theta\mid\cdot}
-&=(\mat H^\top\mat\Omega\mat H+\mat P_\theta)^{-1},\\
-\vect m_{\theta\mid\cdot}
-&=\mat\Sigma_{\theta\mid\cdot}
-(\mat H^\top\mat\Omega\vect z^\star+\mat P_\theta\vect b_\theta),\\
-\vect\theta_{p_0}\mid\cdot
-&\sim
-\Normal(\vect m_{\theta\mid\cdot},\mat\Sigma_{\theta\mid\cdot}).
-\label{eq:supp_glofas_theta_mcmc}
-\end{align}
-
-For exAL latent variables, define
-\[
-\delta_i^c
-=z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--\sigma_cD_{\gamma_c}s_i^c,
-\qquad
-\chi_i^c=\frac{(\delta_i^c)^2}{\sigma_cB_{\gamma_c}},
-\qquad
-\psi_i^c=\frac{A_{\gamma_c}^2}{\sigma_cB_{\gamma_c}}+\frac{2}{\sigma_c}.
-\]
-Then
+For design row \(\vect h_i^c(\vect y_F)\), let \(\mat J_i\) be its Jacobian at
+the mode and \(\mat V_F=\mat K_F^{-1}\). The first-order moments propagated to
+the remaining updates are
 \begin{equation}
-v_i^c\mid\cdot\sim\GIG(1/2,\chi_i^c,\psi_i^c).
-\label{eq:supp_glofas_v_mcmc}
+\begin{aligned}
+\text{Propagated design moments:}\quad
+\E\{\vect h_i^c(\vect y_F)\}
+&\approx \vect a_i^c,\\
+\E\{\vect h_i^c\vect h_i^{c\top}\}
+&\approx \vect a_i^c\vect a_i^{c\top}
++\mat J_i\mat V_F\mat J_i^\top,
+\end{aligned}
+\label{eq:supp_glofas_future_path_delta}
 \end{equation}
-For \(s_i^c\), set
-\(\mu_{0i}^c=z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--A_{\gamma_c}v_i^c\). Then
-\begin{align}
-a_{s,i}^c&=1+\frac{\sigma_cD_{\gamma_c}^2}{B_{\gamma_c}v_i^c},&
-m_{s,i}^c&=
-\frac{D_{\gamma_c}\mu_{0i}^c}
-{B_{\gamma_c}v_i^c+\sigma_cD_{\gamma_c}^2},\\
-s_i^c\mid\cdot&\sim\TN(m_{s,i}^c,(a_{s,i}^c)^{-1}).
-\label{eq:supp_glofas_s_mcmc}
-\end{align}
-For AL,
-\begin{equation}
-v_i^c\mid\cdot
-\sim
-\GIG\left(
-1/2,
-\frac{(z_i^c-\vect h_i^{c\top}\vect\theta_{p_0})^2}{\sigma_cB_0},
-\frac{A_0^2}{\sigma_cB_0}+\frac{2}{\sigma_c}
-\right).
-\label{eq:supp_glofas_al_v_mcmc}
-\end{equation}
-If \(\sigma_c\sim\IG(a_{\sigma,c},b_{\sigma,c})\), then under AL
-\begin{align}
-\sigma_c\mid\cdot
-&\sim
-\IG\left(
-a_{\sigma,c}+\frac{3n_c}{2},
-b_{\sigma,c}+\sum_{i\in\mathcal I_c}v_i^c
-+\frac12\sum_{i\in\mathcal I_c}
-\frac{(z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}-A_0v_i^c)^2}
-{B_0v_i^c}
-\right),
-\label{eq:supp_glofas_al_sigma_mcmc}
-\end{align}
-where \(n_c=|\mathcal I_c|\).
+where \(\vect a_i^c=\vect h_i^c(\widehat{\vect y}_F)\). The corresponding
+Jacobian--covariance term is retained for cross-moments involving a component
+of \(\vect y_F\). Repeated first-order updates give a local Gaussian--Delta
+approximation, not an exact Laplace approximation to the nonlinear posterior.
+Held-out USGS measurements do not enter the latent-path approximation,
+and no post-hoc crossing correction is applied.
 
-For exAL, update \((\sigma_c,\gamma_c)\) source by source. The joint
-log-kernel is
-\begin{align}
-\ell_c(\sigma_c,\gamma_c)
-&=
--\frac12\sum_{i\in\mathcal I_c}\log(\sigma_cB_{\gamma_c}v_i^c)
--\frac12\sum_{i\in\mathcal I_c}
-\frac{
-\{z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c\}^2}
-{\sigma_cB_{\gamma_c}v_i^c}
-\nonumber\\
-&\quad
--n_c\log\sigma_c-\sum_{i\in\mathcal I_c}\frac{v_i^c}{\sigma_c}
--(a_{\sigma,c}+1)\log\sigma_c-\frac{b_{\sigma,c}}{\sigma_c}
-+\log\pi_{\gamma_c}(\gamma_c),
-\label{eq:supp_glofas_sigmagam_kernel}
-\end{align}
-for \(L<\gamma_c<U\), with value \(-\infty\) outside this interval. This
-kernel is the target for the source-specific scale and asymmetry update.
-
-For each block \(b\in\{\beta,\alpha\}\) and \(j\in\mathcal J_b\), the RHS
-scale updates are
-\begin{align}
-\lambda_{b,j}^2\mid\cdot
-&\sim
-\IG\left(1,\frac{1}{\nu_{b,j}}+\frac{\theta_{b,j}^2}{2\tau_b^2}\right),\\
-\nu_{b,j}\mid\cdot
-&\sim
-\IG\left(1,1+\frac{1}{\lambda_{b,j}^2}\right),\\
-\tau_b^2\mid\cdot
-&\sim
-\IG\left(\frac{|\mathcal J_b|+1}{2},
-\frac{1}{\xi_b}+\frac12\sum_{j\in\mathcal J_b}\frac{\theta_{b,j}^2}{\lambda_{b,j}^2}\right),\\
-\xi_b\mid\cdot
-&\sim
-\IG\left(1,\frac{1}{\tau_{0,b}^2}+\frac{1}{\tau_b^2}\right),\\
-\zeta_b^2\mid\cdot
-&\sim
-\IG\left(a_{\zeta,b}+\frac{|\mathcal J_b|}{2},
-b_{\zeta,b}+\frac12\sum_{j\in\mathcal J_b}\theta_{b,j}^2\right),
-\label{eq:supp_glofas_rhs_mcmc}
-\end{align}
-with the final line omitted when the slab scale is fixed.
-
-\subsection{MCMC Sampler}
-\label{subsec:glofas_mcmc}
-
-For exAL, use unconstrained coordinates
-\[
-\eta_{\sigma,c}=\log\sigma_c,\qquad
-\eta_{\gamma,c}=\logit\{(\gamma_c-L)/(U-L)\}.
-\]
-The slice sampler targets
-\begin{equation}
-\ell_c\{T_c(\vect\eta_c)\}+\log|J_{T_c}(\vect\eta_c)|,
-\qquad
-\vect\eta_c=(\eta_{\gamma,c},\eta_{\sigma,c})^\top,
-\label{eq:supp_glofas_slice_target}
-\end{equation}
-where \(T_c\) maps unconstrained coordinates to
-\((\gamma_c,\sigma_c)\). This bivariate slice update may be replaced by a
-Laplace-informed proposal or by one-dimensional conditional slice updates, but
-the target density is \eqref{eq:supp_glofas_slice_target}.
-
-\begin{suppalgorithm}{MCMC sampler for the GloFAS forecast-discrepancy model}
-\label{alg:glofas_mcmc}
-\emph{Input:} stacked observations \(\vect z\), source labels \(c_i\), target
-quantile \(p_0\), likelihood choice AL or exAL, RHS hyperparameters, MCMC
-controls, and either a fixed augmented design \(\mat H\) or a latent-path
-state-continuation map.
-\begin{enumerate}[label=(\arabic*)]
-\item Initialize
-\(\vect\theta_{p_0}=(\vect\beta_{p_0}^\top,\vect\alpha_{p_0}^\top)^\top\),
-the separate \(\beta\)- and \(\alpha\)-block RHS scales, source scales
-\(\{\sigma_c\}\), latent variables \(\{v_i^c\}\), and, for exAL,
-\(\{\gamma_c,s_i^c\}\). For the latent-path model, also initialize
-\(\vect y_F\).
-\item For each MCMC iteration:
-  \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, recompute the forecast-period rows of
-  \(\mat H(\vect y_F)\);
-  \item draw each \(v_i^c\mid\cdot\) from the GIG full conditional in
-  \eqref{eq:supp_glofas_v_mcmc} for exAL or
-  \eqref{eq:supp_glofas_al_v_mcmc} for AL;
-  \item for exAL, draw each \(s_i^c\mid\cdot\) from
-  \eqref{eq:supp_glofas_s_mcmc};
-  \item draw
-  \(\vect\theta_{p_0}\mid\cdot\sim
-  \Normal(\vect m_{\theta\mid\cdot},\mat\Sigma_{\theta\mid\cdot})\)
-  using \eqref{eq:supp_glofas_theta_mcmc};
-  \item for each block \(b\in\{\beta,\alpha\}\), draw the RHS local, global,
-  auxiliary, and slab scales from \eqref{eq:supp_glofas_rhs_mcmc};
-  \item for AL, draw each \(\sigma_c\mid\cdot\) from
-  \eqref{eq:supp_glofas_al_sigma_mcmc};
-  \item for exAL, update each \((\sigma_c,\gamma_c)\) by slice sampling on
-  the transformed target \eqref{eq:supp_glofas_slice_target};
-  \item for the latent-path model, update \(\vect y_F\) by an MH, slice, or
-  componentwise move targeting the complete-data posterior
-  \eqref{eq:supp_glofas_joint_exal_rhs} or
-  \eqref{eq:supp_glofas_joint_al_rhs} with \(\mat H=\mat H(\vect y_F)\),
-  recomputing only forecast-period state rows after a proposal;
-  \item store retained draws and diagnostics after burn-in, with thinning only
-  if used.
-  \end{enumerate}
-\end{enumerate}
-\end{suppalgorithm}
-
-\subsection{Variational Bayes and CAVI Updates}
-\label{subsec:glofas_vb}
-
-\noindent\textbf{Mean-field family.}
-For exAL, use the mean-field family
-\begin{equation}
-q=
-q_\theta(\vect\theta_{p_0})
-q_{\Theta_\beta}(\Theta_\beta)
-q_{\Theta_\alpha}(\Theta_\alpha)
-\prod_{c\in\mathcal C}
-\left[
-q_{\sigma_c,\gamma_c}(\sigma_c,\gamma_c)
-\prod_{i\in\mathcal I_c}q_{v_i^c}(v_i^c)q_{s_i^c}(s_i^c)
-\right]
-\label{eq:supp_glofas_vb_family}
-\end{equation}
-where each \(q_{\Theta_b}\) factorizes over the auxiliary inverse-gamma RHS
-components used in Section~\ref{subsec:glofas_rhs_prior}.
-For AL, replace \(q_{\sigma_c,\gamma_c}\) by \(q_{\sigma_c}\) and omit
-\(q_{s_i^c}\). The coefficient factor is Gaussian. Let
-\[
-\bar w_i^c=\E\{(\sigma_cB_{\gamma_c}v_i^c)^{-1}\},
-\qquad
-\bar m_i^c=
-\E\left[
-\frac{z_i^c-\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c}
-{\sigma_cB_{\gamma_c}v_i^c}
-\right]
-\]
-for exAL, with \(A_{\gamma_c},B_{\gamma_c},D_{\gamma_c}\) replaced by
-\(A_0,B_0,0\) for AL. Stacking \(\bar w_i^c\) and \(\bar m_i^c\) gives
-\(\bar{\mat\Omega}\) and \(\bar{\vect m}\). Let
-\(\bar{\mat P}_\theta\) replace each block-specific RHS precision by
-\(\E(\tau_b^{-2})\E(\lambda_{b,j}^{-2})+\E(\zeta_b^{-2})\). Then
-\begin{align}
-q_\theta(\vect\theta_{p_0})&=\Normal(\vect m_\theta,\mat\Sigma_\theta),\\
-\mat\Sigma_\theta&=(\mat H^\top\bar{\mat\Omega}\mat H+\bar{\mat P}_\theta)^{-1},\\
-\vect m_\theta&=\mat\Sigma_\theta(\mat H^\top\bar{\vect m}
-+\bar{\mat P}_\theta\vect b_\theta).
-\label{eq:supp_glofas_vb_theta}
-\end{align}
-
-\noindent\textbf{Regression residual moments.}
-For each contribution, define
-\[
-\bar r_i^c=z_i^c-\vect h_i^{c\top}\vect m_\theta,\qquad
-\overline{(r_i^c)^2}
-=(\bar r_i^c)^2+\vect h_i^{c\top}\mat\Sigma_\theta\vect h_i^c .
-\]
-
-\noindent\textbf{AL coordinate factors.}
-For AL,
-\begin{align}
-q(v_i^c)
-&=
-\GIG\left(
-1/2,
-B_0^{-1}\E(\sigma_c^{-1})\overline{(r_i^c)^2},
-\E(\sigma_c^{-1})\left(\frac{A_0^2}{B_0}+2\right)
-\right),
-\label{eq:supp_glofas_vb_al_v}\\
-q(\sigma_c)
-&=
-\IG(a_{\sigma,c}^\star,b_{\sigma,c}^\star),\\
-a_{\sigma,c}^\star
-&=a_{\sigma,c}+\frac{3n_c}{2},\\
-b_{\sigma,c}^\star
-&=
-b_{\sigma,c}+\sum_{i\in\mathcal I_c}\E(v_i^c)
-+\frac{1}{2B_0}\sum_{i\in\mathcal I_c}
-\left[
-\overline{(r_i^c)^2}\E\{(v_i^c)^{-1}\}
--2A_0\bar r_i^c+A_0^2\E(v_i^c)
-\right].
-\label{eq:supp_glofas_vb_al_sigma}
-\end{align}
-
-\noindent\textbf{exAL coordinate factors.}
-For exAL, define source-specific branchwise smooth expectations
-\[
-M_{1c}=\E\{(\sigma_cB_{\gamma_c})^{-1}\},\quad
-M_{2c}=\E(D_{\gamma_c}/B_{\gamma_c}),\quad
-M_{3c}=\E(\sigma_cD_{\gamma_c}^2/B_{\gamma_c}),\quad
-M_{4c}=\E(A_{\gamma_c}D_{\gamma_c}/B_{\gamma_c}),
-\]
-and
-\[
-M_{5c}=\E\{A_{\gamma_c}^2/(\sigma_cB_{\gamma_c})+2/\sigma_c\}.
-\]
-These expectations involve the source-specific exAL scale and asymmetry factor
-and are evaluated by Laplace--Delta within the active \(\gamma_c\) branch. The
-AL point \(\gamma_c=0\) is handled as the nested AL case rather than by a
-generic two-sided Hessian. The latent factors are
-\begin{align}
-q(v_i^c)
-&=
-\GIG(1/2,\bar\chi_i^c,\bar\psi_i^c),\\
-\bar\chi_i^c
-&=
-M_{1c}\overline{(r_i^c)^2}
--2M_{2c}\bar r_i^c\E(s_i^c)
-+M_{3c}\E\{(s_i^c)^2\},\\
-\bar\psi_i^c&=M_{5c},
-\label{eq:supp_glofas_vb_exal_v}\\
-q(s_i^c)&=\TN(m_{s,i}^{c,\mathrm{VB}},V_{s,i}^{c,\mathrm{VB}}),\\
-V_{s,i}^{c,\mathrm{VB}}
-&=\left[1+M_{3c}\E\{(v_i^c)^{-1}\}\right]^{-1},\\
-m_{s,i}^{c,\mathrm{VB}}
-&=
-V_{s,i}^{c,\mathrm{VB}}
-\left[
-M_{2c}\bar r_i^c\E\{(v_i^c)^{-1}\}-M_{4c}
-\right].
-\label{eq:supp_glofas_vb_exal_s}
-\end{align}
-
-\noindent\textbf{RHS coordinate factors.}
-The RHS CAVI updates are applied independently to each block
-\(b\in\{\beta,\alpha\}\):
-\begin{align}
-q(\lambda_{b,j}^2)
-&=\IG\left(1,\ \E(\nu_{b,j}^{-1})
-+\frac12\overline{\theta_{b,j}^2}\E(\tau_b^{-2})\right),\\
-q(\nu_{b,j})
-&=\IG\left(1,\ 1+\E(\lambda_{b,j}^{-2})\right),\\
-q(\tau_b^2)
-&=\IG\left(\frac{|\mathcal J_b|+1}{2},
-\E(\xi_b^{-1})
-+\frac12\sum_{j\in\mathcal J_b}\overline{\theta_{b,j}^2}
-\E(\lambda_{b,j}^{-2})\right),\\
-q(\xi_b)
-&=\IG\left(1,\ \tau_{0,b}^{-2}+\E(\tau_b^{-2})\right),\\
-q(\zeta_b^2)
-&=\IG\left(a_{\zeta,b}+\frac{|\mathcal J_b|}{2},
-b_{\zeta,b}+\frac12\sum_{j\in\mathcal J_b}\overline{\theta_{b,j}^2}\right),
-\label{eq:supp_glofas_vb_rhs}
-\end{align}
-where
-\(\overline{\theta_{b,j}^2}=m_{\theta,bj}^2+(\mat\Sigma_\theta)_{bj,bj}\).
-
-\noindent\textbf{Source scale--asymmetry factor.}
-For exAL, the source-specific Laplace--Delta target is
-\begin{align}
-\ell_{c,\mathrm{LD}}(\vect\eta_c)
-&=
-\E_{q_{-(\sigma_c,\gamma_c)}}\{
-\log p(\vect z^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,
-\vect v^c,\vect s^c,\{\vect h_i^c:i\in\mathcal I_c\})
-\nonumber\\
-&\qquad
-+\log p(\vect v^c\mid\sigma_c)
-+\log p(\sigma_c)+\log\pi_{\gamma_c}(\gamma_c)
-\}
-+\log|J_{T_c}(\vect\eta_c)|.
-\label{eq:supp_glofas_ld_target}
-\end{align}
-At the mode \(\hat{\vect\eta}_c\), with Hessian
-\(\mat K_c=\nabla^2\ell_{c,\mathrm{LD}}(\hat{\vect\eta}_c)\), set
-\begin{equation}
-q_{\sigma_c,\gamma_c}(\vect\eta_c)
-\approx
-\Normal\{\hat{\vect\eta}_c,(-\mat K_c)^{-1}\}.
-\label{eq:supp_glofas_ld_gaussian}
-\end{equation}
-For any branchwise smooth function \(h(\sigma_c,\gamma_c)\),
-\begin{equation}
-\E\{h(\sigma_c,\gamma_c)\}
-\approx
-h\{T_c(\hat{\vect\eta}_c)\}
-+\frac12\tr\left[
-\nabla^2_\eta h\{T_c(\hat{\vect\eta}_c)\}(-\mat K_c)^{-1}
-\right].
-\label{eq:supp_glofas_delta}
-\end{equation}
-
-\noindent\textbf{Future-path factor.}
-For the latent-path ensemble-likelihood model, the variational family is
-augmented by a factor \(q_F(\vect y_F)\) for the future reference path. Write
-\(z_i^c(\vect y_F)=z_{i0}^c+\vect u_i^\top\vect y_F\), where
-\(\vect u_i=\vect0\) for observed rows and identifies the appropriate future
-reference value for forecast-period reference rows. The forecast-period
-fixed-design row is \(\vect h_i^c(\vect y_F)\), because output lags in the
-reservoir input may depend on \(\vect y_F\). For a current coefficient factor
-\(q_\theta=\Normal(\vect m_\theta,\mat\Sigma_\theta)\), define
-\[
-e_i^c(\vect y_F)
-=z_i^c(\vect y_F)-\vect h_i^c(\vect y_F)^\top\vect m_\theta,
-\qquad
-R_i^c(\vect y_F)
-=\{e_i^c(\vect y_F)\}^2+
-\vect h_i^c(\vect y_F)^\top
-\mat\Sigma_\theta\vect h_i^c(\vect y_F).
-\]
-
-\noindent\textbf{Future-path likelihood target.}
-For AL, the future-path Laplace target is, up to constants not depending on
-\(\vect y_F\),
-\begin{equation}
-\ell_F^{\mathrm{AL}}(\vect y_F)
-=
--\frac{1}{2B_0}\sum_{i\in\mathcal I_F}
-\E(\sigma_{c_i}^{-1})
-\left[
-\E\{(v_i^{c_i})^{-1}\}R_i^{c_i}(\vect y_F)
--2A_0e_i^{c_i}(\vect y_F)
-\right],
-\label{eq:supp_glofas_latent_path_al_ld_target}
-\end{equation}
-where \(\mathcal I_F\) contains rows whose response or fixed-design row depends on
-the future path. Terms independent of \(\vect y_F\), including the
-\(A_0^2\E(v_i^{c_i})\) part of the Gaussian likelihood and the exponential
-latent-prior terms, are handled in the complete-data ELBO and omitted from the
-future-path mode or Hessian. For exAL, the corresponding target is
-\begin{align}
-\ell_F^{\mathrm{exAL}}(\vect y_F)
-&=
--\frac12\sum_{i\in\mathcal I_F}
-\left[
-M_{1,c_i}\E\{(v_i^{c_i})^{-1}\}R_i^{c_i}(\vect y_F)
--2M_{2,c_i}\E(s_i^{c_i})\E\{(v_i^{c_i})^{-1}\}
-e_i^{c_i}(\vect y_F)
--2M_{6,c_i}e_i^{c_i}(\vect y_F)
-\right],
-\label{eq:supp_glofas_latent_path_exal_ld_target}
-\end{align}
-with
-\[
-M_{6,c}=\E\{A_{\gamma_c}/(\sigma_cB_{\gamma_c})\}.
-\]
-The remaining exAL terms in the complete-data likelihood and latent-prior
-density are independent of \(\vect y_F\) and are included in the ELBO
-decomposition below.
-
-\noindent\textbf{Future-path Gaussian approximation.}
-At the mode \(\hat{\vect y}_F\), set
-\[
-\mat K_F=-\nabla^2_{\vect y_F}\ell_F(\hat{\vect y}_F),
-\qquad
-q_F(\vect y_F)\approx
-\Normal(\hat{\vect y}_F,\mat K_F^{-1}),
-\]
-with any Hessian regularization recorded in the fit object. Delta-method
-moments of the nonlinear state map are then used in the remaining coordinate
-updates.
-
-\noindent\textbf{Delta moments.}
-If \(\mat J_i\) is the Jacobian of \(\vect h_i^c(\vect y_F)\) at
-\(\hat{\vect y}_F\), and \(\mat V_F=\mat K_F^{-1}\), then the default
-first-order Delta moments are
-\[
-\vect a_i^c
-\approx
-\vect h_i^c(\hat{\vect y}_F),
-\qquad
-\mat S_i^c
-\approx
-\vect a_i^c\vect a_i^{c\top}
-+\mat J_i\mat V_F\mat J_i^\top .
-\]
-Also,
-\[
-\bar z_i^c=z_{i0}^c+\vect u_i^\top\hat{\vect y}_F,
-\qquad
-\overline{(z_i^c)^2}
-=(\bar z_i^c)^2+\vect u_i^\top\mat V_F\vect u_i,
-\qquad
-\vect b_i^c
-\approx
-\vect a_i^c\bar z_i^c+\mat J_i\mat V_F\vect u_i .
-\]
-Second-order mean corrections can be added for chosen low-dimensional
-summaries. The first-order construction above avoids featurewise Hessian
-calculations while retaining the mean and covariance terms needed for the
-Gaussian future-path approximation.
-
-\noindent\textbf{Entropy and objective.}
-Replacing fixed-design products by
-\((\vect a_i^c,\mat S_i^c,\vect b_i^c,\bar z_i^c,
-\overline{(z_i^c)^2})\) gives the latent-path VB--LD updates. The entropy
-contribution of the future-path factor is
-\[
-H(q_F)=\frac12\log |2\pi e\,\mat V_F|.
-\]
-The resulting monitored objective is a Laplace--Delta approximation to the
-ELBO of the nonlinear latent-path model.
-
-\begin{suppalgorithm}{Variational Bayes updates for the GloFAS forecast-discrepancy model}
-\label{alg:glofas_vb}
-\emph{Input:} stacked observations \(\vect z\), source labels \(c_i\), target
-quantile \(p_0\), likelihood choice AL or exAL, block-specific RHS hyperparameters,
-convergence controls, and either a fixed augmented design \(\mat H\) or a
-latent-path state-continuation map.
-\begin{enumerate}[label=(\arabic*)]
-\item Initialize \(q_\theta\), latent factors, source scale factors, and RHS
-scale factors. For the latent-path model, also initialize \(q_F\).
-\item Repeat until convergence:
-  \begin{enumerate}[label=(\alph*)]
-  \item for the latent-path model, set \(q_F\) by the Laplace target
-  \eqref{eq:supp_glofas_latent_path_al_ld_target} for AL or
-  \eqref{eq:supp_glofas_latent_path_exal_ld_target} for exAL, then recompute
-  the Delta-method design moments;
-  \item set \(q(v_i^c)\) by \eqref{eq:supp_glofas_vb_al_v} for AL or
-  \eqref{eq:supp_glofas_vb_exal_v} for exAL;
-  \item for exAL, set \(q(s_i^c)\) by
-  \eqref{eq:supp_glofas_vb_exal_s};
-  \item set \(q_\theta\) by \eqref{eq:supp_glofas_vb_theta};
-  \item set the beta and alpha RHS factors by \eqref{eq:supp_glofas_vb_rhs};
-  \item for AL, set each \(q(\sigma_c)\) by
-  \eqref{eq:supp_glofas_vb_al_sigma};
-  \item for exAL, set each \(q_{\sigma_c,\gamma_c}\) by
-  \eqref{eq:supp_glofas_ld_target}--\eqref{eq:supp_glofas_ld_gaussian};
-  \item recompute branchwise smooth expectations by \eqref{eq:supp_glofas_delta} and
-  monitor the ELBO, or the Laplace--Delta ELBO approximation when \(q_F\) is
-  present.
-  \end{enumerate}
-\item Return variational factors, fitted reference and discrepancy summaries,
-forecast summaries, ELBO history, and convergence diagnostics.
-\end{enumerate}
-\end{suppalgorithm}
-
-\subsection{ELBO}
-\label{subsec:glofas_elbo}
-
-\noindent\textbf{Application ELBO.}
-For exAL, the application ELBO is
-\begin{align}
-\elbo(q)
-&=
-\sum_{c\in\mathcal C}
-\left[
-\E_q\{\log p(\vect z^c\mid\vect\theta_{p_0},\sigma_c,\gamma_c,
-\vect v^c,\vect s^c,\mat H)\}
-+\E_q\{\log p(\vect v^c\mid\sigma_c)\}
-+\E_q\{\log p(\vect s^c)\}
-\right.
-\nonumber\\
-&\qquad\left.
-+\E_q\{\log p(\sigma_c)\}
-+\E_q\{\log\pi_{\gamma_c}(\gamma_c)\}
-\right]
-+\E_q\{\log p(\vect\theta_{p_0},\Theta_\beta,\Theta_\alpha)\}
-+H(q).
-\label{eq:supp_glofas_elbo_decomp}
-\end{align}
-
-\noindent\textbf{Likelihood terms.}
-For AL, omit the \(s\)-latent and \(\gamma_c\) prior terms. The exAL
-likelihood term for source \(c\) is
-\begin{align}
-\elbo_{\mathrm{like},c}
-&=
--\frac{n_c}{2}\log(2\pi)
--\frac12\sum_{i\in\mathcal I_c}
-\left[
-\E(\log\sigma_c)+\E(\log B_{\gamma_c})+\E(\log v_i^c)
-\right]
-\nonumber\\
-&\quad
--\frac12\sum_{i\in\mathcal I_c}
-\E\left[
-\frac{
-\{z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}
--\sigma_cD_{\gamma_c}s_i^c-A_{\gamma_c}v_i^c\}^2}
-{\sigma_cB_{\gamma_c}v_i^c}
-\right].
-\label{eq:supp_glofas_elbo_like}
-\end{align}
-The corresponding AL likelihood term is
-\begin{align}
-\elbo_{\mathrm{like},c}^{\mathrm{AL}}
-&=
--\frac{n_c}{2}\log(2\pi)
--\frac12\sum_{i\in\mathcal I_c}
-\left[
-\E(\log\sigma_c)+\log B_0+\E(\log v_i^c)
-\right]
-\nonumber\\
-&\quad
--\frac12\sum_{i\in\mathcal I_c}
-\E\left[
-\frac{
-\{z_i^c-\vect h_i^{c\top}\vect\theta_{p_0}-A_0v_i^c\}^2}
-{\sigma_cB_0v_i^c}
-\right].
-\label{eq:supp_glofas_elbo_like_al}
-\end{align}
-
-\noindent\textbf{Latent-path objective.}
-For the latent-path model, these likelihood terms are evaluated with the
-Laplace--Delta future-path moments above, and \(H(q)\) includes
-\(H(q_F)\). Thus the monitored quantity is an ELBO approximation for the
-nonlinear latent-path model; it reduces to the fixed-design ELBO when
-\(\vect y_F\) is absent or held fixed.
-
-\noindent\textbf{Prior and entropy terms.}
-The latent and source-parameter prior terms are
-\begin{align}
-\elbo_{v,c}
-&=
--n_c\E(\log\sigma_c)-\E(\sigma_c^{-1})
-\sum_{i\in\mathcal I_c}\E(v_i^c),\\
-\elbo_{s,c}
-&=
-n_c\log2-\frac{n_c}{2}\log(2\pi)
--\frac12\sum_{i\in\mathcal I_c}\E\{(s_i^c)^2\},\\
-\elbo_{\sigma,c}
-&=
-a_{\sigma,c}\log b_{\sigma,c}-\log\Gamma(a_{\sigma,c})
--(a_{\sigma,c}+1)\E(\log\sigma_c)-b_{\sigma,c}\E(\sigma_c^{-1}),\\
-\elbo_{\gamma,c}
-&=\E\{\log\pi_{\gamma_c}(\gamma_c)\}.
-\label{eq:supp_glofas_elbo_source_terms}
-\end{align}
-The RHS coefficient-prior and shrinkage-scale terms are the corresponding
-blockwise RHS ELBO terms, with \(\vect\beta\) replaced separately by the
-non-intercept entries of \(\vect\beta_{p_0}\) and \(\vect\alpha_{p_0}\);
-the bookkeeping follows the generic \texttt{rhs\_ns} decomposition in
-Sections~\ref{sec:cavi}--\ref{sec:elbo}.
-Entropy terms are summed over the Gaussian coefficient factor, GIG latent
-factors, truncated-normal latent factors, inverse-gamma RHS factors, and the
-source-specific Laplace--Delta factors.
-Terms involving smooth nonlinear functions of \((\sigma_c,\gamma_c)\) are
-evaluated with the same Laplace--Delta approximation used in
-\eqref{eq:supp_glofas_delta}.
-
-\subsection{Diagnostic Checks}
+\subsection{Numerical Stopping and Supplementary Results}
 \label{subsec:glofas_checks}
 
-The derivation has several useful reductions. If the GloFAS source is removed
-and \(\vect\alpha_{p_0}\) is omitted, the model reduces to the ordinary
-Q--DESN regression in Sections~\ref{sec:model_joint}--\ref{sec:elbo}. If
-\(\gamma_c=0\) and the \(s_i^c\) variables are omitted, the exAL updates reduce
-to the AL updates with constants \(A_0\) and \(B_0\). The coefficient update
-remains Gaussian because the augmented likelihood and the RHS prior are
-conditionally Gaussian. The RHS hierarchy contributes only inverse-gamma scale
-updates under the product representation; the source-specific scale and
-asymmetry block is the non-conjugate component. Finally, the MCMC
-sampler and the variational approximation are written for the same augmented
-working model when the likelihood family, source labels, and state construction
-are matched. The ELBO in \eqref{eq:supp_glofas_elbo_decomp} is therefore an
-approximate objective for the corresponding variational factorization. Direct
-checks of posterior marginals or interval properties require separate
-comparison with posterior simulation.
+Both MQ--DESN variational fits met the specified stopping criteria. The rule
+requires every inner fit to meet its stopping criterion, outer parameter change below
+\(10^{-3}\), relative change of every RHS block below \(10^{-3}\), and three
+consecutive complete coordinate iterations meeting these tolerances after
+global-scale updates begin. MQ--DESN (AL) met the criterion at outer iteration 11,
+with parameter change
+\(8.9279687\times10^{-4}\) and maximum RHS change
+\(7.7748371\times10^{-4}\). MQ--DESN (exAL) met it at iteration 28, with
+corresponding changes \(2.6080582\times10^{-4}\) and
+\(3.8253514\times10^{-4}\). Table~\ref{tab:supp-glofas-part4-convergence}
+and Figure~\ref{fig:supp-glofas-part4-convergence} report these results.
+The structured exAL calculation retains the complete local variational state
+between outer updates. Application inference is variational; no GloFAS MCMC
+fit is reported.
 
-\bibliographystyle{apalike}
+Table~\ref{tab:supp-glofas-part123-scores} separates the recursive evidence
+from the issued-window comparison in the main article. Reference-only and
+combined historical forecasts are scored over 30 dates on the same
+seven-level grid. Reference-only Q--DESN paths under AL and exAL contain
+three and one adjacent-quantile crossing pairs, respectively. The
+reference-only MQ--DESN paths and every combined historical forecast have
+zero crossings. No correction was applied. All six post-cutoff discrepancy-only
+paths are unscored because retrospective GloFAS ends at \(T\); their missing
+scores and crossing counts are not zero-valued measurements.
+
+Q--DESN under AL has the lowest descriptive issued-window score; this
+ranking did not select a family using the held-out forecast period.
+MQ--DESN (AL) is the multiquantile comparator and MQ--DESN (exAL) the sensitivity
+model. The reported grids of all seven issued-ensemble families have zero
+crossings. The nominal 90\% interval from Q--DESN under AL covers
+\(0.750\) of the 28 outcomes; MQ--DESN (AL) has the
+greatest modeled coverage, \(0.786\), still below nominal. At \(p=0.95\),
+the empirical frequency below the MQ--DESN (exAL) forecast is only \(0.286\), compared
+with \(0.750\) for Q--DESN (AL).
+Table~\ref{tab:supp-glofas-part4-calibration} and
+Figure~\ref{fig:supp-glofas-part4-calibration} show the substantial
+disagreement with nominal frequencies across the grid.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentFullComparisonFigure}
+\caption{Full issued-ensemble forecast comparison. Panels group Gaussian and raw
+GloFAS, Q--DESN, and MQ--DESN families; the separate
+legend identifies probabilities and line styles. Black shows historical
+USGS and magenta dashed lines show held-out measurements. The
+vertical line marks 25 December 2022. Panels retain their original separate
+vertical scales, unlike the common-scale illustration in the main article.
+All seven families and their unadjusted reported grids are retained.}
+\figalt{The full issued-ensemble comparison retains Gaussian and raw GloFAS,
+Q--DESN and MQ--DESN AL/exAL paths with their original panel scales,
+historical observations, and held-out measurements.}
+\label{fig:supp-glofas-part4-all-families}
+\end{figure}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Reference-only, discrepancy-only, and combined historical recursive
+forecasts, labeled Reference, Discrepancy, and Combined historical, on the
+\(\log(1+\mathrm{flow})\) scale and the seven-level probability grid.
+Reference-only and combined historical models score 30 USGS horizons.
+The discrepancy-only model supplies a 30-day path but has no future
+retrospective-GloFAS observations and is unscored. Dashes
+denote missing measurements by design. Crossing counts are adjacent-quantile
+pairs over the raw paths, with no correction.}
+\label{tab:supp-glofas-part123-scores}
+\input{\GlofasApplicationCurrentSupplementScoreTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Numerical stopping criteria for the issued-ensemble MQ--DESN fits. Both
+parameter and maximum RHS relative changes are below \(10^{-3}\), all inner
+fits meet their stopping criteria, and both families complete three consecutive
+coordinate iterations meeting the stated tolerances after global-scale updates begin.}
+\label{tab:supp-glofas-part4-convergence}
+\input{\GlofasApplicationCurrentConvergenceTable}
+\end{table}
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Issued-ensemble empirical quantile frequencies over the 28 horizons.
+Entries are the fractions of held-out USGS observations below each fitted
+quantile; the nominal frequency equals the column's probability level. All
+families use the same dates and seven-level grid. This held-out-period
+calibration assessment is descriptive, not a tuning criterion.}
+\label{tab:supp-glofas-part4-calibration}
+\input{\GlofasApplicationCurrentCalibrationTable}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartOneFigure}
+\caption{Reference-only USGS recursive forecasts over 30 days after
+25~December~2022. The three panels group Gaussian, independent quantile,
+and MQ--DESN families. Colors distinguish probability levels and line
+styles distinguish families. Black lines show the last 30 observed dates;
+magenta dashed lines show held-out USGS measurements. Vertical lines mark
+the origin and panels have separate vertical scales. Q--DESN under AL and
+exAL has three and one raw crossing pairs, respectively; no correction is applied.}
+\figalt{Three panels show 30-day reference-only USGS forecasts from Gaussian,
+Q--DESN and MQ--DESN AL/exAL families, alongside black observed
+history and magenta dashed held-out measurements.}
+\label{fig:supp-glofas-part1}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartTwoFigure}
+\caption{Historical retrospective-GloFAS-minus-USGS discrepancy paths over the
+last 30 observed dates and 30 recursive future dates. The discrepancy is
+\(\log(1+\mathrm{GloFAS\ flow})-\log(1+\mathrm{USGS\ flow})\).
+Panels group Gaussian,
+Q--DESN, and MQ--DESN families, with color identifying probability levels
+and line style identifying families. Gaussian paths are mean summaries.
+Black lines show historical discrepancies and vertical lines mark the cutoff.
+No future discrepancy observations are plotted or scored because retrospective GloFAS ends at
+the cutoff; panels have separate vertical scales.}
+\figalt{Three panels show historical black discrepancy lines and 30-day
+future discrepancy paths for Gaussian and AL/exAL families. There are no
+post-cutoff discrepancy observations or scores.}
+\label{fig:supp-glofas-part2}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentPartThreeFigure}
+\caption{USGS recursive forecasts from the combined historical
+reference--discrepancy model over 30 future dates. Gaussian, independent,
+and MQ--DESN families occupy separate panels. Colors identify
+probability levels, line styles identify families, and vertical lines mark
+the December-25 origin. Black historical USGS and magenta dashed held-out
+measurements accompany the forecasts. Panels have separate vertical scales. All
+combined historical paths have zero crossings without correction.}
+\figalt{Three family-group panels compare 30-day combined historical USGS quantile
+forecasts with historical USGS and held-out measurements; all paths are uncrossed.}
+\label{fig:supp-glofas-part3}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentConvergenceFigure}
+\caption{Numerical stopping for the issued-ensemble MQ--DESN fits. Maximum relative
+parameter change is plotted against cumulative outer iteration on a
+logarithmic vertical scale. The horizontal dashed line is the \(10^{-3}\)
+outer tolerance. Triangles identify complete coordinate iterations meeting
+the stopping criteria; the last three consecutive such iterations satisfy
+the stopping rule for MQ--DESN (AL) and MQ--DESN (exAL).}
+\figalt{Green MQ--DESN (AL) and brown MQ--DESN (exAL) parameter-change traces finish
+below the specified tolerance at outer iterations 11 and 28, respectively,
+with three consecutive coordinate iterations satisfying the stopping rule.}
+\label{fig:supp-glofas-part4-convergence}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentCalibrationFigure}
+\caption{Issued-window empirical quantile frequencies. Colored lines give
+the fraction of observations below each fitted quantile for the seven families;
+the diagonal gives the nominal frequency. The comparison uses 28 held-out USGS
+outcomes and was not used for model selection. Q--DESN under AL has the lowest
+grid score but remains undercovered, and MQ--DESN (exAL) has
+particularly low frequencies below its upper quantiles.}
+\figalt{Seven empirical-frequency curves lie below the nominal diagonal.
+MQ--DESN (AL) and Q--DESN (AL) have the highest frequency at p=0.95, while MQ--DESN
+(exAL) reaches only 0.286 and raw GloFAS remains at zero.}
+\label{fig:supp-glofas-part4-calibration}
+\end{figure}
+
+\clearpage
+\bibliographystyle{tables/qdesn_asa_compatible}
 \bibliography{refs}
 
 \end{document}

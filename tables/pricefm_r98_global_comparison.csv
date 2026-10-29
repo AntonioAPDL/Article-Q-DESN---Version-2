@@ -1,0 +1,4 @@
+surface,cases,mean_AQL,authority_role
+R98_protocol_valid_QDESN,114,7.217007319836696,replacement_candidate
+cached_PriceFM,114,7.03868534653447,external_comparator
+R92_deprecated_historical_QDESN,114,6.823677420470439,historical_sensitivity_only

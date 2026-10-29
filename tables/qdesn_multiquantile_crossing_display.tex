@@ -1,0 +1,18 @@
+\begin{table}[!htbp]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & \shortstack{Fit grid\\crossings (\%)} & \shortstack{Forecast grid\\crossings (\%)} & \shortstack{Posterior-draw\\crossings (\%)} & \shortstack{Mean and maximum\\adjustment} \\
+\midrule
+MQ--DESN (AL) & 0.06 & 0.02 & 1.07 & 0.0000 / 0.1223 \\
+Q--DESN (AL) & 0.85 & 5.49 & 10.87 & 0.0106 / 0.6086 \\
+MQ--DESN (exAL) & 0.00 & 0.00 & 0.29 & 0.0000 / 0.0000 \\
+Q--DESN (exAL) & 0.00 & 0.61 & 10.62 & 0.0007 / 0.2137 \\
+\bottomrule
+\end{tabular}
+\caption{Raw adjacent-level crossing percentages and monotone adjustments. The first two columns describe posterior-mean grids; the third averages the eight mechanism-specific crossing percentages across posterior draws with equal weight. Each model has 24,000 fitting and 47,520 forecast comparisons. AL models use 3,750 draws; exAL models use 7,500 for Laplace and 3,750 otherwise. Adjustment magnitudes are on the response scale. Every projected grid is ordered. Q--DESN fits levels independently; MQ--DESN estimates their coefficients jointly.}
+\label{tab:joint-qdesn-pure-desn-v2-crossings}
+\end{table}

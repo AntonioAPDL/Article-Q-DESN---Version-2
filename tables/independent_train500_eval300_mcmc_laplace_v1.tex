@@ -1,0 +1,28 @@
+\begin{table}[!htbp]
+\centering
+\scriptsize
+\setstretch{1}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}clccc@{}}
+\toprule
+Target & Model & Fit RMSE & Forecast MAE & Forecast check loss \\
+\midrule
+$p=0.05$ & DQLM & \shortstack{\textbf{4.967}\\{\scriptsize [3.787, 6.175]}} & \shortstack{9.335\\{\scriptsize [9.021, 9.648]}} & \shortstack{2.027\\{\scriptsize [1.974, 2.085]}} \\
+ & exDQLM & \shortstack{7.250\\{\scriptsize [5.823, 8.610]}} & \shortstack{4.382\\{\scriptsize [4.078, 4.681]}} & \shortstack{1.988\\{\scriptsize [1.905, 2.074]}} \\
+ & Q--DESN AL--RHS & \shortstack{5.324\\{\scriptsize [3.839, 6.647]}} & \shortstack{6.987\\{\scriptsize [4.183, 9.868]}} & \shortstack{2.366\\{\scriptsize [1.940, 3.163]}} \\
+ & Q--DESN exAL--RHS & \shortstack{6.593\\{\scriptsize [5.160, 7.967]}} & \shortstack{\textbf{4.316}\\{\scriptsize [2.004, 8.432]}} & \shortstack{\textbf{1.963}\\{\scriptsize [1.891, 2.103]}} \\
+\addlinespace[2pt]
+$p=0.25$ & DQLM & \shortstack{2.530\\{\scriptsize [1.848, 3.247]}} & \shortstack{4.142\\{\scriptsize [3.844, 4.447]}} & \shortstack{4.727\\{\scriptsize [4.594, 4.863]}} \\
+ & exDQLM & \shortstack{2.067\\{\scriptsize [1.387, 2.860]}} & \shortstack{2.923\\{\scriptsize [2.681, 3.176]}} & \shortstack{4.630\\{\scriptsize [4.484, 4.777]}} \\
+ & Q--DESN AL--RHS & \shortstack{2.275\\{\scriptsize [1.454, 3.106]}} & \shortstack{2.192\\{\scriptsize [0.9468, 4.465]}} & \shortstack{4.525\\{\scriptsize [4.423, 4.760]}} \\
+ & Q--DESN exAL--RHS & \shortstack{\textbf{1.758}\\{\scriptsize [0.9837, 2.568]}} & \shortstack{\textbf{1.646}\\{\scriptsize [0.6759, 3.509]}} & \shortstack{\textbf{4.485}\\{\scriptsize [4.420, 4.603]}} \\
+\addlinespace[2pt]
+$p=0.50$ & DQLM & \shortstack{1.784\\{\scriptsize [1.252, 2.374]}} & \shortstack{3.055\\{\scriptsize [2.801, 3.317]}} & \shortstack{5.493\\{\scriptsize [5.317, 5.671]}} \\
+ & exDQLM & \shortstack{1.781\\{\scriptsize [1.264, 2.373]}} & \shortstack{3.057\\{\scriptsize [2.801, 3.316]}} & \shortstack{5.494\\{\scriptsize [5.319, 5.669]}} \\
+ & Q--DESN AL--RHS & \shortstack{\textbf{1.324}\\{\scriptsize [0.7016, 2.000]}} & \shortstack{\textbf{1.294}\\{\scriptsize [0.5838, 2.582]}} & \shortstack{\textbf{5.200}\\{\scriptsize [5.146, 5.314]}} \\
+ & Q--DESN exAL--RHS & \shortstack{1.337\\{\scriptsize [0.7227, 2.002]}} & \shortstack{1.347\\{\scriptsize [0.6497, 2.595]}} & \shortstack{5.203\\{\scriptsize [5.147, 5.325]}} \\
+\bottomrule
+\end{tabular}
+\caption{Primary MCMC metric summaries for the Laplace family. Forecast criteria use the first 300 scored targets; entries are posterior means with equal-tailed 95\% intervals. Fit RMSE uses the 500-observation fitting sample. Lower is better; boldface marks the lowest unrounded mean within each target level and criterion. Intervals condition on the selected specification and data.}
+\label{tab:independent-eval300-mcmc-laplace}
+\end{table}

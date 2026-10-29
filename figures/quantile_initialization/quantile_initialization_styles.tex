@@ -1,0 +1,28 @@
+% Restrained print palette and TikZ styles for the initialization diagram.
+% Model families are identified by text and position in addition to color.
+\definecolor{qiText}{HTML}{202124}
+\definecolor{qiLine}{HTML}{62676C}
+\definecolor{qiGaussian}{HTML}{737A80}
+\definecolor{qiAL}{HTML}{31566D}
+\definecolor{qiExAL}{HTML}{70444B}
+\tikzset{
+  qi/base/.style={rectangle,rounded corners=0pt,draw=qiLine,
+    fill=white,text=qiText,line width=0.55pt,align=center,
+    font=\normalfont\rmfamily\fontsize{9.5}{11}\selectfont,
+    inner xsep=2.5pt,inner ysep=3pt,outer sep=0.3pt,
+    minimum height=10mm},
+  qi/gaussian/.style={qi/base,draw=qiGaussian},
+  qi/al/.style={qi/base,draw=qiAL},
+  qi/exal/.style={qi/base,draw=qiExAL},
+  qi/heading/.style={text=qiText,align=left,inner sep=0pt,
+    font=\normalfont\rmfamily\bfseries\fontsize{10}{11.5}\selectfont},
+  qi/note/.style={text=qiText,align=left,inner sep=0pt,
+    font=\normalfont\rmfamily\fontsize{9}{10.5}\selectfont},
+  qi/dots/.style={inner sep=0.4pt,text=qiText,
+    font=\normalfont\rmfamily\fontsize{9.5}{11}\selectfont},
+  qi/arrow/.style={draw=qiLine,line width=0.55pt,
+    -{Latex[length=1.65mm,width=1.12mm]},
+    shorten <=0.35pt,shorten >=0.35pt},
+  qi/collection/.style={draw=qiLine,line width=0.55pt},
+  qi/comparison/.style={qi/arrow,dash pattern=on 2.5pt off 1.8pt}
+}

@@ -245,6 +245,17 @@ Fresh runtime/native/cgroup verification still happens on the actual node.
 
 ## API and CLI
 
+The held-job resource check accepts Slurm's exact `TresPerTask=cpu=1`
+representation of the explicit single CPU request. All other per-task TRES
+values, GPU/GRES and per-node/socket/job resource requests remain rejected.
+`NumCPUs`, `NumTasks` and `CPUs/Task` must each be exactly1. A pending user-held
+job with zero runtime, unknown start and absent allocated TRES may report the
+exact one-node range `NumNodes=1-1`; running and other states require the
+concrete count1. No larger or ambiguous range is accepted.
+The real held/cancelled metadata that exposed these spelling differences is
+retained separately; this source compatibility change does not reopen its
+spent reservation, restart its caller or grant a numerical retry.
+
 From the package root, on administrative CPU31 with `-B`:
 
 ```text
@@ -271,3 +282,5 @@ clone without the original local metadata; its actual local PASS receipt is
 retained separately. Tests make no SSH/Slurm calls and import no numerical
 library. Actual qualification, collection and source publication remain
 separate evidence; tests never fabricate a numerical pass.
+
+Positive owned-command, guardian-readability and backstop fixtures reserve4CPU each and still require success. They do not prove production2CPU metadata availability. An observed first-snapshot conservative birth-lifetime upper bound can reject a2CPU command before its0.73CPU active margin is established; future qualification must review complete controller headroom without weakening the guard. The earlier unwitnessed125 failure remains unexplained.

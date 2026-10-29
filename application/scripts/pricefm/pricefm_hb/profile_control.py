@@ -578,7 +578,8 @@ def release_startup(scope_id, runner=bounded):
                 and fields.get('Command') == spec['remote_root'] + '/job.sh'
                 and fields.get('ReqNodeList') == spec['node']
                 and fields.get('UserId', '').split('(')[0] == 'jaguir26'
-                and fields.get('NumCPUs') == fields.get('NumTasks') == fields.get('NumNodes') == '1'
+                and fields.get('NumCPUs') == fields.get('NumTasks') == fields.get('CPUs/Task') == '1'
+                and _exact_single_node(fields)
                 and fields.get('Requeue') == '0' and fields.get('Account') == fields.get('Partition') == '128x24'
                 and fields.get('QOS') == 'normal'
                 and a._wall_seconds(fields.get('TimeLimit', '')) == spec['allocation_limits']['wall_seconds']
@@ -601,7 +602,8 @@ def _owned_fields(text, spec, job_id):
     require(fields.get('JobId') == job_id and fields.get('JobName') == spec['scope_id']
             and fields.get('WorkDir') == spec['remote_root'] and fields.get('UserId', '').split('(')[0] == 'jaguir26'
             and fields.get('Command') == spec['remote_root'] + '/job.sh' and fields.get('ReqNodeList') == spec['node']
-            and fields.get('NumCPUs') == fields.get('NumTasks') == fields.get('NumNodes') == '1'
+            and fields.get('NumCPUs') == fields.get('NumTasks') == fields.get('CPUs/Task') == '1'
+            and _exact_single_node(fields)
             and fields.get('Account') == fields.get('Partition') == '128x24' and fields.get('QOS') == 'normal'
             and fields.get('Requeue') == '0'
             and a._wall_seconds(fields.get('TimeLimit', '')) == spec['allocation_limits']['wall_seconds']
@@ -610,13 +612,25 @@ def _owned_fields(text, spec, job_id):
     return fields
 
 
+def _exact_single_node(fields):
+    # Slurm reports the exact requested one-node range while a job is held;
+    # allocated/running jobs must report the concrete single-node count.
+    return (fields.get('NumNodes') == '1'
+            or (fields.get('NumNodes') == '1-1' and fields.get('JobState') == 'PENDING'
+                and fields.get('Reason') == 'JobHeldUser' and fields.get('RunTime') == '00:00:00'
+                and fields.get('StartTime') == 'Unknown'
+                and fields.get('AllocTRES', '') in ('', '(null)', 'N/A', 'None')))
+
+
 def _no_hidden_resources(fields):
     require(fields.get('ArrayJobId', '0') in ('0', 'N/A')
             and fields.get('ArrayTaskId', 'N/A') in ('N/A', '4294967294'),
             'single held job must not be an inherited array')
     absent = ('', '(null)', 'N/A', 'None')
-    for name in ('Gres', 'GresDetail', 'TresPerNode', 'TresPerTask', 'TresPerSocket', 'TresPerJob'):
+    for name in ('Gres', 'GresDetail', 'TresPerNode', 'TresPerSocket', 'TresPerJob'):
         require(fields.get(name, '') in absent, 'unexpected GPU/GRES/per-task resource request rejected')
+    require(fields.get('TresPerTask', '') in absent + ('cpu=1',),
+            'only the explicitly requested single CPU per task is permitted')
     for name in ('TRES', 'ReqTRES', 'AllocTRES'):
         value = fields.get(name, '')
         if value in absent: continue

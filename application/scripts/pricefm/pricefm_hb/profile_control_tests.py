@@ -98,9 +98,10 @@ class Fixture:
             return '123;hummingbird\n'
         if text.startswith('scontrol show job'):
             return 'JobId=123 JobName=' + self.scope + ' WorkDir=' + self.remote + (
-                ' JobState=PENDING UserId=jaguir26(123) NumCPUs=1 NumTasks=1 NumNodes=1 Requeue=0'
+                ' JobState=PENDING UserId=jaguir26(123) NumCPUs=1 NumTasks=1 NumNodes=1-1 CPUs/Task=1 Requeue=0'
+                ' Reason=JobHeldUser RunTime=00:00:00 StartTime=Unknown AllocTRES=(null)'
                 ' Account=128x24 Partition=128x24 QOS=normal TimeLimit=00:20:00 MinMemoryNode=2048M'
-                ' Command=' + self.remote + '/job.sh ReqNodeList=node-13')
+                ' Command=' + self.remote + '/job.sh ReqNodeList=node-13 TresPerTask=cpu=1')
         if 'every' not in text and 'VERIFIED ' in text:
             return 'VERIFIED ' + r.digest(c.CENTRAL / self.scope / 'release/release_manifest.json')
         if text.startswith(('mkdir', 'scontrol release', 'test ')): return ''
@@ -296,7 +297,8 @@ class LifecycleTests(unittest.TestCase):
             if command.startswith('scontrol show job'):
                 count += 1
                 value = original(argv, **kw)
-                return value if count == 1 else value.replace('JobState=PENDING', 'JobState=CANCELLED')
+                return (value if count == 1 else value.replace('JobState=PENDING', 'JobState=CANCELLED')
+                        .replace('NumNodes=1-1', 'NumNodes=1'))
             if command == 'scancel 123': return ''
             if command.startswith('sacct'):
                 return '123|CANCELLED|0:15|0|0|00:00:00||None assigned\n'
@@ -330,6 +332,48 @@ class LifecycleTests(unittest.TestCase):
                        {'ReqTRES': 'cpu=1,mem=2G,node=1,gres/gpu=1'}):
             with self.subTest(fields=fields), self.assertRaises(ValueError): c._no_hidden_resources(fields)
         c._no_hidden_resources({'ReqTRES': 'cpu=1,mem=2G,node=1,billing=1', 'Gres': '(null)'})
+
+    def test_actual_slurm_single_cpu_held_range_and_cancelled_count(self):
+        # Observed on HB job873277: held NumNodes=1-1,TresPerTask=cpu=1;
+        # after cancellation NumNodes=1. This fixture retains those exact
+        # spellings while substituting the private fixture identity/resources.
+        held = self.f.runner(['dummy', 'scontrol show job -o 123'])
+        fields = c._owned_fields(held, self.f.spec, '123')
+        self.assertEqual(fields['NumNodes'], '1-1')
+        self.assertEqual(fields['TresPerTask'], 'cpu=1')
+        cancelled = held.replace('JobState=PENDING', 'JobState=CANCELLED').replace('NumNodes=1-1', 'NumNodes=1')
+        self.assertEqual(c._owned_fields(cancelled, self.f.spec, '123')['JobState'], 'CANCELLED')
+        running = cancelled.replace('JobState=CANCELLED', 'JobState=RUNNING')
+        self.assertEqual(c._owned_fields(running, self.f.spec, '123')['NumNodes'], '1')
+        with self.assertRaises(ValueError):
+            c._owned_fields(running.replace('NumNodes=1 ', 'NumNodes=1-1 '), self.f.spec, '123')
+
+    def test_per_task_cpu_compatibility_rejects_extra_or_ambiguous_resources(self):
+        c._no_hidden_resources({'TresPerTask': 'cpu=1'})
+        for value in ('cpu=2', 'cpu=0', 'cpu=01', 'cpu:1', 'cpu=1,cpu=1',
+                      'cpu=1,gres/gpu=1', 'cpu=1,mem=8G', 'gpu=1', 'unknown=1', 'cpu=', '1'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                c._no_hidden_resources({'TresPerTask': value})
+        for name in ('Gres', 'GresDetail', 'TresPerNode', 'TresPerSocket', 'TresPerJob'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                c._no_hidden_resources({'TresPerTask': 'cpu=1', name: 'cpu=1'})
+
+    def test_single_node_range_and_explicit_cpu_task_remain_exact(self):
+        text = self.f.runner(['dummy', 'scontrol show job -o 123'])
+        for value in ('1-2', '0-1', '01', '1-01', '2', ''):
+            with self.subTest(nodes=value), self.assertRaises(ValueError):
+                c._owned_fields(text.replace('NumNodes=1-1', 'NumNodes='+value), self.f.spec, '123')
+        for value in ('0', '2', '01', ''):
+            with self.subTest(cpu_task=value), self.assertRaises(ValueError):
+                c._owned_fields(text.replace('CPUs/Task=1', 'CPUs/Task='+value), self.f.spec, '123')
+        with self.assertRaises(ValueError):
+            c._owned_fields(text.replace(' CPUs/Task=1', ''), self.f.spec, '123')
+        for before, after in (('Reason=JobHeldUser', 'Reason=Resources'),
+                              ('RunTime=00:00:00', 'RunTime=00:00:01'),
+                              ('StartTime=Unknown', 'StartTime=2026-10-29T14:20:00'),
+                              ('AllocTRES=(null)', 'AllocTRES=cpu=1,mem=2G,node=1')):
+            with self.subTest(replacement=after), self.assertRaises(ValueError):
+                c._owned_fields(text.replace(before, after), self.f.spec, '123')
 
     def test_command_or_requested_node_mismatch_cannot_cross_owned_job_guard(self):
         text = self.f.runner(['dummy', 'scontrol show job -o 123'])
@@ -365,7 +409,9 @@ class LifecycleTests(unittest.TestCase):
         finally: j.close()
 
     def test_remote_exec_applies_real_private_CPU_and_wall_backstops(self):
-        output = c.bounded([sys.executable, '-I', '-B', '-c', 'print("aggregate owned command")'], wall=5, cpu=2, cap=4096)
+        # Positive acceptance proves the wrapper under a separately funded fixture cap;
+        # production2CPU availability is not the assertion of this test.
+        output = c.bounded([sys.executable, '-I', '-B', '-c', 'print("aggregate owned command")'], wall=5, cpu=4, cap=4096)
         self.assertEqual(output, 'aggregate owned command\n')
 
     def test_same_policy_nested_pins_resolve_from_accepted_prior_canonical_release(self):

@@ -368,12 +368,15 @@ class LifecycleTests(unittest.TestCase):
                 c._owned_fields(text.replace('CPUs/Task=1', 'CPUs/Task='+value), self.f.spec, '123')
         with self.assertRaises(ValueError):
             c._owned_fields(text.replace(' CPUs/Task=1', ''), self.f.spec, '123')
-        for before, after in (('Reason=JobHeldUser', 'Reason=Resources'),
-                              ('RunTime=00:00:00', 'RunTime=00:00:01'),
-                              ('StartTime=Unknown', 'StartTime=2026-10-29T14:20:00'),
+        for before, after in (('RunTime=00:00:00', 'RunTime=00:00:01'),
                               ('AllocTRES=(null)', 'AllocTRES=cpu=1,mem=2G,node=1')):
             with self.subTest(replacement=after), self.assertRaises(ValueError):
                 c._owned_fields(text.replace(before, after), self.f.spec, '123')
+        for before, after in (('Reason=JobHeldUser', 'Reason=Resources'),
+                              ('StartTime=Unknown', 'StartTime=2026-10-29T14:20:00')):
+            fields = dict(c.re.findall(r'(\S+?)=(\S*)', text.replace(before, after)))
+            self.assertFalse(c._exact_single_node(fields))
+            self.assertTrue(c._exact_single_node(fields, held_only=False))
 
     def test_command_or_requested_node_mismatch_cannot_cross_owned_job_guard(self):
         text = self.f.runner(['dummy', 'scontrol show job -o 123'])
@@ -544,6 +547,208 @@ class AuthorityMarkerTests(unittest.TestCase):
             self.assertEqual(Path(c.read.call_args_list[-1].args[0]['path']).name,'worker_authority.json')
         finally:
             for item in reversed(patches):item.stop()
+
+
+class PostvalidationProofTests(unittest.TestCase):
+    def setUp(self):
+        LifecycleTests.setUp(self)
+        self.guard_text = patch.object(c, 'supervisor_source', return_value='# private inert guardian fixture')
+        self.guard_text.start()
+    def tearDown(self):
+        self.guard_text.stop()
+        LifecycleTests.tearDown(self)
+    prepare = LifecycleTests.prepare
+    submit = LifecycleTests.submit
+    last = LifecycleTests.last
+
+    def terminal(self):
+        self.prepare(); root = c.CENTRAL / self.f.scope
+        account = root / 'accounting_0000.json'
+        r.write(account, dict(status='ACCEPTED_COMPLETE_JOB_ACCOUNTING', terminal=True,
+            complete=True, job_id='123', job_still_queued=False, canonical_primary_CPU_seconds=3,
+            canonical_primary_wall_seconds=5, rows=[], step_and_child_CPU_added_as_another_charge=False))
+        ready = root / 'attestation.json'; r.write(ready, dict(runtime={'fixture': True}))
+        j = c.Journal(self.f.scope)
+        try:
+            j.put('TERMINAL_OBSERVED', job_id='123', accounting=c.pin(account), attestation=c.pin(ready),
+                  authority={'sha256': 'a'*64}, submitted={'sha256': 'b'*64}, staged_files=[])
+        finally: j.close()
+        return root, account
+
+    def runner(self, root, account, valid=True, bad_hash=False):
+        trace = []
+        def run(argv, **kw):
+            if '--task' in argv and any(x.endswith('profile_stream.py') for x in argv):
+                task = json.loads(Path(argv[-1]).read_text()); trace.append(('transfer', task['source']))
+                if task['source'].endswith('/accepted_job_accounting.json'):
+                    self.assertTrue((root/'return_validation.json').is_file())
+                    self.assertTrue(json.loads(Path(task['source']).read_text())['all_raw_outputs_returned_and_verified'])
+                return ''
+            if '--validate-return' in argv:
+                trace.append(('validate',))
+                pair = root/'returned_raw/outputs/ACTUAL_COMPONENT_PROFILE'/self.f.scope/'profile_result.json'
+                pair.parent.mkdir(parents=True); r.write(pair, {'fixture': True})
+                manifest = root/'returned_raw_manifest.json'
+                r.write(manifest, dict(root=str(root/'returned_raw'), scope_id=self.f.scope, job_id='123',
+                    members={str(pair.relative_to(root/'returned_raw')):dict(sha256=r.digest(pair), bytes=pair.stat().st_size)}))
+                r.write(Path(argv[argv.index('--receipt')+1]), dict(
+                    status='PASS_FULL_RAW_RETURN_VALIDATION' if valid else 'REJECTED_FIXTURE',
+                    scope_id=self.f.scope, job_id='123', exact_whole_component_parity=valid,
+                    full_raw_manifest=c.pin(manifest), component_pair_result=c.pin(pair)))
+                return ''
+            text = inner_command(argv); trace.append(('metadata', text))
+            if text.startswith('test '): return ''
+            if text.startswith('du '): return '0 fixture\n'
+            if text.startswith('sha256sum '):
+                value = root/'accepted_job_accounting.json' if text.endswith('/accepted_job_accounting.json') else account
+                return ('0'*64 if bad_hash and value.name=='accepted_job_accounting.json' else r.digest(value))+' file\n'
+            raise AssertionError('unmocked fixture operation: '+repr(argv))
+        return run, trace
+
+    def test_new_accounting_is_source_bound_postvalidation_and_preserves_raw_receipt(self):
+        root, account = self.terminal(); original = account.read_bytes()
+        runner, trace = self.runner(root, account); self.assertEqual(c.collect_run(self.f.scope, runner)['state'], 'ACCEPTED')
+        self.assertEqual(account.read_bytes(), original); self.assertNotIn('source_files', json.loads(original))
+        acceptance = json.loads((root/'accepted.json').read_text()); proof = c.read(acceptance['local_whole_accounting'])
+        self.assertEqual(proof['status'], 'ACCEPTED_COMPLETE_JOB_ACCOUNTING')
+        self.assertEqual(proof['source_files'], self.f.workers); self.assertTrue(proof['all_raw_outputs_returned_and_verified'])
+        self.assertEqual(proof['original_accounting_sha256'], r.digest(account))
+        self.assertEqual(acceptance['whole_accounting']['path'], self.f.remote+'/accepted_job_accounting.json')
+        self.assertEqual(acceptance['whole_accounting']['sha256'], acceptance['local_whole_accounting']['sha256'])
+        published = next(i for i,x in enumerate(trace) if x[0]=='transfer' and x[1].endswith('/accepted_job_accounting.json'))
+        self.assertLess(trace.index(('validate',)), published)
+
+    def test_failed_raw_validation_can_reconcile_completed_job_without_acceptance(self):
+        root, account = self.terminal(); original = account.read_bytes(); runner, _ = self.runner(root, account, valid=False)
+        with self.assertRaisesRegex(ValueError, 'raw return validation'): c.collect_run(self.f.scope, runner)
+        self.assertFalse((root/'accepted_job_accounting.json').exists()); self.assertFalse((root/'accepted.json').exists())
+        result = c.reconcile_failure(self.f.scope)
+        self.assertEqual(result['state'], 'FAILED_RECONCILED'); self.assertEqual(result['charged_CPU_seconds'], 600)
+        self.assertFalse(result['raw_outputs_accepted']); self.assertFalse(result['retry_or_refund_authorized'])
+        self.assertEqual(account.read_bytes(), original)
+        with self.assertRaises(ValueError): c.collect_run(self.f.scope, runner)
+
+    def test_bad_published_proof_hash_never_accepts_or_refunds(self):
+        root, account = self.terminal(); runner, _ = self.runner(root, account, bad_hash=True)
+        with self.assertRaisesRegex(ValueError, 'postvalidation accounting changed'): c.collect_run(self.f.scope, runner)
+        self.assertFalse((root/'accepted.json').exists())
+        result = c.reconcile_failure(self.f.scope); self.assertFalse(result['raw_outputs_accepted'])
+        self.assertEqual(result['charged_CPU_seconds'], 600)
+
+    def test_completed_job_cannot_be_abandoned_before_collection(self):
+        self.terminal()
+        with self.assertRaisesRegex(ValueError, 'unaccepted collection'): c.reconcile_failure(self.f.scope)
+
+    def test_measurement_resolves_only_canonical_accepted_dynamic_proof_roles(self):
+        root, account = self.terminal(); runner, _ = self.runner(root, account)
+        c.collect_run(self.f.scope, runner)
+        accepted = json.loads((root/'accepted.json').read_text())
+        later = copy.deepcopy(self.f.spec); later['scope_id'] = 'r164-profile-'+'b'*32
+        later['remote_root'] = self.f.remote.rsplit('/', 1)[0]+'/'+later['scope_id']
+        proof = c.spec_read(later, accepted['whole_accounting'])
+        self.assertEqual(proof['source_files'], self.f.workers)
+        self.assertTrue(proof['all_raw_outputs_returned_and_verified'])
+        self.assertEqual(c.spec_read(later, accepted['component_pair_result']), {'fixture': True})
+        with self.assertRaisesRegex(ValueError, 'exact remote pin'):
+            c.spec_read(later, dict(accepted['whole_accounting'], sha256='0'*64))
+        bad = copy.deepcopy(accepted); outside = self.base/'outside_accounting.json'
+        outside.write_bytes((root/'accepted_job_accounting.json').read_bytes())
+        bad['local_whole_accounting'] = c.pin(outside)
+        with self.assertRaisesRegex(ValueError, 'path or hash'):
+            c.accepted_dependency_read(root, self.f.spec, self.last(), bad, accepted['whole_accounting'])
+
+    def test_already_terminal_owned_job_is_not_cancelled_again(self):
+        self.submit(); original = self.f.runner; calls = []
+        def runner(argv, **kw):
+            text = inner_command(argv); calls.append(text)
+            if text.startswith('scontrol show job'):
+                return original(argv, **kw).replace('JobState=PENDING','JobState=COMPLETED').replace('NumNodes=1-1','NumNodes=1')
+            if text.startswith('squeue'): return ''
+            if text.startswith('sacct'):
+                return '\n'.join('|'.join([name,'COMPLETED','0:0','5','1','00:00:03','10K','node-13']) for name in ('123','123.batch','123.0'))
+            raise AssertionError(text)
+        result = c.cancel_exact_owned_job(self.f.scope, runner)
+        self.assertEqual(result['state'],'FAILED_RECONCILED'); self.assertFalse(result['raw_outputs_accepted'])
+        self.assertFalse(any(x.startswith('scancel') for x in calls))
+
+    def test_released_but_unallocated_exact_single_node_job_can_be_cancelled(self):
+        self.submit(); original = self.f.runner; shows = 0
+        def runner(argv, **kw):
+            nonlocal shows
+            text = inner_command(argv)
+            if text.startswith('scontrol show job'):
+                shows += 1
+                value = original(argv, **kw).replace('Reason=JobHeldUser', 'Reason=Resources')
+                value = value.replace('StartTime=Unknown', 'StartTime=2099-01-01T00:00:00')
+                return value if shows == 1 else value.replace('JobState=PENDING', 'JobState=CANCELLED').replace('NumNodes=1-1', 'NumNodes=1')
+            if text == 'scancel 123' or text.startswith('squeue'): return ''
+            if text.startswith('sacct'): return '123|CANCELLED|0:15|0|0|00:00:00||None assigned\n'
+            raise AssertionError(text)
+        self.assertEqual(c.cancel_exact_owned_job(self.f.scope, runner)['state'], 'FAILED_RECONCILED')
+        self.assertFalse(c._exact_single_node({'NumNodes':'1-1','JobState':'PENDING','RunTime':'00:00:00',
+                        'Reason':'Resources','StartTime':'2099-01-01T00:00:00','AllocTRES':'(null)'}))
+
+    def test_cancel_followups_are_throttled_and_survive_live_job_retention_loss(self):
+        self.submit(); original = self.f.runner; shows = 0; reads = 0; calls = []
+        def runner(argv, **kw):
+            nonlocal shows, reads
+            text = inner_command(argv); calls.append(text)
+            if text.startswith('scontrol show job'):
+                shows += 1; self.assertLessEqual(shows,2)
+                value = original(argv, **kw)
+                return value if shows==1 else value.replace('JobState=PENDING','JobState=CANCELLED').replace('NumNodes=1-1','NumNodes=1')
+            if text=='scancel 123' or text.startswith('squeue'): return ''
+            if text.startswith('sacct'):
+                reads += 1; return '' if reads<3 else '123|CANCELLED|0:15|0|0|00:00:00||None assigned\n'
+            raise AssertionError(text)
+        first = c.cancel_exact_owned_job(self.f.scope, runner); count = len(calls)
+        self.assertEqual(first['state'],'CANCELLATION_REQUESTED_UNRECONCILED')
+        with self.assertRaisesRegex(ValueError,'throttled'): c.cancel_exact_owned_job(self.f.scope, runner)
+        self.assertEqual(len(calls),count)
+        with patch.object(c.time,'time',return_value=first['created_epoch']+301):
+            self.assertEqual(c.cancel_exact_owned_job(self.f.scope,runner)['state'],'CANCELLATION_REQUESTED_UNRECONCILED')
+        with patch.object(c.time,'time',return_value=first['created_epoch']+602):
+            result = c.cancel_exact_owned_job(self.f.scope,runner)
+        self.assertEqual(result['state'],'FAILED_RECONCILED'); self.assertEqual(result['charged_CPU_seconds'],600)
+        self.assertEqual(shows,2); self.assertEqual(calls.count('scancel 123'),1)
+
+    def test_lost_cancel_ack_uses_known_ownership_and_never_resends_cancel(self):
+        self.submit(); original = self.f.runner; calls = []
+        def runner(argv, **kw):
+            text = inner_command(argv); calls.append(text)
+            if text.startswith('scontrol show job'):
+                self.assertEqual(sum(x.startswith('scontrol show job') for x in calls), 1)
+                return original(argv, **kw)
+            if text == 'scancel 123': raise TimeoutError('private lost acknowledgement')
+            if text.startswith('squeue'): return ''
+            if text.startswith('sacct'): return '123|CANCELLED|0:15|0|0|00:00:00||None assigned\n'
+            raise AssertionError(text)
+        with self.assertRaises(TimeoutError): c.cancel_exact_owned_job(self.f.scope, runner)
+        failed = self.last(); self.assertEqual(failed['state'], 'AMBIGUOUS_SPENT')
+        with patch.object(c.time, 'time', return_value=failed['created_epoch'] + 301):
+            result = c.cancel_exact_owned_job(self.f.scope, runner)
+        self.assertEqual(result['state'], 'FAILED_RECONCILED')
+        self.assertEqual(result['charged_CPU_seconds'], 600)
+        self.assertEqual(calls.count('scancel 123'), 1)
+
+    def test_cancel_followup_count_is_finite_when_accounting_stays_pending(self):
+        self.submit(); original = self.f.runner; shows = 0
+        def runner(argv, **kw):
+            nonlocal shows
+            text = inner_command(argv)
+            if text.startswith('scontrol show job'):
+                shows += 1; self.assertLessEqual(shows, 2)
+                value = original(argv, **kw)
+                return value if shows == 1 else value.replace('JobState=PENDING', 'JobState=CANCELLED').replace('NumNodes=1-1', 'NumNodes=1')
+            if text == 'scancel 123' or text.startswith(('squeue', 'sacct')): return ''
+            raise AssertionError(text)
+        first = c.cancel_exact_owned_job(self.f.scope, runner)
+        for seconds in (301, 602):
+            with patch.object(c.time, 'time', return_value=first['created_epoch'] + seconds):
+                self.assertEqual(c.cancel_exact_owned_job(self.f.scope, runner)['state'], 'CANCELLATION_REQUESTED_UNRECONCILED')
+        with patch.object(c.time, 'time', return_value=first['created_epoch'] + 903):
+            with self.assertRaisesRegex(ValueError, 'follow-ups exhausted'):
+                c.cancel_exact_owned_job(self.f.scope, runner)
 
 
 class AccountingTests(unittest.TestCase):

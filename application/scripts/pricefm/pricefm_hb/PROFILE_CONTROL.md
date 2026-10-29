@@ -283,4 +283,52 @@ retained separately. Tests make no SSH/Slurm calls and import no numerical
 library. Actual qualification, collection and source publication remain
 separate evidence; tests never fabricate a numerical pass.
 
-Positive owned-command, guardian-readability and backstop fixtures reserve4CPU each and still require success. They do not prove production2CPU metadata availability. An observed first-snapshot conservative birth-lifetime upper bound can reject a2CPU command before its0.73CPU active margin is established; future qualification must review complete controller headroom without weakening the guard. The earlier unwitnessed125 failure remains unexplained.
+Positive owned-command, guardian-readability and backstop fixtures reserve4CPU each and still require success. They do not prove generic metadata availability. Before the R165 bootstrap anchor, an observed first-snapshot conservative birth-lifetime upper bound could reject a2CPU command before its0.73CPU active margin was established. The earlier unwitnessed125 failure remains unexplained. The new source separately proves a pre-fork actual-CPU anchor while retaining complete process-birth wall limits; unknown time after the anchor remains charged conservatively and can still stop the command.
+
+## R165 reviewed lifecycle and accounting changes
+
+The original scheduler accounting is immutable. After complete raw-return
+validation, collection creates a separate `accepted_job_accounting.json` with
+the scientific worker source map, verified-return flag, original accounting
+hash, validation hash, raw-manifest hash and component-result hash. It checks
+remote absence, publishes this proof create-only, and verifies its remote hash
+before creating acceptance. Qualification points to this post-validation proof;
+the measurement gate keeps its original strict requirements. No flag is added
+retroactively to raw Slurm accounting.
+
+The local prior-qualification resolver admits only the exact accepted accounting
+and component-result JSON roles. Canonical job/source identity, original
+accounting, validation and raw-manifest hashes remain bound. It does not turn
+the returned directory into a general input allowlist. Workers read the original
+retained remote pins; later-phase qualification bytes and common policy bytes
+remain unchanged.
+
+At three ordinary status polls, normal success uses 29 supervised operations:
+20 metadata, two bulk transfers, four proof publications, one validation and
+two READY operations. With metadata4, proof5, bulk40, validation40, READY5 and
+local administrative reserve5, minimum combined core funding is425 CPU seconds
+and command-wall funding is1180 seconds. The separately reviewed R165 caller
+uses450 core plus50 caller =500 CPU seconds per phase,1000 for the pair. These
+are prospective new contracts; no old400-per-phase grant is reopened.
+
+Exact-owned cancellation also supports an already-terminal job without sending
+`scancel`. Known cancellation/accounting lag or a lost cancellation acknowledgement
+can use at most two read-only queue/accounting follow-ups, at least300 seconds
+apart, based on the retained owned-job proof. They never resubmit, release,
+repeat cancellation or accept output. The admission window reserves600 seconds
+for these waits. At three status polls, the maximum active-cancellation prefix
+plus both follow-ups fits29 operations and317 core CPU seconds, below normal
+success;32 operation slots remain the hard maximum.
+
+Cancellation can also verify an exact one-node pending request after its hold
+was released: queue reason or estimated start-time changes do not make that
+same owned request unsafe to cancel. The literal range must still be1-1,
+runtime zero, allocation TRES absent and node assignment empty; all ownership,
+CPU/task, memory, command and requested-node checks remain. Held startup retains
+its stricter JobHeldUser/Unknown-start conditions for the pending range.
+
+A rejected or interrupted collection may reconcile a retained exact terminal
+observation even if Slurm completed successfully. It remains a failed scientific
+attempt: no acceptance, no refunded reservation, no restarted claim and no
+measurement admission. Scientific sources, model contracts, finite certificates,
+iteration limits and the fixed primary operator are unchanged.

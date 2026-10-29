@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import errno
+import hashlib
 import json
 import math
 import mmap
@@ -26,6 +27,7 @@ import tempfile
 import time
 
 GUARD_SHARED = None
+BOOTSTRAP_ANCHOR_TAG = 'OWNED_PRE_FIRST_FORK_CPU_MONOTONIC_V1'
 
 
 class OwnedStopError(RuntimeError):
@@ -151,10 +153,83 @@ def guardian_self_upper(core,ticks):
     return item['own_ticks']/ticks+rounding,rounding
 
 
-def one_core_stop_upper(last_cpu,last_anchor,birth_ticks,ticks,now):
+def bootstrap_anchor_digest(values):
+    return hashlib.sha256(struct.pack('QQQQQdd', *values)).hexdigest()
+
+
+def bootstrap_anchor_fields(anchor, core, ticks, now):
+    """Validate one immutable, typed pre-fork sample, never a mutable pair."""
+    require(type(anchor) is tuple and len(anchor) == 9 and anchor[0] == BOOTSTRAP_ANCHOR_TAG,
+            'immutable bootstrap anchor tuple required')
+    require(all(type(value) is int and value >= 0 for value in anchor[1:6])
+            and anchor[1] > 0 and anchor[2] > 0 and anchor[5] > 0,
+            'bootstrap anchor identity fields invalid')
+    require(anchor[4] == core and anchor[5] == ticks,
+            'bootstrap anchor CPU or clock identity changed')
+    require(type(anchor[6]) is float and type(anchor[7]) is float
+            and math.isfinite(anchor[6]) and math.isfinite(anchor[7])
+            and 0 <= anchor[6] <= now and anchor[7] >= 2 / ticks,
+            'bootstrap anchor CPU or monotonic ordering invalid')
+    require(type(anchor[8]) is str and anchor[8] == bootstrap_anchor_digest(anchor[1:8]),
+            'bootstrap anchor immutable sample fingerprint changed')
+    return anchor
+
+
+def pre_fork_cpu_anchor(core, ticks):
+    """Include every startup CPU tick, before the first possible child exists.
+
+    The timestamp precedes both counter reads, so their interval is counted
+    twice conservatively. Later owned work shares this one CPU. A tuple is
+    inherited by fork/COW; no writer publishes another CPU/time sample.
+    """
+    pid = os.getpid(); before = process_record(pid)
+    def no_earlier_children_or_threads():
+        usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+        require(os.sched_getaffinity(0) == {core}
+                and len(list((Path('/proc') / str(pid) / 'task').iterdir())) == 1
+                and not children_of(pid) and usage.ru_utime == usage.ru_stime == 0,
+                'bootstrap anchor requires one CPU/thread and no earlier child CPU')
+    no_earlier_children_or_threads()
+    require(before['uid'] == os.getuid() and before['waited_ticks'] == 0,
+            'bootstrap anchor initial identity or waited CPU invalid')
+    anchor_time = time.monotonic()  # BEFORE either SELF counter read.
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    sample = process_record(pid)
+    require((sample['pid'], sample['start_ticks'], sample['uid'])
+            == (before['pid'], before['start_ticks'], before['uid'])
+            and sample['waited_ticks'] == 0, 'bootstrap anchor identity changed during sample')
+    no_earlier_children_or_threads()
+    upper = max(usage.ru_utime + usage.ru_stime, sample['own_ticks'] / ticks) + 2 / ticks
+    values = (pid, sample['start_ticks'], sample['uid'], core, ticks, anchor_time, upper)
+    anchor = (BOOTSTRAP_ANCHOR_TAG, *values, bootstrap_anchor_digest(values))
+    return bootstrap_anchor_fields(anchor, core, ticks, time.monotonic())
+
+
+def validate_bootstrap_anchor(anchor, core, ticks, now):
+    bootstrap_anchor_fields(anchor, core, ticks, now)
+    require(GUARD_SHARED is not None, 'bootstrap anchor guardian context missing')
+    pid = struct.unpack('Q', GUARD_SHARED[40:48])[0]
+    birth = struct.unpack('Q', GUARD_SHARED[72:80])[0]
+    item = process_record(pid)
+    require(anchor[1:4] == (pid, birth, os.getuid()) and pid == os.getppid()
+            and (item['pid'], item['start_ticks'], item['uid']) == anchor[1:4],
+            'bootstrap anchor guardian identity changed')
+    require(os.sched_getaffinity(pid) == {core}
+            and len(list((Path('/proc') / str(pid) / 'task').iterdir())) == 1,
+            'bootstrap anchor guardian affinity or thread count changed')
+    return anchor
+
+
+def one_core_stop_upper(last_cpu,last_anchor,birth_ticks,ticks,now,bootstrap_anchor=None,core=None):
     if last_cpu is None:
+        if bootstrap_anchor is not None:
+            validate_bootstrap_anchor(bootstrap_anchor, core, ticks, now)
+            fresh_now = time.monotonic()  # Include validation/counter-read work.
+            require(fresh_now >= now, 'bootstrap anchor monotonic clock changed')
+            return bootstrap_anchor[7] + fresh_now - bootstrap_anchor[6]
         # Birth tick is floored. This bounds startup before the first complete
-        # snapshot, including the one-thread guardian before fork/pinning.
+        # snapshot for legacy direct utility calls. Actual guarded monitors
+        # require the immutable pre-first-fork sample before command creation.
         return time.clock_gettime(time.CLOCK_BOOTTIME)-birth_ticks/ticks
     require(last_anchor is not None and now>=last_anchor,'proved CPU anchor clock changed')
     return last_cpu+now-last_anchor
@@ -183,7 +258,8 @@ def await_owned_stop(records,*,stop_start,inner_deadline,active_ceiling,cpu_uppe
         time.sleep(min(.001,max(0,stop_end-now)))
 
 
-def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
+def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False,
+        bootstrap_anchor=None, guardian_deadline=None):
     require(sys.platform == 'linux' and platform.machine() == 'x86_64', 'Linux x86_64 kernel guards required')
     require(type(cpu_seconds) is int and 2 <= cpu_seconds <= 300
             and type(wall_seconds) is int and 0 < wall_seconds <= 1800
@@ -201,6 +277,12 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
     own_start = process_record(os.getpid())['start_ticks'] / ticks
     lifetime = time.clock_gettime(time.CLOCK_BOOTTIME) - own_start
     deadline = min(start + wall_seconds, start + max(0, wall_seconds - lifetime))
+    if GUARD_SHARED is not None:
+        validate_bootstrap_anchor(bootstrap_anchor, core, ticks, time.monotonic())
+        require(type(guardian_deadline) is float and math.isfinite(guardian_deadline),
+                'original guardian wall deadline required')
+        deadline = min(deadline, guardian_deadline - 3.)
+        require(time.monotonic() < deadline, 'original inner wall exhausted before command spawn')
     # Leave at least one full CPU-second for conservative whole-tick SELF
     # backstops and publication/drain. This is a stop reserve, never a refund.
     active_ceiling = cpu_seconds - 1.25 - 2 / ticks
@@ -261,11 +343,15 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
             if GUARD_SHARED is not None:GUARD_SHARED[64:72]=struct.pack('d',now)
         _,waited=await_owned_stop(lambda:session_records(sid,leader['start_ticks'],uid,core),
             stop_start=stop_start,inner_deadline=deadline,active_ceiling=active_ceiling,
-            cpu_upper=lambda now:one_core_stop_upper(last_snapshot_cpu,last_snapshot_anchor,birth_ticks,ticks,now),
+            cpu_upper=lambda now:one_core_stop_upper(last_snapshot_cpu,last_snapshot_anchor,birth_ticks,ticks,now,
+                bootstrap_anchor=bootstrap_anchor,core=core),
             heartbeat=heartbeat,killed=lambda:killed,context=dict(monitor_affinity=[core],session_id=sid,
                 leader_start_ticks=leader['start_ticks'],uid=uid,proved_prior_snapshots=proved_snapshots,
                 last_proved_CPU_upper=last_snapshot_cpu,last_proved_monotonic_anchor=last_snapshot_anchor,
-                initial_guardian_or_monitor_birth_ticks=birth_ticks,monitor_lifetime_wall_at_entry=lifetime))
+                initial_guardian_or_monitor_birth_ticks=birth_ticks,monitor_lifetime_wall_at_entry=lifetime,
+                bootstrap_anchor_CPU_upper=None if bootstrap_anchor is None else bootstrap_anchor[7],
+                bootstrap_anchor_monotonic=None if bootstrap_anchor is None else bootstrap_anchor[6],
+                initial_bound_source='PRE_FIRST_FORK_CPU_COUNTER_PLUS_ONE_CORE_WALL' if bootstrap_anchor is not None else 'LEGACY_BIRTH_WALL'))
         max_stop_wait=max(max_stop_wait,waited)
         accounting_anchor=time.monotonic()  # BEFORE every counter/accounting read.
         reap()
@@ -340,6 +426,12 @@ def run(argv, *, cpu_seconds, wall_seconds, output_cap, passthrough=False):
             maximum_live_tick_rounding_seconds=max_rounding,
             maximum_stop_wait_seconds=max_stop_wait,proved_stopped_snapshots=proved_snapshots,
             guardian_CPU_snapshot_source='OWNED_PROC_SELF_TICKS_PLUS_TWO_ROUNDING_TICKS',
+            initial_bound_source='PRE_FIRST_FORK_CPU_COUNTER_PLUS_ONE_CORE_WALL' if bootstrap_anchor is not None else 'LEGACY_BIRTH_WALL',
+            bootstrap_anchor=None if bootstrap_anchor is None else dict(
+                tag=bootstrap_anchor[0],guardian_pid=bootstrap_anchor[1],guardian_birth_ticks=bootstrap_anchor[2],
+                uid=bootstrap_anchor[3],affinity=[bootstrap_anchor[4]],clock_ticks=bootstrap_anchor[5],
+                monotonic_before_counter=bootstrap_anchor[6],startup_CPU_upper=bootstrap_anchor[7],
+                sample_fingerprint=bootstrap_anchor[8],counter_rounding_seconds=2/ticks),
             session_id=sid, leader_start_ticks=leader['start_ticks'], uid=uid, affinity=[core],
             reaped=reaped, all_owned_descendants_reaped=True, kernel_escape_filter=True,
             orphan_subreaper=True, counters_are_attribution_not_another_charge=True)
@@ -370,21 +462,32 @@ def guarded_run(command, args):
     GUARD_SHARED[40:48] = struct.pack('Q', os.getpid())
     GUARD_SHARED[72:80] = struct.pack('Q',process_record(os.getpid())['start_ticks'])
     GUARD_SHARED[64:72] = struct.pack('d', time.monotonic())
-    os.sched_setaffinity(0, {min(os.sched_getaffinity(0))})
+    core = min(os.sched_getaffinity(0)); os.sched_setaffinity(0, {core})
     old = resource.getrlimit(resource.RLIMIT_CPU)
     ceiling = args.cpu if old[1] == resource.RLIM_INFINITY else min(args.cpu, old[1])
     resource.setrlimit(resource.RLIMIT_CPU, (ceiling, ceiling))
     own = resource.getrusage(resource.RUSAGE_SELF)
     GUARD_SHARED[32:40] = struct.pack('d', own.ru_utime + own.ru_stime)
-    start = time.monotonic(); deadline = start + args.wall
+    start = time.monotonic(); ticks = os.sysconf('SC_CLK_TCK')
+    startup_lifetime = time.clock_gettime(time.CLOCK_BOOTTIME) - struct.unpack('Q', GUARD_SHARED[72:80])[0] / ticks
+    deadline = start + max(0., args.wall - startup_lifetime)
     pid = None; monitor_usage = None; status = None; forced = False
     with tempfile.TemporaryFile(mode='w+b') as receipt:
+        bootstrap_anchor = pre_fork_cpu_anchor(core, ticks)
+        require(bootstrap_anchor[7] < args.cpu - 1.25 - 2/ticks,
+                'startup CPU exhausts original active command allowance')
+        require(time.monotonic() < deadline - 3.,
+                'startup wall leaves no original three-second drain reserve')
+        # No monitor exists before this first fork. Start its progress clock
+        # now; the original absolute wall deadline and CPU anchor do not move.
+        GUARD_SHARED[64:72] = struct.pack('d', time.monotonic())
         pid = os.fork()
         if pid == 0:
             GUARD_SHARED[48:56] = struct.pack('Q', os.getpid())
             try:
                 value = run(command, cpu_seconds=args.cpu, wall_seconds=args.wall - 3,
-                            output_cap=args.output_cap, passthrough=args.passthrough)
+                            output_cap=args.output_cap, passthrough=args.passthrough,
+                            bootstrap_anchor=bootstrap_anchor, guardian_deadline=deadline)
                 receipt.write(json.dumps(value, sort_keys=True).encode()); receipt.flush()
                 os._exit(value['returncode'])
             except BaseException as exc:
@@ -462,7 +565,10 @@ def guarded_run(command, args):
         value.update(aggregate_CPU_seconds=aggregate, guardian_included_in_CPU=True,
                      independent_guardian=True, guardian_forced_monitor_stop=forced,
                      guardian_nondumpable=True,
-                     complete_lifecycle_wall_seconds=time.monotonic() - start)
+                     guarded_run_wall_seconds=time.monotonic() - start,
+                     guardian_startup_lifetime_seconds=startup_lifetime,
+                     complete_lifecycle_wall_seconds=time.clock_gettime(time.CLOCK_BOOTTIME)
+                        - struct.unpack('Q', GUARD_SHARED[72:80])[0]/ticks)
         if not args.passthrough: print(json.dumps(value, sort_keys=True))
         return value['returncode']
 

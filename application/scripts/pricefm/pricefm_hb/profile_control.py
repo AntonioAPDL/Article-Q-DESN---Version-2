@@ -31,6 +31,8 @@ from .environment import require_compute, THREAD_ENV, REFERENCE_NUMERICAL_ENV
 SCHEMA = 'r164_profile_controller_spec_v1'
 CENTRAL = Path('/data/jaguir26/local/src/Article-Q-DESN/application/data_local/pricefm/hb_control_registry/profile_r164')
 FINAL = {'ACCEPTED', 'FAILED_RECONCILED'}
+CANCEL_ACCOUNTING_MAX_FOLLOWUPS = 2
+CANCEL_ACCOUNTING_INTERVAL_SECONDS = 300
 PHASE_LIMITS = {
     'QUALIFICATION_PAIR': dict(aggregate_cpu_seconds=600, wall_seconds=1200,
         wrapper_cpu_seconds=100, ready_reserve_seconds=270, exit_reserve_seconds=30),
@@ -159,6 +161,9 @@ def spec_read(spec, value, remote=False):
                 and accepted.get('scope_id') == previous_root.name
                 and accepted.get('source_files') == spec['worker_sources'],
                 'prior metadata dependency requires exact accepted qualification')
+        dynamic = accepted_dependency_read(previous_root, previous, records[-1], accepted, value)
+        if dynamic is not None:
+            return dynamic
         prepared = [item for item in records if item['state'] == 'PREPARED']
         require(len(prepared) == 1 and prepared[0]['release_manifest']['path'] == str(previous_root / 'release/release_manifest.json'),
                 'canonical previous release-manifest proof required')
@@ -166,6 +171,78 @@ def spec_read(spec, value, remote=False):
         require(manifest['files'].get(name, {}).get('sha256') == value['sha256'], 'prior immutable metadata pin differs')
         return read(dict(path=str(previous_root / 'release' / safe_relative(name)), sha256=value['sha256']))
     return read(value)
+
+
+def accepted_dependency_read(root, previous, accepted_record, accepted, value):
+    """Resolve only two post-validation JSON roles from a canonical accepted D.
+
+    These proofs are created after the initial release manifest. They cannot
+    expand that manifest or authorize arbitrary reads from returned payloads.
+    Hummingbird workers continue to read the original immutable remote pins.
+    """
+    roles = [('whole_accounting', 'local_whole_accounting'),
+             ('component_pair_result', 'local_component_pair_result')]
+    matched = [role for role in roles if accepted.get(role[0], {}).get('path') == value['path']]
+    if not matched:
+        return None
+    require(len(matched) == 1 and accepted[matched[0][0]] == value,
+            'prior accepted dependency exact remote pin differs')
+    require(accepted.get('whole_accounting_accepted') is True
+            and accepted.get('all_canonical_array_bytes_equal') is True,
+            'prior accepted dependency lacks complete qualification')
+    proof_path = root / 'accepted_job_accounting.json'
+    require(accepted.get('local_whole_accounting') == pin(proof_path)
+            and accepted.get('whole_accounting') == dict(path=previous['remote_root'] + '/accepted_job_accounting.json',
+                                                        sha256=r.digest(proof_path)),
+            'prior postvalidation accounting path or hash differs')
+    proof = read(accepted['local_whole_accounting'])
+    validation_path = root / 'return_validation.json'
+    validation = read(pin(validation_path))
+    manifest_path = root / 'returned_raw_manifest.json'
+    require(accepted.get('full_raw_manifest') == pin(manifest_path)
+            and validation.get('status') == 'PASS_FULL_RAW_RETURN_VALIDATION'
+            and validation.get('scope_id') == root.name
+            and validation.get('job_id') == accepted_record['job_id']
+            and validation.get('full_raw_manifest') == accepted['full_raw_manifest'],
+            'prior accepted dependency requires its canonical full raw validation')
+    original = accepted.get('original_slurm_accounting', {})
+    require(Path(original.get('path', '')).parent == root
+            and re.fullmatch(r'accounting_[0-9]{4}\.json', Path(original.get('path', '')).name),
+            'prior original accounting role is not canonical')
+    raw_accounting = read(original)
+    require(proof.get('status') == 'ACCEPTED_COMPLETE_JOB_ACCOUNTING'
+            and proof.get('job_id') == accepted_record['job_id'] == raw_accounting.get('job_id')
+            and proof.get('scope_id') == root.name
+            and proof.get('source_files') == previous['worker_sources']
+            and proof.get('all_raw_outputs_returned_and_verified') is True
+            and proof.get('request_sha256') == previous['request']['sha256']
+            and raw_accounting.get('complete') is True and raw_accounting.get('terminal') is True
+            and raw_accounting.get('job_still_queued') is False
+            and all(proof.get(key) == raw_accounting.get(key) for key in
+                    ('status', 'complete', 'terminal', 'job_still_queued', 'rows',
+                     'canonical_primary_CPU_seconds', 'canonical_primary_wall_seconds',
+                     'step_and_child_CPU_added_as_another_charge'))
+            and proof.get('original_accounting_sha256') == original['sha256']
+            and proof.get('raw_validation_sha256') == r.digest(validation_path)
+            and proof.get('full_raw_manifest_sha256') == accepted['full_raw_manifest']['sha256']
+            and proof.get('component_pair_result_sha256') == accepted['component_pair_result']['sha256'],
+            'prior postvalidation accounting/qualification binding differs')
+    remote_key, local_key = matched[0]
+    if remote_key == 'whole_accounting':
+        return proof
+    expected = root / 'returned_raw' / Path(previous['output_root']).relative_to(previous['remote_root']) / 'profile_result.json'
+    require(accepted.get(local_key) == pin(expected)
+            and accepted[remote_key] == dict(path=previous['output_root'] + '/profile_result.json', sha256=r.digest(expected))
+            and validation.get('component_pair_result') == accepted[local_key],
+            'prior component result role/path differs')
+    manifest = read(accepted['full_raw_manifest'])
+    relative = str(expected.relative_to(root / 'returned_raw'))
+    require(manifest.get('root') == str(root / 'returned_raw')
+            and manifest.get('scope_id') == root.name
+            and manifest.get('job_id') == accepted_record['job_id']
+            and manifest.get('members', {}).get(relative, {}).get('sha256') == value['sha256'],
+            'prior component result is absent from the canonical raw manifest')
+    return read(accepted[local_key])
 
 
 def runtime_provenance(spec, remote=False):
@@ -268,18 +345,24 @@ def validate_spec(spec, *, now=None, remote=False, admit_new_work=True):
         and controls['aggregate_reserved_CPU_seconds'] <= 1000
         and controls['aggregate_reserved_wall_seconds'] <= 14400
         and controls['max_status_polls'] <= 4, 'finite separately funded controller/transport limits required')
-    n_metadata = 12 + 2 * controls['max_status_polls']
-    required_CPU = (2 * n_metadata * controls['operation_CPU_seconds'] + 6 * controls['proof_CPU_seconds']
+    # Normal success: 20 metadata calls at three polls, two bulk transfers,
+    # four proof publications, one validation and two READY operations.
+    # Post-validation accounting is a separate immutable proof; the original
+    # scheduler receipt must never acquire unverified source/raw-output flags.
+    n_metadata = 14 + 2 * controls['max_status_polls']
+    required_CPU = (2 * n_metadata * controls['operation_CPU_seconds'] + 8 * controls['proof_CPU_seconds']
         + 4 * controls['transport_CPU_seconds'] + controls['validation_CPU_seconds']
         + controls['local_administrative_CPU_reserve_seconds'] + 4 * controls['ready_CPU_seconds'])
-    required_wall = (n_metadata * controls['operation_wall_seconds'] + 3 * controls['proof_wall_seconds']
+    required_wall = (n_metadata * controls['operation_wall_seconds'] + 4 * controls['proof_wall_seconds']
         + 2 * controls['transport_wall_seconds'] + controls['validation_wall_seconds'] + 2 * controls['ready_wall_seconds'])
-    require(controls['max_operations'] >= n_metadata + 8
+    require(controls['max_operations'] >= n_metadata + 9
             and controls['aggregate_reserved_CPU_seconds'] >= required_CPU
             and controls['aggregate_reserved_wall_seconds'] >= required_wall,
             'complete bounded controller lifecycle/poll/transport/validation calendar must be funded before launch')
     if admit_new_work:
-        require(now + whole['wall_seconds'] + required_wall + 300 * controls['max_status_polls'] < spec['controller_expires_epoch'],
+        require(now + whole['wall_seconds'] + required_wall + 300 * controls['max_status_polls']
+                + CANCEL_ACCOUNTING_MAX_FOLLOWUPS * CANCEL_ACCOUNTING_INTERVAL_SECONDS
+                < spec['controller_expires_epoch'],
                 'whole-job and complete controller/poll calendar do not fit declared finite administrative window')
     review = spec_read(spec, spec['prelaunch_review'], remote)
     require(review.get('status') == 'PASS_REVIEWED_NEW_PROFILE_LIFECYCLE'
@@ -603,7 +686,7 @@ def _owned_fields(text, spec, job_id):
             and fields.get('WorkDir') == spec['remote_root'] and fields.get('UserId', '').split('(')[0] == 'jaguir26'
             and fields.get('Command') == spec['remote_root'] + '/job.sh' and fields.get('ReqNodeList') == spec['node']
             and fields.get('NumCPUs') == fields.get('NumTasks') == fields.get('CPUs/Task') == '1'
-            and _exact_single_node(fields)
+            and _exact_single_node(fields, held_only=False)
             and fields.get('Account') == fields.get('Partition') == '128x24' and fields.get('QOS') == 'normal'
             and fields.get('Requeue') == '0'
             and a._wall_seconds(fields.get('TimeLimit', '')) == spec['allocation_limits']['wall_seconds']
@@ -612,14 +695,16 @@ def _owned_fields(text, spec, job_id):
     return fields
 
 
-def _exact_single_node(fields):
+def _exact_single_node(fields, *, held_only=True):
     # Slurm reports the exact requested one-node range while a job is held;
     # allocated/running jobs must report the concrete single-node count.
     return (fields.get('NumNodes') == '1'
             or (fields.get('NumNodes') == '1-1' and fields.get('JobState') == 'PENDING'
-                and fields.get('Reason') == 'JobHeldUser' and fields.get('RunTime') == '00:00:00'
-                and fields.get('StartTime') == 'Unknown'
-                and fields.get('AllocTRES', '') in ('', '(null)', 'N/A', 'None')))
+                and fields.get('RunTime') == '00:00:00'
+                and fields.get('AllocTRES', '') in ('', '(null)', 'N/A', 'None')
+                and fields.get('NodeList', '') in ('', '(null)', 'N/A', 'None')
+                and (not held_only or (fields.get('Reason') == 'JobHeldUser'
+                                       and fields.get('StartTime') == 'Unknown'))))
 
 
 def _no_hidden_resources(fields):
@@ -639,14 +724,7 @@ def _no_hidden_resources(fields):
                 'unexpected whole-job TRES request rejected')
 
 
-def _cancel_owned(j, spec, site, job_id, runner):
-    before = remote(j, spec, site, 'verify_exact_owned_cancel_target', ['scontrol', 'show', 'job', '-o', job_id], runner)
-    fields = _owned_fields(before, spec, job_id)
-    require(fields.get('JobState') in ('PENDING', 'RUNNING', 'CONFIGURING', 'COMPLETING'), 'owned active new job required for cancellation')
-    j.put('OWNED_CANCEL_INTENT', job_id=job_id, before=before, full_reservation_retained=True)
-    remote(j, spec, site, 'cancel_exact_owned_profile_job', ['scancel', job_id], runner)
-    after = remote(j, spec, site, 'verify_exact_owned_job_after_cancel', ['scontrol', 'show', 'job', '-o', job_id], runner)
-    _owned_fields(after, spec, job_id)
+def _cancel_accounting(j, spec, site, job_id, before, after, runner):
     queue = remote(j, spec, site, 'own_queue_after_cancel', ['squeue', '-h', '-u', site['user'], '-o', '%i|%T'], runner)
     text = remote(j, spec, site, 'terminal_accounting_after_cancel', ['sacct', '-nP', '--units=K', '-j', job_id,
         '--format=JobID,State%30,ExitCode,ElapsedRaw,AllocCPUS,TotalCPU,MaxRSS,NodeList'], runner)
@@ -661,9 +739,53 @@ def _cancel_owned(j, spec, site, job_id, runner):
     if parsed['terminal'] and not queued:
         return j.put('FAILED_RECONCILED', job_id=job_id, before=before, after=after, sacct=text,
             charged_CPU_seconds=max(spec['allocation_limits']['aggregate_cpu_seconds'], parsed['canonical_primary_CPU_seconds'] or 0),
-            cancellation_terminal_proved=True, retry_or_refund_authorized=False)
+            cancellation_terminal_proved=True, raw_outputs_accepted=False, retry_or_refund_authorized=False)
     return j.put('CANCELLATION_REQUESTED_UNRECONCILED', job_id=job_id, before=before, after=after,
                  sacct=text, reservation_retained=True, blocks_new_profile=True)
+
+
+def _cancel_owned(j, spec, site, job_id, runner):
+    records = j.records()
+    unresolved = [item for item in records if item['state'] == 'CANCELLATION_REQUESTED_UNRECONCILED'
+                  and item.get('job_id') == job_id]
+    proofs = [item for item in records if item['state'] in
+              ('OWNED_CANCEL_INTENT', 'OWNED_TERMINAL_RECONCILIATION_INTENT')
+              and item.get('job_id') == job_id]
+    cancellation_attempts = [item for item in records if item['state'] == 'OPERATION_INTENT'
+                            and item.get('operation') == 'cancel_exact_owned_profile_job']
+    if unresolved or (proofs and cancellation_attempts):
+        # Ownership was already proved before the original cancellation. A
+        # terminal job can disappear from scontrol while sacct is catching up.
+        # These bounded follow-ups only observe the exact old job; they never
+        # submit, release, cancel again, accept output or reset its reservation.
+        require(bool(proofs), 'prior exact owned cancellation proof required')
+        _owned_fields(proofs[-1]['before'], spec, job_id)
+        checks = [item for item in records if item['state'] == 'CANCEL_ACCOUNTING_FOLLOWUP_INTENT']
+        require(len(checks) < CANCEL_ACCOUNTING_MAX_FOLLOWUPS, 'finite cancellation accounting follow-ups exhausted')
+        previous = (checks[-1]['checked_epoch'] if checks else unresolved[-1]['created_epoch']
+                    if unresolved else cancellation_attempts[-1]['created_epoch'])
+        now = time.time()
+        require(now - previous >= CANCEL_ACCOUNTING_INTERVAL_SECONDS, 'cancellation accounting follow-ups throttled at least300seconds')
+        j.put('CANCEL_ACCOUNTING_FOLLOWUP_INTENT', job_id=job_id, checked_epoch=now,
+              prior_ownership_record_sha256=a.identity(proofs[-1]))
+        after = (unresolved[-1]['after'] if unresolved else
+                 'POST_CANCEL_SCONTROL_UNOBSERVED; use retained ownership and terminal accounting')
+        return _cancel_accounting(j, spec, site, job_id, proofs[-1]['before'], after, runner)
+    before = remote(j, spec, site, 'verify_exact_owned_cancel_target', ['scontrol', 'show', 'job', '-o', job_id], runner)
+    fields = _owned_fields(before, spec, job_id)
+    if fields.get('JobState') in ('PENDING', 'RUNNING', 'CONFIGURING', 'COMPLETING'):
+        j.put('OWNED_CANCEL_INTENT', job_id=job_id, before=before, full_reservation_retained=True)
+        remote(j, spec, site, 'cancel_exact_owned_profile_job', ['scancel', job_id], runner)
+        after = remote(j, spec, site, 'verify_exact_owned_job_after_cancel', ['scontrol', 'show', 'job', '-o', job_id], runner)
+        _owned_fields(after, spec, job_id)
+    else:
+        require(fields.get('JobState') in ('COMPLETED', 'CANCELLED', 'FAILED', 'TIMEOUT',
+                'OUT_OF_MEMORY', 'NODE_FAIL', 'PREEMPTED', 'BOOT_FAIL', 'DEADLINE'),
+                'exact owned active or terminal job required for failure reconciliation')
+        j.put('OWNED_TERMINAL_RECONCILIATION_INTENT', job_id=job_id, before=before,
+              no_scancel_for_terminal_job=True, full_reservation_retained=True)
+        after = before
+    return _cancel_accounting(j, spec, site, job_id, before, after, runner)
 
 
 def cancel_exact_owned_job(scope_id, runner=bounded):
@@ -846,14 +968,25 @@ def observe_run(scope_id, runner=bounded, *, now=None):
 def reconcile_failure(scope_id):
     j = Journal(scope_id)
     try:
-        claim = state(j, 'TERMINAL_OBSERVED'); spec = scope_spec(j, False)
+        records = j.records()
+        require(records and records[-1]['state'] not in FINAL, 'unresolved terminal attempt required')
+        terminal = [item for item in records if item['state'] == 'TERMINAL_OBSERVED']
+        require(bool(terminal), 'retained canonical terminal observation required')
+        claim = terminal[-1]; spec = scope_spec(j, False)
         receipt = read(claim['accounting'])
-        require(receipt.get('terminal') is True and receipt.get('complete') is False
-                and not receipt.get('job_still_queued'), 'proved own terminal unsuccessful job required for failure reconciliation')
+        require(receipt.get('terminal') is True and receipt.get('job_id') == claim['job_id']
+                and receipt.get('job_still_queued') is False, 'proved own terminal job required for failure reconciliation')
+        if receipt.get('complete') is True:
+            # Slurm success is not raw-return acceptance. An interrupted or
+            # rejected collection may be abandoned after the known terminal
+            # observation, without cancelling a completed job or certifying it.
+            index = records.index(claim)
+            require(any(item['state'] == 'COLLECTION_INTENT' and item.get('job_id') == claim['job_id']
+                        for item in records[index + 1:]), 'unaccepted collection required to abandon a completed job')
         return j.put('FAILED_RECONCILED', job_id=claim['job_id'], accounting=claim['accounting'],
             charged_CPU_seconds=max(spec['allocation_limits']['aggregate_cpu_seconds'],
                                     receipt.get('canonical_primary_CPU_seconds') or 0),
-            old_failed_claim_retained=True, retry_or_refund_authorized=False)
+            old_failed_claim_retained=True, raw_outputs_accepted=False, retry_or_refund_authorized=False)
     finally:
         j.close()
 
@@ -951,7 +1084,11 @@ def collect_run(scope_id, runner=bounded):
     try:
         claim = state(j, 'TERMINAL_OBSERVED'); spec = scope_spec(j, False); site = identify_site(spec)
         accounting = read(claim['accounting'])
-        require(accounting.get('complete') is True and not accounting.get('job_still_queued'), 'complete terminal accounting required before collection')
+        require(accounting.get('complete') is True and accounting.get('terminal') is True
+                and accounting.get('job_id') == claim['job_id']
+                and accounting.get('status') == 'ACCEPTED_COMPLETE_JOB_ACCOUNTING'
+                and accounting.get('job_still_queued') is False,
+                'complete exact terminal accounting required before collection')
         incoming = j.root / 'returned_raw'; require(not incoming.exists(), 'create-only raw return; no overwrite')
         incoming.mkdir()
         j.put('COLLECTION_INTENT', job_id=claim['job_id'], authority=claim['authority'], accounting=claim['accounting'])
@@ -976,16 +1113,39 @@ def collect_run(scope_id, runner=bounded):
             '--claim', str(claim_path), '--receipt', str(validation)], runner, validation=True)
         verified = read(pin(validation))
         require(verified.get('status') == 'PASS_FULL_RAW_RETURN_VALIDATION'
-                and verified.get('scope_id') == scope_id and verified.get('job_id') == claim['job_id'],
+                and verified.get('scope_id') == scope_id and verified.get('job_id') == claim['job_id']
+                and verified.get('exact_whole_component_parity') is True,
                 'bounded full raw return validation did not pass')
+        # S admission requires a source-bound accounting proof created only
+        # after full independent raw validation. Preserve the original Slurm
+        # accounting JSON and its already-published bytes exactly.
+        accepted_accounting = dict(accounting, source_files=spec['worker_sources'],
+            all_raw_outputs_returned_and_verified=True, scope_id=scope_id,
+            phase=spec['phase'], request_sha256=spec['request']['sha256'],
+            original_accounting_sha256=claim['accounting']['sha256'],
+            raw_validation_sha256=pin(validation)['sha256'],
+            full_raw_manifest_sha256=verified['full_raw_manifest']['sha256'],
+            component_pair_result_sha256=verified['component_pair_result']['sha256'])
+        accepted_accounting_path = j.root / 'accepted_job_accounting.json'
+        e.write_new(accepted_accounting_path, accepted_accounting)
+        accepted_accounting_pin = pin(accepted_accounting_path)
+        remote_accepted_accounting = spec['remote_root'] + '/accepted_job_accounting.json'
+        remote(j, spec, site, 'accepted_accounting_path_must_be_absent',
+               ['test', '!', '-e', remote_accepted_accounting], runner)
+        transfer(j, spec, site, 'publish_postvalidation_accepted_accounting', str(accepted_accounting_path),
+                 site['user'] + '@' + site['host'] + ':' + remote_accepted_accounting, runner, proof=True)
+        observed = remote(j, spec, site, 'verify_published_accepted_accounting',
+                          ['sha256sum', remote_accepted_accounting], runner).split()[0]
+        require(observed == accepted_accounting_pin['sha256'], 'published postvalidation accounting changed')
         accepted = dict(status='ACCEPTED_COMPLETE_PAIRED_COMPONENT_QUALIFICATION' if spec['phase'] == 'QUALIFICATION_PAIR'
             else 'ACCEPTED_COMPLETE_PAIRED_COMPONENT_MEASUREMENT', scope_id=scope_id, source_files=spec['worker_sources'],
             whole_accounting_accepted=True, all_canonical_array_bytes_equal=True,
             request=spec['request'], parity_runtime=read(claim['attestation'])['runtime'],
-            whole_accounting=dict(path=remote_accounting, sha256=claim['accounting']['sha256']),
+            whole_accounting=dict(path=remote_accepted_accounting, sha256=accepted_accounting_pin['sha256']),
             component_pair_result=dict(path=spec['output_root'] + '/profile_result.json',
                                        sha256=verified['component_pair_result']['sha256']),
-            local_whole_accounting=claim['accounting'], local_component_pair_result=verified['component_pair_result'],
+            local_whole_accounting=accepted_accounting_pin, original_slurm_accounting=claim['accounting'],
+            local_component_pair_result=verified['component_pair_result'],
             full_raw_manifest=verified['full_raw_manifest'],
             raw_return=str(incoming), total_return_bytes=total, screening_admitted=False, prices_revised=False)
         e.write_new(j.root / 'accepted.json', accepted)

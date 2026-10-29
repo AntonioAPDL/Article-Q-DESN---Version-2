@@ -1,0 +1,21 @@
+# Finite R165 caller envelope
+
+The auxiliary `pricefm_profile_caller.py` implements a new metadata caller contract. It creates no scientific grant. The auxiliary caller does not expand the 26-module controller/worker closure. Any final controller, admission or supervisor changes are separately reviewed and bound by the final publication. The statistical operator, priors, RHS and receiver implementations retain their original contracts.
+
+A phase reserves **450 core-controller CPU + 50 caller CPU = 500**, or 1000 across qualification and conditional measurement. Four-CPU metadata helpers plus the repaired D-to-S accounting-proof path have a prospective 425-CPU complete core calendar; 450 retains 25 CPU seconds above that audit minimum, subject to the exact final calendar review. This is a prospective price only until exact headroom, full calendar, source, resource and funding reviews admit a new experiment. All old charges and closed claims remain retained.
+
+The caller has schema `r165_caller_envelope_v1`, requires exactly 450 core and 4 metadata CPU in its spec, and binds 50/450/500 funding. It requires the actual running caller SHA under `feature_publication.auxiliary_sources["pricefm_profile_caller.py"]`, while the normal26-module publication map binds the immutable package. An independently reviewed final configuration binds driver, spec, funding, constructor and the complete caller window.
+
+The parent preserves default unblocked SIGXCPU soft 1/hard 40; each of at most16 ordinary clients preserves soft 2/hard 40. Conservative caller pricing remains2 + 16 × 3 = 50 CPU. Helpers are charged once to the separately funded core calendar. No per-client or global counter can reset. Startup intent precedes validation, slots are durable/create-only, and PID/start/UID/parent/interpreter/argv identities are checked. Failure permits only explicit exact-owned cancellation/reconciliation; no automatic retry or measurement follows.
+
+Publish and read back this exact auxiliary source through command-line Git before use. Root copies the committed bytes to a new owned tracker caller directory; its source file is immutable, but the parent directory must permit a new `runs/<scope>` tree. Do not run the writer from the read-only numerical package. The legacy tracker caller and runs are not modified. The new caller still uses the original reviewed metadata constructor SHA and fixed allowed entrypoints; a new, unexpired constructor scope must cover its full accounting window.
+
+Start once with pinned Python3.11, `-I -B`, administrative CPU 31, nice 19 and idle IO. Keep stdin open for exact JSON commands; use the normal prepare/stage/held-submit/READY/actual-review/worker-release/observe/collect sequence and fund all failure tails. Ordinary clients cannot call compute-session, direct validation, arbitrary argv or external spec replacements. Scientific work remains one physical HB CPU, one numerical thread and8 GiB only after separate actual admission.
+
+The source changes no baseline, installed runtime, scientific worker, certificate rule, numerical budget or expired authority. A profile's exact primary Slurm accounting and full returned arrays/runtime/parity remain acceptance gates. No source-only fixture or source publication proves numerical compatibility.
+
+Tests use private tmpfs dummy metadata and current source-byte copies. The original kernel soft1/soft2 burn probes are retained as dated prior evidence rather than repeated; unchanged limit functions and the real parent/client/helper limit-preservation fixture cover this change.
+
+The earlier 425/475/950 candidate is retained in the dated engineering refinement. It was superseded before this source freeze by the audited missing accounting-proof/calendar requirement. No old scope, numerical claim or charge is renewed by the new 450/500/1000 contract.
+
+The exact scope identifier retains the existing controller-compatible `r164-profile-` prefix, with a fresh unique ID under the new policy; the R165 schema and new source/funding pins distinguish this caller from closed legacy runs. Workspace tests use the preserved, pinned metadata constructor at the original tracker path; no constructor source or runtime is installed or replaced.

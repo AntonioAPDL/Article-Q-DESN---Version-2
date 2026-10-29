@@ -1,0 +1,4 @@
+# Preserve byte-exact package repair patches while excluding their embedded
+# source whitespace from repository-level whitespace diagnostics.
+application/scripts/pricefm/pricefm_stage_r72_exdqlm_1p1p1_spd_repair.patch -whitespace
+application/scripts/pricefm/pricefm_stage_r75_exdqlm_large_n_gig_repair.patch -whitespace

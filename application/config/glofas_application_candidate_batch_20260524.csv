@@ -1,0 +1,6 @@
+"slug","m","alpha","rho","seed","rationale"
+"m110a088r097",110,0.88,0.97,20260512,"Higher effective-rank screen than selected reference while retaining accepted seed 20260512."
+"m110a086r097",110,0.86,0.97,20260512,"Slightly lower leak-rate neighbor of the high-rank m110/r097 region with accepted seed 20260512."
+"m100a092r095",100,0.92,0.95,20260512,"Same memory/leak as selected reference with slightly lower spectral radius."
+"m100a092r093",100,0.92,0.93,20260512,"Same memory/leak as selected reference with lower spectral radius stress test."
+"m110a090r097s13",110,0.9,0.97,20260513,"Highest-ranked m110/a090/r097 screen candidate using a recommended accepted seed."

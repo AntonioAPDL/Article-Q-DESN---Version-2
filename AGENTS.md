@@ -18,6 +18,11 @@
   `scripts/publish_overleaf_article_snapshot.sh`. The flow is one way from
   `origin/main` to `origin/overleaf/article-snapshot` and then to
   `overleaf-direct/main`.
+- Pending corrected GloFAS results block ordinary publication. An explicit
+  `--review-draft` run may deploy the revised text only with all historical-
+  result notices intact and source-derived draft metadata. This is not
+  scientific result promotion or submission approval; every other publication
+  gate remains mandatory.
 - Supply credentials only through Git's credential cache, primed separately
   at an interactive Git prompt. Never put a token in a URL, command, file,
   commit, log, or chat message.

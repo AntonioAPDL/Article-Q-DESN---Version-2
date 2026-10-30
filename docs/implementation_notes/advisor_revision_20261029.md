@@ -97,9 +97,11 @@ PriceFM or historical GloFAS fit is relaunched.
 4. Publication: the owner retains account-level Overleaf--GitHub authorization
    for other projects. Disconnection or revocation is not required. Article-v2
    must use command-line Git exclusively, never its GitHub synchronization
-   controls. Publication still requires the corrected scientific packet,
-   integration checks, builds and direct-Git commit/tree readbacks. Browser
-   conflict branches are not research integration inputs.
+   controls. Final result promotion requires the corrected scientific packet.
+   A separately authorized `--review-draft` publication may expose the revised
+   text with all historical GloFAS notices intact while the fits continue.
+   Integration checks, builds and direct-Git commit/tree readbacks apply to
+   both modes. Browser conflict branches are not research integration inputs.
 
 ### Resolved operational hardening
 
@@ -168,9 +170,12 @@ starting values, rather than an obsolete sentence. Its numerical tests are
 unchanged. The complete harness result remains a separate execution receipt,
 not inferred from these focused passes.
 
-The article publisher now rejects the pending GloFAS draft markers before
-authentication or ref changes. A successful draft compilation therefore
-cannot silently deploy historical scores under the new target.
+The article publisher rejects pending GloFAS draft markers by default before
+authentication or ref changes. The later owner-requested `--review-draft`
+option requires every historical-result notice and source-derived draft
+metadata, including during partial-publication recovery. A successful draft
+compilation therefore cannot silently deploy historical scores as corrected
+results.
 
 The JOINT historical/current projection checkers now recognize the existing
 MQ display aliases and all seven current supplementary table derivatives.

@@ -12,6 +12,7 @@ repo_root=$(cd "$script_dir/../.." && pwd)
 publisher="$repo_root/scripts/publish_overleaf_article_snapshot.sh"
 builder="$repo_root/scripts/build_overleaf_article_snapshot.sh"
 checker="$repo_root/scripts/check_overleaf_article_snapshot.sh"
+draft_helper="$repo_root/scripts/overleaf_review_draft_status.py"
 
 for required in "$publisher" "$builder" "$checker"; do
   if [[ ! -x "$required" ]]; then
@@ -19,6 +20,10 @@ for required in "$publisher" "$builder" "$checker"; do
     exit 2
   fi
 done
+[[ -f "$draft_helper" ]] || {
+  printf 'Required review-draft helper is missing: %s\n' "$draft_helper" >&2
+  exit 2
+}
 
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/qdesn-overleaf-publisher-test.XXXXXX")
 cleanup() {
@@ -26,11 +31,9 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-mkdir -p "$test_root/home" "$test_root/xdg"
-export HOME="$test_root/home"
-export XDG_CONFIG_HOME="$test_root/xdg"
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL="$test_root/gitconfig"
+export GIT_ALLOW_PROTOCOL=file
 export GIT_TERMINAL_PROMPT=0
 unset GIT_ASKPASS SSH_ASKPASS GITHUB_TOKEN GH_TOKEN
 
@@ -157,6 +160,7 @@ new_fixture() {
   cp "$publisher" "$repo/scripts/publish_overleaf_article_snapshot.sh"
   cp "$builder" "$repo/scripts/build_overleaf_article_snapshot.sh"
   cp "$checker" "$repo/scripts/check_overleaf_article_snapshot.sh"
+  cp "$draft_helper" "$repo/scripts/overleaf_review_draft_status.py"
   chmod +x "$repo/scripts/"*.sh
 
   cat >"$repo/main.tex" <<'EOF'

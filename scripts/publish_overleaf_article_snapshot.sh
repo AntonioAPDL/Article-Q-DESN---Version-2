@@ -7,12 +7,16 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/publish_overleaf_article_snapshot.sh \
-    --source-commit FULL_ORIGIN_MAIN_SHA [--dry-run]
+    --source-commit FULL_ORIGIN_MAIN_SHA [--review-draft] [--dry-run]
 
 This is the sole supported Overleaf publication command. It publishes the
 verified article-only projection of an exact, freshly fetched origin/main to
 origin/overleaf/article-snapshot and overleaf-direct/main using normal
 command-line Git pushes only.
+
+--review-draft explicitly permits only the visibly marked historical GloFAS
+draft while unit-member refits remain pending. It does not certify corrected
+scientific results or relax any source, history, build, or readback guard.
 EOF
 }
 
@@ -70,6 +74,7 @@ validate_remote_urls() {
 
 source_commit=
 dry_run=false
+review_draft_arguments=()
 
 while (( $# > 0 )); do
   case "$1" in
@@ -80,6 +85,10 @@ while (( $# > 0 )); do
       ;;
     --dry-run)
       dry_run=true
+      shift
+      ;;
+    --review-draft)
+      review_draft_arguments=(--review-draft)
       shift
       ;;
     -h|--help)
@@ -95,7 +104,7 @@ done
 [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] ||
   die "--source-commit must be a lowercase 40-character commit hash"
 
-for command_name in git flock pdflatex bibtex pdfinfo; do
+for command_name in git flock python3 pdflatex bibtex pdfinfo; do
   command -v "$command_name" >/dev/null 2>&1 ||
     die "$command_name is unavailable"
 done
@@ -108,12 +117,14 @@ cd "$repo_root"
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] ||
   die "DIRTY_WORKTREE: commit or remove all local changes before publication"
 
-# A successful draft build is not approval to deploy historical results under
-# the revised scientific target. This gate runs before authentication or refs.
-if grep -Fq '[The issued-window analysis is being recomputed' main.tex ||
-   grep -Fq '[Streamflow findings will be updated after the unit-member refits.]' main.tex; then
-  die "GLOFAS_CORRECTION_PENDING: validate and replace the complete corrected packet before article publication"
-fi
+# A successful build is not scientific release approval. Pending sources need
+# explicit review-draft authorization and every reader-facing historical notice.
+# Read exact committed bytes before authentication; the fetched-main and local
+# HEAD checks below must still match this source before any remote push.
+review_draft_helper=$repo_root/scripts/overleaf_review_draft_status.py
+publication_status=$(python3 "$review_draft_helper" "$source_commit" \
+  --require-authorization "${review_draft_arguments[@]}") ||
+  die "SOURCE_REVIEW_DRAFT_VALIDATION_FAILED: no publication ref was changed"
 
 validate_remote_urls origin
 validate_remote_urls overleaf-direct git
@@ -200,7 +211,7 @@ validate_origin_ahead_recovery() {
   local ahead=$1
   local behind=$2
   local ahead_count recovery_commit parent extra_parent marker_source subject
-  local expected_subject recovery_tree
+  local expected_subject recovery_tree recovery_status
 
   ahead_count=$(git rev-list --count "${behind}..${ahead}")
   [[ "$ahead_count" -eq 1 ]] ||
@@ -231,6 +242,12 @@ validate_origin_ahead_recovery() {
   [[ "$subject" == "$expected_subject" ]] ||
     die "PARTIAL_PUBLICATION_INVALID: publisher commit subject is invalid"
 
+  # Recovery is itself a publication. A historical draft needs explicit
+  # authorization even if current origin/main already contains corrected work.
+  recovery_status=$(python3 "$review_draft_helper" "$marker_source" \
+    --require-authorization "${review_draft_arguments[@]}") ||
+    die "PARTIAL_PUBLICATION_INVALID: marked source lacks valid review-draft authorization"
+
   mkdir -p "$recovery_stage"
   scripts/build_overleaf_article_snapshot.sh "$marker_source" "$recovery_stage"
   scripts/check_overleaf_article_snapshot.sh "$recovery_stage" "$marker_source"
@@ -240,6 +257,7 @@ validate_origin_ahead_recovery() {
   recovery_tree=$(git -C "$temp_root/recovery-tree-repo" write-tree)
   [[ "$(git rev-parse "${ahead}^{tree}")" == "$recovery_tree" ]] ||
     die "PARTIAL_PUBLICATION_INVALID: origin-ahead tree differs from its verified source projection"
+  printf 'recovery_publication_status=%s\n' "$recovery_status"
 }
 
 if [[ "$old_origin_snapshot" != "$old_direct" ]]; then
@@ -351,6 +369,7 @@ git_network -C "$publish_repo" push --dry-run overleaf-direct \
 
 if [[ "$dry_run" == true ]]; then
   printf 'source_commit=%s\n' "$source_commit"
+  printf 'publication_status=%s\n' "$publication_status"
   printf 'snapshot_commit=%s\n' "$publish_commit"
   printf 'publication_action=%s\n' "$publication_action"
   echo "GIT_ONLY_OVERLEAF_PUBLICATION_DRY_RUN_COMPLETE"
@@ -397,6 +416,7 @@ final_marker_source=$(git show "${final_direct}:SOURCE_AUTHORITY.txt" |
   die "FINAL_SOURCE_AUTHORITY_MISMATCH"
 
 printf 'source_commit=%s\n' "$source_commit"
+printf 'publication_status=%s\n' "$publication_status"
 printf 'snapshot_commit=%s\n' "$publish_commit"
 printf 'snapshot_tree=%s\n' "$staged_tree"
 printf 'publication_action=%s\n' "$publication_action"
@@ -406,4 +426,9 @@ printf 'overleaf_direct_main=%s\n' "$final_direct"
 [[ "$final_source" == "$source_commit" ]] ||
   die "SOURCE_MAIN_ADVANCED_AFTER_SYNCHRONIZED_PUBLICATION: refs are safely equal for $source_commit; publish the newer origin/main"
 
-echo "GIT_ONLY_OVERLEAF_PUBLICATION_COMPLETE"
+if [[ "$publication_status" == review-draft ]]; then
+  echo "GIT_ONLY_OVERLEAF_REVIEW_DRAFT_PUBLICATION_COMPLETE"
+  echo "Historical weighted GloFAS displays remain pending unit-member refits; this is not scientific release approval."
+else
+  echo "GIT_ONLY_OVERLEAF_PUBLICATION_COMPLETE"
+fi

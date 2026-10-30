@@ -21,6 +21,9 @@ destination=$2
 
 source_commit=$(git rev-parse --verify "${source_ref}^{commit}" 2>/dev/null) ||
   die "source ref is not a commit: $source_ref"
+helper_script=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/overleaf_review_draft_status.py
+publication_status=$(python3 "$helper_script" "$source_commit") ||
+  die "source review-draft notices are invalid"
 
 if [[ -e "$destination" ]] &&
    [[ -n "$(find "$destination" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
@@ -105,6 +108,15 @@ supplement_tex_sha256=$supplement_sha256
 refs_bib_sha256=$refs_sha256
 EOF
 
+# Preserve legacy release trees byte-for-byte. Only the specifically marked
+# historical draft receives these additional, source-derived status fields.
+if [[ "$publication_status" == review-draft ]]; then
+  printf '%s\n' \
+    'publication_status=review-draft' \
+    'glofas_status=historical-weighted-unit-member-refits-pending' \
+    >> "$destination/SOURCE_AUTHORITY.txt"
+fi
+
 file_count=$(find "$destination" -type f | wc -l)
 byte_count=$(find "$destination" -type f -printf '%s\n' | awk '{total += $1} END {print total + 0}')
 
@@ -114,6 +126,7 @@ fi
 
 printf 'source_commit=%s\n' "$source_commit"
 printf 'source_tree=%s\n' "$source_tree"
+printf 'publication_status=%s\n' "$publication_status"
 printf 'manifest_files=%d\n' "${#article_files[@]}"
 printf 'snapshot_files=%d\n' "$file_count"
 printf 'snapshot_bytes=%d\n' "$byte_count"

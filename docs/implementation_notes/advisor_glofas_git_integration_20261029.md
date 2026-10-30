@@ -90,7 +90,11 @@ simulations, PriceFM and unrelated lanes are not relaunched or retuned.
 The additional one-step multiquantile comparison still requires authentic
 posterior/design/oracle inputs. Matched fit-only VB/MCMC timing is not
 established by the retained combined-workflow times. These evidence gaps
-remain explicit. Future manuscript publication additionally requires the
-completed corrected GloFAS packet, coherent article regeneration, isolated
-builds and exact direct-Git snapshot/remote readbacks. Global account
-disconnection is not a prerequisite.
+remain explicit. Final scientific publication additionally requires the
+completed corrected GloFAS packet and coherent article regeneration. The owner
+subsequently requested the revised text in Overleaf while the fits continue.
+That review copy uses the separate explicit `--review-draft` authorization,
+retains every historical-result notice, and records its provisional status in
+the article source marker. It does not promote unfinished results. Both review
+and final publication still require isolated builds and exact direct-Git
+snapshot/remote readbacks. Global account disconnection is not a prerequisite.

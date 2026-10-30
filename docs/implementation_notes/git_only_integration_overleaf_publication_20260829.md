@@ -1,5 +1,17 @@
 # Command-Line Git Integration and Overleaf Publication
 
+## Review-draft clarification (2026-10-29)
+
+The publisher's explicit `--review-draft` option permits the owner-requested
+review of revised text while corrected GloFAS fits continue. Default publication
+remains blocked. The exact source must retain all historical-result notices;
+its snapshot marker records the provisional state. This authorization applies
+also to recovery of a pending origin-only draft. It relaxes no authentication,
+history, source-main, allowlist, build or readback gate and does not authorize
+unfinished numerical results or a submission-ready declaration. See
+`CONTRIBUTING.md` for the distinction between review deployment and scientific
+result promotion.
+
 ## Decision
 
 `origin/main` is the sole research and manuscript authority. All scientific

@@ -91,6 +91,26 @@ The guarded publisher is
 `overleaf/article_files.txt`; it must never copy the full research repository
 into Overleaf or mutate a persistent snapshot worktree in place.
 
+### Explicit Review Draft While GloFAS Refits Continue
+
+Ordinary publication rejects the pending GloFAS correction. The owner may
+instead request a review copy with `--review-draft`. This option does not
+promote unfinished results: the historical weighted tables and figures remain
+historical, with the pending-analysis, results, table-caption, figure-caption,
+discussion and supplementary notices retained in the exact committed source.
+The source-derived `SOURCE_AUTHORITY.txt` then records
+`publication_status=review-draft` and
+`glofas_status=historical-weighted-unit-member-refits-pending`.
+
+The builder and checker independently validate those notices and metadata.
+The same explicit authorization is required to recover an origin-only draft
+publication, even when the newly requested source is no longer a draft.
+Authentication, current-main, clean-worktree, allowlist, compilation, history,
+atomic-origin and final readback checks are unchanged. No runtime or model
+output is copied. A successful review-draft deployment is not final scientific
+or journal-submission approval. Corrected GloFAS results require a later,
+complete validated packet and coherent manuscript regeneration.
+
 The source-main guard and canonical snapshot update on `origin` are pushed as
 one atomic group. Because `origin/overleaf/article-snapshot` and
 `overleaf-direct/main` belong to independent remotes, those two refs cannot be

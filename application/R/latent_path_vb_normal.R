@@ -354,7 +354,7 @@ app_fit_latent_path_normal_vb_core <- function(
       freeze_beta_warmup_iters = freeze_beta,
       beta_update_count = beta_update_count,
       coefficient_precision_repaired = repaired,
-      ensemble_weight_contract = "each_horizon_sums_to_one",
+      ensemble_weight_contract = app_latent_ensemble_weight_contract(design),
       future_truth_policy = design$future_truth_policy,
       initialization = initial$provenance,
       iteration_trace = trace,

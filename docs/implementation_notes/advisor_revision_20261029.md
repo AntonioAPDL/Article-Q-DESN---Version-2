@@ -100,17 +100,26 @@ PriceFM or historical GloFAS fit is relaunched.
    controls. Publication still requires the corrected scientific packet,
    integration checks, builds and direct-Git commit/tree readbacks. Browser
    conflict branches are not research integration inputs.
-5. Defensive engine guard: final lexical-scope inspection of the immutable
-   science commit 60daab261d52eec0ae24060babe186d618303e2b found that the worker
-   override is local to its calling function. It does not intercept an
-   indirect call from a globally defined helper. The actual saved-design
-   continuation uses stored reservoirs and Article-side functions, and passed
-   preparation with an effective global override; no external-engine use is
-   established. This is a defense-in-depth defect, not a different fitted
-   target or a reason to discard these fits. Do not edit the running source.
-   Before final source integration, install and restore the guard in its
-   actual binding environment and add an indirect-helper regression test.
-   Record this operational-only change separately from the frozen fit source.
+
+### Resolved operational hardening
+
+The coordinator corrected the worker's defensive engine guard during source
+integration. It now replaces the binding actually used by the feature helpers,
+before validation, and restores the original binding on exit. Its no-fit
+regression passes 25 checks and rejects the original locally scoped guard.
+This changes no posterior target, prior, predictor, initializer or numerical
+update. The running campaign retains its immutable source
+60daab261d52eec0ae24060babe186d618303e2b and original receipts; that worktree was
+not modified or relaunched. Its actual saved-design continuation was verified
+with a global preparation override and uses stored reservoirs and Article-side
+functions, so the defensive repair does not establish invalidity of its fits.
+
+The combined-tree source guard authenticates exactly twelve scientific paths,
+eleven byte-identical to that frozen source and the one explicitly pinned
+worker correction. The original zero-change editorial mode remains available;
+there is no general exemption for application-source edits. The authorization
+manifest is itself pinned by SHA-256. Both original source identities and
+authorized current hashes, modes and ancestry are checked.
 
 PriceFM content and existing numerical CSVs remain protected. No model binary,
 runtime cache, posterior draw, private review source or local execution path

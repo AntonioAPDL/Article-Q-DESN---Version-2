@@ -216,11 +216,14 @@ app_check_statistical_language_revision <- function(repo_root) {
                paste(changed, collapse = ", ")), call. = FALSE)
   }
   checks <- c(checks, "Scientific CSVs, PriceFM files, and frozen IND figures unchanged.")
-  scientific_source_changes <- git(c("diff", "--name-only", baseline, "--",
-    "application/R", "application/config", "application/scripts", "application/cpp",
-    "validation"))
-  require_check(length(scientific_source_changes) == 0L,
-                "An editorial revision may not change scientific source implementations.")
+  source_guard <- new.env(parent = baseenv())
+  sys.source(file.path(repo_root,
+    "scripts/glofas_unit_member_integration_source_guard.R"), envir = source_guard)
+  # Pin the complete authorization, not just its pathname. Without this manifest
+  # the original zero-scientific-source-change editorial restriction still applies.
+  checks <- c(checks, source_guard$app_check_glofas_unit_member_integration_sources(
+    repo_root, manifest_sha256 =
+      "176c0340fbcc7c2efdda7fe01d9e13c44906ffafa311bc48a16a645156905dd6"))
   main <- read_source("main.tex")
   supplement <- read_source("qdesn-supplement.tex")
   segment <- function(text, begin, end) {

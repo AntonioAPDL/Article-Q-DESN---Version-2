@@ -164,6 +164,14 @@ app_latent_joint_validate_continuation <- function(
   if (!identical(tolower(as.character(initial_joint_fit$likelihood_family)), likelihood)) {
     stop("The joint continuation likelihood does not match the requested likelihood.", call. = FALSE)
   }
+  unit_target <- any(vapply(designs, function(x) identical(
+    x$ensemble_member_weight_policy, "unit_member_likelihood_v1"), logical(1L)))
+  if (unit_target && (!identical(initial_joint_fit$ensemble_weight_contract,
+      "each_included_member_weight_one") ||
+      !identical(initial_joint_fit$unit_member_state_contract_hashes,
+        vapply(designs, app_glofas_part4_state_contract_hash, character(1L))))) {
+    stop("Joint continuation rejects a different member-weight target or design identity.", call. = FALSE)
+  }
   source_tau <- as.numeric(initial_joint_fit$tau)
   if (length(source_tau) != length(tau) || any(abs(source_tau - tau) > 1.0e-12)) {
     stop("The joint continuation quantile grid does not match the requested grid.", call. = FALSE)
@@ -605,7 +613,11 @@ app_fit_latent_path_joint_vb_core <- function(
     previous_outer_iterations = outer_offset,
     continuation_count = continuation_count,
     future_truth_policy = designs[[1L]]$future_truth_policy,
-    ensemble_weight_contract = "each_horizon_sums_to_one",
+    ensemble_weight_contract = app_latent_ensemble_weight_contract(designs[[1L]]),
+    unit_member_state_contract_hashes = if (identical(
+      app_latent_ensemble_weight_contract(designs[[1L]]), "each_included_member_weight_one")) {
+      vapply(designs, app_glofas_part4_state_contract_hash, character(1L))
+    } else NULL,
     approximation = "mean_field_quantile_blocks_with_adjacent_rhs_coordinate_updates"
   )
 }

@@ -9,6 +9,17 @@
 # first-order Delta approximations for both the future-path update and
 # draw-level prediction.
 
+app_latent_ensemble_weight_contract <- function(design) {
+  policy <- as.character(design$ensemble_member_weight_policy %||%
+    (design$latent_data %||% list())$ensemble_member_weight_policy %||%
+    "fractional_per_horizon_v1")
+  switch(policy,
+    fractional_per_horizon_v1 = "each_horizon_sums_to_one",
+    unit_member_likelihood_v1 = "each_included_member_weight_one",
+    stop("Unknown latent-path member-weight policy in fitted design.", call. = FALSE)
+  )
+}
+
 app_latent_al_constants <- function(p0) {
   p0 <- as.numeric(p0)
   if (!is.finite(p0) || p0 <= 0 || p0 >= 1) {
@@ -3358,6 +3369,7 @@ app_fit_latent_path_al_vb_core <- function(design, p0, coefficient_prior = "rhs_
     ),
     vb_diagnostics = list(
       converged = final_converged,
+      ensemble_weight_contract = app_latent_ensemble_weight_contract(design),
       iterations = length(objective),
       elbo_final = tail(objective, 1L),
       elbo_trace = objective,

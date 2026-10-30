@@ -18,6 +18,7 @@ for (path in c(
   "glofas_part4_ensemble_likelihood_contract.R", "glofas_normal_driver_bank.R",
   "glofas_part4_normal_driver_prior.R", "glofas_part4_latent_family.R"
 )) source(app_path("application/R", path))
+source(app_path("application/R/glofas_unit_member_correction.R"))
 
 args <- app_parse_args(list(runtime_root = "", job_id = ""))
 runtime_root <- app_resolve_path(args$runtime_root, must_work = TRUE)
@@ -92,6 +93,16 @@ run_job <- function() {
   }
   if (!file.exists(panel_path)) stop("Part 4 scoring sidecar is missing.", call. = FALSE)
   design <- readRDS(design_path)
+  unit_member <- identical((cfg$application_model %||% list())$ensemble_member_weight_policy,
+    "unit_member_likelihood_v1")
+  if (unit_member) app_glofas_unit_member_validate_design(design)
+  if (unit_member) {
+    # The authentic saved reservoirs and Article-side continuation determine
+    # future features; dynamically loading a moving external engine is forbidden.
+    app_qdesn_engine_function <- function(...) {
+      stop("Unit-member fits must not dynamically load an external feature engine.", call. = FALSE)
+    }
+  }
   scoring_sidecar <- readRDS(panel_path)
   panel <- scoring_sidecar$panel
   stopifnot(identical(scoring_sidecar$role, "post_fit_scoring_sidecar"))
@@ -107,6 +118,7 @@ run_job <- function() {
     likelihood_family = as.character(model_rows$likelihood_family[[1L]])
   )
   vb_args$normal_exact_optimization <- TRUE
+  if (unit_member) vb_args <- app_glofas_unit_member_vb_controls(vb_args, cfg)
   vb_args$diagnostics <- modifyList(
     vb_args$diagnostics %||% list(),
     list(profile_substeps = TRUE)
@@ -132,6 +144,22 @@ run_job <- function() {
   } else {
     vb_args$future_gaussian_prior <- NULL
   }
+  if (unit_member) {
+    app_write_json(c(app_glofas_unit_member_contract(), list(
+      job_id = job_id, family = family,
+      state_contract_hash = app_glofas_part4_state_contract_hash(design),
+      shared_design_sha256 = app_sha256_file(design_path),
+      included_historical_Y = sum(as.character(design$source_fixed) == "Y"),
+      included_historical_G = sum(as.character(design$source_fixed) == "G"),
+      included_future_Y = if (quantile_family) 0L else nrow(design$future_key),
+      included_issued_G = 1428L,
+      quantile_blocks = if (grepl("^joint_", family)) nrow(model_rows) else 1L,
+      included_issued_G_across_blocks = 1428L * if (grepl("^joint_", family)) nrow(model_rows) else 1L,
+      future_path_prior_hash = if (quantile_family) driver_prior$contract_hash else NULL,
+      new_target_iteration_offset = 0L,
+      external_feature_engine_loading_forbidden = TRUE)),
+      file.path(runtime_root, "manifests", paste0(job_id, "_target.json")))
+  }
   dependency_paths <- app_glofas_part4_dependency_artifact_paths(runtime_root, dependencies)
   dependency_results <- lapply(dependency_paths, readRDS)
   started <- Sys.time()
@@ -142,6 +170,7 @@ run_job <- function() {
       design, model_rows, likelihood, dependency_results, vb_args,
       seed = as.integer(model_rows$reservoir_seed[[1L]])
     )
+    if (unit_member) joint$unit_member_contract <- app_glofas_unit_member_contract()
     fit_side_path <- file.path(runtime_root, "objects", paste0(job_id, "_fit_side.rds"))
     app_glofas_part4_atomic_save_rds(joint, fit_side_path)
     materialized <- app_glofas_part4_materialize_joint(
@@ -173,6 +202,7 @@ run_job <- function() {
       design, model_rows[1L, , drop = FALSE], vb_args, initializer,
       seed = as.integer(model_rows$reservoir_seed[[1L]])
     )
+    if (unit_member) result$unit_member_contract <- app_glofas_unit_member_contract()
     fit_side_path <- file.path(runtime_root, "objects", paste0(job_id, "_fit_side.rds"))
     app_glofas_part4_atomic_save_rds(
       app_glofas_part4_fit_side_artifact(result, design_path),
@@ -219,6 +249,7 @@ run_job <- function() {
   timing_path <- file.path(runtime_root, "traces", paste0(job_id, "_iteration_timing.csv"))
   if (nrow(iteration_timing)) app_write_csv(iteration_timing, timing_path)
   artifacts <- c(
+    if (unit_member) file.path(runtime_root, "manifests", paste0(job_id, "_target.json")) else character(),
     fit_side_path,
     prediction_path,
     score_path,

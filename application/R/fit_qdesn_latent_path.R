@@ -26,10 +26,20 @@ app_redact_glofas_latent_path_future_truth <- function(x) {
   x
 }
 
-app_glofas_latent_path_ensemble_weights <- function(g_ensemble) {
+app_glofas_latent_path_weight_policy <- function(policy = NULL) {
+  policy <- as.character(policy %||% "fractional_per_horizon_v1")
+  if (length(policy) != 1L || is.na(policy) || !policy %in%
+      c("fractional_per_horizon_v1", "unit_member_likelihood_v1")) {
+    stop("Unknown latent-path ensemble member-weight policy.", call. = FALSE)
+  }
+  policy
+}
+
+app_glofas_latent_path_ensemble_weights <- function(g_ensemble, policy = NULL) {
+  policy <- app_glofas_latent_path_weight_policy(policy)
   key <- paste(as.Date(g_ensemble$target_date), as.integer(g_ensemble$horizon))
   counts <- ave(rep(1, nrow(g_ensemble)), key, FUN = length)
-  weights <- 1 / as.numeric(counts)
+  weights <- if (identical(policy, "unit_member_likelihood_v1")) rep(1, nrow(g_ensemble)) else 1 / as.numeric(counts)
   if (any(!is.finite(weights)) || any(weights <= 0)) {
     stop("Latent-path ensemble weights must be finite and positive.", call. = FALSE)
   }
@@ -87,7 +97,10 @@ app_make_glofas_latent_path_data <- function(panel, cfg, cutoff_row, model_row =
     keep <- unlist(lapply(split(seq_len(nrow(g_ens)), split_key), utils::head, n = member_limit), use.names = FALSE)
     g_ens <- g_ens[sort(keep), , drop = FALSE]
   }
-  g_ens$ensemble_weight <- app_glofas_latent_path_ensemble_weights(g_ens)
+  weight_policy <- app_glofas_latent_path_weight_policy(
+    (cfg$application_model %||% list())$ensemble_member_weight_policy
+  )
+  g_ens$ensemble_weight <- app_glofas_latent_path_ensemble_weights(g_ens, weight_policy)
 
   available_horizons <- sort(unique(as.integer(g_ens$horizon)))
   if (any(!is.finite(available_horizons))) {
@@ -139,6 +152,7 @@ app_make_glofas_latent_path_data <- function(panel, cfg, cutoff_row, model_row =
     g_ensemble = app_redact_glofas_latent_path_future_truth(g_ens),
     future_key = future_key,
     future_truth_policy = "physically_excluded_from_fit_objects_scoring_sidecar_only",
+    ensemble_member_weight_policy = weight_policy,
     source_parameter_scope = source_scope,
     application_model_contract = app_application_model_contract(cfg, model_row)
   )
@@ -173,8 +187,11 @@ app_validate_glofas_latent_path_data <- function(x) {
   }
   key <- paste(as.Date(x$g_ensemble$target_date), as.integer(x$g_ensemble$horizon))
   weight_sum <- tapply(as.numeric(x$g_ensemble$ensemble_weight), key, sum)
-  if (any(!is.finite(weight_sum)) || any(abs(weight_sum - 1) > 1.0e-12)) {
-    stop("Latent-path issued-ensemble weights must sum to one within each horizon.", call. = FALSE)
+  policy <- app_glofas_latent_path_weight_policy(x$ensemble_member_weight_policy)
+  expected <- app_glofas_latent_path_ensemble_weights(x$g_ensemble, policy)
+  if (any(!is.finite(weight_sum)) ||
+      any(abs(as.numeric(x$g_ensemble$ensemble_weight) - expected) > 1.0e-12)) {
+    stop("Latent-path issued-ensemble weights disagree with the declared member policy.", call. = FALSE)
   }
   leaked <- intersect(c("y", "y_raw", "y_transformed", "y_reference", "usgs", "usgs_raw", "usgs_transformed"), names(x$g_ensemble))
   if (length(leaked) && any(vapply(x$g_ensemble[leaked], function(v) any(is.finite(as.numeric(v))), logical(1L)))) {
@@ -208,6 +225,7 @@ app_latent_path_data_summary <- function(x, model_row = NULL) {
     n_glofas_retrospective = nrow(x$g_retro),
     n_glofas_ensemble = nrow(x$g_ensemble),
     n_future_dates = nrow(x$future_key),
+    ensemble_member_weight_policy = app_glofas_latent_path_weight_policy(x$ensemble_member_weight_policy),
     glofas_scale_scope = as.character(x$source_parameter_scope$glofas_scale_scope[[1L]]),
     glofas_asymmetry_scope = as.character(x$source_parameter_scope$glofas_asymmetry_scope[[1L]] %||% NA_character_),
     stringsAsFactors = FALSE
@@ -1323,6 +1341,7 @@ app_make_glofas_latent_path_design <- function(panel, cfg, model_row, cutoff_row
     future_key = latent_data$future_key,
     y_future_init = app_latent_path_initial_future(latent_data, p0),
     future_truth_policy = latent_data$future_truth_policy,
+    ensemble_member_weight_policy = latent_data$ensemble_member_weight_policy,
     glofas_future_center_path = glofas_future_center_path,
     discrepancy_baseline_fixed = discrepancy_baseline_fixed,
     discrepancy_baseline_future = if (identical(

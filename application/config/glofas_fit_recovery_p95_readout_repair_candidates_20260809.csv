@@ -1,4 +1,0 @@
-candidate_id,priority,include_direct_covariates,rhs_tau0,rhs_alpha_tau0,role,rationale
-p95_drop_direct_cov_current_priors,1,false,0.1,0.001,feature_ablation,"Remove direct precipitation and soil lags from both readouts while retaining them in both reservoirs; hold output lags and current priors fixed"
-p95_full_direct_joint_shrinkage,2,true,0.01,0.0001,prior_repair,"Retain the current direct readout and strengthen both block-specific RHS priors to reduce matched tail cancellation"
-p95_drop_direct_cov_joint_shrinkage,3,false,0.01,0.0001,combined_repair,"Combine direct-covariate removal with stronger block-specific RHS priors"

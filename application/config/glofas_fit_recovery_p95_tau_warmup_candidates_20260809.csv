@@ -1,3 +1,0 @@
-candidate_id,priority,freeze_tau_warmup_iters,role,rationale
-fr09_p95_tauwarm25,1,25,application_default_warmup,Freeze only the shared and discrepancy RHS global scales through iteration 25.
-fr09_p95_tauwarm50,2,50,longer_warmup_sensitivity,Freeze only the shared and discrepancy RHS global scales through iteration 50.

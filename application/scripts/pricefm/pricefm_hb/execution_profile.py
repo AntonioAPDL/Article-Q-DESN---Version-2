@@ -43,6 +43,9 @@ SUPPORT_BYTES = 13278
 SUPPORT_RELATIVE = 'metadata/support/pricefm_r150_contract.py'
 DELIVERY_SCHEMA = 'r165_profile_delivery_binding_v1'
 READINESS_SCHEMA = 'r165_profile_input_readiness_v1'
+NATIVE_INVENTORY_POLICY = 'r165_complete_typed_native_inventory_multiset_v1'
+NATIVE_RECORD_STRING_FIELDS = {'architecture', 'filepath', 'internal_api', 'prefix',
+                               'threading_layer', 'user_api', 'version'}
 COMPONENT_LOOP_AST = '9b466b16f5d39890892a629c02ddf9069024a8c16ca22274e628a751231e234a'
 COMPONENT_LOOP_GLOBALS = {'Path', 'PrefixError', 'RESULT_SCHEMA', 'finite', 'len', 'r', 'seal_directory', 'time'}
 PHASES = ('startup_and_authority', 'input_verification', 'runtime_and_adapter_setup',
@@ -634,6 +637,54 @@ def array_packet_identity(path, budget=None):
     return dict(canonical_arrays=result, raw_packet_sha256=packet_hash.hexdigest(), raw_packet_bytes=before.st_size)
 
 
+def typed_JSON_identity(value):
+    """Preserve every JSON value/type and every list order; reject coercions."""
+    def check(item, depth=0):
+        require(depth <= 32, 'bounded typed JSON required')
+        kind = type(item)
+        require(kind in (dict, list, str, int, float, bool, type(None)), 'only exact JSON types required')
+        if kind is dict:
+            require(all(type(key) is str for key in item), 'JSON object keys must be strings')
+            for child in item.values(): check(child, depth + 1)
+        elif kind is list:
+            for child in item: check(child, depth + 1)
+        elif kind is float:
+            require(math.isfinite(item), 'finite typed JSON values required')
+    check(value)
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
+
+
+def canonical_native_inventory(value):
+    """Sort complete typed records only; never omit fields or deduplicate."""
+    require(type(value) is list and 0 < len(value) <= 64, 'complete bounded native inventory required')
+    records = []
+    for record in value:
+        require(type(record) is dict and NATIVE_RECORD_STRING_FIELDS | {'num_threads'} <= set(record),
+                'complete native provenance record required')
+        require(all(type(record[key]) is str and bool(record[key]) for key in NATIVE_RECORD_STRING_FIELDS)
+                and type(record['num_threads']) is int and record['num_threads'] == 1,
+                'exact one-thread native provenance field types required')
+        records.append(typed_JSON_identity(record))
+    return sorted(records)
+
+
+def result_metadata_comparison(left, right):
+    """Only top-level native discovery order is non-semantic for this policy."""
+    require(type(left) is dict and type(right) is dict, 'complete result JSON objects required')
+    native_left = canonical_native_inventory(left.get('numerical_threadpools'))
+    native_right = canonical_native_inventory(right.get('numerical_threadpools'))
+    scientific_left = {key: value for key, value in left.items() if key != 'numerical_threadpools'}
+    scientific_right = {key: value for key, value in right.items() if key != 'numerical_threadpools'}
+    scientific_equal = typed_JSON_identity(scientific_left) == typed_JSON_identity(scientific_right)
+    native_equal = native_left == native_right
+    return dict(native_inventory_comparison_policy=NATIVE_INVENTORY_POLICY,
+        exact_result_and_metrics_equal=typed_JSON_identity(left) == typed_JSON_identity(right),
+        native_inventory_equal_under_policy=native_equal,
+        scientific_fields_and_metrics_equal=scientific_equal,
+        canonical_result_and_metrics_equal=native_equal and scientific_equal,
+        native_inventory_record_counts=dict(reference=len(native_left), instrumented=len(native_right)))
+
+
 def verify_pair(reference, instrumented, binding, budget=None):
     require(type(binding) is dict and all(k in binding for k in
         ('request_sha256', 'authority_sha256', 'attestation_sha256', 'executed_sources',
@@ -684,9 +735,11 @@ def verify_pair(reference, instrumented, binding, budget=None):
                         and seal['artifacts'] == {key: r.digest(root / Path(name).with_name(key))
                                                   for key in ('chunk.json', 'predictions.npz')},
                         'chunk original artifact seal changed')
-    l = planning.decode_json(bounded_read(reference / 'result.json'))
-    rr = planning.decode_json(bounded_read(instrumented / 'result.json'))
-    require(l == rr, 'complete original result/scalars/metrics/order parity failed')
+    raw_left = bounded_read(reference / 'result.json'); raw_right = bounded_read(instrumented / 'result.json')
+    l = planning.decode_json(raw_left); rr = planning.decode_json(raw_right)
+    result_comparison = result_metadata_comparison(l, rr)
+    require(result_comparison['canonical_result_and_metrics_equal'],
+            'complete original result/scalars/metrics/order parity failed')
     require(all(l.get(key) == value for key, value in binding['expected_result'].items()),
             'canonical original task/source/origin-clock result identity differs')
     require(l['chunk_count'] == len(left) - 1 and l['certified'] is True
@@ -694,7 +747,8 @@ def verify_pair(reference, instrumented, binding, budget=None):
             and l['test_opened'] is False and l['promotion_authorized'] is False,
             'complete original component scope/count required')
     return dict(status='PASS_EXACT_WHOLE_COMPONENT_ARRAY_AND_SAMPLER_PARITY', packets=rows,
-        all_ordered_array_bytes_equal=True, exact_result_and_metrics_equal=True,
+        all_ordered_array_bytes_equal=True, **result_comparison,
+        raw_result_JSON_bytes_equal=raw_left == raw_right,
         all_raw_packets_identical=all(row['raw_packet_bytes_equal'] for row in rows),
         serialization_policy='NPZ container hashes retained; canonical dtype/shape/C-order/element bytes exact; no tolerance added',
         screening_admitted=False, prices_revised=False, official_evaluation_authorized=False)

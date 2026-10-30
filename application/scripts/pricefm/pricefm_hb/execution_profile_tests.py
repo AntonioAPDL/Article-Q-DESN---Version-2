@@ -127,11 +127,80 @@ def packet(path, values=(1., 2.), date=(2020, 1, 1, 0, 0, 0), **kw):
         out.writestr(info, npy(values, **kw))
 
 
+def native_record(path='/fixture/native_a.so', prefix='libopenblas'):
+    return dict(architecture='Sandybridge',filepath=path,internal_api='openblas',num_threads=1,
+                prefix=prefix,threading_layer='pthreads',user_api='blas',version='0.3.27')
+
+
+class NativeInventoryComparisonTests(unittest.TestCase):
+    def values(self):
+        records=[native_record(),native_record('/fixture/native_b.so','libscipy_openblas')]
+        return dict(metrics={'AQL':1.},ordered=['first','second'],numerical_threadpools=records)
+
+    def test_only_complete_native_record_order_is_ignored(self):
+        left=self.values();right=copy.deepcopy(left);right['numerical_threadpools'].reverse()
+        result=e.result_metadata_comparison(left,right)
+        self.assertTrue(result['canonical_result_and_metrics_equal']);self.assertFalse(result['exact_result_and_metrics_equal'])
+        self.assertTrue(result['scientific_fields_and_metrics_equal']);self.assertTrue(result['native_inventory_equal_under_policy'])
+        self.assertEqual(result['native_inventory_comparison_policy'],e.NATIVE_INVENTORY_POLICY)
+        self.assertEqual(left['numerical_threadpools'][0]['filepath'],'/fixture/native_a.so')
+
+    def test_fields_extra_fields_and_multiplicity_are_preserved(self):
+        left=self.values();left['numerical_threadpools'][0]['extra']={'ordered':['x','y'],'typed':1}
+        right=copy.deepcopy(left);right['numerical_threadpools'].reverse()
+        self.assertTrue(e.result_metadata_comparison(left,right)['canonical_result_and_metrics_equal'])
+        changed=copy.deepcopy(right);changed['numerical_threadpools'][1]['extra']['ordered'].reverse()
+        self.assertFalse(e.result_metadata_comparison(left,changed)['canonical_result_and_metrics_equal'])
+        for key in native_record():
+            changed=copy.deepcopy(right)
+            if key=='num_threads':changed['numerical_threadpools'][0][key]=2
+            else:changed['numerical_threadpools'][0][key]+='_different'
+            if key=='num_threads':
+                with self.assertRaises(ValueError):e.result_metadata_comparison(left,changed)
+            else:self.assertFalse(e.result_metadata_comparison(left,changed)['canonical_result_and_metrics_equal'])
+        duplicate=copy.deepcopy(left);duplicate['numerical_threadpools'].append(copy.deepcopy(left['numerical_threadpools'][0]))
+        reversed_duplicate=copy.deepcopy(duplicate);reversed_duplicate['numerical_threadpools'].reverse()
+        self.assertTrue(e.result_metadata_comparison(duplicate,reversed_duplicate)['canonical_result_and_metrics_equal'])
+        self.assertFalse(e.result_metadata_comparison(duplicate,right)['canonical_result_and_metrics_equal'])
+
+    def test_missing_records_fields_and_wrong_types_are_rejected(self):
+        for value in (None,[],{},(native_record(),),[[]]):
+            with self.subTest(value=value),self.assertRaises(ValueError):e.canonical_native_inventory(value)
+        for key in native_record():
+            value=native_record();value.pop(key)
+            with self.subTest(missing=key),self.assertRaises(ValueError):e.canonical_native_inventory([value])
+        for value in (True,1.,0,2,'1',None):
+            record=native_record();record['num_threads']=value
+            with self.subTest(threads=value),self.assertRaises(ValueError):e.canonical_native_inventory([record])
+        for value in (None,False,1,1.,[],{}):
+            record=native_record();record['version']=value
+            with self.subTest(version=value),self.assertRaises(ValueError):e.canonical_native_inventory([record])
+        for value in (float('nan'),float('inf'),('tuple',),{1:'non-string key'}):
+            record=native_record();record['extra']=value
+            with self.subTest(extra=value),self.assertRaises(ValueError):e.canonical_native_inventory([record])
+        record=native_record();record['extra']=1
+        changed=copy.deepcopy(record);changed['extra']=True
+        self.assertNotEqual(e.canonical_native_inventory([record]),e.canonical_native_inventory([changed]))
+
+    def test_every_other_list_metric_and_json_type_remains_exact(self):
+        left=self.values()
+        cases=[]
+        for value in (1.001,True,1):
+            changed=copy.deepcopy(left);changed['metrics']['AQL']=value;cases.append(changed)
+        changed=copy.deepcopy(left);changed['ordered'].reverse();cases.append(changed)
+        changed=copy.deepcopy(left);changed['other']={'numerical_threadpools':[1,2]};different=copy.deepcopy(changed)
+        different['other']['numerical_threadpools'].reverse()
+        self.assertFalse(e.result_metadata_comparison(changed,different)['scientific_fields_and_metrics_equal'])
+        for changed in cases:
+            result=e.result_metadata_comparison(left,changed)
+            self.assertFalse(result['scientific_fields_and_metrics_equal']);self.assertFalse(result['canonical_result_and_metrics_equal'])
+
+
 def fixture_pair(base):
     binding = dict(request_sha256='1' * 64, authority_sha256='2' * 64,
         attestation_sha256='3' * 64, executed_sources={'frozen.py': '4' * 64},
         allocation={'job_id': '123', 'node': 'compute1'}, scope_id='test-profile', task_sha256='5' * 64,
-        native_library_sha256={'native.so': '6' * 64})
+        native_library_sha256={'/fixture/native_a.so': '6' * 64,'/fixture/native_b.so':'7'*64})
     binding['expected_packets'] = {name: {'truth': dict(dtype='<f8', shape=[2])} for name in
         ('predictions.npz', 'checkpoints/clock00_part000/predictions.npz')}
     binding['expected_chunk_identities'] = {'checkpoints/clock00_part000/predictions.npz': {'descriptor': 'fixed'}}
@@ -151,7 +220,8 @@ def fixture_pair(base):
             artifacts={name: r.digest(chunk / name) for name in ('chunk.json', 'predictions.npz')}))
         result = dict(chunk_count=1, certified=True, new_model_fits=0, posterior_updated=False,
                       test_opened=False, promotion_authorized=False, metrics={'AQL': 1.},
-                      name='canonical_task', task_sha256=binding['task_sha256'], origin_clock_windows=2)
+                      name='canonical_task', task_sha256=binding['task_sha256'], origin_clock_windows=2,
+                      numerical_threadpools=[native_record(),native_record('/fixture/native_b.so','libscipy_openblas')])
         r.write(root / 'result.json', result)
         r.write(root / 'component_complete.json', dict(status='COMPLETE_PROFILE_COMPONENT_NOT_SCREENING',
             execution=execution, result_sha256=r.digest(root / 'result.json'),
@@ -244,6 +314,18 @@ class ByteParityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp); packet(base / 'x.npz'); (base / 'alias.npz').symlink_to('x.npz')
             with self.assertRaises(ValueError): e.array_packet_identity(base / 'alias.npz')
+
+    def test_native_order_only_pair_keeps_raw_seals_and_reports_literal_difference(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm_native_order_',dir='/dev/shm') as tmp:
+            base=Path(tmp);binding=fixture_pair(base);right=base/'instrumented'
+            path=right/'result.json';value=json.loads(path.read_text());value['numerical_threadpools'].reverse()
+            r.write(path,value);reseal(right)
+            before={role:r.digest(base/role/'result.json') for role in e.ORDER}
+            result=e.verify_pair(base/'reference',right,binding)
+            self.assertFalse(result['exact_result_and_metrics_equal']);self.assertFalse(result['raw_result_JSON_bytes_equal'])
+            self.assertTrue(result['canonical_result_and_metrics_equal']);self.assertTrue(result['scientific_fields_and_metrics_equal'])
+            self.assertTrue(result['all_ordered_array_bytes_equal']);self.assertTrue(result['native_inventory_equal_under_policy'])
+            self.assertEqual(before,{role:r.digest(base/role/'result.json') for role in e.ORDER})
 
     def test_full_pair_reports_container_difference_and_exact_science(self):
         with tempfile.TemporaryDirectory() as tmp:

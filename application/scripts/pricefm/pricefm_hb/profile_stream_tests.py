@@ -9,6 +9,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from . import profile_stream as s
 from unittest.mock import patch
@@ -217,6 +218,83 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(got['files'],2);self.assertEqual((self.target/'binary.bin').read_bytes(),self.binary)
         p.stdout.close();p.stderr.close()
     def test_no_scientific_module_imported(self):self.assertFalse({'numpy','scipy','pandas'}&set(sys.modules))
+
+
+class ForkSafeLaunchTests(unittest.TestCase):
+    def test_public_preexec_callback_and_pipes_are_used(self):
+        with patch.object(s.os,'listdir',return_value=[str(os.getpid())]), patch.object(s.subprocess,'Popen') as launch:
+            self.assertIs(s.fork_safe_popen(['owned-command']),launch.return_value)
+        launch.assert_called_once_with(['owned-command'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE,preexec_fn=s._fork_only_child)
+
+    def test_extra_or_nonmain_kernel_threads_fail_before_fork(self):
+        for tasks in ([],[str(os.getpid()),'12345'],['12345']):
+            with patch.object(s.os,'listdir',return_value=tasks), patch.object(s.subprocess,'Popen') as launch:
+                with self.assertRaisesRegex(ValueError,'exactly the main kernel thread'):s.fork_safe_popen(['owned-command'])
+                launch.assert_not_called()
+
+    def test_delayed_preexec_parent_is_interruptible_and_strict_group_stops(self):
+        """An observation wrapper records only successful original stop proofs."""
+        from . import profile_supervisor as guard
+        with tempfile.TemporaryDirectory(prefix='pricefm_fork_preexec_',dir='/dev/shm') as tmp:
+            root=Path(tmp);marker=root/'callback.json';trace=root/'actual_stopped.json'
+            package=str(Path(s.__file__).resolve().parent.parent)
+            payload=("import sys,os,time,json;from pathlib import Path\n"
+                f"sys.path.insert(0,{package!r})\nfrom pricefm_hb import profile_stream as s\n"
+                "def record(pid):\n"
+                "    f=(Path('/proc')/str(pid)/'stat').read_text().rsplit(')',1)[1].split()\n"
+                "    return dict(pid=pid,state=f[0],birth=int(f[19]),uid=(Path('/proc')/str(pid)).stat().st_uid)\n"
+                "def delayed():\n"
+                "    time.sleep(.03)\n"
+                f"    Path({str(marker)!r}).write_text(json.dumps(dict(parent=record(os.getppid()),child=record(os.getpid()))))\n"
+                "    time.sleep(.45)\n"
+                "s._fork_only_child=delayed\n"
+                "p=s.fork_safe_popen([sys.executable,'-I','-B','-c',\"print('owned fork-only exec')\"])\n"
+                "out,err=p.communicate(timeout=2);assert p.returncode==0 and out==b'owned fork-only exec\\n' and not err\n"
+                "print('owned delayed preexec complete')\n")
+            launcher=("import sys,json;from pathlib import Path;from types import SimpleNamespace\n"
+                f"sys.path.insert(0,{package!r})\nfrom pricefm_hb import profile_supervisor as g\n"
+                "original=g.await_owned_stop\n"
+                "def observed(records,**kw):\n"
+                "    items,waited=original(records,**kw)\n"
+                f"    marker=Path({str(marker)!r});trace=Path({str(trace)!r})\n"
+                "    if marker.exists() and not trace.exists():\n"
+                "        try:info=json.loads(marker.read_text())\n"
+                "        except (OSError,ValueError):info=None\n"
+                "        if info is not None:\n"
+                "            found={x['pid']:x for x in items}\n"
+                "            pair=[info['parent'],info['child']]\n"
+                "            if all(x['pid'] in found and found[x['pid']]['start_ticks']==x['birth'] and found[x['pid']]['uid']==x['uid'] for x in pair):\n"
+                "                trace.write_text(json.dumps(dict(callback=info,actual_original_stop_items=items,observability_only=True)))\n"
+                "    return items,waited\n"
+                "g.await_owned_stop=observed\n"
+                f"code=g.guarded_run([sys.executable,'-I','-B','-c',{payload!r}],SimpleNamespace(cpu=5,wall=8,output_cap=65536,passthrough=False))\n"
+                "sys.exit(code)\n")
+            started=time.monotonic()
+            result=subprocess.run([sys.executable,'-I','-B','-c',launcher],capture_output=True,timeout=12,
+                                  preexec_fn=s._fork_only_child)
+            destination=os.environ.get('PRICEFM_FORK_TEST_ARTIFACTS')
+            if destination:
+                path=Path(destination);path.mkdir(parents=True,exist_ok=True)
+                (path/(self._testMethodName+'.stdout')).write_bytes(result.stdout)
+                (path/(self._testMethodName+'.stderr')).write_bytes(result.stderr)
+                if trace.exists():(path/(self._testMethodName+'.trace.json')).write_bytes(trace.read_bytes())
+            receipt=json.loads(result.stdout) if result.stdout else None
+            actual=json.loads(trace.read_text()) if trace.exists() else None
+            proof=dict(returncode=result.returncode,stdout=result.stdout.decode(errors='replace'),
+                       stderr=result.stderr.decode(errors='replace'),guardian_receipt=receipt,
+                       actual_stopped_observation=actual,wall_seconds=time.monotonic()-started,
+                       instrumented_observation_only_not_original_incident_causal_proof=True)
+            if destination:
+                (path/(self._testMethodName+'.json')).write_text(json.dumps(proof,indent=2,sort_keys=True)+'\n')
+            self.assertEqual(result.returncode,0,proof);self.assertIsNotNone(actual,proof)
+            self.assertEqual(actual['callback']['parent']['state'],'S',proof)
+            pair={actual['callback'][key]['pid'] for key in ('parent','child')}
+            stopped=[x for x in actual['actual_original_stop_items'] if x['pid'] in pair]
+            self.assertEqual(len(stopped),2,proof);self.assertTrue(all(x['state']=='T' for x in stopped),proof)
+            self.assertTrue(receipt['all_owned_descendants_reaped'],proof)
+            self.assertGreater(receipt['proved_stopped_snapshots'],1,proof)
+            self.assertLess(receipt['aggregate_CPU_seconds'],5,proof)
 
 
 if __name__=='__main__':unittest.main()

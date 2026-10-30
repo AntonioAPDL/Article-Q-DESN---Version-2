@@ -27,6 +27,28 @@ def require(value,message):
     if not value:raise ValueError(message)
 
 
+def _fork_only_child():
+    """No-op preexec callback: the pinned CPython uses fork, never vfork here."""
+    return None
+
+
+def fork_safe_popen(argv):
+    """Keep the launch parent stoppable by the existing subtree supervisor.
+
+    A vfork parent waits for its child's exec/exit and cannot complete a group
+    stop while that child is stopped before exec.  A public preexec_fn excludes
+    both vfork and posix_spawn in the pinned CPython.  Python callbacks before
+    exec require a single-threaded process; fail closed on the actual kernel
+    task inventory rather than relying on Python's thread registry.  The
+    transfer helper starts no threads and the callback performs no operations.
+    This does not guarantee filesystem availability or relax any stop deadline.
+    """
+    require(os.listdir('/proc/self/task')==[str(os.getpid())],
+            'fork-safe transfer launch requires exactly the main kernel thread')
+    return subprocess.Popen(argv,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,preexec_fn=_fork_only_child)
+
+
 def physical(path):
     path=Path(path)
     require(path.is_absolute() and '..' not in path.parts,'absolute physical path required')
@@ -318,7 +340,7 @@ def transfer(source,target,ssh_argv,remote_helper_source,cpu,wall,max_bytes,scop
     if upload and target.endswith('/'):payload.append('--directory')
     command=['/usr/bin/python3','-I','-B','-c',remote_helper_source,'--cpu',str(cpu),'--wall',str(wall),
              '--output-cap',str(max_bytes+HEADER_MAX+128),'--passthrough','--',*payload]
-    p=subprocess.Popen([*ssh_argv,shlex.join(command)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    p=fork_safe_popen([*ssh_argv,shlex.join(command)])
     io=Pipes(p,wall)
     try:
         if upload:

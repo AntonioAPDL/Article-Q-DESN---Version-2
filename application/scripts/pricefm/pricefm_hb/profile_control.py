@@ -319,8 +319,19 @@ def validate_spec(spec, *, now=None, remote=False, admit_new_work=True):
             'metadata/source stage must fit bounded64MiB release-verification envelope')
     required = {'code/pricefm_hb/' + name for name in spec['controller_sources']}
     require(required <= set(names), 'complete worker/launcher source stage required')
+    request = spec_read(spec, spec['request'], remote)
+    support = e.validate_profile_support(request, verify=False)
+    require(request['cost_plan']['path'] == spec['remote_root'] + '/metadata/cost_plan.json',
+            'profile support must belong to this distinct new release')
+    support_files = [item for item in spec['files'] if item['relative'] == e.SUPPORT_RELATIVE]
+    require(len(support_files) == 1 and support_files[0]['sha256'] == support['sha256']
+            and support_files[0]['bytes'] == support['bytes'], 'exact profile support source must be staged')
+    profile = spec_read(spec, request['profile_plan'], remote)
+    e.validate_delivery_binding(profile, read_evidence=lambda value: spec_read(spec, value, remote))
     for item in spec['files']:
         if Path(item['relative']).suffix == '.py':
+            if item['relative'] == e.SUPPORT_RELATIVE:
+                continue  # The one fixed source role above is not executable worker code.
             name = Path(item['relative']).name
             require(item['relative'] == 'code/pricefm_hb/' + name and name in spec['controller_sources']
                     and item['sha256'] == spec['controller_sources'][name],
@@ -826,6 +837,7 @@ def observe_ready(scope_id, notification_pin, runner=bounded):
                 and ready.get('controller_sources') == spec['controller_sources']
                 and ready.get('runtime', {}).get('status') == 'verified'
                 and 0 <= time.time() - ready.get('observed_epoch', 0) <= 300, 'fresh actual-job READY required')
+        ready_input_binding(spec, ready)
         e.write_new(j.root / 'ready.json', ready)
         return j.put('READY_OBSERVED', job_id=claim['job_id'], attestation=pin(j.root / 'ready.json'), submitted=claim['submitted'])
     finally:
@@ -867,6 +879,7 @@ def release_worker(scope_id, authority_pin, *, staged_files, runner=bounded):
                 return read(dict(path=matches[0]['local'], sha256=value['sha256']))
             return spec_read(spec, value)
         request = spec_read(spec, spec['request'])
+        readiness = ready_input_binding(spec, ready)
         require(authority.get('schema') == a.AUTHORITY_SCHEMA
                 and authority.get('status') == 'ROOT_ADMITTED_COMPONENT_PROFILE_PAIR'
                 and authority.get('purpose') == a.PURPOSE and authority.get('phase') == spec['phase']
@@ -884,6 +897,11 @@ def release_worker(scope_id, authority_pin, *, staged_files, runner=bounded):
                 and review.get('request_sha256') == spec['request']['sha256']
                 and review.get('limits') == spec['worker_limits']
                 and review.get('allocation_limits') == spec['allocation_limits'], 'complete job-bound source review required before release')
+        profile = spec_read(spec, request['profile_plan'])
+        require(review.get('profile_support') == request['profile_support']
+                and review.get('profile_delivery_binding_sha256') == r.identity(profile['profile_delivery_binding'])
+                and review.get('input_readiness') == readiness,
+                'job-bound review must bind support, delivery and actual allocated input readiness')
         funding = new_proof(authority['funding'])
         submitted = new_proof(funding['submission'])
         require(funding.get('schema') == 'r164_profile_funding_v1'
@@ -991,6 +1009,18 @@ def reconcile_failure(scope_id):
         j.close()
 
 
+def verify_returned_readiness(root, spec, claim):
+    """Recheck exact local raw counterparts of the canonical remote READY roles."""
+    original_ready = read(claim['attestation'])
+    require(r.digest(root / 'ready.json') == claim['attestation']['sha256']
+            and read(pin(root / 'ready.json')) == original_ready, 'returned exact allocated READY changed')
+    readiness = ready_input_binding(spec, original_ready, now=original_ready['observed_epoch'])
+    require(r.digest(root / 'input_readiness.json') == readiness['sha256']
+            and read(pin(root / 'input_readiness.json')) == original_ready['input_readiness'],
+            'returned exact allocated input readiness changed')
+    return original_ready, readiness
+
+
 def verify_return(root, spec, claim):
     root = e.planning.physical(root); require(root.is_dir(), 'collected raw release directory required')
     for path in root.rglob('*'):
@@ -1020,15 +1050,27 @@ def verify_return(root, spec, claim):
             and identity['request_sha256'] == spec['request']['sha256']
             and identity['executed_sources'] == spec['worker_sources']
             and identity['allocation']['job_id'] == claim['job_id'], 'returned exact source/job/request binding differs')
-    original_ready = read(claim['attestation'])
+    original_ready, readiness = verify_returned_readiness(root, spec, claim)
+    request = spec_read(spec, spec['request']); profile = spec_read(spec, request['profile_plan'])
+    delivery = dict(profile_support=request['profile_support'],
+                    profile_delivery_binding_sha256=r.identity(profile['profile_delivery_binding']),
+                    input_readiness=readiness)
     binding = dict(request_sha256=spec['request']['sha256'], authority_sha256=claim['authority']['sha256'],
         attestation_sha256=claim['attestation']['sha256'], executed_sources=spec['worker_sources'],
         allocation=original_ready['allocation'], scope_id=spec['scope_id'],
         task_sha256=spec_read(spec, spec['request'])['task_sha256'],
         native_library_sha256=original_ready['runtime']['native_library_sha256'])
-    binding.update(canonical_return_expectation(spec))
+    canonical = canonical_return_expectation(spec)
+    require(r.identity(canonical) == original_ready['input_readiness']['expected_component_sha256'],
+            'returned allocated expectation differs from original canonical metadata')
+    binding.update(canonical)
+    binding.update(delivery)
     require(all(identity.get(key) == value for key, value in binding.items()),
             'returned parity universe differs from independently pinned canonical task/inputs')
+    for role in e.ORDER:
+        executed = read(pin(pair / role / 'execution_identity.json'))
+        require(all(executed.get(key) == value for key, value in delivery.items()),
+                'returned child support/delivery/readiness differs')
     parity = e.verify_pair(pair / 'reference', pair / 'instrumented', binding)
     post = read(pin(pair / 'post_seal_accounting.json'))
     require(post.get('status') == 'POST_SEAL_ACCOUNTING_SNAPSHOT' and post.get('execution') == identity
@@ -1193,6 +1235,50 @@ def wait_for_authority_marker(path,wait_end,wrapper_cpu):
         time.sleep(min(.25,max(.001,wait_end-time.monotonic())))
 
 
+def ready_input_binding(spec, ready, *, now=None):
+    """Validate the embedded readiness receipt with existing exact pin readers."""
+    request = spec_read(spec, spec['request'])
+    profile = spec_read(spec, request['profile_plan'])
+    cost = spec_read(spec, request['cost_plan'])
+    e.validate_delivery_binding(profile, read_evidence=lambda value: spec_read(spec, value))
+    return e.validate_input_readiness(request, profile, cost, ready,
+        request_sha256=spec['request']['sha256'], scope_id=spec['scope_id'], sources=spec['worker_sources'],
+        allocation=ready['allocation'], now=now)
+
+
+def allocated_input_readiness(spec, allocation):
+    """Allocated stdlib-only verification before READY; never a numerical call.
+
+    The unchanged cost loader hashes every original asset and checks its ledgers.
+    Only then is the one source supplement attached.  The actual expectation
+    function executes original shape/chunk/context metadata, never array payloads.
+    Its work remains inside the wrapper's original CPU and absolute wall budget.
+    """
+    # Attribute all gate/metadata work. Receipt serialization remains charged
+    # to the same whole wrapper, outside this pre-write counter snapshot.
+    started_cpu = e.b.aggregate_cpu_seconds(); started = time.monotonic()
+    require(require_compute() == allocation, 'actual allocation required before original input reads')
+    request = read(spec['request'])
+    profile, cost, _ = e.validate_request(request)
+    _, _, original = e.b.load_staged(cost, request['stage_root'])
+    e.profile_resolver(original, request)
+    expected = e.expected_component(cost, request)
+    receipt = dict(schema=e.READINESS_SCHEMA, status='VERIFIED_ORIGINAL_INPUTS_AND_PROFILE_SUPPORT',
+        scope_id=spec['scope_id'], allocation=allocation, observed_epoch=time.time(),
+        request_sha256=spec['request']['sha256'], cost_plan=request['cost_plan'], stage_root=request['stage_root'],
+        profile_support=request['profile_support'],
+        profile_delivery_binding_sha256=r.identity(profile['profile_delivery_binding']),
+        source_files=e.source_closure(), task_sha256=request['task_sha256'],
+        verified_original_input_count=len(cost['input_allowlist']),
+        verified_original_input_bytes=sum(v['bytes'] for v in cost['input_allowlist'].values()),
+        expected_component_sha256=r.identity(expected), original_verification='UNCHANGED_B_LOAD_STAGED_VERIFY_ALL',
+        verification_CPU_seconds=e.b.aggregate_cpu_seconds() - started_cpu,
+        verification_wall_seconds=time.monotonic() - started, new_model_fits=0,
+        predictions_executed=False, array_payloads_evaluated=False)
+    e.write_new(Path(spec['remote_root']) / 'input_readiness.json', receipt)
+    return receipt
+
+
 def compute_session(spec_path):
     """Admitted compute-only startup; waits finitely for separately reviewed worker authority."""
     allocation = require_compute()
@@ -1212,18 +1298,22 @@ def compute_session(spec_path):
     for name, meta in manifest['files'].items():
         path = e.planning.physical(root / safe_relative(name))
         require(path.stat().st_size == meta['bytes'] and r.digest(path) == meta['sha256'], 'remote release source/metadata changed')
+    input_readiness = allocated_input_readiness(spec, allocation)
     from .environment import verify_runtime
     runtime = verify_runtime(spec['environment_bundle'], root / 'runtime_ready.json')
     scheduler = a.scheduler_evidence(allocation)
     deadline = min(deadline, time.monotonic() + scheduler['end_epoch'] - time.time())
     signal.setitimer(signal.ITIMER_REAL, max(.001, deadline - time.monotonic()))
+    wait_end = min(deadline - spec['worker_limits']['wall_seconds'] - whole['exit_reserve_seconds'],
+                   start + whole['ready_reserve_seconds'])
+    require(time.monotonic() + spec['controller_limits']['ready_wait_seconds'] < wait_end,
+            'allocated readiness leaves no original worker, exit and review allowance')
     ready = dict(schema='r164_profile_job_attestation_v1', status='COMPUTE_READY', scope_id=spec['scope_id'],
         observed_epoch=time.time(), allocation=allocation, runtime=runtime, scheduler_resources=scheduler,
         request_sha256=spec['request']['sha256'], worker_sources=spec['worker_sources'],
-        controller_sources=spec['controller_sources'], release_manifest_sha256=r.digest(root / 'release_manifest.json'))
+        controller_sources=spec['controller_sources'], release_manifest_sha256=r.digest(root / 'release_manifest.json'),
+        input_readiness=input_readiness, input_readiness_pin=pin(root / 'input_readiness.json'))
     e.write_new(root / 'ready.json', ready)
-    wait_end = min(deadline - spec['worker_limits']['wall_seconds'] - whole['exit_reserve_seconds'],
-                   start + whole['ready_reserve_seconds'])
     authority_path = root / 'worker_authority.json'
     authority_fingerprint=wait_for_authority_marker(authority_path,wait_end,whole['wrapper_cpu_seconds'])
     authority = read(pin(authority_path))

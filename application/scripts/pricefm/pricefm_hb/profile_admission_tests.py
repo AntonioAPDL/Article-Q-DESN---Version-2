@@ -18,7 +18,7 @@ class AdmissionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='pricefm-r164-gate-')
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name)/('r164-profile-'+'a'*32);self.root.mkdir()
         self.now = 2000000000.0
         self.sources = e.source_closure()
         self.allocation = {'job_id': '123456', 'node': 'node-13', 'affinity': [7], 'cpus_per_task': 1,
@@ -55,7 +55,7 @@ class AdmissionTests(unittest.TestCase):
         # Private synthetic metadata make this test suite portable. The actual
         # R163 contract/cost/native pins are exercised separately by integration
         # packets; the override exists only inside this owned unittest fixture.
-        cost_pin = self.put('canonical_cost', {'study': 'DK2'})
+        cost_pin = self.put('cost_plan', {'study': 'DK2', 'input_allowlist': {}})
         canonical = patch.dict(planning.CANONICAL, {'DK2': {'cost_plan': cost_pin['sha256']}})
         canonical.start(); self.addCleanup(canonical.stop)
         profile = {'schema': 'r163_execution_profile_plan_v1',
@@ -65,24 +65,44 @@ class AdmissionTests(unittest.TestCase):
                    'studies': {'DK2': {'tasks': [{'name': 'DK_2_C0_s1_D_seed0', 'task_sha256': '3'*64,
                                                'imported': False}],
                                        'numerical_environment_evidence': dict(native, native_library_sha256=self.runtime['native_library_sha256'])}}}
+        compiler = self.put('compiler_output', profile)
+        profile['profile_delivery_binding'] = dict(schema=e.DELIVERY_SCHEMA, source_files=self.sources,
+            compiler_output=compiler, contract_source=dict(path=e.p.CONTRACT_PATH, sha256=e.p.CONTRACT_SHA,
+                                                           bytes=e.SUPPORT_BYTES), authority=False)
+        support_path=self.root/e.SUPPORT_RELATIVE;support_path.parent.mkdir(parents=True,exist_ok=True)
+        support_path.write_bytes(e.bounded_read(e.p.CONTRACT_PATH))
+        support=dict(schema=e.SUPPORT_SCHEMA,role=e.SUPPORT_ROLE,logical_path=e.p.CONTRACT_PATH,
+                     path=str(support_path),bytes=e.SUPPORT_BYTES,sha256=e.p.CONTRACT_SHA)
         original = Path(self.put('profile', profile)['path'])
         self.request = {'schema': a.REQUEST_SCHEMA, 'purpose': a.PURPOSE,
                         'profile_plan': {'path': str(original), 'sha256': a.digest(original)},
                         'cost_plan': cost_pin, 'policy': self.policy_pin, 'study': 'DK2',
                         'task': 'DK_2_C0_s1_D_seed0', 'task_sha256': profile['studies']['DK2']['tasks'][0]['task_sha256'],
                         'stage_root': str(self.root), 'execution_order': ['reference', 'instrumented'],
-                        'storage_mode': 'DIRECT_RETAINED_SOURCE'}
+                        'storage_mode': 'DIRECT_RETAINED_SOURCE','profile_support':support}
         self.request_pin = self.put('request', self.request)
+        readiness=dict(schema=e.READINESS_SCHEMA,status='VERIFIED_ORIGINAL_INPUTS_AND_PROFILE_SUPPORT',
+            scope_id=self.scope,allocation=self.allocation,observed_epoch=self.now-10,
+            request_sha256=self.request_pin['sha256'],cost_plan=cost_pin,stage_root=str(self.root),
+            profile_support=support,profile_delivery_binding_sha256=a.identity(profile['profile_delivery_binding']),
+            source_files=self.sources,task_sha256=self.request['task_sha256'],verified_original_input_count=0,
+            verified_original_input_bytes=0,expected_component_sha256='1'*64,
+            original_verification='UNCHANGED_B_LOAD_STAGED_VERIFY_ALL',verification_CPU_seconds=0.,
+            verification_wall_seconds=0.,new_model_fits=0,predictions_executed=False,array_payloads_evaluated=False)
+        readiness_pin=self.put('input_readiness',readiness)
         self.attestation = {'schema': 'r164_profile_job_attestation_v1', 'status': 'COMPUTE_READY',
                             'scope_id': self.scope, 'allocation': self.allocation,
-                            'observed_epoch': self.now-10, 'runtime': self.runtime, 'scheduler_resources': self.actual}
+                            'observed_epoch': self.now-10, 'runtime': self.runtime, 'scheduler_resources': self.actual,
+                            'input_readiness':readiness,'input_readiness_pin':readiness_pin}
         self.attestation_pin = self.put('attestation', self.attestation)
         self.review = {'schema': 'r164_profile_source_review_v1', 'status': 'PASS',
                        'request_sha256': self.request_pin['sha256'], 'policy': self.policy_pin,
                        'source_files': self.sources, 'phase': 'QUALIFICATION_PAIR', 'limits': self.limits,
                        'allocation_limits': self.whole,
                        'whole_component_reference_is_frozen': True, 'fixed_reference_then_instrumented': True,
-                       'all_old_scopes_and_charges_preserved': True}
+                       'all_old_scopes_and_charges_preserved': True,'profile_support':support,
+                       'profile_delivery_binding_sha256':a.identity(profile['profile_delivery_binding']),
+                       'input_readiness':readiness_pin}
         funding = {'schema': 'r164_profile_funding_v1', 'scope_id': self.scope,
                    'phase': 'QUALIFICATION_PAIR', 'status': 'RESERVED_BEFORE_SUBMISSION',
                    'reserved_CPU_seconds': 600, 'cumulative_reserved_CPU_seconds': 600,
@@ -116,8 +136,10 @@ class AdmissionTests(unittest.TestCase):
         self.addCleanup(self.mock_scheduler.stop)
 
     def put(self, name, value):
-        path = self.root/(name+'.json')
-        path.write_text(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False))
+        path = self.root/('metadata/cost_plan.json' if name=='cost_plan' else name+'.json')
+        path.parent.mkdir(parents=True,exist_ok=True)
+        data=(json.dumps(value,sort_keys=True,indent=2,allow_nan=False)+'\n') if name=='input_readiness' else json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
+        path.write_text(data)
         return {'path': str(path), 'sha256': a.digest(path)}
 
     def run_gate(self, **changes):
@@ -130,6 +152,30 @@ class AdmissionTests(unittest.TestCase):
 
     def test_complete_positive_metadata_fixture(self):
         self.assertEqual(self.run_gate()['scope_id'], self.scope)
+
+    def test_missing_or_changed_reviewed_support_delivery_and_readiness_fail(self):
+        original=dict(self.review)
+        for key in ('profile_support','profile_delivery_binding_sha256','input_readiness'):
+            review=dict(original);review.pop(key);self.authority['review']=self.put('review',review)
+            with self.subTest(key=key),self.assertRaisesRegex(ValueError,'independent review must bind'):
+                self.run_gate()
+
+    def test_embedded_readiness_binding_rejects_stale_wrong_role_and_counts(self):
+        import copy
+        profile=a.read_pin(self.request['profile_plan']);cost=a.read_pin(self.request['cost_plan'])
+        for key,value in [('observed_epoch',self.now-301),('source_files',{}),('task_sha256','0'*64),
+                          ('profile_support',{}),('verified_original_input_count',False),
+                          ('original_verification','SKIPPED'),('new_model_fits',False)]:
+            ready=copy.deepcopy(self.attestation);ready['input_readiness'][key]=value
+            encoded=(json.dumps(ready['input_readiness'],indent=2,sort_keys=True,allow_nan=False)+'\n').encode()
+            ready['input_readiness_pin']['sha256']=hashlib.sha256(encoded).hexdigest()
+            with self.subTest(key=key),self.assertRaisesRegex(ValueError,'input readiness request/source/role/clock'):
+                e.validate_input_readiness(self.request,profile,cost,ready,request_sha256=self.request_pin['sha256'],
+                    scope_id=self.scope,sources=self.sources,allocation=self.allocation,now=self.now)
+
+    def test_actual_readiness_file_is_revalidated_before_worker_admission(self):
+        Path(self.attestation['input_readiness_pin']['path']).write_text('{}')
+        with self.assertRaises(ValueError):self.run_gate()
 
     def test_no_legacy_purpose_or_replay(self):
         for key, value in [('purpose', 'COST'), ('automatic_retry', True), ('new_model_fits', 1),

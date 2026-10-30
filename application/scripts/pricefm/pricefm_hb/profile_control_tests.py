@@ -37,7 +37,19 @@ class Fixture:
             self.files.append(dict(local=str(path), relative='code/pricefm_hb/' + name,
                                    sha256=hashlib.sha256(raw).hexdigest(), bytes=len(raw)))
         self.policy = self.metadata('policy', {'purpose': 'distinct'})
-        self.request = self.metadata('request', {'policy': self.policy})
+        cost=self.metadata('cost_plan',{'input_allowlist':{}})
+        compiler=self.metadata('compiler_output',{})
+        self.profile=self.metadata('profile_plan',{'profile_delivery_binding':dict(schema=c.e.DELIVERY_SCHEMA,
+            source_files=self.workers,compiler_output=compiler,contract_source=dict(path=c.e.p.CONTRACT_PATH,
+                sha256=c.e.p.CONTRACT_SHA,bytes=c.e.SUPPORT_BYTES),authority=False)})
+        support_path=base/'profile_contract.py';support_path.write_bytes(c.e.bounded_read(c.e.p.CONTRACT_PATH))
+        self.support=dict(schema=c.e.SUPPORT_SCHEMA,role=c.e.SUPPORT_ROLE,logical_path=c.e.p.CONTRACT_PATH,
+            path=self.remote+'/'+c.e.SUPPORT_RELATIVE,sha256=c.e.p.CONTRACT_SHA,bytes=c.e.SUPPORT_BYTES)
+        self.files.append(dict(local=str(support_path),relative=c.e.SUPPORT_RELATIVE,
+                               sha256=c.e.p.CONTRACT_SHA,bytes=c.e.SUPPORT_BYTES))
+        self.request_value = {'policy': self.policy,'cost_plan':cost,'profile_plan':self.profile,
+            'profile_support':self.support,'stage_root':'/owned/retained/stage','task_sha256':'3'*64}
+        self.request = self.metadata('request', self.request_value)
         self.reservation = self.metadata('reservation', dict(schema='r164_profile_reservation_v1',
             status='CPU_RESERVED_BEFORE_SUBMISSION', scope_id=scope, phase='QUALIFICATION_PAIR',
             request_sha256=self.request['sha256'], source_files=self.workers, reserved_CPU_seconds=600,
@@ -210,7 +222,7 @@ class LifecycleTests(unittest.TestCase):
             c.validate_spec(self.f.spec, now=self.f.spec['controller_expires_epoch'] + 1, admit_new_work=False)
 
     def test_remote_pin_local_resolution_checks_exact_hash(self):
-        self.assertEqual(c.spec_read(self.f.spec, self.f.request), {'policy': self.f.policy})
+        self.assertEqual(c.spec_read(self.f.spec, self.f.request), self.f.request_value)
         bad = dict(self.f.request, sha256='0' * 64)
         with self.assertRaises(ValueError): c.spec_read(self.f.spec, bad)
 
@@ -284,7 +296,17 @@ class LifecycleTests(unittest.TestCase):
         spec = copy.deepcopy(self.f.spec); spec['request']['sha256'] = binding['request_sha256']; spec['worker_sources'] = binding['executed_sources']
         trusted = {k: copy.deepcopy(binding[k]) for k in ('expected_packets', 'expected_chunk_identities', 'expected_result')}
         trusted['expected_packets']['checkpoints/clock24_part000/predictions.npz'] = {'truth': {'dtype': '<f8', 'shape': [2]}}
-        with patch.object(c, 'spec_read', return_value={'task_sha256': binding['task_sha256']}), \
+        # Isolate the existing canonical-universe negative boundary. Exact raw
+        # READY/readiness counterparts have their own real metadata test.
+        request=dict(self.f.request_value,task_sha256=binding['task_sha256'])
+        profile=c.spec_read(self.f.spec,self.f.profile)
+        readiness=dict(path=self.f.remote+'/input_readiness.json',sha256='4'*64)
+        actual_ready=c.read(c.pin(ready));actual_ready['input_readiness']={'expected_component_sha256':r.identity(trusted)}
+        binding.update(profile_support=self.f.support,
+            profile_delivery_binding_sha256=r.identity(profile['profile_delivery_binding']),input_readiness=readiness)
+        (pair/'execution_identity.json').write_text(json.dumps(binding))
+        with patch.object(c, 'spec_read', side_effect=lambda _,ref:profile if ref==self.f.profile else request), \
+             patch.object(c, 'verify_returned_readiness', return_value=(actual_ready,readiness)), \
              patch.object(c, 'canonical_return_expectation', return_value=trusted):
             with self.assertRaisesRegex(ValueError, 'independently pinned canonical'):
                 c.verify_return(root, spec, claim)
@@ -514,7 +536,7 @@ class AuthorityMarkerTests(unittest.TestCase):
             allocation_limits=dict(wall_seconds=.1,wrapper_cpu_seconds=100,aggregate_cpu_seconds=600,
                                    exit_reserve_seconds=.01,ready_reserve_seconds=.015),
             worker_limits=dict(wall_seconds=.01),environment_bundle='/dummy/not-loaded',scope_id='dummy-only',
-            request=dict(sha256='0'*64),worker_sources={},controller_sources={})
+            request=dict(sha256='0'*64),worker_sources={},controller_sources={},controller_limits=dict(ready_wait_seconds=.005))
         def read(value):
             name=Path(value['path']).name
             if name=='spec.json':return spec
@@ -526,7 +548,8 @@ class AuthorityMarkerTests(unittest.TestCase):
                 patch.object(c,'validate_spec'),patch.object(c.Path,'cwd',return_value=self.root),
                 patch.object(c.signal,'signal'),patch.object(c.signal,'setitimer'),patch.object(c.resource,'setrlimit'),
                 patch.object(environment,'verify_runtime',return_value={'status':'dummy-not-executed'}),
-                patch.object(c.a,'scheduler_evidence',return_value={'end_epoch':time.time()+2}),patch.object(c.e,'write_new')]
+                patch.object(c.a,'scheduler_evidence',return_value={'end_epoch':time.time()+2}),patch.object(c.e,'write_new'),
+                patch.object(c,'allocated_input_readiness',return_value={'dummy':'input readiness mocked for marker-only test'})]
     def test_actual_compute_flow_two_link_crash_never_reads_authority_or_spawns(self):
         os.link(self.part,self.marker);patches=self.compute_fixture()
         for item in patches:item.start()
@@ -535,6 +558,17 @@ class AuthorityMarkerTests(unittest.TestCase):
                 c.compute_session(self.root/'spec.json')
             spawn.assert_not_called()
             self.assertEqual([Path(row.args[0]['path']).name for row in c.read.call_args_list],['spec.json','release_manifest.json'])
+        finally:
+            for item in reversed(patches):item.stop()
+
+    def test_ready_is_not_published_without_full_worker_exit_and_review_allowance(self):
+        patches=self.compute_fixture()
+        for item in patches:item.start()
+        try:
+            with patch.object(c.a,'scheduler_evidence',return_value={'end_epoch':time.time()+.01}), \
+                 patch.object(c.subprocess,'Popen') as spawn,self.assertRaisesRegex(ValueError,'readiness leaves no original worker'):
+                c.compute_session(self.root/'spec.json')
+            spawn.assert_not_called();c.e.write_new.assert_not_called()
         finally:
             for item in reversed(patches):item.stop()
     def test_actual_compute_flow_single_link_still_requires_original_authority_gate(self):
@@ -774,6 +808,58 @@ class AccountingTests(unittest.TestCase):
         self.assertFalse(result['complete']); self.assertFalse(result['terminal'])
         self.assertIsNone(result['canonical_primary_CPU_seconds'])
         self.assertEqual(result['unresolved_full_reservation_CPU_seconds'], 600)
+
+
+class AllocatedInputReadinessTests(unittest.TestCase):
+    def test_returned_ready_and_readiness_are_exact_local_counterparts(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm_readiness_return_',dir='/dev/shm') as tmp:
+            root=Path(tmp);raw=root/'returned_raw';raw.mkdir();receipt={'fixed':'allocated metadata'}
+            c.e.write_new(raw/'input_readiness.json',receipt)
+            ref=dict(path='/home/jaguir26/exact-new-release/input_readiness.json',sha256=r.digest(raw/'input_readiness.json'))
+            ready=dict(observed_epoch=123.,input_readiness=receipt,input_readiness_pin=ref)
+            c.e.write_new(root/'canonical_ready.json',ready);c.e.write_new(raw/'ready.json',ready)
+            claim=dict(attestation=c.pin(root/'canonical_ready.json'))
+            with patch.object(c,'ready_input_binding',return_value=ref) as binding:
+                self.assertEqual(c.verify_returned_readiness(raw,{},claim),(ready,ref))
+                binding.assert_called_once_with({},ready,now=123.)
+                (raw/'input_readiness.json').write_text('{}')
+                with self.assertRaisesRegex(ValueError,'returned exact allocated input readiness'):
+                    c.verify_returned_readiness(raw,{},claim)
+                (raw/'ready.json').write_text('{}')
+                with self.assertRaisesRegex(ValueError,'returned exact allocated READY'):
+                    c.verify_returned_readiness(raw,{},claim)
+
+    def test_original_verification_support_and_actual_metadata_expectation_precede_receipt(self):
+        allocation={'job_id':'private','node':'private'};order=[]
+        request=dict(cost_plan={'path':'/private/cost.json','sha256':'1'*64},stage_root='/old/unchanged/stage',
+                     profile_support={'fixed':'contract'},task_sha256='2'*64)
+        profile={'profile_delivery_binding':{'fixed':'new delivery'}};cost={'input_allowlist':{'old':{'bytes':7}}}
+        spec=dict(request={'path':'/private/request.json','sha256':'3'*64},remote_root='/private/new',scope_id='private')
+        def old(cst,root):order.append('original_all_input_verification');self.assertIs(cst,cost);self.assertEqual(root,request['stage_root']);return {},{},'original resolver'
+        def support(base,req):order.append('support');self.assertEqual(base,'original resolver');self.assertIs(req,request)
+        def expected(cst,req):order.append('actual_expected_component');return {'metadata':'shape only'}
+        with patch.object(c,'require_compute',return_value=allocation),patch.object(c,'read',return_value=request), \
+             patch.object(c.e,'validate_request',return_value=(profile,cost,{})),patch.object(c.e.b,'load_staged',side_effect=old), \
+             patch.object(c.e,'profile_resolver',side_effect=support),patch.object(c.e,'expected_component',side_effect=expected), \
+             patch.object(c.e,'source_closure',return_value={'fixed':'sources'}),patch.object(c.e,'write_new') as write:
+            receipt=c.allocated_input_readiness(spec,allocation)
+        self.assertEqual(order,['original_all_input_verification','support','actual_expected_component'])
+        self.assertEqual(receipt['verified_original_input_count'],1);self.assertEqual(receipt['verified_original_input_bytes'],7)
+        self.assertFalse(receipt['predictions_executed']);self.assertFalse(receipt['array_payloads_evaluated'])
+        self.assertEqual(write.call_args.args[0],Path('/private/new/input_readiness.json'))
+
+    def test_unallocated_or_failed_expectation_cannot_publish_readiness(self):
+        with patch.object(c,'require_compute',side_effect=RuntimeError('no allocation')), \
+             patch.object(c.e.b,'load_staged') as loader,patch.object(c.e,'write_new') as write:
+            with self.assertRaisesRegex(RuntimeError,'no allocation'):c.allocated_input_readiness({}, {})
+            loader.assert_not_called();write.assert_not_called()
+        request=dict(stage_root='/unchanged');profile={};cost={};spec=dict(request={})
+        with patch.object(c,'require_compute',return_value={}),patch.object(c,'read',return_value=request), \
+             patch.object(c.e,'validate_request',return_value=(profile,cost,{})), \
+             patch.object(c.e.b,'load_staged',return_value=({}, {}, 'original')),patch.object(c.e,'profile_resolver'), \
+             patch.object(c.e,'expected_component',side_effect=KeyError('missing dependency')),patch.object(c.e,'write_new') as write:
+            with self.assertRaisesRegex(KeyError,'missing dependency'):c.allocated_input_readiness(spec,{})
+            write.assert_not_called()
 
 
 if __name__ == '__main__': unittest.main()

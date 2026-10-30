@@ -16,6 +16,92 @@ from . import execution_profile as e
 from . import registry as r
 
 
+class ProfileSupportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory(prefix='pricefm_profile_support_',dir='/dev/shm');self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name)/('r164-profile-'+'b'*32);self.root.mkdir()
+        self.path=self.root/e.SUPPORT_RELATIVE;self.path.parent.mkdir(parents=True)
+        self.raw=e.bounded_read(e.p.CONTRACT_PATH);self.path.write_bytes(self.raw)
+        self.request=dict(cost_plan=dict(path=str(self.root/'metadata/cost_plan.json'),sha256='1'*64),
+            profile_support=dict(schema=e.SUPPORT_SCHEMA,role=e.SUPPORT_ROLE,logical_path=e.p.CONTRACT_PATH,
+                path=str(self.path),bytes=e.SUPPORT_BYTES,sha256=e.p.CONTRACT_SHA))
+
+    def test_only_contract_is_overlaid_original_paths_and_directories_are_identical(self):
+        stage=self.root/'old_stage';f=stage/'files/fixed/value.json';f.parent.mkdir(parents=True);f.write_bytes(b'{}')
+        original=e.b.Resolver(stage,dict(assets={'/fixed/value.json':dict(path='files/fixed/value.json',bytes=2,sha256=r.digest(f))}))
+        wrapped=e.profile_resolver(original,self.request)
+        self.assertIs(wrapped.assets,original.assets)
+        self.assertEqual(wrapped.path('/fixed/value.json'),original.path('/fixed/value.json'))
+        self.assertEqual(wrapped.directory('/fixed'),original.directory('/fixed'))
+        self.assertEqual(wrapped.path(e.p.CONTRACT_PATH,verify=False),self.path)
+        with self.assertRaises(KeyError):wrapped.path('/unlisted_contract.py')
+
+    def test_wrong_missing_extra_role_path_hash_size_and_old_release_are_rejected(self):
+        cases=[dict(self.request,profile_support=None)]
+        for key,value in [('role','OTHER'),('logical_path','/other.py'),('path',str(self.root/'other.py')),
+                          ('sha256','0'*64),('bytes',13278.),('extra',True)]:
+            q=copy.deepcopy(self.request);q['profile_support'][key]=value;cases.append(q)
+        q=copy.deepcopy(self.request);q['cost_plan']['path']='/owned/r157-old/metadata/cost_plan.json';cases.append(q)
+        for q in cases:
+            with self.subTest(q=q),self.assertRaises(ValueError):e.validate_profile_support(q)
+
+    def test_tampered_missing_symlink_and_hardlink_support_fail_closed(self):
+        self.path.write_bytes(b'x'+self.raw[1:])
+        with self.assertRaises(ValueError):e.validate_profile_support(self.request)
+        self.path.unlink()
+        with self.assertRaises(FileNotFoundError):e.validate_profile_support(self.request)
+        self.path.symlink_to(e.p.CONTRACT_PATH)
+        with self.assertRaises(ValueError):e.validate_profile_support(self.request)
+        self.path.unlink();self.path.write_bytes(self.raw);alias=self.root/'alias.py';os.link(self.path,alias)
+        with self.assertRaises(ValueError):e.validate_profile_support(self.request)
+
+    def test_delivery_retains_exact_compiler_bytes_and_binds_current_sources(self):
+        original={'schema':'private original compiler fixture','typed_integer':1};compiler=self.root/'compiler.json';compiler.write_text(json.dumps(original))
+        profile=dict(original,profile_delivery_binding=dict(schema=e.DELIVERY_SCHEMA,source_files=e.source_closure(),
+            compiler_output=dict(path=str(compiler),sha256=r.digest(compiler)),
+            contract_source=dict(path=e.p.CONTRACT_PATH,sha256=e.p.CONTRACT_SHA,bytes=e.SUPPORT_BYTES),authority=False))
+        e.validate_delivery_binding(profile)
+        for changed in [dict(profile,changed=True),dict(profile,typed_integer=True),dict(profile,typed_integer=1.),
+                        dict(profile,profile_delivery_binding=dict(profile['profile_delivery_binding'],source_files={}))]:
+            with self.assertRaises(ValueError):e.validate_delivery_binding(changed)
+
+    def test_controller_rejects_readiness_expectation_divergence_before_children(self):
+        request=dict(self.request,task_sha256='1'*64,storage_mode='DIRECT_RETAINED_SOURCE')
+        profile={'profile_delivery_binding':{'private':'delivery'}}
+        output=self.root/'ACTUAL_COMPONENT_PROFILE'/'private'
+        admission=dict(limits={},expires_epoch=1,output_root=str(output),scope_id='private',
+                       parity_runtime={'native_library_sha256':{}})
+        paths=[]
+        for name,value in [('request',request),('authority',{}),('attestation',dict(input_readiness_pin={},
+                input_readiness={'expected_component_sha256':'0'*64}))]:
+            path=self.root/(name+'.json');path.write_text(json.dumps(value));paths.append(path)
+        with patch.object(e,'gate',return_value=(request,profile,{}, {},admission,{})),patch.object(e,'ProfileBudget'), \
+             patch.object(e,'expected_component',return_value={'private':'canonical shape metadata'}), \
+             patch.object(e.subprocess,'Popen') as spawn:
+            with self.assertRaisesRegex(ValueError,'metadata differs from allocated input readiness'):
+                e.run_profile(*paths,output)
+            spawn.assert_not_called()
+
+    def test_both_child_roles_attach_support_only_after_original_load_staged(self):
+        for role in e.ORDER:
+            with self.subTest(role=role):
+                output_root=self.root/'ACTUAL_COMPONENT_PROFILE'/role;output=output_root/role
+                admission=dict(limits={},expires_epoch=1,output_root=str(output_root),parity_runtime={'native_library_sha256':{}})
+                order=[];cost={'fixed':'old inventory'};original=SimpleNamespace(root=self.root,manifest={},assets={})
+                req=dict(self.request,stage_root='/original/unchanged/stage',task='fixed',task_sha256=r.identity({'name':'fixed','reuse':None,'scientific_identity_sha256':'x'}))
+                task=dict(name='fixed',reuse=None,scientific_identity_sha256='x')
+                def load(c,root):order.append('original_verify');self.assertIs(c,cost);self.assertEqual(root,req['stage_root']);return {'tasks':[task]}, {}, original
+                def attach(base,request):order.append('attach_support');self.assertIs(base,original);return base
+                with patch.object(e,'gate',return_value=(req,{},cost,{},admission,{})),patch.object(e,'ProfileBudget'), \
+                     patch.object(e.b,'load_staged',side_effect=load),patch.object(e,'profile_resolver',side_effect=attach), \
+                     patch.object(e.p,'original',return_value=lambda t:'private identity'),patch.object(e.r,'identity',return_value='x'), \
+                     patch.object(e.b,'frozen_adapter',side_effect=RuntimeError('stop before numerical imports')):
+                    req['task_sha256']='x'
+                    with self.assertRaisesRegex(RuntimeError,'stop before numerical imports'):
+                        e.execute_component('/unused','/unused','/unused',output,role,1,1)
+                self.assertEqual(order,['original_verify','attach_support'])
+
+
 class Clock:
     def __init__(self):
         self.value = 0

@@ -26,7 +26,7 @@ POLICY_SCHEMA = "r164_profile_resource_policy_v1"
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 MAX_JSON = 16 * 1024**2
 REQUEST_FIELDS = {"schema", "purpose", "profile_plan", "cost_plan", "policy",
-                  "study", "task", "task_sha256", "stage_root", "execution_order", "storage_mode"}
+                  "study", "task", "task_sha256", "stage_root", "execution_order", "storage_mode", "profile_support"}
 LIMIT_FIELDS = {"aggregate_cpu_seconds", "wall_seconds", "memory_MiB"}
 
 
@@ -192,6 +192,9 @@ def validate_request(request):
             and request['cost_plan']['sha256'] == planning.CANONICAL[request['study']]['cost_plan']
             and request['cost_plan']['sha256'] == plan['input_pins']['studies'][request['study']]['cost_plan']['sha256'],
             "exact original regional cost-plan identity differs")
+    from . import execution_profile as execution
+    execution.validate_profile_support(request)
+    execution.validate_delivery_binding(plan)
     return {"profile_plan": plan, "cost_plan": cost, "task": matches[0]}
 
 
@@ -323,6 +326,15 @@ def validate_worker(*, request, request_sha256, authority, authority_sha256,
             and number(attestation.get("observed_epoch"))
             and 0 <= now - attestation["observed_epoch"] <= (300 if role == 'controller' else limits['wall_seconds'] + 300),
             "fresh exact-job compute attestation required")
+    from . import execution_profile as execution
+    readiness = execution.validate_input_readiness(request, contract['profile_plan'], contract['cost_plan'], attestation,
+        request_sha256=request_sha256, scope_id=authority['scope_id'], sources=executed_sources,
+        allocation=allocation, now=now, max_age=300 if role == 'controller' else limits['wall_seconds'] + 300)
+    require(read_pin(readiness) == attestation['input_readiness'], 'actual pinned allocated readiness file changed')
+    require(review.get('profile_support') == request['profile_support']
+            and review.get('profile_delivery_binding_sha256') == identity(contract['profile_plan']['profile_delivery_binding'])
+            and review.get('input_readiness') == readiness,
+            'independent review must bind exact support, delivery and allocated readiness')
     output_root = physical(authority['output_root'])
     require('ACTUAL_COMPONENT_PROFILE' in output_root.parts and output_root.name == authority['scope_id'],
             "exact owned scope-specific profile output required")
@@ -332,7 +344,9 @@ def validate_worker(*, request, request_sha256, authority, authority_sha256,
         for key, value in {'request_sha256': request_sha256, 'authority_sha256': authority_sha256,
                            'attestation_sha256': attestation_sha256, 'executed_sources': executed_sources,
                            'allocation': allocation, 'scope_id': authority['scope_id'],
-                           'task_sha256': request['task_sha256']}.items():
+                           'task_sha256': request['task_sha256'], 'profile_support':request['profile_support'],
+                           'profile_delivery_binding_sha256':identity(contract['profile_plan']['profile_delivery_binding']),
+                           'input_readiness':readiness}.items():
             require(claim.get(key) == value, "paired controller claim differs: " + key)
         parent = claim.get('process', {})
         require(parent.get('pid') == os.getppid()

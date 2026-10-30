@@ -16,6 +16,7 @@ import math
 import os
 from pathlib import Path
 import resource
+import re
 import signal
 import stat
 import subprocess
@@ -34,8 +35,14 @@ SCHEMA = 'r164_actual_component_profile_request_v1'
 PURPOSE = 'ACTUAL_COMPONENT_PROFILE'
 ORDER = ['reference', 'instrumented']
 REQUEST_KEYS = {'schema', 'purpose', 'profile_plan', 'cost_plan', 'policy', 'study',
-                'task', 'task_sha256', 'stage_root', 'execution_order', 'storage_mode'}
+                'task', 'task_sha256', 'stage_root', 'execution_order', 'storage_mode', 'profile_support'}
 MAX_METADATA = 16 * 1024**2
+SUPPORT_SCHEMA = 'r165_profile_contract_supplement_v1'
+SUPPORT_ROLE = 'CANONICAL_R150_ARRAY_CONTRACT'
+SUPPORT_BYTES = 13278
+SUPPORT_RELATIVE = 'metadata/support/pricefm_r150_contract.py'
+DELIVERY_SCHEMA = 'r165_profile_delivery_binding_v1'
+READINESS_SCHEMA = 'r165_profile_input_readiness_v1'
 COMPONENT_LOOP_AST = '9b466b16f5d39890892a629c02ddf9069024a8c16ca22274e628a751231e234a'
 COMPONENT_LOOP_GLOBALS = {'Path', 'PrefixError', 'RESULT_SCHEMA', 'finite', 'len', 'r', 'seal_directory', 'time'}
 PHASES = ('startup_and_authority', 'input_verification', 'runtime_and_adapter_setup',
@@ -106,6 +113,106 @@ def source_closure():
     return result
 
 
+def validate_profile_support(request, *, verify=True):
+    """One explicit profile-only source, outside the immutable cost inventory."""
+    value = request.get('profile_support')
+    require(type(value) is dict and set(value) == {'schema', 'role', 'logical_path', 'path', 'bytes', 'sha256'},
+            'exact profile contract supplement required')
+    cost_path = Path(request['cost_plan']['path'])
+    root = cost_path.parent.parent
+    require(cost_path.is_absolute() and '..' not in cost_path.parts
+            and cost_path.name == 'cost_plan.json' and cost_path.parent.name == 'metadata'
+            and re.fullmatch(r'r164-profile-[a-z0-9]{16,64}', root.name),
+            'supplement requires a distinct new profile release cost pin')
+    require(value == dict(schema=SUPPORT_SCHEMA, role=SUPPORT_ROLE, logical_path=p.CONTRACT_PATH,
+                          path=str(root / SUPPORT_RELATIVE), bytes=SUPPORT_BYTES, sha256=p.CONTRACT_SHA)
+            and type(value['bytes']) is int,
+            'only the exact original canonical contract role/path/bytes/hash is supported')
+    if verify:
+        path = planning.physical(value['path']); before = path.stat()
+        require(before.st_nlink == 1, 'single-link profile support source required')
+        raw = bounded_read(path, SUPPORT_BYTES); after = path.stat()
+        require(after.st_nlink == 1 and fingerprint(before) == fingerprint(after)
+                and len(raw) == SUPPORT_BYTES and hashlib.sha256(raw).hexdigest() == p.CONTRACT_SHA,
+                'original profile support source changed')
+    return value
+
+
+def validate_delivery_binding(profile, *, read_evidence=None):
+    """The immutable compiler output is preserved, with new delivery authority explicit."""
+    read_evidence = read_pin if read_evidence is None else read_evidence
+    value = profile.get('profile_delivery_binding')
+    require(type(value) is dict and set(value) == {'schema', 'source_files', 'compiler_output', 'contract_source', 'authority'}
+            and value.get('schema') == DELIVERY_SCHEMA and value.get('authority') is False,
+            'exact non-admitting profile delivery binding required')
+    require(value['source_files'] == source_closure()
+            and value['contract_source'] == dict(path=p.CONTRACT_PATH, sha256=p.CONTRACT_SHA, bytes=SUPPORT_BYTES)
+            and type(value['contract_source']['bytes']) is int,
+            'delivery must bind current execution sources and unchanged original contract')
+    original = read_evidence(value['compiler_output'])
+    require(type(original) is dict and 'profile_delivery_binding' not in original
+            and r.identity({k: v for k, v in profile.items() if k != 'profile_delivery_binding'}) == r.identity(original),
+            'derived plan must retain the exact pinned original compiler output')
+    return value
+
+
+class ProfileResolver:
+    """Resolve only the additional canonical contract; all original lookups stay exact."""
+    def __init__(self, original, request):
+        self.original = original
+        self.request = request
+        self.root, self.manifest, self.assets = original.root, original.manifest, original.assets
+        require(p.CONTRACT_PATH not in self.assets, 'profile support cannot shadow an original cost input')
+        validate_profile_support(request)
+
+    def path(self, logical, verify=True):
+        if str(logical) == p.CONTRACT_PATH:
+            # The supplement is always verified, even if an original caller
+            # disables its own optional verification flag.
+            return Path(validate_profile_support(self.request)['path'])
+        return self.original.path(logical, verify=verify)
+
+    def directory(self, logical):
+        return self.original.directory(logical)
+
+
+def profile_resolver(original, request):
+    return ProfileResolver(original, request)
+
+
+def validate_input_readiness(request, profile, cost, ready, *, request_sha256, scope_id, sources, allocation,
+                             now=None, max_age=300):
+    """Validate the embedded, pinned allocated receipt without an extra remote call."""
+    now = time.time() if now is None else now
+    receipt = ready.get('input_readiness'); ref = ready.get('input_readiness_pin')
+    require(type(receipt) is dict and receipt.get('schema') == READINESS_SCHEMA
+            and receipt.get('status') == 'VERIFIED_ORIGINAL_INPUTS_AND_PROFILE_SUPPORT',
+            'allocated complete input readiness receipt required')
+    encoded = (json.dumps(receipt, indent=2, sort_keys=True, allow_nan=False) + '\n').encode()
+    root = Path(request['cost_plan']['path']).parent.parent
+    require(ref == dict(path=str(root / 'input_readiness.json'), sha256=hashlib.sha256(encoded).hexdigest()),
+            'embedded input readiness bytes/pin differ')
+    require(receipt.get('scope_id') == scope_id and receipt.get('allocation') == allocation
+            and receipt.get('request_sha256') == request_sha256
+            and receipt.get('cost_plan') == request['cost_plan'] and receipt.get('stage_root') == request['stage_root']
+            and r.identity(receipt.get('profile_support')) == r.identity(validate_profile_support(request, verify=False))
+            and receipt.get('profile_delivery_binding_sha256') == r.identity(profile['profile_delivery_binding'])
+            and receipt.get('source_files') == sources and receipt.get('task_sha256') == request['task_sha256']
+            and receipt.get('verified_original_input_count') == len(cost['input_allowlist'])
+            and type(receipt.get('verified_original_input_count')) is int
+            and receipt.get('verified_original_input_bytes') == sum(v['bytes'] for v in cost['input_allowlist'].values())
+            and type(receipt.get('verified_original_input_bytes')) is int
+            and re.fullmatch('[a-f0-9]{64}', str(receipt.get('expected_component_sha256', '')))
+            and receipt.get('original_verification') == 'UNCHANGED_B_LOAD_STAGED_VERIFY_ALL'
+            and receipt.get('new_model_fits') == 0 and type(receipt.get('new_model_fits')) is int
+            and finite(receipt.get('verification_CPU_seconds')) and finite(receipt.get('verification_wall_seconds'))
+            and receipt.get('predictions_executed') is False
+            and receipt.get('array_payloads_evaluated') is False
+            and finite(receipt.get('observed_epoch'), True) and 0 <= now - receipt['observed_epoch'] <= max_age,
+            'input readiness request/source/role/clock binding changed')
+    return ref
+
+
 def validate_request(request):
     require(type(request) is dict and set(request) == REQUEST_KEYS, 'exact actual-profile request required')
     require(request['schema'] == SCHEMA and request['purpose'] == PURPOSE,
@@ -131,6 +238,8 @@ def validate_request(request):
     require(len(entries) == 1 and entries[0]['task_sha256'] == request['task_sha256']
             and entries[0]['imported'] is False, 'exact non-imported complete canonical task required')
     read_pin(request['policy'])
+    validate_profile_support(request)
+    validate_delivery_binding(profile)
     return profile, cost, entries[0]
 
 
@@ -355,7 +464,7 @@ def instrumented_component_loop(meter):
 def expected_component(cost, request):
     """Bind parity to the canonical metadata, not two self-consistent outputs."""
     assets = {path: dict(entry, path=entry['staged_relative_path']) for path, entry in cost['input_allowlist'].items()}
-    resolver = b.Resolver(request['stage_root'], dict(assets=assets))
+    resolver = profile_resolver(b.Resolver(request['stage_root'], dict(assets=assets)), request)
     pin = cost['canonical_preparation']
     prep = read_pin(dict(path=str(planning.physical(resolver.path(pin['path']))), sha256=pin['sha256']))
     tasks = [t for t in prep['tasks'] if t['name'] == request['task']]
@@ -397,6 +506,7 @@ def execute_component(request_path, authority_path, attestation_path, output, ro
     try:
         with meter.phase('input_verification'):
             prep, config, resolver = b.load_staged(cost, request['stage_root'])
+            resolver = profile_resolver(resolver, request)
             tasks = [t for t in prep['tasks'] if t['name'] == request['task']]
             require(len(tasks) == 1 and r.identity(tasks[0]) == request['task_sha256'], 'complete staged task changed')
             task = tasks[0]
@@ -421,6 +531,9 @@ def execute_component(request_path, authority_path, attestation_path, output, ro
             context_identity = p.original('context_identity', resolver=resolver)
             executed = dict(role=role, task=task['name'], task_sha256=r.identity(task),
                 source=prep['source'], executed_sources=source_closure(),
+                profile_support=request['profile_support'],
+                profile_delivery_binding_sha256=r.identity(profile['profile_delivery_binding']),
+                input_readiness=read_pin(dict(path=str(Path(attestation_path)), sha256=r.digest(attestation_path)))['input_readiness_pin'],
                 authority_sha256=r.digest(authority_path), attestation_sha256=r.digest(attestation_path),
                 request_sha256=r.digest(request_path), scope_id=admission['scope_id'], allocation=allocation,
                 runtime=adapter.reference_numerical_profile, process=context_evidence(),
@@ -600,9 +713,16 @@ def run_profile(request_path, authority_path, attestation_path, output):
             attestation_sha256=r.digest(attestation_path), executed_sources=source_closure(),
             allocation=allocation, scope_id=admission['scope_id'], task_sha256=request['task_sha256'],
             native_library_sha256=admission['parity_runtime']['native_library_sha256'],
-            execution_order=ORDER, storage_mode=request['storage_mode'], process=context_evidence())
+            execution_order=ORDER, storage_mode=request['storage_mode'], process=context_evidence(),
+            profile_support=request['profile_support'],
+            profile_delivery_binding_sha256=r.identity(profile['profile_delivery_binding']),
+            input_readiness=read_pin(dict(path=str(Path(attestation_path)), sha256=r.digest(attestation_path)))['input_readiness_pin'])
         with meter.phase('input_verification'):
-            binding.update(expected_component(cost, request))
+            expected = expected_component(cost, request)
+            attested = read_pin(dict(path=str(Path(attestation_path)), sha256=r.digest(attestation_path)))
+            require(r.identity(expected) == attested['input_readiness']['expected_component_sha256'],
+                    'actual canonical metadata differs from allocated input readiness')
+            binding.update(expected)
         write_new(output / 'execution_identity.json', binding)
     try:
         for role in ORDER:

@@ -23,6 +23,12 @@
   result notices intact and source-derived draft metadata. This is not
   scientific result promotion or submission approval; every other publication
   gate remains mandatory.
+- Direct-Overleaf-ahead history still blocks ordinary publication. Only the
+  publisher's explicit `--reconcile-reviewed-direct` option may reconcile the
+  exact tip in its committed audit contract, after confirming that every
+  browser edit was captured and dispositioned. Publish a sanitized article-
+  only child of that tip; never merge its history into research main. Any
+  unreviewed edit, changed source projection or changed remote ref must stop.
 - Supply credentials only through Git's credential cache, primed separately
   at an interactive Git prompt. Never put a token in a URL, command, file,
   commit, log, or chat message.

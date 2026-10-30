@@ -7,7 +7,8 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/publish_overleaf_article_snapshot.sh \
-    --source-commit FULL_ORIGIN_MAIN_SHA [--review-draft] [--dry-run]
+    --source-commit FULL_ORIGIN_MAIN_SHA [--review-draft] [--dry-run] \
+    [--reconcile-reviewed-direct FULL_REVIEWED_DIRECT_SHA]
 
 This is the sole supported Overleaf publication command. It publishes the
 verified article-only projection of an exact, freshly fetched origin/main to
@@ -17,6 +18,11 @@ command-line Git pushes only.
 --review-draft explicitly permits only the visibly marked historical GloFAS
 draft while unit-member refits remain pending. It does not certify corrected
 scientific results or relax any source, history, build, or readback guard.
+
+--reconcile-reviewed-direct permits only the exact external commit covered by
+the committed reviewed reconciliation contract. Its edits must already have
+reviewed dispositions in main. A new article-only child preserves that external
+commit in publication history, never in research main; no force push is used.
 EOF
 }
 
@@ -75,6 +81,7 @@ validate_remote_urls() {
 source_commit=
 dry_run=false
 review_draft_arguments=()
+reviewed_direct_commit=
 
 while (( $# > 0 )); do
   case "$1" in
@@ -91,6 +98,11 @@ while (( $# > 0 )); do
       review_draft_arguments=(--review-draft)
       shift
       ;;
+    --reconcile-reviewed-direct)
+      (( $# >= 2 )) || die "--reconcile-reviewed-direct requires a full commit hash"
+      reviewed_direct_commit=$2
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -103,6 +115,8 @@ done
 
 [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] ||
   die "--source-commit must be a lowercase 40-character commit hash"
+[[ -z "$reviewed_direct_commit" || "$reviewed_direct_commit" =~ ^[0-9a-f]{40}$ ]] ||
+  die "--reconcile-reviewed-direct must be a lowercase 40-character commit hash"
 
 for command_name in git flock python3 pdflatex bibtex pdfinfo; do
   command -v "$command_name" >/dev/null 2>&1 ||
@@ -193,6 +207,8 @@ local_head=$(git rev-parse --verify HEAD^{commit})
 
 old_origin_snapshot=$(git rev-parse --verify refs/remotes/origin/overleaf/article-snapshot^{commit})
 old_direct=$(git rev-parse --verify refs/remotes/overleaf-direct/main^{commit})
+publication_parent=$old_origin_snapshot
+reviewed_reconciliation=false
 
 marker_value_from_commit() {
   local commit=$1
@@ -293,14 +309,23 @@ if [[ "$old_origin_snapshot" != "$old_direct" ]]; then
     [[ "$(git rev-parse refs/remotes/origin/main)" == "$source_commit" ]] ||
       die "RECOVERY_COMPLETE_SOURCE_MAIN_MOVED: publication refs are equal; rerun from the new origin/main"
   elif git merge-base --is-ancestor "$old_origin_snapshot" "$old_direct"; then
-    die "DIRECT_OVERLEAF_AHEAD: forbidden one-way flow violation; inspect browser edits without merging them"
+    [[ -n "$reviewed_direct_commit" ]] ||
+      die "DIRECT_OVERLEAF_AHEAD: forbidden one-way flow violation; inspect browser edits without merging them"
+    python3 "$repo_root/scripts/overleaf_reviewed_reconciliation.py" \
+      "$source_commit" "$old_origin_snapshot" "$old_direct" "$reviewed_direct_commit" ||
+      die "REVIEWED_DIRECT_RECONCILIATION_INVALID: no publication ref was changed"
+    publication_parent=$old_direct
+    reviewed_reconciliation=true
   else
     die "PUBLICATION_REF_DIVERGENCE: snapshot and direct Overleaf have unrelated commits"
   fi
 fi
 
-[[ "$old_origin_snapshot" == "$old_direct" ]] ||
+[[ "$old_origin_snapshot" == "$old_direct" || "$reviewed_reconciliation" == true ]] ||
   die "INTERNAL_RECOVERY_ERROR: publication refs remain unequal"
+if [[ "$reviewed_reconciliation" == false ]]; then
+  publication_parent=$old_origin_snapshot
+fi
 
 mkdir -p "$stage_dir"
 scripts/build_overleaf_article_snapshot.sh "$source_commit" "$stage_dir"
@@ -314,16 +339,16 @@ git_network -C "$publish_repo" fetch -q --no-tags origin \
   "refs/heads/overleaf/article-snapshot:refs/remotes/origin/overleaf/article-snapshot"
 git_network -C "$publish_repo" fetch -q --no-tags overleaf-direct \
   "refs/heads/main:refs/remotes/overleaf-direct/main"
-git -C "$publish_repo" checkout -q --detach "$old_origin_snapshot"
+git -C "$publish_repo" checkout -q --detach "$publication_parent"
 
 git -C "$publish_repo" rm -q -r -f --ignore-unmatch .
 cp -a "$stage_dir/." "$publish_repo/"
 git -C "$publish_repo" add --force --all
 staged_tree=$(git -C "$publish_repo" write-tree)
 
-parent_tree=$(git rev-parse "${old_origin_snapshot}^{tree}")
+parent_tree=$(git rev-parse "${publication_parent}^{tree}")
 if [[ "$staged_tree" == "$parent_tree" ]]; then
-  publish_commit=$old_origin_snapshot
+  publish_commit=$publication_parent
   publication_action=noop
 else
   git -C "$publish_repo" config user.name "Q-DESN Integration"
@@ -334,6 +359,9 @@ else
       -m "Publish article-only snapshot from $source_commit"
   publish_commit=$(git -C "$publish_repo" rev-parse HEAD)
   publication_action=new_commit
+  if [[ "$reviewed_reconciliation" == true ]]; then
+    publication_action=reviewed_direct_reconciliation
+  fi
 fi
 
 [[ "$(git -C "$publish_repo" rev-parse "${publish_commit}^{tree}")" == "$staged_tree" ]] ||

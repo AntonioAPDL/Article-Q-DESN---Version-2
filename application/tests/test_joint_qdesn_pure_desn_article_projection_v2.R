@@ -104,6 +104,24 @@ local({
   editorial_manifest_path <- "tables/qdesn_sections5_7_presentation_manifest.json"
   editorial_active <- file.exists(file.path(root, editorial_manifest_path))
   editorial_dependencies <- character()
+  ind_manifest_path <- "tables/independent_forecast_300_500_article_manifest_v1.json"
+  ind_dependencies <- character()
+  if (file.exists(file.path(root, ind_manifest_path))) {
+    ind_receipt <- jsonlite::fromJSON(file.path(root, ind_manifest_path),
+      simplifyVector = FALSE)
+    # The shared presentation checker also verifies the live IND authority.
+    # Its nonarticle dependencies belong in this positive test fixture, not
+    # in the article-only publication allowlist.
+    ind_dependencies <- c(ind_manifest_path, names(ind_receipt$sources),
+      names(ind_receipt$outputs))
+    calibration_path <- "tables/independent_forecast_calibration_manifest_v1.json"
+    if (file.exists(file.path(root, calibration_path))) {
+      calibration <- jsonlite::fromJSON(file.path(root, calibration_path),
+        simplifyVector = FALSE)
+      ind_dependencies <- c(ind_dependencies, calibration_path,
+        names(calibration$sources), paste0("tables/", names(calibration$outputs)))
+    }
+  }
   if (mq_active) {
     mq_receipt <- jsonlite::fromJSON(file.path(root, mq_manifest_path), simplifyVector = FALSE)
     # Copy all source/generator dependencies, including helpers that must not
@@ -122,7 +140,8 @@ local({
   }
   additional_files <- unique(c("main.tex", "qdesn-supplement.tex", "overleaf/article_files.txt",
     "scripts/reconstruct_joint_qdesn_laplace_article_projection_v2.R",
-    manifest$relative_path, allowlist, mq_dependencies, editorial_dependencies))
+    manifest$relative_path, allowlist, mq_dependencies, editorial_dependencies,
+    ind_dependencies))
   for (relative in additional_files) {
     target <- file.path(pristine, relative)
     if (!file.exists(target)) {
@@ -131,6 +150,10 @@ local({
     }
   }
   full_pristine <- run(pristine)
+  if (full_pristine$status != 0L) {
+    stop(paste(c("Positive complete-article fixture failed:", full_pristine$output),
+      collapse = "\n"), call. = FALSE)
+  }
   stopifnot(full_pristine$status == 0L, any(startsWith(full_pristine$output, marker)))
   copied_manifest <- file.path(pristine, manifest_path)
   original_manifest_lines <- readLines(copied_manifest, warn = FALSE)

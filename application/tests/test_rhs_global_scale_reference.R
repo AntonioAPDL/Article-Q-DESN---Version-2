@@ -70,9 +70,13 @@ supplement_text <- paste(
 main_prose <- gsub("[[:space:]]+", " ", main_text)
 stopifnot(grepl("fixed hyperprior scale", main_prose, fixed = TRUE))
 stopifnot(grepl("random global scale", main_prose, fixed = TRUE))
-stopifnot(grepl("residual standard deviation, fitting-sample size", main_prose, fixed = TRUE))
-stopifnot(grepl("prior reference number of coefficients", main_prose, fixed = TRUE))
-stopifnot(grepl("formula and its derivation are given in the supplement", main_prose, fixed = TRUE))
+stopifnot(grepl("Gaussian residual standard deviation", main_prose, fixed = TRUE),
+  grepl("fitting-sample size", main_prose, fixed = TRUE))
+stopifnot(grepl("prior reference number of slopes expected to escape", main_prose, fixed = TRUE))
+stopifnot(grepl("not a starting value", main_prose, fixed = TRUE),
+  grepl("derivation and likelihood-specific alternatives", main_prose, fixed = TRUE),
+  grepl("m_0/(r-m_0)", main_text, fixed = TRUE),
+  grepl("\\sqrt{N_{\\mathrm{fit}}}", main_text, fixed = TRUE))
 stopifnot(grepl("eq:supp-rhs-tau0-gaussian-reference", supplement_text, fixed = TRUE))
 stopifnot(!grepl(
   "tau_{0,\\mathrm{ref}}=\\GlofasApplicationCurrentSharedRhsTau",

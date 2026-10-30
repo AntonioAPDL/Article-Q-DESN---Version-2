@@ -228,6 +228,7 @@ source(app_path("application/tests/test_validation_interface_contract.R"))
 # The v14 full-surface test supersedes the six tt500 tests tied to historical
 # summary-override schemas. It verifies their current point-table roles together
 # with the estimator-separated posterior-interval projection.
+run_standalone_glofas_test("application/tests/test_independent_reporting_authority_checks.R")
 source(app_path("application/tests/test_independent_validation_exdqlm_mcmc_rolling_state_fix_article_v14.R"))
 source(app_path("application/tests/test_independent_validation_dgp_oracle_figures_v14.R"))
 # Retain the complete historical v4 evidence checks, then verify the coherent

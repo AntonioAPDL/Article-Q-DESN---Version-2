@@ -20,6 +20,18 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     end <- regexpr("\\section{", text, fixed = TRUE)[1L]
     if (end > 0L) substring(text, 1L, end - 1L) else text
   }
+  equation <- function(x, label) {
+    marker <- paste0("\\label{", label, "}")
+    at <- regexpr(marker, x, fixed = TRUE)[1L]
+    require_check(at > 0L, paste("Required equation:", label))
+    before <- substring(x, 1L, at)
+    starts <- gregexpr("\\begin{equation}", before, fixed = TRUE)[[1L]]
+    require_check(any(starts > 0L), paste("Numbered equation:", label))
+    text <- substring(x, tail(starts[starts > 0L], 1L))
+    end <- regexpr("\\end{equation}", text, fixed = TRUE)[1L]
+    require_check(end > 0L, paste("Complete equation:", label))
+    substring(text, 1L, end + nchar("\\end{equation}") - 1L)
+  }
   main_plain <- plain(main)
   supplement_plain <- plain(supplement)
   forecast <- section(supplement, "sec:forecast_synthesis")
@@ -29,6 +41,9 @@ app_statistical_language_semantics <- function(main, supplement, history) {
   abstract <- sub("\\\\end\\{abstract\\}.*", "", abstract)
   abstract_plain <- plain(abstract)
   main_body <- plain(sub(".*\\\\end\\{abstract\\}", "", main))
+  glofas <- plain(section(main, "sec:data"))
+  discussion <- plain(section(main, "sec:discussion"))
+  unit_target <- equation(supplement, "eq:supp_glofas_unit_member_target")
 
   require_check(!has(supplement_plain, "Unknown future GloFAS responses") &&
     has(supplement_plain, "Unknown future reference-streamflow values"),
@@ -46,8 +61,7 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     has(forecast_plain, "fitting endpoint"),
     "Generic forecast origins must be o, distinct from the fitting endpoint T.")
   require_check(has(forecast_plain, "equal-weight isotonic projection") &&
-    has(forecast_plain, "rearrangement by sorting") &&
-    has(forecast_plain, "Projection is not sorting") &&
+    grepl("Projection is[[:space:]]+not sorting", forecast_plain) &&
     !grepl("rearrangement[^.]{0,100}such as isotonic projection", forecast_plain) &&
     !has(forecast_plain, "rearrangement is applied") &&
     !has(forecast_plain, "may use isotonic projection"),
@@ -57,18 +71,29 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     has(forecast, "\\sum_k\\omega_k=p_K-p_1") &&
     has(forecast, "0.025,\\ 0.10,\\ 0.20,\\ 0.25,\\ 0.20,\\ 0.10,\\ 0.025"),
     "Retain the actual monotone rule and unnormalized probability weights.")
+  require_check(has(forecast, "\\exAL_{p_0}") &&
+    has(forecast_plain, "shape fixed at zero for AL") &&
+    has(forecast_plain, "Single-level recursion is run separately at each fitted level"),
+    "Retain the separate AL and exAL single-level response laws.")
+  require_check(has(forecast_plain, "Linear inverse-CDF interpolation") &&
+    has(forecast_plain, "endpoint clamping, not extrapolation") &&
+    has(forecast_plain, "primary calculation evaluates coefficient draws at their averaged predictors") &&
+    has(main_plain, "not sampling from a single exAL regression"),
+    "Distinguish ordered-grid response generation from single-level sampling and averaged-feature scoring.")
   require_check(!has(supplement_plain, "ELBO history") &&
     has(supplement_plain, "objective values") &&
     has(supplement_plain, "stopping diagnostics") &&
     has(supplement, "\\label{eq:supp_elbo_transformed_coordinates}") &&
     has(supplement, "\\label{eq:supp_generic_elbo}"),
     "Distinguish numerical objective histories from the derived ELBO.")
-  require_check(has(supplement_plain, "it was not fitted in the reported multiquantile simulation") &&
+  require_check(has(supplement, "\\vect\\Delta_1=\\vect\\beta_1") &&
+    has(supplement_plain, "no additional random baseline is estimated") &&
+    has(supplement_plain, "At \\(K=1\\)") &&
     has(supplement, "C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)") &&
     has(supplement, "\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})") &&
     !has(supplement_plain, "scale-dependent product masses") &&
     !has(supplement_plain, "first innovation"),
-    "Keep the fitted coefficient hierarchy distinct from an optional random baseline.")
+    "Derive the fitted first-slope hierarchy without substituting an optional random baseline.")
   require_check(has(supplement_plain, "point estimates") &&
     has(supplement_plain, "uncertainty") &&
     has(supplement, "\\mat H\\mat\\Sigma\\mat H^\\top"),
@@ -99,25 +124,43 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     "Use all seven MQ table derivatives, not their historical caption sources.")
   require_check(!has(main, "[Simulation findings to be updated.]") &&
     !has(main, "[GloFAS findings to be updated.]") &&
-    has(abstract_plain, "Laplace (AL)") &&
+    has(abstract_plain, "Asymmetric Laplace") &&
+    has(abstract_plain, "extended asymmetric Laplace") &&
     has(abstract, "[PriceFM findings to be updated.]") &&
     has(abstract_plain, "crossing") &&
     has(abstract_plain, "retrospective streamflow application") &&
     has(abstract_plain, "Global Flood Awareness System ensembles") &&
-    has(abstract_plain, "reduces quantile forecast loss relative to the uncorrected ensemble") &&
+    has(abstract_plain, "quantile-specific forecast correction") &&
+    !has(abstract_plain, "reduces quantile forecast loss") &&
     !has(tolower(abstract_plain), "best forecast correction"),
-    "Complete accepted findings while leaving the PriceFM finding provisional.")
-  require_check(has(main_body, "coverage of 21 of 28 observations for the nominal 90\\% interval") &&
-    has(main_body, "nominal 90\\% interval covers 75\\%"),
-    "Keep the substantive streamflow interval-coverage result outside the abstract.")
+    "Keep accepted simulation findings, neutral streamflow purpose, and provisional PriceFM findings distinct.")
+  require_check(has(glofas, "coverage of 21 of 28 observations for the nominal 90\\% interval") &&
+    has(glofas, "historical weighted analysis until all six unit-member refits") &&
+    has(glofas, "it is not a result of the revised likelihood") &&
+    has(glofas, "numerical results and displays in this draft remain from the earlier weighted analysis") &&
+    has(discussion, "Streamflow findings will be updated after the unit-member refits") &&
+    !has(discussion, "nominal 90\\% interval covers 75\\%"),
+    "Identify historical streamflow results explicitly and withhold conclusions about pending unit-member refits.")
+  require_check(has(unit_target, "\\prod_{h=1}^{28}\\prod_{e=1}^{51}") &&
+    has(unit_target, "\\phi_{28}(\\vect y_{F,k};\\vect m_N,\\mat V_N)") &&
+    !has(unit_target, "1/51") && !has(unit_target, "\\frac{1}{51}") &&
+    has(supplement_plain, "Every included historical observation and issued member contributes one density factor") &&
+    has(supplement_plain, "There is no additional future-reference likelihood for these quantile models") &&
+    has(supplement_plain, "1,428 factors per level"),
+    "Retain ordinary unit-member likelihoods, the historical path prior, and no extra future-reference likelihood.")
+  require_check(has(plain(stopping), "describe the historical weighted analysis") &&
+    has(plain(stopping), "after the unit-member refits and their checks are complete"),
+    "Historical stopping evidence must not be relabeled as completed unit-member inference.")
+  require_check(has(discussion, "slightly higher aggregate AQL than PriceFM"),
+    "Preserve the adverse aggregate electricity-price finding while its section remains provisional.")
   historical_selection <- has(main_plain, "historical forecast-based refinement") ||
     (has(main_plain, "historical refinement") &&
       has(main_plain, "forecast performance on the evaluation series"))
   common_target <- has(supplement_plain, "same posterior target") ||
     grepl("same data, likelihood,? and prior", supplement_plain)
   require_check(historical_selection &&
-    has(main_plain, "adopted after exploratory assessment") &&
-    has(supplement_plain, "revised after inspecting") && common_target,
+    grepl("(adopted after exploratory assessment|was chosen after inspecting results over the longer period)", main_plain) &&
+    grepl("(revised after inspecting|shorter primary period was selected after inspecting the longer-period results)", supplement_plain) && common_target,
     "Preserve selection history and the common posterior target across chains.")
   require_check(has(tolower(main_plain), "score intervals") &&
     has(main_plain, "averaged") && has(main_plain, "predictors") &&

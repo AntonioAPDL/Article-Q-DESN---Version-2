@@ -108,6 +108,13 @@ cd "$repo_root"
 [[ -z "$(git status --porcelain=v1 --untracked-files=all)" ]] ||
   die "DIRTY_WORKTREE: commit or remove all local changes before publication"
 
+# A successful draft build is not approval to deploy historical results under
+# the revised scientific target. This gate runs before authentication or refs.
+if grep -Fq '[The issued-window analysis is being recomputed' main.tex ||
+   grep -Fq '[Streamflow findings will be updated after the unit-member refits.]' main.tex; then
+  die "GLOFAS_CORRECTION_PENDING: validate and replace the complete corrected packet before article publication"
+fi
+
 validate_remote_urls origin
 validate_remote_urls overleaf-direct git
 origin_url=$(git remote get-url origin)

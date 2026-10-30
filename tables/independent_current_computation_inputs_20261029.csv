@@ -1,0 +1,8 @@
+"role","artifact","sha256"
+"active_fitting_results","tables/independent_fit_preserved_300_500_v1.csv","3396ee35261b34a4a788b0502fddeb4f4af5b71bbcedbf79408d751760a2a1fa"
+"active_forecast_results","tables/independent_forecast_300_500_v1.csv","7ee08a577b47c9369c8cc8fd35677c6f884bbc1b7a886096fb2afd66838e4bcf"
+"metadata_audit_script","scripts/audit_independent_computation_evidence_20261029.R","d06f0cee63921329767f6b97be86ee0b97a0a676447d8793110f0c68c42d75e3"
+"forecast_locator","protected_source_locator.csv","e2c941b4d26104e70bd178390a979ea62b8e19d9f2cfb3bfd899532ea5ea9772"
+"forecast_locator_manifest","artifact_manifest.csv","5f842dfcdd0e8314783c74d35e72a77641933c2a1e26d12a5dc557782cd96664"
+"historical_bundle_manifest","bundle_file_manifest.csv","f9373f23f2df3e05feaaa09f8f6d82390b5cade8ea5e77762c51a3576506ef2d"
+"historical_rolling_exdqlm_job_manifest","rolling_exdqlm/manifests/job_manifest.csv","d4fb701d52a61fb88bf615181e09b94b85f96ab9e7f6bf72ba67762ead49d5a4"

@@ -155,7 +155,8 @@ article_files <- readLines(
 pure_desn_reader_inputs <- c(
   "\\input{tables/joint_qdesn_pure_desn_v1_forecast_figure.tex}",
   "\\input{tables/joint_qdesn_pro_review_forecast_figure.tex}",
-  "\\input{tables/joint_qdesn_pure_desn_v2_forecast_figure.tex}"
+  "\\input{tables/joint_qdesn_pure_desn_v2_forecast_figure.tex}",
+  "\\input{tables/qdesn_multiquantile_forecast_figure_display.tex}"
 )
 pure_desn_reader_present <- vapply(pure_desn_reader_inputs,
   function(path) grepl(path, main, fixed = TRUE), logical(1L))
@@ -172,7 +173,7 @@ expect(!pure_desn_active || !old_reader_active,
 # scientific/hash gate above. These next assertions concern the CURRENT reader
 # projection: the historical projection remains checked independently below.
 if (pure_desn_active) {
-  pure_desn_v2_active <- pure_desn_reader_present[[3L]]
+  pure_desn_v2_active <- any(pure_desn_reader_present[c(3L, 4L)])
   active_checker <- file.path(
     repo_root, if (pure_desn_v2_active)
       "scripts/check_joint_qdesn_pure_desn_article_projection_v2.R" else

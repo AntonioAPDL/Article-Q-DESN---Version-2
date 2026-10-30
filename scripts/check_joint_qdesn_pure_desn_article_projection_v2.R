@@ -406,17 +406,27 @@ if (!data_only) {
   expect(!grepl("\\\\input\\{tables/joint_qdesn_(pure_desn_v1|pro_review)_", paste(main, supplement)) &&
            !grepl("joint-qdesn-pure-desn-v1-", paste(main, supplement), fixed = TRUE),
          "No historical v1 wrappers or references remain live")
-  required_tables <- c(protocol_table, paste0("tables/", active_prefix, c("score_table", "secondary_score_table",
-    "recursive_policy_table", "vb_score_table", "contrast_table", "crossing_table", "oracle_recovery_table"), ".tex"))
+  table_roles <- c("score", "secondary_score", "recursive_policy", "vb_score",
+    "contrast", "crossing", "oracle_recovery")
+  required_tables <- c(protocol_table, if (editorial_active)
+    paste0("tables/qdesn_multiquantile_", table_roles, "_display.tex") else
+    paste0("tables/", active_prefix, table_roles, "_table.tex"))
   expect(all(vapply(required_tables, function(relative) grepl(relative, supplement, fixed = TRUE),
                     logical(1L))), "All dependent supplementary tables use the new complete packet")
+  # Diagnose forbidden JOINT uploads before peer receipts also reject the
+  # changed allowlist checksum.
+  allowlist <- trimws(readLines(path("overleaf/article_files.txt"), warn = FALSE))
+  allowlist <- allowlist[nzchar(allowlist) & !startsWith(allowlist, "#")]
+  expect(!any(grepl("joint_qdesn_pure_desn_v1_|joint_qdesn_pro_review_", allowlist)),
+         "Historical JOINT article outputs are excluded from the active Overleaf projection")
   if (editorial_active) {
     editorial_check <- suppressWarnings(system2("/usr/bin/python3.11", c(
       shQuote(path("scripts/check_qdesn_sections5_7_presentation.py")),
       "--repo-root", shQuote(repo_root)), stdout = TRUE, stderr = TRUE))
     expect(is.null(attr(editorial_check, "status")) &&
              any(grepl("QDESN_SECTIONS5_7_PRESENTATION_CHECK=PASS", editorial_check, fixed = TRUE)),
-           "The selected editorial wrappers and descriptive design table retain their bounded source identity")
+           paste("The selected editorial wrappers and descriptive design table retain their bounded source identity",
+             paste(editorial_check, collapse = "\n"), sep = "\n"))
   }
   reader_assets <- manifest$relative_path[grepl("\\.tex$", manifest$relative_path)]
   reader_text <- paste(c(main, supplement, vapply(reader_assets, read_text, character(1L))), collapse = "\n")
@@ -481,10 +491,6 @@ if (!data_only) {
         paste("Current MQ one-page vector figure", entry$file))
     }
   }
-  allowlist <- trimws(readLines(path("overleaf/article_files.txt"), warn = FALSE))
-  allowlist <- allowlist[nzchar(allowlist) & !startsWith(allowlist, "#")]
-  expect(!any(grepl("joint_qdesn_pure_desn_v1_|joint_qdesn_pro_review_", allowlist)),
-         "Historical JOINT article outputs are excluded from the active Overleaf projection")
   active_figures <- if (mq_active) vapply(mq_figures, `[[`, character(1L), "file") else figures$relative_path
   active_receipts <- if (mq_active) c(mq_relative, mq_environment$mq_registry_path) else character()
   expect(all(c(required_tables, active_figures, active_receipts, forecast_wrapper,

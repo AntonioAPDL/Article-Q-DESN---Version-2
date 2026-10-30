@@ -149,7 +149,7 @@ for (n in c(300L, 500L)) {
       "Panels A--I identify the observation-error family and probability level. ",
       if(metric == "forecast_mae") "The dashed line marks exact recovery of the state-conditional quantile path. " else
         "The dashed line marks population expected check loss at the true conditional quantile, not a finite-sample lower bound. ",
-      if(n == 300L) "Panel scales match the 500-target sensitivity figures. " else "The last origin contributes 20 leads; earlier origins contribute 30. ",
+      if(n == 300L) "Corresponding panels in the 500-target sensitivity figure use the same horizontal limits. " else "The last origin contributes 20 leads; earlier origins contribute 30. ",
       "The supplement documents criterion-specific selection and model-specific forecast-draw dependence.")
     block <- c("\\begin{figure}[!htbp]", "\\centering",
       sprintf("\\includegraphics[width=0.98\\textwidth]{figures/independent_simulation/independent_train500_eval%d_mcmc_%s_v1.pdf}", n, metric),
@@ -177,7 +177,7 @@ for (family in names(qdesn_family_labels)) for (tau in c(.25, .5)) {
     min(block$posterior_mean[!grepl("^qdesn", block$model_variant)]))
 }
 save_text(c("At the lower quartile and median, both Q--DESN likelihoods have lower posterior mean check loss than both dynamic linear comparators across all three observation-error families.",
-  "Differences are concentrated at the 5\\% level. AL Q--DESN has higher mean loss under Gaussian and Laplace errors, whereas exAL gives more consistent lower-tail performance. DQLM retains the lowest mean under Gaussian-mixture errors at this level."),
+  "At the 5\\% level, exAL Q--DESN has the lowest mean for Gaussian and Laplace errors, whereas DQLM has the lowest mean for Gaussian-mixture errors. AL Q--DESN has higher mean loss than both dynamic comparators in the Gaussian and Laplace lower-tail cases."),
   "tables/independent_eval300_results_v1.tex")
 calibration <- read.csv("tables/independent_forecast_calibration_v1.csv")
 calibration_receipt <- jsonlite::read_json("tables/independent_forecast_calibration_manifest_v1.json", simplifyVector = TRUE)

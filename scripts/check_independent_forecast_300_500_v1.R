@@ -86,8 +86,13 @@ builder <- paste(readLines("scripts/build_qdesn_pro_review_presentation.R"),coll
 check("legacy builder routes to current authority",grepl("if (current_ind_policy)",builder,fixed=TRUE) &&
   grepl("scripts/build_independent_forecast_300_500_v1.R",builder,fixed=TRUE) && grepl("if (current_ind_policy && i <= 3L) next",builder,fixed=TRUE))
 main <- paste(readLines("main.tex"),collapse="\n"); supplement <- paste(readLines("qdesn-supplement.tex"),collapse="\n")
-check("retrospective scope change disclosed",grepl("adopted after exploratory assessment",main,fixed=TRUE) &&
-  grepl("revised after inspecting",supplement,fixed=TRUE))
+normalized_main <- gsub("[[:space:]]+", " ", main)
+normalized_supplement <- gsub("[[:space:]]+", " ", supplement)
+check("retrospective scope change disclosed",
+  grepl("(adopted after exploratory assessment|was chosen after inspecting results over the longer period)", normalized_main) &&
+  grepl("(revised after inspecting|shorter primary period was selected after inspecting the longer-period results)", normalized_supplement) &&
+  grepl("historical refinement also used forecast performance on the evaluation series", normalized_main, fixed = TRUE) &&
+  grepl("Historical refinements retained configurations with lower forecast MAE or check loss on the evaluation series", normalized_supplement, fixed = TRUE))
 check("MAE and empirical frequencies retain distinct targets",
   grepl("rather than error in", supplement, fixed = TRUE) &&
   grepl("predicting individual responses", supplement, fixed = TRUE) &&

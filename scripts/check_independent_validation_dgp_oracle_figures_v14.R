@@ -16,6 +16,9 @@ if (!requireNamespace("yaml", quietly = TRUE) ||
 config <- yaml::read_yaml(config_path)
 sha256 <- function(path) unname(tools::sha256sum(path)[[1L]])
 article_path <- function(relative) file.path(repo_root, relative)
+source(file.path(repo_root, "scripts/independent_reporting_authority_checks.R"))
+current_reporting <- file.exists(article_path("application/config/independent_forecast_300_500_v1.json"))
+if (current_reporting) app_ind_check_current_reporting(repo_root)
 check_count <- 0L
 check <- function(condition, label) {
   check_count <<- check_count + 1L
@@ -194,6 +197,15 @@ supp_text <- paste(
   readLines(article_path("qdesn-supplement.tex"), warn = FALSE), collapse = "\n"
 )
 article_files <- readLines(article_path("overleaf/article_files.txt"), warn = FALSE)
+if (current_reporting) {
+  # Only historical source/routing checks use this immutable checkpoint.
+  # Live 300/500 routing, scientific pins and all current outputs passed above.
+  historical_oracle <- app_ind_authority_commits[["oracle"]]
+  main_text <- app_ind_git_text(repo_root, "main.tex", historical_oracle)
+  supp_text <- app_ind_git_text(repo_root, "qdesn-supplement.tex", historical_oracle)
+  article_files <- strsplit(app_ind_git_text(repo_root, "overleaf/article_files.txt",
+    historical_oracle), "\n", fixed = TRUE)[[1L]]
+}
 check(grepl(config$outputs$mcmc_forecast_wrapper, main_text, fixed = TRUE),
       "main article uses the MCMC forecast wrapper")
 check(grepl(config$outputs$mcmc_fit_wrapper, supp_text, fixed = TRUE) &&
@@ -204,6 +216,8 @@ check(!any(grepl("v14_vb_forecast_", article_files, fixed = TRUE)),
       "inactive VB forecast figures are excluded from article snapshot")
 
 manifest_path <- article_path(config$outputs$manifest)
+if (current_reporting) app_ind_current_hash(repo_root, config$outputs$manifest,
+  app_ind_git_sha(repo_root, config$outputs$manifest, app_ind_authority_commits[["oracle"]]))
 manifest <- readLines(manifest_path, warn = FALSE)
 check(any(manifest == "pdf_container=cairo_vector_pdf"),
       "manifest records vector PDF contract")
@@ -218,8 +232,12 @@ for (line in hash_lines) {
   check(length(fields) == 2L, paste(line, "manifest syntax"))
   path <- article_path(fields[[1L]])
   check(file.exists(path), paste(fields[[1L]], "manifest file exists"))
-  check(identical(sha256(path), fields[[2L]]),
-        paste(fields[[1L]], "manifest hash"))
+  if (current_reporting) {
+    app_ind_historical_hash(repo_root, fields[[1L]], fields[[2L]], "oracle")
+    check(TRUE, paste(fields[[1L]], "immutable historical manifest hash"))
+  } else {
+    check(identical(sha256(path), fields[[2L]]), paste(fields[[1L]], "manifest hash"))
+  }
 }
 
 cat(sprintf(

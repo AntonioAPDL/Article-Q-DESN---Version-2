@@ -419,12 +419,23 @@ def validate_ready(ready, p, job_id):
 
 def ready(site, root):
     p = packet(root); job = h.read(h.pin(root / "JOB.json")); one_shot(root, "ready")
-    result = None
-    for index in range(6):
-        result = run_native(site, ["test", "-f", p["remote_root"] + "/READY.json"])
-        if result["returncode"] != 1: break
-        append(root, "READY_PENDING", check=index + 1)
-        if index < 5: time.sleep(10)
+    # One paid observation only. Wait outside this guarded action, then fetch
+    # once; protected sleeps consume guardian stop-window/accounting headroom.
+    result = run_native(site, ["test", "-f", p["remote_root"] + "/READY.json"])
+    if result["returncode"] == 1:
+        prior = next((x["accounting"] for x in reversed(records(root)) if x["state"] == "OBSERVED"), None)
+        diagnostic = h.read(prior) if prior is not None else None
+        error = None
+        if diagnostic is None or not diagnostic["terminal"]:
+            try:
+                # This diagnostic consumes one of the same three throttled
+                # accounting intents, within this unchanged six-CPU action.
+                diagnostic = observe(site, root)
+            except BaseException as exc:
+                error = type(exc).__name__ + ": " + str(exc)
+        append(root, "READY_ABSENT_DIAGNOSTIC", accounting=diagnostic,
+               accounting_error=error, ready_observations=1, automatic_retry=False)
+        raise ValueError("READY absent after one observation; diagnostic retained; no automatic retry")
     h.require(result["returncode"] == 0, "READY observation transport failed; no automatic retry")
     one_shot(root, "ready_fetch")
     result = run_sftp(site, ["get " + p["remote_root"] + "/READY.json " + safe_path(str(root / "READY.json"))], root / "ready.sftp")

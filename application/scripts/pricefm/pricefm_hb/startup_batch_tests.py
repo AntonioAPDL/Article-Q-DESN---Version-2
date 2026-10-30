@@ -1,4 +1,5 @@
 """Temporary metadata/transport doubles only; no SSH, Slurm, R or child runs."""
+import errno
 import hashlib
 import json
 import os
@@ -135,6 +136,82 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(json.loads(target.read_text()), {"unit": "complete"})
         with self.assertRaises(OSError): w.publish_atomic_new(target, {"unit": "replacement"})
         self.assertEqual(json.loads(target.read_text()), {"unit": "complete"})
+
+    def test_READY_link_publication_complete_single_link_and_durable(self):
+        target = self.base / "READY.json"; real_link = os.link; real_sync = os.fsync; events = []
+        def linking(source, destination, **kwargs):
+            folder = Path(os.readlink("/proc/self/fd/" + str(kwargs["src_dir_fd"])))
+            self.assertEqual(json.loads((folder / source).read_text()), {"unit": "complete"})
+            self.assertFalse((folder / destination).exists())
+            events.append("link"); return real_link(source, destination, **kwargs)
+        def syncing(fd): events.append("sync"); return real_sync(fd)
+        with patch.object(w.os, "link", side_effect=linking), patch.object(w.os, "fsync", side_effect=syncing):
+            w.publish_atomic_new(target, {"unit": "complete"})
+        self.assertEqual(target.stat().st_nlink, 1)
+        self.assertFalse(target.with_name("READY.json.partial").exists())
+        self.assertGreaterEqual(events.index("link"), 2)
+        self.assertEqual(events[-1], "sync")
+        self.assertEqual(w.read_json(w.read_exact(w.pin(target))), {"unit": "complete"})
+
+    def test_READY_unsupported_link_fails_without_final_or_partial(self):
+        for number in (errno.EOPNOTSUPP, errno.EPERM, errno.EXDEV):
+            target = self.base / ("READY_%s.json" % number)
+            with patch.object(w.os, "link", side_effect=OSError(number, "unit unsupported")):
+                with self.assertRaises(OSError): w.publish_atomic_new(target, {"unit": "complete"})
+            self.assertFalse(target.exists()); self.assertFalse(target.with_name(target.name + ".partial").exists())
+
+    def test_READY_partial_write_never_publishes(self):
+        target = self.base / "READY.json"
+        def incomplete(_value, handle, **_kwargs): handle.write('{"partial":'); raise OSError("unit write failure")
+        with patch.object(w.json, "dump", side_effect=incomplete), patch.object(w.os, "link") as link:
+            with self.assertRaises(OSError): w.publish_atomic_new(target, {"unit": "complete"})
+        link.assert_not_called(); self.assertFalse(target.exists())
+        self.assertFalse(target.with_name("READY.json.partial").exists())
+
+    def test_READY_directory_sync_failure_is_not_success(self):
+        target = self.base / "READY.json"; real_sync = os.fsync; count = 0
+        def syncing(fd):
+            nonlocal count
+            count += 1
+            if count == 3: raise OSError("unit final directory sync failure")
+            return real_sync(fd)
+        with patch.object(w.os, "fsync", side_effect=syncing):
+            with self.assertRaises(OSError): w.publish_atomic_new(target, {"unit": "complete"})
+        self.assertEqual(json.loads(target.read_text()), {"unit": "complete"})
+        self.assertEqual(target.stat().st_nlink, 1)
+
+    def test_READY_existing_symlink_is_never_followed(self):
+        original = self.base / "original"; original.write_text("preserve")
+        target = self.base / "READY.json"; target.symlink_to(original)
+        with self.assertRaises(ValueError): w.publish_atomic_new(target, {"unit": "replacement"})
+        self.assertEqual(original.read_text(), "preserve"); self.assertTrue(target.is_symlink())
+
+    def test_READY_absent_is_single_observation_and_retains_terminal_accounting(self):
+        self.save(self.root / "JOB.json", dict(job_id="123"))
+        account = self.save(self.root / "account.json", dict(terminal=True, complete=False, state="FAILED"))
+        b.append(self.root, "OBSERVED", accounting=account)
+        with patch.object(b, "run_native", return_value=dict(returncode=1)) as native, patch.object(b.time, "sleep") as sleep, patch.object(b, "observe") as observe:
+            with self.assertRaisesRegex(ValueError, "READY absent"): b.ready(self.site, self.root)
+        native.assert_called_once(); sleep.assert_not_called(); observe.assert_not_called()
+        last = b.records(self.root)[-1]; self.assertEqual(last["state"], "READY_ABSENT_DIAGNOSTIC")
+        self.assertEqual(last["accounting"]["state"], "FAILED"); self.assertFalse(last["automatic_retry"])
+
+    def test_READY_absent_one_accounting_diagnostic_then_failure(self):
+        self.save(self.root / "JOB.json", dict(job_id="123"))
+        calls = [dict(returncode=1), dict(returncode=0, stdout=self.account(failed=True))]
+        with patch.object(b, "run_native", side_effect=calls) as native, patch.object(b.time, "sleep") as sleep:
+            with self.assertRaisesRegex(ValueError, "READY absent"): b.ready(self.site, self.root)
+        self.assertEqual(native.call_count, 2); sleep.assert_not_called()
+        self.assertEqual(len(list(self.root.glob("observe_*.intent.json"))), 1)
+        self.assertTrue(b.records(self.root)[-1]["accounting"]["terminal"])
+
+    def test_READY_present_fetches_once_without_sleep_or_accounting(self):
+        self.save(self.root / "JOB.json", dict(job_id="123"))
+        def fetch(_site, _commands, _batch):
+            self.save(self.root / "READY.json", self.ready()); return dict(returncode=0)
+        with patch.object(b, "run_native", return_value=dict(returncode=0)) as native, patch.object(b, "run_sftp", side_effect=fetch) as transfer, patch.object(b.time, "sleep") as sleep:
+            self.assertEqual(b.ready(self.site, self.root), self.ready())
+        native.assert_called_once(); transfer.assert_called_once(); sleep.assert_not_called()
 
     def test_return_paths_and_scientific_binary_rejected(self):
         for path in ("../escape", "/absolute", "fit.rds", "array.npz"):

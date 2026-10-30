@@ -1,0 +1,9 @@
+# Isolated READY boundary correction
+
+This r175 lane starts at published r174 commit 631685c291533fe36464e2800d7b11e9179bbaa6. It preserves the failed job873711, its spent role and all original authority/source receipts. It authorizes no replacement job or automatic retry.
+
+The worker now publishes READY with a complete fsynced exclusive private regular temporary file, atomic create-only POSIX hardlink creation, inode/link-count checks, owned temporary unlink and directory fsync. An existing name is preserved. Symlink paths, unsupported hardlink operations, partial writes and durability failures raise an error. No overwrite or rename fallback is used. Metadata tests establish local source behavior; the distinct native BeeGFS probe is required for shared-filesystem capability, and neither is an actual compute READY proof.
+
+The controller makes one READY file observation and one fetch when present. It performs no guarded sleeps or READY retries. Before invoking this one-shot action, an operator uses finite separately paid accounting observations and an unguarded clock delay, respecting the 300-second accounting throttle and fixed expiry. Absence retains an existing terminal accounting diagnostic or attempts at most one counted/throttled diagnostic through the same three-intent accounting limit, then fails closed. That diagnostic belongs entirely to READY's unchanged six-CPU local/remote envelope; it creates no extra job or accounting allowance and consumes one of the three maximum accounting intents. Transport, diagnostic or throttle errors remain failure metadata. Source review, publication, new canonical source bindings and genuinely fresh job/role authority remain separate requirements.
+
+No guardian, CPU/wall limit, stop window, scientific code, installed runtime or old r174 checkout is changed.

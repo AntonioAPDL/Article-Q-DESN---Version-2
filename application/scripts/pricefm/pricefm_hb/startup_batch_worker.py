@@ -72,18 +72,56 @@ def write_new(path, value):
 
 
 def publish_atomic_new(path, value):
-    import ctypes
+    """Publish complete private bytes atomically without replacing any name.
+
+    POSIX hardlink creation has create-only name semantics on the shared
+    filesystem. No renameat2 support, overwrite fallback, or retry is assumed.
+    A successful return also proves the temporary link was removed and the
+    final directory entry was fsynced. Any unsupported operation fails closed.
+    """
     path = Path(path); partial = path.with_name(path.name + ".partial")
-    write_new(partial, value)
-    libc = ctypes.CDLL(None, use_errno=True)
-    rename = libc.renameat2
-    rename.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
-    rename.restype = ctypes.c_int
-    result = rename(-100, os.fsencode(partial), -100, os.fsencode(path), 1)
-    if result != 0: raise OSError(ctypes.get_errno(), "atomic create-only READY publication failed")
-    descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-    try: os.fsync(descriptor)
-    finally: os.close(descriptor)
+    require(path.is_absolute() and not any(x.is_symlink() for x in (path, *path.parents)),
+            "canonical publication path without links required")
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    owned = None
+    try:
+        parent = os.fstat(directory)
+        require(parent.st_uid == os.getuid() and parent.st_mode & 0o022 == 0,
+                "private owned publication directory required")
+        descriptor = os.open(partial.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=directory)
+        info = os.fstat(descriptor); owned = (info.st_dev, info.st_ino, info.st_uid)
+        with os.fdopen(descriptor, "w") as handle:
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == os.getuid(),
+                    "new private regular publication temporary required")
+            json.dump(value, handle, sort_keys=True, indent=2, allow_nan=False)
+            handle.write("\n"); handle.flush(); os.fsync(handle.fileno())
+            info = os.fstat(handle.fileno())
+            require(info.st_nlink == 1 and info.st_size <= 16 * 1024**2,
+                    "bounded single-link publication temporary required")
+        os.fsync(directory)
+        os.link(partial.name, path.name, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
+        source = os.stat(partial.name, dir_fd=directory, follow_symlinks=False)
+        final = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+        require(all(stat.S_ISREG(x.st_mode) and (x.st_dev, x.st_ino, x.st_uid) == owned
+                    and x.st_nlink == 2 for x in (source, final)), "atomic publication link identity differs")
+        os.unlink(partial.name, dir_fd=directory); owned = None
+        final = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+        require(stat.S_ISREG(final.st_mode) and final.st_nlink == 1
+                and (final.st_dev, final.st_ino, final.st_uid) == (source.st_dev, source.st_ino, source.st_uid),
+                "published metadata must have exactly one owned link")
+        os.fsync(directory)
+    finally:
+        try:
+            if owned is not None:
+                current = os.stat(partial.name, dir_fd=directory, follow_symlinks=False)
+                require(stat.S_ISREG(current.st_mode)
+                        and (current.st_dev, current.st_ino, current.st_uid) == owned,
+                        "unowned publication temporary cannot be removed")
+                os.unlink(partial.name, dir_fd=directory)
+                os.fsync(directory)
+        finally:
+            os.close(directory)
 
 
 def bootstrap(spec_pin):

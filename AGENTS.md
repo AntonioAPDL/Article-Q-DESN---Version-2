@@ -2,6 +2,9 @@
 
 - Use command-line Git only. Never use Overleaf **Sync with GitHub**, a
   browser/hosting extension, GitHub CLI, web merges, or force-pushes.
+- This restriction applies to Article-v2. The owner may retain the account's
+  Overleaf--GitHub authorization for other projects. Do not require global
+  disconnection or revocation, or alter other projects' integrations.
 - Treat freshly fetched `origin/main` as the sole research and manuscript
   authority. Never merge `overleaf-direct/main` or a generated `overleaf-*`
   branch into it.

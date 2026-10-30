@@ -104,11 +104,17 @@ The disposable publisher tests cover:
 The production snapshot is also built and compiled directly from the current
 article authority before publication.
 
-## External Setting
+## Project-Scoped Authorization Policy
 
-Repository code cannot disable an account-level browser integration. The
-Overleaf project must therefore have its browser synchronization integration
-disconnected once in the project settings, and its repository authorization
-should be revoked. This is a release prerequisite that the project owner must
-confirm; until then, the repository workflow is installed but cannot guarantee
-that an external browser integration will not create another competing branch.
+As clarified by the owner on 2026-10-29, the account-level Overleaf--GitHub
+authorization remains enabled for other projects. Disconnection or revocation
+is not a release prerequisite for Article-v2 and must not affect those other
+projects. This supersedes this note's original account-disconnection condition.
+
+Article-v2 must never use the browser's GitHub synchronization controls. Its
+only supported integration and publication path is the command-line Git
+sequence above. Existing source-authority, scientific-validation, build,
+clean-state and remote-readback gates remain mandatory. If an external action
+creates a competing branch or changes the direct Overleaf history, preserve
+and investigate it; never force-push or merge a browser-generated branch into
+research main wholesale.

@@ -94,11 +94,12 @@ PriceFM or historical GloFAS fit is relaunched.
    receipts are authenticated. Most elapsed times include forecasting/export;
    eleven rescoring records are separate. They cannot establish a fit-only
    VB/MCMC speed ratio. This evidence gap remains explicit.
-4. Publication: the owner still needs to disconnect Overleaf Sync with
-   GitHub and revoke its access. No Overleaf publication is permitted until
-   confirmed, the corrected scientific packet passes, and direct-Git
-   commit/tree readbacks agree. Browser conflict branches are not research
-   integration inputs.
+4. Publication: the owner retains account-level Overleaf--GitHub authorization
+   for other projects. Disconnection or revocation is not required. Article-v2
+   must use command-line Git exclusively, never its GitHub synchronization
+   controls. Publication still requires the corrected scientific packet,
+   integration checks, builds and direct-Git commit/tree readbacks. Browser
+   conflict branches are not research integration inputs.
 5. Defensive engine guard: final lexical-scope inspection of the immutable
    science commit 60daab261d52eec0ae24060babe186d618303e2b found that the worker
    override is local to its calling function. It does not intercept an

@@ -414,15 +414,20 @@ expect(model_start > 0L && desn_start > model_start,
 expect(grepl("\\vect b_1^{\\mathrm{in}}", main, fixed = TRUE) &&
          grepl("\\vect b_1^{\\mathrm{in}}", supplement, fixed = TRUE),
        "The fixed first-layer input bias is not described consistently.")
+joint_methods <- section_text(supplement, "sec:joint_qdesn_supp")
+optional_note <- "docs/implementation_notes/mq_desn_optional_random_baseline_derivation_20261029.md"
 expect(grepl("\\label{eq:supp_ns_product_factor}", supplement, fixed = TRUE) &&
-         grepl("C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)", supplement, fixed = TRUE) &&
-         grepl("C_0(\\Theta_0)p(\\Theta_0)", supplement, fixed = TRUE),
-       "The complete product-RHS prior omits its scale-dependent factors.")
-expect(grepl("fitted first-slope hierarchy at any", supplement, fixed = TRUE) &&
-         grepl("for every \\(K\\), so \\(\\Delta_1=\\vect\\beta_1\\)",
-               prose(supplement), fixed = TRUE) &&
-         !grepl("if \\(K>1\\)", supplement, fixed = TRUE),
-       "The fitted anchor algorithm must not infer a random baseline from grid size.")
+         grepl("C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)", joint_methods, fixed = TRUE) &&
+         grepl("p(\\vect\\beta_{\\mathrm{st}}\\mid\\mat D_\\Delta)", joint_methods, fixed = TRUE),
+       "The actual first-slope product-RHS target must retain its scale-dependent factor.")
+expect(grepl("\\vect\\Delta_1=\\vect\\beta_1", joint_methods, fixed = TRUE) &&
+         grepl("for every \\(K\\)", prose(joint_methods), fixed = TRUE) &&
+         !grepl("\\beta_{\\mathrm{base}}", joint_methods, fixed = TRUE) &&
+         !grepl("C_0(\\Theta_0)", joint_methods, fixed = TRUE) &&
+         file.exists(repo_path(optional_note)) &&
+         grepl("not fitted in the reported simulation or applications", read_text(optional_note), fixed = TRUE) &&
+         !optional_note %in% article_files,
+       "Derive the fitted anchor directly and retain the unfitted extension only in a nonarticle note.")
 expect(grepl("evaluat", main, fixed = TRUE) &&
          grepl("over the evaluation range", main, fixed = TRUE) &&
          grepl("\\label{eq:crps-integrated-check-main}", main, fixed = TRUE) &&
@@ -439,7 +444,7 @@ expect(grepl("load, solar, and wind", pricefm_main, fixed = TRUE) &&
          !grepl("retrospectively observed own-region", manuscript, fixed = TRUE) &&
          grepl("\\label{tab:supp-pricefm-fold-design}", supplement, fixed = TRUE),
        "PriceFM covariate availability or the executed fold design is misstated.")
-expect(grepl("Separate DESN specifications were selected for the reported criteria",
+expect(grepl("DESN specifications were selected separately for each criterion",
              simulation_main, fixed = TRUE) &&
          grepl("historical refinement also used forecast performance on the evaluation series",
                simulation_main, fixed = TRUE) &&
@@ -455,8 +460,8 @@ history_note <- read_text(
 independent_history_qualified <- if (current_ind_reporting) {
   grepl("remain archived as historical analyses", prose(history_note), fixed = TRUE) &&
     grepl("not evidence of stability", prose(history_note), fixed = TRUE) &&
-    grepl("revised after inspecting", supplement, fixed = TRUE) &&
-    grepl("adopted after exploratory assessment", main, fixed = TRUE)
+    grepl("shorter primary period was selected after inspecting", prose(supplement), fixed = TRUE) &&
+    grepl("chosen after inspecting results", prose(main), fixed = TRUE)
 } else {
   grepl("do not isolate", supplement, fixed = TRUE) &&
     grepl("historical comparisons", supplement, fixed = TRUE)

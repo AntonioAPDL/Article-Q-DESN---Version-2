@@ -110,11 +110,18 @@ there accidentally, copy it into a dedicated local Git branch, review it, and
 integrate it through the procedure above. Do not click **Sync with GitHub** and
 do not merge a generated `overleaf-*` branch.
 
-Before this workflow is first used, disconnect the Overleaf project's GitHub
-integration in the Overleaf project settings and revoke that integration's
-repository access if it is still authorized. Repository code cannot perform or
-verify this account-level action, so publication remains blocked until the
-project owner confirms it once.
+This Git-only restriction applies to Article-v2, not to the owner's other
+projects. The owner explicitly retains the account-level Overleaf--GitHub
+authorization for those projects. Global disconnection or revocation is not
+a publication prerequisite and must not be requested or performed merely to
+publish this article. Do not use this project's GitHub synchronization controls
+or reauthorize them as part of the Article-v2 workflow.
+
+Retained authorization does not relax any scientific, clean-worktree,
+source-authority, build, or remote-readback gate. Fetch both publication
+references before publishing. Unexpected Overleaf-side changes or divergent
+history require investigation and preservation through command-line Git;
+they must not be resolved by force-pushing or wholesale browser-branch merges.
 
 The publishers are intentionally noninteractive and explicitly bypass GitHub
 CLI and editor credential helpers. Credentials must be placed in Git's

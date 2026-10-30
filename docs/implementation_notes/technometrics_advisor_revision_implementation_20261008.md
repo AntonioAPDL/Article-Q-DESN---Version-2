@@ -280,7 +280,9 @@ combined tree. Use only the guarded command-line Git main publisher.
 
 Build and check the article-only projection before the guarded snapshot/direct
 Overleaf publisher. Never merge Overleaf back to main, force-push, expose
-credentials, or copy runtime objects into the article bundle. Owner confirmation
-that legacy automatic synchronization is disconnected is required. Final
-remote hashes and read-back results belong in the ignored publication receipt;
-a successful fetch alone is not evidence of publication.
+credentials, or copy runtime objects into the article bundle. The original
+account-disconnection prerequisite in this record was superseded by the owner's
+2026-10-29 instruction: retain the Overleaf--GitHub authorization for other
+projects, but never use GitHub synchronization for Article-v2. Final remote
+hashes and read-back results belong in the ignored publication receipt; a
+successful fetch alone is not evidence of publication.

@@ -73,8 +73,62 @@ comparison <- data.frame(
   stringsAsFactors = FALSE
 )
 architecture <- app_joint_case_a_width_architecture_sensitivity(comparison, ct)
-wording <- app_joint_case_a_width_article_wording_audit(getwd())
-stopifnot(nrow(architecture) == 4L, all(wording$pass))
+stopifnot(nrow(architecture) == 4L)
+local({
+  # The unchanged closure implementation records the wording at its frozen
+  # article authority. Test that historical receipt against that exact Git
+  # tree, not against a later editorial vocabulary. Current interpretation is
+  # independently checked below; no scientific implementation is changed.
+  root <- normalizePath(getwd(), mustWork = TRUE)
+  reference <- "b83a6086dadbb482edaa02427b290fda8e5215b5"
+  stopifnot(identical(ct$authority_source_head, reference))
+  for (tip in c("HEAD", "refs/remotes/origin/main")) {
+    status <- system2("git", c("-C", shQuote(root), "merge-base", "--is-ancestor",
+      reference, tip), stdout = FALSE, stderr = FALSE)
+    stopifnot(identical(as.integer(status), 0L))
+  }
+  historical_root <- tempfile("case_a_historical_wording_")
+  dir.create(historical_root)
+  on.exit(unlink(historical_root, recursive = TRUE), add = TRUE)
+  for (relative in c("main.tex", "qdesn-supplement.tex")) {
+    text <- system2("git", c("-C", shQuote(root), "show",
+      shQuote(paste0(reference, ":", relative))), stdout = TRUE, stderr = TRUE)
+    stopifnot(is.null(attr(text, "status")))
+    writeLines(text, file.path(historical_root, relative), useBytes = TRUE)
+  }
+  historical_wording <- app_joint_case_a_width_article_wording_audit(historical_root)
+  stopifnot(all(historical_wording$pass))
+
+  normalize <- function(text) gsub("[[:space:]]+", " ", paste(text, collapse = " "))
+  main <- normalize(readLines(file.path(root, "main.tex"), warn = FALSE))
+  supplement <- normalize(readLines(file.path(root, "qdesn-supplement.tex"), warn = FALSE))
+  conditional <- paste("posterior distribution of that averaged score conditional on the averaged",
+    "predictors, rather than variability among 990 independent datasets")
+  replication <- "These origins are not independent simulation replications."
+  heterogeneous <- paste("independent regressions have the lowest mean oracle score in six mechanisms,",
+    "whereas MQ--DESN leads for Gaussian and asymmetric-tail dynamics.")
+  descriptive <- "The descriptive MQ--DESN-minus-Q--DESN score intervals"
+  overlap <- "The other fourteen include zero."
+  current_wording <- function(main, supplement) {
+    c(conditional_interval_scope = grepl(conditional, main, fixed = TRUE),
+      no_general_superiority_claim = grepl(replication, main, fixed = TRUE) &&
+        grepl(heterogeneous, main, fixed = TRUE),
+      descriptive_joint_independent_contrasts =
+        grepl(descriptive, supplement, fixed = TRUE) &&
+        grepl(overlap, supplement, fixed = TRUE))
+  }
+  stopifnot(all(current_wording(main, supplement)))
+  # Each substantive limitation must remain present. Removing one cannot be
+  # masked by the other positive claims or by the historical wording receipt.
+  for (phrase in c(conditional, replication, heterogeneous)) {
+    changed <- sub(phrase, "OMITTED", main, fixed = TRUE)
+    stopifnot(!identical(changed, main), !all(current_wording(changed, supplement)))
+  }
+  for (phrase in c(descriptive, overlap)) {
+    changed <- sub(phrase, "OMITTED", supplement, fixed = TRUE)
+    stopifnot(!identical(changed, supplement), !all(current_wording(main, changed)))
+  }
+})
 
 tmp <- tempfile("case_a_source_")
 writeLines("frozen", tmp)
@@ -88,4 +142,5 @@ failed <- tryCatch({
 unlink(tmp)
 stopifnot(failed)
 
-cat("PASS: Case A current diagnostics, fresh-seed reversal, wording, and hash gates.\n")
+cat(paste0("PASS: Case A current diagnostics, fresh-seed reversal, historical and current ",
+  "wording, five wording ablations, and hash gates.\n"))

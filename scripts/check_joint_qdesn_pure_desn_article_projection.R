@@ -10,6 +10,8 @@ repo_root <- if (file.exists(file.path(candidate_root, "main.tex"))) {
 } else {
   normalizePath(getwd(), mustWork = TRUE)
 }
+source(file.path(repo_root, "scripts/independent_reporting_authority_checks.R"),
+  local = TRUE)
 prefix <- "joint_qdesn_pure_desn_v1_"
 table_dir <- file.path(repo_root, "tables")
 checks <- 0L
@@ -276,8 +278,15 @@ expect(grepl("fit_plot_data$mean <- fit_mcmc$fit_oracle_rmse", plot_code, fixed 
   grepl("fit_plot$layers <- fit_plot$layers[-1L]", plot_code, fixed = TRUE),
   "Fit plotting code removes the unavailable interval layer")
 
-main <- read_text(file.path(repo_root, "main.tex"))
-supplement <- read_text(file.path(repo_root, "qdesn-supplement.tex"))
+# Historical disclosures belong to the same fixed article checkpoint as the
+# retained presentation. Live v2 wording/routing is independently checked by
+# its current checker; active-v1 mode must still inspect the live manuscript.
+manuscript_text <- function(relative) {
+  if (historical_only) app_ind_git_text(repo_root, relative,
+    app_ind_authority_commits[["presentation"]]) else read_text(file.path(repo_root, relative))
+}
+main <- manuscript_text("main.tex")
+supplement <- manuscript_text("qdesn-supplement.tex")
 active_forecast_wrapper <- paste0("tables/", prefix, "forecast_figure.tex")
 active_fit_wrapper <- paste0("tables/", prefix, "fit_figure.tex")
 active_figure_paths <- figures$relative_path
@@ -290,10 +299,19 @@ if (file.exists(file.path(repo_root, presentation_path))) {
   expect(identical(presentation$schema, "qdesn-pro-review-presentation-v1") &&
     identical(presentation$source_script, "scripts/build_qdesn_pro_review_presentation.R"),
     "Presentation derivatives have their own explicit reproducible schema")
-  expect(identical(sha256(file.path(repo_root, presentation$source_script)),
-    presentation$script_sha256) &&
-    identical(sha256(file.path(repo_root, "scripts/qdesn_evaluation_figure_style.R")),
-      presentation$shared_style_sha256), "Presentation builder and common style are authenticated")
+  # This is an immutable historical presentation receipt. The shared builder
+  # subsequently gained independently authenticated 300/500 reporting; that
+  # current source must not be mistaken for the source of these retained PDFs.
+  # Only the two reviewed code paths may resolve at the fixed ancestor. All
+  # scientific inputs, output hashes and captions remain checked in this tree.
+  presentation_commit <- app_ind_authority_commits[["presentation"]]
+  app_ind_current_hash(repo_root, presentation_path,
+    app_ind_git_sha(repo_root, presentation_path, presentation_commit))
+  app_ind_historical_hash(repo_root, presentation$source_script,
+    presentation$script_sha256, "presentation")
+  app_ind_historical_hash(repo_root, "scripts/qdesn_evaluation_figure_style.R",
+    presentation$shared_style_sha256, "presentation")
+  expect(TRUE, "Presentation builder and common style are authenticated at their fixed ancestor")
   output_paths <- vapply(presentation$outputs, `[[`, character(1L), "file")
   expect(length(output_paths) == 13L && !anyDuplicated(output_paths) &&
     all(grepl("^(tables|figures)/", c(names(presentation$sources), output_paths))) &&
@@ -331,7 +349,8 @@ if (file.exists(file.path(repo_root, presentation_path))) {
     expect(identical(read_text(file.path(repo_root, new_wrappers[[i]])), expected_text),
       paste("Presentation wrapper preserves the exact scientific caption and label", new_wrappers[[i]]))
   }
-  presentation_builder <- read_text(file.path(repo_root, presentation$source_script))
+  presentation_builder <- app_ind_git_text(repo_root, presentation$source_script,
+    presentation_commit)
   expect(grepl("mean = score$posterior_score_mean", presentation_builder, fixed = TRUE) &&
     grepl("lo = score$posterior_score_q025, hi = score$posterior_score_q975",
       presentation_builder, fixed = TRUE) &&

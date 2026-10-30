@@ -1,0 +1,17 @@
+version: '1.0'
+design_hash: a6a91bee5bc287803e3a54523162c99e87cf2b5da1878c629231294b7a276877
+quantile_level: 0.5
+n_theta: 1686
+theta_names_hash: 11201aed0a0abcd487fd0f540016fa9401a9c55eda5f37a1a2b185933f164148
+n_future: 28
+future_key_hash: d67764922ac06b0d48e7e58a0eb5c8f5e413fa670f23a8715f7fea1a993531e2
+provenance:
+  baseline_id: glofas_fr09_authoritative_full7_20260811
+  candidate_id: fr09_persistence_innovation
+  source_fit_sha256: d086eff5c9878581ff152893d3fbbc89b45fafe3d83c202383ca1cdbd7e4d663
+  source_design_object_sha256: 9c4a441d80e28eea992abd57b3059eea10194cef6f790c723ca77e656ab70934
+  derivation: exact_authoritative_design_object
+  canonicalization:
+    target_date: ISO-8601 character
+    horizon: integer
+    row_names: removed

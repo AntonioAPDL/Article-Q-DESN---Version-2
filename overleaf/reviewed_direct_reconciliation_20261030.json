@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "decision": "publish_reviewed_advisor_revision_no_external_history_in_main",
+  "canonical_snapshot": "88aa6509693b5cbd7d0bf2c2df2fed97b052905b",
+  "direct_commit": "11b67610f79c0dc0bfee79d2841c86c0f8677b42",
+  "direct_tree": "ef7c0854cf57fc0f0a113074b7bdafd42c34ea72",
+  "direct_diff_sha256": "cf9b2caf71bfc89accb5a0053a020740ecd1af602f48a52d5fbb4a04d4d29603",
+  "historical_main": "483e6edbec72ec76e48f2259e943e674b76e5041",
+  "source_anchor": "fd6a60f580ba2d22f388cfef97a02f0c9ef3322f",
+  "source_article_inputs_sha256": "e177a386345aa382962beafd87b6cef21014502d49ed6f559eb6b3c481194082",
+  "captured_review": "f3ac1146e3e69554a2ba6b9559e9b6b550debf2e",
+  "reviewed_article_paths": [
+    "main.tex",
+    "tables/independent_eval300_results_v1.tex",
+    "tables/independent_train500_eval300_mcmc_figures_v1.tex"
+  ],
+  "extra_support_paths": [
+    "README.md"
+  ],
+  "expected_added_paths": 283,
+  "expected_modified_paths": 4,
+  "resolution_ledger_path": "docs/reproducibility/advisor_revision_resolution_20261029.csv",
+  "resolution_ledger_sha256": "e2a575fa9d13cf43bef017d1f82773a1ca9daa6325fc0290578e568b1f890e2d",
+  "resolution_status_counts": {
+    "IMPLEMENTED_IN_REVIEW_DRAFT": 106,
+    "MODEL_TEXT_REVISED_CORRECTED_RESULT_PACKET_PENDING": 6,
+    "PARTIAL_SETTINGS_AUTHENTICATED_MATCHED_TIMING_UNAVAILABLE": 1,
+    "BLOCKED_MISSING_AUTHENTIC_ONE_STEP_INPUTS": 1,
+    "PRESERVED_UNCHANGED_BY_SCOPE": 1
+  }
+}

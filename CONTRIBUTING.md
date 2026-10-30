@@ -123,6 +123,29 @@ and manuscript builds before advancing the lagging direct ref. A direct-
 Overleaf-ahead state, divergent histories, or unverified one-sided changes
 require investigation and must not be resolved by force-pushing.
 
+### Reconciliation of an Exact Reviewed Direct Tip
+
+Ordinary publication continues to reject a direct-Overleaf-ahead history.
+After a separate source audit, `--reconcile-reviewed-direct FULL_SHA` may
+authorize only the exact browser tip recorded in the committed reconciliation
+contract. The contract verifies the previous canonical snapshot, sole direct
+parent, complete direct tree and change inventory, captured advisor edits,
+their disposition ledger, and unchanged article inputs in current main.
+New or unreviewed browser edits are not covered by an earlier audit.
+
+The coordinator does not copy browser files or merge their history into
+research main. The publisher builds and checks the current-main article-only
+projection, then creates its usual single-parent publication commit as a child
+of the audited direct tip. Both the canonical snapshot and direct Overleaf
+advance normally to that same child. This preserves the reviewed edit history
+while excluding research-only files from the current published tree. If the
+direct push is interrupted, existing verified one-sided recovery applies;
+there is no force-push, arbitrary-history override or relaxation of the
+source-main, authentication, review-draft, build or final readback checks.
+
+The 2026-10-30 audit and its exact identities are documented in
+`docs/implementation_notes/overleaf_reviewed_direct_reconciliation_20261030.md`.
+
 ## Browser Edits and Authentication
 
 Use the Overleaf browser for compilation and review only. If an edit is made

@@ -1,5 +1,15 @@
 # Command-Line Git Integration and Overleaf Publication
 
+## Audited direct-tip reconciliation
+
+The default direct-Overleaf-ahead rejection remains mandatory. An exact
+reviewed tip may be reconciled only through the publisher's explicit option
+and committed audit contract, as documented in
+`overleaf_reviewed_direct_reconciliation_20261030.md`. The replacement current
+tree is manifest-built from main and retains the reviewed tip as publication
+history only. No browser history is merged into research main; no force-push,
+new-result promotion or unreviewed-edit override is permitted.
+
 ## Review-draft clarification (2026-10-29)
 
 The publisher's explicit `--review-draft` option permits the owner-requested

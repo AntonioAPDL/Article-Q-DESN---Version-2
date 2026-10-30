@@ -23,6 +23,9 @@ source_ref=$2
 snapshot_dir=$(cd "$snapshot_dir" && pwd)
 source_commit=$(git rev-parse --verify "${source_ref}^{commit}" 2>/dev/null) ||
   die "source ref is not a commit: $source_ref"
+helper_script=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/overleaf_review_draft_status.py
+publication_status=$(python3 "$helper_script" "$source_commit") ||
+  die "source review-draft notices are invalid"
 
 source_tree=$(git rev-parse "${source_commit}^{tree}")
 
@@ -106,6 +109,15 @@ marker_value() {
   die "supplement SHA-256 is incorrect"
 [[ "$(marker_value refs_bib_sha256)" == "$(sha256sum "$snapshot_dir/refs.bib" | awk '{print $1}')" ]] ||
   die "bibliography SHA-256 is incorrect"
+
+if [[ "$publication_status" == review-draft ]]; then
+  [[ "$(marker_value publication_status)" == review-draft ]] ||
+    die "review-draft publication status is incorrect"
+  [[ "$(marker_value glofas_status)" == historical-weighted-unit-member-refits-pending ]] ||
+    die "review-draft GloFAS status is incorrect"
+elif grep -Eq '^(publication_status|glofas_status)=' "$snapshot_dir/SOURCE_AUTHORITY.txt"; then
+  die "release source must not carry conditional review-draft metadata"
+fi
 
 cp -a "$snapshot_dir/." "$compile_dir/"
 
@@ -198,6 +210,7 @@ main_pages=$(pdfinfo "$compile_dir/main.pdf" | awk '/^Pages:/ {print $2}')
 supplement_pages=$(pdfinfo "$compile_dir/qdesn-supplement.pdf" | awk '/^Pages:/ {print $2}')
 
 printf 'source_commit=%s\n' "$source_commit"
+printf 'publication_status=%s\n' "$publication_status"
 printf 'snapshot_files=%d\n' "$(wc -l < "$actual_inventory")"
 printf 'main_pages=%s\n' "$main_pages"
 printf 'supplement_pages=%s\n' "$supplement_pages"

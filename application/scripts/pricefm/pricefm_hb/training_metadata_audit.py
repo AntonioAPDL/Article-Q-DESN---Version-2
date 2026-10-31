@@ -475,7 +475,11 @@ def main():
     write_new(out / "TRAINING_SPLITS.csv", buf.getvalue())
     rows = result["regions"]
     brief = "\n".join(f'| {x["region"]} | {x["availability"]} | {x["score_count"]} | {x["eligible_complete_groups"]} | {len(x["issues"])} |' for x in rows)
-    report = "# Saved training metadata audit\n\nNo candidate, fit, score or job was created. The existing equal-three-split primary selection was only reproduced, never changed.\n\n| Region | Evidence availability | Valid score rows | Complete eligible groups | Invalid rows |\n|---|---|---:|---:|---:|\n" + brief + "\n\nNO4 retains eight required failures and144 separate RHS precision exclusions. See RESULT.json for component ratios and paired-tau comparisons. Missing remote records, scaler-fit boundaries and recursive target alignment remain unproved. Official tests cannot select a continuation.\n"
+    lineage_regions = [row["region"] for row in rows if row.get("source_metadata_lineage")]
+    lineage_report = ("Pinned source and sealed-metadata fitting-boundary/recursive-target lineage is verified for: "
+                      + ", ".join(lineage_regions) + ". Historical array/scaler values were not recomputed. "
+                      if lineage_regions else "No region has an additional pinned source/sealed-metadata lineage proof. ")
+    report = "# Saved training metadata audit\n\nNo candidate, fit, score or job was created. The existing equal-three-split primary selection was only reproduced, never changed.\n\n| Region | Evidence availability | Valid score rows | Complete eligible groups | Invalid rows |\n|---|---|---:|---:|---:|\n" + brief + "\n\nNO4 retains eight required failures and144 separate RHS precision exclusions. See RESULT.json for component ratios and paired-tau comparisons. " + lineage_report + "Missing records or unbound provenance remain explicit; missing evidence is not a pass. Official tests cannot select a continuation.\n"
     write_new(out / "REPORT.md", report)
     manifest = {"status": "COMPLETE_TRAINING_AUDIT_OUTPUTS", "source": config["source"],
                 "config": {"path": str(physical(args.config)), "sha256": args.config_sha256},

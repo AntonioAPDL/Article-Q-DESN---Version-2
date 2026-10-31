@@ -120,6 +120,17 @@ def validate_frames(frames,spec,ns):
               and f.get('package_library')==ns['library'] and f.get('package_versions')==contract.PACKAGE_VERSIONS
               and f.get('stock_body_sha256')==contract.STOCK_BODY_SHA,'exact actual job/native/package/stock namespace frame required')
     dlls=f.get('loaded_DLLs');h.require(type(dlls) is list and dlls,'actual loaded DLL metadata required')
+    native_R={'path':ns['R_HOME']+'/bin/exec/R','sha256':contract.NATIVE_R_SHA}
+    builtins=f.get('builtin_DLLs')
+    h.require(spec.get('R_native')==native_R and type(builtins) is list and len(builtins)==1
+              and type(builtins[0]) is dict and builtins[0].get('external_file') is False
+              and builtins==[contract.intrinsic_base(native_R)],
+              'exact intrinsic base entry bound to the actual pinned native R required; no external base DLL file is claimed')
+    h.require(all(type(row) is dict and set(row)=={'entry_name','name','path','sha256'}
+                  and type(row.get('path')) is str and Path(row['path']).is_absolute()
+                  and type(row.get('entry_name')) is str and row['entry_name'] and row['entry_name']!='base'
+                  and type(row.get('name')) is str and row['name'] and row['name']!='base' for row in dlls),
+              'all remaining DLL entries require named actual absolute file-backed paths')
     actual={row['path']:row['sha256'] for row in dlls}
     h.require(len(actual)==len(dlls) and all(ns['allowed_package_DLLs'].get(p)==sha for p,sha in actual.items())
               and all(actual.get(p)==sha for p,sha in ns['required_package_DLLs'].items()),'actual exact allowed/mandatory DLL closure required')

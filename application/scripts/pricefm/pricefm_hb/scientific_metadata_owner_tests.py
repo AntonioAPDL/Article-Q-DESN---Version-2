@@ -9,19 +9,23 @@ class MetadataOwnerTests(unittest.TestCase):
     def fixture(self,role='SCIENTIFIC_NAMESPACE_NO_OPTIMIZER'):
         pins=[{'path':'/meta/'+x+'.json','sha256':str(i)*64} for i,x in enumerate(['spec','authority','review','ns'],1)]
         env={k:'x' for k in m.h.ENV_KEYS};env.update({k:'1' for k in m.h.THREAD_KEYS})
-        env.update(TZ='UTC',SLURM_JOB_ID='999',SLURMD_NODENAME='node-13',SLURM_CPUS_PER_TASK='1',
-                   R_HOME='/new/R_HOME',R_LIBS_USER='/new/R_HOME/library',R_LIBS_SITE='/new/R_HOME/library')
+        env.update(PATH='/usr/bin:/bin',LANG='C',LC_ALL='C',HOME='/new',TMPDIR='/new/tmp',R_ARCH='',R_DOC_DIR='/new/code/R_HOME/doc',R_INCLUDE_DIR='/new/code/R_HOME/include',R_SHARE_DIR='/new/code/R_HOME/share',LD_LIBRARY_PATH='/new/code/R_HOME/lib:/new/code/lib',TZ='UTC',SLURM_JOB_ID='999',SLURMD_NODENAME='node-13',SLURM_CPUS_PER_TASK='1',
+                   R_HOME='/new/code/R_HOME',R_LIBS_USER='/new/code/R_HOME/library',R_LIBS_SITE='/new/code/R_HOME/library')
         spec={'schema':'r179_scientific_metadata_owner_spec_v1','role':role,'optimizer_invocations':0,'scientific_data_read':False,'models':0,
               'job_id':'999','node':'node-13','affinity':[0],'traced_guard':{'path':'/source/tracer.py','sha256':m.TRACE_SHA},
-              'boundary_library':{'path':'/source/boundary.so','sha256':m.BOUNDARY_SHA},'R_native':{'path':'/new/R_HOME/bin/exec/R','sha256':m.ELF_SHA},
+              'boundary_library':{'path':'/source/boundary.so','sha256':m.BOUNDARY_SHA},'R_native':{'path':'/new/code/R_HOME/bin/exec/R','sha256':m.ELF_SHA},
               'fixture':m.h.pin(Path(m.__file__).parent/m.ROLES.get(role,'scientific_namespace_fixture.R')),
-              'namespace_spec':pins[3],'environment':env,'nonce':'a'*32}
+              'remote_namespace':'/new','output':'/new/result/owner','namespace_spec':pins[3],'environment':env,'nonce':'a'*32}
         auth={'status':'ROOT_ADMITTED_R179_SCIENTIFIC_METADATA_ONLY','spec':pins[0],'sources':m.sources('SCIENTIFIC_NAMESPACE_NO_OPTIMIZER' if role not in m.ROLES else role),
-              'memory_MiB':8192,'whole_CPU_seconds':600,'whole_wall_seconds':1200,'owner_CPU_seconds':550,'owner_wall_seconds':900,
+              'memory_MiB':8192,'whole_CPU_seconds':600,'whole_wall_seconds':1200,'owner_CPU_seconds':450,'owner_wall_seconds':300,
               'max_calls':1,'issued_epoch':1,'expires_epoch':7000}
         review={'status':'PASS_REVIEWED_R179_SCIENTIFIC_METADATA_OWNER_AND_SPEC','spec':pins[0],'authority':pins[1],'sources':auth['sources']}
         ns={'job_id':'999','node':'node-13','affinity':[0],'schema':'r179_scientific_namespace_fixture_spec_v1','optimizer_invocations':0,
-            'scientific_data_read':False,'library':'/new/R_HOME/library','scientific_boundary_library':spec['boundary_library'],
+            'scientific_data_read':False,'library':'/new/code/R_HOME/library','R_HOME':'/new/code/R_HOME',
+            'package_versions':m.contract.PACKAGE_VERSIONS,'expected_stock_body_sha256':m.contract.STOCK_BODY_SHA,
+            'fixedpoint_helper':{'path':'/new/science/fixedpoint_helper.R','sha256':m.contract.FIXEDPOINT_SHA},
+            'allowed_package_DLLs':{'/new/code/'+p:s for p,s in m.contract.REQUIRED_PACKAGE_DLLS.items()},
+            'required_package_DLLs':{'/new/code/'+p:s for p,s in m.contract.REQUIRED_PACKAGE_DLLS.items() if Path(p).name in {'exdqlm.so','digest.so','jsonlite.so','Matrix.so','Rcpp.so','nimble.so'}},'scientific_boundary_library':spec['boundary_library'],
             'namespace_fixture':m.h.pin(Path(m.__file__).parent/'scientific_namespace_fixture.R')}
         return pins,[spec,auth,review,ns]
 
@@ -41,7 +45,7 @@ class MetadataOwnerTests(unittest.TestCase):
             with self.subTest(key=key),self.assertRaises(ValueError):self.validate(rows)
 
     def test_other_job_core_runtime_or_environment_fails(self):
-        for key,value in [('job_id','1000'),('affinity',[30]),('R_native',{'path':'/new/R_HOME/bin/exec/R','sha256':'0'*64})]:
+        for key,value in [('job_id','1000'),('affinity',[30]),('R_native',{'path':'/new/code/R_HOME/bin/exec/R','sha256':'0'*64})]:
             pins,rows=self.fixture();rows[0][key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):self.validate(rows)
         pins,rows=self.fixture();rows[0]['environment']['LD_PRELOAD']='/unreviewed.so'

@@ -21,6 +21,8 @@ import time
 from . import startup_helper as h
 from . import profile_admission as admission
 from . import environment
+from . import scientific_allocation as allocation
+from . import scientific_namespace_contract as contract
 
 ROLES={'SCIENTIFIC_NAMESPACE_NO_OPTIMIZER':'scientific_namespace_fixture.R',
        'SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER':'scientific_boundary_fixture.R'}
@@ -33,7 +35,8 @@ _UNREAPED_LOCK_FDS=[]
 def sources(role):
     h.require(role in ROLES,'zero-optimizer role required')
     files=[Path(__file__).absolute(),Path(h.__file__).absolute(),Path(admission.__file__).absolute(),Path(environment.__file__).absolute(),
-           Path(__file__).absolute().parent/ROLES[role],Path(__file__).absolute().parent/'scientific_namespace_fixture.R']
+           Path(__file__).absolute().parent/ROLES[role],Path(__file__).absolute().parent/'scientific_namespace_fixture.R',
+           Path(allocation.__file__).absolute(),Path(contract.__file__).absolute()]
     return {str(p):h.pin(p) for p in sorted(set(files))}
 
 
@@ -56,9 +59,9 @@ def validate(spec_pin,authority_pin,review_pin,*,now=None,environ=None,affinity=
     h.require(authority.get('status')=='ROOT_ADMITTED_R179_SCIENTIFIC_METADATA_ONLY' and authority.get('spec')==spec_pin
               and authority.get('sources')==sources(role) and authority.get('memory_MiB')==8192
               and authority.get('whole_CPU_seconds')==600 and authority.get('whole_wall_seconds')==1200
-              and authority.get('owner_CPU_seconds')==550 and authority.get('owner_wall_seconds')==900
+              and authority.get('owner_CPU_seconds')==450 and authority.get('owner_wall_seconds')==300
               and authority.get('max_calls')==1 and authority['issued_epoch']<=now
-              and now+1200<authority['expires_epoch'],'complete new source/job/root/funding window required')
+              and now+300<authority['expires_epoch'],'complete new source/job/root/funding window required')
     h.require(review.get('status')=='PASS_REVIEWED_R179_SCIENTIFIC_METADATA_OWNER_AND_SPEC'
               and review.get('spec')==spec_pin and review.get('authority')==authority_pin
               and review.get('sources')==sources(role),'independent exact owner/spec/authority review required')
@@ -69,6 +72,7 @@ def validate(spec_pin,authority_pin,review_pin,*,now=None,environ=None,affinity=
     for key in ('traced_guard','boundary_library','R_native','namespace_spec'):
         h.read_pin(spec[key],limit=64*1024**2 if key in ('R_native','boundary_library') else 16*1024**2)
     ns=h.read(spec['namespace_spec'])
+    contract.validate(ns,spec['remote_namespace'])
     h.require(ns.get('job_id')==spec['job_id'] and ns.get('node')==spec['node'] and ns.get('affinity')==spec['affinity']
               and ns.get('schema')=='r179_scientific_namespace_fixture_spec_v1'
               and ns.get('optimizer_invocations')==0 and ns.get('scientific_data_read') is False,'exact installed namespace fixture spec required')
@@ -81,6 +85,12 @@ def validate(spec_pin,authority_pin,review_pin,*,now=None,environ=None,affinity=
     h.require(spec['R_native']['path']==str(Path(env['R_HOME'])/'bin/exec/R')
               and env['R_LIBS_USER']==env['R_LIBS_SITE']==ns['library'],
               'exact installed native R and library environment required')
+    root=spec['remote_namespace'];rh=ns['R_HOME']
+    closed=dict(PATH='/usr/bin:/bin',LANG='C',LC_ALL='C',TZ='UTC',HOME=root,TMPDIR=root+'/tmp',R_HOME=rh,R_ARCH='',
+                R_DOC_DIR=rh+'/doc',R_INCLUDE_DIR=rh+'/include',R_SHARE_DIR=rh+'/share',R_LIBS_USER=ns['library'],R_LIBS_SITE=ns['library'],
+                LD_LIBRARY_PATH=rh+'/lib:'+root+'/code/lib',SLURM_JOB_ID=spec['job_id'],SLURMD_NODENAME=spec['node'],SLURM_CPUS_PER_TASK='1')
+    closed.update({key:'1' for key in h.THREAD_KEYS})
+    h.require(env==closed,'exact new namespace/native loader/helper environment required')
     return spec,authority
 
 
@@ -100,13 +110,46 @@ def accepted_guard(receipt,role):
     return True
 
 
+def validate_frames(frames,spec,ns):
+    expected=1 if spec['role']=='SCIENTIFIC_NAMESPACE_NO_OPTIMIZER' else 2
+    h.require(len(frames)==expected,'exact namespace/boundary frame count required')
+    f=frames[0];affinity=f.get('affinity');affinity=affinity if type(affinity) is list else [affinity]
+    h.require(f.get('status')=='PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY'
+              and f.get('job_id')==spec['job_id'] and f.get('node')==spec['node'] and f.get('nonce')==spec['nonce']
+              and affinity==spec['affinity'] and f.get('R_version')=='4.6.0' and f.get('R_home')==ns['R_HOME']
+              and f.get('package_library')==ns['library'] and f.get('package_versions')==contract.PACKAGE_VERSIONS
+              and f.get('stock_body_sha256')==contract.STOCK_BODY_SHA,'exact actual job/native/package/stock namespace frame required')
+    dlls=f.get('loaded_DLLs');h.require(type(dlls) is list and dlls,'actual loaded DLL metadata required')
+    actual={row['path']:row['sha256'] for row in dlls}
+    h.require(len(actual)==len(dlls) and all(ns['allowed_package_DLLs'].get(p)==sha for p,sha in actual.items())
+              and all(actual.get(p)==sha for p,sha in ns['required_package_DLLs'].items()),'actual exact allowed/mandatory DLL closure required')
+    h.require(all(row.get('optimizer_invocations')==0 and row.get('scientific_data_read') is False
+                  and row.get('models')==0 and row.get('nonce')==spec['nonce']
+                  and row.get('job_id')==spec['job_id'] and row.get('node')==spec['node'] for row in frames),
+              'every metadata frame must remain exact job/nonce/data-free')
+    if expected==2:h.require(frames[1].get('status')=='BOUNDARY_CHILD_ACKNOWLEDGED_AWAIT_PARENT_KERNEL_PROOF','exact child ACK frame required')
+    return True
+
+
+def validate_current_owner(guard,tree,spec,authority_pin,ready_identity):
+    accepted_guard(guard,spec['role'])
+    h.require(guard.get('maximum_combined_CPU_seconds')==450 and guard.get('parent_plus_all_reaped_child_CPU_seconds',float('inf'))<450
+              and guard.get('wall_seconds',float('inf'))<300,'actual inclusive450CPU/300wall original guard required')
+    h.require(tree.get('schema')=='r157_ptrace_owner_v1' and tree.get('state')=='CLOSED'
+              and tree.get('scope')==spec['scope_id'] and tree.get('authority_pin')==authority_pin
+              and tree.get('source')=={'kind':'UNCHANGED_R157_TRACER_R179_METADATA_OWNER'},'current exact scope/authority/source closed owner required')
+    for row in [guard['supervisor'],tree['supervisor']]:
+        h.require(all(row.get(k)==ready_identity[k] for k in ['pid','start_ticks','boot_id','affinity']),
+                  'same current READY worker lifetime must be the actual native tracer owner')
+    return True
+
+
 def run(spec_pin,authority_pin,review_pin):
     started=time.monotonic();spec,authority=validate(spec_pin,authority_pin,review_pin)
-    allocation={'job_id':spec['job_id']}
-    scheduler=admission.scheduler_evidence(allocation)
+    scheduler=allocation.live(spec['job_id'],spec['node'],spec['affinity'],minimum_remaining=300)
     h.require(scheduler['memory_MiB']==8192 and 0<scheduler['cgroup_memory_limit_bytes']<=8192*1024**2
               and scheduler['cpus']==scheduler['tasks']==scheduler['nodes']==1
-              and scheduler['wall_seconds']<=1200 and scheduler['end_epoch']>time.time()+900,
+              and scheduler['wall_seconds']<=1200 and scheduler['end_epoch']>time.time()+300,
               'live whole one-CPU/8GiB/nonrequeueing scheduler+cgroup envelope required')
     for path,sha in spec['bootstrap_exec_allowlist'].items():h.read_pin({'path':path,'sha256':sha},limit=64*1024**2)
     h.require(spec['R_native']['path'] in spec['bootstrap_exec_allowlist'],'native R must be in exact bootstrap exec allowlist')
@@ -123,7 +166,7 @@ def run(spec_pin,authority_pin,review_pin):
         h.require(os.sched_getaffinity(0)==core and admission.cgroup_memory_limit()<=8192*1024**2,
                   'current allocated CPU/memory boundary changed')
         text=Path('/proc/self/cgroup').read_text()
-        h.require('job_'+job in text or '/'+job+'/' in text,'own cgroup lost exact Slurm job identity')
+        allocation.exact_cgroup(text,job,os.getuid())
         for expected in owned:
             row=trace.identity(expected['pid'])
             h.require(trace.same_lifetime(row,expected) and row['TracerPid']==os.getpid() and set(row['affinity'])==core,
@@ -137,7 +180,7 @@ def run(spec_pin,authority_pin,review_pin):
     try:
         with (out/'child.stdout').open('xb') as stdout,(out/'child.stderr').open('xb') as stderr:
             receipt=trace.run_traced(command,env=spec['environment'],stdout=stdout,stderr=stderr,lock_fd=fd,
-              affinity=spec['affinity'],wall_seconds=900,maximum_combined_CPU_seconds=550,
+              affinity=spec['affinity'],wall_seconds=300,maximum_combined_CPU_seconds=450,
               absolute_deadline_UTC=dt.datetime.fromtimestamp(min(authority['expires_epoch'],scheduler['end_epoch']),dt.timezone.utc).isoformat(),
               peer_callback=peer,bootstrap_exec_allowlist=spec['bootstrap_exec_allowlist'],owner_path=out/'owned_tree.json',
               scope=spec['scope_id'],source={'kind':'UNCHANGED_R157_TRACER_R179_METADATA_OWNER'},authority_pin=authority_pin,
@@ -148,16 +191,13 @@ def run(spec_pin,authority_pin,review_pin):
         accepted_guard(receipt,spec['role'])
         raw=(out/'child.stdout').read_bytes();h.require(len(raw)<=1024**2,'bounded complete metadata stdout required')
         frames=[h.strict_json(line) for line in raw.splitlines() if line.lstrip().startswith(b'{')]
+        ns=h.read(spec['namespace_spec']);validate_frames(frames,spec,ns)
         expected=1 if spec['role']=='SCIENTIFIC_NAMESPACE_NO_OPTIMIZER' else 2
-        h.require(len(frames)==expected and frames[0].get('status')=='PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY'
-                  and all(f.get('nonce')==spec['nonce'] and f.get('optimizer_invocations')==0 and f.get('scientific_data_read') is False for f in frames),
-                  'exact zero-target/optimizer namespace/boundary fixture frames required')
-        if expected==2:h.require(frames[1].get('status')=='BOUNDARY_CHILD_ACKNOWLEDGED_AWAIT_PARENT_KERNEL_PROOF','boundary child ACK frame differs')
         u=resource.getrusage(resource.RUSAGE_SELF);c=resource.getrusage(resource.RUSAGE_CHILDREN);cpu=u.ru_utime+u.ru_stime+c.ru_utime+c.ru_stime
         h.require(cpu<600 and time.monotonic()-started<1200 and time.time()<authority['expires_epoch'],'whole new metadata-stage accounting failed')
         status='PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY' if expected==1 else 'PASS_HB_NATIVE_SCIENTIFIC_BOUNDARY_NO_TARGET_NO_OPTIMIZER'
         result={'status':status,'schema':'r179_scientific_metadata_result_v1','spec':spec_pin,'authority':authority_pin,'review':review_pin,
-                'owned_guard':h.pin(out/'owned_guard.json'),'namespace_frames':frames,'job_id':job,'node':spec['node'],
+                'owned_guard':h.pin(out/'owned_guard.json'),'owned_tree':h.pin(out/'owned_tree.json'),'namespace_frames':frames,'job_id':job,'node':spec['node'],
                 'scheduler':scheduler,'whole_parent_plus_reaped_CPU':cpu,'wall_seconds':time.monotonic()-started,
                 'original_guard_source_preserved':True,'optimizer_invocations':0,'scientific_data_read':False,
                 'numerical_parity_proved':False,'production_admission':False,'requires_outer_reap_and_primary_Slurm_return_acceptance':True}

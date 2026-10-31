@@ -16,6 +16,10 @@ actual_affinity <- trimws(sub('Cpus_allowed_list:', '',
   readLines('/proc/self/status')[startsWith(readLines('/proc/self/status'), 'Cpus_allowed_list:')]))
 stopifnot(length(spec$affinity) == 1L, identical(actual_affinity, as.character(spec$affinity[[1L]])))
 library <- normalizePath(spec$library, mustWork = TRUE)
+stopifnot(length(spec$package_versions) == 48L,
+  identical(spec$fixedpoint_helper$sha256, 'c573066109eef78cd19e8c60f2630ecad29d433ae9d95150d0a0fe4f7ee21571'),
+  identical(spec$expected_stock_body_sha256, '3637a96c29305a0e3f7df19ecf96f85b77f98f0dbb0e783773d217ba2be6dde6'),
+  identical(as.character(getRversion()), '4.6.0'), identical(normalizePath(R.home()), normalizePath(spec$R_HOME)))
 versions <- list()
 for (name in names(spec$package_versions)) {
   ns <- loadNamespace(name, lib.loc = library)
@@ -32,6 +36,13 @@ stopifnot(identical(stock_body_sha, spec$expected_stock_body_sha256))
 dll_paths <- unique(vapply(getLoadedDLLs(), function(x) x[['path']], character(1)))
 dll_paths <- dll_paths[nzchar(dll_paths)]
 loaded <- lapply(dll_paths, function(path) list(path = normalizePath(path, mustWork = TRUE), sha256 = hash(path)))
+required <- spec$required_package_DLLs
+allowed <- spec$allowed_package_DLLs
+stopifnot(length(required) == 6L, length(allowed) == 34L, all(names(required) %in% dll_paths))
+for (path in names(required)) stopifnot(identical(hash(path), required[[path]]))
+for (item in loaded) {
+  stopifnot(item$path %in% names(allowed), identical(item$sha256, allowed[[item$path]]))
+}
 result <- list(status = 'PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY',
   role = 'SCIENTIFIC_NAMESPACE_NO_OPTIMIZER', nonce = args[[3L]],
   job_id = Sys.getenv('SLURM_JOB_ID'), node = Sys.getenv('SLURMD_NODENAME'),

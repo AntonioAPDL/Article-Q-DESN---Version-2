@@ -13,9 +13,9 @@ class InstallGateTests(unittest.TestCase):
         pins=[{'path':'/meta/'+n+'.json','sha256':str(i)*64} for i,n in enumerate(['spec','authority','review'],1)]
         spec={'schema':'r179_scientific_code_install_spec_v1','purpose':m.n.PURPOSE,
               'bounds':{'files':m.n.MAX_FILES,'bytes':m.n.MAX_BYTES,'one_file_bytes':m.n.MAX_FILE},
-              'R_executions':0,'scientific_target_data':False,'optimizer_invocations':0,'job_id':'999','node':'node-13','affinity':[0]}
+              'R_executions':0,'scientific_target_data':False,'optimizer_invocations':0,'job_id':'999','node':'node-13','affinity':[0],'expires_epoch':10000}
         auth={'status':'ROOT_ADMITTED_NEW_SCIENTIFIC_CODE_NAMESPACE_ONLY','spec':pins[0],'sources':m.sources(),
-              'issued_epoch':1,'expires_epoch':10000,'memory_MiB':8192,'max_calls':1}
+              'issued_epoch':1,'expires_epoch':7000,'memory_MiB':8192,'max_calls':1,'install_CPU_seconds':60,'install_wall_seconds':600,'whole_CPU_seconds':600,'whole_wall_seconds':1200}
         review={'status':'PASS_REVIEWED_SCIENTIFIC_CODE_INSTALL_SOURCE_AND_SPEC','spec':pins[0],'authority':pins[1],'sources':m.sources()}
         return pins,[spec,auth,review]
 

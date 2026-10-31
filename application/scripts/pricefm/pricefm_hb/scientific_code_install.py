@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import resource
@@ -17,13 +18,16 @@ import time
 
 from . import runtime_archive as a
 from . import scientific_namespace_plan as n
+from . import scientific_allocation as allocation
+from . import scientific_namespace_contract as contract
 
 BASE_MANIFEST_SHA='60eb4229602956510631bb6989de7d20ccd47cae7f6ab32bbfd6841d64af28e6'
 BASE_ARCHIVE_SHA='c94cadf4c75a56113355e86f2e485b1bba0c6e61ffee058bd22f681f4ba7132a'
 
 
 def sources():
-    return {p.name:a.pin(p) for p in (Path(__file__).absolute(),Path(a.__file__).absolute(),Path(n.__file__).absolute())}
+    return {p.name:a.pin(p) for p in (Path(__file__).absolute(),Path(a.__file__).absolute(),Path(n.__file__).absolute(),
+                                    Path(allocation.__file__).absolute(),Path(allocation.admission.__file__).absolute(),Path(contract.__file__).absolute())}
 
 
 def validate(spec_pin,authority_pin,review_pin,*,now=None,environment=None,affinity=None,node=None):
@@ -43,8 +47,13 @@ def validate(spec_pin,authority_pin,review_pin,*,now=None,environment=None,affin
     a.require(authority.get('status')=='ROOT_ADMITTED_NEW_SCIENTIFIC_CODE_NAMESPACE_ONLY'
               and authority.get('spec')==spec_pin and authority.get('sources')==sources()
               and authority['issued_epoch']<=now and now+600<authority['expires_epoch']
-              and authority.get('memory_MiB')==8192 and authority.get('max_calls')==1,
+              and authority.get('memory_MiB')==8192 and authority.get('max_calls')==1
+              and authority.get('install_CPU_seconds')==60 and authority.get('install_wall_seconds')==600
+              and authority.get('whole_CPU_seconds')==600 and authority.get('whole_wall_seconds')==1200,
               'new exact source/spec/root/job funding authority required')
+    a.require(all(type(authority.get(k)) in (int,float) and math.isfinite(authority[k]) for k in ['issued_epoch','expires_epoch'])
+              and 0<authority['expires_epoch']-authority['issued_epoch']<=7200
+              and authority['expires_epoch']<=spec['expires_epoch'],'finite outer-scope-bounded install authority required')
     a.require(review.get('status')=='PASS_REVIEWED_SCIENTIFIC_CODE_INSTALL_SOURCE_AND_SPEC'
               and review.get('spec')==spec_pin and review.get('authority')==authority_pin
               and review.get('sources')==sources(),'independent exact new-role source/spec review required')
@@ -74,6 +83,12 @@ def install_one(archive_pin,manifest,out,seen):
 
 
 def install(spec):
+    allocation.live(spec['job_id'],spec['node'],spec['affinity'],minimum_remaining=600)
+    hashes={'base_archive.tar.gz':spec['base_archive']['sha256'],'base_manifest.json':spec['base_manifest']['sha256'],
+            'addon_closure.json':spec['addon_manifest']['sha256']}
+    for i,item in enumerate(spec['addons'],1):
+        hashes['addon0'+str(i)+'.tar.gz']=item['archive']['sha256'];hashes['addon0'+str(i)+'_manifest.json']=item['manifest']['sha256']
+    a.require(hashes==contract.INPUT_HASHES,'exact closed reviewed code-only input archive/manifest hashes required')
     a.require(spec['base_manifest']['sha256']==BASE_MANIFEST_SHA and spec['base_archive']['sha256']==BASE_ARCHIVE_SHA,
               'exact previously verified base archive must be reused')
     base=a.read(spec['base_manifest']);addon=a.read(spec['addon_manifest'])

@@ -20,10 +20,11 @@ def exact_cgroup(text, job_id, uid):
         users=[part for part in parts if part.startswith('uid_')]
         if users:require(users==['uid_'+str(uid)],'contradictory Slurm UID membership forbidden')
         if jobs:
-            require(jobs==['job_'+str(job_id)] and users==['uid_'+str(uid)],
+            require(jobs==['job_'+str(job_id)] and users in ([],['uid_'+str(uid)]),
                     'contradictory Slurm job/UID membership forbidden')
         if 'job_'+str(job_id) in parts:
-            require('uid_'+str(uid) in parts, 'exact owned Slurm UID cgroup required')
+            # Slurm v1 can name uid_N; v2 can omit it. A label is not UID
+            #authority: live() separately requires kernelUID/scontrol.UserId.
             paths.append(fields[2])
     require(paths, 'exact owned Slurm job cgroup component required')
     return paths

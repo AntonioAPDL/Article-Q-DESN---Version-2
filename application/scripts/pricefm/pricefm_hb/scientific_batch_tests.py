@@ -40,6 +40,8 @@ class ScientificRegressionTests(unittest.TestCase):
     def test_cgroup_requires_exact_job_component_and_UID_without_contradictions(self):
         uid=os.getuid();good='0::/slurm/uid_'+str(uid)+'/job_999/step_batch\n'
         self.assertEqual(allocation.exact_cgroup(good,'999',uid),[good.strip().split(':',2)[2]])
+        uidless='0::/system.slice/slurmstepd.scope/job_999/step_batch\n'
+        self.assertEqual(allocation.exact_cgroup(uidless,'999',uid),[uidless.strip().split(':',2)[2]])
         for text in [good.replace('job_999/','job_9990/'),good.replace('uid_'+str(uid),'uid_1'),
                      good+'1:cpu:/slurm/uid_'+str(uid)+'/job_1000/step_batch\n',good+'1:cpu:/slurm/uid_1/job_999/step_batch\n',
                      'malformed',good.replace('job_999/','job_999/child/job_1000/'),good+'1:cpu:/slurm/uid_1\n']:
@@ -152,10 +154,13 @@ class ScientificRegressionTests(unittest.TestCase):
                  patch.object(allocation.time,'mktime',return_value=time.time()+1500)):
                 return allocation.live('999','node-13',[0],minimum_remaining=600)
         self.assertEqual(live(fields)['uid'],uid)
+        self.assertEqual(live(fields,'0::/system.slice/slurmstepd.scope/job_999/step_batch\n')['uid'],uid)
         for key,value in [('UserId','other(1)'),('NumCPUs','2'),('Requeue','1'),('NodeList','node-12'),('MinMemoryNode','16G')]:
             f=dict(fields);f[key]=value
             with self.subTest(key=key),self.assertRaises(ValueError):live(f)
         with self.assertRaises(ValueError):live(fields,text.replace('job_999','job_9990'))
+        wrong=dict(fields,UserId='other(1)')
+        with self.assertRaises(ValueError):live(wrong,'0::/system.slice/slurmstepd.scope/job_999/step_batch\n')
 
     def test_direct_batch_accounting_requires_primary_and_batch_without_fabricated_srun_step(self):
         def row(job):return job+'|COMPLETED|0:0|00:00:01|4|1|scope|128x24|128x24|8Gn|\n'
@@ -185,6 +190,20 @@ class ScientificRegressionTests(unittest.TestCase):
             with patch.object(batch.h,'write_new',side_effect=interrupted),self.assertRaises(OSError):
                 batch.acknowledge_failed_previous(registry,batch.ROLES[0],guard)
             self.assertTrue((root/'ROLE_FAILED_SPENT.json').exists());self.assertFalse((registry/'control_0000.failed_ack.json').exists())
+
+    def test_pre_READY_admission_failure_seals_truthful_metadata_without_payload(self):
+        with tempfile.TemporaryDirectory(dir='/dev/shm') as tmp:
+            root=Path(tmp);code=root/'package/pricefm_hb/scientific_batch_worker.py';code.parent.mkdir(parents=True)
+            code.write_text('synthetic source placeholder, never executed');(root/'result').mkdir()
+            spec=dict(remote_root=str(root),role=batch.ROLES[0],scope_id='synthetic-failure',sources={},maximum_return_files=4096,maximum_return_bytes=32*1024**2)
+            path=root/'SPEC.json';common.write_new(path,spec)
+            with (patch.object(worker,'__file__',str(code)),patch.object(worker,'bootstrap',side_effect=ValueError('synthetic UID mismatch')),
+                 patch.dict(os.environ,dict(SLURM_JOB_ID='999'))):
+                self.assertEqual(worker.run(common.pin(path)),1)
+            result=common.read_json((root/'result/RESULT.json').read_bytes());manifest=common.read_json((root/'result/RETURN_MANIFEST.json').read_bytes())
+            self.assertEqual(result['status'],'FAILED_SCIENTIFIC_METADATA_WORKER');self.assertFalse(result['allocation_admitted'])
+            self.assertIsNone(result['ready']);self.assertIsNone(result['outcome']);self.assertFalse((root/'READY.json').exists())
+            batch.validate_manifest(manifest,spec,'999')
 
 
 if __name__=='__main__':unittest.main()

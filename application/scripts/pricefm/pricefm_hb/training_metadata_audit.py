@@ -321,9 +321,18 @@ def source_metadata_lineage(inputs, region, entry):
             and proof.get("schema") == "pricefm_SI_source_metadata_lineage_v1", "unknown SI lineage proof")
     require(proof.get("array_values_or_binary_bank_integrity_recomputed") is False
             and proof.get("source_imported_or_executed") is False, "SI proof overstates its evidence class")
-    expected = {(row["design"]["sha256"],row["scaler"]["sha256"]) for row in entry.get("designs", [])}
-    observed = {(row["design"]["sha256"],row["sealed_scaler"]["sha256"]) for row in proof.get("designs", [])}
-    require(len(proof.get("designs", [])) == len(expected) == len(observed) == 6 and expected == observed,
+    expected = set()
+    for row in entry.get("designs", []):
+        task = inputs.read(row["task"])
+        require(type(task.get("split")) is int and task["split"] in (1,2,3), "SI lineage task split differs")
+        tau0 = finite(task.get("tau0"), "SI lineage tau0", positive=True)
+        expected.add((task["split"],tau0,row["design"]["sha256"],row["scaler"]["sha256"]))
+    observed = set()
+    for row in proof.get("designs", []):
+        require(type(row.get("split")) is int and row["split"] in (1,2,3), "SI proof split differs")
+        tau0 = finite(row.get("tau0"), "SI proof tau0", positive=True)
+        observed.add((row["split"],tau0,row["design"]["sha256"],row["sealed_scaler"]["sha256"]))
+    require(len(entry.get("designs", [])) == len(proof.get("designs", [])) == len(expected) == len(observed) == 6 and expected == observed,
             "SI lineage proof differs from bound design/scaler inputs")
     return {"proof": entry["source_metadata_lineage"], "evidence_class": "PINNED_SOURCE_AND_SEALED_METADATA_ONLY",
             "array_values_recomputed": False, "recursive_target_source_alignment": "PROVED_FOR_PINNED_SOURCE_CONTRACT"}

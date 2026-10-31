@@ -195,17 +195,48 @@ class AuditTests(unittest.TestCase):
         self.assertFalse(result["winner_mutated"])
 
     def test_SI_lineage_requires_the_same_six_sealed_designs_and_scalers(self):
-        designs = [{"design":{"sha256":format(i+1,'064x')},"scaler":{"sha256":format(i+100,'064x')}} for i in range(6)]
+        # Tau changes fitting shrinkage, not the fixed design/scaler bytes.
+        # Three splits therefore legitimately yield only three unique hash pairs.
+        designs = [{"task":self.doc({"split":i//2+1,"tau0":.001 if i%2 else .0001}),
+                    "design":{"sha256":format(i//2+1,'064x')},"scaler":{"sha256":format(i//2+100,'064x')}} for i in range(6)]
         proof = {"status":"PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE",
                  "schema":"pricefm_SI_source_metadata_lineage_v1",
                  "array_values_or_binary_bank_integrity_recomputed":False,"source_imported_or_executed":False,
-                 "designs":[{"design":x["design"],"sealed_scaler":x["scaler"]} for x in designs]}
+                 "designs":[dict(self.inputs.read(x["task"]),design=x["design"],sealed_scaler=x["scaler"]) for x in designs]}
         entry = {"designs":designs,"source_metadata_lineage":self.doc(proof)}
         result = a.source_metadata_lineage(self.inputs,"SI",entry)
         self.assertFalse(result["array_values_recomputed"])
+        self.assertEqual(len({(x["design"]["sha256"],x["scaler"]["sha256"]) for x in designs}),3)
         proof["designs"][0]["sealed_scaler"] = {"sha256":"f"*64}
         entry["source_metadata_lineage"] = self.doc(proof)
         with self.assertRaises(a.AuditError):a.source_metadata_lineage(self.inputs,"SI",entry)
+
+    def test_SI_lineage_shared_bytes_cannot_crosswire_tau_identity(self):
+        designs = [{"task":self.doc({"split":i//2+1,"tau0":.001 if i%2 else .0001}),
+                    "design":{"sha256":format(i//2+1,'064x')},"scaler":{"sha256":format(i//2+100,'064x')}} for i in range(6)]
+        rows=[dict(self.inputs.read(x["task"]),design=x["design"],sealed_scaler=x["scaler"]) for x in designs]
+        rows[0]["tau0"] = .2
+        proof={"status":"PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE",
+               "schema":"pricefm_SI_source_metadata_lineage_v1","array_values_or_binary_bank_integrity_recomputed":False,
+               "source_imported_or_executed":False,"designs":rows}
+        with self.assertRaises(a.AuditError):
+            a.source_metadata_lineage(self.inputs,"SI",{"designs":designs,"source_metadata_lineage":self.doc(proof)})
+
+    def test_SI_lineage_rejects_duplicate_missing_or_crossed_split_identity(self):
+        designs = [{"task":self.doc({"split":i//2+1,"tau0":.001 if i%2 else .0001}),
+                    "design":{"sha256":format(i//2+1,'064x')},"scaler":{"sha256":format(i//2+100,'064x')}} for i in range(6)]
+        rows=[dict(self.inputs.read(x["task"]),design=x["design"],sealed_scaler=x["scaler"]) for x in designs]
+        base={"status":"PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE",
+              "schema":"pricefm_SI_source_metadata_lineage_v1","array_values_or_binary_bank_integrity_recomputed":False,
+              "source_imported_or_executed":False,"designs":rows}
+        for variant in ('duplicate','missing','crossed_split','boolean_split'):
+            proof=copy.deepcopy(base)
+            if variant=='duplicate':proof['designs'][1]=proof['designs'][0]
+            elif variant=='missing':proof['designs'].pop()
+            elif variant=='crossed_split':proof['designs'][0]['split']=2
+            else:proof['designs'][0]['split']=True
+            with self.assertRaises(a.AuditError,msg=variant):
+                a.source_metadata_lineage(self.inputs,"SI",{'designs':designs,'source_metadata_lineage':self.doc(proof)})
 
     def test_SI_lineage_cannot_claim_array_recomputation_or_another_region(self):
         proof = {"status":"PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE",

@@ -49,6 +49,14 @@ def bootstrap(spec_pin):
             and spec['component_wall_caps']==dict(install=600,owner=300,release_wait=120,exit=180)
             and spec['new_models']==spec['optimizer_invocations']==0 and spec['scientific_data_read'] is False,
             'whole additive component CPU/wall/data-free bounds required')
+    raw_cgroup=Path('/proc/self/cgroup').read_text()
+    facts=dict(schema='pricefm_scientific_precheck_facts_v1',status='OBSERVED_OWN_JOB_FACTS_NOT_ADMISSION',
+        job_id=os.environ.get('SLURM_JOB_ID'),node=os.uname().nodename,uid=os.getuid(),pid=os.getpid(),
+        start_ticks=owner.h.process_birth_ticks(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+        affinity=sorted(os.sched_getaffinity(0)),cgroup_raw=raw_cgroup[:16384],cgroup_truncated=len(raw_cgroup)>16384,
+        CPU_rlimit=list(resource.getrlimit(resource.RLIMIT_CPU)),sources=spec['sources'],optimizer_invocations=0,scientific_data_read=False)
+    common.write_new(root/'result/PRECHECK_FACTS.json',facts)
+    require(len(raw_cgroup)<=16384,'own cgroup metadata exceeds bounded exact observation')
     require(os.environ.get('SLURM_JOB_ID','').isdigit() and os.environ.get('SLURMD_NODENAME')==spec['node']=='node-13'
             and os.uname().nodename.split('.')[0]==spec['node'] and len(os.sched_getaffinity(0))==1
             and os.environ.get('SLURM_CPUS_PER_TASK')=='1' and os.environ.get('TZ')=='UTC',
@@ -91,7 +99,20 @@ def validate_release(spec,spec_pin,ready_pin,release_pin,common,*,job_id=None):
 
 
 def run(spec_pin):
-    started=time.monotonic();spec,scope,common,owner,job,scheduler=bootstrap(spec_pin)
+    started=time.monotonic()
+    sys.path.insert(0,str(Path(__file__).absolute().parents[1]))
+    from pricefm_hb import startup_batch_worker as common
+    spec=common.read_json(common.read_exact(spec_pin));root=Path(spec['remote_root'])
+    require(root==Path(__file__).absolute().parents[2] and root.stat().st_uid==os.getuid()
+            and root.stat().st_mode&0o022==0,'exact staged owned worker namespace required before failure return')
+    try:spec,scope,common,owner,job,scheduler=bootstrap(spec_pin)
+    except BaseException as exc:
+        common.seal_return(spec,os.environ.get('SLURM_JOB_ID',''),dict(status='FAILED_SCIENTIFIC_METADATA_WORKER',
+            role=spec['role'],scope_id=spec['scope_id'],job_id=os.environ.get('SLURM_JOB_ID',''),node=os.uname().nodename.split('.')[0],
+            spec_sha256=spec_pin['sha256'],sources=spec['sources'],ready=None,release=None,outcome=None,
+            error=type(exc).__name__+': '+str(exc),allocation_admitted=False,optimizer_invocations=0,new_models=0,
+            scientific_data_read=False,production_admission=False,numerical_parity_proved=False,canonical_sacct_required=True))
+        return 1
     from pricefm_hb import scientific_code_install as install
     root=Path(spec['remote_root']);result_root=root/'result'
     ready_pin=None;release_pin=None;outcome=None;error=None;installation=None

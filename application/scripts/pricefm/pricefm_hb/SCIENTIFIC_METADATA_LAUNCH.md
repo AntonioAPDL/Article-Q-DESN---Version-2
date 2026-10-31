@@ -22,6 +22,15 @@ Slurm/cgroup job, UID, memory, allocation class and deadline are checked before
 READY or any R. A wider batch affinity fails before R; this code never chooses
 an arbitrary CPU or changes another process's affinity.
 
+An exact `job_ID` cgroup component is mandatory. If a `uid_UID` component is
+present it must match the kernel UID; contradictory job/UID labels always fail.
+A Slurm v2 layout may omit a UID label. That omission supplies no ownership
+authority: live scheduler `UserId` must still equal the current kernel UID,
+with exact current job/node/resources and owned lifetimes. Before this check,
+bounded raw own cgroup, affinity, UID, birth/boot and limit facts are retained.
+Pre-READY admission failures seal a truthful data-free failed return, never
+READY or payload authority.
+
 The inherited hard CPU ceiling is600, allowing the worker to enforce its own
 cumulative90CPU soft ceiling without irreversibly capping its R child at30.
 Installation never forks and has a60CPU/600wall component. The worker and batch

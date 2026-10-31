@@ -103,6 +103,16 @@ and must match its hash; it is not falsely assumed to load during a namespace
 test. Successful namespace loading proves the ABI for DLLs actually loaded.
 No compiler, toy parity, future optional ABI or scientific fit is implied.
 
+R's one intrinsic base entry is explicitly reported under `builtin_DLLs` only
+when the entry-list name, DLLInfo name and path are all exactly `base`. It has
+no external file hash. Its record is bound to the actual pinned native R4.6
+executable. Every other entry must be a named, absolute regular file inside the
+unchanged34-file allowlist and must match its hash; the six mandatory DLLs stay
+required. Missing, relative, unknown pseudo, duplicate or mislabeled base
+entries fail. The owner accepts exactly one typed builtin record, so this
+exception cannot hide an unknown library. A bounded pre-DLL phase observation
+on stderr is diagnostic metadata and never a namespace PASS.
+
 READY records the worker UID/PID/birth/boot/affinity and current actual
 kernel/libc/Python/helper identities. These must match the exact accepted-R
 component context before payload release. Acceptance binds every namespace

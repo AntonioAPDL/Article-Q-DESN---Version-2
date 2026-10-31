@@ -33,11 +33,44 @@ ns <- r129_namespace(library)
 stock <- get('.run_static_dqlm_cavi', ns)
 stock_body_sha <- digest::digest(body(stock), algo = 'sha256')
 stopifnot(identical(stock_body_sha, spec$expected_stock_body_sha256))
-dll_paths <- unique(vapply(getLoadedDLLs(), function(x) x[['path']], character(1)))
-dll_paths <- dll_paths[nzchar(dll_paths)]
-loaded <- lapply(dll_paths, function(path) list(path = normalizePath(path, mustWork = TRUE), sha256 = hash(path)))
 required <- spec$required_package_DLLs
 allowed <- spec$allowed_package_DLLs
+native_R <- list(path = file.path(spec$R_HOME, 'bin', 'exec', 'R'))
+native_R$sha256 <- hash(native_R$path)
+stopifnot(identical(native_R$sha256, '9d76330f01cace4574a9ec7a5407ca50b9faacc9813bbf4339595582e5c33c27'))
+cat(jsonlite::toJSON(list(status = 'OBSERVED_NAMESPACE_AND_STOCK_BEFORE_DLL_VALIDATION',
+  nonce = args[[3L]], job_id = Sys.getenv('SLURM_JOB_ID'), node = Sys.getenv('SLURMD_NODENAME'),
+  package_count = length(versions), stock_body_sha256 = stock_body_sha,
+  optimizer_invocations = 0L, scientific_data_read = FALSE), auto_unbox = TRUE), '\n', file = stderr())
+infos <- getLoadedDLLs()
+entry_names <- names(infos)
+stopifnot(length(entry_names) == length(infos), !anyDuplicated(entry_names))
+loaded <- list()
+builtins <- list()
+for (i in seq_along(infos)) {
+  entry_name <- entry_names[[i]]
+  name <- infos[[i]][['name']]
+  path <- infos[[i]][['path']]
+  stopifnot(is.character(entry_name), length(entry_name) == 1L, nzchar(entry_name),
+    is.character(name), length(name) == 1L, nzchar(name),
+    is.character(path), length(path) == 1L, nzchar(path))
+  if (identical(entry_name, 'base') && identical(name, 'base') && identical(path, 'base')) {
+    builtins[[length(builtins) + 1L]] <- list(entry_name = 'base', name = 'base', path = 'base',
+      kind = 'R_INTRINSIC_NO_EXTERNAL_FILE', external_file = FALSE, native_R = native_R)
+  } else {
+    # Missing/pseudo/nonfile entries are errors. The exact builtin above is
+    #the only exception; no unknown entry can be silently skipped.
+    stopifnot(!identical(entry_name, 'base'), !identical(name, 'base'),
+      grepl('^/', path), isTRUE(utils::file_test('-f', path)))
+    canonical <- normalizePath(path, mustWork = TRUE)
+    stopifnot(canonical %in% names(allowed))
+    loaded[[length(loaded) + 1L]] <- list(entry_name = entry_name, name = name,
+      path = canonical, sha256 = hash(canonical))
+  }
+}
+stopifnot(length(builtins) == 1L)
+dll_paths <- vapply(loaded, function(x) x$path, character(1))
+stopifnot(!anyDuplicated(dll_paths))
 stopifnot(length(required) == 6L, length(allowed) == 34L, all(names(required) %in% dll_paths))
 for (path in names(required)) stopifnot(identical(hash(path), required[[path]]))
 for (item in loaded) {
@@ -47,7 +80,7 @@ result <- list(status = 'PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY',
   role = 'SCIENTIFIC_NAMESPACE_NO_OPTIMIZER', nonce = args[[3L]],
   job_id = Sys.getenv('SLURM_JOB_ID'), node = Sys.getenv('SLURMD_NODENAME'),
   affinity = unlist(spec$affinity), R_version = as.character(getRversion()), R_home = R.home(),
-  package_versions = versions, stock_body_sha256 = stock_body_sha, loaded_DLLs = loaded,
+  package_versions = versions, stock_body_sha256 = stock_body_sha, loaded_DLLs = loaded, builtin_DLLs = builtins,
   package_library = library, optimizer_invocations = 0L, models = 0L,
   scientific_data_read = FALSE, scientific_boundary_proved = FALSE,
   numerical_parity_proved = FALSE, host_glibc_is_actual_compute_host = TRUE)

@@ -67,11 +67,12 @@ class ScientificRegressionTests(unittest.TestCase):
     def frame(self):
         n=self.namespace();return dict(status='PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY',nonce='a'*32,job_id='999',node='node-13',affinity=0,
             R_version='4.6.0',R_home=n['R_HOME'],package_library=n['library'],package_versions=contract.PACKAGE_VERSIONS,
-            stock_body_sha256=contract.STOCK_BODY_SHA,loaded_DLLs=[dict(path=p,sha256=s) for p,s in n['required_package_DLLs'].items()],
+            stock_body_sha256=contract.STOCK_BODY_SHA,loaded_DLLs=[dict(entry_name=Path(p).stem,name=Path(p).stem,path=p,sha256=s) for p,s in n['required_package_DLLs'].items()],
+            builtin_DLLs=[contract.intrinsic_base(dict(path='/new/code/R_HOME/bin/exec/R',sha256=contract.NATIVE_R_SHA))],
             optimizer_invocations=0,scientific_data_read=False,models=0)
 
     def test_actual_frames_bind_job_nonce_runtime_versions_and_DLLs(self):
-        spec=dict(role=batch.ROLES[0],job_id='999',node='node-13',nonce='a'*32,affinity=[0]);n=self.namespace()
+        spec=dict(role=batch.ROLES[0],job_id='999',node='node-13',nonce='a'*32,affinity=[0],R_native=dict(path='/new/code/R_HOME/bin/exec/R',sha256=contract.NATIVE_R_SHA));n=self.namespace()
         owner.validate_frames([self.frame()],spec,n)
         for key,value in [('job_id','998'),('nonce','b'*32),('R_version','4.5.0'),('package_versions',{}),('stock_body_sha256','0'*64),('models',1)]:
             f=self.frame();f[key]=value
@@ -82,10 +83,10 @@ class ScientificRegressionTests(unittest.TestCase):
         with self.assertRaises(ValueError):owner.validate_frames([f],spec,n)
 
     def test_optional_packaged_cairo_is_allowed_without_manufactured_load_requirement(self):
-        f=self.frame();n=self.namespace();spec=dict(role=batch.ROLES[0],job_id='999',node='node-13',nonce='a'*32,affinity=[0])
+        f=self.frame();n=self.namespace();spec=dict(role=batch.ROLES[0],job_id='999',node='node-13',nonce='a'*32,affinity=[0],R_native=dict(path='/new/code/R_HOME/bin/exec/R',sha256=contract.NATIVE_R_SHA))
         owner.validate_frames([f],spec,n)
         optional=next(p for p in n['allowed_package_DLLs'] if p.endswith('/cairo.so'))
-        f['loaded_DLLs'].append(dict(path=optional,sha256=n['allowed_package_DLLs'][optional]));owner.validate_frames([f],spec,n)
+        f['loaded_DLLs'].append(dict(entry_name='cairo',name='cairo',path=optional,sha256=n['allowed_package_DLLs'][optional]));owner.validate_frames([f],spec,n)
 
     def test_current_owner_receipt_cannot_be_swapped_from_other_lifetime_scope_or_authority(self):
         life=dict(pid=123,start_ticks=456,boot_id='boot',affinity=[0],uid=os.getuid())

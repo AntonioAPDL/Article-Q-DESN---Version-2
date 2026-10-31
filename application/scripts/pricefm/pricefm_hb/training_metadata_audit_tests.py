@@ -67,7 +67,7 @@ class AuditTests(unittest.TestCase):
             terminal.update(tau=tau, tau0=tau0, fold=split)
             cp, tp = self.doc(cert), self.doc(terminal)
             seal = self.doc({"artifacts": {"fit/fixedpoint_certificate.json": cp["sha256"], "fit/terminal.json": tp["sha256"]},
-                             "metadata": {"task_sha256": alp["sha256"], "source_head": head}})
+                             "metadata": {"task_sha256": alp["sha256"], "source_head": head, "certified": True}})
             companions.append(dict(task=alp, certificate=cp, terminal=tp, seal=seal))
         taskpin = self.doc(task)
         result = {"candidate_id": candidate, "tau0": tau0, "split": split, "certified": True,
@@ -115,6 +115,105 @@ class AuditTests(unittest.TestCase):
         cert, terminal = self.cert(failed=True, formal=True)
         self.assertTrue(a.validate_certificate(cert, terminal)["accepted_original_rule"])
         self.assertFalse(a.validate_certificate(cert, terminal)["independent"])
+
+    def formal_companion(self, row, index=0, *, finite=True, reseal=True):
+        companion = row["certificates"][index]
+        terminal = self.inputs.read(companion["terminal"])
+        terminal.update(formal_converged=True, finite_core=finite,
+                        computationally_certified=finite, independent_fixedpoint_certified=False,
+                        iterations=278)
+        companion["terminal"] = self.doc(terminal)
+        companion["certificate"] = None
+        if reseal:
+            seal = self.inputs.read(companion["seal"])
+            seal["artifacts"].pop("fit/fixedpoint_certificate.json")
+            seal["artifacts"]["fit/terminal.json"] = companion["terminal"]["sha256"]
+            seal["metadata"]["certified"] = finite
+            companion["seal"] = self.doc(seal)
+        return row
+
+    def test_formal_missing_independent_certificate_preserves_OR(self):
+        _, terminal = self.cert(failed=True, formal=True)
+        terminal["iterations"] = 278
+        result = a.validate_certificate(None, terminal)
+        self.assertTrue(result["accepted_original_rule"])
+        self.assertFalse(result["independent"])
+        self.assertIsNone(result["both_RHS_starts"])
+        self.assertEqual(result["ratios"], {})
+
+    def test_formal_without_finite_core_cannot_pass(self):
+        _, terminal = self.cert(failed=True, formal=True, finite=False)
+        self.assertFalse(a.validate_certificate(None, terminal)["accepted_original_rule"])
+
+    def test_missing_certificate_cannot_assert_independent_or_nonformal(self):
+        for formal, independent in ((False,False),(True,True)):
+            _, terminal = self.cert(failed=True, formal=formal)
+            terminal["independent_fixedpoint_certified"] = independent
+            with self.assertRaises(a.AuditError):a.validate_certificate(None, terminal)
+
+    def test_formal_branch_retains_AL300_cap(self):
+        _, terminal = self.cert(failed=True, formal=True)
+        terminal["iterations"] = 301
+        with self.assertRaises(a.AuditError):a.validate_certificate(None, terminal)
+
+    def test_sealed_formal_companion_is_eligible_without_fake_start_proof(self):
+        row = self.formal_companion(self.score())
+        result = a.score_row(self.inputs,"SI",row,HEAD)
+        self.assertTrue(result["eligible_original_rule"])
+        self.assertIsNone(result["all_both_RHS_starts"])
+        self.assertFalse(result["all_independent"])
+
+    def test_formal_terminal_must_still_match_original_seal(self):
+        row = self.formal_companion(self.score(), reseal=False)
+        with self.assertRaises(a.AuditError):a.score_row(self.inputs,"SI",row,HEAD)
+
+    def test_formal_cannot_drop_a_declared_certificate(self):
+        row = self.formal_companion(self.score())
+        companion = row["certificates"][0]
+        seal = self.inputs.read(companion["seal"])
+        seal["artifacts"]["fit/fixedpoint_certificate.json"] = "a"*64
+        companion["seal"] = self.doc(seal)
+        with self.assertRaises(a.AuditError):a.score_row(self.inputs,"SI",row,HEAD)
+
+    def test_formal_seal_certification_cannot_contradict_finite_branch(self):
+        row = self.formal_companion(self.score())
+        companion = row["certificates"][0]
+        seal = self.inputs.read(companion["seal"]);seal["metadata"]["certified"] = False
+        companion["seal"] = self.doc(seal)
+        with self.assertRaises(a.AuditError):a.score_row(self.inputs,"SI",row,HEAD)
+
+    def test_mixed_formal_independent_selection_preserves_scores_and_winner(self):
+        values = [6.104121246342146,6.418595684193847,5.8131622442837765]
+        rows = [a.score_row(self.inputs,"SI",self.formal_companion(self.score(split=i+1,tau0=.001,AQL=v)),HEAD)
+                for i,v in enumerate(values)]
+        frozen = {"selected_before_test":True,"selected_on":"fold1_train_internal_only_seven_quantile_AL_AQL",
+                  "candidate_id":rows[0]["candidate_id"],"tau0":.001,
+                  "ranking":[{"candidate_id":rows[0]["candidate_id"],"tau0":.001,"mean_AQL":sum(values)/3}]}
+        result = a.reproduce_selection(rows,frozen)
+        self.assertTrue(result["frozen_winner_reproduced"])
+        self.assertEqual([r["AQL"] for r in rows],values)
+        self.assertFalse(result["winner_mutated"])
+
+    def test_SI_lineage_requires_the_same_six_sealed_designs_and_scalers(self):
+        designs = [{"design":{"sha256":format(i+1,'064x')},"scaler":{"sha256":format(i+100,'064x')}} for i in range(6)]
+        proof = {"status":"PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE",
+                 "schema":"pricefm_SI_source_metadata_lineage_v1",
+                 "array_values_or_binary_bank_integrity_recomputed":False,"source_imported_or_executed":False,
+                 "designs":[{"design":x["design"],"sealed_scaler":x["scaler"]} for x in designs]}
+        entry = {"designs":designs,"source_metadata_lineage":self.doc(proof)}
+        result = a.source_metadata_lineage(self.inputs,"SI",entry)
+        self.assertFalse(result["array_values_recomputed"])
+        proof["designs"][0]["sealed_scaler"] = {"sha256":"f"*64}
+        entry["source_metadata_lineage"] = self.doc(proof)
+        with self.assertRaises(a.AuditError):a.source_metadata_lineage(self.inputs,"SI",entry)
+
+    def test_SI_lineage_cannot_claim_array_recomputation_or_another_region(self):
+        proof = {"status":"PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE",
+                 "schema":"pricefm_SI_source_metadata_lineage_v1",
+                 "array_values_or_binary_bank_integrity_recomputed":True,"source_imported_or_executed":False,"designs":[]}
+        entry = {"designs":[],"source_metadata_lineage":self.doc(proof)}
+        with self.assertRaises(a.AuditError):a.source_metadata_lineage(self.inputs,"SI",entry)
+        with self.assertRaises(a.AuditError):a.source_metadata_lineage(self.inputs,"FR",entry)
 
     def test_wrong_original_limit_rejected(self):
         cert, terminal = self.cert()

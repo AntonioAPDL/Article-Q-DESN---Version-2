@@ -63,6 +63,23 @@ class CollectionTests(unittest.TestCase):
         ast.parse(SOURCE.read_text(), feature_version=(3, 6))
         ast.parse(BOOTSTRAP.read_text(), feature_version=(3, 6))
 
+    def test_formal_branch_can_omit_unproduced_independent_certificate(self):
+        terminal={"formal_converged":True,"finite_core":True,"computationally_certified":True,
+                  "independent_fixedpoint_certified":False,"family":"al","initialization_only":True,"iterations":278}
+        seal={"metadata":{"certified":True},"artifacts":{"fit/terminal.json":"a"*64}}
+        self.assertTrue(c.formal_without_independent_certificate(terminal,seal))
+        for field,value in (("formal_converged",False),("finite_core",False),
+                            ("independent_fixedpoint_certified",True),("iterations",301),("iterations",True)):
+            wrong=dict(terminal);wrong[field]=value
+            self.assertFalse(c.formal_without_independent_certificate(wrong,seal),field)
+
+    def test_formal_branch_cannot_drop_declared_or_uncertified_artifact(self):
+        terminal={"formal_converged":True,"finite_core":True,"computationally_certified":True,
+                  "independent_fixedpoint_certified":False,"family":"al","initialization_only":True,"iterations":252}
+        for seal in ({"metadata":{"certified":False},"artifacts":{}},
+                     {"metadata":{"certified":True},"artifacts":{"fit/fixedpoint_certificate.json":"b"*64}}):
+            self.assertFalse(c.formal_without_independent_certificate(terminal,seal))
+
     def test_exact_inventory_and_shape_plan(self):
         self.assertIs(c.validate_plan(self.plan), self.plan)
 

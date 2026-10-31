@@ -31,6 +31,16 @@ def require(value, reason):
     if not value:
         raise ValueError(reason)
 
+def formal_without_independent_certificate(terminal, seal):
+    """Only the original sealed formal branch may omit an independent artifact."""
+    return (terminal.get("formal_converged") is True and terminal.get("finite_core") is True
+            and terminal.get("computationally_certified") is True
+            and terminal.get("independent_fixedpoint_certified") is False
+            and terminal.get("family") == "al" and terminal.get("initialization_only") is True
+            and type(terminal.get("iterations")) is int and 0 < terminal["iterations"] <= 300
+            and seal.get("metadata", {}).get("certified") is True
+            and "fit/fixedpoint_certificate.json" not in seal.get("artifacts", {}))
+
 def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
@@ -219,11 +229,13 @@ def collect(plan):
                 paths = {"task": root / "tasks" / (alname + ".json"),
                          "certificate": base / "fit/fixedpoint_certificate.json",
                          "terminal": base / "fit/terminal.json", "seal": base / "completed_evidence.json"}
-                if not all(path.is_file() for path in paths.values()):
+                if not all(paths[k].is_file() for k in ("task", "terminal", "seal")):
                     result["missingness"].append("INCOMPLETE_AL_METADATA:" + alname)
                     complete = False
                     break
-                docs = {key: collector.original(path, root) for key, path in paths.items()}
+                has_certificate = paths["certificate"].is_file()
+                docs = {key: collector.original(path, root) for key, path in paths.items()
+                        if key != "certificate" or has_certificate}
                 no_test(docs["task"][1])
                 no_test(docs["terminal"][1])
                 al = docs["task"][1]
@@ -234,11 +246,20 @@ def collect(plan):
                 alseal = docs["seal"][1]
                 require(alseal.get("metadata", {}).get("source_head") == entry["expected_source_head"]
                         and alseal["metadata"].get("task_sha256") == sha(docs["task"][0])
-                        and alseal.get("artifacts", {}).get("fit/fixedpoint_certificate.json") == sha(docs["certificate"][0])
                         and alseal["artifacts"].get("fit/terminal.json") == sha(docs["terminal"][0]), "AL metadata seal mismatch")
+                if has_certificate:
+                    require(alseal["artifacts"].get("fit/fixedpoint_certificate.json") == sha(docs["certificate"][0]),
+                            "independent AL certificate not sealed")
+                else:
+                    terminal = docs["terminal"][1]
+                    require(formal_without_independent_certificate(terminal, alseal),
+                            "missing certificate without sealed formal eligibility")
                 rels = {"task": "tasks/" + alname + ".json", "certificate": "tasks_done/" + alname + "/fit/fixedpoint_certificate.json",
                         "terminal": "tasks_done/" + alname + "/fit/terminal.json", "seal": "tasks_done/" + alname + "/completed_evidence.json"}
-                score_row["certificates"].append({key: collector.add(region, rels[key], path, root) for key, path in paths.items()})
+                bound = {key: collector.add(region, rels[key], path, root) for key, path in paths.items()
+                         if key != "certificate" or has_certificate}
+                if not has_certificate: bound["certificate"] = None
+                score_row["certificates"].append(bound)
             if complete:
                 result["scores"].append(score_row)
         for design in sorted((root / "tasks_done").glob("*_design/design/design.json")):

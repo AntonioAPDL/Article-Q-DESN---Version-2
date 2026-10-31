@@ -12,6 +12,45 @@ limits and both RHS starts are preserved. Unknown task kinds, official-test
 selection flags, mismatched sources and missing evidence cannot create an
 eligible group. Existing frozen winners are compared, never replaced.
 
+## Formal fits and source lineage
+
+The original AL300 producer deliberately writes `fixedpoint_certificate.json`
+only when a finite fit has not formally converged. The auditor, binder and
+collector preserve that OR rule: a companion may bind `certificate: null` only
+when its original sealed terminal records formal convergence, finite core, the
+matching computationally-certified flag, AL initialization semantics and at
+most300 iterations. Task, terminal, seal and source/target identities must agree.
+A seal that declares a certificate cannot silently drop it. A missing artifact
+cannot support an independent assertion. Independent branches still check all
+seven unchanged limits and both RHS starts.
+
+This distinction fixes FR frozen split1 eligibility: quantiles0.10 and0.90
+formally converged at278 and252 iterations; the other five companions have
+independent certificates. No score, winner, certificate or fit is created to
+repair this metadata omission. Each verified score records its companion branch;
+absent independent measures and starts remain unknown.
+
+`training_evidence_read.py` is a separate Python3.6-compatible, one-shot reader
+of those exact FR JSON paths and bounded matching interrupted attempts in four
+explicit historical roots. It needs a fresh reviewed source transmission,
+original owned guard and finite scope. Its packet is not audit acceptance.
+Old audits and failures stay intact; originals and corrected source are bound
+into a new immutable configuration for a separately reviewed execution.
+
+`training_provenance.py` verifies the pinned SI source chain and six sealed
+design/scaler pairs without importing scientific source or opening arrays. It
+checks940-origin split stops506/631/766, training-only scaler selection,
+count×96 design rows and quarter-hour H96 daily response boundaries. The first
+validation origin equals the exclusive end of the last training response. AST
+checks bind teacher-forced training rows, generated-only recursive target lags
+and shifted validation scope. Source bytes match the captured preparation.
+
+This evidence class is **source and sealed metadata only**. It does not
+recompute scaler values, binary-bank integrity, predictions or losses, nor
+re-audit live remote libraries. The generic audit can bind the separately
+reviewed result as `source_metadata_lineage`; all six design/scaler hashes must
+match its actual inputs. It grants no numerical-runtime or screening authority.
+
 The current binder runs on Muscat's saved campaign roots and explicitly uses the
 previously collected local SI metadata. Other Jerez regions remain
 REMOTE_NOT_OBSERVED. The generic auditor can consume another prospectively

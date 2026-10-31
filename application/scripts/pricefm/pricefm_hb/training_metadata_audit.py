@@ -106,8 +106,28 @@ def no_test_flags(value):
 
 def validate_certificate(certificate, terminal):
     """Classify the original finite AND(formal OR independent) rule unchanged."""
-    require(type(certificate) is dict and type(terminal) is dict, "certificate/terminal objects required")
+    require(type(terminal) is dict, "terminal object required")
     no_test_flags(terminal)
+    formal = terminal.get("formal_converged")
+    require(type(formal) is bool and type(terminal.get("finite_core")) is bool, "finite/formal flags required")
+    require(type(terminal.get("iterations")) is int and 0 < terminal["iterations"] <= 300, "AL300 cap violated")
+    require(terminal.get("family") == "al" and terminal.get("initialization_only") is True, "AL initialization contract differs")
+    if certificate is None:
+        # The producer writes a fixedpoint certificate only for the independent
+        # branch. A formally converged fit legitimately has no such artifact.
+        # Its terminal must still be sealed by score_row; absence is not an
+        # independent pass and never supplies fabricated measures/RHS starts.
+        require(formal is True, "missing independent certificate without formal convergence")
+        require(terminal.get("independent_fixedpoint_certified") is False,
+                "missing certificate cannot support an independent assertion")
+        accepted = terminal["finite_core"] and formal
+        require(terminal.get("computationally_certified") is accepted,
+                "formal terminal contradicts finite AND(formal OR independent)")
+        return {"accepted_original_rule": accepted, "independent": False, "formal": formal,
+                "finite_core": terminal["finite_core"], "both_RHS_starts": None,
+                "ratios": {}, "failing_gates": [], "iterations": terminal["iterations"],
+                "independent_evidence_present": False, "eligibility_branch": "formal"}
+    require(type(certificate) is dict, "certificate object required")
     require(certificate.get("limits") == LIMITS, "original seven limits changed")
     measures = certificate.get("measures", {})
     checks = certificate.get("checks", {})
@@ -120,18 +140,15 @@ def validate_certificate(certificate, terminal):
     independent = all(expected.values()) and both
     require(type(certificate.get("certified")) is bool and certificate["certified"] == independent,
             "certificate certified flag contradicts original measures/starts")
-    formal = terminal.get("formal_converged")
-    require(type(formal) is bool and type(terminal.get("finite_core")) is bool, "finite/formal flags required")
     require(type(terminal.get("independent_fixedpoint_certified")) is bool
             and terminal["independent_fixedpoint_certified"] == independent, "terminal independent flag differs")
-    require(type(terminal.get("iterations")) is int and 0 < terminal["iterations"] <= 300, "AL300 cap violated")
-    require(terminal.get("family") == "al" and terminal.get("initialization_only") is True, "AL initialization contract differs")
     accepted = terminal["finite_core"] and (formal or independent)
     require(terminal.get("computationally_certified") is accepted, "terminal computational flag contradicts finite AND(formal OR independent)")
     return {"accepted_original_rule": accepted, "independent": independent, "formal": formal,
             "finite_core": terminal["finite_core"], "both_RHS_starts": both,
             "ratios": ratios, "failing_gates": [k for k in LIMITS if not expected[k]],
-            "iterations": terminal["iterations"]}
+            "iterations": terminal["iterations"], "independent_evidence_present": True,
+            "eligibility_branch": "formal" if formal else "independent"}
 
 def task_identity(task):
     no_test_flags(task)
@@ -184,16 +201,23 @@ def score_row(inputs, region, row, expected_head):
         tau = finite(al.get("tau"), "tau", positive=True)
         taus.append(tau)
         require(task.get("al_names", {}).get(str(tau)) == al.get("name"), "AL companion not declared by score")
-        cert = inputs.read(companion["certificate"])
+        cert_pin = companion.get("certificate")
+        cert = inputs.read(cert_pin) if cert_pin is not None else None
         terminal = inputs.read(companion["terminal"])
         seal = inputs.read(companion["seal"])
-        require(seal.get("artifacts", {}).get("fit/fixedpoint_certificate.json") == companion["certificate"]["sha256"]
-                and seal["artifacts"].get("fit/terminal.json") == companion["terminal"]["sha256"]
+        artifacts = seal.get("artifacts", {})
+        require((artifacts.get("fit/fixedpoint_certificate.json") == cert_pin["sha256"] if cert_pin is not None
+                 else "fit/fixedpoint_certificate.json" not in artifacts), "independent certificate seal/absence mismatch")
+        require(artifacts.get("fit/terminal.json") == companion["terminal"]["sha256"]
                 and seal.get("metadata", {}).get("task_sha256") == companion["task"]["sha256"], "AL certificate/terminal/task not sealed")
         require(seal["metadata"].get("source_head") == head, "score/AL source-head drift")
         require(terminal.get("tau") == tau and terminal.get("tau0") == identity[2]
                 and terminal.get("fold") == identity[3], "AL terminal target crosswire")
-        certs.append(validate_certificate(cert, terminal))
+        classified = validate_certificate(cert, terminal)
+        require(seal["metadata"].get("certified") is classified["accepted_original_rule"],
+                "AL seal certification contradicts original eligibility")
+        certs.append(dict(classified, task=al["name"], tau=tau, terminal=companion["terminal"],
+                          certificate=cert_pin, completion_seal=companion["seal"]))
     require(tuple(sorted(taus)) == QUANTILES, "duplicate/missing quantile companions")
     eligible = result["certified"] and all(x["accepted_original_rule"] for x in certs)
     clocks = result.get("clock_metrics", [])
@@ -211,9 +235,11 @@ def score_row(inputs, region, row, expected_head):
             "width_80": width, "crossing_rate": result.get("crossing_rate"),
             "clock_tail_frequencies": tails, "origin_clock_pairs": pairs,
             "eligible_original_rule": eligible,
-            "max_original_gate_ratio": max(v for c in certs for v in c["ratios"].values()),
+            "max_original_gate_ratio": max((v for c in certs for v in c["ratios"].values()), default=None),
             "all_independent": all(c["independent"] for c in certs),
-            "all_both_RHS_starts": all(c["both_RHS_starts"] for c in certs),
+            "all_both_RHS_starts": (True if all(c["both_RHS_starts"] is True for c in certs) else
+                                    False if any(c["both_RHS_starts"] is False for c in certs) else None),
+            "companion_eligibility": certs,
             "score_task": row["task"], "score_result": row["result"], "score_seal": row["seal"]}
 
 def reproduce_selection(rows, frozen):
@@ -284,6 +310,23 @@ def design_provenance(inputs, region, rows, scores, expected_head):
                        "recursive_target_alignment": "NOT_RECOMPUTED_NO_ARRAY_ACCESS",
                        "design": row["design"]})
     return result
+
+def source_metadata_lineage(inputs, region, entry):
+    """Bind a separately reviewed lineage proof without claiming array checks."""
+    if not entry.get("source_metadata_lineage"):
+        return None
+    require(region == "SI", "unexpected region-specific lineage proof")
+    proof = inputs.read(entry["source_metadata_lineage"])
+    require(proof.get("status") == "PASS_PINNED_SOURCE_AND_SEALED_SI_METADATA_LINEAGE"
+            and proof.get("schema") == "pricefm_SI_source_metadata_lineage_v1", "unknown SI lineage proof")
+    require(proof.get("array_values_or_binary_bank_integrity_recomputed") is False
+            and proof.get("source_imported_or_executed") is False, "SI proof overstates its evidence class")
+    expected = {(row["design"]["sha256"],row["scaler"]["sha256"]) for row in entry.get("designs", [])}
+    observed = {(row["design"]["sha256"],row["sealed_scaler"]["sha256"]) for row in proof.get("designs", [])}
+    require(len(proof.get("designs", [])) == len(expected) == len(observed) == 6 and expected == observed,
+            "SI lineage proof differs from bound design/scaler inputs")
+    return {"proof": entry["source_metadata_lineage"], "evidence_class": "PINNED_SOURCE_AND_SEALED_METADATA_ONLY",
+            "array_values_recomputed": False, "recursive_target_source_alignment": "PROVED_FOR_PINNED_SOURCE_CONTRACT"}
 
 def classify_no4(inputs, rows, exclusions, frozen):
     require(frozen.get("status") == "COMPLETE_READONLY_HELD_AND_ACTIVE_FRONTIER_DIAGNOSIS", "wrong NO4 frozen diagnosis")
@@ -370,6 +413,7 @@ def audit(config):
         frozen = inputs.read(entry["selection"]).get(region) if entry.get("selection") else None
         selection = reproduce_selection(rows, frozen)
         provenance = design_provenance(inputs, region, entry.get("designs", []), rows, expected_head)
+        lineage = source_metadata_lineage(inputs, region, entry)
         context = None if preparation is None else {
             "source": preparation.get("source"), "source_sha256": preparation.get("source_sha256"),
             "input_sha256": preparation.get("input_sha256"), "bank_sha256": preparation.get("bank_sha256"),
@@ -383,7 +427,8 @@ def audit(config):
                        "score_count": len(rows), "eligible_complete_groups": len(selection["ranking"]),
                        "issues": issues, "selection": selection, "preparation_identity": context,
                        "missingness": entry.get("missingness", []),
-                       "scaler_boundary_proof": "UNPROVED_FROM_SAVED_METADATA",
+                       "scaler_boundary_proof": "PINNED_SOURCE_AND_SEALED_METADATA_ONLY" if lineage else "UNPROVED_FROM_SAVED_METADATA",
+                       "source_metadata_lineage": lineage,
                        "new_selection_or_promotion": False})
         all_rows.extend(rows)
         designs.extend(provenance)

@@ -104,11 +104,24 @@ def main():
                 alpaths = {"task": root / "tasks" / (alname + ".json"),
                            "certificate": base / "fit/fixedpoint_certificate.json",
                            "terminal": base / "fit/terminal.json", "seal": base / "completed_evidence.json"}
-                if not all(path.is_file() for path in alpaths.values()):
+                if not all(alpaths[k].is_file() for k in ("task", "terminal", "seal")):
                     complete = False
                     entry["missingness"].append("INCOMPLETE_AL_METADATA:" + alname)
                     break
-                score["certificates"].append({role: pin(path) for role, path in alpaths.items()})
+                if alpaths["certificate"].is_file():
+                    bound = {role: pin(path) for role, path in alpaths.items()}
+                else:
+                    terminal, seal = doc(alpaths["terminal"]), doc(alpaths["seal"])
+                    if not (terminal.get("formal_converged") is True and terminal.get("finite_core") is True
+                            and terminal.get("computationally_certified") is True
+                            and terminal.get("independent_fixedpoint_certified") is False
+                            and "fit/fixedpoint_certificate.json" not in seal.get("artifacts", {})):
+                        complete = False
+                        entry["missingness"].append("INCOMPLETE_INDEPENDENT_AL_METADATA:" + alname)
+                        break
+                    bound = {role: pin(alpaths[role]) for role in ("task", "terminal", "seal")}
+                    bound["certificate"] = None
+                score["certificates"].append(bound)
             if complete:
                 entry["scores"].append(score)
         for design in sorted((root / "tasks_done").glob("*_design/design/design.json")):

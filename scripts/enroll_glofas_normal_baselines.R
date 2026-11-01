@@ -98,10 +98,16 @@ gnr_main <- function(args = commandArgs(TRUE)) {
     invisible(binding$path)
   }
   for (binding in spec$source_files) verify_file(binding)
+  phase <- function(label) cat(sprintf("NORMAL_ENROLLMENT_PHASE=%s cpu_seconds=%.3f utc=%s\n",
+    label, sum(proc.time()[1:2]), format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")))
+  phase("reading_original_design")
   original <- app_gnr_read_pinned_rds(spec$original_design)
+  phase("reading_prepared_design")
   prepared <- app_gnr_read_pinned_rds(spec$prepared_design)
+  phase("comparing_protected_design_values")
   identity <- app_gnr_compare_designs(original$object, prepared$object,
     expected_transition_contract = app_glofas_family_transition_contract())
+  phase("protected_design_identity_verified")
   dates <- as.character(prepared$object$future_key$target_date)
   require(length(dates) == 28L && !anyDuplicated(dates), "complete prepared forecast dates")
   rm(prepared); gc(FALSE)
@@ -109,6 +115,7 @@ gnr_main <- function(args = commandArgs(TRUE)) {
     "both baselines enrolled together")
   receipts <- list(); rows <- list(); bindings <- list()
   for (model in c("normal_ridge", "normal_rhs")) {
+    phase(paste0("enrolling_", model))
     item <- spec$models[[model]]
     for (name in c("configuration", "model_grid", "target_receipt", "runtime_receipt")) {
       verify_file(item[[name]])
@@ -131,9 +138,11 @@ gnr_main <- function(args = commandArgs(TRUE)) {
     receipts[[model]] <- enrolled$receipt
     rows[[model]] <- enrolled$rows
     bindings[[model]] <- item
+    phase(paste0(model, "_report_verified"))
     rm(fit, enrolled); gc(FALSE)
   }
   # Source binding is rechecked after all retained reads and before any output.
+  phase("final_input_reverification")
   for (binding in spec$source_files) verify_file(binding)
   app_gnr_file_binding(spec$original_design)
   app_gnr_file_binding(spec$prepared_design)

@@ -112,12 +112,20 @@ app_gnr_compare_designs <- function(original, prepared, expected_transition_cont
   app_gnr_require(is.data.frame(future) && nrow(future) == 28L &&
     identical(as.integer(future$horizon), seq_len(28L)) &&
     !anyNA(as.Date(future$target_date)) && !anyDuplicated(as.Date(future$target_date)), "expected 28 unique future dates")
-  list(schema_version = "glofas_normal_design_mapping_v1", status = "EXACT_PROTECTED_DESIGN_MATCH",
+  list(schema_version = "glofas_normal_design_mapping_v2", status = "EXACT_PROTECTED_DESIGN_MATCH",
     exact_comparison = TRUE, mapping = c("unit_member_contract -> historical_unit_member_contract",
       "family_transition_contract added", "design_version suffix __same_family_transition_v1",
       "future_probe_init attribute removed"),
-    protected_fields = names(old), protected_component_sha256 = lapply(setdiff(names(old), "future_builder"),
-      function(k) list(field = k, sha256 = app_gnr_hash(old[[k]]))),
+    protected_fields = names(old),
+    # Do not serialize the multi-GB arrays again merely to add redundant
+    # component digests. The pinned whole-file hashes and the complete exact
+    # comparison above carry data identity; these small descriptors are for
+    # readable inventory only and are never used as equality evidence.
+    data_identity_evidence = "pinned_whole_file_SHA256_and_exact_all_protected_value_comparison",
+    protected_component_structures = lapply(setdiff(names(old), "future_builder"), function(k) {
+      x <- old[[k]]
+      list(field = k, type = typeof(x), class = class(x), length = length(x), dimensions = dim(x))
+    }),
     closure_code_sha256 = app_gnr_hash(list(formals(original$future_builder), body(original$future_builder))),
     closure_context_and_all_compiled_bindings_identical = TRUE,
     original_design_version = original$design_version, prepared_design_version = prepared$design_version,

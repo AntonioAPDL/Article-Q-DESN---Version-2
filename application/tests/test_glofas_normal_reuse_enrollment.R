@@ -44,6 +44,19 @@ gnr_map <- app_gnr_compare_designs(gnr_original, gnr_prepared, app_glofas_family
 gnr_check(gnr_map$status == "EXACT_PROTECTED_DESIGN_MATCH")
 gnr_check(gnr_map$builder_calls == 0L && gnr_map$new_model_fits == 0L && !gnr_map$scoring_truth_read)
 gnr_check(length(gnr_map$protected_fields) == length(gnr_original) - 2L)
+gnr_check(gnr_map$schema_version == "glofas_normal_design_mapping_v2" &&
+  is.null(gnr_map$protected_component_sha256) &&
+  length(gnr_map$protected_component_structures) == length(gnr_map$protected_fields) - 1L)
+# A readable inventory must not rehash numeric arrays after exact equality.
+# It is not a replacement for the pre/post-read whole-file hash checks.
+gnr_original_hash_function <- app_gnr_hash
+app_gnr_hash <- function(x) {
+  if (is.matrix(x)) stop("unexpected redundant full-array digest")
+  gnr_original_hash_function(x)
+}
+gnr_check(identical(app_gnr_compare_designs(gnr_original, gnr_prepared,
+  app_glofas_family_transition_contract()), gnr_map))
+app_gnr_hash <- gnr_original_hash_function
 for (mutate in list(
   function(x) { x$H_fixed[1L] <- 5; x },
   function(x) { x$weight_fixed[1L] <- 1/51; x },

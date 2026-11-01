@@ -72,6 +72,17 @@ the two exact Muscat identities and requires Linux and R 4.6.0. Negative
 tests reject Jerez and unrelated lookalike names. The failed admission and
 its resource use remain retained; no scientific target or tolerance changed.
 
+The first full retained-evidence attempt reached its finite CPU boundary
+without producing an enrollment. Its failure is retained. A subsequent
+efficiency correction removes only a redundant serialization pass for
+per-component hashes of the already authenticated large designs. Every
+protected value and closure binding is still compared exactly; whole-file
+hashes are still checked before and after reads and at final verification.
+The mapping receipt now records small component descriptors as inventory,
+not as evidence of equality. Phase timings make any further bottleneck
+explicit. Neither scientific acceptance criteria nor resource limits are
+relaxed by this correction.
+
 ## Verification and remaining gates
 
 The registered synthetic test covers exact metadata mapping, protected

@@ -152,3 +152,35 @@ unchanged by this repair.
 unapproved references, incorrect generator pins, changed historical figure
 or numerical pins, stale main forecast routing, and moving forecast MAE back
 to the main article. All mutations are in-memory strings or expected hashes.
+
+## Later current-document metadata refresh
+
+The 2026-10-31 forecasting/application exposition changes the two manuscript
+source digests, not any independent-study numbers, plots or reporting rules.
+The live 300/500 article receipt therefore needs an editorial-source update.
+This is distinct from the immutable historical receipts described above.
+
+`scripts/refresh_independent_forecast_editorial_manifest_20261031.R` authenticates
+the complete original live receipt at fixed ancestor
+`8b28ba51176c25624b638fac54fce2699b9af078` (SHA-256
+`687d5531300c8c42eb8a2499ad88f3adbb5d3aa318e6b50b277b282db1d30b1c`).
+It requires every noneditorial source and every output to retain that receipt's
+digest, and independently reruns the bounded scientific/source and exposition
+guards. Only `main.tex` and `qdesn-supplement.tex` source digests may change.
+The metadata records the original digest, approved baseline, exact updated
+paths, refresher identity and the fact that no scientific output was regenerated.
+No historical lookup permission or current-asset hash check is relaxed.
+
+Reproduce or verify this generated metadata without fitting, forecasting,
+rescoring or figure generation:
+
+```bash
+/data/jaguir26/local/opt/R/4.6.0/bin/Rscript \
+  scripts/refresh_independent_forecast_editorial_manifest_20261031.R --refresh
+/data/jaguir26/local/opt/R/4.6.0/bin/Rscript \
+  scripts/refresh_independent_forecast_editorial_manifest_20261031.R --check
+```
+
+The default is read-only checking. Negative fixtures reject changed scientific
+pins or files, changed reporting policy, extra update paths and false regeneration
+claims. All original authority-check negative tests remain active.

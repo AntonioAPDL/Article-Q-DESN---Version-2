@@ -125,7 +125,8 @@ def run(config_path,authority_pin):
         h.write_new(bundle/'STAGE_GRANT.json',grant)
         preparation.bind_owner(config_path,bundle)
         owner_authority=h.read(h.pin(bundle/'OWNER_AUTHORITY_TEMPLATE.json'));owner_authority['status']=owner_authority.pop('required_status')
-        owner_authority['issued_epoch']=time.time();owner_authority['expires_epoch']=min(scope['expires_epoch'],time.time()+7200)
+        owner_issued_epoch=time.time();owner_authority['issued_epoch']=owner_issued_epoch
+        owner_authority['expires_epoch']=min(scope['expires_epoch'],owner_issued_epoch+7200)
         owner_authority['driver_root_authority']=authority_pin;h.write_new(bundle/'OWNER_AUTHORITY.json',owner_authority)
         peer('owner_release',bundle,ready_guard)
         proposal=preparation.release_proposal(config_path,bundle);proposal.pop('required_status');proposal['status']='ROOT_RELEASED_STARTUP_BATCH_ROLE'

@@ -128,6 +128,10 @@ accounting are required before accepting either result.
    again before each phase; the driver never writes peer PASS records. A
    snapshot older than90 seconds stops release. No automatic retry or window
    extension is present.
+   Owner authority issuance and its expiry derive from one captured epoch:
+   expiry is exactly `min(scope_expiry, issued_epoch + 7200)`. Advancing wall
+   clocks cannot add a second read's interval to the7200-second ceiling. The
+   independent peer retains its strict duration, expiry and lifecycle checks.
 5. After terminal primary accounting, the exact finite return is hash checked,
    independently reviewed and deeply revalidated before guarded acceptance and
    finalize. Primary CPU is counted once; component counters are attribution.

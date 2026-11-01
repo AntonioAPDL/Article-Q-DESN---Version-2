@@ -134,4 +134,33 @@ class DriverTests(unittest.TestCase):
         self.assertGreater(row['start_ticks'],0);self.assertEqual(len(row['boot_id']),36)
 
 
+
+
+class MetadataRoleApprovalTests(unittest.TestCase):
+    def test_each_metadata_role_has_its_own_approval(self):
+        for role in ("SCIENTIFIC_NAMESPACE_NO_OPTIMIZER", "SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER"):
+            with self.subTest(role=role):
+                self.assertTrue(m.approved_metadata_role(role, [role]))
+
+    def test_cross_role_approval_is_rejected(self):
+        with self.assertRaises(m.DriverError):
+            m.approved_metadata_role("SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER", ["SCIENTIFIC_NAMESPACE_NO_OPTIMIZER"])
+
+    def test_multi_role_or_duplicate_approval_is_rejected(self):
+        role = "SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER"
+        for values in ([role, "SCIENTIFIC_NAMESPACE_NO_OPTIMIZER"], [role, role]):
+            with self.subTest(values=values), self.assertRaises(m.DriverError):
+                m.approved_metadata_role(role, values)
+
+    def test_missing_or_wrong_type_approval_is_rejected(self):
+        role = "SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER"
+        for values in (None, [], (role,), role, {"role": role}):
+            with self.subTest(values=values), self.assertRaises(m.DriverError):
+                m.approved_metadata_role(role, values)
+
+    def test_numerical_and_unknown_roles_are_rejected(self):
+        for role in ("TOY_PARITY", "ZERO_UPDATE_BRIDGE", "PILOT", "", None):
+            with self.subTest(role=role), self.assertRaises(m.DriverError):
+                m.approved_metadata_role(role, [role])
+
 if __name__=='__main__':unittest.main()

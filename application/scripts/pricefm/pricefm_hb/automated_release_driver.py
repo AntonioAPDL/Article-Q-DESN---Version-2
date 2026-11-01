@@ -35,6 +35,15 @@ def require(ok,message):
     if not ok:raise DriverError(message)
 
 
+def approved_metadata_role(role, supported_roles):
+    """Each approval covers exactly one known zero-target metadata role."""
+    allowed = {"SCIENTIFIC_NAMESPACE_NO_OPTIMIZER", "SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER"}
+    require(type(role) is str and role in allowed, "only an exact metadata role is supported")
+    require(type(supported_roles) is list and supported_roles == [role],
+            "the independent reviewer must be approved for this one exact role")
+    return True
+
+
 def physical(path):
     p=Path(path)
     require(p.is_absolute() and '..' not in p.parts and not any(q.is_symlink() for q in (p,*p.parents)), 'absolute physical metadata path required')
@@ -147,7 +156,7 @@ def preflight(config_path,stage_guard,packet_review):
             and approval.get('local_python')==d['local_python'] and approval.get('CPU_limit')==12
             and approval.get('output_files')==list(REVIEW_OUTPUTS)
             and approval.get('required_cli_options')==['--config','--bundle','--scope','--stage-guard','--submit-guard','--ready-guard','--packet-review']
-            and approval.get('supported_roles')==['SCIENTIFIC_NAMESPACE_NO_OPTIMIZER'] and c['role'] in approval['supported_roles']
+            and approved_metadata_role(c['role'], approval.get('supported_roles'))
             and approval['issued_epoch']<=now<approval['expires_epoch']
             and review.get('reviewer_source_approval')==d['reviewer_source_approval'],
             'independently authored pinned namespace READY12 reviewer required')

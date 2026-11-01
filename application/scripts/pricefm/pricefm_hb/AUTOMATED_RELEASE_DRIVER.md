@@ -61,3 +61,15 @@ release transport. Supply its actual release guard as `--previous-guard` to
 the next normal core action. Complete accounting, return, independent runtime
 review, accept and final guard validation remain mandatory. Old job887360 stays
 failed and spent; this driver never resumes or reuses it.
+
+## Separately reviewed metadata boundary role
+
+Each independently approved reviewer covers exactly one role. The driver can
+coordinate either the namespace role or the zero-target TSYNC role when its
+reviewer approval names that exact role. Mixed, duplicate, numerical and unknown
+role approvals are rejected. The unchanged core requires actual accepted
+namespace evidence before the boundary role, and the boundary-specific reviewer
+must independently check its exact returned source/runtime context. This source
+extension creates no boundary execution or acceptance authority. All original
+supervisor limits, the 120-second worker window and the 80-second driver ceiling
+remain unchanged.

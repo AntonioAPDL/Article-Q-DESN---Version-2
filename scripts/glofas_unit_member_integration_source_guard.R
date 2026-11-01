@@ -79,11 +79,11 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
     require_check(regular_file(extension_file) && regular_file(extension_guard),
       "The new additive source authorization and guard must be regular files.")
     require_check(identical(unname(tools::sha256sum(extension_guard)[[1L]]),
-      "e5fb434347edf0c36b929886d53fbe8a7df5a9fe2fea94f2fcd9ad5c4c78f635"), "The new source guard must match its exact implementation pin.")
+      "c8369d81b1c56b9cd7829040398b4d689a330dd1c500c0eb4f8eb05d25a1771b"), "The new source guard must match its exact implementation pin.")
     extension_env <- new.env(parent = baseenv())
     sys.source(extension_guard, envir = extension_env)
     extension_checks <- extension_env$app_check_integrated_forecast_transition_sources(
-      repo_root, manifest_sha256 = "7b5470181febb1036ff397c033dbe7a64fa1752d9dabd3312a4f5abc6dd152f1")
+      repo_root, manifest_sha256 = "a5e4d93bef282be307b41844d3c12577173388fcc3358628e9ac114fdf7fea85")
     extension_paths <- attr(extension_checks, "authorized_additions")
     require_check(length(extension_paths) == 7L,
       "The additive workflow must authorize exactly seven new application source files.")

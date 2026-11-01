@@ -12,6 +12,7 @@ app_transition_source_paths <- function() {
       "application/scripts/prepare_glofas_family_transition.R",
       "application/scripts/run_glofas_family_transition.R",
       "application/scripts/run_integrated_quantile_forecast.R",
+      "configs/glofas_family_transition_muscat_20261101.json",
       "scripts/integrated_quantile_blocks.R",
       "scripts/integrated_forecast_transition_source_guard.R",
       "scripts/prepare_integrated_forecast_evidence.R",

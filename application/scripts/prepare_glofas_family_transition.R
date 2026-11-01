@@ -33,6 +33,7 @@ ignored <- system2("git",c("check-ignore","--quiet",shQuote(out)),stdout=FALSE,s
 if (ignored!=0L) app_gft_stop("Prepared runtime must be ignored by Git.")
 frozen_design_path <- app_gft_bind_path(file.path(source_runtime,"objects/part4_shared_design_truth_free.rds"),evidence)
 old_manifest_path <- app_gft_bind_path(file.path(source_runtime,"configs/part4_model_manifest.csv"),evidence)
+frozen_design_sha256 <- app_sha256_file(frozen_design_path)
 frozen <- readRDS(frozen_design_path)
 design <- app_glofas_family_transition_design(frozen)
 root_source <- app_gft_bind_path(args$root_initializer,evidence)
@@ -40,7 +41,7 @@ root_original <- readRDS(root_source)
 root_core <- app_glofas_part4_extract_fit(root_original)
 if (!identical(root_core$likelihood_family,"normal") ||
     !identical(root_original$state_contract_hash,app_glofas_part4_state_contract_hash(frozen)) ||
-    !identical(root_original$shared_design_reference$sha256,app_sha256_file(frozen_design_path))) {
+    !identical(root_original$shared_design_reference$sha256,frozen_design_sha256)) {
   app_gft_stop("Normal median initializer lacks matching authenticated frozen design/coordinate provenance.")
 }
 root_moments <- app_gft_moment_initializer(root_original,design)
@@ -90,15 +91,20 @@ for (i in seq_len(nrow(tasks))) {
     source_model_grid_sha256=app_sha256_file(grid_path),
     prior_sha256=app_gft_hash(fresh_args[c("beta_rhs","alpha_rhs","beta_ridge","prior_sigma")]),
     source_evidence_manifest_sha256=args$evidence_manifest_sha256,
-    source_design_sha256=app_sha256_file(frozen_design_path))
+    source_design_sha256=frozen_design_sha256)
 }
 source_head <- system2("git",c("rev-parse","HEAD"),stdout=TRUE)
 source_tree <- system2("git",c("rev-parse","HEAD^{tree}"),stdout=TRUE)
 # Target identity excludes operational host, claim nonce, retries and output paths.
 target_sha <- app_gft_hash(list(contract=app_glofas_family_transition_contract(),
-  source_design_sha256=app_sha256_file(frozen_design_path),
+  source_design_sha256=frozen_design_sha256,
   task_models=lapply(configs,function(x) x[c("task_id","prior_sha256","source_model_grid_sha256")]),
   source_manifest_sha256=args$source_manifest_sha256))
+# Recheck once after all read-only construction. The sixteen task records use
+# this same authenticated immutable design, not sixteen additional4GB reads.
+if (!identical(app_sha256_file(frozen_design_path),frozen_design_sha256)) {
+  app_gft_stop("Frozen source design changed during preparation; no output written.")
+}
 for (d in c("objects","configs","requests","control_tasks","results","manifests")) app_ensure_dir(file.path(out,d))
 design_path <- file.path(out,"objects/shared_truth_free_design.rds")
 app_glofas_part4_atomic_save_rds(app_latent_path_drop_runtime_cache(design,compact=FALSE),design_path)
@@ -109,7 +115,7 @@ if (nzchar(args$root_initializer)) {
   compact <- list(summary=list(theta_mean=root_moments$theta_mean,theta_cov=root_moments$theta_cov,
     y_future_mean=root_moments$y_future_mean,y_future_cov=root_moments$y_future_cov),
     likelihood_family="normal",source_sha256=app_sha256_file(root_source),
-    source_design_sha256=app_sha256_file(frozen_design_path),
+    source_design_sha256=frozen_design_sha256,
     source_state_contract_hash=root_original$state_contract_hash)
   root_path <- file.path(out,"objects/root_initializer_moments.rds")
   app_glofas_part4_atomic_save_rds(compact,root_path)

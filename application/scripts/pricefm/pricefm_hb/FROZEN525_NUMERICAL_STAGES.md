@@ -1,5 +1,12 @@
 # Separate frozen 525 numerical stages
 
+The bridge bootstrap now logs a bounded scalar-only failure frame after the
+original TSYNC/ACK, through existing child stdout. Its exact current/old seven
+measures/limits, certified/ELBO/RHS scalar whitelist and optional terminal sigma
+exclude factor arrays. Nonfinite values have explicit labels; non-scalars are
+redacted. Logging errors cannot bypass unconditional exit1. This diagnostic
+changes no scientific assertion, math source, acceptance gate or return schema.
+
 This is source preparation. It does not certify Slurm resources, R syntax,
 numerical parity, a bridge, source-context pricing, or a production fit. The
 metadata namespace/boundary controller and its grants remain zero-optimizer.

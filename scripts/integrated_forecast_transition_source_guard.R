@@ -12,8 +12,12 @@ app_transition_source_paths <- function() {
       "application/scripts/prepare_glofas_family_transition.R",
       "application/scripts/run_glofas_family_transition.R",
       "application/scripts/run_integrated_quantile_forecast.R",
+      "scripts/integrated_quantile_blocks.R",
       "scripts/integrated_forecast_transition_source_guard.R",
       "scripts/prepare_integrated_forecast_evidence.R",
+      "scripts/qualify_glofas_family_transition.R",
+      "scripts/qualify_integrated_quantile_forecast.R",
+      "scripts/run_glofas_transition_campaign.py",
       "scripts/score_integrated_quantile_forecasts.R"),
     frozen = c(
       "application/R/fit_qdesn_latent_path.R",

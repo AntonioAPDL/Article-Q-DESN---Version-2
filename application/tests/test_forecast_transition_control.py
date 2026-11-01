@@ -27,7 +27,10 @@ EXPIRES = "2031-01-01T00:00:00Z"
 HASH = "a" * 64
 COMMIT = "b" * 40
 TREE = "c" * 40
-ARGV = ["/mock/Rscript", "/mock/source/worker.R", "--request", "/mock/request.json"]
+ARGV = ["/mock/Rscript", "/mock/source/worker.R", "--mode", "run", "--request", "/mock/request.json",
+        "--authorization", "/mock/auth.json", "--authorization-sha256", HASH,
+        "--claim-ticket", "/mock/ticket.json", "--claim-ticket-sha256", HASH,
+        "--ledger", "/mock/ledger.sqlite", "--source-manifest", "/mock/source.csv"]
 
 
 def task(task_id="task-1", prerequisites=None):
@@ -59,11 +62,16 @@ def configuration():
     config = control.read_json(ROOT / "application/config/forecast_transition_multihost_v1.json")
     config["launch_authorized"] = True
     config["production_budget"] = {"max_submissions": 10, "max_cpu_seconds": 10000,
-                                   "max_wall_seconds": 1000, "max_output_bytes": GIB}
+                                   "max_wall_seconds": 1000, "max_output_bytes": GIB,
+                                   "max_metadata_bytes": 64 * 1024 ** 2}
     for host, site in config["hosts"].items():
         site["qualified"] = False
         site["qualification_receipt_sha256"] = None
         site["core_grants"] = ["test-new-scope-" + host]
+        site["python_bin"] = "/usr/bin/python3.11"
+        site["rscript"] = "/mock/Rscript"
+        if "ssh_profile" in site:
+            site["ssh_profile"].update(identity_file=None, known_hosts_file=None, known_hosts_sha256=None)
     return config
 
 
@@ -88,13 +96,13 @@ def grant(host="muscat"):
             "max_workers": 72 if host == "hummingbird" else 8,
             "max_cpus": 72 if host == "hummingbird" else 8,
             "max_memory_bytes": 100 * GIB, "max_output_bytes": GIB,
-            "max_artifact_bytes": GIB, "max_log_bytes": GIB}
+            "max_artifact_bytes": GIB, "max_log_bytes": GIB, "max_metadata_bytes": 64 * 1024 ** 2}
 
 
 def budget(cpu=0, cpus=1):
     return {"workers": 1, "cpus": cpus, "memory_bytes": GIB, "cpu_seconds": cpus * 10,
             "wall_seconds": 10, "output_bytes": 1024 ** 2, "log_bytes": 1024 ** 2,
-            "total_output_bytes": 2 * 1024 ** 2, "logical_cpus": [cpu]}
+            "metadata_bytes": 1024 ** 2, "total_output_bytes": 3 * 1024 ** 2, "logical_cpus": [cpu]}
 
 
 def authority(config=None, task_ids=None):
@@ -108,7 +116,8 @@ def authority(config=None, task_ids=None):
             "allowed_task_sha256": {name: control.object_sha256(task(name)) for name in
                                     (task_ids or ["task-1", "task-2", "task-3"])},
             "allowed_hosts": ["muscat", "jerez", "hummingbird"],
-            "allowed_operations": ["claim", "dispatch", "record_terminal", "accept", "reassign", "cancel"],
+            "allowed_operations": ["claim", "dispatch", "record_terminal", "accept", "reassign", "cancel",
+                                   "abandon_preintent", "adopt_ambiguous"],
             "budget": copy.deepcopy(config["production_budget"]),
             "resource_receipt_sha256": {host: control.object_sha256(resource(host)) for host in config["hosts"]},
             "resource_grants": {grant(host)["grant_id"]: control.object_sha256(grant(host)) for host in config["hosts"]},
@@ -119,6 +128,9 @@ def authority(config=None, task_ids=None):
                 "coordinator_connectivity_receipt_sha256": HASH,
                 "cpu_boundary_receipt_sha256": HASH, "accounting_receipt_sha256": HASH,
                 "output_root": "/tmp/forecast-transition-test-results",
+                "metadata_root": "/tmp/forecast-transition-test-metadata",
+                "python_bin": config["hosts"][host]["python_bin"], "rscript": config["hosts"][host]["rscript"],
+                "numerical_backend": {"backend": "bundled_rblas", "library_path": "/mock/libRblas.so", "library_sha256": HASH},
                 "expires_utc": EXPIRES} for host in config["hosts"]}}
     for receipt in auth["qualified_hosts"].values():
         receipt["receipt_sha256"] = control.object_sha256(receipt)
@@ -134,6 +146,8 @@ class ControllerTests(unittest.TestCase):
         for host, receipt in self.auth.authorization["qualified_hosts"].items():
             output = self.root / ("qualified-output-" + host); output.mkdir()
             receipt["output_root"] = str(output)
+            metadata_root = self.root / ("qualified-meta-" + host); metadata_root.mkdir()
+            receipt["metadata_root"] = str(metadata_root)
             receipt["receipt_sha256"] = control.object_sha256({key: value for key, value in receipt.items() if key != "receipt_sha256"})
         self.ledger = control.Ledger(self.root / "ledger.sqlite", self.auth, coordinator_hostname="muscat")
 
@@ -145,9 +159,19 @@ class ControllerTests(unittest.TestCase):
         return self.ledger.claim(spec or task(), host, "test-owner", resource(host), grant(host), budget(cpu))
 
     def dispatch(self, ticket):
-        self.ledger.prepare_intent(ticket["claim_nonce"], self.root, ARGV)
+        self.ledger.prepare_intent(ticket["claim_nonce"], self.root, ARGV,
+            [{"role": "supervision", "sha256": HASH}])
         return self.ledger.dispatch(ticket["claim_nonce"], lambda intent: {
             "host": ticket["host"], "claim_nonce": ticket["claim_nonce"], "job_id": "mock-job-" + ticket["task_id"]})
+
+    def metadata(self, ticket, root, argv=ARGV):
+        records = []
+        for role in ("request", "claim_ticket", "authorization", "supervision"):
+            path = self.root / (ticket["claim_nonce"] + "." + role + ".json")
+            path.write_text(json.dumps(self.auth.authorization) if role == "authorization" else '{"unit":true}')
+            records.append({"role": role, "local_path": str(path), "remote_path": str(Path(root) / path.name),
+                            "sha256": control.file_sha256(path)})
+        return records
 
     def finish(self, ticket, exit_code=0):
         self.ledger.terminal(ticket["claim_nonce"], {"host": ticket["host"],
@@ -535,7 +559,7 @@ class ControllerTests(unittest.TestCase):
         receipt = self.auth.authorization["qualified_hosts"]["jerez"]
         receipt["receipt_sha256"] = control.object_sha256({key: value for key, value in receipt.items() if key != "receipt_sha256"})
         metadata = []
-        for role in ("request", "claim_ticket", "authorization"):
+        for role in ("request", "claim_ticket", "authorization", "supervision"):
             local = self.root / (role + ".json")
             local.write_text(json.dumps(self.auth.authorization) if role == "authorization" else '{"unit":true}\n')
             metadata.append({"role": role, "local_path": str(local),
@@ -558,37 +582,46 @@ class ControllerTests(unittest.TestCase):
 
     def test_real_local_adapter_is_bounded_and_mocked(self):
         spec = task(); ticket = self.claim()
+        metadata = self.metadata(ticket, self.root)
         submit = control.qualified_submitter("muscat", ARGV, self.root, budget(), resource(),
-            self.root, spec, ticket, self.auth.config, self.auth)
+            self.root, spec, ticket, self.auth.config, self.auth, metadata)
         process = mock.Mock(pid=12345)
         identity = {"host": "muscat", "pid": 12345, "boot_id": "unit-boot", "start_ticks": 99}
         with mock.patch.object(control.subprocess, "Popen", return_value=process) as popen, \
              mock.patch.object(control, "process_identity", return_value=identity):
-            result = submit({"argv": ARGV, "ticket": ticket})
+            result = submit({"argv": ARGV, "ticket": ticket, "metadata": metadata})
         self.assertEqual(result["job_id"], "pid:12345:unit-boot:99")
         argv = popen.call_args.args[0]
-        self.assertEqual(argv[:4], ["/usr/bin/timeout", "--signal=TERM", "--kill-after=30", "10"])
+        self.assertEqual(argv[0], "/usr/bin/python3.11")
+        self.assertEqual(argv[2], "supervise")
+        self.assertIn("--ticket", argv); self.assertIn("--ticket-sha256", argv)
+        self.assertNotIn("--claim-ticket", argv)
         self.assertTrue(popen.call_args.kwargs["start_new_session"])
         self.assertEqual(popen.call_args.kwargs["env"]["OPENBLAS_NUM_THREADS"], "1")
         self.assertTrue(callable(popen.call_args.kwargs["preexec_fn"]))
         with mock.patch.object(control.os, "sched_setaffinity"), \
              mock.patch.object(control.posix_resource, "setrlimit") as limits:
             popen.call_args.kwargs["preexec_fn"]()
-        self.assertIn(mock.call(control.posix_resource.RLIMIT_FSIZE, (1024 ** 2, 1024 ** 2)), limits.call_args_list)
+        self.assertIn(mock.call(control.posix_resource.RLIMIT_FSIZE, (65536, 1024 ** 2)), limits.call_args_list)
 
     def test_real_jerez_adapter_is_ssh_shell_only_and_mocked(self):
         spec = task(); ticket = self.claim(host="jerez")
+        metadata = self.metadata(ticket, "/qualified/logs")
         submit = control.qualified_submitter("jerez", ARGV, Path("/qualified/source"), budget(), resource("jerez"),
-            Path("/qualified/logs"), spec, ticket, self.auth.config, self.auth)
+            Path("/qualified/logs"), spec, ticket, self.auth.config, self.auth, metadata)
+        self.auth.authorization["qualified_hosts"]["jerez"]["metadata_root"] = "/qualified/logs"
+        receipt = self.auth.authorization["qualified_hosts"]["jerez"]
+        receipt["receipt_sha256"] = control.object_sha256({key: value for key, value in receipt.items() if key != "receipt_sha256"})
         answer = mock.Mock(stdout="12345 abcdef-0123 99\n")
         with mock.patch.object(control.subprocess, "run", return_value=answer) as run:
-            result = submit({"argv": ARGV, "ticket": ticket})
+            result = submit({"argv": ARGV, "ticket": ticket, "metadata": metadata})
         self.assertEqual(result["job_id"], "pid:12345:abcdef-0123:99")
-        self.assertEqual(run.call_args.args[0][-2:], ["jerez", "bash -s"])
+        self.assertEqual(run.call_args.args[0][-2:], ["jaguir26@jerez.be.ucsc.edu", "bash -s"])
         script = run.call_args.kwargs["input"]
         self.assertIn("ulimit -v", script)
         self.assertIn("ulimit -t", script)
         self.assertIn("ulimit -f 1024", script)
+        self.assertIn("ulimit -S -f 64", script)
         self.assertIn("/usr/bin/taskset --cpu-list 0", script)
         self.assertIn(COMMIT, script)
         self.assertIn(TREE, script)
@@ -597,21 +630,24 @@ class ControllerTests(unittest.TestCase):
         spec = task(); ticket = self.claim(host="hummingbird")
         root = Path("/qualified/source")
         script_path = str(root / self.auth.config["worker_scripts"][spec["workflow"]])
-        argv = ["/qualified/Rscript", script_path, "--mode", "run", "--request", "/request.json",
-                "--authorization", "/auth.json"]
+        argv = list(ARGV); argv[0] = "/qualified/Rscript"; argv[1] = script_path
+        metadata = self.metadata(ticket, "/qualified/logs", argv)
+        self.auth.authorization["qualified_hosts"]["hummingbird"]["metadata_root"] = "/qualified/logs"
+        receipt = self.auth.authorization["qualified_hosts"]["hummingbird"]
+        receipt["receipt_sha256"] = control.object_sha256({key: value for key, value in receipt.items() if key != "receipt_sha256"})
         submit = control.qualified_submitter("hummingbird", argv, root, budget(), resource("hummingbird"),
-            Path("/qualified/logs"), spec, ticket, self.auth.config, self.auth)
+            Path("/qualified/logs"), spec, ticket, self.auth.config, self.auth, metadata)
         with mock.patch.object(control.subprocess, "run", return_value=mock.Mock(stdout="123456;unitcluster\n")) as run:
-            result = submit({"argv": argv, "ticket": ticket})
+            result = submit({"argv": argv, "ticket": ticket, "metadata": metadata})
         self.assertEqual(result["job_id"], "123456")
-        self.assertEqual(run.call_args.args[0][-2:], ["hummingbird", "sbatch --parsable"])
+        self.assertEqual(run.call_args.args[0][-2:], ["jaguir26@hb.ucsc.edu", "sbatch --parsable"])
         script = run.call_args.kwargs["input"]
-        self.assertIn("--mode run --request /request.json --authorization /auth.json", script)
+        self.assertIn("forecast_transition_control.py supervise", script)
         self.assertIn("#SBATCH --mem=1024M", script)
         self.assertIn("ulimit -f 1024", script)
-        self.assertIn(".stdout.log", script)
-        self.assertIn("exec > ", script)
-        self.assertNotIn("python", script)
+        self.assertIn("ulimit -S -f 64", script)
+        self.assertIn("srun --exclusive /usr/bin/python3.11", script)
+        self.assertNotIn("Rscript --mode", script)
 
     def test_remote_verifier_requires_qualified_compute_callback_mocked(self):
         request = request_for(task()); request["host"] = "hummingbird"
@@ -624,14 +660,17 @@ class ControllerTests(unittest.TestCase):
              mock.patch.object(control.socket, "gethostname", return_value="compute1"), \
              mock.patch.object(control.subprocess, "run", return_value=mock.Mock(stdout=json.dumps(observed))) as run:
             self.assertTrue(control.verify_claim_remote(args, request, self.auth)["verified"])
-        self.assertEqual(run.call_args.args[0][-2], "muscat")
+        self.assertEqual(run.call_args.args[0][-2], "jaguir26@muscat.be.ucsc.edu")
         self.assertIn("verify-claim", run.call_args.args[0][-1])
         with mock.patch.dict(control.os.environ, {}, clear=True), self.assertRaisesRegex(control.GateError, "compute allocation"):
             control.verify_claim_remote(args, request, self.auth)
 
     def test_dispatch_argv_operational_hashes_have_no_cycle(self):
-        first = [*ARGV, "--claim-ticket-sha256", "a" * 64, "--authorization-sha256", "b" * 64]
-        second = [*ARGV, "--claim-ticket-sha256", "c" * 64, "--authorization-sha256", "d" * 64]
+        first = list(ARGV); second = list(ARGV)
+        first[first.index("--claim-ticket-sha256")+1] = "a" * 64
+        second[second.index("--claim-ticket-sha256")+1] = "c" * 64
+        first[first.index("--authorization-sha256")+1] = "b" * 64
+        second[second.index("--authorization-sha256")+1] = "d" * 64
         self.assertEqual(control.argv_spec_sha256(first), control.argv_spec_sha256(second))
         second[0] = "/unapproved/executable"
         self.assertNotEqual(control.argv_spec_sha256(first), control.argv_spec_sha256(second))
@@ -725,6 +764,296 @@ class ControllerTests(unittest.TestCase):
         observed = dict(identity, admission_stopped=False)
         with self.assertRaisesRegex(control.GateError, "stop admission"):
             control.cancellation_proof(identity, observed, self.auth, task())
+
+    def supervisor_fixture(self):
+        nonce = "unit-supervised-nonce"
+        library = self.root / "lib-unit.so"; library.write_bytes(b"synthetic-not-a-loaded-library")
+        backend = {"backend": "bundled_rblas", "library_path": str(library),
+                   "library_sha256": control.file_sha256(library)}
+        spec = {"schema_version": "forecast_transition_supervision_v1", "claim_nonce": nonce,
+                "task_id": "task-1", "routing_id": "route-task-1", "host": "muscat",
+                "worker_argv": ARGV, "budget": budget(), "source_root": str(self.root),
+                "identity": {name: task()[name] for name in control.IDENTITY_FIELDS},
+                "numerical_backend": backend}
+        spec["budget"].update(wall_seconds=90, cpu_seconds=90)
+        for field, suffix in (("started_path", "started.json"), ("terminal_path", "terminal.json"), ("log_path", "stdout.log")):
+            spec[field] = str(self.root / (nonce + "." + suffix))
+        verified = {"verified": True, **{name: spec[name] for name in
+                    ("claim_nonce", "task_id", "routing_id", "host", "numerical_backend")},
+                    "resource_budget": copy.deepcopy(spec["budget"]), "worker_argv_sha256": control.object_sha256(ARGV),
+                    "metadata_root": str(self.root)}
+        created = control.utc_now()
+        verified.update(dispatch_created_utc=control.timestamp(created),
+                        deadline_utc=control.timestamp(created+dt.timedelta(seconds=90)))
+        def identity(pid, root):
+            return {"host": "muscat", "hostname": "muscat", "pid": pid, "boot_id": "unit-boot",
+                    "start_ticks": 1000 + pid, "cwd": str(root), "uid": 1000}
+        child = mock.Mock(pid=12345); child.wait.return_value = 0
+        return spec, verified, identity, child
+
+    def test_supervisor_normal_exit_has_durable_started_and_terminal_receipts(self):
+        spec, verified, identity, child = self.supervisor_fixture()
+        runner = mock.Mock(return_value=child)
+        with mock.patch.object(control.os, "killpg") as signals:
+            result = control.supervised_child(spec, verified, runner=runner, identity=identity)
+        self.assertEqual(result["exit_code"], 0)
+        self.assertTrue(result["worker_terminated"])
+        self.assertTrue(result["supervisor_exit_pending"])
+        self.assertEqual(control.read_json(spec["terminal_path"]), result)
+        self.assertEqual(control.read_json(spec["started_path"])["phase"], "started")
+        self.assertTrue(0 < child.wait.call_args.kwargs["timeout"] <= 60)
+        self.assertLessEqual(result["dispatch_elapsed_seconds"], spec["budget"]["wall_seconds"])
+        self.assertNotIn("LD_PRELOAD", runner.call_args.kwargs["env"])
+        self.assertEqual(runner.call_args.kwargs["env"]["OMP_NUM_THREADS"], "1")
+        with mock.patch.object(control.os, "sched_setaffinity"), mock.patch.object(control.posix_resource, "setrlimit") as limits:
+            runner.call_args.kwargs["preexec_fn"]()
+        self.assertIn(mock.call(control.posix_resource.RLIMIT_FSIZE, (1024 ** 2, 1024 ** 2)), limits.call_args_list)
+        signals.assert_not_called()
+        with self.assertRaisesRegex(control.GateError, "overwritten"):
+            control.durable_json(Path(spec["terminal_path"]), result)
+
+    def test_supervisor_failed_exit_is_retained_not_retried(self):
+        spec, verified, identity, child = self.supervisor_fixture()
+        child.wait.return_value = 7
+        runner = mock.Mock(return_value=child)
+        result = control.supervised_child(spec, verified, runner=runner, identity=identity)
+        self.assertEqual(result["exit_code"], 7); self.assertEqual(runner.call_count, 1)
+        self.assertTrue(Path(spec["terminal_path"]).is_file())
+
+    def test_supervisor_timeout_signals_only_exact_owned_child_mock(self):
+        spec, verified, identity, child = self.supervisor_fixture()
+        child.wait.side_effect = [control.subprocess.TimeoutExpired(ARGV, 10), 0]
+        with mock.patch.object(control.os, "getpgid", return_value=child.pid), mock.patch.object(control.os, "killpg") as signals:
+            result = control.supervised_child(spec, verified, runner=mock.Mock(return_value=child), identity=identity)
+        self.assertEqual(result["exit_code"], 124); self.assertTrue(result["timed_out"])
+        signals.assert_called_once_with(child.pid, 15)
+
+    def test_supervisor_refuses_changed_host_budget_command_or_log_namespace(self):
+        for name, value, pattern in (("host", "jerez", "claim/routing"),
+                                     ("worker_argv", ARGV + ["unbound"], "command/budget"),
+                                     ("log_path", str(self.root.parent / "escape.log"), "namespace")):
+            spec, verified, identity, child = self.supervisor_fixture()
+            spec[name] = value; runner = mock.Mock(return_value=child)
+            with self.subTest(field=name), self.assertRaisesRegex(control.GateError, pattern):
+                control.supervised_child(spec, verified, runner=runner, identity=identity)
+            runner.assert_not_called()
+
+    def test_supervisor_rejects_tiny_or_expired_complete_wall_budget(self):
+        spec, verified, identity, child = self.supervisor_fixture()
+        spec["budget"].update(wall_seconds=10,cpu_seconds=10)
+        verified["resource_budget"] = copy.deepcopy(spec["budget"])
+        with self.assertRaisesRegex(control.GateError, "at least60"):
+            control.supervised_child(spec, verified, runner=mock.Mock(return_value=child), identity=identity)
+        spec, verified, identity, child = self.supervisor_fixture()
+        verified["dispatch_created_utc"] = control.timestamp(control.utc_now()-dt.timedelta(seconds=80))
+        verified["deadline_utc"] = control.timestamp(control.parse_utc(verified["dispatch_created_utc"])+dt.timedelta(seconds=90))
+        with self.assertRaisesRegex(control.GateError, "no bounded"):
+            control.supervised_child(spec, verified, runner=mock.Mock(return_value=child), identity=identity)
+
+    def test_backend_environment_is_explicit_clean_and_library_bound(self):
+        library = self.root / "unit-library.so"; library.write_bytes(b"not-a-loaded-library")
+        backend = {"backend": "bundled_rblas", "library_path": str(library), "library_sha256": control.file_sha256(library)}
+        inherited = {"LD_PRELOAD": "/unapproved.so", "LD_LIBRARY_PATH": "/unapproved", "R_PROFILE_USER": "/bad.R",
+                     "PYTHONPATH": "/bad", "OPENBLAS_NUM_THREADS": "64", "QDESN_BLAS_LIBRARY_PATH": "/old.so"}
+        with mock.patch.dict(control.os.environ, inherited):
+            env = control.numerical_backend_environment(backend)
+        self.assertNotIn("LD_PRELOAD", env); self.assertNotIn("LD_LIBRARY_PATH", env)
+        self.assertNotIn("QDESN_BLAS_LIBRARY_PATH", env); self.assertNotIn("PYTHONPATH", env)
+        self.assertEqual(env["R_PROFILE_USER"], "/dev/null"); self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual(env["R_LIBS_USER"], "/dev/null"); self.assertEqual(env["R_LIBS_SITE"], "/dev/null")
+        env = control.numerical_backend_environment(dict(backend, backend="openblas_pthread"))
+        self.assertEqual(env["LD_PRELOAD"], str(library)); self.assertEqual(env["QDESN_BLAS_LIBRARY_SHA256"], backend["library_sha256"])
+        with self.assertRaisesRegex(control.GateError, "library identity"):
+            control.numerical_backend_environment(dict(backend, library_sha256="0" * 64))
+        link = self.root / "link.so"; link.symlink_to(library)
+        with self.assertRaisesRegex(control.GateError, "library identity"):
+            control.numerical_backend_environment(dict(backend, library_path=str(link)))
+
+    def test_transport_profile_is_strict_and_source_owned(self):
+        profile = copy.deepcopy(self.auth.config["hosts"]["jerez"]["ssh_profile"])
+        argv = control.ssh_argv(profile, "hostname -s")
+        self.assertIn("jaguir26@jerez.be.ucsc.edu", argv)
+        self.assertIn("ForwardAgent=no", argv); self.assertIn("IdentityAgent=none", argv)
+        with self.assertRaisesRegex(control.GateError, "approved SSH endpoint"):
+            control.ssh_argv(dict(profile, endpoint="unapproved.example"), "hostname -s")
+        with self.assertRaisesRegex(control.GateError, "exact SSH"):
+            control.ssh_argv(dict(profile, extra_option="ProxyCommand=unreviewed"), "hostname -s")
+        known = self.root / "known-hosts"; known.write_text("unit-public-host-record")
+        with self.assertRaisesRegex(control.GateError, "snapshot"):
+            control.ssh_argv(dict(profile, known_hosts_file=str(known), known_hosts_sha256=HASH), "hostname -s")
+
+    def test_preintent_abandonment_is_exact_bounded_and_not_a_retry(self):
+        ticket = self.claim(); nonce = ticket["claim_nonce"]
+        proof = {"claim_nonce": nonce, "host": "muscat", "no_submission": True, "evidence_sha256": HASH}
+        self.ledger.abandon_preintent(nonce, proof)
+        self.assertEqual(self.ledger.row(nonce)["state"], "abandoned_preintent")
+        with self.assertRaisesRegex(control.GateError, "reconciliation"):
+            self.claim()
+        ticket2 = self.claim(task("task-2"), cpu=1)
+        self.ledger.prepare_intent(ticket2["claim_nonce"], self.root, ARGV)
+        with self.assertRaisesRegex(control.GateError, "no durable intent"):
+            self.ledger.abandon_preintent(ticket2["claim_nonce"], dict(proof, claim_nonce=ticket2["claim_nonce"]))
+
+    def test_abandoned_claim_metadata_reservation_is_not_refunded(self):
+        ceiling = 2 * budget()["metadata_bytes"]
+        self.auth.config["production_budget"]["max_metadata_bytes"] = ceiling
+        self.auth.config_sha256 = control.object_sha256(self.auth.config)
+        self.auth.authorization["config_sha256"] = self.auth.config_sha256
+        self.auth.authorization["budget"]["max_metadata_bytes"] = ceiling
+        for index in (1, 2):
+            ticket = self.claim(task("task-" + str(index)), cpu=index)
+            self.ledger.abandon_preintent(ticket["claim_nonce"], {"claim_nonce": ticket["claim_nonce"],
+                "host": "muscat", "no_submission": True, "evidence_sha256": HASH})
+        with self.assertRaisesRegex(control.GateError, "metadata_bytes budget at claim"):
+            self.claim(task("task-3"), cpu=3)
+
+    def test_supervised_closeout_requires_independent_owner_and_accounting_proof(self):
+        ticket = self.claim(); self.dispatch(ticket); nonce = ticket["claim_nonce"]
+        body = {"schema_version": "forecast_transition_supervisor_receipt_v1", "phase": "terminal",
+                "claim_nonce": nonce, "host": "muscat", "routing_id": ticket["routing_id"],
+                "worker_terminated": True, "job_id": "mock-job-task-1", "exit_code": 0,
+                "identity": {name: task()[name] for name in control.IDENTITY_FIELDS}, "worker_argv_sha256": control.object_sha256(ARGV)}
+        intent = control.read_json(self.ledger.row(nonce)["intent_path"])
+        body.update(dispatch_created_utc=intent["created_utc"],deadline_utc=intent["deadline_utc"],
+                    dispatch_elapsed_seconds=5,utc=intent["created_utc"])
+        proof = {"claim_nonce": nonce, "host": "muscat", "job_id": body["job_id"],
+                 "owner_terminated": True, "accounting_complete": True, "no_orphans": True,
+                 "supervisor_receipt_sha256": control.object_sha256(body), "evidence_sha256": HASH}
+        with self.assertRaisesRegex(control.GateError, "independent terminal"):
+            self.ledger.close_supervised(nonce, body, dict(proof, no_orphans=False))
+        self.assertEqual(self.ledger.row(nonce)["state"], "submitted")
+        late = dict(body,dispatch_elapsed_seconds=11)
+        late_proof = dict(proof,supervisor_receipt_sha256=control.object_sha256(late))
+        with self.assertRaisesRegex(control.GateError, "charged wall deadline"):
+            self.ledger.close_supervised(nonce, late, late_proof)
+        self.ledger.close_supervised(nonce, body, proof)
+        self.assertEqual(self.ledger.row(nonce)["state"], "succeeded")
+
+    def test_ambiguous_success_can_only_adopt_the_same_fenced_nonce(self):
+        ticket = self.claim(); nonce = ticket["claim_nonce"]
+        self.ledger.prepare_intent(nonce, self.root, ARGV)
+        with self.assertRaises(control.GateError):
+            self.ledger.dispatch(nonce, mock.Mock(side_effect=RuntimeError("mock-transport-loss")))
+        terminal = {"claim_nonce": nonce, "host": "muscat", "job_id": "one-exact-job", "exit_code": 0,
+                    "owner_terminated": True, "accounting_complete": True,
+                    "identity": {name: task()[name] for name in control.IDENTITY_FIELDS}, "worker_argv_sha256": control.object_sha256(ARGV)}
+        proof = {"claim_nonce": nonce, "host": "muscat", "job_id": "one-exact-job", "matching_jobs": 1,
+                 "owner_terminated": True, "accounting_complete": True, "no_orphans": True,
+                 "evidence_sha256": HASH, "terminal_receipt_sha256": control.object_sha256(terminal)}
+        with self.assertRaisesRegex(control.GateError, "one exact"):
+            self.ledger.adopt_ambiguous(nonce, dict(proof, matching_jobs=2), terminal)
+        self.ledger.adopt_ambiguous(nonce, proof, terminal)
+        self.assertEqual(self.ledger.row(nonce)["state"], "succeeded")
+        self.assertEqual(len(self.ledger.db.execute("SELECT nonce FROM attempts").fetchall()), 1)
+        with self.assertRaisesRegex(control.GateError, "active owner|reconciliation"):
+            self.claim()
+
+    def test_closeout_cli_requires_explicit_authority_and_does_not_create_a_ledger(self):
+        missing = self.root / "must-not-create.sqlite"
+        for command in ("close-supervised", "abandon-preintent", "accept", "reassign"):
+            with self.subTest(command=command), self.assertRaisesRegex(control.GateError, "--execute"):
+                control.main([command, "--ledger", str(missing), "--nonce", "unit"])
+        self.assertFalse(missing.exists())
+
+    def test_real_supervisor_argv_is_accepted_by_controller_parser(self):
+        command = control.supervision_argv(self.auth.config, "muscat", ROOT, ARGV,
+            {"remote_path": "/missing/spec.json", "sha256": HASH})
+        # Reaches the fail-closed file/authority check rather than argparse's
+        # unknown-option SystemExit; no subprocess or model work occurs.
+        with self.assertRaisesRegex(control.GateError, "claim ticket file/hash"):
+            control.main(command[2:])
+
+    def test_accepted_dependency_is_rehashed_not_a_status_marker(self):
+        ticket, manifest, out = self.ready_output()
+        Path(str(out) + ".output_manifest.json").write_text(json.dumps(manifest))
+        self.ledger.accept(ticket["claim_nonce"], manifest, out)
+        verified = self.ledger.accepted_output("task-1")
+        self.assertEqual(verified["claim_nonce"], ticket["claim_nonce"])
+        self.assertEqual(len(verified["artifacts"]), 2)
+        (out / manifest["shards"][0]["relative_path"]).write_text("tampered")
+        with self.assertRaisesRegex(control.GateError, "prerequisite artifact changed"):
+            self.ledger.accepted_output("task-1")
+
+    def test_readonly_claim_receipt_authenticates_exact_accepted_prerequisite_artifacts(self):
+        parent, manifest, out = self.ready_output()
+        Path(str(out)+".output_manifest.json").write_text(json.dumps(manifest))
+        self.ledger.accept(parent["claim_nonce"],manifest,out)
+        child = task("task-2",[{"task_id":"task-1","task_manifest_sha256":HASH,"posterior_target_sha256":HASH}])
+        self.auth.authorization["allowed_task_sha256"]["task-2"] = control.object_sha256(child)
+        ticket = self.claim(child,cpu=1);self.dispatch(ticket)
+        request = dict(request_for(child),output_root=ticket["output_root"])
+        receipt = control.verify_claim_readonly(self.ledger.path,ticket,request,self.auth,coordinator_hostname="muscat")
+        proof = receipt["accepted_prerequisites"][0]
+        self.assertEqual(proof["output_manifest_sha256"],control.object_sha256(manifest))
+        self.assertEqual(proof["identity"],{name:manifest[name] for name in control.IDENTITY_FIELDS})
+        self.assertTrue(all(set(row)=={"relative_path","sha256","bytes"} for row in proof["artifacts"]))
+        (out/manifest["shards"][0]["relative_path"]).write_text("tampered")
+        with self.assertRaisesRegex(control.GateError,"prerequisite artifact changed"):
+            control.verify_claim_readonly(self.ledger.path,ticket,request,self.auth,coordinator_hostname="muscat")
+
+    def test_typed_master_derivation_roundtrip_and_scope_mutations(self):
+        module_spec = importlib.util.spec_from_file_location("campaign_fixture",ROOT/"application/tests/test_glofas_transition_campaign.py")
+        fixture = importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(fixture)
+        master,prepared,state = fixture.make_fixture(self.root/"master-fixture")
+        G = fixture.G
+        with mock.patch.object(G.C,"git_identity",return_value=(master["source_commit"],master["source_tree"],True)):
+            templates = G.validate(master,prepared)
+        state.mkdir()
+        grant_record = G.C.read_json(master["resource_grant_path"])
+        paths,auth = G.freeze("gft-al-p050",templates,{},master,state,24,{"host":"muscat"},grant_record)
+        loaded,digest = control.load_authorization(paths["authorization"],control.file_sha256(paths["authorization"]),ROOT)
+        self.assertEqual(loaded,auth);self.assertEqual(digest,control.file_sha256(paths["authorization"]))
+        for name,change in (("task",lambda x:x.update(allowed_task_ids=["gft-al-p035"])),
+                            ("budget",lambda x:x["budget"].update(max_cpu_seconds=10**12)),
+                            ("host",lambda x:x.update(allowed_hosts=["jerez"])),
+                            ("operation",lambda x:x["allowed_operations"].append("reassign")),
+                            ("untyped",lambda x:x.pop("master_grant_sha256"))):
+            bad=copy.deepcopy(auth);change(bad);paths["authorization"].write_text(json.dumps(bad))
+            with self.subTest(mutation=name),self.assertRaises(control.GateError):
+                control.load_authorization(paths["authorization"],control.file_sha256(paths["authorization"]),ROOT)
+        paths["authorization"].write_text(json.dumps(auth))
+        master_file=Path(master["master_grant_path"]);master_file.write_text(master_file.read_text()+" ")
+        with self.assertRaisesRegex(control.GateError,"master/template/grant digest"):
+            control.load_authorization(paths["authorization"],control.file_sha256(paths["authorization"]),ROOT)
+
+    def test_actual_r_blocked_producer_many_members_one_artifact(self):
+        rscript = Path("/data/jaguir26/local/opt/R/4.6.0/bin/Rscript")
+        if not rscript.is_file():
+            self.skipTest("pinned R 4.6.0 absent")
+        spec = task(); spec["expected_output_keys"] = ["draw:d1|origin:o1", "draw:d2|origin:o1"]
+        spec["expected_output_keys_sha256"] = control.object_sha256(sorted(spec["expected_output_keys"]))
+        self.auth.authorization["allowed_task_sha256"]["task-1"] = control.object_sha256(spec)
+        ticket = self.claim(spec); self.dispatch(ticket); self.finish(ticket)
+        claim = {"verified": True, "task_id": spec["task_id"], "routing_id": spec["routing_id"], "claim_nonce": ticket["claim_nonce"]}
+        payload = self.root / "block-input.json"; payload.write_text(json.dumps({"request": spec, "claim": claim}))
+        out = Path(ticket["output_root"]); out.mkdir(parents=True)
+        sidecar = Path(str(out) + ".output_manifest.json")
+        code = r'''
+          a<-commandArgs(TRUE);source(file.path(a[1],"application/R/integrated_quantile_forecast.R"))
+          source(file.path(a[1],"scripts/integrated_quantile_blocks.R"));x<-jsonlite::read_json(a[2],simplifyVector=FALSE)
+          fixture<-function(i)list(schema_version="integrated_quantile_forecast_shard_v1",draw_id=paste0("d",i),origin_id="o1",
+            integration_status="PASS_PREDECLARED_DKW_QUANTILE_ACCURACY_GATE",quantiles=data.frame(model_id="m",draw_id=paste0("d",i),
+            origin_id="o1",horizon=1L,probability=.5,quantile=i/10,functional="parameter_conditional_integrated_quantile"))
+          b<-app_iqf_pack_block(lapply(1:2,fixture));path<-file.path(a[3],"block.rds");saveRDS(b,path)
+          tab<-data.frame(relative_path="block.rds",member_index=1:2,size_bytes=file.info(path)$size,
+            sha256=app_iqf_hash(path,TRUE),artifact_key=b$member_keys,integration_status="PASS_PREDECLARED_DKW_QUANTILE_ACCURACY_GATE")
+          write.csv(tab,file.path(a[3],"output_manifest.csv"),row.names=FALSE)
+          sealed<-app_iqf_block_envelope(x$request,x$claim,tab,a[3]);jsonlite::write_json(sealed,a[4],auto_unbox=TRUE,digits=17)
+        '''
+        control.subprocess.run([str(rscript), "-e", code, str(ROOT), str(payload), str(out), str(sidecar)],
+                               capture_output=True, text=True, check=True, timeout=30)
+        manifest = control.read_json(sidecar)
+        self.assertEqual(len(manifest["shards"]), 2); self.assertEqual(len(manifest["artifacts"]), 2)
+        self.assertEqual(len({row["relative_path"] for row in manifest["shards"]}), 1)
+        for kind in ("missing", "duplicate", "hash"):
+            bad = copy.deepcopy(manifest)
+            if kind == "missing": bad["shards"].pop()
+            elif kind == "duplicate": bad["shards"][1]["key"] = bad["shards"][0]["key"]
+            else: bad["shards"][0]["sha256"] = "0" * 64
+            with self.subTest(kind=kind), self.assertRaises(control.GateError):
+                self.ledger.accept(ticket["claim_nonce"], bad, out)
+        self.ledger.accept(ticket["claim_nonce"], manifest, out)
+        self.assertEqual(len(self.ledger.accepted_output(spec["task_id"])["artifacts"]), 2)
 
     def test_manifest_and_external_authorization_checks(self):
         data = self.root / "input.csv"; data.write_text("value\n1\n")

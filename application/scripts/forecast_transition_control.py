@@ -5,9 +5,10 @@ The shipped configuration cannot launch. Planning is read-only. A production
 claim, dispatch, reconciliation or cancellation proof requires an external,
 hash-pinned authorization, a qualified host, a current resource grant and a
 single Muscat-owned local SQLite ledger. Remote lock files are not ownership.
-This module never installs environments, connects to a host or kills a process.
-The dispatch adapter is injected; all unit tests use mocks. An uncertain
-submission is deliberately nonretryable until exact accounting reconciliation.
+This module never installs environments. Only an explicitly admitted dispatch
+can connect or start its bounded supervisor. A timeout can signal only that
+supervisor's verified child process group. An uncertain submission is never
+retried; exact evidence is required for adoption or reassignment.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ import subprocess
 import sys
 import re
 import resource as posix_resource
+import time
 from typing import Any, Callable
 
 
@@ -48,6 +50,27 @@ def canonical(value: Any) -> bytes:
 
 def object_sha256(value: Any) -> str:
     return hashlib.sha256(canonical(value)).hexdigest()
+
+
+def durable_json(path: Path, value: dict, max_bytes: int = 65536) -> str:
+    """Create-only, fsynced publication; a partial receipt is retained on failure."""
+    data = canonical(value) + b"\n"
+    require(len(data) <= max_bytes and path.parent.is_dir() and not path.parent.is_symlink(),
+            "bounded existing metadata directory")
+    require(not path.exists() and not path.is_symlink(), "metadata receipt cannot be overwritten")
+    partial = path.with_name(path.name + ".partial")
+    descriptor = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(data); stream.flush(); os.fsync(stream.fileno())
+    os.link(partial, path)
+    directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+        partial.unlink()
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    return file_sha256(path)
 
 
 def file_sha256(path: Path | str) -> str:
@@ -71,7 +94,7 @@ AUTHORIZATION_FIELDS = {
     "posterior_target_sha256", "input_manifest_sha256", "task_manifest_sha256", "config_sha256",
     "allowed_task_ids", "allowed_task_sha256", "allowed_hosts", "allowed_operations", "expires_utc",
     "approved_by", "budget", "qualified_hosts", "resource_receipt_sha256", "resource_grants",
-    "approval_id", "scope", "coordinator_host",
+    "approval_id", "scope", "coordinator_host", "master_grant_path", "master_grant_sha256",
 }
 
 
@@ -128,7 +151,7 @@ IDENTITY_FIELDS = ("task_id", "source_commit", "source_tree", "source_manifest_s
 HASH_FIELDS = ("source_manifest_sha256", "posterior_target_sha256",
                "input_manifest_sha256", "task_manifest_sha256")
 ACTIVE_STATES = ("claimed", "intent", "submitted", "submission_ambiguous")
-BUDGET_FIELDS = ("submissions", "cpu_seconds", "wall_seconds", "output_bytes")
+BUDGET_FIELDS = ("submissions", "cpu_seconds", "wall_seconds", "output_bytes", "metadata_bytes")
 WORKFLOWS = {"integrated_quantile_forecast", "integrated_quantile_score", "glofas_family_transition"}
 REQUEST_OPERATIONAL_FIELDS = {
     "allow_launch", "host", "routing_id", "output_root", "authorization_sha256",
@@ -155,6 +178,60 @@ def argv_spec_sha256(argv: list[str]) -> str:
             require(index + 1 < len(frozen), "missing operational digest")
             frozen[index + 1] = "<verified-external-digest>"
     return object_sha256(frozen)
+
+
+def ssh_argv(profile: dict, command: str) -> list[str]:
+    """A source-owned, nonsecret transport profile; never arbitrary SSH options."""
+    allowed = {"endpoint", "user", "identity_file", "known_hosts_file", "known_hosts_sha256", "connect_timeout_seconds"}
+    require(isinstance(profile, dict) and set(profile) == allowed, "exact SSH transport profile fields")
+    require(profile["endpoint"] in {"muscat.be.ucsc.edu", "jerez.be.ucsc.edu", "hb.ucsc.edu"}, "source-approved SSH endpoint")
+    require(re.fullmatch(r"[A-Za-z0-9_.-]+", profile["user"] or "") is not None, "safe SSH user")
+    timeout = positive_int(profile["connect_timeout_seconds"], "SSH timeout")
+    require(timeout <= 30, "bounded SSH timeout")
+    result = ["ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+              "-o", "ForwardAgent=no", "-o", "ClearAllForwardings=yes", "-o", "ControlMaster=no",
+              "-o", "ControlPath=none", "-o", "IdentityAgent=none", "-o", "IdentitiesOnly=yes",
+              "-o", "ConnectionAttempts=1", "-o", "ConnectTimeout=" + str(timeout)]
+    for field in ("identity_file", "known_hosts_file"):
+        value = profile.get(field)
+        if value is not None:
+            require(isinstance(value, str) and Path(value).is_absolute() and "\n" not in value and "\r" not in value,
+                    "absolute nonsecret SSH profile path")
+            result.extend((["-i", value] if field == "identity_file" else ["-o", "UserKnownHostsFile=" + value]))
+    if profile.get("known_hosts_file") is not None:
+        require(valid_hash(profile.get("known_hosts_sha256")) and
+                file_sha256(profile["known_hosts_file"]) == profile["known_hosts_sha256"], "strict SSH known-host snapshot")
+    else:
+        require(profile.get("known_hosts_sha256") is None, "no dangling host-trust digest")
+    return [*result, profile["user"] + "@" + profile["endpoint"], command]
+
+
+def clean_process_environment() -> dict[str, str]:
+    keys = {"HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TZ", "TMPDIR", "SLURM_JOB_ID",
+            "SLURM_JOB_NODELIST", "SLURM_CPUS_PER_TASK", "SLURM_MEM_PER_NODE", "SLURM_JOB_CPUS_PER_NODE",
+            "SLURM_PROCID", "SLURM_LOCALID", "SLURM_NTASKS", "SLURM_NODEID"}
+    env = {key: value for key, value in os.environ.items() if key in keys}
+    env.update(PATH="/usr/bin:/bin:/usr/local/bin", OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
+        MKL_NUM_THREADS="1", BLIS_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1", NUMEXPR_NUM_THREADS="1",
+        OMP_DYNAMIC="FALSE", MKL_DYNAMIC="FALSE", R_PROFILE="/dev/null", R_PROFILE_USER="/dev/null",
+        R_ENVIRON="/dev/null", R_ENVIRON_USER="/dev/null", R_LIBS="", R_LIBS_USER="/dev/null", R_LIBS_SITE="/dev/null",
+        PYTHONNOUSERSITE="1", PYTHONDONTWRITEBYTECODE="1")
+    return env
+
+
+def numerical_backend_environment(backend: dict) -> dict[str, str]:
+    require(isinstance(backend, dict) and set(backend) == {"backend", "library_path", "library_sha256"} and
+            backend["backend"] in ("bundled_rblas", "openblas_pthread"), "explicit numerical backend schema/tag")
+    path = Path(backend["library_path"])
+    require(path.is_absolute() and path.is_file() and path.resolve() == path and not path.is_symlink() and
+            valid_hash(backend["library_sha256"]) and file_sha256(path) == backend["library_sha256"],
+            "executing-host nonsymlink numerical library identity")
+    env = clean_process_environment()
+    env["QDESN_NUMERICAL_BACKEND"] = backend["backend"]
+    if backend["backend"] == "openblas_pthread":
+        env.update(LD_PRELOAD=str(path), QDESN_BLAS_LIBRARY_PATH=str(path),
+                   QDESN_BLAS_LIBRARY_SHA256=backend["library_sha256"])
+    return env
 
 
 def validate_task(task: dict) -> None:
@@ -214,7 +291,101 @@ def load_authorization(path: Path, expected_sha256: str, root: Path) -> tuple[di
     metadata_without_secrets(authorization, authorization=True)
     require(authorization.get("schema_version") == "forecast_transition_authorization_v1",
             "authorization schema")
+    if "master_grant_path" in authorization or "master_grant_sha256" in authorization:
+        verify_master_derivation(authorization, resolved, root)
     return authorization, expected_sha256
+
+
+def bounded_json(path: Path, digest: str | None = None) -> dict:
+    require(path.is_absolute() and path.is_file() and path.resolve() == path and
+            not any(item.is_symlink() for item in (path, *path.parents)) and path.stat().st_size <= 1024 ** 2,
+            "bounded canonical regular derivation input")
+    if digest is not None:
+        require(valid_hash(digest) and file_sha256(path) == digest, "external master/template/grant digest")
+    return read_json(path)
+
+
+def verify_master_derivation(auth: dict, auth_path: Path, root: Path) -> None:
+    """Only the sixteen frozen Muscat GFT templates may derive ready-wave authority."""
+    require(isinstance(auth.get("master_grant_path"), str) and valid_hash(auth.get("master_grant_sha256")),
+            "paired typed master grant path/hash")
+    path = Path(auth["master_grant_path"])
+    require(path.is_absolute() and not path.resolve().is_relative_to(root.resolve()), "external master grant required")
+    master = bounded_json(path, auth["master_grant_sha256"])
+    metadata_without_secrets(master)
+    required = {"schema_version", "allow_launch", "authorize_derived_ready_wave_authorizations",
+        "authorize_live_resource_observation", "approved_by", "expires_utc", "host", "logical_cpus",
+        "max_workers", "templates", "task_budgets", "qualified_host", "budget", "state_root", "campaign_id",
+        "resource_grant_path", "resource_grant_sha256", "source_commit", "source_tree", *HASH_FIELDS, "config_sha256"}
+    require(required <= set(master), "complete typed campaign master required")
+    require(master.get("schema_version") == "glofas_transition_campaign_master_v1" and
+            master.get("allow_launch") is True and master.get("authorize_derived_ready_wave_authorizations") is True and
+            master.get("authorize_live_resource_observation") is True and master.get("approved_by"),
+            "master explicitly authorizes deterministic ready-task derivation")
+    now = utc_now()
+    require(parse_utc(master["expires_utc"]) >= parse_utc(auth["expires_utc"]) > now,
+            "derived authority cannot outlive its active master")
+    require(master.get("host") == "muscat" and master.get("logical_cpus") == [24, 25] and
+            master.get("max_workers") in (1, 2) and auth.get("allow_launch") is True and
+            auth.get("allowed_hosts") == ["muscat"] and
+            set(auth.get("allowed_operations", [])) == {"claim", "dispatch", "record_terminal", "accept"},
+            "master derivation is Muscat-only with four bounded operations")
+    ids = {"gft-" + family + "-p" + tau for family in ("al", "exal")
+           for tau in ("005", "020", "035", "050", "065", "080", "095")} | {"gft-mq-al", "gft-mq-exal"}
+    require(set(master.get("templates", {})) == ids == set(master.get("task_budgets", {})) and
+            len(auth.get("allowed_task_ids", [])) == 1 and auth["allowed_task_ids"][0] in ids,
+            "one derived task from the exact sixteen-task master")
+    tid = auth["allowed_task_ids"][0]
+    for name in ("source_commit", "source_tree", *HASH_FIELDS, "config_sha256"):
+        require(valid_hash(master.get(name), 40 if name in ("source_commit", "source_tree") else 64) and
+                auth.get(name) == master[name], "derived master source/target/input/config mismatch: " + name)
+    for field in BUDGET_FIELDS:
+        key = "max_" + field
+        require(positive_int(auth.get("budget", {}).get(key), key) <=
+                positive_int(master.get("budget", {}).get(key), "master " + key), "derived budget exceeds master: " + field)
+    require(auth.get("qualified_hosts") == {"muscat": master.get("qualified_host")},
+            "derived qualification must equal the pinned master proof")
+    grant = bounded_json(Path(master.get("resource_grant_path", "")), master.get("resource_grant_sha256"))
+    require(grant.get("host") == "muscat" and grant.get("scope") == "forecast_transition" and
+            grant.get("pricefm_grant") is False and grant.get("logical_cpus") == [24, 25] and
+            parse_utc(grant["expires_utc"]) >= parse_utc(auth["expires_utc"]) and
+            auth.get("resource_grants") == {grant.get("grant_id"): object_sha256(grant)},
+            "derived resource grant differs from the pinned current-scope master grant")
+    state = Path(master.get("state_root", ""))
+    require(state.is_absolute() and not state.resolve().is_relative_to(root.resolve()) and
+            auth_path == state / (tid + ".authorization.json"), "derived authorization must occupy its exact master state slot")
+    task = bounded_json(state / (tid + ".task.json"))
+    request = bounded_json(state / (tid + ".request.json"))
+    budget = bounded_json(state / (tid + ".budget.json"))
+    resource = bounded_json(state / (tid + ".resource.json"))
+    validate_task(task)
+    require(task["task_id"] == tid and auth.get("allowed_task_sha256") == {tid: object_sha256(task)} and
+            all(task[name] == auth[name] for name in ("source_commit", "source_tree", *HASH_FIELDS)) and
+            task["request_spec_sha256"] == request_spec_sha256(request), "derived task/request hash does not match master authority")
+    require(budget.get("logical_cpus") in ([24], [25]) and
+            budget == dict(master["task_budgets"][tid], logical_cpus=budget["logical_cpus"]) and
+            resource.get("host") == "muscat" and
+            auth.get("resource_receipt_sha256") == {"muscat": object_sha256(resource)},
+            "derived worker/resource budget differs from the master task")
+    prepared = Path(master["qualified_host"]["output_root"]).parent
+    pins = master["templates"][tid]
+    original_request = bounded_json(prepared / "requests" / (tid + ".template.json"), pins.get("request_sha256"))
+    original_task = bounded_json(prepared / "control_tasks" / (tid + ".template.json"), pins.get("control_sha256"))
+    prereqs = request.get("prerequisites", [])
+    require([item.get("task_id") for item in prereqs] == [item["task_id"] for item in original_task.get("prerequisites", [])] and
+            all(set(item) == {"task_id", "fit_path", "fit_sha256"} and
+                Path(item["fit_path"]).is_absolute() and valid_hash(item["fit_sha256"]) for item in prereqs),
+            "derived prerequisite IDs/compact-fit identities differ from the frozen template")
+    route = master["campaign_id"] + "." + tid
+    expected = dict(original_request, prerequisites=prereqs, routing_id=route, host="muscat",
+        ledger_path=str(state / "ledger.sqlite"), controller_python=master["qualified_host"]["python_bin"],
+        resource_budget={"max_threads": 1, "max_memory_mb": budget["memory_bytes"] // 1024 ** 2,
+            "max_wall_seconds": budget["wall_seconds"], "max_output_bytes": budget["output_bytes"]})
+    require(request == expected, "derived request changed a non-operational scientific template field")
+    expected_task = dict(original_task); expected_task.pop("status", None)
+    expected_task.update(routing_id=route, routing_revision=1, request_spec_sha256=request_spec_sha256(request),
+                         dispatch_argv_sha256=task["dispatch_argv_sha256"])
+    require(task == expected_task, "derived control task changed the frozen template")
 
 
 def verify_file_manifest(root: Path, manifest: Path, expected_sha256: str,
@@ -281,6 +452,8 @@ def host_gates(config: dict, host: str, resource: dict | None = None) -> list[st
         reasons.append("HOST_UNQUALIFIED: source/runtime/accuracy/resource receipt missing")
     if not valid_hash(site.get("qualification_receipt_sha256")):
         reasons.append("QUALIFICATION_DIGEST_MISSING")
+    if not isinstance(site.get("python_bin"), str) or not isinstance(site.get("rscript"), str):
+        reasons.append("SOURCE_RUNTIME_PATH_UNRESOLVED")
     if not site.get("core_grants"):
         reasons.append("NO_CURRENT_SCOPE_CORE_GRANT: old PriceFM grants are not transferable")
     if resource is None:
@@ -330,14 +503,16 @@ def resource_admission(config: dict, host: str, resource: dict, grant: dict,
     require(workers <= min(site["hard_max_workers"], grant["max_workers"]), "finite worker ceiling")
     for field in ("cpu_seconds", "wall_seconds", "output_bytes"):
         positive_int(budget.get(field), field)
+    positive_int(budget.get("metadata_bytes"), "metadata_bytes")
     require(budget.get("log_bytes") == budget["output_bytes"] and
-            budget.get("total_output_bytes") == 2 * budget["output_bytes"],
-            "explicit artifact B plus merged-log B reservation (2B total)")
+            budget.get("total_output_bytes") == 2 * budget["output_bytes"] + budget["metadata_bytes"],
+            "explicit artifact B plus merged-log B plus metadata reservation")
     require(budget["cpu_seconds"] >= cpus * budget["wall_seconds"], "full finite CPU charge reservation")
     require(memory <= grant["max_memory_bytes"] and
             budget["output_bytes"] <= grant.get("max_artifact_bytes", 0) and
             budget["log_bytes"] <= grant.get("max_log_bytes", 0) and
-            budget["total_output_bytes"] <= grant["max_output_bytes"],
+            2 * budget["output_bytes"] <= grant["max_output_bytes"] and
+            budget["metadata_bytes"] <= grant.get("max_metadata_bytes", 0),
             "grant memory/artifact/log/total-output budget")
     if host == "hummingbird":
         required = ("compute_node_runtime_proof", "cpu_boundary_proof", "closed_accounting_receipt")
@@ -391,6 +566,14 @@ class Authority:
                 all(valid_hash(receipt.get(name)) for name in ("runtime_receipt_sha256", "accuracy_receipt_sha256",
                                                                "resource_receipt_sha256")) and
                 parse_utc(receipt["expires_utc"]) > self.now(), "exact host qualification evidence/expiry")
+        require(all(isinstance(site.get(name), str) and Path(site[name]).is_absolute() and
+                    receipt.get(name) == site[name] for name in ("python_bin", "rscript")),
+                "source-owned qualified Python/R runtime paths required")
+        backend = receipt.get("numerical_backend", {})
+        require(isinstance(backend, dict) and set(backend) == {"backend", "library_path", "library_sha256"} and
+                backend.get("backend") in self.config.get("allowed_numerical_backends", []) and
+                isinstance(backend.get("library_path"), str) and Path(backend["library_path"]).is_absolute() and
+                valid_hash(backend.get("library_sha256")), "source/auth-qualified numerical backend required")
         if host != "muscat":
             require(receipt.get("compute_to_coordinator_verified") is True and
                     valid_hash(receipt.get("coordinator_connectivity_receipt_sha256")),
@@ -405,6 +588,11 @@ class Authority:
                 output_root not in ("/", "/data", "/home", "/tmp", "/var/tmp") and
                 not set(Path(output_root).parts).intersection({".ssh", ".git", ".codex"}),
                 "qualification needs an exact task-scope output root")
+        metadata_root = receipt.get("metadata_root")
+        require(isinstance(metadata_root, str) and Path(metadata_root).is_absolute() and
+                ".." not in Path(metadata_root).parts and len(Path(metadata_root).parts) >= 3 and
+                metadata_root not in ("/", "/data", "/home", "/tmp", "/var/tmp"),
+                "qualification needs an exact task-scope metadata root")
         return receipt
 
     def check(self, operation: str, task: dict, host: str) -> None:
@@ -497,6 +685,54 @@ class Ledger:
         require(row is not None, "unknown task")
         return json.loads(row[0])
 
+    def attempts(self, task_id: str | None = None) -> list[dict]:
+        """Read-only operator/cohort view; no lease expiry or implicit retries."""
+        rows = (self.db.execute("SELECT * FROM attempts ORDER BY rowid").fetchall() if task_id is None else
+                self.db.execute("SELECT * FROM attempts WHERE task_id=? ORDER BY rowid", (task_id,)).fetchall())
+        result = []
+        for row in rows:
+            item = dict(row)
+            for field in ("ticket", "budget", "terminal_receipt"):
+                if item.get(field) is not None:
+                    item[field] = json.loads(item[field])
+            result.append(item)
+        return result
+
+    @staticmethod
+    def accepted_output_readonly(db: sqlite3.Connection, task_id: str) -> dict:
+        """Revalidate an accepted producer packet, not an untrusted done marker."""
+        record = db.execute("SELECT spec FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        require(record is not None, "unknown accepted producer task")
+        task = json.loads(record[0])
+        rows = db.execute("SELECT * FROM attempts WHERE task_id=? AND state='accepted'", (task_id,)).fetchall()
+        require(len(rows) == 1, "exactly one accepted producer packet required")
+        row = rows[0]; root = Path(json.loads(row["ticket"])["output_root"])
+        sidecar = Path(str(root) + ".output_manifest.json")
+        require(root.is_dir() and not any(path.is_symlink() for path in (root, *root.parents)) and
+                sidecar.is_file() and not sidecar.is_symlink(), "retained accepted producer namespace/sidecar required")
+        manifest = read_json(sidecar)
+        require(object_sha256(manifest) == row["output_manifest_sha"] and
+                manifest.get("claim_nonce") == row["nonce"] and manifest.get("routing_id") == row["routing_id"] and
+                all(manifest.get(name) == task[name] for name in IDENTITY_FIELDS), "accepted producer manifest changed")
+        artifacts = manifest.get("artifacts", manifest.get("shards", []))
+        paths = []
+        for artifact in artifacts:
+            relative = Path(artifact.get("relative_path", "")); path = root / relative
+            require(relative.parts and not relative.is_absolute() and ".." not in relative.parts and
+                    path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(root) and
+                    path.stat().st_size == artifact.get("bytes") and file_sha256(path) == artifact.get("sha256"),
+                    "accepted prerequisite artifact changed")
+            paths.append(relative.as_posix())
+        require(len(paths) == len(set(paths)) and sorted(paths) == sorted(
+                path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()),
+                "accepted prerequisite artifact membership changed")
+        return {"task_id": task_id, "claim_nonce": row["nonce"], "output_root": str(root),
+                "output_manifest_sha256": row["output_manifest_sha"], "manifest": manifest,
+                "artifacts": [dict(artifact, path=str(root / artifact["relative_path"])) for artifact in artifacts]}
+
+    def accepted_output(self, task_id: str) -> dict:
+        return self.accepted_output_readonly(self.db, task_id)
+
     def prerequisites(self, task: dict) -> None:
         for required in task.get("prerequisites", []):
             row = self.db.execute("SELECT spec FROM tasks WHERE task_id=?", (required["task_id"],)).fetchone()
@@ -526,6 +762,14 @@ class Ledger:
             else:
                 require(previous["task_sha"] == object_sha256(task), "immutable task definition changed")
             self.prerequisites(task)
+            # Metadata is reserved at claim time, including abandoned claims.
+            # Otherwise repeated pre-intent failure could evade the byte cap.
+            metadata_spent = sum(json.loads(item[0])["metadata_bytes"] for item in
+                self.db.execute("SELECT budget FROM attempts").fetchall())
+            for limits in (self.authority.config["production_budget"], self.authority.authorization.get("budget", {})):
+                ceiling = positive_int(limits.get("max_metadata_bytes"), "finite metadata ceiling")
+                require(metadata_spent + budget["metadata_bytes"] <= ceiling,
+                        "finite cumulative metadata_bytes budget at claim")
             prior = self.db.execute("SELECT * FROM attempts WHERE task_id=?", (task["task_id"],)).fetchall()
             require(not any(row["state"] in ACTIVE_STATES or row["state"] == "accepted" for row in prior),
                     "task already has an active owner or accepted result")
@@ -543,8 +787,10 @@ class Ledger:
             require(used_cpus + budget["cpus"] <= grant["max_cpus"], "aggregate grant CPU budget")
             require(sum(json.loads(row[0])["memory_bytes"] for row in active) + budget["memory_bytes"]
                     <= grant["max_memory_bytes"], "aggregate grant memory budget")
-            require(sum(json.loads(row[0])["total_output_bytes"] for row in active) + budget["total_output_bytes"]
+            require(sum(2 * json.loads(row[0])["output_bytes"] for row in active) + 2 * budget["output_bytes"]
                     <= grant["max_output_bytes"], "aggregate grant artifact/log output budget")
+            require(sum(json.loads(row[0])["metadata_bytes"] for row in active) + budget["metadata_bytes"]
+                    <= grant["max_metadata_bytes"], "aggregate grant metadata budget")
             if host != "hummingbird":
                 total_memory = budget["memory_bytes"] + sum(json.loads(row[0])["memory_bytes"] for row in active)
                 total_output = budget["total_output_bytes"] + sum(json.loads(row[0])["total_output_bytes"] for row in active)
@@ -593,23 +839,27 @@ class Ledger:
         charge = {"submissions": 1, **{field: budget[field] for field in BUDGET_FIELDS if field != "submissions"}}
         charge["artifact_bytes"] = budget["output_bytes"]
         charge["log_bytes"] = budget["log_bytes"]
-        charge["output_bytes"] = budget["total_output_bytes"]
+        charge["output_bytes"] = 2 * budget["output_bytes"]
         require(directory.is_dir() and not directory.is_symlink(), "existing private intent directory")
         path = directory / (nonce + ".intent.json")
         with self.transaction():
             require(self.row(nonce)["state"] == "claimed", "claim state changed")
             intents = self.db.execute("SELECT budget FROM attempts WHERE intent_path IS NOT NULL").fetchall()
             spent = {field: (len(intents) if field == "submissions" else
-                            sum(json.loads(item[0])["total_output_bytes" if field == "output_bytes" else field]
-                                for item in intents)) for field in BUDGET_FIELDS}
+                            sum((2 * json.loads(item[0])["output_bytes"] if field == "output_bytes" else
+                                 json.loads(item[0])[field]) for item in intents)) for field in BUDGET_FIELDS}
+            spent["metadata_bytes"] = sum(json.loads(item[0])["metadata_bytes"] for item in
+                self.db.execute("SELECT budget FROM attempts WHERE nonce<>?", (nonce,)).fetchall())
             for field in BUDGET_FIELDS:
                 source_limit = self.authority.config["production_budget"]["max_" + field]
                 auth_limit = self.authority.authorization.get("budget", {}).get("max_" + field, 0)
                 positive_int(auth_limit, "authorization max_" + field)
                 require(spent[field] + charge[field] <= min(source_limit, auth_limit), "finite cumulative " + field + " budget")
+            created = self.authority.now()
             intent = {"schema_version": "forecast_transition_dispatch_intent_v1", "ticket": json.loads(row["ticket"]),
                       "argv": command, "metadata": metadata or [], "charge": charge,
-                      "created_utc": timestamp(self.authority.now())}
+                      "created_utc": timestamp(created),
+                      "deadline_utc": timestamp(created + dt.timedelta(seconds=budget["wall_seconds"]))}
             # Exclusive creation plus file and directory fsync precede submission.
             # An orphan file after a crash is retained and blocks blind retry.
             descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -673,12 +923,95 @@ class Ledger:
                             ("succeeded" if receipt["exit_code"] == 0 else "failed", canonical(receipt).decode(), nonce))
             self.event(task["task_id"], nonce, "terminal", receipt)
 
+    def abandon_preintent(self, nonce: str, receipt: dict) -> None:
+        """Release only a never-submitted claim; preserve its full forensic record."""
+        row = self.row(nonce); task = self.task(row["task_id"])
+        self.authority.check("abandon_preintent", task, row["host"])
+        require(receipt.get("claim_nonce") == nonce and receipt.get("host") == row["host"] and
+                receipt.get("no_submission") is True and valid_hash(receipt.get("evidence_sha256")),
+                "reviewed exact pre-intent non-submission proof")
+        with self.transaction():
+            row = self.row(nonce)
+            events = self.db.execute("SELECT kind FROM events WHERE nonce=?", (nonce,)).fetchall()
+            require(row["state"] == "claimed" and row["intent_path"] is None and row["job_id"] is None and
+                    not any(item[0] in ("dispatch_intent_fsynced", "submission_started", "submitted") for item in events),
+                    "only a claim with no durable intent or submission can be abandoned")
+            self.db.execute("UPDATE attempts SET state='abandoned_preintent',terminal_receipt=? WHERE nonce=?",
+                            (canonical(receipt).decode(), nonce))
+            self.event(task["task_id"], nonce, "abandoned_preintent_no_refund", receipt)
+
+    def adopt_ambiguous(self, nonce: str, submission: dict, terminal: dict) -> None:
+        """Adopt the same nonce from independently verified terminal/accounting evidence."""
+        row = self.row(nonce); task = self.task(row["task_id"])
+        self.authority.check("adopt_ambiguous", task, row["host"])
+        require(row["state"] == "submission_ambiguous" and row["intent_path"] and
+                file_sha256(row["intent_path"]) == row["intent_sha"], "exact unresolved durable submission")
+        require(submission.get("claim_nonce") == nonce and submission.get("host") == row["host"] and
+                isinstance(submission.get("job_id"), str) and submission["job_id"] and
+                submission.get("matching_jobs") == 1 and submission.get("owner_terminated") is True and
+                submission.get("accounting_complete") is True and submission.get("no_orphans") is True and
+                valid_hash(submission.get("evidence_sha256")) and
+                submission.get("terminal_receipt_sha256") == object_sha256(terminal),
+                "one exact terminated owner with independently bound terminal/accounting proof")
+        require(terminal.get("claim_nonce") == nonce and terminal.get("host") == row["host"] and
+                terminal.get("job_id") == submission["job_id"] and terminal.get("owner_terminated") is True and
+                terminal.get("accounting_complete") is True and type(terminal.get("exit_code")) is int,
+                "adopted terminal receipt identity")
+        intent = read_json(row["intent_path"])
+        require(terminal.get("worker_argv_sha256") == object_sha256(intent["argv"]) and
+                terminal.get("identity") == {name: task[name] for name in IDENTITY_FIELDS},
+                "adopted receipt must bind the original source/target/input and executed command")
+        with self.transaction():
+            require(self.row(nonce)["state"] == "submission_ambiguous", "ambiguous owner changed")
+            self.db.execute("UPDATE attempts SET job_id=?,state=?,terminal_receipt=? WHERE nonce=?",
+                            (submission["job_id"], "succeeded" if terminal["exit_code"] == 0 else "failed",
+                             canonical(terminal).decode(), nonce))
+            self.event(task["task_id"], nonce, "ambiguous_submission_adopted_no_retry_no_refund",
+                       {"submission": submission, "terminal": terminal})
+
+    def close_supervised(self, nonce: str, body: dict, proof: dict) -> None:
+        """Use a durable worker receipt plus independent owner/accounting proof."""
+        row = self.row(nonce); task = self.task(row["task_id"])
+        self.authority.check("record_terminal", task, row["host"])
+        require(row["state"] in ("submitted", "submission_ambiguous") and row["intent_path"], "closeout ownership state")
+        intent = read_json(row["intent_path"])
+        require(body.get("schema_version") == "forecast_transition_supervisor_receipt_v1" and
+                body.get("phase") == "terminal" and body.get("worker_terminated") is True and
+                body.get("claim_nonce") == nonce and body.get("host") == row["host"] and
+                body.get("routing_id") == row["routing_id"] and
+                body.get("identity") == {name: task[name] for name in IDENTITY_FIELDS} and
+                body.get("worker_argv_sha256") == object_sha256(intent["argv"]) and
+                type(body.get("exit_code")) is int, "durable terminal source/command/owner receipt")
+        require(body.get("dispatch_created_utc") == intent["created_utc"] and
+                body.get("deadline_utc") == intent["deadline_utc"] and
+                type(body.get("dispatch_elapsed_seconds")) in (int, float) and
+                math.isfinite(body["dispatch_elapsed_seconds"]) and
+                0 <= body["dispatch_elapsed_seconds"] <= json.loads(row["budget"])["wall_seconds"] and
+                parse_utc(body["utc"]) <= parse_utc(intent["deadline_utc"]),
+                "complete supervised task exceeded its centrally charged wall deadline")
+        require(proof.get("claim_nonce") == nonce and proof.get("host") == row["host"] and
+                proof.get("job_id") == body.get("job_id") and proof.get("owner_terminated") is True and
+                proof.get("accounting_complete") is True and proof.get("no_orphans") is True and
+                proof.get("supervisor_receipt_sha256") == object_sha256(body) and
+                valid_hash(proof.get("evidence_sha256")), "independent terminal accounting/liveness proof")
+        if row["host"] == "hummingbird":
+            require(proof.get("slurm_steps_complete") is True and proof.get("allocation_cpus") == json.loads(row["budget"])["cpus"],
+                    "complete primary/batch/step accounting required, not a worker's self-declaration")
+        terminal = dict(body, owner_terminated=True, accounting_complete=True, evidence_sha256=proof["evidence_sha256"])
+        if row["state"] == "submission_ambiguous":
+            adoption = dict(proof, matching_jobs=proof.get("matching_jobs"), terminal_receipt_sha256=object_sha256(terminal))
+            self.adopt_ambiguous(nonce, adoption, terminal)
+        else:
+            require(body["job_id"] == row["job_id"], "terminal job differs from accepted submission")
+            self.terminal(nonce, terminal)
+
     def reconcile_reassign(self, nonce: str, receipt: dict, new_routing_id: str, host: str, revision: int) -> None:
         row = self.row(nonce)
         task = self.task(row["task_id"])
         self.authority.check("reassign", task, row["host"])
         self.authority.check("reassign", task, host)
-        require(row["state"] in ("failed", "submission_ambiguous", "cancelled"), "reassignment is not a lease timeout")
+        require(row["state"] in ("failed", "submission_ambiguous", "cancelled", "abandoned_preintent"),
+                "reassignment is not a lease timeout")
         require(receipt.get("claim_nonce") == nonce and receipt.get("owner_terminated") is True and
                 receipt.get("host") == row["host"] and
                 (not row["job_id"] or receipt.get("job_id") == row["job_id"]) and
@@ -737,6 +1070,10 @@ class Ledger:
             paths.append(path.as_posix())
         require(len(paths) == len(set(paths)), "one artifact cannot masquerade as multiple shards")
         require(all(shard.get("relative_path") in paths for shard in shards), "every numerical shard has an inventoried artifact")
+        index = {item["relative_path"]: item for item in artifacts}
+        require(all(shard.get("sha256") == index[shard["relative_path"]].get("sha256") and
+                    shard.get("bytes") == index[shard["relative_path"]].get("bytes") for shard in shards),
+                "numerical member/artifact hash and size bindings differ")
         require(sorted(paths) == sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()),
                 "exact accepted artifact membership")
         require(sum((root / path).stat().st_size for path in paths) <= json.loads(row["budget"])["output_bytes"], "bounded accepted output bytes")
@@ -751,7 +1088,7 @@ class Ledger:
 def slurm_script(task: dict, ticket: dict, budget: dict, resource: dict,
                  worker_script: str, request_path: str, source_root: str, rscript: str,
                  worker_options: list[str] | None = None, worker_log: str | None = None,
-                 metadata_log: str = "/dev/null") -> str:
+                 metadata_log: str = "/dev/null", command_override: list[str] | None = None) -> str:
     """Render only a compute-node script; no Python/application runs on login."""
     require(ticket.get("host") == "hummingbird" and ticket.get("task_id") == task["task_id"], "Slurm ticket identity")
     require(1 <= budget["cpus"] <= 24 and budget["memory_bytes"] > 0, "finite per-node Slurm request")
@@ -765,6 +1102,11 @@ def slurm_script(task: dict, ticket: dict, budget: dict, resource: dict,
     mode = {"integrated_quantile_forecast": ["--mode", "run"],
             "integrated_quantile_score": ["--mode", "score"], "glofas_family_transition": []}[task["workflow"]]
     argv = [rscript, worker_script, *mode, "--request", request_path, *(worker_options or [])]
+    if command_override is not None:
+        require(len(command_override) > 3 and command_override[1] == str(Path(source_root) /
+            "application/scripts/forecast_transition_control.py") and command_override[2] == "supervise",
+            "Slurm override must be the source-owned compute supervisor")
+        argv = command_override
     require("\n" not in metadata_log and "\r" not in metadata_log and Path(metadata_log).is_absolute(),
             "bounded Slurm metadata log path")
     redirect = []
@@ -773,6 +1115,7 @@ def slurm_script(task: dict, ticket: dict, budget: dict, resource: dict,
                 "bounded compute-owned merged log")
         redirect = ["set -o noclobber", "exec > " + shlex.quote(worker_log) + " 2>&1"]
     return "\n".join(["#!/usr/bin/env bash",
+        "#SBATCH --job-name=qdesn-" + ticket["claim_nonce"], "#SBATCH --no-requeue",
         f"#SBATCH --partition={resource['partition']}", f"#SBATCH --account={resource['account']}",
         f"#SBATCH --qos={resource['qos']}", "#SBATCH --nodes=1", "#SBATCH --ntasks=1",
         f"#SBATCH --cpus-per-task={budget['cpus']}", f"#SBATCH --mem={memory_mib}M", f"#SBATCH --time={walltime}",
@@ -781,6 +1124,7 @@ def slurm_script(task: dict, ticket: dict, budget: dict, resource: dict,
         "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1",
         "test -n \"${SLURM_JOB_ID:-}\"", "test -n \"${SLURM_JOB_NODELIST:-}\"",
         "ulimit -f " + str(budget["output_bytes"] // 1024),
+        "ulimit -S -f " + str(min(64, budget["output_bytes"] // 1024)),
         "printf '%s\\n' 'qualified compute dispatch started'", *redirect,
         "cd " + shlex.quote(source_root), "exec srun --exclusive " + shlex.join(argv), ""])
 
@@ -838,10 +1182,30 @@ def verify_claim_readonly(ledger_path: Path, ticket: dict, request: dict,
                 requested_budget.get("max_output_bytes") == recorded_budget["output_bytes"],
                 "worker budget differs from centrally reserved CPU/memory/wall/output bounds")
         require(file_sha256(row["intent_path"]) == row["intent_sha"], "submitted dispatch intent changed")
+        intent = read_json(row["intent_path"])
+        supervisors = [item for item in intent.get("metadata", []) if item.get("role") == "supervision"]
+        require(len(supervisors) == 1 and valid_hash(supervisors[0].get("sha256")),
+                "active claim lacks one immutable supervision specification")
+        qualification = authority.qualification(row["host"], task["source_commit"], task["source_manifest_sha256"])
+        prerequisites = []
+        for expected in task.get("prerequisites", []):
+            accepted = Ledger.accepted_output_readonly(db, expected["task_id"])
+            require(all(accepted["manifest"][name] == expected[name] for name in
+                        ("task_manifest_sha256", "posterior_target_sha256")), "accepted prerequisite target changed")
+            prerequisites.append({**expected, "output_manifest_sha256": accepted["output_manifest_sha256"],
+                "identity": {name: accepted["manifest"][name] for name in IDENTITY_FIELDS},
+                "artifacts": [{name: artifact[name] for name in ("relative_path", "sha256", "bytes")}
+                              for artifact in accepted["artifacts"]]})
         return {"schema_version": "forecast_transition_claim_verification_v1", "verified": True,
                 "claim_nonce": nonce, "task_id": task["task_id"], "routing_id": row["routing_id"],
                 "host": row["host"], "job_id": row["job_id"], "resource_budget": recorded_budget,
                 "output_root": ticket["output_root"],
+                "metadata_root": qualification["metadata_root"],
+                "numerical_backend": qualification["numerical_backend"],
+                "worker_argv_sha256": object_sha256(intent["argv"]),
+                "supervision_spec_sha256": supervisors[0]["sha256"],
+                "dispatch_created_utc": intent["created_utc"], "deadline_utc": intent["deadline_utc"],
+                "accepted_prerequisites": prerequisites,
                 "ledger_mutations": 0}
     finally:
         db.close()
@@ -862,7 +1226,7 @@ def worker_argv(config: dict, host: str, task: dict, request: dict,
             *mode, "--request", str(request_path), "--authorization", str(auth_path),
             "--authorization-sha256", request["authorization_sha256"], "--claim-ticket", str(ticket_path),
             "--claim-ticket-sha256", ticket_digest or file_sha256(ticket_path), "--ledger", str(ledger_path),
-            "--source-manifest", str(source_manifest), "--python", "/usr/bin/python3.11"]
+            "--source-manifest", str(source_manifest), "--python", config["hosts"][host]["python_bin"]]
 
 
 def process_identity(pid: int, source_root: Path) -> dict:
@@ -870,8 +1234,167 @@ def process_identity(pid: int, source_root: Path) -> dict:
     # comm may contain whitespace or parentheses; fields after its last ')'
     # begin at Linux field 3, so starttime (22) is index 19 here.
     start = int(stat.rsplit(") ", 1)[1].split()[19])
-    return {"host": "muscat", "pid": pid, "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
+    actual = socket.gethostname().split(".")[0].lower()
+    host = actual if actual in ("muscat", "jerez") else ("hummingbird" if os.environ.get("SLURM_JOB_ID") else actual)
+    return {"host": host, "hostname": actual, "pid": pid, "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
             "start_ticks": start, "cwd": str(source_root), "uid": os.getuid()}
+
+
+def supervision_argv(config: dict, host: str, source_root: Path, worker: list[str], spec: dict) -> list[str]:
+    """One source-owned supervisor, never an arbitrary callback executable."""
+    python = config["hosts"][host].get("python_bin")
+    require(isinstance(python, str) and Path(python).is_absolute(), "qualified source-owned Python runtime unavailable")
+    required = ("--request", "--authorization", "--authorization-sha256", "--claim-ticket",
+                "--claim-ticket-sha256", "--ledger", "--source-manifest")
+    flags = []
+    controller_flag = {"--claim-ticket": "--ticket", "--claim-ticket-sha256": "--ticket-sha256"}
+    for flag in required:
+        require(worker.count(flag) == 1 and worker.index(flag) + 1 < len(worker), "supervisor worker context: " + flag)
+        flags.extend([controller_flag.get(flag, flag), worker[worker.index(flag) + 1]])
+    return [python, str(source_root / "application/scripts/forecast_transition_control.py"), "supervise", *flags,
+            "--source-root", str(source_root), "--supervision-spec", spec["remote_path"],
+            "--supervision-spec-sha256", spec["sha256"]]
+
+
+def supervised_child(spec: dict, verified: dict, *, runner: Callable = subprocess.Popen,
+                     identity: Callable = process_identity) -> dict:
+    """Wait for one admitted child and durably retain its terminal evidence.
+
+    Production CLI verifies source/auth/claim first. Tests inject a child and
+    identity function; no scientific process is needed for this lifecycle test.
+    """
+    require(spec.get("schema_version") == "forecast_transition_supervision_v1" and verified.get("verified") is True,
+            "verified source-owned supervision context")
+    require(spec.get("claim_nonce") == verified.get("claim_nonce") and spec.get("task_id") == verified.get("task_id") and
+            spec.get("routing_id") == verified.get("routing_id") and spec.get("host") == verified.get("host"),
+            "supervisor claim/routing identity")
+    require(object_sha256(spec["worker_argv"]) == verified.get("worker_argv_sha256") and
+            spec["budget"] == verified["resource_budget"], "supervisor command/budget differs from durable intent")
+    budget = spec["budget"]; root = Path(spec["source_root"])
+    require(budget["wall_seconds"] >= 60, "supervised wall budget must include at least60 seconds for startup and closure")
+    created = parse_utc(verified["dispatch_created_utc"]); deadline_utc = parse_utc(verified["deadline_utc"])
+    require((deadline_utc - created).total_seconds() == budget["wall_seconds"], "centrally charged wall deadline")
+    remaining = (deadline_utc - utc_now()).total_seconds()
+    require(remaining > 30, "charged wall deadline leaves no bounded startup/termination/receipt grace")
+    deadline = time.monotonic() + remaining
+    own = identity(os.getpid(), root)
+    require(own["host"] == spec["host"], "actual supervisor host")
+    metadata_root = Path(verified["metadata_root"])
+    nonce = spec["claim_nonce"]
+    paths = {name: Path(spec[name]) for name in ("started_path", "terminal_path", "log_path")}
+    require(all(path.parent == metadata_root and path.name.startswith(nonce + ".") for path in paths.values()),
+            "supervisor receipt/log namespace")
+    job_id = (str(os.environ["SLURM_JOB_ID"]) if spec["host"] == "hummingbird" else
+              "pid:" + str(own["pid"]) + ":" + own["boot_id"] + ":" + str(own["start_ticks"]))
+    started_at = time.monotonic()
+    usage_before = posix_resource.getrusage(posix_resource.RUSAGE_CHILDREN)
+    def limits():
+        if spec["host"] != "hummingbird":
+            os.sched_setaffinity(0, set(budget["logical_cpus"]))
+        posix_resource.setrlimit(posix_resource.RLIMIT_AS, (budget["memory_bytes"], budget["memory_bytes"]))
+        posix_resource.setrlimit(posix_resource.RLIMIT_CPU, (budget["cpu_seconds"], budget["cpu_seconds"]))
+        posix_resource.setrlimit(posix_resource.RLIMIT_FSIZE, (budget["output_bytes"], budget["output_bytes"]))
+    require(spec.get("numerical_backend") == verified.get("numerical_backend"), "supervisor numerical backend differs from qualification")
+    env = numerical_backend_environment(verified["numerical_backend"])
+    with paths["log_path"].open("xb") as log:
+        child = runner(spec["worker_argv"], cwd=root, env=env, stdin=subprocess.DEVNULL,
+                       stdout=log, stderr=subprocess.STDOUT, start_new_session=True, preexec_fn=limits)
+        child_identity = identity(child.pid, root)
+        base = {"schema_version": "forecast_transition_supervisor_receipt_v1", "claim_nonce": nonce,
+                "task_id": spec["task_id"], "routing_id": spec["routing_id"], "host": spec["host"],
+                "job_id": job_id, "supervisor_identity": own, "child_identity": child_identity,
+                "worker_argv_sha256": verified["worker_argv_sha256"], "budget": budget,
+                "identity": spec["identity"]}
+        durable_json(paths["started_path"], dict(base, phase="started", utc=timestamp(utc_now())))
+        timed_out = False
+        try:
+            work_seconds = deadline - time.monotonic() - 30
+            require(work_seconds > 0, "startup exhausted the charged worker wall allowance")
+            code = child.wait(timeout=work_seconds)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            require(identity(child.pid, root) == child_identity and os.getpgid(child.pid) == child.pid,
+                    "timeout may signal only the exact owned child process group")
+            os.killpg(child.pid, 15)
+            try:
+                child.wait(timeout=max(0, min(15, deadline - time.monotonic() - 15)))
+            except subprocess.TimeoutExpired:
+                require(identity(child.pid, root) == child_identity and os.getpgid(child.pid) == child.pid,
+                        "timeout hard-stop ownership identity changed")
+                os.killpg(child.pid, 9)
+                child.wait(timeout=max(0, min(5, deadline - time.monotonic() - 10)))
+            code = 124
+    usage_after = posix_resource.getrusage(posix_resource.RUSAGE_CHILDREN)
+    receipt = dict(base, phase="terminal", exit_code=int(code), timed_out=timed_out,
+        worker_terminated=True, supervisor_exit_pending=True,
+        accounting_complete=spec["host"] != "hummingbird", utc=timestamp(utc_now()),
+        dispatch_created_utc=verified["dispatch_created_utc"], deadline_utc=verified["deadline_utc"],
+        dispatch_elapsed_seconds=(utc_now()-created).total_seconds(),
+        elapsed_seconds=time.monotonic() - started_at,
+        child_cpu_seconds=(usage_after.ru_utime + usage_after.ru_stime - usage_before.ru_utime - usage_before.ru_stime),
+        child_maxrss_kib=usage_after.ru_maxrss,
+        cpu_scope="reaped_child_primary_usage_not_added_to_Slurm_parent_and_step_records",
+        log_bytes=paths["log_path"].stat().st_size, log_sha256=file_sha256(paths["log_path"]))
+    require(receipt["log_bytes"] <= budget["log_bytes"], "merged log exceeded its reserved capacity")
+    require(time.monotonic() <= deadline and 0 <= receipt["dispatch_elapsed_seconds"] <= budget["wall_seconds"],
+            "supervisor terminal must fit the complete charged dispatch wall budget")
+    durable_json(paths["terminal_path"], receipt)
+    return receipt
+
+
+def verification_context(args: argparse.Namespace, config: dict) -> tuple[dict, Authority, dict]:
+    require(all((args.ledger, args.ticket, args.ticket_sha256, args.request,
+                 args.authorization, args.authorization_sha256, args.source_root, args.source_manifest)),
+            "all external authority/ledger/source/ticket paths and hashes are required")
+    ticket = pinned_json(args.ticket, args.ticket_sha256, "claim ticket")
+    request = read_json(args.request)
+    authorization, auth_sha = load_authorization(args.authorization, args.authorization_sha256, args.source_root)
+    rows = verify_file_manifest(args.source_root, args.source_manifest, request.get("source_manifest_sha256"), source=True)
+    verify_production_config(args.config, args.source_root, rows, authorization.get("config_sha256"))
+    authority = Authority(config, file_sha256(args.config), authorization, auth_sha, git_identity(args.source_root))
+    verified = (verify_claim_readonly(args.ledger, ticket, request, authority)
+                if args.command == "verify-claim" or request.get("host") == "muscat" else verify_claim_remote(args, request, authority))
+    return request, authority, verified
+
+
+def pinned_json(path: Path | None, digest: str | None, label: str) -> dict:
+    require(path is not None and path.is_file() and not path.is_symlink() and valid_hash(digest)
+            and file_sha256(path) == digest, "exact regular " + label + " file/hash")
+    return read_json(path)
+
+
+def closeout_cli(args: argparse.Namespace, config: dict) -> dict:
+    """Explicit, source-bound closeout; never retry, invent proof or edit SQL."""
+    require(args.execute and args.ledger and args.ledger.is_file() and args.nonce and
+            args.authorization and args.authorization_sha256 and args.source_root and args.source_manifest,
+            "closeout requires --execute, an existing ledger, exact nonce/source and external authorization")
+    auth, digest = load_authorization(args.authorization, args.authorization_sha256, args.source_root)
+    rows = verify_file_manifest(args.source_root, args.source_manifest, auth.get("source_manifest_sha256"), source=True)
+    verify_production_config(args.config, args.source_root, rows, auth.get("config_sha256"))
+    authority = Authority(config, file_sha256(args.config), auth, digest, git_identity(args.source_root))
+    ledger = Ledger(args.ledger, authority)
+    try:
+        row = ledger.row(args.nonce)
+        if args.command == "accept":
+            require(args.output_root is not None, "exact claimed output root required")
+            body = pinned_json(args.completion, args.completion_sha256, "completion envelope")
+            result = {"output_manifest_sha256": ledger.accept(args.nonce, body, args.output_root)}
+        else:
+            proof = pinned_json(args.proof, args.proof_sha256, "independent closeout proof")
+            if args.command == "abandon-preintent":
+                ledger.abandon_preintent(args.nonce, proof)
+            elif args.command == "close-supervised":
+                body = pinned_json(args.terminal_receipt, args.terminal_receipt_sha256, "durable terminal receipt")
+                ledger.close_supervised(args.nonce, body, proof)
+            elif args.command == "reassign":
+                require(args.new_routing_id and args.new_host and args.routing_revision,
+                        "reviewed reassignment needs a new route, host and increasing revision")
+                ledger.reconcile_reassign(args.nonce, proof, args.new_routing_id, args.new_host, args.routing_revision)
+            result = {}
+        result.update(task_id=row["task_id"], claim_nonce=args.nonce, state=ledger.row(args.nonce)["state"])
+        return result
+    finally:
+        ledger.close()
 
 
 def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: dict,
@@ -888,21 +1411,27 @@ def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: d
     authority.check("dispatch", task, host)
     require(config["hosts"][host]["adapter"] == {
         "muscat": "local", "jerez": "ssh_local", "hummingbird": "slurm"}[host], "site adapter identity")
+    records = metadata or []
+    specs = [item for item in records if item.get("role") == "supervision"]
+    require(len(specs) == 1, "one durable source-owned supervision specification required")
+    spec_record = specs[0]
+    require(file_sha256(spec_record["local_path"]) == spec_record["sha256"], "supervision specification changed")
+    launch = supervision_argv(config, host, source_root, argv, spec_record)
     def submit(intent: dict) -> dict:
         authority.check("dispatch", task, host)
         require(intent["argv"] == argv and intent["ticket"]["claim_nonce"] == ticket["claim_nonce"],
                 "adapter differs from fsynced intent")
         nonce = ticket["claim_nonce"]
         receipt = {"host": host, "claim_nonce": nonce}
-        if metadata:
-            require(host != "muscat" and intent.get("metadata") == metadata, "exact durable metadata transfer inventory")
+        require(intent.get("metadata") == records, "exact durable supervision metadata inventory")
+        if host != "muscat":
             approved_root = Path(authority.authorization["qualified_hosts"][host]["metadata_root"])
             require(approved_root.is_absolute() and str(approved_root) not in ("/", "/tmp", "/home", "/data"),
                     "exact qualified metadata directory")
             lines = ["set -euo pipefail", "test -d " + shlex.quote(str(approved_root)), "umask 077", "set -o noclobber"]
-            require(len(metadata) == 3, "only request, claim ticket and authorization metadata transfer")
-            require({item.get("role") for item in metadata} == {"request", "claim_ticket", "authorization"}, "metadata allowlist")
-            for item in metadata:
+            require(len(records) == 4, "only request, claim ticket, authorization and supervision metadata transfer")
+            require({item.get("role") for item in records} == {"request", "claim_ticket", "authorization", "supervision"}, "metadata allowlist")
+            for item in records:
                 local = Path(item["local_path"])
                 remote = Path(item["remote_path"])
                 require(local.is_file() and not local.is_symlink() and local.stat().st_size <= 1024 ** 2,
@@ -914,7 +1443,7 @@ def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: d
                 lines.extend(["test ! -e " + shlex.quote(str(remote)),
                     "printf '%s' " + shlex.quote(payload) + " > " + shlex.quote(str(remote)),
                     "test \"$(sha256sum " + shlex.quote(str(remote)) + " | cut -d ' ' -f1)\" = " + shlex.quote(item["sha256"])])
-            subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", host, "bash -s"],
+            subprocess.run(ssh_argv(config["hosts"][host]["ssh_profile"], "bash -s"),
                            input="\n".join(lines) + "\n", text=True, capture_output=True, check=True, timeout=60)
         if host == "muscat":
             require(source_root.is_dir() and log_dir.is_dir(), "existing owned local directories")
@@ -923,13 +1452,11 @@ def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: d
                 os.sched_setaffinity(0, cpus)
                 posix_resource.setrlimit(posix_resource.RLIMIT_AS, (budget["memory_bytes"], budget["memory_bytes"]))
                 posix_resource.setrlimit(posix_resource.RLIMIT_CPU, (budget["cpu_seconds"], budget["cpu_seconds"]))
-                posix_resource.setrlimit(posix_resource.RLIMIT_FSIZE, (budget["output_bytes"], budget["output_bytes"]))
-            env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1",
-                       VECLIB_MAXIMUM_THREADS="1", BLIS_NUM_THREADS="1")
-            log_path = log_dir / (nonce + ".stdout.log")
+                posix_resource.setrlimit(posix_resource.RLIMIT_FSIZE, (min(65536, budget["output_bytes"]), budget["output_bytes"]))
+            env = clean_process_environment()
+            log_path = log_dir / (nonce + ".supervisor.log")
             with log_path.open("xb") as stream:
-                process = subprocess.Popen(["/usr/bin/timeout", "--signal=TERM", "--kill-after=30",
-                    str(budget["wall_seconds"]), *argv], cwd=source_root, env=env,
+                process = subprocess.Popen(launch, cwd=source_root, env=env,
                     stdin=subprocess.DEVNULL, stdout=stream, stderr=subprocess.STDOUT,
                     start_new_session=True, preexec_fn=limits)
             identity = process_identity(process.pid, source_root)
@@ -937,9 +1464,8 @@ def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: d
                            process_identity=identity, log_path=str(log_path))
         elif host == "jerez":
             cpu_list = ",".join(str(cpu) for cpu in budget["logical_cpus"])
-            command = ["/usr/bin/taskset", "--cpu-list", cpu_list, "/usr/bin/timeout", "--signal=TERM",
-                       "--kill-after=30", str(budget["wall_seconds"]), *argv]
-            log_path = log_dir / (nonce + ".stdout.log")
+            command = ["/usr/bin/taskset", "--cpu-list", cpu_list, *launch]
+            log_path = log_dir / (nonce + ".supervisor.log")
             script = "\n".join(["set -euo pipefail", "test \"$(hostname -s)\" = jerez",
                 "test \"$(git -C " + shlex.quote(str(source_root)) + " rev-parse HEAD)\" = " + shlex.quote(task["source_commit"]),
                 "test \"$(git -C " + shlex.quote(str(source_root)) + " rev-parse 'HEAD^{tree}')\" = " + shlex.quote(task["source_tree"]),
@@ -947,13 +1473,14 @@ def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: d
                 "cd " + shlex.quote(str(source_root)), "umask 077", "set -o noclobber",
                 "ulimit -v " + str(math.ceil(budget["memory_bytes"] / 1024)), "ulimit -t " + str(budget["cpu_seconds"]),
                 "ulimit -f " + str(budget["output_bytes"] // 1024),
+                "ulimit -S -f " + str(min(64, budget["output_bytes"] // 1024)),
                 "export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1",
                 "nohup " + shlex.join(command) + " > " + shlex.quote(str(log_path)) + " 2>&1 < /dev/null &",
                 "worker_pid=$!", "boot_id=$(cat /proc/sys/kernel/random/boot_id)",
                 "worker_stat=$(cat /proc/\"$worker_pid\"/stat)", "worker_tail=${worker_stat##*) }",
                 "read -ra worker_fields <<< \"$worker_tail\"",
                 "printf '%s %s %s\\n' \"$worker_pid\" \"$boot_id\" \"${worker_fields[19]}\"", ""])
-            result = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "jerez", "bash -s"],
+            result = subprocess.run(ssh_argv(config["hosts"][host]["ssh_profile"], "bash -s"),
                                     input=script, text=True, capture_output=True, check=True, timeout=60)
             match = re.fullmatch(r"([1-9][0-9]*) ([a-f0-9-]+) ([0-9]+)\s*", result.stdout)
             require(match is not None, "unparseable Jerez process receipt")
@@ -965,11 +1492,11 @@ def qualified_submitter(host: str, argv: list[str], source_root: Path, budget: d
             request_index = argv.index("--request")
             options = argv[request_index + 2:]
             script = slurm_script(task, ticket, budget, resource, argv[1], argv[request_index + 1], str(source_root), argv[0], options,
-                str(log_dir / (nonce + ".stdout.log")), str(log_dir / (nonce + ".scheduler.log")))
+                None, str(log_dir / (nonce + ".scheduler.log")), launch)
             if task["workflow"] == "integrated_quantile_score" and "--mode" in argv:
                 script = script.replace(" --mode score --request ", " --mode " + argv[argv.index("--mode") + 1] + " --request ", 1)
-            result = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "hummingbird",
-                                     "sbatch --parsable"], input=script, text=True, capture_output=True, check=True, timeout=60)
+            result = subprocess.run(ssh_argv(config["hosts"][host]["ssh_profile"], "sbatch --parsable"),
+                                    input=script, text=True, capture_output=True, check=True, timeout=60)
             match = re.fullmatch(r"([1-9][0-9]*)(?:;([A-Za-z0-9_.-]+))?\s*", result.stdout)
             require(match is not None, "unparseable Slurm submission receipt")
             receipt.update(job_id=match.group(1), cluster=match.group(2), batch_script_sha256=hashlib.sha256(script.encode()).hexdigest())
@@ -1003,12 +1530,12 @@ def verify_claim_remote(args: argparse.Namespace, request: dict, authority: Auth
     paths = {name: request.get("coordinator_" + name) for name in names}
     require(all(isinstance(value, str) and Path(value).is_absolute() for value in paths.values()), "six frozen coordinator paths")
     require(str(args.ledger) == paths["ledger_path"], "central ledger path mismatch")
-    command = ["/usr/bin/python3.11", str(Path(paths["source_root"]) / "application/scripts/forecast_transition_control.py"),
+    command = [authority.config["coordinator_python_bin"], str(Path(paths["source_root"]) / "application/scripts/forecast_transition_control.py"),
         "verify-claim", "--ledger", paths["ledger_path"], "--ticket", paths["ticket_path"],
         "--ticket-sha256", args.ticket_sha256, "--request", paths["request_path"],
         "--authorization", paths["authorization_path"], "--authorization-sha256", args.authorization_sha256,
         "--source-root", paths["source_root"], "--source-manifest", paths["source_manifest_path"]]
-    result = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "muscat", shlex.join(command)],
+    result = subprocess.run(ssh_argv(authority.config["coordinator_ssh_profile"], shlex.join(command)),
                             text=True, capture_output=True, check=True, timeout=60)
     observed = json.loads(result.stdout)
     require(observed.get("verified") is True and observed.get("task_id") == request["task_id"]
@@ -1019,7 +1546,8 @@ def verify_claim_remote(args: argparse.Namespace, request: dict, authority: Auth
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", default="plan",
-                        choices=("plan", "dry-run", "preflight", "dispatch", "verify-claim", "verify-claim-remote"))
+                        choices=("plan", "dry-run", "preflight", "dispatch", "verify-claim", "verify-claim-remote", "supervise",
+                                 "close-supervised", "abandon-preintent", "accept", "reassign"))
     parser.add_argument("--config", type=Path, default=Path(__file__).resolve().parents[1] / "config/forecast_transition_multihost_v1.json")
     parser.add_argument("--host", choices=("muscat", "jerez", "hummingbird"))
     parser.add_argument("--task", type=Path)
@@ -1037,22 +1565,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--owner")
     parser.add_argument("--intent-directory", type=Path)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--supervision-spec", type=Path)
+    parser.add_argument("--supervision-spec-sha256")
+    parser.add_argument("--nonce")
+    parser.add_argument("--proof", type=Path)
+    parser.add_argument("--proof-sha256")
+    parser.add_argument("--terminal-receipt", type=Path)
+    parser.add_argument("--terminal-receipt-sha256")
+    parser.add_argument("--completion", type=Path)
+    parser.add_argument("--completion-sha256")
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--new-routing-id")
+    parser.add_argument("--new-host", choices=("muscat", "jerez", "hummingbird"))
+    parser.add_argument("--routing-revision", type=int)
     args = parser.parse_args(argv)
     config = read_json(args.config)
     validate_config(config)
-    if args.command in ("verify-claim", "verify-claim-remote"):
-        require(all((args.ledger, args.ticket, args.ticket_sha256, args.request,
-                    args.authorization, args.authorization_sha256, args.source_root, args.source_manifest)),
-                "all external authority/ledger/source/ticket paths and hashes are required")
-        require(valid_hash(args.ticket_sha256) and file_sha256(args.ticket) == args.ticket_sha256,
-                "claim ticket file hash")
-        request = read_json(args.request)
-        authorization, auth_sha = load_authorization(args.authorization, args.authorization_sha256, args.source_root)
-        rows = verify_file_manifest(args.source_root, args.source_manifest, request.get("source_manifest_sha256"), source=True)
-        verify_production_config(args.config, args.source_root, rows, authorization.get("config_sha256"))
-        authority = Authority(config, file_sha256(args.config), authorization, auth_sha, git_identity(args.source_root))
-        receipt = (verify_claim_readonly(args.ledger, read_json(args.ticket), request, authority)
-                   if args.command == "verify-claim" else verify_claim_remote(args, request, authority))
+    if args.command in ("close-supervised", "abandon-preintent", "accept", "reassign"):
+        print(json.dumps(closeout_cli(args, config), sort_keys=True))
+        return 0
+    if args.command in ("verify-claim", "verify-claim-remote", "supervise"):
+        request, authority, receipt = verification_context(args, config)
+        if args.command == "supervise":
+            require(args.supervision_spec and valid_hash(args.supervision_spec_sha256) and
+                    file_sha256(args.supervision_spec) == args.supervision_spec_sha256 == receipt["supervision_spec_sha256"],
+                    "source-owned supervisor specification must match the coordinator intent")
+            spec = read_json(args.supervision_spec)
+            require(spec.get("request_sha256") == file_sha256(args.request) and
+                    spec.get("identity") == {name: request[name] for name in IDENTITY_FIELDS},
+                    "supervisor request/source/target/input identity changed")
+            terminal = supervised_child(spec, receipt)
+            print(json.dumps({"phase": "terminal_receipt_published", "claim_nonce": receipt["claim_nonce"],
+                              "exit_code": terminal["exit_code"]}, sort_keys=True))
+            return 0 if terminal["exit_code"] == 0 else 1
         print(json.dumps(receipt, sort_keys=True))
         return 0
     if args.command == "dispatch" and args.execute:
@@ -1103,12 +1648,26 @@ def main(argv: list[str] | None = None) -> int:
                     "prepared source-manifest path must match qualified execution source")
             with envelope_path.open("xb") as stream:
                 stream.write(canonical(envelope) + b"\n"); stream.flush(); os.fsync(stream.fileno())
-            if args.host != "muscat":
-                metadata = [{"role": role, "local_path": str(local), "remote_path": str(remote), "sha256": file_sha256(local)}
-                    for role, local, remote in (("request", envelope_path, execution_request),
-                        ("claim_ticket", args.ticket, execution_ticket), ("authorization", args.authorization, execution_authorization))]
             argv = worker_argv(config, args.host, task, envelope, execution_request, execution_ticket, execution_authorization,
                                args.ledger, execution_manifest, execution_source, file_sha256(args.ticket))
+            supervision_path = args.intent_directory / (ticket["claim_nonce"] + ".supervision.json")
+            execution_supervision = execution_log / supervision_path.name
+            supervision = {"schema_version": "forecast_transition_supervision_v1", "task_id": task["task_id"],
+                "routing_id": ticket["routing_id"], "claim_nonce": ticket["claim_nonce"], "host": args.host,
+                "source_root": str(execution_source), "worker_argv": argv, "budget": budget,
+                "numerical_backend": auth.qualification(args.host, task["source_commit"], task["source_manifest_sha256"])["numerical_backend"],
+                "identity": {name: envelope[name] for name in IDENTITY_FIELDS},
+                "request_sha256": file_sha256(envelope_path),
+                "started_path": str(execution_log / (ticket["claim_nonce"] + ".started.json")),
+                "terminal_path": str(execution_log / (ticket["claim_nonce"] + ".terminal.json")),
+                "log_path": str(execution_log / (ticket["claim_nonce"] + ".stdout.log"))}
+            durable_json(supervision_path, supervision, max_bytes=1024 ** 2)
+            metadata = [{"role": role, "local_path": str(local), "remote_path": str(remote), "sha256": file_sha256(local)}
+                for role, local, remote in (("request", envelope_path, execution_request),
+                    ("claim_ticket", args.ticket, execution_ticket), ("authorization", args.authorization, execution_authorization),
+                    ("supervision", supervision_path, execution_supervision))]
+            require(2 * sum(Path(record["local_path"]).stat().st_size for record in metadata) + 4 * 65536 <= budget["metadata_bytes"],
+                    "frozen metadata plus durable receipts exceed administrative byte reserve")
             ledger.prepare_intent(ticket["claim_nonce"], args.intent_directory, argv, metadata)
             result = ledger.dispatch(ticket["claim_nonce"], qualified_submitter(args.host, argv, execution_source,
                 budget, resource, execution_log, task, ticket, config, auth, metadata))

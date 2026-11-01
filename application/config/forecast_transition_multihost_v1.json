@@ -2,15 +2,26 @@
   "schema_version": "forecast_transition_multihost_v1",
   "launch_authorized": false,
   "coordinator_host": "muscat",
+  "coordinator_python_bin": "/usr/bin/python3.11",
+  "coordinator_ssh_profile": {
+    "endpoint": "muscat.be.ucsc.edu",
+    "user": "jaguir26",
+    "identity_file": null,
+    "known_hosts_file": null,
+    "known_hosts_sha256": null,
+    "connect_timeout_seconds": 15
+  },
   "ledger_mode": "single_coordinator_local_sqlite",
   "production_authorization_required": true,
   "host_qualification_status_is_advisory": true,
-  "output_budget_semantics": "artifact_bytes_B_plus_one_merged_log_allowance_B_total_2B",
+  "allowed_numerical_backends": ["bundled_rblas", "openblas_pthread"],
+  "output_budget_semantics": "artifact_bytes_B_plus_one_merged_log_B_plus_explicit_metadata_bytes",
   "production_budget": {
     "max_submissions": 0,
     "max_cpu_seconds": 0,
     "max_wall_seconds": 0,
-    "max_output_bytes": 0
+    "max_output_bytes": 0,
+    "max_metadata_bytes": 0
   },
   "worker_scripts": {
     "integrated_quantile_forecast": "application/scripts/run_integrated_quantile_forecast.R",
@@ -20,6 +31,7 @@
   "hosts": {
     "muscat": {
       "adapter": "local",
+      "python_bin": "/usr/bin/python3.11",
       "qualified": false,
       "qualification_receipt_sha256": null,
       "core_grants": [],
@@ -33,6 +45,15 @@
     },
     "jerez": {
       "adapter": "ssh_local",
+      "python_bin": "/usr/bin/python3.11",
+      "ssh_profile": {
+        "endpoint": "jerez.be.ucsc.edu",
+        "user": "jaguir26",
+        "identity_file": "/home/jaguir26/.ssh/id_ed25519_muscat_jerez",
+        "known_hosts_file": null,
+        "known_hosts_sha256": null,
+        "connect_timeout_seconds": 15
+      },
       "qualified": false,
       "qualification_receipt_sha256": null,
       "core_grants": [],
@@ -46,6 +67,15 @@
     },
     "hummingbird": {
       "adapter": "slurm",
+      "python_bin": null,
+      "ssh_profile": {
+        "endpoint": "hb.ucsc.edu",
+        "user": "jaguir26",
+        "identity_file": "/home/jaguir26/.ssh/id_ed25519_muscat_hummingbird_pricefm_20261028",
+        "known_hosts_file": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_hummingbird_20261027/evidence/hb.known_hosts",
+        "known_hosts_sha256": "d0b3f9a9f5cc46381af15ab00cb7ef049b4074221da997a17edea5ff58e0e21d",
+        "connect_timeout_seconds": 15
+      },
       "qualified": false,
       "qualification_receipt_sha256": null,
       "core_grants": [],
@@ -57,7 +87,7 @@
       "require_compute_node_runtime_proof": true,
       "require_cpu_boundary_proof": true,
       "require_closed_accounting_receipt": true,
-      "rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
+      "rscript": null
     }
   }
 }

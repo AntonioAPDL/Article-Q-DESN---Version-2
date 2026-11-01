@@ -604,10 +604,10 @@ def physical_facts(config, spec, ready):
             and Path(cpuset['effective_file']).parent == Path(cpuset['job_filesystem_path'])
             and Path(cpuset['effective_file']).name in ('cpuset.cpus.effective', 'cpuset.effective_cpus', 'cpuset.cpus'),
             'observed job ancestor reserves exactly all online siblings of one physical core')
-    policy = snap['Slurm_core_policy']; params = set(policy.get('SelectTypeParameters', '').split(','))
+    policy = snap['Slurm_core_policy']; params = {token.upper() for token in policy.get('SelectTypeParameters', '').split(',')}
     require(policy.get('SelectType') == 'select/cons_tres'
-            and (bool(params & {'CR_Core', 'CR_Core_Memory'})
-                 or (bool(params & {'CR_CPU', 'CR_CPU_Memory'}) and topo['thread_siblings'] == affinity))
+            and (bool(params & {'CR_CORE', 'CR_CORE_MEMORY'})
+                 or (bool(params & {'CR_CPU', 'CR_CPU_MEMORY'}) and topo['thread_siblings'] == affinity))
             and 'task/cgroup' in policy.get('TaskPlugin', '').split(',')
             and policy.get('ProctrackType') == 'proctrack/cgroup'
             and policy.get('PartitionOverSubscribe') in ('NO', 'EXCLUSIVE'),

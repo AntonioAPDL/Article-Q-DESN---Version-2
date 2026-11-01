@@ -202,9 +202,9 @@ def validate(snapshot,proof,review,*,job_id,node,affinity,now):
               'actual typed filesystem observation required, never affinity-only admission')
     validate_filesystem(snapshot['filesystem'],snapshot['filesystem']['path'],now=now)
     policy=snapshot['Slurm_core_policy']
-    parameters=policy.get('SelectTypeParameters','').split(',')
-    core_policy=any(p in {'CR_Core','CR_Core_Memory'} for p in parameters)
-    singleton=any(p in {'CR_CPU','CR_CPU_Memory'} for p in parameters) and snapshot['topology']['thread_siblings']==affinity
+    parameters={p.upper() for p in policy.get('SelectTypeParameters','').split(',')}
+    core_policy=bool(parameters & {'CR_CORE','CR_CORE_MEMORY'})
+    singleton=bool(parameters & {'CR_CPU','CR_CPU_MEMORY'}) and snapshot['topology']['thread_siblings']==affinity
     h.require(policy.get('SelectType')=='select/cons_tres' and (core_policy or singleton)
               and 'task/cgroup' in policy.get('TaskPlugin','').split(',')
               and policy.get('ProctrackType')=='proctrack/cgroup'

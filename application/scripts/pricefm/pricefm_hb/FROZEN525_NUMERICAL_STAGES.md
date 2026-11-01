@@ -65,6 +65,14 @@ task/proctrack cgroups and nonoversubscribed partition policy must be observed.
 CR_CPU is applicable only when actual topology has exactly the assigned one
 online sibling. Unknown or contradictory policy fails closed.
 
+Slurm's exact `SelectTypeParameters` enum tokens are compared after uppercase
+normalization. `CR_CORE`/`CR_CORE_MEMORY` retain the whole-core route;
+`CR_CPU`/`CR_CPU_MEMORY` retain the existing strictly singleton-topology route.
+The raw observed scheduler strings remain unchanged in the evidence. This
+accepts canonical uppercase spellings and the prior mixed-case spellings while
+preserving all SMT, job-ancestor cpuset, cgroup, partition, disk and drain gates.
+An unknown token or a CPU policy with multiple SMT siblings still fails closed.
+
 An independently authored peer validator must review the fresh producer facts
 and bind their exact witness pins. Root then issues the numerical core/peer/drain
 proof. An affinity length of one, `--hint=nomultithread`, or metadata PASS alone

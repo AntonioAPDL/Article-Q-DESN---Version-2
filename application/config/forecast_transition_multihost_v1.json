@@ -1,0 +1,63 @@
+{
+  "schema_version": "forecast_transition_multihost_v1",
+  "launch_authorized": false,
+  "coordinator_host": "muscat",
+  "ledger_mode": "single_coordinator_local_sqlite",
+  "production_authorization_required": true,
+  "host_qualification_status_is_advisory": true,
+  "output_budget_semantics": "artifact_bytes_B_plus_one_merged_log_allowance_B_total_2B",
+  "production_budget": {
+    "max_submissions": 0,
+    "max_cpu_seconds": 0,
+    "max_wall_seconds": 0,
+    "max_output_bytes": 0
+  },
+  "worker_scripts": {
+    "integrated_quantile_forecast": "application/scripts/run_integrated_quantile_forecast.R",
+    "integrated_quantile_score": "scripts/score_integrated_quantile_forecasts.R",
+    "glofas_family_transition": "application/scripts/run_glofas_family_transition.R"
+  },
+  "hosts": {
+    "muscat": {
+      "adapter": "local",
+      "qualified": false,
+      "qualification_receipt_sha256": null,
+      "core_grants": [],
+      "initial_max_workers": 8,
+      "hard_max_workers": 16,
+      "reserve_physical_cores": 2,
+      "min_available_ram_gib": 180,
+      "min_available_disk_gib": 80,
+      "reserved_logical_cpus": [48, 49, 50, 51, 52, 53, 54, 55],
+      "rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
+    },
+    "jerez": {
+      "adapter": "ssh_local",
+      "qualified": false,
+      "qualification_receipt_sha256": null,
+      "core_grants": [],
+      "initial_max_workers": 8,
+      "hard_max_workers": 16,
+      "reserve_physical_cores": 2,
+      "min_available_ram_gib": 180,
+      "min_available_disk_gib": 50,
+      "reserved_logical_cpus": [],
+      "rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
+    },
+    "hummingbird": {
+      "adapter": "slurm",
+      "qualified": false,
+      "qualification_receipt_sha256": null,
+      "core_grants": [],
+      "initial_max_workers": 1,
+      "hard_max_workers": 72,
+      "aggregate_cpu_ceiling": 72,
+      "node_physical_cpu_ceiling": 24,
+      "node_ram_ceiling_gib": 120,
+      "require_compute_node_runtime_proof": true,
+      "require_cpu_boundary_proof": true,
+      "require_closed_accounting_receipt": true,
+      "rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
+    }
+  }
+}

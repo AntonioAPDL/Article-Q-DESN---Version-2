@@ -66,6 +66,28 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
       blob = sub("^[0-9]{6} blob ([a-f0-9]{40})\t.*$", "\\1", rows),
       stringsAsFactors = FALSE)
   }
+  # A separately requested, additive scientific workflow has its own exact
+  # source contract. Its presence never changes the twelve historical blobs,
+  # historical manifest, or their original mutation tests below.
+  extension_checks <- character()
+  extension_paths <- character()
+  extension_relative <- "docs/reproducibility/integrated_forecast_transition_sources_20261031.csv"
+  extension_file <- file.path(repo_root, extension_relative)
+  extension_link <- Sys.readlink(extension_file)
+  if (file.exists(extension_file) || (!is.na(extension_link) && nzchar(extension_link))) {
+    extension_guard <- file.path(repo_root, "scripts/integrated_forecast_transition_source_guard.R")
+    require_check(regular_file(extension_file) && regular_file(extension_guard),
+      "The new additive source authorization and guard must be regular files.")
+    require_check(identical(unname(tools::sha256sum(extension_guard)[[1L]]),
+      "345d5d58e26541a648533687619b5aa57b2c8ebef9bb940085d4cd309eb5048e"), "The new source guard must match its exact implementation pin.")
+    extension_env <- new.env(parent = baseenv())
+    sys.source(extension_guard, envir = extension_env)
+    extension_checks <- extension_env$app_check_integrated_forecast_transition_sources(
+      repo_root, manifest_sha256 = "425fc1147572fe5542553a7ef299ec0a03e98abde6bcd7ac379915dcc9035028")
+    extension_paths <- attr(extension_checks, "authorized_additions")
+    require_check(length(extension_paths) == 7L,
+      "The additive workflow must authorize exactly seven new application source files.")
+  }
   # Include ignored source additions; only generated Python bytecode is not a
   # source implementation. In particular, an ignore rule cannot hide new R,
   # Python, C++, configuration, or validation sources from this guard.
@@ -78,6 +100,7 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
       baseline, "--", scopes)),
     git(c("diff", "--cached", "--no-ext-diff", "--no-renames", "--name-only",
       baseline, "--", scopes)))
+  changes <- setdiff(changes, extension_paths)
   manifest_path <- file.path(repo_root, manifest_relative)
   manifest_link <- Sys.readlink(manifest_path)
   manifest_present <- file.exists(manifest_path) ||
@@ -164,6 +187,6 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
     all(staged_blobs[positions] == manifest$source_blob |
       staged_blobs[positions] == manifest$authorized_blob),
     "Staged source bytes must be frozen science or the sole authorized worker correction.")
-  invisible(c(checks,
+  invisible(c(checks, extension_checks,
     "Integrated source authorization: twelve exact paths; eleven frozen blobs and one operational worker correction."))
 }

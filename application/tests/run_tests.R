@@ -263,4 +263,13 @@ stopifnot(system2("python3.11", app_path("application/tests/test_qdesn_historica
 # GloFAS vector overlays require the pinned PyMuPDF presentation environment;
 # their separate focused test is recorded in the editorial release receipt.
 
+# Additive, no-launch reconstruction/transition workflow. These tests use only
+# synthetic mathematical fixtures, isolated source mutations and mocked hosts.
+run_standalone_glofas_test("application/tests/test_integrated_quantile_forecast.R")
+run_standalone_glofas_test("application/tests/test_integrated_quantile_scoring.R")
+run_standalone_glofas_test("application/tests/test_integrated_forecast_evidence.R")
+run_standalone_glofas_test("application/tests/test_glofas_family_transition.R")
+run_standalone_glofas_test("application/tests/test_integrated_forecast_transition_source_guard.R")
+stopifnot(system2("python3.11", app_path("application/tests/test_forecast_transition_control.py")) == 0L)
+
 cat("Application tests completed.\n")

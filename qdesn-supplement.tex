@@ -242,12 +242,20 @@ corresponding sign region.
 The Q--DESN regression inherits the feature map defined in the main article. The
 reservoir weights, input weights, dimension-reduction matrices, leak rates, and washout convention
 are fixed before posterior inference. Posterior inference conditions on the
-design matrix \(\mat X\) constructed from these features. We distinguish a
+observed fitting design \(\mat X\) constructed from these features. We distinguish a
 random response \(Y_t\) from its observed value \(y_t\). Lowercase responses
 in posterior kernels denote the data at which the likelihood is evaluated.
 
-Let \(\vect u_t=(y_{t-1},\ldots,y_{t-m},\vect z_t^\top)^\top\) collect response
-lags and exogenous covariates. For layers \(d=1,\ldots,D\), sparse reservoir
+Let \(\vect z_t\in\R^q\) contain the exogenous covariates and let
+\[
+\text{Inputs:}\quad
+\vect u_t=(y_{t-1},\ldots,y_{t-m},\vect z_t^\top,\ldots,
+\vect z_{t-m_z}^\top)^\top\in\R^{d_u},\qquad
+d_u=m+q(m_z+1).
+\]
+Here \(m\geq1\) is the maximum response lag and \(m_z\geq0\) the maximum
+covariate lag. The previous reservoir state also carries information from
+earlier inputs. For layers \(d=1,\ldots,D\), sparse reservoir
 matrices \(\mat W_d\) and input matrices \(\mat W^{\mathrm{in}}_d\) are
 randomly drawn once before fitting and then held fixed. The dimension-reduction matrices
 \(\mat Q_d\), \(d=1,\ldots,D-1\), and other feature-construction choices
@@ -270,8 +278,8 @@ the layer states satisfy
 \tilde{\vect h}_{t,d-1}&=\mat Q_{d-1}\vect h_{t,d-1},
 \end{align}
 where \(\bar{\mat W}_d=\rho_d\mat W_d/\rho(\mat W_d)\).
-For \(m\) lags and \(q\) covariates, the first input matrix is
-\(n_1\times(m+q)\), and \(\vect b_1^{\mathrm{in}}\in\R^{n_1}\) is
+The first input matrix is
+\(n_1\times d_u\), and \(\vect b_1^{\mathrm{in}}\in\R^{n_1}\) is
 a fixed input bias, equivalent to a constant input column. For \(d\ge2\),
 the input matrix is
 \(n_d\times\tilde n_{d-1}\), and
@@ -301,7 +309,7 @@ After a fixed washout period, the reservoir quantities in
 \mat X=[\vect x_1^\top;\ldots;\vect x_T^\top]\in\R^{T\times(r+1)},\qquad
 \mu_t=\vect x_t^\top\vect\beta .
 \]
-Here \(r=n_D+\sum_{d=1}^{D-1}\tilde n_d+m+q\) for a dimension-preserving
+Here \(r=n_D+\sum_{d=1}^{D-1}\tilde n_d+d_u\) for a dimension-preserving
 \(k\); a dimension-expanding transformation changes the corresponding terms.
 Direct inputs may be omitted: the multiquantile simulation and GloFAS use reservoir
 features and an intercept only, with their specific stacking rules stated
@@ -1665,9 +1673,9 @@ inequality requires explicit constrained estimation.
 \section{Forecast Summaries and Scores}
 \label{sec:forecast_synthesis}
 
-The main article describes the recursive forecast procedure. Here we retain
-the transformation, draw-dependence and scoring details needed to define its
-summaries. For fitted ordinates
+The recursive procedure in the main article preserves each parameter draw
+and its corresponding response history. The definitions below specify the
+ordering, reported locations and scores used in the analyses. For fitted ordinates
 \(\widehat{\vect q}_t=(\widehat q_{1,t},\ldots,\widehat q_{K,t})^\top\) at
 levels \(p_1<\cdots<p_K\), the projection is
 \begin{equation}
@@ -1691,8 +1699,10 @@ the variational approximation as
 \(\theta_{p_0}^{(b)}
 =(\vect\beta_{p_0}^{(b)},\sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)})\).
 The forecast origin \(o\) may follow the fitting endpoint \(T\).
-Observed history initializes the reservoir; previously simulated responses
-supply subsequent unknown lags. Conditional on the draw and its
+Observed history initializes the reservoir, and the fitted parameter
+distribution is retained as origins advance. Within an origin, previously
+simulated responses supply subsequent unknown lags. The covariate path is
+supplied as specified for the analysis. Conditional on the draw and its
 \(p_0\)-indexed predictor vector, the response law is
 \[
 y_{o+h}^{(b,p_0)}
@@ -1701,10 +1711,20 @@ y_{o+h}^{(b,p_0)}
 \left(\vect x_{o+h}^{(b,p_0)\top}\vect\beta_{p_0}^{(b)},
 \sigma_{p_0}^{(b)},\gamma_{p_0}^{(b)}\right),
 \]
-with shape fixed at zero for AL. Response simulation and evaluation of the
-conditional-quantile location are distinct operations. Single-level recursion
-is run separately at each fitted level and conditions on the fixed
-reservoir realization.
+with shape fixed at zero for AL. The same coefficient, scale and shape draw
+is retained over the trajectory, while fresh future errors are generated
+at each step. Each generated response updates only that trajectory's history
+and reservoir state. Single-level recursion is run separately at each fitted
+level and conditions on the fixed reservoir realization.
+
+Response simulation and evaluation of the conditional-quantile location are
+distinct operations. A location evaluated along one simulated history
+conditions on that history. A quantile given only the observed origin history
+requires integrating the unknown intermediate responses; the posterior
+predictive quantile additionally integrates the parameter distribution.
+These quantiles are generally different from averages of the conditional
+locations. The single-level metric calculations below evaluate retained
+location paths rather than quantiles of the pooled predictive responses.
 
 For a draw-specific recursive MQ--DESN forecast, write
 \[
@@ -1726,12 +1746,15 @@ fixed. The four regressions share the same 990 origin--horizon evaluation
 pairs but can generate different future predictor trajectories. The primary
 calculation evaluates coefficient draws at their averaged predictors; the
 draw-specific calculation above is its recursive sensitivity analysis.
+The latter scores conditional locations along generated histories, so its
+intervals include trajectory variation as well as parameter variation.
+It is not a calculation of quantiles after integrating those histories.
 
 Forecast scores use \(0<p_1<\cdots<p_K<1\), with \(K\geq2\), as the
 evaluation grid. The evaluation
 levels may differ from the fitted levels when an estimated quantile function
 is available at other probabilities. Let
-\(q_{o,h,k}^*\) denote the reported conditional \(p_k\)-quantile at origin
+\(q_{o,h,k}^*\) denote the reported quantile forecast at level \(p_k\), origin
 \(o\) and horizon \(h\), after the specified monotone transformation when applied.
 Here \(K\) counts evaluation levels, while \(b\) indexes posterior or
 variational draws. With check loss
@@ -1814,12 +1837,11 @@ Eq.~\eqref{eq:supp-acrps}. Its reported issued-window grids are ordered
 without crossing correction; Section~\ref{subsec:glofas_checks} gives
 the separate crossing results for historical reference and discrepancy models.
 
-Response-level posterior predictive draws determine an empirical predictive
-quantile function that can be evaluated on any prespecified grid; integrating
-its check loss over \((0,1)\) gives the empirical predictive CRPS. Posterior
-draws of a fitted \(p\)-level quantile provide credible summaries for that
-conditional quantile. The single-level interval analysis below computes its
-criteria for each retained quantile draw.
+Response-level posterior predictive draws instead determine an empirical
+predictive quantile function that can be evaluated on any prespecified grid;
+integrating its check loss over \((0,1)\) gives the empirical predictive CRPS.
+This response-distribution calculation is separate from the reported
+single-level criteria, which are computed for each retained location path.
 
 \clearpage
 \section{Reservoir Specification, Selection, and Diagnostics}
@@ -2442,9 +2464,12 @@ simulated response trajectories differ.
 \subsection{PriceFM Design and Additional Results}
 \label{subsec:supp_pricefm_diagnostics}
 
-The PriceFM comparison evaluates average quantile loss (AQL) from independently
-fitted quantile regressions and VB for 38 regions and three folds. Within each
-region, reservoir and RHS-scale
+The PriceFM comparison evaluates average quantile loss (AQL) from separately
+fitted univariate regional regressions. Each of the 38 regions has one
+selected specification, with seven quantile regressions estimated by VB in
+each of three folds. Neighboring-region predictors supply information to a
+regional response model; they do not define a joint regional posterior.
+Within each region, reservoir and RHS-scale
 selection uses three expanding temporal validation periods lying entirely
 within the original Fold~1 training period. These validation periods are
 September--December~2023, January--April~2024, and May--August~2024.
@@ -2480,17 +2505,29 @@ Fold & Validation period & Test period & Test targets \\
 \end{tabular}
 \end{table}
 
-The predictors use the released load, solar, and wind columns, identified
-as day-ahead forecasts by \citet{YuEtAl2026PriceFM}. Their availability at
-each forecast origin was not separately verified, so the comparison does
-not establish operational information parity. Selected spatial specifications either
-concatenate neighboring-region predictors or add their means, with or
-without standard deviations; other specifications use the target region
-alone. Predictor and response scales are estimated separately using
-training-only median and interquartile-range scaling. Selected lag windows
-contain 48, 96, 168, or 240 quarter-hourly observations. All readouts use the
-final reservoir layer and an intercept. The 38 selected specifications use
-AL in 11 regions and exAL in 27.
+Historical inputs contain price, load, solar and wind for the target region.
+Selected spatial specifications either concatenate the corresponding
+neighboring-region histories or add their means, with or without standard
+deviations; other specifications use the target region alone. These histories
+can include neighboring prices as well as exogenous variables. Selected lag
+windows contain 48, 96, 168, or 240 quarter-hourly observations. Predictor and
+response scales are estimated separately using training-only median and
+interquartile-range scaling.
+
+The future covariates are the released load, solar and wind columns, identified
+as day-ahead forecasts by \citet{YuEtAl2026PriceFM}, rather than their future
+realizations. Their availability at each forecast origin was not separately
+verified, so the comparison does not establish operational information parity.
+At each origin, the fixed DESN maps the observed regional histories to a
+reservoir representation. Each horizon's predictors combine the final-layer
+state, the corresponding released covariate forecasts, and horizon features:
+a scaled horizon, sine and cosine phase, and horizon indicators. An intercept
+completes the design. The quantile forecasts evaluate the fitted variational
+coefficient means directly at these origin--horizon predictors. Future price
+responses are not simulated and fed into subsequent horizons in this analysis.
+Forecasts are mapped back to EUR/MWh by reversing the training-only response
+transformation before evaluation.
+The 38 selected specifications use AL in 11 regions and exAL in 27.
 
 The fixed-regional Q--DESN comparison has mean AQL 7.217, compared with
 7.039 for PriceFM. Q--DESN is lower in
@@ -2533,9 +2570,11 @@ and fixed-regional Q--DESN lower in 16.}
 
 The streamflow application combines the historical and issued Global Flood
 Awareness System (GloFAS) products with a reference gauge record
-\citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. Separate DESN
-feature maps represent the reference process and the GloFAS-minus-reference
-discrepancy. Reference-only, discrepancy-only, and combined historical
+\citep{AlfieriEtAl2013GloFAS,HarriganEtAl2023GloFASForecasts}. A reference
+regression describes gauge behavior, and the GloFAS regression adds a
+source-specific location discrepancy to that shared reference component.
+Two distinct fixed DESNs provide predictors for the reference and discrepancy
+regressions. Reference-only, discrepancy-only, and combined historical
 regressions produce 30-day recursive paths. The issued-ensemble correction
 instead uses 28 forecast horizons: future reference values are latent during
 fitting, and the issued members contribute directly to the likelihood.
@@ -2589,12 +2628,28 @@ The additive relation specifies a quantile-indexed location adjustment;
 it is not a general identity between the quantiles of a difference and
 those of its two components. MQ--DESN links adjacent quantile-specific
 coefficients separately within the reference and discrepancy components.
-Historical reference features are generated from the observed reference
-history, and historical discrepancy features are generated from
-\(g_t^{\mathrm{ret}}-y_t\). After \(T\), the reference and discrepancy
-reservoir states are recomputed as functions of the latent path
-\(\vect y_F\). Strict lagging is imposed: the design row for \(T+h\) may
-depend on earlier latent values but not on \(y_{T+h}\).
+Historical reference predictors use the observed gauge history and weather
+covariates. The discrepancy predictors use weather and the history of
+\(a_t=g_t^{\mathrm{ret}}-y_t\). This observed difference supplies inputs;
+it is not an additional independent response in the combined likelihood.
+
+Beyond \(T\), the missing gauge values are needed to continue the reference
+reservoir. They also enter the discrepancy history, whose future inputs use
+the ensemble center minus the candidate reference value:
+\begin{equation}
+\begin{aligned}
+\text{Ensemble center:}\quad
+\bar g_{T+j}^{\mathrm{ens}}
+&=\frac1{51}\sum_{e=1}^{51}g_{T+j,e}^{\mathrm{ens}},\\
+\text{Discrepancy input:}\quad
+a_{T+j}(\vect y_F)&=\bar g_{T+j}^{\mathrm{ens}}-y_{T+j}.
+\end{aligned}
+\label{eq:supp_glofas_future_discrepancy_input}
+\end{equation}
+The center averages the transformed member values. Only indices \(j<h\)
+enter the design row for \(T+h\): both reservoirs depend on earlier latent
+values but not on \(y_{T+h}\). The ensemble center is a predictor summary;
+all 51 issued members still enter their individual likelihood factors.
 
 For one probability level, stack the reference and discrepancy coefficients as
 \[
@@ -2611,7 +2666,8 @@ For one probability level, stack the reference and discrepancy coefficients as
 Then \(\vect h_t^{\mathrm{ref}\top}\vect\theta_k=q_{k,t}\) and
 \(\vect h_t^{\mathrm{glo}\top}\vect\theta_k=q_{k,t}+d_{k,t}\).
 Conditional on \(\vect y_F\), these are ordinary fixed-design Q--DESN
-regressions.
+regressions. The product observations couple the two coefficient blocks in
+the posterior even when their priors are specified separately.
 
 \subsection{Historical Selection and Coefficient Priors}
 
@@ -2758,7 +2814,10 @@ observations and issued ensemble. The quantile-regression target is
 Here \(\phi_{28}\) is a Gaussian density and \(f_{p_k}\) is the AL or exAL
 density. The Gaussian path prior is calibrated from historical forecasts as
 described below. There is no additional future-reference likelihood for
-these quantile models. In MQ--DESN, the joint coefficient prior replaces
+these quantile models. The issued forecasts are available at \(T\), although
+their target dates are later; they update the parameters and latent path
+jointly. Future USGS observations remain excluded from this target.
+In MQ--DESN, the joint coefficient prior replaces
 the separate priors and multiplies the seven level-specific historical,
 path-prior, and issued-member factors. Each level retains its own path.
 

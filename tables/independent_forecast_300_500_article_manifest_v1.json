@@ -20,8 +20,8 @@
     "tables/independent_forecast_300_500_vb_coverage.csv": "b4e81b0319f762d94954a5c6833872f379bf3c5ed81529759eb0da0f77663b55",
     "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
     "scripts/build_independent_forecast_300_500_v1.R": "b8f1d9789059044a67895e81584114e943a89edf23a328697919468ac996a160",
-    "main.tex": "8b954bed6a2a2819cda2a4dccd551e7bb8b651a6e3eb72aa40974b2ba3cd5355",
-    "qdesn-supplement.tex": "1c129563a0f2466f556c1a96728833a3e9f87e7898381903a7c26c2e4feab155",
+    "main.tex": "fca548d6c4c147c1e54c960a96b966d76d3793bd78d109b181c6ec518371da40",
+    "qdesn-supplement.tex": "1dcfe1d04afb02bc870e7134c690a521b0a672d11b5f28cc1ed2beeb07c34d75",
     "overleaf/article_files.txt": "c0dabe07357559779969f91234e0630911487631f0e78c36394d2fcd2b18c2e3",
     "tables/independent_forecast_dependence_v1.tex": "cf2d9319fda9e629bfee3991ff01aac94b55249c547b6b9daea92a1cb4ef166c",
     "docs/implementation_notes/independent_forecast_300_500_reporting_20261015.md": "a7ed1622b4cd73895a5f4d54e1e2664cf72884ad767fd030ce9c44750deef998",
@@ -56,5 +56,28 @@
     "figures/independent_simulation/independent_forecast_calibration_v1.pdf": "f99cd11381cff1b1592918877e876edca092b64140f5dcac1b985fda1580fbdf",
     "tables/independent_forecast_calibration_figure_v1.tex": "54e403240197da236963283503561159d9a490a1eb512f8c7a1aee4ac5de640e",
     "tables/independent_forecast_calibration_table_v1.tex": "ac06603b4617bd4ddcf76fb2a59988ad61d65bd60f0ae90e9941e4e8fd08b2f7"
+  },
+  "editorial_source_refresh": {
+    "schema": "independent-forecast-editorial-source-refresh-v1",
+    "baseline_commit": "8b28ba51176c25624b638fac54fce2699b9af078",
+    "original_manifest_sha256": "687d5531300c8c42eb8a2499ad88f3adbb5d3aa318e6b50b277b282db1d30b1c",
+    "updated_paths": [
+      "main.tex",
+      "qdesn-supplement.tex"
+    ],
+    "original_document_sha256": {
+      "main.tex": "8b954bed6a2a2819cda2a4dccd551e7bb8b651a6e3eb72aa40974b2ba3cd5355",
+      "qdesn-supplement.tex": "1c129563a0f2466f556c1a96728833a3e9f87e7898381903a7c26c2e4feab155"
+    },
+    "updated_document_sha256": {
+      "main.tex": "fca548d6c4c147c1e54c960a96b966d76d3793bd78d109b181c6ec518371da40",
+      "qdesn-supplement.tex": "1dcfe1d04afb02bc870e7134c690a521b0a672d11b5f28cc1ed2beeb07c34d75"
+    },
+    "refresher": "scripts/refresh_independent_forecast_editorial_manifest_20261031.R",
+    "refresher_sha256": "b2e6e6a9672ef165fcf779e633a055a625e989a48be25f9b6d9de71a8fa2bc2a",
+    "scientific_outputs_regenerated": false,
+    "scientific_values_changed": false,
+    "fits_launched": 0,
+    "forecasts_launched": 0
   }
 }

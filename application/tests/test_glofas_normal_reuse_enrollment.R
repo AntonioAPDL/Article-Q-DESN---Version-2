@@ -6,12 +6,17 @@ if (!exists("app_glofas_family_transition_contract", mode = "function")) {
   source("application/R/glofas_family_transition.R")
 }
 source("scripts/glofas_normal_reuse_enrollment.R")
+source("scripts/enroll_glofas_normal_baselines.R")
 gnr_checks <- 0L
 gnr_check <- function(ok) { stopifnot(isTRUE(ok)); gnr_checks <<- gnr_checks + 1L }
 gnr_reject <- function(expr) {
   out <- tryCatch({ force(expr); NULL }, error = identity)
   gnr_check(inherits(out, "error"))
 }
+gnr_check(gnr_local_reporting_host("muscat"))
+gnr_check(gnr_local_reporting_host("muscat.be.ucsc.edu"))
+gnr_check(!gnr_local_reporting_host("jerez.be.ucsc.edu"))
+gnr_check(!gnr_local_reporting_host("muscat.example.org"))
 gnr_closure <- function() {
   env <- new.env(parent = globalenv())
   env$context <- list(lags = 1L, future_covariates = matrix(seq_len(28L), 28L, 1L))

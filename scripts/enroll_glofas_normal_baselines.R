@@ -1,5 +1,9 @@
 #!/usr/bin/env Rscript
 # Authenticated reporting-only enrollment; never fits, scores, or publishes.
+gnr_local_reporting_host <- function(host = unname(Sys.info()[["nodename"]])) {
+  is.character(host) && length(host) == 1L &&
+    host %in% c("muscat", "muscat.be.ucsc.edu")
+}
 gnr_main <- function(args = commandArgs(TRUE)) {
   if (identical(args, "--help")) {
     cat("Usage: Rscript scripts/enroll_glofas_normal_baselines.R --contract FILE --contract-sha256 SHA256 --execute\n")
@@ -36,7 +40,8 @@ gnr_main <- function(args = commandArgs(TRUE)) {
   expiry <- as.POSIXct(spec$expires_utc, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
   require(!is.na(expiry) && expiry > Sys.time() + 300, "finite complete execution lifetime")
   require(identical(spec$host, "muscat") &&
-    identical(unname(Sys.info()[["nodename"]]), "muscat"), "local reporting host")
+    gnr_local_reporting_host() && identical(unname(Sys.info()[["sysname"]]), "Linux") &&
+    identical(as.character(getRversion()), "4.6.0"), "local reporting host and pinned R version")
   # The wrapper is intentionally not a production-task or authorization path.
   # It neither creates a claim in the fitting ledger nor modifies that ledger.
   limits <- readLines("/proc/self/limits", warn = FALSE)

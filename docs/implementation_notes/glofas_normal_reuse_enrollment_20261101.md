@@ -65,6 +65,13 @@ Later scientific closeout must bind these reporting artifacts separately
 and verify their compatibility with all 16 accepted quantile fits before
 scoring or article publication.
 
+The first reporting admission stopped at the host check, before any retained
+design or fit was read: R exposes Muscat's fully qualified hostname whereas
+Python reports its short name. The reporting preflight now recognizes only
+the two exact Muscat identities and requires Linux and R 4.6.0. Negative
+tests reject Jerez and unrelated lookalike names. The failed admission and
+its resource use remain retained; no scientific target or tolerance changed.
+
 ## Verification and remaining gates
 
 The registered synthetic test covers exact metadata mapping, protected

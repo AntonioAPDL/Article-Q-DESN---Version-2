@@ -439,7 +439,7 @@ def foundation_release_proposal(config_path,bundle,role):
               and peer.get('role')==role and peer.get('job_id')==job['job_id']
               and peer.get('node')==config['node'] and peer.get('qualification_route_id')==scope['qualification_route_id']
               and peer.get('ready_sha256')==digest(root/'READY.json') and peer.get('spec_sha256')==p['spec_sha256']
-              and peer.get('sources')==hashes,'actual same-route independent release review before root proposal')
+              and peer.get('sources')==p['sources'],'actual same-route independent release review before root proposal')
     folder=p['remote_root']+'/release/'
     rp=lambda name:dict(path=folder+name,sha256=digest(out/name))
     names=['PEER_RELEASE.json']

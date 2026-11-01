@@ -27,6 +27,29 @@ from pricefm_hb import numerical_stage_contract as contract
 ORIGINAL_H_SHA='7d33218f593b0b9677093954f7331cac2b4586f2c428fe08cdf0c784289492a1'
 
 
+def wait_for_startup_ready(probe,profile):
+    """Bound waiting outside H; never replay the single READY action."""
+    h.require(profile==batch.STARTUP_WATCH_PROFILE,'exact reviewed finite startup profile')
+    start=time.monotonic();attempts=[]
+    for index in range(profile['maximum_probes']):
+        remaining=profile['deadline_seconds']-(time.monotonic()-start)
+        h.require(remaining>=profile['probe_wall_seconds'],'startup deadline cannot fit another complete original guardian')
+        item=probe(index);attempts.append(item)
+        h.require(time.monotonic()-start<=profile['deadline_seconds'],'startup probe exceeded total deadline')
+        value=item['result']
+        h.require(value['probe_index']==index and value['production_admission'] is False
+                  and value['status'] in {'STARTUP_WAITING_READY_ABSENT_NO_RELEASE','STARTUP_READY_PRESENT_MATCHED_NO_RELEASE'},
+                  'exact indexed waiting/presence result, never release authority')
+        if value['status']=='STARTUP_READY_PRESENT_MATCHED_NO_RELEASE':
+            return dict(status='STARTUP_READY_OBSERVED_AWAIT_ONE_SHOT_READY',attempts=attempts,
+                profile=profile,elapsed_seconds=time.monotonic()-start,ready=value['ready'])
+        if index+1<profile['maximum_probes']:
+            remaining=profile['deadline_seconds']-(time.monotonic()-start)
+            delay=min(profile['interval_seconds'],max(0,remaining-profile['probe_wall_seconds']))
+            if delay:time.sleep(delay)  # Outside every original H envelope.
+    raise ValueError('finite startup probes exhausted; exact cancellation required, no resubmission')
+
+
 def require_authority(config_path,authority_pin):
     config,scope,site,hashes=batch.load_config(config_path);authority=h.read(authority_pin);now=time.time()
     h.require(os.sched_getaffinity(0)=={31}
@@ -39,7 +62,9 @@ def require_authority(config_path,authority_pin):
               and authority.get('driver_SELF_CPU_reservation')==10 and authority.get('driver_SELF_soft_CPU')==8
               and authority.get('peer_CPU_each')==8
               and authority.get('peer_phases')==['source_physical','owner_release']
-              and authority.get('outside_guard_settle_seconds')==15
+              and authority.get('startup_watch_profile')==batch.STARTUP_WATCH_PROFILE
+              and authority.get('startup_watch_budget')==config['startup_watch_budget']
+              and authority.get('driver_maximum_wall_seconds')==1200
               and scope['issued_epoch']<=authority['issued_epoch']<=now<authority['expires_epoch']<=scope['expires_epoch'],
               'new exact bounded numerical critical-driver root authority')
     h.require(authority['original_supervisor']['sha256']==ORIGINAL_H_SHA,
@@ -100,11 +125,43 @@ def run(config_path,authority_pin):
         with (out/(phase+'.peer.stdout')).open('xb') as stream,(out/(phase+'.peer.stderr')).open('xb') as error:
             child=subprocess.Popen(argv,stdout=stream,stderr=error,preexec_fn=cap);code=child.wait()
         h.require(code==0,'independent numerical peer rejected; no root release or retry')
+    def startup_probe(index):
+        h.read_pin(authority['original_supervisor'],limit=1024**2)
+        folder=out/'startup';stdout=folder/('probe_%02d.guard.json'%index);stderr=folder/('probe_%02d.guard.stderr'%index)
+        profile=authority['startup_watch_profile']
+        argv=[python,'-I','-B',authority['original_supervisor']['path'],'--cpu',str(profile['probe_local_CPU']),
+            '--wall',str(profile['probe_wall_seconds']),'--output-cap','8388608','--',python,'-I','-B','-c',command_code,
+            'startup_probe','--config',config_path,'--role',config['role'],'--driver-authority',authority_pin['path'],
+            '--driver-authority-sha256',authority_pin['sha256'],'--probe-index',str(index)]
+        with stdout.open('xb') as stream,stderr.open('xb') as error:
+            child=subprocess.Popen(argv,stdout=stream,stderr=error,preexec_fn=lambda:None);code=child.wait()
+        durable([stdout,stderr]);observed=h.read(h.pin(stdout))
+        h.require(code==0,'startup original guardian failed; cancel exact job and retain every fee')
+        batch.passing_guard(observed,profile['probe_local_CPU'],profile['probe_wall_seconds'])
+        value=json.loads(observed['stdout'])
+        h.require(value['config']==h.pin(config_path) and value['driver_authority']==authority_pin,
+                  'probe is bound to exact current config and authority')
+        return dict(guard=h.pin(stdout),result=value)
     try:
         submit_guard=native('submit',authority['actual_stage_guard'])
-        time.sleep(15)  # Outside every original per-action guardian.
+        (out/'startup').mkdir(mode=0o700)
+        try:
+            startup=wait_for_startup_ready(startup_probe,authority['startup_watch_profile'])
+            h.write_new(out/'STARTUP_WATCH.json',startup)
+        except BaseException as startup_error:
+            cancellation=None;cancel_error=None
+            try:cancellation=native('cancel',submit_guard)
+            except BaseException as exc:cancel_error=type(exc).__name__+': '+str(exc)
+            h.write_new(out/'STARTUP_FAILED.json',dict(status=('FAILED_STARTUP_EXACT_CANCEL_REQUESTED_NOT_TERMINAL_PROOF'
+                if cancellation is not None else 'FAILED_STARTUP_CANCEL_UNKNOWN_ROLE_QUARANTINED'),
+                error=type(startup_error).__name__+': '+str(startup_error),cancel_guard=cancellation,cancel_error=cancel_error,
+                no_retry=True,no_release=True,all_reserved_fees_retained=True))
+            h.write_new(root/'ROLE_FAILED_SPENT.json',dict(status='FAILED_ROLE_SPENT_DRAIN_OR_DIAGNOSIS_ONLY',
+                failed_startup=h.pin(out/'STARTUP_FAILED.json'),old_fees_retained=True))
+            raise
         ready_guard=native('ready',submit_guard)
         ready=h.read(h.pin(root/'READY.json'));snapshot=ready['physical_snapshot_value']
+        h.require(h.pin(root/'READY.json')['sha256']==startup['ready']['sha256'],'READY changed after exact startup observation')
         h.require(time.time()-snapshot['observed_epoch']<90,'insufficient unchanged READY window; no payload released')
         bundle=out/'release';preparation.prepare(config_path,bundle)
         peer('source_physical',bundle,ready_guard)
@@ -135,6 +192,7 @@ def run(config_path,authority_pin):
         h.write_new(bundle/'RELEASE.json',proposal)
         release_guard=native('release',ready_guard)
         result=dict(status='NATIVE_NUMERICAL_ROOT_RELEASE_ISSUED_AWAIT_COMPUTE_NOT_ACCEPTED',job=h.pin(root/'JOB.json'),
+            startup_watch=h.pin(out/'STARTUP_WATCH.json'),
             submit_guard=submit_guard,ready_guard=ready_guard,release_guard=release_guard,root_release=h.pin(bundle/'RELEASE.json'),
             actual_independent_source_review=h.pin(bundle/'STAGE_SOURCE_REVIEW.json'),actual_independent_physical_review=h.pin(bundle/'PHYSICAL_CORE_REVIEW.json'),
             actual_independent_owner_review=h.pin(bundle/'OWNER_REVIEW.json'),actual_independent_outer_review=h.pin(bundle/'PEER_RELEASE.json'),
@@ -148,7 +206,7 @@ def run(config_path,authority_pin):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--config',required=True);parser.add_argument('--authority',required=True);parser.add_argument('--authority-sha256',required=True)
-    args=parser.parse_args();signal.signal(signal.SIGXCPU,signal.SIG_DFL);signal.alarm(900)
+    args=parser.parse_args();signal.signal(signal.SIGXCPU,signal.SIG_DFL);signal.alarm(1200)
     resource.setrlimit(resource.RLIMIT_CORE,(0,0));resource.setrlimit(resource.RLIMIT_CPU,(8,136))
     result=run(args.config,dict(path=args.authority,sha256=args.authority_sha256));print(json.dumps(result,sort_keys=True))
 

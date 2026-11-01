@@ -16,6 +16,20 @@ NATIVE=metadata.NATIVE
 TERMINAL=metadata.TERMINAL
 ACTION_ENVELOPE=metadata.ACTION_ENVELOPE
 NATIVE_CONTROL_TOTAL=136
+STARTUP_WATCH_PROFILE=dict(maximum_probes=10,interval_seconds=20,deadline_seconds=300,
+    probe_local_CPU=3,probe_remote_unknown_fee=3,probe_wall_seconds=45,
+    combined_startup_watch_CPU_ceiling=60)
+
+
+def validate_startup_watch_budget(config,scope):
+    budget=h.read(config['startup_watch_budget'])
+    h.require(budget.get('status')=='PROSPECTIVE_FRESH_NUMERICAL_STARTUP_WATCH_BUDGET'
+              and budget.get('scope')==config['scope'] and budget.get('profile')==STARTUP_WATCH_PROFILE
+              and budget.get('expires_epoch')==scope['expires_epoch']
+              and scope.get('administrative_allocations',{}).get('startup_watch60')==60
+              and scope.get('new_separate_administrative_CPU_reservation')==234,
+              'new complete startup60 including each remote unknown fee; original native136 unchanged')
+    return budget
 
 
 def load_config(path):
@@ -56,6 +70,7 @@ def load_config(path):
     h.require(budget.get('status')=='PROSPECTIVE_FRESH_NUMERICAL_NATIVE_CONTROL_BUDGET'
               and budget.get('combined_native_control_CPU_ceiling')==136 and budget.get('scope')==config['scope']
               and budget.get('expires_epoch')==scope['expires_epoch'],'separate complete native136 funding')
+    validate_startup_watch_budget(config,scope)
     h.require(config['node']=='node-13' and config['remote_namespace'].startswith('/mnt/beegfs/home/jaguir26/pricefm_r182_'),
               'new isolated numerical namespace on qualified node')
     h.require(set(config['scientific_sources'])==set(contract.SCIENCE_HASHES)
@@ -381,10 +396,17 @@ def acknowledge_failed_previous(registry,role,guard_path):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action',choices=['prepare','stage','submit','ready','release','observe','collect','accept','cancel','reconcile','retire_failed','finalize'])
+    parser.add_argument('action',choices=['prepare','stage','submit','startup_probe','ready','release','observe','collect','accept','cancel','reconcile','retire_failed','finalize'])
     parser.add_argument('--config',required=True);parser.add_argument('--role',choices=ROLES,required=True)
     for name in ['bundle','actual-review','previous-guard','failed-guard']:parser.add_argument('--'+name)
-    args=parser.parse_args();c,s,site,hashes=load_config(args.config);h.require(args.role==c['role'],'only the singly funded role is admitted')
+    parser.add_argument('--driver-authority');parser.add_argument('--driver-authority-sha256')
+    parser.add_argument('--probe-index',type=int)
+    args=parser.parse_args()
+    if args.action=='startup_probe':
+        value=startup_probe(args.config,dict(path=args.driver_authority,sha256=args.driver_authority_sha256),args.probe_index)
+        h.require(args.role==value['role'],'startup probe role must match exact configuration')
+        print(json.dumps(value,sort_keys=True));return
+    c,s,site,hashes=load_config(args.config);h.require(args.role==c['role'],'only the singly funded role is admitted')
     if args.action!='finalize':
         require_outer_context();h.require(resource.getrlimit(resource.RLIMIT_CPU)[1]==action_limits(args.action)['local_CPU'],'same original native action hard cap required')
     else:resource.setrlimit(resource.RLIMIT_CPU,(2,2));signal.alarm(15)
@@ -636,6 +658,55 @@ def validate_ready(ready, p, job_id):
               "stale/foreign/malformed READY cannot release payload")
 
 
+def startup_probe(config_path,authority_pin,index):
+    """One separately funded exact-file observation, never the READY action.
+
+    Absence is a successful waiting observation. Transport or source/identity
+    disagreement is fatal. No Slurm accounting poll, grant or release occurs.
+    """
+    config,scope,site,_=load_config(config_path);require_outer_context()
+    h.require(resource.getrlimit(resource.RLIMIT_CPU)[1]==3
+              and type(index) is int and 0<=index<STARTUP_WATCH_PROFILE['maximum_probes'],
+              'one original H3 startup probe and finite exact index required')
+    authority=h.read(authority_pin);now=time.time()
+    h.require(authority.get('status')=='ROOT_AUTHORIZED_FROZEN525_NUMERICAL_CRITICAL_LIFECYCLE'
+              and authority.get('config')==h.pin(config_path) and authority.get('scope')==config['scope']
+              and authority.get('driver_source')==config['critical_driver']
+              and authority.get('startup_watch_profile')==STARTUP_WATCH_PROFILE
+              and authority.get('startup_watch_budget')==config['startup_watch_budget']
+              and scope['issued_epoch']<=authority['issued_epoch']<=now<authority['expires_epoch']<=scope['expires_epoch'],
+              'exact source/config/scope-bound startup watcher authority')
+    root=Path(config['registry'])/config['role'];p=packet(root);job=known_job(root)
+    h.require(records(root)[-1]['state']=='SUBMITTED' and not (root/'ROLE_FAILED_SPENT.json').exists()
+              and job['scope_id']==p['scope_id'],'only exact fresh submitted job may be probed')
+    out=Path(scope['allowed_metadata_output_root'])/'critical_driver/startup'
+    h.require(out.is_dir(),'original driver must create private startup namespace')
+    one_shot(out,'probe_%02d'%index)
+    raw=run_native(site,['test','-f',p['remote_root']+'/READY.json'])
+    h.write_new(out/('probe_%02d.native.json'%index),raw)
+    h.require(raw['returncode'] in (0,1),'startup probe transport failed; never waiting or retry authority')
+    value=dict(status='STARTUP_WAITING_READY_ABSENT_NO_RELEASE',probe_index=index,
+        job_id=job['job_id'],scope_id=p['scope_id'],role=config['role'],config=h.pin(config_path),
+        driver_authority=authority_pin,batch_source_sha256=digest(__file__),
+        command_pid=os.getpid(),command_birth_ticks=h.process_birth_ticks(),observed_epoch=now,
+        raw_observation=h.pin(out/('probe_%02d.native.json'%index)),production_admission=False)
+    if raw['returncode']==0:
+        # This is a bounded metadata copy. The one-shot native READY action
+        # still performs its own exact fetch and full real release validation.
+        resource.setrlimit(resource.RLIMIT_FSIZE,(4*1024**2,4*1024**2))
+        local=out/('probe_%02d.READY.json'%index)
+        transfer=run_sftp(site,['get '+p['remote_root']+'/READY.json '+safe_path(str(local))],out/('probe_%02d.sftp'%index))
+        h.write_new(out/('probe_%02d.transfer.json'%index),transfer)
+        h.require(transfer['returncode']==0,'startup READY metadata transfer failed')
+        ready_value=h.read(h.pin(local));validate_ready(ready_value,p,job['job_id'])
+        h.require(type(ready_value.get('physical_snapshot_value',{}).get('observed_epoch')) in (int,float)
+                  and 0<=time.time()-ready_value['physical_snapshot_value']['observed_epoch']<90,
+                  'startup READY physical snapshot is stale or future')
+        value.update(status='STARTUP_READY_PRESENT_MATCHED_NO_RELEASE',ready=h.pin(local))
+    h.write_new(out/('probe_%02d.RESULT.json'%index),value)
+    return value
+
+
 def ready(site, root):
     p = packet(root); job = h.read(h.pin(root / "JOB.json")); one_shot(root, "ready")
     # One paid observation only. Wait outside this guarded action, then fetch
@@ -702,11 +773,21 @@ def parse_accounting(raw, job_id, scope_id):
     rows = [x for x in lines if x[0] == job_id]
     h.require(len(rows) == 1, "one complete canonical primary Slurm row required")
     x = rows[0]; state = x[1].split()[0]
-    h.require(x[6] == scope_id and x[7:9] == ["128x24", "128x24"] and x[5] == "1", "foreign job/account/allocation")
+    h.require(x[6] == scope_id and x[7:9] == ["128x24", "128x24"] and x[5] in ("0","1"), "foreign job/account/allocation")
     memory = re.fullmatch(r"([0-9.]+)([KMG])([cn])?", x[9])
     h.require(memory is not None and float(memory[1]) * {"K": 1 / 1024, "M": 1, "G": 1024}[memory[2]] == 8192,
               "actual primary requested memory differs from8GiB")
     cpu = CPU_seconds(x[3]); elapsed = int(x[4]); h.require(cpu <= 600 and 0 <= elapsed <= 1200, "whole batch reservation exceeded")
+    if x[5]=='0':
+        h.require(len(lines)==1 and cpu==0 and elapsed==0 and x[2]=='0:0'
+                  and state in {'PENDING','CONFIGURING','CANCELLED'},
+                  'unallocated accounting requires one zero-CPU/elapsed pending or cancelled primary only')
+        return dict(job_id=job_id,state=state,exit_code=x[2],canonical_primary_CPU_seconds=0.,elapsed_seconds=0,
+            complete=False,terminal=state=='CANCELLED',allocation_state='UNALLOCATED_NO_NUMERICAL_SUCCESS',
+            allocated_CPUs=0,numerical_admission=False,missing_required_rows=[job_id+'.batch'],
+            MaxRSS_raw={job_id:x[10] or None},unknown_MaxRSS_is_not_zero=True,
+            primary_CPU_consistent_with_each_step=True,raw_sacct=raw,step_rows_diagnostic_not_added=True,
+            primary_charge_counted_once=True)
     required = {job_id, job_id + ".batch"}; actual = {row[0] for row in lines}
     for row in lines:
         h.require(re.fullmatch(r"[0-9]+:[0-9]+", row[2]) and 0 <= int(row[4]) <= 1200
@@ -733,8 +814,12 @@ def observe(site, root):
                   "minimum300seconds between paid Slurm accounting intents, including failures")
     result = run_native(site, ["sacct", "--jobs", job["job_id"], "--noheader", "--parsable2", "--format",
         "JobIDRaw,State,ExitCode,TotalCPU,ElapsedRaw,AllocCPUS,JobName%128,Account,Partition,ReqMem,MaxRSS"])
+    # Persist even transport, identity or parsing failures before interpreting
+    # them. The intent count and 300-second throttle still include failures.
+    raw_path=root/("accounting_raw_%04d.json"%count);h.write_new(raw_path,result)
     h.require(result["returncode"] == 0, "accounting observation failed")
     value = parse_accounting(result["stdout"], job["job_id"], p["scope_id"])
+    value['raw_observation']=h.pin(raw_path)
     path = root / ("accounting_%04d.json" % sum(x["state"] == "OBSERVED" for x in past)); h.write_new(path, value)
     append(root, "OBSERVED", accounting=h.pin(path))
     return value
@@ -789,12 +874,24 @@ def retire_failed(config, site, root, actual_review):
     h.require(peer["status"] == "PASS_REVIEWED_FROZEN525_FAILED_ROLE_RETIREMENT"
               and peer["job_id"] == job["job_id"] and peer["accounting"] == account_pin,
               "actual failed-role retirement review required")
+    absence=[]
+    if account.get('allocation_state')=='UNALLOCATED_NO_NUMERICAL_SUCCESS':
+        h.require(account['state']=='CANCELLED' and account['allocated_CPUs']==0
+                  and account['canonical_primary_CPU_seconds']==account['elapsed_seconds']==0
+                  and not (root/'READY.json').exists()
+                  and not (Path(config['registry']).parent/'critical_driver/release/RELEASE.json').exists(),
+                  'unallocated cancellation cannot contain local READY or release')
+        for relative in ['READY.json','release/RELEASE.json','result/RETURN_MANIFEST.json']:
+            observation=run_native(site,['test','-e',p['remote_root']+'/'+relative]);absence.append(observation)
+            h.write_new(root/('unallocated_absence_%02d.json'%(len(absence)-1)),observation)
+            h.require(observation['returncode']==1,'unallocated cancelled role has remote payload/unknown transport; claim stays')
     queue = run_native(site, ["squeue", "--noheader", "--user", site["user"], "--format", "%i"])
     h.require(queue["returncode"] == 0 and job["job_id"] not in queue["stdout"].split(), "failed job still queued/unknown")
     lock = config["remote_namespace"] + "/qualification.lock"
     for argv in (["test", "-f", lock + "/OWNED_" + p["scope_id"]], ["rm", "--", lock + "/OWNED_" + p["scope_id"]], ["rmdir", lock]):
         h.require(run_native(site, argv)["returncode"] == 0, "failed claim release unknown; no retry")
     append(root, "FAILED_RETIRED_NO_RETRY", accounting=account_pin, independent_review=h.pin(actual_review),
+           unallocated_native_absence_checks=absence,
            all_fees_and_partial_artifacts_retained=True, same_role_resubmission_forbidden=True)
     return dict(status="FAILED_RETIRED_NO_RETRY", job_id=job["job_id"])
 

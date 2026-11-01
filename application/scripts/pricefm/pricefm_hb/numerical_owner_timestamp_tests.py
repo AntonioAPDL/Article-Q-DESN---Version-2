@@ -6,6 +6,7 @@ constructs its metadata and both real independent peer phases validate it;
 the actual local/compute release validators consume the produced proposal.
 """
 import hashlib
+import contextlib
 import json
 from pathlib import Path
 import tempfile
@@ -28,7 +29,7 @@ class AdvancingClock:
 
 
 class OwnerTimestampTests(unittest.TestCase):
-    def exercise(self,folder,scope_seconds=20000,mutation=None):
+    def exercise(self,folder,scope_seconds=20000,mutation=None,startup_failure=False):
         clock=AdvancingClock();actions=[];phases=[];seen={}
         with patch.object(driver.time,'time',side_effect=clock):
             context=retained.BuilderTests().fixture(folder);config,scope,root,packet,spec,ready=context
@@ -54,6 +55,8 @@ class OwnerTimestampTests(unittest.TestCase):
             dummy=folder/'UNIT_NEVER_EXECUTED.py';dummy.write_text('# synthetic source, never executed\n')
             stage=folder/'UNIT_STAGE.json';prepare.h.write_new(stage,dict(synthetic_not_guard_proof=True))
             authority=dict(original_supervisor=prepare.h.pin(dummy),peer_program=prepare.h.pin(dummy),actual_stage_guard=prepare.h.pin(stage))
+            authority['startup_watch_profile']=batch.STARTUP_WATCH_PROFILE
+            (folder/'UNIT_CONFIG.json').write_text(json.dumps(config,sort_keys=True)+'\n')
             reuse=prepare.h.read(config['runtime_reuse'])
             def peer_context(bundle):return config,scope,root,bundle,packet,spec,ready,authority,reuse
             def native_child(argv,stdout,stderr,**kwargs):
@@ -71,7 +74,16 @@ class OwnerTimestampTests(unittest.TestCase):
                         peer.owner_phase(peer_context(bundle),str(authority_file));seen['real_owner_phase_passed']=True
                 else:
                     action=argv[argv.index('-c')+2];actions.append(action)
-                    if action=='submit':prepare.h.write_new(root/'JOB.json',dict(job_id=ready['job_id'],unit_not_real_job=True))
+                    probe_value=None
+                    if action=='startup_probe':
+                        probe_value=dict(status='STARTUP_READY_PRESENT_MATCHED_NO_RELEASE',probe_index=0,
+                            production_admission=False,config=prepare.h.pin(folder/'UNIT_CONFIG.json'),
+                            driver_authority=prepare.h.pin(authority_file),ready=prepare.h.pin(root/'READY.json'))
+                    if action=='submit':prepare.h.write_new(root/'JOB.json',dict(job_id=ready['job_id'],scope_id=spec['scope_id'],unit_not_real_job=True))
+                    if action=='cancel':
+                        def cancelled(site,argv):seen['exact_cancel_argv']=argv;return dict(returncode=0,stdout='',stderr='')
+                        seen['expected_cancel_argv']=['scancel','--user','UNIT_USER','--name',packet['scope_id'],ready['job_id']]
+                        with patch.object(batch,'run_native',side_effect=cancelled):batch.cancel(dict(user='UNIT_USER'),root)
                     if action=='release':
                         self.assertEqual(phases,['source_physical','owner_release']);bundle=folder/'critical_driver/release'
                         with patch.object(batch,'run_sftp',return_value=dict(returncode=0,stdout='',stderr='')):
@@ -91,17 +103,20 @@ class OwnerTimestampTests(unittest.TestCase):
                         aggregate_CPU_seconds=.001,complete_lifecycle_wall_seconds=.001,guardian_forced_monitor_stop=False,
                         **{key:True for key in ['all_owned_descendants_reaped','independent_guardian','kernel_escape_filter',
                             'orphan_subreaper','guardian_included_in_CPU','inherited_waited_history_included_once']})
+                    if probe_value is not None:guard['stdout']=json.dumps(probe_value)
                     stdout.write(json.dumps(guard).encode());stdout.flush()
                 return type('NeverSpawned',(),{'wait':lambda _self:0})()
             with patch.object(driver,'require_authority',return_value=(config,scope,authority,root)),\
                  patch.object(prepare,'context',return_value=context),patch.object(batch,'packet',return_value=packet),\
-                 patch.object(driver.subprocess,'Popen',side_effect=native_child),patch.object(driver.time,'sleep'):
+                 patch.object(driver.subprocess,'Popen',side_effect=native_child),patch.object(driver.time,'sleep'),\
+                 (patch.object(driver,'wait_for_startup_ready',side_effect=ValueError('unit startup deadline')) if startup_failure else contextlib.nullcontext()):
                 try:seen['result']=driver.run(str(folder/'UNIT_CONFIG.json'),prepare.h.pin(authority_file))
                 except ValueError as error:
-                    if mutation is None:raise
+                    if mutation is None and not startup_failure:raise
                     seen['rejected']=str(error)
             seen.update(actions=actions,phases=phases,clock_calls=clock.calls,scope_expiry=scope['expires_epoch'],
                         released=(folder/'critical_driver/release/RELEASE.json').exists())
+            seen['role_failed_spent']=(root/'ROLE_FAILED_SPENT.json').exists()
         return seen
 
     def test_advancing_clock_actual_driver_real_peers_and_both_release_validators(self):
@@ -109,7 +124,7 @@ class OwnerTimestampTests(unittest.TestCase):
         auth=seen['produced_authority'];self.assertEqual(auth['expires_epoch']-auth['issued_epoch'],7200)
         self.assertGreater(seen['clock_calls'],2);self.assertTrue(seen['real_owner_phase_passed'])
         self.assertTrue(seen['real_local_release_passed']);self.assertTrue(seen['real_worker_release_passed'])
-        self.assertEqual(seen['actions'],['submit','ready','release']);self.assertTrue(seen['released'])
+        self.assertEqual(seen['actions'],['submit','startup_probe','ready','release']);self.assertTrue(seen['released'])
 
     def test_scope_expiry_clips_same_captured_epoch(self):
         with tempfile.TemporaryDirectory(prefix='pricefm_unit_r187_') as path:seen=self.exercise(Path(path),scope_seconds=900)
@@ -119,11 +134,17 @@ class OwnerTimestampTests(unittest.TestCase):
     def assert_peer_rejection(self,mutation):
         with tempfile.TemporaryDirectory(prefix='pricefm_unit_r187_') as path:seen=self.exercise(Path(path),mutation=mutation)
         self.assertIn('fresh bounded owner450/child300/whole600 authority',seen['rejected'])
-        self.assertEqual(seen['actions'],['submit','ready']);self.assertFalse(seen['released'])
+        self.assertEqual(seen['actions'],['submit','startup_probe','ready']);self.assertFalse(seen['released'])
 
     def test_real_peer_still_rejects_overlong_authority(self):self.assert_peer_rejection('overlong')
     def test_real_peer_still_rejects_expired_authority(self):self.assert_peer_rejection('expired')
     def test_real_peer_still_rejects_future_issuance(self):self.assert_peer_rejection('late_issuance')
+
+    def test_actual_driver_startup_failure_uses_real_exact_cancel_and_spends_role(self):
+        with tempfile.TemporaryDirectory(prefix='pricefm_unit_r189_') as path:seen=self.exercise(Path(path),startup_failure=True)
+        self.assertEqual(seen['actions'],['submit','cancel']);self.assertEqual(seen['phases'],[])
+        self.assertFalse(seen['released']);self.assertTrue(seen['role_failed_spent'])
+        self.assertEqual(seen['exact_cancel_argv'],seen['expected_cancel_argv'])
 
 
 if __name__=='__main__':unittest.main()

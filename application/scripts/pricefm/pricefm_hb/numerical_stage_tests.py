@@ -520,6 +520,7 @@ class CriticalDriverTests(unittest.TestCase):
         dummy=folder/'UNIT_NEVER_EXECUTED.py';dummy.write_text('# source fixture only\n')
         stage=folder/'UNIT_STAGE_GUARD.json';stage.write_text('{}')
         authority=dict(original_supervisor=preparation.h.pin(dummy),peer_program=preparation.h.pin(dummy),actual_stage_guard=preparation.h.pin(stage))
+        authority['startup_watch_profile']=batch.STARTUP_WATCH_PROFILE
         actions=[];peer_phases=[]
         def popen(argv,stdout,stderr,**kwargs):
             if '--phase' in argv:
@@ -542,12 +543,18 @@ class CriticalDriverTests(unittest.TestCase):
                         stage_pins={key:dict(path=packet['remote_root']+'/release/'+name,sha256=batch.digest(bundle/name)) for key,name in labels.items()}))
             else:
                 action=argv[argv.index('-c')+2];actions.append(action)
+                probe_value=None
+                if action=='startup_probe':
+                    probe_value=dict(status='STARTUP_READY_PRESENT_MATCHED_NO_RELEASE',probe_index=0,production_admission=False,
+                        config=preparation.h.pin(folder/'UNIT_CONFIG.json'),driver_authority=preparation.h.pin(authority_file),
+                        ready=preparation.h.pin(root/'READY.json'))
                 if action=='submit':preparation.h.write_new(root/'JOB.json',{'job_id':ready['job_id'],'unit_fixture_only':True})
                 if action=='release':self.assertEqual(peer_phases,['source_physical','owner_release'])
                 guard=dict(returncode=0,command_returncode=0,cap_reason=None,CPU_limit=int(argv[argv.index('--cpu')+1]),
                     aggregate_CPU_seconds=.001,complete_lifecycle_wall_seconds=.001,guardian_forced_monitor_stop=False,
                     **{key:True for key in ['all_owned_descendants_reaped','independent_guardian','kernel_escape_filter',
                         'orphan_subreaper','guardian_included_in_CPU','inherited_waited_history_included_once']})
+                if probe_value is not None:guard['stdout']=json.dumps(probe_value)
                 stdout.write(json.dumps(guard).encode());stdout.flush()
             return type('NeverSpawned',(),{'wait':lambda _self:0})()
         with patch.object(driver,'require_authority',return_value=(config,scope,authority,root)),\
@@ -556,18 +563,18 @@ class CriticalDriverTests(unittest.TestCase):
             try:result=driver.run(str(folder/'UNIT_CONFIG.json'),preparation.h.pin(authority_file))
             except ValueError:
                 self.assertIsNotNone(reject_phase);result=None
-            sleep.assert_called_once_with(15)
+            sleep.assert_not_called()
         return result,actions,peer_phases,folder/'critical_driver'
     def test_mocked_lifecycle_is_acyclic_and_two_peers_precede_release(self):
         with tempfile.TemporaryDirectory() as path:
             result,actions,peers,out=self.exercise(Path(path))
-            self.assertEqual(actions,['submit','ready','release']);self.assertEqual(peers,['source_physical','owner_release'])
+            self.assertEqual(actions,['submit','startup_probe','ready','release']);self.assertEqual(peers,['source_physical','owner_release'])
             self.assertEqual(result['status'],'NATIVE_NUMERICAL_ROOT_RELEASE_ISSUED_AWAIT_COMPUTE_NOT_ACCEPTED')
             self.assertTrue((out/'RESULT.json').is_file());self.assertFalse((out/'FAILED.json').exists())
     def test_mocked_peer_rejection_never_releases_or_retries(self):
         with tempfile.TemporaryDirectory() as path:
             result,actions,peers,out=self.exercise(Path(path),reject_phase='owner_release')
-            self.assertIsNone(result);self.assertEqual(actions,['submit','ready']);self.assertEqual(peers,['source_physical','owner_release'])
+            self.assertIsNone(result);self.assertEqual(actions,['submit','startup_probe','ready']);self.assertEqual(peers,['source_physical','owner_release'])
             self.assertTrue((out/'FAILED.json').is_file());self.assertFalse((out/'release/RELEASE.json').exists())
 
 

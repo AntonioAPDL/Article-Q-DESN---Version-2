@@ -2794,9 +2794,10 @@ coefficients defined in the design subsection.
 Write \(L_{H,k}\) for the historical likelihood and \(\Theta_k\) for
 the coefficients, scales, and shape parameters at level \(p_k\).
 Historical and issued GloFAS contributions share their source-specific
-scale and shape parameters. Conditional on these parameters and the latent
-future reference path \(\vect y_{F,k}\), issued members are modeled as
-independent across members and horizons. Set
+scale and shape parameters. At each horizon, the 51 issued members are
+modeled as conditionally independent given the regression parameters,
+the latent future reference path \(\vect y_{F,k}\), and preceding input
+histories. Set
 \(\mu^G_{k,h}=q_{k,T+h}+d_{k,T+h}\), and write \(D\) for the historical
 observations and issued ensemble. The quantile-regression target is
 \begin{equation}

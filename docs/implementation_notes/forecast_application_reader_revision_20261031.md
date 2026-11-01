@@ -152,3 +152,25 @@ pages; anonymous proofs compiled to 37 and 100 pages. Final logs were clean.
 The new input, recursive forecast, GloFAS and regional forecast displays were
 visually inspected. Successful proofs do not remove the pending scientific
 gates or establish submission readiness.
+
+## Follow-up: issued-member conditioning
+
+A fresh remote readback verified the initial deployment at article snapshot
+`b2613a92683e2729492d79bd0dedd70d8beb9991`, sourced from main
+`bf625dac5ff1559683f42dcc59c41ca87fbf0e46`. All 110 remote snapshot files
+passed the isolated projection checker and both manuscripts compiled cleanly.
+
+The read-through identified one inherited supplementary sentence claiming
+independence across both members and horizons conditional only on parameters
+and the latent path. Later design rows use earlier ensemble centers, so this
+sentence was too broad. It now states conditional independence of the 51
+members at each horizon, given the parameters, latent reference path and
+preceding input histories. The displayed target, augmentation, priors and all
+numerical results are unchanged. No refit is required by this clarification.
+
+The exposition regression now has 25 checks and 23 mutation rejections; the
+additional negative test restores the unqualified across-horizon claim.
+The live article manifest is refreshed only for the supplementary source
+digest and its existing provenance. Historical receipts and numerical
+source/output digests remain unchanged. This correction does not authorize
+the separately planned future-transition target or distributed campaign.

@@ -75,6 +75,11 @@ local({
   reject_semantics("ensemble likelihood collapsed to one summary", changed_main = mutate(main,
     "all 51 members still enter the likelihood individually",
     "the ensemble enters as one average"))
+  reject_semantics("unqualified across-horizon ensemble independence", changed_supplement = mutate(supplement,
+    paste0("At each horizon, the 51 issued members are modeled as ",
+      "conditionally independent given the regression parameters, the latent future reference ",
+      "path \\(\\vect y_{F,k}\\), and preceding input histories."),
+    "Conditional on the regression parameters and latent future reference path, issued members are independent across members and horizons."))
   reject_semantics("mean reference location called a predictive quantile", changed_main = mutate(main,
     "variational mean", "predictive quantile"))
   reject_semantics("future gauge truth enters fitting", changed_main = mutate(main,

@@ -146,6 +146,11 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
     grepl("(earlier|lagged)[^.]{0,100}(value|values|path|input)|path[^.]{0,100}earlier", glofas) &&
     grepl("(mean|average)[^.]{0,100}(ensemble|issued)|ensemble[^.]{0,100}(mean|average)", glofas),
     "Explain causal latent inputs and distinguish ensemble summaries from the individual member likelihoods.")
+  require_check(has(sg, paste0("At each horizon, the 51 issued members are modeled as ",
+      "conditionally independent given the regression parameters, the latent future reference ",
+      "path \\(\\vect y_{F,k}\\), and preceding input histories.")) &&
+    !has(sg, "independent across members and horizons"),
+    "Condition within-horizon member densities on preceding inputs without asserting across-horizon independence.")
   require_check(has(glofas, "variational mean") &&
     has(glofas, "not obtained by taking a quantile") &&
     has(glofas, "future USGS measurements are reserved for scoring"),

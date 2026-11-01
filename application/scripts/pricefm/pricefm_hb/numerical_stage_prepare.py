@@ -91,7 +91,7 @@ def prerequisite_inputs(accepted_pin,manifest_inputs,output,*,expected_node,expe
         manifest=h.read(manifest_inputs[label])
         for row in manifest['files']:files.append(dict(path=code_root+'/'+row['relative'],sha256=row['sha256']))
     reuse=dict(status='PREPARED_ACCEPTED_NAMESPACE_RUNTIME_REUSE_NOT_EXECUTION_AUTHORITY',accepted_boundary=accepted,
-        native_R=dict(path=installation['R_HOME']+'/bin/exec/R',sha256=c.NATIVE_SHA),inventory=qualified['inventory'],qualification_node=expected_node,qualification_route_id=expected_route_id,
+        native_R=dict(path=installation['R_HOME']+'/bin/exec/R',sha256=c.NATIVE_SHA),inventory=qualified['inventory'],qualification_node=expected_node,qualification_route_id=expected_route_id,cached_artifact_origin_node='node-13',
         runtime_files=files,manifest_inputs=manifest_inputs,
         boundary_qualification=dict(path=str(remote_root/'owner/RESULT.json'),sha256=rows['owner/RESULT.json']['sha256']),
         no_runtime_or_target_bytes_opened_administratively=True,current_compute_must_rehash_all2279_code_files=True,

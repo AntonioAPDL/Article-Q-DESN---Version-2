@@ -29,6 +29,60 @@ g <- list(family = "mq_grid", q = c(0, 0, 1), tau = tau)
 check(max(abs(app_iqf_invert_cdf(list(g), c(.05, .3, .5, .7, .95)) - c(0, 0, 0, .5, 1))) < 1e-7)
 reject(app_iqf_mq_grid_cdf(0, 1:3, c(.2, .1, .9)), "Invalid MQ")
 
+# Knot/slope/jump inversion preserves the same generalized inverse as the
+# original mixture-CDF bisection. Endpoint atoms, flats, disjoint support and
+# CDF plateaus require the leftmost root, not interpolation through an atom.
+mq_kernel <- function(q, p = tau) list(family = "mq_grid", q = q, tau = p)
+mq_cases <- list(list(g), list(mq_kernel(rep(0, 3)), mq_kernel(rep(10, 3))),
+  list(mq_kernel(c(-2, 0, 0)), mq_kernel(c(0, 0, 2))),
+  list(mq_kernel(c(2, -1, 0)), mq_kernel(c(-3, 1, 1))),
+  list(mq_kernel(c(-5, -4, -3)), mq_kernel(c(3, 4, 5))))
+mq_probabilities <- c(.001, .05, .1, .3, .5, .500000001, .7, .9, .95, .999)
+for (case in mq_cases) {
+  fast <- app_iqf_mq_mixture_inverse(case, mq_probabilities, 1e-8)
+  reference <- app_iqf_invert_cdf_bisection(case, mq_probabilities, 5e-9)
+  check(max(abs(fast - reference)) < 1e-8)
+  probe <- app_iqf_mixture_cdf(c(fast - 1e-8, fast + 1e-8), case)
+  check(all(probe[seq_along(fast)] < mq_probabilities) &&
+    all(probe[length(fast) + seq_along(fast)] >= mq_probabilities))
+  q_matrix <- do.call(rbind, lapply(case, function(k) app_iqf_grid(k$q, k$tau)$q))
+  cdf_probe <- sort(unique(c(-Inf, Inf, q_matrix, q_matrix - 1e-8, q_matrix + 1e-8)))
+  check(max(abs(app_iqf_mq_matrix_cdf(cdf_probe, q_matrix, tau) -
+    app_iqf_mixture_cdf(cdf_probe, case))) < 1e-12)
+}
+mq_tau7 <- c(.05, .10, .25, .50, .75, .90, .95)
+set.seed(9361L)
+for (L in c(1L, 3L, 8L, 21L)) for (replicate in seq_len(3L)) {
+  grids <- lapply(seq_len(L), function(i) mq_kernel(
+    round(stats::qnorm(mq_tau7) + stats::rnorm(7L, sd = .7) + stats::rnorm(1L), 1L), mq_tau7))
+  rng_before <- .Random.seed
+  fast <- app_iqf_invert_cdf(grids, mq_probabilities, 1e-8)
+  reference <- app_iqf_invert_cdf_bisection(grids, mq_probabilities, 5e-9)
+  check(max(abs(fast - reference)) < 1e-8)
+  check(identical(.Random.seed, rng_before))
+  q_matrix <- do.call(rbind, lapply(grids, function(k) app_iqf_grid(k$q, k$tau)$q))
+  check(max(abs(app_iqf_mq_matrix_cdf(c(-5, -1, 0, 1, 5), q_matrix, mq_tau7) -
+    app_iqf_mixture_cdf(c(-5, -1, 0, 1, 5), grids))) < 1e-12)
+}
+# Shared latent feature histories with one fixed stacked coefficient draw are
+# also covered; no rank recoupling or change of independent/joint assembly.
+features <- c(-2, -.3, .2, 1.7)
+coupled_grids <- lapply(features, function(x) mq_kernel(
+  stats::qnorm(mq_tau7) + x * seq(.1, .7, length.out = 7L), mq_tau7))
+check(max(abs(app_iqf_mq_mixture_inverse(coupled_grids, mq_tau7) -
+  app_iqf_invert_cdf_bisection(coupled_grids, mq_tau7, 5e-9))) < 1e-8)
+# Translation and rescaling do not replace the original quantile-grid law.
+scaled_grids <- lapply(coupled_grids, function(k) mq_kernel(7 + 2.3 * k$q, k$tau))
+check(max(abs(app_iqf_mq_mixture_inverse(scaled_grids, mq_tau7) -
+  (7 + 2.3 * app_iqf_mq_mixture_inverse(coupled_grids, mq_tau7)))) < 1e-8)
+reject(app_iqf_mq_mixture_inverse(list(), .5), "Invalid MQ mixture")
+heterogeneous <- list(g, mq_kernel(c(-1, 0, 2), c(.05, .6, .95)))
+check(max(abs(app_iqf_mq_mixture_inverse(heterogeneous, mq_probabilities) -
+  app_iqf_invert_cdf_bisection(heterogeneous, mq_probabilities, 5e-9))) < 1e-8)
+extreme_narrow <- list(mq_kernel(c(0, 1e-320, 2e-320)))
+check(max(abs(app_iqf_mq_mixture_inverse(extreme_narrow, mq_probabilities) -
+  app_iqf_invert_cdf_bisection(extreme_narrow, mq_probabilities))) < 1e-8)
+
 # Hash streams are stable scientific streams, preserve caller RNG, and extend
 # by prefixes when L increases. No host/routing/resolution field enters the key.
 set.seed(294L); old <- .Random.seed; old_kind <- RNGkind()

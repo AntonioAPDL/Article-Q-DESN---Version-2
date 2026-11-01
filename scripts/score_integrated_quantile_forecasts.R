@@ -189,6 +189,89 @@ app_iqf_score_manifest <- function(root, path, expected) {
   x
 }
 
+app_iqf_score_bind_producers <- function(request, spec, manifest, claim, mode) {
+  require <- app_iqf_score_require
+  scalar <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x)
+  hash <- function(x) scalar(x) && grepl("^[a-f0-9]{64}$", x)
+  relative <- function(x) scalar(x) && !startsWith(x, "/") &&
+    !any(strsplit(x, "/", fixed = TRUE)[[1L]] %in% c("", ".", ".."))
+  fields <- c("task_id", "source_commit", "source_tree", "source_manifest_sha256",
+    "posterior_target_sha256", "input_manifest_sha256", "task_manifest_sha256", "rng_namespace")
+  require(mode %in% c("score", "aggregate") && isTRUE(claim$verified),
+    "accepted producers require a live verified central claim")
+  paths <- as.character(unlist(if (mode == "score") spec$forecast_shards else spec$score_blocks,
+    use.names = FALSE))
+  role <- if (mode == "score") "accepted_forecast_shard" else "accepted_score_block"
+  require(length(paths) > 0L && !anyDuplicated(paths) && all(vapply(paths, relative, logical(1L))),
+    "each consumed producer artifact must have one explicit relative input path")
+  selected <- manifest[manifest$role %in% c("accepted_forecast_shard", "accepted_score_block"), , drop = FALSE]
+  require(setequal(selected$relative_path, paths) && all(selected$role == role),
+    "accepted-input roles must match exactly the consumed producer artifacts")
+  bindings <- spec$producer_bindings
+  proofs <- claim$accepted_prerequisites
+  require(is.list(bindings) && length(bindings) == length(paths) &&
+    is.list(proofs) && length(proofs) > 0L,
+    "role-only scoring inputs are prohibited; exact central accepted-producer bindings are required")
+  binding_names <- c("input_relative_path", "producer_task_id", "producer_relative_path",
+    "producer_output_manifest_sha256")
+  require(all(vapply(bindings, function(x) is.list(x) && length(x) == length(binding_names) &&
+    !anyDuplicated(names(x)) && setequal(names(x), binding_names) &&
+    all(vapply(x, scalar, logical(1L))), logical(1L))),
+    "producer binding schema must be explicit and exact")
+  inputs <- vapply(bindings, `[[`, "", "input_relative_path")
+  require(!anyDuplicated(inputs) && setequal(inputs, paths),
+    "missing, duplicate or unused accepted-producer binding")
+  producer_keys <- vapply(bindings, function(x) paste(x$producer_task_id,
+    x$producer_relative_path, sep = "|"), "")
+  require(!anyDuplicated(producer_keys), "one accepted producer artifact cannot be consumed twice")
+  require(all(vapply(proofs, function(x) is.list(x) && scalar(x$task_id), logical(1L))),
+    "central accepted-prerequisite receipt is incomplete")
+  producer_ids <- vapply(proofs, `[[`, "", "task_id")
+  require(!anyDuplicated(producer_ids), "ambiguous central accepted-prerequisite task")
+  resolved <- lapply(paths, function(path) {
+    binding <- bindings[[match(path, inputs)]]
+    at <- match(binding$producer_task_id, producer_ids)
+    require(!is.na(at) && !identical(binding$producer_task_id, request$task_id),
+      "producer is not a distinct declared, centrally accepted prerequisite")
+    producer <- proofs[[at]]; identity <- producer$identity
+    require(hash(binding$producer_output_manifest_sha256) &&
+      identical(binding$producer_output_manifest_sha256, producer$output_manifest_sha256) &&
+      hash(producer$task_manifest_sha256) && hash(producer$posterior_target_sha256) &&
+      is.list(identity) && all(fields %in% names(identity)) &&
+      all(vapply(identity[fields], scalar, logical(1L))) &&
+      identical(identity$task_id, producer$task_id) &&
+      identical(identity$task_manifest_sha256, producer$task_manifest_sha256) &&
+      identical(identity$posterior_target_sha256, producer$posterior_target_sha256),
+      "accepted producer manifest, task or posterior identity differs from the frozen binding")
+    artifacts <- producer$artifacts
+    require(relative(binding$producer_relative_path) && is.list(artifacts) && length(artifacts) > 0L &&
+      all(vapply(artifacts, function(x) is.list(x) && relative(x$relative_path), logical(1L))),
+      "accepted producer artifact inventory is incomplete")
+    artifact_names <- vapply(artifacts, `[[`, "", "relative_path")
+    require(!anyDuplicated(artifact_names) && binding$producer_relative_path %in% artifact_names,
+      "artifact is absent or duplicated in its accepted producer packet")
+    artifact <- artifacts[[match(binding$producer_relative_path, artifact_names)]]
+    row <- manifest[manifest$relative_path == path, , drop = FALSE]
+    require(nrow(row) == 1L && identical(row$role, role) && hash(artifact$sha256) &&
+      identical(row$sha256, artifact$sha256) && is.numeric(artifact$bytes) &&
+      length(artifact$bytes) == 1L && is.finite(artifact$bytes) && artifact$bytes >= 0 &&
+      artifact$bytes == floor(artifact$bytes) && row$size_bytes == artifact$bytes,
+      "scoring input digest/size is not the exact accepted producer artifact")
+    c(binding, list(sha256 = artifact$sha256, size_bytes = artifact$bytes,
+      producer_task_manifest_sha256 = producer$task_manifest_sha256,
+      posterior_target_sha256 = producer$posterior_target_sha256, identity = identity[fields]))
+  })
+  stats::setNames(resolved, paths)
+}
+
+app_iqf_score_member_producer <- function(shard, binding) {
+  fields <- names(binding$identity)
+  app_iqf_score_require(length(fields) == 8L && is.list(shard$identity) &&
+    all(vapply(fields, function(name) identical(shard$identity[[name]], binding$identity[[name]]), logical(1L))),
+    "decoded forecast member identity differs from its centrally accepted producer")
+  invisible(TRUE)
+}
+
 if (sys.nframe() == 0L) {
   argv <- commandArgs(TRUE)
   arg <- function(name, default = NULL) {
@@ -198,6 +281,7 @@ if (sys.nframe() == 0L) {
   file_arg <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[[1L]])
   repo <- normalizePath(file.path(dirname(file_arg), ".."))
   source(file.path(repo, "application/R/integrated_quantile_forecast.R"))
+  source(file.path(repo, "scripts/integrated_quantile_blocks.R"))
   mode <- arg("mode", "preflight")
   app_iqf_score_require(mode %in% c("preflight", "score", "aggregate"), "unsupported scoring mode")
   request_file <- arg("request")
@@ -232,14 +316,18 @@ if (sys.nframe() == 0L) {
   bind <- function(relative, role) {
     j <- match(relative, manifest$relative_path)
     app_iqf_score_require(!is.na(j) && identical(manifest$role[j], role), "scoring role is not manifest-bound")
-    app_iqf_safe_path(request$input_root, relative)
+    path <- app_iqf_safe_path(request$input_root, relative)
+    app_iqf_score_require(file.info(path)$size == manifest$size_bytes[j] &&
+      identical(app_iqf_hash(path, TRUE), manifest$sha256[j]), "scoring input changed before reading")
+    path
   }
   spec <- jsonlite::read_json(bind(request$scoring_spec_path, "scoring_spec"), simplifyVector = FALSE)
   app_iqf_score_require(identical(spec$schema_version, "integrated_quantile_scoring_v1"), "scoring specification is unknown")
   if (mode == "preflight") {
-    cat("SCORING_PREFLIGHT_PASS: authenticated sidecars; zero scores generated.\n")
+    cat("SCORING_PREFLIGHT_PASS: authenticated sidecars; central accepted producers not checked; zero scores generated.\n")
     quit(save = "no", status = 0L)
   }
+  producers <- app_iqf_score_bind_producers(request, spec, manifest, claim, mode)
   setTimeLimit(elapsed = as.numeric(claim$resource_budget$wall_seconds), transient = FALSE)
   output <- normalizePath(request$output_root, mustWork = FALSE)
   app_iqf_score_require(identical(output, claim$output_root),
@@ -254,14 +342,15 @@ if (sys.nframe() == 0L) {
   if (mode == "score") {
     oracle <- readRDS(bind(spec$oracle_path, "scoring_oracle"))
     if (!"origin_id" %in% names(oracle$forecast_map)) oracle <- app_iqf_score_native_oracle(oracle)
-    blocks <- lapply(unlist(spec$forecast_shards), function(path) {
-      shard <- readRDS(bind(path, "accepted_forecast_shard"))
-      app_iqf_score_require(identical(shard$identity$posterior_target_sha256, request$posterior_target_sha256),
-        "forecast/scoring posterior target mismatch")
-      app_iqf_score_require(identical(shard$integration_accuracy_contract_sha256,
-        spec$integration_accuracy_contract_sha256), "scoring used a different integration accuracy contract")
-      app_iqf_score_shard(shard, oracle, unlist(spec$probabilities), unlist(spec$weights), spec$score_mode)
-    })
+    blocks <- do.call(c, lapply(unlist(spec$forecast_shards), function(path)
+      app_iqf_forecast_members(readRDS(bind(path, "accepted_forecast_shard")), function(shard) {
+        app_iqf_score_member_producer(shard, producers[[path]])
+        app_iqf_score_require(identical(shard$identity$posterior_target_sha256, request$posterior_target_sha256),
+          "forecast/scoring posterior target mismatch")
+        app_iqf_score_require(identical(shard$integration_accuracy_contract_sha256,
+          spec$integration_accuracy_contract_sha256), "scoring used a different integration accuracy contract")
+        app_iqf_score_shard(shard, oracle, unlist(spec$probabilities), unlist(spec$weights), spec$score_mode)
+      })))
     scores <- do.call(rbind, blocks)
     app_iqf_score_require(!anyDuplicated(do.call(paste, c(scores[c("model_id","draw_id","origin_id","horizon")], sep="|"))),
       "duplicate forecast shards in scoring task")
@@ -269,8 +358,11 @@ if (sys.nframe() == 0L) {
     bounded_write(scores, files)
     if (!is.null(spec$recovery_path)) {
       reference <- readRDS(bind(spec$recovery_path,"oracle_quantile_recovery"))
-      recovery <- do.call(rbind,lapply(unlist(spec$forecast_shards),function(path)
-        app_iqf_quantile_recovery(readRDS(bind(path,"accepted_forecast_shard")),reference)))
+      recovery <- do.call(rbind, do.call(c, lapply(unlist(spec$forecast_shards), function(path)
+        app_iqf_forecast_members(readRDS(bind(path,"accepted_forecast_shard")), function(shard) {
+          app_iqf_score_member_producer(shard, producers[[path]])
+          app_iqf_quantile_recovery(shard, reference)
+        }))))
       bounded_write(recovery, "oracle_recovery.csv")
       files <- c(files,oracle_recovery="oracle_recovery.csv")
     }
@@ -300,6 +392,7 @@ if (sys.nframe() == 0L) {
   }
   receipt <- list(schema_version="integrated_quantile_scoring_receipt_v1",mode=mode,
     task_id=request$task_id, numerical_gates_pass=TRUE, new_model_fits=0L,
+    accepted_producer_bindings=unname(producers),
     intervals="posterior_summaries_after_complete_drawwise_sum_count_aggregation",
     raw_coherence="not_inferred_from_ordered_predictive_CDF_quantiles")
   bounded_write(receipt, "score_receipt.json", "json")

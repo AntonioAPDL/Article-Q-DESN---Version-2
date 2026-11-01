@@ -271,5 +271,9 @@ run_standalone_glofas_test("application/tests/test_integrated_forecast_evidence.
 run_standalone_glofas_test("application/tests/test_glofas_family_transition.R")
 run_standalone_glofas_test("application/tests/test_integrated_forecast_transition_source_guard.R")
 stopifnot(system2("python3.11", app_path("application/tests/test_forecast_transition_control.py")) == 0L)
+run_standalone_glofas_test("application/tests/test_integrated_quantile_blocks.R")
+run_standalone_glofas_test("application/tests/test_glofas_family_transition_qualification.R")
+run_standalone_glofas_test("application/tests/test_integrated_quantile_qualification.R")
+stopifnot(system2("python3.11", app_path("application/tests/test_glofas_transition_campaign.py")) == 0L)
 
 cat("Application tests completed.\n")

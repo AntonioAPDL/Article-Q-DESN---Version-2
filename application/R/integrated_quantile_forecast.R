@@ -152,7 +152,7 @@ app_iqf_mixture_cdf <- function(y, kernels) {
   }
   Reduce(`+`, lapply(kernels, function(k) app_iqf_kernel_cdf(y, k))) / length(kernels)
 }
-app_iqf_invert_cdf <- function(kernels, probabilities, tolerance = 1e-8) {
+app_iqf_invert_cdf_bisection <- function(kernels, probabilities, tolerance = 1e-8) {
   app_iqf_require(all(is.finite(probabilities)) && all(probabilities > 0 & probabilities < 1) &&
     is.finite(tolerance) && tolerance > 0, "Invalid inversion settings.")
   # Bracket with actual support for grids, expanding for unbounded errors.
@@ -179,6 +179,110 @@ app_iqf_invert_cdf <- function(kernels, probabilities, tolerance = 1e-8) {
     }
     app_iqf_fail("CDF inversion exhausted its accuracy budget.")
   }, numeric(1L))
+}
+
+# Exact inversion of the equal-weight mixture of the original interpolated MQ
+# response laws. Every strict quantile segment is a uniform-density piece;
+# endpoint clamping and flat quantile segments contribute atoms. Combining their
+# slope/jump events avoids repeated O(L) CDF evaluations in every bisection.
+app_iqf_mq_matrix_cdf <- function(y, q, tau) {
+  q <- as.matrix(q); K <- length(tau); L <- nrow(q)
+  app_iqf_require(L > 0L && K >= 2L && ncol(q) == K && all(is.finite(q)) &&
+    all(q[, -1L, drop = FALSE] >= q[, -K, drop = FALSE]), "Invalid ordered matrix CDF kernels.")
+  app_iqf_grid(rep(0, K), tau)
+  vapply(y, function(value) {
+    index <- rowSums(q <= value)
+    out <- as.numeric(index == K)
+    rows <- which(index > 0L & index < K)
+    if (length(rows)) {
+      k <- index[rows]
+      low <- q[cbind(rows, k)]; high <- q[cbind(rows, k + 1L)]
+      out[rows] <- tau[k] + (tau[k + 1L] - tau[k]) * (value - low) / (high - low)
+    }
+    mean(out)
+  }, numeric(1L))
+}
+app_iqf_mq_mixture_inverse <- function(kernels, probabilities, tolerance = 1e-8) {
+  app_iqf_require(length(kernels) > 0L && length(probabilities) > 0L &&
+    all(is.finite(probabilities)) && all(probabilities > 0 & probabilities < 1) &&
+    length(tolerance) == 1L && is.finite(tolerance) && tolerance > 0,
+    "Invalid MQ mixture inversion settings.")
+  L <- length(kernels)
+  common_tau <- as.numeric(kernels[[1L]]$tau)
+  K <- length(common_tau)
+  same_grid <- all(vapply(kernels, function(k) identical(k$family, "mq_grid") &&
+    identical(as.numeric(k$tau), common_tau) && length(k$q) == K, logical(1L)))
+  cdf <- function(y) app_iqf_mixture_cdf(y, kernels)
+  if (same_grid) {
+    app_iqf_grid(rep(0, K), common_tau)
+    q <- do.call(rbind, lapply(kernels, function(k) as.numeric(k$q)))
+    app_iqf_require(all(is.finite(q)), "Nonfinite MQ matrix kernel.")
+    crossed <- which(rowSums(q[, -1L, drop = FALSE] < q[, -K, drop = FALSE]) > 0L)
+    for (i in crossed) q[i, ] <- stats::isoreg(seq_len(K), q[i, ])$yf
+    width <- q[, -1L, drop = FALSE] - q[, -K, drop = FALSE]
+    mass <- matrix(rep(diff(common_tau), each = L), nrow = L)
+    positive <- width > 0
+    density <- matrix(0, nrow = L, ncol = K - 1L)
+    density[positive] <- mass[positive] / width[positive]
+    events <- cbind(position = c(q[, 1L], q[, K], q[, -K, drop = FALSE], q[, -1L, drop = FALSE]),
+      slope_change = c(rep(0, 2L * L), density, -density) / L,
+      atom = c(rep(common_tau[1L], L), rep(1 - common_tau[K], L),
+        ifelse(positive, 0, mass), rep(0, length(mass))) / L)
+    cdf <- function(y) app_iqf_mq_matrix_cdf(y, q, common_tau)
+  } else events <- do.call(rbind, lapply(kernels, function(kernel) {
+    app_iqf_require(identical(kernel$family, "mq_grid"), "MQ sweep requires only MQ grid kernels.")
+    grid <- app_iqf_grid(kernel$q, kernel$tau)
+    q <- grid$q; tau <- grid$tau; K <- length(q)
+    width <- diff(q); mass <- diff(tau)
+    density <- numeric(K - 1L)
+    positive <- width > 0
+    density[positive] <- mass[positive] / width[positive]
+    cbind(position = c(q[1L], q[K], q[-K], q[-1L]),
+      slope_change = c(0, 0, density, -density) / L,
+      atom = c(tau[1L], 1 - tau[K], ifelse(positive, 0, mass), rep(0, K - 1L)) / L)
+  }))
+  fallback <- function() app_iqf_invert_cdf_bisection(kernels, probabilities, tolerance)
+  # Extremely narrow segments can overflow a density despite a valid CDF. Keep
+  # the original generalized-inverse implementation as a checked numeric path;
+  # never change the response law, drop atoms, or choose a favorable root.
+  if (any(!is.finite(events))) return(fallback())
+  knots <- sort(unique(events[, "position"]))
+  grouped <- rowsum(events[, c("slope_change", "atom"), drop = FALSE],
+    match(events[, "position"], knots), reorder = TRUE)
+  slope <- cumsum(grouped[, "slope_change"])
+  interval_mass <- if (length(knots) > 1L) head(slope, -1L) * diff(knots) else numeric()
+  if (any(!is.finite(interval_mass)) || any(interval_mass < -1e-12)) return(fallback())
+  interval_mass <- pmax(0, interval_mass)
+  right <- cumsum(grouped[, "atom"] + c(0, interval_mass))
+  left <- right - grouped[, "atom"]
+  if (any(!is.finite(c(left, right))) || any(left < -1e-10) ||
+      any(right > 1 + 1e-10) || abs(tail(right, 1L) - 1) > 1e-10 ||
+      any(diff(right) < -1e-12)) return(fallback())
+  right <- pmin(1, pmax(0, right)); right[length(right)] <- 1
+  answer <- vapply(probabilities, function(p) {
+    j <- which(right >= p)[1L]
+    if (is.na(j)) return(NA_real_)
+    if (j == 1L || p > left[j]) return(knots[j])
+    if (!is.finite(slope[j - 1L]) || slope[j - 1L] <= 0) return(NA_real_)
+    value <- knots[j - 1L] + (p - right[j - 1L]) / slope[j - 1L]
+    max(knots[j - 1L], min(knots[j], value))
+  }, numeric(1L))
+  if (any(!is.finite(answer))) return(fallback())
+  # Check an absolute-y bracket against the unchanged native mixture CDF. In
+  # particular, the strict lower inequality guards the *leftmost* root when
+  # the CDF has a plateau. One vector CDF pass replaces dozens per probability.
+  probe <- cdf(c(answer - tolerance, answer + tolerance))
+  n <- length(answer)
+  if (any(!is.finite(probe)) || any(probe[seq_len(n)] >= probabilities) ||
+      any(probe[n + seq_len(n)] < probabilities)) return(fallback())
+  answer
+}
+
+app_iqf_invert_cdf <- function(kernels, probabilities, tolerance = 1e-8) {
+  app_iqf_require(length(kernels) > 0L, "Cannot invert an empty CDF mixture.")
+  if (all(vapply(kernels, function(k) identical(k$family, "mq_grid"), logical(1L))))
+    app_iqf_mq_mixture_inverse(kernels, probabilities, tolerance) else
+    app_iqf_invert_cdf_bisection(kernels, probabilities, tolerance)
 }
 
 app_iqf_validate_origins <- function(origins) {

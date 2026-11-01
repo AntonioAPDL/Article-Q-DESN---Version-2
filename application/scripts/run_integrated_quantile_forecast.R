@@ -13,6 +13,7 @@ iqf_arg <- function(name, default = NULL) {
 iqf_script <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1L])
 iqf_repo <- normalizePath(file.path(dirname(iqf_script), "../.."), mustWork = TRUE)
 source(file.path(iqf_repo, "application/R/integrated_quantile_forecast.R"))
+source(file.path(iqf_repo, "scripts/integrated_quantile_blocks.R"))
 iqf_mode <- iqf_arg("mode", "preflight")
 app_iqf_require(iqf_mode %in% c("preflight", "run"), "Mode must be preflight or run.")
 iqf_request_path <- iqf_arg("request")
@@ -150,6 +151,38 @@ app_iqf_verify_output_root(iqf_request$output_root, iqf_claim$output_root)
 dir.create(iqf_request$output_root, recursive = TRUE, showWarnings = FALSE)
 app_iqf_require(dir.exists(iqf_request$output_root), "Could not create admitted output directory.")
 iqf_outputs <- list(); iqf_n <- 0L; iqf_written_bytes <- 0
+iqf_block_limit <- iqf_request$members_per_file
+if (is.null(iqf_block_limit)) iqf_block_limit <- if (iqf_retain_cdf) 1L else 1000L
+app_iqf_require(is.numeric(iqf_block_limit) && length(iqf_block_limit) == 1L &&
+  is.finite(iqf_block_limit) && iqf_block_limit == as.integer(iqf_block_limit) &&
+  iqf_block_limit >= 1L && iqf_block_limit <= 1000L && (!iqf_retain_cdf || iqf_block_limit == 1L),
+  "Storage blocks require 1–1000 complete members; retained inner CDFs require one member per file.")
+iqf_buffer <- list(); iqf_buffer_bytes <- 0; iqf_block_count <- 0L
+iqf_flush_block <- function() {
+  if (!length(iqf_buffer)) return(invisible(NULL))
+  block <- app_iqf_pack_block(iqf_buffer)
+  bytes <- serialize(block, NULL, version = 3L)
+  app_iqf_require(iqf_written_bytes + length(bytes) + 65536 <= iqf_budget$output_bytes,
+    "Next storage block exceeds the admitted cumulative output budget; partial evidence is retained.")
+  iqf_block_count <<- iqf_block_count + 1L
+  name <- sprintf("block_%06d_%s.rds", iqf_block_count, app_iqf_hash(block$member_keys))
+  destination <- file.path(iqf_request$output_root, name)
+  app_iqf_require(!file.exists(destination), "Refusing to overwrite a forecast storage block.")
+  writeBin(bytes, destination)
+  hash <- app_iqf_hash(destination, TRUE)
+  for (member in seq_along(iqf_buffer)) {
+    result <- iqf_buffer[[member]]
+    iqf_n <<- iqf_n + 1L
+    iqf_outputs[[iqf_n]] <<- data.frame(relative_path = name, member_index = member,
+      storage_schema = block$schema_version, size_bytes = length(bytes), sha256 = hash,
+      draw_id = result$draw_id, origin_id = result$origin_id,
+      integration_status = result$integration_status,
+      artifact_key = app_iqf_member_key(result), stringsAsFactors = FALSE)
+  }
+  iqf_written_bytes <<- iqf_written_bytes + length(bytes)
+  iqf_buffer <<- list(); iqf_buffer_bytes <<- 0
+  invisible(gc(FALSE))
+}
 iqf_identity_names <- c("task_id", "source_commit", "source_tree", "source_manifest_sha256",
   "posterior_target_sha256", "input_manifest_sha256", "task_manifest_sha256", "rng_namespace")
 for (iqf_draw in iqf_draws) for (iqf_origin in iqf_origins) {
@@ -181,26 +214,22 @@ for (iqf_draw in iqf_draws) for (iqf_origin in iqf_origins) {
   iqf_result$identity$outer_conditioning <- iqf_adapter$outer_conditioning
   iqf_result$task_id <- iqf_request$task_id
   iqf_result$routing_id <- iqf_request$routing_id
-  iqf_n <- iqf_n + 1L
-  iqf_name <- paste0("shard_", app_iqf_hash(list(iqf_draw, iqf_origin)), ".rds")
-  iqf_dest <- file.path(iqf_request$output_root, iqf_name)
-  app_iqf_require(iqf_written_bytes + as.numeric(object.size(iqf_result)) + 65536 <= iqf_budget$output_bytes,
-    "Next shard exceeds the admitted output budget; existing partial evidence is retained.")
-  saveRDS(iqf_result, iqf_dest, version = 3L)
-  iqf_written_bytes <- iqf_written_bytes + file.info(iqf_dest)$size
-  iqf_outputs[[iqf_n]] <- data.frame(relative_path = iqf_name,
-    size_bytes = file.info(iqf_dest)$size, sha256 = app_iqf_hash(iqf_dest, TRUE),
-    draw_id = iqf_draw, origin_id = iqf_origin, integration_status = iqf_result$integration_status,
-    artifact_key = paste0("draw:", iqf_draw, "|origin:", iqf_origin),
-    stringsAsFactors = FALSE)
-  rm(iqf_result); invisible(gc(FALSE))
+  if (length(iqf_buffer) && !app_iqf_same_geometry(iqf_buffer[[1L]], iqf_result)) iqf_flush_block()
+  iqf_buffer_bytes <- iqf_buffer_bytes + as.numeric(object.size(iqf_result))
+  app_iqf_require(iqf_buffer_bytes <= iqf_budget$memory_bytes / 4,
+    "Output block buffer exceeds its admitted memory allowance; lower members_per_file prospectively.")
+  iqf_buffer[[length(iqf_buffer) + 1L]] <- iqf_result
+  rm(iqf_result)
+  if (length(iqf_buffer) >= iqf_block_limit) iqf_flush_block()
 }
+iqf_flush_block()
 iqf_output_table <- do.call(rbind, iqf_outputs)
 iqf_csv <- file.path(iqf_request$output_root, "output_manifest.csv")
-utils::write.csv(iqf_output_table, iqf_csv, row.names = FALSE)
-app_iqf_require(sum(iqf_output_table$size_bytes) + file.info(iqf_csv)$size <= iqf_budget$output_bytes,
+app_iqf_write_output_index(iqf_output_table, iqf_csv, iqf_budget$output_bytes, iqf_written_bytes)
+app_iqf_require(sum(iqf_output_table$size_bytes[!duplicated(iqf_output_table$relative_path)]) +
+    file.info(iqf_csv)$size <= iqf_budget$output_bytes,
   "Final artifact inventory exceeds the admitted output budget; evidence is retained but not accepted.")
-iqf_acceptance <- app_iqf_output_envelope(iqf_request, iqf_claim, iqf_output_table, iqf_request$output_root)
+iqf_acceptance <- app_iqf_block_envelope(iqf_request, iqf_claim, iqf_output_table, iqf_request$output_root)
 # The controller sidecar is outside the exact artifact set; no hash self-cycle.
 jsonlite::write_json(iqf_acceptance, paste0(iqf_request$output_root, ".output_manifest.json"),
   auto_unbox = TRUE, pretty = TRUE, digits = 17L, null = "null")

@@ -1,0 +1,70 @@
+#!/usr/bin/env Rscript
+# Synthetic guards only; no real backend child, compiler, design or fit runs.
+local({
+  root<-if(exists("app_repo_root",mode="function"))app_repo_root() else {
+    a<-sub("^--file=","",grep("^--file=",commandArgs(FALSE),value=TRUE)[1L])
+    normalizePath(file.path(dirname(a),"../.."))
+  }
+  source(file.path(root,"scripts/qualify_glofas_family_transition.R"),local=TRUE)
+  checks<-0L
+  check<-function(ok){stopifnot(isTRUE(ok));checks<<-checks+1L}
+  reject<-function(expr){e<-tryCatch({force(expr);NULL},error=identity);check(inherits(e,"error"))}
+  lin<-gftq_linalg();check(lin$residual<1e-10)
+  sample<-list(theta_mean=c(1,2),theta_cov=diag(2),future_mean=0,future_cov=matrix(1),
+    sigma_shape=c(Y=2,G=3),sigma_rate=c(Y=1,G=2))
+  tol<-list(linalg_absolute=1e-10,moment_absolute=1e-8,moment_relative=1e-8)
+  check(all(gftq_compare(sample,sample,tol)$pass))
+  other<-sample;other$future_mean<-1
+  check(!all(gftq_compare(sample,other,tol)$pass))
+  other<-sample;other$theta_mean<-NA_real_
+  reject(gftq_compare(sample,other,tol))
+  tmp<-tempfile("gftq_guard_");dir.create(tmp)
+  on.exit(unlink(tmp,recursive=TRUE),add=TRUE)
+  input<-file.path(tmp,"input");dir.create(input)
+  grant<-list(schema_version="glofas_qualification_resource_grant_v1",purpose="qualification_not_article",
+    host="synthetic",ownership_verified=TRUE,smt_siblings_checked=TRUE,logical_cpus=list(7L),
+    expires_utc="2099-01-01T00:00:00Z",owner="synthetic_fixture",memory_bytes=32*1024^3,
+    total_output_bytes=2*1024^3)
+  gp<-file.path(tmp,"grant.json");jsonlite::write_json(grant,gp,auto_unbox=TRUE)
+  c<-list(schema_version="glofas_transition_qualification_v1",purpose="qualification_not_article",
+    allow_real_qualification=TRUE,allow_production=FALSE,approved_by="synthetic_fixture_only",
+    expires_utc="2099-01-01T00:00:00Z",iterations=2L,diagnostic_freeze_beta_warmup_iters=0L,
+    causality_probe_columns=list(1L,14L,28L),
+    limits=list(memory_bytes=32*1024^3,cpu_seconds_per_backend=600,wall_seconds_per_backend=1800,
+      total_cpu_seconds=1200,total_output_bytes=2*1024^3),tolerances=tol,
+    outer_boundary=list(wall_seconds=1199L,timeout_prefix=as.list(c("/usr/bin/timeout","--signal=TERM","--kill-after=1","1199"))),
+    source_manifest_sha256=strrep("a",64L),input_manifest_sha256=strrep("b",64L),
+    resource_grant_path=gp,resource_grant_sha256=gftq_hash(gp),input_root=input,
+    output_root=file.path(root,"local_trackers/synthetic_qualification_not_created"),host="synthetic")
+  cp<-file.path(tmp,"purpose.json")
+  approve<-function(z){jsonlite::write_json(z,cp,auto_unbox=TRUE);gftq_contract(cp,gftq_hash(cp),root,verify_files=FALSE)}
+  check(identical(approve(c)$purpose,"qualification_not_article"))
+  for(field in c("allow_real_qualification","allow_production")) {
+    bad<-c;bad[[field]]<-!bad[[field]];reject(approve(bad))
+  }
+  bad<-c;bad$purpose<-"article_promotion";reject(approve(bad))
+  bad<-c;bad$iterations<-5L;reject(approve(bad))
+  bad<-c;bad$causality_probe_columns<-list(1L);reject(approve(bad))
+  bad<-c;bad$diagnostic_freeze_beta_warmup_iters<-20L;reject(approve(bad))
+  bad<-c;bad$limits$memory_bytes<-33*1024^3;reject(approve(bad))
+  bad<-c;bad$limits$cpu_seconds_per_backend<-601L;reject(approve(bad))
+  bad<-c;bad$limits$total_output_bytes<-3*1024^3;reject(approve(bad))
+  bad<-c;bad$outer_boundary$wall_seconds<-1201L;reject(approve(bad))
+  bad<-c;bad$expires_utc<-"2000-01-01T00:00:00Z";reject(approve(bad))
+  bad<-c;bad$expires_utc<-format(Sys.time()+60,"%Y-%m-%dT%H:%M:%SZ",tz="UTC");reject(approve(bad))
+  short_grant<-grant;short_grant$expires_utc<-format(Sys.time()+60,"%Y-%m-%dT%H:%M:%SZ",tz="UTC")
+  short_gp<-file.path(tmp,"short_grant.json");jsonlite::write_json(short_grant,short_gp,auto_unbox=TRUE)
+  bad<-c;bad$resource_grant_path<-short_gp;bad$resource_grant_sha256<-gftq_hash(short_gp);reject(approve(bad))
+  bad<-c;bad$output_root<-input;reject(approve(bad))
+  bad<-c;bad$resource_grant_sha256<-strrep("0",64L);reject(approve(bad))
+  bad<-c;bad$tolerances$moment_absolute<-0;reject(approve(bad))
+  writeLines("fixture",file.path(input,"file.txt"))
+  check(file.exists(gftq_bounded_path(input,"file.txt")))
+  reject(gftq_bounded_path(input,"../purpose.json"))
+  if(file.symlink(file.path(input,"file.txt"),file.path(input,"link.txt")))reject(gftq_bounded_path(input,"link.txt"))
+  result<-gftq_main(c("--mode","synthetic"))
+  check(result$residual<1e-10)
+  reject(gftq_main(c("--mode","real")))
+  check(!file.exists(c$output_root))
+  cat(sprintf("GLOFAS_TRANSITION_QUALIFICATION_SYNTHETIC_PASS checks=%d real_calls=0\n",checks))
+})

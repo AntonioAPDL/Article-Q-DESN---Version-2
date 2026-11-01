@@ -5,6 +5,7 @@ local({
     normalizePath(file.path(dirname(sub("^--file=","",arg)),"..",".."))
   }
   source(file.path(root,"application/R/integrated_quantile_forecast.R"),local=TRUE)
+  source(file.path(root,"scripts/integrated_quantile_blocks.R"),local=TRUE)
   source(file.path(root,"scripts/score_integrated_quantile_forecasts.R"),local=TRUE)
   p <- c(.1,.5,.9); q <- c(-.5,.5,1.5); w <- c(.2,.4,.2)
   contract <- list(method="dkw_response_cdf",alpha_per_shard=.05,max_split_absolute=.1,
@@ -27,6 +28,12 @@ local({
     observed_y=1,sorted_response=matrix(c(-1,0,1,2)),prefix_response=matrix(c(-1,-1,0,2)),
     diagnostics=data.frame(status="pass"))
   result <- app_iqf_score_shard(shard,oracle,p,w)
+  first<-shard;first$draw_id<-"d1";first$origin_id<-"o"
+  second<-first;second$draw_id<-"d2";second$quantiles$draw_id<-"d2"
+  packed<-app_iqf_pack_block(list(first,second))
+  decoded_scores<-app_iqf_forecast_members(packed,function(s)app_iqf_score_shard(s,oracle,p,w))
+  original_scores<-lapply(list(first,second),function(s)app_iqf_score_shard(s,oracle,p,w))
+  stopifnot(identical(decoded_scores,original_scores))
   direct <- sum(2*w*vapply(seq_along(p),function(k) mean((c(-1,0,1,2)-q[k])*
     (p[k]-(c(-1,0,1,2)<q[k]))),numeric(1L)))
   stopifnot(abs(result$score_sum-direct)<1e-12,result$score_count==1L,
@@ -44,6 +51,91 @@ local({
     error <- tryCatch({force(expr);NULL},error=identity)
     stopifnot(inherits(error,"error"));rejected<<-rejected+1L
   }
+  producer_identity <- list(task_id="forecast-accepted",source_commit=strrep("1",40),
+    source_tree=strrep("2",40),source_manifest_sha256=strrep("a",64),
+    posterior_target_sha256=strrep("b",64),input_manifest_sha256=strrep("c",64),
+    task_manifest_sha256=strrep("d",64),rng_namespace="original-scientific-draws")
+  producer <- list(task_id=producer_identity$task_id,
+    task_manifest_sha256=producer_identity$task_manifest_sha256,
+    posterior_target_sha256=producer_identity$posterior_target_sha256,
+    output_manifest_sha256=strrep("e",64),identity=producer_identity,
+    artifacts=list(list(relative_path="block_001.rds",sha256=strrep("f",64),bytes=1234L)))
+  input <- data.frame(relative_path="copied/block_001.rds",size_bytes=1234L,
+    sha256=strrep("f",64),role="accepted_forecast_shard")
+  producer_binding <- list(input_relative_path=input$relative_path,
+    producer_task_id=producer$task_id,producer_relative_path="block_001.rds",
+    producer_output_manifest_sha256=producer$output_manifest_sha256)
+  score_spec <- list(forecast_shards=list(input$relative_path),producer_bindings=list(producer_binding))
+  claim <- list(verified=TRUE,accepted_prerequisites=list(producer))
+  score_request <- list(task_id="score-new")
+  resolved <- app_iqf_score_bind_producers(score_request,score_spec,input,claim,"score")
+  stopifnot(identical(names(resolved),input$relative_path),
+    identical(resolved[[1]]$sha256,input$sha256),resolved[[1]]$size_bytes==1234L,
+    identical(resolved[[1]]$identity,producer_identity))
+  producer_member <- shard;producer_member$identity <- c(producer_identity,
+    list(outer_conditioning=shard$outer_conditioning))
+  stopifnot(isTRUE(app_iqf_score_member_producer(producer_member,resolved[[1]])))
+  wire_claim <- jsonlite::fromJSON(jsonlite::toJSON(claim,auto_unbox=TRUE),simplifyVector=FALSE)
+  wire_spec <- jsonlite::fromJSON(jsonlite::toJSON(score_spec,auto_unbox=TRUE),simplifyVector=FALSE)
+  wire_bound <- app_iqf_score_bind_producers(score_request,wire_spec,input,wire_claim,"score")
+  stopifnot(wire_bound[[1]]$size_bytes==resolved[[1]]$size_bytes,
+    identical(wire_bound[[1]]$sha256,resolved[[1]]$sha256),
+    isTRUE(app_iqf_score_member_producer(producer_member,wire_bound[[1]])))
+  bad <- score_spec;bad$producer_bindings <- NULL
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  bad <- claim;bad$accepted_prerequisites <- NULL
+  reject(app_iqf_score_bind_producers(score_request,score_spec,input,bad,"score"))
+  bad <- claim;bad$verified <- FALSE
+  reject(app_iqf_score_bind_producers(score_request,score_spec,input,bad,"score"))
+  for (field in c("producer_task_id","producer_relative_path","producer_output_manifest_sha256")) {
+    bad <- score_spec;bad$producer_bindings[[1]][[field]] <- "different"
+    reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  }
+  bad <- claim;bad$accepted_prerequisites <- rep(list(producer),2L)
+  reject(app_iqf_score_bind_producers(score_request,score_spec,input,bad,"score"))
+  bad <- input;bad$size_bytes <- 1235L
+  reject(app_iqf_score_bind_producers(score_request,score_spec,bad,claim,"score"))
+  bad <- input;bad$sha256 <- strrep("0",64)
+  reject(app_iqf_score_bind_producers(score_request,score_spec,bad,claim,"score"))
+  for (field in c("task_manifest_sha256","posterior_target_sha256")) {
+    bad <- claim;bad$accepted_prerequisites[[1]][[field]] <- strrep("0",64)
+    reject(app_iqf_score_bind_producers(score_request,score_spec,input,bad,"score"))
+  }
+  bad <- claim;bad$accepted_prerequisites[[1]]$artifacts <- rep(producer$artifacts,2L)
+  reject(app_iqf_score_bind_producers(score_request,score_spec,input,bad,"score"))
+  bad <- score_spec;bad$producer_bindings <- rep(list(producer_binding),2L)
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  twice <- rbind(input,transform(input,relative_path="copied/again.rds"))
+  bad <- score_spec;bad$forecast_shards <- as.list(twice$relative_path)
+  duplicate <- producer_binding;duplicate$input_relative_path <- twice$relative_path[2L]
+  bad$producer_bindings <- list(producer_binding,duplicate)
+  reject(app_iqf_score_bind_producers(score_request,bad,twice,claim,"score"))
+  bad <- score_spec;bad$producer_bindings[[1]]$input_relative_path <- "unused.rds"
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  bad <- score_spec;bad$forecast_shards <- rep(score_spec$forecast_shards,2L)
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  bad <- rbind(input,transform(input,relative_path="unused.rds"))
+  reject(app_iqf_score_bind_producers(score_request,score_spec,bad,claim,"score"))
+  bad <- input;bad$role <- "accepted_score_block"
+  reject(app_iqf_score_bind_producers(score_request,score_spec,bad,claim,"score"))
+  reject(app_iqf_score_bind_producers(list(task_id=producer$task_id),score_spec,input,claim,"score"))
+  bad <- score_spec;bad$producer_bindings[[1]]$producer_relative_path <- "../block_001.rds"
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  bad <- score_spec;bad$producer_bindings[[1]]$unverified_extra <- TRUE
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  bad <- score_spec;bad$producer_bindings[[1]] <- c(producer_binding,
+    list(producer_task_id=producer$task_id))
+  reject(app_iqf_score_bind_producers(score_request,bad,input,claim,"score"))
+  bad <- producer_member;bad$identity$task_id <- "different-producer"
+  reject(app_iqf_score_member_producer(bad,resolved[[1]]))
+  bad <- producer_member;bad$identity$source_manifest_sha256 <- NULL
+  reject(app_iqf_score_member_producer(bad,resolved[[1]]))
+  aggregate_spec <- list(score_blocks=score_spec$forecast_shards,producer_bindings=score_spec$producer_bindings)
+  aggregate_input <- transform(input,role="accepted_score_block")
+  aggregate_bound <- app_iqf_score_bind_producers(score_request,aggregate_spec,aggregate_input,claim,"aggregate")
+  stopifnot(identical(aggregate_bound,resolved))
+  reject(app_iqf_score_bind_producers(score_request,aggregate_spec,aggregate_input,
+    list(verified=TRUE),"aggregate"))
   bad <- shard;bad$integration_status <- "REVIEW";reject(app_iqf_score_shard(bad,oracle,p,w))
   bad <- shard;bad$integration_dkw <- NULL;reject(app_iqf_score_shard(bad,oracle,p,w))
   bad <- shard;bad$integration_accuracy_contract$method <- "split_stream_diagnostic";reject(app_iqf_score_shard(bad,oracle,p,w))

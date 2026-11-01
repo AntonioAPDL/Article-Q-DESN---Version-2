@@ -113,23 +113,13 @@ class ProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaisesRegex(ValueError,'stale or future'):self.run_probe(Path(td),mutation=lambda x:x['physical_snapshot_value'].update(observed_epoch=999999000.))
     def test_real_peer_reconciles_guard_and_ready_metadata(self):
+        from .numerical_independent_startup_peer_tests import StartupFixture
         with tempfile.TemporaryDirectory() as td:
-            folder=Path(td);value,ctx=self.run_probe(folder);root,startup,packet,scope,config,cp,authority,ap,ready=ctx
-            batch.h.write_new(root/'READY.json',ready)
-            guard=dict(returncode=0,command_returncode=0,cap_reason=None,CPU_limit=3,aggregate_CPU_seconds=.1,
-                complete_lifecycle_wall_seconds=.2,guardian_forced_monitor_stop=False,
-                session_id=value['command_pid'],leader_start_ticks=value['command_birth_ticks'],stdout=json.dumps(value))
-            guard.update({key:True for key in ['all_owned_descendants_reaped','independent_guardian','kernel_escape_filter',
-                'orphan_subreaper','guardian_included_in_CPU','inherited_waited_history_included_once']})
-            gp=startup/'probe_00.guard.json';batch.h.write_new(gp,guard)
-            watch=dict(status='STARTUP_READY_OBSERVED_AWAIT_ONE_SHOT_READY',profile=batch.STARTUP_WATCH_PROFILE,
-                elapsed_seconds=.5,attempts=[dict(guard=batch.h.pin(gp),result=value)],ready=value['ready'])
-            batch.h.write_new(folder/'critical_driver/STARTUP_WATCH.json',watch)
-            self.assertEqual(peer.startup_watch_review(str(cp),scope,root,ready,authority,str(ap)),watch)
-            guard['session_id']+=1;gp.write_text(json.dumps(guard))
-            watch['attempts'][0]['guard']=batch.h.pin(gp)
-            (folder/'critical_driver/STARTUP_WATCH.json').write_text(json.dumps(watch))
-            with self.assertRaisesRegex(ValueError,'actual paid probe'):peer.startup_watch_review(str(cp),scope,root,ready,authority,str(ap))
+            fixture=StartupFixture(Path(td),absent=0)
+            self.assertEqual(fixture.review(),fixture.watch)
+            fixture.change_guard(0,lambda value:value.update(session_id=1))
+            with self.assertRaisesRegex(ValueError,'actual paid H3'):
+                fixture.review()
 
 
 def row(state='CANCELLED by 269188',alloc='0',cpu='00:00:00',elapsed='0',job='123',name='UNIT'):

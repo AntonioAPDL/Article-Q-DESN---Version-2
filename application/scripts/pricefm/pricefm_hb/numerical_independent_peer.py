@@ -66,9 +66,6 @@ COMPUTE_NAMES = {'__init__.py', 'startup_helper.py', 'startup_batch_worker.py', 
     'scientific_batch_worker.py', 'numerical_batch.py', 'numerical_stage_owner.py', 'numerical_stage_contract.py',
     'numerical_physical_admission.py', 'numerical_stage_worker.py', 'numerical_stage_bootstrap.R'}
 ADMIN_NAMES = {'numerical_stage_prepare.py', 'numerical_critical_driver.py', 'numerical_independent_peer.py'}
-STARTUP_PROFILE = dict(maximum_probes=10, interval_seconds=20, deadline_seconds=300,
-    probe_local_CPU=3, probe_remote_unknown_fee=3, probe_wall_seconds=45,
-    combined_startup_watch_CPU_ceiling=60)
 
 
 def require(ok, message):
@@ -487,51 +484,6 @@ def packet_and_native_journals(config, root, packet, spec, ready, ready_guard_pa
     require(parsed == hashes, 'all remote packet bytes and cached Python actually matched; no peer array read')
 
 
-def startup_watch_review(config_path,scope,root,ready,authority,driver_authority_path):
-    """Independently reconcile paid probe guards without trusting driver PASS."""
-    config=local(config_path);budget=read(config['startup_watch_budget'])
-    require(budget.get('status')=='PROSPECTIVE_FRESH_NUMERICAL_STARTUP_WATCH_BUDGET'
-            and budget.get('scope')==config['scope'] and budget.get('profile')==STARTUP_PROFILE
-            and budget.get('expires_epoch')==scope['expires_epoch']
-            and scope.get('administrative_allocations',{}).get('startup_watch60')==60
-            and scope.get('new_separate_administrative_CPU_reservation')==234,
-            'complete separately bound startup60 including ten remote unknown fees')
-    require(authority.get('startup_watch_profile')==STARTUP_PROFILE
-            and authority.get('startup_watch_budget')==config['startup_watch_budget']
-            and authority.get('driver_maximum_wall_seconds')==1200,'current reviewed startup profile and full driver wall')
-    folder=Path(scope['allowed_metadata_output_root'])/'critical_driver';watch=local(folder/'STARTUP_WATCH.json')
-    require(watch.get('status')=='STARTUP_READY_OBSERVED_AWAIT_ONE_SHOT_READY' and watch.get('profile')==STARTUP_PROFILE
-            and type(watch.get('elapsed_seconds')) in (int,float) and math.isfinite(watch['elapsed_seconds'])
-            and 0<=watch['elapsed_seconds']<=300 and type(watch.get('attempts')) is list
-            and 1<=len(watch['attempts'])<=10,'finite complete startup observation, not release authority')
-    packet=local(root/'PACKET.json')
-    for index,item in enumerate(watch['attempts']):
-        expected_guard=pin(folder/'startup'/('probe_%02d.guard.json'%index))
-        require(item['guard']==expected_guard,'exact indexed original startup guardian')
-        actual=read(item['guard']);guard(actual,3,45);value=item['result']
-        require(strict_json(actual['stdout'])==value
-                and value==local(folder/'startup'/('probe_%02d.RESULT.json'%index))
-                and value.get('probe_index')==index and value.get('job_id')==ready['job_id']
-                and value.get('scope_id')==packet['scope_id'] and value.get('role')==config['role']
-                and value.get('config')==pin(config_path) and value.get('driver_authority')==pin(driver_authority_path)
-                and value.get('batch_source_sha256')==packet['sources']['numerical_batch.py']['sha256']
-                and value.get('command_pid')==actual['session_id']
-                and value.get('command_birth_ticks')==actual['leader_start_ticks']
-                and value.get('production_admission') is False,'actual paid probe process/config/source/identity result')
-        raw=read(value['raw_observation'])
-        require(value['raw_observation']==pin(folder/'startup'/('probe_%02d.native.json'%index))
-                and raw['argv']==['test','-f',packet['remote_root']+'/READY.json'],
-                'exact own-nonce READY observation only')
-        final=index+1==len(watch['attempts'])
-        require(value['status']==('STARTUP_READY_PRESENT_MATCHED_NO_RELEASE' if final else 'STARTUP_WAITING_READY_ABSENT_NO_RELEASE')
-                and raw['returncode']==(0 if final else 1),'only absence may wait; matched presence ends probes')
-        if final:
-            require(value['ready']==watch['ready']==pin(folder/'startup'/('probe_%02d.READY.json'%index))
-                    and value['ready']['sha256']==pin(root/'READY.json')['sha256']
-                    and read(value['ready'])==ready,'startup metadata and one-shot actual READY remain identical')
-    return watch
-
-
 def context(config_path, bundle_path, ready_guard_path, driver_authority_path):
     require(os.sched_getaffinity(0) == {31}, 'administrative CPU31 only')
     config = local(config_path); scope = read(config['scope']); now = time.time()
@@ -618,7 +570,6 @@ def context(config_path, bundle_path, ready_guard_path, driver_authority_path):
             and all(ready['inventory'][k] == reuse['inventory'][k] for k in ('libc', 'python', 'python_version'))
             and spec['known_prior_jobs'] == config['known_prior_jobs'], 'qualified current runtime and complete known registry')
     packet_and_native_journals(config, root, packet, spec, ready, ready_guard_path, reuse)
-    startup_watch_review(config_path,scope,root,ready,authority,driver_authority_path)
     return config, scope, root, out, packet, spec, ready, authority, reuse
 
 
@@ -899,6 +850,183 @@ def owner_phase(ctx, driver_authority_path):
         current_R_parse_not_preclaimed=True, conditional_current_parse_and_kernel_ACK_required=True))
 
 
+STARTUP_REVIEW_PROFILE = dict(maximum_probes=10, interval_seconds=20, deadline_seconds=300,
+    probe_local_CPU=3, probe_remote_unknown_fee=3, probe_wall_seconds=45,
+    combined_startup_watch_CPU_ceiling=60)
+STARTUP_REVIEW_H_SHA = '7d33218f593b0b9677093954f7331cac2b4586f2c428fe08cdf0c784289492a1'
+
+
+def startup_watch_review(config_path, scope, root, ready, authority, authority_path):
+    """Independently reconcile paid native observations before either peer phase.
+
+    Authored from the frozen W188 peer and raw producer/driver contracts. No
+    producer admission helper, watcher helper or rejected W189 peer is used.
+    """
+    def exact_map(value, expected, label):
+        require(type(value) is dict and set(value) == set(expected)
+                and all(type(value[k]) is type(v) and value[k] == v
+                        for k, v in expected.items()), label)
+    def finite(value, label):
+        require(type(value) in (int, float) and math.isfinite(value), label)
+        return value
+    def keys(value, expected, label):
+        require(type(value) is dict and set(value) == set(expected), label)
+    def raw_result(value, expected_rc, label):
+        keys(value, {'returncode', 'stdout', 'stderr'}, label)
+        require(exact_int(value['returncode'], expected_rc)
+                and type(value['stdout']) is type(value['stderr']) is str
+                and len(value['stdout'].encode()) + len(value['stderr'].encode()) <= 2 * 1024**2,
+                label)
+    config_pin = pin(config_path)
+    config = read(config_pin)
+    authority_pin = pin(authority_path)
+    require(read(authority_pin) == authority and read(config['scope']) == scope,
+            'startup exact current configuration, authority and scope')
+    exact_map(authority.get('startup_watch_profile'), STARTUP_REVIEW_PROFILE,
+              'independently frozen startup profile')
+    require(authority.get('config') == config_pin and authority.get('scope') == config['scope']
+            and authority.get('status') == 'ROOT_AUTHORIZED_FROZEN525_NUMERICAL_CRITICAL_LIFECYCLE'
+            and authority.get('driver_source') == config.get('critical_driver')
+            and authority.get('startup_watch_budget') == config.get('startup_watch_budget')
+            and exact_int(authority.get('driver_maximum_wall_seconds'), 1200),
+            'startup source/config/budget/driver authority binding')
+    read_bytes(authority['driver_source']['path'], authority['driver_source']['sha256'], code=True)
+    original_h = pin(Path(config['source_dir']) / 'profile_supervisor.py', code=True)
+    require(authority.get('original_supervisor') == original_h
+            and original_h['sha256'] == STARTUP_REVIEW_H_SHA,
+            'every paid probe uses unchanged original H source')
+    allocations = dict(native_complete_envelope136=136, critical_driver_SELF10=10,
+        independent_source_physical8=8, independent_owner_release8=8,
+        independent_complete_return6=6, exact_useful_mirror4=4, closeout2=2,
+        startup_watch60=60)
+    exact_map(scope.get('administrative_allocations'), allocations,
+              'complete separate234 administrative reservation')
+    require(exact_int(scope.get('new_separate_administrative_CPU_reservation'), 234),
+            'complete separate234 administrative reservation')
+    budget = read(config['startup_watch_budget'])
+    require(budget.get('status') == 'PROSPECTIVE_FRESH_NUMERICAL_STARTUP_WATCH_BUDGET'
+            and budget.get('scope') == config['scope']
+            and budget.get('expires_epoch') == scope['expires_epoch'], 'startup60 exact purpose')
+    exact_map(budget.get('profile'), STARTUP_REVIEW_PROFILE, 'startup60 exact profile')
+    native_budget = read(config['native_control_budget'])
+    require(native_budget.get('status') == 'PROSPECTIVE_FRESH_NUMERICAL_NATIVE_CONTROL_BUDGET'
+            and native_budget.get('scope') == config['scope']
+            and exact_int(native_budget.get('combined_native_control_CPU_ceiling'), 136)
+            and native_budget.get('expires_epoch') == scope['expires_epoch'],
+            'ordinary native136 remains separately funded')
+    base = Path(scope['allowed_metadata_output_root'])
+    folder = physical(base / 'critical_driver/startup')
+    require(folder.stat().st_uid == os.getuid() and folder.stat().st_mode & 0o077 == 0,
+            'private owned startup observation directory')
+    watch = local(base / 'critical_driver/STARTUP_WATCH.json')
+    keys(watch, {'status', 'attempts', 'profile', 'elapsed_seconds', 'ready'},
+         'closed startup watch fields')
+    exact_map(watch['profile'], STARTUP_REVIEW_PROFILE, 'exact observed startup profile')
+    require(watch['status'] == 'STARTUP_READY_OBSERVED_AWAIT_ONE_SHOT_READY'
+            and 0 <= finite(watch['elapsed_seconds'], 'finite startup elapsed') <= 300
+            and type(watch['attempts']) is list and 1 <= len(watch['attempts']) <= 10,
+            'bounded successful startup observation, never release authority')
+    packet = local(root / 'PACKET.json')
+    job = local(root / 'JOB.json')
+    expected_batch = packet['sources']['numerical_batch.py']['sha256']
+    require(pin(Path(config['source_dir']) / 'numerical_batch.py', code=True)['sha256'] == expected_batch,
+            'probe producer is exact current batch source')
+    canonical_ready = pin(root / 'READY.json')
+    canonical_bytes = read_bytes(root / 'READY.json', canonical_ready['sha256'])
+    require(strict_json(canonical_bytes) == ready
+            and job['job_id'] == ready['job_id'] and job['scope_id'] == packet['scope_id']
+            and ready['scope_id'] == packet['scope_id'] and ready['role'] == packet['role'] == config['role']
+            and ready['status'] == 'READY_SOURCE_BOUND_COMPUTE_METADATA'
+            and ready['sources'] == packet['sources'] and ready['spec_sha256'] == packet['spec_sha256']
+            and type(job['job_id']) is str and re.fullmatch('[1-9][0-9]*', job['job_id'])
+            and ready['node'] == 'node-13' and exact_int(ready['cpus_per_task'], 1)
+            and type(ready['affinity']) is list and len(ready['affinity']) == 1
+            and type(ready['affinity'][0]) is int and ready['affinity'][0] >= 0
+            and exact_int(ready['models'], 0) and exact_int(ready['optimizer_invocations'], 0)
+            and ready['physical_numerical_admission'] is False,
+            'canonical one-shot READY exact identity/source/zero-work closure')
+    now = time.time()
+    snapshot_epoch = finite(ready['physical_snapshot_value']['observed_epoch'],
+                            'finite canonical snapshot time')
+    require(0 <= now - snapshot_epoch < 90, 'current unchanged READY snapshot freshness')
+    expected_files = set()
+    previous_epoch = None
+    first_epoch = None
+    for index, attempt in enumerate(watch['attempts']):
+        keys(attempt, {'guard', 'result'}, 'closed paid probe reference')
+        stem = 'probe_%02d' % index
+        expected_files |= {stem + ending for ending in (
+            '.intent.json', '.native.json', '.RESULT.json', '.guard.json', '.guard.stderr')}
+        guard_path = folder / (stem + '.guard.json')
+        require(attempt['guard'] == pin(guard_path), 'exact contiguous indexed paid probe guard')
+        observed_guard = read(attempt['guard'])
+        guard(observed_guard, 3, 45)
+        value = local(folder / (stem + '.RESULT.json'))
+        require(value == attempt['result'] == strict_json(observed_guard['stdout']),
+                'paid guard stdout, stored result and watch value identical')
+        final = index == len(watch['attempts']) - 1
+        fields = {'status', 'probe_index', 'job_id', 'scope_id', 'role', 'config',
+                  'driver_authority', 'batch_source_sha256', 'command_pid',
+                  'command_birth_ticks', 'observed_epoch', 'raw_observation',
+                  'production_admission'}
+        keys(value, fields | ({'ready'} if final else set()), 'closed indexed probe result')
+        require(exact_int(value['probe_index'], index)
+                and value['status'] == ('STARTUP_READY_PRESENT_MATCHED_NO_RELEASE' if final
+                                       else 'STARTUP_WAITING_READY_ABSENT_NO_RELEASE')
+                and value['job_id'] == ready['job_id'] and value['scope_id'] == packet['scope_id']
+                and value['role'] == config['role'] and value['config'] == config_pin
+                and value['driver_authority'] == authority_pin
+                and value['batch_source_sha256'] == expected_batch
+                and value['production_admission'] is False,
+                'one fresh indexed source/config/job observation without admission')
+        require(type(value['command_pid']) is type(value['command_birth_ticks']) is int
+                and value['command_pid'] > 0 and value['command_birth_ticks'] > 0
+                and observed_guard.get('session_id') == value['command_pid']
+                and observed_guard.get('leader_start_ticks') == value['command_birth_ticks'],
+                'actual paid H3 guard owns the exact command PID and birth')
+        epoch = finite(value['observed_epoch'], 'finite observation timestamp')
+        require(scope['issued_epoch'] <= epoch <= now < scope['expires_epoch']
+                and (previous_epoch is None or previous_epoch <= epoch),
+                'current ordered observation timestamps')
+        if first_epoch is None:
+            first_epoch = epoch
+        previous_epoch = epoch
+        intent = local(folder / (stem + '.intent.json'))
+        keys(intent, {'status', 'operation', 'epoch'}, 'one durable closed probe intent')
+        require(intent['status'] == 'INTENT_NOT_SUCCESS' and intent['operation'] == stem
+                and epoch <= finite(intent['epoch'], 'finite intent timestamp') <= now,
+                'one fresh durable intent per actual probe')
+        native_pin = pin(folder / (stem + '.native.json'))
+        require(value['raw_observation'] == native_pin, 'exact indexed raw native proof pin')
+        native = read(native_pin)
+        keys(native, {'argv', 'returncode', 'stdout', 'stderr'}, 'closed native observation')
+        require(native['argv'] == ['test', '-f', packet['remote_root'] + '/READY.json'],
+                'exact owned remote READY test command')
+        raw_result({k: native[k] for k in ('returncode', 'stdout', 'stderr')},
+                   0 if final else 1, 'absence before presence, never a transport error')
+        require(native['stdout'] == native['stderr'] == '', 'file-test output must be unambiguous')
+        read_bytes(folder / (stem + '.guard.stderr'))
+        if final:
+            expected_files |= {stem + ending for ending in ('.READY.json', '.transfer.json', '.sftp')}
+            downloaded = pin(folder / (stem + '.READY.json'))
+            require(value['ready'] == watch['ready'] == downloaded
+                    and downloaded['sha256'] == canonical_ready['sha256']
+                    and read_bytes(downloaded['path'], downloaded['sha256']) == canonical_bytes,
+                    'final observed READY is byte-identical to actual one-shot READY')
+            transfer = local(folder / (stem + '.transfer.json'))
+            raw_result(transfer, 0, 'actual successful final SFTP transfer required')
+            command = 'get ' + packet['remote_root'] + '/READY.json ' + downloaded['path'] + '\n'
+            require(read_bytes(folder / (stem + '.sftp'), code=True) == command.encode(),
+                    'exact single successful download command; no substituted source or destination')
+    require(previous_epoch - first_epoch <= watch['elapsed_seconds'],
+            'observed probe span fits actual bounded watcher elapsed')
+    require({p.name for p in folder.iterdir()} == expected_files,
+            'complete exact startup artifact closure; no foreign or redundant probe')
+    return watch
+
+
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--phase', choices=('source_physical', 'owner_release'), required=True)
@@ -908,6 +1036,7 @@ def main():
     resource.setrlimit(resource.RLIMIT_CPU, (6, 8)); resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     before = time.process_time(); started = time.monotonic()
     ctx = context(args.config, args.bundle, args.ready_guard, args.driver_authority)
+    startup_watch_review(args.config, ctx[1], ctx[2], ctx[6], ctx[7], args.driver_authority)
     if args.phase == 'source_physical':
         source_phase(ctx)
     else:

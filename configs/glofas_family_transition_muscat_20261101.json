@@ -23,7 +23,7 @@
     "max_submissions": 16,
     "max_cpu_seconds": 1224000,
     "max_wall_seconds": 1224000,
-    "max_output_bytes": 68719476736,
+    "max_output_bytes": 94489280512,
     "max_metadata_bytes": 268435456
   },
   "worker_scripts": {
@@ -274,10 +274,10 @@
       "memory_bytes": 34359738368,
       "cpu_seconds": 259200,
       "wall_seconds": 259200,
-      "output_bytes": 2147483648,
-      "log_bytes": 2147483648,
+      "output_bytes": 8589934592,
+      "log_bytes": 8589934592,
       "metadata_bytes": 16777216,
-      "total_output_bytes": 4311744512
+      "total_output_bytes": 17196646400
     },
     "gft-mq-exal": {
       "workers": 1,
@@ -285,10 +285,10 @@
       "memory_bytes": 34359738368,
       "cpu_seconds": 259200,
       "wall_seconds": 259200,
-      "output_bytes": 2147483648,
-      "log_bytes": 2147483648,
+      "output_bytes": 8589934592,
+      "log_bytes": 8589934592,
       "metadata_bytes": 16777216,
-      "total_output_bytes": 4311744512
+      "total_output_bytes": 17196646400
     }
   }
 }

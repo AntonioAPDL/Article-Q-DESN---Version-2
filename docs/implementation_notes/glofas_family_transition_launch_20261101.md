@@ -47,10 +47,19 @@ mandatory. The configuration alone launches nothing.
 Prospective task ceilings are12hours per independentAL,16hours per
 independentexAL and72hours per MQ fit. Their sum is340CPU/wall hours, a hard
 reservation rather than an ETA or a guarantee of completion. Each task has
-32GiB memory,2GiB artifact bytes,2GiB merged-log bytes and16MiB administrative
-bytes. The full output reservation is64GiB plus256MiB administration.
+32GiB memory and16MiB administrative bytes. Independent fits have2GiB artifact
+and2GiB merged-log caps; the two MQ fits have8GiB artifact and8GiB log caps.
+The full output reservation is88GiB plus256MiB administration.
 Nonconvergence, failure, ambiguous ownership or exhausted limits stop further
 admission. No retry, seed change, cap increase or renewal is automatic.
+
+The MQ storage price was corrected prospectively before any claim or fit.
+Its seven full cores retain the coefficient covariance twice. The resulting
+covariance-only lower bound already needs2.61GiB under the unchanged
+four-times-object-size output check; an authenticated seven-core proxy needs
+3.58GiB before wrapper/headroom. The former2GiB policy was therefore unsafe.
+Earlier source/preparation receipts remain retained. The mathematical target,
+precheck, priors, seeds and inference controls are unchanged.
 
 The median-outward dependency schedule and same-family complete-grid MQ
 requirements are unchanged. Initializers transfer compatible moments, not

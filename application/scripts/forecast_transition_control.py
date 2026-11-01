@@ -284,7 +284,7 @@ def validate_config(config: dict) -> None:
                 "named activation is restricted to the two-core Muscat GloFAS scope")
         require(config.get("task_budget_caps") == named_gft_caps(), "exact sixteen named source task caps")
         require(config["production_budget"] == {"max_submissions":16,"max_cpu_seconds":1224000,
-                "max_wall_seconds":1224000,"max_output_bytes":68719476736,"max_metadata_bytes":268435456},
+                "max_wall_seconds":1224000,"max_output_bytes":94489280512,"max_metadata_bytes":268435456},
                 "finite named340-hour source budget")
 
 
@@ -295,9 +295,12 @@ def named_gft_caps() -> dict[str, dict]:
         for tau in ("005","020","035","050","065","080","095"):
             result["gft-"+family+"-p"+tau] = 43200 if family == "al" else 57600
         result["gft-mq-"+family] = 259200
-    return {task_id: {"workers":1,"cpus":1,"memory_bytes":34359738368,"cpu_seconds":seconds,
+    caps = {task_id: {"workers":1,"cpus":1,"memory_bytes":34359738368,"cpu_seconds":seconds,
         "wall_seconds":seconds,"output_bytes":2147483648,"log_bytes":2147483648,
         "metadata_bytes":16777216,"total_output_bytes":4311744512} for task_id,seconds in result.items()}
+    for task_id in ("gft-mq-al","gft-mq-exal"):
+        caps[task_id].update(output_bytes=8589934592,log_bytes=8589934592,total_output_bytes=17196646400)
+    return caps
 
 
 def source_task_budget(config: dict, task: dict, budget: dict) -> None:

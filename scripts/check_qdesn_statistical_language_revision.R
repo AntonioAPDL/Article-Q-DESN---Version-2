@@ -236,14 +236,25 @@ app_check_statistical_language_revision <- function(repo_root) {
   }
   main_begin <- "\\section{Application: Electricity-Price Quantile Forecasting}"
   supplement_begin <- "\\subsection{PriceFM Design and Additional Results}"
-  require_check(identical(segment(main, main_begin, "\\section{Discussion}"),
-    segment(baseline_text("main.tex"), main_begin, "\\section{Discussion}")),
-    "Keep the complete provisional PriceFM main section unchanged.")
-  require_check(identical(segment(supplement, supplement_begin,
+  main_pricefm_unchanged <- identical(segment(main, main_begin, "\\section{Discussion}"),
+    segment(baseline_text("main.tex"), main_begin, "\\section{Discussion}"))
+  supplement_pricefm_unchanged <- identical(segment(supplement, supplement_begin,
     "\\section{GloFAS Reference--Discrepancy Forecast Correction}"),
     segment(baseline_text("qdesn-supplement.tex"), supplement_begin,
-    "\\section{GloFAS Reference--Discrepancy Forecast Correction}")),
-    "Keep the complete provisional PriceFM supplement section unchanged.")
+    "\\section{GloFAS Reference--Discrepancy Forecast Correction}"))
+  if (main_pricefm_unchanged && supplement_pricefm_unchanged) {
+    checks <- c(checks, "Complete provisional PriceFM sections unchanged (original mode).")
+  } else {
+    # The later author-requested explanation can differ only by the exact two
+    # reviewed text segments in a cryptographically pinned authorization.
+    # Scientific CSVs, figures, aliases, code and source pins above/below remain
+    # protected by their original invariance checks.
+    exposition <- new.env(parent = baseenv())
+    sys.source(file.path(repo_root,
+      "scripts/check_forecast_application_exposition_20261031.R"), envir = exposition)
+    checks <- c(checks, exposition$app_forecast_exposition_pricefm_authorization(
+      repo_root, main, supplement))
+  }
   receipt_path <- "tables/qdesn_sections5_7_presentation_manifest.json"
   receipt <- jsonlite::fromJSON(file.path(repo_root, receipt_path), simplifyVector = FALSE)
   old_receipt <- jsonlite::fromJSON(baseline_text(receipt_path), simplifyVector = FALSE)

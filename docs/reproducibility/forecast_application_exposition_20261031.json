@@ -1,0 +1,23 @@
+{
+  "schema_version": "forecast_application_exposition_v1",
+  "baseline": "8b28ba51176c25624b638fac54fce2699b9af078",
+  "scope": "current_method_exposition_only",
+  "scientific_results_changed": false,
+  "fitting_or_forecasting_authorized": false,
+  "sections": {
+    "main_pricefm": {
+      "file": "main.tex",
+      "begin": "\\section{Application: Electricity-Price Quantile Forecasting}",
+      "end": "\\section{Discussion}",
+      "before_sha256": "5aecca228856e03fc185e4716670fdf57590075a71cca944c680441b6623ae12",
+      "after_sha256": "9a7390cf670a45f8481cd72005bf85c5a581fa1193b134faa687080867ab0b4e"
+    },
+    "supplement_pricefm": {
+      "file": "qdesn-supplement.tex",
+      "begin": "\\subsection{PriceFM Design and Additional Results}",
+      "end": "\\section{GloFAS Reference--Discrepancy Forecast Correction}",
+      "before_sha256": "0f2c7f6d9cdbf35a15cd4f667596bb8723fdbcc7011b25261de4a61bc3d74afe",
+      "after_sha256": "9427a597837508216533049b2d9aa17c6e23a522ef16850fd4195d72e3845e68"
+    }
+  }
+}

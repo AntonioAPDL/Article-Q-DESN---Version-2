@@ -163,6 +163,10 @@ source(app_path("application/tests/test_glofas_part4_publication_contract.R"))
 source(app_path("application/tests/test_glofas_part4_presentation_refresh.R"))
 source(app_path("application/tests/test_vb_preparation.R"))
 source(app_path("application/tests/test_forecast_contract.R"))
+source(app_path("application/tests/test_forecast_application_exposition_20261031.R"),
+       local = new.env(parent = environment()))
+source(app_path("application/tests/test_independent_forecast_editorial_manifest_20261031.R"),
+       local = new.env(parent = environment()))
 source(app_path("application/tests/test_discrepancy_design.R"))
 source(app_path("application/tests/test_reservoir_screening.R"))
 source(app_path("application/tests/test_glofas_fit_recovery.R"))

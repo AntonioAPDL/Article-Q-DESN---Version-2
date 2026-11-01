@@ -207,10 +207,12 @@ method_invariants <- function(main, supplement) {
       has(mq_text, "C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)"),
     covariance = has(supplement, "\\mat H\\mat\\Sigma\\mat H^\\top") &&
       has(supplement, "\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})"),
-    forecast_estimand = has(flat_main, "Neither averaging conditional-quantile locations") &&
-      has(flat_main, "fully marginalized predictive distribution") &&
+    forecast_estimand = has(flat_main, "A posterior predictive quantile integrates over") &&
+      has(flat_main, "intermediate responses and parameters") &&
+      has(flat_main, "conditions on one simulated history") &&
       has(main, "\\label{eq:forecast-location-main}"),
-    method_specific_recursion = has(flat_main, "Single-level Q--DESN uses its AL or exAL forecast law") &&
+    method_specific_recursion = has(flat_main, "fresh errors are generated at each step from") &&
+      has(main, "\\exAL_{p_0}(0,\\sigma^{(b)},\\gamma^{(b)})") &&
       has(flat_main, "ordered quantile grid at each step") &&
       has(flat_main, "endpoint quantiles"),
     coordinate_entropy = has(supplement, "\\label{eq:supp_elbo_transformed_coordinates}") &&
@@ -236,8 +238,8 @@ mutations <- list(
   list("cross-level covariance removed", main,
        mutate(supplement, "\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})", "0")),
   list("location average asserted to be predictive quantile",
-       mutate(main, "Neither averaging conditional-quantile locations",
-              "Averaging conditional-quantile locations always"), supplement),
+       mutate(main, "A posterior predictive quantile integrates over",
+              "A posterior predictive quantile equals the average over"), supplement),
   list("coordinate Jacobian lost", main,
        mutate(supplement, "J(\\vect\\eta)=\\sigma(U-L)\\expit(\\eta_2)", "J=1"))
 )

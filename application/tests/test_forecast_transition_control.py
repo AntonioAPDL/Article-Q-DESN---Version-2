@@ -232,6 +232,19 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(config["launch_authorized"])
         self.assertEqual(config["task_budget_caps"],control.named_gft_caps())
         self.assertEqual(sum(row["cpu_seconds"] for row in config["task_budget_caps"].values()),340*3600)
+        self.assertEqual(config["production_budget"]["max_output_bytes"],88*GIB)
+        # Seven2502-dimensional cores retain summary/state covariance copies.
+        # The unchanged fourfold serialization precheck already exceeds2GiB
+        # from these arrays alone; a measured retained seven-core proxy is
+        # 961,015,944bytes before MQ wrapper/progress/receipt headroom.
+        covariance_precheck_lower_bound=4*7*2*2502**2*8
+        independent=config["task_budget_caps"]["gft-al-p050"]
+        self.assertGreater(covariance_precheck_lower_bound,independent["output_bytes"])
+        for tid in ("gft-mq-al","gft-mq-exal"):
+            mq=config["task_budget_caps"][tid]
+            self.assertEqual(mq["output_bytes"],8*GIB);self.assertEqual(mq["log_bytes"],8*GIB)
+            self.assertGreater(mq["output_bytes"],4*961015944+32*1024**2)
+            self.assertEqual(mq["total_output_bytes"],16*GIB+16*1024**2)
         self.assertEqual(config["production_hosts"],["muscat"])
         self.assertEqual(config["production_workflows"],["glofas_family_transition"])
         self.assertEqual(config["hosts"]["muscat"]["logical_cpu_scope"],[24,25])

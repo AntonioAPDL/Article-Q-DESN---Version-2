@@ -83,7 +83,7 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
     extension_env <- new.env(parent = baseenv())
     sys.source(extension_guard, envir = extension_env)
     extension_checks <- extension_env$app_check_integrated_forecast_transition_sources(
-      repo_root, manifest_sha256 = "a5e4d93bef282be307b41844d3c12577173388fcc3358628e9ac114fdf7fea85")
+      repo_root, manifest_sha256 = "cd6684a6933de85f23d942a538c1efd241e66821b974467afb108379c068887b")
     extension_paths <- attr(extension_checks, "authorized_additions")
     require_check(length(extension_paths) == 7L,
       "The additive workflow must authorize exactly seven new application source files.")

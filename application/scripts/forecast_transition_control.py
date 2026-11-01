@@ -153,6 +153,8 @@ HASH_FIELDS = ("source_manifest_sha256", "posterior_target_sha256",
 ACTIVE_STATES = ("claimed", "intent", "submitted", "submission_ambiguous")
 BUDGET_FIELDS = ("submissions", "cpu_seconds", "wall_seconds", "output_bytes", "metadata_bytes")
 WORKFLOWS = {"integrated_quantile_forecast", "integrated_quantile_score", "glofas_family_transition"}
+NAMED_GFT_CONFIG = "configs/glofas_family_transition_muscat_20261101.json"
+PRODUCTION_CONFIG_PATHS = ("application/config/forecast_transition_multihost_v1.json", NAMED_GFT_CONFIG)
 REQUEST_OPERATIONAL_FIELDS = {
     "allow_launch", "host", "routing_id", "output_root", "authorization_sha256",
     "authorization_path", "claim_ticket", "claim_ticket_path", "claim_ticket_sha256",
@@ -273,6 +275,38 @@ def validate_config(config: dict) -> None:
     require(config["hosts"]["hummingbird"].get("adapter") == "slurm", "Hummingbird is Slurm only")
     require(config["hosts"]["hummingbird"].get("aggregate_cpu_ceiling", 999) <= 72,
             "Hummingbird conservative 72 aggregate CPU ceiling")
+    if config.get("activation_id") is not None:
+        require(config["activation_id"] == "glofas_family_transition_muscat_20261101" and
+                config.get("production_hosts") == ["muscat"] and
+                config.get("production_workflows") == ["glofas_family_transition"] and
+                config["hosts"]["muscat"].get("logical_cpu_scope") == [24,25] and
+                config["hosts"]["muscat"]["hard_max_workers"] == 2,
+                "named activation is restricted to the two-core Muscat GloFAS scope")
+        require(config.get("task_budget_caps") == named_gft_caps(), "exact sixteen named source task caps")
+        require(config["production_budget"] == {"max_submissions":16,"max_cpu_seconds":1224000,
+                "max_wall_seconds":1224000,"max_output_bytes":68719476736,"max_metadata_bytes":268435456},
+                "finite named340-hour source budget")
+
+
+def named_gft_caps() -> dict[str, dict]:
+    """Reviewed hard limits, not runtime estimates or permission to retry."""
+    result = {}
+    for family in ("al","exal"):
+        for tau in ("005","020","035","050","065","080","095"):
+            result["gft-"+family+"-p"+tau] = 43200 if family == "al" else 57600
+        result["gft-mq-"+family] = 259200
+    return {task_id: {"workers":1,"cpus":1,"memory_bytes":34359738368,"cpu_seconds":seconds,
+        "wall_seconds":seconds,"output_bytes":2147483648,"log_bytes":2147483648,
+        "metadata_bytes":16777216,"total_output_bytes":4311744512} for task_id,seconds in result.items()}
+
+
+def source_task_budget(config: dict, task: dict, budget: dict) -> None:
+    caps = config.get("task_budget_caps")
+    if caps is not None:
+        require(task["task_id"] in caps, "task is outside the named source activation")
+        for field,ceiling in caps[task["task_id"]].items():
+            require(positive_int(budget.get(field),field) <= ceiling,
+                    "named source per-task cap exceeded: " + field)
 
 
 def git_identity(root: Path) -> tuple[str, str, bool]:
@@ -424,10 +458,14 @@ def verify_file_manifest(root: Path, manifest: Path, expected_sha256: str,
 
 def verify_production_config(path: Path, source_root: Path, rows: list[dict], expected_sha256: str) -> None:
     """No external true-overlay may bypass the committed source no-launch lock."""
-    relative = "application/config/forecast_transition_multihost_v1.json"
-    expected_path = source_root.resolve(strict=True) / relative
-    require(path.absolute() == expected_path and path.is_file() and not path.is_symlink(),
+    source = source_root.resolve(strict=True)
+    matches = [relative for relative in PRODUCTION_CONFIG_PATHS if path.absolute() == source/relative]
+    require(len(matches) == 1 and path.is_file() and not path.is_symlink(),
             "production config must be the exact regular source-root file")
+    relative = matches[0]
+    if relative == NAMED_GFT_CONFIG:
+        require(read_json(path).get("activation_id") == "glofas_family_transition_muscat_20261101",
+                "named config must retain its exact source activation identity")
     matches = [row for row in rows if row.get("path") == relative]
     require(len(matches) == 1, "production config must be a unique source-manifest member")
     row = matches[0]
@@ -448,6 +486,8 @@ def host_gates(config: dict, host: str, resource: dict | None = None) -> list[st
     reasons = []
     if config.get("launch_authorized") is not True:
         reasons.append("NO_LAUNCH_NOW: source configuration has launch_authorized=false")
+    if host not in config.get("production_hosts",config["hosts"]):
+        reasons.append("HOST_OUTSIDE_NAMED_SOURCE_ACTIVATION")
     if site.get("qualified") is not True:
         reasons.append("HOST_UNQUALIFIED: source/runtime/accuracy/resource receipt missing")
     if not valid_hash(site.get("qualification_receipt_sha256")):
@@ -474,6 +514,8 @@ def physical_allocation(site: dict, resource: dict, grant: dict, requested: list
         mapping[row["cpu"]] = (row["socket"], row["core"])
     require(requested and len(requested) == len(set(requested)) and all(cpu in mapping for cpu in requested),
             "explicit known logical CPU selection")
+    if "logical_cpu_scope" in site:
+        require(set(requested) <= set(site["logical_cpu_scope"]), "CPU outside named source scope")
     require(len({mapping[cpu] for cpu in requested}) == len(requested), "SMT siblings are one physical core")
     reserved = set(site.get("reserved_logical_cpus", [])) | set(resource.get("reserved_logical_cpus", []))
     require(all(cpu in mapping for cpu in reserved), "reserved topology must be known")
@@ -552,6 +594,7 @@ class Authority:
         validate_config(config)
 
     def qualification(self, host: str, source_commit: str, source_manifest_sha256: str) -> dict:
+        require(host in self.config.get("production_hosts",self.config["hosts"]), "host outside named source activation")
         site = self.config["hosts"][host]
         receipt = self.authorization.get("qualified_hosts", {}).get(host, {})
         body = {key: value for key, value in receipt.items() if key != "receipt_sha256"}
@@ -599,6 +642,11 @@ class Authority:
         validate_task(task)
         auth = self.authorization
         require(self.config.get("launch_authorized") is True, "NO_LAUNCH_NOW")
+        require(host in self.config.get("production_hosts",self.config["hosts"]) and
+                task["workflow"] in self.config.get("production_workflows",WORKFLOWS),
+                "host/workflow outside named source activation")
+        if "task_budget_caps" in self.config:
+            require(task["task_id"] in self.config["task_budget_caps"], "task is outside the named source activation")
         require(auth.get("schema_version") == "forecast_transition_authorization_v1" and
                 auth.get("allow_launch") is True, "explicit external launch authorization")
         require(valid_hash(self.sha256) and auth.get("approved_by"), "authorization identity/approver")
@@ -746,6 +794,7 @@ class Ledger:
 
     def claim(self, task: dict, host: str, owner: str, resource: dict, grant: dict, budget: dict) -> dict:
         self.authority.check("claim", task, host)
+        source_task_budget(self.authority.config,task,budget)
         require(self.authority.authorization.get("resource_receipt_sha256", {}).get(host) == object_sha256(resource),
                 "fresh resource receipt is not bound by external authorization")
         require(self.authority.authorization.get("resource_grants", {}).get(grant.get("grant_id")) == object_sha256(grant),
@@ -1251,7 +1300,9 @@ def supervision_argv(config: dict, host: str, source_root: Path, worker: list[st
     for flag in required:
         require(worker.count(flag) == 1 and worker.index(flag) + 1 < len(worker), "supervisor worker context: " + flag)
         flags.extend([controller_flag.get(flag, flag), worker[worker.index(flag) + 1]])
+    relative = NAMED_GFT_CONFIG if config.get("activation_id") is not None else PRODUCTION_CONFIG_PATHS[0]
     return [python, str(source_root / "application/scripts/forecast_transition_control.py"), "supervise", *flags,
+            "--config", str(source_root/relative),
             "--source-root", str(source_root), "--supervision-spec", spec["remote_path"],
             "--supervision-spec-sha256", spec["sha256"]]
 
@@ -1532,6 +1583,7 @@ def verify_claim_remote(args: argparse.Namespace, request: dict, authority: Auth
     require(str(args.ledger) == paths["ledger_path"], "central ledger path mismatch")
     command = [authority.config["coordinator_python_bin"], str(Path(paths["source_root"]) / "application/scripts/forecast_transition_control.py"),
         "verify-claim", "--ledger", paths["ledger_path"], "--ticket", paths["ticket_path"],
+        "--config", str(Path(paths["source_root"]) / (NAMED_GFT_CONFIG if authority.config.get("activation_id") is not None else PRODUCTION_CONFIG_PATHS[0])),
         "--ticket-sha256", args.ticket_sha256, "--request", paths["request_path"],
         "--authorization", paths["authorization_path"], "--authorization-sha256", args.authorization_sha256,
         "--source-root", paths["source_root"], "--source-manifest", paths["source_manifest_path"]]
@@ -1543,12 +1595,28 @@ def verify_claim_remote(args: argparse.Namespace, request: dict, authority: Auth
     return observed
 
 
+def resolve_control_config(args: argparse.Namespace) -> Path:
+    if args.config is not None:
+        return args.config
+    # Historical R workers omit --config. Their source-bound authorization may
+    # select only an exact reviewed source policy; manifest/HEAD checks follow.
+    if args.command in ("verify-claim","verify-claim-remote","supervise") and all(
+            (args.authorization,args.authorization_sha256,args.source_root)):
+        auth,_ = load_authorization(args.authorization,args.authorization_sha256,args.source_root)
+        candidates = [args.source_root.resolve()/relative for relative in PRODUCTION_CONFIG_PATHS]
+        candidates = [path for path in candidates if path.is_file() and not path.is_symlink() and
+                      file_sha256(path) == auth.get("config_sha256")]
+        require(len(candidates) == 1, "external authorization must pin exactly one reviewed source configuration")
+        return candidates[0]
+    return Path(__file__).resolve().parents[1]/"config/forecast_transition_multihost_v1.json"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", default="plan",
                         choices=("plan", "dry-run", "preflight", "dispatch", "verify-claim", "verify-claim-remote", "supervise",
                                  "close-supervised", "abandon-preintent", "accept", "reassign"))
-    parser.add_argument("--config", type=Path, default=Path(__file__).resolve().parents[1] / "config/forecast_transition_multihost_v1.json")
+    parser.add_argument("--config", type=Path)
     parser.add_argument("--host", choices=("muscat", "jerez", "hummingbird"))
     parser.add_argument("--task", type=Path)
     parser.add_argument("--ledger", type=Path)
@@ -1579,6 +1647,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--new-host", choices=("muscat", "jerez", "hummingbird"))
     parser.add_argument("--routing-revision", type=int)
     args = parser.parse_args(argv)
+    args.config = resolve_control_config(args)
     config = read_json(args.config)
     validate_config(config)
     if args.command in ("close-supervised", "abandon-preintent", "accept", "reassign"):

@@ -216,6 +216,125 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaisesRegex(control.GateError, "NO_LAUNCH_NOW"):
             authority(shipped).check("claim", task(), "muscat")
 
+    def named_authority(self, spec):
+        config = control.read_json(ROOT/control.NAMED_GFT_CONFIG)
+        auth = authority(config,[spec["task_id"]])
+        auth.authorization["allowed_task_sha256"] = {spec["task_id"]:control.object_sha256(spec)}
+        for host,receipt in auth.authorization["qualified_hosts"].items():
+            receipt.update(output_root=self.auth.authorization["qualified_hosts"][host]["output_root"],
+                           metadata_root=self.auth.authorization["qualified_hosts"][host]["metadata_root"])
+            receipt["receipt_sha256"] = control.object_sha256({k:v for k,v in receipt.items() if k!="receipt_sha256"})
+        return auth
+
+    def test_named_policy_is_finite_and_separate_from_disabled_defaults(self):
+        config = control.read_json(ROOT/control.NAMED_GFT_CONFIG)
+        control.validate_config(config)
+        self.assertTrue(config["launch_authorized"])
+        self.assertEqual(config["task_budget_caps"],control.named_gft_caps())
+        self.assertEqual(sum(row["cpu_seconds"] for row in config["task_budget_caps"].values()),340*3600)
+        self.assertEqual(config["production_hosts"],["muscat"])
+        self.assertEqual(config["production_workflows"],["glofas_family_transition"])
+        self.assertEqual(config["hosts"]["muscat"]["logical_cpu_scope"],[24,25])
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            control.main(["plan","--config",str(ROOT/control.NAMED_GFT_CONFIG)])
+        plan=json.loads(output.getvalue())
+        self.assertEqual(plan["production_actions"],0);self.assertFalse(plan["ledger_created"])
+        self.assertIn("HOST_OUTSIDE_NAMED_SOURCE_ACTIVATION",plan["hosts"]["jerez"]["gates"])
+        self.assertFalse(control.read_json(ROOT/"application/config/forecast_transition_multihost_v1.json")["launch_authorized"])
+
+    def test_named_flat_authorization_cannot_widen_tasks_hosts_workflows_or_cpu_scope(self):
+        spec=task("gft-al-p050");spec["workflow"]="glofas_family_transition"
+        auth=self.named_authority(spec)
+        auth.check("claim",spec,"muscat")
+        for host in ("jerez","hummingbird"):
+            with self.subTest(host=host),self.assertRaisesRegex(control.GateError,"named source activation"):
+                auth.check("claim",spec,host)
+        for field,value in (("task_id","unapproved-task"),("workflow","integrated_quantile_forecast")):
+            other=copy.deepcopy(spec);other[field]=value
+            with self.subTest(field=field),self.assertRaisesRegex(control.GateError,"named source activation"):
+                auth.check("claim",other,"muscat")
+        control.resource_admission(auth.config,"muscat",resource(),grant(),budget(24),NOW)
+        for cpu in (0,25+32):
+            with self.subTest(cpu=cpu),self.assertRaisesRegex(control.GateError,"named source scope"):
+                control.resource_admission(auth.config,"muscat",resource(),grant(),budget(cpu),NOW)
+
+    def test_named_per_task_caps_reject_flat_authorization_budget_expansion(self):
+        spec=task("gft-al-p050");spec["workflow"]="glofas_family_transition"
+        auth=self.named_authority(spec)
+        limits=auth.config["task_budget_caps"][spec["task_id"]]
+        for field in limits:
+            expanded=dict(limits,logical_cpus=[24]);expanded[field]+=1
+            with self.subTest(field=field),self.assertRaisesRegex(control.GateError,"per-task cap exceeded"):
+                control.source_task_budget(auth.config,spec,expanded)
+        control.source_task_budget(auth.config,spec,dict(limits,logical_cpus=[24]))
+        ledger=control.Ledger(self.root/"named-policy.sqlite",auth,coordinator_hostname="muscat")
+        try:
+            too_large=dict(budget(24),wall_seconds=43201,cpu_seconds=43201)
+            with self.assertRaisesRegex(control.GateError,"per-task cap exceeded"):
+                ledger.claim(spec,"muscat","synthetic",resource(),grant(),too_large)
+            self.assertEqual(ledger.attempts(),[])
+            for index,tid in enumerate(("gft-al-p050","gft-al-p035","gft-al-p065")):
+                cell=task(tid);cell["workflow"]="glofas_family_transition"
+                auth.authorization["allowed_task_ids"].append(tid)
+                auth.authorization["allowed_task_sha256"][tid]=control.object_sha256(cell)
+                if index<2:ledger.claim(cell,"muscat","fixture-only",resource(),grant(),budget(24+index))
+                else:
+                    with self.assertRaisesRegex(control.GateError,"aggregate active worker budget"):
+                        ledger.claim(cell,"muscat","fixture-only",resource(),grant(),budget(24))
+        finally:ledger.close()
+
+    def test_named_source_policy_claim_verification_roundtrip_real_git_and_ledger(self):
+        source=self.root/"policy-source";source.mkdir()
+        config_path=source/control.NAMED_GFT_CONFIG;config_path.parent.mkdir()
+        config_path.write_bytes((ROOT/control.NAMED_GFT_CONFIG).read_bytes())
+        def git(*argv):
+            return control.subprocess.check_output(["git","-C",str(source),*argv],text=True).strip()
+        git("init","--quiet");git("add","--",control.NAMED_GFT_CONFIG)
+        git("-c","user.name=SyntheticFixture","-c","user.email=fixture@example.invalid","commit","--quiet","-m","Fixture source policy")
+        commit,tree=git("rev-parse","HEAD"),git("rev-parse","HEAD^{tree}")
+        manifest=self.root/"named-source.csv"
+        with manifest.open("w",newline="") as f:
+            writer=csv.DictWriter(f,fieldnames=["path","role","mode","sha256","blob"]);writer.writeheader()
+            writer.writerow(dict(path=control.NAMED_GFT_CONFIG,role="new_workflow",mode="100644",
+                sha256=control.file_sha256(config_path),blob=git("hash-object","--",str(config_path))))
+        spec=task("gft-al-p050");spec.update(workflow="glofas_family_transition",source_commit=commit,
+            source_tree=tree,source_manifest_sha256=control.file_sha256(manifest))
+        request=request_for(spec);request["schema_version"]="glofas_family_transition_request_v1"
+        spec["request_spec_sha256"]=control.request_spec_sha256(request)
+        auth=self.named_authority(spec);auth.config_sha256=control.file_sha256(config_path)
+        auth.source=(commit,tree,True)
+        for name in ("source_commit","source_tree",*control.HASH_FIELDS):auth.authorization[name]=spec[name]
+        auth.authorization["config_sha256"]=auth.config_sha256
+        for receipt in auth.authorization["qualified_hosts"].values():
+            receipt.update(source_commit=commit,source_manifest_sha256=spec["source_manifest_sha256"])
+            receipt["receipt_sha256"]=control.object_sha256({k:v for k,v in receipt.items() if k!="receipt_sha256"})
+        auth_path=self.root/"named-authorization.json";auth_path.write_text(json.dumps(auth.authorization))
+        auth.sha256=control.file_sha256(auth_path)
+        ledger=control.Ledger(self.root/"named-roundtrip.sqlite",auth,coordinator_hostname="muscat")
+        try:
+            ticket=ledger.claim(spec,"muscat","fixture-only",resource(),grant(),budget(24))
+            ledger.prepare_intent(ticket["claim_nonce"],self.root,ARGV,[{"role":"supervision","sha256":HASH}])
+            ledger.dispatch(ticket["claim_nonce"],lambda intent:{"host":"muscat","claim_nonce":ticket["claim_nonce"],"job_id":"mock-submission-only"})
+            request.update(authorization_sha256=auth.sha256,output_root=ticket["output_root"])
+            request_path=self.root/"named-request.json";request_path.write_text(json.dumps(request))
+            ticket_path=self.root/"named-ticket.json";ticket_path.write_text(json.dumps(ticket))
+            args=["verify-claim","--ledger",str(ledger.path),"--ticket",str(ticket_path),"--ticket-sha256",control.file_sha256(ticket_path),
+                "--request",str(request_path),"--authorization",str(auth_path),"--authorization-sha256",auth.sha256,
+                "--source-root",str(source),"--source-manifest",str(manifest)]
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(control.main(args),0)
+            self.assertTrue(json.loads(out.getvalue())["verified"])
+            bad=copy.deepcopy(auth.authorization);bad["config_sha256"]="0"*64
+            auth_path.write_text(json.dumps(bad));wrong=list(args)
+            wrong[wrong.index("--authorization-sha256")+1]=control.file_sha256(auth_path)
+            with self.assertRaisesRegex(control.GateError,"exactly one reviewed source configuration"):
+                control.main(wrong)
+            auth_path.write_text(json.dumps(auth.authorization))
+            third=self.root/"third-policy.json";third.write_bytes(config_path.read_bytes())
+            with self.assertRaisesRegex(control.GateError,"exact regular source-root"):
+                control.main(args+["--config",str(third)])
+        finally:ledger.close()
+
     def test_one_coordinator_only(self):
         with self.assertRaisesRegex(control.GateError, "Muscat coordinator"):
             control.Ledger(self.root / "remote.sqlite", self.auth, coordinator_hostname="jerez")

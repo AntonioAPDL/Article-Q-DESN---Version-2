@@ -1,0 +1,294 @@
+{
+  "schema_version": "forecast_transition_multihost_v1",
+  "launch_authorized": true,
+  "coordinator_host": "muscat",
+  "coordinator_python_bin": "/usr/bin/python3.11",
+  "coordinator_ssh_profile": {
+    "endpoint": "muscat.be.ucsc.edu",
+    "user": "jaguir26",
+    "identity_file": null,
+    "known_hosts_file": null,
+    "known_hosts_sha256": null,
+    "connect_timeout_seconds": 15
+  },
+  "ledger_mode": "single_coordinator_local_sqlite",
+  "production_authorization_required": true,
+  "host_qualification_status_is_advisory": true,
+  "allowed_numerical_backends": [
+    "bundled_rblas",
+    "openblas_pthread"
+  ],
+  "output_budget_semantics": "artifact_bytes_B_plus_one_merged_log_B_plus_explicit_metadata_bytes",
+  "production_budget": {
+    "max_submissions": 16,
+    "max_cpu_seconds": 1224000,
+    "max_wall_seconds": 1224000,
+    "max_output_bytes": 68719476736,
+    "max_metadata_bytes": 268435456
+  },
+  "worker_scripts": {
+    "integrated_quantile_forecast": "application/scripts/run_integrated_quantile_forecast.R",
+    "integrated_quantile_score": "scripts/score_integrated_quantile_forecasts.R",
+    "glofas_family_transition": "application/scripts/run_glofas_family_transition.R"
+  },
+  "hosts": {
+    "muscat": {
+      "adapter": "local",
+      "python_bin": "/usr/bin/python3.11",
+      "qualified": false,
+      "qualification_receipt_sha256": null,
+      "core_grants": [],
+      "initial_max_workers": 2,
+      "hard_max_workers": 2,
+      "reserve_physical_cores": 2,
+      "min_available_ram_gib": 180,
+      "min_available_disk_gib": 80,
+      "reserved_logical_cpus": [
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55
+      ],
+      "rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript",
+      "logical_cpu_scope": [
+        24,
+        25
+      ]
+    },
+    "jerez": {
+      "adapter": "ssh_local",
+      "python_bin": "/usr/bin/python3.11",
+      "ssh_profile": {
+        "endpoint": "jerez.be.ucsc.edu",
+        "user": "jaguir26",
+        "identity_file": "/home/jaguir26/.ssh/id_ed25519_muscat_jerez",
+        "known_hosts_file": null,
+        "known_hosts_sha256": null,
+        "connect_timeout_seconds": 15
+      },
+      "qualified": false,
+      "qualification_receipt_sha256": null,
+      "core_grants": [],
+      "initial_max_workers": 8,
+      "hard_max_workers": 16,
+      "reserve_physical_cores": 2,
+      "min_available_ram_gib": 180,
+      "min_available_disk_gib": 50,
+      "reserved_logical_cpus": [],
+      "rscript": "/data/jaguir26/local/opt/R/4.6.0/bin/Rscript"
+    },
+    "hummingbird": {
+      "adapter": "slurm",
+      "python_bin": null,
+      "ssh_profile": {
+        "endpoint": "hb.ucsc.edu",
+        "user": "jaguir26",
+        "identity_file": "/home/jaguir26/.ssh/id_ed25519_muscat_hummingbird_pricefm_20261028",
+        "known_hosts_file": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_hummingbird_20261027/evidence/hb.known_hosts",
+        "known_hosts_sha256": "d0b3f9a9f5cc46381af15ab00cb7ef049b4074221da997a17edea5ff58e0e21d",
+        "connect_timeout_seconds": 15
+      },
+      "qualified": false,
+      "qualification_receipt_sha256": null,
+      "core_grants": [],
+      "initial_max_workers": 1,
+      "hard_max_workers": 72,
+      "aggregate_cpu_ceiling": 72,
+      "node_physical_cpu_ceiling": 24,
+      "node_ram_ceiling_gib": 120,
+      "require_compute_node_runtime_proof": true,
+      "require_cpu_boundary_proof": true,
+      "require_closed_accounting_receipt": true,
+      "rscript": null
+    }
+  },
+  "activation_id": "glofas_family_transition_muscat_20261101",
+  "production_hosts": [
+    "muscat"
+  ],
+  "production_workflows": [
+    "glofas_family_transition"
+  ],
+  "task_budget_caps": {
+    "gft-al-p005": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-al-p020": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-al-p035": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-al-p050": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-al-p065": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-al-p080": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-al-p095": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 43200,
+      "wall_seconds": 43200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p005": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p020": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p035": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p050": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p065": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p080": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-exal-p095": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 57600,
+      "wall_seconds": 57600,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-mq-al": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 259200,
+      "wall_seconds": 259200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    },
+    "gft-mq-exal": {
+      "workers": 1,
+      "cpus": 1,
+      "memory_bytes": 34359738368,
+      "cpu_seconds": 259200,
+      "wall_seconds": 259200,
+      "output_bytes": 2147483648,
+      "log_bytes": 2147483648,
+      "metadata_bytes": 16777216,
+      "total_output_bytes": 4311744512
+    }
+  }
+}

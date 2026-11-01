@@ -276,5 +276,6 @@ run_standalone_glofas_test("application/tests/test_glofas_family_transition_qual
 run_standalone_glofas_test("application/tests/test_integrated_quantile_qualification.R")
 stopifnot(system2("python3.11", app_path("application/tests/test_glofas_transition_campaign.py")) == 0L)
 run_standalone_glofas_test("application/tests/test_glofas_normal_reuse_enrollment.R")
+run_standalone_glofas_test("application/tests/test_ind_conditional_filter_replay.R")
 
 cat("Application tests completed.\n")

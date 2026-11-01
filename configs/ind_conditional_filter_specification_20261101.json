@@ -1,0 +1,48 @@
+{
+  "schema_version": "ind_conditional_filter_specification_v1",
+  "status": "AUTHOR_APPROVED_DIRECTION_NUMERICAL_METHOD_NOT_YET_QUALIFIED",
+  "author_confirmation": "Use this corrected specification",
+  "confirmed_date": "2026-11-01",
+  "scope": "independent_study_retained_fit_forecast_reconstruction",
+  "allow_refit": false,
+  "allow_production_launch": false,
+  "allow_article_promotion": false,
+  "training_parameter_measure": "original_retained_empirical_training_posterior",
+  "later_parameter_reweighting": false,
+  "preserve_original_draw_ids_and_weights": true,
+  "legacy_metric_draw_ids_are_not_native_parameter_proof": true,
+  "native_parameter_draw_catalog_required": true,
+  "outer_conditioning": "static_parameters_only_integrate_states_and_auxiliary_variables",
+  "source_versions": ["1.0.0", "1.1.1"],
+  "source_commits": ["c72e19f345da88fc1a8175ed30bdde328eab88be", "7ace6618601b7dd8d8c5fd3bd676000ba40f11e8"],
+  "observed_backend": "C++ (mode=fast)",
+  "observed_backend_cases": 54,
+  "native_cpp_sha256": "f6ccf41466ece60a3a63737bb434309e8bea59f5b254a086793e5cca0aba6065",
+  "evolution": {
+    "propagation": "P_t = G_t C_previous transpose(G_t)",
+    "innovation": "W_t = df_mat elementwise_times P_t",
+    "predictive_covariance": "R_t = symmetrize(P_t + W_t)",
+    "historical_forecast_D_times_C_rule_allowed": false,
+    "covariance_history_must_be_explicit": true,
+    "fixed_plugin_origin_covariance_allowed": false,
+    "all_horizon_extension_requires_derivation_and_qualification": true
+  },
+  "qualification_only": {
+    "first_stage": "native_training_end_conditional_Gaussian_replay",
+    "conditioning_label": "static_parameters_and_paired_training_augmentation",
+    "does_not_certify_parameters_only_filter": true,
+    "does_not_certify_historical_global_MCMC_target": true,
+    "does_not_generate_forecasts": true
+  },
+  "production_requirements": [
+    "complete_all_horizon_state_and_auxiliary_transition_definition",
+    "authenticated_original_source_backend_and_input_enrollment",
+    "native_full_time_indexed_forward_operator_parity",
+    "conditional_training_auxiliary_integration_not_single_paired_draw",
+    "within_parameter_filter_weight_normalization_without_parameter_reweighting",
+    "immutable_prefix_causal_origin_checkpoints",
+    "separate_filter_and_future_CDF_accuracy_qualification",
+    "finite_whole_inventory_resource_price_and_qualified_host_grants",
+    "complete_matched_packet_before_scoring_or_article_promotion"
+  ]
+}

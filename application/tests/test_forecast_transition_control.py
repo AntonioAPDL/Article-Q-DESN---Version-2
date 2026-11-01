@@ -860,6 +860,7 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn("LD_PRELOAD", env); self.assertNotIn("LD_LIBRARY_PATH", env)
         self.assertNotIn("QDESN_BLAS_LIBRARY_PATH", env); self.assertNotIn("PYTHONPATH", env)
         self.assertEqual(env["R_PROFILE_USER"], "/dev/null"); self.assertEqual(env["OPENBLAS_NUM_THREADS"], "1")
+        self.assertEqual(env["R_LIBS_USER"], "/dev/null"); self.assertEqual(env["R_LIBS_SITE"], "/dev/null")
         env = control.numerical_backend_environment(dict(backend, backend="openblas_pthread"))
         self.assertEqual(env["LD_PRELOAD"], str(library)); self.assertEqual(env["QDESN_BLAS_LIBRARY_SHA256"], backend["library_sha256"])
         with self.assertRaisesRegex(control.GateError, "library identity"):

@@ -9,6 +9,14 @@ local({
   checks<-0L
   check<-function(ok){stopifnot(isTRUE(ok));checks<<-checks+1L}
   reject<-function(expr){e<-tryCatch({force(expr);NULL},error=identity);check(inherits(e,"error"))}
+  # Empty library variables are rewritten to defaults by R startup. Exercise
+  # the actual executable, without a backend/model/data call, to prevent a
+  # synthetic-only environment assertion from missing that behavior again.
+  startup<-system2(file.path(R.home("bin"),"Rscript"),
+    c("-e",shQuote('stopifnot(Sys.getenv("R_LIBS_USER")=="/dev/null",Sys.getenv("R_LIBS_SITE")=="/dev/null",identical(normalizePath(.libPaths()),normalizePath(.Library)));cat("Q1_CLEAN_R_STARTUP_PASS\\n")')),
+    env=c("R_PROFILE_USER=/dev/null","R_ENVIRON_USER=/dev/null","R_MAKEVARS_USER=/dev/null",
+      "R_LIBS_USER=/dev/null","R_LIBS_SITE=/dev/null"),stdout=TRUE,stderr=TRUE)
+  check(identical(startup,"Q1_CLEAN_R_STARTUP_PASS"))
   lin<-gftq_linalg();check(lin$residual<1e-10)
   sample<-list(theta_mean=c(1,2),theta_cov=diag(2),future_mean=0,future_cov=matrix(1),
     sigma_shape=c(Y=2,G=3),sigma_rate=c(Y=1,G=2))

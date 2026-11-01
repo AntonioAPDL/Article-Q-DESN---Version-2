@@ -214,7 +214,7 @@ def clean_process_environment() -> dict[str, str]:
     env.update(PATH="/usr/bin:/bin:/usr/local/bin", OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
         MKL_NUM_THREADS="1", BLIS_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1", NUMEXPR_NUM_THREADS="1",
         OMP_DYNAMIC="FALSE", MKL_DYNAMIC="FALSE", R_PROFILE="/dev/null", R_PROFILE_USER="/dev/null",
-        R_ENVIRON="/dev/null", R_ENVIRON_USER="/dev/null", R_LIBS="", R_LIBS_USER="", R_LIBS_SITE="",
+        R_ENVIRON="/dev/null", R_ENVIRON_USER="/dev/null", R_LIBS="", R_LIBS_USER="/dev/null", R_LIBS_SITE="/dev/null",
         PYTHONNOUSERSITE="1", PYTHONDONTWRITEBYTECODE="1")
     return env
 

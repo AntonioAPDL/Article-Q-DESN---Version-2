@@ -160,3 +160,12 @@ main/supplement proofs have 39/101 pages; anonymous proofs have 37/100 pages,
 with clean final build logs. The full combined harness and authentic bounded
 qualification outcomes are recorded separately as they complete. No article
 authority or numerical result is changed by these implementation checks.
+
+The first authentic qualification admission stopped before loading any design
+or fitting a model: R4.6 expands empty library environment variables to its
+defaults. The repaired launcher uses explicit `/dev/null` library variables
+and verifies the effective search path is the pinned core library only. A
+real-executable startup regression now exercises this behavior. The failed
+admission's timing and logs are retained and charged; a corrected purpose
+cannot erase or refund them. This is an environment correction, not a changed
+prior, target or parity tolerance.

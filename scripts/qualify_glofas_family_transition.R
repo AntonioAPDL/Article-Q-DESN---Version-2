@@ -110,8 +110,10 @@ gftq_contract <- function(path,expected_sha,repo,now=Sys.time(),verify_files=TRU
 }
 gftq_actual_boundary <- function(contract) {
   clean<-c(R_PROFILE_USER="/dev/null",R_ENVIRON_USER="/dev/null",R_MAKEVARS_USER="/dev/null",
-    R_LIBS_USER="",R_LIBS_SITE="")
+    R_LIBS_USER="/dev/null",R_LIBS_SITE="/dev/null")
   gftq_require(identical(unname(Sys.getenv(names(clean),unset="")),unname(clean)),"parent/worker startup environment is not explicitly clean")
+  gftq_require(identical(normalizePath(.libPaths()),normalizePath(.Library)),
+    "parent/worker library search must contain only the pinned R core library")
   status<-readLines("/proc/self/status",warn=FALSE)
   affinity<-trimws(sub("^Cpus_allowed_list:","",grep("^Cpus_allowed_list:",status,value=TRUE)))
   cpu<-as.character(unlist(contract$verified_resource_grant$logical_cpus,use.names=FALSE))
@@ -309,8 +311,9 @@ gftq_main <- function(argv=commandArgs(TRUE)) {
   repo<-normalizePath(file.path(dirname(file),".."),mustWork=TRUE);setwd(repo)
   contract_path<-arg("purpose-contract");contract_sha<-arg("purpose-contract-sha256")
   gftq_require(!is.null(contract_path)&&!is.null(contract_sha),"real qualification needs pinned external purpose contract")
-  contract<-gftq_contract(contract_path,contract_sha,repo)
+  contract<-gftq_contract(contract_path,contract_sha,repo,verify_files=FALSE)
   boundary<-gftq_actual_boundary(contract)
+  contract<-gftq_contract(contract_path,contract_sha,repo)
   output<-normalizePath(contract$output_root,mustWork=FALSE)
   if(mode=="worker") return(gftq_worker(contract,arg("backend"),repo,file.path(output,arg("backend"))))
   gftq_require(!file.exists(output)&&dir.exists(dirname(output)),"qualification output root must be new")
@@ -324,7 +327,7 @@ gftq_main <- function(argv=commandArgs(TRUE)) {
     lib<-contract$libraries[[backend]]
     env<-c("OMP_NUM_THREADS=1","OMP_THREAD_LIMIT=1","OPENBLAS_NUM_THREADS=1","MKL_NUM_THREADS=1",
       "GOTO_NUM_THREADS=1","BLIS_NUM_THREADS=1","VECLIB_MAXIMUM_THREADS=1","NUMEXPR_NUM_THREADS=1",
-      "R_PROFILE_USER=/dev/null","R_ENVIRON_USER=/dev/null","R_MAKEVARS_USER=/dev/null","R_LIBS_USER=","R_LIBS_SITE=",
+      "R_PROFILE_USER=/dev/null","R_ENVIRON_USER=/dev/null","R_MAKEVARS_USER=/dev/null","R_LIBS_USER=/dev/null","R_LIBS_SITE=/dev/null",
       "MAKEFLAGS=-j1",paste0("QDESN_NUMERICAL_BACKEND=",if(backend=="bundled")"bundled_rblas"else"openblas_pthread"))
     env_args<-if(backend=="bundled")c("-u","LD_PRELOAD","-u","QDESN_BLAS_LIBRARY_PATH","-u","QDESN_BLAS_LIBRARY_SHA256") else
       c(paste0("LD_PRELOAD=",lib$path),paste0("QDESN_BLAS_LIBRARY_PATH=",lib$path),paste0("QDESN_BLAS_LIBRARY_SHA256=",lib$sha256))

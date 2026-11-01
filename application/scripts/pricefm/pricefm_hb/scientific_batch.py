@@ -120,7 +120,7 @@ def prepare_release(config_path,output):
     h.write_new(out/'PREPARATION.json',value);return value
 
 
-def accepted_R(value):
+def accepted_R(value,expected_node=None,expected_route_id=None):
     record=h.read(value)
     h.require(record.get('status')=='ACCEPTED_COMPLETE_STARTUP_BATCH_METADATA_ROLE'
               and record.get('role')=='EXACT_R46_STARTUP_METADATA','actual accepted exactR metadata role required')
@@ -132,21 +132,25 @@ def accepted_R(value):
     h.require(result.get('status')=='R46_STARTUP_METADATA_PASS_NOT_NUMERICAL_PARITY'
               and result.get('outcome',{}).get('R_startup_proved') is True
               and result['job_id']==record['job_id'],'actual compute R startup outcome required')
+    if expected_node is not None:
+        h.require(result.get('node')==expected_node and record.get('qualification_route_id')==result.get('qualification_route_id')==expected_route_id,
+                  'fresh acceptedR execution node and qualification route required')
     return record
 
 
-def accepted_R_context(value):
-    record=accepted_R(value);manifest=h.read(record['full_return_manifest'])
+def accepted_R_context(value,expected_node=None,expected_route_id=None):
+    record=accepted_R(value,expected_node,expected_route_id);manifest=h.read(record['full_return_manifest'])
     rows=[row for row in manifest['files'] if row['relative']=='INVENTORY.json']
     h.require(len(rows)==1,'actual acceptedR compute inventory must be in complete return')
     path=Path(record['full_return_manifest']['path']).parent/'INVENTORY.json'
     pin=dict(path=str(path),sha256=rows[0]['sha256']);inventory=h.read(pin)
     h.require(path.stat().st_size==rows[0]['bytes'] and inventory.get('job_id')==record['job_id']
-              and inventory.get('node')=='node-13','exact acceptedR runtime inventory identity required')
+              and inventory.get('node')==(expected_node or 'node-13')
+              and (expected_node is None or inventory.get('qualification_route_id')==expected_route_id),'exact acceptedR runtime inventory identity required')
     return dict(inventory_pin=pin,inventory=inventory)
 
 
-def accepted_namespace(value,hashes):
+def accepted_namespace(value,hashes,expected_node=None,expected_route_id=None):
     record=h.read(value);h.require(record.get('status')=='ACCEPTED_COMPLETE_SCIENTIFIC_METADATA_ROLE'
         and record.get('role')==ROLES[0] and record.get('namespace_proved') is True,'actual accepted namespace required')
     guard=h.read(record['actual_accept_action_guard']);passing_guard(guard,5,180)
@@ -154,7 +158,8 @@ def accepted_namespace(value,hashes):
               'actual guarded namespace acceptance record required')
     result=h.read(record['result']);account=h.read(record['accounting'])
     h.require(result.get('status')=='PASS_COMPLETE_SCIENTIFIC_METADATA_WORKER' and result.get('role')==ROLES[0]
-              and result.get('job_id')==record['job_id'] and result.get('node')=='node-13'
+              and result.get('job_id')==record['job_id'] and result.get('node')==(expected_node or 'node-13')
+              and (expected_node is None or record.get('qualification_route_id')==result.get('qualification_route_id')==expected_route_id)
               and {k:v['sha256'] for k,v in result['sources'].items()}==hashes
               and account.get('complete') is True and account.get('terminal') is True
               and account.get('job_id')==record['job_id'],'complete same-source namespace result/accounting required')
@@ -216,9 +221,64 @@ def validate_local_release(root,bundle):
     return worker.validate_release(h.read(h.pin(root/'packet/SPEC.json')),spec_pin,ready_pin,release_pin,Aliases,job_id=job['job_id'])
 
 
+STARTUP_WATCH_PROFILE=dict(maximum_probes=10,interval_seconds=20,deadline_seconds=300,
+    probe_local_CPU=3,probe_remote_unknown_fee=3,probe_wall_seconds=45,combined_startup_watch_CPU_ceiling=60)
+
+
+def validate_startup_watch_budget(config,scope,roles):
+    b=h.read(config['startup_watch_budget']);count=len(roles)
+    roots=config.get('startup_watch_roots',{})
+    h.require(type(roots) is dict and set(roots)==set(roles) and len(set(roots.values()))==count,
+              'one distinct canonical startup output root per exact funded role')
+    base=h.physical(scope['allowed_metadata_output_root'])
+    h.require(all(h.physical(value).is_relative_to(base) and h.physical(value)!=base for value in roots.values()),
+              'startup roots stay in private prospective scope')
+    h.require(b.get('status')=='PROSPECTIVE_FRESH_NODE_STARTUP_WATCH_BUDGET'
+              and b.get('scope')==config['scope'] and b.get('profile')==STARTUP_WATCH_PROFILE
+              and all(type(b['profile'][key]) is int for key in STARTUP_WATCH_PROFILE)
+              and b.get('roles')==list(roles) and type(b.get('combined_startup_watch_CPU_ceiling')) is int
+              and b['combined_startup_watch_CPU_ceiling']==60*count
+              and b.get('expires_epoch')==scope['expires_epoch']
+              and scope.get('administrative_allocations',{}).get('startup_watch'+str(60*count))==60*count,
+              'each fresh role has separately paid local30 and remote30 startup observations')
+
+
+def validate_failure_tail_budgets(config,scope,roles):
+    values=config.get('failure_tail_budgets',{})
+    h.require(type(values) is dict and set(values)==set(roles),'distinct prepriced failure budget for every funded role')
+    allocations=dict(query_local4=4,query_remote4=4,independent_review4=4,drain_local4=4,drain_remote4=4,preparation4=4,closeout4=4)
+    for role,value in values.items():
+        b=h.read(value)
+        h.require(b.get('schema')=='node_unallocated_failure_budget_v1'
+                  and b.get('status')=='PROSPECTIVE_DISTINCT_NODE_UNALLOCATED_FAILURE_TAIL_BUDGET'
+                  and b.get('parent_scope')==config['scope'] and b.get('role')==role
+                  and b.get('allocations')==allocations and all(type(x) is int for x in b['allocations'].values())
+                  and type(b.get('total_administrative_CPU')) is int and b['total_administrative_CPU']==28
+                  and all(type(b.get(k)) is int and b[k]==1 for k in ['maximum_query_calls','maximum_drain_calls','maximum_peer_calls'])
+                  and b.get('expires_epoch')==scope['expires_epoch'],
+                  'complete separate28 tail scope, not original native/H3 credit')
+
+
+def validate_node_context(config,scope):
+    node=config.get('node');route=scope.get('qualification_route_id')
+    h.require(type(node) is str and re.fullmatch(r'node-(?:1[5-9]|2[01])',node)
+              and scope.get('execution_node')==scope.get('qualification_node')==node
+              and type(route) is str and re.fullmatch('[0-9a-f]{32}',route)
+              and scope.get('cached_artifact_origin_node')=='node-13',
+              'one exact scope-selected available-node route; historical cached origin is not admission')
+    jobs=1 if 'role' in config else 2
+    h.require(all(type(scope.get(k)) is int and scope[k]==v for k,v in
+              dict(maximum_jobs=jobs,max_concurrent_jobs=1,cpus_per_task=1,threads=1,memory_MiB=8192,compute_CPU_reservation=600*jobs).items()),
+              'exact integer whole-role jobs/CPU/thread/memory funding')
+    return node,route
+
+
 def load_config(path):
     h.require(os.sched_getaffinity(0)=={31},'administrative31 required')
     c=h.read(h.pin(path));s=h.read(c['scope']);now=time.time()
+    validate_node_context(c,s)
+    validate_startup_watch_budget(c,s,[c["role"]])
+    validate_failure_tail_budgets(c,s,[c["role"]])
     h.require(c.get('schema')=='pricefm_scientific_batch_config_v1' and c.get('role') in ROLES,
               'single metadata-only scientific purpose required')
     h.require(s.get('status')=='PROSPECTIVE_FRESH_SCIENTIFIC_METADATA_JOB_SCOPE'
@@ -250,7 +310,7 @@ def load_config(path):
               and budget.get('combined_native_control_CPU_ceiling')==136 and budget.get('scope')==c['scope']
               and budget.get('expires_epoch')==s['expires_epoch'],'new whole native136 including forensic drain reservation required')
     safe_path(c['remote_namespace']);h.require(c['remote_namespace'].startswith('/mnt/beegfs/home/jaguir26/pricefm_r181_')
-              and c['node']=='node-13','new isolated reviewed compute namespace required')
+              and c['node']==s['execution_node'],'new isolated reviewed compute namespace required')
     hashes={name:digest(Path(c['source_dir'])/name) for name in NAMES}
     h.require(set(c['inputs'])==set(contract.INPUT_HASHES)
               and {name:row['sha256'] for name,row in c['inputs'].items()}==contract.INPUT_HASHES,
@@ -259,9 +319,9 @@ def load_config(path):
     h.require(pub.get('status')=='PASS_SCIENTIFIC_BATCH_SOURCE_PUBLICATION' and re.fullmatch('[0-9a-f]{40}',pub['commit'])
               and pub.get('source_files')==hashes and review.get('status')=='PASS_REVIEWED_SCIENTIFIC_BATCH_SOURCE'
               and review.get('source_files')==hashes,'complete published and independently reviewed source map required')
-    accepted_R(c['accepted_R'])
+    accepted_R(c['accepted_R'],c['node'],s['qualification_route_id'])
     if c['role']==ROLES[1]:
-        accepted_namespace(c['accepted_namespace'],hashes)
+        accepted_namespace(c['accepted_namespace'],hashes,c['node'],s['qualification_route_id'])
     return c,s,site_config(c['site']),hashes
 
 
@@ -296,13 +356,13 @@ def prepare(config,scope,role,hashes,registry):
         science[name]=add(row['path'],'science/'+name,row['sha256'],True)
     spec=dict(schema='pricefm_scientific_batch_spec_v1',role=role,scope_id=scope_id,remote_root=remote,
         scope=scope_pin,source_commit=h.read(config['publication'])['commit'],sources=sources,inputs=inputs,science=science,
-        cached_python=config['cached_python'],cached_python_sha256=config['cached_python_sha256'],node=config['node'],nonce=token,
+        cached_python=config['cached_python'],cached_python_sha256=config['cached_python_sha256'],node=config['node'],qualification_route_id=scope['qualification_route_id'],nonce=token,
         expires_epoch=scope['expires_epoch'],release_wait_seconds=120,aggregate_CPU_reservation=600,wall_seconds=1200,
         memory_MiB=8192,threads=1,component_CPU_caps=dict(install=60,owner=450,worker=30,batch_shell=30,launch_reserve=30),
         component_wall_caps=dict(install=600,owner=300,release_wait=120,exit=180),
         maximum_return_bytes=32*1024**2,maximum_return_files=4096,new_models=0,optimizer_invocations=0,scientific_data_read=False,
-        accepted_R_reference=config['accepted_R'],accepted_R=accepted_R(config['accepted_R']),
-        accepted_R_context=accepted_R_context(config['accepted_R']))
+        accepted_R_reference=config['accepted_R'],accepted_R=accepted_R(config['accepted_R'],config['node'],scope['qualification_route_id']),
+        accepted_R_context=accepted_R_context(config['accepted_R'],config['node'],scope['qualification_route_id']))
     if role==ROLES[1]:spec['accepted_namespace']=h.read(config['accepted_namespace'])
     h.write_new(out/'SPEC.json',spec);spec_sha=digest(out/'SPEC.json')
     #600 is the inherited ceiling, never30: a worker soft cap separately bounds
@@ -313,14 +373,29 @@ def prepare(config,scope,role,hashes,registry):
         config['cached_python'],'-I','-B',remote+'/package/pricefm_hb/scientific_batch_worker.py','--spec',remote+'/SPEC.json','--sha256',spec_sha])+'\n'
     with (out/'job.sbatch').open('x') as f:f.write(body)
     for name in ['SPEC.json','job.sbatch']:add(out/name,name)
-    value=dict(scope_id=scope_id,role=role,remote_root=remote,spec_sha256=spec_sha,uploads=uploads,sources=sources,
+    value=dict(scope_id=scope_id,role=role,remote_root=remote,execution_node=config['node'],qualification_route_id=scope['qualification_route_id'],spec_sha256=spec_sha,uploads=uploads,sources=sources,
                source_publication=config['publication'],source_review=config['source_review'])
     h.write_new(root/'PACKET.json',value);append(root,'PREPARED',packet=h.pin(root/'PACKET.json'));return value
 
 
+def validate_submission_calendar(scope,role,*,paired=False,now=None):
+    now=time.time() if now is None else now
+    cutoffs=scope.get('fixed_submit_cutoffs',{});remaining=scope.get('remaining_route_role_count')
+    h.require(type(cutoffs) is dict and role in cutoffs and type(cutoffs[role]) in (int,float)
+              and type(scope.get('not_before_epoch')) in (int,float)
+              and scope['not_before_epoch']<=now<cutoffs[role]
+              and type(remaining) is int and remaining>=1
+              and type(scope.get('role_slot_seconds')) is int and scope['role_slot_seconds']==7200
+              and type(scope.get('final_route_reserve_seconds')) is int and scope['final_route_reserve_seconds']==3600,
+              'fresh fixed per-role submission window and complete remaining-route price')
+    if paired:remaining-=ROLES.index(role)
+    h.require(remaining>=1 and now+remaining*7200+3600<=scope['expires_epoch'],
+              'complete remaining serial route and failure/handoff reserves cannot fit')
+
+
 def submit(config,scope,site,root):
-    p=packet(root);h.require(records(root)[-1]['state']=='STAGED','exact completed stage required')
-    one_shot(root,'submit');h.require(time.time()<scope['fixed_latest_submit_epoch'] and time.time()+1200<scope['expires_epoch'],
+    p=packet(root);validate_submission_calendar(scope,p['role']);h.require(records(root)[-1]['state']=='STAGED','exact completed stage required')
+    one_shot(root,'submit');h.require(time.time()+1200<scope['expires_epoch'],
                                     'full job and return must fit fixed calendar')
     queue=run_native(site,['squeue','--noheader','--user',site['user'],'--format','%i'])
     h.require(queue['returncode']==0 and not queue['stdout'].strip(),'single-job queue must be empty')
@@ -365,6 +440,7 @@ def accept(config,site,root,actual_review):
     h.require(result.get('status')=='PASS_COMPLETE_SCIENTIFIC_METADATA_WORKER' and result.get('role')==p['role']
               and result['scope_id']==p['scope_id'] and result['sources']==p['sources'] and result['spec_sha256']==p['spec_sha256']
               and result['job_id']==job['job_id'] and result['node']==config['node']
+              and result.get('qualification_route_id')==p['qualification_route_id']
               and result.get('optimizer_invocations')==0 and result.get('scientific_data_read') is False,
               'actual exact data-free scientific worker result required')
     outcome=result['outcome'];expected='PASS_HB_SCIENTIFIC_NAMESPACE_METADATA_ONLY' if p['role']==ROLES[0] else 'PASS_HB_NATIVE_SCIENTIFIC_BOUNDARY_NO_TARGET_NO_OPTIMIZER'
@@ -400,7 +476,7 @@ def accept(config,site,root,actual_review):
     h.require(queue['returncode']==0 and job['job_id'] not in queue['stdout'].split(),'job remains queued/unknown')
     value=dict(status='ACCEPTANCE_PENDING_ACTUAL_OUTER_GUARD',role=p['role'],job_id=job['job_id'],scope_id=p['scope_id'],
         result=result_pin,full_return_manifest=returned,accounting=account_pin,canonical_primary_CPU_seconds=account['canonical_primary_CPU_seconds'],
-        primary_charge_counted_once=True,independent_review=review_pin,namespace_proved=True,
+        primary_charge_counted_once=True,qualification_route_id=p['qualification_route_id'],independent_review=review_pin,namespace_proved=True,
         scientific_boundary_proved=p['role']==ROLES[1],numerical_parity_proved=False,production_admission=False)
     h.write_new(root/'ACCEPTANCE_CANDIDATE.json',value);append(root,'ACCEPTANCE_VALIDATED',candidate=h.pin(root/'ACCEPTANCE_CANDIDATE.json'))
     lock=config['remote_namespace']+'/qualification.lock'
@@ -636,7 +712,7 @@ def parse_job_id(raw):
 def validate_ready(ready, p, job_id):
     h.require(ready["status"] == "READY_SOURCE_BOUND_COMPUTE_METADATA" and ready["scope_id"] == p["scope_id"]
               and ready["job_id"] == job_id and ready["spec_sha256"] == p["spec_sha256"]
-              and ready["node"] == "node-13" and len(ready["affinity"]) == 1
+              and ready["node"] == p["execution_node"] and ready["qualification_route_id"] == p["qualification_route_id"] and len(ready["affinity"]) == 1
               and ready["cpus_per_task"] == 1 and type(ready["models"]) is int and ready["models"] == 0
               and ready["sources"] == p["sources"] and ready["role"] == p["role"],
               "stale/foreign/malformed READY cannot release payload")
@@ -697,31 +773,49 @@ def CPU_seconds(text):
     h.require(math.isfinite(value) and value >= 0 and int(minutes) < 60 and float(seconds) < 60, "invalid Slurm CPU")
     return value
 
-def parse_accounting(raw, job_id, scope_id):
-    lines = [line.split("|") for line in raw.splitlines() if line.strip()]
-    h.require(all(len(x) == 11 and x[0] in {job_id, job_id + ".batch", job_id + ".extern"} for x in lines)
-              and len({x[0] for x in lines}) == len(lines), "foreign/duplicate/partial accounting row")
-    rows = [x for x in lines if x[0] == job_id]
-    h.require(len(rows) == 1, "one complete canonical primary Slurm row required")
-    x = rows[0]; state = x[1].split()[0]
-    h.require(x[6] == scope_id and x[7:9] == ["128x24", "128x24"] and x[5] == "1", "foreign job/account/allocation")
-    memory = re.fullmatch(r"([0-9.]+)([KMG])([cn])?", x[9])
-    h.require(memory is not None and float(memory[1]) * {"K": 1 / 1024, "M": 1, "G": 1024}[memory[2]] == 8192,
-              "actual primary requested memory differs from8GiB")
-    cpu = CPU_seconds(x[3]); elapsed = int(x[4]); h.require(cpu <= 600 and 0 <= elapsed <= 1200, "whole batch reservation exceeded")
-    required = {job_id, job_id + ".batch"}; actual = {row[0] for row in lines}
+def parse_accounting(raw,job_id,scope_id,expected_node=None):
+    lines=[line.split('|') for line in raw.splitlines() if line.strip()]
+    h.require(lines and all(len(row) in (11,16) and row[0] in {job_id,job_id+'.batch',job_id+'.extern'} for row in lines)
+              and len({row[0] for row in lines})==len(lines) and len({len(row) for row in lines})==1,
+              'foreign/duplicate/partial accounting row')
+    primary=[row for row in lines if row[0]==job_id]
+    h.require(len(primary)==1,'one complete canonical primary Slurm row required')
+    x=primary[0];state=x[1].split()[0]
+    h.require(x[6]==scope_id and x[7:9]==['128x24','128x24'] and x[5] in ('0','1'),
+              'foreign job/account/allocation')
+    memory=re.fullmatch(r'([0-9.]+)([KMG])([cn])?',x[9])
+    h.require(memory is not None and float(memory[1])*{'K':1/1024,'M':1,'G':1024}[memory[2]]==8192,
+              'actual primary requested memory differs from8GiB')
+    cpu=CPU_seconds(x[3]);elapsed=int(x[4]);h.require(cpu<=600 and 0<=elapsed<=1200,'whole batch reservation exceeded')
+    if len(x)==16:
+        h.require(x[11]=='jaguir26' and x[12]==str(os.getuid()) and x[13]=='1','exact primary Slurm user/UID/requestedCPU')
+    elif expected_node is not None:
+        raise ValueError('current scoped accounting requires complete owner/start/node fields')
+    if x[5]=='0':
+        h.require(len(x)==16 and len(lines)==1 and cpu==0 and elapsed==0 and x[2]=='0:0'
+                  and state in {'PENDING','CONFIGURING','CANCELLED'}
+                  and x[14] in {'','None','Unknown','N/A'} and x[15] in {'','None','None assigned','Unknown','N/A'},
+                  'unallocated primary has no start/node/steps/CPU/elapsed; never numerical success')
+        return dict(job_id=job_id,state=state,exit_code=x[2],canonical_primary_CPU_seconds=0.,elapsed_seconds=0,
+            complete=False,terminal=state=='CANCELLED',allocation_state='UNALLOCATED_NO_NUMERICAL_SUCCESS',
+            allocated_CPUs=0,numerical_admission=False,missing_required_rows=[job_id+'.batch'],
+            user=x[11],uid=int(x[12]),requested_CPUs=1,start_raw=x[14] or None,node_raw=x[15] or None,
+            MaxRSS_raw={job_id:x[10] or None},unknown_MaxRSS_is_not_zero=True,
+            primary_CPU_consistent_with_each_step=True,raw_sacct=raw,step_rows_diagnostic_not_added=True,primary_charge_counted_once=True)
+    if expected_node is not None:
+        h.require(x[15]==expected_node and x[14] not in {'','None','Unknown','N/A'},'allocated primary must start on exact selected node')
+    required={job_id,job_id+'.batch'};actual={row[0] for row in lines}
     for row in lines:
-        h.require(re.fullmatch(r"[0-9]+:[0-9]+", row[2]) and 0 <= int(row[4]) <= 1200
-                  and int(row[5]) in (0, 1) and CPU_seconds(row[3]) <= 600, "invalid step/accounting bound")
-    complete_rows = required <= actual
-    primary_consistent = cpu + .01 >= max((CPU_seconds(row[3]) for row in lines), default=0.)
-    complete = complete_rows and primary_consistent and all(row[1].split()[0] == "COMPLETED" and row[2] == "0:0" for row in lines)
-    terminal = complete_rows and primary_consistent and all(row[1].split()[0] in TERMINAL for row in lines)
-    return dict(job_id=job_id, state=state, exit_code=x[2], canonical_primary_CPU_seconds=cpu,
-        elapsed_seconds=elapsed, complete=complete, terminal=terminal, missing_required_rows=sorted(required - actual),
-        MaxRSS_raw={row[0]: row[10] or None for row in lines}, unknown_MaxRSS_is_not_zero=True,
-        primary_CPU_consistent_with_each_step=primary_consistent,
-        raw_sacct=raw, step_rows_diagnostic_not_added=True, primary_charge_counted_once=True)
+        h.require(re.fullmatch(r'[0-9]+:[0-9]+',row[2]) and 0<=int(row[4])<=1200
+                  and int(row[5]) in (0,1) and CPU_seconds(row[3])<=600,'invalid step/accounting bound')
+    complete_rows=required<=actual;consistent=cpu+.01>=max(CPU_seconds(row[3]) for row in lines)
+    complete=complete_rows and consistent and all(row[1].split()[0]=='COMPLETED' and row[2]=='0:0' for row in lines)
+    terminal=complete_rows and consistent and all(row[1].split()[0] in TERMINAL for row in lines)
+    return dict(job_id=job_id,state=state,exit_code=x[2],canonical_primary_CPU_seconds=cpu,elapsed_seconds=elapsed,
+        complete=complete,terminal=terminal,missing_required_rows=sorted(required-actual),
+        MaxRSS_raw={row[0]:row[10] or None for row in lines},unknown_MaxRSS_is_not_zero=True,
+        primary_CPU_consistent_with_each_step=consistent,raw_sacct=raw,step_rows_diagnostic_not_added=True,primary_charge_counted_once=True)
+
 
 def observe(site, root):
     p = packet(root); job = known_job(root); past = records(root)
@@ -733,9 +827,11 @@ def observe(site, root):
         h.require(h.read(h.pin(intents[-1]))["epoch"] - h.read(h.pin(intents[-2]))["epoch"] >= 300,
                   "minimum300seconds between paid Slurm accounting intents, including failures")
     result = run_native(site, ["sacct", "--jobs", job["job_id"], "--noheader", "--parsable2", "--format",
-        "JobIDRaw,State,ExitCode,TotalCPU,ElapsedRaw,AllocCPUS,JobName%128,Account,Partition,ReqMem,MaxRSS"])
+        "JobIDRaw,State,ExitCode,TotalCPU,ElapsedRaw,AllocCPUS,JobName%128,Account,Partition,ReqMem,MaxRSS,User,UID,ReqCPUS,Start,NodeList"])
+    raw_path=root/("accounting_raw_%04d.json"%count);h.write_new(raw_path,result)
     h.require(result["returncode"] == 0, "accounting observation failed")
-    value = parse_accounting(result["stdout"], job["job_id"], p["scope_id"])
+    value = parse_accounting(result["stdout"], job["job_id"], p["scope_id"],p.get("execution_node"))
+    value["raw_observation"]=h.pin(raw_path)
     path = root / ("accounting_%04d.json" % sum(x["state"] == "OBSERVED" for x in past)); h.write_new(path, value)
     append(root, "OBSERVED", accounting=h.pin(path))
     return value
@@ -795,6 +891,7 @@ def retire_failed(config, site, root, actual_review):
     account_pin = next(x["accounting"] for x in reversed(records(root)) if x["state"] == "OBSERVED")
     account = h.read(account_pin)
     h.require(account["terminal"] and not account["complete"], "failed terminal primary accounting required")
+    h.require(account.get('allocation_state')!='UNALLOCATED_NO_NUMERICAL_SUCCESS','unallocated cancellation requires separately funded H4 query/review/drain, never original H3')
     peer = h.read(h.pin(actual_review))
     h.require(peer["status"] == "PASS_REVIEWED_FAILED_STARTUP_BATCH_RETIREMENT"
               and peer["job_id"] == job["job_id"] and peer["accounting"] == account_pin,

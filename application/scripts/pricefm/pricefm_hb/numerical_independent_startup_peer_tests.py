@@ -30,12 +30,15 @@ class StartupFixture:
         self.cp=folder/'CONFIG.json';self.ap=folder/'AUTHORITY.json'
         source=Path(__file__).resolve().parent
         self.scope=dict(issued_epoch=self.clock.now-10,expires_epoch=self.clock.now+1000,
+            execution_node='node-15',qualification_node='node-15',qualification_route_id='a'*32,
+            cached_artifact_origin_node='node-13',
             allowed_metadata_output_root=str(folder),new_separate_administrative_CPU_reservation=234,
             administrative_allocations=dict(native_complete_envelope136=136,critical_driver_SELF10=10,
                 independent_source_physical8=8,independent_owner_release8=8,
                 independent_complete_return6=6,exact_useful_mirror4=4,closeout2=2,startup_watch60=60))
         self.sp=folder/'SCOPE.json';self.write(self.sp,self.scope)
         self.packet=dict(role='ZERO_UPDATE_BRIDGE',scope_id='SYNTHETIC_STARTUP_NONCANDIDATE',
+            execution_node='node-15',qualification_route_id='a'*32,
             remote_root='/UNIT_REMOTE/SYNTHETIC_NONCANDIDATE',spec_sha256='a'*64,
             sources={'numerical_batch.py':batch.h.pin(batch.__file__)})
         self.write(self.root/'PACKET.json',self.packet)
@@ -49,7 +52,7 @@ class StartupFixture:
         self.write(np,dict(status='PROSPECTIVE_FRESH_NUMERICAL_NATIVE_CONTROL_BUDGET',
             scope=batch.h.pin(self.sp),combined_native_control_CPU_ceiling=136,
             issued_epoch=self.clock.now,expires_epoch=self.scope['expires_epoch']))
-        self.config=dict(role=self.packet['role'],registry=str(self.root.parent),scope=batch.h.pin(self.sp),
+        self.config=dict(role=self.packet['role'],registry=str(self.root.parent),scope=batch.h.pin(self.sp),node='node-15',
             source_dir=str(source),critical_driver=batch.h.pin(driver.__file__),
             startup_watch_budget=batch.h.pin(wp),native_control_budget=batch.h.pin(np))
         self.write(self.cp,self.config)
@@ -63,7 +66,8 @@ class StartupFixture:
         self.write(self.ap,self.authority)
         self.ready=dict(status='READY_SOURCE_BOUND_COMPUTE_METADATA',scope_id=self.packet['scope_id'],job_id='123',
             role=self.config['role'],spec_sha256=self.packet['spec_sha256'],sources=self.packet['sources'],
-            node='node-13',affinity=[0],cpus_per_task=1,models=0,optimizer_invocations=0,
+            node='node-15',qualification_route_id='a'*32,inventory=dict(qualification_route_id='a'*32),
+            affinity=[0],cpus_per_task=1,models=0,optimizer_invocations=0,
             physical_numerical_admission=False,physical_snapshot_value=dict(observed_epoch=self.clock.now))
         def native(site, argv):
             return dict(argv=argv,returncode=1 if self.index<absent else 0,stdout='',stderr='')
@@ -223,16 +227,22 @@ class IndependentDriverIntegrationTests(unittest.TestCase):
                 (old_root/name).rename(root/name)
             context=(config,scope,root,packet,spec,ready)
             physical_config,_,physical_ready=retained.IndependentPhysicalFactsTests().fixture()
-            ready.update(physical_ready);snap=ready['physical_snapshot_value'];remote=packet['remote_root']
+            ready.update(physical_ready)
+            # These are synthetic raw scheduler fixtures, never cached admission records.
+            ready=json.loads(json.dumps(ready).replace('node-13','node-15'))
+            ready['qualification_route_id']='a'*32;ready['inventory']['qualification_route_id']='a'*32
+            context=(config,scope,root,packet,spec,ready)
+            snap=ready['physical_snapshot_value'];remote=packet['remote_root']
             snap['filesystem']['path']=remote
             native=snap['native_observations_value'];snap['native_observations']=dict(path=remote+'/result/physical/NATIVE_OBSERVATIONS.json',sha256=hashlib.sha256(peer.encoded(native)).hexdigest())
             snap['witness_pins']={name:dict(path=remote+'/result/physical/'+name.upper()+'.json',sha256=hashlib.sha256(peer.encoded(value)).hexdigest()) for name,value in snap['witnesses'].items()}
             ready['physical_snapshot']=dict(path=remote+'/result/PHYSICAL_SNAPSHOT.json',sha256=hashlib.sha256(peer.encoded(snap)).hexdigest())
-            spec['science']=dict(sorted(spec['science'].items()));spec.update(remote_root=remote,node=ready['node'])
-            packet.update(scope_id=spec['scope_id'],role=config['role'],sources=spec['sources'])
+            spec['science']=dict(sorted(spec['science'].items()));spec.update(remote_root=remote,node=ready['node'],qualification_route_id='a'*32)
+            packet.update(scope_id=spec['scope_id'],role=config['role'],sources=spec['sources'],execution_node='node-15',qualification_route_id='a'*32)
             config.update(source_dir=str(Path(__file__).absolute().parent),registry=str(root.parent),scope=dict(path='/UNIT_NOT_AUTHORITY/scope.json',sha256='8'*64),
-                          known_prior_jobs=physical_config['known_prior_jobs'])
+                          known_prior_jobs=physical_config['known_prior_jobs'],node='node-15')
             scope.update(allowed_metadata_output_root=str(folder),issued_epoch=clock.current-10,expires_epoch=clock.current+scope_seconds,
+                execution_node='node-15',qualification_node='node-15',qualification_route_id='a'*32,cached_artifact_origin_node='node-13',
                 new_separate_administrative_CPU_reservation=234,
                 administrative_allocations=dict(native_complete_envelope136=136,critical_driver_SELF10=10,
                     independent_source_physical8=8,independent_owner_release8=8,independent_complete_return6=6,
@@ -260,6 +270,7 @@ class IndependentDriverIntegrationTests(unittest.TestCase):
             config.update(startup_watch_budget=prepare.h.pin(watch_budget),native_control_budget=prepare.h.pin(native_budget),
                           critical_driver=prepare.h.pin(driver.__file__))
             authority.update(startup_watch_profile=batch.STARTUP_WATCH_PROFILE,
+                startup_watch_authority=dict(path='/UNIT_NEVER_ISSUED_GENERIC_WATCH_AUTHORITY.json',sha256='7'*64),
                 startup_watch_budget=config['startup_watch_budget'],config=None,scope=config['scope'],
                 driver_source=config['critical_driver'],driver_maximum_wall_seconds=1200,
                 original_supervisor=prepare.h.pin(Path(peer.__file__).parent/'profile_supervisor.py'),
@@ -340,9 +351,25 @@ class IndependentDriverIntegrationTests(unittest.TestCase):
                         guard['session_id']=probe_value['command_pid'];guard['leader_start_ticks']=probe_value['command_birth_ticks']
                     stdout.write(json.dumps(guard).encode());stdout.flush()
                 return type('NeverSpawned',(),{'wait':lambda _self:0})()
+            def retained_watch_fixture(*args):
+                # The generic watcher itself is tested against real producer code in
+                # node_qualification_independent_peer_tests. This retained fixture
+                # exercises the prior raw protocol through the current driver API.
+                sf=folder/'critical_driver/startup';sf.mkdir(mode=0o700,exist_ok=True)
+                def probe(index):
+                    gp=sf/('probe_%02d.guard.json'%index)
+                    ep=sf/('probe_%02d.guard.stderr'%index)
+                    argv=['UNIT_NEVER_EXECUTED','--cpu','3','-c','UNIT_MODULE','startup_probe']
+                    with gp.open('xb') as stream,ep.open('xb') as error:native_child(argv,stream,error)
+                    value=prepare.h.read(prepare.h.pin(gp))
+                    return dict(guard=prepare.h.pin(gp),result=json.loads(value['stdout']))
+                watched=driver.wait_for_startup_ready(probe,batch.STARTUP_WATCH_PROFILE)
+                prepare.h.write_new(folder/'critical_driver/STARTUP_WATCH.json',watched)
+                return watched
             with patch.object(driver,'require_authority',return_value=(config,scope,authority,root)),\
                  patch.object(prepare,'context',return_value=context),patch.object(batch,'packet',return_value=packet),\
                  patch.object(driver.subprocess,'Popen',side_effect=native_child),patch.object(driver.time,'sleep'),\
+                 patch.object(driver.node_startup_watch,'wait',side_effect=retained_watch_fixture),\
                  (patch.object(driver,'wait_for_startup_ready',side_effect=ValueError('unit startup deadline')) if startup_failure else contextlib.nullcontext()):
                 try:seen['result']=driver.run(str(folder/'UNIT_CONFIG.json'),prepare.h.pin(authority_file))
                 except ValueError as error:

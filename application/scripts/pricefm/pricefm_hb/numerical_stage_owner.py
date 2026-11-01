@@ -15,6 +15,7 @@ import math
 import os
 from pathlib import Path
 import resource
+import re
 import signal
 import stat
 import time
@@ -38,7 +39,7 @@ def sources():
     return {name:h.pin(root/name) for name in names}
 
 
-def validate_prerequisites(bundle):
+def validate_prerequisites(bundle,expected_node=None,expected_route_id=None):
     """Resolve copied metadata bytes without relabeling old logical pins."""
     h.require(bundle.get('status')=='PREPARED_ACTUAL_ACCEPTED_BOUNDARY_EVIDENCE_NOT_EXECUTION_AUTHORITY',
               'actual accepted evidence bundle required')
@@ -58,6 +59,10 @@ def validate_prerequisites(bundle):
         c.strict_pin(pin);h.require(pin['path'] in aliases and aliases[pin['path']]['sha256']==pin['sha256'],
                                   'closed original proof pin required')
         return h.read(aliases[pin['path']])
+    if expected_node is not None:
+        h.require(bundle.get('qualification_node')==expected_node
+                  and bundle.get('qualification_route_id')==expected_route_id,
+                  'fresh boundary bundle must bind selected qualification node and route')
     accepted=bundle['accepted_boundary']
     h.require(accepted.get('status')=='ACCEPTED_COMPLETE_SCIENTIFIC_METADATA_ROLE'
               and accepted.get('role')=='SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER'
@@ -85,7 +90,8 @@ def validate_prerequisites(bundle):
               and peer.get('return_manifest')==accepted['full_return_manifest'],'actual independent complete boundary return')
     h.require(result.get('status')=='PASS_COMPLETE_SCIENTIFIC_METADATA_WORKER'
               and result.get('job_id')==accepted['job_id'] and result.get('role')==accepted['role']
-              and result.get('node')=='node-13','actual applicable complete boundary worker')
+              and result.get('node')==(expected_node or 'node-13')
+              and (expected_node is None or accepted.get('qualification_route_id')==result.get('qualification_route_id')==expected_route_id),'actual applicable complete boundary worker')
     outcome=result['outcome'];h.require(outcome.get('status')=='PASS_HB_NATIVE_SCIENTIFIC_BOUNDARY_NO_TARGET_NO_OPTIMIZER'
                                      and outcome.get('original_guard_source_preserved') is True,'actual native boundary result')
     accepted_guard(read(outcome['owned_guard']))
@@ -99,7 +105,8 @@ def validate_prerequisites(bundle):
                   'every complete-return member binds exact logical path, byte length and hash; duplicate bytes cannot substitute')
     inventory=read(bundle['inventory']);inventory_rows=[r for r in manifest['files'] if r['relative']=='INVENTORY.json']
     h.require(len(inventory_rows)==1 and bundle['inventory']['sha256']==inventory_rows[0]['sha256']
-              and inventory.get('job_id')==accepted['job_id'] and inventory.get('node')=='node-13',
+              and inventory.get('job_id')==accepted['job_id'] and inventory.get('node')==(expected_node or 'node-13')
+              and (expected_node is None or inventory.get('qualification_route_id')==expected_route_id),
               'actual accepted scientific runtime inventory')
     installation=result.get('installation',{})
     h.require(installation.get('status')=='INSTALLED_CODE_BYTES_ONLY_NOT_NAMESPACE_OR_SCIENTIFIC_PROOF'
@@ -108,13 +115,17 @@ def validate_prerequisites(bundle):
     return dict(accepted=accepted,installation=installation,inventory=inventory)
 
 
-def validate_runtime_reuse(reuse,prerequisite):
-    qualified=validate_prerequisites(prerequisite);installation=qualified['installation']
+def validate_runtime_reuse(reuse,prerequisite,expected_node=None,expected_route_id=None):
+    qualified=validate_prerequisites(prerequisite,expected_node,expected_route_id);installation=qualified['installation']
     h.require(reuse.get('status')=='PREPARED_ACCEPTED_NAMESPACE_RUNTIME_REUSE_NOT_EXECUTION_AUTHORITY'
               and reuse.get('accepted_boundary')==qualified['accepted']
               and reuse.get('inventory')==qualified['inventory']
               and reuse.get('native_R')==dict(path=installation['R_HOME']+'/bin/exec/R',sha256=c.NATIVE_SHA),
               'byte/runtime context reuse derives from actual applicable accepted namespace')
+    if expected_node is not None:
+        h.require(reuse.get('qualification_node')==expected_node
+                  and reuse.get('qualification_route_id')==expected_route_id,
+                  'current runtime reuse must bind fresh selected-node qualification')
     expected=[];total=0;names=set()
     labels=['base_manifest.json','addon01_manifest.json','addon02_manifest.json']
     h.require(set(reuse.get('manifest_inputs',{}))==set(labels),'closed code-only manifest inputs')
@@ -142,7 +153,9 @@ def validate(spec_pin,authority_pin,review_pin,*,now=None,environ=None,affinity=
               and spec.get('role') in c.ROLES,'separate supported numerical-purpose spec required')
     c.validate_role(spec['role'],spec['role_limits']);c.validate_delivery(spec['role'],spec['target_delivery'])
     h.require(env.get('SLURM_JOB_ID','').isdigit() and spec.get('job_id')==env['SLURM_JOB_ID']
-              and spec.get('node')==env.get('SLURMD_NODENAME')==node=='node-13'
+              and spec.get('node')==env.get('SLURMD_NODENAME')==node
+              and re.fullmatch(r'node-(?:1[5-9]|2[01])',node)
+              and type(spec.get('qualification_route_id')) is str and re.fullmatch('[0-9a-f]{32}',spec['qualification_route_id'])
               and env.get('SLURM_CPUS_PER_TASK')=='1' and env.get('TZ')=='UTC'
               and len(affinity)==1 and spec.get('affinity')==sorted(affinity),
               'actual exact one-CPU Slurm compute placement required')
@@ -191,7 +204,7 @@ def validate(spec_pin,authority_pin,review_pin,*,now=None,environ=None,affinity=
               'exact role-specific immutable mathematical entrypoint')
     for pin in spec['scientific_source_bindings']:h.read_pin(pin,limit=16*1024**2)
     h.require(spec['entrypoint'] in spec['scientific_source_bindings'], 'exact pinned scientific entrypoint')
-    bundle=h.read(spec['prerequisite_bundle']);validate_prerequisites(bundle)
+    bundle=h.read(spec['prerequisite_bundle']);validate_prerequisites(bundle,spec['node'],spec['qualification_route_id'])
     h.require(spec['accepted_boundary']==bundle['accepted_boundary'],'exact imported accepted boundary record')
     gate=h.read(spec['boundary_qualification']);oldguard=h.read(gate['owned_guard'])
     h.require(gate.get('status')=='PASS_HB_NATIVE_SCIENTIFIC_BOUNDARY_NO_TARGET_NO_OPTIMIZER'

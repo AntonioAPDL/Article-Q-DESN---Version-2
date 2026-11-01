@@ -47,7 +47,7 @@ def delivery_request(original_pin,alias_pin,output):
     path=h.physical(output);h.write_new(path,value);return value
 
 
-def prerequisite_inputs(accepted_pin,manifest_inputs,output):
+def prerequisite_inputs(accepted_pin,manifest_inputs,output,*,expected_node,expected_route_id):
     """Build actual-proof aliases/reuse metadata; no old execution grant reused.
 
     Reads only the completed zero-target boundary's returned metadata and the
@@ -83,20 +83,20 @@ def prerequisite_inputs(accepted_pin,manifest_inputs,output):
     h.require('INVENTORY.json' in rows and 'owner/RESULT.json' in rows,'actual qualified inventory and standalone boundary result')
     inventory_pin=dict(path=str(remote_root/'INVENTORY.json'),sha256=rows['INVENTORY.json']['sha256'])
     bundle=dict(status='PREPARED_ACTUAL_ACCEPTED_BOUNDARY_EVIDENCE_NOT_EXECUTION_AUTHORITY',accepted_boundary=accepted,
-        original_accepted_record=accepted_pin,artifacts=list(artifacts.values()),return_remote_root=str(remote_root),inventory=inventory_pin,
+        original_accepted_record=accepted_pin,qualification_node=expected_node,qualification_route_id=expected_route_id,artifacts=list(artifacts.values()),return_remote_root=str(remote_root),inventory=inventory_pin,
         old_execution_authority_reused=False,new_root_peer_scope_and_current_kernel_proof_still_required=True)
-    qualified=owner.validate_prerequisites(bundle);installation=qualified['installation'];code_root=str(Path(installation['R_HOME']).parent)
+    qualified=owner.validate_prerequisites(bundle,expected_node,expected_route_id);installation=qualified['installation'];code_root=str(Path(installation['R_HOME']).parent)
     files=[]
     for label in ['base_manifest.json','addon01_manifest.json','addon02_manifest.json']:
         manifest=h.read(manifest_inputs[label])
         for row in manifest['files']:files.append(dict(path=code_root+'/'+row['relative'],sha256=row['sha256']))
     reuse=dict(status='PREPARED_ACCEPTED_NAMESPACE_RUNTIME_REUSE_NOT_EXECUTION_AUTHORITY',accepted_boundary=accepted,
-        native_R=dict(path=installation['R_HOME']+'/bin/exec/R',sha256=c.NATIVE_SHA),inventory=qualified['inventory'],
+        native_R=dict(path=installation['R_HOME']+'/bin/exec/R',sha256=c.NATIVE_SHA),inventory=qualified['inventory'],qualification_node=expected_node,qualification_route_id=expected_route_id,
         runtime_files=files,manifest_inputs=manifest_inputs,
         boundary_qualification=dict(path=str(remote_root/'owner/RESULT.json'),sha256=rows['owner/RESULT.json']['sha256']),
         no_runtime_or_target_bytes_opened_administratively=True,current_compute_must_rehash_all2279_code_files=True,
         old_execution_authority_reused=False)
-    owner.validate_runtime_reuse(reuse,bundle)
+    owner.validate_runtime_reuse(reuse,bundle,expected_node,expected_route_id)
     out=h.physical(output);out.mkdir(mode=0o700);h.write_new(out/'BOUNDARY_PREREQUISITES.json',bundle);h.write_new(out/'RUNTIME_REUSE.json',reuse)
     receipt=dict(status='PREPARED_ACTUAL_PROOF_AND_CODE_REUSE_INPUTS_NO_EXECUTION_AUTHORITY',accepted_boundary=accepted_pin,
         bundle=h.pin(out/'BOUNDARY_PREREQUISITES.json'),runtime_reuse=h.pin(out/'RUNTIME_REUSE.json'),
@@ -200,7 +200,7 @@ def bind_owner(config_path,output):
     allowed={row['resolved_file']['path']:row['resolved_file']['sha256'] for row in ready['inventory']['helpers'].values()};allowed[native['path']]=native['sha256']
     ospec=dict(schema='r182_frozen525_numerical_owner_spec_v1',role=config['role'],role_limits=config['role_limits'],
         job_id=ready['job_id'],node=config['node'],affinity=ready['affinity'],scope_id=spec['scope_id'],nonce=spec['nonce'],expires_epoch=scope['expires_epoch'],
-        source_commit=spec['source_commit'],
+        source_commit=spec['source_commit'],qualification_route_id=spec['qualification_route_id'],
         remote_namespace=remote,science_root=science_root,output=outdir,resource_lock=remote+'/numerical.lock',
         traced_guard=spec['controls']['traced_guard'],boundary_library=spec['controls']['boundary_library'],R_native=native,
         bootstrap=spec['sources']['numerical_stage_bootstrap.R'],bootstrap_spec=remote_pin('BOOTSTRAP_SPEC.json'),stage_grant=stage_pin,
@@ -230,10 +230,11 @@ def release_proposal(config_path,output):
     pins={key:dict(path=folder+'/'+name,sha256=batch.digest(out/name)) for key,name in labels.items()}
     peer=h.read(h.pin(out/'PEER_RELEASE.json'))
     h.require(peer.get('status')=='PASS_REVIEWED_FROZEN525_NUMERICAL_BATCH_RELEASE'
+              and peer.get('node')==config['node'] and peer.get('qualification_route_id')==scope['qualification_route_id']
               and peer.get('stage_pins')=={key:value for key,value in pins.items() if key!='independent_review'},
               'actual exact independent release review before proposal')
     value=dict(status='PROPOSED_UNISSUED',required_status='ROOT_RELEASED_STARTUP_BATCH_ROLE',purpose='FROZEN525_NUMERICAL_STAGE_ONLY',
-        role=config['role'],scope_id=spec['scope_id'],job_id=ready['job_id'],node=config['node'],ready_sha256=batch.digest(root/'READY.json'),
+        role=config['role'],scope_id=spec['scope_id'],job_id=ready['job_id'],node=config['node'],qualification_route_id=scope['qualification_route_id'],ready_sha256=batch.digest(root/'READY.json'),
         spec_sha256=packet['spec_sha256'],scope_sha256=config['scope']['sha256'],sources=spec['sources'],issued_epoch=None,expires_epoch=scope['expires_epoch'],
         files=[dict(relative=name,sha256=batch.digest(out/name)) for name in sorted(set(labels.values())|set(extra))],**pins)
     h.write_new(out/'RELEASE_PROPOSAL.json',value);return value

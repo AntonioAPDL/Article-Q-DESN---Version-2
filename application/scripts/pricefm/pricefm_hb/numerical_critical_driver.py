@@ -23,6 +23,7 @@ from pricefm_hb import startup_helper as h
 from pricefm_hb import numerical_batch as batch
 from pricefm_hb import numerical_stage_prepare as preparation
 from pricefm_hb import numerical_stage_contract as contract
+from pricefm_hb import node_startup_watch
 
 ORIGINAL_H_SHA='7d33218f593b0b9677093954f7331cac2b4586f2c428fe08cdf0c784289492a1'
 
@@ -64,6 +65,7 @@ def require_authority(config_path,authority_pin):
               and authority.get('peer_phases')==['source_physical','owner_release']
               and authority.get('startup_watch_profile')==batch.STARTUP_WATCH_PROFILE
               and authority.get('startup_watch_budget')==config['startup_watch_budget']
+              and type(authority.get('startup_watch_authority')) is dict
               and authority.get('driver_maximum_wall_seconds')==1200
               and scope['issued_epoch']<=authority['issued_epoch']<=now<authority['expires_epoch']<=scope['expires_epoch'],
               'new exact bounded numerical critical-driver root authority')
@@ -144,20 +146,19 @@ def run(config_path,authority_pin):
         return dict(guard=h.pin(stdout),result=value)
     try:
         submit_guard=native('submit',authority['actual_stage_guard'])
-        (out/'startup').mkdir(mode=0o700)
         try:
-            startup=wait_for_startup_ready(startup_probe,authority['startup_watch_profile'])
-            h.write_new(out/'STARTUP_WATCH.json',startup)
+            startup=node_startup_watch.wait(config_path,config['role'],'numerical',authority['startup_watch_authority'])
         except BaseException as startup_error:
             cancellation=None;cancel_error=None
             try:cancellation=native('cancel',submit_guard)
             except BaseException as exc:cancel_error=type(exc).__name__+': '+str(exc)
-            h.write_new(out/'STARTUP_FAILED.json',dict(status=('FAILED_STARTUP_EXACT_CANCEL_REQUESTED_NOT_TERMINAL_PROOF'
+            h.write_new(out/'STARTUP_FAILED.json',dict(status=('STARTUP_FAILED_NO_RELEASE'
                 if cancellation is not None else 'FAILED_STARTUP_CANCEL_UNKNOWN_ROLE_QUARANTINED'),
+                job_id=h.read(h.pin(root/'JOB.json'))['job_id'],role=config['role'],
                 error=type(startup_error).__name__+': '+str(startup_error),cancel_guard=cancellation,cancel_error=cancel_error,
                 no_retry=True,no_release=True,all_reserved_fees_retained=True))
-            h.write_new(root/'ROLE_FAILED_SPENT.json',dict(status='FAILED_ROLE_SPENT_DRAIN_OR_DIAGNOSIS_ONLY',
-                failed_startup=h.pin(out/'STARTUP_FAILED.json'),old_fees_retained=True))
+            h.write_new(root/'ROLE_FAILED_SPENT.json',dict(status='ROLE_FAILED_SPENT',job_id=h.read(h.pin(root/'JOB.json'))['job_id'],
+                role=config['role'],no_release=True,failed_startup=h.pin(out/'STARTUP_FAILED.json'),old_fees_retained=True))
             raise
         ready_guard=native('ready',submit_guard)
         ready=h.read(h.pin(root/'READY.json'));snapshot=ready['physical_snapshot_value']

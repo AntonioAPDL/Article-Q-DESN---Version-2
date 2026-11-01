@@ -57,17 +57,22 @@ def bootstrap(spec_pin):
         CPU_rlimit=list(resource.getrlimit(resource.RLIMIT_CPU)),sources=spec['sources'],optimizer_invocations=0,scientific_data_read=False)
     common.write_new(root/'result/PRECHECK_FACTS.json',facts)
     require(len(raw_cgroup)<=16384,'own cgroup metadata exceeds bounded exact observation')
-    require(os.environ.get('SLURM_JOB_ID','').isdigit() and os.environ.get('SLURMD_NODENAME')==spec['node']=='node-13'
+    require(os.environ.get('SLURM_JOB_ID','').isdigit() and os.environ.get('SLURMD_NODENAME')==spec['node']==scope['execution_node']==scope['qualification_node']
+            and spec['node'] in ['node-%02d'%n for n in range(15,22)]
+            and spec.get('qualification_route_id')==scope.get('qualification_route_id')
+            and type(spec.get('qualification_route_id')) is str and len(spec['qualification_route_id'])==32
             and os.uname().nodename.split('.')[0]==spec['node'] and len(os.sched_getaffinity(0))==1
             and os.environ.get('SLURM_CPUS_PER_TASK')=='1' and os.environ.get('TZ')=='UTC',
             'actual one-CPU compute allocation only; never login')
     for key in owner.h.THREAD_KEYS:require(os.environ.get(key)=='1','single numerical thread environment required')
     require(common.sha(Path(sys.executable).resolve(strict=True))==spec['cached_python_sha256'],'actual cached compute Python required')
     prior=spec['accepted_R'];require(prior.get('role')=='EXACT_R46_STARTUP_METADATA'
-        and prior.get('status')=='ACCEPTED_COMPLETE_STARTUP_BATCH_METADATA_ROLE','actual accepted baseR required')
+        and prior.get('status')=='ACCEPTED_COMPLETE_STARTUP_BATCH_METADATA_ROLE'
+        and prior.get('qualification_route_id')==spec['qualification_route_id'],'actual accepted baseR required')
     if spec['role']=='SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER':
         require(spec['accepted_namespace'].get('status')=='ACCEPTED_COMPLETE_SCIENTIFIC_METADATA_ROLE'
-                and spec['accepted_namespace'].get('namespace_proved') is True,'accepted namespace prerequisite required')
+                and spec['accepted_namespace'].get('namespace_proved') is True
+                and spec['accepted_namespace'].get('qualification_route_id')==spec['qualification_route_id'],'accepted namespace prerequisite required')
     job=os.environ['SLURM_JOB_ID'];scheduler=allocation.live(job,spec['node'],sorted(os.sched_getaffinity(0)),minimum_remaining=1000)
     return spec,scope,common,owner,job,scheduler
 
@@ -78,6 +83,7 @@ def validate_release(spec,spec_pin,ready_pin,release_pin,common,*,job_id=None):
     require(release.get('status')=='ROOT_RELEASED_STARTUP_BATCH_ROLE' and release.get('role')==spec['role']
             and release.get('scope_id')==spec['scope_id'] and release.get('job_id')==ready['job_id']==job_id
             and release.get('node')==ready['node']==spec['node'] and release.get('ready_sha256')==ready_pin['sha256']
+            and release.get('qualification_route_id')==ready.get('qualification_route_id')==spec.get('qualification_route_id')
             and release.get('spec_sha256')==spec_pin['sha256'] and release.get('sources')==spec['sources']
             and release.get('scope_sha256')==spec['scope']['sha256'],'exact root READY/source/job release required')
     require(release['issued_epoch']<=time.time() and time.time()+900<release['expires_epoch']<=spec['expires_epoch'],
@@ -93,7 +99,7 @@ def validate_release(spec,spec_pin,ready_pin,release_pin,common,*,job_id=None):
         common.read_exact(pin)
     peer=common.read_json(common.read_exact(release['independent_review']))
     require(peer.get('status')=='PASS_REVIEWED_STARTUP_BATCH_RELEASE' and peer.get('purpose')=='SCIENTIFIC_METADATA_ONLY'
-            and all(peer.get(k)==release.get(k) for k in ['role','job_id','node','ready_sha256','spec_sha256','sources'])
+            and all(peer.get(k)==release.get(k) for k in ['role','job_id','node','qualification_route_id','ready_sha256','spec_sha256','sources'])
             and peer.get('stage_pins')=={k:release[k] for k in required-{'independent_review'}},'independent exact stage/source release review required')
     return release
 
@@ -118,9 +124,9 @@ def run(spec_pin):
     ready_pin=None;release_pin=None;outcome=None;error=None;installation=None
     initial_self,_=CPU()
     try:
-        inventory=common.runtime_inventory(spec,job)
+        inventory=common.runtime_inventory(spec,job);inventory['qualification_route_id']=spec['qualification_route_id']
         old=spec['accepted_R_context']['inventory']
-        require(old.get('job_id')==spec['accepted_R']['job_id'] and old.get('node')==spec['node']
+        require(old.get('job_id')==spec['accepted_R']['job_id'] and old.get('node')==spec['node'] and old.get('qualification_route_id')==spec['qualification_route_id']
                 and all(inventory[k]==old[k] for k in ['libc','python','python_version'])
                 and all(inventory['uname'][i]==old['uname'][i] for i in [0,2,4])
                 and all(inventory['helpers'][k]==old['helpers'][k] for k in ['which','uname']),
@@ -129,9 +135,9 @@ def run(spec_pin):
             path=(Path('/usr/bin')/name).resolve(strict=True)
             inventory['helpers'][name]=dict(logical_path='/usr/bin/'+name,resolved_file=common.pin(path),bytes=path.stat().st_size)
         inventory['scheduler']=scheduler;common.write_new(result_root/'INVENTORY.json',inventory)
-        ready=dict(status='READY_SOURCE_BOUND_COMPUTE_METADATA',role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],
+        ready=dict(status='READY_SOURCE_BOUND_COMPUTE_METADATA',role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],qualification_route_id=spec['qualification_route_id'],
             spec_sha256=spec_pin['sha256'],sources=spec['sources'],affinity=inventory['affinity'],cpus_per_task=1,models=0,
-            inventory=inventory,expires_epoch=spec['expires_epoch'])
+            inventory=inventory,observed_epoch=time.time(),expires_epoch=spec['expires_epoch'])
         ready['worker_identity']=dict(pid=os.getpid(),start_ticks=owner.h.process_birth_ticks(),
             boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),affinity=inventory['affinity'],uid=os.getuid())
         common.publish_atomic_new(root/'READY.json',ready);ready_pin=common.pin(root/'READY.json')
@@ -168,7 +174,7 @@ def run(spec_pin):
     except BaseException as exc:
         status='FAILED_SCIENTIFIC_METADATA_WORKER';error=type(exc).__name__+': '+str(exc)
     own,waited=CPU()
-    result=dict(status=status,role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],spec_sha256=spec_pin['sha256'],
+    result=dict(status=status,role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],qualification_route_id=spec['qualification_route_id'],spec_sha256=spec_pin['sha256'],
         sources=spec['sources'],ready=ready_pin,release=release_pin,outcome=outcome,error=error,installation=installation,
         optimizer_invocations=0,new_models=0,scientific_data_read=False,production_admission=False,numerical_parity_proved=False,
         worker_SELF_CPU_seconds=own,worker_waited_CPU_seconds=waited,whole_self_plus_waited_CPU=own+waited,

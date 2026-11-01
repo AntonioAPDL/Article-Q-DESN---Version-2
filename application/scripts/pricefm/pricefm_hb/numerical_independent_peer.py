@@ -209,10 +209,83 @@ def guard(value, cpu, wall):
             and all(value.get(k) is True for k in flags), 'actual complete original native guard')
 
 
+def selected_qualification_route(config, scope, spec=None):
+    """Independent current-node policy; historical cached origin earns no gate."""
+    node = scope.get('execution_node')
+    route = scope.get('qualification_route_id')
+    require(type(node) is str and node in {'node-%02d' % i for i in range(15, 22)}
+            and scope.get('qualification_node') == node and config.get('node') == node
+            and type(route) is str and re.fullmatch('[0-9a-f]{32}', route) is not None
+            and scope.get('cached_artifact_origin_node') == 'node-13',
+            'fresh exact approved selected node and immutable code-cache origin')
+    if spec is not None:
+        require(spec.get('node') == node and spec.get('qualification_route_id') == route,
+                'current spec must bind the same selected node and qualification route')
+    return node, route
+
+
+
+def current_independent_core_helper(config,publication,source_review):
+    """Verify the four-peer/two-extra closure before importing the B checker."""
+    import importlib
+    names={'independent_foundation_release_peer.py','independent_scientific_ready_peer.py',
+           'independent_unallocated_drain_review.py','independent_complete_return_peer.py'}
+    extra={'node_startup_watch.py','unallocated_tail.py'}
+    for key,expected in [('independent_source_files',names),('extra_administrative_source_files',extra)]:
+        mapping=publication.get(key)
+        require(type(mapping) is dict and set(mapping)==expected and mapping==source_review.get(key),
+                'closed exact separately authored peer/extra source closure before import')
+        for name,sha in mapping.items():read_bytes(Path(config['source_dir'])/name,sha,code=True)
+    require(publication.get('scientific_source_files')==source_review.get('scientific_source_files')==SCIENCE,
+            'unchanged published exact mathematical5 map')
+    module=importlib.import_module('pricefm_hb.independent_foundation_release_peer')
+    require(Path(module.__file__).absolute()==Path(config['source_dir'])/'independent_foundation_release_peer.py',
+            'exact actual hash-verified independent core checker')
+    module.closed_source_maps(publication,source_review,'numerical',config)
+    return module
+
+
+def current_toy_prerequisite(config,node,route,current_sources):
+    record=read(config['accepted_toy']);result=read(record['result'])
+    require(record.get('status')=='ACCEPTED_COMPLETE_FROZEN525_NUMERICAL_ROLE'
+            and record.get('role')=='TOY_PARITY' and record.get('toy_parity_proved') is True
+            and record.get('production_admission') is False and exact_int(record.get('pilot_fits'),0)
+            and record.get('qualification_route_id')==result.get('qualification_route_id')==route
+            and result.get('node')==node and result.get('job_id')==record['job_id']
+            and result.get('status')=='PASS_COMPLETE_FROZEN525_NUMERICAL_WORKER'
+            and {k:v['sha256'] for k,v in result['sources'].items()}==current_sources,
+            'fresh same-node same-route same-core actual accepted toy before bridge')
+    g=read(record['actual_accept_action_guard']);guard(g,5,180)
+    require(dict(strict_json(g['stdout']),status=record['status'],
+                 actual_accept_action_guard=record['actual_accept_action_guard'])==record,
+            'toy record equals exact actual guarded candidate')
+    account=read(record['accounting']);peer=read(record['independent_review']);manifest=read(record['full_return_manifest'])
+    require(account.get('terminal') is True and account.get('complete') is True
+            and account.get('job_id')==record['job_id'] and account.get('primary_charge_counted_once') is True
+            and peer.get('status')=='PASS_REVIEWED_COMPLETE_FROZEN525_NUMERICAL_ROLE'
+            and peer.get('role')=='TOY_PARITY' and peer.get('job_id')==record['job_id']
+            and peer.get('result')==record['result'] and peer.get('accounting')==record['accounting']
+            and peer.get('return_manifest')==record['full_return_manifest'] and manifest.get('complete_success') is True,
+            'complete independent current toy return/accounting')
+    module=current_independent_core_helper(config,read(config['publication']),read(config['source_review']))
+    returned=__import__('importlib').import_module('pricefm_hb.independent_complete_return_peer')
+    require(Path(returned.__file__).absolute()==Path(config['source_dir'])/'independent_complete_return_peer.py',
+            'exact hash-verified independent toy return inventory checker')
+    expected,binary=returned.numerical_output_inventory('TOY_PARITY')
+    require({x['relative'] for x in manifest['files']}==expected
+            and len(manifest['files'])==len(expected),'all13 opaque toy states/eight synthetic arrays and metadata proved by actual transport')
+    return record
+
+
 def prerequisites(config):
+    selected_node, selected_route = selected_qualification_route(config, read(config['scope']))
     bundle = read(config['prerequisite_bundle']); reuse = read(config['runtime_reuse'])
     require(bundle.get('status') == 'PREPARED_ACTUAL_ACCEPTED_BOUNDARY_EVIDENCE_NOT_EXECUTION_AUTHORITY',
             'actual accepted prerequisite metadata closure')
+    require(bundle.get('qualification_node') == reuse.get('qualification_node') == selected_node
+            and bundle.get('qualification_route_id') == reuse.get('qualification_route_id') == selected_route
+            and reuse.get('cached_artifact_origin_node') == 'node-13',
+            'fresh same-node same-route prerequisite; cached bytes are not old execution proof')
     aliases = {}
     for row in bundle['artifacts']:
         logical = check_pin(row['logical']); actual = check_pin(row.get('local') or row['staged'])
@@ -230,6 +303,7 @@ def prerequisites(config):
     accepted = bundle['accepted_boundary']
     require(accepted.get('status') == 'ACCEPTED_COMPLETE_SCIENTIFIC_METADATA_ROLE'
             and accepted.get('role') == 'SCIENTIFIC_TSYNC_NO_TARGET_NO_OPTIMIZER'
+            and accepted.get('qualification_route_id') == selected_route
             and accepted.get('namespace_proved') is True and accepted.get('scientific_boundary_proved') is True,
             'outer accepted actual namespace and TSYNC prerequisite')
     g = resolve(accepted['actual_accept_action_guard']); guard(g, 5, 180)
@@ -247,7 +321,11 @@ def prerequisites(config):
             and all(peer.get(k) == accepted[v] for k, v in dict(result='result', accounting='accounting',
                 return_manifest='full_return_manifest').items()), 'actual independent accepted parent return')
     require(result.get('status') == 'PASS_COMPLETE_SCIENTIFIC_METADATA_WORKER'
-            and result.get('job_id') == accepted['job_id'] and result.get('node') == 'node-13', 'actual parent worker')
+            and result.get('job_id') == accepted['job_id'] and result.get('node') == selected_node
+            and result.get('qualification_route_id') == selected_route
+            and {k:v['sha256'] for k,v in result['sources'].items()}==
+                read(config['publication'])['core_source_maps']['source_family_files']['scientific'],
+            'actual current-node same-core parent worker')
     outcome = result['outcome']; native = resolve(outcome['owned_guard'])
     require(outcome.get('status') == 'PASS_HB_NATIVE_SCIENTIFIC_BOUNDARY_NO_TARGET_NO_OPTIMIZER'
             and outcome.get('original_guard_source_preserved') is True
@@ -276,6 +354,9 @@ def prerequisites(config):
             and installation.get('files') == 2279 and installation.get('bytes') == 275498747
             and installation.get('job_id') == accepted['job_id'] and inventory.get('job_id') == accepted['job_id'],
             'actual accepted exact namespace code inventory')
+    require(inventory.get('node') == selected_node
+            and inventory.get('qualification_route_id') == selected_route,
+            'fresh accepted namespace inventory belongs to selected node and route')
     require(reuse.get('status') == 'PREPARED_ACCEPTED_NAMESPACE_RUNTIME_REUSE_NOT_EXECUTION_AUTHORITY'
             and reuse.get('accepted_boundary') == accepted and reuse.get('inventory') == inventory
             and reuse.get('native_R') == dict(path=installation['R_HOME'] + '/bin/exec/R', sha256=NATIVE_R)
@@ -487,6 +568,7 @@ def packet_and_native_journals(config, root, packet, spec, ready, ready_guard_pa
 def context(config_path, bundle_path, ready_guard_path, driver_authority_path):
     require(os.sched_getaffinity(0) == {31}, 'administrative CPU31 only')
     config = local(config_path); scope = read(config['scope']); now = time.time()
+    selected_node, selected_route = selected_qualification_route(config, scope)
     authority = local(driver_authority_path)
     require(authority.get('status') == 'ROOT_AUTHORIZED_FROZEN525_NUMERICAL_CRITICAL_LIFECYCLE'
             and authority.get('config') == pin(config_path) and authority.get('scope') == config['scope']
@@ -523,7 +605,8 @@ def context(config_path, bundle_path, ready_guard_path, driver_authority_path):
             and packet['role'] == spec['role'] == ready['role'] == config['role']
             and ready.get('status') == 'READY_SOURCE_BOUND_COMPUTE_METADATA'
             and ready['scope_id'] == packet['scope_id'] == spec['scope_id']
-            and ready['job_id'] == job['job_id'] and ready['node'] == spec['node'] == config['node'] == 'node-13'
+            and ready['job_id'] == job['job_id'] and ready['node'] == spec['node'] == config['node'] == selected_node
+            and ready.get('qualification_route_id') == spec.get('qualification_route_id') == selected_route
             and ready['spec_sha256'] == packet['spec_sha256'] and ready['sources'] == packet['sources'] == spec['sources']
             and ready.get('models') == ready.get('optimizer_invocations') == 0
             and ready.get('physical_numerical_admission') is False
@@ -557,6 +640,9 @@ def context(config_path, bundle_path, ready_guard_path, driver_authority_path):
     require(spec['controls']['traced_guard']['sha256'] == TRACER
             and spec['controls']['boundary_library']['sha256'] == BOUNDARY,
             'unchanged native tracer and TSYNC boundary')
+    current_independent_core_helper(config,publication,source_review)
+    if config['role']=='ZERO_UPDATE_BRIDGE':
+        current_toy_prerequisite(config,selected_node,selected_route,publication['source_files'])
     prereq, reuse = prerequisites(config)
     known = read(config['known_jobs_registry'])
     terminal = {'COMPLETED', 'FAILED', 'CANCELLED', 'TIMEOUT', 'OUT_OF_MEMORY', 'NODE_FAIL', 'PREEMPTED', 'BOOT_FAIL'}
@@ -567,6 +653,7 @@ def context(config_path, bundle_path, ready_guard_path, driver_authority_path):
                     and row['job_name'] == prereq['accepted_boundary']['scope_id'] for row in expected_known),
             'entire pinned known PriceFM registry and accepted parent terminal')
     require(ready['inventory']['job_id'] == ready['job_id']
+            and ready['inventory'].get('qualification_route_id') == selected_route
             and all(ready['inventory'][k] == reuse['inventory'][k] for k in ('libc', 'python', 'python_version'))
             and spec['known_prior_jobs'] == config['known_prior_jobs'], 'qualified current runtime and complete known registry')
     packet_and_native_journals(config, root, packet, spec, ready, ready_guard_path, reuse)
@@ -838,6 +925,7 @@ def owner_phase(ctx, driver_authority_path):
             and global_contract == dict(schema='r179_hb_scientific_job_contract_v1', job_id=ready['job_id'], node=ready['node'],
                 resource_lock=base + '/numerical.lock', max_new_numerical=1, expires_epoch=scope['expires_epoch']), 'exact global one-new-numerical contract')
     review = dict(status='PASS_REVIEWED_R182_FROZEN525_NUMERICAL_OWNER_AND_SPEC', role=config['role'],
+        qualification_route_id=scope['qualification_route_id'],
         spec=remote_pin('OWNER_SPEC.json'), authority=remote_pin('OWNER_AUTHORITY.json'), sources=owner_sources,
         current_R_parse_not_preclaimed=True, conditional_current_parse_and_kernel_ACK_required=True)
     write_new(out / 'OWNER_REVIEW.json', review)
@@ -845,6 +933,7 @@ def owner_phase(ctx, driver_authority_path):
         stage_grant='STAGE_GRANT.json', stage_source_review='STAGE_SOURCE_REVIEW.json', global_contract='GLOBAL_CONTRACT.json',
         bootstrap_spec='BOOTSTRAP_SPEC.json', physical_core_proof='PHYSICAL_CORE_PROOF.json', physical_core_review='PHYSICAL_CORE_REVIEW.json')
     write_new(out / 'PEER_RELEASE.json', dict(status='PASS_REVIEWED_FROZEN525_NUMERICAL_BATCH_RELEASE',
+        qualification_route_id=scope['qualification_route_id'],
         role=config['role'], job_id=ready['job_id'], node=ready['node'], ready_sha256=pin(root / 'READY.json')['sha256'],
         spec_sha256=packet['spec_sha256'], sources=spec['sources'], stage_pins={key: remote_pin(name) for key, name in labels.items()},
         current_R_parse_not_preclaimed=True, conditional_current_parse_and_kernel_ACK_required=True))
@@ -862,6 +951,27 @@ def startup_watch_review(config_path, scope, root, ready, authority, authority_p
     Authored from the frozen W188 peer and raw producer/driver contracts. No
     producer admission helper, watcher helper or rejected W189 peer is used.
     """
+    current_config=read(pin(config_path))
+    if 'startup_watch_roots' in current_config:
+        # This independently authored administrative peer is verified before import.
+        import importlib
+        source=Path(current_config['source_dir'])
+        publication=read(current_config['publication']);review=read(current_config['source_review'])
+        name='independent_foundation_release_peer.py'
+        independent=publication.get('independent_source_files',{})
+        require(independent==review.get('independent_source_files') and name in independent,
+                'published reviewed independent raw-watch checker source')
+        read_bytes(source/name,independent[name],code=True)
+        module=importlib.import_module('pricefm_hb.independent_foundation_release_peer')
+        require(Path(module.__file__).absolute()==source/name,'exact frozen independent watcher module path')
+        module.READS.clear()
+        result=module.review_startup_watch(config_path,current_config,scope,local(root/'PACKET.json'),
+                    local(root/'JOB.json'),ready,'numerical')
+        READS.update(module.READS)
+        watched=read(result)
+        require(watched['authority']==authority.get('startup_watch_authority'),
+                'actual critical lifecycle authority binds exact separate generic startup watch authority')
+        return watched
     def exact_map(value, expected, label):
         require(type(value) is dict and set(value) == set(expected)
                 and all(type(value[k]) is type(v) and value[k] == v
@@ -879,6 +989,7 @@ def startup_watch_review(config_path, scope, root, ready, authority, authority_p
                 label)
     config_pin = pin(config_path)
     config = read(config_pin)
+    selected_node, selected_route = selected_qualification_route(config, scope)
     authority_pin = pin(authority_path)
     require(read(authority_pin) == authority and read(config['scope']) == scope,
             'startup exact current configuration, authority and scope')
@@ -939,7 +1050,10 @@ def startup_watch_review(config_path, scope, root, ready, authority, authority_p
             and ready['status'] == 'READY_SOURCE_BOUND_COMPUTE_METADATA'
             and ready['sources'] == packet['sources'] and ready['spec_sha256'] == packet['spec_sha256']
             and type(job['job_id']) is str and re.fullmatch('[1-9][0-9]*', job['job_id'])
-            and ready['node'] == 'node-13' and exact_int(ready['cpus_per_task'], 1)
+            and ready['node'] == selected_node
+            and ready.get('qualification_route_id') == selected_route
+            and ready.get('inventory', {}).get('qualification_route_id') == selected_route
+            and exact_int(ready['cpus_per_task'], 1)
             and type(ready['affinity']) is list and len(ready['affinity']) == 1
             and type(ready['affinity'][0]) is int and ready['affinity'][0] >= 0
             and exact_int(ready['models'], 0) and exact_int(ready['optimizer_invocations'], 0)

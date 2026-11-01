@@ -39,7 +39,10 @@ def bootstrap(spec_pin):
                    and spec['memory_MiB']==8192 and spec['threads']==1 and spec['production_fits']==0,
                    'exact complete bounded numerical resource profile')
     job=os.environ.get('SLURM_JOB_ID','');node=os.uname().nodename.split('.')[0]
-    common.require(job.isdigit() and os.environ.get('SLURMD_NODENAME')==node==spec['node']=='node-13'
+    common.require(job.isdigit() and os.environ.get('SLURMD_NODENAME')==node==spec['node']==scope['execution_node']==scope['qualification_node']
+                   and spec['node'] in ['node-%02d'%n for n in range(15,22)]
+                   and spec.get('qualification_route_id')==scope.get('qualification_route_id')
+                   and type(spec.get('qualification_route_id')) is str and len(spec['qualification_route_id'])==32
                    and os.environ.get('SLURM_CPUS_PER_TASK')=='1' and len(os.sched_getaffinity(0))==1
                    and os.environ.get('TZ')=='UTC','actual assigned single CPU compute allocation')
     for key in owner.h.THREAD_KEYS:common.require(os.environ.get(key)=='1','single numerical thread environment')
@@ -58,6 +61,7 @@ def validate_release(spec,spec_pin,ready_pin,release_pin,common):
                    and release.get('role')==spec['role'] and release.get('scope_id')==spec['scope_id']
                    and release.get('job_id')==ready['job_id']==os.environ['SLURM_JOB_ID']
                    and release.get('node')==ready['node']==spec['node']
+                   and release.get('qualification_route_id')==ready.get('qualification_route_id')==spec.get('qualification_route_id')
                    and release.get('ready_sha256')==ready_pin['sha256'] and release.get('spec_sha256')==spec_pin['sha256']
                    and release.get('sources')==spec['sources'] and release.get('scope_sha256')==spec['scope']['sha256'],
                    'actual current numerical-purpose root release')
@@ -75,7 +79,7 @@ def validate_release(spec,spec_pin,ready_pin,release_pin,common):
         common.read_exact(pin)
     peer=common.read_json(common.read_exact(release['independent_review']))
     common.require(peer.get('status')=='PASS_REVIEWED_FROZEN525_NUMERICAL_BATCH_RELEASE'
-                   and all(peer.get(k)==release[k] for k in ['role','job_id','node','ready_sha256','spec_sha256','sources'])
+                   and all(peer.get(k)==release[k] for k in ['role','job_id','node','qualification_route_id','ready_sha256','spec_sha256','sources'])
                    and peer.get('stage_pins')=={key:release[key] for key in required-{'independent_review'}},
                    'applicable independent numerical-purpose outer release review')
     return release
@@ -104,15 +108,15 @@ def run(spec_pin):
     root=Path(spec['remote_root']);result_root=root/'result';ready_pin=None;release_pin=None;outcome=None;error=None
     try:
         prerequisite=common.read_json(common.read_exact(spec['controls']['prerequisite_bundle']))
-        owner.validate_prerequisites(prerequisite)
+        owner.validate_prerequisites(prerequisite,spec['node'],spec['qualification_route_id'])
         reuse=common.read_json(common.read_exact(spec['controls']['runtime_reuse']))
-        owner.validate_runtime_reuse(reuse,prerequisite)
+        owner.validate_runtime_reuse(reuse,prerequisite,spec['node'],spec['qualification_route_id'])
         seen=set();total=0
         for row in reuse['runtime_files']:
             common.require(row['path'] not in seen,'unique exact reused code files');seen.add(row['path'])
             raw=common.read_exact(row,64*1024**2);total+=len(raw)
         common.require(len(seen)==2279 and total==275498747,'complete qualified code-only runtime closure')
-        inventory=common.runtime_inventory(spec,job);old=reuse['inventory']
+        inventory=common.runtime_inventory(spec,job);inventory['qualification_route_id']=spec['qualification_route_id'];old=reuse['inventory']
         common.require(all(inventory[k]==old[k] for k in ['libc','python','python_version'])
                        and all(inventory['uname'][i]==old['uname'][i] for i in [0,2,4]),'current numerical kernel/runtime context changed')
         for name in ['bash','sh','rm']:
@@ -124,9 +128,9 @@ def run(spec_pin):
         snapshot=physical.capture(job,spec['node'],spec['known_prior_jobs'],result_root/'physical',disk_root=root);common.write_new(result_root/'PHYSICAL_SNAPSHOT.json',snapshot)
         identity=dict(pid=os.getpid(),start_ticks=owner.h.process_birth_ticks(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                       affinity=sorted(os.sched_getaffinity(0)),uid=os.getuid())
-        ready=dict(status='READY_SOURCE_BOUND_COMPUTE_METADATA',role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],
+        ready=dict(status='READY_SOURCE_BOUND_COMPUTE_METADATA',role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],qualification_route_id=spec['qualification_route_id'],
             spec_sha256=spec_pin['sha256'],sources=spec['sources'],affinity=identity['affinity'],cpus_per_task=1,models=0,
-            optimizer_invocations=0,inventory=inventory,worker_identity=identity,physical_snapshot=common.pin(result_root/'PHYSICAL_SNAPSHOT.json'),
+            optimizer_invocations=0,inventory=inventory,observed_epoch=time.time(),worker_identity=identity,physical_snapshot=common.pin(result_root/'PHYSICAL_SNAPSHOT.json'),
             physical_snapshot_value=snapshot,physical_numerical_admission=False,expires_epoch=spec['expires_epoch'])
         common.publish_atomic_new(root/'READY.json',ready);ready_pin=common.pin(root/'READY.json')
         release_path=root/'release/RELEASE.json';until=time.monotonic()+120
@@ -152,7 +156,7 @@ def run(spec_pin):
     own=resource.getrusage(resource.RUSAGE_SELF);waited=resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu=own.ru_utime+own.ru_stime+waited.ru_utime+waited.ru_stime
     common.require(cpu<600 and time.monotonic()-started<1200,'whole numerical reservation exceeded')
-    result=dict(status=status,role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],spec_sha256=spec_pin['sha256'],
+    result=dict(status=status,role=spec['role'],scope_id=spec['scope_id'],job_id=job,node=spec['node'],qualification_route_id=spec['qualification_route_id'],spec_sha256=spec_pin['sha256'],
         sources=spec['sources'],ready=ready_pin,release=release_pin,outcome=outcome,error=error,production_fits=0,pilot_fits=0,
         whole_self_plus_waited_CPU=cpu,wall_seconds=time.monotonic()-started,canonical_primary_accounting_still_required=True)
     seal(spec,job,result,common,contract);return 0 if error is None else 1

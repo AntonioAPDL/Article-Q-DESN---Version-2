@@ -123,6 +123,13 @@ ind_aq_process_limits <- function() {
   q(FALSE,"bounded native timeout ancestor missing")
 }
 
+ind_aq_strict_mappings_present <- function(paths,present,is_directory) {
+  ind_aq_require(is.character(paths)&&!anyNA(paths)&&!anyDuplicated(paths)&&
+    is.logical(present)&&length(present)==length(paths)&&!anyNA(present)&&all(present)&&
+    is.logical(is_directory)&&length(is_directory)==length(paths)&&!anyNA(is_directory)&&
+    !any(is_directory),"every strict mapped file must remain present and non-directory")
+  invisible(TRUE)
+}
 ind_aq_runtime_inventory <- function() {
   q <- ind_aq_require
   packages <- c("base","compiler","datasets","graphics","grDevices","methods","stats","utils","tools","digest","jsonlite")
@@ -131,6 +138,8 @@ ind_aq_runtime_inventory <- function() {
   roots <- vapply(packages,function(p)find.package(p,quiet=TRUE),character(1L))
   files <- unlist(lapply(roots,function(p)list.files(p,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE)),use.names=FALSE)
   os <- runtime_ic_snapshot()
+  ind_aq_strict_mappings_present(os$strict_mapped_paths,file.exists(os$strict_mapped_paths),
+    file.info(os$strict_mapped_paths,extra_cols=FALSE)$isdir)
   files <- c(files,os$strict_mapped_paths,Sys.readlink("/proc/self/exe"),file.path(R.home("bin"),"Rscript"),
     Sys.which("git"),"/usr/bin/timeout")
   files <- files[file.exists(files)&!file.info(files)$isdir]

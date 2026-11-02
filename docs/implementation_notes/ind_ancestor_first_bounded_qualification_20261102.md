@@ -99,6 +99,8 @@ all installed files in base/compiler/datasets/graphics/grDevices/methods/
 stats/utils/tools/digest/jsonlite, all strictly classified mapped file paths, the actual
 R interpreter, Rscript, Git and the native timeout executable. Duplicate
 canonical paths are collapsed.
+Every strict mapped path must exist and be nondirectory before ordinary
+inventory filtering; a disappeared or replaced mapping cannot be omitted.
 The actual inventory is independently rebuilt and compared before and after
 the numerical phase. It is a source/runtime metadata preparation helper,
 not a model qualification or source of scientific draws. The parent must

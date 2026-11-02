@@ -92,14 +92,14 @@ mqa_scope <- function(s) {
   invisible(TRUE)
 }
 mqa_git <- function(root,args) {
-  z <- system2("git",c("--no-replace-objects","-c","core.fsmonitor=false","-C",shQuote(root),args),stdout=TRUE)
+  z <- system2("/usr/bin/git",c("--no-replace-objects","-c","core.fsmonitor=false","-C",shQuote(root),args),stdout=TRUE)
   mqa_require(is.null(attr(z,"status")),"Git verification failed")
   unname(z)
 }
 mqa_git_blob <- function(root,commit,path) {
   mqa_require(mqa_hex(commit,40)&&is.character(path)&&length(path)==1L&&
     !startsWith(path,"/")&&!grepl("(^|/)\\.\\.(/|$)",path),"safe historical Git blob identity required")
-  cmd <- paste("git --no-replace-objects -C",shQuote(root),"cat-file blob",shQuote(paste0(commit,":",path)))
+  cmd <- paste("/usr/bin/git --no-replace-objects -C",shQuote(root),"cat-file blob",shQuote(paste0(commit,":",path)))
   con <- pipe(cmd,"rb");on.exit(close(con))
   raw <- readBin(con,"raw",n=4*1024^2+1L)
   mqa_require(length(raw)>0L&&length(raw)<=4*1024^2,"bounded historical source blob required")

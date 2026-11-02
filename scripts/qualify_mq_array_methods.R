@@ -31,7 +31,7 @@ mqa_main <- function(args=commandArgs(TRUE)) {
   q(is.character(output)&&length(output)==1L&&startsWith(output,paste0(root,"/local_trackers/"))&&
     !file.exists(output)&&dir.exists(dirname(output))&&
     identical(normalizePath(dirname(output),mustWork=TRUE),dirname(output))&&
-    system2("git",c("check-ignore","--quiet","--",shQuote(output)))==0L,"fresh ignored real output parent required")
+    system2("/usr/bin/git",c("check-ignore","--quiet","--",shQuote(output)))==0L,"fresh ignored real output parent required")
   q(dir.create(output),"fresh output creation failed")
   administrative_reserve <- 1024^2;initial_rng <- mqa_rng();phase <- "ADMITTED_TRUTH_FREE_PREPARED_PAYLOAD"
   write_json <- function(x,name) {

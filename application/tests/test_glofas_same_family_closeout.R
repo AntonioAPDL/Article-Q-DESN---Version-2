@@ -3,6 +3,7 @@ local({
 source("scripts/glofas_same_family_closeout.R")
 source("scripts/finalize_glofas_same_family_transition.R")
 source("scripts/check_glofas_same_family_article_projection.R")
+source("scripts/glofas_same_family_plot_inputs.R")
 source("application/R/glofas_family_transition.R")
 gsc_test_checks <- 0L
 ok <- function(x) {stopifnot(isTRUE(x));gsc_test_checks <<- gsc_test_checks+1L;invisible(TRUE)}
@@ -119,8 +120,22 @@ rows <- gsc_assemble(quantiles,normal_rows,members)
 ok(nrow(rows)==1372L&&nrow(gsc_raw_rows(members))==196L)
 ok(all(gsc_crossings(rows)$adjacent_comparisons==168L)&&all(gsc_crossings(rows)$raw_crossing_pairs==0))
 reject(gsc_assemble(quantiles[-1L],normal_rows,members),"all quantile tasks")
-bad <- members[-1L,];reject(gsc_raw_rows(bad),"member grid")
+bad <- members[-1L,];reject(gsc_raw_rows(bad),"member identities")
 bad <- members;bad$member[1L] <- bad$member[29L];bad$horizon[1L] <- bad$horizon[29L]
+reject(gsc_raw_rows(bad),"member grid")
+for(member in c(NA_character_,"","  ")) {
+  bad <- members;bad$member[bad$member==members$member[1L]] <- member
+  reject(gsc_raw_rows(bad),"member identities")
+}
+for(horizon in c(NA_real_,Inf,0,29,1.5)) {
+  bad <- members;bad$horizon[1L] <- horizon
+  reject(gsc_raw_rows(bad),"integer horizons")
+}
+bad <- members;bad$horizon <- as.character(bad$horizon)
+reject(gsc_raw_rows(bad),"integer horizons")
+bad <- members;bad$target_date[1L] <- "2022-12-26 extra"
+reject(gsc_raw_rows(bad),"member grid")
+bad <- members;bad$target_date[1L] <- NA_character_
 reject(gsc_raw_rows(bad),"member grid")
 bad <- rows;bad$tau[1L] <- .1;reject(gsc_validate_grid(bad),"forecast key")
 bad <- rows;bad$target_date[1L] <- "2022-12-25";reject(gsc_validate_grid(bad),"dates")
@@ -218,6 +233,38 @@ pin <- list(path=f,size_bytes=file.info(f)$size,sha256=unname(tools::sha256sum(f
 ok(identical(gsc_pin(pin),f));bad <- pin;bad$sha256 <- strrep("0",64L);reject(gsc_pin(bad),"bytes changed")
 link <- file.path(tmp,"linked.csv");ok(file.symlink(f,link));bad <- pin;bad$path <- link
 reject(gsc_pin(bad),"symlink")
+
+# The extraction code sees only tiny, generated historical/member fixtures.
+hist <- data.frame(target_date=seq(as.Date("2022-11-26"),as.Date("2022-12-25"),by="day"),
+  y_transformed=seq(2,3,length.out=30),g_transformed=seq(2.1,3.1,length.out=30))
+ens <- members;ens$origin_date <- "2022-12-25";ens$ensemble_weight <- 1;ens$y_transformed <- NA_real_
+data <- list(future_truth_policy="physically_excluded_from_fit_objects_scoring_sidecar_only",
+  historical_panel=hist,y_history=hist,g_retro=hist,g_ensemble=ens)
+design <- list(future_truth_policy="physically_excluded_from_fit_objects_scoring_sidecar_only",
+  ensemble_member_weight_policy="unit_member_likelihood_v1",family_transition_contract=app_glofas_family_transition_contract(),
+  two_block_design=TRUE,latent_data=data,future_context=list(latent_data=data),base_panel=hist,
+  future_key=data.frame(target_date=gsc_dates(),horizon=1:28),
+  future_builder=function(...)stop("This extraction must never call a feature builder."))
+extracted <- gsc_plot_input_tables(design)
+ok(nrow(extracted$history)==30L&&nrow(extracted$issued_members)==1428L&&nrow(extracted$raw_members)==1428L)
+ok(identical(names(extracted$raw_members),c("target_date","horizon","member","g_transformed")))
+bad <- clone(design);bad$latent_data$g_ensemble$y_transformed[1L] <- 9
+reject(gsc_plot_input_tables(bad),"unredacted future USGS")
+bad <- clone(design);bad$future_context$future_truth <- 9
+reject(gsc_plot_input_tables(bad),"unsafe embedded truth")
+bad <- clone(design);bad$latent_data$historical_panel$target_date[1L] <- as.Date("2022-12-26")
+reject(gsc_plot_input_tables(bad),"post-origin")
+bad <- clone(design);bad$base_panel <- bad$base_panel[-1L,]
+reject(gsc_plot_input_tables(bad),"thirty consecutive")
+bad <- clone(design);bad$latent_data$g_ensemble$ensemble_weight[1L] <- 1/51
+reject(gsc_plot_input_tables(bad),"unit-weight")
+bad <- clone(collection);bad$producers <- bad$producers[-16L]
+reject(gsc_extract_authorized(list(),bad,NULL,NULL,NULL,NULL),"sixteen")
+extract_scope <- scope;extract_scope$mode <- "extract";extract_scope$allow_assembly <- FALSE
+extract_scope$allow_design_read <- TRUE
+ok(gsc_closeout_scope(extract_scope,"extract"))
+extract_scope$allow_design_read <- FALSE
+reject(gsc_closeout_scope(extract_scope,"extract"),"authority")
 unlink(tmp,recursive=TRUE) # Only this test-created, uniquely named fixture directory.
 cat("GloFAS same-family closeout synthetic tests PASS:",gsc_test_checks,"checks\n")
 })

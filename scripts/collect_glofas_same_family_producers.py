@@ -71,8 +71,8 @@ def collect(spec, controller):
     budget = spec.get("read_budget", {})
     require(set(budget) == {"max_artifact_bytes", "max_total_artifact_bytes"} and
             all(type(v) is int for v in budget.values()) and
-            0 < budget["max_artifact_bytes"] <= 1024**3 and
-            0 < budget["max_total_artifact_bytes"] <= 4*1024**3,
+            0 < budget["max_artifact_bytes"] <= 8*1024**3 and
+            0 < budget["max_total_artifact_bytes"] <= 44*1024**3,
             "finite artifact-hash read budget required")
     ledger = pin(spec["ledger_snapshot"])
     # A raw DB digest does not bind uncheckpointed WAL contents. Refuse rather

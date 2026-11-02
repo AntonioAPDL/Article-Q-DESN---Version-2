@@ -168,6 +168,14 @@ class CollectionTest(unittest.TestCase):
         with self.rejects("frozen producer source and target"):
             self.collect()
 
+    def test_compiled_read_ceiling_allows_source_admitted_mq_but_is_not_renewable(self):
+        self.contract["read_budget"] = {"max_artifact_bytes":8*1024**3,
+                                        "max_total_artifact_bytes":44*1024**3}
+        self.assertEqual(len(self.collect()["producers"]),16)
+        self.contract["read_budget"]["max_artifact_bytes"] = 9*1024**3
+        with self.rejects("finite artifact-hash read budget"):
+            self.collect()
+
     def test_snapshot_pin_and_symlink_rejected(self):
         self.contract["ledger_snapshot"]["sha256"] = "0"*64
         with self.rejects("input bytes changed"):

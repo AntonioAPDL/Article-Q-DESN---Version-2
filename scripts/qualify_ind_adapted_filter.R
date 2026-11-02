@@ -130,14 +130,29 @@ ind_aq_strict_mappings_present <- function(paths,present,is_directory) {
     !any(is_directory),"every strict mapped file must remain present and non-directory")
   invisible(TRUE)
 }
+ind_aq_initialize_numerical_runtime <- function() {
+  # Force native lazy-loaded numerical code into the strict inventory before
+  # its first comparison. Fixed synthetic constants are not study inputs.
+  A <- matrix(c(2,.25,.25,1),2L,2L)
+  values <- c(base::chol(A),base::eigen(A,symmetric=TRUE,only.values=TRUE)$values,
+    base::solve(A),base::svd(A,nu=0L,nv=0L)$d)
+  ind_aq_require(all(is.finite(values)),"deterministic numerical-runtime initialization failed")
+  list(schema_version="ind_deterministic_numerical_runtime_initialization_v1",
+    before_first_runtime_pin_match=TRUE,routines=c("chol","eigen","solve","svd"),
+    generated_synthetic_matrix_dimension=2L,random_draws=0L,study_inputs_read=0L,
+    native_lapack_module=file.path(R.home(),"modules","lapack.so"))
+}
 ind_aq_runtime_inventory <- function() {
   q <- ind_aq_require
   packages <- c("base","compiler","datasets","graphics","grDevices","methods","stats","utils","tools","digest","jsonlite")
   for(p in packages)q(requireNamespace(p,quietly=TRUE),paste("required pinned package unavailable",p))
   q(all(loadedNamespaces() %in% packages),"unlisted namespace or installed model substitution")
+  initialized <- ind_aq_initialize_numerical_runtime()
   roots <- vapply(packages,function(p)find.package(p,quiet=TRUE),character(1L))
   files <- unlist(lapply(roots,function(p)list.files(p,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE)),use.names=FALSE)
   os <- runtime_ic_snapshot()
+  q(normalizePath(initialized$native_lapack_module,mustWork=TRUE)%in%
+    normalizePath(os$strict_mapped_paths,mustWork=TRUE),"initialized native LAPACK module must remain a strict mapping")
   ind_aq_strict_mappings_present(os$strict_mapped_paths,file.exists(os$strict_mapped_paths),
     file.info(os$strict_mapped_paths,extra_cols=FALSE)$isdir)
   files <- c(files,os$strict_mapped_paths,Sys.readlink("/proc/self/exe"),file.path(R.home("bin"),"Rscript"),
@@ -149,6 +164,7 @@ ind_aq_runtime_inventory <- function() {
     sha256=unname(tools::sha256sum(files)),stringsAsFactors=FALSE)
   attr(result,"observational_os_state") <- os$observational_os_state
   attr(result,"observational_os_state_role") <- os$observation_role
+  attr(result,"deterministic_numerical_runtime_initialization") <- initialized
   result
 }
 ind_aq_runtime_match <- function(expected,actual) {
@@ -293,6 +309,7 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
     purpose_contract_sha256=args[4],production_authorized=FALSE,details=list(...)),"progress.json")
   started <- proc.time()
   progress("ADMITTED_PINNED_TRAINING_ONLY_INPUT")
+  write.csv(runtime,file.path(output,"runtime_strict_inventory_before.csv"),row.names=FALSE)
   write_json(list(role=attr(runtime,"observational_os_state_role"),
     observation_utc=format(Sys.time(),"%Y-%m-%dT%H:%M:%SZ",tz="UTC"),
     observations=attr(runtime,"observational_os_state"),live_byte_equality_required=FALSE,
@@ -353,11 +370,15 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
     for(k in c("training_input","native_forward_receipt","native_forward_manifest","bootstrap_receipt",
       "historical_guided_receipt","native_cpp"))ind_aq_pin(spec[[k]])
     ind_aq_pin(spec$original_fit,max_bytes=611287756);ind_aq_pin(spec$runtime_manifest)
-    final_runtime <- ind_aq_runtime_inventory();ind_aq_runtime_match(runtime_manifest,final_runtime)
+    final_runtime <- ind_aq_runtime_inventory()
+    # Preserve actual post-calculation bytes before a strict comparison can
+    # reject them; a failed attempt is never repaired or relabelled as success.
+    write.csv(final_runtime,file.path(output,"runtime_strict_inventory_after.csv"),row.names=FALSE)
     write_json(list(role=attr(final_runtime,"observational_os_state_role"),
       observation_utc=format(Sys.time(),"%Y-%m-%dT%H:%M:%SZ",tz="UTC"),
       observations=attr(final_runtime,"observational_os_state"),live_byte_equality_required=FALSE,
       numerical_inputs_and_software_remain_strictly_pinned=TRUE),"runtime_OS_identity_cache_after.json")
+    ind_aq_runtime_match(runtime_manifest,final_runtime)
     q(expiry>Sys.time()&&identical(git(c("rev-parse","HEAD")),spec$source_commit)&&
       identical(git(c("rev-parse","HEAD^{tree}")),spec$source_tree)&&
       length(git(c("status","--porcelain","--untracked-files=normal")))==0L,"source/lifetime drift")
@@ -376,6 +397,7 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
       observational_OS_identity_cache_before=attr(runtime,"observational_os_state"),
       observational_OS_identity_cache_after=attr(final_runtime,"observational_os_state"),
       identity_cache_observation_role=attr(runtime,"observational_os_state_role"),
+      numerical_runtime_initialization=attr(runtime,"deterministic_numerical_runtime_initialization"),
       administration_and_contract_reserve_bytes=reserve,caller_RNG_restored=TRUE,
       process_CPU_seconds_before_terminal_receipt=sum(proc.time()[c(1,2,4,5)]),
       process_wall_seconds_before_terminal_receipt=unname(proc.time()["elapsed"]),

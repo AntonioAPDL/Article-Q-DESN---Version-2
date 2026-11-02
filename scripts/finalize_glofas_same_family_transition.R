@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # New, source-bound closeout only; never invoke the legacy fitter/finalizer.
 source("scripts/glofas_same_family_closeout.R")
+source("scripts/glofas_same_family_truth_bridge.R")
 
 gsc_closeout_scope <- function(s,mode) {
   q <- gsc_require
@@ -11,6 +12,7 @@ gsc_closeout_scope <- function(s,mode) {
     identical(s$allow_scoring,mode=="score")&&identical(isTRUE(s$allow_design_read),mode=="extract"),
     "explicit extraction/assembly/scoring-only authority required")
   b <- s$limits
+  if(mode=="score")gst_truth_interface(s)
   q(is.list(b)&&all(vapply(b[c("cpu_seconds","wall_seconds","memory_bytes","output_bytes","logical_cpu")],
     function(v)is.numeric(v)&&length(v)==1L&&is.finite(v)&&v>=0,logical(1L)))&&
     b$cpu_seconds>0&&b$cpu_seconds<=1200&&b$wall_seconds>=60&&b$wall_seconds<=1800&&
@@ -65,7 +67,8 @@ gsc_closeout_main <- function(args=commandArgs(TRUE)) {
   }
   q(wall_proof,"whole-purpose exact TERM/KILL supervisor required")
   required <- c("scripts/glofas_same_family_closeout.R","scripts/finalize_glofas_same_family_transition.R",
-    "scripts/collect_glofas_same_family_producers.py","application/scripts/forecast_transition_control.py")
+    "scripts/collect_glofas_same_family_producers.py","application/scripts/forecast_transition_control.py",
+    "scripts/glofas_same_family_truth_bridge.R")
   if(mode=="extract")required <- c(required,"scripts/glofas_same_family_plot_inputs.R")
   source_paths <- vapply(s$source_files,gsc_pin,character(1L),max_bytes=1024^2)
   q(all(file.path(root,required) %in% source_paths)&&all(startsWith(source_paths,paste0(root,"/")))&&
@@ -124,12 +127,22 @@ gsc_closeout_main <- function(args=commandArgs(TRUE)) {
     gsc_verify_forecast_seal(out,forecast_seal_sha256)
     if(mode=="score") {
       q(identical(s$truth_role,"post_fit_scoring_only")&&isFALSE(s$model_selection_or_retuning),"truth is scoring-only")
+      if(identical(gst_truth_interface(s),"authenticated_truth_bridge_v2")) {
+        gst_validate_score_truth(s,gsc_verify_forecast_seal(out,forecast_seal_sha256))
+      }
       truth <- read.csv(gsc_pin(s$truth,1024^2),stringsAsFactors=FALSE)
       scored <- gsc_score(rows,truth)
-      write.csv(truth,file.path(out,"scoring_truth.csv"),row.names=FALSE)
+      if(identical(gst_truth_interface(s),"authenticated_truth_bridge_v2")) {
+        q(file.copy(s$truth$path,file.path(out,"scoring_truth.csv"),overwrite=FALSE),"exact derived scoring truth retention failed")
+      } else write.csv(truth,file.path(out,"scoring_truth.csv"),row.names=FALSE)
       for(pair in list(c("summary","family_scores.csv"),c("by_date","scores_by_date.csv"),
         c("calibration","quantile_calibration.csv")))write.csv(scored[[pair[1L]]],file.path(out,pair[2L]),row.names=FALSE)
       write_json(scored$score_contract,"score_contract.json")
+      if(identical(gst_truth_interface(s),"authenticated_truth_bridge_v2")) {
+        q(file.copy(s$truth_derivation$path,file.path(out,"TRUTH_DERIVATION.json"),overwrite=FALSE)&&
+          file.copy(s$truth_adapter_purpose$path,file.path(out,"TRUTH_PURPOSE.json"),overwrite=FALSE),
+          "truth provenance retention failed")
+      }
     }
     for(b in s$source_files)gsc_pin(b,1024^2)
     for(b in s[c("collection_contract","normal_manifest","normal_receipt","normal_quantiles","raw_member_derivation","raw_members")])gsc_pin(b,2*1024^2)
@@ -138,7 +151,11 @@ gsc_closeout_main <- function(args=commandArgs(TRUE)) {
         b$relative_path <- NULL;gsc_pin(b,16*1024^2)
       }
     }
-    if(mode=="score")gsc_pin(s$truth,1024^2)
+    if(mode=="score") {
+      gsc_pin(s$truth,1024^2)
+      if(identical(gst_truth_interface(s),"authenticated_truth_bridge_v2"))
+        gst_validate_score_truth(s,gsc_verify_forecast_seal(out,forecast_seal_sha256))
+    }
     gsc_verify_forecast_seal(out,forecast_seal_sha256)
     check_source();q(expiry>Sys.time(),"purpose expired")
     cpu <- sum(proc.time()[c("user.self","sys.self","user.child","sys.child")])
@@ -148,10 +165,13 @@ gsc_closeout_main <- function(args=commandArgs(TRUE)) {
         "ASSEMBLED_COMPLETE_GRID_NO_TRUTH_READ",mode=mode,source_commit=s$source_commit,source_tree=s$source_tree,
       contract_sha256=args[4L],expected_identity=s$expected_identity,forecast_rows=1372L,families=7L,
       forecast_seal_sha256=forecast_seal_sha256,
+      truth_interface_version=if(mode=="score")gst_truth_interface(s)else NULL,
       future_truth_read=mode=="score",model_selection_or_retuning=FALSE,new_fits=0L,
       artifact_scope="new_ignored_closeout_only",article_publication_authorized=FALSE,
       CPU_seconds=cpu,input_bindings=s[c("normal_manifest","normal_receipt","normal_quantiles","raw_member_derivation","raw_members",
-        if(mode=="score")"truth")]),"DECISION.json")
+        if(mode=="score")"truth",if(mode=="score"&&identical(gst_truth_interface(s),"authenticated_truth_bridge_v2"))
+          c("truth_rds","truth_provenance_manifest","assembly_root","assembly_manifest","assembly_forecast_seal",
+            "truth_derivation","truth_adapter_purpose"))]),"DECISION.json")
     write_json(list(status="CLOSEOUT_TERMINAL_NOT_PUBLICATION",mode=mode,future_truth_read=mode=="score"),"progress.json")
     files <- list.files(out,full.names=TRUE,all.files=TRUE,no..=TRUE)
     q(all(!file.info(files)$isdir)&&sum(file.info(files)$size)+65536<s$limits$output_bytes,"complete output budget")

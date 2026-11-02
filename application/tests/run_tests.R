@@ -294,14 +294,17 @@ run_standalone_glofas_test("application/tests/test_ind_native_parameter_catalog.
 # Additive next-stage methods and closeout. Synthetic software checks do not
 # authorize reconstruction, replace source qualifications or promote results.
 run_standalone_glofas_test("application/tests/test_ind_adapted_auxiliary_filter.R")
+run_standalone_glofas_test("application/tests/test_ind_batched_al_auxiliary_filter.R")
 run_standalone_glofas_test("application/tests/test_ind_future_cdf_reconstruction.R")
 run_standalone_glofas_test("application/tests/test_ind_qdesn_native_catalog.R")
 run_standalone_glofas_test("application/tests/test_runtime_identity_cache_observations.R")
 run_standalone_glofas_test("application/tests/test_ind_adapted_qualification_guards.R")
+run_standalone_glofas_test("application/tests/test_ind_high_resolution_qualification.R")
 run_standalone_glofas_test("application/tests/test_mq_array_qualification.R")
 run_standalone_glofas_test("application/tests/test_mq_forecast_array_methods.R")
 run_standalone_glofas_test("application/tests/test_integrated_quantile_receipts_v2.R")
 run_standalone_glofas_test("application/tests/test_glofas_same_family_closeout.R")
+run_standalone_glofas_test("application/tests/test_glofas_same_family_truth_bridge.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_reconstruction_admission.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_same_family_collection.py")) == 0L)
 

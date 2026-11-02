@@ -158,7 +158,8 @@ allow_scoring = (mode == score)
 allow_refit = allow_retuning = allow_publication = false
 source_commit, source_tree = clean reviewed closeout implementation
 expires_utc = UTC expiry covering the full requested wall time
-source_files = pins for the four closeout/controller implementation files
+source_files = pins for the five closeout/controller implementation files
+               (including glofas_same_family_truth_bridge.R)
                plus glofas_same_family_plot_inputs.R in extract mode
 expected_identity = exact six frozen producer fields
 collection_contract = file pin of the preceding collection contract
@@ -175,6 +176,10 @@ Score mode additionally requires `truth_role=post_fit_scoring_only`,
 `model_selection_or_retuning=false` and a `truth` file pin. Assemble mode must
 not open this sidecar. No contract template grants permission to execute.
 Both external contract bytes and their supplied SHA-256 digests are checked.
+For the retained RDS sidecar, the separately guarded post-seal truth bridge
+and `authenticated_truth_bridge_v2` score interface bind the original seal,
+derived CSV and producer purpose. The exact protocol and v1 CSV compatibility
+are documented in `glofas_same_family_truth_bridge_20261102.md`.
 Extract mode instead requires `design` equal to the Normal enrollment's
 prepared-design pin and `input_manifest` bound to the frozen producer input
 digest. The exact prepared SHA-256 is

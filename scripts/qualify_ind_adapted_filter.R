@@ -58,6 +58,28 @@ ind_aq_timeout_argv <- function(x) {
     "exact native timeout TERM1799/KILL1 argv required")
   invisible(TRUE)
 }
+ind_aq_proc_stat <- function(x) {
+  q <- ind_aq_require
+  q(is.character(x)&&length(x)==1L&&!is.na(x),"one Linux process stat record required")
+  # The parenthesized command can contain spaces and closing parentheses.
+  # Match its final closing delimiter before state/ppid/pgrp/session.
+  m <- regmatches(x,regexec("^([0-9]+) \\((.*)\\) ([[:alpha:]]) ([0-9]+) ([0-9]+) ([0-9]+)( |$)",x))[[1L]]
+  q(length(m)==8L,"malformed Linux process stat record")
+  v <- suppressWarnings(as.numeric(m[c(2L,5L,6L,7L)]))
+  q(all(is.finite(v))&&all(v==floor(v))&&all(v<=.Machine$integer.max)&&
+    v[1L]>0&&v[2L]>=0&&all(v[3:4]>0),"invalid Linux process identities")
+  as.list(setNames(as.integer(v),c("pid","ppid","pgid","sid")))
+}
+ind_aq_process_group_proof <- function(self_stat,timeout_stat) {
+  q <- ind_aq_require
+  self <- ind_aq_proc_stat(self_stat);timeout <- ind_aq_proc_stat(timeout_stat)
+  q(timeout$pgid==timeout$pid,"native timeout must lead its controlled process group")
+  q(self$pid!=timeout$pid&&self$pgid==timeout$pgid&&self$sid==timeout$sid,
+    "R must remain in the native timeout process group and session")
+  list(payload_pid=self$pid,payload_pgid=self$pgid,payload_session=self$sid,
+    timeout_pid=timeout$pid,timeout_pgid=timeout$pgid,timeout_session=timeout$sid,
+    timeout_process_group_leader=TRUE,payload_same_timeout_group_and_session=TRUE)
+}
 ind_aq_process_limits <- function() {
   q <- ind_aq_require
   affinity <- function(pid="self") {
@@ -87,8 +109,12 @@ ind_aq_process_limits <- function() {
         exe <- normalizePath(Sys.readlink(sprintf("/proc/%d/exe",parent)),mustWork=TRUE)
         q(identical(exe,normalizePath("/usr/bin/timeout",mustWork=TRUE))&&identical(affinity(parent),"26"),
           "native timeout ancestor must itself be confined to CPU26")
+        group <- ind_aq_process_group_proof(readLines("/proc/self/stat",warn=FALSE),
+          readLines(sprintf("/proc/%d/stat",parent),warn=FALSE))
+        q(group$payload_pid==Sys.getpid()&&group$timeout_pid==parent,
+          "process-group proof must bind the actual payload and timeout ancestor")
         return(list(pid=parent,argv=argv[1:5],executable=exe,affinity="26",
-          aggregate_single_CPU_wall_bound_seconds=1800L))
+          process_group=group,aggregate_single_CPU_wall_bound_seconds=1800L))
       }
     }
     pid <- parent

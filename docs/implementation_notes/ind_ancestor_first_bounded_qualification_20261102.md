@@ -115,7 +115,11 @@ The prospective contract price is 1800 CPU seconds, native timeout TERM at
 total packet budget. CPU26 and its SMT sibling require fresh ownership
 review. These limits are checked from actual OS limits and the actual
 `/usr/bin/timeout` ancestor. That ancestor must itself be confined to CPU26;
-the single-CPU wall boundary bounds aggregate payload-process CPU even
+its process-group identifier must equal its PID, and the R payload must
+remain in that same process group and session. The receipt records both
+process identities. An intervening `setsid` or a separate payload process
+group is rejected; the default timeout must not use `--foreground`.
+The single-CPU wall boundary bounds aggregate payload-process CPU even
 when child utilities run. External supervisor preparation and final resource
 accounting remain separately required.
 
@@ -152,6 +156,7 @@ even when adapted child weights are uniform.
 The source-only test
 `application/tests/test_ind_adapted_qualification_guards.R` checks scope,
 fixed hashes/geometry, runtime metadata equality, exact timeout arguments,
+process-group/session identity and escaped-process rejection,
 truth-free input schemas, constant F/G, source/scale compatibility and early
 negative admission without authentic inputs or scientific execution.
 It is not the genuine numerical purpose described above.

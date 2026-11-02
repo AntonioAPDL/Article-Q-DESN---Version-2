@@ -132,8 +132,8 @@ master_sha256 = complete cohort's authenticated master digest
 ledger_snapshot = file pin of the separately sealed SQLite snapshot
 complete = pin of the matching COHORT_COMPLETE_NOT_ARTICLE_PROMOTION receipt
 controller_source = pin of application/scripts/forecast_transition_control.py
-read_budget.max_artifact_bytes = positive integer, at most 1 GiB
-read_budget.max_total_artifact_bytes = positive integer, at most 4 GiB
+read_budget.max_artifact_bytes = positive integer, at most 8 GiB
+read_budget.max_total_artifact_bytes = positive integer, at most 44 GiB
 ```
 
 The finalizer's external purpose contract has:
@@ -161,6 +161,13 @@ Score mode additionally requires `truth_role=post_fit_scoring_only`,
 `model_selection_or_retuning=false` and a `truth` file pin. Assemble mode must
 not open this sidecar. No contract template grants permission to execute.
 Both external contract bytes and their supplied SHA-256 digests are checked.
+The compiled artifact-read ceilings accommodate the frozen producer admission
+limits (including the larger MQ outputs); they are not a grant to hash that
+amount. The actual separately costed external purpose must specify its own
+finite read limits, normally much lower, and sufficient whole-purpose CPU and
+wall budgets. An exceeded read cap stops rather than being renewed implicitly.
+The total artifact ceiling is `14*2 + 2*8 = 44 GiB`; it excludes the separate
+44 GiB reserved for logs. The collector never reads or imports those logs.
 
 The R entry point requires pinned R 4.6.0 on Muscat, one BLAS/OpenMP thread,
 the exact CPU affinity, finite OS CPU/address-space/file-size limits and a

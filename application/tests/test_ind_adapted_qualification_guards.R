@@ -78,6 +78,11 @@ for(bad in c("not a stat record","201 (R) S 200 200","201 (R) S 200 0 90",
 runtime <- data.frame(path=c("/runtime/a","/runtime/b"),size_bytes=c(1,2),
   sha256=c(paste(rep("a",64),collapse=""),paste(rep("b",64),collapse="")))
 aq_check(isTRUE(ind_aq_runtime_match(runtime,runtime)))
+aq_check(isTRUE(ind_aq_strict_mappings_present(runtime$path,c(TRUE,TRUE),c(FALSE,FALSE))))
+aq_reject(ind_aq_strict_mappings_present(runtime$path,c(TRUE,FALSE),c(FALSE,NA)),"strict mapped file")
+aq_reject(ind_aq_strict_mappings_present(runtime$path,c(TRUE,TRUE),c(FALSE,TRUE)),"strict mapped file")
+aq_reject(ind_aq_strict_mappings_present(runtime$path,c(TRUE,TRUE),c(FALSE,NA)),"strict mapped file")
+aq_reject(ind_aq_strict_mappings_present(runtime$path,TRUE,FALSE),"strict mapped file")
 for(mut in list(function(x){x<-x[2:1,];x},function(x){x$sha256[1]<-"bad";x},
   function(x){x$size_bytes[1]<-99;x},function(x){x$path[1]<-x$path[2];x},
   function(x){x<-x[-1L,];x}))aq_reject(ind_aq_runtime_match(runtime,mut(runtime)),"runtime/package")

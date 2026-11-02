@@ -96,7 +96,8 @@ The CSV `runtime_manifest` has exactly `path,size_bytes,sha256`, sorted by
 canonical path. `ind_aq_runtime_inventory()` produces its metadata from
 all installed files in base/compiler/datasets/graphics/grDevices/methods/
 stats/utils/tools/digest/jsonlite, all mapped runtime file paths, the actual
-R interpreter, Rscript and Git. Duplicate canonical paths are collapsed.
+R interpreter, Rscript, Git and the native timeout executable. Duplicate
+canonical paths are collapsed.
 The actual inventory is independently rebuilt and compared before and after
 the numerical phase. It is a source/runtime metadata preparation helper,
 not a model qualification or source of scientific draws. The parent must

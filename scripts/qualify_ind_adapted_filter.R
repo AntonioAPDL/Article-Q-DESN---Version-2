@@ -106,7 +106,8 @@ ind_aq_runtime_inventory <- function() {
   maps <- readLines("/proc/self/maps",warn=FALSE)
   maps <- sub("^[^/]*(/.*)$","\\1",maps[grepl("/",maps)])
   q(!any(grepl(" \\(deleted\\)$",maps)),"deleted mapped runtime object")
-  files <- c(files,maps,Sys.readlink("/proc/self/exe"),file.path(R.home("bin"),"Rscript"),Sys.which("git"))
+  files <- c(files,maps,Sys.readlink("/proc/self/exe"),file.path(R.home("bin"),"Rscript"),
+    Sys.which("git"),"/usr/bin/timeout")
   files <- files[file.exists(files)&!file.info(files)$isdir]
   files <- sort(unique(normalizePath(files,mustWork=TRUE)))
   q(length(files)>0L,"complete runtime closure required")

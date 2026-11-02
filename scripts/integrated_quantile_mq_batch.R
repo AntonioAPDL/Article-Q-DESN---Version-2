@@ -228,7 +228,8 @@ app_iqf_mqb_uniforms <- function(rng_namespace, draw_id, origin_id, inner_ids, H
   })
 }
 
-app_iqf_mqb_paths_context <- function(context, draw_id, origin_id, inner_ids, include_trace = FALSE) {
+app_iqf_mqb_paths_context <- function(context, draw_id, origin_id, inner_ids, include_trace = FALSE,
+    include_paths = TRUE, collect_coherence = FALSE, crossing_tolerance = 0) {
   req <- app_iqf_mqb_require
   req(is.character(draw_id) && length(draw_id) == 1L && !is.na(draw_id) &&
     is.character(origin_id) && length(origin_id) == 1L && !is.na(origin_id) &&
@@ -240,6 +241,10 @@ app_iqf_mqb_paths_context <- function(context, draw_id, origin_id, inner_ids, in
     "distinct positive original inner-path identities required")
   req(is.logical(include_trace) && length(include_trace) == 1L && !is.na(include_trace),
     "invalid trace setting")
+  req(is.logical(include_paths) && length(include_paths) == 1L && !is.na(include_paths) &&
+    is.logical(collect_coherence) && length(collect_coherence) == 1L && !is.na(collect_coherence) &&
+    is.numeric(crossing_tolerance) && length(crossing_tolerance) == 1L &&
+    is.finite(crossing_tolerance) && crossing_tolerance >= 0, "invalid array/coherence settings")
   B <- length(inner_ids); design <- context$design; r <- design$reservoir
   origin <- context$origins[[origin_id]]; snapshot <- context$snapshots[[origin_id]]
   v <- context$validated[[origin_id]]; H <- origin$H; K <- length(context$tau)
@@ -251,6 +256,13 @@ app_iqf_mqb_paths_context <- function(context, draw_id, origin_id, inner_ids, in
   uniforms <- app_iqf_mqb_uniforms(context$rng_namespace, draw_id, origin_id, inner_ids, H,
     context$rng_mode, context$rng_proof)
   trace <- if (include_trace) vector("list", H) else NULL
+  coherence <- NULL
+  if (collect_coherence) {
+    req(all(vapply(c("app_iqf_mqc_init", "app_iqf_mqc_update", "app_iqf_mqc_validate"),
+      exists, logical(1L), mode = "function")), "load the explicit MQ array/coherence helpers first")
+    coherence <- app_iqf_mqc_init(H, context$tau, inner_ids, draw_id, origin_id,
+      context$rng_namespace, crossing_tolerance)
+  }
   for (h in seq_len(H)) {
     raw <- app_iqf_mqb_raw(as.integer(origin$origin_time + h), response, origin, design, B)
     scaled <- if (isTRUE(design$scale_params$standardize))
@@ -277,7 +289,16 @@ app_iqf_mqb_paths_context <- function(context, draw_id, origin_id, inner_ids, in
     mu <- sweep(t(crossprod(beta, z)), 2L, alpha, "+")
     crossed <- which(rowSums(mu[, -1L, drop = FALSE] < mu[, -K, drop = FALSE]) > 0L)
     q <- mu
-    if (length(crossed)) for (i in crossed) q[i, ] <- app_iqf_grid(mu[i, ], context$tau)$q
+    if (include_paths) {
+      if (length(crossed)) for (i in crossed) q[i, ] <- app_iqf_grid(mu[i, ], context$tau)$q
+    } else {
+      # The adapter has already validated this common tau grid. The array-only
+      # route calls the identical isoreg operation without repeating per-path
+      # tau validation/list allocation; preserve the reference default above.
+      req(all(is.finite(mu)), "nonfinite array-only raw quantile grid")
+      if (length(crossed)) for (i in crossed) q[i, ] <- stats::isoreg(seq_len(K), mu[i, ])$yf
+    }
+    if (collect_coherence) coherence <- app_iqf_mqc_update(coherence, mu, q, h)
     u <- as.numeric(uniforms[, h])
     response[, h] <- app_iqf_mqb_inverse_rows(q, context$tau, u)
     req(all(is.finite(c(raw, z, mu, response[, h]))), "nonfinite batched recursive path")
@@ -285,14 +306,19 @@ app_iqf_mqb_paths_context <- function(context, draw_id, origin_id, inner_ids, in
     if (include_trace) trace[[h]] <- list(raw = raw, scaled = scaled, states = states,
       readout = z, raw_quantiles = mu, ordered_quantiles = q, uniform = u)
   }
-  paths <- lapply(seq_len(B), function(i) list(kernels = lapply(seq_len(H), function(h)
+  paths <- if (include_paths) lapply(seq_len(B), function(i) list(kernels = lapply(seq_len(H), function(h)
     list(family = "mq_grid", q = as.numeric(ordered[i, , h]), tau = context$tau)),
-    response = as.numeric(response[i, ])))
-  list(paths = paths, response = response, ordered_quantiles = ordered, trace = trace,
+    response = as.numeric(response[i, ]))) else NULL
+  out <- list(paths = paths, response = response, ordered_quantiles = ordered, trace = trace,
     inner_ids = as.integer(inner_ids), draw_id = draw_id, origin_id = origin_id,
     coupling = context$coupling, rng_namespace = context$rng_namespace,
     outer_conditioning = "parameters_and_observed_origin_reservoir_state",
     production_authorized = FALSE, numerical_accuracy_qualified = FALSE)
+  if (collect_coherence) {
+    app_iqf_mqc_validate(coherence)
+    out$raw_coherence <- coherence
+  }
+  out
 }
 
 app_iqf_mq_batch_paths <- function(adapter, draw_id, origin_id, inner_ids, include_trace = FALSE) {
@@ -300,6 +326,20 @@ app_iqf_mq_batch_paths <- function(adapter, draw_id, origin_id, inner_ids, inclu
   app_iqf_mqb_require(is.numeric(inner_ids) && all(is.finite(inner_ids)) &&
     all(inner_ids <= adapter$inner_paths), "batch path exceeds the declared task resolution")
   app_iqf_mqb_paths_context(adapter$batch_context, draw_id, origin_id, inner_ids, include_trace)
+}
+
+# Array-only opt-in interface: identical recursive paths/kernels and streams,
+# without allocating the unused per-path/per-horizon R kernel lists.
+app_iqf_mq_batch_arrays <- function(adapter, draw_id, origin_id, inner_ids,
+    collect_coherence = TRUE, crossing_tolerance = 0, include_trace = FALSE) {
+  app_iqf_mqb_require(inherits(adapter, "app_iqf_mq_batch_adapter"), "an explicit MQ batch adapter is required")
+  app_iqf_mqb_require(is.numeric(inner_ids) && all(is.finite(inner_ids)) &&
+    all(inner_ids <= adapter$inner_paths), "batch path exceeds the declared task resolution")
+  out <- app_iqf_mqb_paths_context(adapter$batch_context, draw_id, origin_id, inner_ids,
+    include_trace = include_trace, include_paths = FALSE, collect_coherence = collect_coherence,
+    crossing_tolerance = crossing_tolerance)
+  out$numerical_adapter <- "opt_in_array_only_MQ_paths_v1"
+  out
 }
 
 # inner_paths is explicit so the compatible scalar $path interface never

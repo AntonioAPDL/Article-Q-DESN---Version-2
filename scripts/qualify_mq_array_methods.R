@@ -2,6 +2,24 @@
 # A new, genuine one-unit numerical experiment. No old purpose is executable
 # here; no raw fixture or raw design is deserialized, no model is fitted/scored.
 source("scripts/mq_array_qualification.R",local=TRUE)
+mqa_native_closure_files <- function()c("application/R/00_packages.R","application/R/joint_qvp_qdesn.R",
+  "application/R/latent_path_design.R","application/R/joint_qdesn_pure_recursive_campaign.R",
+  "application/R/joint_qdesn_recursive_mean_design.R","application/R/integrated_quantile_forecast.R",
+  "scripts/integrated_quantile_mq_batch.R","scripts/mq_forecast_array_methods.R",
+  "scripts/mq_independent_cdf_certificate.R","scripts/mq_streaming_cdf_certificate.R")
+mqa_load_native_closure <- function(root) {
+  # The unchanged native helpers use base exists() as a vapply callback. Its
+  # default lookup does not discover a separately sourced private namespace.
+  # Match the historical qualifier: one dedicated --vanilla R process and
+  # a source-verified global native namespace. Keep the archived batch private.
+  for(f in mqa_native_closure_files())source(file.path(root,f),local=.GlobalEnv)
+  needed<-c("app_joint_recursive_origin_snapshots","app_joint_recursive_feature_from_history",
+    "app_joint_recursive_readout_row","app_joint_recursive_predict_vector",
+    "app_iqf_mqc_init","app_iqf_mqc_update","app_iqf_mqc_validate")
+  mqa_require(all(vapply(needed,function(name)exists(name,envir=.GlobalEnv,mode="function",inherits=FALSE),logical(1L))),
+    "complete source-verified native bootstrap failed")
+  .GlobalEnv
+}
 mqa_main <- function(args=commandArgs(TRUE)) {
   if(identical(args,"--help")) {
     cat("Usage: Rscript --vanilla scripts/qualify_mq_array_methods.R --contract FILE --sha256 SHA --execute\n")
@@ -65,13 +83,7 @@ mqa_main <- function(args=commandArgs(TRUE)) {
   started <- proc.time()
   tryCatch({
     progress(phase)
-    env <- new.env(parent=.GlobalEnv)
-    files <- c("application/R/00_packages.R","application/R/joint_qvp_qdesn.R",
-      "application/R/latent_path_design.R","application/R/joint_qdesn_pure_recursive_campaign.R",
-      "application/R/joint_qdesn_recursive_mean_design.R","application/R/integrated_quantile_forecast.R",
-      "scripts/integrated_quantile_mq_batch.R","scripts/mq_forecast_array_methods.R",
-      "scripts/mq_independent_cdf_certificate.R","scripts/mq_streaming_cdf_certificate.R")
-    for(f in files)source(file.path(root,f),local=env)
+    env <- mqa_load_native_closure(root)
     env$app_set_repo_root(root)
     old <- new.env(parent=env)
     eval(parse(text=rawToChar(historical$old_batch_raw)),envir=old)

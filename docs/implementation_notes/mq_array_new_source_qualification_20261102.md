@@ -269,3 +269,36 @@ Final bounded guard-suite readback: **115 checks PASS**, 1.77 seconds elapsed,
 All four new R files parsed and `git diff --check` passed. Independent reviewers
 also inspected the math and isolation/source bridge; these are source checks,
 not an authentic numerical qualification receipt.
+
+## Native bootstrap repair after the first admitted attempt
+
+The first admitted qualification at source `b380b279626def03c5bfc99a524e0b21b4080e76`
+stopped before training or parity computation: the unchanged native adapter's
+`vapply(..., exists, ...)` availability check could not find helpers sourced
+only into the driver's private environment. Source-byte authentication had
+passed; namespace visibility is a separate requirement. The failed purpose
+and output remain retained and cannot be relabelled as a successful probe.
+
+The qualification driver now loads its same ten authenticated native source
+files into the dedicated `Rscript --vanilla` process's global environment,
+as the historical qualifier did. The authenticated historical batch still
+loads into its own child environment. Native adapter, reservoir, scalar,
+batch, array, RNG and preparation/reduction source bytes are unchanged.
+The accepted observed-prefix preparation therefore need not be repeated
+solely for this driver bootstrap repair; a new source freeze and qualification
+purpose are nevertheless required.
+
+The guard suite reproduces the original failure from a function context using
+the genuine small synthetic DESN fixture, then exercises the new loader,
+unchanged scalar adapter, authenticated historical batch Git blob and array
+adapter. Both native-scoped and R-4.6 first-step RNG modes must preserve the
+caller's exact RNG state and agree on recursive responses and quantile
+kernels. No authentic payload or qualification is executed by this regression.
+
+Bounded repair verification under R 4.6.0, `--vanilla`, logical CPU 27 and one
+numerical thread: the qualification guard suite passed **235 checks** in
+3.75 seconds (3.68 CPU seconds; 126,912 KiB maximum RSS); the unchanged batch
+reference suite passed **2,759 checks** in 3.61 seconds; and the array-method
+suite passed **616 checks** in 6.18 seconds. Each invocation had a native
+120-second timeout. These are synthetic regression receipts, not a successful
+authentic qualification or production admission.

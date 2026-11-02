@@ -28,14 +28,19 @@ def require(condition, message):
 
 
 def finite(value, name, *, positive=False):
-    require(type(value) in (int, float) and math.isfinite(value)
+    try:
+        valid = type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        valid = False
+    require(valid
             and (value > 0 if positive else value >= 0),
             name + " must be finite and " + ("positive" if positive else "nonnegative"))
     return value
 
 
 def integer(value, name):
-    require(type(value) is int and value > 0, name + " must be a positive integer")
+    require(type(value) is int and 0 < value <= 2**53-1,
+            name + " must be a positive exactly representable integer")
     return value
 
 
@@ -108,7 +113,9 @@ def assess(spec, now=None):
     require(all(labels) and len(labels) == len(set(labels)), "duplicate or empty strata")
     counts = {}
     for row in rows:
-        require(row["member_count"].isdigit() and int(row["member_count"]) > 0
+        require(row["member_count"].isascii() and row["member_count"].isdigit()
+                and len(row["member_count"]) <= 16
+                and 0 < int(row["member_count"]) <= 2**53-1
                 and row["adapter"] and row["empirical_measure"], "invalid native stratum")
         counts[row["stratum"]] = int(row["member_count"])
     require(sum(counts.values()) == integer(spec["expected_members"], "expected native members"),
@@ -156,9 +163,12 @@ def assess(spec, now=None):
     cpu = contingency*(sum(counts[k]*measured[k]["cpu"] for k in counts)
                        + finite(overhead["cpu_seconds"], "setup/scoring/transport/controller CPU"))
     wall_work = contingency*sum(counts[k]*measured[k]["wall"] for k in counts)
-    output = math.ceil(contingency*(sum(counts[k]*(measured[k]["artifact"]+measured[k]["logs"])
+    output_estimate = contingency*(sum(counts[k]*(measured[k]["artifact"]+measured[k]["logs"])
                                            for k in counts)
-                       + finite(overhead["retained_bytes"], "setup/scoring/transport retained bytes")))
+                       + finite(overhead["retained_bytes"], "setup/scoring/transport retained bytes"))
+    finite(cpu, "complete CPU estimate", positive=True)
+    finite(wall_work, "complete wall-work estimate", positive=True)
+    output = math.ceil(finite(output_estimate, "complete retained-byte estimate", positive=True))
     peak = max(x["rss"] for x in measured.values())*contingency
     budget = spec["budget"]
     require(cpu <= finite(budget["cpu_seconds"], "total CPU budget", positive=True),
@@ -222,7 +232,7 @@ def main(argv=None):
         spec = read_json(pinned({"path":str(path), "bytes":path.stat().st_size,
                                 "sha256":args.sha256}))
         result = assess(spec)
-    except (AdmissionError, KeyError, ValueError, TypeError, OSError) as error:
+    except (AdmissionError, KeyError, ValueError, TypeError, OSError, OverflowError) as error:
         print(json.dumps(dict(status="NOT_ADMITTED", reason=str(error),
                               allow_launch=False, allow_refit=False)))
         return 2

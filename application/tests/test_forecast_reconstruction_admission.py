@@ -115,6 +115,12 @@ class AdmissionTests(unittest.TestCase):
         data=copy.deepcopy(self.data);data["hosts"]*=2
         with self.assertRaises(gate.AdmissionError):self.assess(data)
 
+    def test_numeric_overflow_is_not_admission(self):
+        data=copy.deepcopy(self.data);data["contingency_multiplier"]=1e308
+        with self.assertRaises(gate.AdmissionError):self.assess(data)
+        data=copy.deepcopy(self.data);data["budget"]["cpu_seconds"]=10**1000
+        with self.assertRaises(gate.AdmissionError):self.assess(data)
+
     def test_every_benchmark_is_source_bound_and_measured(self):
         changes=[
             ("measurement_kind","extrapolated_from_single_unit"),

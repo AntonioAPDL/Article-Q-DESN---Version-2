@@ -160,11 +160,13 @@ by the coordinator, not this isolated source lane.
 
 No authentic qualification or computational speedup is established by this
 implementation. A10 compiled/vectorized optimization requires a separately
-profiled scalar-identical counterpart. IF01 still requires a fully source-,
-payload-, runtime- and resource-bound authentic qualification driver and
-representative AL/exAL/native-version/parameter checks. The H1--H30
-connector's synthetic tests do not satisfy those gates. No metadata-only
-CLI or source hash is substituted for an executed numerical qualification.
+profiled scalar-identical counterpart. The separately documented
+`qualify_ind_adapted_filter.R` provides a source-, input-, runtime- and
+resource-bound driver for one original AL training diagnostic. It has not
+been executed on authentic input. Representative AL/exAL/native-version/
+parameter and H1--H30 checks remain necessary for IF01; neither that one
+driver nor this connector's synthetic tests satisfy the full gate. No
+metadata-only CLI or source hash substitutes for numerical qualification.
 
 Full reconstruction remains blocked until these gates, the remaining
 Q--DESN/VB enrollment, historical prior/execution audit, complete production

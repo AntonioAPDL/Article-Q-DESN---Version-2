@@ -44,6 +44,28 @@ local({
   check(!mqa_metadata_equal(list(a=1),list(a=2)))
   check(!mqa_metadata_equal(setNames(list(1,2),c("x","x")),list(x=1)))
   bad<-spec;bad$extra<-setNames(list(1,2),c("duplicate","duplicate"));reject(mqa_scope(bad),"duplicate")
+  bridge_tmp<-tempfile("mq_synthetic_asset_bridge_");dir.create(bridge_tmp)
+  on.exit(unlink(bridge_tmp,recursive=TRUE),add=TRUE)
+  localized<-unit;recorded<-unit
+  for(role in names(unit$assets)) {
+    path<-file.path(bridge_tmp,role);writeLines(paste0("synthetic_",role),path)
+    localized$assets[[role]]<-pin(path);recorded$assets[[role]]<-pin(path)
+    recorded$assets[[role]]$path<-paste0("/recorded_original_host/",role)
+  }
+  bridge<-mqa_original_unit_bridge(localized,recorded)
+  check(all(vapply(bridge$assets,`[[`,logical(1L),"path_relocated"))&&
+    bridge$materialized_content_reverification_required&&!bridge$original_contract_rewritten)
+  reordered<-recorded[rev(seq_along(recorded))]
+  check(mqa_metadata_equal(bridge,mqa_original_unit_bridge(localized,reordered)))
+  bad<-localized;bad$origin_time<-11001L;reject(mqa_original_unit_bridge(bad,recorded))
+  bad<-localized;bad$assets$design$sha256<-strrep("b",64);reject(mqa_original_unit_bridge(bad,recorded),"size or SHA")
+  bad<-localized;bad$assets$fixture$size_bytes<-bad$assets$fixture$size_bytes+1;reject(mqa_original_unit_bridge(bad,recorded),"size or SHA")
+  bad<-localized;bad$assets$design<-bad$assets$fixture;reject(mqa_original_unit_bridge(bad,recorded),"size or SHA")
+  bad<-localized;bad$assets<-bad$assets[-1];reject(mqa_original_unit_bridge(bad,recorded),"six")
+  bad<-recorded;bad$assets$design$path<-"relative/design";reject(mqa_original_unit_bridge(localized,bad),"canonical")
+  bad<-localized;bad$assets$design$path<-file.path(bridge_tmp,".","design");reject(mqa_original_unit_bridge(bad,recorded),"canonical")
+  link_asset<-file.path(bridge_tmp,"linked_design");file.symlink(localized$assets$design$path,link_asset)
+  bad<-localized;bad$assets$design$path<-link_asset;reject(mqa_original_unit_bridge(bad,recorded),"symlink")
   for(key in c("allow_refit","allow_production","allow_scoring","allow_article","allow_raw_fixture_deserialization")) {
     bad<-spec;bad[[key]]<-TRUE;reject(mqa_scope(bad))
   }

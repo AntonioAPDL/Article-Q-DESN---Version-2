@@ -22,7 +22,7 @@ mqa_main <- function(args=commandArgs(TRUE)) {
   source_check <- mqa_source_guard(s,root)
   historical <- mqa_history_bridge(s,root)
   original <- jsonlite::read_json(mqa_pin(s$original_unit_contract,1024^2),simplifyVector=FALSE)
-  q(mqa_metadata_equal(s$original_unit,original),"exact immutable original unit including asset identities required")
+  asset_bridge<-mqa_original_unit_bridge(s$original_unit,original)
   metadata <- q2_metadata(s$original_unit) # Streaming hashes and parameter-only CSV metadata; never readRDS.
   q(!"exdqlm"%in%loadedNamespaces(),"installed engine substitution forbidden")
   # A missing authentic observed prefix is a hard gate, not metadata success.
@@ -215,6 +215,7 @@ mqa_main <- function(args=commandArgs(TRUE)) {
       source_manifest=s$source_manifest,source_files=s$source_files,source_inventory_sha256=mqa_hash(s$source_files),
       runtime=runtime,final_runtime=final_runtime,source_readback=final_source,
       original_unit_contract=s$original_unit_contract,original_unit=unit,original_row_mapping=o$mapping,
+      original_asset_path_bridge=asset_bridge,
       prepared_payload=s$prepared_payload,prepared_derivation=s$prepared_derivation,prepared_manifest=s$prepared_manifest,
       original_asset_bytes_stream_hashed=sum(metadata$size_bytes),raw_fixture_deserializations=0L,raw_design_deserializations=0L,
       historical_baseline_status=historical$historical_status,historical_old_failure_preserved=TRUE,

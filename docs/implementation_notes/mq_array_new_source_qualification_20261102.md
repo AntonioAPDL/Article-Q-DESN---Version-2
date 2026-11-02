@@ -117,6 +117,17 @@ bytes must remain unchanged except the explicitly reviewed batch helper. The
 new array helper, driver, preparer and guards are additional pinned sources.
 Checkout-path relocation of an otherwise byte-identical native manifest is
 allowed; historical identities and old output statuses are not rewritten.
+The original Q2 contract also records Jerez input locations, whereas the
+authenticated v1 experiment uses Muscat materializations of those six assets.
+`mqa_original_unit_bridge()` compares every nonasset unit field exactly and
+requires the same six roles, positive integer sizes and SHA-256 digests. Only
+absolute canonical path relocation is permitted; old-host paths need not exist
+locally, and every actual materialized path must be canonical/nonsymlink and
+rehash through `q2_metadata()` before a payload read. Both actors use that same
+gate. The old-to-materialized mapping is recorded in the derivation and final
+qualification receipt and checked before the reduced RDS is opened. Original
+contract bytes, targets, feature definitions, rows, clocks and thresholds are
+not rewritten, and a digest/size/role change is never a path bridge.
 The archived old batch is evaluated in an isolated environment over the
 unchanged native closure, allowing actual three-way scalar/old-batch/new-array
 path parity. Old success or REVIEW never becomes new-source qualification.

@@ -166,8 +166,14 @@ gsc_normal_rows <- function(rows,receipt,prepared_design_sha256) {
 gsc_raw_rows <- function(members) {
   q <- gsc_require
   q(is.data.frame(members)&&setequal(c("target_date","horizon","member","g_transformed"),names(members))&&
-    nrow(members)==1428L&&all(is.finite(members$g_transformed))&&
-    all(as.Date(members$target_date)==gsc_dates()[members$horizon])&&
+    nrow(members)==1428L&&is.numeric(members$g_transformed)&&all(is.finite(members$g_transformed))&&
+    is.numeric(members$horizon)&&all(is.finite(members$horizon))&&
+    all(members$horizon %in% 1:28)&&!anyNA(members$member)&&
+    all(nzchar(trimws(as.character(members$member)))),"finite integer horizons and nonempty original member identities required")
+  q(inherits(members$target_date,"Date")||is.character(members$target_date),"explicit target dates required")
+  dates <- as.Date(members$target_date,format="%Y-%m-%d")
+  q(!anyNA(dates)&&all(as.character(dates)==as.character(members$target_date))&&
+    all(dates==gsc_dates()[members$horizon])&&
     !anyDuplicated(paste(members$horizon,members$member)),"authentic 28-by-51 member grid required")
   q(all(table(members$horizon)==51L)&&setequal(unique(members$horizon),1:28)&&
     length(unique(members$member))==51L,"missing or changed ensemble member set")

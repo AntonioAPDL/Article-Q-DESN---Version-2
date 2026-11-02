@@ -120,8 +120,22 @@ rows <- gsc_assemble(quantiles,normal_rows,members)
 ok(nrow(rows)==1372L&&nrow(gsc_raw_rows(members))==196L)
 ok(all(gsc_crossings(rows)$adjacent_comparisons==168L)&&all(gsc_crossings(rows)$raw_crossing_pairs==0))
 reject(gsc_assemble(quantiles[-1L],normal_rows,members),"all quantile tasks")
-bad <- members[-1L,];reject(gsc_raw_rows(bad),"member grid")
+bad <- members[-1L,];reject(gsc_raw_rows(bad),"member identities")
 bad <- members;bad$member[1L] <- bad$member[29L];bad$horizon[1L] <- bad$horizon[29L]
+reject(gsc_raw_rows(bad),"member grid")
+for(member in c(NA_character_,"","  ")) {
+  bad <- members;bad$member[bad$member==members$member[1L]] <- member
+  reject(gsc_raw_rows(bad),"member identities")
+}
+for(horizon in c(NA_real_,Inf,0,29,1.5)) {
+  bad <- members;bad$horizon[1L] <- horizon
+  reject(gsc_raw_rows(bad),"integer horizons")
+}
+bad <- members;bad$horizon <- as.character(bad$horizon)
+reject(gsc_raw_rows(bad),"integer horizons")
+bad <- members;bad$target_date[1L] <- "2022-12-26 extra"
+reject(gsc_raw_rows(bad),"member grid")
+bad <- members;bad$target_date[1L] <- NA_character_
 reject(gsc_raw_rows(bad),"member grid")
 bad <- rows;bad$tau[1L] <- .1;reject(gsc_validate_grid(bad),"forecast key")
 bad <- rows;bad$target_date[1L] <- "2022-12-25";reject(gsc_validate_grid(bad),"dates")

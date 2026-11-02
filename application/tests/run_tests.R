@@ -287,5 +287,8 @@ run_standalone_glofas_test("application/tests/test_ind_guided_qualification_guar
 run_standalone_glofas_test("application/tests/test_integrated_quantile_mq_batch.R")
 run_standalone_glofas_test("application/tests/test_mq_independent_cdf_certificate.R")
 run_standalone_glofas_test("application/tests/test_mq_batch_qualification_guards.R")
+run_standalone_glofas_test("application/tests/test_mq_streaming_cdf_certificate.R")
+run_standalone_glofas_test("application/tests/test_mq_precision_extension_guards.R")
+run_standalone_glofas_test("application/tests/test_ind_native_parameter_catalog.R")
 
 cat("Application tests completed.\n")

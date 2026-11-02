@@ -157,3 +157,87 @@ requires authentic complete draw maps, separately qualified filtering and
 future integration, representative full-inventory cost and fresh host grants.
 No new parameter fit, partial-result promotion or manuscript publication is
 implied by a passing code or numerical-unit test.
+
+## First authentic qualification results
+
+At source `a099aba928e6d1fb01931a4b12466125bbb2bc64`, the registered
+repository suite passed in 563.08 wall seconds (508.89 CPU seconds), including
+3,181 new checks. One pre-existing optional external-engine adapter was
+skipped. These are software checks, not scientific campaign completion.
+
+The authentic IND probe completed all six particle calculations in 809.33
+CPU seconds. Guidance reduced resampling to 30--42 of 500 observations,
+compared with approximately 430--471 under the earlier bootstrap proposal.
+However, only 13 of 27 prespecified resolution agreements passed. The probe
+therefore remains REVIEW; high median ESS does not certify filter accuracy.
+
+The authentic MQ probe compared 122,880 recursive responses, 860,160
+conditional-kernel values and 210 integrated quantiles with the unchanged
+scalar reference. Every difference was exactly zero. Training wall time fell
+from 97.416 to 15.809 seconds, a 6.162-fold speedup. Of 210 requirements,
+122 split diagnostics and 128 independent-CDF certificates passed. All
+validation mean brackets contained their target probability, but the
+confidence bounds were too wide for some endpoints. This is REVIEW, not a
+waiver or a basis for publishing results.
+
+The private packets retain all original matrices, streams, checks, resource
+charges and hash inventories. No unsuccessful evidence is replaced by a
+later calculation. The manuscript and its reported results are unchanged.
+
+## Prospective precision extension
+
+A separate opt-in purpose increases training integration to 65,536 paths.
+Its candidate quantiles and .01 absolute-OR-relative tolerance endpoints
+are fixed before generating new validation paths. The training split
+criterion remains .005 absolute OR relative; failure stops the purpose
+before validation rather than spending more computation on an ineligible
+candidate.
+
+Validation uses fresh path IDs 65,537--327,680, with only three allowed
+looks at 65,536, 131,072 and 262,144 validation paths. Each look receives
+failure probability .05/3. Applying the endpoint/side union within each
+look and then the finite union across looks controls the declared .05
+error probability, conditional on the training candidates and fixed
+draw/origin. Optional inspection at unlisted sample sizes is not allowed.
+The candidate is not moved in response to validation outcomes.
+
+Validation retains Welford counts, means and second central moments,
+per-block data and path-ID hashes, and the frozen contracts and all
+look-level bounds. It does not retain a new full validation matrix. This
+prospective storage policy is explicit; old validation matrices remain
+retained. Streaming moments reproduce the same sample variance used by
+the fixed-sample bound. Neither this variance calculation nor its hash
+chain authenticates the source or establishes iid sampling on its own;
+the source-bound qualification separately verifies the generation procedure.
+
+The extension inherits the authenticated 4,096-path scalar/batch parity
+receipt, rechecks all its artifact hashes and unchanged executable-source
+pins, and adds predetermined scalar checks at larger path IDs. It has its
+own finite CPU, wall, memory, storage and lifetime contract. A failed split,
+parity check, source pin, resource limit or final certificate remains a
+failure or REVIEW, with no automatic budget renewal or production dispatch.
+
+## Native independent-study parameter catalog
+
+The retained dynamic-model inventory contains 54 chain-specific fits:
+27 AL fits from source C72/version 1.0.0 and 27 exAL fits from source
+7ace/version 1.1.1. Each fit retains 20,000 native post-burn parameter
+columns. The legacy 4,000 metric-draw labels instead identify generated
+metric summaries; they do not establish a map to native MCMC columns.
+
+An explicit enrollment reads one protected fit at a time, authenticates its
+full payload, native source and retained model specification, and validates
+the observed response prefix, state/auxiliary axes, support and pairing.
+The catalog records original columns and iterations without thinning,
+namespace replacement or parameter re-estimation. Three equal-sized chains
+give 60,000 equally weighted native static draws per model cell, with weight
+1/60,000. This is the empirical training-parameter measure supplied to later
+reconstruction; catalog validation does not certify the historical posterior
+target or the accuracy of a subsequent conditional filter.
+
+The historical `old_realization_reproduced` flag concerns agreement between
+old and replayed metric calculations. It is not a test of whether two models
+use the same simulated series. Source checks separately establish the
+observed/evaluation series identity, and enrollment rechecks the actual
+500-observation fitting prefix and its transformations. The original flag
+and its narrower meaning remain recorded rather than discarded.

@@ -126,6 +126,13 @@ hashed only. The sole scientific RDS read is the existing 13,728-byte,
 500-observation truth-free input. Historical failed artifacts are rehashed,
 not deserialized or altered.
 
+The coordinator's combined-source review strengthened this native-prefix
+check to elementwise absolute-plus-relative `1e-10` comparisons at every
+numeric leaf, with exact structure/attributes and metadata. It does not use
+an aggregate `all.equal` discrepancy that could obscure an isolated mismatch.
+The default scalar algorithm and the Monte Carlo agreement tolerances are
+unchanged.
+
 Each actor retains its supplied stream, both complete filter artifacts,
 18 H=1 quantile rows, nine within-seed comparisons, runtime inventories and
 source/progress/terminal evidence. `ind_hq_comparisons()` combines the two

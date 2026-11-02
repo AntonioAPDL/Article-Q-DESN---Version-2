@@ -123,10 +123,11 @@ ind_hq_main <- function(args=commandArgs(TRUE)) {
   tiny_G<-if(is.matrix(input$GG))input$GG else input$GG[,,1:8,drop=FALSE]
   scalar<-ind_aaf_continue(initial,input$y[1:8],input$FF[,1:8,drop=FALSE],tiny_G,small_u,1:8,8L)
   batch<-ind_baf_continue(initial,input$y[1:8],input$FF[,1:8,drop=FALSE],tiny_G,small_u,1:8,8L)
-  q(isTRUE(all.equal(scalar,batch,tolerance=1e-10,check.attributes=TRUE))&&
+  q(isTRUE(ind_hq_arithmetic_parity(scalar,batch))&&
    identical(lapply(scalar$diagnostics,`[[`,"ancestor_indices"),lapply(batch$diagnostics,`[[`,"ancestor_indices"))&&
    identical(.Random.seed,after_rng),"native-prefix scalar/batch parity or RNG failed")
   write_json(list(status="PASS_NATIVE_PREFIX_ARITHMETIC_PARITY_ONLY",particles=64L,observations=8L,
+   comparison_policy="elementwise_all_numeric_leaves_structure_exact",
    absolute_plus_relative_parity_tolerance=1e-10,ancestry_exact=TRUE,caller_RNG_unchanged=TRUE,
    numerical_accuracy_certified=FALSE,production_authorized=FALSE),"native_prefix_parity.json")
   rm(scalar,batch,small_u);gc(FALSE)

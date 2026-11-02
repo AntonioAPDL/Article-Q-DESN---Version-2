@@ -6,6 +6,28 @@ ind_hq_require <- function(ok,why) {
  if(!isTRUE(ok))stop(paste0("IND high-resolution diagnostic: ",why),call.=FALSE)
  invisible(TRUE)
 }
+ind_hq_arithmetic_parity <- function(reference,candidate) {
+ # Check every numeric leaf, not all.equal's aggregate numerical discrepancy.
+ # This establishes arithmetic agreement only; each filter separately checks
+ # valid states. Nonfinite metadata, if present, must agree exactly.
+ q<-ind_hq_require
+ walk<-function(a,b,path) {
+  q(identical(attributes(a),attributes(b)),paste("arithmetic structure changed",path))
+  if(is.numeric(a)&&is.numeric(b)) {
+   q(length(a)==length(b)&&identical(is.finite(a),is.finite(b)),paste("arithmetic geometry changed",path))
+   at<-is.finite(a)
+   q(identical(as.double(a[!at]),as.double(b[!at])),paste("nonfinite arithmetic metadata changed",path))
+   q(all(abs(a[at]-b[at])<=1e-10+1e-10*pmax(abs(a[at]),abs(b[at]))),
+    paste("elementwise arithmetic tolerance exceeded",path))
+  } else if(is.list(a)&&is.list(b)) {
+   q(length(a)==length(b)&&identical(names(a),names(b)),paste("arithmetic fields changed",path))
+   for(i in seq_along(a))walk(a[[i]],b[[i]],paste0(path,"/",i))
+  } else q(identical(a,b),paste("arithmetic metadata changed",path))
+  invisible(TRUE)
+ }
+ walk(reference,candidate,"filter")
+ invisible(TRUE)
+}
 ind_hq_scope <- function(s) {
  q<-ind_hq_require
  eq<-function(x,y)is.numeric(unlist(x))&&identical(as.numeric(unlist(x)),as.numeric(y))

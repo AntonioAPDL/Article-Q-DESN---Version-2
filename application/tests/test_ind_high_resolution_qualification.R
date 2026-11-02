@@ -5,6 +5,28 @@ reject<-function(expr) {
  e<-tryCatch({force(expr);NULL},error=identity)
  check(inherits(e,"error"))
 }
+toy<-list(mean=c(0,1),covariance=diag(2),checkpoints=list("8"=list(weights=c(.25,.75))),
+ ancestry=1:2,scope="arithmetic_only")
+check(ind_hq_arithmetic_parity(toy,toy))
+near<-toy;near$mean[2]<-near$mean[2]+1e-12;check(ind_hq_arithmetic_parity(toy,near))
+bad<-toy;bad$mean[2]<-bad$mean[2]+1e-5;reject(ind_hq_arithmetic_parity(toy,bad))
+bad<-toy;bad$covariance[2,1]<-1e-5;reject(ind_hq_arithmetic_parity(toy,bad))
+bad<-toy;bad$checkpoints[[1]]$weights[1]<-.3;reject(ind_hq_arithmetic_parity(toy,bad))
+bad<-toy;bad$ancestry<-2:1;reject(ind_hq_arithmetic_parity(toy,bad))
+bad<-toy;names(bad$mean)<-c("a","b");reject(ind_hq_arithmetic_parity(toy,bad))
+bad<-toy;bad$extra<-TRUE;reject(ind_hq_arithmetic_parity(toy,bad))
+check(ind_hq_arithmetic_parity(list(value=c(Inf,-Inf,NA_real_)),list(value=c(Inf,-Inf,NA_real_))))
+reject(ind_hq_arithmetic_parity(list(value=Inf),list(value=-Inf)))
+# Exercise the same recursive comparator over actual generated filter objects.
+nu<-list(proposal=array(seq(.01,.99,length.out=16L*3L*4L),c(16L,3L,4L)),
+ ancestor=rep(.5,3L),residual_resampling=rep(.5,3L))
+st<-ind_aaf_initialize(c(0,0),diag(2),diag(rep(.2,2)),
+ list(family="al",p=.05,sigma=.7,gamma=0),16L,"generated_native_prefix_parity")
+ref<-ind_aaf_continue(st,c(1,-4,2),matrix(rep(c(1,0),3L),2L),diag(2),nu,1:3,c(1L,3L))
+bat<-ind_baf_continue(st,c(1,-4,2),matrix(rep(c(1,0),3L),2L),diag(2),nu,1:3,c(1L,3L))
+check(ind_hq_arithmetic_parity(ref,bat))
+bad<-bat;bad$checkpoints[["3"]]$covariance[1,1,1]<-bad$checkpoints[["3"]]$covariance[1,1,1]+1e-5
+reject(ind_hq_arithmetic_parity(ref,bad))
 pin<-function(sha,n=0)list(path="/not-an-authentic-input",size_bytes=n,sha256=sha)
 s<-list(schema_version="ind_high_resolution_AL_filter_contract_v1",
  purpose="ONE_PREDECLARED_SEED_TWO_HIGHER_RESOLUTIONS_NO_REFIT",allow_diagnostic=TRUE,

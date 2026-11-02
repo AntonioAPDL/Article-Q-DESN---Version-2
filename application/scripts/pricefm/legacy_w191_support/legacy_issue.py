@@ -15,6 +15,7 @@ ROLE='ZERO_UPDATE_BRIDGE'
 PHASES=['issue','cache','finalize','driver']
 SETUP=dict(issue_original_H8=8,blind_hash_original_H8=8,finalize_original_H4=4,stage_authority_SELF2=2)
 READSET={}
+SOURCE_CONTEXT={'path': '/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/source/SOURCE_CONTEXT.json', 'sha256': '9ff26b6e81d0859202e7a3cf251e1f8a4a488238907202062c8d9cdc08870570'}
 
 def require(value,message):
     if not value:raise ValueError(message)
@@ -78,6 +79,7 @@ def support(r):
     require(re.fullmatch('[0-9a-f]{40}',pub.get('commit','')) and pub.get('remote_readback')==pub['commit'] and type(pub.get('branch')) is str and pub['branch'] not in {'main','master','origin/main'},'feature branch exact remote readback')
     for key in ('issuer_source','cache_helper_source','scheduler_verifier'):
         item=r[key];require(pin(item['path'])==item and pub['source_files'].get(Path(item['path']).name)==item['sha256'],'exact published support source '+key)
+    require(review.get('source_context')==pub.get('source_context')==SOURCE_CONTEXT,'immutable reviewed source context is not calendar permission')
     require(r['issuer_source']==pin(Path(__file__).absolute()),'actual executing issuer identity')
     require(Path(r['cache_helper_source']['path']).parent==Path(__file__).absolute().parent,'unchanged cache sibling imports this exact reviewed issuer')
     expected_unchanged={'legacy_cache.py':'e428946364048f35acc80451d68bd762557e610649759f6a983a6d8f08003ba7','legacy_tail.py':'204d4ce1d9a8cdea62ab5d9ff9d5f74f1dba3654e38c2d5a3560bd6ad061e253','legacy_tail_peer.py':'68675fd80f9e1b68017f581013d71b65aec9ac92e1c26cd38422d6f6a4803f44','legacy_failed_return_peer.py':'d9a10bf292c726a59cf0eb5bbbd6af23b76a311fcfb463d3db7e53f6c35f7624'}
@@ -105,11 +107,12 @@ def checked(request_pin,now=None,require_absent=False):
     require(authority.get('status')=='ROOT_AUTHORIZED_REVIEWED_LEGACY_NODE13_ISSUER'
         and authority.get('request_body_sha256')==hashlib.sha256(canonical(request_body(r))).hexdigest()
         and authority.get('phases')==PHASES and type(authority.get('maximum_calls_each')) is int and authority['maximum_calls_each']==1,'exact ROOT body, phases and one-shot calls')
-    for key in ('phase_scope','new_root','ledger_after_output','support_review','support_publication','issuer_source','cache_helper_source'):
+    for key in ('phase_scope','new_root','ledger_after_output','support_review','support_publication','issuer_source','cache_helper_source','calendar_authority','user_request'):
         require(authority.get(key)==r[key],'ROOT authority binding '+key)
     require(phase['issued_epoch']<=authority['issued_epoch']<=now<authority['expires_epoch']<=phase['expires_epoch'],'current authority inside new fixed purpose')
     verifier=module(r['scheduler_verifier']['path'],r['scheduler_verifier']['sha256'],'reviewed_legacy_production_scheduler')
-    verifier.validate_phase(r['phase_scope'],parent)
+    verifier.validate_phase(r['phase_scope'],parent,now=now)
+    require(r.get('calendar_authority')==phase['calendar_authority'] and r.get('user_request')==phase['user_request'],'exact current genuine user request and separately issued calendar')
     require(r['phase_scope']!=verifier.LEGACY_PHASE,'closed original528 cannot issue a new runtime')
     require(phase['runtime_purpose']==r['purpose'] and all(phase[k]==r[k] for k in ('new_root','remote_namespace','known_jobs_registry','namespace_registry')),'exact reassessment issuer purpose/root/namespace/registries')
     admitted=verifier.verify_root_admission(r['native_admission'],now=now)

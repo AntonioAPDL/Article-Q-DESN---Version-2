@@ -56,6 +56,25 @@ for(bad in list(c("timeout","1799s","Rscript"),
   c("timeout","--signal=TERM","--kill-after=1s","1799s","--foreground")))
   aq_reject(ind_aq_timeout_argv(bad),"exact native timeout")
 
+# Default GNU timeout creates its own process group, not necessarily a new
+# session. A setsid/setpgid payload must not evade its TERM/KILL group.
+proc_stat <- function(pid,ppid,pgid,sid,comm="R")
+  sprintf("%d (%s) S %d %d %d 0 0 0 0",pid,comm,ppid,pgid,sid)
+timeout_stat <- proc_stat(200L,100L,200L,90L,"timeout")
+self_stat <- proc_stat(201L,200L,200L,90L,"R ) with embedded ) name")
+proof <- ind_aq_process_group_proof(self_stat,timeout_stat)
+aq_check(identical(proof$payload_pid,201L)&&identical(proof$timeout_pid,200L)&&
+  isTRUE(proof$timeout_process_group_leader)&&isTRUE(proof$payload_same_timeout_group_and_session))
+aq_check(identical(ind_aq_proc_stat(self_stat),list(pid=201L,ppid=200L,pgid=200L,sid=90L)))
+aq_reject(ind_aq_process_group_proof(proc_stat(201L,200L,201L,90L),timeout_stat),"process group and session")
+aq_reject(ind_aq_process_group_proof(proc_stat(201L,200L,200L,201L),timeout_stat),"process group and session")
+aq_reject(ind_aq_process_group_proof(proc_stat(201L,200L,201L,201L),timeout_stat),"process group and session")
+aq_reject(ind_aq_process_group_proof(self_stat,proc_stat(200L,100L,100L,90L)),"lead its controlled process group")
+aq_reject(ind_aq_process_group_proof(timeout_stat,timeout_stat),"process group and session")
+for(bad in c("not a stat record","201 (R) S 200 200","201 (R) S 200 0 90",
+  "0 (R) S 200 200 90","201 (R) S 200 200 0","2147483648 (R) S 200 200 90"))
+  aq_reject(ind_aq_proc_stat(bad))
+
 runtime <- data.frame(path=c("/runtime/a","/runtime/b"),size_bytes=c(1,2),
   sha256=c(paste(rep("a",64),collapse=""),paste(rep("b",64),collapse="")))
 aq_check(isTRUE(ind_aq_runtime_match(runtime,runtime)))

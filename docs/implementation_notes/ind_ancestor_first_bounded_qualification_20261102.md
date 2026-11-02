@@ -96,7 +96,8 @@ The CSV `runtime_manifest` has exactly `path,size_bytes,sha256`, sorted by
 canonical path. `ind_aq_runtime_inventory()` produces its metadata from
 all installed files in base/compiler/datasets/graphics/grDevices/methods/
 stats/utils/tools/digest/jsonlite, all mapped runtime file paths, the actual
-R interpreter, Rscript and Git. Duplicate canonical paths are collapsed.
+R interpreter, Rscript, Git and the native timeout executable. Duplicate
+canonical paths are collapsed.
 The actual inventory is independently rebuilt and compared before and after
 the numerical phase. It is a source/runtime metadata preparation helper,
 not a model qualification or source of scientific draws. The parent must
@@ -114,7 +115,11 @@ The prospective contract price is 1800 CPU seconds, native timeout TERM at
 total packet budget. CPU26 and its SMT sibling require fresh ownership
 review. These limits are checked from actual OS limits and the actual
 `/usr/bin/timeout` ancestor. That ancestor must itself be confined to CPU26;
-the single-CPU wall boundary bounds aggregate payload-process CPU even
+its process-group identifier must equal its PID, and the R payload must
+remain in that same process group and session. The receipt records both
+process identities. An intervening `setsid` or a separate payload process
+group is rejected; the default timeout must not use `--foreground`.
+The single-CPU wall boundary bounds aggregate payload-process CPU even
 when child utilities run. External supervisor preparation and final resource
 accounting remain separately required.
 
@@ -151,6 +156,7 @@ even when adapted child weights are uniform.
 The source-only test
 `application/tests/test_ind_adapted_qualification_guards.R` checks scope,
 fixed hashes/geometry, runtime metadata equality, exact timeout arguments,
+process-group/session identity and escaped-process rejection,
 truth-free input schemas, constant F/G, source/scale compatibility and early
 negative admission without authentic inputs or scientific execution.
 It is not the genuine numerical purpose described above.

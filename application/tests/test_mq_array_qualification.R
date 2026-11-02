@@ -229,5 +229,68 @@ local({
   reject(mqa_source_guard(gs,tmp,FALSE),"clean exact")
   p<-file.path(tmp,"pin_fixture");writeLines("pin",p);pp<-pin(p);check(identical(mqa_pin(pp),p))
   link<-file.path(tmp,"pin_link");file.symlink(p,link);bad<-pp;bad$path<-link;reject(mqa_pin(bad),"symlink")
+
+  # Exercise the actual driver namespace from a function, not a helper stub.
+  # The old private bootstrap must fail even in a suite that already loaded
+  # native helpers globally; restore the four temporarily removed bindings.
+  local({
+    needed<-c("app_joint_recursive_origin_snapshots","app_joint_recursive_feature_from_history",
+      "app_joint_recursive_readout_row","app_joint_recursive_predict_vector")
+    had<-vapply(needed,exists,logical(1L),envir=.GlobalEnv,inherits=FALSE)
+    saved<-lapply(needed[had],get,envir=.GlobalEnv,inherits=FALSE);names(saved)<-needed[had]
+    rng_before<-mqa_rng()
+    on.exit({
+      for(name in needed)if(exists(name,.GlobalEnv,inherits=FALSE))rm(list=name,envir=.GlobalEnv)
+      for(name in names(saved))assign(name,saved[[name]],.GlobalEnv)
+      do.call(RNGkind,as.list(rng_before$kind))
+      if(rng_before$present)assign(".Random.seed",rng_before$seed,.GlobalEnv)
+      else if(exists(".Random.seed",.GlobalEnv,inherits=FALSE))rm(".Random.seed",envir=.GlobalEnv)
+    },add=TRUE)
+    for(name in needed[had])rm(list=name,envir=.GlobalEnv)
+    root<-normalizePath(getwd(),mustWork=TRUE);private<-new.env(parent=.GlobalEnv)
+    for(file in mqa_native_closure_files())source(file.path(root,file),local=private)
+    check(all(vapply(needed,exists,logical(1L),envir=private,inherits=FALSE)))
+    # Evaluate only the real tiny-fixture function definition, never the large
+    # batch suite or an authentic fixture/design/posterior archive.
+    ast<-parse(file="application/tests/test_integrated_quantile_mq_batch.R")
+    fixture_index<-which(vapply(ast,function(e)is.call(e)&&identical(e[[1L]],as.name("<-"))&&
+      identical(e[[2L]],as.name("mqb_fixture")),logical(1L)))
+    check(length(fixture_index)==1L)
+    private$mqb_tau<-unit$tau;private$mqb_hash<-sha()
+    eval(ast[[fixture_index]],envir=private);f<-private$mqb_fixture()
+    reject((function()do.call(private$app_iqf_desn_adapter,c(f,list(family="mq_grid"))))(),
+      "Authenticated native recursive DESN helpers must be loaded.")
+    env<-(function()mqa_load_native_closure(root))();check(identical(env,.GlobalEnv))
+    check(all(vapply(needed,function(name)identical(environment(get(name,env)),.GlobalEnv),logical(1L))))
+    env$app_set_repo_root(root)
+    scalar<-(function()do.call(env$app_iqf_desn_adapter,c(f,list(family="mq_grid"))))()
+    old_raw<-mqa_git_blob(root,"a099aba928e6d1fb01931a4b12466125bbb2bc64","scripts/integrated_quantile_mq_batch.R")
+    check(identical(digest::digest(old_raw,algo="sha256",serialize=FALSE),
+      "f87fa0deefedd0fc155645bc5977625798b7065512a429b58f536e2875387698"))
+    old<-new.env(parent=env);eval(parse(text=rawToChar(old_raw)),envir=old)
+    check(identical(parent.env(old),.GlobalEnv)&&!identical(old,.GlobalEnv))
+    rng_after_bootstrap<-mqa_rng()
+    for(mode in c("native_scoped","r46_first_step_qualified")) {
+      arguments<-c(f,list(inner_paths=3L,batch_size=2L,rng_mode=mode,
+        rng_proof=if(mode=="native_scoped")NULL else env$app_iqf_mqb_rng_reference()))
+      batch<-(function()do.call(env$app_iqf_mq_batch_adapter,arguments))()
+      legacy<-(function()do.call(old$app_iqf_mq_batch_adapter,arguments))()
+      ids<-c(1L,3L);draw<-f$posterior$draw_ids[1L];origin<-"o8"
+      arrays<-env$app_iqf_mq_batch_arrays(batch,draw,origin,ids,include_trace=TRUE)
+      previous<-old$app_iqf_mq_batch_paths(legacy,draw,origin,ids,include_trace=TRUE)
+      close<-function(a,b)check(isTRUE(all.equal(a,b,tolerance=1e-11,check.attributes=FALSE)))
+      check(is.null(arrays$paths)&&!arrays$production_authorized&&!arrays$numerical_accuracy_qualified)
+      check(env$app_iqf_mqc_validate(arrays$raw_coherence))
+      close(arrays$response,previous$response);close(arrays$ordered_quantiles,previous$ordered_quantiles)
+      for(h in 1:5)for(key in c("raw","scaled","readout","raw_quantiles","ordered_quantiles","uniform"))
+        close(arrays$trace[[h]][[key]],previous$trace[[h]][[key]])
+      for(i in seq_along(ids)) {
+        reference<-scalar$path(draw,origin,ids[i]);close(reference$response,arrays$response[i,])
+        for(h in 1:5)close(reference$kernels[[h]]$q,arrays$ordered_quantiles[i,,h])
+      }
+      check(identical(mqa_rng(),rng_after_bootstrap))
+    }
+    check(identical(mqa_rng(),rng_before))
+  })
   cat(sprintf("MQ_ARRAY_QUALIFICATION_GUARD_CHECKS=%d PASS; synthetic_only=TRUE authentic_reads=0 qualification_executions=0\n",n))
 })

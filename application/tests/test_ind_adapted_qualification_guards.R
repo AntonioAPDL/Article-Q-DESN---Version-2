@@ -78,6 +78,11 @@ for(bad in c("not a stat record","201 (R) S 200 200","201 (R) S 200 0 90",
 runtime <- data.frame(path=c("/runtime/a","/runtime/b"),size_bytes=c(1,2),
   sha256=c(paste(rep("a",64),collapse=""),paste(rep("b",64),collapse="")))
 aq_check(isTRUE(ind_aq_runtime_match(runtime,runtime)))
+initialized <- ind_aq_initialize_numerical_runtime()
+aq_check(identical(initialized$schema_version,"ind_deterministic_numerical_runtime_initialization_v1")&&
+  isTRUE(initialized$before_first_runtime_pin_match)&&initialized$random_draws==0L&&initialized$study_inputs_read==0L)
+aq_check(identical(initialized$routines,c("chol","eigen","solve","svd"))&&
+  identical(initialized$native_lapack_module,file.path(R.home(),"modules","lapack.so")))
 aq_check(isTRUE(ind_aq_strict_mappings_present(runtime$path,c(TRUE,TRUE),c(FALSE,FALSE))))
 aq_reject(ind_aq_strict_mappings_present(runtime$path,c(TRUE,FALSE),c(FALSE,NA)),"strict mapped file")
 aq_reject(ind_aq_strict_mappings_present(runtime$path,c(TRUE,TRUE),c(FALSE,TRUE)),"strict mapped file")

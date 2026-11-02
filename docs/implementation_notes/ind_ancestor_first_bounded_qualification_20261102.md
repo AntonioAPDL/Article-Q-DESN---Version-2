@@ -99,12 +99,20 @@ all installed files in base/compiler/datasets/graphics/grDevices/methods/
 stats/utils/tools/digest/jsonlite, all strictly classified mapped file paths, the actual
 R interpreter, Rscript, Git and the native timeout executable. Duplicate
 canonical paths are collapsed.
+The inventory first executes deterministic 2-by-2 Cholesky, symmetric
+eigendecomposition, inversion and singular-value calculations. This loads
+native lazy numerical modules before the first pin comparison without
+reading study inputs or drawing random numbers. In particular, `lapack.so`
+must then appear as a strict mapped software file; it is never exempted.
 Every strict mapped path must exist and be nondirectory before ordinary
 inventory filtering; a disappeared or replaced mapping cannot be omitted.
 The actual inventory is independently rebuilt and compared before and after
 the numerical phase. It is a source/runtime metadata preparation helper,
 not a model qualification or source of scientific draws. The parent must
 create and review this manifest under its own bounded preparation scope.
+The qualifier retains its actual initial and final strict CSV inventories.
+The final inventory is serialized before strict comparison so a failure
+retains the precise observed paths and hashes rather than only an error.
 
 The exact nonexecuting Muscat SSSD identity-cache mappings are separately
 classified by `runtime_identity_cache_observations.R`; see
@@ -120,6 +128,18 @@ observation record. Mutable cache equality is not required; software,
 mandatory. Unknown SSSD paths, executable or owner/type masquerades fail.
 The original source-45e3 preflight failure remains untouched and is not a
 filter or quantile-accuracy result. A new source/purpose is required.
+
+A later attempt at source `b380b279626def03c5bfc99a524e0b21b4080e76`
+completed all six numerical filters but failed its final strict runtime
+comparison. The original exit-one evidence remains unaccepted. A separately
+bounded generated-data diagnostic identified one newly mapped software file,
+native `modules/lapack.so` (SHA-256
+`b982318919395dc1ec8745b2990296b95c6511bdc3ba9fd47c5306303eed7da8`),
+after the deterministic linear algebra calls; no other path or software hash
+changed, and a tiny synthetic AL filter added no further mapping. This
+motivates the initialization above, not relaxed software-byte checks.
+The retained CSVs independently give 20/27 descriptive agreements, still
+REVIEW, and are not a complete filter-accuracy or execution qualification.
 
 The process must be native Muscat R 4.6.0 launched with `--vanilla`, bundled
 R BLAS, exactly one core library path, explicit `R_LIBS_USER=/dev/null` and

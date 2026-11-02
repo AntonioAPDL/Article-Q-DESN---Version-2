@@ -16,6 +16,20 @@ ROLE='ZERO_UPDATE_BRIDGE'
 DATE_FORMAT='+%Y-%m-%dT%H:%M:%SZ|%s|%z|%Z'
 SLURM_FORMAT='SLURM_TIME_FORMAT=%Y-%m-%dT%H:%M:%S%z'
 ROLE_SECONDS=7200;RESERVE_SECONDS=3600
+# One reviewed current reassessment profile, never a general budget override.
+REASSESSMENT_SCHEMA='legacy_node13_reassessment_phase_v1'
+REASSESSMENT_STATUS='PROSPECTIVE_FRESH_LEGACY_NODE13_REASSESSMENT_ONLY_NO_RUNTIME'
+REASSESSMENT_PROFILE='LEGACY_NODE13_REASSESSMENT64_V1'
+REASSESSMENT_ALLOCATIONS={k:8 for k in ('initial_native_local_H8','initial_native_remote_uncertainty8','binding_registry_preparation8','independent_binding_review8','ROOT_admission_and_issuer_request8','metadata_mirror8','terminal_decision_closeout8','independent_final_reassessment_review8')}
+HOME=Path('/home/jaguir26/.local/state/pricefm/r180_native_4503eef91eaa')
+SOURCE_PREPARATION_SCOPE={'path': '/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/SCOPE.json', 'sha256': '7b42acedef5fa1e92bd64f8a7a44b6c651b295ecb53b5313150ba4fd2e66ad9a'}
+SOURCE_PREPARATION_LEDGER={'path': '/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/SCOPE_LEDGER_01.json', 'sha256': 'c3e02e15b8b504a74f577f8a8a6f46693db8e46d8ae8526001fd329e16f649c8'}
+CLOSED_INITIAL={'path': '/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/capture_transport_repair_20261101_1510PST/runtime/INELIGIBILITY_ANALYSIS.json', 'sha256': '1625f16027286767360e6a59491e7daa7d0a5c8c1e198e3ef67c1faa0578b9e4'}
+LEGACY_PHASE={'path': '/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/SCOPE.json', 'sha256': '81073ab1ae24d3cf30a1c71548d60f39e8267844d2661a075eebdb01395e7312'}
+KNOWN_JOB_IDS=frozenset(['873499', '873711', '873834', '887283', '887286', '887338', '887347', '887360', '887381', '887432', '887723', '887761', '887840', '887885', '887950', '888523', '888843'])
+KNOWN_JOB_NAMES={'873499': 'r164-profile-feb3840ef66e59cda675336196e1a12d', '873711': 'r174-inventory-a4844682edc1b5ee6e65', '873834': 'r174-inventory-a02bbd5f3c5ba333bc16', '887283': 'r174-inventory-5955c702c0ebf2e1752b', '887286': 'r174-R46-0cc08e4fc44b5fa73efe', '887338': 'r180-R46-d62dcd3b4e19f71fe4f1', '887347': 'r181-namespace-3c65377284900c7d54a0', '887360': 'r181-namespace-41173e6a0e8df65aa2ee', '887381': 'r181-namespace-63774610a4ebda9b986e', '887432': 'r181-boundary-1e9f1d3fe9b9bd43e779', '887723': 'r182-toy-7957f41cf7f198b8b124', '887761': 'r182-toy-4b113db93866d08a7187', '887840': 'r182-toy-3470fdf589da22b3ee6d', '887885': 'r182-bridge-68d51d4a2779186d0bf0', '887950': 'r182-bridge-972837bf9c6439842fff', '888523': 'r182-bridge-fda75d3f0e8304008115', '888843': 'r174-inventory-f6262f60cf3f4f0abbec'}
+UNCHANGED_SUPPORT={'legacy_cache.py':'e428946364048f35acc80451d68bd762557e610649759f6a983a6d8f08003ba7','legacy_tail.py':'204d4ce1d9a8cdea62ab5d9ff9d5f74f1dba3654e38c2d5a3560bd6ad061e253','legacy_tail_peer.py':'68675fd80f9e1b68017f581013d71b65aec9ac92e1c26cd38422d6f6a4803f44','legacy_failed_return_peer.py':'d9a10bf292c726a59cf0eb5bbbd6af23b76a311fcfb463d3db7e53f6c35f7624'}
+
 def require(ok,why):
  if not ok:raise ValueError(why)
 def physical(p):
@@ -68,8 +82,135 @@ def support(review_pin,pub_pin,source):
   and p.get('source_files',{}).get(Path(source['path']).name)==source['sha256']
   and re.fullmatch('[0-9a-f]{40}',p.get('commit','')) and p.get('remote_readback')==p['commit']
   and p.get('branch') not in {'main','master',''} and p.get('branch','').startswith('work/'),'published independently reviewed support source')
+ require(type(p.get('source_files')) is dict and set(p['source_files'])==set(UNCHANGED_SUPPORT)|{'legacy_issue.py','legacy_scheduler.py'}
+  and all(p['source_files'].get(k)==v for k,v in UNCHANGED_SUPPORT.items())
+  and all(type(v) is str and re.fullmatch('[0-9a-f]{64}',v) for v in p['source_files'].values()),'exact reviewed six-source closure with four unchanged modules')
  require(pin(source['path'])==source,'current support bytes')
  return r,p
+def typed_number(v):return type(v) in (int,float) and math.isfinite(v)
+def exact_ints(value,expected):
+ return type(value) is dict and set(value)==set(expected) and all(type(value[k]) is int and value[k]==v for k,v in expected.items())
+def canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)
+def current_known17(registry_pin):
+ registry=linked(registry_pin);jobs=registry.get('jobs')
+ require(type(jobs) is list and len(jobs)==17 and all(type(x) is dict and type(x.get('job_id')) is str and type(x.get('job_name')) is str for x in jobs)
+  and {x['job_id'] for x in jobs}==KNOWN_JOB_IDS and len({x['job_id'] for x in jobs})==17
+  and {x['job_id']:x['job_name'] for x in jobs}==KNOWN_JOB_NAMES
+  and all(x.get('state') in {'COMPLETED','FAILED','CANCELLED','TIMEOUT','OUT_OF_MEMORY','NODE_FAIL','PREEMPTED','BOOT_FAIL'} for x in jobs),'exact known17 all terminal, no replacement or extra job')
+ return registry
+def closed_initial():
+ old=linked(CLOSED_INITIAL);candidate=linked(old['candidate']);scope=linked(candidate['observation_scope']);guard=linked(old['guard']);healthy(guard)
+ require(old.get('status')=='ACTUAL_NATIVE_OBSERVATION_HEALTHY_BUT_INELIGIBLE_NO_RUNTIME_OR_JOB'
+  and old.get('automatic_second_observation_not_admitted') is True and old.get('runtime300_600_and_all_input_job_authorities_unissued') is True
+  and old.get('no_scope_clock_role_fee_or_guard_reset') is True and strict(guard['stdout'])==candidate
+  and guard['session_id']==candidate['command_pid'] and guard['leader_start_ticks']==candidate['command_birth_ticks']
+  and scope['phase_scope']==LEGACY_PHASE and candidate['mode']=='initial','closed actual original one-shot provenance')
+ intent=read(Path(old['candidate']['path']).parent/'INTENT.json');evaluation=linked(old['evaluation'])
+ require(intent.get('status')=='NATIVE_FORECAST_STARTED_NO_REPLAY' and intent.get('scope')==candidate['observation_scope']
+  and intent.get('issued_epoch')==candidate['started_epoch'] and evaluation.get('status')=='NATIVE_OBSERVATION_INELIGIBLE_NO_GRANT','closed intent and ineligible evaluation, never a retry credit')
+ return old,candidate,scope
+def source_ledger_descendant(ledger_pin):
+ current=ledger_pin;seen=set()
+ for _ in range(32):
+  ledger=linked(current)
+  if current==SOURCE_PREPARATION_LEDGER:return linked(ledger_pin)
+  require(current['sha256'] not in seen,'acyclic bounded whole ledger lineage');seen.add(current['sha256'])
+  previous=ledger.get('previous');before=linked(previous)
+  require(set(ledger)==set(before)|{'previous','created_epoch'},'exact whole inherited ledger key set; no deleted nulls or added fields')
+  require(type(before.get('scopes')) is list and type(ledger.get('scopes')) is list and len(ledger['scopes'])==len(before['scopes'])+1,'one appended intervening source-only scope')
+  row=ledger['scopes'][-1];phase=linked(row['scope']);admin=row.get('administrative_CPU_reservation')
+  require(type(admin) is int and admin>0 and type(row.get('compute_CPU_reservation')) is int and row['compute_CPU_reservation']==0
+   and type(phase.get('new_administrative_CPU_reservation')) is int and phase['new_administrative_CPU_reservation']==admin
+   and type(phase.get('new_compute_CPU_reservation')) is int and phase['new_compute_CPU_reservation']==0
+   and phase.get('previous_ledger')==previous and row.get('purpose')==phase.get('purpose')
+   and all(x.get('purpose')!=row['purpose'] for x in before['scopes'])
+   and canonical(ledger['scopes'][:-1])==canonical(before['scopes']) and canonical(ledger.get('compute_roles'))==canonical(before.get('compute_roles')),'whole previous source rows and compute fees conserved')
+  counters={'total_administrative_reservation':admin,'total_new_administrative_reservation':admin,'total_qualification_compute_reservation':0,'total_new_qualification_compute_reservation':0}
+  for key,delta in counters.items():require(type(before.get(key)) is int and type(ledger.get(key)) is int and ledger[key]==before[key]+delta,'intervening source-only whole counter '+key)
+  for key in before:
+   if key not in {'previous','created_epoch','scopes','compute_roles',*counters}:require(canonical(ledger.get(key))==canonical(before[key]),'intervening old ledger field preserved '+key)
+  current=previous
+ raise ValueError('whole current ledger must descend from funded source256 in <=32 source-only appends')
+
+def validate_phase(phase_pin,parent=None):
+ phase=linked(phase_pin)
+ if phase_pin==LEGACY_PHASE:
+  require(phase.get('status')=='NEW_LEGACY_NODE13_COMPATIBLE_SUPPORT_IMPLEMENTATION_ONLY'
+   and type(phase.get('new_administrative_CPU_reservation')) is int and phase['new_administrative_CPU_reservation']==528
+   and type(phase.get('new_compute_CPU_reservation')) is int and phase['new_compute_CPU_reservation']==0,'closed original528 profile only')
+  return phase
+ require(phase.get('schema')==REASSESSMENT_SCHEMA and phase.get('status')==REASSESSMENT_STATUS and phase.get('funding_profile')==REASSESSMENT_PROFILE,'reviewed exact reassessment64 phase kind')
+ require(exact_ints(phase.get('allocations'),REASSESSMENT_ALLOCATIONS)
+  and type(phase.get('new_administrative_CPU_reservation')) is int and phase['new_administrative_CPU_reservation']==64
+  and type(phase.get('new_compute_CPU_reservation')) is int and phase['new_compute_CPU_reservation']==0
+  and type(phase.get('maximum_proposed_compute_jobs')) is int and phase['maximum_proposed_compute_jobs']==1
+  and type(phase.get('maximum_initial_native_observations')) is int and phase['maximum_initial_native_observations']==1
+  and phase.get('proposed_node')=='node-13'
+  and phase.get('no_automatic_retry_requeue_or_node_sweep') is True and phase.get('no_old_scope_fee_role_window_or_intent_reopened') is True,'typed complete64 administrative price, no compute or old credit')
+ require(phase.get('source_preparation_scope')==SOURCE_PREPARATION_SCOPE and phase.get('closed_initial_observation')==CLOSED_INITIAL,'exact independent current source provenance and closed original')
+ prep=linked(SOURCE_PREPARATION_SCOPE);before=source_ledger_descendant(phase['ledger_before'])
+ require(type(prep.get('new_administrative_CPU_reservation')) is int and prep['new_administrative_CPU_reservation']==256 and prep.get('new_compute_CPU_reservation')==0,'independent source-only256 provenance')
+ require(all(typed_number(phase.get(k)) for k in ('issued_epoch','expires_epoch','fixed_latest_first_submit_epoch'))
+  and prep['issued_epoch']<=phase['issued_epoch']<phase['fixed_latest_first_submit_epoch']<phase['expires_epoch']
+  and phase['expires_epoch']==prep['expires_epoch'] and phase['fixed_latest_first_submit_epoch']==prep['fixed_latest_first_submit_epoch'],'fresh phase cannot extend fixed calendar')
+ require(type(phase.get('purpose')) is str and re.fullmatch('[A-Za-z0-9_]{1,64}',phase['purpose'])
+  and type(before.get('scopes')) is list and type(before.get('compute_roles')) is list
+  and all(x.get('purpose')!=phase['purpose'] for x in before['scopes'])
+  and type(phase.get('runtime_purpose')) is str and re.fullmatch('[A-Za-z0-9_]{1,64}',phase['runtime_purpose'])
+  and phase['runtime_purpose']!=phase['purpose'] and all(x.get('purpose')!=phase['runtime_purpose'] for x in before['scopes']),'distinct fresh assessment and runtime purposes absent from whole earlier ledger')
+ rows=[x for x in before['scopes'] if x.get('scope')==SOURCE_PREPARATION_SCOPE]
+ require(len(rows)==1 and exact_ints({k:rows[0][k] for k in ('administrative_CPU_reservation','compute_CPU_reservation')},{'administrative_CPU_reservation':256,'compute_CPU_reservation':0}),'source256 reservation already retained in whole ledger')
+ old,candidate,oldscope=closed_initial()
+ require(phase['issued_epoch']>old['created_epoch'] and phase['purpose']!=candidate['purpose'] and phase['runtime_purpose']!=candidate['purpose']
+  and phase['remote_namespace']!=candidate['remote_namespace'],'new purpose and namespace after closed ineligible observation')
+ root=physical(phase['new_root']);native=physical(phase['initial_observation_output_root'])
+ require(root.parent==HOME and re.fullmatch('Legacy_NODE13_'+re.escape(phase['runtime_purpose'])+'_[0-9a-f]{32}',root.name)
+  and native.parent==HOME and re.fullmatch('Native_REASSESSMENT_'+re.escape(phase['purpose'])+'_[0-9a-f]{32}',native.name)
+  and native!=Path(oldscope['output_root']) and all(x.get('canonical_home_root')!=str(root) for x in before['compute_roles']),'unique phase-wide initial intent root and new canonical HOME descriptor')
+ require(re.fullmatch('/mnt/beegfs/home/jaguir26/pricefm_r182_LEGACY_'+re.escape(phase['runtime_purpose'])+'_[0-9a-f]{32}',phase['remote_namespace']),'new exact purpose-bound remote namespace')
+ current_known17(phase['known_jobs_registry']);ns=linked(phase['namespace_registry'])
+ require(ns.get('known_jobs_registry')==phase['known_jobs_registry'] and type(ns.get('namespaces')) is list and type(ns.get('canonical_roots')) is list
+  and phase['remote_namespace'] not in ns['namespaces'] and str(root) not in ns['canonical_roots'],'new namespace and root absent from exact current registry')
+ if parent is not None:
+  require(parent['phase_scope']==phase_pin and parent['purpose']==phase['runtime_purpose'] and all(parent[k]==phase[k] for k in ('remote_namespace','known_jobs_registry')),'parent exact fresh reassessment bindings')
+ return phase
+def validate_funding(scope,parent,for_collection=False):
+ phase=validate_phase(scope['phase_scope'],parent);ledger=linked(scope['funding_ledger'])
+ require(scope['mode'] in {'initial','final'},'closed initial/final funding mode')
+ if scope['mode']=='initial':
+  if scope['phase_scope']==LEGACY_PHASE:
+   require(not for_collection,'closed original528 initial collection cannot be reopened')
+   rows=[x for x in ledger['scopes'] if x.get('scope')==LEGACY_PHASE]
+   require(len(rows)==1 and exact_ints({k:rows[0][k] for k in ('administrative_CPU_reservation','compute_CPU_reservation')},{'administrative_CPU_reservation':528,'compute_CPU_reservation':0})
+    and scope['funding_kind']=='PREPARATION_INITIAL_NATIVE16','historical closed original528 funding')
+  else:
+   before=linked(phase['ledger_before'])
+   require(set(ledger)==set(before)|{'previous','created_epoch'},'exact reassessment ledger key set; no deleted nulls or added fields')
+   review=linked(scope['binding_review'])
+   require(review.get('status')=='PASS_REVIEWED_FRESH_LEGACY_NODE13_REASSESSMENT_BINDINGS'
+    and type(review.get('administrative_CPU_reservation')) is int and review['administrative_CPU_reservation']==8
+    and type(review.get('maximum_initial_native_observations')) is int and review['maximum_initial_native_observations']==1
+    and typed_number(review.get('issued_epoch')) and phase['issued_epoch']<=review['issued_epoch']<=scope['issued_epoch'],'prospective separately priced independent binding review8 before initial native')
+   for key in ('phase_scope','parent','funding_ledger','source','support_review','support_publication','output_root'):
+    require(review.get(key)==scope[key],'exact independent pre-native binding '+key)
+   for key in ('purpose','runtime_purpose','new_root','remote_namespace','known_jobs_registry'):
+    require(review.get(key)==phase[key],'exact reviewed reassessment descriptor '+key)
+   expected=dict(purpose=phase['purpose'],scope=scope['phase_scope'],administrative_CPU_reservation=64,compute_CPU_reservation=0)
+   require(scope['funding_kind']=='REASSESSMENT_INITIAL_NATIVE16' and scope['output_root']==phase['initial_observation_output_root']
+    and ledger.get('previous')==phase['ledger_before'] and canonical(ledger.get('scopes'))==canonical(before['scopes']+[expected])
+    and canonical(ledger.get('compute_roles'))==canonical(before['compute_roles']),'one exact new64 append with all old rows and compute fees conserved')
+   counters={'total_administrative_reservation':64,'total_new_administrative_reservation':64,'total_qualification_compute_reservation':0,'total_new_qualification_compute_reservation':0}
+   for key,delta in counters.items():require(type(before.get(key)) is int and type(ledger.get(key)) is int and ledger[key]==before[key]+delta,'typed whole reassessment counter '+key)
+   require(typed_number(ledger.get('created_epoch')) and phase['issued_epoch']<=ledger['created_epoch']<=scope['issued_epoch'],'prospective new64 funding chronology')
+   for key in before:
+    if key not in {'previous','created_epoch','scopes','compute_roles',*counters}:require(canonical(ledger.get(key))==canonical(before[key]),'old whole ledger field preserved '+key)
+ else:
+  rows=[x for x in ledger['scopes'] if x.get('scope')==scope['runtime_scope']];runtime=linked(scope['runtime_scope'])
+  require(len(rows)==1 and exact_ints({k:rows[0][k] for k in ('administrative_CPU_reservation','compute_CPU_reservation')},{'administrative_CPU_reservation':300,'compute_CPU_reservation':600})
+   and type(runtime['extra_setup_forecast_tail']['scheduler_evidence_CPU']) is int and runtime['extra_setup_forecast_tail']['scheduler_evidence_CPU']==16
+   and runtime.get('support_scope')==scope['phase_scope'] and scope['funding_kind']=='RUNTIME_FINAL_NATIVE16','one completely funded unchanged final16 within runtime300/600')
+ return phase
+
 def parent_fields(parent):
  require(parent.get('schema')=='legacy_node13_scheduler_parent_v1' and parent.get('status')=='PROSPECTIVE_NATIVE_SCHEDULER_PARENT_NOT_JOB_AUTHORITY','new prospective descriptor')
  require(re.fullmatch('[A-Za-z0-9_]{1,64}',parent.get('purpose','')) and parent.get('node')=='node-13'
@@ -81,7 +222,7 @@ def parent_fields(parent):
   and parent['final_reserve_seconds']==3600 and type(parent['final_reserve_seconds']) is int
   and parent['startup_budget_seconds']==300 and type(parent['startup_budget_seconds']) is int
   and start<cutoff<=expiry,'fixed complete calendar')
- phase=linked(parent['phase_scope'])
+ phase=validate_phase(parent['phase_scope'],parent)
  require(phase['issued_epoch']<=start and expiry==phase['expires_epoch'] and cutoff==phase['fixed_latest_first_submit_epoch'],'parent cannot extend actual phase window or cutoff')
  return start,expiry,cutoff
 def base_argv(p):
@@ -124,23 +265,13 @@ def verify_candidate(c,now=None):
  require(scope['parent']==c['parent'] and scope['mode']==c['mode'] and scope['source']==c['source']
   and scope['phase_scope']==parent['phase_scope'] and c['source']==pin(__file__),'exact native observation scope/source')
  phase=linked(scope['phase_scope'])
- require(phase['issued_epoch']<=scope['issued_epoch']<=c['started_epoch']<=c['observed_epoch']<=now<scope['expires_epoch']<=phase['expires_epoch']
-  and scope['allocations']=={'local_originalH8':8,'remote_unknown8':8} and type(scope['maximum_calls']) is int and scope['maximum_calls']==1
+ require(all(typed_number(x) for x in (phase['issued_epoch'],scope['issued_epoch'],c['started_epoch'],c['observed_epoch'],now,scope['expires_epoch']))
+  and phase['issued_epoch']<=scope['issued_epoch']<=c['started_epoch']<=c['observed_epoch']<=now<scope['expires_epoch']<=phase['expires_epoch']
+  and exact_ints(scope['allocations'],{'local_originalH8':8,'remote_unknown8':8}) and type(scope['maximum_calls']) is int and scope['maximum_calls']==1
   and c['purpose']==parent['purpose'] and c['node']=='node-13' and c['remote_namespace']==parent['remote_namespace']
   and c['known_jobs_registry']==parent['known_jobs_registry'],'prospectively priced exact one-shot current observation')
  support(scope['support_review'],scope['support_publication'],c['source'])
- ledger=linked(scope['funding_ledger'])
- if c['mode']=='initial':
-  rows=[x for x in ledger['scopes'] if x.get('scope')==scope['phase_scope']]
-  require(len(rows)==1 and rows[0]['administrative_CPU_reservation']==528 and rows[0]['compute_CPU_reservation']==0
-   and phase['allocations']['fresh_capacity_and_admission32']==32
-   and scope['funding_kind']=='PREPARATION_INITIAL_NATIVE16','prospective initial native16 within phase528')
- else:
-  rows=[x for x in ledger['scopes'] if x.get('scope')==scope['runtime_scope']]
-  runtime=linked(scope['runtime_scope'])
-  require(len(rows)==1 and rows[0]['administrative_CPU_reservation']==300 and rows[0]['compute_CPU_reservation']==600
-   and runtime['extra_setup_forecast_tail']['scheduler_evidence_CPU']==16
-   and scope['funding_kind']=='RUNTIME_FINAL_NATIVE16','one completely funded final native16')
+ validate_funding(scope,parent)
  packet=None
  if c['mode']=='final':
   packet=linked(c['packet']);cfg=linked(c['config']);g=linked(c['actual_stage_guard']);healthy(g,18,300)
@@ -196,18 +327,8 @@ def collect(scope_pin):
  require(s.get('schema')=='legacy_node13_scheduler_observation_scope_v1' and s['source']==pin(__file__)
   and s['phase_scope']==p['phase_scope'] and phase['issued_epoch']<=s['issued_epoch']<=now<s['expires_epoch']<=phase['expires_epoch'],'fresh exact native source scope')
  support(s['support_review'],s['support_publication'],s['source'])
- require(s['allocations']=={'local_originalH8':8,'remote_unknown8':8} and type(s['maximum_calls']) is int and s['maximum_calls']==1,'funded one native observation')
- funding=linked(s['funding_ledger'])
- if s['mode']=='initial':
-  rows=[x for x in funding['scopes'] if x.get('scope')==s['phase_scope']]
-  require(len(rows)==1 and rows[0]['administrative_CPU_reservation']==528 and rows[0]['compute_CPU_reservation']==0
-   and phase['allocations']['fresh_capacity_and_admission32']==32 and s['funding_kind']=='PREPARATION_INITIAL_NATIVE16','funded initial before network')
- else:
-  require(s['mode']=='final','closed observation mode')
-  rows=[x for x in funding['scopes'] if x.get('scope')==s['runtime_scope']]
-  runtime=linked(s['runtime_scope'])
-  require(len(rows)==1 and rows[0]['administrative_CPU_reservation']==300 and rows[0]['compute_CPU_reservation']==600
-   and runtime['extra_setup_forecast_tail']['scheduler_evidence_CPU']==16 and s['funding_kind']=='RUNTIME_FINAL_NATIVE16','funded final before network')
+ require(exact_ints(s['allocations'],{'local_originalH8':8,'remote_unknown8':8}) and type(s['maximum_calls']) is int and s['maximum_calls']==1,'funded one native observation')
+ validate_funding(s,p,for_collection=True)
  out=physical(s['output_root']);require(out.is_dir() and out.stat().st_uid==os.getuid() and out.stat().st_mode&0o077==0,'private existing native output')
  site=linked(s['site']);require((site['host'],site['user'],site['account'],site['partition'],site['qos'])==('hb.ucsc.edu','jaguir26','128x24','128x24','normal'),'exact trusted HB site')
  for key in ['known_hosts_file','ssh_identity_file']:require(physical(site[key]).is_file(),'physical enrolled SSH key/trust')

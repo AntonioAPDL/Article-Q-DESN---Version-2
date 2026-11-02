@@ -79,6 +79,9 @@ def support(r):
     for key in ('issuer_source','cache_helper_source','scheduler_verifier'):
         item=r[key];require(pin(item['path'])==item and pub['source_files'].get(Path(item['path']).name)==item['sha256'],'exact published support source '+key)
     require(r['issuer_source']==pin(Path(__file__).absolute()),'actual executing issuer identity')
+    require(Path(r['cache_helper_source']['path']).parent==Path(__file__).absolute().parent,'unchanged cache sibling imports this exact reviewed issuer')
+    expected_unchanged={'legacy_cache.py':'e428946364048f35acc80451d68bd762557e610649759f6a983a6d8f08003ba7','legacy_tail.py':'204d4ce1d9a8cdea62ab5d9ff9d5f74f1dba3654e38c2d5a3560bd6ad061e253','legacy_tail_peer.py':'68675fd80f9e1b68017f581013d71b65aec9ac92e1c26cd38422d6f6a4803f44','legacy_failed_return_peer.py':'d9a10bf292c726a59cf0eb5bbbd6af23b76a311fcfb463d3db7e53f6c35f7624'}
+    require(set(pub['source_files'])==set(expected_unchanged)|{'legacy_issue.py','legacy_scheduler.py'} and all(pub['source_files'][k]==v for k,v in expected_unchanged.items()),'exact six-source closure and four unchanged support sources')
     tail=linked(r['compatible_H4_tail_approval']);original=legacy()
     require(tail.get('status')=='PASS_REVIEWED_W191_COMPATIBLE_SEPARATE_H4_FAILURE_PROTOCOL' and tail.get('source_publication')==original.PUB and tail.get('source_review')==original.REVIEW
         and tail.get('support_source_review')==r['support_review']
@@ -94,8 +97,7 @@ def checked(request_pin,now=None,require_absent=False):
     now=time.time() if now is None else now;r=linked(request_pin)
     require(r.get('schema')=='legacy_node13_issue_request_v1' and re.fullmatch('[A-Za-z0-9_]{1,64}',r.get('purpose','')),'genuine new exact issue request')
     original=support(r);phase=linked(r['phase_scope']);root=physical(r['new_root']);parent=linked(r['prospective_parent'])
-    require(phase.get('status')=='NEW_LEGACY_NODE13_COMPATIBLE_SUPPORT_IMPLEMENTATION_ONLY' and phase.get('maximum_proposed_compute_jobs')==1 and phase.get('proposed_node')=='node-13'
-        and phase['issued_epoch']<=now<phase['expires_epoch'],'current new support purpose, never old expiry reuse')
+    require(phase['issued_epoch']<=now<phase['expires_epoch'],'current separately issued phase, never old expiry reuse')
     require(str(root).startswith(str(HOME)+'/Legacy_NODE13_') and root.parent==HOME and len(root.name)<=96 and root.parent.is_dir()
         and root.parent.stat().st_uid==os.getuid() and root.parent.stat().st_mode&0o077==0,'fresh private persistent HOME root descriptor')
     if require_absent:require(not root.exists(),'fresh root has no earlier issue or retry')
@@ -107,7 +109,12 @@ def checked(request_pin,now=None,require_absent=False):
         require(authority.get(key)==r[key],'ROOT authority binding '+key)
     require(phase['issued_epoch']<=authority['issued_epoch']<=now<authority['expires_epoch']<=phase['expires_epoch'],'current authority inside new fixed purpose')
     verifier=module(r['scheduler_verifier']['path'],r['scheduler_verifier']['sha256'],'reviewed_legacy_production_scheduler')
+    verifier.validate_phase(r['phase_scope'],parent)
+    require(r['phase_scope']!=verifier.LEGACY_PHASE,'closed original528 cannot issue a new runtime')
+    require(phase['runtime_purpose']==r['purpose'] and all(phase[k]==r[k] for k in ('new_root','remote_namespace','known_jobs_registry','namespace_registry')),'exact reassessment issuer purpose/root/namespace/registries')
     admitted=verifier.verify_root_admission(r['native_admission'],now=now)
+    native=linked(r['native_admission']);initial_scope=linked(native['candidate']['observation_scope'])
+    require(r['ledger_before']==initial_scope['funding_ledger'],'runtime funding begins from actual complete reassessment64 ledger')
     require(admitted.get('mode')=='initial','initial genuine resource-equivalent native admission before issuance')
     for key,value in dict(parent=r['prospective_parent'],purpose=r['purpose'],node='node-13',remote_namespace=r['remote_namespace'],known_jobs_registry=r['known_jobs_registry']).items():require(admitted.get(key)==value,'actual guarded native binding '+key)
     require(admitted['not_before_epoch']<=now<admitted['role_submit_cutoff_epoch']<=admitted['expires_epoch']<=phase['expires_epoch']
@@ -137,6 +144,7 @@ def checked(request_pin,now=None,require_absent=False):
 
 def exact_funding(c,scope_pin,after_pin):
     r=c['request'];before=c['ledger_before'];after=linked(after_pin)
+    require(set(after)==set(before)|{'previous','created_epoch'},'exact runtime whole ledger key set; no deleted nulls or added fields')
     expected_row=dict(purpose=r['purpose'],scope=scope_pin,administrative_CPU_reservation=c['total'],compute_CPU_reservation=600)
     expected_compute=dict(canonical_home_root=r['new_root'],reservation=600,scope=scope_pin)
     equal=lambda a,b:canonical(a)==canonical(b)

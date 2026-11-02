@@ -1,96 +1,52 @@
 {
-  "capture_authority": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/capture_transport_repair_20261101_1510PST/publisher/ROOT_CAPTURE_AUTHORITY.json",
-    "sha256": "ecc057b62ac904d6014d465f586022723afce78c05db06404315bbdd988e19e2"
+  "base_support_publication": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/capture_transport_repair_20261101_1510PST/publisher/SOURCE_PUBLICATION.json",
+    "sha256": "78d0235446727da14da7d47bad4b2f69a65fff7ad49be412195f001f0d13f510"
   },
-  "controller_review": {
-    "path": "/home/jaguir26/.local/state/pricefm/r180_native_4503eef91eaa/Review_CAPTURE_REPAIR_7aeea0f70286/SOURCE_REVIEW.json",
-    "sha256": "e5dfe3a54e350e4a6269d874d021da17f401f5c3597d7a409928ed9f25ec209a"
-  },
-  "correction_funding_ledger": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/capture_transport_repair_20261101_1510PST/SCOPE_LEDGER_01.json",
-    "sha256": "7906bd6f45a831bda5be23ad2ccd208c18e5aea782c5923cad1a73ec07ad388b"
-  },
-  "correction_scope": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/capture_transport_repair_20261101_1510PST/SCOPE.json",
-    "sha256": "7aeea0f702866dae4813243b8613220a9a61b8d1115a9ad5c16a3f547dc97019"
-  },
-  "feature_source_only_no_scientific_admission": true,
-  "local_source_evidence": [
+  "no_runtime_or_input_authority": true,
+  "no_self_commit_hash_cycle": true,
+  "original_W191_commit": "91a0423d5baab068e55c19b9e62e2fb5f13047bc",
+  "schema": "pricefm_admission_profile_source_evidence_v1",
+  "source_evidence": [
     {
-      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/issuer/SOURCE_FREEZE_02.json",
-      "sha256": "ee075cd09812267d75b34b0488480c40e5efa58a4d7fc4a102d8d5145653c9a8"
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/source/SOURCE_FREEZE_02.json",
+      "sha256": "1f60036d217a75135c3d562e43e19177ff2bd1a20344a02d52a8b2cb675cd966"
     },
     {
-      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/scheduler/SOURCE_FREEZE_03.json",
-      "sha256": "a84446cdbf56926e3afeeef9b661c6db56707140b161dd3185b5847a37bd1187"
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/publisher/PUBLISHER_FREEZE.json",
+      "sha256": "fa5b11f3a92c4e9e4fc293354fb450aea97d3a83917a6eafa4b56e9dcb38bc2d"
     },
     {
-      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/failure_tail/PEER_SOURCE_SUPPLEMENT_02.json",
-      "sha256": "24584fae156080f785280d6411883cefdf397485e17954948dfee2c8a5e7c254"
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/publisher/ACTUAL_FIXTURE_ADJUDICATION.json",
+      "sha256": "31687f6bad878255f5d6fd7b961031aaaf9dc68d56ae19b6ecf907ceecdb8afd"
     },
     {
-      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/failure_tail/RETURN_PEER_SOURCE_FREEZE_01.json",
-      "sha256": "b22a4abeebff14d1275c5f471b99a7f8538eaaa9b03aa7debec1e0ee98466df4"
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/runtime/PREPARER_REFINEMENT12.RECEIPT.json",
+      "sha256": "ec453799bac8064b7f13b307fe3ae0d523b04786796798f1be3582c7074031ba"
     },
     {
-      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/independent_review/TAIL_SOURCE_APPROVAL.json",
-      "sha256": "edeaa0ac42b9456e89cf7ee5ed8333589c942c6ae9e6c4ecd5e6764614ef268b"
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/runtime/home_intent_correction/RECEIPT.json",
+      "sha256": "7bbea319e063829da86089c38f8d5ce8ed7d9bba69088d499368ef961e6345b5"
     },
     {
-      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/capture_transport_repair_20261101_1510PST/publisher/SOURCE_FREEZE_02.json",
-      "sha256": "1d1539b9cea55122ec01fa7b0128d83949ad97d3d24252a6b6f7052d4cf1cf3f"
-    },
-    {
-      "path": "/home/jaguir26/.local/state/pricefm/r180_native_4503eef91eaa/Review_CAPTURE_REPAIR_7aeea0f70286/SOURCE_REVIEW.json",
-      "sha256": "e5dfe3a54e350e4a6269d874d021da17f401f5c3597d7a409928ed9f25ec209a"
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/review/SOURCE_EXECUTION_RECEIPT.json",
+      "sha256": "22689b077b9a38c1d8fb8e503bf8327c14ca7d1b5a6c098d01aa82a10524795a"
     }
   ],
-  "no_self_commit_reference": true,
-  "original_W191_commit": "91a0423d5baab068e55c19b9e62e2fb5f13047bc",
-  "original_failed_guard": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/publication/COMMIT_01.guard.json",
-    "sha256": "5ee05f33318d1bf001f22ebc6ffaaacec3173c35ad6e4a6e5e78c1a1c2e0f0ce"
-  },
-  "original_failed_operation": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/publication/OP_COMMIT_01.json",
-    "sha256": "bfcff43bf3077d0b48b8617569f657b0750b41d6bdc4ffb5acc410df86130960"
-  },
-  "original_publication": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/continuation_execution_20261031_2022PDT/independent_startup_peer/SOURCE_PUBLICATION.json",
-    "sha256": "9c4dbc62dcef754637879e249e8361630f0923fd3a223883347fa8434061758f"
-  },
-  "original_spent_completion_funding_ledger": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/SCOPE_LEDGER_02.json",
-    "sha256": "e3c3820bfad79e8974f079ea5b7e27d82c9dfa9744f540d9fdb3d4ca96ced970"
-  },
-  "original_spent_completion_scope": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/publication/COMMIT_COMPLETION_SCOPE_01.json",
-    "sha256": "022701d483f71a65ec50022937849c77fe5720601e756038283ec8371631992a"
-  },
-  "policy_interpretation": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/publication/ROOT_POLICY_INTERPRETATION.json",
-    "sha256": "09ad9283366803d0ad8a329e9fd39d6bbf283c70eb1bcefb7dbbef2faa4cbc6f"
-  },
-  "pre_correction_archive": {
-    "path": "/home/jaguir26/.local/state/pricefm/r180_native_4503eef91eaa/Publish_CAPTURE_REPAIR_7aeea0f70286/commit_03/PRE_CORRECTION_ARCHIVE.json",
-    "sha256": "575d81986ea1555fe8379241fd656e7a1b5055c2914e485cd70b747d5dcd5a73"
-  },
-  "previous_completion_failure": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/publication/COMMIT_FAILURE_02.json",
-    "sha256": "57ccc1638948c48293904b11382406e819bddb36f31be4b10996a0b74d119821"
-  },
-  "schema": "legacy_W191_support_source_evidence_v1",
   "source_files": {
     "legacy_cache.py": "e428946364048f35acc80451d68bd762557e610649759f6a983a6d8f08003ba7",
     "legacy_failed_return_peer.py": "d9a10bf292c726a59cf0eb5bbbd6af23b76a311fcfb463d3db7e53f6c35f7624",
-    "legacy_issue.py": "f91c2180d3601075036e2c5aa048c14d4a927173c9f0ff56bf5abcf643347571",
-    "legacy_scheduler.py": "4b5210befbbd4193c528d591b9bd30f904ecd16552a0cb7ef2692f3288738e6c",
+    "legacy_issue.py": "93156be13e4e78dd097624a3ab8c58ddaa7d8eeef16537c8ff547f6da1e0ad2d",
+    "legacy_scheduler.py": "c3a4ebb3b508a10e23e73492c8222b499ded6ad68277ff599570a4e3340a09d4",
     "legacy_tail.py": "204d4ce1d9a8cdea62ab5d9ff9d5f74f1dba3654e38c2d5a3560bd6ad061e253",
     "legacy_tail_peer.py": "68675fd80f9e1b68017f581013d71b65aec9ac92e1c26cd38422d6f6a4803f44"
   },
+  "source_phase": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/SCOPE.json",
+    "sha256": "7b42acedef5fa1e92bd64f8a7a44b6c651b295ecb53b5313150ba4fd2e66ad9a"
+  },
   "whole_independent_review": {
-    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/legacy_node13_execution_20261101_1250PST/independent_review/SOURCE_REVIEW.json",
-    "sha256": "3e604b268c0a978d938e1c7bf418620133607864d59525abc120c8a45feec924"
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/review/SOURCE_REVIEW.json",
+    "sha256": "9962a76c72ce66ef91a52ac433a71c1824daee23fda65f215a3b32d9ee9bba79"
   }
 }

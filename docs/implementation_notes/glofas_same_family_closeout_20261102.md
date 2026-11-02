@@ -66,8 +66,9 @@ The required issued-member extract has exactly four columns:
 members per date. Raw quantiles use type-8 empirical quantiles on the log1p
 scale. Seven retained raw quantiles cannot reconstruct 51 authentic paths.
 The extraction must have its own immutable derivation receipt tying its hash
-to the prepared, truth-free design. This software intentionally does not load
-that design or manufacture the extraction.
+to the prepared, truth-free design. The guarded `extract` mode provides that
+future extraction; it has not been run against the actual design. It does not
+manufacture members from a quantile grid.
 
 ## Entry points and data flow
 
@@ -77,20 +78,30 @@ that design or manufacture the extraction.
    copied blindly, checkpointed or modified by this collector. A coordinator
    must first obtain a SQLite-consistent snapshot after all accepted states
    and supervisor exits are verified.
-2. `scripts/finalize_glofas_same_family_transition.R --mode assemble` validates
+2. The same finalizer's separately authorized `--mode extract` invokes
+   `scripts/glofas_same_family_plot_inputs.R` only after all sixteen native
+   accepted producers and target receipts have passed. It then binds the
+   exact prepared-design hash to the truth-free role in the frozen input
+   manifest and the analytic Normal enrollment before reading the design.
+   It extracts 30 consecutive pre-origin dates, all 1,428 issued members and
+   the four-column raw input, with a hashed derivation receipt. Both nested
+   issued-member copies must have redacted USGS columns; embedded scoring
+   truth, post-origin historical rows, missing dates and fractional weights
+   stop extraction. Saved feature builders are never called.
+3. `scripts/finalize_glofas_same_family_transition.R --mode assemble` validates
    the collection, sixteen target receipts and forecast CSVs, separate Normal
    enrollment and raw-member extract. It assembles and validates exactly
    1,372 family/date/level rows without opening scoring truth.
-3. It writes `quantile_paths.csv`, `raw_crossings.csv` and
+4. It writes `quantile_paths.csv`, `raw_crossings.csv` and
    `accepted_producers.json`, then persists `FORECAST_SEAL.json`. The seal binds
    their exact hashes, all sixteen historical identities and the Normal/raw
    input pins. It is reverified before the first truth read. An ordinary final
    artifact manifest does not replace this pre-truth commitment.
-4. Explicit `--mode score` authority may then open a separately pinned
+5. Explicit `--mode score` authority may then open a separately pinned
    28-row USGS sidecar, containing `target_date,horizon,y_transformed`.
    The scorer has no selection, retuning, fitting or seed-screening interface.
    It computes the seven families together, with no case-level fallback.
-5. `scripts/build_glofas_same_family_article_projection.R` independently
+6. `scripts/build_glofas_same_family_article_projection.R` independently
    recomputes every scored packet's numerical summaries and creates a
    **candidate-only** CSV and TeX score table. Its companion checker verifies
    the exact candidate membership, labels and values. Neither writes article
@@ -140,18 +151,21 @@ The finalizer's external purpose contract has:
 
 ```text
 schema_version = glofas_same_family_closeout_contract_v1
-mode = assemble OR score
-allow_assembly = true
+mode = extract OR assemble OR score
+allow_assembly = (mode != extract)
+allow_design_read = (mode == extract), false/absent otherwise
 allow_scoring = (mode == score)
 allow_refit = allow_retuning = allow_publication = false
 source_commit, source_tree = clean reviewed closeout implementation
 expires_utc = UTC expiry covering the full requested wall time
 source_files = pins for the four closeout/controller implementation files
+               plus glofas_same_family_plot_inputs.R in extract mode
 expected_identity = exact six frozen producer fields
 collection_contract = file pin of the preceding collection contract
 normal_manifest, normal_receipt, normal_quantiles = authenticated file pins
 prepared_design_sha256 = common exact protected prepared-design digest
 raw_member_derivation, raw_members = authenticated truth-free file pins
+                                   (assemble/score modes only)
 output_root = fresh ignored child of this worktree's local_trackers
 limits = finite cpu_seconds, wall_seconds, memory_bytes, output_bytes,
          logical_cpu (a separately authorized, unprotected logical CPU)
@@ -161,6 +175,19 @@ Score mode additionally requires `truth_role=post_fit_scoring_only`,
 `model_selection_or_retuning=false` and a `truth` file pin. Assemble mode must
 not open this sidecar. No contract template grants permission to execute.
 Both external contract bytes and their supplied SHA-256 digests are checked.
+Extract mode instead requires `design` equal to the Normal enrollment's
+prepared-design pin and `input_manifest` bound to the frozen producer input
+digest. The exact prepared SHA-256 is
+`193056d66ae9f004d909eab6161adcdc696b5243587f3bee74396def452381f3`.
+Its 4,014,834,693-byte RDS is not a small metadata input: future admission must
+price full hashing, deserialization and peak RAM. The initial sixteen-producer
+gate precedes both its hashing and reading. The code never opens the separate
+USGS scoring sidecar during extraction. Authenticated frozen-source and Normal
+mapping provenance establish that the complete saved object is truth-free;
+the checks on its known panels provide additional protection, not a claim to
+inspect arbitrary unknown object fields or execute saved closures safely.
+An unexpected payload requires a reviewed truth-free source, not an automatic
+redaction followed by continued execution.
 The compiled artifact-read ceilings accommodate the frozen producer admission
 limits (including the larger MQ outputs); they are not a grant to hash that
 amount. The actual separately costed external purpose must specify its own
@@ -200,6 +227,10 @@ exercise the real static read-only controller API against tiny synthetic
 SQLite/native-shard fixtures, including active/failure/retry states, wrong
 targets, terminal identities, sidecar/payload tampering, unknown artifacts,
 WAL ambiguity, finite read ceilings and symlink rejection.
+Additional synthetic R fixtures cover authentic-member/history extraction,
+no builder execution, unredacted future-USGS rejection, embedded truth,
+post-origin historical contamination, missing dates, fractional weights, and
+the sixteen-producer gate before any design access.
 
 The old eighteen-marker unit-member finalizer and generic simulation DKW
 scorer are deliberately not reused or weakened. Their target/reporting

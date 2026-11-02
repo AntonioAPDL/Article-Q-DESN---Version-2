@@ -5,10 +5,11 @@ source("scripts/glofas_same_family_closeout.R")
 gsc_closeout_scope <- function(s,mode) {
   q <- gsc_require
   q(is.list(s)&&identical(s$schema_version,"glofas_same_family_closeout_contract_v1")&&
-    mode %in% c("assemble","score")&&identical(s$mode,mode)&&
+    mode %in% c("extract","assemble","score")&&identical(s$mode,mode)&&
     identical(s$allow_refit,FALSE)&&identical(s$allow_retuning,FALSE)&&
-    identical(s$allow_publication,FALSE)&&identical(s$allow_assembly,TRUE)&&
-    identical(s$allow_scoring,mode=="score"),"explicit assembly/scoring-only authority required")
+    identical(s$allow_publication,FALSE)&&identical(s$allow_assembly,mode!="extract")&&
+    identical(s$allow_scoring,mode=="score")&&identical(isTRUE(s$allow_design_read),mode=="extract"),
+    "explicit extraction/assembly/scoring-only authority required")
   b <- s$limits
   q(is.list(b)&&all(vapply(b[c("cpu_seconds","wall_seconds","memory_bytes","output_bytes","logical_cpu")],
     function(v)is.numeric(v)&&length(v)==1L&&is.finite(v)&&v>=0,logical(1L)))&&
@@ -20,7 +21,7 @@ gsc_closeout_scope <- function(s,mode) {
 
 gsc_closeout_main <- function(args=commandArgs(TRUE)) {
   if(identical(args,"--help")) {
-    cat("Usage: Rscript scripts/finalize_glofas_same_family_transition.R --contract FILE --sha256 SHA --mode assemble|score --execute\n")
+    cat("Usage: Rscript scripts/finalize_glofas_same_family_transition.R --contract FILE --sha256 SHA --mode extract|assemble|score --execute\n")
     return(invisible(NULL))
   }
   q <- gsc_require
@@ -65,6 +66,7 @@ gsc_closeout_main <- function(args=commandArgs(TRUE)) {
   q(wall_proof,"whole-purpose exact TERM/KILL supervisor required")
   required <- c("scripts/glofas_same_family_closeout.R","scripts/finalize_glofas_same_family_transition.R",
     "scripts/collect_glofas_same_family_producers.py","application/scripts/forecast_transition_control.py")
+  if(mode=="extract")required <- c(required,"scripts/glofas_same_family_plot_inputs.R")
   source_paths <- vapply(s$source_files,gsc_pin,character(1L),max_bytes=1024^2)
   q(all(file.path(root,required) %in% source_paths)&&all(startsWith(source_paths,paste0(root,"/")))&&
     !anyDuplicated(source_paths),"complete reviewed closeout source closure required")
@@ -90,6 +92,10 @@ gsc_closeout_main <- function(args=commandArgs(TRUE)) {
   }
   normal_rows <- read.csv(gsc_pin(s$normal_quantiles,1024^2),stringsAsFactors=FALSE)
   normal_rows <- gsc_normal_rows(normal_rows,normal,s$prepared_design_sha256)
+  if(mode=="extract") {
+    source("scripts/glofas_same_family_plot_inputs.R")
+    return(gsc_extract_authorized(s,collection,normal,check_source,expiry,args[4L]))
+  }
   derivation <- jsonlite::read_json(gsc_pin(s$raw_member_derivation,1024^2),simplifyVector=FALSE)
   q(identical(derivation$schema_version,"glofas_same_family_raw_members_v1")&&
     identical(derivation$source_design_sha256,s$prepared_design_sha256)&&

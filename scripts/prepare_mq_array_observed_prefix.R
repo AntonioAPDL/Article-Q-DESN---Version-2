@@ -20,9 +20,10 @@ mqa_preparation_main <- function(args=commandArgs(TRUE)) {
   runtime <- mqa_runtime_guard(s);mqa_source_guard(s,root)
   historical <- jsonlite::read_json(mqa_pin(s$baseline_contract,1024^2),simplifyVector=FALSE)
   original <- jsonlite::read_json(mqa_pin(s$original_unit_contract,1024^2),simplifyVector=FALSE)
-  q(mqa_metadata_equal(s$original_unit,historical$original_unit)&&mqa_metadata_equal(original,s$original_unit)&&
+  q(mqa_metadata_equal(s$original_unit,historical$original_unit)&&
     mqa_metadata_equal(s$original_unit_contract,historical$original_unit_contract),"authentic original unit/assets may not be substituted")
-  metadata <- q2_metadata(original)
+  unit<-s$original_unit;asset_bridge<-mqa_original_unit_bridge(unit,original)
+  metadata <- q2_metadata(unit)
   output <- s$output_root;q2_regular(output)
   state <- normalizePath(file.path(Sys.getenv("HOME"),".local/state/qdesn_forecast_transition"),mustWork=TRUE)
   q(is.character(output)&&length(output)==1L&&startsWith(output,paste0(state,"/mq_array_prefix_preparation_"))&&
@@ -32,9 +33,9 @@ mqa_preparation_main <- function(args=commandArgs(TRUE)) {
   tryCatch({
     # Deserialize only in this separately scoped actor. The immutable selector
     # below accesses f$y[1:11000], never future response values or callbacks.
-    reads$design <- 1L;d <- readRDS(original$assets$design$path)
-    reads$fixture <- 1L;f <- readRDS(original$assets$fixture$path)
-    reads$posterior <- 1L;p <- read.csv(original$assets$posterior$path,stringsAsFactors=FALSE)
+    reads$design <- 1L;d <- readRDS(unit$assets$design$path)
+    reads$fixture <- 1L;f <- readRDS(unit$assets$fixture$path)
+    reads$posterior <- 1L;p <- read.csv(unit$assets$posterior$path,stringsAsFactors=FALSE)
     source("application/R/integrated_quantile_forecast.R",local=environment(q2_payloads))
     preparation <- list(source_commit=s$source_commit,source_tree=s$source_tree,
       purpose_contract_sha256=args[4L],reducer_relative_path="scripts/mq_array_qualification.R",
@@ -46,11 +47,12 @@ mqa_preparation_main <- function(args=commandArgs(TRUE)) {
       source_invariance_argument="unchanged_Q2_fixed_prefix_selector_no_future_response_or_future_Z_access",
       synthetic_invariance_test="application/tests/test_mq_array_qualification.R",
       synthetic_invariance_test_sha256=unname(tools::sha256sum(file.path(root,"application/tests/test_mq_array_qualification.R"))))
-    reduced <- mqa_reduce_original_payload(d,f,p,original,preparation)
+    reduced <- mqa_reduce_original_payload(d,f,p,unit,preparation)
+    reduced$derivation$original_asset_path_bridge<-asset_bridge
     rm(d,f,p);gc(FALSE)
     ss <- list(prepared_source=preparation)
-    mqa_validate_derivation(reduced$objects,reduced$derivation,original,ss)
-    q2_metadata(original);mqa_source_guard(s,root);mqa_runtime_guard(s)
+    mqa_validate_derivation(reduced$objects,reduced$derivation,unit,ss)
+    q2_metadata(unit);mqa_source_guard(s,root);mqa_runtime_guard(s)
     cpu <- sum(proc.time()[c("user.self","sys.self","user.child","sys.child")])
     q(cpu<=120&&expiry>Sys.time(),"complete preparation CPU/wall budget exceeded")
     payload <- file.path(output,"observed_prefix_payload.rds")

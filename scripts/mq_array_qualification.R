@@ -40,6 +40,45 @@ mqa_unique_json_objects <- function(x,depth=0L) {
   }
   invisible(TRUE)
 }
+# The frozen Jerez contract remains immutable. Its byte-identical six inputs
+# may have a separately authenticated Muscat materialization; this is not a
+# change of unit, target, parameter row, clock, role, size or content digest.
+mqa_original_unit_bridge <- function(materialized,original) {
+  q<-mqa_require
+  mqa_unique_json_objects(materialized);mqa_unique_json_objects(original)
+  q2_geometry(materialized);q2_geometry(original)
+  nonasset<-setdiff(names(original),"assets")
+  q(setequal(names(materialized),names(original))&&
+    mqa_metadata_equal(materialized[nonasset],original[nonasset]),
+    "all nonasset original-unit metadata must remain exact")
+  roles<-c("design","fixture","posterior","target_contract","worker_manifest","cell_target_audit")
+  q(is.list(materialized$assets)&&is.list(original$assets)&&length(materialized$assets)==6L&&
+    length(original$assets)==6L&&setequal(names(materialized$assets),roles)&&setequal(names(original$assets),roles),
+    "exact six original asset roles required")
+  path_ok<-function(p) is.character(p)&&length(p)==1L&&!is.na(p)&&startsWith(p,"/")&&
+    !grepl("//|(^|/)\\.\\.?(/|$)|/$",p)
+  out<-lapply(roles,function(role) {
+    old<-original$assets[[role]];new<-materialized$assets[[role]]
+    for(p in list(old,new))q(is.list(p)&&setequal(names(p),c("path","size_bytes","sha256"))&&
+      path_ok(p$path)&&is.numeric(p$size_bytes)&&length(p$size_bytes)==1L&&is.finite(p$size_bytes)&&
+      p$size_bytes>0&&p$size_bytes==floor(p$size_bytes)&&mqa_hex(p$sha256),"canonical original/materialized asset pin required")
+    q(mqa_metadata_equal(old[c("size_bytes","sha256")],new[c("size_bytes","sha256")]),
+      "original/materialized asset size or SHA changed")
+    # Old paths describe another host and need not exist on this one. New
+    # paths must be actual canonical nonsymlink files; q2_metadata MUST hash
+    # their bytes before a payload read. No archive is opened in this helper.
+    q2_regular(new$path)
+    q(file.exists(new$path)&&!dir.exists(new$path)&&
+      identical(normalizePath(new$path,mustWork=TRUE),new$path),"canonical local materialized asset path required")
+    list(role=role,original_path=old$path,materialized_path=new$path,
+      size_bytes=new$size_bytes,sha256=new$sha256,path_relocated=!identical(old$path,new$path),
+      content_equivalence="same_role_size_SHA256_materialized_bytes_must_be_rehashed")
+  })
+  names(out)<-roles
+  list(schema_version="mq_original_unit_materialized_path_bridge_v1",assets=out,
+    nonasset_unit_metadata_unchanged=TRUE,original_contract_rewritten=FALSE,
+    materialized_content_reverification_required=TRUE)
+}
 mqa_pin <- function(x,max_bytes=256*1024^2) {
   q <- mqa_require
   q(is.list(x)&&!anyDuplicated(names(x))&&setequal(names(x),c("path","size_bytes","sha256"))&&
@@ -474,6 +513,9 @@ mqa_verify_prepared <- function(s,root) {
       algo="sha256",serialize=FALSE),a$reducer_sha256),"authentic preparation source/reducer blob required")
   derivation <- jsonlite::read_json(s$prepared_derivation$path,simplifyVector=FALSE)
   mqa_derivation_metadata(derivation,s$original_unit,s)
+  original<-jsonlite::read_json(mqa_pin(s$original_unit_contract,1024^2),simplifyVector=FALSE)
+  q(mqa_metadata_equal(derivation$original_asset_path_bridge,mqa_original_unit_bridge(s$original_unit,original)),
+    "prepared derivation lost the authenticated original-to-materialized path bridge")
   q(identical(derivation$payload_sha256,s$prepared_payload$sha256)&&
     derivation$payload_size_bytes==s$prepared_payload$size_bytes&&
     identical(a$reducer_sha256,unname(tools::sha256sum(file.path(root,a$reducer_relative_path)))),

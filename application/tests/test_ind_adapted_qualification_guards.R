@@ -82,6 +82,12 @@ for(mut in list(function(x){x<-x[2:1,];x},function(x){x$sha256[1]<-"bad";x},
   function(x){x$size_bytes[1]<-99;x},function(x){x$path[1]<-x$path[2];x},
   function(x){x<-x[-1L,];x}))aq_reject(ind_aq_runtime_match(runtime,mut(runtime)),"runtime/package")
 
+changed_observation <- runtime
+attr(changed_observation,"observational_os_state") <- list(path=runtime_ic_paths(),observed_sha256="different_live_OS_bytes")
+aq_check(isTRUE(ind_aq_runtime_match(runtime,changed_observation)))
+changed_software <- changed_observation;changed_software$sha256[1] <- strrep("c",64L)
+aq_reject(ind_aq_runtime_match(runtime,changed_software),"runtime/package")
+
 eta <- list(family="al",p=.05,sigma=.7,gamma=0)
 A <- (1-2*.05)/(.05*.95);B <- 2/(.05*.95)
 input <- list(y=rep(0,500),FF=matrix(rep(c(1,0,1,0,1,0),500),6L),GG=diag(6L),

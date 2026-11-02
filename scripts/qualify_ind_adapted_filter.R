@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
 # One separately admitted AL training-only numerical purpose; no production.
+source("scripts/runtime_identity_cache_observations.R",local=TRUE)
 ind_aq_require <- function(x,message) {
   if(!isTRUE(x))stop(paste0("IND ancestor-first qualification: ",message),call.=FALSE)
   invisible(TRUE)
@@ -129,16 +130,17 @@ ind_aq_runtime_inventory <- function() {
   q(all(loadedNamespaces() %in% packages),"unlisted namespace or installed model substitution")
   roots <- vapply(packages,function(p)find.package(p,quiet=TRUE),character(1L))
   files <- unlist(lapply(roots,function(p)list.files(p,recursive=TRUE,full.names=TRUE,all.files=TRUE,no..=TRUE)),use.names=FALSE)
-  maps <- readLines("/proc/self/maps",warn=FALSE)
-  maps <- sub("^[^/]*(/.*)$","\\1",maps[grepl("/",maps)])
-  q(!any(grepl(" \\(deleted\\)$",maps)),"deleted mapped runtime object")
-  files <- c(files,maps,Sys.readlink("/proc/self/exe"),file.path(R.home("bin"),"Rscript"),
+  os <- runtime_ic_snapshot()
+  files <- c(files,os$strict_mapped_paths,Sys.readlink("/proc/self/exe"),file.path(R.home("bin"),"Rscript"),
     Sys.which("git"),"/usr/bin/timeout")
   files <- files[file.exists(files)&!file.info(files)$isdir]
   files <- sort(unique(normalizePath(files,mustWork=TRUE)))
   q(length(files)>0L,"complete runtime closure required")
-  data.frame(path=files,size_bytes=as.numeric(file.info(files)$size),
+  result <- data.frame(path=files,size_bytes=as.numeric(file.info(files)$size),
     sha256=unname(tools::sha256sum(files)),stringsAsFactors=FALSE)
+  attr(result,"observational_os_state") <- os$observational_os_state
+  attr(result,"observational_os_state_role") <- os$observation_role
+  result
 }
 ind_aq_runtime_match <- function(expected,actual) {
   fields <- c("path","size_bytes","sha256")
@@ -217,7 +219,7 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
   sources <- c("scripts/qualify_ind_adapted_filter.R","scripts/ind_adapted_auxiliary_filter.R",
     "scripts/ind_guided_auxiliary_filter.R","scripts/ind_guided_auxiliary_primitives.R",
     "scripts/ind_conditional_auxiliary_filter.R","scripts/ind_conditional_filter_replay.R",
-    "scripts/qualify_ind_guided_filter.R")
+    "scripts/qualify_ind_guided_filter.R","scripts/runtime_identity_cache_observations.R")
   q(is.list(spec$source_files)&&length(spec$source_files)==length(sources),"complete exact source/reference inventory required")
   paths <- vapply(spec$source_files,ind_aq_pin,character(1L))
   q(!anyDuplicated(paths)&&setequal(paths,file.path(root,sources)),"unlisted or missing transitive source")
@@ -282,6 +284,10 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
     purpose_contract_sha256=args[4],production_authorized=FALSE,details=list(...)),"progress.json")
   started <- proc.time()
   progress("ADMITTED_PINNED_TRAINING_ONLY_INPUT")
+  write_json(list(role=attr(runtime,"observational_os_state_role"),
+    observation_utc=format(Sys.time(),"%Y-%m-%dT%H:%M:%SZ",tz="UTC"),
+    observations=attr(runtime,"observational_os_state"),live_byte_equality_required=FALSE,
+    numerical_inputs_and_software_remain_strictly_pinned=TRUE),"runtime_OS_identity_cache_before.json")
   tryCatch({
     input <- readRDS(spec$training_input$path) # The sole scientific RDS read.
     eta <- list(family="al",p=.05,sigma=old$sigma,gamma=0)
@@ -338,7 +344,11 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
     for(k in c("training_input","native_forward_receipt","native_forward_manifest","bootstrap_receipt",
       "historical_guided_receipt","native_cpp"))ind_aq_pin(spec[[k]])
     ind_aq_pin(spec$original_fit,max_bytes=611287756);ind_aq_pin(spec$runtime_manifest)
-    ind_aq_runtime_match(runtime_manifest,ind_aq_runtime_inventory())
+    final_runtime <- ind_aq_runtime_inventory();ind_aq_runtime_match(runtime_manifest,final_runtime)
+    write_json(list(role=attr(final_runtime,"observational_os_state_role"),
+      observation_utc=format(Sys.time(),"%Y-%m-%dT%H:%M:%SZ",tz="UTC"),
+      observations=attr(final_runtime,"observational_os_state"),live_byte_equality_required=FALSE,
+      numerical_inputs_and_software_remain_strictly_pinned=TRUE),"runtime_OS_identity_cache_after.json")
     q(expiry>Sys.time()&&identical(git(c("rev-parse","HEAD")),spec$source_commit)&&
       identical(git(c("rev-parse","HEAD^{tree}")),spec$source_tree)&&
       length(git(c("status","--porcelain","--untracked-files=normal")))==0L,"source/lifetime drift")
@@ -354,6 +364,9 @@ ind_aq_main <- function(args=commandArgs(TRUE)) {
       agreement_status=if(all(comparisons$agreement))"PASS_DESCRIPTIVE_AGREEMENT_ONLY"else"REVIEW",
       run_receipts=runs,one_parameter_only=TRUE,full_IF01_or_production_qualified=FALSE,
       runtime_manifest=spec$runtime_manifest,timeout_boundary=timeout,finite_limits=spec$limits,
+      observational_OS_identity_cache_before=attr(runtime,"observational_os_state"),
+      observational_OS_identity_cache_after=attr(final_runtime,"observational_os_state"),
+      identity_cache_observation_role=attr(runtime,"observational_os_state_role"),
       administration_and_contract_reserve_bytes=reserve,caller_RNG_restored=TRUE,
       process_CPU_seconds_before_terminal_receipt=sum(proc.time()[c(1,2,4,5)]),
       process_wall_seconds_before_terminal_receipt=unname(proc.time()["elapsed"]),

@@ -72,8 +72,8 @@ the checkout, at most 512 KiB, and supplied with its exact SHA through
 flags false.
 
 Every file pin has exactly `path`, `size_bytes`, `sha256`. Source files are
-the following exact seven current-checkout paths (the last is a checked
-historical reference, not a sourced execution dependency):
+the following exact eight current-checkout paths (`qualify_ind_guided_filter.R`
+is a checked historical reference, not a sourced execution dependency):
 
 ```
 scripts/qualify_ind_adapted_filter.R
@@ -83,6 +83,7 @@ scripts/ind_guided_auxiliary_primitives.R
 scripts/ind_conditional_auxiliary_filter.R
 scripts/ind_conditional_filter_replay.R
 scripts/qualify_ind_guided_filter.R
+scripts/runtime_identity_cache_observations.R
 ```
 
 Input/proof pin fields are `training_input`, `original_fit`, `native_cpp`,
@@ -95,13 +96,28 @@ checkout are rechecked without optional Git index writes.
 The CSV `runtime_manifest` has exactly `path,size_bytes,sha256`, sorted by
 canonical path. `ind_aq_runtime_inventory()` produces its metadata from
 all installed files in base/compiler/datasets/graphics/grDevices/methods/
-stats/utils/tools/digest/jsonlite, all mapped runtime file paths, the actual
+stats/utils/tools/digest/jsonlite, all strictly classified mapped file paths, the actual
 R interpreter, Rscript, Git and the native timeout executable. Duplicate
 canonical paths are collapsed.
 The actual inventory is independently rebuilt and compared before and after
 the numerical phase. It is a source/runtime metadata preparation helper,
 not a model qualification or source of scientific draws. The parent must
 create and review this manifest under its own bounded preparation scope.
+
+The exact nonexecuting Muscat SSSD identity-cache mappings are separately
+classified by `runtime_identity_cache_observations.R`; see
+`runtime_identity_cache_boundary_20261102.md`. Only the three service-owned
+`passwd`, `group` and `initgroups` files can be observational OS state.
+The inventory retains their observed metadata/hashes in its
+`observational_os_state` attribute instead of the immutable runtime CSV.
+The qualifier writes before/after observation artifacts and includes both
+snapshots in its final receipt. The metadata preparer must also retain this
+attribute separately; writing the strict CSV alone does not preserve the
+observation record. Mutable cache equality is not required; software,
+`libnss*.so`, package and all numerical/source input byte equality remains
+mandatory. Unknown SSSD paths, executable or owner/type masquerades fail.
+The original source-45e3 preflight failure remains untouched and is not a
+filter or quantile-accuracy result. A new source/purpose is required.
 
 The process must be native Muscat R 4.6.0 launched with `--vanilla`, bundled
 R BLAS, exactly one core library path, explicit `R_LIBS_USER=/dev/null` and

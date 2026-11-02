@@ -1,20 +1,28 @@
 # Candidate table projection only. No historical asset or manuscript is edited.
 source("scripts/glofas_same_family_closeout.R")
+source("scripts/glofas_same_family_truth_bridge.R")
 gsc_check_packet <- function(root,manifest_sha256) {
   q <- gsc_require;root <- normalizePath(root,mustWork=TRUE)
   path <- file.path(root,"artifact_manifest.csv")
   q(identical(unname(tools::sha256sum(path)),manifest_sha256),"closeout manifest differs")
   manifest <- read.csv(path,stringsAsFactors=FALSE)
+  q(identical(names(manifest),c("relative_path","size_bytes","sha256"))&&!anyDuplicated(manifest$relative_path)&&
+    all(!grepl("[/\\\\]|^\\.",manifest$relative_path)),"bounded exact scored-packet inventory required")
+  at<-which(manifest$relative_path=="DECISION.json")
+  q(length(at)==1L,"bounded exact scored-packet inventory required")
+  gsc_pin(list(path=file.path(root,"DECISION.json"),size_bytes=manifest$size_bytes[at],sha256=manifest$sha256[at]),8*1024^2)
+  decision <- jsonlite::read_json(file.path(root,"DECISION.json"),simplifyVector=FALSE)
+  truth_version<-gst_truth_interface(decision)
   required <- c("accepted_producers.json","DECISION.json","FORECAST_SEAL.json","family_scores.csv","progress.json",
     "quantile_paths.csv","raw_crossings.csv","score_contract.json","scores_by_date.csv",
     "scoring_truth.csv","quantile_calibration.csv")
+  if(identical(truth_version,"authenticated_truth_bridge_v2"))required<-c(required,"TRUTH_DERIVATION.json","TRUTH_PURPOSE.json")
   q(identical(names(manifest),c("relative_path","size_bytes","sha256"))&&!anyDuplicated(manifest$relative_path)&&
     all(!grepl("[/\\\\]|^\\.",manifest$relative_path))&&setequal(manifest$relative_path,required),
     "bounded exact scored-packet inventory required")
   q(setequal(list.files(root,all.files=TRUE,no..=TRUE),c(manifest$relative_path,"artifact_manifest.csv")),"packet membership differs")
   for(i in seq_len(nrow(manifest)))gsc_pin(list(path=file.path(root,manifest$relative_path[i]),
     size_bytes=manifest$size_bytes[i],sha256=manifest$sha256[i]),8*1024^2)
-  decision <- jsonlite::read_json(file.path(root,"DECISION.json"),simplifyVector=FALSE)
   q(identical(decision$schema_version,"glofas_same_family_closeout_receipt_v1")&&
     identical(decision$status,"READY_FOR_SCIENTIFIC_REVIEW_NOT_AUTOMATIC_PUBLICATION")&&
     identical(decision$mode,"score")&&isTRUE(decision$future_truth_read)&&
@@ -22,7 +30,21 @@ gsc_check_packet <- function(root,manifest_sha256) {
     identical(decision$article_publication_authorized,FALSE),"complete scored packet required, not article approval")
   collection <- jsonlite::read_json(file.path(root,"accepted_producers.json"),simplifyVector=FALSE)
   gsc_validate_collection(collection,decision$expected_identity)
-  gsc_verify_forecast_seal(root,decision$forecast_seal_sha256)
+  current_seal<-gsc_verify_forecast_seal(root,decision$forecast_seal_sha256)
+  if(identical(truth_version,"authenticated_truth_bridge_v2")) {
+    s<-decision$input_bindings
+    s$source_commit<-decision$source_commit;s$source_tree<-decision$source_tree
+    s$truth_interface_version<-truth_version
+    for(pair in list(c("truth_derivation","TRUTH_DERIVATION.json"),c("truth_adapter_purpose","TRUTH_PURPOSE.json"))) {
+      observed<-file.path(root,pair[2L])
+      gsc_require(identical(unname(tools::sha256sum(observed)),s[[pair[1L]]]$sha256)&&
+        file.info(observed)$size==s[[pair[1L]]]$size_bytes,"retained truth provenance differs from approved input")
+    }
+    gst_validate_score_truth(s,current_seal)
+    gsc_require(identical(unname(tools::sha256sum(file.path(root,"scoring_truth.csv"))),s$truth$sha256)&&
+      file.info(file.path(root,"scoring_truth.csv"))$size==s$truth$size_bytes,
+      "retained scoring truth differs from the authenticated post-seal extraction")
+  }
   contract <- jsonlite::read_json(file.path(root,"score_contract.json"),simplifyVector=FALSE)
   q(identical(contract$name,"realized_finite_grid_acrps")&&identical(contract$scale,"log1p")&&
     contract$factor==2&&max(abs(as.numeric(unlist(contract$weights))-c(.075,rep(.15,5L),.075)))<1e-15&&

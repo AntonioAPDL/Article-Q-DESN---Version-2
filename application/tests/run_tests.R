@@ -304,6 +304,7 @@ run_standalone_glofas_test("application/tests/test_mq_array_qualification.R")
 run_standalone_glofas_test("application/tests/test_mq_forecast_array_methods.R")
 run_standalone_glofas_test("application/tests/test_integrated_quantile_receipts_v2.R")
 run_standalone_glofas_test("application/tests/test_glofas_same_family_closeout.R")
+run_standalone_glofas_test("application/tests/test_glofas_same_family_truth_bridge.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_reconstruction_admission.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_same_family_collection.py")) == 0L)
 

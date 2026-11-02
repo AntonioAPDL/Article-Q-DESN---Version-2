@@ -1,6 +1,7 @@
 # New-source MQ qualification guards and deterministic preparation algebra.
 # Defining these functions grants no permission to read an authentic payload.
 source("scripts/qualify_integrated_quantile_forecast.R",local=TRUE)
+source("scripts/runtime_identity_cache_observations.R",local=TRUE)
 mqa_require <- function(ok,why) {
   if(!isTRUE(ok))stop(paste0("MQ_ARRAY_QUALIFICATION: ",why),call.=FALSE)
   invisible(TRUE)
@@ -109,6 +110,7 @@ mqa_required_sources <- function(native_paths)sort(unique(c(native_paths,
   "scripts/qualify_mq_array_methods.R","scripts/mq_array_qualification.R",
   "scripts/prepare_mq_array_observed_prefix.R",
   "application/tests/test_mq_array_qualification.R",
+  "scripts/runtime_identity_cache_observations.R",
   "scripts/qualify_integrated_quantile_forecast.R","scripts/integrated_quantile_mq_batch.R",
   "scripts/mq_forecast_array_methods.R","scripts/mq_independent_cdf_certificate.R",
   "scripts/mq_streaming_cdf_certificate.R","application/R/00_packages.R",
@@ -399,10 +401,11 @@ mqa_runtime_paths <- function() {
   for(p in c("digest","jsonlite","tools","compiler"))mqa_require(requireNamespace(p,quietly=TRUE),paste("runtime package",p))
   allowed <- c("base","compiler","datasets","digest","graphics","grDevices","jsonlite","methods","stats","tools","utils")
   mqa_require(all(loadedNamespaces()%in%allowed),"unexpected package namespace or inference-engine substitution")
-  maps <- readLines("/proc/self/maps",warn=FALSE)
-  mqa_require(!any(grepl("\\.so.*\\(deleted\\)$",maps)),"a mapped runtime library was deleted")
-  mapped <- sub("^.*[[:space:]](/[^[:space:]]+)$","\\1",maps[grepl("[[:space:]]/",maps)])
-  mapped <- mapped[grepl("\\.so([.][0-9]+)*$",mapped)|mapped==Sys.readlink("/proc/self/exe")]
+  # All file-backed mappings stay byte-pinned except the separately classified
+  # exact three nonexecuting SSSD identity caches. No .so or input exemption.
+  mapped <- runtime_ic_snapshot()$strict_mapped_paths
+  mqa_require(all(file.exists(mapped))&&!any(dir.exists(mapped)),
+    "a strict mapped runtime file disappeared; it cannot be silently excluded")
   package_files <- unlist(lapply(loadedNamespaces(),function(p) {
     base <- find.package(p)
     c(file.path(base,c("DESCRIPTION","NAMESPACE")),list.files(file.path(base,"R"),full.names=TRUE,all.files=TRUE,no..=TRUE),
@@ -429,14 +432,19 @@ mqa_runtime_guard <- function(s) {
     max_wall_seconds=s$limits$wall_term_seconds+1,
     max_memory_bytes=s$limits$address_space_bytes,max_output_bytes=s$limits$output_bytes))
   timeout <- mqa_timeout_ancestor(s$limits$wall_term_seconds)
-  files <- mqa_runtime_paths();pins <- vapply(s$runtime_files,mqa_pin,character(1L),max_bytes=128*1024^2)
+  before <- runtime_ic_snapshot()
+  files <- mqa_runtime_paths();pins <- vapply(s$runtime_files,mqa_pin,character(1L),max_bytes=256*1024^2)
   q(!anyDuplicated(pins)&&setequal(pins,files),"complete exact runtime/library/package byte inventory required")
   mqa_pin(s$native_rng_source,4*1024^2)
   q(identical(s$native_rng_source$sha256,"6ef2c5d552c087cd57e0ef49386e01e0174b40433e4ad8d572461b20c958450e"),
     "exact native R4.6 RNG source required")
   list(R=as.character(getRversion()),BLAS=blas,logical_cpu=27L,timeout=timeout,
     namespaces=sort(loadedNamespaces()),runtime_files_verified=length(files),
-    runtime_file_sha256=mqa_hash(s$runtime_files))
+    runtime_file_sha256=mqa_hash(s$runtime_files),
+    observational_os_state_before=before$observational_os_state,
+    observational_os_state_after=runtime_ic_snapshot()$observational_os_state,
+    observation_role=before$observation_role,SSSD_cache_live_byte_equality_required=FALSE,
+    all_other_software_packages_libraries_mappings_and_model_inputs_byte_pinned=TRUE)
 }
 
 mqa_verify_prepared <- function(s,root) {

@@ -55,10 +55,27 @@ thread, logical CPU 27 and a complete pinned inventory returned by
 `mqa_runtime_paths()`: loaded R libraries, package code/DLLs, R binaries and
 the native Git/SSH/timeout executables. Unexpected namespaces, including an
 installed inference-engine substitution, are rejected. At development-time
-discovery this inventory contained 105 files and 93,337,011 bytes; these
-numbers are observations, not permanent substitutes for discovering and
+discovery the software-focused inventory contained 105 files and 93,337,011
+bytes. The final policy additionally includes every strict file-backed mapping;
+these counts are observations, not permanent substitutes for discovering and
 pinning the actual clean process inventory. No model object is read to build
-the inventory.
+the inventory. The shared `runtime_identity_cache_observations.R` policy treats
+only `/var/lib/sss/mc/{passwd,group,initgroups}` as observed OS state, and only
+with canonical regular nonsymlink paths, UID/GID 981, mode 0664 and exclusively
+nonexecuting mappings. Before/after metadata and hash observations are retained,
+without requiring volatile cache bytes to match. Every other mapped file,
+including `libnss*.so`, remains strictly pinned. Wrong ownership, executable,
+renamed/deleted or unknown SSSD mappings reject the purpose; there is no broad
+cache, `/var/lib`, library or numerical-input exception. The pure policy test
+is `application/tests/test_runtime_identity_cache_observations.R`.
+After this change, a read-only metadata discovery found 115 strict runtime
+files, 321,542,083 bytes total. The largest mapped runtime data file was the
+217,800,224-byte system locale archive; the finite runtime-file reader ceiling
+is therefore 256 MiB, not the earlier 128 MiB software-only ceiling. It remains
+byte-pinned. Runtime/input read bytes are part of later admission pricing, not
+additional output permission. Only one currently mapped SSSD cache was present
+in that particular snapshot; late appearance of another permitted cache is
+recorded rather than treated as altered numerical software.
 
 The OS must enforce finite CPU, address-space and file-size limits. Exact
 native timeout arguments and executable are verified, as are process groups:

@@ -62,6 +62,66 @@ local({
       sha256 = unname(tools::sha256sum(dll)), source_path = source, source_sha256 = unname(tools::sha256sum(source)))
   }
   restore(); output_check()
+  # Exercise the genuine-mode FILE/OBJECT identity branch with generated
+  # libraries and synthetic metadata only. This does not call mqnk_load,
+  # create an authentic context or grant any numerical execution permission.
+  manifest_file <- file.path(output, "generated_retained_build_receipt.json")
+  jsonlite::write_json(manifest, manifest_file, auto_unbox = TRUE, pretty = TRUE, digits = 17)
+  bound <- jsonlite::read_json(manifest_file, simplifyVector = FALSE)
+  attr(bound, "receipt_path") <- normalizePath(manifest_file, mustWork = TRUE)
+  attr(bound, "receipt_sha256") <- unname(tools::sha256sum(manifest_file))
+  metadata_context <- list(source_commit = bound$source_commit, source_tree = bound$source_tree,
+    retained_build_receipt_sha256 = attr(bound, "receipt_sha256"))
+  before_names <- names(bound)
+  ok(mqnk_manifest_check(bound, metadata_context, synthetic = FALSE))
+  ok(identical(names(bound), before_names))
+  plain <- bound; attr(plain, "receipt_path") <- NULL; attr(plain, "receipt_sha256") <- NULL
+  ok(identical(plain, jsonlite::read_json(manifest_file, simplifyVector = FALSE)))
+  # These exact source, object, file, hash and attribute mutations must fail.
+  bad <- bound; bad$extra_permission <- TRUE; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; bad$source_commit <- "wrong"; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; bad$source_tree <- "wrong"; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad_context <- metadata_context; bad_context$retained_build_receipt_sha256 <- strrep("0", 64L)
+  reject(mqnk_manifest_check(bound, bad_context, FALSE))
+  bad <- bound; attr(bad, "receipt_path") <- file.path(output, "missing_receipt.json")
+  reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; attr(bad, "receipt_sha256") <- strrep("0", 64L)
+  reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; attr(bad, "receipt_path") <- NULL; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; attr(bad, "receipt_sha256") <- NULL; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  for (key in c("class", "dim", "unreviewed_metadata")) {
+    bad <- bound
+    attr(bad, key) <- if (key == "dim") length(bad) else "forged"
+    reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  }
+  bad <- bound; names(bad)[1L] <- "changed_schema_name"
+  reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; names(bad)[2L] <- names(bad)[1L]
+  reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; names(bad)[2L] <- ""; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  bad <- bound; names(bad)[2L] <- NA_character_; reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  reordered <- bound[rev(seq_along(bound))]
+  attr(reordered, "receipt_path") <- attr(bound, "receipt_path")
+  attr(reordered, "receipt_sha256") <- attr(bound, "receipt_sha256")
+  reject(mqnk_manifest_check(reordered, metadata_context, FALSE))
+  json_alias <- file.path(output, "generated_receipt_symlink.json")
+  ok(file.symlink(manifest_file, json_alias))
+  bad <- bound; attr(bad, "receipt_path") <- json_alias
+  reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  stopifnot(unlink(json_alias) == 0L) # Disposable generated symlink only.
+  bad <- bound; bad$dlls$key$source_sha256 <- strrep("0", 64L)
+  reject(mqnk_manifest_check(bad, metadata_context, FALSE))
+  changed_file <- file.path(output, "changed_generated_receipt.json")
+  jsonlite::write_json(bad, changed_file, auto_unbox = TRUE, pretty = TRUE, digits = 17)
+  changed <- bound; attr(changed, "receipt_path") <- normalizePath(changed_file, mustWork = TRUE)
+  attr(changed, "receipt_sha256") <- unname(tools::sha256sum(changed_file))
+  changed_context <- metadata_context; changed_context$retained_build_receipt_sha256 <- attr(changed, "receipt_sha256")
+  reject(mqnk_manifest_check(changed, changed_context, FALSE))
+  parsed_changed <- jsonlite::read_json(changed_file, simplifyVector = FALSE)
+  attr(parsed_changed, "receipt_path") <- attr(changed, "receipt_path")
+  attr(parsed_changed, "receipt_sha256") <- attr(changed, "receipt_sha256")
+  reject(mqnk_manifest_check(parsed_changed, changed_context, FALSE))
+  output_check()
   proof <- app_iqf_mqb_rng_reference()
   synthetic_context <- function(draw, phase = "training") structure(list(
     schema_version = "mq_native_synthetic_context_v1", mode = "synthetic_backend_contract_test_v1",

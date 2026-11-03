@@ -64,6 +64,23 @@ file after removing these attributes. The guard also checks its complete
 compiler/SDK/runtime/source closure; a numerical wrapper's registration check
 does not replace those checks.
 
+### Named receipt identity correction
+
+The first bounded authentic replay under source `6b11722b` stopped in the
+build-receipt check before output creation or any prepared-prefix/reference
+deserialization. Its unsuccessful terminal record is retained. The wrapper
+had removed every R attribute before comparing the object with its pinned
+JSON, inadvertently removing the list's field names as well.
+
+The correction removes only `receipt_path` and `receipt_sha256`, preserves
+the names, and rejects any other wrapper attribute. It does not relax exact
+JSON/object, source, DLL, purpose or runtime checks. The generated test now
+calls this exact `synthetic = FALSE` metadata-checking branch using temporary
+generated DLLs and a pinned synthetic JSON receipt; mutations of its object,
+source, file, hash and attributes must fail. It creates no authentic context,
+purpose or numerical handle. All executed scientific sources, streams,
+counts, tolerances, targets and historical failure evidence are unchanged.
+
 ## Unchanged calculation
 
 The C sources and their existing generated-only R wrappers are unchanged.

@@ -312,6 +312,13 @@ stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_mq_typ
 # Native candidates compile only temporary generated-test libraries. These
 # checks do not authorize authentic inputs, replace defaults or admit jobs.
 run_standalone_glofas_test("application/tests/run_mq_native_generated_tests.R")
+# Authentic replay source checks are generated-only here. These tests do not
+# build retained libraries, issue purposes or launch scientific calculations.
+run_standalone_glofas_test("application/tests/test_mq_native_qualification_backend.R")
+run_standalone_glofas_test("application/tests/test_mq_native_source_qualification.R")
+run_standalone_glofas_test("application/tests/test_mq_native_runtime_enrollment.R")
+stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_build_mq_native_replay.py"))) == 0L)
+stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_mq_native_external_terminal.py"))) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_reconstruction_admission.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_same_family_collection.py")) == 0L)
 

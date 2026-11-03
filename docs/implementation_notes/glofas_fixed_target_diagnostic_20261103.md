@@ -92,3 +92,84 @@ reader-contract rejection and generated-only reporting. The registered harness
 runs them in isolated processes. This infrastructure does not itself establish
 application convergence, posterior accuracy, improved forecasting, or a new
 article authority.
+
+## Recorded diagnostic findings
+
+At diagnostic source `dd83bfabc89000132e39ab803db4462673bcf5f9`, the 42
+scalar cases pass their independently checked reference and coordinate-update
+comparisons. The 36 nonmedian approximation-accuracy failures remain explicit.
+The 34 affine checks pass; their Gaussian references condition on augmentation
+moments. Both suites reject deliberate source mutations. The generated reader
+contract suites pass 99 and 58 checks, and the pure equation suite passes 53.
+
+The first authenticated read inspected one truth-free design and the
+independent AL fits at 0.05 and 0.50. Both retained future covariances are
+symmetric and positive definite; their condition numbers are approximately
+30.42 and 96.33. Stored reference and discrepancy Jacobians exclude current
+and later latent responses. These are saved-state checks, not a fresh
+reconstruction of every feature or proof of complete optimizer convergence.
+
+A separately admitted read evaluated the median coordinate equations and two
+tiny frozen configurations. All 44 named prior-field comparisons passed. The
+reference/discrepancy global-prior scales are `5.2043087e-5` and `0.0001159`;
+both intercept precisions are `1e-9`, with slab hyperparameters 2 and 4. This
+does not certify every unlisted prior or the uninspected multiquantile fits.
+
+The median future block is close to its linearized coordinate equations:
+
+| Diagnostic | Value |
+|---|---:|
+| Maximum absolute preconditioned step, not applied | 5.4346395e-5 |
+| Covariance relative Frobenius discrepancy | 3.5140297e-5 |
+| Normalized linear-solve residual | 3.3198892e-17 |
+| Linearized precision condition number | 96.3280 |
+
+At horizon 17 the saved path mean is -0.416236, whereas the conditional
+reference plug-in is 2.409956. The reference and issued-factor gradient terms
+are approximately -4.427515 and +4.427156, leaving a small residual. At the
+terminal horizon, where there are no later factors, the path mean and
+conditional reference location agree to about `1.7e-10`. The displacement is
+therefore supported by the executed coupled equations; its magnitude alone
+does not establish a coding or stopping defect. Full-state, three-pass
+stability and accuracy relative to the nonlinear posterior remain unverified.
+
+The independent exact two-horizon AL example provides a useful distinction.
+With conditional reference location zero, its exact earlier-response median
+is -0.010185 with one later member and -1.986548 with 51 ordinary later-member
+factors. Thus conditioning on later issued information can itself substantially
+move a response marginal. This example does not quantify that effect in the
+application. Its 51-member mean-field median also fails the separate CDF
+accuracy check, illustrating that posterior conditioning and approximation
+error can coexist.
+
+## Decision and remaining gate
+
+No iteration-only production rerun is justified by these diagnostics. No
+production kernel, prior, feature map, result table, figure or manuscript has
+been changed. The current article packet is retained, including its adverse
+results; this closeout does not approve a replacement scientific authority.
+
+A new inference implementation would need to preserve the mathematical target
+and qualify all coupled expectations. Collapsing future AL auxiliary variables
+changes the coefficient objective; retaining a structured future block requires
+joint moments rather than products of separate expectations. Neither is a
+drop-in correction established by the scalar example. Replacing a marginal
+quantile with the conditional plug-in, or freezing historical parameter
+learning, is not automatically inference-equivalent.
+
+Before another campaign, require an independently reviewed same-target
+derivation, relevant one-/two-horizon and uncertain-parameter benchmarks,
+exAL/MQ qualification where affected, accurate objective/stopping accounting,
+and a timed feasible dependency schedule. Preserve the protected scoring
+window throughout. Do not seek a favorable run by seed or prior selection.
+
+## Historical source-guard consumer
+
+The immutable transition launch guard and its original source manifest are
+unchanged. The registered consumer tests that original grant at the exact
+frozen scientific producer. On the current tree it separately checks the
+original working/staged bytes and modes, the four diagnostic modules pinned
+to diagnostic source `dd83bfabc89000132e39ab803db4462673bcf5f9`, the exact scoped
+change set and rejection of untracked scientific implementations. All original
+manifest mutations and the seven-authorized-additions assertion remain active.
+This is test-context maintenance, not a broader scientific launch permission.

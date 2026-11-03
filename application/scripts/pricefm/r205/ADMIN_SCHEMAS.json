@@ -1,0 +1,321 @@
+{
+  "administrative_grant_schema": "r203_root_delegated_administrative_action_v1",
+  "cli_arguments": [
+    "manifest_path",
+    "manifest_sha256"
+  ],
+  "fixed_role_prefixes": [
+    "CAPTURE_",
+    "PEER_",
+    "ISSUE_"
+  ],
+  "known_runtime_holds": [
+    "native_clean_launch_actual_evidence",
+    "same_path_RO_facility",
+    "actual_owned_build",
+    "actual_native_ABI",
+    "initial_analytic_qualification",
+    "fullsize_price_export_error_budget"
+  ],
+  "minimum_complete_administrative_reservation": 192,
+  "minimum_complete_remote_unknown_reservation": 64,
+  "native_route": [
+    "CAPTURE_ADMISSION",
+    "CAPTURE_INSTALL_BOOTSTRAP",
+    "CAPTURE_SUBMIT",
+    "CAPTURE_READY_DISCOVERY",
+    "CAPTURE_SOURCE_PHYSICAL",
+    "CAPTURE_OWNER_READY",
+    "CAPTURE_INSTALL_RELEASE",
+    "CAPTURE_TERMINAL"
+  ],
+  "records": {
+    "admin_context.py": {
+      "public_functions": {
+        "grant": [
+          "pin",
+          "operation",
+          "program",
+          "cpu",
+          "remote"
+        ],
+        "kernel": [
+          "cpu"
+        ]
+      },
+      "source": {
+        "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/admin_context.py",
+        "sha256": "a877ebc7ae8a183b17eddaf1a7f28e4ea07df79c6c7e3f932251af612fc3a6ea"
+      }
+    },
+    "independent_peer.py": {
+      "public_functions": {
+        "abi_probe": [
+          "value",
+          "t"
+        ],
+        "abi_suite_review": [
+          "core_pin",
+          "output"
+        ],
+        "admin_before_records": [
+          "cpu"
+        ],
+        "admission_evidence": [
+          "a",
+          "t",
+          "q"
+        ],
+        "admission_review": [
+          "preview_pin",
+          "core_pin",
+          "output"
+        ],
+        "bound_result_review": [
+          "kind",
+          "result_pin",
+          "accounting_pin",
+          "output"
+        ],
+        "clean_launch_contract": [
+          "pin",
+          "t"
+        ],
+        "clean_launch_facts": [
+          "core",
+          "t"
+        ],
+        "clean_launch_review": [
+          "core_pin",
+          "expires_epoch",
+          "output"
+        ],
+        "complete_inventory": [
+          "r",
+          "t",
+          "q",
+          "o"
+        ],
+        "copy_pin": [
+          "pin",
+          "o"
+        ],
+        "facility_facts": [
+          "raw_pin",
+          "accounting_pin"
+        ],
+        "founder": [
+          "v",
+          "r",
+          "t"
+        ],
+        "guarded": [
+          "pair",
+          "cpu"
+        ],
+        "main": [],
+        "native_argv": [
+          "argv"
+        ],
+        "observation": [
+          "pin",
+          "r",
+          "t",
+          "mode",
+          "request_pin"
+        ],
+        "owner_release": [
+          "request_pin",
+          "source_review_pin",
+          "observation_pair",
+          "output_path"
+        ],
+        "profile_values": [
+          "profile",
+          "owner_wall_seconds",
+          "canonical_metadata_root",
+          "nonce"
+        ],
+        "program": [
+          "pin",
+          "t",
+          "name"
+        ],
+        "prospective": [
+          "pin"
+        ],
+        "raw_build_review": [
+          "raw_pin",
+          "accounting_pin",
+          "output"
+        ],
+        "raw_stage": [
+          "raw_pin",
+          "accounting_pin",
+          "stage"
+        ],
+        "readonly_facts": [
+          "raw_pin",
+          "accounting_pin"
+        ],
+        "reconstruct_ABI": [
+          "raw_pin",
+          "accounting_pin"
+        ],
+        "request": [
+          "pin",
+          "check_current"
+        ],
+        "resolve": [
+          "pin",
+          "observation"
+        ],
+        "script_policy": [
+          "t",
+          "template_path"
+        ],
+        "source_physical": [
+          "request_pin",
+          "observation_pair",
+          "output_path"
+        ],
+        "static_review": [
+          "kind",
+          "core_pin",
+          "output",
+          "resource_constraints"
+        ],
+        "template": [
+          "pin",
+          "check_current"
+        ],
+        "traced_guard": [
+          "pin",
+          "r",
+          "handshake"
+        ],
+        "validate_admission": [
+          "t",
+          "q",
+          "check_current"
+        ]
+      },
+      "source": {
+        "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/independent_peer.py",
+        "sha256": "b2f124fd3d10d4cd28a255b32fa4ba0ddfe57204a0cf8d673892083dec3dccd7"
+      }
+    },
+    "issuer_finalize.py": {
+      "public_functions": {
+        "abi_candidate": [
+          "raw_pin",
+          "accounting_pin",
+          "output"
+        ],
+        "abi_core": [
+          "candidate_pin",
+          "guard_pin",
+          "output"
+        ],
+        "abi_finalize": [
+          "core_pin",
+          "review_pin",
+          "output"
+        ],
+        "admission_candidate": [
+          "preview_pin",
+          "core_pin",
+          "review_pin",
+          "output"
+        ],
+        "assemble_template": [
+          "preview_pin",
+          "admission_pin",
+          "proofs",
+          "output_root"
+        ],
+        "attach_review": [
+          "core_pin",
+          "review_pin",
+          "kind",
+          "output"
+        ],
+        "birth": [],
+        "build_result": [
+          "raw_pin",
+          "accounting_pin",
+          "raw_review_pin",
+          "output_root"
+        ],
+        "compatible_candidate": [
+          "kind",
+          "result_pin",
+          "review_pin",
+          "accounting_pin",
+          "output"
+        ],
+        "deployment_result": [
+          "raw_pin",
+          "accounting_pin",
+          "output_root"
+        ],
+        "facility_result": [
+          "raw_pin",
+          "accounting_pin",
+          "output"
+        ],
+        "main": [],
+        "promote": [
+          "candidate_pin",
+          "guard_pin",
+          "candidate_status",
+          "accepted_status",
+          "output"
+        ],
+        "release": [
+          "request_pin",
+          "source_pin",
+          "owner_pin",
+          "proofs",
+          "output_root"
+        ],
+        "request_from_ready": [
+          "template_pin",
+          "capture_pair_pin",
+          "output"
+        ],
+        "terminal_accounting": [
+          "raw_pin",
+          "capture_pair_pin",
+          "output"
+        ]
+      },
+      "source": {
+        "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/issuer_finalize.py",
+        "sha256": "31c4501d6c040aa703dedac9d7f48c307782e716e57bd7b42a5b2e60d02741f4"
+      }
+    },
+    "observation_capture.py": {
+      "public_functions": {
+        "before_records": [],
+        "birth": [],
+        "run": [
+          "pin"
+        ]
+      },
+      "source": {
+        "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/observation_capture.py",
+        "sha256": "485b14b4bc4cb2f50203c191e1129b852ebf928f4e8db74fd2e19dc0f5aa0b97"
+      }
+    }
+  },
+  "runtime_qualification": false,
+  "schema": "r203_administrative_source_protocol_catalog_v1",
+  "source_scope": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SCOPE.json",
+    "sha256": "850434d116ab41abae222a12639ba268d483dbee2dedb45fb7fa4c24f3c78e9e"
+  },
+  "stage_scope_status": "ROOT_FUNDED_R203_CONTROL_STAGE_NO_TARGETS",
+  "static_metadata_scope_status": "ROOT_FUNDED_R203_METADATA_PREPARATION_ONLY",
+  "status": "SOURCE_INTERFACE_CATALOG_NOT_ACTUAL_RECORDS"
+}

@@ -1,0 +1,1148 @@
+{
+  "actual_binary_file_UIDs": {
+    "immutable_baseline_and_toolchain": [
+      0,
+      "actual UID"
+    ],
+    "own_source_metadata_and_produced_artifacts": "actual UID; immutable runtime39 ownUID constraints remain later gates"
+  },
+  "actual_proof_policy": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/PEER_POLICY.json",
+    "sha256": "65094e86aca9121f776bffff260ddb6a84890a8f39344291ab9a6456d7cbf234"
+  },
+  "admission": {
+    "keys": [
+      "schema",
+      "status",
+      "purpose",
+      "nonce",
+      "stage",
+      "node",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "scope",
+      "ledger",
+      "quote",
+      "parameters_sha256",
+      "output_root",
+      "qualified_startup_baseline",
+      "actual_resource_observation",
+      "actual_calendar_assessment",
+      "independent_review",
+      "maximum_jobs",
+      "optimizer_invocations",
+      "new_posterior_fits",
+      "issued_epoch",
+      "expires_epoch",
+      "actual_accept_guard",
+      "command_pid",
+      "command_birth_ticks"
+    ],
+    "rules": {
+      "actual_observation_requires_original_guard_PIN_and_PID_birth": true,
+      "baseline_does_not_mean_native_runtime_qualification": true,
+      "genuine_fresh_role_specific": true,
+      "independent_review_core": "Exclude independent_review,status,actual_accept_guard,issued_epoch,command_pid,command_birth_ticks; include expiry and all logical fields",
+      "maximum_jobs": 1,
+      "new_posterior_fits": 0,
+      "optimizer_invocations": 0,
+      "policy_issuer": "Root independently defines actual guard/calendar/baseline validation; Common must reject absent/inapplicable proofs",
+      "promotion": "Actual H5 candidate stdout/PID/birth and exact real guard; expected immutable bootstrap plan is independently reviewed and matched to actual startup facts, not prior native-runtime qualification",
+      "source_scope_or_plain_JSON_status_insufficient": true
+    },
+    "schema": "r203_control_stage_admission_v1",
+    "status": "ADMITTED_R203_ONE_DIRECT_SLURM_STAGE"
+  },
+  "authority": {
+    "keys": [
+      "schema",
+      "status",
+      "request",
+      "source_review",
+      "owner_review",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "uid",
+      "owner",
+      "root",
+      "permit_fd",
+      "parameters_sha256",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "scope",
+      "ledger",
+      "quote",
+      "admission",
+      "maximum_owner_calls",
+      "maximum_traced_subjects",
+      "optimizer_invocations",
+      "new_posterior_fits",
+      "scientific_target_data_read",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "rules": {
+      "first_entry": "source.issue <= authority.issue <= now < source.expiry AND owner.issue <= authority.issue <= now < owner.expiry AND READY120",
+      "maximum_owner_calls": 1,
+      "new_posterior_fits": 0,
+      "optimizer_invocations": 0,
+      "target_data": false,
+      "whole_stage": "all later subjects/return use actual one-call claim time; never renew early lease or full clock"
+    },
+    "schema": "r203_control_stage_authority_v1",
+    "status": "ROOT_ADMITTED_R203_ONE_CONTROL_STAGE"
+  },
+  "bootstrap_authority": {
+    "keys": [
+      "schema",
+      "status",
+      "template_core_sha256",
+      "purpose",
+      "nonce",
+      "stage",
+      "node",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "scope",
+      "ledger",
+      "quote",
+      "admission",
+      "parameters_sha256",
+      "output_root",
+      "maximum_jobs",
+      "maximum_owner_calls",
+      "optimizer_invocations",
+      "scientific_target_data_read",
+      "issued_epoch",
+      "expires_epoch",
+      "canonical_input_proofs"
+    ],
+    "rules": {
+      "maximum_jobs": 1,
+      "maximum_owner_calls": 1,
+      "metadata_startup_only": true,
+      "optimizer_invocations": 0,
+      "scientific_target_data_read": false,
+      "template_core": "all template fields except bootstrap_authority"
+    },
+    "schema": "r203_control_metadata_bootstrap_authority_v1",
+    "status": "ROOT_AUTHORIZED_R203_METADATA_STARTUP_ONLY"
+  },
+  "canonical_input_proofs": {
+    "bootstrap": "prejob exact schema-required closure, excluding template/bootstrap themselves",
+    "release": "postREADY exact request/peers/authority/capture closure, excluding release itself",
+    "rules": "no blind historical descriptor recursion; no actor callback resolver or JSON rewrite; missing canonical paths STOP"
+  },
+  "context_contract": {
+    "child_attributes": [
+      "child",
+      "parent",
+      "case_id",
+      "ordinal",
+      "native_deadline_epoch"
+    ],
+    "module": "_r203_control_contract",
+    "owner_state_machine": [
+      "READY_METADATA_ONLY",
+      "RELEASED_CLAIMED_ONCE",
+      "CLOSED"
+    ],
+    "parameters_view": "full template.parameters object; phase fields under parameters.stage",
+    "properties": "read-only/defensively copied; actual context seals and kernel/job/lifetime checks remain private",
+    "require_context_returns": "same actual sealed context; no duck types, injected validators or callbacks",
+    "reservation_binding": "All fixed physical slots allocated BEFORE READY; actual reservation manifest/witness links inode/cap/current logical length and any sameinode terminal aliases; no paid slot claimed twice",
+    "slot_methods": {
+      "finalize_stream(name,used_bytes=None)": "supplied length must equal actual tracked sharedFDcursor; before close, no paddedJSON",
+      "open_slot(name,mode=\"r+b\")": "unbuffered same reserved inode; exact closed mode",
+      "write_metadata(name,value)": "complete one counted write into paidslot"
+    },
+    "subject_context": "same fixed authenticated module instance per process; same immutable owner/request/authority/two maps/parameters plus observed actual child+parent identities",
+    "wait_and_admit": "verifies exact Root release, both fresh independent phases and finite full authority, then creates single stage-start claim inside original READY+leases",
+    "whole_stage_deadline": "min(authority expiry, actual owner_startup entry epoch + quote.owner_wall_seconds), fixed once; separate stage_started_epoch is first admitted claim"
+  },
+  "created_epoch": 1793696345.7324982,
+  "dependency_inventory": {
+    "file_keys": [
+      "path",
+      "sha256",
+      "bytes"
+    ],
+    "keys": [
+      "schema",
+      "files",
+      "exec_allowlist"
+    ],
+    "schema": "r203_immutable_dependency_inventory_v1"
+  },
+  "design_review": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/independent_review/DESIGN8.REVIEW.json",
+    "sha256": "50cd8453cace43b7f69913117e649d9f5c2820132c5aa251122e1f7a8057bca8"
+  },
+  "expected_startup_baseline": {
+    "independent_review_core": "baseline_core_sha256 excluding independent_review",
+    "keys": [
+      "schema",
+      "status",
+      "node",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "startup_python",
+      "traced_guard",
+      "source_and_baseline",
+      "physical_profile",
+      "facility_policy",
+      "parameters_sha256",
+      "independent_review"
+    ],
+    "schema": "r203_expected_startup_baseline_plan_v1",
+    "status": "PASS_REVIEWED_R203_EXPECTED_STARTUP_BASELINE_PLAN"
+  },
+  "facility_plan": {
+    "actual_observation_and_independent_review_still_required": true,
+    "required": [
+      "node",
+      "controller_mounts_or_privilege_operations=false",
+      "canonical_output_path_preserved=true"
+    ],
+    "schema": "r203_same_path_facility_plan_v1",
+    "status": "APPROVED_FACILITY_PLAN_REQUIRES_ACTUAL_OBSERVATION"
+  },
+  "native_clean_launch_prerequisite": {
+    "actual_evidence_pair": [
+      "result",
+      "guard"
+    ],
+    "actual_missing": "STOP before admission; expected source plan/boolean never qualifies",
+    "actual_result_keys": [
+      "schema",
+      "status",
+      "node",
+      "site",
+      "sbatch",
+      "bash",
+      "launcher",
+      "environment",
+      "submission_policy",
+      "site_SPANK_policy",
+      "actual_probe_argv",
+      "first_exec_environment",
+      "first_exec_events",
+      "raw_native_observations",
+      "command_source",
+      "source_review",
+      "command_pid",
+      "command_birth_ticks",
+      "observed_epoch"
+    ],
+    "actual_result_schema": "r203_actual_native_clean_launch_evidence_v1",
+    "actual_result_status": "CAPTURED_ACTUAL_SITE_FIRST_EXEC_ENVIRONMENT_NOT_RUNTIME_QUALIFICATION",
+    "closed_base_environment": {
+      "optional": {
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin"
+      },
+      "required": [
+        "TZ",
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "BLIS_NUM_THREADS"
+      ]
+    },
+    "contract_keys": [
+      "schema",
+      "status",
+      "node",
+      "site",
+      "sbatch",
+      "bash",
+      "launcher",
+      "environment",
+      "submission_policy",
+      "site_SPANK_policy",
+      "actual_evidence",
+      "independent_review"
+    ],
+    "contract_schema": "r203_native_clean_launch_contract_v1",
+    "contract_status": "PASS_REVIEWED_R203_NATIVE_CLEAN_LAUNCH_BEFORE_INTERPRETER",
+    "environment_timing": {
+      "actual_Python_owner": "AFTER reviewed script cleanup/re-export: require every expected closed environment key/value and forbid inherited loader/Python/shell controls",
+      "first_exec": "PRE_BASH under NIL: forbid injection, check closed expected values IF PRESENT, require real Slurm identity; future exported thread/TZ/locale keys need not yet exist"
+    },
+    "independent_review": {
+      "actual_evidence": "exact pair",
+      "clock": "observed<=review.issued<=template.issued;template.expires<=review.expires<=review.issued+86400",
+      "core_field": "clean_launch_core_sha256",
+      "status": "PASS_REVIEWED_R203_NATIVE_CLEAN_LAUNCH_BEFORE_INTERPRETER"
+    },
+    "location": "baseline.facility_policy.native_clean_launch_contract",
+    "native_argv_grammar": {
+      "boolean_options": [
+        "parsable",
+        "no-requeue"
+      ],
+      "forbidden": "short/abbreviated/unknown/duplicate options,wait,exclusive,test-only,wrap,get-user-env,alternate export,extra positionals,heterogeneous job syntax",
+      "forecast": "native collector alone adds --test-only; actual submit grammar forbids it",
+      "required_once": [
+        "--export=NIL",
+        "--no-requeue"
+      ],
+      "value_options": [
+        "partition",
+        "qos",
+        "nodes",
+        "ntasks",
+        "cpus-per-task",
+        "mem",
+        "time",
+        "nodelist",
+        "job-name",
+        "output",
+        "error",
+        "chdir",
+        "account",
+        "reservation",
+        "hint",
+        "threads-per-core",
+        "ntasks-per-node",
+        "distribution",
+        "export"
+      ]
+    },
+    "script_shebang": "#!/bin/bash -p",
+    "site": "hb.ucsc.edu",
+    "site_SPANK_policy": {
+      "allowed_environment_names": "unique explicit SPANK_* names only; same object in actual result"
+    },
+    "source_phase_actual_evidence_created": false,
+    "submission": "exactly one --export=NIL; no alternative export/get-user-env/wrap; literal absolute sbatch"
+  },
+  "native_client_environment_revision": {
+    "does_not_attest": "SSH remote shell/env executable loader startup or compute-node first-exec/pre-Bash/RO",
+    "fixed_absolute_tools": {
+      "date": "/usr/bin/date",
+      "dd": "/usr/bin/dd",
+      "find": "/usr/bin/find",
+      "realpath": "/usr/bin/realpath",
+      "sacct": "/usr/bin/sacct",
+      "scontrol": "/usr/bin/scontrol",
+      "sha256sum": "/usr/bin/sha256sum",
+      "sync": "/usr/bin/sync",
+      "tar": "/usr/bin/tar"
+    },
+    "fixed_environment": [
+      "PATH=/usr/bin:/bin",
+      "TZ=UTC",
+      "LANG=C",
+      "LC_ALL=C",
+      "SLURM_TIME_FORMAT=%Y-%m-%dT%H:%M:%S%z"
+    ],
+    "logical_reply_schema_unchanged": true,
+    "native_envelope_new_field": "native_client_argv",
+    "revision": "r205_source_preparation",
+    "sbatch_path": "Exact existing reviewed clean-launch contract and physical-profile absolute path; no guessed /usr/bin/sbatch",
+    "source_only_no_actual_site_qualification": true,
+    "wrapper": "/usr/bin/env -i"
+  },
+  "native_wrong_permit_argument": {
+    "operation": "verify actual fstat EBADF, then deliberate native wrongargument only",
+    "real_inherited_permit_remains_live": true,
+    "value": 2147483647
+  },
+  "open_design_points": [],
+  "owner_peer": {
+    "keys": [
+      "schema",
+      "status",
+      "request",
+      "template",
+      "source_review",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "parameters_sha256",
+      "owner_ready",
+      "physical_witness",
+      "observation",
+      "independent_program",
+      "runtime_admitted",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "rules": {
+      "expiry": "min(request expiry, source lease expiry, original READY expiry)",
+      "independent_algorithms": true,
+      "runtime_admitted": false
+    },
+    "schema": "r203_control_owner_release_review_v1",
+    "status": "PASS_REVIEWED_R203_ACTUAL_OWNER_RELEASE"
+  },
+  "parameters": {
+    "common": {
+      "environment": "fixed one-thread TZUTC/minimal safe environment, no user Python/loader injection; actual Slurm IDs added only after job exists",
+      "keys": [
+        "schema",
+        "startup_python",
+        "traced_guard",
+        "source_and_baseline",
+        "exec_allowlist",
+        "environment",
+        "permit_path",
+        "canonical_metadata_root",
+        "physical_profile",
+        "storage_policy"
+      ],
+      "physical_profile": "independently reviewed Pin with exact core/SMT/RAM/disk/headroom/calendar policy; no old profile transfer inferred",
+      "schema": "r203_common_stage_parameters_v1",
+      "source_and_baseline": {
+        "baseline_files": "unique exact Pin list; actual immutable code/runtime/Python/toolchain dependencies appropriate to stage; native-library build target excluded before build",
+        "dependency_inventory": "Pin of closed complete dependency/exec inventory, checked on owned compute; no binary reads on admin",
+        "keys": [
+          "baseline_files",
+          "dependency_inventory"
+        ]
+      },
+      "storage_policy": {
+        "alias_rule": "null except an explicitly granted same-inode native NOREPLACE transition; final alias initially absent, no second slot/reservation or copy",
+        "compiler_output_and_old_tree": "explicit priced live transient allowance, never falsely called preallocated when unchanged creation rules cannot consume slots",
+        "keys": [
+          "slots",
+          "payload_useful_limit_bytes",
+          "return_proof_reservation_bytes",
+          "physical_proof_reservation_bytes",
+          "transient_tree_reservation_bytes",
+          "dynamic_artifact_reservation_bytes"
+        ],
+        "physical_semantics": "physical_proof_reservation_bytes is TOTAL all declared preallocated capacities, including ABI16MiB founder/case +32MiB Commonproof=48MiB, equal quote.proof_storage_reservation_bytes. Returned proof minimum is separate.",
+        "return_proof_minimum": 16777216,
+        "slot_keys": [
+          "name",
+          "kind",
+          "maximum_bytes",
+          "final_alias"
+        ],
+        "slot_rules": "exact unique fixed phase/case filenames, max16MiB, physical allocate before first action and consume once; no sparse fallback, overflow, cleanup or slot reuse",
+        "total_useful_maximum": 67108864,
+        "transient_tree_minimum": 33554432
+      }
+    },
+    "keys": [
+      "schema",
+      "common",
+      "stage"
+    ],
+    "per_stage": {
+      "FACILITY_PRECHECK": {
+        "accepted_output": "raw observed route or STOP; no deployment/native acceptance",
+        "canonical_path_row_keys": [
+          "path",
+          "kind",
+          "may_be_missing_before_build"
+        ],
+        "keys": [
+          "schema",
+          "facility_plan",
+          "canonical_paths",
+          "output_library",
+          "toolchain_closure",
+          "canonical_metadata_inputs",
+          "same_path_policy"
+        ],
+        "same_path_policy": "FACILITY_SEALS_SAME_CANONICAL_BUILD_OUTPUT_NO_JSON_REWRITE",
+        "schema": "r203_facility_precheck_parameters_v1"
+      },
+      "NATIVE_ABI_SUITE": {
+        "keys": [
+          "schema",
+          "native_library",
+          "native_abi",
+          "native_build_manifest",
+          "build_acceptance",
+          "deployment_acceptance",
+          "native_dependencies",
+          "subject_policy"
+        ],
+        "native_dependencies": "closed runtime native dependency descriptors matching actual accepted build manifest",
+        "schema": "r203_native_ABI_parameters_v1",
+        "subject_policy": {
+          "case_ids_ordinals_handshakes": [
+            {
+              "case": "pre_ack_live",
+              "handshake": false,
+              "ordinal": 1
+            },
+            {
+              "case": "wrong_lifetime",
+              "handshake": false,
+              "ordinal": 2
+            },
+            {
+              "case": "wrong_permit",
+              "handshake": false,
+              "ordinal": 3
+            },
+            {
+              "case": "late_transition",
+              "handshake": false,
+              "ordinal": 4
+            },
+            {
+              "case": "repeat_transition",
+              "handshake": true,
+              "ordinal": 5
+            },
+            {
+              "case": "real_ACK",
+              "handshake": true,
+              "ordinal": 6
+            },
+            {
+              "case": "live_rechecks",
+              "handshake": true,
+              "ordinal": 7
+            },
+            {
+              "case": "noreplace_collision",
+              "handshake": true,
+              "ordinal": 8
+            },
+            {
+              "case": "bounded_storage",
+              "handshake": true,
+              "ordinal": 9
+            }
+          ],
+          "case_keys": [
+            "case_id",
+            "ordinal",
+            "handshake",
+            "child_CPU_seconds",
+            "wall_seconds",
+            "native_deadline_rule"
+          ],
+          "founder": "actual admitted owner TracerPid0; failed one-use singleton never reused; observational trace-causality limitation retained",
+          "keys": [
+            "cases",
+            "founder",
+            "storage_slots"
+          ],
+          "native_deadline_rule": {
+            "late": {
+              "descriptor_window_seconds": 30,
+              "kind": "PREP_READY_PLUS_SECONDS_WITH_FIXED_DESCRIPTOR_UPPER_BOUND",
+              "native_interval_seconds": 2,
+              "wait_margin_seconds": 1
+            },
+            "normal": {
+              "kind": "STAGE_DEADLINE"
+            },
+            "requirements": "descriptor issued+30 fixed upper bound; authenticated readiness derives actual C expiry once; rc0 real prepare before expiry; expiry+margin within upper bound and live fullstage; late startup INCONCLUSIVE, never renew"
+          },
+          "storage_slots": {
+            "common_proof_reservation_bytes": 33554432,
+            "entry_keys": [
+              "slot_names",
+              "file_cap_bytes",
+              "slot_count",
+              "physical_reserved_bytes"
+            ],
+            "founder_case_file_cap_bytes": 524288,
+            "founder_case_total_bytes": 16777216,
+            "group_keys": [
+              "founder",
+              "pre_ack_live",
+              "wrong_lifetime",
+              "wrong_permit",
+              "late_transition",
+              "repeat_transition",
+              "real_ACK",
+              "live_rechecks",
+              "noreplace_collision",
+              "bounded_storage",
+              "proof"
+            ],
+            "minimum_total_named_capacity_bytes": 50331648,
+            "physical_founder_case_slots": 32,
+            "rules": "31 casephysical slots+founder1; normal7groups3,collision5,bounded5; exact rows determine sums; alias payload.final initially absent/sameinode, no additional physicalslot; proof includes every Common/Root/terminal/H5 artifact within useful64MiB"
+          }
+        }
+      },
+      "OWNED_NATIVE_BUILD": {
+        "keys": [
+          "schema",
+          "facility_precheck",
+          "facility_plan",
+          "source",
+          "header",
+          "abi",
+          "compiler",
+          "toolchain_closure",
+          "build_directory",
+          "output_library",
+          "maximum_compiler_execs"
+        ],
+        "maximum_compiler_execs": "typed positive independently priced fixed toolchain bound; owner and all helper descendants counted, shell false",
+        "output_library": "actual gcc -o path, absent before compile, retained SAME canonical name through later facility RO transition",
+        "requires_science_handshake": false,
+        "schema": "r203_native_build_parameters_v1",
+        "source_header_abi": "exact corresponding immutable runtime39 pins"
+      },
+      "READONLY_DEPLOYMENT": {
+        "canonical_metadata_inputs": "closed list of {path,sha256} originals, no data payload",
+        "keys": [
+          "schema",
+          "facility_plan",
+          "build_acceptance",
+          "native_build_manifest",
+          "native_library",
+          "native_abi",
+          "baseline_files",
+          "canonical_metadata_inputs",
+          "same_path_policy"
+        ],
+        "operation": "observe actual RO mount+backing and exact canonical bytes only; never mount/copy/rewrite",
+        "same_path_policy": "FACILITY_SEALS_SAME_CANONICAL_BUILD_OUTPUT_NO_JSON_REWRITE",
+        "schema": "r203_readonly_deployment_parameters_v1"
+      }
+    },
+    "schema": "r203_stage_parameters_v1"
+  },
+  "postjob_DAG": [
+    "live owner RAW_STAGE_RESULT with raw compiler/observer evidence; no terminal accounting claim",
+    "after job exit capture actual terminal primary Slurm accounting",
+    "independent raw-build review binds raw result+actual accounting",
+    "create immutable old-compatible build manifest using actual argv/output/dependencies/guard/accounting/raw review",
+    "create enriched result pinning that manifest",
+    "independent compatible bound-result review",
+    "new actual H5 candidate stdout/PIDbirth followed by pure metadata finalizer with exact real guard"
+  ],
+  "previous_proposal": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SCHEMAS_PROPOSED.json",
+    "sha256": "a6479c6ee1576ebfdd8991ae9573762b94255e30ea56628019308df7bf03293e"
+  },
+  "quote": {
+    "keys": [
+      "schema",
+      "status",
+      "purpose",
+      "nonce",
+      "stage",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "parameters_sha256",
+      "output_root",
+      "components",
+      "whole_CPU_seconds",
+      "whole_wall_seconds",
+      "compute_CPU_reservation",
+      "administrative_CPU_reservation",
+      "remote_unknown_CPU_reservation",
+      "owner_CPU_seconds",
+      "child_CPU_seconds",
+      "owner_wall_seconds",
+      "memory_MiB",
+      "reserved_filesystem_bytes",
+      "mandatory_headroom_bytes",
+      "return_proof_reservation_bytes",
+      "proof_storage_reservation_bytes",
+      "transient_tree_reservation_bytes",
+      "independent_review"
+    ],
+    "rules": {
+      "clock_binding": "Quote has no clock fields; independently reviewed quote core is bound by funded scope/template fixed interval. Never access quote.expires_epoch.",
+      "component_keys": [
+        "covered",
+        "CPU_upper_seconds",
+        "wall_upper_seconds",
+        "compute_CPU_upper_seconds",
+        "administrative_CPU_upper_seconds",
+        "remote_unknown_CPU_reservation"
+      ],
+      "component_names": [
+        "startup",
+        "namespace",
+        "import",
+        "optimizer",
+        "certification",
+        "checkpoint",
+        "return",
+        "independent_peer",
+        "closure"
+      ],
+      "exact_disjoint_channel_sums": true,
+      "independent_review_binds": "quote_core_sha256 excluding independent_review",
+      "independent_review_status": "PASS_REVIEWED_R203_CONTROL_STAGE_QUOTE",
+      "integer_only": true,
+      "optimizer_compute": 0,
+      "owner_CPU_inclusive_not_added_to_primary": true,
+      "per_file_maximum": 16777216,
+      "return_proof_minimum": 16777216,
+      "startup_wall_minimum": 120,
+      "total_useful_maximum": 67108864,
+      "transient_tree_minimum": 33554432
+    },
+    "schema": "r203_control_stage_quote_v1",
+    "status": "REVIEWED_R203_PROSPECTIVE_COMPLETE_STAGE_QUOTE"
+  },
+  "raw_result": {
+    "keys": [
+      "schema",
+      "status",
+      "template",
+      "request",
+      "authority",
+      "source_review",
+      "owner_review",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "owner",
+      "stage_claim",
+      "started_epoch",
+      "ended_epoch",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "parameters_sha256",
+      "phase_evidence",
+      "owned_guards",
+      "inventory",
+      "usage",
+      "terminal_accounting_pending",
+      "runtime_qualified",
+      "scientific_acceptance"
+    ],
+    "rules": {
+      "no_engine_PASS_trusted": true,
+      "runtime_qualified": false,
+      "scientific_acceptance": false,
+      "terminal_accounting_pending": true
+    },
+    "schema": "r203_owned_control_raw_stage_result_v1",
+    "status": "RAW_R203_CONTROL_STAGE_NOT_ACCEPTED_AWAIT_TERMINAL_ACCOUNTING"
+  },
+  "raw_worker_schemas": {
+    "build": "r203_raw_native_build_evidence_v1",
+    "common_added_fields": [
+      "owned_guards",
+      "stdout",
+      "stderr",
+      "terminal_accounting_pending"
+    ],
+    "compiler_exec_rows": "unchanged real guard.events where event==EXEC; exact path+SHA closure and separate maximum_compiler_execs",
+    "facility": "r203_raw_facility_precheck_evidence_v1",
+    "readonly": "r203_raw_readonly_deployment_evidence_v1"
+  },
+  "ready": {
+    "keys": [
+      "schema",
+      "status",
+      "template",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "uid",
+      "owner",
+      "affinity",
+      "root",
+      "permit_fd",
+      "permit_path",
+      "source_capture",
+      "physical_witness",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "scope",
+      "ledger",
+      "quote",
+      "parameters_sha256",
+      "created_epoch",
+      "expires_epoch",
+      "owner_started_epoch"
+    ],
+    "rules": {
+      "lifetime_maximum_seconds": 120,
+      "no_native_or_compiler_action": true,
+      "owner_actual_PID_birth_boot": true,
+      "owner_started_epoch": "actual first owner_startup entry, <=READYcreated; root authority expiry <=min(templateexpiry,owner_started+quote.owner_wall), no invented futuretime",
+      "paths": "fixed names under actual output_root; canonical mirrors carry exact same bytes, no rewritten old JSON"
+    },
+    "schema": "r203_control_owner_ready_v1",
+    "status": "READY_R203_METADATA_ONLY_AWAIT_TWO_PEERS_AND_ROOT_RELEASE"
+  },
+  "release": {
+    "keys": [
+      "schema",
+      "status",
+      "template",
+      "ready",
+      "request",
+      "source_review",
+      "owner_review",
+      "authority",
+      "issued_epoch",
+      "expires_epoch",
+      "canonical_input_proofs"
+    ],
+    "rules": {
+      "create_only": true,
+      "exact_canonical_PINs": true,
+      "one_release": true
+    },
+    "schema": "r203_control_stage_root_release_v1",
+    "status": "ROOT_RELEASED_R203_ONE_OWNED_CONTROL_STAGE"
+  },
+  "request": {
+    "keys": [
+      "schema",
+      "template",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "uid",
+      "affinity",
+      "owner",
+      "root",
+      "permit_fd",
+      "permit_path",
+      "ready",
+      "source_capture",
+      "physical_witness",
+      "scope",
+      "ledger",
+      "quote",
+      "control_map_sha256",
+      "runtime_map_sha256",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "rules": {
+      "fields_exact": true,
+      "issued_after_READY": true,
+      "no_future_PID": true,
+      "request_has_no_status": true,
+      "source_maps_publications_parameters": "derived from exact pinned template; request includes exact map digests"
+    },
+    "schema": "r203_control_stage_request_v1",
+    "status": null
+  },
+  "runtime_authority_or_actual_phase_PASS_created": false,
+  "runtime_base": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/RUNTIME_BASE.json",
+    "sha256": "85bce27c0cc4aaf16e744c1abb0988abdea64ef582c578fb8871997db6a8e543"
+  },
+  "runtime_scope": {
+    "keys": [
+      "schema",
+      "status",
+      "purpose",
+      "nonce",
+      "stage",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "parameters_sha256",
+      "quote",
+      "remote_namespace",
+      "previous_ledger",
+      "compute_CPU_reservation",
+      "new_administrative_CPU_reservation",
+      "maximum_jobs",
+      "maximum_owner_calls",
+      "maximum_traced_subjects",
+      "automatic_retry",
+      "requeue",
+      "optimizer_invocations",
+      "new_posterior_fits",
+      "target_input_manifest",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "ledger_append_schema": {
+      "created_epoch": "finite new epoch within issued scope/template interval; >=previous.created_epoch",
+      "historical_fields": "exact previous keyset, every old row/null/clock/fee unchanged except immediate previous,created_epoch,exact append and four counters",
+      "new_primary_compute_roles": 1,
+      "new_rows_per_scope": 1,
+      "previous": "exact scope.previous_ledger pin",
+      "primary_actual_CPU": null,
+      "primary_compute_role_keys": [
+        "purpose",
+        "stage",
+        "scope",
+        "compute_CPU_reservation",
+        "primary_actual_CPU"
+      ],
+      "scope_row_keys": [
+        "purpose",
+        "scope",
+        "administrative_CPU_reservation",
+        "compute_CPU_reservation"
+      ],
+      "typed_positive_compute_reservation": true
+    },
+    "rules": {
+      "admin_covers_quote_admin_plus_remote": true,
+      "automatic_retry": false,
+      "clock": "scope issued <= template issued; scope/spec/quote expiry conserved; <=8h; no reset",
+      "compiler_helpers": "maximum_compiler_execs separately bounds all toolchain helper exec events inside one compiler root trace",
+      "compute_reservation_positive": true,
+      "ledger": "append-only whole old fields/nulls/roles/fees/counters; previous_ledger exact",
+      "maximum_jobs": 1,
+      "maximum_owner_calls": 1,
+      "maximum_traced_subjects": {
+        "FACILITY_PRECHECK": 1,
+        "NATIVE_ABI_SUITE": 9,
+        "OWNED_NATIVE_BUILD": 1,
+        "READONLY_DEPLOYMENT": 1
+      },
+      "new_posterior_fits": 0,
+      "optimizer_invocations": 0,
+      "requeue": false,
+      "target_input_manifest": null
+    },
+    "schema": "r203_funded_control_stage_scope_v1",
+    "status": "ROOT_FUNDED_R203_CONTROL_STAGE_NO_TARGETS"
+  },
+  "same_path_facility_acceptance": {
+    "candidate_status": "CANDIDATE_R203_FACILITY_ROUTE_AWAIT_H5",
+    "independent_review_status": "PASS_REVIEWED_R203_SAME_PATH_FACILITY_ROUTE",
+    "not_native_runtime_qualification": true,
+    "required": [
+      "source_map_sha256(runtime39)",
+      "result",
+      "independent_review",
+      "accounting",
+      "actual_accept_guard",
+      "command_pid",
+      "command_birth_ticks"
+    ],
+    "result_required": [
+      "same_path_facility_route_observed=true",
+      "canonical_output_library",
+      "source_map_sha256",
+      "job_id"
+    ],
+    "schema": "r203_same_path_facility_acceptance_v1",
+    "status": "ACCEPTED_R203_SAME_PATH_FACILITY_ROUTE_NOT_DEPLOYMENT"
+  },
+  "schema": "r203_subordinate_schema_catalog_v6",
+  "shared_interfaces": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/INTERFACES.json",
+    "sha256": "c596a43eb9442fda1394b2995d8a1035802147454770dc60b35d38548040fab7"
+  },
+  "source_only": true,
+  "source_peer": {
+    "keys": [
+      "schema",
+      "status",
+      "request",
+      "template",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "parameters_sha256",
+      "source_capture",
+      "physical_witness",
+      "observation",
+      "independent_program",
+      "runtime_admitted",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "rules": {
+      "independent_algorithms": true,
+      "maximum_lease_seconds": 60,
+      "runtime_admitted": false
+    },
+    "schema": "r203_control_source_physical_review_v1",
+    "status": "PASS_REVIEWED_R203_ACTUAL_SOURCE_PHYSICAL"
+  },
+  "stage_claim": {
+    "keys": [
+      "schema",
+      "status",
+      "request",
+      "authority",
+      "source_review",
+      "owner_review",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "owner",
+      "permit_fd",
+      "stage_started_epoch",
+      "stage_deadline_epoch",
+      "maximum_owner_calls",
+      "maximum_traced_subjects",
+      "owner_started_epoch"
+    ],
+    "rules": {
+      "create_only": true,
+      "maximum_owner_calls": 1,
+      "stage_started_inside_original_leases": true
+    },
+    "schema": "r203_control_stage_start_claim_v1",
+    "status": "SPENT_R203_ONE_STAGE_NO_RETRY"
+  },
+  "startup_CLI": {
+    "argv": "pinnedPython -I -B common/stage_owner.py CANONICAL_TEMPLATE_PATH",
+    "gate": "real Slurm before file I/O, then capture stable template Pin and verify bootstrap core/real H5 admission",
+    "no_final_template_SHA_in_script": true
+  },
+  "status": "APPROVED_SOURCE_CATALOG_NO_RUNTIME_AUTHORITY",
+  "subject": {
+    "keys": [
+      "schema",
+      "request",
+      "authority",
+      "stage_claim",
+      "case_id",
+      "ordinal",
+      "owner",
+      "job_id",
+      "node",
+      "root",
+      "permit_fd",
+      "native_deadline_epoch",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "rules": {
+      "case_ordinal_pairs": [
+        {
+          "case": "pre_ack_live",
+          "handshake": false,
+          "ordinal": 1
+        },
+        {
+          "case": "wrong_lifetime",
+          "handshake": false,
+          "ordinal": 2
+        },
+        {
+          "case": "wrong_permit",
+          "handshake": false,
+          "ordinal": 3
+        },
+        {
+          "case": "late_transition",
+          "handshake": false,
+          "ordinal": 4
+        },
+        {
+          "case": "repeat_transition",
+          "handshake": true,
+          "ordinal": 5
+        },
+        {
+          "case": "real_ACK",
+          "handshake": true,
+          "ordinal": 6
+        },
+        {
+          "case": "live_rechecks",
+          "handshake": true,
+          "ordinal": 7
+        },
+        {
+          "case": "noreplace_collision",
+          "handshake": true,
+          "ordinal": 8
+        },
+        {
+          "case": "bounded_storage",
+          "handshake": true,
+          "ordinal": 9
+        }
+      ],
+      "child_identity": "observed actual PID/birth/PPID/TracerPid before records; parent and tracer must actual same stage owner",
+      "descriptor_creation": "only under actual admitted RELEASED sealed OwnerContext",
+      "native_deadline": "bounded by still-live stage deadline; late_transition narrower than whole authority",
+      "negative_args": "only predetermined ABI source operations; never forge inherited facts",
+      "no_prefilled_child_identity": true,
+      "observer_cases": [
+        {
+          "case_id": "facility_observer",
+          "handshake": false,
+          "ordinal": 1
+        },
+        {
+          "case_id": "readonly_observer",
+          "handshake": false,
+          "ordinal": 1
+        }
+      ]
+    },
+    "schema": "r203_control_subject_descriptor_v1",
+    "status": null
+  },
+  "template": {
+    "keys": [
+      "schema",
+      "purpose",
+      "nonce",
+      "stage",
+      "node",
+      "control_publication",
+      "control_sources",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_sources",
+      "runtime_map_sha256",
+      "scope",
+      "ledger",
+      "quote",
+      "bootstrap_authority",
+      "admission",
+      "output_root",
+      "parameters",
+      "issued_epoch",
+      "expires_epoch"
+    ],
+    "rules": {
+      "no_job_PID_before_READY": true,
+      "parameters": "closed object {schema,common,stage}; common and phase schemas below"
+    },
+    "schema": "r203_control_job_template_v1",
+    "status": null
+  }
+}

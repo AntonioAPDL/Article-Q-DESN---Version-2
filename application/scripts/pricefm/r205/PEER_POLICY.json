@@ -1,0 +1,245 @@
+{
+  "admission": {
+    "binding": [
+      "purpose",
+      "nonce",
+      "stage",
+      "node",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "scope",
+      "ledger",
+      "quote",
+      "parameters_sha256",
+      "output_root"
+    ],
+    "calendar": "Parse native explicit UTC clock bounds and exact fixed sbatch --test-only reply from reviewed capture program. Exact profile.rendered_sbatch_argv plus --test-only, node/jobname/script SHA/CPU/memory/wall match reviewed physical profile and quote; no shell/wrap/arbitrary flags. Native Slurm timestamp must be explicit UTC/offset and its projected start+whole quoted wall+profile reserve fit fixed profile window. At actual issuer time, latest first submission lies inside original scope and current fixed profile; maximum submission horizon255 seconds and observation age90 seconds. Unsupported/unparseable/missing reply or incomplete identity refuses. A test-only number is not an actual job.",
+    "candidate_status": "CANDIDATE_R203_CONTROL_STAGE_ADMISSION_AWAIT_H5",
+    "clock": "finite scope/template interval, actual source request already funded; issued<=now<expiry; no source448 or expired fee/role reuse",
+    "maximum_jobs": 1,
+    "new_posterior_fits": 0,
+    "optimizer_invocations": 0,
+    "promotion": "Finalizer requires actual H5 stdout equals candidate; PID and birth match; accepted record is candidate with accepted status and actual_accept_guard. No fabricated guard; Root issuer command itself requires real H5 context before supplied metadata.",
+    "resource": "Parse raw native scontrol node reply. Exact requested node; scheduler RealMemory-AllocMem >= quote memory_MiB, requested CPUs available within qualified physical profile. FreeMem never used for schedulable RAM. Independent actual stage-start witness must also prove actual job cgroup/core/SMT/affinity/RAM/storage and source/RO gates.",
+    "resource_pair": "actual_resource_observation has closed {result,guard}; calendar pair may reference same actual capture (charged once); validate original H8 flags, exact stdout/PID/birth and fixed control capture program source, not a reported status alone",
+    "schema": "r203_control_stage_admission_v1",
+    "source_phase_mints_admission": false,
+    "startup_baseline": "qualified_startup_baseline is a separately independently reviewed EXPECTED immutable startup baseline plan, not already accepted native-runtime qualification. Status PASS_REVIEWED_R203_EXPECTED_STARTUP_BASELINE_PLAN. It binds node, startup Python, fixed source/dependency/exec inventory, read-only code/toolchain/runtime roots and facility policy. Native pre-exec exact hash verification plus immutable backing is required; actual source/physical startup capture must realize and independently verify the plan before any payload release. Missing facility/baseline facts refuses; do not demand an already-earned new ABI qualification to start metadata-only bootstrap.",
+    "status": "ADMITTED_R203_ONE_DIRECT_SLURM_STAGE"
+  },
+  "created_epoch": 1793692875.9109879,
+  "guard": {
+    "CPU_admission_and_acceptance": 5,
+    "CPU_native_capture": 8,
+    "cap_reason": null,
+    "exact_stdout_JSON_PID_birth": true,
+    "guardian_forced_monitor_stop": false,
+    "program_source_matches_reviewed_control_map": true,
+    "required_true": [
+      "all_owned_descendants_reaped",
+      "independent_guardian",
+      "kernel_escape_filter",
+      "orphan_subreaper",
+      "guardian_included_in_CPU",
+      "inherited_waited_history_included_once"
+    ],
+    "required_zero": [
+      "returncode",
+      "command_returncode"
+    ],
+    "schemas": "actual unchanged original H receipts only",
+    "source_pulse_H8_cannot_substitute_for_H5_or_stage_admission": true,
+    "wall_maximum_seconds": 180
+  },
+  "independent_peer": {
+    "owner_status": "PASS_REVIEWED_R203_ACTUAL_OWNER_RELEASE",
+    "rules": [
+      "Root peer independently recomputes all closed identities/maps/funding/quote/raw native guard/actual source+physical facts; never calls owner validators or caller callbacks",
+      "fixed peer source SHA matches control publication, Main physical path retained separately from installed path",
+      "source review source capture and owner review actual READY are separate independently captured phases, lease clocks immutable",
+      "first payload enters inside both leases+READY with one create-only stage claim, later subjects full authority and same owner/lifetime/budget, no renewal"
+    ],
+    "source_status": "PASS_REVIEWED_R203_ACTUAL_SOURCE_PHYSICAL"
+  },
+  "native_capture": {
+    "admission_no_job_or_template_fabrication": "ADMISSION mode has job_id/template/request null, binds exact planned identity/scope/quote/maps/params. Other modes require exact actual job and request/template as appropriate.",
+    "freshness": "source/physical and owner-ready observations <=90 seconds; both peer leases<=60 and original READY<=120; terminal evidence is actual final accounting and never fabricated during live job",
+    "keys": [
+      "schema",
+      "status",
+      "mode",
+      "purpose",
+      "nonce",
+      "stage",
+      "node",
+      "job_id",
+      "template",
+      "request",
+      "scope",
+      "ledger",
+      "quote",
+      "parameters_sha256",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "raw",
+      "records",
+      "observed_epoch",
+      "completed_epoch",
+      "command_pid",
+      "command_birth_ticks",
+      "controller_source"
+    ],
+    "modes": [
+      "ADMISSION",
+      "SOURCE_PHYSICAL",
+      "OWNER_READY",
+      "TERMINAL"
+    ],
+    "raw_row_keys": [
+      "argv",
+      "returncode",
+      "stdout",
+      "stderr"
+    ],
+    "record_rules": "Metadata copies are byte-identical and hashes/pointers are not rewritten. A Main peer resolves a remote pin only through this actual H8-captured remote_path+SHA/local_copy map (or exact physical local pin). Duplicate paths, mismatches, sources outside requested job root and undeclared metadata refuse.",
+    "records_row_keys": [
+      "remote_path",
+      "sha256",
+      "local_copy"
+    ],
+    "schema": "r203_owned_stage_metadata_capture_v1",
+    "status": "CAPTURED_R203_ACTUAL_NATIVE_STAGE_METADATA_NOT_ADMISSION",
+    "transport": "Reviewed fixed existing public-key native SSH transport and site. Native env TZ=UTC date; exact node scontrol; exact sbatch --test-only for admission only; exact owned-job scontrol/sacct plus exact whitelisted job-owned metadata cat/sha256sum for other modes. No remote interpreter, global census, node sweep, other jobs, numerical data or arbitrary argv. Each source/owner/terminal capture is separately funded single H8+remote uncertainty8 and create-only intent; no retry."
+  },
+  "physical_profile": {
+    "keys": [
+      "schema",
+      "status",
+      "node",
+      "affinity",
+      "online_thread_siblings",
+      "requested_CPUs",
+      "memory_MiB",
+      "mandatory_headroom_bytes",
+      "not_before_epoch",
+      "latest_first_submit_epoch",
+      "window_end_epoch",
+      "reserve_seconds",
+      "rendered_sbatch_argv",
+      "job_name",
+      "job_script",
+      "independent_review"
+    ],
+    "rules": [
+      "typed finite positive bounds; one actual selected CPU; every online SMT sibling reserved inside effective Slurm cpuset",
+      "exact same quote memory/wall and source-script command, no old role/calendar/profile transfer inferred",
+      "role-specific independent source review and whole-stage funding before native observation"
+    ],
+    "schema": "r203_control_physical_calendar_profile_v1",
+    "status": "PASS_REVIEWED_R203_FIXED_CONTROL_PHYSICAL_CALENDAR_PROFILE"
+  },
+  "physical_witness": {
+    "keys": [
+      "schema",
+      "template",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "owner",
+      "affinity",
+      "online_thread_siblings",
+      "effective_job_cpus",
+      "cgroup_path",
+      "cgroup_memory_limit_bytes",
+      "filesystem_available_bytes",
+      "mandatory_headroom_bytes",
+      "reservation",
+      "parameters_sha256",
+      "observed_epoch"
+    ],
+    "rules": [
+      "actual job cgroup contains job_<id>; selected CPU in owned effective cpuset and all online physical SMT siblings owned",
+      "cgroup memory cap positive and <=quoted memory; quote full memory reserved by admission",
+      "filesystem available after physical reservations still >=mandatory headroom plus explicitly priced dynamic/transient peak",
+      "reservation pin is actual immutable pre-READY inode/capacity manifest matching every declared slot and alias; no sparse fallback/double reservation or invented preallocation"
+    ],
+    "schema": "r203_actual_control_physical_witness_v1"
+  },
+  "postjob": {
+    "ABI_review_status": "PASS_REVIEWED_R201_NATIVE_ABI_SUITE",
+    "build_review_status": "PASS_REVIEWED_R203_RAW_NATIVE_BUILD",
+    "compatible_build_review_status": "PASS_REVIEWED_R201_NATIVE_BUILD",
+    "compatible_deploy_review_status": "PASS_REVIEWED_R201_READONLY_NAMESPACE",
+    "no_accepted_from_live": "RAW stage result and case facts never accepted booleans",
+    "rules": [
+      "reconstruct every native expected operation/failure code+errno/first-error/observed receipt/precondition matrix and actual guard/source/artifact binding",
+      "negative lifecycle private numeric state never invented; source-bound terminal guarantee distinguished from observed receipt state3",
+      "outside-trace only observational founder refusal with isolated_trace_predicate_proved false",
+      "real current RO same canonical build output and compatible exact manifest/argv, no copied-path rewrite",
+      "all required proof inventory returned complete within64MiB; per-file<=16MiB; overflow fails with retained evidence, never truncation/drop",
+      "actual terminal primary accounting, independent review core-hash acyclic and real new H5 candidate/finalize promote old-compatible build/deploy/suite"
+    ]
+  },
+  "record_transport": {
+    "allowed_names": [
+      "request.json",
+      "source_review.json",
+      "owner_review.json",
+      "authority.json",
+      "RELEASE.json",
+      "RELEASE.ready"
+    ],
+    "commit_marker": "RELEASE.ready",
+    "no_cleanup_or_overwrite": true,
+    "no_production_mutation": true,
+    "policy": "Main may hold exact canonical records in a local approved metadata root or use actual-capture remote-path mapping; it never rewrites original JSON/pins to pretend shared filesystem. A separately funded native-only install operation may copy exact NEW job-owned metadata records to declared canonical ingress paths using exclusive create+fsync. Input records installed before RELEASE.json; RELEASE.ready zero-length exclusive marker written last after all verified copies. Owner bounded READY wait reads only after marker; partial/failed installs remain retained and cannot be accepted.",
+    "source_scope_not_transport_grant": true
+  },
+  "schema": "r203_independent_actual_proof_policy_v1",
+  "source_phase_runtime_admission_or_scientific_acceptance": false,
+  "startup_source_witness": {
+    "files_row": "exact {path,sha256,bytes,device,inode,mode,uid}; full actual source/readset, not sampled",
+    "keys": [
+      "schema",
+      "template",
+      "purpose",
+      "nonce",
+      "stage",
+      "job_id",
+      "node",
+      "owner",
+      "control_publication",
+      "control_map_sha256",
+      "runtime_publication",
+      "runtime_map_sha256",
+      "control_sources",
+      "runtime_sources",
+      "files",
+      "readonly_files",
+      "baseline_files",
+      "parameters_sha256",
+      "observed_epoch"
+    ],
+    "metadata_startup": "source/metadata-only preparation under real funded direct-Slurm startup; no compiler/project DLL, no target read before full release",
+    "readonly_row": "path,mountpoint,mount_options,super_options; actual most-specific mount and backing superblock both RO, no writable-alias bind claim",
+    "schema": "r203_actual_control_source_capture_v1"
+  },
+  "status": "APPROVED_SOURCE_POLICY_NOT_ACTUAL_ADMISSION_OR_BASELINE",
+  "terminal": {
+    "accounting_is_not_live_owner_usage": true,
+    "required": [
+      "exact actual job/name/node/user/UID, terminal state, source/template/request/authority, actual native H8 capture proof",
+      "terminal true, complete true, primary_charge_counted_once true",
+      "whole raw owner SELF and all CHILDREN end-start usage, all9 original guard roots reaped/drained once, no unknown lifetimes; no raw wait4/cumulative-guard sums",
+      "quote whole CPU/wall/memory/storage/return bounds obeyed; any cap/failure incomplete return yields no accepted result"
+    ],
+    "schema": "r203_actual_terminal_control_stage_accounting_v1",
+    "status": "CAPTURED_TERMINAL_R203_PRIMARY_STAGE_ACCOUNTING"
+  }
+}

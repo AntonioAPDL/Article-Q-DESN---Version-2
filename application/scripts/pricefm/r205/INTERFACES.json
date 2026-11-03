@@ -1,0 +1,350 @@
+{
+  "ABI": {
+    "acceptance_fields": [
+      "source_map_sha256=runtime39 map",
+      "native_library",
+      "native_abi",
+      "node",
+      "all exact10 case booleans reconstructed from raw facts, never Engine PASS flags",
+      "owned_guards nine genuine original R157 receipt pins with actual rc0/reap/drain/CPU/newborn/EXITKILL",
+      "accounting terminal countedonce",
+      "independent_review corehash excluding review",
+      "new control-publication/map/source pins, raw fact inventory and founder observational limitation"
+    ],
+    "acceptance_schema": "r201_actual_native_ABI_suite_v1",
+    "acceptance_status": "ACCEPTED_NATIVE_ABI_SUITE_NOT_PRODUCTION",
+    "cases": [
+      "preparation_outside_trace_refused",
+      "pre_ack_live_refused",
+      "wrong_lifetime_refused",
+      "wrong_permit_refused",
+      "late_or_repeated_transition_refused",
+      "real_TSYNC_ACK",
+      "live_identity_permit_rechecks",
+      "noreplace_collision_refused",
+      "bounded_payload_proof_storage",
+      "complete_reap_drain"
+    ],
+    "founder": "Actual admitted direct-Slurm existing control owner, TracerPid0, one prepare with actual readable PPID/birth, real owned permit, role1/finite expiry; record actual rc-1/EPERM/first-error with exact unmet prerequisite matrix. Never fake pipes or parent FLOCK. isolated_trace_predicate_proved=false; unavailable/inconsistent facts ->INCONCLUSIVE/FAIL, no suite acceptance. No singleton reuse after failure.",
+    "late_policy": {
+      "descriptor_upper_window_seconds": 30,
+      "missed_window": "INCONCLUSIVE_NO_RENEWAL",
+      "native_expiry_after_actual_gated_preparation_ready_seconds": 2,
+      "wait_margin_seconds": 1
+    },
+    "lifecycle_gate": "A distinct source inspection must establish repeated original run_traced finally/FD/signal/subreaper/global cleanup and cumulative accounting before implementation. If unsupported, hold/propose explicit variant rather than mutate original helper.",
+    "runtime_lowlevel_role": 1,
+    "storage_coverage": "ABI native NOREPLACE+bounded lowlevel/controller proof reservations only. Actual r201 writer/storage/analytic9/27 remains separately qualified; this suite does not claim production-writer coverage.",
+    "storage_policy": {
+      "case_slot_capacity_bytes": 524288,
+      "case_slot_total_bytes": 16777216,
+      "common_proof_budget_bytes": 33554432,
+      "physical_founder_case_slots": 32,
+      "positive_final_precreated": false,
+      "positive_noreplace_final_is_same_inode_alias": true,
+      "production_writer_qualification_earned": false
+    },
+    "subject_requirements": [
+      "nine sequential fresh execs in SAME control-owner/tracer Python lifetime and existing actual FLOCK",
+      "original R157 run_traced unchanged; fixed false only first4; true remaining5",
+      "direct typed lowlevel native API after accepted same-path build/deploy and current RO/baseline; no old r201 prepare/bootstrap/production authority cycle",
+      "negative raw rc/errno immediate/first-error/operation sequence, no invented private numeric lifecycle",
+      "successful actual receipt state3; success errno unspecified",
+      "late native deadline narrower than still-live full Root authority; repeat uses separate fresh subject",
+      "source tests no actual DLL/ELF/native C execution and no fake actual suite"
+    ],
+    "subjects": [
+      {
+        "case": "pre_ack_live",
+        "handshake": false
+      },
+      {
+        "case": "wrong_lifetime",
+        "handshake": false
+      },
+      {
+        "case": "wrong_permit",
+        "handshake": false
+      },
+      {
+        "case": "late_transition",
+        "handshake": false
+      },
+      {
+        "case": "repeat_transition",
+        "handshake": true
+      },
+      {
+        "case": "real_ACK",
+        "handshake": true
+      },
+      {
+        "case": "live_rechecks",
+        "handshake": true
+      },
+      {
+        "case": "noreplace_collision",
+        "handshake": true
+      },
+      {
+        "case": "bounded_storage",
+        "handshake": true
+      }
+    ]
+  },
+  "acyclic_bootstrap": "Bootstrap authority pins template_core_sha256 excluding bootstrap_authority; source-only template inspection returns no execution grant. The actual bootstrap authority must be separately issued with finite funding/admission. Unknown future PID/job is never invented.",
+  "admission": "Separate genuine role-specific fresh admission and qualified startup/runtime baseline are prerequisites. This source phase emits no stage admission or bootstrap/release authority. Immutable source/metadata fixtures are not accepted admission.",
+  "authority_bounds": [
+    "maximum_owner_calls1",
+    "ABI maximum_traced_subjects9; other phases exact fixed toolchain or observer bounds",
+    "no targets/optimizer/posterior fits",
+    "finite <=8h full stage clock, first native action after actual admitted start claim"
+  ],
+  "authority_status": "ROOT_ADMITTED_R203_ONE_CONTROL_STAGE",
+  "bootstrap_authority_status": "ROOT_AUTHORIZED_R203_METADATA_STARTUP_ONLY",
+  "context_attributes": [
+    "stage",
+    "template",
+    "request",
+    "request_pin",
+    "authority",
+    "authority_pin",
+    "source_review_pin",
+    "owner_review_pin",
+    "quote",
+    "root (Path)",
+    "permit_fd",
+    "job_id",
+    "node",
+    "owner (actual pid/start_ticks/boot_id)",
+    "runtime_sources",
+    "control_sources",
+    "runtime_map_sha256",
+    "control_map_sha256",
+    "parameters",
+    "stage_started_epoch (actual one-call claim)",
+    "stage_deadline_epoch",
+    "verify_live()"
+  ],
+  "created_epoch": 1793690926.7495027,
+  "deployment": {
+    "build": "Exact unchanged runtime build_contract flags/argv and nativeC/header/ABI; full pinned compiler/helper/dependency allowlist. Compile before science filter in owned direct Slurm, original tracer with require_science_handshake=False. No accepted native runtime/deployment prerequisite for prebuild. Output path absent/fresh private controlled directory, one call, retain all partials.",
+    "compatible_build_schema": "r201_owned_native_build_acceptance_v1",
+    "compatible_build_status": "ACCEPTED_SOURCE_BUILD_ONLY_NOT_RUNTIME",
+    "compatible_deployment_schema": "r201_readonly_namespace_acceptance_v1",
+    "compatible_deployment_status": "ACCEPTED_READONLY_NAMESPACE_ONLY_NOT_RUNTIME",
+    "compatible_fields": "Exactly unchanged INTERFACES_03 fields including actual H5 command_pid/command_birth_ticks; source_map_sha256 is runtime39. Control-map identities live in producer result and peer evidence, not arbitrary extra fields in closed old records.",
+    "facility": "No controller mount/remount/privilege operations. Require facility-provided RO source/toolchain/runtime roots and a dedicated initially RW final compiler-output backing that facility can seal genuinely RO at SAME canonical path. Missing actual facility capability yields explicit STOP/refusal; render-only assumptions never promote.",
+    "posttransition": "Same-path exact artifact/manifest/argv identity; actual mount and backing-superblock RO for required sources/runtime/library. Canonical old metadata paths and exact bytes, no old JSON rewrites. Reject relocated output or bind-only RO over writable backing.",
+    "terminal_DAG": [
+      "live owner RAW_STAGE_RESULT with raw compiler/observer evidence; no terminal accounting claim",
+      "after job exit capture actual terminal primary Slurm accounting",
+      "independent raw-build review binds raw result+actual accounting",
+      "create immutable old-compatible build manifest using actual argv/output/dependencies/guard/accounting/raw review",
+      "create enriched result pinning that manifest",
+      "independent compatible bound-result review",
+      "new actual H5 candidate stdout/PIDbirth followed by pure metadata finalizer with exact real guard"
+    ]
+  },
+  "design_review": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/independent_review/DESIGN8.REVIEW.json",
+    "sha256": "50cd8453cace43b7f69913117e649d9f5c2820132c5aa251122e1f7a8057bca8"
+  },
+  "entrypoints": {
+    "ABI": "abi/controller.py::run(context)->raw ABI evidence dict after require_context(NATIVE_ABI_SUITE)",
+    "capture": "peer/observation_capture.py one separately funded H8+remote native-only exact own-job ready/source/physical/terminal metadata capture; no login-node interpreter/global census/sweep or automatic repeat",
+    "common_context": "common/contract.py::require_context(context, stage) validates private actual context type/seal+same fixed source-module instance and current kernel/job/owner/full-stage authority; rejects duck types before native/binary work",
+    "common_release": "common/contract.py::wait_and_admit(context)->same actual opaque context after exact request/source-peer/owner-peer/Root authority release; no caller callbacks",
+    "common_startup": "common/contract.py::owner_startup(template_pin)->opaque OwnerContext; B defines exact closed template schema before tests; requires actual Slurm before supplied metadata, full source/funding/quote/bootstrap authority, no source448 acceptance",
+    "common_subject": "common/contract.py::enter_subject(descriptor_pin, expected_case)->opaque child context; actual Slurm/traced PPID before records; schema r203_control_subject_descriptor_v1; fixed ABI9 or fixed observer child IDs; derives only from admitted stage request+authority+actual stage-start claim",
+    "deployment": "deployment/worker.py::run(context)->raw feasibility/build/posttransition evidence dict selected only by closed stage",
+    "issuer": "peer/issuer_finalize.py bootstrap/request/release/postjob-manifest/candidate/finalize modes with exact source-backed fields and real H5 guard for accepted compatible records; pure render/inspection never grants",
+    "owner": "common/stage_owner.py::run(template_pin) actual job-before-records, separately funded metadata startup, source+physical witness/READY120, one Root release, fixed stage dispatch, raw result only",
+    "peer_owner": "peer/independent_peer.py::owner_release(request_pin, source_review_pin, observation_pin, output_path) second actual peer phase; first entry within both leases+READY120",
+    "peer_source": "peer/independent_peer.py::source_physical(request_pin, observation_pin, output_path) actual independent metadata policy; never owner validators",
+    "prepare": "deployment/prepare.py::prepare(template_pin, output_root) pure schema/source/metadata only; renders fixed direct-Slurm startup command, never submits",
+    "subject": "abi/subject.py CASE_DESCRIPTOR_PATH CASE_DESCRIPTOR_SHA; fixed closed case dispatch only; original tracer starts every subject before execution"
+  },
+  "forbidden": [
+    "new source/runtime grants from this448 scope",
+    "R/compile/FFI/native libraries/ELF/scientific data/numerical kernels on admin",
+    "changes to original H/tracer/helpers/runtime39/five maths/scientific identity",
+    "untraced newborns or fake inherited kernel facts",
+    "source/ASCII tests called runtime evidence",
+    "automatic retries/requeue/sweep/future checks",
+    "source-map or terminal-accounting/review hash cycles",
+    "caller-supplied callbacks/validators or duck-typed native contexts"
+  ],
+  "ledger": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SCOPE_LEDGER_01.json",
+    "sha256": "07be82057651a459019d85dde78e5f95816d496a5e697bf33d50174fb1520d79"
+  },
+  "module_identity": "Use one fixed authenticated module name _r203_control_contract cached in sys.modules. Owner/engine/subject loaders verify captured common/contract bytes and same file/digest; private context seal stays in that one module. Final hashes bound before source freeze; no unresolved placeholders.",
+  "owners": {
+    "A": [
+      "abi/contract.py",
+      "abi/controller.py",
+      "abi/subject.py",
+      "abi/native_abi.py"
+    ],
+    "B": [
+      "common/metadata.py (byte-identical runtime owner/metadata.py 6593a6bbb617375029bee0c692e510cd5621662eaf9fab46445eab433ff0762b)",
+      "common/contract.py",
+      "common/stage_owner.py",
+      "deployment/prepare.py",
+      "deployment/worker.py"
+    ],
+    "Root": [
+      "peer/independent_peer.py",
+      "peer/observation_capture.py",
+      "peer/issuer_finalize.py",
+      "operator and interface guides",
+      "source publisher and private fixture"
+    ]
+  },
+  "peer_independence": "Root peer reconstructs raw facts with independent metadata/type/hash/guard/identity algorithms. Share only immutable basic metadata primitives, never Common/Owner acceptance validators or caller callbacks. Main metadata-only H5 acceptance happens after actual complete accounting; no binary/ELF reads on admin.",
+  "previous": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/INTERFACES.json",
+    "sha256": "c596a43eb9442fda1394b2995d8a1035802147454770dc60b35d38548040fab7"
+  },
+  "publication": {
+    "base": "3868d6467ccb5df1463094c8bd69ed1607212043",
+    "branch": "work/pricefm-r203-abi-deployment-20261102",
+    "no_legacy_EOF_waiver_needed": true,
+    "prefix": "application/scripts/pricefm/r203",
+    "private_fullmap_fixture_and_three_external_actual_H8_required": true,
+    "runtime39_not_copied_or_republished_as_control": true,
+    "source_publication_schema": "r203_control_source_publication_v1",
+    "source_publication_status": "PASS_PUBLISHED_R203_CONTROL_SOURCE_PREPARATION",
+    "source_review_status": "PASS_REVIEWED_R203_CONTROL_SOURCE_PREPARATION_ONLY"
+  },
+  "quote": {
+    "channels": [
+      "compute_CPU_upper_seconds",
+      "administrative_CPU_upper_seconds",
+      "remote_unknown_CPU_reservation"
+    ],
+    "components": [
+      "startup",
+      "namespace",
+      "import",
+      "optimizer",
+      "certification",
+      "checkpoint",
+      "return",
+      "independent_peer",
+      "closure"
+    ],
+    "rules": [
+      "typed finite integer bounds; exact disjoint sums; optimizer compute0",
+      "startup wall>=120 and no budget/clock resets",
+      "full owner+child whole-stage CPU, wall, memory, all process/dependency/IO costs",
+      "one primary terminal Slurm account, no sum of cumulative per-guard histories",
+      "max file16MiB; total useful return64MiB including every mandatory proof/manifest",
+      "minimum return-proof reserve16MiB; bounded physical preallocated proof slots and complete inventory",
+      "price immutable-source/toolchain closure, raw output+reservation peak, retained failures and transient original tree old+tmp32MiB; never claim dynamic tree inode preallocated",
+      "Quote has no own clockfields: immutable core binds the fixed scope/template interval; no quote.expiry lookup"
+    ],
+    "schema": "r203_control_stage_quote_v1"
+  },
+  "raw_result_requirements": [
+    "template/request/authority/two peers/two maps/publications exact pins",
+    "actual job/node/owner/PIDbirth/whole start and end",
+    "phase-specific evidence dict and owned trace receipts",
+    "all proof inventory/limits/retained partials and full actual cumulative usage",
+    "no native qualification/source/runtime/scientific PASS status"
+  ],
+  "raw_result_schema": "r203_owned_control_raw_stage_result_v1",
+  "raw_result_status": "RAW_R203_CONTROL_STAGE_NOT_ACCEPTED_AWAIT_TERMINAL_ACCOUNTING",
+  "release_contents": [
+    "request pin",
+    "source peer pin",
+    "owner peer pin",
+    "Root authority pin"
+  ],
+  "release_schema": "r203_control_stage_root_release_v1",
+  "release_status": "ROOT_RELEASED_R203_ONE_OWNED_CONTROL_STAGE",
+  "request_identity": [
+    "template",
+    "purpose",
+    "nonce",
+    "stage",
+    "job_id",
+    "node",
+    "uid",
+    "affinity",
+    "owner",
+    "root",
+    "permit_fd",
+    "permit_path",
+    "ready",
+    "source_capture",
+    "physical_witness",
+    "scope",
+    "ledger",
+    "quote",
+    "control_map_sha256",
+    "runtime_map_sha256",
+    "issued_epoch",
+    "expires_epoch"
+  ],
+  "request_schema": "r203_control_stage_request_v1",
+  "runtime": {
+    "byte_immutable": true,
+    "control_publication_is_distinct": true,
+    "files": 39,
+    "publication_sha256": "0a82b94f62904a0d74eb5ea7433a95fe5505a5fe6e2506f77b22b9302dc2d7db",
+    "source_freeze": "X/SOURCE_FREEZE_03.json",
+    "source_freeze_sha256": "4f78c727a5eac21ee69cbded3c5367b69c11ef1f798ca2f9740fe2c79a70c1f4",
+    "source_map_is_runtime39_hashes_only": true
+  },
+  "schema": "r203_control_stage_interfaces_v1",
+  "scope": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SCOPE.json",
+    "sha256": "850434d116ab41abae222a12639ba268d483dbee2dedb45fb7fa4c24f3c78e9e"
+  },
+  "scope_requirements": [
+    "actual separate compute reservation and complete admin/remote funds",
+    "one primary job and owner call, no retry/requeue/optimizer/posterior fit",
+    "exact stage/purpose/nonce/two maps/two publications/quote/namespace/previous whole ledger",
+    "whole previous fields/roles/nulls/scopes/counters conserved",
+    "source r203448 and old scopes are not stage execution funding"
+  ],
+  "scope_schema": "r203_funded_control_stage_scope_v1",
+  "scope_status": "ROOT_FUNDED_R203_CONTROL_STAGE_NO_TARGETS",
+  "stages": [
+    "FACILITY_PRECHECK",
+    "OWNED_NATIVE_BUILD",
+    "READONLY_DEPLOYMENT",
+    "NATIVE_ABI_SUITE"
+  ],
+  "startup_and_release": "Bootstrap grants metadata-only startup in actual direct Slurm job. Owner creates fresh0700 root/held FLOCK, actual source/physical witnesses and READY120. Main captures real native own-job metadata; two independently authored peer phases precede Root release. First native/compiler action must be inside both leases+READY. One full-stage authority governs founder+all sequential subjects; later subjects recheck whole authority/lifetime/budget, never renew early leases.",
+  "status": "APPROVED_SOURCE_ARCHITECTURE_SUBORDINATE_CATALOGS_REQUIRED_BEFORE_TESTS",
+  "subject_descriptor_schema": "r203_control_subject_descriptor_v1",
+  "subject_ordinals": "Typed integers1..9 for ABI listed order; facility_observer/readonly_observer ordinal1 with handshakeFalse; no prefilled child identity",
+  "template_keys": [
+    "schema",
+    "purpose",
+    "nonce",
+    "stage",
+    "node",
+    "control_publication",
+    "control_sources",
+    "control_map_sha256",
+    "runtime_publication",
+    "runtime_sources",
+    "runtime_map_sha256",
+    "scope",
+    "ledger",
+    "quote",
+    "bootstrap_authority",
+    "admission",
+    "output_root",
+    "parameters",
+    "issued_epoch",
+    "expires_epoch"
+  ],
+  "template_parameter_completion": "Common owns explicit startup/tracer/baseline/permit/physical/storage and per-stage settings; sealed slot API open_slot/finalize_stream/write_metadata",
+  "template_schema": "r203_control_job_template_v1",
+  "updated_epoch": 1793692631.1673303
+}

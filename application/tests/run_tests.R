@@ -309,6 +309,12 @@ run_standalone_glofas_test("application/tests/test_glofas_same_family_fitted_his
 run_standalone_glofas_test("application/tests/test_mq_typed_workflow_v2.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_transition_typed_v2.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_mq_typed_workflow_v2_sources.py")) == 0L)
+# Native candidates compile only temporary generated-test libraries. These
+# checks do not authorize authentic inputs, replace defaults or admit jobs.
+run_standalone_glofas_test("application/tests/test_mq_native_key_hash.R")
+run_standalone_glofas_test("application/tests/test_mq_isoreg_batch.R")
+run_standalone_glofas_test("application/tests/test_mq_native_event_inverse.R")
+run_standalone_glofas_test("application/tests/test_mq_native_composed_arrays.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_reconstruction_admission.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_same_family_collection.py")) == 0L)
 

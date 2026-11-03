@@ -79,6 +79,8 @@
 \input{tables/pricefm_full_current_outputs.tex}
 % Presentation-only revisions; scientific sources and aliases are retained.
 \input{tables/qdesn_sections5_7_main_display_overrides.tex}
+% Complete corrected issued-window authority; historical comparisons are retained.
+\input{tables/glofas_same_family_20261103_display_aliases.tex}
 
 % Identity, zeros, and ones with consistent bold style
 \newcommand{\Id}[1]{\mat I_{#1}}
@@ -131,8 +133,8 @@ Posterior computation
 uses Markov chain Monte Carlo and model-specific variational approximations.
 Two simulation studies examine quantile-path recovery, forecast loss, and
 quantile ordering. Q--DESN attains competitive forecast loss relative to
-structural dynamic quantile linear models; multiquantile shrinkage reduces
-crossings without uniform score gains. A retrospective streamflow application
+structural dynamic quantile linear models; in the multiquantile simulation,
+shrinkage reduces crossings without uniform score gains. A retrospective streamflow application
 combines gauge records with Global Flood Awareness System ensembles to study
 quantile-specific forecast correction. An electricity-price application compares
 region-specific regressions with matched forecasts from the pretrained neural
@@ -1053,10 +1055,6 @@ sensitivity.
 \section{Application: Streamflow Quantile Forecast Correction}
 \label{sec:data}
 
-\noindent\textit{[The issued-window analysis is being recomputed under the
-unit-member likelihood specified below. Its numerical results and displays
-in this draft remain from the earlier weighted analysis.]}
-
 Daily river-discharge measurements from the United States Geological Survey
 (USGS) provide a local reference for assessing hydrological forecasts.
 The Global Flood Awareness System (GloFAS) combines meteorological
@@ -1113,6 +1111,9 @@ y_t\mid\cdot&\sim\exAL_p(q_{p,t},\sigma_{Y,p},\gamma_{Y,p}),\\
 \text{Retrospective GloFAS:}\quad
 g_t^{\mathrm{ret}}\mid\cdot&\sim
 \exAL_p(q_{p,t}+d_{p,t},\sigma_{G,p},\gamma_{G,p}),\\
+\text{Future reference:}\quad
+y_{T+h}\mid\cdot&\sim
+\exAL_p(q_{p,T+h},\sigma_{Y,p},\gamma_{Y,p}),\\
 \text{Issued member:}\quad
 g_{T+h,e}^{\mathrm{ens}}\mid\cdot&\sim
 \exAL_p(q_{p,T+h}+d_{p,T+h},\sigma_{G,p},\gamma_{G,p}),\\
@@ -1122,9 +1123,7 @@ g_{T+h,e}^{\mathrm{ens}}\mid\cdot&\sim
 (\vect\delta_p,\Theta_{\mathrm{disc}})&\sim\pi_{\mathrm{NS,disc}},\\
 \text{Source priors:}\quad
 \sigma_{c,p}&\sim\IG(a_c,b_c),\qquad
-\gamma_{c,p}\sim\pi_{\gamma,c,p},\quad c\in\{Y,G\},\\
-\text{Future-path prior:}\quad
-\vect y_F&\sim\Normal(\vect m_N,\mat V_N).
+\gamma_{c,p}\sim\pi_{\gamma,c,p},\quad c\in\{Y,G\}.
 \end{aligned}
 \label{eq:glofas-part4-main}
 \end{equation}
@@ -1134,8 +1133,9 @@ priors; \(\Theta_{\mathrm{ref}}\) and \(\Theta_{\mathrm{disc}}\) collect
 their shrinkage variables. Source-specific scale and supported shape priors
 follow Section~\ref{sec:model}. AL fixes the shape parameters at zero.
 The historical and issued GloFAS products share their scale and shape,
-whereas the reference has its own parameters. Numerical prior settings
-are given in the supplement.
+whereas the reference has its own parameters. The supplement gives the
+prior and fitting details. Historical equations apply through \(T\);
+future equations apply at \(h=1,\ldots,28\), with \(e=1,\ldots,51\).
 
 The reference DESN transforms gauge-history and weather inputs. The second
 DESN transforms the history of
@@ -1157,29 +1157,34 @@ individually. Each historical observation and each issued member contributes
 one ordinary factor, with conditionally independent residuals given the
 regression parameters and input histories.
 
-The Gaussian path-prior moments \((\vect m_N,\mat V_N)\) are calibrated
-from recursive forecasts of the combined historical Gaussian DESN (RHS)
-fit, without using issued members or future USGS measurements. This prior
-supplies the future-path distribution in the quantile regressions instead
-of additional future-reference AL or exAL factors. The issued ensemble then
-updates the coefficients and latent path jointly through
-Eq.~\eqref{eq:glofas-part4-main}. Thus uncertainty in unknown response lags
-enters the future predictors rather than fixing them at one substituted path.
+The future reference equation uses the same likelihood as the observed
+gauge record. Because its predictors depend only on earlier responses, the
+product over horizons defines a normalized sequential distribution for
+\(\vect y_F\). The issued members update this distribution and the
+regression parameters together. This construction carries uncertainty in
+the unknown response lags into both DESN predictor vectors.
 
-The reference forecast is the variational mean of its extrapolated
-quantile-location function,
+We use VB to approximate the coefficients, scales, shape parameters, and
+latent future path. Joint MCMC over these quantities would require repeated
+updates of the nonlinear predictors in addition to the high-dimensional
+regressions over the long historical record. The variational calculation
+instead alternates regression updates with a local Gaussian--Delta update
+of each level-specific future path. Writing its retained mean and covariance
+as \(\vect m_p\) and \(\mat V_p\), the forecast is
 \begin{equation}
-\text{Reference forecast:}\quad
-\widehat q_{p,h}
-=\E_q\!\left[
-\vect x_{T+h}^{\mathrm{ref}}(\vect y_F)^\top\vect\beta_p
-\right],
+\begin{aligned}
+\text{Future-path approximation:}\quad
+q_{F,p}(\vect y_F)&\approx\Normal(\vect m_p,\mat V_p),\\
+\text{Reported response quantile:}\quad
+\widehat q_{p,h}&=m_{p,h}+\Phi^{-1}(p)\sqrt{V_{p,hh}}.
+\end{aligned}
 \label{eq:glofas-reference-forecast-main}
 \end{equation}
-evaluated using the latent-path approximation described in the supplement.
-This summarizes the level-specific regression location; it is not obtained
-by taking a quantile of the latent-path posterior. The Gaussian comparators
-instead report quantiles of their simulated future reference paths.
+Thus the reported forecast is a marginal response quantile under the
+ensemble-conditioned approximation, rather than the conditional location
+evaluated at one future history. The Gaussian comparators use the same
+analytic quantile rule for their fitted path factors. Applying
+\(\exp(\widehat q_{p,h})-1\) gives the corresponding flow-scale quantile.
 
 The comparison uses the seven levels \(0.05\), \(0.20\), \(0.35\), \(0.50\),
 \(0.65\), \(0.80\), and \(0.95\). Q--DESN fits the levels separately under
@@ -1190,34 +1195,30 @@ the raw GloFAS ensemble complete the comparison.
 
 The reservoir and prior specifications were selected using historical
 development and confirmation periods, without using the held-out issued
-window. Posterior inference then accounts for the regression parameters
-and the latent future streamflow path. The long historical record and
-high-dimensional regressions make MCMC computationally demanding, so we
-use VB to approximate this posterior. The supplement gives the family-specific
-updates, latent-path approximation and numerical stopping criteria.
+window. Compatible earlier fits supply starting moments for subsequent
+variational fits; they do not replace the specified priors. The supplement
+gives the family-specific updates, retained covariance terms, and numerical
+stopping criteria.
 
 \subsection{Forecast correction results}
 
-\noindent\textit{[The following comparison is retained as the historical
-weighted analysis until all six unit-member refits and their scoring checks
-are complete; it is not a result of the revised likelihood.]}
+Table~\ref{tab:glofas-application-score} compares all seven families on the
+same issued window. Gaussian DESN with ridge regularization has the lowest
+grid \(\aCRPS\), \GlofasApplicationCurrentNormalRidgeAcrps{}, compared
+with \GlofasApplicationCurrentRawAcrps{} for the raw ensemble. Gaussian
+DESN with RHS regularization also reduces the loss, whereas all four AL
+and exAL regressions score above the raw ensemble.
 
-Table~\ref{tab:glofas-application-score} gives the complete seven-family
-comparison on the same issued window. Q--DESN under AL is the descriptive
-leader, with grid \(\aCRPS\) of \GlofasApplicationCurrentQdesnAcrps{},
-compared with \GlofasApplicationCurrentRawAcrps{} for raw GloFAS.
-Q--DESN under exAL and Gaussian DESN with ridge regularization have the next
-lowest scores; Gaussian DESN with RHS regularization scores worse than raw GloFAS.
-
-Score and calibration give different assessments. Q--DESN under AL has
-coverage of 21 of 28 observations for the nominal 90\% interval. MQ--DESN under AL
-covers 22, the largest count among fitted families, but both fall below the
-nominal proportion. Gaussian DESN with ridge regularization covers only
-3 of 28, despite its relatively low score. Only 8 of 28 observations fall
-below the MQ--DESN exAL forecast at level 0.95.
-All seven reported issued-window quantile grids are ordered without a
-crossing correction. The supplement reports level-specific coverage and
-additional forecasts from the reference and discrepancy components.
+Despite their lower loss, the Gaussian regressions each cover only 2 of
+28 observations with their nominal 90\% intervals.
+For the ridge fit, 25 of 28 observations exceed its 0.95 quantile.
+Coverage is greatest for Q--DESN and MQ--DESN under AL, at 10 of 28
+observations, but their outer quantile bounds are inverted on eight dates.
+Crossings occur in 23.2--27.4\% of adjacent-level comparisons across the
+four quantile-regression families. Adjacent-coefficient shrinkage therefore
+does not order these marginal forecast grids in this application. The
+supplement gives the level-specific empirical frequencies, inversion
+counts, and crossing magnitudes.
 
 Figure~\ref{fig:glofas-application-forecast-period} shows the observations and
 issued ensemble, followed by Q--DESN under AL and the illustrative Gaussian ridge
@@ -1227,15 +1228,16 @@ scale. The supplement retains the full-family figure.
 \begin{table}[!htbp]
 \centering
 \TableStyle
-\caption{Historical weighted forecast correction at the 25 December 2022
-origin, retained pending the unit-member refits. Scores use the
+\caption{Forecast correction at the 25 December 2022 origin. Scores use the
 28 issued horizons on the \(\log(1+\mathrm{flow})\) scale, with flow in
 \(\mathrm{m}^3/\mathrm{s}\), and the grid
 \(0.05,0.20,0.35,0.50,0.65,0.80,0.95\).
-Mean check loss weights the seven levels equally; grid \(\aCRPS\) uses
-the unnormalized trapezoidal weights in Eq.~\eqref{eq:acrps-main}.
+Grid \(\aCRPS\) uses the unnormalized trapezoidal weights in
+Eq.~\eqref{eq:acrps-main}.
 Coverage is the observed proportion between the reported 0.05 and 0.95
-quantiles. All seven models are evaluated on the same dates; lower scores
+quantiles; inverted bounds are retained and cannot cover an observation.
+Raw crossing rates use 168 adjacent-level comparisons per family.
+All seven models are evaluated on the same dates; lower scores
 are better.}
 \label{tab:glofas-application-score}
 \input{\GlofasApplicationCurrentScoreTable}
@@ -1244,20 +1246,16 @@ are better.}
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.94\textwidth]{\GlofasApplicationCurrentForecastWindowFigure}
-\caption{Streamflow data and two historical weighted quantile forecasts at
-the 25 December 2022 origin, retained pending the unit-member refits.
-(a) USGS observations, retrospective GloFAS, and all
-51 issued ensemble paths. (b) Q--DESN (AL) and (c) Gaussian DESN (ridge) show seven
-quantile levels over the same 30 historical days and 28 issued horizons.
-Before the origin, curves are posterior-mean fitted conditional quantiles;
-afterward, they show forecasts informed by the issued ensemble. Axes are common, and
-the vertical dashed line marks the origin.
-Filled green points denote historical USGS; open dark-red points are used
-only for evaluation. Orange identifies GloFAS products. Blue curves show
-the quantile levels, with the median emphasized.
-The outer paths bound a nominal 90\% quantile interval, not a credible band;
-no crossing correction is applied. The analysis conditions on realized
-future weather.}
+\caption{Streamflow observations and quantile forecasts at the 25 December 2022
+origin. (a) USGS, retrospective GloFAS, and all 51 issued members.
+(b) Q--DESN (AL) and (c) Gaussian DESN (ridge) show seven quantile levels
+over the same 30 historical days and 28 issued horizons, with common axes
+and an origin line. Historical curves are mean fitted conditional quantiles
+under VB; future curves are marginal response quantiles informed by the
+issued ensemble. Filled green points denote historical USGS; open dark-red
+points are evaluation-only. Orange identifies GloFAS products; thin blue
+curves darken toward the tails. Raw crossings are retained. The curves are
+quantile estimates, not credible limits. Future weather is realized.}
 \figalt{Three stacked panels share a vertical scale. The first shows green
 filled historical USGS points, orange retrospective GloFAS and 51 issued
 ensemble paths, and dark-red open held-out USGS points. The second and third
@@ -1390,7 +1388,10 @@ less consistent gains in forecast scores.
 The applications illustrate different uses of the regression. For streamflow
 correction, the reference--discrepancy regression combines gauge measurements
 with GloFAS products at one retrospective forecast origin.
-\textit{[Streamflow findings will be updated after the unit-member refits.]}
+Gaussian DESN baselines reduce issued-window quantile loss relative to the
+raw ensemble, whereas the AL and exAL regressions do not. Coverage remains
+low across families, and the quantile regressions produce crossed marginal
+forecast grids despite meeting their numerical stopping criteria.
 The electricity-price comparison holds each regional
 specification fixed across three test folds and has slightly higher aggregate
 AQL than PriceFM, with substantial fold and region variation. The

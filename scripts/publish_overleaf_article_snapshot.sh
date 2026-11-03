@@ -118,7 +118,7 @@ done
 [[ -z "$reviewed_direct_commit" || "$reviewed_direct_commit" =~ ^[0-9a-f]{40}$ ]] ||
   die "--reconcile-reviewed-direct must be a lowercase 40-character commit hash"
 
-for command_name in git flock python3 pdflatex bibtex pdfinfo; do
+for command_name in git flock python3 pdflatex bibtex pdfinfo pdftotext pdfdetach; do
   command -v "$command_name" >/dev/null 2>&1 ||
     die "$command_name is unavailable"
 done

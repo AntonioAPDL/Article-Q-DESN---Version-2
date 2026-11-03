@@ -10,7 +10,12 @@ local({
   original_text <- system2("git", c("-C", shQuote(root), "show",
     shQuote(paste0(app_ind_editorial_baseline, ":", app_ind_editorial_receipt_path))), stdout = TRUE)
   baseline <- jsonlite::fromJSON(paste(original_text, collapse = "\n"), simplifyVector = FALSE)
-  sha <- function(path) unname(tools::sha256sum(file.path(root, path))[[1L]])
+  actual_sha <- function(path) unname(tools::sha256sum(file.path(root, path))[[1L]])
+  # This pure historical planner still accepts only the original allowlist.
+  # Supply that frozen digest in its generated test; the actual production
+  # adapter below independently checks the real corrected GloFAS expansion.
+  sha <- function(path) if (identical(path, "overleaf/article_files.txt"))
+    baseline$sources[[path]] else actual_sha(path)
   script_sha <- sha(app_ind_editorial_refresh_path)
   good <- app_ind_editorial_refresh_plan(baseline, baseline, sha, script_sha)
   stopifnot(identical(good$outputs, baseline$outputs),
@@ -44,6 +49,7 @@ local({
   altered <- good; altered$editorial_source_refresh$updated_paths <- as.list(c(app_ind_editorial_document_paths, output)); reject(altered)
   altered <- good; altered$editorial_source_refresh$original_manifest_sha256 <- wrong; reject(altered)
   altered <- good; altered$editorial_source_refresh$updated_document_sha256[["main.tex"]] <- wrong; reject(altered)
+  reject(baseline, function(path) if (identical(path, "overleaf/article_files.txt")) wrong else sha(path))
   app_ind_editorial_refresh(root, refresh = FALSE)
   cat(sprintf("IND_EDITORIAL_MANIFEST_TEST_PASS expected_mutation_rejections=%d scientific_files_regenerated=0\n", rejected))
 })

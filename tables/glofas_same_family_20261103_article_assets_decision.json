@@ -1,0 +1,50 @@
+{
+  "schema_version": "glofas_same_family_article_assets_v1",
+  "status": "COMPLETE_ARTICLE_ASSET_CANDIDATE_NOT_AUTHORITY",
+  "lineage": {
+    "scientific_source": {
+      "source_commit": "fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6",
+      "source_tree": "0d0d1eefbc930b31c404a301ace28c8e190b8453",
+      "source_manifest_sha256": "cd6684a6933de85f23d942a538c1efd241e66821b974467afb108379c068887b",
+      "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
+      "input_manifest_sha256": "f298dac4dd45479bd847528feab6d1104a8086f2c85116c8568acc53c871ae7f",
+      "task_manifest_sha256": "af3281e0aa916ea1ff4a793752c221e051422f2d6705c9f88da471c1e58e5397"
+    },
+    "packet_manifest_sha256": "5c476aeda6d2164658875de22ab393a6b25e7a0e6c4e8c72e85e9a3d2b6267ce",
+    "extraction_manifest_sha256": "60fc57bc7039cc239d1ca77aa54f8114b03a42eb5884702089b288c9f12e6736",
+    "fitted_history_manifest_sha256": "ed4ff608ff07513815576af4d13b757e14e792ffee69335eb5bdf7181720ff68",
+    "convergence_sha256": "5336a5a3e11ddf778061b0f124b8dabb5aba0b0333d127e349f80dccb5be85d0",
+    "derived_metrics_manifest_sha256": "e4f77a094dc7aa05f2aadb0cdf65da51c84753bf189d3188fe1d80bc09f6e4c1"
+  },
+  "forecast_rows": 1372,
+  "historical_fitted_rows": 1260,
+  "issued_member_rows": 1428,
+  "history_rows": 30,
+  "truth_rows": 28,
+  "models": 7,
+  "probabilities": [0.050000000000000003, 0.20000000000000001, 0.34999999999999998, 0.5, 0.65000000000000002, 0.80000000000000004, 0.94999999999999996],
+  "history_start": "2022-11-26",
+  "origin": "2022-12-25",
+  "forecast_end": "2023-01-22",
+  "forecast_functional": "ensemble_conditioned_Gaussian_VB_marginal_response_quantile",
+  "historical_functional": "VB_mean_conditional_quantile_on_log1p_scale",
+  "isotonic_adjustment": false,
+  "clipping_or_smoothing": false,
+  "added_credible_ribbons": false,
+  "extra_response_noise_added": false,
+  "new_fits": 0,
+  "source_models_opened": 0,
+  "style": {
+    "history": "#24543A",
+    "truth": "#8E2529",
+    "product": "#B45D1B",
+    "quantiles": ["#153F63", "#315F83", "#688EAC", "#AEC3D2", "#688EAC", "#315F83", "#153F63"],
+    "quantile_lwd": 0.56999999999999995,
+    "observation_lwd": 0.69999999999999996,
+    "member_lwd": 0.38,
+    "quantile_line_mm": 0.14999999999999999,
+    "historical_points": 16,
+    "future_points": 1
+  },
+  "article_publication_authorized": false
+}

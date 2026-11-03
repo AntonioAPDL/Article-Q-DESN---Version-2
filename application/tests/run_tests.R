@@ -309,6 +309,12 @@ run_standalone_glofas_test("application/tests/test_glofas_same_family_fitted_his
 run_standalone_glofas_test("application/tests/test_glofas_same_family_history_materializer.R")
 run_standalone_glofas_test("application/tests/test_glofas_same_family_publication_metrics.R")
 run_standalone_glofas_test("application/tests/test_glofas_same_family_article_assets.R")
+# Generated-only diagnostic references retain the adverse AL approximation
+# result separately from successful coordinate-update/linear-algebra parity.
+run_standalone_glofas_test("application/tests/test_glofas_fixed_target_scalar_diagnostics.R")
+run_standalone_glofas_test("application/tests/test_glofas_fixed_target_affine_diagnostics.R")
+run_standalone_glofas_test("application/tests/test_glofas_fixed_target_diagnostic_driver.R")
+run_standalone_glofas_test("application/tests/test_glofas_fixed_target_forensic_reader.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 run_standalone_glofas_test("application/tests/test_mq_typed_workflow_v2.R")

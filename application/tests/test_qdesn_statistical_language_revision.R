@@ -20,6 +20,15 @@ local({
   history <- read_text("docs/implementation_notes/statistical_language_reader_revision_20261019.md")
   passed <- app_check_statistical_language_revision(root)
   mutations <- 0L
+  frozen_text <- function(path) {
+    result <- system2("git", c("-C", shQuote(root), "show", shQuote(paste0(
+      "0d111e0c2bf3951378aec2bbfc1f46fd9ecd8437:", path))), stdout = TRUE, stderr = TRUE)
+    stopifnot(is.null(attr(result, "status")))
+    paste(result, collapse = "\n")
+  }
+  fixtures <- list(current = list(main = main, supplement = supplement),
+    historical = list(main = frozen_text("main.tex"),
+      supplement = frozen_text("qdesn-supplement.tex")))
   mutate_text <- function(text, before, after) {
     # Prose may wrap over source lines. Normalize whitespace before mutation
     # and require a real replacement, so a non-matching fixture cannot pass.
@@ -41,6 +50,12 @@ local({
       call. = FALSE)
     mutations <<- mutations + 1L
   }
+  for (fixture in fixtures) {
+  main <- fixture$main
+  supplement <- fixture$supplement
+  corrected <- grepl("\\input{tables/glofas_same_family_20261103_display_aliases.tex}",
+    main, fixed = TRUE)
+  app_statistical_language_semantics(main, supplement, history)
   reject("GloFAS inputs relabeled as the latent quantity", changed_supplement = mutate_text(
     supplement, "Unknown future reference-streamflow values", "Unknown future GloFAS responses"))
   reject("undefined inverse logit", changed_supplement = mutate_text(
@@ -78,8 +93,15 @@ local({
     "\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})", "0"))
   reject("variational stopping described as strict convergence", changed_supplement = paste(
     supplement, "Both fits have strict convergence."))
-  reject("achieved stopping statistic changed", changed_supplement = mutate_text(
-    supplement, "8.9279687", "1.9"))
+  if (corrected) {
+    reject("corrected stopping tolerances changed", changed_supplement = mutate_text(
+      supplement, "10^{-3}", "10^{-1}"))
+    reject("complete consecutive stopping passes removed", changed_supplement = mutate_text(
+      supplement, "three consecutive", "one"))
+  } else {
+    reject("achieved stopping statistic changed", changed_supplement = mutate_text(
+      supplement, "8.9279687", "1.9"))
+  }
   reject("input lag relabeled as measured reservoir memory", changed_supplement = paste(
     supplement, "The reservoir memory is 540 observations."))
   reject("historical unverified-target table made active", changed_supplement = paste(
@@ -95,6 +117,22 @@ local({
   reject("pending streamflow refits presented as an abstract gain", changed_main = mutate_text(
     main, "quantile-specific forecast correction",
     "reduces quantile forecast loss relative to the uncorrected ensemble"))
+  if (corrected) {
+    reject("Gaussian loss leadership concealed", changed_main = mutate_text(main,
+      "Gaussian DESN with ridge regularization has the lowest", "All models have similar"))
+    reject("adverse AL and exAL loss concealed", changed_main = mutate_text(main,
+      "all four AL and exAL regressions score above the raw ensemble", "all four regressions improve over the raw ensemble"))
+    reject("poor Gaussian inclusion concealed", changed_main = mutate_text(main,
+      "each cover only 2 of 28", "each cover most"))
+    reject("inverted bounds concealed", changed_main = mutate_text(main,
+      "inverted on eight dates", "ordered on every date"))
+    reject("raw crossing percentages concealed", changed_main = mutate_text(main,
+      "Crossings occur in 23.2--27.4\\%", "No crossings occur"))
+    reject("actual streamflow conclusion incorrectly made pending", changed_main = mutate_text(main,
+      "whereas the AL and exAL regressions do not", "all quantile regressions improve the score"))
+    reject("corrected alias missing from one manuscript", changed_main = mutate_text(main,
+      "\\input{tables/glofas_same_family_20261103_display_aliases.tex}", ""))
+  } else {
   reject("streamflow interval-coverage result removed from the application", changed_main = mutate_text(
     main, "coverage of 21 of 28 observations for the nominal 90\\% interval",
     "favorable interval coverage"))
@@ -107,6 +145,7 @@ local({
   reject("historical draft marker removed", changed_main = mutate_text(main,
     "numerical results and displays in this draft remain from the earlier weighted analysis",
     "numerical results are from the revised likelihood"))
+  }
   reject("abstract acronym introduced without expansion", changed_main = mutate_text(
     main, "Asymmetric Laplace", "AL"))
   reject("pending PriceFM finding silently finalized", changed_main = mutate_text(
@@ -119,6 +158,28 @@ local({
   reject("issued ensemble cardinality changed", changed_supplement = mutate_text(
     supplement, "\\prod_{h=1}^{28}\\prod_{e=1}^{51}",
     "\\prod_{h=1}^{28}\\prod_{e=1}^{50}"))
+  if (corrected) {
+    reject("same-family future factors removed", changed_supplement = mutate_text(supplement,
+      "\\prod_{h=1}^{28}f_{p_k}", "1"))
+    reject("same-family future target disconnected", changed_supplement = mutate_text(supplement,
+      "L_{F,k}", "1"))
+    reject("Gaussian driver prior silently restored", changed_supplement = paste(supplement,
+      "\\phi_{28}(\\vect y_{F,k};\\vect m_N,\\mat V_N)"))
+    reject("future paths shared across levels", changed_supplement = mutate_text(supplement,
+      "Each level retains its own path", "All levels share one path"))
+    reject("future reference mean substituted for marginal quantile", changed_main = mutate_text(main,
+      "\\Phi^{-1}(p)\\sqrt{V_{p,hh}}", "0"))
+    reject("future observation noise counted twice", changed_supplement = mutate_text(supplement,
+      "No additional observation error is added", "Additional observation error is added"))
+    reject("future gauge truth used in fitting", changed_main = mutate_text(main,
+      "future USGS measurements are reserved for scoring", "future USGS measurements enter fitting"))
+    reject("realized weather hidden", changed_main = mutate_text(main,
+      "Both use realized values during the forecast window", "Both use verified issuance-time forecasts"))
+    reject("negative quantiles clipped", changed_supplement = mutate_text(supplement,
+      "retained without clipping or truncation", "clipped at zero"))
+    reject("post-hoc crossing repair authorized", changed_supplement = mutate_text(supplement,
+      "no post-hoc crossing correction is applied", "post-hoc crossing correction is applied"))
+  } else {
   reject("historical Gaussian path prior removed", changed_supplement = mutate_text(
     supplement, "\\phi_{28}(\\vect y_{F,k};\\vect m_N,\\mat V_N)", "1"))
   reject("extra future-reference likelihood silently introduced", changed_supplement = mutate_text(
@@ -127,11 +188,13 @@ local({
   reject("historical stopping evidence relabeled as unit-member completion", changed_supplement = mutate_text(
     supplement, "describe the historical weighted analysis",
     "describe the completed unit-member analysis"))
+  }
   reject("adverse electricity-price finding hidden", changed_main = mutate_text(
     main, "slightly higher aggregate AQL than PriceFM", "lower aggregate AQL than PriceFM"))
   reject("historical MQ caption restored", changed_supplement = mutate_text(
     supplement, "\\input{tables/qdesn_multiquantile_score_display.tex}",
     "\\input{tables/joint_qdesn_pure_desn_v2_mq_score_table.tex}"))
+  }
   cat(sprintf(paste0("QDESN_STATISTICAL_LANGUAGE_REVISION_TEST_PASS checks=%d ",
-    "expected_mutation_rejections=%d scientific_runs=0\n"), length(passed), mutations))
+    "expected_mutation_rejections=%d source_versions=2 scientific_runs=0\n"), length(passed), mutations))
 })

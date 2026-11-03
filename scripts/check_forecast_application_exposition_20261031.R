@@ -78,6 +78,50 @@ app_forecast_exposition_pricefm_authorization <- function(repo_root, main, suppl
   checks
 }
 
+app_forecast_exposition_glofas_version <- function(main, supplement) {
+  alias <- "\\input{tables/glofas_same_family_20261103_display_aliases.tex}"
+  present <- c(grepl(alias, main, fixed = TRUE), grepl(alias, supplement, fixed = TRUE))
+  if (any(present) && !all(present)) {
+    stop("Corrected GloFAS aliases must be explicit in both manuscripts.", call. = FALSE)
+  }
+  if (all(present)) "same_family_20261103" else "historical_gaussian_driver_20261031"
+}
+
+app_forecast_exposition_glofas_authority <- function(repo_root, main, supplement) {
+  version <- app_forecast_exposition_glofas_version(main, supplement)
+  authority <- file.path(repo_root, "tables/glofas_same_family_current_authority.json")
+  if (identical(version, "historical_gaussian_driver_20261031")) {
+    if (file.exists(authority)) {
+      stop("Corrected GloFAS authority cannot retain historical active aliases.", call. = FALSE)
+    }
+    return(character())
+  }
+  helper <- file.path(repo_root, "scripts/glofas_current_article_authority.py")
+  if (!file.exists(authority) || !file.exists(helper)) {
+    stop("Corrected GloFAS exposition requires its current-authority contract and validator.",
+      call. = FALSE)
+  }
+  program <- paste(
+    "import importlib.util, pathlib, sys",
+    "root = pathlib.Path(sys.argv[1])",
+    "spec = importlib.util.spec_from_file_location('glofas_authority', root / 'scripts/glofas_current_article_authority.py')",
+    "module = importlib.util.module_from_spec(spec)",
+    "spec.loader.exec_module(module)",
+    "module.validate_authority_tree(root)",
+    "print('GLOFAS_CURRENT_ARTICLE_AUTHORITY_TREE_VERIFIED')",
+    sep = "; "
+  )
+  result <- suppressWarnings(system2("/usr/bin/python3.11",
+    c("-I", "-S", "-B", "-c", shQuote(program), shQuote(normalizePath(repo_root))),
+    stdout = TRUE, stderr = TRUE))
+  if (!is.null(attr(result, "status")) ||
+      !any(result == "GLOFAS_CURRENT_ARTICLE_AUTHORITY_TREE_VERIFIED")) {
+    stop(paste("Corrected GloFAS current-authority validation failed:",
+      paste(result[seq_len(min(12L, length(result)))], collapse = "\n")), call. = FALSE)
+  }
+  "Corrected GloFAS authority, numerical assets, and effective aliases verified."
+}
+
 app_forecast_application_exposition_semantics <- function(main, supplement) {
   checks <- character()
   require_check <- function(value, message) {
@@ -100,6 +144,8 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
   pricefm <- plain(section(main, "sec:pricefm-application"))
   sf <- plain(section(supplement, "sec:forecast_synthesis"))
   sg <- plain(section(supplement, "sec:glofas_discrepancy"))
+  corrected_glofas <- identical(app_forecast_exposition_glofas_version(main, supplement),
+    "same_family_20261103")
   require_check(has(model, "d_u=m+q(m_z+1)") &&
     has(model, "\\vect z_{t-m_z}") && has(model, "\\vect h_{t-1"),
     "Define exogenous lags and recurrent state separately from the input-vector dimension.")
@@ -135,10 +181,20 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
     has(glofas, "\\vect\\beta_p") && has(glofas, "\\vect\\delta_p") &&
     (has(glofas, "GloFAS-minus-reference") || has(glofas, "g_t^{\\mathrm{ret}}-y_t")),
     "Keep reference and discrepancy regressions and their two predictor maps identifiable.")
-  require_check(has(glofas, "Gaussian") && has(glofas, "latent") &&
-    has(glofas, "path") && has(glofas, "prior") &&
-    has(sg, "There is no additional future-reference likelihood for these quantile models"),
-    "The current quantile application uses its Gaussian path prior, not a new response transition.")
+  if (corrected_glofas) {
+    require_check(has(glofas, "normalized sequential distribution") &&
+      has(glofas, "same likelihood as the observed gauge record") &&
+      has(glofas, "\\text{Future reference:}") &&
+      has(sg, "\\prod_{h=1}^{28}f_{p_k}") && has(sg, "L_{F,k}") &&
+      !has(sg, "\\phi_{28}(\\vect y_{F,k};\\vect m_N,\\mat V_N)") &&
+      has(sg, "Each level retains its own path"),
+      "Corrected GloFAS uses normalized same-family future responses and separate MQ paths, not a Gaussian driver prior.")
+  } else {
+    require_check(has(glofas, "Gaussian") && has(glofas, "latent") &&
+      has(glofas, "path") && has(glofas, "prior") &&
+      has(sg, "There is no additional future-reference likelihood for these quantile models"),
+      "The historical quantile application uses its Gaussian path prior, not a new response transition.")
+  }
   require_check(has(glofas, "51") &&
     (has(glofas, "ordinary likelihood factor") || has(glofas, "one ordinary factor")) &&
     has(glofas, "j<h") &&
@@ -146,15 +202,35 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
     grepl("(earlier|lagged)[^.]{0,100}(value|values|path|input)|path[^.]{0,100}earlier", glofas) &&
     grepl("(mean|average)[^.]{0,100}(ensemble|issued)|ensemble[^.]{0,100}(mean|average)", glofas),
     "Explain causal latent inputs and distinguish ensemble summaries from the individual member likelihoods.")
-  require_check(has(sg, paste0("At each horizon, the 51 issued members are modeled as ",
-      "conditionally independent given the regression parameters, the latent future reference ",
-      "path \\(\\vect y_{F,k}\\), and preceding input histories.")) &&
-    !has(sg, "independent across members and horizons"),
-    "Condition within-horizon member densities on preceding inputs without asserting across-horizon independence.")
-  require_check(has(glofas, "variational mean") &&
-    has(glofas, "not obtained by taking a quantile") &&
-    has(glofas, "future USGS measurements are reserved for scoring"),
-    "Name the reported GloFAS location summary and retain its future-truth firewall.")
+  if (corrected_glofas) {
+    require_check(has(sg, "At each horizon, the 51 issued members are modeled as conditionally independent") &&
+      has(sg, "preceding input histories") &&
+      !has(sg, "independent across members and horizons"),
+      "Condition within-horizon members on the causal path and parameters, not across-horizon independence.")
+    require_check(has(glofas, "\\Phi^{-1}(p)\\sqrt{V_{p,hh}}") &&
+      has(sg, "\\Phi^{-1}(p_k)\\sqrt{V_{k,hh}}") &&
+      has(glofas, "marginal response quantile") && has(sg, "local Gaussian--Delta approximation") &&
+      has(sg, "No additional observation error is added") &&
+      has(glofas, "future USGS measurements are reserved for scoring") &&
+      has(glofas, "Both use realized values during the forecast window"),
+      "Report Gaussian--Delta marginal response quantiles without extra noise and preserve truth/weather roles.")
+    require_check(has(glofas, "Gaussian DESN with ridge regularization has the lowest") &&
+      has(glofas, "all four AL and exAL regressions score above the raw ensemble") &&
+      has(glofas, "inverted on eight dates") &&
+      has(sg, "retained without clipping or truncation") &&
+      has(sg, "no post-hoc crossing correction is applied"),
+      "Retain adverse quantile-regression loss, inversion, crossing, and physical-support findings.")
+  } else {
+    require_check(has(sg, paste0("At each horizon, the 51 issued members are modeled as ",
+        "conditionally independent given the regression parameters, the latent future reference ",
+        "path \\(\\vect y_{F,k}\\), and preceding input histories.")) &&
+      !has(sg, "independent across members and horizons"),
+      "Condition historical member densities on preceding inputs without asserting across-horizon independence.")
+    require_check(has(glofas, "variational mean") &&
+      has(glofas, "not obtained by taking a quantile") &&
+      has(glofas, "future USGS measurements are reserved for scoring"),
+      "Name the historical GloFAS location summary and retain its future-truth firewall.")
+  }
   require_check((has(pricefm, "38") || has(pricefm, "\\PricefmFullRegions")) &&
     grepl("(separately|independently)[^.]{0,100}(regional|region)|regional[^.]{0,100}(separately|independently)", pricefm) &&
     has(pricefm, "univariate") && has(pricefm, "neighbor"),
@@ -167,8 +243,9 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
     has(pricefm, "forecasts") && has(pricefm, "not independently verified"),
     "Distinguish supplied day-ahead covariate forecasts from certified issue-time vintages.")
   require_check(has(main, "[PriceFM findings to be updated.]") &&
-    has(glofas, "historical weighted analysis until all six unit-member refits"),
-    "Exposition changes do not finalize pending application authorities.")
+    (if (corrected_glofas) !has(glofas, "historical weighted analysis until all six unit-member refits") else
+      has(glofas, "historical weighted analysis until all six unit-member refits")),
+    "Keep the independent pending application and the versioned GloFAS authority distinct.")
   invisible(checks)
 }
 
@@ -177,7 +254,9 @@ app_check_forecast_application_exposition <- function(repo_root) {
     collapse = "\n")
   main <- read_source("main.tex")
   supplement <- read_source("qdesn-supplement.tex")
+  authority_checks <- app_forecast_exposition_glofas_authority(repo_root, main, supplement)
   checks <- app_forecast_application_exposition_semantics(main, supplement)
+  checks <- c(checks, authority_checks)
   checks <- c(checks, app_forecast_exposition_pricefm_authorization(repo_root, main, supplement))
   cat(sprintf("FORECAST_APPLICATION_EXPOSITION_CHECK=PASS checks=%d scientific_runs=0\n",
     length(checks)))

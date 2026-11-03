@@ -44,6 +44,11 @@ app_statistical_language_semantics <- function(main, supplement, history) {
   glofas <- plain(section(main, "sec:data"))
   discussion <- plain(section(main, "sec:discussion"))
   unit_target <- equation(supplement, "eq:supp_glofas_unit_member_target")
+  current_alias <- "\\input{tables/glofas_same_family_20261103_display_aliases.tex}"
+  current_inputs <- c(has(main, current_alias), has(supplement, current_alias))
+  require_check(!any(current_inputs) || all(current_inputs),
+    "Corrected GloFAS aliases must be explicit in both manuscripts.")
+  corrected_glofas <- all(current_inputs)
 
   require_check(!has(supplement_plain, "Unknown future GloFAS responses") &&
     has(supplement_plain, "Unknown future reference-streamflow values"),
@@ -98,13 +103,22 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     has(supplement_plain, "uncertainty") &&
     has(supplement, "\\mat H\\mat\\Sigma\\mat H^\\top"),
     "Retain fixed-intercept uncertainty scope and stacked slope covariance.")
-  require_check(!grepl("strict(ly)? converg", plain(stopping), ignore.case = TRUE) &&
+  stopping_rule <- !grepl("strict(ly)? converg", plain(stopping), ignore.case = TRUE) &&
     has(plain(stopping), "stopping criteria") &&
     has(plain(stopping), "three consecutive") &&
-    has(stopping, "10^{-3}") && has(stopping, "8.9279687") &&
-    has(stopping, "7.7748371") && has(stopping, "2.6080582") &&
-    has(stopping, "3.8253514"),
-    "Describe variational stopping without altering its thresholds or achieved values.")
+    has(stopping, "10^{-3}")
+  if (corrected_glofas) {
+    require_check(stopping_rule && has(plain(stopping), "every inner fit") &&
+      has(plain(stopping), "after global-scale updates begin") &&
+      has(stopping, "10^{-4}") && has(plain(stopping), "at most 60 updates") &&
+      has(plain(stopping), "completed fits"),
+      "Retain corrected variational stopping tolerances, complete passes, and completed-fit accounting.")
+  } else {
+    require_check(stopping_rule && has(stopping, "8.9279687") &&
+      has(stopping, "7.7748371") && has(stopping, "2.6080582") &&
+      has(stopping, "3.8253514"),
+      "Describe historical variational stopping without altering its thresholds or achieved values.")
+  }
   require_check(has(supplement_plain, "maximum response lag") &&
     !grepl("memory[^.]{0,35}(540|180)", supplement_plain, ignore.case = TRUE) &&
     !has(supplement_plain, "forecasts with memory"),
@@ -134,7 +148,37 @@ app_statistical_language_semantics <- function(main, supplement, history) {
     !has(abstract_plain, "reduces quantile forecast loss") &&
     !has(tolower(abstract_plain), "best forecast correction"),
     "Keep accepted simulation findings, neutral streamflow purpose, and provisional PriceFM findings distinct.")
-  require_check(has(glofas, "coverage of 21 of 28 observations for the nominal 90\\% interval") &&
+  if (corrected_glofas) {
+    require_check(has(glofas, "Gaussian DESN with ridge regularization has the lowest") &&
+      has(glofas, "all four AL and exAL regressions score above the raw ensemble") &&
+      has(glofas, "each cover only 2 of 28") &&
+      has(glofas, "inverted on eight dates") &&
+      has(glofas, "Crossings occur in 23.2--27.4\\%") &&
+      has(discussion, "whereas the AL and exAL regressions do not") &&
+      has(discussion, "crossed marginal forecast grids") &&
+      !has(glofas, "historical weighted analysis until all six unit-member refits") &&
+      !has(discussion, "Streamflow findings will be updated after the unit-member refits"),
+      "Retain corrected adverse losses, poor inclusion, inversions and crossings without historical pending claims.")
+    require_check(has(unit_target, "\\prod_{h=1}^{28}\\prod_{e=1}^{51}") &&
+      has(unit_target, "L_{F,k}") &&
+      !has(supplement, "\\phi_{28}(\\vect y_{F,k};\\vect m_N,\\mat V_N)") &&
+      !has(unit_target, "1/51") && !has(unit_target, "\\frac{1}{51}") &&
+      has(supplement_plain, "Every included historical observation and issued member contributes one density factor") &&
+      has(supplement_plain, "\\prod_{h=1}^{28}f_{p_k}") &&
+      has(supplement_plain, "Each level retains its own path") &&
+      has(supplement_plain, "1,428 factors per level"),
+      "Retain normalized same-family future reference and ordinary unit-member factors with level-specific paths.")
+    require_check(has(main_plain, "normalized sequential distribution") &&
+      has(main_plain, "\\Phi^{-1}(p)\\sqrt{V_{p,hh}}") &&
+      has(supplement_plain, "\\Phi^{-1}(p_k)\\sqrt{V_{k,hh}}") &&
+      has(supplement_plain, "No additional observation error is added") &&
+      has(main_plain, "future USGS measurements are reserved for scoring") &&
+      has(main_plain, "Both use realized values during the forecast window") &&
+      has(supplement_plain, "retained without clipping or truncation") &&
+      has(supplement_plain, "no post-hoc crossing correction is applied"),
+      "Report Gaussian--Delta marginal response quantiles with unchanged truth, weather, raw-crossing and support roles.")
+  } else {
+    require_check(has(glofas, "coverage of 21 of 28 observations for the nominal 90\\% interval") &&
     has(glofas, "historical weighted analysis until all six unit-member refits") &&
     has(glofas, "it is not a result of the revised likelihood") &&
     has(glofas, "numerical results and displays in this draft remain from the earlier weighted analysis") &&
@@ -151,6 +195,7 @@ app_statistical_language_semantics <- function(main, supplement, history) {
   require_check(has(plain(stopping), "describe the historical weighted analysis") &&
     has(plain(stopping), "after the unit-member refits and their checks are complete"),
     "Historical stopping evidence must not be relabeled as completed unit-member inference.")
+  }
   require_check(has(discussion, "slightly higher aggregate AQL than PriceFM"),
     "Preserve the adverse aggregate electricity-price finding while its section remains provisional.")
   historical_selection <- has(main_plain, "historical forecast-based refinement") ||
@@ -226,6 +271,11 @@ app_check_statistical_language_revision <- function(repo_root) {
       "176c0340fbcc7c2efdda7fe01d9e13c44906ffafa311bc48a16a645156905dd6"))
   main <- read_source("main.tex")
   supplement <- read_source("qdesn-supplement.tex")
+  glofas_authority <- new.env(parent = baseenv())
+  sys.source(file.path(repo_root,
+    "scripts/check_forecast_application_exposition_20261031.R"), envir = glofas_authority)
+  checks <- c(checks, glofas_authority$app_forecast_exposition_glofas_authority(
+    repo_root, main, supplement))
   segment <- function(text, begin, end) {
     start <- regexpr(begin, text, fixed = TRUE)[1L]
     require_check(start > 0L, paste("Missing protected segment:", begin))

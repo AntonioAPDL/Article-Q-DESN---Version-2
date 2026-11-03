@@ -138,6 +138,14 @@ local({
       vapply(editorial_receipt$sources, `[[`, character(1L), "file"),
       vapply(editorial_receipt$outputs, `[[`, character(1L), "file"))
   }
+  # The current GloFAS validator is a shared presentation-test dependency,
+  # not an article upload. Its approved data/TeX closure is already copied
+  # through the allowlist; include the helper in this isolated positive fixture.
+  if (file.exists(file.path(root, "tables/glofas_same_family_current_authority.json"))) {
+    glofas_helper <- "scripts/glofas_current_article_authority.py"
+    stopifnot(file.exists(file.path(root, glofas_helper)))
+    editorial_dependencies <- c(editorial_dependencies, glofas_helper)
+  }
   additional_files <- unique(c("main.tex", "qdesn-supplement.tex", "overleaf/article_files.txt",
     "scripts/reconstruct_joint_qdesn_laplace_article_projection_v2.R",
     manifest$relative_path, allowlist, mq_dependencies, editorial_dependencies,

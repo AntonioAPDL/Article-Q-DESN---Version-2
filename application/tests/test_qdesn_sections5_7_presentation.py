@@ -246,6 +246,14 @@ class EditorialPresentationTest(unittest.TestCase):
         main.write_text(main.read_text() + "\n\\input{tables/glofas_mq_display_overrides.tex}\n")
         self.reject(effective=True)
 
+    def test_corrected_alias_requires_its_approval(self):
+        authority = self.fixture / "tables/glofas_same_family_current_authority.json"
+        if authority.exists():
+            authority.unlink()
+        main = self.fixture / "main.tex"
+        main.write_text(main.read_text() + "\n\\input{tables/glofas_same_family_20261103_display_aliases.tex}\n")
+        self.reject(effective=True)
+
     def test_supp_stale_pricefm_alias_rejected(self):
         supp = self.fixture / "qdesn-supplement.tex"
         supp.write_text(supp.read_text() + "\n\\input{tables/pricefm_full_current_outputs.tex}\n")
@@ -254,6 +262,44 @@ class EditorialPresentationTest(unittest.TestCase):
     def test_missing_upload_asset_rejected(self):
         self.alter("overleaf/article_files.txt", self.builder.PDF_OUTPUTS["pricefm_region"][1], "")
         self.reject(effective=True)
+
+
+class CorrectedGlofasProjectionAdapterTest(unittest.TestCase):
+    """Exercise the new wiring branch using generated, local-only fixtures."""
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("glofas_generated_authority_fixture",
+            ROOT / "application/tests/test_glofas_current_article_authority.py")
+        fixture_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture_module)
+        self.guard = fixture_module.GUARD
+        temporary = tempfile.TemporaryDirectory(prefix="glofas-presentation-adapter-")
+        self.addCleanup(temporary.cleanup)
+        self.f = fixture_module.AuthorityFixture(temporary.name)
+
+    def test_approved_tree_adds_exact_new_dependency_closure(self):
+        authority, paths = CHECKER.corrected_glofas_authority(self.f.root)
+        self.assertEqual(authority["status"], "SCIENTIFIC_REVIEW_APPROVED")
+        self.assertTrue(self.guard.EXPECTED_ASSETS <= paths)
+        self.assertTrue({self.guard.AUTHORITY_PATH, self.guard.MANIFEST_PATH,
+                         "scripts/glofas_current_article_authority.py", self.guard.ALIAS_PATH} <= paths)
+
+    def test_changed_corrected_asset_fails_effective_tree_guard(self):
+        self.f.write(self.guard.ALIASES["GlofasApplicationCurrentScoreTable"], "Changed numerical output\n")
+        with self.assertRaises(AssertionError):
+            CHECKER.corrected_glofas_authority(self.f.root)
+
+    def test_missing_approval_fails_with_whitespace_late_alias(self):
+        (self.f.root / self.guard.AUTHORITY_PATH).unlink()
+        marker = "\\input{" + self.guard.ALIAS_PATH + "}"
+        self.f.write("main.tex", self.f.main.replace(marker, "\\input { " + self.guard.ALIAS_PATH + " }"))
+        with self.assertRaises(AssertionError):
+            CHECKER.corrected_glofas_authority(self.f.root)
+
+    def test_historical_tree_without_corrected_selection_is_unchanged(self):
+        (self.f.root / self.guard.AUTHORITY_PATH).unlink()
+        for path in ("main.tex", "qdesn-supplement.tex"):
+            self.f.write(path, "\\documentclass{article}\n\\begin{document}Historical fixture.\\end{document}\n")
+        self.assertEqual(CHECKER.corrected_glofas_authority(self.f.root), (None, set()))
 
 
 if __name__ == "__main__":

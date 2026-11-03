@@ -72,6 +72,20 @@ local({
     z <- gfh_transition_rows(result(paste0("gft-mq-", f)), design, 3L)
     ok(nrow(z) == 21L && identical(unique(z$tau), gfh_tau()))
   }
+  conditional <- result("gft-mq-al")
+  for(k in seq_len(7L))conditional$fit$fits[[k]]$prior <- "ridge"
+  conditional$fit$converged_rhs <- TRUE
+  conditional$fit$rhs_state_reference <- rep(list(list(prior_precision=c(1,1))),7L)
+  conditional$fit$rhs_state_discrepancy <- rep(list(list(prior_precision=1)),7L)
+  conditional$fit$rhs_partition_certificate <- data.frame(schema_version="glofas_part3_rhs_partition_v1",
+    p_reference=2L,p_discrepancy=1L,n_quantiles=7L,overlap_count=0L,all_precision_finite=TRUE)
+  ok(identical(gfh_transition_rows(conditional,design,3L),gfh_transition_rows(result("gft-mq-al"),design,3L)))
+  bad <- conditional;bad$fit$converged_rhs <- FALSE
+  reject(gfh_transition_rows(bad,design,3L),"outer RHS certificate")
+  bad <- conditional;bad$fit$rhs_state_reference[[1L]]$prior_precision[1L] <- -1
+  reject(gfh_transition_rows(bad,design,3L),"outer RHS certificate")
+  bad <- result();bad$fit$prior <- "ridge"
+  reject(gfh_transition_rows(bad,design,3L),"fixed-p")
   # Retain crossing fitted functionals rather than imposing order.
   crossing <- result("gft-mq-al")
   for (k in seq_along(gfh_tau())) crossing$fit$fits[[k]]$summary$theta_mean[1L] <- 10 - k

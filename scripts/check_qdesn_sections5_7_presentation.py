@@ -16,6 +16,30 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
+
+
+def corrected_glofas_authority(root: Path):
+    """Authenticate the new active projection without weakening frozen assets."""
+    authority = root / "tables/glofas_same_family_current_authority.json"
+    marker = r"\\input\s*\{\s*tables/glofas_same_family_20261103_display_aliases\.tex\s*\}"
+    selected = any(re.search(marker, re.sub(r"(?<!\\)%.*", "", (root / document).read_text())) is not None
+                   for document in ("main.tex", "qdesn-supplement.tex"))
+    if not authority.exists():
+        assert not selected, "Corrected GloFAS alias selected without its approved authority contract."
+        return None, set()
+    helper = root / "scripts/glofas_current_article_authority.py"
+    assert helper.is_file(), "Corrected GloFAS authority validator is missing."
+    spec = importlib.util.spec_from_file_location("glofas_authority_presentation_tree", helper)
+    module = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True
+    spec.loader.exec_module(module)
+    try:
+        reviewed = module.validate_authority_tree(root)
+        paths = module.authority_dependency_paths(root)
+    except (module.AuthorityError, OSError, ValueError) as error:
+        raise AssertionError("Corrected GloFAS active projection failed: " + str(error)) from error
+    return reviewed, paths
 
 
 def load_builder(root: Path):
@@ -50,6 +74,8 @@ def dependency_paths(root: Path) -> set[str]:
             files.add(calibration_path)
             files.update(calibration["sources"])
             files.update("tables/" + path for path in calibration["outputs"])
+    _, corrected_paths = corrected_glofas_authority(root)
+    files.update(corrected_paths)
     return files
 
 
@@ -178,13 +204,21 @@ def check(root: Path, *, effective: bool = True) -> dict:
             if role != "mq_design":
                 assert builder.table_rows((root / source).read_text()) == builder.table_rows((root / output).read_text())
     if effective:
+        corrected_glofas, _ = corrected_glofas_authority(root)
+        current_glofas_aliases = corrected_glofas["active_aliases"] if corrected_glofas else {}
+        superseded_glofas_paths = set()
         for document, override, aliases in (("main.tex", builder.MAIN_OVERRIDE, builder.MAIN_ALIASES),
                                              ("qdesn-supplement.tex", builder.SUPP_OVERRIDE, builder.SUPP_ALIASES)):
             text = (root / document).read_text()
             assert r"\input{" + override + "}" in text, "Missing document-specific presentation override."
             current = aliases_for_document(root, document)
             for macro, path in aliases.items():
-                assert current.get(macro) == path, "A stale later alias overrides " + macro
+                expected_path = path
+                if macro.startswith("GlofasApplicationCurrent") and macro in current_glofas_aliases:
+                    expected_path = current_glofas_aliases[macro]
+                    if expected_path != path:
+                        superseded_glofas_paths.add(path)
+                assert current.get(macro) == expected_path, "A stale later alias overrides " + macro
         main = (root / "main.tex").read_text()
         supplement = (root / "qdesn-supplement.tex").read_text()
         ind_revision = (root / "application/config/independent_forecast_300_500_v1.json").exists()
@@ -239,8 +273,16 @@ def check(root: Path, *, effective: bool = True) -> dict:
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][1] + "}" in supplement, "Stale effective multiquantile design table."
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][0] + "}" not in supplement, "Original multiquantile design remains selected."
         upload = set((root / "overleaf/article_files.txt").read_text().splitlines())
-        active_entries = (entry for role, entry in entries.items() if not (ind_revision and role == "independent_forecast"))
+        active_entries = (entry for role, entry in entries.items()
+                          if not (ind_revision and role == "independent_forecast") and
+                          not (role.startswith("glofas_") and entry["file"] in superseded_glofas_paths))
         assert set(entry["file"] for entry in active_entries) | {builder.MANIFEST} <= upload, "An active derivative is absent from the upload inventory."
+        if corrected_glofas:
+            authority_file = "tables/glofas_same_family_current_authority.json"
+            manifest_path = corrected_glofas["asset_manifest"]["relative_path"]
+            with (root / manifest_path).open(newline="") as stream:
+                corrected_assets = {row["relative_path"] for row in csv.DictReader(stream)}
+            assert corrected_assets | {authority_file, manifest_path} <= upload, "A current GloFAS asset is absent from the upload inventory."
     return {"status": "PASS", "source_files": len(source_rows), "outputs": len(entries),
             "pdf_outputs": len(builder.PDF_OUTPUTS), "table_outputs": len(builder.TABLE_OUTPUTS),
             "caption_wrappers": len(builder.WRAPPER_OUTPUTS), "scientific_runs": 0, "scores_recomputed": 0}

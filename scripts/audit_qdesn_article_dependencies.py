@@ -32,6 +32,11 @@ def uncomment(source: str) -> str:
 
 def classification(path: str) -> tuple[str, str, str, str]:
     suffix = Path(path).suffix
+    if "glofas_same_family_20261103_" in path or path == "tables/glofas_same_family_current_authority.json":
+        return ("corrected GloFAS issued-window asset/authority",
+                "complete same-family future-path comparison; seven families; no selective replacement",
+                "tables/glofas_same_family_current_authority.json;tables/glofas_same_family_20261103_article_asset_manifest.csv",
+                "unit-member likelihood; Gaussian VB marginal future-response quantiles; historical mean conditional quantiles distinguished; realized future weather; no new fitting")
     if path in ("main.tex", "qdesn-supplement.tex"):
         return "manuscript", "current editorial source", "main.tex;qdesn-supplement.tex", "not a scientific estimator"
     if suffix in (".bib", ".bst"):

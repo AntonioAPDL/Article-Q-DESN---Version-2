@@ -199,9 +199,60 @@ requires the original authenticated 54-file handoff. Neither mode reconstructs
 posterior draws or integrated scores. The summary-only example does not claim
 to satisfy an inaccessible current journal-specific code/data requirement.
 
-### Active presentation derivatives
+### Corrected GloFAS presentation
 
-The main GloFAS figure now uses
+The corrected issued-ensemble comparison uses the sixteen accepted fits
+from scientific source `fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6`, two
+separately authenticated Normal baselines, and authentic issued-member
+extracts. The complete surface has seven families, 28 dates, and seven
+probability levels, giving 1,372 forecast rows. Its target contains one
+normalized same-family future-reference factor per horizon and one ordinary
+factor for each of the 51 issued members. Neither `1/51` powers of the
+augmented member densities nor a replacement Gaussian path prior belongs to
+this corrected target.
+
+The guarded collection, extraction, assembly, truth bridge, scoring and
+candidate-table interfaces are documented in
+`docs/implementation_notes/glofas_same_family_closeout_20261102.md` and
+`glofas_same_family_truth_bridge_20261102.md`. The complete forecast surface
+is sealed before the scoring-only USGS values are read. The same-family
+future-response quantiles are calculated analytically from the retained
+Gaussian--Delta VB path factors; adding another response error or substituting
+a posterior-mean readout location would change the reported quantity.
+
+Historical fitted curves have their own guarded materializer,
+`scripts/materialize_glofas_same_family_fitted_history.R`, described in
+`docs/implementation_notes/glofas_fitted_history_materializer_20261102.md`.
+It reads the existing fits and historical design without calling a saved
+feature builder, fitting, forecasting, or reading scoring truth. Conditional
+historical quantiles and marginal future-response quantiles retain separate
+labels. The original scale transformation is monotone; inverse-transformed
+quantiles are not original-scale means.
+
+`scripts/build_glofas_same_family_article_projection.R` and its checker
+independently verify the scored packet and produce a candidate table only.
+They do not alone regenerate figures, change article aliases, or approve
+publication. `scripts/build_glofas_same_family_article_assets.R` and
+`scripts/check_glofas_same_family_article_assets.R` provide the complete
+asset projection and its semantic checks. The projection must bind the new historical
+curves, vector figures, effective aliases, and manuscript descriptions to
+the same reviewed packet. Generated numerical candidates remain outside
+article authority until those checks pass.
+
+The current GloFAS display input is
+`tables/glofas_same_family_20261103_display_aliases.tex`, loaded after the
+historical overrides in both manuscripts. It supplies the issued-window
+scores, calibration, convergence and full-comparison displays while
+preserving the separate historical reference/discrepancy results. The
+issued-window supplementary diagnostics use
+`GlofasApplicationCurrentIssuedSupplementScoreTable`; the older
+`GlofasApplicationCurrentSupplementScoreTable` still denotes the unchanged
+historical comparisons. Only the approved article-safe dependency closure
+belongs in the Overleaf snapshot.
+
+### Historical GloFAS presentation derivatives
+
+The superseded weighted-analysis main GloFAS figure uses
 `scripts/build_glofas_figure4_common_window.R`. All three panels share the
 30 historical dates and 28 issued forecast dates. The two model panels add
 posterior-mean fitted conditional quantiles from the same retained Part 4
@@ -211,7 +262,8 @@ this presentation-only extension. No fit, score, model choice, or prior is
 changed. The model panels repeat the historical and held-out USGS values and
 share identical date limits, tick positions, and plotting-area widths.
 
-The compact historical-quantile CSV suffices for public reproduction. Its
+The corresponding historical-quantile CSV suffices to reproduce that
+historical drawing. Its
 read-only extraction checks the retained fit and design hashes before using
 historical features. For AL it averages the conditional quantile readout;
 for Normal Ridge it averages the conditional Normal response quantile,
@@ -229,12 +281,12 @@ reconstruct posterior draws, rescore a forecast, or change a scientific grid.
 This historical builder and its thirteen outputs remain unchanged; the new
 common-window main figure is generated separately.
 
-The compact GloFAS history, member and truth CSVs and their provenance record
+The earlier compact GloFAS history, member and truth CSVs and their provenance record
 are public repository inputs, not required TeX files. The extraction script
 `scripts/extract_glofas_pro_review_plot_inputs.R` requires the authentic frozen
 design object and verifies its hash before extracting 30 historical dates,
 51 members over 28 target dates, and 28 held-out truth values. The public
-extracts suffice to reproduce the new drawing without redistributing the
+extracts suffice to reproduce that historical drawing without redistributing the
 runtime design object. Their derivation does not authenticate unavailable
 issued-product metadata or covariate vintages.
 
@@ -242,8 +294,9 @@ The exact extraction checks, geometry, font-size checks and standalone commands
 are documented in
 `docs/implementation_notes/pro_review_presentation_revision_20261008.md`.
 The older `scripts/build_glofas_review_figures.py --check` still verifies its
-six frozen-vector display derivatives; its override now points to the new main
-figure and retains a separate full-family supplementary alias.
+six frozen-vector display derivatives. Their old override chain is historical;
+it must not override a corrected current figure or score table merely
+because a shared display file is loaded later.
 
 ## Fit and score workflow map
 
@@ -258,7 +311,8 @@ new execution reproduces a historical result.
 | Independent 300 primary / 500 sensitivity | Frozen case-specific v14 sources reconstructed at recovery HEAD `bba23c9317a37ee1c0b6ac181c7cc37bbd4e1513`; three-chain draws repooled by `validation/fitforecast_v2/scripts/build_independent_forecast_reporting_v1.R`. No inference, forecast resimulation or winner reselection occurs. Historical package runtimes are preserved. | `scripts/build_independent_forecast_300_500_v1.R`; `scripts/check_independent_forecast_300_500_v1.R`; policy `application/config/independent_forecast_300_500_v1.json`. | 144 current MCMC forecast cells, 72 unchanged MCMC/VB fit cells, numerical replay, DGP references, VB omission ledger and source/asset manifests. Raw fitted samples and joint paths remain protected in the separate validation tracker. Current intervals condition on selected sources, simulated data, native model-specific dependence and evaluation windows. |
 | Independent rolling-state v14 historical lineage | Frozen compatibility authority `5b85bb3a3894a88968e4987f330e3ec66711f9c7`, scoped exDQLM 1.1.1 refresh and earlier Q-DESN runtimes; configuration `application/config/independent_validation_exdqlm_mcmc_rolling_state_fix_article_v14.yaml`. | Original `build_independent_validation_...v14.R` and matching check/finalize drivers remain historical entry points, not the current forecast publisher. | Original full-period summaries and manifests remain archived. They cannot supply prefix intervals without retained joint paths or sufficient draw-level sums; obsolete numerical panels are excluded from the current article projection. |
 | Expanded pure-DESN JOINT | `application/scripts/prepare_joint_qdesn_pure_recursive_campaign.R`, `prepare_joint_qdesn_pure_recursive_expanded_screen.R`, `run_joint_qdesn_pure_recursive_worker.R`, `prepare_joint_qdesn_pure_recursive_confirmation.R`, and `run_joint_qdesn_pure_recursive_article_vb.R` / `run_joint_qdesn_pure_recursive_article_mcmc.R` map selection and fitting. `prepare_joint_qdesn_pure_recursive_quantiles.R` and `run_joint_qdesn_pure_recursive_quantile_worker.R` map selected quantile fitting. `prepare_joint_qdesn_pure_recursive_score_packet.R` prepares the score contract; `run_joint_qdesn_recursive_mean_forecast_worker.R` and `run_joint_qdesn_recursive_dgp_oracle_worker.R` execute recursive cell scoring and oracle shards. Implementations are in `application/R/joint_qdesn_pure_recursive_campaign.R` and `application/R/joint_qdesn_recursive_mean_score_packet.R`. Fitted source is `e39b061e69e176c35369fae9df0657e7b484e443`; article handoff lane is separately identified by projection provenance. | `scripts/build_joint_qdesn_pure_desn_article_projection.R` and `scripts/check_joint_qdesn_pure_desn_article_projection.R`; the small standalone example above is a subset of this presentation layer. | Fifteen pinned public CSVs retain selected backbones, full summaries, sampler/target hashes, contrasts, crossings and review qualifications. Full fit/score reconstruction additionally needs simulation fixtures, exact frozen cell contracts, retained fits/draws, recursive score/oracle shards and the original handoff manifests. Large payloads are not in the article-only projection; current posterior score intervals are not repeated-DGP uncertainty. No new campaign or recovery is authorized here. |
-| GloFAS Search III Parts 1--4 | `application/scripts/427_prepare_glofas_search3.R`, `428_run_glofas_search3_worker.R`, `429_score_glofas_search3.R` and `431_check_glofas_search3.R` map protected development/confirmation. `423_run_glofas_quantile_certification_continuation.R`, `386_run_glofas_part4_latent_family_job.R` and `389_continue_glofas_part4_joint_fit.R` are fitting/continuation entry points, not display renderers. `445_build_glofas_search3_final_closeout.R` and `446_check_glofas_search3_final_closeout.R` assemble/check the complete scientific authority. Current Part 4 AL/exAL terminal sources and partitioned RHS hashes are separately recorded in the completion audit; they must not be replaced by a generic Parts 1--3 base commit. | `application/scripts/447_build_glofas_search3_article_projection.R`, `448_check_glofas_search3_article_projection.R`, and `application/R/glofas_search3_article_projection.R`. The separate `scripts/build_glofas_review_figures.py` derives display lettering from authenticated vector sources without loading fit/forecast payloads. | Tracked publication/source-hash manifests, full-precision score/calibration/prior/quantile summaries and original vector panels preserve the complete comparison. Full analysis needs frozen USGS/GloFAS/weather materialization, the executed oracle-covariate design, reservoir inputs, latent-path and fit/continuation state plus original closeout sources. Public quantile summaries lack Part 2's complete display input history and are not enough for all original figures. Part 2 remains unscored; Part 4's 1/51 augmented-member weighting, latent path and driver prior must be reproduced, not replaced by a known-future-design fit. Unauthenticated issued-product/weather metadata and Part 4 historical N remain explicit gaps. |
+| Corrected GloFAS issued-ensemble comparison | `application/R/glofas_family_transition.R` defines the same-family future-reference target, unit-member factors, moment-only initialization and analytic marginal-response quantiles. Scientific fits are frozen at `fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6`; the sixteen accepted quantile fits and separately enrolled Normal fits are not regenerated by presentation work. | `scripts/collect_glofas_same_family_producers.py`, `finalize_glofas_same_family_transition.R`, `glofas_same_family_truth_bridge.R`, and `materialize_glofas_same_family_fitted_history.R` authenticate the closed cohort, extract plotting inputs, seal forecasts, score, and materialize fitted history. Candidate-only projection uses `build_glofas_same_family_article_projection.R` and `check_glofas_same_family_article_projection.R`, also under `scripts/`. | Exactly seven families by 28 dates by seven levels; complete source, target, input, terminal, forecast-seal, truth-derivation, score and historical-curve provenance is required. The issued members are available at the origin; future USGS is scoring-only. Realized PRISM/ERA5 covariates are not authenticated issue-time weather forecasts. Current-authority promotion additionally requires the complete figures, effective aliases, manuscript/supplement and publication checks; a candidate table is not scientific release approval. |
+| Historical GloFAS reference/discrepancy analyses and superseded weighted issued-window comparison | `application/scripts/427_prepare_glofas_search3.R`, `428_run_glofas_search3_worker.R`, `429_score_glofas_search3.R` and `431_check_glofas_search3.R` map historical development/confirmation. `423_run_glofas_quantile_certification_continuation.R`, `386_run_glofas_part4_latent_family_job.R` and `389_continue_glofas_part4_joint_fit.R` remain historical fitting/continuation entry points. `445_build_glofas_search3_final_closeout.R` and `446_check_glofas_search3_final_closeout.R` preserve that earlier closeout. | `application/scripts/447_build_glofas_search3_article_projection.R`, `448_check_glofas_search3_article_projection.R`, and `application/R/glofas_search3_article_projection.R` reproduce the historical projection. `scripts/build_glofas_review_figures.py` derives historical display lettering without loading fit payloads. | Preserve the unchanged reference-only, discrepancy-only, and combined historical evidence. Post-cutoff discrepancy paths remain unscored because retrospective GloFAS ends at the cutoff. The earlier issued-window `1/51` augmented-member weighting and Gaussian driver prior define a different, superseded target; preserve them only for historical reproduction, not as current quantile-model specification or a source of replacement rows. Original inputs and runtime objects remain outside the article-only projection. |
 | PriceFM R98 | `application/scripts/pricefm/316_prepare_pricefm_stage_r97_global_region_campaign.py`, `317_prepare_pricefm_stage_r97_region_quantile_surface.py`, `318_closeout_pricefm_stage_r97_region_quantile_surface.py` and `319_orchestrate_pricefm_stage_r97_global_campaign.py` map frozen region fitting/selection. `320_score_pricefm_stage_r97_frozen_case.py` performs scoring without refitting/reselection; `312_run_pricefm_stage_r96_scoring_only_fold.py` records the separate R96 scoring/reuse path. `329_prepare_pricefm_stage_r98_validity_first_authority.py` and `330_closeout_pricefm_stage_r98_validity_first_authority.py` reconcile the complete 114-case authority, not a new 114-case fitting campaign. | `scripts/build_pricefm_r98_article_projection.py` and `scripts/check_pricefm_r98_article_projection.py`; focused test `application/tests/test_pricefm_r98_article_projection.py`. | Tracked registry, transition ledger, region/fold/global comparisons and projection manifest retain all 38 regions x 3 folds and labelled R92 sensitivity. Full reconstruction needs the frozen released `FINAL.csv`, matched PriceFM predictions, exact region/window/preprocessing manifests, selected seven-level coefficients/fits and R97/R96 scoring terminals, including reused SE_2 evidence. Private runtime payloads are not in the article ZIP. Released lead-covariate vintages were not separately verified; no operational information-parity or joint PriceFM claim follows. |
 
 The map distinguishes current scientific-source provenance from presentation

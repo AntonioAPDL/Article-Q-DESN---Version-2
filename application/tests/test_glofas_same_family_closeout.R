@@ -248,6 +248,15 @@ design <- list(future_truth_policy="physically_excluded_from_fit_objects_scoring
 extracted <- gsc_plot_input_tables(design)
 ok(nrow(extracted$history)==30L&&nrow(extracted$issued_members)==1428L&&nrow(extracted$raw_members)==1428L)
 ok(identical(names(extracted$raw_members),c("target_date","horizon","member","g_transformed")))
+# Date storage type is not a scientific distinction: serialized R designs may
+# retain integer-backed dates while seq.Date constructs double-backed dates.
+integer_dates <- clone(design)
+integer_dates$base_panel$target_date <- structure(as.integer(hist$target_date),class="Date")
+integer_dates$future_key$target_date <- structure(as.integer(gsc_dates()),class="Date")
+integer_extracted <- gsc_plot_input_tables(integer_dates)
+ok(identical(as.numeric(integer_extracted$history$target_date),as.numeric(extracted$history$target_date)))
+bad <- clone(integer_dates);bad$base_panel$target_date[1L] <- as.Date("2022-11-25")
+reject(gsc_plot_input_tables(bad),"thirty consecutive")
 bad <- clone(design);bad$latent_data$g_ensemble$y_transformed[1L] <- 9
 reject(gsc_plot_input_tables(bad),"unredacted future USGS")
 bad <- clone(design);bad$future_context$future_truth <- 9

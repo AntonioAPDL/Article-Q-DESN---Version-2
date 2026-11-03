@@ -10,6 +10,8 @@ It uses only Python's standard library and supports Python 3.6.
 """
 
 import argparse
+import importlib.util
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -122,6 +124,30 @@ def source_status(source_commit):
         for signal in PENDING_SIGNALS
     )
     if not pending:
+        # Generic publisher fixtures have no GloFAS section. Actual GloFAS
+        # releases require the committed corrected-packet approval contract;
+        # merely deleting the historical notices must never bypass that gate.
+        text = "\n".join(documents.values())
+        actual_glofas = ("GlofasApplicationCurrent" in text or
+                         (r"\label{sec:data}" in text and re.search("glofas", text, re.I)))
+        if actual_glofas:
+            helper = Path(__file__).resolve().parent / "glofas_current_article_authority.py"
+            try:
+                expected_helper = subprocess.check_output(
+                    ["git", "show", source_commit + ":scripts/glofas_current_article_authority.py"],
+                    stderr=subprocess.PIPE,
+                )
+                if not helper.is_file() or helper.read_bytes() != expected_helper:
+                    raise DraftStatusError("GLOFAS_AUTHORITY_HELPER_MISSING_OR_CHANGED")
+                sys.dont_write_bytecode = True
+                spec = importlib.util.spec_from_file_location("glofas_current_article_authority", str(helper))
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                module.validate_authority(source_commit)
+            except DraftStatusError:
+                raise
+            except Exception as error:
+                raise DraftStatusError("GLOFAS_CURRENT_RELEASE_NOT_APPROVED: {}".format(error))
         return "release"
     bodies = {path: document_body(document) for path, document in documents.items()}
     for path, name, notice in DRAFT_MARKERS:

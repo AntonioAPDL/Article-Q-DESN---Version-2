@@ -47,7 +47,23 @@ class CommonWindowFigureTest(unittest.TestCase):
 
     def test_historical_presentation_bundle_is_unchanged(self):
         historical = json.loads((ROOT / "tables/qdesn_pro_review_presentation_manifest.json").read_text())
-        self.assertEqual(sha(historical["source_script"]), historical["script_sha256"])
+        if (ROOT / "application/config/independent_forecast_300_500_v1.json").exists():
+            # The approved IND renderer delegation predates this GloFAS revision.
+            # Keep the original receipt and its 13 outputs pinned; distinguish
+            # its historical generator from the already-authorized live script.
+            self.assertEqual(sha("tables/qdesn_pro_review_presentation_manifest.json"),
+                             "648ef97d91adceaa17cf5958dcc515520ebe31ae65ca7fc1d58de5ca960a8e9e")
+            self.assertEqual(historical["script_sha256"],
+                             "86f72a80acf33241ecfc2f043177e7d4c9b2dc1913356502988091b33f1defb9")
+            self.assertEqual(sha(historical["source_script"]),
+                             "98cdbed43661b24a9b4d488efaabcf58b2cfac66bac5bf4202e7de2d2431613f")
+            renderer = (ROOT / historical["source_script"]).read_text()
+            for statement in ("if (current_ind_policy)",
+                              "scripts/build_independent_forecast_300_500_v1.R",
+                              "if (current_ind_policy && i <= 3L) next"):
+                self.assertIn(statement, renderer)
+        else:
+            self.assertEqual(sha(historical["source_script"]), historical["script_sha256"])
         self.assertEqual(sha("scripts/qdesn_evaluation_figure_style.R"), historical["shared_style_sha256"])
         self.assertEqual(len(historical["outputs"]), 13)
         for output in historical["outputs"]:

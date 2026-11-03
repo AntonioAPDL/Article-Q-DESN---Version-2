@@ -31,7 +31,7 @@ gsc_plot_input_tables <- function(design) {
   history$target_date <- as.Date(history$target_date)
   history <- history[history$target_date>=origin-29,];history <- history[order(history$target_date),]
   q(nrow(history)==30L&&!anyDuplicated(history$target_date)&&
-    identical(history$target_date,seq(origin-29,origin,by="day"))&&
+    identical(as.numeric(history$target_date),as.numeric(seq(origin-29,origin,by="day")))&&
     all(is.finite(c(history$y_transformed,history$g_transformed))),
     "thirty consecutive finite historical dates required; no interpolation permitted")
   issued <- design$latent_data$g_ensemble
@@ -45,7 +45,7 @@ gsc_plot_input_tables <- function(design) {
   q(isTRUE(all.equal(issued,other[order(other$horizon,other$member),fields],
     check.attributes=FALSE,tolerance=0)),"nested issued-member source differs")
   q(is.data.frame(design$future_key)&&identical(as.integer(design$future_key$horizon),1:28)&&
-    identical(as.Date(design$future_key$target_date),gsc_dates()),"issued forecast window differs")
+    identical(as.numeric(as.Date(design$future_key$target_date)),as.numeric(gsc_dates())),"issued forecast window differs")
   list(history=history,issued_members=issued,raw_members=members)
 }
 

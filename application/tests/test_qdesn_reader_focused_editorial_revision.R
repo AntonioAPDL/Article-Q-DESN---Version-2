@@ -153,10 +153,44 @@ expect(!has(main, "[Simulation findings to be updated.]") &&
          !has(main, "[GloFAS findings to be updated.]") &&
          has(main, "[PriceFM findings to be updated.]"),
        "Complete accepted simulation and GloFAS findings; retain pending PriceFM.")
+glofas_invariants <- function(main, supplement) {
+  main_text <- prose(main)
+  supplement_text <- prose(supplement)
+  alias <- "\\input{tables/glofas_same_family_20261103_display_aliases.tex}"
+  selected <- c(has(main, alias), has(supplement, alias))
+  if (any(selected)) {
+    return(c(
+      corrected_aliases = all(selected),
+      same_family_future = has(main_text, "normalized sequential distribution") &&
+        has(main_text, "same likelihood as the observed gauge record") &&
+        has(supplement_text, "\\prod_{h=1}^{28}f_{p_k}") &&
+        has(supplement_text, "Each level retains its own path"),
+      marginal_quantile = has(main_text, "\\Phi^{-1}(p)\\sqrt{V_{p,hh}}") &&
+        has(supplement_text, "No additional observation error is added"),
+      ordinary_member_factors = has(supplement_text, "\\prod_{h=1}^{28}\\prod_{e=1}^{51}") &&
+        has(main_text, "all 51 members still enter the likelihood individually"),
+      adverse_losses = has(main_text, "Gaussian DESN with ridge regularization has the lowest") &&
+        has(main_text, "all four AL and exAL regressions score above the raw ensemble"),
+      inclusion_and_inversion = has(main_text, "each cover only 2 of 28") &&
+        has(main_text, "inverted on eight dates"),
+      uncorrected_crossings = has(main_text, "Crossings occur in 23.2--27.4\\%") &&
+        has(supplement_text, "no post-hoc crossing correction is applied"),
+      support_and_weather = has(supplement_text, "retained without clipping or truncation") &&
+        has(main_text, "Both use realized values during the forecast window")
+    ))
+  }
+  c(historical_inclusion = has(main_text, "21 of 28"),
+    historical_scope = has(main_text, "historical weighted analysis until all six unit-member refits") &&
+      has(main_text, "it is not a result of the revised likelihood"))
+}
+glofas_guard <- new.env(parent = baseenv())
+sys.source(file.path(repo_root,
+  "scripts/check_forecast_application_exposition_20261031.R"), envir = glofas_guard)
+invisible(glofas_guard$app_forecast_exposition_glofas_authority(repo_root, main, supplement))
 expect(has(prose(main), "future USGS measurements are reserved for scoring") &&
          has(supplement, "unscored") &&
          has(prose(supplement), "retrospective GloFAS ends") &&
-         has(prose(main), "21 of 28") &&
+         all(glofas_invariants(main, supplement)) &&
          has(prose(main), "aggregate loss is slightly higher"),
        "Retain the material application information boundaries and adverse results.")
 for (heading in c("Single-quantile simulation design", "Single-quantile results",
@@ -247,6 +281,58 @@ for (item in mutations) {
   expect(!all(method_invariants(item[[2L]], item[[3L]])),
          paste("Mutation must be rejected:", item[[1L]]))
 }
+frozen_text <- function(path) {
+  result <- system2("git", c("-C", shQuote(repo_root), "show", shQuote(paste0(
+    "0d111e0c2bf3951378aec2bbfc1f46fd9ecd8437:", path))), stdout = TRUE, stderr = TRUE)
+  expect(is.null(attr(result, "status")), paste("Frozen historical fixture:", path))
+  paste(result, collapse = "\n")
+}
+historical_main <- frozen_text("main.tex")
+historical_supplement <- frozen_text("qdesn-supplement.tex")
+expect(all(glofas_invariants(historical_main, historical_supplement)),
+       "Preserve the original historical GloFAS fixture without relabeling it current.")
+glofas_mutations <- 0L
+reject_glofas <- function(label, text, before, after, historical = FALSE,
+                          supplement_change = FALSE) {
+  text <- prose(text)
+  before <- prose(before)
+  expect(has(text, before), paste("Missing GloFAS mutation fixture:", before))
+  changed <- gsub(before, after, text, fixed = TRUE)
+  fixture_main <- if (historical) historical_main else main
+  fixture_supplement <- if (historical) historical_supplement else supplement
+  if (supplement_change) fixture_supplement <- changed else fixture_main <- changed
+  expect(!all(glofas_invariants(fixture_main, fixture_supplement)),
+         paste("GloFAS mutation must be rejected:", label))
+  glofas_mutations <<- glofas_mutations + 1L
+}
+if (has(main, "\\input{tables/glofas_same_family_20261103_display_aliases.tex}")) {
+  for (item in list(
+    c("new alias removed", "\\input{tables/glofas_same_family_20261103_display_aliases.tex}", ""),
+    c("future target no longer normalized", "normalized sequential distribution", "arbitrary future kernel"),
+    c("path mean substituted for quantile", "\\Phi^{-1}(p)\\sqrt{V_{p,hh}}", "0"),
+    c("individual members averaged away", "all 51 members still enter the likelihood individually", "one ensemble mean enters the likelihood"),
+    c("adverse quantile losses concealed", "all four AL and exAL regressions score above the raw ensemble", "all quantile regressions improve the loss"),
+    c("poor inclusion concealed", "each cover only 2 of 28", "each cover most"),
+    c("inversions concealed", "inverted on eight dates", "always ordered"),
+    c("crossing rate concealed", "Crossings occur in 23.2--27.4\\%", "No crossings occur"),
+    c("realized weather hidden", "Both use realized values during the forecast window", "Both use issuance-time forecasts"))) {
+    reject_glofas(item[1L], main, item[2L], item[3L])
+  }
+  for (item in list(
+    c("future factors removed", "\\prod_{h=1}^{28}f_{p_k}", "1"),
+    c("shared future path introduced", "Each level retains its own path", "All levels share one path"),
+    c("extra response error added", "No additional observation error is added", "Additional observation error is added"),
+    c("member cardinality changed", "\\prod_{h=1}^{28}\\prod_{e=1}^{51}", "\\prod_{h=1}^{28}\\prod_{e=1}^{50}"),
+    c("crossing repair introduced", "no post-hoc crossing correction is applied", "post-hoc crossing correction is applied"),
+    c("negative quantiles clipped", "retained without clipping or truncation", "clipped at zero"))) {
+    reject_glofas(item[1L], supplement, item[2L], item[3L], supplement_change = TRUE)
+  }
+}
+reject_glofas("historical coverage lost", historical_main, "21 of 28", "most",
+              historical = TRUE)
+reject_glofas("historical results relabeled corrected", historical_main,
+              "it is not a result of the revised likelihood", "it is a corrected result",
+              historical = TRUE)
 cat(sprintf(paste0("QDESN_READER_FOCUSED_EDITORIAL_REVISION_PASS: %d checks ",
-                  "expected_mutation_rejections=%d scientific_runs=0\n"),
-            checks, length(mutations)))
+                  "expected_mutation_rejections=%d manuscript_versions=2 scientific_runs=0\n"),
+            checks, length(mutations) + glofas_mutations))

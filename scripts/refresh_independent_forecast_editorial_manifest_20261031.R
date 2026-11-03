@@ -66,6 +66,20 @@ app_ind_editorial_refresh_plan <- function(baseline, current, hash_file, refresh
 
 app_ind_editorial_refresh <- function(root, refresh = FALSE) {
   root <- normalizePath(root, mustWork = TRUE)
+  # A reviewed corrected GloFAS projection adds exactly twenty-one article
+  # files. Its successor authenticates that narrow allowlist change and keeps
+  # this historical two-document receipt untouched as retained provenance.
+  documents <- vapply(app_ind_editorial_document_paths, function(path)
+    paste(readLines(file.path(root, path), warn = FALSE), collapse = "\n"), character(1L))
+  if (any(grepl("glofas_same_family_20261103_display_aliases.tex", documents, fixed = TRUE))) {
+    helper <- file.path(root, "scripts/refresh_glofas_article_shared_receipts.py")
+    app_ind_editorial_require(file.exists(helper), "reviewed GloFAS shared-receipt successor is required")
+    result <- system2("/usr/bin/python3.11", c("-I", "-B", shQuote(helper), "--root", shQuote(root),
+      if (isTRUE(refresh)) "--refresh" else "--check"), stdout = TRUE, stderr = TRUE)
+    app_ind_editorial_require(is.null(attr(result, "status")), paste(result, collapse = "\n"))
+    cat(paste(result, collapse = "\n"), "\n", sep = "")
+    return(invisible(jsonlite::read_json(file.path(root, app_ind_editorial_receipt_path), simplifyVector = FALSE)))
+  }
   sha <- function(path) unname(tools::sha256sum(file.path(root, path))[[1L]])
   require <- app_ind_editorial_require
   for (tip in c("HEAD", "refs/remotes/origin/main")) {

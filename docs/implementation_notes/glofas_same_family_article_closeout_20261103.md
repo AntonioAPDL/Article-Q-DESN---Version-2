@@ -174,3 +174,12 @@ reconciliation publication tests pass against disposable file-only remotes.
 No production remote is used as a test. Superseded model/presentation guards
 retain historical branches; the corrected branch additionally requires the
 complete current authority rather than merely removing pending notices.
+
+The isolated JOINT-v2 article fixture also copies the current GloFAS validator
+when its approved authority is present. Its article-safe data are already in
+the copied allowlist; the validator is a test dependency, not an Overleaf upload.
+This fixture adjustment does not change any JOINT target, result or scientific
+source hash. The combined harness requires R4.6.0 on the child-process PATH as
+well as for the parent, and Python3.11 with PyYAML6.0.2; the QA environment also
+provides pytest8.3.5 and PyMuPDF1.26.5. Environment failure receipts are retained
+separately from source regressions.

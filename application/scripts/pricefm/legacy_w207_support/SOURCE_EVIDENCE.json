@@ -1,0 +1,89 @@
+{
+  "base_support_publication": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/publisher/SOURCE_PUBLICATION.json",
+    "sha256": "c882da8a73b0a4d41e9d38c2f07bb6f1434c75839a687567d57d1e5e2722b866"
+  },
+  "no_runtime_or_input_authority": true,
+  "no_self_commit_hash_cycle": true,
+  "original_W191_commit": "91a0423d5baab068e55c19b9e62e2fb5f13047bc",
+  "schema": "pricefm_calendar_profile_source_evidence_v2",
+  "source_context": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/source/SOURCE_CONTEXT.json",
+    "sha256": "9ff26b6e81d0859202e7a3cf251e1f8a4a488238907202062c8d9cdc08870570"
+  },
+  "source_context_record": {
+    "minimum_new_user_request_epoch": 1793592727.5479383,
+    "no_automatic_calendar_renewal": true,
+    "no_runtime_native_inputs_or_jobs_authorized": true,
+    "original_scientific_invariants": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/ORIGINAL_INVARIANTS.json",
+      "sha256": "e1d6be0fb57c5751e854eeb5e9bf290c8845d8a5ac2f357e057d647c1ebb7666"
+    },
+    "original_support_source_freeze": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/source/SOURCE_FREEZE_02.json",
+      "sha256": "1f60036d217a75135c3d562e43e19177ff2bd1a20344a02d52a8b2cb675cd966"
+    },
+    "previous_initial_stop_closeout": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/CLOSEOUT.json",
+      "sha256": "7c0c753a3e5b7a3ae5c4ab07fba50d0786689cb82a98c0f221f1dd8bdf72be98"
+    },
+    "schema": "legacy_node13_calendar_source_context_v2",
+    "source_preparation_ledger": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/SCOPE_LEDGER_01.json",
+      "sha256": "2ada347c076b54b58f070b30b391551ac668ca898d05f82ca0ff21c03a18f62f"
+    },
+    "source_preparation_scope": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/SCOPE.json",
+      "sha256": "9d0a3bf9e1116d68ff6032a6c19b2d0ce81b78aff89dc19972dd71d3add17aa1"
+    },
+    "source_provenance_may_outlive_engineering_scope": true,
+    "status": "IMMUTABLE_REVIEWED_SOURCE_PROVENANCE_NOT_EXECUTION_PERMISSION"
+  },
+  "source_context_utf8": "{\n  \"minimum_new_user_request_epoch\": 1793592727.5479383,\n  \"no_automatic_calendar_renewal\": true,\n  \"no_runtime_native_inputs_or_jobs_authorized\": true,\n  \"original_scientific_invariants\": {\n    \"path\": \"/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/ORIGINAL_INVARIANTS.json\",\n    \"sha256\": \"e1d6be0fb57c5751e854eeb5e9bf290c8845d8a5ac2f357e057d647c1ebb7666\"\n  },\n  \"original_support_source_freeze\": {\n    \"path\": \"/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/source/SOURCE_FREEZE_02.json\",\n    \"sha256\": \"1f60036d217a75135c3d562e43e19177ff2bd1a20344a02d52a8b2cb675cd966\"\n  },\n  \"previous_initial_stop_closeout\": {\n    \"path\": \"/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/admission_profile_implementation_20261101_1802PST/CLOSEOUT.json\",\n    \"sha256\": \"7c0c753a3e5b7a3ae5c4ab07fba50d0786689cb82a98c0f221f1dd8bdf72be98\"\n  },\n  \"schema\": \"legacy_node13_calendar_source_context_v2\",\n  \"source_preparation_ledger\": {\n    \"path\": \"/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/SCOPE_LEDGER_01.json\",\n    \"sha256\": \"2ada347c076b54b58f070b30b391551ac668ca898d05f82ca0ff21c03a18f62f\"\n  },\n  \"source_preparation_scope\": {\n    \"path\": \"/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/calendar_profile_implementation_20261101_2010PST/SCOPE.json\",\n    \"sha256\": \"9d0a3bf9e1116d68ff6032a6c19b2d0ce81b78aff89dc19972dd71d3add17aa1\"\n  },\n  \"source_provenance_may_outlive_engineering_scope\": true,\n  \"status\": \"IMMUTABLE_REVIEWED_SOURCE_PROVENANCE_NOT_EXECUTION_PERMISSION\"\n}\n",
+  "source_evidence": [
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/SOURCE_FREEZE.json",
+      "sha256": "0811e8f26a9c80892d051c6e65c5469572e09428a1a158069aab987571f664f1"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/ancestry/CHECKPOINT_ANCESTRY_AUDIT.json",
+      "sha256": "708783aa84cafd199d15e7dabd1a9e3fd56d0bad6303bcf16610e5dc528b5c1e"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/independent_tests/CHECKPOINT_TEST_RECEIPT_01.json",
+      "sha256": "28ca72cfc1ba1565b30bad20c7e094c7c094ce000410f461ea548c5e4bf7b850"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/AUTHOR_BINDING_SMOKE_RECEIPT.json",
+      "sha256": "3d1f842e192739334a9425c356fb7bc6bbfff343c821840dd899b8acfad04b6f"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/git_fixture_01/RECEIPT.json",
+      "sha256": "a77b9642977e7075f87fabe863c4125d24b198d50c0188796254775499b54612"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/review/SOURCE_REVIEW_COMPLETION_02.json",
+      "sha256": "ad412c090df6a09acde955d6559b20a5254a69721a7b012bc830e27b16f50970"
+    },
+    {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/review/TAIL_SOURCE_APPROVAL.json",
+      "sha256": "83af6f4f47392483db7a5c1675ac15d976d73397aabf970a430c80112bd21ed5"
+    }
+  ],
+  "source_files": {
+    "legacy_cache.py": "e428946364048f35acc80451d68bd762557e610649759f6a983a6d8f08003ba7",
+    "legacy_failed_return_peer.py": "d9a10bf292c726a59cf0eb5bbbd6af23b76a311fcfb463d3db7e53f6c35f7624",
+    "legacy_issue.py": "142e7b1a6b73f648a29ee4c00f41f4ce034dad0215d399c0a1a8024fcafa77c1",
+    "legacy_scheduler.py": "33c09fa9ad1445cec3b0ac6e762f02b3b27a3e1dbf4ef18b3db410ba62e49690",
+    "legacy_tail.py": "204d4ce1d9a8cdea62ab5d9ff9d5f74f1dba3654e38c2d5a3560bd6ad061e253",
+    "legacy_tail_peer.py": "68675fd80f9e1b68017f581013d71b65aec9ac92e1c26cd38422d6f6a4803f44"
+  },
+  "source_phase": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/SCOPE.json",
+    "sha256": "93af961afa6f24c36290dc5faf30663f2ecdff7b8264a65a824a05b62bb003ad"
+  },
+  "whole_independent_review": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/ledger_checkpoint_source_repair_20261103_2208UTC/review/SOURCE_REVIEW.json",
+    "sha256": "3a5540f2de66db97cf1bb687da138db92664428ee6829e79ee5d2a171699d05b"
+  }
+}

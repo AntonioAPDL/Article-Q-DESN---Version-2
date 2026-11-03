@@ -68,7 +68,25 @@ class MQNomenclatureTest(unittest.TestCase):
             (self.root / relative).write_text(json.dumps(receipt))
 
     def test_complete_isolated_dependency_closure_passes(self):
-        self.assertEqual(CHECKER.check(self.root)["selected_mq_pdfs"], 8)
+        expected = 9 if (self.root / "tables/glofas_same_family_current_authority.json").exists() else 8
+        self.assertEqual(CHECKER.check(self.root)["selected_mq_pdfs"], expected)
+
+    def test_current_glofas_approval_cannot_be_omitted(self):
+        path = self.root / "tables/glofas_same_family_current_authority.json"
+        if not path.exists():
+            self.skipTest("Historical-only projection has no corrected GloFAS authority")
+        path.unlink()
+        with self.assertRaisesRegex(CHECKER.CheckError, "without its approved authority"):
+            CHECKER.check(self.root)
+
+    def test_superseded_issued_glofas_table_cannot_return(self):
+        if not (self.root / "tables/glofas_same_family_current_authority.json").exists():
+            self.skipTest("Historical-only projection has no corrected GloFAS authority")
+        path = self.root / "qdesn-supplement.tex"
+        path.write_text(path.read_text() + "\n\\input{tables/glofas_forecast_correction_main_scores_display.tex}\n")
+        self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+        with self.assertRaisesRegex(CHECKER.CheckError, "superseded GloFAS issued-window table"):
+            CHECKER.check(self.root)
 
     def test_all_active_mq_caption_derivatives_preserve_table_rows(self):
         builder = CHECKER.editorial_checker(self.root).load_builder(self.root)

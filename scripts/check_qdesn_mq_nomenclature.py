@@ -512,8 +512,10 @@ def check(root: Path) -> dict[str, int]:
     historical_manifest(root)
     # Authenticate descriptive-label and caption derivatives independently of
     # the unchanged MQ scientific/presentation source manifests above.
+    editorial = editorial_checker(root)
     try:
-        editorial_checker(root).check(root)
+        editorial.check(root)
+        current_glofas, _ = editorial.corrected_glofas_authority(root)
     except (AssertionError, RuntimeError) as error:
         raise CheckError(str(error)) from error
     graphs, visible = manuscript_consumers(root)
@@ -522,11 +524,38 @@ def check(root: Path) -> dict[str, int]:
     current_joint_tables = set(EDITORIAL_JOINT_TABLES.values()) | {
         PROTOCOL_TABLE, FORECAST_WRAPPER, FIT_WRAPPER}
     current_glofas_tables = EDITORIAL_GLOFAS_TABLES
+    current_glofas_pdfs = EDITORIAL_GLOFAS_PDFS
+    current_glofas_aliases = {
+        "GlofasApplicationCurrent" + suffix:
+        "figures/glofas_application/glofas_editorial_20261013_" + EDITORIAL_GLOFAS_ROLE_NAMES[role] + ".pdf"
+        for suffix, role in GLOFAS_ALIASES.items()
+    }
+    if current_glofas is not None:
+        # Keep all historical hashes/label transformations above. Only the
+        # issued-window consumers advance to the separately approved packet;
+        # the historical reference/discrepancy displays remain selected.
+        historical_tables = {
+            "tables/glofas_reference_discrepancy_scores_display.tex",
+            "tables/glofas_reference_discrepancy_priors_display.tex",
+            "tables/glofas_selected_specifications_display.tex",
+        }
+        historical_pdfs = {
+            "figures/glofas_application/glofas_editorial_20261013_" + name + ".pdf"
+            for name in ("reference", "discrepancy", "combined")
+        }
+        approved = current_glofas["active_aliases"]
+        current_glofas_tables = historical_tables | {path for path in approved.values() if path.endswith(".tex")}
+        current_glofas_pdfs = historical_pdfs | {path for path in approved.values() if path.endswith(".pdf")}
+        current_glofas_aliases.update(approved)
+        expect(not (EDITORIAL_GLOFAS_TABLES - historical_tables) & files,
+               "A superseded GloFAS issued-window table remains an active manuscript input")
+        expect(not (EDITORIAL_GLOFAS_PDFS - historical_pdfs) & figures,
+               "A superseded GloFAS issued-window figure remains an active manuscript input")
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
     expect(not (JOINT_TABLES | GLOFAS_TABLES) & files,
            "A superseded MQ table or caption remains an active manuscript input")
-    display_builder = editorial_checker(root).load_builder(root)
+    display_builder = editorial.load_builder(root)
     for source, output in EDITORIAL_JOINT_TABLES.items():
         expect(display_builder.table_rows(read(root, source)) ==
                display_builder.table_rows(read(root, output)),
@@ -542,8 +571,8 @@ def check(root: Path) -> dict[str, int]:
                "Current IND dependence account is missing")
     expect(current_historical <= files,
            "Current manuscript omits an authenticated historical display derivative")
-    expect(JOINT_PDFS | EDITORIAL_GLOFAS_PDFS <= figures,
-           "Effective selected aliases/wrappers do not select all eight MQ PDFs")
+    expect(JOINT_PDFS | current_glofas_pdfs <= figures,
+           "Effective selected aliases/wrappers do not select all authenticated MQ/GloFAS PDFs")
     expect(FORECAST_WRAPPER in graphs["main.tex"].files and
            FIT_WRAPPER in graphs["qdesn-supplement.tex"].files,
            "JOINT forecast belongs in main; JOINT fit belongs in supplement")
@@ -554,10 +583,7 @@ def check(root: Path) -> dict[str, int]:
         expect(GLOFAS_OVERRIDE in graph.files, f"MQ overrides missing from {document}")
         expect(not any(re.match(r"tables/joint_qdesn_pure_desn_v2_(?!mq_).*\.tex$", p) for p in graph.files),
                f"Stale JOINT TeX derivative remains selected in {document}")
-        for suffix, role in GLOFAS_ALIASES.items():
-            name = "GlofasApplicationCurrent" + suffix
-            expected_path = ("figures/glofas_application/glofas_editorial_20261013_" +
-                             EDITORIAL_GLOFAS_ROLE_NAMES[role] + ".pdf")
+        for name, expected_path in current_glofas_aliases.items():
             if name in graph.alias_uses:
                 expect(all(p == expected_path for p in graph.alias_uses[name]),
                        f"Stale effective selected alias: {name}")
@@ -574,7 +600,7 @@ def check(root: Path) -> dict[str, int]:
             source, output = asset["source"], asset["output"]
             extractor = pdf_text if field == "assets" else read
             verify_label_mapping(extractor(root, source), extractor(root, output), rows, output)
-    return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": 8,
+    return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": len(JOINT_PDFS | current_glofas_pdfs),
             "selected_mq_tex": len(current_joint_tables | current_glofas_tables),
             "historical_displays": len(current_historical)}
 

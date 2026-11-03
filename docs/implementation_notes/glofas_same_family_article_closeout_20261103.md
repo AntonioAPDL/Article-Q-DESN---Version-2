@@ -183,3 +183,12 @@ source hash. The combined harness requires R4.6.0 on the child-process PATH as
 well as for the parent, and Python3.11 with PyYAML6.0.2; the QA environment also
 provides pytest8.3.5 and PyMuPDF1.26.5. Environment failure receipts are retained
 separately from source regressions.
+
+The reader-focused guard retains both historical and corrected GloFAS text
+versions (115 checks, 24 mutation rejections). The MQ nomenclature suite passes
+17 tests, retaining all original source hashes while checking the approved
+current issued-window aliases. Its selected-PDF inventory now includes four
+corrected GloFAS figures and the three unchanged historical component figures,
+in addition to the two simulation figures. Missing approval and a stale
+issued-window table are rejected. These are test-consumer updates, not changes
+to any simulation or application fit.

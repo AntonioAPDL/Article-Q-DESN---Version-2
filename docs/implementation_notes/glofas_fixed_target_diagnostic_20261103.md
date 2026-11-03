@@ -171,9 +171,10 @@ window throughout. Do not seek a favorable run by seed or prior selection.
 
 ## Diagnostic placement and unchanged scientific authorization
 
-The four pure mathematical and read-only equation helpers live under
+The four mathematical and read-only equation helpers live under
 `scripts/diagnostics/`, not the production `application/R/` surface. They
-neither fit a model nor launch, continue or update an inference algorithm.
+provide generated reference iterations and evaluation of supplied numeric
+state, without a scientific dispatch or retained-fit continuation entry point.
 The generated tests, diagnostic driver and guarded reader import those exact
 paths; any later admitted reader must pin the updated source closure.
 

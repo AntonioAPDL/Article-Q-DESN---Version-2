@@ -306,6 +306,7 @@ run_standalone_glofas_test("application/tests/test_integrated_quantile_receipts_
 run_standalone_glofas_test("application/tests/test_glofas_same_family_closeout.R")
 run_standalone_glofas_test("application/tests/test_glofas_same_family_truth_bridge.R")
 run_standalone_glofas_test("application/tests/test_glofas_same_family_fitted_history.R")
+run_standalone_glofas_test("application/tests/test_glofas_same_family_history_materializer.R")
 run_standalone_glofas_test("application/tests/test_mq_typed_workflow_v2.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_transition_typed_v2.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_mq_typed_workflow_v2_sources.py")) == 0L)

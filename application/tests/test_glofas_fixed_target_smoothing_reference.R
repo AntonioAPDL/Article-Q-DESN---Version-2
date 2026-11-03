@@ -1,6 +1,6 @@
 # Generated only: exact target reference, never application-data retuning.
 local({
-  source("application/R/glofas_fixed_target_smoothing_reference.R", local = TRUE)
+  source("scripts/diagnostics/glofas_fixed_target_smoothing_reference.R", local = TRUE)
   result <- gftsr_run_smoothing_diagnostics()
   stopifnot(result$scientific_runs == 0L, result$authentic_reads == 0L,
             all(result$checks$reference_validity == "PASS"),

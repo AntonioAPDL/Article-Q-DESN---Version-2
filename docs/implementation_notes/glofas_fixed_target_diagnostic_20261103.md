@@ -102,6 +102,12 @@ The 34 affine checks pass; their Gaussian references condition on augmentation
 moments. Both suites reject deliberate source mutations. The generated reader
 contract suites pass 99 and 58 checks, and the pure equation suite passes 53.
 
+For example, at probability 0.05, the reported Gaussian-factor quantile has
+probability approximately 0.137243 under the exact AL distribution, rather
+than 0.05. The analytic AL CDF and independent Normal-mixture integration agree
+within `1e-8`. This controlled example isolates an approximation limitation;
+it does not estimate how much of the application's loss it explains.
+
 The first authenticated read inspected one truth-free design and the
 independent AL fits at 0.05 and 0.50. Both retained future covariances are
 symmetric and positive definite; their condition numbers are approximately
@@ -163,13 +169,25 @@ exAL/MQ qualification where affected, accurate objective/stopping accounting,
 and a timed feasible dependency schedule. Preserve the protected scoring
 window throughout. Do not seek a favorable run by seed or prior selection.
 
-## Historical source-guard consumer
+## Diagnostic placement and unchanged scientific authorization
 
-The immutable transition launch guard and its original source manifest are
-unchanged. The registered consumer tests that original grant at the exact
-frozen scientific producer. On the current tree it separately checks the
-original working/staged bytes and modes, the four diagnostic modules pinned
-to diagnostic source `dd83bfabc89000132e39ab803db4462673bcf5f9`, the exact scoped
-change set and rejection of untracked scientific implementations. All original
-manifest mutations and the seven-authorized-additions assertion remain active.
-This is test-context maintenance, not a broader scientific launch permission.
+The four pure mathematical and read-only equation helpers live under
+`scripts/diagnostics/`, not the production `application/R/` surface. They
+neither fit a model nor launch, continue or update an inference algorithm.
+The generated tests, diagnostic driver and guarded reader import those exact
+paths; any later admitted reader must pin the updated source closure.
+
+Both production source guards, their immutable manifests and all three
+historical source/editorial consumer tests remain byte-identical to the
+pre-diagnostic authority. They run against the current repository without a
+historical-fixture exception or an expanded scientific grant. The original
+scientific paths, modes, working/index checks and mutation rejections remain
+active. This placement separates diagnostic evaluation from production model
+implementation; it does not authorize inference changes in an unguarded path.
+
+The numerical findings above and their source-bound private receipts remain
+at their original diagnostic commits, including
+`dd83bfabc89000132e39ab803db4462673bcf5f9`. Relocation does not rewrite those
+receipts, reopen a closed purpose, reidentify a fitted object or authorize a
+new retained-payload read. No production guard, fitting source, scientific
+result or article asset is changed by this integration repair.

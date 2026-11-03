@@ -2,10 +2,10 @@
 # A new, separate four-object diagnostic purpose. The earlier three-object
 # contract remains closed and unchanged. No coordinate step is applied here.
 source("scripts/glofas_fixed_target_forensic_reader.R")
-source("application/R/glofas_fixed_target_stationarity.R")
+source("scripts/diagnostics/glofas_fixed_target_stationarity.R")
 
 gfs_sources <- function() c(gfr_sources(), "scripts/glofas_fixed_target_stationarity_reader.R",
-  "application/R/glofas_fixed_target_stationarity.R", "application/R/latent_path_vb_al.R")
+  "scripts/diagnostics/glofas_fixed_target_stationarity.R", "application/R/latent_path_vb_al.R")
 gfs_scope <- function(s) {
   q <- gfr_require; gst_unique_objects(s)
   fields <- c("schema_version","purpose","nonce","expires_utc","source_root","source_commit",

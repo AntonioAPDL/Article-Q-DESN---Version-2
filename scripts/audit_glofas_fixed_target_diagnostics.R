@@ -3,9 +3,9 @@
 
 gftd_generated_report <- function(repo_root = getwd()) {
   repo_root <- normalizePath(repo_root, mustWork = TRUE)
-  paths <- c("application/R/glofas_fixed_target_scalar_diagnostics.R",
-             "application/R/glofas_fixed_target_affine_diagnostics.R",
-             "application/R/glofas_fixed_target_smoothing_reference.R")
+  paths <- c("scripts/diagnostics/glofas_fixed_target_scalar_diagnostics.R",
+             "scripts/diagnostics/glofas_fixed_target_affine_diagnostics.R",
+             "scripts/diagnostics/glofas_fixed_target_smoothing_reference.R")
   ns <- new.env(parent = globalenv())
   for (path in paths) sys.source(file.path(repo_root, path), envir = ns)
   scalar <- ns$gfts_run_scalar_diagnostics(repo_root = repo_root)

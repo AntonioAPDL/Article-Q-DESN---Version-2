@@ -1,8 +1,8 @@
 # Generated numeric fixtures only. No RDS, callback execution, applied update,
 # authentic inference, held-out scoring, or scientific launch.
 local({
-  source("application/R/glofas_fixed_target_affine_diagnostics.R", local = TRUE)
-  source("application/R/glofas_fixed_target_stationarity.R", local = TRUE)
+  source("scripts/diagnostics/glofas_fixed_target_affine_diagnostics.R", local = TRUE)
+  source("scripts/diagnostics/glofas_fixed_target_stationarity.R", local = TRUE)
   engine <- gfta_engine()
   checks <- 0L
   ok <- function(x) {stopifnot(isTRUE(x)); checks <<- checks + 1L}

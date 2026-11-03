@@ -2,7 +2,7 @@
 local({
   test_repo <- if (exists("repo_root", inherits = TRUE)) {
     normalizePath(get("repo_root", inherits = TRUE), mustWork = TRUE)
-  } else if (file.exists("application/R/glofas_fixed_target_scalar_diagnostics.R")) {
+  } else if (file.exists("scripts/diagnostics/glofas_fixed_target_scalar_diagnostics.R")) {
     normalizePath(".", mustWork = TRUE)
   } else {
     script <- grep("^--file=", commandArgs(FALSE), value = TRUE)
@@ -10,7 +10,7 @@ local({
     normalizePath(file.path(dirname(sub("^--file=", "", script)), "..", ".."),
                   mustWork = TRUE)
   }
-  source(file.path(test_repo, "application/R/glofas_fixed_target_scalar_diagnostics.R"),
+  source(file.path(test_repo, "scripts/diagnostics/glofas_fixed_target_scalar_diagnostics.R"),
          local = environment())
   results <- app_gftd_scalar_diagnostics(test_repo)
   stopifnot(nrow(results) == 42L,

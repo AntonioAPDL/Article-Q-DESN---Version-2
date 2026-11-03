@@ -1,6 +1,6 @@
 # Standalone generated-only diagnostic test; no retained objects or fits.
 local({
-  source("application/R/glofas_fixed_target_affine_diagnostics.R", local = TRUE)
+  source("scripts/diagnostics/glofas_fixed_target_affine_diagnostics.R", local = TRUE)
   out <- gfta_run_affine_diagnostics()
   stopifnot(identical(out$scientific_runs, 0L), identical(out$authentic_reads, 0L))
   stopifnot(nrow(out$checks) >= 30L)

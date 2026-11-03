@@ -1,0 +1,114 @@
+{
+  "base_commit": "3868d6467ccb5df1463094c8bd69ed1607212043",
+  "ledger": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SCOPE_LEDGER_01.json",
+    "sha256": "07be82057651a459019d85dde78e5f95816d496a5e697bf33d50174fb1520d79"
+  },
+  "no_future_commit_hash_cycle": true,
+  "original_worktree_commits": {
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r191_independent_watch_peer_20261031": "91a0423d5baab068e55c19b9e62e2fb5f13047bc",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r199_calendar_profile_20261101": "eb0588a9ea141dc29b82490a79cb116b954d2cb7",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r200_pilot_reference_20261102": "0c421bb4bca54d7c59aa5aafcea7444a7bd7d2e3",
+    "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r201_native_reference_20261102": "3868d6467ccb5df1463094c8bd69ed1607212043"
+  },
+  "publisher_review": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/publication/INDEPENDENT_SOURCE_REVIEW.json",
+    "sha256": "26ca51da5d5bcbd468b62298a8ae42ff28fcf342aa8ef9e551b32e7d56c17f2c"
+  },
+  "runtime_or_input_authority": false,
+  "runtime_source_publication": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/native_reference_implementation_20261102_1732PST/home_metadata_mirror/Publish_R201_46172bbc0e4d/SOURCE_PUBLICATION.json",
+    "sha256": "0a82b94f62904a0d74eb5ea7433a95fe5505a5fe6e2506f77b22b9302dc2d7db"
+  },
+  "schema": "r203_committed_control_source_evidence_v1",
+  "source_pins": {
+    "ABI_OPERATOR.md": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/ABI_OPERATOR.md",
+      "sha256": "15339cf83ccb585494f5321abfd9bd4a40fdadeb865d7b4d5aab2b89382a81c7"
+    },
+    "ADMIN_SCHEMAS.json": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/ADMIN_SCHEMAS.json",
+      "sha256": "ef93026306445ae883ba7ae2aab31052d9752f241ff6705be3dd76639435c5e0"
+    },
+    "INTERFACES.json": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/INTERFACES.json",
+      "sha256": "f4a8767b1d22fc289702e1c98a7b7917146773758304a129855c97bc0cf27b11"
+    },
+    "OPERATOR.md": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/OPERATOR.md",
+      "sha256": "3220d417d9f873d9a5f528e143ddc74f85e54d0bddd6752dc75557cb4e4e5604"
+    },
+    "PEER_POLICY.json": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/PEER_POLICY.json",
+      "sha256": "65094e86aca9121f776bffff260ddb6a84890a8f39344291ab9a6456d7cbf234"
+    },
+    "RUNTIME_BASE.json": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/RUNTIME_BASE.json",
+      "sha256": "85bce27c0cc4aaf16e744c1abb0988abdea64ef582c578fb8871997db6a8e543"
+    },
+    "SCHEMAS.json": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/SCHEMAS.json",
+      "sha256": "33195e8a0a67663fc8286a682f8885c0e6b6995798d50faca592a82e4618a305"
+    },
+    "abi/contract.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/abi/contract.py",
+      "sha256": "0d6ae35a0b2d20af4ff1f9db8d511d9564bbc686e3c9434bca3f71c6c6d06c7d"
+    },
+    "abi/controller.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/abi/controller.py",
+      "sha256": "d7af39df11a9b42d2990a583741cd77d28a7f131445e779b66a424b86c5f9918"
+    },
+    "abi/native_abi.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/abi/native_abi.py",
+      "sha256": "6c45941d73661b3e15b3e78b6aee32127acfed741c56c3a29ad9022f1e6d892d"
+    },
+    "abi/subject.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/abi/subject.py",
+      "sha256": "342f336e4a417641566aca843741e08b27c61b8c1b298e06defe83fd3693032e"
+    },
+    "common/contract.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/common/contract.py",
+      "sha256": "3090fb684b3c8796bc7754b036b5b4c3a1f92a92051f1ccc700e5d3d657900a7"
+    },
+    "common/metadata.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/common/metadata.py",
+      "sha256": "6593a6bbb617375029bee0c692e510cd5621662eaf9fab46445eab433ff0762b"
+    },
+    "common/stage_owner.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/common/stage_owner.py",
+      "sha256": "0614d2fbca3bd507b0218ed5e2309517a93cd94f53ef6c7887bcf4e9fe64077c"
+    },
+    "deployment/prepare.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/deployment/prepare.py",
+      "sha256": "5fd231a85ae3377c19115d195c288e138a0fe462d1536275394688cb5f309ed5"
+    },
+    "deployment/worker.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/deployment/worker.py",
+      "sha256": "4a5791c12d8a4c406b5ff9a1e2289cc1e1c1246f3f7a6e694131a874c5385b75"
+    },
+    "peer/admin_context.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/admin_context.py",
+      "sha256": "a877ebc7ae8a183b17eddaf1a7f28e4ea07df79c6c7e3f932251af612fc3a6ea"
+    },
+    "peer/independent_peer.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/independent_peer.py",
+      "sha256": "b2f124fd3d10d4cd28a255b32fa4ba0ddfe57204a0cf8d673892083dec3dccd7"
+    },
+    "peer/issuer_finalize.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/issuer_finalize.py",
+      "sha256": "31c4501d6c040aa703dedac9d7f48c307782e716e57bd7b42a5b2e60d02741f4"
+    },
+    "peer/observation_capture.py": {
+      "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/control/peer/observation_capture.py",
+      "sha256": "485b14b4bc4cb2f50203c191e1129b852ebf928f4e8db74fd2e19dc0f5aa0b97"
+    }
+  },
+  "source_review": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SOURCE_REVIEW.json",
+    "sha256": "b4ffe819b7871fd69a0e9a4aaeaf20ed4d831a78e5fc551597b72f15a73518e2"
+  },
+  "source_scope": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/abi_controller_deployment_implementation_20261102_2253PST/SCOPE.json",
+    "sha256": "850434d116ab41abae222a12639ba268d483dbee2dedb45fb7fa4c24f3c78e9e"
+  }
+}

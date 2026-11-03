@@ -1,0 +1,61 @@
+{
+  "control_source_publication_is_separate": true,
+  "original_tracer": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r157_native_bootstrap_20261028/application/scripts/pricefm/526_traced_bootstrap_guard.py",
+    "sha256": "914d7d369d68579b7149c5130e3bba5d59f3b8f09a5bf691e1557ccbcd40c963"
+  },
+  "runtime_freeze": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/native_reference_implementation_20261102_1732PST/SOURCE_FREEZE_03.json",
+    "sha256": "4f78c727a5eac21ee69cbded3c5367b69c11ef1f798ca2f9740fe2c79a70c1f4"
+  },
+  "runtime_map_sha256": "a1493c018fe312a5da5102f120c6aed19bd574df6a18fdb38236d7a5f075363c",
+  "runtime_publication": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/pricefm_r165_headroom_execution_20261029_1526PDT/native_reference_implementation_20261102_1732PST/home_metadata_mirror/Publish_R201_46172bbc0e4d/SOURCE_PUBLICATION.json",
+    "sha256": "0a82b94f62904a0d74eb5ea7433a95fe5505a5fe6e2506f77b22b9302dc2d7db"
+  },
+  "runtime_source_hashes": {
+    "README.md": "dbff6bf7fa2bb8371449db91d50fad4bbccc9a07f18e9f936f5c593d28648572",
+    "native_python/build_contract.py": "6fadc25f189ee6da392a07a0c4f5fb132583cfe3dcd37966103c42bcd9d4cc80",
+    "native_python/native_abi.json": "dcd6f14e7373f91dc0bc7288d8fc60b238afcf95d851c6e5409f282ac6028753",
+    "native_python/native_contract.py": "a9d05df363968312592a1ef11314878053ae38fdb7f57228e5c3938f38502f41",
+    "native_python/python_bootstrap.py": "a52b17a769ad8f56651b1e6f51740d073cae7cefe7d8fca56d9cec8cc91dfa9c",
+    "native_python/r201_native_boundary.c": "8834321ef8c7d96dba553c5c45ed32b63cb923bd73bc4811507df03792f53727",
+    "native_python/r201_native_boundary.h": "8d080db85443726befb396dc500f12ccdd8a16db8d1328dc7e5c93f85c384ff5",
+    "owner/STARTUP_OPERATOR_GUIDE.md": "0d9baa6fba8933506410379ce4f07f0f80ab0f59a4b383294778bf1683ea7e30",
+    "owner/__init__.py": "e127945249f225075061e39f6a118d564d5c7ad44b3b2e4bcbf41debae4cc846",
+    "owner/compute_boundary.py": "f1a5a13f887f60579664d716ff349fdcf86b9dc27cfd1d7fdad6eab3148a04ae",
+    "owner/metadata.py": "6593a6bbb617375029bee0c692e510cd5621662eaf9fab46445eab433ff0762b",
+    "owner/pilot_compute_owner.py": "8db25c433166a43b213a20a4117a3350ae36f004e30b37c0ca35d1970f7154f8",
+    "owner/pilot_independent_peer.py": "98fd0b635fbc1971306b0068db693d7a5036fe345d9f2c925e67eef92649281a",
+    "owner/pilot_job_prepare.py": "2d6671ad465be03f7cebe1af24d695333cdb0c434429f551fe2df74148e42233",
+    "owner/pilot_owner_dispatch.py": "79e36a35fe581615ae1c16591b8b203c9e4d6f9898fb009ffe0e575c0a351d3c",
+    "owner/pilot_startup_worker.py": "c148ce6f6bc28eb40990f2463c1501e2b9906d92c9557b760e72c4f7b623a052",
+    "owner/reference_common.py": "e9e35192e82bf0669cdbce20614cfc68e195ecd3c4c2655d479b8267544fc870",
+    "owner/reference_compute_owner.py": "b00017fda5b036505576160c64704b472e3e348cc219e037f6dd6d8487f11119",
+    "owner/reference_job_prepare.py": "1fe0d2a934f9b6778aa0a60f4c4c34b8c3703faaf516822e361d424c97ccbb1a",
+    "owner/reference_return.py": "a89932706e22274210878e98a8bc28f6c38dfeee02f016cd35eea7620b28d674",
+    "owner/reference_startup_worker.py": "fb0c4d6e1ceae61e362c9abee893800d8baec0ed5e7aa6cef3a6e00332f65cea",
+    "pilot_io/OPERATOR_GUIDE.md": "0ff08231d8565dbd432d056a744c3735d8f93b79c4fdadcdc7667746c9d6f48e",
+    "pilot_io/pilot_bootstrap.R": "fe61eac07a1f24948f3c4c568741359651b3fc0cabc110e95141ea276beb0d6e",
+    "pilot_io/pilot_io_contract.py": "5405112883b3433655e010022028798be3736241143da116955554f61e2b7cd8",
+    "pilot_io/pilot_owned_io.R": "2c2d7f34d4aa181e277a61c2c35d72c5bb0ca87908591ae86527834f12e6b2e5",
+    "pilot_io/pilot_owned_io.c": "07988492f83bf031d75fe55f438d5fb08971e2cf34c57db5bea248f22f108dd0",
+    "qualification/OPERATOR_PROTOCOL.md": "33146062cb06feffa86aa4bdb541cc54ec26b3af9c68d79b15041ebb67343a17",
+    "qualification/qualification_acceptance.py": "4eb8ea495968b67b2b661a55adf8d6f052eedcc8df8d42eab6fb83dc16712c81",
+    "qualification/qualification_boundary.py": "67c3d2050521a8c6bbaf378371f3f657df754e747e5325211f8e38b45aa887e0",
+    "qualification/qualification_contract.py": "39a53e52b4c1ebafe076d59b8e509e94f1b5a02706ef1710637654aa0a74ec75",
+    "qualification/qualification_entry.py": "65322eeaadecc011b2dd3399a0b3bc805c90f1a341ab4a773b98c1e2ec45d6c7",
+    "qualification/qualification_peer.py": "6d36221b106332ec18c287ddc7248c544cdb73db6af71405e15e14deb279eb09",
+    "qualification/qualification_protocol.json": "43e45108238bb4ae8e979412e99bafdbaba827911eee8a49f1c488bfc2d51eb3",
+    "regional_reference/README.md": "ba85b72532e632415f651cfd06335d1dc660ccdd42f109a99a13de5aca19dc36",
+    "regional_reference/SOURCE_PROVENANCE.md": "74d44f019f9d942a4ba5e4e95077590f421598ab8ff526a870d4a2c575ebeeef",
+    "regional_reference/analytical_fixtures.py": "22dd6fdb8365ce6b6824e4cc9d25895690b83318f4ba1f042110509c4814bb93",
+    "regional_reference/decimal_reference.py": "ea75cf0bae3695988aa3db524c25b010cd21fbbdb9ae60685a1a5aee34a90d89",
+    "regional_reference/reference_compute.py": "021961ea0faab034479b29d60e32aba1aeedaf6a5e9b14d70fe1654f6a580d2c",
+    "regional_reference/reference_contract.py": "67ba431ad5dbf2ce302e57a6f6bd84a3fad36b034b442787b0edda2af511c6b6"
+  },
+  "schema": "r203_immutable_runtime_base_v1",
+  "scientific_acceptance": false,
+  "source_commit": "3868d6467ccb5df1463094c8bd69ed1607212043",
+  "status": "EXACT_PREVIOUS_RUNTIME_SOURCE_NOT_RUNTIME_QUALIFICATION"
+}

@@ -1,0 +1,58 @@
+{
+  "initial": {
+    "cases": 9,
+    "families": [
+      "diagonal",
+      "rank_one",
+      "paired_ill_conditioned"
+    ],
+    "new_posterior_fits": 0,
+    "optimizer_updates": 0,
+    "precision_evaluations": 27,
+    "sizes": [
+      8,
+      16,
+      32
+    ],
+    "target_input_manifest": null
+  },
+  "limits": {
+    "LT_physical_plan_bytes": 301989888,
+    "NO4_physical_plan_bytes": 637534208,
+    "additional_transient_tree_peak_bytes": 33554432,
+    "initial_physical_plan_bytes": 117440512,
+    "minimum_physical_proof_bytes": 67108864,
+    "minimum_return_proof_bytes": 16777216,
+    "per_file_bytes": 16777216,
+    "total_return_bytes": 67108864
+  },
+  "new_jobs": 0,
+  "roles": [
+    "INITIAL_NATIVE_REFERENCE_QUALIFICATION",
+    "LT_NO4_REFERENCE"
+  ],
+  "runtime_admitted": false,
+  "schema": "r201_qualification_stage_protocol_v1",
+  "scientific_acceptance": false,
+  "stages": [
+    "feasibility_and_disjoint_cost",
+    "actual_readonly_canonical_namespace",
+    "owned_native_build_and_H5_source_acceptance",
+    "actual_owned_native_ABI10_and_independent_acceptance",
+    "initial_fixed_analytic9_precision27",
+    "complete_return_accounting_independent_review_H5",
+    "fullsize_price_export_error_budget_before_LT_NO4"
+  ],
+  "status": "SOURCE_PROTOCOL_ONLY_RUNTIME_UNEARNED",
+  "unearned": [
+    "read_only_namespace_feasibility_on_actual_node",
+    "actual_owned_compilation",
+    "actual_ABI_suite_controller_source_and_execution",
+    "actual_analytic_fixture_execution",
+    "actual_runtime_qualification",
+    "fullsize_price",
+    "original_state_target_export",
+    "full_scientific_error_budget",
+    "separate_NO3_C_R_writer_qualification"
+  ]
+}

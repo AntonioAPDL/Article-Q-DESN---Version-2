@@ -1,0 +1,90 @@
+{
+  "handshake_token": "R157_TSYNC_FORK_DENIAL_READY_V1",
+  "original_policy_source": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r157_native_bootstrap_20261028/application/R/526_scientific_boundary.c",
+    "sha256": "b3ed6ab30ca2e3aa2b777044e502576c3e323ee25f653ba8046113124b104b53"
+  },
+  "original_traced_guard": {
+    "path": "/data/jaguir26/local/src/Article-Q-DESN---Version-2/local_trackers/worktrees/pricefm_r157_native_bootstrap_20261028/application/scripts/pricefm/526_traced_bootstrap_guard.py",
+    "sha256": "914d7d369d68579b7149c5130e3bba5d59f3b8f09a5bf691e1557ccbcd40c963"
+  },
+  "platform": "linux-x86_64",
+  "receipt_fields": [
+    [
+      "abi_version",
+      "uint32"
+    ],
+    [
+      "state",
+      "uint32"
+    ],
+    [
+      "role",
+      "uint32"
+    ],
+    [
+      "uid",
+      "uint32"
+    ],
+    [
+      "child_pid",
+      "int64"
+    ],
+    [
+      "owner_pid",
+      "int64"
+    ],
+    [
+      "child_start_ticks",
+      "uint64"
+    ],
+    [
+      "owner_start_ticks",
+      "uint64"
+    ],
+    [
+      "permit_device",
+      "uint64"
+    ],
+    [
+      "permit_inode",
+      "uint64"
+    ],
+    [
+      "expires_epoch",
+      "double"
+    ],
+    [
+      "boot_id",
+      "char[37]"
+    ],
+    [
+      "job_id",
+      "char[21]"
+    ],
+    [
+      "node",
+      "char[256]"
+    ],
+    [
+      "cgroup",
+      "char[8192]"
+    ]
+  ],
+  "return_convention": "0_SUCCESS_MINUS1_TERMINAL_REFUSAL",
+  "roles": {
+    "INITIAL_NATIVE_REFERENCE_QUALIFICATION": 1,
+    "LT_NO4_REFERENCE": 2
+  },
+  "schema": "r201_native_python_boundary_abi_v1",
+  "symbols": {
+    "r201_last_error_v1": "const_char*(void)",
+    "r201_prepare_v1": "int(int64,uint64,int,int,double)",
+    "r201_receipt_size_v1": "uint64(void)",
+    "r201_receipt_v1": "int(receipt_v1*)",
+    "r201_rename_noreplace_v1": "int(int,const_char*,const_char*)",
+    "r201_scientific_boundary_v1": "int(void)",
+    "r201_validate_live_v1": "int(void)"
+  },
+  "version": 1
+}

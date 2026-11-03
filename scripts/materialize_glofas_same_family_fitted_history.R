@@ -90,7 +90,7 @@ gfm_source_guard <- function(s) {
 
 gfm_bind_models <- function(s,collection,normal) {
   q<-gsc_require;gsc_validate_collection(collection,gsc_identity())
-  q(identical(normal$prepared_design,s$design),"Normal enrollment binds a different prepared design")
+  q(gst_same(normal$prepared_design,s$design),"Normal enrollment binds a different prepared design")
   ids<-gfm_selection(s$selection);out<-list()
   for(id in ids) {
     supplied<-s$models[[id]]
@@ -103,9 +103,9 @@ gfm_bind_models <- function(s,collection,normal) {
     } else {
       z<-normal$models[[id]];expected<-z$original_fit
       q(identical(z$status,"FIT_REUSE_AND_NEW_ANALYTIC_REPORT_VERIFIED")&&
-        identical(normal$input_bindings[[id]]$fit,expected),"Normal model is not the enrolled original fit")
+        gst_same(normal$input_bindings[[id]]$fit,expected),"Normal model is not the enrolled original fit")
     }
-    q(identical(supplied,expected),"model pin does not match its accepted/enrolled role")
+    q(gst_same(supplied,expected),"model pin does not match its accepted/enrolled role")
     q(is.numeric(supplied$size_bytes)&&length(supplied$size_bytes)==1L&&
       is.finite(supplied$size_bytes)&&supplied$size_bytes>0&&supplied$size_bytes<=8*1024^3&&
       gsc_hash_string(supplied$sha256),"bounded accepted model identity required")
@@ -226,7 +226,7 @@ gfm_main <- function(args=commandArgs(TRUE)) {
     identical(basename(cscope$complete$path),"COMPLETE.json"),"exact metadata role interfaces required")
   metadata_cost<-gfm_metadata_cost(s,cscope)
   prospective_cost<-gfm_precollect_read_cost(s,cscope)
-  q(identical(cscope$expected_identity,gsc_identity())&&identical(s$expected_identity,gsc_identity())&&
+  q(gst_same(cscope$expected_identity,gsc_identity())&&gst_same(s$expected_identity,gsc_identity())&&
     identical(cscope$schema_version,"glofas_same_family_collection_contract_v1")&&
     identical(cscope$allow_ledger_mutation,FALSE)&&identical(cscope$allow_refit,FALSE)&&identical(cscope$allow_truth,FALSE)&&
     identical(cscope$controller_source$path,file.path(root,"application/scripts/forecast_transition_control.py"))&&
@@ -259,6 +259,7 @@ gfm_main <- function(args=commandArgs(TRUE)) {
   gfh_reference_history(design,30L)
   tables<-list()
   for(id in ids) {
+    message("HISTORY_READ_ROLE: ",id)
     object<-readRDS(gsc_pin(models[[id]],8*1024^3))
     producer<-if(id%in%gsc_tasks())Filter(function(z)identical(z$task_id,id),collection$producers)[[1L]] else NULL
     tables[[id]]<-gfm_rows(object,design,id,producer,normal)

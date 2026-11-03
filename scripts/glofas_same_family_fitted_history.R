@@ -70,7 +70,7 @@ gfh_normal_sd_mean <- function(sigma) {
   value
 }
 
-gfh_core_rows <- function(core, history, family, probabilities) {
+gfh_core_rows <- function(core, history, family, probabilities, conditional_joint_rhs = FALSE) {
   q <- gfh_require
   q(inherits(history, "gfh_reference_history_v1"), "validated historical reference rows required")
   q(is.list(core) && identical(core$method, "vb") &&
@@ -93,7 +93,8 @@ gfh_core_rows <- function(core, history, family, probabilities) {
       c("Independent exAL", "MQ exAL"), "family label disagrees with likelihood")
   if (normal) q(identical(core$prior, if (family == "Normal Ridge") "ridge" else "rhs_ns"),
     "Normal family label disagrees with prior")
-  q(normal || (length(p) == 1L && identical(core$prior, "rhs_ns")),
+  q(normal || (length(p) == 1L && (identical(core$prior, "rhs_ns") ||
+    (isTRUE(conditional_joint_rhs) && family %in% c("MQ AL", "MQ exAL") && identical(core$prior,"ridge")))),
     "one matching fixed-p AL/exAL core required")
   sd_mean <- if (normal) gfh_normal_sd_mean(core$variational_state$sigma) else 0
   out <- do.call(rbind, lapply(p, function(tau) {
@@ -136,8 +137,25 @@ gfh_transition_rows <- function(result, design, days = 30L) {
       isTRUE(joint$converged) && identical(as.numeric(joint$tau), gfh_tau()) && length(joint$fits) == 7L,
       "matching complete multiquantile blocks required")
     cores <- joint$fits; p <- gfh_tau()
+    # The joint engine updates RHS moments outside the seven conditional
+    # Gaussian coefficient fits (which are therefore tagged ridge internally).
+    # Accept that representation only with the retained outer RHS certificate.
+    conditional_rhs <- any(vapply(cores,function(x)identical(x$prior,"ridge"),logical(1L)))
+    if (conditional_rhs) {
+      cert <- joint$rhs_partition_certificate
+      precision_ok <- function(states,n) is.list(states)&&length(states)==7L&&
+        all(vapply(states,function(x)is.numeric(x$prior_precision)&&length(x$prior_precision)==n&&
+          all(is.finite(x$prior_precision)&x$prior_precision>0),logical(1L)))
+      q(isTRUE(joint$converged_rhs)&&is.data.frame(cert)&&nrow(cert)==1L&&
+        identical(cert$schema_version,"glofas_part3_rhs_partition_v1")&&
+        cert$p_reference==length(history$beta_index)&&cert$p_discrepancy==length(history$alpha_index)&&
+        cert$n_quantiles==7L&&cert$overlap_count==0L&&isTRUE(cert$all_precision_finite)&&
+        precision_ok(joint$rhs_state_reference,length(history$beta_index))&&
+        precision_ok(joint$rhs_state_discrepancy,length(history$alpha_index)),
+        "conditional Gaussian cores require the converged outer RHS certificate")
+    }
   } else {
-    cores <- list(result$fit); p <- as.numeric(sub(".*-p", "", id)) / 100
+    cores <- list(result$fit); p <- as.numeric(sub(".*-p", "", id)) / 100; conditional_rhs <- FALSE
   }
   rows <- lapply(seq_along(cores), function(k) {
     core <- cores[[k]]
@@ -149,7 +167,7 @@ gfh_transition_rows <- function(result, design, days = 30L) {
     # cannot silently conflict with that association.
     stated <- core$warm_start_contract$quantile_level
     if (!is.null(stated)) q(identical(as.numeric(stated), p[k]), "retained core probability level differs")
-    gfh_core_rows(core, history, family, p[k])
+    gfh_core_rows(core, history, family, p[k],conditional_joint_rhs=conditional_rhs)
   })
   out <- do.call(rbind, rows); rownames(out) <- NULL; out
 }

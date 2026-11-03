@@ -72,6 +72,11 @@ local({
     bad<-s;bad$limits[[key]]<-Inf;reject(gfm_scope(bad),"one-core")
   }
   bound<-gfm_bind_models(s,collection,normal);ok(identical(bound,models))
+  unordered <- s
+  unordered$design <- unordered$design[c("sha256","path","size_bytes")]
+  unordered$models <- lapply(unordered$models,function(p)p[c("sha256","size_bytes","path")])
+  ok(gst_same(gfm_bind_models(unordered,collection,normal),models))
+  ok(gst_same(rev(gsc_identity()),gsc_identity()))
   cost<-gfm_read_cost(s,collection,bound)
   ok(cost$RDS_deserializations==19L&&cost$deserialized_bytes==2700&&cost$payload_hash_bytes==7000)
   main<-scope("main_figure_v1");ok(length(gfm_bind_models(main,collection,normal))==8L)

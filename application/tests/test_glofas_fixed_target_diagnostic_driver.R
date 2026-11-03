@@ -7,6 +7,8 @@ stopifnot(identical(report$software_status, "PASS"),
           identical(report$scientific_runs, 0L),
           identical(report$authentic_reads, 0L),
           identical(report$future_truth_read, FALSE),
+          nrow(report$smoothing_cases) == 2L,
+          all(report$smoothing_reference_checks$reference_validity == "PASS"),
           any(report$generated_checks$approximation_accuracy == "FAIL"),
           all(report$generated_checks$reference_validity == "PASS"))
 bad <- try(gftd_generated_main(c("--out-dir", tempdir(), "--read-model")), silent = TRUE)

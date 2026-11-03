@@ -20,6 +20,15 @@ derivatives and the distinction between a Gauss–Newton approximation and the
 full nonlinear Hessian. Generated causality fixtures do not authenticate a
 saved application feature map.
 
+A separate two-horizon AL reference integrates out the unobserved terminal
+response exactly. Its earlier-response density is proportional to an AL
+transition and ordinary issued-member factors whose location depends on that
+earlier response. Independent split integration and a piecewise exponential
+CDF show that later member information can move the exact marginal median
+far from its conditional reference location. This is a controlled mechanism
+check, not an attribution of the application's forecast loss or a proposal to
+change its member weights. Mean-field accuracy is assessed separately.
+
 The standalone entry point is:
 
 ```bash
@@ -52,6 +61,29 @@ payloads and output receipts stay outside Git. Any correction must preserve the
 mathematical posterior, document changed execution identities and trace its
 affected dependencies before production admission. An unfavorable score or
 crossing alone is not a reason to change a prior, feature map, seed or target.
+
+## Read-only coordinate-equation check
+
+`scripts/glofas_fixed_target_stationarity_reader.R` has a new, separate
+four-object purpose: two tiny frozen configurations, the truth-free design
+and the median AL fit. It verifies the first reader's summary/manifest/native
+terminal chain before using those summaries for named prior-field comparisons.
+It compares only the specified scalar RHS/slab/intercept/schedule fields,
+source-scale conditional shapes and linear prior terms; it does not assert
+complete equivalence of every prior or initialization detail.
+
+The pure helper evaluates the saved future-path gradient, its reference and
+issued-member terms, the linearized precision and its covariance implication.
+It retains the complete coefficient covariance, including cross-component
+terms. A preconditioned gradient is reported as a diagnostic but is never
+applied. The current probability is supplied explicitly from the authenticated
+task, not inferred from the shared design. Numerical jitter is not interpreted
+as a zero-centered prior.
+
+Small residuals establish agreement with these coordinate equations only.
+They do not establish three-pass stability of every variational factor, a
+complete ELBO optimum, exact posterior accuracy, or a reason to select a new
+forecast using the held-out responses.
 
 ## Verification scope
 

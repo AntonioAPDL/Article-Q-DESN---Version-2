@@ -4,11 +4,13 @@
 gftd_generated_report <- function(repo_root = getwd()) {
   repo_root <- normalizePath(repo_root, mustWork = TRUE)
   paths <- c("application/R/glofas_fixed_target_scalar_diagnostics.R",
-             "application/R/glofas_fixed_target_affine_diagnostics.R")
+             "application/R/glofas_fixed_target_affine_diagnostics.R",
+             "application/R/glofas_fixed_target_smoothing_reference.R")
   ns <- new.env(parent = globalenv())
   for (path in paths) sys.source(file.path(repo_root, path), envir = ns)
   scalar <- ns$gfts_run_scalar_diagnostics(repo_root = repo_root)
   affine <- ns$gfta_run_affine_diagnostics(root = repo_root)
+  smoothing <- ns$gftsr_run_smoothing_diagnostics(root = repo_root)
   parts <- list(scalar = scalar, affine = affine)
   required <- c("test_id", "reference_validity", "implementation_parity",
                 "numerical_stability", "approximation_accuracy",
@@ -28,11 +30,20 @@ gftd_generated_report <- function(repo_root = getwd()) {
                         "numerical_stability")
   software_fail <- any(vapply(checks[software_columns], function(x)
     anyNA(x) || any(x != "PASS"), logical(1L)))
-  accuracy_fail <- any(checks$approximation_accuracy == "FAIL")
+  software_fail <- software_fail ||
+    any(smoothing$checks$reference_validity != "PASS") ||
+    any(smoothing$checks$numerical_stability != "PASS")
+  accuracy_fail <- any(checks$approximation_accuracy == "FAIL") ||
+    any(smoothing$checks$approximation_accuracy == "FAIL")
   list(
     schema_version = "glofas_fixed_target_generated_diagnostic_v1",
     generated_checks = checks,
     scalar_results = scalar$results,
+    smoothing_reference_checks = smoothing$checks,
+    smoothing_cases = smoothing$cases,
+    smoothing_quantiles = smoothing$quantiles,
+    smoothing_reference_qualification = "Exact small-model reference; implementation parity is not independently established by those cases",
+    smoothing_implementation_parity_status = "NOT_ASSESSED_BY_SMOOTHING_CASES",
     no_information_reference = scalar$no_information_reference,
     software_status = if (software_fail) "FAIL" else "PASS",
     approximation_accuracy_status = if (accuracy_fail) "FAIL" else "NOT_FAILED_IN_TESTED_CASES",
@@ -71,6 +82,10 @@ gftd_generated_main <- function(args = commandArgs(trailingOnly = TRUE)) {
   if (!dir.create(out, recursive = TRUE)) stop("Cannot create fresh diagnostic output.", call. = FALSE)
   utils::write.csv(report$generated_checks, file.path(out, "generated_checks.csv"), row.names = FALSE)
   utils::write.csv(report$scalar_results, file.path(out, "scalar_results.csv"), row.names = FALSE)
+  utils::write.csv(report$smoothing_reference_checks,
+    file.path(out, "smoothing_reference_checks.csv"), row.names = FALSE)
+  utils::write.csv(report$smoothing_cases, file.path(out, "smoothing_cases.csv"), row.names = FALSE)
+  utils::write.csv(report$smoothing_quantiles, file.path(out, "smoothing_quantiles.csv"), row.names = FALSE)
   jsonlite::write_json(report$no_information_reference,
     file.path(out, "no_information_reference.json"), auto_unbox = TRUE, pretty = TRUE, digits = 17)
   files <- c(report$source_files, "application/R/latent_path_vb_al.R",
@@ -79,6 +94,9 @@ gftd_generated_main <- function(args = commandArgs(trailingOnly = TRUE)) {
     relative_path = path, sha256 = unname(tools::sha256sum(path))))
   report$generated_checks <- NULL
   report$scalar_results <- NULL
+  report$smoothing_reference_checks <- NULL
+  report$smoothing_cases <- NULL
+  report$smoothing_quantiles <- NULL
   report$no_information_reference <- NULL
   report$source_commit <- unname(system2("git", c("rev-parse", "HEAD"), stdout = TRUE))
   report$source_dirty <- length(system2("git", c("status", "--porcelain"), stdout = TRUE)) > 0L

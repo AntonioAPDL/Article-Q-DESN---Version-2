@@ -11,6 +11,13 @@ gfm_selection <- function(name) {
   c(gsc_tasks(),"normal_ridge","normal_rhs")
 }
 
+gfm_fresh_output <- function(path) {
+  # R returns NA for a path that does not exist; a broken symlink instead has
+  # a nonempty target and must still be rejected.
+  link <- Sys.readlink(path)
+  !file.exists(path) && length(link)==1L && (is.na(link)||!nzchar(link))
+}
+
 gfm_scope <- function(s) {
   q<-gsc_require;gst_unique_objects(s)
   fields<-c("schema_version","purpose","nonce","expires_utc","source_root","source_commit","source_tree",
@@ -204,7 +211,7 @@ gfm_main <- function(args=commandArgs(TRUE)) {
   q(!is.na(expiry)&&expiry>Sys.time()+s$limits$wall_seconds,"purpose must cover complete bounded history read")
   out<-s$output_root
   q(is.character(out)&&length(out)==1L&&startsWith(out,paste0(root,"/local_trackers/"))&&
-    !file.exists(out)&&!nzchar(Sys.readlink(out))&&dir.exists(dirname(out))&&
+    gfm_fresh_output(out)&&dir.exists(dirname(out))&&
     identical(normalizePath(dirname(out)),dirname(out))&&!grepl("(^|/)\\.\\.(/|$)",out)&&
     system2("/usr/bin/git",c("check-ignore","--quiet","--",shQuote(out)))==0L,"fresh ignored historical output required")
   # Collection is the first payload operation. It authenticates every accepted

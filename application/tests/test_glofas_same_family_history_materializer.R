@@ -45,6 +45,13 @@ local({
       allow_scoring=FALSE,allow_publication=FALSE)
   }
   s<-scope();ok(identical(gfm_scope(s),names(models)))
+  fresh_test <- tempfile("glofas_history_fresh_")
+  ok(gfm_fresh_output(fresh_test))
+  dir.create(fresh_test);ok(!gfm_fresh_output(fresh_test))
+  broken_test <- paste0(fresh_test,"_broken")
+  ok(file.symlink(paste0(fresh_test,"_absent_target"),broken_test))
+  ok(!gfm_fresh_output(broken_test))
+  unlink(broken_test);unlink(fresh_test) # Only this test-created empty fixture.
   ok(length(gfm_scope(scope("main_figure_v1")))==8L)
   for(key in c("allow_truth_read","allow_refit","allow_retuning","allow_forecasting","allow_scoring","allow_publication")) {
     bad<-s;bad[[key]]<-TRUE;reject(gfm_scope(bad),"history-only")

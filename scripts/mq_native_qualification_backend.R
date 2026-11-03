@@ -62,6 +62,13 @@ mqnk_context_check <- function(context, synthetic = FALSE) {
   invisible(TRUE)
 }
 mqnk_manifest_check <- function(manifest, context, synthetic) {
+  if (!synthetic) {
+    mqnk_require(is.list(manifest) &&
+      identical(sort(names(attributes(manifest))), sort(c("names", "receipt_path", "receipt_sha256"))) &&
+      is.character(names(manifest)) && length(names(manifest)) == length(manifest) &&
+      !anyNA(names(manifest)) && all(nzchar(names(manifest))) && !anyDuplicated(names(manifest)),
+      "only unique named receipt fields and the two pinned-file metadata attributes are permitted")
+  }
   mqnk_require(is.list(manifest) && identical(manifest$schema_version, "mq_native_retained_build_receipt_v1") &&
     identical(sort(names(manifest$dlls)), c("inverse", "isotonic", "key")) &&
     identical(manifest$R_home, normalizePath(R.home(), mustWork = TRUE)) &&
@@ -75,7 +82,9 @@ mqnk_manifest_check <- function(manifest, context, synthetic) {
       identical(sha, context$retained_build_receipt_sha256) && identical(unname(tools::sha256sum(path)), sha),
       "retained build receipt file and purpose pin required")
     parsed <- jsonlite::fromJSON(path, simplifyVector = FALSE)
-    plain <- manifest; attributes(plain) <- NULL
+    plain <- manifest
+    attr(plain, "receipt_path") <- NULL
+    attr(plain, "receipt_sha256") <- NULL
     mqnk_require(identical(parsed, plain), "build receipt object differs from its pinned file")
   }
   source <- c(key = "scripts/native/mq_key_hash.c", isotonic = "scripts/native/mq_isoreg_batch.c",

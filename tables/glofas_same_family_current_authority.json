@@ -1,0 +1,34 @@
+{
+  "schema_version": "glofas_same_family_current_article_authority_v1",
+  "status": "SCIENTIFIC_REVIEW_APPROVED",
+  "producer_source_commit": "fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6",
+  "execution_source_commit": "90309792229f98a6ad372fe6072f850f9b12deed",
+  "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
+  "scored_packet_manifest_sha256": "5c476aeda6d2164658875de22ab393a6b25e7a0e6c4e8c72e85e9a3d2b6267ce",
+  "asset_manifest": {
+    "relative_path": "tables/glofas_same_family_20261103_article_asset_manifest.csv",
+    "sha256": "ecb2ae967b25309e0989b9c9cda01a698f825731bab6fbe5f6d321d047ed2f06"
+  },
+  "forecast_rows": 1372,
+  "families": 7,
+  "horizons": 28,
+  "probabilities": [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95],
+  "alias_file": "tables/glofas_same_family_20261103_display_aliases.tex",
+  "active_aliases": {
+    "GlofasApplicationCurrentScoreTable": "tables/glofas_same_family_20261103_main_scores.tex",
+    "GlofasApplicationCurrentForecastWindowFigure": "figures/glofas_application/glofas_same_family_20261103_main.pdf",
+    "GlofasApplicationCurrentCorrectedPathsFigure": "figures/glofas_application/glofas_same_family_20261103_main.pdf",
+    "GlofasApplicationCurrentFullComparisonFigure": "figures/glofas_application/glofas_same_family_20261103_all_families.pdf",
+    "GlofasApplicationCurrentCalibrationTable": "tables/glofas_same_family_20261103_calibration.tex",
+    "GlofasApplicationCurrentCalibrationFigure": "figures/glofas_application/glofas_same_family_20261103_calibration.pdf",
+    "GlofasApplicationCurrentConvergenceTable": "tables/glofas_same_family_20261103_convergence.tex",
+    "GlofasApplicationCurrentConvergenceFigure": "figures/glofas_application/glofas_same_family_20261103_convergence.pdf",
+    "GlofasApplicationCurrentIssuedSupplementScoreTable": "tables/glofas_same_family_20261103_full_scores.tex"
+  },
+  "scientific_review": {
+    "all_families_retained": true,
+    "adverse_results_retained": true,
+    "scoring_truth_used_only_postfit": true,
+    "no_refit_or_retuning": true
+  }
+}

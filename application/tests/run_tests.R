@@ -326,6 +326,12 @@ run_standalone_glofas_test("application/tests/test_glofas_future_information_ref
 run_standalone_glofas_test("application/tests/test_glofas_compiled_value_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_al_conditional_reference_reader.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_gaussian_reference.R")
+# Same-target proposal recovery and complete-parameter small references.
+# Generated tests and the bounded pilot do not qualify a production refit.
+run_standalone_glofas_test("application/tests/test_glofas_reference_recovery_kernels.R")
+run_standalone_glofas_test("application/tests/test_glofas_reference_recovery_reader.R")
+run_standalone_glofas_test("application/tests/test_glofas_coupled_parameter_reference.R")
+stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_reference_recovery_controller.py"))) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 run_standalone_glofas_test("application/tests/test_mq_typed_workflow_v2.R")

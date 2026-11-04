@@ -88,6 +88,10 @@ only its own validated session groups, and verifies source/output manifests
 after exit. Generated tests exercise frontend exit, unrelated-process
 preservation, timeout, lineage, and invalid-manifest rejection. R progress
 files are chain-specific and do not consume sampling RNG state.
+Controller metadata is published atomically without overwriting evidence.
+Bounded snapshots distinguish expected progress-file renames and new owned
+children from missing evidence, foreign processes, and other I/O failures;
+process identities are rechecked across the native metadata reads.
 
 Every pilot arm and the top-level result have `qualified = FALSE` or the
 corresponding explicit qualification flags. Diagnostic thresholds are retained

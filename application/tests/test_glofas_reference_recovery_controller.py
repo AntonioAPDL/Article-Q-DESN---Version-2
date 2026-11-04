@@ -2,17 +2,20 @@
 """Generated tiny process fixtures only: no scientific data or R invocation."""
 import importlib.util
 import csv
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,6 +36,160 @@ def until(predicate, seconds=15):
 
 
 class ControllerTests(unittest.TestCase):
+    def test_atomic_write_is_complete_before_publication_and_never_overwrites(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "terminal.json"
+            real_link = os.link
+            def publish(pending, destination, **kwargs):
+                self.assertFalse(target.exists())
+                self.assertEqual(json.loads(Path(pending).read_text()), {"complete": True})
+                return real_link(pending, destination, **kwargs)
+            with mock.patch.object(C.os, "link", side_effect=publish):
+                C.write_new(target, dict(complete=True))
+            self.assertEqual(json.loads(target.read_text()), {"complete": True})
+            with self.assertRaisesRegex(ValueError, "overwrite"):
+                C.write_new(target, dict(complete=False))
+            self.assertEqual(json.loads(target.read_text()), {"complete": True})
+            self.assertEqual([p.name for p in Path(tmp).iterdir()], ["terminal.json"])
+
+    def test_atomic_write_preserves_evidence_created_during_publish_race(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "terminal.json"
+            real_link = os.link
+            def competing_publish(pending, destination, **kwargs):
+                target.write_text('{"prior_failure":"preserve"}')
+                return real_link(pending, destination, **kwargs)
+            with mock.patch.object(C.os, "link", side_effect=competing_publish):
+                with self.assertRaises(FileExistsError):
+                    C.write_new(target, dict(replacement="forbidden"))
+            self.assertEqual(json.loads(target.read_text()), {"prior_failure": "preserve"})
+            self.assertEqual(len(list(Path(tmp).iterdir())), 1)
+
+    def process_snapshot_mocks(self, starts):
+        def proc_stat(start):
+            fields = ["S", "100", "200", "200"] + ["0"] * 16
+            fields[19] = str(start)
+            return "123 (generated_fixture) " + " ".join(fields)
+        files = {name: mock.Mock() for name in ("stat", "status", "cmdline", "limits")}
+        files["stat"].read_text.side_effect = [proc_stat(x) for x in starts]
+        files["status"].read_text.return_value = "Cpus_allowed_list:\t19\nVmRSS:\t10 kB\n"
+        files["cmdline"].read_bytes.return_value = b"generated_fixture\0"
+        files["limits"].read_text.return_value = "generated limits"
+        proc = mock.MagicMock()
+        proc.__truediv__.side_effect = lambda name: files[name]
+        proc.stat.return_value = SimpleNamespace(st_uid=os.getuid())
+        root = mock.MagicMock()
+        root.__truediv__.return_value = proc
+        return root, files
+
+    def test_process_snapshot_rechecks_starttime_and_retries_pid_reuse(self):
+        root, files = self.process_snapshot_mocks([1, 2, 2, 2])
+        with mock.patch.object(C, "Path", return_value=root):
+            snapshot = C.process(123)
+        self.assertEqual(snapshot["starttime_ticks"], "2")
+        self.assertEqual(files["stat"].read_text.call_count, 4)
+
+    def test_process_snapshot_skips_persistently_unstable_unrelated_pid(self):
+        root, files = self.process_snapshot_mocks([1, 2] * 3)
+        with mock.patch.object(C, "Path", return_value=root):
+            self.assertIsNone(C.process(123))
+        self.assertEqual(files["stat"].read_text.call_count, 6)
+
+    def test_owned_leader_identity_retries_then_requires_conclusive_proof(self):
+        identity = dict(pid=123, session=123, starttime_ticks="1")
+        leader = dict(identity, uid=os.getuid(), state="S")
+        with mock.patch.object(C, "process", side_effect=[None, leader]), \
+             mock.patch.object(C.Path, "exists", return_value=True), \
+             mock.patch.object(C, "process_table", return_value=[leader]), mock.patch.object(C.time, "sleep"):
+            self.assertEqual(C.owned_rows(identity), [leader])
+        with mock.patch.object(C, "process", return_value=None), \
+             mock.patch.object(C.Path, "exists", return_value=True), mock.patch.object(C.time, "sleep"):
+            with self.assertRaisesRegex(ValueError, "inconclusive"):
+                C.owned_rows(identity)
+
+    def scan_context(self, entries):
+        context = mock.MagicMock()
+        context.__enter__.return_value = entries
+        return context
+
+    def scan_entry(self, path, *, inode=1, size=17, mode=stat.S_IFREG):
+        entry = mock.Mock(path=str(path))
+        entry.stat.return_value = SimpleNamespace(st_mode=mode, st_dev=1, st_ino=inode, st_size=size)
+        return entry
+
+    def test_output_scanner_rescans_progress_and_control_atomic_temporaries(self):
+        control, output = Path("/GENERATED_CONTROL"), Path("/GENERATED_OUTPUT")
+        for base, temporary, published in (
+            (output, "progress_worker_01.json.new", "progress_worker_01.json"),
+            (control, ".terminal.json.pending-abcdefgh", "terminal.json"),
+        ):
+            with self.subTest(temporary=temporary):
+                vanished = self.scan_entry(base / temporary)
+                vanished.stat.side_effect = FileNotFoundError(errno.ENOENT, "generated atomic rename", str(base / temporary))
+                stable = self.scan_entry(base / published)
+                first = [self.scan_context([vanished] if base == control else []),
+                         self.scan_context([vanished] if base == output else [])]
+                second = [self.scan_context([stable] if base == control else []),
+                          self.scan_context([stable] if base == output else [])]
+                with mock.patch.object(C.os, "scandir", side_effect=first + second) as scan, mock.patch.object(C.time, "sleep"):
+                    self.assertEqual(C.scan_output_bytes(control, output), 17)
+                self.assertEqual(scan.call_count, 4)
+
+    def test_output_scanner_fails_closed_on_persistent_or_unexpected_errors(self):
+        control, output = Path("/GENERATED_CONTROL"), Path("/GENERATED_OUTPUT")
+        pending = self.scan_entry(output / "progress_worker_01.json.new")
+        pending.stat.side_effect = FileNotFoundError(errno.ENOENT, "generated race", pending.path)
+        scans = [self.scan_context([]), self.scan_context([pending])] * 4
+        with mock.patch.object(C.os, "scandir", side_effect=scans) as scan, mock.patch.object(C.time, "sleep"):
+            with self.assertRaisesRegex(ValueError, "bounded atomic-publication"):
+                C.scan_output_bytes(control, output)
+        self.assertEqual(scan.call_count, 8)
+        for entry, exception in (
+            (self.scan_entry(output / "unexpected.json"), FileNotFoundError(errno.ENOENT, "unexpected disappearance", "unexpected.json")),
+            (self.scan_entry(output / "progress_worker_01.json.new"), PermissionError("permission must remain strict")),
+        ):
+            entry.stat.side_effect = exception
+            with mock.patch.object(C.os, "scandir", side_effect=[self.scan_context([]), self.scan_context([entry])]):
+                with self.assertRaises(type(exception)):
+                    C.scan_output_bytes(control, output)
+        symlink = self.scan_entry(output / "bad-link", mode=stat.S_IFLNK)
+        with mock.patch.object(C.os, "scandir", side_effect=[self.scan_context([]), self.scan_context([symlink])]):
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                C.scan_output_bytes(control, output)
+
+    def test_output_scanner_counts_atomic_control_inode_once_and_budget_stays_strict(self):
+        control, output = Path("/GENERATED_CONTROL"), Path("/GENERATED_OUTPUT")
+        entries = [self.scan_entry(control / name) for name in ("terminal.json", ".terminal.json.pending-abcdefgh")]
+        with mock.patch.object(C.os, "scandir", side_effect=[self.scan_context(entries), self.scan_context([])]):
+            self.assertEqual(C.scan_output_bytes(control, output), 17)
+        child = mock.Mock()
+        child.poll.return_value = None
+        c = dict(output_root=str(output), limits=dict(aggregate_memory_bytes=1000, aggregate_cpu_seconds=1000,
+                                                      wall_seconds=1000, output_bytes=16))
+        with mock.patch.object(C, "owned_rows", return_value=[]), mock.patch.object(C, "scan_output_bytes", return_value=17):
+            with self.assertRaisesRegex(ValueError, "compact output budget"):
+                C.monitor(child, {}, c, control)
+
+    def test_cleanup_snapshot_retries_new_owned_children_but_not_foreign_members(self):
+        identity = dict(session=123)
+        first = dict(pid=123, starttime_ticks="1", pgid=123, session=123, uid=os.getuid(), state="S")
+        forked = dict(first, pid=124, starttime_ticks="2")
+        with mock.patch.object(C, "process_table", return_value=[first, forked]) as table, \
+             mock.patch.object(C, "owned_rows", return_value=[first, forked]) as owned, mock.patch.object(C.time, "sleep"):
+            self.assertEqual(C.validated_group(identity, 123, [first]), [first, forked])
+        self.assertEqual(table.call_count, 2)
+        owned.assert_called_once_with(identity)
+        with mock.patch.object(C, "process_table", return_value=[first, dict(forked, session=999)]), \
+             mock.patch.object(C, "owned_rows") as owned:
+            with self.assertRaisesRegex(ValueError, "foreign"):
+                C.validated_group(identity, 123, [first])
+            owned.assert_not_called()
+        with mock.patch.object(C, "process_table", return_value=[first, forked]) as table, \
+             mock.patch.object(C, "owned_rows", return_value=[first]), mock.patch.object(C.time, "sleep"):
+            with self.assertRaisesRegex(ValueError, "remained unstable"):
+                C.validated_group(identity, 123, [first])
+        self.assertEqual(table.call_count, 4)
+
     def generated_manifest(self, out):
         """No input paths exist: only newly generated test bytes are hashed."""
         c = dict(source_commit="a" * 40, source_tree="b" * 40, output_root=str(out),

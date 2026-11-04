@@ -80,11 +80,24 @@ def read_json(path):
 def write_new(path, value):
     p = Path(path)
     need(not p.exists() and not p.is_symlink(), "refusing to overwrite controller evidence: " + str(p))
-    with p.open("x") as f:
-        json.dump(value, f, indent=2, sort_keys=True)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
+    # Publish a complete fsynced inode atomically. link(), unlike replace(),
+    # cannot overwrite evidence that another actor creates after the check.
+    fd, name = tempfile.mkstemp(prefix="." + p.name + ".pending-", dir=p.parent)
+    pending = Path(name)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(value, f, indent=2, sort_keys=True)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.link(pending, p, follow_symlinks=False)
+    finally:
+        pending.unlink()
+    directory_fd = os.open(p.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
 
 
 def git(root, *args):
@@ -128,19 +141,29 @@ def cpu_set(value):
 
 def process(pid):
     p = Path("/proc") / str(pid)
-    try:
-        text = (p / "stat").read_text()
-        fields = text.rsplit(") ", 1)[1].split()
-        status = (p / "status").read_text().splitlines()
-        rss = next((int(x.split()[1]) * 1024 for x in status if x.startswith("VmRSS:")), 0)
-        return dict(pid=int(pid), comm=text[text.index("(") + 1:text.rindex(")")], state=fields[0],
-            ppid=int(fields[1]), pgid=int(fields[2]), session=int(fields[3]), starttime_ticks=fields[19],
-            uid=p.stat().st_uid, rss_bytes=rss, cpu_seconds=(int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK"),
-            CPUs_allowed_list=next(x.split(":", 1)[1].strip() for x in status if x.startswith("Cpus_allowed_list:")),
-            command=(p / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip(),
-            limits=(p / "limits").read_text())
-    except (FileNotFoundError, ProcessLookupError, PermissionError, StopIteration):
-        return None
+    for _ in range(3):
+        try:
+            text = (p / "stat").read_text()
+            fields = text.rsplit(") ", 1)[1].split()
+            status = (p / "status").read_text().splitlines()
+            rss = next((int(x.split()[1]) * 1024 for x in status if x.startswith("VmRSS:")), 0)
+            value = dict(pid=int(pid), comm=text[text.index("(") + 1:text.rindex(")")], state=fields[0],
+                ppid=int(fields[1]), pgid=int(fields[2]), session=int(fields[3]), starttime_ticks=fields[19],
+                uid=p.stat().st_uid, rss_bytes=rss, cpu_seconds=(int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK"),
+                CPUs_allowed_list=next(x.split(":", 1)[1].strip() for x in status if x.startswith("Cpus_allowed_list:")),
+                command=(p / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip(),
+                limits=(p / "limits").read_text())
+            end = (p / "stat").read_text()
+            last = end.rsplit(") ", 1)[1].split()
+            # A PID may disappear/reappear, exec, or change group while the
+            # other proc files are read. Never return a mixed identity.
+            if fields[19] == last[19] and fields[1:4] == last[1:4] and text.rsplit(") ", 1)[0] == end.rsplit(") ", 1)[0]:
+                return value
+        except (FileNotFoundError, ProcessLookupError, PermissionError, StopIteration):
+            return None
+    # A rapidly changing unrelated /proc entry must not abort a healthy job.
+    # Owned-leader callers separately refuse an inconclusive live identity.
+    return None
 
 
 def process_table():
@@ -267,7 +290,13 @@ def native_environment(c):
 
 
 def owned_rows(identity):
-    leader = process(identity["pid"])
+    for _ in range(3):
+        leader = process(identity["pid"])
+        if leader is not None or not (Path("/proc") / str(identity["pid"])).exists():
+            break
+        time.sleep(.01)
+    else:
+        raise ValueError("owned session leader identity remained inconclusive; refusing closure or signal")
     need(leader is None or leader["starttime_ticks"] == identity["starttime_ticks"], "session leader PID reused; refusing signal")
     return [p for p in process_table() if p["session"] == identity["session"] and p["uid"] == os.getuid() and p["state"] != "Z"]
 
@@ -281,12 +310,9 @@ def cleanup_owned(child, identity):
         for group in sorted({r["pgid"] for r in rows}):
             # Reinspect immediately, including groups timeout created before
             # full capture. Never signal a group with a foreign member.
-            members = [r for r in process_table() if r["pgid"] == group and r["state"] != "Z"]
-            need(all(r["session"] == identity["session"] and r["uid"] == os.getuid() for r in members), "foreign process group member; refusing signal")
+            members = validated_group(identity, group, rows)
             if not members:
                 continue
-            need(all(any(x["pid"] == r["pid"] and x["starttime_ticks"] == r["starttime_ticks"] for x in rows)
-                     for r in members), "process group membership changed; refusing signal")
             try:
                 os.killpg(group, sig)
                 actions.append(dict(pgid=group, signal=int(sig), pids=[r["pid"] for r in members]))
@@ -303,6 +329,79 @@ def cleanup_owned(child, identity):
         time.sleep(.05)
     need(not owned_rows(identity), "native session failed to close")
     return actions
+
+
+def validated_group(identity, group, rows):
+    """Retry a new owned fork; never retry through a foreign group member."""
+    for _ in range(4):
+        members = [r for r in process_table() if r["pgid"] == group and r["state"] != "Z"]
+        need(all(r["session"] == identity["session"] and r["uid"] == os.getuid() for r in members),
+             "foreign process group member; refusing signal")
+        if all(any(x["pid"] == r["pid"] and x["starttime_ticks"] == r["starttime_ticks"] for x in rows) for r in members):
+            return members
+        rows = owned_rows(identity)  # reauthenticate leader and new children
+        time.sleep(.01)
+    raise ValueError("owned process group snapshot remained unstable; refusing signal")
+
+
+CONTROL_JSON_NAMES = {"ownership.json", "admission.json", "launcher_return.json", "supervisor_started.json",
+                      "native_start.json", "terminal.json"}
+
+
+def expected_pending(path, control, output_root):
+    if path.parent == output_root:
+        return bool(re.fullmatch(r"progress_worker_0[1-8]\.json\.new", path.name))
+    if path.parent == control:
+        return any(re.fullmatch(re.escape("." + name + ".pending-") + r"[a-z0-9_]{8}", path.name)
+                   for name in CONTROL_JSON_NAMES)
+    return False
+
+
+def scan_output_bytes(control, output_root):
+    """Bounded rescan of expected atomic publishers; no payload opens."""
+    control, output_root = Path(control), Path(output_root)
+    for _ in range(4):
+        total = 0
+        retry = False
+        control_inodes = set()
+        def visit(directory):
+            nonlocal total, retry
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    p = Path(entry.path)
+                    try:
+                        s = entry.stat(follow_symlinks=False)
+                    except FileNotFoundError:
+                        if expected_pending(p, control, output_root):
+                            retry = True
+                            continue
+                        raise
+                    need(not stat.S_ISLNK(s.st_mode), "symlink in owned output snapshot")
+                    if stat.S_ISDIR(s.st_mode):
+                        visit(p)
+                    elif stat.S_ISREG(s.st_mode):
+                        # Atomic link publication briefly has two names for
+                        # one control-metadata inode. Charge its bytes once.
+                        atomic_control = p.parent == control and (p.name in CONTROL_JSON_NAMES or expected_pending(p, control, output_root))
+                        inode = (s.st_dev, s.st_ino)
+                        if not atomic_control or inode not in control_inodes:
+                            total += s.st_size
+                        if atomic_control:
+                            control_inodes.add(inode)
+                    else:
+                        need(p == control / "server.sock" and stat.S_ISSOCK(s.st_mode), "unexpected special file in owned output snapshot")
+        visit(control)
+        try:
+            visit(output_root)
+        except FileNotFoundError as error:
+            # Native output is legitimately absent during startup; an entry
+            # disappearing inside an existing output directory is not.
+            if error.filename != str(output_root):
+                raise
+        if not retry:
+            return total
+        time.sleep(.005)
+    raise ValueError("output snapshot remained unstable after bounded atomic-publication rescans")
 
 
 def capture(child, identity, c, purpose, digest):
@@ -341,8 +440,7 @@ def monitor(child, identity, c, control):
         need(peak_rss <= c["limits"]["aggregate_memory_bytes"], "aggregate RSS budget exceeded")
         need(sum(cpu_max.values()) <= c["limits"]["aggregate_cpu_seconds"], "aggregate sampled CPU budget exceeded")
         need(time.monotonic() - started <= c["limits"]["wall_seconds"] + 20, "outer wall deadline exceeded")
-        total = sum(p.stat().st_size for base in (control, Path(c["output_root"])) if base.exists()
-                    for p in base.rglob("*") if p.is_file() and not p.is_symlink())
+        total = scan_output_bytes(control, c["output_root"])
         need(total <= c["limits"]["output_bytes"], "aggregate compact output budget exceeded")
         time.sleep(.25)
     return dict(native_exit_code=child.wait(), sampled_aggregate_cpu_seconds=sum(cpu_max.values()), peak_aggregate_RSS_bytes=peak_rss)

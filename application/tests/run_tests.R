@@ -318,6 +318,14 @@ run_standalone_glofas_test("application/tests/test_glofas_fixed_target_forensic_
 run_standalone_glofas_test("application/tests/test_glofas_fixed_target_smoothing_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_fixed_target_stationarity.R")
 run_standalone_glofas_test("application/tests/test_glofas_fixed_target_stationarity_reader.R")
+# Truth-free feature replay and matched conditional-reference diagnostics.
+# Their generated software tests do not authorize retained-data access or fits.
+run_standalone_glofas_test("application/tests/test_glofas_nonlinear_replay.R")
+run_standalone_glofas_test("application/tests/test_glofas_al_path_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_future_information_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_compiled_value_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_al_conditional_reference_reader.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_gaussian_reference.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 run_standalone_glofas_test("application/tests/test_mq_typed_workflow_v2.R")

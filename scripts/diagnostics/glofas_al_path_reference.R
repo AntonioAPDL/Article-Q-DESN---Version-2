@@ -266,6 +266,7 @@ gapr_sample_reference <- function(target, starts, proposal_scale = NULL, control
   }, add = TRUE)
   RNGkind("Mersenne-Twister", "Inversion", "Rejection")
   draws <- array(NA_real_, c(control$samples, 4L, H))
+  chain_states <- stats::setNames(vector("list",4L),paste0("chain",1:4))
   accepted <- attempted <- matrix(0L, H, 4L)
   final_steps <- matrix(NA_real_, H, 4L)
   final_factors <- rep(NA_real_, 4L)
@@ -279,15 +280,26 @@ gapr_sample_reference <- function(target, starts, proposal_scale = NULL, control
     gapr_log_target(target, y)
   }
   failure <- NULL
+  capture_state <- function()list(schema_version="conditional_path_chain_state_v1",
+    chain_id=chain,seed=seeds[[chain]],RNG_kind=RNGkind(),
+    final_RNG_state=get(".Random.seed",envir=.GlobalEnv),final_path=as.numeric(y),
+    current_log_density=value,completed_iterations=completed_iterations,
+    retained_iterations=max(0L,completed_iterations-control$warmup),
+    fully_completed=completed_iterations==control$warmup+control$samples,
+    frozen_proposal_scales=step,
+    frozen_proposal_factor=if(proposal_kind=="blocked_preconditioned")factor else NULL,
+    proposal_kind=proposal_kind,control=control,exact_resume_qualified=FALSE,
+    interpretation="Preserved diagnostic transition state; no resume implementation is qualified.")
   tryCatch({
     for (chain in chain_ids) {
       started_chains <- started_chains + 1L
       set.seed(seeds[[chain]])
-      y <- starts[, chain]; value <- evaluate(y)
-      if (!is.finite(value)) gapr_stop("An explicit start has nonfinite density.")
+      y <- starts[, chain]; value <- NA_real_;completed_iterations<-0L
       initial_factor <- 2.38 / sqrt(H); factor <- initial_factor
       step <- as.numeric(proposal_scale)
       if (proposal_kind == "blocked_preconditioned") step <- step * factor
+      value <- evaluate(y)
+      if (!is.finite(value)) gapr_stop("An explicit start has nonfinite density.")
       for (iteration in seq_len(control$warmup + control$samples)) {
         sweep_accept <- numeric(H)
         proposal_indices <- if (proposal_kind == "componentwise") seq_len(H) else 1L
@@ -316,17 +328,24 @@ gapr_sample_reference <- function(target, starts, proposal_scale = NULL, control
           }
         }
         if (iteration > control$warmup) draws[iteration - control$warmup, chain, ] <- y
+        completed_iterations<-iteration
       }
       final_steps[, chain] <- step
       if (proposal_kind == "blocked_preconditioned") final_factors[chain] <- factor
       completed_chains <- completed_chains + 1L
+      chain_states[[chain]]<-capture_state()
     }
   }, gapr_budget_exhausted = function(e) failure <<- "INCONCLUSIVE_BUDGET_LIMITED",
      error = function(e) failure <<- paste0("FAIL_REFERENCE_EXECUTION: ", conditionMessage(e)))
-  out <- if (is.null(failure) && identical(sort(chain_ids), 1:4)) gapr_diagnose_draws(draws, target, control) else if (is.null(failure))
+  if(!is.null(failure)&&started_chains>completed_chains)chain_states[[chain]]<-capture_state()
+  out <- if (is.null(failure) && identical(sort(chain_ids), 1:4)) tryCatch(
+    gapr_diagnose_draws(draws,target,control),error=function(e)list(
+      status="INCONCLUSIVE_DIAGNOSTIC_CALCULATION_ERROR",qualified=FALSE,
+      dependency=dependency,error=conditionMessage(e))) else if (is.null(failure))
     list(status = "CHAINS_PENDING_COMBINATION", qualified = FALSE, dependency = dependency) else
     list(status = failure, qualified = FALSE, dependency = dependency)
   out$draws <- draws; out$seeds <- seeds; out$control <- control
+  out$chain_states<-chain_states
   out$chain_ids <- chain_ids; out$proposal_kind <- proposal_kind
   out$proposal_covariance <- proposal_covariance
   out$initial_proposal_scales <- proposal_scale
@@ -373,8 +392,11 @@ gapr_combine_chains <- function(parts, target, control) {
       gapr_stop("Chain conditional targets or draw allocations differ.")
     for (chain in part$chain_ids) draws[, chain, ] <- part$draws[, chain, ]
   }
-  out <- gapr_diagnose_draws(draws, target, control)
+  out <- tryCatch(gapr_diagnose_draws(draws,target,control),error=function(e)list(
+    status="INCONCLUSIVE_DIAGNOSTIC_CALCULATION_ERROR",qualified=FALSE,error=conditionMessage(e)))
   out$draws <- draws; out$condition <- target$contract
+  out$chain_states<-stats::setNames(vector("list",4L),paste0("chain",1:4))
+  for(part in parts)for(chain in part$chain_ids)out$chain_states[[chain]]<-part$chain_states[[chain]]
   out$callback_evaluations <- sum(vapply(parts, function(x) x$callback_evaluations, numeric(1L)))
   out$scientific_runs <- 0L; out$authentic_reads <- 0L
   out$full_parameter_refits <- 0L

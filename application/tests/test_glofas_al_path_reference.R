@@ -118,6 +118,11 @@ local({
               sampled$conditional_reference_chains_requested==4L,
               sampled$conditional_reference_chains_attempted==4L,
               sampled$conditional_reference_chains_completed==4L,
+              length(sampled$chain_states)==4L,
+              all(vapply(sampled$chain_states,function(z)z$fully_completed&&
+                z$completed_iterations==control$warmup+control$samples&&
+                is.integer(z$final_RNG_state)&&length(z$final_path)==1L&&
+                identical(z$exact_resume_qualified,FALSE),logical(1L))),
               sampled$callback_evaluations==4L*(1L+control$warmup+control$samples),
               all(is.finite(sampled$draws)),!grepl("FAIL_",sampled$status),
               identical(names(sampled$seeds),paste0("chain",1:4)),
@@ -143,7 +148,9 @@ local({
     stopped <- gapr_sample_reference(fixture()$target,starts,control=tiny,
                                       proposal_covariance=matrix(.04,1,1))
     stopifnot(stopped$status=="INCONCLUSIVE_BUDGET_LIMITED",!stopped$qualified,
-              stopped$callback_evaluations==2L)
+              stopped$callback_evaluations==2L,
+              !is.null(stopped$chain_states[[1L]])&&
+                !stopped$chain_states[[1L]]$fully_completed)
     # Named chains may be run separately under a separate native admission;
     # combining requires all four exactly once and the identical target.
     split_control <- control;split_control$warmup<-100L;split_control$samples<-200L

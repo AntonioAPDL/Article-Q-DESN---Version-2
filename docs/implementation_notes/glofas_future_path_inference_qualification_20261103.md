@@ -265,6 +265,61 @@ those gates pass. If they cannot pass before the submission deadline, retain
 the audited adverse packet and report the unresolved inference question;
 do not seek a favorable result by changing the prior or selecting a seed.
 
+## 6. Conditional reference execution
+
+`scripts/glofas_al_conditional_reference_reader.R` separates a measured pilot
+from conditional path sampling. Each requires a new external purpose, a clean
+committed source tree, the closed authentic feature-replay receipts, exact
+input hashes and a native resource allowance. The median AL reference fixes
+coefficients at their retained means and scales at the reciprocals of their
+retained inverse-scale means. The comparison calculation uses those same
+values and zero coefficient covariance; it is not the original uncertain-
+parameter VB fit.
+
+The value-only compiled-input adapter first checks agreement with the unchanged
+uncached evaluator, including a return to the original path after a perturbation.
+It refreshes every future-path-dependent input; only static input construction
+is cached. Three subsequent calls measure the actual warm evaluation cost.
+An affordable derivative pilot does not establish that a long conditional
+sampler is affordable, so the sample admission uses these measured costs.
+
+Sampling uses four predeclared seeds and starting paths dispersed around both
+the retained future mean and its conditional reference-location path. Symmetric
+proposal adaptation ends with warmup. Parallel execution requires four explicit
+CPU allocations, native per-process limits, an aggregate memory check, and
+independent termination receipts. No automatic extension, seed replacement,
+prior update, protected-truth access or production fit is permitted.
+
+Rank-normalized R-hat, bulk and tail ESS, and quantile Monte Carlo error must
+pass before the conditional reference is described as qualified. A prospective
+coarser error threshold is labelled a path-mechanism diagnostic, not production
+qualification. Generated conditional path arrays and transition states may be
+retained in ignored evidence storage under a separately bounded export role;
+they are not full parameter-posterior draws and cannot enter Git or the article.
+
+## 7. A collapsed Gaussian reference is still an approximation
+
+For fixed location mu and AL scale sigma, let q(Y)=N(m,s^2) and e=m−mu.
+Its expected check loss is
+
+\[
+E_q\{\rho_p(Y-\mu)\}
+=s\phi(e/s)+e\{p-\Phi(-e/s)\}.
+\]
+
+Minimizing this expectation divided by sigma minus log s gives
+s=sigma/phi(z_p) and m=mu−s z_p, where z_p=Phi^{-1}(p).
+Consequently the approximating Gaussian's p-quantile equals mu in this scalar
+example. Its entire distribution is not AL. Affine member-conditioned cases
+can still have appreciable quantile errors. The generated tests deliberately
+retain those errors alongside successful objective/gradient checks.
+
+`scripts/diagnostics/glofas_collapsed_gaussian_reference.R` supplies these
+small-dimensional objective and derivative references. It also checks a coupled
+Normal coefficient–response block that preserves the coefficient marginal in
+the absence of new data. Neither calculation justifies replacing the nonlinear
+future block alone while leaving all existing parameter updates unchanged.
+
 ## Verification record
 
 The numerical values and pass/fail counts are supplied by the generated test

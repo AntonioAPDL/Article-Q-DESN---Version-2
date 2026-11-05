@@ -340,6 +340,11 @@ run_standalone_glofas_test("application/tests/test_glofas_innovation_streaming.R
 run_standalone_glofas_test("application/tests/test_glofas_innovation_sampler.R")
 run_standalone_glofas_test("application/tests/test_glofas_innovation_reference_reader.R")
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_innovation_reference_controller.py"))) == 0L)
+# Explicit executed-design identity and generated collapsed future-path
+# integration. These tests do not authorize authentic fits or publication.
+run_standalone_glofas_test("application/tests/test_glofas_specification_reconciliation.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_particle_vi.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_particle_reference.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 # Generated general-editorial scope, presentation and negative text fixtures;

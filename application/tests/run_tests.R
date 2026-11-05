@@ -332,6 +332,14 @@ run_standalone_glofas_test("application/tests/test_glofas_reference_recovery_ker
 run_standalone_glofas_test("application/tests/test_glofas_reference_recovery_reader.R")
 run_standalone_glofas_test("application/tests/test_glofas_coupled_parameter_reference.R")
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_reference_recovery_controller.py"))) == 0L)
+# Exact AL innovation coordinates and a separately admitted conditional pilot.
+# Software parity does not imply approximation accuracy or article approval.
+run_standalone_glofas_test("application/tests/test_glofas_vb_accuracy_benchmarks.R")
+run_standalone_glofas_test("application/tests/test_glofas_innovation_coordinates.R")
+run_standalone_glofas_test("application/tests/test_glofas_innovation_streaming.R")
+run_standalone_glofas_test("application/tests/test_glofas_innovation_sampler.R")
+run_standalone_glofas_test("application/tests/test_glofas_innovation_reference_reader.R")
+stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_innovation_reference_controller.py"))) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 # Generated general-editorial scope, presentation and negative text fixtures;

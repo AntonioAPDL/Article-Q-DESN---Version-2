@@ -61,7 +61,7 @@
       "qdesn-supplement.tex"
     ],
     "updated_source_sha256": {
-      "main.tex": "366703c62a01b55d610c38e240ffc33d200c8614ededd683efebe25a3e7aa088",
+      "main.tex": "40dbb04dd45e207e3ef6e5ce5075e74ad78b9547bffe3d1424f742b96a8a4e78",
       "qdesn-supplement.tex": "56c1a256412f397e80d8ea7a71987593ef6b930ae0611b50d729a2029ffcd04e"
     }
   },
@@ -157,7 +157,7 @@
     "docs/implementation_notes/statistical_language_reader_revision_20261019.md": "9e9a80ceced41347e41e6a787d1cea7a5c5802ad4ecb491b59de008f33e0efab",
     "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6",
     "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9",
-    "main.tex": "366703c62a01b55d610c38e240ffc33d200c8614ededd683efebe25a3e7aa088",
+    "main.tex": "40dbb04dd45e207e3ef6e5ce5075e74ad78b9547bffe3d1424f742b96a8a4e78",
     "overleaf/article_files.txt": "f687c5ed5af46a2267f0fd3f7552d4881f19b7cd14444066fc3b6f4ae90541d9",
     "qdesn-supplement.tex": "56c1a256412f397e80d8ea7a71987593ef6b930ae0611b50d729a2029ffcd04e",
     "scripts/build_independent_forecast_300_500_v1.R": "b8f1d9789059044a67895e81584114e943a89edf23a328697919468ac996a160",

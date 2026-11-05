@@ -66,6 +66,19 @@ app_ind_editorial_refresh_plan <- function(baseline, current, hash_file, refresh
 
 app_ind_editorial_refresh <- function(root, refresh = FALSE) {
   root <- normalizePath(root, mustWork = TRUE)
+  live_receipt <- jsonlite::read_json(file.path(root, app_ind_editorial_receipt_path),
+    simplifyVector = FALSE)
+  if (!is.null(live_receipt$general_editorial_source_refresh)) {
+    app_ind_editorial_require(!isTRUE(refresh),
+      "general editorial writes require scripts/refresh_article_clarity_editorial_receipts_20261104.py")
+    helper <- file.path(root, "scripts/refresh_article_clarity_editorial_receipts_20261104.py")
+    app_ind_editorial_require(file.exists(helper), "general editorial successor is required")
+    result <- system2("/usr/bin/python3.11", c("-I", "-B", shQuote(helper), "--root", shQuote(root),
+      "--check"), stdout = TRUE, stderr = TRUE)
+    app_ind_editorial_require(is.null(attr(result, "status")), paste(result, collapse = "\n"))
+    cat(paste(result, collapse = "\n"), "\n", sep = "")
+    return(invisible(live_receipt))
+  }
   # A reviewed corrected GloFAS projection adds exactly twenty-one article
   # files. Its successor authenticates that narrow allowlist change and keeps
   # this historical two-document receipt untouched as retained provenance.

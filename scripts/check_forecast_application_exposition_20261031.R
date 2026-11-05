@@ -146,18 +146,20 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
   sg <- plain(section(supplement, "sec:glofas_discrepancy"))
   corrected_glofas <- identical(app_forecast_exposition_glofas_version(main, supplement),
     "same_family_20261103")
-  require_check(has(model, "d_u=m+q(m_z+1)") &&
+  require_check(has(gsub("\\cdot", "", model, fixed = TRUE), "d_u=m+q(m_z+1)") &&
     has(model, "\\vect z_{t-m_z}") && has(model, "\\vect h_{t-1"),
     "Define exogenous lags and recurrent state separately from the input-vector dimension.")
   require_check(has(model, "n_1\\times d_u") &&
     has(model, "r=n_D+\\sum_{d<D}\\tilde n_d+d_u"),
     "Input matrices and a readout with direct inputs use the same declared input dimension.")
   require_check(has(forecast, "parameter draw") && has(forecast, "history") &&
-    has(forecast, "\\varepsilon") && has(forecast, "\\beta") &&
-    grepl("(same|fixed)[^.]{0,110}parameter draw|parameter draw[^.]{0,110}(fixed|same)", forecast),
+    has(forecast, "\\exAL_{p_0}") && has(forecast, "\\beta") &&
+    (grepl("(same|fixed)[^.]{0,110}parameter draw|parameter draw[^.]{0,110}(fixed|same)", forecast) ||
+      has(forecast, "The parameters remain fixed along the trajectory")),
     "Recursive response simulation retains its paired parameters over the trajectory.")
   require_check((grepl("(own|separate)[^.]{0,100}(history|histories)|history[^.]{0,100}(own|separate)", forecast) ||
-      (has(forecast, "draw's history") && has(forecast, "own predictors"))) &&
+      (has(forecast, "draw's history") && has(forecast, "own predictors")) ||
+      has(forecast, "Append the response to that draw's history before updating the reservoir")) &&
     !has(forecast, "a common averaged response history"),
     "Each draw propagates its own response history rather than a shared mean path.")
   require_check(has(forecast, "future responses") &&
@@ -167,11 +169,14 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
   require_check(grepl("(fresh|new)[^.]{0,60}(error|errors)|error[^.]{0,60}(fresh|new)", forecast) &&
     has(forecast, "AL") && has(forecast, "exAL"),
     "Future likelihood errors are newly generated, not reused fitting variables.")
-  require_check(has(forecast, "A posterior predictive quantile integrates over") &&
-    has(forecast, "intermediate responses and parameters") &&
-    has(forecast, "conditions on one simulated history"),
+  require_check((has(forecast, "A posterior predictive quantile integrates over") &&
+      has(forecast, "intermediate responses and parameters") &&
+      has(forecast, "conditions on one simulated history")) ||
+    has(forecast, "A conditional location along one simulated history is not a quantile integrated over all possible histories"),
     "Distinguish conditional locations from multistep predictive quantiles.")
-  require_check(has(forecast, "averaged future predictors") &&
+  require_check(has(forecast, "\\bar{\\vect x}_{o+h}") &&
+    has(forecast, "ordered quantile grid at each step") &&
+    has(forecast, "endpoint quantiles") &&
     has(forecast, "not sampling from a single exAL regression") &&
     has(sf, "primary calculation evaluates coefficient draws at their averaged predictors") &&
     has(sf, "endpoint clamping, not extrapolation"),

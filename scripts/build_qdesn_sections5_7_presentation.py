@@ -212,7 +212,7 @@ def display_table(role: str, source: str) -> str:
                 cells = line.removesuffix(r"\\").strip().split(" & ")
                 assert len(cells) == 10
                 line = " & ".join(cells[:1] + cells[2:]) + r" \\"
-            line = line.replace("llrrrrrrrl", "lrrrrrrrl").replace("Search slab", "Screening slab")
+            line = line.replace("llrrrrrrrl", "lrrrrrrrl").replace("Search slab", "Screening slab").replace("$m_x$", "$m_z$")
             result.append(line)
         return "\n".join(result) + "\n"
     if role == "mq_design":

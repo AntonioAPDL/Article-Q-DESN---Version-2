@@ -202,6 +202,24 @@ def prepare(root):
 
 
 def refresh(root, write=False):
+    # A later general manuscript revision has its own exact-scope provenance.
+    # Read-only compatibility must not widen this GloFAS-only write authority.
+    current = decode_json(regular_bytes(Path(root), RECEIPT, 1024 * 1024), "current receipt")
+    if "general_editorial_source_refresh" in current:
+        require(not write, "general editorial updates require the explicitly named article-clarity refresher")
+        helper = Path(root) / "scripts/refresh_article_clarity_editorial_receipts_20261104.py"
+        require(helper.is_file() and not helper.is_symlink(), "general editorial successor is missing")
+        # The historical entry point remains runnable under system Python
+        # 3.6; the explicitly versioned successor uses Python 3.11 syntax.
+        result = subprocess.run(["/usr/bin/python3.11", "-I", "-B", str(helper),
+                                 "--root", str(root), "--check"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                universal_newlines=True)
+        require(result.returncode == 0 and
+                "ARTICLE_CLARITY_EDITORIAL_RECEIPTS_CHECK_PASS" in result.stdout,
+                "general editorial successor verification failed: " + result.stderr.strip())
+        print(result.stdout.strip())
+        return current
     root, current, result, fingerprints = prepare(root)
     for path, expected in fingerprints.items():
         require(sha(regular_bytes(root, path)) == expected, "source changed during shared-receipt verification")

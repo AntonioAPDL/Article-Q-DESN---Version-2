@@ -1,103 +1,81 @@
 {
-  "schema": "independent-forecast-300-500-article-v1",
   "authority_id": "independent_forecast_300_primary_500_sensitivity_v1",
-  "primary_cutoff": 300,
-  "sensitivity_cutoff": 500,
   "deprecated_reporting_cutoff": 1000,
-  "retrospective_scope_change": true,
-  "fit_unchanged": true,
-  "vb_forecasts": "OMITTED_NO_AUTHENTIC_PREFIX_DRAWS",
-  "fits_launched": 0,
-  "forecasts_launched": 0,
-  "primary_plot_placement": {
-    "forecast_check": "main",
-    "forecast_mae": "supplement"
-  },
-  "sources": {
-    "application/config/independent_forecast_300_500_v1.json": "944f32e1d06b050a8c7beb72170257b8e37db35ef4ab7416f38019d6c0dcf307",
-    "tables/independent_forecast_300_500_v1.csv": "7ee08a577b47c9369c8cc8fd35677c6f884bbc1b7a886096fb2afd66838e4bcf",
-    "tables/independent_fit_preserved_300_500_v1.csv": "3396ee35261b34a4a788b0502fddeb4f4af5b71bbcedbf79408d751760a2a1fa",
-    "tables/independent_forecast_300_500_vb_coverage.csv": "b4e81b0319f762d94954a5c6833872f379bf3c5ed81529759eb0da0f77663b55",
-    "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
-    "scripts/build_independent_forecast_300_500_v1.R": "b8f1d9789059044a67895e81584114e943a89edf23a328697919468ac996a160",
-    "main.tex": "822ab048f0676878e23ae8bb5f9c8177c5fcf532f1c3d0062ddae78ed8a57d41",
-    "qdesn-supplement.tex": "97df9182714b88853b74bb624091b533da763fcb8bbb40f2e61279d2e13fb95b",
-    "overleaf/article_files.txt": "f687c5ed5af46a2267f0fd3f7552d4881f19b7cd14444066fc3b6f4ae90541d9",
-    "tables/independent_forecast_dependence_v1.tex": "cf2d9319fda9e629bfee3991ff01aac94b55249c547b6b9daea92a1cb4ef166c",
-    "docs/implementation_notes/independent_forecast_300_500_reporting_20261015.md": "a7ed1622b4cd73895a5f4d54e1e2664cf72884ad767fd030ce9c44750deef998",
-    "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6",
-    "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9",
-    "application/config/independent_forecast_calibration_v1.json": "11f2f1226bbb05e3acb6fbdeba9f2668f5bc9d0314746251b626f893ccd47976",
-    "docs/implementation_notes/statistical_language_reader_revision_20261019.md": "9e9a80ceced41347e41e6a787d1cea7a5c5802ad4ecb491b59de008f33e0efab",
-    "docs/implementation_notes/independent_forecast_focus_and_calibration_20261015.md": "9e84f436070de4164f104769ef045526fec62246833d88f74a75aa148ac86162",
-    "tables/independent_forecast_calibration_v1.csv": "5720dfae26aebe095db188e74ba44939bfbc3b8e72f38e3eab01ad4f30d32eed",
-    "tables/independent_forecast_calibration_sources_v1.csv": "689ad521a79388f64d3dd1e888c480f85715a4cf47d09737dac9d1f5c4ae0ad4",
-    "tables/independent_forecast_calibration_manifest_v1.json": "77931b8e5c7950eb2e4454a54d5eaa579abbbd4d0c884aed550327594222a2e2"
-  },
-  "outputs": {
-    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf": "44f0e8ba6aea98a6ae47f1625eaebf0011d6e506a162064ef67fbd96afd41399",
-    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_check_v1.pdf": "4b91d61a9ff0991c58d6714b8f89b2c39e68bd46c4643f4e5f421c5c48d157ba",
-    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_mae_v1.pdf": "3519c01b61a6e2273a10dec7b92d0fe3fccc93bf01cd6d4bea9d39bcd2d921a8",
-    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_check_v1.pdf": "a7b60666a23d8e992d79aa877852a8b10202ec991c0d3b20cd22ebb5527e97a5",
-    "tables/independent_train500_eval300_mcmc_normal_v1.tex": "57d24572713ce4f3963c130dc6d2275bd78c1bb77a283e38884496687a1ff9d7",
-    "tables/independent_train500_eval300_mcmc_laplace_v1.tex": "4a605b0e9a1ad70a35781a380472ea995ed62042a2d14d964f09bac5de78742a",
-    "tables/independent_train500_eval300_mcmc_gausmix_v1.tex": "c52697a5d90571428d7ecdcd8cded560282ebd6f4f9b213b60f3d7013d8d3fa7",
-    "tables/independent_train500_eval500_mcmc_normal_v1.tex": "950da5e7f954b64fe2d453edf5060ae70c708aff3811cb8d9b92f3ecf5f0a371",
-    "tables/independent_train500_eval500_mcmc_laplace_v1.tex": "b53a0acf34f185bf1d4001c1dc1bc54e67b96e80ae617eac14b2ea7d90aa8eab",
-    "tables/independent_train500_eval500_mcmc_gausmix_v1.tex": "0ffa7cd5fda4e5833cf8dac36c19a442a3eaf5a59fbed2e7deab22f257c01c7b",
-    "tables/independent_train500_eval300_mcmc_tables_v1.tex": "a1716059e0e191d27efdc0e7974f3f32a07ca7f006733a195c56f9bd269f3016",
-    "tables/independent_train500_eval500_mcmc_tables_v1.tex": "4bd7dd15d7e615ceb5c61a2664cbac4e9d700f14567b8bc87466fba60b151b8f",
-    "tables/independent_vb_fit_preserved_v1.tex": "f1f2b7f6a1b30c5cb1d8697b71de0845c387f2a7a94a3ec4e1d38fd349cb362f",
-    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex": "37beeb6d624c45c63f5a012577990c9318b4196b297dd10bf8483ca8f2bfef27",
-    "tables/independent_train500_eval300_mcmc_figures_v1.tex": "b292dde535e81d2f9f6c0eb79b2bd1d561ebb95e819f1831c1d985dada6cd88f",
-    "tables/independent_train500_eval500_mcmc_figures_v1.tex": "f67e41de24a6ef1e2ed7e25a280eead8970a44cbd50225f719dca0c06427683e",
-    "tables/independent_forecast_300_500_comparisons_v1.csv": "043e7e27ece1a89fd3b88ed4f5a6fc023e4e40682b9496b6f96584d890ec2091",
-    "tables/independent_eval300_results_v1.tex": "6401ef0c10fb51af55d8a80d110992bac98992239dd5d5ba4cde0c3a184e1e06",
-    "figures/independent_simulation/independent_forecast_calibration_v1.pdf": "f99cd11381cff1b1592918877e876edca092b64140f5dcac1b985fda1580fbdf",
-    "tables/independent_forecast_calibration_figure_v1.tex": "54e403240197da236963283503561159d9a490a1eb512f8c7a1aee4ac5de640e",
-    "tables/independent_forecast_calibration_table_v1.tex": "ac06603b4617bd4ddcf76fb2a59988ad61d65bd60f0ae90e9941e4e8fd08b2f7"
-  },
   "editorial_source_refresh": {
-    "schema": "independent-forecast-editorial-source-refresh-v1",
     "baseline_commit": "8b28ba51176c25624b638fac54fce2699b9af078",
-    "original_manifest_sha256": "687d5531300c8c42eb8a2499ad88f3adbb5d3aa318e6b50b277b282db1d30b1c",
-    "updated_paths": [
-      "main.tex",
-      "qdesn-supplement.tex"
-    ],
+    "fits_launched": 0,
+    "forecasts_launched": 0,
     "original_document_sha256": {
       "main.tex": "8b954bed6a2a2819cda2a4dccd551e7bb8b651a6e3eb72aa40974b2ba3cd5355",
       "qdesn-supplement.tex": "1c129563a0f2466f556c1a96728833a3e9f87e7898381903a7c26c2e4feab155"
     },
+    "original_manifest_sha256": "687d5531300c8c42eb8a2499ad88f3adbb5d3aa318e6b50b277b282db1d30b1c",
+    "refresher": "scripts/refresh_independent_forecast_editorial_manifest_20261031.R",
+    "refresher_sha256": "b2e6e6a9672ef165fcf779e633a055a625e989a48be25f9b6d9de71a8fa2bc2a",
+    "schema": "independent-forecast-editorial-source-refresh-v1",
+    "scientific_outputs_regenerated": false,
+    "scientific_values_changed": false,
     "updated_document_sha256": {
       "main.tex": "fca548d6c4c147c1e54c960a96b966d76d3793bd78d109b181c6ec518371da40",
       "qdesn-supplement.tex": "8e9957eff6655724db234590f26f2a560de31c873b0e02aa383e04c0e5638fb6"
     },
-    "refresher": "scripts/refresh_independent_forecast_editorial_manifest_20261031.R",
-    "refresher_sha256": "b2e6e6a9672ef165fcf779e633a055a625e989a48be25f9b6d9de71a8fa2bc2a",
-    "scientific_outputs_regenerated": false,
-    "scientific_values_changed": false,
-    "fits_launched": 0,
-    "forecasts_launched": 0
-  },
-  "glofas_article_source_refresh": {
-    "schema": "glofas-article-shared-source-refresh-v1",
-    "baseline_commit": "0d111e0c2bf3951378aec2bbfc1f46fd9ecd8437",
-    "original_manifest_sha256": "0e319eb1731c459701e97738b04c23ef0a8ed82655bc0b45f94d6458e04e3e16",
     "updated_paths": [
       "main.tex",
-      "qdesn-supplement.tex",
-      "overleaf/article_files.txt"
+      "qdesn-supplement.tex"
+    ]
+  },
+  "fit_unchanged": true,
+  "fits_launched": 0,
+  "forecasts_launched": 0,
+  "general_editorial_source_refresh": {
+    "baseline_commit": "e63bce30ab8cf70b9c3fc3d1c56418502c955c38",
+    "fits_launched": 0,
+    "forecasts_launched": 0,
+    "original_manifest_sha256": "6e1566d6441b2255fefd43563ead0ee74dc49b1c1d3fe9c80585739138035ee9",
+    "original_source_sha256": {
+      "main.tex": "822ab048f0676878e23ae8bb5f9c8177c5fcf532f1c3d0062ddae78ed8a57d41",
+      "qdesn-supplement.tex": "97df9182714b88853b74bb624091b533da763fcb8bbb40f2e61279d2e13fb95b"
+    },
+    "presentation_manifest": {
+      "generator": "scripts/build_qdesn_sections5_7_presentation.py",
+      "operation": "covariate_lag_header_m_x_to_m_z_only",
+      "original_sha256": "187e44af42e8daf79ddd7baeb6c26954e6d08acd0f40f37f465758742a75385b",
+      "path": "tables/qdesn_sections5_7_presentation_manifest.json",
+      "permitted_output": "tables/glofas_selected_specifications_display.tex",
+      "updated_generator_sha256": "3b2024490234021e09438edda774f98becbbbf7cfae0332fa346c3d3b9a61c6b",
+      "updated_output_sha256": "e3bc925ea0724e0f0f38ec127e151d4fe8d2eacf24df438ff0870d6d1b449aa5",
+      "updated_sha256": "35346680aa76c434e459eaa38a40b370a4f7477e30cc842ed934025aaffa7a7f"
+    },
+    "preserved_historical_fields_sha256": {
+      "editorial_source_refresh": "853ea0436b20c72a6437a1297a2ed939522eea9aa232eef74818650596b35209",
+      "glofas_article_source_refresh": "6a85405d5c1bfea289dc601960d954826fe8e9c20cb1f984abf865bb88c5525a"
+    },
+    "refresher": "scripts/refresh_article_clarity_editorial_receipts_20261104.py",
+    "refresher_sha256": "84d6e6edb0111ef359a7fbeb7bc4927152427ad3f74f1a6250850baee24c57da",
+    "schema": "article-clarity-general-editorial-refresh-v1",
+    "scientific_outputs_regenerated": false,
+    "scientific_values_changed": false,
+    "scores_recomputed": 0,
+    "updated_paths": [
+      "main.tex",
+      "qdesn-supplement.tex"
     ],
+    "updated_source_sha256": {
+      "main.tex": "366703c62a01b55d610c38e240ffc33d200c8614ededd683efebe25a3e7aa088",
+      "qdesn-supplement.tex": "56c1a256412f397e80d8ea7a71987593ef6b930ae0611b50d729a2029ffcd04e"
+    }
+  },
+  "glofas_article_source_refresh": {
+    "asset_manifest_sha256": "ecb2ae967b25309e0989b9c9cda01a698f825731bab6fbe5f6d321d047ed2f06",
+    "authority_contract_sha256": "ef1a21307f581ff5ce9813e37ce15b84ddad866e410f522f88c05de618426640",
+    "baseline_commit": "0d111e0c2bf3951378aec2bbfc1f46fd9ecd8437",
+    "fits_launched": 0,
+    "forecasts_launched": 0,
+    "original_manifest_sha256": "0e319eb1731c459701e97738b04c23ef0a8ed82655bc0b45f94d6458e04e3e16",
     "original_source_sha256": {
       "main.tex": "fca548d6c4c147c1e54c960a96b966d76d3793bd78d109b181c6ec518371da40",
-      "qdesn-supplement.tex": "8e9957eff6655724db234590f26f2a560de31c873b0e02aa383e04c0e5638fb6",
-      "overleaf/article_files.txt": "c0dabe07357559779969f91234e0630911487631f0e78c36394d2fcd2b18c2e3"
-    },
-    "updated_source_sha256": {
-      "main.tex": "822ab048f0676878e23ae8bb5f9c8177c5fcf532f1c3d0062ddae78ed8a57d41",
-      "qdesn-supplement.tex": "97df9182714b88853b74bb624091b533da763fcb8bbb40f2e61279d2e13fb95b",
-      "overleaf/article_files.txt": "f687c5ed5af46a2267f0fd3f7552d4881f19b7cd14444066fc3b6f4ae90541d9"
+      "overleaf/article_files.txt": "c0dabe07357559779969f91234e0630911487631f0e78c36394d2fcd2b18c2e3",
+      "qdesn-supplement.tex": "8e9957eff6655724db234590f26f2a560de31c873b0e02aa383e04c0e5638fb6"
     },
     "overleaf_added_paths": [
       "figures/glofas_application/glofas_same_family_20261103_all_families.pdf",
@@ -122,15 +100,75 @@
       "tables/glofas_same_family_20261103_quantile_paths.csv",
       "tables/glofas_same_family_current_authority.json"
     ],
-    "authority_contract_sha256": "ef1a21307f581ff5ce9813e37ce15b84ddad866e410f522f88c05de618426640",
-    "asset_manifest_sha256": "ecb2ae967b25309e0989b9c9cda01a698f825731bab6fbe5f6d321d047ed2f06",
-    "scored_packet_manifest_sha256": "5c476aeda6d2164658875de22ab393a6b25e7a0e6c4e8c72e85e9a3d2b6267ce",
     "producer_source_commit": "fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6",
     "refresher": "scripts/refresh_glofas_article_shared_receipts.py",
     "refresher_sha256": "afc1bdce35e427761140930360ed6b29f66e97ed3decb9aed784ee2021a480b5",
+    "schema": "glofas-article-shared-source-refresh-v1",
     "scientific_outputs_regenerated": false,
     "scientific_values_changed": false,
-    "fits_launched": 0,
-    "forecasts_launched": 0
-  }
+    "scored_packet_manifest_sha256": "5c476aeda6d2164658875de22ab393a6b25e7a0e6c4e8c72e85e9a3d2b6267ce",
+    "updated_paths": [
+      "main.tex",
+      "qdesn-supplement.tex",
+      "overleaf/article_files.txt"
+    ],
+    "updated_source_sha256": {
+      "main.tex": "822ab048f0676878e23ae8bb5f9c8177c5fcf532f1c3d0062ddae78ed8a57d41",
+      "overleaf/article_files.txt": "f687c5ed5af46a2267f0fd3f7552d4881f19b7cd14444066fc3b6f4ae90541d9",
+      "qdesn-supplement.tex": "97df9182714b88853b74bb624091b533da763fcb8bbb40f2e61279d2e13fb95b"
+    }
+  },
+  "outputs": {
+    "figures/independent_simulation/independent_forecast_calibration_v1.pdf": "f99cd11381cff1b1592918877e876edca092b64140f5dcac1b985fda1580fbdf",
+    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_check_v1.pdf": "4b91d61a9ff0991c58d6714b8f89b2c39e68bd46c4643f4e5f421c5c48d157ba",
+    "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf": "44f0e8ba6aea98a6ae47f1625eaebf0011d6e506a162064ef67fbd96afd41399",
+    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_check_v1.pdf": "a7b60666a23d8e992d79aa877852a8b10202ec991c0d3b20cd22ebb5527e97a5",
+    "figures/independent_simulation/independent_train500_eval500_mcmc_forecast_mae_v1.pdf": "3519c01b61a6e2273a10dec7b92d0fe3fccc93bf01cd6d4bea9d39bcd2d921a8",
+    "tables/independent_eval300_results_v1.tex": "6401ef0c10fb51af55d8a80d110992bac98992239dd5d5ba4cde0c3a184e1e06",
+    "tables/independent_forecast_300_500_comparisons_v1.csv": "043e7e27ece1a89fd3b88ed4f5a6fc023e4e40682b9496b6f96584d890ec2091",
+    "tables/independent_forecast_calibration_figure_v1.tex": "54e403240197da236963283503561159d9a490a1eb512f8c7a1aee4ac5de640e",
+    "tables/independent_forecast_calibration_table_v1.tex": "ac06603b4617bd4ddcf76fb2a59988ad61d65bd60f0ae90e9941e4e8fd08b2f7",
+    "tables/independent_train500_eval300_mcmc_figures_v1.tex": "b292dde535e81d2f9f6c0eb79b2bd1d561ebb95e819f1831c1d985dada6cd88f",
+    "tables/independent_train500_eval300_mcmc_gausmix_v1.tex": "c52697a5d90571428d7ecdcd8cded560282ebd6f4f9b213b60f3d7013d8d3fa7",
+    "tables/independent_train500_eval300_mcmc_laplace_v1.tex": "4a605b0e9a1ad70a35781a380472ea995ed62042a2d14d964f09bac5de78742a",
+    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex": "37beeb6d624c45c63f5a012577990c9318b4196b297dd10bf8483ca8f2bfef27",
+    "tables/independent_train500_eval300_mcmc_normal_v1.tex": "57d24572713ce4f3963c130dc6d2275bd78c1bb77a283e38884496687a1ff9d7",
+    "tables/independent_train500_eval300_mcmc_tables_v1.tex": "a1716059e0e191d27efdc0e7974f3f32a07ca7f006733a195c56f9bd269f3016",
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex": "f67e41de24a6ef1e2ed7e25a280eead8970a44cbd50225f719dca0c06427683e",
+    "tables/independent_train500_eval500_mcmc_gausmix_v1.tex": "0ffa7cd5fda4e5833cf8dac36c19a442a3eaf5a59fbed2e7deab22f257c01c7b",
+    "tables/independent_train500_eval500_mcmc_laplace_v1.tex": "b53a0acf34f185bf1d4001c1dc1bc54e67b96e80ae617eac14b2ea7d90aa8eab",
+    "tables/independent_train500_eval500_mcmc_normal_v1.tex": "950da5e7f954b64fe2d453edf5060ae70c708aff3811cb8d9b92f3ecf5f0a371",
+    "tables/independent_train500_eval500_mcmc_tables_v1.tex": "4bd7dd15d7e615ceb5c61a2664cbac4e9d700f14567b8bc87466fba60b151b8f",
+    "tables/independent_vb_fit_preserved_v1.tex": "f1f2b7f6a1b30c5cb1d8697b71de0845c387f2a7a94a3ec4e1d38fd349cb362f"
+  },
+  "primary_cutoff": 300,
+  "primary_plot_placement": {
+    "forecast_check": "main",
+    "forecast_mae": "supplement"
+  },
+  "retrospective_scope_change": true,
+  "schema": "independent-forecast-300-500-article-v1",
+  "sensitivity_cutoff": 500,
+  "sources": {
+    "application/config/independent_forecast_300_500_v1.json": "944f32e1d06b050a8c7beb72170257b8e37db35ef4ab7416f38019d6c0dcf307",
+    "application/config/independent_forecast_calibration_v1.json": "11f2f1226bbb05e3acb6fbdeba9f2668f5bc9d0314746251b626f893ccd47976",
+    "docs/implementation_notes/independent_forecast_300_500_reporting_20261015.md": "a7ed1622b4cd73895a5f4d54e1e2664cf72884ad767fd030ce9c44750deef998",
+    "docs/implementation_notes/independent_forecast_focus_and_calibration_20261015.md": "9e84f436070de4164f104769ef045526fec62246833d88f74a75aa148ac86162",
+    "docs/implementation_notes/statistical_language_reader_revision_20261019.md": "9e9a80ceced41347e41e6a787d1cea7a5c5802ad4ecb491b59de008f33e0efab",
+    "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6",
+    "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9",
+    "main.tex": "366703c62a01b55d610c38e240ffc33d200c8614ededd683efebe25a3e7aa088",
+    "overleaf/article_files.txt": "f687c5ed5af46a2267f0fd3f7552d4881f19b7cd14444066fc3b6f4ae90541d9",
+    "qdesn-supplement.tex": "56c1a256412f397e80d8ea7a71987593ef6b930ae0611b50d729a2029ffcd04e",
+    "scripts/build_independent_forecast_300_500_v1.R": "b8f1d9789059044a67895e81584114e943a89edf23a328697919468ac996a160",
+    "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
+    "tables/independent_fit_preserved_300_500_v1.csv": "3396ee35261b34a4a788b0502fddeb4f4af5b71bbcedbf79408d751760a2a1fa",
+    "tables/independent_forecast_300_500_v1.csv": "7ee08a577b47c9369c8cc8fd35677c6f884bbc1b7a886096fb2afd66838e4bcf",
+    "tables/independent_forecast_300_500_vb_coverage.csv": "b4e81b0319f762d94954a5c6833872f379bf3c5ed81529759eb0da0f77663b55",
+    "tables/independent_forecast_calibration_manifest_v1.json": "77931b8e5c7950eb2e4454a54d5eaa579abbbd4d0c884aed550327594222a2e2",
+    "tables/independent_forecast_calibration_sources_v1.csv": "689ad521a79388f64d3dd1e888c480f85715a4cf47d09737dac9d1f5c4ae0ad4",
+    "tables/independent_forecast_calibration_v1.csv": "5720dfae26aebe095db188e74ba44939bfbc3b8e72f38e3eab01ad4f30d32eed",
+    "tables/independent_forecast_dependence_v1.tex": "cf2d9319fda9e629bfee3991ff01aac94b55249c547b6b9daea92a1cb4ef166c"
+  },
+  "vb_forecasts": "OMITTED_NO_AUTHENTIC_PREFIX_DRAWS"
 }

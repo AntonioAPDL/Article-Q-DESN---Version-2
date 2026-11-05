@@ -78,22 +78,27 @@ local({
   supplement <- fixture$supplement
   corrected <- identical(app_forecast_exposition_glofas_version(main, supplement),
     "same_family_20261103")
+  clarity_revision <- !grepl("eq:recursive-posterior-predictive-main", main, fixed = TRUE)
   app_forecast_application_exposition_semantics(main, supplement)
   reject_semantics("wrong covariate lag dimension", changed_main = mutate(main,
-    "d_u=m+q(m_z+1)", "d_u=m+q*m_z"))
+    if (clarity_revision) "d_u=m+q\\cdot(m_z+1)" else "d_u=m+q(m_z+1)", "d_u=m+q*m_z"))
   reject_semantics("old input matrix dimension", changed_main = mutate(main,
     "n_1\\times d_u", "n_1\\times(m+q)"))
   reject_semantics("readout dimension omits lagged covariates", changed_main = mutate(main,
     "r=n_D+\\sum_{d<D}\\tilde n_d+d_u", "r=n_D+\\sum_{d<D}\\tilde n_d"))
   reject_semantics("parameter draw changes inside a trajectory", changed_main = mutate(main,
-    "parameter draw remains fixed", "parameter draw is redrawn"))
+    if (clarity_revision) "The parameters remain fixed along the trajectory" else "parameter draw remains fixed",
+    "parameter draw is redrawn"))
   reject_semantics("trajectory histories collapsed", changed_main = mutate(main,
     "that draw's history", "a common averaged response history"))
   reject_semantics("training errors reused in forecasting", changed_main = mutate(main,
-    "fresh errors", "training errors"))
+    if (clarity_revision) "fresh error" else "fresh errors", "training errors"))
   reject_semantics("path-conditional location called the marginal quantile", changed_main = mutate(main,
-    "intermediate responses and parameters", "only the conditional location"))
+    if (clarity_revision) "is not a quantile integrated over all possible histories" else "intermediate responses and parameters",
+    "is the quantile of the conditional location"))
   reject_semantics("unassigned multiquantile response likelihood", changed_main = mutate(main,
+    "ordered quantile grid at each step", "single exAL response law at each step"))
+  reject_semantics("MQ interpolation falsely called single-exAL sampling", changed_main = mutate(main,
     "not sampling from a single exAL regression", "sampling from a single exAL regression"))
   reject_semantics("unimplemented MQ pathwise authority", changed_supplement = mutate(supplement,
     "primary calculation evaluates coefficient draws at their averaged predictors",

@@ -1,6 +1,6 @@
 # Pure generated specification/replay metadata; zero files or model objects read.
 local({
-  source("application/R/glofas_specification_reconciliation.R", local = TRUE)
+  source("scripts/diagnostics/glofas_specification_reconciliation.R", local = TRUE)
   checks <- 0L
   ok <- function(x) { stopifnot(isTRUE(x)); checks <<- checks + 1L; invisible(TRUE) }
   reject <- function(expr, text = NULL) {

@@ -189,3 +189,11 @@ by the metadata and generated-reference drivers remains ignored. Integration
 uses a fresh worktree, preserved source commits and command-line Git. The
 article projection and existing results remain unchanged until a separate,
 complete scientifically qualified packet is frozen.
+
+The metadata reconciler resides under `scripts/diagnostics`, not the frozen
+production inference surface. The first combined-tree rehearsal correctly
+rejected its initial placement under `application/R`; the follow-up relocation
+preserves the existing source guard and its exact authorization manifest.
+That failed rehearsal and the earlier audit receipts are retained. A fresh
+combined-tree test and new source-bound audit receipts are required after the
+relocation; the failure is not reclassified as a passing test.

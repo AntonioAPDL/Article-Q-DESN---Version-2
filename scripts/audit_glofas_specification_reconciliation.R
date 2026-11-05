@@ -47,7 +47,7 @@ if (!length(args) || identical(args, "--help")) {
 } else {
   script <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1L])
   root <- normalizePath(file.path(dirname(script), ".."), mustWork = TRUE)
-  setwd(root); source("application/R/glofas_specification_reconciliation.R")
+  setwd(root); source("scripts/diagnostics/glofas_specification_reconciliation.R")
   q <- app_gsr_require
   expected <- c("selected", "selected-sha256", "executed", "executed-sha256", "replay-summary",
     "replay-summary-sha256", "reused-source-manifest", "reused-source-manifest-sha256",
@@ -99,7 +99,7 @@ if (!length(args) || identical(args, "--help")) {
     }
   }
   q(length(gain_records) == 18L, "all 18 retained model configurations must share frozen gain convention")
-  source_paths <- c("application/R/glofas_specification_reconciliation.R",
+  source_paths <- c("scripts/diagnostics/glofas_specification_reconciliation.R",
     "scripts/audit_glofas_specification_reconciliation.R", "application/tests/test_glofas_specification_reconciliation.R",
     "application/R/glofas_post_search2_workflow.R", "application/R/glofas_search_phase2.R",
     "application/R/glofas_search3_rainy_season.R", "application/R/glofas_normal_desn_part1_screening.R",

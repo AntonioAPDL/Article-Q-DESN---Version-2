@@ -1,4 +1,4 @@
-# Metadata-only reconciliation of the selected and executed GloFAS DESNs.
+# Diagnostic-only metadata reconciliation of selected and executed GloFAS DESNs.
 # These functions never read files, generate weights, build features, fit models,
 # inspect forecast losses, or grant permission to change a frozen model.
 

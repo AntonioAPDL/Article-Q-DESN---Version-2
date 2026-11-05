@@ -349,6 +349,14 @@ run_standalone_glofas_test("application/tests/test_glofas_collapsed_al_target.R"
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_parameter_optimizer.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_audit.R")
+# Generated variance/step qualification: statistical target and existing
+# application results are unchanged; passing tests do not authorize native fits.
+run_standalone_glofas_test("application/tests/test_glofas_optimizer_control_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_al_future_score_projection.R")
+run_standalone_glofas_test("application/tests/test_glofas_optimizer_predictive_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_variance_particle_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_optimizer_variance_audit.R")
+run_standalone_glofas_test("application/tests/test_glofas_variance_auxiliary_audit.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 # Generated general-editorial scope, presentation and negative text fixtures;

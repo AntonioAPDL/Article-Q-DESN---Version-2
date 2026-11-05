@@ -171,7 +171,7 @@ gcpor_h1_optimize <- function(initial_mean, initial_log_sd, factor = diag(2L),
     gradient = value$gradient, covariance = value$covariance,
     initial_value = start, convergence = fit$convergence, message = fit$message,
     evaluations = fit$counts, original_reads = 0L, production_qualified = FALSE,
-    scope = "exact generated-target optimum within specified fixed-factor Gaussian family")
+    scope = "deterministically optimized exact generated ELBO within bounded fixed-factor Gaussian family; no global-optimality certificate")
 }
 
 gcpor_h1_joint_moments <- function(members = numeric(), probability = .5,

@@ -252,7 +252,7 @@ Let \(\vect z_t\in\R^q\) contain the exogenous covariates and let
 \text{Inputs:}\quad
 \vect u_t=(y_{t-1},\ldots,y_{t-m},\vect z_t^\top,\ldots,
 \vect z_{t-m_z}^\top)^\top\in\R^{d_u},\qquad
-d_u=m+q(m_z+1).
+d_u=m+q\cdot(m_z+1).
 \]
 Here \(m\geq1\) is the maximum response lag and \(m_z\geq0\) the maximum
 covariate lag. The previous reservoir state also carries information from
@@ -828,7 +828,7 @@ as
 \text{Scale--shape kernel:}\quad
 &\pi(\sigma,\gamma\mid\cdot)
  \propto\exp(c_\gamma)\sigma^{\nu-1}
- \exp\!\left[-\tfrac12\{\chi_\gamma/\sigma+psi_\gamma\sigma\}\right],\\
+ \exp\!\left[-\tfrac12\{\chi_\gamma/\sigma+\psi_\gamma\sigma\}\right],\\
 \nu&=-a_\sigma-3T/2,\\
 \chi_\gamma&=2b_\sigma+2\sum_t v_t+
  \sum_t r_{t,\gamma}^2/(B_\gamma v_t),\\
@@ -1834,9 +1834,10 @@ Posterior means and equal-tailed 95\% intervals of the oracle \(\aCRPS\),
 \(S_{\mathrm{DGP}}^{(b)}\), form the primary comparison. The score evaluated
 at the posterior-mean quantile curve is reported separately as a sensitivity
 summary. The GloFAS analysis uses realized outcomes in
-Eq.~\eqref{eq:supp-acrps}. Its reported issued-window grids are ordered
-without crossing correction; Section~\ref{subsec:glofas_checks} gives
-the separate crossing results for historical reference and discrepancy models.
+Eq.~\eqref{eq:supp-acrps}. Its issued-window scores use the unadjusted
+quantile grids, with no post-hoc crossing correction.
+Section~\ref{subsec:glofas_checks} gives the crossing results for these
+forecasts and the historical reference and discrepancy models.
 
 Response-level posterior predictive draws instead determine an empirical
 predictive quantile function that can be evaluated on any prespecified grid;
@@ -2081,7 +2082,8 @@ entries give amplitude and phase for the two harmonic pairs.}
 \end{table}
 
 The sample roles and rolling-origin schedule are given in the main article.
-In retained-series indices, the primary origins are \(9000+30j\),
+With observation times numbered after discarding the first 2,000
+observations, the primary forecast origins are \(9000+30j\),
 \(j=0,\ldots,9\). The extended evaluation adds \(j=10,\ldots,16\),
 using only the first 20 leads at the last origin. Both periods retain the
 same fitted posterior and forecast construction. As noted in the main
@@ -2092,7 +2094,7 @@ longer-period results.
 \label{subsec:supp-independent-metrics}
 
 Let \(q_{p,t}^{(b)}\) be retained draw \(b\) of the conditional
-\(p\)-quantile at fitting index \(t\), and
+\(p\)-quantile at fitting time \(t\), and
 \(q_{p,\ell}^{(b)}\) its forecast counterpart for origin--horizon pair
 \(\ell\). With \(N_{\mathrm{fit}}\) fitting observations and
 \(N_{\mathrm{eval}}\) forecast pairs, root mean squared error (RMSE), mean
@@ -2272,20 +2274,28 @@ The parameter posterior from the initial fit is retained, while observations
 available at successive origins update the state filter before forecasts are
 propagated over the requested horizons.
 
-Each reconstructed MCMC chain uses 5,000 burn-in iterations followed by
-20,000 sampling iterations, without sampler thinning. The metric
-calculations select aligned subsets of these draws and generally pool
-12,000 evaluations from three independently initialized chains. The Q--DESN AL--RHS Gaussian
-\(p=0.05\) forecast MAE and check-loss summaries use 3,000 retained evaluations
-from three chains. Diagnostics assess between-chain agreement for each
-draw-wise criterion.
+Each of the three independently initialized MCMC chains uses 5,000 burn-in
+iterations followed by 20,000 sampling iterations, without sampler thinning.
+The metric calculations select aligned subsets of 4,000 draws per chain,
+giving 12,000 pooled evaluations. The Q--DESN AL--RHS Gaussian \(p=0.05\)
+forecast MAE and check-loss summaries instead use 1,000 draws per chain,
+giving 3,000 pooled evaluations. These scoring subsets are distinct from
+the complete retained samples. Diagnostics assess between-chain agreement
+for each draw-wise criterion.
+
+The selected single-level VB fits allow at most 300 iterations. Their
+stopping criteria are given in Section~\ref{sec:elbo}; the iteration
+limit alone does not establish that a fit attained those criteria.
+Recorded elapsed times include forecasting and preparation of the metric
+summaries, so they do not isolate the fitting-time difference between VB
+and MCMC.
 
 \clearpage
 \subsection{Multiquantile Generating Mechanisms}
 \label{subsec:supp-mq-generating-design}
 
 The eight mechanisms use the location--scale construction in the main
-article. For full generated-series index \(t=1,\ldots,12000\), define
+article. For the original generating times \(t=1,\ldots,12000\), define
 \(r_t=-1+2(t-1)/11999\), \(\omega_t=2\pi(t-1)/24\), and
 \(u_t=|y_{t-1}|/(1+|y_{t-1}|)\), with \(y_0=0\). The common predictor
 vector is
@@ -2297,8 +2307,9 @@ Table~\ref{tab:supp-mq-generating-coefficients} gives the coefficients of
 \(m_t=a_m+\vect b_m^\top\vect z_t\) and
 \(s_t=a_s+\vect b_s^\top\vect z_t\). Two mechanisms add the terms
 specified below. All realized scales are positive. The final fitting and
-forecast periods use retained-series indices, obtained by subtracting
-2,000 from the full index.
+forecast periods use observation times numbered after discarding the first
+2,000 observations. These times are obtained by subtracting 2,000 from the
+original generating times used in the displayed predictors.
 
 \begin{table}[!htbp]
 \centering
@@ -2386,6 +2397,16 @@ Intercept prior centers and scales are calibrated once from the Gaussian
 reference fit and held common across the four regressions and all chains;
 MQ--DESN intercepts are ordered. The first quantile slope anchors the RHS hierarchy,
 with no additional latent baseline.
+
+Each model uses five MCMC chains. Under AL, each chain runs for 4,000
+iterations, discards the first 1,000 and retains every fourth remaining
+draw, giving 750 draws per chain and 3,750 pooled draws. Under exAL,
+8,000 iterations with 2,000 discarded and the same thinning interval give
+1,500 retained draws per chain. The exAL score calculations use pooled
+subsets of 3,750 draws, except for both exAL regressions under the Laplace
+mechanism, which use all 7,500 draws. Retained sampling allocations and
+the subsets used for scoring are therefore reported separately.
+
 Writing \(q_G\) for the Gaussian RHS variational reference, the fixed
 calibration quantities are
 \begin{equation}
@@ -2730,7 +2751,7 @@ no fitted coefficient prior.
 \centering
 \TableStyle
 \caption{Reference and discrepancy specifications selected using historical
-development and confirmation periods. Here \(m\) and \(m_x\) are the maximum
+development and confirmation periods. Here \(m\) and \(m_z\) are the maximum
 response and weather lags. Selection excludes the held-out final forecast
 period. The slab column describes the selected prior; family-specific exceptions are
 stated in the text.}
@@ -3055,15 +3076,33 @@ completed fits, separately from forecast accuracy. Each quantile-fit worker
 uses one numerical thread. The Gaussian baselines reuse separately
 authenticated fits rather than adding new fitting runs to this comparison.
 
-Table~\ref{tab:supp-glofas-part123-scores} separates the recursive evidence
-from the issued-window comparison in the main article. Reference-only and
-combined historical forecasts are scored over 30 dates on the same
-seven-level grid. Reference-only Q--DESN paths under AL and exAL contain
-three and one adjacent-quantile crossing pairs, respectively. The
-reference-only MQ--DESN paths and every combined historical forecast have
-zero crossings. No correction was applied. All six post-cutoff discrepancy-only
-paths are unscored because retrospective GloFAS ends at \(T\); their missing
-scores and crossing counts are not zero-valued measurements.
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Numerical stopping and computational cost for the issued-ensemble
+quantile fits. MQ--DESN requires outer parameter change below \(10^{-3}\),
+maximum RHS relative change at most \(10^{-3}\), convergence of every inner quantile fit, and
+three consecutive complete passes after global-scale updates begin.
+Elapsed time refers to the completed one-thread workers.}
+\label{tab:supp-glofas-part4-convergence}
+\input{\GlofasApplicationCurrentConvergenceTable}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentConvergenceFigure}
+\caption{Computation time for the sixteen issued-ensemble quantile fits.
+Open points show elapsed time and filled points CPU time in hours; the
+seven independent fits in each likelihood family are identified by level.
+Each worker uses one numerical thread. The two Gaussian baselines are
+reused fits and are not counted as new fitting work.}
+\figalt{Elapsed and CPU times are compared for fourteen independent
+quantile fits and two multiquantile fits, all executed with one numerical
+thread per worker.}
+\label{fig:supp-glofas-part4-convergence}
+\end{figure}
+
+\clearpage
 
 The issued-window results favor the Gaussian baselines in grid
 \(\aCRPS\), while raw endpoint inclusion is below the nominal 90\%
@@ -3095,40 +3134,6 @@ These estimates are retained without clipping or truncation. They indicate
 a physical-support limitation in addition to the calibration and ordering
 limitations above.
 
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentFullComparisonFigure}
-\caption{Full issued-ensemble forecast comparison over the common historical
-and forecast window. The six fitted families and raw GloFAS use the same
-seven probability levels. Green filled points show historical USGS and
-dark-red open points show held-out observations; orange identifies GloFAS
-products. Blue quantile paths darken toward the tails. The vertical line marks
-25 December 2022. Historical fitted conditional quantiles and future
-marginal response quantiles are distinct summaries. Raw crossings are
-retained without projection, and future weather covariates are realized.}
-\figalt{All seven families are shown with historical USGS, held-out USGS,
-and the common forecast origin. Historical points are green and filled,
-held-out points dark red and open, and GloFAS products orange. Thin blue
-quantile curves are darker at more extreme probability levels; crossing
-curves remain visible.}
-\label{fig:supp-glofas-part4-all-families}
-\end{figure}
-
-\begin{table}[!htbp]
-\centering
-\TableStyle
-\caption{Reference-only, discrepancy-only, and combined historical recursive
-forecasts, labeled Reference, Discrepancy, and Combined historical, on the
-\(\log(1+\mathrm{flow})\) scale and the seven-level probability grid.
-Reference-only and combined historical models score 30 USGS horizons.
-The discrepancy-only model supplies a 30-day path but has no future
-retrospective-GloFAS observations and is unscored. Dashes
-denote missing measurements by design. Crossing counts are adjacent-quantile
-pairs over the raw paths, with no correction.}
-\label{tab:supp-glofas-part123-scores}
-\input{\GlofasApplicationCurrentSupplementScoreTable}
-\end{table}
-
 \begin{table}[!htbp]
 \centering
 \TableStyle
@@ -3148,18 +3153,6 @@ unadjusted forecasts as the main comparison.}
 \begin{table}[!htbp]
 \centering
 \TableStyle
-\caption{Numerical stopping and computational cost for the issued-ensemble
-quantile fits. MQ--DESN requires outer parameter change below \(10^{-3}\),
-maximum RHS relative change at most \(10^{-3}\), convergence of every inner quantile fit, and
-three consecutive complete passes after global-scale updates begin.
-Elapsed time refers to the completed one-thread workers.}
-\label{tab:supp-glofas-part4-convergence}
-\input{\GlofasApplicationCurrentConvergenceTable}
-\end{table}
-
-\begin{table}[!htbp]
-\centering
-\TableStyle
 \caption{Issued-ensemble empirical quantile frequencies over the 28 horizons.
 Entries are the fractions of held-out USGS observations below each fitted
 quantile; the nominal frequency equals the column's probability level. All
@@ -3167,6 +3160,67 @@ families use the same dates and seven-level grid. This held-out-period
 calibration assessment is descriptive, not a tuning criterion.}
 \label{tab:supp-glofas-part4-calibration}
 \input{\GlofasApplicationCurrentCalibrationTable}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentCalibrationFigure}
+\caption{Issued-window empirical quantile frequencies. Each panel gives
+the fraction of observations below each reported quantile for one family;
+the diagonal gives the nominal frequency. The comparison uses 28 held-out USGS
+outcomes and was not used for model selection. Departures from the diagonal
+show the level and direction of empirical miscalibration.}
+\figalt{Seven empirical-frequency curves are compared with a diagonal
+representing the nominal quantile levels over the common 28 held-out dates.}
+\label{fig:supp-glofas-part4-calibration}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentFullComparisonFigure}
+\caption{Full issued-ensemble forecast comparison over the common historical
+and forecast window. The six fitted families and raw GloFAS use the same
+seven probability levels. Green filled points show historical USGS and
+dark-red open points show held-out observations; orange identifies GloFAS
+products. Blue quantile paths darken toward the tails. The vertical line marks
+25 December 2022. Historical fitted conditional quantiles and future
+marginal response quantiles are distinct summaries. Raw crossings are
+retained without projection, and future weather covariates are realized.}
+\figalt{All seven families are shown with historical USGS, held-out USGS,
+and the common forecast origin. Historical points are green and filled,
+held-out points dark red and open, and GloFAS products orange. Thin blue
+quantile curves are darker at more extreme probability levels; crossing
+curves remain visible.}
+\label{fig:supp-glofas-part4-all-families}
+\end{figure}
+
+\clearpage
+
+Table~\ref{tab:supp-glofas-part123-scores} separates the recursive evidence
+from the issued-window comparison in the main article. Reference-only and
+combined historical forecasts are scored over 30 dates on the same
+seven-level grid. Reference-only Q--DESN paths under AL and exAL contain
+three and one adjacent-quantile crossing pairs, respectively. The
+reference-only MQ--DESN paths and every combined historical forecast have
+zero crossings. No correction was applied. All six post-cutoff discrepancy-only
+paths are unscored because retrospective GloFAS ends at \(T\); their missing
+scores and crossing counts are not zero-valued measurements.
+
+\begin{table}[!htbp]
+\centering
+\TableStyle
+\caption{Reference-only, discrepancy-only, and combined historical recursive
+forecasts, labeled Reference, Discrepancy, and Combined historical, on the
+\(\log(1+\mathrm{flow})\) scale and the seven-level probability grid.
+Reference-only and combined historical models score 30 USGS horizons.
+The discrepancy-only model supplies a 30-day path but has no future
+retrospective-GloFAS observations and is unscored. Dashes
+denote missing measurements by design. Crossing counts are adjacent-quantile
+pairs over the raw paths, with no correction.}
+\label{tab:supp-glofas-part123-scores}
+\input{\GlofasApplicationCurrentSupplementScoreTable}
 \end{table}
 
 \begin{figure}[!htbp]
@@ -3216,33 +3270,6 @@ combined historical paths have zero crossings without correction.}
 \figalt{Three family-group panels compare 30-day combined historical USGS quantile
 forecasts with historical USGS and held-out measurements; all paths are uncrossed.}
 \label{fig:supp-glofas-part3}
-\end{figure}
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentConvergenceFigure}
-\caption{Computation time for the sixteen issued-ensemble quantile fits.
-Open points show elapsed time and filled points CPU time in hours; the
-seven independent fits in each likelihood family are identified by level.
-Each worker uses one numerical thread. The two Gaussian baselines are
-reused fits and are not counted as new fitting work.}
-\figalt{Elapsed and CPU times are compared for fourteen independent
-quantile fits and two multiquantile fits, all executed with one numerical
-thread per worker.}
-\label{fig:supp-glofas-part4-convergence}
-\end{figure}
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=0.98\textwidth]{\GlofasApplicationCurrentCalibrationFigure}
-\caption{Issued-window empirical quantile frequencies. Each panel gives
-the fraction of observations below each reported quantile for one family;
-the diagonal gives the nominal frequency. The comparison uses 28 held-out USGS
-outcomes and was not used for model selection. Departures from the diagonal
-show the level and direction of empirical miscalibration.}
-\figalt{Seven empirical-frequency curves are compared with a diagonal
-representing the nominal quantile levels over the common 28 held-out dates.}
-\label{fig:supp-glofas-part4-calibration}
 \end{figure}
 
 \clearpage

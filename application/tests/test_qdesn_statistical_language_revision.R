@@ -77,6 +77,8 @@ local({
     supplement, "\\exAL_{p_0}", "\\Normal"))
   reject("MQ endpoint clamping relabeled as tail extrapolation", changed_supplement = mutate_text(
     supplement, "endpoint clamping, not extrapolation", "tail extrapolation"))
+  reject("MQ interpolation falsely called single-exAL sampling", changed_main = mutate_text(
+    main, "not sampling from a single exAL regression", "sampling from a single exAL regression"))
   reject("primary averaged-feature score relabeled as draw-recursive", changed_supplement = mutate_text(
     supplement, "primary calculation evaluates coefficient draws at their averaged predictors",
     "primary calculation evaluates coefficient draws along their own future paths"))

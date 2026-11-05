@@ -83,6 +83,8 @@ app_statistical_language_semantics <- function(main, supplement, history) {
   require_check(has(forecast_plain, "Linear inverse-CDF interpolation") &&
     has(forecast_plain, "endpoint clamping, not extrapolation") &&
     has(forecast_plain, "primary calculation evaluates coefficient draws at their averaged predictors") &&
+    has(main_plain, "ordered quantile grid at each step") &&
+    has(main_plain, "endpoint quantiles") &&
     has(main_plain, "not sampling from a single exAL regression"),
     "Distinguish ordered-grid response generation from single-level sampling and averaged-feature scoring.")
   require_check(!has(supplement_plain, "ELBO history") &&

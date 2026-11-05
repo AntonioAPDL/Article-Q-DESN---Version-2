@@ -76,10 +76,11 @@ expect(has(prose(intro), "We model response quantiles directly using asymmetric 
          has(prose(intro), "variational Bayes (VB) approximations"),
        "Identify joint direct regression and its computation, not a literal one-step algorithm.")
 expect(has(prose(mq), "BarlowBrunk1972IsotonicDual,chernozhukov2010, DeLeonPradoSanso2026HydrologicProducts") &&
-         has(mq, "eq:isotonic-projection-main"),
+         !has(main, "eq:isotonic-projection-main") &&
+         has(supplement, "eq:supp_monotone_projection"),
        "Cite the authenticated hydrologic ordering procedure.")
 expect(has(mq, "predictor-dependent variation") && has(mq, "ordered intercepts") &&
-         has(prose(mq), "equal-weight least-squares projection"),
+         has(prose(forecast), "equal-weight isotonic projection"),
        "Explain the crossing mechanism without claiming exact monotonicity or no postprocessing.")
 expect(has(prose(intro), "\\citet{DeLeonPradoSanso2026HydrologicProducts} combine hydrologic products") &&
          !has(prose(intro), "The earlier hydrologic model of") &&
@@ -122,16 +123,18 @@ for (heading in c("Multi-step quantile forecasts", "Forecast scores",
   expect(has(main, paste0("\\subsection{", heading, "}")),
          paste("Missing reader-oriented subsection:", heading))
 }
-expect(has(main, "eq:isotonic-projection-main") &&
+expect(!has(main, "eq:isotonic-projection-main") &&
          has(supplement, "eq:supp_monotone_projection") &&
-         has(prose(main), "each scored draw"),
-       "Define the projection near MQ and retain its actual draw-level scoring rule.")
+         has(prose(forecast), "each scored quantile vector") &&
+         has(prose(forecast), "evaluated before projection"),
+       "Keep the projection definition in the supplement and its scoring role in the main paper.")
 expect(has(prose(main), "oracle finite-grid") && has(prose(supplement), "oracle finite-grid") &&
          has(main, "S_{\\mathrm{DGP}}^{(b)}") && has(main, "p_K-p_1"),
        "Rename only the display name, retaining the finite-grid score and range.")
-expect(has(prose(main), "score intervals describe readout uncertainty conditional on these averaged future predictors") &&
+expect(has(prose(main), "score intervals describe readout uncertainty conditional on these mean predictors") &&
          has(main, "\\bar{\\vect x}_{o+h}") &&
-         has(prose(main), "model-generated future predictor trajectories"),
+         has(prose(main), "primary multiquantile comparison") &&
+         has(prose(main), "generated future predictors over trajectories"),
        "Define the uncertainty displayed in the primary joint comparison.")
 expect(has(prose(main), "shared by independent Q--DESN under AL and exAL and MQ--DESN under AL and exAL") &&
          has(prose(main), "These four regressions use the same selected temporal representation"),
@@ -241,11 +244,9 @@ method_invariants <- function(main, supplement) {
       has(mq_text, "C_\\Delta(\\Theta_\\Delta)p(\\Theta_\\Delta)"),
     covariance = has(supplement, "\\mat H\\mat\\Sigma\\mat H^\\top") &&
       has(supplement, "\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})"),
-    forecast_estimand = has(flat_main, "A posterior predictive quantile integrates over") &&
-      has(flat_main, "intermediate responses and parameters") &&
-      has(flat_main, "conditions on one simulated history") &&
+    forecast_estimand = has(flat_main, "A conditional location along one simulated history is not a quantile integrated over all possible histories") &&
       has(main, "\\label{eq:forecast-location-main}"),
-    method_specific_recursion = has(flat_main, "fresh errors are generated at each step from") &&
+    method_specific_recursion = has(flat_main, "using a fresh error from") &&
       has(main, "\\exAL_{p_0}(0,\\sigma^{(b)},\\gamma^{(b)})") &&
       has(flat_main, "ordered quantile grid at each step") &&
       has(flat_main, "endpoint quantiles"),
@@ -272,8 +273,8 @@ mutations <- list(
   list("cross-level covariance removed", main,
        mutate(supplement, "\\operatorname{Cov}_q(\\beta_{k,j},\\beta_{k-1,j})", "0")),
   list("location average asserted to be predictive quantile",
-       mutate(main, "A posterior predictive quantile integrates over",
-              "A posterior predictive quantile equals the average over"), supplement),
+       mutate(main, "A conditional location along one simulated history is not a quantile",
+              "A conditional location along one simulated history is a quantile"), supplement),
   list("coordinate Jacobian lost", main,
        mutate(supplement, "J(\\vect\\eta)=\\sigma(U-L)\\expit(\\eta_2)", "J=1"))
 )

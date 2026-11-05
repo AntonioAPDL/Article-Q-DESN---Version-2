@@ -102,7 +102,7 @@ gcpoa_main <- function(args=commandArgs(TRUE)) {
     optimizer_accuracy_passes=sum(result$summary$optimizer_accuracy_gate),fixtures=nrow(result$summary),
     original_RDS_reads=0L,original_RDS_hashes=0L,original_RDS_stats=0L,application_fits=0L,
     future_truth_reads=0L,forecast_score_selection=FALSE,existing_results_changed=FALSE,
-    full_RHS_target_fixture_tested_separately=TRUE,
+    full_RHS_target_fixture_scope="Separate focused test; not attested by this generated two-parameter driver",
     full_application_parameter_accuracy_qualified=FALSE,native_backend_qualified=FALSE,
     production_launch_authorized=FALSE,publication_authorized=FALSE,
     remaining_gates=c("actual_destination_prior_input_binding","richer_parameter_covariance_accuracy",

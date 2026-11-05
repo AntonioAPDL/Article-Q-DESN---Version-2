@@ -187,5 +187,141 @@ local({
   reject(gcpopt_factor(matrix(0, 2L, 2L), 2L))
   reject(gcpopt_score_gradient(0, 0, epsilon = matrix(NA_real_, 4L, 1L), rewards = rep(0, 4L)))
   ok(!limited$production_launch_authorized && !failed$reference_qualified)
+  # Frozen polynomial controls have analytic partial-score moments for any
+  # fixed affine Gaussian factor. They contain no historical prior or entropy.
+  polynomial <- function(constant, linear, quadratic) {
+    force(constant); force(linear); force(quadratic)
+    function(mean, log_sd, factor) {
+      d <- length(mean); L <- if (is.null(factor)) diag(d) else factor
+      s2 <- exp(2 * log_sd)
+      evaluate <- function(eta) constant + sum(linear * eta) + .5 * as.numeric(crossprod(eta, quadratic %*% eta))
+      list(evaluate = evaluate,
+        expected_value = constant + sum(linear * mean) + .5 * as.numeric(crossprod(mean, quadratic %*% mean)) +
+          .5 * sum(s2 * diag(t(L) %*% quadratic %*% L)),
+        score_mean = as.numeric(linear + quadratic %*% mean),
+        score_log_sd = s2 * diag(t(L) %*% quadratic %*% L),
+        freeze_policy = "exact_control", moment_scope = "partial_outer_score_holding_control_fixed",
+        source_identity = gcpopt_hash(list(constant, linear, quadratic)))
+    }
+  }
+  short <- gcpopt_control(max_iterations = 1L, minimum_iterations = 1L, batch_size = 16L)
+  Q <- matrix(c(-.6, .1, .1, -.3), 2L); linear <- c(.4, -.2)
+  poly <- polynomial(.7, linear, Q)
+  model <- function(eta, seed) list(log_estimate = .7 + sum(linear * eta) + .5 * as.numeric(crossprod(eta, Q %*% eta)),
+    complete = TRUE, diagnostic_thresholds_passed = TRUE, callback_calls = 0L)
+  cvfit <- gcpopt_optimize(log_evidence_estimate = model, initial_mean = mean, initial_log_sd = log_sd,
+    factor = L, control = short, input_contract = contract(2, "affine_polynomial_control"),
+    analytic_historical = h, control_variate = poly)
+  moments <- poly(mean, log_sd, L); historical <- h(mean, log_sd, L)
+  near(cvfit$last_gradient$gradient, c(historical$gradient_mean + moments$score_mean,
+    historical$gradient_log_sd + moments$score_log_sd), 1e-12)
+  near(cvfit$last_gradient$standardized_gradient_mean,
+    exp(log_sd) * as.numeric(crossprod(L, historical$gradient_mean + moments$score_mean)), 1e-12)
+  near(cvfit$history$objective, historical$value + moments$expected_value, 1e-12)
+  near(cvfit$last_gradient$mcse, rep(0, 4L), 1e-12)
+  ok(max(cvfit$last_gradient$raw_no_control_mcse) > .01)
+  ok(cvfit$control_variate_evaluations == 17L && cvfit$evaluations == 17L && cvfit$total_callbacks == 34L)
+  ok(!cvfit$stopping_criteria_met && !cvfit$posterior_accuracy_qualified)
+  # A zero control leaves every optimizer step and outer RNG draw unchanged;
+  # auxiliary calls are separately charged rather than hidden as free work.
+  parity_ctl <- many_ctl; parity_ctl$batch_size <- 8L
+  no_control <- gcpopt_optimize(log_evidence_estimate = evidence, initial_mean = .3, initial_log_sd = -.4,
+    control = parity_ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)))
+  zero_control <- gcpopt_optimize(log_evidence_estimate = evidence, initial_mean = .3, initial_log_sd = -.4,
+    control = parity_ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    control_variate = polynomial(0, 0, matrix(0,1,1)))
+  near(zero_control$mean, no_control$mean, 1e-15)
+  near(zero_control$log_sd, no_control$log_sd, 1e-15)
+  near(zero_control$history$objective, no_control$history$objective, 1e-14)
+  ok(zero_control$evaluations == no_control$evaluations && zero_control$control_variate_evaluations == 27L)
+  # Exact linear/quadratic future controls recover a proper Normal posterior
+  # by real optimization, not merely by evaluating a supplied gradient once.
+  linear_cv <- polynomial(0, .8, matrix(0,1,1))
+  linear_model <- function(eta, seed) list(log_estimate = .8 * eta[1L], complete = TRUE,
+    diagnostic_thresholds_passed = TRUE, callback_calls = 0L)
+  linear_fit <- gcpopt_optimize(log_evidence_estimate = linear_model, initial_mean = 0, initial_log_sd = -.3,
+    control = ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)), control_variate = linear_cv)
+  ok(linear_fit$stopping_criteria_met)
+  near(linear_fit$mean, .8, 5e-4); near(linear_fit$log_sd, 0, 5e-4)
+  constant_model <- function(eta, seed) list(log_estimate = 7, complete = TRUE,
+    diagnostic_thresholds_passed = TRUE, callback_calls = 0L)
+  constant_fit <- gcpopt_optimize(log_evidence_estimate = constant_model, initial_mean = 0, initial_log_sd = 0,
+    control = many_ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    control_variate = polynomial(7, 0, matrix(0,1,1)))
+  near(constant_fit$mean, 0, 1e-15); near(constant_fit$history$objective, rep(7,3L), 1e-15)
+  # A phi-dependent standardized-linear control has E(c)=0, yet its PARTIAL
+  # score moment is 1/s. Using the total derivative of zero would be biased.
+  standardized_control <- function(mean, log_sd, factor) {
+    stopifnot(is.null(factor)); m0 <- mean[1L]; s0 <- exp(log_sd[1L])
+    list(evaluate = function(eta) (eta[1L] - m0) / s0, expected_value = 0,
+      score_mean = 1 / s0, score_log_sd = 0, freeze_policy = "exact_control",
+      moment_scope = "partial_outer_score_holding_control_fixed", source_identity = gcpopt_hash(c(m0,s0)))
+  }
+  large_batch <- short; large_batch$batch_size <- 4096L
+  corrected <- gcpopt_optimize(log_evidence_estimate = zero, initial_mean = .3, initial_log_sd = log(.7),
+    control = large_batch, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    control_variate = standardized_control)
+  ok(abs(corrected$last_gradient$gradient_mean + .3) < 5 * corrected$last_gradient$mcse[1L] + .001)
+  wrong <- standardized_control(.3, log(.7), NULL)
+  ok(abs(wrong$score_mean) > 1 && wrong$expected_value == 0)
+  bad_factory <- function(mean, log_sd, factor) {
+    x <- standardized_control(mean, log_sd, factor)
+    x$moment_scope <- "total_derivative_including_factory"; x
+  }
+  rejected <- gcpopt_optimize(log_evidence_estimate = zero, initial_mean = 0, initial_log_sd = 0,
+    control = many_ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    control_variate = bad_factory)
+  ok(rejected$evaluations == 0L && rejected$control_variate_evaluations == 1L && !is.null(rejected$failure))
+  current_batch <- function(mean, log_sd, factor) {
+    x <- standardized_control(mean, log_sd, factor); x$freeze_policy <- "trained_on_current_outer_batch"; x
+  }
+  reject(gcpopt_validate_control_variate(current_batch(0, 0, NULL), 1L))
+  malformed <- polynomial(0, 0, matrix(0,1,1))(0,0,NULL); malformed$score_mean <- c(0,0)
+  reject(gcpopt_validate_control_variate(malformed, 1L))
+  malformed <- polynomial(0, 0, matrix(0,1,1))(0,0,NULL); malformed$source_identity <- "not_a_hash"
+  reject(gcpopt_validate_control_variate(malformed, 1L))
+  evil_control <- function(mean, log_sd, factor) { runif(1); standardized_control(mean,log_sd,factor) }
+  before <- .Random.seed
+  bad_control_rng <- gcpopt_optimize(log_evidence_estimate = zero, initial_mean = 0, initial_log_sd = 0,
+    control = many_ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    control_variate = evil_control)
+  ok(!is.null(bad_control_rng$failure) && identical(before, .Random.seed))
+  same_cap <- parity_ctl; same_cap$max_evaluations <- 10L
+  capped_plain <- gcpopt_optimize(log_evidence_estimate = zero, initial_mean = .3, initial_log_sd = -.4,
+    control = same_cap, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)))
+  capped_control <- gcpopt_optimize(log_evidence_estimate = zero, initial_mean = .3, initial_log_sd = -.4,
+    control = same_cap, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    control_variate = polynomial(0, 0, matrix(0,1,1)))
+  ok(capped_plain$evaluations == capped_control$evaluations && capped_control$evaluations == 10L)
+  ok(capped_plain$completed_iterations == capped_control$completed_iterations && !capped_control$stopping_criteria_met)
+  # The historical Adam strategy is still the exact default. Shorter second-
+  # moment memories are explicit numerical strategies, not per-case retuning.
+  explicit_legacy <- gcpopt_optimize(log_evidence_estimate = evidence, initial_mean = .3, initial_log_sd = -.4,
+    control = parity_ctl, input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+    step_strategy = "legacy_adam_0999")
+  near(explicit_legacy$mean, no_control$mean, 1e-15)
+  near(explicit_legacy$log_sd, no_control$log_sd, 1e-15)
+  ok(explicit_legacy$adam_beta2 == .999 && explicit_legacy$step_strategy == "legacy_adam_0999")
+  for (strategy in c("short_memory_adam_099", "short_memory_adam_095")) {
+    b2 <- if (strategy == "short_memory_adam_099") .99 else .95
+    for (control_linear in c(.8, .5)) {
+      # The .5 control is deliberately approximate and leaves stochastic
+      # residual reward; its supplied partial-score moments remain exact.
+      candidate <- gcpopt_optimize(log_evidence_estimate = linear_model,
+        initial_mean = 0, initial_log_sd = -.3, control = parity_ctl,
+        input_contract = contract(1), analytic_historical = gaussian(0, matrix(1,1,1)),
+        control_variate = polynomial(0, control_linear, matrix(0,1,1)), step_strategy = strategy)
+      ok(is.null(candidate$failure) && candidate$completed_iterations == 3L)
+      ok(candidate$adam_beta2 == b2 && candidate$step_strategy == strategy)
+      ok(candidate$evaluations == 27L && candidate$control_variate_evaluations == 27L)
+      ok(!candidate$posterior_accuracy_qualified && !candidate$production_launch_authorized)
+      if (control_linear == .8) near(candidate$last_gradient$mcse, rep(0,2L), 1e-12) else
+        ok(max(candidate$last_gradient$mcse) > .01)
+      ok(candidate$input_seal_sha256 != explicit_legacy$input_seal_sha256)
+    }
+  }
+  reject(gcpopt_optimize(log_evidence_estimate = zero, initial_mean = 0, initial_log_sd = 0,
+    control = many_ctl, input_contract = contract(1), analytic_historical = gaussian(0,matrix(1,1,1)),
+    step_strategy = "choose_the_best_case"))
   cat(sprintf("GLOFAS_COLLAPSED_PARAMETER_OPTIMIZER_PASS checks=%d original_reads=0 authentic_fits=0 production_qualified=FALSE\n", checks))
 })

@@ -125,10 +125,43 @@ gcpopt_score_gradient <- function(mean, log_sd, factor = NULL, epsilon, rewards,
     entropy_added = include_entropy)
 }
 
+# A factory is evaluated before the current independent outer sample is drawn.
+# Its function c(eta) is then frozen. Supplied moments are E_q[c] and
+# E_q[score_q c] HOLDING THAT FUNCTION FIXED, not total derivatives of a
+# phi-dependent factory/anchor. Conditional unbiasedness requires these moments
+# to be correct; an independence declaration cannot certify their mathematics.
+gcpopt_validate_control_variate <- function(x, p) {
+  q <- gcpopt_require
+  keys <- c("evaluate", "expected_value", "score_mean", "score_log_sd", "freeze_policy", "moment_scope", "source_identity")
+  q(is.list(x) && setequal(names(x), keys) && length(x) == length(keys) && is.function(x$evaluate) &&
+    gcpopt_number(x$expected_value) && length(x$expected_value) == 1L &&
+    gcpopt_number(x$score_mean) && length(x$score_mean) == p &&
+    gcpopt_number(x$score_log_sd) && length(x$score_log_sd) == p &&
+    is.character(x$freeze_policy) && length(x$freeze_policy) == 1L &&
+    x$freeze_policy %in% c("exact_control", "independent_frozen_control") &&
+    identical(x$moment_scope, "partial_outer_score_holding_control_fixed") &&
+    is.character(x$source_identity) && length(x$source_identity) == 1L &&
+    grepl("^[a-f0-9]{64}$", x$source_identity),
+    "frozen exact/independent control with analytic partial-score moments required")
+  invisible(TRUE)
+}
+gcpopt_control_variate_seal <- function(x) gcpopt_hash(list(expected_value = x$expected_value,
+  score_mean = x$score_mean, score_log_sd = x$score_log_sd,
+  freeze_policy = x$freeze_policy, moment_scope = x$moment_scope, source_identity = x$source_identity,
+  formals = deparse(formals(x$evaluate)), body = deparse(body(x$evaluate))))
+
 gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
     initial_mean, initial_log_sd, factor = NULL, control = gcpopt_control(),
-    input_contract, analytic_historical = NULL) {
+    input_contract, analytic_historical = NULL, control_variate = NULL, future_projection = NULL,
+    step_strategy = "legacy_adam_0999") {
   q <- gcpopt_require; gcpopt_validate_control(control)
+  strategies <- c(legacy_adam_0999 = .999, short_memory_adam_099 = .99,
+    short_memory_adam_095 = .95)
+  q(is.character(step_strategy) && length(step_strategy) == 1L && !is.na(step_strategy) &&
+    step_strategy %in% names(strategies), "named, prespecified Adam step strategy required")
+  beta2 <- unname(strategies[[step_strategy]])
+  second_moment_weight <- unname(c(legacy_adam_0999 = .001,
+    short_memory_adam_099 = .01, short_memory_adam_095 = .05)[[step_strategy]])
   p <- length(initial_mean)
   q(gcpopt_number(initial_mean) && gcpopt_number(initial_log_sd) && length(initial_log_sd) == p &&
     p <= 20000L && p * control$batch_size <= 2000000L &&
@@ -138,6 +171,17 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
     (is.null(log_historical) || is.function(log_historical)) &&
     (is.null(analytic_historical) || is.function(analytic_historical)),
     "exactly one historical route; analytic historical ELBO must already include entropy")
+  q(is.null(control_variate) || is.function(control_variate), "control variate must be a factory frozen before each batch")
+  projector <- NULL; projection_identity <- NULL
+  if (!is.null(future_projection)) {
+    q(is.environment(future_projection) && is.function(analytic_historical) && is.null(factor) &&
+      exists("gafsp_project_future", envir = environment(gcpopt_optimize), mode = "function", inherits = TRUE),
+      "authenticated generated future projection requires analytic history and identity factor")
+    projector <- get("gafsp_project_future", envir = environment(gcpopt_optimize), inherits = TRUE)
+    projection_identity <- list(dimension = future_projection$dimension,
+      coordinate_names = future_projection$coordinate_names, source_sha256 = future_projection$source_sha256)
+    gcpopt_plain(projection_identity)
+  }
   q(is.list(input_contract) && identical(input_contract$schema_version, "glofas_generated_outer_score_input_v1") &&
     identical(input_contract$scope, "generated_only") && length(input_contract$parameter_names) == p &&
     identical(input_contract$inner_kernel_phi_independent, TRUE) &&
@@ -149,10 +193,12 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
     input_contract$coordinate_measure, input_contract$target_inputs, input_contract$source_sha256)),
     "input contract fields, coordinate names or source identities changed")
   f <- gcpopt_factor(factor, p)
-  callbacks <- list(historical = log_historical, evidence = log_evidence_estimate, analytic = analytic_historical)
+  callbacks <- list(historical = log_historical, evidence = log_evidence_estimate,
+    analytic = analytic_historical, control_variate = control_variate, projection = projector)
   body_identity <- function() lapply(callbacks, function(fn) if (is.null(fn)) NULL else
     list(formals = deparse(formals(fn)), body = deparse(body(fn))))
-  sealed <- function() gcpopt_hash(list(input_contract, control, initial_mean, initial_log_sd, factor, body_identity()))
+  sealed <- function() gcpopt_hash(list(input_contract, control, initial_mean, initial_log_sd, factor,
+    body_identity(), projection_identity, step_strategy, beta2, second_moment_weight))
   seal <- sealed()
   old_kind <- RNGkind(); old_seed <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) get(".Random.seed", .GlobalEnv) else NULL
   on.exit({
@@ -162,15 +208,25 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
     } else assign(".Random.seed", old_seed, .GlobalEnv)
   }, add = TRUE)
   RNGkind("Mersenne-Twister", "Inversion", "Rejection"); set.seed(as.integer(control$seed))
-  started <- proc.time()[["elapsed"]]; calls <- inner_calls <- 0L
+  started <- proc.time()[["elapsed"]]; calls <- inner_calls <- control_calls <- projection_calls <- 0L
   m <- last_m <- as.numeric(initial_mean); ls <- last_ls <- as.numeric(initial_log_sd)
   adam_m <- adam_v <- rep(0, 2L * p); history <- list(); stable <- 0L
   prior_objective <- NA_real_; prior_parameters <- NULL; final_gradient <- NULL
   status <- "ITERATION_BUDGET_EXHAUSTED_NOT_QUALIFIED"; failure <- NULL; stopping <- FALSE
-  callback <- function(fn, ...) {
-    q(calls < control$max_evaluations && proc.time()[["elapsed"]] - started < control$max_wall_seconds,
-      "optimizer callback/wall budget exhausted")
-    calls <<- calls + 1L; before <- get(".Random.seed", .GlobalEnv)
+  callback <- function(fn, ..., cost_role = "model") {
+    q(proc.time()[["elapsed"]] - started < control$max_wall_seconds, "optimizer callback/wall budget exhausted")
+    if (cost_role == "model") {
+      q(calls < control$max_evaluations, "optimizer callback/wall budget exhausted")
+      calls <<- calls + 1L
+    } else if (cost_role == "control") {
+      q(control_calls < control$max_iterations * (control$batch_size + 1), "control-variate callback budget exhausted")
+      control_calls <<- control_calls + 1L
+    } else {
+      q(identical(cost_role, "projection") && projection_calls < 2 * control$max_iterations,
+        "future projection callback budget exhausted")
+      projection_calls <<- projection_calls + 1L
+    }
+    before <- get(".Random.seed", .GlobalEnv)
     out <- fn(...)
     q(identical(before, get(".Random.seed", .GlobalEnv)), "callbacks must preserve the outer RNG stream")
     out
@@ -178,13 +234,28 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
   tryCatch({
     for (iteration in seq_len(control$max_iterations)) {
       q(identical(seal, sealed()), "declared inputs/control/source bodies changed")
+      cv <- if (is.null(control_variate)) NULL else callback(control_variate, m, ls, factor, cost_role = "control")
+      cv_seal <- NULL
+      if (!is.null(cv)) {
+        gcpopt_validate_control_variate(cv, p)
+        cv_seal <- gcpopt_control_variate_seal(cv)
+      }
+      if (!is.null(projector)) {
+        zeros <- rep(0, p)
+        empty_gradient <- list(gradient_mean = zeros, gradient_log_sd = zeros,
+          standardized_gradient_mean = zeros, mcse = rep(0, 2L * p),
+          standardized_mcse_mean = zeros, gradient = rep(0, 2L * p),
+          standardized_gradient = rep(0, 2L * p), standardized_mcse = rep(0, 2L * p))
+        callback(projector, empty_gradient, future_projection, factor = factor,
+          evidence = log_evidence_estimate, surrogate = cv, cost_role = "projection")
+      }
       epsilon <- matrix(stats::rnorm(control$batch_size * p), control$batch_size, p)
       q(all(apply(epsilon, 2L, stats::var) > 0), "degenerate independent outer Monte Carlo draws")
       scaled <- sweep(epsilon, 2L, exp(ls), `*`)
       if (!is.null(f$matrix)) scaled <- scaled %*% t(f$matrix)
       eta <- sweep(scaled, 2L, m, `+`)
       seeds <- sample.int(.Machine$integer.max, control$batch_size, replace = FALSE)
-      reward <- evidence <- numeric(control$batch_size)
+      reward <- evidence <- control_values <- numeric(control$batch_size)
       historical <- if (!is.null(analytic_historical)) callback(analytic_historical, m, ls, factor) else NULL
       if (!is.null(historical)) q(is.list(historical) && gcpopt_number(historical$value) && length(historical$value) == 1L &&
         gcpopt_number(historical$gradient_mean) && length(historical$gradient_mean) == p &&
@@ -206,9 +277,32 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
           q(gcpopt_number(h) && length(h) == 1L, "finite same-measure historical log target required")
           reward[j] <- h + evidence[j]
         } else reward[j] <- evidence[j]
+        if (!is.null(cv)) {
+          cv_value <- callback(cv$evaluate, as.numeric(eta[j, ]), cost_role = "control")
+          q(gcpopt_number(cv_value) && length(cv_value) == 1L, "finite scalar frozen control value required")
+          control_values[j] <- cv_value
+        }
       }
-      gradient <- gcpopt_score_gradient(m, ls, factor, epsilon, reward,
+      raw_reward <- reward
+      raw_gradient <- gcpopt_score_gradient(m, ls, factor, epsilon, raw_reward,
         include_entropy = is.null(historical))
+      reward <- reward - control_values
+      gradient <- if (is.null(cv)) raw_gradient else gcpopt_score_gradient(m, ls, factor, epsilon, reward,
+        include_entropy = is.null(historical))
+      if (!is.null(cv)) {
+        q(identical(cv_seal, gcpopt_control_variate_seal(cv)), "frozen control changed within the current batch")
+        gradient$gradient <- gradient$gradient + c(cv$score_mean, cv$score_log_sd)
+        moment_m <- if (is.null(f$matrix)) cv$score_mean else as.numeric(crossprod(f$matrix, cv$score_mean))
+        gradient$standardized_gradient_mean <- gradient$standardized_gradient_mean + exp(ls) * moment_m
+      }
+      gradient$gradient_mean <- gradient$gradient[seq_len(p)]
+      gradient$gradient_log_sd <- gradient$gradient[p + seq_len(p)]
+      gradient$standardized_gradient <- c(gradient$standardized_gradient_mean, gradient$gradient_log_sd)
+      gradient$standardized_mcse <- c(gradient$standardized_mcse_mean, gradient$mcse[p + seq_len(p)])
+      controlled_unprojected_mcse <- gradient$mcse
+      controlled_unprojected_standardized_mcse <- gradient$standardized_mcse
+      if (!is.null(projector)) gradient <- callback(projector, gradient, future_projection, factor = factor,
+        evidence = log_evidence_estimate, surrogate = cv, cost_role = "projection")
       if (!is.null(historical)) gradient$gradient <- gradient$gradient +
         c(historical$gradient_mean, historical$gradient_log_sd)
       gradient$gradient_mean <- gradient$gradient[seq_len(p)]
@@ -220,8 +314,13 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
       }
       gradient$standardized_gradient <- c(gradient$standardized_gradient_mean, gradient$gradient_log_sd)
       gradient$standardized_mcse <- c(gradient$standardized_mcse_mean, gradient$mcse[p + seq_len(p)])
+      gradient$raw_no_control_mcse <- raw_gradient$mcse
+      gradient$raw_no_control_standardized_mcse <- c(raw_gradient$standardized_mcse_mean, raw_gradient$mcse[p + seq_len(p)])
+      gradient$controlled_unprojected_mcse <- controlled_unprojected_mcse
+      gradient$controlled_unprojected_standardized_mcse <- controlled_unprojected_standardized_mcse
       entropy <- .5 * p * (1 + log(2 * pi)) + sum(ls) + f$log_abs_determinant
-      objective <- mean(reward) + if (is.null(historical)) entropy else historical$value
+      objective <- mean(reward) + (if (is.null(cv)) 0 else cv$expected_value) +
+        if (is.null(historical)) entropy else historical$value
       objective_mcse <- stats::sd(reward) / sqrt(control$batch_size)
       q(all(is.finite(c(gradient$gradient, gradient$mcse, gradient$standardized_gradient,
         gradient$standardized_mcse, objective, objective_mcse))), "nonfinite optimizer state")
@@ -243,21 +342,27 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
       multiplier <- min(1, control$gradient_clip / max(norm, .Machine$double.eps))
       history[[iteration]] <- data.frame(iteration = iteration, objective = objective, objective_mcse = objective_mcse,
         max_abs_gradient = max(abs(gradient$gradient)), max_gradient_mcse = max(gradient$mcse),
+        raw_no_control_max_gradient_mcse = max(raw_gradient$mcse),
+        raw_no_control_max_standardized_mcse = max(c(raw_gradient$standardized_mcse_mean, raw_gradient$mcse[p + seq_len(p)])),
+        controlled_unprojected_max_gradient_mcse = max(controlled_unprojected_mcse),
+        controlled_unprojected_max_standardized_mcse = max(controlled_unprojected_standardized_mcse),
         max_abs_standardized_gradient = max(abs(gradient$standardized_gradient)),
         max_standardized_gradient_mcse = max(gradient$standardized_mcse),
         max_parameter_change = step, max_standardized_parameter_change = standardized_step,
         objective_change = change, stable_iterations = stable,
         gradient_clip_multiplier = multiplier, variance_bound_active = at_bound,
-        evaluations = calls, inner_calls = inner_calls, elapsed_seconds = proc.time()[["elapsed"]] - started)
+        evaluations = calls, control_variate_evaluations = control_calls, projection_evaluations = projection_calls,
+        total_callbacks = calls + control_calls + projection_calls,
+        inner_calls = inner_calls, elapsed_seconds = proc.time()[["elapsed"]] - started)
       last_m <- m; last_ls <- ls; final_gradient <- gradient
       if (stable >= control$stable_iterations) {
         stopping <- TRUE; status <- "OPTIMIZER_STOPPING_CRITERIA_MET_NOT_POSTERIOR_QUALIFICATION"; break
       }
       if (iteration == control$max_iterations) break
       update <- gradient$standardized_gradient * multiplier
-      adam_m <- .9 * adam_m + .1 * update; adam_v <- .999 * adam_v + .001 * update^2
+      adam_m <- .9 * adam_m + .1 * update; adam_v <- beta2 * adam_v + second_moment_weight * update^2
       standardized_update <- control$learning_rate * (adam_m / (1 - .9^iteration)) /
-        (sqrt(adam_v / (1 - .999^iteration)) + 1e-8)
+        (sqrt(adam_v / (1 - beta2^iteration)) + 1e-8)
       mean_update <- exp(ls) * standardized_update[seq_len(p)]
       if (!is.null(f$matrix)) mean_update <- as.numeric(f$matrix %*% mean_update)
       next_parameters <- parameters + c(mean_update, standardized_update[p + seq_len(p)])
@@ -275,10 +380,18 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
     initial_mean = initial_mean, initial_log_sd = initial_log_sd,
     history = trace, last_gradient = final_gradient, completed_iterations = nrow(trace),
     stopping_criteria_met = stopping, failure = failure, evaluations = calls, inner_calls = inner_calls,
+    control_variate_evaluations = control_calls, projection_evaluations = projection_calls,
+    total_callbacks = calls + control_calls + projection_calls,
+    control_variate_call_limit = control$max_iterations * (control$batch_size + 1),
+    projection_call_limit = 2 * control$max_iterations,
+    control_variate_used = !is.null(control_variate), future_projection_used = !is.null(future_projection),
+    control_moment_scope = "Partial outer-score moments with each control frozen before current independent outer draws.",
+    controlled_mcse_scope = "Sampling variability conditional on a frozen control and correct supplied moments; not a guarantee of moment correctness or posterior accuracy.",
     elapsed_seconds = proc.time()[["elapsed"]] - started, control = control, input_contract = input_contract,
     input_seal_sha256 = seal, callback_source_sha256 = gcpopt_hash(body_identity()),
     seal_scope = "Declared generated value inputs and callback bodies; no opaque closure environments are serialized or authenticated.",
     family = "fixed_affine_factor_diagonal_Gaussian_all_supplied_transformed_coordinates",
+    step_strategy = step_strategy, adam_beta1 = .9, adam_beta2 = beta2,
     mean_update_coordinates = "local_variational_standard_deviation_units_L_diag_sd",
     stopping_gradient_coordinates = "standardized_means_and_log_standard_deviations_raw_metrics_retained",
     all_parameter_dimensions_optimized = TRUE, historical_parameters_frozen = FALSE,

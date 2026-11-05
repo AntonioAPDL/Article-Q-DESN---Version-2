@@ -345,6 +345,10 @@ stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tes
 run_standalone_glofas_test("application/tests/test_glofas_specification_reconciliation.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_particle_vi.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_particle_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_al_target.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_parameter_optimizer.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_reference.R")
+run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_audit.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 # Generated general-editorial scope, presentation and negative text fixtures;

@@ -5,8 +5,9 @@ giga_main <- function(args = commandArgs(TRUE)) {
   root <- normalizePath(".", mustWork = TRUE)
   parent <- normalizePath(dirname(args[2L]), mustWork = TRUE)
   out <- file.path(parent, basename(args[2L]))
+  link <- Sys.readlink(out)
   stopifnot(startsWith(parent, paste0(root, "/local_trackers/")),
-    !file.exists(out), !nzchar(Sys.readlink(out)),
+    !file.exists(out), is.na(link) || !nzchar(link),
     system2("git", c("check-ignore", "-q", shQuote(out))) == 0L)
   stopifnot(requireNamespace("jsonlite", quietly = TRUE))
   source("scripts/diagnostics/glofas_vb_accuracy_benchmarks.R", local = TRUE)

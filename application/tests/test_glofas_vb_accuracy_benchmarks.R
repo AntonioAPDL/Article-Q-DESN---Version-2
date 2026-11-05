@@ -132,6 +132,22 @@ local({
   ok(identical(unname(before), unname(tools::md5sum(original_sources))))
   new_rng <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) get(".Random.seed", .GlobalEnv) else NULL
   ok(identical(old_rng, new_rng))
+  # Exercise the real export entry point. A missing path may have NA from
+  # Sys.readlink: it must be admitted, while links and overwrites must not.
+  source("scripts/audit_glofas_innovation_generated.R", local = TRUE)
+  export_parent <- tempfile("giga_generated_test_", tmpdir = file.path(getwd(), "local_trackers"))
+  dir.create(export_parent, recursive = TRUE, mode = "0700")
+  on.exit(unlink(export_parent, recursive = TRUE), add = TRUE)
+  export_path <- file.path(export_parent, "new_output")
+  exported <- giga_main(c("--out-dir", export_path))
+  ok(file.exists(file.path(export_path, "artifact_manifest.csv")))
+  ok(length(list.files(export_path)) == 8L && !exported$reference_qualified)
+  ok(exported$authentic_reads == 0L && exported$scientific_runs == 0L)
+  reject(giga_main(c("--out-dir", export_path)))
+  reject(giga_main(c("--out-dir", file.path(tempdir(), "not_in_ignored_tree"))))
+  link_path <- file.path(export_parent, "output_link")
+  ok(file.symlink(export_path, link_path))
+  reject(giga_main(c("--out-dir", link_path)))
   cat(sprintf("GLOFAS_VB_ACCURACY_BENCHMARKS_PASS checks=%d cases=%d software_parity_passes=%d complete_target_accuracy_failures=%d original_reads=0 production_fits=0\n",
     checks, nrow(out$checks), sum(out$checks$implementation_parity == "PASS"),
     sum(out$checks$approximation_accuracy == "FAIL")))

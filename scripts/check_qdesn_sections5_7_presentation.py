@@ -76,6 +76,13 @@ def dependency_paths(root: Path) -> set[str]:
             files.update("tables/" + path for path in calibration["outputs"])
     _, corrected_paths = corrected_glofas_authority(root)
     files.update(corrected_paths)
+    path = root / "scripts/appendix_compression_validation_20261106.py"
+    if path.is_file():
+        spec = importlib.util.spec_from_file_location("presentation_compression_paths", path)
+        compression = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(compression)
+        if compression.active(root):
+            files.update(compression.dependency_paths(root))
     return files
 
 
@@ -139,11 +146,23 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
             # Live sources, every omitted historical inclusion's disposition,
             # scientific blobs and current authority are checked before allowing
             # an intentionally archived panel to leave the reader-facing PDF.
-            if portable_reader_fixture:
-                successor.portable_reader_checks(root)
-            else:
-                successor.refresh(root)
+            try:
+                if portable_reader_fixture:
+                    successor.portable_reader_checks(root)
+                else:
+                    successor.refresh(root)
+            except Exception as error:
+                raise AssertionError(str(error)) from error
     assert not portable_reader_fixture or reader_revision, "Explicit copied-fixture mode requires the reviewed reader successor."
+    compressed = False
+    compression_path = root / "scripts/appendix_compression_validation_20261106.py"
+    if compression_path.is_file():
+        spec = importlib.util.spec_from_file_location("presentation_compression", compression_path)
+        compression = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(compression)
+        compressed = compression.active(root)
+    def appendix_display(original, compact):
+        return "tables/appendix_compact_20261106_" + compact + ".tex" if compressed else original
     builder = load_builder(root)
     manifest = json.loads((root / builder.MANIFEST).read_text())
     assert manifest["schema"] == "qdesn-sections5-7-presentation-v1"
@@ -248,12 +267,12 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
                     for path, expected_hash in receipt[group].items():
                         assert digest(root / path) == expected_hash, "IND reporting receipt mismatch: " + path
                 assert r"\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}" in main
-                assert r"\input{tables/independent_train500_eval500_mcmc_figures_v1.tex}" in supplement
+                assert r"\input{" + appendix_display("tables/independent_train500_eval500_mcmc_figures_v1.tex", "ind_sensitivity") + "}" in supplement
                 main_wrapper = (root / "tables/independent_train500_eval300_mcmc_figures_v1.tex").read_text()
                 assert "eval300_mcmc_forecast_check_v1.pdf" in main_wrapper
                 assert "eval300_mcmc_forecast_mae_v1.pdf" not in main_wrapper, "Primary MAE must not remain in main."
-                assert r"\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}" in supplement
-                assert r"\input{tables/independent_forecast_calibration_figure_v1.tex}" in supplement
+                assert r"\input{" + appendix_display("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex", "ind_forecast_mae") + "}" in supplement
+                assert r"\input{" + appendix_display("tables/independent_forecast_calibration_figure_v1.tex", "ind_frequencies") + "}" in supplement
                 assert r"\input{tables/independent_forecast_calibration_figure_v1.tex}" not in main
                 calibration = json.loads((root / "tables/independent_forecast_calibration_manifest_v1.json").read_text())
                 assert calibration["point_summary"] == "posterior_median"
@@ -288,7 +307,8 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
             included = r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" in supplement
             assert included or reader_revision, "Stale effective fit wrapper: " + role
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][0] + "}" not in supplement, "Original effective fit wrapper remains: " + role
-        assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][1] + "}" in supplement, "Stale effective multiquantile design table."
+        if not compressed:
+            assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][1] + "}" in supplement, "Stale effective multiquantile design table."
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][0] + "}" not in supplement, "Original multiquantile design remains selected."
         upload = set((root / "overleaf/article_files.txt").read_text().splitlines())
         active_entries = (entry for role, entry in entries.items()

@@ -20,6 +20,11 @@ SPEC.loader.exec_module(CHECKER)
 
 
 class EditorialPresentationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Authenticate the actual Git checkout before copying public fixtures.
+        CHECKER.check(ROOT)
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="qdesn-editorial-mutation-")
         self.fixture = Path(self.temporary.name)
@@ -54,7 +59,7 @@ class EditorialPresentationTest(unittest.TestCase):
 
     def reject(self, *, effective=False):
         with self.assertRaises((AssertionError, FileNotFoundError)):
-            CHECKER.check(self.fixture, effective=effective)
+            CHECKER.check(self.fixture, effective=effective, portable_reader_fixture=True)
 
     def test_authentic_assets(self):
         receipt = CHECKER.check(ROOT, effective=False)
@@ -68,7 +73,9 @@ class EditorialPresentationTest(unittest.TestCase):
         self.assertEqual(CHECKER.check(ROOT)["status"], "PASS")
 
     def test_isolated_current_document_selections(self):
-        self.assertEqual(CHECKER.check(self.fixture)["status"], "PASS")
+        result = CHECKER.check(self.fixture, portable_reader_fixture=True)
+        self.assertEqual(result["status"], "PASS")
+        self.assertFalse(result["source_ancestry_authenticated"])
 
     def test_current_ind_forecast_mutation_rejected(self):
         path = "figures/independent_simulation/independent_train500_eval300_mcmc_forecast_mae_v1.pdf"

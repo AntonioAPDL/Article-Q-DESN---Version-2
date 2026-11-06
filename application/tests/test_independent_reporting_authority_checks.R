@@ -36,10 +36,7 @@ local({
   selected <- unique(c(app_ind_effective_tex(root, "main.tex"),
     app_ind_effective_tex(root, "qdesn-supplement.tex")))
   app_ind_current_closure(root, selected)
-  for (required in c("tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
-    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
-    "tables/independent_train500_eval500_mcmc_figures_v1.tex",
-    "tables/independent_forecast_calibration_figure_v1.tex")) {
+  for (required in unname(app_ind_reader_routes(root))) {
     stopifnot(required %in% selected)
     reject(app_ind_current_closure(root, setdiff(selected, required)))
   }

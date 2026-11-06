@@ -486,9 +486,11 @@ def reader_appendix_roles(root: Path) -> dict[str, dict[str, str]] | None:
                r["baseline_path"] == "qdesn-supplement.tex" for r in records),
            "Reader appendix role map is not uniquely bound to its baseline")
     try:
-        helper.semantic_checks(read(root, "main.tex"), read(root, "qdesn-supplement.tex"), read(root, "refs.bib"))
+        compression = compression_helper(root)
+        semantics = compression if compression is not None else helper
+        semantics.semantic_checks(read(root, "main.tex"), read(root, "qdesn-supplement.tex"), read(root, "refs.bib"))
         helper.current_route_checks(root, records)
-    except (helper.EditorialError, OSError, ValueError) as error:
+    except Exception as error:
         raise CheckError("Current reader appendix semantics/routing: " + str(error)) from error
     roles = {r["role_id"]: r for r in records}
     for role, asset in READER_ARCHIVES.items():
@@ -537,6 +539,16 @@ def check_definitions(root: Path, visible: dict[str, str]) -> None:
         expect(matched_scope, f"Unresolved effective PriceFM section: {scope[1]}")
 
 
+def compression_helper(root: Path):
+    path = root / "scripts/appendix_compression_validation_20261106.py"
+    if not path.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("mq_appendix_compression", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module if module.active(root) else None
+
+
 def dependency_paths(root: Path) -> set[str]:
     """Exact dependency closure for isolated tests; never discover via a glob."""
     paths = {REGISTRY, JOINT_MANIFEST, GLOFAS_MANIFEST, GLOFAS_OVERRIDE, HISTORICAL_MANIFEST,
@@ -569,6 +581,9 @@ def dependency_paths(root: Path) -> set[str]:
     graphs, _ = manuscript_consumers(root)
     for graph in graphs.values():
         paths.update(graph.files | graph.figures)
+    compression = compression_helper(root)
+    if compression is not None:
+        paths.update(compression.dependency_paths(root))
     return paths
 
 
@@ -634,6 +649,20 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
         current_glofas_pdfs -= archived
         expect(not archived & (files | figures),
                "An approved archived display has returned as current compiled evidence")
+    compression = compression_helper(root)
+    fit_wrapper = FIT_WRAPPER
+    if compression is not None:
+        # Full successor admission has already run in editorial.check above.
+        # Only compiled display roles change; original hashes and rows below
+        # are still mandatory, including the now-consolidated score tables.
+        current_joint_tables -= {PROTOCOL_TABLE, FIT_WRAPPER,
+            "tables/qdesn_multiquantile_score_display.tex",
+            "tables/qdesn_multiquantile_recursive_policy_display.tex"}
+        fit_wrapper = compression.PREFIX + "mq_fit_rmse.tex"
+        current_joint_tables |= {fit_wrapper, compression.PREFIX + "mq_scores.tex"}
+        current_glofas_tables -= set(compression.STALE_DISPLAYS)
+        current_glofas_tables |= {compression.PREFIX + name + ".tex" for name in
+            ("glofas_specifications", "glofas_historical_scores", "glofas_diagnostics", "glofas_convergence")}
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
     expect(not (JOINT_TABLES | GLOFAS_TABLES) & files,
@@ -657,7 +686,7 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
     expect(JOINT_PDFS | current_glofas_pdfs <= figures,
            "Effective selected aliases/wrappers do not select all authenticated MQ/GloFAS PDFs")
     expect(FORECAST_WRAPPER in graphs["main.tex"].files and
-           FIT_WRAPPER in graphs["qdesn-supplement.tex"].files,
+           fit_wrapper in graphs["qdesn-supplement.tex"].files,
            "JOINT forecast belongs in main; JOINT fit belongs in supplement")
     expect(MAIN_EDITORIAL_OVERRIDE in graphs["main.tex"].files and
            SUPP_EDITORIAL_OVERRIDE in graphs["qdesn-supplement.tex"].files,

@@ -38,6 +38,32 @@ gnser_cost <- function(s) {
     deserialization_bytes = bytes, payload_hash_bytes = 2 * bytes)
 }
 
+gnser_append_attempt <- function(attempts, post_attempted, pin, role) {
+  q <- gfr_require
+  at <- length(attempts) + 1L
+  q(at <= 2L && length(post_attempted) == length(attempts),
+    "consistent two-original Stage E read ledger required")
+  attempts[[at]] <- list(role = role, path = pin$path,
+    size_bytes = pin$size_bytes, sha256 = pin$sha256,
+    pre_read_sha256 = pin$sha256, status = "DESERIALIZATION_ATTEMPTED")
+  post_attempted[[at]] <- FALSE
+  list(attempts = attempts, post_attempted = post_attempted, index = at)
+}
+
+gnser_post_hash_attempts <- function(attempts, post_attempted) {
+  q <- gfr_require
+  q(length(attempts) <= 2L && length(post_attempted) == length(attempts),
+    "consistent Stage E post-read ledger required")
+  for (i in seq_along(attempts)) if (!isTRUE(post_attempted[[i]])) {
+    post_attempted[[i]] <- TRUE
+    if (is.null(attempts[[i]]$pre_read_sha256)) next
+    gsc_pin(attempts[[i]][c("path", "size_bytes", "sha256")], 8 * 1024^3)
+    attempts[[i]]$post_read_sha256 <- attempts[[i]]$sha256
+    attempts[[i]]$post_hash_status <- "PASS"
+  }
+  list(attempts = attempts, post_attempted = post_attempted)
+}
+
 gnser_scope <- function(s) {
   q <- gfr_require; gst_unique_objects(s)
   yes <- c("allow_original_reads", "allow_prior_metadata_read",
@@ -235,13 +261,9 @@ gnser_main <- function(args = commandArgs(TRUE)) {
   attempts <- list(); post_attempted <- logical(); finished <- FALSE
   started <- proc.time()[["elapsed"]]; engine <- NULL; result <- NULL
   post_hash <- function() {
-    for (i in seq_along(attempts)) if (!isTRUE(post_attempted[[i]])) {
-      post_attempted[[i]] <<- TRUE
-      if (is.null(attempts[[i]]$pre_read_sha256)) next
-      gsc_pin(attempts[[i]][c("path", "size_bytes", "sha256")], 8 * 1024^3)
-      attempts[[i]]$post_read_sha256 <<- attempts[[i]]$sha256
-      attempts[[i]]$post_hash_status <<- "PASS"
-    }
+    closed <- gnser_post_hash_attempts(attempts, post_attempted)
+    attempts <<- closed$attempts
+    post_attempted <<- closed$post_attempted
     invisible(TRUE)
   }
   on.exit(if (!finished) try({
@@ -256,11 +278,14 @@ gnser_main <- function(args = commandArgs(TRUE)) {
       out, s$limits$output_bytes)
   }, silent = TRUE), add = TRUE)
   read_one <- function(pin, role) {
-    path <- gsc_pin(pin, 8 * 1024^3); at <- length(attempts) + 1L
-    q(at <= 2L, "two-original Stage E read allowance exhausted")
-    attempts[[at]] <<- list(role = role, path = path,
-      size_bytes = pin$size_bytes, sha256 = pin$sha256,
-      pre_read_sha256 = pin$sha256, status = "DESERIALIZATION_ATTEMPTED")
+    path <- gsc_pin(pin, 8 * 1024^3)
+    attempt_pin <- pin
+    attempt_pin$path <- path
+    opened <- gnser_append_attempt(attempts, post_attempted,
+      attempt_pin, role)
+    attempts <<- opened$attempts
+    post_attempted <<- opened$post_attempted
+    at <- opened$index
     value <- readRDS(path)
     attempts[[at]]$status <<- "DESERIALIZED"
     value

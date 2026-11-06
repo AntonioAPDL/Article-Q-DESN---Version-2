@@ -348,6 +348,9 @@ run_standalone_glofas_test("application/tests/test_glofas_collapsed_particle_ref
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_al_target.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_parameter_optimizer.R")
 run_standalone_glofas_test("application/tests/test_glofas_native_prior_contract.R")
+run_standalone_glofas_test("application/tests/test_glofas_two_desn_particle_backend.R")
+run_standalone_glofas_test("application/tests/test_glofas_native_parameter_optimizer.R")
+run_standalone_glofas_test("application/tests/test_glofas_particle_marginal_quantiles.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_audit.R")
 # Generated variance/step qualification: statistical target and existing

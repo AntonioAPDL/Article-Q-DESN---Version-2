@@ -150,10 +150,26 @@ gcpopt_control_variate_seal <- function(x) gcpopt_hash(list(expected_value = x$e
   freeze_policy = x$freeze_policy, moment_scope = x$moment_scope, source_identity = x$source_identity,
   formals = deparse(formals(x$evaluate)), body = deparse(body(x$evaluate))))
 
-gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
+gcpopt_validate_generated_contract <- function(input_contract, p) {
+  q <- gcpopt_require
+  q(is.list(input_contract) && identical(input_contract$schema_version, "glofas_generated_outer_score_input_v1") &&
+    identical(input_contract$scope, "generated_only") && length(input_contract$parameter_names) == p &&
+    identical(input_contract$inner_kernel_phi_independent, TRUE) &&
+    identical(input_contract$authentic_reads_authorized, FALSE) && identical(input_contract$production_authorized, FALSE) &&
+    identical(input_contract$jacobian_policy, "caller_supplied_once_in_target_and_same_measure_log_q") &&
+    identical(input_contract$target_inputs_sha256, gcpopt_hash(input_contract$target_inputs)),
+    "sealed generated target/coordinate declaration required")
+  q(identical(input_contract, gcpopt_input_contract(input_contract$parameter_names,
+    input_contract$coordinate_measure, input_contract$target_inputs, input_contract$source_sha256)),
+    "input contract fields, coordinate names or source identities changed")
+  invisible(TRUE)
+}
+
+.gcpopt_optimize_core <- function(log_historical = NULL, log_evidence_estimate,
     initial_mean, initial_log_sd, factor = NULL, control = gcpopt_control(),
     input_contract, analytic_historical = NULL, control_variate = NULL, future_projection = NULL,
-    step_strategy = "legacy_adam_0999") {
+    step_strategy = "legacy_adam_0999", contract_validator,
+    output_schema = "glofas_generated_collapsed_parameter_optimizer_v1") {
   q <- gcpopt_require; gcpopt_validate_control(control)
   strategies <- c(legacy_adam_0999 = .999, short_memory_adam_099 = .99,
     short_memory_adam_095 = .95)
@@ -175,23 +191,17 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
   projector <- NULL; projection_identity <- NULL
   if (!is.null(future_projection)) {
     q(is.environment(future_projection) && is.function(analytic_historical) && is.null(factor) &&
-      exists("gafsp_project_future", envir = environment(gcpopt_optimize), mode = "function", inherits = TRUE),
+      exists("gafsp_project_future", envir = environment(.gcpopt_optimize_core), mode = "function", inherits = TRUE),
       "authenticated generated future projection requires analytic history and identity factor")
-    projector <- get("gafsp_project_future", envir = environment(gcpopt_optimize), inherits = TRUE)
+    projector <- get("gafsp_project_future", envir = environment(.gcpopt_optimize_core), inherits = TRUE)
     projection_identity <- list(dimension = future_projection$dimension,
       coordinate_names = future_projection$coordinate_names, source_sha256 = future_projection$source_sha256)
     gcpopt_plain(projection_identity)
   }
-  q(is.list(input_contract) && identical(input_contract$schema_version, "glofas_generated_outer_score_input_v1") &&
-    identical(input_contract$scope, "generated_only") && length(input_contract$parameter_names) == p &&
-    identical(input_contract$inner_kernel_phi_independent, TRUE) &&
-    identical(input_contract$authentic_reads_authorized, FALSE) && identical(input_contract$production_authorized, FALSE) &&
-    identical(input_contract$jacobian_policy, "caller_supplied_once_in_target_and_same_measure_log_q") &&
-    identical(input_contract$target_inputs_sha256, gcpopt_hash(input_contract$target_inputs)),
-    "sealed generated target/coordinate declaration required")
-  q(identical(input_contract, gcpopt_input_contract(input_contract$parameter_names,
-    input_contract$coordinate_measure, input_contract$target_inputs, input_contract$source_sha256)),
-    "input contract fields, coordinate names or source identities changed")
+  q(is.function(contract_validator) && is.character(output_schema) &&
+    length(output_schema) == 1L && nzchar(output_schema),
+    "explicit contract validator and output schema required")
+  contract_validator(input_contract, p)
   f <- gcpopt_factor(factor, p)
   callbacks <- list(historical = log_historical, evidence = log_evidence_estimate,
     analytic = analytic_historical, control_variate = control_variate, projection = projector)
@@ -375,7 +385,7 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
   q(identical(seal, sealed()), "declared input/source seal failed after optimization")
   trace <- if (length(history)) do.call(rbind, history) else data.frame()
   variance <- if (is.null(f$matrix)) exp(2 * last_ls) else as.numeric((f$matrix^2) %*% exp(2 * last_ls))
-  list(schema_version = "glofas_generated_collapsed_parameter_optimizer_v1", status = status,
+  list(schema_version = output_schema, status = status,
     mean = last_m, log_sd = last_ls, factor = factor, marginal_variance = variance,
     initial_mean = initial_mean, initial_log_sd = initial_log_sd,
     history = trace, last_gradient = final_gradient, completed_iterations = nrow(trace),
@@ -401,4 +411,18 @@ gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
     posterior_accuracy_qualified = FALSE, reference_qualified = FALSE,
     production_launch_authorized = FALSE, publication_authorized = FALSE,
     original_reads = 0L, authentic_fits = 0L)
+}
+
+gcpopt_optimize <- function(log_historical = NULL, log_evidence_estimate,
+    initial_mean, initial_log_sd, factor = NULL, control = gcpopt_control(),
+    input_contract, analytic_historical = NULL, control_variate = NULL,
+    future_projection = NULL, step_strategy = "legacy_adam_0999") {
+  .gcpopt_optimize_core(log_historical = log_historical,
+    log_evidence_estimate = log_evidence_estimate, initial_mean = initial_mean,
+    initial_log_sd = initial_log_sd, factor = factor, control = control,
+    input_contract = input_contract, analytic_historical = analytic_historical,
+    control_variate = control_variate, future_projection = future_projection,
+    step_strategy = step_strategy,
+    contract_validator = gcpopt_validate_generated_contract,
+    output_schema = "glofas_generated_collapsed_parameter_optimizer_v1")
 }

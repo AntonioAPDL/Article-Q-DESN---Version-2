@@ -19,15 +19,26 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
     members, horizon, probability = .5, particles = 128L, ess_fraction = .5,
     seed = 2026110501L, guide = NULL,
     limits = list(max_horizon = 28L, max_particles = 4096L, max_calls = 1000000L),
-    gates = list(min_ess = 2, min_unique_ancestors = 2L)) {
+    gates = list(min_ess = 2, min_unique_ancestors = 2L), state_backend = NULL) {
   q <- gpg_require
   q(all(vapply(c("gcpv_plain", "gcpv_scalar", "gcpv_integer", "gcpv_logsumexp",
     "gcpv_flags", "gic_al_quantile", "gic_al_log_density"), function(n)
     exists(n, envir = environment(gpg_smc), mode = "function", inherits = TRUE), logical(1L))),
     "load pure generated particle and AL helpers first")
   gcpv_plain(parameters)
-  q(length(unlist(parameters)) <= 20000L && is.function(location) &&
+  using_state_backend <- !is.null(state_backend)
+  q(length(unlist(parameters)) <= 20000L &&
+    ((is.function(location) && is.function(member_location)) ||
+      (using_state_backend && is.null(location) && is.null(member_location))) &&
     (is.null(guide) || is.function(guide)), "bounded generated parameters and causal callbacks required")
+  if (using_state_backend) {
+    q(is.list(state_backend) && identical(state_backend$schema_version,
+      "glofas_two_desn_particle_state_backend_v1") &&
+      all(vapply(c("initial", "step", "resample", "diagnostics"), function(name)
+        is.function(state_backend[[name]]), logical(1L))) &&
+      identical(state_backend$production_qualified, FALSE),
+      "explicit experimental two-DESN state backend required")
+  }
   q(is.list(limits) && setequal(names(limits), c("max_horizon", "max_particles", "max_calls")) &&
     length(limits) == 3L && all(vapply(limits, gcpv_integer, logical(1L))) &&
     all(unlist(limits) > 0) && limits$max_horizon <= 28L && limits$max_particles <= 4096L &&
@@ -45,7 +56,8 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
     "exact prespecified degeneracy gates required")
   if (!is.null(members)) q(is.matrix(members) && is.numeric(members) &&
     identical(dim(members), c(as.integer(horizon), 51L)) && all(is.finite(members)) &&
-    is.function(member_location), "all fifty-one ordinary member factors required")
+    (is.function(member_location) || using_state_backend),
+    "all fifty-one ordinary member factors required")
   old_kind <- RNGkind()
   old_seed <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) get(".Random.seed", .GlobalEnv) else NULL
   on.exit({
@@ -63,9 +75,12 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
   # NULL-guide arithmetic is retained exactly for bootstrap regression checks.
   carry_log_weights <- !is.null(guide) && !is.null(members)
   ancestors <- seq_len(N); diagnostics <- vector("list", H)
+  particle_state <- NULL
   calls <- terms <- completed <- 0L; logZ <- 0; stage <- "START"; failure <- NULL
   used <- c(location = 0L, scale = 0L, member_location = 0L, member_scale = 0L,
-    guide_factory = 0L, proposal_draw = 0L, proposal_log_density = 0L)
+    guide_factory = 0L, proposal_draw = 0L, proposal_log_density = 0L,
+    state_initial = 0L, state_step = 0L, state_resample = 0L,
+    state_diagnostics = 0L)
   invoke <- function(fn, ..., role) {
     q(calls < limits$max_calls, "declared callback budget exhausted")
     calls <<- calls + 1L; used[[role]] <<- used[[role]] + 1L
@@ -95,13 +110,30 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
     increment
   }
   tryCatch({
+    if (using_state_backend) {
+      particle_state <- invoke(state_backend$initial, N, parameters, role = "state_initial")
+    }
     for (h in seq_len(H)) {
+      state_locations <- NULL
+      if (using_state_backend) {
+        state_locations <- invoke(state_backend$step, particle_state, h, paths,
+          parameters, role = "state_step")
+        q(is.list(state_locations) && all(c("state", "reference", "ensemble") %in%
+          names(state_locations)) && is.numeric(state_locations$reference) &&
+          is.numeric(state_locations$ensemble) &&
+          length(state_locations$reference) == N &&
+          length(state_locations$ensemble) == N &&
+          all(is.finite(c(state_locations$reference, state_locations$ensemble))),
+          "state backend must return finite aligned reference and ensemble locations")
+        particle_state <- state_locations$state
+      }
       stage <- paste0("MEMBER_WEIGHT_HORIZON_", h)
       member_increment <- 0
       if (!is.null(members)) {
         potential <- vapply(seq_len(N), function(i) {
           past <- if (h == 1L) numeric() else paths[i, seq_len(h - 1L)]
-          mu <- value(member_location, h, past, "member_location")
+          mu <- if (using_state_backend) state_locations$ensemble[[i]] else
+            value(member_location, h, past, "member_location")
           sigma <- value(member_scale, h, past, "member_scale", TRUE)
           terms <<- terms + 51L
           sum(gic_al_log_density(members[h, ], mu, probability, sigma))
@@ -115,6 +147,12 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
       if (do_resample) {
         selected <- sample.int(N, N, replace = TRUE, prob = weights)
         paths <- paths[selected, , drop = FALSE]; ancestors <- ancestors[selected]
+        if (using_state_backend) {
+          particle_state <- invoke(state_backend$resample, particle_state,
+            selected, role = "state_resample")
+          state_locations$reference <- state_locations$reference[selected]
+          state_locations$ensemble <- state_locations$ensemble[selected]
+        }
         weights <- rep(1 / N, N)
         log_weights <- rep(-log(N), N)
       }
@@ -122,7 +160,8 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
       correction <- numeric(N); guided <- 0L
       for (i in seq_len(N)) {
         past <- if (h == 1L) numeric() else paths[i, seq_len(h - 1L)]
-        mu <- value(location, h, past, "location")
+        mu <- if (using_state_backend) state_locations$reference[[i]] else
+          value(location, h, past, "location")
         sigma <- value(scale, h, past, "scale", TRUE)
         # Terminal prior and the no-member identity do not need a guide.
         proposal <- if (h == H || is.null(members) || is.null(guide)) NULL else
@@ -157,6 +196,9 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
     }
   }, error = function(e) { failure <<- conditionMessage(e) })
   complete <- is.null(failure) && completed == H && all(is.finite(paths))
+  state_diagnostics <- if (using_state_backend) tryCatch(
+    invoke(state_backend$diagnostics, role = "state_diagnostics"),
+    error = function(e) list(failure = conditionMessage(e))) else NULL
   records <- diagnostics[!vapply(diagnostics, is.null, logical(1L))]
   records <- if (length(records)) do.call(rbind, records) else data.frame()
   passed <- complete && nrow(records) == H && all(records$effective_sample_size >= gates$min_ess) &&
@@ -180,6 +222,8 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
     parameters = parameters, horizon = H, particles = N, probability = probability, seed = seed,
     limits = limits, gates = gates, terminal_prior_proposal = TRUE,
     no_resampling_between_correction_and_next_member = TRUE,
+    state_backend_used = using_state_backend,
+    state_backend_diagnostics = state_diagnostics,
     generic_proposal_normalization_authenticated = FALSE,
     unbiasedness_scope = "Exact-arithmetic positive unbiased normalizer requires normalized full-support proposals and the complete f/q correction; arbitrary callback flags do not certify these conditions.",
     expected_log_bound = TRUE, realized_log_estimate_is_a_bound = FALSE,

@@ -1,0 +1,120 @@
+{
+  "schema_version": "glofas_native_stage_e_acceptance_budget_v1",
+  "stage": "E_NATIVE_OPERATIONS_PRECISION_COST_NO_FIT",
+  "task_id": "gft-al-p050",
+  "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
+  "declared_prior_sha256": "d7549e8287c6bf37ee1dafbdc70b0fcc5921307484e9c9658a8140a1926ed65b",
+  "effective_prior_sha256": "0f9d6ddbe7ddd2e7e9f8c4be151e135a82ae184b587e9d8153de3f3d05c45f71",
+  "application_geometry": {
+    "coefficient_count": 2502,
+    "native_coordinate_count": 7510,
+    "reference_coefficient_count": 1501,
+    "discrepancy_coefficient_count": 1001,
+    "historical_rows_per_source": 12455,
+    "forecast_horizon": 28,
+    "issued_members_per_horizon": 51,
+    "member_factors_per_path": 1428,
+    "reference_input_gain": 0.5,
+    "discrepancy_input_gain": 0.35
+  },
+  "initializer": {
+    "coefficient_rule": "retained_median_AL_VB_theta_mean_and_diagonal_theta_covariance",
+    "source_scale_rule": "exact_log_moments_of_retained_inverse_gamma_variational_factors",
+    "rhs_rule": "log_moments_reconstructed_from_retained_inverse_moments_and_known_conditional_shapes",
+    "minimum_standard_deviation": 1e-10,
+    "initializer_is_prior_defining": false
+  },
+  "continuation_parity": {
+    "horizons": [2, 28],
+    "path_rules": ["retained_mean", "retained_mean_minus_sd", "retained_mean_plus_sd"],
+    "parameter_sequence": ["A", "B", "A"],
+    "coefficient_perturbation": 0.01,
+    "source_log_scale_perturbation": 0.05,
+    "absolute_tolerance": 1e-10,
+    "require_feature_rows": true,
+    "require_repeated_ancestor_cache_hit": true
+  },
+  "historical_derivatives": {
+    "roles": [
+      "beta_intercept", "beta_slopes", "alpha_intercept", "alpha_slopes",
+      "sigma_Y", "sigma_G", "beta_tau", "beta_xi", "beta_lambda", "beta_nu",
+      "beta_slab", "alpha_tau", "alpha_xi", "alpha_lambda", "alpha_nu",
+      "alpha_slab"
+    ],
+    "variational_coordinates": ["mean", "log_sd"],
+    "central_steps": [0.0001, 0.00003],
+    "direction_rule": "normalized_sine_cosine_by_sorted_coordinate_index",
+    "scaled_error_formula": "abs(fd-analytic)/(1+abs(fd)+abs(analytic))",
+    "scaled_error_tolerance": 5e-6,
+    "cross_step_scaled_difference_tolerance": 2e-5
+  },
+  "nonlinear_h2": {
+    "contexts": ["retained_initializer", "coefficient_perturbation", "source_scale_perturbation"],
+    "split_standard_deviations": [-12, -6, -3, 0, 3, 6, 12],
+    "relative_tolerance": 1e-7,
+    "absolute_tolerance": 1e-10,
+    "particle_count": 256,
+    "replicate_seeds": [2026110611, 2026110612, 2026110613, 2026110614],
+    "log_evidence_difference_plus_2mcse_tolerance": 0.02
+  },
+  "particle_grid": {
+    "contexts": ["retained_initializer", "coefficient_perturbation", "source_scale_perturbation"],
+    "particle_counts": [64, 128, 256],
+    "initial_replicates": 4,
+    "maximum_replicates": 16,
+    "replicate_seeds": [
+      2026110701, 2026110702, 2026110703, 2026110704,
+      2026110705, 2026110706, 2026110707, 2026110708,
+      2026110709, 2026110710, 2026110711, 2026110712,
+      2026110713, 2026110714, 2026110715, 2026110716
+    ],
+    "ess_fraction": 0.5,
+    "minimum_ess_diagnostic": 2,
+    "minimum_unique_ancestors_diagnostic": 2,
+    "initial_cost_safety_factor": 2,
+    "minimum_remaining_wall_seconds": 600,
+    "memory_headroom_bytes": 193273528320,
+    "maximum_conditional_evaluations": 144,
+    "inner_objective_mcse_allocation": 0.0025,
+    "centered_particle_count_drift_budget": 0.01,
+    "two_mcse_multiplier": 2,
+    "reporting_probabilities": [0.05, 0.5, 0.95],
+    "reporting_mcse_budget_log1p": 0.001,
+    "cross_count_reporting_budget_log1p": 0.005
+  },
+  "rhs_only_invariance": {
+    "particle_count": 64,
+    "seed": 2026110791,
+    "log_coordinate_perturbation": 0.1,
+    "absolute_tolerance": 0
+  },
+  "frozen_q_gradient_assessment": {
+    "enabled": true,
+    "particle_counts": [64, 128],
+    "independent_batches": 4,
+    "outer_draws_per_batch": 2,
+    "seeds": [
+      2026110801, 2026110802, 2026110803, 2026110804,
+      2026110805, 2026110806, 2026110807, 2026110808,
+      2026110809, 2026110810, 2026110811, 2026110812,
+      2026110813, 2026110814, 2026110815, 2026110816
+    ],
+    "raw_and_batch_centered_scores": true,
+    "standardized_gradient_tolerance": 0.02,
+    "gradient_mcse_tolerance": 0.04,
+    "qualification_only_not_optimizer_gradient": true
+  },
+  "resource_caps": {
+    "maximum_wall_seconds": 28800,
+    "maximum_cpu_seconds": 28800,
+    "maximum_resident_bytes": 34359738368,
+    "maximum_output_bytes": 67108864,
+    "maximum_metadata_bytes": 67108864,
+    "maximum_callback_calls_per_evidence": 1000000
+  },
+  "decision_states": ["REJECT", "REVISE_SOURCE", "INCONCLUSIVE", "ADMIT_STAGE_F_PROPOSAL"],
+  "stage_f_authorized": false,
+  "native_fit_authorized": false,
+  "production_authorized": false,
+  "publication_authorized": false
+}

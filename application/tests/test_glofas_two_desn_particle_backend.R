@@ -112,6 +112,24 @@ local({
       all(f$binding$member_weights == 1))
   }
   f <- fixture(2L)
+  decoded <- gcat_decode(f$eta, f$binding$spec)
+  pars <- list(coefficients = decoded$coefficients, sigma = decoded$sigma)
+  retained <- gtdpb_state_backend(f$binding, retain_features = TRUE)
+  retained_state <- retained$initial(1L, pars)
+  retained_paths <- matrix(NA_real_, 1L, 2L)
+  retained_first <- retained$step(retained_state, 1L, retained_paths, pars)
+  retained_repeat <- retained$step(retained_state, 1L, retained_paths, pars)
+  near(retained_first$beta_features, retained_repeat$beta_features, 0)
+  near(retained_first$alpha_features, retained_repeat$alpha_features, 0)
+  changed_pars <- pars; changed_pars$coefficients[2L] <-
+    changed_pars$coefficients[2L] + .25
+  retained_changed <- retained$step(retained_state, 1L, retained_paths, changed_pars)
+  ok(retained_changed$reference[[1L]] != retained_first$reference[[1L]])
+  retained_again <- retained$step(retained_state, 1L, retained_paths, pars)
+  near(retained_again$reference, retained_first$reference, 0)
+  ok(retained$diagnostics()$feature_rows_retained &&
+    retained$diagnostics()$cache_hits == 2L &&
+    retained$diagnostics()$cache_misses == 2L)
   ev <- gtdpb_make_evidence(f$binding, particles = 16L,
     gates = list(min_ess = 1, min_unique_ancestors = 1L), retain_particles = TRUE)
   rng <- if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) .Random.seed else NULL

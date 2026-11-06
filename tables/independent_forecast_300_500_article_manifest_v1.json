@@ -219,7 +219,7 @@
       "tables/qdesn_multiquantile_forecast_figure_display.tex": "1834d537250d024083f688e3c487ce90c88cba4a8b829df699fbc718cf985ccf"
     },
     "validation_source_sha256": {
-      "application/tests/run_tests.R": "c04cfe1aa35d96f8d673c552940b0289dfac2541c02c83d1bcb11b03dd9da318",
+      "application/tests/run_tests.R": "e74a9d23b3efe71a4cdc7802a7e5a1e7053f2678065e2dffd141e9f52ca46e92",
       "application/tests/test_article_clarity_editorial_receipts_20261104.py": "834aa62d957120932078f87e0381f242d91d355569a39be53e9c7e8455717c0e",
       "application/tests/test_forecast_application_exposition_20261031.R": "66387cfb6dd253a0e162ef6533ec7f3e3574a7c621345f58d767f7058b2bfd92",
       "application/tests/test_independent_forecast_editorial_manifest_20261031.R": "bab22f96173dc8bce0df39511823f53eb07531d986c2ebae22571c9cc58e2dce",

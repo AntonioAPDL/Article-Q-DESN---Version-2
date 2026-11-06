@@ -46,7 +46,8 @@ members per horizon.
 
 The state backend starts both DESNs from retained cutoff states for each
 parameter evaluation. It uses exact complete response prefixes, never rounded
-keys, and resets its bounded cache between parameter values. Resampling carries
+keys, and keys its bounded cache by the exact coefficient/source-scale identity
+as well as horizon and prefix. Resampling carries
 the response path, ancestry, and both DESN state collections together. Reference
 lags use preceding simulated Y values; discrepancy lags use the issued centre
 minus those same preceding Y values. The known baseline is added once.

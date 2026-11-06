@@ -95,7 +95,8 @@ gtdpb_bind <- function(engine, context, spec, known_baseline = NULL,
 
 gtdpb_clone_states <- function(states, n) lapply(states, function(x) rep(list(x), n))
 
-gtdpb_state_backend <- function(binding, max_cache_entries = 100000L) {
+gtdpb_state_backend <- function(binding, max_cache_entries = 100000L,
+    retain_features = FALSE) {
   q <- gtdpb_require
   q(is.list(binding) && identical(binding$schema_version,
     "glofas_two_desn_particle_binding_v1") && identical(binding$production_qualified, FALSE),
@@ -104,6 +105,8 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L) {
     is.finite(max_cache_entries) && max_cache_entries == floor(max_cache_entries) &&
     max_cache_entries >= binding$horizon && max_cache_entries <= 1000000L,
     "bounded exact-prefix cache size required")
+  q(is.logical(retain_features) && length(retain_features) == 1L &&
+    !is.na(retain_features), "one explicit feature-retention flag required")
   e <- binding$engine$env
   cache <- list(); hits <- misses <- steps <- resamples <- 0L
   initial <- function(n, parameters) {
@@ -114,9 +117,11 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L) {
     list(states = gtdpb_clone_states(binding$initial_states, as.integer(n)),
       ancestor_ids = seq_len(as.integer(n)))
   }
-  lookup <- function(h, prefix) {
+  lookup <- function(h, prefix, parameter_key) {
     if (!length(cache)) return(NULL)
-    at <- which(vapply(cache, function(x) x$h == h && identical(x$prefix, prefix), logical(1L)))
+    at <- which(vapply(cache, function(x) x$h == h &&
+      identical(x$prefix, prefix) && identical(x$parameter_key, parameter_key),
+      logical(1L)))
     if (!length(at)) NULL else cache[[at[[1L]]]]
   }
   step <- function(state, h, paths, parameters) {
@@ -125,18 +130,26 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L) {
       "aligned particle states, paths, and horizon required")
     beta <- parameters$coefficients[binding$spec$blocks$beta$index]
     alpha <- parameters$coefficients[binding$spec$blocks$alpha$index]
+    parameter_key <- gtdpb_hash(list(coefficients = parameters$coefficients,
+      sigma = parameters$sigma))
     N <- nrow(paths); mu_y <- mu_g <- numeric(N)
+    beta_rows <- if (isTRUE(retain_features)) matrix(NA_real_, N, binding$widths[["beta"]]) else NULL
+    alpha_rows <- if (isTRUE(retain_features)) matrix(NA_real_, N, binding$widths[["alpha"]]) else NULL
     next_states <- state$states
     for (i in seq_len(N)) {
       prefix <- if (h == 1L) numeric() else as.numeric(paths[i, seq_len(h - 1L)])
       q(all(is.finite(prefix)), "complete finite response prefix required")
-      found <- lookup(h, prefix)
+      found <- lookup(h, prefix, parameter_key)
       if (!is.null(found)) {
         hits <<- hits + 1L
         next_states$beta[[i]] <- found$beta_state
         next_states$alpha[[i]] <- found$alpha_state
         mu_y[[i]] <- found$reference
         mu_g[[i]] <- found$ensemble
+        if (isTRUE(retain_features)) {
+          beta_rows[i, ] <- found$beta_row
+          alpha_rows[i, ] <- found$alpha_row
+        }
         next
       }
       misses <<- misses + 1L
@@ -160,13 +173,21 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L) {
       mu_g[[i]] <- mu_y[[i]] + sum(rows$alpha * alpha) + binding$known_baseline[[h]]
       q(all(is.finite(c(mu_y[[i]], mu_g[[i]]))), "nonfinite retained-DESN location")
       q(length(cache) < max_cache_entries, "exact-prefix cache budget exhausted")
-      cache[[length(cache) + 1L]] <<- list(h = h, prefix = prefix,
+      entry <- list(h = h, prefix = prefix, parameter_key = parameter_key,
         beta_state = next_states$beta[[i]], alpha_state = next_states$alpha[[i]],
         reference = mu_y[[i]], ensemble = mu_g[[i]])
+      if (isTRUE(retain_features)) {
+        beta_rows[i, ] <- rows$beta
+        alpha_rows[i, ] <- rows$alpha
+        entry$beta_row <- rows$beta
+        entry$alpha_row <- rows$alpha
+      }
+      cache[[length(cache) + 1L]] <<- entry
     }
     steps <<- steps + 1L
     list(state = list(states = next_states, ancestor_ids = state$ancestor_ids),
-      reference = mu_y, ensemble = mu_g)
+      reference = mu_y, ensemble = mu_g,
+      beta_features = beta_rows, alpha_features = alpha_rows)
   }
   resample <- function(state, selected) {
     q(is.numeric(selected) && length(selected) == length(state$ancestor_ids) &&
@@ -180,7 +201,9 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L) {
     cache_entries = length(cache), cache_hits = hits, cache_misses = misses,
     step_calls = steps, resample_calls = resamples,
     exact_complete_prefix_comparison = TRUE, rounded_keys = FALSE,
+    cache_parameter_identity = "exact_coefficients_and_source_scales_sha256",
     cache_reset_scope = "one_parameter_evaluation", both_desn_states_carried = TRUE,
+    feature_rows_retained = isTRUE(retain_features),
     original_file_reads = 0L, future_truth_read = FALSE,
     production_qualified = FALSE)
   list(schema_version = "glofas_two_desn_particle_state_backend_v1",

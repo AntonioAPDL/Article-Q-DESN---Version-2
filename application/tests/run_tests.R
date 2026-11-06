@@ -356,6 +356,8 @@ run_standalone_glofas_test("application/tests/test_glofas_forecast_factorial_dia
 run_standalone_glofas_test("application/tests/test_glofas_authority_reconciliation.R")
 run_standalone_glofas_test("application/tests/test_glofas_global_path_generated_qualification.R")
 run_standalone_glofas_test("application/tests/test_glofas_native_factorial_adapter.R")
+run_standalone_glofas_test("application/tests/test_glofas_native_stage_e.R")
+run_standalone_glofas_test("application/tests/test_glofas_native_stage_e_reader.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_audit.R")
 # Generated variance/step qualification: statistical target and existing

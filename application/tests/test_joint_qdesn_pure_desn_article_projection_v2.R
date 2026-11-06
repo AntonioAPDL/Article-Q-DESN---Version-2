@@ -146,16 +146,48 @@ local({
     stopifnot(file.exists(file.path(root, glofas_helper)))
     editorial_dependencies <- c(editorial_dependencies, glofas_helper)
   }
+  reader_field <- "reader_appendix_20261106"
+  reader_active <- exists("ind_receipt") && !is.null(ind_receipt[[reader_field]])
+  reader_dependencies <- character()
+  if (reader_active) {
+    # Full copied fixture, not a production bypass: expose only the original
+    # repository's immutable object directory to a NEW temporary Git store.
+    # No original ref/index/config is changed, and no runtime/model payload is
+    # copied or read. All live public source protection still executes normally.
+    baseline <- "6370677bf37204dd494db1b7f649d2ceb288f36b"
+    baseline_paths <- system2("git", c("-C", shQuote(root), "ls-tree", "-r", "--name-only", baseline), stdout = TRUE)
+    stopifnot(is.null(attr(baseline_paths, "status")))
+    protected <- baseline_paths[grepl("^application/(R|config)/", baseline_paths) |
+      grepl("^tables/.*[.]csv$", baseline_paths) | grepl("^figures/.*[.]pdf$", baseline_paths)]
+    reader_dependencies <- unique(c(protected,
+      names(ind_receipt[[reader_field]]$updated_source_sha256),
+      names(ind_receipt[[reader_field]]$validation_source_sha256),
+      ind_receipt[[reader_field]]$disposition_map))
+  }
   additional_files <- unique(c("main.tex", "qdesn-supplement.tex", "overleaf/article_files.txt",
     "scripts/reconstruct_joint_qdesn_laplace_article_projection_v2.R",
     manifest$relative_path, allowlist, mq_dependencies, editorial_dependencies,
-    ind_dependencies))
+    ind_dependencies, reader_dependencies))
   for (relative in additional_files) {
     target <- file.path(pristine, relative)
     if (!file.exists(target)) {
       dir.create(dirname(target), recursive = TRUE, showWarnings = FALSE)
       stopifnot(file.copy(file.path(root, relative), target))
     }
+  }
+  if (reader_active) {
+    run_git <- function(arguments) {
+      result <- system2("git", c("-C", shQuote(pristine), arguments), stdout = TRUE, stderr = TRUE)
+      stopifnot(is.null(attr(result, "status")))
+      invisible(result)
+    }
+    run_git(c("init", "--quiet"))
+    objects <- system2("git", c("-C", shQuote(root), "rev-parse", "--path-format=absolute", "--git-common-dir"), stdout = TRUE)
+    stopifnot(is.null(attr(objects, "status")), length(objects) == 1L)
+    objects <- normalizePath(file.path(objects, "objects"), mustWork = TRUE)
+    writeLines(objects, file.path(pristine, ".git", "objects", "info", "alternates"))
+    run_git(c("symbolic-ref", "HEAD", "refs/heads/generated_fixture"))
+    run_git(c("update-ref", "HEAD", baseline))
   }
   full_pristine <- run(pristine)
   if (full_pristine$status != 0L) {

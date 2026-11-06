@@ -125,8 +125,25 @@ def aliases_for_document(root: Path, path: str) -> dict[str, str]:
     return aliases
 
 
-def check(root: Path, *, effective: bool = True) -> dict:
+def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool = False) -> dict:
     root = Path(root).resolve()
+    assert isinstance(portable_reader_fixture, bool), "Fixture mode is an explicit Boolean API option, never metadata or environment."
+    reader_revision = False
+    reader_helper = root / "scripts/refresh_reader_online_appendix_receipts_20261106.py"
+    if reader_helper.is_file():
+        spec = importlib.util.spec_from_file_location("reader_appendix_current_presentation", reader_helper)
+        successor = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(successor)
+        reader_revision = successor.active(root)
+        if reader_revision:
+            # Live sources, every omitted historical inclusion's disposition,
+            # scientific blobs and current authority are checked before allowing
+            # an intentionally archived panel to leave the reader-facing PDF.
+            if portable_reader_fixture:
+                successor.portable_reader_checks(root)
+            else:
+                successor.refresh(root)
+    assert not portable_reader_fixture or reader_revision, "Explicit copied-fixture mode requires the reviewed reader successor."
     builder = load_builder(root)
     manifest = json.loads((root / builder.MANIFEST).read_text())
     assert manifest["schema"] == "qdesn-sections5-7-presentation-v1"
@@ -268,7 +285,8 @@ def check(root: Path, *, effective: bool = True) -> dict:
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" in main, "Stale effective forecast wrapper: " + role
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][0] + "}" not in main, "Original effective forecast wrapper remains: " + role
         for role in ("independent_mcmc_fit", "independent_vb_fit", "mq_fit"):
-            assert r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" in supplement, "Stale effective fit wrapper: " + role
+            included = r"\input{" + builder.WRAPPER_OUTPUTS[role][1] + "}" in supplement
+            assert included or reader_revision, "Stale effective fit wrapper: " + role
             assert r"\input{" + builder.WRAPPER_OUTPUTS[role][0] + "}" not in supplement, "Original effective fit wrapper remains: " + role
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][1] + "}" in supplement, "Stale effective multiquantile design table."
         assert r"\input{" + builder.TABLE_OUTPUTS["mq_design"][0] + "}" not in supplement, "Original multiquantile design remains selected."
@@ -285,7 +303,9 @@ def check(root: Path, *, effective: bool = True) -> dict:
             assert corrected_assets | {authority_file, manifest_path} <= upload, "A current GloFAS asset is absent from the upload inventory."
     return {"status": "PASS", "source_files": len(source_rows), "outputs": len(entries),
             "pdf_outputs": len(builder.PDF_OUTPUTS), "table_outputs": len(builder.TABLE_OUTPUTS),
-            "caption_wrappers": len(builder.WRAPPER_OUTPUTS), "scientific_runs": 0, "scores_recomputed": 0}
+            "caption_wrappers": len(builder.WRAPPER_OUTPUTS), "scientific_runs": 0, "scores_recomputed": 0,
+            "source_ancestry_authenticated": reader_revision and not portable_reader_fixture,
+            "qualification_scope": "controlled_copied_public_fixture_only" if portable_reader_fixture else "live_source_checks"}
 
 
 def main() -> None:

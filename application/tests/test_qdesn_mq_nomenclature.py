@@ -28,6 +28,12 @@ class MQNomenclatureTest(unittest.TestCase):
             target = cls.fixture / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, target)
+        # The real research checkout passed full Git-backed admission above.
+        # This separate mode tests copied public-source mutations only; it
+        # cannot create a qualifying receipt or authenticate source ancestry.
+        portable = CHECKER.check(cls.fixture, portable_reader_fixture=True)
+        if CHECKER.READER_FIELD in CHECKER.load_json(cls.fixture, CHECKER.READER_RECEIPT):
+            assert portable["source_ancestry_authenticated"] is False
 
     @classmethod
     def tearDownClass(cls):
@@ -49,6 +55,8 @@ class MQNomenclatureTest(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text())
             self.assertIn(relative, receipt["sources"])
             receipt["sources"][relative] = hashlib.sha256((self.root / relative).read_bytes()).hexdigest()
+            if CHECKER.READER_FIELD in receipt:
+                receipt[CHECKER.READER_FIELD]["updated_source_sha256"][relative] = receipt["sources"][relative]
             receipt_path.write_text(json.dumps(receipt))
 
     def mutate_registry(self, mutate):
@@ -68,16 +76,72 @@ class MQNomenclatureTest(unittest.TestCase):
             (self.root / relative).write_text(json.dumps(receipt))
 
     def test_complete_isolated_dependency_closure_passes(self):
-        expected = 9 if (self.root / "tables/glofas_same_family_current_authority.json").exists() else 8
-        self.assertEqual(CHECKER.check(self.root)["selected_mq_pdfs"], expected)
+        revision = CHECKER.READER_FIELD in CHECKER.load_json(self.root, CHECKER.READER_RECEIPT)
+        expected = (4 if revision else 9) if (self.root / "tables/glofas_same_family_current_authority.json").exists() else 8
+        result = CHECKER.check(self.root, portable_reader_fixture=True)
+        self.assertEqual(result["selected_mq_pdfs"], expected)
+        self.assertFalse(result["source_ancestry_authenticated"])
+
+    def test_copied_fixture_cannot_use_default_full_admission_without_git(self):
+        if CHECKER.READER_FIELD not in CHECKER.load_json(self.root, CHECKER.READER_RECEIPT):
+            self.skipTest("Historical projection has no new successor")
+        self.assertFalse((self.root / ".git").exists())
+        with self.assertRaisesRegex(CHECKER.CheckError, "Git|fixed Git evidence|baseline|ancestry"):
+            CHECKER.check(self.root)
+
+    def test_mandatory_current_mq_evidence_cannot_be_removed(self):
+        for relative in (
+            "tables/qdesn_multiquantile_score_display.tex",
+            "tables/qdesn_multiquantile_crossing_display.tex",
+            "tables/qdesn_multiquantile_recursive_policy_display.tex",
+        ):
+            with self.subTest(relative=relative):
+                path = self.root / "qdesn-supplement.tex"
+                original = path.read_text()
+                marker = "\\input{" + relative + "}"
+                self.assertIn(marker, original)
+                path.write_text(original.replace(marker, "", 1))
+                self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+                with self.assertRaisesRegex(CHECKER.CheckError, "mandatory appendix evidence|not selected|omits an authenticated"):
+                    CHECKER.check(self.root, portable_reader_fixture=True)
+                path.write_text(original)
+                self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+
+    def test_archived_role_cannot_be_forged_into_current_evidence(self):
+        path = self.root / CHECKER.READER_DISPOSITION
+        records = CHECKER.csv_rows(self.root, CHECKER.READER_DISPOSITION)
+        row = next(r for r in records if r["role_id"] == "mq_secondary_score_table")
+        row["disposition"] = "retained"
+        with path.open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=tuple(records[0]), lineterminator="\n")
+            writer.writeheader(); writer.writerows(records)
+        relative = CHECKER.READER_ARCHIVES["mq_secondary_score_table"]
+        supplement = self.root / "qdesn-supplement.tex"
+        supplement.write_text(supplement.read_text() + "\n\\input{" + relative + "}\n")
+        self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+        receipt_path = self.root / CHECKER.READER_RECEIPT
+        receipt = CHECKER.load_json(self.root, CHECKER.READER_RECEIPT)
+        receipt[CHECKER.READER_FIELD]["disposition_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        receipt_path.write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(CHECKER.CheckError, "archived display cannot be promoted|archived display has returned"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
+
+    def test_archived_scientific_table_remains_immutable(self):
+        relative = "tables/qdesn_multiquantile_secondary_score_display.tex"
+        path = self.root / relative
+        self.assertNotIn("\\input{" + relative + "}", (self.root / "qdesn-supplement.tex").read_text())
+        path.write_text(path.read_text() + "\nunauthorized archived edit\n")
+        with self.assertRaisesRegex(CHECKER.CheckError, "bytes/hash mismatch|immutable scientific|Unpermitted table/caption"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_current_glofas_approval_cannot_be_omitted(self):
         path = self.root / "tables/glofas_same_family_current_authority.json"
         if not path.exists():
             self.skipTest("Historical-only projection has no corrected GloFAS authority")
         path.unlink()
-        with self.assertRaisesRegex(CHECKER.CheckError, "without its approved authority"):
-            CHECKER.check(self.root)
+        with self.assertRaisesRegex(CHECKER.CheckError,
+                "without its approved authority|Missing allowlisted file: tables/glofas_same_family_current_authority\\.json"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_superseded_issued_glofas_table_cannot_return(self):
         if not (self.root / "tables/glofas_same_family_current_authority.json").exists():
@@ -86,7 +150,7 @@ class MQNomenclatureTest(unittest.TestCase):
         path.write_text(path.read_text() + "\n\\input{tables/glofas_forecast_correction_main_scores_display.tex}\n")
         self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
         with self.assertRaisesRegex(CHECKER.CheckError, "superseded GloFAS issued-window table"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_all_active_mq_caption_derivatives_preserve_table_rows(self):
         builder = CHECKER.editorial_checker(self.root).load_builder(self.root)
@@ -101,8 +165,10 @@ class MQNomenclatureTest(unittest.TestCase):
         self.assertIn(output, text)
         path.write_text(text.replace(output, source, 1))
         self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
-        with self.assertRaisesRegex(CHECKER.CheckError, "omits an authenticated|superseded"):
-            CHECKER.check(self.root)
+        with self.assertRaisesRegex(CHECKER.CheckError,
+                "omits an authenticated|superseded|mandatory appendix evidence|"
+                "Source-inferred inputs absent from allowlist: tables/joint_qdesn_pure_desn_v2_mq_score_table\\.tex"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_current_mq_table_numeric_edit_fails_with_rehashed_editorial_receipt(self):
         relative = "tables/qdesn_multiquantile_score_display.tex"
@@ -116,15 +182,17 @@ class MQNomenclatureTest(unittest.TestCase):
         entry["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         manifest_path.write_text(json.dumps(receipt))
         with self.assertRaisesRegex(CHECKER.CheckError, "Unpermitted table/caption transformation|scientific table rows"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_historical_unverified_target_table_cannot_return_as_current_evidence(self):
         path = self.root / "qdesn-supplement.tex"
         relative = "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex"
         path.write_text(path.read_text() + "\n\\input{" + relative + "}\n")
         self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
-        with self.assertRaisesRegex(CHECKER.CheckError, "Historical unverified-target replication"):
-            CHECKER.check(self.root)
+        with self.assertRaisesRegex(CHECKER.CheckError,
+                "Historical unverified-target replication|Source-inferred inputs absent from allowlist: "
+                "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display\\.tex"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_registry_al_exal_label_swap_fails_with_updated_receipts(self):
         def swap(rows):
@@ -134,7 +202,7 @@ class MQNomenclatureTest(unittest.TestCase):
                 joint_al[field], joint_exal[field] = joint_exal[field], joint_al[field]
         self.mutate_registry(swap)
         with self.assertRaisesRegex(CHECKER.CheckError, "semantic mapping"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_independent_model_cannot_be_relabelled_mq(self):
         def relabel(rows):
@@ -142,14 +210,14 @@ class MQNomenclatureTest(unittest.TestCase):
             row.update(model_family="MQ-DESN", display_text="MQ-DESN (AL)", display_tex="MQ--DESN (AL)")
         self.mutate_registry(relabel)
         with self.assertRaisesRegex(CHECKER.CheckError, "semantic mapping"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_stale_derivative_hash_fails(self):
         relative = "tables/joint_qdesn_pure_desn_v2_mq_score_table.tex"
         with (self.root / relative).open("a") as stream:
             stream.write("\n% stale derivative\n")
         with self.assertRaisesRegex(CHECKER.CheckError, "Hash mismatch"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_independent_table_label_cannot_be_mq_even_with_updated_receipt(self):
         relative = "tables/joint_qdesn_pure_desn_v2_mq_score_table.tex"
@@ -165,7 +233,7 @@ class MQNomenclatureTest(unittest.TestCase):
         asset["size_bytes"] = path.stat().st_size
         receipt_path.write_text(json.dumps(receipt))
         with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts|Frozen source changed: tables/joint_qdesn_(?:mq_presentation_manifest.json|pure_desn_v2_mq_score_table.tex)"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_stale_manifest_output_hash_fails(self):
         path = self.root / CHECKER.GLOFAS_MANIFEST
@@ -173,16 +241,21 @@ class MQNomenclatureTest(unittest.TestCase):
         receipt["assets"][0]["output_sha256"] = "0" * 64
         path.write_text(json.dumps(receipt))
         with self.assertRaisesRegex(CHECKER.CheckError, "Hash mismatch"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_late_stale_selected_alias_fails(self):
         path = self.root / "qdesn-supplement.tex"
         text = path.read_text()
-        needle = r"\input{tables/qdesn_sections5_7_supp_display_overrides.tex}"
+        needle = (r"\input{tables/glofas_same_family_20261103_display_aliases.tex}"
+                  if (self.root / "tables/glofas_same_family_current_authority.json").exists()
+                  else r"\input{tables/qdesn_sections5_7_supp_display_overrides.tex}")
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, needle + "\n" + r"\input{tables/glofas_review_figure_overrides.tex}", 1))
-        with self.assertRaisesRegex(CHECKER.CheckError, "selected aliases|selected alias|A stale later alias overrides|effective|selected|MQ TeX"):
-            CHECKER.check(self.root)
+        self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
+        with self.assertRaisesRegex(CHECKER.CheckError,
+                "selected aliases|selected alias|A stale later alias overrides|effective|selected|MQ TeX|"
+                "Source-inferred inputs absent from allowlist: figures/glofas_application/glofas_search3_review_20261008_part4\\.pdf"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_stale_joint_main_wrapper_fails(self):
         path = self.root / "main.tex"
@@ -191,8 +264,10 @@ class MQNomenclatureTest(unittest.TestCase):
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, "tables/joint_qdesn_pure_desn_v2_forecast_figure.tex", 1))
         self.refresh_ind_manuscript_receipt("main.tex")
-        with self.assertRaisesRegex(CHECKER.CheckError, "MQ TeX|selected aliases|Stale JOINT|effective|selected"):
-            CHECKER.check(self.root)
+        with self.assertRaisesRegex(CHECKER.CheckError,
+                "MQ TeX|selected aliases|Stale JOINT|effective|selected|"
+                "Source-inferred inputs absent from allowlist: .*joint_qdesn_pure_desn_v2_forecast_figure\\.tex"):
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_posterior_target_mutation_fails_even_with_updated_module_receipt(self):
         path = self.root / CHECKER.TARGET_AUDIT
@@ -204,7 +279,7 @@ class MQNomenclatureTest(unittest.TestCase):
         receipt["sources"][CHECKER.TARGET_AUDIT] = hashlib.sha256(path.read_bytes()).hexdigest()
         receipt_path.write_text(json.dumps(receipt))
         with self.assertRaisesRegex(CHECKER.CheckError, "Hash mismatch"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_pricefm_mq_assertion_fails(self):
         path = self.root / "main.tex"
@@ -214,7 +289,7 @@ class MQNomenclatureTest(unittest.TestCase):
         path.write_text(text.replace(needle, needle + "\nThe fitted model is MQ--DESN.\n", 1))
         self.refresh_ind_manuscript_receipt("main.tex")
         with self.assertRaisesRegex(CHECKER.CheckError, "PriceFM"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_historical_numeric_edit_fails_even_with_updated_receipt(self):
         relative = "tables/joint_qdesn_article_validation_phase153_replication_summary_mq_display.tex"
@@ -228,7 +303,7 @@ class MQNomenclatureTest(unittest.TestCase):
         asset["output_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         receipt_path.write_text(json.dumps(receipt))
         with self.assertRaisesRegex(CHECKER.CheckError, "approved replacements"):
-            CHECKER.check(self.root)
+            CHECKER.check(self.root, portable_reader_fixture=True)
 
 
 if __name__ == "__main__":

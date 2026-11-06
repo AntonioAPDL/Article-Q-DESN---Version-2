@@ -257,6 +257,9 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
 app_check_forecast_application_exposition <- function(repo_root) {
   read_source <- function(path) paste(readLines(file.path(repo_root, path), warn = FALSE),
     collapse = "\n")
+  source(file.path(repo_root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+  reader_appendix <- app_reader_appendix_adapter(repo_root)
+  read_source <- reader_appendix$read
   main <- read_source("main.tex")
   supplement <- read_source("qdesn-supplement.tex")
   authority_checks <- app_forecast_exposition_glofas_authority(repo_root, main, supplement)

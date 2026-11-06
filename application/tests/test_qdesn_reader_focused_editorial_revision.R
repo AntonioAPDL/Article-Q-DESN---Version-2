@@ -6,6 +6,9 @@ repo_root <- normalizePath(file.path(dirname(sub("^--file=", "", file_arg)),
 read_source <- function(relative) {
   paste(readLines(file.path(repo_root, relative), warn = FALSE), collapse = "\n")
 }
+source(file.path(repo_root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"))
+reader_appendix <- app_reader_appendix_adapter(repo_root)
+read_source <- reader_appendix$read
 main <- read_source("main.tex")
 supplement <- read_source("qdesn-supplement.tex")
 caption <- read_source("figures/quantile_initialization/quantile_initialization_caption.tex")

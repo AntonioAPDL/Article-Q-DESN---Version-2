@@ -2,6 +2,8 @@
 options(stringsAsFactors = FALSE, digits = 17)
 script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1L]))
 root <- normalizePath(file.path(dirname(script), "..")); setwd(root)
+source("scripts/reader_online_appendix_legacy_adapter_20261106.R")
+reader_appendix <- app_reader_appendix_adapter(root)
 args <- commandArgs(TRUE)
 arg <- function(flag) { i <- match(flag, args); if(is.na(i)) NULL else args[i + 1L] }
 sha <- function(path) unname(tools::sha256sum(path)[[1L]])
@@ -69,10 +71,12 @@ primary_wrapper <- paste(readLines("tables/independent_train500_eval300_mcmc_fig
 check("main retains check loss only", grepl("eval300_mcmc_forecast_check_v1.pdf", primary_wrapper, fixed = TRUE) &&
   !grepl("eval300_mcmc_forecast_mae_v1.pdf", primary_wrapper, fixed = TRUE) &&
   !"tables/independent_train500_eval300_mcmc_mae_figure_v1.tex" %in% main_files)
+calibration_displays <- c("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    "tables/independent_forecast_calibration_figure_v1.tex")
+if (!reader_appendix$active) calibration_displays <- c(calibration_displays,
+    "tables/independent_forecast_calibration_table_v1.tex")
 check("primary recovery and calibration are supplementary only",
-  all(c("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
-    "tables/independent_forecast_calibration_figure_v1.tex",
-    "tables/independent_forecast_calibration_table_v1.tex") %in% supp_files) &&
+  all(calibration_displays %in% supp_files) &&
   !any(c("tables/independent_forecast_calibration_figure_v1.tex",
     "tables/independent_forecast_calibration_table_v1.tex") %in% main_files))
 check("sensitivity figures are supplementary only", !"tables/independent_train500_eval500_mcmc_figures_v1.tex" %in% main_files &&
@@ -86,6 +90,12 @@ builder <- paste(readLines("scripts/build_qdesn_pro_review_presentation.R"),coll
 check("legacy builder routes to current authority",grepl("if (current_ind_policy)",builder,fixed=TRUE) &&
   grepl("scripts/build_independent_forecast_300_500_v1.R",builder,fixed=TRUE) && grepl("if (current_ind_policy && i <= 3L) next",builder,fixed=TRUE))
 main <- paste(readLines("main.tex"),collapse="\n"); supplement <- paste(readLines("qdesn-supplement.tex"),collapse="\n")
+# Current closure/data checks above remain live. Dated prose assertions below
+# use fixed historical wording only after independently validated new semantics.
+if (reader_appendix$active) {
+  main <- reader_appendix$read("main.tex")
+  supplement <- reader_appendix$read("qdesn-supplement.tex")
+}
 normalized_main <- gsub("[[:space:]]+", " ", main)
 normalized_supplement <- gsub("[[:space:]]+", " ", supplement)
 check("retrospective scope change disclosed",

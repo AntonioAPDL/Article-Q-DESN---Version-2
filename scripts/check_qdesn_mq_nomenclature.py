@@ -3,8 +3,10 @@
 
 The display registry is not a model registry. Original model IDs, scientific
 CSV files, posterior targets, and historical article assets remain immutable.
-Only effective TeX consumers and the eight selected MQ PDF derivatives are
-audited for current display names. No fitting or asset generation is performed.
+Effective TeX consumers and authenticated MQ PDF derivatives are audited for
+current display names. Approved archived assets remain hash-checked without
+requiring their inclusion in the compiled article. No fitting or asset
+generation is performed.
 """
 from __future__ import annotations
 
@@ -32,6 +34,23 @@ SUPP_EDITORIAL_OVERRIDE = "tables/qdesn_sections5_7_supp_display_overrides.tex"
 FORECAST_WRAPPER = "tables/qdesn_multiquantile_forecast_figure_display.tex"
 FIT_WRAPPER = "tables/qdesn_multiquantile_fit_figure_display.tex"
 PROTOCOL_TABLE = "tables/qdesn_multiquantile_design_display.tex"
+READER_HELPER = "scripts/refresh_reader_online_appendix_receipts_20261106.py"
+READER_DISPOSITION = "docs/reproducibility/reader_appendix_content_disposition_20261106.csv"
+READER_RECEIPT = "tables/independent_forecast_300_500_article_manifest_v1.json"
+READER_FIELD = "reader_appendix_20261106"
+# Presentation dispositions never permit changing rows, scientific manifests,
+# plots, or the article publication set.
+READER_ARCHIVES = {
+    "mq_secondary_score_table": "tables/qdesn_multiquantile_secondary_score_display.tex",
+    "mq_vb_scores": "tables/qdesn_multiquantile_vb_score_display.tex",
+    "mq_contrast_table": "tables/qdesn_multiquantile_contrast_display.tex",
+    "mq_recovery_table": "tables/qdesn_multiquantile_oracle_recovery_display.tex",
+    "glofas_runtime_figure": "figures/glofas_application/glofas_same_family_20261103_convergence.pdf",
+    "glofas_frequency_figure": "figures/glofas_application/glofas_same_family_20261103_calibration.pdf",
+    **{"glofas_" + role + "_panel":
+       "figures/glofas_application/glofas_editorial_20261013_" + role + ".pdf"
+       for role in ("reference", "discrepancy", "combined")},
+}
 HISTORICAL_ASSETS = {
     "tables/qdesn_validation_500obs_metric_dependence_sensitivity.tex": (
         "74c165ad4b29f00808e058750d8f6a320b5454f97ae7133d1260ae9794d5ee2b",
@@ -438,13 +457,56 @@ def manuscript_consumers(root: Path) -> tuple[dict[str, TexConsumers], dict[str,
     return graphs, visible
 
 
+def reader_appendix_roles(root: Path) -> dict[str, dict[str, str]] | None:
+    """Check actual semantics and narrowly approved compiled-display roles.
+
+    Existing scientific manifests still authenticate every archived asset. A
+    role declaration alone cannot promote an archived display into the PDF.
+    """
+    if not (root / READER_RECEIPT).exists():
+        return None
+    revision = load_json(root, READER_RECEIPT).get(READER_FIELD)
+    if revision is None:
+        return None
+    expect(isinstance(revision, dict) and
+           revision.get("schema") == "reader-online-appendix-editorial-v1" and
+           revision.get("baseline_commit") == "6370677bf37204dd494db1b7f649d2ceb288f36b" and
+           all(revision.get(k) is False for k in
+               ("scientific_values_changed", "scientific_outputs_regenerated", "publication_inventory_changed")) and
+           all(type(revision.get(k)) is int and revision[k] == 0 for k in
+               ("fits_launched", "forecasts_launched", "scores_recomputed")),
+           "Reader appendix routing requires its unchanged scientific scope")
+    verify_hash(root, READER_DISPOSITION, revision.get("disposition_sha256"))
+    spec = importlib.util.spec_from_file_location("mq_reader_appendix_semantics", local_path(root, READER_HELPER))
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    records = csv_rows(root, READER_DISPOSITION)
+    expect(records and len({r["role_id"] for r in records}) == len(records) and
+           all(r["baseline_commit"] == revision["baseline_commit"] and
+               r["baseline_path"] == "qdesn-supplement.tex" for r in records),
+           "Reader appendix role map is not uniquely bound to its baseline")
+    try:
+        helper.semantic_checks(read(root, "main.tex"), read(root, "qdesn-supplement.tex"), read(root, "refs.bib"))
+        helper.current_route_checks(root, records)
+    except (helper.EditorialError, OSError, ValueError) as error:
+        raise CheckError("Current reader appendix semantics/routing: " + str(error)) from error
+    roles = {r["role_id"]: r for r in records}
+    for role, asset in READER_ARCHIVES.items():
+        row = roles.get(role, {})
+        expect(row.get("disposition") == "public_archive" and
+               row.get("destination") == asset and asset in row.get("asset_paths", "").split(";"),
+               "Approved archived display cannot be promoted by changing its role: " + role)
+    return roles
+
+
 def check_definitions(root: Path, visible: dict[str, str]) -> None:
     main, supplement = (uncomment(read(root, p)) for p in ("main.tex", "qdesn-supplement.tex"))
     abstract = re.search(r"\\begin\{abstract\}(.*?)\\end\{abstract\}", main, re.S)
     intro = re.search(r"\\section\{Introduction\}(.*?)(?=\\section\{)", main, re.S)
     expect(abstract is not None and intro is not None, "Main abstract/introduction missing")
+    opening = re.split(r"\\section\*?\{", supplement, maxsplit=1)[0]
     windows = {"main abstract": abstract[1], "main introduction": intro[1],
-               "supplement opening": supplement[:supplement.find(r"\section{Distributional Conventions}")]}
+               "supplement opening": opening}
     for name, window in windows.items():
         text = normalized(window)
         q_definition = re.search(r"quantile\s+deep\s+echo\s+state\s+networks?\s*\(\s*Q-DESN\s*\)", text, re.I)
@@ -499,13 +561,24 @@ def dependency_paths(root: Path) -> set[str]:
     paths.update(editorial_checker(root).dependency_paths(root))
     paths.update((EDITORIAL_CHECKER, EDITORIAL_MANIFEST,
                   MAIN_EDITORIAL_OVERRIDE, SUPP_EDITORIAL_OVERRIDE))
+    if (root / READER_RECEIPT).exists() and READER_FIELD in load_json(root, READER_RECEIPT):
+        paths.update((READER_HELPER, READER_DISPOSITION,
+                      "scripts/audit_qdesn_article_dependencies.py", "refs.bib"))
+        paths.update(p for p in read(root, "overleaf/article_files.txt").splitlines()
+                     if p and not p.startswith("#"))
     graphs, _ = manuscript_consumers(root)
     for graph in graphs.values():
         paths.update(graph.files | graph.figures)
     return paths
 
 
-def check(root: Path) -> dict[str, int]:
+def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int | bool]:
+    """Audit current presentation; portable mode is ONLY for copied test fixtures.
+
+    CLI and publication callers retain full Git-backed successor admission.
+    Portable results explicitly do not authenticate research-source ancestry.
+    """
+    expect(type(portable_reader_fixture) is bool, "Explicit Boolean fixture mode required")
     rows = registry_rows(root)
     immutable_sources(root)
     joint, glofas, _ = module_manifests(root)
@@ -514,13 +587,16 @@ def check(root: Path) -> dict[str, int]:
     # the unchanged MQ scientific/presentation source manifests above.
     editorial = editorial_checker(root)
     try:
-        editorial.check(root)
+        editorial.check(root, portable_reader_fixture=portable_reader_fixture)
         current_glofas, _ = editorial.corrected_glofas_authority(root)
-    except (AssertionError, RuntimeError) as error:
+    except Exception as error:
+        # Shared admission helpers have their own exception classes. Preserve
+        # every failure and message while exposing one fail-closed API type.
         raise CheckError(str(error)) from error
     graphs, visible = manuscript_consumers(root)
     files = set().union(*(g.files for g in graphs.values()))
     figures = set().union(*(g.figures for g in graphs.values()))
+    reader_roles = reader_appendix_roles(root)
     current_joint_tables = set(EDITORIAL_JOINT_TABLES.values()) | {
         PROTOCOL_TABLE, FORECAST_WRAPPER, FIT_WRAPPER}
     current_glofas_tables = EDITORIAL_GLOFAS_TABLES
@@ -551,6 +627,13 @@ def check(root: Path) -> dict[str, int]:
                "A superseded GloFAS issued-window table remains an active manuscript input")
         expect(not (EDITORIAL_GLOFAS_PDFS - historical_pdfs) & figures,
                "A superseded GloFAS issued-window figure remains an active manuscript input")
+    if reader_roles is not None:
+        archived = set(READER_ARCHIVES.values())
+        # Required compiled roles change, not any scientific/table/hash check.
+        current_joint_tables -= archived
+        current_glofas_pdfs -= archived
+        expect(not archived & (files | figures),
+               "An approved archived display has returned as current compiled evidence")
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
     expect(not (JOINT_TABLES | GLOFAS_TABLES) & files,
@@ -602,7 +685,8 @@ def check(root: Path) -> dict[str, int]:
             verify_label_mapping(extractor(root, source), extractor(root, output), rows, output)
     return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": len(JOINT_PDFS | current_glofas_pdfs),
             "selected_mq_tex": len(current_joint_tables | current_glofas_tables),
-            "historical_displays": len(current_historical)}
+            "historical_displays": len(current_historical),
+            "source_ancestry_authenticated": reader_roles is not None and not portable_reader_fixture}
 
 
 def main() -> int:

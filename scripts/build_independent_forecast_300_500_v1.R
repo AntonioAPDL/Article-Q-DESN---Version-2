@@ -150,7 +150,7 @@ for (n in c(300L, 500L)) {
       if(metric == "forecast_mae") "The dashed line marks exact recovery of the state-conditional quantile path. " else
         "The dashed line marks population expected check loss at the true conditional quantile, not a finite-sample lower bound. ",
       if(n == 300L) "Corresponding panels in the 500-target sensitivity figure use the same horizontal limits. " else "The last origin contributes 20 leads; earlier origins contribute 30. ",
-      "The supplement documents criterion-specific selection and model-specific forecast-draw dependence.")
+      "Online Appendix D documents criterion-specific selection and model-specific forecast-draw dependence.")
     block <- c("\\begin{figure}[!htbp]", "\\centering",
       sprintf("\\includegraphics[width=0.98\\textwidth]{figures/independent_simulation/independent_train500_eval%d_mcmc_%s_v1.pdf}", n, metric),
       paste0("\\caption{", caption, "}"),

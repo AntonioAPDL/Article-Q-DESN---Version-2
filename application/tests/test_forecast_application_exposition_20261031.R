@@ -15,6 +15,9 @@ local({
     local = TRUE)
   read_text <- function(path) paste(readLines(file.path(root, path), warn = FALSE),
     collapse = "\n")
+  source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+  reader_appendix <- app_reader_appendix_adapter(root)
+  read_text <- reader_appendix$read
   main <- read_text("main.tex")
   supplement <- read_text("qdesn-supplement.tex")
   checks <- app_check_forecast_application_exposition(root)

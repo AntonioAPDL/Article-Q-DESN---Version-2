@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("clarity_receipts", ROOT / "scripts/refresh_article_clarity_editorial_receipts_20261104.py")
 REFRESH = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(REFRESH)
+next_spec = importlib.util.spec_from_file_location("reader_appendix_successor", ROOT / "scripts/refresh_reader_online_appendix_receipts_20261106.py")
+SUCCESSOR = importlib.util.module_from_spec(next_spec)
+next_spec.loader.exec_module(SUCCESSOR)
 
 
 def digest(value):
@@ -192,8 +195,16 @@ class PresentationTests(unittest.TestCase):
 
 class CurrentTextTests(unittest.TestCase):
     def setUp(self):
-        self.main = (ROOT / "main.tex").read_text()
-        self.supplement = (ROOT / "qdesn-supplement.tex").read_text()
+        self.reader_revision = SUCCESSOR.active(ROOT)
+        if self.reader_revision:
+            # Actual CURRENT semantics and scientific blobs pass the successor
+            # before these dated C01--C11 prose fixtures are authenticated.
+            SUCCESSOR.refresh(ROOT)
+            self.main = SUCCESSOR.historical_text(ROOT, "main.tex")
+            self.supplement = SUCCESSOR.historical_text(ROOT, "qdesn-supplement.tex")
+        else:
+            self.main = (ROOT / "main.tex").read_text()
+            self.supplement = (ROOT / "qdesn-supplement.tex").read_text()
         self.display = (ROOT / REFRESH.DISPLAY).read_text()
 
     def test_all_eleven_approved_corrections_present(self):
@@ -201,18 +212,25 @@ class CurrentTextTests(unittest.TestCase):
             {"C%02d" % i for i in range(1, 12)})
 
     def test_live_successor_authenticates_public_evidence_and_current_metadata(self):
+        if self.reader_revision:
+            live = SUCCESSOR.refresh(ROOT)
+            self.assertEqual(live[SUCCESSOR.FIELD]["baseline_commit"], SUCCESSOR.BASELINE)
+            self.assertFalse(live[SUCCESSOR.FIELD]["scientific_values_changed"])
+            return
         live = REFRESH.refresh(ROOT)
         self.assertEqual(live[REFRESH.FIELD]["baseline_commit"], REFRESH.BASELINE)
         self.assertFalse(live[REFRESH.FIELD]["scientific_values_changed"])
 
-    def test_historical_readonly_cli_remains_compatible_with_system_python(self):
+    def test_supported_readonly_cli_uses_the_reviewed_version(self):
         # On Muscat this interpreter is Python 3.6.8. The historical adapter
         # must execute the 3.11 successor rather than import its new syntax.
-        result = subprocess.run(["/usr/bin/python3", "-I", "-B",
-            str(ROOT / "scripts/refresh_glofas_article_shared_receipts.py"), "--root", str(ROOT), "--check"],
+        command = (["/usr/bin/python3.11", "-I", "-B", str(ROOT / SUCCESSOR.REFRESHER)] if self.reader_revision else
+            ["/usr/bin/python3", "-I", "-B", str(ROOT / "scripts/refresh_glofas_article_shared_receipts.py")])
+        result = subprocess.run(command + ["--root", str(ROOT), "--check"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("ARTICLE_CLARITY_EDITORIAL_RECEIPTS_CHECK_PASS", result.stdout)
+        self.assertIn("READER_ONLINE_APPENDIX_RECEIPTS_CHECK_PASS" if self.reader_revision else
+            "ARTICLE_CLARITY_EDITORIAL_RECEIPTS_CHECK_PASS", result.stdout)
 
     def test_historical_write_entrypoint_refuses_a_general_editorial_receipt(self):
         oldspec = importlib.util.spec_from_file_location("old_glofas_refresh_scope",

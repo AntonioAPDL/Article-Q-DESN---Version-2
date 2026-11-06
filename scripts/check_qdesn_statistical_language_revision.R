@@ -233,6 +233,9 @@ app_check_statistical_language_revision <- function(repo_root) {
   }
   read_source <- function(relative) paste(readLines(file.path(repo_root, relative),
     warn = FALSE), collapse = "\n")
+  source(file.path(repo_root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+  reader_appendix <- app_reader_appendix_adapter(repo_root)
+  read_source <- reader_appendix$read
   baseline_text <- function(relative) paste(git(c("show", shQuote(paste0(
     baseline, ":", relative)))), collapse = "\n")
   paths <- git(c("ls-tree", "-r", "--name-only", baseline))

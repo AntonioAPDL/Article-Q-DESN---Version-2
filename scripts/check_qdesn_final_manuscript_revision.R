@@ -17,6 +17,9 @@ expect <- function(value, message) {
 read_text <- function(relative) {
   paste(readLines(repo_path(relative), warn = FALSE), collapse = "\n")
 }
+source(repo_path("scripts/reader_online_appendix_legacy_adapter_20261106.R"))
+reader_appendix <- app_reader_appendix_adapter(repo_root)
+read_text <- reader_appendix$read
 prose <- function(text) gsub("[[:space:]]+", " ", text)
 section_text <- function(text, label) {
   marker <- paste0("\\label{", label, "}")

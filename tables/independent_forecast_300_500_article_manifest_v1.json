@@ -4,6 +4,12 @@
     "manifest": "tables/appendix_compression_20261106_manifest.json",
     "schema": "appendix-compression-editorial-v1"
   },
+  "appendix_essential_20261106": {
+    "baseline_commit": "1b249255018715dd3bdc3c95389c80702d26c8c9",
+    "contract": "tables/appendix_essential_20261106_contract.json",
+    "manifest": "tables/appendix_essential_20261106_manifest.json",
+    "schema": "appendix-essential-v2"
+  },
   "authority_id": "independent_forecast_300_primary_500_sensitivity_v1",
   "deprecated_reporting_cutoff": 1000,
   "editorial_source_refresh": {
@@ -260,9 +266,9 @@
     "docs/implementation_notes/statistical_language_reader_revision_20261019.md": "9e9a80ceced41347e41e6a787d1cea7a5c5802ad4ecb491b59de008f33e0efab",
     "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf": "ffc4aa891f34b8672aceba5ad8bae64b27ea920673711820c70a426eb91ca2f6",
     "figures/independent_simulation/qdesn_pro_review_vb_fit_rmse.pdf": "1383c592e20a2d79bc5837032dc1d1b5b838f088503e983876fc2490cb31dfe9",
-    "main.tex": "345a6563e271bf515ebc77001240521ed5e137d5926a87b9bb2145760f284f3b",
-    "overleaf/article_files.txt": "822aa6841216a6139c9e28a81f94dff4a7cb6146941cf076c64934d98f17343b",
-    "qdesn-supplement.tex": "ce32c2d6b663734d41d1e5c4c03207db8abb96ba19b9f22983c09d95fccb749b",
+    "main.tex": "738ccf951346b14d138f9f108162c4b51786844c9e7519bc9cd038064e073b38",
+    "overleaf/article_files.txt": "811a10728dd446c1ec3a9b1218d63f534ab0be4048ec440a3a5a45da375a3901",
+    "qdesn-supplement.tex": "b1826b4b01595d41705875f235bbbcfec9d4300231f2434dac67b0989e558126",
     "scripts/build_independent_forecast_300_500_v1.R": "df41f4fae327b0b4a8dc4394b335decb8e0e95a0bcd3962b4e6cd20112ea9910",
     "scripts/qdesn_evaluation_figure_style.R": "388acabfb175f291fcf5f9112eccc66f35388ea8e0e73c6b28c7831b6bc5022c",
     "tables/independent_fit_preserved_300_500_v1.csv": "3396ee35261b34a4a788b0502fddeb4f4af5b71bbcedbf79408d751760a2a1fa",

@@ -182,7 +182,10 @@ class CurrentSourceTests(unittest.TestCase):
             for path in paths:
                 target = root/path; target.parent.mkdir(parents=True,exist_ok=True)
                 shutil.copyfile(ROOT/path,target)
-            mandatory = ((compression.PREFIX + name + ".tex" for name in
+            essential = compression is not None and compression.essential_requested(ROOT)
+            mandatory = (("tables/appendix_essential_20261106_ind_forecast_mae.tex",
+                          "tables/appendix_compact_20261106_ind_frequencies.tex") if essential else
+                (compression.PREFIX + name + ".tex" for name in
                 ("ind_forecast_mae", "ind_sensitivity", "ind_frequencies")) if compression is not None else
                 (R.CAPTIONS[1].replace("figures_v1","mae_figure_v1"),
                  "tables/independent_train500_eval500_mcmc_figures_v1.tex",
@@ -196,7 +199,7 @@ class CurrentSourceTests(unittest.TestCase):
                     if path in row["asset_paths"]: row["disposition"]="public_archive"
                 # Dynamic dispatch loads an independent module instance; assert
                 # the public error contract rather than its Python class identity.
-                with self.subTest(path=path),self.assertRaisesRegex(Exception,"not selected"):
+                with self.subTest(path=path),self.assertRaisesRegex(Exception,"not selected|actual role consumer absent"):
                     R.current_route_checks(root,forged)
                 (root/"qdesn-supplement.tex").write_text(supplement)
 
@@ -205,7 +208,9 @@ class CurrentSourceTests(unittest.TestCase):
         supplement = (ROOT / "qdesn-supplement.tex").read_text()
         bibliography = (ROOT / "refs.bib").read_text()
         compression = R.compression_successor(ROOT)
-        semantic = compression.semantic_checks if compression is not None else R.semantic_checks
+        essential = compression is not None and compression.essential_requested(ROOT)
+        semantic = (compression.essential_semantic_checks if essential else
+                    compression.semantic_checks if compression is not None else R.semantic_checks)
         error = compression.CompressionError if compression is not None else R.EditorialError
         semantic(main, supplement, bibliography)
         mutations = (
@@ -231,7 +236,7 @@ class CurrentSourceTests(unittest.TestCase):
             mutations = tuple(value for value in mutations if value[1] not in
                 {"same parameter draw", "equal-weight isotonic"}) + (
                 ("supplement", r"\frac{D_\gamma^2}{B_\gamma}", r"D_\gamma^2"),
-                ("supplement", r"a_\zeta+\frac{r}{2}", r"a_\zeta+\frac{r+1}{2}"),
+                ("supplement", r"a_\zeta+\frac r2" if essential else r"a_\zeta+\frac{r}{2}", r"a_\zeta+\frac{r+1}{2}"),
             )
         for role,before,after in mutations:
             value = main if role == "main" else supplement

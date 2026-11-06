@@ -403,13 +403,36 @@ if (!data_only) {
   # remains the route expected in the separate historical-prose fixture.
   compression <- jsonlite::read_json(path(
     "tables/independent_forecast_300_500_article_manifest_v1.json"))$appendix_compression_20261106
-  live_fit_wrapper <- if (!is.null(compression)) {
-    expect(reader_appendix$active, "Validated successor required for compact MQ fitting route")
-    "tables/appendix_compact_20261106_mq_fit_rmse.tex"
-  } else fit_wrapper
-  expect(grepl(live_fit_wrapper, supplement, fixed = TRUE) &&
-           !grepl(live_fit_wrapper, main, fixed = TRUE),
-         "Forecast figure remains in main and fitting figure in supplement")
+  essential_layout <- identical(reader_appendix$role_summary$schema,
+                                 "appendix-essential-v2")
+  if (essential_layout) {
+    # The adapter has already authenticated current documents, all protected
+    # inputs and genuine Git ancestry. Inspect its bound role map rather than
+    # requiring the old in-sample diagnostic to remain a printed figure.
+    roles <- reader_appendix$role_summary$roles
+    actual_routes <- reader_appendix$role_summary$actual_input_routes
+    fit_role <- roles$mq_fit_rmse
+    expect(reader_appendix$active && identical(fit_role$disposition, "archived") &&
+             identical(fit_role$baseline_label, "fig:joint-qdesn-pure-desn-v2-fit-rmse") &&
+             !("qdesn-supplement.tex" %in% unlist(actual_routes[[fit_role$asset]])) &&
+             !grepl(fit_wrapper, main, fixed = TRUE),
+           "Forecast figure remains in main and fitting diagnostic follows its authenticated archive role")
+    for (role in c("mq_sensitivity", "mq_crossings")) {
+      selected <- roles[[role]]
+      destination <- strsplit(selected$destination, "#", fixed = TRUE)[[1L]][[1L]]
+      expect(identical(selected$disposition, "retained") &&
+               "qdesn-supplement.tex" %in% unlist(actual_routes[[destination]]),
+             paste("Essential MQ reader evidence retains actual consumer", role))
+    }
+  } else {
+    live_fit_wrapper <- if (!is.null(compression)) {
+      expect(reader_appendix$active, "Validated successor required for compact MQ fitting route")
+      "tables/appendix_compact_20261106_mq_fit_rmse.tex"
+    } else fit_wrapper
+    expect(grepl(live_fit_wrapper, supplement, fixed = TRUE) &&
+             !grepl(live_fit_wrapper, main, fixed = TRUE),
+           "Forecast figure remains in main and fitting figure in supplement")
+  }
   read_text <- reader_appendix$read
   # Dated prose assertions below use historical fixtures only after actual
   # current semantics, routing, ancestry and protected inputs all pass.

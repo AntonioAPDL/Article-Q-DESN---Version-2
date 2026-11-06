@@ -6,6 +6,7 @@ app_reader_appendix_adapter <- function(root) {
   path <- file.path(root, "tables/independent_forecast_300_500_article_manifest_v1.json")
   receipt <- jsonlite::read_json(path, simplifyVector = FALSE)
   active <- !is.null(receipt$reader_appendix_20261106)
+  role_summary <- list(version = 0L, roles = list())
   allowed <- c("main.tex", "qdesn-supplement.tex", "refs.bib",
     "tables/qdesn_multiquantile_forecast_figure_display.tex",
     "tables/independent_train500_eval300_mcmc_figures_v1.tex",
@@ -13,9 +14,10 @@ app_reader_appendix_adapter <- function(root) {
     "tables/independent_train500_eval500_mcmc_figures_v1.tex")
   if (active) {
     result <- system2("/usr/bin/python3.11", c("-I", "-B", shQuote(file.path(root,
-      "scripts/refresh_reader_online_appendix_receipts_20261106.py")), "--root", shQuote(root), "--check"),
+      "scripts/refresh_reader_online_appendix_receipts_20261106.py")), "--root", shQuote(root), "--check", "--role-summary"),
       stdout = TRUE, stderr = TRUE)
     if (!is.null(attr(result, "status"))) stop(paste(result, collapse = "\n"), call. = FALSE)
+    role_summary <- jsonlite::fromJSON(paste(result, collapse = "\n"), simplifyVector = FALSE)
     message("READER_APPENDIX_CURRENT_SEMANTICS_VERIFIED; dated prose assertions use authenticated 637 fixtures; scientific inputs stay live.")
   }
   read <- function(relative) {
@@ -27,5 +29,6 @@ app_reader_appendix_adapter <- function(root) {
     }
     paste(readLines(file.path(root, relative), warn = FALSE), collapse = "\n")
   }
-  list(active = active, read = read)
+  list(active = active, read = read, role_summary = role_summary,
+    selected_manifest = role_summary$manifest)
 }

@@ -57,6 +57,8 @@ INPUT = re.compile(r"\\(?:input|include)\s*\{([^{}]+)\}")
 DEFINE = re.compile(r"\\(newcommand|renewcommand|providecommand)\*?\s*"
                     r"\{\s*\\(GlofasApplicationCurrent[A-Za-z]+)\s*\}\s*"
                     r"(?:\[[^\]]*\]\s*)?\{([^{}]*)\}")
+ESSENTIAL_CONTRACT = "tables/appendix_essential_20261106_contract.json"
+ESSENTIAL_CONTRACT_SHA = "b0bc20572044955b1fe1937ee3d3e13153c5c0dde35b0ac42c2a2f2874ede0c1"
 
 
 class AuthorityError(Exception):
@@ -396,6 +398,92 @@ def validate_compact_supplement_scores(store, supplement):
     require(data_lines == expected, "compact diagnostic values/family order differ from approved metrics")
 
 
+def essential_requested(supplement):
+    # The marker is an actual selected new caption, not an approval comment.
+    return "appendix_essential_20261106_" in strip_comments(supplement)
+
+
+def validate_essential_supplement(store, supplement):
+    """Independent Python-3.6 admission of the reduced reader presentation.
+
+    This grants no new scientific approval. All original assets/score values
+    still pass _validate_authority. The new branch verifies the actual retained
+    seven-family figure and 49 calibration values, and source-keyed adverse
+    numerical prose rather than trusting an editorial flag.
+    """
+    raw = store.read(ESSENTIAL_CONTRACT, 128 * 1024)
+    require(digest(raw) == ESSENTIAL_CONTRACT_SHA, "unknown essential-layout contract")
+    contract = json_object(raw.decode("utf-8"), "essential layout")
+    require(contract.get("schema") == "appendix-essential-v2" and
+            contract.get("baseline_commit") == "1b249255018715dd3bdc3c95389c80702d26c8c9" and
+            contract.get("variant") == "default-full-32-cell-sensitivity", "partial essential-layout contract")
+    require(visible_use(supplement, r"\\input\s*\{\\GlofasApplicationCurrentCalibrationTable\}") and
+            visible_use(supplement, r"\\includegraphics(?:\[[^\]]*\])?\s*\{\\GlofasApplicationCurrentFullComparisonFigure\}"),
+            "essential appendix must actually retain calibration and all-family figure")
+    require(not re.search(r"\\input\s*\{(?:tables/appendix_compact_20261106_glofas_diagnostics\.tex|"
+                          r"\\GlofasApplicationCurrentIssuedSupplementScoreTable)\}", supplement),
+            "essential appendix unexpectedly selects archived duplicate diagnostics")
+    calibration = list(csv.DictReader(io.StringIO(store.text("tables/" + PREFIX + "_calibration.csv"))))
+    records = {}
+    for row in calibration:
+        try:
+            key = row["family"], float(row["tau"])
+            value = float(row["empirical_coverage"])
+            n = int(row["n_horizons"])
+        except (KeyError, TypeError, ValueError):
+            raise AuthorityError("GLOFAS_CURRENT_AUTHORITY_INVALID: calibration source schema")
+        require(key not in records and key[0] in FAMILIES and key[1] in PROBABILITIES and
+                n == 28 and math.isfinite(value) and 0 <= value <= 1,
+                "exact distinct family-level calibration keys required")
+        records[key] = value
+    require(set(records) == {(f,p) for f in FAMILIES for p in PROBABILITIES},
+            "all 49 calibration values required")
+    text = strip_comments(store.text(ALIASES["GlofasApplicationCurrentCalibrationTable"]))
+    rows = [" ".join(line.split()) for line in text.splitlines() if "&" in line and not line.strip().startswith("Model &")]
+    expected = [label + " & " + " & ".join("{:.3f}".format(records[(family,p)]) for p in PROBABILITIES) + r" \\"
+                for family,label in zip(FAMILIES,TEX_LABELS)]
+    require(rows == expected, "actual retained calibration family/level values differ")
+    raw_prose = strip_comments(supplement)
+    prose = re.sub(r"\s+", " ", raw_prose)
+    gain = [re.sub(r"\s+"," ",m.group()) for m in re.finditer(
+        r"The\s+reference\s+and\s+discrepancy\s+components\s+use\s+input\s+multipliers.*?with\s+bias\s+multiplier[^.]*\.",
+        raw_prose,re.S) if top_level(raw_prose,m.start())]
+    expected_gain = "The reference and discrepancy components use input multipliers 0.5 and 0.35, respectively, with bias multiplier one."
+    require(gain == [expected_gain],
+            "G01 local executed reference/discrepancy/global/bias roles differ")
+    metrics = {r["family"]: r for r in csv.DictReader(io.StringIO(store.text("tables/" + PREFIX + "_family_metrics.csv")))}
+    paths = list(csv.DictReader(io.StringIO(store.text("tables/" + PREFIX + "_quantile_paths.csv"))))
+    negative = {}
+    for family in FAMILIES:
+        selected = [r for r in paths if r.get("family") == family]
+        require(len(selected) == 196 and len({(r.get("horizon"),r.get("tau")) for r in selected}) == 196,
+                "complete distinct quantile paths required for support prose")
+        try:
+            values = [float(r["quantile"]) for r in selected]
+        except (ValueError, KeyError, TypeError):
+            raise AuthorityError("GLOFAS_CURRENT_AUTHORITY_INVALID: numerical quantile paths required")
+        require(all(math.isfinite(v) for v in values), "finite public quantile paths required")
+        negative[family] = sum(v < 0 for v in values)
+    def sequence(field):
+        try:
+            numbers = [int(metrics[f][field]) for f in FAMILIES[3:]]
+        except (ValueError, KeyError, TypeError):
+            raise AuthorityError("GLOFAS_CURRENT_AUTHORITY_INVALID: support/crossing source schema")
+        return numbers
+    def present(numbers, prefix, suffix):
+        expression = r"\b" + r",\s*".join(str(v) for v in numbers[:3]) + r"(?:,?\s+and\s+|,\s*)" + str(numbers[3]) + r"\b"
+        pattern = prefix.replace(" ",r"\s+") + r"\s*" + expression + r"\s*" + suffix.replace(" ",r"\s+")
+        return any(top_level(raw_prose,m.start()) for m in re.finditer(pattern,raw_prose,re.I))
+    require(present(sequence("inverted_intervals"),r"inverted on",r"dates") and
+            present(sequence("raw_crossing_pairs"),r"crossing counts are",r"among 168 comparisons") and
+            present([negative[f] for f in FAMILIES[3:]],r"families have",r"negative flow quantiles among 196"),
+            "retained numerical inversion/crossing/support prose differs from sources")
+    violation = float(metrics["Independent AL"]["max_positive_adjacent_violation_log1p"])
+    require("{:.4f}".format(violation) in prose and "negative" in prose.lower() and
+            "no clipping, truncation or ordering repair is applied" in prose.lower() and "respectively" in prose.lower(),
+            "retained maximum violation or physical-support interpretation absent")
+
+
 def _validate_authority(store):
     authority_raw = store.read(AUTHORITY_PATH, 1024 * 1024)
     require(not PRIVATE.search(authority_raw), "private information in authority contract")
@@ -463,7 +551,9 @@ def _validate_authority(store):
     require(visible_use(main, r"\\input\s*\{\\GlofasApplicationCurrentScoreTable\}") and
             visible_use(main, r"\\includegraphics(?:\[[^\]]*\])?\s*\{\\GlofasApplicationCurrentForecastWindowFigure\}"),
             "main must display the approved current score table and figure")
-    if not visible_use(supp, r"\\input\s*\{\\GlofasApplicationCurrentIssuedSupplementScoreTable\}"):
+    if essential_requested(supp):
+        validate_essential_supplement(store, supp)
+    elif not visible_use(supp, r"\\input\s*\{\\GlofasApplicationCurrentIssuedSupplementScoreTable\}"):
         validate_compact_supplement_scores(store, supp)
     for name in ("GlofasApplicationCurrentOriginDate", "GlofasApplicationCurrentScoredHorizons"):
         expected = "25 December 2022" if name.endswith("OriginDate") else "28"

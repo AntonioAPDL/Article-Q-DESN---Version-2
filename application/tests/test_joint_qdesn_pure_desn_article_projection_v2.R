@@ -151,13 +151,33 @@ local({
   reader_dependencies <- character()
   compression_active <- exists("ind_receipt") &&
     !is.null(ind_receipt$appendix_compression_20261106)
+  essential_active <- exists("ind_receipt") &&
+    !is.null(ind_receipt$appendix_essential_20261106)
   if (reader_active) {
     # Full copied fixture, not a production bypass: expose only the original
     # repository's immutable object directory to a NEW temporary Git store.
     # No original ref/index/config is changed, and no runtime/model payload is
     # copied or read. All live public source protection still executes normally.
     baseline <- "6370677bf37204dd494db1b7f649d2ceb288f36b"
-    if (compression_active) {
+    if (essential_active) {
+      # Full production admission above must precede this fixture. Preserve
+      # both immutable compression history and the selected essential-layout
+      # closure, then authenticate the genuine newer baseline below. This is
+      # not a missing-Git fallback or a portable-ancestry claim.
+      essential_path <- "tables/appendix_essential_20261106_manifest.json"
+      essential_receipt <- jsonlite::read_json(file.path(root, essential_path))
+      baseline <- "1b249255018715dd3bdc3c95389c80702d26c8c9"
+      stopifnot(identical(essential_receipt$schema, "appendix-essential-v2"),
+        identical(essential_receipt$baseline_commit, baseline))
+      compression_path <- "tables/appendix_compression_20261106_manifest.json"
+      compression_receipt <- jsonlite::read_json(file.path(root, compression_path))
+      reader_dependencies <- c(essential_path, compression_path,
+        "tables/appendix_essential_20261106_contract.json",
+        names(essential_receipt$current_source_sha256),
+        names(essential_receipt$protected_source_sha256),
+        names(compression_receipt$current_source_sha256),
+        names(compression_receipt$protected_source_sha256))
+    } else if (compression_active) {
       # run(root) above has already performed full production admission.
       # Copy its exact public successor closure, never runtime/model objects,
       # and give this fixture the genuine newer Git baseline it requires.

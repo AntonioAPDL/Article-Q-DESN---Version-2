@@ -68,7 +68,26 @@ app_ind_effective_tex <- function(root, path, seen = character()) {
   inputs <- inputs[file.exists(file.path(root, inputs))]
   unique(c(path, unlist(lapply(inputs, function(p) app_ind_effective_tex(root, p, c(seen, path))))))
 }
-app_ind_reader_routes <- function(root) {
+app_ind_essential_layout <- function(root, admitted = NULL) {
+  receipt <- jsonlite::read_json(file.path(root,
+    "tables/independent_forecast_300_500_article_manifest_v1.json"), simplifyVector = FALSE)
+  requested <- !is.null(receipt$appendix_essential_20261106) ||
+    file.exists(file.path(root, "tables/appendix_essential_20261106_contract.json"))
+  if (!requested) return(FALSE)
+  # A contract's presence never admits an omitted panel: authenticate the full
+  # current sources, immutable inputs and actual retained/archive destinations.
+  if (is.null(admitted)) {
+    source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+    admitted <- app_reader_appendix_adapter(root)
+  }
+  app_ind_require(isTRUE(admitted$active) &&
+    identical(admitted$role_summary$schema, "appendix-essential-v2"), "complete essential-layout admission required")
+  TRUE
+}
+app_ind_reader_routes <- function(root, admitted = NULL) {
+  if (app_ind_essential_layout(root, admitted)) return(c(
+    recovery = "tables/appendix_essential_20261106_ind_forecast_mae.tex",
+    calibration = "tables/appendix_compact_20261106_ind_frequencies.tex"))
   routes <- c(fit = "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
     recovery = "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
     sensitivity = "tables/independent_train500_eval500_mcmc_figures_v1.tex",
@@ -91,19 +110,28 @@ app_ind_reader_routes <- function(root) {
   }
   routes
 }
-app_ind_current_routing <- function(root, main = NULL, supplement = NULL) {
+app_ind_current_routing <- function(root, main = NULL, supplement = NULL, admitted = NULL) {
   read <- function(path) paste(readLines(file.path(root, path), warn = FALSE), collapse = "\n")
   if (is.null(main)) main <- read("main.tex")
   if (is.null(supplement)) supplement <- read("qdesn-supplement.tex")
   has <- function(x, text) grepl(text, x, fixed = TRUE)
-  routes <- app_ind_reader_routes(root)
+  routes <- app_ind_reader_routes(root, admitted)
   app_ind_require(has(main, "\\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}") &&
     !has(main, "\\input{tables/qdesn_pro_review_mcmc_forecast_figures.tex}"), "live main forecast routing")
   app_ind_require(all(vapply(routes, function(path)
       has(supplement, paste0("\\input{", path, "}")), logical(1L))) &&
     !any(vapply(c(unname(routes), "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex"),
       function(path) has(main, paste0("\\input{", path, "}")), logical(1L))),
-    "live supplementary fitting/recovery/sensitivity/calibration routing")
+    "live supplementary reader-evidence routing")
+  if (app_ind_essential_layout(root, admitted)) {
+    archived <- c("tables/appendix_compact_20261106_ind_fit_rmse.tex",
+      "tables/appendix_compact_20261106_ind_sensitivity.tex",
+      "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+      "tables/independent_train500_eval500_mcmc_figures_v1.tex")
+    app_ind_require(!any(vapply(archived, function(path)
+      has(supplement, paste0("\\input{", path, "}")), logical(1L))),
+      "essential reader boundary archives fitting and 500-target panels")
+  }
   wrapper <- read("tables/independent_train500_eval300_mcmc_figures_v1.tex")
   app_ind_require(has(wrapper, "eval300_mcmc_forecast_check_v1.pdf") &&
     !has(wrapper, "eval300_mcmc_forecast_mae_v1.pdf"), "live main figure contains check loss only")
@@ -111,7 +139,7 @@ app_ind_current_routing <- function(root, main = NULL, supplement = NULL) {
     has(main, "fig:simulation-500obs-mcmc-forecast-check-loss-intervals"), "live main references the primary criterion only")
   invisible(TRUE)
 }
-app_ind_current_closure <- function(root, selected) {
+app_ind_current_closure <- function(root, selected, admitted = NULL) {
   # This remains a LIVE routing guard. An explicitly archived redundant VB
   # panel is optional only after the new successor authenticates the actual
   # manuscript, disposition map and unchanged public scientific evidence.
@@ -121,9 +149,16 @@ app_ind_current_closure <- function(root, selected) {
     "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
     "tables/qdesn_validation_mcmc_five_chain_sensitivity.tex",
     "tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex")
-  required <- unname(app_ind_reader_routes(root))
+  essential <- app_ind_essential_layout(root, admitted)
+  required <- unname(app_ind_reader_routes(root, admitted))
   vb <- "tables/qdesn_single_quantile_vb_fit_figure_display.tex"
-  if (!is.null(receipt$reader_appendix_20261106)) {
+  if (essential) {
+    archived <- c("tables/appendix_compact_20261106_ind_fit_rmse.tex",
+      "tables/appendix_compact_20261106_ind_sensitivity.tex",
+      "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+      "tables/independent_train500_eval500_mcmc_figures_v1.tex", vb)
+    app_ind_require(!any(archived %in% selected), "approved fitting and extension figures stay archived")
+  } else if (!is.null(receipt$reader_appendix_20261106)) {
     source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
     validated <- app_reader_appendix_adapter(root)
     app_ind_require(validated$active, "validated current editorial revision required")
@@ -140,7 +175,7 @@ app_ind_current_closure <- function(root, selected) {
     "live closure excludes retired forecasts and retains mandatory fitting/recovery/sensitivity/calibration")
   invisible(TRUE)
 }
-app_ind_check_current_reporting <- function(root) {
+app_ind_check_current_reporting <- function(root, admitted = NULL) {
   commit <- app_ind_authority_commits[["current_reporting"]]
   app_ind_require_ancestor(root, commit)
   fixed <- c("application/config/independent_forecast_300_500_v1.json",
@@ -163,9 +198,9 @@ app_ind_check_current_reporting <- function(root) {
   app_ind_require(nrow(rows) == 144L && all(rows$n_chains == 3L) &&
     all(rows$forecast_pairs == rows$cutoff) && all(rows$forecast_origins == ceiling(rows$cutoff/30)) &&
     all(rows$last_lead == ifelse(rows$cutoff == 300L, 30L, 20L)), "live balanced origin/horizon surface")
-  app_ind_current_routing(root)
+  app_ind_current_routing(root, admitted = admitted)
   selected <- unique(c(app_ind_effective_tex(root, "main.tex"), app_ind_effective_tex(root, "qdesn-supplement.tex")))
-  app_ind_current_closure(root, selected)
+  app_ind_current_closure(root, selected, admitted)
   upload <- readLines(file.path(root, "overleaf/article_files.txt"), warn = FALSE)
   required <- c("tables/independent_train500_eval300_mcmc_figures_v1.tex",
     "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
@@ -173,7 +208,7 @@ app_ind_check_current_reporting <- function(root) {
     "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex", "tables/qdesn_single_quantile_vb_fit_figure_display.tex",
     sprintf("figures/independent_simulation/independent_train500_eval%d_mcmc_forecast_%s_v1.pdf",
       rep(c(300L, 500L), each = 2L), rep(c("check", "mae"), 2L)))
-  required <- unique(c(required, unname(app_ind_reader_routes(root))))
+  required <- unique(c(required, unname(app_ind_reader_routes(root, admitted))))
   app_ind_require(all(required %in% upload) &&
     !any(grepl("qdesn_pro_review_mcmc_forecast|qdesn_validation_500obs_v14_mcmc_forecast|v14_vb_forecast_", upload)), "live article-only IND publication surface")
   invisible(TRUE)

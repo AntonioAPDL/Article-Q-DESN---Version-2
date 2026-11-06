@@ -141,8 +141,11 @@ def compression_successor(root):
     path = Path(root) / "scripts/appendix_compression_validation_20261106.py"
     manifest = Path(root) / "tables/appendix_compression_20261106_manifest.json"
     receipt = Path(root) / RECEIPT
-    requested = manifest.is_file() or (receipt.is_file() and
-        "appendix_compression_20261106" in decode(receipt.read_bytes()))
+    essential_markers = ("tables/appendix_essential_20261106_contract.json",
+                         "tables/appendix_essential_20261106_manifest.json")
+    requested = manifest.is_file() or any((Path(root) / p).is_file() for p in essential_markers) or (
+        receipt.is_file() and any(k in decode(receipt.read_bytes()) for k in
+            ("appendix_compression_20261106", "appendix_essential_20261106")))
     if not requested:
         return None
     require(path.is_file(), "compression successor checker missing")
@@ -617,10 +620,17 @@ def main():
     mode.add_argument("--check", action="store_true")
     mode.add_argument("--refresh", action="store_true")
     parser.add_argument("--legacy-text", choices=sorted(LEGACY_TEXT))
+    parser.add_argument("--role-summary", action="store_true",
+                        help="Return selected reader roles after full source admission.")
     args = parser.parse_args()
     try:
-        refresh(args.root, write=args.refresh)
-        if args.legacy_text:
+        admitted = refresh(args.root, write=args.refresh)
+        if args.role_summary:
+            require(not args.legacy_text, "role summary and historical prose are separate outputs")
+            successor = compression_successor(args.root)
+            summary = successor.role_summary(args.root, admitted=admitted) if successor else dict(version=0, roles={})
+            print(json.dumps({k: v for k, v in summary.items() if k != "current_source_sha256"}, sort_keys=True))
+        elif args.legacy_text:
             sys.stdout.write(historical_text(args.root, args.legacy_text))
         else:
             print("READER_ONLINE_APPENDIX_RECEIPTS_{} scientific_runs=0 legacy_fixture_scope=prose_only".format("REFRESHED" if args.refresh else "CHECK_PASS"))

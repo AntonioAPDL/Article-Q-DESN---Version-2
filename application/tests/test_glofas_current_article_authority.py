@@ -252,6 +252,94 @@ class AuthorityTests(unittest.TestCase):
             "\\newcommand{\\unusedCompact}{\\input{" + path + "}}"))
         self.fails("supplement must display")
 
+    def essential_scores(self):
+        """Complete generated 7x7/7x196 evidence, not application results."""
+        self.f.write(GUARD.ESSENTIAL_CONTRACT,(ROOT/GUARD.ESSENTIAL_CONTRACT).read_bytes())
+        for index,row in enumerate(self.f.metrics):
+            row["inverted_intervals"]=index
+        stream=io.StringIO(); writer=csv.DictWriter(stream,fieldnames=list(self.f.metrics[0]))
+        writer.writeheader(); writer.writerows(self.f.metrics)
+        self.f.write("tables/"+GUARD.PREFIX+"_family_metrics.csv",stream.getvalue())
+        calibration=[]; quantiles=[]
+        lines=[r"\begin{tabular}{lrrrrrrr}","Model & "+" & ".join(str(p) for p in GUARD.PROBABILITIES)+r" \\"]
+        for index,(family,label) in enumerate(zip(GUARD.FAMILIES,GUARD.TEX_LABELS)):
+            for p in GUARD.PROBABILITIES:
+                calibration.append(dict(family=family,tau=p,n_horizons=28,empirical_coverage=p))
+            lines.append(label+" & "+" & ".join("{:.3f}".format(p) for p in GUARD.PROBABILITIES)+r" \\")
+            for horizon in range(1,29):
+                for level,p in enumerate(GUARD.PROBABILITIES):
+                    quantiles.append(dict(family=family,horizon=horizon,tau=p,quantile=-1 if 7*(horizon-1)+level<index else 1))
+        lines.append(r"\end{tabular}")
+        self.f.write(GUARD.ALIASES["GlofasApplicationCurrentCalibrationTable"],"\n".join(lines)+"\n")
+        for name,rows in (("calibration",calibration),("quantile_paths",quantiles)):
+            stream=io.StringIO(); writer=csv.DictWriter(stream,fieldnames=list(rows[0]))
+            writer.writeheader(); writer.writerows(rows)
+            self.f.write("tables/"+GUARD.PREFIX+"_"+name+".csv",stream.getvalue())
+        replacement=(r"\input{tables/appendix_essential_20261106_mq_crossings.tex}"+"\n"
+            r"\input{\GlofasApplicationCurrentCalibrationTable}"+"\n"
+            r"\includegraphics[width=.98\textwidth]{\GlofasApplicationCurrentFullComparisonFigure}"+"\n"
+            "The reference and discrepancy components use input multipliers 0.5 and 0.35, respectively, with bias multiplier one.\n"
+            "Endpoint bounds are inverted on 3, 4, 5 and 6 dates, respectively.\n"
+            "Crossing counts are 6, 8, 10 and 12 among 168 comparisons.\n"
+            "The four families have 3, 4, 5 and 6 negative flow quantiles among 196.\n"
+            "Maximum violation is 0.0030. No clipping, truncation or ordering repair is applied.\n")
+        self.f.write("tables/appendix_essential_20261106_mq_crossings.tex","Generated selected caption\n")
+        self.f.write("qdesn-supplement.tex",self.f.supp.replace(r"\input{\GlofasApplicationCurrentIssuedSupplementScoreTable}",replacement))
+        self.f.reseal()
+
+    def test_essential_selected_consumers_and_committed_release(self):
+        self.essential_scores()
+        GUARD.validate_authority_tree(self.f.root)
+        self.assertIn(GUARD.ESSENTIAL_CONTRACT,GUARD.authority_dependency_paths(self.f.root))
+        result=self.f.check()
+        self.assertEqual(result.returncode,0,result.stdout)
+
+    def test_essential_calibration_wrong_value_or_family_rejected_even_rehashed(self):
+        self.essential_scores()
+        path=GUARD.ALIASES["GlofasApplicationCurrentCalibrationTable"]
+        original=(self.f.root/path).read_text()
+        for text in (original.replace("0.050","0.051",1),original.replace("MQ--DESN (exAL)","duplicate model")):
+            self.f.write(path,text); self.f.reseal()
+            with self.subTest(text=text[:40]),self.assertRaisesRegex(GUARD.AuthorityError,"calibration family/level"):
+                GUARD.validate_authority_tree(self.f.root)
+
+    def test_essential_hidden_or_missing_retained_consumer_rejected(self):
+        self.essential_scores()
+        path="qdesn-supplement.tex"; original=(self.f.root/path).read_text()
+        token=r"\input{\GlofasApplicationCurrentCalibrationTable}"
+        self.f.write(path,original.replace(token,r"\iffalse"+token+r"\fi"))
+        self.fails("actually retain calibration")
+
+    def test_essential_g01_wrong_local_roles_not_masked_by_correct_values_elsewhere(self):
+        self.essential_scores()
+        path="qdesn-supplement.tex"; original=(self.f.root/path).read_text()
+        for before,after in (("0.5 and 0.35","0.35 and 0.5"),("0.5 and 0.35","0.058843894 and 0.047541010"),("bias multiplier one","bias multiplier 0.5")):
+            text=original.replace(before,after)+"\nReference values elsewhere: 0.5, 0.35, one.\n"
+            self.f.write(path,text)
+            with self.subTest(after=after),self.assertRaisesRegex(GUARD.AuthorityError,"G01 local executed"):
+                GUARD.validate_authority_tree(self.f.root)
+
+    def test_essential_hidden_correct_gain_sentence_cannot_mask_visible_wrong_claim(self):
+        self.essential_scores()
+        path="qdesn-supplement.tex"; original=(self.f.root/path).read_text()
+        exact="The reference and discrepancy components use input multipliers 0.5 and 0.35, respectively, with bias multiplier one."
+        self.assertIn(exact,original)
+        self.f.write(path,original.replace(exact,exact.replace("0.5 and 0.35","0.058843894 and 0.047541010"))+"\n\\iffalse\n"+exact+"\n\\fi\n")
+        self.fails("G01 local executed")
+
+    def test_essential_adverse_numerical_prose_not_replaced_by_flag(self):
+        self.essential_scores()
+        path="qdesn-supplement.tex"; original=(self.f.root/path).read_text()
+        for before,after in (("6, 8, 10 and 12","0, 0, 0 and 0"),("0.0030","0.0000"),("among 196","among 100")):
+            self.f.write(path,original.replace(before,after))
+            with self.subTest(after=after),self.assertRaises(GUARD.AuthorityError):
+                GUARD.validate_authority_tree(self.f.root)
+
+    def test_essential_unknown_contract_rejected(self):
+        self.essential_scores()
+        self.f.write(GUARD.ESSENTIAL_CONTRACT,'{"schema":"approved"}\n')
+        self.fails("unknown essential-layout contract")
+
     def test_source_tree_missing_approval_fails(self):
         (self.f.root / GUARD.AUTHORITY_PATH).unlink()
         with self.assertRaises(GUARD.AuthorityError):

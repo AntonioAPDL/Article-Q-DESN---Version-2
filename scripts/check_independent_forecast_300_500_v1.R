@@ -5,7 +5,8 @@ root <- normalizePath(file.path(dirname(script), "..")); setwd(root)
 source("scripts/reader_online_appendix_legacy_adapter_20261106.R")
 reader_appendix <- app_reader_appendix_adapter(root)
 source("scripts/independent_reporting_authority_checks.R")
-reader_routes <- app_ind_reader_routes(root)
+reader_routes <- app_ind_reader_routes(root, reader_appendix)
+essential_layout <- app_ind_essential_layout(root, reader_appendix)
 args <- commandArgs(TRUE)
 arg <- function(flag) { i <- match(flag, args); if(is.na(i)) NULL else args[i + 1L] }
 sha <- function(path) unname(tools::sha256sum(path)[[1L]])
@@ -74,8 +75,17 @@ check("main retains check loss only", grepl("eval300_mcmc_forecast_check_v1.pdf"
   !grepl("eval300_mcmc_forecast_mae_v1.pdf", primary_wrapper, fixed = TRUE) &&
   !any(c("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
     unname(reader_routes["recovery"])) %in% main_files))
-check("fitting recovery remains supplementary only", reader_routes[["fit"]] %in% supp_files &&
-  !reader_routes[["fit"]] %in% main_files)
+if (essential_layout) {
+  archived_displays <- c("tables/appendix_compact_20261106_ind_fit_rmse.tex",
+    "tables/appendix_compact_20261106_ind_sensitivity.tex",
+    "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex")
+  check("essential reader boundary archives fitting and extension panels",
+    !any(archived_displays %in% c(main_files, supp_files)))
+} else {
+  check("fitting recovery remains supplementary only", reader_routes[["fit"]] %in% supp_files &&
+    !reader_routes[["fit"]] %in% main_files)
+}
 calibration_displays <- unname(reader_routes[c("recovery", "calibration")])
 if (!reader_appendix$active) calibration_displays <- c(calibration_displays,
     "tables/independent_forecast_calibration_table_v1.tex")
@@ -83,7 +93,7 @@ check("primary recovery and calibration are supplementary only",
   all(calibration_displays %in% supp_files) &&
   !any(c(unname(reader_routes["calibration"]), "tables/independent_forecast_calibration_figure_v1.tex",
     "tables/independent_forecast_calibration_table_v1.tex") %in% main_files))
-check("sensitivity figures are supplementary only", !any(c(reader_routes[["sensitivity"]],
+if (!essential_layout) check("sensitivity figures are supplementary only", !any(c(reader_routes[["sensitivity"]],
     "tables/independent_train500_eval500_mcmc_figures_v1.tex") %in% main_files) &&
   reader_routes[["sensitivity"]] %in% supp_files)
 retired <- c("tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex",
@@ -97,12 +107,26 @@ check("legacy builder routes to current authority",grepl("if (current_ind_policy
 main <- paste(readLines("main.tex"),collapse="\n"); supplement <- paste(readLines("qdesn-supplement.tex"),collapse="\n")
 # Current closure/data checks above remain live. Dated prose assertions below
 # use fixed historical wording only after independently validated new semantics.
-if (reader_appendix$active) {
+if (reader_appendix$active && !essential_layout) {
   main <- reader_appendix$read("main.tex")
   supplement <- reader_appendix$read("qdesn-supplement.tex")
 }
 normalized_main <- gsub("[[:space:]]+", " ", main)
 normalized_supplement <- gsub("[[:space:]]+", " ", supplement)
+if (essential_layout) {
+  check("actual essential prose retains retrospective scope and selection history",
+    grepl("300-target primary window was selected after inspecting this longer record", normalized_supplement, fixed=TRUE) &&
+    grepl("historical forecast-guided refinements", normalized_supplement, fixed=TRUE) &&
+    grepl("configurations with lower forecast MAE or check loss on the evaluation series were retained", normalized_supplement, fixed=TRUE) &&
+    grepl("nested rather than an independent validation", normalized_supplement, fixed=TRUE))
+  check("actual essential prose distinguishes recovery, frequency and aggregate uncertainty",
+    grepl("recovery of the state-conditional quantile path", normalized_supplement, fixed=TRUE) &&
+    grepl("not individual responses", normalized_supplement, fixed=TRUE) &&
+    grepl("not response prediction intervals", normalized_supplement, fixed=TRUE) &&
+    grepl("Aggregate widths therefore depend on this cross-target coupling", normalized_supplement, fixed=TRUE) &&
+    grepl("empirical frequencies", normalized_supplement, fixed=TRUE) &&
+    grepl("check-loss specification", normalized_supplement, fixed=TRUE))
+} else {
 check("retrospective scope change disclosed",
   grepl("(adopted after exploratory assessment|was chosen after inspecting results over the longer period)", normalized_main) &&
   grepl("(revised after inspecting|shorter primary period was selected after inspecting the longer-period results)", normalized_supplement) &&
@@ -114,6 +138,7 @@ check("MAE and empirical frequencies retain distinct targets",
   grepl("model-specific cross-time draw construction", supplement, fixed = TRUE) &&
   grepl("specification used for check loss", supplement, fixed = TRUE) &&
   grepl("not widths of future-response prediction intervals", supplement, fixed = TRUE))
+}
 check("obsolete point-path sensitivity not actively claimed", !grepl("subsec:supp-independent-five-chain-sensitivity",supplement,fixed=TRUE))
 # The a96e6616 statistical-language revision deliberately edits prose outside
 # the independent study. Its bounded replacement for the old 53e4912 blanket
@@ -143,11 +168,15 @@ if (!is.null(build_root)) for (doc in c("main","qdesn-supplement")) {
       !any(c("independent_train500_eval300_mcmc_forecast_mae_v1.pdf",
         "independent_forecast_calibration_v1.pdf") %in% asset_names))
   } else {
-    check("supplement recorder selects recovery sensitivity and calibration",
-      all(c("independent_train500_eval300_mcmc_forecast_mae_v1.pdf",
-        "independent_train500_eval500_mcmc_forecast_mae_v1.pdf",
-        "independent_train500_eval500_mcmc_forecast_check_v1.pdf",
-        "independent_forecast_calibration_v1.pdf") %in% asset_names))
+    required_pdfs <- c("independent_train500_eval300_mcmc_forecast_mae_v1.pdf",
+      "independent_forecast_calibration_v1.pdf")
+    archived_pdfs <- c("qdesn_pro_review_mcmc_fit_rmse.pdf",
+      "independent_train500_eval500_mcmc_forecast_mae_v1.pdf",
+      "independent_train500_eval500_mcmc_forecast_check_v1.pdf")
+    if (!essential_layout) required_pdfs <- c(required_pdfs, archived_pdfs[-1L])
+    check("supplement recorder selects approved reader evidence",
+      all(required_pdfs %in% asset_names) &&
+      (!essential_layout || !any(archived_pdfs %in% asset_names)))
   }
   log <- readLines(file.path(build_root,doc,paste0(doc,".log")),warn=FALSE)
   check(paste(doc,"no unresolved references or citations"),!any(grepl("undefined|multiply defined|There were undefined|Rerun to get",log)))

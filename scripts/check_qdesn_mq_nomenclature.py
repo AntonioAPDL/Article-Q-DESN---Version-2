@@ -488,7 +488,13 @@ def reader_appendix_roles(root: Path) -> dict[str, dict[str, str]] | None:
     try:
         compression = compression_helper(root)
         semantics = compression if compression is not None else helper
-        semantics.semantic_checks(read(root, "main.tex"), read(root, "qdesn-supplement.tex"), read(root, "refs.bib"))
+        if compression is not None and compression.role_summary(root)["version"] == 2:
+            # Full or explicit copied-fixture admission has already checked
+            # current v2 semantics in editorial.check. Do not reapply the old
+            # eight-figure layout to the new three-figure reader boundary.
+            compression.current_route_checks(root)
+        else:
+            semantics.semantic_checks(read(root, "main.tex"), read(root, "qdesn-supplement.tex"), read(root, "refs.bib"))
         helper.current_route_checks(root, records)
     except Exception as error:
         raise CheckError("Current reader appendix semantics/routing: " + str(error)) from error
@@ -651,6 +657,8 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
                "An approved archived display has returned as current compiled evidence")
     compression = compression_helper(root)
     fit_wrapper = FIT_WRAPPER
+    selected_joint_pdfs = set(JOINT_PDFS)
+    essential = compression is not None and compression.role_summary(root)["version"] == 2
     if compression is not None:
         # Full successor admission has already run in editorial.check above.
         # Only compiled display roles change; original hashes and rows below
@@ -659,10 +667,19 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
             "tables/qdesn_multiquantile_score_display.tex",
             "tables/qdesn_multiquantile_recursive_policy_display.tex"}
         fit_wrapper = compression.PREFIX + "mq_fit_rmse.tex"
-        current_joint_tables |= {fit_wrapper, compression.PREFIX + "mq_scores.tex"}
+        current_joint_tables |= {compression.PREFIX + "mq_scores.tex"}
         current_glofas_tables -= set(compression.STALE_DISPLAYS)
-        current_glofas_tables |= {compression.PREFIX + name + ".tex" for name in
-            ("glofas_specifications", "glofas_historical_scores", "glofas_diagnostics", "glofas_convergence")}
+        if essential:
+            current_joint_tables.discard("tables/qdesn_multiquantile_crossing_display.tex")
+            current_joint_tables.add("tables/appendix_essential_20261106_mq_crossings.tex")
+            current_glofas_tables |= {compression.PREFIX + "glofas_specifications.tex"}
+            selected_joint_pdfs.discard("figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_fit_oracle_rmse.pdf")
+            expect(fit_wrapper not in files and not (JOINT_PDFS - selected_joint_pdfs) & figures,
+                   "Archived MQ fitting display returned to the reader appendix")
+        else:
+            current_joint_tables.add(fit_wrapper)
+            current_glofas_tables |= {compression.PREFIX + name + ".tex" for name in
+                ("glofas_specifications", "glofas_historical_scores", "glofas_diagnostics", "glofas_convergence")}
     expect(current_joint_tables | current_glofas_tables <= files,
            "Current manuscript omits an authenticated MQ/editorial TeX derivative")
     expect(not (JOINT_TABLES | GLOFAS_TABLES) & files,
@@ -679,15 +696,25 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
            "Historical unverified-target replication must remain outside current manuscript evidence")
     if (root / "application/config/independent_forecast_300_500_v1.json").exists():
         current_historical.discard("tables/qdesn_validation_500obs_metric_dependence_sensitivity_display.tex")
-        expect("tables/independent_forecast_dependence_v1.tex" in files,
-               "Current IND dependence account is missing")
+        if essential:
+            source = uncomment(read(root, "qdesn-supplement.tex"))
+            marker = r"\label{subsec:supp-independent-metrics}"
+            expect(source.count(marker) == 1, "Current IND uncertainty subsection is missing")
+            account = normalized(source.split(marker, 1)[1].split(r"\subsection{", 1)[0])
+            expect(all(phrase in account for phrase in (
+                "one coefficient draw across targets", "target-specific draws",
+                "latent-Gaussian", "cross-target coupling")),
+                "Consolidated current IND dependence account is missing")
+        else:
+            expect("tables/independent_forecast_dependence_v1.tex" in files,
+                   "Current IND dependence account is missing")
     expect(current_historical <= files,
            "Current manuscript omits an authenticated historical display derivative")
-    expect(JOINT_PDFS | current_glofas_pdfs <= figures,
+    expect(selected_joint_pdfs | current_glofas_pdfs <= figures,
            "Effective selected aliases/wrappers do not select all authenticated MQ/GloFAS PDFs")
     expect(FORECAST_WRAPPER in graphs["main.tex"].files and
-           fit_wrapper in graphs["qdesn-supplement.tex"].files,
-           "JOINT forecast belongs in main; JOINT fit belongs in supplement")
+           (essential or fit_wrapper in graphs["qdesn-supplement.tex"].files),
+           "MQ forecast belongs in main; retained or archived fit role must match the admitted layout")
     expect(MAIN_EDITORIAL_OVERRIDE in graphs["main.tex"].files and
            SUPP_EDITORIAL_OVERRIDE in graphs["qdesn-supplement.tex"].files,
            "Current document-specific editorial overrides are not selected")
@@ -712,7 +739,7 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
             source, output = asset["source"], asset["output"]
             extractor = pdf_text if field == "assets" else read
             verify_label_mapping(extractor(root, source), extractor(root, output), rows, output)
-    return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": len(JOINT_PDFS | current_glofas_pdfs),
+    return {"registry_rows": 12, "posterior_cells": 32, "selected_mq_pdfs": len(selected_joint_pdfs | current_glofas_pdfs),
             "selected_mq_tex": len(current_joint_tables | current_glofas_tables),
             "historical_displays": len(current_historical),
             "source_ancestry_authenticated": reader_roles is not None and not portable_reader_fixture}

@@ -4,6 +4,8 @@ script <- normalizePath(sub("^--file=", "", grep("^--file=", commandArgs(FALSE),
 root <- normalizePath(file.path(dirname(script), "..")); setwd(root)
 source("scripts/reader_online_appendix_legacy_adapter_20261106.R")
 reader_appendix <- app_reader_appendix_adapter(root)
+source("scripts/independent_reporting_authority_checks.R")
+reader_routes <- app_ind_reader_routes(root)
 args <- commandArgs(TRUE)
 arg <- function(flag) { i <- match(flag, args); if(is.na(i)) NULL else args[i + 1L] }
 sha <- function(path) unname(tools::sha256sum(path)[[1L]])
@@ -70,17 +72,20 @@ check("main selects primary forecast wrapper", "tables/independent_train500_eval
 primary_wrapper <- paste(readLines("tables/independent_train500_eval300_mcmc_figures_v1.tex"), collapse = "\n")
 check("main retains check loss only", grepl("eval300_mcmc_forecast_check_v1.pdf", primary_wrapper, fixed = TRUE) &&
   !grepl("eval300_mcmc_forecast_mae_v1.pdf", primary_wrapper, fixed = TRUE) &&
-  !"tables/independent_train500_eval300_mcmc_mae_figure_v1.tex" %in% main_files)
-calibration_displays <- c("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
-    "tables/independent_forecast_calibration_figure_v1.tex")
+  !any(c("tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    unname(reader_routes["recovery"])) %in% main_files))
+check("fitting recovery remains supplementary only", reader_routes[["fit"]] %in% supp_files &&
+  !reader_routes[["fit"]] %in% main_files)
+calibration_displays <- unname(reader_routes[c("recovery", "calibration")])
 if (!reader_appendix$active) calibration_displays <- c(calibration_displays,
     "tables/independent_forecast_calibration_table_v1.tex")
 check("primary recovery and calibration are supplementary only",
   all(calibration_displays %in% supp_files) &&
-  !any(c("tables/independent_forecast_calibration_figure_v1.tex",
+  !any(c(unname(reader_routes["calibration"]), "tables/independent_forecast_calibration_figure_v1.tex",
     "tables/independent_forecast_calibration_table_v1.tex") %in% main_files))
-check("sensitivity figures are supplementary only", !"tables/independent_train500_eval500_mcmc_figures_v1.tex" %in% main_files &&
-  "tables/independent_train500_eval500_mcmc_figures_v1.tex" %in% supp_files)
+check("sensitivity figures are supplementary only", !any(c(reader_routes[["sensitivity"]],
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex") %in% main_files) &&
+  reader_routes[["sensitivity"]] %in% supp_files)
 retired <- c("tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex",
   "tables/qdesn_validation_mcmc_five_chain_sensitivity.tex", "tables/qdesn_pro_review_mcmc_forecast_figures.tex")
 check("retired forecast wrappers are inactive", !any(retired %in% c(main_files,supp_files)))

@@ -68,16 +68,42 @@ app_ind_effective_tex <- function(root, path, seen = character()) {
   inputs <- inputs[file.exists(file.path(root, inputs))]
   unique(c(path, unlist(lapply(inputs, function(p) app_ind_effective_tex(root, p, c(seen, path))))))
 }
+app_ind_reader_routes <- function(root) {
+  routes <- c(fit = "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+    recovery = "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    sensitivity = "tables/independent_train500_eval500_mcmc_figures_v1.tex",
+    calibration = "tables/independent_forecast_calibration_figure_v1.tex")
+  receipt <- jsonlite::read_json(file.path(root,
+    "tables/independent_forecast_300_500_article_manifest_v1.json"), simplifyVector = FALSE)
+  namespace <- !is.null(receipt$appendix_compression_20261106)
+  manifest <- file.exists(file.path(root, "tables/appendix_compression_20261106_manifest.json"))
+  if (namespace || manifest) {
+    app_ind_require(namespace && manifest && !is.null(receipt$reader_appendix_20261106),
+      "complete compression namespace and manifest required before changed IND routing")
+    # The adapter runs the full semantic successor against ACTUAL documents,
+    # unchanged scientific assets and outer receipt hashes. This is not a
+    # historical-text substitution and cannot approve a route by existence.
+    source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+    validated <- app_reader_appendix_adapter(root)
+    app_ind_require(validated$active, "validated compression successor required before changed IND routing")
+    routes <- setNames(paste0("tables/appendix_compact_20261106_",
+      c("ind_fit_rmse", "ind_forecast_mae", "ind_sensitivity", "ind_frequencies"), ".tex"), names(routes))
+  }
+  routes
+}
 app_ind_current_routing <- function(root, main = NULL, supplement = NULL) {
   read <- function(path) paste(readLines(file.path(root, path), warn = FALSE), collapse = "\n")
   if (is.null(main)) main <- read("main.tex")
   if (is.null(supplement)) supplement <- read("qdesn-supplement.tex")
   has <- function(x, text) grepl(text, x, fixed = TRUE)
+  routes <- app_ind_reader_routes(root)
   app_ind_require(has(main, "\\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}") &&
     !has(main, "\\input{tables/qdesn_pro_review_mcmc_forecast_figures.tex}"), "live main forecast routing")
-  app_ind_require(has(supplement, "\\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}") &&
-    has(supplement, "\\input{tables/independent_train500_eval500_mcmc_figures_v1.tex}") &&
-    !has(main, "\\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}"), "live supplementary recovery and sensitivity routing")
+  app_ind_require(all(vapply(routes, function(path)
+      has(supplement, paste0("\\input{", path, "}")), logical(1L))) &&
+    !any(vapply(c(unname(routes), "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex"),
+      function(path) has(main, paste0("\\input{", path, "}")), logical(1L))),
+    "live supplementary fitting/recovery/sensitivity/calibration routing")
   wrapper <- read("tables/independent_train500_eval300_mcmc_figures_v1.tex")
   app_ind_require(has(wrapper, "eval300_mcmc_forecast_check_v1.pdf") &&
     !has(wrapper, "eval300_mcmc_forecast_mae_v1.pdf"), "live main figure contains check loss only")
@@ -95,10 +121,7 @@ app_ind_current_closure <- function(root, selected) {
     "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
     "tables/qdesn_validation_mcmc_five_chain_sensitivity.tex",
     "tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex")
-  required <- c("tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
-    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
-    "tables/independent_train500_eval500_mcmc_figures_v1.tex",
-    "tables/independent_forecast_calibration_figure_v1.tex")
+  required <- unname(app_ind_reader_routes(root))
   vb <- "tables/qdesn_single_quantile_vb_fit_figure_display.tex"
   if (!is.null(receipt$reader_appendix_20261106)) {
     source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
@@ -150,6 +173,7 @@ app_ind_check_current_reporting <- function(root) {
     "tables/qdesn_single_quantile_mcmc_fit_figure_display.tex", "tables/qdesn_single_quantile_vb_fit_figure_display.tex",
     sprintf("figures/independent_simulation/independent_train500_eval%d_mcmc_forecast_%s_v1.pdf",
       rep(c(300L, 500L), each = 2L), rep(c("check", "mae"), 2L)))
+  required <- unique(c(required, unname(app_ind_reader_routes(root))))
   app_ind_require(all(required %in% upload) &&
     !any(grepl("qdesn_pro_review_mcmc_forecast|qdesn_validation_500obs_v14_mcmc_forecast|v14_vb_forecast_", upload)), "live article-only IND publication surface")
   invisible(TRUE)

@@ -129,8 +129,27 @@ def public_blob_identity(raw):
 
 
 def active(root):
+    successor = compression_successor(root)
+    if successor is not None and successor.active(root):
+        return True
     path = Path(root) / RECEIPT
     return path.is_file() and FIELD in decode(path.read_bytes())
+
+
+def compression_successor(root):
+    """Narrow revision dispatch; absence of Git never selects fixture mode."""
+    path = Path(root) / "scripts/appendix_compression_validation_20261106.py"
+    manifest = Path(root) / "tables/appendix_compression_20261106_manifest.json"
+    receipt = Path(root) / RECEIPT
+    requested = manifest.is_file() or (receipt.is_file() and
+        "appendix_compression_20261106" in decode(receipt.read_bytes()))
+    if not requested:
+        return None
+    require(path.is_file(), "compression successor checker missing")
+    spec = importlib.util.spec_from_file_location("reader_compression_successor", path)
+    successor = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(successor)
+    return successor
 
 
 def uncomment(text):
@@ -335,6 +354,9 @@ def disposition_checks(root, raw, main, supplement):
 
 def current_route_checks(root, rows):
     """Validate ACTUAL alias-aware selection, not merely an archive declaration."""
+    successor = compression_successor(root)
+    if successor is not None:
+        return successor.current_route_checks(root)
     spec = importlib.util.spec_from_file_location("reader_appendix_dependency_closure", root / "scripts/audit_qdesn_article_dependencies.py")
     dependency = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(dependency)
@@ -499,6 +521,9 @@ def prepare(root):
 
 
 def refresh(root, write=False):
+    successor = compression_successor(root)
+    if successor is not None:
+        return successor.refresh(root, write=write)
     root, current, presentation, result, expected_p, pins = prepare(root)
     def stable(exclude=()):
         for path, digest in pins.items():
@@ -544,6 +569,9 @@ def portable_reader_checks(root):
     environment variable or this module's CLI, and never writes metadata.
     Frozen scientific/public manifest checks remain the caller's responsibility.
     """
+    successor = compression_successor(root)
+    if successor is not None:
+        return successor.portable_checks(root)
     root = Path(root).absolute()
     current = decode(regular(root, RECEIPT))
     declared = current.get(FIELD, {})

@@ -170,32 +170,44 @@ class CurrentSourceTests(unittest.TestCase):
             rows = list(csv.DictReader(stream))
         main = (ROOT/"main.tex").read_text()
         supplement = (ROOT/"qdesn-supplement.tex").read_text()
+        compression = R.compression_successor(ROOT)
         R.current_route_checks(ROOT,rows)
         with tempfile.TemporaryDirectory(prefix="reader_appendix_routing_") as directory:
             root = Path(directory)
             # Public article-safe inputs only, never model/runtime payloads.
             paths = [p for p in (ROOT/"overleaf/article_files.txt").read_text().splitlines() if p and not p.startswith("#")]
             paths += ["overleaf/article_files.txt","scripts/audit_qdesn_article_dependencies.py"]
+            if compression is not None:
+                paths += list(compression.dependency_paths(ROOT))
             for path in paths:
                 target = root/path; target.parent.mkdir(parents=True,exist_ok=True)
                 shutil.copyfile(ROOT/path,target)
-            for path in (R.CAPTIONS[1].replace("figures_v1","mae_figure_v1"),
-                         "tables/independent_train500_eval500_mcmc_figures_v1.tex",
-                         "tables/independent_forecast_calibration_figure_v1.tex"):
+            mandatory = ((compression.PREFIX + name + ".tex" for name in
+                ("ind_forecast_mae", "ind_sensitivity", "ind_frequencies")) if compression is not None else
+                (R.CAPTIONS[1].replace("figures_v1","mae_figure_v1"),
+                 "tables/independent_train500_eval500_mcmc_figures_v1.tex",
+                 "tables/independent_forecast_calibration_figure_v1.tex"))
+            for path in mandatory:
                 marker = "\\input{"+path+"}"
                 self.assertIn(marker,supplement)
                 (root/"qdesn-supplement.tex").write_text(supplement.replace(marker,"% omitted in generated fixture"))
                 forged = copy.deepcopy(rows)
                 for row in forged:
                     if path in row["asset_paths"]: row["disposition"]="public_archive"
-                with self.subTest(path=path),self.assertRaises(R.EditorialError): R.current_route_checks(root,forged)
+                # Dynamic dispatch loads an independent module instance; assert
+                # the public error contract rather than its Python class identity.
+                with self.subTest(path=path),self.assertRaisesRegex(Exception,"not selected"):
+                    R.current_route_checks(root,forged)
                 (root/"qdesn-supplement.tex").write_text(supplement)
 
     def test_actual_documents_and_real_negative_mutations(self):
         main = (ROOT / "main.tex").read_text()
         supplement = (ROOT / "qdesn-supplement.tex").read_text()
         bibliography = (ROOT / "refs.bib").read_text()
-        R.semantic_checks(main, supplement, bibliography)
+        compression = R.compression_successor(ROOT)
+        semantic = compression.semantic_checks if compression is not None else R.semantic_checks
+        error = compression.CompressionError if compression is not None else R.EditorialError
+        semantic(main, supplement, bibliography)
         mutations = (
             ("main", "same parameter draw", "a new parameter draw"),
             ("main", "features averaged", "features selected separately"),
@@ -213,17 +225,25 @@ class CurrentSourceTests(unittest.TestCase):
             ("supplement", "\\prod_{h=1}^{28}f_{p_k}", "1"),
             ("supplement", "0.025,0.10,0.20,0.25,0.20,0.10,0.025", "0.1,0.1,0.2,0.2,0.2,0.1,0.1"),
         )
+        if compression is not None:
+            # The new revision owns current semantics; dated assertions above
+            # remain applicable to its historical branch, not to removed prose.
+            mutations = tuple(value for value in mutations if value[1] not in
+                {"same parameter draw", "equal-weight isotonic"}) + (
+                ("supplement", r"\frac{D_\gamma^2}{B_\gamma}", r"D_\gamma^2"),
+                ("supplement", r"a_\zeta+\frac{r}{2}", r"a_\zeta+\frac{r+1}{2}"),
+            )
         for role,before,after in mutations:
             value = main if role == "main" else supplement
             self.assertIn(before, R.plain(value), "negative fixture must actually match: " + before)
             changed = R.plain(value).replace(before, after)
-            with self.subTest(role=role,before=before), self.assertRaises(R.EditorialError):
-                R.semantic_checks(changed if role == "main" else main,
+            with self.subTest(role=role,before=before), self.assertRaises(error):
+                semantic(changed if role == "main" else main,
                                   changed if role == "supplement" else supplement, bibliography)
         # Harmless line wrapping and a concise paraphrase do not erase meaning.
         paraphrase = main.replace("retaining the same parameter draw", "keeping the same parameter draw")
         self.assertNotEqual(paraphrase, main, "permitted paraphrase must match actual prose")
-        R.semantic_checks(paraphrase.replace("Quantile location:", "Quantile\n location:"), supplement, bibliography)
+        semantic(paraphrase.replace("Quantile location:", "Quantile\n location:"), supplement, bibliography)
 
     def test_only_verified_bibliography_and_caption_substitutions(self):
         before = R.baseline_bytes(ROOT, "refs.bib")

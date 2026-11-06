@@ -213,6 +213,45 @@ class AuthorityTests(unittest.TestCase):
         with self.assertRaises(GUARD.AuthorityError):
             GUARD.validate_authority_tree(self.f.root)
 
+    def compact_scores(self):
+        path = "tables/appendix_compact_20261106_glofas_diagnostics.tex"
+        labels = ("Raw GloFAS", "Gaussian DESN (ridge)", "Gaussian DESN (RHS)",
+                  "Q--DESN (AL)", "Q--DESN (exAL)", "MQ--DESN (AL)", "MQ--DESN (exAL)")
+        lines = [r"\begin{tabular}{@{}lrr@{}}", r"Model & Mean check loss & Max. violation \\"]
+        lines.extend("{} & {:.4f} & {:.4f} \\\\".format(label, row["mean_check_loss"],
+                     row["max_positive_adjacent_violation_log1p"])
+                     for label, row in zip(labels, self.f.metrics))
+        lines.append(r"\end{tabular}")
+        self.f.write(path, "\n".join(lines) + "\n")
+        self.f.write("qdesn-supplement.tex", self.f.supp.replace(
+            r"\input{\GlofasApplicationCurrentIssuedSupplementScoreTable}", "\\input{" + path + "}"))
+        return path
+
+    def test_exact_compact_scores_tree_and_committed_release(self):
+        path = self.compact_scores()
+        GUARD.validate_authority_tree(self.f.root)
+        self.assertIn(path, GUARD.authority_dependency_paths(self.f.root))
+        result = self.f.check()
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_compact_score_numeric_mutation_rejected(self):
+        path = self.compact_scores()
+        self.f.write(path, (self.f.root / path).read_text().replace("0.2500", "0.2400", 1))
+        self.fails("compact diagnostic values/family order differ")
+
+    def test_compact_score_missing_family_rejected(self):
+        path = self.compact_scores()
+        text = (self.f.root / path).read_text()
+        self.f.write(path, "\n".join(line for line in text.splitlines() if not line.startswith("MQ--DESN (exAL)")))
+        self.fails("exactly seven distinct families")
+
+    def test_hidden_compact_score_input_rejected(self):
+        path = self.compact_scores()
+        text = (self.f.root / "qdesn-supplement.tex").read_text()
+        self.f.write("qdesn-supplement.tex", text.replace("\\input{" + path + "}",
+            "\\newcommand{\\unusedCompact}{\\input{" + path + "}}"))
+        self.fails("supplement must display")
+
     def test_source_tree_missing_approval_fails(self):
         (self.f.root / GUARD.AUTHORITY_PATH).unlink()
         with self.assertRaises(GUARD.AuthorityError):

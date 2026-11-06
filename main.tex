@@ -532,9 +532,10 @@ monitor and stopping criteria, together with the complete MCMC conditionals.
 A completed VB fit can also initialize MCMC under the same model. The single-level simulation
 uses three independently initialized MCMC chains and the multiquantile
 simulation uses five. We assess parameter mixing using rank-normalized
-\(\widehat R\) and effective sample sizes, together with stability of the
-forecast criteria. Online Appendix D gives iteration counts, burn-in, scoring
-subsets and diagnostics.
+\(\widehat R\) and effective sample sizes, alongside stability of the
+forecast criteria. Online Appendix D gives iteration counts, burn-in,
+scoring subsets and available score diagnostics, distinguishing these from
+scalar-parameter mixing.
 
 % ============================================================
 \section{Forecasting, Scoring, and Model Selection}
@@ -1313,6 +1314,10 @@ These materials support verification of the published summaries and their
 presentation. Original fitted objects, retained posterior draws, and some
 third-party inputs are not included in the article snapshot; reproducing the
 scientific fits requires the documented inputs and execution environment.
+An
+\href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2/blob/main/docs/reproducibility/appendix_compression_archive_20261106.md}{appendix archive index}
+locates extended calculations and complete numerical tables omitted from the
+shorter Online Appendix.
 
 \section*{Funding}
 No specific funding was received for this work.

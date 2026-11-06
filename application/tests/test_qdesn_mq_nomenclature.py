@@ -55,7 +55,25 @@ class MQNomenclatureTest(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text())
             self.assertIn(relative, receipt["sources"])
             receipt["sources"][relative] = hashlib.sha256((self.root / relative).read_bytes()).hexdigest()
-            if CHECKER.READER_FIELD in receipt:
+            compression = CHECKER.compression_helper(self.root)
+            if compression is not None:
+                # Explicit copied negative fixture only: reseal the changed
+                # text/routes so the semantic guard, not a stale checksum,
+                # decides. Historical receipt namespaces stay immutable.
+                manifest_path = self.root / compression.MANIFEST
+                manifest = json.loads(manifest_path.read_text())
+                manifest["current_source_sha256"][relative] = receipt["sources"][relative]
+                try:
+                    routes = compression.route_inventory(self.root)
+                except ValueError:
+                    # A forbidden consumer is itself the intended negative
+                    # fixture. Leave its route receipt stale so CHECKER, not
+                    # this test helper, rejects the invalid allowlist closure.
+                    pass
+                else:
+                    manifest["actual_input_routes"] = {p: docs for p, docs in routes.items() if docs}
+                manifest_path.write_text(json.dumps(manifest))
+            elif CHECKER.READER_FIELD in receipt:
                 receipt[CHECKER.READER_FIELD]["updated_source_sha256"][relative] = receipt["sources"][relative]
             receipt_path.write_text(json.dumps(receipt))
 
@@ -90,11 +108,16 @@ class MQNomenclatureTest(unittest.TestCase):
             CHECKER.check(self.root)
 
     def test_mandatory_current_mq_evidence_cannot_be_removed(self):
-        for relative in (
+        displays = (
             "tables/qdesn_multiquantile_score_display.tex",
             "tables/qdesn_multiquantile_crossing_display.tex",
             "tables/qdesn_multiquantile_recursive_policy_display.tex",
-        ):
+        )
+        if CHECKER.compression_helper(self.root) is not None:
+            displays = ("tables/appendix_compact_20261106_mq_scores.tex",
+                        "tables/qdesn_multiquantile_crossing_display.tex",
+                        "tables/appendix_compact_20261106_mq_fit_rmse.tex")
+        for relative in displays:
             with self.subTest(relative=relative):
                 path = self.root / "qdesn-supplement.tex"
                 original = path.read_text()
@@ -123,7 +146,7 @@ class MQNomenclatureTest(unittest.TestCase):
         receipt = CHECKER.load_json(self.root, CHECKER.READER_RECEIPT)
         receipt[CHECKER.READER_FIELD]["disposition_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         receipt_path.write_text(json.dumps(receipt))
-        with self.assertRaisesRegex(CHECKER.CheckError, "archived display cannot be promoted|archived display has returned"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "archived display cannot be promoted|archived display has returned|historical reader receipt or immutable outer scientific pins changed"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_archived_scientific_table_remains_immutable(self):
@@ -131,7 +154,7 @@ class MQNomenclatureTest(unittest.TestCase):
         path = self.root / relative
         self.assertNotIn("\\input{" + relative + "}", (self.root / "qdesn-supplement.tex").read_text())
         path.write_text(path.read_text() + "\nunauthorized archived edit\n")
-        with self.assertRaisesRegex(CHECKER.CheckError, "bytes/hash mismatch|immutable scientific|Unpermitted table/caption"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "bytes/hash mismatch|immutable scientific|Unpermitted table/caption|copied fixture current source differs: tables/qdesn_multiquantile_secondary_score_display.tex"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_current_glofas_approval_cannot_be_omitted(self):
@@ -140,7 +163,7 @@ class MQNomenclatureTest(unittest.TestCase):
             self.skipTest("Historical-only projection has no corrected GloFAS authority")
         path.unlink()
         with self.assertRaisesRegex(CHECKER.CheckError,
-                "without its approved authority|Missing allowlisted file: tables/glofas_same_family_current_authority\\.json"):
+                "without its approved authority|(?:Missing allowlisted file|bounded regular public file required): tables/glofas_same_family_current_authority\\.json"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_superseded_issued_glofas_table_cannot_return(self):
@@ -159,7 +182,8 @@ class MQNomenclatureTest(unittest.TestCase):
                              builder.table_rows(CHECKER.read(self.root, output)))
 
     def test_superseded_mq_table_cannot_replace_caption_derivative(self):
-        source, output = next(iter(CHECKER.EDITORIAL_JOINT_TABLES.items()))
+        source, output = next((s, o) for s, o in CHECKER.EDITORIAL_JOINT_TABLES.items()
+                              if o in (self.root / "qdesn-supplement.tex").read_text())
         path = self.root / "qdesn-supplement.tex"
         text = path.read_text()
         self.assertIn(output, text)
@@ -167,7 +191,7 @@ class MQNomenclatureTest(unittest.TestCase):
         self.refresh_ind_manuscript_receipt("qdesn-supplement.tex")
         with self.assertRaisesRegex(CHECKER.CheckError,
                 "omits an authenticated|superseded|mandatory appendix evidence|"
-                "Source-inferred inputs absent from allowlist: tables/joint_qdesn_pure_desn_v2_mq_score_table\\.tex"):
+                "Source-inferred inputs absent from allowlist: tables/joint_qdesn_pure_desn_v2_mq_(?:score|crossing)_table\\.tex"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_current_mq_table_numeric_edit_fails_with_rehashed_editorial_receipt(self):
@@ -181,7 +205,7 @@ class MQNomenclatureTest(unittest.TestCase):
         entry = next(r for r in receipt["outputs"] if r["file"] == relative)
         entry["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         manifest_path.write_text(json.dumps(receipt))
-        with self.assertRaisesRegex(CHECKER.CheckError, "Unpermitted table/caption transformation|scientific table rows"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "Unpermitted table/caption transformation|scientific table rows|copied fixture current source differs: tables/qdesn_multiquantile_score_display.tex"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_historical_unverified_target_table_cannot_return_as_current_evidence(self):
@@ -232,7 +256,7 @@ class MQNomenclatureTest(unittest.TestCase):
         asset["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         asset["size_bytes"] = path.stat().st_size
         receipt_path.write_text(json.dumps(receipt))
-        with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts|Frozen source changed: tables/joint_qdesn_(?:mq_presentation_manifest.json|pure_desn_v2_mq_score_table.tex)"):
+        with self.assertRaisesRegex(CHECKER.CheckError, "display-label counts|(?:Frozen source changed|copied fixture current source differs): tables/joint_qdesn_(?:mq_presentation_manifest.json|pure_desn_v2_mq_score_table.tex)"):
             CHECKER.check(self.root, portable_reader_fixture=True)
 
     def test_stale_manifest_output_hash_fails(self):

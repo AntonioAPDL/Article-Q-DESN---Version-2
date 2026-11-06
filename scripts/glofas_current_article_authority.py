@@ -361,6 +361,41 @@ def validate_score_display(store, values):
                     "current numerical alias differs from metrics: " + macro)
 
 
+def validate_compact_supplement_scores(store, supplement):
+    """Presentation successor: only duplicate columns leave the reader table.
+
+    Original full-score bytes and every authority/asset check remain required.
+    This separate check authenticates the ACTUALLY selected compact values,
+    including all seven families, against the approved public metrics.
+    Compatible with both committed publication and ordinary source-tree stores.
+    """
+    path = "tables/appendix_compact_20261106_glofas_diagnostics.tex"
+    require(visible_use(supplement, r"\\input\s*\{" + re.escape(path) + r"\}"),
+            "supplement must display the corrected full-family scores or exact compact diagnostic successor")
+    text = strip_comments(store.text(path))
+    require(r"\begin{tabular}{@{}lrr@{}}" in text and
+            "Model & Mean check loss & Max. violation" in text,
+            "compact score diagnostic schema differs")
+    data_lines = [" ".join(line.split()) for line in text.splitlines()
+                  if "&" in line and not line.strip().startswith("Model &")]
+    rows = list(csv.DictReader(io.StringIO(store.text("tables/" + PREFIX + "_family_metrics.csv"))))
+    require(len(data_lines) == 7 and len(rows) == 7 and {r.get("family") for r in rows} == set(FAMILIES),
+            "compact diagnostics must retain exactly seven distinct families")
+    labels = dict(zip(FAMILIES, ("Raw GloFAS", "Gaussian DESN (ridge)", "Gaussian DESN (RHS)",
+        "Q--DESN (AL)", "Q--DESN (exAL)", "MQ--DESN (AL)", "MQ--DESN (exAL)")))
+    expected = []
+    for row in rows:
+        try:
+            loss = float(row["mean_check_loss"])
+            violation = float(row["max_positive_adjacent_violation_log1p"])
+        except (KeyError, TypeError, ValueError):
+            raise AuthorityError("GLOFAS_CURRENT_AUTHORITY_INVALID: numeric compact diagnostic source required")
+        require(math.isfinite(loss) and math.isfinite(violation) and loss >= 0 and violation >= 0,
+                "finite nonnegative compact diagnostics required")
+        expected.append("{} & {:.4f} & {:.4f} \\\\".format(labels[row["family"]], loss, violation))
+    require(data_lines == expected, "compact diagnostic values/family order differ from approved metrics")
+
+
 def _validate_authority(store):
     authority_raw = store.read(AUTHORITY_PATH, 1024 * 1024)
     require(not PRIVATE.search(authority_raw), "private information in authority contract")
@@ -428,8 +463,8 @@ def _validate_authority(store):
     require(visible_use(main, r"\\input\s*\{\\GlofasApplicationCurrentScoreTable\}") and
             visible_use(main, r"\\includegraphics(?:\[[^\]]*\])?\s*\{\\GlofasApplicationCurrentForecastWindowFigure\}"),
             "main must display the approved current score table and figure")
-    require(visible_use(supp, r"\\input\s*\{\\GlofasApplicationCurrentIssuedSupplementScoreTable\}"),
-            "supplement must display the corrected full-family scores")
+    if not visible_use(supp, r"\\input\s*\{\\GlofasApplicationCurrentIssuedSupplementScoreTable\}"):
+        validate_compact_supplement_scores(store, supp)
     for name in ("GlofasApplicationCurrentOriginDate", "GlofasApplicationCurrentScoredHorizons"):
         expected = "25 December 2022" if name.endswith("OriginDate") else "28"
         require(all(v.get(name) == expected for v in values.values()), "origin or horizon reporting differs")

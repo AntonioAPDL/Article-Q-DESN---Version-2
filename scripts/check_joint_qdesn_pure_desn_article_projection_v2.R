@@ -389,7 +389,6 @@ if (!data_only) {
   # before invoking the stronger reader receipt. Data-only copies never enter
   # this branch and need no prose, Git ancestry or compatibility dependencies.
   expect(grepl(forecast_wrapper, main, fixed = TRUE) &&
-           grepl(fit_wrapper, supplement, fixed = TRUE) &&
            !grepl(fit_wrapper, main, fixed = TRUE),
          "Forecast figure remains in main and fitting figure in supplement")
   live_allowlist <- trimws(readLines(path("overleaf/article_files.txt"), warn = FALSE))
@@ -398,6 +397,19 @@ if (!data_only) {
          "Historical JOINT article outputs are excluded from the active Overleaf projection")
   source(path("scripts/reader_online_appendix_legacy_adapter_20261106.R"))
   reader_appendix <- app_reader_appendix_adapter(repo_root)
+  # A changed fitting-figure route is admitted only after the adapter has
+  # authenticated the complete successor against the ACTUAL current source,
+  # scientific assets, immutable baseline and manifest. The old wrapper below
+  # remains the route expected in the separate historical-prose fixture.
+  compression <- jsonlite::read_json(path(
+    "tables/independent_forecast_300_500_article_manifest_v1.json"))$appendix_compression_20261106
+  live_fit_wrapper <- if (!is.null(compression)) {
+    expect(reader_appendix$active, "Validated successor required for compact MQ fitting route")
+    "tables/appendix_compact_20261106_mq_fit_rmse.tex"
+  } else fit_wrapper
+  expect(grepl(live_fit_wrapper, supplement, fixed = TRUE) &&
+           !grepl(live_fit_wrapper, main, fixed = TRUE),
+         "Forecast figure remains in main and fitting figure in supplement")
   read_text <- reader_appendix$read
   # Dated prose assertions below use historical fixtures only after actual
   # current semantics, routing, ancestry and protected inputs all pass.

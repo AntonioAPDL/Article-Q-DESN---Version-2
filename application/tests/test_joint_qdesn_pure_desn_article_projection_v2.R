@@ -149,17 +149,31 @@ local({
   reader_field <- "reader_appendix_20261106"
   reader_active <- exists("ind_receipt") && !is.null(ind_receipt[[reader_field]])
   reader_dependencies <- character()
+  compression_active <- exists("ind_receipt") &&
+    !is.null(ind_receipt$appendix_compression_20261106)
   if (reader_active) {
     # Full copied fixture, not a production bypass: expose only the original
     # repository's immutable object directory to a NEW temporary Git store.
     # No original ref/index/config is changed, and no runtime/model payload is
     # copied or read. All live public source protection still executes normally.
     baseline <- "6370677bf37204dd494db1b7f649d2ceb288f36b"
+    if (compression_active) {
+      # run(root) above has already performed full production admission.
+      # Copy its exact public successor closure, never runtime/model objects,
+      # and give this fixture the genuine newer Git baseline it requires.
+      compression_path <- "tables/appendix_compression_20261106_manifest.json"
+      compression_receipt <- jsonlite::read_json(file.path(root, compression_path))
+      baseline <- "a9220a25e978b50180beabe3e243bcab963f2ca1"
+      stopifnot(identical(compression_receipt$baseline_commit, baseline))
+      reader_dependencies <- c(compression_path,
+        names(compression_receipt$current_source_sha256),
+        names(compression_receipt$protected_source_sha256))
+    }
     baseline_paths <- system2("git", c("-C", shQuote(root), "ls-tree", "-r", "--name-only", baseline), stdout = TRUE)
     stopifnot(is.null(attr(baseline_paths, "status")))
     protected <- baseline_paths[grepl("^application/(R|config)/", baseline_paths) |
       grepl("^tables/.*[.]csv$", baseline_paths) | grepl("^figures/.*[.]pdf$", baseline_paths)]
-    reader_dependencies <- unique(c(protected,
+    reader_dependencies <- unique(c(reader_dependencies, protected,
       names(ind_receipt[[reader_field]]$updated_source_sha256),
       names(ind_receipt[[reader_field]]$validation_source_sha256),
       ind_receipt[[reader_field]]$disposition_map))

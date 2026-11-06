@@ -72,11 +72,35 @@ local({
   combined <- gis_combine_chains(parts,list(horizon=2L),ctl)
   ok(identical(combined$status,"PILOT_PARTIAL_RETAINED_NOT_PROMOTABLE") &&
     !combined$diagnostic_thresholds_passed && !combined$reference_qualified)
-  # Check the declared per-chain wall budget after, not only before, callbacks.
+  # Test both sides of the wall-budget boundary without depending on whether
+  # the OS schedules the first callback within a one-millisecond window.
+  # Only this copied test function sees the synthetic monotone clock; the
+  # production sampler, thresholds and callback body are unchanged.
+  with_clock <- function(ticks) {
+    i <- 0L
+    clock_scope <- new.env(parent=environment(gis_sample_chain))
+    clock_scope$proc.time <- function() {
+      i <<- min(i+1L,length(ticks))
+      structure(c(user.self=0,sys.self=0,elapsed=ticks[i],user.child=0,sys.child=0),
+        class="proc_time")
+    }
+    copied <- gis_sample_chain; environment(copied) <- clock_scope; copied
+  }
   tiny <- ctl; tiny$max_wall_seconds <- .001
-  exhausted <- gis_sample_chain(function(z) {Sys.sleep(.01); zero(z)},c(0,0),tiny,1L)
+  before_calls <- 0L
+  before <- with_clock(c(0,.01,.01))(function(z) {
+    before_calls <<- before_calls+1L; zero(z)
+  },c(0,0),tiny,1L)
+  ok(!before$fully_completed && before$callback_evaluations==0L && before_calls==0L &&
+    identical(before$status,"INCONCLUSIVE_BUDGET_LIMITED") &&
+    identical(before$failure,"declared innovation chain budget exhausted"))
+  after_calls <- 0L
+  exhausted <- with_clock(c(0,0,.01,.01))(function(z) {
+    after_calls <<- after_calls+1L; zero(z)
+  },c(0,0),tiny,1L)
   ok(!exhausted$fully_completed && exhausted$callback_evaluations==1L &&
-    identical(exhausted$status,"INCONCLUSIVE_BUDGET_LIMITED"))
+    after_calls==1L && identical(exhausted$status,"INCONCLUSIVE_BUDGET_LIMITED") &&
+    identical(exhausted$failure,"declared innovation chain wall budget exhausted during evaluation"))
   bad <- ctl; bad$delta_initial <- 1; reject(gis_validate_control(bad))
   bad <- ctl; bad$seeds[2] <- bad$seeds[1]; reject(gis_validate_control(bad))
   bad <- ctl; bad$max_evaluations <- 1; reject(gis_validate_control(bad))

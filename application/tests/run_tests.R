@@ -357,6 +357,9 @@ run_standalone_glofas_test("application/tests/test_glofas_optimizer_predictive_r
 run_standalone_glofas_test("application/tests/test_glofas_variance_particle_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_optimizer_variance_audit.R")
 run_standalone_glofas_test("application/tests/test_glofas_variance_auxiliary_audit.R")
+run_standalone_glofas_test("application/tests/test_glofas_al_affine_guided_proposal.R")
+run_standalone_glofas_test("application/tests/test_glofas_guided_collapsed_particle.R")
+run_standalone_glofas_test("application/tests/test_glofas_guided_particle_qualification.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_glofas_current_article_authority.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_glofas_article_shared_receipts.py"))) == 0L)
 # Generated general-editorial scope, presentation and negative text fixtures;

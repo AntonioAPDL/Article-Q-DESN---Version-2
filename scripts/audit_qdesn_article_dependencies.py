@@ -41,6 +41,11 @@ def classification(path: str) -> tuple[str, str, str, str]:
         return "manuscript", "current editorial source", "main.tex;qdesn-supplement.tex", "not a scientific estimator"
     if suffix in (".bib", ".bst"):
         return "bibliography database/style", "bibliographic and local presentation authority", "refs.bib;tables/qdesn_asa_compatible.bst", "not a scientific estimator; BST is not official journal software"
+    if "appendix_essential_20261106_" in path:
+        return ("essential-appendix editorial contract/derivative",
+                "unchanged independent and multiquantile scientific summaries",
+                "tables/appendix_essential_20261106_contract.json",
+                "selected reader roles and caption clarification only; no fitting, rescoring or numerical result replacement")
     if "independent_forecast_calibration" in path:
         return ("empirical quantile-frequency diagnostic", "fixed check-loss specifications; pooled posterior-median quantile locations",
                 "tables/independent_forecast_calibration_manifest_v1.json",

@@ -161,7 +161,12 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
         compression = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(compression)
         compressed = compression.active(root)
+    # The selected-version summary is available only after the full successor
+    # admission above. It changes printed roles, never frozen derivative checks.
+    essential = compressed and compression.role_summary(root)["version"] == 2
     def appendix_display(original, compact):
+        if essential and compact == "ind_forecast_mae":
+            return "tables/appendix_essential_20261106_ind_forecast_mae.tex"
         return "tables/appendix_compact_20261106_" + compact + ".tex" if compressed else original
     builder = load_builder(root)
     manifest = json.loads((root / builder.MANIFEST).read_text())
@@ -267,7 +272,11 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
                     for path, expected_hash in receipt[group].items():
                         assert digest(root / path) == expected_hash, "IND reporting receipt mismatch: " + path
                 assert r"\input{tables/independent_train500_eval300_mcmc_figures_v1.tex}" in main
-                assert r"\input{" + appendix_display("tables/independent_train500_eval500_mcmc_figures_v1.tex", "ind_sensitivity") + "}" in supplement
+                sensitivity = appendix_display("tables/independent_train500_eval500_mcmc_figures_v1.tex", "ind_sensitivity")
+                if essential:
+                    assert r"\input{" + sensitivity + "}" not in supplement, "Archived sensitivity panels returned to the reader appendix."
+                else:
+                    assert r"\input{" + sensitivity + "}" in supplement
                 main_wrapper = (root / "tables/independent_train500_eval300_mcmc_figures_v1.tex").read_text()
                 assert "eval300_mcmc_forecast_check_v1.pdf" in main_wrapper
                 assert "eval300_mcmc_forecast_mae_v1.pdf" not in main_wrapper, "Primary MAE must not remain in main."

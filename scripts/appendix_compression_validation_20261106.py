@@ -548,6 +548,432 @@ def portable_checks(root):
                 full_scientific_inventory_authenticated=False, metadata_written=False)
 
 
+# The v1 implementation above is retained as historical admission code. All
+# callers enter through the following explicit version dispatch; a v2 marker
+# is never interpreted using the older eight-figure layout.
+_v1_active = active
+_v1_refresh = refresh
+_v1_portable_checks = portable_checks
+_v1_dependency_paths = dependency_paths
+_v1_current_route_checks = current_route_checks
+
+ESSENTIAL_SCHEMA = "appendix-essential-v2"
+ESSENTIAL_BASELINE = "1b249255018715dd3bdc3c95389c80702d26c8c9"
+ESSENTIAL_FIELD = "appendix_essential_20261106"
+ESSENTIAL_CONTRACT = "tables/appendix_essential_20261106_contract.json"
+ESSENTIAL_CONTRACT_SHA = "b0bc20572044955b1fe1937ee3d3e13153c5c0dde35b0ac42c2a2f2874ede0c1"
+ESSENTIAL_MANIFEST = "tables/appendix_essential_20261106_manifest.json"
+ESSENTIAL_LEGACY_SHA = "15ed5a6914a0a0cc288e2e8f053aa6e98d7346bbf8d1507b4ba9d7d95bc61495"
+ESSENTIAL_BUILDER = "scripts/build_appendix_essential_displays_20261106.py"
+ESSENTIAL_ARCHIVE = "docs/reproducibility/appendix_essential_archive_20261106.md"
+ESSENTIAL_REVISION = "docs/reproducibility/appendix_essential_revision_20261106.md"
+ESSENTIAL_VALIDATORS = (
+    ESSENTIAL_BUILDER, "application/tests/test_appendix_essential_20261106.py",
+    "application/tests/test_pro_review_supplement_math.R",
+    "scripts/reader_online_appendix_legacy_adapter_20261106.R",
+    "scripts/check_qdesn_final_manuscript_revision.R",
+    "scripts/check_qdesn_statistical_language_revision.R",
+    "scripts/check_forecast_application_exposition_20261031.R",
+    "scripts/refresh_independent_forecast_editorial_manifest_20261031.R",
+    "application/tests/test_qdesn_reader_focused_editorial_revision.R",
+    "application/tests/test_qdesn_statistical_language_revision.R",
+    "application/tests/test_forecast_application_exposition_20261031.R",
+    "application/tests/test_rhs_global_scale_reference.R",
+    "application/tests/test_article_clarity_editorial_receipts_20261104.py",
+    "application/tests/test_independent_forecast_editorial_manifest_20261031.R",
+    "application/tests/run_tests.R",
+)
+
+
+def essential_requested(root):
+    root = Path(root)
+    receipt = root / LEGACY_RECEIPT
+    return (root / ESSENTIAL_CONTRACT).exists() or (root / ESSENTIAL_MANIFEST).exists() or (
+        receipt.is_file() and ESSENTIAL_FIELD in decode(receipt.read_bytes()))
+
+
+def essential_contract(root):
+    raw = regular(root, ESSENTIAL_CONTRACT)
+    require(sha(raw) == ESSENTIAL_CONTRACT_SHA, "approved essential-layout contract changed; refresh cannot approve roles")
+    contract = decode(raw)
+    require(contract.get("schema") == ESSENTIAL_SCHEMA and
+            contract.get("baseline_commit") == ESSENTIAL_BASELINE and
+            contract.get("variant") == "default-full-32-cell-sensitivity",
+            "unknown or partial essential layout marker")
+    return contract
+
+
+def active(root):
+    if essential_requested(root):
+        essential_contract(root)  # partial/unknown markers fail closed
+        return True
+    return _v1_active(root)
+
+
+def essential_namespace():
+    return dict(schema=ESSENTIAL_SCHEMA, baseline_commit=ESSENTIAL_BASELINE,
+                contract=ESSENTIAL_CONTRACT, manifest=ESSENTIAL_MANIFEST)
+
+
+def essential_legacy(current, baseline, hashes=None):
+    restored = copy.deepcopy(current)
+    pointer = restored.pop(ESSENTIAL_FIELD, None)
+    require(pointer is None or pointer == essential_namespace(), "essential namespace changed")
+    for group in ("sources", "outputs"):
+        for path in OUTER_MUTABLE:
+            if path in restored.get(group, {}):
+                restored[group][path] = baseline[group][path]
+    require(restored == baseline, "historical namespace or immutable outer scientific pins changed")
+    result = copy.deepcopy(baseline)
+    if hashes is not None:
+        for group in ("sources", "outputs"):
+            for path in OUTER_MUTABLE:
+                if path in result.get(group, {}):
+                    result[group][path] = hashes[path]
+        result[ESSENTIAL_FIELD] = essential_namespace()
+    return result
+
+
+def essential_protected_inventory(root):
+    """Authenticate every original science/asset byte against the fixed v2 ancestor."""
+    entries = {}
+    for record in git(root, "ls-tree", "-r", "-z", ESSENTIAL_BASELINE).split(b"\0"):
+        if not record:
+            continue
+        header, raw_path = record.split(b"\t", 1)
+        mode, kind, identity = header.split()
+        path = raw_path.decode()
+        selected = (path.startswith(("application/R/", "application/config/")) or
+            path.endswith((".csv", ".pdf")) or
+            path.startswith("tables/") and path.endswith((".tex", ".json")) or
+            path == "figures/quantile_initialization/quantile_initialization_picture.tex")
+        if not selected or path in {LEGACY_RECEIPT, "docs/reproducibility/article_dependency_inventory.csv"}:
+            continue
+        require(kind == b"blob" and mode in (b"100644", b"100755"), "regular fixed ancestor asset required")
+        raw = regular(root, path)
+        identity_now = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+        require(identity_now == identity.decode(), "frozen original scientific/presentation asset changed: " + path)
+        entries[path] = sha(raw)
+    require(entries, "nonempty fixed essential scientific inventory required")
+    return entries
+
+
+def _visible_tex(root, routes):
+    return {p: uncomment(regular(root, p).decode()) for p, docs in routes.items()
+            if "qdesn-supplement.tex" in docs and p.endswith(".tex")}
+
+
+def essential_route_checks(root, contract=None):
+    contract = contract or essential_contract(root)
+    authority=module(root,"scripts/glofas_current_article_authority.py","essential_inline_visibility")
+    routes, visible = route_inventory(root), visible_routes(root)
+    selected = _visible_tex(root, visible)
+    for role in contract["roles"]:
+        path, _, label = role["destination"].partition("#")
+        disposition = role["disposition"]
+        if disposition == "archived":
+            if role.get("asset"):
+                require("qdesn-supplement.tex" not in visible.get(role["asset"], []),
+                        "archived figure accidentally reintroduced: " + role["role"])
+            elif path != "qdesn-supplement.tex":
+                require("qdesn-supplement.tex" not in visible.get(path, []),
+                        "archived table accidentally reintroduced: " + role["role"])
+            continue
+        consumer = "main.tex" if disposition == "main" else "qdesn-supplement.tex"
+        require(consumer in visible.get(path, []), "mandatory actual role consumer absent: " + role["role"])
+        if label:
+            text=uncomment(regular(root,path).decode())
+            matches=list(re.finditer(re.escape("\\label{"+label+"}"),text))
+            require(len(matches)==1 and authority.top_level(text,matches[0].start()),
+                    "actual role destination label missing or hidden: " + role["role"])
+        if role.get("asset"):
+            require(consumer in visible.get(role["asset"], []), "mandatory role asset is hidden: " + role["role"])
+    def count(environments):
+        pattern=r"\\begin\{(?:"+"|".join(re.escape(v) for v in environments)+r")\}"
+        return sum(sum(authority.top_level(t,m.start()) for m in re.finditer(pattern,t)) for t in selected.values())
+    counts=dict(figures=count(("figure","figure*")),tables=count(("table","table*","longtable")),algorithms=count(("suppalgorithm",)))
+    require(counts == contract["visible_counts"], "essential visible figure/table/algorithm count differs: " + str(counts))
+    # Ordinary dependency inference must agree with independently visible TeX.
+    for role in contract["roles"]:
+        if role["disposition"] in ("retained", "consolidated"):
+            path = role["destination"].split("#", 1)[0]
+            require("qdesn-supplement.tex" in routes.get(path, []), "inferred role consumer differs")
+    return {path: docs for path, docs in routes.items() if docs}
+
+
+def current_route_checks(root, rows=None):
+    if essential_requested(root):
+        return essential_route_checks(root)
+    return _v1_current_route_checks(root, rows)
+
+
+def essential_semantic_checks(main, supplement, bibliography):
+    """Scoped mathematical obligations for the shortened reader account."""
+    # Inspect the actual labelled displays, not a correct but dormant copy
+    # hidden in a conditional or macro definition. Local import has no Git,
+    # runtime or publication side effect and shares the visible-TeX rule used
+    # by both independent admission paths.
+    visibility=module(Path(__file__).resolve().parents[1],"scripts/glofas_current_article_authority.py","essential_semantic_visibility")
+    for text in (uncomment(main),uncomment(supplement)):
+        for match in re.finditer(r"\\label\{eq:[^}]+\}",text):
+            require(visibility.top_level(text,match.start()),"current defining equation is hidden or conditional: "+match.group())
+    a = section(supplement, "sec:dist_conventions")
+    b = section(supplement, "sec:joint_qdesn_supp")
+    c = section(supplement, "sec:forecast_synthesis")
+    e = section(supplement, "sec:glofas_discrepancy")
+    am, bm, cm, em = map(math, (a, b, c, e))
+    p = plain(supplement).lower()
+    checks = {}
+    ns = equation(supplement, "eq:supp_ns_product_factor")
+    rhs = equation(supplement, "eq:supp_rhs_mcmc")
+    checks["ns_scale_mass"] = (r"\Normal(0;0,a+b)" in ns and r"\frac{ab}{a+b}" in ns and
+        r"\Normal(\beta;0,a)\Normal(0;\beta,b)" in ns)
+    checks["ns_full_prior_and_shapes"] = (r"C_\beta(\Theta_\beta)\prod_{j=1}^r\Normal(\beta_j;0,V_j)" in am and r"\frac{r+1}{2}" in rhs and
+        (r"a_\zeta+\frac{r}{2}" in rhs or r"a_\zeta+\fracr2" in rhs) and
+        r"\tau_0^{-2}" in rhs and "fixed slab" in plain(a).lower())
+    checks["cavi_covariance_and_independence"] = all(x in am for x in (
+        r"m_{\beta,j}^2+(\mat\Sigma_\beta)_{jj}",
+        r"e_t^{(2)}=\bare_t^2+\vectx_t^\top\mat\Sigma_\beta\vectx_t")) and "mutually independent" in plain(a).lower()
+    latent = equation(supplement, "eq:supp_generic_vb_exal_latents")
+    tn = equation(supplement, "eq:supp_truncated_normal_moments")
+    checks["expected_canonical_latents"] = all(x in latent for x in (
+        r"e_t^{(2)}\E_q\{(\sigmaB_\gamma)^{-1}\}",
+        r"-2\bare_t\E_q(D_\gamma/B_\gamma)\E_q(s_t)",
+        r"+\E_q(\sigmaD_\gamma^2/B_\gamma)\E_q(s_t^2)",
+        r"K_t^s&=1+\E_q(\sigmaD_\gamma^2/B_\gamma)\E_q(v_t^{-1})",
+        r"-\E_q(A_\gammaD_\gamma/B_\gamma)")) and all(x in am for x in (
+        r"\GIG(1/2,\chi_t^v,\psi_t^v)",r"\TN(h_t^s/K_t^s,1/K_t^s)")) and all(x in tn for x in (
+        r"\phi(a)", r"\Phi(a)", r"\sqrtV", r"m^2+V+m\sqrtV")) and "location" in plain(a).lower()
+    checks["structured_moments_not_split"] = "mixed moment" in plain(a).lower() and "joint" in plain(a).lower() and not re.search(
+        r"\\E[^\n]{0,25}sigma[^\n]{0,25}\\E[^\n]{0,25}B_?\\gamma", a)
+    power=equation(supplement,"eq:supp_structured_scale_moments")
+    checks["structured_gig_power_cases"] = all(x in power for x in (r"K_{\nu+a}", r"K_\nu", r"\Gamma(-\nu-a)", r"\Gamma(-\nu)", r"\psi=0",r"\nu<0", r"a<-\nu")) and "quadrature" in plain(a).lower()
+    checks["jacobian_and_monitor"] = "jacobian" in plain(a).lower() and "monitor" in plain(a).lower() and ("hessian" in plain(a).lower() or r"\nabla^2" in am)
+    checks["collapsed_order"] = re.search(r"collapsed[^.]{0,500}immediately[^.]{0,250}(?:scale|sigma)", plain(a), re.I) is not None
+    increments = equation(supplement, "eq:supp_joint_increment_moments")
+    checks["mq_mass_full_covariance"] = (r"C_\Delta(\Theta_\Delta)p(\Theta_\Delta)" in bm and
+        r"\diag(\matH\mat\Sigma\matH^\top)" in increments and
+        "evaluates a gaussian density at repeated observations" in plain(b).lower() and "point" in plain(b).lower() and "uncertainty" in plain(b).lower())
+    forecast = equation(supplement, "eq:supp-forecast-mean-design")
+    checks["reported_averaged_feature_functional"] = all(x in forecast for x in (
+        r"\bar{\vectx}_{o+h}", r"M^{-1}\sum_{j=1}^M", r"\beta_{0k}^{(b)}", r"\bar{\vectx}_{o+h}^\top\vect\beta_k^{(b)}")) and all(x in plain(c).lower() for x in ("trajectory", "mixture", "neither"))
+    checks["ordering_and_weights"] = (r"\sum_{k=1}^K(\widehatq_{k,t}-z_k)^2" in cm and "sorting" in plain(c).lower() and "outer" in plain(c).lower() and
+        any([float(x) for x in w.split(",")] == [.025,.1,.2,.25,.2,.1,.025] for w in re.findall(r"(?:\d*\.\d+)(?:,\d*\.\d+){6}",cm)) and "0.90" in c)
+    unit = equation(supplement, "eq:supp_glofas_unit_member_target")
+    checks["glofas_unit_target_and_no_truth"] = (r"\prod_{h=1}^{28}\prod_{e=1}^{51}" in unit and
+        r"\prod_{h=1}^{28}f_{p_k}" in unit and "1/51" not in unit and r"\frac{1}{51}" not in unit and
+        "future usgs" in plain(main + e).lower() and "scoring" in plain(main + e).lower())
+    checks["glofas_source_families"] = all(x in em.replace("{,}","") for x in (
+        "12483", "13883", r"a_c+3n_c/2", r"\sigma_c^2", r"a_c+n_c/2")) and r"\frac{D_\gamma^2}{B_\gamma}" in em
+    checks["random_design_covariances"] = all(x in em for x in (r"\matJ_i\matV\vecte_h",r"\matJ_i\matV\matJ_i^\top")) and "covariance" in plain(e).lower()
+    checks["mixing_and_exceptions"] = ("mixing" in p and "score" in p and
+        "all four exceptions occur under persistent-heavy-tail dynamics" in p and "28 of 32" in p and "0.7364" in p and
+        not re.search(r"(?:all|every)[^.]{0,90}intervals?[^.]{0,50}(?:widen|wider)", p))
+    label=r"\label{subsec:supp-independent-metrics}"
+    require(supplement.count(label)==1,"one local independent computation/uncertainty account required")
+    dependence=plain(supplement.split(label,1)[1].split(r"\subsection",1)[0])
+    checks["ind_consolidated_cross_target_dependence"] = all(x in dependence for x in (
+        "one coefficient draw across targets","target-specific draws","cross-target coupling",
+        "reconstructed","not response prediction intervals"))
+    checks["main_model_targets_unchanged"] = all(x in math(main) for x in (
+        r"\Normal(0\mid\beta_j,\zeta^2)", r"\Normal(\beta_j\mid0,\tau^2\lambda_j^2)",
+        r"\sigma\sim\IG(a_\sigma,b_\sigma)", r"\xi\sim\IG(1/2,1/\tau_0^2)"))
+    main_plain=plain(main)
+    main_glofas=plain(section(main,"sec:data"))
+    checks["main_forecast_information_and_adverse_result"] = (
+        re.search(r"features averaged over (?:the |its )?simulated trajectories",main_plain) is not None and
+        "future USGS measurements are reserved for scoring" in main_glofas and
+        "all four AL and exAL regressions score above the raw ensemble" in main_glofas and
+        "direct multihorizon predictors" in section(main,"sec:pricefm-application"))
+    checks["pricefm_and_archive"] = ("[PriceFM findings to be updated.]" in main and "direct" in section(main,"sec:pricefm-application").lower() and "not independently verified" in main and
+        "appendix_essential_archive_20261106" in main + supplement and "10.1371/journal.pcbi.1008618" in bibliography)
+    require(all(checks.values()), "essential mathematical/reporting semantics: " + ", ".join(k for k,v in checks.items() if not v))
+    return checks
+
+
+def essential_archive_checks(root, contract):
+    archive = regular(root, ESSENTIAL_ARCHIVE).decode()
+    fixed = "https://github.com/AntonioAPDL/Article-Q-DESN---Version-2/blob/" + ESSENTIAL_BASELINE + "/"
+    require(fixed + "qdesn-supplement.tex" in archive and all(x in archive for x in contract["archive_errata"]) and
+            "rebuild" in archive.lower() and "B_gamma" in archive and "0.5" in archive and "0.35" in archive,
+            "archive must identify frozen source, all errata and rebuild procedure")
+    for role in contract["roles"]:
+        if role["disposition"] == "archived":
+            target=contract["archive_destinations"].get(role["role"])
+            require(target and role["role"] in archive and "("+fixed+target+")" in archive,
+                    "archive role destination missing: " + role["role"])
+    old = git(root, "show", ESSENTIAL_BASELINE + ":qdesn-supplement.tex").decode()
+    require(re.search(r"discrepancy[^.]{0,400}(?:unscored|not scored)", plain(old), re.I) is not None and
+            "future retrospective" in old.lower(), "archived historical discrepancy no-score boundary absent")
+    return dict(historical_no_score="authenticated_in_fixed_archive_not_forced_live")
+
+
+def essential_derivative_checks(root):
+    derivative_checks(root)  # all eleven historical derivatives remain exact
+    builder = module(root, ESSENTIAL_BUILDER, "essential_display_builder")
+    outputs = builder.build_outputs(Path(root))
+    expected = {"tables/appendix_essential_20261106_ind_forecast_mae.tex", "tables/appendix_essential_20261106_mq_crossings.tex"}
+    require(set(outputs) == expected, "exact essential derivative membership required")
+    for path, text in outputs.items():
+        require(regular(root, path) == text.encode(), "essential display differs from exact source rendering: " + path)
+    return dict(essential_derivatives=2, historical_derivatives=11, mq_cell_keys=32)
+
+
+def essential_dependency_paths(root):
+    paths = _v1_dependency_paths(root) | set(ESSENTIAL_VALIDATORS) | {ESSENTIAL_CONTRACT, ESSENTIAL_ARCHIVE, ESSENTIAL_REVISION}
+    builder = module(root, ESSENTIAL_BUILDER, "essential_fixture_dependencies")
+    paths.update(builder.SOURCE_SHA256)
+    paths.update(builder.build_outputs(Path(root)))
+    if (Path(root) / ESSENTIAL_MANIFEST).is_file():
+        paths.add(ESSENTIAL_MANIFEST)
+    return paths
+
+
+def dependency_paths(root):
+    return essential_dependency_paths(root) if essential_requested(root) else _v1_dependency_paths(root)
+
+
+def essential_prepare(root):
+    root = Path(root).absolute()
+    contract = essential_contract(root)
+    git(root, "merge-base", "--is-ancestor", ESSENTIAL_BASELINE, "HEAD")
+    original = git(root, "show", ESSENTIAL_BASELINE + ":" + LEGACY_RECEIPT)
+    require(sha(original) == ESSENTIAL_LEGACY_SHA, "fixed essential ancestor receipt differs")
+    baseline, current = decode(original), decode(regular(root, LEGACY_RECEIPT))
+    essential_legacy(current, baseline)
+    protected = essential_protected_inventory(root)
+    for path, digest in contract["historical_records"].items():
+        require(sha(regular(root, path)) == digest, "historical v1 record changed: " + path)
+    semantics = essential_semantic_checks(*(regular(root,p).decode() for p in ("main.tex","qdesn-supplement.tex","refs.bib")))
+    routes = essential_route_checks(root, contract)
+    essential_archive_checks(root, contract)
+    derivatives = essential_derivative_checks(root)
+    authority = module(root, "scripts/glofas_current_article_authority.py", "essential_current_authority")
+    authority.validate_authority_tree(root)
+    paths = essential_dependency_paths(root) - {ESSENTIAL_MANIFEST, LEGACY_RECEIPT}
+    hashes = {path: sha(regular(root,path)) for path in sorted(paths)}
+    result = dict(schema=ESSENTIAL_SCHEMA, baseline_commit=ESSENTIAL_BASELINE,
+        approved_contract_sha256=ESSENTIAL_CONTRACT_SHA, variant=contract["variant"],
+        original_legacy_receipt_sha256=ESSENTIAL_LEGACY_SHA, original_legacy_receipt=baseline,
+        current_source_sha256=hashes, protected_source_sha256=protected,
+        actual_input_routes=routes, roles={r["role"]:r for r in contract["roles"]},
+        semantic_checks=sorted(semantics), derivative_checks=derivatives,
+        scientific_values_changed=False, scientific_outputs_regenerated=False,
+        fits_launched=0, forecasts_launched=0, scores_recomputed=0,
+        source_ancestry_authenticated=True,
+        fixture_policy="explicit_python_api_only_not_publication_no_missing_git_fallback")
+    if (root / ESSENTIAL_MANIFEST).exists():
+        previous = decode(regular(root, ESSENTIAL_MANIFEST))
+        mutable = {"current_source_sha256","semantic_checks","actual_input_routes"}
+        require(previous.keys() == result.keys() and all(previous[k] == result[k] for k in result if k not in mutable),
+                "essential immutable roles, scientific scope or fixed historical pins changed")
+    legacy = essential_legacy(current, baseline, hashes)
+    pins = dict(protected, **hashes)
+    pins[LEGACY_RECEIPT] = sha(regular(root, LEGACY_RECEIPT))
+    return root,result,legacy,pins
+
+
+def essential_refresh(root, write=False):
+    root,result,legacy,pins = essential_prepare(root)
+    def stable(exclude=()):
+        for path,digest in pins.items():
+            if path not in exclude:
+                require(sha(regular(root,path)) == digest, "essential source changed during admission: " + path)
+    stable()
+    if write:
+        staged=[]
+        try:
+            for path,value in ((ESSENTIAL_MANIFEST,result),(LEGACY_RECEIPT,legacy)):
+                with tempfile.NamedTemporaryFile(prefix=".appendix_essential_",dir=root/"tables",delete=False) as stream:
+                    stream.write(canonical(value)); stream.flush(); os.fsync(stream.fileno())
+                    staged.append((Path(stream.name),root/path))
+            stable()
+            for temporary,target in staged:
+                os.replace(temporary,target)
+            descriptor=os.open(root/"tables",os.O_RDONLY|os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        finally:
+            for temporary,_ in staged:
+                if temporary.exists(): temporary.unlink()
+        stable(exclude={LEGACY_RECEIPT})
+    require(decode(regular(root,ESSENTIAL_MANIFEST)) == result and decode(regular(root,LEGACY_RECEIPT)) == legacy,
+            "explicit --refresh required for current essential sources/routes")
+    return legacy
+
+
+def refresh(root, write=False):
+    if essential_requested(root):
+        return essential_refresh(root,write)
+    return _v1_refresh(root,write)
+
+
+def essential_portable_checks(root):
+    root=Path(root).absolute()
+    contract=essential_contract(root)
+    manifest=decode(regular(root,ESSENTIAL_MANIFEST))
+    require(manifest.get("schema") == ESSENTIAL_SCHEMA and manifest.get("baseline_commit") == ESSENTIAL_BASELINE and
+        manifest.get("approved_contract_sha256") == ESSENTIAL_CONTRACT_SHA and manifest.get("source_ancestry_authenticated") is True and
+        manifest.get("scientific_values_changed") is False and manifest.get("scientific_outputs_regenerated") is False and
+        all(manifest.get(k) == 0 for k in ("fits_launched","forecasts_launched","scores_recomputed")),
+        "copied fixture requires admitted essential metadata")
+    require(manifest.get("current_source_sha256") and manifest.get("protected_source_sha256"), "nonempty copied fixture inventories required")
+    # Copied fixtures do not assert a repository-wide scientific inventory.
+    # Its fixed-ancestor pins are authenticated only by full Git admission.
+    for path,digest in manifest["current_source_sha256"].items():
+        require(sha(regular(root,path)) == digest, "copied essential source differs: " + path)
+    baseline=manifest.get("original_legacy_receipt",{})
+    require(sha(canonical(baseline)) == ESSENTIAL_LEGACY_SHA, "copied fixed historical receipt differs")
+    current=decode(regular(root,LEGACY_RECEIPT))
+    require(current == essential_legacy(current,baseline,manifest["current_source_sha256"]), "copied essential outer receipt differs")
+    require(essential_route_checks(root,contract) == manifest.get("actual_input_routes"), "copied essential routes differ")
+    essential_semantic_checks(*(regular(root,p).decode() for p in ("main.tex","qdesn-supplement.tex","refs.bib")))
+    essential_derivative_checks(root)
+    for path,digest in contract["historical_records"].items():
+        require(sha(regular(root,path)) == digest,"copied historical record changed: " + path)
+    authority=module(root,"scripts/glofas_current_article_authority.py","essential_portable_authority")
+    authority.validate_authority_tree(root)
+    return dict(scope="controlled_copied_public_fixture_only",source_ancestry_authenticated=False,
+                full_scientific_inventory_authenticated=False,metadata_written=False)
+
+
+def portable_checks(root):
+    return essential_portable_checks(root) if essential_requested(root) else _v1_portable_checks(root)
+
+
+def role_summary(root, admitted=None):
+    """Expose an admitted role map; caller can pass its existing check result.
+
+    The returned pins bind all sources, aliases and numeric inputs, not just
+    root TeX. A later invocation revalidates; no mutable-global cache exists.
+    """
+    if not essential_requested(root):
+        if admitted is None: _v1_refresh(root)
+        return dict(version=1,schema=SCHEMA,manifest=MANIFEST,roles={},actual_input_routes=current_route_checks(root))
+    # This is the structural view of already admitted metadata. Verify its
+    # complete source fingerprint again, but do not rerun a Git-backed harness
+    # after an explicit portable admission or claim ancestry for this view.
+    essential_contract(root)
+    record=decode(regular(root,ESSENTIAL_MANIFEST))
+    require(record.get("schema") == ESSENTIAL_SCHEMA and record.get("roles") ==
+            {r["role"]:r for r in essential_contract(root)["roles"]},"admitted role summary differs from fixed contract")
+    for path,digest in record["current_source_sha256"].items():
+        require(sha(regular(root,path)) == digest, "role summary current source changed: " + path)
+    return dict(version=2,schema=ESSENTIAL_SCHEMA,variant=record["variant"],manifest=ESSENTIAL_MANIFEST,
+                roles=record["roles"],actual_input_routes=record["actual_input_routes"],
+                current_source_sha256=record["current_source_sha256"],
+                source_ancestry_authenticated=False)
+
+
+def selected_manifest_path(root):
+    if essential_requested(root):
+        essential_contract(root)
+        return ESSENTIAL_MANIFEST
+    return MANIFEST
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])

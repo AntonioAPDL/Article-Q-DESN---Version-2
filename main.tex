@@ -388,8 +388,8 @@ on the scales, the \(j\)th slope therefore has variance
 \end{equation}
 The slab bounds the conditional coefficient variance, whereas local scales
 allow slopes to escape global shrinkage. Online Appendix A gives the
-factorization and full conditional calculations, together with the
-intercept--slope prior transformation required if final features are centered.
+scale-dependent prior factors and computation. The computational materials
+also give the intercept--slope prior transformation for centered features.
 
 The fixed hyperprior scale \(\tau_0\) controls prior shrinkage through the
 random global scale \(\tau\). For standardized predictors, a Gaussian
@@ -527,7 +527,7 @@ either by the transformed Laplace--Delta approximation of
 integration over \(\sigma\) reduces normalization and moment calculations
 to one-dimensional quadrature in \(\gamma\). Online Appendices A and B
 specify the variational factors, ordered-intercept calculation, coordinate
-monitor and stopping criteria, together with the complete MCMC conditionals.
+monitor and stopping criteria, together with the shared MCMC updates.
 
 A completed VB fit can also initialize MCMC under the same model. The single-level simulation
 uses three independently initialized MCMC chains and the multiquantile
@@ -720,7 +720,7 @@ compares independent Q--DESN and MQ--DESN using a common DESN specification
 within each generating mechanism. We use \(p\) for a single probability
 level and \(p_k\), \(k=1,\ldots,K\), for several levels fitted together.
 The main figures report MCMC forecast results; online Appendix D covers
-quantile-path recovery, a longer evaluation period, and VB settings.
+forecast quantile-path recovery, a longer evaluation period, and computation.
 
 \subsection{Single-quantile simulation design}
 \label{subsec:simulation-single-design}
@@ -807,7 +807,8 @@ the common forecast pairs. The main comparison summarizes the posterior
 distribution of check loss averaged over these pairs, conditional on this
 evaluation realization. Online Appendix D assesses recovery of the known
 state-conditional quantile path using mean absolute error (MAE), together
-with empirical quantile frequencies and fitting-sample recovery.
+with empirical quantile frequencies. Fitting-sample recovery is available
+in the computational materials.
 
 \subsection{Single-quantile results}
 \label{subsec:simulation-single-results}
@@ -825,8 +826,9 @@ dynamic linear forecasts in this structural benchmark without specifying
 the trend and seasonal transitions. Over 500 targets, the lower-quartile
 and median comparisons persist, but the lower-tail rankings can change:
 DQLM replaces exAL Q--DESN as the numerical leader for Laplace errors.
-Online Appendix D reports this longer-period comparison, quantile-path
-recovery, and empirical quantile frequencies.
+Online Appendix D summarizes this longer-period comparison and reports
+forecast quantile-path recovery and empirical quantile frequencies; the
+computational materials retain the complete longer-period figures.
 
 \subsection{Multiquantile simulation design}
 \label{subsec:simulation-mq-design}
@@ -1241,8 +1243,8 @@ Q--DESN has lower AQL in \PricefmFullQdesnWins{} of
 higher. Table~\ref{tab:pricefm-matched-aql-comparison} shows the variation
 across folds: Q--DESN is marginally lower in the second fold, whereas
 PriceFM is lower in the first and third. Online Appendix E describes the
-design and aggregate summaries; the reproducibility materials provide the
-full regional comparisons and historical sensitivity analysis.
+evaluation design; the reproducibility materials provide the full regional
+comparisons and historical sensitivity analysis.
 
 \begin{table}[!htbp]
 \centering
@@ -1315,7 +1317,7 @@ presentation. Original fitted objects, retained posterior draws, and some
 third-party inputs are not included in the article snapshot; reproducing the
 scientific fits requires the documented inputs and execution environment.
 An
-\href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2/blob/main/docs/reproducibility/appendix_compression_archive_20261106.md}{appendix archive index}
+\href{https://github.com/AntonioAPDL/Article-Q-DESN---Version-2/blob/main/docs/reproducibility/appendix_essential_archive_20261106.md}{appendix archive index}
 locates extended calculations and complete numerical tables omitted from the
 shorter Online Appendix.
 

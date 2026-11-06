@@ -46,6 +46,64 @@ local({
   record("Global IG implementation matches identity",
          max(abs(vapply(r, app_joint_qvp_rhs_tau2_shape, numeric(1)) - (r + 1) / 2)))
 
+  # Coordinate ascent averages canonical coefficients, not conditional means
+  # or variances. This finite example has a known quadratic optimum.
+  conditional_precision <- c(1, 4)
+  conditional_linear <- c(0, 4)
+  expected_log_kernel <- function(beta) mean(conditional_linear * beta -
+    conditional_precision * beta^2 / 2)
+  coordinate_mean <- mean(conditional_linear) / mean(conditional_precision)
+  numerical_mean <- optimize(expected_log_kernel, c(-2, 2), maximum = TRUE)$maximum
+  record("CAVI averages canonical coefficients", abs(coordinate_mean - numerical_mean), 1e-7)
+  record("CAVI is not an average of conditional locations or variances",
+    if (abs(coordinate_mean - mean(conditional_linear / conditional_precision)) > .1 &&
+      abs(1 / mean(conditional_precision) - mean(1 / conditional_precision)) > .1) 0 else Inf)
+
+  # TN(m,V) names the underlying Normal parameters. Its actual first/second
+  # moments, including the half-Normal limit, enter the latent updates.
+  for (location in c(-1.5, 0, .8)) {
+    variance <- if (location == 0) 1 else .7
+    alpha <- location / sqrt(variance)
+    density <- function(s) dnorm(s, location, sqrt(variance)) / pnorm(alpha)
+    numeric_first <- integrate(function(s) s * density(s), 0, Inf, rel.tol = 1e-11)$value
+    numeric_second <- integrate(function(s) s^2 * density(s), 0, Inf, rel.tol = 1e-11)$value
+    ratio <- dnorm(alpha) / pnorm(alpha)
+    exact_first <- location + sqrt(variance) * ratio
+    exact_second <- location^2 + variance + location * sqrt(variance) * ratio
+    record(paste("TN actual moments, location", location),
+      max(abs(c(numeric_first - exact_first, numeric_second - exact_second))))
+  }
+  record("TN(0,1) has nonzero actual mean", abs(sqrt(2 / pi) - dnorm(0) / pnorm(0)))
+
+  # Derive the positive-auxiliary expected canonical coefficients directly
+  # from a finite product distribution. Keep scale--shape pairs joint.
+  pair_shape <- c(-.25, .3)
+  pair_scale <- c(.6, 1.4)
+  pair_constants <- lapply(pair_shape, function(gamma) app_joint_exqdesn_constants(.4, gamma))
+  pair_A <- vapply(pair_constants, `[[`, numeric(1), "A")
+  pair_B <- vapply(pair_constants, `[[`, numeric(1), "B")
+  pair_D <- vapply(pair_constants, `[[`, numeric(1), "lambda")
+  residual_values <- -.3 + c(-1, 1) * sqrt(.12)
+  v_values <- c(.8, 1.4)
+  finite <- expand.grid(pair = 1:2, residual = 1:2, v = 1:2)
+  positive_log_kernel <- function(s) {
+    with(finite, mean(-s^2 / 2 -
+      (residual_values[residual] - pair_A[pair] * v_values[v] -
+        pair_scale[pair] * pair_D[pair] * s)^2 /
+      (2 * pair_scale[pair] * pair_B[pair] * v_values[v])))
+  }
+  finite_linear <- (positive_log_kernel(1) - positive_log_kernel(-1)) / 2
+  finite_precision <- -(positive_log_kernel(1) + positive_log_kernel(-1) -
+    2 * positive_log_kernel(0))
+  expected_precision <- 1 + mean(pair_scale * pair_D^2 / pair_B) * mean(1 / v_values)
+  expected_linear <- mean(residual_values) * mean(pair_D / pair_B) * mean(1 / v_values) -
+    mean(pair_A * pair_D / pair_B)
+  record("ExAL latent expected precision and linear coefficient",
+    max(abs(c(finite_precision - expected_precision, finite_linear - expected_linear))))
+  record("Joint scale--shape expectation cannot be split",
+    if (abs(mean(1 / (pair_scale * pair_B)) -
+      mean(1 / pair_scale) * mean(1 / pair_B)) > 1e-6) 0 else Inf)
+
   # The original-coordinate lognormal entropy includes E(log Jacobian).
   eta_mean <- 0.4
   eta_sd <- 0.6
@@ -177,6 +235,13 @@ local({
     exp((nu - 1) * log(sigma) - chi / (2 * sigma))
   }, 0, Inf, rel.tol = 1e-11)$value
   record("AL-limit scale integral", abs(numeric_mass / (gamma(-nu) * (chi / 2)^nu) - 1))
+  for (power in c(-1, 1, 2)) {
+    numeric_moment <- integrate(function(sigma) {
+      exp((nu + power - 1) * log(sigma) - chi / (2 * sigma))
+    }, 0, Inf, rel.tol = 1e-11)$value / numeric_mass
+    exact_moment <- (chi / 2)^power * gamma(-nu - power) / gamma(-nu)
+    record(paste("AL-limit scale power moment", power), abs(numeric_moment / exact_moment - 1))
+  }
 
   # Stable source labels and the corrected numbered ELBO environment.
   supplement <- paste(readLines(file.path(root, "qdesn-supplement.tex"),
@@ -184,7 +249,9 @@ local({
   for (label in c("eq:supp_ns_full_prior", "eq:supp_generic_vb_scale_family",
                   "eq:supp_elbo_transformed_coordinates", "eq:supp_joint_stacked_likelihood",
                   "subsec:supp_structured_exal_vb", "eq:supp_structured_scale_shape_kernel",
-                  "eq:supp_structured_scale_integral", "eq:supp_structured_mixed_moments")) {
+                  "eq:supp_structured_scale_integral", "eq:supp_structured_mixed_moments",
+                  "eq:supp_structured_scale_moments", "eq:supp_generic_vb_exal_latents",
+                  "eq:supp_truncated_normal_moments")) {
     record(paste("Supplement label", label),
            if (grepl(paste0("\\label{", label, "}"), supplement, fixed = TRUE)) 0 else Inf)
   }

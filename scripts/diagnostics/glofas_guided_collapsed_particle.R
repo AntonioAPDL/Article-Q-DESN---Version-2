@@ -39,6 +39,9 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
       identical(state_backend$production_qualified, FALSE),
       "explicit experimental two-DESN state backend required")
   }
+  using_state_guide <- using_state_backend && is.function(state_backend$guide)
+  q(!(using_state_guide && !is.null(guide)),
+    "generic and state-aware guides cannot both be active")
   q(is.list(limits) && setequal(names(limits), c("max_horizon", "max_particles", "max_calls")) &&
     length(limits) == 3L && all(vapply(limits, gcpv_integer, logical(1L))) &&
     all(unlist(limits) > 0) && limits$max_horizon <= 28L && limits$max_particles <= 4096L &&
@@ -73,12 +76,13 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
   # Probability-scale weights may underflow after f/q and revive under the
   # next G contribution. Preserve their finite logs through this cancellation.
   # NULL-guide arithmetic is retained exactly for bootstrap regression checks.
-  carry_log_weights <- !is.null(guide) && !is.null(members)
+  carry_log_weights <- (!is.null(guide) || using_state_guide) && !is.null(members)
   ancestors <- seq_len(N); diagnostics <- vector("list", H)
   particle_state <- NULL
   calls <- terms <- completed <- 0L; logZ <- 0; stage <- "START"; failure <- NULL
   used <- c(location = 0L, scale = 0L, member_location = 0L, member_scale = 0L,
-    guide_factory = 0L, proposal_draw = 0L, proposal_log_density = 0L,
+    guide_factory = 0L, state_guide_factory = 0L,
+    proposal_draw = 0L, proposal_log_density = 0L,
     state_initial = 0L, state_step = 0L, state_resample = 0L,
     state_diagnostics = 0L)
   invoke <- function(fn, ..., role) {
@@ -164,10 +168,19 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
           value(location, h, past, "location")
         sigma <- value(scale, h, past, "scale", TRUE)
         # Terminal prior and the no-member identity do not need a guide.
-        proposal <- if (h == H || is.null(members) || is.null(guide)) NULL else
-          invoke(guide, h = h, past = past, parameters = parameters,
-            prior_location = mu, prior_scale = sigma, probability = probability,
-            role = "guide_factory")
+        proposal <- NULL
+        if (h < H && !is.null(members)) {
+          if (using_state_guide) {
+            proposal <- invoke(state_backend$guide, state = particle_state,
+              particle = i, h = h, paths = paths, parameters = parameters,
+              prior_location = mu, prior_scale = sigma, probability = probability,
+              role = "state_guide_factory")
+          } else if (!is.null(guide)) {
+            proposal <- invoke(guide, h = h, past = past, parameters = parameters,
+              prior_location = mu, prior_scale = sigma, probability = probability,
+              role = "guide_factory")
+          }
+        }
         u <- stats::runif(1L)
         if (is.null(proposal)) paths[i, h] <- gic_al_quantile(u, probability, mu, sigma) else {
           # These flags describe scope, not proof that an arbitrary q is normalized.
@@ -223,6 +236,7 @@ gpg_smc <- function(parameters, location, scale, member_location, member_scale,
     limits = limits, gates = gates, terminal_prior_proposal = TRUE,
     no_resampling_between_correction_and_next_member = TRUE,
     state_backend_used = using_state_backend,
+    state_guide_used = using_state_guide,
     state_backend_diagnostics = state_diagnostics,
     generic_proposal_normalization_authenticated = FALSE,
     unbiasedness_scope = "Exact-arithmetic positive unbiased normalizer requires normalized full-support proposals and the complete f/q correction; arbitrary callback flags do not certify these conditions.",

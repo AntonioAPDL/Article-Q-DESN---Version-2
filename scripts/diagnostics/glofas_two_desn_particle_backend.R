@@ -96,7 +96,7 @@ gtdpb_bind <- function(engine, context, spec, known_baseline = NULL,
 gtdpb_clone_states <- function(states, n) lapply(states, function(x) rep(list(x), n))
 
 gtdpb_state_backend <- function(binding, max_cache_entries = 100000L,
-    retain_features = FALSE) {
+    retain_features = FALSE, guide_control = NULL) {
   q <- gtdpb_require
   q(is.list(binding) && identical(binding$schema_version,
     "glofas_two_desn_particle_binding_v1") && identical(binding$production_qualified, FALSE),
@@ -107,8 +107,23 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L,
     "bounded exact-prefix cache size required")
   q(is.logical(retain_features) && length(retain_features) == 1L &&
     !is.na(retain_features), "one explicit feature-retention flag required")
+  guide_enabled <- !is.null(guide_control)
+  if (guide_enabled) {
+    q(is.list(guide_control) && setequal(names(guide_control),
+      "maximum_absolute_slope") &&
+      all(vapply(guide_control, function(x) is.numeric(x) && length(x) == 1L &&
+        is.finite(x) && x > 0, logical(1L))),
+      "positive local-affine guide slope bound required")
+    q(guide_control$maximum_absolute_slope <= 1e6,
+      "bounded local-affine guide slope control required")
+    q(all(vapply(c("gaag_build", "gaag_as_guide"), function(name)
+      exists(name, mode = "function", inherits = TRUE), logical(1L))),
+      "load the normalized affine-AL guide before enabling the native guide")
+  }
   e <- binding$engine$env
   cache <- list(); hits <- misses <- steps <- resamples <- 0L
+  guide_calls <- guide_continuations <- 0L
+  guide_slope_range <- c(Inf, -Inf)
   initial <- function(n, parameters) {
     q(is.numeric(n) && length(n) == 1L && n == floor(n) && n >= 1L && n <= 4096L,
       "bounded particle count required")
@@ -197,17 +212,102 @@ gtdpb_state_backend <- function(binding, max_cache_entries = 100000L,
     list(states = lapply(state$states, function(x) x[selected]),
       ancestor_ids = state$ancestor_ids[selected])
   }
+  lookahead_ensemble <- function(state, particle, h, paths, parameters, candidate,
+      derivative = FALSE) {
+    q(guide_enabled && is.list(state) && is.list(state$states) &&
+      is.numeric(particle) && length(particle) == 1L && particle == floor(particle) &&
+      particle >= 1L && particle <= length(state$ancestor_ids) &&
+      h >= 1L && h < binding$horizon && is.matrix(paths) &&
+      nrow(paths) == length(state$ancestor_ids) && is.numeric(candidate) &&
+      length(candidate) == 1L && is.finite(candidate) && is.logical(derivative) &&
+      length(derivative) == 1L && !is.na(derivative),
+      "aligned nonterminal state and finite look-ahead candidate required")
+    beta <- parameters$coefficients[binding$spec$blocks$beta$index]
+    alpha <- parameters$coefficients[binding$spec$blocks$alpha$index]
+    prefix0 <- if (h == 1L) numeric() else as.numeric(paths[particle, seq_len(h - 1L)])
+    q(all(is.finite(prefix0)), "finite look-ahead prefix required")
+    prefix <- c(prefix0, candidate)
+    rows <- derivatives <- list()
+    for (block in c("beta", "alpha")) {
+      fit <- binding$context[[paste0("qfit_", block)]]
+      input <- binding$contracts[[block]]$static_values[h + 1L, ]
+      input_derivative <- matrix(0, nrow = length(input), ncol = 1L)
+      idx <- binding$contracts[[block]]$future_index[h + 1L, ]
+      dynamic <- which(idx > 0L)
+      if (length(dynamic)) {
+        q(all(idx[dynamic] <= h), "look-ahead input must use only the candidate prefix")
+        input[dynamic] <- if (block == "beta") prefix[idx[dynamic]] else
+          binding$ensemble_center[idx[dynamic]] - prefix[idx[dynamic]]
+        active <- dynamic[idx[dynamic] == h]
+        if (length(active)) input_derivative[active, 1L] <-
+          if (block == "beta") 1 else -1
+      }
+      if (isTRUE(derivative)) {
+        zero <- lapply(state$states[[block]][[particle]], function(x)
+          matrix(0, nrow = length(x), ncol = 1L))
+        next_step <- e$app_qdesn_continue_one_step_with_jacobian(
+          state$states[[block]][[particle]], zero, input, input_derivative,
+          fit$reservoir, fit$meta)
+        readout <- e$app_qdesn_readout_row_from_states_with_jacobian(
+          next_step$states, next_step$d_states, fit$reservoir)
+        rows[[block]] <- c(1, readout$value)
+        derivatives[[block]] <- c(0, readout$jacobian[, 1L])
+      } else {
+        next_state <- e$app_qdesn_continue_one_step(
+          state$states[[block]][[particle]], input, fit$reservoir, fit$meta)
+        rows[[block]] <- c(1, e$app_qdesn_readout_row_from_states(
+          next_state, fit$reservoir))
+      }
+      guide_continuations <<- guide_continuations + 1L
+    }
+    value <- sum(rows$beta * beta) + sum(rows$alpha * alpha) +
+      binding$known_baseline[[h + 1L]]
+    slope <- if (isTRUE(derivative)) sum(derivatives$beta * beta) +
+      sum(derivatives$alpha * alpha) else NA_real_
+    q(is.finite(value) && (!isTRUE(derivative) || is.finite(slope)),
+      "finite nonlinear look-ahead location and derivative required")
+    list(value = value, derivative = slope)
+  }
+  guide <- if (!guide_enabled) NULL else function(state, particle, h, paths,
+      parameters, prior_location, prior_scale, probability) {
+    q(is.numeric(prior_location) && length(prior_location) == 1L &&
+      is.finite(prior_location) && is.numeric(prior_scale) &&
+      length(prior_scale) == 1L && is.finite(prior_scale) && prior_scale > 0 &&
+      is.numeric(probability) && length(probability) == 1L &&
+      probability > 0 && probability < 1,
+      "finite local guide location, scale, and probability required")
+    location <- lookahead_ensemble(state, particle, h, paths, parameters,
+      prior_location, derivative = TRUE)
+    slope <- location$derivative
+    q(is.finite(slope) && abs(slope) <= guide_control$maximum_absolute_slope,
+      "bounded finite local guide slope required")
+    offset <- location$value - slope * prior_location
+    proposal <- gaag_build(mu = prior_location, sigma_y = prior_scale,
+      members = binding$members[h + 1L, ], offset = offset, lag = slope,
+      sigma_g = unname(parameters$sigma[["G"]]), probability = probability)
+    envelope <- gaag_as_guide(proposal)
+    envelope$native_local_affine <- TRUE
+    envelope$linearization_location <- prior_location
+    envelope$ensemble_location <- location$value
+    envelope$ensemble_slope <- slope
+    guide_calls <<- guide_calls + 1L
+    guide_slope_range <<- range(c(guide_slope_range, slope))
+    envelope
+  }
   diagnostics <- function() list(schema_version = "glofas_two_desn_particle_backend_diagnostics_v1",
     cache_entries = length(cache), cache_hits = hits, cache_misses = misses,
     step_calls = steps, resample_calls = resamples,
     exact_complete_prefix_comparison = TRUE, rounded_keys = FALSE,
     cache_parameter_identity = "exact_coefficients_and_source_scales_sha256",
     cache_reset_scope = "one_parameter_evaluation", both_desn_states_carried = TRUE,
-    feature_rows_retained = isTRUE(retain_features),
+    feature_rows_retained = isTRUE(retain_features), guide_enabled = guide_enabled,
+    guide_calls = guide_calls, guide_continuations = guide_continuations,
+    guide_slope_range = if (guide_calls) guide_slope_range else c(NA_real_, NA_real_),
     original_file_reads = 0L, future_truth_read = FALSE,
     production_qualified = FALSE)
   list(schema_version = "glofas_two_desn_particle_state_backend_v1",
-    initial = initial, step = step, resample = resample, diagnostics = diagnostics,
+    initial = initial, step = step, resample = resample, guide = guide,
+    diagnostics = diagnostics,
     production_qualified = FALSE)
 }
 
@@ -231,14 +331,16 @@ gtdpb_reference_locations <- function(binding, path, parameters) {
 gtdpb_make_evidence <- function(binding, particles = 128L, ess_fraction = .5,
     limits = list(max_horizon = 28L, max_particles = 4096L, max_calls = 1000000L),
     gates = list(min_ess = 2, min_unique_ancestors = 2L), guide = NULL,
-    retain_particles = FALSE) {
+    retain_particles = FALSE, native_guide_control = NULL) {
   q <- gtdpb_require
   force(binding); force(particles); force(ess_fraction); force(limits); force(gates)
-  force(guide); force(retain_particles)
+  force(guide); force(retain_particles); force(native_guide_control)
+  q(is.null(guide) || is.null(native_guide_control),
+    "generic and native guides cannot both be requested")
   function(eta, seed) {
     decoded <- gcat_decode(eta, binding$spec)
     parameters <- list(coefficients = decoded$coefficients, sigma = decoded$sigma)
-    backend <- gtdpb_state_backend(binding)
+    backend <- gtdpb_state_backend(binding, guide_control = native_guide_control)
     out <- gpg_smc(parameters = parameters, location = NULL,
       scale = unname(parameters$sigma[["Y"]]), member_location = NULL,
       member_scale = unname(parameters$sigma[["G"]]), members = binding$members,

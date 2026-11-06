@@ -433,7 +433,9 @@ gnse_evidence_once <- function(binding, eta, particles, seed, budget,
   out
 }
 
-gnse_h2_check <- function(engine, context, spec, contexts, known, budget) {
+gnse_h2_check <- function(engine, context, spec, contexts, known, budget,
+    evidence_once = gnse_evidence_once) {
+  gnse_require(is.function(evidence_once), "H2 evidence callback required")
   ctx <- gnse_context_slice(context, 2L)
   binding <- gnse_binding(engine, ctx, spec, known[1:2], budget)
   rows <- list(); pieces <- list(); at <- 0L
@@ -443,7 +445,7 @@ gnse_h2_check <- function(engine, context, spec, contexts, known, budget) {
     estimates <- numeric()
     for (seed in as.integer(unlist(budget$nonlinear_h2$replicate_seeds))) {
       at <- at + 1L
-      out <- gnse_evidence_once(binding, contexts[[name]],
+      out <- evidence_once(binding, contexts[[name]],
         as.integer(budget$nonlinear_h2$particle_count), seed, budget, FALSE)
       estimates <- c(estimates, out$log_estimate)
       rows[[at]] <- data.frame(context = name, seed = seed,
@@ -470,8 +472,9 @@ gnse_h2_check <- function(engine, context, spec, contexts, known, budget) {
 }
 
 gnse_particle_grid <- function(binding, contexts, budget, replicate_count,
-    existing = NULL) {
+    existing = NULL, evidence_once = gnse_evidence_once) {
   q <- gnse_require
+  q(is.function(evidence_once), "particle-grid evidence callback required")
   q(replicate_count %in% c(budget$particle_grid$initial_replicates,
     budget$particle_grid$maximum_replicates), "declared replicate count required")
   context_names <- unlist(budget$particle_grid$contexts)
@@ -489,7 +492,7 @@ gnse_particle_grid <- function(binding, contexts, budget, replicate_count,
   for (name in context_names) for (N in counts) for (r in seq_len(replicate_count)) {
     key <- paste(name, N, r, sep = ":")
     if (key %in% done) next
-    out <- gnse_evidence_once(binding, contexts[[name]], N, seeds[[r]], budget, TRUE)
+    out <- evidence_once(binding, contexts[[name]], N, seeds[[r]], budget, TRUE)
     particle <- out$particle_output
     rows[[length(rows) + 1L]] <- data.frame(context = name, particles = N,
       replicate = r, seed = seeds[[r]], complete = out$complete,
@@ -633,7 +636,9 @@ gnse_grid_precision <- function(grid, budget) {
     particle_count_selected = is.finite(selected))
 }
 
-gnse_rhs_invariance <- function(binding, eta, spec, budget) {
+gnse_rhs_invariance <- function(binding, eta, spec, budget,
+    evidence_once = gnse_evidence_once) {
+  gnse_require(is.function(evidence_once), "RHS-invariance evidence callback required")
   changed <- eta
   rhs <- unlist(lapply(spec$blocks, function(b)
     c(b$tau, b$xi, b$lambda, b$nu, b$slab)), use.names = FALSE)
@@ -641,8 +646,8 @@ gnse_rhs_invariance <- function(binding, eta, spec, budget) {
     gnse_direction(rhs, spec$dimension, 4)[rhs]
   seed <- as.integer(budget$rhs_only_invariance$seed)
   N <- as.integer(budget$rhs_only_invariance$particle_count)
-  a <- gnse_evidence_once(binding, eta, N, seed, budget, FALSE)
-  b <- gnse_evidence_once(binding, changed, N, seed, budget, FALSE)
+  a <- evidence_once(binding, eta, N, seed, budget, FALSE)
+  b <- evidence_once(binding, changed, N, seed, budget, FALSE)
   gap <- abs(a$log_estimate - b$log_estimate)
   data.frame(particles = N, seed = seed, original_log_evidence = a$log_estimate,
     perturbed_log_evidence = b$log_estimate, absolute_difference = gap,
@@ -654,7 +659,9 @@ gnse_rhs_invariance <- function(binding, eta, spec, budget) {
     future_parameter_values_changed = FALSE, stringsAsFactors = FALSE)
 }
 
-gnse_gradient_assessment <- function(binding, initializer, budget) {
+gnse_gradient_assessment <- function(binding, initializer, budget,
+    evidence_once = gnse_evidence_once) {
+  gnse_require(is.function(evidence_once), "gradient evidence callback required")
   cfg <- budget$frozen_q_gradient_assessment
   if (!isTRUE(cfg$enabled)) return(data.frame())
   roles <- gnse_role_indices(binding$spec)
@@ -675,7 +682,7 @@ gnse_gradient_assessment <- function(binding, initializer, budget) {
       at_seed <- at_seed + 1L; seed <- seeds[[at_seed]]
       set.seed(seed); z <- stats::rnorm(binding$spec$dimension)
       eta <- initializer$mean + sd * z
-      ev <- gnse_evidence_once(binding, eta, N, seed, budget, FALSE)
+      ev <- evidence_once(binding, eta, N, seed, budget, FALSE)
       draws[[draw]] <- list(z = z, log_evidence = ev$log_estimate,
         complete = ev$complete, seed = seed)
       logs[[draw]] <- ev$log_estimate
@@ -743,8 +750,11 @@ gnse_extension_admission <- function(initial, elapsed, remaining, budget) {
 }
 
 gnse_run <- function(engine, design, object, prior_export, budget,
-    wall_seconds, source_sha256) {
+    wall_seconds, source_sha256, evidence_once = gnse_evidence_once,
+    extension_admission = gnse_extension_admission) {
   q <- gnse_require; gnse_validate_budget(budget)
+  q(is.function(evidence_once) && is.function(extension_admission),
+    "evidence and extension-admission callbacks required")
   started <- proc.time()[["elapsed"]]
   core <- object$fit
   spec <- gnse_spec(design, prior_export, budget)
@@ -766,24 +776,27 @@ gnse_run <- function(engine, design, object, prior_export, budget,
   tick <- proc.time()[["elapsed"]]
   derivatives <- gnse_historical_derivatives(historical, initializer, budget)
   historical_seconds <- proc.time()[["elapsed"]] - tick
-  h2 <- gnse_h2_check(engine, context, spec, contexts, known, budget)
+  h2 <- gnse_h2_check(engine, context, spec, contexts, known, budget,
+    evidence_once)
   binding <- gnse_binding(engine, context, spec, known, budget)
   native_contract <- gnpo_contract(spec, binding, prior_export,
     source_sha256 = source_sha256, fixture_only = FALSE)
   gnpo_validate_contract(native_contract, spec$dimension)
-  rhs <- gnse_rhs_invariance(binding, initializer$mean, spec, budget)
+  rhs <- gnse_rhs_invariance(binding, initializer$mean, spec, budget,
+    evidence_once)
   initial <- gnse_particle_grid(binding, contexts, budget,
-    budget$particle_grid$initial_replicates)
+    budget$particle_grid$initial_replicates, evidence_once = evidence_once)
   elapsed <- proc.time()[["elapsed"]] - started
-  extension <- gnse_extension_admission(initial, elapsed,
+  extension <- extension_admission(initial, elapsed,
     wall_seconds - elapsed, budget)
   grid <- initial
   if (isTRUE(extension$admitted[[1L]])) {
     grid <- gnse_particle_grid(binding, contexts, budget,
-      budget$particle_grid$maximum_replicates, initial)
+      budget$particle_grid$maximum_replicates, initial, evidence_once)
   }
   precision <- gnse_grid_precision(grid, budget)
-  gradient <- gnse_gradient_assessment(binding, initializer, budget)
+  gradient <- gnse_gradient_assessment(binding, initializer, budget,
+    evidence_once)
   h2_pass <- all(h2$summary$pass)
   derivative_pass <- all(derivatives$rows$pass) &&
     all(derivatives$rows$cross_step_pass)

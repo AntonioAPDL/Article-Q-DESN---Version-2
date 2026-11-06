@@ -1,0 +1,37 @@
+{
+  "schema_version": "glofas_native_guided_requalification_budget_v1",
+  "stage": "GUIDED_NATIVE_PROPOSAL_REQUALIFICATION_NO_FIT",
+  "task_id": "gft-al-p050",
+  "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
+  "declared_prior_sha256": "d7549e8287c6bf37ee1dafbdc70b0fcc5921307484e9c9658a8140a1926ed65b",
+  "effective_prior_sha256": "0f9d6ddbe7ddd2e7e9f8c4be151e135a82ae184b587e9d8153de3f3d05c45f71",
+  "stage_e_budget_sha256": "7b32e3279b76342bc95533271ce30c8752de2f5238b57a80658ccd0be625b6bd",
+  "stage_e_receipt_sha256": "8a4f13057e228cbd133e50105e4cdad3219d1e561642d9eb44ac88b0aeb7995e",
+  "guide_control": {
+    "maximum_absolute_slope": 1000000
+  },
+  "initial_extension_gate": {
+    "require_all_complete": true,
+    "require_all_degeneracy_diagnostics": true,
+    "maximum_mcse_ratio_to_stage_e": 0.5,
+    "stage_e_initial_mcse": [
+      {"context": "retained_initializer", "particles": 64, "mcse": 95.02059977781177},
+      {"context": "retained_initializer", "particles": 128, "mcse": 88.89228292826272},
+      {"context": "retained_initializer", "particles": 256, "mcse": 53.670806393725655},
+      {"context": "coefficient_perturbation", "particles": 64, "mcse": 63.642664492292326},
+      {"context": "coefficient_perturbation", "particles": 128, "mcse": 72.7509400752045},
+      {"context": "coefficient_perturbation", "particles": 256, "mcse": 22.144015140903576},
+      {"context": "source_scale_perturbation", "particles": 64, "mcse": 84.96080359345689},
+      {"context": "source_scale_perturbation", "particles": 128, "mcse": 45.01235447281863},
+      {"context": "source_scale_perturbation", "particles": 256, "mcse": 52.75841727246749}
+    ]
+  },
+  "authorizations": {
+    "future_truth_read": false,
+    "model_fit": false,
+    "optimizer_iteration": false,
+    "stage_f": false,
+    "production": false,
+    "publication": false
+  }
+}

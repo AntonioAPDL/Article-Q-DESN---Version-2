@@ -4,6 +4,7 @@ local({
   source("scripts/diagnostics/glofas_collapsed_particle_vi.R", local = TRUE)
   source("scripts/diagnostics/glofas_innovation_coordinates.R", local = TRUE)
   source("scripts/diagnostics/glofas_guided_collapsed_particle.R", local = TRUE)
+  source("scripts/diagnostics/glofas_al_affine_guided_proposal.R", local = TRUE)
   source("scripts/diagnostics/glofas_collapsed_al_target.R", local = TRUE)
   source("scripts/diagnostics/glofas_two_desn_particle_backend.R", local = TRUE)
   n <- 0L
@@ -16,7 +17,7 @@ local({
   reject <- function(x) ok(inherits(try(force(x), silent = TRUE), "try-error"))
   scratch <- tempfile("gtdpb_"); dir.create(scratch)
   on.exit(unlink(scratch, recursive = TRUE), add = TRUE)
-  fixture <- function(H = 2L) {
+  fixture <- function(H = 2L, activation = "tanh", input_bound = "tanh") {
     work <- tempfile("engine_", tmpdir = scratch); dir.create(work)
     engine <- gnr_engine(getwd(), work,
       list(max_files = 64L, max_file_bytes = 4 * 1024^2, max_total_bytes = 64 * 1024^2))
@@ -45,10 +46,10 @@ local({
       n_tilde = integer(), m = 4L, m_input = 4L, alpha = .7,
       W = list(matrix(c(.15, .02, -.03, .1), 2L)),
       Win = list(sign * matrix(seq_len(10L) / 50 - .1, nrow = 2L)),
-      Q = list(), Q_is_identity = logical(), act_f = "tanh", act_k = "identity"),
+      Q = list(), Q_is_identity = logical(), act_f = activation, act_k = "identity"),
       states = list(H_all = list(matrix(c(.1, -.15, .2, -.1), 2L, byrow = TRUE))),
       meta = list(reservoir_input_spec = input_spec, history_dates = hist_dates,
-        m_input = 4L, standardize_inputs = TRUE, input_bound = "tanh",
+        m_input = 4L, standardize_inputs = TRUE, input_bound = input_bound,
         win_scale_global = gain, win_scale_bias = 1,
         win_scale_lags = c(1, .9, .8, 1.1), lag_center = c(.2, .1, .3, .2),
         lag_scale = c(.8, .7, .4, .6)))
@@ -143,11 +144,135 @@ local({
   ok(a1$particle_output$member_factor_evaluations == 2L * 16L * 51L)
   ok(a1$backend_diagnostics$cache_reset_scope == "one_parameter_evaluation")
   ok(identical(rng, if (exists(".Random.seed", .GlobalEnv, inherits = FALSE)) .Random.seed else NULL))
+  guide_control <- list(maximum_absolute_slope = 1e4)
+  affine <- fixture(2L, activation = "identity", input_bound = "none")
+  affine_decoded <- gcat_decode(affine$eta, affine$binding$spec)
+  affine_parameters <- list(coefficients = affine_decoded$coefficients,
+    sigma = affine_decoded$sigma)
+  affine_backend <- gtdpb_state_backend(affine$binding,
+    guide_control = guide_control)
+  affine_state <- affine_backend$initial(1L, affine_parameters)
+  affine_paths <- matrix(NA_real_, 1L, 2L)
+  affine_first <- affine_backend$step(affine_state, 1L, affine_paths,
+    affine_parameters)
+  affine_proposal <- affine_backend$guide(affine_first$state, 1L, 1L,
+    affine_paths, affine_parameters, affine_first$reference[[1L]],
+    unname(affine_parameters$sigma[["Y"]]), affine$binding$spec$probability)
+  ok(isTRUE(affine_proposal$native_local_affine) &&
+    is.finite(affine_proposal$ensemble_slope))
+  delta <- 1e-5
+  y0 <- affine_first$reference[[1L]]
+  location_at <- function(y) gtdpb_reference_locations(affine$binding,
+    c(y, 0), affine_parameters)$ensemble[[2L]]
+  finite_difference <- (location_at(y0 + delta) - location_at(y0 - delta)) /
+    (2 * delta)
+  near(affine_proposal$ensemble_slope, finite_difference, 1e-8)
+  exact_h2 <- function(binding, eta) {
+    decoded <- gcat_decode(eta, binding$spec)
+    parameters <- list(coefficients = decoded$coefficients, sigma = decoded$sigma)
+    backend <- gtdpb_state_backend(binding)
+    state <- backend$initial(1L, parameters)
+    paths <- matrix(NA_real_, 1L, 2L)
+    first <- backend$step(state, 1L, paths, parameters)
+    log_g1 <- sum(gic_al_log_density(binding$members[1L, ],
+      first$ensemble[[1L]], binding$spec$probability,
+      unname(parameters$sigma[["G"]])))
+    log_integrand <- function(y) vapply(y, function(value) {
+      one <- paths; one[1L, 1L] <- value
+      second <- backend$step(first$state, 2L, one, parameters)
+      gic_al_log_density(value, first$reference[[1L]],
+        binding$spec$probability, unname(parameters$sigma[["Y"]])) +
+        sum(gic_al_log_density(binding$members[2L, ],
+          second$ensemble[[1L]], binding$spec$probability,
+          unname(parameters$sigma[["G"]])))
+    }, numeric(1L))
+    scale <- unname(parameters$sigma[["Y"]])
+    probe <- first$reference[[1L]] + scale * seq(-20, 20, length.out = 161L)
+    peak <- max(log_integrand(probe))
+    value <- stats::integrate(function(y) exp(log_integrand(y) - peak),
+      -Inf, Inf, rel.tol = 1e-10, abs.tol = 1e-12, subdivisions = 500L)
+    stopifnot(identical(value$message, "OK"))
+    log_g1 + peak + log(value$value)
+  }
+  affine_exact <- exact_h2(affine$binding, affine$eta)
+  affine_guided <- gtdpb_make_evidence(affine$binding, particles = 1L,
+    gates = list(min_ess = 1, min_unique_ancestors = 1L),
+    retain_particles = TRUE, native_guide_control = guide_control)
+  for (seed in 2026111001:2026111004) {
+    result <- affine_guided(affine$eta, seed)
+    ok(result$complete && result$particle_output$state_guide_used)
+    near(result$log_estimate, affine_exact, 1e-8)
+    ok(result$backend_diagnostics$guide_calls == 1L &&
+      result$backend_diagnostics$guide_continuations == 2L &&
+      result$particle_output$callback_calls_by_role[["guide_factory"]] == 0L &&
+      result$particle_output$callback_calls_by_role[["state_guide_factory"]] == 1L)
+  }
+  nonlinear <- fixture(2L)
+  nonlinear_decoded <- gcat_decode(nonlinear$eta, nonlinear$binding$spec)
+  nonlinear_parameters <- list(coefficients = nonlinear_decoded$coefficients,
+    sigma = nonlinear_decoded$sigma)
+  nonlinear_backend <- gtdpb_state_backend(nonlinear$binding,
+    guide_control = guide_control)
+  nonlinear_state <- nonlinear_backend$initial(1L, nonlinear_parameters)
+  nonlinear_paths <- matrix(NA_real_, 1L, 2L)
+  nonlinear_first <- nonlinear_backend$step(nonlinear_state, 1L,
+    nonlinear_paths, nonlinear_parameters)
+  nonlinear_proposal <- nonlinear_backend$guide(nonlinear_first$state, 1L, 1L,
+    nonlinear_paths, nonlinear_parameters, nonlinear_first$reference[[1L]],
+    unname(nonlinear_parameters$sigma[["Y"]]), nonlinear$binding$spec$probability)
+  y0 <- nonlinear_first$reference[[1L]]
+  location_at <- function(y) gtdpb_reference_locations(nonlinear$binding,
+    c(y, 0), nonlinear_parameters)$ensemble[[2L]]
+  finite_difference <- (location_at(y0 + delta) - location_at(y0 - delta)) /
+    (2 * delta)
+  near(nonlinear_proposal$ensemble_slope, finite_difference, 1e-7)
+  nonlinear_guided <- gtdpb_make_evidence(nonlinear$binding, particles = 64L,
+    gates = list(min_ess = 1, min_unique_ancestors = 1L),
+    retain_particles = TRUE, native_guide_control = guide_control)
+  nonlinear_result <- nonlinear_guided(nonlinear$eta, 2026111011L)
+  ok(nonlinear_result$complete &&
+    nonlinear_result$backend_diagnostics$guide_calls == 64L &&
+    nonlinear_result$backend_diagnostics$guide_continuations == 128L &&
+    all(is.finite(nonlinear_result$particle_output$log_weights)))
+  stress <- fixture(5L)
+  bootstrap_stress <- gtdpb_make_evidence(stress$binding, particles = 64L,
+    gates = list(min_ess = 1, min_unique_ancestors = 1L), retain_particles = TRUE)
+  guided_stress <- gtdpb_make_evidence(stress$binding, particles = 64L,
+    gates = list(min_ess = 1, min_unique_ancestors = 1L), retain_particles = TRUE,
+    native_guide_control = guide_control)
+  stress_rows <- lapply(2026111021:2026111028, function(seed) {
+    plain <- bootstrap_stress(stress$eta, seed)
+    guided <- guided_stress(stress$eta, seed)
+    ok(plain$complete && guided$complete)
+    data.frame(seed = seed, bootstrap_log_evidence = plain$log_estimate,
+      guided_log_evidence = guided$log_estimate,
+      bootstrap_min_ess = plain$min_ess, guided_min_ess = guided$min_ess,
+      bootstrap_ancestors = plain$min_unique_ancestors,
+      guided_ancestors = guided$min_unique_ancestors)
+  })
+  stress_rows <- do.call(rbind, stress_rows)
+  ok(stats::sd(stress_rows$guided_log_evidence) <
+    stats::sd(stress_rows$bootstrap_log_evidence))
+  ok(stats::median(stress_rows$guided_min_ess) >
+    stats::median(stress_rows$bootstrap_min_ess))
+  ok(stats::median(stress_rows$guided_ancestors) >=
+    stats::median(stress_rows$bootstrap_ancestors))
+  reject(gtdpb_state_backend(nonlinear$binding,
+    guide_control = list(maximum_absolute_slope = -1)))
+  reject(gtdpb_state_backend(nonlinear$binding,
+    guide_control = list(maximum_absolute_slope = 1e7)))
+  reject(gtdpb_make_evidence(nonlinear$binding, guide = function(...) NULL,
+    native_guide_control = guide_control))
   bad <- f$binding; bad$member_policy <- "fractional"
   reject(gtdpb_bind(bad$engine, bad$context, bad$spec, bad$known_baseline,
     bad$gains, bad$target_identity, "fractional"))
   bad <- f$binding$context; bad$latent_data$g_ensemble$ensemble_weight[1L] <- 1 / 51
   reject(gtdpb_bind(f$binding$engine, bad, f$binding$spec, f$binding$known_baseline,
     f$binding$gains, f$binding$target_identity))
-  cat(sprintf("GLOFAS_TWO_DESN_PARTICLE_BACKEND_PASS checks=%d authentic_reads=0 model_runs=0\n", n))
+  cat(sprintf(paste0("GLOFAS_TWO_DESN_PARTICLE_BACKEND_PASS checks=%d ",
+    "stress_sd_ratio=%.6f stress_ess_ratio=%.6f authentic_reads=0 model_runs=0\n"),
+    n, stats::sd(stress_rows$guided_log_evidence) /
+      stats::sd(stress_rows$bootstrap_log_evidence),
+    stats::median(stress_rows$guided_min_ess) /
+      stats::median(stress_rows$bootstrap_min_ess)))
 })

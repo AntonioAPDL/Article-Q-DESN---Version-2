@@ -112,6 +112,25 @@ and combined repository tests, exact scope review and guarded CLI Git push
 with remote readback. No manuscript compile is needed when every article
 blob is unchanged; this stage does not publish Overleaf.
 
+## Deterministic resource-boundary regression
+
+The first combined guided integration run stopped in an older sampler test,
+before reaching the new guided tests. That test allowed one millisecond
+before the first callback and assumed exactly one callback would run. The
+unchanged sampler correctly permits zero calls if the budget expires first,
+so the test has an OS-scheduling-dependent assumption. Both states were
+independently reproduced using controlled monotone clocks; the original test
+also passed in isolation. The failed full run did not retain its exhaustion
+object, so its exact callback count is not retrospectively asserted.
+
+The corrected test supplies a synthetic clock to a private copy of the
+sampler function and checks both pre-callback exhaustion (zero calls) and
+post-callback exhaustion (one call), including their distinct failure
+messages. Production code, budget thresholds and statistical gates are
+unchanged. The original failed full-suite receipt is retained; success
+requires a fresh complete combined-tree run, not a selective rerun that
+discards the failure.
+
 ## Remaining native boundary
 
 Exact affine H2 behavior does not certify the retained nonlinear H28 path,

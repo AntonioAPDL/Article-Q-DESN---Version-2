@@ -1,7 +1,7 @@
 {
   "frozen_sources_modified": 0,
   "generator": "scripts/build_qdesn_sections5_7_presentation.py",
-  "generator_sha256": "3b2024490234021e09438edda774f98becbbbf7cfae0332fa346c3d3b9a61c6b",
+  "generator_sha256": "b2b18eb0a41a2028ba0d49f032eff1f98c576d55b1155116c23e8382d62be826",
   "main_aliases": {
     "GlofasApplicationCurrentForecastWindowFigure": "figures/glofas_application/glofas_common_window_statistical_labels_20261019.pdf",
     "GlofasApplicationCurrentScoreTable": "tables/glofas_forecast_correction_main_scores_display.tex"
@@ -1919,7 +1919,7 @@
       "file": "tables/qdesn_multiquantile_forecast_figure_display.tex",
       "permitted_operation": "caption/alternative-text revision; labels and graphics unchanged",
       "role": "mq_forecast",
-      "sha256": "d66af45edbd592d0615e460d1e41968b7aaf5fdf07b91d677d933aedc888cda0",
+      "sha256": "1834d537250d024083f688e3c487ce90c88cba4a8b829df699fbc718cf985ccf",
       "source": "tables/joint_qdesn_pure_desn_v2_mq_forecast_figure.tex",
       "source_sha256": "696117474b4ed88e51f6baa90db9196dcd4dc80e48dc8fe23a2680f682329457"
     },

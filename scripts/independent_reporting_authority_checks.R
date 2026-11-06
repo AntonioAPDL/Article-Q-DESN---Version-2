@@ -85,6 +85,38 @@ app_ind_current_routing <- function(root, main = NULL, supplement = NULL) {
     has(main, "fig:simulation-500obs-mcmc-forecast-check-loss-intervals"), "live main references the primary criterion only")
   invisible(TRUE)
 }
+app_ind_current_closure <- function(root, selected) {
+  # This remains a LIVE routing guard. An explicitly archived redundant VB
+  # panel is optional only after the new successor authenticates the actual
+  # manuscript, disposition map and unchanged public scientific evidence.
+  receipt <- jsonlite::read_json(file.path(root,
+    "tables/independent_forecast_300_500_article_manifest_v1.json"), simplifyVector = FALSE)
+  retired <- c("tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+    "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
+    "tables/qdesn_validation_mcmc_five_chain_sensitivity.tex",
+    "tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex")
+  required <- c("tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex",
+    "tables/independent_forecast_calibration_figure_v1.tex")
+  vb <- "tables/qdesn_single_quantile_vb_fit_figure_display.tex"
+  if (!is.null(receipt$reader_appendix_20261106)) {
+    source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+    validated <- app_reader_appendix_adapter(root)
+    app_ind_require(validated$active, "validated current editorial revision required")
+    roles <- read.csv(file.path(root,
+      "docs/reproducibility/reader_appendix_content_disposition_20261106.csv"), stringsAsFactors = FALSE)
+    archived <- roles[roles$role_id == "ind_vb_fit_panel", , drop = FALSE]
+    app_ind_require(nrow(archived) == 1L && archived$disposition == "public_archive" &&
+      archived$destination == vb && grepl(vb, archived$asset_paths, fixed = TRUE) &&
+      !vb %in% selected, "only the approved redundant VB fitting panel is archived")
+  } else {
+    required <- c(required, vb)
+  }
+  app_ind_require(!any(retired %in% selected) && all(required %in% selected),
+    "live closure excludes retired forecasts and retains mandatory fitting/recovery/sensitivity/calibration")
+  invisible(TRUE)
+}
 app_ind_check_current_reporting <- function(root) {
   commit <- app_ind_authority_commits[["current_reporting"]]
   app_ind_require_ancestor(root, commit)
@@ -110,13 +142,7 @@ app_ind_check_current_reporting <- function(root) {
     all(rows$last_lead == ifelse(rows$cutoff == 300L, 30L, 20L)), "live balanced origin/horizon surface")
   app_ind_current_routing(root)
   selected <- unique(c(app_ind_effective_tex(root, "main.tex"), app_ind_effective_tex(root, "qdesn-supplement.tex")))
-  retired <- c("tables/qdesn_pro_review_mcmc_forecast_figures.tex",
-    "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
-    "tables/qdesn_validation_mcmc_five_chain_sensitivity.tex")
-  app_ind_require(!any(retired %in% selected) &&
-    all(c("tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
-      "tables/qdesn_single_quantile_vb_fit_figure_display.tex",
-      "tables/independent_forecast_calibration_figure_v1.tex") %in% selected), "live closure excludes retired forecasts and retains fitting/calibration")
+  app_ind_current_closure(root, selected)
   upload <- readLines(file.path(root, "overleaf/article_files.txt"), warn = FALSE)
   required <- c("tables/independent_train500_eval300_mcmc_figures_v1.tex",
     "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",

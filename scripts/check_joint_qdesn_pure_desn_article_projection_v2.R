@@ -385,6 +385,23 @@ if (!data_only) {
   protocol_table <- if (editorial_active)
     "tables/qdesn_multiquantile_design_display.tex" else
     paste0("tables/", active_prefix, "protocol.tex")
+  # Keep scientific, registered-asset and actual live-routing failures precise
+  # before invoking the stronger reader receipt. Data-only copies never enter
+  # this branch and need no prose, Git ancestry or compatibility dependencies.
+  expect(grepl(forecast_wrapper, main, fixed = TRUE) &&
+           grepl(fit_wrapper, supplement, fixed = TRUE) &&
+           !grepl(fit_wrapper, main, fixed = TRUE),
+         "Forecast figure remains in main and fitting figure in supplement")
+  live_allowlist <- trimws(readLines(path("overleaf/article_files.txt"), warn = FALSE))
+  live_allowlist <- live_allowlist[nzchar(live_allowlist) & !startsWith(live_allowlist, "#")]
+  expect(!any(grepl("joint_qdesn_pure_desn_v1_|joint_qdesn_pro_review_", live_allowlist)),
+         "Historical JOINT article outputs are excluded from the active Overleaf projection")
+  source(path("scripts/reader_online_appendix_legacy_adapter_20261106.R"))
+  reader_appendix <- app_reader_appendix_adapter(repo_root)
+  read_text <- reader_appendix$read
+  # Dated prose assertions below use historical fixtures only after actual
+  # current semantics, routing, ancestry and protected inputs all pass.
+  main <- read_text("main.tex"); supplement <- read_text("qdesn-supplement.tex")
   mcmc_policy <- policy[all_scores$inference_method == "mcmc", ]
   narrower_count <- sum(mcmc_policy$mean_state_to_path_width_ratio < 1)
   rounded_width_ratio <- sprintf("%.4f", median(mcmc_policy$mean_state_to_path_width_ratio))

@@ -64,6 +64,10 @@ supplement_text <- paste(
   readLines(app_path("qdesn-supplement.tex"), warn = FALSE),
   collapse = "\n"
 )
+source(app_path("scripts/reader_online_appendix_legacy_adapter_20261106.R"))
+reader_appendix <- app_reader_appendix_adapter(app_repo_root())
+main_text <- reader_appendix$read("main.tex")
+supplement_text <- reader_appendix$read("qdesn-supplement.tex")
 # The current compressed article introduces this reference in prose and puts
 # its numbered derivation in the supplement. Check that semantic placement,
 # rather than requiring a removed main-text heading/equation label.

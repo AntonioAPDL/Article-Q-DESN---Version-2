@@ -68,6 +68,14 @@ app_ind_editorial_refresh <- function(root, refresh = FALSE) {
   root <- normalizePath(root, mustWork = TRUE)
   live_receipt <- jsonlite::read_json(file.path(root, app_ind_editorial_receipt_path),
     simplifyVector = FALSE)
+  if (!is.null(live_receipt$reader_appendix_20261106)) {
+    app_ind_editorial_require(!isTRUE(refresh),
+      "reader/appendix writes require the separately authorized 20261106 successor")
+    source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+    adapter <- app_reader_appendix_adapter(root)
+    app_ind_editorial_require(adapter$active, "validated reader/appendix successor required")
+    return(invisible(live_receipt))
+  }
   if (!is.null(live_receipt$general_editorial_source_refresh)) {
     app_ind_editorial_require(!isTRUE(refresh),
       "general editorial writes require scripts/refresh_article_clarity_editorial_receipts_20261104.py")

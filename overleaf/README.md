@@ -4,7 +4,8 @@ This project is an article-only, one-way projection of the complete research
 repository. The sole manuscript authority is `origin/main` in
 `AntonioAPDL/Article-Q-DESN---Version-2`. This snapshot intentionally contains
 only the source files, generated tables, and figures needed to compile
-`main.tex` and `qdesn-supplement.tex`.
+`main.tex` and the Online Appendix, whose source remains
+`qdesn-supplement.tex`.
 
 Use the Overleaf browser for compilation and review only. Do not use
 Overleaf's **Sync with GitHub** feature or any GitHub extension, do not create
@@ -34,4 +35,4 @@ pdflatex -interaction=nonstopmode -halt-on-error main.tex
 pdflatex -interaction=nonstopmode -halt-on-error main.tex
 ```
 
-Use the same sequence with `qdesn-supplement` for the supplement.
+Use the same sequence with `qdesn-supplement` for the Online Appendix.

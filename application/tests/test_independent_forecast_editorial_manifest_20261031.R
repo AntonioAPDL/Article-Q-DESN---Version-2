@@ -11,11 +11,24 @@ local({
     shQuote(paste0(app_ind_editorial_baseline, ":", app_ind_editorial_receipt_path))), stdout = TRUE)
   baseline <- jsonlite::fromJSON(paste(original_text, collapse = "\n"), simplifyVector = FALSE)
   actual_sha <- function(path) unname(tools::sha256sum(file.path(root, path))[[1L]])
+  source(file.path(root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
+  reader_appendix <- app_reader_appendix_adapter(root)
+  historical_editorial_paths <- c("main.tex", "qdesn-supplement.tex", "refs.bib",
+    "scripts/build_independent_forecast_300_500_v1.R",
+    "tables/independent_train500_eval300_mcmc_figures_v1.tex",
+    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex")
   # This pure historical planner still accepts only the original allowlist.
   # Supply that frozen digest in its generated test; the actual production
   # adapter below independently checks the real corrected GloFAS expansion.
-  sha <- function(path) if (identical(path, "overleaf/article_files.txt"))
-    baseline$sources[[path]] else actual_sha(path)
+  sha <- function(path) {
+    if (identical(path, "overleaf/article_files.txt")) return(baseline$sources[[path]])
+    if (reader_appendix$active && path %in% historical_editorial_paths) {
+      original <- c(baseline$sources, baseline$outputs)[[path]]
+      if (!is.null(original)) return(original)
+    }
+    actual_sha(path)
+  }
   script_sha <- sha(app_ind_editorial_refresh_path)
   good <- app_ind_editorial_refresh_plan(baseline, baseline, sha, script_sha)
   stopifnot(identical(good$outputs, baseline$outputs),

@@ -365,6 +365,7 @@ stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tes
 # Generated general-editorial scope, presentation and negative text fixtures;
 # no scientific fitting, retained-data deserialization or publication.
 stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_article_clarity_editorial_receipts_20261104.py"))) == 0L)
+stopifnot(system2("/usr/bin/python3.11", c("-I", "-B", app_path("application/tests/test_reader_online_appendix_receipts_20261106.py"))) == 0L)
 run_standalone_glofas_test("application/tests/test_mq_typed_workflow_v2.R")
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_forecast_transition_typed_v2.py")) == 0L)
 stopifnot(system2("/usr/bin/python3.11", app_path("application/tests/test_mq_typed_workflow_v2_sources.py")) == 0L)

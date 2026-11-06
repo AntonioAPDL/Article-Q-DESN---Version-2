@@ -1,7 +1,7 @@
 Anonymous reviewer proofs
 
-manuscript.pdf and supplement.pdf contain the same body and evidence as
-the identified manuscripts. The author block, acknowledgments and author-owned
+manuscript.pdf and supplement.pdf (the Online Appendix) contain the same body
+and evidence as the identified manuscripts. The author block, acknowledgments and author-owned
 repository link are omitted. Neutral literature citations remain.
 
 This package contains PDFs only. It is not an anonymous LaTeX source archive,

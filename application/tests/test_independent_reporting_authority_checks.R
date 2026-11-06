@@ -33,6 +33,22 @@ local({
   reject(app_ind_current_routing(root, stale, supplement))
   reject(app_ind_current_routing(root, paste(main,
     "\\input{tables/independent_train500_eval300_mcmc_mae_figure_v1.tex}"), supplement))
+  selected <- unique(c(app_ind_effective_tex(root, "main.tex"),
+    app_ind_effective_tex(root, "qdesn-supplement.tex")))
+  app_ind_current_closure(root, selected)
+  for (required in c("tables/qdesn_single_quantile_mcmc_fit_figure_display.tex",
+    "tables/independent_train500_eval300_mcmc_mae_figure_v1.tex",
+    "tables/independent_train500_eval500_mcmc_figures_v1.tex",
+    "tables/independent_forecast_calibration_figure_v1.tex")) {
+    stopifnot(required %in% selected)
+    reject(app_ind_current_closure(root, setdiff(selected, required)))
+  }
+  for (retired in c("tables/qdesn_pro_review_mcmc_forecast_figures.tex",
+    "tables/qdesn_validation_500obs_v14_mcmc_forecast_metric_interval_figures.tex",
+    "tables/qdesn_validation_mcmc_five_chain_sensitivity.tex",
+    "tables/qdesn_validation_500obs_v14_paired_metric_interval_tables.tex")) {
+    reject(app_ind_current_closure(root, c(selected, retired)))
+  }
   app_ind_check_current_reporting(root)
   cat(sprintf("INDEPENDENT_REPORTING_AUTHORITY_CHECKS_PASS expected_mutation_rejections=%d scientific_runs=0\n", rejected))
 })

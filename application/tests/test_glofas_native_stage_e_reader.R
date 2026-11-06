@@ -70,6 +70,29 @@ local({
   reject(gnser_scope(bad), "eight-hour")
   bad <- s; bad$acceptance_budget$sha256 <- strrep("f", 64L)
   reject(gnser_scope(bad), "frozen tracked source pin")
+  generated <- tempfile("stage_e_post_hash_")
+  writeBin(charToRaw("generated Stage E lifecycle fixture"), generated)
+  generated_pin <- list(path = normalizePath(generated),
+    size_bytes = unname(file.info(generated)$size),
+    sha256 = unname(tools::sha256sum(generated)))
+  opened <- gnser_append_attempt(list(), logical(), generated_pin,
+    "generated_lifecycle_fixture")
+  ok(length(opened$attempts) == 1L &&
+    identical(opened$post_attempted, FALSE) && opened$index == 1L)
+  opened$attempts[[1L]]$status <- "DESERIALIZED"
+  closed <- gnser_post_hash_attempts(opened$attempts,
+    opened$post_attempted)
+  ok(identical(closed$post_attempted, TRUE) &&
+    identical(closed$attempts[[1L]]$post_hash_status, "PASS") &&
+    identical(closed$attempts[[1L]]$post_read_sha256,
+      generated_pin$sha256))
+  repeated <- gnser_post_hash_attempts(closed$attempts,
+    closed$post_attempted)
+  ok(identical(repeated, closed))
+  malformed <- opened$post_attempted[-1L]
+  reject(gnser_post_hash_attempts(opened$attempts, malformed),
+    "consistent Stage E post-read ledger")
+  unlink(generated)
   ok(length(gnser_sources()) == length(unique(gnser_sources())) &&
     all(file.exists(gnser_sources())))
   cat(sprintf("GLOFAS_NATIVE_STAGE_E_READER_GENERATED_PASS checks=%d authentic_reads=0 model_runs=0\n", n))

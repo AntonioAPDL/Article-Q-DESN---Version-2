@@ -139,19 +139,20 @@ ggpc_pdf <- function(evidence, path) {
   text(.05, .13, paste("Execution receipt", ggpc_hash(file.path(evidence$root,
     "GLOBAL_PATH_RECEIPT.json"))), adj = c(0, .5), cex = .75, col = "#666666")
 
-  par(mar = c(7, 4.5, 3, 1)); x <- evidence$reference
-  labels <- paste(ggpc_contract_label(x$contract), x$method, sep = "\n")
+  par(mar = c(4.5, 15, 3, 1)); x <- evidence$reference
+  labels <- paste(ggpc_contract_label(x$contract), x$method, sep = " | ")
   reference_colors <- rep(palette, length.out = nrow(x))
-  barplot(x$ess_ratio, names.arg = labels, las = 2, col = reference_colors,
-    ylab = "ESS / frozen minimum", main = "Reference quality: effective sample size")
-  abline(h = 1, lty = 2, lwd = 2, col = "#333333")
-  legend("topright", legend = unique(x$classification), bty = "n", cex = .8)
+  barplot(x$ess_ratio, names.arg = labels, horiz = TRUE, las = 1,
+    cex.names = .62, col = reference_colors, xlab = "ESS / frozen minimum",
+    main = "Reference quality: effective sample size")
+  abline(v = 1, lty = 2, lwd = 2, col = "#333333")
 
-  barplot(x$maximum_weight_ratio, names.arg = labels, las = 2,
-    col = reference_colors, ylab = "max weight / frozen maximum",
+  barplot(x$maximum_weight_ratio, names.arg = labels, horiz = TRUE, las = 1,
+    cex.names = .62, col = reference_colors,
+    xlab = "max weight / frozen maximum",
     main = "Reference quality: maximum normalized weight")
-  abline(h = 1, lty = 2, lwd = 2, col = "#333333")
-  abline(h = 1.1, lty = 3, col = "#777777")
+  abline(v = 1, lty = 2, lwd = 2, col = "#333333")
+  abline(v = 1.1, lty = 3, col = "#777777")
 
   par(mar = c(4.5, 4.5, 3, 1)); reporting <- evidence$reporting
   operators <- unique(reporting$reporting_operator)
@@ -191,8 +192,10 @@ ggpc_pdf <- function(evidence, path) {
       lines(stage$stage, stage$beta, type = "b", pch = 16,
         col = palette[i], lwd = 2)
     }
-    legend("bottomright", legend = ggpc_contract_label(sub("^stages_|__tempered.csv$",
-      "", basename(stage_files))), col = palette, lwd = 2, pch = 16,
+    stage_labels <- sub("^stages_", "", basename(stage_files))
+    stage_labels <- sub("__tempered\\.csv$", "", stage_labels)
+    legend("bottomright", legend = ggpc_contract_label(stage_labels),
+      col = palette, lwd = 2, pch = 16,
       bty = "n", cex = .72)
   }
 }

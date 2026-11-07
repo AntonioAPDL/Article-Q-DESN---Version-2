@@ -118,6 +118,10 @@ local({
     names(output)) && all(vapply(output, is.raw, logical(1L))))
   ok(length(ggrr_sources()) == length(unique(ggrr_sources())) &&
     all(file.exists(ggrr_sources())))
+  launcher <- readLines("scripts/launch_glofas_global_path_native.sh", warn = FALSE)
+  ok(any(grepl("--kill-after=1s", launcher, fixed = TRUE)) &&
+    any(grepl("--fsize=", launcher, fixed = TRUE)) &&
+    any(grepl("OMP_NUM_THREADS=1", launcher, fixed = TRUE)))
   cat(sprintf(paste0("GLOFAS_GLOBAL_PATH_NATIVE_READER_GENERATED_PASS checks=%d ",
     "authentic_reads=0 model_runs=0\n"), checks))
 })

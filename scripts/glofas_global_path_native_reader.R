@@ -9,6 +9,7 @@ source("scripts/diagnostics/glofas_native_factorial_adapter.R")
 
 ggrr_sources <- function() unique(c(gnser_sources(),
   "scripts/glofas_global_path_native_reader.R",
+  "scripts/launch_glofas_global_path_native.sh",
   "scripts/diagnostics/glofas_global_path_reference.R",
   "scripts/diagnostics/glofas_forecast_factorial_diagnostic.R",
   "scripts/diagnostics/glofas_native_factorial_adapter.R",

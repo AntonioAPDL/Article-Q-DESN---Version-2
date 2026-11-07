@@ -6,7 +6,7 @@ local({
     "scripts/diagnostics/glofas_global_path_native_controls.json",
     simplifyVector = FALSE)
   summary <- data.frame(contract = c("a", "b", "c"),
-    method = c("importance", "tempering", "tempering"),
+    method = c("importance", "tempered", "tempered"),
     status = c("REFERENCE_GATE_PASS", "REFERENCE_GATE_FAIL", "REFERENCE_GATE_FAIL"),
     complete = TRUE, particles = c(2048, 256, 256),
     evaluations = c(2048, 1280, 1280),

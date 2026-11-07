@@ -16,7 +16,9 @@ ggpc_classify <- function(summary, controls) {
   rows$maximum_weight_allowed <- NA_real_
   rows$classification <- NA_character_
   for (i in seq_len(nrow(rows))) {
-    rule <- controls$execution[[rows$method[i]]]
+    control_name <- if (identical(rows$method[i], "tempered")) "tempering" else
+      rows$method[i]
+    rule <- controls$execution[[control_name]]
     if (is.null(rule)) ggpc_stop("reference method has no frozen control")
     rows$minimum_ess[i] <- rule$min_ess_fraction * rows$particles[i]
     rows$maximum_weight_allowed[i] <- rule$max_weight_fraction

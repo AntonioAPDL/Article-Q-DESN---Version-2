@@ -1,0 +1,39 @@
+{
+  "schema_version": "glofas_global_path_tail_controls_v1",
+  "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
+  "declared_prior_sha256": "d7549e8287c6bf37ee1dafbdc70b0fcc5921307484e9c9658a8140a1926ed65b",
+  "tasks": {
+    "gft-al-p005": {
+      "probability": 0.05,
+      "fit_size_bytes": 138934249,
+      "fit_sha256": "74c56d0ac8a3aae28202438a6d732e333658185de4ba598a8e6f78c061b5eccf",
+      "config_size_bytes": 3798,
+      "config_sha256": "81ec20c1b010996297f1ecde3b5323f7ccae9d54c5b767c793f4433b60fb6509"
+    },
+    "gft-al-p095": {
+      "probability": 0.95,
+      "fit_size_bytes": 139362323,
+      "fit_sha256": "f36af23fe23aeadbc690eb927b8546c7f0240f66a0e3fdae776ca83a34f35d6b",
+      "config_size_bytes": 3798,
+      "config_sha256": "6b30294a257ccb1afdda7b1fdba22dfa0d678b248c35306e86c13173f7e693c2"
+    }
+  },
+  "measurement": {
+    "path_rules": [
+      "retained_mean",
+      "retained_mean_minus_quarter_sd",
+      "retained_mean_plus_quarter_sd"
+    ],
+    "sd_multiplier": 0.25,
+    "maximum_target_evaluations": 12,
+    "maximum_wall_seconds": 7200
+  },
+  "execution": {
+    "authorized": false,
+    "reason": "blocked until both source-bound tail measurements complete and prospective budgets are frozen"
+  },
+  "truth_access": "forbidden",
+  "model_fits": 0,
+  "parameter_updates": 0,
+  "publication_authorized": false
+}

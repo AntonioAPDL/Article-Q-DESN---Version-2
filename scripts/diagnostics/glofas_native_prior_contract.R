@@ -18,6 +18,14 @@ gnpc_scalar <- function(x, positive = FALSE) is.numeric(x) && length(x) == 1L &&
   is.finite(x) && (!positive || x > 0)
 gnpc_or <- function(x, default) if (is.null(x)) default else x
 
+gnpc_task_probability <- function(task_id) {
+  values <- c(`gft-al-p005` = .05, `gft-al-p050` = .50,
+    `gft-al-p095` = .95)
+  gnpc_require(is.character(task_id) && length(task_id) == 1L &&
+    task_id %in% names(values), "task must be an explicitly admitted AL level")
+  unname(values[[task_id]])
+}
+
 gnpc_block_prior <- function(raw, inherited = list()) {
   args <- modifyList(inherited, raw %||% list())
   pick <- function(name, default) {
@@ -98,6 +106,7 @@ gnpc_extract_config <- function(config) {
   list(
     schema_version = "glofas_native_prior_export_v1",
     task_id = config$task_id,
+    probability = gnpc_task_probability(config$task_id),
     posterior_target_sha256 = config$posterior_target_sha256 %||% NULL,
     declared_prior_sha256 = config$prior_sha256 %||% NULL,
     raw_protected_tuple = raw,
@@ -122,8 +131,11 @@ gnpc_validate_purpose <- function(s) {
     "read_budget", "output_root", "allow_config_read", "allow_design_read",
     "allow_fit_read", "allow_model_run", "allow_truth_read", "allow_publication")
   q(is.list(s) && setequal(names(s), fields) && !anyDuplicated(names(s)) &&
-    identical(s$schema_version, "glofas_native_prior_config_read_purpose_v1") &&
-    identical(s$purpose, "ONE_MEDIAN_AL_CONFIG_PRIOR_EXPORT_NO_MODEL_RUN") &&
+    ((identical(s$schema_version, "glofas_native_prior_config_read_purpose_v1") &&
+        identical(s$purpose, "ONE_MEDIAN_AL_CONFIG_PRIOR_EXPORT_NO_MODEL_RUN")) ||
+      (identical(s$schema_version, "glofas_native_prior_config_read_purpose_v2") &&
+        identical(s$purpose,
+          "ONE_ADMITTED_AL_CONFIG_PRIOR_EXPORT_NO_MODEL_RUN"))) &&
     gnpc_hex(s$nonce, 64L) && gnpc_hex(s$source_commit, 40L) &&
     gnpc_hex(s$source_tree, 40L), "exact config-only purpose required")
   q(isTRUE(s$allow_config_read) && all(vapply(s[c("allow_design_read", "allow_fit_read",
@@ -135,9 +147,18 @@ gnpc_validate_purpose <- function(s) {
     gnpc_scalar(pin$size_bytes, TRUE) && pin$size_bytes <= 1024^2 &&
     gnpc_hex(pin$sha256, 64L), "bounded role-bound config pin required")
   e <- s$expected
-  q(is.list(e) && setequal(names(e), c("task_id", "posterior_target_sha256")) &&
-    identical(e$task_id, "gft-al-p050") && gnpc_hex(e$posterior_target_sha256, 64L),
-    "exact median task and target identities required; the hash-pinned config exports its own prior identity")
+  expected_fields <- if (identical(s$schema_version,
+      "glofas_native_prior_config_read_purpose_v1"))
+    c("task_id", "posterior_target_sha256") else
+    c("task_id", "probability", "posterior_target_sha256")
+  q(is.list(e) && setequal(names(e), expected_fields) &&
+    e$task_id %in% c("gft-al-p005", "gft-al-p050", "gft-al-p095") &&
+    gnpc_hex(e$posterior_target_sha256, 64L) &&
+    (identical(s$schema_version, "glofas_native_prior_config_read_purpose_v2") ||
+      identical(e$task_id, "gft-al-p050")) &&
+    (is.null(e$probability) || identical(as.numeric(e$probability),
+      gnpc_task_probability(e$task_id))),
+    "exact admitted AL task, probability, and target identities required")
   b <- s$read_budget
   q(is.list(b) && setequal(names(b), c("max_RDS_deserializations",
     "max_deserialization_bytes", "max_hash_bytes", "max_output_bytes")) &&
@@ -208,6 +229,8 @@ gnpc_main <- function(args = commandArgs(TRUE)) {
   q(identical(gnpc_hash_file(pin$path), pin$sha256), "config changed after read")
   export <- gnpc_extract_config(config)
   q(identical(export$task_id, s$expected$task_id) &&
+    (is.null(s$expected$probability) || identical(export$probability,
+      as.numeric(s$expected$probability))) &&
     identical(export$posterior_target_sha256, s$expected$posterior_target_sha256) &&
     gnpc_hex(export$declared_prior_sha256, 64L),
     "config task, target, or declared prior identity differs from purpose")

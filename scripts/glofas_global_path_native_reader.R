@@ -182,9 +182,12 @@ ggrr_source <- function(s) {
   invisible(root)
 }
 
-ggrr_build <- function(engine, design, object, prior_export, budget) {
+ggrr_build <- function(engine, design, object, prior_export, budget,
+    task_id = "gft-al-p050", probability = gnse_task_probability(task_id)) {
   core <- object$fit
-  spec <- gnse_spec(design, prior_export, budget)
+  spec <- if (identical(task_id, "gft-al-p050"))
+    gnse_spec(design, prior_export, budget) else
+    gnse_spec_task(design, prior_export, budget, task_id, probability)
   initializer <- gnse_initializer(core, spec, design, budget)
   context <- gnr_context(design, engine)
   known <- if (is.null(design$discrepancy_baseline_future)) rep(0, 28L) else

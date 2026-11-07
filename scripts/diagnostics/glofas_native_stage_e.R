@@ -84,9 +84,20 @@ gnse_validate_budget <- function(x) {
   invisible(TRUE)
 }
 
-gnse_spec <- function(design, prior_export, budget) {
+gnse_task_probability <- function(task_id) {
+  values <- c(`gft-al-p005` = .05, `gft-al-p050` = .50,
+    `gft-al-p095` = .95)
+  gnse_require(is.character(task_id) && length(task_id) == 1L &&
+    task_id %in% names(values), "task must be an explicitly admitted AL level")
+  unname(values[[task_id]])
+}
+
+gnse_spec_task <- function(design, prior_export, budget, task_id,
+    probability = gnse_task_probability(task_id)) {
   q <- gnse_require
   gnse_validate_budget(budget)
+  q(identical(as.numeric(probability), gnse_task_probability(task_id)),
+    "task and probability differ")
   q(is.list(design) && is.matrix(design$H_fixed) &&
     ncol(design$H_fixed) == budget$application_geometry$coefficient_count &&
     identical(as.integer(design$beta_index), seq_len(1501L)) &&
@@ -95,7 +106,8 @@ gnse_spec <- function(design, prior_export, budget) {
     "exact two-block unit-factor historical design required")
   q(is.list(prior_export) && identical(prior_export$schema_version,
     "glofas_native_prior_export_v1") &&
-    identical(prior_export$task_id, budget$task_id) &&
+    identical(prior_export$task_id, task_id) &&
+    identical(as.numeric(prior_export$probability), as.numeric(probability)) &&
     identical(prior_export$posterior_target_sha256,
       budget$posterior_target_sha256) &&
     identical(prior_export$declared_prior_sha256,
@@ -111,12 +123,17 @@ gnse_spec <- function(design, prior_export, budget) {
   effective <- prior_export$effective_prior
   spec <- gcat_spec(ncol(design$H_fixed),
     list(beta = block(design$beta_index, effective$beta),
-      alpha = block(design$alpha_index, effective$alpha)), .5,
+      alpha = block(design$alpha_index, effective$alpha)), probability,
     list(Y = setNames(as.numeric(effective$source_scale$Y), c("shape", "rate")),
       G = setNames(as.numeric(effective$source_scale$G), c("shape", "rate"))))
   q(spec$dimension == budget$application_geometry$native_coordinate_count,
     "native coordinate count differs")
   spec
+}
+
+gnse_spec <- function(design, prior_export, budget) {
+  if (is.null(prior_export$probability)) prior_export$probability <- .5
+  gnse_spec_task(design, prior_export, budget, "gft-al-p050", .5)
 }
 
 gnse_ig_log_moments_from_inverse_mean <- function(shape, inverse_mean) {

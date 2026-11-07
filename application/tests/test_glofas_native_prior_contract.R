@@ -13,6 +13,7 @@ local({
       beta_ridge = list(precision = 3), prior_sigma = list(a = 2, b = 1)))
   out <- gnpc_extract_config(cfg)
   ok(out$schema_version == "glofas_native_prior_export_v1")
+  ok(out$probability == .5)
   ok(out$effective_prior$beta$tau0 == 5.2043087e-5)
   ok(out$effective_prior$alpha$tau0 == .0001159)
   ok(out$effective_prior$alpha$slab$a_zeta == 2 &&
@@ -49,5 +50,33 @@ local({
   reject(gnpc_extract_config(bad))
   raw <- out$raw_protected_tuple; raw$beta_rhs$slab_s2 <- 11
   ok(!identical(gnpc_hash_object(raw), out$raw_protected_tuple_sha256))
+  low <- cfg; low$task_id <- "gft-al-p005"
+  high <- cfg; high$task_id <- "gft-al-p095"
+  ok(gnpc_extract_config(low)$probability == .05)
+  ok(gnpc_extract_config(high)$probability == .95)
+  bad <- cfg; bad$task_id <- "gft-al-p020"
+  reject(gnpc_extract_config(bad))
+  pin <- function(path, role = NULL) {
+    out <- list(path = path, size_bytes = 100, sha256 = strrep("a", 64L))
+    if (!is.null(role)) out$role <- role
+    out
+  }
+  purpose <- list(schema_version = "glofas_native_prior_config_read_purpose_v2",
+    purpose = "ONE_ADMITTED_AL_CONFIG_PRIOR_EXPORT_NO_MODEL_RUN",
+    nonce = strrep("b", 64L), expires_utc = "2100-01-01T00:00:00Z",
+    source_root = "/generated", source_commit = strrep("c", 40L),
+    source_tree = strrep("d", 40L), source_files = rep(list(pin("/source")), 3L),
+    config = pin("/config.rds", "transition_task_configuration"),
+    expected = list(task_id = "gft-al-p005", probability = .05,
+      posterior_target_sha256 = target),
+    read_budget = list(max_RDS_deserializations = 1L,
+      max_deserialization_bytes = 100, max_hash_bytes = 200,
+      max_output_bytes = 1024), output_root = "/generated/output",
+    allow_config_read = TRUE, allow_design_read = FALSE, allow_fit_read = FALSE,
+    allow_model_run = FALSE, allow_truth_read = FALSE,
+    allow_publication = FALSE)
+  ok(isTRUE(gnpc_validate_purpose(purpose)))
+  bad_purpose <- purpose; bad_purpose$expected$probability <- .95
+  reject(gnpc_validate_purpose(bad_purpose))
   cat(sprintf("GLOFAS_NATIVE_PRIOR_CONTRACT_PASS checks=%d original_reads=0 model_runs=0\n", n))
 })

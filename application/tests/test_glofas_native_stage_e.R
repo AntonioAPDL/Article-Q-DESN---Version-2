@@ -24,7 +24,7 @@ local({
     rhs_hierarchy = list(global_conditional_shape =
       "(r+1)/2 with intercept excluded", local_conditional_shape = 1))
   prior_export <- list(schema_version = "glofas_native_prior_export_v1",
-    task_id = budget$task_id,
+    task_id = budget$task_id, probability = .5,
     posterior_target_sha256 = budget$posterior_target_sha256,
     declared_prior_sha256 = budget$declared_prior_sha256,
     effective_prior_sha256 = budget$effective_prior_sha256,
@@ -36,6 +36,14 @@ local({
   design <- list(H_fixed = matrix(0, 4L, 2502L), beta_index = 1:1501,
     alpha_index = 1502:2502, weight_fixed = rep(1, 4L))
   spec <- gnse_spec(design, prior_export, budget)
+  low_prior <- prior_export
+  low_prior$task_id <- "gft-al-p005"
+  low_prior$probability <- .05
+  low_spec <- gnse_spec_task(design, low_prior, budget, "gft-al-p005", .05)
+  stopifnot(low_spec$probability == .05)
+  bad_probability <- try(gnse_spec_task(design, low_prior, budget,
+    "gft-al-p005", .95), silent = TRUE)
+  stopifnot(inherits(bad_probability, "try-error"))
   ok(spec$p == 2502L && spec$dimension == 7510L)
   roles <- gnse_role_indices(spec)
   ok(identical(names(roles), unlist(budget$historical_derivatives$roles)) &&

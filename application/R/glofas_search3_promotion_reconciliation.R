@@ -285,7 +285,7 @@ gpr_build <- function(repo_root, closeout_root, root_cause_root, driver_audit_ro
   archive <- file.path(stage, "packages/glofas_search3_coordinator_packet_20261107.tar.gz")
   dir.create(dirname(archive), recursive = TRUE, showWarnings = FALSE)
   old <- getwd(); setwd(stage); on.exit(setwd(old), add = TRUE)
-  status <- system2("tar", c("--sort=name", "--mtime=UTC 2026-11-07", "--owner=0", "--group=0",
+  status <- system2("tar", c("--sort=name", "--mtime=2026-11-07T00:00:00Z", "--owner=0", "--group=0",
     "--numeric-owner", "--use-compress-program=gzip -n", "-cf", shQuote(archive),
     "article_safe", "coordinator_candidate", "reports", "tables", "evidence"))
   setwd(old)

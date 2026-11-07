@@ -28,4 +28,11 @@ manifest <- data.frame(relative_path = "a.txt", size_bytes = file.info(file.path
   sha256 = gpr_sha(file.path(td, "a.txt")))
 write.csv(manifest, file.path(td, "manifest.csv"), row.names = FALSE)
 gpr_verify_manifest(td, file.path(td, "manifest.csv"))
+archive <- file.path(td, "test.tar.gz")
+old <- getwd(); setwd(td)
+status <- system2("tar", c("--sort=name", "--mtime=2026-11-07T00:00:00Z",
+  "--owner=0", "--group=0", "--numeric-owner",
+  "--use-compress-program=gzip -n", "-cf", shQuote(archive), "a.txt"))
+setwd(old)
+stopifnot(status == 0L, file.exists(archive), identical(utils::untar(archive, list = TRUE), "a.txt"))
 cat("GLOFAS_SEARCH3_PROMOTION_RECONCILIATION_TEST_PASS\n")

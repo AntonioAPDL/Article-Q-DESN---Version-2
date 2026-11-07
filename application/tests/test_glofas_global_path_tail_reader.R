@@ -14,12 +14,15 @@ local({
     simplifyVector = FALSE)
   ok(ggtr_task("gft-al-p005") == .05 && ggtr_task("gft-al-p095") == .95)
   reject(ggtr_task("gft-al-p050"), "two admitted")
-  ok(is.list(ggtr_controls(controls, "gft-al-p005", "measure")))
+  measurement_controls <- controls
+  measurement_controls$schema_version <- "glofas_global_path_tail_controls_v1"
+  measurement_controls$execution <- list(authorized = FALSE,
+    reason = "generated measurement-only test")
+  ok(is.list(ggtr_controls(measurement_controls, "gft-al-p005", "measure")))
   changed <- controls; changed$tasks$`gft-al-p005`$fit_sha256 <- strrep("a", 64L)
   reject(ggtr_controls(changed, "gft-al-p005", "measure"),
     "tail task identity changed")
-  reject(ggtr_controls(controls, "gft-al-p005", "execute"),
-    "source-bound measurement")
+  ok(is.list(ggtr_controls(controls, "gft-al-p005", "execute")))
   H <- 3L
   callback <- function(path) list(reference_location = path / 2,
     ensemble_location = path / 3)
@@ -28,7 +31,7 @@ local({
     "generated-tail-parameters", "generated-tail-features")
   built <- list(mean = rep(0, H), covariance = diag(rep(.2, H)),
     adapter = list(contracts = contracts, callback = callback))
-  measurement <- ggrr_measure(built, controls)
+  measurement <- ggrr_measure(built, measurement_controls)
   ok(nrow(measurement) == 12L && all(is.finite(measurement$total_log_density)))
   launcher <- readLines("scripts/launch_glofas_global_path_tail.sh", warn = FALSE)
   ok(any(grepl("--kill-after=1s", launcher, fixed = TRUE)) &&

@@ -66,10 +66,30 @@ ggtr_controls <- function(x, task_id, operation) {
       isTRUE(x$execution$authorized) && is.list(task$authentic_measurement) &&
       all(vapply(task$authentic_measurement[c("receipt_sha256", "summary_sha256",
         "target_measurement_sha256")], gsc_hash_string, logical(1L))) &&
+      grepl("^[a-f0-9]{40}$", task$authentic_measurement$source_commit) &&
       task$authentic_measurement$target_evaluations == 12L &&
-      is.list(task$execution),
+      task$authentic_measurement$maximum_target_seconds > 0 &&
+      is.list(task$execution) && isTRUE(task$execution$authorized),
       "tail execution requires a source-bound measurement and frozen budget")
-  } else q(identical(x$execution$authorized, FALSE),
+    e <- task$execution
+    q(identical(as.numeric(e$probabilities),
+        c(.05, .2, .35, .5, .65, .8, .95)) &&
+      e$proposal_covariance_inflation == 1 &&
+      e$importance$particles == 2048L &&
+      e$importance$max_evaluations == 2048L &&
+      e$tempering$particles == 256L &&
+      e$tempering$max_evaluations == 2304L &&
+      e$tempering$max_tempering_steps == 8L &&
+      (4 * (e$importance$max_evaluations + e$tempering$max_evaluations) *
+        task$authentic_measurement$maximum_target_seconds) < 12000,
+      "tail execution exceeds its measured four-hour evaluation envelope")
+    ggpr_validate_common(function(x) 0, numeric(28L), diag(28L),
+      c(e$importance, seed = 1L))
+    ggpr_validate_common(function(x) 0, numeric(28L), diag(28L),
+      c(e$tempering, seed = 1L), tempered = TRUE)
+  } else q(identical(x$schema_version,
+      "glofas_global_path_tail_controls_v1") &&
+    identical(x$execution$authorized, FALSE),
     "measurement source must not authorize execution")
   invisible(task)
 }

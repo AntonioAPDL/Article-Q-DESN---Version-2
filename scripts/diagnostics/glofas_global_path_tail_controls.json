@@ -1,5 +1,5 @@
 {
-  "schema_version": "glofas_global_path_tail_controls_v1",
+  "schema_version": "glofas_global_path_tail_controls_v2",
   "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
   "declared_prior_sha256": "d7549e8287c6bf37ee1dafbdc70b0fcc5921307484e9c9658a8140a1926ed65b",
   "tasks": {
@@ -8,14 +8,78 @@
       "fit_size_bytes": 138934249,
       "fit_sha256": "74c56d0ac8a3aae28202438a6d732e333658185de4ba598a8e6f78c061b5eccf",
       "config_size_bytes": 3798,
-      "config_sha256": "81ec20c1b010996297f1ecde3b5323f7ccae9d54c5b767c793f4433b60fb6509"
+      "config_sha256": "81ec20c1b010996297f1ecde3b5323f7ccae9d54c5b767c793f4433b60fb6509",
+      "authentic_measurement": {
+        "source_commit": "815926347935fa8d09567b729a549a4f38e2394a",
+        "receipt_sha256": "0090b296ac03aa7a0c3fd8a7784181d44edc9b8c9adf38a39f984300c162d854",
+        "summary_sha256": "6c57e6a50e35722f8f81e1130fdf51e37b431788fa0d33cc74137c3a5abe0b21",
+        "target_measurement_sha256": "86bf75bb93bf3ab38279785eb6bcc1122423b685ad7a929deff7b5040dfc93a2",
+        "target_evaluations": 12,
+        "maximum_target_seconds": 0.553
+      },
+      "execution": {
+        "authorized": true,
+        "probabilities": [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95],
+        "proposal_covariance_inflation": 1.0,
+        "importance": {
+          "particles": 2048,
+          "max_evaluations": 2048,
+          "max_wall_seconds": 2400,
+          "min_ess_fraction": 0.10,
+          "max_weight_fraction": 0.02
+        },
+        "tempering": {
+          "particles": 256,
+          "max_evaluations": 2304,
+          "max_wall_seconds": 1800,
+          "min_ess_fraction": 0.50,
+          "max_weight_fraction": 0.01,
+          "ess_target_fraction": 0.70,
+          "max_tempering_steps": 8,
+          "rejuvenation_steps": 1,
+          "random_walk_scale": 0.30,
+          "resample_final": false
+        }
+      }
     },
     "gft-al-p095": {
       "probability": 0.95,
       "fit_size_bytes": 139362323,
       "fit_sha256": "f36af23fe23aeadbc690eb927b8546c7f0240f66a0e3fdae776ca83a34f35d6b",
       "config_size_bytes": 3798,
-      "config_sha256": "6b30294a257ccb1afdda7b1fdba22dfa0d678b248c35306e86c13173f7e693c2"
+      "config_sha256": "6b30294a257ccb1afdda7b1fdba22dfa0d678b248c35306e86c13173f7e693c2",
+      "authentic_measurement": {
+        "source_commit": "815926347935fa8d09567b729a549a4f38e2394a",
+        "receipt_sha256": "379dbee31cb41aa868527d561239c382a629bb59510d132d09794bde3ab10664",
+        "summary_sha256": "a52e9a3e8b2009aa41d9cbbccca4f11eb03ad38059ea411a55a207f591f43b4d",
+        "target_measurement_sha256": "c250fc93c17a690bf988188acc2cf427b11c1090049c73e395077655d3b2a690",
+        "target_evaluations": 12,
+        "maximum_target_seconds": 0.550
+      },
+      "execution": {
+        "authorized": true,
+        "probabilities": [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95],
+        "proposal_covariance_inflation": 1.0,
+        "importance": {
+          "particles": 2048,
+          "max_evaluations": 2048,
+          "max_wall_seconds": 2400,
+          "min_ess_fraction": 0.10,
+          "max_weight_fraction": 0.02
+        },
+        "tempering": {
+          "particles": 256,
+          "max_evaluations": 2304,
+          "max_wall_seconds": 1800,
+          "min_ess_fraction": 0.50,
+          "max_weight_fraction": 0.01,
+          "ess_target_fraction": 0.70,
+          "max_tempering_steps": 8,
+          "rejuvenation_steps": 1,
+          "random_walk_scale": 0.30,
+          "resample_final": false
+        }
+      }
     }
   },
   "measurement": {
@@ -29,8 +93,8 @@
     "maximum_wall_seconds": 7200
   },
   "execution": {
-    "authorized": false,
-    "reason": "blocked until both source-bound tail measurements complete and prospective budgets are frozen"
+    "authorized": true,
+    "reason": "prospectively frozen from two source-bound truth-free twelve-evaluation tail measurements; diagnostic only"
   },
   "truth_access": "forbidden",
   "model_fits": 0,

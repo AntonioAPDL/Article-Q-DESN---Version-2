@@ -28,6 +28,9 @@ manifest <- data.frame(relative_path = "a.txt", size_bytes = file.info(file.path
   sha256 = gpr_sha(file.path(td, "a.txt")))
 write.csv(manifest, file.path(td, "manifest.csv"), row.names = FALSE)
 gpr_verify_manifest(td, file.path(td, "manifest.csv"))
+packet_row <- gpr_packet_source_row("toy", "a.txt", td, "sealed", "fixture")
+stopifnot(packet_row$path == "a.txt", packet_row$path_scope == "packet_relative",
+  packet_row$sha256 == gpr_sha(file.path(td, "a.txt")))
 archive <- file.path(td, "test.tar.gz")
 old <- getwd(); setwd(td)
 status <- system2("tar", c("--sort=name", "--mtime=2026-11-07T00:00:00Z",

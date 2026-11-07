@@ -103,6 +103,25 @@ gpr_source_row <- function(role, path, disposition, note) {
   data.frame(
     role = role,
     path = normalizePath(path, mustWork = TRUE),
+    path_scope = "external_absolute",
+    size_bytes = as.numeric(file.info(path)$size),
+    sha256 = gpr_sha(path),
+    disposition = disposition,
+    note = note,
+    stringsAsFactors = FALSE
+  )
+}
+
+gpr_packet_source_row <- function(role, packet_relative_path, stage, disposition, note) {
+  gpr_require(!grepl("^/", packet_relative_path) &&
+    !".." %in% strsplit(packet_relative_path, "/", fixed = TRUE)[[1L]],
+    "unsafe packet-relative source path")
+  path <- file.path(stage, packet_relative_path)
+  gpr_require(file.exists(path), paste0("packet source is missing: ", packet_relative_path))
+  data.frame(
+    role = role,
+    path = packet_relative_path,
+    path_scope = "packet_relative",
     size_bytes = as.numeric(file.info(path)$size),
     sha256 = gpr_sha(path),
     disposition = disposition,
@@ -182,10 +201,13 @@ gpr_build <- function(repo_root, closeout_root, root_cause_root, driver_audit_ro
     gpr_source_row("root_cause_decision", decision_path, "canonical_diagnostic", "global path reference reproduces crossings"),
     gpr_source_row("root_cause_pdf", root_pdf, "canonical_diagnostic", "truth-free bounded closeout"),
     gpr_source_row("coherent_driver_audit", driver_summary_path, "canonical_contract_evidence", "3 banks, 48 forecasts, 48 covariance fits, 28 Part 4 cores"),
-    gpr_source_row("isolated_projection_manifest", projection_manifest, "candidate_article_projection", "byte-identical Search III rebuild")
+    gpr_packet_source_row("isolated_projection_manifest",
+      file.path("article_safe", g3_path("tables", "publication_manifest", "csv")), stage,
+      "candidate_article_projection", "byte-identical Search III rebuild")
   ))
   for (i in seq_along(rebound)) source_seal <- rbind(source_seal,
-    gpr_source_row(sprintf("part%d_rebound_driver_bank", i), rebound_copy[[i]],
+    gpr_packet_source_row(sprintf("part%d_rebound_driver_bank", i),
+      file.path("authority_objects", basename(rebound_copy[[i]])), stage,
       "sealed_provenance_object", "source path rebound only after retained-fit SHA256 match"))
   gpr_write_csv(source_seal, file.path(stage, "manifests/source_authority_seal.csv"))
 
@@ -341,6 +363,16 @@ gpr_check <- function(root, closeout_root = NULL, repo_root = NULL) {
   gpr_require(identical(transition$final_status[transition$authority ==
     "November same-family AL/exAL transition"], "diagnostic_rejected_not_authority"),
     "November authority was not excluded")
+  source_seal <- gpr_read_csv(file.path(root, "manifests/source_authority_seal.csv"))
+  gpr_require(nrow(source_seal) == 10L && !anyDuplicated(source_seal$role) &&
+    setequal(source_seal$path_scope, c("external_absolute", "packet_relative")),
+    "source authority seal schema or cardinality changed")
+  sealed_paths <- ifelse(source_seal$path_scope == "packet_relative",
+    file.path(root, source_seal$path), source_seal$path)
+  gpr_require(all(file.exists(sealed_paths)) &&
+    all(as.numeric(file.info(sealed_paths)$size) == source_seal$size_bytes) &&
+    all(vapply(sealed_paths, gpr_sha, character(1L)) == source_seal$sha256),
+    "source authority seal does not resolve after packet publication")
   gpr_require(!any(grepl("glofas_same_family_20261103", manifest$relative_path[grepl("^article_safe/", manifest$relative_path)])),
     "rejected November asset leaked into article-safe packet")
   gpr_require(!any(grepl("[.](rds|rda|rdata)$", utils::untar(

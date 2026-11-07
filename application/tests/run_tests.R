@@ -250,6 +250,7 @@ source(app_path("application/tests/test_joint_qdesn_recursive_dgp_oracle.R"))
 source(app_path("application/tests/test_joint_qdesn_recursive_mean_score_packet.R"))
 source(app_path("application/tests/test_joint_qdesn_case_a_width_closure.R"))
 run_standalone_glofas_test("application/tests/test_glofas_search3_article_projection.R")
+run_standalone_glofas_test("application/tests/test_glofas_search3_promotion_reconciliation.R")
 
 # Bounded editorial checks, isolated from scientific fixture state.
 run_standalone_glofas_test("application/tests/test_pro_review_supplement_math.R")

@@ -721,3 +721,12 @@ AL and Joint exAL comparators, a Part 2 no-score boundary, and a descriptive
 seven-family issued-window comparison. Article integration may check and
 project this frozen evidence, but must not execute a screen, fit, continuation,
 forecast, or calibration worker.
+
+`449_build_glofas_search3_promotion_reconciliation.R` and
+`450_check_glofas_search3_promotion_reconciliation.R` supersede the rejected
+November same-family article packet without modifying the article. They
+authenticate the bounded global-path root-cause decision, rebuild the Search
+III projection in an isolated ignored tree, require byte identity with its
+reviewed assets, seal hash-rebound Normal-RHS driver banks, and create the
+coordinator replacement map and handoff. They never fit, forecast, score raw
+future truth, switch tracked aliases, or publish to Overleaf.

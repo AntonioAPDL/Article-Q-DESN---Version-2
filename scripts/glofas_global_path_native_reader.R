@@ -18,7 +18,7 @@ ggrr_sources <- function() unique(c(gnser_sources(),
 ggrr_controls <- function(x) {
   q <- gfr_require
   q(is.list(x) && identical(x$schema_version,
-      "glofas_global_path_native_controls_v1") &&
+      "glofas_global_path_native_controls_v2") &&
     identical(x$task_id, "gft-al-p050") &&
     identical(x$posterior_target_sha256,
       "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03") &&
@@ -31,11 +31,29 @@ ggrr_controls <- function(x) {
     m$sd_multiplier == .25 && m$maximum_target_evaluations == 12L &&
     m$maximum_wall_seconds == 7200L,
     "fixed three-path measurement controls required")
+  a <- x$authentic_measurement
+  q(is.list(a) && grepl("^[a-f0-9]{40}$", a$source_commit) &&
+    all(vapply(a[c("receipt_sha256", "summary_sha256",
+      "target_measurement_sha256")], gsc_hash_string, logical(1L))) &&
+    a$target_evaluations == 12L && a$maximum_target_seconds == .608,
+    "exact source-bound authentic measurement is required")
   e <- x$execution
   q(is.list(e) && is.logical(e$authorized) && length(e$authorized) == 1L &&
     is.character(e$reason) && length(e$reason) == 1L && nzchar(e$reason) &&
-    is.list(e$importance_template) && is.list(e$tempering_template),
-    "explicit execution admission and templates required")
+    identical(e$authorized, TRUE) && identical(as.numeric(e$probabilities),
+      c(.05, .2, .35, .5, .65, .8, .95)) &&
+    e$proposal_covariance_inflation == 1 && is.list(e$importance) &&
+    is.list(e$tempering), "explicit frozen execution admission required")
+  ggpr_validate_common(function(x) 0, numeric(28L), diag(28L),
+    c(e$importance, seed = 1L))
+  ggpr_validate_common(function(x) 0, numeric(28L), diag(28L),
+    c(e$tempering, seed = 1L), tempered = TRUE)
+  q(e$importance$particles == 2048L && e$importance$max_evaluations == 2048L &&
+    e$tempering$particles == 256L && e$tempering$max_evaluations == 2304L &&
+    e$tempering$max_tempering_steps == 8L &&
+    (4 * (e$importance$max_evaluations + e$tempering$max_evaluations) *
+      a$maximum_target_seconds) < 12000,
+    "execution evaluation budget exceeds the measured four-hour envelope")
   invisible(TRUE)
 }
 
@@ -66,6 +84,7 @@ ggrr_scope <- function(s) {
     "source_root", "source_commit", "source_tree", "source_files",
     "expected_identity", "collection", "input_manifest", "design",
     "median_model", "prior_receipt", "acceptance_budget", "controls",
+    "measurement_receipt",
     "read_budget", "limits", "output_root", "metadata_scratch_root",
     "metadata_serialization", "execution_controls", yes, no)
   q(is.list(s) && length(s) == length(fields) && setequal(names(s), fields) &&
@@ -84,14 +103,19 @@ ggrr_scope <- function(s) {
     "full source and accepted-producer identities required")
   for (pin in s[c("design", "median_model")]) gfr_pin_shape(pin, 8 * 1024^3)
   for (pin in s[c("collection", "input_manifest", "prior_receipt",
-    "acceptance_budget", "controls")]) gfr_pin_shape(pin, 4 * 1024^2)
+    "acceptance_budget", "controls", "measurement_receipt")])
+    gfr_pin_shape(pin, 4 * 1024^2)
   q(s$design$size_bytes == 4014834693 && identical(s$design$sha256,
       "193056d66ae9f004d909eab6161adcdc696b5243587f3bee74396def452381f3") &&
     s$median_model$size_bytes == 137820489 && identical(s$median_model$sha256,
       "f56b4b7792ab04bd431838c8ef94ff88dd859d16cd70cb68116eecf6fade5881") &&
     identical(s$input_manifest$sha256, gsc_identity()$input_manifest_sha256) &&
     identical(basename(s$controls$path),
-      "glofas_global_path_native_controls.json"),
+      "glofas_global_path_native_controls.json") &&
+    identical(basename(s$measurement_receipt$path),
+      "GLOBAL_PATH_RECEIPT.json") &&
+    identical(s$measurement_receipt$sha256,
+      "66f472e44e89c72adeac3358c0f1540e43b6cfcee122080dafef4a1fc7261e3b"),
     "exact frozen native inputs and controls required")
   paths <- vapply(s$source_files, function(pin) {
     gfr_pin_shape(pin, 2 * 1024^2); pin$path
@@ -307,6 +331,10 @@ ggrr_main <- function(args = commandArgs(TRUE)) {
   controls <- jsonlite::read_json(gsc_pin(s$controls, 4 * 1024^2),
     simplifyVector = FALSE)
   ggrr_controls(controls)
+  q(identical(s$measurement_receipt$sha256,
+      controls$authentic_measurement$receipt_sha256) &&
+    gst_same(s$execution_controls, controls$execution),
+    "purpose must use the measured and tracked execution controls exactly")
   if (identical(s$operation, "execute")) q(isTRUE(controls$execution$authorized),
     "tracked control freezes execution until measurement review")
   if (args[5L] == "--dry-run") {
@@ -327,12 +355,19 @@ ggrr_main <- function(args = commandArgs(TRUE)) {
     !length(list.files(tempdir(), all.files = TRUE, no.. = TRUE)) &&
     identical(Sys.getenv("TMPDIR"), scratch), "empty owned metadata scratch required")
   metadata <- c(s$source_files, s[c("collection", "input_manifest", "prior_receipt",
-    "acceptance_budget", "controls")])
+    "acceptance_budget", "controls", "measurement_receipt")])
   for (pin in metadata) gsc_pin(pin, 4 * 1024^2)
   collection <- jsonlite::read_json(s$collection$path, simplifyVector = FALSE)
   manifest <- read.csv(s$input_manifest$path, stringsAsFactors = FALSE)
   prior <- jsonlite::read_json(s$prior_receipt$path, simplifyVector = FALSE)
   budget <- jsonlite::read_json(s$acceptance_budget$path, simplifyVector = FALSE)
+  measured <- jsonlite::read_json(s$measurement_receipt$path, simplifyVector = FALSE)
+  q(identical(measured$schema_version, "glofas_global_path_native_receipt_v1") &&
+    identical(measured$status, "MEASUREMENT_COMPLETE_EXECUTION_NOT_AUTHORIZED") &&
+    identical(measured$source_commit, controls$authentic_measurement$source_commit) &&
+    measured$future_truth_read == FALSE && measured$model_fits == 0L &&
+    measured$parameter_updates == 0L && measured$scoring == FALSE,
+    "authentic truth-free measurement receipt is invalid")
   bound <- gnser_bind_metadata(s, collection, manifest, prior, budget)
   q(dir.create(out, mode = "0700"), "exclusive output creation failed")
   attempts <- list(); post_attempted <- logical(); finished <- FALSE
@@ -399,7 +434,7 @@ ggrr_main <- function(args = commandArgs(TRUE)) {
     publication_authorized = FALSE)
   gfr_write(gfr_json_raw(summary), file.path(out, "global_path_summary.json"),
     out, s$limits$output_bytes)
-  rm(design, object, collection, manifest, prior); gc(FALSE)
+  rm(design, object, collection, manifest, prior, measured); gc(FALSE)
   post_hash(); for (pin in metadata) gsc_pin(pin, 4 * 1024^2); ggrr_source(s)
   receipt <- list(schema_version = "glofas_global_path_native_receipt_v1",
     status = summary$status, purpose_sha256 = args[4L], operation = s$operation,

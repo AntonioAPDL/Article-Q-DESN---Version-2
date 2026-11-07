@@ -17,9 +17,9 @@ local({
     simplifyVector = FALSE)
   ok(isTRUE(ggrr_controls(controls)))
   bad_controls <- controls
-  bad_controls$execution$authorized <- TRUE
+  bad_controls$execution$authorized <- FALSE
   bad_controls$execution$reason <- ""
-  reject(ggrr_controls(bad_controls), "explicit execution admission")
+  reject(ggrr_controls(bad_controls), "explicit frozen execution admission")
 
   root <- "/generated/source"
   source_pins <- lapply(ggrr_sources(), function(path)
@@ -53,6 +53,8 @@ local({
       "f56b4b7792ab04bd431838c8ef94ff88dd859d16cd70cb68116eecf6fade5881"),
     prior_receipt = pin("/generated/NATIVE_PRIOR_CONFIG_READ_RECEIPT.json"),
     acceptance_budget = budget_pin, controls = controls_pin,
+    measurement_receipt = pin("/generated/GLOBAL_PATH_RECEIPT.json",
+      sha = controls$authentic_measurement$receipt_sha256),
     read_budget = list(max_payload_hash_bytes = 8305310364,
       max_deserialization_bytes = 4152655182,
       max_RDS_deserializations = 2L, max_generated_RDS_deserializations = 0L,
@@ -64,17 +66,7 @@ local({
     metadata_scratch_root = "/generated/scratch",
     metadata_serialization = list(max_files = 64L,
       max_file_bytes = 4 * 1024^2, max_total_bytes = 32 * 1024^2),
-    execution_controls = list(authorized = FALSE,
-      probabilities = c(.05, .2, .35, .5, .65, .8, .95),
-      proposal_covariance_inflation = 1,
-      importance = list(particles = 8L, max_evaluations = 8L,
-        max_wall_seconds = 60, min_ess_fraction = .1,
-        max_weight_fraction = .5),
-      tempering = list(particles = 8L, max_evaluations = 80L,
-        max_wall_seconds = 60, min_ess_fraction = .1,
-        max_weight_fraction = .5, ess_target_fraction = .7,
-        max_tempering_steps = 8L, rejuvenation_steps = 1L,
-        random_walk_scale = .3, resample_final = TRUE)))
+    execution_controls = controls$execution)
   for (field in yes) purpose[[field]] <- TRUE
   for (field in no) purpose[[field]] <- FALSE
   ok(isTRUE(ggrr_scope(purpose)))
@@ -101,8 +93,9 @@ local({
     adapter = list(contracts = contracts, callback = callback))
   measurement <- ggrr_measure(built, controls)
   ok(nrow(measurement) == 12L && all(is.finite(measurement$total_log_density)))
-  reject(ggrr_execute(built, purpose$execution_controls, 10L),
-    "do not authorize execution")
+  locked <- purpose$execution_controls
+  locked$authorized <- FALSE
+  reject(ggrr_execute(built, locked, 10L), "do not authorize execution")
 
   paths <- matrix(seq(-.3, .3, length.out = 12L), 4L, H)
   draw <- list(status = "REFERENCE_GATE_PASS",

@@ -52,11 +52,19 @@ external <- list(
   input_manifest = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_family_transition_launch_20261101/local_trackers/glofas_transition_launch_20261101/prepared_r2/manifests/input_manifest.csv",
   design = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_family_transition_launch_20261101/local_trackers/glofas_transition_launch_20261101/prepared_r2/objects/shared_truth_free_design.rds",
   median_model = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_family_transition_launch_20261101/local_trackers/glofas_transition_launch_20261101/prepared_r2/results/gft-al-p050/ae23d06dbcc3f87d31ed65e3173b186d8d1044a117a6e609/fit.rds",
-  prior_receipt = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_native_optimizer_continuation_20261106/local_trackers/glofas_native_optimizer_continuation_20261106/native_prior_export_stageA/NATIVE_PRIOR_CONFIG_READ_RECEIPT.json")
+  prior_receipt = "/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_native_optimizer_continuation_20261106/local_trackers/glofas_native_optimizer_continuation_20261106/native_prior_export_stageA/NATIVE_PRIOR_CONFIG_READ_RECEIPT.json",
+  measurement_receipt = file.path(root, "local_trackers",
+    "glofas_forecast_root_cause_reference_20261106",
+    "native_global_path_measure_20261107T033648Z_dedb6b87",
+    "GLOBAL_PATH_RECEIPT.json"))
 source_files <- lapply(ggrr_sources(), function(rel) pin(file.path(root, rel),
   2 * 1024^2))
 source_paths <- vapply(source_files, function(x) x$path, character(1L))
 source_pin <- function(rel) source_files[[match(file.path(root, rel), source_paths)]]
+tracked_controls <- jsonlite::read_json(file.path(root,
+  "scripts/diagnostics/glofas_global_path_native_controls.json"),
+  simplifyVector = FALSE)
+ggrr_controls(tracked_controls)
 
 output_parent <- file.path(root, "local_trackers",
   "glofas_forecast_root_cause_reference_20261106")
@@ -84,6 +92,7 @@ purpose <- list(schema_version = "glofas_global_path_native_purpose_v1",
     "scripts/diagnostics/glofas_native_stage_e_acceptance_budget.json"),
   controls = source_pin(
     "scripts/diagnostics/glofas_global_path_native_controls.json"),
+  measurement_receipt = pin(external$measurement_receipt, 4 * 1024^2),
   read_budget = list(max_payload_hash_bytes = 8305310364,
     max_deserialization_bytes = 4152655182,
     max_RDS_deserializations = 2L, max_generated_RDS_deserializations = 0L,
@@ -95,17 +104,7 @@ purpose <- list(schema_version = "glofas_global_path_native_purpose_v1",
   metadata_scratch_root = normalizePath(scratch),
   metadata_serialization = list(max_files = 64L,
     max_file_bytes = 4 * 1024^2, max_total_bytes = 32 * 1024^2),
-  execution_controls = list(authorized = FALSE,
-    probabilities = c(.05, .2, .35, .5, .65, .8, .95),
-    proposal_covariance_inflation = 1,
-    importance = list(particles = 2048L, max_evaluations = 2048L,
-      max_wall_seconds = 10800, min_ess_fraction = .10,
-      max_weight_fraction = .02),
-    tempering = list(particles = 1024L, max_evaluations = 132096L,
-      max_wall_seconds = 10800, min_ess_fraction = .50,
-      max_weight_fraction = .01, ess_target_fraction = .70,
-      max_tempering_steps = 64L, rejuvenation_steps = 2L,
-      random_walk_scale = .30, resample_final = TRUE)),
+  execution_controls = tracked_controls$execution,
   allow_original_reads = TRUE, allow_prior_metadata_read = TRUE,
   allow_fresh_source_feature_replay = TRUE,
   allow_fixed_parameter_diagnostic = TRUE, allow_metadata_serialization = TRUE,

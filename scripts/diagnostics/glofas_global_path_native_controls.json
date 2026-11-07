@@ -1,30 +1,48 @@
 {
-  "schema_version": "glofas_global_path_native_controls_v1",
+  "schema_version": "glofas_global_path_native_controls_v2",
   "task_id": "gft-al-p050",
   "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
   "measurement": {
-    "path_rules": ["retained_mean", "retained_mean_minus_quarter_sd", "retained_mean_plus_quarter_sd"],
+    "path_rules": [
+      "retained_mean",
+      "retained_mean_minus_quarter_sd",
+      "retained_mean_plus_quarter_sd"
+    ],
     "sd_multiplier": 0.25,
     "maximum_target_evaluations": 12,
     "maximum_wall_seconds": 7200
   },
+  "authentic_measurement": {
+    "source_commit": "dedb6b874a16d29346780d35767fcf1ad382bba9",
+    "receipt_sha256": "66f472e44e89c72adeac3358c0f1540e43b6cfcee122080dafef4a1fc7261e3b",
+    "summary_sha256": "84a1f351e51c7e6ab95b68a16d937ed8410031b7753dbe45c3574541d2f7d320",
+    "target_measurement_sha256": "94444ba9ddfc93437285849ac17ed083006c7509db279e37b47b12e2b6736fdf",
+    "target_evaluations": 12,
+    "maximum_target_seconds": 0.608
+  },
   "execution": {
-    "authorized": false,
-    "reason": "requires a source-bound authentic measurement receipt before particle and wall budgets are frozen",
-    "importance_template": {
+    "authorized": true,
+    "reason": "prospectively frozen from the source-bound truth-free 12-evaluation measurement; diagnostic only",
+    "probabilities": [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95],
+    "proposal_covariance_inflation": 1.0,
+    "importance": {
       "particles": 2048,
+      "max_evaluations": 2048,
+      "max_wall_seconds": 2400,
       "min_ess_fraction": 0.10,
       "max_weight_fraction": 0.02
     },
-    "tempering_template": {
-      "particles": 1024,
-      "ess_target_fraction": 0.70,
-      "max_tempering_steps": 64,
-      "rejuvenation_steps": 2,
-      "random_walk_scale": 0.30,
-      "resample_final": true,
+    "tempering": {
+      "particles": 256,
+      "max_evaluations": 2304,
+      "max_wall_seconds": 1800,
       "min_ess_fraction": 0.50,
-      "max_weight_fraction": 0.01
+      "max_weight_fraction": 0.01,
+      "ess_target_fraction": 0.70,
+      "max_tempering_steps": 8,
+      "rejuvenation_steps": 1,
+      "random_walk_scale": 0.30,
+      "resample_final": false
     }
   },
   "truth_access": "forbidden",

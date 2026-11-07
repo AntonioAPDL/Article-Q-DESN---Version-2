@@ -24,6 +24,29 @@ bank <- app_glofas_normal_driver_bank(
 )
 stopifnot(app_validate_glofas_normal_driver_bank(bank, "usgs", 5L, dates))
 
+relocated_source_fit <- tempfile(fileext = ".rds")
+file.copy(source_fit, relocated_source_fit)
+bank_with_missing_source <- bank
+bank_with_missing_source$contract$source_fit_path <- file.path(tempdir(), "missing_source_fit.rds")
+bank_with_missing_source$contract$contract_hash <- NULL
+bank_with_missing_source$contract$contract_hash <- app_latent_path_contract_hash(
+  bank_with_missing_source$contract, "glofas_normal_driver_bank_"
+)
+stopifnot(inherits(try(app_validate_glofas_normal_driver_bank(
+  bank_with_missing_source, "usgs", 5L, dates,
+  require_source_available = TRUE
+), silent = TRUE), "try-error"))
+rebound_bank <- app_rebind_glofas_normal_driver_bank_source(
+  bank_with_missing_source, relocated_source_fit
+)
+stopifnot(
+  app_validate_glofas_normal_driver_bank(
+    rebound_bank, "usgs", 5L, dates, require_source_available = TRUE
+  ),
+  identical(rebound_bank$contract$source_fit_path, normalizePath(relocated_source_fit)),
+  !identical(rebound_bank$contract$contract_hash, bank$contract$contract_hash)
+)
+
 context <- list(
   state0 = c(0.1, -0.1),
   reservoir = list(
@@ -118,5 +141,6 @@ stopifnot(max(abs(prior_only$cov - diag(c(0.5, 0.25)))) < 1.0e-10)
 stopifnot(isTRUE(prior_only$future_gaussian_prior_used))
 stopifnot(!isTRUE(prior_only$future_y_working_likelihood_used))
 unlink(source_fit)
+unlink(relocated_source_fit)
 
 message("GloFAS Normal-driver forecast tests passed.")

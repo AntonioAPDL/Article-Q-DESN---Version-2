@@ -97,7 +97,8 @@ app_validate_glofas_normal_driver_bank <- function(
   required_components,
   expected_paths = 500L,
   expected_dates = NULL,
-  verify_source_hash = TRUE
+  verify_source_hash = TRUE,
+  require_source_available = FALSE
 ) {
   if (!inherits(bank, "glofas_normal_driver_bank") ||
       !identical(bank$contract$schema_version, "glofas_normal_driver_bank_v1")) {
@@ -131,11 +132,47 @@ app_validate_glofas_normal_driver_bank <- function(
   }
   source_path <- as.character(bank$contract$source_fit_path %||% NA_character_)[[1L]]
   source_sha <- as.character(bank$contract$source_fit_sha256 %||% NA_character_)[[1L]]
-  if (isTRUE(verify_source_hash) && !is.na(source_path) && nzchar(source_path) && file.exists(source_path) &&
+  source_available <- !is.na(source_path) && nzchar(source_path) && file.exists(source_path)
+  if (isTRUE(require_source_available) && !source_available) {
+    stop("Normal driver source fit is unavailable at its bound path.", call. = FALSE)
+  }
+  if (isTRUE(verify_source_hash) && source_available &&
       !identical(app_sha256_file(source_path), source_sha)) {
     stop("Normal driver source fit changed after the bank was created.", call. = FALSE)
   }
   invisible(TRUE)
+}
+
+app_rebind_glofas_normal_driver_bank_source <- function(bank, source_fit_path) {
+  app_validate_glofas_normal_driver_bank(
+    bank,
+    required_components = names(bank$components),
+    expected_paths = bank$contract$n_paths,
+    expected_dates = as.Date(bank$contract$future_dates),
+    verify_source_hash = FALSE
+  )
+  source_fit_path <- normalizePath(source_fit_path, mustWork = TRUE)
+  observed_sha <- app_sha256_file(source_fit_path)
+  expected_sha <- as.character(bank$contract$source_fit_sha256 %||% NA_character_)[[1L]]
+  if (is.na(expected_sha) || !nzchar(expected_sha) || !identical(observed_sha, expected_sha)) {
+    stop("Replacement Normal driver source fit does not match the bound SHA256.", call. = FALSE)
+  }
+  contract <- bank$contract
+  contract$source_fit_path <- source_fit_path
+  contract$contract_hash <- NULL
+  contract$contract_hash <- app_latent_path_contract_hash(
+    contract, "glofas_normal_driver_bank_"
+  )
+  bank$contract <- contract
+  app_validate_glofas_normal_driver_bank(
+    bank,
+    required_components = names(bank$components),
+    expected_paths = bank$contract$n_paths,
+    expected_dates = as.Date(bank$contract$future_dates),
+    verify_source_hash = TRUE,
+    require_source_available = TRUE
+  )
+  bank
 }
 
 app_glofas_normal_driver_bank_from_part1 <- function(forecast, cutoff_date, seed, source_fit_path = NA_character_) {

@@ -1,0 +1,34 @@
+{
+  "schema_version": "glofas_global_path_native_controls_v1",
+  "task_id": "gft-al-p050",
+  "posterior_target_sha256": "72ef0550393106009b100636e1b11e8c21d4da31e77ed01a3dc2663439dbef03",
+  "measurement": {
+    "path_rules": ["retained_mean", "retained_mean_minus_quarter_sd", "retained_mean_plus_quarter_sd"],
+    "sd_multiplier": 0.25,
+    "maximum_target_evaluations": 12,
+    "maximum_wall_seconds": 7200
+  },
+  "execution": {
+    "authorized": false,
+    "reason": "requires a source-bound authentic measurement receipt before particle and wall budgets are frozen",
+    "importance_template": {
+      "particles": 2048,
+      "min_ess_fraction": 0.10,
+      "max_weight_fraction": 0.02
+    },
+    "tempering_template": {
+      "particles": 1024,
+      "ess_target_fraction": 0.70,
+      "max_tempering_steps": 64,
+      "rejuvenation_steps": 2,
+      "random_walk_scale": 0.30,
+      "resample_final": true,
+      "min_ess_fraction": 0.50,
+      "max_weight_fraction": 0.01
+    }
+  },
+  "truth_access": "forbidden",
+  "model_fits": 0,
+  "parameter_updates": 0,
+  "publication_authorized": false
+}

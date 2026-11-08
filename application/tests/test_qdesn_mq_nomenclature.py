@@ -295,8 +295,8 @@ class MQNomenclatureTest(unittest.TestCase):
     def test_late_stale_selected_alias_fails(self):
         path = self.root / "qdesn-supplement.tex"
         text = path.read_text()
-        needle = (r"\input{tables/glofas_same_family_20261103_display_aliases.tex}"
-                  if (self.root / "tables/glofas_same_family_current_authority.json").exists()
+        needle = (r"\input{tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex}"
+                  if (self.root / "tables/glofas_hybrid_current_authority.json").exists()
                   else r"\input{tables/qdesn_sections5_7_supp_display_overrides.tex}")
         self.assertIn(needle, text)
         path.write_text(text.replace(needle, needle + "\n" + r"\input{tables/glofas_review_figure_overrides.tex}", 1))

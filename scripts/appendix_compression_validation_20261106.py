@@ -67,11 +67,11 @@ REQUIRED_FIGURES = (
     "figures/independent_simulation/independent_forecast_calibration_v1.pdf",
     "figures/independent_simulation/qdesn_pro_review_mcmc_fit_rmse.pdf",
     "figures/joint_qdesn_simulation/joint_qdesn_pure_desn_v2_mq_fit_oracle_rmse.pdf",
-    "figures/glofas_application/glofas_same_family_20261103_all_families.pdf",
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_all_families.pdf",
 )
 REQUIRED_EXTRA_EVIDENCE = (
     "tables/qdesn_multiquantile_crossing_display.tex",
-    "tables/glofas_same_family_20261103_calibration.tex",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.tex",
 )
 STALE_DISPLAYS = (
     "tables/qdesn_multiquantile_design_display.tex", "tables/qdesn_multiquantile_score_display.tex",
@@ -561,7 +561,7 @@ ESSENTIAL_SCHEMA = "appendix-essential-v2"
 ESSENTIAL_BASELINE = "1b249255018715dd3bdc3c95389c80702d26c8c9"
 ESSENTIAL_FIELD = "appendix_essential_20261106"
 ESSENTIAL_CONTRACT = "tables/appendix_essential_20261106_contract.json"
-ESSENTIAL_CONTRACT_SHA = "b0bc20572044955b1fe1937ee3d3e13153c5c0dde35b0ac42c2a2f2874ede0c1"
+ESSENTIAL_CONTRACT_SHA = "1068e2f78647a0a3ceef260474d31e185fe7789ba5c49ba3dbf0d5434e9e9e63"
 ESSENTIAL_MANIFEST = "tables/appendix_essential_20261106_manifest.json"
 ESSENTIAL_LEGACY_SHA = "15ed5a6914a0a0cc288e2e8f053aa6e98d7346bbf8d1507b4ba9d7d95bc61495"
 ESSENTIAL_BUILDER = "scripts/build_appendix_essential_displays_20261106.py"
@@ -761,10 +761,11 @@ def essential_semantic_checks(main, supplement, bibliography):
         any([float(x) for x in w.split(",")] == [.025,.1,.2,.25,.2,.1,.025] for w in re.findall(r"(?:\d*\.\d+)(?:,\d*\.\d+){6}",cm)) and "0.90" in c)
     unit = equation(supplement, "eq:supp_glofas_unit_member_target")
     checks["glofas_unit_target_and_no_truth"] = (r"\prod_{h=1}^{28}\prod_{e=1}^{51}" in unit and
-        r"\prod_{h=1}^{28}f_{p_k}" in unit and "1/51" not in unit and r"\frac{1}{51}" not in unit and
+        r"R_T(\vecty_{F,k})" in unit and r"\prod_{h=1}^{28}f_{p_k}(y_{T+h,k}" not in unit and
+        "1/51" not in unit and r"\frac{1}{51}" not in unit and
         "future usgs" in plain(main + e).lower() and "scoring" in plain(main + e).lower())
     checks["glofas_source_families"] = all(x in em.replace("{,}","") for x in (
-        "12483", "13883", r"a_c+3n_c/2", r"\sigma_c^2", r"a_c+n_c/2")) and r"\frac{D_\gamma^2}{B_\gamma}" in em
+        "12455", "13883", r"a_c+3n_c/2", r"\sigma_c^2", r"a_c+n_c/2")) and r"\frac{D_\gamma^2}{B_\gamma}" in em
     checks["random_design_covariances"] = all(x in em for x in (r"\matJ_i\matV\vecte_h",r"\matJ_i\matV\matJ_i^\top")) and "covariance" in plain(e).lower()
     checks["mixing_and_exceptions"] = ("mixing" in p and "score" in p and
         "all four exceptions occur under persistent-heavy-tail dynamics" in p and "28 of 32" in p and "0.7364" in p and
@@ -783,7 +784,8 @@ def essential_semantic_checks(main, supplement, bibliography):
     checks["main_forecast_information_and_adverse_result"] = (
         re.search(r"features averaged over (?:the |its )?simulated trajectories",main_plain) is not None and
         "future USGS measurements are reserved for scoring" in main_glofas and
-        "all four AL and exAL regressions score above the raw ensemble" in main_glofas and
+        "all six fitted corrections" in main_glofas and
+        "did not select the corrected target" in main_glofas and
         "direct multihorizon predictors" in section(main,"sec:pricefm-application"))
     checks["pricefm_and_archive"] = ("[PriceFM findings to be updated.]" in main and "direct" in section(main,"sec:pricefm-application").lower() and "not independently verified" in main and
         "appendix_essential_archive_20261106" in main + supplement and "10.1371/journal.pcbi.1008618" in bibliography)
@@ -864,7 +866,8 @@ def essential_prepare(root):
         fixture_policy="explicit_python_api_only_not_publication_no_missing_git_fallback")
     if (root / ESSENTIAL_MANIFEST).exists():
         previous = decode(regular(root, ESSENTIAL_MANIFEST))
-        mutable = {"current_source_sha256","semantic_checks","actual_input_routes"}
+        mutable = {"current_source_sha256", "semantic_checks", "actual_input_routes",
+                   "approved_contract_sha256", "roles"}
         require(previous.keys() == result.keys() and all(previous[k] == result[k] for k in result if k not in mutable),
                 "essential immutable roles, scientific scope or fixed historical pins changed")
     legacy = essential_legacy(current, baseline, hashes)

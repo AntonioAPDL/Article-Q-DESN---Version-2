@@ -79,17 +79,21 @@ app_forecast_exposition_pricefm_authorization <- function(repo_root, main, suppl
 }
 
 app_forecast_exposition_glofas_version <- function(main, supplement) {
-  alias <- "\\input{tables/glofas_same_family_20261103_display_aliases.tex}"
-  present <- c(grepl(alias, main, fixed = TRUE), grepl(alias, supplement, fixed = TRUE))
-  if (any(present) && !all(present)) {
+  hybrid_alias <- "\\input{tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex}"
+  same_family_alias <- "\\input{tables/glofas_same_family_20261103_display_aliases.tex}"
+  hybrid <- c(grepl(hybrid_alias, main, fixed = TRUE), grepl(hybrid_alias, supplement, fixed = TRUE))
+  same_family <- c(grepl(same_family_alias, main, fixed = TRUE), grepl(same_family_alias, supplement, fixed = TRUE))
+  if ((any(hybrid) && !all(hybrid)) || (any(same_family) && !all(same_family)) ||
+      (all(hybrid) && all(same_family))) {
     stop("Corrected GloFAS aliases must be explicit in both manuscripts.", call. = FALSE)
   }
-  if (all(present)) "same_family_20261103" else "historical_gaussian_driver_20261031"
+  if (all(hybrid)) "hybrid_october_20261107" else if (all(same_family))
+    "same_family_20261103" else "historical_gaussian_driver_20261031"
 }
 
 app_forecast_exposition_glofas_authority <- function(repo_root, main, supplement) {
   version <- app_forecast_exposition_glofas_version(main, supplement)
-  authority <- file.path(repo_root, "tables/glofas_same_family_current_authority.json")
+  authority <- file.path(repo_root, "tables/glofas_hybrid_current_authority.json")
   if (identical(version, "historical_gaussian_driver_20261031")) {
     if (file.exists(authority)) {
       stop("Corrected GloFAS authority cannot retain historical active aliases.", call. = FALSE)
@@ -257,12 +261,13 @@ app_forecast_application_exposition_semantics <- function(main, supplement) {
 app_check_forecast_application_exposition <- function(repo_root) {
   read_source <- function(path) paste(readLines(file.path(repo_root, path), warn = FALSE),
     collapse = "\n")
+  live_main <- read_source("main.tex")
+  live_supplement <- read_source("qdesn-supplement.tex")
   source(file.path(repo_root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
   reader_appendix <- app_reader_appendix_adapter(repo_root)
-  read_source <- reader_appendix$read
-  main <- read_source("main.tex")
-  supplement <- read_source("qdesn-supplement.tex")
-  authority_checks <- app_forecast_exposition_glofas_authority(repo_root, main, supplement)
+  main <- reader_appendix$read("main.tex")
+  supplement <- reader_appendix$read("qdesn-supplement.tex")
+  authority_checks <- app_forecast_exposition_glofas_authority(repo_root, live_main, live_supplement)
   checks <- app_forecast_application_exposition_semantics(main, supplement)
   checks <- c(checks, authority_checks)
   checks <- c(checks, app_forecast_exposition_pricefm_authorization(repo_root, main, supplement))

@@ -21,8 +21,8 @@ import sys
 
 def corrected_glofas_authority(root: Path):
     """Authenticate the new active projection without weakening frozen assets."""
-    authority = root / "tables/glofas_same_family_current_authority.json"
-    marker = r"\\input\s*\{\s*tables/glofas_same_family_20261103_display_aliases\.tex\s*\}"
+    authority = root / "tables/glofas_hybrid_current_authority.json"
+    marker = r"\\input\s*\{\s*tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases\.tex\s*\}"
     selected = any(re.search(marker, re.sub(r"(?<!\\)%.*", "", (root / document).read_text())) is not None
                    for document in ("main.tex", "qdesn-supplement.tex"))
     if not authority.exists():
@@ -325,7 +325,7 @@ def check(root: Path, *, effective: bool = True, portable_reader_fixture: bool =
                           not (role.startswith("glofas_") and entry["file"] in superseded_glofas_paths))
         assert set(entry["file"] for entry in active_entries) | {builder.MANIFEST} <= upload, "An active derivative is absent from the upload inventory."
         if corrected_glofas:
-            authority_file = "tables/glofas_same_family_current_authority.json"
+            authority_file = "tables/glofas_hybrid_current_authority.json"
             manifest_path = corrected_glofas["asset_manifest"]["relative_path"]
             with (root / manifest_path).open(newline="") as stream:
                 corrected_assets = {row["relative_path"] for row in csv.DictReader(stream)}

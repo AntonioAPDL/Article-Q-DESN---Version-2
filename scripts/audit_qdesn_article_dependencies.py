@@ -32,11 +32,16 @@ def uncomment(source: str) -> str:
 
 def classification(path: str) -> tuple[str, str, str, str]:
     suffix = Path(path).suffix
+    if "glofas_hybrid_part123_search3_part4_october_20261107_" in path or path == "tables/glofas_hybrid_current_authority.json":
+        return ("corrected GloFAS hybrid article asset/authority",
+                "Search III Parts 1--3 unchanged; qualified October coherent target for Part 4",
+                "tables/glofas_hybrid_current_authority.json;tables/glofas_hybrid_part123_search3_part4_october_20261107_article_asset_manifest.csv",
+                "shared truth-free Normal-RHS driver prior; 1,428 unit-member factors; mean quantile-readout reporting; no protected-window selection or new fitting")
     if "glofas_same_family_20261103_" in path or path == "tables/glofas_same_family_current_authority.json":
-        return ("corrected GloFAS issued-window asset/authority",
-                "complete same-family future-path comparison; seven families; no selective replacement",
+        return ("historical adverse GloFAS issued-window asset/authority",
+                "rejected November same-family target retained as adverse evidence only",
                 "tables/glofas_same_family_current_authority.json;tables/glofas_same_family_20261103_article_asset_manifest.csv",
-                "unit-member likelihood; Gaussian VB marginal future-response quantiles; historical mean conditional quantiles distinguished; realized future weather; no new fitting")
+                "not active article authority; retained for provenance and root-cause comparison")
     if path in ("main.tex", "qdesn-supplement.tex"):
         return "manuscript", "current editorial source", "main.tex;qdesn-supplement.tex", "not a scientific estimator"
     if suffix in (".bib", ".bst"):

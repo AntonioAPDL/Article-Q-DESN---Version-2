@@ -1,0 +1,23 @@
+{
+  "decision": "READY_FOR_COORDINATOR_REVIEW_NOT_AUTOMATIC_MAIN_PROMOTION",
+  "created_on": "2026-11-07",
+  "tag": "glofas_hybrid_part123_search3_part4_october_20261107",
+  "source_head": "25e6083197b8f214a5042693a0349159a11f8938",
+  "source_tree": "2543f898298d744996fe9848835577a093ae94d1",
+  "source_dirty": false,
+  "reviewed_base_ref": "origin/main",
+  "reviewed_base_commit": "82a8e70b1306aa2f36cf67ac8da65e6052df2c91",
+  "qualification_ready_sha256": "6785d8b1ad4cc7873f99d71ca0628913d8b20f5b19680484e978967dcba5e73f",
+  "qualification_manifest_sha256": "33716c17629313f7d0d045201b6c31e906e788a294b6d3d9e5405a9fd2f580e9",
+  "october_source_head": "60daab261d52eec0ae24060babe186d618303e2b",
+  "search3_integration_head": "e2a3be97853b1af9c8cb269a3e065336ca5590f3",
+  "rejected_november_head": "fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6",
+  "corrected_design_sha256": "55edbd490c622bdc55ebf373d792dbbb4f1be71fffc8df115e44f089548c4b33",
+  "corrected_path_prior_sha256": "0202bc19e26d84d6cbb55c2256a2071695f9c386c9dc64933005bd4d5acbb357",
+  "artifact_manifest_sha256": "688f3a2c1219b1a0b3d48a38446676cfb605bb1a995ced83d4310f53f9549a5a",
+  "model_fits_run": 0,
+  "source_rds_reads": 0,
+  "article_files_modified": 0,
+  "protected_window_method_choices": 0,
+  "search3_part123_changed": false
+}

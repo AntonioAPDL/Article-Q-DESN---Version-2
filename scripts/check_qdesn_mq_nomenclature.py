@@ -641,8 +641,16 @@ def check(root: Path, *, portable_reader_fixture: bool = False) -> dict[str, int
             for name in ("reference", "discrepancy", "combined")
         }
         approved = current_glofas["active_aliases"]
-        current_glofas_tables = historical_tables | {path for path in approved.values() if path.endswith(".tex")}
-        current_glofas_pdfs = historical_pdfs | {path for path in approved.values() if path.endswith(".pdf")}
+        reader_table_roles = (
+            "GlofasApplicationCurrentScoreTable",
+            "GlofasApplicationCurrentCalibrationTable",
+        )
+        reader_pdf_roles = (
+            "GlofasApplicationCurrentForecastWindowFigure",
+            "GlofasApplicationCurrentFullComparisonFigure",
+        )
+        current_glofas_tables = historical_tables | {approved[role] for role in reader_table_roles}
+        current_glofas_pdfs = historical_pdfs | {approved[role] for role in reader_pdf_roles}
         current_glofas_aliases.update(approved)
         expect(not (EDITORIAL_GLOFAS_TABLES - historical_tables) & files,
                "A superseded GloFAS issued-window table remains an active manuscript input")

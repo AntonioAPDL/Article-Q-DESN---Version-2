@@ -254,11 +254,11 @@ class EditorialPresentationTest(unittest.TestCase):
         self.reject(effective=True)
 
     def test_corrected_alias_requires_its_approval(self):
-        authority = self.fixture / "tables/glofas_same_family_current_authority.json"
+        authority = self.fixture / "tables/glofas_hybrid_current_authority.json"
         if authority.exists():
             authority.unlink()
         main = self.fixture / "main.tex"
-        main.write_text(main.read_text() + "\n\\input{tables/glofas_same_family_20261103_display_aliases.tex}\n")
+        main.write_text(main.read_text() + "\n\\input{tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex}\n")
         self.reject(effective=True)
 
     def test_supp_stale_pricefm_alias_rejected(self):

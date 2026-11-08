@@ -62,7 +62,7 @@
 \input{tables/glofas_mq_display_overrides.tex}
 \input{tables/pricefm_full_current_outputs.tex}
 \input{tables/qdesn_sections5_7_supp_display_overrides.tex}
-\input{tables/glofas_same_family_20261103_display_aliases.tex}
+\input{tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex}
 
 \newcounter{suppalgorithm}
 \numberwithin{suppalgorithm}{section}
@@ -1072,8 +1072,7 @@ responses. Using the locations defined in main Section~6, the target is
 \begin{aligned}
 \text{Target:}\quad
 \pi_k(\Theta_k,\vect y_{F,k}\mid D)
-&\propto\pi_k(\Theta_k)L_{H,k}
-\prod_{h=1}^{28}f_{p_k}(y_{T+h,k}\mid q_{k,T+h},\sigma_{Y,k},\gamma_{Y,k})\\
+&\propto\pi_k(\Theta_k)L_{H,k}R_T(\vect y_{F,k})\\
 &\quad\times\prod_{h=1}^{28}\prod_{e=1}^{51}
 f_{p_k}(g_{T+h,e}^{\mathrm{ens}}\mid
 q_{k,T+h}+d_{k,T+h},\sigma_{G,k},\gamma_{G,k}).
@@ -1081,16 +1080,19 @@ q_{k,T+h}+d_{k,T+h},\sigma_{G,k},\gamma_{G,k}).
 \label{eq:supp_glofas_unit_member_target}
 \end{equation}
 Here \(D\) contains history and issued forecasts, not future USGS.
-The future-reference factors use the historical reference likelihood;
-their product is normalized by sequential backward integration because
-each predictor depends only on earlier responses. No Gaussian future-path
-prior replaces this distribution. Each issued member has unit weight and
-is conditionally independent given the parameters, path and preceding
-histories. The 1,428 member factors therefore represent replicate
-information without additional residual member dependence. Historical and
-issued observations share source-specific scales and shapes. MQ--DESN
-multiplies the seven level-specific likelihoods under its coefficient prior,
-with a separate path for each level.
+The frozen law
+\(R_T(\vect y_F)=\Normal(\vect y_F;\vect m_N,\mat C_N)\) is
+moment-matched from 500 truth-free recursive trajectories of the historical
+Part~3 Gaussian DESN with RHS regularization. The same law is used for every
+quantile family and level. It replaces, rather than multiplies,
+future-reference AL or exAL working-likelihood factors. Each issued member
+has unit weight and is conditionally independent given the parameters, path
+and preceding histories. The 1,428 member factors therefore represent
+replicate information without additional residual member dependence.
+Historical retrospective and issued GloFAS observations share
+source-specific scales and shapes. MQ--DESN multiplies the seven
+level-specific likelihoods under its coefficient prior, with a separate
+path factor for each level initialized from the same frozen law.
 
 Stack \(\vect b_k=(\vect\beta_k^\top,\vect\delta_k^\top)^\top\),
 and set \(\vect h_t^Y=(\vect x_t^{\mathrm{ref}\top},\vect0^\top)^\top\)
@@ -1101,9 +1103,9 @@ updates in Appendix~A apply with
 \((y_t,\vect x_t,\vect\beta,\sigma,\gamma)\) replaced by
 \((z_i^c,\vect h_i^c,\vect b_k,\sigma_{c,k},\gamma_{c,k})\),
 for source \(c\in\{Y,G\}\). Source counts are
-\(n_Y=12{,}455+28=12{,}483\) and
+\(n_Y=12{,}455\) and
 \(n_G=12{,}455+28\times51=13{,}883\); the future-reference responses
-are latent, not supplied observations. Thus an AL scale prior
+are latent under \(R_T\), not reference-likelihood observations. Thus an AL scale prior
 \(\sigma_c\sim\IG(a_c,b_c)\) gives shape \(a_c+3n_c/2\), whereas
 a Gaussian variance prior gives shape \(a_c+n_c/2\) for
 \(\sigma_c^2\). Residual moments include coefficient and path uncertainty.
@@ -1135,8 +1137,9 @@ The grid is \((0.05,0.20,0.35,0.50,0.65,0.80,0.95)\).
 Independent fits estimate levels separately; MQ--DESN uses quantile-block
 coordinate updates with separate adjacent-difference priors for reference
 and discrepancy slopes. Within a level, the coefficient factor retains
-reference--discrepancy covariance and the future-path factor uses both
-reference and member terms in Eq.~\eqref{eq:supp_glofas_unit_member_target}.
+reference--discrepancy covariance and the future-path factor combines the
+frozen Gaussian prior with member terms in
+Eq.~\eqref{eq:supp_glofas_unit_member_target}.
 This is not a full Gaussian factor over every parameter and path.
 
 Linearizing the design around the current path mean gives the local
@@ -1145,7 +1148,8 @@ The Gaussian path factor and its precision are
 \begin{equation}
 \text{Latent path:}\quad
 q_{F,k}\approx\Normal(\vect m_k,\mat V_k),\qquad
-\mat V_k^{-1}=-\nabla^2\widetilde\ell_{F,k}+\epsilon\mat I_{28}.
+\mat V_k^{-1}=\mat C_N^{-1}
+-\nabla^2\widetilde\ell_{F,k}^{\mathrm{ens}}+\epsilon\mat I_{28}.
 \label{eq:supp_glofas_future_path_factor}
 \end{equation}
 For \(\vect a_i^c=\vect h_i^c(\vect m)\) and its Jacobian
@@ -1168,43 +1172,31 @@ is \(\epsilon=10^{-8}\), with a \(10^{-12}\) coefficient ridge floor.
 These numerical regularizations do not define a replacement future model.
 Repeated first-order updates give a local Gaussian--Delta approximation.
 
-As specified in the main article, each reported forecast is the level's
-marginal response quantile \(m_{k,h}+\Phi^{-1}(p_k)\sqrt{V_{k,hh}}\),
-without additional response noise. Separate path factors need not produce
-an ordered assembled grid; no post-hoc projection is applied. The
-inverse transform is \(\exp(\widehat q)-1\). These forecasts are not
-credible limits for a quantile functional. Historical AL and exAL curves
-instead evaluate the conditional linear predictor at the coefficient
-mean; Gaussian curves also use \(\Phi^{-1}(p)\E_q(\sigma_Y)\), not
-\(\Phi^{-1}(p)\sqrt{\E_q(\sigma_Y^2)}\). The conditional-scale
-moment and complete historical-curve calculation remain archived.
+As specified in the main article, each reported quantile forecast is
+\(\E_q\{q_{p_k,T+h}(\vect y_{F,1:h-1})\}\), evaluated by Monte Carlo
+over the shared driver paths. This is a mean conditional-quantile readout
+location, not a quantile of \(q_{F,k}\) and not a credible limit. Separate
+fits need not produce an ordered assembled grid; no post-hoc projection is
+applied. The inverse transform is \(\exp(\widehat q)-1\). Historical AL and
+exAL curves instead evaluate the conditional linear predictor at the
+coefficient mean. Gaussian forecast curves use empirical type-8 quantiles
+of their retained path draws. The conditional-scale moment and complete
+historical-curve calculation remain archived.
 
 \subsection{Stopping criteria and additional streamflow evidence}
 \label{subsec:glofas_checks}
 
-MQ--DESN stopping requires every inner fit to finish, outer parameter
-change below \(10^{-3}\), relative change of every RHS block at most
-\(10^{-3}\), and three consecutive complete passes meeting these
-tolerances after global-scale updates begin. Inner quantile updates use
-tolerance \(10^{-4}\) and at most 60 updates per outer iteration.
-Both fits met this numerical rule; it does not establish accuracy of the
-approximation. Independent AL required 267--1,037 iterations and
-1.64--5.17 worker hours; exAL required 200--392 and 1.26--2.49 hours.
-MQ--DESN completed 19 AL and 22 exAL sweeps in 22.72 and 33.99 worker
-hours. Fits use one numerical thread; these are worker times, not campaign
-elapsed times or controlled VB--MCMC comparisons.
+The qualified packet contains 18 Part~4 fit units: one Gaussian ridge, one
+Gaussian RHS/VB, seven independent AL, seven independent exAL, one MQ--DESN
+AL, and one MQ--DESN exAL. All 18 are marked converged and pass their frozen
+strict numerical and quadrature gates. These diagnostics establish the
+declared computational gates, not exactness of the variational approximation.
 
-The main article gives primary loss and coverage. Endpoint bounds are
-inverted on 8, 9, 8 and 7 dates for Q--DESN (AL), Q--DESN (exAL),
-MQ--DESN (AL) and MQ--DESN (exAL), respectively. Their adjacent crossing
-counts are 39, 46, 43 and 44 among 168 comparisons; neither Gaussian
-baseline nor raw GloFAS crosses. Independent AL has the largest maximum
-adjacent violation, 4.4527 on the transformed scale, so crossing frequency
-alone does not describe severity.
-After inverse transformation, the same four families have 12, 9, 10 and 8 negative
-flow quantiles among 196. No clipping, truncation or ordering repair is
-applied. The likelihoods and Gaussian path approximation do not impose
-the physical lower bound. Table~\ref{tab:supp-glofas-part4-calibration}
+The main article gives primary loss and coverage. Raw adjacent crossings
+are 1, 0, 0 and 0 among 168 comparisons for Q--DESN (AL), Q--DESN (exAL),
+MQ--DESN (AL), and MQ--DESN (exAL), respectively; neither Gaussian baseline
+nor raw GloFAS crosses. No clipping, truncation, isotonic projection, or
+other ordering repair is applied. Table~\ref{tab:supp-glofas-part4-calibration}
 reports all-level empirical frequencies, evaluated after fitting rather
 than used for model selection.
 
@@ -1228,9 +1220,9 @@ and forecast window. The six fitted families and raw GloFAS use the same
 seven probability levels. Green filled points show historical USGS and
 dark-red open points show held-out observations; orange identifies GloFAS
 products. Blue quantile paths darken toward the tails. The vertical line marks
-25 December 2022. Historical fitted conditional quantiles and future
-marginal response quantiles are distinct summaries. Raw crossings are
-retained without projection, and future weather covariates are realized.}
+25 December 2022. The fitted models show corrected future quantile paths;
+raw crossings are retained without projection, and future weather covariates
+are realized.}
 \figalt{All seven families are shown with historical USGS, held-out USGS,
 and the common forecast origin. Historical points are green and filled,
 held-out points dark red and open, and GloFAS products orange. Thin blue

@@ -213,7 +213,7 @@ gpah_gate_tex <- function(summary) {
 }
 
 gpah_plot_panel <- function(paths, history, observations, members, family, title,
-  show_members = FALSE, show_legend = FALSE) {
+  show_members = FALSE, show_legend = FALSE, x_label = "Date") {
   tau <- sort(unique(paths$quantile_level))
   cols <- c("#184E77", "#1D6996", "#2A9D8F", "#202124", "#D4A017", "#E76F51", "#A61B1B")
   hist_date <- as.Date(history$target_date)
@@ -222,7 +222,7 @@ gpah_plot_panel <- function(paths, history, observations, members, family, title
   if (show_members) all_y <- c(all_y, members$g_transformed)
   if (!is.null(family)) all_y <- c(all_y, paths$qhat[paths$family == family])
   ylim <- range(all_y, finite = TRUE)
-  plot(range(c(hist_date, obs_date)), ylim, type = "n", xaxt = "n", xlab = "Date",
+  plot(range(c(hist_date, obs_date)), ylim, type = "n", xaxt = "n", xlab = x_label,
     ylab = "log(1 + streamflow)", main = title, las = 1)
   axis.Date(1, at = pretty(c(hist_date, obs_date), 7), format = "%b %d")
   abline(v = as.Date("2022-12-25"), col = "#555555", lty = 3, lwd = 1.2)
@@ -258,11 +258,11 @@ gpah_plot_main <- function(path, data) {
   op <- par(no.readonly = TRUE); on.exit(par(op), add = TRUE)
   par(mfrow = c(3, 1), mar = c(3.4, 4.2, 3.0, .8), oma = c(0, 0, .5, 0))
   gpah_plot_panel(data$paths, data$history, data$observations, data$members, NULL,
-    "(a) USGS history and issued GloFAS ensemble", TRUE, TRUE)
+    "(a) USGS history and issued GloFAS ensemble", TRUE, TRUE, "")
   gpah_plot_panel(data$paths, data$history, data$observations, data$members, "Independent AL",
-    "(b) Q-DESN (AL): shared Normal-driver path prior", FALSE, FALSE)
+    "(b) Q-DESN (AL): shared Normal-driver path prior", FALSE, FALSE, "")
   gpah_plot_panel(data$paths, data$history, data$observations, data$members, "Normal Ridge",
-    "(c) Gaussian DESN (ridge)", FALSE, FALSE)
+    "(c) Gaussian DESN (ridge)", FALSE, FALSE, "Date")
 }
 
 gpah_plot_all <- function(path, data) {
@@ -272,12 +272,12 @@ gpah_plot_all <- function(path, data) {
   op <- par(no.readonly = TRUE); on.exit(par(op), add = TRUE)
   par(mfrow = c(4, 2), mar = c(3.0, 3.8, 2.6, .6), oma = c(0, 0, 1.3, 0))
   gpah_plot_panel(data$paths, data$history, data$observations, data$members, NULL,
-    "Issued GloFAS ensemble", TRUE, TRUE)
+    "Issued GloFAS ensemble", TRUE, TRUE, "")
   for (family in gpah_family_order[gpah_family_order != "Raw GloFAS"]) {
     score <- data$scores$crps_grid_log1p[data$scores$family == family]
     cross <- data$scores$crossing_pairs[data$scores$family == family]
     gpah_plot_panel(data$paths, data$history, data$observations, data$members, family,
-      sprintf("%s | aCRPS %.3f | crossings %d", family, score, cross), FALSE, FALSE)
+      sprintf("%s | aCRPS %.3f | crossings %d", family, score, cross), FALSE, FALSE, "")
   }
   plot.new()
   text(.5, .56, "Corrected Part 4 authority", cex = 1.25, font = 2)
@@ -354,6 +354,8 @@ gpah_aliases <- function(tag, scores) {
     paste0("\\renewcommand{\\GlofasApplicationCurrentJointExalAcrps}{", sprintf("%.4f", pick("MQ exAL", "crps_grid_log1p")), "}"),
     paste0("\\renewcommand{\\GlofasApplicationCurrentJointAlCoverage}{", sprintf("%.3f", pick("MQ AL", "coverage90")), "}"),
     paste0("\\renewcommand{\\GlofasApplicationCurrentJointExalUpperCoverage}{", sprintf("%.3f", pick("MQ exAL", "coverage90")), "}"),
+    "\\providecommand{\\GlofasApplicationCurrentNormalRidgeAcrps}{}",
+    "\\providecommand{\\GlofasApplicationCurrentNormalRhsAcrps}{}",
     "\\renewcommand{\\GlofasApplicationCurrentNormalRidgeAcrps}{0.8429}",
     "\\renewcommand{\\GlofasApplicationCurrentNormalRhsAcrps}{0.9463}",
     "\\renewcommand{\\GlofasApplicationCurrentDescriptivePartFourLeader}{Normal Ridge}",

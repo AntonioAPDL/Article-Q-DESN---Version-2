@@ -375,7 +375,7 @@ gpah_manuscript_spec <- function(tag) c(
   paste0("- Add `tables/", tag, "_display_aliases.tex` after `glofas_application_current_outputs.tex` in both manuscripts."),
   "- Keep November files in Git as adverse evidence; never use them for article claims or aliases.", "",
   "## Main-text model correction", "",
-  "Replace the future-reference working-likelihood line in Eq. (GloFAS Part 4) with a frozen Gaussian path-prior line:", "",
+  "Replace the future-reference working-likelihood line in Eq. (GloFAS Part 4) with a frozen Gaussian path prior line:", "",
   "```tex", "\\text{Future path prior:}\\quad",
   "\\vect y_F\\mid D_T\\sim\\Normal(\\vect m_N,\\mat C_N),", "```", "",
   "State that `(m_N, C_N)` is moment-matched from 500 truth-free recursive paths of the frozen Part 3 Normal-RHS driver. The path prior replaces, rather than multiplies, future-USGS AL/exAL factors. The 1,428 issued-member factors remain in the likelihood. Future USGS is scoring-only.", "",

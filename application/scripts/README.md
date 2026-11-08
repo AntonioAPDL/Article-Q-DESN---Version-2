@@ -738,3 +738,9 @@ target before any integration. The builder authenticates all 18 retained fits,
 the exact 4.0 GB design hash, target manifests, convergence gates, source
 lineage, scores, and paths. It produces an ignored evidence packet and PDF;
 it never fits, selects, changes article aliases, or publishes.
+
+`453_build_glofas_part4_hybrid_authority_handoff.R` and
+`454_check_glofas_part4_hybrid_authority_handoff.R` build and verify the final
+compact coordinator transaction. They retain Search III Parts 1-3, project the
+qualified October Part 4 result, and exclude the rejected November display
+layer without editing the live article or selecting from the protected window.

@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 PREFIX = "glofas_hybrid_part123_search3_part4_october_20261107"
 AUTHORITY_PATH = "tables/glofas_hybrid_current_authority.json"
 ACCEPTANCE_PATH = "tables/glofas_final_scientific_acceptance_receipt_20261108.json"
-ACCEPTANCE_SHA256 = "8a6bda6bfb3bd0570e1d285f75a426279675d354b51fefab7d6fd1aa94129e8e"
+ACCEPTANCE_SHA256 = "45825fdae7a5ba04fedabbb03c07ada6d4787aee4301f46870b71f2f57ea933a"
 ALIAS_PATH = "tables/" + PREFIX + "_display_aliases.tex"
 MANIFEST_PATH = "tables/" + PREFIX + "_article_asset_manifest.csv"
 REJECTED_ALIAS = "tables/glofas_same_family_20261103_display_aliases.tex"

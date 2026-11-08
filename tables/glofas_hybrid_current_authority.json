@@ -14,7 +14,7 @@
   "handoff_manifest_sha256": "688f3a2c1219b1a0b3d48a38446676cfb605bb1a995ced83d4310f53f9549a5a",
   "final_scientific_acceptance": {
     "relative_path": "tables/glofas_final_scientific_acceptance_receipt_20261108.json",
-    "sha256": "8a6bda6bfb3bd0570e1d285f75a426279675d354b51fefab7d6fd1aa94129e8e",
+    "sha256": "45825fdae7a5ba04fedabbb03c07ada6d4787aee4301f46870b71f2f57ea933a",
     "source_commit": "499e5ff3652246df5ef11f157ac299c2970f9e87",
     "accepted_article_payload_commit": "2516d1a03dac214aaea60f413fb41e25075ba7df",
     "decision": "GLOFAS_SCIENTIFIC_ACCEPTANCE_PASS_READY_FOR_CONTROLLED_PROMOTION"

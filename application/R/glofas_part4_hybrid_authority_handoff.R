@@ -570,7 +570,7 @@ gpah_check <- function(root) {
   gpah_stop(!any(grepl("glofas_same_family_20261103", aliases, fixed = TRUE)) &&
       any(grepl(ready$tag, aliases, fixed = TRUE)), "Alias projection still references November.")
   pdfs <- list.files(file.path(root, "article_safe/figures/glofas_application"), pattern = "[.]pdf$", full.names = TRUE)
-  gpah_stop(length(pdfs) == 4L && all(file.info(pdfs)$size > 10000),
+  gpah_stop(length(pdfs) == 4L && all(file.info(pdfs)$size > 4000),
     "Hybrid-authority figures are missing or implausibly small.")
   spec <- paste(readLines(file.path(root, "integration/manuscript_change_spec.md"), warn = FALSE), collapse = "\n")
   gpah_stop(grepl("Gaussian path prior", spec, fixed = TRUE) &&

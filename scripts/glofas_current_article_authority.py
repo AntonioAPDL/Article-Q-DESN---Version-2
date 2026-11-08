@@ -19,6 +19,8 @@ from pathlib import Path, PurePosixPath
 
 PREFIX = "glofas_hybrid_part123_search3_part4_october_20261107"
 AUTHORITY_PATH = "tables/glofas_hybrid_current_authority.json"
+ACCEPTANCE_PATH = "tables/glofas_final_scientific_acceptance_receipt_20261108.json"
+ACCEPTANCE_SHA256 = "8a6bda6bfb3bd0570e1d285f75a426279675d354b51fefab7d6fd1aa94129e8e"
 ALIAS_PATH = "tables/" + PREFIX + "_display_aliases.tex"
 MANIFEST_PATH = "tables/" + PREFIX + "_article_asset_manifest.csv"
 REJECTED_ALIAS = "tables/glofas_same_family_20261103_display_aliases.tex"
@@ -65,6 +67,40 @@ REVIEW_FIELDS = (
     "no_refit_or_retuning_during_handoff",
     "november_target_excluded_from_active_authority",
 )
+
+
+def validate_final_acceptance(store, authority):
+    pin = authority.get("final_scientific_acceptance", {})
+    require(isinstance(pin, dict) and pin.get("relative_path") == ACCEPTANCE_PATH and
+            pin.get("sha256") == ACCEPTANCE_SHA256 and
+            pin.get("source_commit") ==
+            "499e5ff3652246df5ef11f157ac299c2970f9e87" and
+            pin.get("accepted_article_payload_commit") ==
+            "2516d1a03dac214aaea60f413fb41e25075ba7df" and
+            pin.get("decision") ==
+            "GLOFAS_SCIENTIFIC_ACCEPTANCE_PASS_READY_FOR_CONTROLLED_PROMOTION",
+            "final scientific-acceptance pin differs")
+    raw = store.read(ACCEPTANCE_PATH)
+    require(digest(raw) == ACCEPTANCE_SHA256,
+            "final scientific-acceptance receipt hash differs")
+    receipt = json_object(raw.decode("utf-8"), "final scientific acceptance")
+    require(receipt.get("schema_version") == "glofas_final_scientific_acceptance_v1" and
+            receipt.get("decision") ==
+            "GLOFAS_SCIENTIFIC_ACCEPTANCE_PASS_READY_FOR_CONTROLLED_PROMOTION" and
+            receipt.get("acceptance_source_head") == pin["source_commit"] and
+            receipt.get("accepted_article_payload_commit") ==
+            pin["accepted_article_payload_commit"] and
+            receipt.get("root_cause") ==
+            "STRUCTURAL_INDEPENDENT_TAIL_PATH_TARGET_INCOHERENCE" and
+            receipt.get("acceptance_source_dirty") is False and
+            receipt.get("hard_gates") == 12 and receipt.get("hard_gates_passed") == 12 and
+            receipt.get("documented_limitations") == 1 and
+            receipt.get("maximum_corrected_part4_crossings") <= 1 and
+            receipt.get("protected_window_method_choices") == 0 and
+            receipt.get("new_model_fits") == 0 and
+            receipt.get("broad_refit_required") is False,
+            "final scientific-acceptance contract differs")
+    return receipt
 PRIVATE = re.compile(
     rb"/data/|/home/|/tmp/|local_trackers/|application/cache/|file://|"
     rb"\.rds\b|\.rda\b|\.rdata\b|BEGIN [A-Z ]*PRIVATE KEY", re.I)
@@ -312,9 +348,9 @@ def validate_scores(store, aliases):
 def _validate_authority(store):
     authority = json_object(store.text(AUTHORITY_PATH), "authority")
     require(authority.get("schema_version") == "glofas_hybrid_current_article_authority_v1" and
-            authority.get("status") == "SCIENTIFIC_REVIEW_APPROVED" and
+            authority.get("status") == "FINAL_SCIENTIFIC_ACCEPTANCE_PASS" and
             authority.get("authority_tag") == PREFIX,
-            "explicit hybrid scientific review required")
+            "final hybrid scientific acceptance required")
     require(authority.get("reviewed_base_commit") ==
             "82a8e70b1306aa2f36cf67ac8da65e6052df2c91" and
             authority.get("search3_part123_source_commit") ==
@@ -333,6 +369,7 @@ def _validate_authority(store):
     review = authority.get("scientific_review", {})
     require(isinstance(review, dict) and all(review.get(field) is True for field in REVIEW_FIELDS),
             "complete hybrid scientific-review flags required")
+    authority["final_acceptance_receipt"] = validate_final_acceptance(store, authority)
     validate_manifest(store, authority)
     aliases = validate_wiring(store)
     validate_scores(store, aliases)

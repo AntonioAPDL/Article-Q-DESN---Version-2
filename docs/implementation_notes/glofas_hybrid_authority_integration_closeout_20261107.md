@@ -52,6 +52,11 @@ under the namespace
 membership and hashes are recorded in
 `tables/glofas_hybrid_part123_search3_part4_october_20261107_article_asset_manifest.csv`.
 The active contract is `tables/glofas_hybrid_current_authority.json`.
+Its release state is subsequently bound to the final scientific acceptance
+receipt documented in
+`docs/implementation_notes/glofas_final_scientific_acceptance_binding_20261108.md`.
+The intermediate `SCIENTIFIC_REVIEW_APPROVED` state is no longer sufficient
+for release.
 
 The main manuscript and supplement both select the namespaced alias file.
 Appendix role routing, the Overleaf allowlist, dependency inventory, and

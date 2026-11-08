@@ -285,7 +285,7 @@ class CorrectedGlofasProjectionAdapterTest(unittest.TestCase):
 
     def test_approved_tree_adds_exact_new_dependency_closure(self):
         authority, paths = CHECKER.corrected_glofas_authority(self.f.root)
-        self.assertEqual(authority["status"], "SCIENTIFIC_REVIEW_APPROVED")
+        self.assertEqual(authority["status"], "FINAL_SCIENTIFIC_ACCEPTANCE_PASS")
         self.assertTrue(self.guard.EXPECTED_ASSETS <= paths)
         self.assertTrue({self.guard.AUTHORITY_PATH, self.guard.MANIFEST_PATH,
                          "scripts/glofas_current_article_authority.py", self.guard.ALIAS_PATH} <= paths)

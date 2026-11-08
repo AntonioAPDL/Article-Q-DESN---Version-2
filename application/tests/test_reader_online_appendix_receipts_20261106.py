@@ -222,12 +222,12 @@ class CurrentSourceTests(unittest.TestCase):
             ("main", "\\xi\\sim\\IG(1/2,1/\\tau_0^2)", "\\xi\\sim\\IG(1/2,1)"),
             ("main", "future USGS measurements are reserved for scoring", "future USGS measurements are used for fitting"),
             ("main", "direct multihorizon predictors", "recursive multihorizon predictors"),
-            ("main", "all four AL and exAL regressions score above the raw ensemble", "all quantile regressions improve the raw ensemble"),
+            ("main", "all six fitted corrections", "five fitted corrections"),
             ("supplement", "\\frac{r+1}{2}", "\\frac{r}{2}"),
             ("supplement", "\\mat H\\mat\\Sigma\\mat H^\\top", "\\operatorname{diag}(\\mat\\Sigma)"),
             ("supplement", "\\prod_{h=1}^{28}\\prod_{e=1}^{51}", "\\prod_{h=1}^{28}\\prod_{e=1}^{50}"),
             ("supplement", "\\prod_{h=1}^{28}\\prod_{e=1}^{51}", "\\{\\prod_{h=1}^{28}\\prod_{e=1}^{51}\\}^{1/51}"),
-            ("supplement", "\\prod_{h=1}^{28}f_{p_k}", "1"),
+            ("supplement", "R_T(\\vect y_{F,k})", "1"),
             ("supplement", "0.025,0.10,0.20,0.25,0.20,0.10,0.025", "0.1,0.1,0.2,0.2,0.2,0.1,0.1"),
         )
         if compression is not None:

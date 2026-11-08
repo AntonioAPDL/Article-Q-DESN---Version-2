@@ -32,6 +32,11 @@ def uncomment(source: str) -> str:
 
 def classification(path: str) -> tuple[str, str, str, str]:
     suffix = Path(path).suffix
+    if path == "tables/glofas_final_scientific_acceptance_receipt_20261108.json":
+        return ("final GloFAS scientific-acceptance receipt",
+                "accepted Search III Parts 1--3 and coherent October Part 4 composition",
+                "tables/glofas_hybrid_current_authority.json;work/glofas-final-scientific-acceptance-20261108@499e5ff3",
+                "12/12 hard gates; zero protected-window choices; zero new fitting; Part 2 explicitly not evaluable")
     if "glofas_hybrid_part123_search3_part4_october_20261107_" in path or path == "tables/glofas_hybrid_current_authority.json":
         return ("corrected GloFAS hybrid article asset/authority",
                 "Search III Parts 1--3 unchanged; qualified October coherent target for Part 4",

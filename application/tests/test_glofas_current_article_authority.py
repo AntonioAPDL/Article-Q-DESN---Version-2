@@ -53,7 +53,8 @@ class HybridAuthorityTests(unittest.TestCase):
 
     def test_current_tree_and_complete_surface_pass(self):
         authority = GUARD.validate_authority_tree(self.root)
-        self.assertEqual(authority["status"], "SCIENTIFIC_REVIEW_APPROVED")
+        self.assertEqual(authority["status"], "FINAL_SCIENTIFIC_ACCEPTANCE_PASS")
+        self.assertEqual(authority["final_acceptance_receipt"]["hard_gates_passed"], 12)
         self.assertEqual(len(GUARD.EXPECTED_ASSETS), 16)
 
     def test_rejected_november_alias_cannot_be_reactivated(self):
@@ -72,6 +73,12 @@ class HybridAuthorityTests(unittest.TestCase):
             "0202bc19e26d84d6cbb55c2256a2071695f9c386c9dc64933005bd4d5acbb357",
             "1202bc19e26d84d6cbb55c2256a2071695f9c386c9dc64933005bd4d5acbb357"))
         self.assert_rejected("reviewed source lineage differs")
+
+    def test_final_acceptance_receipt_cannot_change(self):
+        path = self.root / GUARD.ACCEPTANCE_PATH
+        path.write_text(path.read_text().replace('"hard_gates_passed": 12',
+                                                 '"hard_gates_passed": 11'))
+        self.assert_rejected("final scientific-acceptance receipt hash differs")
 
     def test_rejected_reporting_rule_cannot_return(self):
         path = self.root / "main.tex"

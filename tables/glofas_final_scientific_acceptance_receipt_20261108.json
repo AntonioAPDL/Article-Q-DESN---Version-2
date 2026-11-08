@@ -1,0 +1,31 @@
+{
+  "schema_version": "glofas_final_scientific_acceptance_v1",
+  "decision": "GLOFAS_SCIENTIFIC_ACCEPTANCE_PASS_READY_FOR_CONTROLLED_PROMOTION",
+  "created_on": "2026-11-08",
+  "acceptance_source_head": "499e5ff3652246df5ef11f157ac299c2970f9e87",
+  "acceptance_source_tree": "1ab7ec2b4b2d16bb0e42bd23a3902be97aeaf9cf",
+  "acceptance_source_dirty": false,
+  "accepted_article_payload_commit": "2516d1a03dac214aaea60f413fb41e25075ba7df",
+  "root_cause": "STRUCTURAL_INDEPENDENT_TAIL_PATH_TARGET_INCOHERENCE",
+  "authority_composition": {
+    "parts_1_3": "Search III frozen",
+    "part_4": "October coherent unit-member target",
+    "november": "adverse evidence only"
+  },
+  "hard_gates": 12,
+  "hard_gates_passed": 12,
+  "issue_rows": 12,
+  "documented_limitations": 1,
+  "part4_fit_units": 18,
+  "part4_quantile_fit_units": 16,
+  "part123_forecast_contracts": 48,
+  "aligned_driver_paths": 500,
+  "issued_members": 51,
+  "issued_member_factors": 1428,
+  "maximum_corrected_part4_crossings": 1,
+  "protected_window_method_choices": 0,
+  "new_model_fits": 0,
+  "broad_refit_required": false,
+  "promotion_scope": "controlled coordinator promotion only; no automatic merge or Overleaf update"
+}
+

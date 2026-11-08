@@ -730,3 +730,11 @@ III projection in an isolated ignored tree, require byte identity with its
 reviewed assets, seal hash-rebound Normal-RHS driver banks, and create the
 coordinator replacement map and handoff. They never fit, forecast, score raw
 future truth, switch tracked aliases, or publish to Overleaf.
+
+`451_build_glofas_part4_corrected_target_qualification.R` and
+`452_check_glofas_part4_corrected_target_qualification.R` qualify the completed
+October coherent Normal-driver target against the rejected November same-family
+target before any integration. The builder authenticates all 18 retained fits,
+the exact 4.0 GB design hash, target manifests, convergence gates, source
+lineage, scores, and paths. It produces an ignored evidence packet and PDF;
+it never fits, selects, changes article aliases, or publishes.

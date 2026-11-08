@@ -367,6 +367,7 @@ run_standalone_glofas_test("application/tests/test_glofas_global_path_tail_close
 run_standalone_glofas_test("application/tests/test_glofas_normal_driver_authority_audit.R")
 run_standalone_glofas_test("application/tests/test_glofas_part4_corrected_target_qualification.R")
 run_standalone_glofas_test("application/tests/test_glofas_part4_hybrid_authority_handoff.R")
+run_standalone_glofas_test("application/tests/test_glofas_final_scientific_acceptance.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_reference.R")
 run_standalone_glofas_test("application/tests/test_glofas_collapsed_optimizer_audit.R")
 # Generated variance/step qualification: statistical target and existing

@@ -744,3 +744,12 @@ it never fits, selects, changes article aliases, or publishes.
 compact coordinator transaction. They retain Search III Parts 1-3, project the
 qualified October Part 4 result, and exclude the rejected November display
 layer without editing the live article or selecting from the protected window.
+
+`455_build_glofas_final_scientific_acceptance.R` and
+`456_check_glofas_final_scientific_acceptance.R` add the fail-closed scientific
+acceptance boundary required before controlled promotion. They join the
+structural root-cause decision, coherent recursive-driver audit, corrected
+Part 4 qualification, frozen Parts 1--3 scores and exact committed article
+payload. The packet distinguishes weaker valid exAL results from inference
+failures and keeps the unavailable Part 2 post-cutoff retrospective score
+explicitly not evaluable. These scripts never fit or retune a model.

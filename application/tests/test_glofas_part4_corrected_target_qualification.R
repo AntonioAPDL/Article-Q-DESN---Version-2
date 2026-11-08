@@ -26,5 +26,7 @@ m <- data.frame(relative_path = "evidence.txt", size_bytes = file.info(file.path
   sha256 = gptq_sha256(file.path(td, "evidence.txt")))
 dir.create(file.path(td, "manifests")); gptq_write_csv(m, file.path(td, "manifests/artifact_manifest.csv"))
 stopifnot(file.exists(file.path(td, "manifests/artifact_manifest.csv")))
+stopifnot(nchar(system2("git", c("rev-parse", "HEAD"), stdout = TRUE)) == 40L,
+  !length(system2("git", c("status", "--porcelain", "--untracked-files=no"), stdout = TRUE)))
 unlink(td, recursive = TRUE, force = TRUE)
 cat("GLOFAS_PART4_CORRECTED_TARGET_QUALIFICATION_TEST_PASS\n")

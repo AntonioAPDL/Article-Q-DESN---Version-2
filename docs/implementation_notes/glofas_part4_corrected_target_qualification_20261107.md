@@ -35,6 +35,10 @@ It emits ignored CSV evidence, a report, a multi-page forecast-path PDF, an
 artifact manifest, and a decision receipt. The checker in script 452 verifies
 that packet without reading or changing any fit.
 
+The builder refuses a dirty tracked worktree and records the full source HEAD
+and source tree in the decision receipt. Runtime outputs remain ignored, while
+the code and contract documentation are committed and remotely recoverable.
+
 ## Scientific gate
 
 Passing qualification means only:

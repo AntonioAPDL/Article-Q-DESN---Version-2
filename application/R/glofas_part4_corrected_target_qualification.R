@@ -293,6 +293,12 @@ gptq_plot_paths <- function(path, comparison, search3_paths, corrected_paths, re
 gptq_build <- function(repo_root, corrected_root, rejected_root, search3_root, root_cause_path,
   output_root, deep_fit_audit = TRUE) {
   repo_root <- normalizePath(repo_root, mustWork = TRUE)
+  source_head <- system2("git", c("-C", repo_root, "rev-parse", "HEAD"), stdout = TRUE)
+  source_tree <- system2("git", c("-C", repo_root, "rev-parse", "HEAD^{tree}"), stdout = TRUE)
+  source_status <- system2("git", c("-C", repo_root, "status", "--porcelain"), stdout = TRUE)
+  gptq_stop(length(source_head) == 1L && nchar(source_head) == 40L &&
+    length(source_tree) == 1L && nchar(source_tree) == 40L && !length(source_status),
+    "Qualification must be built from a clean, committed source worktree.")
   output_root <- normalizePath(output_root, mustWork = FALSE)
   gptq_stop(!file.exists(output_root), "Output root already exists; refusing to overwrite.")
   stage <- paste0(output_root, ".staging-", Sys.getpid())
@@ -397,7 +403,9 @@ gptq_build <- function(repo_root, corrected_root, rejected_root, search3_root, r
   gptq_write_csv(manifest, file.path(stage, "manifests/artifact_manifest.csv"))
   ready <- list(
     decision = "CORRECTED_PART4_TARGET_QUALIFIED_NO_REFIT_REQUIRED_INTEGRATION_REVIEW_PENDING",
-    created_on = "2026-11-07", corrected_runtime = normalizePath(corrected_root),
+    created_on = "2026-11-07", qualification_source_head = source_head,
+    qualification_source_tree = source_tree, qualification_source_dirty = FALSE,
+    corrected_runtime = normalizePath(corrected_root),
     corrected_design_sha256 = gptq_expected$design_sha256,
     rejected_target_sha256 = gptq_expected$rejected_target_sha256,
     root_cause_decision_sha256 = gptq_expected$root_cause_sha256,
@@ -429,6 +437,9 @@ gptq_check <- function(root) {
   gptq_stop(ready$corrected_fit_units == 18L && ready$rejected_fit_units == 16L &&
     ready$new_model_fits == 0L && ready$future_truth_reads_for_method_choice == 0L &&
     ready$article_files_modified == 0L, "Qualification crossed a forbidden boundary.")
+  gptq_stop(nchar(ready$qualification_source_head) == 40L &&
+    nchar(ready$qualification_source_tree) == 40L && !ready$qualification_source_dirty,
+    "Qualification source identity is incomplete or dirty.")
   gptq_stop(identical(ready$artifact_manifest_sha256, gptq_sha256(manifest_path)),
     "Ready receipt does not bind the artifact manifest.")
   gates <- gptq_read_csv(file.path(root, "tables/qualification_gates.csv"))

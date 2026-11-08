@@ -1,0 +1,42 @@
+{
+  "schema_version": "glofas_hybrid_current_article_authority_v1",
+  "status": "FINAL_SCIENTIFIC_ACCEPTANCE_PASS",
+  "authority_tag": "glofas_hybrid_part123_search3_part4_october_20261107",
+  "reviewed_base_commit": "82a8e70b1306aa2f36cf67ac8da65e6052df2c91",
+  "handoff_source_commit": "25e6083197b8f214a5042693a0349159a11f8938",
+  "search3_part123_source_commit": "e2a3be97853b1af9c8cb269a3e065336ca5590f3",
+  "part4_source_commit": "60daab261d52eec0ae24060babe186d618303e2b",
+  "rejected_november_source_commit": "fa6a4e33c6d352d65cf99dd3e59b66a1b4c498a6",
+  "part4_design_sha256": "55edbd490c622bdc55ebf373d792dbbb4f1be71fffc8df115e44f089548c4b33",
+  "part4_path_prior_sha256": "0202bc19e26d84d6cbb55c2256a2071695f9c386c9dc64933005bd4d5acbb357",
+  "qualification_ready_sha256": "6785d8b1ad4cc7873f99d71ca0628913d8b20f5b19680484e978967dcba5e73f",
+  "qualification_manifest_sha256": "33716c17629313f7d0d045201b6c31e906e788a294b6d3d9e5405a9fd2f580e9",
+  "handoff_manifest_sha256": "688f3a2c1219b1a0b3d48a38446676cfb605bb1a995ced83d4310f53f9549a5a",
+  "final_scientific_acceptance": {
+    "relative_path": "tables/glofas_final_scientific_acceptance_receipt_20261108.json",
+    "sha256": "45825fdae7a5ba04fedabbb03c07ada6d4787aee4301f46870b71f2f57ea933a",
+    "source_commit": "499e5ff3652246df5ef11f157ac299c2970f9e87",
+    "accepted_article_payload_commit": "2516d1a03dac214aaea60f413fb41e25075ba7df",
+    "decision": "GLOFAS_SCIENTIFIC_ACCEPTANCE_PASS_READY_FOR_CONTROLLED_PROMOTION"
+  },
+  "asset_manifest": {
+    "relative_path": "tables/glofas_hybrid_part123_search3_part4_october_20261107_article_asset_manifest.csv",
+    "sha256": "d273d3d87071a88d306edbded18b6551fb59e03ccafef9e145659687bfaa08cb"
+  },
+  "alias_file": "tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex",
+  "families": 7,
+  "part4_fit_units": 18,
+  "horizons": 28,
+  "issued_members": 51,
+  "issued_member_factors": 1428,
+  "driver_paths": 500,
+  "probabilities": [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95],
+  "scientific_review": {
+    "search3_parts123_unchanged": true,
+    "part4_corrected_target_qualified": true,
+    "scoring_truth_used_only_postfit": true,
+    "protected_window_not_used_for_selection": true,
+    "no_refit_or_retuning_during_handoff": true,
+    "november_target_excluded_from_active_authority": true
+  }
+}

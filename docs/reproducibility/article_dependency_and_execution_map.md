@@ -214,11 +214,11 @@ this corrected target.
 The guarded collection, extraction, assembly, truth bridge, scoring and
 candidate-table interfaces are documented in
 `docs/implementation_notes/glofas_same_family_closeout_20261102.md` and
-`glofas_same_family_truth_bridge_20261102.md`. The complete forecast surface
-is sealed before the scoring-only USGS values are read. The same-family
-future-response quantiles are calculated analytically from the retained
-Gaussian--Delta VB path factors; adding another response error or substituting
-a posterior-mean readout location would change the reported quantity.
+`glofas_same_family_truth_bridge_20261102.md`. That November target is now
+retained as adverse evidence rather than active article authority. The
+source-bound correction and replacement map are recorded in
+`docs/implementation_notes/glofas_hybrid_authority_integration_handoff_20261107.md`
+and `glofas_hybrid_authority_manuscript_change_spec_20261107.md`.
 
 Historical fitted curves have their own guarded materializer,
 `scripts/materialize_glofas_same_family_fitted_history.R`, described in
@@ -240,15 +240,17 @@ the same reviewed packet. Generated numerical candidates remain outside
 article authority until those checks pass.
 
 The current GloFAS display input is
-`tables/glofas_same_family_20261103_display_aliases.tex`, loaded after the
-historical overrides in both manuscripts. It supplies the issued-window
-scores, calibration, convergence and full-comparison displays while
-preserving the separate historical reference/discrepancy results. The
-issued-window supplementary diagnostics use
-`GlofasApplicationCurrentIssuedSupplementScoreTable`; the older
-`GlofasApplicationCurrentSupplementScoreTable` still denotes the unchanged
-historical comparisons. Only the approved article-safe dependency closure
-belongs in the Overleaf snapshot.
+`tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex`,
+loaded after the historical overrides in both manuscripts. It preserves
+Search III Parts 1--3 and supplies the qualified October Part 4 scores,
+calibration, numerical gates and figures. The Part 4 quantile regressions use
+one frozen path law moment-matched from 500 truth-free recursive Part 3
+Normal-RHS trajectories; the 1,428 issued-member likelihood factors remain.
+The active score and calibration displays are authenticated by
+`tables/glofas_hybrid_current_authority.json` and its exact asset manifest.
+November assets remain versioned but are not selected by either manuscript.
+Only the approved article-safe dependency closure belongs in the Overleaf
+snapshot.
 
 ### Historical GloFAS presentation derivatives
 

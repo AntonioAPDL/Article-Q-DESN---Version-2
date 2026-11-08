@@ -254,11 +254,11 @@ class EditorialPresentationTest(unittest.TestCase):
         self.reject(effective=True)
 
     def test_corrected_alias_requires_its_approval(self):
-        authority = self.fixture / "tables/glofas_same_family_current_authority.json"
+        authority = self.fixture / "tables/glofas_hybrid_current_authority.json"
         if authority.exists():
             authority.unlink()
         main = self.fixture / "main.tex"
-        main.write_text(main.read_text() + "\n\\input{tables/glofas_same_family_20261103_display_aliases.tex}\n")
+        main.write_text(main.read_text() + "\n\\input{tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex}\n")
         self.reject(effective=True)
 
     def test_supp_stale_pricefm_alias_rejected(self):
@@ -285,7 +285,7 @@ class CorrectedGlofasProjectionAdapterTest(unittest.TestCase):
 
     def test_approved_tree_adds_exact_new_dependency_closure(self):
         authority, paths = CHECKER.corrected_glofas_authority(self.f.root)
-        self.assertEqual(authority["status"], "SCIENTIFIC_REVIEW_APPROVED")
+        self.assertEqual(authority["status"], "FINAL_SCIENTIFIC_ACCEPTANCE_PASS")
         self.assertTrue(self.guard.EXPECTED_ASSETS <= paths)
         self.assertTrue({self.guard.AUTHORITY_PATH, self.guard.MANIFEST_PATH,
                          "scripts/glofas_current_article_authority.py", self.guard.ALIAS_PATH} <= paths)

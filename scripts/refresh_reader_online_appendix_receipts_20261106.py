@@ -258,22 +258,22 @@ def semantic_checks(main, supplement, bibliography):
         "J(\\vect\\eta)=\\sigma(U-L)\\expit(\\eta_2)" in supplement and
         "eq:supp_generic_elbo" in supplement and "eq:supp_elbo_transformed_coordinates" in supplement and
         "point" in mq and "intercept" in mq and "uncertainty" in combined)
-    checks["glofas_current_target"] = ("glofas_same_family_20261103_display_aliases.tex" in main and
-        "glofas_same_family_20261103_display_aliases.tex" in supplement and
+    checks["glofas_current_target"] = ("glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex" in main and
+        "glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex" in supplement and
         "\\prod_{h=1}^{28}\\prod_{e=1}^{51}" in supplement and
-        "\\prod_{h=1}^{28}f_{p_k}" in supplement and
-        "Each level retains its own path" in s and
+        "R_T(\\vect y_{F,k})" in supplement and
+        "path factor for each level initialized from the same frozen law" in s and
         "future USGS measurements are reserved for scoring" in m and
         "Both use realized values during the forecast window" in m and
-        "\\Phi^{-1}(p)\\sqrt{V_{p,hh}}" in main and
-        "No additional observation error is added" in s and
-        "no post-hoc crossing correction is applied" in s)
+        "mean conditional-quantile readout location" in m and
+        "empirical type-8 quantiles" in s and
+        "No clipping, truncation, isotonic projection" in s)
     unit_target = equation(supplement, "eq:supp_glofas_unit_member_target")
     checks["unit_member_not_fractional"] = (r"\prod_{h=1}^{28}\prod_{e=1}^{51}" in compact_math(unit_target) and
         "1/51" not in unit_target and r"\frac{1}{51}" not in compact_math(unit_target))
-    checks["glofas_complete_findings"] = ("all four AL and exAL regressions score above the raw ensemble" in glofas and
-        "each cover only 2 of 28" in glofas and "inverted on eight dates" in glofas and
-        "23.2--27.4\\%" in glofas)
+    checks["glofas_complete_findings"] = ("all six fitted corrections" in glofas and
+        "did not select the corrected target" in glofas and "19 of 28" in glofas and
+        "one adjacent crossing" in glofas)
     checks["pricefm_actual_design"] = ("direct" in pricefm and "horizon" in pricefm and
         "variational" in pricefm and "not independently verified" in pricefm and
         "future prices are simulated recursively" not in pricefm and
@@ -377,9 +377,7 @@ def current_route_checks(root, rows):
         "tables/qdesn_multiquantile_recursive_policy_display.tex",
         "tables/qdesn_multiquantile_crossing_display.tex",
         "figures/quantile_initialization/quantile_initialization_picture.tex",
-        "tables/glofas_same_family_20261103_full_scores.tex",
-        "tables/glofas_same_family_20261103_calibration.tex",
-        "tables/glofas_same_family_20261103_convergence.tex",
+        "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.tex",
     )
     for path in mandatory:
         require("qdesn-supplement.tex" in consumers.get(path, set()), "mandatory appendix evidence is not selected: " + path)

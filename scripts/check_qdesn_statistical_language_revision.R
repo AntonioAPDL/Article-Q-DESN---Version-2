@@ -233,6 +233,8 @@ app_check_statistical_language_revision <- function(repo_root) {
   }
   read_source <- function(relative) paste(readLines(file.path(repo_root, relative),
     warn = FALSE), collapse = "\n")
+  live_main <- read_source("main.tex")
+  live_supplement <- read_source("qdesn-supplement.tex")
   source(file.path(repo_root, "scripts/reader_online_appendix_legacy_adapter_20261106.R"), local = TRUE)
   reader_appendix <- app_reader_appendix_adapter(repo_root)
   read_source <- reader_appendix$read
@@ -280,7 +282,7 @@ app_check_statistical_language_revision <- function(repo_root) {
   sys.source(file.path(repo_root,
     "scripts/check_forecast_application_exposition_20261031.R"), envir = glofas_authority)
   checks <- c(checks, glofas_authority$app_forecast_exposition_glofas_authority(
-    repo_root, main, supplement))
+    repo_root, live_main, live_supplement))
   segment <- function(text, begin, end) {
     start <- regexpr(begin, text, fixed = TRUE)[1L]
     require_check(start > 0L, paste("Missing protected segment:", begin))

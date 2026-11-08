@@ -1,9 +1,9 @@
 {
   "actual_input_routes": {
-    "figures/glofas_application/glofas_same_family_20261103_all_families.pdf": [
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_all_families.pdf": [
       "qdesn-supplement.tex"
     ],
-    "figures/glofas_application/glofas_same_family_20261103_main.pdf": [
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_main.pdf": [
       "main.tex"
     ],
     "figures/independent_simulation/independent_forecast_calibration_v1.pdf": [
@@ -50,6 +50,16 @@
     "tables/glofas_figure4_common_window_outputs.tex": [
       "main.tex"
     ],
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex": [
+      "main.tex",
+      "qdesn-supplement.tex"
+    ],
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.tex": [
+      "qdesn-supplement.tex"
+    ],
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_scores.tex": [
+      "main.tex"
+    ],
     "tables/glofas_mq_display_overrides.tex": [
       "main.tex",
       "qdesn-supplement.tex"
@@ -57,16 +67,6 @@
     "tables/glofas_review_figure_overrides.tex": [
       "main.tex",
       "qdesn-supplement.tex"
-    ],
-    "tables/glofas_same_family_20261103_calibration.tex": [
-      "qdesn-supplement.tex"
-    ],
-    "tables/glofas_same_family_20261103_display_aliases.tex": [
-      "main.tex",
-      "qdesn-supplement.tex"
-    ],
-    "tables/glofas_same_family_20261103_main_scores.tex": [
-      "main.tex"
     ],
     "tables/independent_eval300_results_v1.tex": [
       "main.tex"
@@ -95,7 +95,7 @@
       "qdesn-supplement.tex"
     ]
   },
-  "approved_contract_sha256": "b0bc20572044955b1fe1937ee3d3e13153c5c0dde35b0ac42c2a2f2874ede0c1",
+  "approved_contract_sha256": "1068e2f78647a0a3ceef260474d31e185fe7789ba5c49ba3dbf0d5434e9e9e63",
   "baseline_commit": "1b249255018715dd3bdc3c95389c80702d26c8c9",
   "current_source_sha256": {
     "application/tests/run_tests.R": "c04cfe1aa35d96f8d673c552940b0289dfac2541c02c83d1bcb11b03dd9da318",
@@ -103,16 +103,16 @@
     "application/tests/test_appendix_essential_20261106.py": "4b5cbc198cb461957957bdec0edd650e0821ff9a7fe55a12c3bb62a305102b14",
     "application/tests/test_article_clarity_editorial_receipts_20261104.py": "834aa62d957120932078f87e0381f242d91d355569a39be53e9c7e8455717c0e",
     "application/tests/test_forecast_application_exposition_20261031.R": "66387cfb6dd253a0e162ef6533ec7f3e3574a7c621345f58d767f7058b2bfd92",
-    "application/tests/test_glofas_current_article_authority.py": "70e7155be95378ca82bd58724da57c678bd2e39adc89d3386cf172d95f090e72",
+    "application/tests/test_glofas_current_article_authority.py": "f62772fac237e8b5318052c44d3a76a87c69a8b2bfdb5c97d3f8dd73701ad246",
     "application/tests/test_independent_forecast_editorial_manifest_20261031.R": "bab22f96173dc8bce0df39511823f53eb07531d986c2ebae22571c9cc58e2dce",
     "application/tests/test_independent_reporting_authority_checks.R": "c4368e924e6dd97fb9db15bbb2caf40fe2355c0ce8fc94cfb6bcd2f12c3b83a6",
     "application/tests/test_joint_qdesn_pure_desn_article_projection_v2.R": "8b46ec0139838a706c3ae2a093684e4e6b9caeca6bb0b2dbe2049d44f69f24ca",
     "application/tests/test_pro_review_supplement_math.R": "40792b02437aa49430e4b4e7cb4fd35101af5ef0a58f1724cc2cd567eda24643",
-    "application/tests/test_qdesn_mq_nomenclature.py": "260b8b54ce60ec1df390d6a22eeb5f5957c4547103b358a8f2b29377a66b5b88",
+    "application/tests/test_qdesn_mq_nomenclature.py": "d7b1958201d77cc20f7eb2717d638dc85671967f5e09bedb1439fbb12d4c5701",
     "application/tests/test_qdesn_reader_focused_editorial_revision.R": "6356ed556132e82110f9a526e861e08d972be0b1dbbbfea8e7b285542bdf718f",
-    "application/tests/test_qdesn_sections5_7_presentation.py": "db75b15ad381178a4e01c725a929bf994ac28cc5d0d21b57a4ab2c943ee6489d",
+    "application/tests/test_qdesn_sections5_7_presentation.py": "e79679e937db793a54cea035e1340883db3e38559f95a0fbc5e003c31890a065",
     "application/tests/test_qdesn_statistical_language_revision.R": "7a046ac0389ddf61ccbc59e3286fed659f093382c7eb1724fcf112920ad234ac",
-    "application/tests/test_reader_online_appendix_receipts_20261106.py": "a2c4b5b0c80b7eab5c27a22c1116339a582c5ca746d9bc05b822e2cc9c5e93da",
+    "application/tests/test_reader_online_appendix_receipts_20261106.py": "820eca8750c543f5bf6cf1d70586ef3e0558aa58e85487931022da881a146cdd",
     "application/tests/test_rhs_global_scale_reference.R": "93e65ad0128b54c71fbd37087b7b3ab2e751c4446e4b82d2ffd696194b110297",
     "docs/reproducibility/appendix_compression_archive_20261106.md": "ffc8f78a79c62c68947eb4499bb14aa27f2fe26b18960b611a64b8383f606fb5",
     "docs/reproducibility/appendix_compression_disposition_20261106.csv": "f5b68a870c9d6a68d2057c9a624a98aab9131bebdca1a1ddc4bdc258503f060a",
@@ -126,6 +126,10 @@
     "figures/glofas_application/glofas_editorial_20261013_discrepancy.pdf": "aac4187597e04cbedc0b9b25cdd85feffd5185eadb9e23b07b9c6822e797ea49",
     "figures/glofas_application/glofas_editorial_20261013_issued.pdf": "375720a6a3515432a12af571cb0df27d57c74214474512b6b57b7b0f165e074d",
     "figures/glofas_application/glofas_editorial_20261013_reference.pdf": "7a598b9369b79be989825968654b3f6e0ab3415150ec46cd1c249e1167dae016",
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_all_families.pdf": "4ae6159808ce696139dd85350610750c0b389e472f94581812d8019a2a06c9d0",
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.pdf": "0ac2f9b3e14f79c63bc4642ce04757ac0205016c3abf569feee615d761cc3b09",
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_main.pdf": "a4641b8894e65d9de3b0e951336fa2bba4a8a545cd75c0c5c165042aceb3a0c6",
+    "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_numerical_gates.pdf": "519bce073cd5b86d0a0c92563a81d53eeaae506087a23b53d884a7ba04b5e210",
     "figures/glofas_application/glofas_same_family_20261103_all_families.pdf": "b4190346284cd7563ebfc9bb02232696b6d731ad2b08651ca73472c99fbe9e0b",
     "figures/glofas_application/glofas_same_family_20261103_calibration.pdf": "15919a0cd5c48cce883314cbe8d2bc8f9a75e6444c97425db43c3fc45d1c5a19",
     "figures/glofas_application/glofas_same_family_20261103_convergence.pdf": "67d8506d358b90bed26b5d6c496b65168245247e77b88f4d92129682f2c41a0c",
@@ -145,26 +149,26 @@
     "figures/quantile_initialization/quantile_initialization_caption.tex": "2aa7adc733eebf551499ac077907b5343be3185b275b6ae748b8f2e54a54b7e4",
     "figures/quantile_initialization/quantile_initialization_picture.tex": "6e1ab7141d75897a48f056a0d69b28e74fecd089df5284f6a08a87d0fc437a69",
     "figures/quantile_initialization/quantile_initialization_styles.tex": "f74bb62033dd8aa51e3657b8262efe9273aefae8b66afb08f6e3bacddd4297fe",
-    "main.tex": "738ccf951346b14d138f9f108162c4b51786844c9e7519bc9cd038064e073b38",
-    "overleaf/article_files.txt": "811a10728dd446c1ec3a9b1218d63f534ab0be4048ec440a3a5a45da375a3901",
-    "qdesn-supplement.tex": "b1826b4b01595d41705875f235bbbcfec9d4300231f2434dac67b0989e558126",
+    "main.tex": "a23ed5008480904ccc45a188caed8554c4e2a06122618c4f57f0d7aa06686c20",
+    "overleaf/article_files.txt": "d27e6b6a1d68e08bc8520257b5b58c933c5952e5cec0392dad8ed661e3565b7d",
+    "qdesn-supplement.tex": "940cfa2c08da37545c087abd5cc7a7e792add46f08d9577e86e9360337a02a29",
     "refs.bib": "892f613eb7be4f14718b4351c770cc867fb37f2a4cd9651356929224a6bf5678",
-    "scripts/appendix_compression_validation_20261106.py": "f525ca9b9d745e840342fc49bbf5ae152fc9c149efe70ac3f00494db195dd351",
-    "scripts/audit_qdesn_article_dependencies.py": "f5cae379be16ded2421139ebcdc206e8533d998fa4b42aad95dcf599098d3251",
+    "scripts/appendix_compression_validation_20261106.py": "3692cb9f9de6c1505c4d20b2cd3102f9567ef15ded018ea83ef571f7a47c374c",
+    "scripts/audit_qdesn_article_dependencies.py": "806d804d3329c093213963e7f226e97edf585b9e305c8bad8bcebd8a09449dac",
     "scripts/build_appendix_compact_tables_20261106.py": "8a14b950ac3063321e52c5c332cb5ce02a2f2ecd3e8fbd16e2b8792cce993648",
     "scripts/build_appendix_essential_displays_20261106.py": "9fa751bed81d0585a1749530418cbabe31e49221379aea0be0bdb945f6713222",
-    "scripts/check_forecast_application_exposition_20261031.R": "eb3eae0db38497461a0204bb790637e502b270efd646521b0f0145189c14622f",
+    "scripts/check_forecast_application_exposition_20261031.R": "8312674faf6b0064020c235a9091137f8db1d8e44ee0b9bc32c95225bc9955cd",
     "scripts/check_independent_forecast_300_500_v1.R": "0756d29875eb2766c84ecb6db31df15bdc56d0e41dd0055873057a710d0a408e",
     "scripts/check_joint_qdesn_pure_desn_article_projection_v2.R": "2b7b1a0e7304abd39fb14b400e8662683220baf442cfffba7f6587df181cd70c",
     "scripts/check_qdesn_final_manuscript_revision.R": "2d7ce3c182fcbf10c120c5e118b0c97affc89887c14bb124a0c924b915358f3a",
-    "scripts/check_qdesn_mq_nomenclature.py": "1de998a0ebe20593a386a1f4c9662bd2fbeb550f27e56872120c52b50623ab85",
-    "scripts/check_qdesn_sections5_7_presentation.py": "669d1d31f5c076e0f251416e3b8961cec7dd16e42105fd21511bae12eb7313ee",
-    "scripts/check_qdesn_statistical_language_revision.R": "c702f24a522962ec06c7d8a18c830f5cf8e01056e60a8fa7fcc21aa122511ae1",
-    "scripts/glofas_current_article_authority.py": "14492a77b389ce8cea61fc67520ad6ee735b08256cc9eeb1a20ac766f42ab85f",
+    "scripts/check_qdesn_mq_nomenclature.py": "b3bfb6b10a0656c7f90b47819fafb8ef266d2839943d953fc5ec525c22db25f2",
+    "scripts/check_qdesn_sections5_7_presentation.py": "5de34aea29b08f7132b42680b4c23c6cd881efa01d78788acd0085dd61217853",
+    "scripts/check_qdesn_statistical_language_revision.R": "6a6e5c767c4a0aac6b6249d3935487e616da4b95e9f4d18a050c49ee2c19cc3c",
+    "scripts/glofas_current_article_authority.py": "2c4ffbaf5990fe3a5624a642e9277d5be1c79f1db30445633f058144d7f45187",
     "scripts/independent_reporting_authority_checks.R": "010ed21d5a549406a8863749ff5baae312c3c0bdebc4ecb9d57eeab67c22148a",
     "scripts/reader_online_appendix_legacy_adapter_20261106.R": "c8e0639016e2b4f1993c16cc1e37a1bcb3b6f52a32daa42b21ab5a68e5f78dfc",
     "scripts/refresh_independent_forecast_editorial_manifest_20261031.R": "357c3160e29423d7b0741c4742a06b593ff6d3b773d13fffba417222d0b50e64",
-    "scripts/refresh_reader_online_appendix_receipts_20261106.py": "afadc03335d46559c0c258ac67bfc46350565c3636312633f1494d338cb4a983",
+    "scripts/refresh_reader_online_appendix_receipts_20261106.py": "374e35be35ad26049cea35d16fbc3161fe1d8c8368c87ffecb9fbecd68312aba",
     "tables/appendix_compact_20261106_glofas_convergence.tex": "e2ab595ce3a690820e0e8f498939f4aad45473391e387968c20e27589ba33660",
     "tables/appendix_compact_20261106_glofas_diagnostics.tex": "173abe149835c77e3ba5082bfa119c439f25ed858da907c9f149cda479bdd14d",
     "tables/appendix_compact_20261106_glofas_historical_scores.tex": "5e0594584689ab51a58b4833eb1d962307bb393971988235faad4dd157178df8",
@@ -177,7 +181,7 @@
     "tables/appendix_compact_20261106_mq_scores.tex": "bdfd080cb5f0f265ba58514cc55acdeed2a23ac517fa0563a373bee8d32bf9c5",
     "tables/appendix_compact_20261106_score_diagnostics.tex": "e2e55bda25c6300d4470437251bc30daaaeedc64f1a9315fcfc196e7b7604121",
     "tables/appendix_compression_20261106_manifest.json": "3db87261adee62ca975642941b76d67eea108e985b493917c4bcf0afbe3b61f1",
-    "tables/appendix_essential_20261106_contract.json": "b0bc20572044955b1fe1937ee3d3e13153c5c0dde35b0ac42c2a2f2874ede0c1",
+    "tables/appendix_essential_20261106_contract.json": "1068e2f78647a0a3ceef260474d31e185fe7789ba5c49ba3dbf0d5434e9e9e63",
     "tables/appendix_essential_20261106_ind_forecast_mae.tex": "c5e83c55b78c0b000d41f78454d7fc4d88048c1e34b546e3c445de1700ee9b85",
     "tables/appendix_essential_20261106_mq_crossings.tex": "d69ae6bdde95bc805679b6b901eabcb4dab7c8477e2b15e2f4262e72afe22506",
     "tables/glofas_application_current_outputs.tex": "57d8ac0430dd2174c700cc6657eb396b6460909f6b9f9055eb4d8f28a69da471",
@@ -186,7 +190,22 @@
     "tables/glofas_empirical_quantile_frequencies_display.tex": "8abc75e76a451709d8acb58f84339a5446c62c10081446d3100fb26c6b27442f",
     "tables/glofas_figure4_common_window_manifest.json": "af9ef008903f5fc571803d75c322ada07ca3d691a2ff9cc83a3b5041012992f8",
     "tables/glofas_figure4_common_window_outputs.tex": "9f6e8b3fe9b70daff6ee63ee355ca346c6cca5d714d2cd9f4b9eae30562bea38",
+    "tables/glofas_final_scientific_acceptance_receipt_20261108.json": "45825fdae7a5ba04fedabbb03c07ada6d4787aee4301f46870b71f2f57ea933a",
     "tables/glofas_forecast_correction_main_scores_display.tex": "038be3036eaa8e1a088c7f5a747ae0e4a33deb38ba2e8e66430554afdd79b230",
+    "tables/glofas_hybrid_current_authority.json": "5fa234351f0c6282cb49bd8c53e657912be64ce041696f98b89dcc577b632c0e",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_article_asset_manifest.csv": "d273d3d87071a88d306edbded18b6551fb59e03ccafef9e145659687bfaa08cb",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_display_aliases.tex": "16c95cce3210f82c43c1f3918c54f6c15c7e0f31d80d9989e05009f6ecf87aeb",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_history.csv": "3bb26dd6bb90cf562331d7cd8f9f46cca89e62591c6570d97e9bfebf9b12ceee",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_issued_members.csv": "b85a7a3b751ebb406872ca4e555e022c475e6ead47cf182e5b70810b006a24e0",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_observations.csv": "8ea6b81915b7fab17703ea851f8a4a2837a23388b4fe56f6ef49b04bad944391",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.csv": "80f6afa21479f0d874148047f5c7eb8be8d0e3398301da2e070596f34ac3c407",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.tex": "4a2381603e67fb7afda671b79764138603448c0a9ecc5a64d23d9c9a9e41de88",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_numerical_gate_summary.csv": "14fb3ef32a4f00ad090a094f782c2ec08f33e42af7a7a89e4a58de302612d6c1",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_numerical_gates.csv": "4b0c82d34602e72cc7a4358b8389e1319ca8dded18746afd02549d7fda9deaf9",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_numerical_gates.tex": "9a60a31d22bb9ddc664b4922652c83ad3db8e91494dcc1e4f90df7d1ca986141",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_quantile_paths.csv": "66c28733dda03063182d2ba219b3d5ec76647ecebb89f26de1d9b7d2093083d6",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_scores.csv": "8f195377f4998755f51d23723673985cfb7584460bd8762b25bcaca42891c478",
+    "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_scores.tex": "c669e4c679facc765b3d6bd5ba4e06bf1e02c211321f4a87a6c496cd330cd2de",
     "tables/glofas_issued_prior_settings_display.tex": "c158fd8eb941b4566682f29744406d98e31804b8ba9d442d6304619568ebbe0d",
     "tables/glofas_mq_display_overrides.tex": "84b2c2aa27cca97b9d1eb3c3515e8d46b98e485b1d023aa2e2e1abe84ec20dc2",
     "tables/glofas_mq_presentation_manifest.json": "3ed5f035d6b6efe81d759b92903f62841f54bc448d6272aba193d80fbef26e48",
@@ -2042,7 +2061,7 @@
       "role": "gaussian_scale_reference"
     },
     "glofas_all_families": {
-      "asset": "figures/glofas_application/glofas_same_family_20261103_all_families.pdf",
+      "asset": "figures/glofas_application/glofas_hybrid_part123_search3_part4_october_20261107_part4_all_families.pdf",
       "baseline_label": "fig:supp-glofas-part4-all-families",
       "baseline_path": "qdesn-supplement.tex",
       "destination": "qdesn-supplement.tex#fig:supp-glofas-part4-all-families",
@@ -2067,9 +2086,9 @@
       "role": "glofas_diagnostics"
     },
     "glofas_frequencies": {
-      "asset": "tables/glofas_same_family_20261103_calibration.tex",
+      "asset": "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.tex",
       "baseline_label": "tab:supp-glofas-part4-calibration",
-      "baseline_path": "tables/glofas_same_family_20261103_calibration.tex",
+      "baseline_path": "tables/glofas_hybrid_part123_search3_part4_october_20261107_part4_calibration.tex",
       "destination": "qdesn-supplement.tex#tab:supp-glofas-part4-calibration",
       "disposition": "retained",
       "kind": "table",

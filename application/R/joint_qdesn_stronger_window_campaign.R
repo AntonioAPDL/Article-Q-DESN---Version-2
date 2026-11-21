@@ -903,6 +903,7 @@ app_joint_sw_collect_stage <- function(root, stage) {
 
 app_joint_sw_finalize_benchmark <- function(root) {
   root <- normalizePath(root, mustWork = TRUE)
+  contract <- app_joint_sw_read_contract(file.path(root, "frozen_contract.csv"))
   scores <- app_joint_sw_collect_stage(root, "benchmark")
   scores <- scores[order(scores$retained_state_budget), , drop = FALSE]
   required <- c(24L, 300L, 600L, 1200L, 1500L, 2000L)
@@ -917,9 +918,40 @@ app_joint_sw_finalize_benchmark <- function(root) {
   )
   capacity_receipt <- file.path(root, "benchmark_capacity_receipt.csv")
   if (file.exists(capacity_receipt)) out <- c(out, capacity_receipt = capacity_receipt)
+  r1a <- app_read_csv(file.path(root, "r1a_worker_plan.csv"))
+  nearest <- vapply(r1a$retained_state_budget, function(z) {
+    which.min(abs(log(z) - log(scores$retained_state_budget)))
+  }, integer(1L))
+  projected_cpu_seconds <- sum(scores$runtime_seconds[nearest])
+  rss_per_worker_gib <- max(scores$peak_rss_kib) / 1024^2
+  memory_worker_cap <- floor((contract$min_available_memory_gib -
+    contract$host_reserve_memory_gib) / rss_per_worker_gib)
+  recommended_workers <- max(1L, min(contract$max_workers, memory_worker_cap))
+  capacity_class <- cut(r1a$retained_state_budget, c(-Inf, 600, 1200, Inf),
+    labels = c("ordinary_le600", "conditional_601_1200", "sentinel_1500_2000"))
+  class_count <- as.data.frame(table(capacity_class), stringsAsFactors = FALSE)
+  names(class_count) <- c("capacity_class", "worker_count")
+  projection <- data.frame(
+    r1a_workers = nrow(r1a),
+    projected_cpu_hours = projected_cpu_seconds / 3600,
+    recommended_physical_workers = recommended_workers,
+    projected_wall_hours = projected_cpu_seconds / 3600 / recommended_workers,
+    conservative_wall_hours = 1.5 * projected_cpu_seconds / 3600 / recommended_workers,
+    max_observed_worker_rss_gib = rss_per_worker_gib,
+    projected_peak_rss_gib = rss_per_worker_gib * recommended_workers,
+    memory_worker_cap = memory_worker_cap,
+    stringsAsFactors = FALSE
+  )
+  out <- c(out,
+    r1a_capacity_classes = app_write_csv(class_count, file.path(root, "r1a_capacity_class_counts.csv")),
+    r1a_resource_projection = app_write_csv(projection, file.path(root, "r1a_resource_projection.csv")),
+    analysis_git_state = app_write_csv(app_joint_shared_git_state(),
+      file.path(root, "benchmark_analysis_git_state.csv")))
   decision <- data.frame(
     status = if (pass) "BENCHMARK_COMPLETE_READY_FOR_R1A_REVIEW" else "BENCHMARK_FAILED_BLOCK_R1A",
     benchmark_pass = pass,
+    recommended_physical_workers = recommended_workers,
+    conservative_r1a_wall_hours = projection$conservative_wall_hours,
     broad_screen_launched = FALSE,
     downstream_auto_launch = FALSE,
     stringsAsFactors = FALSE

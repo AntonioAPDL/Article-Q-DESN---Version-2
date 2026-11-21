@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ ${JOINT_PR_ALLOW_SUPERSEDED_V1:-0} != 1 ]]; then
+  echo "This v1 launcher is superseded by launch_joint_qdesn_persistent_regime_recalibration_v2.sh." >&2
+  exit 2
+fi
+
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 R_BIN=${R_BIN:-/data/jaguir26/local/opt/R/4.6.0/bin/Rscript}
 ROOT=${ROOT:-$REPO_ROOT/application/cache/joint_qdesn_persistent_regime_recalibration_20261120}

@@ -1,0 +1,65 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_regime_recalibration_v2,character,Seed-robust targeted recalibration with median and tail AL transfer gates.
+identity,run_tag,joint_qdesn_persistent_regime_recalibration_v2_20261120,character,Ignored runtime tag.
+scope,scenario_ids,persistent_heavy_tail;regime_shift,character_vector,Only the two unresolved scenarios are screened.
+scope,scenario_count,2,integer,Number of targeted scenarios.
+observational,desn_washout_rows,500,integer,Reservoir washout rows.
+observational,fit_rows,500,integer,Complete observational fit window.
+observational,inner_training_rows,350,integer,Internal training rows.
+observational,inner_calibration_rows,150,integer,Internal recursive calibration rows.
+observational,protected_validation_rows,1000,integer,Rows forbidden during selection.
+forecast,calibration_origin_stride,30,integer,Teacher-forced spacing between internal origins.
+forecast,calibration_max_lead,30,integer,Recursive horizon within each origin.
+forecast,origin_update_policy,teacher_forced_between_origins,character,Observed outcomes enter only when the origin advances.
+forecast,within_origin_policy,recursive_central_action,character,Gaussian means or AL medians feed future response lags.
+parity,parity_relative_tolerance,0.00000001,numeric,Maximum relative discrepancy from the authoritative calibration score.
+ridge,candidate_count,1024,integer,Candidates per scenario including exact parity.
+ridge,local_candidate_count,383,integer,Local refinements around the authoritative specification.
+ridge,global_candidate_count,512,integer,Broad global candidates.
+ridge,mechanism_candidate_count,128,integer,Mechanism-focused candidates.
+ridge,numerical_shortlist_count,34,integer,Best numerical candidates retained before diversity supplementation.
+ridge,diversity_shortlist_count,15,integer,Diverse candidates added beside parity.
+ridge,ridge_tau2,10000,numeric,Gaussian ridge coefficient prior variance.
+ridge,intercept_variance,1000000,numeric,Gaussian ridge intercept variance.
+ridge,sigma_shape,2,numeric,Inverse-gamma shape.
+ridge,sigma_rate,1,numeric,Inverse-gamma rate.
+ridge,calibration_replicates,3,integer,Independent observational selector replicates.
+seed,canonical_reservoir_seed,202609250,integer,Seed used to isolate architecture during the broad screen.
+seed,robustness_reservoir_seeds,202609250;202611201;202611202,integer_vector,Deterministic seed panel for finalists.
+seed,advance_count,50,integer,Architectures evaluated for seed robustness per scenario.
+rhs,coarse_tau0_grid,10;1;0.1;0.01;0.001;0.0001;0.00001;0.000001,numeric_vector,Coarse RHS scale grid.
+rhs,refinement_factor,3.16227766016838,numeric,Half-decade adaptive refinement factor.
+rhs,refinement_min_tau0,0.0000001,numeric,Lower adaptive RHS scale bound.
+rhs,refinement_max_tau0,100,numeric,Upper adaptive RHS scale bound.
+rhs,refinement_candidate_count,12,integer,Unique architectures receiving adaptive refinement per scenario.
+rhs,rhs_max_iter,400,integer,Gaussian RHS VB maximum iterations.
+rhs,rhs_min_iter,50,integer,Gaussian RHS VB minimum iterations.
+rhs,rhs_tolerance,0.0001,numeric,Gaussian RHS VB tolerance.
+median_al,median_candidate_count,12,integer,Diverse architecture-scale pairs advanced per scenario.
+median_al,median_tau,0.5,numeric,Independent AL median gate.
+median_al,median_max_iter,1200,integer,Median AL VB maximum iterations.
+median_al,median_tolerance,0.00001,numeric,Median AL VB tolerance.
+median_al,rhs_vb_inner,10,integer,RHS coordinate passes per AL iteration.
+median_al,rhs_freeze_iters,10,integer,Initial iterations with RHS state frozen.
+median_al,a_sigma,0.001,numeric,AL scale prior shape.
+median_al,b_sigma,0.001,numeric,AL scale prior rate.
+median_al,alpha_prior_sd_multiplier,4,numeric,Intercept prior SD multiplier.
+tail_al,tail_candidate_count,4,integer,Best median candidates retained before mandatory parity.
+tail_al,tail_quantiles,0.05;0.95,numeric_vector,Extreme AL transfer sentinels.
+tail_al,proxy_weights,0.25;0.50;0.25,numeric_vector,Lower median upper check-loss proxy weights.
+gates,max_condition_number,1000000000000,numeric,Review ceiling for conditioning.
+gates,max_state_saturation,0.25,numeric,Review ceiling for state saturation.
+gates,max_readout_dimension,600,integer,Maximum retained all-layer states.
+gates,protected_selection_forbidden,true,logical,Protected rows cannot enter selection.
+gates,require_finite_scores,true,logical,Promoted results must be finite.
+gates,allow_max_iter_review,true,logical,Finite max-iteration AL fits remain review-level.
+runtime,max_workers,15,integer,One-thread worker slots.
+runtime,cpu_affinity_list,0;1;2;3;4;5;7;8;9;10;11;12;13;14;15,integer_vector,Fifteen distinct physical cores excluding the observed unrelated heavy core.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.
+runtime,min_data_free_gib,100,numeric,Minimum free data capacity.
+policy,selection_unit,scenario_specific,character,No universal specification is selected.
+policy,raw_inputs_in_readout,false,logical,Readout is intercept plus reservoir states only.
+policy,full_states_all_layers,true,logical,All layer states enter the readout.
+policy,protected_scores_for_selection,false,logical,Protected outcomes never tune controls.
+policy,automatic_stop_after,three_quantile_al_transfer_review,character,No seven-level joint exAL or MCMC work starts automatically.

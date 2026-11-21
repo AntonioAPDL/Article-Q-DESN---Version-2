@@ -1,0 +1,9 @@
+enabled,scenario_id,scenario_order,selector_seed_base,article_seed,canonical_reservoir_seed
+true,asymmetric_laplace_tail,1,202631100,202607205,202609250
+true,gaussian_mixture_bridge,2,202631200,202607203,202609250
+true,laplace_bridge,3,202631300,202607202,202609250
+true,nonlinear_reservoir_friendly,4,202631400,202607209,202609250
+true,normal_bridge,5,202631500,202607201,202609250
+true,persistent_heavy_tail,6,202631600,202607207,202609250
+true,regime_shift,7,202631700,202607208,202609250
+true,student_t_location_scale,8,202631800,202607204,202609250

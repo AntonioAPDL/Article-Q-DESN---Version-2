@@ -1,0 +1,49 @@
+section,name,value,type,description
+identity,contract_version,joint_qdesn_persistent_regime_recalibration_v1,character,Targeted observational-only recalibration for the two unresolved recursive forecast scenarios.
+identity,run_tag,joint_qdesn_persistent_regime_recalibration_20261120,character,Ignored runtime tag.
+scope,scenario_ids,persistent_heavy_tail;regime_shift,character_vector,Only the two unresolved scenarios are screened.
+scope,scenario_count,2,integer,Number of targeted scenarios.
+observational,desn_washout_rows,500,integer,Reservoir washout rows.
+observational,fit_rows,500,integer,Complete observational fit window.
+observational,inner_training_rows,350,integer,Internal training rows.
+observational,inner_calibration_rows,150,integer,Untouched internal calibration rows used for selection.
+observational,protected_validation_rows,1000,integer,Rows forbidden during every selection stage.
+forecast,calibration_origin_stride,30,integer,Teacher-forced spacing between internal origins.
+forecast,calibration_max_lead,30,integer,Recursive forecast horizon within each internal origin.
+forecast,origin_update_policy,teacher_forced_between_origins,character,Observed outcomes enter only when the origin advances.
+forecast,within_origin_policy,recursive_model_action,character,Gaussian means or AL medians feed future response lags within an origin.
+ridge,candidate_count,1024,integer,Deterministic candidates per scenario including the authoritative parity anchor.
+ridge,ridge_advance_count,50,integer,Gaussian ridge candidates advanced per scenario.
+ridge,ridge_tau2,10000,numeric,Gaussian ridge coefficient prior variance.
+ridge,intercept_variance,1000000,numeric,Gaussian ridge intercept prior variance.
+ridge,sigma_shape,2,numeric,Inverse-gamma shape.
+ridge,sigma_rate,1,numeric,Inverse-gamma rate.
+ridge,calibration_replicates,3,integer,Independent observational selector replicates.
+rhs,tau0_grid,10;1;0.1;0.01;0.001;0.0001;0.00001;0.000001,numeric_vector,Coarse global-scale grid extending both prior boundaries.
+rhs,rhs_max_iter,400,integer,Gaussian RHS VB maximum iterations.
+rhs,rhs_min_iter,50,integer,Gaussian RHS VB minimum iterations.
+rhs,rhs_tolerance,0.0001,numeric,Gaussian RHS VB tolerance.
+median_al,median_advance_count,8,integer,RHS architecture-scale pairs advanced per scenario to median AL VB.
+median_al,median_tau,0.5,numeric,Only the independent AL median is screened before broad promotion.
+median_al,median_max_iter,1200,integer,Independent median AL VB maximum iterations.
+median_al,median_tolerance,0.00001,numeric,Independent median AL VB tolerance.
+median_al,rhs_vb_inner,10,integer,RHS coordinate passes per AL VB iteration.
+median_al,rhs_freeze_iters,10,integer,Initial AL VB iterations with the RHS state frozen.
+median_al,a_sigma,0.001,numeric,AL scale prior shape.
+median_al,b_sigma,0.001,numeric,AL scale prior rate.
+median_al,alpha_prior_sd_multiplier,4,numeric,Intercept prior SD relative to Gaussian residual SD.
+gates,max_condition_number,1000000000000,numeric,Review ceiling for readout conditioning.
+gates,max_state_saturation,0.25,numeric,Review ceiling for near-saturated reservoir states.
+gates,max_readout_dimension,600,integer,Maximum number of retained all-layer reservoir states.
+gates,protected_selection_forbidden,true,logical,Protected rows cannot enter selection.
+gates,require_finite_scores,true,logical,Every promoted result must be finite.
+gates,allow_max_iter_review,true,logical,Finite AL max-iteration fits remain review-level rather than automatic failures.
+runtime,max_workers,15,integer,Maximum one-thread workers when capacity is explicitly granted.
+runtime,blas_threads,1,integer,One numerical thread per worker.
+runtime,nice_level,10,integer,Reduced scheduling priority.
+runtime,min_data_free_gib,100,numeric,Minimum free data space before launch.
+policy,selection_unit,scenario_specific,character,No universal specification is selected.
+policy,raw_inputs_in_readout,false,logical,Readout is intercept plus reservoir states only.
+policy,full_states_all_layers,true,logical,All layer states enter the readout.
+policy,protected_scores_for_selection,false,logical,Article/protected outcomes never tune controls.
+policy,automatic_stop_after,median_al_vb_review,character,No seven-quantile joint exAL or MCMC fit is launched automatically.

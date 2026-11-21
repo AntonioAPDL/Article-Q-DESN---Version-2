@@ -42,11 +42,16 @@ this lane.
 
 ## Execution rule
 
-Only the six-worker benchmark is authorized by the 2026-11-21 implementation
-instruction. Its finalizer must stop at
-`BENCHMARK_COMPLETE_READY_FOR_R1A_REVIEW`. Every later stage requires an exact
-stage confirmation token and an explicit physical CPU list. Finalizers may
-prepare the next plan but never launch it.
+The six-worker benchmark completed with six successes and no failures. Its
+largest 2,000-state worker used about 0.52 GiB peak RSS and 19.6 seconds. The
+frozen R1a plan projects about 33 CPU-hours, 1.32 wall-hours at 25 workers, and
+1.98 conservative wall-hours. After that review, R1a was launched on 25
+distinct physical Muscat cores from code commit `d90645a8`, at nice priority
+and one numerical thread per worker. Its finalizer may prepare R1b but cannot
+launch it.
+
+Every later stage requires an exact stage confirmation token and an explicit
+physical CPU list. Finalizers may prepare the next plan but never launch it.
 
 The ignored authoritative planning tracker is:
 

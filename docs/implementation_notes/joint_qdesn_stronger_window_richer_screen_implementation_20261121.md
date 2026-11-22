@@ -156,6 +156,43 @@ clean, pushed task branch after exact hash and capacity checks. Its finalizer
 may prepare H1 but cannot launch it. R3 aggregates across the predeclared seed
 set and must never promote the empirically best reservoir seed.
 
+## R3 closeout and H1 contract
+
+R3 launched on 2026-11-21 at 22:58 EST from commit
+`e6d7dcb54bc90266e1219f0ff43cdd777907c7cf` on the same reviewed 25-core
+allocation. Its capacity receipt recorded 493 GiB available memory and 346 GiB
+free durable storage.
+
+R3 closed with 4,608/4,608 workers complete, zero failures, 4,608 finite
+scores, zero protected rows, and pipeline exit zero. Its eight-entry manifest
+verifies completely. Three warning rows are from the known 1,500-state
+persistent-tail sentinel at the canonical seed; they are finite, reproducible,
+poor-scoring, and capacity-bound. No supported architecture warned.
+
+The finalizer aggregated 512 architectures across all three selector fixtures
+and three frozen reservoir seeds. It retained exactly 50 backend-supported
+architectures per scenario, recorded 67 capacity-bound architectures, and
+prepared 4,400 H1 workers across the 11-point `tau0` grid.
+
+Every supported seed-aggregated winner improves the authoritative anchor mean,
+by 3.0% to 21.4%. Five improve all nine matched fixture/seed comparisons; the
+remaining three improve seven or eight, with worst reversals below 1%. Every
+global winner uses 20-48 retained states and is supported by the current RHS
+backend. No capacity-bound architecture wins.
+
+Frozen hashes:
+
+- `r3_scores.csv`: `8e8be643da4e8b3e895a99f083ebf08acdeb5bd0f12786d51ebd6b0c381bdc56`
+- `r3_seed_robustness_aggregate.csv`: `c56a38cd22d5250270f587a7bc67c3508645b7425dce506ec0a083f1125cab59`
+- `r3_rhs_frontier.csv`: `2935806165bf3c32543a9f4702a497a2f189874835b3e40328da6b6e15c1bfc7`
+- `h1_worker_plan.csv`: `ec8b662e77c61c7054a6c3d5653f8eab0f8c5adc38196cc0018a2237858537ed`
+- `r3_manifest.csv`: `e3ee7668a9110c70dac98951478cefb44b2d6a620cace0de3a8abfae15624fd4`
+
+Current decision: `R3_COMPLETE_READY_FOR_H1_REVIEW`. H1 may launch only from a
+clean, pushed task branch after exact hash and capacity checks. It must use the
+frozen 11-point `tau0` grid for all 400 architectures on selector fixture 1
+and stop after preparing H2.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

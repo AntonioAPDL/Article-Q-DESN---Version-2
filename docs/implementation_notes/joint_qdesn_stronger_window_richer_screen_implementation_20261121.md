@@ -193,6 +193,42 @@ clean, pushed task branch after exact hash and capacity checks. It must use the
 frozen 11-point `tau0` grid for all 400 architectures on selector fixture 1
 and stop after preparing H2.
 
+## H1 closeout and H2 contract
+
+H1 completed all 4,400 normal-RHS VB workers with zero failures, zero
+warnings, finite scores throughout, and zero protected rows. Of the fits,
+4,397 met the ordinary convergence rule and three reached the frozen maximum
+iteration count with finite, nonpathological outputs. These three are retained
+for replicate review rather than silently deleted.
+
+The H1 finalizer retained exactly two `tau0` values for each of the 400
+scenario-architecture pairs, producing 800 retained pairs and a balanced H2
+plan of 2,400 workers across three selector fixtures. The best H1 value lies
+at one of the two grid boundaries for 262/400 architectures. This is evidence
+for the predeclared local H3 refinement after cross-fixture confirmation, not
+permission to expand or rerank H1 adaptively.
+
+A provenance audit found that the original H1/H2 finalizers returned their
+stage decision to standard output but did not manifest it. Commit `55ff614b`
+adds durable, manifested decision receipts to both stages. The H1 finalizer
+was then replayed deterministically without refitting any worker. The H2 plan
+hash remained identical, proving that this was a provenance-only correction.
+
+Frozen H1 hashes after that replay:
+
+- `h1_scores.csv`: `65647cc4347cd6d26ef1ff6ee31c1aa268d162f14aaff762fa7f7cefa9d60f76`
+- `h1_aggregate.csv`: `4806f8fbfa4d1eff74511493301c0dbf44f86508d36ec601a6ee2a728706d122`
+- `h1_retained_tau_pairs.csv`: `db2fd1a66f12f52f4603e0161fbeb9aa263cc4b66dc3cd02e9f8118569858b91`
+- `h2_worker_plan.csv`: `1055285daa9962445de75fedf6dffd9eb9d7e6331b5bbf3ed9c5a1aebf5b4644`
+- `h1_decision.csv`: `3d9b2eacaa65c759fb03d631a3a025146d413ceac6b7c9797282a3f086f5ba4f`
+- `h1_manifest.csv`: `51530716bcf197eb8a9a48347f0a5647fd1729567c18c8a3e7e91f8a94b9ebbe`
+
+Current decision: `H1_COMPLETE_READY_FOR_H2_REVIEW`. H2 may launch only after
+the seven-entry manifest, exact H2 plan hash, clean pushed source, and fresh
+capacity receipt pass. H2 evaluates the two retained values for every
+architecture on all three selector fixtures. Its finalizer may prepare H3 but
+cannot launch it.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

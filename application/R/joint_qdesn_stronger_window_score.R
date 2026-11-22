@@ -160,6 +160,14 @@ app_joint_swscore_finalize_oracle <- function(root) {
   contract <- app_read_csv(file.path(out, "score_contract.csv"))
   tau <- app_joint_swscore_numvec(contract, "quantile_grid")
   weights <- app_joint_swscore_numvec(contract, "trapezoidal_weights")
+  for (id in plan$oracle_worker_id) {
+    worker <- app_joint_swscore_oracle_dir(root, id)
+    verified <- app_joint_shared_verify_manifest(worker,
+      file.path(worker, "artifact_manifest.csv"))
+    if (!nrow(verified) || any(!verified$verified)) {
+      stop(sprintf("Oracle worker %d manifest is not verified.", id), call. = FALSE)
+    }
+  }
   diagnostics <- paths <- list()
   for (scenario in unique(plan$scenario_id)) {
     block <- plan[plan$scenario_id == scenario, , drop = FALSE]

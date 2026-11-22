@@ -577,3 +577,50 @@ per worker, and excludes observed unrelated PriceFM/service cores. The launch
 receipt recorded 344 GiB free `/data` storage and 491 GiB available memory.
 The campaign must stop after MCMC finalization; protected oracle and score
 workers remain prohibited until all 192 workers and their manifests verify.
+
+## MCMC closeout and protected-score preparation
+
+The MCMC stage closed on 2026-11-22 with 192/192 chains complete, zero
+failures, and pipeline exit zero. All 960 worker-manifest entries verify by
+size and SHA-256. The registry contains 64 model cells with three independent
+chains each, balanced across 96 AL and 96 exact-M0 exAL workers and across
+independent and joint fits. Every retained draw is finite, every chain has the
+frozen retained-draw count, all three chains within each cell share one
+posterior-target hash, and no protected score was computed during fitting.
+
+Thirty chains emitted attributable sparse-factorization warnings. Thirty
+chains used the predeclared precision safeguard, totaling 439 repairs; the
+maximum relative jitter was `1e-12`. These remain review-level diagnostics:
+the draws are finite and all fit-window contract crossings are zero. Raw
+fit-window crossings total 248 and are retained as coherence diagnostics.
+Chain runtimes ranged from 25.0 to 78.2 minutes, with median 45.7 minutes.
+
+The MCMC finalizer froze the protected scoring contract and prepared, but did
+not run, 64 DGP-oracle workers and 128 score workers. The contract retains the
+seven-level trapezoidal quantile grid, origin-marginal DGP-integrated aCRPS,
+canonical recursive-mean-state forecasting, recursive-path sensitivity,
+matched independent coupling, equal-tailed 95% intervals, and a 1% complete
+scenario-packet noninferiority margin. Interval overlap is never treated as
+equivalence.
+
+Frozen score-preparation hashes:
+
+- `score_contract.csv`:
+  `cc022ba7066118d293f8d7c161fe8609ab239c9bb787d9fb8c5348eb512dd268`
+- `mcmc_worker_summary.csv`:
+  `6621609d62e6cdeb80086b4fdb0ea03ade405a0cbdd2548bb04f65d6da7ac9c9`
+- `posterior_target_audit.csv`:
+  `e4c35ee02d7353110717fa57d0eecec3144eb98356c4a55013317c0024dd93bc`
+- `oracle_worker_plan.csv`:
+  `6dfba47ae4bdfe0dc811ad11bc97d00ec7708240cb4c97bbdcc0ffa99e0ae7b2`
+- `score_worker_plan.csv`:
+  `6d8e1fa67d8df9fe90e45878708068d8d228fee3cb30b76944178df81f978dce`
+- `score_readiness.csv`:
+  `fd6cefef8a6ad19c39d3269f3c05565a1033c0d8b1e78d306d264fb5873e10a4`
+- `score_prepare_manifest.csv`:
+  `bf017cde6fcab0c43d9d019642666f18ed707cdc4d6262cee8ee729b74db6ec7`
+
+Before protected launch, the oracle finalizer was strengthened to re-verify
+every worker manifest immediately before combining oracle shards. This is a
+post-processing provenance gate; it does not change a fitted model, posterior
+draw, oracle seed, score definition, or selection rule.

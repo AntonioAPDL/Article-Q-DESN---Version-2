@@ -17,6 +17,7 @@ stopifnot(
 
 prepare_body <- paste(deparse(app_joint_swscore_finalize_mcmc), collapse = "\n")
 score_body <- paste(deparse(app_joint_swscore_run_cell), collapse = "\n")
+oracle_final_body <- paste(deparse(app_joint_swscore_finalize_oracle), collapse = "\n")
 final_body <- paste(deparse(app_joint_swscore_finalize), collapse = "\n")
 stopifnot(
   grepl("nrow(summary) != 192L", prepare_body, fixed = TRUE),
@@ -24,6 +25,7 @@ stopifnot(
   grepl("score_launch_readiness.csv", score_body, fixed = TRUE),
   grepl("app_joint_recursive_mean_design", score_body, fixed = TRUE),
   grepl("app_joint_pure_recursive_path_score_draws", score_body, fixed = TRUE),
+  grepl("Oracle worker %d manifest is not verified", oracle_final_body, fixed = TRUE),
   grepl("interval_overlap_is_equivalence = FALSE", final_body, fixed = TRUE),
   grepl("promote_complete_challenger_packet", final_body, fixed = TRUE)
 )

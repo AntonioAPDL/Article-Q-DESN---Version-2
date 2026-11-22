@@ -229,6 +229,47 @@ capacity receipt pass. H2 evaluates the two retained values for every
 architecture on all three selector fixtures. Its finalizer may prepare H3 but
 cannot launch it.
 
+## H2 closeout and H3 contract
+
+H2 launched from clean pushed commit `7cbcb7e6` on 25 distinct physical
+Muscat cores, excluding the physical core occupied by an unrelated PriceFM
+verification process. The receipt recorded 492 GiB available memory and 345
+GiB free durable storage.
+
+H2 closed with 2,400/2,400 complete workers, zero failures, zero warnings,
+finite score and runtime fields throughout, zero protected rows, and pipeline
+exit zero. Six fits reached the frozen 400-iteration limit; all had finite
+scores and final deltas between `1.56e-4` and `2.70e-4`. They remain
+review-level evidence rather than being deleted or retried.
+
+The finalizer produced 800 cross-fixture architecture-`tau0` aggregates,
+retained exactly 20 pairs per scenario (160 total), preserved all eight
+authoritative architecture anchors, and prepared 960 H3 workers. Each H3 pair
+evaluates the two predeclared log-scale neighbors on all three selector
+fixtures. Among the 400 architecture-level H2 optima, 245 lie at a frozen H1
+grid boundary. H3 therefore answers a real boundary-resolution question, but
+does so only through the rule frozen before H1.
+
+Every H2 scenario winner improves its matched best authoritative anchor in
+all three fixtures. Mean improvements range from 0.58% to 11.49%. This remains
+internal selection evidence and cannot enter the article or protected-model
+comparison.
+
+Frozen H2 hashes:
+
+- `h2_scores.csv`: `eddfe65cda6396af64944221678f5ad50b05d900267eed5118a91be04a501251`
+- `h2_aggregate.csv`: `c13afc3e7f14fb1de7a7e01ea27d130df9d98afb82fcd1b7cdd74097eb282fc9`
+- `h2_refinement_shortlist.csv`: `3823d9fa74c755b9b2744dd4200a0d33330983fa9cd17ab21b2348aba9896721`
+- `h3_worker_plan.csv`: `39f64e374dde8f3945f6491560f64651147e094c01060d71d31e0b50a90b9e46`
+- `h2_decision.csv`: `240c8c3f0db04ee2c0c562032777fcdac33ecbf5d878a3323871d32f17ccbd44`
+- `h2_manifest.csv`: `07c3b08884d3b874bd0444fe3c340749dcb584ad3b6318561178795bd89a351f`
+
+Current decision: `H2_COMPLETE_READY_FOR_H3_REVIEW`. H3 may launch only from a
+clean pushed branch after exact plan and manifest verification plus a fresh
+capacity audit. Its finalizer must combine H2 and H3, select exactly 20
+architecture-`tau0` pairs per scenario, emit the median-AL worker plan, and
+stop. It cannot start quantile fitting.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

@@ -86,9 +86,39 @@ R1b launched on 2026-11-21 at 20:58 EST from commit
 `8ed0b063edc889486ea62758c577b066c7f5727d` on 25 distinct physical Muscat
 cores, with one numerical thread per worker and reduced scheduling priority.
 The launch receipt recorded 493 GiB available memory and 347 GiB free durable
-storage. The initial live sentinel completed 69 workers with zero failures and
-zero structured warning receipts. The launch session is
-`joint_sw_r1b_20261121`. R2 remains blocked pending complete R1b closeout.
+storage.
+
+R1b closed at 21:26 EST with 8,192/8,192 workers complete, zero failures,
+8,192 finite scores, zero protected rows, and pipeline exit zero. The final
+seven-entry manifest verifies completely. Two high-capacity sentinel workers
+recorded an eigensolver warning; both produced complete finite outputs and are
+noncompetitive, so the warnings are review-level rather than failure-level.
+
+The finalizer retained exactly 256 candidates per scenario, including all
+authoritative anchors and exactly 32 high-capacity sentinels per scenario. It
+prepared a balanced R2 plan with 6,144 workers: 256 candidates x 3 selector
+fixtures x 8 scenarios, using all ten internal origins. The R2 plan SHA-256 is
+`7922d49e0f76ed209556dc6ba74a7aaa9b7175f20e8c78d36644fbcf0970c79d`.
+The R1b manifest SHA-256 is
+`37f846d77751d956833f61f3e86a69de1b4fdfcd87c80b27574e71c1c10f02bd`.
+
+Every R1b numerical minimum improves on its matched authoritative architecture
+anchor on the internal six-origin target, by 3.3% to 18.1%. Ranking stability
+between R1a and R1b is nevertheless scenario-dependent: common-candidate
+Spearman correlations range from 0.05 to 0.76 and top-20 overlap ranges from
+zero to four. R2 is therefore required to measure full-origin,
+three-replicate stability before freezing any architecture. These internal
+scores are not article evidence and do not authorize protected evaluation.
+
+The best R1b retained-state budgets are 20-48. No 1,500/2,000-state sentinel
+wins. Their frozen quota remains in R2 as capacity evidence, but the campaign
+does not expand the expensive inference backend unless later reproducible
+evidence supports it.
+
+Current decision: `R1B_COMPLETE_READY_FOR_R2_REVIEW`. R2 may launch only from
+a clean, pushed branch after focused tests, exact manifest and plan-hash
+verification, and a fresh CPU/memory/storage audit. Its finalizer may prepare
+R3 but cannot launch it.
 
 The ignored authoritative planning tracker is:
 

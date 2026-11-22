@@ -50,10 +50,12 @@ metadata <- app_joint_swcf_model_metadata("joint_exqdesn_rhs")
 stopifnot(metadata$fit_structure == "joint", metadata$likelihood_family == "exAL")
 mcmc_body <- paste(deparse(app_joint_swcf_run_mcmc), collapse = "\n")
 finalize_body <- paste(deparse(app_joint_swcf_finalize_vb), collapse = "\n")
+prepare_body <- paste(deparse(app_joint_swcf_prepare_vb), collapse = "\n")
 stopifnot(
   grepl("app_joint_article_overdispersed_start", mcmc_body, fixed = TRUE),
   grepl("protected_scores_computed = FALSE", mcmc_body, fixed = TRUE),
   grepl("nrow(workers) != 192L", finalize_body, fixed = TRUE),
-  grepl("M0_v_collapsed_support_logit", finalize_body, fixed = TRUE)
+  grepl("M0_v_collapsed_support_logit", finalize_body, fixed = TRUE),
+  grepl("fixture$registry_row <- row", prepare_body, fixed = TRUE)
 )
 cat("Stronger-window confirmation tests passed.\n")

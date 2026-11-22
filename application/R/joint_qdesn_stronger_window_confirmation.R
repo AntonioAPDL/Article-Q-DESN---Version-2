@@ -225,6 +225,11 @@ app_joint_swcf_prepare_vb <- function(root) {
     row <- dgp[dgp$scenario_id == registry$scenario_id[[i]], , drop = FALSE]
     row$seed <- registry$article_seed[[i]]
     fixture <- app_joint_qdesn_fixture_from_registry_row(row)
+    fixture$registry_row <- row
+    if (is.null(fixture$registry_row$simulated_length) ||
+        fixture$registry_row$simulated_length[[1L]] != length(fixture$y)) {
+      stop("Article fixture registry metadata is missing or inconsistent.", call. = FALSE)
+    }
     path <- file.path(fixture_dir, sprintf("%02d_%s_article.rds", registry$scenario_order[[i]],
       registry$scenario_id[[i]])); saveRDS(fixture, path, version = 3L, compress = "xz")
     data.frame(scenario_id = registry$scenario_id[[i]], article_seed = registry$article_seed[[i]],

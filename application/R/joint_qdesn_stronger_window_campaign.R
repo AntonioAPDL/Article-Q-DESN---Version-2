@@ -823,6 +823,15 @@ app_joint_sw_prepare <- function(root = app_joint_sw_default_root()) {
   list(root = root, expected = expected, readiness = readiness)
 }
 
+app_joint_sw_capture_warnings <- function(fun) {
+  warnings <- character()
+  value <- withCallingHandlers(fun(), warning = function(w) {
+    warnings <<- c(warnings, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  list(value = value, warnings = unique(warnings))
+}
+
 app_joint_sw_run_worker <- function(root, stage, worker_id) {
   root <- normalizePath(root, mustWork = TRUE)
   spec <- app_joint_sw_stage_spec(stage)
@@ -839,18 +848,31 @@ app_joint_sw_run_worker <- function(root, stage, worker_id) {
   origin_indices <- as.integer(strsplit(as.character(row$origin_indices[[1L]]), ";", fixed = TRUE)[[1L]])
   started <- Sys.time()
   score_fun <- if (stage %in% c("h1", "h2", "h3")) app_joint_sw_score_rhs else app_joint_sw_score_ridge
-  result <- tryCatch(score_fun(fixture, row, contract, origin_indices), error = function(e) e)
-  if (inherits(result, "error")) {
-    failure <- cbind(row, data.frame(status = "failed", error_message = conditionMessage(result),
+  captured <- tryCatch(app_joint_sw_capture_warnings(function() {
+    score_fun(fixture, row, contract, origin_indices)
+  }), error = function(e) e)
+  if (inherits(captured, "error")) {
+    failure <- cbind(row, data.frame(status = "failed", error_message = conditionMessage(captured),
       runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")), stringsAsFactors = FALSE))
     app_write_csv(failure, file.path(out, "failure.csv"))
     writeLines("failed", file.path(out, "FAILED"))
     return(invisible(out))
   }
+  result <- captured$value
+  result$summary$warning_count <- length(captured$warnings)
+  result$summary$warning_messages <- paste(captured$warnings, collapse = " | ")
   files <- c(
     summary = app_write_csv(result$summary, file.path(out, "summary.csv")),
     detail = app_write_csv(result$detail, file.path(out, "calibration_detail.csv"))
   )
+  if (length(captured$warnings)) {
+    warning_events <- data.frame(
+      warning_index = seq_along(captured$warnings),
+      warning_message = captured$warnings,
+      stringsAsFactors = FALSE
+    )
+    files <- c(files, warnings = app_write_csv(warning_events, file.path(out, "warnings.csv")))
+  }
   if (!is.null(result$trace) && nrow(result$trace)) {
     files <- c(files, vb_trace = app_write_csv(result$trace, file.path(out, "vb_trace.csv")))
   }
@@ -899,6 +921,15 @@ app_joint_sw_collect_stage <- function(root, stage) {
     stop("Collected stronger-window scores violate completion gates.", call. = FALSE)
   }
   scores
+}
+
+app_joint_sw_stage_receipts <- function(root, stage) {
+  out <- c()
+  capacity <- file.path(root, paste0(stage, "_capacity_receipt.csv"))
+  if (file.exists(capacity)) out <- c(out, capacity_receipt = capacity)
+  out <- c(out, finalizer_git_state = app_write_csv(app_joint_shared_git_state(),
+    file.path(root, paste0(stage, "_finalizer_git_state.csv"))))
+  out
 }
 
 app_joint_sw_finalize_benchmark <- function(root) {
@@ -1114,6 +1145,7 @@ app_joint_sw_finalize_ridge_stage <- function(root, stage) {
     selected = nrow(frontier), next_stage_launched = FALSE, protected_rows_used = 0L,
     stringsAsFactors = FALSE)
   files <- c(files, decision = app_write_csv(decision, file.path(root, paste0(stage, "_decision.csv"))))
+  files <- c(files, app_joint_sw_stage_receipts(root, stage))
   app_joint_shared_write_manifest(root, files, filename = paste0(stage, "_manifest.csv"))
   decision
 }
@@ -1166,6 +1198,7 @@ app_joint_sw_finalize_r3 <- function(root) {
     capacity_bound = nrow(blocked), h1_workers = nrow(plan), h1_launched = FALSE,
     protected_rows_used = 0L, stringsAsFactors = FALSE)
   files <- c(files, decision = app_write_csv(decision, file.path(root, "r3_decision.csv")))
+  files <- c(files, app_joint_sw_stage_receipts(root, "r3"))
   app_joint_shared_write_manifest(root, files, filename = "r3_manifest.csv")
   decision
 }
@@ -1196,6 +1229,7 @@ app_joint_sw_finalize_h1 <- function(root) {
     h2_plan = app_write_csv(plan, file.path(root, "h2_worker_plan.csv"))
   )
   app_ensure_dir(file.path(root, "h2_workers"))
+  files <- c(files, app_joint_sw_stage_receipts(root, "h1"))
   app_joint_shared_write_manifest(root, files, filename = "h1_manifest.csv")
   data.frame(status = "H1_COMPLETE_READY_FOR_H2_REVIEW", h2_workers = nrow(plan), stringsAsFactors = FALSE)
 }
@@ -1237,6 +1271,7 @@ app_joint_sw_finalize_h2 <- function(root) {
     h3_plan = app_write_csv(plan, file.path(root, "h3_worker_plan.csv"))
   )
   app_ensure_dir(file.path(root, "h3_workers"))
+  files <- c(files, app_joint_sw_stage_receipts(root, "h2"))
   app_joint_shared_write_manifest(root, files, filename = "h2_manifest.csv")
   data.frame(status = "H2_COMPLETE_READY_FOR_H3_REVIEW", h3_workers = nrow(plan), stringsAsFactors = FALSE)
 }
@@ -1276,6 +1311,7 @@ app_joint_sw_finalize_h3 <- function(root) {
     selected_pairs = nrow(selected), median_workers = nrow(median_plan), median_launched = FALSE,
     seven_grid_launched = FALSE, protected_rows_used = 0L, stringsAsFactors = FALSE)
   files <- c(files, readiness = app_write_csv(readiness, file.path(root, "quantile_vb_readiness.csv")))
+  files <- c(files, app_joint_sw_stage_receipts(root, "h3"))
   app_joint_shared_write_manifest(root, files, filename = "h3_manifest.csv")
   readiness
 }

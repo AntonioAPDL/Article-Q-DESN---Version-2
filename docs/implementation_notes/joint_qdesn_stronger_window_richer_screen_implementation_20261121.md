@@ -53,6 +53,35 @@ launch it.
 Every later stage requires an exact stage confirmation token and an explicit
 physical CPU list. Finalizers may prepare the next plan but never launch it.
 
+## R1a closeout and R1b contract
+
+R1a closed on 2026-11-21 at 07:44 EST with 32,768/32,768 workers complete,
+zero failures, 32,768 finite scores, and zero protected rows. The finalizer
+retained exactly 1,024 candidates per scenario, including all 16 anchors and
+exactly 64 high-capacity sentinels per scenario. The five-file R1a manifest
+verified completely.
+
+Frozen hashes:
+
+- `r1a_manifest.csv`: `e0417e076eb4c4793bbd6c3bbb26d9af0116a0bbdaff40166e6306d5e704266b`
+- `r1a_scores.csv`: `559526528353d196b6966abaef3226fc5efb4edd7c5dd82895edd23122b9e355`
+- `r1a_frontier.csv`: `6e2ec82e8c2b50999882e2ecc42cc4526bf9a22e4afa11a53d33803ee5582eb4`
+- `r1b_worker_plan.csv`: `291c4a8aef40a8cb584f2ecbec202d175f41abf14578d97ab09999d7ea711278`
+
+The best three-origin internal score improved over exact parity in every
+scenario, from 7.2% to 28.7%. This is screening evidence only. No R1a score is
+eligible for article promotion, and no protected realization was inspected.
+The early winners use 20-150 retained states; no 1,500/2,000-state sentinel is
+a scenario winner. The sentinel quota remains frozen through R1b so this
+observation does not create an adaptive early deletion.
+
+R1b evaluates the frozen 1,024 candidates per scenario on origins
+`1,3,5,7,9,10`, giving 8,192 workers and 180 recursively forecast rows per
+worker. Actual R1a timing projects 0.94 wall-hours at 25 workers, with a 1.27
+hour conservative allowance. R1b must stop after preparing the 256-per-scenario
+R2 plan. R2 cannot launch without a new score, manifest, runtime, warning, and
+capacity audit.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

@@ -97,6 +97,15 @@ stopifnot(
   abs(aggregate_probe$convergence_fraction - 2 / 3) < 1e-12
 )
 
+warning_probe <- app_joint_sw_capture_warnings(function() {
+  warning("structured warning probe")
+  42L
+})
+stopifnot(
+  identical(warning_probe$value, 42L),
+  identical(warning_probe$warnings, "structured warning probe")
+)
+
 expected_rows <- candidates[grepl("^expected_degree_", candidates$recurrent_sparsity_mode), , drop = FALSE]
 stopifnot(nrow(expected_rows) > 0L)
 for (ii in seq_len(min(30L, nrow(expected_rows)))) {

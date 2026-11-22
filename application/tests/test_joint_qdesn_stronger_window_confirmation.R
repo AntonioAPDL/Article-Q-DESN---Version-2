@@ -16,4 +16,12 @@ stopifnot(
   grepl("protected_rows_loaded = 0L", paste(deparse(app_joint_swcf_run_sentinel), collapse = "\n"), fixed = TRUE),
   grepl("protected_scores_computed = FALSE", paste(deparse(app_joint_swcf_run_vb), collapse = "\n"), fixed = TRUE)
 )
+launcher <- paste(readLines(file.path(repo_root,
+  "application/scripts/launch_joint_qdesn_stronger_window_confirmation.sh"), warn = FALSE),
+  collapse = "\n")
+stopifnot(
+  grepl("JOINT_SWCF_CONFIRM_STAGE", launcher, fixed = TRUE),
+  grepl("physical_package_id", launcher, fixed = TRUE),
+  grepl("taskset -c", launcher, fixed = TRUE)
+)
 cat("Stronger-window confirmation tests passed.\n")

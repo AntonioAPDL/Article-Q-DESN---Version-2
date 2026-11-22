@@ -293,10 +293,39 @@ app_joint_swtx_recursive_grid <- function(design, fixture, fits, contract) {
     origin_index = origin, horizon = horizon)
 }
 
+app_joint_swtx_location_scale <- function(design, tolerance = 1.0e-8) {
+  true_q <- as.matrix(design$true_q)
+  tau <- as.numeric(design$tau)
+  if (ncol(true_q) != length(tau) || length(tau) < 2L ||
+      any(!is.finite(true_q)) || is.null(design$dgp_row)) {
+    stop("Location-scale reconstruction requires finite oracle quantiles and a DGP row.",
+      call. = FALSE)
+  }
+  standardized_q <- app_joint_qvp_registry_standardized_quantile(tau, design$dgp_row)
+  centered_q <- standardized_q - mean(standardized_q)
+  denominator <- sum(centered_q^2)
+  if (!is.finite(denominator) || denominator <= .Machine$double.eps) {
+    stop("Standardized DGP quantiles do not identify location and scale.", call. = FALSE)
+  }
+  sigma <- as.numeric(true_q %*% centered_q / denominator)
+  mu <- rowMeans(true_q) - sigma * mean(standardized_q)
+  reconstructed <- outer(mu, rep(1, length(tau))) + outer(sigma, standardized_q)
+  row_tolerance <- tolerance * pmax(1, apply(abs(true_q), 1L, max))
+  row_error <- apply(abs(reconstructed - true_q), 1L, max)
+  if (any(!is.finite(mu)) || any(!is.finite(sigma)) || any(sigma <= 0) ||
+      any(row_error > row_tolerance)) {
+    stop("Oracle quantiles do not satisfy the frozen DGP location-scale contract.",
+      call. = FALSE)
+  }
+  list(mu = mu, sigma = sigma, standardized_q = standardized_q,
+    max_reconstruction_error = max(row_error))
+}
+
 app_joint_swtx_score_window <- function(design, qhat, index, model_id, window) {
   contract <- app_joint_qdesn_apply_monotone_contract(qhat, design$tau)
+  location_scale <- app_joint_swtx_location_scale(design)
   score <- app_joint_qdesn_postscore_score_matrix(contract$qhat_contract,
-    design$y[index], design$mu[index], design$sigma[index], design$dgp_row,
+    design$y[index], location_scale$mu[index], location_scale$sigma[index], design$dgp_row,
     design$tau, app_joint_shared_weights(design$tau))
   truth_error <- contract$qhat_contract - design$true_q[index, , drop = FALSE]
   data.frame(model_id = model_id, window = window, n_scored_rows = length(index),

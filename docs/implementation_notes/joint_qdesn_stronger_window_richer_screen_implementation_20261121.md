@@ -427,3 +427,22 @@ Transfer finalization will report fit and recursive-calibration DGP-integrated
 aCRPS, realized aCRPS, oracle recovery, and crossing diagnostics for all four
 model families. It cannot launch full-development refits, MCMC, protected
 evaluation, or article replacement.
+
+The first complete dependency-block sentinel exposed a post-processing-only
+contract mismatch: the pure-DESN design stores the oracle quantile matrix but
+does not duplicate the DGP location and scale paths expected by the existing
+DGP-integrated scorer. The transfer scorer now recovers those paths exactly
+from the frozen standardized DGP quantiles. It requires positive scales and
+round-trips every oracle quantile row within a relative tolerance of `1e-8`.
+Across all 48 frozen specification-replicate designs, the largest observed
+round-trip error was `1.78e-15` and the smallest recovered scale was `0.521`.
+No fit, fixture, seed, model action, or selection result changed.
+
+The committed-code dependency sentinel contains seven independent structured
+exAL fits, one joint AL fit, and one joint structured-exAL fit. All nine
+workers completed with verified artifacts and zero protected rows. Scoring
+the matched independent/joint AL/exAL actions on both the 1,000-row training
+window and 300-row recursive calibration window produced eight finite score
+rows and zero contract crossings. These nine valid workers remain part of the
+432-worker production plan; the broad launcher must skip rather than refit
+them.

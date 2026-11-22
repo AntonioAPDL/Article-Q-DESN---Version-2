@@ -29,6 +29,25 @@ stopifnot(
 independent_prediction <- app_joint_swtx_predict_grid(fits, c(2, 1), design$tau)
 stopifnot(identical(independent_prediction, c(3, 11)))
 
+location_scale_design <- list(
+  tau = c(0.05, 0.20, 0.50, 0.80, 0.95),
+  dgp_row = data.frame(distribution_family = "asymmetric_laplace", al_tau = 0.20),
+  true_q = NULL
+)
+standardized_q <- app_joint_qvp_registry_standardized_quantile(
+  location_scale_design$tau, location_scale_design$dgp_row
+)
+expected_mu <- c(-2, 0.5, 4)
+expected_sigma <- c(0.25, 1.5, 3)
+location_scale_design$true_q <- outer(expected_mu, rep(1, length(standardized_q))) +
+  outer(expected_sigma, standardized_q)
+recovered <- app_joint_swtx_location_scale(location_scale_design)
+stopifnot(
+  max(abs(recovered$mu - expected_mu)) < 1.0e-12,
+  max(abs(recovered$sigma - expected_sigma)) < 1.0e-12,
+  recovered$max_reconstruction_error < 1.0e-12
+)
+
 prepare_body <- paste(deparse(app_joint_swtx_prepare), collapse = "\n")
 worker_body <- paste(deparse(app_joint_swtx_run_worker), collapse = "\n")
 finalize_body <- paste(deparse(app_joint_swtx_finalize), collapse = "\n")

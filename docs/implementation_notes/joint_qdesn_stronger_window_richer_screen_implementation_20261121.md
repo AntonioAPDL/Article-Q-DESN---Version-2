@@ -340,6 +340,16 @@ and adds a regression assertion. The three unaffected first-attempt cells are
 preserved with verified manifests, and the resumed launcher reruns only the
 failed independent-exAL cell.
 
+The protected score layer is separately implemented and remains blocked until
+all 192 MCMC workers verify. Its contract freezes the seven-level trapezoidal
+weights, eight 4,096-path DGP-oracle shards per scenario, matched independent
+draw coupling, equal-tailed 95% intervals, canonical recursive-mean-state
+forecasting, and recursive-path sensitivity. It produces 128 score cells
+(64 VB and 64 MCMC), matched challenger-minus-parity posterior contrasts, and
+one complete four-model decision per scenario. Overlapping intervals are
+reported but never interpreted as formal equivalence. No article file or
+historical authority is modified by this scientific lane.
+
 ## Quantile continuation implementation
 
 The continuation is implemented in

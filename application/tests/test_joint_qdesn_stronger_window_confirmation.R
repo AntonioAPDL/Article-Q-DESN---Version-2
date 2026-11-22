@@ -42,7 +42,9 @@ stopifnot(
   grepl("JOINT_SWCF_CONFIRM_STAGE", launcher, fixed = TRUE),
   grepl("physical_package_id", launcher, fixed = TRUE),
   grepl("taskset -c", launcher, fixed = TRUE),
-  grepl("mcmc_worker_plan.csv", launcher, fixed = TRUE)
+  grepl("mcmc_worker_plan.csv", launcher, fixed = TRUE),
+  grepl("oracle_worker_plan.csv", launcher, fixed = TRUE),
+  grepl("score_worker_plan.csv", launcher, fixed = TRUE)
 )
 metadata <- app_joint_swcf_model_metadata("joint_exqdesn_rhs")
 stopifnot(metadata$fit_structure == "joint", metadata$likelihood_family == "exAL")

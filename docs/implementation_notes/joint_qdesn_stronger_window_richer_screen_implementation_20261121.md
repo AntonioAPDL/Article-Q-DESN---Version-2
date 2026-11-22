@@ -624,3 +624,67 @@ Before protected launch, the oracle finalizer was strengthened to re-verify
 every worker manifest immediately before combining oracle shards. This is a
 post-processing provenance gate; it does not change a fitted model, posterior
 draw, oracle seed, score definition, or selection rule.
+
+## Protected oracle and score closeout
+
+The protected oracle campaign closed with 64/64 shards complete and zero
+failures. Eight scenario banks contain 32,768 paths each. Every bank passed
+the frozen split-half and analytic first-horizon checks. The score campaign
+then closed with 128/128 cells complete, zero failures, 128 teacher-forced
+audits passing, finite required metrics throughout, and zero contract
+crossings. The final status is
+`PROTECTED_SCORE_PACKET_READY_FOR_INTEGRATION_REVIEW`.
+
+The frozen complete-packet rule promotes five challenger packets:
+Gaussian-mixture bridge, nonlinear-reservoir-friendly, normal bridge,
+persistent heavy tail, and regime shift. It retains new-geometry parity for
+asymmetric-Laplace tail, Laplace bridge, and Student-t location-scale. These
+are packet-level decisions: no model-specific architecture is spliced into a
+scenario. Overlapping intervals are not interpreted as predictive
+equivalence.
+
+The selected 32-row MCMC packet has finite scores, six canonical raw crossing
+pairs, and zero canonical contract crossings. Its descriptive numerical
+winners are joint exAL for asymmetric-Laplace tail; joint AL for Gaussian
+mixture and nonlinear-reservoir-friendly; and independent AL for Laplace,
+normal, persistent-heavy-tail, regime-shift, and Student-t location-scale.
+These minima are descriptive until the integration coordinator completes the
+historical-authority comparison.
+
+Three selected rows require explicit predictive-functional review. The
+Laplace joint-exAL parity row has tail ESS 35.7. The persistent-heavy-tail
+joint-exAL challenger has folded R-hat 1.305, bulk ESS 65.2, and tail ESS
+53.6. The persistent-heavy-tail joint-AL challenger has folded R-hat 1.206,
+rank R-hat 1.063, bulk ESS 76.5, and a rare right tail that places its score
+mean above its 97.5% quantile. That last row also has materially poorer
+fit-oracle recovery than its matched parity row. These are not merely scalar
+gamma/sigma warnings; they concern the predictive score functional itself.
+They therefore remain review-level blockers to an automatic article claim,
+even though the complete persistent-tail packet passes the predeclared
+mean-improvement and 1% noninferiority rule.
+
+The difficult joint-score spread is consequently improved in some scenarios
+but not universally solved. Relative to the corresponding independent model,
+the selected persistent-heavy-tail joint interval is 8.28 times wider under
+AL and 7.56 times wider under exAL. The regime-shift ratios are 2.19 and 1.38.
+The article coordinator must not describe this campaign as proving uniform
+joint uncertainty contraction.
+
+## Frozen handoff artifacts
+
+The ignored handoff directory is:
+
+`application/cache/joint_qdesn_stronger_window_richer_screen_20261121/integration_handoff/`
+
+It contains the selected MCMC packet, joint-versus-independent interval-width
+audit, predictive-functional review table, integration audit, storage
+summary, handoff decision, and a 2,790-file byte-and-SHA-256 inventory for the
+entire full-confirmation runtime. The inventory covers 5,228,293,518 bytes and
+verified with zero mismatches. The complete campaign runtime occupies
+6,925,625,312 bytes across 262,467 files. Seventeen empty failed-attempt
+directories were removed; their durable exit and log receipts remain.
+
+The lane is `READY_FOR_INTEGRATION` for reproducibility code and frozen
+scientific evidence. It is not an automatic article replacement: no article
+asset was modified, and historical-authority reconciliation plus review of
+the three predictive-functional rows remains required.

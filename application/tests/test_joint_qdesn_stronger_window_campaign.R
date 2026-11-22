@@ -157,4 +157,15 @@ stopifnot(
   all(continuation$parent_tau[-1L] %in% continuation$tau)
 )
 
+quantile_launcher <- paste(readLines(file.path(
+  app_repo_root(),
+  "application/scripts/launch_joint_qdesn_stronger_window_quantile_stage.sh"
+), warn = FALSE), collapse = "\n")
+stopifnot(
+  grepl("cpu_fifo", quantile_launcher, fixed = TRUE),
+  grepl("IFS= read -r cpu <&9", quantile_launcher, fixed = TRUE),
+  grepl("printf '%s\\n' \"$cpu\" >&9", quantile_launcher, fixed = TRUE),
+  !grepl("index+=${#CPUS[@]}", quantile_launcher, fixed = TRUE)
+)
+
 cat("Stronger-window campaign contract tests passed.\n")

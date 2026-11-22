@@ -357,3 +357,34 @@ Runtime remains ignored under:
 
 No manuscript, table, figure, Overleaf branch, `main`, historical runtime, or
 unrelated scientific lane is modified by this implementation.
+
+## Median-AL closeout
+
+The median-AL stage closed on 2026-11-22 with 480/480 workers complete, zero
+failures, zero warnings, 480 converged fits, 480 finite internal calibration
+scores, and zero protected rows loaded. All eight closeout-manifest entries
+verify by size and SHA-256. The finalizer retained exactly eight shared
+architecture-`tau0` pairs per scenario, including exact parity in every
+scenario, and prepared 1,344 independent seven-grid AL workers. It did not
+launch the next stage.
+
+Frozen closeout hashes:
+
+- `median_al_scores.csv`:
+  `a279414d6acd521132138685c7be977f2c898ee52c3ffc46d10d4b7c3e10843f`
+- `median_al_aggregate.csv`:
+  `73116c28e49a6ecd96614aca8488a8a897645eaeeac57276a8204dd8a4ad7857`
+- `median_al_selected_top8_by_scenario.csv`:
+  `13a4f6f786d987b71c77a61419aee3efa261cceb82c9e3e05a81a4dd8530b4cd`
+- `seven_al_worker_plan.csv`:
+  `3e5cc7075b2bab610ee2a562e3d1439adc2c9dbf0a833d40540c1428fdf451d1`
+- `median_al_manifest.csv`:
+  `5393c55f922e2d33c29e79fc5ce0e9756ac2dc3b9759c327a07a4baa97757dfb`
+
+The seven-grid plan contains 192 median imports, 384 quarter/three-quarter
+fits, 384 inner-tail fits, and 384 outer-tail fits. Every median source and
+continuation parent resolves uniquely. The median stage exposed a static
+round-robin scheduling tail after unrelated work occupied one preflight CPU.
+The quantile launcher now uses a shared CPU-token pool, returning each CPU as
+soon as its worker completes. This is an execution-only correction: worker
+plans, seeds, models, and atomic output contracts are unchanged.

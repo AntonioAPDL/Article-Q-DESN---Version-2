@@ -43,6 +43,14 @@ printf '%s,%s,"%s",%d,%d,%d,%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$STAGE" "$CP
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export BLIS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 
+# Return each CPU to a shared token pool as soon as its worker completes. This
+# avoids a long static-stride tail when candidate runtimes are heterogeneous.
+cpu_fifo="$ROOT/.${STAGE}_cpu_pool_$$"
+mkfifo "$cpu_fifo"
+exec 9<>"$cpu_fifo"
+rm -f "$cpu_fifo"
+for cpu in "${CPUS[@]}"; do printf '%s\n' "$cpu" >&9; done
+
 for continuation_stage in "${stages[@]}"; do
   mapfile -t ids < <("$R_BIN" -e '
     x <- read.csv(commandArgs(TRUE)[1L]); id <- commandArgs(TRUE)[2L]
@@ -51,18 +59,22 @@ for continuation_stage in "${stages[@]}"; do
     stopifnot(id %in% names(x), nrow(x) > 0L); cat(x[[id]], sep="\n")
   ' "$plan" "$id_column" "$continuation_stage")
   pids=()
-  for ((slot=0; slot<${#CPUS[@]}; slot++)); do
+  for id in "${ids[@]}"; do
+    IFS= read -r cpu <&9
     (
-      for ((index=slot; index<${#ids[@]}; index+=${#CPUS[@]})); do
-        taskset -c "${CPUS[$slot]}" nice -n 10 "$R_BIN" \
-          "$REPO_ROOT/application/scripts/run_joint_qdesn_stronger_window_quantile_worker.R" \
-          --root="$ROOT" --stage="$STAGE" --worker-id="${ids[$index]}"
-      done
+      set +e
+      taskset -c "$cpu" nice -n 10 "$R_BIN" \
+        "$REPO_ROOT/application/scripts/run_joint_qdesn_stronger_window_quantile_worker.R" \
+        --root="$ROOT" --stage="$STAGE" --worker-id="$id"
+      rc=$?
+      printf '%s\n' "$cpu" >&9
+      exit "$rc"
     ) &
     pids+=("$!")
   done
   failed=0; for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
   (( failed == 0 )) || exit 4
 done
+exec 9>&-
 "$R_BIN" "$REPO_ROOT/application/scripts/finalize_joint_qdesn_stronger_window_quantile_stage.R" \
   --root="$ROOT" --stage="$STAGE"

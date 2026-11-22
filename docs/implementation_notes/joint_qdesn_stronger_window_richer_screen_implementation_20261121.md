@@ -306,6 +306,47 @@ preserve the pure intercept-plus-all-reservoir-state readout contract, score
 only the internal recursive calibration window, and stop after a separately
 manifested median decision.
 
+## Quantile continuation implementation
+
+The continuation is implemented in
+`application/R/joint_qdesn_stronger_window_quantile.R` with dedicated worker,
+finalizer, and launcher scripts. It reuses the established AL VB kernel but
+does not reuse the older teacher-forced prediction wrapper.
+
+Stage `m1` performs the frozen 480 independent median-AL fits. Each worker:
+
+1. rebuilds the selected pure-DESN design from its protected-row-free fixture;
+2. refits normal ridge and normal RHS on the 1,000 training rows;
+3. creates a compact seven-level Gaussian initializer without materializing a
+   seven-block covariance;
+4. fits median AL under the matched `tau0`;
+5. scores ten teacher-forced origins with 30 recursive steps each, feeding the
+   fitted median into unknown future response lags;
+6. freezes compact AL and Gaussian initializer objects plus score, trace, and
+   manifest receipts.
+
+The `m1` finalizer advances exactly eight diverse pairs per scenario while
+preserving exact parity. It emits a 1,344-job independent-AL ladder. Its 192
+median jobs import the already verified `m1` result; the remaining 1,152 fits
+follow `0.50 -> {0.25,0.75} -> {0.10,0.90} -> {0.05,0.95}`. Every target
+quantile is forecast on the matched recursively generated median state path.
+The stage-specific launcher enforces these four dependency levels.
+
+The seven-grid finalizer reconstructs each 7-column quantile action, computes
+internal finite-grid aCRPS, oracle recovery, and crossing diagnostics, and
+freezes one challenger plus exact parity per scenario. It cannot launch exAL,
+joint VB, MCMC, or protected evaluation.
+
+Verification completed before launch:
+
+- one real isolated median-AL sentinel passed in 6.6 seconds;
+- its score and five-artifact manifest verified completely;
+- stronger-window campaign contract tests passed;
+- shared-backbone quantile AL/exAL/joint kernel tests passed;
+- large-`p` ridge, pure-recursive campaign, and persistent/regime regression
+  tests passed;
+- shell syntax and `git diff --check` passed.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

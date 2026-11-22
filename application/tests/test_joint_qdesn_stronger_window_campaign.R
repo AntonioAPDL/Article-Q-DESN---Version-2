@@ -146,4 +146,15 @@ for (stage in c("h1", "h2")) {
   )
 }
 
+controls <- app_joint_swq_controls(contract)
+continuation <- app_joint_swq_continuation_order()
+stopifnot(
+  identical(controls$tau, contract$tau),
+  controls$max_dense_dim == contract$ordinary_promotion_dimension,
+  identical(controls$exal_vb_method, "VB1_structured_v"),
+  identical(continuation$tau, c(0.50, 0.25, 0.75, 0.10, 0.90, 0.05, 0.95)),
+  identical(continuation$continuation_stage, c(1L, 2L, 2L, 3L, 3L, 4L, 4L)),
+  all(continuation$parent_tau[-1L] %in% continuation$tau)
+)
+
 cat("Stronger-window campaign contract tests passed.\n")

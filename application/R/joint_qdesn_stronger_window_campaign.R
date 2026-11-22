@@ -1229,9 +1229,19 @@ app_joint_sw_finalize_h1 <- function(root) {
     h2_plan = app_write_csv(plan, file.path(root, "h2_worker_plan.csv"))
   )
   app_ensure_dir(file.path(root, "h2_workers"))
+  decision <- data.frame(
+    stage = "h1",
+    status = "H1_COMPLETE_READY_FOR_H2_REVIEW",
+    retained_pairs = nrow(retained),
+    h2_workers = nrow(plan),
+    next_stage_launched = FALSE,
+    protected_rows_used = 0L,
+    stringsAsFactors = FALSE
+  )
+  files <- c(files, decision = app_write_csv(decision, file.path(root, "h1_decision.csv")))
   files <- c(files, app_joint_sw_stage_receipts(root, "h1"))
   app_joint_shared_write_manifest(root, files, filename = "h1_manifest.csv")
-  data.frame(status = "H1_COMPLETE_READY_FOR_H2_REVIEW", h2_workers = nrow(plan), stringsAsFactors = FALSE)
+  decision
 }
 
 app_joint_sw_finalize_h2 <- function(root) {
@@ -1271,9 +1281,19 @@ app_joint_sw_finalize_h2 <- function(root) {
     h3_plan = app_write_csv(plan, file.path(root, "h3_worker_plan.csv"))
   )
   app_ensure_dir(file.path(root, "h3_workers"))
+  decision <- data.frame(
+    stage = "h2",
+    status = "H2_COMPLETE_READY_FOR_H3_REVIEW",
+    shortlisted_pairs = nrow(shortlist),
+    h3_workers = nrow(plan),
+    next_stage_launched = FALSE,
+    protected_rows_used = 0L,
+    stringsAsFactors = FALSE
+  )
+  files <- c(files, decision = app_write_csv(decision, file.path(root, "h2_decision.csv")))
   files <- c(files, app_joint_sw_stage_receipts(root, "h2"))
   app_joint_shared_write_manifest(root, files, filename = "h2_manifest.csv")
-  data.frame(status = "H2_COMPLETE_READY_FOR_H3_REVIEW", h3_workers = nrow(plan), stringsAsFactors = FALSE)
+  decision
 }
 
 app_joint_sw_finalize_h3 <- function(root) {

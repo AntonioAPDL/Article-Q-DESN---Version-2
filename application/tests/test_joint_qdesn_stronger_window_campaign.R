@@ -136,4 +136,14 @@ stopifnot(
   is.finite(result$summary$calibration_acrps_mean)
 )
 
+for (stage in c("h1", "h2")) {
+  body_text <- paste(deparse(get(paste0("app_joint_sw_finalize_", stage))), collapse = "\n")
+  stopifnot(
+    grepl(paste0(stage, "_decision\\.csv"), body_text),
+    grepl("next_stage_launched", body_text),
+    grepl("protected_rows_used", body_text),
+    grepl("decision = app_write_csv", body_text, fixed = TRUE)
+  )
+}
+
 cat("Stronger-window campaign contract tests passed.\n")

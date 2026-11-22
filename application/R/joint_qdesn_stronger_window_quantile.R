@@ -360,6 +360,30 @@ app_joint_swq_key <- function(scenario, candidate, tau0, replicate, tau = NULL) 
   if (is.null(tau)) base else paste(base, format(tau, digits = 17L, scientific = TRUE), sep = "::")
 }
 
+app_joint_swq_select_joint_eligible_specs <- function(aggregate, base_contract) {
+  aggregate$joint_dense_dimension <- length(base_contract$tau) *
+    as.integer(aggregate$retained_state_budget)
+  aggregate$joint_backend_eligible <- aggregate$joint_dense_dimension <=
+    as.integer(base_contract$ordinary_promotion_dimension)
+  selected <- app_bind_rows_fill(lapply(split(aggregate, aggregate$scenario_id), function(x) {
+    eligible <- x[app_as_bool_vec(x$joint_backend_eligible), , drop = FALSE]
+    parity <- eligible[grepl("anchor_authoritative_v2", eligible$candidate_role), , drop = FALSE]
+    if (!nrow(eligible) || !nrow(parity)) {
+      stop("Seven-grid selection lacks a joint-backend-eligible candidate or parity anchor.", call. = FALSE)
+    }
+    eligible <- eligible[order(eligible$calibration_acrps_mean,
+      eligible$calibration_acrps_worst, eligible$calibration_acrps_sd,
+      eligible$retained_state_budget, eligible$candidate_id), , drop = FALSE]
+    challenger <- eligible[1L, , drop = FALSE]
+    parity <- parity[which.min(parity$calibration_acrps_mean), , drop = FALSE]
+    challenger$specification_role <- "challenger"
+    parity$specification_role <- "new_geometry_parity"
+    out <- app_bind_rows_fill(list(challenger, parity))
+    out[!duplicated(paste(out$scenario_id, out$candidate_id, out$rhs_tau0)), , drop = FALSE]
+  }))
+  list(aggregate = aggregate, selected = selected)
+}
+
 app_joint_swq_finalize_m1 <- function(root) {
   root <- normalizePath(root, mustWork = TRUE)
   base_contract <- app_joint_sw_read_contract(file.path(root, "frozen_contract.csv"))
@@ -463,17 +487,9 @@ app_joint_swq_finalize_q1 <- function(root) {
     app_joint_sw_aggregate_scores(transform(replicate_scores,
       status = "completed", runtime_seconds = 0, peak_rss_kib = 0),
       c("scenario_id", "candidate_id", "rhs_tau0")))
-  selected <- app_bind_rows_fill(lapply(split(aggregate, aggregate$scenario_id), function(x) {
-    x <- x[order(x$calibration_acrps_mean, x$calibration_acrps_worst,
-      x$calibration_acrps_sd, x$retained_state_budget, x$candidate_id), , drop = FALSE]
-    challenger <- x[1L, , drop = FALSE]
-    parity <- x[grepl("anchor_authoritative_v2", x$candidate_role), , drop = FALSE]
-    parity <- parity[which.min(parity$calibration_acrps_mean), , drop = FALSE]
-    challenger$specification_role <- "challenger"
-    parity$specification_role <- "new_geometry_parity"
-    out <- app_bind_rows_fill(list(challenger, parity))
-    out[!duplicated(paste(out$scenario_id, out$candidate_id, out$rhs_tau0)), , drop = FALSE]
-  }))
+  selection <- app_joint_swq_select_joint_eligible_specs(aggregate, base_contract)
+  aggregate <- selection$aggregate
+  selected <- selection$selected
   if (nrow(replicate_scores) != base_contract$scenario_count *
       base_contract$seven_grid_advance_count * base_contract$calibration_replicates ||
       any(replicate_scores$contract_crossing_pairs != 0L) ||

@@ -157,6 +157,30 @@ stopifnot(
   all(continuation$parent_tau[-1L] %in% continuation$tau)
 )
 
+eligibility_probe <- data.frame(
+  scenario_id = "normal_bridge",
+  candidate_id = c("ineligible_best", "eligible_challenger", "parity"),
+  rhs_tau0 = c(1, 1, 1),
+  retained_state_budget = c(100L, 40L, 24L),
+  calibration_acrps_mean = c(0.8, 0.9, 1.0),
+  calibration_acrps_worst = c(0.9, 1.0, 1.1),
+  calibration_acrps_sd = c(0.01, 0.01, 0.01),
+  candidate_role = c("global_low_discrepancy", "global_low_discrepancy",
+    "anchor_authoritative_v2"),
+  stringsAsFactors = FALSE
+)
+contract_probe <- contract
+contract_probe$ordinary_promotion_dimension <- 600L
+eligibility_result <- app_joint_swq_select_joint_eligible_specs(
+  eligibility_probe, contract_probe)
+stopifnot(
+  eligibility_result$aggregate$joint_dense_dimension[[1L]] == 700L,
+  !eligibility_result$aggregate$joint_backend_eligible[[1L]],
+  identical(eligibility_result$selected$candidate_id,
+    c("eligible_challenger", "parity")),
+  all(eligibility_result$selected$joint_backend_eligible)
+)
+
 quantile_launcher <- paste(readLines(file.path(
   app_repo_root(),
   "application/scripts/launch_joint_qdesn_stronger_window_quantile_stage.sh"

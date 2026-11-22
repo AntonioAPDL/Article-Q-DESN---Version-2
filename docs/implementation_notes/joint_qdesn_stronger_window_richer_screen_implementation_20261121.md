@@ -120,6 +120,42 @@ a clean, pushed branch after focused tests, exact manifest and plan-hash
 verification, and a fresh CPU/memory/storage audit. Its finalizer may prepare
 R3 but cannot launch it.
 
+## R2 closeout and R3 contract
+
+R2 launched on 2026-11-21 at 22:26 EST from commit
+`9125fc2f227e8a4587468f2edb298d36af340bbf` on 25 distinct physical Muscat
+cores, excluding unrelated busy cores 4 and 8. Its capacity receipt recorded
+493 GiB available memory and 346 GiB free durable storage.
+
+R2 closed with 6,144/6,144 workers complete, zero failures, 6,144 finite
+scores, zero protected rows, and pipeline exit zero. Its seven-entry manifest
+verifies completely. Six warning rows belong to exactly two high-capacity
+sentinels across three selector fixtures each. Both candidates are finite,
+complete, and noncompetitive; no ordinary-capacity worker warned.
+
+The finalizer produced 2,048 cross-fixture aggregates and retained exactly 64
+candidates per scenario, including the authoritative anchor and exactly eight
+1,500/2,000-state sentinels per scenario. The R3 plan has 4,608 workers: 64
+architectures x 3 fixtures x 3 frozen reservoir seeds x 8 scenarios.
+
+Every scenario's numerical R2 minimum improves on the matched authoritative
+anchor in mean internal aCRPS, by 2.6% to 14.1%. Seven minima improve in all
+three fixtures. Gaussian mixture improves in two of three, with one fixture
+0.7% worse and a 6.5% lower mean. R1b-to-R2 rank correlations remain only
+0.19-0.50, so seed robustness is necessary before architecture freezing.
+
+Frozen hashes:
+
+- `r2_scores.csv`: `d825905c82ffbe9ed9f44d057cac7bc28e1c4492e742a00c4535dd12c1e698c8`
+- `r2_frontier.csv`: `1f5810555ea6d66f8909313fadcfcc8ff30e01013e8ec0f87143b0050408a0a8`
+- `r3_worker_plan.csv`: `e321c45f7fe75f5619e8a82102d3724159a8c91163edb9c65448ee848634ced1`
+- `r2_manifest.csv`: `43c1d98f829555ccfbf9f5165a0561508ac70f949cf2dd20dfc9040a438b7c8e`
+
+Current decision: `R2_COMPLETE_READY_FOR_R3_REVIEW`. R3 may launch only from a
+clean, pushed task branch after exact hash and capacity checks. Its finalizer
+may prepare H1 but cannot launch it. R3 aggregates across the predeclared seed
+set and must never promote the empirically best reservoir seed.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

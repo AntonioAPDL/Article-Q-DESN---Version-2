@@ -306,6 +306,40 @@ preserve the pure intercept-plus-all-reservoir-state readout contract, score
 only the internal recursive calibration window, and stop after a separately
 manifested median decision.
 
+## Transfer audit and full-confirmation gate
+
+The frozen quantile transfer completed 432/432 workers with zero failures,
+finite scores throughout, and zero contract crossings. The challenger improved
+mean internal calibration DGP-integrated aCRPS in 30 of 32 scenario-model
+cells. The two small regressions are both independent Laplace-bridge rows
+(-0.29% AL and -0.12% exAL); the joint Laplace rows improve. This is internal
+selection evidence only. It does not authorize article replacement or
+model-specific backbone splicing.
+
+The full-development confirmation layer is implemented in
+`application/R/joint_qdesn_stronger_window_confirmation.R`. Its first gate is
+a four-cell, non-protected persistent-heavy-tail MCMC sentinel covering AL and
+exAL under independent and joint fitting. The exAL dispatch is fixed to exact
+M0 (`M0_v_collapsed_support_logit`). The sentinel cannot materialize article
+fixtures or compute protected scores.
+
+After a passing sentinel, exactly 16 full-development VB packets are prepared:
+challenger and parity for each of eight scenarios. Each packet refits normal
+ridge/RHS, seven nested independent AL fits, seven structured independent exAL
+fits, joint AL, and structured joint exAL on all 1,300 development rows. The
+VB finalizer then creates 64 model cells and a balanced three-chain MCMC plan
+with 192 workers. Every exAL worker is exact M0. MCMC workers retain compact
+draws, posterior-target fields, warning receipts, precision-repair diagnostics,
+and verified manifests; they do not score the protected forecast window.
+
+The first sentinel launch identified an adapter-only defect before protected
+evaluation: independent exAL transfer initializers were a bare seven-fit list,
+while the production independent MCMC dispatcher requires the established
+`fits`/`sigma_mean`/`gamma_mean` wrapper. Commit `292e95cd` repairs the adapter
+and adds a regression assertion. The three unaffected first-attempt cells are
+preserved with verified manifests, and the resumed launcher reruns only the
+failed independent-exAL cell.
+
 ## Quantile continuation implementation
 
 The continuation is implemented in

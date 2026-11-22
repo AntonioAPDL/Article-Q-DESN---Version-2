@@ -9,7 +9,9 @@ CPU_LIST=${CPU_LIST:-}
 [[ ${JOINT_SWCF_CONFIRM_STAGE:-} == "$STAGE" ]] || {
   echo "Set JOINT_SWCF_CONFIRM_STAGE to the requested STAGE." >&2; exit 2;
 }
-[[ $STAGE == sentinel || $STAGE == vb ]] || { echo "STAGE must be sentinel or vb." >&2; exit 2; }
+[[ $STAGE == sentinel || $STAGE == vb || $STAGE == mcmc ]] || {
+  echo "STAGE must be sentinel, vb, or mcmc." >&2; exit 2;
+}
 [[ -n $CPU_LIST ]] || { echo "CPU_LIST is required." >&2; exit 2; }
 IFS=',' read -r -a CPUS <<< "$CPU_LIST"
 (( ${#CPUS[@]} >= 1 && ${#CPUS[@]} <= 25 )) || { echo "Use 1-25 physical CPU IDs." >&2; exit 2; }
@@ -29,9 +31,12 @@ OUT="$ROOT/full_confirmation"
 if [[ $STAGE == sentinel ]]; then
   PLAN="$OUT/mcmc_sentinel_plan.csv"; ID=sentinel_worker_id
   WORKER="$REPO_ROOT/application/scripts/run_joint_qdesn_stronger_window_confirmation_sentinel.R"
-else
+elif [[ $STAGE == vb ]]; then
   PLAN="$OUT/full_vb_plan.csv"; ID=vb_worker_id
   WORKER="$REPO_ROOT/application/scripts/run_joint_qdesn_stronger_window_full_vb.R"
+else
+  PLAN="$OUT/mcmc_worker_plan.csv"; ID=worker_id
+  WORKER="$REPO_ROOT/application/scripts/run_joint_qdesn_stronger_window_full_mcmc.R"
 fi
 [[ -f $PLAN ]] || { echo "Missing plan $PLAN." >&2; exit 3; }
 printf 'recorded_at_utc,stage,cpu_list,physical_workers,data_free_gib,memory_available_gib,git_head\n' > "$OUT/${STAGE}_capacity_receipt.csv"

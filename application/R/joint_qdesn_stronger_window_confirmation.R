@@ -385,3 +385,225 @@ app_joint_swcf_vb_health <- function(root) {
   data.frame(expected = nrow(plan), completed = sum(done), failed = sum(failed),
     remaining = sum(!done & !failed), stringsAsFactors = FALSE)
 }
+
+app_joint_swcf_model_metadata <- function(model_id) {
+  data.frame(
+    model_id = model_id,
+    fit_structure = if (startsWith(model_id, "joint_")) "joint" else "independent",
+    likelihood_family = if (grepl("exqdesn", model_id, fixed = TRUE)) "exAL" else "AL",
+    stringsAsFactors = FALSE
+  )
+}
+
+app_joint_swcf_packet_init <- function(packet, model_id) {
+  init <- packet[[model_id]]
+  if (startsWith(model_id, "independent_")) {
+    fits <- init$fits %||% init
+    init <- list(
+      fits = fits,
+      beta_mean = unlist(lapply(fits, `[[`, "beta_mean"), use.names = FALSE),
+      alpha_mean = vapply(fits, function(x) x$alpha_mean[[1L]], numeric(1L)),
+      sigma_mean = vapply(fits, function(x) x$sigma_mean[[1L]], numeric(1L))
+    )
+    if (grepl("exqdesn", model_id, fixed = TRUE)) {
+      init$gamma_mean <- vapply(fits, function(x) x$gamma_mean[[1L]], numeric(1L))
+    }
+  }
+  init
+}
+
+app_joint_swcf_finalize_vb <- function(root) {
+  root <- normalizePath(root, mustWork = TRUE); out <- app_joint_swcf_root(root)
+  health <- app_joint_swcf_vb_health(root)
+  if (health$completed[[1L]] != health$expected[[1L]] || health$failed[[1L]] != 0L) {
+    stop("Full-development VB is not complete and failure-free.", call. = FALSE)
+  }
+  plan <- app_read_csv(file.path(out, "full_vb_plan.csv"))
+  summaries <- lapply(plan$vb_worker_id, function(id) {
+    worker <- app_joint_swcf_worker_dir(root, "vb", id)
+    verified <- app_joint_shared_verify_manifest(worker,
+      file.path(worker, "artifact_manifest.csv"))
+    if (!nrow(verified) || any(!verified$verified)) {
+      stop(sprintf("VB worker %d manifest is not verified.", id), call. = FALSE)
+    }
+    app_read_csv(file.path(worker, "summary.csv"))
+  })
+  summary <- app_bind_rows_fill(summaries)
+  if (nrow(summary) != 272L || any(!summary$finite_output) ||
+      any(summary$protected_rows_used_for_fit != 0L) ||
+      any(app_as_bool_vec(summary$protected_scores_computed))) {
+    stop("Full-development VB summary violates the frozen gate.", call. = FALSE)
+  }
+  summary_path <- app_write_csv(summary, file.path(out, "full_vb_summary.csv"))
+  model_ids <- c("independent_qdesn_rhs", "joint_qdesn_rhs",
+    "independent_exqdesn_rhs", "joint_exqdesn_rhs")
+  cells <- app_bind_rows_fill(lapply(seq_len(nrow(plan)), function(i) {
+    app_bind_rows_fill(lapply(model_ids, function(model_id) {
+      row <- plan[i, , drop = FALSE]
+      meta <- app_joint_swcf_model_metadata(model_id)
+      row$model_id <- model_id
+      row$fit_structure <- meta$fit_structure
+      row$likelihood_family <- meta$likelihood_family
+      row$model_cell_id <- paste(row$scenario_id, row$specification_role,
+        model_id, sep = "__")
+      row$vb_packet_path <- file.path(app_joint_swcf_worker_dir(root, "vb",
+        row$vb_worker_id[[1L]]), "vb_packet.rds")
+      row$design_path <- file.path(app_joint_swcf_worker_dir(root, "vb",
+        row$vb_worker_id[[1L]]), "design.rds")
+      row
+    }))
+  }))
+  cells$cell_index <- seq_len(nrow(cells))
+  if (nrow(cells) != 64L || anyDuplicated(cells$model_cell_id) ||
+      any(!file.exists(cells$vb_packet_path)) || any(!file.exists(cells$design_path))) {
+    stop("Full-development model-cell registry is malformed.", call. = FALSE)
+  }
+  contract <- app_read_csv(file.path(out, "confirmation_contract.csv"))
+  chains <- as.integer(app_joint_swcf_value(contract, "chains_per_cell", TRUE))
+  workers <- app_bind_rows_fill(lapply(seq_len(nrow(cells)), function(i) {
+    app_bind_rows_fill(lapply(seq_len(chains), function(chain_id) {
+      row <- cells[i, , drop = FALSE]
+      row$chain_id <- chain_id
+      row$chain_seed <- as.integer(703611220L + row$cell_index[[1L]] * 100000L +
+        chain_id * 10000L)
+      row$chain_start_seed <- as.integer(803611220L + row$cell_index[[1L]] * 100000L +
+        chain_id * 10000L)
+      exal <- identical(row$likelihood_family[[1L]], "exAL")
+      row$n_iter <- as.integer(app_joint_swcf_value(contract,
+        if (exal) "exal_n_iter" else "al_n_iter", TRUE))
+      row$burn <- as.integer(app_joint_swcf_value(contract,
+        if (exal) "exal_burn" else "al_burn", TRUE))
+      row$thin <- as.integer(app_joint_swcf_value(contract,
+        if (exal) "exal_thin" else "al_thin", TRUE))
+      row$n_keep <- as.integer((row$n_iter - row$burn) / row$thin)
+      row$tau_seed_stride <- 1009L
+      row$inference_method_id <- if (exal) {
+        app_joint_swcf_value(contract, "exal_mcmc_method")
+      } else "AL_MCMC"
+      row
+    }))
+  }))
+  workers$worker_id <- seq_len(nrow(workers))
+  component_seeds <- app_bind_rows_fill(lapply(seq_len(nrow(workers)), function(i) {
+    row <- workers[i, , drop = FALSE]
+    if (identical(row$fit_structure[[1L]], "joint")) {
+      return(data.frame(worker_id = row$worker_id, model_cell_id = row$model_cell_id,
+        chain_id = row$chain_id, quantile_index = NA_integer_, tau = NA_real_,
+        component_seed = row$chain_seed, stringsAsFactors = FALSE))
+    }
+    data.frame(worker_id = row$worker_id, model_cell_id = row$model_cell_id,
+      chain_id = row$chain_id, quantile_index = seq_along(app_joint_sw_read_contract()$tau),
+      tau = app_joint_sw_read_contract()$tau,
+      component_seed = as.integer(row$chain_seed[[1L]] +
+        seq_along(app_joint_sw_read_contract()$tau) * row$tau_seed_stride[[1L]]),
+      stringsAsFactors = FALSE)
+  }))
+  if (nrow(workers) != 192L || anyDuplicated(workers$worker_id) ||
+      anyDuplicated(workers$chain_seed) || anyDuplicated(workers$chain_start_seed) ||
+      anyDuplicated(component_seeds$component_seed) ||
+      any(workers$likelihood_family == "exAL" &
+        workers$inference_method_id != "M0_v_collapsed_support_logit")) {
+    stop("Full-development MCMC plan or seed namespace is malformed.", call. = FALSE)
+  }
+  cells_path <- app_write_csv(cells, file.path(out, "model_cell_plan.csv"))
+  worker_path <- app_write_csv(workers, file.path(out, "mcmc_worker_plan.csv"))
+  seed_path <- app_write_csv(component_seeds, file.path(out, "mcmc_component_seed_plan.csv"))
+  app_ensure_dir(file.path(out, "mcmc_workers"))
+  readiness <- data.frame(status = "VB_COMPLETE_MCMC_READY_NOT_LAUNCHED",
+    vb_workers = nrow(plan), vb_components = nrow(summary), model_cells = nrow(cells),
+    mcmc_workers = nrow(workers), protected_scores_computed = FALSE,
+    stringsAsFactors = FALSE)
+  readiness_path <- app_write_csv(readiness, file.path(out, "mcmc_readiness.csv"))
+  app_joint_shared_write_manifest(out, c(vb_summary = summary_path,
+    model_cells = cells_path, mcmc_plan = worker_path, component_seeds = seed_path,
+    readiness = readiness_path), filename = "full_vb_final_manifest.csv")
+  readiness
+}
+
+app_joint_swcf_run_mcmc <- function(root, worker_id) {
+  root <- normalizePath(root, mustWork = TRUE); out_root <- app_joint_swcf_root(root)
+  plan <- app_read_csv(file.path(out_root, "mcmc_worker_plan.csv"))
+  row <- plan[plan$worker_id == as.integer(worker_id), , drop = FALSE]
+  if (nrow(row) != 1L) stop("Full MCMC worker is not unique.", call. = FALSE)
+  out <- app_joint_swcf_worker_dir(root, "mcmc", worker_id)
+  if (file.exists(file.path(out, "DONE"))) return(invisible(out))
+  tmp <- paste0(out, ".tmp_", Sys.getpid()); unlink(tmp, recursive = TRUE, force = TRUE)
+  app_ensure_dir(tmp); started <- Sys.time()
+  design <- readRDS(row$design_path[[1L]])
+  packet <- readRDS(row$vb_packet_path[[1L]])
+  init <- app_joint_swcf_packet_init(packet, row$model_id[[1L]])
+  init <- app_joint_article_overdispersed_start(init, row, design$tau)
+  captured <- tryCatch(app_joint_sw_capture_warnings(function() app_joint_swcf_mcmc_fit(
+    row$model_id[[1L]], design, init, packet$normal, row$rhs_tau0[[1L]],
+    row$chain_seed[[1L]], row$n_iter[[1L]], row$burn[[1L]], row$thin[[1L]])),
+    error = function(e) e)
+  if (inherits(captured, "error")) {
+    app_ensure_dir(out)
+    app_write_csv(cbind(row, data.frame(error_message = conditionMessage(captured),
+      stringsAsFactors = FALSE)), file.path(out, "failure.csv"))
+    writeLines("failed", file.path(out, "FAILED"))
+    stop(conditionMessage(captured), call. = FALSE)
+  }
+  fit <- captured$value; draws <- app_joint_article_draw_frame(fit)
+  if (nrow(draws) != row$n_keep[[1L]] ||
+      any(!is.finite(as.matrix(draws[, -1L, drop = FALSE])))) {
+    stop("Full MCMC retained draws violate the frozen budget.", call. = FALSE)
+  }
+  qhat <- app_joint_qdesn_predict_fit(fit,
+    design$Z[design$train_local, , drop = FALSE], design$tau)
+  crossing <- app_joint_qdesn_apply_monotone_contract(qhat, design$tau)
+  target_fields <- data.frame(
+    posterior_data_design_fingerprint = design$posterior_data_design_fingerprint,
+    rhs_tau0 = row$rhs_tau0, zeta2 = packet$normal$initializer$zeta2,
+    a_sigma = app_joint_swq_controls(app_joint_sw_read_contract())$a_sigma,
+    b_sigma = app_joint_swq_controls(app_joint_sw_read_contract())$b_sigma,
+    slab_fixed = app_joint_swq_controls(app_joint_sw_read_contract())$rhs_slab_fixed,
+    alpha_min_spacing = if (row$fit_structure[[1L]] == "joint")
+      app_joint_swq_controls(app_joint_sw_read_contract())$alpha_min_spacing else 0,
+    stringsAsFactors = FALSE)
+  target_hash <- app_joint_qvp_sha256_text(paste(names(target_fields),
+    format(unlist(target_fields), digits = 17L, scientific = TRUE), collapse = "|"))
+  summary <- data.frame(worker_id = row$worker_id, model_cell_id = row$model_cell_id,
+    scenario_id = row$scenario_id, specification_role = row$specification_role,
+    model_id = row$model_id, fit_structure = row$fit_structure,
+    likelihood_family = row$likelihood_family, chain_id = row$chain_id,
+    chain_seed = row$chain_seed, chain_start_seed = row$chain_start_seed,
+    n_iter = row$n_iter, burn = row$burn, thin = row$thin, n_keep = nrow(draws),
+    inference_method_id = fit$inference_method_id %||% row$inference_method_id,
+    finite_draws = TRUE,
+    fit_raw_crossing_pairs = sum(crossing$raw_crossing$n_crossing_pairs),
+    fit_contract_crossing_pairs = sum(crossing$contract_crossing$n_crossing_pairs),
+    precision_repair_count = as.integer(fit$precision_repair_count %||% 0L),
+    precision_repair_max_relative_jitter =
+      as.numeric(fit$precision_repair_max_rel_used %||% 0),
+    warning_count = length(captured$warnings), posterior_target_sha256 = target_hash,
+    protected_scores_computed = FALSE,
+    runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
+    stringsAsFactors = FALSE)
+  warnings <- data.frame(warning_index = seq_along(captured$warnings),
+    warning_message = as.character(captured$warnings), stringsAsFactors = FALSE)
+  precision <- fit$precision_repair_diagnostics %||% data.frame()
+  files <- c(
+    posterior_draws = app_joint_article_write_gzip_csv(draws,
+      file.path(tmp, "posterior_draws.csv.gz")),
+    summary = app_write_csv(summary, file.path(tmp, "summary.csv")),
+    target = app_write_csv(target_fields, file.path(tmp, "posterior_target_contract.csv")),
+    warnings = app_write_csv(warnings, file.path(tmp, "warnings.csv")),
+    precision = app_write_csv(precision, file.path(tmp, "precision_repair_diagnostics.csv")))
+  app_joint_shared_write_manifest(tmp, files)
+  if (!all(app_joint_shared_verify_manifest(tmp,
+      file.path(tmp, "artifact_manifest.csv"))$verified)) {
+    stop("Full MCMC worker manifest failed verification.", call. = FALSE)
+  }
+  writeLines("completed", file.path(tmp, "DONE")); if (dir.exists(out)) unlink(out, recursive = TRUE)
+  if (!file.rename(tmp, out)) stop("Could not publish full MCMC worker atomically.", call. = FALSE)
+  invisible(out)
+}
+
+app_joint_swcf_mcmc_health <- function(root) {
+  plan <- app_read_csv(file.path(app_joint_swcf_root(root), "mcmc_worker_plan.csv"))
+  dirs <- vapply(plan$worker_id, function(id) app_joint_swcf_worker_dir(root, "mcmc", id), character(1L))
+  done <- file.exists(file.path(dirs, "DONE")); failed <- file.exists(file.path(dirs, "FAILED"))
+  data.frame(expected = nrow(plan), completed = sum(done), failed = sum(failed),
+    remaining = sum(!done & !failed), stringsAsFactors = FALSE)
+}

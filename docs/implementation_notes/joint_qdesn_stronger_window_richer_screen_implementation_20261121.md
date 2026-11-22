@@ -270,6 +270,42 @@ capacity audit. Its finalizer must combine H2 and H3, select exactly 20
 architecture-`tau0` pairs per scenario, emit the median-AL worker plan, and
 stop. It cannot start quantile fitting.
 
+## H3 closeout and median-AL implementation boundary
+
+H3 launched from clean pushed commit `dcbacbdd` on 25 distinct physical
+Muscat cores after excluding four cores observed running unrelated PriceFM
+verification processes. Its receipt recorded 492 GiB available memory and 345
+GiB free durable storage.
+
+H3 closed with 960/960 complete workers, zero failures, zero warnings, finite
+score and runtime fields throughout, zero protected rows, and pipeline exit
+zero. Four fits reached the frozen 400-iteration limit; their finite final
+deltas are at most `2.54e-4`, so they remain review-level rather than fatal.
+
+The finalizer combined 800 H2 and 960 H3 architecture-`tau0` aggregates,
+retained exactly 20 pairs per scenario, preserved all eight authoritative
+anchors, and emitted a balanced 480-worker median-AL plan across the three
+selector fixtures. The internal winners remain scenario-specific. Their mean
+advantages over the matched best authoritative architecture anchors range
+from 0.58% to 11.49%; this is selection evidence only.
+
+Frozen H3 hashes:
+
+- `rhs_all_scores.csv`: `b57bb4b6405af579d229a928457c8e9519c2432dc3cf535e061f4b782d64f6c9`
+- `rhs_all_aggregate.csv`: `f5030bda5f82049311f5f7eec7e65be664ac9f6c5591dff6cdf929b2b1c6ab3e`
+- `rhs_selected_top20_by_scenario.csv`: `1d1ca6ba478babe146818922f46799221d0e92adb7a86d6a4bfb268977761cee`
+- `median_al_worker_plan.csv`: `d0d0e359c988e0afc528a54dfa3b1c01d96d005dedd61f6793c8267335159b15`
+- `quantile_vb_readiness.csv`: `3dd120103005a2b0c2b81763160ca364982aee570b351b80039f153ae5b2d163`
+- `h3_manifest.csv`: `40fb81387d3e9ef364a7fe1b1dc98bfab6fbcdd09a50d640d4926a471916ed86`
+
+Current decision:
+`NORMAL_RHS_FUNNEL_COMPLETE_READY_FOR_MEDIAN_AL_IMPLEMENTATION_REVIEW`.
+No quantile worker has been launched. The next code change must reuse the
+existing tested AL quantile kernel and the selected normal-RHS initializer,
+preserve the pure intercept-plus-all-reservoir-state readout contract, score
+only the internal recursive calibration window, and stop after a separately
+manifested median decision.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

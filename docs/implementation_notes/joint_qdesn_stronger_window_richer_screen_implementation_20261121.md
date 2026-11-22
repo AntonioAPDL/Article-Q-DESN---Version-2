@@ -82,6 +82,14 @@ hour conservative allowance. R1b must stop after preparing the 256-per-scenario
 R2 plan. R2 cannot launch without a new score, manifest, runtime, warning, and
 capacity audit.
 
+R1b launched on 2026-11-21 at 20:58 EST from commit
+`8ed0b063edc889486ea62758c577b066c7f5727d` on 25 distinct physical Muscat
+cores, with one numerical thread per worker and reduced scheduling priority.
+The launch receipt recorded 493 GiB available memory and 347 GiB free durable
+storage. The initial live sentinel completed 69 workers with zero failures and
+zero structured warning receipts. The launch session is
+`joint_sw_r1b_20261121`. R2 remains blocked pending complete R1b closeout.
+
 The ignored authoritative planning tracker is:
 
 `local_trackers/joint_qdesn_stronger_window_richer_screen_plan_20261121/JOINT_QDESN_STRONGER_WINDOW_RICHER_SCREEN_ULTIMATE_PLAN_20261121.md`

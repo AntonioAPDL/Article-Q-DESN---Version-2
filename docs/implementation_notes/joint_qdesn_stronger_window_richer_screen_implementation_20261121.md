@@ -528,3 +528,52 @@ outcomes are loaded, freeze a practical packet-level noninferiority margin,
 fit/forecast policy, posterior coupling, and MCMC budget using non-protected
 sentinels. Internal transfer results may justify advancement but cannot be
 presented as article replacement evidence.
+
+## Full-development VB closeout and MCMC launch
+
+The full-development VB stage closed on 2026-11-22 with 16/16 packets and all
+272 required components complete. Every component is finite and converged,
+no component emitted a warning, no protected row was used for fitting, and no
+protected score was computed. Each packet contains one Gaussian RHS
+initializer, seven nested independent AL fits, seven structured independent
+exAL fits, one joint AL fit, and one structured joint exAL fit on all 1,300
+development rows.
+
+The first broad VB attempt failed before fitting because the generated article
+fixture did not carry the registry metadata required by the full recursive
+design. Commit `ec77a6e9` attaches that metadata and adds a regression check.
+The failed attempt is retained in its exit/log receipts; it did not compute a
+protected score. A full-budget worker then passed as an isolated smoke before
+the remaining 15 workers launched. Packet runtimes ranged from 602.4 to
+2,058.1 seconds. The longer tail was the expected nonlinear-reservoir packet,
+not a stale worker.
+
+The VB finalizer froze exactly 64 model cells and 192 MCMC workers: eight
+scenarios, challenger and new-geometry parity, four model families, and three
+chains per cell. The 96 AL workers retain 750 draws per chain after 2,000
+iterations, 500 burn-in iterations, and thinning by two. The 96 exAL workers
+retain 1,500 draws per chain after 4,000 iterations, 1,000 burn-in iterations,
+and thinning by two. Every exAL worker is fixed to exact M0
+(`M0_v_collapsed_support_logit`). Chain, chain-start, and independent-quantile
+component seed namespaces are all unique.
+
+Frozen VB/MCMC-plan hashes:
+
+- `full_vb_summary.csv`:
+  `f8c34fce24b7827a918b3e1f30ad200041fcaa5e2559cbce6d4f3c43844b6963`
+- `model_cell_plan.csv`:
+  `1f223b6e57f407997578dc3a25052576f0ea87c90e492567437cfd789f153258`
+- `mcmc_worker_plan.csv`:
+  `e2da12a9c87987cb0b9c0221a0ec8b69a8f66df77dab39420b636b8f151f9e01`
+- `mcmc_component_seed_plan.csv`:
+  `a585a0b3fccbe6c9b1c214a0e298dfc283c8f25f98ac8921dc43b4e3fcc882c1`
+- `mcmc_readiness.csv`:
+  `709c25d677ef62c7642b7adad6fe50e19813f78c1b90eb473ec14e93ad3dab16`
+
+The MCMC campaign launched from source HEAD
+`ec77a6e92f0c440f09c478d60f9c1059e7769394` on 2026-11-22 at
+`09:28:27Z`. It uses 25 distinct Muscat physical cores, one numerical thread
+per worker, and excludes observed unrelated PriceFM/service cores. The launch
+receipt recorded 344 GiB free `/data` storage and 491 GiB available memory.
+The campaign must stop after MCMC finalization; protected oracle and score
+workers remain prohibited until all 192 workers and their manifests verify.

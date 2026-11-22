@@ -1,0 +1,16 @@
+profile,axis,values,role
+common,depth,1;2;3;4;5;6;7;8,screened
+common,state_budget,20;24;40;48;75;100;150;200;300;450;600;800;1000;1200;1500;2000,screened
+common,width_shape,flat;tapered;expanding;bottleneck;hourglass,screened
+common,response_lags,1;2;3;5;8;10;12;15;24;30;45;60;75;90;120;150;180;240;300;360,screened
+common,exogenous_lags,0,not_applicable
+common,alpha_range,0.005;0.995,screened
+common,rho_range,0.10;0.999,screened
+common,global_schedule,flat,shared_base_contract
+common,special_schedule,flat;increasing;decreasing;u_shape;unconstrained,local_and_mechanism_only
+common,input_scale,0.01;0.03;0.05;0.10;0.25;0.50;1.00;2.00,screened
+common,pi_in,0.05;0.10;0.25;0.50;1.00,screened
+common,pi_w_fixed,0.005;0.01;0.02;0.05;0.10;0.20,screened
+common,recurrent_expected_degree,4;8;16;32;64,screened
+common,minimum_generated_layer_width,2,fixed
+common,high_capacity_budget,1500;2000,ridge_sentinel

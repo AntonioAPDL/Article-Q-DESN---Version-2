@@ -23,6 +23,7 @@ for (path in c(
   "joint_qdesn_persistent_regime_recalibration_v2.R",
   "joint_qdesn_stronger_window_campaign.R",
   "joint_qdesn_shared_backbone_quantile_fit.R", "joint_qdesn_stronger_window_quantile.R",
+  "joint_qdesn_stronger_window_transfer.R",
   "joint_qdesn_shared_backbone_article_confirmation.R",
   "joint_qdesn_recursive_mean_design.R", "joint_qdesn_recursive_dgp_oracle.R",
   "joint_qdesn_recursive_mean_score_packet.R"

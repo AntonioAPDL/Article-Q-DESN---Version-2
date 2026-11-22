@@ -388,3 +388,42 @@ round-robin scheduling tail after unrelated work occupied one preflight CPU.
 The quantile launcher now uses a shared CPU-token pool, returning each CPU as
 soon as its worker completes. This is an execution-only correction: worker
 plans, seeds, models, and atomic output contracts are unchanged.
+
+## Seven-grid AL closeout and transfer implementation
+
+The seven-grid AL stage closed with 1,344/1,344 workers complete, zero
+failures, zero warnings, 1,344 converged fits, balanced coverage of all seven
+quantile levels, zero protected rows, and zero contract crossings. The Q1
+finalizer initially selected a 200-state nonlinear challenger whose
+seven-level joint dense dimension was 1,400, above the frozen verified limit
+of 600. The finalizer was corrected to enforce the predeclared joint-backend
+gate and replayed without refitting any model. Worker and replicate-score
+hashes remained byte-identical. The corrected nonlinear challenger uses 75
+states, has joint dimension 525, and changes mean internal aCRPS only from
+0.46976 to 0.47027.
+
+Corrected frozen hashes:
+
+- `seven_al_worker_summary.csv`:
+  `5591c50f67c88e3b1ebbdac1d9d7249bddd31473b99f1bbdfac37cdb5dcd07ad`
+- `seven_al_score_by_replicate.csv`:
+  `3d9e213da0b2b0a042cf8dbbca4c50d608492533acd570bd06189efbfb95e777`
+- `seven_al_aggregate.csv`:
+  `e9a9ba0ebc150bb8249be74220f6125651da9f7d3d777b50d0b85d409291fcc5`
+- `frozen_challenger_parity_specifications.csv`:
+  `498755d9ca3c85d86a05ebe0279da941604cccbb14cb3d5392e635ae8ba41e1d`
+- `seven_al_manifest.csv`:
+  `bca2fb23ded03d2b2c9ef2db34dddf4dc4e51c47e9a720e7a760ca23ef2eca38`
+
+The next transfer layer is implemented in
+`application/R/joint_qdesn_stronger_window_transfer.R`. Its frozen plan has
+432 jobs: 336 independent structured-exAL fits, 48 joint-AL fits, and 48
+joint structured-exAL fits. It reuses the verified Q1 independent-AL fits and
+M1 normal-RHS initializers, preserves one shared scenario-specific backbone,
+and runs in three dependency stages. A real independent structured-exAL
+sentinel converged in 62 iterations and 32.2 seconds, used about 266 MiB peak
+RSS, loaded zero protected rows, and verified all four persisted artifacts.
+Transfer finalization will report fit and recursive-calibration DGP-integrated
+aCRPS, realized aCRPS, oracle recovery, and crossing diagnostics for all four
+model families. It cannot launch full-development refits, MCMC, protected
+evaluation, or article replacement.

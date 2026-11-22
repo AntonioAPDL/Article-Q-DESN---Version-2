@@ -446,3 +446,41 @@ window and 300-row recursive calibration window produced eight finite score
 rows and zero contract crossings. These nine valid workers remain part of the
 432-worker production plan; the broad launcher must skip rather than refit
 them.
+
+## Transfer closeout
+
+The complete internal transfer audit closed on 2026-11-22 with 432/432
+workers complete, zero failures, zero warnings, 432 converged finite fits,
+and zero protected rows. It contains 336 independent structured-exAL fits, 48
+joint-AL fits, and 48 joint structured-exAL fits. Finalization produced 384
+fit/calibration score rows, all finite, with zero contract crossings. The
+launcher stopped after the transfer packet and did not start full-development
+VB, MCMC, protected scoring, or article replacement.
+
+The challenger has lower mean internal calibration DGP-integrated aCRPS than
+new-geometry parity in 30 of 32 model-scenario cells. Persistent-heavy-tail
+improvements range from 11.9% to 14.8% across the four model rows. The only
+mean regressions are the independent AL and independent exAL Laplace rows,
+at 0.29% and 0.12%, while the matched joint Laplace rows improve by 0.76% and
+0.99%. Those two small regressions remain explicit noninferiority checks; no
+model-specific backbone substitution is permitted because the scientific
+unit is one shared scenario packet.
+
+Frozen transfer hashes:
+
+- `transfer_worker_summary.csv`:
+  `de14b22a06e89d7c05abf944c3081787d13f8cf553237505e16b6dc7bab1e250`
+- `transfer_score_by_replicate.csv`:
+  `5bca77319f326f90a552f35eda6b21b915d39b40b8e4bffc97c2c67e5c202147`
+- `transfer_score_aggregate.csv`:
+  `5cc57ae0bb0df90c622960f6d7f147c2da26e1830c12299b618087099e559062`
+- `transfer_decision.csv`:
+  `7892ba340d34a92bf1f8922b57469408840b8fe72a6e716a5f5b22786d49a2e2`
+- `transfer_manifest.csv`:
+  `adf5a615bf6af7d2c9e7c31099cc341373596b374ea15d15734abb62696de04c`
+
+The next gate is full-development implementation review. Before protected
+outcomes are loaded, freeze a practical packet-level noninferiority margin,
+fit/forecast policy, posterior coupling, and MCMC budget using non-protected
+sentinels. Internal transfer results may justify advancement but cannot be
+presented as article replacement evidence.

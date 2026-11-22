@@ -16,6 +16,17 @@ stopifnot(
   grepl("protected_rows_loaded = 0L", paste(deparse(app_joint_swcf_run_sentinel), collapse = "\n"), fixed = TRUE),
   grepl("protected_scores_computed = FALSE", paste(deparse(app_joint_swcf_run_vb), collapse = "\n"), fixed = TRUE)
 )
+root <- file.path(repo_root, "application/cache/joint_qdesn_stronger_window_richer_screen_20261121")
+if (file.exists(file.path(root, "full_confirmation/mcmc_sentinel_plan.csv"))) {
+  sentinel <- app_read_csv(file.path(root, "full_confirmation/mcmc_sentinel_plan.csv"))
+  packet <- app_joint_swcf_load_transfer_packet(root,
+    sentinel[sentinel$sentinel_model_id == "independent_exqdesn_rhs", , drop = FALSE])
+  stopifnot(
+    length(packet$independent_exqdesn_rhs$fits) == 7L,
+    length(packet$independent_exqdesn_rhs$sigma_mean) == 7L,
+    length(packet$independent_exqdesn_rhs$gamma_mean) == 7L
+  )
+}
 launcher <- paste(readLines(file.path(repo_root,
   "application/scripts/launch_joint_qdesn_stronger_window_confirmation.sh"), warn = FALSE),
   collapse = "\n")

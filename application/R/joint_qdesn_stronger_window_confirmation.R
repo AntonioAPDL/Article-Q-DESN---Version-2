@@ -81,10 +81,14 @@ app_joint_swcf_load_transfer_packet <- function(root, row) {
   ex <- ex[order(ex$tau), , drop = FALSE]
   joint_al <- block[block$model_id == "joint_qdesn_rhs", , drop = FALSE]
   joint_ex <- block[block$model_id == "joint_exqdesn_rhs", , drop = FALSE]
+  ex_fits <- lapply(ex$transfer_worker_id, function(id) readRDS(
+    file.path(app_joint_swtx_worker_dir(root, id), "fit_initializer.rds")))
   list(
     independent_qdesn_rhs = app_joint_swtx_load_q1_fits(root, row),
-    independent_exqdesn_rhs = lapply(ex$transfer_worker_id, function(id) readRDS(
-      file.path(app_joint_swtx_worker_dir(root, id), "fit_initializer.rds"))),
+    independent_exqdesn_rhs = list(
+      fits = ex_fits,
+      sigma_mean = vapply(ex_fits, function(x) x$sigma_mean[[1L]], numeric(1L)),
+      gamma_mean = vapply(ex_fits, function(x) x$gamma_mean[[1L]], numeric(1L))),
     joint_qdesn_rhs = readRDS(file.path(app_joint_swtx_worker_dir(root,
       joint_al$transfer_worker_id[[1L]]), "fit_initializer.rds")),
     joint_exqdesn_rhs = readRDS(file.path(app_joint_swtx_worker_dir(root,

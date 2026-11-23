@@ -638,11 +638,17 @@ app_joint_superfinal_closeout <- function(source_root,
   branch <- git_value(c("branch", "--show-current"))
   head <- git_value(c("rev-parse", "HEAD"))
   upstream <- git_value(c("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
+  origin_main <- git_value(c("rev-parse", "origin/main"))
+  merge_base <- git_value(c("merge-base", "origin/main", "HEAD"))
   divergence <- as.integer(strsplit(git_value(c("rev-list", "--left-right", "--count",
     "@{u}...HEAD")), "[[:space:]]+")[[1L]])
+  main_divergence <- as.integer(strsplit(git_value(c("rev-list", "--left-right", "--count",
+    "origin/main...HEAD")), "[[:space:]]+")[[1L]])
   tracked_status <- git_value(c("status", "--porcelain", "--untracked-files=no"))
   git_state <- data.frame(branch = branch, upstream = upstream, head = head,
     upstream_behind = divergence[[1L]], upstream_ahead = divergence[[2L]],
+    origin_main = origin_main, merge_base = merge_base,
+    main_behind = main_divergence[[1L]], main_ahead = main_divergence[[2L]],
     tracked_worktree_clean = !length(tracked_status) || identical(tracked_status, ""),
     stringsAsFactors = FALSE)
   changed <- git_value(c("diff", "--name-status", "origin/main...HEAD"))
@@ -659,6 +665,53 @@ app_joint_superfinal_closeout <- function(source_root,
     source_handoff_manifest_sha256 = app_sha256_file(
       app_joint_superfinal_source_paths(source_root)$handoff_manifest),
     stringsAsFactors = FALSE)
+  focused_tests <- c(
+    "application/tests/test_joint_qdesn_superfinal_predictive_stability.R",
+    "application/tests/test_joint_qdesn_stronger_window_confirmation.R",
+    "application/tests/test_joint_qdesn_stronger_window_score.R",
+    "application/tests/test_joint_qdesn_stronger_window_transfer.R",
+    "application/tests/test_joint_exqdesn_inference_dispatch.R")
+  rscript <- file.path(R.home("bin"), "Rscript")
+  tests <- app_bind_rows_fill(lapply(focused_tests, function(test) {
+    output <- system2(rscript, file.path(repo_root, test), stdout = TRUE, stderr = TRUE)
+    status <- attr(output, "status") %||% 0L
+    data.frame(test = test, status = if (status == 0L) "PASS" else "FAIL",
+      exit_code = as.integer(status), output = paste(output, collapse = " | "),
+      stringsAsFactors = FALSE)
+  }))
+  if (any(tests$status != "PASS")) stop("A focused closeout test failed.", call. = FALSE)
+  publication <- data.frame(
+    classification = c("article_safe_candidate", "article_safe_candidate",
+      "article_safe_candidate", "runtime_excluded", "runtime_excluded",
+      "not_modified"),
+    path = c("integration_handoff/selected_32_row_packet.csv",
+      "integration_handoff/combined_score_gate_summary.csv",
+      "integration_handoff/scenario_decisions.csv",
+      "full_confirmation/mcmc_workers/", "score_cells/",
+      "article_and_overleaf_assets"),
+    instruction = c("Review as the final 32-row scientific packet.",
+      "Use for predictive-functional qualification and caveats.",
+      "Preserve whole-scenario decisions; do not splice models.",
+      "Keep ignored; transfer only for reproducibility audit.",
+      "Keep ignored; transfer only for reproducibility audit.",
+      "Regenerate only in the later coordinator article projection."),
+    stringsAsFactors = FALSE)
+  risks <- data.frame(
+    risk = c("persistent_joint_al_predictive_instability",
+      "persistent_joint_exal_folded_rhat_review", "laplace_numerical_winner_claim",
+      "source_runtime_dependency"),
+    disposition = c("Complete scenario falls back to parity.",
+      "Complete scenario falls back to parity; no scalar-mixing veto was added.",
+      "Treat as stabilized descriptive evidence, not formal superiority.",
+      "Retain or transfer the frozen source runtime with its verified handoff."),
+    resolved_for_packet = c(TRUE, TRUE, TRUE, TRUE), stringsAsFactors = FALSE)
+  instructions <- data.frame(step = 1:5,
+    instruction = c("Verify this handoff manifest and runtime transfer inventory.",
+      "Review the 32-row packet and scenario-level fallback decisions.",
+      "Merge this dedicated branch only once; do not separately merge intermediate lanes.",
+      "Run combined repository tests before any article projection.",
+      "Regenerate article assets in the integration lane; do not publish runtime artifacts."),
+    stringsAsFactors = FALSE)
   files <- c(
     health = app_write_csv(health, file.path(out, "health_summary.csv")),
     mcmc = app_write_csv(mcmc, file.path(out, "supplemental_mcmc_summary.csv")),
@@ -669,7 +722,12 @@ app_joint_superfinal_closeout <- function(source_root,
     git = app_write_csv(git_state, file.path(out, "git_state.csv")),
     changed = app_write_csv(changed, file.path(out, "changed_files.csv")),
     commits = app_write_csv(commits, file.path(out, "unique_commits.csv")),
-    storage = app_write_csv(storage, file.path(out, "storage_summary.csv")))
+    storage = app_write_csv(storage, file.path(out, "storage_summary.csv")),
+    tests = app_write_csv(tests, file.path(out, "focused_test_results.csv")),
+    publication = app_write_csv(publication, file.path(out, "publication_scope.csv")),
+    risks = app_write_csv(risks, file.path(out, "scientific_risks.csv")),
+    instructions = app_write_csv(instructions,
+      file.path(out, "integration_instructions.csv")))
   runtime_files <- list.files(root, recursive = TRUE, full.names = TRUE)
   runtime_files <- runtime_files[!startsWith(runtime_files,
     paste0(normalizePath(out, mustWork = TRUE), .Platform$file.sep))]

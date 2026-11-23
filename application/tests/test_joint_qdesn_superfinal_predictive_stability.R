@@ -46,6 +46,9 @@ stopifnot(
   grepl("M0_v_collapsed_support_logit", paste(deparse(
     app_joint_superfinal_combined_draws), collapse = "\n"), fixed = TRUE),
   grepl("runtime_transfer_inventory.csv", closeout_body, fixed = TRUE),
-  grepl("READY_FOR_INTEGRATION", closeout_body, fixed = TRUE)
+  grepl("READY_FOR_INTEGRATION", closeout_body, fixed = TRUE),
+  grepl("focused_test_results.csv", closeout_body, fixed = TRUE),
+  grepl("publication_scope.csv", closeout_body, fixed = TRUE),
+  grepl("origin/main...HEAD", closeout_body, fixed = TRUE)
 )
 cat("Super-final predictive-stability tests passed.\n")

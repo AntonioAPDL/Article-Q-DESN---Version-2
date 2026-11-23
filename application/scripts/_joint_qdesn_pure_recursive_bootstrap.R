@@ -27,6 +27,7 @@ for (path in c(
   "joint_qdesn_stronger_window_confirmation.R",
   "joint_qdesn_stronger_window_score.R",
   "joint_qdesn_superfinal_predictive_stability.R",
+  "joint_qdesn_superfinal_al_kernel_rerun.R",
   "joint_qdesn_shared_backbone_article_confirmation.R",
   "joint_qdesn_recursive_mean_design.R", "joint_qdesn_recursive_dgp_oracle.R",
   "joint_qdesn_recursive_mean_score_packet.R"

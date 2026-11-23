@@ -76,9 +76,24 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
   joint_relative <- paste0("docs/reproducibility/",
     "joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv")
   joint_file <- file.path(repo_root, joint_relative)
+  final_relative <- paste0("docs/reproducibility/",
+    "joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
+  final_file <- file.path(repo_root, final_relative)
   extension_link <- Sys.readlink(extension_file)
   if (file.exists(extension_file) || (!is.na(extension_link) && nzchar(extension_link))) {
-    if (file.exists(joint_file)) {
+    if (file.exists(final_file)) {
+      extension_guard <- file.path(repo_root,
+        "scripts/joint_superfinal_final_source_guard.R")
+      require_check(regular_file(extension_file) && regular_file(joint_file) &&
+        regular_file(final_file) && regular_file(extension_guard),
+        "The final composed source authorizations and guard must be regular files.")
+      extension_env <- new.env(parent = baseenv())
+      sys.source(extension_guard, envir = extension_env)
+      extension_checks <- extension_env$app_check_joint_superfinal_final_sources(repo_root)
+      extension_paths <- attr(extension_checks, "authorized_paths")
+      require_check(length(extension_paths) == 76L,
+        "The final composed workflow must retain 76 authorized application paths.")
+    } else if (file.exists(joint_file)) {
       extension_guard <- file.path(repo_root,
         "scripts/composable_scientific_source_guard.R")
       require_check(regular_file(extension_file) && regular_file(joint_file) &&

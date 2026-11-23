@@ -257,8 +257,10 @@ run_standalone_glofas_test("application/tests/test_joint_qdesn_stronger_window_c
 run_standalone_glofas_test("application/tests/test_joint_qdesn_stronger_window_score.R")
 run_standalone_glofas_test("application/tests/test_joint_qdesn_stronger_window_transfer.R")
 run_standalone_glofas_test("application/tests/test_joint_qdesn_superfinal_predictive_stability.R")
+run_standalone_glofas_test("application/tests/test_joint_qdesn_superfinal_al_kernel_rerun.R")
 run_standalone_glofas_test("application/tests/test_joint_qdesn_al_kernel_correction.R")
 run_standalone_glofas_test("application/tests/test_composable_scientific_source_guard.R")
+run_standalone_glofas_test("application/tests/test_joint_superfinal_final_source_guard.R")
 run_standalone_glofas_test("application/tests/test_glofas_search3_article_projection.R")
 
 # Bounded editorial checks, isolated from scientific fixture state.

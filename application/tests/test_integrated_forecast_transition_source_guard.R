@@ -11,7 +11,14 @@ local({
   pin <- unname(tools::sha256sum(file.path(root, cfg$manifest))[[1L]])
   joint_manifest <- file.path(root, "docs/reproducibility",
     "joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv")
-  if (file.exists(joint_manifest)) {
+  final_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
+  if (file.exists(final_manifest)) {
+    source(file.path(root, "scripts/joint_superfinal_final_source_guard.R"),
+      local = TRUE)
+    checks <- app_check_joint_superfinal_final_sources(root)
+    stopifnot(length(attr(checks, "final_authorized_paths")) == 8L)
+  } else if (file.exists(joint_manifest)) {
     source(file.path(root, "scripts/composable_scientific_source_guard.R"),
       local = TRUE)
     checks <- app_check_composable_scientific_sources(root)

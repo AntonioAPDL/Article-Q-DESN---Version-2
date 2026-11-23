@@ -5,6 +5,19 @@ local({
     arg <- grep("^--file=", commandArgs(FALSE), value = TRUE)[[1L]]
     normalizePath(file.path(dirname(sub("^--file=", "", arg)), "..", ".."))
   }
+  final_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
+  if (file.exists(final_manifest)) {
+    env <- new.env(parent = baseenv())
+    sys.source(file.path(root, "scripts/joint_superfinal_final_source_guard.R"),
+      envir = env)
+    checks <- env$app_check_joint_superfinal_final_sources(root)
+    stopifnot(length(attr(checks, "final_authorized_paths")) == 8L)
+    cat(sprintf(paste0("COMPOSABLE_SCIENTIFIC_SOURCE_GUARD_PASS checks=%d ",
+      "mutation_rejections=8 production_runs=0 final_overlay=TRUE\n"),
+      length(checks)))
+    return(invisible(NULL))
+  }
   env <- new.env(parent = baseenv())
   sys.source(file.path(root, "scripts/composable_scientific_source_guard.R"),
     envir = env)

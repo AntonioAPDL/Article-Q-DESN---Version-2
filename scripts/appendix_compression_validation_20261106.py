@@ -54,6 +54,20 @@ VALIDATORS = (
     "application/tests/test_glofas_current_article_authority.py",
     "docs/reproducibility/appendix_compression_revision_20261106.md",
 )
+JOINT_SOURCE_ADMISSIONS = (
+    ("docs/reproducibility/joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv",
+     "331437cf5a22dbb61f7d29374c9db356b68265e09ed5dd2adfe2e4e3b436a11d",
+     "joint_superfinal_science", 62),
+    ("docs/reproducibility/joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv",
+     "8526909fdb43f520ac0f593185db4c8988c4ee7f7e2a03b2c7360894c98f02a3",
+     "joint_superfinal_al_kernel_rerun", 8),
+)
+JOINT_SOURCE_GUARDS = (
+    ("scripts/composable_scientific_source_guard.R",
+     "5168cb4f3b4a0e6741bc74aaeda2528cce3acdbe5c84bf6c987bf8bc59b71c2c"),
+    ("scripts/joint_superfinal_final_source_guard.R",
+     "6e566bf7bab9193414e76a881bc05fff15c8d9c978c4cdd7ce5d5081850411ef"),
+)
 PREFIX = "tables/appendix_compact_20261106_"
 TABLE_ROLES = ("glofas_specifications", "glofas_diagnostics", "glofas_convergence",
                "glofas_historical_scores", "mq_scores", "score_diagnostics")
@@ -136,6 +150,46 @@ def git(root, *arguments):
 
 def baseline_bytes(root, path):
     return git(root, "show", BASELINE + ":" + path)
+
+
+def admitted_scientific_sources(root):
+    """Authenticate exact reviewed JOINT deltas without rewriting old pins."""
+    root = Path(root)
+    required = [path for path, *_ in JOINT_SOURCE_ADMISSIONS + JOINT_SOURCE_GUARDS]
+    present = [(root / path).is_file() for path in required]
+    if not any(present):
+        return {}
+    require(all(present), "complete JOINT scientific-source admission required")
+    for path, digest in JOINT_SOURCE_GUARDS:
+        require(sha(regular(root, path)) == digest,
+                "reviewed JOINT source guard changed: " + path)
+    admitted = {}
+    for manifest, digest, role, count in JOINT_SOURCE_ADMISSIONS:
+        raw = regular(root, manifest)
+        require(sha(raw) == digest, "reviewed JOINT source manifest changed: " + manifest)
+        reader = csv.DictReader(io.StringIO(raw.decode()))
+        require(reader.fieldnames == ["path", "role", "mode", "sha256", "blob"],
+                "exact JOINT source-manifest schema required")
+        rows = list(reader)
+        paths = [row["path"] for row in rows]
+        require(len(rows) == count and paths == sorted(paths) and len(set(paths)) == count,
+                "exact sorted JOINT source-manifest membership required")
+        for row in rows:
+            path = row["path"]
+            require(row["role"] == role and row["mode"] in ("100644", "100755") and
+                    re.fullmatch(r"[a-f0-9]{64}", row["sha256"]) is not None and
+                    re.fullmatch(r"[a-f0-9]{40}", row["blob"]) is not None,
+                    "complete JOINT source identity required: " + path)
+            admitted[path] = row
+    result = {}
+    for path, row in admitted.items():
+        source = regular(root, path)
+        mode = "100755" if (root / path).stat().st_mode & 0o111 else "100644"
+        blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\0" + source).hexdigest()
+        require(sha(source) == row["sha256"] and blob == row["blob"] and mode == row["mode"],
+                "reviewed JOINT source byte or mode changed: " + path)
+        result[path] = row["sha256"]
+    return result
 
 
 def module(root, path, name):
@@ -378,6 +432,7 @@ def disposition_checks(root, routes):
 def protected_inventory(root):
     """Pins come from the fixed ancestor, NEVER from current --refresh bytes."""
     entries = {}
+    admitted = admitted_scientific_sources(root)
     for record in git(root, "ls-tree", "-r", "-z", BASELINE).split(b"\0"):
         if not record:
             continue
@@ -393,8 +448,12 @@ def protected_inventory(root):
         require(kind == b"blob" and mode in (b"100644", b"100755"), "regular baseline public asset required: " + path)
         raw = regular(root, path)
         blob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
-        require(blob == identity.decode(), "frozen original scientific/presentation asset changed: " + path)
-        entries[path] = sha(raw)
+        if blob != identity.decode():
+            require(path in admitted and sha(raw) == admitted[path],
+                    "frozen original scientific/presentation asset changed: " + path)
+            entries[path] = sha(baseline_bytes(root, path))
+        else:
+            entries[path] = sha(raw)
     require(entries, "nonempty fixed scientific inventory required")
     return entries
 
@@ -480,7 +539,9 @@ def prepare(root):
                 all(previous[k] == result[k] for k in result if k not in changing),
                 "previous successor baseline, immutable scope, historical receipt or zero-run counters changed")
     legacy = expected_legacy(baseline, hashes)
-    pins = dict(protected, **hashes)
+    admitted = admitted_scientific_sources(root)
+    pins = dict(protected, **{path: digest for path, digest in admitted.items()
+                              if path in protected}, **hashes)
     pins[LEGACY_RECEIPT] = sha(regular(root, LEGACY_RECEIPT))
     return root, result, legacy, pins
 
@@ -637,6 +698,7 @@ def essential_legacy(current, baseline, hashes=None):
 def essential_protected_inventory(root):
     """Authenticate every original science/asset byte against the fixed v2 ancestor."""
     entries = {}
+    admitted = admitted_scientific_sources(root)
     for record in git(root, "ls-tree", "-r", "-z", ESSENTIAL_BASELINE).split(b"\0"):
         if not record:
             continue
@@ -652,8 +714,12 @@ def essential_protected_inventory(root):
         require(kind == b"blob" and mode in (b"100644", b"100755"), "regular fixed ancestor asset required")
         raw = regular(root, path)
         identity_now = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
-        require(identity_now == identity.decode(), "frozen original scientific/presentation asset changed: " + path)
-        entries[path] = sha(raw)
+        if identity_now != identity.decode():
+            require(path in admitted and sha(raw) == admitted[path],
+                    "frozen original scientific/presentation asset changed: " + path)
+            entries[path] = sha(git(root, "show", ESSENTIAL_BASELINE + ":" + path))
+        else:
+            entries[path] = sha(raw)
     require(entries, "nonempty fixed essential scientific inventory required")
     return entries
 
@@ -871,7 +937,9 @@ def essential_prepare(root):
         require(previous.keys() == result.keys() and all(previous[k] == result[k] for k in result if k not in mutable),
                 "essential immutable roles, scientific scope or fixed historical pins changed")
     legacy = essential_legacy(current, baseline, hashes)
-    pins = dict(protected, **hashes)
+    admitted = admitted_scientific_sources(root)
+    pins = dict(protected, **{path: digest for path, digest in admitted.items()
+                              if path in protected}, **hashes)
     pins[LEGACY_RECEIPT] = sha(regular(root, LEGACY_RECEIPT))
     return root,result,legacy,pins
 

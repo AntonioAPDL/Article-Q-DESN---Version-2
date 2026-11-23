@@ -107,8 +107,8 @@ local({
   replication <- "These origins are not independent simulation replications."
   heterogeneous <- paste("independent regressions have the lowest mean oracle score in six mechanisms,",
     "whereas MQ--DESN leads for Gaussian and asymmetric-tail dynamics.")
-  descriptive <- "The descriptive MQ--DESN-minus-Q--DESN score intervals"
-  overlap <- "The other fourteen include zero."
+  descriptive <- "The descriptive MQ--DESN-minus-Q--DESN intervals"
+  overlap <- "the other fourteen include zero."
   current_wording <- function(main, supplement) {
     c(conditional_interval_scope = grepl(conditional, main, fixed = TRUE),
       no_general_superiority_claim = grepl(replication, main, fixed = TRUE) &&

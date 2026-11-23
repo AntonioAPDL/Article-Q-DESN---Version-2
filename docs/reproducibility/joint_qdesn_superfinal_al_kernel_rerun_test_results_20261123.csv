@@ -1,0 +1,8 @@
+test,status,command_or_scope,result
+al_kernel_correction,PASS,"Rscript application/tests/test_joint_qdesn_al_kernel_correction.R","Unbounded inverse-gamma AL update, start invariance, target/kernel identity, anti-splicing, exact-M0 and RHS regressions passed"
+al_kernel_rerun,PASS,"Rscript application/tests/test_joint_qdesn_superfinal_al_kernel_rerun.R","18 checks passed; production_runs=0"
+final_source_guard,PASS,"Rscript application/tests/test_joint_superfinal_final_source_guard.R","15 checks and 8 expected mutation rejections passed; production_runs=0"
+composable_source_guard,PASS,"Rscript application/tests/test_composable_scientific_source_guard.R","15 checks and 8 expected mutation rejections passed; final overlay enabled"
+historical_transition_guard,PASS,"Rscript application/tests/test_integrated_forecast_transition_source_guard.R","15 checks and 35 expected mutation rejections passed; production_runs=0"
+complete_repository_suite,PASS,"env R_LIBS_USER=/data/jaguir26/local/src/Article-Q-DESN---Version-2__wt__glofas_nonlinear_reference_qualification_20261103/local_trackers/glofas_nonlinear_reference_qualification_20261103/Rlib PYTHONPATH=/tmp/glofas-search3-python311-deps OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 BLIS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMEXPR_NUM_THREADS=1 nice -n 15 /data/jaguir26/local/opt/R/4.6.0/bin/Rscript application/tests/run_tests.R","Exit 0 under pinned R 4.6.0 and one numerical thread; log SHA-256 b0aa7dac7084eed3b36e8ee366d0b8f01d7eded32739b2881a7a3d1f90f730da"
+git_diff_check,PASS,"git diff --check","No whitespace errors before final commit"

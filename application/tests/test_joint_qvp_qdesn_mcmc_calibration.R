@@ -88,8 +88,9 @@ stopifnot(all(c(
   "upper_bound_hit_fraction"
 ) %in% names(draw_summary)))
 sigma_draw_summary <- draw_summary[draw_summary$block == "sigma", , drop = FALSE]
-stopifnot(all(is.finite(sigma_draw_summary$lower_bound)))
-stopifnot(all(is.finite(sigma_draw_summary$upper_bound)))
+stopifnot(all(sigma_draw_summary$lower_bound == 0))
+stopifnot(all(is.infinite(sigma_draw_summary$upper_bound) &
+  sigma_draw_summary$upper_bound > 0))
 stopifnot(all(is.finite(sigma_draw_summary$lower_bound_hit_fraction)))
 stopifnot(all(is.finite(sigma_draw_summary$upper_bound_hit_fraction)))
 

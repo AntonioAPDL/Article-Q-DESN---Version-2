@@ -189,6 +189,20 @@ local({
         names(compression_receipt$current_source_sha256),
         names(compression_receipt$protected_source_sha256))
     }
+    # The live protected source can differ from the immutable appendix
+    # baseline only through these exact reviewed JOINT overlays. The copied
+    # fixture must carry their manifests and guards so it authenticates the
+    # same source tree instead of falling back or silently weakening checks.
+    joint_admission_manifests <- c(
+      "docs/reproducibility/joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv",
+      "docs/reproducibility/joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
+    joint_admission_paths <- unique(unlist(lapply(joint_admission_manifests,
+      function(path) read.csv(file.path(root, path), stringsAsFactors = FALSE,
+        check.names = FALSE)$path), use.names = FALSE))
+    reader_dependencies <- c(reader_dependencies, joint_admission_manifests,
+      joint_admission_paths,
+      "scripts/composable_scientific_source_guard.R",
+      "scripts/joint_superfinal_final_source_guard.R")
     baseline_paths <- system2("git", c("-C", shQuote(root), "ls-tree", "-r", "--name-only", baseline), stdout = TRUE)
     stopifnot(is.null(attr(baseline_paths, "status")))
     protected <- baseline_paths[grepl("^application/(R|config)/", baseline_paths) |

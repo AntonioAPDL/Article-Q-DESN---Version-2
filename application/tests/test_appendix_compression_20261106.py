@@ -132,6 +132,33 @@ class SemanticTests(unittest.TestCase):
 
 
 class AdmissionTests(unittest.TestCase):
+    def test_reviewed_joint_admission_is_exact_and_preserves_historical_pin(self):
+        admitted = C.admitted_scientific_sources(ROOT)
+        path = "application/R/joint_qvp_qdesn.R"
+        self.assertEqual(admitted[path], C.sha(C.regular(ROOT, path)))
+        protected = C.protected_inventory(ROOT)
+        self.assertEqual(protected[path], C.sha(C.baseline_bytes(ROOT, path)))
+        self.assertNotEqual(protected[path], admitted[path])
+
+        original = C.regular
+        def changed(root, requested, *args):
+            raw = original(root, requested, *args)
+            return raw + b"\n# unauthorized mutation\n" if requested == path else raw
+        with mock.patch.object(C, "regular", side_effect=changed), \
+             self.assertRaisesRegex(C.CompressionError,
+                                    "reviewed JOINT source byte or mode changed"):
+            C.admitted_scientific_sources(ROOT)
+
+    def test_partial_joint_admission_fails_closed(self):
+        original = Path.is_file
+        missing = C.JOINT_SOURCE_ADMISSIONS[0][0]
+        def incomplete(path):
+            return False if str(path).endswith(missing) else original(path)
+        with mock.patch.object(Path, "is_file", incomplete), \
+             self.assertRaisesRegex(C.CompressionError,
+                                    "complete JOINT scientific-source admission"):
+            C.admitted_scientific_sources(ROOT)
+
     def test_public_archive_target_is_determined_by_frozen_role_identity(self):
         row = dict(id="synthetic-role", source="qdesn-supplement.tex;tables/tiny.tex",
                    baseline_lines="8-12;20-24", actual_destination=C.PUBLIC_BASE + "qdesn-supplement.tex#L8-L12")

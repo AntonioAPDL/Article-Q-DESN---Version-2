@@ -1,0 +1,3 @@
+enabled,scenario_id,scenario_order,calibration_seed_base,article_seed,scientific_reason
+true,persistent_heavy_tail,1,202620600,202607207,Highest persistent-tail recursive score with a large calibration-to-protected deterioration.
+true,regime_shift,2,202620700,202607208,Highest regime-change recursive score with a large calibration-to-protected deterioration.

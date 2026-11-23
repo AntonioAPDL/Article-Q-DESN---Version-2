@@ -9,8 +9,25 @@ local({
   cfg <- app_transition_source_paths()
   manifest <- read.csv(file.path(root, cfg$manifest), colClasses = "character", check.names = FALSE)
   pin <- unname(tools::sha256sum(file.path(root, cfg$manifest))[[1L]])
-  checks <- app_check_integrated_forecast_transition_sources(root, pin)
-  stopifnot(length(attr(checks, "authorized_additions")) == 7L)
+  joint_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv")
+  final_manifest <- file.path(root, "docs/reproducibility",
+    "joint_qdesn_superfinal_al_kernel_rerun_sources_20261123.csv")
+  if (file.exists(final_manifest)) {
+    source(file.path(root, "scripts/joint_superfinal_final_source_guard.R"),
+      local = TRUE)
+    checks <- app_check_joint_superfinal_final_sources(root)
+    stopifnot(length(attr(checks, "final_authorized_paths")) == 8L)
+  } else if (file.exists(joint_manifest)) {
+    source(file.path(root, "scripts/composable_scientific_source_guard.R"),
+      local = TRUE)
+    checks <- app_check_composable_scientific_sources(root)
+    stopifnot(length(attr(checks,
+      "transition_authorized_additions")) == 7L)
+  } else {
+    checks <- app_check_integrated_forecast_transition_sources(root, pin)
+    stopifnot(length(attr(checks, "authorized_additions")) == 7L)
+  }
   rejected <- 0L
   reject <- function(expr) {
     err <- tryCatch({force(expr); NULL}, error = identity)

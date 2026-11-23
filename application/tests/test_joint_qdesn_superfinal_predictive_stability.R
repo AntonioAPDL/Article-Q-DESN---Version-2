@@ -48,6 +48,7 @@ stopifnot(
   grepl("runtime_transfer_inventory.csv", closeout_body, fixed = TRUE),
   grepl("READY_FOR_INTEGRATION", closeout_body, fixed = TRUE),
   grepl("focused_test_results.csv", closeout_body, fixed = TRUE),
+  grepl("FROZEN_INTEGRATION_HANDOFF.md", closeout_body, fixed = TRUE),
   grepl("publication_scope.csv", closeout_body, fixed = TRUE),
   grepl("origin/main...HEAD", closeout_body, fixed = TRUE)
 )

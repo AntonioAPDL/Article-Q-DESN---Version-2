@@ -63,10 +63,15 @@ app_joint_swscore_finalize_mcmc <- function(root) {
   if (any(target_count$posterior_target_sha256 != 1L)) {
     stop("Chains within a model cell do not share one posterior target.", call. = FALSE)
   }
+  identity_audit <- app_joint_swcf_chain_identity_audit(summary,
+    expected_chains = app_joint_swcf_value(app_joint_swcf_contract(),
+      "chains_per_cell", TRUE))
   out <- app_joint_swscore_root(root); app_ensure_dir(out)
   contract_path <- app_write_csv(app_joint_swscore_contract(), file.path(out, "score_contract.csv"))
   summary_path <- app_write_csv(summary, file.path(out, "mcmc_worker_summary.csv"))
   target_path <- app_write_csv(target_count, file.path(out, "posterior_target_audit.csv"))
+  identity_path <- app_write_csv(identity_audit,
+    file.path(out, "complete_chain_identity_audit.csv"))
   cells <- app_read_csv(file.path(confirmation, "model_cell_plan.csv"))
   fixture_manifest <- app_read_csv(file.path(confirmation, "article_fixture_manifest.csv"))
   contract <- app_joint_swscore_contract()
@@ -107,7 +112,8 @@ app_joint_swscore_finalize_mcmc <- function(root) {
     protected_scores_computed = FALSE, stringsAsFactors = FALSE)
   readiness_path <- app_write_csv(readiness, file.path(out, "score_readiness.csv"))
   app_joint_shared_write_manifest(out, c(contract = contract_path, mcmc = summary_path,
-    targets = target_path, oracle_plan = oracle_path, score_plan = score_path,
+    targets = target_path, complete_identities = identity_path,
+    oracle_plan = oracle_path, score_plan = score_path,
     readiness = readiness_path), filename = "score_prepare_manifest.csv")
   readiness
 }

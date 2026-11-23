@@ -11771,6 +11771,54 @@ app_joint_qvp_rinvgamma <- function(n, shape, rate) {
   1 / stats::rgamma(n, shape = shape, rate = rate)
 }
 
+app_joint_qvp_al_sigma_support <- function(sigma_bounds = c(0, Inf)) {
+  # Retain the argument for historical callers, but never let a numerical
+  # stabilization control alter the AL model's positive-unbounded support.
+  app_joint_qvp_validate_sigma_bounds(sigma_bounds)
+  c(0, Inf)
+}
+
+app_joint_qvp_al_sigma_conditional <- function(
+    resid, v, A, B, kappa, a_sigma, b_sigma) {
+  resid <- as.numeric(resid)
+  v <- as.numeric(v)
+  A <- as.numeric(A)[[1L]]
+  B <- as.numeric(B)[[1L]]
+  kappa <- as.numeric(kappa)[[1L]]
+  a_sigma <- as.numeric(a_sigma)[[1L]]
+  b_sigma <- as.numeric(b_sigma)[[1L]]
+  if (!length(resid) || length(v) != length(resid) ||
+      any(!is.finite(resid)) || any(!is.finite(v)) || any(v <= 0) ||
+      !is.finite(A) || !is.finite(B) || B <= 0 ||
+      !is.finite(kappa) || kappa <= 0 ||
+      !is.finite(a_sigma) || a_sigma <= 0 ||
+      !is.finite(b_sigma) || b_sigma <= 0) {
+    stop("Invalid AL scale-conditional inputs.", call. = FALSE)
+  }
+  shape <- a_sigma + 1.5 * kappa * length(resid)
+  rate <- b_sigma + kappa * (
+    sum(v) + 0.5 * sum((resid - A * v)^2 / (B * v))
+  )
+  if (!is.finite(shape) || shape <= 0 || !is.finite(rate) || rate <= 0) {
+    stop("AL scale conditional has invalid inverse-gamma parameters.", call. = FALSE)
+  }
+  list(shape = shape, rate = rate, support = c(0, Inf),
+    update_id = "direct_inverse_gamma_unbounded_v1")
+}
+
+app_joint_qvp_draw_al_sigma <- function(
+    resid, v, A, B, kappa, a_sigma, b_sigma) {
+  conditional <- app_joint_qvp_al_sigma_conditional(
+    resid = resid, v = v, A = A, B = B, kappa = kappa,
+    a_sigma = a_sigma, b_sigma = b_sigma)
+  value <- app_joint_qvp_rinvgamma(
+    1L, shape = conditional$shape, rate = conditional$rate)[[1L]]
+  if (!is.finite(value) || value <= 0) {
+    stop("AL inverse-gamma scale draw is not positive and finite.", call. = FALSE)
+  }
+  c(conditional, list(value = value))
+}
+
 app_joint_qvp_rinvgauss <- function(n, mu, lambda) {
   if (any(!is.finite(mu)) || any(mu <= 0) || any(!is.finite(lambda)) || any(lambda <= 0)) {
     stop("Inverse-Gaussian parameters must be positive.", call. = FALSE)
@@ -12804,7 +12852,7 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   precision_repair_start_rel = 1.0e-12,
   precision_repair_max_rel = 1.0e-8,
   precision_repair_growth = 10,
-  sigma_bounds = c(1.0e-8, 1.0e8),
+  sigma_bounds = c(0, Inf),
   init = NULL
 ) {
   if (!is.null(seed)) set.seed(seed)
@@ -12827,7 +12875,7 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
   if (!is.finite(a_sigma) || a_sigma <= 0 || !is.finite(b_sigma) || b_sigma <= 0) {
     stop("a_sigma and b_sigma must be positive.", call. = FALSE)
   }
-  sigma_bounds <- app_joint_qvp_validate_sigma_bounds(sigma_bounds)
+  sigma_bounds <- app_joint_qvp_al_sigma_support(sigma_bounds)
   constants <- app_joint_qvp_al_constants(tau)
   alpha_prior <- app_joint_qvp_alpha_prior_spec(y, tau, alpha_prior_mean, alpha_prior_sd)
   init <- app_joint_qvp_normalize_init(init, K, p)
@@ -12913,12 +12961,11 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
       chi <- kappa * resid^2 / (constants$B[[k]] * sigma[[k]])
       psi <- kappa * (constants$A[[k]]^2 / (constants$B[[k]] * sigma[[k]]) + 2 / sigma[[k]])
       v[, k] <- app_joint_qvp_rgig(lambda = 1 - kappa / 2, chi = chi, psi = psi, current = v[, k])
-      sigma_rate <- kappa * (
-        sum(v[, k]) +
-          0.5 * sum((resid - constants$A[[k]] * v[, k])^2 / (constants$B[[k]] * v[, k]))
-      )
-      sigma[[k]] <- app_joint_qvp_rinvgamma(1, shape = a_sigma + 1.5 * kappa * Tn, rate = b_sigma + sigma_rate)
-      sigma[[k]] <- min(max(sigma[[k]], sigma_bounds[[1L]]), sigma_bounds[[2L]])
+      sigma_update <- app_joint_qvp_draw_al_sigma(
+        resid = resid, v = v[, k], A = constants$A[[k]],
+        B = constants$B[[k]], kappa = kappa,
+        a_sigma = a_sigma, b_sigma = b_sigma)
+      sigma[[k]] <- sigma_update$value
     }
     if (iter %in% keep_idx) {
       keep_pos <- keep_pos + 1L
@@ -12948,6 +12995,7 @@ app_joint_qvp_fit_al_mcmc_tiny <- function(
     alpha_prior_sd = alpha_prior$sd,
     alpha_prior_mean_source = alpha_prior$mean_source,
     sigma_bounds = sigma_bounds,
+    sigma_update_id = "direct_inverse_gamma_unbounded_v1",
     precision_repair_enabled = isTRUE(precision_repair),
     precision_repair_start_rel = precision_repair_start_rel,
     precision_repair_max_rel = precision_repair_max_rel,
@@ -13753,6 +13801,7 @@ app_joint_qvp_default_mcmc_calibration_thresholds <- function() {
 }
 
 app_joint_qvp_mcmc_draw_summary <- function(fit, case_id, stress_case, scenario, sigma_bounds = c(NA_real_, NA_real_)) {
+  sigma_bounds <- fit$sigma_bounds %||% sigma_bounds
   blocks <- list(
     beta = fit$beta_draws,
     alpha = fit$alpha_draws,
@@ -13765,11 +13814,15 @@ app_joint_qvp_mcmc_draw_summary <- function(fit, case_id, stress_case, scenario,
     upper_bound <- if (identical(block, "sigma")) sigma_bounds[[2L]] else NA_real_
     lower_hit_fraction <- if (identical(block, "sigma") && is.finite(lower_bound)) {
       mean(x <= lower_bound * (1 + 1.0e-8))
+    } else if (identical(block, "sigma") && identical(lower_bound, 0)) {
+      0
     } else {
       NA_real_
     }
     upper_hit_fraction <- if (identical(block, "sigma") && is.finite(upper_bound)) {
       mean(x >= upper_bound * (1 - 1.0e-8))
+    } else if (identical(block, "sigma") && is.infinite(upper_bound)) {
+      0
     } else {
       NA_real_
     }

@@ -73,20 +73,46 @@ app_check_glofas_unit_member_integration_sources <- function(repo_root,
   extension_paths <- character()
   extension_relative <- "docs/reproducibility/integrated_forecast_transition_sources_20261031.csv"
   extension_file <- file.path(repo_root, extension_relative)
+  joint_relative <- paste0("docs/reproducibility/",
+    "joint_qdesn_superfinal_al_kernel_correction_sources_20261123.csv")
+  joint_file <- file.path(repo_root, joint_relative)
   extension_link <- Sys.readlink(extension_file)
   if (file.exists(extension_file) || (!is.na(extension_link) && nzchar(extension_link))) {
-    extension_guard <- file.path(repo_root, "scripts/integrated_forecast_transition_source_guard.R")
-    require_check(regular_file(extension_file) && regular_file(extension_guard),
-      "The new additive source authorization and guard must be regular files.")
-    require_check(identical(unname(tools::sha256sum(extension_guard)[[1L]]),
-      "c8369d81b1c56b9cd7829040398b4d689a330dd1c500c0eb4f8eb05d25a1771b"), "The new source guard must match its exact implementation pin.")
-    extension_env <- new.env(parent = baseenv())
-    sys.source(extension_guard, envir = extension_env)
-    extension_checks <- extension_env$app_check_integrated_forecast_transition_sources(
-      repo_root, manifest_sha256 = "cd6684a6933de85f23d942a538c1efd241e66821b974467afb108379c068887b")
-    extension_paths <- attr(extension_checks, "authorized_additions")
-    require_check(length(extension_paths) == 7L,
-      "The additive workflow must authorize exactly seven new application source files.")
+    if (file.exists(joint_file)) {
+      extension_guard <- file.path(repo_root,
+        "scripts/composable_scientific_source_guard.R")
+      require_check(regular_file(extension_file) && regular_file(joint_file) &&
+        regular_file(extension_guard),
+        "The composed additive source authorizations and guard must be regular files.")
+      require_check(identical(unname(tools::sha256sum(extension_guard)[[1L]]),
+        "5168cb4f3b4a0e6741bc74aaeda2528cce3acdbe5c84bf6c987bf8bc59b71c2c"),
+        "The composable source guard must match its exact implementation pin.")
+      extension_env <- new.env(parent = baseenv())
+      sys.source(extension_guard, envir = extension_env)
+      extension_checks <- extension_env$app_check_composable_scientific_sources(
+        repo_root,
+        joint_manifest_sha256 =
+          "331437cf5a22dbb61f7d29374c9db356b68265e09ed5dd2adfe2e4e3b436a11d")
+      extension_paths <- attr(extension_checks, "authorized_additions")
+      require_check(length(extension_paths) == 69L,
+        "The composed workflow must authorize exactly 69 application source files.")
+    } else {
+      extension_guard <- file.path(repo_root,
+        "scripts/integrated_forecast_transition_source_guard.R")
+      require_check(regular_file(extension_file) && regular_file(extension_guard),
+        "The new additive source authorization and guard must be regular files.")
+      require_check(identical(unname(tools::sha256sum(extension_guard)[[1L]]),
+        "c8369d81b1c56b9cd7829040398b4d689a330dd1c500c0eb4f8eb05d25a1771b"),
+        "The new source guard must match its exact implementation pin.")
+      extension_env <- new.env(parent = baseenv())
+      sys.source(extension_guard, envir = extension_env)
+      extension_checks <- extension_env$app_check_integrated_forecast_transition_sources(
+        repo_root, manifest_sha256 =
+          "cd6684a6933de85f23d942a538c1efd241e66821b974467afb108379c068887b")
+      extension_paths <- attr(extension_checks, "authorized_additions")
+      require_check(length(extension_paths) == 7L,
+        "The additive workflow must authorize exactly seven new application source files.")
+    }
   }
   # Include ignored source additions; only generated Python bytecode is not a
   # source implementation. In particular, an ignore rule cannot hide new R,

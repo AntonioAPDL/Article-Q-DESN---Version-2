@@ -22,6 +22,8 @@ final_body <- paste(deparse(app_joint_swscore_finalize), collapse = "\n")
 stopifnot(
   grepl("nrow(summary) != 192L", prepare_body, fixed = TRUE),
   grepl("M0_v_collapsed_support_logit", prepare_body, fixed = TRUE),
+  grepl("app_joint_swcf_chain_identity_audit", prepare_body, fixed = TRUE),
+  grepl("complete_chain_identity_audit.csv", prepare_body, fixed = TRUE),
   grepl("score_launch_readiness.csv", score_body, fixed = TRUE),
   grepl("app_joint_recursive_mean_design", score_body, fixed = TRUE),
   grepl("app_joint_pure_recursive_path_score_draws", score_body, fixed = TRUE),

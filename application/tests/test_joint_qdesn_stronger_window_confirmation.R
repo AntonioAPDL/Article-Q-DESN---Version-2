@@ -12,6 +12,7 @@ stopifnot(
 body <- paste(deparse(app_joint_swcf_mcmc_fit), collapse = "\n")
 stopifnot(
   grepl("M0_v_collapsed_support_logit", body, fixed = TRUE),
+  grepl("sigma_bounds = c(0, Inf)", body, fixed = TRUE),
   grepl("app_joint_article_mcmc_precision_repair_controls", body, fixed = TRUE),
   grepl("protected_rows_loaded = 0L", paste(deparse(app_joint_swcf_run_sentinel), collapse = "\n"), fixed = TRUE),
   grepl("protected_scores_computed = FALSE", paste(deparse(app_joint_swcf_run_vb), collapse = "\n"), fixed = TRUE)
@@ -53,6 +54,10 @@ finalize_body <- paste(deparse(app_joint_swcf_finalize_vb), collapse = "\n")
 prepare_body <- paste(deparse(app_joint_swcf_prepare_vb), collapse = "\n")
 stopifnot(
   grepl("app_joint_article_overdispersed_start", mcmc_body, fixed = TRUE),
+  grepl("app_joint_swcf_complete_target", mcmc_body, fixed = TRUE),
+  grepl("app_joint_swcf_sampler_control_contract", mcmc_body, fixed = TRUE),
+  grepl("complete_posterior_target_sha256", mcmc_body, fixed = TRUE),
+  grepl("effective_sampler_control_sha256", mcmc_body, fixed = TRUE),
   grepl("protected_scores_computed = FALSE", mcmc_body, fixed = TRUE),
   grepl("nrow(workers) != 192L", finalize_body, fixed = TRUE),
   grepl("M0_v_collapsed_support_logit", finalize_body, fixed = TRUE),

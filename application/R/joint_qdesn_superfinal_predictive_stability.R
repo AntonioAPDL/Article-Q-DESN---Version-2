@@ -318,6 +318,32 @@ app_joint_superfinal_health <- function(root = app_joint_superfinal_default_root
     remaining = sum(!done & !failed), stringsAsFactors = FALSE)
 }
 
+app_joint_superfinal_combined_identity <- function(blocks) {
+  if (!length(blocks) || any(!vapply(blocks, is.list, logical(1L)))) {
+    stop("Combined-chain identity requires a nonempty list of chain blocks.",
+      call. = FALSE)
+  }
+  field <- function(name) unique(unlist(lapply(blocks, function(block) {
+    value <- block[[name]]
+    if (is.null(value) || length(value) != 1L ||
+        !grepl("^[0-9a-f]{64}$", as.character(value))) {
+      stop(sprintf("Combined chain block lacks valid %s.", name), call. = FALSE)
+    }
+    as.character(value)
+  }), use.names = FALSE))
+  historical <- field("posterior_target_sha256")
+  complete <- field("complete_posterior_target_sha256")
+  kernel <- field("effective_sampler_control_sha256")
+  if (length(historical) != 1L || length(complete) != 1L ||
+      length(kernel) != 1L) {
+    stop("Combined chains do not share one complete target and sampler kernel.",
+      call. = FALSE)
+  }
+  list(posterior_target_sha256 = historical,
+    complete_posterior_target_sha256 = complete,
+    effective_sampler_control_sha256 = kernel)
+}
+
 app_joint_superfinal_combined_draws <- function(source_root, root, model_cell_id) {
   source_paths <- app_joint_superfinal_source_paths(source_root)
   old_plan <- app_read_csv(file.path(source_paths$confirmation, "mcmc_worker_plan.csv"))
@@ -345,6 +371,16 @@ app_joint_superfinal_combined_draws <- function(source_root, root, model_cell_id
       stop("MCMC chain summary does not match the requested posterior target.",
         call. = FALSE)
     }
+    required_identity <- c("complete_posterior_target_sha256",
+      "effective_sampler_control_sha256")
+    if (!all(required_identity %in% names(summary)) ||
+        any(!grepl("^[0-9a-f]{64}$",
+          as.character(unlist(summary[1L, required_identity]))))) {
+      stop(paste(
+        "MCMC chain lacks the corrected complete target or sampler identity;",
+        "historical capped and corrected uncapped chains cannot be combined."
+      ), call. = FALSE)
+    }
     if (summary$likelihood_family[[1L]] == "exAL" &&
         summary$inference_method_id[[1L]] != "M0_v_collapsed_support_logit") {
       stop("An exAL supplemental chain did not use exact M0.", call. = FALSE)
@@ -357,20 +393,24 @@ app_joint_superfinal_combined_draws <- function(source_root, root, model_cell_id
       alpha = app_joint_recursive_select_block(draws, "alpha"),
       chain_id = rep(job$chain_id[[1L]], nrow(draws)),
       source_draw_index = draws$draw_index,
-      posterior_target_sha256 = summary$posterior_target_sha256[[1L]])
+      posterior_target_sha256 = summary$posterior_target_sha256[[1L]],
+      complete_posterior_target_sha256 =
+        summary$complete_posterior_target_sha256[[1L]],
+      effective_sampler_control_sha256 =
+        summary$effective_sampler_control_sha256[[1L]])
   }
   blocks <- c(lapply(seq_len(nrow(old_jobs)), function(i) load_block(old_jobs[i, ], source_root)),
     lapply(seq_len(nrow(new_jobs)), function(i) load_block(new_jobs[i, ], root)))
-  targets <- unique(unlist(lapply(blocks, `[[`, "posterior_target_sha256"),
-    use.names = FALSE))
-  if (length(targets) != 1L) {
-    stop("Combined chains do not share one exact posterior target.", call. = FALSE)
-  }
+  identity <- app_joint_superfinal_combined_identity(blocks)
   list(beta = do.call(rbind, lapply(blocks, `[[`, "beta")),
     alpha = do.call(rbind, lapply(blocks, `[[`, "alpha")),
     chain_id = unlist(lapply(blocks, `[[`, "chain_id"), use.names = FALSE),
     source_draw_index = unlist(lapply(blocks, `[[`, "source_draw_index"), use.names = FALSE),
-    posterior_target_sha256 = targets)
+    posterior_target_sha256 = identity$posterior_target_sha256,
+    complete_posterior_target_sha256 =
+      identity$complete_posterior_target_sha256,
+    effective_sampler_control_sha256 =
+      identity$effective_sampler_control_sha256)
 }
 
 app_joint_superfinal_run_score <- function(source_root, root, target_id) {
@@ -459,6 +499,24 @@ app_joint_superfinal_score_health <- function(root = app_joint_superfinal_defaul
     remaining = sum(!done & !failed), stringsAsFactors = FALSE)
 }
 
+app_joint_superfinal_whole_scenario_packet <- function(mcmc, scenario_id,
+    challenger_stable, required_models = c("independent_qdesn_rhs",
+      "joint_qdesn_rhs", "independent_exqdesn_rhs", "joint_exqdesn_rhs")) {
+  role <- if (isTRUE(challenger_stable)) "challenger" else
+    "new_geometry_parity"
+  packet <- mcmc[mcmc$scenario_id == scenario_id &
+    mcmc$specification_role == role, , drop = FALSE]
+  if (nrow(packet) != length(required_models) ||
+      anyDuplicated(packet$model_id) ||
+      !setequal(as.character(packet$model_id), required_models)) {
+    stop(sprintf(
+      "Scenario '%s' does not contain one complete %s four-model packet.",
+      scenario_id, role), call. = FALSE)
+  }
+  packet$promote_complete_challenger_packet <- isTRUE(challenger_stable)
+  packet[match(required_models, packet$model_id), , drop = FALSE]
+}
+
 app_joint_superfinal_finalize <- function(source_root, root = app_joint_superfinal_default_root()) {
   source_root <- normalizePath(source_root, mustWork = TRUE)
   root <- normalizePath(root, mustWork = TRUE)
@@ -519,18 +577,17 @@ app_joint_superfinal_finalize <- function(source_root, root = app_joint_superfin
     selected <- replace_row(selected,
       summaries[summaries$scenario_id == "laplace_bridge", , drop = FALSE])
   }
+  selected <- selected[selected$scenario_id != "persistent_heavy_tail", , drop = FALSE]
+  persistent_packet <- app_joint_superfinal_whole_scenario_packet(
+    mcmc, "persistent_heavy_tail", persistent_ok)
   if (persistent_ok) {
     for (model in c("joint_qdesn_rhs", "joint_exqdesn_rhs")) {
-      selected <- replace_row(selected, summaries[summaries$scenario_id ==
+      persistent_packet <- replace_row(persistent_packet,
+        summaries[summaries$scenario_id ==
         "persistent_heavy_tail" & summaries$model_id == model, , drop = FALSE])
     }
-  } else {
-    selected <- selected[selected$scenario_id != "persistent_heavy_tail", , drop = FALSE]
-    fallback <- mcmc[mcmc$scenario_id == "persistent_heavy_tail" &
-      mcmc$specification_role == "new_geometry_parity", , drop = FALSE]
-    fallback$promote_complete_challenger_packet <- FALSE
-    selected <- app_bind_rows_fill(list(selected, fallback))
   }
+  selected <- app_bind_rows_fill(list(selected, persistent_packet))
   decisions <- data.frame(scenario_id = c("laplace_bridge", "persistent_heavy_tail"),
     targeted_rows_stable = c(sum(summaries$stable[summaries$scenario_id == "laplace_bridge"]),
       sum(summaries$stable[summaries$scenario_id == "persistent_heavy_tail"])),

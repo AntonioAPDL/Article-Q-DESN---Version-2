@@ -96,6 +96,140 @@ app_joint_swcf_load_transfer_packet <- function(root, row) {
   )
 }
 
+app_joint_swcf_complete_target <- function(model, design, normal, tau0) {
+  metadata <- app_joint_swcf_model_metadata(model)
+  controls <- app_joint_swq_controls(app_joint_sw_read_contract())
+  joint <- identical(metadata$fit_structure, "joint")
+  app_joint_posterior_contract(
+    likelihood_family = metadata$likelihood_family,
+    fit_structure = metadata$fit_structure,
+    tau = design$tau,
+    design_fingerprint = design$posterior_data_design_fingerprint,
+    tau0 = as.numeric(tau0),
+    zeta2 = normal$initializer$zeta2,
+    slab_fixed = controls$rhs_slab_fixed,
+    a_sigma = controls$a_sigma,
+    b_sigma = controls$b_sigma,
+    alpha_prior_mean = normal$initializer$alpha_mean,
+    alpha_prior_sd = rep(normal$initializer$alpha_prior_sd, length(design$tau)),
+    alpha_min_spacing = if (joint) controls$alpha_min_spacing else 0,
+    sigma_bounds = c(0, Inf),
+    kappa = 1,
+    coefficient_hierarchy = if (joint) {
+      "first_quantile_anchor_adjacent_differences"
+    } else {
+      "independent_quantile_specific_rhs"
+    },
+    ordered_intercepts = joint,
+    gamma_prior_type = if (identical(metadata$likelihood_family, "exAL")) {
+      "quantile_fixed_bounded_shape_support"
+    } else {
+      "none"
+    },
+    score_definition = "dgp_integrated_finite_grid_acrps",
+    projection_rule = "weighted_isotonic_equal_weights",
+    draw_coupling = "matched_draw_index_with_repeated_permutation_sensitivity",
+    contract_version = "joint_qdesn_stronger_window_complete_target_v2"
+  )
+}
+
+app_joint_swcf_sampler_control_contract <- function(model, n_iter = NULL,
+    burn = NULL, thin = NULL) {
+  metadata <- app_joint_swcf_model_metadata(model)
+  precision <- app_joint_article_mcmc_precision_repair_controls()
+  exal <- identical(metadata$likelihood_family, "exAL")
+  frozen <- app_joint_swcf_contract()
+  n_iter <- as.integer(n_iter %||% app_joint_swcf_value(frozen,
+    if (exal) "exal_n_iter" else "al_n_iter", TRUE))
+  burn <- as.integer(burn %||% app_joint_swcf_value(frozen,
+    if (exal) "exal_burn" else "al_burn", TRUE))
+  thin <- as.integer(thin %||% app_joint_swcf_value(frozen,
+    if (exal) "exal_thin" else "al_thin", TRUE))
+  if (any(!is.finite(c(n_iter, burn, thin))) || n_iter <= 0L || burn < 0L ||
+      burn >= n_iter || thin <= 0L) {
+    stop("Sampler-control iteration budget is invalid.", call. = FALSE)
+  }
+  fields <- data.frame(
+    field = c(
+      "contract_version", "likelihood_family", "fit_structure",
+      "inference_method_id", "scale_update_id", "sigma_support",
+      "n_iter", "burn", "thin",
+      "max_dense_dim", "precision_repair", "precision_repair_start_rel",
+      "precision_repair_max_rel", "precision_repair_growth",
+      "gamma_slice_width", "gamma_slice_max_steps", "tau_seed_stride"
+    ),
+    value = c(
+      "joint_qdesn_stronger_window_sampler_control_v1",
+      metadata$likelihood_family,
+      metadata$fit_structure,
+      if (exal) "M0_v_collapsed_support_logit" else "AL_MCMC",
+      if (exal) "exact_M0_v_collapsed_scale_shape" else
+        "direct_inverse_gamma_unbounded_v1",
+      "(0,Inf)",
+      as.character(n_iter),
+      as.character(burn),
+      as.character(thin),
+      "0",
+      tolower(as.character(isTRUE(precision$precision_repair))),
+      app_joint_posterior_format_numeric(precision$precision_repair_start_rel),
+      app_joint_posterior_format_numeric(precision$precision_repair_max_rel),
+      app_joint_posterior_format_numeric(precision$precision_repair_growth),
+      if (exal) "1" else "NA",
+      if (exal) "100" else "NA",
+      if (identical(metadata$fit_structure, "independent")) "1009" else "NA"
+    ),
+    stringsAsFactors = FALSE
+  )
+  canonical <- paste(paste(fields$field, fields$value, sep = "="), collapse = "\n")
+  list(fields = fields, hash = app_joint_qvp_sha256_text(canonical))
+}
+
+app_joint_swcf_chain_identity_audit <- function(summary, expected_chains = NULL) {
+  required <- c(
+    "model_cell_id", "model_id", "likelihood_family",
+    "complete_posterior_target_sha256", "effective_sampler_control_sha256"
+  )
+  app_check_required_columns(summary, required, "corrected JOINT chain summary")
+  hashes <- c("complete_posterior_target_sha256",
+    "effective_sampler_control_sha256")
+  for (field in hashes) {
+    if (any(!grepl("^[0-9a-f]{64}$", as.character(summary[[field]])))) {
+      stop(sprintf("%s must contain lowercase SHA-256 values.", field),
+        call. = FALSE)
+    }
+  }
+  groups <- split(seq_len(nrow(summary)), summary$model_cell_id)
+  rows <- lapply(names(groups), function(cell_id) {
+    idx <- groups[[cell_id]]
+    invariant <- c("model_id", "likelihood_family", hashes)
+    counts <- vapply(invariant, function(field) {
+      length(unique(as.character(summary[[field]][idx])))
+    }, integer(1L))
+    if (any(counts != 1L)) {
+      stop(sprintf(
+        "Corrected chain artifacts for model cell '%s' have incompatible targets or kernels.",
+        cell_id), call. = FALSE)
+    }
+    if (!is.null(expected_chains) && length(idx) != as.integer(expected_chains)) {
+      stop(sprintf("Model cell '%s' has %d chains; expected %d.",
+        cell_id, length(idx), as.integer(expected_chains)), call. = FALSE)
+    }
+    data.frame(
+      model_cell_id = cell_id,
+      model_id = summary$model_id[idx[[1L]]],
+      likelihood_family = summary$likelihood_family[idx[[1L]]],
+      n_chains = length(idx),
+      complete_posterior_target_sha256 =
+        summary$complete_posterior_target_sha256[idx[[1L]]],
+      effective_sampler_control_sha256 =
+        summary$effective_sampler_control_sha256[idx[[1L]]],
+      verified = TRUE,
+      stringsAsFactors = FALSE
+    )
+  })
+  app_bind_rows_fill(rows)
+}
+
 app_joint_swcf_mcmc_fit <- function(model, design, init, normal, tau0, seed,
     n_iter, burn, thin) {
   controls <- app_joint_swq_controls(app_joint_sw_read_contract())
@@ -109,8 +243,7 @@ app_joint_swcf_mcmc_fit <- function(model, design, init, normal, tau0, seed,
     alpha_prior_sd = rep(normal$initializer$alpha_prior_sd, length(design$tau)),
     alpha_min_spacing = if (startsWith(model, "joint_")) controls$alpha_min_spacing else 0,
     max_dense_dim = 0L,
-    sigma_bounds = c(1e-8, max(1, 10 * max(init$sigma_mean %||%
-      vapply(init$fits, function(x) x$sigma_mean[[1L]], numeric(1L))))), init = init)
+    sigma_bounds = c(0, Inf), init = init)
   common <- c(common, app_joint_article_mcmc_precision_repair_controls())
   if (grepl("exqdesn", model, fixed = TRUE)) {
     common$gamma_init <- init$gamma_mean %||%
@@ -537,6 +670,10 @@ app_joint_swcf_run_mcmc <- function(root, worker_id) {
   design <- readRDS(row$design_path[[1L]])
   packet <- readRDS(row$vb_packet_path[[1L]])
   init <- app_joint_swcf_packet_init(packet, row$model_id[[1L]])
+  complete_target <- app_joint_swcf_complete_target(
+    row$model_id[[1L]], design, packet$normal, row$rhs_tau0[[1L]])
+  sampler_control <- app_joint_swcf_sampler_control_contract(
+    row$model_id[[1L]], row$n_iter[[1L]], row$burn[[1L]], row$thin[[1L]])
   init <- app_joint_article_overdispersed_start(init, row, design$tau)
   captured <- tryCatch(app_joint_sw_capture_warnings(function() app_joint_swcf_mcmc_fit(
     row$model_id[[1L]], design, init, packet$normal, row$rhs_tau0[[1L]],
@@ -582,6 +719,15 @@ app_joint_swcf_run_mcmc <- function(root, worker_id) {
     precision_repair_max_relative_jitter =
       as.numeric(fit$precision_repair_max_rel_used %||% 0),
     warning_count = length(captured$warnings), posterior_target_sha256 = target_hash,
+    complete_posterior_target_sha256 = complete_target$hash,
+    effective_sampler_control_sha256 = sampler_control$hash,
+    sigma_support = "(0,Inf)",
+    sigma_update_id = fit$sigma_update_id %||%
+      if (row$likelihood_family[[1L]] == "exAL") {
+        "exact_M0_v_collapsed_scale_shape"
+      } else {
+        "direct_inverse_gamma_unbounded_v1"
+      },
     protected_scores_computed = FALSE,
     runtime_seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
     stringsAsFactors = FALSE)
@@ -593,6 +739,10 @@ app_joint_swcf_run_mcmc <- function(root, worker_id) {
       file.path(tmp, "posterior_draws.csv.gz")),
     summary = app_write_csv(summary, file.path(tmp, "summary.csv")),
     target = app_write_csv(target_fields, file.path(tmp, "posterior_target_contract.csv")),
+    complete_target = app_write_csv(complete_target$fields,
+      file.path(tmp, "complete_posterior_target_contract.csv")),
+    sampler_control = app_write_csv(sampler_control$fields,
+      file.path(tmp, "effective_sampler_control_contract.csv")),
     warnings = app_write_csv(warnings, file.path(tmp, "warnings.csv")),
     precision = app_write_csv(precision, file.path(tmp, "precision_repair_diagnostics.csv")))
   app_joint_shared_write_manifest(tmp, files)
